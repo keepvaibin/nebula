@@ -1,0 +1,22 @@
+[package]
+name = "nebula-recomp"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+clap.workspace = true
+nebula-recomp-core = { path = "../nebula-recomp-core" }
+serde_json.workspace = true
+sha1.workspace = true
+sha2.workspace = true
+serde.workspace = true
+nod = "=1.4.4"
+
+[dev-dependencies]
+tempfile.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+windows-sys.workspace = true

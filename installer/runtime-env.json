@@ -1,0 +1,322 @@
+[
+  {
+    "name": "GALAXY_ALLOW_TEARING",
+    "value": "0"
+  },
+  {
+    "name": "GALAXY_ASYNC_NAND_WRITES",
+    "value": "1"
+  },
+  {
+    "name": "GALAXY_ASYNC_RENDER_THREAD",
+    "value": "1"
+  },
+  {
+    "name": "GALAXY_CAPTURE_MOUSE_BUTTONS",
+    "value": "1"
+  },
+  {
+    "name": "GALAXY_CHECKPOINT_SAME_CONTEXT_RFI",
+    "value": "1"
+  },
+  {
+    "name": "GALAXY_CHECKPOINT_SAME_CONTEXT_RFI_PENDING_ONLY",
+    "value": "1"
+  },
+  {
+    "name": "GALAXY_D3D_DEBUG",
+    "value": "0"
+  },
+  {
+    "name": "GALAXY_DEFER_YAZ0_LOOP_INTERRUPTS",
+    "value": "1"
+  },
+  {
+    "name": "GALAXY_DIRECT_WGPIPE_PE_EVENTS",
+    "value": "0"
+  },
+  {
+    "name": "GALAXY_DISPLAY_LIST_DIRTY_INVALIDATE",
+    "value": "0"
+  },
+  {
+    "name": "GALAXY_DSP_NATIVE",
+    "value": "1"
+  },
+  {
+    "name": "GALAXY_DSP_WORKER_HIGH_PRIORITY",
+    "value": "1"
+  },
+  {
+    "name": "GALAXY_EFB_SCALE",
+    "value": "1"
+  },
+  {
+    "name": "GALAXY_EXCLUSIVE_FULLSCREEN",
+    "value": "0"
+  },
+  {
+    "name": "GALAXY_FAST_CACHED_GUEST_CALLS",
+    "value": "0"
+  },
+  {
+    "name": "GALAXY_FAST_THP_CHECKPOINTS",
+    "value": "1"
+  },
+  {
+    "name": "GALAXY_FAST_THP_CHECKPOINT_INTERVAL",
+    "value": "256"
+  },
+  {
+    "name": "GALAXY_FAST_YAZ0_CHECKPOINTS",
+    "value": "1"
+  },
+  {
+    "name": "GALAXY_FAST_YAZ0_CHECKPOINT_INTERVAL",
+    "value": "262144"
+  },
+  {
+    "name": "GALAXY_FLIP_DISCARD",
+    "value": "0"
+  },
+  {
+    "name": "GALAXY_FRAME_RATE_DECOUPLE",
+    "value": "0"
+  },
+  {
+    "name": "GALAXY_FULLSCREEN",
+    "value": "0"
+  },
+  {
+    "name": "GALAXY_GPU_TIMESTAMPS",
+    "value": "0"
+  },
+  {
+    "name": "GALAXY_GX_DECODED_VERTEX_CACHE",
+    "value": "1"
+  },
+  {
+    "name": "GALAXY_GX_SORTED_VERTEX_INVALIDATION",
+    "value": "1"
+  },
+  {
+    "name": "GALAXY_HIDE_OS_CURSOR",
+    "value": "1"
+  },
+  {
+    "name": "GALAXY_HIGH_RES_VI_WAIT",
+    "value": "1"
+  },
+  {
+    "name": "GALAXY_HOST_POINTER_POLL_CACHE_MS",
+    "value": "1"
+  },
+  {
+    "name": "GALAXY_INDEPENDENT_VI_PE_COMPLETION",
+    "value": "1"
+  },
+  {
+    "name": "GALAXY_INLINE_BRANCH_CHECKPOINTS",
+    "value": "1"
+  },
+  {
+    "name": "GALAXY_INPUT_MODE",
+    "value": "keyboard_mouse"
+  },
+  {
+    "name": "GALAXY_MOUSE_IR_ABSOLUTE_X_SCALE",
+    "value": "1.0"
+  },
+  {
+    "name": "GALAXY_MOUSE_IR_ABSOLUTE_Y_SCALE",
+    "value": "1.0"
+  },
+  {
+    "name": "GALAXY_MOUSE_IR_CURSOR_POLL",
+    "value": "auto"
+  },
+  {
+    "name": "GALAXY_MOUSE_IR_HOLD_MS",
+    "value": "500"
+  },
+  {
+    "name": "GALAXY_MOUSE_IR_MESSAGE_RECENT_MS",
+    "value": "120"
+  },
+  {
+    "name": "GALAXY_NATIVE_BT_WIIMOTE",
+    "value": "1"
+  },
+  {
+    "name": "GALAXY_NATIVE_FAST_HOST_FLOAT_HELPERS",
+    "value": "1"
+  },
+  {
+    "name": "GALAXY_NATIVE_MOUSE_POINTER_FRAME",
+    "value": "1"
+  },
+  {
+    "name": "GALAXY_NATIVE_THP_VIDEO_DECODE",
+    "value": "1"
+  },
+  {
+    "name": "GALAXY_PE_EVENTS_GPU_FENCE",
+    "value": "1"
+  },
+  {
+    "name": "GALAXY_PRESENT_IN_RENDER_FRAME",
+    "value": "0"
+  },
+  {
+    "name": "GALAXY_PSO_PREWARM",
+    "value": "1"
+  },
+  {
+    "name": "GALAXY_PSO_PREWARM_BLOCKING",
+    "value": "1"
+  },
+  {
+    "name": "GALAXY_PSO_PREWARM_BLOCKING_MS",
+    "value": "30000"
+  },
+  {
+    "name": "GALAXY_PSO_PREWARM_LIMIT",
+    "value": "4096"
+  },
+  {
+    "name": "GALAXY_REALTIME_VI",
+    "value": "1"
+  },
+  {
+    "name": "GALAXY_REALTIME_VI_NEAR_DUE_RETRY_US",
+    "value": "0"
+  },
+  {
+    "name": "GALAXY_REALTIME_VI_NEAR_DUE_WAIT",
+    "value": "1"
+  },
+  {
+    "name": "GALAXY_REALTIME_VI_POLL_CHECKPOINTS",
+    "value": "2048"
+  },
+  {
+    "name": "GALAXY_RENDER_IMMUTABLE_RANGE_OWNERSHIP",
+    "value": "0"
+  },
+  {
+    "name": "GALAXY_RENDER_LIVE_MEMORY_WAIT",
+    "value": "0"
+  },
+  {
+    "name": "GALAXY_RENDER_MEMORY_SNAPSHOT",
+    "value": "1"
+  },
+  {
+    "name": "GALAXY_RENDER_MEMORY_SNAPSHOT_COMPACT",
+    "value": "1"
+  },
+  {
+    "name": "GALAXY_RENDER_QUEUE_DEPTH",
+    "value": "3"
+  },
+  {
+    "name": "GALAXY_RENDER_WORKER_MEMORY_SNAPSHOT",
+    "value": "0"
+  },
+  {
+    "name": "GALAXY_RUNTIME_HIGH_PRIORITY",
+    "value": "1"
+  },
+  {
+    "name": "GALAXY_SCAN_PE_EVENTS_ON_SIM_THREAD",
+    "value": "0"
+  },
+  {
+    "name": "GALAXY_SIMULATION_LARGEST_CACHE",
+    "value": "1"
+  },
+  {
+    "name": "GALAXY_SKIP_DUPLICATE_XFB_PRESENTS",
+    "value": "0"
+  },
+  {
+    "name": "GALAXY_SKIP_LAUNCHER",
+    "value": "1"
+  },
+  {
+    "name": "GALAXY_SMOOTH_REALTIME_PRESENT",
+    "value": "0"
+  },
+  {
+    "name": "GALAXY_SMOOTH_REALTIME_PRESENT_MAX_WAIT_US",
+    "value": "2000"
+  },
+  {
+    "name": "GALAXY_SUBMIT_GX_AT_DRAW_DONE_WAIT",
+    "value": "1"
+  },
+  {
+    "name": "GALAXY_SWAP_CHAIN_FRAME_LATENCY",
+    "value": "2"
+  },
+  {
+    "name": "GALAXY_SYNTHETIC_KPAD_FRESH_MOUSE_POINTER",
+    "value": "1"
+  },
+  {
+    "name": "GALAXY_UNBUFFERED_STDOUT",
+    "value": "1"
+  },
+  {
+    "name": "GALAXY_VIRTUAL_WIIMOTE_COUNT",
+    "value": "1"
+  },
+  {
+    "name": "GALAXY_VI_RENDER_FIFO_WAIT",
+    "value": "0"
+  },
+  {
+    "name": "GALAXY_VSYNC_INTERVAL",
+    "value": "0"
+  },
+  {
+    "name": "GALAXY_WAIT_FOR_FRAME_LATENCY",
+    "value": "0"
+  },
+  {
+    "name": "GALAXY_WINDOW_HEIGHT",
+    "value": "480"
+  },
+  {
+    "name": "GALAXY_WINDOW_WIDTH",
+    "value": "854"
+  },
+  {
+    "name": "GALAXY_XFB_INDETERMINATE_SLOT_PRESERVE_VIS",
+    "value": "2"
+  },
+  {
+    "name": "GALAXY_XFB_INVALID_MANAGER_PRESERVE_VIS",
+    "value": "2"
+  },
+  {
+    "name": "GALAXY_XFB_MAX_PRESERVE_AGE",
+    "value": "30"
+  },
+  {
+    "value": "1",
+    "name": "GALAXY_NATIVE_MOUSE_COOPERATIVE_DEPTH_WAIT"
+  },
+  {
+    "value": "1",
+    "name": "GALAXY_NATIVE_BLOOM_WORKSPACE"
+  },
+  {
+    "name": "GALAXY_FRAME_TELEMETRY",
+    "value": "1"
+  },
+  {
+    "value": "1",
+    "name": "GALAXY_LAYOUT_ASPECT_REPAIRS"
+  }
+]

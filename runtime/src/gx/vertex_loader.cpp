@@ -1,0 +1,1823 @@
+// vertex_loader.cpp — VertexLoader implementation.
+//
+// Converts one GX draw packet (any VCD/VAT combination, direct or indexed
+// attributes) into the canonical GxVertexOut stream plus an index list for
+// triangle/line/point draws written into the frame's upload rings.
+//
+// Design invariants:
+//  - Bulk attribute streams use FifoCursor::take() + swap16_block/swap32_block;
+//    no per-byte scalar reads on the hot path.
+//  - Color attributes are NEVER passed through the swap kernels (see below).
+//  - Unknown/unsupported configurations throw GxFatalError (hard-fail).
+//  - Indexed attributes resolve through GuestMemoryV1; unmapped → GxFatalError.
+
+#include "galaxy/gx/vertex_loader.h"
+#include "galaxy/gx/dependency_event_capture.h"
+
+#include "galaxy/gx/fifo_parser.h"
+#include "galaxy/gx/gx_bitfields.h"
+#include "galaxy/gx/gx_state.h"
+#include "galaxy/gx/renderer_d3d12.h"
+#include "galaxy/native_api.h"
+
+#include <algorithm>
+#include <array>
+#include <bit>
+#include <cassert>
+#include <cstddef>
+#include <cstdint>
+#include <cstdio>
+#include <cstring>
+#include <limits>
+#include <span>
+#include <string>
+
+namespace galaxy::gx {
+
+// ---------------------------------------------------------------------------
+// Internal helpers
+// ---------------------------------------------------------------------------
+
+namespace {
+
+struct ResolvedGuestRange {
+    bool valid = false;
+    std::uint32_t guest_base = 0;
+    std::uint64_t guest_end = 0;
+    const std::byte* host_base = nullptr;
+
+    [[nodiscard]] bool contains(
+        std::uint32_t address,
+        std::uint32_t size) const {
+        const std::uint64_t end =
+            static_cast<std::uint64_t>(address) + size;
+        return valid && address >= guest_base && end <= guest_end;
+    }
+
+    [[nodiscard]] const std::byte* pointer(std::uint32_t address) const {
+        return host_base + (address - guest_base);
+    }
+};
+
+struct ResolvedGuestPointer {
+    const std::byte* ptr = nullptr;
+    ResolvedGuestRange range{};
+};
+
+struct RecordedIndexedArrayRange {
+    bool used = false;
+    std::uint32_t begin = 0;
+    std::uint64_t end = 0;
+};
+
+[[noreturn]] static void throw_unmapped_indexed_array(
+    std::uint32_t address,
+    std::size_t fifo_offset) {
+    throw GxFatalError(
+        "VertexLoader: indexed array address 0x" +
+            [&] {
+                char buf[16];
+                std::snprintf(buf, sizeof(buf), "%08X", address);
+                return std::string(buf);
+            }() +
+            " is not mapped",
+        fifo_offset, 0);
+}
+
+// Per-draw cache for CP array-backed indexed attributes. SMG gameplay replays
+// many small cached display-list draws; each draw often fetches position,
+// normal, color, and texcoord attributes from the same guest memory regions for
+// every vertex. Cache only the resolved mapping bounds, never data contents.
+class IndexedArrayResolver {
+public:
+    explicit IndexedArrayResolver(
+        GuestMemoryV1* memory,
+        std::vector<VertexDecodeGuestRange>* read_ranges = nullptr,
+        DependencyEventSink* dependency_event_sink = nullptr)
+        : memory_(memory), read_ranges_(read_ranges),
+          dependency_event_sink_(dependency_event_sink) {}
+
+    [[nodiscard]] const std::byte* resolve(
+        unsigned attr_idx,
+        std::uint32_t address,
+        std::uint32_t size,
+        std::size_t fifo_offset) {
+        record_read(attr_idx, address, size);
+        const std::byte* resolved = nullptr;
+        if (attr_idx < ranges_.size()) {
+            ResolvedGuestRange& cached = ranges_[attr_idx];
+            if (cached.contains(address, size)) {
+                resolved = cached.pointer(address);
+            } else {
+                const ResolvedGuestPointer uncached =
+                    resolve_uncached(address, size, fifo_offset);
+                cached = uncached.range;
+                resolved = uncached.ptr;
+            }
+        } else {
+            resolved = resolve_uncached(address, size, fifo_offset).ptr;
+        }
+        if (dependency_event_sink_ != nullptr) {
+            dependency_event_sink_->guest_read(
+                DependencyReadSource::IndexedVertex,
+                address, std::span<const std::byte>(resolved, size));
+        }
+        return resolved;
+    }
+
+    void emit_recorded_ranges() const {
+        if (read_ranges_ == nullptr) {
+            return;
+        }
+        for (const RecordedIndexedArrayRange& range : read_range_accum_) {
+            if (!range.used || range.end <= range.begin) {
+                continue;
+            }
+            read_ranges_->push_back(VertexDecodeGuestRange{
+                range.begin,
+                static_cast<std::uint32_t>(range.end - range.begin),
+            });
+        }
+    }
+
+private:
+    void record_read(
+        unsigned attr_idx,
+        std::uint32_t address,
+        std::uint32_t size) {
+        if (read_ranges_ == nullptr ||
+            attr_idx >= read_range_accum_.size() ||
+            size == 0u) {
+            return;
+        }
+        const std::uint64_t end =
+            static_cast<std::uint64_t>(address) + size;
+        if (end > 0x1'0000'0000ull) {
+            throw GxFatalError(
+                "VertexLoader: indexed array dependency range overflows",
+                0,
+                0);
+        }
+        RecordedIndexedArrayRange& range = read_range_accum_[attr_idx];
+        if (!range.used) {
+            range.used = true;
+            range.begin = address;
+            range.end = end;
+            return;
+        }
+        range.begin = std::min(range.begin, address);
+        range.end = std::max(range.end, end);
+    }
+
+    [[nodiscard]] ResolvedGuestPointer resolve_uncached(
+        std::uint32_t address,
+        std::uint32_t size,
+        std::size_t fifo_offset) const {
+        if (memory_ == nullptr) {
+            throw GxFatalError(
+                "VertexLoader: GuestMemoryV1 is null",
+                fifo_offset, 0);
+        }
+
+        if (std::byte* fast = resolve_guest_fast(memory_, address, size);
+            fast != nullptr) {
+            const std::uint32_t region_index = address >> 28;
+            const GuestMemoryFastRegionV1& region =
+                memory_->fast_regions[region_index];
+            const std::uint32_t guest_base = region_index << 28;
+            return ResolvedGuestPointer{
+                fast,
+                ResolvedGuestRange{
+                    true,
+                    guest_base,
+                    static_cast<std::uint64_t>(guest_base) + region.size,
+                    region.host_base,
+                },
+            };
+        }
+
+        if (memory_->regions != nullptr) {
+            const std::uint64_t end =
+                static_cast<std::uint64_t>(address) + size;
+            for (std::uint32_t i = 0; i < memory_->region_count; ++i) {
+                const auto& r = memory_->regions[i];
+                const std::uint64_t r_end =
+                    static_cast<std::uint64_t>(r.guest_base) + r.size;
+                if (r.host_base != nullptr &&
+                    address >= r.guest_base && end <= r_end) {
+                    return ResolvedGuestPointer{
+                        r.host_base + (address - r.guest_base),
+                        ResolvedGuestRange{
+                            true,
+                            r.guest_base,
+                            r_end,
+                            r.host_base,
+                        },
+                    };
+                }
+            }
+        }
+
+        throw_unmapped_indexed_array(address, fifo_offset);
+    }
+
+    GuestMemoryV1* memory_ = nullptr;
+    std::array<ResolvedGuestRange, 16> ranges_{};
+    std::array<RecordedIndexedArrayRange, 16> read_range_accum_{};
+    std::vector<VertexDecodeGuestRange>* read_ranges_ = nullptr;
+    DependencyEventSink* dependency_event_sink_ = nullptr;
+};
+
+// Read a big-endian u16 from an arbitrary host byte pointer.
+[[nodiscard]] static std::uint16_t read_be_u16(const std::byte* p)
+{
+    return static_cast<std::uint16_t>(
+        (static_cast<std::uint16_t>(std::to_integer<std::uint8_t>(p[0])) << 8) |
+         static_cast<std::uint16_t>(std::to_integer<std::uint8_t>(p[1])));
+}
+
+// Byte size of one element for position / normal / texcoord component formats.
+// ComponentFormat: U8=0, S8=1, U16=2, S16=3, F32=4.
+[[nodiscard]] static std::size_t component_byte_size(std::uint8_t fmt)
+{
+    switch (static_cast<ComponentFormat>(fmt)) {
+    case ComponentFormat::U8:  return 1;
+    case ComponentFormat::S8:  return 1;
+    case ComponentFormat::U16: return 2;
+    case ComponentFormat::S16: return 2;
+    case ComponentFormat::F32: return 4;
+    default:
+        throw GxFatalError(
+            "VertexLoader: unknown ComponentFormat " + std::to_string(fmt),
+            0, 0);
+    }
+}
+
+// Byte size of one color element.
+// ColorComponentFormat: RGB565=0, RGB888=1, RGBX8888=2, RGBA4444=3, RGBA6666=4, RGBA8888=5.
+[[nodiscard]] static std::size_t color_byte_size(std::uint8_t fmt)
+{
+    switch (static_cast<ColorComponentFormat>(fmt)) {
+    case ColorComponentFormat::RGB565:   return 2;
+    case ColorComponentFormat::RGB888:   return 3;
+    case ColorComponentFormat::RGBX8888: return 4;
+    case ColorComponentFormat::RGBA4444: return 2;
+    case ColorComponentFormat::RGBA6666: return 3;
+    case ColorComponentFormat::RGBA8888: return 4;
+    default:
+        throw GxFatalError(
+            "VertexLoader: unknown ColorComponentFormat " + std::to_string(fmt),
+            0, 0);
+    }
+}
+
+// VertexAttribute::count for position/texcoord:
+//   0 = XY (2 components), 1 = XYZ (3 components).
+// Normal always has 3 components. NBT stores normal, tangent, and binormal
+// triples; normal_index_3 selects whether indexed NBT uses one shared index or
+// three separate indices.
+[[nodiscard]] static std::size_t pos_component_count(std::uint8_t count)
+{
+    return (count == 0) ? 2u : 3u;   // XY / XYZ
+}
+
+[[nodiscard]] static std::size_t tex_component_count(std::uint8_t count)
+{
+    return (count == 0) ? 1u : 2u;   // S / ST
+}
+
+// De-quantise a fixed-point scalar to float.
+[[nodiscard]] static float dequant_u8(std::uint8_t v, std::uint8_t shift)
+{
+    return static_cast<float>(v) / static_cast<float>(1u << shift);
+}
+[[nodiscard]] static float dequant_s8(std::uint8_t v, std::uint8_t shift)
+{
+    return static_cast<float>(static_cast<std::int8_t>(v)) /
+           static_cast<float>(1u << shift);
+}
+[[nodiscard]] static float dequant_u16(std::uint16_t v, std::uint8_t shift)
+{
+    return static_cast<float>(v) / static_cast<float>(1u << shift);
+}
+[[nodiscard]] static float dequant_s16(std::uint16_t v, std::uint8_t shift)
+{
+    return static_cast<float>(static_cast<std::int16_t>(v)) /
+           static_cast<float>(1u << shift);
+}
+
+// Decode `count` float32 big-endian components from `src` into `dst`.
+// Uses swap32_block for bulk conversion.
+static void decode_floats(
+    const std::byte* src,
+    float* dst,
+    std::size_t count)
+{
+    // swap32_block writes into uint32_t; float and uint32_t are same size and
+    // we bit-cast immediately after, so we can use a local array.
+    // Stack VLA is non-standard; use a small fixed buffer (positions/normals
+    // have at most 3 components, texcoords at most 2).
+    std::uint32_t tmp[3];
+    assert(count <= 3);
+    swap32_block(src, tmp, count);
+    for (std::size_t i = 0; i < count; ++i) {
+        dst[i] = std::bit_cast<float>(tmp[i]);
+    }
+}
+
+// Decode `count` components of the given ComponentFormat from big-endian `src`
+// into `dst` floats, applying fixed-point de-quantisation where appropriate.
+static void decode_components(
+    const std::byte* src,
+    float* dst,
+    std::size_t count,
+    ComponentFormat fmt,
+    std::uint8_t shift)
+{
+    switch (fmt) {
+    case ComponentFormat::F32:
+        decode_floats(src, dst, count);
+        return;
+
+    case ComponentFormat::U8:
+        for (std::size_t i = 0; i < count; ++i) {
+            dst[i] = dequant_u8(
+                std::to_integer<std::uint8_t>(src[i]), shift);
+        }
+        return;
+
+    case ComponentFormat::S8:
+        for (std::size_t i = 0; i < count; ++i) {
+            dst[i] = dequant_s8(
+                std::to_integer<std::uint8_t>(src[i]), shift);
+        }
+        return;
+
+    case ComponentFormat::U16: {
+        // Use swap16_block for pairs/triples.
+        std::uint16_t tmp[3];
+        assert(count <= 3);
+        swap16_block(src, tmp, count);
+        for (std::size_t i = 0; i < count; ++i) {
+            dst[i] = dequant_u16(tmp[i], shift);
+        }
+        return;
+    }
+
+    case ComponentFormat::S16: {
+        std::uint16_t tmp[3];
+        assert(count <= 3);
+        swap16_block(src, tmp, count);
+        for (std::size_t i = 0; i < count; ++i) {
+            dst[i] = dequant_s16(tmp[i], shift);
+        }
+        return;
+    }
+
+    default:
+        throw GxFatalError(
+            "VertexLoader: unsupported ComponentFormat",
+            0, 0);
+    }
+}
+
+// GX normal data is not controlled by the VAT fixed-point shift field used by
+// position/texcoord attributes. It is stored as a fixed fractional vector:
+// U8=0.7, S8=1.6, U16=0.15, S16=1.14, or raw F32. Feeding raw S8/S16 into
+// lighting/emboss makes dot products and texture offsets explode.
+static void decode_normal_components(
+    const std::byte* src,
+    float* dst,
+    ComponentFormat fmt)
+{
+    switch (fmt) {
+    case ComponentFormat::F32:
+        decode_floats(src, dst, 3);
+        return;
+
+    case ComponentFormat::U8:
+        for (std::size_t i = 0; i < 3; ++i) {
+            dst[i] = dequant_u8(
+                std::to_integer<std::uint8_t>(src[i]), 7);
+        }
+        return;
+
+    case ComponentFormat::S8:
+        for (std::size_t i = 0; i < 3; ++i) {
+            dst[i] = dequant_s8(
+                std::to_integer<std::uint8_t>(src[i]), 6);
+        }
+        return;
+
+    case ComponentFormat::U16: {
+        std::uint16_t tmp[3];
+        swap16_block(src, tmp, 3);
+        for (std::size_t i = 0; i < 3; ++i) {
+            dst[i] = dequant_u16(tmp[i], 15);
+        }
+        return;
+    }
+
+    case ComponentFormat::S16: {
+        std::uint16_t tmp[3];
+        swap16_block(src, tmp, 3);
+        for (std::size_t i = 0; i < 3; ++i) {
+            dst[i] = dequant_s16(tmp[i], 14);
+        }
+        return;
+    }
+
+    default:
+        throw GxFatalError(
+            "VertexLoader: unsupported normal ComponentFormat",
+            0, 0);
+    }
+}
+
+// Decode one GX color value from big-endian bytes into a packed RGBA8 uint32.
+// The output is (R<<24)|(G<<16)|(B<<8)|A so that byte 0 = R in little-endian
+// memory, matching DXGI_FORMAT_R8G8B8A8_UNORM.
+//
+// CRITICAL: do NOT swap-byte these bytes — the bytes are already in the
+// right per-channel order in the FIFO stream.
+[[nodiscard]] static std::uint32_t decode_color(
+    const std::byte* src,
+    ColorComponentFormat fmt)
+{
+    auto b = [&](std::size_t i) {
+        return std::to_integer<std::uint32_t>(src[i]);
+    };
+
+    switch (fmt) {
+    case ColorComponentFormat::RGB565: {
+        const std::uint16_t v = static_cast<std::uint16_t>(
+            (b(0) << 8) | b(1));
+        const std::uint32_t r5 = (v >> 11) & 0x1Fu;
+        const std::uint32_t g6 = (v >>  5) & 0x3Fu;
+        const std::uint32_t b5 =  v        & 0x1Fu;
+        // Expand to 8-bit: replicate MSBs into LSBs.
+        const std::uint32_t r8 = (r5 << 3) | (r5 >> 2);
+        const std::uint32_t g8 = (g6 << 2) | (g6 >> 4);
+        const std::uint32_t b8 = (b5 << 3) | (b5 >> 2);
+        return (r8 << 24) | (g8 << 16) | (b8 << 8) | 0xFFu;
+    }
+    case ColorComponentFormat::RGB888:
+        return (b(0) << 24) | (b(1) << 16) | (b(2) << 8) | 0xFFu;
+
+    case ColorComponentFormat::RGBX8888:
+        return (b(0) << 24) | (b(1) << 16) | (b(2) << 8) | 0xFFu;
+
+    case ColorComponentFormat::RGBA4444: {
+        const std::uint16_t v = static_cast<std::uint16_t>(
+            (b(0) << 8) | b(1));
+        const std::uint32_t r4 = (v >> 12) & 0xFu;
+        const std::uint32_t g4 = (v >>  8) & 0xFu;
+        const std::uint32_t b4 = (v >>  4) & 0xFu;
+        const std::uint32_t a4 =  v        & 0xFu;
+        // Expand nibble to byte: replicate into low bits.
+        return ((r4 | (r4 << 4)) << 24) |
+               ((g4 | (g4 << 4)) << 16) |
+               ((b4 | (b4 << 4)) <<  8) |
+               ((a4 | (a4 << 4)));
+    }
+    case ColorComponentFormat::RGBA6666: {
+        // 3 bytes holding 4x6 bits packed as RRRRRRGG GGGGBBBB BBAAAAAA.
+        const std::uint32_t v = (b(0) << 16) | (b(1) << 8) | b(2);
+        const std::uint32_t r6 = (v >> 18) & 0x3Fu;
+        const std::uint32_t g6 = (v >> 12) & 0x3Fu;
+        const std::uint32_t b6 = (v >>  6) & 0x3Fu;
+        const std::uint32_t a6 =  v        & 0x3Fu;
+        // Expand 6-bit to 8-bit: (val << 2) | (val >> 4).
+        const std::uint32_t r8 = (r6 << 2) | (r6 >> 4);
+        const std::uint32_t g8 = (g6 << 2) | (g6 >> 4);
+        const std::uint32_t b8 = (b6 << 2) | (b6 >> 4);
+        const std::uint32_t a8 = (a6 << 2) | (a6 >> 4);
+        return (r8 << 24) | (g8 << 16) | (b8 << 8) | a8;
+    }
+    case ColorComponentFormat::RGBA8888:
+        return (b(0) << 24) | (b(1) << 16) | (b(2) << 8) | b(3);
+
+    default:
+        throw GxFatalError(
+            "VertexLoader: unsupported ColorComponentFormat",
+            0, 0);
+    }
+}
+
+// Decode position or normal from a big-endian source pointer into GxVertexOut.
+static void decode_pos(
+    const std::byte* src,
+    GxVertexOut& out,
+    const VertexAttribute& attr,
+    bool byte_dequant)
+{
+    const std::size_t nc = pos_component_count(attr.count);
+    const auto fmt = static_cast<ComponentFormat>(attr.format);
+    const std::uint8_t shift = !byte_dequant &&
+        (fmt == ComponentFormat::U8 || fmt == ComponentFormat::S8)
+        ? 0u : attr.shift;
+    decode_components(src, out.position, nc, fmt, shift);
+    if (nc < 3) {
+        out.position[2] = 0.0f;
+    }
+}
+
+static void decode_nrm(
+    const std::byte* src,
+    GxVertexOut& out,
+    const VertexAttribute& attr)
+{
+    const auto fmt = static_cast<ComponentFormat>(attr.format);
+    decode_normal_components(src, out.normal, fmt);
+}
+
+static void decode_tangent(
+    const std::byte* src,
+    GxVertexOut& out,
+    const VertexAttribute& attr)
+{
+    const auto fmt = static_cast<ComponentFormat>(attr.format);
+    decode_normal_components(src, out.tangent, fmt);
+}
+
+static void decode_binormal(
+    const std::byte* src,
+    GxVertexOut& out,
+    const VertexAttribute& attr)
+{
+    const auto fmt = static_cast<ComponentFormat>(attr.format);
+    decode_normal_components(src, out.binormal, fmt);
+}
+
+static void zero_vec3(float (&v)[3])
+{
+    v[0] = 0.0f;
+    v[1] = 0.0f;
+    v[2] = 0.0f;
+}
+
+static bool normal_has_nbt(const VertexDescriptor& desc)
+{
+    return desc.normal.count != 0u;
+}
+
+static bool normal_uses_three_indices(const VertexDescriptor& desc)
+{
+    return normal_has_nbt(desc) && desc.normal_index_3;
+}
+
+static std::size_t normal_elem_size(const VertexAttribute& attr)
+{
+    return component_byte_size(attr.format) * 3u;
+}
+
+static void decode_nbt(
+    const std::byte* src,
+    GxVertexOut& out,
+    const VertexAttribute& attr)
+{
+    const std::size_t elem_size = normal_elem_size(attr);
+    decode_nrm(src, out, attr);
+    decode_tangent(src + elem_size, out, attr);
+    decode_binormal(src + elem_size * 2u, out, attr);
+}
+
+static void decode_tex(
+    const std::byte* src,
+    float* uv,
+    const VertexAttribute& attr,
+    bool byte_dequant)
+{
+    const std::size_t nc = tex_component_count(attr.count);
+    const auto fmt = static_cast<ComponentFormat>(attr.format);
+    const std::uint8_t shift = !byte_dequant &&
+        (fmt == ComponentFormat::U8 || fmt == ComponentFormat::S8)
+        ? 0u : attr.shift;
+    decode_components(src, uv, nc, fmt, shift);
+    if (nc < 2) {
+        uv[1] = 0.0f;
+    }
+}
+
+// ---------------------------------------------------------------------------
+// source_vertex_size helpers
+// ---------------------------------------------------------------------------
+
+static std::size_t attr_direct_size_pos(const VertexAttribute& attr)
+{
+    return component_byte_size(attr.format) * pos_component_count(attr.count);
+}
+
+static std::size_t attr_direct_size_nrm(const VertexAttribute& attr)
+{
+    // Normal count 1 is GX_NRM_NBT: direct streams one N/T/B triple.
+    const std::size_t base = normal_elem_size(attr);
+    return attr.count != 0u ? base * 3u : base;
+}
+
+static std::size_t attr_direct_size_tex(const VertexAttribute& attr)
+{
+    return component_byte_size(attr.format) * tex_component_count(attr.count);
+}
+
+[[nodiscard]] std::uint32_t primitive_index_count(
+    PrimitiveClass primitive,
+    std::uint32_t vtx_count,
+    std::size_t fifo_error_offset) {
+    switch (primitive) {
+    case PrimitiveClass::Quads:
+    case PrimitiveClass::Quads2:
+        return (vtx_count / 4u) * 6u;
+    case PrimitiveClass::Triangles:
+        return (vtx_count / 3u) * 3u;
+    case PrimitiveClass::TriangleStrip:
+    case PrimitiveClass::TriangleFan:
+        return vtx_count >= 3u ? (vtx_count - 2u) * 3u : 0u;
+    case PrimitiveClass::Lines:
+        return (vtx_count / 2u) * 2u;
+    case PrimitiveClass::LineStrip:
+        return vtx_count >= 2u ? (vtx_count - 1u) * 2u : 0u;
+    case PrimitiveClass::Points:
+        return vtx_count;
+    default:
+        throw GxFatalError(
+            "VertexLoader: unknown PrimitiveClass",
+            fifo_error_offset,
+            0);
+    }
+}
+
+void decode_vertex_stream(
+    const std::byte* raw_ptr,
+    std::uint32_t vtx_count,
+    std::size_t src_stride,
+    const VertexDescriptor& desc,
+    const GxState& state,
+    IndexedArrayResolver& array_resolver,
+    std::size_t fifo_error_offset,
+    GxVertexOut* verts) {
+    for (std::uint32_t vi = 0; vi < vtx_count; ++vi) {
+        GxVertexOut& out = verts[vi];
+        const std::byte* vsrc =
+            raw_ptr + static_cast<std::size_t>(vi) * src_stride;
+        std::size_t off = 0;
+
+        std::uint8_t pnmtx_idx = static_cast<std::uint8_t>(
+            state.cp(cp::kMatrixIndexA) & 0x3Fu);
+        std::uint8_t texmtx_idx[8]{};
+
+        if (desc.has_pn_matrix_index) {
+            pnmtx_idx = std::to_integer<std::uint8_t>(vsrc[off++]);
+        }
+        for (unsigned ti = 0; ti < 8; ++ti) {
+            if (desc.has_tex_matrix_index[ti]) {
+                texmtx_idx[ti] = std::to_integer<std::uint8_t>(vsrc[off++]);
+            }
+        }
+        out.mtx_indices[0] =
+            static_cast<std::uint32_t>(pnmtx_idx) |
+            (static_cast<std::uint32_t>(texmtx_idx[0]) << 8) |
+            (static_cast<std::uint32_t>(texmtx_idx[1]) << 16) |
+            (static_cast<std::uint32_t>(texmtx_idx[2]) << 24);
+        out.mtx_indices[1] =
+            static_cast<std::uint32_t>(texmtx_idx[3]) |
+            (static_cast<std::uint32_t>(texmtx_idx[4]) << 8) |
+            (static_cast<std::uint32_t>(texmtx_idx[5]) << 16) |
+            (static_cast<std::uint32_t>(texmtx_idx[6]) << 24);
+        out.mtx_indices[2] = static_cast<std::uint32_t>(texmtx_idx[7]);
+        out.mtx_indices[3] = 0u;
+
+        if (desc.position.vcd == VcdType::Direct) {
+            const std::size_t sz = attr_direct_size_pos(desc.position);
+            decode_pos(vsrc + off, out, desc.position, desc.byte_dequant);
+            off += sz;
+        } else if (desc.position.vcd == VcdType::Index8 ||
+                   desc.position.vcd == VcdType::Index16) {
+            std::uint32_t idx = 0;
+            if (desc.position.vcd == VcdType::Index8) {
+                idx = std::to_integer<std::uint8_t>(vsrc[off]);
+                off += 1;
+            } else {
+                idx = read_be_u16(vsrc + off);
+                off += 2;
+            }
+            const std::uint32_t arr_base = state.array_base(0u);
+            const std::uint32_t arr_stride = state.array_stride(0u);
+            const std::uint32_t addr = arr_base + idx * arr_stride;
+            const std::byte* ap = array_resolver.resolve(
+                0u,
+                addr,
+                static_cast<std::uint32_t>(
+                    attr_direct_size_pos(desc.position)),
+                fifo_error_offset);
+            decode_pos(ap, out, desc.position, desc.byte_dequant);
+        } else {
+            out.position[0] = 0.0f;
+            out.position[1] = 0.0f;
+            out.position[2] = 0.0f;
+        }
+
+        if (desc.normal.vcd == VcdType::Direct) {
+            const std::size_t sz = attr_direct_size_nrm(desc.normal);
+            if (normal_has_nbt(desc)) {
+                decode_nbt(vsrc + off, out, desc.normal);
+            } else {
+                decode_nrm(vsrc + off, out, desc.normal);
+                zero_vec3(out.tangent);
+                zero_vec3(out.binormal);
+            }
+            off += sz;
+        } else if (desc.normal.vcd == VcdType::Index8 ||
+                   desc.normal.vcd == VcdType::Index16) {
+            const unsigned attr_idx = 1u;
+            const std::uint32_t arr_base = state.array_base(attr_idx);
+            const std::uint32_t arr_stride = state.array_stride(attr_idx);
+
+            if (!normal_uses_three_indices(desc)) {
+                std::uint32_t idx = 0;
+                if (desc.normal.vcd == VcdType::Index8) {
+                    idx = std::to_integer<std::uint8_t>(vsrc[off]);
+                    off += 1;
+                } else {
+                    idx = read_be_u16(vsrc + off);
+                    off += 2;
+                }
+                const std::size_t elem_sz = normal_elem_size(desc.normal);
+                const std::size_t read_sz =
+                    normal_has_nbt(desc) ? elem_sz * 3u : elem_sz;
+                const std::uint32_t addr = arr_base + idx * arr_stride;
+                const std::byte* ap = array_resolver.resolve(
+                    attr_idx,
+                    addr,
+                    static_cast<std::uint32_t>(read_sz),
+                    fifo_error_offset);
+                if (normal_has_nbt(desc)) {
+                    decode_nbt(ap, out, desc.normal);
+                } else {
+                    decode_nrm(ap, out, desc.normal);
+                    zero_vec3(out.tangent);
+                    zero_vec3(out.binormal);
+                }
+            } else {
+                const std::size_t idx_bytes =
+                    (desc.normal.vcd == VcdType::Index8) ? 1u : 2u;
+                std::uint32_t idx[3]{};
+                for (unsigned ni = 0; ni < 3; ++ni) {
+                    if (desc.normal.vcd == VcdType::Index8) {
+                        idx[ni] = std::to_integer<std::uint8_t>(
+                            vsrc[off + ni]);
+                    } else {
+                        idx[ni] = read_be_u16(vsrc + off + ni * idx_bytes);
+                    }
+                }
+                off += idx_bytes * 3u;
+
+                const std::size_t elem_sz = normal_elem_size(desc.normal);
+                const std::byte* n = array_resolver.resolve(
+                    attr_idx,
+                    arr_base + idx[0] * arr_stride,
+                    static_cast<std::uint32_t>(elem_sz),
+                    fifo_error_offset);
+                const std::byte* t = array_resolver.resolve(
+                    attr_idx,
+                    arr_base + idx[1] * arr_stride + static_cast<std::uint32_t>(elem_sz),
+                    static_cast<std::uint32_t>(elem_sz),
+                    fifo_error_offset);
+                const std::byte* b = array_resolver.resolve(
+                    attr_idx,
+                    arr_base + idx[2] * arr_stride + static_cast<std::uint32_t>(elem_sz * 2u),
+                    static_cast<std::uint32_t>(elem_sz),
+                    fifo_error_offset);
+                decode_nrm(n, out, desc.normal);
+                decode_tangent(t, out, desc.normal);
+                decode_binormal(b, out, desc.normal);
+            }
+        } else {
+            zero_vec3(out.normal);
+            zero_vec3(out.tangent);
+            zero_vec3(out.binormal);
+        }
+
+        for (unsigned ci = 0; ci < 2; ++ci) {
+            const VertexAttribute& ca = desc.color[ci];
+            std::uint32_t& cdst = (ci == 0) ? out.color0 : out.color1;
+            const unsigned attr_idx = 2u + ci;
+
+            if (ca.vcd == VcdType::Direct) {
+                const std::size_t sz = color_byte_size(ca.format);
+                cdst = decode_color(
+                    vsrc + off,
+                    static_cast<ColorComponentFormat>(ca.format));
+                off += sz;
+            } else if (ca.vcd == VcdType::Index8 ||
+                       ca.vcd == VcdType::Index16) {
+                std::uint32_t idx = 0;
+                if (ca.vcd == VcdType::Index8) {
+                    idx = std::to_integer<std::uint8_t>(vsrc[off]);
+                    off += 1;
+                } else {
+                    idx = read_be_u16(vsrc + off);
+                    off += 2;
+                }
+                const std::uint32_t arr_base = state.array_base(attr_idx);
+                const std::uint32_t arr_stride = state.array_stride(attr_idx);
+                const std::uint32_t addr = arr_base + idx * arr_stride;
+                const std::byte* ap = array_resolver.resolve(
+                    attr_idx,
+                    addr,
+                    static_cast<std::uint32_t>(color_byte_size(ca.format)),
+                    fifo_error_offset);
+                cdst = decode_color(
+                    ap, static_cast<ColorComponentFormat>(ca.format));
+            } else {
+                cdst = 0u;
+            }
+        }
+
+        for (unsigned ti = 0; ti < 8; ++ti) {
+            const VertexAttribute& ta = desc.texcoord[ti];
+            float* uv = out.uv[ti];
+            const unsigned attr_idx = 4u + ti;
+
+            if (ta.vcd == VcdType::Direct) {
+                const std::size_t sz = attr_direct_size_tex(ta);
+                decode_tex(vsrc + off, uv, ta, desc.byte_dequant);
+                off += sz;
+            } else if (ta.vcd == VcdType::Index8 ||
+                       ta.vcd == VcdType::Index16) {
+                std::uint32_t idx = 0;
+                if (ta.vcd == VcdType::Index8) {
+                    idx = std::to_integer<std::uint8_t>(vsrc[off]);
+                    off += 1;
+                } else {
+                    idx = read_be_u16(vsrc + off);
+                    off += 2;
+                }
+                const std::uint32_t arr_base = state.array_base(attr_idx);
+                const std::uint32_t arr_stride = state.array_stride(attr_idx);
+                const std::uint32_t addr = arr_base + idx * arr_stride;
+                const std::size_t elem_sz = attr_direct_size_tex(ta);
+                const std::byte* ap = array_resolver.resolve(
+                    attr_idx,
+                    addr,
+                    static_cast<std::uint32_t>(elem_sz),
+                    fifo_error_offset);
+                decode_tex(ap, uv, ta, desc.byte_dequant);
+            } else {
+                uv[0] = 0.0f;
+                uv[1] = 0.0f;
+            }
+        }
+
+        if (off != src_stride) {
+            throw GxFatalError(
+                "VertexLoader: source vertex decode size mismatch",
+                fifo_error_offset,
+                0);
+        }
+    }
+}
+
+void emit_primitive_indices(
+    std::uint16_t* idx_ptr,
+    std::uint32_t& idx_count,
+    PrimitiveClass primitive,
+    std::uint32_t packet_vertex_base,
+    std::uint32_t vtx_count,
+    std::uint32_t index_vertex_bias,
+    std::size_t fifo_error_offset) {
+    auto emit_index = [&](std::uint32_t value) {
+        const std::uint32_t biased =
+            packet_vertex_base + value + index_vertex_bias;
+        if (biased > std::numeric_limits<std::uint16_t>::max()) {
+            throw GxFatalError(
+                "VertexLoader: indexed batch exceeded 16-bit index range",
+                fifo_error_offset,
+                0);
+        }
+        idx_ptr[idx_count++] = static_cast<std::uint16_t>(biased);
+    };
+    auto emit = [&](std::uint32_t a, std::uint32_t b, std::uint32_t c) {
+        emit_index(a);
+        emit_index(b);
+        emit_index(c);
+    };
+    auto emit2 = [&](std::uint32_t a, std::uint32_t b) {
+        emit_index(a);
+        emit_index(b);
+    };
+
+    switch (primitive) {
+    case PrimitiveClass::Quads:
+    case PrimitiveClass::Quads2: {
+        const std::uint32_t n = (vtx_count / 4u) * 4u;
+        for (std::uint32_t i = 0; i < n; i += 4u) {
+            emit(i, i + 1u, i + 2u);
+            emit(i, i + 2u, i + 3u);
+        }
+        break;
+    }
+    case PrimitiveClass::Triangles:
+        for (std::uint32_t i = 0; i < (vtx_count / 3u) * 3u; ++i) {
+            emit_index(i);
+        }
+        break;
+    case PrimitiveClass::TriangleStrip:
+        for (std::uint32_t i = 0; i + 2u < vtx_count; ++i) {
+            if ((i & 1u) == 0u) {
+                emit(i, i + 1u, i + 2u);
+            } else {
+                emit(i + 1u, i, i + 2u);
+            }
+        }
+        break;
+    case PrimitiveClass::TriangleFan:
+        for (std::uint32_t i = 1u; i + 1u < vtx_count; ++i) {
+            emit(0u, i, i + 1u);
+        }
+        break;
+    case PrimitiveClass::Lines:
+        for (std::uint32_t i = 0; i + 1u < vtx_count; i += 2u) {
+            emit2(i, i + 1u);
+        }
+        break;
+    case PrimitiveClass::LineStrip:
+        for (std::uint32_t i = 0; i + 1u < vtx_count; ++i) {
+            emit2(i, i + 1u);
+        }
+        break;
+    case PrimitiveClass::Points:
+        for (std::uint32_t i = 0; i < vtx_count; ++i) {
+            emit_index(i);
+        }
+        break;
+    default:
+        throw GxFatalError(
+            "VertexLoader: unknown PrimitiveClass",
+            fifo_error_offset,
+            0);
+    }
+}
+
+}  // anonymous namespace
+
+// ---------------------------------------------------------------------------
+// VertexLoader::source_vertex_size
+// ---------------------------------------------------------------------------
+
+std::size_t VertexLoader::source_vertex_size(const VertexDescriptor& desc)
+{
+    std::size_t sz = 0;
+
+    // Matrix index bytes (always 1 byte each when present, regardless of
+    // the attribute type — these are always Direct in the FIFO).
+    if (desc.has_pn_matrix_index) {
+        sz += 1;
+    }
+    for (unsigned i = 0; i < 8; ++i) {
+        if (desc.has_tex_matrix_index[i]) {
+            sz += 1;
+        }
+    }
+
+    // Position.
+    switch (desc.position.vcd) {
+    case VcdType::None:   break;
+    case VcdType::Direct: sz += attr_direct_size_pos(desc.position); break;
+    case VcdType::Index8: sz += 1; break;
+    case VcdType::Index16: sz += 2; break;
+    }
+
+    // Normal.
+    switch (desc.normal.vcd) {
+    case VcdType::None:   break;
+    case VcdType::Direct: sz += attr_direct_size_nrm(desc.normal); break;
+    case VcdType::Index8:
+        sz += normal_uses_three_indices(desc) ? 3u : 1u;
+        break;
+    case VcdType::Index16:
+        sz += normal_uses_three_indices(desc) ? 6u : 2u;
+        break;
+    }
+
+    // Color0, Color1.
+    for (unsigned c = 0; c < 2; ++c) {
+        switch (desc.color[c].vcd) {
+        case VcdType::None:   break;
+        case VcdType::Direct: sz += color_byte_size(desc.color[c].format); break;
+        case VcdType::Index8: sz += 1; break;
+        case VcdType::Index16: sz += 2; break;
+        }
+    }
+
+    // Texcoords 0-7.
+    for (unsigned t = 0; t < 8; ++t) {
+        switch (desc.texcoord[t].vcd) {
+        case VcdType::None:   break;
+        case VcdType::Direct: sz += attr_direct_size_tex(desc.texcoord[t]); break;
+        case VcdType::Index8: sz += 1; break;
+        case VcdType::Index16: sz += 2; break;
+        }
+    }
+
+    return sz;
+}
+
+// ---------------------------------------------------------------------------
+// VertexLoader::load — main entry point
+// ---------------------------------------------------------------------------
+
+LoadedPrimitive VertexLoader::load(
+    FifoCursor& cursor,
+    PrimitiveClass primitive,
+    std::uint8_t vtxfmt,
+    const GxState& state,
+    GuestMemoryV1* memory,
+    UploadRing& vertex_ring,
+    UploadRing& index_ring,
+    std::uint32_t index_batch_base_vertex,
+    bool rebase_indices_to_batch_base)
+{
+    const VertexDescriptor desc = state.vertex_desc(vtxfmt);
+    const std::size_t src_stride = source_vertex_size(desc);
+    return load_with_layout(
+        cursor,
+        primitive,
+        vtxfmt,
+        state,
+        desc,
+        src_stride,
+        memory,
+        vertex_ring,
+        index_ring,
+        index_batch_base_vertex,
+        rebase_indices_to_batch_base);
+}
+
+LoadedPrimitive VertexLoader::load_with_layout(
+    FifoCursor& cursor,
+    PrimitiveClass primitive,
+    std::uint8_t vtxfmt,
+    const GxState& state,
+    const VertexDescriptor& desc,
+    std::size_t src_stride,
+    GuestMemoryV1* memory,
+    UploadRing& vertex_ring,
+    UploadRing& index_ring,
+    std::uint32_t index_batch_base_vertex,
+    bool rebase_indices_to_batch_base)
+{
+    (void)vtxfmt;
+    const std::uint16_t vtx_count = cursor.read_u16();
+
+    if (vtx_count == 0) {
+        // Nothing to do; return an empty primitive.
+        LoadedPrimitive empty{};
+        empty.source_class = primitive;
+        return empty;
+    }
+
+    // ---------------------------------------------------------------------------
+    // Allocate output vertex buffer in the upload ring.
+    // ---------------------------------------------------------------------------
+    const std::size_t vb_size = static_cast<std::size_t>(vtx_count) *
+                                 sizeof(GxVertexOut);
+    const UploadRing::Allocation vb = vertex_ring.allocate(vb_size, 16);
+    const auto verts = reinterpret_cast<GxVertexOut*>(vb.cpu);
+    const std::uint32_t base_vertex =
+        static_cast<std::uint32_t>(vb.offset / sizeof(GxVertexOut));
+    if (rebase_indices_to_batch_base &&
+        base_vertex < index_batch_base_vertex) {
+        throw GxFatalError(
+            "VertexLoader: indexed batch base is after primitive vertices",
+            cursor.base_offset,
+            0);
+    }
+    const std::uint32_t index_vertex_bias = rebase_indices_to_batch_base
+        ? (base_vertex - index_batch_base_vertex)
+        : 0u;
+
+    // ---------------------------------------------------------------------------
+    // Take the raw FIFO window for all vertex data in one shot.
+    // ---------------------------------------------------------------------------
+    const std::size_t total_raw  = src_stride * vtx_count;
+    const std::span<const std::byte> raw = cursor.take(total_raw);
+    const std::byte* raw_ptr = raw.data();
+    const std::size_t fifo_error_offset = cursor.base_offset + cursor.offset;
+    IndexedArrayResolver array_resolver(
+        memory, nullptr, dependency_event_sink_);
+
+    // ---------------------------------------------------------------------------
+    // Decode each vertex.
+    // ---------------------------------------------------------------------------
+    for (std::uint32_t vi = 0; vi < vtx_count; ++vi) {
+        GxVertexOut& out = verts[vi];
+        const std::byte* vsrc = raw_ptr + static_cast<std::size_t>(vi) * src_stride;
+        std::size_t off = 0;           // byte offset within this vertex's raw data
+
+        // --- Matrix indices ---------------------------------------------------
+        // Default = the CURRENT matrix (CP MatrixIndexA bits 5:0, set by
+        // GXSetCurrentMtx / draw setup), NOT a hardcoded PNMTX0.  Draws
+        // without per-vertex PNMTXIDX must transform with the current
+        // matrix per GX semantics.
+        std::uint8_t pnmtx_idx = static_cast<std::uint8_t>(
+            state.cp(cp::kMatrixIndexA) & 0x3Fu);
+        std::uint8_t texmtx_idx[8]{};
+
+        if (desc.has_pn_matrix_index) {
+            pnmtx_idx = std::to_integer<std::uint8_t>(vsrc[off++]);
+        }
+        for (unsigned ti = 0; ti < 8; ++ti) {
+            if (desc.has_tex_matrix_index[ti]) {
+                texmtx_idx[ti] = std::to_integer<std::uint8_t>(vsrc[off++]);
+            }
+        }
+        out.mtx_indices[0] =
+            static_cast<std::uint32_t>(pnmtx_idx) |
+            (static_cast<std::uint32_t>(texmtx_idx[0]) << 8) |
+            (static_cast<std::uint32_t>(texmtx_idx[1]) << 16) |
+            (static_cast<std::uint32_t>(texmtx_idx[2]) << 24);
+        out.mtx_indices[1] =
+            static_cast<std::uint32_t>(texmtx_idx[3]) |
+            (static_cast<std::uint32_t>(texmtx_idx[4]) << 8) |
+            (static_cast<std::uint32_t>(texmtx_idx[5]) << 16) |
+            (static_cast<std::uint32_t>(texmtx_idx[6]) << 24);
+        out.mtx_indices[2] = static_cast<std::uint32_t>(texmtx_idx[7]);
+        out.mtx_indices[3] = 0u;
+
+        // --- Position ---------------------------------------------------------
+        if (desc.position.vcd == VcdType::Direct) {
+            const std::size_t sz = attr_direct_size_pos(desc.position);
+            decode_pos(vsrc + off, out, desc.position, desc.byte_dequant);
+            off += sz;
+        } else if (desc.position.vcd == VcdType::Index8 ||
+                   desc.position.vcd == VcdType::Index16)
+        {
+            std::uint32_t idx = 0;
+            if (desc.position.vcd == VcdType::Index8) {
+                idx = std::to_integer<std::uint8_t>(vsrc[off]);
+                off += 1;
+            } else {
+                idx = read_be_u16(vsrc + off);
+                off += 2;
+            }
+            // CP array attr index: position = 0 in CP array registers.
+            const std::uint32_t arr_base   = state.array_base(0u);
+            const std::uint32_t arr_stride = state.array_stride(0u);
+            const std::uint32_t addr = arr_base + idx * arr_stride;
+            const std::byte* ap = array_resolver.resolve(
+                0u,
+                addr,
+                static_cast<std::uint32_t>(attr_direct_size_pos(desc.position)),
+                fifo_error_offset);
+            decode_pos(ap, out, desc.position, desc.byte_dequant);
+        } else {
+            out.position[0] = 0.0f;
+            out.position[1] = 0.0f;
+            out.position[2] = 0.0f;
+        }
+
+        // --- Normal -----------------------------------------------------------
+        if (desc.normal.vcd == VcdType::Direct) {
+            const std::size_t sz = attr_direct_size_nrm(desc.normal);
+            if (normal_has_nbt(desc)) {
+                decode_nbt(vsrc + off, out, desc.normal);
+            } else {
+                decode_nrm(vsrc + off, out, desc.normal);
+                zero_vec3(out.tangent);
+                zero_vec3(out.binormal);
+            }
+            off += sz;
+        } else if (desc.normal.vcd == VcdType::Index8 ||
+                   desc.normal.vcd == VcdType::Index16)
+        {
+            // CP array attribute index for normal = 1.
+            const unsigned attr_idx = 1u;
+            const std::uint32_t arr_base   = state.array_base(attr_idx);
+            const std::uint32_t arr_stride = state.array_stride(attr_idx);
+
+            if (!normal_uses_three_indices(desc)) {
+                std::uint32_t idx = 0;
+                if (desc.normal.vcd == VcdType::Index8) {
+                    idx = std::to_integer<std::uint8_t>(vsrc[off]);
+                    off += 1;
+                } else {
+                    idx = read_be_u16(vsrc + off);
+                    off += 2;
+                }
+                const std::size_t elem_sz = normal_elem_size(desc.normal);
+                const std::size_t read_sz =
+                    normal_has_nbt(desc) ? elem_sz * 3u : elem_sz;
+                const std::uint32_t addr = arr_base + idx * arr_stride;
+                const std::byte* ap = array_resolver.resolve(
+                    attr_idx,
+                    addr,
+                    static_cast<std::uint32_t>(read_sz),
+                    fifo_error_offset);
+                if (normal_has_nbt(desc)) {
+                    decode_nbt(ap, out, desc.normal);
+                } else {
+                    decode_nrm(ap, out, desc.normal);
+                    zero_vec3(out.tangent);
+                    zero_vec3(out.binormal);
+                }
+            } else {
+                const std::size_t idx_bytes =
+                    (desc.normal.vcd == VcdType::Index8) ? 1u : 2u;
+                std::uint32_t idx[3]{};
+                for (unsigned ni = 0; ni < 3; ++ni) {
+                    if (desc.normal.vcd == VcdType::Index8) {
+                        idx[ni] = std::to_integer<std::uint8_t>(
+                            vsrc[off + ni]);
+                    } else {
+                        idx[ni] = read_be_u16(vsrc + off + ni * idx_bytes);
+                    }
+                }
+                off += idx_bytes * 3u;
+
+                const std::size_t elem_sz = normal_elem_size(desc.normal);
+                const std::byte* n = array_resolver.resolve(
+                    attr_idx,
+                    arr_base + idx[0] * arr_stride,
+                    static_cast<std::uint32_t>(elem_sz),
+                    fifo_error_offset);
+                const std::byte* t = array_resolver.resolve(
+                    attr_idx,
+                    arr_base + idx[1] * arr_stride + static_cast<std::uint32_t>(elem_sz),
+                    static_cast<std::uint32_t>(elem_sz),
+                    fifo_error_offset);
+                const std::byte* b = array_resolver.resolve(
+                    attr_idx,
+                    arr_base + idx[2] * arr_stride + static_cast<std::uint32_t>(elem_sz * 2u),
+                    static_cast<std::uint32_t>(elem_sz),
+                    fifo_error_offset);
+                decode_nrm(n, out, desc.normal);
+                decode_tangent(t, out, desc.normal);
+                decode_binormal(b, out, desc.normal);
+            }
+        } else {
+            zero_vec3(out.normal);
+            zero_vec3(out.tangent);
+            zero_vec3(out.binormal);
+        }
+
+        // --- Color0, Color1 ---------------------------------------------------
+        // CP array attribute indices: color0 = 2, color1 = 3.
+        for (unsigned ci = 0; ci < 2; ++ci) {
+            const VertexAttribute& ca = desc.color[ci];
+            std::uint32_t& cdst = (ci == 0) ? out.color0 : out.color1;
+            const unsigned attr_idx = 2u + ci;
+
+            if (ca.vcd == VcdType::Direct) {
+                const std::size_t sz = color_byte_size(ca.format);
+                cdst = decode_color(
+                    vsrc + off,
+                    static_cast<ColorComponentFormat>(ca.format));
+                off += sz;
+            } else if (ca.vcd == VcdType::Index8 || ca.vcd == VcdType::Index16) {
+                std::uint32_t idx = 0;
+                if (ca.vcd == VcdType::Index8) {
+                    idx = std::to_integer<std::uint8_t>(vsrc[off]);
+                    off += 1;
+                } else {
+                    idx = read_be_u16(vsrc + off);
+                    off += 2;
+                }
+                const std::uint32_t arr_base   = state.array_base(attr_idx);
+                const std::uint32_t arr_stride = state.array_stride(attr_idx);
+                const std::uint32_t addr = arr_base + idx * arr_stride;
+                const std::byte* ap = array_resolver.resolve(
+                    attr_idx,
+                    addr,
+                    static_cast<std::uint32_t>(color_byte_size(ca.format)),
+                    fifo_error_offset);
+                cdst = decode_color(
+                    ap, static_cast<ColorComponentFormat>(ca.format));
+            } else {
+                cdst = 0u;
+            }
+        }
+
+        // --- Texcoords 0-7 ----------------------------------------------------
+        // CP array attribute indices: texcoord0-7 = 4-11.
+        for (unsigned ti = 0; ti < 8; ++ti) {
+            const VertexAttribute& ta = desc.texcoord[ti];
+            float* uv = out.uv[ti];
+            const unsigned attr_idx = 4u + ti;
+
+            if (ta.vcd == VcdType::Direct) {
+                const std::size_t sz = attr_direct_size_tex(ta);
+                decode_tex(vsrc + off, uv, ta, desc.byte_dequant);
+                off += sz;
+            } else if (ta.vcd == VcdType::Index8 || ta.vcd == VcdType::Index16) {
+                std::uint32_t idx = 0;
+                if (ta.vcd == VcdType::Index8) {
+                    idx = std::to_integer<std::uint8_t>(vsrc[off]);
+                    off += 1;
+                } else {
+                    idx = read_be_u16(vsrc + off);
+                    off += 2;
+                }
+                const std::uint32_t arr_base   = state.array_base(attr_idx);
+                const std::uint32_t arr_stride = state.array_stride(attr_idx);
+                const std::uint32_t addr = arr_base + idx * arr_stride;
+                const std::size_t elem_sz = attr_direct_size_tex(ta);
+                const std::byte* ap = array_resolver.resolve(
+                    attr_idx,
+                    addr,
+                    static_cast<std::uint32_t>(elem_sz),
+                    fifo_error_offset);
+                decode_tex(ap, uv, ta, desc.byte_dequant);
+            } else {
+                uv[0] = 0.0f;
+                uv[1] = 0.0f;
+            }
+        }
+    }  // end vertex loop
+
+    // ---------------------------------------------------------------------------
+    // Build index list.
+    // ---------------------------------------------------------------------------
+
+    // Compute the maximum index count.
+    std::uint32_t max_indices = 0;
+    switch (primitive) {
+    case PrimitiveClass::Quads:
+    case PrimitiveClass::Quads2:
+        // Each group of 4 verts → 2 triangles = 6 indices.
+        max_indices = (static_cast<std::uint32_t>(vtx_count) / 4) * 6;
+        break;
+    case PrimitiveClass::Triangles:
+        max_indices = (static_cast<std::uint32_t>(vtx_count) / 3u) * 3u;
+        break;
+    case PrimitiveClass::TriangleStrip:
+        // N verts → max N-2 triangles.
+        max_indices = vtx_count >= 3
+            ? (static_cast<std::uint32_t>(vtx_count) - 2) * 3
+            : 0;
+        break;
+    case PrimitiveClass::TriangleFan:
+        max_indices = vtx_count >= 3
+            ? (static_cast<std::uint32_t>(vtx_count) - 2) * 3
+            : 0;
+        break;
+    case PrimitiveClass::Lines:
+        max_indices = vtx_count;
+        break;
+    case PrimitiveClass::LineStrip:
+        max_indices = vtx_count >= 2
+            ? (static_cast<std::uint32_t>(vtx_count) - 1) * 2
+            : 0;
+        break;
+    case PrimitiveClass::Points:
+        max_indices = vtx_count;
+        break;
+    default:
+        throw GxFatalError(
+            "VertexLoader: unknown PrimitiveClass",
+            cursor.base_offset, 0);
+    }
+
+    if (max_indices == 0) {
+        // Degenerate primitive — no index data needed.
+        LoadedPrimitive prim{};
+        prim.base_vertex   = base_vertex;
+        prim.vertex_byte_offset = vb.offset;
+        prim.vertex_count  = vtx_count;
+        prim.first_index   = 0;
+        prim.index_count   = 0;
+        prim.indexed       = false;
+        prim.source_class  = primitive;
+        return prim;
+    }
+
+    if (primitive == PrimitiveClass::Triangles) {
+        LoadedPrimitive prim{};
+        prim.base_vertex  = base_vertex;
+        prim.vertex_byte_offset = vb.offset;
+        prim.vertex_count = vtx_count;
+        prim.first_index  = 0;
+        prim.index_count  = max_indices;
+        prim.indexed      = false;
+        prim.source_class = primitive;
+        return prim;
+    }
+
+    const UploadRing::Allocation ib =
+        index_ring.allocate(
+            static_cast<std::size_t>(max_indices) * sizeof(std::uint16_t),
+            sizeof(std::uint16_t));
+    auto* idx_ptr = reinterpret_cast<std::uint16_t*>(ib.cpu);
+    const std::uint32_t first_index =
+        static_cast<std::uint32_t>(ib.offset / sizeof(std::uint16_t));
+
+    std::uint32_t idx_count = 0;
+
+    auto emit_index = [&](std::uint32_t value) {
+        const std::uint32_t biased = value + index_vertex_bias;
+        if (biased > std::numeric_limits<std::uint16_t>::max()) {
+            throw GxFatalError(
+                "VertexLoader: indexed batch exceeded 16-bit index range",
+                cursor.base_offset,
+                0);
+        }
+        idx_ptr[idx_count++] = static_cast<std::uint16_t>(biased);
+    };
+    auto emit = [&](std::uint32_t a, std::uint32_t b2, std::uint32_t c2) {
+        emit_index(a);
+        emit_index(b2);
+        emit_index(c2);
+    };
+    auto emit2 = [&](std::uint32_t a, std::uint32_t b2) {
+        emit_index(a);
+        emit_index(b2);
+    };
+
+    switch (primitive) {
+    case PrimitiveClass::Quads:
+    case PrimitiveClass::Quads2: {
+        // GX Quads: vertices 0,1,2,3 → triangles (0,1,2) and (0,2,3).
+        const std::uint32_t n = (static_cast<std::uint32_t>(vtx_count) / 4) * 4;
+        for (std::uint32_t i = 0; i < n; i += 4) {
+            emit(i, i + 1, i + 2);
+            emit(i, i + 2, i + 3);
+        }
+        break;
+    }
+    case PrimitiveClass::Triangles: {
+        for (std::uint32_t i = 0; i < (vtx_count / 3u) * 3u; ++i) {
+            emit_index(i);
+        }
+        break;
+    }
+    case PrimitiveClass::TriangleStrip: {
+        // Even-numbered triangles: i, i+1, i+2.
+        // Odd-numbered triangles:  i+1, i, i+2  (flip winding).
+        for (std::uint32_t i = 0; i + 2 < vtx_count; ++i) {
+            if ((i & 1u) == 0) {
+                emit(i, i + 1, i + 2);
+            } else {
+                emit(i + 1, i, i + 2);
+            }
+        }
+        break;
+    }
+    case PrimitiveClass::TriangleFan: {
+        // All triangles share vertex 0.
+        for (std::uint32_t i = 1; i + 1 < vtx_count; ++i) {
+            emit(0, i, i + 1);
+        }
+        break;
+    }
+    case PrimitiveClass::Lines: {
+        for (std::uint32_t i = 0; i + 1 < vtx_count; i += 2) {
+            emit2(i, i + 1);
+        }
+        break;
+    }
+    case PrimitiveClass::LineStrip: {
+        for (std::uint32_t i = 0; i + 1 < vtx_count; ++i) {
+            emit2(i, i + 1);
+        }
+        break;
+    }
+    case PrimitiveClass::Points: {
+        for (std::uint32_t i = 0; i < vtx_count; ++i) {
+            emit_index(i);
+        }
+        break;
+    }
+    default:
+        break;
+    }
+
+    LoadedPrimitive prim{};
+    prim.base_vertex  = base_vertex;
+    prim.vertex_byte_offset = vb.offset;
+    prim.vertex_count = vtx_count;
+    prim.first_index  = first_index;
+    prim.index_count  = idx_count;
+    prim.indexed      = true;
+    prim.source_class = primitive;
+
+    return prim;
+}
+
+LoadedPrimitive VertexLoader::load_cached_packet_run_with_layout(
+    std::span<const std::byte> bytes,
+    std::size_t base_offset,
+    std::span<const CachedDrawPacket> packets,
+    PrimitiveClass primitive,
+    std::uint8_t vtxfmt,
+    const GxState& state,
+    const VertexDescriptor& desc,
+    std::size_t src_stride,
+    GuestMemoryV1* memory,
+    UploadRing& vertex_ring,
+    UploadRing& index_ring,
+    std::uint32_t index_batch_base_vertex,
+    bool rebase_indices_to_batch_base,
+    std::uint32_t precomputed_total_vertices,
+    std::uint32_t precomputed_total_indices,
+    std::span<const std::uint16_t> precomputed_indices) {
+    const DecodedPacketRunVertices decoded =
+        decode_cached_packet_run_vertices_with_layout(
+            bytes,
+            base_offset,
+            packets,
+            primitive,
+            vtxfmt,
+            state,
+            desc,
+            src_stride,
+            memory,
+            precomputed_total_vertices,
+            precomputed_total_indices);
+    return upload_cached_packet_run_vertices(
+        decoded.vertices,
+        base_offset,
+        packets,
+        primitive,
+        vertex_ring,
+        index_ring,
+        index_batch_base_vertex,
+        rebase_indices_to_batch_base,
+        decoded.total_indices,
+        precomputed_indices);
+}
+
+DecodedPacketRunVertices
+VertexLoader::decode_cached_packet_run_vertices_with_layout(
+    std::span<const std::byte> bytes,
+    std::size_t base_offset,
+    std::span<const CachedDrawPacket> packets,
+    PrimitiveClass primitive,
+    std::uint8_t vtxfmt,
+    const GxState& state,
+    const VertexDescriptor& desc,
+    std::size_t src_stride,
+    GuestMemoryV1* memory,
+    std::uint32_t precomputed_total_vertices,
+    std::uint32_t precomputed_total_indices) {
+    (void)vtxfmt;
+    DecodedPacketRunVertices decoded{};
+    if (packets.empty()) {
+        return decoded;
+    }
+
+    std::uint32_t actual_vertices = 0;
+    std::uint32_t actual_indices = 0;
+    for (const CachedDrawPacket& packet : packets) {
+        const std::size_t expected_payload =
+            src_stride * static_cast<std::size_t>(packet.vertex_count);
+        if (packet.draw_payload_size != expected_payload ||
+            packet.draw_cursor_offset + 2u < packet.draw_cursor_offset ||
+            packet.draw_cursor_offset + 2u + packet.draw_payload_size >
+                bytes.size()) {
+            throw GxFatalError(
+                "GX FIFO: cached packet draw run packet out of range",
+                base_offset + packet.local_opcode_offset,
+                packet.opcode);
+        }
+        if (packet.vertex_count == 0u) {
+            continue;
+        }
+        if (actual_vertices >
+            static_cast<std::uint32_t>(
+                std::numeric_limits<std::uint16_t>::max()) -
+                packet.vertex_count) {
+            throw GxFatalError(
+                "VertexLoader: cached packet run exceeded 16-bit vertex span",
+                base_offset + packet.local_opcode_offset,
+                packet.opcode);
+        }
+        const std::uint32_t packet_index_count = primitive_index_count(
+            primitive,
+            packet.vertex_count,
+            base_offset + packet.local_opcode_offset);
+        if (actual_indices >
+            std::numeric_limits<std::uint32_t>::max() - packet_index_count) {
+            throw GxFatalError(
+                "VertexLoader: cached packet run index count overflow",
+                base_offset + packet.local_opcode_offset,
+                packet.opcode);
+        }
+        actual_vertices += packet.vertex_count;
+        actual_indices += packet_index_count;
+    }
+
+    std::uint32_t total_vertices = actual_vertices;
+    std::uint32_t total_indices = actual_indices;
+    if (precomputed_total_vertices != 0u ||
+        precomputed_total_indices != 0u) {
+        if (precomputed_total_vertices != actual_vertices ||
+            precomputed_total_indices != actual_indices) {
+            throw GxFatalError(
+                "VertexLoader: cached packet run precomputed totals mismatch",
+                base_offset + packets.front().local_opcode_offset,
+                packets.front().opcode);
+        }
+        total_vertices = precomputed_total_vertices;
+        total_indices = precomputed_total_indices;
+    }
+
+    if (total_vertices >
+        static_cast<std::uint32_t>(
+            std::numeric_limits<std::uint16_t>::max())) {
+        throw GxFatalError(
+            "VertexLoader: cached packet run exceeded 16-bit vertex span",
+            base_offset + packets.front().local_opcode_offset,
+            packets.front().opcode);
+    }
+
+    if (total_vertices == 0u) {
+        decoded.total_indices = total_indices;
+        return decoded;
+    }
+
+    decoded.total_vertices = total_vertices;
+    decoded.total_indices = total_indices;
+    decoded.vertices.resize(total_vertices);
+
+    IndexedArrayResolver array_resolver(
+        memory, &decoded.guest_array_reads, dependency_event_sink_);
+    std::uint32_t dst_vertex = 0;
+    for (const CachedDrawPacket& packet : packets) {
+        if (packet.vertex_count == 0u) {
+            continue;
+        }
+        const std::byte* raw_ptr =
+            bytes.data() + packet.draw_cursor_offset + 2u;
+        decode_vertex_stream(
+            raw_ptr,
+            packet.vertex_count,
+            src_stride,
+            desc,
+            state,
+            array_resolver,
+            base_offset + packet.local_opcode_offset,
+            decoded.vertices.data() + dst_vertex);
+        dst_vertex += packet.vertex_count;
+    }
+    if (dst_vertex != total_vertices) {
+        throw GxFatalError(
+            "VertexLoader: cached packet run decoded wrong vertex count",
+            base_offset + packets.front().local_opcode_offset,
+            packets.front().opcode);
+    }
+    array_resolver.emit_recorded_ranges();
+    return decoded;
+}
+
+LoadedPrimitive VertexLoader::upload_cached_packet_run_vertices(
+    std::span<const GxVertexOut> decoded_vertices,
+    std::size_t base_offset,
+    std::span<const CachedDrawPacket> packets,
+    PrimitiveClass primitive,
+    UploadRing& vertex_ring,
+    UploadRing& index_ring,
+    std::uint32_t index_batch_base_vertex,
+    bool rebase_indices_to_batch_base,
+    std::uint32_t total_indices,
+    std::span<const std::uint16_t> precomputed_indices,
+    ImmutableUploadToken* upload_token) {
+    const std::uint32_t total_vertices =
+        static_cast<std::uint32_t>(decoded_vertices.size());
+    const std::size_t error_offset =
+        base_offset +
+        (!packets.empty() ? packets.front().local_opcode_offset : 0u);
+    const std::uint8_t error_opcode =
+        !packets.empty() ? packets.front().opcode : 0u;
+    if (decoded_vertices.size() >
+        static_cast<std::size_t>(std::numeric_limits<std::uint16_t>::max())) {
+        throw GxFatalError(
+            "VertexLoader: cached packet run exceeded 16-bit vertex span",
+            error_offset,
+            error_opcode);
+    }
+
+    if (total_vertices == 0u) {
+        LoadedPrimitive empty{};
+        empty.source_class = primitive;
+        return empty;
+    }
+
+    const std::size_t vb_size =
+        static_cast<std::size_t>(total_vertices) * sizeof(GxVertexOut);
+    const UploadRing::Allocation vb = upload_token != nullptr
+        ? vertex_ring.upload_immutable(
+              decoded_vertices.data(), vb_size, 16, *upload_token)
+        : vertex_ring.allocate(vb_size, 16);
+    if (upload_token == nullptr) {
+        std::memcpy(vb.cpu, decoded_vertices.data(), vb_size);
+    }
+    const std::uint32_t base_vertex =
+        static_cast<std::uint32_t>(vb.offset / sizeof(GxVertexOut));
+    if (rebase_indices_to_batch_base &&
+        base_vertex < index_batch_base_vertex) {
+        throw GxFatalError(
+            "VertexLoader: indexed batch base is after primitive vertices",
+            error_offset,
+            error_opcode);
+    }
+    const std::uint32_t index_vertex_bias = rebase_indices_to_batch_base
+        ? (base_vertex - index_batch_base_vertex)
+        : 0u;
+
+    if (total_indices == 0u) {
+        LoadedPrimitive prim{};
+        prim.base_vertex = base_vertex;
+        prim.vertex_byte_offset = vb.offset;
+        prim.vertex_count = total_vertices;
+        prim.first_index = 0;
+        prim.index_count = 0;
+        prim.indexed = false;
+        prim.source_class = primitive;
+        return prim;
+    }
+
+    if (primitive == PrimitiveClass::Triangles &&
+        std::all_of(packets.begin(), packets.end(),
+            [](const CachedDrawPacket& packet) {
+                return packet.vertex_count % 3u == 0u;
+            })) {
+        LoadedPrimitive prim{};
+        prim.base_vertex = base_vertex;
+        prim.vertex_byte_offset = vb.offset;
+        prim.vertex_count = total_vertices;
+        prim.first_index = 0;
+        prim.index_count = total_vertices;
+        prim.indexed = false;
+        prim.source_class = primitive;
+        return prim;
+    }
+
+    const UploadRing::Allocation ib = index_ring.allocate(
+        static_cast<std::size_t>(total_indices) * sizeof(std::uint16_t),
+        sizeof(std::uint16_t));
+    auto* idx_ptr = reinterpret_cast<std::uint16_t*>(ib.cpu);
+    const std::uint32_t first_index =
+        static_cast<std::uint32_t>(ib.offset / sizeof(std::uint16_t));
+
+    std::uint32_t idx_count = 0;
+    if (!precomputed_indices.empty()) {
+        if (precomputed_indices.size() != total_indices) {
+            throw GxFatalError(
+                "VertexLoader: cached packet run index payload size mismatch",
+                error_offset,
+                error_opcode);
+        }
+        if (index_vertex_bias == 0u) {
+            std::memcpy(
+                idx_ptr,
+                precomputed_indices.data(),
+                precomputed_indices.size() * sizeof(std::uint16_t));
+        } else {
+            for (const std::uint16_t index : precomputed_indices) {
+                const std::uint32_t biased =
+                    static_cast<std::uint32_t>(index) + index_vertex_bias;
+                if (biased > std::numeric_limits<std::uint16_t>::max()) {
+                    throw GxFatalError(
+                        "VertexLoader: indexed batch exceeded 16-bit index range",
+                        error_offset,
+                        error_opcode);
+                }
+                idx_ptr[idx_count++] = static_cast<std::uint16_t>(biased);
+            }
+        }
+        idx_count = static_cast<std::uint32_t>(precomputed_indices.size());
+    } else {
+        std::uint32_t packet_vertex_base = 0;
+        for (const CachedDrawPacket& packet : packets) {
+            if (packet.vertex_count != 0u) {
+                emit_primitive_indices(
+                    idx_ptr,
+                    idx_count,
+                    primitive,
+                    packet_vertex_base,
+                    packet.vertex_count,
+                    index_vertex_bias,
+                    base_offset + packet.local_opcode_offset);
+            }
+            packet_vertex_base += packet.vertex_count;
+        }
+    }
+    if (idx_count != total_indices) {
+        throw GxFatalError(
+            "VertexLoader: cached packet run emitted wrong index count",
+            error_offset,
+            error_opcode);
+    }
+
+    LoadedPrimitive prim{};
+    prim.base_vertex = base_vertex;
+    prim.vertex_byte_offset = vb.offset;
+    prim.vertex_count = total_vertices;
+    prim.first_index = first_index;
+    prim.index_count = idx_count;
+    prim.indexed = true;
+    prim.source_class = primitive;
+    return prim;
+}
+
+}  // namespace galaxy::gx
