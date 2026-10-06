@@ -1,0 +1,19 @@
+# Build trees
+/target/
+/build/
+/build-*/
+/out/
+/dist/
+/.vs/
+*.user
+
+# Anything derived from a game dump stays local (see docs/CONTENT_POLICY.md)
+/generated/
+
+# Local scratch and editor state
+/.env
+/.env.*
+/.claude/
+**/__pycache__/
+*.log
+*.tmp

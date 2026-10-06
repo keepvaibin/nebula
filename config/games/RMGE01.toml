@@ -1,0 +1,7 @@
+schema_version = 1
+game_id = "RMGE01"
+region = "USA"
+revision = 0
+main_dol_sha1 = "9a71008ae1ee9010e267fa67d1f0b0d4f0e895dd"
+native_platform = "windows-x86_64"
+
