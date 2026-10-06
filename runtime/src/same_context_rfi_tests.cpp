@@ -45,7 +45,7 @@ int main() {
     require(!proof.matches(context,pc,4,thread,thread&0x3FFFFFFFu,3,false));
     galaxy::PpcContext different_native=context;
     require(!proof.matches(different_native,pc,4,thread,thread&0x3FFFFFFFu,3,true));
-    // Timer/exception SPR changes remain live: this proof never restores them.
+    // Timer/exception SPR changes stay live; the proof does not restore them.
     context.decrementer_start_ticks=9999; context.decrementer_start_value=1234;
     context.time_base_offset=4321; context.spr[26]=pc; context.spr[27]=context.msr;
     require(match(proof)); require(context.decrementer_start_ticks==9999);

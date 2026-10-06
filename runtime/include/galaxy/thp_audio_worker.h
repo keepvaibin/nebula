@@ -5,7 +5,7 @@
 // daMP_PushDecodedAudioBuffer,daMP_PopDecodedAudioBuffer,daMP_MixAudio}
 // https://github.com/TwilitRealm/dusklight/tree/ad979d3dae092d0f5cbdaf49eabca7b4f1db4838
 // Galaxy's movie owns 20 slots, rather than Dusklight's three. This primitive
-// deliberately has no guest address or guest-memory API. The producer copies
+// has no guest address or guest-memory API. The producer copies
 // compressed input before the worker can see it; the consumer copies 32-kHz
 // interleaved PCM exactly once for each strictly ordered audio callback.
 

@@ -13,13 +13,12 @@ inline void fit_rmge01_cinema_vertical(const Access& access, std::uint32_t root,
         access.children(owner, [&](std::uint32_t bar) {
             const bool upper = access.named(bar, "FrameU");
             if (!upper && !access.named(bar, "FrameD")) return;
-            // RMGE01 Wait/Appear/End author a 60-unit bar at y +/-245..260.
-            // Close/Open animate height 60..250 to meet at the screen center.
-            // The animation has just supplied fresh dimensions and matrices.
-            // Anchor the ordinary frame to the expanded outer edge, retaining
-            // its height/motion. During closure add only the corresponding
-            // fraction of extra half-screen coverage, so Blank cannot open a
-            // center gap. Size is consumed by Picture::DrawSelf; no hit region.
+            // RMGE01 Wait/Appear/End author a 60-unit bar at y +/-245..260;
+            // Close/Open animate height 60..250 to meet at screen center.
+            // Anchor the bar to the expanded outer edge and, while closing,
+            // add the matching fraction of extra half-screen coverage so
+            // Blank cannot open a center gap. Size is used only by
+            // Picture::DrawSelf; there is no hit region.
             const float height = access.f32(bar + 0x50u);
             if (!std::isfinite(height) || height <= 0.0f)
                 throw std::runtime_error("RMGE01 cinema bar height is invalid");

@@ -42,12 +42,17 @@ namespace Nebula.Setup
         /// <summary>Bump when nebula-recomp package-content output changes shape.</summary>
         public const int ContentFormatVersion = 1;
 
-        /// <summary>Accepted module build recipe; part of the module compatibility key.</summary>
+        /// <summary>Module build recipe; part of the module compatibility key.</summary>
         private static readonly string[] ModuleRecipe =
         {
-            "Ninja Multi-Config", "Release", "GALAXY_NATIVE_ISA=SSE2", "GALAXY_MODULE_USE_PCH=ON",
-            "GALAXY_MODULE_ENABLE_LTCG=OFF"
+            "Ninja", "Release", "clang-cl", "GALAXY_NATIVE_ISA=SSE2", "GALAXY_MODULE_USE_PCH=ON"
         };
+
+        /// <summary>Files Setup compiles from the user's game.</summary>
+        private static readonly string[] ModuleFiles = { "RMGE01_game.dll", "RMGE01_home_button.dll", "RMGE01_dsp.dll", "RMGE01_boot_image.bin" };
+
+        /// <summary>Prebuilt runtime libraries the modules link against (Setup payload).</summary>
+        private static readonly string[] RuntimeLibraries = { "galaxy_ppc_float.lib", "galaxy_softfloat.lib", "galaxy_dsp_alu.lib" };
 
         /// <summary>Files under game-inputs that regeneration needs.</summary>
         private static readonly string[] GameInputFiles =
@@ -63,6 +68,7 @@ namespace Nebula.Setup
         private readonly SourceTree source;
         private readonly Toolchain toolchain;
         private readonly StreamWriter logFile;
+        private readonly object logLock = new object();
         private readonly Stopwatch clock = Stopwatch.StartNew();
         private string staging;
         private double stageBase, stageWeight;
@@ -87,87 +93,92 @@ namespace Nebula.Setup
         public string InstalledVersionDir { get; private set; }
         public TimeSpan Elapsed { get { return clock.Elapsed; } }
 
-        // ---- compatibility keys ------------------------------------------------
-
-        private string GeneratorKey
-        {
-            get
-            {
-                return source.SubsetSha256("crates/", "metadata/", "third_party/dolphin-free-dsp-rom/", "Cargo.lock", "Cargo.toml");
-            }
-        }
-
+        /// <summary>Everything compiled modules depend on: generator, runtime, toolchain and recipe.</summary>
         public string ModuleKey
         {
             get
             {
-                return FileUtil.Sha256Text(string.Join("\n", new[] { GeneratorKey, source.SubsetSha256("runtime/include/"), toolchain.Id }.Concat(ModuleRecipe)));
-            }
-        }
-
-        public string RuntimeKey
-        {
-            get
-            {
-                return FileUtil.Sha256Text(string.Join("\n", GeneratorKey,
-                    source.SubsetSha256("runtime/", "CMakeLists.txt", "third_party/berkeley-softfloat-3/"), toolchain.Id));
+                string inputs = source.SubsetSha256("crates/", "metadata/", "third_party/", "runtime/", "Cargo.lock", "Cargo.toml", "CMakeLists.txt");
+                return FileUtil.Sha256Text(string.Join("\n", new[] { inputs, toolchain.Id }.Concat(ModuleRecipe)));
             }
         }
 
         // ---- requirements --------------------------------------------------------
 
-        public const long RequiredFreeBytes = 22L << 30;
-        public const ulong MinimumMemory = 15UL << 30;
+        public const long RequiredFreeBytes = 16L << 30;
+        public const ulong MinimumMemory = 7UL << 30;
 
         public static List<string> CheckRequirements(string installRoot)
         {
             var problems = new List<string>();
-            if (!Environment.Is64BitOperatingSystem) problems.Add("Nebula requires 64-bit Windows 10 or Windows 11.");
-            if (Environment.OSVersion.Version.Major < 10) problems.Add("Nebula requires Windows 10 or Windows 11.");
+            if (!Environment.Is64BitOperatingSystem) problems.Add("Nebula needs 64-bit Windows 10 or 11.");
+            if (Environment.OSVersion.Version.Major < 10) problems.Add("Nebula needs Windows 10 or 11.");
             ulong memory = NativeMethods.TotalPhysicalMemory();
             if (memory < MinimumMemory)
-                problems.Add(string.Format("Compiling Nebula needs at least 16 GB of RAM (this PC has {0}). One recompiled module takes about 13 GB to compile.",
-                    FileUtil.FormatBytes((long)memory)));
+                problems.Add("Nebula needs 8 GB of RAM (this PC has " + FileUtil.FormatBytes((long)memory) + ").");
             try
             {
                 string fs = FileUtil.FileSystemName(installRoot);
                 if (!string.Equals(fs, "NTFS", StringComparison.OrdinalIgnoreCase))
-                    problems.Add("The install folder must be on an NTFS drive (this drive is " + fs + ").");
+                    problems.Add("The install folder must be on an NTFS drive (this one is " + fs + ").");
                 long free = FileUtil.FreeBytes(installRoot);
                 if (free < RequiredFreeBytes)
-                    problems.Add(string.Format("The install drive needs {0} free during setup; it has {1}.",
-                        FileUtil.FormatBytes(RequiredFreeBytes), FileUtil.FormatBytes(free)));
+                    problems.Add("Setup needs " + FileUtil.FormatBytes(RequiredFreeBytes) + " free; the drive has " + FileUtil.FormatBytes(free) + ".");
             }
             catch (Exception error) { problems.Add("Cannot inspect the install folder: " + error.Message); }
             return problems;
         }
 
+        /// <summary>One compiler per thread, limited to about 1 GB of RAM each beyond 3 GB for Windows.</summary>
         public static int DefaultCompileJobs()
         {
-            // Up to about 2.4 GB per compiler process (measured) for 512 KiB shards,
-            // keeping 4 GB for Windows and the rest of the desktop.
             double gigabytes = NativeMethods.TotalPhysicalMemory() / (double)(1UL << 30);
-            int byMemory = (int)Math.Floor((gigabytes - 4) / 2.5);
-            return Math.Max(1, Math.Min(Math.Min(Environment.ProcessorCount, byMemory), 32));
+            int byMemory = (int)Math.Floor(gigabytes - 3);
+            return Math.Max(1, Math.Min(Math.Min(Environment.ProcessorCount, byMemory), 64));
         }
 
         // ---- main entry ------------------------------------------------------------
 
         public void Run()
         {
-            Log("Nebula Setup " + BuildInfo.Version + " (" + BuildInfo.Commit + "), mode " + request.Mode);
+            Log("Nebula Setup " + BuildInfo.Version + " (" + BuildInfo.Commit + "), " + request.Mode);
             Log("Install folder: " + layout.Root);
             Directory.CreateDirectory(layout.Root);
             Directory.CreateDirectory(layout.Staging);
             CleanAbandonedStaging();
             staging = Path.Combine(layout.Staging, DateTime.UtcNow.ToString("yyyyMMdd-HHmmss") + "-" + Guid.NewGuid().ToString("N").Substring(0, 8));
             Directory.CreateDirectory(staging);
+            Thread prepare = null;
+            Exception prepareFailure = null;
+            var prepareCancel = CancellationTokenSource.CreateLinkedTokenSource(cancel);
+            string src = null;
             try
             {
                 var current = InstalledInfo.Read(layout);
                 bool needInput = request.GameInput != null || !RetainedInputsValid() || !ContentValid();
                 if (needInput && request.GameInput == null)
-                    throw new InvalidOperationException("Choose your Super Mario Galaxy ISO, RVZ or extracted folder to continue.");
+                    throw new InvalidOperationException("Choose your Super Mario Galaxy ISO, RVZ or extracted folder.");
+
+                bool reuseModules = current != null && current.ModuleKey == ModuleKey && request.Mode == InstallMode.Update
+                    && current.FilesIntact(ModuleFiles);
+                Log("Reuse compiled modules: " + reuseModules);
+
+                // Downloads run while the game is extracted and recompiled.
+                if (!reuseModules)
+                {
+                    if (!toolchain.IsReady) Log("Microsoft C++ Build Tools license: " + toolchain.LicenseUrl);
+                    prepare = new Thread(delegate()
+                    {
+                        try
+                        {
+                            toolchain.Ensure(BackgroundProgress, Log, prepareCancel.Token);
+                            src = source.Ensure(layout.Sources, request.SourceOverride, BackgroundProgress, Log, prepareCancel.Token);
+                        }
+                        catch (Exception error) { prepareFailure = error; }
+                    });
+                    prepare.IsBackground = true;
+                    prepare.Start();
+                }
 
                 string data = null;
                 if (request.GameInput != null)
@@ -175,55 +186,52 @@ namespace Nebula.Setup
                     Stage(0.00, 0.02, "Checking your game");
                     Identify(request.GameInput);
                     data = PrepareData(request.GameInput);
-                    Stage(0.10, 0.02, "Saving the game files Nebula needs for future updates");
                     CopyGameInputs(data, Path.Combine(staging, "game-inputs"));
-                    Stage(0.12, 0.08, "Building the game content package");
+                    Stage(0.10, 0.08, "Packing the game files");
                     RunRecomp(new[] { "package-content", data, "--output", Path.Combine(staging, "content") }, null);
                 }
 
-                bool reuseModules = current != null && current.ModuleKey == ModuleKey && request.Mode == InstallMode.Update
-                    && current.FilesIntact("RMGE01_game.dll", "RMGE01_home_button.dll", "RMGE01_boot_image.bin");
-                bool reuseRuntime = reuseModules && current.RuntimeKey == RuntimeKey && current.FilesIntact("NebulaRuntime.exe");
-                Log("Reuse compiled game modules: " + reuseModules + "; reuse runtime: " + reuseRuntime);
-
                 string app = Path.Combine(staging, "app");
                 Directory.CreateDirectory(app);
-                if (!reuseRuntime || !reuseModules)
+                if (reuseModules)
                 {
-                    Stage(0.20, 0.17, "Downloading and preparing the compiler toolchain");
-                    if (!toolchain.IsReady)
-                        Log("Microsoft C++ Build Tools license: " + toolchain.LicenseUrl);
-                    toolchain.Ensure(StepProgress, Log, cancel);
-                    Stage(0.37, 0.02, "Getting the Nebula source code");
-                    string src = source.Ensure(layout.Sources, request.SourceOverride, StepProgress, Log, cancel);
-                    Stage(0.39, 0.02, "Recompiling the game code");
-                    string inputs = request.GameInput != null ? Path.Combine(staging, "game-inputs") : layout.GameInputs;
-                    string gen = Path.Combine(staging, "generated");
-                    RunRecomp(new[] { "generate", inputs, "--output", gen }, null);
-                    BuildAll(src, gen, app, reuseRuntime ? current : null, reuseModules ? current : null);
+                    Stage(0.20, 0.70, "Reusing the compiled game");
+                    current.CopyFiles(app, ModuleFiles);
+                    foreach (var dll in current.RuntimeDllNames()) current.CopyFiles(app, dll);
                 }
                 else
                 {
-                    Stage(0.39, 0.55, "Reusing the compatible compiled game");
-                    current.CopyFiles(app, "NebulaRuntime.exe", "RMGE01_game.dll", "RMGE01_home_button.dll", "RMGE01_boot_image.bin");
-                    foreach (var dll in current.RuntimeDllNames()) current.CopyFiles(app, dll);
+                    Stage(0.18, 0.04, "Recompiling the game code");
+                    string inputs = request.GameInput != null ? Path.Combine(staging, "game-inputs") : layout.GameInputs;
+                    string gen = Path.Combine(staging, "generated");
+                    RunRecomp(new[] { "generate", inputs, "--output", gen }, null);
+
+                    Stage(0.22, 0.08, "Downloading the compiler");
+                    waitingForDownloads = true;
+                    prepare.Join();
+                    waitingForDownloads = false;
+                    if (prepareFailure != null) throw prepareFailure;
+                    Build(src, gen, app);
                 }
 
-                Stage(0.94, 0.02, "Finishing the installation");
+                Stage(0.94, 0.02, "Finishing");
                 AssembleApp(app, current);
                 ValidateApp(app);
                 Stage(0.96, 0.04, "Switching to the new version");
                 Commit(app, current);
                 Report(1.0, "Nebula " + BuildInfo.Version + " is installed.", 1);
-                Log(string.Format("Completed in {0:hh\\:mm\\:ss}.", clock.Elapsed));
+                Log(string.Format("Completed in {0:mm\\:ss}.", clock.Elapsed));
             }
             catch (Exception error)
             {
+                prepareCancel.Cancel();
                 Log("FAILED: " + error);
                 throw;
             }
             finally
             {
+                if (prepare != null) prepare.Join();
+                prepareCancel.Dispose();
                 try { FileUtil.DeleteTree(staging); } catch (Exception error) { Log("Could not remove staging: " + error.Message); }
                 logFile.Dispose();
             }
@@ -233,10 +241,9 @@ namespace Nebula.Setup
 
         private void Identify(string input)
         {
-            string json = null;
             var lines = new List<string>();
             int code = RunTool(RecompPath, new[] { "identify", input, "--json" }, null, delegate(string line) { lines.Add(line); });
-            json = string.Join("\n", lines);
+            string json = string.Join("\n", lines);
             Log(json);
             Dictionary<string, object> identity;
             try { identity = Json.Parse(json.Substring(Math.Max(0, json.IndexOf('{')))); }
@@ -249,36 +256,31 @@ namespace Nebula.Setup
         {
             if (Directory.Exists(input))
             {
-                Log("Using the extracted folder " + input + " (read only).");
                 string nested = Path.Combine(input, "DATA");
                 return File.Exists(Path.Combine(nested, "sys", "main.dol")) ? nested : input;
             }
-            Stage(0.02, 0.08, "Extracting your game image");
+            Stage(0.02, 0.08, "Extracting your game");
             string output = Path.Combine(staging, "extracted");
             RunRecomp(new[] { "extract", input, "--output", output }, delegate(string line)
             {
                 var match = Regex.Match(line, @"^PROGRESS (\d+) (\d+)$");
-                if (match.Success)
-                {
-                    StepProgress("Extracting your game image", double.Parse(match.Groups[1].Value) / Math.Max(1, double.Parse(match.Groups[2].Value)));
-                    return true;
-                }
-                return false;
+                if (!match.Success) return false;
+                StepProgress(null, double.Parse(match.Groups[1].Value) / Math.Max(1, double.Parse(match.Groups[2].Value)));
+                return true;
             });
             return Path.Combine(output, "DATA");
         }
 
         private static void CopyGameInputs(string data, string target)
         {
+            var hashes = new Dictionary<string, object>();
             foreach (var relative in GameInputFiles)
             {
-                string from = Path.Combine(data, relative.Replace('/', '\\'));
                 string to = Path.Combine(target, relative.Replace('/', '\\'));
                 Directory.CreateDirectory(Path.GetDirectoryName(to));
-                File.Copy(from, to);
+                File.Copy(Path.Combine(data, relative.Replace('/', '\\')), to);
+                hashes[relative] = FileUtil.Sha256File(to);
             }
-            var hashes = new Dictionary<string, object>();
-            foreach (var relative in GameInputFiles) hashes[relative] = FileUtil.Sha256File(Path.Combine(target, relative.Replace('/', '\\')));
             Json.Save(Path.Combine(target, "inputs.json"), hashes);
         }
 
@@ -307,48 +309,30 @@ namespace Nebula.Setup
             catch (Exception) { return false; }
         }
 
-        private void BuildAll(string src, string gen, string app, InstalledInfo runtimeFrom, InstalledInfo modulesFrom)
+        /// <summary>One clang-cl build of the game, Home Menu and DSP modules.</summary>
+        private void Build(string src, string gen, string app)
         {
             var env = toolchain.BuildEnvironment();
             int jobs = request.CompileJobs > 0 ? request.CompileJobs : DefaultCompileJobs();
-            Log("Compile jobs: " + jobs);
+            string libs = Path.Combine(staging, "runtime-libs");
+            foreach (var lib in RuntimeLibraries) Payload.Extract(lib, Path.Combine(libs, lib));
+            Func<string, string> cmakePath = delegate(string path) { return path.Replace('\\', '/'); };
+
+            Stage(0.30, 0.64, "Compiling the game (" + jobs + " at a time)");
             string build = Path.Combine(staging, "build");
-            string rt = Path.Combine(build, "runtime");
-            Stage(0.41, 0.08, "Compiling the Nebula runtime");
-            var configure = new List<string> { "-S", src, "-B", rt, "-G", "Ninja Multi-Config", "-DGALAXY_NATIVE_ISA=SSE2",
-                "-DNEBULA_GENERATED_DSP_SOURCE=" + Path.Combine(gen, "dsp", "rmge01_dsp.cpp").Replace('\\', '/') };
+            var configure = new List<string> { "-S", gen, "-B", build, "-G", "Ninja", "-DCMAKE_BUILD_TYPE=Release",
+                "-DGALAXY_RUNTIME_INCLUDE=" + cmakePath(Path.Combine(src, "runtime", "include")),
+                "-DGALAXY_PPC_FLOAT_LIBRARY=" + cmakePath(Path.Combine(libs, "galaxy_ppc_float.lib")),
+                "-DGALAXY_SOFTFLOAT_LIBRARY=" + cmakePath(Path.Combine(libs, "galaxy_softfloat.lib")),
+                "-DGALAXY_DSP_ALU_LIBRARY=" + cmakePath(Path.Combine(libs, "galaxy_dsp_alu.lib")),
+                "-DGALAXY_NATIVE_ISA=SSE2", "-DGALAXY_MODULE_COMPILE_JOBS=" + jobs };
             configure.AddRange(toolchain.CMakeToolArguments());
             CMake(configure, env);
-            CMake(new List<string> { "--build", rt, "--config", "Release", "--parallel", jobs.ToString(),
-                "--target", "NebulaRuntime", "galaxy_ppc_float", "galaxy_softfloat" }, env);
-            File.Copy(Path.Combine(rt, "Release", "NebulaRuntime.exe"), Path.Combine(app, "NebulaRuntime.exe"));
+            CMake(new List<string> { "--build", build, "--parallel", jobs.ToString() }, env);
 
-            var common = new List<string> {
-                "-DGALAXY_RUNTIME_INCLUDE=" + Path.Combine(src, "runtime", "include").Replace('\\', '/'),
-                "-DGALAXY_PPC_FLOAT_LIBRARY=" + Path.Combine(rt, "Release", "galaxy_ppc_float.lib").Replace('\\', '/'),
-                "-DGALAXY_SOFTFLOAT_LIBRARY=" + Path.Combine(rt, "Release", "galaxy_softfloat.lib").Replace('\\', '/'),
-                "-DGALAXY_NATIVE_ISA=SSE2" };
-            common.AddRange(toolchain.CMakeToolArguments());
-
-            if (modulesFrom != null)
-            {
-                Stage(0.49, 0.45, "Reusing the compatible compiled game modules");
-                modulesFrom.CopyFiles(app, "RMGE01_game.dll", "RMGE01_home_button.dll", "RMGE01_boot_image.bin");
-                return;
-            }
-            Stage(0.49, 0.33, "Compiling the recompiled game (the longest step)");
-            var game = new List<string> { "-S", Path.Combine(gen, "game"), "-B", Path.Combine(build, "game"), "-G", "Ninja Multi-Config",
-                "-DGALAXY_MODULE_COMPILE_JOBS=" + jobs };
-            game.AddRange(common);
-            CMake(game, env);
-            CMake(new List<string> { "--build", Path.Combine(build, "game"), "--config", "Release", "--parallel", jobs.ToString() }, env);
-            Stage(0.82, 0.12, "Compiling the Home Menu module");
-            var home = new List<string> { "-S", Path.Combine(gen, "home"), "-B", Path.Combine(build, "home"), "-G", "Ninja Multi-Config" };
-            home.AddRange(common);
-            CMake(home, env);
-            CMake(new List<string> { "--build", Path.Combine(build, "home"), "--config", "Release", "--parallel", "1" }, env);
-            File.Copy(Path.Combine(build, "game", "Release", "RMGE01_game.dll"), Path.Combine(app, "RMGE01_game.dll"));
-            File.Copy(Path.Combine(build, "home", "Release", "RMGE01_home_button.dll"), Path.Combine(app, "RMGE01_home_button.dll"));
+            File.Copy(Path.Combine(build, "game", "RMGE01_game.dll"), Path.Combine(app, "RMGE01_game.dll"));
+            File.Copy(Path.Combine(build, "home", "RMGE01_home_button.dll"), Path.Combine(app, "RMGE01_home_button.dll"));
+            File.Copy(Path.Combine(build, "dsp", "RMGE01_dsp.dll"), Path.Combine(app, "RMGE01_dsp.dll"));
             File.Copy(Path.Combine(gen, "RMGE01_boot_image.bin"), Path.Combine(app, "RMGE01_boot_image.bin"));
         }
 
@@ -361,7 +345,7 @@ namespace Nebula.Setup
             }
             if (!File.Exists(Path.Combine(app, "vcruntime140.dll")) && current != null)
                 foreach (var dll in current.RuntimeDllNames()) current.CopyFiles(app, dll);
-            foreach (var name in new[] { "Nebula.exe", "runtime-env.json", "LICENSE", "THIRD-PARTY-NOTICES.md", "README.md", "nebula-recomp.exe" })
+            foreach (var name in new[] { "NebulaRuntime.exe", "Nebula.exe", "runtime-env.json", "LICENSE", "THIRD-PARTY-NOTICES.md", "README.md", "nebula-recomp.exe" })
                 Payload.Extract(name, Path.Combine(app, name));
 
             var files = new Dictionary<string, object>();
@@ -373,7 +357,6 @@ namespace Nebula.Setup
                 { "commit", source.Commit },
                 { "repository", source.Repository },
                 { "moduleKey", ModuleKey },
-                { "runtimeKey", RuntimeKey },
                 { "toolchain", toolchain.Id },
                 { "contentFormatVersion", ContentFormatVersion },
                 { "installedUtc", DateTime.UtcNow.ToString("o") },
@@ -381,21 +364,34 @@ namespace Nebula.Setup
             });
         }
 
-        /// <summary>Load the built module and check its manifest exports before switching.</summary>
+        /// <summary>Load each compiled module and check its exports before switching.</summary>
         private void ValidateApp(string app)
         {
-            foreach (var name in new[] { "NebulaRuntime.exe", "RMGE01_game.dll", "RMGE01_home_button.dll", "RMGE01_boot_image.bin", "Nebula.exe" })
+            foreach (var name in ModuleFiles.Concat(new[] { "NebulaRuntime.exe", "Nebula.exe" }))
                 if (!File.Exists(Path.Combine(app, name))) throw new InvalidOperationException("The new version is missing " + name + ".");
+            var exports = new Dictionary<string, string[]>
+            {
+                { "RMGE01_game.dll", new[] { "galaxy_module_manifest", "galaxy_module_init", "galaxy_module_entry", "galaxy_lookup_function" } },
+                { "RMGE01_home_button.dll", new[] { "galaxy_home_button_rso_manifest", "galaxy_home_button_rso_try_call", "galaxy_home_button_rso_resume" } },
+                { "RMGE01_dsp.dll", new[] { "galaxy_rmge01_dsp_entry", "galaxy_rmge01_dsp_entry_expected_iram_sha1" } }
+            };
             SetDllDirectory(app);
-            IntPtr module = LoadLibraryEx(Path.Combine(app, "RMGE01_game.dll"), IntPtr.Zero, 0x00000008);
-            if (module == IntPtr.Zero) throw new InvalidOperationException("The compiled game module could not be loaded (error " + Marshal.GetLastWin32Error() + ").");
             try
             {
-                foreach (var export in new[] { "galaxy_module_manifest", "galaxy_module_init", "galaxy_module_entry", "galaxy_lookup_function" })
-                    if (GetProcAddress(module, export) == IntPtr.Zero) throw new InvalidOperationException("The compiled game module has no " + export + " export.");
+                foreach (var pair in exports)
+                {
+                    IntPtr module = LoadLibraryEx(Path.Combine(app, pair.Key), IntPtr.Zero, 0x00000008);
+                    if (module == IntPtr.Zero) throw new InvalidOperationException(pair.Key + " could not be loaded (error " + Marshal.GetLastWin32Error() + ").");
+                    try
+                    {
+                        foreach (var export in pair.Value)
+                            if (GetProcAddress(module, export) == IntPtr.Zero) throw new InvalidOperationException(pair.Key + " has no " + export + " export.");
+                    }
+                    finally { FreeLibrary(module); }
+                }
             }
-            finally { FreeLibrary(module); SetDllDirectory(null); }
-            Log("Validated the compiled game module exports.");
+            finally { SetDllDirectory(null); }
+            Log("Validated the compiled modules.");
         }
 
         private void Commit(string app, InstalledInfo current)
@@ -415,8 +411,7 @@ namespace Nebula.Setup
             if (Directory.Exists(newContent))
             {
                 Json.Save(Path.Combine(newContent, "content.json"), new Dictionary<string, object> { { "formatVersion", ContentFormatVersion }, { "createdUtc", DateTime.UtcNow.ToString("o") } });
-                string oldContent = Path.Combine(staging, "content-old");
-                if (Directory.Exists(layout.Content)) Directory.Move(layout.Content, oldContent);
+                if (Directory.Exists(layout.Content)) Directory.Move(layout.Content, Path.Combine(staging, "content-old"));
                 Directory.Move(newContent, layout.Content);
             }
             string newInputs = Path.Combine(staging, "game-inputs");
@@ -444,14 +439,14 @@ namespace Nebula.Setup
                 File.Copy(self, layout.SetupCopy, true);
             Integration.Register(layout, BuildInfo.Version, request.DesktopShortcut);
             InstalledVersionDir = versionDir;
-            Log("Installed " + BuildInfo.Version + " to " + versionDir + (previous != null ? "; previous version " + previous + " kept for rollback." : "."));
+            Log("Installed " + BuildInfo.Version + " to " + versionDir + (previous != null ? "; kept " + previous + " for rollback." : "."));
         }
 
         private void CleanAbandonedStaging()
         {
             foreach (var dir in Directory.GetDirectories(layout.Staging))
             {
-                try { FileUtil.DeleteTree(dir); Log("Removed incomplete work from an earlier run: " + dir); }
+                try { FileUtil.DeleteTree(dir); Log("Removed unfinished work: " + dir); }
                 catch (Exception) { }
             }
         }
@@ -476,7 +471,7 @@ namespace Nebula.Setup
                 if (line.StartsWith("STEP ")) StepProgress(line.Substring(line.IndexOf(' ', 5) + 1), -1);
                 Log(line);
             });
-            if (code != 0) throw new InvalidOperationException("nebula-recomp " + arguments[0] + " failed (exit " + code + "). See the setup log for details.");
+            if (code != 0) throw new InvalidOperationException("nebula-recomp " + arguments[0] + " failed (exit " + code + "). See the setup log.");
         }
 
         private static readonly Regex NinjaProgress = new Regex(@"^\[(\d+)/(\d+)\]");
@@ -491,13 +486,13 @@ namespace Nebula.Setup
                 {
                     double done = double.Parse(match.Groups[1].Value), total = double.Parse(match.Groups[2].Value);
                     StepProgress(null, done / Math.Max(1, total));
-                    logFile.WriteLine(line);
+                    WriteLog(line);
                     return;
                 }
                 if (line.Contains("error") || line.Contains("FAILED")) last = line;
                 Log(line);
             });
-            if (code != 0) throw new InvalidOperationException("Compilation failed" + (last != null ? ": " + last : ".") + " See the setup log for details.");
+            if (code != 0) throw new InvalidOperationException("Compiling failed" + (last != null ? ": " + last : ".") + " See the setup log.");
         }
 
         private int RunTool(string file, IList<string> arguments, Dictionary<string, string> env, Action<string> onLine)
@@ -510,6 +505,7 @@ namespace Nebula.Setup
         // ---- progress ------------------------------------------------------------
 
         private string stepText = "";
+        private volatile bool waitingForDownloads;
 
         private void Stage(double start, double weight, string text)
         {
@@ -527,11 +523,22 @@ namespace Nebula.Setup
             Report(stageBase + stageWeight * Math.Max(0, Math.Min(1, fraction)), stepText, fraction);
         }
 
+        /// <summary>Background downloads show progress only once Setup is waiting for them.</summary>
+        private void BackgroundProgress(string text, double fraction)
+        {
+            if (waitingForDownloads) StepProgress(text, fraction);
+        }
+
         private void Report(double overall, string text, double fraction) { progress.Report(overall, text, fraction); }
+
+        private void WriteLog(string line)
+        {
+            lock (logLock) logFile.WriteLine(DateTime.UtcNow.ToString("HH:mm:ss.fff") + " " + line);
+        }
 
         private void Log(string line)
         {
-            logFile.WriteLine(DateTime.UtcNow.ToString("HH:mm:ss.fff") + " " + line);
+            WriteLog(line);
             progress.Log(line);
         }
 

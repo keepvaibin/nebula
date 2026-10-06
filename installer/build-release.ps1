@@ -3,15 +3,14 @@
 Builds Nebula-Setup.exe from one exact source revision.
 
 .DESCRIPTION
-Exports the revision with `git archive`, records the SHA-256 of every file
-(the setup verifies its GitHub download against this manifest), builds
-nebula-recomp from the exported tree with a static C runtime, compiles the
-launcher and setup with the in-box .NET Framework C# compiler and embeds
-the payload. With -SigningKey, writes Nebula-Setup.exe.sig (RSA-SHA256) for
-the updater.
+Exports the revision with `git archive` and records each file's SHA-256
+(Setup checks its GitHub download against it), builds nebula-recomp and the
+runtime from that export, then compiles the launcher and Setup with the
+in-box C# compiler and embeds everything. -SigningKey also writes
+Nebula-Setup.exe.sig for the updater.
 
-Requirements: Git, Rust (stable, MSVC target) and the Visual Studio C++
-build tools for the Rust build. The setup itself needs none of these.
+Requirements: Git, Rust (stable, MSVC target) and Visual Studio 2022 with
+the C++ tools. Setup needs none of these.
 #>
 [CmdletBinding()]
 param(
@@ -71,7 +70,19 @@ try {
     try { Invoke-Checked $cargo @('build', '--release', '--locked', '-p', 'nebula-recomp') } finally { Pop-Location; Remove-Item Env:RUSTFLAGS }
     $recomp = Join-Path $env:CARGO_TARGET_DIR 'release\nebula-recomp.exe'
 
-    # 3. Build information and C# executables.
+    # 3. Prebuilt runtime; the DSP is loaded from RMGE01_dsp.dll, which Setup compiles.
+    . (Join-Path $src 'tools\enter_msvc_environment.ps1')
+    $rt = Join-Path $work 'runtime'
+    Invoke-Checked cmake @('-S', $src, '-B', $rt, '-G', 'Ninja', '-DCMAKE_BUILD_TYPE=Release', '-DGALAXY_NATIVE_ISA=SSE2', '-DNEBULA_DSP_MODULE=ON')
+    Invoke-Checked cmake @('--build', $rt, '--target', 'NebulaRuntime', 'galaxy_ppc_float', 'galaxy_softfloat', 'galaxy_dsp_alu')
+    $runtimeFiles = @{}
+    foreach ($name in 'NebulaRuntime.exe', 'galaxy_ppc_float.lib', 'galaxy_softfloat.lib', 'galaxy_dsp_alu.lib') {
+        $file = Get-ChildItem -LiteralPath $rt -Recurse -File -Filter $name | Select-Object -First 1
+        if (-not $file) { throw "The runtime build produced no $name" }
+        $runtimeFiles[$name] = $file.FullName
+    }
+
+    # 4. Build information and C# executables.
     $publicKey = (Get-Content -LiteralPath (Join-Path $src 'installer\release-public-key.xml') -Raw).Trim()
     $buildInfo = @"
 namespace Nebula
@@ -101,12 +112,13 @@ namespace Nebula
         'toolchain.json' = (Join-Path $src 'installer\toolchain.json'); 'runtime-env.json' = (Join-Path $src 'installer\runtime-env.json')
         'LICENSE' = (Join-Path $src 'LICENSE'); 'THIRD-PARTY-NOTICES.md' = (Join-Path $src 'THIRD-PARTY-NOTICES.md'); 'README.md' = (Join-Path $src 'README.md')
     }
+    foreach ($pair in $runtimeFiles.GetEnumerator()) { $resources[$pair.Key] = $pair.Value }
     $resourceArgs = @($resources.GetEnumerator() | ForEach-Object { "/resource:$($_.Value),$($_.Key)" })
     $setup = Join-Path $OutputDirectory 'Nebula-Setup.exe'
     Invoke-Checked $csc (@('/nologo', '/target:winexe', '/platform:x64', '/optimize+', "/win32manifest:$manifestFile", "/out:$setup") + $references + $resourceArgs + $common +
         @(Get-ChildItem (Join-Path $src 'installer\src\Setup\*.cs') | ForEach-Object FullName))
 
-    # 4. Signature and checksums.
+    # 5. Signature and checksums.
     $setupHash = (Get-FileHash -LiteralPath $setup -Algorithm SHA256).Hash.ToLowerInvariant()
     if ($SigningKey) {
         $rsa = New-Object Security.Cryptography.RSACryptoServiceProvider

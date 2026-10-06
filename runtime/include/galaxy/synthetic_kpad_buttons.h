@@ -30,7 +30,7 @@ struct SyntheticKpadButtons {
 };
 
 // Some injected Windows keyboard events carry a virtual key but no scan code.
-// Generic Shift/Control still belong to the existing left/right bindings.
+// Map generic Shift/Control to the left/right bindings.
 [[nodiscard]] constexpr std::uint32_t normalize_native_window_key(
     std::uint32_t key, std::uint32_t mapped_shift, bool right_control) noexcept {
     if (key == 0x10u) { // VK_SHIFT

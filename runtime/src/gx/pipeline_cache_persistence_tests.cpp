@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// Tests the actual cache loaders/writers with valid compiled DXBC; no GPU is created.
+// Exercises the cache loaders/writers with valid compiled DXBC; no GPU device.
 #include "galaxy/gx/pipeline_cache.h"
 
 #pragma warning(push, 0)
@@ -198,8 +198,8 @@ bool tail_repair(const std::filesystem::path& root, bool shader, bool add_new, b
     if (after_load) append_bytes(path, tail);
     if (add_new) {
         Access::seed(live, shader, 3u);
-        // Even an unsuccessful first repair/persist must leave the original
-        // prefix+tail untouched and retain the pending entry for this process.
+        // A failed first repair must leave the original prefix and tail untouched
+        // and keep the pending entry.
         const Bytes damaged = read_bytes(path);
         galaxy::gx::set_pipeline_cache_persistence_test_fault(original.size() + 12u, false);
         live.flush_disk();
@@ -329,8 +329,8 @@ bool damaged_shader_recovery(const std::filesystem::path& root, bool wrong_stage
     const auto path = cache_file(root, true);
     if (!wrong_stage) {
         Bytes damaged = read_bytes(path);
-        // Header(8) + record header(40): corrupt the DXBC payload, keeping
-        // all lengths and framing intact so this exercises integrity checking.
+        // Past the 8-byte file header and 40-byte record header: corrupt a DXBC
+        // payload byte with all lengths and framing intact.
         damaged.at(48u) ^= 1u;
         std::ofstream file(path, std::ios::binary | std::ios::trunc);
         file.write(reinterpret_cast<const char*>(damaged.data()), static_cast<std::streamsize>(damaged.size()));
@@ -385,7 +385,7 @@ bool busy_writer_retry(const std::filesystem::path& root) {
 struct IsolatedFiles {
     std::filesystem::path root;
     IsolatedFiles() {
-        // CTest runs in the C: build tree. No LOCALAPPDATA or user cache access.
+        // Stay inside the build tree; never touch LOCALAPPDATA or the user cache.
         root = std::filesystem::absolute(std::filesystem::current_path() / "generated" /
             ("cache-persistence-test-" + std::to_string(GetCurrentProcessId()) + "-" +
              std::to_string(GetTickCount64())));

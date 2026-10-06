@@ -91,12 +91,10 @@ void map_guest_alias(
     std::uint32_t guest_address,
     std::uint32_t size) {
     auto* target = g_guest_base + guest_address;
-    // This mirrors WiiCompiled's placeholder split and exact-address section
-    // view replacement. Every span is 64-KiB aligned and disjoint.
-    // WiiCompiled intentionally does not treat a failed split as fatal: when
-    // the requested range is already an exact-size placeholder, VirtualFree
-    // can report ERROR_INVALID_PARAMETER even though replacement is valid.
-    // MapViewOfFile3 below is the authoritative success check in either case.
+    // Mirrors WiiCompiled's placeholder split and exact-address view
+    // replacement; every span is 64-KiB aligned and disjoint. A failed split
+    // is not fatal: VirtualFree returns ERROR_INVALID_PARAMETER when the range
+    // is already an exact-size placeholder. MapViewOfFile3 is the real check.
     VirtualFree(target, size, MEM_RELEASE | kMemPreservePlaceholder);
     void* const view = map_view_of_file3(
         section.mapping, GetCurrentProcess(), target, 0u, size,

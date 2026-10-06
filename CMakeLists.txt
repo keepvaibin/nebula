@@ -254,7 +254,13 @@ set(NEBULA_GENERATED_DSP_SOURCE
     "${CMAKE_CURRENT_SOURCE_DIR}/generated/dsp/rmge01_dsp.cpp"
     CACHE FILEPATH "Locally generated RMGE01 DSP source")
 set(galaxy_generated_dsp_source "${NEBULA_GENERATED_DSP_SOURCE}")
-if(EXISTS "${galaxy_generated_dsp_source}")
+# Release builds load the DSP from RMGE01_dsp.dll, which Setup compiles,
+# so the shipped runtime contains nothing derived from the game.
+option(NEBULA_DSP_MODULE "Load the generated DSP from RMGE01_dsp.dll" OFF)
+if(NEBULA_DSP_MODULE)
+    target_compile_definitions(galaxy_native_dsp PUBLIC GALAXY_HAVE_NATIVE_DSP=1 GALAXY_NATIVE_DSP_MODULE=1)
+    message(STATUS "Nebula: native DSP loaded from RMGE01_dsp.dll")
+elseif(EXISTS "${galaxy_generated_dsp_source}")
     target_sources(galaxy_native_dsp PRIVATE "${galaxy_generated_dsp_source}")
     target_compile_definitions(galaxy_native_dsp PUBLIC GALAXY_HAVE_NATIVE_DSP=1)
     message(STATUS

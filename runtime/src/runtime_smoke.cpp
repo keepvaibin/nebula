@@ -218,11 +218,9 @@ int wmain(int argc, wchar_t** argv) {
     }
 
     galaxy::PpcContext context{};
-    // The smoke harness has no translated OS exception environment. Execute
-    // synthetic proof modules with FP available so a legitimate guarded FP
-    // instruction does not route into the deliberately fatal unresolved
-    // exception callback. Full-game lazy-FPU behavior is exercised only by
-    // NebulaRuntime with RMGE01's translated exception-7 handler.
+    // The smoke harness has no translated OS exception handler, so run with FP
+    // enabled; an FP-unavailable exception would hit the fatal unresolved
+    // exception callback. Lazy-FPU handling needs RMGE01's exception-7 handler.
     context.msr = galaxy::kMsrFloatingPointAvailable;
     galaxy::GuestMemoryV1 memory{};
     const bool is_test_module = std::string(manifest->game_id) == "TEST01";

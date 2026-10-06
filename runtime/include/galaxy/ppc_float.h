@@ -41,9 +41,8 @@ PpcFloat32Result ppc_narrow_f64_to_f32(std::uint64_t bits, std::uint32_t fpscr);
 namespace float_native_detail {
 
 // Loads and binary32 arithmetic store exact widened normals or signed zero.
-// This narrow common-case proof excludes every NaN/infinity/subnormal and
-// every binary64 value that would require a rounding decision. Excluded
-// encodings retain the full original f64-to-f32 arithmetic path.
+// This fast path excludes NaN, infinity, subnormals and any binary64 value
+// that needs rounding; those use the full f64-to-f32 arithmetic path.
 #if defined(_MSC_VER)
 __forceinline
 #else

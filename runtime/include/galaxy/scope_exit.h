@@ -28,9 +28,8 @@ private:
     Cleanup cleanup_;
 };
 
-// Own noexcept rollback only until the whole callback has returned normally.
-// A later caller failure must not roll back this already completed boundary.
-// The original native exception propagates through ordinary C++ unwinding.
+// Runs the noexcept cleanup only if the callback throws; a failure after the
+// callback returns does not roll it back. The exception still propagates.
 template <typename Callback, typename Cleanup>
 void run_with_exception_cleanup(Callback&& callback, Cleanup cleanup) {
     static_assert(std::is_nothrow_invocable_v<Cleanup&>);
@@ -42,10 +41,9 @@ void run_with_exception_cleanup(Callback&& callback, Cleanup cleanup) {
     completed = true;
 }
 
-// Only omit the handler when its owner has proved every failure postlude is
-// empty. Ordinary C++ unwinding and all callback/local destructors still run.
-// A required handler retains catch/rethrow semantics, including a fallible
-// diagnostic handler replacing an exception exactly as before.
+// Omit the handler only when every failure postlude is empty. C++ unwinding and
+// destructors still run. A present handler keeps catch/rethrow semantics and
+// may replace the exception.
 template <typename Callback, typename Handler>
 void run_with_optional_exception_handler(
     bool required, Callback&& callback, Handler&& handler) {

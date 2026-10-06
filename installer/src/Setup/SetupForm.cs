@@ -68,18 +68,18 @@ namespace Nebula.Setup
             choose.Dock = DockStyle.Fill;
             var title = AddLabel(choose, "Nebula", 20, 14, 700, 34);
             title.Font = new Font("Segoe UI Semibold", 17f);
-            AddLabel(choose, "Unofficial native PC build of Super Mario Galaxy (North America, RMGE01, revision 0), compiled on this PC from your own copy of the game. Development preview.", 20, 50, 720, 40);
+            AddLabel(choose, "Unofficial native PC port of Super Mario Galaxy (USA, RMGE01). Development preview.", 20, 50, 720, 40);
 
             int y = 98;
             if (installed != null)
             {
                 AddLabel(choose, "Installed: Nebula " + installed.Version + (installed.Previous != null ? " (previous " + installed.Previous + " kept)" : ""), 20, y, 720, 22);
                 y += 26;
-                modeRepair.Text = "Repair or reinstall this version (rebuilds from your saved game files, or from the game you choose below)";
+                modeRepair.Text = "Repair this version";
                 modeRepair.Checked = true;
                 modeRestore.Text = "Restore the previous version" + (installed.Previous != null ? " (" + installed.Previous + ")" : " (none available)");
                 modeRestore.Enabled = installed.Previous != null;
-                modeUninstall.Text = "Uninstall Nebula (your saves and settings are kept)";
+                modeUninstall.Text = "Uninstall (keeps saves and settings)";
                 foreach (var radio in new[] { modeRepair, modeRestore, modeUninstall })
                 {
                     radio.Location = new Point(28, y);
@@ -97,7 +97,7 @@ namespace Nebula.Setup
                 modeInstall.Checked = true;
             }
 
-            AddLabel(choose, "Your game: an ISO or RVZ image, or an extracted folder (DATA\\sys\\main.dol). It is only read, never changed.", 20, y, 720, 22);
+            AddLabel(choose, "Your game: ISO, RVZ or extracted folder.", 20, y, 720, 22);
             y += 24;
             input.Location = new Point(20, y);
             input.Size = new Size(470, 26);
@@ -111,14 +111,14 @@ namespace Nebula.Setup
             var folder = new Button { Text = "Folder…", Location = new Point(620, y - 1), Size = new Size(116, 28) };
             folder.Click += delegate
             {
-                using (var dialog = new FolderBrowserDialog { Description = "Choose the extracted game folder (the one containing DATA, or DATA itself)" })
+                using (var dialog = new FolderBrowserDialog { Description = "Choose the extracted game folder" })
                     if (dialog.ShowDialog(this) == DialogResult.OK) input.Text = dialog.SelectedPath;
             };
             choose.Controls.Add(file);
             choose.Controls.Add(folder);
             y += 38;
 
-            AddLabel(choose, "Install folder (per-user, no administrator rights needed):", 20, y, 720, 22);
+            AddLabel(choose, "Install folder:", 20, y, 720, 22);
             y += 24;
             root.Text = layout.Root;
             root.Location = new Point(20, y);
@@ -141,7 +141,7 @@ namespace Nebula.Setup
             y += 28;
 
             var toolchain = new Toolchain(Json.Parse(Payload.ReadText("toolchain.json")), layout.Toolchains);
-            license.Text = "I accept the Microsoft Visual Studio Build Tools license for the compiler Setup downloads";
+            license.Text = "I accept the Microsoft Visual Studio Build Tools license";
             license.Location = new Point(20, y);
             license.Size = new Size(620, 24);
             choose.Controls.Add(license);
@@ -153,11 +153,9 @@ namespace Nebula.Setup
             summary.Location = new Point(20, y);
             summary.Size = new Size(720, 170);
             summary.Text =
-                "What Setup does: checks your game, extracts it if needed, downloads Microsoft's C++ compiler and Windows SDK (about " +
-                FileUtil.FormatBytes(toolchain.DownloadBytes) + ", from Microsoft; CMake and Ninja from GitHub; every file is hash-checked), downloads the matching Nebula source from GitHub, " +
-                "recompiles the game and compiles it into a native Windows program. Nothing from your game is uploaded or downloaded.\r\n\r\n" +
-                "Needs: Windows 10/11 x64, 16 GB RAM (32 GB recommended), " + FileUtil.FormatBytes(InstallEngine.RequiredFreeBytes) + "  free on an NTFS drive during setup (about 7 GB afterwards), an internet connection and a DirectX 12 GPU. " +
-                "Compiling took about 70 minutes on a 16-core test PC and takes longer on PCs with fewer cores or less RAM. You can keep using the PC; cancel at any time.";
+                "This is responsible for checking your game, recompiling it and compiling it into a Windows program on this PC. " +
+                "It downloads a C++ compiler (" + FileUtil.FormatBytes(toolchain.DownloadBytes) + ").\r\n\r\n" +
+                "Needs: Windows 10/11 64-bit, 8 GB RAM, " + FileUtil.FormatBytes(InstallEngine.RequiredFreeBytes) + " free disk space, a DirectX 12 GPU.";
             choose.Controls.Add(summary);
 
             start.Text = installed == null ? "Install" : "Continue";
@@ -196,7 +194,7 @@ namespace Nebula.Setup
             cancelButton.Size = new Size(100, 32);
             cancelButton.Click += delegate
             {
-                if (cancel != null && MessageBox.Show(this, "Cancel? Incomplete work is discarded and your current installation stays as it is.", "Nebula Setup", MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.Yes)
+                if (cancel != null && MessageBox.Show(this, "Cancel setup?", "Nebula Setup", MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.Yes)
                 {
                     cancel.Cancel();
                     cancelButton.Enabled = false;
@@ -256,9 +254,9 @@ namespace Nebula.Setup
             var toolchain = new Toolchain(Json.Parse(Payload.ReadText("toolchain.json")), layout.Toolchains);
             if (!toolchain.IsReady && !license.Checked)
             {
-                if (mode == InstallMode.Update && MessageBox.Show(this, "This update needs Microsoft's C++ compiler. Do you accept the Microsoft Visual Studio Build Tools license?\r\n" + toolchain.LicenseUrl,
+                if (mode == InstallMode.Update && MessageBox.Show(this, "This update needs the Microsoft Visual Studio Build Tools license. Accept it?\r\n" + toolchain.LicenseUrl,
                     "Nebula Setup", MessageBoxButtons.YesNo) == DialogResult.Yes) { }
-                else { Fail("Accept the Microsoft Visual Studio Build Tools license to download the compiler."); return; }
+                else { Fail("Accept the Microsoft Visual Studio Build Tools license to continue."); return; }
             }
             var problems = InstallEngine.CheckRequirements(layout.Root.Length > 3 ? Path.GetDirectoryName(layout.Root) ?? layout.Root : layout.Root);
             if (problems.Count > 0) { Fail(string.Join("\r\n", problems)); return; }
@@ -304,7 +302,7 @@ namespace Nebula.Setup
                 return;
             }
             bool canceled = failure is OperationCanceledByUserException || failure is OperationCanceledException;
-            step.Text = canceled ? "Canceled. Your existing installation was not changed." : "Setup did not finish. Your existing installation was not changed.";
+            step.Text = canceled ? "Canceled." : "Setup failed.";
             if (!canceled) MessageBox.Show(this, failure.Message, "Nebula Setup", MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
 

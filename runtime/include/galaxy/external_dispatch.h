@@ -31,8 +31,8 @@ struct ExternalHandlerCallEvidence {
 
 // A host-timeline recovery may preserve an in-flight VI transaction only when
 // the translated external dispatcher still explains the boundary's wait.
-// Before the dispatcher's mask scan reaches its indirect call there is
-// deliberately no selected source; after selection, only IRQ24 is compatible
+// Before the dispatcher's mask scan reaches its indirect call there is no
+// selected source; after selection, only IRQ24 is compatible
 // with an explicitly owned VI boundary. This predicate never selects a source
 // or completes an interrupt.
 [[nodiscard]] constexpr bool external_dispatch_preserves_vi_boundary_wait(
@@ -209,9 +209,8 @@ private:
 // A synchronous exception (notably lazy-FPU exception 7) can occur while a
 // translated external-interrupt handler is still running. Its inner RFI must
 // return to the suppressed instruction without inspecting or consuming the
-// outer dispatch record. Keep that ownership decision together with the only
-// operation that may consume the record, so later interrupt sources cannot
-// accidentally collapse two nested architectural returns into one.
+// outer dispatch record. This decision lives with the only operation that may
+// consume the record, so two nested returns cannot collapse into one.
 [[nodiscard]] inline ExternalRfiRouteResult route_external_rfi(
     ExternalDispatchTracker& tracker,
     RfiRouteSource source,

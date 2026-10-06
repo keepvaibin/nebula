@@ -30,8 +30,8 @@ struct MainFrameDynamicCallRecord {
     bool completed{};
 };
 
-// The context is read-only. This helper deliberately has no guest-memory or
-// service interface and cannot add architectural loads or scheduling work.
+// The context is read-only. This helper has no guest-memory or service
+// interface, so it cannot add architectural loads or scheduling work.
 template <typename Context>
 void capture_member_entry_registers(
     MainFrameDynamicCallRecord& record, const Context& context) noexcept {

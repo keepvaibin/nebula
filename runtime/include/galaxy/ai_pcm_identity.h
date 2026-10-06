@@ -23,11 +23,9 @@ struct Pcm16BeStereoAnalysis {
 [[nodiscard]] Pcm16BeStereoAnalysis analyze_pcm16_be_stereo(
     std::span<const std::byte> source);
 
-// Full PCM analysis calculates a content hash and aggregate amplitudes for
-// diagnostic identity proof. The native play path only needs that work until
-// the first audible AI buffer: afterwards every buffer must be submitted
-// regardless of its content. Keep tracing and an active measurement window
-// exact, while avoiding that diagnostic scan during ordinary audible play.
+// Full PCM analysis (content hash and amplitudes) is needed only for tracing,
+// an active measurement window, or until the first audible AI buffer; after
+// that every buffer is submitted regardless of content.
 [[nodiscard]] constexpr bool should_analyze_ai_pcm(
     bool identity_tracking_enabled,
     bool trace_pcm,
@@ -62,9 +60,9 @@ struct AiPcmIdentityStats {
     std::uint64_t sink_submit_buffers{};
 };
 
-// Window-local exact PCM identity accounting. The tracker deliberately keeps
-// copies of distinct buffers during a diagnostic window: this makes both the
-// repeated-buffer and distinct-content claims immune to hash collisions.
+// Window-local exact PCM identity accounting. The tracker keeps copies of
+// distinct buffers so repeated and distinct counts are immune to hash
+// collisions.
 class AiPcmIdentityTracker {
 public:
     void reset();

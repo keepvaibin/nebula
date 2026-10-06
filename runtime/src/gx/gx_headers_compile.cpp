@@ -1,8 +1,5 @@
-// Compile-enforcement TU for the Phase-2 graphics interface headers.
-// Includes every galaxy/gx header so they stay /W4 /WX /permissive- clean
-// and self-contained; the constexpr decoders are exercised at compile time.
-// No runtime code — the headers are interface-only until the M0-M8
-// decomposition lands (docs/GRAPHICS_ARCHITECTURE.md).
+// Includes every galaxy/gx header so each stays self-contained and clean under
+// /W4 /WX /permissive-. The constexpr decoders are exercised at compile time.
 
 #include "galaxy/gx/efb_copy.h"
 #include "galaxy/gx/fifo_parser.h"
@@ -82,8 +79,7 @@ constexpr EfbCopyParams make_efb_copy_filter(
     return params;
 }
 
-// Each tap is deliberately distinct so moving any one into the wrong row
-// changes at least one assertion.
+// Every tap is distinct, so a tap moved to the wrong row fails an assertion.
 constexpr auto kAsymmetricEfbCopyFilter =
     make_efb_copy_filter(1u, 2u, 4u, 8u, 16u, 32u, 63u);
 static_assert(kAsymmetricEfbCopyFilter.filter_upper() == 3u);
@@ -96,8 +92,8 @@ static_assert(kStandardEfbCopyFilter.filter_upper() == 0u);
 static_assert(kStandardEfbCopyFilter.filter_middle() == 64u);
 static_assert(kStandardEfbCopyFilter.filter_lower() == 0u);
 
-// The GPU-shared constant layouts must keep their asserted shape; a change
-// here requires the matching HLSL edit and a shader-cache version bump.
+// GPU-shared constant layouts must keep this shape; changing them requires the
+// matching HLSL edit and a shader-cache version bump.
 static_assert(sizeof(GxPsConstants) % 256 == 0);
 static_assert(sizeof(GxVsConstants) % 256 == 0);
 

@@ -991,16 +991,11 @@ int main() {
     passed &= expect(galaxy::dsp_data_read(mutable_context, 0x1803) == 0x4567,
                      "DSP data helper reads mirrored coefficient ROM after it is loaded");
 
-    // Address ranges outside DRAM (0x0xxx), coefficient ROM (0x1xxx), and IFX
-    // (0xFxxx) are wired to nothing on real DSP silicon: there is no MMU or
-    // access-fault mechanism, so hardware reads back an undefined value (0)
-    // and drops writes. Dolphin's DSP LLE core -- which runs real DSP
-    // microcode bit-exactly -- models the same behavior (ReadDMEM/WriteDMEM
-    // log and return 0 / drop the write; they never fault). This is reachable
-    // during ordinary gameplay: a legitimate JAudio2 call site feeds a
-    // non-positional/BGM channel's distance term with a deliberate "not
-    // applicable" sentinel, which the predictor-index computation turns into
-    // an address like 0x7fff.
+    // DSP addresses outside DRAM (0x0xxx), coefficient ROM (0x1xxx) and IFX
+    // (0xFxxx) are unmapped: reads return 0 and writes are dropped, with no
+    // fault (as in Dolphin's ReadDMEM/WriteDMEM). JAudio2 reaches this in
+    // normal play when a BGM channel's "not applicable" distance sentinel
+    // becomes a predictor address like 0x7fff.
     passed &= expect(galaxy::dsp_data_read(mutable_context, 0x7fffu) == 0u,
                      "DSP data helper returns zero for an address outside DRAM/COEF/IFX");
     const auto dram_before_unmapped_write = mutable_context.dram[0x0123];

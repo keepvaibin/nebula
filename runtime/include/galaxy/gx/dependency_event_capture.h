@@ -2,9 +2,9 @@
 
 // Galaxy adapter for Aurora's ordered frame staging model:
 // encounter/aurora@77326d45415a64c40e560cebd2cdef0a0f08d840,
-// lib/gfx/frame_packet.hpp and lib/gfx/recording.cpp (MIT). This event format
-// is independently implemented for GX; it does not imply that a frame packet
-// is replayable until every opaque resource binding has an owned lifetime.
+// lib/gfx/frame_packet.hpp and lib/gfx/recording.cpp (MIT). The event format
+// is implemented independently for GX. A packet is not replayable until every
+// opaque resource binding has an owned lifetime.
 
 #include <cstddef>
 #include <cstdint>
@@ -54,10 +54,10 @@ public:
                           std::uint32_t exec_command) = 0;
 };
 
-// An observational, bounded stream from ONE render parse. Repeated reads of
-// the same guest address remain distinct and own the bytes seen at that read.
-// Opaque bindings from resources made before capture are explicit (generation
-// zero) so a later packet builder cannot silently treat them as guest bytes.
+// Bounded event stream from one render parse. Repeated reads of the same guest
+// address stay distinct and own the bytes seen at that read. Bindings to
+// resources created before capture use generation zero, so a packet builder
+// cannot mistake them for guest bytes.
 class OwnedDependencyEvents final : public DependencyEventSink {
 public:
     enum class Kind : std::uint8_t {

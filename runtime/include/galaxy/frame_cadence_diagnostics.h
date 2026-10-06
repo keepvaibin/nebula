@@ -9,7 +9,7 @@
 
 namespace galaxy::cadence {
 
-// This diagnostic is deliberately bounded and allocation-free while frames
+// This diagnostic is bounded and allocation-free while frames
 // are running. Text is produced only by dump_report(), after the benchmark has
 // drained or during shutdown.
 inline constexpr std::uint32_t kReportSchemaVersion = 4u;
@@ -52,7 +52,7 @@ enum class TimingPhase : std::uint8_t {
 };
 
 // Internal host diagnostic origin; neither this enum nor its counters are part
-// of the generated game-module ABI. Other callers retain their original path.
+// of the generated game-module ABI.
 enum class DspPollOrigin : std::uint8_t {
     Other,
     CheckpointPreflight,
@@ -80,8 +80,8 @@ inline constexpr std::array<TimingPhase, 4u> kDspPollTimingPhases{
     TimingPhase::DspCheckpointPreflightYield,
     TimingPhase::DspCheckpointPublicationYield};
 
-// Cumulative completed-scope totals, captured by the simulation owner at the
-// existing frame boundaries. A yield is included in its corresponding poll;
+// Cumulative completed-scope totals, captured by the simulation owner at frame
+// boundaries. A yield is included in its corresponding poll;
 // do not add the two wall totals. No histogram is copied into each frame record.
 struct DspPollTimingSnapshot {
     std::array<std::uint64_t, kDspPollTimingPhases.size()> counts{};
@@ -373,8 +373,7 @@ private:
 
 using MonotonicReadFn = std::uint64_t (*)(void*) noexcept;
 
-// The disabled contract is intentionally testable: a null/disabled session
-// returns zero without calling the supplied clock reader.
+// A null/disabled session returns zero without calling the clock reader.
 [[nodiscard]] std::uint64_t sample_now_ns_if_enabled(
     const Session* session,
     MonotonicReadFn reader,

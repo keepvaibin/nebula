@@ -101,8 +101,7 @@ pub enum TranslationError {
     TopSelfClosureEdgeProfile(String),
 }
 
-/// The relocation form of one PPC instruction's 16-bit immediate field.
-/// This is install-time lowering metadata, never a runtime decode rule.
+/// Relocation form of one PPC instruction's 16-bit immediate field.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PpcImmediateKind {
     /// ELF/RVL `ADDR16_LO`: sign-extended low half of the resolved address.
@@ -111,9 +110,8 @@ pub enum PpcImmediateKind {
     HighAdjusted16,
 }
 
-/// A symbolic install-time replacement for a relocated PPC immediate. The
-/// expression is emitted directly into native C++; it is not guest code and
-/// does not retain an executable instruction stream at runtime.
+/// Install-time replacement for a relocated PPC immediate, emitted directly
+/// as a C++ expression.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct PpcImmediateOverride {
     pub kind: PpcImmediateKind,
@@ -155,32 +153,29 @@ pub struct TranslationCoverage {
     pub first_blocker_examples: BTreeMap<String, Vec<String>>,
 }
 
-// The exact lazy-FPU restart table makes RMGE01's largest single translated
-// function slightly larger than 336 KiB. Keep the default bounded, but high
-// enough that a full hard-fail module can include every required continuation
-// instead of requiring a machine-local override.
+// RMGE01's largest translated function, with its lazy-FPU restart table, is
+// slightly over 336 KiB and must fit in one shard.
 pub const DEFAULT_MODULE_SHARD_SOURCE_KIB: usize = 384;
 const KIBIBYTE: usize = 1024;
 
-/// Install-time exact lowering controls. PSMTX local-lane reuse is the
-/// production default; trace instrumentation remains explicitly disabled.
+/// Install-time lowering controls. PSMTX local-lane reuse is on by default;
+/// trace instrumentation is off.
 #[derive(Clone, Copy, Debug)]
 pub struct ModuleTranslationOptions {
-    /// Opt-in, typed-effect-proven local GPR residency for straight-line
-    /// integer leaves and guarded direct-call callers. All other functions
-    /// retain ordinary lowering.
+    /// Local GPR residency for straight-line integer leaves and guarded
+    /// direct-call callers whose effects the typed analysis proves.
     pub guest_resident_leaf: bool,
-    /// Exact RMGE01 0x80165478 private typed-GPR region pilot. Public and
-    /// interior entries keep the ordinary full-context translation.
+    /// Private typed-GPR region for RMGE01 0x80165478. Public and interior
+    /// entries keep the full-context translation.
     pub typed_region_80165478: bool,
-    /// Opt-in WiiCompiled-derived flat RAM read selection. The Galaxy ABI
-    /// checks complete RAM spans and keeps the checked device/fault fallback.
+    /// Flat RAM read helpers derived from WiiCompiled. The Galaxy ABI checks
+    /// the whole RAM span and keeps the device/fault fallback.
     pub flat_ram_reads: bool,
-    /// Experimental fused paired arithmetic/commit helper. Public entries,
-    /// operand validation, FPSCR and precise floating faults remain unchanged.
+    /// Experimental fused paired-single arithmetic/commit helper. Public
+    /// entries, operand validation, FPSCR and precise FP faults are unaffected.
     pub fused_paired_binary: bool,
-    /// Experimental in-header widened-single scalar add/subtract/multiply.
-    /// Excluded inputs/modes/results retain the complete original lowering.
+    /// Experimental inline widened-single scalar add/subtract/multiply.
+    /// Unhandled inputs, modes and results use the original lowering.
     pub inline_scalar_single_binary: bool,
     pub exact_psmtx_local_lanes: bool,
     pub exact_psvec_cross_local_lanes: bool,
@@ -251,19 +246,16 @@ struct LocalPairedExperiments<'a> {
     typed_region_80165478: Option<&'a str>,
 }
 
-/// Lowers one installer-supplied, already-validated PPC code range into a
-/// native C++ function body. This is intentionally an install-time primitive:
-/// callers must provide function boundaries and any relocation processing
-/// before calling it. It never exposes a runtime decoder or interpreter.
+/// Lowers a validated PPC code range into a native C++ function body.
+/// Callers supply function boundaries and apply relocations first.
 pub fn lower_ppc_code_range(address: u32, bytes: &[u8]) -> Result<String, TranslationError> {
     lower_words(address, bytes)
 }
 
-/// Lowers an installer-validated PPC code range whose selected 16-bit fields
-/// are symbolic relocation expressions. `entries` are address-taken starts in
-/// the same range and receive the normal native resume dispatch. Any
-/// relocation that does not correspond to a supported PPC immediate fails at
-/// installation rather than being approximated.
+/// Lowers a validated PPC range whose selected 16-bit fields are symbolic
+/// relocation expressions. `entries` are address-taken starts in the range
+/// and get the normal resume dispatch. A relocation that does not match a
+/// supported PPC immediate is an error.
 pub fn lower_ppc_code_range_with_entries_and_immediate_overrides(
     address: u32,
     bytes: &[u8],
@@ -279,11 +271,9 @@ pub fn lower_ppc_code_range_with_entries_and_immediate_overrides(
     )
 }
 
-/// Lowers an installer-validated PPC range with explicit return continuations
-/// for linked indirect calls. Those continuations are needed when native
-/// control resumes after an OS context unwind rather than returning through
-/// the original C++ caller frame. Every continuation must also be an explicit
-/// entry; the lowerer rejects an incomplete declaration at install time.
+/// Also takes explicit return continuations for linked indirect calls, needed
+/// when control resumes after an OS context unwind instead of returning
+/// through the C++ caller frame. Each continuation must also be an entry.
 pub fn lower_ppc_code_range_with_entries_call_returns_and_immediate_overrides(
     address: u32,
     bytes: &[u8],
@@ -375,10 +365,8 @@ fn selected_psmtx_local_target(
             "guard trace target not selected; use --count 0",
         ));
     }
-    // Exact PSMTX lowering is the production default, while partial module
-    // emission is a supported translator mode. If the selected prefix does
-    // not contain this function there is nothing to transform; do not make an
-    // unrelated partial translation require a full-module count.
+    // Partial module emission is supported: if the selected prefix does not
+    // contain this function there is nothing to transform.
     Ok(None)
 }
 
@@ -546,10 +534,10 @@ pub fn translate_module_with_options(
         .chain(aliases.iter().copied())
         .collect::<BTreeMap<_, _>>();
     let empty_entries = BTreeSet::new();
-    // WiiCompiled's caller residency narrows a boundary only for a callee
-    // whose complete architectural contract is known. Our first opt-in
-    // contract source is the same proven integer-leaf decoder used below;
-    // substitutions, FP bodies, and interior-entry leaves stay full fences.
+    // As in WiiCompiled, caller residency narrows a call boundary only for a
+    // callee with a fully known contract: the proven integer leaves decoded
+    // below. Substitutions, FP bodies and leaves with interior entries stay
+    // full fences.
     let mut resident_leaf_contracts = BTreeMap::new();
     if options.guest_resident_leaf {
         for (function, _) in &translated {
@@ -915,13 +903,11 @@ fn mapped_function_containing(functions: &[FunctionRange], address: u32) -> Opti
     (address < end).then_some(function)
 }
 
-// Broadway raises exception 7 before executing any floating-point or
-// paired-single instruction while MSR[FP] is clear. The runtime normally
-// catches the exception handler's exact same-PC RFI inside the live AOT guard.
-// An already-pending asynchronous exception may be recognized at that RFI
-// boundary before the suppressed instruction retries, however, and that
-// exception abandons the live native frame. Interior guarded PCs therefore
-// also receive static continuation aliases below; no runtime decoder is used.
+// Broadway raises exception 7 before any FP or paired-single instruction
+// while MSR[FP] is clear. The handler's same-PC RFI is normally caught inside
+// the AOT guard, but a pending asynchronous exception taken at that RFI
+// abandons the native frame, so interior guarded PCs also get static
+// continuation aliases.
 fn opcode_requires_fpu(opcode: Opcode) -> bool {
     matches!(
         opcode,
@@ -1012,13 +998,11 @@ fn opcode_requires_fpu(opcode: Opcode) -> bool {
     )
 }
 
-// A single MSR[FP] check can cover a straight-line region.  No ordinary PPC
-// integer, floating-point, paired-single, or memory instruction changes the
-// availability bit; the instructions below either explicitly write machine
-// state or may enter a service/continuation which can return with a different
-// MSR.  Resetting at those boundaries keeps the first following FP instruction
-// as the exact exception-7 restart point while avoiding redundant guards in
-// hot straight-line FP code.
+// One MSR[FP] check covers a straight-line region, since ordinary PPC
+// instructions do not change MSR[FP]. The opcodes below write machine state
+// or may enter a service/continuation that returns with a different MSR, so
+// the check is repeated after them and the next FP instruction stays the
+// exact exception-7 restart point.
 fn opcode_invalidates_fpu_availability_proof(opcode: Opcode) -> bool {
     matches!(
         opcode,
@@ -1030,9 +1014,8 @@ fn opcode_invalidates_fpu_availability_proof(opcode: Opcode) -> bool {
             | Opcode::Twi
             | Opcode::Rfi
             | Opcode::Mtmsr
-            // A DEC write can immediately enter a translated asynchronous
-            // boundary. Other SPR writes are conservative here too: their
-            // low frequency is not worth weakening the proof invariant.
+            // A DEC write can immediately enter an asynchronous boundary.
+            // Other SPR writes are rare enough to treat the same way.
             | Opcode::Mtspr
     )
 }
@@ -1044,12 +1027,10 @@ fn function_requires_fpu(bytes: &[u8]) -> bool {
     })
 }
 
-// Some entry/direct-call native optimizations either touch FPR/PS/FPSCR
-// directly or fold a tail-called FP routine into the helper even when the
-// wrapper's own range has no FP opcode. Such substitutions cannot reproduce
-// the exact suppressed-instruction boundary, so retain the generated call
-// chain. The classification is metadata on the substitution itself to prevent
-// a second address list from drifting out of sync.
+// Some entry/direct-call substitutions touch FPR/PS/FPSCR directly or fold
+// in a tail-called FP routine even when the wrapper has no FP opcode. They
+// cannot reproduce the suppressed-instruction boundary, so those call
+// chains are kept.
 fn native_substitution_uses_fpu(address: u32) -> bool {
     native_pure_helper(address).is_some_and(|helper| helper.uses_fpu)
         || audited_inline_wrapper_uses_fpu(address)
@@ -1111,13 +1092,11 @@ fn discover_external_interior_targets_with_call_returns(
     targets
 }
 
-// Exception 7 suppresses the faulting FP/paired-single instruction. When its
-// RFI restores EE, a pending external/decrementer exception may be recognized
-// before that instruction retries. The asynchronous exception then records
-// the suppressed instruction PC in SRR0 and unwinds the live AOT guard, so its
-// eventual ordinary RFI requires an exact static entry at the instruction
-// itself. Function starts are already callable entries and must not be added
-// as duplicate aliases.
+// Exception 7 suppresses the faulting FP instruction. If its RFI re-enables
+// EE, a pending external/decrementer exception can be taken first: it
+// records the suppressed PC in SRR0 and unwinds the AOT guard, so the later
+// RFI needs a static entry at that instruction. Function starts are already
+// entries and are not added again.
 fn interior_fpu_retry_entries(address: u32, bytes: &[u8]) -> BTreeSet<u32> {
     bytes
         .chunks_exact(4)
@@ -1132,12 +1111,10 @@ fn interior_fpu_retry_entries(address: u32, bytes: &[u8]) -> BTreeSet<u32> {
         .collect()
 }
 
-// mtmsr and mtspr DEC are statically emitted architectural recognition
-// boundaries. Either callback can enter a translated exception and abandon
-// the owning native C++ frame, so its exact next instruction must be a flat
-// continuation alias for the eventual RFI. This is deliberately instruction-
-// specific: ordinary SPR writes and unrelated machine-state operations cannot
-// manufacture interior callable entries.
+// mtmsr and mtspr DEC are interrupt-recognition points. Either can enter a
+// translated exception and abandon the native C++ frame, so the next
+// instruction must be a continuation alias for the eventual RFI. Other SPR
+// writes do not create entries.
 fn architectural_interrupt_resume_entries(address: u32, bytes: &[u8]) -> BTreeSet<u32> {
     let function_end = address.wrapping_add(bytes.len() as u32);
     bytes
@@ -1239,14 +1216,11 @@ fn direct_link_calls(address: u32, bytes: &[u8]) -> Vec<(u32, u32)> {
         .collect()
 }
 
-// Preemptive context switches (decrementer/external interrupts dispatched at
-// branch checkpoints) can freeze a thread whose guest stack passes through
-// ANY call site — not just the statically rfi-reaching chains.  The interrupt
-// save itself lands on the taken branch target (aliased via
-// backward_branch_resume_entries), but the cooperative-resume LR
-// trampoline then unwinds the frozen stack through every outer frame's
-// return address, so EVERY direct and indirect call return site must be a
-// callable continuation or the resume dead-ends and the thread is abandoned.
+// A decrementer/external interrupt taken at a branch checkpoint can freeze a
+// thread at any call depth. The interrupt resumes at the branch target (see
+// backward_branch_resume_entries), but the cooperative-resume LR trampoline
+// then unwinds through every outer frame's return address, so every direct
+// and indirect call return site must be a callable continuation.
 fn call_return_continuations(
     sections: &[DolSection],
     dol_bytes: &[u8],
@@ -1301,13 +1275,11 @@ fn rfi_unwind_continuations(
         })
         .collect::<BTreeSet<_>>();
     let mut continuations = BTreeSet::new();
-    // Indirect linked calls (bctrl / blrl — virtual dispatch, registered
-    // callbacks) can reach any address-taken function, including the
-    // OSLockMutex/OSSleepThread → OSLoadContext chain, so the static taint
-    // cannot see through them.  Treat every function containing one as
-    // tainted and its indirect return sites as resume continuations —
-    // otherwise a thread blocked below e.g. virtual JKRHeap::alloc unwinds
-    // to a return site with no alias and the resume trampoline dead-ends.
+    // Indirect linked calls (bctrl/blrl: virtual dispatch, callbacks) can
+    // reach any address-taken function, including the OSLockMutex/
+    // OSSleepThread → OSLoadContext chain, which the static taint cannot
+    // follow. Functions containing one are tainted and their indirect return
+    // sites become continuations.
     for source in functions {
         let Some(bytes) = function_bytes(sections, dol_bytes, *source) else {
             continue;
@@ -1343,14 +1315,11 @@ fn rfi_unwind_continuations(
                 }
                 changed |= tainted.insert(source.address);
             }
-            // Taint also propagates through direct TAIL CALLS (`b`/`bc`
-            // without link landing in a different function): the callee
-            // returns through the CALLER's link register, so a thread
-            // suspended below the tail-callee unwinds to the tail-CALLER's
-            // call sites.  Without this, thin thunks like
-            // loadFileUsingRipper (fn_80398364: `b FileRipper::loadToMainRAM`)
-            // break the continuation chain and the cooperative-resume
-            // trampoline dead-ends.
+            // Taint also propagates through direct tail calls (`b`/`bc` into
+            // another function): the callee returns through the caller's LR,
+            // so a thread suspended below it unwinds to the caller's call
+            // sites. Example: loadFileUsingRipper (fn_80398364:
+            // `b FileRipper::loadToMainRAM`).
             for target in direct_branch_targets(source.address, bytes) {
                 if target >= source.address && target < source_end {
                     continue; // internal branch, not a tail call
@@ -1380,10 +1349,9 @@ fn interior_code_pointers(bytes: &[u8], functions: &[FunctionRange]) -> BTreeSet
         .collect()
 }
 
-// Maps every discovered interior entry point to the address of the function
-// that owns it.  The owner's single lowered body carries a pc-dispatch
-// prologue for all of its interior entries, so aliases add only a lookup-table
-// row — never a duplicated function body.
+// Maps each interior entry point to its owning function. The owner's body
+// dispatches on pc to all of its interior entries, so an alias only adds a
+// table row.
 #[cfg(test)]
 fn discover_alias_entries(
     sections: &[DolSection],
@@ -1419,13 +1387,11 @@ fn lower_words(address: u32, bytes: &[u8]) -> Result<String, TranslationError> {
     lower_words_with_entries(address, bytes, &BTreeSet::new())
 }
 
-/// Adapt WiiCompiled's typed read-before-write/possible-write analysis to a
-/// deliberately small *structural* emitter. Only straight-line integer leaves
-/// enter this path. There is no text rewriting of generated C++, and an
-/// unsupported instruction or any legal interior entry selects the original
-/// complete-context lowerer instead. The local source values are loaded from
-/// the analyzed read-before-write set; every maybe-written GPR is committed
-/// before the same `blr` return as the original lowerer.
+/// Structural emitter for straight-line integer leaves, using WiiCompiled's
+/// typed read-before-write/possible-write analysis. Unsupported instructions
+/// or any interior entry fall back to the full-context lowerer. Locals load
+/// from the read-before-write set, and every possibly written GPR is
+/// committed before `blr`.
 fn analyze_resident_integer_leaf(
     address: u32,
     bytes: &[u8],
@@ -1585,14 +1551,12 @@ fn lower_resident_integer_leaf(
     Some(output)
 }
 
-/// WiiCompiled's direct-call residency policy, adapted only where Galaxy can
-/// prove an entire integer callee contract from the verified DOL. The caller
-/// is deliberately structural: arithmetic and LR moves use locals; checked
-/// stack memory uses the ordinary guest helpers behind a complete fence;
-/// calls, checkpoints, and public return continuations retain their exact
-/// native boundaries. Unknown/substituted/observed callees use a complete
-/// fence. Other memory, FP, indirect calls, and unclassified opcodes select
-/// the ordinary emitter instead of running with an incomplete effect model.
+/// WiiCompiled's direct-call residency policy, applied where the whole
+/// integer callee contract is known from the DOL. Arithmetic and LR moves use
+/// locals; checked stack memory uses the guest helpers behind a full fence;
+/// calls, checkpoints and return continuations keep their native boundaries.
+/// Unknown, substituted or observed callees get a full fence. Other memory,
+/// FP, indirect calls and unclassified opcodes use the ordinary emitter.
 fn lower_resident_integer_direct_calls(
     address: u32,
     bytes: &[u8],
@@ -1710,9 +1674,8 @@ fn lower_resident_integer_direct_calls(
         if entries.contains(&pc) {
             writeln!(output, "label_{pc:08X}:").map_err(|_| TranslationError::Formatting)?;
         }
-        // Calls and exact guest-memory helpers may declare local temporaries.
-        // The ordinary lowerer scopes each PPC instruction so an interior
-        // entry can jump to any later label without crossing initialization.
+        // Each PPC instruction is scoped so an interior-entry goto never
+        // crosses a local's initialization, as in the ordinary lowerer.
         output.push_str("    {\n");
         match opcode {
             Opcode::Addi | Opcode::Addis => {
@@ -1760,13 +1723,11 @@ fn lower_resident_integer_direct_calls(
                     .map_err(|_| TranslationError::Formatting)?;
             }
             Opcode::Lwz | Opcode::Stw | Opcode::Stwu => {
-                // The checked helper may fault or call a native subsystem.
-                // Publish every resident register before it runs, preserve
-                // the ordinary store-before-RA-update ordering, then reload
-                // all locals only after the helper returns normally.
-                // Scope the effective-address temporary exactly as the
-                // ordinary emitter does: public interior-entry gotos must
-                // never jump across its C++ initialization.
+                // The checked helper may fault or call native code: flush all
+                // resident registers, keep the store-before-RA-update order,
+                // and reload locals after it returns. The EA temporary is
+                // scoped so interior-entry gotos do not cross its
+                // initialization.
                 output.push_str("    {\n");
                 emit_resident_gpr_sync(&mut output, local_gpr_mask, false)?;
                 let update = opcode == Opcode::Stwu;
@@ -1830,9 +1791,8 @@ fn lower_resident_integer_direct_calls(
                     )?;
                 }
                 emit_resident_gpr_sync(&mut output, sync.reload.gpr & local_gpr_mask, true)?;
-                // Every linked call has a public return continuation. The
-                // checkpoint can inspect or alter the entire context, so it
-                // remains a complete flush/reload even for a pure callee.
+                // The checkpoint can inspect or change the whole context, so
+                // linked calls do a full flush/reload even for a pure callee.
                 emit_resident_gpr_sync(&mut output, local_gpr_mask, false)?;
                 emit_call_return_checkpoint(&mut output, pc)?;
                 emit_resident_gpr_sync(&mut output, local_gpr_mask, true)?;
@@ -1959,13 +1919,11 @@ fn lower_words_for_module_with_call_return_entries_and_exact_fpu_flat_reads(
     )
 }
 
-// Interior entry points (cooperative-resume continuations, checkpoint resume
-// pcs, address-taken interior labels) share the owning function's single
-// lowered body: every native invocation sets context->pc to the requested
-// entry address first (host call_guest, interrupt dispatchers, and the
-// resume trampoline all do), so a pc-dispatch prologue routes interior
-// entries to their labels.  The function's own start address is the common
-// case and skips the switch; any other unknown entry address hard-fails.
+// Interior entry points (resume continuations, checkpoint resume PCs,
+// address-taken labels) share the owning function's body. Every native
+// invocation sets context->pc to the entry address first, so a pc-dispatch
+// prologue jumps to the label. The function start skips the switch; an
+// unknown entry address hard-fails.
 fn lower_words_with_entries(
     address: u32,
     bytes: &[u8],
@@ -1983,7 +1941,7 @@ fn lower_words_with_entries(
     )
 }
 
-// Keep this compatibility wrapper's independent lowering controls explicit.
+// Compatibility wrapper that keeps each lowering control explicit.
 #[allow(clippy::too_many_arguments)]
 fn lower_words_with_options(
     address: u32,
@@ -2034,10 +1992,10 @@ struct LoweringConfig<'a> {
     typed_region_gpr_mask: u32,
 }
 
-// The first typed-region pilot deliberately has one exact DOL owner. Its
-// ordinary public body remains the authority for interior entries and faults.
-// Only non-recording integer instructions may use GPR locals; every other
-// instruction observes and publishes the complete architectural context.
+// The typed-region pilot has a single DOL owner; its public body still
+// handles interior entries and faults. Only non-recording integer
+// instructions may use GPR locals; all others read and publish the full
+// context.
 fn typed_region_pure_gpr_access(opcode: Opcode, word: u32) -> Option<GuestGprAccess> {
     if !matches!(
         opcode,
@@ -2180,11 +2138,10 @@ fn discover_wgpipe_store_runs(
             (pc, word, opcode)
         })
         .collect::<Vec<_>>();
-    // This is deliberately a local, conservative proof. Values are discarded
-    // at every control-flow join and after every branch/call. Unknown GPR
-    // definitions invalidate their destination through the decoder's `defs`
-    // metadata. Therefore a candidate can never turn an ordinary dynamic
-    // object/stack store into a runtime WGPIPE probe.
+    // Local constant tracking: values are dropped at every join and after
+    // every branch/call, and unknown GPR definitions invalidate their
+    // destination via the decoder's `defs`. A dynamic object/stack store can
+    // therefore never become a runtime WGPIPE probe.
     let mut constants: [Option<u32>; 32] = [None; 32];
     let mut known_store_addresses = BTreeMap::new();
     for (pc, word, opcode) in &decoded {
@@ -2382,11 +2339,11 @@ fn emit_wgpipe_store_run(
     Ok(())
 }
 
-// WiiCompiled GPLv3 helper-family selection, adapted from
+// Helper-family selection adapted from WiiCompiled (GPLv3)
 // CxxLinearCodeGenerator.FlatGuestMemory.cs::FlatReadHelper at
-// 83463764b8acda394e058b0c689a10b8561fc380. Unlike upstream's raw
-// fault-handler-backed FlatRead, Galaxy's ABI helper checks the complete RAM
-// span and retains the original MMIO/locked-cache/fault-PC path.
+// 83463764b8acda394e058b0c689a10b8561fc380. Unlike upstream's
+// fault-handler-backed FlatRead, Galaxy's ABI helper checks the whole RAM
+// span and keeps the MMIO/locked-cache/fault-PC path.
 // https://github.com/patchzyy/Wiicompiled/blob/83463764b8acda394e058b0c689a10b8561fc380/translator/src/Translator.Core/CodeGen/CxxLinearCodeGenerator.FlatGuestMemory.cs
 fn integer_guest_load_expression(width: u32, ea: &str, pc: u32, flat_ram_reads: bool) -> String {
     let suffix = match width {
@@ -2443,9 +2400,8 @@ fn lower_words_with_config(
         }
     }
     if flat_ram_reads {
-        // Each invocation binds its own GuestMemoryV1. The host never revokes
-        // this capability during that instance's lifetime, including calls.
-        // Put the binding before public interior-entry dispatch.
+        // Each invocation binds its own GuestMemoryV1 for its lifetime. The
+        // binding precedes interior-entry dispatch.
         output.push_str(
             "    [[maybe_unused]] const std::byte* flat_guest_read_base = galaxy::guest_flat_read_base(memory);\n",
         );
@@ -2455,9 +2411,9 @@ fn lower_words_with_config(
     }
     let function_end = address.wrapping_add(bytes.len() as u32);
     let internal_return_targets = internal_link_return_targets(address, bytes);
-    // WiiCompiled emits one LR-continuation dispatch when several sites need
-    // the same target set. Keep Galaxy's native call-return labels and exact
-    // checkpoint behavior; only share the repeated non-link BCLR switch.
+    // As in WiiCompiled, sites with the same target set share one
+    // LR-continuation dispatch. Only the repeated non-link BCLR switch is
+    // shared; call-return labels and checkpoints are unchanged.
     let share_lr_continuation_dispatch = !internal_return_targets.is_empty()
         && bytes
             .chunks_exact(4)
@@ -2475,12 +2431,10 @@ fn lower_words_with_config(
         .collect::<BTreeSet<_>>();
     let mut branch_targets = internal_branch_targets(address, bytes);
     branch_targets.extend(call_return_targets.iter().copied());
-    // Every potentially suppressed FP instruction receives an interior alias
-    // so an exception-7 RFI can restart at its exact PC.  Most of those aliases
-    // are not ordinary branch destinations, however.  Route only those aliases
-    // through a small guarded reentry stub; the normal straight-line path then
-    // need not discard a preceding MSR[FP] proof merely because this PC is
-    // address-taken for recovery.
+    // Every potentially suppressed FP instruction gets an interior alias so
+    // an exception-7 RFI can restart there. Aliases that are not branch
+    // targets go through a guarded reentry stub, so the straight-line path
+    // keeps its MSR[FP] check.
     let structural_reentry_targets = branch_targets.clone();
     let fpu_retry_entries = entries
         .iter()
@@ -2558,12 +2512,10 @@ fn lower_words_with_config(
         .flat_map(|run| run.stores.iter().skip(1).map(|store| store.pc))
         .collect::<BTreeSet<_>>();
     let mut final_instruction_is_terminal = false;
-    // `true` means the current straight-line native path has already checked
-    // MSR[FP]. It is deliberately reset at every ordinary control-flow label
-    // and at any instruction that can transfer control or alter architectural
-    // state. FP retry aliases use guarded reentry stubs above, so their labels
-    // do not perturb normal fallthrough. This is a lowering optimization, not
-    // a relaxation of the FPU-unavailable contract.
+    // True when the current straight-line path has already checked MSR[FP].
+    // Reset at every control-flow label and at any instruction that can
+    // transfer control or change architectural state. FP retry aliases use
+    // the reentry stubs above and do not reset it.
     let mut fpu_availability_proven = false;
     for (index, chunk) in bytes.chunks_exact(4).enumerate() {
         let pc = address + index as u32 * 4;
@@ -2636,12 +2588,9 @@ fn lower_words_with_config(
             .map_err(|_| TranslationError::Formatting)?;
             fpu_availability_proven = true;
         }
-        // Passive proof markers live at exact architectural boundaries in the
-        // translated FunctionAsync lifecycle. They deliberately run before
-        // the instruction at `pc`, after any preceding instruction has
-        // committed. Return-continuation markers therefore survive a
-        // non-local OSLoadContext/RFI unwind instead of depending on a native
-        // C++ caller frame that no longer exists.
+        // FunctionAsync lifecycle markers run before the instruction at `pc`,
+        // after the previous one has committed, so return-continuation
+        // markers survive a non-local OSLoadContext/RFI unwind.
         let function_async_marker = function_async_marker(address, pc);
         if let Some(marker) = function_async_marker {
             writeln!(
@@ -2662,9 +2611,9 @@ fn lower_words_with_config(
             )
             .map_err(|_| TranslationError::Formatting)?;
         }
-        // RMGE01's animation has completed at this boundary. Adjust only the
-        // identified backing panes before their matrices and hit regions are
-        // calculated; the original load/call and its continuation still run.
+        // RMGE01's animation is complete here. Adjust only the identified
+        // backing panes before their matrices and hit regions are calculated;
+        // the original load/call and continuation still run.
         if address == 0x8036_7D28
             && function_end == 0x8036_7E84
             && pc == 0x8036_7D78
@@ -2676,8 +2625,8 @@ fn lower_words_with_config(
             )
             .map_err(|_| TranslationError::Formatting)?;
         }
-        // Exact statically admitted Home RSO Pane::CalculateMtx entry. Runtime
-        // geometry identification distinguishes its main backing from pointers.
+        // Home RSO Pane::CalculateMtx entry. Runtime geometry checks tell its
+        // main backing apart from pointers.
         if (address, function_end, pc, word) == (0x8100_00D8, 0x8101_B120, 0x8101_18F8, 0x9421_FF20)
         {
             writeln!(
@@ -2686,8 +2635,8 @@ fn lower_words_with_config(
             )
             .map_err(|_| TranslationError::Formatting)?;
         }
-        // Home Pane global matrix is complete on every path reaching this join;
-        // children have not been calculated yet. Preserve the original lbz.
+        // The Home Pane global matrix is complete on every path to this join
+        // and children are not calculated yet. The original lbz still runs.
         if (address, function_end, pc, word) == (0x8100_00D8, 0x8101_B120, 0x8101_1B1C, 0x881D_00CF)
         {
             writeln!(
@@ -2837,12 +2786,11 @@ fn lower_words_with_config(
                 };
                 writeln!(output, "    context->gpr[{target}] = {expression};")
                     .map_err(|_| TranslationError::Formatting)?;
-                // RMGE01's SCGetAspectRatio has one final lbz of its
-                // normalized stack byte. Preserve that guest load and all
-                // earlier SC/NAND, CR and stack effects, then opt-in to the
-                // game's native 4:3 mode at this exact return-value boundary.
-                // DATA/sys/main.dol (SHA-1 9a71008a...): 0x804D074C =
-                // lbz r3,8(r1). The helper also updates that live byte.
+                // RMGE01 SCGetAspectRatio ends with an lbz of its normalized
+                // stack byte. Keep that load and all earlier SC/NAND, CR and
+                // stack effects, then select the game's native 4:3 mode at
+                // the return value. main.dol (SHA-1 9a71008a...):
+                // 0x804D074C = lbz r3,8(r1); the helper also updates the byte.
                 if address == 0x804D_0708
                     && function_end == 0x804D_075C
                     && pc == 0x804D_074C
@@ -3137,8 +3085,8 @@ fn lower_words_with_config(
                         "    galaxy::load_fpr_single(context, {target}u, memory, {ea}, services, 0x{pc:08X}u);"
                     )
                     .map_err(|_| TranslationError::Formatting)?;
-                    // Exact RMGE01 inverse screen/layout conversions. The
-                    // selected canvas also governs cursor draw and pane hits.
+                    // RMGE01 inverse screen/layout conversions. The selected
+                    // canvas also drives cursor drawing and pane hit tests.
                     let layout_constant = match (address, function_end, pc, word) {
                         (0x8036_6658, 0x8036_6758, 0x8036_66A8, 0xC042_1438) => Some((2, false)),
                         (0x8036_6658, 0x8036_6758, 0x8036_66B4, 0xC002_143C) => Some((0, true)),
@@ -3150,12 +3098,11 @@ fn lower_words_with_config(
                             "    galaxy::apply_experimental_rmge01_layout_constant(context, services, {lane}u, {half});"
                         ).map_err(|_| TranslationError::Formatting)?;
                     }
-                    // Dusklight CC0 keeps its menu panes circular by using a
+                    // As in Dusklight CC0, menu panes stay circular through a
                     // wider root canvas with inverse horizontal child scale.
-                    // Galaxy's fixed 608-unit NW4R ortho canvas is loaded by
-                    // this exact lfs. Preserve its original guest operation,
-                    // then adjust only f3 for the opt-in wide-aspect XFB path.
-                    // RMGE01 DATA/sys/main.dol: 0x803CA6FC = 0xC06219A8.
+                    // This lfs loads Galaxy's fixed 608-unit NW4R ortho
+                    // canvas; it runs unchanged, then f3 is adjusted for the
+                    // wide-aspect XFB path. main.dol: 0x803CA6FC = 0xC06219A8.
                     if address == 0x803C_A6C4
                         && function_end == 0x803C_A76C
                         && pc == 0x803C_A6FC
@@ -3165,10 +3112,9 @@ fn lower_words_with_config(
                             "    galaxy::apply_experimental_rmge01_nw4r_canvas_width(context, services);\n",
                         );
                     }
-                    // RMGE01 CameraContext::getAspect loads a fixed 16:9
-                    // float in its widescreen branch. Retain the original
-                    // lfs and all PPC/FPU effects, then replace only f1 for
-                    // the selected opt-in content aspect. Exact DOL word:
+                    // RMGE01 CameraContext::getAspect loads a fixed 16:9 float
+                    // in its widescreen branch. The original lfs runs, then f1
+                    // is replaced with the selected content aspect.
                     // 0x800972B0 = lfs f1,-0x691c(r2).
                     if address == 0x8009_7288
                         && function_end == 0x8009_731C
@@ -4480,11 +4426,10 @@ fn lower_words_with_config(
                 }
             }
             Opcode::Bc => {
-                // Dusklight's PC JAudio port excludes this timing-based safety
-                // kill: host DSP cadence can satisfy its false starvation test
-                // and cut off active voices. Keep RMGE01's preceding commands,
-                // tick/history writes, and all following JAudio work translated;
-                // only bypass the optional kill block for this exact disc opcode.
+                // Dusklight's PC JAudio port drops this timing-based safety
+                // kill: host DSP cadence can trip its starvation test and cut
+                // off active voices. Only the kill block at this opcode is
+                // bypassed; the surrounding JAudio work stays translated.
                 // Source: dusklight/libs/JSystem/src/JAudio2/JASAiCtrl.cpp,
                 // JASDriver::updateDSP, CC0-1.0, commit ad979d3dae092d0f5cbdaf49eabca7b4f1db4838.
                 if address == 0x8049_44D0 && pc == 0x8049_452C && word == 0x4182_0054 {
@@ -4612,14 +4557,11 @@ fn lower_words_with_config(
                 }
             }
             Opcode::Bclr => {
-                // Dusklight CC0 m_Do_graphic.cpp::updateRenderSize derives
-                // perspective, HUD, and pointer space from one logical width.
-                // RMGE01's MR::getScreenWidth has one final blr at 0x803F6B70.
-                // Keep its complete AOT body, including the aspect query,
-                // stack/LR restoration and legal return continuation, then
-                // alter only its r3 result for the opt-in ultrawide policy.
-                // Gate the exact owner, extent and opcode; no generated shard
-                // is hand-edited. Dusklight commit ad979d3, CC0 1.0.
+                // As in Dusklight m_Do_graphic.cpp::updateRenderSize (commit
+                // ad979d3, CC0 1.0), perspective, HUD and pointer space derive
+                // from one logical width. RMGE01's MR::getScreenWidth has one
+                // final blr at 0x803F6B70; its body runs unchanged and only
+                // the r3 result changes for the ultrawide policy.
                 if address == 0x803F_6B44
                     && function_end == 0x803F_6B74
                     && pc == 0x803F_6B70
@@ -4716,10 +4658,10 @@ fn lower_words_with_config(
                 "    galaxy::apply_experimental_rmge01_efb_screen_width(context, services);\n",
             );
         }
-        // Fit the authored wide UI into narrower custom aspects without
-        // changing the 3D camera. Projection height and both Y conversions
-        // form an inverse pair; original guest operations execute first.
-        // Geometry hooks follow the completed instruction block.
+        // Fit the wide UI into narrower custom aspects without changing the
+        // 3D camera. Projection height and both Y conversions form an inverse
+        // pair; guest operations run first and geometry hooks follow the
+        // instruction block.
         let mut post_block_hooks = String::new();
         let layout_vertical_fit = match (address, function_end, pc, word) {
             (0x803C_A6C4, 0x803C_A76C, 0x803C_A708, 0xEC21_1028) => Some((1, false)),
@@ -4758,8 +4700,8 @@ fn lower_words_with_config(
             }
             .map_err(|_| TranslationError::Formatting)?;
         }
-        // These geometry hooks change the canonical context after the guest
-        // operation. Optional local-lane lowering must reload that lane.
+        // These hooks change the canonical context after the guest operation,
+        // so local-lane lowering must reload that lane.
         let changed_layout_lane = home_geometry
             .map(|(_, lane)| lane)
             .or(layout_vertical_fit.map(|(lane, _)| lane))
@@ -4781,9 +4723,8 @@ fn lower_words_with_config(
         if typed_region_gpr_mask != 0 && typed_pure_access.is_none() {
             emit_resident_gpr_sync(&mut output, typed_region_gpr_mask, true)?;
         }
-        // The injected diagnostic callbacks above are host service boundaries
-        // when active. Re-establish the guard after one rather than assuming a
-        // tracing build preserves the caller's MSR[FP].
+        // The diagnostic callbacks above are host service boundaries when
+        // active, so the MSR[FP] guard is re-established after one.
         if function_async_marker.is_some()
             || main_frame_stage_marker(address, pc).is_some()
             || opcode_invalidates_fpu_availability_proof(instruction.op)
@@ -4800,14 +4741,12 @@ fn lower_words_with_config(
         return Err(TranslationError::MissingReturn { address });
     }
     if !call_return_targets.is_empty() {
-        // Internal linked calls reach these labels through the translated
-        // non-link BCLR/LR dispatch above. External call-return continuations
-        // reach the same labels when the host resumes a native stack that was
-        // unwound by OSLoadContext/RFI. Other interior-entry provenances keep
-        // using label_* and therefore do not manufacture a return boundary.
-        // If an address has both provenances, treating the shared entry as a
-        // checkpoint is architecturally safe: it observes only an already
-        // published event at the exact instruction boundary.
+        // Internal linked calls reach these labels through the non-link
+        // BCLR/LR dispatch above; external call-return continuations reach
+        // them when the host resumes a stack unwound by OSLoadContext/RFI.
+        // Other interior entries use label_* and add no return boundary. An
+        // address with both kinds is safe as a checkpoint: it only observes an
+        // already published event at the instruction boundary.
         output.push_str("    return;\n");
         if share_lr_continuation_dispatch {
             output
@@ -4902,8 +4841,8 @@ fn require_local_paired_opcode(
 }
 
 // Only exact widened-binary32 producers establish a cached lane. The ordinary
-// instruction emitter still supplies every memory operation and architectural
-// commit; this postpass substitutes only its validated input expressions.
+// emitter still emits every memory operation and commit; this pass only
+// substitutes validated input expressions.
 fn cache_local_paired_instruction(
     output: &mut String,
     start: usize,
@@ -5050,19 +4989,19 @@ fn cache_local_paired_instruction(
         facts[0][target] = true;
         facts[1][target] = true;
     } else if profile == LocalLaneProfile::PsvecNormalize && op == Opcode::Frsqrte {
-        // Reciprocal-square-root estimate writes binary64. Its following scalar
-        // single multiply re-establishes an exact widened-binary32 producer.
+        // frsqrte writes binary64; the following scalar single multiply
+        // produces an exact widened binary32 again.
         facts[0][target] = false;
     } else if op == Opcode::Lfd {
-        // An actual stack restore may load arbitrary binary64. PS1 is untouched.
+        // A stack restore may load arbitrary binary64. PS1 is untouched.
         facts[0][target] = false;
     }
     Ok(())
 }
 
-// Symbolically verify that every memory access is inside the exact initial
-// RAM spans checked by the emitted guard. Roots identify initial registers;
-// root zero represents an absolute address. No input contents are assumed.
+// Checks symbolically that every memory access lies inside the initial RAM
+// spans checked by the emitted guard. Roots identify initial registers; root
+// zero is an absolute address.
 fn validate_psmtx_local_memory_contract(bytes: &[u8]) -> Result<(), TranslationError> {
     let address = 0x804B_5F3C;
     let mut registers: [Option<(u32, i64)>; 32] = [None; 32];
@@ -5150,9 +5089,9 @@ fn validate_psmtx_local_memory_contract(bytes: &[u8]) -> Result<(), TranslationE
     Ok(())
 }
 
-// The cross-product guard proves two 12-byte input spans and one 12-byte
-// output span. Keep this verifier independent from the matrix profile: the
-// smaller leaf has scalar loads, paired loads/stores and no stack frame.
+// The cross-product guard checks two 12-byte input spans and one 12-byte
+// output span. This leaf has scalar loads, paired loads/stores and no stack
+// frame, so it has its own verifier.
 fn validate_psvec_cross_local_memory_contract(bytes: &[u8]) -> Result<(), TranslationError> {
     let address = 0x804B_6CB8;
     if bytes.len() != 0x3C || bytes.len() % 4 != 0 {
@@ -5212,9 +5151,9 @@ fn validate_psvec_cross_local_memory_contract(bytes: &[u8]) -> Result<(), Transl
     Ok(())
 }
 
-// Normalize reads one 12-byte vector and two adjacent scalar constants, then
-// writes one 12-byte vector. The arithmetic profile is intentionally separate
-// from CrossProduct because it also proves scalar-single producer facts.
+// Normalize reads one 12-byte vector and two adjacent scalar constants and
+// writes one 12-byte vector. Separate from CrossProduct because it also
+// checks scalar-single producer facts.
 fn validate_psvec_normalize_local_memory_contract(bytes: &[u8]) -> Result<(), TranslationError> {
     let address = 0x804B_6BCC;
     if bytes.len() != 0x44 || bytes.len() % 4 != 0 {
@@ -5336,12 +5275,10 @@ fn emit_direct_guest_call_with_exact_fpu(
     callable_entries: Option<&BTreeMap<u32, u32>>,
     exact_fpu_functions: Option<&BTreeSet<u32>>,
 ) -> Result<(), TranslationError> {
-    // These are the five direct WPADRead calls to the translated memmove body.
-    // Preserve their PPC volatile arguments at the exact pre-call boundary for
-    // the optional native-input causality proof. The ordinary post-call
-    // checkpoint then verifies the copied guest bytes. This is statically
-    // emitted for a finite, audited address set only; no runtime instruction
-    // recognition or emulation is introduced.
+    // The five direct WPADRead calls to the translated memmove body. Their
+    // volatile arguments are saved before the call for the optional
+    // native-input causality check; the post-call checkpoint then verifies
+    // the copied guest bytes.
     if target == 0x8000_4338
         && matches!(
             pc,
@@ -5404,11 +5341,10 @@ fn emit_direct_guest_call_with_exact_fpu(
             )
             .map_err(|_| TranslationError::Formatting)
         } else if target == 0x8039_8D3C && pc == 0x8039_8E7C {
-            // Keep the worker's real translated call. The begin marker is a
-            // passive observation before the architectural call; completion
-            // is emitted at return PC 0x80398E80 by lower_words_with_options
-            // so an OSLoadContext/RFI transfer cannot strand it on an unwound
-            // native C++ stack.
+            // The worker's translated call runs normally. The begin marker is
+            // observed before the call; completion is emitted at return PC
+            // 0x80398E80 by lower_words_with_options so an OSLoadContext/RFI
+            // transfer cannot strand it on an unwound C++ stack.
             writeln!(
                 output,
                 "    galaxy::function_async_trace_callback(services, galaxy::kFunctionAsyncTraceWorkerBegin, context, memory);\n    context->pc = 0x{target:08X}u;\n    rmge01::fn_{owner:08X}(context, memory, services);"
@@ -5439,16 +5375,11 @@ fn emit_direct_guest_call_with_exact_fpu(
     }
 }
 
-// These are the selected function entries recorded by the native runtime's
-// route-marker diagnostic.  Keep ordinary statically resolved calls as direct
-// C++ calls: only these finite entries use the existing direct-resolved helper,
-// whose normal path is still a native function call and whose diagnostic path
-// crosses the host boundary only when the runtime publishes either the route
-// trace bit or, for the three Mario-control entries, the relative-input anchor
-// bit in NativeServicesV1::runtime_flags. Generated code never reads either
-// process environment variable on this hot path.
-// This is static instrumentation of generated native code, not runtime PPC
-// decoding, interpretation, compilation, or an HLE replacement.
+// Function entries recorded by the runtime's route-marker diagnostic. Only
+// these use the direct-resolved helper: its normal path is a native call, and
+// it crosses the host boundary only when NativeServicesV1::runtime_flags has
+// the route trace bit or, for the three Mario-control entries, the
+// relative-input anchor bit.
 fn should_observe_route_marker_generated_direct_call(target: u32) -> bool {
     matches!(
         target,
@@ -5653,13 +5584,10 @@ fn native_pure_helper(target: u32) -> Option<NativePureHelper> {
         0x8034_4A54 => Some(NativePureHelper::integer(
             "native_indexed_word_load_80344A54",
         )),
-        // WPad input function replacements reverted: the game's real
-        // WPadButton/Stick/Pointer/Acceleration::update now recompile and run
-        // natively. Truly-native input belongs at the raw-report boundary, not
-        // as high-level function replacement.
-        // 0x803E4D24 is intentionally not substituted: its two-instruction
-        // body tail-calls the FP routine at 0x804B6BCC, and only that exact
-        // generated boundary can raise exception 7 after the wrapper's `mr`.
+        // WPad update functions are not replaced; native input enters at the
+        // raw-report boundary. 0x803E4D24 is not substituted: its body
+        // tail-calls the FP routine at 0x804B6BCC, and only that generated
+        // boundary can raise exception 7 after the wrapper's `mr`.
         0x803E_595C => Some(NativePureHelper::fpu(
             "native_vec3_abs_le_threshold_803E595C",
         )),
@@ -5682,10 +5610,9 @@ fn native_pure_helper(target: u32) -> Option<NativePureHelper> {
         0x804B_D28C => Some(NativePureHelper::integer(
             "native_gx_set_chan_color_804BD28C",
         )),
-        // Stateful functions with nested calls or interruptible loops must use
-        // their exact generated bodies. Hand-written entry/direct-call
-        // replacements previously omitted architectural call-return
-        // checkpoints and, in several cases, resume-visible CR/GPR effects.
+        // Stateful functions with nested calls or interruptible loops are not
+        // substituted: a hand-written replacement would skip call-return
+        // checkpoints and resume-visible CR/GPR effects.
         0x804B_E1D8 => Some(NativePureHelper::fpu("native_gx_load_pos_mtx_imm_804BE1D8")),
         0x804B_E59C => Some(NativePureHelper::integer("native_gx_set_array_804BE59C")),
         0x8042_E100 => Some(NativePureHelper::integer("native_stride6_offset8_8042E100")),
@@ -5707,7 +5634,7 @@ fn native_pure_helper(target: u32) -> Option<NativePureHelper> {
 }
 
 // The MoviePlayerSimple draw/stop boundaries publish their target PC before
-// the host boundary, as in the qualified movie-return module.
+// the host boundary.
 fn publishes_movie_boundary_target_pc(target: u32, pc: u32) -> bool {
     (target == 0x8038_D1CC && pc == 0x8036_FDD4)
         || (target == 0x8037_0398 && matches!(pc, 0x8036_FEC8 | 0x8037_0278))
@@ -5732,7 +5659,7 @@ fn requires_host_guest_call(target: u32) -> bool {
         target,
         // Runtime OS/device/input/bring-up intercepts.
         0x0000_0000
-            | 0x8038_5034 // Mouse pointer position/depth transaction, original body retained.
+            | 0x8038_5034 // Mouse pointer position/depth transaction; original body kept.
             | 0x8038_52BC // Restore previous position before velocity/history update.
             | 0x8038_BC80
             | 0x8038_D2E4 // Bounded THP video wrapper HLE; interior entry stays AOT.
@@ -5823,8 +5750,8 @@ fn native_function_body(address: u32) -> Option<&'static str> {
         0x8034_4A54 => Some(
             "    galaxy::native_indexed_word_load_80344A54(context, memory, services, 0x80344A54u);\n    return;\n",
         ),
-        // Former controller function-body replacements stay translated; native
-        // device bytes enter through the raw-report boundary.
+        // WPad update functions stay translated; native device bytes enter
+        // through the raw-report boundary.
         0x803E_595C => Some(
             "    galaxy::native_vec3_abs_le_threshold_803E595C(context, memory, services, 0x803E595Cu);\n    return;\n",
         ),
@@ -5985,11 +5912,8 @@ fn emit_audio_trace_hook(output: &mut String, address: u32) -> Result<(), Transl
 fn should_emit_main_frame_trace_hook(address: u32) -> bool {
     matches!(
         address,
-        // The outer six entries establish the observed frame cadence.  The
-        // remaining entries are the statically known direct subcall boundary
-        // inside GameSystem::frameLoop's work phase.  Keeping this finite and
-        // address-specific gives the native diagnostic useful attribution
-        // without introducing a general runtime function profiler.
+        // The first six entries mark the frame cadence; the rest are the
+        // direct subcall boundaries inside GameSystem::frameLoop's work phase.
         0x8039_9AF0
             | 0x8039_9B58
             | 0x8039_D3D4
@@ -6020,16 +5944,13 @@ fn emit_main_frame_trace_hook(output: &mut String, address: u32) -> Result<(), T
     .map_err(|_| TranslationError::Formatting)
 }
 
-// These are continuations after statically direct calls in the GameScene
-// execute/draw3D path reached by the observed main-frame virtual call. They
-// are deliberately continuation PCs: a call-return checkpoint can resume
-// there after an OS context transfer, while an "after call" C++ statement
-// would be skipped. The markers are bounded diagnostics only; neither their
-// synthetic identities nor their logging path participates in guest dispatch.
-// Diagnostic metadata only: these fixed labels are in the ordinary static
-// lowering, including resume paths reached through GuestTransfer checkpoints.
-// 803A0154 is a shared join, not proof that a mode-3 call completed: consumers
-// must pair it with the matching 803A0150 begin in the same guest frame/thread.
+// Continuations after direct calls in the GameScene execute/draw3D path
+// reached from the main-frame virtual call. They are continuation PCs because
+// a call-return checkpoint can resume there after an OS context transfer,
+// skipping any "after call" C++ statement. Diagnostic only; they do not
+// affect guest dispatch. 803A0154 is a shared join, not proof that a mode-3
+// call completed: pair it with the matching 803A0150 begin in the same guest
+// frame/thread.
 const END_FRAME_SPAN_LABELS: [u32; 8] = [
     0x803A_0140,
     0x803A_0144,
@@ -6045,8 +5966,8 @@ fn insert_end_frame_span_markers(
     files: &mut [GeneratedSource],
     shard_source_bytes: usize,
 ) -> Result<(), TranslationError> {
-    // Run after ordinary sharding so diagnostic bytes cannot cascade the
-    // membership of later shards. Require all eight labels in one shard.
+    // Runs after ordinary sharding so diagnostic bytes cannot change later
+    // shard membership. All eight labels must be in one shard.
     let mut shard_index = None;
     for pc in END_FRAME_SPAN_LABELS {
         let label = format!("\nlabel_{pc:08X}:\n");
@@ -8756,7 +8677,9 @@ fn emit_sharded_module_with_experiment(
          set(GALAXY_NATIVE_ISA \"AUTO\" CACHE STRING \"Native CPU target: AUTO, SSE2, or AVX2\")\n\
          set_property(CACHE GALAXY_NATIVE_ISA PROPERTY STRINGS AUTO SSE2 AVX2)\n\n\
          if(MSVC)\n\
-         \x20   string(REGEX REPLACE \"(^| )/Ob[0-9]\" \"\\\\1/Ob3\" CMAKE_CXX_FLAGS_RELEASE \"${CMAKE_CXX_FLAGS_RELEASE}\")\n\
+         \x20   if(NOT CMAKE_CXX_COMPILER_ID STREQUAL \"Clang\")\n\
+         \x20       string(REGEX REPLACE \"(^| )/Ob[0-9]\" \"\\\\1/Ob3\" CMAKE_CXX_FLAGS_RELEASE \"${CMAKE_CXX_FLAGS_RELEASE}\")\n\
+         \x20   endif()\n\
          \x20   string(TOUPPER \"${GALAXY_NATIVE_ISA}\" GALAXY_NATIVE_ISA)\n\
          \x20   if(NOT GALAXY_NATIVE_ISA MATCHES \"^(AUTO|SSE2|AVX2)$\")\n\
          \x20       message(FATAL_ERROR \"GALAXY_NATIVE_ISA must be AUTO, SSE2, or AVX2\")\n\
@@ -8794,7 +8717,17 @@ fn emit_sharded_module_with_experiment(
          add_library(RMGE01_game SHARED\n\
          \x20   module.cpp\n",
     );
-    for name in &shard_names {
+    // Largest shards first: Ninja starts them in this order, so the slowest
+    // compiles do not trail at the end of a parallel build.
+    let shard_size_of = |name: &String| {
+        files
+            .iter()
+            .find(|file| &file.name == name)
+            .map_or(0, |file| file.contents.len())
+    };
+    let mut ordered_shards: Vec<&String> = shard_names.iter().collect();
+    ordered_shards.sort_by_key(|name| std::cmp::Reverse(shard_size_of(name)));
+    for name in ordered_shards {
         writeln!(cmake, "    {name}").map_err(|_| TranslationError::Formatting)?;
     }
     cmake.push_str(
@@ -8816,11 +8749,17 @@ fn emit_sharded_module_with_experiment(
          \x20   # Guest address preservation can emit intentional dead blocks after unconditional branches.\n\
          \x20   # AUTO keeps old x64 hosts on SSE2 and selects AVX2/FMA only when safe.\n\
          \x20   # /fp:precise remains mandatory; never add /fp:fast.\n\
-         \x20   target_compile_options(RMGE01_game PRIVATE /W4 /WX /wd4702 /permissive- /EHsc /GS- /GR- /Oi /favor:INTEL64)\n\
+         \x20   if(CMAKE_CXX_COMPILER_ID STREQUAL \"Clang\")\n\
+         \x20       # clang-cl keeps MSVC's semantics here: no FMA contraction, wrapping\n\
+         \x20       # signed arithmetic and no type-based alias analysis.\n\
+         \x20       target_compile_options(RMGE01_game PRIVATE /EHsc /GS- /GR- -w -ffp-contract=off -fwrapv -fno-strict-aliasing -fno-slp-vectorize)\n\
+         \x20   else()\n\
+         \x20       target_compile_options(RMGE01_game PRIVATE /W4 /WX /wd4702 /permissive- /EHsc /GS- /GR- /Oi /favor:INTEL64)\n\
+         \x20   endif()\n\
          \x20   if(galaxy_native_isa_effective STREQUAL \"AVX2\")\n\
          \x20       target_compile_options(RMGE01_game PRIVATE /arch:AVX2)\n\
          \x20   endif()\n\
-         \x20   if(GALAXY_MODULE_ENABLE_LTCG)\n\
+         \x20   if(GALAXY_MODULE_ENABLE_LTCG AND NOT CMAKE_CXX_COMPILER_ID STREQUAL \"Clang\")\n\
          \x20       target_compile_options(RMGE01_game PRIVATE $<$<CONFIG:Release>:/GL> $<$<CONFIG:Release>:/Gw>)\n\
          \x20       target_link_options(RMGE01_game PRIVATE $<$<CONFIG:Release>:/LTCG> $<$<CONFIG:Release>:/OPT:REF> $<$<CONFIG:Release>:/OPT:ICF>)\n\
          \x20   endif()\n\
@@ -13506,7 +13445,12 @@ mod tests {
         assert!(!cmake.contents.contains(
             "option(GALAXY_MODULE_ENABLE_LTCG \"Enable Release LTCG for the generated RMGE01 game module\" ON)"
         ));
-        assert!(cmake.contents.contains("if(GALAXY_MODULE_ENABLE_LTCG)"));
+        assert!(cmake
+            .contents
+            .contains("if(GALAXY_MODULE_ENABLE_LTCG AND NOT CMAKE_CXX_COMPILER_ID STREQUAL \"Clang\")"));
+        assert!(cmake
+            .contents
+            .contains("-ffp-contract=off -fwrapv -fno-strict-aliasing"));
         assert!(cmake
             .contents
             .contains("$<$<CONFIG:Release>:/GL> $<$<CONFIG:Release>:/Gw>"));

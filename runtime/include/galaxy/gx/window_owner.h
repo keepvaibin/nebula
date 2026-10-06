@@ -24,8 +24,8 @@ struct WindowOwnerConfig {
     bool show{};
 };
 
-// Owns HWND creation, native modal loops and destruction independently of
-// guest execution and GPU recording. The consumer owns start/stop calls.
+// Owns HWND creation, native modal loops and destruction, independent of guest
+// execution and GPU recording. The consumer calls start/stop.
 class WindowOwner {
 public:
     WindowOwner() = default;

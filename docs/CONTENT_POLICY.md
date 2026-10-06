@@ -23,8 +23,11 @@ tests, hand-written source, and metadata tables needed by the recompiler.
 outputs stay in ignored directories such as `generated/`, `target/` and
 `build-*/`, or in an installation outside the repository. The install-time
 `RMGE01_boot_image.bin`, generated module sources, DSP program, `game.pak` and
-compiled modules are dump-derived: they are produced on the user's machine and
+compiled modules (`RMGE01_game.dll`, `RMGE01_home_button.dll`,
+`RMGE01_dsp.dll`) are dump-derived: they are produced on the user's machine and
 are never tracked, attached to releases, or downloaded by the updater.
+`NebulaRuntime.exe` and its libraries ship prebuilt in Setup because they are
+built only from this repository's source.
 
 The only binary data files in the repository are the Dolphin project's
 clean-room DSP ROM replacements in `third_party/dolphin-free-dsp-rom/`.

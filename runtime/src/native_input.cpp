@@ -1412,10 +1412,8 @@ NativePointerAxes merge_native_pointer_axes(
         return axes;
     }
 
-    // Input modes are an ownership boundary, not a preference. In explicit
-    // keyboard/mouse mode a connected controller must be incapable of moving,
-    // recentering, or keeping the IR pointer visible. Mixing the right stick
-    // here made neutral mouse routes depend on unrelated XInput hardware.
+    // Input modes are exclusive: in keyboard/mouse mode a connected controller
+    // cannot move, recenter, or keep the IR pointer visible.
     axes.x = std::clamp(keyboard_x, -1.0f, 1.0f);
     axes.y = std::clamp(keyboard_y, -1.0f, 1.0f);
     axes.moving = moved(axes.x, axes.y);
@@ -1463,8 +1461,8 @@ NativeMousePointerProjection project_native_mouse_pointer(
             return clamped_normalized;
         }
 
-        // Preserve the proven low-gain center band used by the game's
-        // save-select cursor, then regain full camera reach at the edges.
+        // Low-gain center band for the game's save-select cursor, then full
+        // camera reach at the edges.
         constexpr float kCenterBand = 0.50f;
         const float magnitude = std::fabs(clamped_normalized);
         const float sign = std::signbit(clamped_normalized) ? -1.0f : 1.0f;
@@ -1504,15 +1502,11 @@ void publish_wiimote_ir_dots(
     constexpr int kKpadFrameMaxXRaw = 997;
     constexpr int kKpadFrameMaxYRaw = 725;
     constexpr int kPrimaryHalfSeparation = 80;
-    // The raw IR camera raster is not the KPAD pointing coordinate system.
-    // RMGE01's translated WPAD/KPAD stack applies the EEPROM DPD calibration,
-    // the configured below-screen sensor-bar offset, and its own pointing
-    // scale. Native five-point HID traces through that complete stack measured
-    // 226 raw camera units per KPAD unit, with neutral at (510, 487). Mapping
-    // the full 1024x768 camera raster directly made host [-1, +1] decode as
-    // roughly X [-1.80, +1.79] and Y [-2.04, +1.05]. Keep this compensation at
-    // the raw camera producer: the guest still receives and decodes genuine
-    // Wiimote reports, with no decoded KPAD/WPAD host hook.
+    // The raw IR camera raster is not the KPAD pointing space: RMGE01's
+    // WPAD/KPAD stack applies EEPROM DPD calibration, the below-screen
+    // sensor-bar offset and its own scale, giving 226 raw camera units per
+    // KPAD unit with neutral at (510, 487). Compensating here keeps the guest
+    // decoding real Wiimote reports with no KPAD/WPAD host hook.
     constexpr float kKpadPointerRawUnitsPerHostUnit = 226.0f;
     constexpr float kKpadPointerNeutralXRaw = 510.0f;
     constexpr float kKpadPointerNeutralYRaw = 487.0f;

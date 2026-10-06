@@ -87,7 +87,7 @@ bool native_input_anomalies_retain_missing_slots_without_changing_cadence() {
     cadence.note_delivery(*cadence.collect_latest_due(ticks), ticks);
     for (std::uint64_t i = 0u; i < 40u; ++i) {
         // Model a protected transaction and a missed real device slot, then
-        // drain the latest sample exactly as production does. Missing start
+        // drain the latest sample as the runtime does. Missing start
         // QPC must remain unknown even when the second observation is known.
         deferral.observe({ticks, 0u, 100u, 0x80001000u});
         deferral.observe({ticks + 1u, ticks + 2u, 100u, 0x80002000u});
@@ -2464,9 +2464,8 @@ bool native_hid_published_identity_closes_next_edge_toctou() {
     cadence.arm(origin);
 
     // The consumer wakes for edge 1, then wall time crosses edge 2 before the
-    // broker can publish it. Only the immutable drained identity may advance
-    // the device. Lateness remains honestly invalid; skipped/coalesced count
-    // must remain zero because no second publication was owned yet.
+    // broker publishes it. Only the drained identity may advance the device;
+    // lateness stays invalid and skipped/coalesced counts stay zero.
     const auto first = cadence.collect_published_due(
         galaxy::input::NativeHidPublishedBatch{
             1u, 1u, 1u, origin, origin},

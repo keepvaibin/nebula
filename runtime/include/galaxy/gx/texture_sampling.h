@@ -8,12 +8,11 @@
 
 namespace galaxy::gx {
 
-// Aurora (MIT, encounter/aurora@77326d4, lib/gx/shader_info.cpp,
-// build_shader_info) includes each used indirect stage's texmap in its sampled
-// texture set. Adapt that rule to the raw BP state and to the stages emitted
-// by Galaxy's specialized shader generator. The shader currently samples all
-// configured indirect stages, so each one needs a binding and a memory
-// snapshot even when no ordinary TEV stage names its map.
+// Adapted from Aurora (MIT, encounter/aurora@77326d4, lib/gx/shader_info.cpp,
+// build_shader_info), which adds each used indirect stage's texmap to the
+// sampled texture set. The specialized shader samples every configured
+// indirect stage, so each needs a binding and a memory snapshot even when no
+// TEV stage names its map.
 [[nodiscard]] inline std::uint8_t sampled_texture_map_mask(
     const GxState& state) noexcept {
     const GenMode mode = state.gen_mode();

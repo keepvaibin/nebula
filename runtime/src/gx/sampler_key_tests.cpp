@@ -139,8 +139,8 @@ int main() {
     passed &= expect(field(nearest_key, 24, 0xFFu) == 0u,
         "non-rewritten sampler preserves TexMode max LOD");
 
-    // Force all keys into one bucket: equality must retain all eight slots
-    // and the effective host configuration, not only a fingerprint.
+    // One bucket for every key: equality must compare all eight slots and the host
+    // configuration, not just a fingerprint.
     struct SameBucket {
         std::size_t operator()(const galaxy::gx::SamplerTableKey&) const { return 0u; }
     };
@@ -158,8 +158,8 @@ int main() {
 
     galaxy::gx::SamplerTableCache table_cache;
     for (unsigned frame = 0u; frame < 4u; ++frame) {
-        // Mirrors a fence-completed frame-slot reset. More than 255 distinct
-        // lifetime keys are legal; a single frame retains its explicit limit.
+        // Mirrors a fence-completed frame-slot reset. More than 255 distinct keys over
+        // the cache lifetime are legal; the per-frame limit still applies.
         table_cache.reset();
         for (unsigned i = 0u; i < 255u; ++i) {
             auto key = table_a;
@@ -202,7 +202,7 @@ int main() {
     passed &= expect(bad_levels, "invalid mip count rejected before shifts");
     galaxy::gx::EfbCopyParams copy{};
     copy.src_width = copy.src_height = 8u;
-    copy.target_format = 6u; // two 64-byte RGBA blocks per block row
+    copy.target_format = 6u; // Two 64-byte RGBA blocks per block row.
     copy.dest_stride = 512u;
     passed &= expect(galaxy::gx::efb_copy_guest_byte_size(copy) == 640u,
         "strided copy span reaches last block row without trailing padding");

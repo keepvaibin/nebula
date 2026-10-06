@@ -34,9 +34,9 @@ bool expect(bool condition, const char* message) {
 }
 
 bool owned_bytes_and_ordered_effects() {
-    // Two FIFO segments stand in for commands that enter a nested display
-    // list and later return. Command ordinals, rather than FIFO offsets, keep
-    // its PE and XFB effects in the exact encounter order.
+    // Two FIFO segments model entering a nested display list and returning.
+    // Command ordinals, not FIFO offsets, keep PE and XFB effects in encounter
+    // order.
     std::array<std::byte, 3> first_fifo{
         std::byte{0x40}, std::byte{0x12}, std::byte{0x34}};
     std::array<std::byte, 2> second_fifo{
@@ -70,7 +70,7 @@ bool owned_bytes_and_ordered_effects() {
     });
     packet.set_presentation({true, 0x10ff8160u});
 
-    // The producer's live buffers may be reused immediately after sealing.
+    // The producer may reuse its buffers immediately after sealing.
     first_fifo.fill(std::byte{0});
     second_fifo.fill(std::byte{0});
     first_dependency.fill(std::byte{0});

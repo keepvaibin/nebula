@@ -20,8 +20,8 @@ inline constexpr std::array<const char*, kNativeThpBoundaryReasonCount>
         "source-mapping", "decoder-status", "missing-original",
         "admitted-compare", "admitted-native"};
 
-// Values are snapshots of reads the existing native eligibility path already
-// performed. A zero value without its checked-fields bit means not observed.
+// Values are snapshots of reads made by the native eligibility path. A zero
+// value without its checked-fields bit means not observed.
 struct NativeThpBoundarySnapshot {
     NativeThpBoundaryReason reason{};
     std::uint64_t mode{};

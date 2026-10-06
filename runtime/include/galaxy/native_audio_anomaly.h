@@ -56,7 +56,7 @@ struct NativeAudioAnomalyRecord {
 
 // Append-only MPSC capture. A producer owns one unique slot and release-
 // publishes only after copying every field. Readers never touch an incomplete
-// slot, slots are never reused, and overflow never overwrites earlier evidence.
+// slot, slots are never reused, and overflow never overwrites earlier records.
 // No allocation, lock, formatting or I/O occurs here. Dump after all producers
 // stop; read() is also safe during publication for tests/diagnostic snapshots.
 template <std::size_t Capacity>

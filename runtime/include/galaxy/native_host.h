@@ -28,8 +28,8 @@
 
 namespace galaxy::host {
 
-// Opt-in fixed phases for the existing bounded slow-input anomaly ledger.
-// Native steady-clock diagnostics only; these do not sample or alter Wii time.
+// Phases of the opt-in slow-input anomaly ledger. Host steady-clock
+// diagnostics only; they do not sample or alter Wii time.
 enum class NativeInputPollStage : std::size_t {
     Reconnect, Cadence, Script, Focus, Keys, Controller, Pointer,
     PointerRemainder, Report, DeliverySelection, DeliveryCopy, DeliveryClock,
@@ -47,11 +47,10 @@ struct NativeInputPollBreakdown {
 };
 [[nodiscard]] NativeInputPollBreakdown native_input_poll_breakdown() noexcept;
 
-// Native Bluetooth lifecycle timing uses the same deterministic 60.75 MHz
-// checkpoint clock as the rest of the virtual hardware. The HCI accept timeout
-// is the Bluetooth Core default (0x1FA0 baseband slots at 0.625 ms each). The
-// retry delays and finite L2CAP retry budget are explicit virtual-peripheral
-// policy, never host-wall-clock pacing.
+// Bluetooth lifecycle timing runs on the 60.75 MHz checkpoint clock. The HCI
+// accept timeout is the Bluetooth Core default (0x1FA0 slots of 0.625 ms).
+// Retry delays and the L2CAP retry budget are virtual-peripheral policy, not
+// host wall-clock pacing.
 inline constexpr std::uint16_t kNativeBluetoothConnectionAcceptTimeoutSlots =
     0x1FA0u;
 inline constexpr std::uint64_t kNativeBluetoothConnectionAcceptTimeoutTicks =
@@ -66,19 +65,16 @@ inline constexpr std::uint64_t kNativeBluetoothL2capPostAuthDelayTicks =
     (input::kNativeHidTimelineTicksPerSecond * 250u) / 1000u;
 inline constexpr std::uint64_t kNativeBluetoothL2capRetryDelayTicks =
     kNativeBluetoothL2capPostAuthDelayTicks;
-// Bluetooth Core, Vol 3, Part A, 6.2: every outstanding signaling request owns
-// an RTX timer (1..60 seconds). A Pending response replaces it with ERTX
-// (60..300 seconds). The Standard Configuration process may not exceed 120
-// seconds. Use the specification minima for prompt, deterministic recovery and
-// the mandated maximum for the whole configuration transaction.
+// Bluetooth Core Vol 3 Part A 6.2: each outstanding signaling request has an
+// RTX timer (1-60 s); a Pending response switches it to ERTX (60-300 s); the
+// Standard Configuration process may not exceed 120 s. These use the spec
+// minima and the configuration maximum.
 inline constexpr std::uint64_t kNativeBluetoothL2capRtxTicks =
     input::kNativeHidTimelineTicksPerSecond;
 inline constexpr std::uint64_t kNativeBluetoothL2capErtxTicks =
     input::kNativeHidTimelineTicksPerSecond * 60u;
-// An individual Pending response starts ERTX, but repeated Pending responses
-// may not renew one connection transaction forever. Bluetooth Core, Vol 3,
-// Part A, 6.2.2 caps the elapsed time from the first ERTX start to channel
-// termination at 300 seconds.
+// Repeated Pending responses cannot renew ERTX forever: Vol 3 Part A 6.2.2
+// caps the time from the first ERTX start to channel termination at 300 s.
 inline constexpr std::uint64_t kNativeBluetoothL2capErtxMaximumTotalTicks =
     input::kNativeHidTimelineTicksPerSecond * 300u;
 inline constexpr std::uint64_t kNativeBluetoothL2capConfigurationTimeoutTicks =
@@ -89,39 +85,34 @@ class NativeAudioSink;
 class NativeIosAnomalyLedger;
 
 enum class AiDmaServiceMode : std::uint8_t {
-    // Stop at the first boundary that can invoke guest code. This lets the
-    // guest interrupt path update the next shadow buffer before hardware
+    // Stop at the first boundary that can invoke guest code, so the guest
+    // interrupt handler can update the next shadow buffer before hardware
     // autoloads it.
     Interruptible,
-    // MSR[EE] is known to be clear. Hardware still advances at one real
-    // boundary per service call, while its level interrupt remains latched for
-    // later guest delivery.
+    // MSR[EE] is clear. Hardware still advances one boundary per service call;
+    // its level interrupt stays latched for later guest delivery.
     ExternalInterruptsMasked,
 };
 
-// Internal runtime policy for an AI-related MMIO observation.  This is kept
-// separate from AiDmaServiceMode because deferring while translated guest AI
-// handler code updates the shadow registers is an event-ordering decision, not
-// a hardware service mode.
+// Policy for an AI-related MMIO access. Separate from AiDmaServiceMode because
+// deferring while the guest AI handler updates the shadow registers is an
+// event-ordering decision, not a hardware mode.
 enum class AiDmaMmioServiceDecision : std::uint8_t {
     DeferForGuestInterruptHandler,
     Interruptible,
     ExternalInterruptsMasked,
 };
 
-// The renderer's absolute-position cache and its lossless button-transition
-// journal have independent producers and independent counters. A sequence is
-// therefore an identity only together with this domain; equal numeric values
-// from the two domains must never be treated as the same pointer publication.
+// The absolute-position cache and the button-transition journal have
+// independent counters, so a sequence number identifies a pointer publication
+// only together with its domain.
 enum class HostPointerSequenceDomain : std::uint8_t {
     None,
     AbsolutePosition,
     ButtonTransition,
 };
 
-// Stable diagnostic spelling used by the runtime trace and its fail-closed
-// proof parsers. Keep these values explicit: the numeric sequence is not an
-// identity without its producer domain.
+// Spellings used by the runtime trace and its parsers; keep them stable.
 [[nodiscard]] constexpr std::string_view host_pointer_sequence_domain_name(
     HostPointerSequenceDomain domain) noexcept {
     switch (domain) {
@@ -146,17 +137,15 @@ struct HostPointerState {
     int client_width = 0;
     int client_height = 0;
     std::uint64_t absolute_sequence = 0;
-    // Host GetTickCount64 milliseconds. Keep this clock domain distinct from
-    // the Wii time-base ticks used by native HID cadence identities.
+    // Host GetTickCount64 milliseconds, not Wii time-base ticks.
     std::uint64_t absolute_acquired_ms = 0;
     std::uint32_t debug_flags = 0;
     std::uint32_t debug_error = 0;
     std::uintptr_t debug_window = 0;
 };
 
-// Private host policy only; this does not change the generated-module ABI.
-// Host cursor identity is always (domain, sequence, acquired_ms), never just
-// sequence. Original virtual-HID/WPAD/KPAD causal tags remain separate.
+// Private host policy; not part of the generated-module ABI. Host cursor
+// identity is (domain, sequence, acquired_ms), never the sequence alone.
 enum class SyntheticKpadPointerOrigin : std::uint8_t {
     None, PhysicalMouse, KeyboardPointer, Controller, Script, Replay,
 };
@@ -180,8 +169,8 @@ enum class SyntheticKpadPointerSelection : std::uint8_t {
 struct SyntheticKpadPointerRead {
     SyntheticKpadPointerSample sample{};
     SyntheticKpadPointerSelection selection{SyntheticKpadPointerSelection::Stored};
-    // Original 100 Hz cache identity stays available for bounded comparison
-    // even when sample above selects a retained press or new absolute point.
+    // The 100 Hz cache identity, kept for comparison when `sample` selects a
+    // retained press or a fresh absolute point.
     HostPointerSequenceDomain stored_domain{HostPointerSequenceDomain::None};
     std::uint64_t stored_sequence{}, stored_acquired_ms{}, stored_production_wii_ticks{};
     float stored_x{}, stored_y{};
@@ -198,10 +187,9 @@ using HostPointerTransitionProvider = HostPointerTransitionPoll (*)(
 using HostPointerClock = std::uint64_t (*)() noexcept;
 using NativeKeyboardCaptureProvider = bool (*)() noexcept;
 
-// Passive identity emitted only when a queued virtual Wii Remote input report
-// crosses the IOS /dev/usb/oh1 bulk-in boundary. Host milliseconds and Wii
-// time-base ticks intentionally remain separate fields: they do not share an
-// epoch or unit and must never be subtracted from one another.
+// Recorded when a virtual Wii Remote input report crosses the IOS
+// /dev/usb/oh1 bulk-in boundary. Host milliseconds and Wii ticks have
+// different epochs and units; never subtract one from the other.
 struct NativeVirtualInputAclDeliveryIdentity {
     std::uint64_t logical_epoch{};
     std::uint64_t sample_sequence{};
@@ -215,9 +203,8 @@ struct NativeVirtualInputAclDeliveryIdentity {
     std::array<
         std::uint8_t,
         input::kMaxWiimoteInputReportBytes> payload{};
-    // FNV-1a64 shorthand for log correlation only. Exact identity is the
-    // payload_size plus byte array above; this signature is not collision
-    // proof.
+    // FNV-1a64 for log correlation only; the exact identity is payload_size plus
+    // payload.
     std::uint64_t payload_fingerprint{};
     std::uint32_t ios_request{};
     std::uint8_t report_id{};
@@ -235,9 +222,8 @@ void install_host_pointer_transition_provider(
 // Deterministic clock seam for pointer-visibility integration tests. Passing
 // null restores the production GetTickCount64 clock.
 void install_host_pointer_clock(HostPointerClock clock) noexcept;
-// The native settings overlay owns window-key navigation. Install a host-owned
-// visibility callback so independently polled keyboard state cannot also leak
-// those keys into the guest while the overlay is open. Null disables capture.
+// The settings overlay owns window-key navigation; while it is visible,
+// polled keyboard state is not forwarded to the guest. Null disables capture.
 void install_native_keyboard_capture_provider(
     NativeKeyboardCaptureProvider provider) noexcept;
 [[nodiscard]] bool native_keyboard_capture_active() noexcept;
@@ -347,11 +333,9 @@ struct RealWiimoteInputStats {
     bool fifo_occupied{};
 };
 
-// Opt-in, benchmark-end-only accounting for the virtual Wii Remote transport.
-// This records what crossed the native HID producer and IOS delivery boundary;
-// it intentionally does not infer that a particular game screen consumed an
-// input.  Keeping the observations in memory avoids perturbing the realtime
-// input and VI schedules with per-report logging.
+// Opt-in, end-of-run counts of reports crossing the HID producer and IOS
+// delivery boundaries. Does not infer that the game consumed an input. Kept in
+// memory to avoid per-report logging in the realtime input path.
 struct VirtualWiimoteInputBenchmarkStats {
     bool enabled{};
     std::uint64_t produced_reports{};
@@ -554,21 +538,18 @@ public:
     GuestAddressSpace(GuestAddressSpace&&) = delete;
     GuestAddressSpace& operator=(GuestAddressSpace&&) = delete;
 
-    // The runtime terminates through ExitProcess, so automatic storage
-    // destructors do not run on the normal path. Perform the worker teardown
-    // that must precede module unload explicitly. This is a terminal,
-    // idempotent operation; true is returned only to the caller that performs
-    // the teardown and emits any enabled terminal DSP causal report.
+    // The runtime exits through ExitProcess, so destructors do not run. Performs
+    // the worker teardown that must precede module unload. Idempotent; returns
+    // true only to the caller that performed the teardown.
     [[nodiscard]] bool prepare_for_process_exit();
 
-    // Experimental async NAND writes; default off. Wake is notification-only,
-    // never a guest callback. Unbinding synchronizes with in-flight wake calls.
+    // Experimental async NAND writes, off by default. The wake callback only
+    // notifies and never runs guest code. Unbinding waits for in-flight wakes.
     void set_native_ios_completion_wake_callback(
         void (*callback)(void*) noexcept, void* user) noexcept;
     [[nodiscard]] bool native_ios_completion_pending() const noexcept;
-    // Never waits for a running write. Committing a ready write may admit the
-    // one held filesystem request; legacy non-write handlers retain their
-    // synchronous I/O costs. Guest IRQ dispatch remains the runtime's job.
+    // Never waits for a running write. Committing a ready write may admit the one
+    // held filesystem request. Guest IRQ dispatch stays with the runtime.
     void service_native_ios_completions();
 
     using EfbPeekCallback = bool (*)(
@@ -596,7 +577,7 @@ public:
         void* user) noexcept;
     std::byte* pointer(std::uint32_t address, std::uint32_t size);
     const std::byte* pointer(std::uint32_t address, std::uint32_t size) const;
-    // Non-throwing variant — returns nullptr if the address is not mapped.
+    // Returns nullptr if the address is not mapped.
     std::byte* pointer_or_null(std::uint32_t address, std::uint32_t size);
     const std::byte* pointer_or_null(std::uint32_t address, std::uint32_t size) const;
 
@@ -604,11 +585,10 @@ public:
     void copy(std::uint32_t address, std::span<const std::byte> source);
     void write_u32(std::uint32_t address, std::uint32_t value);
     std::uint32_t read_u32(std::uint32_t address) const;
-    // PE (pixel engine) completion latches. GXSetDrawDone submits BP reg 0x45
-    // with bit 1; GXSetDrawSync submits BP reg 0x48. The GX backend raises
-    // these only after the native GPU fence covering the ordered BP event has
-    // completed. They remain private levels until the guest writes the
-    // corresponding write-only PE interrupt-control clear strobe.
+    // PE completion latches. GXSetDrawDone writes BP 0x45 bit 1; GXSetDrawSync
+    // writes BP 0x48. The GX backend raises them only after the GPU fence covering
+    // that BP event completes. They stay pending until the guest writes the PE
+    // interrupt-control clear bit.
     void raise_pe_finish() {
         pe_finish_pending_.store(true, std::memory_order_release);
     }
@@ -618,9 +598,8 @@ public:
             pe_token_pending_.store(true, std::memory_order_release);
         }
     }
-    // Transitional runtime compatibility: these accessors used to consume a
-    // host-side edge. PE interrupts are hardware levels now, so observing one
-    // must not acknowledge it; the translated handler clears PE_SR instead.
+    // PE interrupts are levels: observing one does not acknowledge it. The
+    // translated handler clears PE_SR.
     bool take_pe_finish() const { return pe_finish_pending(); }
     bool take_pe_token() const { return pe_token_pending(); }
     bool pe_finish_pending() const {
@@ -633,15 +612,14 @@ public:
         return pe_token_value_.load(std::memory_order_acquire);
     }
 
-    // DSP interrupt: DIRQ latches DSPCR.DSPINT. The processor line is a level
-    // gated by DSPCR.DSPINTMSK, and only the translated guest's DSPCR W1C write
-    // acknowledges it. The legacy take accessor is deliberately observational.
+    // DIRQ latches DSPCR.DSPINT. The processor line is gated by DSPCR.DSPINTMSK
+    // and acknowledged only by the guest's DSPCR W1C write; take_dsp_interrupt()
+    // does not clear it.
     bool take_dsp_interrupt() const { return dsp_interrupt_pending(); }
     bool dsp_interrupt_pending() const;
 
-    // Broadway ARAM DMA is a native device transaction over the Wii memory
-    // fabric.  The status is level-triggered in DSPCR: completion latches
-    // ARINT and the processor line is asserted only while ARINTMSK is set.
+    // ARAM DMA completion latches DSPCR.ARINT; the processor line is asserted only
+    // while ARINTMSK is set.
     bool aram_dma_interrupt_status() const;
     bool aram_dma_interrupt_pending() const;
     bool aram_dma_active() const { return aram_dma_active_; }
@@ -650,10 +628,9 @@ public:
     }
     void service_aram_dma(std::uint64_t now_ticks);
 
-    // Surface any mail/interrupt the native DSP coprocessor produced on its
-    // worker thread into the CPU-visible mailbox and interrupt flag. No-op
-    // unless the experimental native DSP path is active; safe to call from the
-    // runtime's interrupt-dispatch cadence.
+    // Moves mail and interrupts produced by the native DSP worker into the
+    // CPU-visible mailbox and interrupt flag. No-op unless the native DSP path is
+    // active.
     void poll_native_dsp(
         cadence::DspPollOrigin origin = cadence::DspPollOrigin::Other);
     [[nodiscard]] bool set_native_dsp_service_wake_callback(
@@ -667,29 +644,22 @@ public:
         return mram && aram;
     }
 
-    // Drive native Wii Remote reconnect attempts from the host event pump. When
-    // the guest's WPAD layer drops the controller it sits at the
-    // "communications interrupted" overlay and stops posting BT reads, so the
-    // retry cannot ride the guest's own polling; the runtime calls this on its
-    // periodic cadence instead. No-op unless the native BT path is gated on.
+    // Drives Wii Remote reconnect attempts from the host event pump. After WPAD
+    // drops the controller the game shows the "communications interrupted" overlay
+    // and stops posting BT reads, so retries cannot depend on guest polling. No-op
+    // unless native BT is enabled.
     void poll_native_bt_reconnect();
-    // Runtime-owned periodic service supplies the exact identity atomically
-    // drained from DeadlineBroker. The device may use the current clock to
-    // measure lateness, but it must not infer a second edge from that clock.
+    // Periodic-service variant using the identity drained from DeadlineBroker.
+    // The current clock may measure lateness but must not create a second edge.
     void poll_native_bt_reconnect(
         const input::NativeHidPublishedBatch& published_batch);
-    // Load and validate an opt-in deterministic input replay before the guest
-    // can arm its realtime HID cadence. A malformed replay remains a hard
-    // startup failure; valid replay reads must never first occur in a periodic
-    // input service.
+    // Loads and validates an opt-in input replay before the guest arms its HID
+    // cadence. A malformed replay fails startup.
     void preload_native_input_replay_log();
-    // Publish the first absolute RuntimeTimeline VI bucket at which translated
-    // Mario-control code is observed.  This must use the same timeline epoch
-    // as the 100 Hz HID deadline consumer; RuntimeState::vi_retrace_count has a
-    // later, relative epoch and is not interchangeable with this value.
-    // The route-marker producer and the 100 Hz virtual-input consumer can run
-    // on different host threads, so this is a one-shot release/acquire handoff.
-    // Later observations must never re-anchor an in-flight diagnostic script.
+    // Publishes the first absolute RuntimeTimeline VI at which translated
+    // Mario-control code runs. Uses the same epoch as the 100 Hz HID deadline
+    // consumer, not RuntimeState::vi_retrace_count. One-shot release/acquire
+    // handoff between threads; later calls never re-anchor a running script.
     void publish_native_input_first_mario_control_vi(
         std::uint64_t vi) noexcept {
         if (native_input_first_mario_control_vi_.load(
@@ -742,9 +712,8 @@ public:
         void* user) noexcept;
     void throw_if_native_input_failed() const;
 
-    // One-shot diagnostic: returns true exactly once after the guest's L2CAP
-    // layer security-blocks the native Wii Remote's HID channel, so the runtime
-    // can dump the guest call history that produced the rejection.
+    // Returns true once after the guest L2CAP layer security-blocks the Wii
+    // Remote HID channel, so the runtime can dump the guest call history.
     bool take_native_bt_security_block_capture() {
         const bool v = bt_capture_security_block_;
         bt_capture_security_block_ = false;
@@ -759,18 +728,14 @@ public:
         return bt_last_disconnect_reason_;
     }
 
-    // AI DMA: true while guest audio DMA runs (AID_LEN 0xCC005036 bit15).
-    // The host models the native AI hardware boundary: guest writes update
-    // shadow registers, the hardware latches them into an active transfer, and
+    // True while guest audio DMA runs (AID_LEN 0xCC005036 bit 15). Guest writes
+    // update shadow registers, hardware latches them into an active transfer, and
     // OS interrupt 5 is raised when a transfer starts.
     bool ai_dma_playing() const { return ai_dma_playing_; }
 
-    // The most recent WiimoteInputSnapshot produced by the ~100 Hz native HID
-    // sample pipeline (build_native_hid_input_snapshot), cached here so a
-    // KPADRead/WPADRead host intercept can read the same already-polled
-    // keyboard/mouse/controller/replay state directly instead of
-    // re-deriving it (which would double-consume replay samples and diverge
-    // from the raw HID report the same sample already produced).
+    // Latest snapshot from the ~100 Hz native HID sampler. KPADRead/WPADRead
+    // intercepts read it instead of re-polling, which would consume replay samples
+    // twice and diverge from the HID report built from the same sample.
     const galaxy::input::WiimoteInputSnapshot* latest_native_hid_snapshot()
         const {
         return latest_native_hid_snapshot_valid_
@@ -794,9 +759,9 @@ public:
         bool retain_edges) noexcept {
         return synthetic_kpad_buttons_.consume(retain_edges);
     }
-    // Opt-in pointer policy: acquisition records metadata without re-polling
-    // or changing the immutable HID snapshot. Only the subsequent game-frame
-    // read may acquire fresh geometry, never keys, button edges or replay.
+    // Opt-in pointer policy: capture records metadata without re-polling or
+    // changing the HID snapshot. Only the next game-frame read may acquire fresh
+    // geometry, never keys, button edges or replay data.
     void capture_synthetic_kpad_pointer(
         const SyntheticKpadPointerSample& sample,
         std::uint32_t owned_mouse_buttons,
@@ -808,10 +773,8 @@ public:
     [[nodiscard]] SyntheticKpadPointerStats synthetic_kpad_pointer_stats() const noexcept {
         return synthetic_kpad_pointer_stats_;
     }
-    // Final normalized ([-1,1], +y up) pointer position from the same native
-    // HID sample cached above -- the pre-IR-dot-encoding position, i.e. what
-    // a real KPADStatus.pos read would resolve to, without needing to
-    // reconstruct it from synthesized IR camera dot geometry.
+    // Normalized pointer ([-1,1], +y up) from the same HID sample before IR-dot
+    // encoding; what KPADStatus.pos would resolve to.
     float latest_native_pointer_x() const { return latest_native_pointer_x_; }
     float latest_native_pointer_y() const { return latest_native_pointer_y_; }
     bool latest_native_pointer_active() const {
@@ -849,11 +812,10 @@ public:
         return std::min(ai_dma_next_completion_ticks_,
                         ai_dma_next_interrupt_ticks_);
     }
-    // Advance the hardware transfer timeline independently of whether the
-    // guest currently accepts external interrupts. An interruptible service
-    // returns at the first pending AID edge so the guest can update its shadow
-    // buffer. A masked service has a bounded catch-up path because present-day
-    // guest RAM cannot reconstruct an arbitrary history of past PCM buffers.
+    // Advances the AI transfer timeline whether or not the guest accepts external
+    // interrupts. Interruptible mode returns at the first pending AID edge so the
+    // guest can update its shadow buffer. Masked mode catches up only a bounded
+    // amount, since guest RAM cannot reproduce past PCM buffers.
     void service_ai_dma(
         std::uint64_t now_ticks,
         AiDmaServiceMode mode);
@@ -870,10 +832,9 @@ public:
     bool native_audio_sink_started() const {
         return native_audio_ != nullptr;
     }
-    // Initialize the native Windows audio backend on the simulation thread,
-    // before guest timing and AI DMA deadlines begin. Explicit disable and
-    // WAV-dump-only diagnostics are intentional no-endpoint modes and succeed
-    // without constructing a sink.
+    // Initializes the Windows audio backend on the simulation thread before guest
+    // timing and AI DMA deadlines start. Disabled output and WAV-dump-only mode
+    // succeed without creating a sink.
     bool preinitialize_native_audio();
     void set_native_audio_failure_callback(
         NativeAudioFailureCallback callback,
@@ -899,8 +860,8 @@ public:
         return ai_dma_resync_missed_buffers_;
     }
     AudioSinkStats audio_sink_stats() const;
-    // Bounded deferred correlation only; called on the simulation thread
-    // after an already-accepted timeline rebase. Never services a device.
+    // Records deferred correlation data after an accepted timeline rebase.
+    // Simulation thread only; does not service any device.
     void record_audio_host_pause(
         std::uint64_t vi, std::uint32_t proof,
         std::uint64_t last_guest_ticks, std::uint64_t observed_ticks,
@@ -914,9 +875,8 @@ public:
         return ai_pcm_identity_tracker_.stats();
     }
     galaxy::DspNativeTelemetrySnapshot dsp_native_telemetry() const;
-    // Observe a generated-DSP hard trap at a terminal runtime boundary. This
-    // is intentionally a public probe for the native harness only; it does not
-    // service hardware or alter the worker's state.
+    // Throws if the generated DSP hit a hard trap. Used by the native harness at
+    // a terminal boundary; does not service hardware or change worker state.
     void throw_if_native_dsp_failed();
     [[nodiscard]] galaxy::DspMramTransactionBoundary::Snapshot
     dsp_native_mram_transaction_stats() const noexcept {
@@ -927,12 +887,11 @@ public:
     IpcDebugSnapshot ipc_debug_snapshot() const;
     bool ipc_interrupt_pending() const;
 
-    // GX FIFO accumulator — populated by WGPIPE write intercept.
+    // Filled by the WGPIPE write intercept.
     const std::vector<std::byte>& gx_fifo_data() const { return gx_fifo_; }
-    // Transfer one completed producer epoch into durable frame ownership.
-    // A fresh vector is installed before any render wait or guest interrupt can
-    // unwind the current native stack, so later WGPIPE writes can never mutate
-    // the captured frame.
+    // Moves the completed FIFO epoch out. A fresh vector is installed before any
+    // render wait or guest interrupt can unwind the stack, so later WGPIPE writes
+    // cannot mutate the captured frame.
     std::vector<std::byte> take_gx_fifo() {
         std::vector<std::byte> captured = std::move(gx_fifo_);
         gx_fifo_.clear();
@@ -950,54 +909,40 @@ public:
     void flush_wgpipe_gather_tail_for_frame();
     bool write_gx_fifo_bytes(std::span<const std::byte> bytes);
 
-    // Deterministic guest-tick source (the runtime's checkpoint clock, in
-    // 60.75 MHz time-base ticks).  When set, AISCNT — the free-running
-    // 48 kHz sample counter — is derived from it instead of the host wall
-    // clock, so the boot schedule stays reproducible regardless of host
-    // frame cost (renderer, shader compiles, debug layers).
+    // Deterministic guest tick source (60.75 MHz time base). When set, AISCNT
+    // (the 48 kHz sample counter) derives from it instead of the host clock, so
+    // boot timing does not depend on host frame cost.
     using TickSource = std::uint64_t (*)(void* user);
     void set_tick_source(TickSource fn, void* user) {
         tick_source_ = fn;
         tick_source_user_ = user;
     }
 
-    // Must be called before the game boots so DVDLowReadDiskID returns a valid
-    // disc ID.  Accepts up to 0x20 bytes from the beginning of boot.bin.
+    // Must be set before boot so DVDLowReadDiskID returns a valid disc ID.
+    // Accepts up to 0x20 bytes from the start of boot.bin.
     void set_disc_id(std::span<const std::byte> id);
     void set_disc_es_metadata(
         std::vector<std::byte> ticket,
         std::vector<std::byte> tmd);
 
-    // Open and memory-map the game.pak sparse image produced by build-pak.
-    // After this call DVDLowRead requests are served in O(1) from the mapped
-    // view.  If the file does not exist a warning is printed and disc reads
-    // will return EIO until the pak is built.
+    // Opens and memory-maps the game.pak image produced by build-pak. If the file
+    // is missing, a warning is printed and disc reads return EIO.
     void open_game_pak(const std::filesystem::path& path);
 
-    // Read-only, host-side-only, never-fatal: parses the raw FST image (the
-    // same bytes already placed in guest memory at boot) into a small table
-    // of `files/LayoutData/*.arc` entries so DVDLowRead can recognize, by
-    // disc byte-offset, when the guest is streaming the file-select
-    // screen's own layout archive. Used purely to gate a cosmetic
-    // native-UI hint (see file_select_scene_active()); a parse failure or a
-    // different game revision just leaves the hint permanently "unknown"
-    // and never affects guest-visible behavior.
-    // The live hint itself is process-global (see galaxy/host/scene_hint.h
-    // and galaxy::host::file_select_scene_active()) rather than a member,
-    // since exactly one GuestAddressSpace exists per process and the
-    // renderer -- a separate translation unit that never sees this class --
-    // needs to read it without depending on native_host.h.
+    // Parses the FST into a table of files/LayoutData/*.arc entries so DVDLowRead
+    // can tell, by disc offset, when the guest loads the file-select layout
+    // archive. Only gates a cosmetic UI hint; a parse failure leaves the hint
+    // unknown and never affects the guest. The hint is process-global
+    // (galaxy/host/scene_hint.h) because the renderer reads it without this header.
     void install_fst_scene_table(std::span<const std::byte> fst_bytes);
 
-    // Pre-wire the CP FIFO ring-buffer simulation with the same base/end that
-    // the dummy GXFifoObj exposes, so if GX code writes CP_WRITE_POINTER
-    // directly, advance_cp_fifo starts draining without waiting for GXInit.
+    // Pre-wires the CP FIFO ring with the dummy GXFifoObj base/end so direct
+    // CP_WRITE_POINTER writes drain before GXInit runs.
     void pre_wire_cp_fifo(std::uint32_t base, std::uint32_t end);
 
     // Posts a queued IOS reply only at a runtime dispatch boundary. The IPC
-    // handler can clear the previous reply's IRQ flag before it finishes
-    // processing ARMMSG, so queued replies must not become visible from inside
-    // that same translated interrupt handler pass.
+    // handler can clear the previous reply's IRQ flag before it finishes with
+    // ARMMSG, so a queued reply must not appear within the same handler pass.
     void service_ipc_reply_queue();
     void begin_ipc_interrupt_handler_pass();
     void end_ipc_interrupt_handler_pass();
@@ -1054,9 +999,8 @@ private:
         std::uint32_t result);
     bool should_defer_ios_reply(std::uint32_t physical_request) const;
     void flush_deferred_ios_replies();
-    // Posts the next queued IOS reply into ARMMSG + PPCCTRL.Y2 if the guest
-    // has acknowledged the previous one.  Called from reply_ios_request and
-    // from the PPCCTRL write-1-to-clear path.
+    // Posts the next queued IOS reply into ARMMSG and PPCCTRL.Y2 once the guest
+    // has acknowledged the previous one.
     void post_next_ipc_reply();
     void release_latched_reply_after_irq_clear();
     bool handle_bluetooth_ioctlv(
@@ -1066,9 +1010,8 @@ private:
         std::uint16_t opcode,
         const std::uint8_t* command,
         std::uint32_t command_size);
-    // Native Wiimote BT data path (gated). Returns true if the opcode is a
-    // connection-flow command handled here (Command_Status + later event) rather
-    // than via the command-complete path.
+    // Returns true if the opcode is a connection-flow command answered here with
+    // Command_Status and a later event instead of Command_Complete.
     bool handle_bluetooth_connection_command(
         std::uint16_t opcode,
         const std::uint8_t* command,
@@ -1087,13 +1030,12 @@ private:
     void queue_wiimote_acl_teardown(std::uint8_t reason);
     void queue_wiimote_authentication_complete();
     void queue_bluetooth_connection_request();
-    // Retry the inbound Wiimote connection while the host is scanning but no
-    // Wiimote is connected. The upper WPAD/CSL layer rejects a controller that
-    // connects before it is ready (BTM disconnects right after link setup);
-    // retrying lets a later, ready host state accept and keep the Wii Remote.
+    // Retries the inbound Wii Remote connection while the host scans with no
+    // remote connected. WPAD/CSL disconnects a controller that connects before it
+    // is ready, so a later retry is needed for the connection to stay up.
     void maybe_reinject_wiimote_connection();
-    // Native Wiimote data path (gated): parse outbound ACL (L2CAP signaling +
-    // HID output reports) the game sends to the Wiimote. Returns true if handled.
+    // Parses outbound ACL (L2CAP signaling and HID output reports) sent to the
+    // Wii Remote. Returns true if handled.
     bool handle_bluetooth_acl_out(std::uint32_t buffer, std::uint32_t size);
     void queue_bluetooth_acl_completed_packet();
     void queue_wiimote_l2cap_connection_request(std::uint16_t psm);
@@ -1131,21 +1073,18 @@ private:
     void invalidate_virtual_wiimote_input_report(bool begin_logical_epoch);
     void reset_virtual_wiimote_input_device(bool disconnected);
     void deliver_bluetooth_event();
-    // Handles IOCTL requests on /dev/di (the DVD drive interface).
-    // Returns true if the request was consumed; false if the handle is not a
-    // /dev/di handle and the caller should fall through to the default path.
+    // IOCTL on /dev/di. Returns false if the handle is not /dev/di so the caller
+    // falls through to the default path.
     bool handle_di_ioctl(
         std::uint32_t physical_request,
         std::uint32_t handle);
-    // Handles IOCTLV requests on /dev/di (scatter-gather variant used by
-    // higher-level SDK DVD functions).  Same semantics as handle_di_ioctl.
+    // IOCTLV on /dev/di; same return semantics as handle_di_ioctl.
     bool handle_di_ioctlv(
         std::uint32_t physical_request,
         std::uint32_t handle);
-    // Native host-backed NAND save files (fresh-Wii semantics: a missing
-    // file fails IOS_Open with raw ISFS ENOENT so the SDK converts it and the
-    // game creates a new save).
-    // Files live under nand_root_; every write flushes through to disk.
+    // Host-backed NAND save files. As on a fresh Wii, a missing file fails
+    // IOS_Open with ISFS ENOENT and the game creates a new save. Files live under
+    // nand_root_ and every write is flushed to disk.
     struct NandMetadata {
         std::uint32_t owner{};
         std::uint16_t group{};
@@ -1169,12 +1108,11 @@ private:
         std::uint32_t position{};
         std::uint8_t mode{};
     };
-    // A known-format file may exist briefly with incomplete contents between
-    // ISFS_CreateFile and the guest's first complete write (and, for RFL,
-    // while NANDSafeOpen replaces that empty original).  This authority binds
-    // the exact bytes, metadata, and NTFS object and is mirrored by a durable
-    // identity-bearing marker so an interrupted create can be recovered on
-    // the next boot.  A pathname alone never bypasses content validation.
+    // A known-format file can briefly hold incomplete contents between
+    // ISFS_CreateFile and the first complete write (for RFL, also while
+    // NANDSafeOpen replaces the empty original). This record binds the exact
+    // bytes, metadata and NTFS object; a durable marker lets an interrupted create
+    // be recovered on the next boot. A path alone never bypasses validation.
     struct ProvisionalNandFile {
         NandMetadata metadata;
         std::vector<std::byte> expected_data;
@@ -1185,8 +1123,7 @@ private:
     std::uint32_t open_nand_file(
         const std::string& guest_path,
         std::uint8_t mode);
-    // Handles ISFS IOCTL/IOCTLV requests on /dev/fs and on open NAND file
-    // handles (GetFileStats).  Same consume semantics as handle_di_ioctl.
+    // ISFS IOCTL/IOCTLV on /dev/fs and on open NAND file handles (GetFileStats).
     bool handle_fs_ioctl(
         std::uint32_t physical_request,
         std::uint32_t handle);
@@ -1196,15 +1133,13 @@ private:
     bool handle_es_ioctlv(
         std::uint32_t physical_request,
         std::uint32_t handle);
-    // Provision the exact ES-owned RMGE01 title/data directory chain.  Kept
-    // behind a member boundary so the early ES request handler does not need
-    // to depend on the private host metadata representation below.
+    // Creates the ES-owned RMGE01 title/data directory chain. A member function so
+    // the ES handler does not depend on the private NAND metadata types.
     [[nodiscard]] std::uint32_t ensure_rmge01_data_directory();
     std::filesystem::path nand_host_path(std::string_view guest_path) const;
-    // Persist the complete file through a durable same-directory sibling and
-    // atomically publish it only after write, flush, and close all succeed.
-    // Returns an IOS/ISFS result so callers never report a failed host write
-    // as a successful guest write.
+    // Writes the file to a same-directory sibling and atomically replaces the
+    // original only after write, flush and close succeed. Returns an IOS/ISFS
+    // result so a failed host write is never reported as success.
     [[nodiscard]] std::uint32_t flush_nand_file(
         NandBacking& file,
         bool replace_existing = true,
@@ -1220,8 +1155,7 @@ private:
         std::uint32_t request, std::uint32_t handle, std::uint32_t length,
         NandBacking candidate);
     void finish_native_ios_shutdown();
-    // Layout stays identical for runtime and test-support consumers. Only the
-    // test-support CPP copies this hook into a job; production never calls it.
+    // Present in all builds so the layout matches; only test support sets it.
     void (*native_nand_test_before_persist_)(void*){};
     void* native_nand_test_before_persist_user_{};
     void (*native_nand_test_after_persist_)(void*){};
@@ -1326,10 +1260,8 @@ private:
     void pump_dsp_from_mailbox();
 
     // --- Native DSP coprocessor ---
-    // Boots the real lowered RMGE01 ucode on the free-running coprocessor using
-    // the captured boot descriptor. Returns true once the coprocessor owns the
-    // DSP. Callers hard-fail on false rather than falling back to the retired
-    // transitional mixer.
+    // Boots the lowered RMGE01 ucode using the captured boot descriptor. Returns
+    // true once the coprocessor owns the DSP; callers fail hard on false.
     bool dsp_native_try_boot();
     // Locate the guest DSPTaskInfo matching the booted native ucode and retain
     // its task start/resume vectors for explicit native HALT resumes.
@@ -1477,8 +1409,8 @@ private:
     std::unordered_map<std::uint32_t, NandFile> nand_files_;
     std::unordered_map<std::string, ProvisionalNandFile>
         provisional_nand_files_;
-    // Host directory backing the guest NAND.  Resolved on first use to
-    // %LOCALAPPDATA%\SuperMarioGalaxy\nand (per-user production data home).
+    // Host directory backing the guest NAND, resolved on first use to
+    // %LOCALAPPDATA%\SuperMarioGalaxy\nand.
     mutable std::filesystem::path nand_root_;
     std::optional<PendingBluetoothRead> bluetooth_interrupt_read_;
     std::optional<PendingBluetoothRead> bluetooth_bulk_read_;
@@ -1491,9 +1423,8 @@ private:
         std::vector<std::byte> packet;
         input::NativeHidCadenceSample cadence;
         std::uint64_t production_wii_ticks{};
-        // Generation of the coherent runtime input-mode snapshot used to
-        // acquire and encode this report. A source change invalidates the
-        // report before it can cross the IOS bulk-in boundary.
+        // Input-mode generation used to build this report. A source change
+        // invalidates it before it crosses the IOS bulk-in boundary.
         std::uint64_t input_mode_generation{};
         // Exact coordinate-publication identity is the domain/sequence pair.
         std::uint64_t host_pointer_sequence{};
@@ -1501,22 +1432,19 @@ private:
         bool host_pointer_sampled{};
         HostPointerSequenceDomain host_pointer_sequence_domain =
             HostPointerSequenceDomain::None;
-        // Retains the compact-proof selection latch until this exact report
-        // either crosses the ACL boundary or is superseded. It is diagnostic
-        // only and never participates in report construction or scheduling.
+        // Diagnostic selection latch, held until this report crosses the ACL boundary
+        // or is superseded. Not used for report construction or scheduling.
         bool trace_selected_cursor_poll_event{};
-        // End-only benchmark accounting fields. These are zero unless the
-        // explicit diagnostic is enabled, and never participate in report
-        // construction or delivery scheduling.
+        // End-of-run benchmark fields; zero unless that diagnostic is enabled.
         std::uint16_t benchmark_buttons{};
         bool benchmark_ir_active{};
         bool benchmark_nunchuk_active{};
         bool benchmark_replay_source{};
         std::uint64_t benchmark_vi{};
     };
-    // A real Wii Remote and the BT controller both have finite buffering. Both
-    // native sources intentionally keep one newest report rather than creating
-    // an unbounded queue when the guest stops posting USB reads.
+    // Real Wii Remotes and BT controllers buffer finitely, so each source keeps
+    // only the newest report instead of queueing when the guest stops posting USB
+    // reads.
     std::optional<QueuedVirtualWiimoteInputReport>
         bt_virtual_input_report_;
     std::unique_ptr<input::NativeHidIoWorker> bt_real_input_worker_;
@@ -1524,30 +1452,26 @@ private:
         ~std::uint64_t{0};
     std::atomic<std::uint64_t> native_input_first_mario_control_vi_{
         kNativeInputMarioControlViUnset};
-    // The opt-in route script publishes one bounded proof record at the first
-    // HID sample suppressed by the live Mario-control marker.  All later
-    // samples retain a terminal A/B-source invariant, but never emit another
-    // record from the realtime input path.
+    // The opt-in route script records once, at the first HID sample suppressed by
+    // the Mario-control marker; later samples never record from the realtime path.
     bool bt_autopress_script_live_stop_recorded_{};
     NativeInputFailureCallback native_input_failure_callback_{};
     void* native_input_failure_callback_user_{};
     input::NativeHidReportCadence bt_virtual_input_cadence_;
     VirtualWiimoteInputBenchmarkStats bt_virtual_input_benchmark_stats_{};
-    // Last source generation incorporated into the virtual device timeline.
-    // Source changes begin a logical HID epoch without rephasing its hardware
-    // deadline clock.
+    // Last source generation applied to the virtual device. A source change
+    // starts a new logical HID epoch without rephasing the deadline clock.
     std::uint64_t bt_virtual_input_mode_generation_{};
     NativeInputCadenceArmCallback native_input_cadence_arm_callback_{};
     void* native_input_cadence_arm_callback_user_{};
     NativeVirtualInputAclDeliveryCallback
         native_virtual_input_acl_delivery_callback_{};
     void* native_virtual_input_acl_delivery_callback_user_{};
-    // Native Wiimote Bluetooth data path (gated by GALAXY_NATIVE_BT_WIIMOTE,
-    // default off). Inbound/peripheral-initiated model observed in [bt] traces:
-    // after the game enables scanning we inject an HCI Connection_Request; on the
-    // game's Accept_Connection_Request we emit Command_Status + Connection_Complete.
-    // This is bring-up scaffolding for the no-HLE input path; the L2CAP/HID report
-    // data path layers on top (see docs/INPUT_BT_NATIVE_COMPLETION.md).
+    // Native Wii Remote Bluetooth path (GALAXY_NATIVE_BT_WIIMOTE, off by default).
+    // Peripheral-initiated: after the game enables scanning an HCI
+    // Connection_Request is injected, and Accept_Connection_Request is answered
+    // with Command_Status and Connection_Complete. See
+    // docs/INPUT_BT_NATIVE_COMPLETION.md.
     bool bt_wiimote_scan_enabled_ = false;
     bool bt_wiimote_connection_requested_ = false;
     // Connection_Accept_Timeout begins only after the HCI event crosses the
@@ -1594,9 +1518,9 @@ private:
     bool bt_l2cap_config_response_pending_ = false;
     std::uint64_t bt_l2cap_configuration_deadline_ticks_ = 0;
     std::uint16_t bt_wiimote_handle_ = 0x0100;
-    // L2CAP HID channels (host-initiated: the console opens PSM 0x11 control and
-    // 0x13 interrupt to the Wiimote; we respond). Local CIDs we assign; remote
-    // CIDs the host assigned. 0 = closed.
+    // L2CAP HID channels: the console opens PSM 0x11 (control) and 0x13
+    // (interrupt). Local CIDs are assigned here, remote CIDs by the console.
+    // 0 = closed.
     std::uint16_t bt_l2cap_control_local_cid_ = 0;
     std::uint16_t bt_l2cap_control_remote_cid_ = 0;
     std::uint16_t bt_l2cap_interrupt_local_cid_ = 0;
@@ -1658,22 +1582,18 @@ private:
     std::uint64_t disc_read_ticket_sequence_ = 0;
     std::unordered_map<std::uint32_t, DiscReadTicket> disc_read_tickets_;
     std::vector<std::byte> gx_fifo_;
-    // CP FIFO ring-buffer simulation.  When the game writes to the CP write-
-    // pointer registers (0x0C000034/36), we read the newly produced bytes from
-    // MEM1 into gx_fifo_ so render_frame sees them without needing real CP DMA.
-    //
-    // CP register layout (all offsets from 0x0C000000, 16-bit writes):
-    //   0x0020 = CP_BASE_LO (lower 16 bits of base addr, written FIRST by SDK)
-    //   0x0022 = CP_BASE_HI (upper 16 bits of base addr, written SECOND → triggers)
-    //   0x0024 = CP_END_LO  (lower 16 bits of end addr,  written FIRST)
-    //   0x0026 = CP_END_HI  (upper 16 bits of end addr,  written SECOND → triggers)
-    //   0x0034 = CP_WRITE_PTR_LO (lower 16 bits of write ptr, written FIRST)
-    //   0x0036 = CP_WRITE_PTR_HI (upper 16 bits of write ptr, written SECOND → advance)
-    //   0x0038 = CP_READ_PTR_LO  (lower 16 bits — written back by advance_cp_fifo)
-    //   0x003A = CP_READ_PTR_HI  (upper 16 bits — written back by advance_cp_fifo)
-    std::uint16_t cp_base_lo_{0};  // saved lower 16 bits (from offset 0x0020)
-    std::uint16_t cp_end_lo_{0};   // saved lower 16 bits (from offset 0x0024)
-    std::uint16_t cp_wr_lo_{0};    // saved lower 16 bits (from offset 0x0034)
+    // CP FIFO ring simulation. When the game writes the CP write pointer
+    // (0x0C000034/36), the new bytes are copied from MEM1 into gx_fifo_ without
+    // real CP DMA.
+    // CP registers (offsets from 0x0C000000, 16-bit writes). The SDK writes LO
+    // first; the HI write latches the value:
+    //   0x0020/0x0022 CP_BASE
+    //   0x0024/0x0026 CP_END
+    //   0x0034/0x0036 CP_WRITE_PTR (HI write advances the FIFO)
+    //   0x0038/0x003A CP_READ_PTR  (written back by advance_cp_fifo)
+    std::uint16_t cp_base_lo_{0};
+    std::uint16_t cp_end_lo_{0};
+    std::uint16_t cp_wr_lo_{0};
     std::uint32_t cp_fifo_base_{0};
     std::uint32_t cp_fifo_end_{0};
     std::uint32_t cp_rd_ptr_{0};
@@ -1758,11 +1678,10 @@ private:
     std::atomic_bool pe_finish_pending_{false};
     std::atomic_bool pe_token_pending_{false};
     std::atomic<std::uint16_t> pe_token_value_{0};
-    // Native DSP-interface mailbox state: to-DSP mails arrive as a 16-bit high write
-    // (0x5000) followed by a 16-bit low write (0x5002).  The DSP boot-task
-    // protocol sends (command, value) mail pairs; command 0x80F3D001's value
-    // is the start vector — the "DSP" then replies DSP_INIT (0xDCD10000).
-    // Task-level mails after boot are answered with DSP_RESUME (0xDCD10001).
+    // DSP mailbox: a to-DSP mail is a 16-bit high write (0x5000) then a low write
+    // (0x5002). The boot-task protocol sends (command, value) pairs; the value of
+    // 0x80F3D001 is the start vector, answered with DSP_INIT (0xDCD10000).
+    // Post-boot task mails are answered with DSP_RESUME (0xDCD10001).
     bool aram_dma_active_{};
     bool aram_dma_aram_to_mram_{};
     std::uint32_t aram_dma_mram_address_{};
@@ -1803,11 +1722,10 @@ private:
     bool dsp_expect_value_mail_{};
     std::uint16_t dsp_mail_to_high_{};
     std::uint32_t dsp_last_command_{};
-    // Boot-task upload descriptor reconstructed from the 0x80F3xxxx (command,
-    // value) mailbox pairs (Dolphin ROM.cpp ROMUCode::HandleMail): A001=IRAM
-    // main-RAM source, A002=IRAM length, B002=DRAM length, C002=IRAM DSP dest,
-    // D001=start vector.  Captured so a single boot can persist the real jdsp
-    // IRAM image for the static recompiler (maybe_dump_dsp_ucode).
+    // Boot-task upload descriptor from the 0x80F3xxxx mailbox pairs (Dolphin
+    // ROM.cpp ROMUCode::HandleMail): A001 = IRAM main-RAM source, A002 = IRAM
+    // length, B002 = DRAM length, C002 = IRAM DSP destination, D001 = start
+    // vector. Used by maybe_dump_dsp_ucode.
     std::uint32_t dsp_boot_iram_src_{};
     std::uint32_t dsp_boot_iram_len_{};
     std::uint16_t dsp_boot_iram_dest_{};
@@ -1905,31 +1823,28 @@ private:
         std::uint64_t,
         std::shared_ptr<DspAdpcmPredictorCache>>
         dsp_adpcm_predictor_caches_;
-    // From-DSP mails wait here while the (single-slot) mailbox is full; the
-    // next one is delivered when the guest consumes the current mail (FromLow
-    // read).  Needed because the JAudio boot handshake is TWO mails: DSP_INIT
-    // (read by __DSPHandler, which then calls the task's init callback) and
-    // the ucode's 0xF3551111 (read by DspHandShake, Petari dsptask.cpp).
+    // From-DSP mails wait here while the single-slot mailbox is full; the next is
+    // delivered when the guest reads FromLow. The JAudio boot handshake is two
+    // mails: DSP_INIT (read by __DSPHandler, which calls the task init callback)
+    // and the ucode's 0xF3551111 (read by DspHandShake, Petari dsptask.cpp).
     std::deque<std::uint32_t> dsp_from_mail_queue_;
     // --- Native DSP coprocessor ---
-    // The real coprocessor runs the lowered RMGE01 ucode in place of the retired
-    // high-level mixer. The interrupt flag is written from the DSP worker thread.
+    // Runs the lowered RMGE01 ucode. The interrupt flag is written from the DSP
+    // worker thread.
     bool dsp_native_enabled_{};
     bool dsp_dusk_hle_enabled_{};
     bool dsp_native_running_{};
-    // Declare the rendezvous before both coprocessor owners so reverse member
-    // destruction cannot remove it first. The destructor additionally calls
-    // dsp_native_shutdown(), which cancels this slot and joins the worker
-    // before any member teardown begins.
+    // Declared before both coprocessor owners so reverse destruction cannot
+    // remove it first. The destructor also calls dsp_native_shutdown(), which
+    // cancels this slot and joins the worker before member teardown.
     galaxy::DspAramMirrorBoundary dsp_native_aram_boundary_{};
     galaxy::DspMramTransactionBoundary dsp_native_mram_transactions_{};
     galaxy::DspMramTransactionBoundary
         dsp_native_aram_commit_transactions_{};
-    // Process-lifetime owner for the exact selected-channel identity boundary.
-    // Production audio-bus routing uses its validated channel sequence; the
-    // larger diagnostic publication payload remains opt-in. It deliberately
-    // precedes the coprocessor and worker so DSPCR teardown can join/destroy
-    // them without discarding prior publication/DMA evidence.
+    // Owns the selected-channel identity boundary for the process lifetime.
+    // Audio-bus routing uses its validated channel sequence; the diagnostic
+    // payload is opt-in. Declared before the coprocessor and worker so DSPCR
+    // teardown can destroy them without losing recorded data.
     std::unique_ptr<galaxy::DspChannelSelectionDmaProbeRecorder>
         dsp_channel_selection_dma_probe_{};
     galaxy::audio::NativeAudioBusControls dsp_audio_bus_controls_{};
@@ -1951,20 +1866,18 @@ private:
     // Prevents dispatching duplicate Broadway DSP interrupts for the same
     // unread DCD1 mail while the hardware mailbox remains held.
     bool dsp_native_from_mail_irq_latched_{};
-    // Diagnostic/native-task ownership guard: when suppressing task-done mails,
-    // drop the paired DIRQ edge even if the worker posts it just after the mail.
+    // When task-done mails are suppressed, also drop the paired DIRQ edge even if
+    // the worker posts it just after the mail.
     bool dsp_native_suppressing_task_done_dirq_{};
     std::uint64_t dsp_native_suppressed_task_done_count_{};
-    // Diagnostic pacing for native DSP sync-frame completions. The production
-    // path lets the native ucode finish ahead of AI DMA; pacing can be
-    // re-enabled for mailbox timing traces.
+    // Diagnostic pacing of DSP sync-frame completions. By default the ucode may
+    // finish ahead of AI DMA; pacing can be enabled for mailbox timing traces.
     bool dsp_native_sync_pacing_active_{};
     std::uint64_t dsp_native_next_sync_completion_ticks_{};
     std::uint64_t dsp_native_paced_sync_completion_count_{};
     std::uint64_t dsp_native_held_sync_completion_count_{};
-    // In native mode this should remain empty: the worker mailbox itself is the
-    // single hardware slot. Retained so diagnostics can assert that no hidden
-    // DSP->CPU queue is being used.
+    // Stays empty in native mode, where the worker mailbox is the single hardware
+    // slot. Kept so diagnostics can assert that no hidden DSP->CPU queue is used.
     std::deque<std::uint32_t> dsp_native_from_mail_queue_;
     std::uint64_t dsp_native_mram_miss_count_{};
     std::uint64_t dsp_native_aram_miss_count_{};
