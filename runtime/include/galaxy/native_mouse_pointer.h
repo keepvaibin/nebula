@@ -34,10 +34,8 @@ struct MousePointerPosition { float x{},y{}; };
         framebuffer_width == 0u || framebuffer_width > 640u) return {};
     float sx = (x + 1.0f) * (static_cast<float>(screen_width) * 0.5f);
     float sy = (y + 1.0f) * (static_cast<float>(screen_height) * 0.5f);
-    // Normalized +1 denotes the inclusive physical content edge. Represent it
-    // by the nearest interior logical coordinate and query THAT coordinate's
-    // GX pixel. This retains subpixel positions across the final logical pixel
-    // without pairing an out-of-range coordinate with a borrowed depth value.
+    // Normalized +1 is the inclusive content edge. Clamp it to the nearest
+    // interior coordinate so the queried GX pixel matches the position.
     if (sx >= static_cast<float>(screen_width))
         sx=std::nextafter(static_cast<float>(screen_width),0.0f);
     if (sy >= static_cast<float>(screen_height))

@@ -14095,6 +14095,69 @@ void GuestAddressSpace::maybe_dump_dsp_ucode(std::uint16_t start_vector) {
 // retired mixer is reachable only from the dedicated test-support target.
 // ---------------------------------------------------------------------------
 #if defined(GALAXY_HAVE_NATIVE_DSP)
+namespace {
+
+struct GeneratedDsp {
+    void (*entry)(galaxy::DspContext&);
+    std::uint16_t (*iram_start)();
+    std::uint32_t (*iram_byte_len)();
+    const char* (*iram_sha1)();
+    std::uint32_t (*probe_contract_version)();
+    std::uint32_t (*probe_capabilities)();
+};
+
+#if defined(GALAXY_NATIVE_DSP_MODULE)
+// Product builds load the DSP that Setup compiles from the user's game, so the
+// prebuilt runtime itself contains nothing derived from the game.
+const GeneratedDsp& generated_dsp() {
+    static const GeneratedDsp dsp = [] {
+        std::wstring path(32768, L'\0');
+        const DWORD length = GetModuleFileNameW(
+            nullptr, path.data(), static_cast<DWORD>(path.size()));
+        if (length == 0u || length >= path.size()) {
+            throw std::runtime_error("cannot locate NebulaRuntime.exe");
+        }
+        path.resize(length);
+        path.resize(path.find_last_of(L"\\/") + 1u);
+        path += L"RMGE01_dsp.dll";
+        const HMODULE module = LoadLibraryExW(
+            path.c_str(), nullptr,
+            LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR | LOAD_LIBRARY_SEARCH_DEFAULT_DIRS);
+        if (module == nullptr) {
+            throw std::runtime_error("RMGE01_dsp.dll could not be loaded");
+        }
+        const auto load = [module](const char* name) {
+            const FARPROC symbol = GetProcAddress(module, name);
+            if (symbol == nullptr) {
+                throw std::runtime_error(
+                    std::string("RMGE01_dsp.dll has no ") + name);
+            }
+            return symbol;
+        };
+        GeneratedDsp result{};
+        result.entry = reinterpret_cast<decltype(result.entry)>(
+            load("galaxy_rmge01_dsp_entry"));
+        result.iram_start = reinterpret_cast<decltype(result.iram_start)>(
+            load("galaxy_rmge01_dsp_entry_expected_iram_start_address"));
+        result.iram_byte_len = reinterpret_cast<decltype(result.iram_byte_len)>(
+            load("galaxy_rmge01_dsp_entry_expected_iram_byte_len"));
+        result.iram_sha1 = reinterpret_cast<decltype(result.iram_sha1)>(
+            load("galaxy_rmge01_dsp_entry_expected_iram_sha1"));
+        result.probe_contract_version =
+            reinterpret_cast<decltype(result.probe_contract_version)>(
+                load("galaxy_rmge01_dsp_entry_generated_probe_contract_version"));
+        result.probe_capabilities =
+            reinterpret_cast<decltype(result.probe_capabilities)>(
+                load("galaxy_rmge01_dsp_entry_generated_probe_capabilities"));
+        return result;
+    }();
+    return dsp;
+}
+#endif
+
+}  // namespace
+
+#if !defined(GALAXY_NATIVE_DSP_MODULE)
 extern "C" void galaxy_rmge01_dsp_entry(galaxy::DspContext& ctx);
 extern "C" std::uint16_t galaxy_rmge01_dsp_entry_expected_iram_start_address();
 extern "C" std::uint32_t galaxy_rmge01_dsp_entry_expected_iram_byte_len();
@@ -14103,6 +14166,23 @@ extern "C" std::uint32_t
 galaxy_rmge01_dsp_entry_generated_probe_contract_version();
 extern "C" std::uint32_t
 galaxy_rmge01_dsp_entry_generated_probe_capabilities();
+
+namespace {
+
+const GeneratedDsp& generated_dsp() {
+    static constexpr GeneratedDsp dsp{
+        &galaxy_rmge01_dsp_entry,
+        &galaxy_rmge01_dsp_entry_expected_iram_start_address,
+        &galaxy_rmge01_dsp_entry_expected_iram_byte_len,
+        &galaxy_rmge01_dsp_entry_expected_iram_sha1,
+        &galaxy_rmge01_dsp_entry_generated_probe_contract_version,
+        &galaxy_rmge01_dsp_entry_generated_probe_capabilities,
+    };
+    return dsp;
+}
+
+}  // namespace
+#endif
 #endif
 
 void GuestAddressSpace::dsp_native_request_interrupt_cb(void* user) {
@@ -15170,16 +15250,14 @@ bool GuestAddressSpace::dsp_native_try_boot() {
     if (image == nullptr) {
         return false;
     }
-    const std::uint16_t expected_start =
-        galaxy_rmge01_dsp_entry_expected_iram_start_address();
-    const std::uint32_t expected_len =
-        galaxy_rmge01_dsp_entry_expected_iram_byte_len();
-    const char* expected_sha1 =
-        galaxy_rmge01_dsp_entry_expected_iram_sha1();
+    const GeneratedDsp& generated = generated_dsp();
+    const std::uint16_t expected_start = generated.iram_start();
+    const std::uint32_t expected_len = generated.iram_byte_len();
+    const char* expected_sha1 = generated.iram_sha1();
     const std::uint32_t generated_probe_contract_version =
-        galaxy_rmge01_dsp_entry_generated_probe_contract_version();
+        generated.probe_contract_version();
     const std::uint32_t generated_probe_capabilities =
-        galaxy_rmge01_dsp_entry_generated_probe_capabilities();
+        generated.probe_capabilities();
     if (expected_sha1 == nullptr || std::strlen(expected_sha1) != 40u) {
         throw std::runtime_error(
             "GALAXY_DSP_NATIVE requested, but generated native DSP "
@@ -15288,7 +15366,7 @@ bool GuestAddressSpace::dsp_native_try_boot() {
     dsp_native_int_pending_.store(false, std::memory_order_release);
     dsp_native_worker_ = std::make_unique<galaxy::NativeDspWorker>(
         *dsp_native_,
-        &galaxy_rmge01_dsp_entry,
+        generated.entry,
         /*free_running=*/true,
         &dsp_native_aram_boundary_);
     dsp_native_worker_->start();

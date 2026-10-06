@@ -254,7 +254,7 @@ void commit_published_cursor_poll(
 }
 
 bool host_pointer_poll_cache_expires_on_precise_fake_clock() {
-    // The old GetTickCount64 identity stays constant while precise time and
+    // The coarse GetTickCount64 identity stays constant while precise time and
     // cursor coordinates advance. Exercise whole-snapshot reuse, not sleeps.
     constexpr std::uint64_t kStartNs = 5'000'000'000u;
     constexpr std::uint64_t kUnchangedCoarseIdentityMs = 1'000u;
@@ -490,9 +490,8 @@ bool stalled_client_messages_do_not_throttle_changed_cursor_polls() {
         "first changed cursor coordinate publishes after the message stall");
     commit_published_cursor_poll(baseline, first, 200, 200);
 
-    // The first cursor publication has an acquisition time of 1121 ms, but it
-    // must not alter kLastClientMessageMs. A changed sample one millisecond
-    // later therefore remains authoritative instead of waiting another 120 ms.
+    // The first publication (1121 ms) must not alter kLastClientMessageMs, so
+    // a changed sample 1 ms later is used without waiting another 120 ms.
     const auto second_timing =
         galaxy::host::classify_host_pointer_client_message_timing(
             1'122u,
@@ -544,10 +543,8 @@ bool local_cursor_poll_is_decoupled_from_the_window_message_pump() {
             !local_recent.stale_center_guard_allowed,
         "adaptive local cursor polling stays authoritative while a client message is recent");
 
-    // Model a renderer that pumps one fresh WM_MOUSEMOVE and then takes much
-    // longer than the native HID period to render. Every changed OS cursor
-    // sample must still publish instead of being pinned to that render-thread
-    // message for the full recent-message window.
+    // A renderer pumps one WM_MOUSEMOVE, then renders for longer than the HID
+    // period. Every changed cursor sample must still publish.
     AcceptedCursorPollBaseline baseline{true, 100, 100};
     for (std::int32_t coordinate = 101; coordinate <= 120; ++coordinate) {
         const HostPointerCursorPollSelection selection = select_cursor_poll(

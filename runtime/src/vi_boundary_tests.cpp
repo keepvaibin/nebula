@@ -373,9 +373,8 @@ void test_active_boundary_successor_during_backlog_evidence() {
     backlog.expected_sequence = snapshot.edge.sequence + 1u;
     backlog.expected_deadline_ticks =
         snapshot.edge.deadline_ticks + galaxy::timing::kViPeriodTicks;
-    // A large backlog (several missed/coalesced periods of WALL time) is
-    // exactly the case active_boundary_owns_ready_vi_successor cannot cover
-    // -- that is the gap this predicate exists to close.
+    // A backlog of several missed wall-time periods, which
+    // active_boundary_owns_ready_vi_successor does not cover.
     backlog.pending_edges = 6u;
     backlog.scheduled_due_edges = 6u;
     backlog.scheduled_edges_elapsed = backlog.expected_sequence;
@@ -415,8 +414,7 @@ void test_active_boundary_successor_during_backlog_evidence() {
             consumed_token, backlog, last_guest_ticks),
         "a consumed token cannot anchor a backlog successor");
 
-    // The Ready-only predicate must NOT accept this Backlog observation --
-    // confirms the two predicates are not accidentally equivalent.
+    // The Ready-only predicate must reject this Backlog observation.
     require(
         !active_boundary_owns_ready_vi_successor(
             snapshot, backlog, last_guest_ticks),

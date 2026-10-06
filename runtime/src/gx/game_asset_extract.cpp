@@ -51,8 +51,7 @@ std::vector<std::byte> yaz0_decompress(std::span<const std::byte> data) {
         return {};
     }
     const std::uint32_t dec_size = read_be32(data, 4);
-    // A malformed/corrupt archive could claim an enormous size; refuse
-    // rather than allocate unbounded memory for a cosmetic asset.
+    // Refuse implausible sizes from corrupt archives instead of allocating them.
     if (dec_size == 0 || dec_size > kMaxCosmeticArchiveSize) {
         return {};
     }
@@ -94,8 +93,7 @@ std::vector<std::byte> yaz0_decompress(std::span<const std::byte> data) {
                     copy_len += 2;
                 }
                 if (dist + 1 > dst) {
-                    // Back-reference points before the start of output --
-                    // corrupt input, refuse rather than read out of bounds.
+                    // Back-reference before the start of output: corrupt input.
                     return {};
                 }
                 std::size_t copy_src = dst - (dist + 1);
@@ -123,9 +121,7 @@ std::vector<RarcFile> rarc_list_files(std::span<const std::byte> data) {
     const std::size_t entry_off = static_cast<std::size_t>(read_be32(data, 0x2C)) + 0x20u;
     const std::size_t string_off = static_cast<std::size_t>(read_be32(data, 0x34)) + 0x20u;
 
-    // Bound node/entry counts generously but finitely -- this is untrusted
-    // (if unlikely-to-be-hostile) file data, never trust header counts
-    // enough to loop unbounded.
+    // Header counts come from file data; bound them before looping.
     if (num_nodes > 4096u ||
         !contains_bytes(data, node_off, static_cast<std::size_t>(num_nodes) * 0x10u)) {
         return result;
@@ -145,9 +141,7 @@ std::vector<RarcFile> rarc_list_files(std::span<const std::byte> data) {
                 continue;
             }
             const std::uint32_t type_and_name_off = read_be32(data, ebase + 4);
-            // Bit 17 of the entry's (type<<16 | nameOffset) word marks a
-            // directory entry (matches the reference Python extraction this
-            // was validated against: (word >> 16) & 0x02).
+            // Bit 17 of the (type << 16 | nameOffset) word marks a directory.
             const bool is_dir = (type_and_name_off & 0x00020000u) != 0u;
             const std::uint32_t name_off = type_and_name_off & 0xFFFFu;
             const std::uint32_t data_off = read_be32(data, ebase + 8);
@@ -352,8 +346,7 @@ std::optional<DecodedTexture> decode_tpl(std::span<const std::byte> data) noexce
             decode_rgb5a3(data, data_off, width, height, result.rgba8);
             break;
         default:
-            // Not one of the formats this reader has been verified against
-            // (see the header comment) -- decline rather than guess.
+            // Not a format this reader has been verified against.
             return std::nullopt;
     }
     return result;
@@ -403,7 +396,7 @@ std::optional<DecodedTexture> load_game_texture(
     }
     return decode_tpl(*entry);
 } catch (...) {
-    // Cosmetic extraction must not escape into the renderer's failure path.
+    // Cosmetic extraction failures must not reach the renderer's failure path.
     return std::nullopt;
 }
 

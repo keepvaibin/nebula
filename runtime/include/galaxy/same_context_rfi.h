@@ -15,8 +15,8 @@ namespace galaxy::interrupt {
            load_call_pc == 0x804A381Cu;
 }
 
-// Retired stateful HLE bodies contained explicit callbacks with retained RAM
-// locals. Keep those exact RMGE01 ranges on the flat path even if re-enabled.
+// These RMGE01 ranges had stateful HLE bodies with callbacks over retained RAM
+// locals. Keep them on the flat path even if that HLE is re-enabled.
 [[nodiscard]] constexpr bool checkpoint_native_helper_range(std::uint32_t pc) noexcept {
     return (pc >= 0x8000C53Cu && pc < 0x8000C5C0u) ||
            (pc >= 0x802617B4u && pc < 0x80261854u) ||

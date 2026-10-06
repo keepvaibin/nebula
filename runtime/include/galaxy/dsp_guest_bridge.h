@@ -129,9 +129,8 @@ inline void dsp_attach_guest_memory_bridge(
     context.hardware.validate_external_span = dsp_guest_bridge_validate_span;
     context.hardware.external_read_byte = dsp_guest_bridge_read_byte;
     context.hardware.external_write_byte = dsp_guest_bridge_write_byte;
-    // The default bridge backs both buses with the same flat guest memory, so a
-    // coprocessor without a host-supplied ARAM router behaves as it did before
-    // the DMA/ARAM bus split.
+    // Without a host-supplied ARAM router, both buses use the same flat guest
+    // memory.
     context.hardware.validate_aram_span = dsp_guest_bridge_validate_span;
     context.hardware.aram_read_byte = dsp_guest_bridge_read_byte;
     context.hardware.aram_write_byte = dsp_guest_bridge_write_byte;

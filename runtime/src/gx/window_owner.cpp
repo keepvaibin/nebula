@@ -55,8 +55,8 @@ void WindowOwner::stop() {
     if (GetCurrentThreadId() == thread_id_) {
         throw std::logic_error("Win32 window owner cannot join itself");
     }
-    // An HWND message is dispatched by nested native loops too. Request
-    // normal window cleanup before terminating the outer message loop.
+    // Nested native loops also dispatch HWND messages, so request normal window
+    // cleanup before ending the outer loop.
     if (window_ != nullptr) (void)PostMessageW(window_, WM_CLOSE, 0, 0);
     // WM_QUIT also terminates Win32's nested move/size/menu message loops;
     // the outer owner loop then destroys its HWND on the same thread.

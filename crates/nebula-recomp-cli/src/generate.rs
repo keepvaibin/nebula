@@ -20,7 +20,7 @@ use std::{fs, path::Path};
 
 /// Bump whenever generated source for the same game changes, so installers
 /// know that previously compiled modules can no longer be reused.
-pub const GENERATION_VERSION: u32 = 1;
+pub const GENERATION_VERSION: u32 = 2;
 
 /// Shard size and per-shard source budget of the qualified module build.
 pub const MODULE_SHARD_SIZE: usize = 64;
@@ -41,6 +41,45 @@ pub fn release_module_options() -> ModuleTranslationOptions {
         ..ModuleTranslationOptions::default()
     }
 }
+
+/// One build graph for everything Setup compiles. The two largest single
+/// files (Home Menu, DSP) come first so they start first.
+const BUILD_CMAKE: &str = r#"cmake_minimum_required(VERSION 3.24)
+project(NebulaGenerated LANGUAGES CXX)
+add_subdirectory(home)
+add_subdirectory(dsp)
+add_subdirectory(game)
+"#;
+
+/// RMGE01_dsp.dll: the lowered AX ucode, loaded by the prebuilt runtime.
+const DSP_CMAKE: &str = r#"cmake_minimum_required(VERSION 3.24)
+project(RMGE01NativeDsp LANGUAGES CXX)
+if(NOT DEFINED GALAXY_RUNTIME_INCLUDE OR NOT DEFINED GALAXY_DSP_ALU_LIBRARY)
+    message(FATAL_ERROR "Set the Nebula runtime include and DSP ALU library")
+endif()
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+add_library(RMGE01_dsp SHARED rmge01_dsp.cpp)
+target_include_directories(RMGE01_dsp PRIVATE "${GALAXY_RUNTIME_INCLUDE}")
+target_link_libraries(RMGE01_dsp PRIVATE "${GALAXY_DSP_ALU_LIBRARY}")
+set_target_properties(RMGE01_dsp PROPERTIES PREFIX "")
+if(MSVC)
+    target_compile_options(RMGE01_dsp PRIVATE /EHsc /GS- /GR-)
+    if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+        # /O1 compiles in about 30 s; /O2 takes minutes and 5 GB for this file.
+        target_compile_options(RMGE01_dsp PRIVATE -w -fwrapv -fno-strict-aliasing /O1)
+    endif()
+    foreach(symbol IN ITEMS
+            galaxy_rmge01_dsp_entry
+            galaxy_rmge01_dsp_entry_expected_iram_start_address
+            galaxy_rmge01_dsp_entry_expected_iram_byte_len
+            galaxy_rmge01_dsp_entry_expected_iram_sha1
+            galaxy_rmge01_dsp_entry_generated_probe_contract_version
+            galaxy_rmge01_dsp_entry_generated_probe_capabilities)
+        target_link_options(RMGE01_dsp PRIVATE "/EXPORT:${symbol}")
+    endforeach()
+endif()
+"#;
 
 /// Lower RMGE01's AX ucode with the bundled Dolphin free DSP ROMs.
 pub fn generate_dsp(game: &Path, output: &Path) -> Result<()> {
@@ -129,6 +168,8 @@ pub fn generate_all(game: &Path, output: &Path) -> Result<()> {
     generate_home_button_sidecar(game, &output.join("home"))?;
     println!("STEP 4/5 Lowering the audio DSP program");
     generate_dsp(game, &output.join("dsp").join("rmge01_dsp.cpp"))?;
+    write_generated_text_create_new(&output.join("dsp").join("CMakeLists.txt"), DSP_CMAKE)?;
+    write_generated_text_create_new(&output.join("CMakeLists.txt"), BUILD_CMAKE)?;
     println!("STEP 5/5 Building the boot image");
     #[cfg(target_os = "windows")]
     crate::build_boot_image::run(game, &output.join("RMGE01_boot_image.bin"))?;

@@ -1,5 +1,4 @@
-// gx_shim.cpp — thin shim implementing the frozen galaxy::gx public API
-// (gx_d3d12.h) over a single GxBackend instance.
+// Implements the galaxy::gx public API (gx_d3d12.h) over a single GxBackend.
 
 #include "galaxy/gx_d3d12.h"
 

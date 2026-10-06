@@ -11,7 +11,7 @@ namespace galaxy {
 // RMGE01 LayoutManager::calcAnimWithoutLocationAdjust, after animateRecursive
 // and immediately before Layout::CalculateMtx. The resource-owned dimensions
 // are absolute baselines; animation still owns translation, alpha and scale.
-// This candidate remains opt-in until transition and interaction checks pass.
+// Opt-in until transition and interaction checks pass.
 inline bool layout_aspect_repairs_enabled() {
     static const bool enabled = [] {
         char* value = nullptr;

@@ -1,5 +1,4 @@
 using System;
-using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
@@ -9,12 +8,15 @@ using System.Threading;
 namespace Nebula.Setup
 {
     /// <summary>
-    /// The pinned compiler toolchain: Microsoft's MSVC and Windows SDK packages
-    /// plus CMake and Ninja, downloaded from their official hosts, verified
-    /// against pinned SHA-256 values and unpacked per-user without elevation.
+    /// The pinned build toolchain: clang-cl and lld-link (from llvm-mingw),
+    /// Microsoft's C++ runtime headers and libraries and the Windows SDK,
+    /// plus CMake and Ninja. Every download is checked against a pinned
+    /// SHA-256 and unpacked per-user without elevation.
     /// </summary>
     internal sealed class Toolchain
     {
+        private const int ParallelDownloads = 6;
+
         private readonly Dictionary<string, object> pins;
         private readonly string root;
 
@@ -27,16 +29,15 @@ namespace Nebula.Setup
 
         /// <summary>Identity of the pinned toolchain; part of module compatibility.</summary>
         public string Id { get; private set; }
-        public string Root { get { return root; } }
-        public string MsvcVersion { get { return Json.Str(pins, "msvcVersion"); } }
         public string LicenseUrl { get { return Json.Str(Json.Obj(pins, "visualStudio"), "licenseUrl"); } }
 
         public long DownloadBytes
         {
             get
             {
-                return Json.Long(pins, "downloadBytes") + Json.Long(Json.Obj(pins, "cmake"), "size")
-                    + 48L * 1024 * 1024;
+                long total = Json.Long(pins, "downloadBytes");
+                foreach (var name in new[] { "llvm", "cmake", "ninja" }) total += Json.Long(Json.Obj(pins, name), "size");
+                return total;
             }
         }
 
@@ -46,9 +47,20 @@ namespace Nebula.Setup
         public string MsvcDir { get; private set; }
         public string SdkDir { get; private set; }
         public string SdkVersion { get; private set; }
+        public string RedistDir { get; private set; }
+        public string ClangCl { get { return Path.Combine(root, "llvm", "bin", "clang-cl.exe"); } }
+        public string LldLink { get { return Path.Combine(root, "llvm", "bin", "lld-link.exe"); } }
         public string CMake { get { return Path.Combine(root, "cmake", "bin", "cmake.exe"); } }
         public string Ninja { get { return Path.Combine(root, "ninja", "ninja.exe"); } }
-        public string RedistDir { get; private set; }
+        private string Rc { get { return Path.Combine(SdkDir, "bin", SdkVersion, "x64", "rc.exe"); } }
+        private string Mt { get { return Path.Combine(SdkDir, "bin", SdkVersion, "x64", "mt.exe"); } }
+
+        private sealed class Download
+        {
+            public string Url, File, Sha256, Kind;
+            public long Size;
+            public Dictionary<string, object> Pin;
+        }
 
         public void Ensure(Action<string, double> progress, Action<string> log, CancellationToken cancel)
         {
@@ -57,52 +69,100 @@ namespace Nebula.Setup
             string downloads = Path.Combine(Path.GetDirectoryName(root), "downloads");
             Directory.CreateDirectory(downloads);
 
-            var payloads = new List<Dictionary<string, object>>();
-            foreach (var item in Json.List(pins, "payloads")) payloads.Add((Dictionary<string, object>)item);
-            var cmake = Json.Obj(pins, "cmake");
-            var ninja = Json.Obj(pins, "ninja");
-            long total = 0, done = 0;
-            foreach (var payload in payloads) total += Json.Long(payload, "size");
-
-            foreach (var payload in payloads)
+            var items = new List<Download>();
+            foreach (Dictionary<string, object> payload in Json.List(pins, "payloads"))
+                items.Add(new Download
+                {
+                    Url = Json.Str(payload, "url"), Sha256 = Json.Str(payload, "sha256"), Size = Json.Long(payload, "size"),
+                    Kind = Json.Str(payload, "kind"), File = Path.Combine(downloads, Path.GetFileName(Json.Str(payload, "fileName")))
+                });
+            foreach (var name in new[] { "llvm", "cmake", "ninja" })
             {
-                cancel.ThrowIfCancellationRequested();
-                string file = Path.Combine(downloads, Path.GetFileName(Json.Str(payload, "fileName")));
-                long before = done;
-                Downloader.Fetch(Json.Str(payload, "url"), file, Json.Str(payload, "sha256"), Json.Long(payload, "size"),
-                    delegate(long bytes) { progress("Downloading the Microsoft C++ compiler and Windows SDK", (before + bytes) / (double)Math.Max(1, total)); },
-                    cancel);
-                done = before + Json.Long(payload, "size");
+                var pin = Json.Obj(pins, name);
+                items.Add(new Download
+                {
+                    Url = Json.Str(pin, "url"), Sha256 = Json.Str(pin, "sha256"), Size = Json.Long(pin, "size"),
+                    Kind = name, File = Path.Combine(downloads, name + "-" + Json.Str(pin, "version") + ".zip"), Pin = pin
+                });
             }
-            string cmakeZip = Path.Combine(downloads, "cmake-" + Json.Str(cmake, "version") + ".zip");
-            Downloader.Fetch(Json.Str(cmake, "url"), cmakeZip, Json.Str(cmake, "sha256"), 0,
-                delegate(long bytes) { progress("Downloading CMake", 0); }, cancel);
-            string ninjaZip = Path.Combine(downloads, "ninja-" + Json.Str(ninja, "version") + ".zip");
-            Downloader.Fetch(Json.Str(ninja, "url"), ninjaZip, Json.Str(ninja, "sha256"), 0, null, cancel);
+
+            DownloadAll(items, progress, cancel);
+            log("Downloaded " + items.Count + " toolchain files.");
 
             string staging = root + ".partial";
             if (Directory.Exists(staging)) FileUtil.DeleteTree(staging);
             Directory.CreateDirectory(staging);
-            int index = 0;
-            foreach (var payload in payloads)
+            progress("Unpacking the toolchain", -1);
+            // msiexec runs one install at a time, so the SDK unpacks on its own
+            // thread while the archives extract alongside it.
+            Exception sdkFailure = null;
+            var sdk = new Thread(delegate()
+            {
+                try
+                {
+                    foreach (var item in items.Where(i => i.Kind == "msi"))
+                    {
+                        cancel.ThrowIfCancellationRequested();
+                        InstallMsi(item.File, Path.Combine(staging, "sdk"), log, cancel);
+                    }
+                }
+                catch (Exception error) { sdkFailure = error; }
+            });
+            sdk.Start();
+            foreach (var item in items)
             {
                 cancel.ThrowIfCancellationRequested();
-                index++;
-                progress("Unpacking the compiler toolchain", index / (double)(payloads.Count + 2));
-                string file = Path.Combine(downloads, Path.GetFileName(Json.Str(payload, "fileName")));
-                string kind = Json.Str(payload, "kind");
-                if (kind == "vsix") ExtractVsix(file, staging);
-                else if (kind == "msi") InstallMsi(file, Path.Combine(staging, "sdk"), log, cancel);
+                if (item.Kind == "vsix") ExtractVsix(item.File, staging);
+                else if (item.Kind == "llvm") ExtractSelected(item.File, Path.Combine(staging, "llvm"), Json.Obj(item.Pin, "extract"));
+                else if (item.Kind == "cmake") ExtractZipStripTop(item.File, Path.Combine(staging, "cmake"));
+                else if (item.Kind == "ninja") ZipFile.ExtractToDirectory(item.File, Path.Combine(staging, "ninja"));
             }
-            ExtractZipStripTop(cmakeZip, Path.Combine(staging, "cmake"));
-            ZipFile.ExtractToDirectory(ninjaZip, Path.Combine(staging, "ninja"));
+            sdk.Join();
+            if (sdkFailure != null) throw sdkFailure;
             foreach (var msi in Directory.GetFiles(Path.Combine(staging, "sdk"), "*.msi")) File.Delete(msi);
 
             Directory.Move(staging, root);
             if (!Locate(true)) throw new InvalidOperationException("The unpacked toolchain is incomplete.");
-            Json.Save(Marker, new Dictionary<string, object> { { "id", Id }, { "msvc", MsvcVersion }, { "sdk", SdkVersion }, { "createdUtc", DateTime.UtcNow.ToString("o") } });
+            Json.Save(Marker, new Dictionary<string, object> { { "id", Id }, { "sdk", SdkVersion }, { "createdUtc", DateTime.UtcNow.ToString("o") } });
             FileUtil.DeleteTree(downloads);
+            // Toolchains of earlier versions are never used again.
+            foreach (var dir in Directory.GetDirectories(Path.GetDirectoryName(root)))
+                if (!string.Equals(dir, root, StringComparison.OrdinalIgnoreCase))
+                    try { FileUtil.DeleteTree(dir); } catch (IOException) { } catch (UnauthorizedAccessException) { }
             log("Toolchain " + Id + " is ready.");
+        }
+
+        private static void DownloadAll(List<Download> items, Action<string, double> progress, CancellationToken cancel)
+        {
+            long total = items.Sum(i => i.Size);
+            var received = new long[items.Count];
+            int next = -1;
+            Exception failure = null;
+            var workers = new List<Thread>();
+            for (int w = 0; w < ParallelDownloads; w++)
+            {
+                var worker = new Thread(delegate()
+                {
+                    try
+                    {
+                        for (int index; (index = Interlocked.Increment(ref next)) < items.Count && failure == null; )
+                        {
+                            int slot = index;
+                            var item = items[slot];
+                            Downloader.Fetch(item.Url, item.File, item.Sha256, item.Size, delegate(long bytes)
+                            {
+                                Interlocked.Exchange(ref received[slot], bytes);
+                                progress("Downloading the compiler toolchain", received.Sum() / (double)Math.Max(1, total));
+                            }, cancel);
+                        }
+                    }
+                    catch (Exception error) { Interlocked.CompareExchange(ref failure, error, null); }
+                });
+                worker.Start();
+                workers.Add(worker);
+            }
+            foreach (var worker in workers) worker.Join();
+            if (failure != null) throw failure;
         }
 
         /// <summary>VSIX packages are zip files; their payload is under Contents/.</summary>
@@ -114,12 +174,43 @@ namespace Nebula.Setup
                 {
                     string name = Uri.UnescapeDataString(entry.FullName.Replace('\\', '/'));
                     if (!name.StartsWith("Contents/", StringComparison.OrdinalIgnoreCase) || name.EndsWith("/")) continue;
-                    string relative = name.Substring("Contents/".Length);
-                    string path = SafeJoin(target, relative);
+                    string path = SafeJoin(target, name.Substring("Contents/".Length));
                     Directory.CreateDirectory(Path.GetDirectoryName(path));
                     entry.ExtractToFile(path, true);
                 }
             }
+        }
+
+        /// <summary>
+        /// Extract only the pinned entries of a release zip (its top folder
+        /// removed). A key ending in "/" maps a whole folder.
+        /// </summary>
+        private static void ExtractSelected(string zip, string target, Dictionary<string, object> map)
+        {
+            int found = 0;
+            using (var archive = ZipFile.OpenRead(zip))
+            {
+                foreach (var entry in archive.Entries)
+                {
+                    string name = entry.FullName.Replace('\\', '/');
+                    int slash = name.IndexOf('/');
+                    if (slash < 0 || name.EndsWith("/")) continue;
+                    string relative = name.Substring(slash + 1);
+                    string mapped = null;
+                    foreach (var pair in map)
+                    {
+                        string to = (string)pair.Value;
+                        if (pair.Key.EndsWith("/") ? relative.StartsWith(pair.Key, StringComparison.Ordinal) : relative == pair.Key)
+                            mapped = to + relative.Substring(pair.Key.Length);
+                    }
+                    if (mapped == null) continue;
+                    string path = SafeJoin(target, mapped);
+                    Directory.CreateDirectory(Path.GetDirectoryName(path));
+                    entry.ExtractToFile(path, true);
+                    found++;
+                }
+            }
+            if (found < map.Count) throw new InvalidDataException(Path.GetFileName(zip) + " is missing pinned files.");
         }
 
         /// <summary>An administrative MSI install only unpacks files; it needs no elevation.</summary>
@@ -179,13 +270,11 @@ namespace Nebula.Setup
                 : null;
             string[] required =
             {
-                Path.Combine(MsvcDir, "bin", "Hostx64", "x64", "cl.exe"),
-                Path.Combine(MsvcDir, "bin", "Hostx64", "x64", "link.exe"),
-                Path.Combine(SdkDir, "bin", SdkVersion, "x64", "rc.exe"),
-                Path.Combine(SdkDir, "bin", SdkVersion, "x64", "mt.exe"),
-                Path.Combine(SdkDir, "Lib", SdkVersion, "um", "x64", "d3d12.lib"),
-                Path.Combine(SdkDir, "Lib", SdkVersion, "ucrt", "x64", "ucrt.lib"),
-                CMake, Ninja
+                ClangCl, LldLink, Rc, Mt, CMake, Ninja,
+                Path.Combine(MsvcDir, "include", "vcruntime.h"),
+                Path.Combine(MsvcDir, "lib", "x64", "msvcrt.lib"),
+                Path.Combine(SdkDir, "Lib", SdkVersion, "um", "x64", "kernel32.lib"),
+                Path.Combine(SdkDir, "Lib", SdkVersion, "ucrt", "x64", "ucrt.lib")
             };
             foreach (var path in required)
             {
@@ -202,10 +291,6 @@ namespace Nebula.Setup
             }
             return true;
         }
-
-        public string Cl { get { return Path.Combine(MsvcDir, "bin", "Hostx64", "x64", "cl.exe"); } }
-        public string Rc { get { return Path.Combine(SdkDir, "bin", SdkVersion, "x64", "rc.exe"); } }
-        public string Mt { get { return Path.Combine(SdkDir, "bin", SdkVersion, "x64", "mt.exe"); } }
 
         /// <summary>
         /// A complete, isolated build environment. Nothing from an installed
@@ -224,25 +309,22 @@ namespace Nebula.Setup
             }
             string system = Environment.GetFolderPath(Environment.SpecialFolder.System);
             string windows = Environment.GetFolderPath(Environment.SpecialFolder.Windows);
-            string sdkBin = Path.Combine(SdkDir, "bin", SdkVersion, "x64");
             env["PATH"] = string.Join(";", new[]
             {
-                Path.Combine(MsvcDir, "bin", "Hostx64", "x64"), sdkBin,
+                Path.GetDirectoryName(ClangCl), Path.Combine(SdkDir, "bin", SdkVersion, "x64"),
                 Path.GetDirectoryName(CMake), Path.GetDirectoryName(Ninja),
                 system, windows, Path.Combine(system, "Wbem")
             });
             string inc = Path.Combine(SdkDir, "Include", SdkVersion);
             env["INCLUDE"] = string.Join(";", new[]
             {
-                Path.Combine(MsvcDir, "include"), Path.Combine(inc, "ucrt"), Path.Combine(inc, "shared"),
-                Path.Combine(inc, "um"), Path.Combine(inc, "winrt"), Path.Combine(inc, "cppwinrt")
+                Path.Combine(MsvcDir, "include"), Path.Combine(inc, "ucrt"), Path.Combine(inc, "shared"), Path.Combine(inc, "um")
             });
             string lib = Path.Combine(SdkDir, "Lib", SdkVersion);
             env["LIB"] = string.Join(";", new[]
             {
                 Path.Combine(MsvcDir, "lib", "x64"), Path.Combine(lib, "ucrt", "x64"), Path.Combine(lib, "um", "x64")
             });
-            env["LIBPATH"] = Path.Combine(MsvcDir, "lib", "x64");
             return env;
         }
 
@@ -251,15 +333,15 @@ namespace Nebula.Setup
         {
             return new List<string>
             {
-                "-DCMAKE_C_COMPILER=" + Cl.Replace('\\', '/'),
-                "-DCMAKE_CXX_COMPILER=" + Cl.Replace('\\', '/'),
+                "-DCMAKE_CXX_COMPILER=" + ClangCl.Replace('\\', '/'),
+                "-DCMAKE_LINKER=" + LldLink.Replace('\\', '/'),
                 "-DCMAKE_RC_COMPILER=" + Rc.Replace('\\', '/'),
                 "-DCMAKE_MT=" + Mt.Replace('\\', '/'),
                 "-DCMAKE_MAKE_PROGRAM=" + Ninja.Replace('\\', '/')
             };
         }
 
-        /// <summary>App-local C++ runtime DLLs for the locally built binaries.</summary>
+        /// <summary>App-local C++ runtime DLLs for the runtime and modules.</summary>
         public IEnumerable<string> RuntimeDlls()
         {
             Locate(true);

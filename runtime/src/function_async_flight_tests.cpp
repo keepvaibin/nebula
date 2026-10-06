@@ -24,9 +24,8 @@ bool complete_flight(
     bool passed = true;
     passed &= tracker.observe(Event::WorkerDequeued, info, worker).accepted;
     passed &= tracker.observe(Event::ExecuteBegin, info, worker).accepted;
-    // A scheduler transfer may unwind every native frame here. The tracker is
-    // deliberately durable and accepts the exact translated return boundary
-    // when the worker continuation is entered later.
+    // A scheduler transfer may unwind every native frame here; the tracker
+    // accepts the translated return boundary when the continuation resumes.
     passed &= tracker.observe(Event::ExecuteReturned, info, worker).accepted;
     passed &= tracker.observe(Event::DoneMessagePosted, info, worker, true).accepted;
     passed &= tracker.observe(Event::EndFlagPublished, info, worker, true).accepted;

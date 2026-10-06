@@ -41,7 +41,6 @@ namespace Nebula.Setup
         public string Previous { get; private set; }
         public string Directory { get; private set; }
         public string ModuleKey { get { return Json.Str(install, "moduleKey"); } }
-        public string RuntimeKey { get { return Json.Str(install, "runtimeKey"); } }
         public string Commit { get { return Json.Str(install, "commit"); } }
 
         public static InstalledInfo Read(InstallLayout layout)

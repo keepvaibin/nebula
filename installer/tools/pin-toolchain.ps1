@@ -49,9 +49,8 @@ try {
     }
 
     $payloads = New-Object Collections.ArrayList
+    # C++ runtime headers and libraries only: clang-cl and lld-link compile and link.
     $msvcIds = @(
-        "Microsoft.VC.$MsvcVersion.Tools.HostX64.TargetX64.base",
-        "Microsoft.VC.$MsvcVersion.Tools.HostX64.TargetX64.Res.base",
         "Microsoft.VC.$MsvcVersion.CRT.Headers.base",
         "Microsoft.VC.$MsvcVersion.CRT.x64.Desktop.base",
         "Microsoft.VC.$MsvcVersion.CRT.x64.Store.base",
@@ -114,7 +113,7 @@ try {
     foreach ($payload in $payloads) { $total += $payload.size }
     $result = [ordered]@{
         schema = 'nebula.toolchain.v1'
-        description = "MSVC $MsvcVersion (x64 host/target) and Windows SDK $SdkPackage from Microsoft's Visual Studio 2022 release manifest"
+        description = "clang-cl and lld-link from llvm-mingw; MSVC $MsvcVersion C++ runtime headers/libraries and Windows SDK $SdkPackage from Microsoft's Visual Studio 2022 release manifest"
         visualStudio = [ordered]@{
             channel = $ChannelUrl
             productVersion = $channel.info.productDisplayVersion
@@ -126,16 +125,36 @@ try {
         sdkVersion = $SdkPackage
         downloadBytes = $total
         payloads = $payloads
+        # Only the compiler, linker and their headers are unpacked.
+        llvm = [ordered]@{
+            version = '20260922'
+            url = 'https://github.com/mstorsjo/llvm-mingw/releases/download/20260922/llvm-mingw-20260922-ucrt-x86_64.zip'
+            sha256 = 'e3ad77d117a4bea19a7a3b333341824d79a5a371004a10e25b8504e7b3047666'
+            size = 190725905
+            hashSource = 'SHA-256 digest GitHub publishes for the release asset'
+            extract = [ordered]@{
+                'bin/clang-23.exe' = 'bin/clang-cl.exe'
+                'bin/ld.lld.exe' = 'bin/lld-link.exe'
+                'bin/libLLVM-23.dll' = 'bin/libLLVM-23.dll'
+                'bin/libclang-cpp.dll' = 'bin/libclang-cpp.dll'
+                'bin/libc++.dll' = 'bin/libc++.dll'
+                'bin/libunwind.dll' = 'bin/libunwind.dll'
+                'bin/libwinpthread-1.dll' = 'bin/libwinpthread-1.dll'
+                'lib/clang/23/include/' = 'lib/clang/23/include/'
+            }
+        }
         cmake = [ordered]@{
             version = '3.31.6'
             url = 'https://github.com/Kitware/CMake/releases/download/v3.31.6/cmake-3.31.6-windows-x86_64.zip'
             sha256 = 'd163cd3ab4959b0a53fa8988f2ddbd2e6c501658201e6a154386bad9dbe4f836'
+            size = 46473549
             hashSource = 'cmake-3.31.6-SHA-256.txt published with the Kitware release'
         }
         ninja = [ordered]@{
             version = '1.12.1'
             url = 'https://github.com/ninja-build/ninja/releases/download/v1.12.1/ninja-win.zip'
             sha256 = 'f550fec705b6d6ff58f2db3c374c2277a37691678d6aba463adcbb129108467a'
+            size = 275425
             hashSource = 'recorded from the official release download; Ninja publishes no checksum file'
         }
     }

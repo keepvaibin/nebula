@@ -1523,7 +1523,15 @@ set_target_properties(RMGE01_home_button PROPERTIES PREFIX "")
 if(MSVC)
     # AUTO keeps old x64 hosts on SSE2 and selects AVX2/FMA only when safe.
     # /fp:precise remains mandatory; never add /fp:fast.
-    target_compile_options(RMGE01_home_button PRIVATE /W4 /WX /wd4702 /permissive- /EHsc /GS- /GR- /Oi /bigobj /favor:INTEL64)
+    if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+        # clang-cl keeps MSVC's semantics here: no FMA contraction, wrapping
+        # signed arithmetic and no type-based alias analysis. The whole RSO is
+        # one function with a resume label per instruction, which no optimizer
+        # finishes in reasonable time, so it is built unoptimized (seconds).
+        target_compile_options(RMGE01_home_button PRIVATE /EHsc /GS- /GR- -w -ffp-contract=off -fwrapv -fno-strict-aliasing /Od)
+    else()
+        target_compile_options(RMGE01_home_button PRIVATE /W4 /WX /wd4702 /permissive- /EHsc /GS- /GR- /Oi /bigobj /favor:INTEL64)
+    endif()
     if(galaxy_native_isa_effective STREQUAL "AVX2")
         target_compile_options(RMGE01_home_button PRIVATE /arch:AVX2)
     endif()

@@ -204,11 +204,13 @@ The `nod` and `powerpc` crates ship no license file; both declare
 Nebula-Setup downloads these from their publishers and verifies pinned SHA-256
 values; Nebula does not redistribute them:
 
-- Microsoft MSVC 14.44 (x64) and Windows SDK 10.0.26100 packages from the
-  Visual Studio 2022 release manifest, under the Microsoft Visual Studio Build
-  Tools license, which the user accepts in Setup
+- clang-cl and lld-link (LLVM 23, Apache-2.0 WITH LLVM-exception) from the
+  llvm-mingw 20260922 release, <https://github.com/mstorsjo/llvm-mingw>.
+- Microsoft MSVC 14.44 C++ runtime headers and libraries and Windows SDK
+  10.0.26100 packages from the Visual Studio 2022 release manifest, under the
+  Microsoft Visual Studio Build Tools license, which the user accepts in Setup
   (<https://go.microsoft.com/fwlink/?LinkId=2179911>). The Microsoft C++
-  runtime DLLs from that download are copied next to the locally built game.
+  runtime DLLs from that download are copied next to the game.
 - CMake 3.31.6 (BSD-3-Clause) from <https://github.com/Kitware/CMake>.
 - Ninja 1.12.1 (Apache-2.0) from <https://github.com/ninja-build/ninja>.
 

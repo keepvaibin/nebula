@@ -34,8 +34,8 @@ void initialize();
     std::uint32_t size) noexcept;
 
 // True only for a complete MEM1/MEM2 span in one of the six mapped aliases.
-// A future raw translated access outside these spans must fault; this module
-// never allocates backing for unmapped addresses on demand.
+// Raw translated access outside these spans must fault; backing is never
+// allocated on demand for unmapped addresses.
 [[nodiscard]] bool is_mapped_ram_span(
     std::uint32_t guest_address,
     std::uint32_t size) noexcept;

@@ -32,7 +32,7 @@ namespace Nebula.Launcher
         }
     }
 
-    /// <summary>Play settings and launch, matching the qualified development launcher.</summary>
+    /// <summary>Play settings and launch.</summary>
     internal sealed class LauncherForm : Form
     {
         private readonly string app = AppDomain.CurrentDomain.BaseDirectory.TrimEnd('\\');
@@ -80,11 +80,11 @@ namespace Nebula.Launcher
             info.Location = new Point(20, 210);
             info.Size = new Size(720, 120);
             Controls.Add(info);
-            monitor.Text = "Record diagnostics for this session (off by default; saved to a new folder each time)";
+            monitor.Text = "Record diagnostics for this session";
             monitor.Location = new Point(20, 336);
             monitor.Size = new Size(720, 26);
             Controls.Add(monitor);
-            AddLabel("Internal rendering changes apply on the next launch. Movies keep their original resolution.", 20, 368, 720);
+            AddLabel("Rendering changes apply on the next launch.", 20, 368, 720);
 
             var import = Button("Import a GalaxyRecomp save…", 20, 412, 250);
             import.Click += delegate { ImportSave(); };
@@ -273,7 +273,7 @@ namespace Nebula.Launcher
 
         private void ImportSave()
         {
-            using (var dialog = new FolderBrowserDialog { Description = "Choose the GalaxyRecomp save-data folder to import (it is only read)" })
+            using (var dialog = new FolderBrowserDialog { Description = "Choose the GalaxyRecomp save-data folder" })
             {
                 if (dialog.ShowDialog(this) != DialogResult.OK) return;
                 try

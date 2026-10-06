@@ -71,9 +71,9 @@ in source control.
    functions, 329,871 callable entries, 1,350,000 instructions, none
    excluded), the Home Button sidecar, the lowered AX DSP program and the
    deterministic `RMGE01_boot_image.bin`. It records `generation.json`.
-5. CMake and Ninja build `NebulaRuntime.exe` (which links the generated DSP
-   program), `RMGE01_game.dll` and `RMGE01_home_button.dll` with the pinned
-   MSVC toolchain, Release, SSE2, PCH on, LTCG off.
+5. One CMake/Ninja build compiles `RMGE01_game.dll`, `RMGE01_home_button.dll`
+   and `RMGE01_dsp.dll` with clang-cl (Release, SSE2, no FMA contraction).
+   `NebulaRuntime.exe` ships prebuilt in Setup and loads the DSP DLL.
 6. Setup checks the module exports, writes `install.json` with every file
    hash and the compatibility keys, and switches `current.json` atomically.
 

@@ -80,7 +80,7 @@ parse_diagnostic_stick_command(std::string_view text) noexcept {
     return command;
 }
 
-// Owned only by the existing HID snapshot consumer thread. Clock samples are
+// Owned only by the HID snapshot consumer thread. Clock samples are
 // monotonic host milliseconds, not VI counts or gameplay/simulation time.
 class DiagnosticStickLease {
 public:

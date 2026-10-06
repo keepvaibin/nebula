@@ -7,10 +7,10 @@
 
 namespace galaxy::gx {
 
-// Input consists of nonempty physical dirty ranges, sorted and coalesced by
-// GxBackend. The caller normalizes the dependency's cached/uncached alias.
-// Nonoverlapping ranges have monotonically increasing ends, so the first end
-// past the dependency start is the only candidate needed for an overlap.
+// Ranges are nonempty physical dirty ranges, sorted and coalesced by GxBackend;
+// the caller normalizes the cached/uncached alias. Because the ranges do not
+// overlap, their ends increase monotonically, so only the first end past the
+// dependency start can overlap.
 template <typename Range>
 [[nodiscard]] bool sorted_dirty_ranges_overlap(
     std::span<const Range> ranges,

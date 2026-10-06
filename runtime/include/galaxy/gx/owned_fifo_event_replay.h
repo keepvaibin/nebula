@@ -4,8 +4,8 @@
 // encounter/aurora@aeb38ab1fcc6a018999cd440f55b445236b736a0,
 // lib/gfx/frame_packet.hpp::{FrameOp,FramePacket} and
 // lib/gfx/recording.cpp::{capture_frame_op,seal_pass,push} (MIT; see
-// THIRD-PARTY-NOTICES.md, Aurora MIT notice). This adapter owns GX read bytes and
-// copies alias *identities* only. It never owns or replays GPU resources.
+// THIRD-PARTY-NOTICES.md). Owns GX read bytes and copies alias identities
+// only; GPU resources are never owned or replayed.
 
 #include "galaxy/gx/dependency_event_capture.h"
 #include "galaxy/gx/owned_fifo_packet.h"
@@ -18,9 +18,9 @@
 
 namespace galaxy::gx {
 
-// Called after one actual render parse, while its captured event stream is
-// still alive. FIFO is the parser input for this invocation, including any
-// pending command prefix. It is retained for inspection, not parsed twice.
+// Call after a render parse while its captured event stream is still alive.
+// `fifo` is that parse's input, including any pending command prefix; it is
+// retained for inspection and not parsed again.
 [[nodiscard]] inline OwnedFifoPacket capture_owned_fifo_events(
     std::span<const std::byte> parser_input,
     const OwnedDependencyEvents& captured,
@@ -71,8 +71,8 @@ namespace galaxy::gx {
     return packet;
 }
 
-// Replays the *event description* only. This checks that repeated guest reads,
-// EFB alias generations and PE/XFB ordering survive sealing. Opaque GPU
+// Replays only the event description, so repeated guest reads, EFB alias
+// generations and PE/XFB ordering can be checked after sealing. Opaque GPU
 // resource identities are never dereferenced or submitted to D3D12.
 [[nodiscard]] inline OwnedDependencyEvents replay_owned_fifo_events(
     const OwnedFifoPacket& packet) {

@@ -6,7 +6,7 @@
 
 namespace galaxy::scheduler {
 
-// Passive proof state for RMGE01's translated FunctionAsyncExecutor worker.
+// Passive diagnostic state for RMGE01's translated FunctionAsyncExecutor worker.
 // None of this state is consulted by guest scheduling or game-visible memory.
 enum class FunctionAsyncEvent : std::uint32_t {
     WorkerDequeued,

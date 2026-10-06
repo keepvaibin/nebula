@@ -1,7 +1,7 @@
 //! Identification and extraction of user-supplied game input.
 //!
 //! Disc images (ISO, RVZ, WIA, WBFS, CISO, GCZ) are read with the `nod`
-//! library. Inputs are only read; extraction writes to a new directory.
+//! library; extraction writes to a new directory.
 
 use crate::generate::resolve_game_data_root;
 use anyhow::{bail, Context, Result};
