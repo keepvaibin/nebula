@@ -12878,6 +12878,53 @@ mod tests {
     }
 
     #[test]
+    fn arithmetic_reads_r0_while_literal_base_encodings_keep_zero() {
+        // ISA register values differ from the literal-zero RA encoding used
+        // by addi/addis and address generation. Seed r0 with 7 so replacing a
+        // value operand with zero changes the program: add r3,r0,r4 adds 7.
+        let xform = |rt: u32, ra: u32, rb: u32, xo: u32| {
+            (31_u32 << 26) | (rt << 21) | (ra << 16) | (rb << 11) | (xo << 1)
+        };
+        let dform = |op: u32, rt: u32, imm: u16| {
+            (op << 26) | (rt << 21) | u32::from(imm)
+        };
+        for (word, required) in [
+            (xform(3, 0, 4, 266), "context->gpr[3] = context->gpr[0] + context->gpr[4];"),
+            (xform(3, 4, 0, 266), "context->gpr[3] = context->gpr[4] + context->gpr[0];"),
+            (xform(0, 0, 4, 266), "context->gpr[0] = context->gpr[0] + context->gpr[4];"),
+            (xform(3, 0, 4, 10), "const std::uint64_t result = static_cast<std::uint64_t>(context->gpr[0]) + context->gpr[4];"),
+            (xform(3, 4, 0, 10), "const std::uint64_t result = static_cast<std::uint64_t>(context->gpr[4]) + context->gpr[0];"),
+            (xform(3, 0, 4, 40), "context->gpr[3] = context->gpr[4] - context->gpr[0];"),
+            (xform(3, 4, 0, 40), "context->gpr[3] = context->gpr[0] - context->gpr[4];"),
+            (xform(3, 0, 4, 8), "const std::uint32_t left_value = context->gpr[0];"),
+            (xform(0, 4, 0, 8), "const std::uint32_t right_value = context->gpr[0];"),
+            (xform(3, 0, 4, 235), "const std::int64_t result = static_cast<std::int64_t>(static_cast<std::int32_t>(context->gpr[0])) * static_cast<std::int32_t>(context->gpr[4]);"),
+            (xform(3, 4, 0, 235), "const std::int64_t result = static_cast<std::int64_t>(static_cast<std::int32_t>(context->gpr[4])) * static_cast<std::int32_t>(context->gpr[0]);"),
+            (xform(0, 0, 0, 104), "context->gpr[0] = 0u - context->gpr[0];"),
+            (dform(12, 3, 7), "const std::uint64_t result = static_cast<std::uint64_t>(context->gpr[0]) + 0x00000007u;"),
+            (dform(13, 0, 7), "const std::uint64_t result = static_cast<std::uint64_t>(context->gpr[0]) + 0x00000007u;"),
+            (dform(8, 0, 0xfffb), "const std::uint32_t source_value = context->gpr[0];"),
+            (dform(7, 3, 0xfff9), "const std::int64_t result = static_cast<std::int64_t>(static_cast<std::int32_t>(context->gpr[0])) * static_cast<std::int32_t>(0xFFFFFFF9u);"),
+        ] {
+            let output = lower_instruction_fixture(
+                0x8000_4000,
+                &[0x3800_0007, word, 0x4e80_0020], // li r0,7; instruction; blr
+            );
+            assert!(output.contains("context->gpr[0] = 0x00000007u;"), "{output}");
+            assert!(output.contains(required), "word={word:08x}: {output}");
+        }
+
+        // These RA=0 exceptions still ignore the seeded r0; preserve their
+        // established lowering while repairing arithmetic value operands.
+        let output = lower_instruction_fixture(
+            0x8000_4000,
+            &[0x3800_0007, dform(14, 3, 9), dform(15, 4, 0x1234), 0x4e80_0020],
+        );
+        assert!(output.contains("context->gpr[3] = 0x00000009u;"), "{output}");
+        assert!(output.contains("context->gpr[4] = 0x12340000u;"), "{output}");
+    }
+
+    #[test]
     fn lowers_integer_carry_shift_and_insert_operations() {
         let andi = (28_u32 << 26) | (3 << 21) | (4 << 16) | 0x00FF;
         let addc = (31_u32 << 26) | (5 << 21) | (3 << 16) | (4 << 11) | (10 << 1);
