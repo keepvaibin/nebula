@@ -1,4 +1,5 @@
 #include "galaxy/native_api.h"
+#include "nebula_build_identity.h"
 #include "galaxy/ai_dma_timing.h"
 #include "galaxy/checkpoint_gate.h"
 #include "galaxy/decrementer_deadline.h"
@@ -28305,6 +28306,7 @@ int wmain(int argc, wchar_t** argv) {
     //        [--trace-ticks] [--trace-transfers] [--profile-calls]
     //        [--profile-call-time] [--profile-call-self-time]
     RuntimeLaunchPaths launch_paths = default_runtime_launch_paths();
+    std::cerr << "[runtime-build] " << NEBULA_RUNTIME_BUILD_IDENTITY << '\n';
     RuntimeState state{};
     galaxy::cadence::configure_global_session(
         read_env_flag("GALAXY_DIAGNOSTIC_FRAME_CADENCE", false));

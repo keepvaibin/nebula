@@ -589,6 +589,25 @@ add_executable(NebulaRuntime
     runtime/src/native_runtime.cpp
     runtime/src/native_thp_video.cpp
 )
+# Exported releases pass their source identity; working checkouts report Git
+# identity/dirty state at build time. This is runtime provenance, not a label
+# inferred from the launcher or a module compatibility key.
+set(NEBULA_SOURCE_REVISION "" CACHE STRING "Revision of exported source")
+set(NEBULA_SOURCE_REVISION_KIND "unknown" CACHE STRING "Exported revision object type (commit or tree)")
+set(NEBULA_SOURCE_GIT_TREE "unknown" CACHE STRING "Git tree of exported source")
+set(NEBULA_SOURCE_TREE_SHA256 "" CACHE STRING "Exported source manifest tree SHA256")
+set(NEBULA_SOURCE_DIRTY "unknown" CACHE STRING "Exported source dirty state")
+mark_as_advanced(NEBULA_SOURCE_REVISION NEBULA_SOURCE_REVISION_KIND NEBULA_SOURCE_GIT_TREE NEBULA_SOURCE_TREE_SHA256 NEBULA_SOURCE_DIRTY)
+add_custom_target(nebula_runtime_identity
+    COMMAND "${CMAKE_COMMAND}"
+        "-DCONFIG_FILE=${CMAKE_CURRENT_BINARY_DIR}/runtime_identity_config.cmake"
+        "-DBUILD_CONFIG=$<CONFIG>"
+        "-DOUTPUT_HEADER=${CMAKE_CURRENT_BINARY_DIR}/nebula_build_identity.h"
+        -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/runtime_build_identity.cmake"
+    BYPRODUCTS "${CMAKE_CURRENT_BINARY_DIR}/nebula_build_identity.h"
+    VERBATIM)
+add_dependencies(NebulaRuntime nebula_runtime_identity)
+target_include_directories(NebulaRuntime PRIVATE "${CMAKE_CURRENT_BINARY_DIR}")
 add_executable(galaxy_native_thp_video_tests runtime/src/native_thp_video_tests.cpp runtime/src/native_thp_video.cpp)
 target_link_libraries(galaxy_native_thp_video_tests PRIVATE galaxy_runtime_abi)
 add_executable(galaxy_verify_thp_native tools/dev/verify_thp_native.cpp runtime/src/native_thp_video.cpp)
@@ -621,6 +640,12 @@ if(MSVC)
     target_compile_options(NebulaRuntime PRIVATE /GS- /GR- /Oi /favor:INTEL64)
     target_link_options(NebulaRuntime PRIVATE /STACK:268435456,1048576)
 endif()
+get_target_property(NEBULA_ID_TARGET_OPTIONS NebulaRuntime COMPILE_OPTIONS)
+if(NOT NEBULA_ID_TARGET_OPTIONS)
+    set(NEBULA_ID_TARGET_OPTIONS "")
+endif()
+get_directory_property(NEBULA_ID_DIRECTORY_OPTIONS COMPILE_OPTIONS)
+configure_file(cmake/runtime_identity_config.cmake.in runtime_identity_config.cmake @ONLY)
 
 add_executable(galaxy_native_api_tests runtime/src/native_api_tests.cpp)
 target_link_libraries(galaxy_native_api_tests PRIVATE galaxy_runtime_abi galaxy_ppc_float)

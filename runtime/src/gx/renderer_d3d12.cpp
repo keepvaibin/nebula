@@ -3995,7 +3995,12 @@ std::uint64_t RendererD3D12::end_frame(bool present_swap_chain) {
                     << " tearing-enabled=" << (tearing_supported_ ? 1 : 0)
                     << " remote-session="
                     << (GetSystemMetrics(SM_REMOTESESSION) != 0 ? 1 : 0)
-                    << " gpu-ms(avg)=" << gpu_avg
+                    << " gpu-timing=" << (!gpu_timestamps_enabled() ? "disabled" :
+                        telemetry_gpu_samples_ == 0u ? "pending" : "measured")
+                    << " gpu-ms(avg)=";
+                if (telemetry_gpu_samples_ != 0u) message << gpu_avg;
+                else message << "unavailable";
+                message
                     << " gpu-samples=" << telemetry_gpu_samples_
                     << " gpu-total-ms=" << telemetry_gpu_ms_
                     << " gpu-scope=completed-renderer-command-lists"
