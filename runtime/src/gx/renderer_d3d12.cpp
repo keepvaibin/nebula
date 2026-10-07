@@ -1792,36 +1792,61 @@ bool DescriptorRing::initialize(
     unsigned descriptors_per_frame,
     unsigned frames_in_flight,
     unsigned persistent_descriptors) {
-    persistent_descriptors_ = persistent_descriptors;
-    persistent_cursor_      = 0;
-    descriptors_per_frame_ = descriptors_per_frame;
-    frames_in_flight_      = frames_in_flight;
-    increment_             = device->GetDescriptorHandleIncrementSize(type);
-
+    const std::uint64_t total = static_cast<std::uint64_t>(persistent_descriptors) +
+        static_cast<std::uint64_t>(descriptors_per_frame) * frames_in_flight;
+    if (device == nullptr || frames_in_flight == 0u || total == 0u ||
+        total > std::numeric_limits<UINT>::max()) {
+        return false;
+    }
     D3D12_DESCRIPTOR_HEAP_DESC dhd{};
     dhd.Type           = type;
-    dhd.NumDescriptors =
-        persistent_descriptors + descriptors_per_frame * frames_in_flight;
+    dhd.NumDescriptors = static_cast<UINT>(total);
     dhd.Flags          = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
-    return SUCCEEDED(device->CreateDescriptorHeap(&dhd, IID_PPV_ARGS(&heap_)));
+    // Publish a complete heap/stride/base tuple only on success. A failed
+    // initialization must not pair an old heap with new cursor limits.
+    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> heap;
+    if (FAILED(device->CreateDescriptorHeap(&dhd, IID_PPV_ARGS(&heap)))) {
+        return false;
+    }
+    const auto cpu_base = heap->GetCPUDescriptorHandleForHeapStart();
+    const auto gpu_base = heap->GetGPUDescriptorHandleForHeapStart();
+    const auto increment = device->GetDescriptorHandleIncrementSize(type);
+    heap_ = std::move(heap);
+    cpu_base_ = cpu_base;
+    gpu_base_ = gpu_base;
+    increment_ = increment;
+    persistent_descriptors_ = persistent_descriptors;
+    persistent_cursor_ = 0u;
+    descriptors_per_frame_ = descriptors_per_frame;
+    frames_in_flight_ = frames_in_flight;
+    segment_base_ = cursor_ = 0u;
+    frame_ready_ = false;
+    return true;
 }
 
 void DescriptorRing::begin_frame(unsigned frame_slot) {
+    if (!heap_ || frame_slot >= frames_in_flight_) {
+        throw std::runtime_error("DescriptorRing invalid frame slot");
+    }
     segment_base_ = persistent_descriptors_ +
         frame_slot * descriptors_per_frame_;
     cursor_       = segment_base_;
+    frame_ready_ = true;
 }
 
 DescriptorRing::Table DescriptorRing::allocate_persistent(unsigned count) {
-    if (persistent_cursor_ + count > persistent_descriptors_) {
+    if (!heap_) {
+        throw std::runtime_error("DescriptorRing not initialized");
+    }
+    if (count > persistent_descriptors_ - persistent_cursor_) {
         throw std::runtime_error(
             "DescriptorRing persistent region exhausted: request " +
             std::to_string(count) + " descriptors at used " +
             std::to_string(persistent_cursor_) + "/" +
             std::to_string(persistent_descriptors_));
     }
-    D3D12_CPU_DESCRIPTOR_HANDLE cpu = heap_->GetCPUDescriptorHandleForHeapStart();
-    D3D12_GPU_DESCRIPTOR_HANDLE gpu = heap_->GetGPUDescriptorHandleForHeapStart();
+    D3D12_CPU_DESCRIPTOR_HANDLE cpu = cpu_base_;
+    D3D12_GPU_DESCRIPTOR_HANDLE gpu = gpu_base_;
     cpu.ptr += static_cast<SIZE_T>(persistent_cursor_) * increment_;
     gpu.ptr += static_cast<UINT64>(persistent_cursor_) * increment_;
     persistent_cursor_ += count;
@@ -1829,15 +1854,18 @@ DescriptorRing::Table DescriptorRing::allocate_persistent(unsigned count) {
 }
 
 DescriptorRing::Table DescriptorRing::allocate(unsigned count) {
-    if (cursor_ + count > segment_base_ + descriptors_per_frame_) {
+    if (!frame_ready_) {
+        throw std::runtime_error("DescriptorRing allocation before begin_frame");
+    }
+    if (count > descriptors_per_frame_ - (cursor_ - segment_base_)) {
         throw std::runtime_error(
             "DescriptorRing exhausted: request " + std::to_string(count) +
             " descriptors at frame-used " +
             std::to_string(cursor_ - segment_base_) + "/" +
             std::to_string(descriptors_per_frame_));
     }
-    D3D12_CPU_DESCRIPTOR_HANDLE cpu = heap_->GetCPUDescriptorHandleForHeapStart();
-    D3D12_GPU_DESCRIPTOR_HANDLE gpu = heap_->GetGPUDescriptorHandleForHeapStart();
+    D3D12_CPU_DESCRIPTOR_HANDLE cpu = cpu_base_;
+    D3D12_GPU_DESCRIPTOR_HANDLE gpu = gpu_base_;
     cpu.ptr += static_cast<SIZE_T>(cursor_) * increment_;
     gpu.ptr += static_cast<UINT64>  (cursor_) * increment_;
     cursor_ += count;
