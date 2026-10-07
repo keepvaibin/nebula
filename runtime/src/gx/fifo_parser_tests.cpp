@@ -172,6 +172,74 @@ bool expect(bool condition, const char* message) {
     return condition;
 }
 
+bool test_xf_matrix_span_updates() {
+    constexpr std::array<std::uint16_t, 25> bases{
+        0x0000u, 0x0001u, 0x00F0u, 0x00FEu, 0x00FFu, 0x0100u,
+        0x03FFu, 0x0400u, 0x0401u, 0x044Fu, 0x045Eu, 0x045Fu,
+        0x0460u, 0x04FFu, 0x0500u, 0x0501u, 0x05FFu, 0x0600u,
+        0x0601u, 0x066Fu, 0x067Eu, 0x067Fu, 0x0680u, 0xFFF0u, 0xFFFFu};
+    constexpr std::array<std::uint16_t, 9> counts{0u, 1u, 2u, 9u, 12u, 16u, 96u, 256u, 384u};
+    std::array<std::uint32_t, 384> values{};
+    for (unsigned i = 0; i < values.size(); ++i) values[i] = 0x3F800001u + i;
+    const auto memory_address = [](std::uint32_t address) {
+        return address <= 0x00FFu ||
+            (address >= 0x0400u && address <= 0x045Fu) ||
+            (address >= 0x0500u && address <= 0x067Fu);
+    };
+    for (bool indexed : {false, true}) {
+        for (const auto base : bases) {
+            for (const auto count : counts) {
+                bool valid = true;
+                for (unsigned i = 0u; i < count; ++i) valid &= memory_address(base + i);
+                GxState state;
+                (void)state.consume_dirty();
+                state.load_cp(galaxy::gx::cp::kMatrixIndexA, 1u);
+                std::array<std::uint32_t, 0x2000> expected{};
+                if (valid) for (unsigned i = 0u; i < count; ++i) expected[base + i] = values[i];
+                bool caught = false;
+                try {
+                    if (indexed) state.load_xf_indexed(base, values.data(), count);
+                    else state.load_xf(base, values.data(), count);
+                } catch (const GxFatalError& error) {
+                    caught = true;
+                    if (!expect(error.opcode() == (indexed ? galaxy::gx::op::kLoadIndxA : galaxy::gx::op::kLoadXfReg),
+                                "XF matrix span fault retains direct/indexed opcode")) return false;
+                }
+                const auto dirty = GxState::kDirtyVsConstants |
+                    (valid && count != 0u ? GxState::kDirtyXfMatrices : 0u);
+                if (!expect(caught == !valid && state.consume_dirty() == dirty &&
+                        std::memcmp(state.xf_raw(), expected.data(), sizeof(expected)) == 0,
+                        "XF matrix span boundaries preserve complete validation, words and dirty union")) return false;
+                if (valid) {
+                    if (indexed) state.load_xf_indexed(base, values.data(), count);
+                    else state.load_xf(base, values.data(), count);
+                    if (!expect(state.consume_dirty() == 0u,
+                                "unchanged XF matrix span remains clean")) return false;
+                }
+            }
+        }
+        for (const std::uint16_t bank : {0x0040u, 0x0420u, 0x05F0u}) {
+            for (const unsigned dst_offset : {0u, 1u, 2u}) {
+                GxState state;
+                state.load_xf(bank, values.data(), 32u);
+                (void)state.consume_dirty();
+                std::array<std::uint32_t, 0x2000> expected{};
+                std::copy_n(state.xf_raw(), expected.size(), expected.begin());
+                const unsigned src = bank + 1u, dst = bank + dst_offset;
+                // Independent ordered-copy model, including forward alias
+                // propagation. A memmove/snapshot is not equivalent here.
+                for (unsigned i = 0u; i < 12u; ++i) expected[dst + i] = expected[src + i];
+                if (indexed) state.load_xf_indexed(static_cast<std::uint16_t>(dst), state.xf_raw() + src, 12u);
+                else state.load_xf(static_cast<std::uint16_t>(dst), state.xf_raw() + src, 12u);
+                if (!expect(std::memcmp(state.xf_raw(), expected.data(), sizeof(expected)) == 0 &&
+                        state.consume_dirty() == (src == dst ? 0u : GxState::kDirtyXfMatrices),
+                        "XF matrix span retains aliased-source read/store order")) return false;
+            }
+        }
+    }
+    return true;
+}
+
 }  // namespace
 
 namespace galaxy::gx {
@@ -304,6 +372,7 @@ void test_dependency_hash_cache() {
 }
 
 int main() try {
+    if (!test_xf_matrix_span_updates()) return 1;
     test_dependency_hash_cache();
     static_assert(galaxy::gx::bp::kBpMask == 0xFEu);
 
