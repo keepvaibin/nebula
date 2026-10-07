@@ -676,39 +676,33 @@ void detail::decode_small_index_tiles(
     }
 }
 
-namespace {
-
-static void decode_C14X2(
+void detail::decode_c14x2_tiles(
     const std::uint8_t* src,
     std::uint32_t width,
     std::uint32_t height,
-    const std::uint8_t* tlut_bank,
-    std::uint32_t tlut_byte_offset,
+    const std::uint8_t* palette,
     TlutFormat tlut_fmt,
     RGBA8* out) {
     // Block: 4×4 pixels; two big-endian bytes per index, bits 13:0 used.
-    const std::uint32_t blocks_x = (width  + 3u) / 4u;
-    const std::uint32_t blocks_y = (height + 3u) / 4u;
-    for (std::uint32_t by = 0; by < blocks_y; ++by) {
-        for (std::uint32_t bx = 0; bx < blocks_x; ++bx) {
-            for (std::uint32_t py = 0; py < 4u; ++py) {
-                for (std::uint32_t px = 0; px < 4u; ++px) {
+    for (std::uint32_t y = 0; y < height; y += 4u) {
+        const std::uint32_t rows = std::min(4u, height - y);
+        for (std::uint32_t x = 0; x < width; x += 4u) {
+            const std::uint32_t columns = std::min(4u, width - x);
+            for (std::uint32_t py = 0; py < rows; ++py) {
+                const std::uint8_t* row = src + py * 8u;
+                RGBA8* dst = out + static_cast<std::size_t>(y + py) * width + x;
+                for (std::uint32_t px = 0; px < columns; ++px) {
                     const std::uint32_t index =
-                        static_cast<std::uint32_t>(read_be16(src)) & 0x3FFFu;
-                    src += 2;
-                    const std::uint32_t ix = bx * 4u + px;
-                    const std::uint32_t iy = by * 4u + py;
-                    if (ix < width && iy < height) {
-                        const std::uint32_t entry_offset =
-                            tlut_byte_offset + index * 2u;
-                        out[iy * width + ix] = decode_tlut_entry(
-                            tlut_bank + entry_offset, tlut_fmt);
-                    }
+                        static_cast<std::uint32_t>(read_be16(row + px * 2u)) & 0x3FFFu;
+                    dst[px] = decode_tlut_entry(palette + index * 2u, tlut_fmt);
                 }
             }
+            src += 32u;
         }
     }
 }
+
+namespace {
 
 // ---------------------------------------------------------------------------
 // CMPR (S3TC / DXT1): 8×8 pixel blocks, each containing four 4×4 DXT1 sub-blocks.
@@ -1848,8 +1842,8 @@ TextureHandle TextureCache::get(
                 tlut_bank_ + tlut_byte_offset, tlut.format, out);
             break;
         case TexFormat::C14X2:
-            decode_C14X2(src, lw, lh,
-                tlut_bank_, tlut_byte_offset, tlut.format, out);
+            detail::decode_c14x2_tiles(src, lw, lh,
+                tlut_bank_ + tlut_byte_offset, tlut.format, out);
             break;
         case TexFormat::CMPR:
             detail::decode_cmpr_tiles(src, lw, lh, out);

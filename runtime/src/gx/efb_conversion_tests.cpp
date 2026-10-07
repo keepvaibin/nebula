@@ -454,9 +454,9 @@ bool test_small_index_tile_decode() {
     // sides of the raw/predecoded palette threshold. Keep the pixel oracle
     // independent: it computes each tiled source address from destination x/y.
     constexpr auto sizes = [] {
-        constexpr std::array<std::uint32_t, 17> dimensions{
+        constexpr std::array<std::uint32_t, 18> dimensions{
             1u, 2u, 3u, 4u, 5u, 6u, 7u, 8u, 9u,
-            15u, 16u, 31u, 32u, 33u, 64u, 65u, 257u};
+            15u, 16u, 31u, 32u, 33u, 64u, 65u, 256u, 257u};
         std::array<std::array<std::uint32_t, 2>, dimensions.size() * dimensions.size()> result{};
         std::size_t next = 0u;
         for (auto width : dimensions) {
@@ -490,26 +490,46 @@ bool test_small_index_tile_decode() {
         return {e4((word / 256u) % 16u), e4((word / 16u) % 16u), e4(word % 16u),
                 static_cast<std::uint8_t>(32u * alpha + 4u * alpha + alpha / 2u)};
     };
-    for (const auto format : {TexFormat::C4, TexFormat::C8}) {
+    const auto decode = [](TexFormat format, const std::uint8_t* src,
+                           std::uint32_t width, std::uint32_t height,
+                           const std::uint8_t* palette, TlutFormat tlut, RGBA8* out) {
+        if (format == TexFormat::C14X2) {
+            galaxy::gx::detail::decode_c14x2_tiles(src, width, height, palette, tlut, out);
+        } else {
+            galaxy::gx::detail::decode_small_index_tiles(format, src, width, height, palette, tlut, out);
+        }
+    };
+    for (const auto format : {TexFormat::C4, TexFormat::C8, TexFormat::C14X2}) {
         const bool four_bits = format == TexFormat::C4;
-        const unsigned entries = four_bits ? 16u : 256u;
+        const bool wide_index = format == TexFormat::C14X2;
+        const unsigned entries = wide_index ? 16384u : four_bits ? 16u : 256u;
         const unsigned tile_rows = four_bits ? 8u : 4u;
+        const unsigned tile_columns = wide_index ? 4u : 8u;
         for (const auto tlut : {TlutFormat::IA8, TlutFormat::RGB565, TlutFormat::RGB5A3}) {
             for (const auto size : sizes) {
                 const auto width = size[0], height = size[1];
-                const auto tiles_x = (width + 7u) / 8u;
+                const auto tiles_x = (width + tile_columns - 1u) / tile_columns;
                 const auto tiles_y = (height + tile_rows - 1u) / tile_rows;
                 for (const auto prefix : {0u, 513u}) {
                     std::vector<std::uint8_t> source(3u + tiles_x * tiles_y * 32u);
                     for (std::size_t i = 3u; i < source.size(); ++i) {
                         source[i] = static_cast<std::uint8_t>((i - 3u) * 37u + 13u);
                     }
+                    if (wide_index) {
+                        // The exact 256x256 case visits every raw 16-bit index,
+                        // including all four values of the two unused top bits.
+                        for (std::size_t i = 3u; i < source.size(); i += 2u) {
+                            const auto word = static_cast<std::uint16_t>((i - 3u) / 2u);
+                            source[i] = static_cast<std::uint8_t>(word / 256u);
+                            source[i + 1u] = static_cast<std::uint8_t>(word % 256u);
+                        }
+                    }
                     std::vector<std::uint8_t> bank(prefix + entries * 2u, 0xE7u);
                     std::vector<RGBA8> output(width * height + 2u, guard);
                     // Reuse the same input/output pointers with changed colors;
                     // no table may survive into the next call or palette format.
                     for (unsigned round = 0u; round < 2u; ++round) {
-                        std::array<std::uint16_t, 256> words{};
+                        std::vector<std::uint16_t> words(entries);
                         for (unsigned i = 0u; i < entries; ++i) {
                             words[i] = static_cast<std::uint16_t>(i * 421u + round * 0x3D37u);
                             if (round == 0u && i < edge_words.size()) words[i] = edge_words[i];
@@ -517,21 +537,24 @@ bool test_small_index_tile_decode() {
                             bank[prefix + i * 2u + 1u] = static_cast<std::uint8_t>(words[i]);
                         }
                         std::fill(output.begin(), output.end(), guard);
-                        galaxy::gx::detail::decode_small_index_tiles(format, source.data() + 3u,
+                        decode(format, source.data() + 3u,
                             width, height, bank.data() + prefix, tlut, output.data() + 1u);
                         if (!expect(same(output.front(), guard) && same(output.back(), guard),
-                                    "C4/C8 edge tiles stay inside output")) return false;
+                                    "indexed edge tiles stay inside output")) return false;
                         for (std::uint32_t y = 0; y < height; ++y) {
                             for (std::uint32_t x = 0; x < width; ++x) {
-                                const auto tile = (y / tile_rows) * tiles_x + x / 8u;
-                                const auto local_pixel = (y % tile_rows) * 8u + x % 8u;
-                                const auto byte = source[3u + tile * 32u +
-                                    (four_bits ? local_pixel / 2u : local_pixel)];
+                                const auto tile = (y / tile_rows) * tiles_x + x / tile_columns;
+                                const auto local_pixel = (y % tile_rows) * tile_columns + x % tile_columns;
+                                const auto byte_offset = 3u + tile * 32u + (wide_index
+                                    ? local_pixel * 2u : four_bits ? local_pixel / 2u : local_pixel);
+                                const auto byte = source[byte_offset];
                                 const unsigned index = four_bits
                                     ? (local_pixel % 2u == 0u ? byte / 16u : byte % 16u)
-                                    : byte;
+                                    : wide_index
+                                        ? (static_cast<unsigned>(byte) * 256u + source[byte_offset + 1u]) % 16384u
+                                        : byte;
                                 if (!expect(same(output[1u + y * width + x], color(words[index], tlut)),
-                                            "C4/C8 tile address, TLUT channels and changed palette match oracle")) {
+                                            "indexed tile address, TLUT channels and changed palette match oracle")) {
                                     return false;
                                 }
                             }
@@ -540,9 +563,9 @@ bool test_small_index_tile_decode() {
                 }
             }
         }
-        galaxy::gx::detail::decode_small_index_tiles(
+        decode(
             format, nullptr, 0u, 9u, nullptr, TlutFormat::IA8, nullptr);
-        galaxy::gx::detail::decode_small_index_tiles(
+        decode(
             format, nullptr, 9u, 0u, nullptr, TlutFormat::RGB565, nullptr);
     }
     return true;
