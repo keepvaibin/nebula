@@ -970,8 +970,28 @@ public:
             return false;
         }
 
-        // Entries whose complete dependency bytes do not fit the bounded
-        // cache must not retain a partial snapshot.
+        // A descriptor with no backing storage must not become a non-null
+        // pointer through address-offset arithmetic. It also cannot shadow
+        // a later actual owner of the same guest interval.
+        std::array<GuestMemoryRegionV1, 2> nullable_regions{{
+            {kBase, static_cast<std::uint32_t>(live.size()), nullptr}, region}};
+        memory.regions = nullable_regions.data();
+        memory.region_count = 2u;
+        if (!GxBackend::decoded_packet_run_dependencies_match(&memory, snapshots) ||
+            !GxBackend::capture_decoded_packet_run_dependencies(
+                &memory, dependencies, 7u, snapshots, captured_bytes) ||
+            captured_bytes != 7u || snapshots.size() != 2u ||
+            snapshots[0].bytes != std::vector<std::byte>(live.begin() + 4u, live.begin() + 8u) ||
+            snapshots[1].bytes != std::vector<std::byte>(live.begin() + 16u, live.begin() + 19u)) return false;
+        memory.region_count = 1u; // only the unbacked descriptor remains
+        if (GxBackend::decoded_packet_run_dependencies_match(&memory, snapshots)) return false;
+        captured_bytes = 99u;
+        if (GxBackend::capture_decoded_packet_run_dependencies(
+                &memory, dependencies, 7u, snapshots, captured_bytes) ||
+            !snapshots.empty() || captured_bytes != 0u) return false;
+        memory.regions = &region; memory.region_count = 1u;
+
+        // Reject the entire capture when its byte budget is insufficient.
         captured_bytes = 99u;
         return !GxBackend::capture_decoded_packet_run_dependencies(
                    &memory, dependencies, 6u, snapshots, captured_bytes) &&
