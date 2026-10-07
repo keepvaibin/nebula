@@ -640,6 +640,59 @@ V main(uint id : SV_VertexID) {
         passed &= expect(decoded.guest_byte_size == 192u && decoded.mip_levels == 3u,
             "authored mip handle retains all three block-rounded source levels");
 
+        for (auto format : {TexFormat::I4, TexFormat::I8, TexFormat::IA4, TexFormat::IA8,
+                            TexFormat::RGB565, TexFormat::RGB5A3, TexFormat::RGBA8, TexFormat::CMPR}) {
+            auto direct_image = image; direct_image.guest_addr = address + 768u;
+            direct_image.format = format;
+            const auto original = cache.get(direct_image, mode, TlutRef{}, &memory);
+            for (auto palette_format : {TlutFormat::IA8, TlutFormat::RGB565, TlutFormat::RGB5A3})
+                for (std::uint16_t slot : {std::uint16_t{0}, std::uint16_t{1}, std::uint16_t{1023}}) {
+                const auto reused = cache.get(direct_image, mode, TlutRef{slot, palette_format}, &memory);
+                passed &= expect(reused.resource == original.resource && reused.srv_index == original.srv_index &&
+                    reused.guest_byte_size == original.guest_byte_size && reused.mip_levels == original.mip_levels,
+                    "direct texture formats reuse the same resource and descriptor across irrelevant palette changes");
+            }
+        }
+        auto indexed_image = image; indexed_image.guest_addr = address + 512u;
+        indexed_image.format = TexFormat::C4;
+        TexMode indexed_mode{}; indexed_mode.min_filter = TexMinFilter::Near;
+        const auto indexed = cache.get(indexed_image, indexed_mode, TlutRef{0u, TlutFormat::IA8}, &memory);
+        const auto other_palette_format = cache.get(indexed_image, indexed_mode, TlutRef{0u, TlutFormat::RGB565}, &memory);
+        const auto other_palette_slot = cache.get(indexed_image, indexed_mode, TlutRef{1u, TlutFormat::IA8}, &memory);
+        passed &= expect(indexed.srv_index != other_palette_format.srv_index &&
+            indexed.srv_index != other_palette_slot.srv_index,
+            "indexed textures retain palette format and slot dependencies even when palette bytes match");
+        constexpr auto palette_source = address + 1536u;
+        cache.load_tlut(palette_source >> 5u, 1u << 10u, &memory); // 32 unchanged bytes at slot zero
+        const auto after_identical_reload = cache.get(indexed_image, indexed_mode, TlutRef{0u, TlutFormat::IA8}, &memory);
+        passed &= expect(after_identical_reload.resource == indexed.resource &&
+            after_identical_reload.srv_index == indexed.srv_index,
+            "identical palette reload retains its decoded texture and descriptor");
+        bytes[1536] = std::byte{0xff};
+        cache.load_tlut(palette_source >> 5u, 1u << 10u, &memory);
+        const auto after_changed_reload = cache.get(indexed_image, indexed_mode, TlutRef{0u, TlutFormat::IA8}, &memory);
+        const auto unaffected_slot = cache.get(indexed_image, indexed_mode, TlutRef{1u, TlutFormat::IA8}, &memory);
+        passed &= expect(after_changed_reload.resource != indexed.resource &&
+            unaffected_slot.resource == other_palette_slot.resource && unaffected_slot.srv_index == other_palette_slot.srv_index,
+            "changed palette bytes retire overlapping resources while retaining an unaffected slot");
+
+        const auto original_config = get_render_config();
+        auto mip_config = original_config; mip_config.enhanced_mipmaps = false;
+        set_render_config(mip_config);
+        auto enhanced_image = image; enhanced_image.guest_addr = address + 1280u;
+        enhanced_image.width = 64u; enhanced_image.height = 4u;
+        TexMode enhanced_mode{};
+        enhanced_mode.min_filter = TexMinFilter::Linear;
+        enhanced_mode.mag_filter = TexMagFilter::Linear;
+        const auto no_enhancement = cache.get(enhanced_image, enhanced_mode, TlutRef{}, &memory);
+        mip_config.enhanced_mipmaps = true; set_render_config(mip_config);
+        const auto enhancement = cache.get(enhanced_image, enhanced_mode, TlutRef{}, &memory);
+        set_render_config(original_config);
+        passed &= expect(no_enhancement.mip_levels == 1u && !no_enhancement.generated_mips &&
+            enhancement.mip_levels == 7u && enhancement.generated_mips &&
+            enhancement.resource != no_enhancement.resource && enhancement.guest_byte_size == 512u,
+            "eligible native mip generation still reads live options and keeps its resource separate from the base texture");
+
         // Complete the actual recorded upload before retirement/shutdown. This
         // test owns its queue and waits for GPU completion, not just CPU submit.
         check_hr(list->Close(), "Close texture cache uploads");

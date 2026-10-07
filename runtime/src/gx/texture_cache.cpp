@@ -275,16 +275,18 @@ static const std::byte* resolve_guest_tex(
 
 [[nodiscard]] static bool should_generate_native_mips(
     const TexImage& image,
-    const TexMode& mode,
-    const RenderConfig& cfg) {
-    if (!cfg.enhanced_mipmaps ||
-        (static_cast<unsigned>(mode.min_filter) & 0x3u) != 0u ||
+    const TexMode& mode) {
+    if ((static_cast<unsigned>(mode.min_filter) & 0x3u) != 0u ||
         mode.min_filter != TexMinFilter::Linear ||
         mode.mag_filter != TexMagFilter::Linear ||
-        (image.width < 64u && image.height < 64u)) {
+        (image.width < 64u && image.height < 64u) ||
+        !generated_mips_color_format(image.format)) {
         return false;
     }
-    return generated_mips_color_format(image.format);
+    // The shared settings lock/copy is needed only when this option can affect
+    // the resource. Authored mips, nearest filtering, small and intensity-only
+    // textures have a complete decision from their guest descriptors.
+    return get_render_config().enhanced_mipmaps;
 }
 
 static void generate_rgba8_mip_level(
@@ -1248,6 +1250,11 @@ void TextureCache::load_tlut(
             DependencyReadSource::Tlut, src_addr,
             std::span<const std::byte>(src_ptr, transfer));
     }
+    // An identical reload changes no decoded palette. Keep dependency reads
+    // observable, but avoid retiring/redecoding every texture using this slot.
+    if (std::memcmp(tlut_bank_ + dest_byte_offset, src_ptr, transfer) == 0) {
+        return;
+    }
     std::memcpy(
         tlut_bank_ + dest_byte_offset,
         src_ptr,
@@ -1600,7 +1607,6 @@ TextureHandle TextureCache::get(
     // SMG hand-authors lower mip levels (fog/lava/water tinting — Dolphin PRs
     // #6118/#6875), so game-authored mips must never alias the generated native
     // mip chains used for quality filtering.
-    const RenderConfig cfg = get_render_config();
     unsigned levels = 1;
     unsigned guest_levels = 1;
     bool generated_mips = false;
@@ -1614,7 +1620,7 @@ TextureHandle TextureCache::get(
                 1u + (static_cast<unsigned>(mode.max_lod_x16) + 15u) / 16u;
             levels = std::min(wanted, full_chain);
             guest_levels = levels;
-        } else if (should_generate_native_mips(image, mode, cfg)) {
+        } else if (should_generate_native_mips(image, mode)) {
             levels = full_chain;
             guest_levels = 1;
             generated_mips = levels > 1u;
@@ -1629,8 +1635,14 @@ TextureHandle TextureCache::get(
     key.width       = image.width;
     key.height      = image.height;
     key.format      = static_cast<std::uint8_t>(image.format);
-    key.tlut_format = static_cast<std::uint8_t>(tlut.format);
-    key.tlut_offset = tlut.tmem_offset;
+    // Only indexed formats consume a TLUT. These BP registers may retain a
+    // previous texture's palette, so keying direct formats on them created
+    // duplicate decodes/resources for identical guest images.
+    if (image.format == TexFormat::C4 || image.format == TexFormat::C8 ||
+        image.format == TexFormat::C14X2) {
+        key.tlut_format = static_cast<std::uint8_t>(tlut.format);
+        key.tlut_offset = tlut.tmem_offset;
+    }
     key.levels      = static_cast<std::uint8_t>(levels);
     key.generated_mips = generated_mips ? 1u : 0u;
     const std::uint32_t total_guest_size =

@@ -89,6 +89,18 @@ earlier accepted checkpoints are retained. The unrelated pre-existing
   bulk loop is out of line. Added an unrun byte/page oracle across six aliases,
   word edges, clipped spans and pre-existing bits. Removed work is up to 63
   bitmap loads/updates per complete 64-page word; timing is unmeasured.
+- **Texture palette dependencies:** direct texture formats no longer key on
+  unused TLUT format/slot registers. Identical TLUT reloads retain valid decoded
+  entries, while changed bytes still retire every overlapping palette. The
+  dependency recorder still observes the source read. Added unrun resource/SRV
+  reuse checks across all eight direct formats plus palette format/slot,
+  identical reload and changed reload cases. This can remove complete duplicate
+  decode/resource/upload operations; its frequency and saving are unmeasured.
+- **Texture settings lookup:** authored mips, nearest filtering, small and
+  intensity-only textures no longer acquire the settings lock and copy the
+  whole configuration on every cache lookup. Eligible native mip generation
+  still reads the live enhanced-mipmap option. Added an unrun live-option and
+  distinct-resource check. No filtering choice or output dimensions changed.
 
 For the sustained CPU candidates, contribution and milliseconds saved are
 **unmeasured**. Code inspection establishes removed work: one allocation per
@@ -168,3 +180,7 @@ API constraints checked against primary documentation:
 [null SRVs](https://learn.microsoft.com/en-us/windows/win32/api/d3d12/nf-d3d12-id3d12device-createshaderresourceview),
 [pipeline-library descriptor matching](https://learn.microsoft.com/en-us/windows/win32/api/d3d12/nf-d3d12-id3d12pipelinelibrary-loadgraphicspipeline),
 and [GPU timestamp scope](https://learn.microsoft.com/en-us/windows/win32/direct3d12/timing).
+Palette cache review also checked Dolphin's own
+[texture-cache implementation](https://github.com/dolphin-emu/dolphin/blob/master/Source/Core/VideoCommon/TextureCacheBase.cpp),
+which includes palette content in its hash only for palettized formats. That
+supports the dependency distinction; it is not a Galaxy performance comparison.
