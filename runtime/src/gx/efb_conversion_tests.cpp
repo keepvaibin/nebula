@@ -1098,6 +1098,72 @@ V main(uint id : SV_VertexID) {
         return run_bytes(DXGI_FORMAT_R32_FLOAT,bytes,width,height,logical_size,constants);
     }
 
+    bool test_texture_descriptor_retirement() {
+        using namespace galaxy::gx;
+        bool passed = true;
+        auto cache_owner = std::make_unique<TextureCache>();
+        TextureCache& cache = *cache_owner;
+        if (!cache.initialize(device_.Get())) {
+            throw std::runtime_error("initialize WARP retirement cache");
+        }
+        cache.begin_frame(0u, kFramesInFlight);
+        ComPtr<ID3D12CommandAllocator> allocator;
+        ComPtr<ID3D12GraphicsCommandList> list;
+        check_hr(device_->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT,
+            IID_PPV_ARGS(&allocator)), "Create retirement allocator");
+        check_hr(device_->CreateCommandList(0u, D3D12_COMMAND_LIST_TYPE_DIRECT,
+            allocator.Get(), nullptr, IID_PPV_ARGS(&list)), "Create retirement command list");
+        cache.set_upload_list(list.Get());
+        constexpr std::uint32_t address = 0x10000000u;
+        std::array<std::byte, 512> bytes{};
+        // Distinct content prevents the optional decoded-content cache from
+        // turning the four lookups into shared-resource hits.
+        for (unsigned block = 0; block < 4u; ++block) {
+            bytes[block * 128u] = static_cast<std::byte>(block + 1u);
+        }
+        galaxy::GuestMemoryRegionV1 region{
+            address, static_cast<std::uint32_t>(bytes.size()), bytes.data()};
+        galaxy::GuestMemoryV1 memory{};
+        memory.region_count = 1u;
+        memory.regions = &region;
+        TexImage image{};
+        image.guest_addr = address;
+        image.width = image.height = 8u;
+        image.format = TexFormat::RGB565;
+        TexMode mode{};
+        mode.min_filter = TexMinFilter::Near;
+        const auto initial_revision = cache.retirement_revision();
+        const auto first = cache.get(image, mode, TlutRef{}, &memory);
+        const auto hit = cache.get(image, mode, TlutRef{}, &memory);
+        passed &= expect(hit.srv_index == first.srv_index &&
+            cache.retirement_revision() == initial_revision,
+            "texture hits do not invalidate cross-frame handles");
+        passed &= expect(cache.invalidate_guest_range(address, 128u) == 1u &&
+            cache.retirement_revision() == initial_revision + 1u,
+            "retirement publishes a cross-frame handle lifetime change");
+        image.guest_addr = address + 128u;
+        const auto same_frame = cache.get(image, mode, TlutRef{}, &memory);
+        passed &= expect(same_frame.srv_index != first.srv_index &&
+            first.resource->GetDesc().Width == 8u,
+            "retired resource and CPU descriptor survive later lookups in the same frame");
+        cache.begin_frame(1u, kFramesInFlight);
+        image.guest_addr = address + 256u;
+        const auto other_slot = cache.get(image, mode, TlutRef{}, &memory);
+        passed &= expect(other_slot.srv_index != first.srv_index,
+            "another frame slot cannot reclaim the retired CPU descriptor");
+        // No command list is submitted by this lifetime fixture. In production,
+        // returning to slot 0 requires its renderer fence wait first.
+        cache.begin_frame(0u, kFramesInFlight);
+        image.guest_addr = address + 384u;
+        const auto reclaimed = cache.get(image, mode, TlutRef{}, &memory);
+        passed &= expect(reclaimed.srv_index == first.srv_index &&
+            cache.retirement_revision() == initial_revision + 1u,
+            "owning slot reclaims the descriptor without another retirement");
+        cache.set_upload_list(nullptr);
+        cache.shutdown();
+        return passed;
+    }
+
     bool test_texture_cache_ranges() {
         using namespace galaxy::gx;
         bool passed = true;
@@ -2236,6 +2302,7 @@ int main() {
     passed &= test_gx_pixel_readbacks();
     try {
         WarpConversionHarness harness;
+        passed &= harness.test_texture_descriptor_retirement();
         passed &= harness.test_texture_cache_ranges();
         passed &= test_scaled_xfb_filter();
     } catch (const std::exception& error) {

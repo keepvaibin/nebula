@@ -6431,6 +6431,13 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
         renderer_.begin_frame(chunk.present_swap_chain);
         efb_copies_.begin_frame(renderer_.frame_slot(), kFramesInFlight);
         texture_cache_.begin_frame(renderer_.frame_slot(), kFramesInFlight);
+        const auto retirement_revision = texture_cache_.retirement_revision();
+        if (retirement_revision != seen_texture_retirement_revision_) {
+            // Retirement can happen inside get(), including budget eviction.
+            // Such handles are safe through their last frame, not across it.
+            texture_handle_cache_.clear();
+            seen_texture_retirement_revision_ = retirement_revision;
+        }
         clear_frame_texture_binding_table_cache();
         pipeline_cache_.drain_completions();
         // New decoded textures upload through this frame's command list.
