@@ -10,7 +10,6 @@
 #include "galaxy/gx/gx_state.h"
 
 #include "galaxy/gx/fifo_parser.h"
-#include "galaxy/gx/texture_sampling.h"
 #include "galaxy/gx/uber_constants.h"
 
 #include <algorithm>
@@ -795,9 +794,19 @@ std::uint64_t GxState::dependency_shape_hash() const noexcept {
     }
 
     hash = fnv1a_mix_u32(hash, state.bp(bp::kGenMode));
-    // Exact live-map membership is sufficient for the newly observed TEV
-    // inputs/z-texture enablement; do not hash all 32 arithmetic env words.
-    hash = fnv1a_mix_u32(hash, sampled_texture_map_mask(state));
+    // A whole-FIFO hit also restores final parser state. Two states with the
+    // same current live-map mask can respond differently to a later masked
+    // selector write, so retain the actual selector bits (including inactive
+    // stages) and both z-operation bits. Pack each color/alpha selector pair
+    // into one word; arithmetic, swaps and z format still cannot affect ranges.
+    for (unsigned stage = 0; stage < kMaxTevStages; ++stage) {
+        const auto color = state.bp(static_cast<std::uint8_t>(
+            bp::kTevColorEnvBase + 2u * stage)) & 0xFFFFu;
+        const auto alpha = state.bp(static_cast<std::uint8_t>(
+            bp::kTevAlphaEnvBase + 2u * stage)) & 0xFFF0u;
+        hash = fnv1a_mix_u32(hash, color | (alpha << 12u));
+    }
+    hash = fnv1a_mix_u32(hash, state.bp(bp::kTevZEnv1) & 0xCu);
     for (std::uint8_t reg = bp::kTevOrderBase;
          reg < bp::kTevOrderBase + 8u;
          ++reg) {

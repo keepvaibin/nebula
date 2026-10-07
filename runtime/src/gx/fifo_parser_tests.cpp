@@ -340,6 +340,16 @@ std::uint64_t reference_dependency_shape_state_hash(const GxState& state) noexce
     }
 
     hash = dependency_reference_mix_u32(hash, state.bp(bp::kGenMode));
+    // Masked future writes observe selector bits even when current samples
+    // are dead. Arithmetic/swap/z-format bits do not enter dependency shape.
+    for (unsigned stage = 0; stage < kMaxTevStages; ++stage) {
+        const std::uint32_t color = state.bp(static_cast<std::uint8_t>(
+            bp::kTevColorEnvBase + 2u * stage)) & 0xFFFFu;
+        const std::uint32_t alpha = state.bp(static_cast<std::uint8_t>(
+            bp::kTevAlphaEnvBase + 2u * stage)) & 0xFFF0u;
+        hash = dependency_reference_mix_u32(hash, color | (alpha << 12u));
+    }
+    hash = dependency_reference_mix_u32(hash, state.bp(bp::kTevZEnv1) & 0xCu);
     for (std::uint8_t reg = bp::kTevOrderBase;
          reg < bp::kTevOrderBase + 8u;
          ++reg) {

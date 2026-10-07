@@ -216,24 +216,69 @@ public:
             memo.contains(state.dependency_shape_revision(), 0u)) return false;
         memo.mark(0u);
         write(bp::kTevColorEnvBase, (1u << 19u) | 9u);
-        if (state.dependency_shape_hash() != live_hash ||
+        if (state.dependency_shape_hash() == live_hash ||
             memo.contains(state.dependency_shape_revision(), 0u)) return false;
         write(bp::kTevColorEnvBase, 1u << 19u);
         if (state.dependency_shape_hash() != unused_hash) return false;
 
         write(bp::kTevAlphaEnvBase, 15u | (4u << 4u));
-        if (state.dependency_shape_hash() != live_hash ||
+        if (state.dependency_shape_hash() == unused_hash ||
             sampled_texture_map_mask(state) != (1u << 6u)) return false;
         write(bp::kTevAlphaEnvBase, 15u);
         if (state.dependency_shape_hash() != unused_hash) return false;
 
         write(bp::kTevZEnv1, 4u | 3u);
         const auto z_revision = state.dependency_shape_revision();
-        if (state.dependency_shape_hash() != live_hash ||
+        const auto z_hash = state.dependency_shape_hash();
+        if (z_hash == unused_hash ||
             memo.contains(z_revision, 0u)) return false;
         memo.mark(0u);
         write(bp::kTevZEnv1, 4u | 1u); // same enablement, different z format
-        return state.dependency_shape_hash() == live_hash &&
+        if (state.dependency_shape_hash() != z_hash ||
+            state.dependency_shape_revision() != z_revision ||
+            !memo.contains(z_revision, 0u)) return false;
+
+        // Identical sampled-map membership must not alias initial selectors:
+        // the same future BP mask can turn only one into a texture input.
+        struct MaskCase {
+            std::uint8_t reg;
+            std::uint32_t mask, value, first, second, first_final, second_final;
+        };
+        for (const auto test : {
+                 MaskCase{bp::kTevColorEnvBase, 8u, 8u, 0u, 2u, 8u, 10u},
+                 MaskCase{bp::kTevAlphaEnvBase, 64u, 64u, 0u, 32u, 64u, 96u},
+                 MaskCase{bp::kTevZEnv1, 4u, 0u, 4u, 8u, 0u, 8u}}) {
+            auto backend = std::make_unique<GxBackend>();
+            GuestMemoryV1 memory{};
+            GxState first;
+            first.load_bp((static_cast<std::uint32_t>(bp::kGenMode) << 24u) | 1u);
+            first.load_bp((static_cast<std::uint32_t>(bp::kTevOrderBase) << 24u) | 70u);
+            first.load_bp((static_cast<std::uint32_t>(test.reg) << 24u) | test.first);
+            GxState second = first;
+            second.load_bp((static_cast<std::uint32_t>(test.reg) << 24u) | test.second);
+            if (sampled_texture_map_mask(first) != sampled_texture_map_mask(second) ||
+                first.dependency_shape_hash() == second.dependency_shape_hash()) return false;
+            std::vector<std::byte> fifo;
+            fifo.push_back(std::byte{op::kLoadBpReg});
+            append_be_u32(fifo, (static_cast<std::uint32_t>(bp::kBpMask) << 24u) | test.mask);
+            fifo.push_back(std::byte{op::kLoadBpReg});
+            append_be_u32(fifo, (static_cast<std::uint32_t>(test.reg) << 24u) | test.value);
+            fifo.resize(32u, std::byte{op::kNop});
+            std::vector<GuestMemoryRange> ranges;
+            bool hit = false;
+            backend->dependency_state_ = first;
+            backend->collect_memory_dependency_ranges(fifo.data(), fifo.size(), &memory, ranges, hit);
+            if (hit || backend->dependency_state_.bp(test.reg) != test.first_final) return false;
+            const auto first_mask = sampled_texture_map_mask(backend->dependency_state_);
+            backend->dependency_state_ = second;
+            backend->collect_memory_dependency_ranges(fifo.data(), fifo.size(), &memory, ranges, hit);
+            if (hit || backend->dependency_state_.bp(test.reg) != test.second_final ||
+                sampled_texture_map_mask(backend->dependency_state_) == first_mask) return false;
+            backend->dependency_state_ = second;
+            backend->collect_memory_dependency_ranges(fifo.data(), fifo.size(), &memory, ranges, hit);
+            if (!hit || backend->dependency_state_.bp(test.reg) != test.second_final) return false;
+        }
+        return state.dependency_shape_hash() == z_hash &&
             state.dependency_shape_revision() == z_revision &&
             memo.contains(z_revision, 0u);
     }
