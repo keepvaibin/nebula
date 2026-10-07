@@ -3570,6 +3570,7 @@ void RendererD3D12::invalidate_gx_bindings() {
     bound_matrix_palette_ = 0;
     bound_topology_ = D3D_PRIMITIVE_TOPOLOGY_UNDEFINED;
     bound_scissor_valid_ = false;
+    bound_scissor_input_valid_ = false;
     bound_viewport_valid_ = false;
 }
 
@@ -4170,6 +4171,9 @@ void RendererD3D12::bind_efb(const float xf_vp[6]) {
     command_list_->RSSetScissorRects(1, &sci);
     bound_viewport_ = vp;
     bound_scissor_ = sci;
+    // Full-EFB binding can overwrite a previously applied GX scissor even
+    // though its raw draw input is unchanged on the next draw.
+    bound_scissor_input_valid_ = false;
     bound_viewport_valid_ = true;
     bound_scissor_valid_ = true;
 }
@@ -4284,7 +4288,14 @@ void RendererD3D12::draw(const DrawCall& call) {
     // Per-draw GX scissor, scaled to the EFB and clamped.  GX titles rely on
     // the scissor for UI clipping and split renders; an empty scissor is a
     // faithful "rasterize nothing" (also how CullMode::All is expressed).
-    {
+    // The raw key is recorded only after a nonempty input has been applied.
+    // Its conversion is deterministic for these fixed EFB extents and scale.
+    if (!bound_scissor_valid_ || !bound_scissor_input_valid_ ||
+        bound_scissor_input_scale_ != efb_scale_ ||
+        call.scissor.left != bound_scissor_input_.left ||
+        call.scissor.top != bound_scissor_input_.top ||
+        call.scissor.right != bound_scissor_input_.right ||
+        call.scissor.bottom != bound_scissor_input_.bottom) {
         const ScaledEfbRect scaled = compute_scaled_efb_rect(
             call.scissor.left,
             call.scissor.top,
@@ -4307,6 +4318,9 @@ void RendererD3D12::draw(const DrawCall& call) {
             bound_scissor_ = sci;
             bound_scissor_valid_ = true;
         }
+        bound_scissor_input_ = call.scissor;
+        bound_scissor_input_scale_ = efb_scale_;
+        bound_scissor_input_valid_ = true;
     }
 
     // Per-draw XF viewport (O8 closed — it was NOT benign).  SMG never uses

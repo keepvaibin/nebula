@@ -571,6 +571,10 @@ private:
     D3D12_PRIMITIVE_TOPOLOGY bound_topology_ =
         D3D_PRIMITIVE_TOPOLOGY_UNDEFINED;
     D3D12_RECT bound_scissor_{};
+    // Successful nonempty GX input that produced the currently bound scissor.
+    D3D12_RECT bound_scissor_input_{};
+    unsigned bound_scissor_input_scale_ = 0;
+    bool bound_scissor_input_valid_ = false;
     D3D12_VIEWPORT bound_viewport_{};
     bool bound_scissor_valid_ = false;
     bool bound_viewport_valid_ = false;
