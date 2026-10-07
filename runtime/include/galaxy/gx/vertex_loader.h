@@ -27,6 +27,14 @@ class UploadRing;
 struct ImmutableUploadToken;
 class DependencyEventSink;
 
+namespace detail {
+// Source/destination are distinct, valid native-endian index storage. Returns
+// false if any mathematical sum exceeds 65535; the caller must reject the draw.
+[[nodiscard]] bool rebase_cached_indices(std::span<const std::uint16_t> source,
+                                        std::uint32_t bias,
+                                        std::uint16_t* destination) noexcept;
+}  // namespace detail
+
 // Canonical post-load vertex.  One fixed input layout for every PSO keeps
 // pipeline permutations down and the loader branch-free per attribute.
 //

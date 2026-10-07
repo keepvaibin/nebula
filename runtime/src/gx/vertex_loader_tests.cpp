@@ -818,6 +818,68 @@ bool byte_dequant_and_nbt3_match_cached_decode(
     return ok;
 }
 
+bool cached_index_rebasing_matches_wide_arithmetic() {
+    constexpr std::uint16_t guard = 0x9bd7u;
+    constexpr std::array<std::uint32_t, 11> biases{
+        0u, 1u, 2u, 255u, 256u, 32767u, 32768u,
+        65534u, 65535u, 65536u, 0xffffffffu};
+    const auto check = [&](const std::array<std::uint16_t, 40>& input,
+                           unsigned source_offset, unsigned count,
+                           unsigned destination_offset, std::uint32_t bias) {
+        const auto before = input;
+        const std::span<const std::uint16_t> source(input.data() + source_offset, count);
+        std::array<std::uint16_t, 40> output;
+        output.fill(guard);
+        bool expected = true;
+        for (auto index : source) {
+            expected &= static_cast<std::uint64_t>(index) + bias <= 65535u;
+        }
+        const bool result = galaxy::gx::detail::rebase_cached_indices(
+            source, bias, output.data() + destination_offset);
+        if (!expect(result == expected && input == before,
+                    "cached index rebasing must match mathematical sums and preserve source")) return false;
+        for (unsigned i = 0u; i < output.size(); ++i) {
+            if (i < destination_offset || i >= destination_offset + count) {
+                if (!expect(output[i] == guard, "cached index rebasing wrote outside its span")) return false;
+            } else if (result) {
+                const auto wide = static_cast<std::uint64_t>(source[i - destination_offset]) + bias;
+                if (!expect(output[i] == wide, "cached index rebasing changed an exact index")) return false;
+            }
+        }
+        return true;
+    };
+    std::array<std::uint16_t, 40> input{};
+    for (unsigned offset = 0u; offset < 8u; ++offset) {
+        const unsigned source_offset = 7u - offset;
+        for (auto bias : biases) {
+            for (unsigned first = 0u; first < 65536u; first += 8u) {
+                for (unsigned lane = 0u; lane < 8u; ++lane) {
+                    input[source_offset + lane] = static_cast<std::uint16_t>(first + lane);
+                }
+                if (!check(input, source_offset, 8u, offset, bias)) return false;
+            }
+            // Every vector-tail length, with distinct values and alignments.
+            for (unsigned count = 0u; count <= 24u; ++count) {
+                for (unsigned i = 0u; i < count; ++i) {
+                    input[source_offset + i] = static_cast<std::uint16_t>(i * 8191u + count * 17u);
+                }
+                if (!check(input, source_offset, count, offset, bias)) return false;
+            }
+        }
+        // Overflow independently in every lane, including later vectors and
+        // scalar tails. Valid zero indices elsewhere must not mask that lane.
+        for (unsigned count = 1u; count <= 24u; ++count) {
+            for (unsigned bad = 0u; bad < count; ++bad) {
+                input.fill(0u);
+                input[source_offset + bad] = 65535u;
+                if (!check(input, source_offset, count, offset, 1u)) return false;
+            }
+        }
+    }
+    return expect(galaxy::gx::detail::rebase_cached_indices({}, 0xffffffffu, nullptr),
+                  "empty rebasing must not touch null destination or reject an unused bias");
+}
+
 bool generated_index_boundaries_preserve_topology(ID3D12Device* device) {
     using namespace galaxy::gx;
     struct Case {
@@ -870,7 +932,8 @@ bool generated_index_boundaries_preserve_topology(ID3D12Device* device) {
         }
         for (auto index : test.indices) largest_index = index > largest_index ? index : largest_index;
         const std::vector<GxVertexOut> decoded(total_vertices);
-        for (bool cached : {false, true}) {
+        for (unsigned route : {0u, 1u, 2u}) {
+            const bool cached = route != 0u;
             if (!cached && test.packet_counts.size() != 1u) continue;
             const bool indexed = !test.indices.empty() &&
                 !(test.primitive == PrimitiveClass::Triangles && (!cached || test.cached_nonindexed));
@@ -888,7 +951,9 @@ bool generated_index_boundaries_preserve_topology(ID3D12Device* device) {
                     if (cached) {
                         prim = loader.upload_cached_packet_run_vertices(decoded, 0x1200u,
                             packets, test.primitive, vertices, indices, 0u, true,
-                            static_cast<std::uint32_t>(test.indices.size()));
+                            static_cast<std::uint32_t>(test.indices.size()),
+                            route == 2u ? std::span<const std::uint16_t>{test.indices}
+                                        : std::span<const std::uint16_t>{});
                     } else {
                         std::vector<std::byte> fifo;
                         append_u16(fifo, static_cast<std::uint16_t>(total_vertices));
@@ -1041,6 +1106,7 @@ bool immutable_upload_reuse_preserves_bytes(ID3D12Device* device) {
 int main() {
     if (!fixed_vertex_dequantization_preserves_bits()) return 1;
     if (!small_vertex_components_preserve_bits()) return 1;
+    if (!cached_index_rebasing_matches_wide_arithmetic()) return 1;
     if (!prepared_vertex_inputs_preserve_mixed_layouts()) return 1;
     const ComPtr<ID3D12Device> device = create_warp_device();
     if (!expect(device != nullptr, "could not create D3D12 WARP device")) {

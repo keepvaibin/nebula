@@ -21,6 +21,8 @@
 #include "galaxy/gx/renderer_d3d12.h"
 #include "galaxy/native_api.h"
 
+#include <emmintrin.h>
+
 #include <algorithm>
 #include <array>
 #include <bit>
@@ -1023,6 +1025,37 @@ void emit_primitive_indices(
 
 }  // anonymous namespace
 
+bool detail::rebase_cached_indices(std::span<const std::uint16_t> source,
+                                   std::uint32_t bias,
+                                   std::uint16_t* destination) noexcept {
+    if (source.empty()) return true;
+    if (bias > std::numeric_limits<std::uint16_t>::max()) return false;
+    std::size_t i = 0u;
+    if (source.size() >= 8u) {
+        const __m128i offsets = _mm_set1_epi16(
+            std::bit_cast<std::int16_t>(static_cast<std::uint16_t>(bias)));
+        do {
+            const __m128i indices = _mm_loadu_si128(
+                reinterpret_cast<const __m128i*>(source.data() + i));
+            const __m128i wrapped = _mm_add_epi16(indices, offsets);
+            const __m128i saturated = _mm_adds_epu16(indices, offsets);
+            // Both additions agree exactly through 65535. Above it the saturating
+            // result is 65535 and the wrapped result is smaller, in any lane.
+            if (_mm_movemask_epi8(_mm_cmpeq_epi16(wrapped, saturated)) != 0xffff) {
+                return false;
+            }
+            _mm_storeu_si128(reinterpret_cast<__m128i*>(destination + i), wrapped);
+            i += 8u;
+        } while (source.size() - i >= 8u);
+    }
+    for (; i < source.size(); ++i) {
+        const std::uint32_t value = static_cast<std::uint32_t>(source[i]) + bias;
+        if (value > std::numeric_limits<std::uint16_t>::max()) return false;
+        destination[i] = static_cast<std::uint16_t>(value);
+    }
+    return true;
+}
+
 // ---------------------------------------------------------------------------
 // VertexLoader::source_vertex_size
 // ---------------------------------------------------------------------------
@@ -1547,16 +1580,11 @@ LoadedPrimitive VertexLoader::upload_cached_packet_run_vertices(
                 precomputed_indices.data(),
                 precomputed_indices.size() * sizeof(std::uint16_t));
         } else {
-            for (const std::uint16_t index : precomputed_indices) {
-                const std::uint32_t biased =
-                    static_cast<std::uint32_t>(index) + index_vertex_bias;
-                if (biased > std::numeric_limits<std::uint16_t>::max()) {
-                    throw GxFatalError(
-                        "VertexLoader: indexed batch exceeded 16-bit index range",
-                        error_offset,
-                        error_opcode);
-                }
-                idx_ptr[idx_count++] = static_cast<std::uint16_t>(biased);
+            if (!detail::rebase_cached_indices(precomputed_indices, index_vertex_bias, idx_ptr)) {
+                throw GxFatalError(
+                    "VertexLoader: indexed batch exceeded 16-bit index range",
+                    error_offset,
+                    error_opcode);
             }
         }
         idx_count = static_cast<std::uint32_t>(precomputed_indices.size());
