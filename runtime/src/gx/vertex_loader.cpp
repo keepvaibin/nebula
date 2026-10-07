@@ -573,9 +573,9 @@ static std::size_t normal_elem_size(const VertexAttribute& attr)
 static void decode_nbt(
     const std::byte* src,
     GxVertexOut& out,
-    const VertexAttribute& attr)
+    const VertexAttribute& attr,
+    std::size_t elem_size)
 {
-    const std::size_t elem_size = normal_elem_size(attr);
     decode_nrm(src, out, attr);
     decode_tangent(src + elem_size, out, attr);
     decode_binormal(src + elem_size * 2u, out, attr);
@@ -646,12 +646,58 @@ static std::size_t attr_direct_size_tex(const VertexAttribute& attr)
     }
 }
 
+struct PreparedVertexInputs {
+    std::array<std::uint32_t, 12> element_bytes{};
+    std::array<std::uint32_t, 12> array_bases{};
+    std::array<std::uint32_t, 12> array_strides{};
+    std::uint32_t normal_vector_bytes = 0u;
+    std::uint8_t default_position_matrix = 0u;
+};
+
+PreparedVertexInputs prepare_vertex_inputs(
+    const VertexDescriptor& desc,
+    const GxState& state) {
+    PreparedVertexInputs inputs{};
+    if (!desc.has_pn_matrix_index) {
+        inputs.default_position_matrix = static_cast<std::uint8_t>(
+            state.cp(cp::kMatrixIndexA) & 0x3fu);
+    }
+    // The draw/run owns one fixed CP layout. Resolve its sizes and indexed
+    // array settings once, keeping per-vertex reads and byte conversion below.
+    for (unsigned attr = 0u; attr < inputs.element_bytes.size(); ++attr) {
+        const VertexAttribute& attribute = attr == 0u ? desc.position :
+            attr == 1u ? desc.normal : attr < 4u ? desc.color[attr - 2u] :
+            desc.texcoord[attr - 4u];
+        if (attribute.vcd != VcdType::Direct &&
+            attribute.vcd != VcdType::Index8 && attribute.vcd != VcdType::Index16) {
+            continue;
+        }
+        std::size_t size = 0u;
+        if (attr == 0u) {
+            size = attr_direct_size_pos(attribute);
+        } else if (attr == 1u) {
+            inputs.normal_vector_bytes = static_cast<std::uint32_t>(normal_elem_size(attribute));
+            size = inputs.normal_vector_bytes * (attribute.count != 0u ? 3u : 1u);
+        } else if (attr < 4u) {
+            size = color_byte_size(attribute.format);
+        } else {
+            size = attr_direct_size_tex(attribute);
+        }
+        inputs.element_bytes[attr] = static_cast<std::uint32_t>(size);
+        if (attribute.vcd == VcdType::Index8 || attribute.vcd == VcdType::Index16) {
+            inputs.array_bases[attr] = state.array_base(attr);
+            inputs.array_strides[attr] = state.array_stride(attr);
+        }
+    }
+    return inputs;
+}
+
 void decode_vertex_stream(
     const std::byte* raw_ptr,
     std::uint32_t vtx_count,
     std::size_t src_stride,
     const VertexDescriptor& desc,
-    const GxState& state,
+    const PreparedVertexInputs& inputs,
     IndexedArrayResolver& array_resolver,
     std::size_t fifo_error_offset,
     GxVertexOut* verts) {
@@ -661,8 +707,7 @@ void decode_vertex_stream(
             raw_ptr + static_cast<std::size_t>(vi) * src_stride;
         std::size_t off = 0;
 
-        std::uint8_t pnmtx_idx = static_cast<std::uint8_t>(
-            state.cp(cp::kMatrixIndexA) & 0x3Fu);
+        std::uint8_t pnmtx_idx = inputs.default_position_matrix;
         std::uint8_t texmtx_idx[8]{};
 
         if (desc.has_pn_matrix_index) {
@@ -687,7 +732,7 @@ void decode_vertex_stream(
         out.mtx_indices[3] = 0u;
 
         if (desc.position.vcd == VcdType::Direct) {
-            const std::size_t sz = attr_direct_size_pos(desc.position);
+            const std::size_t sz = inputs.element_bytes[0u];
             decode_pos(vsrc + off, out, desc.position, desc.byte_dequant);
             off += sz;
         } else if (desc.position.vcd == VcdType::Index8 ||
@@ -700,14 +745,13 @@ void decode_vertex_stream(
                 idx = read_be_u16(vsrc + off);
                 off += 2;
             }
-            const std::uint32_t arr_base = state.array_base(0u);
-            const std::uint32_t arr_stride = state.array_stride(0u);
+            const std::uint32_t arr_base = inputs.array_bases[0u];
+            const std::uint32_t arr_stride = inputs.array_strides[0u];
             const std::uint32_t addr = arr_base + idx * arr_stride;
             const std::byte* ap = array_resolver.resolve(
                 0u,
                 addr,
-                static_cast<std::uint32_t>(
-                    attr_direct_size_pos(desc.position)),
+                inputs.element_bytes[0u],
                 fifo_error_offset);
             decode_pos(ap, out, desc.position, desc.byte_dequant);
         } else {
@@ -717,9 +761,9 @@ void decode_vertex_stream(
         }
 
         if (desc.normal.vcd == VcdType::Direct) {
-            const std::size_t sz = attr_direct_size_nrm(desc.normal);
+            const std::size_t sz = inputs.element_bytes[1u];
             if (normal_has_nbt(desc)) {
-                decode_nbt(vsrc + off, out, desc.normal);
+                decode_nbt(vsrc + off, out, desc.normal, inputs.normal_vector_bytes);
             } else {
                 decode_nrm(vsrc + off, out, desc.normal);
                 zero_vec3(out.tangent);
@@ -729,8 +773,8 @@ void decode_vertex_stream(
         } else if (desc.normal.vcd == VcdType::Index8 ||
                    desc.normal.vcd == VcdType::Index16) {
             const unsigned attr_idx = 1u;
-            const std::uint32_t arr_base = state.array_base(attr_idx);
-            const std::uint32_t arr_stride = state.array_stride(attr_idx);
+            const std::uint32_t arr_base = inputs.array_bases[attr_idx];
+            const std::uint32_t arr_stride = inputs.array_strides[attr_idx];
 
             if (!normal_uses_three_indices(desc)) {
                 std::uint32_t idx = 0;
@@ -741,17 +785,15 @@ void decode_vertex_stream(
                     idx = read_be_u16(vsrc + off);
                     off += 2;
                 }
-                const std::size_t elem_sz = normal_elem_size(desc.normal);
-                const std::size_t read_sz =
-                    normal_has_nbt(desc) ? elem_sz * 3u : elem_sz;
+                const std::uint32_t read_sz = inputs.element_bytes[1u];
                 const std::uint32_t addr = arr_base + idx * arr_stride;
                 const std::byte* ap = array_resolver.resolve(
                     attr_idx,
                     addr,
-                    static_cast<std::uint32_t>(read_sz),
+                    read_sz,
                     fifo_error_offset);
                 if (normal_has_nbt(desc)) {
-                    decode_nbt(ap, out, desc.normal);
+                    decode_nbt(ap, out, desc.normal, inputs.normal_vector_bytes);
                 } else {
                     decode_nrm(ap, out, desc.normal);
                     zero_vec3(out.tangent);
@@ -771,7 +813,7 @@ void decode_vertex_stream(
                 }
                 off += idx_bytes * 3u;
 
-                const std::size_t elem_sz = normal_elem_size(desc.normal);
+                const std::size_t elem_sz = inputs.normal_vector_bytes;
                 const std::byte* n = array_resolver.resolve(
                     attr_idx,
                     arr_base + idx[0] * arr_stride,
@@ -803,7 +845,7 @@ void decode_vertex_stream(
             const unsigned attr_idx = 2u + ci;
 
             if (ca.vcd == VcdType::Direct) {
-                const std::size_t sz = color_byte_size(ca.format);
+                const std::size_t sz = inputs.element_bytes[attr_idx];
                 cdst = decode_color(
                     vsrc + off,
                     static_cast<ColorComponentFormat>(ca.format));
@@ -818,13 +860,13 @@ void decode_vertex_stream(
                     idx = read_be_u16(vsrc + off);
                     off += 2;
                 }
-                const std::uint32_t arr_base = state.array_base(attr_idx);
-                const std::uint32_t arr_stride = state.array_stride(attr_idx);
+                const std::uint32_t arr_base = inputs.array_bases[attr_idx];
+                const std::uint32_t arr_stride = inputs.array_strides[attr_idx];
                 const std::uint32_t addr = arr_base + idx * arr_stride;
                 const std::byte* ap = array_resolver.resolve(
                     attr_idx,
                     addr,
-                    static_cast<std::uint32_t>(color_byte_size(ca.format)),
+                    inputs.element_bytes[attr_idx],
                     fifo_error_offset);
                 cdst = decode_color(
                     ap, static_cast<ColorComponentFormat>(ca.format));
@@ -839,7 +881,7 @@ void decode_vertex_stream(
             const unsigned attr_idx = 4u + ti;
 
             if (ta.vcd == VcdType::Direct) {
-                const std::size_t sz = attr_direct_size_tex(ta);
+                const std::size_t sz = inputs.element_bytes[attr_idx];
                 decode_tex(vsrc + off, uv, ta, desc.byte_dequant);
                 off += sz;
             } else if (ta.vcd == VcdType::Index8 ||
@@ -852,10 +894,10 @@ void decode_vertex_stream(
                     idx = read_be_u16(vsrc + off);
                     off += 2;
                 }
-                const std::uint32_t arr_base = state.array_base(attr_idx);
-                const std::uint32_t arr_stride = state.array_stride(attr_idx);
+                const std::uint32_t arr_base = inputs.array_bases[attr_idx];
+                const std::uint32_t arr_stride = inputs.array_strides[attr_idx];
                 const std::uint32_t addr = arr_base + idx * arr_stride;
-                const std::size_t elem_sz = attr_direct_size_tex(ta);
+                const std::size_t elem_sz = inputs.element_bytes[attr_idx];
                 const std::byte* ap = array_resolver.resolve(
                     attr_idx,
                     addr,
@@ -1109,230 +1151,10 @@ LoadedPrimitive VertexLoader::load_with_layout(
     // ---------------------------------------------------------------------------
     // Decode each vertex.
     // ---------------------------------------------------------------------------
-    for (std::uint32_t vi = 0; vi < vtx_count; ++vi) {
-        GxVertexOut& out = verts[vi];
-        const std::byte* vsrc = raw_ptr + static_cast<std::size_t>(vi) * src_stride;
-        std::size_t off = 0;           // byte offset within this vertex's raw data
-
-        // --- Matrix indices ---------------------------------------------------
-        // Default = the CURRENT matrix (CP MatrixIndexA bits 5:0, set by
-        // GXSetCurrentMtx / draw setup), NOT a hardcoded PNMTX0.  Draws
-        // without per-vertex PNMTXIDX must transform with the current
-        // matrix per GX semantics.
-        std::uint8_t pnmtx_idx = static_cast<std::uint8_t>(
-            state.cp(cp::kMatrixIndexA) & 0x3Fu);
-        std::uint8_t texmtx_idx[8]{};
-
-        if (desc.has_pn_matrix_index) {
-            pnmtx_idx = std::to_integer<std::uint8_t>(vsrc[off++]);
-        }
-        for (unsigned ti = 0; ti < 8; ++ti) {
-            if (desc.has_tex_matrix_index[ti]) {
-                texmtx_idx[ti] = std::to_integer<std::uint8_t>(vsrc[off++]);
-            }
-        }
-        out.mtx_indices[0] =
-            static_cast<std::uint32_t>(pnmtx_idx) |
-            (static_cast<std::uint32_t>(texmtx_idx[0]) << 8) |
-            (static_cast<std::uint32_t>(texmtx_idx[1]) << 16) |
-            (static_cast<std::uint32_t>(texmtx_idx[2]) << 24);
-        out.mtx_indices[1] =
-            static_cast<std::uint32_t>(texmtx_idx[3]) |
-            (static_cast<std::uint32_t>(texmtx_idx[4]) << 8) |
-            (static_cast<std::uint32_t>(texmtx_idx[5]) << 16) |
-            (static_cast<std::uint32_t>(texmtx_idx[6]) << 24);
-        out.mtx_indices[2] = static_cast<std::uint32_t>(texmtx_idx[7]);
-        out.mtx_indices[3] = 0u;
-
-        // --- Position ---------------------------------------------------------
-        if (desc.position.vcd == VcdType::Direct) {
-            const std::size_t sz = attr_direct_size_pos(desc.position);
-            decode_pos(vsrc + off, out, desc.position, desc.byte_dequant);
-            off += sz;
-        } else if (desc.position.vcd == VcdType::Index8 ||
-                   desc.position.vcd == VcdType::Index16)
-        {
-            std::uint32_t idx = 0;
-            if (desc.position.vcd == VcdType::Index8) {
-                idx = std::to_integer<std::uint8_t>(vsrc[off]);
-                off += 1;
-            } else {
-                idx = read_be_u16(vsrc + off);
-                off += 2;
-            }
-            // CP array attr index: position = 0 in CP array registers.
-            const std::uint32_t arr_base   = state.array_base(0u);
-            const std::uint32_t arr_stride = state.array_stride(0u);
-            const std::uint32_t addr = arr_base + idx * arr_stride;
-            const std::byte* ap = array_resolver.resolve(
-                0u,
-                addr,
-                static_cast<std::uint32_t>(attr_direct_size_pos(desc.position)),
-                fifo_error_offset);
-            decode_pos(ap, out, desc.position, desc.byte_dequant);
-        } else {
-            out.position[0] = 0.0f;
-            out.position[1] = 0.0f;
-            out.position[2] = 0.0f;
-        }
-
-        // --- Normal -----------------------------------------------------------
-        if (desc.normal.vcd == VcdType::Direct) {
-            const std::size_t sz = attr_direct_size_nrm(desc.normal);
-            if (normal_has_nbt(desc)) {
-                decode_nbt(vsrc + off, out, desc.normal);
-            } else {
-                decode_nrm(vsrc + off, out, desc.normal);
-                zero_vec3(out.tangent);
-                zero_vec3(out.binormal);
-            }
-            off += sz;
-        } else if (desc.normal.vcd == VcdType::Index8 ||
-                   desc.normal.vcd == VcdType::Index16)
-        {
-            // CP array attribute index for normal = 1.
-            const unsigned attr_idx = 1u;
-            const std::uint32_t arr_base   = state.array_base(attr_idx);
-            const std::uint32_t arr_stride = state.array_stride(attr_idx);
-
-            if (!normal_uses_three_indices(desc)) {
-                std::uint32_t idx = 0;
-                if (desc.normal.vcd == VcdType::Index8) {
-                    idx = std::to_integer<std::uint8_t>(vsrc[off]);
-                    off += 1;
-                } else {
-                    idx = read_be_u16(vsrc + off);
-                    off += 2;
-                }
-                const std::size_t elem_sz = normal_elem_size(desc.normal);
-                const std::size_t read_sz =
-                    normal_has_nbt(desc) ? elem_sz * 3u : elem_sz;
-                const std::uint32_t addr = arr_base + idx * arr_stride;
-                const std::byte* ap = array_resolver.resolve(
-                    attr_idx,
-                    addr,
-                    static_cast<std::uint32_t>(read_sz),
-                    fifo_error_offset);
-                if (normal_has_nbt(desc)) {
-                    decode_nbt(ap, out, desc.normal);
-                } else {
-                    decode_nrm(ap, out, desc.normal);
-                    zero_vec3(out.tangent);
-                    zero_vec3(out.binormal);
-                }
-            } else {
-                const std::size_t idx_bytes =
-                    (desc.normal.vcd == VcdType::Index8) ? 1u : 2u;
-                std::uint32_t idx[3]{};
-                for (unsigned ni = 0; ni < 3; ++ni) {
-                    if (desc.normal.vcd == VcdType::Index8) {
-                        idx[ni] = std::to_integer<std::uint8_t>(
-                            vsrc[off + ni]);
-                    } else {
-                        idx[ni] = read_be_u16(vsrc + off + ni * idx_bytes);
-                    }
-                }
-                off += idx_bytes * 3u;
-
-                const std::size_t elem_sz = normal_elem_size(desc.normal);
-                const std::byte* n = array_resolver.resolve(
-                    attr_idx,
-                    arr_base + idx[0] * arr_stride,
-                    static_cast<std::uint32_t>(elem_sz),
-                    fifo_error_offset);
-                const std::byte* t = array_resolver.resolve(
-                    attr_idx,
-                    arr_base + idx[1] * arr_stride + static_cast<std::uint32_t>(elem_sz),
-                    static_cast<std::uint32_t>(elem_sz),
-                    fifo_error_offset);
-                const std::byte* b = array_resolver.resolve(
-                    attr_idx,
-                    arr_base + idx[2] * arr_stride + static_cast<std::uint32_t>(elem_sz * 2u),
-                    static_cast<std::uint32_t>(elem_sz),
-                    fifo_error_offset);
-                decode_nrm(n, out, desc.normal);
-                decode_tangent(t, out, desc.normal);
-                decode_binormal(b, out, desc.normal);
-            }
-        } else {
-            zero_vec3(out.normal);
-            zero_vec3(out.tangent);
-            zero_vec3(out.binormal);
-        }
-
-        // --- Color0, Color1 ---------------------------------------------------
-        // CP array attribute indices: color0 = 2, color1 = 3.
-        for (unsigned ci = 0; ci < 2; ++ci) {
-            const VertexAttribute& ca = desc.color[ci];
-            std::uint32_t& cdst = (ci == 0) ? out.color0 : out.color1;
-            const unsigned attr_idx = 2u + ci;
-
-            if (ca.vcd == VcdType::Direct) {
-                const std::size_t sz = color_byte_size(ca.format);
-                cdst = decode_color(
-                    vsrc + off,
-                    static_cast<ColorComponentFormat>(ca.format));
-                off += sz;
-            } else if (ca.vcd == VcdType::Index8 || ca.vcd == VcdType::Index16) {
-                std::uint32_t idx = 0;
-                if (ca.vcd == VcdType::Index8) {
-                    idx = std::to_integer<std::uint8_t>(vsrc[off]);
-                    off += 1;
-                } else {
-                    idx = read_be_u16(vsrc + off);
-                    off += 2;
-                }
-                const std::uint32_t arr_base   = state.array_base(attr_idx);
-                const std::uint32_t arr_stride = state.array_stride(attr_idx);
-                const std::uint32_t addr = arr_base + idx * arr_stride;
-                const std::byte* ap = array_resolver.resolve(
-                    attr_idx,
-                    addr,
-                    static_cast<std::uint32_t>(color_byte_size(ca.format)),
-                    fifo_error_offset);
-                cdst = decode_color(
-                    ap, static_cast<ColorComponentFormat>(ca.format));
-            } else {
-                cdst = 0u;
-            }
-        }
-
-        // --- Texcoords 0-7 ----------------------------------------------------
-        // CP array attribute indices: texcoord0-7 = 4-11.
-        for (unsigned ti = 0; ti < 8; ++ti) {
-            const VertexAttribute& ta = desc.texcoord[ti];
-            float* uv = out.uv[ti];
-            const unsigned attr_idx = 4u + ti;
-
-            if (ta.vcd == VcdType::Direct) {
-                const std::size_t sz = attr_direct_size_tex(ta);
-                decode_tex(vsrc + off, uv, ta, desc.byte_dequant);
-                off += sz;
-            } else if (ta.vcd == VcdType::Index8 || ta.vcd == VcdType::Index16) {
-                std::uint32_t idx = 0;
-                if (ta.vcd == VcdType::Index8) {
-                    idx = std::to_integer<std::uint8_t>(vsrc[off]);
-                    off += 1;
-                } else {
-                    idx = read_be_u16(vsrc + off);
-                    off += 2;
-                }
-                const std::uint32_t arr_base   = state.array_base(attr_idx);
-                const std::uint32_t arr_stride = state.array_stride(attr_idx);
-                const std::uint32_t addr = arr_base + idx * arr_stride;
-                const std::size_t elem_sz = attr_direct_size_tex(ta);
-                const std::byte* ap = array_resolver.resolve(
-                    attr_idx,
-                    addr,
-                    static_cast<std::uint32_t>(elem_sz),
-                    fifo_error_offset);
-                decode_tex(ap, uv, ta, desc.byte_dequant);
-            } else {
-                uv[0] = 0.0f;
-                uv[1] = 0.0f;
-            }
-        }
-    }  // end vertex loop
+    const PreparedVertexInputs inputs = prepare_vertex_inputs(desc, state);
+    decode_vertex_stream(
+        raw_ptr, vtx_count, src_stride, desc, inputs,
+        array_resolver, fifo_error_offset, verts);
 
     // ---------------------------------------------------------------------------
     // Build index list.
@@ -1640,6 +1462,7 @@ VertexLoader::decode_cached_packet_run_vertices_with_layout(
 
     IndexedArrayResolver array_resolver(
         memory, &decoded.guest_array_reads, dependency_event_sink_);
+    const PreparedVertexInputs inputs = prepare_vertex_inputs(desc, state);
     std::uint32_t dst_vertex = 0;
     for (const CachedDrawPacket& packet : packets) {
         if (packet.vertex_count == 0u) {
@@ -1652,7 +1475,7 @@ VertexLoader::decode_cached_packet_run_vertices_with_layout(
             packet.vertex_count,
             src_stride,
             desc,
-            state,
+            inputs,
             array_resolver,
             base_offset + packet.local_opcode_offset,
             decoded.vertices.data() + dst_vertex);
