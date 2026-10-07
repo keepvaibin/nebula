@@ -1524,6 +1524,44 @@ bool test_single_precision_operand_proof() {
     return passed;
 }
 
+bool arithmetic_shift_matches_floor_division() {
+    const auto matches = [](std::uint32_t value, std::uint32_t shift) {
+        // Independent mathematical oracle: interpret guest two's-complement
+        // bits in 64 bits, then divide with explicit floor rounding. Do not
+        // use a signed right shift or sign-extension masks in the oracle.
+        const std::int64_t signed_value = static_cast<std::int64_t>(value) -
+            ((value & 0x80000000u) != 0u ? (INT64_C(1) << 32u) : 0);
+        const std::int64_t divisor = INT64_C(1) << shift;
+        const std::int64_t expected = signed_value >= 0
+            ? signed_value / divisor
+            : (signed_value - (divisor - 1)) / divisor;
+        return galaxy::arithmetic_shift_right(value, shift) ==
+            static_cast<std::uint32_t>(expected);
+    };
+    for (std::uint32_t shift = 0u; shift < 32u; ++shift) {
+        for (std::uint32_t bit = 0u; bit < 32u; ++bit) {
+            if (!matches(1u << bit, shift) || !matches(~(1u << bit), shift)) {
+                return expect(false, "arithmetic shift bit-basis differs from floor division");
+            }
+        }
+        for (std::uint32_t value : {0u, 1u, 2u, 3u, 0x7fffffffu,
+            0x80000000u, 0x80000001u, 0x80000002u, 0x89abcdefu,
+            0xfffffffeu, 0xffffffffu}) {
+            if (!matches(value, shift)) {
+                return expect(false, "arithmetic shift boundary differs from floor division");
+            }
+        }
+        std::uint32_t random = 0x1234abcdu;
+        for (unsigned sample = 0u; sample < 4096u; ++sample) {
+            random = random * 1664525u + 1013904223u;
+            if (!matches(random, shift)) {
+                return expect(false, "arithmetic shift word differs from floor division");
+            }
+        }
+    }
+    return true;
+}
+
 }  // namespace
 
 int main() {
@@ -3570,6 +3608,7 @@ int main() {
                      "positive arithmetic right shift");
     passed &= expect(galaxy::arithmetic_shift_right(0x81234567u, 0) == 0x81234567u,
                      "zero arithmetic right shift");
+    passed &= arithmetic_shift_matches_floor_division();
 
     galaxy::PpcContext cache_context{};
     cache_context.gpr[3] = 0x80000003u;

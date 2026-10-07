@@ -9984,13 +9984,10 @@ inline bool xer_ca(const PpcContext* context) {
 }
 
 inline std::uint32_t arithmetic_shift_right(std::uint32_t value, std::uint32_t shift) {
-    if (shift == 0) {
-        return value;
-    }
-    const std::uint32_t shifted = value >> shift;
-    return (value & 0x80000000u) != 0
-               ? shifted | (0xFFFFFFFFu << (32u - shift))
-               : shifted;
+    // shift is in [0,31]: sraw handles larger counts before calling, and
+    // srawi carries a five-bit immediate. C++20 signed right shift performs
+    // the required sign extension and rounds negative values downward.
+    return static_cast<std::uint32_t>(std::bit_cast<std::int32_t>(value) >> shift);
 }
 
 // divw edge-case behavior on Broadway/Gekko with OE=0 (overflow exceptions
