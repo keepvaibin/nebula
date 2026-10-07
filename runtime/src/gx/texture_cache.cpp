@@ -290,7 +290,9 @@ static const std::byte* resolve_guest_tex(
     return get_render_config().enhanced_mipmaps;
 }
 
-static void generate_rgba8_mip_level(
+}  // namespace
+
+void detail::generate_rgba8_mip_level(
     const std::vector<RGBA8>& source,
     std::uint32_t source_width,
     std::uint32_t source_height,
@@ -304,6 +306,28 @@ static void generate_rgba8_mip_level(
         for (std::uint32_t x = 0; x < dest_width; ++x) {
             const std::uint32_t src_x = x * 2u;
             const std::uint32_t src_y = y * 2u;
+            if (src_x + 1u < source_width && src_y + 1u < source_height) {
+                const std::size_t top = static_cast<std::size_t>(src_y) * source_width + src_x;
+                const RGBA8& p0 = source[top];
+                const RGBA8& p1 = source[top + 1u];
+                const RGBA8& p2 = source[top + source_width];
+                const RGBA8& p3 = source[top + source_width + 1u];
+                if (((p0.a ^ p1.a) | (p0.a ^ p2.a) | (p0.a ^ p3.a)) == 0u) {
+                    // For equal nonzero alpha, it cancels exactly from
+                    // (alpha * sum + 2 * alpha) / (4 * alpha). Keep the
+                    // original zero RGB for fully transparent input.
+                    RGBA8 pixel{};
+                    if (p0.a != 0u) {
+                        pixel = {
+                            static_cast<std::uint8_t>((p0.r + p1.r + p2.r + p3.r + 2u) >> 2u),
+                            static_cast<std::uint8_t>((p0.g + p1.g + p2.g + p3.g + 2u) >> 2u),
+                            static_cast<std::uint8_t>((p0.b + p1.b + p2.b + p3.b + 2u) >> 2u),
+                            p0.a};
+                    }
+                    dest[static_cast<std::size_t>(y) * dest_width + x] = pixel;
+                    continue;
+                }
+            }
             std::uint32_t premul_r = 0;
             std::uint32_t premul_g = 0;
             std::uint32_t premul_b = 0;
@@ -346,6 +370,8 @@ static void generate_rgba8_mip_level(
         }
     }
 }
+
+namespace {
 
 [[nodiscard]] static RGBA8 decode_tlut_entry(
     const std::uint8_t* entry,
@@ -1944,7 +1970,7 @@ TextureHandle TextureCache::get(
                 std::max<std::uint32_t>(1u, h >> (l - 1u));
             const std::uint32_t dst_w = std::max<std::uint32_t>(1u, w >> l);
             const std::uint32_t dst_h = std::max<std::uint32_t>(1u, h >> l);
-            generate_rgba8_mip_level(
+            detail::generate_rgba8_mip_level(
                 level_pixels[l - 1u],
                 src_w,
                 src_h,
