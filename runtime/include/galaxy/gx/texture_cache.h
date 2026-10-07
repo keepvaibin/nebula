@@ -53,6 +53,11 @@ struct RGBA8 {
 };
 
 namespace detail {
+// I4/I8/IA4/IA8 only. Caller validates the entire block-rounded source;
+// clipped rows still advance over each complete 32-byte tile.
+void decode_intensity_tiles(TexFormat format, const std::uint8_t* src,
+                            std::uint32_t width, std::uint32_t height,
+                            RGBA8* out);
 // Native enhancement only: preserve the premultiplied-alpha box filter and
 // rounding of every output byte. Source and destination storage are distinct.
 void generate_rgba8_mip_level(const std::vector<RGBA8>& source,

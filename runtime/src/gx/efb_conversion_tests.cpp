@@ -79,6 +79,96 @@ bool expect_pixel(Pixel actual, Pixel expected, const char* message) {
     return false;
 }
 
+bool test_intensity_tile_decode() {
+    using galaxy::gx::RGBA8;
+    using galaxy::gx::TexFormat;
+    constexpr std::array<std::uint32_t, 12> dimensions{
+        1u, 2u, 3u, 4u, 5u, 7u, 8u, 9u, 13u, 16u, 31u, 32u};
+    constexpr RGBA8 guard{0xD3u, 0x62u, 0xA5u, 0x18u};
+    const auto same = [](RGBA8 a, RGBA8 b) {
+        return a.r == b.r && a.g == b.g && a.b == b.b && a.a == b.a;
+    };
+    const auto check = [&](TexFormat format, std::uint32_t width,
+                           std::uint32_t height, std::uint32_t prefix) {
+        const std::uint32_t tile_width = format == TexFormat::IA8 ? 4u : 8u;
+        const std::uint32_t tile_height = format == TexFormat::I4 ? 8u : 4u;
+        const auto blocks_x = (width + tile_width - 1u) / tile_width;
+        const auto blocks_y = (height + tile_height - 1u) / tile_height;
+        const auto byte_count = blocks_x * blocks_y * 32u;
+        std::vector<std::uint8_t> source(byte_count + prefix, 0xEDu);
+        for (std::uint32_t i = 0; i < byte_count; ++i) {
+            if (format == TexFormat::IA8) {
+                // 256x256 covers all 65,536 (A,I) pairs, not just matching
+                // or correlated channels. Smaller cases retain tile variation.
+                const auto word = i / 2u;
+                source[prefix + i] = static_cast<std::uint8_t>(
+                    (i & 1u) == 0u ? word >> 8u : word);
+            } else {
+                // Odd stride traverses every possible byte value.
+                source[prefix + i] = static_cast<std::uint8_t>(i * 73u + 91u);
+            }
+        }
+        std::vector<RGBA8> output(width * height + 2u, guard);
+        galaxy::gx::detail::decode_intensity_tiles(
+            format, source.data() + prefix, width, height, output.data() + 1u);
+        if (!expect(same(output.front(), guard) && same(output.back(), guard),
+                    "intensity edge tiles stay inside output")) {
+            return false;
+        }
+        for (std::uint32_t y = 0; y < height; ++y) {
+            for (std::uint32_t x = 0; x < width; ++x) {
+                // Independent global-pixel address oracle includes padding
+                // in every tile; it does not traverse the decoder's row loops.
+                const auto tile = (y / tile_height) * blocks_x + x / tile_width;
+                const auto pixel = (y % tile_height) * tile_width + x % tile_width;
+                const auto offset = prefix + tile * 32u;
+                std::uint8_t intensity = 0u;
+                std::uint8_t alpha = 0u;
+                if (format == TexFormat::I4) {
+                    const auto byte = source[offset + pixel / 2u];
+                    const auto nibble = static_cast<std::uint8_t>(
+                        ((pixel & 1u) == 0u ? byte >> 4u : byte) & 15u);
+                    intensity = static_cast<std::uint8_t>((nibble << 4u) | nibble);
+                    alpha = intensity;
+                } else if (format == TexFormat::I8) {
+                    intensity = alpha = source[offset + pixel];
+                } else if (format == TexFormat::IA4) {
+                    const auto byte = source[offset + pixel];
+                    const auto i = static_cast<std::uint8_t>(byte & 15u);
+                    const auto a = static_cast<std::uint8_t>(byte >> 4u);
+                    intensity = static_cast<std::uint8_t>((i << 4u) | i);
+                    alpha = static_cast<std::uint8_t>((a << 4u) | a);
+                } else {
+                    alpha = source[offset + pixel * 2u];
+                    intensity = source[offset + pixel * 2u + 1u];
+                }
+                if (!expect(same(output[1u + y * width + x],
+                                 RGBA8{intensity, intensity, intensity, alpha}),
+                            "intensity tiled bytes, channel order and alpha match oracle")) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    };
+    for (const auto format : {TexFormat::I4, TexFormat::I8,
+                              TexFormat::IA4, TexFormat::IA8}) {
+        for (const auto width : dimensions) {
+            for (const auto height : dimensions) {
+                for (const auto prefix : {0u, 1u, 3u}) {
+                    if (!check(format, width, height, prefix)) {
+                        return false;
+                    }
+                }
+            }
+        }
+        galaxy::gx::detail::decode_intensity_tiles(format, nullptr, 0u, 0u, nullptr);
+        galaxy::gx::detail::decode_intensity_tiles(format, nullptr, 0u, 8u, nullptr);
+        galaxy::gx::detail::decode_intensity_tiles(format, nullptr, 8u, 0u, nullptr);
+    }
+    return check(TexFormat::IA8, 256u, 256u, 1u);
+}
+
 bool test_rgba8_tile_decode() {
     using galaxy::gx::RGBA8;
     constexpr std::array<std::uint32_t, 12> dimensions{
@@ -2014,6 +2104,7 @@ bool test_warp_against_oracle() {
 
 int main() {
     bool passed = test_cpu_oracle();
+    passed &= test_intensity_tile_decode();
     passed &= test_rgba8_tile_decode();
     passed &= test_generated_mip_uniform_alpha();
     passed &= test_cmpr_tile_decode();
