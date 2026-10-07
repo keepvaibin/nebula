@@ -36,7 +36,9 @@ struct TestSink final : FifoSink {
         std::uint8_t,
         FifoCursor& cursor) override {
         const std::uint16_t count = cursor.read_u16();
-        (void)cursor.take(count);
+        const auto payload = cursor.take(count);
+        last_draw_payload_first = payload.empty()
+            ? 0u : static_cast<std::uint8_t>(payload.front());
         ++draws;
     }
 
@@ -134,6 +136,7 @@ struct TestSink final : FifoSink {
     void on_invalidate_vertex_cache() override {}
 
     int draws = 0;
+    std::uint8_t last_draw_payload_first = 0u;
     bool enable_cached_draw_runs = false;
     int cached_draw_run_begins = 0;
     int cached_draw_run_ends = 0;
@@ -170,6 +173,64 @@ bool expect(bool condition, const char* message) {
         std::cerr << "FAIL: " << message << '\n';
     }
     return condition;
+}
+
+bool test_display_list_variant_lookup_invalidation() {
+    for (const unsigned variants : {2u, 8u, 9u}) {
+        std::array<std::byte, 64> bytes{};
+        bytes[0] = std::byte{0x90};
+        bytes[2] = std::byte{0x01};
+        bytes[3] = std::byte{0xA5};
+        galaxy::GuestMemoryV1 memory{};
+        memory.fast_regions[8].host_base = bytes.data();
+        memory.fast_regions[8].size = static_cast<std::uint32_t>(bytes.size());
+        FifoParserProfile profile{};
+        FifoParser parser;
+        parser.set_profile(&profile);
+        GxState state;
+        TestSink sink;
+        const std::array<std::byte, 9> call{
+            std::byte{0x40}, std::byte{0x80}, std::byte{0}, std::byte{0}, std::byte{0},
+            std::byte{0}, std::byte{0}, std::byte{0}, std::byte{16}};
+        auto other = call;
+        other[4] = std::byte{32};  // A different all-NOP list.
+        const auto run = [&](const auto& command) {
+            return parser.run_available(command, &memory, sink, state) == command.size();
+        };
+        for (unsigned i = 0; i < variants; ++i) {
+            state.load_cp(galaxy::gx::cp::kVatABase, i + 1u);
+            if (!run(call)) return false;
+        }
+        if (!expect(profile.call_dl_cache_stores == variants && profile.call_dl_cache_hits == 0u,
+                    "distinct VAT dependencies retain display-list variants")) return false;
+        if (!run(other)) return false;
+        for (unsigned i = 0; i < variants; ++i) {
+            state.load_cp(galaxy::gx::cp::kVatABase, i + 1u);
+            // Force the keyed candidate path rather than the last-list shortcut.
+            if (!run(other) || !run(call)) return false;
+            if (!expect(sink.last_draw_payload_first == 0xA5u &&
+                    profile.call_dl_cache_stores == variants + 1u &&
+                    profile.call_dl_cache_hits == (i + 1u) * 2u,
+                    "small/large candidate snapshots select the matching cached variant")) return false;
+        }
+        if (!run(other)) return false;
+        const auto hits_before_change = profile.call_dl_cache_hits;
+        bytes[3] = std::byte{0xD3};
+        if (!run(call)) return false;
+        if (!expect(sink.last_draw_payload_first == 0xD3u &&
+                profile.call_dl_cache_hits == hits_before_change &&
+                profile.call_dl_cache_stores == variants + 2u &&
+                sink.draws == static_cast<int>(variants * 2u + 1u),
+                "changed list bytes invalidate every variant safely during candidate traversal")) return false;
+        // Reinstating old bytes cannot resurrect a variant invalidated above.
+        bytes[3] = std::byte{0xA5};
+        if (!run(call)) return false;
+        if (!expect(sink.last_draw_payload_first == 0xA5u &&
+                profile.call_dl_cache_hits == hits_before_change &&
+                profile.call_dl_cache_stores == variants + 3u,
+                "last-list changed-byte check preserves invalidation on restored bytes")) return false;
+    }
+    return true;
 }
 
 bool test_xf_matrix_span_updates() {
@@ -372,6 +433,7 @@ void test_dependency_hash_cache() {
 }
 
 int main() try {
+    if (!test_display_list_variant_lookup_invalidation()) return 1;
     if (!test_xf_matrix_span_updates()) return 1;
     test_dependency_hash_cache();
     static_assert(galaxy::gx::bp::kBpMask == 0xFEu);
@@ -468,8 +530,10 @@ int main() try {
     {
         GxState channel_state;
         channel_state.load_bp(1u << 4u);  // BP 0x00: one color channel.
+        // Lit channel parts keep their complete control word; unlit parts
+        // keep only the material source (see build_vertex_shader_key).
         const std::uint32_t controls[4]{
-            0x00000111u, 0x00000222u, 0x00000333u, 0x00000444u};
+            0x00000113u, 0x00000222u, 0x00000333u, 0x00000444u};
         channel_state.load_xf(
             galaxy::gx::xf::kChannelCtrlBase, controls, 4u);
         const galaxy::gx::VertexShaderKey key =
