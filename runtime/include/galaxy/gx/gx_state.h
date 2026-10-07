@@ -175,6 +175,10 @@ public:
     void mark_all_dirty() { dirty_ = ~0u; }
 
 private:
+    // Both public XF mutators validate the entire transfer before this shared
+    // write/dirty pass. Keep unchecked application inaccessible to callers.
+    void apply_validated_xf(std::uint16_t base, const std::uint32_t* values,
+        std::uint16_t count);
     std::array<std::uint32_t, 0x100> cp_{};
     std::array<std::uint32_t, 0x2000> xf_{};
     std::array<std::uint32_t, 0x100> bp_{};
