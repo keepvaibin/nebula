@@ -173,6 +173,11 @@ public:
     [[nodiscard]] ID3D12DescriptorHeap* srv_heap() const;
     [[nodiscard]] UINT srv_descriptor_stride() const noexcept { return srv_stride_; }
     [[nodiscard]] D3D12_CPU_DESCRIPTOR_HANDLE null_srv() const noexcept { return null_srv_; }
+    // Render-thread-only lifetime epoch. Raw handles remain valid for this
+    // frame, but cross-frame handle caches must drop them after retirement.
+    [[nodiscard]] std::uint64_t retirement_revision() const noexcept {
+        return retirement_revision_;
+    }
 
     // Command list new-texture uploads are recorded on (CopyTextureRegion +
     // barrier to PIXEL_SHADER_RESOURCE).  Set by GxBackend each frame before
@@ -313,6 +318,8 @@ private:
     ID3D12GraphicsCommandList* upload_list_ = nullptr;
     std::uint32_t next_srv_index_ = 0;
     std::vector<std::uint32_t> free_srv_indices_;
+    // Kept monotonic across shutdown/reinitialization, like resource lifetimes.
+    std::uint64_t retirement_revision_ = 0;
 
     // Absolute TMEM address domain, including every encoded TLUT slot and
     // maximum transfer/palette extent. Entries remain raw big endian.

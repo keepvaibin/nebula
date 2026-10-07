@@ -936,6 +936,7 @@ private:
         TextureHandle,
         TextureHandleKeyHash>
         texture_handle_cache_;
+    std::uint64_t seen_texture_retirement_revision_ = 0;
     std::unordered_map<
         TextureHandleKey,
         TextureHandle,

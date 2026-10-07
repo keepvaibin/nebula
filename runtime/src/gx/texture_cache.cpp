@@ -993,7 +993,16 @@ void TextureCache::begin_frame(
 
     // RendererD3D12::begin_frame has already waited for this slot's fence,
     // so every resource retired during this slot's previous use is GPU-idle.
-    retired_entries_[frame_slot].clear();
+    // Keep its CPU descriptor alive too: handles selected earlier in a frame
+    // can still be copied into a new table after another lookup evicts them.
+    auto& retired = retired_entries_[frame_slot];
+    // Reserve before publishing any slots, so allocation failure cannot leave
+    // a partially reclaimed list that would publish duplicate slots on retry.
+    free_srv_indices_.reserve(free_srv_indices_.size() + retired.size());
+    for (const Entry& entry : retired) {
+        free_srv_indices_.push_back(entry.handle.srv_index);
+    }
+    retired.clear();
     upload_arenas_[frame_slot].active_chunk = 0;
     upload_arenas_[frame_slot].cursor = 0;
     current_frame_slot_ = frame_slot;
@@ -1037,17 +1046,12 @@ void TextureCache::retire(Entry&& entry) {
         throw std::runtime_error(
             "[TextureCache] resource retired before begin_frame");
     }
-    // Both allocations must succeed before publishing this descriptor as free
-    // or transferring the resource out of its still-live cache entry.
+    // Allocate before transferring ownership; retain both the resource and its
+    // CPU descriptor until begin_frame has waited for this slot's fence.
     auto& retired = retired_entries_[current_frame_slot_];
     retired.emplace_back();
-    try {
-        free_srv_indices_.push_back(entry.handle.srv_index);
-    } catch (...) {
-        retired.pop_back();
-        throw;
-    }
     retired.back() = std::move(entry);
+    ++retirement_revision_;
 }
 
 void TextureCache::release_upload_arenas() {
@@ -1452,7 +1456,7 @@ void TextureCache::invalidate_all() {
     entries_.clear();
     decoded_guest_envelope_.clear();
     // EFB aliases are NOT cleared here — their content lives on the GPU.
-    // SRV slots for retired decoded textures are returned to the free list.
+    // Retired SRV slots return to the free list after their frame-slot fence.
 }
 
 // ---------------------------------------------------------------------------
