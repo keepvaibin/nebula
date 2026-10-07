@@ -694,6 +694,49 @@ public:
         return true;
     }
 
+    static bool dirty_drain_preserves_every_word_and_legacy_publication() {
+        auto backend = std::make_unique<GxBackend>();
+        GuestMemoryV1 memory{};
+        backend->install_guest_dirty_tracker(&memory);
+        constexpr std::uint32_t base = 0x10000000u;
+        const std::array<std::uint32_t, 3> addresses{
+            base, base + 7u * 2048u, base + 63u * 2048u};
+        std::vector<GxBackend::GuestWriteRange> ranges;
+        for (const auto alias : {0u, 0x80000000u, 0xC0000000u}) {
+            for (const bool fast : {false, true}) {
+                for (const auto address : addresses) {
+                    if (fast) guest_notify_write(&memory, address | alias, 1u);
+                    else backend->notify_guest_memory_write(address | alias, 1u);
+                }
+                backend->drain_guest_memory_writes(ranges);
+                if (ranges.size() != addresses.size()) return false;
+                for (std::size_t i = 0u; i < addresses.size(); ++i) {
+                    if (ranges[i].guest_addr != addresses[i] || ranges[i].size != 32u) return false;
+                }
+                backend->drain_guest_memory_writes(ranges);
+                if (!ranges.empty()) return false;
+                // One span crosses multiple 128KiB summary groups. Endpoints
+                // alone cannot advertise all of its intervening bitmap words.
+                if (fast) guest_notify_write(&memory, (base + 17u) | alias, 0x40023u);
+                else backend->notify_guest_memory_write((base + 17u) | alias, 0x40023u);
+                backend->drain_guest_memory_writes(ranges);
+                if (ranges.size() != 1u || ranges[0].guest_addr != base ||
+                    ranges[0].size != 0x40040u) return false;
+                backend->drain_guest_memory_writes(ranges);
+                if (!ranges.empty()) return false;
+            }
+        }
+        // Older translated modules know only the original page-word fields.
+        // They can publish directly without a summary or host callback. The
+        // runtime must keep their invalidations observable until every producer
+        // has explicitly negotiated the summarized-publication capability.
+        const auto page = (base - memory.dirty_tracked_base) >> memory.dirty_page_shift;
+        memory.dirty_page_words[page / 64u].fetch_or(
+            std::uint64_t{1} << (page % 64u), std::memory_order_relaxed);
+        backend->drain_guest_memory_writes(ranges);
+        return ranges.size() == 1u && ranges[0].guest_addr == base && ranges[0].size == 32u;
+    }
+
     static bool dependency_discovery_is_independent_and_tracks_dl_versions() {
         auto backend = std::make_unique<GxBackend>();
         constexpr std::uint32_t outer_addr = 0x2000u;
@@ -1516,6 +1559,9 @@ int main() {
     if (!expect(galaxy::gx::GxBackendMemorySnapshotTestAccess::
         dirty_writes_respect_efb_copy_boundaries(),
         "writes adjacent to a GX copy must not invalidate its GPU contents; overlapping writes must")) return 1;
+    if (!expect(galaxy::gx::GxBackendMemorySnapshotTestAccess::
+        dirty_drain_preserves_every_word_and_legacy_publication(),
+        "dirty drain must retain every same-group word, span interior and legacy publication")) return 1;
     if (!expect(galaxy::gx::GxBackendMemorySnapshotTestAccess::
         dependency_discovery_is_independent_and_tracks_dl_versions(),
         "dependency discovery must not wait for rendering and must track dirty nested DL versions")) return 1;
