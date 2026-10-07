@@ -1344,6 +1344,11 @@ struct RuntimeState {
     std::uint32_t home_button_rso_base{};
     bool trace_home_button_rso_state =
         read_env_flag("GALAXY_TRACE_HOME_BUTTON_RSO_STATE", false);
+    // Scene-allocation diagnosis only. The allocator remains translated;
+    // disabled runs retain its cached native-call path and do no heap reads.
+    bool trace_scene_solid_allocations =
+        read_env_flag("GALAXY_TRACE_SCENE_SOLID_ALLOCATIONS", false);
+    std::uint32_t scene_solid_allocation_records{};
     static constexpr std::size_t kHomeButtonRsoCheckpointCapacity = 128u;
     std::array<HomeButtonRsoCheckpointRecord, kHomeButtonRsoCheckpointCapacity>
         home_button_rso_checkpoint_records{};
@@ -14861,6 +14866,9 @@ bool call_intercept_diagnostics_enabled() {
 bool needs_call_guest_intercept(
     const RuntimeState& state,
     std::uint32_t guest_address) {
+    if (state.trace_scene_solid_allocations && guest_address == 0x8040B8F8u) {
+        return true;
+    }
     // These dynamically selected callbacks must retain their mouse transaction
     // after the generated indirect-call cache warms up.
     if ((state.native_mouse_pointer_frame && guest_address==0x80385AF0u) ||
@@ -21636,8 +21644,18 @@ void call_guest_impl_body(
                 state.native_mouse_field_wait_ns+=waited;
                 state.native_mouse_field_wait_max_ns=std::max(state.native_mouse_field_wait_max_ns,waited);
             }
+            // Native device servicing can change the input owner or resize
+            // the window while this exact depth field is awaited. Recheck
+            // those identities before consuming any pixel from it.
+            const auto store_mode = galaxy::get_runtime_input_mode_state();
+            const auto store_aspect_word = galaxy::experimental_dynamic_aspect_requested() ?
+                state.services->experimental_aspect_word(state.services->user) : 0u;
+            const bool store_owner_matches =
+                store_mode.mode == galaxy::RuntimeInputMode::KeyboardMouse &&
+                store_mode.generation == mouse_mode.generation &&
+                store_aspect_word == mouse_aspect_word;
             if (matches && frame->capture->error) std::rethrow_exception(frame->capture->error);
-            matches=matches && frame->capture->complete.load(std::memory_order_acquire) && frame->capture->success;
+            matches=matches && store_owner_matches && frame->capture->complete.load(std::memory_order_acquire) && frame->capture->success;
             const bool depth_complete=frame && frame->capture->complete.load(std::memory_order_acquire);
             const bool depth_success=depth_complete && frame->capture->success;
             const bool initial_identity_match=matches;
@@ -21653,7 +21671,7 @@ void call_guest_impl_body(
                     if(mem.read_u32(view+i*4u)!=frame->view_matrix[i]) {matches=false;view_mismatch=static_cast<int>(i);break;}
                 }
             }
-            const bool screen_only=state.native_mouse_pointer_frame && state.synthetic_kpad_fresh_mouse_pointer &&
+            const bool screen_only=store_owner_matches && state.native_mouse_pointer_frame && state.synthetic_kpad_fresh_mouse_pointer &&
                 selected.active && selected.origin==galaxy::host::SyntheticKpadPointerOrigin::PhysicalMouse &&
                 selected.mode_generation==mouse_mode.generation && native_mouse_file_select_mode(state,*context);
             unsigned screen_width=frame ? frame->screen_width : 0u;
@@ -21692,17 +21710,19 @@ void call_guest_impl_body(
                 }
                 ++state.native_mouse_queries;
             } else ++state.native_mouse_fallbacks;
+            const auto stored_ns=static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(
+                std::chrono::steady_clock::now().time_since_epoch()).count());
             if(state.monitor_mouse_latency) {
                 state.native_mouse_past_stamp=query ? galaxy::gx::PointerResponseStamp{
-                    state.synthetic_pointer_last_read_serial,mouse_mode.generation,state.native_mouse_select_ns,selected_ns,0u,
+                    state.synthetic_pointer_last_read_serial,mouse_mode.generation,state.native_mouse_select_ns,stored_ns,0u,
                     std::bit_cast<std::uint32_t>(query->screen_x),std::bit_cast<std::uint32_t>(query->screen_y),
                     state.native_mouse_acquisition_age_ms,state.native_mouse_acquisition_age_known} : state.native_mouse_info_stamp;
-                state.native_mouse_past_stamp.processed_ns=selected_ns;
+                state.native_mouse_past_stamp.processed_ns=stored_ns;
             }
             const auto elapsed=static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now().time_since_epoch()).count())-selected_ns;
             state.native_mouse_query_ns+=elapsed;
             state.native_mouse_query_max_ns=std::max(state.native_mouse_query_max_ns,elapsed);
-            const auto age=state.native_mouse_select_ns ? selected_ns-state.native_mouse_select_ns : 0u;
+            const auto age=state.native_mouse_select_ns && stored_ns>=state.native_mouse_select_ns ? stored_ns-state.native_mouse_select_ns : 0u;
             state.native_mouse_selected_to_store_ns+=age;
             state.native_mouse_selected_to_store_max_ns=std::max(state.native_mouse_selected_to_store_max_ns,age);
             if(trace_mouse_past) {
@@ -21712,7 +21732,7 @@ void call_guest_impl_body(
                 std::ostringstream row;
                 row<<"[mouse-pointer-frame] vi="<<state.vi_retrace_count<<" serial="<<state.synthetic_pointer_last_read_serial
                    <<" sample-host-ms="<<selected.acquired_ms<<" selection-to-store-us="<<age/1000.0
-                   <<" store-steady-ns="<<selected_ns<<" depth-generation="<<(frame?frame->generation:0u)
+                   <<" store-steady-ns="<<stored_ns<<" depth-generation="<<(frame?frame->generation:0u)
                    <<" repaired="<<bool(query)<<" identity-matched="<<matches<<" screen-only="<<screen_only
                    <<" depth-complete="<<depth_complete<<" depth-success="<<depth_success
                    <<" frame-valid="<<(frame && frame->valid)<<" initial-identity-match="<<initial_identity_match
@@ -22038,6 +22058,66 @@ void call_guest_impl_body(
                       << hexadecimal(context->lr) << '\n';
         }
     }
+    // JKRSolidHeap::do_alloc: observe entry before the translated allocator
+    // changes volatile registers. Only MEM2 solid heaps reaching the recorded
+    // scene arena end, at most 512 records per
+    // run, and never enabled by routine monitoring. The exp-heap diagnostic
+    // above cannot describe this bump allocator's scene allocation ledger.
+    if (guest_address == 0x8040B8F8u && state.trace_scene_solid_allocations &&
+        state.scene_solid_allocation_records < 512u &&
+        state.address_space != nullptr) {
+        const auto& space = *state.address_space;
+        const std::uint32_t heap = context->gpr[3];
+        if (heap >= 0x90000000u && heap < 0x94000000u &&
+            mapped_guest_range(&space, heap, 0x80u) &&
+            space.read_u32(heap + 0x34u) ==
+                space.read_u32(0x80003120u) - 0x20000u) {
+            ++state.scene_solid_allocation_records;
+            const std::uint32_t video = space.read_u32(0x806A2850u);
+            const std::uint32_t mode = mapped_guest_range(&space, video, 8u)
+                ? space.read_u32(video + 4u) : 0u;
+            const bool mode_valid = mapped_guest_range(&space, mode, 12u);
+            const auto mode_halfword = [&](std::uint32_t offset) {
+                return mode_valid
+                    ? ((space.read_u32(mode + (offset & ~3u)) >>
+                        ((offset & 2u) == 0u ? 16u : 0u)) & 0xFFFFu)
+                    : 0u;
+            };
+            std::cout << "[scene-solid-alloc] record="
+                      << state.scene_solid_allocation_records
+                      << " vi=" << state.vi_retrace_count
+                      << " heap=" << hexadecimal(heap)
+                      << " size=" << context->gpr[4]
+                      << " align=" << static_cast<std::int32_t>(context->gpr[5])
+                      << " lr=" << hexadecimal(context->lr)
+                      << " start=" << hexadecimal(space.read_u32(heap + 0x30u))
+                      << " capacity=" << space.read_u32(heap + 0x38u)
+                      << " free=" << space.read_u32(heap + 0x6Cu)
+                      << " head=" << hexadecimal(space.read_u32(heap + 0x70u))
+                      << " tail=" << hexadecimal(space.read_u32(heap + 0x74u))
+                      << " video=" << hexadecimal(video)
+                      << " mode=" << hexadecimal(mode)
+                      << " fb-width=" << mode_halfword(4u)
+                      << " efb-height=" << mode_halfword(6u)
+                      << " xfb-height=" << mode_halfword(8u)
+                      << " home-base=" << hexadecimal(state.home_button_rso_base)
+                      << " stack:";
+            // ABI back-chain frames are observations, not an inferred caller.
+            // Validate each mapped frame and a strictly increasing MEM1 chain.
+            std::uint32_t stack = context->gpr[1];
+            for (unsigned depth = 0u; depth < 8u; ++depth) {
+                if ((stack & 3u) != 0u || stack < 0x80000000u ||
+                    stack >= 0x81800000u ||
+                    !mapped_guest_range(&space, stack, 8u)) break;
+                std::cout << ' ' << hexadecimal(stack) << ':'
+                          << hexadecimal(space.read_u32(stack + 4u));
+                const std::uint32_t next = space.read_u32(stack);
+                if (next <= stack) break;
+                stack = next;
+            }
+            std::cout << '\n';
+        }
+    }
     // HeapMemoryWatcher::memoryErrorCallback (0x8039EF50): a JKR heap alloc
     // failed.  Log which heap and how big before the guest panics.
     if (guest_address == 0x8039EF50u) {
@@ -22069,6 +22149,7 @@ void call_guest_impl_body(
                   << hexadecimal(state.address_space != nullptr
                          ? state.address_space->read_u32(0x800000E4u)
                          : 0u)
+                  << " home-base=" << hexadecimal(state.home_button_rso_base)
                   << '\n';
         std::cout << "[heap-oom] recent-calls:";
         state.print_recent_reverse(std::cout, 32);
@@ -23326,7 +23407,12 @@ void call_guest_impl_body(
             }
             return;
         }
-        if (context->gpr[1] < 0x80000000u || context->gpr[1] >= 0x93400000u) {
+        // Validate the translated prologue's frame, not a legacy IOS end.
+        // IOS33 can allocate stacks above93400000. The32-byte frame plus
+        // saved LR at incoming r1+4 must all belong to mapped cached RAM.
+        if (context->gpr[1] < 0x80000020u ||
+            !mapped_guest_range(*state.address_space,
+                                context->gpr[1] - 0x20u, 0x28u)) {
             throw RuntimeFailure(
                 "OSWakeupThread non-empty queue reached with unsupported stack "
                 "r1=" + hexadecimal(context->gpr[1]) +
@@ -25145,7 +25231,8 @@ void branch_checkpoint_body(
     if (trace_save_ipc() && guest_pc == 0x804AC164u &&
         state.address_space != nullptr && context != nullptr) {
         const std::uint32_t queue = context->gpr[30];
-        if (queue >= 0x933E0000u && queue < 0x93400000u) {
+        if (queue >= state.address_space->read_u32(0x80003130u) &&
+            queue < state.address_space->read_u32(0x80003134u)) {
             const std::uint32_t wake_thread = context->gpr[8];
             std::cout << "[save-ipc] oswakeup-loop"
                       << " vi=" << state.vi_retrace_count

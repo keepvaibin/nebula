@@ -207,12 +207,7 @@ function Get-ThreadSampleRows {
             # the column name claims; no scaling. Verified on this host:
             # TotalProcessorTime 00:00:00.0781250 reports Ticks = 7812500.
             $cpu = $t.TotalProcessorTime.Ticks
-            $threadState = $t.ThreadState
-            # WaitReason throws for a running thread. Keep its CPU sample rather
-            # than losing precisely the threads doing active work.
-            $waitReason = if ($threadState -eq [Diagnostics.ThreadState]::Wait) { $t.WaitReason } else { '' }
-            $elapsedText = $Elapsed.ToString('F3', [Globalization.CultureInfo]::InvariantCulture)
-            $rows.Add(('{0},{1},{2},{3},{4},{5}' -f $elapsedText, $t.Id, $cpu, $threadState, $waitReason, $t.PriorityLevel))
+            $rows.Add(('{0:N3},{1},{2},{3},{4},{5}' -f $Elapsed, $t.Id, $cpu, $t.ThreadState, $t.WaitReason, $t.PriorityLevel))
         } catch {
             # A thread can exit between enumeration and the property read.
         }
@@ -252,7 +247,7 @@ while (-not $p.WaitForExit(1000)) {
     try {
         $cpuNow = Get-CimInstance -ClassName Win32_Processor -ErrorAction Stop | Select-Object -First 1
         $clockRows.Add(('{0},{1},{2},{3}' -f `
-            (([DateTime]::UtcNow - $clockSampleStart).TotalSeconds.ToString('F1', [Globalization.CultureInfo]::InvariantCulture)), `
+            [Math]::Round(([DateTime]::UtcNow - $clockSampleStart).TotalSeconds, 1), `
             $cpuNow.CurrentClockSpeed, $cpuNow.MaxClockSpeed, $cpuNow.LoadPercentage))
     } catch {
         $clockSampleErrors++

@@ -14716,18 +14716,23 @@ int main() {
         memory.read_u32(0x8000311C) == galaxy::host::GuestAddressSpace::kMem2Size,
         "IOS reports the retail MEM2 size");
     passed &= expect(
-        memory.read_u32(0x80003120) == 0x93400000,
-        "IOS reserves the upper MEM2 range");
+        memory.read_u32(0x80003120) == 0x93600000,
+        "IOS33 reports its retail MEM2 end, not the pre-IOS28 legacy end");
     passed &= expect(
         memory.read_u32(0x80003124) == 0x90000800,
         "MEM2 arena starts after the low-memory vectors");
     passed &= expect(
-        memory.read_u32(0x80003128) == 0x933E0000,
-        "MEM2 arena ends before the IOS IPC buffer");
+        memory.read_u32(0x80003128) == 0x935E0000,
+        "IOS33 MEM2 arena ends before IPC and retains the missing two MiB");
     passed &= expect(
-        memory.read_u32(0x80003130) == 0x933E0000 &&
-            memory.read_u32(0x80003134) == 0x93400000,
-        "IOS IPC buffer range is initialized");
+        memory.read_u32(0x80003130) == 0x935E0000 &&
+            memory.read_u32(0x80003134) == 0x93600000,
+        "IOS33 initializes the retail 128 KiB IPC range");
+    passed &= expect(
+        memory.read_u32(0x80003118) == 0x04000000u &&
+            memory.read_u32(0x80003120) - memory.read_u32(0x80003128) == 0x20000u &&
+            memory.read_u32(0x80003128) - 0x933E0000u == 0x200000u,
+        "IOS33 corrects arena ownership without increasing physical MEM2 or IPC size");
 
     {
         constexpr std::uint32_t kBoundaryArBackingBaseGlobal = 0x806A2C54u;

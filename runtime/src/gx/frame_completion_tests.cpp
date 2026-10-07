@@ -656,13 +656,21 @@ bool reset_and_drain_audit_reject_pending_or_unconsumed() {
 
 bool cooperative_wait_policy_is_bounded_and_exact() {
     const auto first = frame_pe_cooperative_wait_step(0u);
-    const auto last = frame_pe_cooperative_wait_step(1'999u);
-    const auto expired = frame_pe_cooperative_wait_step(2'000u);
+    const auto first_use_scene = frame_pe_cooperative_wait_step(4'182u);
+    const auto last = frame_pe_cooperative_wait_step(
+        galaxy::gx::kFramePeCooperativeWaitTimeoutMs - 1u);
+    const auto expired = frame_pe_cooperative_wait_step(
+        galaxy::gx::kFramePeCooperativeWaitTimeoutMs);
     const auto clipped = frame_pe_cooperative_wait_step(8u, 10u, 4u);
     return expect(first.wait_ms == 1u && !first.timed_out,
                   "cooperative wait starts with one bounded slice") &&
         expect(last.wait_ms == 1u && !last.timed_out,
                "last in-budget millisecond remains serviceable") &&
+        expect(first_use_scene.wait_ms == 1u && !first_use_scene.timed_out,
+               "recorded 4.182-second first-use scene remains serviceable") &&
+        expect(galaxy::gx::kFramePeCooperativeWaitTimeoutMs ==
+                   galaxy::gx::kFramePeCompletionTimeoutMs,
+               "runtime and backend allow the same absolute completion budget") &&
         expect(expired.wait_ms == 0u && expired.timed_out,
                "cooperative wait hard-fails at its exact budget") &&
         expect(clipped.wait_ms == 2u && !clipped.timed_out,

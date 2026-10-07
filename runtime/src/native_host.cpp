@@ -30689,10 +30689,15 @@ void load_boot_image(
 
 void initialize_wii_memory_values(GuestAddressSpace& address_space) {
     constexpr std::uint32_t kMem2ArenaBegin = 0x90000800;
-    constexpr std::uint32_t kIpcBufferBegin = 0x933E0000;
-    constexpr std::uint32_t kIosReservedBegin = 0x93400000;
+    constexpr std::uint32_t kIpcBufferBegin = 0x935E0000;
+    constexpr std::uint32_t kIosReservedBegin = 0x93600000;
 
-    // Retail IOS33 memory values normally installed before the apploader runs.
+    // RMGE01's TMD requests IOS33 (00000001-00000021). Its retail boot
+    // values are the IOS33 row in Dolphin Core/IOS/VersionInfo.cpp, extracted
+    // from the IOS binaries. The pre-IOS28 933E0000/93400000 legacy range
+    // wrongly removed 2 MiB from Galaxy's scene heaps and exhausted them on
+    // Observatory transitions. Physical MEM2 remains 64 MiB; the guest owns
+    // only the arena below IPC, and no guest allocation size is changed here.
     address_space.write_u32(0x80003100, GuestAddressSpace::kMem1Size);
     address_space.write_u32(0x80003104, GuestAddressSpace::kMem1Size);
     address_space.write_u32(0x80003118, GuestAddressSpace::kMem2Size);

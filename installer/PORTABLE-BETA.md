@@ -1,20 +1,18 @@
-Nebula 0.1.1 Beta 2 includes CPU and renderer performance improvements and a fix for Mario's distorted model.
+Nebula 0.1.1 Beta 3 fixes the reproduced crash when entering the Terrace in the Comet Observatory. It also corrects a render-completion timeout and checks valid memory ranges for thread wakeup stacks. Previous performance and Mario model fixes are retained.
 
-### Play
+### Install and play
 
-1. Download **Nebula-Beta-0.1.1-beta.2-win64.zip** and extract the whole folder to a new location.
-2. Open **Nebula.exe**, choose your settings and click **Play**. If needed, select `game.pak` from your existing installation.
+1. Download **Nebula-Beta-0.1.1-beta.3-win64.zip** and extract the whole folder to a new location.
+2. Open **Nebula.exe** and click **Play**. Select `game.pak` from your existing installation if prompted.
 
-This portable build uses the same saves as the regular installer. Progress is saved normally. Existing saves and caches are backed up before the first launch. Keep your existing installation; do not replace its EXE alone.
+This portable build uses your existing saves and shader cache. Progress saves normally, and a backup is made before the first launch. Keep your previous installation. Update the entire portable folder; do not replace an older installation's runtime EXE alone.
 
-### Recording
+### Optional recording
 
-- **No recording** (default): ordinary play.
-- **Lightweight recording**: basic performance and diagnostic logs.
-- **Detailed recording**: additional CPU/renderer and GPU timing; this may reduce performance.
+- **No recording**: normal play; this is the default.
+- **Lightweight recording**: basic performance logs.
+- **Detailed recording**: additional timing for investigating problems; it can reduce performance.
 
-Recordings are saved under **Open diagnostics** as ZIP files after closing the game.
+After closing the game, use **Open diagnostics** to find recording ZIPs. If a scene crashes or slows down, record a short reproduction and describe the location and your settings.
 
-For lower GPU load, select **480p** internal resolution. Increase it if performance allows. If you encounter a problem, use Detailed recording for a short reproduction and send the ZIP with a description.
-
-Castle-area slowdown and IR responsiveness remain under investigation. Performance on lower-end PCs still needs testing.
+Sustained performance on lower-end PCs remains under investigation. This update does not establish 60 FPS on low-end hardware or a performance advantage over Dolphin. Other Observatory scenes, targeting responsiveness and full graphics/audio behavior still require testing.
