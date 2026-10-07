@@ -960,7 +960,8 @@ bool TextureCache::initialize(ID3D12Device* device) {
     }
     srv_stride_ = device->GetDescriptorHandleIncrementSize(
         D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-    null_srv_ = srv_heap_->GetCPUDescriptorHandleForHeapStart();
+    srv_cpu_base_ = srv_heap_->GetCPUDescriptorHandleForHeapStart();
+    null_srv_ = srv_cpu_base_;
     null_srv_.ptr += static_cast<SIZE_T>(kSrvHeapCapacity) * srv_stride_;
     D3D12_SHADER_RESOURCE_VIEW_DESC null_desc{};
     null_desc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
@@ -1094,6 +1095,7 @@ void TextureCache::shutdown() {
     level_offsets_scratch_.clear();
     level_pitches_scratch_.clear();
     srv_heap_.Reset();
+    srv_cpu_base_ = {};
     srv_stride_ = 0u;
     null_srv_ = {};
     device_.Reset();
@@ -1396,13 +1398,12 @@ bool TextureCache::register_efb_copy(
     srv_desc.Texture2D.ResourceMinLODClamp = 0.0f;
 
     const UINT increment = srv_stride_;
-    D3D12_CPU_DESCRIPTOR_HANDLE cpu =
-        srv_heap_->GetCPUDescriptorHandleForHeapStart();
+    D3D12_CPU_DESCRIPTOR_HANDLE cpu = srv_cpu_base_;
     cpu.ptr += static_cast<SIZE_T>(srv_idx) * increment;
 
     device_->CreateShaderResourceView(texture.Get(), &srv_desc, cpu);
 
-    D3D12_RESOURCE_DESC rd = texture->GetDesc();
+    const D3D12_RESOURCE_DESC& rd = resource_desc;
     TextureHandle handle{};
     handle.resource      = texture.Get();
     handle.srv_index     = srv_idx;
@@ -1760,8 +1761,7 @@ TextureHandle TextureCache::get(
                     D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
                 srv_desc.Texture2D.MipLevels = static_cast<UINT>(levels);
                 const UINT increment = srv_stride_;
-                D3D12_CPU_DESCRIPTOR_HANDLE cpu =
-                    srv_heap_->GetCPUDescriptorHandleForHeapStart();
+                D3D12_CPU_DESCRIPTOR_HANDLE cpu = srv_cpu_base_;
                 cpu.ptr += static_cast<SIZE_T>(srv_idx) * increment;
                 device_->CreateShaderResourceView(
                     it->second.texture.Get(), &srv_desc, cpu);
@@ -2004,8 +2004,7 @@ TextureHandle TextureCache::get(
     srv_desc.Texture2D.MipLevels       = static_cast<UINT>(levels);
 
     const UINT increment = srv_stride_;
-    D3D12_CPU_DESCRIPTOR_HANDLE cpu =
-        srv_heap_->GetCPUDescriptorHandleForHeapStart();
+    D3D12_CPU_DESCRIPTOR_HANDLE cpu = srv_cpu_base_;
     cpu.ptr += static_cast<SIZE_T>(srv_idx) * increment;
 
     device_->CreateShaderResourceView(resource.Get(), &srv_desc, cpu);
