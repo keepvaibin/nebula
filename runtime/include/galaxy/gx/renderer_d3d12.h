@@ -55,6 +55,30 @@ class TextureCache;
 inline constexpr unsigned kFramesInFlight = 2;
 inline constexpr unsigned kSamplerHeapSlots = 2048;
 
+namespace detail {
+
+// One shared CPU-only conversion RTV. Its contents are the identity being
+// cached, not any individual destination's last use of that descriptor.
+class ConversionRtvSlot {
+public:
+    // True when a descriptor write was required. All slot writes go through
+    // this method; reset before replacing its device or descriptor heap.
+    [[nodiscard]] bool bind(
+        ID3D12Device* device, ID3D12Resource* resource,
+        D3D12_CPU_DESCRIPTOR_HANDLE descriptor);
+    void reset() noexcept {
+        resource_.Reset();
+        descriptor_ = {};
+    }
+
+private:
+    // Retain identity so freed resource-pointer reuse cannot fake a match.
+    Microsoft::WRL::ComPtr<ID3D12Resource> resource_;
+    D3D12_CPU_DESCRIPTOR_HANDLE descriptor_{};
+};
+
+}  // namespace detail
+
 struct SamplerTableKey {
     std::array<std::uint32_t, 8> samplers{};
     std::uint32_t config = 0;
@@ -637,6 +661,7 @@ private:
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> conv_rtv_heap_;
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> conv_srv_heap_;
     D3D12_CPU_DESCRIPTOR_HANDLE conv_scratch_rtv_{};
+    detail::ConversionRtvSlot conv_scratch_rtv_slot_;
     D3D12_CPU_DESCRIPTOR_HANDLE conv_efb_color_srv_{};
     D3D12_CPU_DESCRIPTOR_HANDLE conv_efb_depth_srv_{};
     Microsoft::WRL::ComPtr<ID3D12PipelineState> clear_rgb_pipeline_;

@@ -1099,6 +1099,56 @@ V main(uint id : SV_VertexID) {
         return run_bytes(DXGI_FORMAT_R32_FLOAT,bytes,width,height,logical_size,constants);
     }
 
+    bool test_conversion_rtv_slot_identity() {
+        using namespace galaxy::gx;
+        D3D12_DESCRIPTOR_HEAP_DESC heap_desc{};
+        heap_desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
+        heap_desc.NumDescriptors = 2u;
+        ComPtr<ID3D12DescriptorHeap> heap;
+        check_hr(device_->CreateDescriptorHeap(&heap_desc, IID_PPV_ARGS(&heap)),
+            "Create scratch RTV identity heap");
+        const auto first_slot = heap->GetCPUDescriptorHandleForHeapStart();
+        auto second_slot = first_slot;
+        second_slot.ptr += device_->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
+        D3D12_HEAP_PROPERTIES properties{};
+        properties.Type = D3D12_HEAP_TYPE_DEFAULT;
+        D3D12_RESOURCE_DESC desc{};
+        desc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+        desc.Width = desc.Height = 8u;
+        desc.DepthOrArraySize = desc.MipLevels = 1u;
+        desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+        desc.SampleDesc.Count = 1u;
+        desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
+        ComPtr<ID3D12Resource> a, b;
+        for (auto* target : {&a, &b}) {
+            check_hr(device_->CreateCommittedResource(&properties, D3D12_HEAP_FLAG_NONE,
+                &desc, D3D12_RESOURCE_STATE_RENDER_TARGET, nullptr,
+                IID_PPV_ARGS(target->ReleaseAndGetAddressOf())), "Create scratch RTV identity target");
+        }
+        detail::ConversionRtvSlot slot;
+        bool passed = expect(slot.bind(device_.Get(), a.Get(), first_slot),
+            "first scratch RTV use writes its descriptor");
+        passed &= expect(!slot.bind(device_.Get(), a.Get(), first_slot),
+            "consecutive copies to the same resource reuse the current slot contents");
+        passed &= expect(slot.bind(device_.Get(), b.Get(), first_slot) &&
+            slot.bind(device_.Get(), a.Get(), first_slot),
+            "A/B/A copies rewrite the shared slot on both resource changes");
+        passed &= expect(!slot.bind(device_.Get(), a.Get(), first_slot) &&
+            slot.bind(device_.Get(), a.Get(), second_slot),
+            "same-resource reuse requires the same descriptor slot");
+        bool rejected = false;
+        try { (void)slot.bind(device_.Get(), nullptr, second_slot); }
+        catch (const std::runtime_error&) { rejected = true; }
+        passed &= expect(rejected && !slot.bind(device_.Get(), a.Get(), second_slot),
+            "failed scratch RTV bind preserves the previous slot identity");
+        slot.reset();
+        passed &= expect(slot.bind(device_.Get(), a.Get(), second_slot),
+            "heap/device lifecycle reset forces the next descriptor write");
+        slot.reset();
+        // Calls exercise the actual descriptor writer; no GPU work is submitted.
+        return passed;
+    }
+
     bool test_xfb_retirement_rollback() {
         using namespace galaxy::gx;
         EfbCopyManager manager;
@@ -2489,6 +2539,7 @@ int main(int argc, char** argv) {
         WarpConversionHarness harness;
         passed &= harness.test_texture_descriptor_retirement();
         passed &= harness.test_xfb_retirement_rollback();
+        passed &= harness.test_conversion_rtv_slot_identity();
         passed &= harness.test_xfb_idle_pool_admission();
         passed &= harness.test_texture_cache_ranges();
         passed &= test_scaled_xfb_filter();

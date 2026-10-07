@@ -43,6 +43,21 @@ using Microsoft::WRL::ComPtr;
 
 namespace galaxy::gx {
 
+bool detail::ConversionRtvSlot::bind(
+    ID3D12Device* device, ID3D12Resource* resource,
+    D3D12_CPU_DESCRIPTOR_HANDLE descriptor) {
+    if (device == nullptr || resource == nullptr || descriptor.ptr == 0u) {
+        throw std::runtime_error("conversion RTV slot has no device/resource/descriptor");
+    }
+    if (resource_.Get() == resource && descriptor_.ptr == descriptor.ptr) {
+        return false;
+    }
+    device->CreateRenderTargetView(resource, nullptr, descriptor);
+    resource_ = resource;
+    descriptor_ = descriptor;
+    return true;
+}
+
 // ---------------------------------------------------------------------------
 // Module-level state for things the frozen header can't hold
 // ---------------------------------------------------------------------------
@@ -2333,6 +2348,7 @@ bool RendererD3D12::create_conversion_pipeline() {
             &dhd, IID_PPV_ARGS(&conv_rtv_heap_)), "ConvRTV heap");
         conv_scratch_rtv_ =
             conv_rtv_heap_->GetCPUDescriptorHandleForHeapStart();
+        conv_scratch_rtv_slot_.reset();
     }
 
     // CPU-only cached EFB source SRVs.  Each conversion copy copies one of
@@ -3043,6 +3059,7 @@ void RendererD3D12::shutdown() {
     blit_pipeline_.Reset();
     s_conv_root_sig.Reset();
     conv_pipeline_.Reset();
+    conv_scratch_rtv_slot_.reset();
     conv_rtv_heap_.Reset();
     conv_srv_heap_.Reset();
     conv_scratch_rtv_ = {};
@@ -4356,9 +4373,10 @@ D3D12_CPU_DESCRIPTOR_HANDLE RendererD3D12::allocate_conversion_rtv(
         throw std::runtime_error(
             "[RendererD3D12] conversion RTV descriptor unavailable");
     }
-    // RTV descriptors are consumed by OMSetRenderTargets at recording time.
-    // Rebind this CPU-only slot each copy; frame fences own resource lifetime.
-    device_->CreateRenderTargetView(resource, nullptr, conv_scratch_rtv_);
+    // OMSetRenderTargets snapshots this CPU descriptor at recording time.
+    // Reuse only if the shared slot still describes this exact resource.
+    static_cast<void>(conv_scratch_rtv_slot_.bind(
+        device_.Get(), resource, conv_scratch_rtv_));
     return conv_scratch_rtv_;
 }
 
@@ -4406,13 +4424,11 @@ void RendererD3D12::record_conversion_blit(
         src_srv,
         D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 
-    // Scratch or persistent RTV (consumed by OMSetRenderTargets at record
-    // time).  XFB copies pass an empty handle and use the scratch slot;
-    // EFB-copy texture destinations pass their resource-owned cached RTV.
+    // CPU RTVs are consumed at recording time. Empty-handle callers use the
+    // same shared slot writer, keeping its cached resource identity coherent.
     D3D12_CPU_DESCRIPTOR_HANDLE rtv = dest_rtv;
     if (rtv.ptr == 0u) {
-        rtv = conv_scratch_rtv_;
-        device_->CreateRenderTargetView(dest, nullptr, rtv);
+        rtv = allocate_conversion_rtv(dest);
     }
 
     command_list_->OMSetRenderTargets(1, &rtv, FALSE, nullptr);
