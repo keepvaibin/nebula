@@ -818,6 +818,121 @@ bool byte_dequant_and_nbt3_match_cached_decode(
     return ok;
 }
 
+bool generated_index_boundaries_preserve_topology(ID3D12Device* device) {
+    using namespace galaxy::gx;
+    struct Case {
+        PrimitiveClass primitive;
+        std::vector<std::uint16_t> packet_counts;
+        std::vector<std::uint16_t> indices; // Literal un-biased index stream.
+        bool cached_nonindexed = false;
+    };
+    const std::vector<Case> cases{
+        {PrimitiveClass::Quads, {5}, {0, 1, 2, 0, 2, 3}},
+        {PrimitiveClass::Quads2, {5}, {0, 1, 2, 0, 2, 3}},
+        {PrimitiveClass::Quads, {8}, {0, 1, 2, 0, 2, 3, 4, 5, 6, 4, 6, 7}},
+        {PrimitiveClass::Triangles, {5}, {0, 1, 2}},
+        {PrimitiveClass::Triangles, {3}, {0, 1, 2}, true},
+        {PrimitiveClass::TriangleStrip, {5}, {0, 1, 2, 2, 1, 3, 2, 3, 4}},
+        {PrimitiveClass::TriangleFan, {5}, {0, 1, 2, 0, 2, 3, 0, 3, 4}},
+        {PrimitiveClass::Lines, {5}, {0, 1, 2, 3}},
+        {PrimitiveClass::LineStrip, {5}, {0, 1, 1, 2, 2, 3, 3, 4}},
+        {PrimitiveClass::Points, {5}, {0, 1, 2, 3, 4}},
+        {PrimitiveClass::Points, {1}, {0}},
+        {PrimitiveClass::Points, {0}, {}},
+        {PrimitiveClass::Lines, {2}, {0, 1}},
+        {PrimitiveClass::Lines, {1}, {}},
+        {PrimitiveClass::LineStrip, {1}, {}},
+        {PrimitiveClass::Quads, {3}, {}},
+        {PrimitiveClass::TriangleStrip, {2}, {}},
+        {PrimitiveClass::TriangleFan, {2}, {}},
+        {PrimitiveClass::Triangles, {2}, {}},
+        {PrimitiveClass::Quads, {5, 5}, {0, 1, 2, 0, 2, 3, 5, 6, 7, 5, 7, 8}},
+        {PrimitiveClass::Triangles, {5, 5}, {0, 1, 2, 5, 6, 7}},
+        {PrimitiveClass::TriangleStrip, {3, 3}, {0, 1, 2, 3, 4, 5}},
+        {PrimitiveClass::TriangleFan, {3, 3}, {0, 1, 2, 3, 4, 5}},
+        {PrimitiveClass::Lines, {3, 3}, {0, 1, 3, 4}},
+        {PrimitiveClass::LineStrip, {3, 3}, {0, 1, 1, 2, 3, 4, 4, 5}},
+    };
+    UploadRing vertices, indices;
+    if (!expect(vertices.initialize(device, "index-boundary-vertices",
+                    (65536u + 16u) * sizeof(GxVertexOut), 1u) &&
+                indices.initialize(device, "index-boundary-indices", 4096u, 1u),
+                "could not initialize boundary-test rings")) return false;
+    VertexLoader loader;
+    GxState state;
+    const VertexDescriptor desc{}; // No FIFO attributes: only the count is consumed.
+    for (const auto& test : cases) {
+        std::uint32_t total_vertices = 0u, largest_index = 0u;
+        std::vector<CachedDrawPacket> packets;
+        for (auto count : test.packet_counts) {
+            packets.push_back({0x90u, count, packets.size(), 0u, 0u});
+            total_vertices += count;
+        }
+        for (auto index : test.indices) largest_index = index > largest_index ? index : largest_index;
+        const std::vector<GxVertexOut> decoded(total_vertices);
+        for (bool cached : {false, true}) {
+            if (!cached && test.packet_counts.size() != 1u) continue;
+            const bool indexed = !test.indices.empty() &&
+                !(test.primitive == PrimitiveClass::Triangles && (!cached || test.cached_nonindexed));
+            for (std::uint32_t bias : {0u, 1u, 65527u, 65528u, 65530u, 65531u,
+                                       65532u, 65533u, 65534u, 65535u}) {
+                vertices.begin_frame(0u);
+                indices.begin_frame(0u);
+                // Reserve an untouched prefix to exercise the actual rebasing
+                // entry points at every relevant upper-bound transition.
+                (void)vertices.allocate(static_cast<std::size_t>(bias) * sizeof(GxVertexOut), 16u);
+                const bool should_reject = indexed && bias + largest_index > 65535u;
+                LoadedPrimitive prim{};
+                bool rejected = false;
+                try {
+                    if (cached) {
+                        prim = loader.upload_cached_packet_run_vertices(decoded, 0x1200u,
+                            packets, test.primitive, vertices, indices, 0u, true,
+                            static_cast<std::uint32_t>(test.indices.size()));
+                    } else {
+                        std::vector<std::byte> fifo;
+                        append_u16(fifo, static_cast<std::uint16_t>(total_vertices));
+                        FifoCursor cursor;
+                        cursor.data = fifo;
+                        cursor.base_offset = 0x1200u;
+                        prim = loader.load_with_layout(cursor, test.primitive, 0u, state,
+                            desc, 0u, nullptr, vertices, indices, 0u, true);
+                        if (!expect(cursor.offset == fifo.size(), "index expansion changed FIFO consumption")) return false;
+                    }
+                } catch (const GxFatalError& error) {
+                    rejected = true;
+                    if (!expect(std::strcmp(error.what(),
+                            "VertexLoader: indexed batch exceeded 16-bit index range") == 0,
+                            "index-boundary rejection was caused by an unrelated failure")) return false;
+                }
+                if (!expect(rejected == should_reject,
+                            "index bounds must use referenced vertices, excluding incomplete tails")) return false;
+                if (rejected) continue;
+                if (!expect(prim.vertex_count == total_vertices && prim.indexed == indexed &&
+                            prim.index_count == test.indices.size(),
+                            "generated topology changed its source span or index count")) return false;
+                const std::size_t bytes = indexed ? test.indices.size() * sizeof(std::uint16_t) : 0u;
+                if (!expect(indices.allocate(0u, 2u).offset == bytes,
+                            "index allocation retained an incomplete line tail")) return false;
+                if (!indexed) continue;
+                void* mapped = nullptr;
+                const D3D12_RANGE range{0u, bytes};
+                if (!expect(SUCCEEDED(indices.resource()->Map(0u, &range, &mapped)),
+                            "could not inspect generated topology")) return false;
+                const auto* actual = static_cast<const std::uint16_t*>(mapped);
+                bool correct = true;
+                for (std::size_t i = 0u; i < test.indices.size(); ++i) {
+                    correct &= actual[i] == test.indices[i] + bias;
+                }
+                const D3D12_RANGE no_write{0u, 0u};
+                indices.resource()->Unmap(0u, &no_write);
+                if (!expect(correct, "literal topology or packet boundaries changed after rebasing")) return false;
+            }
+        }
+    }
+    return true;
+}
+
 bool immutable_upload_reuse_preserves_bytes(ID3D12Device* device) {
     galaxy::gx::UploadRing ring;
     if (!expect(ring.initialize(device, "immutable-test", 4096, 2),
@@ -944,6 +1059,7 @@ int main() {
     }
 
     bool ok = true;
+    ok = generated_index_boundaries_preserve_topology(device.Get()) && ok;
     ok = immutable_upload_reuse_preserves_bytes(device.Get()) && ok;
     ok = byte_dequant_and_nbt3_match_cached_decode(vertex_ring, index_ring) && ok;
     ok = load_position_only_clears_reused_upload_memory(

@@ -916,16 +916,48 @@ void emit_primitive_indices(
     std::uint32_t vtx_count,
     std::uint32_t index_vertex_bias,
     std::size_t fifo_error_offset) {
+    // Prove the largest index once per packet, rather than checking every
+    // emitted index. Incomplete independent primitives do not reference their
+    // trailing vertices; degenerate packets reference none at all.
+    std::uint32_t referenced_vertices = 0u;
+    switch (primitive) {
+    case PrimitiveClass::Quads:
+    case PrimitiveClass::Quads2:
+        referenced_vertices = (vtx_count / 4u) * 4u;
+        break;
+    case PrimitiveClass::Triangles:
+        referenced_vertices = (vtx_count / 3u) * 3u;
+        break;
+    case PrimitiveClass::Lines:
+        referenced_vertices = (vtx_count / 2u) * 2u;
+        break;
+    case PrimitiveClass::TriangleStrip:
+    case PrimitiveClass::TriangleFan:
+        referenced_vertices = vtx_count >= 3u ? vtx_count : 0u;
+        break;
+    case PrimitiveClass::LineStrip:
+        referenced_vertices = vtx_count >= 2u ? vtx_count : 0u;
+        break;
+    case PrimitiveClass::Points:
+        referenced_vertices = vtx_count;
+        break;
+    default:
+        throw GxFatalError(
+            "VertexLoader: unknown PrimitiveClass", fifo_error_offset, 0);
+    }
+    const std::uint64_t index_base =
+        static_cast<std::uint64_t>(packet_vertex_base) + index_vertex_bias;
+    if (referenced_vertices != 0u &&
+        index_base + referenced_vertices - 1u >
+            std::numeric_limits<std::uint16_t>::max()) {
+        throw GxFatalError(
+            "VertexLoader: indexed batch exceeded 16-bit index range",
+            fifo_error_offset,
+            0);
+    }
+    const auto bounded_index_base = static_cast<std::uint32_t>(index_base);
     auto emit_index = [&](std::uint32_t value) {
-        const std::uint32_t biased =
-            packet_vertex_base + value + index_vertex_bias;
-        if (biased > std::numeric_limits<std::uint16_t>::max()) {
-            throw GxFatalError(
-                "VertexLoader: indexed batch exceeded 16-bit index range",
-                fifo_error_offset,
-                0);
-        }
-        idx_ptr[idx_count++] = static_cast<std::uint16_t>(biased);
+        idx_ptr[idx_count++] = static_cast<std::uint16_t>(bounded_index_base + value);
     };
     auto emit = [&](std::uint32_t a, std::uint32_t b, std::uint32_t c) {
         emit_index(a);
@@ -1172,7 +1204,7 @@ LoadedPrimitive VertexLoader::load_with_layout(
             : 0;
         break;
     case PrimitiveClass::Lines:
-        max_indices = vtx_count;
+        max_indices = (static_cast<std::uint32_t>(vtx_count) / 2u) * 2u;
         break;
     case PrimitiveClass::LineStrip:
         max_indices = vtx_count >= 2
@@ -1222,83 +1254,14 @@ LoadedPrimitive VertexLoader::load_with_layout(
         static_cast<std::uint32_t>(ib.offset / sizeof(std::uint16_t));
 
     std::uint32_t idx_count = 0;
-
-    auto emit_index = [&](std::uint32_t value) {
-        const std::uint32_t biased = value + index_vertex_bias;
-        if (biased > std::numeric_limits<std::uint16_t>::max()) {
-            throw GxFatalError(
-                "VertexLoader: indexed batch exceeded 16-bit index range",
-                cursor.base_offset,
-                0);
-        }
-        idx_ptr[idx_count++] = static_cast<std::uint16_t>(biased);
-    };
-    auto emit = [&](std::uint32_t a, std::uint32_t b2, std::uint32_t c2) {
-        emit_index(a);
-        emit_index(b2);
-        emit_index(c2);
-    };
-    auto emit2 = [&](std::uint32_t a, std::uint32_t b2) {
-        emit_index(a);
-        emit_index(b2);
-    };
-
-    switch (primitive) {
-    case PrimitiveClass::Quads:
-    case PrimitiveClass::Quads2: {
-        // GX Quads: vertices 0,1,2,3 → triangles (0,1,2) and (0,2,3).
-        const std::uint32_t n = (static_cast<std::uint32_t>(vtx_count) / 4) * 4;
-        for (std::uint32_t i = 0; i < n; i += 4) {
-            emit(i, i + 1, i + 2);
-            emit(i, i + 2, i + 3);
-        }
-        break;
-    }
-    case PrimitiveClass::Triangles: {
-        for (std::uint32_t i = 0; i < (vtx_count / 3u) * 3u; ++i) {
-            emit_index(i);
-        }
-        break;
-    }
-    case PrimitiveClass::TriangleStrip: {
-        // Even-numbered triangles: i, i+1, i+2.
-        // Odd-numbered triangles:  i+1, i, i+2  (flip winding).
-        for (std::uint32_t i = 0; i + 2 < vtx_count; ++i) {
-            if ((i & 1u) == 0) {
-                emit(i, i + 1, i + 2);
-            } else {
-                emit(i + 1, i, i + 2);
-            }
-        }
-        break;
-    }
-    case PrimitiveClass::TriangleFan: {
-        // All triangles share vertex 0.
-        for (std::uint32_t i = 1; i + 1 < vtx_count; ++i) {
-            emit(0, i, i + 1);
-        }
-        break;
-    }
-    case PrimitiveClass::Lines: {
-        for (std::uint32_t i = 0; i + 1 < vtx_count; i += 2) {
-            emit2(i, i + 1);
-        }
-        break;
-    }
-    case PrimitiveClass::LineStrip: {
-        for (std::uint32_t i = 0; i + 1 < vtx_count; ++i) {
-            emit2(i, i + 1);
-        }
-        break;
-    }
-    case PrimitiveClass::Points: {
-        for (std::uint32_t i = 0; i < vtx_count; ++i) {
-            emit_index(i);
-        }
-        break;
-    }
-    default:
-        break;
+    emit_primitive_indices(
+        idx_ptr, idx_count, primitive, 0u, vtx_count,
+        index_vertex_bias, cursor.base_offset);
+    if (idx_count != max_indices) {
+        throw GxFatalError(
+            "VertexLoader: primitive emitted wrong index count",
+            cursor.base_offset,
+            0);
     }
 
     LoadedPrimitive prim{};
