@@ -4595,10 +4595,9 @@ std::size_t GxBackend::DecodedPacketRunCacheKeyHash::operator()(
     const DecodedPacketRunCacheKey& key) const noexcept {
     std::uint64_t hash = 1469598103934665603ull;
     const auto mix = [&hash](std::uint64_t value) noexcept {
-        for (unsigned byte = 0; byte < 8; ++byte) {
-            hash ^= (value >> (byte * 8u)) & 0xFFu;
-            hash *= 1099511628211ull;
-        }
+        // Each typed field contributes once. This hash only selects an
+        // in-memory bucket; complete key equality remains authoritative.
+        hash = (hash ^ value) * 1099511628211ull;
     };
     mix(key.cache_token);
     mix(static_cast<std::uint64_t>(key.packet_run_index));
@@ -4614,7 +4613,13 @@ std::size_t GxBackend::DecodedPacketRunCacheKeyHash::operator()(
     for (const std::uint32_t value : key.array_base_stride) {
         mix(value);
     }
-    return static_cast<std::size_t>(hash);
+    // Aligned addresses and narrow register fields need their upper bits
+    // diffused into the bucket bits after whole-word mixing.
+    hash ^= hash >> 30u;
+    hash *= 0xBF58476D1CE4E5B9ull;
+    hash ^= hash >> 27u;
+    hash *= 0x94D049BB133111EBull;
+    return static_cast<std::size_t>(hash ^ (hash >> 31u));
 }
 
 GxBackend::DecodedPacketRunCacheKey GxBackend::decoded_packet_run_cache_key(
