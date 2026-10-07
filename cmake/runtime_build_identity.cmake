@@ -72,4 +72,3 @@ string(REPLACE "\r" "" identity "${identity}")
 file(WRITE "${OUTPUT_HEADER}.tmp" "#pragma once\n#define NEBULA_RUNTIME_BUILD_IDENTITY \"${identity}\"\n")
 execute_process(COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${OUTPUT_HEADER}.tmp" "${OUTPUT_HEADER}"
     COMMAND_ERROR_IS_FATAL ANY)
-
