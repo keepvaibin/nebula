@@ -514,6 +514,8 @@ private:
     std::array<Microsoft::WRL::ComPtr<ID3D12DescriptorHeap>, kFramesInFlight>
         sampler_heaps_;
     D3D12_GPU_DESCRIPTOR_HANDLE default_sampler_table_{};
+    std::array<std::uint32_t, kFramesInFlight> default_sampler_config_keys_{};
+    std::array<bool, kFramesInFlight> default_sampler_valid_{};
     // The active slot is reset at begin_frame after its fence. Older slots'
     // descriptors remain untouched while their submitted draws are in flight.
     SamplerTableCache sampler_tables_;

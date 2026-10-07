@@ -819,6 +819,9 @@ private:
         const TexImage& image,
         const TexMode& mode,
         const TlutRef& tlut) const;
+    [[nodiscard]] std::array<std::uint32_t, kMaxTextureMaps> capture_sampler_keys(
+        std::uint8_t map_mask,
+        const std::array<TextureHandle, kMaxTextureMaps>& handles) const;
     void mark_texture_binding_alias_dirty(const EfbCopyParams& params);
     void prune_dirty_texture_binding_tables();
     void clear_frame_texture_binding_table_cache();

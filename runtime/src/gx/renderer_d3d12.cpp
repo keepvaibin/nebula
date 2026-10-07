@@ -2135,11 +2135,15 @@ std::size_t SamplerTableKeyHasher::operator()(const SamplerTableKey& key) const 
     return static_cast<std::size_t>(hash);
 }
 
+static std::uint32_t sampler_config_key(const RenderConfig& cfg) noexcept {
+    return ((std::clamp(cfg.anisotropic_filtering, 1u, 16u) & 0x1fu) << 8u) |
+        (std::clamp(cfg.texture_lod_bias, 0u, 8u) & 0xfu);
+}
+
 SamplerTableKey make_sampler_table_key(const std::uint32_t keys[8], const RenderConfig& cfg) noexcept {
     SamplerTableKey key{};
     std::copy_n(keys, key.samplers.size(), key.samplers.begin());
-    key.config = ((std::clamp(cfg.anisotropic_filtering, 1u, 16u) & 0x1fu) << 8u) |
-        (std::clamp(cfg.texture_lod_bias, 0u, 8u) & 0xfu);
+    key.config = sampler_config_key(cfg);
     return key;
 }
 
@@ -2154,6 +2158,7 @@ SamplerTableCache::Allocation SamplerTableCache::get_or_allocate(const SamplerTa
 }
 
 bool RendererD3D12::create_sampler_heap() {
+    default_sampler_valid_.fill(false);
     D3D12_DESCRIPTOR_HEAP_DESC dhd{};
     dhd.Type           = D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER;
     dhd.NumDescriptors = kSamplerHeapSlots;
@@ -2170,12 +2175,19 @@ void RendererD3D12::reset_sampler_frame() {
     sampler_heap_ = sampler_heaps_[frame_slot_];
     sampler_tables_.reset();
 
+    default_sampler_table_ = sampler_heap_->GetGPUDescriptorHandleForHeapStart();
+    const RenderConfig cfg = get_render_config();
+    const std::uint32_t config_key = sampler_config_key(cfg);
+    if (default_sampler_valid_[frame_slot_] &&
+        default_sampler_config_keys_[frame_slot_] == config_key) {
+        return;
+    }
+
     const UINT stride = device_->GetDescriptorHandleIncrementSize(
         D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER);
     D3D12_CPU_DESCRIPTOR_HANDLE base =
         sampler_heap_->GetCPUDescriptorHandleForHeapStart();
 
-    const RenderConfig cfg = get_render_config();
     const float lod_bias = static_cast<float>(std::clamp(cfg.texture_lod_bias, 0u, 8u)) * 0.5f;
     const unsigned anisotropy =
         std::clamp(cfg.anisotropic_filtering, 1u, 16u);
@@ -2197,8 +2209,10 @@ void RendererD3D12::reset_sampler_frame() {
         h.ptr += static_cast<SIZE_T>(i) * stride;
         device_->CreateSampler(&sd, h);
     }
-    default_sampler_table_ =
-        sampler_heap_->GetGPUDescriptorHandleForHeapStart();
+    // Slots 0..7 are never allocated dynamically. Their descriptors survive
+    // this slot's fence/reset, and need rewriting only for changed settings.
+    default_sampler_config_keys_[frame_slot_] = config_key;
+    default_sampler_valid_[frame_slot_] = true;
 }
 
 // Packed sampler key layout (must match pack_sampler_key in gx_backend.cpp):
@@ -3064,6 +3078,7 @@ void RendererD3D12::shutdown() {
     for (auto& heap : sampler_heaps_) heap.Reset();
     sampler_tables_.reset();
     default_sampler_table_ = {};
+    default_sampler_valid_.fill(false);
     swap_chain_.Reset(); command_list_.Reset();
     for (auto& a : allocators_) a.Reset();
     fence_.Reset(); queue_.Reset(); device_.Reset();

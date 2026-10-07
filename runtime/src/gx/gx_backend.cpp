@@ -7457,6 +7457,23 @@ GxBackend::TextureHandleKey GxBackend::texture_handle_key(
     };
 }
 
+std::array<std::uint32_t, kMaxTextureMaps> GxBackend::capture_sampler_keys(
+    std::uint8_t map_mask,
+    const std::array<TextureHandle, kMaxTextureMaps>& handles) const {
+    std::array<std::uint32_t, kMaxTextureMaps> keys{};
+    for (unsigned map = 0u; map < kMaxTextureMaps; ++map) {
+        if ((map_mask & (1u << map)) == 0u) {
+            continue;
+        }
+        const TextureHandle& handle = handles[map];
+        keys[map] = pack_sampler_key(
+            state_.tex_mode(map), handle.generated_mips, handle.mip_levels);
+    }
+    // Unused slots still get valid zero-key descriptors, but cannot fragment
+    // the table cache. map_mask includes both direct and indirect sampling.
+    return keys;
+}
+
 void GxBackend::clear_frame_texture_binding_table_cache() {
     frame_texture_tables_.clear();
     frame_texture_binding_tables_.clear();
@@ -7942,25 +7959,14 @@ ID3D12PipelineState* GxBackend::flush_draw_state(
                 // Per-map sampler state from TexMode0/1 (wrap, filters, LOD
                 // bias and range).  Packed key layout documented at
                 // RendererD3D12::sampler_table_for; tables are
-                // cached/persistent.
-                std::uint32_t samp_keys[8]{};
-                for (unsigned m = 0; m < kMaxTextureMaps; ++m) {
-                    const TexMode mode = state_.tex_mode(m);
-                    bool generated_mips = false;
-                    std::uint8_t mip_levels = 1u;
-                    if ((texture_map_mask & (1u << m)) != 0u) {
-                        const TextureHandle& th = texture_handles[m];
-                        generated_mips = th.generated_mips;
-                        mip_levels = th.mip_levels;
-                    }
-                    samp_keys[m] =
-                        pack_sampler_key(mode, generated_mips, mip_levels);
-                }
+                // cached for this frame's fence-owned sampler heap.
+                const auto samp_keys = capture_sampler_keys(
+                    texture_map_mask, texture_handles);
                 const auto sampler_start = time_detail
                     ? std::chrono::steady_clock::now()
                     : std::chrono::steady_clock::time_point{};
                 current_sampler_table_ =
-                    renderer_.sampler_table_for(samp_keys);
+                    renderer_.sampler_table_for(samp_keys.data());
                 if (time_detail) {
                     sampler_table_us = elapsed_us(
                         sampler_start, std::chrono::steady_clock::now());
