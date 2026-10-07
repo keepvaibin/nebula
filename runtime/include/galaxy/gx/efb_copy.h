@@ -234,7 +234,7 @@ private:
         std::uint16_t width = 0;
         std::uint16_t height = 0;
     };
-    void retire_texture(PooledTexture&& texture);
+    void retire_texture(XfbTexture& texture);
     void recycle_retired_textures(unsigned frame_slot);
     [[nodiscard]] Microsoft::WRL::ComPtr<ID3D12Resource>
         acquire_idle_texture(std::uint16_t width, std::uint16_t height);

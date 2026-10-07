@@ -159,7 +159,7 @@ void EfbCopyManager::begin_frame(
     current_frame_slot_ = frame_slot;
 }
 
-void EfbCopyManager::retire_texture(PooledTexture&& texture) {
+void EfbCopyManager::retire_texture(XfbTexture& texture) {
     if (!texture.texture) {
         return;
     }
@@ -167,16 +167,24 @@ void EfbCopyManager::retire_texture(PooledTexture&& texture) {
         throw std::runtime_error(
             "[EfbCopyManager] texture retired before begin_frame");
     }
-    retired_textures_[current_frame_slot_].push_back(std::move(texture));
+    // Reserve ownership storage before moving the live registry resource.
+    // A vector allocation failure must not release an in-flight XFB.
+    auto& retired = retired_textures_[current_frame_slot_];
+    retired.emplace_back();
+    retired.back().width = texture.width;
+    retired.back().height = texture.height;
+    retired.back().texture = std::move(texture.texture);
 }
 
 void EfbCopyManager::recycle_retired_textures(unsigned frame_slot) {
     auto& retired = retired_textures_[frame_slot];
     for (auto& texture : retired) {
-        if (idle_textures_.size() >= kMaxIdleXfbTextures) {
-            break;
-        }
         if (texture.texture) {
+            if (idle_textures_.size() >= kMaxIdleXfbTextures) {
+                // An idle resource is already fence-safe to release. Admit
+                // current sizes instead of keeping eight cold sizes forever.
+                idle_textures_.erase(idle_textures_.begin());
+            }
             idle_textures_.push_back(std::move(texture));
         }
     }
@@ -441,10 +449,7 @@ XfbTexture* EfbCopyManager::acquire_xfb(
         }
         // Wrong size — drop the old texture and recreate below.
         if (entry.texture) {
-            retire_texture(PooledTexture{
-                std::move(entry.texture),
-                entry.width,
-                entry.height});
+            retire_texture(entry);
         }
         entry.rtv = {};
         entry.rtv_valid = false;
