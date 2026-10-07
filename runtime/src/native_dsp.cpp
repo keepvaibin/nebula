@@ -8,6 +8,7 @@
 #endif
 
 #include <algorithm>
+#include <bit>
 #include <cstdlib>
 #include <cstring>
 #include <iostream>
@@ -1095,43 +1096,36 @@ bool DspAramMirrorBoundary::worker_flush_outbound(
         have_span = false;
     };
 
-    std::uint32_t prior_page = 0u;
-    bool have_prior_page = false;
     for (std::uint32_t list_index = 0u;
          list_index < outbound_dirty_page_count_ && accepted;
          ++list_index) {
         const std::uint32_t page = storage_->flush_page_indices[list_index];
-        if (have_span && have_prior_page && page != prior_page + 1u) {
-            commit_span();
-        }
         const std::uint32_t page_base = page * kDirtyPageBytes;
-        for (std::uint32_t byte = 0u; byte < kDirtyPageBytes && accepted; ++byte) {
-            const auto word = static_cast<std::size_t>(page) * 2u + byte / 64u;
-            const bool dirty =
-                (storage_->dirty_byte_words[word] &
-                 (UINT64_C(1) << (byte % 64u))) != 0u;
-            const std::uint32_t address = page_base + byte;
-            if (dirty) {
+        // Enumerate exact contiguous runs in the worker-owned byte mask.
+        // This preserves ascending callback spans, including runs crossing
+        // word/page boundaries, without testing every clean byte in a page.
+        static_assert(kDirtyPageBytes == 128u);
+        for (unsigned word = 0u; word < 2u && accepted; ++word) {
+            std::uint64_t bits = storage_->dirty_byte_words[
+                static_cast<std::size_t>(page) * 2u + word];
+            while (bits != 0u && accepted) {
+                const unsigned first = std::countr_zero(bits);
+                const unsigned length = std::countr_one(bits >> first);
+                const std::uint32_t address = page_base + word * 64u + first;
+                if (have_span && span_end != address) {
+                    commit_span();
+                }
+                if (!accepted) break;
                 if (!have_span) {
                     span_begin = address;
-                    span_end = address + 1u;
                     have_span = true;
-                } else if (span_end == address) {
-                    ++span_end;
-                } else {
-                    commit_span();
-                    if (accepted) {
-                        span_begin = address;
-                        span_end = address + 1u;
-                        have_span = true;
-                    }
                 }
-            } else if (have_span) {
-                commit_span();
+                span_end = address + length;
+                const unsigned next = first + length;
+                // Guard the full-word case: shifting by 64 is undefined.
+                bits = next == 64u ? 0u : bits & (~UINT64_C(0) << next);
             }
         }
-        prior_page = page;
-        have_prior_page = true;
     }
     if (accepted && have_span) {
         commit_span();
