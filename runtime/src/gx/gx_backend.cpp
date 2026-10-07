@@ -14,6 +14,7 @@
 
 #include "galaxy/gx/gx_backend.h"
 #include "galaxy/gx/dependency_draw_memo.h"
+#include "galaxy/gx/dependency_range_memo.h"
 #include "galaxy/gx/dependency_event_capture.h"
 #include "galaxy/gx/owned_fifo_event_replay.h"
 
@@ -1290,9 +1291,7 @@ public:
           draw_run_cache_bytes_(draw_run_cache_bytes),
           stat_draw_run_cache_hits_(stat_draw_run_cache_hits),
           stat_draw_run_cache_misses_(stat_draw_run_cache_misses),
-          stat_draw_run_cache_evictions_(stat_draw_run_cache_evictions) {
-        emitted_range_keys_.reserve(4096u);
-    }
+          stat_draw_run_cache_evictions_(stat_draw_run_cache_evictions) {}
 
     [[nodiscard]] std::size_t draw_payload_size(
         std::uint8_t vtxfmt,
@@ -1524,7 +1523,7 @@ private:
         }
         const std::uint64_t key =
             (static_cast<std::uint64_t>(guest_base) << 32) | size;
-        if (!emitted_range_keys_.insert(key).second) {
+        if (!emitted_range_keys_.insert(key)) {
             return;
         }
         record_guest_memory_range(ranges_, guest_base, size);
@@ -1957,7 +1956,7 @@ private:
     std::atomic<std::uint64_t>& stat_draw_run_cache_hits_;
     std::atomic<std::uint64_t>& stat_draw_run_cache_misses_;
     std::atomic<std::uint64_t>& stat_draw_run_cache_evictions_;
-    std::unordered_set<std::uint64_t> emitted_range_keys_;
+    detail::DependencyRangeMemo emitted_range_keys_;
     detail::BroadDrawDependencyMemo broad_draw_memo_;
     std::uint64_t exact_cached_dependency_vertices_ = 0;
     bool cached_broad_draw_run_active_ = false;
