@@ -847,6 +847,45 @@ bool test_matrix_scale_publishes_before_exception() {
     return passed;
 }
 
+bool test_bulk_dirty_word_masks() {
+    bool passed = true;
+    for (auto physical : {0u, 0x10000000u}) for (auto alias : {0u, 0x80000000u, 0xc0000000u}) {
+        for (bool already_marked : {false, true})
+            for (auto offset : {0u, 1u, 31u, 32u, 33u, 255u, 256u, 287u, 288u, 1023u, 1055u, 1056u})
+                for (auto size : {0u, 1u, 2u, 4u, 32u, 256u, 512u, 1024u, 1100u}) {
+            std::array<std::atomic_uint64_t, 4> renderer{};
+            std::array<std::uint64_t, 4> cpu{}, expected{};
+            for (unsigned word = 0u; word < expected.size(); ++word) {
+                expected[word] = already_marked ? UINT64_C(0x8000000000000001) : 0u;
+                renderer[word].store(expected[word]); cpu[word] = expected[word];
+            }
+            // Literal byte/page oracle across complete words and clipped edges.
+            for (unsigned byte = offset; byte < offset + size; ++byte) {
+                if (byte >= 32u && byte < 1056u) {
+                    const auto page = (byte - 32u) / 4u;
+                    expected[page / 64u] |= UINT64_C(1) << (page % 64u);
+                }
+            }
+            NotifyProbe notify{};
+            galaxy::GuestMemoryV1 memory{}; memory.user = &notify;
+            memory.notify_write = capture_notify_write;
+            memory.dirty_page_words = renderer.data(); memory.cpu_dirty_page_words = cpu.data();
+            memory.dirty_tracked_base = memory.cpu_dirty_tracked_base = physical + 32u;
+            memory.dirty_tracked_size = memory.cpu_dirty_tracked_size = 1024u;
+            memory.dirty_page_shift = memory.cpu_dirty_page_shift = 2u;
+            memory.dirty_page_word_count = memory.cpu_dirty_page_word_count = 4u;
+            galaxy::guest_notify_write(&memory, alias | (physical + offset), size);
+            const bool fully_tracked = offset >= 32u && offset + size <= 1056u;
+            bool same_words = cpu == expected;
+            for (unsigned word = 0u; word < expected.size(); ++word)
+                same_words &= renderer[word].load() == expected[word];
+            passed &= expect(same_words && notify.writes == (size == 0u || fully_tracked ? 0u : 1u),
+                "bulk dirty word masks preserve existing bits, exact page union, clipped edges and callback coverage across six aliases");
+        }
+    }
+    return passed;
+}
+
 bool test_gpr_helper_ram_spans() {
     bool passed = true;
     // Literal byte oracle, independent of the scalar load/store helpers.
@@ -6140,6 +6179,7 @@ int main() {
     passed &= test_audio_interleave_order_and_overlap();
     passed &= test_vector_copy_instruction_effects();
     passed &= test_matrix_scale_publishes_before_exception();
+    passed &= test_bulk_dirty_word_masks();
     passed &= test_gpr_helper_ram_spans();
     passed &= test_gpr_save_tracker_admission();
     passed &= test_psq_complete_ram_instruction();

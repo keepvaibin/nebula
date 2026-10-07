@@ -4995,6 +4995,29 @@ GALAXY_ALWAYS_INLINE bool guest_dirty_page_range_fast(
     return true;
 }
 
+// Multi-page bulk publication touches each bitmap word once. Keep this loop
+// outside scalar-store machine code; the single-page case remains inlined.
+// Readers cannot clear bits during CPU-owned publication. Other producers may
+// add bits, so renderer words still require atomic OR on a missing mask.
+template <typename Word>
+GALAXY_NOINLINE inline void guest_mark_dirty_page_words(
+    Word* words, std::uint32_t first_page, std::uint32_t last_page) {
+    const auto first_word = first_page / 64u;
+    const auto last_word = last_page / 64u;
+    for (std::uint32_t word = first_word;; ++word) {
+        const auto low = word == first_word ? first_page % 64u : 0u;
+        const auto high = word == last_word ? last_page % 64u : 63u;
+        const std::uint64_t mask = (UINT64_MAX << low) & (UINT64_MAX >> (63u - high));
+        if constexpr (std::is_same_v<Word, std::atomic_uint64_t>) {
+            if ((words[word].load(std::memory_order_relaxed) & mask) != mask)
+                words[word].fetch_or(mask, std::memory_order_relaxed);
+        } else {
+            words[word] |= mask;
+        }
+        if (word == last_word) break;
+    }
+}
+
 // Rare span crossing a tracker boundary. Keep this out of scalar-store code
 // and retain the full-coverage return value of the fast helpers: a partial
 // mark must not suppress the original notify_write fallback. Each tracker
@@ -5007,16 +5030,7 @@ GALAXY_NOINLINE inline void guest_mark_partial_dirty_pages(
     std::uint32_t first = 0u, last = 0u;
     if (words == nullptr || !guest_dirty_page_range_fast(
             address, size, base, extent, shift, word_count, &first, &last, true)) return;
-    for (std::uint32_t page = first;; ++page) {
-        const std::uint64_t bit = UINT64_C(1) << (page % 64u);
-        if constexpr (std::is_same_v<Word, std::atomic_uint64_t>) {
-            if ((words[page / 64u].load(std::memory_order_relaxed) & bit) == 0u)
-                words[page / 64u].fetch_or(bit, std::memory_order_relaxed);
-        } else {
-            words[page / 64u] |= bit;
-        }
-        if (page == last) break;
-    }
+    guest_mark_dirty_page_words(words, first, last);
 }
 
 GALAXY_ALWAYS_INLINE bool guest_mark_dirty_page_fast(
@@ -5043,9 +5057,9 @@ GALAXY_ALWAYS_INLINE bool guest_mark_dirty_page_fast(
         return false;
     }
 
-    for (std::uint32_t page = first_page;; ++page) {
-        const std::uint32_t word = page / 64u;
-        const std::uint64_t bit = 1ull << (page % 64u);
+    if (first_page == last_page) [[likely]] {
+        const std::uint32_t word = first_page / 64u;
+        const std::uint64_t bit = 1ull << (first_page % 64u);
         auto& dirty_word = memory->dirty_page_words[word];
         // Translated stores and frame capture share the simulation thread.
         // No consumer can clear a previously observed bit in the middle of
@@ -5055,9 +5069,8 @@ GALAXY_ALWAYS_INLINE bool guest_mark_dirty_page_fast(
         if ((dirty_word.load(std::memory_order_relaxed) & bit) == 0u) {
             dirty_word.fetch_or(bit, std::memory_order_relaxed);
         }
-        if (page == last_page) {
-            break;
-        }
+    } else {
+        guest_mark_dirty_page_words(memory->dirty_page_words, first_page, last_page);
     }
     return true;
 }
@@ -5101,12 +5114,11 @@ GALAXY_ALWAYS_INLINE bool guest_mark_cpu_dirty_page_fast(
         return false;
     }
 
-    for (std::uint32_t page = first_page;; ++page) {
-        memory->cpu_dirty_page_words[page / 64u] |=
-            1ull << (page % 64u);
-        if (page == last_page) {
-            break;
-        }
+    if (first_page == last_page) [[likely]] {
+        memory->cpu_dirty_page_words[first_page / 64u] |=
+            1ull << (first_page % 64u);
+    } else {
+        guest_mark_dirty_page_words(memory->cpu_dirty_page_words, first_page, last_page);
     }
     return true;
 }

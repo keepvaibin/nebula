@@ -81,6 +81,14 @@ earlier accepted checkpoints are retained. The unrelated pre-existing
   precise stfs conversion as translated code. This is a correctness fix,
   with additional notification work rather than an asserted speedup. Added
   unrun overflow-after-first-store checks for callback and both dirty trackers.
+- **Bulk dirty-word publication:** multi-page notifications now form exact
+  masks per bitmap word instead of marking every page individually. Fully
+  dirty words still avoid locked instructions; missing renderer bits use
+  atomic OR so concurrent producers are retained. Partial-tracker overlap
+  uses the same word masks. The scalar single-page path stays inlined and the
+  bulk loop is out of line. Added an unrun byte/page oracle across six aliases,
+  word edges, clipped spans and pre-existing bits. Removed work is up to 63
+  bitmap loads/updates per complete 64-page word; timing is unmeasured.
 
 For the sustained CPU candidates, contribution and milliseconds saved are
 **unmeasured**. Code inspection establishes removed work: one allocation per
