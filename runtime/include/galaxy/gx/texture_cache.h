@@ -33,6 +33,7 @@
 #include "galaxy/gx/shader_keys.h"  // fnv1a64
 #include "galaxy/native_api.h"
 
+#include <bitset>
 #include <cstddef>
 #include <cstdint>
 #include <list>
@@ -178,6 +179,11 @@ public:
     [[nodiscard]] std::uint64_t retirement_revision() const noexcept {
         return retirement_revision_;
     }
+    // Query at frame begin, before any new allocations can reuse reclaimed
+    // slots. A reused descriptor is a new identity and clears its retired bit.
+    [[nodiscard]] bool srv_index_retired(std::uint32_t index) const noexcept {
+        return index >= kSrvHeapCapacity || retired_srv_indices_[index];
+    }
 
     // Command list new-texture uploads are recorded on (CopyTextureRegion +
     // barrier to PIXEL_SHADER_RESOURCE).  Set by GxBackend each frame before
@@ -318,6 +324,9 @@ private:
     ID3D12GraphicsCommandList* upload_list_ = nullptr;
     std::uint32_t next_srv_index_ = 0;
     std::vector<std::uint32_t> free_srv_indices_;
+    // Heap size and retirement bitmap must describe the same index domain.
+    static constexpr std::uint32_t kSrvHeapCapacity = 4096u;
+    std::bitset<kSrvHeapCapacity> retired_srv_indices_;
     // Kept monotonic across shutdown/reinitialization, like resource lifetimes.
     std::uint64_t retirement_revision_ = 0;
 

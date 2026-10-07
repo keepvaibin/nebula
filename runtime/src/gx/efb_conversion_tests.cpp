@@ -1136,27 +1136,35 @@ V main(uint id : SV_VertexID) {
         const auto first = cache.get(image, mode, TlutRef{}, &memory);
         const auto hit = cache.get(image, mode, TlutRef{}, &memory);
         passed &= expect(hit.srv_index == first.srv_index &&
+            !cache.srv_index_retired(first.srv_index) &&
             cache.retirement_revision() == initial_revision,
             "texture hits do not invalidate cross-frame handles");
         passed &= expect(cache.invalidate_guest_range(address, 128u) == 1u &&
+            cache.srv_index_retired(first.srv_index) &&
             cache.retirement_revision() == initial_revision + 1u,
             "retirement publishes a cross-frame handle lifetime change");
         image.guest_addr = address + 128u;
         const auto same_frame = cache.get(image, mode, TlutRef{}, &memory);
         passed &= expect(same_frame.srv_index != first.srv_index &&
+            !cache.srv_index_retired(same_frame.srv_index) &&
             first.resource->GetDesc().Width == 8u,
             "retired resource and CPU descriptor survive later lookups in the same frame");
         cache.begin_frame(1u, kFramesInFlight);
         image.guest_addr = address + 256u;
         const auto other_slot = cache.get(image, mode, TlutRef{}, &memory);
-        passed &= expect(other_slot.srv_index != first.srv_index,
+        passed &= expect(other_slot.srv_index != first.srv_index &&
+            cache.srv_index_retired(first.srv_index) &&
+            !cache.srv_index_retired(other_slot.srv_index),
             "another frame slot cannot reclaim the retired CPU descriptor");
         // No command list is submitted by this lifetime fixture. In production,
         // returning to slot 0 requires its renderer fence wait first.
         cache.begin_frame(0u, kFramesInFlight);
+        passed &= expect(cache.srv_index_retired(first.srv_index),
+            "reclaimed slot retains its retired identity until allocation");
         image.guest_addr = address + 384u;
         const auto reclaimed = cache.get(image, mode, TlutRef{}, &memory);
         passed &= expect(reclaimed.srv_index == first.srv_index &&
+            !cache.srv_index_retired(reclaimed.srv_index) &&
             cache.retirement_revision() == initial_revision + 1u,
             "owning slot reclaims the descriptor without another retirement");
         cache.set_upload_list(nullptr);
