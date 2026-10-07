@@ -57,6 +57,12 @@ namespace detail {
 // advance by all 64 source bytes but write only pixels inside width/height.
 void decode_rgba8_tiles(const std::uint8_t* src, std::uint32_t width,
                         std::uint32_t height, RGBA8* out);
+// C4/C8 only. Caller validates tiled source and the full 16/256-entry palette;
+// palette points at the selected slot's big-endian entries.
+void decode_small_index_tiles(TexFormat format, const std::uint8_t* src,
+                              std::uint32_t width, std::uint32_t height,
+                              const std::uint8_t* palette, TlutFormat tlut_format,
+                              RGBA8* out);
 }  // namespace detail
 
 [[nodiscard]] std::uint8_t efb_copy_alias_texture_format(

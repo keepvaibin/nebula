@@ -129,6 +129,97 @@ bool test_rgba8_tile_decode() {
     return true;
 }
 
+bool test_small_index_tile_decode() {
+    using galaxy::gx::RGBA8;
+    using galaxy::gx::TexFormat;
+    using galaxy::gx::TlutFormat;
+    constexpr std::array<std::array<std::uint32_t, 2>, 10> sizes{{
+        {1u, 1u}, {3u, 2u}, {7u, 9u}, {8u, 8u}, {9u, 9u},
+        {31u, 33u}, {32u, 32u}, {33u, 33u}, {64u, 65u}, {257u, 3u}}};
+    constexpr std::array<std::uint16_t, 8> edge_words{
+        0x0000u, 0xFFFFu, 0x8000u, 0x7FFFu,
+        0xF800u, 0x07E0u, 0x001Fu, 0x1234u};
+    constexpr RGBA8 guard{0x91u, 0x38u, 0xE2u, 0x57u};
+    const auto same = [](RGBA8 a, RGBA8 b) {
+        return a.r == b.r && a.g == b.g && a.b == b.b && a.a == b.a;
+    };
+    // Arithmetic channel expansion is independent of the decoder's shifts/ORs.
+    const auto color = [](std::uint16_t word, TlutFormat format) -> RGBA8 {
+        const auto e5 = [](unsigned n) { return static_cast<std::uint8_t>(8u * n + n / 4u); };
+        const auto e6 = [](unsigned n) { return static_cast<std::uint8_t>(4u * n + n / 16u); };
+        const auto e4 = [](unsigned n) { return static_cast<std::uint8_t>(17u * n); };
+        if (format == TlutFormat::IA8) {
+            const auto intensity = static_cast<std::uint8_t>(word % 256u);
+            return {intensity, intensity, intensity, static_cast<std::uint8_t>(word / 256u)};
+        }
+        if (format == TlutFormat::RGB565) {
+            return {e5(word / 2048u), e6((word / 32u) % 64u), e5(word % 32u), 255u};
+        }
+        if (word >= 0x8000u) {
+            return {e5((word / 1024u) % 32u), e5((word / 32u) % 32u), e5(word % 32u), 255u};
+        }
+        const unsigned alpha = word / 4096u;
+        return {e4((word / 256u) % 16u), e4((word / 16u) % 16u), e4(word % 16u),
+                static_cast<std::uint8_t>(32u * alpha + 4u * alpha + alpha / 2u)};
+    };
+    for (const auto format : {TexFormat::C4, TexFormat::C8}) {
+        const bool four_bits = format == TexFormat::C4;
+        const unsigned entries = four_bits ? 16u : 256u;
+        const unsigned tile_rows = four_bits ? 8u : 4u;
+        for (const auto tlut : {TlutFormat::IA8, TlutFormat::RGB565, TlutFormat::RGB5A3}) {
+            for (const auto size : sizes) {
+                const auto width = size[0], height = size[1];
+                const auto tiles_x = (width + 7u) / 8u;
+                const auto tiles_y = (height + tile_rows - 1u) / tile_rows;
+                for (const auto prefix : {0u, 513u}) {
+                    std::vector<std::uint8_t> source(3u + tiles_x * tiles_y * 32u);
+                    for (std::size_t i = 3u; i < source.size(); ++i) {
+                        source[i] = static_cast<std::uint8_t>((i - 3u) * 37u + 13u);
+                    }
+                    std::vector<std::uint8_t> bank(prefix + entries * 2u, 0xE7u);
+                    std::vector<RGBA8> output(width * height + 2u, guard);
+                    // Reuse the same input/output pointers with changed colors;
+                    // no table may survive into the next call or palette format.
+                    for (unsigned round = 0u; round < 2u; ++round) {
+                        std::array<std::uint16_t, 256> words{};
+                        for (unsigned i = 0u; i < entries; ++i) {
+                            words[i] = static_cast<std::uint16_t>(i * 421u + round * 0x3D37u);
+                            if (round == 0u && i < edge_words.size()) words[i] = edge_words[i];
+                            bank[prefix + i * 2u] = static_cast<std::uint8_t>(words[i] >> 8u);
+                            bank[prefix + i * 2u + 1u] = static_cast<std::uint8_t>(words[i]);
+                        }
+                        std::fill(output.begin(), output.end(), guard);
+                        galaxy::gx::detail::decode_small_index_tiles(format, source.data() + 3u,
+                            width, height, bank.data() + prefix, tlut, output.data() + 1u);
+                        if (!expect(same(output.front(), guard) && same(output.back(), guard),
+                                    "C4/C8 edge tiles stay inside output")) return false;
+                        for (std::uint32_t y = 0; y < height; ++y) {
+                            for (std::uint32_t x = 0; x < width; ++x) {
+                                const auto tile = (y / tile_rows) * tiles_x + x / 8u;
+                                const auto local_pixel = (y % tile_rows) * 8u + x % 8u;
+                                const auto byte = source[3u + tile * 32u +
+                                    (four_bits ? local_pixel / 2u : local_pixel)];
+                                const unsigned index = four_bits
+                                    ? (local_pixel % 2u == 0u ? byte / 16u : byte % 16u)
+                                    : byte;
+                                if (!expect(same(output[1u + y * width + x], color(words[index], tlut)),
+                                            "C4/C8 tile address, TLUT channels and changed palette match oracle")) {
+                                    return false;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        galaxy::gx::detail::decode_small_index_tiles(
+            format, nullptr, 0u, 9u, nullptr, TlutFormat::IA8, nullptr);
+        galaxy::gx::detail::decode_small_index_tiles(
+            format, nullptr, 9u, 0u, nullptr, TlutFormat::RGB565, nullptr);
+    }
+    return true;
+}
+
 galaxy::gx::EfbCopyParams make_filter_params(
     const std::array<std::uint32_t, 7>& taps) {
     galaxy::gx::EfbCopyParams params{};
@@ -1726,6 +1817,7 @@ bool test_warp_against_oracle() {
 int main() {
     bool passed = test_cpu_oracle();
     passed &= test_rgba8_tile_decode();
+    passed &= test_small_index_tile_decode();
     passed &= test_clear_precision();
     passed &= test_warp_against_oracle();
     passed &= test_gx_pixel_readbacks();

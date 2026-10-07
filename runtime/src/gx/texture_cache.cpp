@@ -22,6 +22,7 @@
 #include "galaxy/gx/render_config.h"
 
 #include <algorithm>
+#include <array>
 #include <bit>
 #include <cassert>
 #include <chrono>
@@ -402,12 +403,11 @@ static void generate_rgba8_mip_level(
 // Per-format decode functions.
 // Each writes `width * height` RGBA8 pixels into `out` (row-major, no padding).
 // `src` points into guest memory at the base of the texture.
-// For CI formats, `tlut_bank` is the full 0x10000-byte TLUT bank; the TLUT
-// entries start at byte offset (tlut.tmem_offset * 2) (each entry is 2 bytes).
+// CI palettes live in the cache's absolute TMEM byte bank. The caller validates
+// the full palette extent at tlut.tmem_offset * 512; each entry occupies 2 bytes.
 // ---------------------------------------------------------------------------
 
-// GX textures use a Morton/swizzle tiling within each block.  For the block
-// formats below the tile order within a block is straightforward raster.
+// The block formats below use raster pixel order inside each tile.
 
 static void decode_I4(
     const std::uint8_t* src,
@@ -655,16 +655,15 @@ void detail::decode_rgba8_tiles(
 
 namespace {
 
-// Palettized formats: indices are read from the block layout, then passed
-// through tlut_bank at offset `tlut_byte_offset` with `tlut_fmt`.
+// C4/C8 indices use either raw entry conversion or an already decoded small
+// palette. Keep the same tiled traversal for both paths.
 
+template <typename PaletteLookup>
 static void decode_C4(
     const std::uint8_t* src,
     std::uint32_t width,
     std::uint32_t height,
-    const std::uint8_t* tlut_bank,
-    std::uint32_t tlut_byte_offset,
-    TlutFormat tlut_fmt,
+    const PaletteLookup& lookup,
     RGBA8* out) {
     // Block: 8×8 pixels; 4 bits per index, high nibble first.
     const std::uint32_t blocks_x = (width  + 7u) / 8u;
@@ -682,10 +681,7 @@ static void decode_C4(
                                 (half == 0u)
                                     ? static_cast<std::uint32_t>((byte >> 4) & 0xFu)
                                     : static_cast<std::uint32_t>(byte & 0xFu);
-                            const std::uint32_t entry_offset =
-                                tlut_byte_offset + index * 2u;
-                            out[iy * width + ix] = decode_tlut_entry(
-                                tlut_bank + entry_offset, tlut_fmt);
+                            out[iy * width + ix] = lookup(index);
                         }
                     }
                 }
@@ -694,13 +690,12 @@ static void decode_C4(
     }
 }
 
+template <typename PaletteLookup>
 static void decode_C8(
     const std::uint8_t* src,
     std::uint32_t width,
     std::uint32_t height,
-    const std::uint8_t* tlut_bank,
-    std::uint32_t tlut_byte_offset,
-    TlutFormat tlut_fmt,
+    const PaletteLookup& lookup,
     RGBA8* out) {
     // Block: 8×4 pixels; one byte per index.
     const std::uint32_t blocks_x = (width  + 7u) / 8u;
@@ -713,16 +708,56 @@ static void decode_C8(
                     const std::uint32_t ix = bx * 8u + px;
                     const std::uint32_t iy = by * 4u + py;
                     if (ix < width && iy < height) {
-                        const std::uint32_t entry_offset =
-                            tlut_byte_offset + index * 2u;
-                        out[iy * width + ix] = decode_tlut_entry(
-                            tlut_bank + entry_offset, tlut_fmt);
+                        out[iy * width + ix] = lookup(index);
                     }
                 }
             }
         }
     }
 }
+
+template <std::size_t Entries, typename Decode>
+static void decode_with_small_palette(
+    const std::uint8_t* entries, TlutFormat format,
+    std::uint64_t pixels, const Decode& decode) {
+    const auto raw_lookup = [entries, format](std::uint32_t index) {
+        return decode_tlut_entry(entries + index * 2u, format);
+    };
+    // Amortize table construction only when it removes at least three of
+    // every four color conversions. Tiny textures retain the original path.
+    if (pixels < Entries * 4u) {
+        decode(raw_lookup);
+        return;
+    }
+    std::array<RGBA8, Entries> palette;
+    for (std::size_t index = 0; index < Entries; ++index) {
+        palette[index] = raw_lookup(static_cast<std::uint32_t>(index));
+    }
+    decode([&palette](std::uint32_t index) { return palette[index]; });
+}
+
+}  // namespace
+
+void detail::decode_small_index_tiles(
+    TexFormat format, const std::uint8_t* src,
+    std::uint32_t width, std::uint32_t height,
+    const std::uint8_t* palette, TlutFormat tlut_format, RGBA8* out) {
+    const std::uint64_t pixels = static_cast<std::uint64_t>(width) * height;
+    switch (format) {
+    case TexFormat::C4:
+        decode_with_small_palette<16u>(palette, tlut_format, pixels,
+            [&](const auto& lookup) { decode_C4(src, width, height, lookup, out); });
+        return;
+    case TexFormat::C8:
+        decode_with_small_palette<256u>(palette, tlut_format, pixels,
+            [&](const auto& lookup) { decode_C8(src, width, height, lookup, out); });
+        return;
+    default:
+        throw std::runtime_error("[TextureCache] expected small indexed format");
+    }
+}
+
+namespace {
 
 static void decode_C14X2(
     const std::uint8_t* src,
@@ -1869,12 +1904,9 @@ TextureHandle TextureCache::get(
             detail::decode_rgba8_tiles(src, lw, lh, out);
             break;
         case TexFormat::C4:
-            decode_C4(src, lw, lh,
-                tlut_bank_, tlut_byte_offset, tlut.format, out);
-            break;
         case TexFormat::C8:
-            decode_C8(src, lw, lh,
-                tlut_bank_, tlut_byte_offset, tlut.format, out);
+            detail::decode_small_index_tiles(image.format, src, lw, lh,
+                tlut_bank_ + tlut_byte_offset, tlut.format, out);
             break;
         case TexFormat::C14X2:
             decode_C14X2(src, lw, lh,
