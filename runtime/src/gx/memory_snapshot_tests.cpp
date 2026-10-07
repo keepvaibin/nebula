@@ -3,6 +3,7 @@
 #include "galaxy/gx/dependency_range_memo.h"
 #include "galaxy/gx/fifo_cache_fingerprint.h"
 #include "galaxy/gx/texture_sampling.h"
+#include "galaxy/gx/guest_range_envelope.h"
 
 #include <algorithm>
 #include <array>
@@ -138,6 +139,74 @@ bool reject_device_write(
 }
 
 void observe_guest_write(void*, std::uint32_t, std::uint32_t) {}
+
+bool guest_range_envelope_never_rejects_live_ranges() {
+    struct Range { std::uint32_t guest_addr, size; };
+    galaxy::gx::detail::ConservativeGuestRangeEnvelope envelope;
+    if (envelope.may_overlap(0u, UINT32_MAX) ||
+        envelope.may_overlap(std::span<const Range>{})) return false;
+    envelope.include(0x10000100u, 128u);
+    if (envelope.may_overlap(0x00000100u, 128u) ||
+        envelope.may_overlap(0x100000FFu, 1u) ||
+        envelope.may_overlap(0x10000180u, 1u) ||
+        envelope.may_overlap(0x10000110u, 0u) ||
+        !envelope.may_overlap(0x1000017Fu, 1u)) return false;
+    const std::array<Range, 3> separated{{
+        {0x00000100u, 16u}, {0x10000110u, 0u}, {0x20000100u, 16u}}};
+    if (envelope.may_overlap(std::span<const Range>{separated})) return false;
+    envelope.clear();
+    if (envelope.may_overlap(0x10000100u, 128u)) return false;
+
+    std::uint32_t random = 0x81B63F29u;
+    const auto next = [&] {
+        random ^= random << 13u;
+        random ^= random >> 17u;
+        random ^= random << 5u;
+        return random;
+    };
+    std::vector<Range> live;
+    std::array<Range, 128> queries{};
+    for (unsigned i = 0; i < queries.size(); ++i) {
+        queries[i] = {i * 0x02000000u + (next() & 0xFFFFFu), next() & 0xFFFFu};
+    }
+    const auto overlaps = [](Range a, Range b) {
+        return a.size != 0u && b.size != 0u &&
+            static_cast<std::uint64_t>(a.guest_addr) <
+                static_cast<std::uint64_t>(b.guest_addr) + b.size &&
+            static_cast<std::uint64_t>(b.guest_addr) <
+                static_cast<std::uint64_t>(a.guest_addr) + a.size;
+    };
+    for (unsigned step = 0; step < 512u; ++step) {
+        // Explicit boundaries and >32-bit range ends, followed by arbitrary
+        // spans. Flat brute-force overlap is independent of the band filter.
+        Range added{next(), next() & 0xFFFFFFu};
+        if (step == 0u) added = {0x0FFFFFF0u, 64u};
+        if (step == 1u) added = {0x1FFFFFF0u, 64u};
+        if (step == 2u) added = {0xFFFFFFF0u, 64u};
+        if (step == 3u) added = {0u, UINT32_MAX};
+        live.push_back(added);
+        envelope.include(added.guest_addr, added.size);
+        if (step % 7u == 0u && live.size() > 2u) live.erase(live.begin());
+        bool any = false;
+        for (const auto query : queries) {
+            const bool actual = std::any_of(live.begin(), live.end(),
+                [&](Range entry) { return overlaps(entry, query); });
+            any |= actual;
+            const std::span<const Range> single{&query, 1u};
+            if (actual && (!envelope.may_overlap(query.guest_addr, query.size) ||
+                           !envelope.may_overlap(single))) return false;
+        }
+        if (any && !envelope.may_overlap(std::span<const Range>{queries})) return false;
+        // Every newly included nonempty range must remain observable itself.
+        if (added.size != 0u && !envelope.may_overlap(added.guest_addr, added.size)) return false;
+        if (step % 53u == 52u) {
+            envelope.clear();
+            live.clear();
+            if (envelope.may_overlap(std::span<const Range>{queries})) return false;
+        }
+    }
+    return true;
+}
 
 bool dependency_range_memo_preserves_exact_keys() {
     galaxy::gx::detail::DependencyRangeMemo actual;
@@ -1730,6 +1799,8 @@ int main() {
     memory.cpu_dirty_page_word_count = 1u;
 
     bool ok = true;
+    ok = expect(guest_range_envelope_never_rejects_live_ranges(),
+             "conservative texture range filter rejected a live guest interval") && ok;
     ok = expect(dependency_range_memo_preserves_exact_keys(),
              "inline dependency range memo lost exact equality across overflow") && ok;
     ok = expect(

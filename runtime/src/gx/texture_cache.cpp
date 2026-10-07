@@ -102,7 +102,7 @@ const TextureCache::GuestRange* first_overlapping_dirty_range(
         return nullptr;
     }
 
-    const auto it = std::lower_bound(
+    auto it = std::lower_bound(
         ranges.begin(),
         ranges.end(),
         target_begin,
@@ -112,11 +112,8 @@ const TextureCache::GuestRange* first_overlapping_dirty_range(
                        static_cast<std::uint64_t>(range.size) <=
                    value;
         });
-    if (it == ranges.end()) {
-        return nullptr;
-    }
-    if (static_cast<std::uint64_t>(it->guest_addr) < target_end) {
-        return &*it;
+    for (; it != ranges.end() && it->guest_addr < target_end; ++it) {
+        if (it->size != 0u) return &*it;
     }
     return nullptr;
 }
@@ -1146,6 +1143,7 @@ void TextureCache::shutdown() {
                   << " live-bytes=" << content_bytes_ << '\n';
     }
     entries_.clear();
+    decoded_guest_envelope_.clear();
     content_entries_.clear();
     content_lru_.clear();
     content_bytes_ = 0;
@@ -1156,6 +1154,7 @@ void TextureCache::shutdown() {
     content_evicted_bytes_ = 0;
     content_evicted_entries_ = 0;
     efb_aliases_.clear();
+    alias_guest_envelope_.clear();
     retired_entries_.clear();
     release_upload_arenas();
     upload_arenas_.clear();
@@ -1394,7 +1393,8 @@ bool TextureCache::register_efb_copy(
     // overlap the newly captured copy. Galaxy reuses capture work buffers for
     // glass/blur effects; exact-address eviction leaves stale GPU aliases.
     bool evicted_overlap = false;
-    for (auto it = entries_.begin(); it != entries_.end(); ) {
+    for (auto it = decoded_guest_envelope_.may_overlap(guest_addr, guest_byte_size)
+             ? entries_.begin() : entries_.end(); it != entries_.end(); ) {
         const std::uint64_t entry_begin = it->first.guest_addr;
         const std::uint64_t entry_end =
             entry_begin + it->second.handle.guest_byte_size;
@@ -1406,7 +1406,8 @@ bool TextureCache::register_efb_copy(
             ++it;
         }
     }
-    for (auto it = efb_aliases_.begin(); it != efb_aliases_.end(); ) {
+    for (auto it = alias_guest_envelope_.may_overlap(guest_addr, guest_byte_size)
+             ? efb_aliases_.begin() : efb_aliases_.end(); it != efb_aliases_.end(); ) {
         const std::uint64_t alias_begin = it->first.guest_addr;
         const std::uint64_t alias_end =
             alias_begin + it->second.handle.guest_byte_size;
@@ -1431,6 +1432,10 @@ bool TextureCache::register_efb_copy(
         }
     }
 
+    // Publish every new/extended alias footprint. Removal never shrinks the
+    // filter; a fresh empty map can reset it before its first publication.
+    if (efb_aliases_.empty()) alias_guest_envelope_.clear();
+    alias_guest_envelope_.include(guest_addr, guest_byte_size);
     if (current_alias_same_resource) {
         const bool footprint_changed =
             current_alias_it->second.handle.guest_byte_size != guest_byte_size;
@@ -1515,6 +1520,7 @@ void TextureCache::invalidate_all() {
         retire(std::move(entry));
     }
     entries_.clear();
+    decoded_guest_envelope_.clear();
     // EFB aliases are NOT cleared here — their content lives on the GPU.
     // SRV slots for retired decoded textures are returned to the free list.
 }
@@ -1542,7 +1548,8 @@ std::size_t TextureCache::invalidate_guest_ranges(
 
 
     std::size_t evicted = 0;
-    for (auto it = entries_.begin(); it != entries_.end(); ) {
+    for (auto it = decoded_guest_envelope_.may_overlap(sorted_coalesced_ranges)
+             ? entries_.begin() : entries_.end(); it != entries_.end(); ) {
         const std::uint64_t tex_begin = it->first.guest_addr;
         const std::uint64_t tex_end = tex_begin + it->second.handle.guest_byte_size;
         const GuestRange* dirty = first_overlapping_dirty_range(
@@ -1577,7 +1584,8 @@ std::size_t TextureCache::invalidate_guest_ranges(
             ++it;
         }
     }
-    for (auto it = efb_aliases_.begin(); it != efb_aliases_.end(); ) {
+    for (auto it = alias_guest_envelope_.may_overlap(sorted_coalesced_ranges)
+             ? efb_aliases_.begin() : efb_aliases_.end(); it != efb_aliases_.end(); ) {
         const std::uint64_t alias_begin = it->first.guest_addr;
         const std::uint64_t alias_end =
             alias_begin + it->second.handle.guest_byte_size;
@@ -1838,6 +1846,8 @@ TextureHandle TextureCache::get(
                 entry.handle.generated_mips = generated_mips;
                 entry.handle.guest_byte_size = total_guest_size;
                 const TextureHandle handle = entry.handle;
+                if (entries_.empty()) decoded_guest_envelope_.clear();
+                decoded_guest_envelope_.include(image.guest_addr, total_guest_size);
                 entries_.emplace(key, std::move(entry));
                 return handle;
             }
@@ -2174,6 +2184,8 @@ TextureHandle TextureCache::get(
     const auto emplace_start = trace_stalls
         ? std::chrono::steady_clock::now()
         : std::chrono::steady_clock::time_point{};
+    if (entries_.empty()) decoded_guest_envelope_.clear();
+    decoded_guest_envelope_.include(image.guest_addr, total_guest_size);
     entries_.emplace(key, std::move(entry));
     if (content_key.has_value()) {
         ++content_decoded_misses_;
