@@ -760,6 +760,19 @@ FifoParser::CachedDisplayList* FifoParser::find_cached_display_list(
     if (entries.size() == 1u) {
         return inspect(entries.front());
     }
+    // Small variant sets still need owned indices: a changed list can erase
+    // its map entry inside inspect(). Keep that protection without a heap
+    // allocation in the ordinary few-layout case. Larger sets retain the
+    // existing dynamically sized snapshot.
+    std::array<std::size_t, 8> fixed_candidates;
+    const std::size_t candidate_count = entries.size();
+    if (candidate_count <= fixed_candidates.size()) {
+        std::copy(entries.begin(), entries.end(), fixed_candidates.begin());
+        for (std::size_t i = 0; i < candidate_count; ++i) {
+            if (auto* cached = inspect(fixed_candidates[i])) return cached;
+        }
+        return nullptr;
+    }
     const std::vector<std::size_t> candidates = entries;
     for (const std::size_t index : candidates) {
         if (auto* cached = inspect(index)) {
@@ -1750,12 +1763,13 @@ void FifoParser::run_window(
                     if (cached.valid &&
                         cached.guest_addr == canonical_guest_addr &&
                         cached.byte_size == byte_size) {
-                        if (cached.bytes.size() == dl_window.size() &&
+                        const bool bytes_match =
+                            cached.bytes.size() == dl_window.size() &&
                             std::equal(
                                 dl_window.begin(),
                                 dl_window.end(),
-                                cached.bytes.begin()) &&
-                            display_list_dependencies_match(cached, state)) {
+                                cached.bytes.begin());
+                        if (bytes_match && display_list_dependencies_match(cached, state)) {
                             if (profile != nullptr) {
                                 ++profile->call_dl_cache_hits;
                             }
@@ -1777,11 +1791,7 @@ void FifoParser::run_window(
                             }
                             break;
                         }
-                        if (cached.bytes.size() != dl_window.size() ||
-                            !std::equal(
-                                dl_window.begin(),
-                                dl_window.end(),
-                                cached.bytes.begin())) {
+                        if (!bytes_match) {
                             invalidate_display_list_cache_index(
                                 last_display_list_cache_index_);
                         }
