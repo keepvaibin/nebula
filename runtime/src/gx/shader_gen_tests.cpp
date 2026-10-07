@@ -345,6 +345,69 @@ int main() {
         }
     }
 
+    {
+        GxState state;
+        const auto write_bp = [&state](std::uint8_t reg, std::uint32_t value) {
+            state.load_bp((static_cast<std::uint32_t>(reg) << 24u) | value);
+        };
+        constexpr auto map_bit = static_cast<std::uint8_t>(1u << 6u);
+        write_bp(bp::kGenMode, 1u);
+        write_bp(bp::kTevOrderBase, 6u | (1u << 6u));
+        if (sampled_texture_map_mask(state) != 0u) {
+            ++g_failures;
+            std::printf("FAILED: dead texture stage bound leftover map\n");
+        }
+        // Every selector position, including alpha-only texture consumers.
+        // Other operands remain nontexture register inputs.
+        for (unsigned input = 0; input < 4u; ++input) {
+            for (unsigned value = 0; value < 16u; ++value) {
+                write_bp(bp::kTevColorEnvBase, value << (input * 4u));
+                const auto expected = static_cast<std::uint8_t>(
+                    value == 8u || value == 9u ? map_bit : 0u);
+                if (sampled_texture_map_mask(state) != expected) {
+                    ++g_failures;
+                    std::printf("FAILED: TEXC/TEXA color selector binding\n");
+                }
+            }
+        }
+        write_bp(bp::kTevColorEnvBase, 0u);
+        for (unsigned input = 0; input < 4u; ++input) {
+            for (unsigned value = 0; value < 8u; ++value) {
+                write_bp(bp::kTevAlphaEnvBase, value << (4u + input * 3u));
+                const auto expected = static_cast<std::uint8_t>(value == 4u ? map_bit : 0u);
+                if (sampled_texture_map_mask(state) != expected) {
+                    ++g_failures;
+                    std::printf("FAILED: TEXA alpha selector binding\n");
+                }
+            }
+        }
+        write_bp(bp::kTevAlphaEnvBase, 0u);
+        write_bp(bp::kTevZEnv1, 4u);
+        if (sampled_texture_map_mask(state) != map_bit) {
+            ++g_failures;
+            std::printf("FAILED: z-texture retains raw sample without TEX operands\n");
+        }
+        write_bp(bp::kGenMode, 0u);
+        if (sampled_texture_map_mask(state) != 0u) {
+            ++g_failures;
+            std::printf("FAILED: no texgens cannot supply z-texture raw sample\n");
+        }
+        for (unsigned stage = 0; stage < kMaxTevStages; ++stage) {
+            GxState staged;
+            staged.load_bp((static_cast<std::uint32_t>(bp::kGenMode) << 24u) |
+                           (stage << 10u) | 1u);
+            const unsigned map = stage & 7u;
+            staged.load_bp((static_cast<std::uint32_t>(bp::kTevOrderBase + stage / 2u) << 24u) |
+                           ((map | (1u << 6u)) << ((stage & 1u) * 12u)));
+            staged.load_bp((static_cast<std::uint32_t>(bp::kTevColorEnvBase + 2u * stage) << 24u) |
+                           8u);
+            if (sampled_texture_map_mask(staged) != static_cast<std::uint8_t>(1u << map)) {
+                ++g_failures;
+                std::printf("FAILED: live texture stage/map coverage\n");
+            }
+        }
+    }
+
     check_compiles(
         std::string{ShaderGenerator::line_geometry_shader_source()},
         "gs_5_1",

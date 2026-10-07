@@ -10,6 +10,7 @@
 #include "galaxy/gx/gx_state.h"
 
 #include "galaxy/gx/fifo_parser.h"
+#include "galaxy/gx/texture_sampling.h"
 #include "galaxy/gx/uber_constants.h"
 
 #include <algorithm>
@@ -175,7 +176,17 @@ void validate_xf_write(
 // complete BP inputs, not the larger set affecting visual state. Uniform,
 // blend, scissor and copy writes must still execute, but cannot change the
 // cached hash of guest-memory dependency shape.
-[[nodiscard]] constexpr bool affects_dependency_shape(std::uint8_t reg) noexcept {
+[[nodiscard]] constexpr bool affects_dependency_shape(
+    std::uint8_t reg, std::uint32_t changed) noexcept {
+    // The sampled-map mask observes combiner input selectors and z-texture
+    // enablement. Other combiner arithmetic, swaps and z format bits do not
+    // change texture ranges, so they need not discard the dependency memo.
+    if (reg >= bp::kTevColorEnvBase && reg < bp::kTevColorEnvBase + 0x20u) {
+        return (changed & ((reg & 1u) != 0u ? 0xFFF0u : 0xFFFFu)) != 0u;
+    }
+    if (reg == bp::kTevZEnv1) {
+        return (changed & 0xCu) != 0u;
+    }
     if (reg == bp::kGenMode || reg == bp::kIndRef ||
         reg == bp::kTlutSrcAddr || reg == bp::kTlutDest ||
         (reg >= bp::kTevOrderBase && reg < bp::kTevOrderBase + 8u) ||
@@ -364,7 +375,7 @@ void GxState::load_bp(std::uint32_t command) {
         return;
     }
     bp_[reg] = next;
-    if (affects_dependency_shape(reg)) {
+    if (affects_dependency_shape(reg, previous ^ next)) {
         invalidate_dependency_shape();
     }
 
@@ -784,6 +795,9 @@ std::uint64_t GxState::dependency_shape_hash() const noexcept {
     }
 
     hash = fnv1a_mix_u32(hash, state.bp(bp::kGenMode));
+    // Exact live-map membership is sufficient for the newly observed TEV
+    // inputs/z-texture enablement; do not hash all 32 arithmetic env words.
+    hash = fnv1a_mix_u32(hash, sampled_texture_map_mask(state));
     for (std::uint8_t reg = bp::kTevOrderBase;
          reg < bp::kTevOrderBase + 8u;
          ++reg) {
