@@ -494,6 +494,83 @@ public:
             guest_load_u32(&second.memory, outer_addr + 1u, nullptr, 0u) == second_addr;
     }
 
+    static bool texture_keys_preserve_actual_palette_dependencies() {
+        auto backend = std::make_unique<GxBackend>();
+        for (unsigned map = 0u; map < kMaxTextureMaps; ++map) {
+            const unsigned bank = map >= 4u ? bp::kTexHighBankOffset : 0u;
+            const unsigned slot = map & 3u;
+            const auto write = [&](unsigned base, std::uint32_t value) {
+                backend->state_.load_bp(((base + bank + slot) << 24u) | value);
+            };
+            const auto mask = static_cast<std::uint8_t>(1u << map);
+            for (auto format : {TexFormat::I4, TexFormat::I8, TexFormat::IA4,
+                    TexFormat::IA8, TexFormat::RGB565, TexFormat::RGB5A3,
+                    TexFormat::RGBA8, TexFormat::CMPR, TexFormat::C4,
+                    TexFormat::C8, TexFormat::C14X2}) {
+                write(bp::kTexImage0Base, 7u | (7u << 10u) |
+                    (static_cast<std::uint32_t>(format) << 20u));
+                write(bp::kTexMode0Base, 0u); // nearest: no host mip settings
+                write(bp::kTexTlutBase, 0u);
+                const auto binding = backend->capture_texture_binding_key(mask);
+                const auto image = backend->state_.tex_image(map);
+                const auto mode = backend->state_.tex_mode(map);
+                const auto handle = backend->texture_handle_key(image, mode, backend->state_.tex_tlut(map));
+                const bool indexed = format == TexFormat::C4 ||
+                    format == TexFormat::C8 || format == TexFormat::C14X2;
+                // Literal TLUT fields: slot in bits 0..9, format in 10..11.
+                for (std::uint32_t palette : {1u, 1u << 10u, 1023u | (2u << 10u)}) {
+                    write(bp::kTexTlutBase, palette);
+                    const bool same_binding = binding == backend->capture_texture_binding_key(mask);
+                    const bool same_handle = handle == backend->texture_handle_key(
+                        image, mode, backend->state_.tex_tlut(map));
+                    if (same_binding == indexed || same_handle == indexed) return false;
+                }
+                write(bp::kTexTlutBase, 0u);
+                write(bp::kTexMode0Base, 1u); // changed S wrap remains relevant
+                if (binding == backend->capture_texture_binding_key(mask)) return false;
+            }
+        }
+        return true;
+    }
+
+    static bool identical_tlut_reload_preserves_backend_bindings() {
+        auto backend = std::make_unique<GxBackend>();
+        constexpr std::uint32_t address = 0x00001000u;
+        std::array<std::byte, 32> bytes{};
+        GuestMemoryRegionV1 region{address, 32u, bytes.data()};
+        GuestMemoryV1 memory{};
+        memory.regions = &region; memory.region_count = 1u;
+        backend->frame_memory_ = &memory;
+        backend->state_.load_bp(0x64000000u | (address >> 5u));
+        backend->state_.load_bp(0x65000400u); // 32 bytes at bank offset zero
+        GxBackend::TextureHandleKey handle_key{};
+        TextureHandle handle{};
+        GxBackend::TextureBindingKey binding_key{};
+        GxBackend::TextureBindingTables tables{};
+        backend->texture_handle_cache_.emplace(handle_key, handle);
+        backend->frame_texture_handle_cache_.emplace(handle_key, handle);
+        backend->frame_texture_binding_tables_.emplace(binding_key, tables);
+        backend->persistent_texture_binding_tables_.emplace(binding_key, tables);
+        backend->frame_texture_tables_.emplace(GxBackend::TextureTableKey{}, D3D12_GPU_DESCRIPTOR_HANDLE{});
+        backend->texture_bindings_dirty_ = false;
+        backend->current_texture_binding_key_valid_ = true;
+        backend->on_tlut_load();
+        if (backend->texture_handle_cache_.size() != 1u ||
+            backend->frame_texture_handle_cache_.size() != 1u ||
+            backend->frame_texture_binding_tables_.size() != 1u ||
+            backend->persistent_texture_binding_tables_.size() != 1u ||
+            backend->frame_texture_tables_.size() != 1u ||
+            backend->texture_bindings_dirty_ || !backend->current_texture_binding_key_valid_) return false;
+        bytes[0] = std::byte{0xff};
+        backend->on_tlut_load();
+        return backend->texture_handle_cache_.empty() &&
+            backend->frame_texture_handle_cache_.empty() &&
+            backend->frame_texture_binding_tables_.empty() &&
+            backend->persistent_texture_binding_tables_.empty() &&
+            backend->frame_texture_tables_.empty() &&
+            backend->texture_bindings_dirty_ && !backend->current_texture_binding_key_valid_;
+    }
+
     static bool texture_binding_footprints_retire_all_dependent_caches() {
         auto backend = std::make_unique<GxBackend>();
         constexpr std::uint32_t address = 0x00100000u;
@@ -1124,6 +1201,12 @@ int main() {
     if (!expect(galaxy::gx::GxBackendMemorySnapshotTestAccess::
         dependency_discovery_is_independent_and_tracks_dl_versions(),
         "dependency discovery must not wait for rendering and must track dirty nested DL versions")) return 1;
+    if (!expect(galaxy::gx::GxBackendMemorySnapshotTestAccess::
+        texture_keys_preserve_actual_palette_dependencies(),
+        "backend texture keys ignore palettes only for direct formats in both register banks")) return 1;
+    if (!expect(galaxy::gx::GxBackendMemorySnapshotTestAccess::
+        identical_tlut_reload_preserves_backend_bindings(),
+        "identical TLUT reload preserves backend caches; changed bytes invalidate all bindings")) return 1;
     if (!expect(galaxy::gx::GxBackendMemorySnapshotTestAccess::
         texture_binding_footprints_retire_all_dependent_caches(),
         "lower-mip and strided EFB writes retire backend handles and binding tables")) return 1;
