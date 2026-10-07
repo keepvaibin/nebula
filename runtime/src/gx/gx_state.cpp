@@ -219,6 +219,13 @@ void GxState::load_xf(
     const std::uint32_t* values,
     std::uint16_t count) {
     validate_xf_write(op::kLoadXfReg, base, values, count);
+    apply_validated_xf(base, values, count);
+}
+
+void GxState::apply_validated_xf(
+    std::uint16_t base,
+    const std::uint32_t* values,
+    std::uint16_t count) {
     for (std::uint16_t i = 0; i < count; ++i) {
         const std::uint16_t addr =
             static_cast<std::uint16_t>(base + i);
@@ -289,8 +296,9 @@ void GxState::load_xf_indexed(
     // This mutator does not receive the A-D selector; kLoadIndxA identifies
     // the LOAD_INDX opcode family in fatal metadata.
     validate_xf_write(op::kLoadIndxA, xf_addr, values, count);
-    // Semantically identical to load_xf with already-resolved values.
-    load_xf(xf_addr, values, count);
+    // Already validated with the indexed opcode's exact failure metadata.
+    // Reuse application without a second complete classification pass.
+    apply_validated_xf(xf_addr, values, count);
 }
 
 // ---------------------------------------------------------------------------

@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
 #include <iostream>
 #include <sstream>
 #include <string>
@@ -750,6 +751,16 @@ int main() try {
         constexpr std::uint32_t kIndexedUnknown = 0xDEADC0DEu;
         caught = false;
         try {
+            xf_state.load_xf_indexed(0x00FFu, values.data(), 2u);
+        } catch (const GxFatalError& error) {
+            caught = error.opcode() == galaxy::gx::op::kLoadIndxA &&
+                std::string(error.what()).find("register=0x0100") != std::string::npos;
+        }
+        if (!expect(caught && xf_state.xf(0x00FFu) == kOriginal &&
+                xf_state.xf(0x0100u) == 0u && xf_state.consume_dirty() == 0u,
+                "indexed XF transaction rejects a bad trailing word before any mutation")) return 1;
+        caught = false;
+        try {
             xf_state.load_xf_indexed(0x1048u, &kIndexedUnknown, 1u);
         } catch (const GxFatalError& error) {
             const std::string message = error.what();
@@ -765,6 +776,22 @@ int main() try {
                     xf_state.consume_dirty() == 0u,
                 "unknown indexed XF write mutated state")) {
             return 1;
+        }
+    }
+
+    {
+        GxState direct, indexed;
+        (void)direct.consume_dirty();
+        (void)indexed.consume_dirty();
+        std::array<std::uint32_t, 12> words{};
+        for (unsigned i = 0u; i < words.size(); ++i) words[i] = 0x3f800000u + i;
+        for (const std::uint16_t base : {0x0000u, 0x0040u, 0x0400u, 0x0500u, 0x0600u, 0x1009u}) {
+            const auto count = static_cast<std::uint16_t>(base == 0x1009u ? 4u : words.size());
+            direct.load_xf(base, words.data(), count);
+            indexed.load_xf_indexed(base, words.data(), count);
+            if (!expect(std::memcmp(direct.xf_raw(), indexed.xf_raw(), 0x2000u * sizeof(std::uint32_t)) == 0 &&
+                    direct.consume_dirty() == indexed.consume_dirty(),
+                    "direct and indexed XF transfers retain identical register and dirty effects")) return 1;
         }
     }
 
