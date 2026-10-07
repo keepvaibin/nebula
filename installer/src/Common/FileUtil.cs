@@ -61,6 +61,16 @@ namespace Nebula
             return (attributes & FileAttributes.ReparsePoint) != 0;
         }
 
+        // Named streams can push otherwise valid save paths past MAX_PATH.
+        // Keep Win32 calls in the extended-length namespace, including UNC paths.
+        private static string NativePath(string path)
+        {
+            if (path.StartsWith(@"\\?\", StringComparison.Ordinal)) return path;
+            string full = Path.GetFullPath(path);
+            return full.StartsWith(@"\\", StringComparison.Ordinal)
+                ? @"\\?\UNC\" + full.Substring(2) : @"\\?\" + full;
+        }
+
         /// <summary>Resolve junctions/symlinks in a directory path to the physical path.</summary>
         public static string FinalPath(string path)
         {
@@ -96,7 +106,7 @@ namespace Nebula
             {
                 if (IsReparsePoint(file)) throw new IOException("Refusing to copy a linked file: " + file);
                 string destination = Path.Combine(target, Path.GetFileName(file));
-                if (!NativeMethods.CopyFileW(file, destination, true))
+                if (!NativeMethods.CopyFileW(NativePath(file), NativePath(destination), true))
                     throw new Win32Exception(Marshal.GetLastWin32Error(), "Copy failed: " + file);
                 if (onFile != null) onFile(file);
             }
@@ -109,7 +119,7 @@ namespace Nebula
         public static void CopyNamedStreams(string source, string target)
         {
             NativeMethods.WIN32_FIND_STREAM_DATA data;
-            IntPtr find = NativeMethods.FindFirstStreamW(source, 0, out data, 0);
+            IntPtr find = NativeMethods.FindFirstStreamW(NativePath(source), 0, out data, 0);
             if (find == new IntPtr(-1))
             {
                 int error = Marshal.GetLastWin32Error();
@@ -122,8 +132,8 @@ namespace Nebula
                 {
                     string name = data.cStreamName;
                     if (name == "::$DATA") continue;
-                    using (var input = NativeMethods.CreateFileW(source + name, 0x80000000, 1, IntPtr.Zero, 3, 0, IntPtr.Zero))
-                    using (var output = NativeMethods.CreateFileW(target + name, 0x40000000, 0, IntPtr.Zero, 1, 0, IntPtr.Zero))
+                    using (var input = NativeMethods.CreateFileW(NativePath(source) + name, 0x80000000, 1, IntPtr.Zero, 3, 0, IntPtr.Zero))
+                    using (var output = NativeMethods.CreateFileW(NativePath(target) + name, 0x40000000, 0, IntPtr.Zero, 1, 0, IntPtr.Zero))
                     {
                         if (input.IsInvalid) throw new Win32Exception(Marshal.GetLastWin32Error(), source + name);
                         if (output.IsInvalid) throw new Win32Exception(Marshal.GetLastWin32Error(), target + name);
@@ -141,7 +151,7 @@ namespace Nebula
         {
             var result = new SortedDictionary<string, string>(StringComparer.Ordinal);
             NativeMethods.WIN32_FIND_STREAM_DATA data;
-            IntPtr find = NativeMethods.FindFirstStreamW(path, 0, out data, 0);
+            IntPtr find = NativeMethods.FindFirstStreamW(NativePath(path), 0, out data, 0);
             if (find == new IntPtr(-1))
             {
                 int error = Marshal.GetLastWin32Error();
@@ -154,7 +164,7 @@ namespace Nebula
                 {
                     string name = data.cStreamName;
                     // FileStream rejects "file:stream" paths; open streams natively.
-                    using (var handle = NativeMethods.CreateFileW(name == "::$DATA" ? path : path + name,
+                    using (var handle = NativeMethods.CreateFileW(name == "::$DATA" ? NativePath(path) : NativePath(path) + name,
                         0x80000000, 1, IntPtr.Zero, 3, 0, IntPtr.Zero))
                     {
                         if (handle.IsInvalid) throw new Win32Exception(Marshal.GetLastWin32Error(), path + name);

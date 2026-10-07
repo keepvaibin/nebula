@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
@@ -36,12 +36,13 @@ namespace Nebula.Launcher
     internal sealed class LauncherForm : Form
     {
         private readonly string app = AppDomain.CurrentDomain.BaseDirectory.TrimEnd('\\');
-        private readonly string content;
+        private string content;
+        private readonly bool portable;
+        private string settingsFile { get { return portable ? Path.Combine(app, "portable-settings.json") : NebulaPaths.SettingsFile; } }
         private readonly ComboBox output = new ComboBox(), aspect = new ComboBox(), internalTarget = new ComboBox();
         private readonly NumericUpDown customWidth = new NumericUpDown(), customHeight = new NumericUpDown();
         private readonly Label outputInfo = new Label(), info = new Label();
-        private readonly CheckBox monitor = new CheckBox();
-        private readonly CheckBox detailed = new CheckBox();
+        private readonly ComboBox recording = new ComboBox();
         private readonly Button play = new Button();
         private DisplayPlan plan;
         private bool borderless;
@@ -49,9 +50,11 @@ namespace Nebula.Launcher
         public LauncherForm()
         {
             // versions\<version>\ -> install root -> content
-            string root = Path.GetDirectoryName(Path.GetDirectoryName(app));
+            portable = File.Exists(Path.Combine(app, "portable.json"));
+            string root = portable ? (NebulaPaths.RegisteredInstallRoot ?? NebulaPaths.DefaultInstallRoot) : Path.GetDirectoryName(Path.GetDirectoryName(app));
             content = Path.Combine(root, "content");
-            Text = "Nebula";
+            if (File.Exists(Path.Combine(app, "content", "game.pak"))) content = Path.Combine(app, "content");
+            Text = portable ? "Nebula Beta" : "Nebula";
             Font = new Font("Segoe UI", 10f);
 
             AutoScaleMode = AutoScaleMode.None;
@@ -81,17 +84,11 @@ namespace Nebula.Launcher
             info.Location = new Point(20, 210);
             info.Size = new Size(720, 120);
             Controls.Add(info);
-            monitor.Text = "Record diagnostics for this session";
-            monitor.Location = new Point(20, 336);
-            monitor.Size = new Size(720, 26);
-            Controls.Add(monitor);
-            detailed.Text = "Include detailed renderer timings (may affect performance)";
-            detailed.Location = new Point(20, 364);
-            detailed.Size = new Size(720, 26);
-            detailed.Enabled = false;
-            monitor.CheckedChanged += delegate { detailed.Enabled = monitor.Checked; };
-            Controls.Add(detailed);
-            AddLabel("Rendering changes apply on the next launch.", 20, 392, 720);
+            AddLabel("Recording", 20, 342, 300);
+            recording.Items.AddRange(new[] { "No recording", "Lightweight recording", "Detailed recording" });
+            Combo(recording, 340, 339, true);
+            recording.SelectedIndex = 0;
+            AddLabel("Detailed recording may reduce performance. Saves use the normal Nebula folder.", 20, 378, 720);
 
             var import = Button("Import a GalaxyRecomp save…", 20, 436, 250);
             import.Click += delegate { ImportSave(); };
@@ -99,9 +96,12 @@ namespace Nebula.Launcher
             saves.Click += delegate { Directory.CreateDirectory(NebulaPaths.Saves); Process.Start("explorer.exe", "\"" + NebulaPaths.Saves + "\""); };
             var sessions = Button("Open diagnostics", 450, 436, 150);
             sessions.Click += delegate { Directory.CreateDirectory(NebulaPaths.Sessions); Process.Start("explorer.exe", "\"" + NebulaPaths.Sessions + "\""); };
-            var update = Button("Check for updates", 20, 514, 170);
+            var chooseContent = Button("Choose game content…", 20, 476, 250);
+            chooseContent.Click += delegate { ChooseContent(); };
+            var update = Button(portable ? "Beta releases" : "Check for updates", 20, 514, 170);
             update.Click += delegate
             {
+                if (portable) { Process.Start("https://github.com/" + BuildInfo.Repository + "/releases"); return; }
                 string setup = Path.Combine(root, "Nebula-Setup.exe");
                 if (File.Exists(setup)) Process.Start(new ProcessStartInfo(setup, "--update") { WorkingDirectory = root });
             };
@@ -160,8 +160,11 @@ namespace Nebula.Launcher
             internalTarget.SelectedIndex = 0;
             try
             {
-                if (!File.Exists(NebulaPaths.SettingsFile)) return;
-                var settings = Json.Load(NebulaPaths.SettingsFile);
+                string loadPath = File.Exists(settingsFile) ? settingsFile : NebulaPaths.SettingsFile;
+                if (!File.Exists(loadPath)) { if(portable) { output.SelectedIndex = 2; internalTarget.SelectedIndex = 1; } return; }
+                var settings = Json.Load(loadPath);
+                string savedContent = Json.Str(settings, "content");
+                if (portable && savedContent != null && File.Exists(Path.Combine(savedContent, "game.pak"))) content = savedContent;
                 int index = output.Items.IndexOf(Json.Str(settings, "output") ?? "");
                 if (index >= 0) output.SelectedIndex = index;
                 if (Json.Str(settings, "aspect") != null) aspect.Text = Json.Str(settings, "aspect");
@@ -176,10 +179,10 @@ namespace Nebula.Launcher
 
         private void SaveSettings()
         {
-            Json.Save(NebulaPaths.SettingsFile, new Dictionary<string, object>
+            Json.Save(settingsFile, new Dictionary<string, object>
             {
                 { "output", output.Text }, { "aspect", aspect.Text }, { "internal", internalTarget.Text },
-                { "customWidth", (int)customWidth.Value }, { "customHeight", (int)customHeight.Value }
+                { "customWidth", (int)customWidth.Value }, { "customHeight", (int)customHeight.Value }, { "content", content }
             });
         }
 
@@ -203,8 +206,8 @@ namespace Nebula.Launcher
                 plan = DisplaySettings.Resolve(width, height, aspect.Text, selection, (int)customWidth.Value, (int)customHeight.Value);
                 info.ForeColor = SystemColors.ControlText;
                 info.Text = string.Format(
-                    "Active game picture: {0}×{1}, centered at ({2},{3}).\r\nActual 3D scene: {4}×{5} ({6}x internal); frame buffer {7}×{8}.\r\n" +
-                    "480 is the original Wii resolution; higher settings render the 3D scene at a genuinely higher resolution (more GPU work).",
+                    "Game picture: {0}×{1}, centered at ({2},{3}).\r\nInternal scale: {6}x. Scene {4}×{5}; frame buffer {7}×{8}.\r\n" +
+                    "Choose 480p internal resolution for lower GPU load.",
                     plan.ContentWidth, plan.ContentHeight, plan.ContentLeft, plan.ContentTop, plan.SceneWidth, plan.SceneHeight,
                     plan.EfbScale, plan.BackingWidth, plan.BackingHeight);
                 play.Enabled = true;
@@ -218,113 +221,63 @@ namespace Nebula.Launcher
             }
         }
 
+        private bool ChooseContent()
+        {
+            using (var dialog = new OpenFileDialog { Title = "Choose game.pak from your Nebula installation", Filter = "Nebula game content|game.pak", CheckFileExists = true })
+            {
+                if (dialog.ShowDialog(this) != DialogResult.OK) return false;
+                content = Path.GetDirectoryName(dialog.FileName);
+                SaveSettings();
+                return true;
+            }
+        }
+
         private void Play()
         {
             Recalculate();
             if (plan == null) return;
             try
             {
-                if (!File.Exists(Path.Combine(content, "game.pak")))
-                    throw new FileNotFoundException("The game content is missing. Run Nebula Setup and choose Repair.");
+                if (!File.Exists(Path.Combine(content, "game.pak")) && !ChooseContent()) return;
+                if (Process.GetProcessesByName("NebulaRuntime").Length != 0)
+                    throw new InvalidOperationException("Close the running Nebula game before starting another copy.");
+                LaunchOptions.ValidatePair(app);
+                if (portable) LaunchOptions.PreserveUserData(NebulaPaths.DataRoot, "portable-" + BuildInfo.Version);
                 SaveSettings();
                 Directory.CreateDirectory(NebulaPaths.Saves);
-                string session = Sessions.Create(monitor.Checked ? "diagnostics" : "launches");
-                var start = new ProcessStartInfo(Path.Combine(app, "NebulaRuntime.exe"),
-                    ProcessRunner.Quote(content) + " " + ProcessRunner.Quote(Path.Combine(app, "RMGE01_game.dll")));
-                start.UseShellExecute = false;
-                start.WorkingDirectory = app;
-                start.RedirectStandardOutput = true;
-                start.RedirectStandardError = true;
-                foreach (var name in start.EnvironmentVariables.Keys.Cast<string>().Where(n => n.StartsWith("GALAXY_", StringComparison.OrdinalIgnoreCase)).ToList())
-                    start.EnvironmentVariables.Remove(name);
-                foreach (var entry in (System.Collections.IList)Json.ParseAny(File.ReadAllText(Path.Combine(app, "runtime-env.json"))))
+                var mode = (RecordingMode)recording.SelectedIndex;
+                var start = LaunchOptions.Create(app, content, FileUtil.FinalPath(NebulaPaths.Saves), plan, borderless, mode);
+                // Normal play has no recording folder, redirected log pipes or sampler.
+                if (mode == RecordingMode.None)
                 {
-                    var pair = (Dictionary<string, object>)entry;
-                    start.EnvironmentVariables[Json.Str(pair, "name")] = Json.Str(pair, "value");
+                    using (var process = Process.Start(start)) { }
+                    Close();
+                    return;
                 }
-                var env = start.EnvironmentVariables;
-                env["GALAXY_NAND_ROOT"] = FileUtil.FinalPath(NebulaPaths.Saves);
-                env["GALAXY_WINDOW_WIDTH"] = plan.OutputWidth.ToString();
-                env["GALAXY_WINDOW_HEIGHT"] = plan.OutputHeight.ToString();
-                env["GALAXY_FULLSCREEN"] = borderless ? "1" : "0";
-                env["GALAXY_EXCLUSIVE_FULLSCREEN"] = "0";
-                env["GALAXY_EFB_SCALE"] = plan.EfbScale.ToString();
-                env["GALAXY_EXPERIMENTAL_NATIVE_4_3"] = plan.NativeFourThree ? "1" : "0";
-                env["GALAXY_EXPERIMENTAL_DYNAMIC_ASPECT"] = "0";
-                env["GALAXY_EXPERIMENTAL_ULTRAWIDE_ASPECT"] =
-                    plan.NativeFourThree || Math.Abs(plan.AspectRatio - 16.0 / 9.0) < 1e-10 ? "" : plan.Aspect;
-                env["GALAXY_NATIVE_THP_VIDEO_DECODE"] = "1";
-                env["GALAXY_DUSK_DSP_HLE"] = "0";
-                foreach (var flag in new[] { "GALAXY_TRACE_PRESENT_STATS", "GALAXY_MONITOR_POINTER_LATENCY", "GALAXY_MONITOR_FRAME_TAILS",
-                    "GALAXY_MONITOR_DISPLAY_LAYOUT", "GALAXY_TRACE_NATIVE_THP_BOUNDARY" })
-                    env[flag] = monitor.Checked ? "1" : "0";
-                bool detailedTimings = monitor.Checked && detailed.Checked;
-                // The UI owns these diagnostic choices even if an older
-                // runtime-env.json retained an intrusive diagnostic setting.
-                env["GALAXY_TRACE_GX_STALLS"] = detailedTimings ? "1" : "0";
-                // GPU-serialised time follows `monitoring`, not `detailed`.
-                //
-                // The two are independent because their costs are not comparable:
-                // `detailed` enables GALAXY_TRACE_GX_STALLS, which adds clock reads
-                // to the per-draw path and is why the checkbox carries its
-                // performance warning, while the GPU timestamp queries add a fixed
-                // three command-list operations and one small mapped read per frame.
-                //
-                // Tying this to `detailed` left `gpu-samples` at zero in every
-                // diagnostic session, so the GPU was never measured and no
-                // GPU-versus-CPU question could be answered. Monitoring is already
-                // an explicit opt-in, so a diagnostic session carries this
-                // measurement. To record without it, leave monitoring off.
-                env["GALAXY_GPU_TIMESTAMPS"] = monitor.Checked ? "1" : "0";
-                env["GALAXY_TRACE_GX_MICROPROFILE"] = "0";
-                if (detailedTimings)
-                {
-                    env["GALAXY_TRACE_GX_STALL_US"] = "20000";
-                }
-                // The sample period and the cycle witness follow `detailed`, like
-                // GALAXY_TRACE_GX_STALLS.
-                //
-                // Both are pinned here rather than left to runtime-env.json because
-                // the Launcher loads every named entry from that file before this
-                // block, so any flag it does not assign keeps an older build's
-                // value. `frame_time_detail_` is the OR of the microprofile flag,
-                // GALAXY_TRACE_GX_STALLS and the sample period, so an unpinned
-                // nonzero period would inject instrumented frames into a routine
-                // launch; an unpinned cycle witness would make every flush read the
-                // thread cycle counter without anyone asking for it.
-                //
-                // Off is deliberate on both lines. The period is 0, so nothing is
-                // sampled; the witness is 0, so no cycle reads are taken. Detailed
-                // timings turn the period to one frame in 256 and the witness on,
-                // which is the pair that makes a sampled frame interpretable.
-                env["GALAXY_GX_FRAME_TIMING_SAMPLE"] = detailedTimings ? "256" : "0";
-                env["GALAXY_GX_PSO_CYCLES"] = detailedTimings ? "1" : "0";
-                // Hash the actual launch pair before gameplay. install.json is
-                // retained as historical metadata and cannot attest to files
-                // replaced after installation. This also records manual swaps.
+                string session = Sessions.Create("diagnostics");
                 var launchFiles = new Dictionary<string, object>();
                 foreach (string name in new[] { "NebulaRuntime.exe", "RMGE01_game.dll", "RMGE01_home_button.dll",
                     "RMGE01_dsp.dll", "RMGE01_boot_image.bin", "runtime-env.json", "Nebula.exe" })
-                {
-                    string file = Path.Combine(app, name);
-                    launchFiles[name] = File.Exists(file) ? (object)FileUtil.Sha256File(file) : null;
-                }
+                    launchFiles[name] = FileUtil.Sha256File(Path.Combine(app, name));
                 var launchEnvironment = new Dictionary<string, object>();
-                foreach (string name in env.Keys)
-                    if (name.StartsWith("GALAXY_", StringComparison.OrdinalIgnoreCase)) launchEnvironment[name] = env[name];
-                var process = Process.Start(start);
+                foreach (string name in start.EnvironmentVariables.Keys)
+                    if (name.StartsWith("GALAXY_", StringComparison.OrdinalIgnoreCase)) launchEnvironment[name] = start.EnvironmentVariables[name];
                 var sessionInfo = new Dictionary<string, object>
                 {
-                    { "startUtc", DateTime.UtcNow.ToString("o") }, { "pid", process.Id }, { "monitoring", monitor.Checked },
-                    { "content", content }, { "saves", env["GALAXY_NAND_ROOT"] }, { "app", app },
-                    { "output", plan.OutputWidth + "x" + plan.OutputHeight }, { "aspect", plan.Aspect },
-                    { "efbScale", plan.EfbScale }, { "borderless", borderless },
-                    { "detailedRendererTimings", detailedTimings },
-                    { "launchFileSha256", launchFiles }, { "environment", launchEnvironment },
-                    { "install", File.Exists(Path.Combine(app, "install.json")) ? (object)Json.Load(Path.Combine(app, "install.json")) : null }
+                    { "startUtc", DateTime.UtcNow.ToString("o") }, { "pid", null }, { "monitoring", true },
+                    { "recording", mode.ToString() }, { "content", content }, { "saves", start.EnvironmentVariables["GALAXY_NAND_ROOT"] },
+                    { "app", app }, { "output", plan.OutputWidth + "x" + plan.OutputHeight }, { "aspect", plan.Aspect },
+                    { "efbScale", plan.EfbScale }, { "borderless", borderless }, { "detailedRendererTimings", mode == RecordingMode.Detailed },
+                    { "launchFileSha256", launchFiles }, { "environment", launchEnvironment }
                 };
                 Json.Save(Path.Combine(session, "session.json"), sessionInfo);
-                Sessions.Capture(process, session, monitor.Checked);
+                var game = Process.Start(start);
+                // Start draining redirected output before any further file work.
+                Sessions.Capture(game, session, true);
+                sessionInfo["pid"] = game.Id;
+                try { Json.Save(Path.Combine(session, "session.json"), sessionInfo); }
+                catch (IOException) { } // The pre-launch identity and live reader remain.
+                catch (UnauthorizedAccessException) { }
                 Close();
             }
             catch (Exception error) { MessageBox.Show(this, error.Message, "Nebula", MessageBoxButtons.OK, MessageBoxIcon.Error); }
@@ -361,9 +314,8 @@ namespace Nebula.Launcher
         }
 
         /// <summary>
-        /// Stream the runtime's output to the session folder in a detached
-        /// helper thread of a hidden helper process: the launcher window closes
-        /// while the game runs. The helper is this launcher started again.
+        /// Stream the runtime's output on a foreground worker thread. The launcher
+        /// window closes while its recording worker stays alive until game exit.
         /// </summary>
         public static void Capture(Process process, string session, bool sampling)
         {
@@ -421,14 +373,16 @@ namespace Nebula.Launcher
                         {
                             try
                             {
+                                var threadState = t.ThreadState;
+                                string waitReason = threadState == System.Diagnostics.ThreadState.Wait ? t.WaitReason.ToString() : "";
                                 threads.WriteLine(string.Format(
                                     System.Globalization.CultureInfo.InvariantCulture,
                                     "{0:F3},{1},{2},{3},{4},{5}",
                                     elapsed,
                                     t.Id,
                                     t.TotalProcessorTime.Ticks,
-                                    t.ThreadState,
-                                    t.WaitReason,
+                                    threadState,
+                                    waitReason,
                                     t.PriorityLevel));
                             }
                             catch (Exception) { }
@@ -447,8 +401,15 @@ namespace Nebula.Launcher
                     { "exitCode", process.ExitCode }, { "elapsedSeconds", (DateTime.UtcNow - started).TotalSeconds },
                     { "endUtc", DateTime.UtcNow.ToString("o") }
                 });
-                if (process.ExitCode != 0)
-                    MessageBox.Show("The game exited with code " + process.ExitCode + ". Logs: " + session, "Nebula", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                string result = "Recording saved to " + session;
+                try
+                {
+                    System.IO.Compression.ZipFile.CreateFromDirectory(session, session + ".zip", System.IO.Compression.CompressionLevel.Optimal, false);
+                    result = "Recording saved to " + session + ".zip";
+                }
+                catch (Exception) { /* Logs remain available if ZIP creation fails. */ }
+                if (process.ExitCode != 0) result = "The game exited with code " + process.ExitCode + ".\r\n" + result;
+                MessageBox.Show(result, "Nebula recording", MessageBoxButtons.OK, process.ExitCode == 0 ? MessageBoxIcon.Information : MessageBoxIcon.Warning);
                 Environment.Exit(0);
             });
             thread.IsBackground = false;
