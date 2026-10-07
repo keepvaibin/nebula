@@ -14707,6 +14707,22 @@ void capture_cadence_jut_selection(
     }
 }
 
+bool call_intercept_diagnostics_enabled() {
+    // These opt-in selectors already capture immutable process environment
+    // values. Collapse their disabled steady-state cost at the call boundary;
+    // active VI windows and target filters still run below when requested.
+    // Live input, exception, VI and performance-marker state are not cached.
+    static const bool enabled =
+        trace_file_select_enabled() || trace_native_input_stack_enabled() ||
+        trace_bt_wpad_commands_enabled() || trace_dsp_host() ||
+        trace_audio_thread_loop_enabled() || trace_native_dsp_race_enabled() ||
+        trace_ptmf_targets_enabled() || trace_jpa_init_enabled() ||
+        trace_jpa_resources_enabled() || trace_main_frame_enabled() ||
+        trace_route_markers_enabled() || trace_audio_starts_enabled() ||
+        trace_fileloader_flow_enabled();
+    return enabled;
+}
+
 bool needs_call_guest_intercept(
     const RuntimeState& state,
     std::uint32_t guest_address) {
@@ -14724,79 +14740,86 @@ bool needs_call_guest_intercept(
     if (state.trace_calls) {
         return true;
     }
-    if (trace_file_select_vi_window(state) &&
-        is_file_select_trace_address(guest_address)) {
-        return true;
-    }
-    if (trace_native_input_stack_enabled() &&
-        (is_native_input_stack_trace_address(guest_address) ||
-            is_translated_wpad_report_decoder_address(guest_address))) {
-        return true;
-    }
-    if (trace_bt_wpad_commands_enabled() &&
-        is_bt_wpad_command_trace_address(guest_address)) {
-        return true;
-    }
-    if (trace_dsp_host() &&
-        (guest_address == 0x804CB2C0u || guest_address == 0x804CB420u ||
-         guest_address == 0x80494390u || guest_address == 0x804946E8u ||
-         guest_address == 0x8049569Cu || guest_address == 0x80496900u ||
-         guest_address == 0x80496980u || guest_address == 0x804969E0u ||
-         guest_address == 0x80496A60u || guest_address == 0x80496A80u ||
-         // Audio-thread queue producers: OSSendMessage + the AUDIOMSG_DMA
-         // (msg=0) poster fn_80494C70, to see which producer stops feeding
-         // the JAC audio thread's message queue.
-         guest_address == 0x804A88E4u || guest_address == 0x80494C70u)) {
-        return true;
-    }
-    if (trace_audio_thread_loop_enabled() &&
-        is_audio_thread_loop_call_address(guest_address)) {
-        return true;
-    }
-    if (trace_native_dsp_race_enabled() && guest_address == 0x804D1F10u) {
-        return true;
-    }
-    if (trace_ptmf_targets_enabled() && guest_address == 0x805173E0u) {
-        return true;
+    const bool diagnostic_intercepts = call_intercept_diagnostics_enabled();
+    if (diagnostic_intercepts) {
+        if (trace_file_select_vi_window(state) &&
+            is_file_select_trace_address(guest_address)) {
+            return true;
+        }
+        if (trace_native_input_stack_enabled() &&
+            (is_native_input_stack_trace_address(guest_address) ||
+                is_translated_wpad_report_decoder_address(guest_address))) {
+            return true;
+        }
+        if (trace_bt_wpad_commands_enabled() &&
+            is_bt_wpad_command_trace_address(guest_address)) {
+            return true;
+        }
+        if (trace_dsp_host() &&
+            (guest_address == 0x804CB2C0u || guest_address == 0x804CB420u ||
+             guest_address == 0x80494390u || guest_address == 0x804946E8u ||
+             guest_address == 0x8049569Cu || guest_address == 0x80496900u ||
+             guest_address == 0x80496980u || guest_address == 0x804969E0u ||
+             guest_address == 0x80496A60u || guest_address == 0x80496A80u ||
+             // Audio-thread queue producers: OSSendMessage + the AUDIOMSG_DMA
+             // (msg=0) poster fn_80494C70, to see which producer stops feeding
+             // the JAC audio thread's message queue.
+             guest_address == 0x804A88E4u || guest_address == 0x80494C70u)) {
+            return true;
+        }
+        if (trace_audio_thread_loop_enabled() &&
+            is_audio_thread_loop_call_address(guest_address)) {
+            return true;
+        }
+        if (trace_native_dsp_race_enabled() && guest_address == 0x804D1F10u) {
+            return true;
+        }
+        if (trace_ptmf_targets_enabled() && guest_address == 0x805173E0u) {
+            return true;
+        }
     }
     if (guest_address < 0x80000000u || guest_address >= 0x81800000u) {
         return true;
     }
-    if (trace_jpa_init_enabled() && guest_address == 0x803A38ECu) {
-        return true;
-    }
-    if (trace_jpa_resources_enabled()) {
-        switch (guest_address) {
-            case 0x80441400u: // JPAResourceManager::getResource
-            case 0x804414DCu: // JPAResourceManager::registRes
-            case 0x804414FCu: // JPAResourceManager::registTex
-            case 0x80448024u: // JPAResourceLoader
-                return true;
-            default:
-                break;
+    if (diagnostic_intercepts) {
+        if (trace_jpa_init_enabled() && guest_address == 0x803A38ECu) {
+            return true;
+        }
+        if (trace_jpa_resources_enabled()) {
+            switch (guest_address) {
+                case 0x80441400u: // JPAResourceManager::getResource
+                case 0x804414DCu: // JPAResourceManager::registRes
+                case 0x804414FCu: // JPAResourceManager::registTex
+                case 0x80448024u: // JPAResourceLoader
+                    return true;
+                default:
+                    break;
+            }
         }
     }
     if (state.dispatching_vi_retrace && (guest_address >> 16) == 0x8041u) {
         return true;
     }
-    // The main-frame diagnostic has an explicit VI window.  Forcing its
-    // selected calls through the host boundary outside that window defeats
-    // the cached native-call path throughout boot, even though
-    // log_main_frame_call() deliberately emits nothing there.  Besides
-    // creating misleadingly perturbative traces, that can make an audio DMA
-    // deadline expire before the requested observation range.  Use the same
-    // window predicate for interception and emission.
-    if (trace_main_frame_vi_window(state) &&
-        is_main_frame_core_call(guest_address)) {
-        return true;
-    }
-    // Marked targets reach the runtime through the cached-call service. Keep
-    // only those targets on the host boundary so their bounded records are
-    // captured before the translated callee runs. The record path itself is
-    // allocation-free and deferred; it performs no console I/O here.
-    if (trace_route_markers_enabled() &&
-        is_route_marker_call_address(guest_address)) {
-        return true;
+    if (diagnostic_intercepts) {
+        // The main-frame diagnostic has an explicit VI window.  Forcing its
+        // selected calls through the host boundary outside that window defeats
+        // the cached native-call path throughout boot, even though
+        // log_main_frame_call() deliberately emits nothing there.  Besides
+        // creating misleadingly perturbative traces, that can make an audio DMA
+        // deadline expire before the requested observation range.  Use the same
+        // window predicate for interception and emission.
+        if (trace_main_frame_vi_window(state) &&
+            is_main_frame_core_call(guest_address)) {
+            return true;
+        }
+        // Marked targets reach the runtime through the cached-call service. Keep
+        // only those targets on the host boundary so their bounded records are
+        // captured before the translated callee runs. The record path itself is
+        // allocation-free and deferred; it performs no console I/O here.
+        if (trace_route_markers_enabled() &&
+            is_route_marker_call_address(guest_address)) {
+            return true;
+        }
     }
     if (performance_mario_marker_probe_needed(state, guest_address)) {
         return true;
@@ -14807,30 +14830,31 @@ bool needs_call_guest_intercept(
         is_route_marker_mario_control_address(guest_address)) {
         return true;
     }
-    // Audio-start logging runs at the call_guest boundary.  Keep the normal
-    // fast path intact, but force only the explicitly traced call targets
-    // through that boundary while the opt-in diagnostic is active.
-    if (trace_audio_starts_enabled() &&
-        audio_start_call_label(guest_address) != nullptr) {
-        return true;
-    }
-    if (trace_fileloader_flow_enabled()) {
-        switch (guest_address) {
-            case 0x80397A38u: // FileHolderFileEntry::waitReadDone
-            case 0x80397A84u: // FileHolderFileEntry::setContext
-            case 0x803983DCu: // FileLoaderThread::run
-            case 0x80398468u: // FileLoaderThread::loadToMainRAM
-            case 0x803984BCu: // FileLoaderThread::mountArchiveAndStartCreateResource
-            case 0x803CE030u: // MR::createAndAddArchive wrapper
-            case 0x804A88E4u: // OSSendMessage
-            case 0x804A89ACu: // OSReceiveMessage
-            case 0x804A8A88u: // OSJamMessage
-                return true;
-            default:
-                break;
+    if (diagnostic_intercepts) {
+        // Audio-start logging runs at the call_guest boundary.  Keep the normal
+        // fast path intact, but force only the explicitly traced call targets
+        // through that boundary while the opt-in diagnostic is active.
+        if (trace_audio_starts_enabled() &&
+            audio_start_call_label(guest_address) != nullptr) {
+            return true;
+        }
+        if (trace_fileloader_flow_enabled()) {
+            switch (guest_address) {
+                case 0x80397A38u: // FileHolderFileEntry::waitReadDone
+                case 0x80397A84u: // FileHolderFileEntry::setContext
+                case 0x803983DCu: // FileLoaderThread::run
+                case 0x80398468u: // FileLoaderThread::loadToMainRAM
+                case 0x803984BCu: // FileLoaderThread::mountArchiveAndStartCreateResource
+                case 0x803CE030u: // MR::createAndAddArchive wrapper
+                case 0x804A88E4u: // OSSendMessage
+                case 0x804A89ACu: // OSReceiveMessage
+                case 0x804A8A88u: // OSJamMessage
+                    return true;
+                default:
+                    break;
+            }
         }
     }
-
     switch (guest_address >> 16) {
         case 0x0000u:
         case 0x8017u:
@@ -27067,6 +27091,7 @@ void call_guest_cached(
     RuntimeBoundarySelfScope runtime_boundary_self_scope(state, 0u, runtime_boundary_warm_hit);
     const std::uint32_t scene_nerve_decoded_target = guest_address;
     galaxy::NativeGameFunction function = nullptr;
+    bool publish_lookup_cache = false;
     if (cached_address != nullptr && cached_function != nullptr &&
         *cached_address == guest_address) {
         // A generated direct-call site stores the canonical guest target.  A
@@ -27083,11 +27108,7 @@ void call_guest_cached(
         } else if (cached_address != nullptr && cached_function != nullptr &&
                    guest_address >= 0x80000000u && guest_address < 0x81800000u) {
             function = state.lookup_function(guest_address);
-            if (function != nullptr &&
-                !needs_call_guest_intercept(state, guest_address)) {
-                *cached_address = guest_address;
-                *cached_function = function;
-            }
+            publish_lookup_cache = true;
         }
     }
     // This marker must execute on cached native calls too.
@@ -27099,7 +27120,16 @@ void call_guest_cached(
         galaxy::gx::set_safety_scene_surround(guest_address == 0x803404B0u
             ? galaxy::rmge01_safety_surround(context, memory, state.services) : 0.0f);
     }
-    if (function != nullptr && !needs_call_guest_intercept(state, guest_address)) {
+    // Resolve the live decision once for this call, after input service and
+    // the scene marker. Never persist it in the generated target cache: input
+    // transactions and exception ownership may change before the next call.
+    const bool requires_intercept =
+        function != nullptr && needs_call_guest_intercept(state, guest_address);
+    if (function != nullptr && !requires_intercept) {
+        if (publish_lookup_cache) {
+            *cached_address = guest_address;
+            *cached_function = function;
+        }
         const bool account_cached_call =
             state.profile_calls || state.profile_call_time ||
             state.profile_call_self_time || state.trace_calls ||
@@ -27203,7 +27233,7 @@ void call_guest_cached(
         function != nullptr &&
         trace_main_frame_vi_window(state) &&
         is_main_frame_dynamic_call_return(main_frame_dynamic_return_pc) &&
-        needs_call_guest_intercept(state, guest_address);
+        requires_intercept;
     const auto main_frame_dynamic_host_started =
         trace_main_frame_dynamic_host_call ? std::chrono::steady_clock::now()
                                            : std::chrono::steady_clock::time_point{};
