@@ -819,6 +819,48 @@ V main(uint id : SV_VertexID) {
             unaffected_slot.resource == other_palette_slot.resource && unaffected_slot.srv_index == other_palette_slot.srv_index,
             "changed palette bytes retire overlapping resources while retaining an unaffected slot");
 
+        auto c8_image = indexed_image; c8_image.format = TexFormat::C8;
+        const auto c8_before = cache.get(c8_image, indexed_mode, TlutRef{}, &memory);
+        bytes[1536u + 510u] = std::byte{0x12};  // outside C4, inside C8
+        passed &= expect(cache.load_tlut(palette_source >> 5u, 16u << 10u, &memory),
+            "wide TLUT transfer reports changed C8-tail bytes");
+        const auto c4_after_tail = cache.get(indexed_image, indexed_mode, TlutRef{}, &memory);
+        const auto c8_after_tail = cache.get(c8_image, indexed_mode, TlutRef{}, &memory);
+        passed &= expect(c4_after_tail.resource == after_changed_reload.resource &&
+            c4_after_tail.srv_index == after_changed_reload.srv_index &&
+            c8_after_tail.resource != c8_before.resource,
+            "changed transfer preserves identical C4 prefix but retires changed C8 palette");
+        bytes[1538u] = std::byte{0x77};  // now both palettes consume changed bytes
+        passed &= expect(cache.load_tlut(palette_source >> 5u, 16u << 10u, &memory),
+            "wide TLUT transfer reports changed shared prefix");
+        const auto c4_after_prefix = cache.get(indexed_image, indexed_mode, TlutRef{}, &memory);
+        const auto c8_after_prefix = cache.get(c8_image, indexed_mode, TlutRef{}, &memory);
+        passed &= expect(c4_after_prefix.resource != c4_after_tail.resource &&
+            c8_after_prefix.resource != c8_after_tail.resource,
+            "changed shared prefix retires both C4 and C8 textures");
+        passed &= expect(!cache.load_tlut(palette_source >> 5u, 16u << 10u, &memory),
+            "identical wide reload reports no change");
+        const auto c4_after_repeat = cache.get(indexed_image, indexed_mode, TlutRef{}, &memory);
+        const auto c8_after_repeat = cache.get(c8_image, indexed_mode, TlutRef{}, &memory);
+        passed &= expect(c4_after_repeat.resource == c4_after_prefix.resource &&
+            c4_after_repeat.srv_index == c4_after_prefix.srv_index &&
+            c8_after_repeat.resource == c8_after_prefix.resource &&
+            c8_after_repeat.srv_index == c8_after_prefix.srv_index,
+            "identical wide reload retains both resources and descriptors");
+
+        auto c14_image = indexed_image; c14_image.format = TexFormat::C14X2;
+        const auto c14_before_partial = cache.get(c14_image, indexed_mode, TlutRef{}, &memory);
+        // Slot 1 is inside the C14 palette starting at slot 0, but outside
+        // the C4/C8 palettes starting there. Incoming prefix differs from zero.
+        passed &= expect(cache.load_tlut(palette_source >> 5u, (1u << 10u) | 1u, &memory),
+            "partial transfer into later slot changes C14 palette bytes");
+        const auto c14_after_partial = cache.get(c14_image, indexed_mode, TlutRef{}, &memory);
+        const auto c8_after_partial = cache.get(c8_image, indexed_mode, TlutRef{}, &memory);
+        passed &= expect(c14_after_partial.resource != c14_before_partial.resource &&
+            c8_after_partial.resource == c8_after_repeat.resource &&
+            c8_after_partial.srv_index == c8_after_repeat.srv_index,
+            "partial transfer retires encompassing C14 palette without touching C8 prefix");
+
         const auto original_config = get_render_config();
         auto mip_config = original_config; mip_config.enhanced_mipmaps = false;
         set_render_config(mip_config);
