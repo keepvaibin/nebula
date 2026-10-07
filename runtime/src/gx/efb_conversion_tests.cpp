@@ -129,6 +129,81 @@ bool test_rgba8_tile_decode() {
     return true;
 }
 
+bool test_generated_mip_uniform_alpha() {
+    using galaxy::gx::RGBA8;
+    std::vector<RGBA8> actual;
+    const auto check = [&](const std::vector<RGBA8>& source,
+                           std::uint32_t width, std::uint32_t height) {
+        const auto dest_width = std::max(1u, width / 2u);
+        const auto dest_height = std::max(1u, height / 2u);
+        galaxy::gx::detail::generate_rgba8_mip_level(
+            source, width, height, actual, dest_width, dest_height);
+        if (!expect(actual.size() == dest_width * dest_height,
+                    "generated mip retains exact output extent")) return false;
+        // Original scalar premultiplied-alpha rule, including thin/empty
+        // footprints and integer rounding; no uniform-alpha special case.
+        for (std::uint32_t y = 0u; y < dest_height; ++y) {
+            for (std::uint32_t x = 0u; x < dest_width; ++x) {
+                std::array<std::uint32_t, 4> sums{};
+                std::uint32_t count = 0u;
+                for (std::uint32_t sy = y * 2u; sy < y * 2u + 2u && sy < height; ++sy) {
+                    for (std::uint32_t sx = x * 2u; sx < x * 2u + 2u && sx < width; ++sx) {
+                        const auto pixel = source[static_cast<std::size_t>(sy) * width + sx];
+                        sums[0] += pixel.r * pixel.a;
+                        sums[1] += pixel.g * pixel.a;
+                        sums[2] += pixel.b * pixel.a;
+                        sums[3] += pixel.a;
+                        ++count;
+                    }
+                }
+                count = std::max(1u, count);
+                const auto divisor = sums[3] != 0u ? sums[3] : count;
+                const RGBA8 expected{
+                    static_cast<std::uint8_t>((sums[0] + divisor / 2u) / divisor),
+                    static_cast<std::uint8_t>((sums[1] + divisor / 2u) / divisor),
+                    static_cast<std::uint8_t>((sums[2] + divisor / 2u) / divisor),
+                    static_cast<std::uint8_t>((sums[3] + count / 2u) / count)};
+                const auto pixel = actual[y * dest_width + x];
+                if (!expect(pixel.r == expected.r && pixel.g == expected.g &&
+                            pixel.b == expected.b && pixel.a == expected.a,
+                            "generated mip bytes match original premultiplied-alpha oracle")) return false;
+            }
+        }
+        return true;
+    };
+    std::vector<RGBA8> block(4u);
+    // Every representable uniform alpha and RGB sum, including each rounding
+    // boundary; zero-alpha inputs keep zero RGB rather than hidden colors.
+    for (std::uint32_t alpha = 0u; alpha < 256u; ++alpha) {
+        for (std::uint32_t sum = 0u; sum <= 1020u; ++sum) {
+            auto remaining = sum;
+            for (auto& pixel : block) {
+                const auto value = std::min(255u, remaining);
+                remaining -= value;
+                pixel = {static_cast<std::uint8_t>(value),
+                         static_cast<std::uint8_t>(255u - value),
+                         static_cast<std::uint8_t>(value), static_cast<std::uint8_t>(alpha)};
+            }
+            if (!check(block, 2u, 2u)) return false;
+        }
+    }
+    constexpr std::array<std::uint32_t, 9> dimensions{0u, 1u, 2u, 3u, 4u, 5u, 7u, 8u, 17u};
+    for (const auto width : dimensions) for (const auto height : dimensions) {
+        std::vector<RGBA8> source(width * height);
+        for (std::uint32_t pattern = 0u; pattern < 4u; ++pattern) {
+            for (std::size_t i = 0u; i < source.size(); ++i) {
+                source[i] = {static_cast<std::uint8_t>(i * 73u + 29u),
+                             static_cast<std::uint8_t>(i * 19u + 251u),
+                             static_cast<std::uint8_t>(i * 113u + 17u),
+                             static_cast<std::uint8_t>(pattern == 0u ? 0u :
+                                 pattern == 1u ? 255u : pattern == 2u ? (i & 1u) * 255u : i * 67u + 3u)};
+            }
+            if (!check(source, width, height)) return false;
+        }
+    }
+    return true;
+}
+
 bool test_cmpr_tile_decode() {
     using galaxy::gx::RGBA8;
     constexpr std::array<std::uint32_t, 12> dimensions{
@@ -1940,6 +2015,7 @@ bool test_warp_against_oracle() {
 int main() {
     bool passed = test_cpu_oracle();
     passed &= test_rgba8_tile_decode();
+    passed &= test_generated_mip_uniform_alpha();
     passed &= test_cmpr_tile_decode();
     passed &= test_small_index_tile_decode();
     passed &= test_clear_precision();

@@ -53,6 +53,12 @@ struct RGBA8 {
 };
 
 namespace detail {
+// Native enhancement only: preserve the premultiplied-alpha box filter and
+// rounding of every output byte. Source and destination storage are distinct.
+void generate_rgba8_mip_level(const std::vector<RGBA8>& source,
+                             std::uint32_t source_width, std::uint32_t source_height,
+                             std::vector<RGBA8>& dest,
+                             std::uint32_t dest_width, std::uint32_t dest_height);
 // Caller validates the complete block-rounded source footprint. Edge tiles
 // advance by all 64 source bytes but write only pixels inside width/height.
 void decode_rgba8_tiles(const std::uint8_t* src, std::uint32_t width,
