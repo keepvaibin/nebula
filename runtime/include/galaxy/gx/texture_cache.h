@@ -244,12 +244,26 @@ private:
         std::uint8_t tlut_format = 0;
         std::vector<std::uint8_t> source;
         std::vector<std::uint8_t> palette;
+        // Finalized once after both byte vectors are captured. All resident
+        // keys and their LRU copies are immutable; container operations must
+        // not walk potentially megabytes of source bytes again to hash them.
+        std::size_t bucket_hash = 0;
 
-        bool operator==(const ContentKey&) const = default;
+        bool operator==(const ContentKey& other) const {
+            // The cached digest is derived data, not texture identity.
+            return width == other.width && height == other.height &&
+                format == other.format && levels == other.levels &&
+                generated_mips == other.generated_mips &&
+                tlut_format == other.tlut_format &&
+                source == other.source && palette == other.palette;
+        }
     };
     struct ContentKeyHasher {
-        [[nodiscard]] std::size_t operator()(const ContentKey& key) const;
+        [[nodiscard]] std::size_t operator()(const ContentKey& key) const noexcept {
+            return key.bucket_hash;
+        }
     };
+    [[nodiscard]] static std::size_t hash_content_key(const ContentKey& key);
     struct ContentEntry {
         Microsoft::WRL::ComPtr<ID3D12Resource> texture;
         std::uint64_t bytes = 0;

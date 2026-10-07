@@ -20,6 +20,7 @@
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <iterator>
 #include <memory>
@@ -1096,6 +1097,86 @@ V main(uint id : SV_VertexID) {
             galaxy::gx::EfbPeekKind::Depth);
         constants.values[15]=-1.0f;
         return run_bytes(DXGI_FORMAT_R32_FLOAT,bytes,width,height,logical_size,constants);
+    }
+
+    bool test_content_texture_identity() {
+        using namespace galaxy::gx;
+        bool passed = true;
+        auto cache_owner = std::make_unique<TextureCache>();
+        TextureCache& cache = *cache_owner;
+        if (!cache.initialize(device_.Get())) {
+            throw std::runtime_error("initialize content identity cache");
+        }
+        cache.begin_frame(0u, kFramesInFlight);
+        ComPtr<ID3D12CommandAllocator> allocator;
+        ComPtr<ID3D12GraphicsCommandList> list;
+        check_hr(device_->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT,
+            IID_PPV_ARGS(&allocator)), "Create content identity allocator");
+        check_hr(device_->CreateCommandList(0u, D3D12_COMMAND_LIST_TYPE_DIRECT,
+            allocator.Get(), nullptr, IID_PPV_ARGS(&list)), "Create content identity command list");
+        cache.set_upload_list(list.Get());
+        constexpr std::uint32_t address = 0x10000000u;
+        std::array<std::byte, 1024> bytes{};
+        galaxy::GuestMemoryRegionV1 region{
+            address, static_cast<std::uint32_t>(bytes.size()), bytes.data()};
+        galaxy::GuestMemoryV1 memory{};
+        memory.region_count = 1u;
+        memory.regions = &region;
+        TexImage image{};
+        image.guest_addr = address;
+        image.width = image.height = 4u;
+        image.format = TexFormat::RGB565;
+        TexMode mode{};
+        mode.min_filter = TexMinFilter::Near;
+        const auto original = cache.get(image, mode, TlutRef{}, &memory);
+        image.guest_addr = address + 32u;
+        const auto twin = cache.get(image, mode, TlutRef{}, &memory);
+        passed &= expect(twin.resource == original.resource && twin.srv_index != original.srv_index,
+            "identical captured content shares its resource across guest addresses");
+        image.guest_addr = address + 64u;
+        image.width = 2u; // same 32-byte tile, different resource extent
+        const auto narrow = cache.get(image, mode, TlutRef{}, &memory);
+        passed &= expect(narrow.resource != original.resource && narrow.resource->GetDesc().Width == 2u,
+            "equal tiled source bytes do not alias distinct texture dimensions");
+        image.guest_addr = address + 96u;
+        image.width = 4u;
+        image.format = TexFormat::RGB5A3;
+        const auto other_format = cache.get(image, mode, TlutRef{}, &memory);
+        passed &= expect(other_format.resource != original.resource,
+            "equal captured bytes do not alias different decoding formats");
+        image.guest_addr = address + 128u;
+        image.format = TexFormat::RGB565;
+        bytes[128u] = std::byte{0xf8};
+        const auto changed_source = cache.get(image, mode, TlutRef{}, &memory);
+        passed &= expect(changed_source.resource != original.resource,
+            "a changed captured source byte produces a different content resource");
+        image.guest_addr = address;
+        cache.invalidate_all();
+        const auto restored = cache.get(image, mode, TlutRef{}, &memory);
+        passed &= expect(restored.resource == original.resource && restored.srv_index != original.srv_index,
+            "immutable content keys remain usable after decoded-address invalidation");
+
+        image.guest_addr = address + 256u;
+        image.width = image.height = 8u;
+        image.format = TexFormat::C4;
+        const auto indexed = cache.get(image, mode, TlutRef{0u, TlutFormat::IA8}, &memory);
+        const auto equal_palette = cache.get(image, mode, TlutRef{1u, TlutFormat::IA8}, &memory);
+        const auto other_palette_format = cache.get(image, mode, TlutRef{0u, TlutFormat::RGB565}, &memory);
+        passed &= expect(equal_palette.resource == indexed.resource &&
+            other_palette_format.resource != indexed.resource,
+            "equal palette bytes reuse content while palette decoding format remains distinct");
+        bytes[768u] = bytes[769u] = std::byte{0xff};
+        passed &= expect(cache.load_tlut((address + 768u) >> 5u, 1u << 10u, &memory),
+            "changed palette word updates the content identity fixture");
+        const auto changed_palette = cache.get(image, mode, TlutRef{0u, TlutFormat::IA8}, &memory);
+        const auto unchanged_palette = cache.get(image, mode, TlutRef{1u, TlutFormat::IA8}, &memory);
+        passed &= expect(changed_palette.resource != indexed.resource &&
+            unchanged_palette.resource == indexed.resource,
+            "changed captured palette bytes separate content without losing unrelated palette reuse");
+        // Resource/identity fixture only; no command list is submitted.
+        cache.set_upload_list(nullptr);
+        cache.shutdown();
+        return passed;
     }
 
     bool test_texture_descriptor_retirement() {
@@ -2297,7 +2378,21 @@ bool test_warp_against_oracle() {
 
 }  // namespace
 
-int main() {
+int main(int argc, char** argv) {
+    if (argc == 2 && std::strcmp(argv[1], "--content-key-hash") == 0) {
+        if (_putenv_s("GALAXY_GX_CONTENT_TEXTURE_CACHE", "1") != 0 ||
+            _putenv_s("GALAXY_GX_DECODED_TEXTURE_BUDGET_MB", "0") != 0) {
+            std::fprintf(stderr, "FAILED: configure content identity regression\n");
+            return 1;
+        }
+        try {
+            WarpConversionHarness harness;
+            return harness.test_content_texture_identity() ? 0 : 1;
+        } catch (const std::exception& error) {
+            std::fprintf(stderr, "FAILED: content identity regression: %s\n", error.what());
+            return 1;
+        }
+    }
     bool passed = test_cpu_oracle();
     passed &= test_direct_color_tile_decode();
     passed &= test_intensity_tile_decode();

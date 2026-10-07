@@ -880,8 +880,7 @@ namespace {
 
 } // anonymous namespace
 
-std::size_t TextureCache::ContentKeyHasher::operator()(
-    const ContentKey& key) const {
+std::size_t TextureCache::hash_content_key(const ContentKey& key) {
     std::uint64_t hash = fnv1a64(key.source.data(), key.source.size());
     const auto mix = [&hash](std::uint64_t value) {
         hash ^= value + 0x9E3779B97F4A7C15ull +
@@ -1742,6 +1741,7 @@ TextureHandle TextureCache::get(
             }
         }
         if (content_key.has_value()) {
+            content_key->bucket_hash = hash_content_key(*content_key);
             // Decode from the exact bytes used to identify this resource.
             // The non-opt-in path retains its existing guest-memory access.
             src = content_key->source.data();
