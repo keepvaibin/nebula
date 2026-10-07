@@ -537,6 +537,89 @@ bool cached_packet_run_preserves_triangle_strip_boundaries(
     return ok;
 }
 
+bool small_vertex_components_preserve_bits() {
+    using namespace galaxy::gx;
+    constexpr std::array<std::uint32_t, 20> float_words{
+        0x00000000u, 0x80000000u, 0x00000001u, 0x007fffffu,
+        0x00800000u, 0x3f800000u, 0xbf800000u, 0x7f7fffffu,
+        0xff7fffffu, 0x7f800000u, 0xff800000u, 0x7fc00001u,
+        0xffc12345u, 0x7f800001u, 0xff800001u, 0x3f000001u,
+        0x3effffffu, 0x01234567u, 0x89abcdefu, 0xdeadbeefu};
+    VertexLoader loader;
+    GxState state;
+    const auto check = [&](ComponentFormat format, unsigned first,
+                           unsigned vertex_count, unsigned prefix) {
+        const auto encoded_word = [&](unsigned vertex, unsigned component) {
+            return format == ComponentFormat::F32
+                ? float_words[(first + vertex + component * 7u) % float_words.size()]
+                : static_cast<std::uint32_t>(
+                    static_cast<std::uint16_t>(first + vertex + component * 8191u));
+        };
+        VertexDescriptor desc{};
+        const auto encoded_format = static_cast<std::uint8_t>(format);
+        desc.position = {VcdType::Direct, 1u, encoded_format, 5u}; // 3 components
+        desc.normal = {VcdType::Direct, 0u, encoded_format, 31u}; // 3; ignores VAT shift
+        desc.texcoord[0] = {VcdType::Direct, 0u, encoded_format, 7u}; // 1 component
+        desc.texcoord[7] = {VcdType::Direct, 1u, encoded_format, 9u}; // 2 components
+        const unsigned word_bytes = format == ComponentFormat::F32 ? 4u : 2u;
+        const unsigned source_stride = word_bytes * 9u;
+        std::vector<std::byte> fifo(prefix, std::byte{0x71});
+        append_u16(fifo, static_cast<std::uint16_t>(vertex_count));
+        for (unsigned vertex = 0u; vertex < vertex_count; ++vertex) {
+            for (unsigned component = 0u; component < 9u; ++component) {
+                const std::uint32_t word = encoded_word(vertex, component);
+                // Construct bytes without floating-point operations or the
+                // production endian helpers, including signaling NaN inputs.
+                for (unsigned byte = word_bytes; byte != 0u; --byte) {
+                    fifo.push_back(static_cast<std::byte>((word >> ((byte - 1u) * 8u)) & 0xffu));
+                }
+            }
+        }
+        const std::array<CachedDrawPacket, 1> packets{{
+            {0x90u, static_cast<std::uint16_t>(vertex_count), prefix, prefix,
+             static_cast<std::size_t>(source_stride) * vertex_count}}};
+        const auto decoded = loader.decode_cached_packet_run_vertices_with_layout(
+            fifo, 0u, packets, PrimitiveClass::Triangles, 0u, state, desc, source_stride, nullptr);
+        if (!expect(decoded.vertices.size() == vertex_count,
+                    "small-component conversion changed the vertex count")) return false;
+        for (unsigned vertex = 0u; vertex < vertex_count; ++vertex) {
+            const auto& out = decoded.vertices[vertex];
+            const std::array<const float*, 9> components{
+                &out.position[0], &out.position[1], &out.position[2],
+                &out.normal[0], &out.normal[1], &out.normal[2],
+                &out.uv[0][0], &out.uv[7][0], &out.uv[7][1]};
+            for (unsigned component = 0u; component < components.size(); ++component) {
+                const auto word = encoded_word(vertex, component);
+                std::uint32_t expected_bits = word;
+                if (format != ComponentFormat::F32) {
+                    const int value = format == ComponentFormat::S16 && word >= 32768u
+                        ? static_cast<int>(word) - 65536 : static_cast<int>(word);
+                    const unsigned shift = component < 3u ? 5u : component < 6u
+                        ? (format == ComponentFormat::S16 ? 14u : 15u)
+                        : component == 6u ? 7u : 9u;
+                    const float expected = static_cast<float>(value) / static_cast<float>(1u << shift);
+                    expected_bits = std::bit_cast<std::uint32_t>(expected);
+                }
+                if (!expect(std::bit_cast<std::uint32_t>(*components[component]) == expected_bits,
+                            "small vertex components preserve raw float bits and exact fixed-point values"))
+                    return false;
+            }
+        }
+        return true;
+    };
+    for (unsigned prefix : {0u, 1u, 2u, 3u}) {
+        if (!check(ComponentFormat::F32, 0u, static_cast<unsigned>(float_words.size()), prefix)) return false;
+        for (const auto format : {ComponentFormat::U16, ComponentFormat::S16}) {
+            // Each of nine component lanes visits all 65536 source words;
+            // bounded batches stay below the 16-bit packet vertex-count limit.
+            for (unsigned first = 0u; first < 65536u; first += 2048u) {
+                if (!check(format, first, 2048u, prefix)) return false;
+            }
+        }
+    }
+    return true;
+}
+
 bool prepared_vertex_inputs_preserve_mixed_layouts() {
     using namespace galaxy::gx;
     constexpr std::uint32_t position_base = 0x1000u, color_base = 0x2000u, tex_base = 0x3000u;
@@ -842,6 +925,7 @@ bool immutable_upload_reuse_preserves_bytes(ID3D12Device* device) {
 
 int main() {
     if (!fixed_vertex_dequantization_preserves_bits()) return 1;
+    if (!small_vertex_components_preserve_bits()) return 1;
     if (!prepared_vertex_inputs_preserve_mixed_layouts()) return 1;
     const ComPtr<ID3D12Device> device = create_warp_device();
     if (!expect(device != nullptr, "could not create D3D12 WARP device")) {
