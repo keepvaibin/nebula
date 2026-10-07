@@ -140,6 +140,24 @@ earlier accepted checkpoints are retained. The unrelated pre-existing
   nearest/small/intensity cases before reading live settings. Authored mip
   extent, active enhancement decisions and filtering remain unchanged. Static
   branch review only; runtime checks remain deferred.
+- **Sampler CPU work:** canonicalize unsampled texture slots to a valid zero
+  sampler key instead of decoding their unrelated mode registers. Active
+  slots still use exact wrap/filter/LOD state and generated-mip metadata; the
+  existing direct-plus-indirect sampled-map mask is unchanged. This removes
+  unused-slot decoding/packing and prevents otherwise duplicate tables from
+  consuming the frame-local 255-table budget. Added an unrun literal-key and
+  real allocator check: 300 unused-slot variants reuse one table for each of
+  the eight possible sampled slots, while active wrap and generated-mip changes
+  remain visible.
+- **Default sampler descriptors:** preserve slots 0..7 independently in each
+  sampler heap when descriptor-clamped host filtering settings are unchanged.
+  Dynamic allocation continues to start at slot 8 and reset only after its
+  frame-slot fence. Heap creation/shutdown invalidates retained defaults;
+  changed settings rewrite only a safely owned slot. Once both heaps are
+  initialized, this removes eight CreateSampler calls per frame with stable
+  settings. Added unrun settings-identity checks; actual descriptor reuse,
+  option changes and graphics still require runtime validation. CPU cost and
+  FPS saving are unmeasured.
 
 For the sustained CPU candidates, contribution and milliseconds saved are
 **unmeasured**. Code inspection establishes removed work: one allocation per

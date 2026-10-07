@@ -494,6 +494,50 @@ public:
             guest_load_u32(&second.memory, outer_addr + 1u, nullptr, 0u) == second_addr;
     }
 
+    static bool sampler_keys_ignore_only_unsampled_maps() {
+        auto backend = std::make_unique<GxBackend>();
+        const auto write = [&](unsigned map, unsigned base, std::uint32_t value) {
+            const unsigned reg = base + (map >= 4u ? bp::kTexHighBankOffset : 0u) + (map & 3u);
+            backend->state_.load_bp((reg << 24u) | value);
+        };
+        std::array<TextureHandle, kMaxTextureMaps> handles{};
+        for (unsigned active = 0u; active < kMaxTextureMaps; ++active) {
+            // Repeat S, clamp T, linear mag/min, +12/32 bias, host 6-level
+            // mip chain. Literal packed result: min becomes 6, max LOD 80.
+            write(active, bp::kTexMode0Base, 1u | (1u << 4u) | (4u << 5u) | (12u << 9u));
+            write(active, bp::kTexMode1Base, 0u);
+            handles[active].generated_mips = true;
+            handles[active].mip_levels = 6u;
+            const auto mask = static_cast<std::uint8_t>(1u << active);
+            std::array<std::uint32_t, kMaxTextureMaps> expected{};
+            expected[active] = 0x50000CD1u;
+            RenderConfig config{};
+            SamplerTableCache cache;
+            for (unsigned variant = 0u; variant < 300u; ++variant) {
+                for (unsigned map = 0u; map < kMaxTextureMaps; ++map) {
+                    if (map == active) continue;
+                    write(map, bp::kTexMode0Base, variant * 997u + map);
+                    write(map, bp::kTexMode1Base, variant * 131u + map);
+                }
+                const auto keys = backend->capture_sampler_keys(mask, handles);
+                if (keys != expected) return false;
+                const auto allocation = cache.get_or_allocate(make_sampler_table_key(keys.data(), config));
+                if (allocation.index != 8u || allocation.created != (variant == 0u)) return false;
+            }
+            // A changed sampled slot still gets a distinct sampler table.
+            write(active, bp::kTexMode0Base, 2u | (1u << 4u) | (4u << 5u) | (12u << 9u));
+            auto changed = backend->capture_sampler_keys(mask, handles);
+            expected[active] = 0x50000CD2u;
+            if (changed != expected || !cache.get_or_allocate(make_sampler_table_key(changed.data(), config)).created)
+                return false;
+            handles[active].generated_mips = false;
+            changed = backend->capture_sampler_keys(mask, handles);
+            expected[active] = 0x00000C92u;
+            if (changed != expected) return false;
+        }
+        return true;
+    }
+
     static bool texture_keys_preserve_actual_palette_dependencies() {
         auto backend = std::make_unique<GxBackend>();
         for (unsigned map = 0u; map < kMaxTextureMaps; ++map) {
@@ -1201,6 +1245,9 @@ int main() {
     if (!expect(galaxy::gx::GxBackendMemorySnapshotTestAccess::
         dependency_discovery_is_independent_and_tracks_dl_versions(),
         "dependency discovery must not wait for rendering and must track dirty nested DL versions")) return 1;
+    if (!expect(galaxy::gx::GxBackendMemorySnapshotTestAccess::
+        sampler_keys_ignore_only_unsampled_maps(),
+        "300 unused-slot changes reuse one sampler table while sampled filters and generated mips remain effective")) return 1;
     if (!expect(galaxy::gx::GxBackendMemorySnapshotTestAccess::
         texture_keys_preserve_actual_palette_dependencies(),
         "backend texture keys ignore palettes only for direct formats in both register banks")) return 1;

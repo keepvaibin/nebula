@@ -149,6 +149,18 @@ int main() {
     sampler_keys[7] = authored_key;
     const auto table_b = galaxy::gx::make_sampler_table_key(sampler_keys, no_aniso_config);
     const auto table_c = galaxy::gx::make_sampler_table_key(sampler_keys, aniso_config);
+    auto clamped_config = aniso_config;
+    clamped_config.anisotropic_filtering = 100u;
+    clamped_config.texture_lod_bias = 100u;
+    auto maximum_config = aniso_config;
+    maximum_config.texture_lod_bias = 8u;
+    passed &= expect(galaxy::gx::make_sampler_table_key(sampler_keys, clamped_config) ==
+        galaxy::gx::make_sampler_table_key(sampler_keys, maximum_config),
+        "sampler settings identity uses descriptor-clamped anisotropy and bias");
+    auto changed_bias_config = aniso_config;
+    changed_bias_config.texture_lod_bias = 3u;
+    passed &= expect(!(galaxy::gx::make_sampler_table_key(sampler_keys, changed_bias_config) == table_c),
+        "sampler identity changes when live descriptor bias changes");
     std::unordered_map<galaxy::gx::SamplerTableKey, unsigned, SameBucket> collision_map;
     collision_map.emplace(table_a, 1u);
     collision_map.emplace(table_b, 2u);
