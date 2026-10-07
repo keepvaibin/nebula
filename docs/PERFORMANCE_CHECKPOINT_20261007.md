@@ -56,6 +56,31 @@ earlier accepted checkpoints are retained. The unrelated pre-existing
 - **Known pipeline preparation:** prewarm can combine independently retained
   shader stages even without an exact persisted pair record. New configurations
   still acquire their required correct pipeline. Cache formats remain unchanged.
+- **Checked native/host RAM lookup:** native bulk/matrix/particle helpers and
+  host memory-copy services now try the existing immutable 16-entry RAM table
+  before walking the complete region list. Whole-span bounds stay checked;
+  partial mappings, devices and empty one-past spans retain the original list
+  path. This removes a region-list walk per admitted RAM lookup. Added unrun
+  six-alias, partial-table, overflow, fast-only-owner and host-region oracles.
+- **Audio interleave aliasing:** load both source halfwords before either
+  store, and retain the last loaded values in r6/r0 rather than rereading
+  potentially overwritten input. Device/callback/partial-span paths retain
+  the DOL's exact scalar ordering, registers and fault PCs. Whole checked RAM
+  can still coalesce publication when no external callback would observe it.
+  Added unrun overlap, callback-state, dirty-tracker and partial-store checks.
+- **Vector-copy effects:** distinguish the scalar and paired-single DOL
+  routines, restore their volatile FPR/PS1 effects, GQR0 quantization, FPU
+  retry and original partial-fault behavior through existing precise helpers.
+  Added unrun literal-value, overlap, quantization and fault checks. The
+  translator still excludes both entry substitutions; retained native JPA
+  wrappers use the helper, but accepted-build path coverage is unverified.
+- **Matrix-scale publication:** the active native helper previously published
+  only on completion although its last multiply follows the first store and
+  may raise an enabled FP exception. Ordered scalar helpers now publish each
+  completed store, preserve exact load/store fault PCs and use the same
+  precise stfs conversion as translated code. This is a correctness fix,
+  with additional notification work rather than an asserted speedup. Added
+  unrun overflow-after-first-store checks for callback and both dirty trackers.
 
 For the sustained CPU candidates, contribution and milliseconds saved are
 **unmeasured**. Code inspection establishes removed work: one allocation per
@@ -65,6 +90,9 @@ new table, and up to 63 redundant bit tests per sparse DSP bitmap word. Cache
 preparation alone cannot satisfy sustained-throughput acceptance. DSP outbound
 enumeration now examines two mask words plus their contiguous runs per dirty
 page; indexed XF transfers eliminate one classification check per uploaded word.
+The newer RAM-lookup candidate also remains unmeasured; the audio/vector fixes
+do not establish that their retained helper paths were exercised in the control.
+No entry substitution, scheduling boundary or game-speed change was enabled.
 
 Recoverable local CPU/cache checkpoints: `415b7c4` (dirty tracking and GX CPU
 work), `4e5da14` (known stage prewarm), `ba1c362` (exact DSP outbound spans),

@@ -30510,14 +30510,7 @@ void GuestAddressSpace::notify_guest_write_renderer_only(
 }
 
 std::byte* GuestAddressSpace::pointer(std::uint32_t address, std::uint32_t size) {
-    const std::uint64_t end = static_cast<std::uint64_t>(address) + size;
-    for (const auto& region : regions_) {
-        const std::uint64_t region_end =
-            static_cast<std::uint64_t>(region.guest_base) + region.size;
-        if (address >= region.guest_base && end <= region_end) {
-            return region.host_base + (address - region.guest_base);
-        }
-    }
+    if (std::byte* direct = pointer_or_null(address, size)) return direct;
     throw std::runtime_error("guest address is outside the native address space");
 }
 
@@ -30530,6 +30523,11 @@ const std::byte* GuestAddressSpace::pointer(
 std::byte* GuestAddressSpace::pointer_or_null(
     std::uint32_t address,
     std::uint32_t size) {
+    // Device service copies use the immutable RAM table already populated by
+    // add_region(). MMIO and partial spans still take the original list path.
+    if (size != 0u) {
+        if (std::byte* direct = galaxy::resolve_guest_fast(&memory_, address, size)) return direct;
+    }
     const std::uint64_t end = static_cast<std::uint64_t>(address) + size;
     for (const auto& region : regions_) {
         const std::uint64_t region_end =
