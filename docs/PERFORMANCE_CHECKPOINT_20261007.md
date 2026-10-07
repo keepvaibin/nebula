@@ -208,6 +208,19 @@ earlier accepted checkpoints are retained. The unrelated pre-existing
   decode-miss throughput must be measured. The critical-path contribution,
   resulting machine code, output correctness and FPS saving remain unverified.
 
+- **RGBA8 texture decode:** decode validated 4x4 AR/GB tiles directly into
+  valid output rows instead of building a temporary 16-pixel tile and copying
+  it with two per-pixel bounds tests. Partial tiles decode only valid pixels;
+  the source still advances by the full 64-byte tile. The cache's complete
+  source-footprint validation, guest dependency recording, mip offsets, channel
+  order and GPU upload are unchanged. Added an unrun CPU oracle for 144 width/
+  height combinations, three source alignments, output guards and zero extents.
+  The helper exercised by that oracle is the actual cache decoder. Source work
+  removed is a temporary tile and a second traversal per tile; how much the
+  compiler previously removed and any saving on decode misses are unmeasured.
+  This does not improve already cached texture hits or establish the dominant
+  gameplay cost. No SIMD requirement, rendering effect or simulation change.
+
 For the sustained CPU candidates, contribution and milliseconds saved are
 **unmeasured**. Code inspection establishes removed work: one allocation per
 eligible display-list lookup/capture, fewer decode-cache misses, variable vertex

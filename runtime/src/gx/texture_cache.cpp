@@ -619,7 +619,9 @@ static void decode_RGB5A3(
     }
 }
 
-static void decode_RGBA8(
+}  // namespace
+
+void detail::decode_rgba8_tiles(
     const std::uint8_t* src,
     std::uint32_t width,
     std::uint32_t height,
@@ -630,30 +632,28 @@ static void decode_RGBA8(
     const std::uint32_t blocks_x = (width  + 3u) / 4u;
     const std::uint32_t blocks_y = (height + 3u) / 4u;
     for (std::uint32_t by = 0; by < blocks_y; ++by) {
+        const std::uint32_t base_y = by * 4u;
+        const std::uint32_t rows = std::min(4u, height - base_y);
         for (std::uint32_t bx = 0; bx < blocks_x; ++bx) {
-            // Temporary 4×4 RGBA accumulator.
-            RGBA8 tile[16]{};
+            const std::uint32_t base_x = bx * 4u;
+            const std::uint32_t columns = std::min(4u, width - base_x);
             const std::uint8_t* ar = src;
             const std::uint8_t* gb = src + 32u;
-            for (std::uint32_t i = 0; i < 16u; ++i) {
-                tile[i].a = ar[i * 2u];
-                tile[i].r = ar[i * 2u + 1u];
-                tile[i].g = gb[i * 2u];
-                tile[i].b = gb[i * 2u + 1u];
-            }
-            src += 64u;
-            for (std::uint32_t py = 0; py < 4u; ++py) {
-                for (std::uint32_t px = 0; px < 4u; ++px) {
-                    const std::uint32_t ix = bx * 4u + px;
-                    const std::uint32_t iy = by * 4u + py;
-                    if (ix < width && iy < height) {
-                        out[iy * width + ix] = tile[py * 4u + px];
-                    }
+            for (std::uint32_t py = 0; py < rows; ++py) {
+                RGBA8* dst = out + (base_y + py) * width + base_x;
+                const std::uint8_t* ar_row = ar + py * 8u;
+                const std::uint8_t* gb_row = gb + py * 8u;
+                for (std::uint32_t px = 0; px < columns; ++px) {
+                    dst[px] = {ar_row[px * 2u + 1u], gb_row[px * 2u],
+                               gb_row[px * 2u + 1u], ar_row[px * 2u]};
                 }
             }
+            src += 64u;
         }
     }
 }
+
+namespace {
 
 // Palettized formats: indices are read from the block layout, then passed
 // through tlut_bank at offset `tlut_byte_offset` with `tlut_fmt`.
@@ -1866,7 +1866,7 @@ TextureHandle TextureCache::get(
             decode_RGB5A3(src, lw, lh, out);
             break;
         case TexFormat::RGBA8:
-            decode_RGBA8(src, lw, lh, out);
+            detail::decode_rgba8_tiles(src, lw, lh, out);
             break;
         case TexFormat::C4:
             decode_C4(src, lw, lh,

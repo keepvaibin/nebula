@@ -79,6 +79,56 @@ bool expect_pixel(Pixel actual, Pixel expected, const char* message) {
     return false;
 }
 
+bool test_rgba8_tile_decode() {
+    using galaxy::gx::RGBA8;
+    constexpr std::array<std::uint32_t, 12> dimensions{
+        1u, 2u, 3u, 4u, 5u, 7u, 8u, 9u, 13u, 16u, 31u, 32u};
+    constexpr RGBA8 guard{0xD3u, 0x62u, 0xA5u, 0x18u};
+    const auto same = [](RGBA8 a, RGBA8 b) {
+        return a.r == b.r && a.g == b.g && a.b == b.b && a.a == b.a;
+    };
+    for (const auto width : dimensions) {
+        for (const auto height : dimensions) {
+            const auto blocks_x = (width + 3u) / 4u;
+            const auto blocks_y = (height + 3u) / 4u;
+            const auto bytes = blocks_x * blocks_y * 64u;
+            for (const auto prefix : {0u, 1u, 3u}) {
+                std::vector<std::uint8_t> source(bytes + prefix, 0xEDu);
+                for (std::uint32_t i = 0; i < bytes; ++i) {
+                    source[prefix + i] = static_cast<std::uint8_t>(
+                        (i * 37u + (i / 64u) * 19u + (i / 8u) * 7u) ^ 0xB3u);
+                }
+                std::vector<RGBA8> output(width * height + 2u, guard);
+                galaxy::gx::detail::decode_rgba8_tiles(
+                    source.data() + prefix, width, height, output.data() + 1u);
+                if (!expect(same(output.front(), guard) && same(output.back(), guard),
+                            "RGBA8 edge tiles stay inside output")) {
+                    return false;
+                }
+                for (std::uint32_t y = 0; y < height; ++y) {
+                    for (std::uint32_t x = 0; x < width; ++x) {
+                        // Independent address oracle: global pixel -> tile ->
+                        // local pixel, including the full padded source tiles.
+                        const auto tile = (y / 4u) * blocks_x + x / 4u;
+                        const auto pixel = (y % 4u) * 4u + x % 4u;
+                        const auto offset = prefix + tile * 64u + pixel * 2u;
+                        const RGBA8 expected{source[offset + 1u], source[offset + 32u],
+                                             source[offset + 33u], source[offset]};
+                        if (!expect(same(output[1u + y * width + x], expected),
+                                    "RGBA8 tiled channels and row stride match oracle")) {
+                            return false;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    galaxy::gx::detail::decode_rgba8_tiles(nullptr, 0u, 0u, nullptr);
+    galaxy::gx::detail::decode_rgba8_tiles(nullptr, 0u, 8u, nullptr);
+    galaxy::gx::detail::decode_rgba8_tiles(nullptr, 8u, 0u, nullptr);
+    return true;
+}
+
 galaxy::gx::EfbCopyParams make_filter_params(
     const std::array<std::uint32_t, 7>& taps) {
     galaxy::gx::EfbCopyParams params{};
@@ -1675,6 +1725,7 @@ bool test_warp_against_oracle() {
 
 int main() {
     bool passed = test_cpu_oracle();
+    passed &= test_rgba8_tile_decode();
     passed &= test_clear_precision();
     passed &= test_warp_against_oracle();
     passed &= test_gx_pixel_readbacks();
