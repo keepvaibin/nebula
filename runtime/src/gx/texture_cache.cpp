@@ -806,15 +806,13 @@ static void decode_dxt1_subblock(
     std::uint32_t width,
     std::uint32_t height,
     RGBA8* out) {
+    if (ox >= width || oy >= height) {
+        return;
+    }
+    const std::uint32_t columns = std::min(4u, width - ox);
+    const std::uint32_t rows = std::min(4u, height - oy);
     const std::uint16_t c0 = read_be16(block);
     const std::uint16_t c1 = read_be16(block + 2);
-    // Big-endian indices: 4 rows × 4 pixels × 2 bits.
-    // GX stores 32-bit index word big-endian.
-    const std::uint32_t idx_word =
-        (static_cast<std::uint32_t>(block[4]) << 24u) |
-        (static_cast<std::uint32_t>(block[5]) << 16u) |
-        (static_cast<std::uint32_t>(block[6]) <<  8u) |
-        static_cast<std::uint32_t>(block[7]);
 
     // Expand color0 and color1 from RGB565.
     auto expand565 = [](std::uint16_t v) -> RGBA8 {
@@ -865,23 +863,33 @@ static void decode_dxt1_subblock(
         };
     }
 
-    for (std::uint32_t py = 0; py < 4u; ++py) {
-        for (std::uint32_t px = 0; px < 4u; ++px) {
-            const std::uint32_t ix = ox + px;
-            const std::uint32_t iy = oy + py;
-            if (ix < width && iy < height) {
-                // Bits are packed from MSB: row 0 bits[31:24], row1 bits[23:16]...
-                // Within a row, leftmost pixel uses the two highest bits.
-                const std::uint32_t bit_pos = (py * 4u + px) * 2u;
-                const std::uint32_t shifted = idx_word >> (30u - bit_pos);
-                const std::uint32_t sel = shifted & 0x3u;
-                out[iy * width + ix] = palette[sel];
+    // Each source byte holds one row, leftmost selector in its top two bits.
+    // Keep row offsets as integers: advancing a pointer after the last clipped
+    // row could otherwise form an address beyond the output's one-past end.
+    std::size_t offset = static_cast<std::size_t>(oy) * width + ox;
+    if (columns == 4u) {
+        for (std::uint32_t py = 0; py < rows; ++py, offset += width) {
+            RGBA8* row = out + offset;
+            const std::uint8_t selectors = block[4u + py];
+            row[0] = palette[(selectors >> 6u) & 3u];
+            row[1] = palette[(selectors >> 4u) & 3u];
+            row[2] = palette[(selectors >> 2u) & 3u];
+            row[3] = palette[selectors & 3u];
+        }
+    } else {
+        for (std::uint32_t py = 0; py < rows; ++py, offset += width) {
+            RGBA8* row = out + offset;
+            const std::uint8_t selectors = block[4u + py];
+            for (std::uint32_t px = 0; px < columns; ++px) {
+                row[px] = palette[(selectors >> (6u - px * 2u)) & 3u];
             }
         }
     }
 }
 
-static void decode_CMPR(
+}  // namespace
+
+void detail::decode_cmpr_tiles(
     const std::uint8_t* src,
     std::uint32_t width,
     std::uint32_t height,
@@ -905,6 +913,8 @@ static void decode_CMPR(
         }
     }
 }
+
+namespace {
 
 // ---------------------------------------------------------------------------
 // Compute raw byte size of a mip0 level for each format.
@@ -1918,7 +1928,7 @@ TextureHandle TextureCache::get(
                 tlut_bank_, tlut_byte_offset, tlut.format, out);
             break;
         case TexFormat::CMPR:
-            decode_CMPR(src, lw, lh, out);
+            detail::decode_cmpr_tiles(src, lw, lh, out);
             break;
         default:
             throw std::runtime_error(

@@ -129,6 +129,87 @@ bool test_rgba8_tile_decode() {
     return true;
 }
 
+bool test_cmpr_tile_decode() {
+    using galaxy::gx::RGBA8;
+    constexpr std::array<std::uint32_t, 12> dimensions{
+        1u, 2u, 3u, 4u, 5u, 7u, 8u, 9u, 13u, 16u, 31u, 32u};
+    constexpr std::array<std::array<std::uint16_t, 2>, 6> endpoints{{
+        {0xF800u, 0x07E0u}, {0x001Fu, 0xFFFFu}, {0x0000u, 0xFFFFu},
+        {0xFFFFu, 0x0000u}, {0x1234u, 0x1234u}, {0x9A56u, 0x1234u}}};
+    constexpr std::array<std::uint8_t, 4> selectors{0x1Bu, 0xE4u, 0x55u, 0xAAu};
+    constexpr RGBA8 guard{0x92u, 0x3Au, 0xCFu, 0x57u};
+    const auto same = [](RGBA8 a, RGBA8 b) {
+        return a.r == b.r && a.g == b.g && a.b == b.b && a.a == b.a;
+    };
+    const auto expand = [](std::uint16_t word) -> RGBA8 {
+        const auto r = (word >> 11u) & 31u;
+        const auto g = (word >> 5u) & 63u;
+        const auto b = word & 31u;
+        return {static_cast<std::uint8_t>(r * 8u + r / 4u),
+                static_cast<std::uint8_t>(g * 4u + g / 16u),
+                static_cast<std::uint8_t>(b * 8u + b / 4u), 255u};
+    };
+    for (const auto width : dimensions) {
+        for (const auto height : dimensions) {
+            const auto macro_columns = (width + 7u) / 8u;
+            const auto subblocks = macro_columns * ((height + 7u) / 8u) * 4u;
+            for (std::size_t alignment = 0u; alignment < 4u; ++alignment) {
+                std::vector<std::uint8_t> source(alignment + subblocks * 8u);
+                auto* tiled = source.data() + alignment;
+                for (std::uint32_t sub = 0u; sub < subblocks; ++sub) {
+                    const auto pair = endpoints[sub % endpoints.size()];
+                    auto* block = tiled + sub * 8u;
+                    block[0] = static_cast<std::uint8_t>(pair[0] >> 8u);
+                    block[1] = static_cast<std::uint8_t>(pair[0]);
+                    block[2] = static_cast<std::uint8_t>(pair[1] >> 8u);
+                    block[3] = static_cast<std::uint8_t>(pair[1]);
+                    for (unsigned row = 0u; row < 4u; ++row) {
+                        block[4u + row] = selectors[(sub + row) & 3u];
+                    }
+                }
+                std::vector<RGBA8> output(width * height + 2u, guard);
+                galaxy::gx::detail::decode_cmpr_tiles(tiled, width, height, output.data() + 1u);
+                if (!expect(same(output.front(), guard) && same(output.back(), guard),
+                            "CMPR clipped tiles stay inside output")) return false;
+                // Pixel-directed oracle: derive a pixel's source subblock and
+                // selector without sharing the decoder's block/row traversal.
+                for (std::uint32_t y = 0u; y < height; ++y) {
+                    for (std::uint32_t x = 0u; x < width; ++x) {
+                        const auto sub = (y / 8u * macro_columns + x / 8u) * 4u +
+                            (y % 8u / 4u) * 2u + (x % 8u / 4u);
+                        const auto pair = endpoints[sub % endpoints.size()];
+                        const auto a = expand(pair[0]);
+                        const auto b = expand(pair[1]);
+                        const auto selector = (tiled[sub * 8u + 4u + (y & 3u)] >>
+                            (6u - (x & 3u) * 2u)) & 3u;
+                        RGBA8 expected = selector == 0u ? a : b;
+                        if (selector >= 2u) {
+                            const auto channel = [&](std::uint8_t first, std::uint8_t second) {
+                                if (pair[0] <= pair[1]) {
+                                    return static_cast<std::uint8_t>((first + second) / 2u);
+                                }
+                                return static_cast<std::uint8_t>(selector == 2u
+                                    ? (5u * first + 3u * second) / 8u
+                                    : (3u * first + 5u * second) / 8u);
+                            };
+                            expected = {channel(a.r, b.r), channel(a.g, b.g), channel(a.b, b.b),
+                                static_cast<std::uint8_t>(pair[0] <= pair[1] && selector == 3u ? 0u : 255u)};
+                        }
+                        if (!expect(same(output[1u + y * width + x], expected),
+                                    "CMPR tile order, selectors, GX interpolation and transparent RGB match oracle")) {
+                            return false;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    galaxy::gx::detail::decode_cmpr_tiles(nullptr, 0u, 0u, nullptr);
+    galaxy::gx::detail::decode_cmpr_tiles(nullptr, 0u, 8u, nullptr);
+    galaxy::gx::detail::decode_cmpr_tiles(nullptr, 8u, 0u, nullptr);
+    return true;
+}
+
 bool test_small_index_tile_decode() {
     using galaxy::gx::RGBA8;
     using galaxy::gx::TexFormat;
@@ -1859,6 +1940,7 @@ bool test_warp_against_oracle() {
 int main() {
     bool passed = test_cpu_oracle();
     passed &= test_rgba8_tile_decode();
+    passed &= test_cmpr_tile_decode();
     passed &= test_small_index_tile_decode();
     passed &= test_clear_precision();
     passed &= test_warp_against_oracle();
