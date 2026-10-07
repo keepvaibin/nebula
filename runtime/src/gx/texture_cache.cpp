@@ -435,120 +435,68 @@ namespace {
 
 // The block formats below use raster pixel order inside each tile.
 
-static void decode_I4(
+template <TexFormat Format>
+void decode_intensity_tiles_impl(
     const std::uint8_t* src,
     std::uint32_t width,
     std::uint32_t height,
     RGBA8* out) {
-    // Block: 8×8 pixels; one byte holds two 4-bit I values (high nibble first).
-    const std::uint32_t blocks_x = (width  + 7u) / 8u;
-    const std::uint32_t blocks_y = (height + 7u) / 8u;
+    static_assert(Format == TexFormat::I4 || Format == TexFormat::I8 ||
+                  Format == TexFormat::IA4 || Format == TexFormat::IA8);
+    // All four formats use a 32-byte tile. Clip once per tile, then decode
+    // contiguous valid rows without per-pixel destination edge tests.
+    constexpr std::uint32_t block_width = Format == TexFormat::IA8 ? 4u : 8u;
+    constexpr std::uint32_t block_height = Format == TexFormat::I4 ? 8u : 4u;
+    constexpr std::uint32_t row_bytes = 32u / block_height;
+    const std::uint32_t blocks_x = (width + block_width - 1u) / block_width;
+    const std::uint32_t blocks_y = (height + block_height - 1u) / block_height;
     for (std::uint32_t by = 0; by < blocks_y; ++by) {
+        const std::uint32_t base_y = by * block_height;
+        const std::uint32_t rows = std::min(block_height, height - base_y);
         for (std::uint32_t bx = 0; bx < blocks_x; ++bx) {
-            for (std::uint32_t py = 0; py < 8u; ++py) {
-                for (std::uint32_t px = 0; px < 8u; px += 2u) {
-                    const std::uint8_t byte = *src++;
-                    for (std::uint32_t half = 0; half < 2u; ++half) {
-                        const std::uint32_t ix = bx * 8u + px + half;
-                        const std::uint32_t iy = by * 8u + py;
-                        if (ix < width && iy < height) {
-                            const std::uint8_t nibble =
-                                (half == 0u)
-                                    ? static_cast<std::uint8_t>((byte >> 4) & 0xFu)
-                                    : static_cast<std::uint8_t>(byte & 0xFu);
-                            const std::uint8_t i =
-                                static_cast<std::uint8_t>((nibble << 4) | nibble);
-                            // GX intensity formats replicate I into ALPHA
-                            // (an I4 sample is (I,I,I,I)) — opaque alpha
-                            // turned every font glyph quad into a solid box.
-                            out[iy * width + ix] = RGBA8{i, i, i, i};
+            const std::uint32_t base_x = bx * block_width;
+            const std::uint32_t columns = std::min(block_width, width - base_x);
+            for (std::uint32_t py = 0; py < rows; ++py) {
+                const std::uint8_t* row = src + py * row_bytes;
+                RGBA8* dst = out + static_cast<std::size_t>(base_y + py) * width + base_x;
+                if constexpr (Format == TexFormat::I4) {
+                    // High nibble first; write both pixels without a half
+                    // selector branch. I4/I8 replicate intensity into ALPHA.
+                    std::uint32_t px = 0u;
+                    for (; px + 1u < columns; px += 2u) {
+                        const std::uint8_t byte = row[px / 2u];
+                        const auto high = static_cast<std::uint8_t>((byte >> 4u) * 17u);
+                        const auto low = static_cast<std::uint8_t>((byte & 15u) * 17u);
+                        dst[px] = RGBA8{high, high, high, high};
+                        dst[px + 1u] = RGBA8{low, low, low, low};
+                    }
+                    if (px < columns) {
+                        const auto high = static_cast<std::uint8_t>((row[px / 2u] >> 4u) * 17u);
+                        dst[px] = RGBA8{high, high, high, high};
+                    }
+                } else {
+                    for (std::uint32_t px = 0; px < columns; ++px) {
+                        if constexpr (Format == TexFormat::I8) {
+                            const std::uint8_t i = row[px];
+                            dst[px] = RGBA8{i, i, i, i};
+                        } else if constexpr (Format == TexFormat::IA4) {
+                            // A[7:4] I[3:0], both expanded by bit replication.
+                            const std::uint8_t byte = row[px];
+                            const auto i = static_cast<std::uint8_t>((byte & 15u) * 17u);
+                            const auto a = static_cast<std::uint8_t>((byte >> 4u) * 17u);
+                            dst[px] = RGBA8{i, i, i, a};
+                        } else {
+                            // IA8 stores A then I in guest byte order.
+                            const std::uint8_t a = row[px * 2u];
+                            const std::uint8_t i = row[px * 2u + 1u];
+                            dst[px] = RGBA8{i, i, i, a};
                         }
                     }
                 }
             }
-        }
-    }
-}
-
-static void decode_I8(
-    const std::uint8_t* src,
-    std::uint32_t width,
-    std::uint32_t height,
-    RGBA8* out) {
-    // Block: 8×4 pixels.
-    const std::uint32_t blocks_x = (width  + 7u) / 8u;
-    const std::uint32_t blocks_y = (height + 3u) / 4u;
-    for (std::uint32_t by = 0; by < blocks_y; ++by) {
-        for (std::uint32_t bx = 0; bx < blocks_x; ++bx) {
-            for (std::uint32_t py = 0; py < 4u; ++py) {
-                for (std::uint32_t px = 0; px < 8u; ++px) {
-                    const std::uint8_t i = *src++;
-                    const std::uint32_t ix = bx * 8u + px;
-                    const std::uint32_t iy = by * 4u + py;
-                    if (ix < width && iy < height) {
-                        // I8 samples replicate intensity into alpha too.
-                        out[iy * width + ix] = RGBA8{i, i, i, i};
-                    }
-                }
-            }
-        }
-    }
-}
-
-static void decode_IA4(
-    const std::uint8_t* src,
-    std::uint32_t width,
-    std::uint32_t height,
-    RGBA8* out) {
-    // Block: 8x4 pixels; one byte = A[7:4] I[3:0].
-    const std::uint32_t blocks_x = (width  + 7u) / 8u;
-    const std::uint32_t blocks_y = (height + 3u) / 4u;
-    for (std::uint32_t by = 0; by < blocks_y; ++by) {
-        for (std::uint32_t bx = 0; bx < blocks_x; ++bx) {
-            for (std::uint32_t py = 0; py < 4u; ++py) {
-                for (std::uint32_t px = 0; px < 8u; ++px) {
-                    const std::uint8_t byte = *src++;
-                    const std::uint32_t ix = bx * 8u + px;
-                    const std::uint32_t iy = by * 4u + py;
-                    if (ix < width && iy < height) {
-                        const std::uint8_t a4 =
-                            static_cast<std::uint8_t>((byte >> 4) & 0xFu);
-                        const std::uint8_t i4 =
-                            static_cast<std::uint8_t>(byte & 0xFu);
-                        const std::uint8_t i =
-                            static_cast<std::uint8_t>((i4 << 4) | i4);
-                        const std::uint8_t a =
-                            static_cast<std::uint8_t>((a4 << 4) | a4);
-                        out[iy * width + ix] = RGBA8{i, i, i, a};
-                    }
-                }
-            }
-        }
-    }
-}
-
-static void decode_IA8(
-    const std::uint8_t* src,
-    std::uint32_t width,
-    std::uint32_t height,
-    RGBA8* out) {
-    // Block: 4x4 pixels; two bytes per pixel: A, I.
-    const std::uint32_t blocks_x = (width  + 3u) / 4u;
-    const std::uint32_t blocks_y = (height + 3u) / 4u;
-    for (std::uint32_t by = 0; by < blocks_y; ++by) {
-        for (std::uint32_t bx = 0; bx < blocks_x; ++bx) {
-            for (std::uint32_t py = 0; py < 4u; ++py) {
-                for (std::uint32_t px = 0; px < 4u; ++px) {
-                    const std::uint8_t alpha     = *src++;
-                    const std::uint8_t intensity = *src++;
-                    const std::uint32_t ix = bx * 4u + px;
-                    const std::uint32_t iy = by * 4u + py;
-                    if (ix < width && iy < height) {
-                        out[iy * width + ix] =
-                            RGBA8{intensity, intensity, intensity, alpha};
-                    }
-                }
-            }
+            // Padding remains part of the validated guest footprint, even
+            // though no destination pixel needs the clipped source texels.
+            src += 32u;
         }
     }
 }
@@ -646,6 +594,18 @@ static void decode_RGB5A3(
 }
 
 }  // namespace
+
+void detail::decode_intensity_tiles(
+    TexFormat format, const std::uint8_t* src,
+    std::uint32_t width, std::uint32_t height, RGBA8* out) {
+    switch (format) {
+    case TexFormat::I4: decode_intensity_tiles_impl<TexFormat::I4>(src, width, height, out); break;
+    case TexFormat::I8: decode_intensity_tiles_impl<TexFormat::I8>(src, width, height, out); break;
+    case TexFormat::IA4: decode_intensity_tiles_impl<TexFormat::IA4>(src, width, height, out); break;
+    case TexFormat::IA8: decode_intensity_tiles_impl<TexFormat::IA8>(src, width, height, out); break;
+    default: throw std::runtime_error("[TextureCache] unsupported intensity format");
+    }
+}
 
 void detail::decode_rgba8_tiles(
     const std::uint8_t* src,
@@ -1924,16 +1884,10 @@ TextureHandle TextureCache::get(
 
         switch (image.format) {
         case TexFormat::I4:
-            decode_I4(src, lw, lh, out);
-            break;
         case TexFormat::I8:
-            decode_I8(src, lw, lh, out);
-            break;
         case TexFormat::IA4:
-            decode_IA4(src, lw, lh, out);
-            break;
         case TexFormat::IA8:
-            decode_IA8(src, lw, lh, out);
+            detail::decode_intensity_tiles(image.format, src, lw, lh, out);
             break;
         case TexFormat::RGB565:
             decode_RGB565(src, lw, lh, out);
