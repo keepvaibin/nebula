@@ -177,6 +177,18 @@ earlier accepted checkpoints are retained. The unrelated pre-existing
   dirty bits, resource ownership or enabling the option. This path is disabled
   by default. Both changes remain unbuilt/unrun; critical-path cost and elapsed
   saving are unmeasured.
+- **Decoded-vertex dependency safety:** the renderer's nullable bulk-read
+  resolver previously accepted a region whose host_base was null, then added
+  the guest offset. A nonzero offset could therefore produce an invalid
+  non-null pointer for a snapshot copy or dependency memcmp, and a null
+  descriptor could shadow a later backed region. Skip unbacked descriptors,
+  matching the FIFO/texture/vertex resolvers' ownership rules. Extended the
+  unrun actual dependency-capture/match check to a null descriptor before a
+  valid owner and to an entirely unbacked interval, including rejection without
+  a partial retained snapshot. This is a source-established correctness bug;
+  the recordings do not establish that this condition occurred. No FPS gain
+  is asserted. Input deadline checks remain unchanged: inspection confirms the
+  normal pending-report query is a single acquire load, not a mutex traversal.
 
 For the sustained CPU candidates, contribution and milliseconds saved are
 **unmeasured**. Code inspection establishes removed work: one allocation per

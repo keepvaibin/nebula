@@ -2175,6 +2175,9 @@ bool trace_thp_draw_frame_enabled(std::uint64_t frame) {
         static_cast<std::uint64_t>(guest_addr) + size;
     for (std::uint32_t i = 0; i < memory->region_count; ++i) {
         const GuestMemoryRegionV1& r = memory->regions[i];
+        if (r.host_base == nullptr) {
+            continue;
+        }
         const std::uint64_t region_end =
             static_cast<std::uint64_t>(r.guest_base) + r.size;
         if (guest_addr >= r.guest_base && end <= region_end) {
