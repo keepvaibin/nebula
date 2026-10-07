@@ -379,9 +379,20 @@ bool test_small_index_tile_decode() {
     using galaxy::gx::RGBA8;
     using galaxy::gx::TexFormat;
     using galaxy::gx::TlutFormat;
-    constexpr std::array<std::array<std::uint32_t, 2>, 10> sizes{{
-        {1u, 1u}, {3u, 2u}, {7u, 9u}, {8u, 8u}, {9u, 9u},
-        {31u, 33u}, {32u, 32u}, {33u, 33u}, {64u, 65u}, {257u, 3u}}};
+    // Every tile-tail width/height plus full tiles, multiple tiles and both
+    // sides of the raw/predecoded palette threshold. Keep the pixel oracle
+    // independent: it computes each tiled source address from destination x/y.
+    constexpr auto sizes = [] {
+        constexpr std::array<std::uint32_t, 17> dimensions{
+            1u, 2u, 3u, 4u, 5u, 6u, 7u, 8u, 9u,
+            15u, 16u, 31u, 32u, 33u, 64u, 65u, 257u};
+        std::array<std::array<std::uint32_t, 2>, dimensions.size() * dimensions.size()> result{};
+        std::size_t next = 0u;
+        for (auto width : dimensions) {
+            for (auto height : dimensions) result[next++] = {width, height};
+        }
+        return result;
+    }();
     constexpr std::array<std::uint16_t, 8> edge_words{
         0x0000u, 0xFFFFu, 0x8000u, 0x7FFFu,
         0xF800u, 0x07E0u, 0x001Fu, 0x1234u};
