@@ -1396,8 +1396,7 @@ bool TextureCache::register_efb_copy(
     srv_desc.Texture2D.PlaneSlice          = 0;
     srv_desc.Texture2D.ResourceMinLODClamp = 0.0f;
 
-    const UINT increment = device_->GetDescriptorHandleIncrementSize(
-        D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+    const UINT increment = srv_stride_;
     D3D12_CPU_DESCRIPTOR_HANDLE cpu =
         srv_heap_->GetCPUDescriptorHandleForHeapStart();
     cpu.ptr += static_cast<SIZE_T>(srv_idx) * increment;
@@ -1760,9 +1759,7 @@ TextureHandle TextureCache::get(
                 srv_desc.Shader4ComponentMapping =
                     D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
                 srv_desc.Texture2D.MipLevels = static_cast<UINT>(levels);
-                const UINT increment =
-                    device_->GetDescriptorHandleIncrementSize(
-                        D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+                const UINT increment = srv_stride_;
                 D3D12_CPU_DESCRIPTOR_HANDLE cpu =
                     srv_heap_->GetCPUDescriptorHandleForHeapStart();
                 cpu.ptr += static_cast<SIZE_T>(srv_idx) * increment;
@@ -2006,8 +2003,7 @@ TextureHandle TextureCache::get(
     srv_desc.Shader4ComponentMapping   = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
     srv_desc.Texture2D.MipLevels       = static_cast<UINT>(levels);
 
-    const UINT increment = device_->GetDescriptorHandleIncrementSize(
-        D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+    const UINT increment = srv_stride_;
     D3D12_CPU_DESCRIPTOR_HANDLE cpu =
         srv_heap_->GetCPUDescriptorHandleForHeapStart();
     cpu.ptr += static_cast<SIZE_T>(srv_idx) * increment;
