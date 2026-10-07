@@ -1099,6 +1099,88 @@ V main(uint id : SV_VertexID) {
         return run_bytes(DXGI_FORMAT_R32_FLOAT,bytes,width,height,logical_size,constants);
     }
 
+    bool test_xfb_retirement_rollback() {
+        using namespace galaxy::gx;
+        EfbCopyManager manager;
+        if (!manager.initialize(device_.Get(), 1u)) {
+            throw std::runtime_error("initialize XFB rollback manager");
+        }
+        EfbCopyParams params{};
+        params.src_width = params.src_height = 8u;
+        params.dest_addr = 0x01000000u;
+        params.copy_to_xfb = true;
+        auto* original = manager.acquire_xfb(params, 1u);
+        manager.mark_xfb_copied(*original, 1u);
+        auto* original_resource = original->texture.Get();
+        const auto original_serial = original->copy_serial;
+        // Initial allocation needs no retirement list. Resizing before the
+        // first begin_frame deliberately exercises its ownership failure path.
+        params.src_width = 16u;
+        bool rejected = false;
+        try { (void)manager.acquire_xfb(params, 2u); }
+        catch (const std::runtime_error&) { rejected = true; }
+        const auto* preserved = manager.find_xfb(params.dest_addr);
+        bool passed = expect(rejected && preserved == original &&
+            preserved != nullptr && preserved->texture.Get() == original_resource &&
+            preserved->width == 8u && preserved->height == 8u &&
+            preserved->copy_serial == original_serial && preserved->frame_stamp == 1u &&
+            manager.latest() == preserved,
+            "failed resize retirement preserves the live XFB resource and presentation identity");
+        manager.begin_frame(0u, kFramesInFlight);
+        const auto* resized = manager.acquire_xfb(params, 2u);
+        passed &= expect(resized->texture != nullptr && resized->width == 16u &&
+            resized->height == 8u && !resized->presentable && resized->copy_serial == 0u,
+            "resize succeeds after retirement storage is available without inventing a copied frame");
+        // No GPU commands reference these resources in this lifecycle fixture.
+        manager.shutdown();
+        return passed;
+    }
+
+    bool test_xfb_idle_pool_admission() {
+        using namespace galaxy::gx;
+        EfbCopyManager manager;
+        if (!manager.initialize(device_.Get(), 1u)) {
+            throw std::runtime_error("initialize XFB pool manager");
+        }
+        manager.begin_frame(0u, kFramesInFlight);
+        EfbCopyParams params{};
+        params.src_height = 8u;
+        params.dest_addr = 0x01000000u;
+        params.copy_to_xfb = true;
+        // Eight one-off sizes fill the idle pool; the ninth is the current XFB.
+        for (unsigned i = 0; i < 9u; ++i) {
+            params.src_width = static_cast<std::uint16_t>(32u + i);
+            (void)manager.acquire_xfb(params, i + 1u);
+        }
+        ComPtr<ID3D12Resource> wanted = manager.acquire_xfb(params, 10u)->texture;
+        manager.begin_frame(0u, kFramesInFlight);
+        params.src_width = 41u;
+        ComPtr<ID3D12Resource> other = manager.acquire_xfb(params, 11u)->texture;
+        manager.begin_frame(1u, kFramesInFlight);
+        params.src_width = 40u;
+        const auto* before_fence = manager.acquire_xfb(params, 12u);
+        // Witness ComPtrs keep identities distinct even in the broken version:
+        // releasing a resource cannot let a new allocation reuse its address.
+        bool passed = expect(before_fence->texture.Get() != wanted.Get(),
+            "another frame slot cannot recycle the recently retired XFB");
+        manager.begin_frame(0u, kFramesInFlight);
+        params.src_width = 41u;
+        (void)manager.acquire_xfb(params, 13u);
+        params.src_width = 40u;
+        const auto* reused = manager.acquire_xfb(params, 14u);
+        passed &= expect(reused->texture.Get() == wanted.Get() &&
+            reused->width == 40u && reused->height == 8u,
+            "full idle pool admits a current size and reuses it after its owning fence");
+        manager.begin_frame(1u, kFramesInFlight);
+        params.src_width = 41u;
+        passed &= expect(manager.acquire_xfb(params, 15u)->texture.Get() == other.Get(),
+            "second size is reusable only after its own retirement slot is reclaimed");
+        // No command lists are submitted; production begin_frame calls are
+        // preceded by the corresponding renderer fence waits.
+        manager.shutdown();
+        return passed;
+    }
+
     bool test_content_texture_identity() {
         using namespace galaxy::gx;
         bool passed = true;
@@ -2406,6 +2488,8 @@ int main(int argc, char** argv) {
     try {
         WarpConversionHarness harness;
         passed &= harness.test_texture_descriptor_retirement();
+        passed &= harness.test_xfb_retirement_rollback();
+        passed &= harness.test_xfb_idle_pool_admission();
         passed &= harness.test_texture_cache_ranges();
         passed &= test_scaled_xfb_filter();
     } catch (const std::exception& error) {
