@@ -122,6 +122,24 @@ earlier accepted checkpoints are retained. The unrelated pre-existing
   cache. No scheduling service was bypassed. Static review checked every grouped
   selector and dynamic check; dispatch/IR/audio/exception regression execution
   and elapsed saving remain pending under the execution restriction.
+- **Backend texture reuse:** extend palette-independent keys to backend handle
+  and binding caches. The earlier inner-cache fix still left backend misses on
+  direct-format palette register changes. Carry the TLUT transfer's actual
+  byte-change result outward so an identical reload no longer clears five
+  backend cache maps or invalidates current bindings. Changed reloads retain
+  the original complete backend invalidation; pending draws still flush before
+  transfers and dependency reads still occur. Added unrun all-eight-map,
+  both-register-bank key checks for every supported direct/indexed format and
+  wrap changes, plus actual backend unchanged/changed reload cache checks.
+  Removed work includes map destruction/refill, binding reconstruction and
+  redundant lookups. Its critical-path contribution and saving are unmeasured.
+- **Texture snapshot settings:** guest dependency footprints now derive solely
+  from authored mips. Host mip generation never consumes additional guest mip
+  levels, so the prior settings-lock/configuration copy and enhancement check
+  could not change the result. Backend host-mip eligibility also rejects
+  nearest/small/intensity cases before reading live settings. Authored mip
+  extent, active enhancement decisions and filtering remain unchanged. Static
+  branch review only; runtime checks remain deferred.
 
 For the sustained CPU candidates, contribution and milliseconds saved are
 **unmeasured**. Code inspection establishes removed work: one allocation per

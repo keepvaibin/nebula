@@ -1149,15 +1149,14 @@ bool dependency_ranges_overlap(
 [[nodiscard]] bool snapshot_should_generate_native_mips(
     const TexImage& image,
     const TexMode& mode) {
-    const RenderConfig cfg = get_render_config();
-    if (!cfg.enhanced_mipmaps ||
-        (static_cast<unsigned>(mode.min_filter) & 0x3u) != 0u ||
+    if ((static_cast<unsigned>(mode.min_filter) & 0x3u) != 0u ||
         mode.min_filter != TexMinFilter::Linear ||
         mode.mag_filter != TexMagFilter::Linear ||
-        (image.width < 64u && image.height < 64u)) {
+        (image.width < 64u && image.height < 64u) ||
+        !snapshot_generated_mips_color_format(image.format)) {
         return false;
     }
-    return snapshot_generated_mips_color_format(image.format);
+    return get_render_config().enhanced_mipmaps;
 }
 
 [[nodiscard]] std::uint32_t snapshot_texture_guest_size(
@@ -1171,9 +1170,9 @@ bool dependency_ranges_overlap(
         const unsigned wanted =
             1u + (static_cast<unsigned>(mode.max_lod_x16) + 15u) / 16u;
         guest_levels = std::min(wanted, full_chain);
-    } else if (snapshot_should_generate_native_mips(image, mode)) {
-        guest_levels = 1u;
     }
+    // Generated host mips consume only guest mip zero, regardless of the
+    // enhancement setting. Dependency discovery needs no settings lookup.
 
     std::uint64_t total = 0;
     for (unsigned level = 0; level < guest_levels; ++level) {
@@ -7416,8 +7415,13 @@ GxBackend::TextureBindingKey GxBackend::capture_texture_binding_key(
             bp::kTexImage0Base + bank_offset + slot));
         key.regs[base + 3u] = state_.bp(static_cast<std::uint8_t>(
             bp::kTexImage3Base + bank_offset + slot));
-        key.regs[base + 4u] = state_.bp(static_cast<std::uint8_t>(
-            bp::kTexTlutBase + bank_offset + slot));
+        const TexFormat format =
+            decode_tex_image(key.regs[base + 2u], key.regs[base + 3u]).format;
+        if (format == TexFormat::C4 || format == TexFormat::C8 ||
+            format == TexFormat::C14X2) {
+            key.regs[base + 4u] = state_.bp(static_cast<std::uint8_t>(
+                bp::kTexTlutBase + bank_offset + slot));
+        }
     }
     return key;
 }
@@ -7439,13 +7443,15 @@ GxBackend::TextureHandleKey GxBackend::texture_handle_key(
         levels = full_chain;
         generated_mips = levels > 1u;
     }
+    const bool palettized = image.format == TexFormat::C4 ||
+        image.format == TexFormat::C8 || image.format == TexFormat::C14X2;
     return TextureHandleKey{
         image.guest_addr,
         image.width,
         image.height,
         static_cast<std::uint8_t>(image.format),
-        static_cast<std::uint8_t>(tlut.format),
-        tlut.tmem_offset,
+        static_cast<std::uint8_t>(palettized ? tlut.format : TlutFormat{}),
+        static_cast<std::uint16_t>(palettized ? tlut.tmem_offset : 0u),
         static_cast<std::uint8_t>(std::min<unsigned>(levels, 255u)),
         generated_mips ? 1u : 0u,
     };
@@ -9971,10 +9977,12 @@ void GxBackend::on_tlut_load() {
     if (frame_memory_ == nullptr) {
         return;
     }
-    texture_cache_.load_tlut(
+    if (!texture_cache_.load_tlut(
         state_.bp(bp::kTlutSrcAddr),
         state_.bp(bp::kTlutDest),
-        frame_memory_);
+        frame_memory_)) {
+        return;
+    }
     texture_handle_cache_.clear();
     clear_texture_binding_table_cache();
     texture_bindings_dirty_ = true;

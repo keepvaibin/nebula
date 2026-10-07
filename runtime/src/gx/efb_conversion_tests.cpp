@@ -663,13 +663,15 @@ V main(uint id : SV_VertexID) {
             indexed.srv_index != other_palette_slot.srv_index,
             "indexed textures retain palette format and slot dependencies even when palette bytes match");
         constexpr auto palette_source = address + 1536u;
-        cache.load_tlut(palette_source >> 5u, 1u << 10u, &memory); // 32 unchanged bytes at slot zero
+        passed &= expect(!cache.load_tlut(palette_source >> 5u, 1u << 10u, &memory),
+            "32 unchanged palette bytes report no binding invalidation");
         const auto after_identical_reload = cache.get(indexed_image, indexed_mode, TlutRef{0u, TlutFormat::IA8}, &memory);
         passed &= expect(after_identical_reload.resource == indexed.resource &&
             after_identical_reload.srv_index == indexed.srv_index,
             "identical palette reload retains its decoded texture and descriptor");
         bytes[1536] = std::byte{0xff};
-        cache.load_tlut(palette_source >> 5u, 1u << 10u, &memory);
+        passed &= expect(cache.load_tlut(palette_source >> 5u, 1u << 10u, &memory),
+            "changed palette bytes report required binding invalidation");
         const auto after_changed_reload = cache.get(indexed_image, indexed_mode, TlutRef{0u, TlutFormat::IA8}, &memory);
         const auto unaffected_slot = cache.get(indexed_image, indexed_mode, TlutRef{1u, TlutFormat::IA8}, &memory);
         passed &= expect(after_changed_reload.resource != indexed.resource &&

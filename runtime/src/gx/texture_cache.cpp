@@ -1227,7 +1227,7 @@ std::uint32_t TextureCache::allocate_srv_index() {
 // load_tlut — BP 0x64 / 0x65
 // ---------------------------------------------------------------------------
 
-void TextureCache::load_tlut(
+bool TextureCache::load_tlut(
     std::uint32_t src_reg,
     std::uint32_t dest_reg,
     GuestMemoryV1* memory) {
@@ -1236,7 +1236,7 @@ void TextureCache::load_tlut(
     const std::uint32_t dest_byte_offset = decoded.destination_offset;
     const std::uint32_t transfer = decoded.byte_count;
     if (transfer == 0u) {
-        return;
+        return false;
     }
     if (dest_byte_offset + transfer > kTlutBankBytes) {
         throw std::runtime_error(
@@ -1253,7 +1253,7 @@ void TextureCache::load_tlut(
     // An identical reload changes no decoded palette. Keep dependency reads
     // observable, but avoid retiring/redecoding every texture using this slot.
     if (std::memcmp(tlut_bank_ + dest_byte_offset, src_ptr, transfer) == 0) {
-        return;
+        return false;
     }
     std::memcpy(
         tlut_bank_ + dest_byte_offset,
@@ -1284,6 +1284,7 @@ void TextureCache::load_tlut(
             ++it;
         }
     }
+    return true;
 }
 
 // ---------------------------------------------------------------------------

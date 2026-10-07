@@ -103,8 +103,9 @@ public:
         GuestMemoryV1* memory);
 
     // BP 0x64/0x65: copy a palette from guest memory into the TMEM-modelled
-    // TLUT bank.  Palettized entries referencing the overwritten slot drop.
-    void load_tlut(
+    // TLUT bank. Return whether bytes changed; only changed palettes retire
+    // overlapping entries. Callers can retain bindings on identical reloads.
+    [[nodiscard]] bool load_tlut(
         std::uint32_t src_reg,
         std::uint32_t dest_reg,
         GuestMemoryV1* memory);
