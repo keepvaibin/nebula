@@ -919,9 +919,34 @@ bool DspAramMirrorBoundary::worker_read_u16_be(
     return state_.load(std::memory_order_acquire) == State::Active;
 }
 
+void DspAramMirrorBoundary::mark_outbound_dirty_page_worker(
+    std::uint32_t page) noexcept {
+    if (storage_->dirty_page_flags[page] == 0u) {
+        if (outbound_dirty_page_count_ == kDirtyPageCount) {
+            std::abort();
+        }
+        storage_->dirty_page_flags[page] = 1u;
+        storage_->dirty_page_indices[outbound_dirty_page_count_++] = page;
+    }
+}
+
 void DspAramMirrorBoundary::mark_outbound_dirty_worker(
     std::uint32_t address,
     std::uint32_t size) noexcept {
+    // PCM word writes fit this path. If the entire checked span fits in
+    // one bitmap word, it also fits in one 128-byte page: no splitting or
+    // range clamping is needed. size==64 is valid only at bit zero, so the
+    // mask shift always lies in [0,63] and never shifts by the word width.
+    static_assert(kDirtyPageBytes == 128u);
+    const std::uint32_t bit = address & 63u;
+    if (size != 0u && size <= 64u - bit) {
+        mark_outbound_dirty_page_worker(address / kDirtyPageBytes);
+        storage_->dirty_byte_words[address / 64u] |=
+            (~UINT64_C(0) >> (64u - size)) << bit;
+        published_outbound_dirty_page_count_.store(
+            outbound_dirty_page_count_, std::memory_order_release);
+        return;
+    }
     const std::uint32_t end = address + size;
     std::uint32_t cursor = address;
     while (cursor < end) {
@@ -929,13 +954,7 @@ void DspAramMirrorBoundary::mark_outbound_dirty_worker(
         const std::uint32_t page_base = page * kDirtyPageBytes;
         const std::uint32_t page_end = page_base + kDirtyPageBytes;
         const std::uint32_t chunk_end = std::min(end, page_end);
-        if (storage_->dirty_page_flags[page] == 0u) {
-            if (outbound_dirty_page_count_ == kDirtyPageCount) {
-                std::abort();
-            }
-            storage_->dirty_page_flags[page] = 1u;
-            storage_->dirty_page_indices[outbound_dirty_page_count_++] = page;
-        }
+        mark_outbound_dirty_page_worker(page);
 
         const std::uint32_t first_bit = cursor - page_base;
         const std::uint32_t last_bit = chunk_end - page_base;

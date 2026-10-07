@@ -5316,6 +5316,86 @@ bool test_aram_exact_span_enumeration() {
         "DSP ARAM flush commits exactly the byte-oracle spans across full words, gaps, and sparse successive pages");
 }
 
+bool test_aram_small_write_dirty_masks() {
+    using Boundary = galaxy::DspAramMirrorBoundary;
+    // Reuse the independent byte oracle, with an address origin so the same
+    // cases also exercise the last physical mirror pages and bitmap words.
+    struct Probe {
+        ExactAramSpanProbe exact;
+        std::uint32_t base{};
+        static bool commit(void* user, std::uint64_t generation,
+            std::uint32_t address, const std::uint8_t* bytes,
+            std::uint32_t size) noexcept {
+            auto& probe = *static_cast<Probe*>(user);
+            if (address < probe.base) return false;
+            return ExactAramSpanProbe::commit(
+                &probe.exact, generation, address - probe.base, bytes, size);
+        }
+    };
+    auto seed = std::make_unique<std::uint8_t[]>(Boundary::kMirrorSizeBytes);
+    seed[127] = 0x12u;
+    seed[128] = 0x34u;
+    auto boundary = std::make_unique<Boundary>();
+    if (!boundary->reset() || !boundary->cpu_stage_seed(1u,
+        std::span<const std::uint8_t>{seed.get(), Boundary::kMirrorSizeBytes})) return false;
+    AramMailProbe mail{boundary.get(), 1u, 127u, 0x1234u};
+    bool worker_ok = false;
+    std::uint64_t flushes = 0u;
+    std::thread worker([&] {
+        bool ok = boundary->worker_bind();
+        ok = ok && boundary->worker_apply_before_mail_consume(1u, &consume_aram_mail, &mail);
+        Probe probe{};
+        const auto flush = [&]() {
+            probe.exact.generation = ++flushes;
+            probe.exact.cursor = probe.exact.calls = 0u;
+            if (!boundary->worker_flush_outbound(flushes, &Probe::commit, &probe)) return false;
+            while (probe.exact.cursor < probe.exact.dirty.size() &&
+                !probe.exact.dirty[probe.exact.cursor]) ++probe.exact.cursor;
+            return probe.exact.cursor == probe.exact.dirty.size();
+        };
+        for (std::uint32_t base : {0u, Boundary::kMirrorSizeBytes - 1024u}) {
+            probe.base = base;
+            for (std::uint32_t offset = 0u; offset < 128u && ok; ++offset) {
+                for (std::uint32_t size : {1u, 2u, 3u, 31u, 32u, 33u,
+                    63u, 64u, 65u, 127u, 128u, 129u}) {
+                    if (!ok) break;
+                    probe.exact.dirty.fill(false);
+                    for (std::uint32_t i = 0u; i < size; ++i) {
+                        probe.exact.dirty[offset + i] = true;
+                        probe.exact.bytes[offset + i] =
+                            static_cast<std::uint8_t>((offset + i) * 37u + size);
+                    }
+                    ok = boundary->worker_write_span(base + offset,
+                        probe.exact.bytes.data() + offset, size);
+                    // Same dirty page registered twice, plus overlapping word
+                    // and span writes. The oracle follows final byte values.
+                    probe.exact.dirty[offset] = probe.exact.dirty[offset + 1u] = true;
+                    probe.exact.bytes[offset] = 0xabu;
+                    probe.exact.bytes[offset + 1u] = 0xcdu;
+                    ok = ok && boundary->worker_write_u16_be(base + offset, 0xabcdu);
+                    ok = ok && flush();
+                }
+            }
+            // The final two mirror bytes are a valid output word.
+            if (ok) {
+                probe.exact.dirty.fill(false);
+                probe.exact.dirty[1022] = probe.exact.dirty[1023] = true;
+                probe.exact.bytes[1022] = 0x45u;
+                probe.exact.bytes[1023] = 0x67u;
+                ok = boundary->worker_write_u16_be(base + 1022u, 0x4567u) && flush();
+            }
+        }
+        const bool detached = boundary->worker_detach();
+        worker_ok = ok && detached;
+    });
+    worker.join();
+    const auto snapshot = boundary->snapshot();
+    return expect(worker_ok && mail.observed_after_apply && !snapshot.failed &&
+        snapshot.outbound_flushes == 3074u && flushes == 3074u &&
+        snapshot.outbound_dirty_pages == 0u,
+        "DSP small ARAM writes preserve exact dirty masks, overlap, word/page edges and final mirror bytes");
+}
+
 bool test_aram_mirror_boundary() {
     using Boundary = galaxy::DspAramMirrorBoundary;
     static_assert(!Boundary::kWorkerHotPathUsesBoundaryMutex);
@@ -6451,6 +6531,7 @@ int main() {
     passed &= test_frame_pe_slice_services_pending_mram_before_ai();
     passed &= test_aram_mirror_boundary();
     passed &= test_aram_exact_span_enumeration();
+    passed &= test_aram_small_write_dirty_masks();
     passed &= test_ifx_ordering_hooks();
     passed &= test_clean_halt_ack_ordering();
     passed &= test_channel_selection_dma_probe();
