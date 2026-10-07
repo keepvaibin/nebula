@@ -639,62 +639,45 @@ void detail::decode_rgba8_tiles(
 namespace {
 
 // C4/C8 indices use either raw entry conversion or an already decoded small
-// palette. Keep the same tiled traversal for both paths.
-
-template <typename PaletteLookup>
-static void decode_C4(
+// palette. Clip once per tile for both paths, preserving 32-byte tile padding.
+template <TexFormat Format, typename PaletteLookup>
+static void decode_small_index_tiles_impl(
     const std::uint8_t* src,
     std::uint32_t width,
     std::uint32_t height,
     const PaletteLookup& lookup,
     RGBA8* out) {
-    // Block: 8×8 pixels; 4 bits per index, high nibble first.
+    static_assert(Format == TexFormat::C4 || Format == TexFormat::C8);
+    constexpr std::uint32_t tile_rows = Format == TexFormat::C4 ? 8u : 4u;
+    constexpr std::uint32_t row_bytes = 32u / tile_rows;
     const std::uint32_t blocks_x = (width  + 7u) / 8u;
-    const std::uint32_t blocks_y = (height + 7u) / 8u;
+    const std::uint32_t blocks_y = (height + tile_rows - 1u) / tile_rows;
     for (std::uint32_t by = 0; by < blocks_y; ++by) {
+        const std::uint32_t base_y = by * tile_rows;
+        const std::uint32_t rows = std::min(tile_rows, height - base_y);
         for (std::uint32_t bx = 0; bx < blocks_x; ++bx) {
-            for (std::uint32_t py = 0; py < 8u; ++py) {
-                for (std::uint32_t px = 0; px < 8u; px += 2u) {
-                    const std::uint8_t byte = *src++;
-                    for (std::uint32_t half = 0; half < 2u; ++half) {
-                        const std::uint32_t ix = bx * 8u + px + half;
-                        const std::uint32_t iy = by * 8u + py;
-                        if (ix < width && iy < height) {
-                            const std::uint32_t index =
-                                (half == 0u)
-                                    ? static_cast<std::uint32_t>((byte >> 4) & 0xFu)
-                                    : static_cast<std::uint32_t>(byte & 0xFu);
-                            out[iy * width + ix] = lookup(index);
-                        }
+            const std::uint32_t base_x = bx * 8u;
+            const std::uint32_t columns = std::min(8u, width - base_x);
+            for (std::uint32_t py = 0; py < rows; ++py) {
+                const std::uint8_t* row = src + py * row_bytes;
+                RGBA8* dst = out + static_cast<std::size_t>(base_y + py) * width + base_x;
+                if constexpr (Format == TexFormat::C4) {
+                    std::uint32_t px = 0u;
+                    for (; px + 1u < columns; px += 2u) {
+                        const std::uint8_t byte = row[px / 2u];
+                        dst[px] = lookup(byte >> 4u);
+                        dst[px + 1u] = lookup(byte & 15u);
+                    }
+                    if (px < columns) {
+                        dst[px] = lookup(row[px / 2u] >> 4u);
+                    }
+                } else {
+                    for (std::uint32_t px = 0u; px < columns; ++px) {
+                        dst[px] = lookup(row[px]);
                     }
                 }
             }
-        }
-    }
-}
-
-template <typename PaletteLookup>
-static void decode_C8(
-    const std::uint8_t* src,
-    std::uint32_t width,
-    std::uint32_t height,
-    const PaletteLookup& lookup,
-    RGBA8* out) {
-    // Block: 8×4 pixels; one byte per index.
-    const std::uint32_t blocks_x = (width  + 7u) / 8u;
-    const std::uint32_t blocks_y = (height + 3u) / 4u;
-    for (std::uint32_t by = 0; by < blocks_y; ++by) {
-        for (std::uint32_t bx = 0; bx < blocks_x; ++bx) {
-            for (std::uint32_t py = 0; py < 4u; ++py) {
-                for (std::uint32_t px = 0; px < 8u; ++px) {
-                    const std::uint32_t index = *src++;
-                    const std::uint32_t ix = bx * 8u + px;
-                    const std::uint32_t iy = by * 4u + py;
-                    if (ix < width && iy < height) {
-                        out[iy * width + ix] = lookup(index);
-                    }
-                }
-            }
+            src += 32u;
         }
     }
 }
@@ -729,11 +712,15 @@ void detail::decode_small_index_tiles(
     switch (format) {
     case TexFormat::C4:
         decode_with_small_palette<16u>(palette, tlut_format, pixels,
-            [&](const auto& lookup) { decode_C4(src, width, height, lookup, out); });
+            [&](const auto& lookup) {
+                decode_small_index_tiles_impl<TexFormat::C4>(src, width, height, lookup, out);
+            });
         return;
     case TexFormat::C8:
         decode_with_small_palette<256u>(palette, tlut_format, pixels,
-            [&](const auto& lookup) { decode_C8(src, width, height, lookup, out); });
+            [&](const auto& lookup) {
+                decode_small_index_tiles_impl<TexFormat::C8>(src, width, height, lookup, out);
+            });
         return;
     default:
         throw std::runtime_error("[TextureCache] expected small indexed format");
