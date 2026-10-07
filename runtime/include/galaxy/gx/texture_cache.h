@@ -52,6 +52,13 @@ struct RGBA8 {
     std::uint8_t a = 0;
 };
 
+namespace detail {
+// Caller validates the complete block-rounded source footprint. Edge tiles
+// advance by all 64 source bytes but write only pixels inside width/height.
+void decode_rgba8_tiles(const std::uint8_t* src, std::uint32_t width,
+                        std::uint32_t height, RGBA8* out);
+}  // namespace detail
+
 [[nodiscard]] std::uint8_t efb_copy_alias_texture_format(
     std::uint8_t copy_format);
 
