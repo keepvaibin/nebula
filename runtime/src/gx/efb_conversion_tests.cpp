@@ -1099,6 +1099,84 @@ V main(uint id : SV_VertexID) {
         return run_bytes(DXGI_FORMAT_R32_FLOAT,bytes,width,height,logical_size,constants);
     }
 
+    bool test_descriptor_ring_allocation_identity() {
+        using namespace galaxy::gx;
+        DescriptorRing ring;
+        const auto rejects = [](auto&& action, const char* message) {
+            try {
+                action();
+            } catch (const std::runtime_error&) {
+                return expect(true, message);
+            }
+            return expect(false, message);
+        };
+        bool passed = rejects([&] { (void)ring.allocate_persistent(1u); },
+            "uninitialized persistent allocation fails without dereferencing a heap");
+        passed &= rejects([&] { ring.begin_frame(0u); },
+            "uninitialized frame binding is rejected");
+        if (!expect(ring.initialize(device_.Get(),
+            D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 8u, 2u, 3u),
+            "create descriptor ring with prefix and two frame segments")) return false;
+        ComPtr<ID3D12DescriptorHeap> original_heap{ring.heap()};
+        const auto cpu = original_heap->GetCPUDescriptorHandleForHeapStart();
+        const auto gpu = original_heap->GetGPUDescriptorHandleForHeapStart();
+        const UINT stride = device_->GetDescriptorHandleIncrementSize(
+            D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+        const auto at = [&](const DescriptorRing::Table& table, unsigned index) {
+            return table.cpu.ptr == cpu.ptr + static_cast<SIZE_T>(index) * stride &&
+                table.gpu.ptr == gpu.ptr + static_cast<UINT64>(index) * stride;
+        };
+        passed &= expect(at(ring.allocate_persistent(2u), 0u),
+            "persistent allocation begins at actual heap CPU/GPU bases");
+        passed &= rejects([&] { (void)ring.allocate_persistent(~0u); },
+            "unsigned-wrap persistent request is rejected before consuming slots");
+        passed &= expect(at(ring.allocate_persistent(1u), 2u),
+            "rejected persistent request preserves the next slot");
+        passed &= rejects([&] { (void)ring.allocate_persistent(1u); },
+            "persistent prefix cannot overflow into frame descriptors");
+        passed &= rejects([&] { (void)ring.allocate(1u); },
+            "frame allocation requires begin_frame and cannot overlap the prefix");
+        ring.begin_frame(0u);
+        passed &= expect(at(ring.allocate(5u), 3u),
+            "first frame starts beyond the persistent prefix");
+        passed &= rejects([&] { (void)ring.allocate(~0u); },
+            "unsigned-wrap frame request is rejected before consuming slots");
+        passed &= expect(at(ring.allocate(1u), 8u),
+            "rejected frame request preserves the next slot");
+        passed &= rejects([&] { ring.begin_frame(2u); },
+            "out-of-heap frame slot is rejected without rewinding active state");
+        passed &= expect(at(ring.allocate(2u), 9u),
+            "invalid frame slot preserves the active frame cursor");
+        passed &= rejects([&] { (void)ring.allocate(1u); },
+            "full first frame cannot consume second-frame descriptors");
+        ring.begin_frame(1u);
+        passed &= expect(at(ring.allocate(8u), 11u),
+            "second frame occupies exactly its own segment");
+        passed &= expect(!ring.initialize(device_.Get(),
+                D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, ~0u, 2u, 0u) &&
+            !ring.initialize(device_.Get(),
+                D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 1u, 0u, 0u) &&
+            !ring.initialize(nullptr,
+                D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 1u, 1u, 0u) &&
+            ring.heap() == original_heap.Get(),
+            "failed initialization preserves the existing heap and bounds");
+        ring.begin_frame(0u);
+        passed &= expect(at(ring.allocate(8u), 3u),
+            "original limits and bases remain paired after rejected initialization");
+        if (!expect(ring.initialize(device_.Get(),
+            D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 4u, 1u, 0u),
+            "replace descriptor heap while original identity remains alive")) return false;
+        passed &= rejects([&] { (void)ring.allocate(1u); },
+            "successful heap replacement requires a fresh frame binding");
+        ring.begin_frame(0u);
+        const auto replacement = ring.allocate(4u);
+        passed &= expect(replacement.cpu.ptr ==
+                ring.heap()->GetCPUDescriptorHandleForHeapStart().ptr &&
+            replacement.gpu.ptr == ring.heap()->GetGPUDescriptorHandleForHeapStart().ptr,
+            "cached descriptor bases refresh on successful heap replacement");
+        return passed;
+    }
+
     bool test_conversion_rtv_slot_identity() {
         using namespace galaxy::gx;
         D3D12_DESCRIPTOR_HEAP_DESC heap_desc{};
@@ -2540,6 +2618,7 @@ int main(int argc, char** argv) {
         passed &= harness.test_texture_descriptor_retirement();
         passed &= harness.test_xfb_retirement_rollback();
         passed &= harness.test_conversion_rtv_slot_identity();
+        passed &= harness.test_descriptor_ring_allocation_identity();
         passed &= harness.test_xfb_idle_pool_admission();
         passed &= harness.test_texture_cache_ranges();
         passed &= test_scaled_xfb_filter();

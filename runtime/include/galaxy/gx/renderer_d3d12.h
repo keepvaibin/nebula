@@ -238,6 +238,9 @@ public:
 
 private:
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> heap_;
+    D3D12_CPU_DESCRIPTOR_HANDLE cpu_base_{};
+    D3D12_GPU_DESCRIPTOR_HANDLE gpu_base_{};
+    bool frame_ready_ = false;
     unsigned persistent_descriptors_ = 0;
     unsigned persistent_cursor_ = 0;
     unsigned descriptors_per_frame_ = 0;
