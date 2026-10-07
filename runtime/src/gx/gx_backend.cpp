@@ -7976,7 +7976,7 @@ ID3D12PipelineState* GxBackend::flush_draw_state(
 
                     D3D12_CPU_DESCRIPTOR_HANDLE sources[kMaxTextureMaps]{};
                     const auto heap_start =
-                        texture_cache_.srv_heap()->GetCPUDescriptorHandleForHeapStart();
+                        texture_cache_.srv_cpu_base();
                     for (unsigned m = 0; m < num_maps; ++m) {
                         const TextureHandle& th = texture_handles[m];
                         if (th.resource != nullptr) {

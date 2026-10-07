@@ -172,6 +172,7 @@ public:
     bool debug_invalidate_every_frame = false;
 
     [[nodiscard]] ID3D12DescriptorHeap* srv_heap() const;
+    [[nodiscard]] D3D12_CPU_DESCRIPTOR_HANDLE srv_cpu_base() const noexcept { return srv_cpu_base_; }
     [[nodiscard]] UINT srv_descriptor_stride() const noexcept { return srv_stride_; }
     [[nodiscard]] D3D12_CPU_DESCRIPTOR_HANDLE null_srv() const noexcept { return null_srv_; }
     // Render-thread-only lifetime epoch. Raw handles remain valid for this
@@ -333,6 +334,7 @@ private:
 
     Microsoft::WRL::ComPtr<ID3D12Device> device_;
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> srv_heap_;
+    D3D12_CPU_DESCRIPTOR_HANDLE srv_cpu_base_{};
     UINT srv_stride_ = 0u;
     D3D12_CPU_DESCRIPTOR_HANDLE null_srv_{};
     ID3D12GraphicsCommandList* upload_list_ = nullptr;
