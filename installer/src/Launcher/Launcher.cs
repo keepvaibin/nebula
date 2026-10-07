@@ -41,6 +41,7 @@ namespace Nebula.Launcher
         private readonly NumericUpDown customWidth = new NumericUpDown(), customHeight = new NumericUpDown();
         private readonly Label outputInfo = new Label(), info = new Label();
         private readonly CheckBox monitor = new CheckBox();
+        private readonly CheckBox detailed = new CheckBox();
         private readonly Button play = new Button();
         private DisplayPlan plan;
         private bool borderless;
@@ -54,7 +55,7 @@ namespace Nebula.Launcher
             Font = new Font("Segoe UI", 10f);
 
             AutoScaleMode = AutoScaleMode.None;
-            ClientSize = new Size(760, 540);
+            ClientSize = new Size(760, 564);
             FormBorderStyle = FormBorderStyle.FixedDialog;
             MaximizeBox = false;
             StartPosition = FormStartPosition.CenterScreen;
@@ -84,22 +85,28 @@ namespace Nebula.Launcher
             monitor.Location = new Point(20, 336);
             monitor.Size = new Size(720, 26);
             Controls.Add(monitor);
-            AddLabel("Rendering changes apply on the next launch.", 20, 368, 720);
+            detailed.Text = "Include detailed renderer timings (may affect performance)";
+            detailed.Location = new Point(20, 364);
+            detailed.Size = new Size(720, 26);
+            detailed.Enabled = false;
+            monitor.CheckedChanged += delegate { detailed.Enabled = monitor.Checked; };
+            Controls.Add(detailed);
+            AddLabel("Rendering changes apply on the next launch.", 20, 392, 720);
 
-            var import = Button("Import a GalaxyRecomp save…", 20, 412, 250);
+            var import = Button("Import a GalaxyRecomp save…", 20, 436, 250);
             import.Click += delegate { ImportSave(); };
-            var saves = Button("Open save folder", 280, 412, 160);
+            var saves = Button("Open save folder", 280, 436, 160);
             saves.Click += delegate { Directory.CreateDirectory(NebulaPaths.Saves); Process.Start("explorer.exe", "\"" + NebulaPaths.Saves + "\""); };
-            var sessions = Button("Open diagnostics", 450, 412, 150);
+            var sessions = Button("Open diagnostics", 450, 436, 150);
             sessions.Click += delegate { Directory.CreateDirectory(NebulaPaths.Sessions); Process.Start("explorer.exe", "\"" + NebulaPaths.Sessions + "\""); };
-            var update = Button("Check for updates", 20, 490, 170);
+            var update = Button("Check for updates", 20, 514, 170);
             update.Click += delegate
             {
                 string setup = Path.Combine(root, "Nebula-Setup.exe");
                 if (File.Exists(setup)) Process.Start(new ProcessStartInfo(setup, "--update") { WorkingDirectory = root });
             };
             play.Text = "Play";
-            play.Location = new Point(620, 486);
+            play.Location = new Point(620, 510);
             play.Size = new Size(120, 36);
             play.Click += delegate { Play(); };
             Controls.Add(play);
@@ -248,13 +255,32 @@ namespace Nebula.Launcher
                     plan.NativeFourThree || Math.Abs(plan.AspectRatio - 16.0 / 9.0) < 1e-10 ? "" : plan.Aspect;
                 env["GALAXY_NATIVE_THP_VIDEO_DECODE"] = "1";
                 env["GALAXY_DUSK_DSP_HLE"] = "0";
-                if (monitor.Checked)
+                foreach (var flag in new[] { "GALAXY_TRACE_PRESENT_STATS", "GALAXY_MONITOR_POINTER_LATENCY", "GALAXY_MONITOR_FRAME_TAILS",
+                    "GALAXY_MONITOR_DISPLAY_LAYOUT", "GALAXY_TRACE_NATIVE_THP_BOUNDARY" })
+                    env[flag] = monitor.Checked ? "1" : "0";
+                bool detailedTimings = monitor.Checked && detailed.Checked;
+                // The UI owns these diagnostic choices even if an older
+                // runtime-env.json retained an intrusive diagnostic setting.
+                env["GALAXY_TRACE_GX_STALLS"] = detailedTimings ? "1" : "0";
+                env["GALAXY_GPU_TIMESTAMPS"] = detailedTimings ? "1" : "0";
+                env["GALAXY_TRACE_GX_MICROPROFILE"] = "0";
+                if (detailedTimings)
                 {
-                    foreach (var flag in new[] { "GALAXY_TRACE_PRESENT_STATS", "GALAXY_MONITOR_POINTER_LATENCY", "GALAXY_MONITOR_FRAME_TAILS",
-                        "GALAXY_MONITOR_DISPLAY_LAYOUT", "GALAXY_TRACE_GX_STALLS", "GALAXY_TRACE_NATIVE_THP_BOUNDARY" })
-                        env[flag] = "1";
                     env["GALAXY_TRACE_GX_STALL_US"] = "20000";
                 }
+                // Hash the actual launch pair before gameplay. install.json is
+                // retained as historical metadata and cannot attest to files
+                // replaced after installation. This also records manual swaps.
+                var launchFiles = new Dictionary<string, object>();
+                foreach (string name in new[] { "NebulaRuntime.exe", "RMGE01_game.dll", "RMGE01_home_button.dll",
+                    "RMGE01_dsp.dll", "RMGE01_boot_image.bin", "runtime-env.json", "Nebula.exe" })
+                {
+                    string file = Path.Combine(app, name);
+                    launchFiles[name] = File.Exists(file) ? (object)FileUtil.Sha256File(file) : null;
+                }
+                var launchEnvironment = new Dictionary<string, object>();
+                foreach (string name in env.Keys)
+                    if (name.StartsWith("GALAXY_", StringComparison.OrdinalIgnoreCase)) launchEnvironment[name] = env[name];
                 var process = Process.Start(start);
                 var sessionInfo = new Dictionary<string, object>
                 {
@@ -262,6 +288,8 @@ namespace Nebula.Launcher
                     { "content", content }, { "saves", env["GALAXY_NAND_ROOT"] }, { "app", app },
                     { "output", plan.OutputWidth + "x" + plan.OutputHeight }, { "aspect", plan.Aspect },
                     { "efbScale", plan.EfbScale }, { "borderless", borderless },
+                    { "detailedRendererTimings", detailedTimings },
+                    { "launchFileSha256", launchFiles }, { "environment", launchEnvironment },
                     { "install", File.Exists(Path.Combine(app, "install.json")) ? (object)Json.Load(Path.Combine(app, "install.json")) : null }
                 };
                 Json.Save(Path.Combine(session, "session.json"), sessionInfo);

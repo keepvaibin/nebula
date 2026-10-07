@@ -38,6 +38,8 @@ try {
     $resolved = (& git -C $repo rev-parse $Revision).Trim()
     if ($LASTEXITCODE -ne 0) { throw "Unknown revision $Revision" }
     $type = (& git -C $repo cat-file -t $resolved).Trim()
+    $gitTree = (& git -C $repo rev-parse "$resolved^{tree}").Trim()
+    if ($LASTEXITCODE -ne 0) { throw "Source revision $resolved has no Git tree" }
     Write-Host "Building Nebula $Version from $type $resolved"
 
     # 1. Exact source export and manifest.
@@ -73,7 +75,7 @@ try {
     # 3. Prebuilt runtime; the DSP is loaded from RMGE01_dsp.dll, which Setup compiles.
     . (Join-Path $src 'tools\enter_msvc_environment.ps1')
     $rt = Join-Path $work 'runtime'
-    Invoke-Checked cmake @('-S', $src, '-B', $rt, '-G', 'Ninja', '-DCMAKE_BUILD_TYPE=Release', '-DGALAXY_NATIVE_ISA=SSE2', '-DNEBULA_DSP_MODULE=ON')
+    Invoke-Checked cmake @('-S', $src, '-B', $rt, '-G', 'Ninja', '-DCMAKE_BUILD_TYPE=Release', '-DGALAXY_NATIVE_ISA=SSE2', '-DNEBULA_DSP_MODULE=ON', "-DNEBULA_SOURCE_REVISION=$resolved", "-DNEBULA_SOURCE_REVISION_KIND=$type", "-DNEBULA_SOURCE_GIT_TREE=$gitTree", "-DNEBULA_SOURCE_TREE_SHA256=$treeHash", '-DNEBULA_SOURCE_DIRTY=0')
     Invoke-Checked cmake @('--build', $rt, '--target', 'NebulaRuntime', 'galaxy_ppc_float', 'galaxy_softfloat', 'galaxy_dsp_alu')
     $runtimeFiles = @{}
     foreach ($name in 'NebulaRuntime.exe', 'galaxy_ppc_float.lib', 'galaxy_softfloat.lib', 'galaxy_dsp_alu.lib') {
