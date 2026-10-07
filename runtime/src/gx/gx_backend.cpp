@@ -6433,9 +6433,12 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
         texture_cache_.begin_frame(renderer_.frame_slot(), kFramesInFlight);
         const auto retirement_revision = texture_cache_.retirement_revision();
         if (retirement_revision != seen_texture_retirement_revision_) {
-            // Retirement can happen inside get(), including budget eviction.
-            // Such handles are safe through their last frame, not across it.
-            texture_handle_cache_.clear();
+            // No descriptor allocation has happened yet this frame. Reclaimed
+            // slots still carry their retired bits, so old handles are removed
+            // before reuse without discarding unrelated cross-frame hits.
+            std::erase_if(texture_handle_cache_, [this](const auto& item) {
+                return texture_cache_.srv_index_retired(item.second.srv_index);
+            });
             seen_texture_retirement_revision_ = retirement_revision;
         }
         clear_frame_texture_binding_table_cache();

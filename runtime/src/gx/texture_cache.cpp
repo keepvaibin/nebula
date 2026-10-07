@@ -45,9 +45,6 @@ namespace galaxy::gx {
 
 namespace {
 
-// Maximum textures the SRV heap can hold.  Bump when > 4096 live textures
-// are needed; M4 does not expect that.
-static constexpr UINT kSrvHeapCapacity = 4096u;
 static constexpr UINT64 kUploadArenaChunkBytes = 16ull << 20;
 static constexpr std::uint64_t kContentCacheBudgetBytes = 64ull << 20;
 static constexpr std::size_t kContentCacheMaxEntries = 4096u;
@@ -951,6 +948,7 @@ bool TextureCache::initialize(ID3D12Device* device) {
     device_ = device;
     next_srv_index_ = 0u;
     free_srv_indices_.clear();
+    retired_srv_indices_.reset();
 
     D3D12_DESCRIPTOR_HEAP_DESC dhd{};
     dhd.Type           = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
@@ -1051,6 +1049,7 @@ void TextureCache::retire(Entry&& entry) {
     auto& retired = retired_entries_[current_frame_slot_];
     retired.emplace_back();
     retired.back() = std::move(entry);
+    retired_srv_indices_.set(retired.back().handle.srv_index);
     ++retirement_revision_;
 }
 
@@ -1179,6 +1178,7 @@ std::uint32_t TextureCache::allocate_srv_index() {
     if (!free_srv_indices_.empty()) {
         const std::uint32_t index = free_srv_indices_.back();
         free_srv_indices_.pop_back();
+        retired_srv_indices_.reset(index);
         return index;
     }
     if (next_srv_index_ >= kSrvHeapCapacity) {
