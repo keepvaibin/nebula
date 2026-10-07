@@ -14150,6 +14150,43 @@ bool ios_open_respects_guest_mapping_boundaries() {
     return passed;
 }
 
+bool checked_host_span_lookup_matches_regions(galaxy::host::GuestAddressSpace& memory) {
+    bool passed = true;
+    const auto* guest = memory.guest_memory();
+    const auto& const_memory = memory;
+    for (std::uint32_t region_index = 0u; region_index < guest->region_count; ++region_index) {
+        const auto& region = guest->regions[region_index];
+        for (auto offset : {0u, 1u, region.size - 1u, region.size, region.size + 1u}) {
+            for (auto size : {0u, 1u, 2u, 4u, 12u, 0xffffffffu}) {
+                const auto address = region.guest_base + offset;
+                std::byte* expected = nullptr;
+                // Preserve the complete list's priority, including empty
+                // one-past spans, locked cache and nonaligned device mappings.
+                for (std::uint32_t candidate_index = 0u; candidate_index < guest->region_count; ++candidate_index) {
+                    const auto& candidate = guest->regions[candidate_index];
+                    if (address >= candidate.guest_base &&
+                        static_cast<std::uint64_t>(address) + size <=
+                            static_cast<std::uint64_t>(candidate.guest_base) + candidate.size) {
+                        expected = candidate.host_base + (address - candidate.guest_base); break;
+                    }
+                }
+                passed &= expect(memory.pointer_or_null(address, size) == expected &&
+                    const_memory.pointer_or_null(address, size) == expected,
+                    "host span lookup preserves the complete region oracle at every boundary");
+                if (expected != nullptr) {
+                    passed &= expect(memory.pointer(address, size) == expected &&
+                        const_memory.pointer(address, size) == expected,
+                        "throwing and const host span lookups return the identical admitted storage");
+                } else {
+                    passed &= expect_runtime_error([&] { (void)memory.pointer(address, size); },
+                        "host span lookup rejects unmapped and overflowing spans");
+                }
+            }
+        }
+    }
+    return passed;
+}
+
 int main() {
     try {
     _putenv_s("GALAXY_AUDIO_DISABLE", "1");
@@ -14319,6 +14356,7 @@ int main() {
 
     passed &= ios_open_respects_guest_mapping_boundaries();
     galaxy::host::GuestAddressSpace memory;
+    passed &= checked_host_span_lookup_matches_regions(memory);
     passed &= native_dsp_mram_transaction_path_works(memory);
     {
         using DspAccess = galaxy::host::NativeDspBoundaryTestAccess;

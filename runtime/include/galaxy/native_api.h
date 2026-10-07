@@ -4705,27 +4705,6 @@ inline void trace_audio_control_zero(
     std::abort();
 }
 
-inline std::byte* resolve_guest(
-    GuestMemoryV1* memory,
-    std::uint32_t address,
-    std::uint32_t size,
-    const NativeServicesV1* services,
-    std::uint32_t guest_pc) {
-    if (memory != nullptr && memory->regions != nullptr) {
-        const std::uint64_t request_end = static_cast<std::uint64_t>(address) + size;
-        for (std::uint32_t index = 0; index < memory->region_count; ++index) {
-            const GuestMemoryRegionV1& region = memory->regions[index];
-            const std::uint64_t region_end =
-                static_cast<std::uint64_t>(region.guest_base) + region.size;
-            if (address >= region.guest_base && request_end <= region_end &&
-                region.host_base != nullptr) {
-                return region.host_base + (address - region.guest_base);
-            }
-        }
-    }
-    guest_memory_fault(services, guest_pc, address);
-}
-
 GALAXY_ALWAYS_INLINE std::byte* resolve_guest_fast(
     GuestMemoryV1* memory,
     std::uint32_t address,
@@ -4742,6 +4721,34 @@ GALAXY_ALWAYS_INLINE std::byte* resolve_guest_fast(
         return region.host_base + offset;
     }
     return nullptr;
+}
+
+inline std::byte* resolve_guest(
+    GuestMemoryV1* memory,
+    std::uint32_t address,
+    std::uint32_t size,
+    const NativeServicesV1* services,
+    std::uint32_t guest_pc) {
+    // Native bulk/matrix/particle helpers use the same checked RAM capability
+    // as scalar guest accesses. This is a span lookup, not a device access;
+    // unmapped/partial spans retain the complete region search and fault path.
+    // Empty spans keep the list's original one-past-region precedence.
+    if (size != 0u) {
+        if (std::byte* direct = resolve_guest_fast(memory, address, size)) return direct;
+    }
+    if (memory != nullptr && memory->regions != nullptr) {
+        const std::uint64_t request_end = static_cast<std::uint64_t>(address) + size;
+        for (std::uint32_t index = 0; index < memory->region_count; ++index) {
+            const GuestMemoryRegionV1& region = memory->regions[index];
+            const std::uint64_t region_end =
+                static_cast<std::uint64_t>(region.guest_base) + region.size;
+            if (address >= region.guest_base && request_end <= region_end &&
+                region.host_base != nullptr) {
+                return region.host_base + (address - region.guest_base);
+            }
+        }
+    }
+    guest_memory_fault(services, guest_pc, address);
 }
 
 GALAXY_ALWAYS_INLINE std::uint8_t guest_load_u8(
@@ -5901,30 +5908,7 @@ inline void native_audio_interleave_i16_804878BC(
     if (count == 0u) {
         return;
     }
-    if (count > (std::numeric_limits<std::uint32_t>::max)() / 4u) {
-        guest_execution_fault(
-            services,
-            guest_pc,
-            "native audio interleave sample count overflows address range");
-    }
-    const std::uint32_t left_bytes = count * 2u;
-    const std::uint32_t dst_bytes = count * 4u;
-    const std::byte* left =
-        resolve_guest(memory, context->gpr[3], left_bytes, services, guest_pc);
-    const std::byte* right =
-        resolve_guest(memory, context->gpr[4], left_bytes, services, guest_pc);
-    std::byte* dst =
-        resolve_guest(memory, context->gpr[5], dst_bytes, services, guest_pc);
-    for (std::uint32_t index = 0; index < count; ++index) {
-        const std::uint32_t src_offset = index * 2u;
-        const std::uint32_t dst_offset = index * 4u;
-        dst[dst_offset + 0u] = left[src_offset + 0u];
-        dst[dst_offset + 1u] = left[src_offset + 1u];
-        dst[dst_offset + 2u] = right[src_offset + 0u];
-        dst[dst_offset + 3u] = right[src_offset + 1u];
-    }
-    guest_notify_write(memory, context->gpr[5], dst_bytes);
-    const std::uint32_t last_src = (count - 1u) * 2u;
+#if !GALAXY_GUEST_TRACE
     const auto read_be_i16 = [](const std::byte* bytes) {
         const std::uint16_t value =
             (static_cast<std::uint16_t>(
@@ -5934,12 +5918,60 @@ inline void native_audio_interleave_i16_804878BC(
         return static_cast<std::uint32_t>(
             static_cast<std::int32_t>(static_cast<std::int16_t>(value)));
     };
-    context->gpr[6] = read_be_i16(left + last_src);
-    context->gpr[0] = read_be_i16(right + last_src);
-    context->gpr[3] += count * 2u;
-    context->gpr[4] += count * 2u;
-    context->gpr[5] += count * 4u;
-    context->ctr = 0u;
+    if (count <= (std::numeric_limits<std::uint32_t>::max)() / 4u) {
+        const std::uint32_t source_bytes = count * 2u;
+        const std::uint32_t destination_bytes = count * 4u;
+        const std::byte* left = resolve_guest_fast(memory, context->gpr[3], source_bytes);
+        const std::byte* right = resolve_guest_fast(memory, context->gpr[4], source_bytes);
+        std::byte* dst = resolve_guest_fast(memory, context->gpr[5], destination_bytes);
+        // Coalesce publication only when every scalar store would suppress
+        // the external callback. The CPU owns both trackers until return;
+        // renderer/DSP consumers receive staged bytes at their handoff.
+        const auto fully_tracked = [&](bool cpu) {
+            std::uint32_t first = 0u, last = 0u;
+            if (cpu ? memory->cpu_dirty_page_words == nullptr : memory->dirty_page_words == nullptr)
+                return false;
+            return guest_dirty_page_range_fast(context->gpr[5], destination_bytes,
+                cpu ? memory->cpu_dirty_tracked_base : memory->dirty_tracked_base,
+                cpu ? memory->cpu_dirty_tracked_size : memory->dirty_tracked_size,
+                cpu ? memory->cpu_dirty_page_shift : memory->dirty_page_shift,
+                cpu ? memory->cpu_dirty_page_word_count : memory->dirty_page_word_count, &first, &last);
+        };
+        if (left != nullptr && right != nullptr && dst != nullptr &&
+            (memory->notify_write == nullptr || fully_tracked(false) || fully_tracked(true))) {
+            std::array<std::byte, 4> stereo{};
+            for (std::uint32_t index = 0u; index < count; ++index) {
+                const std::uint32_t source_offset = index * 2u;
+                // The DOL loads both halfwords before either store. Keep the
+                // loaded values even if output aliases either input stream.
+                stereo = {left[source_offset], left[source_offset + 1u],
+                    right[source_offset], right[source_offset + 1u]};
+                std::memcpy(dst + index * 4u, stereo.data(), stereo.size());
+            }
+            guest_notify_write(memory, context->gpr[5], destination_bytes);
+            context->gpr[6] = read_be_i16(stereo.data());
+            context->gpr[0] = read_be_i16(stereo.data() + 2u);
+            context->gpr[3] += source_bytes;
+            context->gpr[4] += source_bytes;
+            context->gpr[5] += destination_bytes;
+            context->ctr = 0u;
+            return;
+        }
+    }
+#endif
+    // Device, callback, partial mapping and wrap cases must execute the exact
+    // ordered halfword transactions and retain state at the faulting PC.
+    do {
+        context->gpr[6] = static_cast<std::uint32_t>(static_cast<std::int32_t>(
+            static_cast<std::int16_t>(guest_load_u16(memory, context->gpr[3], services, 0x804878C8u))));
+        context->gpr[3] += 2u;
+        context->gpr[0] = static_cast<std::uint32_t>(static_cast<std::int32_t>(
+            static_cast<std::int16_t>(guest_load_u16(memory, context->gpr[4], services, 0x804878D0u))));
+        context->gpr[4] += 2u;
+        guest_store_u16(memory, context->gpr[5], static_cast<std::uint16_t>(context->gpr[6]), services, 0x804878D8u);
+        guest_store_u16(memory, context->gpr[5] + 2u, static_cast<std::uint16_t>(context->gpr[0]), services, 0x804878DCu);
+        context->gpr[5] += 4u;
+    } while (--context->ctr != 0u);
 }
 
 inline void native_audio_ring_output_804945CC(
@@ -6787,15 +6819,54 @@ inline void native_resource_entry_count_8040FC80(
     context->ctr = 0u;
 }
 
+inline void ensure_fpu_available(const NativeServicesV1* services,
+    std::uint32_t guest_pc, PpcContext* context, GuestMemoryV1* memory);
+inline void load_fpr_single(PpcContext* context, std::uint32_t index,
+    GuestMemoryV1* memory, std::uint32_t address,
+    const NativeServicesV1* services, std::uint32_t guest_pc);
+inline void store_fpr_single(const PpcContext* context, std::uint32_t index,
+    GuestMemoryV1* memory, std::uint32_t address,
+    const NativeServicesV1* services, std::uint32_t guest_pc);
+inline void psq_load(PpcContext* context, std::uint32_t target,
+    GuestMemoryV1* memory, std::uint32_t address, std::uint32_t gqr_index,
+    bool one_element, bool d_form, const NativeServicesV1* services,
+    std::uint32_t guest_pc);
+inline void psq_store(const PpcContext* context, std::uint32_t source,
+    GuestMemoryV1* memory, std::uint32_t address, std::uint32_t gqr_index,
+    bool one_element, bool d_form, const NativeServicesV1* services,
+    std::uint32_t guest_pc);
+
 inline void native_vec_copy_12(
     PpcContext* context,
     GuestMemoryV1* memory,
     const NativeServicesV1* services,
     std::uint32_t guest_pc) {
-    const std::byte* src = resolve_guest(memory, context->gpr[4], 12, services, guest_pc);
-    std::byte* dst = resolve_guest(memory, context->gpr[3], 12, services, guest_pc);
-    std::memmove(dst, src, 12);
-    guest_notify_write(memory, context->gpr[3], 12u);
+    // These two DOL routines copy a vec3 through different volatile FPRs.
+    // A raw memmove lost their FPR/PS1 effects, quantization and fault order.
+    if (guest_pc == 0x80018B8Cu) {
+        ensure_fpu_available(services, 0x80018B8Cu, context, memory);
+        psq_load(context, 1u, memory, context->gpr[4], 0u, false, true, services, 0x80018B8Cu);
+        ensure_fpu_available(services, 0x80018B90u, context, memory);
+        load_fpr_single(context, 0u, memory, context->gpr[4] + 8u, services, 0x80018B90u);
+        ensure_fpu_available(services, 0x80018B94u, context, memory);
+        psq_store(context, 1u, memory, context->gpr[3], 0u, false, true, services, 0x80018B94u);
+        ensure_fpu_available(services, 0x80018B98u, context, memory);
+        store_fpr_single(context, 0u, memory, context->gpr[3] + 8u, services, 0x80018B98u);
+        return;
+    }
+    if (guest_pc != 0x8001CF64u) {
+        guest_execution_fault(services, guest_pc, "native vector copy has no verified entry");
+    }
+    for (std::uint32_t word = 0u; word < 3u; ++word) {
+        const auto pc = 0x8001CF64u + word * 4u;
+        ensure_fpu_available(services, pc, context, memory);
+        load_fpr_single(context, 2u - word, memory, context->gpr[4] + word * 4u, services, pc);
+    }
+    for (std::uint32_t word = 0u; word < 3u; ++word) {
+        const auto pc = 0x8001CF70u + word * 4u;
+        ensure_fpu_available(services, pc, context, memory);
+        store_fpr_single(context, 2u - word, memory, context->gpr[3] + word * 4u, services, pc);
+    }
 }
 
 inline void native_add_12_80097278(
@@ -9526,44 +9597,44 @@ inline void native_mtx_scale_803A387C(
     GuestMemoryV1* memory,
     const NativeServicesV1* services,
     std::uint32_t guest_pc) {
-    std::byte* base = resolve_guest(memory, context->gpr[3], 0x2Cu, services, guest_pc);
-    const auto load_single = [&](std::uint32_t index, std::uint32_t offset) {
-        const std::uint64_t widened =
-            widen_f32_bits(native_load_guest_u32_fast(base, offset));
-        context->fpr_bits[index] = widened;
-        if (paired_singles_enabled(context)) {
-            context->ps1_bits[index] = widened;
-        }
+    static_cast<void>(guest_pc);
+    // Preserve the DOL's interleaved register effects and stores. In particular,
+    // the final multiply may trap after the first store: publishing only after
+    // the whole helper returned lost that completed write to both consumers.
+    const auto load_single = [&](std::uint32_t index, std::uint32_t offset, std::uint32_t pc) {
+        ensure_fpu_available(services, pc, context, memory);
+        load_fpr_single(context, index, memory, context->gpr[3] + offset, services, pc);
     };
     const auto multiply = [&](
         std::uint32_t target,
         std::uint64_t left,
         std::uint64_t right,
         std::uint32_t pc) {
+        ensure_fpu_available(services, pc, context, memory);
         const PpcFloatResult result =
             ppc_f64_binary_to_f32(PpcFloatBinaryOperation::Multiply, left, right, context->fpscr);
         ppc_commit_scalar_result(context, target, result, true, false, services, pc);
     };
     const auto store_single = [&](std::uint32_t index, std::uint32_t offset, std::uint32_t pc) {
-        native_store_guest_u32_fast(
-            base, offset, narrow_f64_to_f32_bits(context->fpr_bits[index], services, pc));
+        ensure_fpu_available(services, pc, context, memory);
+        store_fpr_single(context, index, memory, context->gpr[3] + offset, services, pc);
     };
 
-    load_single(3u, 0x00u);
-    load_single(0u, 0x10u);
+    load_single(3u, 0x00u, 0x803A387Cu);
+    load_single(0u, 0x10u, 0x803A3880u);
     multiply(10u, context->fpr_bits[3], context->fpr_bits[1], 0x803A3884u);
-    load_single(4u, 0x20u);
+    load_single(4u, 0x20u, 0x803A3888u);
     multiply(9u, context->fpr_bits[0], context->fpr_bits[1], 0x803A388Cu);
-    load_single(3u, 0x04u);
+    load_single(3u, 0x04u, 0x803A3890u);
     multiply(8u, context->fpr_bits[4], context->fpr_bits[1], 0x803A3894u);
-    load_single(0u, 0x14u);
+    load_single(0u, 0x14u, 0x803A3898u);
     multiply(7u, context->fpr_bits[3], context->fpr_bits[2], 0x803A389Cu);
-    load_single(5u, 0x24u);
+    load_single(5u, 0x24u, 0x803A38A0u);
     multiply(6u, context->fpr_bits[0], context->fpr_bits[2], 0x803A38A4u);
-    load_single(4u, 0x08u);
-    load_single(0u, 0x28u);
+    load_single(4u, 0x08u, 0x803A38A8u);
+    load_single(0u, 0x28u, 0x803A38ACu);
     multiply(5u, context->fpr_bits[5], context->fpr_bits[2], 0x803A38B0u);
-    load_single(3u, 0x18u);
+    load_single(3u, 0x18u, 0x803A38B4u);
     multiply(4u, context->fpr_bits[4], context->fpr_bits[1], 0x803A38B8u);
     multiply(0u, context->fpr_bits[0], context->fpr_bits[1], 0x803A38BCu);
     store_single(10u, 0x00u, 0x803A38C0u);
@@ -9576,7 +9647,6 @@ inline void native_mtx_scale_803A387C(
     store_single(4u, 0x08u, 0x803A38DCu);
     store_single(2u, 0x18u, 0x803A38E0u);
     store_single(0u, 0x28u, 0x803A38E4u);
-    guest_notify_write(memory, context->gpr[3], 0x2Cu);
 }
 
 inline std::uint32_t narrow_paired_single_ftz(std::uint64_t bits) {

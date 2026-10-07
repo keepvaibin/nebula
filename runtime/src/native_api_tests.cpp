@@ -579,6 +579,274 @@ void throw_gpr_span_fault(void*, std::uint32_t pc, const char*) {
     throw GprSpanFault{pc};
 }
 
+bool test_checked_span_resolution() {
+    bool passed = true;
+    std::array<std::byte, 32> ram{}, special{};
+    constexpr std::array<std::uint32_t, 6> aliases{0u, 0x80000000u, 0xc0000000u,
+        0x10000000u, 0x90000000u, 0xd0000000u};
+    std::array<galaxy::GuestMemoryRegionV1, 7> regions{};
+    galaxy::GuestMemoryV1 memory{};
+    for (unsigned i = 0u; i < aliases.size(); ++i) regions[i] = {aliases[i], 32u, ram.data()};
+    regions.back() = {0xcc000080u, 32u, special.data()};
+    memory.regions = regions.data(); memory.region_count = static_cast<std::uint32_t>(regions.size());
+    unsigned device_reads = 0u;
+    memory.user = &device_reads;
+    memory.read_device = [](void* user, std::uint32_t, std::uint32_t, std::byte*) {
+        ++*static_cast<unsigned*>(user); return false;
+    };
+    galaxy::NativeServicesV1 services{}; services.fatal = throw_gpr_span_fault;
+    for (unsigned mode = 0u; mode < 3u; ++mode) {
+        for (auto alias : aliases) memory.fast_regions[alias >> 28u] =
+            mode == 0u ? galaxy::GuestMemoryFastRegionV1{} :
+                galaxy::GuestMemoryFastRegionV1{mode == 1u ? 32u : 16u, ram.data()};
+        for (const auto& region : regions) for (unsigned offset : {0u, 1u, 8u, 31u, 32u, 33u})
+            for (unsigned size : {0u, 1u, 2u, 12u, 32u, 33u, 0xffffffffu}) {
+                const std::uint32_t address = region.guest_base + offset;
+                // Literal complete-region oracle, independent of the fast table.
+                std::byte* expected = nullptr;
+                for (const auto& candidate : regions) {
+                    if (address >= candidate.guest_base &&
+                        static_cast<std::uint64_t>(address) + size <=
+                            static_cast<std::uint64_t>(candidate.guest_base) + candidate.size) {
+                        expected = candidate.host_base + (address - candidate.guest_base); break;
+                    }
+                }
+                std::byte* actual = nullptr; bool faulted = false;
+                try { actual = galaxy::resolve_guest(&memory, address, size, &services, 0x80001000u); }
+                catch (GprSpanFault fault) { faulted = fault.pc == 0x80001000u; }
+                passed &= expect(actual == expected && faulted == (expected == nullptr),
+                    "checked native span resolution retains six RAM aliases, partial-table fallback, bounds and exact fault PC");
+            }
+    }
+    passed &= expect(device_reads == 0u, "plain span resolution never performs a device read");
+    // The scalar ABI already accepts a fast-only owner. Native span helpers
+    // can use that same valid capability without requiring a second table.
+    memory.regions = nullptr; memory.region_count = 0u;
+    memory.fast_regions[8] = {32u, ram.data()};
+    passed &= expect(galaxy::resolve_guest(&memory, 0x80000008u, 12u, &services, 0x80001000u) == ram.data() + 8u,
+        "native span helper accepts the same complete fast-only RAM capability as scalar accesses");
+    return passed;
+}
+
+bool test_audio_interleave_order_and_overlap() {
+    bool passed = true;
+    constexpr std::uint32_t base = 0x80000000u;
+    struct StoreObservation {
+        std::array<std::byte, 64> bytes{};
+        std::array<std::uint32_t, 6> registers{};
+        std::uint32_t address{};
+    };
+    struct Observer {
+        const std::array<StoreObservation, 8>* expected{};
+        const std::array<std::byte, 64>* ram{};
+        const galaxy::PpcContext* context{};
+        unsigned calls{};
+        bool valid{true};
+        static void notify(void* user, std::uint32_t address, std::uint32_t size) {
+            auto& observer = *static_cast<Observer*>(user);
+            if (observer.calls >= observer.expected->size()) { observer.valid = false; return; }
+            const auto& expected = (*observer.expected)[observer.calls++];
+            const auto& context = *observer.context;
+            observer.valid &= address == expected.address && size == 2u &&
+                *observer.ram == expected.bytes && expected.registers ==
+                std::array<std::uint32_t, 6>{context.gpr[0], context.gpr[3], context.gpr[4],
+                    context.gpr[5], context.gpr[6], context.ctr};
+        }
+    };
+    for (unsigned mode = 0u; mode < 5u; ++mode) {
+        for (unsigned count = 0u; count <= 4u; ++count) {
+            for (unsigned left : {0u, 2u, 8u, 16u}) for (unsigned right : {0u, 2u, 8u, 16u})
+                for (unsigned destination : {0u, 2u, 8u, 16u}) {
+                std::array<std::byte, 64> ram{};
+                for (unsigned byte = 0u; byte < ram.size(); ++byte) ram[byte] = static_cast<std::byte>(0x81u + byte * 11u);
+                auto expected_bytes = ram;
+                galaxy::PpcContext actual{}, expected{};
+                actual.gpr[3] = base + left; actual.gpr[4] = base + right;
+                actual.gpr[5] = base + destination; actual.gpr[6] = count;
+                expected = actual; expected.ctr = count;
+                expected.cr = count == 0u ? 0x20000000u : 0x40000000u;
+                std::array<StoreObservation, 8> observations{};
+                unsigned stores = 0u;
+                const auto read = [&](unsigned offset) {
+                    const auto value = (static_cast<std::uint32_t>(expected_bytes[offset]) << 8u) |
+                        static_cast<std::uint32_t>(expected_bytes[offset + 1u]);
+                    return value & 0x8000u ? value | 0xffff0000u : value;
+                };
+                for (unsigned sample = 0u; sample < count; ++sample) {
+                    expected.gpr[6] = read(expected.gpr[3] - base); expected.gpr[3] += 2u;
+                    expected.gpr[0] = read(expected.gpr[4] - base); expected.gpr[4] += 2u;
+                    for (unsigned channel = 0u; channel < 2u; ++channel) {
+                        const unsigned offset = expected.gpr[5] - base + channel * 2u;
+                        const auto value = expected.gpr[channel == 0u ? 6u : 0u];
+                        expected_bytes[offset] = static_cast<std::byte>(value >> 8u);
+                        expected_bytes[offset + 1u] = static_cast<std::byte>(value);
+                        observations[stores++] = {expected_bytes,
+                            {expected.gpr[0], expected.gpr[3], expected.gpr[4], expected.gpr[5], expected.gpr[6], expected.ctr},
+                            base + offset};
+                    }
+                    expected.gpr[5] += 4u; --expected.ctr;
+                }
+                Observer observer{&observations, &ram, &actual};
+                galaxy::GuestMemoryRegionV1 region{base, static_cast<std::uint32_t>(ram.size()), ram.data()};
+                galaxy::GuestMemoryV1 memory{};
+                memory.regions = &region; memory.region_count = 1u;
+                if (mode != 4u) memory.fast_regions[8] = {region.size, ram.data()};
+                memory.user = &observer;
+                if (mode != 0u) memory.notify_write = &Observer::notify;
+                std::atomic_uint64_t renderer_dirty{0u}; std::uint64_t cpu_dirty = 0u;
+                if (mode == 1u) {
+                    memory.dirty_page_words = &renderer_dirty; memory.dirty_tracked_size = region.size;
+                    memory.dirty_page_shift = 2u; memory.dirty_page_word_count = 1u;
+                } else if (mode == 2u) {
+                    memory.cpu_dirty_page_words = &cpu_dirty; memory.cpu_dirty_tracked_size = region.size;
+                    memory.cpu_dirty_page_shift = 2u; memory.cpu_dirty_page_word_count = 1u;
+                }
+                galaxy::native_audio_interleave_i16_804878BC(&actual, &memory, nullptr, 0x804878BCu);
+                std::uint64_t expected_dirty = 0u;
+                for (unsigned byte = destination; byte < destination + count * 4u; ++byte)
+                    expected_dirty |= UINT64_C(1) << (byte / 4u);
+                passed &= expect(ram == expected_bytes && std::memcmp(actual.gpr, expected.gpr, sizeof(actual.gpr)) == 0 &&
+                    actual.cr == expected.cr && actual.ctr == expected.ctr && observer.valid &&
+                    renderer_dirty.load() == (mode == 1u ? expected_dirty : 0u) &&
+                    cpu_dirty == (mode == 2u ? expected_dirty : 0u) &&
+                    observer.calls == (mode >= 3u ? count * 2u : 0u),
+                    "audio interleave retains load/store ordering, alias results, last loaded values and callback state");
+            }
+        }
+    }
+    std::array<std::byte, 8> ram{std::byte{0x81}, std::byte{0x23}, std::byte{0x45}, std::byte{0x67}};
+    galaxy::GuestMemoryRegionV1 region{base, 6u, ram.data()};
+    galaxy::GuestMemoryV1 memory{}; memory.regions = &region; memory.region_count = 1u;
+    memory.fast_regions[8] = {region.size, ram.data()};
+    galaxy::NativeServicesV1 services{}; services.fatal = throw_gpr_span_fault;
+    galaxy::PpcContext context{};
+    context.gpr[3] = base; context.gpr[4] = base + 2u; context.gpr[5] = base + 4u; context.gpr[6] = 1u;
+    bool faulted = false;
+    try { galaxy::native_audio_interleave_i16_804878BC(&context, &memory, &services, 0x804878BCu); }
+    catch (GprSpanFault fault) { faulted = fault.pc == 0x804878DCu; }
+    passed &= expect(faulted && ram[4] == std::byte{0x81} && ram[5] == std::byte{0x23} &&
+        context.gpr[3] == base + 2u && context.gpr[4] == base + 4u && context.gpr[5] == base + 4u &&
+        context.gpr[6] == 0xffff8123u && context.gpr[0] == 0x4567u && context.ctr == 1u,
+        "audio interleave keeps its first store and exact registers when the second store faults");
+    return passed;
+}
+
+bool test_vector_copy_instruction_effects() {
+    bool passed = true;
+    constexpr std::uint32_t base = 0x80000000u;
+    constexpr std::array<std::byte, 12> source{
+        std::byte{0x3f}, std::byte{0x80}, std::byte{0}, std::byte{0},
+        std::byte{0xc0}, std::byte{0}, std::byte{0}, std::byte{0},
+        std::byte{0x40}, std::byte{0x40}, std::byte{0}, std::byte{0}};
+    constexpr std::array<std::uint64_t, 3> values{
+        UINT64_C(0x4008000000000000), UINT64_C(0xc000000000000000), UINT64_C(0x3ff0000000000000)};
+    constexpr std::uint64_t sentinel = UINT64_C(0x4014000000000000);
+    for (bool paired : {false, true}) for (unsigned destination : {0u, 4u, 8u, 16u}) {
+        std::array<std::byte, 32> ram{};
+        std::copy(source.begin(), source.end(), ram.begin());
+        auto expected_bytes = ram;
+        std::copy(source.begin(), source.end(), expected_bytes.begin() + destination);
+        galaxy::GuestMemoryRegionV1 region{base, static_cast<std::uint32_t>(ram.size()), ram.data()};
+        galaxy::GuestMemoryV1 memory{}; memory.regions = &region; memory.region_count = 1u;
+        memory.fast_regions[8] = {region.size, ram.data()};
+        galaxy::PpcContext context{};
+        context.msr = galaxy::kMsrFloatingPointAvailable;
+        context.hid2 = paired ? 0x20000000u : 0u;
+        context.gpr[3] = base + destination; context.gpr[4] = base;
+        for (unsigned reg = 0u; reg < 3u; ++reg) context.ps1_bits[reg] = sentinel;
+        context.fpscr = 0x80000000u;
+        galaxy::native_vec_copy_12(&context, &memory, nullptr, 0x8001CF64u);
+        for (unsigned reg = 0u; reg < 3u; ++reg) {
+            passed &= expect(context.fpr_bits[reg] == values[reg] &&
+                context.ps1_bits[reg] == (paired ? values[reg] : sentinel),
+                "scalar vector copy retains its three loaded FPRs and HID2-dependent PS1 effects");
+        }
+        passed &= expect(ram == expected_bytes && context.fpscr == 0x80000000u &&
+            context.gpr[3] == base + destination && context.gpr[4] == base,
+            "scalar vector copy loads all three words before overlapping stores without changing FPSCR or pointers");
+    }
+    std::array<std::byte, 32> ram{};
+    ram[0] = std::byte{0xfe}; ram[1] = std::byte{3};
+    std::copy(source.begin() + 8u, source.end(), ram.begin() + 8u);
+    auto expected_bytes = ram;
+    expected_bytes[16] = std::byte{0xfe}; expected_bytes[17] = std::byte{3};
+    std::copy(source.begin() + 8u, source.end(), expected_bytes.begin() + 24u);
+    galaxy::GuestMemoryRegionV1 region{base, static_cast<std::uint32_t>(ram.size()), ram.data()};
+    galaxy::GuestMemoryV1 memory{}; memory.regions = &region; memory.region_count = 1u;
+    memory.fast_regions[8] = {region.size, ram.data()};
+    galaxy::PpcContext context{};
+    context.msr = galaxy::kMsrFloatingPointAvailable; context.hid2 = 0xa0000000u;
+    context.gqr[0] = (6u << 16u) | 6u; // signed byte load/store, scale zero
+    context.gpr[3] = base + 16u; context.gpr[4] = base;
+    context.fpr_bits[2] = sentinel; context.ps1_bits[2] = sentinel;
+    galaxy::native_vec_copy_12(&context, &memory, nullptr, 0x80018B8Cu);
+    passed &= expect(ram == expected_bytes && context.fpr_bits[1] == values[1] &&
+        context.ps1_bits[1] == values[0] && context.fpr_bits[0] == values[0] &&
+        context.ps1_bits[0] == values[0] && context.fpr_bits[2] == sentinel && context.ps1_bits[2] == sentinel,
+        "paired vector copy respects GQR0 quantization, the scalar third component and untouched register two");
+
+    // An unavailable FPU retries the first real instruction. A fault at the
+    // third load keeps the first two FPR effects and performs no output store.
+    std::copy(source.begin(), source.end(), ram.begin());
+    FpuUnavailableProbe probe{};
+    galaxy::NativeServicesV1 services{}; services.user = &probe;
+    services.fpu_unavailable = &simulate_fpu_unavailable; services.fatal = throw_gpr_span_fault;
+    context = {}; context.gpr[3] = base + 16u; context.gpr[4] = base;
+    context.fpr_bits[0] = sentinel;
+    region.size = 8u; memory.fast_regions[8].size = 8u;
+    const auto before_fault = ram;
+    bool faulted = false;
+    try { galaxy::native_vec_copy_12(&context, &memory, &services, 0x8001CF64u); }
+    catch (GprSpanFault fault) { faulted = fault.pc == 0x8001CF6Cu; }
+    passed &= expect(faulted && probe.calls == 1u && probe.guest_pc == 0x8001CF64u &&
+        context.fpr_bits[2] == values[2] && context.fpr_bits[1] == values[1] &&
+        context.fpr_bits[0] == sentinel && ram == before_fault,
+        "vector copy restores FPU retry and exact partial-load fault effects before any output store");
+    return passed;
+}
+
+bool test_matrix_scale_publishes_before_exception() {
+    bool passed = true;
+    constexpr std::uint32_t base = 0x80000000u;
+    for (bool tracked : {false, true}) {
+        std::array<std::byte, 48> ram{};
+        for (unsigned word = 0u; word < 12u; ++word) {
+            ram[word * 4u] = std::byte{0x3f}; ram[word * 4u + 1u] = std::byte{0x80};
+        }
+        // Only the final multiply overflows, after the first output store.
+        ram[0x18] = std::byte{0x7f}; ram[0x19] = std::byte{0x7f};
+        ram[0x1a] = std::byte{0xff}; ram[0x1b] = std::byte{0xff};
+        auto expected_bytes = ram; expected_bytes[0] = std::byte{0x40}; expected_bytes[1] = std::byte{0};
+        galaxy::GuestMemoryRegionV1 region{base, static_cast<std::uint32_t>(ram.size()), ram.data()};
+        galaxy::GuestMemoryV1 memory{}; memory.regions = &region; memory.region_count = 1u;
+        memory.fast_regions[8] = {region.size, ram.data()};
+        NotifyProbe notify{}; memory.user = &notify; memory.notify_write = capture_notify_write;
+        std::atomic_uint64_t renderer_dirty{0u}; std::uint64_t cpu_dirty = 0u;
+        if (tracked) {
+            memory.dirty_page_words = &renderer_dirty; memory.dirty_tracked_size = region.size;
+            memory.dirty_page_shift = 2u; memory.dirty_page_word_count = 1u;
+            memory.cpu_dirty_page_words = &cpu_dirty; memory.cpu_dirty_tracked_size = region.size;
+            memory.cpu_dirty_page_shift = 2u; memory.cpu_dirty_page_word_count = 1u;
+        }
+        galaxy::PpcContext context{};
+        context.msr = galaxy::kMsrFloatingPointAvailable;
+        context.gpr[3] = base; context.fpr_bits[1] = UINT64_C(0x4000000000000000);
+        context.fpr_bits[2] = UINT64_C(0x3ff0000000000000);
+        context.fpscr = 0x40u; // overflow exception enabled
+        galaxy::NativeServicesV1 services{}; services.fatal = throw_gpr_span_fault;
+        bool faulted = false;
+        try { galaxy::native_mtx_scale_803A387C(&context, &memory, &services, 0x803A387Cu); }
+        catch (GprSpanFault fault) { faulted = fault.pc == 0x803A38C4u; }
+        passed &= expect(faulted && ram == expected_bytes &&
+            renderer_dirty.load() == (tracked ? 1u : 0u) && cpu_dirty == (tracked ? 1u : 0u) &&
+            notify.writes == (tracked ? 0u : 1u) &&
+            (tracked || (notify.address == base && notify.size == 4u)) &&
+            context.fpr_bits[2] == UINT64_C(0x3ff0000000000000),
+            "matrix scale publishes the completed first store before the final multiply faults without later stores or destination mutation");
+    }
+    return passed;
+}
+
 bool test_gpr_helper_ram_spans() {
     bool passed = true;
     // Literal byte oracle, independent of the scalar load/store helpers.
@@ -1823,15 +2091,16 @@ int main() {
                 static_cast<std::byte>(0x30u + i);
         }
         galaxy::PpcContext vec_copy_context{};
+        vec_copy_context.msr = galaxy::kMsrFloatingPointAvailable;
         vec_copy_context.gpr[3] = vec_dst;
         vec_copy_context.gpr[4] = vec_src;
         reset_notify();
         galaxy::native_vec_copy_12(
             &vec_copy_context, &memory, nullptr, 0x8001CF64u);
         passed &= expect(
-            notify.writes == 1u && notify.address == vec_dst &&
-                notify.size == 12u,
-            "native vec copy notifies dirty guest memory");
+            notify.writes == 3u && notify.address == vec_dst + 8u &&
+                notify.size == 4u,
+            "native scalar vec copy notifies each original ordered word store");
 
         galaxy::PpcContext vec_zero_context{};
         vec_zero_context.gpr[3] = vec_dst;
@@ -1861,6 +2130,7 @@ int main() {
 
         constexpr std::uint32_t mtx_addr = 0x80000280u;
         galaxy::PpcContext mtx_scale_context{};
+        mtx_scale_context.msr = galaxy::kMsrFloatingPointAvailable;
         mtx_scale_context.gpr[3] = mtx_addr;
         mtx_scale_context.fpr_bits[1] =
             galaxy::widen_f32_bits(std::bit_cast<std::uint32_t>(2.0f));
@@ -1878,9 +2148,9 @@ int main() {
         galaxy::native_mtx_scale_803A387C(
             &mtx_scale_context, &memory, nullptr, 0x803A387Cu);
         passed &= expect(
-            notify.writes == 1u && notify.address == mtx_addr &&
-                notify.size == 0x2Cu,
-            "native matrix scale notifies dirty guest memory");
+            notify.writes == 9u && notify.address == mtx_addr + 0x28u &&
+                notify.size == 4u,
+            "native matrix scale notifies each original ordered word store");
 
         memory.notify_write = nullptr;
         memory.user = &device_probe;
@@ -2204,6 +2474,7 @@ int main() {
     galaxy::guest_store_u32(&memory, jpa_vec_src + 0x28u, 0x11121314u, nullptr, 0);
     galaxy::guest_store_u32(&memory, jpa_vec_src + 0x2Cu, 0x21222324u, nullptr, 0);
     galaxy::PpcContext jpa_vec_context{};
+    jpa_vec_context.msr = galaxy::kMsrFloatingPointAvailable;
     jpa_vec_context.gpr[4] = jpa_vec_src;
     jpa_vec_context.gpr[5] = jpa_vec_dst;
     galaxy::native_jpa_vec_copy_803A35DC(
@@ -2226,6 +2497,7 @@ int main() {
     jpa_dispatch_services.user = &jpa_dispatch_probe;
     jpa_dispatch_services.call_guest_cached = &capture_cached_call;
     galaxy::PpcContext jpa_dispatch_context{};
+    jpa_dispatch_context.msr = galaxy::kMsrFloatingPointAvailable;
     jpa_dispatch_context.gpr[4] = jpa_vec_src;
     jpa_dispatch_context.gpr[5] = jpa_dispatch_dst;
     galaxy::native_jpa_direction_callback_803A3BB4(
@@ -2251,6 +2523,7 @@ int main() {
     galaxy::guest_store_u32(&memory, jpa_vec_src + 0x10u, 0x41424344u, nullptr, 0);
     galaxy::guest_store_u32(&memory, jpa_vec_src + 0x14u, 0x51525354u, nullptr, 0);
     jpa_dispatch_context = {};
+    jpa_dispatch_context.msr = galaxy::kMsrFloatingPointAvailable;
     jpa_dispatch_context.gpr[4] = jpa_vec_src;
     jpa_dispatch_context.gpr[5] = jpa_dispatch_dst_e8;
     galaxy::native_jpa_direction_callback_803A3BB4(
@@ -2562,6 +2835,7 @@ int main() {
             0);
     }
     context.gpr[3] = matrix_base;
+    context.msr |= galaxy::kMsrFloatingPointAvailable;
     context.hid2 = 0x20000000u;
     context.fpscr = 0;
     context.fpr_bits[1] =
@@ -5862,6 +6136,10 @@ int main() {
         galaxy::divide_unsigned_word(0u, 0u, nullptr, 0) == 0x00000000u,
         "divwu zero / 0 returns 0x00000000");
 
+    passed &= test_checked_span_resolution();
+    passed &= test_audio_interleave_order_and_overlap();
+    passed &= test_vector_copy_instruction_effects();
+    passed &= test_matrix_scale_publishes_before_exception();
     passed &= test_gpr_helper_ram_spans();
     passed &= test_gpr_save_tracker_admission();
     passed &= test_psq_complete_ram_instruction();
