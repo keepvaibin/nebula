@@ -167,11 +167,14 @@ public:
     [[nodiscard]] std::uint64_t copied_bytes() const { return copied_bytes_; }
 
     [[nodiscard]] ID3D12Resource* resource() const { return buffer_.Get(); }
+    [[nodiscard]] D3D12_GPU_VIRTUAL_ADDRESS gpu_base() const { return gpu_base_; }
 
 private:
     Microsoft::WRL::ComPtr<ID3D12Resource> buffer_;
     const char* name_ = "";
     std::byte* mapped_ = nullptr;
+    // This committed buffer keeps its address until it is replaced by initialize.
+    D3D12_GPU_VIRTUAL_ADDRESS gpu_base_ = 0;
     std::size_t bytes_per_frame_ = 0;
     std::size_t segment_base_ = 0;
     std::size_t cursor_ = 0;

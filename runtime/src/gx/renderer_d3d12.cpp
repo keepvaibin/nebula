@@ -1700,6 +1700,7 @@ bool UploadRing::initialize(
     void* ptr = nullptr;
     if (FAILED(buffer_->Map(0, &no_read, &ptr))) return false;
     mapped_ = static_cast<std::byte*>(ptr);
+    gpu_base_ = buffer_->GetGPUVirtualAddress();
     static std::atomic<std::uint64_t> next_identity{1};
     resource_identity_ = next_identity.fetch_add(1, std::memory_order_relaxed);
     slot_generations_.assign(frames_in_flight, 0);
@@ -1736,7 +1737,7 @@ UploadRing::Allocation UploadRing::allocate(std::size_t size, std::size_t alignm
     }
     return Allocation{
         mapped_ + aligned,
-        buffer_->GetGPUVirtualAddress() + static_cast<UINT64>(aligned),
+        gpu_base_ + static_cast<UINT64>(aligned),
         aligned
     };
 }
