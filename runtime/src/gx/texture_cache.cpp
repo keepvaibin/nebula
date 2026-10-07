@@ -1290,14 +1290,11 @@ bool TextureCache::load_tlut(
     if (std::memcmp(tlut_bank_ + dest_byte_offset, src_ptr, transfer) == 0) {
         return false;
     }
-    std::memcpy(
-        tlut_bank_ + dest_byte_offset,
-        src_ptr,
-        transfer);
-
     // One transfer can touch several slots, and a C14X2 palette can span
-    // many slots even when its first slot is outside the transfer. Retire
-    // every decoded palette whose byte range overlaps the written bytes.
+    // many slots even when its first slot is outside the transfer. Compare
+    // each overlapping palette BEFORE replacing the bank: a changed transfer
+    // can still leave this texture's complete palette unchanged (e.g. C4
+    // consumes only the first 32 bytes of a 512-byte C8-slot reload).
     const std::uint32_t transfer_end = dest_byte_offset + transfer;
     for (auto it = entries_.begin(); it != entries_.end(); ) {
         std::uint32_t palette_bytes = 0u;
@@ -1312,13 +1309,21 @@ bool TextureCache::load_tlut(
         const bool overlaps = palette_bytes != 0u &&
             palette_start < transfer_end &&
             dest_byte_offset < palette_start + palette_bytes;
+        bool changed = false;
         if (overlaps) {
+            const std::uint32_t begin = std::max(palette_start, dest_byte_offset);
+            const std::uint32_t end = std::min(palette_start + palette_bytes, transfer_end);
+            changed = std::memcmp(tlut_bank_ + begin,
+                src_ptr + (begin - dest_byte_offset), end - begin) != 0;
+        }
+        if (changed) {
             retire(std::move(it->second));
             it = entries_.erase(it);
         } else {
             ++it;
         }
     }
+    std::memcpy(tlut_bank_ + dest_byte_offset, src_ptr, transfer);
     return true;
 }
 
