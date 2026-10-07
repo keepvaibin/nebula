@@ -72,15 +72,18 @@ earlier accepted checkpoints are retained. The unrelated pre-existing
   routines, restore their volatile FPR/PS1 effects, GQR0 quantization, FPU
   retry and original partial-fault behavior through existing precise helpers.
   Added unrun literal-value, overlap, quantization and fault checks. The
-  translator still excludes both entry substitutions; retained native JPA
-  wrappers use the helper, but accepted-build path coverage is unverified.
-- **Matrix-scale publication:** the active native helper previously published
+  translator still excludes both entry substitutions and its JPA callback
+  shortcuts. Retained native JPA wrappers use the helper, but accepted-build
+  path coverage is unverified.
+- **Matrix-scale publication:** the retained native helper previously published
   only on completion although its last multiply follows the first store and
   may raise an enabled FP exception. Ordered scalar helpers now publish each
   completed store, preserve exact load/store fault PCs and use the same
   precise stfs conversion as translated code. This is a correctness fix,
   with additional notification work rather than an asserted speedup. Added
   unrun overflow-after-first-store checks for callback and both dirty trackers.
+  The current translator preserves exact FP entries and excludes its native
+  JPA projection shortcut; this does not prove a live control-build fix.
 - **Bulk dirty-word publication:** multi-page notifications now form exact
   masks per bitmap word instead of marking every page individually. Fully
   dirty words still avoid locked instructions; missing renderer bits use
@@ -110,6 +113,15 @@ earlier accepted checkpoints are retained. The unrelated pre-existing
   mode faults and tracing remain. Extended the unrun literal PSQ oracle to
   locked cache; existing callback-order, device and partial-lane fault checks
   remain. Removed classifications are established by code; timing is unmeasured.
+- **Runtime call dispatch:** collapse 13 immutable opt-in diagnostic selectors
+  behind one cached process flag, avoiding their individual disabled checks
+  on each guest call. Keep all live mouse, external-dispatch, VI, performance
+  marker and route-control decisions outside those groups. Resolve the live
+  intercept decision once per cached-call invocation, after servicing input
+  and the scene marker; retain only function/address lookup in the cross-call
+  cache. No scheduling service was bypassed. Static review checked every grouped
+  selector and dynamic check; dispatch/IR/audio/exception regression execution
+  and elapsed saving remain pending under the execution restriction.
 
 For the sustained CPU candidates, contribution and milliseconds saved are
 **unmeasured**. Code inspection establishes removed work: one allocation per
