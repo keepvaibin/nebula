@@ -1135,7 +1135,13 @@ V main(uint id : SV_VertexID) {
         if (WaitForSingleObject(fence_event_, 30000u) != WAIT_OBJECT_0) {
             throw std::runtime_error("texture cache upload fence timeout");
         }
-        passed &= expect(cache.invalidate_guest_range(address + 160u, 1u) == 1u,
+        passed &= expect(cache.invalidate_guest_range(address + 17u, 0u) == 0u,
+            "zero-byte write inside decoded texture does not evict it");
+        // The zero range is inside the separate direct textures at +768;
+        // only the real write in the base texture's lower mip may retire one.
+        const std::array<TextureCache::GuestRange, 2> mip_dirty{{
+            {address + 160u, 1u}, {address + 785u, 0u}}};
+        passed &= expect(cache.invalidate_guest_ranges(mip_dirty) == 1u,
             "write confined to a lower mip retires the decoded resource");
 
         const auto make_alias = [&] {
@@ -1160,6 +1166,9 @@ V main(uint id : SV_VertexID) {
         copy.dest_stride = 512u;
         auto alias = make_alias();
         passed &= expect(cache.register_efb_copy(address, copy, alias), "register strided alias");
+        passed &= expect(cache.invalidate_guest_range(address + 17u, 0u) == 0u &&
+            !cache.register_efb_copy(address, copy, alias),
+            "zero-byte write preserves existing alias ownership");
         passed &= expect(cache.invalidate_guest_range(address + 512u, 1u) == 1u,
             "write to strided second block-row invalidates its alias");
         passed &= expect(cache.register_efb_copy(address, copy, alias), "register alias again");
@@ -1168,6 +1177,13 @@ V main(uint id : SV_VertexID) {
             "same GPU resource with changed guest footprint requests outer cache refresh");
         passed &= expect(cache.invalidate_guest_range(address + 512u, 1u) == 0u,
             "updated packed footprint excludes prior stride gap");
+        copy.dest_stride = 512u;
+        passed &= expect(cache.register_efb_copy(address, copy, alias) &&
+            cache.invalidate_guest_range(address + 512u, 1u) == 1u,
+            "same-resource alias extension publishes its new guest footprint");
+        copy.dest_stride = 128u;
+        passed &= expect(cache.register_efb_copy(address, copy, alias),
+            "restore packed alias after footprint-extension eviction");
         image.format = TexFormat::RGBA8;
         mode.min_filter = TexMinFilter::Near;
         passed &= expect(cache.get(image, mode, TlutRef{}, &memory).guest_byte_size == 256u,

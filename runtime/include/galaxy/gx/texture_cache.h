@@ -29,6 +29,7 @@
 #include <wrl/client.h>
 
 #include "galaxy/gx/gx_bitfields.h"
+#include "galaxy/gx/guest_range_envelope.h"
 #include "galaxy/gx/shader_keys.h"  // fnv1a64
 #include "galaxy/native_api.h"
 
@@ -271,6 +272,7 @@ private:
     [[nodiscard]] std::uint32_t allocate_srv_index();
 
     std::unordered_map<Key, Entry, KeyHasher> entries_;
+    detail::ConservativeGuestRangeEnvelope decoded_guest_envelope_;
     std::unordered_map<ContentKey, ContentEntry, ContentKeyHasher>
         content_entries_;
     std::list<ContentKey> content_lru_;
@@ -283,6 +285,7 @@ private:
     std::uint64_t content_evicted_entries_ = 0;
     // Full GX texture descriptor -> EFB-copy alias (checked before decode).
     std::unordered_map<EfbAliasKey, Entry, EfbAliasKeyHasher> efb_aliases_;
+    detail::ConservativeGuestRangeEnvelope alias_guest_envelope_;
     std::vector<std::vector<Entry>> retired_entries_;
     std::vector<UploadArenaFrame> upload_arenas_;
     // Render-thread scratch storage for first-use texture decode/upload.
