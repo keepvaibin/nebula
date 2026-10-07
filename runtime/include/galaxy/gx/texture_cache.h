@@ -83,6 +83,12 @@ void decode_small_index_tiles(TexFormat format, const std::uint8_t* src,
                               std::uint32_t width, std::uint32_t height,
                               const std::uint8_t* palette, TlutFormat tlut_format,
                               RGBA8* out);
+// C14X2: caller validates block-rounded source and the full 16384-entry palette.
+// Top two index bits are ignored; edge tiles still consume all 32 source bytes.
+void decode_c14x2_tiles(const std::uint8_t* src,
+                       std::uint32_t width, std::uint32_t height,
+                       const std::uint8_t* palette, TlutFormat tlut_format,
+                       RGBA8* out);
 }  // namespace detail
 
 [[nodiscard]] std::uint8_t efb_copy_alias_texture_format(
