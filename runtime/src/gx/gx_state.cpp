@@ -128,6 +128,19 @@ void validate_xf_write(
     std::uint16_t count) {
     // Validate the complete transaction before touching xf_ or dirty_.  This
     // also rejects the old 0x1FFF address wraparound behavior.
+    const std::uint32_t end = static_cast<std::uint32_t>(base) + count;
+    static_assert(xf::kPostMatricesBase + 0x0100u == xf::kLightsBase);
+    // The post-matrix and light banks are adjacent and equally classified.
+    // Most matrix uploads can validate their entire span without revisiting
+    // the same range checks for every word. Keep the scalar error path for
+    // mixed/invalid spans so it still identifies the first offending word.
+    if (end <= 0x0100u ||
+        (base >= xf::kNormalMatricesBase &&
+         end <= xf::kNormalMatricesBase + 0x0060u) ||
+        (base >= xf::kPostMatricesBase &&
+         end <= xf::kLightsBase + 0x0080u)) {
+        return;
+    }
     for (std::uint32_t i = 0; i < count; ++i) {
         const std::uint32_t address = static_cast<std::uint32_t>(base) + i;
         if (address > 0xFFFFu ||
@@ -226,6 +239,21 @@ void GxState::apply_validated_xf(
     std::uint16_t base,
     const std::uint32_t* values,
     std::uint16_t count) {
+    // Complete validation guarantees every accepted low-bank address is
+    // matrix/light memory. Its only dirty effect is the matrix palette bit.
+    // Preserve sequential reads/stores: values may alias this register bank.
+    if (base < xf::kStatusRegsBase) {
+        bool changed = false;
+        for (std::uint16_t i = 0; i < count; ++i) {
+            const std::uint16_t addr = static_cast<std::uint16_t>(base + i);
+            if (xf_[addr] != values[i]) {
+                xf_[addr] = values[i];
+                changed = true;
+            }
+        }
+        if (changed) dirty_ |= kDirtyXfMatrices;
+        return;
+    }
     for (std::uint16_t i = 0; i < count; ++i) {
         const std::uint16_t addr =
             static_cast<std::uint16_t>(base + i);
@@ -233,21 +261,6 @@ void GxState::apply_validated_xf(
             continue;
         }
         xf_[addr] = values[i];
-
-        // Position matrices  0x0000-0x00FF
-        // Normal matrices    0x0400-0x045F
-        // Post matrices      0x0500-0x05FF
-        if (addr < 0x0100u ||
-            (addr >= xf::kNormalMatricesBase &&
-             addr < xf::kNormalMatricesBase + 0x0060u) ||
-            (addr >= xf::kPostMatricesBase &&
-             addr < xf::kPostMatricesBase + 0x0100u)) {
-            dirty_ |= kDirtyXfMatrices;
-        }
-        // Lights  0x0600-0x067F
-        if (addr >= xf::kLightsBase && addr < xf::kLightsBase + 0x0080u) {
-            dirty_ |= kDirtyXfMatrices;
-        }
 
         // XF misc scalars: num channels, ambient/material colors
         // 0x1009-0x100D
