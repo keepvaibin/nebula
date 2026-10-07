@@ -218,7 +218,7 @@ void GxState::load_cp(std::uint8_t reg, std::uint32_t value) {
     if (cp_[reg] != value) {
         cp_[reg] = value;
         if ((dirty & kDirtyVcd) != 0u) {
-            dependency_shape_hash_valid_ = false;
+            invalidate_dependency_shape();
         }
         dirty_ |= dirty;
     }
@@ -365,7 +365,7 @@ void GxState::load_bp(std::uint32_t command) {
     }
     bp_[reg] = next;
     if (affects_dependency_shape(reg)) {
-        dependency_shape_hash_valid_ = false;
+        invalidate_dependency_shape();
     }
 
     // --------------- Dirty bit classification --------------------------------

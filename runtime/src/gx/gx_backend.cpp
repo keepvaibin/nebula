@@ -13,6 +13,7 @@
 #pragma warning(pop)
 
 #include "galaxy/gx/gx_backend.h"
+#include "galaxy/gx/dependency_draw_memo.h"
 #include "galaxy/gx/dependency_event_capture.h"
 #include "galaxy/gx/owned_fifo_event_replay.h"
 
@@ -1291,7 +1292,6 @@ public:
           stat_draw_run_cache_misses_(stat_draw_run_cache_misses),
           stat_draw_run_cache_evictions_(stat_draw_run_cache_evictions) {
         emitted_range_keys_.reserve(4096u);
-        emitted_broad_draw_dependency_keys_.reserve(256u);
     }
 
     [[nodiscard]] std::size_t draw_payload_size(
@@ -1662,11 +1662,12 @@ private:
         if (!broad_dependency_index_ranges_enabled()) {
             return false;
         }
-        const std::uint64_t key = fnv1a_mix_u32(
-            dependency_shape_state_hash(state_),
-            vtxfmt);
-        if (emitted_broad_draw_dependency_keys_.find(key) !=
-            emitted_broad_draw_dependency_keys_.end()) {
+        // This sink owns one parse interval over the same register instance;
+        // no state assignment/restore occurs while it is active. A revision
+        // identifies mutations exactly here, whereas a hash alone cannot
+        // justify omitting required snapshot reads. Zero forbids reuse after
+        // counter saturation. Changes conservatively start a new format mask.
+        if (broad_draw_memo_.contains(state_.dependency_shape_revision(), vtxfmt)) {
             return true;
         }
         const VertexDescriptor desc = state_.vertex_desc(vtxfmt);
@@ -1674,7 +1675,7 @@ private:
             return false;
         }
         record_texture_dependency_ranges_once();
-        emitted_broad_draw_dependency_keys_.insert(key);
+        broad_draw_memo_.mark(vtxfmt);
         return true;
     }
 
@@ -1957,7 +1958,7 @@ private:
     std::atomic<std::uint64_t>& stat_draw_run_cache_misses_;
     std::atomic<std::uint64_t>& stat_draw_run_cache_evictions_;
     std::unordered_set<std::uint64_t> emitted_range_keys_;
-    std::unordered_set<std::uint64_t> emitted_broad_draw_dependency_keys_;
+    detail::BroadDrawDependencyMemo broad_draw_memo_;
     std::uint64_t exact_cached_dependency_vertices_ = 0;
     bool cached_broad_draw_run_active_ = false;
 };

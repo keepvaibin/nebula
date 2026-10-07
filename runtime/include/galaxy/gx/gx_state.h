@@ -72,6 +72,14 @@ public:
     // copies retain both banks and cache, CP/BP mutations invalidate it.
     [[nodiscard]] std::uint64_t dependency_shape_hash() const noexcept;
 
+    // Local reuse while this exact register owner is mutated by its parser.
+    // Copies/assignments can carry equal revisions for different banks: never
+    // use this as a cross-owner or persistent cache key. Zero is saturated and
+    // requires recomputation on every query, avoiding generation wrap reuse.
+    [[nodiscard]] std::uint64_t dependency_shape_revision() const noexcept {
+        return dependency_shape_revision_;
+    }
+
     // Parser input for the next BP write; not part of current draw shape.
     [[nodiscard]] std::uint32_t pending_bp_write_mask() const noexcept {
         return bp_mask_;
@@ -175,6 +183,11 @@ public:
     void mark_all_dirty() { dirty_ = ~0u; }
 
 private:
+    friend class GxBackendMemorySnapshotTestAccess;
+    void invalidate_dependency_shape() noexcept {
+        dependency_shape_hash_valid_ = false;
+        if (dependency_shape_revision_ != 0u) ++dependency_shape_revision_;
+    }
     // Both public XF mutators validate the entire transfer before this shared
     // write/dirty pass. Keep unchecked application inaccessible to callers.
     void apply_validated_xf(std::uint16_t base, const std::uint32_t* values,
@@ -192,6 +205,7 @@ private:
     std::uint32_t dirty_ = ~0u;
     mutable std::uint64_t dependency_shape_hash_ = 0u;
     mutable bool dependency_shape_hash_valid_ = false;
+    std::uint64_t dependency_shape_revision_ = 1u;
 };
 
 }  // namespace galaxy::gx

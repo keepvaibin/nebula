@@ -1,4 +1,5 @@
 #include "galaxy/gx/gx_backend.h"
+#include "galaxy/gx/dependency_draw_memo.h"
 #include "galaxy/gx/fifo_cache_fingerprint.h"
 
 #include <algorithm>
@@ -154,6 +155,66 @@ struct MemorySnapshotNbtProbeResult {
 
 class GxBackendMemorySnapshotTestAccess {
 public:
+    static bool broad_draw_memo_uses_exact_owner_revisions() {
+        GxState state;
+        detail::BroadDrawDependencyMemo memo;
+        const auto first = state.dependency_shape_revision();
+        for (std::uint8_t format = 0u; format < 8u; ++format) {
+            if (memo.contains(first, format)) return false;
+            memo.mark(format);
+        }
+        for (std::uint8_t format = 0u; format < 8u; ++format) {
+            if (!memo.contains(first, format)) return false;
+        }
+        // Hash equality is insufficient: manufacture equal cached hashes for
+        // different banks while preserving their actual mutation revisions.
+        state.dependency_shape_hash_ = 0x12345678u;
+        state.dependency_shape_hash_valid_ = true;
+        const auto old_hash = state.dependency_shape_hash();
+        state.load_cp(cp::kArrayBaseBase, 0x1000u);
+        state.dependency_shape_hash_ = old_hash;
+        state.dependency_shape_hash_valid_ = true;
+        if (state.dependency_shape_hash() != old_hash ||
+            state.dependency_shape_revision() == first) return false;
+        for (std::uint8_t format = 0u; format < 8u; ++format) {
+            if (memo.contains(state.dependency_shape_revision(), format)) return false;
+        }
+        memo.mark(7u);
+        const auto before_irrelevant = state.dependency_shape_revision();
+        state.load_cp(cp::kArrayBaseBase, 0x1000u);  // identical write
+        state.load_cp(cp::kMatrixIndexA, 9u);       // uniform only
+        const std::uint32_t matrix = 0x3F800000u;
+        state.load_xf(0u, &matrix, 1u);
+        state.load_bp(0xE0000011u);                // TEV constant only
+        (void)state.dependency_shape_hash();
+        (void)state.consume_dirty();
+        state.mark_all_dirty();
+        if (state.dependency_shape_revision() != before_irrelevant ||
+            !memo.contains(before_irrelevant, 7u)) return false;
+        for (const auto command : {0x00000001u, 0x64000080u, 0x80000001u}) {
+            const auto previous = state.dependency_shape_revision();
+            state.load_bp(command);
+            if (state.dependency_shape_revision() == previous ||
+                memo.contains(state.dependency_shape_revision(), 7u)) return false;
+            memo.mark(7u);
+        }
+        state.load_cp(cp::kArrayBaseBase, 0u);  // even restored state starts fresh
+        if (memo.contains(state.dependency_shape_revision(), 7u)) return false;
+        const auto before_fault = state.dependency_shape_revision();
+        bool rejected = false;
+        try { state.load_cp(0xFFu, 3u); }
+        catch (const GxFatalError&) { rejected = true; }
+        if (!rejected || state.dependency_shape_revision() != before_fault) return false;
+        // Saturation cannot wrap back into a previously accepted format mask.
+        state.dependency_shape_revision_ = UINT64_MAX;
+        state.load_cp(cp::kArrayBaseBase, 0x2000u);
+        if (state.dependency_shape_revision() != 0u || memo.contains(0u, 7u)) return false;
+        memo.mark(7u);
+        if (memo.contains(0u, 7u)) return false;
+        state.load_cp(cp::kArrayBaseBase, 0x3000u);
+        return state.dependency_shape_revision() == 0u && !memo.contains(0u, 7u);
+    }
+
     static bool direct_pe_cached_draw_runs_preserve_events() {
         constexpr std::uint32_t address = 0x00002000u;
         for (const auto primitive : {PrimitiveClass::Points,
@@ -1495,6 +1556,10 @@ int main() {
     memory.cpu_dirty_page_word_count = 1u;
 
     bool ok = true;
+    ok = expect(
+             galaxy::gx::GxBackendMemorySnapshotTestAccess::
+                 broad_draw_memo_uses_exact_owner_revisions(),
+             "broad dependency memo reused changed state or lost saturated revision safety") && ok;
     ok = expect(
              galaxy::gx::GxBackendMemorySnapshotTestAccess::
                  direct_pe_cached_draw_runs_preserve_events(),
