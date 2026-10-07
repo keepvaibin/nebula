@@ -15,6 +15,9 @@ extern "C" {
 namespace galaxy {
 namespace {
 
+bool native_f32_fma_wide_fast(
+    float multiplicand, float multiplier, float addend, PpcFloatResult& result);
+
 using namespace float_native_detail;
 
 struct SoftFloatResult32 {
