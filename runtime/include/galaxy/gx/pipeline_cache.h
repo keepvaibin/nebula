@@ -21,11 +21,14 @@
 //
 // Disk cache, %LOCALAPPDATA%\Nebula\shadercache\RMGE01\:
 //   - shaders.bin   {magic, version, vs/ps hash, vs/ps DXBC} records;
-//                   loaded at initialize so a second run never invokes FXC.
+//                   loaded at initialize; valid previously saved stages avoid
+//                   FXC. New configurations and rejected/unsaved stages may
+//                   still require compilation on subsequent runs.
 //   - psos.bin      successful PsoKey records, used by optional
 //                   startup prewarm.
 //   - pipelines.bin optional ID3D12PipelineLibrary1 blob, invalidated when the
-//                   stored adapter LUID or shader-cache version doesn't match.
+//                   stored adapter LUID or shader-cache version doesn't match,
+//                   or the driver rejects its serialized data.
 
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
@@ -219,6 +222,8 @@ private:
     void load_pso_key_cache();
     void load_pipeline_library();
     void flush_pipeline_library();
+    [[nodiscard]] bool find_cached_shader_stages(
+        const PsoKey& key, ShaderPair& out) const;
     [[nodiscard]] std::uint64_t enqueue_cached_pso_prewarm(
         unsigned worker_count);
     void wait_for_cached_pso_prewarm(std::uint64_t enqueued);

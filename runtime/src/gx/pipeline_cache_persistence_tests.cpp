@@ -121,6 +121,24 @@ struct PipelineCachePersistenceTestAccess {
         return !cache.wait_for_in_flight_pso(record, result) && result == nullptr &&
             cache.jobs_.empty() && cache.in_flight_.empty();
     }
+    static bool recombined_prewarm_stages() {
+        PipelineCache cache;
+        const auto vertex = shader_blob(true, 1u);
+        const auto pixel = shader_blob(false, 2u);
+        auto record = key(1u);
+        record.ps_hash = key(2u).ps_hash;
+        cache.vertex_shader_blobs_.emplace(record.vs_hash, vertex);
+        cache.pixel_shader_blobs_.emplace(record.ps_hash, pixel);
+        PipelineCache::ShaderPair stages{};
+        if (!cache.shader_blobs_.empty() ||
+            !cache.find_cached_shader_stages(record, stages) ||
+            stages.vs.Get() != vertex.Get() || stages.ps.Get() != pixel.Get() ||
+            stages.vs_hash != record.vs_hash || stages.ps_hash != record.ps_hash) return false;
+        record.ps_hash = key(3u).ps_hash;
+        if (cache.find_cached_shader_stages(record, stages) || stages.vs || stages.ps) return false;
+        record = key(2u);
+        return !cache.find_cached_shader_stages(record, stages) && !stages.vs && !stages.ps;
+    }
     static bool worker_failure_propagates() {
         PipelineCache cache;
         cache.worker_error_ = std::make_exception_ptr(std::runtime_error("worker fixture failure"));
@@ -409,6 +427,7 @@ int main() {
         passed &= shared_stage_reload(files.root / std::to_string(case_index++));
         passed &= busy_writer_retry(files.root / std::to_string(case_index++));
         passed &= expect(Access::queued_takeover(), "first use claims queued prewarm without duplicate work");
+        passed &= expect(Access::recombined_prewarm_stages(), "prewarm reuses independently cached stages and rejects missing components");
         passed &= expect(Access::worker_failure_propagates(), "worker exception is propagated during startup wait");
         for (bool shader : {true, false}) {
             for (std::size_t header_bytes : {0u, 4u, 7u}) {
