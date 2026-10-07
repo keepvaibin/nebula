@@ -1,5 +1,6 @@
 #include "galaxy/gx/gx_backend.h"
 #include "galaxy/gx/dependency_draw_memo.h"
+#include "galaxy/gx/dependency_range_memo.h"
 #include "galaxy/gx/fifo_cache_fingerprint.h"
 
 #include <algorithm>
@@ -17,6 +18,7 @@
 #include <span>
 #include <stdexcept>
 #include <string>
+#include <unordered_set>
 #include <vector>
 
 namespace {
@@ -135,6 +137,36 @@ bool reject_device_write(
 }
 
 void observe_guest_write(void*, std::uint32_t, std::uint32_t) {}
+
+bool dependency_range_memo_preserves_exact_keys() {
+    galaxy::gx::detail::DependencyRangeMemo actual;
+    std::unordered_set<std::uint64_t> reference;
+    const auto check = [&](std::uint64_t key) {
+        return actual.insert(key) == reference.insert(key).second;
+    };
+    // Include empty-bit-pattern and maximum keys, repeated addresses with
+    // different sizes, and repeated sizes at different addresses.
+    for (const auto key : {std::uint64_t{0}, UINT64_MAX,
+             std::uint64_t{1}, std::uint64_t{1} << 32u}) {
+        if (!check(key) || !check(key)) return false;
+    }
+    // Exercise 31/32/33 distinct-key boundaries and later table growth;
+    // old inline keys must still be found after promotion.
+    for (std::uint32_t i = 1u; i <= 2048u; ++i) {
+        const std::uint64_t key = (static_cast<std::uint64_t>(i * 4096u) << 32u) |
+            ((i & 3u) + 1u);
+        if (!check(key) || !check(key)) return false;
+        if (!check(0u) || !check(UINT64_MAX)) return false;
+    }
+    for (std::uint32_t i = 2048u; i > 0u; --i) {
+        const auto address = static_cast<std::uint64_t>(i * 4096u) << 32u;
+        if (!check(address | ((i & 3u) + 1u)) ||
+            !check(address | 0xFFFFu)) return false;
+    }
+    // New scan owns a fresh memo; no dependency may be suppressed by an old one.
+    galaxy::gx::detail::DependencyRangeMemo next;
+    return next.insert(0u) && !next.insert(0u) && next.insert(UINT64_MAX);
+}
 
 void throw_guest_memory_fault(void*, std::uint32_t, const char* message) {
     throw std::runtime_error(message);
@@ -1556,6 +1588,8 @@ int main() {
     memory.cpu_dirty_page_word_count = 1u;
 
     bool ok = true;
+    ok = expect(dependency_range_memo_preserves_exact_keys(),
+             "inline dependency range memo lost exact equality across overflow") && ok;
     ok = expect(
              galaxy::gx::GxBackendMemorySnapshotTestAccess::
                  broad_draw_memo_uses_exact_owner_revisions(),

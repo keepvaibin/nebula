@@ -237,6 +237,19 @@ earlier accepted checkpoints are retained. The unrelated pre-existing
   preclassification (which already had this path). Its critical-path cost and
   saving remain unmeasured; no event delivery or synchronization is deferred.
 
+- **Dependency scan reuse and allocation:** local broad-draw reuse now uses an
+  eight-format mask invalidated by the exact parser owner's relevant CP/BP
+  mutations, replacing hash-only reuse and its per-scan table (`8b4ccc7`). A
+  saturated revision disables reuse; this revision is never a cross-owner key.
+  The separate exact address/size dedup table now keeps up to 32 keys inline,
+  replacing an unconditional 4096-bucket reserve and small-scan node allocations.
+  Larger scans promote to the original standard table type; range order and
+  equality remain unchanged. Neither change skips draws or guest-memory work.
+  Mutation, manufactured same-hash, overflow and exact-range oracle checks are
+  written but unrun. No evidence establishes a hash collision in the recordings.
+  Critical-path contribution, allocation savings in real scenes, frame rates and
+  regressions remain unmeasured. Other persistent cache hash keys are unchanged.
+
 For the sustained CPU candidates, contribution and milliseconds saved are
 **unmeasured**. Code inspection establishes removed work: one allocation per
 eligible display-list lookup/capture, fewer decode-cache misses, variable vertex
