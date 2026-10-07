@@ -5,8 +5,8 @@
 // triangle/line/point draws written into the frame's upload rings.
 //
 // Design invariants:
-//  - Bulk attribute streams use FifoCursor::take() + swap16_block/swap32_block;
-//    no per-byte scalar reads on the hot path.
+//  - Attribute streams are bounded once, then converted through local endian
+//    loads; each component reads exactly its encoded byte width.
 //  - Color attributes are NEVER passed through the swap kernels (see below).
 //  - Unknown/unsupported configurations throw GxFatalError (hard-fail).
 //  - Indexed attributes resolve through GuestMemoryV1; unmapped → GxFatalError.
@@ -306,21 +306,19 @@ private:
 }
 
 // Decode `count` float32 big-endian components from `src` into `dst`.
-// Uses swap32_block for bulk conversion.
+// Vertex attributes contain at most three components. The bulk swap helper's
+// four-lane SIMD path cannot run here, so convert directly in one local loop.
 static void decode_floats(
     const std::byte* src,
     float* dst,
     std::size_t count)
 {
-    // swap32_block writes into uint32_t; float and uint32_t are same size and
-    // we bit-cast immediately after, so we can use a local array.
-    // Stack VLA is non-standard; use a small fixed buffer (positions/normals
-    // have at most 3 components, texcoords at most 2).
-    std::uint32_t tmp[3];
     assert(count <= 3);
-    swap32_block(src, tmp, count);
     for (std::size_t i = 0; i < count; ++i) {
-        dst[i] = std::bit_cast<float>(tmp[i]);
+        std::uint32_t word;
+        // Unaligned and alias-safe; exactly four bytes, including edge inputs.
+        std::memcpy(&word, src + i * sizeof(word), sizeof(word));
+        dst[i] = std::bit_cast<float>(galaxy::byte_swap_u32(word));
     }
 }
 
@@ -353,22 +351,17 @@ static void decode_components(
         return;
 
     case ComponentFormat::U16: {
-        // Use swap16_block for pairs/triples.
-        std::uint16_t tmp[3];
         assert(count <= 3);
-        swap16_block(src, tmp, count);
         for (std::size_t i = 0; i < count; ++i) {
-            dst[i] = dequant_u16(tmp[i], shift);
+            dst[i] = dequant_u16(read_be_u16(src + i * 2u), shift);
         }
         return;
     }
 
     case ComponentFormat::S16: {
-        std::uint16_t tmp[3];
         assert(count <= 3);
-        swap16_block(src, tmp, count);
         for (std::size_t i = 0; i < count; ++i) {
-            dst[i] = dequant_s16(tmp[i], shift);
+            dst[i] = dequant_s16(read_be_u16(src + i * 2u), shift);
         }
         return;
     }
@@ -409,19 +402,15 @@ static void decode_normal_components(
         return;
 
     case ComponentFormat::U16: {
-        std::uint16_t tmp[3];
-        swap16_block(src, tmp, 3);
         for (std::size_t i = 0; i < 3; ++i) {
-            dst[i] = dequant_u16(tmp[i], 15);
+            dst[i] = dequant_u16(read_be_u16(src + i * 2u), 15);
         }
         return;
     }
 
     case ComponentFormat::S16: {
-        std::uint16_t tmp[3];
-        swap16_block(src, tmp, 3);
         for (std::size_t i = 0; i < 3; ++i) {
-            dst[i] = dequant_s16(tmp[i], 14);
+            dst[i] = dequant_s16(read_be_u16(src + i * 2u), 14);
         }
         return;
     }
