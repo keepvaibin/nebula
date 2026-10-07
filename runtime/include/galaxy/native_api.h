@@ -9887,11 +9887,13 @@ inline void psq_load(
     require_paired_single_mode(context, d_form, services, guest_pc);
     const std::uint32_t gqr = context->gqr[gqr_index];
     const std::uint32_t type = psq_load_type(gqr);
-    // Admit the entire instruction only in RAM. A partial mapping retains the
-    // ordered scalar path, including the first lane's effect before a fault.
+    // The host's complete fast-region capability is also what scalar accesses
+    // trust. Do not repeat fixed MEM1/MEM2 alias/size classification before it;
+    // the capability checks the actual span and includes locked-cache RAM.
+    // A partial mapping retains the ordered scalar path, including the first
+    // lane's effect before a fault.
     // Keep the existing bit conversion and lane assignment order.
-    if (type == 0u && !trace_fileloader_stack_enabled() &&
-        guest_flat_ram_span(address, one_element ? 4u : 8u)) {
+    if (type == 0u && !trace_fileloader_stack_enabled()) {
         if (const std::byte* direct = resolve_guest_fast(
                 memory, address, one_element ? 4u : 8u); direct != nullptr) {
             context->fpr_bits[target] = widen_f32_bits(
@@ -9902,7 +9904,7 @@ inline void psq_load(
             return;
         }
     }
-    // Type0 flat RAM needs neither quantized scale nor element-size dispatch.
+    // Type0 checked RAM needs neither quantized scale nor element-size dispatch.
     // Reserved-type faults still occur before the first scalar effect.
     const std::int32_t scale = psq_load_scale(gqr);
     const std::uint32_t element_size = psq_element_size(type, services, guest_pc);
@@ -9933,11 +9935,8 @@ inline void psq_store(
     require_paired_single_mode(context, d_form, services, guest_pc);
     const std::uint32_t gqr = context->gqr[gqr_index];
     const std::uint32_t type = psq_store_type(gqr);
-    const std::int32_t scale = psq_store_scale(gqr);
-    const std::uint32_t element_size = psq_element_size(type, services, guest_pc);
     if (type == 0u && !trace_fileloader_temp_writes_enabled() &&
-        !trace_u32_store_enabled() &&
-        guest_flat_ram_span(address, one_element ? 4u : 8u)) {
+        !trace_u32_store_enabled()) {
         if (std::byte* direct = resolve_guest_fast(
                 memory, address, one_element ? 4u : 8u); direct != nullptr) {
             const std::uint32_t first = byte_swap_u32(
@@ -9953,6 +9952,8 @@ inline void psq_store(
             return;
         }
     }
+    const std::int32_t scale = psq_store_scale(gqr);
+    const std::uint32_t element_size = psq_element_size(type, services, guest_pc);
     psq_store_element(
         memory,
         address,

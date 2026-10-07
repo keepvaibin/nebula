@@ -101,6 +101,15 @@ earlier accepted checkpoints are retained. The unrelated pre-existing
   whole configuration on every cache lookup. Eligible native mip generation
   still reads the live enhanced-mipmap option. Added an unrun live-option and
   distinct-resource check. No filtering choice or output dimensions changed.
+- **Paired-single memory admission:** type-zero PSQ loads/stores now use the
+  host's complete checked fast-region span directly instead of first repeating
+  fixed MEM1/MEM2 alias/dimension checks. That capability already owns scalar
+  access and locked-cache RAM; devices and partial mappings still take ordered
+  scalar transactions. Quantized size/scale dispatch follows the successful
+  type-zero store path. Per-lane publication, floating encodings, quantization,
+  mode faults and tracing remain. Extended the unrun literal PSQ oracle to
+  locked cache; existing callback-order, device and partial-lane fault checks
+  remain. Removed classifications are established by code; timing is unmeasured.
 
 For the sustained CPU candidates, contribution and milliseconds saved are
 **unmeasured**. Code inspection establishes removed work: one allocation per

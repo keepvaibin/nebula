@@ -1179,7 +1179,7 @@ bool test_psq_complete_ram_instruction() {
         0x8000000000000000ull, 0x7FF0000000000000ull,
         0xFFF0000000000000ull, 0x36A0000000000000ull, 0x7FF0000020000000ull};
     for (auto alias : {0u, 0x80000000u, 0xC0000000u,
-                       0x10000000u, 0x90000000u, 0xD0000000u}) {
+                       0x10000000u, 0x90000000u, 0xD0000000u, 0xE0000000u}) {
         for (bool one : {false, true}) {
             for (std::size_t index = 0u; index < single.size(); ++index) {
                 const auto next = (index + 1u) % single.size();
@@ -1221,8 +1221,9 @@ bool test_psq_complete_ram_instruction() {
                     }
                     passed &= expect(ram[byte] == expected, "PSQ admitted store has literal big-endian bytes and untouched guards");
                 }
-                passed &= expect(shared.load() == 3u && cpu == 3u,
-                    "PSQ admitted writes mark both sides of the 32-byte dirty boundary in both trackers");
+                const auto expected_dirty = alias == 0xE0000000u ? 0u : 3u;
+                passed &= expect(shared.load() == expected_dirty && cpu == expected_dirty,
+                    "PSQ admitted writes mark both sides of the RAM dirty boundary while locked cache stays outside RAM trackers");
             }
         }
     }
