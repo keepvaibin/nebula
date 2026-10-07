@@ -158,6 +158,25 @@ earlier accepted checkpoints are retained. The unrelated pre-existing
   settings. Added unrun settings-identity checks; actual descriptor reuse,
   option changes and graphics still require runtime validation. CPU cost and
   FPS saving are unmeasured.
+- **Snapshot range processing:** merge sorted dependency ranges in their owned
+  vector, retaining capacity instead of allocating a second vector and swapping
+  it in. Zero, nested, overlapping and adjacent ranges retain their coverage;
+  snapshot copying and detachment remain unchanged. Removed the second identical
+  dependency-parser invalidation in CPU-side frame submission: the preceding
+  dependency-cache invalidation already performs it. Worker mode retains its
+  ordered prepass. These remove one temporary allocation/copy pass per nonempty
+  normalization and one parser invalidation pass per CPU-owned submission.
+  Added unrun actual snapshot-content/ownership checks over reordered ranges,
+  both ownership forms and a union ending at 2^32.
+- **Immutable snapshot invalidation:** the existing opt-in ownership cache
+  now searches sorted/coalesced physical writes once per valid owned range,
+  normalizing its RAM alias once. Production callers already provide this
+  invariant. Extend the independent six-alias/edge overlap oracle to this cache,
+  including zero-sized entries and address-space ends. Work changes from up to
+  entries-times-writes comparisons to entries-times-log(writes), without changing
+  dirty bits, resource ownership or enabling the option. This path is disabled
+  by default. Both changes remain unbuilt/unrun; critical-path cost and elapsed
+  saving are unmeasured.
 
 For the sustained CPU candidates, contribution and milliseconds saved are
 **unmeasured**. Code inspection establishes removed work: one allocation per

@@ -890,14 +890,9 @@ void record_guest_memory_range(
 }
 
 void normalize_guest_memory_ranges(std::vector<GuestMemoryRange>& ranges) {
-    ranges.erase(
-        std::remove_if(
-            ranges.begin(),
-            ranges.end(),
-            [](const GuestMemoryRange& range) {
-                return range.size == 0u;
-            }),
-        ranges.end());
+    if (ranges.empty()) {
+        return;
+    }
     std::sort(
         ranges.begin(),
         ranges.end(),
@@ -905,26 +900,30 @@ void normalize_guest_memory_ranges(std::vector<GuestMemoryRange>& ranges) {
             return a.guest_base < b.guest_base ||
                 (a.guest_base == b.guest_base && a.size < b.size);
         });
-    std::vector<GuestMemoryRange> merged;
-    merged.reserve(ranges.size());
+    // Compact into the already owned vector. Output never passes the current
+    // input, so aliasing the read/write storage is safe and retains capacity.
+    std::size_t out = 0u;
     for (const GuestMemoryRange& range : ranges) {
-        const std::uint64_t begin = range.guest_base;
-        const std::uint64_t end = begin + range.size;
-        if (merged.empty()) {
-            merged.push_back(range);
+        if (range.size == 0u) {
             continue;
         }
-        GuestMemoryRange& tail = merged.back();
+        const std::uint64_t begin = range.guest_base;
+        const std::uint64_t end = begin + range.size;
+        if (out == 0u) {
+            ranges[out++] = range;
+            continue;
+        }
+        GuestMemoryRange& tail = ranges[out - 1u];
         const std::uint64_t tail_begin = tail.guest_base;
         const std::uint64_t tail_end = tail_begin + tail.size;
         if (begin <= tail_end) {
             const std::uint64_t merged_end = std::max(tail_end, end);
             tail.size = static_cast<std::uint32_t>(merged_end - tail_begin);
         } else {
-            merged.push_back(range);
+            ranges[out++] = range;
         }
     }
-    ranges.swap(merged);
+    ranges.resize(out);
 }
 
 std::uint64_t guest_memory_range_bytes(
@@ -3486,16 +3485,20 @@ std::shared_ptr<std::vector<std::byte>> GxBackend::acquire_immutable_range(
 
 void GxBackend::invalidate_immutable_range_cache(
     const std::vector<GuestWriteRange>& ranges) noexcept {
+    if (ranges.empty()) {
+        return;
+    }
     for (ImmutableRangeCacheEntry& entry : immutable_range_cache_) {
         if (!entry.valid) {
             continue;
         }
-        for (const GuestWriteRange& range : ranges) {
-            if (dependency_ranges_overlap(
-                    entry.guest_base, entry.size, range.guest_addr, range.size)) {
-                entry.valid = false;
-                break;
-            }
+        // Both production callers pass the same coalesced physical dirty
+        // ranges used by dependency invalidation. Normalize the owned alias
+        // once rather than checking every entry/write pair.
+        if (sorted_dirty_ranges_overlap(
+                std::span<const GuestWriteRange>{ranges},
+                normalize_dependency_guest_addr(entry.guest_base), entry.size)) {
+            entry.valid = false;
         }
     }
 }
@@ -5017,12 +5020,8 @@ FramePeCompletionToken GxBackend::render_frame(
         invalidate_immutable_range_cache(chunk.dirty_ranges);
     }
     invalidate_dirty_display_list_ranges(event_parser_, drained_dirty_ranges);
-    if (!worker_snapshot) {
-        // The renderer consumes its own chunk's dirty ranges in FIFO order.
-        // Applying later producer writes to that parser also held its mutex
-        // through earlier PSO creation and defeated detached snapshots.
-        invalidate_dirty_display_list_ranges(dependency_parser_, chunk.dirty_ranges);
-    }
+    // invalidate_dependency_range_cache above already invalidates the CPU-
+    // owned dependency parser. Worker mode does so in its ordered prepass.
     if (timing.pe_events_gpu_fence) {
         if (display_list_dirty_invalidate_enabled() && !worker_snapshot) {
             for (const GuestWriteRange& range : chunk.dirty_ranges) {

@@ -313,6 +313,15 @@ public:
 
     static bool dependency_invalidation_preserves_alias_and_edge_rules() {
         auto backend = std::make_unique<GxBackend>();
+        backend->immutable_range_cache_.resize(2u);
+        const auto arm_immutable = [&](std::uint32_t address, std::uint32_t size) {
+            backend->immutable_range_cache_[0] = {};
+            backend->immutable_range_cache_[0].guest_base = address;
+            backend->immutable_range_cache_[0].size = size;
+            backend->immutable_range_cache_[0].valid = true;
+            backend->immutable_range_cache_[1] = {};
+            backend->immutable_range_cache_[1].valid = true; // empty range
+        };
         // Literal physical interval oracle, independent of the overlap helper.
         // Cache shapes use any of the six RAM mappings; dirty ranges always
         // come from the physical tracker and are sorted/coalesced by callers.
@@ -337,10 +346,14 @@ public:
                             auto& entry = backend->dependency_range_cache_[0];
                             entry.valid = true;
                             entry.shape_ranges = {{alias + offset, size}, {alias + 0x8000u, 0u}};
+                            arm_immutable(alias + offset, size);
                             backend->invalidate_dependency_range_cache(writes);
+                            backend->invalidate_immutable_range_cache(writes);
                             const bool expected = static_cast<std::uint64_t>(dirty_begin) < end &&
                                 static_cast<std::uint64_t>(dirty_begin) + dirty_size > begin;
-                            if (entry.valid == expected) return false;
+                            if (entry.valid == expected ||
+                                backend->immutable_range_cache_[0].valid == expected ||
+                                !backend->immutable_range_cache_[1].valid) return false;
                         }
                     }
                 }
@@ -355,11 +368,50 @@ public:
         // A range ending at 2^32 must not wrap and overlap low RAM.
         entry.valid = true;
         entry.shape_ranges = {{0xFFFFFFE0u, 32u}};
+        arm_immutable(0xFFFFFFE0u, 32u);
         backend->invalidate_dependency_range_cache({{0u, 32u}, {0xFFFFFFF0u, 16u}});
-        if (entry.valid) return false;
+        backend->invalidate_immutable_range_cache({{0u, 32u}, {0xFFFFFFF0u, 16u}});
+        if (entry.valid || backend->immutable_range_cache_[0].valid) return false;
         entry.valid = true;
+        arm_immutable(0xFFFFFFE0u, 32u);
         backend->invalidate_dependency_range_cache({{0u, 32u}});
-        return entry.valid;
+        backend->invalidate_immutable_range_cache({{0u, 32u}});
+        return entry.valid && backend->immutable_range_cache_[0].valid;
+    }
+
+    static bool snapshot_range_merge_preserves_exact_owned_bytes() {
+        auto backend = std::make_unique<GxBackend>();
+        constexpr std::uint32_t base = 0x1000u;
+        std::array<std::byte, 256> bytes{};
+        for (unsigned i = 0u; i < bytes.size(); ++i) bytes[i] = static_cast<std::byte>(i);
+        GuestMemoryRegionV1 region{base, 256u, bytes.data()};
+        GuestMemoryV1 memory{}; memory.regions = &region; memory.region_count = 1u;
+        std::vector<GuestMemoryRange> ranges{{base + 64u, 32u}, {base + 16u, 16u},
+            {base + 24u, 16u}, {base + 40u, 24u}, {base + 128u, 8u},
+            {base + 136u, 8u}, {base + 16u, 8u}, {0xFFFFFFFFu, 0u}};
+        for (const bool immutable : {false, true}) {
+            for (unsigned permutation = 0u; permutation < ranges.size(); ++permutation) {
+                GxBackend::MemorySnapshot snapshot;
+                backend->capture_memory_snapshot(&memory, snapshot, ranges, true, immutable);
+                if (!snapshot.sealed || snapshot.regions.size() != 2u) return false;
+                // Independent union: [16,96) and [128,144), with no gaps copied.
+                const auto& first = snapshot.regions[0]; const auto& second = snapshot.regions[1];
+                if (first.guest_base != base + 16u || first.size != 80u ||
+                    second.guest_base != base + 128u || second.size != 16u ||
+                    first.host_base == bytes.data() + 16u || second.host_base == bytes.data() + 128u ||
+                    std::memcmp(first.host_base, bytes.data() + 16u, 80u) != 0 ||
+                    std::memcmp(second.host_base, bytes.data() + 128u, 16u) != 0) return false;
+                std::rotate(ranges.begin(), ranges.begin() + 1u, ranges.end());
+            }
+        }
+        // A union ending at 2^32 retains its last byte instead of wrapping.
+        region.guest_base = 0xFFFFFFE0u; region.size = 32u;
+        GxBackend::MemorySnapshot edge;
+        backend->capture_memory_snapshot(&memory, edge,
+            {{0xFFFFFFF0u, 16u}, {0xFFFFFFE0u, 20u}, {0u, 0u}}, true, false);
+        return edge.sealed && edge.regions.size() == 1u &&
+            edge.regions[0].guest_base == 0xFFFFFFE0u && edge.regions[0].size == 32u &&
+            std::memcmp(edge.regions[0].host_base, bytes.data(), 32u) == 0;
     }
 
     static bool dirty_writes_cover_both_ram_boundaries() {
@@ -1268,6 +1320,10 @@ int main() {
         std::cerr << "FAIL: could not establish deterministic snapshot settings\n";
         return 1;
     }
+
+    if (!expect(galaxy::gx::GxBackendMemorySnapshotTestAccess::
+        snapshot_range_merge_preserves_exact_owned_bytes(),
+        "range merge preserves sorted disjoint snapshot ownership across overlaps, zeros and u32 ends")) return 1;
 
     const NbtFixture fixture = make_shared_index_nbt_fixture();
     std::vector<std::byte> live_bytes(kRequiredArrayBytes);
