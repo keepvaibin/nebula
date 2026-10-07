@@ -368,6 +368,7 @@ private:
     [[nodiscard]] bool stage_packet_locked(
         InboundKind kind,
         std::uint64_t generation) noexcept;
+    void mark_outbound_dirty_page_worker(std::uint32_t page) noexcept;
     void mark_outbound_dirty_worker(
         std::uint32_t address,
         std::uint32_t size) noexcept;
