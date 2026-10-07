@@ -382,6 +382,35 @@ public:
         (void)cursor.take(draw_payload_size(vtxfmt, vertex_count));
     }
 
+    // Initial parsing validates every draw's extent. Cached replay verifies
+    // unchanged list bytes and VCD/VAT dependencies before offering these
+    // draw-only runs. This sink has no draw side effects; PE state commands
+    // remain separate and replay in their original order.
+    [[nodiscard]] bool on_cached_prepared_draw_run(
+        PrimitiveClass,
+        std::uint8_t,
+        std::span<const std::byte>,
+        std::size_t,
+        std::size_t,
+        std::uint8_t,
+        std::size_t) override {
+        return true;
+    }
+
+    [[nodiscard]] bool on_cached_packet_draw_run(
+        std::uint64_t,
+        std::size_t,
+        PrimitiveClass,
+        std::uint8_t,
+        std::span<const std::byte>,
+        std::size_t,
+        std::span<const CachedDrawPacket>,
+        std::uint32_t,
+        std::uint32_t,
+        std::span<const std::uint16_t>) override {
+        return true;
+    }
+
     void on_efb_copy(std::uint32_t) override {}
 
     void on_pe_finish() override {

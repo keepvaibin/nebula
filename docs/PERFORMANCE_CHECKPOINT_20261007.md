@@ -221,6 +221,22 @@ earlier accepted checkpoints are retained. The unrelated pre-existing
   This does not improve already cached texture hits or establish the dominant
   gameplay cost. No SIMD requirement, rendering effect or simulation change.
 
+- **Direct CPU PE-event parsing:** the simulation-thread event sink now accepts
+  already validated prepared/packet draw-only runs, matching the existing PE
+  preclassifier. Its draw callback only consumes vertex bytes and has no draw
+  side effects. Cached-list byte equality and VCD/VAT dependency checks still
+  run; initial/new/changed lists still validate every payload. BP/XF/CP commands,
+  one-shot BP masks, token/finish callbacks and their original order remain.
+  The render parser still executes the draws. This removes per-packet descriptor
+  decoding, size/cursor checks and simple-run reconstruction on direct-event
+  cache hits. Added an unrun check of the actual CPU-event path with point,
+  triangle, quad and strip runs, zero vertices, interleaved tokens/finish,
+  split CALL_DL capture, changed VCD and malformed changed bytes. Profile
+  counters in that check verify both cached-run routes are exercised. This
+  helps only the direct simulation-thread event scan, not worker PE
+  preclassification (which already had this path). Its critical-path cost and
+  saving remain unmeasured; no event delivery or synchronization is deferred.
+
 For the sustained CPU candidates, contribution and milliseconds saved are
 **unmeasured**. Code inspection establishes removed work: one allocation per
 eligible display-list lookup/capture, fewer decode-cache misses, variable vertex

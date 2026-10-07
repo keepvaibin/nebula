@@ -154,6 +154,115 @@ struct MemorySnapshotNbtProbeResult {
 
 class GxBackendMemorySnapshotTestAccess {
 public:
+    static bool direct_pe_cached_draw_runs_preserve_events() {
+        constexpr std::uint32_t address = 0x00002000u;
+        for (const auto primitive : {PrimitiveClass::Points,
+                 PrimitiveClass::Triangles, PrimitiveClass::Quads,
+                 PrimitiveClass::TriangleStrip}) {
+            std::vector<std::byte> list;
+            const auto draw = [&](std::uint16_t count) {
+                list.push_back(static_cast<std::byte>(
+                    static_cast<std::uint8_t>(primitive) << 3u));
+                append_be_u16(list, count);
+                for (std::uint32_t i = 0; i < count * 2u; ++i) {
+                    list.push_back(static_cast<std::byte>((i * 13u) & 0xFFu));
+                }
+            };
+            const auto bp_write = [&](std::uint8_t reg, std::uint32_t value) {
+                list.push_back(std::byte{op::kLoadBpReg});
+                append_be_u32(list, (static_cast<std::uint32_t>(reg) << 24u) | value);
+            };
+            const std::uint16_t count = primitive == PrimitiveClass::Quads ? 4u : 3u;
+            draw(count);
+            draw(static_cast<std::uint16_t>(count * 2u));
+            bp_write(bp::kPeToken, 0x1234u);
+            draw(0u);
+            draw(count);
+            bp_write(bp::kPeDone, 2u);
+            // Preserve BP's one-shot mask and both interrupt modes between runs.
+            bp_write(0xFEu, 0x00FFu);
+            bp_write(bp::kPeToken, 0xABCDu);  // existing 0x1234 -> 0x12CD
+            bp_write(bp::kPeTokenInt, 0x5678u);
+
+            GuestMemoryRegionV1 region{address,
+                static_cast<std::uint32_t>(list.size()), list.data()};
+            GuestMemoryV1 memory{};
+            memory.region_count = 1u;
+            memory.regions = &region;
+            std::vector<std::uint32_t> events;
+            NativeServicesV1 services{};
+            services.user = &events;
+            services.gx_pe_finish = [](void* user) {
+                static_cast<std::vector<std::uint32_t>*>(user)->push_back(0x20000u);
+            };
+            services.gx_pe_token = [](void* user, std::uint16_t token, bool interrupt) {
+                static_cast<std::vector<std::uint32_t>*>(user)->push_back(
+                    token | (interrupt ? 0x10000u : 0u));
+            };
+            const std::vector<std::uint32_t> expected{
+                0x1234u, 0x20000u, 0x12CDu, 0x15678u};
+            FifoParserProfile profile{};
+            auto backend = std::make_unique<GxBackend>();
+            backend->event_parser_.set_profile(&profile);
+            std::vector<std::byte> setup;
+            append_cp_write(setup, cp::kVcdLo,
+                static_cast<std::uint32_t>(VcdType::Direct) << 9u);
+            // Direct U8 XY position: exactly two payload bytes per vertex.
+            append_cp_write(setup, cp::kVatABase, 0u);
+            backend->scan_pe_events_on_sim_thread(
+                setup.data(), setup.size(), &memory, &services);
+            std::vector<std::byte> call;
+            append_call_dl(call, address, static_cast<std::uint32_t>(list.size()));
+            for (unsigned round = 0; round < 3u; ++round) {
+                events.clear();
+                if (round == 2u) {
+                    backend->scan_pe_events_on_sim_thread(
+                        call.data(), 4u, &memory, &services);
+                    if (!events.empty()) return false;
+                    backend->scan_pe_events_on_sim_thread(
+                        call.data() + 4u, call.size() - 4u, &memory, &services);
+                } else {
+                    backend->scan_pe_events_on_sim_thread(
+                        call.data(), call.size(), &memory, &services);
+                }
+                if (events != expected || !backend->event_pending_fifo_.empty()) {
+                    return false;
+                }
+            }
+            const bool packet_only = primitive == PrimitiveClass::TriangleStrip;
+            if (profile.call_dl_cache_hits != 2u ||
+                profile.call_dl_replay_prepared_run_count != (packet_only ? 0u : 4u) ||
+                profile.call_dl_replay_packet_run_count != (packet_only ? 4u : 0u)) {
+                return false;
+            }
+            // Different VCD with the same two-byte stride still requires cold
+            // validation and a separate cache entry, not trust in the old run.
+            backend->event_state_.load_cp(cp::kVcdLo,
+                static_cast<std::uint32_t>(VcdType::Index16) << 9u);
+            events.clear();
+            backend->scan_pe_events_on_sim_thread(
+                call.data(), call.size(), &memory, &services);
+            if (events != expected || profile.call_dl_cache_hits != 2u ||
+                profile.call_dl_cache_stores != 2u) {
+                return false;
+            }
+            // Changed bytes must invalidate the trusted run and revalidate the
+            // first draw before emitting any later token/finish callbacks.
+            events.clear();
+            list[1] = std::byte{0xFF};
+            list[2] = std::byte{0xFF};
+            bool rejected = false;
+            try {
+                backend->scan_pe_events_on_sim_thread(
+                    call.data(), call.size(), &memory, &services);
+            } catch (const GxFatalError&) {
+                rejected = true;
+            }
+            if (!rejected || !events.empty()) return false;
+        }
+        return true;
+    }
+
     static bool dependency_cache_rejects_fifo_fingerprint_collision() {
         auto backend = std::make_unique<GxBackend>();
         GuestMemoryV1 memory{};
@@ -1386,6 +1495,10 @@ int main() {
     memory.cpu_dirty_page_word_count = 1u;
 
     bool ok = true;
+    ok = expect(
+             galaxy::gx::GxBackendMemorySnapshotTestAccess::
+                 direct_pe_cached_draw_runs_preserve_events(),
+             "direct PE cached runs changed event order, masks or truncation checks") && ok;
     ok = expect(
              galaxy::gx::GxBackendMemorySnapshotTestAccess::
                  decoded_vertex_keys_track_only_consumed_state(),
