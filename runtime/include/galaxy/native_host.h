@@ -889,12 +889,31 @@ public:
 
     // Filled by the WGPIPE write intercept.
     const std::vector<std::byte>& gx_fifo_data() const { return gx_fifo_; }
-    // Moves the completed FIFO epoch out. A fresh vector is installed before any
+    // Moves the completed FIFO epoch out and installs a fresh vector before any
     // render wait or guest interrupt can unwind the stack, so later WGPIPE writes
     // cannot mutate the captured frame.
+    //
+    // `std::move` leaves `gx_fifo_` with no buffer at all, so the `clear()` this
+    // used to be followed by could not restore any capacity: every frame
+    // restarted from capacity 0 and the WGPIPE/CP-ring `insert` sites regrew
+    // geometrically from scratch — roughly a dozen reallocations and about twice
+    // the payload in copied bytes per ~41 KB frame, repeated for all ~7500
+    // submissions in a session. Swap in a retained spare buffer instead: O(1),
+    // no copy, and no allocation at all in the steady state. Retained capacity is
+    // capped so one large scene-load frame cannot pin an arbitrarily large buffer
+    // for the rest of the session; past the cap the spare is simply dropped and
+    // the next frame grows on demand, which is the old behaviour.
     std::vector<std::byte> take_gx_fifo() {
-        std::vector<std::byte> captured = std::move(gx_fifo_);
-        gx_fifo_.clear();
+        constexpr std::size_t kRetainedFifoCapacityBytes = 256u * 1024u;
+        std::vector<std::byte> captured;
+        swap(captured, gx_fifo_);
+        if (captured.capacity() > kRetainedFifoCapacityBytes) {
+            return captured;
+        }
+        // gx_fifo_ now holds the previous spare (empty on the first call). Hand
+        // this frame's buffer to the spare slot and give gx_fifo_ the old spare,
+        // so exactly one spare allocation is kept alive and neither side regrows.
+        swap(gx_fifo_, gx_fifo_spare_);
         return captured;
     }
     void clear_gx_fifo() { gx_fifo_.clear(); }
@@ -1582,6 +1601,9 @@ private:
     std::uint64_t disc_read_ticket_sequence_ = 0;
     std::unordered_map<std::uint32_t, DiscReadTicket> disc_read_tickets_;
     std::vector<std::byte> gx_fifo_;
+    // Retained spare backing buffer for take_gx_fifo(). Empty until the first
+    // FIFO epoch is taken; bounded by the cap in take_gx_fifo().
+    std::vector<std::byte> gx_fifo_spare_;
     // CP FIFO ring simulation. When the game writes the CP write pointer
     // (0x0C000034/36), the new bytes are copied from MEM1 into gx_fifo_ without
     // real CP DMA.
@@ -1654,10 +1676,30 @@ private:
     bool cpu_fifo_wrap_{false};
     std::array<std::byte, 32> wgpipe_gather_{};
     std::uint32_t wgpipe_gather_count_{0};
+    // Cumulative bytes copied out of the emulated CP FIFO ring. Replaces a
+    // function-local `static` whose only reader asked whether this was the first
+    // advance, so the whole thing costs one member load instead of a
+    // thread-safe-initialisation guard per advance.
+    std::uint64_t cp_ring_bytes_total_{0};
     static constexpr std::size_t kWgpipePeTraceCapacity = 512u;
     static constexpr std::size_t kWgpipeOwnershipTraceCapacity = 8192u;
     bool wgpipe_pe_scan_hint_enabled_{};
     bool wgpipe_pe_ownership_trace_enabled_{};
+    // `GALAXY_PROFILE_WGPIPE` and `GALAXY_DIRECT_WGPIPE_PE_EVENTS` are
+    // launch-time switches, but every guest GX command word and every vertex
+    // byte reaches write_wgpipe_bytes(). Evaluating them through a
+    // function-local `static` costs a thread-safe-initialisation guard
+    // (one acquire load + test + branch) and, for the flag reader itself, a
+    // getenv_s CRT call on *every* write. Resolve both once here and let the
+    // hot path read a plain bool member.
+    bool wgpipe_profile_enabled_{};
+    bool direct_wgpipe_pe_events_{};
+    // `GALAXY_TRACE_GX_FIFO_APPEND_PATTERN`. `trace_gx_fifo_append` is called
+    // once per WGPIPE write and once per CP-ring advance, and its gate used to be
+    // a function-local `static` that ran `read_env_flag` — so every one of those
+    // calls paid a thread-safe-initialisation guard, and the gate itself was an
+    // out-of-line call. Resolved once here.
+    bool trace_gx_fifo_append_enabled_{};
     std::array<std::uint8_t, 5> wgpipe_pe_ownership_recent_bytes_{};
     std::uint32_t wgpipe_pe_ownership_recent_count_{};
     std::uint64_t wgpipe_pe_ownership_trace_sequence_{};
@@ -1701,6 +1743,26 @@ private:
     std::uint64_t ai_dma_next_interrupt_ticks_{};
     std::uint64_t ai_dma_interrupt_pending_since_ticks_{};
     std::uint64_t ai_dma_last_duration_ticks_{};
+    // STRUCTURALLY INERT — both fields are zero-initialised and NOTHING WRITES
+    // THEM. Verified: `++`/`+=` on either name appears 0 times across
+    // `runtime/src/*.cpp`, `runtime/src/gx/*.cpp` and the headers; no `=`
+    // assignment either; no `resync` logic exists anywhere in `runtime/`; and
+    // the names are unchanged since the initial public snapshot commit.
+    //
+    // So the getters below can only ever return 0, and the benchmark report
+    // prints that 0 as `ai-dma-resync-events=` / `ai-dma-resync-missed-buffers=`.
+    // READ IT AS "NOT MEASURED", NOT AS "NO PROBLEM". Note the report prints
+    // `ai-dma-missed-buffer-estimate` immediately beside them, and THAT one is
+    // live — which makes the inert pair easy to mistake for a second, agreeing
+    // signal.
+    //
+    // Consequence for tests: `native_host_tests.cpp` asserts both are `== 0`
+    // under messages about catch-up not resyncing. Those assertions are
+    // TAUTOLOGIES and would pass in a build that resynced on every buffer.
+    //
+    // Deliberately NOT wired up: nothing in the tree defines what a resync event
+    // is, so incrementing them would mean inventing the semantic. Either define
+    // the condition and count it, or delete the pair and its assertions.
     std::uint64_t ai_dma_resync_events_{};
     std::uint64_t ai_dma_resync_missed_buffers_{};
     std::uint64_t ai_dma_notified_deadline_ticks_{};

@@ -62,6 +62,7 @@
 #include <memory>
 #include <mutex>
 #include <thread>
+#include <type_traits>
 #include <unordered_map>
 #include <vector>
 
@@ -149,12 +150,51 @@ private:
     FifoParser parser_{};
     std::vector<std::byte> pending_fifo_;
     std::vector<FramePeEventSignature>* active_events_ = nullptr;
+    // Memo for draw_payload_size(). This classifier runs a second full pass over
+    // the same command stream, and the parser calls draw_payload_size once per
+    // draw to validate that the whole payload is present before it invokes
+    // on_draw — on a replayed display list that is tens of thousands of calls
+    // per frame into a ~30-arm switch walk. The vertex layout is fully described
+    // by CP VCD_LO/VCD_HI and the per-format VAT A/B/C registers, and this sink
+    // shares the parser's GxState, so comparing those five words is an exact
+    // test of whether the remembered stride still applies.
+    struct VtxPayloadStrideMemo {
+        bool valid = false;
+        std::uint32_t vcd_lo = 0u;
+        std::uint32_t vcd_hi = 0u;
+        std::uint32_t vat_a = 0u;
+        std::uint32_t vat_b = 0u;
+        std::uint32_t vat_c = 0u;
+        std::size_t stride = 0u;
+    };
+    mutable std::array<VtxPayloadStrideMemo, 8> vtx_payload_stride_memo_{};
 };
 
 [[nodiscard]] std::uint32_t pack_sampler_key(
     const TexMode& mode,
     bool generated_mips,
     std::uint8_t mip_levels) noexcept;
+
+// FNV-1a step over one 64-bit value. The 32-bit FNV prime is *not* invertible
+// modulo 2^64, so a per-byte recurrence cannot be folded into this; a
+// multi-byte step is a different (still FNV-1a shaped) hash, not a rewrite of
+// the same one. That is fine because these hash operators feed unordered_map
+// buckets only: the keys' operator== stays the sole arbiter of identity, and
+// hashing is transparent to the containers. The reason to prefer it is cost:
+// the byte-at-a-time form ran 8 iterations of {xor, 64-bit multiply} for every
+// 8-byte value, and the binding table hashes ~41 such values, i.e. ~330
+// dependent multiply iterations per call.
+//
+// mix64 keeps the classic FNV-1a constants but consumes a whole word per step.
+// The caller seeds the accumulator with kFnvOffsetBasis; mix64 never inspects
+// the accumulator, so a zero value in the middle of a key cannot restart the
+// chain.
+inline constexpr std::uint64_t kMix64OffsetBasis = 1469598103934665603ull;
+inline constexpr std::uint64_t kMix64Prime = 1099511628211ull;
+
+[[nodiscard]] inline std::uint64_t mix64(std::uint64_t hash, std::uint64_t value) noexcept {
+    return (hash ^ value) * kMix64Prime;
+}
 
 class GxBackend final : public FifoSink {
 public:
@@ -343,6 +383,12 @@ private:
         bool lhs_indexed,
         bool rhs_indexed) noexcept;
     void flush_pending_draw_batch();
+    // Routine, clock-free shader/PSO cache-coverage report; prints only when the
+    // on-disk coverage actually changed. Called once per frame from the
+    // end-of-frame cache-persistence block. See the definition for why it exists.
+    void ReportPipelineCoverage();
+    std::size_t last_reported_shader_records_ = 0;
+    std::size_t last_reported_pso_records_ = 0;
     void on_cached_draw_run_draw(
         PrimitiveClass primitive,
         std::uint8_t vtxfmt,
@@ -379,6 +425,9 @@ private:
         // callback/source pointer into live guest state has been detached.
         // Region host pointers then refer exclusively to `storage` bytes.
         bool sealed = false;
+        // Certificate for these exact, frozen region bytes; never implies
+        // that generic/live guest views have sorted or disjoint mappings.
+        bool regions_disjoint_sorted = false;
     };
 
     struct GuestWriteRange {
@@ -604,6 +653,7 @@ private:
 
     // Valid only inside render_frame_on_thread (parser callbacks need them).
     GuestMemoryV1* frame_memory_ = nullptr;
+    bool frame_memory_regions_disjoint_sorted_ = false;
     DependencyEventSink* frame_dependency_event_sink_ = nullptr;
     const NativeServicesV1* frame_services_ = nullptr;
     std::vector<PeEvent>* frame_pe_events_ = nullptr;
@@ -619,6 +669,51 @@ private:
     std::condition_variable queue_cv_;        // consumer: work or stop
     std::condition_variable queue_space_cv_;  // producer: slot free
     std::deque<FrameChunk> frame_queue_;
+    // Recycled per-frame chunk buffers. The point of these pools is to avoid
+    // re-allocating a buffer every frame, which a *bounded* number of retained
+    // buffers does just as well as an unbounded one: the queue depth is capped
+    // by the in-flight accounting above, so only a handful can ever be handed
+    // out at once. Retaining more than that keeps each rejected buffer's peak
+    // capacity alive for the rest of the session, and those peaks are large --
+    // a delta snapshot's `storage` holds one heap block per scanned dependency
+    // range, and a single scanned frame can request well over a megabyte. An
+    // uncapped pool therefore grows with frames *processed*, not with frames in
+    // flight: the Arc recording's working set climbed from 1.0 GB to 6.3 GB
+    // over one 372 s session while the RTX 5090 session of the same content
+    // stayed near 1.3 GB.
+    //
+    // The cap is deliberately generous relative to the queue depth -- the
+    // largest legitimate steady-state pool is bounded by
+    // `GxTimingConfig::render_queue_depth` plus the one chunk the consumer is
+    // holding, so a handful of retained buffers is already more than can be
+    // handed out at once and this only drops buffers that could never be reused
+    // anyway.
+    //
+    // `render_queue_depth` defaults to 3 but is operator-selectable up to 8
+    // (`GALAXY_RENDER_QUEUE_DEPTH`; see resolve_gx_timing_config_from_environment).
+    // At depth 8 the worst case is 8 queued plus 1 held by the render thread = 9
+    // outstanding, so a cap of 8 would silently discard the ninth buffer and put
+    // the producer back on a fresh allocation every frame -- the exact behaviour
+    // this bound exists to avoid, without the unbounded growth. 2x the maximum
+    // selectable depth (8) plus the consumer's held chunk (1) is 17, so 24 keeps
+    // a deliberate margin above that. The pool is still bounded, so it cannot
+    // regrow with frames processed.
+    static constexpr std::size_t kChunkPoolRetainedBuffers = 24u;
+    // Maximum depth an operator may select. Kept here, next to the pool it
+    // sizes, so the two cannot drift apart silently: raising one without the
+    // other is exactly the bug this assert was written to catch.
+    static constexpr std::size_t kMaxSelectableRenderQueueDepth = 8u;
+    static_assert(
+        kChunkPoolRetainedBuffers >= 2u * kMaxSelectableRenderQueueDepth + 1u,
+        "chunk pool must retain at least twice the maximum selectable "
+        "GALAXY_RENDER_QUEUE_DEPTH plus the consumer's held chunk, or a legal "
+        "queue depth silently forces a re-allocation every frame");
+    // The pools themselves. `gx_backend.cpp` clears them in teardown, pops a
+    // recycled buffer when building a chunk, and pushes one back after the
+    // consumer releases it (three sites, all guarded by
+    // kChunkPoolRetainedBuffers). These declarations are load-bearing: their
+    // removal while those uses remain is a compile error, which is how this was
+    // caught.
     std::vector<std::vector<std::byte>> fifo_pool_;
     std::vector<std::vector<GuestMemoryRange>> memory_range_pool_;
     std::vector<MemorySnapshot> memory_snapshot_pool_;
@@ -701,9 +796,24 @@ private:
         // Dirty-page invalidation is the cheap first line of defence. Keep an
         // immutable copy of every indirect vertex-array byte as well so a
         // missed/coalesced notification can never replay stale decoded
-        // geometry. Cache hits compare these bytes before uploading vertices.
+        // geometry. A cache hit compares these bytes before uploading vertices
+        // -- but only once per dirty-notification generation, not once per hit.
+        // A key replayed thousands of times in one frame would otherwise pay the
+        // full snapshot compare thousands of times, and no guest write can be
+        // observed between the generation bump (which happens before the first
+        // replay of the frame) and the end of the frame.
         std::vector<GuestDependencySnapshot> guest_array_snapshots;
+        // `decoded_packet_run_generation_` value at which `guest_array_snapshots`
+        // was last proven equal to live guest memory. See the match function.
+        std::uint64_t validated_generation = 0;
     };
+    // Bumped once per batch of guest-write notifications, before any display
+    // list is replayed for that frame. An entry whose `validated_generation`
+    // equals the current value has already had its snapshots compared against
+    // live guest memory since the last write was applied, so repeating the byte
+    // compare on every replay of the same key in that frame cannot change the
+    // answer. Never reset to the value an existing entry holds.
+    std::uint64_t decoded_packet_run_generation_ = 1;
 
     [[nodiscard]] DecodedPacketRunCacheKey decoded_packet_run_cache_key(
         std::uint64_t cache_token,
@@ -717,12 +827,21 @@ private:
         std::size_t byte_budget,
         std::vector<DecodedPacketRunCacheEntry::GuestDependencySnapshot>&
             snapshots,
-        std::size_t& captured_bytes);
+        std::size_t& captured_bytes,
+        bool regions_disjoint_sorted = false);
+    // Returns true when the snapshots still describe live guest memory.
+    // `entry_generation` is compared against `current_generation`: when they are
+    // equal and non-zero, this entry was already validated after the most recent
+    // guest write batch and the byte compare is skipped. `new_generation`
+    // receives the non-zero generation the caller may record on success.
     [[nodiscard]] static bool decoded_packet_run_dependencies_match(
         GuestMemoryV1* memory,
+        std::uint64_t entry_generation,
+        std::uint64_t current_generation,
         const std::vector<
-            DecodedPacketRunCacheEntry::GuestDependencySnapshot>& snapshots)
-        noexcept;
+            DecodedPacketRunCacheEntry::GuestDependencySnapshot>& snapshots,
+        std::uint64_t& new_generation,
+        bool regions_disjoint_sorted = false) noexcept;
     void prune_decoded_packet_run_cache();
 
     static constexpr std::size_t kDecodedPacketRunCacheMaxBytes =
@@ -765,7 +884,17 @@ private:
         kDirtyTrackedSize >> kDirtyPageShift;
     static constexpr std::size_t kDirtyPageWordCount =
         (kDirtyPageCount + 63u) / 64u;
+    // Two-level bitmap. `dirty_page_words_` holds one bit per 32-byte guest
+    // page (1 MiB of bitmap); `dirty_word_summary_` holds one bit per word of
+    // that bitmap. Producers set the summary bit whenever they publish a page
+    // bit, so end-of-frame draining can skip entire groups of empty words
+    // instead of loading every one of the 131,072 bitmap words.
+    static constexpr std::size_t kDirtyWordSummaryCount =
+        (kDirtyPageWordCount + 63u) / 64u;
+    static constexpr std::uint64_t kDirtyFullWord = ~std::uint64_t{0};
     std::array<std::atomic_uint64_t, kDirtyPageWordCount> dirty_page_words_{};
+    std::array<std::atomic_uint64_t, kDirtyWordSummaryCount>
+        dirty_word_summary_{};
 
     // Cached per-draw bindings, rebuilt when the matching dirty bit fires.
     PixelShaderKey ps_key_{};
@@ -777,6 +906,40 @@ private:
     PsoKey current_pso_key_{};
     bool current_pso_key_valid_ = false;
     ID3D12PipelineState* current_pipeline_ = nullptr;
+    // Frame-scoped memo of recent (PsoKey -> pipeline) resolutions. Busy SMG
+    // frames run 1k-36k draws through flush_draw_state, and a busy frame's key
+    // set runs to hundreds of distinct material variants, so the same keys are
+    // resolved many times per frame. PipelineCache::published_ is mutated only
+    // on this render thread (from get() here, and from drain_completions() in
+    // begin_frame(), which runs before any draw), so a result resolved inside
+    // this frame cannot change for the rest of the frame. This is therefore a
+    // pure redundant-lookup elision: it never substitutes a different pipeline
+    // and never skips a draw. Invalidated wholesale at begin_frame().
+    //
+    // Direct-mapped on the memoized key hash rather than a linear scan. The
+    // probe is the frame's hottest single operation -- one per PSO resolution,
+    // tens of thousands per frame -- so its cost has to be a constant, and the
+    // table has to be big enough to still hold the frame's working set. An
+    // 8-entry LRU scan was neither: it walked up to 8 entries (valid test, null
+    // test, 32-byte key compare each) and evicted almost everything a busy
+    // frame touches. Indexing by `MemoizedPsoKey::hash` makes the common case
+    // one indexed read, one 64-bit compare and one exact 32-byte confirm, so a
+    // collision still falls through to the full resolution rather than
+    // returning a wrong pipeline.
+    static constexpr std::size_t kPipelineMemoSlots = 512u;
+    static_assert(
+        (kPipelineMemoSlots & (kPipelineMemoSlots - 1u)) == 0u,
+        "the memo index masks the low hash bits, so the slot count is a power of two");
+    static constexpr std::size_t kPipelineMemoMask = kPipelineMemoSlots - 1u;
+    struct PipelineMemoEntry {
+        std::uint64_t hash = 0u;
+        ID3D12PipelineState* pipeline = nullptr;
+        PsoKey key{};
+    };
+    std::array<PipelineMemoEntry, kPipelineMemoSlots> pipeline_memo_{};
+    // Hash of `current_pso_key_`, kept beside it so the memo probe never
+    // re-derives the fold for a key it already hashed once.
+    std::uint64_t current_pso_key_hash_ = 0u;
     D3D12_GPU_VIRTUAL_ADDRESS current_vs_constants_ = 0;
     D3D12_GPU_VIRTUAL_ADDRESS current_ps_constants_ = 0;
     D3D12_GPU_DESCRIPTOR_HANDLE current_texture_table_{};
@@ -784,6 +947,27 @@ private:
     D3D12_GPU_VIRTUAL_ADDRESS current_matrix_palette_ = 0;
     bool matrix_palette_stale_ = true;
     bool inline_matrices_stale_ = true;
+    // Which 32-word chunks of the XF matrix palette have already been
+    // snapshotted into this frame slot's matrix ring. Armed exactly like
+    // `matrix_palette_stale_` (cleared on the frame-slot rewind and on the
+    // session reset) and filled in as each snapshot lands.
+    //
+    // Its one consumer is the reuse decision in `flush_draw_state`: if the
+    // palette has not moved since the snapshot, the existing
+    // `current_matrix_palette_` address is reused and no ring allocation is
+    // made. It does **not** limit how much is copied -- a fresh allocation needs
+    // the complete palette, head and tail included, because the ring segment it
+    // lands in has no inherited contents. See `GxState::xf_palette_dirty()`.
+    static constexpr std::uint64_t xf_palette_chunk_mask =
+        (std::uint64_t{1}
+         << GxState::kMatrixPaletteChunkCount) - 1u;
+    static_assert(
+        GxState::kMatrixPaletteChunkCount < 64u,
+        "palette dirty bitmap is one 64-bit word");
+    static_assert(
+        GxState::kMatrixPaletteWords % GxState::kMatrixPaletteChunkWords == 0u,
+        "palette chunks must tile the palette exactly");
+    std::uint64_t xf_palette_valid_ = 0u;
     // Upload/descriptor-ring handles are frame-slot-local. Rebuild them on
     // the first draw after begin_frame(), even when GX register state did not
     // change. EFB copies can also replace a guest-address texture alias
@@ -791,14 +975,51 @@ private:
     bool frame_bindings_dirty_ = true;
     bool texture_bindings_dirty_ = true;
     std::uint8_t current_texture_map_mask_ = 0;
+    // `sampled_texture_map_mask(state_)` is a pure function of GenMode, the
+    // per-stage TEV order registers and the indirect-command / IND_REF
+    // registers. Every BP write that can move any of those sets kDirtyTev
+    // (GxState::load_bp: GenMode, TEV order, IND_CMD, and RAS1_SS0..IND_REF all
+    // do), so the result only needs recomputing when a flush's dirty mask
+    // contains kDirtyTev. A busy replayed display list re-uploads matrices per
+    // object with kDirtyXfMatrices alone, which cannot change the mask.
+    // Invalidated wherever the guest BP register file is reset.
+    bool current_texture_map_mask_valid_ = false;
     mutable std::array<VertexLayoutCacheEntry, 8> vertex_layout_cache_{};
 
     struct TextureBindingKey {
         std::array<std::uint32_t, kMaxTextureMaps * 5u> regs{};
         std::uint8_t map_mask = 0;
 
-        [[nodiscard]] bool operator==(const TextureBindingKey&) const =
-            default;
+        // Field-wise comparison, deliberately NOT the byte-wise
+        // key_bytes_equal form the shader keys use.
+        //
+        // The decisive reason is the hash, not the padding. TextureBindingKeyHash
+        // below is FIELD-WISE: it mixes `map_mask` and then each element of
+        // `regs`. Equality must partition the same way the hash does. This struct
+        // is 164 bytes with 4-byte alignment and ends in a 1-byte `map_mask`, so
+        // it carries 3 bytes of trailing padding that no member covers; a
+        // byte-wise `==` folds those padding bytes into the answer while the hash
+        // does not. Two keys with identical members can then hash equal and
+        // compare UNEQUAL, which is a broken std::unordered_map contract, not
+        // merely a missed cache: the entry becomes unreachable and the lookup
+        // degrades to a miss (or an unnecessary descriptor-table rebuild) for a
+        // key that is already present.
+        //
+        // The previous comment justified the byte form on construction-path
+        // grounds ("every member is value-initialised, so padding is zero"). That
+        // is true of the aggregate-initialisation path and is still not enough:
+        // it makes the padding *usually* zero rather than *always* determinate,
+        // and it does nothing about the hash mismatch above. Field-wise equality
+        // needs neither argument.
+        //
+        // Cost is unchanged in practice: `std::array::operator==` is element-wise
+        // and the compiler lowers it to the same linear vector compare the memcmp
+        // produced, not the dependent compare-and-branch chain the original
+        // comment described.
+        [[nodiscard]] bool operator==(const TextureBindingKey& other) const
+            noexcept {
+            return regs == other.regs && map_mask == other.map_mask;
+        }
     };
     struct TextureHandleKey {
         std::uint32_t guest_addr = 0;
@@ -828,6 +1049,10 @@ private:
     void clear_texture_binding_table_cache();
     TextureBindingKey current_texture_binding_key_{};
     bool current_texture_binding_key_valid_ = false;
+    // Sampled map mask that produced current_texture_binding_key_. A map-mask
+    // change alone must force a new capture even when no texture BP register
+    // moved, so the key stays an exact function of its inputs.
+    std::uint8_t current_texture_binding_key_mask_ = 0;
 
     struct TextureBindingDependency {
         std::uint32_t guest_addr = 0;
@@ -856,24 +1081,55 @@ private:
         std::array<std::uint16_t, kMaxTextureMaps> heights{};
         std::uint8_t map_mask = 0;
 
-        [[nodiscard]] bool operator==(const TextureTableKey&) const = default;
+        // Field-wise, for exactly the reason given on TextureBindingKey above:
+        // TextureTableKeyHash is field-wise (map_mask then every element of
+        // resources/srv_indices/widths/heights), so equality must be too. This
+        // struct is 136 bytes with 8-byte alignment and ends in a 1-byte
+        // `map_mask`, so it carries 7 bytes of trailing padding that a byte-wise
+        // `==` would fold into the answer while the hash does not.
+        [[nodiscard]] bool operator==(const TextureTableKey& other) const
+            noexcept {
+            return resources == other.resources &&
+                srv_indices == other.srv_indices &&
+                widths == other.widths &&
+                heights == other.heights &&
+                map_mask == other.map_mask;
+        }
     };
+    // Both keys above compare FIELD-WISE, matching their field-wise hashes. The
+    // size assertions below pin the exact layout — including the trailing
+    // `+4`/`+8` tail padding after `map_mask` that the layout necessarily
+    // produces — so a future field cannot silently change the struct these keys
+    // are looked up by. They are layout guards, not a licence to compare bytes.
+    //
+    // NOTE: `std::has_unique_object_representations_v` is deliberately NOT
+    // asserted here, and cannot be. That trait is false for *any* type with
+    // padding, and both of these keys have trailing padding by construction: the
+    // `+4`/`+8` in the size assertions below is exactly that padding. The trait
+    // holds in `shader_keys.h` only because `PixelShaderKey`, `VertexShaderKey`,
+    // `RenderStateKey` and `PsoKey` are explicitly padding-free there.
+    //
+    // That asymmetry is precisely why these two keys must not use the shader
+    // keys' byte-wise `key_bytes_equal`: with padding present it folds bytes the
+    // field-wise hash never saw into the equality answer, so two equal keys can
+    // hash equal and compare unequal. The trait failing here was the compiler
+    // saying so, and the earlier `key_bytes_equal` form did not compile.
+    static_assert(sizeof(TextureBindingKey) ==
+                  kMaxTextureMaps * 5u * sizeof(std::uint32_t) + 4u);
+    static_assert(sizeof(TextureTableKey) ==
+                  kMaxTextureMaps *
+                          (sizeof(std::uintptr_t) + sizeof(std::uint32_t) +
+                           sizeof(std::uint16_t) + sizeof(std::uint16_t)) +
+                      8u);
     struct TextureTableKeyHash {
         [[nodiscard]] std::size_t operator()(
             const TextureTableKey& key) const noexcept {
-            std::uint64_t hash = 1469598103934665603ull;
-            const auto mix = [&hash](std::uint64_t value) {
-                for (unsigned byte = 0; byte < 8; ++byte) {
-                    hash ^= (value >> (byte * 8u)) & 0xFFu;
-                    hash *= 1099511628211ull;
-                }
-            };
-            mix(key.map_mask);
+            std::uint64_t hash = mix64(kMix64OffsetBasis, key.map_mask);
             for (unsigned index = 0; index < kMaxTextureMaps; ++index) {
-                mix(static_cast<std::uint64_t>(key.resources[index]));
-                mix(key.srv_indices[index]);
-                mix(key.widths[index]);
-                mix(key.heights[index]);
+                hash = mix64(hash, key.resources[index]);
+                hash = mix64(hash, key.srv_indices[index]);
+                hash = mix64(hash, key.widths[index]);
+                hash = mix64(hash, key.heights[index]);
             }
             return static_cast<std::size_t>(hash);
         }
@@ -902,16 +1158,12 @@ private:
     struct TextureBindingKeyHash {
         [[nodiscard]] std::size_t operator()(
             const TextureBindingKey& key) const noexcept {
-            std::uint64_t hash = 1469598103934665603ull;
-            const auto mix = [&hash](std::uint64_t value) {
-                for (unsigned byte = 0; byte < 8; ++byte) {
-                    hash ^= (value >> (byte * 8u)) & 0xFFu;
-                    hash *= 1099511628211ull;
-                }
-            };
-            mix(key.map_mask);
+            // 41 values over a 161-byte key: the byte-at-a-time form this
+            // replaces ran ~330 dependent {xor, multiply} iterations here, on
+            // every candidate compare during a draw flush.
+            std::uint64_t hash = mix64(kMix64OffsetBasis, key.map_mask);
             for (const std::uint32_t reg : key.regs) {
-                mix(reg);
+                hash = mix64(hash, reg);
             }
             return static_cast<std::size_t>(hash);
         }
@@ -947,11 +1199,12 @@ private:
         TextureBindingTables,
         TextureBindingKeyHash>
         frame_texture_binding_tables_;
-    std::unordered_map<
-        TextureBindingKey,
-        TextureBindingTables,
-        TextureBindingKeyHash>
-        persistent_texture_binding_tables_;
+    // There was a second, identically-typed `persistent_texture_binding_tables_`
+    // here. It was never inserted into or read -- every one of its uses was
+    // clear/erase/prune -- so it was removed. It could not have worked: the
+    // tables it would have stored hold CPU descriptors valid only for the frame
+    // that built them, which is why `frame_texture_binding_tables_` above is the
+    // owner. Cross-frame amortization is provided by `texture_handle_cache_`.
     std::vector<DirtyTextureAlias> dirty_texture_aliases_;
     std::vector<TextureCache::GuestRange> dirty_texture_ranges_scratch_;
 
@@ -969,6 +1222,25 @@ private:
     bool capture_readback_recorded_ = false;
     bool initialized_ = false;
     bool frame_microprofile_enabled_ = false;
+    // Single per-frame decision for the ~8-12 per-draw clock reads. Computed
+    // once at frame start and read as a member by every draw-path site, so the
+    // gate is no longer a Meyers-singleton-gated function call repeated
+    // thousands of times per frame.
+    //
+    // Semantics are unchanged from `frame_microprofile_enabled_ ||
+    // trace_gx_stalls_enabled()`: fully on for an intrusive run, fully off
+    // otherwise. GALAXY_GX_FRAME_TIMING_SAMPLE >= 2 additionally turns it on for
+    // a bounded window of every Nth frame, which is what makes one routine
+    // recording able to answer both "what does an uninstrumented frame cost" and
+    // "where does the time go" instead of being all-or-nothing.
+    bool frame_time_detail_ = false;
+    bool frame_time_sample_ = false;
+    // State for the rendered `frame-interval-us`: the render_start of the last
+    // emitted [gx-frame-timing] line. Quantifies whether this thread is idle
+    // between frames (interval >> total-us) or saturated (interval ~= total-us),
+    // which the per-phase waits on that line cannot answer when they all read 0.
+    std::chrono::steady_clock::time_point last_frame_timing_emit_{};
+    bool last_frame_timing_emit_valid_ = false;
     // One-time EFB seed clear (GX never clears at frame start — only the
     // copy command's clear bit does, see on_efb_copy).
     bool efb_seeded_ = false;
@@ -990,7 +1262,76 @@ private:
     std::uint64_t frame_scissor_skips_ = 0;
     std::uint64_t frame_flush_us_ = 0;
     std::uint64_t frame_flush_pso_us_ = 0;
+    // Explicit diagnostic counter aggregate. Zero can mean disabled or invalid;
+    // the validity field distinguishes both from a complete measured zero.
+    std::uint64_t frame_flush_pso_cycles_ = 0;
+    bool frame_flush_pso_cycles_valid_ = false;
+    bool pso_cycles_enabled = false;
+    // Always-on, sampled (1 call in kFlushTimingSampleStride) wall time of the
+    // whole `flush_draw_state` call, plus the sample count behind the estimate.
+    // `frame_flush_us_` above is the same quantity but is populated only under
+    // per-draw instrumentation, so it cannot rank the next fix; this pair can,
+    // in an uninstrumented run. See ScopedFlushTiming in gx_backend.cpp for why
+    // the sampling stride exists.
+    std::uint64_t frame_flush_total_us_ = 0;
+    std::uint64_t frame_flush_timed_samples_ = 0;
+    std::uint64_t frame_flush_timed_calls_ = 0;
+    // Sub-slices of frame_flush_pso_us_ so a slow interval can be attributed
+    // without guessing: memo hits (no PipelineCache call at all), the
+    // PipelineCache::get() call itself, and the PsoKey hash/compare work.
+    std::uint64_t frame_pso_memo_hits_ = 0;
+    std::uint64_t frame_pso_get_calls_ = 0;
+    std::uint64_t frame_pso_get_us_ = 0;
+    std::uint64_t frame_pso_get_max_us_ = 0;
+    // Which cached-display-list replay path actually ran, counted in batches
+    // (each batch covers many draws). The parser offers the two batched paths
+    // first and falls back to per-packet replay; without these the split is
+    // invisible in a routine recording and a silently-dead fast path looks
+    // exactly like a slow one.
+    std::uint64_t frame_replay_prepared_batches_ = 0;
+    std::uint64_t frame_replay_packet_batches_ = 0;
+    std::uint64_t frame_replay_simple_batches_ = 0;
+    std::uint64_t frame_replay_generic_draws_ = 0;
     std::uint64_t frame_flush_matrix_us_ = 0;
+    // Bytes pushed into the matrix upload ring this frame. Always-on and
+    // clock-free: `frame_flush_matrix_us_` above says how long the uploads took,
+    // this says how much was written. The two are independent -- a frame can be
+    // slow because the upload is large or because the ring's next slot is cold
+    // -- and on a host whose adapter backs GPU memory from system DRAM the byte
+    // count is the number that predicts the cost, not the call count. Nothing
+    // in either supplied recording could report it.
+    std::uint64_t frame_matrix_upload_bytes_ = 0;
+    // Per-frame deltas of PipelineCache::CompileStats, captured against
+    // `frame_compile_stats_baseline_` at the end of the frame. These decide
+    // whether a slow frame is *compiling* or *waiting on a compile somebody else
+    // started*:
+    //
+    //   pso-compiles      driver builds performed this frame
+    //   pso-library-loads builds answered from the D3D12 pipeline library
+    //   shader-pairs      FXC-generated (VS, PS) pairs
+    //   blobs-from-cache  pairs whose DXBC came off disk
+    //
+    // `[pso-cache-coverage]` reports the cumulative totals, but a cumulative
+    // counter cannot be matched against one frame's `flush-pso-us`, and that is
+    // the open question: 9 of 30 Arc frames carry 84 % of the render thread's
+    // time with `flush-pso-us` at 89-99.7 % of it over as few as 3-4 draws, and
+    // the arithmetic (frame 21110: 115226 us across 4 draws at the observed
+    // ~22 ms per miss = 5.2 compiles) says those frames wait on a small integer
+    // number of compiles rather than drawing. Four subtractions per frame on
+    // already-tracked integers; no clock, no lock, nothing added to the per-draw
+    // path. `pso-compiles = 0` on a tail frame would falsify that reading and
+    // move the cause onto the library-load or memo path instead.
+    std::uint64_t frame_pso_compiles_ = 0;
+    std::uint64_t frame_pso_library_loads_ = 0;
+    std::uint64_t frame_shader_pair_compiles_ = 0;
+    // FXC microseconds this frame. The only per-frame figure for shader
+    // compilation: `blob-us=` on a miss line is per request and gated on that
+    // single request crossing the stall threshold, so a frame compiling several
+    // shaders below the threshold reports nothing at all there.
+    std::uint64_t frame_blob_compile_us_ = 0;
+    std::uint64_t frame_blobs_from_cache_ = 0;
+    // Baseline for the deltas above, captured in the per-frame reset block.
+    PipelineCache::CompileStats frame_compile_stats_baseline_{};
     std::uint64_t frame_flush_constants_us_ = 0;
     std::uint64_t frame_flush_texture_us_ = 0;
     std::uint64_t frame_vertex_load_us_ = 0;
@@ -1002,6 +1343,20 @@ private:
     std::uint64_t frame_decoded_vertex_cache_misses_ = 0;
     std::uint64_t frame_decoded_vertex_cache_evictions_ = 0;
     std::uint64_t frame_decoded_vertex_cache_stale_rejects_ = 0;
+    // Clock-free structural counters. Plain integer increments: never atomic,
+    // never timed, so they cost exactly the same in normal play as under a
+    // diagnostic run. Every *timing* field above is populated only when
+    // frame_microprofile_enabled_ or trace_gx_stalls_enabled() is set -- both
+    // opt-in instrumentation -- so a timing-only profile cannot distinguish
+    // real work from the cost of being measured. These counts settle that:
+    // they say whether the flush-pso-us block runs 3 times per frame or 36000.
+    // route: only the *early-out* count needs its own member. The memo and
+    // get() routes are exactly frame_pso_memo_hits_ and frame_pso_get_calls_,
+    // and the report derives them rather than storing a second copy that could
+    // drift from them and become an overlapping (duplicate) timing field.
+    std::uint64_t frame_flush_calls_ = 0;
+    std::uint64_t frame_pso_resolutions_ = 0;
+    std::uint64_t frame_pso_route_early_ = 0;
     PendingDrawBatch pending_draw_batch_{};
     bool cached_draw_run_active_ = false;
     bool cached_draw_run_scissor_reject_ = false;
@@ -1073,12 +1428,52 @@ private:
         std::uint64_t dirty_display_list_invalidations = 0;
         std::uint64_t palette_uploads = 0;
         std::uint64_t inline_matrix_uploads = 0;
+        // Clock-free attribution, sampled from representative frames rather than
+        // only from over-threshold ones. Every field here is a plain increment on
+        // a per-frame member, so adding them costs no clock read and cannot
+        // inflate the very quantity under investigation -- which is the failure
+        // mode that made `flush-pso-us` unattributable in the retained
+        // recordings: all 16 of their `[gx-frame-timing]` lines came from frames
+        // that had already crossed the stall threshold, so the per-draw
+        // `steady_clock` calls they carried were themselves part of the number.
+        //
+        // `render_ns` above is accumulated only under trace_gx_stats/stalls and
+        // therefore reads 0 on a routine sample; the fields below are the ones
+        // that stay valid, and they are what separate the two hypotheses:
+        //   us_per_flush   = flush_pso_ns / flush_calls
+        //   draws_per_call = draws / flush_calls
+        // A frame with thousands of calls at ~3 us each and a frame with ~24
+        // calls at ~17 ms each have the same total and imply opposite fixes.
+        std::uint64_t draws = 0;
+        std::uint64_t draw_batches = 0;
+        std::uint64_t flush_calls = 0;
+        std::uint64_t pso_resolutions = 0;
+        std::uint64_t pso_route_early = 0;
+        std::uint64_t pso_route_memo = 0;
+        std::uint64_t pso_route_get = 0;
+        std::uint64_t vertex_load_ns = 0;
+        std::uint64_t cached_vertex_upload_ns = 0;
+        std::uint64_t draw_record_ns = 0;
+        std::uint64_t flush_pso_ns = 0;
     };
     static constexpr std::size_t kDeferredGxStatsCapacity = 128;
     std::array<DeferredGxStatsSample, kDeferredGxStatsCapacity>
         deferred_gx_stats_{};
     std::size_t deferred_gx_stats_count_ = 0;
     std::uint64_t deferred_gx_stats_dropped_ = 0;
+    // Total samples offered to the ring, including those it did not retain. This
+    // is reservoir sampling's N: the ring keeps a uniform draw over the whole
+    // session rather than the first `capacity` rows, so the retained rows describe
+    // the run instead of only its opening. `dropped` still counts non-retained
+    // samples so the report can state the retention ratio.
+    std::uint64_t deferred_gx_stats_seen_ = 0;
+    // xorshift64* state for the reservoir replacement index. Per-backend so there
+    // is no shared state on the render thread, and deterministic so the same
+    // session shape yields the same rows.
+    std::uint64_t deferred_gx_stats_rng_ = 0x9e3779b97f4a7c15ull;
+    // Frame index of the first dropped sample, so the shutdown report can state
+    // which part of the session the ring stopped covering. Zero means none.
+    std::uint64_t deferred_gx_stats_first_drop_frame_ = 0;
     // The causal XFB trace is intentionally separate from the periodic GX
     // statistics: it captures a caller-selected contiguous render-frame
     // window and writes it only after the render thread has joined.

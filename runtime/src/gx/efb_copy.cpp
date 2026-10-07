@@ -1,4 +1,4 @@
-// efb_copy.cpp — EfbCopyManager: XFB texture registry for display copies.
+// efb_copy.cpp â€” EfbCopyManager: XFB texture registry for display copies.
 //
 // Threading: all methods are render-thread only.  The registry_ map and
 // device_ ComPtr are never shared with other threads.
@@ -66,9 +66,7 @@ XfbPresentSelection select_xfb_for_present(
     std::uint64_t max_preserved_age,
     std::uint64_t last_presented_frame_stamp) {
     XfbPresentSelection selection{};
-    static_cast<void>(max_preserved_age);
     static_cast<void>(last_presented_frame_stamp);
-    static_cast<void>(current_frame_stamp);
     if (!requested_specific) {
         selection.selected = latest;
         return selection;
@@ -81,7 +79,10 @@ XfbPresentSelection select_xfb_for_present(
             // newest GX copy in a double/triple-buffered game. Once the guest
             // names an XFB, the native renderer must honor that selection
             // instead of falling forward to latest(); latest() is only for
-            // unknown/pre-VI requests.
+            // unknown/pre-VI requests. Note that a buffer the guest is still
+            // naming receives fresh copies every frame, so its stamp advances
+            // with the frame and it does not age out; age only accumulates for
+            // a buffer that has genuinely stopped being written.
             selection.stale_preserved = true;
         }
         selection.selected = requested;
@@ -92,6 +93,28 @@ XfbPresentSelection select_xfb_for_present(
     if (last_valid_selected != nullptr) {
         selection.selected = last_valid_selected;
         selection.missing_preserved = true;
+        // A buffer that is not in the registry cannot receive a copy, so age is
+        // the only signal that the miss is sustained rather than the 1-3 frame
+        // flip jitter this preserve exists for. Past the bound, fall forward to
+        // latest() instead of re-presenting one frozen frame forever -- that is
+        // exactly the multi-frame freeze GALAXY_XFB_MAX_PRESERVE_AGE documents
+        // itself as breaking.
+        //
+        // The clock-free `frame_stamp` difference is used rather than the
+        // presentation counter so this cannot drift when presents are skipped.
+        // Only the `missing` case is age-bounded: `stale_preserved` above is
+        // deliberately left unbounded, because a named-but-trailing buffer is
+        // normal double buffering and expiring it is what produces the visible
+        // per-flip black/flash regression.
+        if (max_preserved_age != 0u &&
+            current_frame_stamp > last_valid_selected->frame_stamp &&
+            current_frame_stamp - last_valid_selected->frame_stamp >
+                max_preserved_age) {
+            selection.missing_expired = true;
+            if (latest != nullptr) {
+                selection.selected = latest;
+            }
+        }
     }
     return selection;
 }
@@ -329,73 +352,10 @@ EfbCopySamplingGeometry compute_xfb_sampling_geometry(
     return geometry;
 }
 
-ScaledEfbRect compute_scaled_efb_rect(
-    std::int32_t logical_left,
-    std::int32_t logical_top,
-    std::int32_t logical_right,
-    std::int32_t logical_bottom,
-    unsigned logical_target_width,
-    unsigned logical_target_height,
-    unsigned efb_scale) noexcept {
-    const std::int64_t scale = static_cast<std::int64_t>(
-        std::clamp(efb_scale, 1u, kMaxEfbScale));
-    // The public helper accepts arbitrary unsigned target extents, while its
-    // D3D12_RECT-compatible result is signed 32-bit. Saturate before the
-    // narrowing cast even though production EFB extents are much smaller.
-    constexpr std::int64_t kRectLimit =
-        std::numeric_limits<std::int32_t>::max();
-    const std::int64_t target_width = std::min(
-        static_cast<std::int64_t>(logical_target_width) * scale,
-        kRectLimit);
-    const std::int64_t target_height = std::min(
-        static_cast<std::int64_t>(logical_target_height) * scale,
-        kRectLimit);
-    const auto scaled_clamped = [scale](
-                                    std::int32_t coordinate,
-                                    std::int64_t maximum) {
-        return static_cast<std::int32_t>(std::clamp<std::int64_t>(
-            static_cast<std::int64_t>(coordinate) * scale,
-            0,
-            maximum));
-    };
-    return ScaledEfbRect{
-        scaled_clamped(logical_left, target_width),
-        scaled_clamped(logical_top, target_height),
-        scaled_clamped(logical_right, target_width),
-        scaled_clamped(logical_bottom, target_height)};
-}
-
-ScaledGxViewport compute_scaled_gx_viewport(
-    const float xf_viewport[6],
-    unsigned efb_scale) noexcept {
-    if (xf_viewport == nullptr) {
-        return {};
-    }
-    const float scale = static_cast<float>(
-        std::clamp(efb_scale, 1u, kMaxEfbScale));
-    const float wd = xf_viewport[0];
-    const float ht = xf_viewport[1];
-    const float z_range = xf_viewport[2];
-    const float x_origin = xf_viewport[3] - 342.0f;
-    const float y_origin = xf_viewport[4] - 342.0f;
-    const float far_z = xf_viewport[5];
-    constexpr float kZ24 = 16777216.0f;
-    float min_depth = std::clamp(1.0f - far_z / kZ24, 0.0f, 1.0f);
-    const float max_depth = std::clamp(
-        1.0f - (far_z - z_range) / kZ24,
-        0.0f,
-        1.0f);
-    if (min_depth > max_depth) {
-        min_depth = max_depth;
-    }
-    return ScaledGxViewport{
-        (x_origin - wd) * scale,
-        (y_origin + ht) * scale,
-        2.0f * wd * scale,
-        -2.0f * ht * scale,
-        min_depth,
-        max_depth};
-}
+// `compute_scaled_efb_rect` and `compute_scaled_gx_viewport` are defined inline
+// in `include/galaxy/gx/efb_copy.h`. Both are called from `RendererD3D12::draw`,
+// once per draw, and could not be inlined into that translation unit from here.
+// Their bodies and results are unchanged; only their linkage moved.
 
 EfbPeekSamplingGeometry compute_efb_peek_sampling_geometry(
     std::uint16_t x,
@@ -447,7 +407,7 @@ XfbTexture* EfbCopyManager::acquire_xfb(
             static_cast<void>(frame_index);
             return &entry;
         }
-        // Wrong size — drop the old texture and recreate below.
+        // Wrong size â€” drop the old texture and recreate below.
         if (entry.texture) {
             retire_texture(entry);
         }
@@ -493,7 +453,7 @@ XfbTexture* EfbCopyManager::acquire_xfb(
     // ALLOW_RENDER_TARGET so copy_efb_to_xfb can blit into it.
     desc.Flags              = D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
 
-    // Initial state: PIXEL_SHADER_RESOURCE — we read it in the present blit
+    // Initial state: PIXEL_SHADER_RESOURCE â€” we read it in the present blit
     // before the first EFB copy transitions it to RENDER_TARGET.
     const D3D12_RESOURCE_STATES initial_state =
         D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;

@@ -48,15 +48,7 @@
     "value": "1"
   },
   {
-    "name": "GALAXY_EFB_SCALE",
-    "value": "1"
-  },
-  {
     "name": "GALAXY_EXCLUSIVE_FULLSCREEN",
-    "value": "0"
-  },
-  {
-    "name": "GALAXY_FAST_CACHED_GUEST_CALLS",
     "value": "0"
   },
   {
@@ -89,11 +81,19 @@
   },
   {
     "name": "GALAXY_GPU_TIMESTAMPS",
-    "value": "0"
+    "value": "1"
   },
   {
     "name": "GALAXY_GX_DECODED_VERTEX_CACHE",
     "value": "1"
+  },
+  {
+    "name": "GALAXY_GX_FRAME_TIMING_SAMPLE",
+    "value": "0"
+  },
+  {
+    "name": "GALAXY_GX_PSO_CYCLES",
+    "value": "0"
   },
   {
     "name": "GALAXY_GX_SORTED_VERTEX_INVALIDATION",
@@ -217,7 +217,7 @@
   },
   {
     "name": "GALAXY_RENDER_QUEUE_DEPTH",
-    "value": "3"
+    "value": "4"
   },
   {
     "name": "GALAXY_RENDER_WORKER_MEMORY_SNAPSHOT",
@@ -276,20 +276,8 @@
     "value": "0"
   },
   {
-    "name": "GALAXY_VSYNC_INTERVAL",
-    "value": "0"
-  },
-  {
     "name": "GALAXY_WAIT_FOR_FRAME_LATENCY",
     "value": "0"
-  },
-  {
-    "name": "GALAXY_WINDOW_HEIGHT",
-    "value": "480"
-  },
-  {
-    "name": "GALAXY_WINDOW_WIDTH",
-    "value": "854"
   },
   {
     "name": "GALAXY_XFB_INDETERMINATE_SLOT_PRESERVE_VIS",

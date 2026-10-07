@@ -142,8 +142,14 @@ PixelShaderKey build_pixel_shader_key(
         key.ind_scale[1] = state.bp(bp::kRas1Ss1);
     }
 
-    // Encode each active TEV stage; zeroed stages beyond num_tev_stages are
-    // already zero from the memset above.
+    // Encode each active TEV stage. Stages beyond num_tev_stages stay zero
+    // because `key` is value-initialised (see the construction above), not
+    // because of the explicit memset: the memset writes the same zeros and is
+    // redundant. Kept deliberately, because `PixelShaderKey::hash()` is a
+    // byte-wise FNV over `sizeof(PixelShaderKey)` and equality is byte-wise too
+    // (`has_unique_object_representations_v` is asserted for this type), so every
+    // byte must be determinate; anyone who removes one of the two zeroings must
+    // keep the other.
     for (unsigned s = 0; s < key.num_tev_stages; ++s) {
         const TevStageConfig cfg = state.tev_stage(s);
 
@@ -194,7 +200,7 @@ PixelShaderKey build_pixel_shader_key(
         const TevKSel ras_odd  = state.tev_ksel(cfg.ras_swap * 2u + 1u);
         const TevKSel tex_even = state.tev_ksel(cfg.tex_swap * 2u);
         const TevKSel tex_odd  = state.tev_ksel(cfg.tex_swap * 2u + 1u);
-        const std::uint32_t ksel =
+        std::uint32_t ksel =
             (static_cast<std::uint32_t>(cfg.kcsel) & 0x1Fu) |
             ((static_cast<std::uint32_t>(cfg.kasel) & 0x1Fu) << 5u) |
             (static_cast<std::uint32_t>(ras_even.swap_red)   << 10u) |
@@ -206,9 +212,57 @@ PixelShaderKey build_pixel_shader_key(
             (static_cast<std::uint32_t>(tex_odd.swap_red)    << 22u) |
             (static_cast<std::uint32_t>(tex_odd.swap_green)  << 24u);
 
-        key.stages[s] = TevStagePacked{color_env, alpha_env, order, ksel};
+        // A stage's texture, rasterized-color and konst values are observed
+        // only through its eight combiner inputs (the generator reads
+        // tex_color_i / ras_color_i / konst_i nowhere else). When a stage
+        // selects none of a source, its order bits, swap table and konst
+        // selector cannot change the output; leftover register state from an
+        // earlier material must not compile a duplicate shader. Z-textures read
+        // the last sampled texel regardless of the combiner, and indirect
+        // stages carry texture coordinates forward, so the texture order is
+        // kept whenever either is active.
+        const TevColorArg color_inputs[4] = {
+            cfg.color_a, cfg.color_b, cfg.color_c, cfg.color_d};
+        const TevAlphaArg alpha_inputs[4] = {
+            cfg.alpha_a, cfg.alpha_b, cfg.alpha_c, cfg.alpha_d};
+        bool uses_tex = false;
+        bool uses_ras = false;
+        bool uses_konst_color = false;
+        bool uses_konst_alpha = false;
+        for (const TevColorArg input : color_inputs) {
+            uses_tex |= input == TevColorArg::TexColor ||
+                input == TevColorArg::TexAlpha;
+            uses_ras |= input == TevColorArg::RasColor ||
+                input == TevColorArg::RasAlpha;
+            uses_konst_color |= input == TevColorArg::Konst;
+        }
+        for (const TevAlphaArg input : alpha_inputs) {
+            uses_tex |= input == TevAlphaArg::TexAlpha;
+            uses_ras |= input == TevAlphaArg::RasAlpha;
+            uses_konst_alpha |= input == TevAlphaArg::Konst;
+        }
+        std::uint32_t canonical_order = order;
+        if (!uses_tex && !ztex_on && key.num_ind_stages == 0u) {
+            canonical_order &= ~0x7Fu;          // texmap, texcoord, tex_enable
+            ksel &= ~(0xFFu << 18u);            // tex swap swizzles
+        }
+        if (!uses_ras) {
+            canonical_order &= ~(0x7u << 7u);   // ras channel
+            ksel &= ~(0xFFu << 10u);            // ras swap swizzles
+        }
+        if (!uses_konst_color) {
+            ksel &= ~0x1Fu;
+        }
+        if (!uses_konst_alpha) {
+            ksel &= ~(0x1Fu << 5u);
+        }
+
+        key.stages[s] = TevStagePacked{color_env, alpha_env, canonical_order, ksel};
     }
-    // Stages beyond num_tev_stages are already zeroed by memset.
+    // Stages beyond num_tev_stages are zero, from the value-initialisation of
+    // `key` rather than from the redundant memset beside it. The hash is a
+    // byte-wise FNV over the whole struct, so this zeroing is load-bearing even
+    // though the stage count is the real key input.
 
     return key;
 }
@@ -265,6 +319,22 @@ VertexShaderKey build_vertex_shader_key(const GxState& state) {
     for (unsigned i = 0; i < key.num_texgens && i < kMaxTexGens; ++i) {
         key.texgen[i] = state.xf(
             static_cast<std::uint16_t>(xf::kTexGenBase + i));
+        // Fields the generator ignores for a texgen type are leftover register
+        // state; keep them out of the key so they cannot duplicate a shader.
+        // Color texgens read only their type; regular texgens never read the
+        // emboss source/light; emboss reads only its source and light.
+        switch (decode_xf_texgen(key.texgen[i]).type) {
+        case TexGenType::Color0:
+        case TexGenType::Color1:
+            key.texgen[i] &= 0x7u << 4u;
+            break;
+        case TexGenType::EmbossMap:
+            key.texgen[i] &= (0x7u << 4u) | (0x3Fu << 12u);
+            break;
+        case TexGenType::Regular:
+            key.texgen[i] &= ~(0x3Fu << 12u);
+            break;
+        }
         // Matrix rows are supplied through inline uniforms from raw XF state.
         // Only normalize changes HLSL, and only for regular dual texgens.
         if (dual_tex && decode_xf_texgen(key.texgen[i]).type == TexGenType::Regular) {
@@ -276,11 +346,17 @@ VertexShaderKey build_vertex_shader_key(const GxState& state) {
     // Channel control registers are grouped by component, not interleaved:
     // color0, color1, alpha0, alpha1. Preserve that layout in the key so
     // shader generation can pair color N with alpha N.
+    // An unlit channel part reads only its material source (bit 0); the
+    // ambient source, light mask and diffuse/attenuation functions are
+    // leftover state and must not fragment the key.
+    const auto canonical_channel = [](std::uint32_t control) {
+        return (control & 0x2u) != 0u ? control : (control & 0x1u);
+    };
     for (unsigned ch = 0; ch < key.num_chans && ch < 2u; ++ch) {
-        key.channel[ch] = state.xf(
-            static_cast<std::uint16_t>(xf::kChannelCtrlBase + ch));
-        key.channel[2u + ch] = state.xf(
-            static_cast<std::uint16_t>(xf::kChannelCtrlBase + 2u + ch));
+        key.channel[ch] = canonical_channel(state.xf(
+            static_cast<std::uint16_t>(xf::kChannelCtrlBase + ch)));
+        key.channel[2u + ch] = canonical_channel(state.xf(
+            static_cast<std::uint16_t>(xf::kChannelCtrlBase + 2u + ch)));
     }
 
     return key;
@@ -346,21 +422,29 @@ RenderStateKey build_render_state_key(const GxState& state) {
         key.blend_bits |= (1u << 27u);
     }
     // Constant EFB alpha replacement is independent of source-alpha routing.
-    if (pe.pixel_format == 1u && bm.const_alpha_enable && bm.alpha_update) {
+    // The pipeline reads this bit only inside its blend-enabled branch; the
+    // pixel shader applies constant destination alpha itself.
+    if (bm.blend_enable && pe.pixel_format == 1u && bm.const_alpha_enable &&
+        bm.alpha_update) {
         key.blend_bits |= (1u << 28u);
     }
 
     // zmode_bits: test_enable(0) | func(3:1) | update_enable(4)
     const ZMode zm = state.z_mode();
+    // A disabled compare passes unconditionally, so the function field is
+    // leftover state then (observed: z=0x6 alongside z=0x0 for one material).
     key.zmode_bits = static_cast<std::uint16_t>(
         (zm.test_enable   ? 1u : 0u)                                            |
-        ((static_cast<std::uint32_t>(zm.func) & 0x7u) << 1u)                   |
+        (zm.test_enable
+             ? ((static_cast<std::uint32_t>(zm.func) & 0x7u) << 1u) : 0u)       |
         (zm.update_enable ? (1u << 4u) : 0u));
 
     const GenMode gm = state.gen_mode();
     key.cull = static_cast<std::uint8_t>(gm.cull);
 
-    key.pixfmt = pe.pixel_format;
+    // The pipeline only distinguishes RGBA6 (has destination alpha) from the
+    // other formats.
+    key.pixfmt = pe.pixel_format == 1u ? 1u : 0u;
     // Backend overwrites this per draw before PSO lookup. Triangle is the
     // safe default for tests and callers that only build render-state keys.
     key.primitive_topology = 3u; // D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE

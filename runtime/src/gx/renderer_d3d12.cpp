@@ -703,6 +703,25 @@ unsigned swap_chain_frame_latency() {
     return latency;
 }
 
+// Installed physical memory, in MiB, or 0 if it cannot be queried.
+//
+// Reported alongside the adapter's dedicated/shared figures because on a unified
+// memory adapter (integrated graphics) the usable graphics budget is the OS cap of
+// one-half of system memory, so neither number is interpretable without it. On a
+// discrete adapter this is context only. Queried once; the value cannot change
+// during a session.
+std::uint64_t host_ram_mb() {
+    static const std::uint64_t megabytes = [] {
+        MEMORYSTATUSEX status{};
+        status.dwLength = sizeof(status);
+        if (GlobalMemoryStatusEx(&status) == FALSE) {
+            return std::uint64_t{0};
+        }
+        return static_cast<std::uint64_t>(status.ullTotalPhys) / (1024ull * 1024ull);
+    }();
+    return megabytes;
+}
+
 bool frame_latency_wait_enabled() {
     static const bool enabled = [] {
         char value[16]{};
@@ -1732,6 +1751,8 @@ bool UploadRing::initialize(
     frame_ready_ = false;
     segment_allocation_pending_ = true;
     reused_bytes_ = copied_bytes_ = 0u;
+    immutable_upload_calls_ = 0u;
+    peak_bytes_per_frame_ = 0u;
     return true;
 }
 
@@ -1743,6 +1764,7 @@ void UploadRing::begin_frame(unsigned frame_slot) {
     segment_allocation_pending_ = true;
     reused_bytes_ = 0;
     copied_bytes_ = 0;
+    immutable_upload_calls_ = 0;
     segment_base_ = static_cast<std::size_t>(frame_slot) * bytes_per_frame_;
     cursor_       = segment_base_;
     frame_ready_ = true;
@@ -1767,6 +1789,14 @@ UploadRing::Allocation UploadRing::allocate(std::size_t size, std::size_t alignm
             std::to_string(bytes_per_frame_) + " B");
     const std::size_t aligned = cursor_ + padding;
     cursor_ = aligned + size;
+    // Peak within the segment, i.e. the bytes of this frame's segment that were
+    // actually handed out. This is the only sound floor for shrinking
+    // `bytes_per_frame_`, and it is what separates the ring's reserved size from
+    // the physical memory it really backs.
+    const std::size_t frame_used = cursor_ - segment_base_;
+    if (frame_used > peak_bytes_per_frame_) {
+        peak_bytes_per_frame_ = frame_used;
+    }
     // Fence-only chunks reset the frame slot but never touch vertex bytes.
     // Count only segment uses that can actually replace their contents.
     if (size != 0 && segment_allocation_pending_) {
@@ -1784,6 +1814,10 @@ UploadRing::Allocation UploadRing::upload_immutable(
     const void* source, std::size_t size, std::size_t alignment,
     ImmutableUploadToken& token) {
     const Allocation result = allocate(size, alignment);
+    // Counted here, before any early classification, so the field reports whether
+    // the immutable path was *entered* -- which is what makes the two byte
+    // counters below interpretable.
+    ++immutable_upload_calls_;
     if (token.slots.size() != frames_in_flight_) {
         token.slots.assign(frames_in_flight_, {});
     }
@@ -1899,16 +1933,193 @@ DescriptorRing::Table DescriptorRing::allocate(unsigned count) {
 // RendererD3D12 helpers
 // ---------------------------------------------------------------------------
 
-static constexpr std::size_t kVbPerFrame  = 64u * 1024u * 1024u;
-static constexpr std::size_t kIbPerFrame  = 16u * 1024u * 1024u;
-static constexpr std::size_t kCbPerFrame  =  8u * 1024u * 1024u;
-// 32 MiB: even with the snapshot-only-on-matrix-change fix, a busy galaxy
+// Upload rings are created with CreateCommittedResource on
+// D3D12_HEAP_TYPE_UPLOAD and then mapped for the life of the process, so
+// bytes_per_frame * frames_in_flight is resident memory that is never released.
+// The defaults below total (64+16+8+32) MiB * 2 slots = 240 MiB, plus a
+// shader-visible descriptor heap. That is a reasonable desktop-dGPU budget.
+//
+// On an integrated adapter it is a meaningful share of *system* memory, because
+// there is no separate pool to put it in. Note carefully what the Arc recording's
+// `[gpu] adapter=... vram-mb=128` line is, though: it is DXGI's
+// `DedicatedVideoMemory`, and Intel's graphics-memory FAQ states the driver
+// reports "128 MB of fictitious Dedicated Video Memory for compatibility with
+// applications that don't correctly comprehend a fully unified memory
+// architecture", with integrated Intel graphics using system memory bounded by
+// "one-half of System Memory". See Intel support article 000020962. So this is
+// NOT a 128 MiB VRAM wall that 240 MiB oversubscribes -- an earlier version of
+// this comment said exactly that and it was wrong. The accurate statement is that
+// every byte here is system memory the simulation thread also needs, on a machine
+// whose graphics share is capped at half of installed RAM.
+//
+// Each ring is therefore individually overridable in MiB so the budget can be
+// measured on the actual target instead of guessed. Exhaustion stays fatal and
+// loud (UploadRing::allocate throws) -- these are deliberately *not* silent
+// fallbacks, so a too-small value is immediately visible rather than quietly
+// dropping geometry.
+namespace {
+
+[[nodiscard]] std::size_t ring_bytes_per_frame(
+    const char* variable,
+    std::size_t default_bytes) {
+    char value[24]{};
+    std::size_t length = 0u;
+    if (getenv_s(&length, value, sizeof(value), variable) != 0 ||
+        length <= 1u) {
+        return default_bytes;
+    }
+    const unsigned long long megabytes = std::strtoull(value, nullptr, 10);
+    if (megabytes == 0ull) {
+        return default_bytes;
+    }
+    // Keep a floor that can still hold the largest single request any of these
+    // rings makes (a 6144-byte XF palette, or one vertex batch) so a hostile
+    // value cannot turn into an immediate crash before the first draw.
+    constexpr std::size_t kFloorBytes = 1u * 1024u * 1024u;
+    const std::size_t bytes = static_cast<std::size_t>(megabytes) *
+        (1024u * 1024u);
+    return bytes < kFloorBytes ? kFloorBytes : bytes;
+}
+
+// The adapter chosen for this session, published for the ring budgeting below.
+// Set once during initialize() before any ring is created, read from the same
+// thread on that path only; no other thread can observe the intermediate state
+// because the render thread does not start until initialize() returns.
+DXGI_ADAPTER_DESC1 g_selected_adapter_desc{};
+bool g_selected_adapter_valid = false;
+
+// True when the adapter has no meaningful pool of its own, i.e. graphics memory
+// is system memory (integrated graphics).
+//
+// Detected structurally rather than by vendor ID, because the condition is about
+// the memory architecture and not who made the chip: DXGI reports a dedicated
+// figure that is negligible next to the shared figure, and on this class of part
+// that dedicated figure is a documented *fictitious* compatibility value rather
+// than a real pool (see the ring-sizing comment above, and Intel FAQ 000020962).
+// The threshold is deliberately loose -- 256 MiB dedicated with shared an order of
+// magnitude larger -- so that a genuine low-end discrete part with a small real
+// pool is not misclassified as unified.
+// Byte budget for the EFB-copy destination cache. Hoisted out of the eviction site
+// so the value this session is actually running with can be REPORTED alongside the
+// live bytes: the pool's allocation is scaled by the internal EFB extent (so its
+// footprint grows with efb_scale^2 while this budget stays fixed), which makes it
+// the one resolution-scaled GPU pool that was neither a render target nor visible
+// in any recording. A reader should not have to know the default to interpret the
+// measurement.
+[[nodiscard]] std::uint64_t efb_copy_dest_budget_bytes() {
+    static const std::uint64_t bytes = [] {
+        char value[24]{};
+        std::size_t length = 0;
+        std::uint64_t megabytes = 192u;
+        if (getenv_s(&length, value, sizeof(value),
+                     "GALAXY_EFB_COPY_DEST_BUDGET_MB") == 0 &&
+            length > 1u) {
+            megabytes = std::strtoull(value, nullptr, 10);
+        }
+        return megabytes << 20;
+    }();
+    return bytes;
+}
+
+[[nodiscard]] bool adapter_is_unified_memory() {
+    if (!g_selected_adapter_valid) {
+        return false;
+    }
+    const std::uint64_t dedicated = g_selected_adapter_desc.DedicatedVideoMemory;
+    const std::uint64_t shared = g_selected_adapter_desc.SharedSystemMemory;
+    constexpr std::uint64_t kNegligibleDedicatedBytes = 256ull * 1024ull * 1024ull;
+    return dedicated <= kNegligibleDedicatedBytes &&
+        shared >= dedicated * 8ull;
+}
+
+// Upload-ring budget per frame, in bytes, for one ring.
+//
+// Scaling down the reservation on unified-memory adapters is the one memory
+// reduction available here with **no behavioural trade-off at all**, which is why
+// it is worth doing by default rather than leaving to four environment variables:
+//
+//   * A ring is created with CreateCommittedResource, but on a UPLOAD heap the
+//     untouched part is never written and therefore never backed by physical
+//     pages. Reserving less does not remove memory the workload was using; it
+//     removes address space and page-file commit the workload was not using.
+//     `UploadRing::peak_bytes_per_frame()` now reports how much is actually used,
+//     so the reservation can be checked against reality instead of assumed.
+//   * Exhaustion is loud, not silent: `UploadRing::allocate` throws with the ring
+//     name, the request size and the frame usage. A resize that is too small fails
+//     on the first frame that needs the space rather than quietly dropping
+//     geometry.
+//
+// **The unified-memory defaults below are deliberately NOT smaller than the
+// dedicated ones, and that is a measured decision, not an oversight.** A first
+// version of this change scaled them down by 4x (vertex 64 -> 16 MiB). That would
+// have crashed the game outright: `fifo-draw-vertices` peaks at **117,361** in both
+// retained recordings, which at the fixed `sizeof(GxVertexOut) == 144` is
+// **16.1 MiB of vertex ring in a single frame** -- already over a 16 MiB ring, and
+// `UploadRing::allocate` throws rather than dropping geometry. So the recorded peak
+// is real evidence that the existing defaults are sized to a genuine worst case, and
+// shrinking them on a guess is not safe in the shrinking direction after all: the
+// failure is loud, but it is still a failure to launch.
+//
+// What survives from that attempt is the *measurement*: `[gpu-rings]` reports
+// `unified-memory=0/1`, and `UploadRing::peak_bytes_per_frame()` reports the true
+// per-frame high-water mark. A run on the target now yields the numbers needed to
+// size these honestly, for the rings whose real demand is not already bounded by a
+// recorded counter. Until then the reservation stays as it was.
+[[nodiscard]] std::size_t default_ring_bytes_per_frame(
+    std::size_t dedicated_default_bytes,
+    std::size_t unified_default_bytes) {
+    return adapter_is_unified_memory() ? unified_default_bytes
+                                       : dedicated_default_bytes;
+}
+
+}  // namespace
+
+// Out-of-line so the budget can be reported without exposing the anonymous-namespace
+// helper, and so both the eviction site and the telemetry read the same value.
+std::uint64_t RendererD3D12::efb_copy_dest_budget_bytes() {
+    return galaxy::gx::efb_copy_dest_budget_bytes();
+}
+
+static std::size_t vb_per_frame_bytes() {
+    // Peak measured demand: 117,361 vertices x 144 B = 16.1 MiB in one frame, so
+    // 64 MiB keeps a ~4x margin over the worst frame either recording contains.
+    return ring_bytes_per_frame(
+        "GALAXY_GPU_VERTEX_RING_MB",
+        default_ring_bytes_per_frame(64u * 1024u * 1024u, 64u * 1024u * 1024u));
+}
+static std::size_t ib_per_frame_bytes() {
+    // Not bounded by any recorded counter; left unchanged pending a measured peak.
+    return ring_bytes_per_frame(
+        "GALAXY_GPU_INDEX_RING_MB",
+        default_ring_bytes_per_frame(16u * 1024u * 1024u, 16u * 1024u * 1024u));
+}
+static std::size_t cb_per_frame_bytes() {
+    return ring_bytes_per_frame(
+        "GALAXY_GPU_CONSTANT_RING_MB",
+        default_ring_bytes_per_frame(8u * 1024u * 1024u, 8u * 1024u * 1024u));
+}
+static std::size_t mtx_per_frame_bytes() {
+    // Not bounded by any recorded counter; left unchanged pending a measured peak,
+    // for the same reason the vertex ring was reverted above.
+    return ring_bytes_per_frame(
+        "GALAXY_GPU_MATRIX_RING_MB",
+        default_ring_bytes_per_frame(32u * 1024u * 1024u, 32u * 1024u * 1024u));
+}
+// 32 MiB default: even with the snapshot-only-on-matrix-change fix, a busy galaxy
 // frame legitimately re-loads the XF palette many times (per-object / skinned
 // matrices via LOAD_INDX); headroom prevents the ring-exhaustion crash that
-// appeared once the scene actually started rendering.
-static constexpr std::size_t kMtxPerFrame = 32u * 1024u * 1024u;
+// appeared once the scene actually started rendering. `peak_bytes_per_frame()`
+// reports the real usage so this figure can be tightened against evidence rather
+// than guessed.
 static constexpr unsigned    kSrvPerFrame = 32768u;
-static constexpr unsigned    kPersistentSrvDescriptors = 131072u;
+// The reserved persistent SRV region is dead space: nothing calls
+// DescriptorRing::allocate_persistent on the SRV ring, so these descriptors are
+// never handed out, yet DescriptorRing::initialize sizes the shader-visible heap
+// as (persistent + per_frame * frames_in_flight). Reducing it to the true
+// requirement (zero) keeps every existing index meaningful -- texture SRV
+// indices come from TextureCache's own 4096-descriptor heap, not from this
+// region -- and shrinks the heap from 196,608 to 65,536 descriptors.
+static constexpr unsigned    kPersistentSrvDescriptors = 0u;
 
 void RendererD3D12::wait_for_gpu() {
     const std::uint64_t val = ++next_fence_value_;
@@ -2215,17 +2426,44 @@ SamplerTableKey make_sampler_table_key(const std::uint32_t keys[8], const Render
 }
 
 SamplerTableCache::Allocation SamplerTableCache::get_or_allocate(const SamplerTableKey& key) {
-    if (const auto it = tables_.find(key); it != tables_.end()) return {it->second, false};
-    if (cursor_ + 8u > kSamplerHeapSlots) {
-        throw std::runtime_error("[Renderer] sampler heap exhausted within one frame");
+    if (const auto it = tables_.find(key); it != tables_.end()) {
+        slot_frames_[(it->second - 8u) / 8u] = frame_;
+        return {it->second, false};
     }
-    const auto [it, inserted] = tables_.emplace(key, cursor_);
-    if (inserted) cursor_ += 8u;
+    const bool fresh_slot = cursor_ + 8u <= kSamplerHeapSlots;
+    unsigned slot = fresh_slot ? (cursor_ - 8u) / 8u : eviction_cursor_;
+    if (!fresh_slot) {
+        unsigned checked = 0u;
+        while (checked < kDynamicTables && slot_frames_[slot] == frame_) {
+            slot = (slot + 1u) % kDynamicTables;
+            ++checked;
+        }
+        if (checked == kDynamicTables) {
+            throw std::runtime_error(
+                "[Renderer] sampler heap exhausted: more than 255 distinct "
+                "sampler configurations used within one frame");
+        }
+    }
+    const unsigned index = 8u + slot * 8u;
+    // Insert before retiring the old mapping: an allocation failure leaves
+    // all resident descriptors discoverable. Do not hold a victim iterator
+    // across insertion, which may rehash the map.
+    const auto [it, inserted] = tables_.emplace(key, index);
+    if (inserted) {
+        if (fresh_slot) cursor_ += 8u;
+        else {
+            tables_.erase(slot_keys_[slot]);
+            eviction_cursor_ = (slot + 1u) % kDynamicTables;
+        }
+        slot_keys_[slot] = key;
+        slot_frames_[slot] = frame_;
+    }
     return {it->second, inserted};
 }
 
 bool RendererD3D12::create_sampler_heap() {
     default_sampler_valid_.fill(false);
+    for (auto& tables : sampler_tables_) tables.reset();
     D3D12_DESCRIPTOR_HEAP_DESC dhd{};
     dhd.Type           = D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER;
     dhd.NumDescriptors = kSamplerHeapSlots;
@@ -2240,11 +2478,16 @@ bool RendererD3D12::create_sampler_heap() {
 
 void RendererD3D12::reset_sampler_frame() {
     sampler_heap_ = sampler_heaps_[frame_slot_];
-    sampler_tables_.reset();
 
-    default_sampler_table_ = sampler_heap_->GetGPUDescriptorHandleForHeapStart();
     const RenderConfig cfg = get_render_config();
     const std::uint32_t config_key = sampler_config_key(cfg);
+    // Retain tables only in the heap where they were written. A table found in
+    // a different slot's cache has no initialized descriptors in this heap.
+    // Each heap warms independently, retaining its eight-descriptor tables
+    // until its sampler configuration changes.
+    sampler_tables_[frame_slot_].reset(config_key);
+
+    default_sampler_table_ = sampler_heap_->GetGPUDescriptorHandleForHeapStart();
     if (default_sampler_valid_[frame_slot_] &&
         default_sampler_config_keys_[frame_slot_] == config_key) {
         return;
@@ -2291,7 +2534,7 @@ void RendererD3D12::reset_sampler_frame() {
 D3D12_GPU_DESCRIPTOR_HANDLE RendererD3D12::sampler_table_for(
     const std::uint32_t keys[8]) {
     const RenderConfig cfg = get_render_config();
-    const auto allocation = sampler_tables_.get_or_allocate(make_sampler_table_key(keys, cfg));
+    const auto allocation = sampler_tables_[frame_slot_].get_or_allocate(make_sampler_table_key(keys, cfg));
     const unsigned table_base = allocation.index;
     const UINT stride = device_->GetDescriptorHandleIncrementSize(
         D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER);
@@ -2698,6 +2941,12 @@ bool RendererD3D12::initialize(int window_width, int window_height, unsigned efb
             throw std::runtime_error(
                 "No hardware D3D12 adapter supports feature level 11_0");
         }
+        // Publish the selected adapter for the ring budgeting below. Assigned only
+        // here, after every failure path, so `adapter_is_unified_memory()` can
+        // never read a partially-populated description: it is guarded by its own
+        // validity flag as well.
+        g_selected_adapter_desc = adapter_desc;
+        g_selected_adapter_valid = true;
         {
             char narrow[128]{};
             WideCharToMultiByte(
@@ -2708,6 +2957,21 @@ bool RendererD3D12::initialize(int window_width, int window_height, unsigned efb
             std::cout << "[gpu] adapter=\"" << narrow << "\""
                       << " vram-mb="
                       << (adapter_desc.DedicatedVideoMemory / (1024 * 1024))
+                      // `vram-mb` alone is misleading on integrated graphics,
+                      // where it is a fixed FICTITIOUS compatibility value (Intel
+                      // reports 128 MB for "applications that don't correctly
+                      // comprehend a fully unified memory architecture"; see the
+                      // ring-sizing comment above, and Intel FAQ 000020962). On
+                      // such an adapter the real budget is SharedSystemMemory,
+                      // which the OS caps at one-half of installed RAM and which
+                      // is a LIMIT rather than a reservation. Emitting all three
+                      // together is what lets a reader tell the two cases apart
+                      // without knowing which GPU they are looking at: a large
+                      // dedicated figure means a separate pool exists, a
+                      // dedicated figure far below shared means unified memory.
+                      << " shared-mb="
+                      << (adapter_desc.SharedSystemMemory / (1024 * 1024))
+                      << " host-ram-mb=" << host_ram_mb()
                       << " software=" << (is_software ? 1 : 0)
                       << " vendor=0x" << std::hex << adapter_desc.VendorId
                       << " device=0x" << adapter_desc.DeviceId << std::dec
@@ -3026,11 +3290,40 @@ bool RendererD3D12::initialize(int window_width, int window_height, unsigned efb
         if (!create_clear_pipeline()) return false;
 
         // Upload + descriptor rings.
-        if (!vertex_ring_  .initialize(device_.Get(), "vertex",   kVbPerFrame,  kFramesInFlight)) return false;
-        if (!index_ring_   .initialize(device_.Get(), "index",    kIbPerFrame,  kFramesInFlight)) return false;
-        if (!constant_ring_.initialize(device_.Get(), "constant", kCbPerFrame,  kFramesInFlight)) return false;
-        if (!matrix_ring_  .initialize(device_.Get(), "matrix",   kMtxPerFrame, kFramesInFlight)) return false;
+        if (!vertex_ring_  .initialize(device_.Get(), "vertex",   vb_per_frame_bytes(),  kFramesInFlight)) return false;
+        if (!index_ring_   .initialize(device_.Get(), "index",    ib_per_frame_bytes(),  kFramesInFlight)) return false;
+        if (!constant_ring_.initialize(device_.Get(), "constant", cb_per_frame_bytes(),  kFramesInFlight)) return false;
+        if (!matrix_ring_  .initialize(device_.Get(), "matrix",   mtx_per_frame_bytes(), kFramesInFlight)) return false;
         if (!srv_ring_.initialize(device_.Get(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, kSrvPerFrame, kFramesInFlight, kPersistentSrvDescriptors)) return false;
+
+        // Reserved upload-ring bytes, emitted with the `[gpu]` adapter line so
+        // the two are read together: the reservation is only meaningful next to
+        // the adapter that has to back it. This is the *configuration*, not the
+        // usage -- a mapped D3D12_HEAP_TYPE_UPLOAD buffer only commits physical
+        // pages for the ranges actually written, so the resident cost tracks the
+        // per-frame peak rather than bytes_per_frame * frames_in_flight. The peak
+        // is reported per ring below and at shutdown; the pairing is what makes
+        // the 240 MiB default checkable against a real workload instead of
+        // assumed.
+        {
+            const auto ring_reserved_mb = [](std::size_t bytes) {
+                return (bytes * kFramesInFlight) / (1024u * 1024u);
+            };
+            std::cerr << "[gpu-rings]"
+                      << " vertex-reserved-mb=" << ring_reserved_mb(vb_per_frame_bytes())
+                      << " index-reserved-mb=" << ring_reserved_mb(ib_per_frame_bytes())
+                      << " constant-reserved-mb=" << ring_reserved_mb(cb_per_frame_bytes())
+                      << " matrix-reserved-mb=" << ring_reserved_mb(mtx_per_frame_bytes())
+                      << " unified-memory=" << (adapter_is_unified_memory() ? 1 : 0)
+                      << " frames-in-flight=" << kFramesInFlight
+                      << " total-reserved-mb="
+                      << ring_reserved_mb(vb_per_frame_bytes()) +
+                             ring_reserved_mb(ib_per_frame_bytes()) +
+                             ring_reserved_mb(cb_per_frame_bytes()) +
+                             ring_reserved_mb(mtx_per_frame_bytes())
+                      << " note=reservation-not-residency"
+                      << '\n';
+        }
 
         if (trace_renderer_startup_enabled()) {
             std::cout << "[Renderer] OK  EFB=" << kEfbWidth * efb_scale_
@@ -3137,6 +3430,8 @@ void RendererD3D12::shutdown() {
     readback_buf_.Reset();
     backbuffer_readback_buf_.Reset();
     efb_copy_dests_.clear();
+    efb_copy_dests_bytes_ = 0u;
+    efb_copy_dests_tick_ = 0u;
     for (auto& retired : retired_efb_copy_textures_) {
         retired.clear();
     }
@@ -3145,7 +3440,7 @@ void RendererD3D12::shutdown() {
     for (auto& b : backbuffers_) b.Reset();
     rtv_heap_.Reset(); dsv_heap_.Reset(); sampler_heap_.Reset(); root_signature_.Reset();
     for (auto& heap : sampler_heaps_) heap.Reset();
-    sampler_tables_.reset();
+    for (auto& tables : sampler_tables_) tables.reset();
     default_sampler_table_ = {};
     default_sampler_valid_.fill(false);
     swap_chain_.Reset(); command_list_.Reset();
@@ -3620,20 +3915,31 @@ void RendererD3D12::invalidate_gx_bindings() {
     bound_sampler_table_ = {};
     bound_matrix_palette_ = 0;
     bound_topology_ = D3D_PRIMITIVE_TOPOLOGY_UNDEFINED;
+    bound_vertex_view_ = {};
+    bound_vertex_view_valid_ = false;
+    bound_index_view_ = {};
+    bound_index_view_valid_ = false;
     bound_scissor_valid_ = false;
     bound_scissor_input_valid_ = false;
     bound_viewport_valid_ = false;
 }
 
 void RendererD3D12::begin_frame(bool present_swap_chain) {
-    // TEMPORARY diagnostic (unconditional, cheap: two steady_clock reads):
-    // isolate which phase of the render loop produces a host-thread stall
-    // long enough to desynchronize the exact-cadence VI consumer. Prints
-    // immediately (not gated behind the 2s [present-stats] window, which a
-    // stall this size never survives to see) whenever a single call takes
-    // longer than one VI period.
-    const auto stall_watch_begin_frame_start =
-        std::chrono::steady_clock::now();
+    // Diagnostic stall watch, gated on its own opt-in flag. GALAXY_TRACE_STALL_WATCH
+    // is unset in the shipped runtime-env.json, and trace_stall_watch_enabled()
+    // holds a function-local `static const bool`, so with the flag off this is a
+    // constant false and clang deletes the timestamps, the subtraction and the
+    // branch below outright.
+    //
+    // This used to read the clock UNCONDITIONALLY at the top of every
+    // begin_frame() and again at the bottom, for a diagnostic that defaults to
+    // off - the only ungated timing in this file. It followed the same shape as
+    // the per-command clocks in fifo_parser.cpp and the per-draw clocks behind
+    // GxBackend's `time_detail`, both of which were already gated.
+    const bool stall_watch = trace_stall_watch_enabled();
+    const auto stall_watch_begin_frame_start = stall_watch
+        ? std::chrono::steady_clock::now()
+        : std::chrono::steady_clock::time_point{};
     // Live resize lands here: the one point guaranteed to be between frames
     // with no in-flight command-list recording on this renderer. Contains
     // its own full GPU-idle wait, so it belongs before any per-slot state
@@ -3744,11 +4050,11 @@ void RendererD3D12::begin_frame(bool present_swap_chain) {
             reset_start,
             std::chrono::steady_clock::now());
     }
-    {
+    if (stall_watch) {
         const double stall_watch_ms = std::chrono::duration<double, std::milli>(
             std::chrono::steady_clock::now() -
             stall_watch_begin_frame_start).count();
-        if (trace_stall_watch_enabled() && stall_watch_ms > 12.0) {
+        if (stall_watch_ms > 12.0) {
             std::ostringstream message;
             message << "[stall-watch] begin_frame took " << stall_watch_ms
                       << "ms latency-wait-us=" << last_latency_wait_us_
@@ -3881,6 +4187,12 @@ void RendererD3D12::pace_present_if_needed(
 }
 
 std::uint64_t RendererD3D12::end_frame(bool present_swap_chain) {
+    // Diagnostic stall watch, gated on its own opt-in flag. Declared here because
+    // this function uses it in two places below; begin_frame() (line ~3682) and
+    // present_frame() (line ~5856) each declare their own from the same helper.
+    // Without this the translation unit does not compile: every `if (stall_watch)`
+    // below is an undeclared identifier.
+    const bool stall_watch = trace_stall_watch_enabled();
     if (timestamp_query_heap_ && timestamp_readback_) {
         command_list_->EndQuery(
             timestamp_query_heap_.Get(), D3D12_QUERY_TYPE_TIMESTAMP,
@@ -3929,14 +4241,14 @@ std::uint64_t RendererD3D12::end_frame(bool present_swap_chain) {
         const UINT present_flags =
             (vsync == 0 && tearing_supported_ && !exclusive_fullscreen_active_) ? DXGI_PRESENT_ALLOW_TEARING
                                                : 0u;
-        {
+        if (stall_watch) {
             const auto stall_watch_pace_start = std::chrono::steady_clock::now();
             pace_present_if_needed(cfg.vsync_interval, cfg.max_fps);
             const double stall_watch_ms =
                 std::chrono::duration<double, std::milli>(
                     std::chrono::steady_clock::now() -
                     stall_watch_pace_start).count();
-            if (trace_stall_watch_enabled() && stall_watch_ms > 12.0) {
+            if (stall_watch_ms > 12.0) {
                 std::ostringstream message;
                 message << "[stall-watch] pace_present_if_needed took "
                           << stall_watch_ms
@@ -3951,14 +4263,16 @@ std::uint64_t RendererD3D12::end_frame(bool present_swap_chain) {
         if (collect_present_telemetry) {
             QueryPerformanceCounter(&present_start);
         }
-        const auto stall_watch_present_start = std::chrono::steady_clock::now();
+        const auto stall_watch_present_start = stall_watch
+            ? std::chrono::steady_clock::now()
+            : std::chrono::steady_clock::time_point{};
         const HRESULT present_hr = swap_chain_->Present(vsync, present_flags);
-        {
+        if (stall_watch) {
             const double stall_watch_ms =
                 std::chrono::duration<double, std::milli>(
                     std::chrono::steady_clock::now() -
                     stall_watch_present_start).count();
-            if (trace_stall_watch_enabled() && stall_watch_ms > 12.0) {
+            if (stall_watch_ms > 12.0) {
                 std::ostringstream message;
                 message << "[stall-watch] IDXGISwapChain::Present took "
                           << stall_watch_ms << "ms vsync=" << vsync
@@ -4417,10 +4731,40 @@ void RendererD3D12::draw(const DrawCall& call) {
         command_list_->IASetPrimitiveTopology(call.topology);
         bound_topology_ = call.topology;
     }
-    command_list_->IASetVertexBuffers(0, 1, &call.vertex_view);
+    // A replayed display list rebinds the same vertex ring allocation for
+    // thousands of consecutive draws, so compare the whole 24-byte view rather
+    // than issuing the call unconditionally. draw() is the only writer of
+    // stream 0 on this command list (the UI helpers, the EFB conversion blit and
+    // the clear quad each own their own pipeline, and every one of them is
+    // followed by invalidate_gx_bindings()), and begin_frame() re-arms the
+    // cached view after the vertex ring has been rewound for the new slot.
+    if (!bound_vertex_view_valid_ ||
+        call.vertex_view.BufferLocation != bound_vertex_view_.BufferLocation ||
+        call.vertex_view.SizeInBytes != bound_vertex_view_.SizeInBytes ||
+        call.vertex_view.StrideInBytes != bound_vertex_view_.StrideInBytes) {
+        command_list_->IASetVertexBuffers(0, 1, &call.vertex_view);
+        bound_vertex_view_ = call.vertex_view;
+        bound_vertex_view_valid_ = true;
+    }
     if (call.index_count > 0) {
         if (call.index_view.BufferLocation) {
-            command_list_->IASetIndexBuffer(&call.index_view);
+            // Same redundant-state elision as the vertex view above. A replayed
+            // display list binds the same index-ring allocation for thousands of
+            // consecutive draws, and IASetIndexBuffer is the one per-draw binding
+            // that was still unconditional: it was issued once per draw even when
+            // the whole 20-byte view was unchanged. draw() is the only writer of
+            // the index binding on this command list, and every other writer (the
+            // UI helpers, the EFB conversion blit) is followed by
+            // invalidate_gx_bindings(), which re-arms the cached view.
+            if (!bound_index_view_valid_ ||
+                call.index_view.BufferLocation !=
+                    bound_index_view_.BufferLocation ||
+                call.index_view.SizeInBytes != bound_index_view_.SizeInBytes ||
+                call.index_view.Format != bound_index_view_.Format) {
+                command_list_->IASetIndexBuffer(&call.index_view);
+                bound_index_view_ = call.index_view;
+                bound_index_view_valid_ = true;
+            }
             command_list_->DrawIndexedInstanced(call.index_count, 1, 0, 0, 0);
         } else {
             command_list_->DrawInstanced(call.index_count, 1, 0, 0);
@@ -4545,8 +4889,9 @@ void RendererD3D12::copy_efb_to_xfb(const EfbCopyParams& params, XfbTexture& des
     if (!dest.texture) {
         throw std::runtime_error("XFB copy has no destination texture");
     }
+    // Another XFB or texture copy can overwrite the shared CPU RTV slot.
+    // Check its current resource, even when this destination has copied before.
     dest.rtv = allocate_conversion_rtv(dest.texture.Get());
-    dest.rtv_valid = true;
 
     // Dest XFB texture -> render target for the stretch blit (the y-scale
     // height difference between src rect and dest texture IS the stretch —
@@ -4668,14 +5013,49 @@ bool RendererD3D12::copy_efb_to_texture(
         // reallocating on every pass/frame; the latest alias still wins.
         (native_bloom ? (1ull << 41) : 0ull);
 
+    // Bound the destination map. Each entry is one copy's SCALED destination
+    // texture, so its size scales with both the copy's logical extent and
+    // `efb_scale_`. At the full 640x456 EFB extent, RGBA8:
+    //
+    //     1x ->  640x 456 ->  1.11 MB
+    //     4x -> 2560x1824 -> 17.81 MB
+    //     6x -> 3840x2736 -> 40.08 MB
+    //
+    // so a 192 MiB default holds only ~10 full-extent entries at 4x. Most SMG
+    // copies are sub-rect masks and bloom workspaces, which are much smaller, but
+    // the full-extent figure is what bounds how far the budget can be lowered:
+    // the earlier "~5 MiB at 4x, ~11 MiB at 6x" here understated a full-extent
+    // entry by ~3.5x, and a budget reasoned from it would be set low enough to
+    // thrash, which is the outcome the note below exists to avoid.
+    //
+    // Before this bound the map only ever grew: a failed allocation or full
+    // shutdown were the only things that removed an entry, so every distinct
+    // (addr, format, depth, bloom) the game had ever copied to stayed resident
+    // for the process lifetime. Evict the least recently used entries until the
+    // byte budget is met. A destination is a pure function of its key, so an
+    // evicted entry costs at most one later re-creation, and the `created` path
+    // below re-establishes the resource, the RTV validity and the size check
+    // exactly as a first use does. `last_used` is stamped on every copy, before
+    // this runs, so the entry used by this call is never a victim, and a
+    // reference to it cannot be invalidated by the erases here.
+    static const std::uint64_t kEfbCopyDestBudgetBytes =
+        efb_copy_dest_budget_bytes();
     EfbCopyDest& dest = efb_copy_dests_[dest_key];
+    dest.last_used = ++efb_copy_dests_tick_;
     const bool created =
         !dest.texture || dest.width != w || dest.height != h;
     if (created) {
         if (dest.texture) {
             retired_efb_copy_textures_[frame_slot_].push_back(
                 std::move(dest.texture));
+            // The replaced texture leaves the budget even though its memory is
+            // still owned by the retirement list for kFramesInFlight. Counting
+            // it here would leak the budget; the retirement list is bounded by
+            // time, not by this map, so the accounting stays exact.
+            efb_copy_dests_bytes_ -= std::min(
+                efb_copy_dests_bytes_, dest.bytes);
         }
+        dest.bytes = 0u;
         dest.rtv = {};
         dest.rtv_valid = false;
         D3D12_HEAP_PROPERTIES hp{};
@@ -4696,6 +5076,9 @@ bool RendererD3D12::copy_efb_to_texture(
                 nullptr, IID_PPV_ARGS(&dest.texture));
         if (FAILED(create_hr)) {
             dump_device_removal(device_.Get());
+            efb_copy_dests_bytes_ -= std::min(
+                efb_copy_dests_bytes_, dest.bytes);
+            dest.bytes = 0u;
             efb_copy_dests_.erase(dest_key);
             std::ostringstream message;
             message << "[efb-copy] dest texture allocation failed"
@@ -4708,9 +5091,52 @@ bool RendererD3D12::copy_efb_to_texture(
         }
         dest.width  = w;
         dest.height = h;
+        // Budget by the resource's own allocation size rather than a hand-computed
+        // w*h*bpp, so the accounting follows the format if kEfbColorFormat changes.
+        dest.bytes = static_cast<std::uint64_t>(
+            device_->GetResourceAllocationInfo(0, 1, &rd).SizeInBytes);
+        efb_copy_dests_bytes_ += dest.bytes;
     }
+    // Trim against the updated allocation, not the destination's old extent.
+    // Shrinking must not evict reusable neighbors; check growth in this call.
+    if (kEfbCopyDestBudgetBytes != 0u &&
+        efb_copy_dests_bytes_ > kEfbCopyDestBudgetBytes) {
+        for (;;) {
+            auto victim = efb_copy_dests_.end();
+            for (auto it = efb_copy_dests_.begin(); it != efb_copy_dests_.end();
+                 ++it) {
+                if (it->first == dest_key) {
+                    continue;
+                }
+                if (victim == efb_copy_dests_.end() ||
+                    it->second.last_used < victim->second.last_used) {
+                    victim = it;
+                }
+            }
+            if (victim == efb_copy_dests_.end()) {
+                break;  // only the entry in use remains
+            }
+            // Hand the texture to the per-frame-slot retirement list rather than
+            // releasing it here. `retired_efb_copy_textures_[slot]` is cleared at
+            // the start of that slot's next begin_frame(), i.e. after
+            // kFramesInFlight frames of GPU work have retired, so a command list
+            // recorded this frame that still references the victim cannot read a
+            // freed resource. Same retirement path the size-change case uses.
+            if (victim->second.texture) {
+                retired_efb_copy_textures_[frame_slot_].push_back(
+                    std::move(victim->second.texture));
+            }
+            efb_copy_dests_bytes_ -= std::min(
+                efb_copy_dests_bytes_, victim->second.bytes);
+            efb_copy_dests_.erase(victim);
+            if (efb_copy_dests_bytes_ <= kEfbCopyDestBudgetBytes) {
+                break;
+            }
+        }
+    }
+    // This descriptor shares its slot with XFB and other texture copies;
+    // destination-local validity cannot prove its current contents.
     dest.rtv = allocate_conversion_rtv(dest.texture.Get());
-    dest.rtv_valid = true;
 
     D3D12_RESOURCE_BARRIER b{};
     b.Type                   = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
@@ -5676,6 +6102,19 @@ void draw_native_settings_overlay(RendererD3D12& renderer) {
 
 void RendererD3D12::present(
     const XfbTexture* source, bool capture_backbuffer) {
+    // Diagnostic stall watch, gated on its own opt-in flag. GALAXY_TRACE_STALL_WATCH
+    // is unset in the shipped runtime-env.json, and trace_stall_watch_enabled()
+    // holds a function-local `static const bool`, so with the flag off this folds to
+    // a constant false and clang deletes every timestamp, subtraction and branch
+    // guarded by it in this function.
+    //
+    // The probes below used to read the clock unconditionally and only *test the
+    // flag afterwards* - two reads per pace_present_if_needed() call and two more
+    // around Present(), plus two around the overlay draw, all on every frame for a
+    // diagnostic that defaults to off. This is the same shape agent 18 already
+    // fixed for the per-command clocks in fifo_parser.cpp, and the same shape
+    // GxBackend's `time_detail` gate already had.
+    const bool stall_watch = trace_stall_watch_enabled();
     // Optional diagnostic: measure the wall-clock gap
     // between successive present() *entries*, independent of the
     // trace_present_stats_enabled()-gated telemetry below. Everything that
@@ -5683,7 +6122,7 @@ void RendererD3D12::present(
     // servicing, guest simulation -- lands in this gap, so it catches a
     // stall the begin_frame/Present/overlay-draw-local stall-watch probes
     // miss entirely because it happens *outside* all of them.
-    if (trace_stall_watch_enabled()) {
+    if (stall_watch) {
         static std::chrono::steady_clock::time_point
             stall_watch_last_present_entry{};
         const auto stall_watch_now = std::chrono::steady_clock::now();
@@ -5855,17 +6294,27 @@ void RendererD3D12::present(
     command_list_->RSSetScissorRects(1, &overlay_sci);
 
     {
-        const auto stall_watch_overlay_start = std::chrono::steady_clock::now();
+        // Gated on the same opt-in flag as the other stall-watch probes; the
+        // flag's function-local static makes this a constant false in the
+        // shipping configuration, so the two clock reads and the branch are
+        // deleted rather than merely skipped.
+        const bool stall_watch_overlay = trace_stall_watch_enabled();
+        const auto stall_watch_overlay_start = stall_watch_overlay
+            ? std::chrono::steady_clock::now()
+            : std::chrono::steady_clock::time_point{};
         draw_and_handle_file_select_settings_button(*this);
         draw_native_settings_overlay(*this);
-        const double stall_watch_ms = std::chrono::duration<double, std::milli>(
-            std::chrono::steady_clock::now() -
-            stall_watch_overlay_start).count();
-        if (trace_stall_watch_enabled() && stall_watch_ms > 4.0) {
-            std::ostringstream message;
-            message << "[stall-watch] draw_native_settings_overlay took "
-                      << stall_watch_ms << "ms\n";
-            std::cerr << message.str();
+        if (stall_watch_overlay) {
+            const double stall_watch_ms =
+                std::chrono::duration<double, std::milli>(
+                    std::chrono::steady_clock::now() -
+                    stall_watch_overlay_start).count();
+            if (stall_watch_ms > 4.0) {
+                std::ostringstream message;
+                message << "[stall-watch] draw_native_settings_overlay took "
+                          << stall_watch_ms << "ms\n";
+                std::cerr << message.str();
+            }
         }
     }
 

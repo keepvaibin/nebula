@@ -2156,8 +2156,14 @@ int main() {
 
     {
         NotifyProbe notify{};
-        memory.user = &notify;
-        memory.notify_write = &capture_notify_write;
+        // This fixture owns notification observations, not device probes.
+        // Slow mapped-RAM accesses must not call the DeviceProbe callbacks
+        // with a NotifyProbe user pointer (probe_read would corrupt writes).
+        galaxy::GuestMemoryV1 notify_memory = memory;
+        notify_memory.user = &notify;
+        notify_memory.notify_write = &capture_notify_write;
+        notify_memory.read_device = nullptr;
+        notify_memory.write_device = nullptr;
         const auto reset_notify = [&] {
             notify = {};
         };
@@ -2174,7 +2180,7 @@ int main() {
         vec_copy_context.gpr[4] = vec_src;
         reset_notify();
         galaxy::native_vec_copy_12(
-            &vec_copy_context, &memory, nullptr, 0x8001CF64u);
+            &vec_copy_context, &notify_memory, nullptr, 0x8001CF64u);
         passed &= expect(
             notify.writes == 3u && notify.address == vec_dst + 8u &&
                 notify.size == 4u,
@@ -2184,7 +2190,7 @@ int main() {
         vec_zero_context.gpr[3] = vec_dst;
         reset_notify();
         galaxy::native_vec_zero(
-            &vec_zero_context, &memory, nullptr, 0x8001D000u);
+            &vec_zero_context, &notify_memory, nullptr, 0x8001D000u);
         passed &= expect(
             notify.writes == 1u && notify.address == vec_dst &&
                 notify.size == 12u,
@@ -2200,7 +2206,7 @@ int main() {
             galaxy::widen_f32_bits(std::bit_cast<std::uint32_t>(3.0f));
         reset_notify();
         galaxy::native_vec_set_from_fprs(
-            &vec_set_context, &memory, nullptr, 0x8001D010u);
+            &vec_set_context, &notify_memory, nullptr, 0x8001D010u);
         passed &= expect(
             notify.writes == 1u && notify.address == vec_dst &&
                 notify.size == 12u,
@@ -2216,7 +2222,7 @@ int main() {
             galaxy::widen_f32_bits(std::bit_cast<std::uint32_t>(3.0f));
         for (std::uint32_t i = 0; i < 11u; ++i) {
             galaxy::guest_store_u32(
-                &memory,
+                &notify_memory,
                 mtx_addr + i * 4u,
                 std::bit_cast<std::uint32_t>(1.0f),
                 nullptr,
@@ -2224,14 +2230,12 @@ int main() {
         }
         reset_notify();
         galaxy::native_mtx_scale_803A387C(
-            &mtx_scale_context, &memory, nullptr, 0x803A387Cu);
+            &mtx_scale_context, &notify_memory, nullptr, 0x803A387Cu);
         passed &= expect(
             notify.writes == 9u && notify.address == mtx_addr + 0x28u &&
                 notify.size == 4u,
             "native matrix scale notifies each original ordered word store");
 
-        memory.notify_write = nullptr;
-        memory.user = &device_probe;
     }
 
     {
@@ -2663,6 +2667,7 @@ int main() {
     std::uint32_t jpa_projection_cached_target = 0u;
     galaxy::NativeGameFunction jpa_projection_cached_function = nullptr;
     galaxy::PpcContext jpa_projection_context{};
+    jpa_projection_context.msr = galaxy::kMsrFloatingPointAvailable;
     jpa_projection_context.gpr[3] = jpa_projection_matrix;
     jpa_projection_context.fpr_bits[1] =
         galaxy::widen_f32_bits(std::bit_cast<std::uint32_t>(2.0F));
@@ -4744,6 +4749,7 @@ int main() {
     memory.read_device = nullptr;
     memory.write_device = &capture_fifo_write;
     jpa_draw_particle_context = {};
+    jpa_draw_particle_context.msr = galaxy::kMsrFloatingPointAvailable;
     jpa_draw_particle_context.hid2 = 0xA0000000u;
     jpa_draw_particle_context.gpr[1] = jpa_draw_stack;
     jpa_draw_particle_context.gpr[2] = 0x80000000u;
@@ -4809,6 +4815,7 @@ int main() {
     memory.read_device = nullptr;
     memory.write_device = &capture_fifo_write;
     jpa_draw_particle_context = {};
+    jpa_draw_particle_context.msr = galaxy::kMsrFloatingPointAvailable;
     jpa_draw_particle_context.hid2 = 0xA0000000u;
     jpa_draw_particle_context.gpr[1] = jpa_draw_stack;
     jpa_draw_particle_context.gpr[2] = 0x80000000u;

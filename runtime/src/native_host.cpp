@@ -2402,11 +2402,6 @@ WgpipeProfileStats& wgpipe_profile_stats() {
     return stats;
 }
 
-bool wgpipe_profile_enabled() {
-    static const bool enabled = read_env_flag("GALAXY_PROFILE_WGPIPE");
-    return enabled;
-}
-
 void dump_wgpipe_profile() {
     const WgpipeProfileStats& stats = wgpipe_profile_stats();
     const std::uint64_t write_calls =
@@ -2444,9 +2439,6 @@ void dump_wgpipe_profile() {
 }
 
 void ensure_wgpipe_profile_registered() {
-    if (!wgpipe_profile_enabled()) {
-        return;
-    }
     static std::atomic_bool registered{false};
     bool expected = false;
     if (registered.compare_exchange_strong(
@@ -2455,10 +2447,13 @@ void ensure_wgpipe_profile_registered() {
     }
 }
 
+// Every caller already resolved `GALAXY_PROFILE_WGPIPE` into
+// `GuestAddressSpace::wgpipe_profile_enabled_` at construction, so these
+// recorders no longer re-test it: the previous form put a function-local
+// `static` guard (acquire load + test + branch) plus, on the first path into
+// it, a getenv_s CRT call in front of every gather-pipe write. They run only
+// when the owner asked for the profile, so the registration is still lazy.
 void record_wgpipe_write(std::size_t bytes) {
-    if (!wgpipe_profile_enabled()) {
-        return;
-    }
     ensure_wgpipe_profile_registered();
     WgpipeProfileStats& stats = wgpipe_profile_stats();
     stats.write_calls.fetch_add(1, std::memory_order_relaxed);
@@ -2466,9 +2461,6 @@ void record_wgpipe_write(std::size_t bytes) {
 }
 
 void record_wgpipe_flush(std::size_t bytes, bool live_fifo) {
-    if (!wgpipe_profile_enabled()) {
-        return;
-    }
     ensure_wgpipe_profile_registered();
     WgpipeProfileStats& stats = wgpipe_profile_stats();
     stats.gather_flushes.fetch_add(1, std::memory_order_relaxed);
@@ -2479,9 +2471,6 @@ void record_wgpipe_flush(std::size_t bytes, bool live_fifo) {
 }
 
 void record_wgpipe_cp_advance(std::uint32_t bytes) {
-    if (!wgpipe_profile_enabled()) {
-        return;
-    }
     ensure_wgpipe_profile_registered();
     WgpipeProfileStats& stats = wgpipe_profile_stats();
     stats.cp_advance_calls.fetch_add(1, std::memory_order_relaxed);
@@ -2489,9 +2478,6 @@ void record_wgpipe_cp_advance(std::uint32_t bytes) {
 }
 
 void record_wgpipe_pe_event(bool token) {
-    if (!wgpipe_profile_enabled()) {
-        return;
-    }
     ensure_wgpipe_profile_registered();
     WgpipeProfileStats& stats = wgpipe_profile_stats();
     if (token) {
@@ -6092,16 +6078,34 @@ struct NativeInputReplayColumns {
 };
 
 std::optional<std::string> read_env_string(const char* name) {
-    constexpr std::size_t kMaxWindowsEnvironmentValueLength = 32767u;
-    std::vector<char> buffer(kMaxWindowsEnvironmentValueLength + 1u);
+    // Every value this reads is a short script, path or number. The previous
+    // form allocated and zero-filled a 32767-byte heap buffer for *every* call
+    // — and `build_native_input_script_overlay` makes ~15 such calls per HID
+    // report, i.e. hundreds per second — so the caller paid a 32 KiB
+    // zero-filling allocation to read a handful of bytes. A stack buffer
+    // covers every real value; the heap path survives only for a value that
+    // genuinely does not fit, so the "too long" contract is unchanged.
+    constexpr std::size_t kStackEnvironmentValueLength = 512u;
+    char stack_buffer[kStackEnvironmentValueLength]{};
     std::size_t length = 0;
     const errno_t result =
-        getenv_s(&length, buffer.data(), buffer.size(), name);
-    if (result != 0) {
+        getenv_s(&length, stack_buffer, sizeof(stack_buffer), name);
+    if (result == 0) {
+        if (length <= 1u) {
+            return std::nullopt;
+        }
+        return std::string(stack_buffer, length - 1u);
+    }
+    // The value exists but does not fit the stack buffer. `getenv_s` has
+    // already reported its size in `length`, so a single exactly-sized
+    // allocation replaces the old fixed 32 KiB one. A failure here can only
+    // mean "too long", which is the original message.
+    std::vector<char> buffer(length + 1u);
+    if (getenv_s(&length, buffer.data(), buffer.size(), name) != 0) {
         throw std::runtime_error(
             std::string("environment variable is too long: ") + name);
     }
-    if (length <= 1) {
+    if (length <= 1u) {
         return std::nullopt;
     }
     return std::string(buffer.data(), length - 1u);
@@ -9576,6 +9580,12 @@ GuestAddressSpace::GuestAddressSpace(
     wgpipe_pe_scan_hint_enabled_ = pe_scan_hints_enabled;
     wgpipe_pe_ownership_trace_enabled_ =
         read_env_flag("GALAXY_TRACE_WGPIPE_PE_OWNERSHIP", false);
+    // Launch-time switches read once instead of once per gather-pipe write.
+    wgpipe_profile_enabled_ = read_env_flag("GALAXY_PROFILE_WGPIPE", false);
+    direct_wgpipe_pe_events_ =
+        read_env_flag("GALAXY_DIRECT_WGPIPE_PE_EVENTS", false);
+    trace_gx_fifo_append_enabled_ =
+        read_env_flag("GALAXY_TRACE_GX_FIFO_APPEND_PATTERN", false);
     if (wgpipe_pe_ownership_trace_enabled_) {
         wgpipe_pe_trace_records_.reserve(kWgpipePeTraceCapacity);
         wgpipe_ownership_trace_records_.reserve(
@@ -10081,9 +10091,13 @@ void GuestAddressSpace::advance_cp_fifo(std::uint32_t new_wr_ptr) {
         cp_rd_ptr_ = new_wr_ptr;
         return;
     }
-    record_wgpipe_cp_advance(bytes_to_read);
-    static std::uint64_t s_cp_bytes_total = 0;
-    const bool first_ever = (s_cp_bytes_total == 0);
+    if (wgpipe_profile_enabled_) {
+        record_wgpipe_cp_advance(bytes_to_read);
+    }
+    // A plain member, not a function-local `static`: the `static` form costs a
+    // thread-safe-initialisation guard on every CP-ring advance, and it was only
+    // ever read to answer "is this the first advance?".
+    const bool first_ever = (cp_ring_bytes_total_ == 0u);
     // Copy ring-buffer bytes from physical MEM1 into gx_fifo_.
     std::uint32_t rd = cp_rd_ptr_;
     std::uint32_t remaining = bytes_to_read;
@@ -10104,12 +10118,14 @@ void GuestAddressSpace::advance_cp_fifo(std::uint32_t new_wr_ptr) {
                 gx_fifo_.end(),
                 mem1_view_.data() + rd,
                 mem1_view_.data() + rd + chunk);
-            trace_gx_fifo_append("cp-ring", append_start, chunk);
+            if (trace_gx_fifo_append_enabled_) {
+                trace_gx_fifo_append("cp-ring", append_start, chunk);
+            }
         }
         rd += chunk;
         remaining -= chunk;
     }
-    s_cp_bytes_total += bytes_to_read;
+    cp_ring_bytes_total_ += bytes_to_read;
     if (first_ever) {
         if (trace_host_startup()) {
             std::cout << "[cp] CP FIFO ring-buffer simulation active: first "
@@ -10358,9 +10374,10 @@ void GuestAddressSpace::trace_gx_fifo_append(
     const char* source,
     std::size_t append_start,
     std::size_t append_size) {
-    static const bool enabled =
-        read_env_flag("GALAXY_TRACE_GX_FIFO_APPEND_PATTERN", false);
-    if (!enabled || append_size == 0 || gx_fifo_.size() < 4) {
+    // The caller tests `trace_gx_fifo_append_enabled_` before calling, so this
+    // body is reached only under the opt-in trace. No per-call static guard and
+    // no getenv_s on the gather-pipe hot path any more.
+    if (append_size == 0 || gx_fifo_.size() < 4) {
         return;
     }
 
@@ -10476,9 +10493,13 @@ void GuestAddressSpace::flush_wgpipe_gather_burst(
     if (live_fifo) {
         const std::size_t append_start = gx_fifo_.size();
         gx_fifo_.insert(gx_fifo_.end(), bytes.begin(), bytes.end());
-        trace_gx_fifo_append("wgpipe-burst", append_start, bytes.size());
+        if (trace_gx_fifo_append_enabled_) {
+            trace_gx_fifo_append("wgpipe-burst", append_start, bytes.size());
+        }
     }
-    record_wgpipe_flush(bytes.size(), live_fifo);
+    if (wgpipe_profile_enabled_) {
+        record_wgpipe_flush(bytes.size(), live_fifo);
+    }
 }
 
 void GuestAddressSpace::flush_wgpipe_gather_tail_for_frame() {
@@ -10502,11 +10523,15 @@ void GuestAddressSpace::flush_wgpipe_gather_tail_for_frame() {
         wgpipe_gather_.begin(),
         wgpipe_gather_.begin() +
             static_cast<std::ptrdiff_t>(wgpipe_gather_count_));
-    trace_gx_fifo_append(
-        "wgpipe-tail",
-        append_start,
-        wgpipe_gather_count_);
-    record_wgpipe_flush(wgpipe_gather_count_, live_fifo);
+    if (trace_gx_fifo_append_enabled_) {
+        trace_gx_fifo_append(
+            "wgpipe-tail",
+            append_start,
+            wgpipe_gather_count_);
+    }
+    if (wgpipe_profile_enabled_) {
+        record_wgpipe_flush(wgpipe_gather_count_, live_fifo);
+    }
     wgpipe_gather_count_ = 0;
 }
 
@@ -10578,7 +10603,9 @@ void GuestAddressSpace::scan_direct_wgpipe_pe_events(
              static_cast<std::uint32_t>(wgpipe_recent_bytes_[4]);
         if (reg == 0x45u && (bp_val & 0x2u) != 0u) {
             raise_pe_finish();
-            record_wgpipe_pe_event(false);
+            if (wgpipe_profile_enabled_) {
+                record_wgpipe_pe_event(false);
+            }
             static int s_finish_log = 0;
             if (trace_host_startup() && ++s_finish_log <= 4) {
                 std::cout << "[pe-host] draw-done token #"
@@ -10588,7 +10615,9 @@ void GuestAddressSpace::scan_direct_wgpipe_pe_events(
             raise_pe_token(
                 static_cast<std::uint16_t>(bp_val & 0xFFFFu),
                 reg == 0x48u);
-            record_wgpipe_pe_event(true);
+            if (wgpipe_profile_enabled_) {
+                record_wgpipe_pe_event(true);
+            }
             static int s_token_log = 0;
             if (trace_host_startup() && reg == 0x48u &&
                 ++s_token_log <= 4) {
@@ -10603,7 +10632,14 @@ bool GuestAddressSpace::write_wgpipe_bytes(std::span<const std::byte> bytes) {
     if (bytes.empty()) {
         return true;
     }
-    record_wgpipe_write(bytes.size());
+    // Both of these are launch-time switches resolved in the constructor. They
+    // used to be re-tested here as function-local `static`s, which put a
+    // thread-safe-initialisation guard — and, for GALAXY_DIRECT_WGPIPE_PE_EVENTS,
+    // a getenv_s CRT call — in front of every guest GX command word and every
+    // vertex byte the gather pipe accepts.
+    if (wgpipe_profile_enabled_) {
+        record_wgpipe_write(bytes.size());
+    }
     std::uint32_t diagnostic_gather_before = 0u;
     bool diagnostic_live_before = false;
     if (wgpipe_pe_ownership_trace_enabled_) {
@@ -10615,9 +10651,7 @@ bool GuestAddressSpace::write_wgpipe_bytes(std::span<const std::byte> bytes) {
         record_wgpipe_pe_scan_hint(bytes);
     }
 
-    static const bool direct_pe_events =
-        read_env_flag("GALAXY_DIRECT_WGPIPE_PE_EVENTS", false);
-    if (direct_pe_events) {
+    if (direct_wgpipe_pe_events_) {
         scan_direct_wgpipe_pe_events(bytes);
     }
 
@@ -11252,6 +11286,12 @@ const GuestAddressSpace::DiscReadTicket* GuestAddressSpace::disc_read_ticket(
 
 void GuestAddressSpace::forget_disc_read_ticket(
     std::uint32_t physical_request) {
+    // Tickets are only created when `trace_di_io()` is on, but this erase runs
+    // unconditionally from the ack and latched-reply-release paths. Skip the
+    // hash and tree descent when there is nothing to erase.
+    if (disc_read_tickets_.empty()) {
+        return;
+    }
     disc_read_tickets_.erase(physical_request);
 }
 
@@ -12579,8 +12619,22 @@ bool GuestAddressSpace::write_device(
                     std::cout << std::dec << '\n';
                 }
             } else {
-                if (trace_di_io() &&
-                    latched_reply_requests_.erase(acked) != 0 &&
+                // Retire the request from the latched set unconditionally.
+                // `latched_reply_requests_.insert()` on the reply path
+                // (post_ios_reply) is unconditional, but this erase used to sit
+                // behind `trace_di_io() &&`. trace_di_io() folds to a
+                // compile-time false under the default GALAXY_GUEST_TRACE==0, so
+                // in every normal build the set was only ever inserted into and
+                // never removed from: one std::set node and one allocation leak
+                // per latched IOS reply for the whole session, plus a growing
+                // tree walked by the count() probes above.
+                //
+                // Only the logging stays gated; the set's contents are a pure
+                // function of the acknowledged request either way, so an
+                // instrumented build observes the same value it did before.
+                const bool latched_retired =
+                    latched_reply_requests_.erase(acked) != 0;
+                if (trace_di_io() && latched_retired &&
                     trace_di_io_counter_allows(s_ack_logs)) {
                     std::cout << "[ipc-ack] Y2 req=0x" << std::hex << acked
                               << " prev=0x" << previous_ctrl;
@@ -13838,11 +13892,22 @@ bool GuestAddressSpace::handle_di_ioctl(
         if (byte_count > 0u) {
             copy_disc_bytes(out_buf, byte_offset, byte_count);
             note_disc_read_for_scene_hint(byte_offset, byte_count);
-            const DiscReadTicket ticket = make_disc_read_ticket(
-                physical_request, out_buf, byte_offset, byte_count,
-                /*ioctlv=*/false);
-            remember_disc_read_ticket(ticket);
+            // The read ticket exists only to be printed. Every reader
+            // (acknowledge_ios_request, post_ios_reply and the two latched-reply
+            // paths) is inside a `trace_di_io()` branch, while
+            // `make_disc_read_ticket` costs 64 iterations of `disc_byte_at`
+            // (each a range check plus a `disc_override_at` scan) plus two
+            // FNV-1a hashes, and `remember_disc_read_ticket` costs an
+            // unordered_map node allocation that `forget_disc_read_ticket`
+            // then frees. SMG streams from disc continuously, so a level load
+            // pays that thousands of times for a string nobody reads. Build it
+            // only when the trace that consumes it is on; the erase sites stay
+            // unconditional and become no-ops on an empty map.
             if (trace_di_io()) {
+                const DiscReadTicket ticket = make_disc_read_ticket(
+                    physical_request, out_buf, byte_offset, byte_count,
+                    /*ioctlv=*/false);
+                remember_disc_read_ticket(ticket);
                 std::cout << "[di-read-copy] seq=" << ticket.sequence
                           << " req=0x" << std::hex << ticket.request
                           << " dst=0x" << ticket.destination
@@ -13997,11 +14062,11 @@ bool GuestAddressSpace::handle_di_ioctlv(
         if (byte_count > 0u) {
             copy_disc_bytes(out_buf, byte_offset, byte_count);
             note_disc_read_for_scene_hint(byte_offset, byte_count);
-            const DiscReadTicket ticket = make_disc_read_ticket(
-                physical_request, out_buf, byte_offset, byte_count,
-                /*ioctlv=*/true);
-            remember_disc_read_ticket(ticket);
             if (trace_di_io()) {
+                const DiscReadTicket ticket = make_disc_read_ticket(
+                    physical_request, out_buf, byte_offset, byte_count,
+                    /*ioctlv=*/true);
+                remember_disc_read_ticket(ticket);
                 std::cout << "[di-read-copy] seq=" << ticket.sequence
                           << " req=0x" << std::hex << ticket.request
                           << " dst=0x" << ticket.destination
@@ -15587,7 +15652,10 @@ bool GuestAddressSpace::dsp_native_suppress_task_done_mail(
             std::cout << '\n';
             next_wait_log = now + std::chrono::milliseconds(50);
         }
-        std::this_thread::yield();
+        // Targeted handoff to the DSP worker; see the note on the to-DSP slot
+        // wait below. This loop is on the simulation thread, which is the
+        // single-thread critical path.
+        SwitchToThread();
     }
     if ((trace_dsp_host() || trace_native_frame) && wait_yields != 0u &&
         (dsp_native_suppressed_task_done_count_ <= 16u ||
@@ -15675,7 +15743,15 @@ void GuestAddressSpace::dsp_native_wait_for_sync_task_done(
             dsp_native_worker_->signal_work();
         }
         ++wait_yields;
-        std::this_thread::yield();
+        // This is a handoff to one specific thread, not a request to end the
+        // slice. `SwitchToThread` yields only to a thread that is ready on this
+        // processor and returns immediately when none is, which is the cheaper
+        // and more targeted primitive for a producer/consumer rendezvous; it is
+        // already the established pattern for the same DSP handoff in
+        // native_runtime.cpp. `std::this_thread::yield` additionally makes a
+        // full scheduler round trip, which this loop — which runs while the
+        // simulation thread is already the critical path — should not pay.
+        SwitchToThread();
     }
 }
 
@@ -15766,7 +15842,14 @@ void GuestAddressSpace::dsp_native_forward_mail(std::uint32_t mail) {
                       << std::dec << '\n';
             next_wait_log = now + std::chrono::milliseconds(50);
         }
-        std::this_thread::yield();
+        // Handoff to the DSP worker rather than surrendering the slice: this
+        // loop runs on the simulation thread, which is the single-thread
+        // critical path, and the wait is normally only a few mailbox polls long.
+        // `SwitchToThread` yields to a thread ready on this processor and returns
+        // immediately when none is -- the cheaper, more targeted primitive for a
+        // producer/consumer rendezvous. Same pattern already used for this exact
+        // DSP handoff in native_runtime.cpp.
+        SwitchToThread();
     }
     const auto waited_duration =
         std::chrono::steady_clock::now() - wait_start;
@@ -16442,7 +16525,12 @@ void GuestAddressSpace::dsp_native_pump() {
         }
         }
     }
+    // Empty polling does not consume a publication. Avoid taking exclusive
+    // ownership of the worker-shared cache line until an edge is observed.
+    // A publication after the negative load stays latched for the next pump;
+    // the positive path keeps the existing acquire/consume/coalescing order.
     const bool observed_dirq =
+        dsp_native_int_pending_.load(std::memory_order_acquire) &&
         dsp_native_int_pending_.exchange(false, std::memory_order_acq_rel);
     const std::uint16_t observed_visible_high =
         read_storage_be16(broadway_registers_, kDspMailboxFromHighOffset);
@@ -16545,7 +16633,9 @@ void GuestAddressSpace::poll_native_dsp(cadence::DspPollOrigin origin) {
         !dsp_native_->cpu_mail_consumed()) {
         cadence::ScopedPhaseTimer yield_timer(
             timing_session, cadence::dsp_poll_timing_phase(origin, true));
-        std::this_thread::yield();
+        // Targeted handoff to the DSP worker rather than a full slice surrender;
+        // see the note in dsp_native_forward_mail's wait loop.
+        SwitchToThread();
     }
 }
 
@@ -29950,18 +30040,13 @@ void GuestAddressSpace::service_virtual_wiimote_input_device(
         std::cerr << trace_line.str();
     }
     NativeHidHostPointerMetadata host_pointer_metadata{};
-    // Avoid even the atomic load in normal interactive play. The marker is a
-    // diagnostic timing input and is consumed only by explicitly relative
-    // stick scripts or marker-stopped button scripts.
-    const bool marker_timed_input_enabled =
-        read_env_flag(
-            "GALAXY_INPUT_STICK_SCRIPT_RELATIVE_MARIO_CONTROL") ||
-        read_env_flag(
-            "GALAXY_INPUT_AUTOPRESS_SCRIPT_STOP_AT_MARIO_CONTROL");
+    // Read the one-shot marker cheaply at the report boundary. Script helpers
+    // evaluate their selectors live; a process-static selector here would hide
+    // a published marker if timing was enabled after the first HID report.
+    // Each helper decides whether it uses the marker, so ordinary input and
+    // absolute scripts remain unchanged without repeated selector lookups.
     const std::optional<std::uint64_t> first_mario_control_vi =
-        marker_timed_input_enabled
-            ? native_input_first_mario_control_vi()
-            : std::nullopt;
+        native_input_first_mario_control_vi();
     const galaxy::input::WiimoteInputSnapshot snapshot =
         build_native_hid_input_snapshot(
             emitted_report_mode,

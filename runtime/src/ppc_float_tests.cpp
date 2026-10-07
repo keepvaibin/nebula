@@ -481,6 +481,15 @@ bool fused_binary32_matches_software_reference(std::uint32_t mode) {
     passed &= check(0u, 0xBF800000u, 0x80000000u);
     passed &= check(0x80000000u, 0x3F800000u, 0u);
     passed &= check(0x3F800000u, 0x3F800000u, 0xBF800000u);
+    // Sums that land exactly on a binary32 midpoint after binary64 rounding,
+    // with a residual below binary64 precision on either side. A plain
+    // conversion rounds these to even; the fused result follows the residual.
+    for (auto sign : {0u, 0x80000000u}) {
+        passed &= check(0x3F7FFFFFu ^ sign, 0x3F800001u, 0x28000400u ^ sign);
+        passed &= check(0x3F7FFFFFu ^ sign, 0x3F800001u, 0x287FFC00u ^ sign);
+        passed &= check(0x3F800002u ^ sign, 0x3F7FFFFFu, 0x287FFC00u ^ sign);
+        passed &= check(0x3F800002u ^ sign, 0x3F7FFFFFu, 0x28000400u ^ sign);
+    }
     // Exercise the fused proof interval at different product binades and
     // far outside both boundaries. The independent SoftFloat oracle above
     // checks result bits, exceptions, FI/FR/FPRF and caller state for every
@@ -1408,8 +1417,357 @@ bool scalar_estimates_preserve_operand_and_result_widths() {
 
 }  // namespace
 
+// Native division, estimate, frsp and fctiwz admissions must equal an
+// independent SoftFloat evaluation of the architectural definition, including
+// FI/FR and every status bit, for ordinary and boundary operands.
+bool native_division_estimates_and_conversions_match_software_reference() {
+    const auto saved_rounding = softfloat_roundingMode;
+    const auto saved_tininess = softfloat_detectTininess;
+    const auto saved_exceptions = softfloat_exceptionFlags;
+    softfloat_detectTininess = softfloat_tininess_afterRounding;
+    const auto restore = [&]() {
+        softfloat_roundingMode = saved_rounding;
+        softfloat_detectTininess = saved_tininess;
+        softfloat_exceptionFlags = saved_exceptions;
+    };
+    const auto exceptions_of = [](std::uint_fast8_t flags) {
+        return ((flags & softfloat_flag_inexact) != 0 ? 0x02000000u : 0u) |
+               ((flags & softfloat_flag_underflow) != 0 ? 0x08000000u : 0u) |
+               ((flags & softfloat_flag_overflow) != 0 ? 0x10000000u : 0u) |
+               ((flags & softfloat_flag_infinite) != 0 ? 0x04000000u : 0u);
+    };
+    bool passed = true;
+
+    const auto check_divide = [&](std::uint32_t a, std::uint32_t b) {
+        if ((a & 0x7F800000u) == 0x7F800000u || (b & 0x7F800000u) == 0x7F800000u ||
+            (b & 0x7FFFFFFFu) == 0u) {
+            return true;
+        }
+        softfloat_roundingMode = softfloat_round_near_even;
+        softfloat_exceptionFlags = 0;
+        const auto primary = f32_div(float32_t{a}, float32_t{b});
+        const auto flags = softfloat_exceptionFlags;
+        softfloat_roundingMode = softfloat_round_minMag;
+        softfloat_exceptionFlags = 0;
+        const auto truncated = f32_div(float32_t{a}, float32_t{b});
+        const bool inexact = (flags & softfloat_flag_inexact) != 0;
+        const bool rounded_up = inexact && primary.v != truncated.v;
+        const auto actual = galaxy::ppc_f32_binary(
+            galaxy::PpcFloatBinaryOperation::Divide, a, b, 0u);
+        const auto wide = galaxy::ppc_f64_binary_to_f32(
+            galaxy::PpcFloatBinaryOperation::Divide,
+            galaxy::widen_f32_bits(a), galaxy::widen_f32_bits(b), 0u);
+        const auto matches = [&](const galaxy::PpcFloatResult& r) {
+            return r.bits == galaxy::widen_f32_bits(primary.v) &&
+                   (r.exception_bits & 0x1E000000u) == exceptions_of(flags) &&
+                   r.inexact == inexact && r.rounded_up == rounded_up &&
+                   r.fprf == galaxy::ppc_f32_passthrough(primary.v).fprf;
+        };
+        if (!matches(actual) || !matches(wide)) {
+            std::cerr << "FAILED: divide a=0x" << std::hex << a << " b=0x" << b
+                      << " expected=0x" << primary.v << " actual-wide=0x"
+                      << actual.bits << " via-f64=0x" << wide.bits << std::dec
+                      << '\n';
+            return false;
+        }
+        return true;
+    };
+    std::uint32_t random = 0x44495631u;
+    const auto next = [&]() {
+        random ^= random << 13u;
+        random ^= random >> 17u;
+        random ^= random << 5u;
+        return random;
+    };
+    constexpr std::array<std::uint32_t, 14> edges{
+        0x3F800000u, 0xBF800000u, 0x40000000u, 0x40400000u, 0x00800000u,
+        0x00800001u, 0x7F7FFFFFu, 0x007FFFFFu, 0x00000001u, 0x7F000000u,
+        0x3F7FFFFFu, 0x3F800001u, 0x01000000u, 0x7E800000u};
+    for (auto a : edges) for (auto b : edges) passed &= check_divide(a, b);
+    for (auto a : {0u, 0x80000000u}) {
+        for (auto b : edges) {
+            passed &= check_divide(a, b);
+            passed &= check_divide(b, a);
+        }
+    }
+    for (std::uint32_t i = 0u; passed && i < 262144u; ++i) {
+        passed &= check_divide(next(), next());
+        // Near-equal exponents exercise inexact and exact quotients alike.
+        const std::uint32_t a = 0x3F800000u | (next() & 0x007FFFFFu);
+        const std::uint32_t b = 0x3F800000u | (next() & 0x007FFFFFu);
+        passed &= check_divide(a, b);
+        passed &= check_divide(a & 0xFFFF0000u, b & 0xFFFF0000u);
+    }
+
+    const auto check_estimates = [&](std::uint32_t bits) {
+        // Reference definition: round-toward-zero reciprocal, then truncate.
+        softfloat_roundingMode = softfloat_round_minMag;
+        const auto truncate32 = [](std::uint32_t value) {
+            const std::uint32_t exponent = value & 0x7F800000u;
+            return exponent == 0u || exponent == 0x7F800000u
+                ? value : value & ~0x00000FFFu;
+        };
+        softfloat_exceptionFlags = 0;
+        const auto reciprocal =
+            f32_div(float32_t{0x3F800000u}, float32_t{bits});
+        const auto reciprocal_flags = softfloat_exceptionFlags;
+        const auto expected_reciprocal = truncate32(reciprocal.v);
+        const auto actual_reciprocal =
+            galaxy::ppc_f32_reciprocal_estimate(bits, 0u);
+        if ((bits & 0x7F800000u) != 0x7F800000u &&
+            (bits & 0x7FFFFFFFu) != 0u &&
+            (actual_reciprocal.bits != galaxy::widen_f32_bits(expected_reciprocal) ||
+             (actual_reciprocal.exception_bits & 0x1E000000u) !=
+                 (exceptions_of(reciprocal_flags) & ~0x02000000u))) {
+            std::cerr << "FAILED: fres estimate bits=0x" << std::hex << bits
+                      << " expected=0x" << expected_reciprocal << " actual=0x"
+                      << actual_reciprocal.bits << std::dec << '\n';
+            return false;
+        }
+        if ((bits & 0x80000000u) == 0u && (bits & 0x7F800000u) != 0x7F800000u &&
+            (bits & 0x7FFFFFFFu) != 0u) {
+            softfloat_exceptionFlags = 0;
+            const auto root = f32_sqrt(float32_t{bits});
+            const auto root_flags = softfloat_exceptionFlags;
+            softfloat_exceptionFlags = 0;
+            const auto inverse =
+                f32_div(float32_t{0x3F800000u}, float32_t{root.v});
+            const auto inverse_flags = softfloat_exceptionFlags;
+            const auto expected = truncate32(inverse.v);
+            const auto actual = galaxy::ppc_f32_reciprocal_sqrt_estimate(bits, 0u);
+            if (actual.bits != galaxy::widen_f32_bits(expected) ||
+                (actual.exception_bits & 0x1E000000u) !=
+                    (exceptions_of(static_cast<std::uint_fast8_t>(root_flags | inverse_flags)) &
+                     ~0x02000000u)) {
+                std::cerr << "FAILED: frsqrte estimate bits=0x" << std::hex
+                          << bits << " expected=0x" << expected << " actual=0x"
+                          << actual.bits << std::dec << '\n';
+                return false;
+            }
+        }
+        return true;
+    };
+    for (auto bits : edges) {
+        passed &= check_estimates(bits);
+        passed &= check_estimates(bits | 0x80000000u);
+    }
+    // Powers of two and their neighbours sit on truncation boundaries.
+    for (std::uint32_t exponent = 0u; exponent < 255u; ++exponent) {
+        for (auto fraction : {0u, 1u, 0x007FFFFFu, 0x00400000u}) {
+            passed &= check_estimates((exponent << 23u) | fraction);
+        }
+    }
+    for (std::uint32_t i = 0u; passed && i < 262144u; ++i) {
+        passed &= check_estimates(next());
+    }
+
+    // Binary64 estimates against the same definition in binary64/binary32.
+    const auto check_estimates64 = [&](std::uint64_t bits) {
+        const bool special = (bits & 0x7FF0000000000000ull) == 0x7FF0000000000000ull ||
+                             (bits & 0x7FFFFFFFFFFFFFFFull) == 0u;
+        if (special) {
+            return true;
+        }
+        softfloat_roundingMode = softfloat_round_minMag;
+        softfloat_exceptionFlags = 0;
+        const auto reciprocal =
+            f64_div(float64_t{0x3FF0000000000000ull}, float64_t{bits});
+        const auto narrowed = f64_to_f32(reciprocal);
+        const auto flags_reciprocal = softfloat_exceptionFlags;
+        const std::uint32_t narrowed_exponent = narrowed.v & 0x7F800000u;
+        const std::uint32_t expected_single =
+            narrowed_exponent == 0u || narrowed_exponent == 0x7F800000u
+                ? narrowed.v : narrowed.v & ~0x00000FFFu;
+        const auto actual = galaxy::ppc_f64_reciprocal_estimate(bits, 0u);
+        if (actual.bits != galaxy::widen_f32_bits(expected_single) ||
+            (actual.exception_bits & 0x1E000000u) !=
+                (exceptions_of(flags_reciprocal) & ~0x02000000u)) {
+            std::cerr << "FAILED: f64 fres bits=0x" << std::hex << bits
+                      << " expected=0x" << expected_single << " actual=0x"
+                      << actual.bits << std::dec << '\n';
+            return false;
+        }
+        if ((bits & 0x8000000000000000ull) == 0u) {
+            softfloat_exceptionFlags = 0;
+            const auto root = f64_sqrt(float64_t{bits});
+            const auto inverse =
+                f64_div(float64_t{0x3FF0000000000000ull}, root);
+            const std::uint64_t exponent = inverse.v & 0x7FF0000000000000ull;
+            const std::uint64_t expected_double =
+                exponent == 0u || exponent == 0x7FF0000000000000ull
+                    ? inverse.v : inverse.v & ~((1ull << 41u) - 1ull);
+            const auto actual_root =
+                galaxy::ppc_f64_reciprocal_sqrt_estimate(bits, 0u);
+            if (actual_root.bits != expected_double ||
+                (actual_root.exception_bits & 0x1E000000u) !=
+                    (exceptions_of(softfloat_exceptionFlags) & ~0x02000000u)) {
+                std::cerr << "FAILED: f64 frsqrte bits=0x" << std::hex << bits
+                          << " expected=0x" << expected_double << " actual=0x"
+                          << actual_root.bits << std::dec << '\n';
+                return false;
+            }
+        }
+        return true;
+    };
+    std::uint64_t random64 = 0x4E454255u;
+    const auto next64 = [&]() {
+        random64 ^= random64 << 13u;
+        random64 ^= random64 >> 7u;
+        random64 ^= random64 << 17u;
+        return random64;
+    };
+    for (std::uint32_t exponent = 0u; exponent < 2047u; exponent += 7u) {
+        for (auto fraction : {0ull, 1ull, 0xFFFFFFFFFFFFFull, 0x8000000000000ull}) {
+            passed &= check_estimates64(
+                (static_cast<std::uint64_t>(exponent) << 52u) | fraction);
+        }
+    }
+    for (std::uint32_t i = 0u; passed && i < 131072u; ++i) {
+        passed &= check_estimates64(next64());
+    }
+
+
+    // Binary64 add/subtract/multiply admissions (error-free transformations).
+    const auto expected_fprf64 = [](std::uint64_t bits) {
+        const bool negative = (bits >> 63) != 0u;
+        const std::uint64_t exponent = bits & 0x7FF0000000000000ull;
+        const std::uint64_t fraction = bits & 0x000FFFFFFFFFFFFFull;
+        if (exponent == 0u) {
+            return fraction == 0u ? (negative ? 0x12000u : 0x2000u)
+                                  : (negative ? 0x18000u : 0x14000u);
+        }
+        return negative ? 0x8000u : 0x4000u;
+    };
+    const auto check_binary64 = [&](galaxy::PpcFloatBinaryOperation operation,
+                                    std::uint64_t a, std::uint64_t b) {
+        if ((a & 0x7FF0000000000000ull) == 0x7FF0000000000000ull ||
+            (b & 0x7FF0000000000000ull) == 0x7FF0000000000000ull) {
+            return true;
+        }
+        const auto reference = [&]() {
+            switch (operation) {
+                case galaxy::PpcFloatBinaryOperation::Add:
+                    return f64_add(float64_t{a}, float64_t{b});
+                case galaxy::PpcFloatBinaryOperation::Subtract:
+                    return f64_sub(float64_t{a}, float64_t{b});
+                default:
+                    return f64_mul(float64_t{a}, float64_t{b});
+            }
+        };
+        softfloat_roundingMode = softfloat_round_near_even;
+        softfloat_exceptionFlags = 0;
+        const auto primary = reference();
+        const auto flags = softfloat_exceptionFlags;
+        softfloat_roundingMode = softfloat_round_minMag;
+        const auto truncated = reference();
+        const bool inexact = (flags & softfloat_flag_inexact) != 0;
+        const auto actual = galaxy::ppc_f64_binary(operation, a, b, 0u);
+        if (actual.bits != primary.v ||
+            (actual.exception_bits & 0x1E000000u) != exceptions_of(flags) ||
+            actual.inexact != inexact ||
+            actual.rounded_up != (inexact && primary.v != truncated.v) ||
+            actual.fprf != expected_fprf64(primary.v)) {
+            std::cerr << "FAILED: binary64 op=" << static_cast<unsigned>(operation)
+                      << " a=0x" << std::hex << a << " b=0x" << b
+                      << " expected=0x" << primary.v << " actual=0x"
+                      << actual.bits << std::dec << '\n';
+            return false;
+        }
+        return true;
+    };
+    const auto next_double_bits = [&](std::uint32_t exponent_span) {
+        const std::uint64_t raw = next64();
+        const std::uint32_t exponent =
+            1023u - exponent_span + static_cast<std::uint32_t>((raw >> 53) % (2u * exponent_span + 1u));
+        return (raw & 0x800FFFFFFFFFFFFFull) |
+               (static_cast<std::uint64_t>(exponent) << 52u);
+    };
+    for (const auto operation : {galaxy::PpcFloatBinaryOperation::Add,
+                                 galaxy::PpcFloatBinaryOperation::Subtract,
+                                 galaxy::PpcFloatBinaryOperation::Multiply}) {
+        // The integer-to-float conversion idiom: (magic | x) - magic.
+        for (std::uint32_t i = 0u; passed && i < 4096u; ++i) {
+            const std::uint64_t magic = 0x4330000080000000ull;
+            const std::uint64_t value = 0x4330000000000000ull | (next() ^ 0x80000000u);
+            passed &= check_binary64(operation, value, magic);
+            passed &= check_binary64(operation, magic, value);
+        }
+        for (std::uint32_t i = 0u; passed && i < 131072u; ++i) {
+            const std::uint32_t span = (i & 3u) == 0u ? 400u : ((i & 3u) == 1u ? 60u : 6u);
+            passed &= check_binary64(operation, next_double_bits(span), next_double_bits(span));
+            // Near-cancelling and near-equal-exponent operands.
+            const std::uint64_t a = next_double_bits(4u);
+            const std::uint64_t b = (a & 0xFFF0000000000000ull) |
+                                    (next64() & 0x000FFFFFFFFFFFFFull);
+            passed &= check_binary64(operation, a, b);
+            passed &= check_binary64(operation, a, b ^ 0x8000000000000000ull);
+        }
+        for (const std::uint64_t a : {0ull, 0x8000000000000000ull, 0x3FF0000000000000ull,
+                                      0xBFF0000000000000ull, 0x0010000000000000ull,
+                                      0x7FEFFFFFFFFFFFFFull, 0x0000000000000001ull,
+                                      0x3FF0000000000001ull, 0x4000000000000000ull}) {
+            for (const std::uint64_t b : {0ull, 0x8000000000000000ull, 0x3FF0000000000000ull,
+                                          0xBFF0000000000000ull, 0x0010000000000000ull,
+                                          0x7FEFFFFFFFFFFFFFull, 0x0000000000000001ull,
+                                          0x3FF0000000000001ull, 0x4000000000000000ull,
+                                          0x3CA0000000000000ull, 0x3FE0000000000000ull}) {
+                passed &= check_binary64(operation, a, b);
+            }
+        }
+    }
+
+    // frsp (nearest) and fctiwz admissions.
+    for (std::uint32_t i = 0u; passed && i < 262144u; ++i) {
+        const std::uint64_t bits = next64();
+        const bool nan_or_inf =
+            (bits & 0x7FF0000000000000ull) == 0x7FF0000000000000ull;
+        softfloat_roundingMode = softfloat_round_near_even;
+        softfloat_exceptionFlags = 0;
+        const auto primary = f64_to_f32(float64_t{bits});
+        const auto flags = softfloat_exceptionFlags;
+        softfloat_roundingMode = softfloat_round_minMag;
+        const auto truncated = f64_to_f32(float64_t{bits});
+        const bool inexact = (flags & softfloat_flag_inexact) != 0;
+        const auto actual = galaxy::ppc_round_f64_to_f32(bits, 0u);
+        if (!nan_or_inf &&
+            (actual.bits != galaxy::widen_f32_bits(primary.v) ||
+             (actual.exception_bits & 0x1E000000u) != exceptions_of(flags) ||
+             actual.inexact != inexact ||
+             actual.rounded_up != (inexact && primary.v != truncated.v))) {
+            std::cerr << "FAILED: frsp bits=0x" << std::hex << bits
+                      << " expected=0x" << primary.v << " actual=0x"
+                      << actual.bits << std::dec << '\n';
+            passed = false;
+        }
+        // Values in the 32-bit range: use scaled operands to hit fctiwz fast
+        // admissions often.
+        const double value = static_cast<double>(static_cast<std::int64_t>(
+                                 next64() >> 20u)) /
+                             static_cast<double>(1u << (next() & 15u));
+        const std::uint64_t value_bits = std::bit_cast<std::uint64_t>(value);
+        softfloat_exceptionFlags = 0;
+        softfloat_roundingMode = softfloat_round_minMag;
+        const auto integer = f64_to_i32_r_minMag(float64_t{value_bits}, true);
+        const auto integer_flags = softfloat_exceptionFlags;
+        const auto converted = galaxy::ppc_f64_to_i32_round_zero(value_bits, 0u);
+        const bool invalid = (integer_flags & softfloat_flag_invalid) != 0;
+        if (!invalid &&
+            (converted.bits !=
+                 (0xFFF8000000000000ull |
+                  static_cast<std::uint32_t>(static_cast<std::int32_t>(integer))) ||
+             converted.inexact != ((integer_flags & softfloat_flag_inexact) != 0))) {
+            std::cerr << "FAILED: fctiwz value bits=0x" << std::hex << value_bits
+                      << std::dec << '\n';
+            passed = false;
+        }
+    }
+    restore();
+    return passed;
+}
+
 int main() {
     bool passed = exact_binary32_store_conversions();
+    passed &= native_division_estimates_and_conversions_match_software_reference();
     passed &= scalar_estimates_preserve_operand_and_result_widths();
     passed &= binary32_matches_software_reference_with_ni();
     passed &= fused_binary32_matches_software_reference(0u);

@@ -237,10 +237,25 @@ int main() {
         ScopedEnv snapshot("GALAXY_RENDER_MEMORY_SNAPSHOT", "1");
         const galaxy::gx::GxTimingConfig resolved =
             galaxy::gx::resolve_gx_timing_config_from_environment();
+        // The ceiling is now 8 rather than 3 so the queue-depth experiment is
+        // reachable without a rebuild; the default remains 3. This still proves
+        // the clamp is applied - 99 must never be accepted verbatim - which is
+        // the property this case exists to pin.
         passed &= expect(
-            resolved.render_queue_depth == 3 &&
+            resolved.render_queue_depth == 8 &&
                 !resolved.render_memory_snapshot,
             "GX timing resolution clamps queue depth and reports the effective live-memory mode");
+    }
+
+    {
+        ScopedEnv queue_depth("GALAXY_RENDER_QUEUE_DEPTH", "6");
+        ScopedEnv live_wait("GALAXY_RENDER_LIVE_MEMORY_WAIT", "1");
+        ScopedEnv snapshot("GALAXY_RENDER_MEMORY_SNAPSHOT", "1");
+        const galaxy::gx::GxTimingConfig resolved =
+            galaxy::gx::resolve_gx_timing_config_from_environment();
+        passed &= expect(
+            resolved.render_queue_depth == 6,
+            "a queue depth above the default is selectable for the decoupling bisect");
     }
 
     galaxy::gx::RenderConfig config{};

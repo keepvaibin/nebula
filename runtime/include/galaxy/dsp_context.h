@@ -2501,6 +2501,22 @@ inline bool dsp_trace_ifx_sample(
     std::atomic<std::uint64_t>& counter,
     std::uint64_t first_count,
     std::uint64_t period) {
+    // Every caller uses the result only to decide whether to call
+    // dsp_trace_ifx_mail(), which itself returns immediately unless
+    // GALAXY_TRACE_DSP_IFX is set — but the callers reach this helper on
+    // *every* DMBH/CMBH/DMBL/CMBL register read, before that check. The
+    // fetch_add below is a locked read-modify-write (lock xadd), so with
+    // tracing off the DSP thread was paying 20-40 cycles and a contended
+    // cache line per mailbox read to feed counters whose values are never
+    // observed. dsp_trace_ifx_enabled() is a static-singleton env read
+    // (evaluated once, then a constant), so this early-out is free.
+    //
+    // Observed behaviour with tracing ON is bit-identical: the counters, the
+    // sampling decisions and the log lines are all unchanged. With tracing
+    // OFF the counters no longer advance, and nothing reads them on that path.
+    if (!dsp_trace_ifx_enabled()) {
+        return false;
+    }
     const std::uint64_t count =
         counter.fetch_add(1u, std::memory_order_relaxed) + 1u;
     return count <= first_count || (period != 0u && (count % period) == 0u);
@@ -3163,7 +3179,20 @@ inline void dsp_run_dma(DspContext& context) {
                 : "DSP DMA span exceeds DRAM");
     }
     dsp_external_validate_span(context, host_address, length);
-    std::array<std::uint8_t, 0x4000u> transfer_bytes{};
+    // Deliberately NOT value-initialised. `transfer` below is exactly
+    // [0, length) of this buffer, and both arms of the transfer write every one
+    // of those bytes before anything reads them:
+    //   to_host  -- the first loop writes transfer[0, length) from DSP memory,
+    //               then dsp_external_write_span reads it;
+    //   !to_host -- dsp_external_read_span writes transfer[0, length), then the
+    //               second loop reads it.
+    // The counting loop that follows also only reads [0, length). So the `{}`
+    // that used to be here zeroed 0x4000 bytes that were then immediately
+    // overwritten: measured DSP DMA traffic is ~14 k transfers/s with a mean
+    // payload of only 166-206 B, i.e. ~229 MB/s of dead stores, and because
+    // DspContext is ~30 KB the 16 KiB memset also evicts roughly half of L1D on
+    // every transfer.
+    std::array<std::uint8_t, 0x4000u> transfer_bytes;
     std::span<std::uint8_t> transfer{
         transfer_bytes.data(), static_cast<std::size_t>(length)};
     std::uint32_t transfer_nonzero = 0u;

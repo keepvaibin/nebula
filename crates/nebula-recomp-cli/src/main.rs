@@ -100,6 +100,10 @@ enum Command {
         /// Experimental typed guest-register residency; off in production.
         #[arg(long)]
         experimental_guest_resident_leaf: bool,
+        /// Straight-line integer GPR residency as a post-pass over the lowered
+        /// body; reachable by default only through `release_module_options`.
+        #[arg(long)]
+        experimental_guest_resident_integer: bool,
         /// Exact RMGE01 0x80165478 private typed-region pilot; off by default.
         #[arg(long)]
         experimental_typed_region_80165478: bool,
@@ -427,6 +431,7 @@ fn main() -> Result<()> {
             shard_size,
             shard_source_kib,
             experimental_guest_resident_leaf,
+            experimental_guest_resident_integer,
             experimental_typed_region_80165478,
             experimental_flat_ram_reads,
             experimental_fused_paired_binary,
@@ -451,6 +456,7 @@ fn main() -> Result<()> {
         } => {
             let options = ModuleTranslationOptions {
                 guest_resident_leaf: experimental_guest_resident_leaf,
+                guest_resident_integer: experimental_guest_resident_integer,
                 typed_region_80165478: experimental_typed_region_80165478,
                 flat_ram_reads: experimental_flat_ram_reads,
                 fused_paired_binary: experimental_fused_paired_binary,

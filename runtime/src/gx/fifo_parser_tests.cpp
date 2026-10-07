@@ -191,7 +191,7 @@ bool test_display_list_variant_lookup_invalidation() {
         TestSink sink;
         const std::array<std::byte, 9> call{
             std::byte{0x40}, std::byte{0x80}, std::byte{0}, std::byte{0}, std::byte{0},
-            std::byte{0}, std::byte{0}, std::byte{0}, std::byte{16}};
+            std::byte{0}, std::byte{0}, std::byte{0}, std::byte{32}};
         auto other = call;
         other[4] = std::byte{32};  // A different all-NOP list.
         const auto run = [&](const auto& command) {
@@ -279,7 +279,16 @@ bool test_xf_matrix_span_updates() {
                 }
             }
         }
-        for (const std::uint16_t bank : {0x0040u, 0x0420u, 0x05F0u}) {
+        // The element type is `std::uint16_t`, so each literal must be spelled as
+        // one: an unsuffixed `0x0040u` is `unsigned int`, which MSVC reports as
+        // C4244 (possible loss of data) inside a braced initializer list. The
+        // project builds with `/WX`, so that warning is a build error. Same repair
+        // as the `{0x0000u, 0x0040u, 0x0400u, 0x0500u, 0x0600u, 0x1009u}` list
+        // lower in this file.
+        for (const std::uint16_t bank :
+             {static_cast<std::uint16_t>(0x0040u),
+              static_cast<std::uint16_t>(0x0420u),
+              static_cast<std::uint16_t>(0x05F0u)}) {
             for (const unsigned dst_offset : {0u, 1u, 2u}) {
                 GxState state;
                 state.load_xf(bank, values.data(), 32u);
@@ -298,6 +307,88 @@ bool test_xf_matrix_span_updates() {
             }
         }
     }
+    return true;
+}
+
+// `GxState::xf_palette_dirty()` exists so the renderer can decide whether the
+// frame's existing GPU snapshot of the XF matrix palette can be reused instead
+// of allocating a fresh one. The renderer half is untestable without a D3D12
+// device, but the producer contract is exactly testable here, and it is the half
+// that can silently go wrong: a chunk the guest wrote but never armed would let
+// the renderer reuse a snapshot that is missing that write.
+bool test_xf_palette_chunk_tracking() {
+    // A using-declaration cannot name a namespace (`xf` is one), so this must be
+    // qualified at each use. The rest of this file already spells
+    // `galaxy::gx::xf::...` out; this line and the one below were the exceptions.
+    GxState state;
+    // A consumer that has uploaded nothing starts with an all-clear mask and
+    // compensates with "not yet valid", so the first upload is always full.
+    if (!expect(state.xf_palette_dirty() == 0u,
+                "palette dirty mask starts clear")) return false;
+
+    // A chunk is 32 words = 128 bytes, a whole number of the 16-byte float4s
+    // the shader indexes, so one 4-row object matrix can never span a chunk
+    // boundary without arming both sides of it.
+    const std::array<std::uint32_t, 12> object_matrix{
+        1u, 2u, 3u, 4u, 5u, 6u, 7u, 8u, 9u, 10u, 11u, 12u};
+    state.load_xf(0x0040u, object_matrix.data(), 12u);
+    (void)state.consume_dirty();
+    if (!expect(state.xf_palette_dirty() == (1ull << 2u),
+                "one object matrix arms exactly its own palette chunk")) return false;
+
+    // Only touched chunks are armed: a second object in a distant chunk must
+    // add its bit and leave the first one alone.
+    state.load_xf(0x0400u, object_matrix.data(), 12u);
+    (void)state.consume_dirty();
+    if (!expect(state.xf_palette_dirty() == ((1ull << 2u) | (1ull << 32u)),
+                "a distant second matrix adds only its own chunk bit")) return false;
+
+    // A span that crosses a chunk boundary arms both chunks, and clearing the
+    // span as a whole is what the uploader does, so the result must be clean.
+    state.load_xf(0x001Eu, object_matrix.data(), 4u);
+    (void)state.consume_dirty();
+    if (!expect(state.xf_palette_dirty() ==
+                    (((1ull << 2u) | (1ull << 32u)) | 0x1u | 0x2u),
+                "a span crossing a chunk boundary arms both chunks")) return false;
+    state.clear_xf_palette_dirty(0u, GxState::kMatrixPaletteChunkCount - 1u);
+    if (!expect(state.xf_palette_dirty() == 0u,
+                "clearing the whole palette span leaves no armed chunk")) return false;
+
+    // `load_xf_indexed` is the path SMG actually uses for object/skin matrices
+    // (LOAD_INDX A-D), so it has to arm the same bits as the direct write, and a
+    // re-issued write of identical data must leave the mask at rest — the
+    // renderer would otherwise re-upload a span that did not move.
+    const std::array<std::uint32_t, 12> skin_matrix{
+        21u, 22u, 23u, 24u, 25u, 26u, 27u, 28u, 29u, 30u, 31u, 32u};
+    state.load_xf_indexed(0x0080u, skin_matrix.data(), 12u);
+    (void)state.consume_dirty();
+    if (!expect(state.xf_palette_dirty() == (1ull << 4u),
+                "an indexed matrix write arms its chunk like a direct one")) return false;
+    state.load_xf_indexed(0x0080u, skin_matrix.data(), 12u);
+    (void)state.consume_dirty();
+    if (!expect(state.xf_palette_dirty() == (1ull << 4u),
+                "rewriting identical indexed matrix data arms nothing new")) return false;
+    state.clear_xf_palette_dirty(4u, 4u);
+    if (!expect(state.xf_palette_dirty() == 0u,
+                "clearing one chunk clears exactly that chunk")) return false;
+    // Clearing a span that was never armed is a no-op, not an underflow.
+    state.load_xf_indexed(0x0080u, skin_matrix.data(), 12u);
+    (void)state.consume_dirty();
+    state.clear_xf_palette_dirty(4u, GxState::kMatrixPaletteChunkCount - 1u);
+    if (!expect(state.xf_palette_dirty() == 0u,
+                "clearing a trailing span clears only what was armed")) return false;
+
+    // Palette tracking is a property of matrix memory only. The XF high bank
+    // cannot alias it (`validate_xf_write` classifies every address), and a CP
+    // write touches neither, so neither may arm a chunk: an over-armed bit only
+    // costs an upload, but an assertion here is what keeps a future high-bank
+    // write from silently sharing the low bank's state.
+    state.load_xf(
+        static_cast<std::uint16_t>(galaxy::gx::xf::kNumTexGens),
+        object_matrix.data(), 1u);
+    state.load_cp(galaxy::gx::cp::kMatrixIndexA, 7u);
+    if (!expect(state.xf_palette_dirty() == 0u,
+                "high-bank and CP writes never arm a palette chunk")) return false;
     return true;
 }
 
@@ -445,6 +536,7 @@ void test_dependency_hash_cache() {
 int main() try {
     if (!test_display_list_variant_lookup_invalidation()) return 1;
     if (!test_xf_matrix_span_updates()) return 1;
+    if (!test_xf_palette_chunk_tracking()) return 1;
     test_dependency_hash_cache();
     static_assert(galaxy::gx::bp::kBpMask == 0xFEu);
 
@@ -928,7 +1020,13 @@ int main() try {
         (void)indexed.consume_dirty();
         std::array<std::uint32_t, 12> words{};
         for (unsigned i = 0u; i < words.size(); ++i) words[i] = 0x3f800000u + i;
-        for (const std::uint16_t base : {0x0000u, 0x0040u, 0x0400u, 0x0500u, 0x0600u, 0x1009u}) {
+        for (const std::uint16_t base :
+             {static_cast<std::uint16_t>(0x0000u),
+              static_cast<std::uint16_t>(0x0040u),
+              static_cast<std::uint16_t>(0x0400u),
+              static_cast<std::uint16_t>(0x0500u),
+              static_cast<std::uint16_t>(0x0600u),
+              static_cast<std::uint16_t>(0x1009u)}) {
             const auto count = static_cast<std::uint16_t>(base == 0x1009u ? 4u : words.size());
             direct.load_xf(base, words.data(), count);
             indexed.load_xf_indexed(base, words.data(), count);
@@ -1591,6 +1689,70 @@ int main() try {
         }
 
         internal_cp_parser.set_profile(nullptr);
+    }
+
+    {
+        // Use the actual shader key as the dependency oracle, independently of
+        // the BP dirty predicate. Exercise every blend word and every bit edge
+        // with each PE format, destination-alpha mode and tested EFB scale.
+        std::uint64_t checked = 0u;
+        for (std::uint32_t format = 0u; format < 4u; ++format) {
+            for (std::uint32_t replacement : {0u, 0x17fu}) {
+                for (std::uint32_t scale : {1u, 6u}) {
+                    GxState blend_state;
+                    const auto write = [&](std::uint8_t reg, std::uint32_t word) {
+                        blend_state.load_bp((static_cast<std::uint32_t>(reg) << 24u) | word);
+                    };
+                    write(galaxy::gx::bp::kGenMode, 15u << 10u);
+                    write(galaxy::gx::bp::kPeControl, format);
+                    write(galaxy::gx::bp::kConstAlpha, replacement);
+                    for (std::uint32_t word = 0u; word < 0x10000u; ++word) {
+                        write(galaxy::gx::bp::kBlendMode, word);
+                        const auto before = galaxy::gx::build_pixel_shader_key(blend_state, scale);
+                        for (unsigned bit = 0u; bit < 16u; ++bit) {
+                            (void)blend_state.consume_dirty();
+                            write(galaxy::gx::bp::kBlendMode, word ^ (1u << bit));
+                            const auto dirty = blend_state.consume_dirty();
+                            const auto after = galaxy::gx::build_pixel_shader_key(blend_state, scale);
+                            if ((dirty & GxState::kDirtyRenderState) == 0u ||
+                                (dirty & GxState::kDirtyTevConstants) != 0u ||
+                                (!(before == after) && (dirty & GxState::kDirtyTev) == 0u) ||
+                                ((bit == 1u || bit == 3u || bit >= 12u) &&
+                                 (dirty & GxState::kDirtyTev) != 0u)) {
+                                std::cerr << "blend dependency mismatch format=" << format
+                                          << " replacement=" << replacement << " scale=" << scale
+                                          << " word=" << word << " bit=" << bit << '\n';
+                                return 1;
+                            }
+                            write(galaxy::gx::bp::kBlendMode, word);
+                            ++checked;
+                        }
+                    }
+                }
+            }
+        }
+        // Partial BP writes must classify the effective merged value; the next
+        // full write must not inherit the previous one-shot register mask.
+        GxState masked_blend;
+        masked_blend.load_bp((0x41u << 24u) | 0x411u);
+        (void)masked_blend.consume_dirty();
+        masked_blend.load_bp((0xfeu << 24u) | (1u << 3u));
+        masked_blend.load_bp((0x41u << 24u) | 0x408u);
+        const auto masked_dirty = masked_blend.consume_dirty();
+        if (!expect(masked_blend.bp(0x41u) == 0x419u &&
+                    masked_dirty == GxState::kDirtyRenderState,
+                    "masked color write must retain blend and skip shader/constants work")) return 1;
+        masked_blend.load_bp((0x41u << 24u) | 0x511u);
+        if (!expect(masked_blend.consume_dirty() == GxState::kDirtyRenderState,
+                    "source alpha factor4-to5 changes blend PSO but not shader/constants")) return 1;
+        masked_blend.load_bp((0x42u << 24u) | 0x180u);
+        masked_blend.load_bp((0x43u << 24u) | 1u);
+        const auto coalesced = masked_blend.consume_dirty();
+        if (!expect((coalesced & (GxState::kDirtyTev | GxState::kDirtyTevConstants |
+                                  GxState::kDirtyRenderState)) ==
+                    (GxState::kDirtyTev | GxState::kDirtyTevConstants | GxState::kDirtyRenderState),
+                    "destination-alpha/format writes must retain coalesced invalidation")) return 1;
+        std::cout << "blend dependency oracle: " << checked << " bit transitions passed\n";
     }
 
     bool strict_failed = false;

@@ -539,6 +539,113 @@ bool cached_packet_run_preserves_triangle_strip_boundaries(
     return ok;
 }
 
+bool indexed_dependencies_cover_nonmonotonic_reads() {
+    using namespace galaxy::gx;
+    constexpr std::uint32_t guest_base = 0x80001000u;
+    constexpr std::uint32_t tex_base = 0x90001000u;
+    constexpr unsigned array_stride = 8u, element_bytes = 6u;
+    std::vector<std::byte> positions(65536u * array_stride);
+    for (unsigned index = 0u; index < 65536u; ++index) {
+        const std::array<unsigned, 3> values{index, index ^ 0x5a5au, 128u};
+        for (unsigned component = 0u; component < 3u; ++component) {
+            const unsigned offset = index * array_stride + component * 2u;
+            positions[offset] = static_cast<std::byte>((values[component] >> 8u) & 0xffu);
+            positions[offset + 1u] = static_cast<std::byte>(values[component] & 0xffu);
+        }
+    }
+    std::array<galaxy::GuestMemoryRegionV1, 2> regions{{
+        {guest_base, static_cast<std::uint32_t>(positions.size()), positions.data()},
+        {tex_base, static_cast<std::uint32_t>(positions.size()), positions.data()}}};
+    galaxy::GuestMemoryV1 memory{};
+    memory.regions = regions.data();
+    memory.region_count = static_cast<std::uint32_t>(regions.size());
+    GxState state;
+    state.load_cp(cp::kArrayBaseBase, guest_base);
+    state.load_cp(cp::kArrayStrideBase, array_stride);
+    state.load_cp(static_cast<std::uint8_t>(cp::kArrayBaseBase + 11u), tex_base);
+    state.load_cp(static_cast<std::uint8_t>(cp::kArrayStrideBase + 11u), array_stride);
+    VertexDescriptor desc{};
+    desc.position = {VcdType::Index16, 1u, 3u, 0u}; // XYZ signed 16-bit, unscaled
+    desc.texcoord[7] = {VcdType::Index16, 1u, 3u, 0u}; // ST in a separate address domain
+    VertexLoader loader;
+    std::vector<std::vector<std::uint16_t>> cases{
+        {}, {1024u, 1023u}, {60000u, 1u}, {1u, 60000u},
+        {128u, 96u, 129u, 95u}, {128u, 95u, 129u, 96u},
+        {0u, 8191u, 8192u}, {8192u, 8191u, 0u},
+        {65535u, 65534u, 1u, 0u, 65535u}};
+    cases.emplace_back();
+    for (unsigned index = 0u; index <= 8192u; ++index)
+        cases.back().push_back(static_cast<std::uint16_t>(index));
+    const std::vector<std::uint16_t> descending(cases.back().rbegin(), cases.back().rend());
+    cases.push_back(descending);
+    cases.emplace_back();
+    std::uint32_t random = 0x8ad31f29u;
+    for (unsigned read = 0u; read < 2048u; ++read) {
+        random = random * 1664525u + 1013904223u;
+        cases.back().push_back(static_cast<std::uint16_t>(random >> 16u));
+    }
+    for (const auto& indices : cases) {
+        std::vector<std::byte> fifo;
+        append_u16(fifo, static_cast<std::uint16_t>(indices.size()));
+        for (auto index : indices) {
+            append_u16(fifo, index);
+            append_u16(fifo, static_cast<std::uint16_t>(65535u - index));
+        }
+        const std::array<CachedDrawPacket, 1> packets{{
+            {0x90u, static_cast<std::uint16_t>(indices.size()), 0u, 0u, indices.size() * 4u}}};
+        const auto tracked = loader.decode_cached_packet_run_vertices_with_layout(
+            fifo, 0u, packets, PrimitiveClass::Triangles, 0u, state, desc, 4u, &memory);
+        const auto untracked = loader.decode_cached_packet_run_vertices_with_layout(
+            fifo, 0u, packets, PrimitiveClass::Triangles, 0u, state, desc, 4u, &memory, 0u, 0u, false);
+        if (!expect(tracked.vertices.size() == indices.size() &&
+                    tracked.total_vertices == untracked.total_vertices &&
+                    tracked.total_indices == untracked.total_indices &&
+                    untracked.guest_array_reads.empty() &&
+                    (indices.empty() || std::memcmp(tracked.vertices.data(), untracked.vertices.data(),
+                        tracked.vertices.size() * sizeof(GxVertexOut)) == 0),
+                    "dependency recording preserves canonical vertices and the opt-out path")) return false;
+        std::uint64_t captured_bytes = 0u;
+        for (const auto& range : tracked.guest_array_reads) {
+            captured_bytes += range.size;
+            const auto inside_region = [&](std::uint32_t base) {
+                return range.guest_base >= base &&
+                    static_cast<std::uint64_t>(range.guest_base) + range.size <=
+                        static_cast<std::uint64_t>(base) + positions.size();
+            };
+            if (!expect(range.size != 0u && range.size <= 65536u &&
+                        (inside_region(guest_base) || inside_region(tex_base)),
+                        "indexed snapshots stay bounded and inside the mapped array")) return false;
+        }
+        if (!expect(captured_bytes <= indices.size() * (element_bytes + 4u + 2u * 256u),
+                    "scattered reads cannot retain the whole indexed array")) return false;
+        for (std::size_t vertex = 0u; vertex < indices.size(); ++vertex) {
+            for (const auto [address, size] : {
+                    std::array<std::uint32_t, 2>{guest_base + indices[vertex] * array_stride, element_bytes},
+                    std::array<std::uint32_t, 2>{tex_base + (65535u - indices[vertex]) * array_stride, 4u}}) {
+                bool covered = false;
+                for (const auto& range : tracked.guest_array_reads) {
+                    covered |= range.guest_base <= address &&
+                        static_cast<std::uint64_t>(range.guest_base) + range.size >=
+                            static_cast<std::uint64_t>(address) + size;
+                }
+                if (!expect(covered, "every forward/backward indexed read is captured completely")) return false;
+            }
+            const unsigned raw = indices[vertex];
+            const float expected_x = static_cast<float>(raw < 32768u
+                ? static_cast<int>(raw) : static_cast<int>(raw) - 65536);
+            if (!expect(tracked.vertices[vertex].position[0] == expected_x &&
+                        tracked.vertices[vertex].position[2] == 128.0f,
+                        "indexed position values match independent known bytes")) return false;
+            const unsigned tex_raw = 65535u - raw;
+            const float expected_s = static_cast<float>(tex_raw < 32768u
+                ? static_cast<int>(tex_raw) : static_cast<int>(tex_raw) - 65536);
+            if (!expect(tracked.vertices[vertex].uv[7][0] == expected_s,
+                        "opposite-direction TEXCOORD7 reads keep their own indexed array")) return false;
+        }
+    }
+    return true;
+}
+
 bool small_vertex_components_preserve_bits() {
     using namespace galaxy::gx;
     constexpr std::array<std::uint32_t, 20> float_words{
@@ -1182,6 +1289,7 @@ bool immutable_upload_reuse_preserves_bytes(ID3D12Device* device) {
 }  // namespace
 
 int main() {
+    if (!indexed_dependencies_cover_nonmonotonic_reads()) return 1;
     if (!fixed_vertex_dequantization_preserves_bits()) return 1;
     if (!small_vertex_components_preserve_bits()) return 1;
     if (!cached_index_rebasing_matches_wide_arithmetic()) return 1;

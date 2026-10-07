@@ -73,7 +73,38 @@ if(MSVC)
     endif()
     message(STATUS "Galaxy native CPU target: ${galaxy_native_isa_effective} (requested ${GALAXY_NATIVE_ISA})")
     if(galaxy_native_isa_effective STREQUAL "AVX2")
-        add_compile_options($<$<COMPILE_LANGUAGE:C,CXX>:/arch:AVX2>)
+        # /arch:AVX2 also makes FMA3 available to the code generator. Under
+        # /fp:precise that is only safe because Visual Studio 2022 changed the
+        # /fp:precise default to fp_contract(off) (documented in
+        # learn.microsoft.com/cpp/build/reference/fp-specify-floating-point-behavior).
+        # Before VS2022, /fp:precise defaulted to fp_contract(on), so an FMA3-
+        # capable target would let the compiler fuse a*b+c and round once.
+        # galaxy_ppc_float's TwoSum/TwoProduct error terms and every guest
+        # single-precision result are only exact because that cannot happen, so
+        # refuse the combination rather than emit a guest-visible FP difference.
+        if(NOT CMAKE_CXX_COMPILER_ID STREQUAL "Clang" AND MSVC_VERSION LESS 1930)
+            message(FATAL_ERROR
+                "GALAXY_NATIVE_ISA=AVX2 with ${CMAKE_CXX_COMPILER_ID} "
+                "${MSVC_VERSION} would allow floating-point contraction under "
+                "/fp:precise and change guest FP results. Use a Visual Studio "
+                "2022 (MSVC 19.30+) toolset, clang-cl, or GALAXY_NATIVE_ISA=SSE2.")
+        endif()
+        # /arch:AVX2 is an MSVC cl.exe spelling. Setup and build-release both
+        # drive this project with clang-cl (installer/toolchain.json pins it and
+        # InstallEngine passes -DCMAKE_CXX_COMPILER=<clang-cl>), where
+        # CMAKE_CXX_COMPILER_ID is "Clang" but MSVC is still true -- so the
+        # message above reported AVX2 while every translation unit was compiled
+        # for the SSE2 baseline and the runtime lost VEX encoding, the wider
+        # register file and vector integer compares. clang-cl accepts the
+        # GCC-style -mavx2. Deliberately NOT -mfma: guest float results must stay
+        # bit-identical to the SoftFloat reference and /fp:precise is mandatory.
+        # (clang's own -ffp-contract default is on, so withholding the FMA
+        # feature is what keeps contraction impossible on that path.)
+        if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+            add_compile_options($<$<COMPILE_LANGUAGE:C,CXX>:-mavx2>)
+        else()
+            add_compile_options($<$<COMPILE_LANGUAGE:C,CXX>:/arch:AVX2>)
+        endif()
     endif()
     # NOTE: deliberately NOT enabling LTCG/IPO. The recompiled game module is
     # ~51 MB; whole-program link on a weak install-time host can take very long
@@ -919,6 +950,7 @@ galaxy_add_native_test(sampler_key_packing galaxy_sampler_key_tests)
 galaxy_add_native_test(xfb_present_selection galaxy_xfb_present_selection_tests)
 galaxy_add_native_test(efb_content_key_identity galaxy_efb_conversion_tests --content-key-hash)
 galaxy_add_native_test(efb_conversion_pipeline galaxy_efb_conversion_tests)
+galaxy_add_native_test(efb_oversized_content_retirement galaxy_efb_conversion_tests --oversized-content-cache)
 galaxy_add_native_test(line_point_raster galaxy_line_point_raster_tests)
 galaxy_add_native_test(cosmetic_game_asset_extract galaxy_game_asset_extract_tests)
 galaxy_add_native_test(sorted_dirty_ranges galaxy_sorted_dirty_ranges_tests)

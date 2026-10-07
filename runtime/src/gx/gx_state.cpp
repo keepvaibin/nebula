@@ -21,6 +21,14 @@ namespace galaxy::gx {
 
 namespace {
 
+// Bit span covering palette chunks `first`..`last` inclusive. Callers guarantee
+// last < 64 (52 chunks exist) and first <= last, so the shift is never wide.
+[[nodiscard]] constexpr std::uint64_t xf_palette_span_bits(
+    std::uint32_t first, std::uint32_t last) noexcept {
+    return ((std::uint64_t{1} << (last + 1u)) - 1u) &
+        ~((std::uint64_t{1} << first) - 1u);
+}
+
 [[noreturn]] void throw_unknown_cp_write(
     std::uint8_t reg,
     std::uint32_t value) {
@@ -261,7 +269,26 @@ void GxState::apply_validated_xf(
                 changed = true;
             }
         }
-        if (changed) dirty_ |= kDirtyXfMatrices;
+        if (changed) {
+            dirty_ |= kDirtyXfMatrices;
+            // Record which palette chunks moved. The renderer consumes this as
+            // one question — "did anything in the palette move?" — and uses the
+            // answer to decide whether the frame's existing palette ring
+            // allocation can be reused. The snapshot it takes is always the
+            // whole 6656 bytes; see `xf_palette_dirty()` for why. `changed` is
+            // already the "did any word differ" test, so the extra cost is one
+            // 64-bit compare on the writes that turn out to change nothing (a
+            // re-issued LOAD_INDX, which is common).
+            const std::uint32_t first = base / kMatrixPaletteChunkWords;
+            const std::uint32_t last =
+                static_cast<std::uint32_t>(base + count - 1u) /
+                kMatrixPaletteChunkWords;
+            const std::uint64_t bits =
+                xf_palette_span_bits(first, last);
+            if ((xf_palette_dirty_ & bits) != bits) {
+                xf_palette_dirty_ |= bits;
+            }
+        }
         return;
     }
     for (std::uint16_t i = 0; i < count; ++i) {
@@ -451,9 +478,23 @@ void GxState::load_bp(std::uint32_t command) {
         break;
 
     // Blend / PE
-    case bp::kBlendMode:   // 0x41
-        dirty_ |= kDirtyRenderState | kDirtyTev | kDirtyTevConstants;
+    case bp::kBlendMode: { // 0x41
+        // Every effective blend/mask change still updates the fixed-function
+        // pipeline. PS code consumes only enable/subtract/dither/alpha-update
+        // and whether either factor reads the TEV source alpha (factor4/5).
+        // PS uniforms read constant destination alpha from BP0x42, not here.
+        dirty_ |= kDirtyRenderState;
+        const auto reads_source_alpha = [](std::uint32_t word) {
+            return ((word >> 5u) & 6u) == 4u ||
+                   ((word >> 8u) & 6u) == 4u;
+        };
+        constexpr std::uint32_t kShaderScalarMask = 0x815u;
+        if (((previous ^ next) & kShaderScalarMask) != 0u ||
+            reads_source_alpha(previous) != reads_source_alpha(next)) {
+            dirty_ |= kDirtyTev;
+        }
         break;
+    }
     case bp::kConstAlpha:  // 0x42
         dirty_ |= kDirtyTevConstants;
         // The enable flag affects shader outputs and blend routing; the

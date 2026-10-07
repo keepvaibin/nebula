@@ -262,12 +262,43 @@ namespace Nebula.Launcher
                 // The UI owns these diagnostic choices even if an older
                 // runtime-env.json retained an intrusive diagnostic setting.
                 env["GALAXY_TRACE_GX_STALLS"] = detailedTimings ? "1" : "0";
-                env["GALAXY_GPU_TIMESTAMPS"] = detailedTimings ? "1" : "0";
+                // GPU-serialised time follows `monitoring`, not `detailed`.
+                //
+                // The two are independent because their costs are not comparable:
+                // `detailed` enables GALAXY_TRACE_GX_STALLS, which adds clock reads
+                // to the per-draw path and is why the checkbox carries its
+                // performance warning, while the GPU timestamp queries add a fixed
+                // three command-list operations and one small mapped read per frame.
+                //
+                // Tying this to `detailed` left `gpu-samples` at zero in every
+                // diagnostic session, so the GPU was never measured and no
+                // GPU-versus-CPU question could be answered. Monitoring is already
+                // an explicit opt-in, so a diagnostic session carries this
+                // measurement. To record without it, leave monitoring off.
+                env["GALAXY_GPU_TIMESTAMPS"] = monitor.Checked ? "1" : "0";
                 env["GALAXY_TRACE_GX_MICROPROFILE"] = "0";
                 if (detailedTimings)
                 {
                     env["GALAXY_TRACE_GX_STALL_US"] = "20000";
                 }
+                // The sample period and the cycle witness follow `detailed`, like
+                // GALAXY_TRACE_GX_STALLS.
+                //
+                // Both are pinned here rather than left to runtime-env.json because
+                // the Launcher loads every named entry from that file before this
+                // block, so any flag it does not assign keeps an older build's
+                // value. `frame_time_detail_` is the OR of the microprofile flag,
+                // GALAXY_TRACE_GX_STALLS and the sample period, so an unpinned
+                // nonzero period would inject instrumented frames into a routine
+                // launch; an unpinned cycle witness would make every flush read the
+                // thread cycle counter without anyone asking for it.
+                //
+                // Off is deliberate on both lines. The period is 0, so nothing is
+                // sampled; the witness is 0, so no cycle reads are taken. Detailed
+                // timings turn the period to one frame in 256 and the witness on,
+                // which is the pair that makes a sampled frame interpretable.
+                env["GALAXY_GX_FRAME_TIMING_SAMPLE"] = detailedTimings ? "256" : "0";
+                env["GALAXY_GX_PSO_CYCLES"] = detailedTimings ? "1" : "0";
                 // Hash the actual launch pair before gameplay. install.json is
                 // retained as historical metadata and cannot attest to files
                 // replaced after installation. This also records manual swaps.
@@ -346,10 +377,30 @@ namespace Nebula.Launcher
             {
                 var started = DateTime.UtcNow;
                 StreamWriter samples = null;
+                StreamWriter threads = null;
                 if (sampling)
                 {
                     samples = new StreamWriter(Path.Combine(session, "process.csv"));
                     samples.WriteLine("elapsedSeconds,cpuSeconds,workingSetBytes");
+                    // Per-thread CPU, alongside the process-wide row. `process.csv`
+                    // cannot say which thread is spending the time, and that is the
+                    // open question: the process runs at a flat ~1.3 cores of 32
+                    // while producing 44 frames/s instead of 60, so the CPU seconds
+                    // are going somewhere the frame rate does not reflect.
+                    //
+                    // Do NOT read the regime gap here as "1.41x CPU per produced
+                    // frame". That figure is ~96 % a rate effect -- the denominator
+                    // (frame rate) moves 35 % while the numerator (CPU rate) moves
+                    // 3.6 % -- and it cannot distinguish executing from waiting,
+                    // since any slow pipeline raises CPU-per-frame as
+                    // 1/frame_rate. The honest signal is the CPU RATE. See
+                    // AgentWork/agent-23/25-cpu-per-frame-is-a-rate-effect.md.
+                    //
+                    // The column set matches tools/perf_session.ps1 so
+                    // session_report.ps1's existing threads.csv parser reads it
+                    // unchanged.
+                    threads = new StreamWriter(Path.Combine(session, "threads.csv"));
+                    threads.WriteLine("elapsedSeconds,threadId,cpu100ns,threadState,waitReason,priorityLevel");
                 }
                 while (!process.WaitForExit(1000))
                 {
@@ -357,14 +408,38 @@ namespace Nebula.Launcher
                     try
                     {
                         process.Refresh();
+                        var elapsed = (DateTime.UtcNow - started).TotalSeconds;
                         samples.WriteLine(string.Format(System.Globalization.CultureInfo.InvariantCulture, "{0:F3},{1:F6},{2}",
-                            (DateTime.UtcNow - started).TotalSeconds, process.TotalProcessorTime.TotalSeconds, process.WorkingSet64));
+                            elapsed, process.TotalProcessorTime.TotalSeconds, process.WorkingSet64));
                         samples.Flush();
+                        // A thread can exit between enumerating the collection and
+                        // reading its properties, so one bad thread must not lose
+                        // the whole sample. Threads that have never run report a
+                        // zero TotalProcessorTime, which is a real value here and
+                        // not an error.
+                        foreach (System.Diagnostics.ProcessThread t in process.Threads)
+                        {
+                            try
+                            {
+                                threads.WriteLine(string.Format(
+                                    System.Globalization.CultureInfo.InvariantCulture,
+                                    "{0:F3},{1},{2},{3},{4},{5}",
+                                    elapsed,
+                                    t.Id,
+                                    t.TotalProcessorTime.Ticks,
+                                    t.ThreadState,
+                                    t.WaitReason,
+                                    t.PriorityLevel));
+                            }
+                            catch (Exception) { }
+                        }
+                        threads.Flush();
                     }
                     catch (InvalidOperationException) { break; }
                 }
                 process.WaitForExit();
                 if (samples != null) samples.Dispose();
+                if (threads != null) threads.Dispose();
                 lock (stdout) stdout.Dispose();
                 lock (stderr) stderr.Dispose();
                 Json.Save(Path.Combine(session, "exit.json"), new Dictionary<string, object>

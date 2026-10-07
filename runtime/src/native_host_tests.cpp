@@ -18461,12 +18461,25 @@ int main() {
     passed &= expect(
         memory.ai_audio_submit_count() == 3,
         "the already-serviced interruptible AI boundary is not submitted again");
-    passed &= expect(
-        memory.ai_dma_resync_events() == 0,
-        "late AI DMA catch-up does not skip ahead by resyncing");
-    passed &= expect(
-        memory.ai_dma_resync_missed_buffers() == 0,
-        "late AI DMA catch-up records no skipped buffer periods");
+    // Two assertions were REMOVED here (agent 6, fix 43):
+    //   ai_dma_resync_events() == 0, "late AI DMA catch-up does not skip ahead by resyncing"
+    //   ai_dma_resync_missed_buffers() == 0, "… records no skipped buffer periods"
+    //
+    // Both were TAUTOLOGIES. Their counters are zero-initialised and nothing in
+    // the runtime ever writes them (verified: 0 `++`/`+=`, 0 `=` assignments, no
+    // `resync` logic anywhere), so the getters can only return 0 and the
+    // assertions could never fail — including in a build that resynced on every
+    // buffer. Asserting that a constant equals zero is not a check.
+    //
+    // The invariant they were reaching for IS covered, by the real assertions
+    // immediately above and below: `ai_audio_submit_count() == 3` pins "submits
+    // one boundary and waits", and the masked-catch-up case is covered at
+    // "masked catch-up republishes the completion and following exact deadlines".
+    // The inert pair added no coverage.
+    //
+    // If a resync path is ever implemented, restore these assertions ONLY once
+    // the counters are actually incremented — at that point they become
+    // meaningful and this note is obsolete. See finding 39 and fix 42.
     passed &= expect(
         memory.ai_dma_next_completion_ticks() > second_ai_completion,
         "on-time masked AI service arms exactly the next real hardware boundary");

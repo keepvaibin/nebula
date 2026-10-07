@@ -186,6 +186,56 @@ public:
         return index >= kSrvHeapCapacity || retired_srv_indices_[index];
     }
 
+    // Live GPU-texture residency of the decoded map (`entries_`), reported as
+    // the summed guest source bytes.
+    //
+    // This exists because that map is the one cache in the runtime with NO size
+    // bound, NO byte bound and NO LRU: entries are removed only by dirty-range
+    // invalidation, and -- until this bound was added -- the only ceiling was
+    // `kSrvHeapCapacity`, which THREW "[TextureCache] SRV heap exhausted" rather
+    // than evicting. The [gx-content-cache] line already prints `live-entries` /
+    // `live-bytes`, but those describe the CPU-side content cache (bounded to
+    // 64 MB with its own LRU), NOT this GPU map.
+    //
+    // **`guest_byte_size` is the guest-side source size, and it is NOT scaled by
+    // the internal EFB scale.** A previous version of this comment said the
+    // resident resource is "that footprint scaled by the internal EFB scale" --
+    // that is backwards, and it is recorded here because a comment stating
+    // behaviour the code does not implement hands a confident wrong answer to
+    // whoever cites it. What the code does: `load_texture` takes
+    // `w = image.width` and `h = image.height` -- GUEST dimensions -- and creates
+    // the decoded resource with `rd.Width = w; rd.Height = h` at
+    // `DXGI_FORMAT_R8G8B8A8_UNORM`. Nothing multiplies by a scale factor, and this
+    // class has no scale member at all: `initialize` takes only `ID3D12Device*`.
+    // So one entry's resident cost is `w * h * 4`, and the multiplier over the
+    // guest figure is a DECODE EXPANSION set by the source format -- CMPR
+    // 0.5 B/px -> 4 B/px = 8x, C4 = 16x, RGBA8 = 1x -- not `efb_scale^2`.
+    //
+    // This matters for reading the number: the total bounds resident bytes within
+    // a small constant (the budget in `decoded_resident_budget_bytes`, default
+    // 64 MiB), so it is a usable VRAM proxy as well as a trend, and a working-set
+    // change cannot be attributed to it scaling with internal resolution.
+    [[nodiscard]] std::uint64_t decoded_entry_guest_bytes() const noexcept {
+        return decoded_resident_bytes_;
+    }
+
+    // Routine, allocation-free view of the decoded map's bound. Reported on the
+    // sampled `[gx-frame-timing]` line rather than only from shutdown(), because
+    // neither retained recording ever contained the shutdown-only
+    // `[gx-content-cache]` line at all -- so the one number that would have shown
+    // this map growing unbounded was never captured. Sampling it with the other
+    // per-frame counters means a run that is killed before a clean shutdown still
+    // yields the trend.
+    struct DecodedMapStats {
+        std::uint64_t resident_bytes = 0;   // sum of guest_byte_size over entries_
+        std::uint64_t budget_bytes = 0;
+        std::uint64_t evicted_bytes = 0;
+        std::uint64_t evicted_entries = 0;
+        std::size_t entries = 0;
+        std::size_t lru_entries = 0;
+    };
+    [[nodiscard]] DecodedMapStats decoded_map_stats() const noexcept;
+
     // Command list new-texture uploads are recorded on (CopyTextureRegion +
     // barrier to PIXEL_SHADER_RESOURCE).  Set by GxBackend each frame before
     // parsing; decoded textures are DEFAULT-heap Texture2D resources, so the
@@ -285,6 +335,24 @@ private:
         }
     };
     void retire(Entry&& entry);
+    // Decoded-map LRU maintenance. `decoded_lru_touch` moves a key to the most
+    // recently used end; `decoded_lru_forget` removes it. Both are no-ops when
+    // the key is absent, so the invalidation paths can call them unguarded.
+    void decoded_lru_touch(const Key& key);
+    void decoded_lru_forget(const Key& key);
+    // Removes a key from the LRU and subtracts its footprint from the resident
+    // total. Every explicit `entries_` removal must call this so the total can
+    // never drift above the real residency.
+    void decoded_lru_release(const Key& key, Entry& entry);
+    // Records a newly inserted `entries_` entry in the LRU and adds its footprint
+    // to the resident total, then enforces the budget. The inverse of
+    // `decoded_lru_release`, and the only writer of `decoded_lru_` /
+    // `decoded_resident_bytes_` besides it, so the total cannot drift.
+    void decoded_lru_track(const Key& key, std::uint64_t guest_bytes);
+    // Pushes the decoded map back under its byte bound, oldest first, retiring
+    // each victim through `retire()` so no resource is destroyed while a
+    // submitted command list may still reference it.
+    void decoded_lru_evict_to_budget();
     void release_upload_arenas();
     struct UploadAllocation {
         ID3D12Resource* resource = nullptr;
@@ -309,6 +377,25 @@ private:
 
     std::unordered_map<Key, Entry, KeyHasher> entries_;
     detail::ConservativeGuestRangeEnvelope decoded_guest_envelope_;
+    // Bounded LRU over the decoded GPU map. `entries_` is the one cache in the
+    // runtime with no size bound and no byte bound: entries leave it only by
+    // dirty-range invalidation (or whole-map reset), so every texture the game
+    // has touched and not since overwritten stays resident for the session. On
+    // a low-end machine with a small GPU this is a measured, progressive cost
+    // rather than a hypothetical one -- the target recording's working set grows
+    // 207 MB -> 6 GB over one 6-minute session while its new-frame rate falls
+    // 60 Hz -> ~5 Hz, and the only ceiling on that growth is
+    // `kSrvHeapCapacity`, which THROWS instead of evicting.
+    //
+    // The bound below restores the property the content cache already has, and
+    // reuses the retirement path for release so an entry can never be destroyed
+    // while a submitted command list still references its resource.
+    std::list<Key> decoded_lru_;
+    std::unordered_map<Key, std::list<Key>::iterator, KeyHasher>
+        decoded_lru_pos_;
+    std::uint64_t decoded_resident_bytes_ = 0;
+    std::uint64_t decoded_evicted_bytes_ = 0;
+    std::uint64_t decoded_evicted_entries_ = 0;
     std::unordered_map<ContentKey, ContentEntry, ContentKeyHasher>
         content_entries_;
     std::list<ContentKey> content_lru_;

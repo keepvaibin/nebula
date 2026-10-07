@@ -3,6 +3,8 @@
 
 #include "galaxy/native_api.h"
 
+#include <cmath>
+
 #if defined(_M_X64) || defined(__SSE2__)
 #include <emmintrin.h>
 #endif
@@ -612,6 +614,33 @@ PpcFloatResult native_f64_exact_result(std::uint64_t bits) {
     return PpcFloatResult{bits, 0, classify_f64(bits), false, false};
 }
 
+// Nearest-even binary64 add/subtract/multiply. The rounding error of a sum
+// (Knuth TwoSum) or a product (Dekker/Veltkamp TwoProduct) is itself exactly
+// representable, so FI and FR follow from the error term's sign without a
+// second SoftFloat evaluation. Overflow, subnormal and exceptional operands or
+// results keep the SoftFloat path. Only binary operations on SSE2-or-later
+// hosts take this route; every operation is one correctly rounded binary64
+// instruction (no fused contraction: the helpers below use intrinsics).
+#if defined(_M_X64) || defined(__SSE2__)
+GALAXY_ALWAYS_INLINE double f64_op_add(double x, double y) {
+    return _mm_cvtsd_f64(_mm_add_sd(_mm_set_sd(x), _mm_set_sd(y)));
+}
+GALAXY_ALWAYS_INLINE double f64_op_sub(double x, double y) {
+    return _mm_cvtsd_f64(_mm_sub_sd(_mm_set_sd(x), _mm_set_sd(y)));
+}
+GALAXY_ALWAYS_INLINE double f64_op_mul(double x, double y) {
+    return _mm_cvtsd_f64(_mm_mul_sd(_mm_set_sd(x), _mm_set_sd(y)));
+}
+#endif
+
+GALAXY_ALWAYS_INLINE PpcFloatResult native_f64_status_result(
+    std::uint64_t bits,
+    bool inexact,
+    bool rounded_up) {
+    return PpcFloatResult{
+        bits, inexact ? kXx : 0u, classify_f64(bits), inexact, rounded_up};
+}
+
 bool native_f64_binary_fast(
     PpcFloatBinaryOperation operation,
     std::uint64_t left,
@@ -626,6 +655,81 @@ bool native_f64_binary_fast(
 
     const double left_value = std::bit_cast<double>(left);
     const double right_value = std::bit_cast<double>(right);
+#if defined(_M_X64) || defined(__SSE2__)
+    if (operation == PpcFloatBinaryOperation::Add ||
+        operation == PpcFloatBinaryOperation::Subtract) {
+        const double b = operation == PpcFloatBinaryOperation::Add
+            ? right_value : -right_value;
+        const double sum = f64_op_add(left_value, b);
+        const std::uint64_t sum_bits = std::bit_cast<std::uint64_t>(sum);
+        if (!f64_is_normal_or_zero_result(sum_bits)) {
+            return false;
+        }
+        const double bb = f64_op_sub(sum, left_value);
+        const double error = f64_op_add(
+            f64_op_sub(left_value, f64_op_sub(sum, bb)),
+            f64_op_sub(b, bb));
+        if (error == 0.0) {
+            result = native_f64_exact_result(sum_bits);
+            return true;
+        }
+        // |sum| exceeds the exact value exactly when the error has the
+        // opposite sign. A nonzero error implies a nonzero sum.
+        result = native_f64_status_result(
+            sum_bits, true, (error < 0.0) != (sum < 0.0));
+        return true;
+    }
+    if (operation == PpcFloatBinaryOperation::Multiply) {
+        // Keep the operand split and the partial products far from the
+        // binary64 exponent limits so every step of the error-free
+        // transformation is exact.
+        const auto operand_in_range = [](std::uint64_t bits) {
+            const std::uint32_t exponent =
+                static_cast<std::uint32_t>((bits >> 52) & 0x7FFu);
+            return (bits & 0x7FFFFFFFFFFFFFFFull) == 0u ||
+                   (exponent >= 723u && exponent <= 1323u);
+        };
+        if (!operand_in_range(left) || !operand_in_range(right)) {
+            return false;
+        }
+        const double product = f64_op_mul(left_value, right_value);
+        const std::uint64_t product_bits =
+            std::bit_cast<std::uint64_t>(product);
+        if ((product_bits & 0x7FFFFFFFFFFFFFFFull) == 0u) {
+            // Zero operand (the operand range excludes underflow to zero).
+            result = native_f64_exact_result(product_bits);
+            return true;
+        }
+        const std::uint32_t product_exponent =
+            static_cast<std::uint32_t>((product_bits >> 52) & 0x7FFu);
+        if (product_exponent < 100u || product_exponent > 1900u) {
+            return false;
+        }
+        constexpr double kSplit = 134217729.0;  // 2^27 + 1
+        const auto split = [](double x, double& high, double& low) {
+            const double c = f64_op_mul(kSplit, x);
+            high = f64_op_sub(c, f64_op_sub(c, x));
+            low = f64_op_sub(x, high);
+        };
+        double ah = 0.0, al = 0.0, bh = 0.0, bl = 0.0;
+        split(left_value, ah, al);
+        split(right_value, bh, bl);
+        const double error = f64_op_add(
+            f64_op_add(
+                f64_op_add(f64_op_sub(f64_op_mul(ah, bh), product),
+                           f64_op_mul(ah, bl)),
+                f64_op_mul(al, bh)),
+            f64_op_mul(al, bl));
+        if (error == 0.0) {
+            result = native_f64_exact_result(product_bits);
+            return true;
+        }
+        result = native_f64_status_result(
+            product_bits, true, (error < 0.0) != (product < 0.0));
+        return true;
+    }
+    return false;
+#else
     double rounded = 0.0;
     bool exact = false;
     switch (operation) {
@@ -650,10 +754,6 @@ bool native_f64_binary_fast(
     if (!exact || !f64_is_normal_or_zero_result(rounded_bits)) {
         return false;
     }
-    // Scaling by a power of two is exact only while the result remains
-    // representable. A nonzero product rounded to zero or up to minimum
-    // normal must retain the software path's underflow, inexact, and
-    // rounding status.
     if (operation == PpcFloatBinaryOperation::Multiply &&
         (rounded_bits & 0x7FFFFFFFFFFFFFFFull) <= 0x0010000000000000ull &&
         !f64_is_zero_bits(left) && !f64_is_zero_bits(right)) {
@@ -661,6 +761,7 @@ bool native_f64_binary_fast(
     }
     result = native_f64_exact_result(rounded_bits);
     return true;
+#endif
 }
 
 GALAXY_ALWAYS_INLINE bool native_f32_ternary_fast(
@@ -674,8 +775,7 @@ GALAXY_ALWAYS_INLINE bool native_f32_ternary_fast(
         !f32_is_finite(multiplier) || !f32_is_finite(addend) ||
         !f32_is_zero_or_normal(multiplicand) ||
         !f32_is_zero_or_normal(multiplier) ||
-        !f32_is_zero_or_normal(addend) ||
-        !f32_fma_exact_in_double(multiplicand, multiplier, addend)) {
+        !f32_is_zero_or_normal(addend)) {
         return false;
     }
 
@@ -684,6 +784,14 @@ GALAXY_ALWAYS_INLINE bool native_f32_ternary_fast(
     const float addend_value = std::bit_cast<float>(addend);
     const float adjusted_addend =
         ternary_subtracts(operation) ? -addend_value : addend_value;
+    if (!f32_fma_exact_in_double(multiplicand, multiplier, addend)) {
+        // Wide exponent gap (e.g. position += velocity * dt): every operand is
+        // a nonzero normal here, and the wide path keeps the software result.
+        if (!native_f32_fma_wide_fast(
+                multiplicand_value, multiplier_value, adjusted_addend, result)) {
+            return false;
+        }
+    } else {
     const double exact =
         static_cast<double>(multiplicand_value) *
             static_cast<double>(multiplier_value) +
@@ -701,6 +809,7 @@ GALAXY_ALWAYS_INLINE bool native_f32_ternary_fast(
     }
 
     result = native_f32_normal_or_zero_result(rounded_bits, exact);
+    }
     if (ternary_negates(operation)) {
         // Eligibility already proves a normal or signed-zero result. Negation
         // changes only its sign: the widened encoding keeps its magnitude,
@@ -826,7 +935,282 @@ bool native_f64_ternary_fast(
     return true;
 }
 
+// Binary32 status for a normal-or-zero result whose inexact/rounded-up
+// relation to the exact value was derived by the caller.
+GALAXY_ALWAYS_INLINE PpcFloatResult native_f32_status_result(
+    std::uint32_t bits,
+    bool inexact,
+    bool rounded_up) {
+    const bool zero = (bits & 0x7FFFFFFFu) == 0u;
+    std::uint32_t exception_bits = inexact ? kXx : 0u;
+    if (zero && inexact) {
+        exception_bits |= kUx;
+    }
+    const std::uint32_t fprf = zero
+        ? ((bits & 0x80000000u) != 0u ? 0x00012000u : 0x00002000u)
+        : ((bits & 0x80000000u) != 0u ? 0x00008000u : 0x00004000u);
+    return PpcFloatResult{
+        widen_f32_bits(bits), exception_bits, fprf, inexact, rounded_up};
+}
 
+// Fused binary32 multiply-add for nonzero normal operands outside the range
+// where the binary64 sum is provably exact. The product of two binary32 values
+// is exact in binary64 (at most 48 bits). Knuth's TwoSum then gives sum + error
+// == product + addend exactly, so the only way a plain conversion of `sum` to
+// binary32 can differ from the correctly rounded fused result is double
+// rounding onto an exact binary32 midpoint; the sign of `error` selects the
+// side there. FI/FR derive from the same exact pair. Results near the
+// subnormal or overflow limits, and exact cancellation, keep the software path.
+bool native_f32_fma_wide_fast(
+    float multiplicand,
+    float multiplier,
+    float addend,
+    PpcFloatResult& result) {
+    const double product =
+        static_cast<double>(multiplicand) * static_cast<double>(multiplier);
+    const double addend_value = static_cast<double>(addend);
+    const double sum = product + addend_value;
+    const double virtual_addend = sum - product;
+    const double error =
+        (product - (sum - virtual_addend)) + (addend_value - virtual_addend);
+
+    // Binary64 exponent fields 898 / 1150 are 2^-125 / 2^127.
+    const std::uint64_t sum_magnitude =
+        std::bit_cast<std::uint64_t>(sum) & 0x7FFFFFFFFFFFFFFFull;
+    if (sum_magnitude < (898ull << 52) || sum_magnitude >= (1150ull << 52)) {
+        return false;
+    }
+
+    const float rounded = static_cast<float>(sum);
+    std::uint32_t bits = std::bit_cast<std::uint32_t>(rounded);
+    const double rounded_value = static_cast<double>(rounded);
+    if (error != 0.0 && rounded_value != sum) {
+        // Neighbor of `rounded` on the side of `sum`; the range guard keeps
+        // both normal.
+        const bool away_from_zero = std::fabs(sum) > std::fabs(rounded_value);
+        const std::uint32_t neighbor_bits = away_from_zero ? bits + 1u : bits - 1u;
+        const double neighbor_value =
+            static_cast<double>(std::bit_cast<float>(neighbor_bits));
+        if (sum == (rounded_value + neighbor_value) * 0.5) {
+            const bool true_value_above = error > 0.0;
+            const bool neighbor_above = neighbor_value > rounded_value;
+            if (true_value_above == neighbor_above) {
+                bits = neighbor_bits;
+            }
+        }
+    }
+
+    const double result_value = static_cast<double>(std::bit_cast<float>(bits));
+    const bool inexact = error != 0.0 || result_value != sum;
+    bool rounded_up = false;
+    if (result_value != sum) {
+        rounded_up = std::fabs(result_value) > std::fabs(sum);
+    } else if (error != 0.0) {
+        rounded_up = (error < 0.0) != (result_value < 0.0);
+    }
+    result = native_f32_status_result(bits, inexact, rounded_up);
+    return true;
+}
+
+// Nearest-even binary32 division of finite normal/zero operands. A binary32
+// product has at most 48 significant bits, so q*d is exact in binary64.
+// Comparing that exact product with the dividend yields FI and FR without a
+// second division: |q*d| > |n| exactly when the quotient was rounded up.
+bool native_f32_divide_fast(
+    std::uint32_t left,
+    std::uint32_t right,
+    std::uint32_t fpscr,
+    PpcFloatResult& result) {
+    if ((fpscr & 0x3u) != 0u || !native_f32_binary_inputs(left, right) ||
+        (right & 0x7FFFFFFFu) == 0u) {
+        return false;
+    }
+    const float numerator = std::bit_cast<float>(left);
+    const float denominator = std::bit_cast<float>(right);
+    const float quotient = numerator / denominator;
+    const std::uint32_t quotient_bits = std::bit_cast<std::uint32_t>(quotient);
+    if (!native_f32_result_is_eligible(quotient_bits)) {
+        return false;
+    }
+    const double product =
+        static_cast<double>(quotient) * static_cast<double>(denominator);
+    const double dividend = static_cast<double>(numerator);
+    result = native_f32_status_result(
+        quotient_bits,
+        product != dividend,
+        std::fabs(product) > std::fabs(dividend));
+    return true;
+}
+
+#if defined(_M_X64) || defined(__SSE2__)
+GALAXY_ALWAYS_INLINE float native_sqrt_f32(float value) {
+    return _mm_cvtss_f32(_mm_sqrt_ss(_mm_set_ss(value)));
+}
+
+GALAXY_ALWAYS_INLINE double native_sqrt_f64(double value) {
+    return _mm_cvtsd_f64(_mm_sqrt_sd(_mm_setzero_pd(), _mm_set_sd(value)));
+}
+
+// The reciprocal and reciprocal-square-root estimates use round-toward-zero
+// intermediates and then clear the low significand bits. Nearest-even
+// intermediates differ from them by at most four ulps of the final value, so
+// when the cleared field is not within eight ulps of either end, both give
+// the identical truncated result. Anything near a truncation boundary keeps
+// the SoftFloat path.
+constexpr std::uint32_t kF32EstimateClearMask = 0xFFFu;
+constexpr std::uint64_t kF64EstimateClearMask = (1ull << 41u) - 1ull;
+
+GALAXY_ALWAYS_INLINE bool estimate_f32_clear_field_safe(std::uint32_t bits) {
+    const std::uint32_t low = bits & kF32EstimateClearMask;
+    return low >= 8u && low <= kF32EstimateClearMask - 8u;
+}
+
+GALAXY_ALWAYS_INLINE bool estimate_f64_clear_field_safe(std::uint64_t bits) {
+    const std::uint64_t low = bits & kF64EstimateClearMask;
+    return low >= 8u && low <= kF64EstimateClearMask - 8u;
+}
+
+bool native_f32_reciprocal_estimate_fast(
+    std::uint32_t bits,
+    PpcFloatResult& result) {
+    // Normal input whose reciprocal is also normal (no overflow/underflow).
+    const std::uint32_t exponent = (bits >> 23) & 0xFFu;
+    if (exponent < 1u || exponent > 252u) {
+        return false;
+    }
+    const float quotient = 1.0f / std::bit_cast<float>(bits);
+    const std::uint32_t quotient_bits = std::bit_cast<std::uint32_t>(quotient);
+    if (!estimate_f32_clear_field_safe(quotient_bits)) {
+        return false;
+    }
+    const std::uint32_t estimate = quotient_bits & ~kF32EstimateClearMask;
+    result = PpcFloatResult{
+        widen_f32_bits(estimate), 0u, classify_f32(estimate), false, false};
+    return true;
+}
+
+bool native_f64_reciprocal_estimate_fast(
+    std::uint64_t bits,
+    PpcFloatResult& result) {
+    // The estimate is narrowed toward zero to binary32; keep the reciprocal
+    // comfortably inside the normal binary32 range.
+    const std::uint32_t exponent =
+        static_cast<std::uint32_t>((bits >> 52) & 0x7FFu);
+    if (exponent < 903u || exponent > 1143u) {
+        return false;
+    }
+    const double quotient = 1.0 / std::bit_cast<double>(bits);
+    const std::uint64_t quotient_bits = std::bit_cast<std::uint64_t>(quotient);
+    if (!estimate_f64_clear_field_safe(quotient_bits)) {
+        return false;
+    }
+    const std::uint64_t truncated = quotient_bits & ~kF64EstimateClearMask;
+    const std::uint32_t estimate = std::bit_cast<std::uint32_t>(
+        static_cast<float>(std::bit_cast<double>(truncated)));
+    result = PpcFloatResult{
+        widen_f32_bits(estimate), 0u, classify_f32(estimate), false, false};
+    return true;
+}
+
+bool native_f32_reciprocal_sqrt_estimate_fast(
+    std::uint32_t bits,
+    PpcFloatResult& result) {
+    // Positive normal input; the caller has excluded NaN, zero and infinity.
+    // The square root and its reciprocal then stay normal.
+    const std::uint32_t exponent = (bits >> 23) & 0xFFu;
+    if ((bits & 0x80000000u) != 0u || exponent < 1u || exponent > 254u) {
+        return false;
+    }
+    const float quotient =
+        1.0f / native_sqrt_f32(std::bit_cast<float>(bits));
+    const std::uint32_t quotient_bits = std::bit_cast<std::uint32_t>(quotient);
+    if (!estimate_f32_clear_field_safe(quotient_bits)) {
+        return false;
+    }
+    const std::uint32_t estimate = quotient_bits & ~kF32EstimateClearMask;
+    result = PpcFloatResult{
+        widen_f32_bits(estimate), 0u, classify_f32(estimate), false, false};
+    return true;
+}
+
+bool native_f64_reciprocal_sqrt_estimate_fast(
+    std::uint64_t bits,
+    PpcFloatResult& result) {
+    const std::uint32_t exponent =
+        static_cast<std::uint32_t>((bits >> 52) & 0x7FFu);
+    if ((bits & 0x8000000000000000ull) != 0u || exponent < 1u ||
+        exponent > 2046u) {
+        return false;
+    }
+    const double quotient =
+        1.0 / native_sqrt_f64(std::bit_cast<double>(bits));
+    const std::uint64_t quotient_bits = std::bit_cast<std::uint64_t>(quotient);
+    if (!estimate_f64_clear_field_safe(quotient_bits)) {
+        return false;
+    }
+    const std::uint64_t estimate = quotient_bits & ~kF64EstimateClearMask;
+    result = PpcFloatResult{estimate, 0u, classify_f64(estimate), false, false};
+    return true;
+}
+#else
+inline bool native_f32_reciprocal_estimate_fast(std::uint32_t, PpcFloatResult&) { return false; }
+inline bool native_f64_reciprocal_estimate_fast(std::uint64_t, PpcFloatResult&) { return false; }
+inline bool native_f32_reciprocal_sqrt_estimate_fast(std::uint32_t, PpcFloatResult&) { return false; }
+inline bool native_f64_reciprocal_sqrt_estimate_fast(std::uint64_t, PpcFloatResult&) { return false; }
+#endif
+
+// frsp: nearest-even binary64 -> binary32 for a value whose binary32 result
+// is normal. FI/FR follow from comparing the exact widened result.
+bool native_round_f64_to_f32_fast(
+    std::uint64_t bits,
+    std::uint32_t fpscr,
+    PpcFloatResult& result) {
+    if ((fpscr & 0x3u) != 0u) {
+        return false;
+    }
+    const std::uint32_t exponent =
+        static_cast<std::uint32_t>((bits >> 52) & 0x7FFu);
+    if (exponent < 897u || exponent > 1150u) {
+        if ((bits & 0x7FFFFFFFFFFFFFFFull) == 0u) {
+            result = native_f32_status_result(
+                static_cast<std::uint32_t>(bits >> 32) & 0x80000000u,
+                false, false);
+            return true;
+        }
+        return false;
+    }
+    const double value = std::bit_cast<double>(bits);
+    const float rounded = static_cast<float>(value);
+    const std::uint32_t rounded_bits = std::bit_cast<std::uint32_t>(rounded);
+    if (!native_f32_result_is_eligible(rounded_bits)) {
+        return false;
+    }
+    const double widened = static_cast<double>(rounded);
+    result = native_f32_status_result(
+        rounded_bits,
+        widened != value,
+        std::fabs(widened) > std::fabs(value));
+    return true;
+}
+
+// fctiwz for a finite value whose truncation fits int32.
+bool native_f64_to_i32_round_zero_fast(
+    std::uint64_t bits,
+    PpcFloatResult& result) {
+    const double value = std::bit_cast<double>(bits);
+    if (!(value > -2147483649.0 && value < 2147483648.0)) {
+        return false;
+    }
+    const std::int32_t integer = static_cast<std::int32_t>(value);
+    const bool inexact = static_cast<double>(integer) != value;
+    result = PpcFloatResult{
+        0xFFF8000000000000ull | static_cast<std::uint32_t>(integer),
+        inexact ? kXx : 0u,
+        0u,
+        inexact,
+        false};
+    return true;
+}
 
 }  // namespace
 
@@ -851,6 +1235,10 @@ PpcFloatResult ppc_round_f64_to_f32(
     std::uint64_t bits,
     std::uint32_t fpscr) {
     bits = flush_f64_input(bits, fpscr);
+    PpcFloatResult fast_result{};
+    if (native_round_f64_to_f32_fast(bits, fpscr, fast_result)) {
+        return fast_result;
+    }
     const std::uint32_t invalid =
         f64_is_signaling_nan(bits) ? kVxSnan : 0;
     const auto primary =
@@ -880,6 +1268,10 @@ PpcFloatResult ppc_f64_to_i32_round_zero(
     std::uint64_t bits,
     std::uint32_t fpscr) {
     bits = flush_f64_input(bits, fpscr);
+    PpcFloatResult fast_result{};
+    if (native_f64_to_i32_round_zero_fast(bits, fast_result)) {
+        return fast_result;
+    }
     const auto converted = calculate_f64_to_i32_round_zero(bits);
     const bool invalid =
         (converted.exceptions & softfloat_flag_invalid) != 0;
@@ -967,6 +1359,10 @@ PpcFloatResult ppc_f32_binary(
     if (native_f32_binary_fast(operation, left, right, fpscr, fast_result)) {
         return fast_result;
     }
+    if (operation == PpcFloatBinaryOperation::Divide &&
+        native_f32_divide_fast(left, right, fpscr, fast_result)) {
+        return fast_result;
+    }
     const std::uint32_t invalid = invalid_detail_f32(operation, left, right);
     if (f32_is_nan(left) || f32_is_nan(right)) {
         const std::uint32_t source = f32_is_nan(left) ? left : right;
@@ -1013,6 +1409,14 @@ PpcFloatResult ppc_f64_binary_to_f32(
     std::uint32_t fpscr) {
     std::uint32_t left_f32 = 0;
     std::uint32_t right_f32 = 0;
+    if (operation == PpcFloatBinaryOperation::Divide &&
+        try_narrow_normal_or_zero_widened_f32(left, left_f32) &&
+        try_narrow_normal_or_zero_widened_f32(right, right_f32)) {
+        PpcFloatResult divided{};
+        if (native_f32_divide_fast(left_f32, right_f32, fpscr, divided)) {
+            return divided;
+        }
+    }
     if (operation != PpcFloatBinaryOperation::Divide &&
         try_narrow_widened_f32(left, left_f32) &&
         try_narrow_widened_f32(right, right_f32)) {
@@ -1194,6 +1598,10 @@ PpcFloatResult ppc_f32_reciprocal_estimate(
             widen_f32(result), 0, classify_f32(result), false, false};
     }
 
+    PpcFloatResult fast_result{};
+    if (native_f32_reciprocal_estimate_fast(bits, fast_result)) {
+        return fast_result;
+    }
     const auto estimate = calculate_f32(
         PpcFloatBinaryOperation::Divide,
         0x3F800000u,
@@ -1238,6 +1646,10 @@ PpcFloatResult ppc_f64_reciprocal_estimate(
             widen_f32(result), 0u, classify_f32(result), false, false};
     }
 
+    PpcFloatResult fast_result{};
+    if (native_f64_reciprocal_estimate_fast(bits, fast_result)) {
+        return fast_result;
+    }
     // Estimate from the full source; narrowing the operand would erase legal
     // binary64 values before taking their reciprocal. The software estimate
     // policy is retained here; this is not a Broadway table implementation.
@@ -1292,6 +1704,10 @@ PpcFloatResult ppc_f32_reciprocal_sqrt_estimate(
         return PpcFloatResult{0, 0, classify_f32(0), false, false};
     }
 
+    PpcFloatResult fast_result{};
+    if (native_f32_reciprocal_sqrt_estimate_fast(bits, fast_result)) {
+        return fast_result;
+    }
     const auto root = calculate_f32_sqrt(bits, softfloat_round_minMag);
     const auto estimate = calculate_f32(
         PpcFloatBinaryOperation::Divide,
@@ -1348,6 +1764,10 @@ PpcFloatResult ppc_f64_reciprocal_sqrt_estimate(
         return PpcFloatResult{0, 0, classify_f64(0), false, false};
     }
 
+    PpcFloatResult fast_result{};
+    if (native_f64_reciprocal_sqrt_estimate_fast(bits, fast_result)) {
+        return fast_result;
+    }
     const auto root = calculate_f64_sqrt(bits, softfloat_round_minMag);
     const auto reciprocal = calculate_f64(
         PpcFloatBinaryOperation::Divide,

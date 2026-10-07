@@ -32,7 +32,8 @@ inline constexpr std::uint16_t kNativeDspControlHalt = 0x0004;
 // until the CPU commits the complete span or a bounded failure occurs. There
 // is deliberately no request queue and no worker-side GuestMemory alias. The
 // owner must call shutdown() and join its submitting worker before destroying
-// this boundary; GuestAddressSpace enforces that lifetime order explicitly.
+// this boundary, and must retain it until any active service_one() call has
+// returned. GuestAddressSpace services and destroys it on the same CPU owner.
 class DspMramTransactionBoundary {
 public:
     static constexpr std::uint32_t kMaximumSpanBytes = 0x4000u;
@@ -149,7 +150,13 @@ private:
     std::thread::id service_thread_{};
     std::chrono::milliseconds timeout_{kDefaultTimeout};
     Direction direction_{Direction::ReadFromMram};
-    State state_{State::Idle};
+    // Atomic so service_one() can reject the overwhelmingly common "nothing is
+    // pending" call with a relaxed load instead of taking mutex_. Only
+    // State::Pending has side effects, so a relaxed load that misses a
+    // concurrent submit merely defers service to the next pump -- the designed
+    // behaviour for a wake arriving between pumps. Every other comparison of
+    // this member still runs under mutex_.
+    std::atomic<State> state_{State::Idle};
     std::uint32_t address_{};
     std::uint32_t size_{};
     bool submitter_active_{};

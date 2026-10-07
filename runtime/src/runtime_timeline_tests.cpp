@@ -104,14 +104,33 @@ bool counter_scale_matches_wide_integer_oracle() {
         if (frequency == 0 || frequency > 1'000'000'000ull) {
             expected_saturation = true;
         } else {
-            std::uint64_t high = 0, remainder = 0;
-            const auto low = _umul128(delta,
-                galaxy::timing::kTimelineTicksPerSecond, &high);
+            // Independent wide multiply/divide oracle. MSVC x64 supplies
+            // intrinsics instead of unsigned __int128; clang supplies the
+            // integer type but does not expose _udiv128. Keep both front ends
+            // supported, and check the high half before dividing so the
+            // quotient fits in 64 bits.
+#if defined(_MSC_VER) && !defined(__clang__)
+            std::uint64_t high{};
+            const std::uint64_t low = _umul128(
+                delta, galaxy::timing::kTimelineTicksPerSecond, &high);
             if (high >= frequency) {
                 expected_saturation = true;
             } else {
+                std::uint64_t remainder{};
                 expected = _udiv128(high, low, frequency, &remainder);
             }
+#else
+            const unsigned __int128 product =
+                static_cast<unsigned __int128>(delta) *
+                galaxy::timing::kTimelineTicksPerSecond;
+            const std::uint64_t high =
+                static_cast<std::uint64_t>(product >> 64);
+            if (high >= frequency) {
+                expected_saturation = true;
+            } else {
+                expected = static_cast<std::uint64_t>(product / frequency);
+            }
+#endif
         }
         bool saturated = !expected_saturation;
         return expect(galaxy::timing::scale_counter_delta(

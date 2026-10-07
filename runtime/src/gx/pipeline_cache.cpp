@@ -17,15 +17,18 @@
 #include "galaxy/gx/shader_gen.h"
 #include "galaxy/gx/shader_keys.h"
 #include "galaxy/gx/shader_pair_compile.h"
+#include "galaxy/scope_exit.h"
 
 #pragma warning(push, 0)
 #include <d3dcompiler.h>
 #include <d3d12shader.h>
+#include <Windows.h>
 #pragma warning(pop)
 
 #include <atomic>
 #include <array>
 #include <limits>
+#include <new>
 #include <algorithm>
 #include <cassert>
 #include <chrono>
@@ -35,12 +38,29 @@
 #include <iostream>
 #include <stdexcept>
 #include <sstream>
+#include <thread>
+// Required directly by the `std::is_trivially_copyable_v<PsoKey>` assert at the
+// `psos.bin` parse site. It is not taken transitively: `shader_keys.h` includes
+// <type_traits>, but this translation unit should not depend on a sibling header's
+// include list for a trait it uses itself.
+#include <type_traits>
 
 #pragma comment(lib, "d3dcompiler.lib")
 
 namespace galaxy::gx {
 
+#if defined(GALAXY_PIPELINE_CACHE_PERSISTENCE_TEST_IO)
+using PipelineTestCreator = Microsoft::WRL::ComPtr<ID3D12PipelineState> (*)(const PsoKey&);
+static PipelineTestCreator pipeline_test_creator = nullptr;
+void set_pipeline_cache_test_creator(PipelineTestCreator creator) {
+    pipeline_test_creator = creator;
+}
+#endif
+
 namespace {
+#if defined(GALAXY_PIPELINE_CACHE_PERSISTENCE_TEST_IO)
+void persistence_test_load_publication(unsigned stage);
+#endif
 
 bool trace_gx_stalls_enabled() {
     static const bool enabled = [] {
@@ -248,11 +268,14 @@ Microsoft::WRL::ComPtr<ID3DBlob> compile_shader(
     const char* target,
     const char* label) {
     Microsoft::WRL::ComPtr<ID3DBlob> code, errors;
+    // Level 1: the driver re-optimizes DXBC when it builds the PSO, so FXC's
+    // level 3 only lengthens the synchronous first-use miss on the render
+    // thread (measured 12-21 ms per shader pair at level 3).
     const HRESULT hr = D3DCompile(
         src.data(), src.size(), label, nullptr, nullptr, "main", target,
         D3DCOMPILE_ENABLE_STRICTNESS |
             D3DCOMPILE_PACK_MATRIX_ROW_MAJOR |
-            D3DCOMPILE_OPTIMIZATION_LEVEL3,
+            D3DCOMPILE_OPTIMIZATION_LEVEL1,
         0, &code, &errors);
     if (FAILED(hr)) {
         static std::atomic<int> s_err_logs{0};
@@ -695,6 +718,15 @@ void PipelineCache::shutdown() {
     device_.Reset();
 }
 
+// Share of a first-use stall that was FXC shader compilation rather than the
+// driver's pipeline build, so the split is readable without dividing two fields
+// by hand. Integer percent; 0 when nothing was timed.
+[[nodiscard]] std::uint64_t blob_share_percent(
+    std::uint64_t blob_us,
+    std::uint64_t total_us) noexcept {
+    return total_us == 0u ? 0u : (blob_us * 100u) / total_us;
+}
+
 // ---------------------------------------------------------------------------
 // get — render thread only
 // ---------------------------------------------------------------------------
@@ -704,25 +736,81 @@ ID3D12PipelineState* PipelineCache::get(
     const PixelShaderKey& ps_key,
     const VertexShaderKey& vs_key) {
 
-    if (worker_failed_.load(std::memory_order_acquire)) {
+    if (worker_failed_.load(std::memory_order_acquire)) [[unlikely]] {
         std::lock_guard<std::mutex> lock(job_mutex_);
         if (worker_error_) std::rethrow_exception(worker_error_);
     }
+    // 0. One-entry memo of the last successful resolution. This is in front of
+    // the map probe because a busy frame alternates between a small number of
+    // PsoKeys (a material and its blend/depth variants), so the same key comes
+    // back within a few draws. This is the slice the frame timings blame for most
+    // of the parse cost. published_ never loses an entry during a session, so a
+    // memo hit returns exactly what the probe below would have returned.
+    //
+    // The comparison order is deliberate: hash first, key second. `PsoKey::hash()`
+    // is 32 bytes mixed into a 64-bit value, so the old form — compare all 32
+    // bytes of the key, and on a miss hash those same 32 bytes again — did the
+    // expensive work twice on every miss. A mismatching hash already proves the
+    // keys differ, because hash is a pure function of the key, so the byte
+    // comparison only has to run on a hash match. That is the same rule
+    // std::unordered_map uses, and it is safe for the reason the map's own
+    // equality is: a hash collision falls through to the exact comparison rather
+    // than returning a wrong pipeline.
+    const std::uint64_t requested_hash = key.hash();
+    if (last_hit_pipeline_ != nullptr &&
+        last_hit_key_.hash == requested_hash &&
+        last_hit_key_.key == key) {
+        ++specialized_hits_;
+        return last_hit_pipeline_;
+    }
+    // Hash the key once for the whole request, reusing the value the memo above
+    // already computed. The renderer issues this call whenever a shader/render
+    // state input changed, which on a busy frame is tens of thousands of times;
+    // the memo keeps the map probes from re-deriving the same hash for each of
+    // published_ and in_flight_, and this construction keeps the memo itself from
+    // hashing the same 32 bytes a second time on every miss.
+    const MemoizedPsoKey memoized{key, requested_hash};
     // 1. Check the published specialized map (render-thread-only, no lock).
     {
-        const auto it = published_.find(key);
+        const auto it = published_.find(memoized);
         if (it != published_.end() && it->second) {
-            specialized_hits_.fetch_add(1, std::memory_order_relaxed);
+            ++specialized_hits_;
+            last_hit_key_ = memoized;
+            last_hit_pipeline_ = it->second.Get();
+            last_hit_owner_ = it->second;
             return it->second.Get();
         }
     }
-    const std::uint64_t key_hash = key.hash();
-    if (in_flight_.find(key) != in_flight_.end()) {
-        ID3D12PipelineState* in_flight_pso = nullptr;
-        if (wait_for_in_flight_pso(key, in_flight_pso) &&
-            in_flight_pso != nullptr) {
-            specialized_hits_.fetch_add(1, std::memory_order_relaxed);
-            return in_flight_pso;
+    const std::uint64_t key_hash = memoized.hash;
+    if (in_flight_.find(memoized) != in_flight_.end()) {
+        // A worker that finished after begin_frame()'s drain left its result on
+        // the lock-free completion queue, where the probe above cannot see it.
+        // Drain here — get() is render-thread-only, exactly like the frame
+        // drain — so an already-finished job is taken instead of being waited
+        // on. Without this the render thread pays a full wait quantum for every
+        // render-state change that touches a key whose compile is already done.
+        drain_completions();
+        if (const auto it = published_.find(memoized);
+            it != published_.end() && it->second) {
+            ++specialized_hits_;
+            last_hit_key_ = memoized;
+            last_hit_pipeline_ = it->second.Get();
+            last_hit_owner_ = it->second;
+            return it->second.Get();
+        }
+        if (in_flight_.find(memoized) != in_flight_.end()) {
+            ID3D12PipelineState* in_flight_pso = nullptr;
+            if (wait_for_in_flight_pso(memoized, in_flight_pso) &&
+                in_flight_pso != nullptr) {
+                ++specialized_hits_;
+                if (const auto it = published_.find(memoized);
+                    it != published_.end() && it->second) {
+                    last_hit_key_ = memoized;
+                    last_hit_pipeline_ = it->second.Get();
+                    last_hit_owner_ = it->second;
+                }
+                return in_flight_pso;
+            }
         }
     }
 
@@ -737,7 +825,7 @@ ID3D12PipelineState* PipelineCache::get(
     // the FIRST run that ever sees the shader; render-state variants reuse
     // the blobs and pay only the driver PSO build.  This mirrors the
     // trade-off space described in Dolphin's hybrid-ubershader design.
-    uber_fallbacks_.fetch_add(1, std::memory_order_relaxed);
+    ++uber_fallbacks_;
 
     const auto miss_start = std::chrono::steady_clock::now();
     const ShaderPairKey shader_pair_hash{key.vs_hash, key.ps_hash};
@@ -758,9 +846,9 @@ ID3D12PipelineState* PipelineCache::get(
     // Preserve map ownership if a completion populated this key during the
     // in-flight wait. Upgrade only a null entry; never discard a successful
     // PSO or return a pointer from this temporary ComPtr.
-    auto published_it = published_.find(key);
+    auto published_it = published_.find(memoized);
     if (published_it == published_.end() && pso) {
-        published_it = published_.emplace(key, std::move(pso)).first;
+        published_it = published_.emplace(memoized, std::move(pso)).first;
     } else if (published_it != published_.end() && !published_it->second && pso) {
         published_it->second = std::move(pso);
     }
@@ -768,6 +856,11 @@ ID3D12PipelineState* PipelineCache::get(
         ? nullptr : published_it->second.Get();
     if (raw != nullptr) {
         remember_pso_key(key);
+        // First-use path just resolved (or loaded) this key synchronously, so it
+        // is the most likely key to be asked for again immediately.
+        last_hit_key_ = memoized;
+        last_hit_pipeline_ = raw;
+        last_hit_owner_ = published_it->second;
     }
     const std::uint64_t total_us = elapsed_us(miss_start, pso_end);
     if (trace_gx_stalls_enabled() &&
@@ -791,6 +884,22 @@ ID3D12PipelineState* PipelineCache::get(
                   << " blob-us=" << elapsed_us(miss_start, blobs_end)
                   << " pso-us=" << elapsed_us(pso_start, pso_end)
                   << " total-us=" << total_us
+                  // Both recordings show FXC, not the driver build, dominating
+                  // this stall: on all 17 RTX misses blob-us exceeded pso-us,
+                  // and blob-cache-hit was 0 on 84 of 85 misses across the two
+                  // recordings. This field is the split, so a reader does not
+                  // have to divide the two by hand (or, worse, guess).
+                  << " blob-share-pct="
+                  << blob_share_percent(
+                         elapsed_us(miss_start, blobs_end), total_us)
+                  // Which stage was missing is what decides whether the pair
+                  // cache is answering or only the per-stage maps are: both
+                  // stages missing is a genuinely new material, one stage
+                  // missing means the pair record was not found for a shader
+                  // already resident.
+                  << " stages-missing="
+                  << ((blob_cache_hit ? 0u : 1u) +
+                      (vs_cache_hit ? 0u : 1u) + (ps_cache_hit ? 0u : 1u))
                   << " success=" << (raw != nullptr ? 1 : 0)
                   << '\n';
         std::cerr << message.str();
@@ -803,56 +912,128 @@ ID3D12PipelineState* PipelineCache::get(
 // ---------------------------------------------------------------------------
 
 void PipelineCache::drain_completions() {
+    // The last-hit memo in get() asserts that `published_` cannot gain an entry
+    // between the memo being written and it being read. This is the only place
+    // that can add one outside get(), so it is the only place that has to drop
+    // the memo. Doing it unconditionally keeps the assert true even when the
+    // queue turns out to be empty: the cost is one null store on a path that
+    // already runs once per frame.
+    clear_last_hit_memo();
     PsoCompletionQueue::Item item;
     while (completions_.try_pop(item)) {
+        // The completed job has no remaining worker/queue owner. Retire its
+        // marker before publication or persistence allocations can throw,
+        // otherwise a caught retry waits for a completion already consumed.
+        // Both maps are render-thread-owned, so no get can observe this gap.
+        const MemoizedPsoKey memoized{item.key};
+        in_flight_.erase(memoized);
         // A failed prewarm must leave this key available for a synchronous
         // first-use attempt. A successful completion can replace a null
         // synchronous result but must never replace another successful PSO.
         if (item.pipeline) {
-            auto published_it = published_.find(item.key);
+            auto published_it = published_.find(memoized);
             if (published_it == published_.end()) {
+#if defined(GALAXY_PIPELINE_CACHE_PERSISTENCE_TEST_IO)
+                persistence_test_load_publication(7u);
+#endif
                 published_it = published_
-                    .emplace(item.key, std::move(item.pipeline)).first;
+                    .emplace(memoized, std::move(item.pipeline)).first;
             } else if (!published_it->second) {
                 published_it->second = std::move(item.pipeline);
             }
             remember_pso_key(item.key);
         }
-        in_flight_.erase(item.key);
     }
 }
 
 bool PipelineCache::wait_for_in_flight_pso(
-    const PsoKey& key,
+    const MemoizedPsoKey& memoized,
     ID3D12PipelineState*& out) {
     out = nullptr;
-    const std::uint64_t key_hash = key.hash();
+    const PsoKey& key = memoized.key;
+    const std::uint64_t key_hash = memoized.hash;
     // A queued job can be claimed by first use. A running job has one owner;
     // timing out must never cause a duplicate driver creation for the same key.
+    //
+    // Distinguish the two cases, because only one of them needs to wait. A job
+    // still sitting in `jobs_` has no owner yet, so the render thread may take it
+    // and build the PSO itself — see the inline attempt below. A job a worker has
+    // already removed from the queue is genuinely in progress and must be waited
+    // on, or two threads would create the same pipeline concurrently.
+    CompileJob inline_job{};
+    bool claimed_queued_job = false;
     {
         std::lock_guard<std::mutex> lock(job_mutex_);
         const auto queued = std::find_if(jobs_.begin(), jobs_.end(),
             [&](const CompileJob& job) { return job.key == key; });
         if (queued != jobs_.end()) {
+            // Transfer ownership before releasing the worker's queue lock.
+            // Merely observing the entry permits a worker to take it while
+            // this thread is already creating the same pipeline.
+            inline_job = std::move(*queued);
             jobs_.erase(queued);
-            in_flight_.erase(key);
+            claimed_queued_job = true;
+        }
+    }
+    // An owned queued job needs no worker wait. Cached DXBC avoids shader
+    // translation here, but a driver-library miss can still create a PSO.
+    // Running jobs are not claimed and retain the completion wait below.
+    if (claimed_queued_job) {
+        try {
+            ShaderPair stages{};
+            const bool have_blobs = inline_job.use_cached_blobs
+                ? static_cast<bool>(inline_job.vs_blob) && static_cast<bool>(inline_job.ps_blob)
+                : find_cached_shader_stages(key, stages);
+            if (inline_job.use_cached_blobs) {
+                stages.vs = inline_job.vs_blob;
+                stages.ps = inline_job.ps_blob;
+            }
+            if (have_blobs && stages.vs && stages.ps) {
+                auto inline_pso = create_or_load_pso(key, stages.vs.Get(), stages.ps.Get());
+                if (inline_pso) {
+                    auto resolved = published_.find(memoized);
+                    if (resolved == published_.end()) {
+                        resolved = published_.emplace(memoized, std::move(inline_pso)).first;
+                    } else if (!resolved->second) {
+                        resolved->second = std::move(inline_pso);
+                    }
+                    in_flight_.erase(memoized);
+                    remember_pso_key(key);
+                    out = resolved->second.Get();
+                    last_hit_key_ = memoized;
+                    last_hit_pipeline_ = out;
+                    last_hit_owner_ = resolved->second;
+                    return out != nullptr;
+                }
+            }
+            // No worker owns this removed job. Retire the marker and let
+            // get() perform its full-key synchronous attempt; never wait for
+            // a completion that cannot arrive or return an incorrect fallback.
+            in_flight_.erase(memoized);
             return false;
+        } catch (...) {
+            // Creation, publication and persistence bookkeeping may throw.
+            // The owned queue entry is gone on every exit, so its marker must
+            // not leave a later request waiting on nonexistent work.
+            in_flight_.erase(memoized);
+            throw;
         }
     }
     const std::uint64_t timeout_ms = std::max<std::uint64_t>(
         30000u, std::min<std::uint64_t>(pso_inflight_wait_ms(), 300000u));
     const auto start = std::chrono::steady_clock::now();
+    bool spin_spent = false;
     for (;;) {
         drain_completions();
         {
             std::lock_guard<std::mutex> lock(job_mutex_);
             if (worker_error_) std::rethrow_exception(worker_error_);
         }
-        if (const auto it = published_.find(key); it != published_.end()) {
+        if (const auto it = published_.find(memoized); it != published_.end()) {
             out = it->second.Get();
             return true;
         }
-        if (in_flight_.find(key) == in_flight_.end()) {
+        if (in_flight_.find(memoized) == in_flight_.end()) {
             return false;
         }
 
@@ -871,7 +1052,83 @@ bool PipelineCache::wait_for_in_flight_pso(
             throw std::runtime_error("timed out waiting for a running GX pipeline job");
         }
 
+        // Spin through the completion queue before sleeping. `wait_for(1ms)`
+        // is quantized by the system timer, so a job that finishes 50 us from
+        // now still costs the render thread a full millisecond here; a frame
+        // that resolves hundreds of batches paid that quantum hundreds of
+        // times. The window is deliberately short: it exists only to catch an
+        // already-imminent completion between the drain above and the wait
+        // below. A longer window would burn render-thread CPU on a low-end host
+        // for no benefit, because a finishing worker notifies `completion_cv_`
+        // and the wait below then returns immediately instead of sleeping out
+        // its quantum. This is not a correctness path: every exit still comes
+        // from `published_` or from `in_flight_` losing the key.
+        //
+        // The window is spent at most once per call. Re-entering it after the
+        // condition-variable wait cannot observe anything the wait's own
+        // notification did not already deliver, but it would add its full
+        // duration to every outer iteration — turning a job that needs N
+        // quanta into N x (spin + quantum) instead of N x quantum. That
+        // inflation is exactly what this loop exists to remove.
+        //
+        // The window must also stay small in ABSOLUTE terms, because it is paid
+        // on every call that reaches this point, not only on the ones that
+        // complete inside it. The recording shows `flush-pso-us` = 422221 us
+        // over 361 draw batches in one low-end frame — 1.17 ms per pipeline
+        // request, i.e. exactly the order of a multi-hundred-microsecond spin
+        // plus one wait quantum. 50 us keeps the "already imminent" catch while
+        // capping the worst case at a twentieth of a millisecond instead of
+        // half of one.
+        constexpr auto kSpinWindow = std::chrono::microseconds(50);
+        if (!spin_spent) {
+            spin_spent = true;
+            const auto spin_start = std::chrono::steady_clock::now();
+            bool woke_for_completion = false;
+            // One clock read per spin pass, not two. `steady_clock::now()` on
+            // this toolchain is `_Query_perf_frequency` + `_Query_perf_counter`
+            // (confirmed in the /O2 assembly of this function), so a loop
+            // condition that reads it and a body that reads it again pays for
+            // two full clock queries per pass of a window whose entire purpose is
+            // to sample the completion queue in a tight loop. Reading once also
+            // makes the deadline test and the drain genuinely the same instant,
+            // so a pass cannot be admitted whose drain then runs past the window.
+            //
+            // The window length is unchanged: the last admitted pass still begins
+            // before `spin_start + kSpinWindow`, so total spin is bounded by
+            // kSpinWindow plus one pass, exactly as before.
+            for (;;) {
+                const auto spin_now = std::chrono::steady_clock::now();
+                if (spin_now - spin_start >= kSpinWindow) {
+                    break;
+                }
+                // A scheduler yield here is the wrong primitive: yield() hands
+                // the rest of the slice to another runnable thread and costs a
+                // ring transition, which on a loaded low-end CPU is far more
+                // than the wait quantum this spin exists to avoid. A short
+                // architectural pause keeps the window a true local spin.
+#if defined(_M_X64) || defined(_M_IX86)
+                _mm_pause();
+#else
+                std::this_thread::yield();
+#endif
+                drain_completions();
+                if (published_.find(memoized) != published_.end() ||
+                    in_flight_.find(memoized) == in_flight_.end()) {
+                    woke_for_completion = true;
+                    break;
+                }
+            }
+            if (woke_for_completion) {
+                continue;
+            }
+        }
+
         std::unique_lock<std::mutex> lock(job_mutex_);
+        // `completion_cv_` is notified by every finished worker job as well as
+        // by shutdown, so a wait that is notified proceeds at once instead of
+        // finishing the whole quantum. The 1 ms bound is only the worst case
+        // for a completion that landed in the window between the drain above
+        // and this wait.
         completion_cv_.wait_for(lock, std::chrono::milliseconds(1));
     }
 }
@@ -908,6 +1165,19 @@ const PipelineCache::ShaderPair* PipelineCache::get_or_compile_blobs(
 
     const bool need_vs = !pair.vs;
     const bool need_ps = !pair.ps;
+    // A pair reachable here with both stages already resident came out of
+    // shaders.bin (or an earlier compile) for this exact (vs_hash, ps_hash);
+    // that is the coverage the disk cache is supposed to provide and is the
+    // denominator for "did the cache actually grow".
+    if (!need_vs && !need_ps) {
+        ++blobs_from_cache_;
+    } else {
+        ++shader_pair_compiles_;
+    }
+    // Time the FXC work only, not the map probes above: this is the figure that
+    // says what shader compilation cost the session, and it is the term the
+    // stall attribution needs.
+    const auto compile_start = std::chrono::steady_clock::now();
     if (need_vs && need_ps) {
         const std::string vs_src = generator_.generate_vs(vs_key);
         const std::string ps_src = generator_.generate_ps(ps_key);
@@ -922,6 +1192,8 @@ const PipelineCache::ShaderPair* PipelineCache::get_or_compile_blobs(
         const std::string ps_src = generator_.generate_ps(ps_key);
         pair.ps = compile_shader(ps_src, "ps_5_1", "gx_ps");
     }
+    blob_compile_us_ +=
+        elapsed_us(compile_start, std::chrono::steady_clock::now());
 
     if (pair.vs) {
         vertex_shader_blobs_.try_emplace(key.vs_hash, pair.vs);
@@ -936,9 +1208,20 @@ const PipelineCache::ShaderPair* PipelineCache::get_or_compile_blobs(
         // A transient compiler failure must remain retryable.
         return nullptr;
     }
-    const auto [it, inserted] = shader_blobs_.emplace(ph, std::move(pair));
-    (void)inserted;
-    return &it->second;
+    try {
+#if defined(GALAXY_PIPELINE_CACHE_PERSISTENCE_TEST_IO)
+        persistence_test_load_publication(7u);
+#endif
+        const auto [it, inserted] = shader_blobs_.emplace(ph, std::move(pair));
+        (void)inserted;
+        return &it->second;
+    } catch (...) {
+        // Only this render-thread owner mutates these containers. Remove the
+        // identity just appended above; valid stages and earlier pending pairs
+        // survive, and a retry can recombine those stages without compilation.
+        unsaved_blobs_.pop_back();
+        throw;
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -969,12 +1252,38 @@ constexpr std::uint32_t kShaderCacheMagic   = 0x43535847u;  // "GXSC"
     // surfaces because RMGE01 vertices lack authored tangent/binormal).
 constexpr std::uint32_t kShaderCacheVersion = 24u;
 constexpr std::uint32_t kPsoKeyCacheMagic = 0x43504B47u;  // "GKPC"
-constexpr std::uint32_t kPsoKeyCacheVersion = 5u;
+// These keys are only meaningful while the shader cache that defines their
+// `vs_hash`/`ps_hash` stages is also current: a PSO key whose stages are absent
+// from `shaders.bin` cannot be prewarmed, because enqueue_cached_pso_prewarm
+// skips any key find_cached_shader_stages rejects. Keeping the two versions
+// independent therefore lets a kShaderCacheVersion bump invalidate `shaders.bin`
+// and `pipelines.bin` (which already gates on shader_version, see the header
+// read in load_disk_cache) while leaving `psos.bin` behind, orphaning its keys
+// until they are forgotten. Folding the shader version into this one makes the
+// dependency a foreign key that cannot be forgotten: the file is rejected and
+// rebuilt whenever the shader semantics it references change. Rejection is
+// self-healing and cheap -- these keys are a pure cache, and losing them costs
+// only the prewarm of keys the game has not met yet in this session.
+//
+// This is PREVENTIVE hardening, not a repair. An earlier version of this comment
+// claimed "36 of 72 keys unusable in one real cache directory"; that measurement
+// was withdrawn as an artefact of parsing `psos.bin` with an 80-byte stride when
+// PsoKey is 32 bytes. Re-measured at the correct stride, a real cache directory
+// held 180 keys and every one was fully covered -- no orphans. The dependency is
+// real and worth making explicit; it simply was not being violated at the time.
+constexpr std::uint32_t kPsoKeyCacheVersion = 0x100u + kShaderCacheVersion;
 constexpr std::uint32_t kPipelineLibraryMagic = 0x4C505847u; // "GXPL"
 constexpr std::uint32_t kPipelineLibraryVersion = 6u;
 constexpr std::uint64_t kMaxPipelineLibraryBytes = 64ull << 20;
 constexpr std::uint64_t kMaxShaderCacheBytes = 128ull << 20;
 constexpr std::uint32_t kMaxCacheRecords = 65536u;
+// Both disk caches are append-only running totals, so a session that meets a new
+// configuration pays for it again on every later launch unless the file itself
+// grows to cover it. Append in bounded batches and then pay one rewrite that
+// brings the file up to the coverage the process already holds in memory.
+// 64 amortizes that rewrite (a few hundred KB to a few MB, once per 64 newly
+// learned configurations) instead of rewriting the whole shader cache per flush.
+constexpr std::size_t kCacheCoverageAppendBatch = 64u;
 
 bool valid_pso_key(const PsoKey& key) {
     const auto& state = key.render_state;
@@ -985,20 +1294,49 @@ bool valid_pso_key(const PsoKey& key) {
             [](std::uint8_t value) { return value == 0u; });
 }
 
-// Reflection checks the container and shader stage. Per-record checksums reject
-// accidental payload corruption; this local cache is not a trust boundary.
-bool valid_shader_blob(ID3DBlob* blob, bool vertex) {
+enum class ShaderRecordRead : std::uint8_t { Ok, Invalid, Resource };
+
+#if defined(GALAXY_PIPELINE_CACHE_PERSISTENCE_TEST_IO)
+std::size_t persistence_test_read_budget = std::numeric_limits<std::size_t>::max();
+bool persistence_test_reflection_failure = false;
+unsigned persistence_test_load_stage = 0u;
+std::size_t persistence_test_load_budget = std::numeric_limits<std::size_t>::max();
+unsigned persistence_test_load_exception = 0u;
+void persistence_test_load_publication(unsigned stage) {
+    if (stage != persistence_test_load_stage) return;
+    if (persistence_test_load_budget != 0u) {
+        --persistence_test_load_budget;
+        return;
+    }
+    if (persistence_test_load_exception == 0u) throw std::bad_alloc{};
+    if (persistence_test_load_exception == 1u) throw std::length_error("cache load publication");
+    throw std::runtime_error("cache load publication");
+}
+#endif
+
+// A failed allocation is not evidence that the cached bytes are corrupt.
+ShaderRecordRead valid_shader_blob(ID3DBlob* blob, bool vertex) {
+    if (blob == nullptr) return ShaderRecordRead::Invalid;
     Microsoft::WRL::ComPtr<ID3D12ShaderReflection> reflection;
-    if (blob == nullptr || FAILED(D3DReflect(blob->GetBufferPointer(),
-            blob->GetBufferSize(), IID_PPV_ARGS(&reflection)))) return false;
+    HRESULT reflected;
+#if defined(GALAXY_PIPELINE_CACHE_PERSISTENCE_TEST_IO)
+    if (persistence_test_read_budget == 0u && persistence_test_reflection_failure) {
+        reflected = E_OUTOFMEMORY;
+    } else
+#endif
+    reflected = D3DReflect(blob->GetBufferPointer(), blob->GetBufferSize(),
+        IID_PPV_ARGS(&reflection));
+    if (reflected == E_OUTOFMEMORY) return ShaderRecordRead::Resource;
+    if (FAILED(reflected)) return ShaderRecordRead::Invalid;
     D3D12_SHADER_DESC desc{};
-    if (FAILED(reflection->GetDesc(&desc))) return false;
+    if (FAILED(reflection->GetDesc(&desc))) return ShaderRecordRead::Resource;
     // DXBC shader version tokens encode the program type in their high word:
     // pixel = 0, vertex = 1 (D3D12_SHVER_*).
-    return (desc.Version >> 16) == (vertex ? 1u : 0u);
+    return (desc.Version >> 16) == (vertex ? 1u : 0u)
+        ? ShaderRecordRead::Ok : ShaderRecordRead::Invalid;
 }
 
-bool read_shader_record(FILE* f, std::uint64_t& vs_hash, std::uint64_t& ps_hash,
+ShaderRecordRead read_shader_record(FILE* f, std::uint64_t& vs_hash, std::uint64_t& ps_hash,
     Microsoft::WRL::ComPtr<ID3DBlob>& vs, Microsoft::WRL::ComPtr<ID3DBlob>& ps) {
     std::uint32_t vs_size = 0u, ps_size = 0u;
     std::uint64_t vs_checksum = 0u, ps_checksum = 0u;
@@ -1007,22 +1345,42 @@ bool read_shader_record(FILE* f, std::uint64_t& vs_hash, std::uint64_t& ps_hash,
         std::fread(&vs_size, sizeof(vs_size), 1, f) != 1 ||
         std::fread(&ps_size, sizeof(ps_size), 1, f) != 1 ||
         std::fread(&vs_checksum, sizeof(vs_checksum), 1, f) != 1 ||
-        std::fread(&ps_checksum, sizeof(ps_checksum), 1, f) != 1 ||
-        vs_size == 0u || ps_size == 0u ||
-        vs_size > (16u << 20) || ps_size > (16u << 20)) return false;
+        std::fread(&ps_checksum, sizeof(ps_checksum), 1, f) != 1) {
+        // A short read is a truncated record unless the stream itself failed.
+        return std::ferror(f) != 0 ? ShaderRecordRead::Resource : ShaderRecordRead::Invalid;
+    }
+    if (vs_size == 0u || ps_size == 0u ||
+        vs_size > (16u << 20) || ps_size > (16u << 20)) return ShaderRecordRead::Invalid;
     const __int64 payload_start = _ftelli64(f);
-    if (payload_start < 0 || _fseeki64(f, 0, SEEK_END) != 0) return false;
+    if (payload_start < 0 || _fseeki64(f, 0, SEEK_END) != 0) return ShaderRecordRead::Resource;
     const __int64 end = _ftelli64(f);
+    if (end < 0) return ShaderRecordRead::Resource;
     if (end < payload_start ||
         static_cast<std::uint64_t>(end - payload_start) <
-            static_cast<std::uint64_t>(vs_size) + ps_size ||
-        _fseeki64(f, payload_start, SEEK_SET) != 0) return false;
-    if (FAILED(D3DCreateBlob(vs_size, &vs)) || FAILED(D3DCreateBlob(ps_size, &ps)) ||
-        std::fread(vs->GetBufferPointer(), 1, vs_size, f) != vs_size ||
-        std::fread(ps->GetBufferPointer(), 1, ps_size, f) != ps_size) return false;
-    return fnv1a64(vs->GetBufferPointer(), vs_size) == vs_checksum &&
-        fnv1a64(ps->GetBufferPointer(), ps_size) == ps_checksum &&
-        valid_shader_blob(vs.Get(), true) && valid_shader_blob(ps.Get(), false);
+            static_cast<std::uint64_t>(vs_size) + ps_size) return ShaderRecordRead::Invalid;
+    if (_fseeki64(f, payload_start, SEEK_SET) != 0) return ShaderRecordRead::Resource;
+#if defined(GALAXY_PIPELINE_CACHE_PERSISTENCE_TEST_IO)
+    if (persistence_test_read_budget == 0u && !persistence_test_reflection_failure)
+        return ShaderRecordRead::Resource;
+#endif
+    if (FAILED(D3DCreateBlob(vs_size, &vs)) || FAILED(D3DCreateBlob(ps_size, &ps))) {
+        return ShaderRecordRead::Resource;
+    }
+    if (std::fread(vs->GetBufferPointer(), 1, vs_size, f) != vs_size ||
+        std::fread(ps->GetBufferPointer(), 1, ps_size, f) != ps_size) {
+        return std::ferror(f) != 0 ? ShaderRecordRead::Resource : ShaderRecordRead::Invalid;
+    }
+    if (fnv1a64(vs->GetBufferPointer(), vs_size) != vs_checksum ||
+        fnv1a64(ps->GetBufferPointer(), ps_size) != ps_checksum)
+        return ShaderRecordRead::Invalid;
+    const auto vertex = valid_shader_blob(vs.Get(), true);
+    if (vertex != ShaderRecordRead::Ok) return vertex;
+    const auto pixel = valid_shader_blob(ps.Get(), false);
+#if defined(GALAXY_PIPELINE_CACHE_PERSISTENCE_TEST_IO)
+    if (pixel == ShaderRecordRead::Ok && persistence_test_read_budget != 0u)
+        --persistence_test_read_budget;
+#endif
+    return pixel;
 }
 
 // Serializes replacement writers across processes. The cache remains optional:
@@ -1073,9 +1431,11 @@ bool close_cache_output(FILE* f) {
 #endif
 }
 
+template <typename CollectShader>
 bool find_cache_prefix(
     FILE* f, std::uint32_t expected_magic, std::uint32_t expected_version,
-    bool shader_records, std::uint64_t& prefix_bytes, std::uint32_t& retained_records) {
+    bool shader_records, std::uint64_t& prefix_bytes, std::uint32_t& retained_records,
+    CollectShader collect_shader) {
     prefix_bytes = 0u;
     retained_records = 0u;
     if (_fseeki64(f, 0, SEEK_END) != 0) return false;
@@ -1103,9 +1463,13 @@ bool find_cache_prefix(
            records++ < kMaxCacheRecords) {
         std::uint64_t vs_hash = 0u, ps_hash = 0u;
         Microsoft::WRL::ComPtr<ID3DBlob> vs, ps;
-        if (!read_shader_record(f, vs_hash, ps_hash, vs, ps)) break;
+        const auto read = read_shader_record(f, vs_hash, ps_hash, vs, ps);
+        if (read == ShaderRecordRead::Resource) return false;
+        if (read == ShaderRecordRead::Invalid) break;
         const auto end = _ftelli64(f);
-        if (end < 0 || static_cast<std::uint64_t>(end) > kMaxShaderCacheBytes) break;
+        if (end < 0) return false;
+        if (static_cast<std::uint64_t>(end) > kMaxShaderCacheBytes) break;
+        collect_shader(vs_hash, ps_hash);
         prefix_bytes = static_cast<std::uint64_t>(end);
         ++retained_records;
     }
@@ -1118,34 +1482,71 @@ bool cache_has_tail(FILE* f, __int64 last_complete) {
     return _ftelli64(f) > last_complete;
 }
 
-template <typename WritePending>
+// Validate under the writer lease, collecting shader identities during that
+// scan. Copy the complete prefix verbatim; append only records not represented
+// there. Any resource/identity-allocation failure leaves the original untouched.
+template <typename CollectShader, typename WritePending>
 bool replace_record_cache(
     const std::filesystem::path& path, std::uint32_t magic,
-    std::uint32_t version, bool shader_records, WritePending write_pending) {
+    std::uint32_t version, bool shader_records,
+    CollectShader collect_shader, WritePending write_pending) {
     CacheWriterLease lease(path);
     if (!lease) return false;
     FILE* source = nullptr;
+    const galaxy::ScopeExit close_source([&]() noexcept {
+        if (source != nullptr) {
+            std::fclose(source);
+            source = nullptr;
+        }
+    });
     std::uint64_t prefix_bytes = 0u;
     std::uint32_t retained_records = 0u;
-    if (_wfopen_s(&source, path.c_str(), L"rb") == 0 && source != nullptr) {
-        if (!find_cache_prefix(source, magic, version, shader_records, prefix_bytes, retained_records) ||
-            _fseeki64(source, 0, SEEK_SET) != 0) {
-            std::fclose(source);
-            return false;
+    try {
+        if (_wfopen_s(&source, path.c_str(), L"rb") == 0 && source != nullptr) {
+            if (!find_cache_prefix(source, magic, version, shader_records, prefix_bytes, retained_records, collect_shader) ||
+                _fseeki64(source, 0, SEEK_SET) != 0) {
+                return false;
+            }
+        } else {
+            std::error_code ec;
+            // A read failure for an existing cache is not proof it is corrupt.
+            const bool exists = std::filesystem::exists(path, ec);
+            if (ec || exists) return false;
         }
-    } else {
-        std::error_code ec;
-        // A read failure for an existing cache is not proof it is corrupt.
-        const bool exists = std::filesystem::exists(path, ec);
-        if (ec || exists) return false;
-    }
-    std::filesystem::path tmp = path;
-    tmp += L".tmp";
-    FILE* output = nullptr;
-    if (_wfopen_s(&output, tmp.c_str(), L"wb") != 0 || output == nullptr) {
-        if (source != nullptr) std::fclose(source);
+    } catch (const std::bad_alloc&) {
+        return false;
+    } catch (const std::length_error&) {
         return false;
     }
+    // Ownership rules, in one place:
+    //   `source` is owned from here and closed on every exit.
+    //   The temp file is owned only once this call has CREATED or TRUNCATED it,
+    //     and is removed when it was not published - not merely when the write
+    //     returned false, so an unexpected exception still cleans up.
+    //   A temp file this call never opened is never deleted, so a concurrent
+    //     writer's temp file survives.
+    FILE* output = nullptr;
+    bool output_owned = false;
+    bool published = false;
+    // Declared before the temp-file owner below, which removes it on failure and
+    // therefore must outlive it.
+    std::filesystem::path tmp = path;
+    tmp += L".tmp";
+    const galaxy::ScopeExit close_output_on_failure([&]() noexcept {
+        if (output != nullptr) {
+            close_cache_output(output);
+            output = nullptr;
+        }
+        if (output_owned && !published) {
+            std::error_code cleanup_ec;
+            std::filesystem::remove(tmp, cleanup_ec);
+        }
+    });
+    output_owned = _wfopen_s(&output, tmp.c_str(), L"wb") == 0 && output != nullptr;
+    if (!output_owned) return false;
+    // Safe to start true: `source` is null only when no cache file existed, and
+    // `find_cache_prefix` then leaves `prefix_bytes` and `retained_records` at
+    // zero, so the copy loop and the seek below are both skipped.
     bool written = true;
     std::array<unsigned char, 64u << 10> buffer{};
     std::uint64_t remaining = prefix_bytes;
@@ -1156,19 +1557,60 @@ bool replace_record_cache(
             write_cache_bytes(output, buffer.data(), chunk);
         remaining -= chunk;
     }
-    if (source != nullptr && std::fclose(source) != 0) written = false;
     if (written && prefix_bytes == 0u) {
         written = write_cache_bytes(output, &magic, sizeof(magic)) &&
             write_cache_bytes(output, &version, sizeof(version));
     }
-    if (written) written = write_pending(output, retained_records);
-    const bool closed = close_cache_output(output);
-    if (written && closed && MoveFileExW(
+    // The copy loop above left `source` at the END of the prefix, which is EOF
+    // whenever the prefix is the whole file - the normal case for a repair. The
+    // records `write_pending` needs are BEHIND that position, so seek back to the
+    // first one. Offset 8 is always the first record when the prefix is
+    // non-empty: `find_cache_prefix` sets `prefix_bytes` to exactly 8u for the
+    // header and only ever adds whole records, so the header is 8 bytes and both
+    // formats put their first record immediately after it. When the prefix is
+    // empty the callback is given zero records and never touches `source`, so the
+    // seek is a harmless no-op. Established here rather than in either lambda
+    // because both callbacks share this position.
+    if (written && retained_records != 0u) {
+        written = source != nullptr && _fseeki64(source, 8, SEEK_SET) == 0;
+    }
+    // An allocation failure inside the writer must abort this save, not the
+    // caller and not the process: `PipelineCache` is an optional cache, so the
+    // correct response is a false return with the pending data still pending,
+    // which the guards above then clean up. Only allocation and length errors are
+    // caught - anything else propagates rather than being silently swallowed.
+    if (written) {
+        try {
+            written = write_pending(output, source, retained_records);
+        } catch (const std::bad_alloc&) {
+            written = false;
+        } catch (const std::length_error&) {
+            written = false;
+        }
+    }
+    // Close BOTH handles before the replacement. `MoveFileExW` must not run while
+    // the CRT still holds the source open, and the guard above would skip a
+    // handle that had been nulled without being closed - so close explicitly,
+    // check the result, and only then null. The guards remain for exits that
+    // bypass this tail.
+    const bool closed_output = close_cache_output(output);
+    output = nullptr;
+    bool closed_source = true;
+    if (source != nullptr) {
+        closed_source = std::fclose(source) == 0;
+        source = nullptr;
+    }
+    // The two close results join `written`, so the return value keeps reporting
+    // whether the record set was actually committed. The final return is false on
+    // its own if the replacement fails, which leaves `published` false and so
+    // still removes the temp file.
+    if (!closed_output || !closed_source) written = false;
+    if (written && MoveFileExW(
             tmp.c_str(), path.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)) {
+        published = true;
         return true;
     }
-    std::error_code ec;
-    std::filesystem::remove(tmp, ec);
+    written = false;
     return false;
 }
 }  // namespace
@@ -1178,6 +1620,16 @@ void set_pipeline_cache_persistence_test_fault(std::size_t write_budget, bool fa
     persistence_test_write_budget = write_budget;
     persistence_test_fail_close = fail_close;
 }
+void set_pipeline_cache_persistence_test_read_fault(std::size_t read_budget, bool reflection) {
+    persistence_test_read_budget = read_budget;
+    persistence_test_reflection_failure = reflection;
+}
+void set_pipeline_cache_persistence_test_load_fault(
+    unsigned stage, std::size_t budget, unsigned exception_kind) {
+    persistence_test_load_stage = stage;
+    persistence_test_load_budget = budget;
+    persistence_test_load_exception = exception_kind;
+}
 #endif
 
 void PipelineCache::load_disk_cache() {
@@ -1186,11 +1638,13 @@ void PipelineCache::load_disk_cache() {
     if (_wfopen_s(&f, path.c_str(), L"rb") != 0 || f == nullptr) {
         return;
     }
+    const galaxy::ScopeExit close_input([&]() noexcept { std::fclose(f); });
     std::uint32_t magic = 0, version = 0;
     if (std::fread(&magic, sizeof(magic), 1, f) != 1 ||
         std::fread(&version, sizeof(version), 1, f) != 1 ||
         magic != kShaderCacheMagic || version != kShaderCacheVersion) {
-        std::fclose(f);
+        const bool read_failed = std::ferror(f) != 0;
+        if (read_failed) return;
         // Exclude stale/foreign shader semantics immediately. The replacement
         // writer also validates a retained file prefix before persisting
         // new records. Invalid input is left untouched until replacement succeeds.
@@ -1205,26 +1659,60 @@ void PipelineCache::load_disk_cache() {
     }
     unsigned loaded = 0;
     __int64 last_complete = _ftelli64(f);
-    for (; loaded < kMaxCacheRecords && last_complete < static_cast<__int64>(kMaxShaderCacheBytes);) {
-        std::uint64_t vs_hash = 0, ps_hash = 0;
-        ShaderPair pair{};
-        if (!read_shader_record(f, vs_hash, ps_hash, pair.vs, pair.ps) ||
-            _ftelli64(f) > static_cast<__int64>(kMaxShaderCacheBytes)) break;
-        pair.vs_hash = vs_hash;
-        pair.ps_hash = ps_hash;
-        pair.vs = vertex_shader_blobs_.try_emplace(vs_hash, pair.vs).first->second;
-        pair.ps = pixel_shader_blobs_.try_emplace(ps_hash, pair.ps).first->second;
-        shader_blobs_.emplace(ShaderPairKey{vs_hash, ps_hash}, std::move(pair));
-        ++loaded;
-        last_complete = _ftelli64(f);
+    bool resource_failed = last_complete < 0;
+    try {
+        while (!resource_failed && loaded < kMaxCacheRecords &&
+            last_complete < static_cast<__int64>(kMaxShaderCacheBytes)) {
+            std::uint64_t vs_hash = 0, ps_hash = 0;
+            ShaderPair pair{};
+            const auto read = read_shader_record(f, vs_hash, ps_hash, pair.vs, pair.ps);
+            const auto record_end = _ftelli64(f);
+            if (read != ShaderRecordRead::Ok || record_end < 0 ||
+                record_end > static_cast<__int64>(kMaxShaderCacheBytes)) {
+                resource_failed = read == ShaderRecordRead::Resource || record_end < 0;
+                break;
+            }
+            pair.vs_hash = vs_hash;
+            pair.ps_hash = ps_hash;
+#if defined(GALAXY_PIPELINE_CACHE_PERSISTENCE_TEST_IO)
+            persistence_test_load_publication(1u);
+#endif
+            pair.vs = vertex_shader_blobs_.try_emplace(vs_hash, pair.vs).first->second;
+#if defined(GALAXY_PIPELINE_CACHE_PERSISTENCE_TEST_IO)
+            persistence_test_load_publication(2u);
+#endif
+            pair.ps = pixel_shader_blobs_.try_emplace(ps_hash, pair.ps).first->second;
+#if defined(GALAXY_PIPELINE_CACHE_PERSISTENCE_TEST_IO)
+            persistence_test_load_publication(3u);
+#endif
+            shader_blobs_.emplace(ShaderPairKey{vs_hash, ps_hash}, std::move(pair));
+            ++loaded;
+            last_complete = record_end;
+        }
+    } catch (const std::bad_alloc&) {
+        resource_failed = true;
+    } catch (const std::length_error&) {
+        resource_failed = true;
     }
-    shader_cache_repair_pending_ = cache_has_tail(f, last_complete);
-    std::fclose(f);
+    // Keep completed residents and valid independent stages after resource
+    // failure; the unconsumed tail is not evidence of corruption.
+    shader_cache_repair_pending_ = !resource_failed && cache_has_tail(f, last_complete);
+    // Coverage the retained file prefix actually holds. Records the parse
+    // rejected past a corrupt tail are not covered, so the next flush appends
+    // them again; the retained prefix is still what gets copied forward.
+    cached_shader_records_ = loaded;
     if (loaded != 0 && trace_gx_stalls_enabled()) {
         std::cerr << "[PipelineCache] loaded " << loaded
                   << " DXBC pairs from shader cache\n";
     }
 }
+
+// ---------------------------------------------------------------------------
+// Disk cache: psos.bin
+//   header: u32 magic 'GKPC', u32 version (= kPsoKeyCacheVersion)
+//   record: PsoKey, sizeof(PsoKey) bytes, bare and unpadded
+// The version is derived from kShaderCacheVersion; see the note there.
+// ---------------------------------------------------------------------------
 
 void PipelineCache::load_pso_key_cache() {
     const std::filesystem::path path = cache_dir_ / "psos.bin";
@@ -1232,18 +1720,41 @@ void PipelineCache::load_pso_key_cache() {
     if (_wfopen_s(&f, path.c_str(), L"rb") != 0 || f == nullptr) {
         return;
     }
+    const galaxy::ScopeExit close_input([&]() noexcept { std::fclose(f); });
 
     std::uint32_t magic = 0;
     std::uint32_t version = 0;
+    // The record size is part of the on-disk format: `psos.bin` is a bare,
+    // unpadded run of `PsoKey` records, so changing `PsoKey` silently makes an
+    // existing file misparse unless the version moves too.
+    //
+    // The size guard lives next to the type, not here. `shader_keys.h` already
+    // asserts `sizeof(PsoKey) == 32` and that the type has no padding, which is
+    // the real invariant; a second literal comparison here can only contradict it
+    // — the previous `== 80u` did exactly that and failed to compile every
+    // translation unit that included this file. What is worth guarding *here* is
+    // that the record really is one bare `PsoKey`, i.e. that the type is
+    // trivially copyable and therefore safe to `fread`/`fwrite` as a raw run.
+    static_assert(std::is_trivially_copyable_v<PsoKey>,
+        "psos.bin is a bare run of PsoKey records and is read/written with "
+        "fread/fwrite, so PsoKey must stay trivially copyable; changing it "
+        "requires bumping kPsoKeyCacheVersion so stale files are rejected rather "
+        "than misparsed");
+    // `load_pso_key_cache` / `find_cache_prefix` read exactly `magic` + `version`
+    // before the records, so the header is two 32-bit words by construction.
+    static_assert(sizeof(magic) == 4u && sizeof(version) == 4u,
+        "psos.bin header is two 32-bit words");
     if (std::fread(&magic, sizeof(magic), 1, f) != 1 ||
         std::fread(&version, sizeof(version), 1, f) != 1 ||
         magic != kPsoKeyCacheMagic || version != kPsoKeyCacheVersion) {
-        std::fclose(f);
+        if (std::ferror(f) != 0) return;
         pso_cache_repair_pending_ = true;
         if (trace_gx_stalls_enabled()) {
             std::ostringstream message;
-            message << "[pso-key-cache-rejected] reason=header-or-version magic=" << magic
-                    << " version=" << version << " expected-version=" << kPsoKeyCacheVersion << '\n';
+            message << "[pso-key-cache-rejected] reason=header-or-version magic="
+                    << magic << " version=" << version
+                    << " expected-version=" << kPsoKeyCacheVersion
+                    << " shader-version=" << kShaderCacheVersion << '\n';
             std::cerr << message.str();
         }
         return;
@@ -1252,15 +1763,40 @@ void PipelineCache::load_pso_key_cache() {
     PsoKey key{};
     __int64 last_complete = _ftelli64(f);
     std::uint32_t records = 0;
-    while (records++ < kMaxCacheRecords && std::fread(&key, sizeof(key), 1, f) == 1) {
-        if (!valid_pso_key(key)) break;
-        if (persisted_pso_keys_.insert(key).second) {
-            warm_pso_keys_.push_back(key);
+    bool resource_failed = last_complete < 0;
+    try {
+        while (!resource_failed && records++ < kMaxCacheRecords &&
+            std::fread(&key, sizeof(key), 1, f) == 1) {
+            if (!valid_pso_key(key)) break;
+#if defined(GALAXY_PIPELINE_CACHE_PERSISTENCE_TEST_IO)
+            persistence_test_load_publication(4u);
+#endif
+            const auto [position, inserted] = persisted_pso_keys_.insert(key);
+            if (inserted) {
+                try {
+#if defined(GALAXY_PIPELINE_CACHE_PERSISTENCE_TEST_IO)
+                    persistence_test_load_publication(5u);
+#endif
+                    warm_pso_keys_.push_back(key);
+                } catch (...) {
+                    // Do not leave a key resident but permanently absent from
+                    // prewarming when publication of this new key fails.
+                    persisted_pso_keys_.erase(position);
+                    throw;
+                }
+            }
+            last_complete = _ftelli64(f);
+            resource_failed = last_complete < 0;
         }
-        last_complete = _ftelli64(f);
+    } catch (const std::bad_alloc&) {
+        resource_failed = true;
+    } catch (const std::length_error&) {
+        resource_failed = true;
     }
-    pso_cache_repair_pending_ = cache_has_tail(f, last_complete);
-    std::fclose(f);
+    resource_failed = resource_failed || std::ferror(f) != 0;
+    pso_cache_repair_pending_ = !resource_failed && cache_has_tail(f, last_complete);
+    // Coverage the retained file prefix actually holds; see load_disk_cache.
+    cached_pso_records_ = persisted_pso_keys_.size();
 
     if (!warm_pso_keys_.empty() && trace_gx_stalls_enabled()) {
         std::cerr << "[PipelineCache] loaded " << warm_pso_keys_.size()
@@ -1269,8 +1805,17 @@ void PipelineCache::load_pso_key_cache() {
 }
 
 void PipelineCache::remember_pso_key(const PsoKey& key) {
-    if (persisted_pso_keys_.insert(key).second) {
-        unsaved_pso_keys_.push_back(key);
+    const auto [position, inserted] = persisted_pso_keys_.insert(key);
+    if (inserted) {
+        try {
+#if defined(GALAXY_PIPELINE_CACHE_PERSISTENCE_TEST_IO)
+            persistence_test_load_publication(6u);
+#endif
+            unsaved_pso_keys_.push_back(key);
+        } catch (...) {
+            persisted_pso_keys_.erase(position);
+            throw;
+        }
     }
 }
 
@@ -1296,6 +1841,7 @@ void PipelineCache::load_pipeline_library() {
     const std::filesystem::path path = cache_dir_ / "pipelines.bin";
     FILE* f = nullptr;
     if (_wfopen_s(&f, path.c_str(), L"rb") == 0 && f != nullptr) {
+        const galaxy::ScopeExit close_input([&]() noexcept { std::fclose(f); });
         std::uint32_t magic = 0;
         std::uint32_t version = 0;
         std::uint32_t shader_version = 0;
@@ -1319,17 +1865,16 @@ void PipelineCache::load_pipeline_library() {
             !matches_device ||
             blob_size == 0 ||
             blob_size > kMaxPipelineLibraryBytes) {
-            std::fclose(f);
             pipeline_library_blob_.clear();
         } else {
-            pipeline_library_blob_.resize(static_cast<std::size_t>(blob_size));
-            const std::size_t got = std::fread(
-                pipeline_library_blob_.data(),
-                1,
-                pipeline_library_blob_.size(),
-                f);
-            std::fclose(f);
-            if (got != pipeline_library_blob_.size()) {
+            try {
+                pipeline_library_blob_.resize(static_cast<std::size_t>(blob_size));
+                const std::size_t got = std::fread(
+                    pipeline_library_blob_.data(), 1, pipeline_library_blob_.size(), f);
+                if (got != pipeline_library_blob_.size()) pipeline_library_blob_.clear();
+            } catch (const std::bad_alloc&) {
+                pipeline_library_blob_.clear();
+            } catch (const std::length_error&) {
                 pipeline_library_blob_.clear();
             }
         }
@@ -1373,6 +1918,9 @@ Microsoft::WRL::ComPtr<ID3D12PipelineState> PipelineCache::create_or_load_pso(
     const PsoKey& key,
     ID3DBlob* vs_blob,
     ID3DBlob* ps_blob) {
+#if defined(GALAXY_PIPELINE_CACHE_PERSISTENCE_TEST_IO)
+    if (pipeline_test_creator != nullptr) return pipeline_test_creator(key);
+#endif
     const D3D12_GRAPHICS_PIPELINE_STATE_DESC pd = make_gx_pso_desc(
         root_signature_.Get(),
         key.render_state,
@@ -1391,6 +1939,7 @@ Microsoft::WRL::ComPtr<ID3D12PipelineState> PipelineCache::create_or_load_pso(
                 &pd,
                 IID_PPV_ARGS(&cached));
             if (SUCCEEDED(load_hr)) {
+                pso_library_loads_.fetch_add(1, std::memory_order_relaxed);
                 return cached;
             }
         }
@@ -1407,6 +1956,7 @@ Microsoft::WRL::ComPtr<ID3D12PipelineState> PipelineCache::create_or_load_pso(
     if (!pso) {
         return nullptr;
     }
+    pso_compiles_.fetch_add(1, std::memory_order_relaxed);
 
     {
         std::lock_guard<std::mutex> lock(pipeline_library_mutex_);
@@ -1423,20 +1973,47 @@ Microsoft::WRL::ComPtr<ID3D12PipelineState> PipelineCache::create_or_load_pso(
 }
 
 void PipelineCache::flush_pipeline_library() {
-    std::lock_guard<std::mutex> lock(pipeline_library_mutex_);
-    if (!pipeline_library_ || !pipeline_library_dirty_) {
-        return;
-    }
+    // `pipeline_library_mutex_` is also taken by `create_or_load_pso` on the
+    // render thread (and on prewarm workers) around every
+    // `LoadGraphicsPipeline`/`StorePipeline`. Only `ID3D12PipelineLibrary`
+    // itself needs that mutual exclusion; the disk write that follows does not.
+    // Holding the lock across `GetSerializedSize`, the whole-library
+    // `Serialize` into a heap vector, a temp-file create/write and a
+    // write-through rename would queue every render-thread pipeline
+    // acquisition behind a multi-megabyte file write. Serialize under the lock
+    // (that is the only part that touches the borrowed library bytes), take a
+    // local copy of the blob, then release it before touching the filesystem.
+    std::vector<std::uint8_t> bytes;
+    bool needs_retry = false;
+    const galaxy::ScopeExit retry_failed_save([&]() noexcept {
+        if (needs_retry) {
+            std::lock_guard<std::mutex> lock(pipeline_library_mutex_);
+            pipeline_library_dirty_ = true;
+        }
+    });
+    {
+        std::lock_guard<std::mutex> lock(pipeline_library_mutex_);
+        if (!pipeline_library_ || !pipeline_library_dirty_) {
+            return;
+        }
 
-    const SIZE_T size = pipeline_library_->GetSerializedSize();
-    if (size == 0 || size > kMaxPipelineLibraryBytes) {
-        return;
-    }
+        const SIZE_T size = pipeline_library_->GetSerializedSize();
+        if (size == 0 || size > kMaxPipelineLibraryBytes) {
+            return;
+        }
 
-    std::vector<std::uint8_t> bytes(size);
-    const HRESULT hr = pipeline_library_->Serialize(bytes.data(), bytes.size());
-    if (FAILED(hr)) {
-        return;
+        bytes.resize(size);
+        const HRESULT hr =
+            pipeline_library_->Serialize(bytes.data(), bytes.size());
+        if (FAILED(hr)) {
+            bytes.clear();
+            return;
+        }
+        // Rotate pending state under the lock so a concurrent StorePipeline
+        // remains pending after this snapshot is saved. Any failure below must
+        // also re-arm it: serialization alone has not persisted the snapshot.
+        needs_retry = true;
+        pipeline_library_dirty_ = false;
     }
 
     const std::filesystem::path path = cache_dir_ / "pipelines.bin";
@@ -1478,8 +2055,10 @@ void PipelineCache::flush_pipeline_library() {
         return;
     }
 
+    // Do not clear the shared flag here: workers may have stored new pipelines
+    // since serialization. Only retire this successfully persisted snapshot.
+    needs_retry = false;
     // Serialization output does not replace the bytes borrowed by the live library.
-    pipeline_library_dirty_ = false;
 }
 
 bool PipelineCache::find_cached_shader_stages(
@@ -1525,7 +2104,7 @@ std::uint64_t PipelineCache::enqueue_cached_pso_prewarm(unsigned worker_count) {
                 stages.vs,
                 stages.ps,
                 true});
-            in_flight_.insert(key);
+            in_flight_.insert(MemoizedPsoKey{key});
             ++enqueued;
         }
     }
@@ -1538,7 +2117,28 @@ std::uint64_t PipelineCache::enqueue_cached_pso_prewarm(unsigned worker_count) {
             std::min<std::uint64_t>(std::clamp(worker_count, 1u, 4u), enqueued));
         workers_.reserve(threads);
         for (unsigned i = 0; i < threads; ++i) {
-            workers_.emplace_back([this] { worker_main(); });
+            workers_.emplace_back([this] {
+                // PSO prewarm is pure background work, but it is FXC plus a
+                // driver PSO build: many milliseconds of saturated CPU per job,
+                // several jobs deep, on up to four threads. At default priority
+                // those threads compete with the render thread, which the
+                // runtime raises to ABOVE_NORMAL precisely because it is the
+                // critical path. Priority is the tie-breaker Windows uses when
+                // both are runnable, so a prewarm worker that happens to be
+                // runnable when the render thread wakes can take the core and
+                // stretch a pipeline-cache probe from ~100 ns into hundreds of
+                // microseconds of wall clock. That is indistinguishable from a
+                // slow lookup in a wall-clock instrumented slice, and it lands
+                // exactly in the per-draw `flush_draw_state` path. BELOW_NORMAL
+                // makes the render thread always win that race; the only cost is
+                // that prewarm finishes later, and prewarm is idempotent
+                // background work whose late or missed job is retried by the
+                // synchronous first-use path. This does not serialize anything
+                // or change which pipeline is returned.
+                (void)SetThreadPriority(
+                    GetCurrentThread(), THREAD_PRIORITY_BELOW_NORMAL);
+                worker_main();
+            });
         }
         job_cv_.notify_all();
     }
@@ -1592,20 +2192,36 @@ void PipelineCache::flush_disk() {
         std::lock_guard<std::mutex> lock(pipeline_library_mutex_);
         pipeline_dirty = pipeline_library_dirty_;
     }
+    // A cache whose in-memory set has outrun the file by a whole batch is due a
+    // rewrite that appends every record it does not already hold. Without this
+    // the file only ever grows by the handful of configurations one session
+    // happens to meet, which is why repeated launches kept re-running FXC for
+    // configurations an earlier launch had already compiled.
+    const bool shader_coverage_pending = shader_blobs_.size() >
+        cached_shader_records_ + kCacheCoverageAppendBatch;
+    const bool pso_coverage_pending = persisted_pso_keys_.size() >
+        cached_pso_records_ + kCacheCoverageAppendBatch;
     if (unsaved_blobs_.empty() && unsaved_pso_keys_.empty() &&
         !shader_cache_repair_pending_ && !pso_cache_repair_pending_ &&
+        !shader_coverage_pending && !pso_coverage_pending &&
         !pipeline_dirty) {
         return;
     }
 
-    if (!unsaved_blobs_.empty() || shader_cache_repair_pending_) {
+    if (!unsaved_blobs_.empty() || shader_cache_repair_pending_ ||
+        shader_coverage_pending) {
+        // The file's validated prefix is copied forward and `records` arrives as
+        // the number of records it already holds, so this emits only pairs the
+        // prefix does not carry - which is what stops a rewrite of an
+        // already-complete cache from appending a duplicate of itself.
+        std::unordered_set<ShaderPairKey, ShaderPairKeyHasher> in_prefix;
         const bool saved = replace_record_cache(
             cache_dir_ / "shaders.bin", kShaderCacheMagic, kShaderCacheVersion, true,
-            [&](FILE* f, std::uint32_t records) {
-                for (const ShaderPairKey& ph : unsaved_blobs_) {
-                    const auto it = shader_blobs_.find(ph);
-                    if (it == shader_blobs_.end() || !it->second.vs || !it->second.ps) return false;
-                    const ShaderPair& pair = it->second;
+            [&](std::uint64_t vs_hash, std::uint64_t ps_hash) {
+                in_prefix.insert(ShaderPairKey{vs_hash, ps_hash});
+            },
+            [&](FILE* f, FILE*, std::uint32_t records) {
+                const auto write_pair = [&](const ShaderPair& pair) {
                     const auto position = _ftelli64(f);
                     if (records++ >= kMaxCacheRecords || position < 0 ||
                         pair.vs->GetBufferSize() > (16u << 20u) ||
@@ -1616,36 +2232,94 @@ void PipelineCache::flush_disk() {
                     const auto ps_size = static_cast<std::uint32_t>(pair.ps->GetBufferSize());
                     const auto vs_checksum = fnv1a64(pair.vs->GetBufferPointer(), vs_size);
                     const auto ps_checksum = fnv1a64(pair.ps->GetBufferPointer(), ps_size);
-                    if (!write_cache_bytes(f, &pair.vs_hash, sizeof(pair.vs_hash)) ||
-                        !write_cache_bytes(f, &pair.ps_hash, sizeof(pair.ps_hash)) ||
-                        !write_cache_bytes(f, &vs_size, sizeof(vs_size)) ||
-                        !write_cache_bytes(f, &ps_size, sizeof(ps_size)) ||
-                        !write_cache_bytes(f, &vs_checksum, sizeof(vs_checksum)) ||
-                        !write_cache_bytes(f, &ps_checksum, sizeof(ps_checksum)) ||
-                        !write_cache_bytes(f, pair.vs->GetBufferPointer(), vs_size) ||
-                        !write_cache_bytes(f, pair.ps->GetBufferPointer(), ps_size)) return false;
+                    return write_cache_bytes(f, &pair.vs_hash, sizeof(pair.vs_hash)) &&
+                        write_cache_bytes(f, &pair.ps_hash, sizeof(pair.ps_hash)) &&
+                        write_cache_bytes(f, &vs_size, sizeof(vs_size)) &&
+                        write_cache_bytes(f, &ps_size, sizeof(ps_size)) &&
+                        write_cache_bytes(f, &vs_checksum, sizeof(vs_checksum)) &&
+                        write_cache_bytes(f, &ps_checksum, sizeof(ps_checksum)) &&
+                        write_cache_bytes(f, pair.vs->GetBufferPointer(), vs_size) &&
+                        write_cache_bytes(f, pair.ps->GetBufferPointer(), ps_size);
+                };
+                // Identities were collected during the validated scan under the
+                // same writer lease; do not allocate, hash and reflect every
+                // shader a second time just to recover those identities.
+                // Emit resident pairs, then pending ones the resident pass did not
+                // already cover. Membership in the prefix and in `emitted` both
+                // suppress a duplicate: the prefix because its bytes are already in
+                // the output, `emitted` because a pair can be BOTH resident and
+                // pending - `shutdown` retains `shader_blobs_` when `unsaved_blobs_`
+                // is non-empty - and emitting it in both passes would append a
+                // duplicate record every flush.
+                std::unordered_set<ShaderPairKey, ShaderPairKeyHasher> emitted;
+                for (const auto& entry : shader_blobs_) {
+                    const ShaderPair& pair = entry.second;
+                    if (!pair.vs || !pair.ps) return false;
+                    if (in_prefix.find(entry.first) != in_prefix.end()) continue;
+                    if (!write_pair(pair)) return false;
+                    emitted.insert(entry.first);
+                }
+                for (const ShaderPairKey& ph : unsaved_blobs_) {
+                    const auto it = shader_blobs_.find(ph);
+                    if (it == shader_blobs_.end() || !it->second.vs || !it->second.ps) return false;
+                    if (in_prefix.find(ph) != in_prefix.end()) continue;
+                    if (!emitted.insert(ph).second) continue;
+                    if (!write_pair(it->second)) return false;
                 }
                 return true;
             });
         if (saved) {
             unsaved_blobs_.clear();
             shader_cache_repair_pending_ = false;
+            cached_shader_records_ = shader_blobs_.size();
         }
     }
 
-    if (!unsaved_pso_keys_.empty() || pso_cache_repair_pending_) {
+    if (!unsaved_pso_keys_.empty() || pso_cache_repair_pending_ ||
+        pso_coverage_pending) {
         const bool saved = replace_record_cache(
             cache_dir_ / "psos.bin", kPsoKeyCacheMagic, kPsoKeyCacheVersion, false,
-            [&](FILE* f, std::uint32_t records) {
-                for (const PsoKey& key : unsaved_pso_keys_) {
+            [](std::uint64_t, std::uint64_t) {},
+            [&](FILE* f, FILE* src, std::uint32_t records) {
+                // `PsoKey::operator==` is the identity test here, not a hash
+                // compare and not a byte walk: it compares exactly the fields
+                // `hash()` mixes, so two keys colliding under PsoKeyHasher stay
+                // distinct records, while the deliberately excluded `reserved`
+                // bytes cannot split one key in two - and `valid_pso_key` has
+                // already forced those bytes to zero.
+                std::unordered_set<PsoKey, PsoKeyHasher> in_prefix;
+                in_prefix.reserve(records);
+                for (std::uint32_t i = 0; i < records; ++i) {
+                    PsoKey key{};
+                    if (std::fread(&key, sizeof(key), 1, src) != 1) return false;
+                    in_prefix.insert(key);
+                }
+                // Merge RESIDENT and PENDING keys before emitting. `shutdown`
+                // calls flush_disk and then clears `persisted_pso_keys_`, so a
+                // retry arrives with resident empty and only `unsaved_pso_keys_`
+                // populated - the branch below must therefore walk BOTH, or a
+                // failed shutdown's pending keys are lost. Membership is a hash
+                // lookup rather than a scan per record, and `emitted` dedupes a
+                // key that is both resident and pending.
+                std::unordered_set<PsoKey, PsoKeyHasher> emitted;
+                const auto emit = [&](const PsoKey& key) {
+                    if (in_prefix.find(key) != in_prefix.end()) return true;
+                    if (!emitted.insert(key).second) return true;
                     if (records++ >= kMaxCacheRecords) return false;
-                    if (!write_cache_bytes(f, &key, sizeof(key))) return false;
+                    return write_cache_bytes(f, &key, sizeof(key));
+                };
+                for (const PsoKey& key : persisted_pso_keys_) {
+                    if (!emit(key)) return false;
+                }
+                for (const PsoKey& key : unsaved_pso_keys_) {
+                    if (!emit(key)) return false;
                 }
                 return true;
             });
         if (saved) {
             unsaved_pso_keys_.clear();
             pso_cache_repair_pending_ = false;
+            cached_pso_records_ = persisted_pso_keys_.size();
         }
     }
 
@@ -1657,11 +2331,31 @@ void PipelineCache::flush_disk() {
 // ---------------------------------------------------------------------------
 
 std::uint64_t PipelineCache::specialized_hits() const {
-    return specialized_hits_.load(std::memory_order_relaxed);
+    return specialized_hits_;
 }
 
 std::uint64_t PipelineCache::uber_fallbacks() const {
-    return uber_fallbacks_.load(std::memory_order_relaxed);
+    return uber_fallbacks_;
+}
+
+PipelineCache::CompileStats PipelineCache::compile_stats() const {
+    // Called on the render thread, from the frame reset and from
+    // ReportPipelineCoverage(). `pso_compiles` / `pso_library_loads` are atomics
+    // because prewarm workers increment them too; the rest are written only by
+    // this thread (see the field comments in the header). Relaxed ordering is
+    // sufficient: these are monotonic diagnostics, so a stale read can misreport
+    // a per-frame delta but can never corrupt state.
+    CompileStats stats{};
+    stats.pso_compiles = pso_compiles_.load(std::memory_order_relaxed);
+    stats.pso_library_loads = pso_library_loads_.load(std::memory_order_relaxed);
+    stats.shader_pair_compiles = shader_pair_compiles_;
+    stats.blobs_from_cache = blobs_from_cache_;
+    stats.blob_compile_us = blob_compile_us_;
+    stats.shader_records = shader_blobs_.size();
+    stats.shader_records_on_disk = cached_shader_records_;
+    stats.pso_keys = persisted_pso_keys_.size();
+    stats.pso_keys_on_disk = cached_pso_records_;
+    return stats;
 }
 
 // ---------------------------------------------------------------------------

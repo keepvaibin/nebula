@@ -1198,7 +1198,13 @@ V main(uint id : SV_VertexID) {
         desc.SampleDesc.Count = 1u;
         desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
         ComPtr<ID3D12Resource> a, b;
-        for (auto* target : {&a, &b}) {
+        // A plain array rather than a braced-init-list: the elements of an
+        // `initializer_list` deduce to `ComPtr<ID3D12Resource>* const`, which
+        // `auto*` cannot bind (the original error here) and which `auto&&` binds
+        // as a const `ComPtrRef` proxy that has no `operator->`. An array keeps
+        // the element type a plain non-const `ComPtr*`, so the body is unchanged.
+        std::array<ComPtr<ID3D12Resource>*, 2> targets{&a, &b};
+        for (auto* target : targets) {
             check_hr(device_->CreateCommittedResource(&properties, D3D12_HEAP_FLAG_NONE,
                 &desc, D3D12_RESOURCE_STATE_RENDER_TARGET, nullptr,
                 IID_PPV_ARGS(target->ReleaseAndGetAddressOf())), "Create scratch RTV identity target");
@@ -1458,6 +1464,69 @@ V main(uint id : SV_VertexID) {
             !cache.srv_index_retired(reclaimed.srv_index) &&
             cache.retirement_revision() == initial_revision + 1u,
             "owning slot reclaims the descriptor without another retirement");
+        cache.set_upload_list(nullptr);
+        cache.shutdown();
+        return passed;
+    }
+
+    bool test_oversized_content_texture_retirement() {
+        using namespace galaxy::gx;
+        bool passed = true;
+        auto cache_owner = std::make_unique<TextureCache>();
+        TextureCache& cache = *cache_owner;
+        if (!cache.initialize(device_.Get())) {
+            throw std::runtime_error("initialize oversized content cache");
+        }
+        cache.begin_frame(0u, kFramesInFlight);
+        ComPtr<ID3D12CommandAllocator> allocator;
+        ComPtr<ID3D12GraphicsCommandList> list;
+        check_hr(device_->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT,
+            IID_PPV_ARGS(&allocator)), "Create oversized texture allocator");
+        check_hr(device_->CreateCommandList(0u, D3D12_COMMAND_LIST_TYPE_DIRECT,
+            allocator.Get(), nullptr, IID_PPV_ARGS(&list)), "Create oversized texture command list");
+        cache.set_upload_list(list.Get());
+        constexpr std::uint32_t address = 0x10000000u;
+        constexpr std::uint16_t width = 1024u, height = 512u;
+        constexpr std::uint32_t size = width * height * 4u;
+        static_assert(size > (1u << 20u));
+        std::vector<std::byte> bytes(size, std::byte{0x55});
+        galaxy::GuestMemoryRegionV1 region{address, size, bytes.data()};
+        galaxy::GuestMemoryV1 memory{};
+        memory.region_count = 1u;
+        memory.regions = &region;
+        TexImage image{};
+        image.guest_addr = address;
+        image.width = width;
+        image.height = height;
+        image.format = TexFormat::RGBA8;
+        TexMode mode{};
+        mode.min_filter = TexMinFilter::Near;
+        const auto revision = cache.retirement_revision();
+        // The isolated test process enables the content cache and limits the
+        // decoded map to 1MiB. This 2MiB entry therefore evicts itself inside
+        // get(), before its content-cache resource is published.
+        const auto decoded = cache.get(image, mode, TlutRef{}, &memory);
+        passed &= expect(decoded.resource != nullptr &&
+            decoded.guest_byte_size == size && cache.srv_index_retired(decoded.srv_index) &&
+            cache.retirement_revision() == revision + 1u,
+            "oversized first decode returns a fence-retained resource after self-eviction");
+        const auto reused = cache.get(image, mode, TlutRef{}, &memory);
+        passed &= expect(reused.resource == decoded.resource &&
+            reused.srv_index != decoded.srv_index && cache.srv_index_retired(reused.srv_index) &&
+            cache.retirement_revision() == revision + 2u,
+            "content hit reuses the resource with a distinct still-valid CPU descriptor");
+        passed &= expect(reused.resource->GetDesc().Width == width &&
+            reused.resource->GetDesc().Height == height,
+            "self-evicted content resource remains bindable through the frame");
+        cache.begin_frame(1u, kFramesInFlight);
+        cache.begin_frame(0u, kFramesInFlight);
+        // No list is submitted. Production waits the owning slot's fence before
+        // reclamation; the content cache still owns this resource afterward.
+        const auto after_fence = cache.get(image, mode, TlutRef{}, &memory);
+        passed &= expect(after_fence.resource == decoded.resource &&
+            after_fence.srv_index == reused.srv_index &&
+            cache.retirement_revision() == revision + 3u,
+            "content retention survives decoded-resource fence reclamation");
         cache.set_upload_list(nullptr);
         cache.shutdown();
         return passed;
@@ -2600,6 +2669,22 @@ int main(int argc, char** argv) {
             return harness.test_content_texture_identity() ? 0 : 1;
         } catch (const std::exception& error) {
             std::fprintf(stderr, "FAILED: content identity regression: %s\n", error.what());
+            return 1;
+        }
+    }
+    if (argc == 2 && std::strcmp(argv[1], "--oversized-content-cache") == 0) {
+        // Cache settings are memoized on first access: use a fresh process and
+        // configure the CRT environment before any harness/cache construction.
+        if (_putenv_s("GALAXY_GX_CONTENT_TEXTURE_CACHE", "1") != 0 ||
+            _putenv_s("GALAXY_GX_DECODED_TEXTURE_BUDGET_MB", "1") != 0) {
+            std::fprintf(stderr, "FAILED: configure oversized content cache regression\n");
+            return 1;
+        }
+        try {
+            WarpConversionHarness harness;
+            return harness.test_oversized_content_texture_retirement() ? 0 : 1;
+        } catch (const std::exception& error) {
+            std::fprintf(stderr, "FAILED: oversized content cache regression: %s\n", error.what());
             return 1;
         }
     }

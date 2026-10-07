@@ -43,6 +43,8 @@
 #include <Shellapi.h>
 #include <timeapi.h>
 
+#include "galaxy/windows_power.h"
+
 #include <algorithm>
 #include <array>
 #include <atomic>
@@ -1033,8 +1035,8 @@ struct RuntimeState {
     // post-RFI arbitration and continuation handoff. Keep those few state
     // transitions in memory while a just-completed VI is outstanding so a
     // later cadence failure can distinguish the host arbitration path from a
-    // guest continuation that stopped reaching safepoints. This is bounded
-    // and has no successful-path logging.
+    // guest continuation that stopped reaching safepoints. Collection is
+    // opt-in: bounded retention still incurs clock and stack reads per record.
     struct ViPostRfiHandoffRecord {
         std::uint64_t sequence{};
         std::uint64_t serial{};
@@ -1581,6 +1583,7 @@ struct RuntimeState {
     std::array<InlineCheckpointRecord, kInlineCheckpointTimingCapacity>
         inline_checkpoint_records{};
     std::size_t inline_checkpoint_record_count{};
+    bool inline_checkpoint_history_enabled{};
     static constexpr std::size_t kViBoundaryCompletionTimingCapacity = 128u;
     std::array<
         ViBoundaryCompletionRecord,
@@ -1597,6 +1600,9 @@ struct RuntimeState {
         kViPostRfiHandoffTimingCapacity>
         vi_post_rfi_handoff_records{};
     std::uint64_t checkpoint_timing_sequence{};
+    // Inclusive wall-phase totals, collected only with explicit timing enabled.
+    std::uint64_t checkpoint_phase_total_us{};
+    std::uint64_t checkpoint_phase_entries{};
     std::size_t checkpoint_gap_record_count{};
     std::size_t checkpoint_phase_record_count{};
     std::size_t native_input_service_record_count{};
@@ -1605,6 +1611,11 @@ struct RuntimeState {
     std::size_t vi_boundary_completion_record_count{};
     std::size_t vi_service_checkpoint_record_count{};
     std::size_t vi_post_rfi_handoff_record_count{};
+    const bool vi_post_rfi_handoff_recording_enabled{
+        read_env_flag("GALAXY_TRACE_VI_POST_RFI_HANDOFF", false) ||
+        read_env_flag("GALAXY_DIAGNOSTIC_AI_LATE_CHECKPOINT_SNAPSHOT", false) ||
+        read_env_flag("GALAXY_TRACE_MAIN_FRAME", false)};
+    // Required continuation ownership is independent of diagnostic collection.
     std::uint64_t vi_post_rfi_handoff_serial{};
     bool last_vi_service_checkpoint_active{};
     std::uint64_t last_vi_service_checkpoint_vi{};
@@ -1640,6 +1651,15 @@ struct RuntimeState {
     std::uint64_t pending_vi_boundary_advance_calls{};
     std::uint64_t pending_vi_token_blocking_polls{};
     std::uint64_t pending_vi_token_nonblocking_polls{};
+    // Wall time the guest spent in the TokenPending phase while its context was the
+    // one the boundary blocks, i.e. actually waiting on draw/PE completion. Counts
+    // alone cannot distinguish "the guest waits 60 times for a microsecond" from
+    // "the guest waits 60 times for 16 ms", and that difference decides whether the
+    // render cadence is set by guest work or by waiting for the renderer. This is
+    // the measurement `MEASUREMENT-CAVEATS.md` says the current recordings lack for
+    // within-frame attribution.
+    std::uint64_t pending_vi_token_blocking_ns{};
+    std::uint64_t pending_vi_token_completion_ns{};
     std::uint64_t pending_vi_token_blocking_completions{};
     std::uint64_t pending_vi_token_nonblocking_completions{};
     std::uint64_t pending_vi_token_blocking_incomplete{};
@@ -1648,6 +1668,13 @@ struct RuntimeState {
     std::uint64_t pending_vi_await_ee_masked{};
     std::uint64_t pending_vi_await_dispatch_eligible{};
     std::uint64_t pending_vi_await_dispatch_returned{};
+    // Advances in the AwaitViRfi phase whose dispatch_external_interrupt call
+    // actually delivered IRQ24. `returned - delivered` is the count of advances
+    // that reported progress to their caller while delivering nothing; the
+    // `await-external-active` branch cannot be in `delivered`, because when an
+    // external dispatch is already active the callee either fails its PI
+    // cause&mask test or throws its nested-dispatch guard.
+    std::uint64_t pending_vi_await_dispatch_delivered{};
     std::uint64_t external_dispatch_vi_owner_serial{};
     bool dispatching_external_interrupt{};
     bool dispatching_vi_retrace{};
@@ -1725,6 +1752,13 @@ struct RuntimeState {
     // await the restored edge instead of applying it against rebased time.
     std::uint64_t decrementer_deadline_rebase_discards{};
     std::uint64_t decrementer_deadline_late_events{};
+    // Sum of lateness over every settled edge, so the audit can report a mean
+    // and not only a count. A count of "late" events says nothing on its own:
+    // sub-microsecond scheduling jitter and a missed 428 ms deadline both
+    // increment it. The maximum beside it is a single outlier; the mean is what
+    // says whether the typical edge is on time.
+    std::uint64_t decrementer_deadline_total_lateness_ticks{};
+    std::uint64_t decrementer_deadline_settled_events{};
     std::uint64_t decrementer_deadline_max_lateness_ticks{};
     std::uint8_t bluetooth_device_state{0xFFu};
     std::uint64_t bluetooth_state_checks{};
@@ -1852,6 +1886,22 @@ struct RuntimeState {
     std::uint64_t native_mouse_submission_serial{}, native_mouse_submitted{}, native_mouse_consumed{};
     std::uint64_t native_mouse_select_ns{}, native_mouse_query_ns{}, native_mouse_query_max_ns{};
     std::uint64_t native_mouse_selected_to_store_ns{}, native_mouse_selected_to_store_max_ns{};
+    // EFB peeks. Each one is the simulation thread synchronising with the render
+    // thread twice: render_pending_gx_fifo_for_sync() drains the pending FIFO and
+    // gx::peek_efb() then round-trips through the frame queue and blocks on a
+    // condition variable until the render thread services the request. That is a
+    // hard producer/consumer dependency on the exact path the objective asks
+    // about ("if waits dominate, identify the dependency"), and nothing counted
+    // it: both existing phase timers are inert unless frame-cadence diagnostics
+    // are on, so no recording can say whether peeks are negligible or the
+    // dominant stall. Counted unconditionally because the two clock reads are
+    // bounded well below the round-trip they bracket.
+    std::uint64_t efb_peek_count{}, efb_peek_ns{}, efb_peek_max_ns{}, efb_peek_failures{};
+    // Split, because the two halves are different dependencies: the first waits
+    // for the render thread to consume already-submitted GX work, the second
+    // waits for a freshly queued request to be serviced. A fix for one is not a
+    // fix for the other.
+    std::uint64_t efb_peek_sync_ns{}, efb_peek_readback_ns{};
     unsigned native_mouse_trace_rows{}, native_mouse_callback_trace_rows{};
     std::uint64_t native_mouse_callback_entries{};
     std::array<std::uint32_t,2> native_mouse_trace_xy{};
@@ -2623,7 +2673,7 @@ struct RuntimeState {
         // Keep this trail strictly scoped to the verified scheduler-idle
         // continuation. Other callbacks would turn it into a high-frequency
         // trace and perturb the cadence being diagnosed.
-        if (guest_pc != 0x804AB360u) {
+        if (!inline_checkpoint_history_enabled || guest_pc != 0x804AB360u) {
             return;
         }
         InlineCheckpointRecord& record = inline_checkpoint_records[
@@ -2659,7 +2709,7 @@ struct RuntimeState {
     void mark_inline_checkpoint_stage(
         const galaxy::PpcContext* context,
         const char* stage) noexcept {
-        if (inline_checkpoint_record_count == 0u) {
+        if (!inline_checkpoint_history_enabled || inline_checkpoint_record_count == 0u) {
             return;
         }
         InlineCheckpointRecord& record = inline_checkpoint_records[
@@ -2724,7 +2774,8 @@ struct RuntimeState {
         const char* stage,
         std::uint32_t transfer_address,
         const galaxy::PpcContext* context) noexcept {
-        if (vi_post_rfi_handoff_serial == 0u) {
+        if (vi_post_rfi_handoff_serial == 0u ||
+            !vi_post_rfi_handoff_recording_enabled) {
             return;
         }
         ViPostRfiHandoffRecord& record = vi_post_rfi_handoff_records[
@@ -2807,6 +2858,10 @@ struct RuntimeState {
     }
 
     void dump_checkpoint_timing(std::ostream& output) const {
+        output << "[inline-checkpoint-history] enabled="
+               << (inline_checkpoint_history_enabled ? 1 : 0)
+               << " captured=" << inline_checkpoint_record_count
+               << " scope=diagnostic-history-not-total-guest-checkpoints\n";
         const std::size_t gap_count = std::min(
             checkpoint_gap_record_count, checkpoint_gap_records.size());
         const std::size_t gap_start =
@@ -3057,6 +3112,9 @@ struct RuntimeState {
                    << " external="
                    << (record.external_dispatch_active ? 1 : 0) << '\n';
         }
+        output << "[vi-post-rfi-handoff-summary] enabled="
+               << (vi_post_rfi_handoff_recording_enabled ? 1 : 0)
+               << " records=" << vi_post_rfi_handoff_record_count << '\n';
         const std::size_t handoff_count = std::min(
             vi_post_rfi_handoff_record_count,
             vi_post_rfi_handoff_records.size());
@@ -3215,9 +3273,8 @@ void dump_failure_worker_quiescence(
 
 // Extend existing fixed callback-timer/deferred main-frame pattern, not a ring.
 bool runtime_boundary_self_probe_active(const RuntimeState& state) {
-    if (!galaxy::main_frame_trace_window_active(state.services)) return false;
     static const bool enabled = read_env_flag("GALAXY_TRACE_RUNTIME_BOUNDARY_SELF", false);
-    return enabled;
+    return enabled && galaxy::main_frame_trace_window_active(state.services);
 }
 
 class RuntimeBoundarySelfScope final {
@@ -3327,12 +3384,22 @@ void run_timed_checkpoint_phase(
         std::forward<Callback>(callback)();
         return;
     }
-    const auto started = std::chrono::steady_clock::now();
+    // Record enabled phases on both normal return and native unwinds.
+    std::optional<std::chrono::steady_clock::time_point> started;
     const auto record_elapsed = [&]() noexcept {
+        if (!started.has_value()) {
+            return;
+        }
         const auto elapsed_us =
             std::chrono::duration_cast<std::chrono::microseconds>(
-                std::chrono::steady_clock::now() - started)
+                std::chrono::steady_clock::now() - *started)
                 .count();
+        // These inclusive wall spans may overlap in nested service calls.
+        if (elapsed_us > 0) {
+            state.checkpoint_phase_total_us +=
+                static_cast<std::uint64_t>(elapsed_us);
+        }
+        ++state.checkpoint_phase_entries;
         if (elapsed_us >= 1'000) {
             state.record_checkpoint_phase(
                 phase, static_cast<std::uint64_t>(elapsed_us), guest_pc);
@@ -3341,6 +3408,7 @@ void run_timed_checkpoint_phase(
     // Retain timing on GuestTransfer and other native unwinds without an
     // additional catch/rethrow search. The original exception keeps unwinding.
     const galaxy::ScopeExit record_scope(record_elapsed);
+    started = std::chrono::steady_clock::now();
     std::forward<Callback>(callback)();
 }
 
@@ -4439,7 +4507,56 @@ std::uint64_t ticks_per_checkpoint() {
     return ticks;
 }
 
-// Opt-in only (default off, unchanged behavior): GALAXY_THROTTLE_CPU_TIME_SAMPLING.
+// Bounded-interval cache for the repeated GetThreadTimes sample.
+//
+// CORRECTED 2026-10-07 by agent 14. This comment previously read:
+//
+//   "`runtime_time_base_ticks` runs on every full checkpoint escalation
+//    (measured at ~15k/s ...: 2,140,257 `proof-preparations` over 143 s) and
+//    unconditionally paid a GetThreadTimes syscall on each one."
+//
+// Both statements were false, and a claim (board C0023) was registered by
+// restating them, so the wording is corrected here rather than left to mislead
+// again. Verified against the tree:
+//
+//   * The CPU-time sample is NOT unconditional and NOT per escalation. The
+//     only `runtime_time_base_ticks` call inside `branch_checkpoint_body`
+//     (defined 24647) is at 25829, which sits INSIDE the quiet-architecture
+//     region - the gate opens at 25814 and `quiet_architectural_checkpoint(...)`
+//     is called at 25845. It is therefore paid on quiet-path entries only.
+//     (Found by agent 7 while contradicting C0023; confirmed by agent 14.)
+//   * `proof-preparations` is incremented in
+//     `branch_checkpoint_retaining_same_context` (20749), a DIFFERENT function
+//     from the one holding the sample, so that count is not this call's
+//     multiplier. The true call count is not derivable from source.
+//
+// The syscall is only consumed as *evidence* by
+// `is_host_suspension_candidate_interval` below, which compares an interval's
+// CPU-time delta against `kHostSuspensionCandidateMaximumCpuTime100ns` = 10 ms.
+//
+// REVERTED with the flag (agent 20): the 100 us `cpu_time_sample_cache_window()`
+// and the default flip are withdrawn, and the one-millisecond window inside
+// `throttled_thread_cpu_time_100ns` below is the shipped behaviour again. The
+// change could not be justified by measurement - the only call site is inside
+// the quiet-architecture gate, which defaults false and is unset in
+// installer/runtime-env.json - so it is out rather than left as an unmeasured
+// behaviour change.
+//
+// For the record, so nobody re-derives it: one
+// GetThreadTimes(GetCurrentThread()) measured **144.56 ns/call** on this host
+// against 7.04 ns for a raw rdtsc (AgentWork/agent-20/bench/gt_bench.rs,
+// rustc -O, 2e6 iterations). Real kernel transition, worth avoiding *if* a
+// profile ever puts it on a hot path.
+// Opt-in only (default off, unchanged behaviour):
+// GALAXY_THROTTLE_CPU_TIME_SAMPLING.
+//
+// REVERTED 2026-10-07 by agent 20. This flag was briefly defaulted to `true`
+// with a 100 us cache window, on the premise that the sample was paid on every
+// checkpoint escalation. The premise was false (see the correction above), so
+// the change could not be justified by measurement and is withdrawn rather than
+// left in the tree as an unmeasured behaviour change. Nothing here is known to
+// be hot; if a future profile shows this path is, re-enable it with that
+// profile attached.
 bool throttle_cpu_time_sampling_enabled() {
     static const bool enabled =
         read_env_flag("GALAXY_THROTTLE_CPU_TIME_SAMPLING", false);
@@ -4451,6 +4568,12 @@ bool throttle_cpu_time_sampling_enabled() {
 // value alone does not prove that recovery decisions remain equivalent.
 // This stays opt-in. Checkpoint timings include surrounding work and cannot
 // establish the syscall's self-time or justify enabling this control.
+//
+// For the record, so nobody re-derives it: one GetThreadTimes(GetCurrentThread())
+// measured 144.56 ns/call on the current host against 7.04 ns for a raw rdtsc
+// (AgentWork/agent-20/bench/gt_bench.rs, rustc -O, 2e6 iterations). That is a
+// real kernel transition and worth avoiding *if* a profile ever puts it on a
+// hot path. On the recorded configuration it does not.
 std::uint64_t throttled_thread_cpu_time_100ns() noexcept {
     thread_local std::uint64_t s_cached_value = 0;
     thread_local std::chrono::steady_clock::time_point s_cached_at{};
@@ -14891,26 +15014,46 @@ bool needs_call_guest_intercept(
             return false;
     }
 
+    // These targets reach the host boundary only for opt-in trace output; the
+    // translated body runs unchanged either way. The JKR allocator/free entries
+    // and OSGetTick are invoked through virtual/indirect calls many times per
+    // frame, so keeping them on the cached native path matters.
+    static const bool trace_only_targets_intercepted =
+        trace_runtime_scaffolding() || trace_scene_changes();
+    if (trace_only_targets_intercepted) {
+        switch (guest_address) {
+            case 0x8038BC80u:
+            case 0x803981A0u:
+            case 0x8039B9E0u:
+            case 0x803F81ACu:
+            case 0x80409F48u:
+            case 0x8040A2B4u:
+            case 0x8040ABF4u:
+            case 0x8040ACE0u:
+            case 0x8040CA60u:
+            case 0x80418440u:
+            case 0x804A8A0Cu:
+            case 0x804AB488u:
+            case 0x804B1E38u:
+            case 0x804B1E7Cu:
+                return true;
+            default:
+                break;
+        }
+    }
+    if (guest_address == 0x804AC380u) {
+        return state.trace_ticks;
+    }
+
     switch (guest_address) {
         case 0x00000000u:
-        case 0x8038BC80u:
-        case 0x803981A0u:
         case 0x80399058u:
         case 0x803990A8u:
         case 0x80399144u:
         case 0x80399280u:
-        case 0x8039B9E0u:
         case 0x8039EF50u:
         case 0x803CE128u:
-        case 0x803F81ACu:
-        case 0x804077BCu:
-        case 0x80409F48u:
-        case 0x8040A2B4u:
-        case 0x8040ABF4u:
-        case 0x8040ACE0u:
-        case 0x8040CA60u:
         case 0x8041071Cu:
-        case 0x80418440u:
         case 0x804506D8u: // KPADRead: synthetic keyboard/mouse pointer boundary
         case 0x804A095Cu:
         case 0x804A096Cu:
@@ -14921,17 +15064,9 @@ bool needs_call_guest_intercept(
         case 0x804A3E94u:
         case 0x804A3F24u:
         case 0x804A84F8u:
-        case 0x804A8A0Cu:
-        case 0x804AB488u:
         case 0x804ABFBCu:
-        case 0x804AC380u:
-        case 0x804B1E38u:
-        case 0x804B1E7Cu:
-        case 0x804B2730u:
         case 0x804BEF5Cu:
         case 0x804BF2CCu:
-        case 0x804CEE44u:
-        case 0x804ECA00u:
         case 0x804F5500u:
         case 0x8052B490u:
             return true;
@@ -16253,6 +16388,15 @@ void dump_pending_vi_boundary_audit(
                galaxy::vi::BoundaryPhase::Finalize)]
         << " token-blocking-polls="
         << state.pending_vi_token_blocking_polls
+        // Nanoseconds, and the fields sum to the blocked share of the session. Pair
+        // with the session wall time from process.csv: if
+        // (token-blocking-ns + token-completion-ns) is a large fraction of wall time,
+        // the guest's render cadence is set by waiting for the render thread rather
+        // than by guest execution.
+        << " token-blocking-ns="
+        << state.pending_vi_token_blocking_ns
+        << " token-completion-ns="
+        << state.pending_vi_token_completion_ns
         << " token-nonblocking-polls="
         << state.pending_vi_token_nonblocking_polls
         << " token-blocking-completions="
@@ -16270,6 +16414,14 @@ void dump_pending_vi_boundary_audit(
         << state.pending_vi_await_dispatch_eligible
         << " await-dispatch-returned="
         << state.pending_vi_await_dispatch_returned
+        << " await-dispatch-delivered="
+        << state.pending_vi_await_dispatch_delivered
+        << " await-dispatch-noop="
+        << (state.pending_vi_await_dispatch_returned >=
+                    state.pending_vi_await_dispatch_delivered
+                ? state.pending_vi_await_dispatch_returned -
+                      state.pending_vi_await_dispatch_delivered
+                : 0u)
         << " active=" << (state.pending_vi_boundary.active() ? 1 : 0)
         << " active-phase="
         << static_cast<unsigned>(snapshot.phase)
@@ -16720,8 +16872,15 @@ void dump_exact_vi_deadline_audit(
     output << "[vi-deadline-audit] tag=" << tag
            << " armed=" << (state.vi_deadline_consumer != nullptr ? 1 : 0)
            << " first-deadline=" << state.vi_first_deadline_ticks;
+    // Hoisted out of the consumer block below: the guest-rate fields further down need
+    // these two counts, and `stats` is scoped to the `if` that reads them. Zero when
+    // there is no consumer, so the rates print as 0 rather than as garbage.
+    std::uint64_t vi_scheduled_edges = 0u;
+    std::uint64_t vi_delivered_interrupts = 0u;
     if (state.vi_deadline_consumer != nullptr) {
         const auto& stats = state.vi_deadline_consumer->stats();
+        vi_scheduled_edges = stats.scheduled_edges;
+        vi_delivered_interrupts = stats.delivered_interrupts;
         output << " scheduled=" << stats.scheduled_edges
                << " delivered=" << stats.delivered_edges
                << " delivered-interrupts=" << stats.delivered_interrupts
@@ -16748,6 +16907,39 @@ void dump_exact_vi_deadline_audit(
                << " broker-last-sequence=" << publication.last_sequence
                << " broker-last-deadline-ticks="
                << publication.last_deadline_ticks
+               // Guest-active window and the two rates that follow from it, printed so
+               // that nobody has to choose a denominator again.
+               //
+               // Why this exists: three defensible denominators for the same numerator
+               // gave three answers a whole Hz apart on the Arc recording - 371.86 s of
+               // process.csv wall (includes pre-guest startup) gave 58.88 Hz, the
+               // present-stats span of 365.40 s (omits the window the first sample
+               // closes) gave 59.92 Hz, and the guest's own timeline gives 59.59 Hz.
+               // Agent 15 published 58.88, agent 14 "corrected" it to 59.92, and both
+               // were estimates; the timeline anchor settles it at 59.59 Hz delivered
+               // against a 59.99 Hz schedule (145 coalesced edges = 0.66%).
+               //
+               // The host sampling cadence is not the guest's clock. Both endpoints are
+               // already in scope here, so emitting them costs nothing.
+               << " guest-active-ms="
+               << ((publication.last_deadline_ticks > state.vi_first_deadline_ticks
+                        ? (publication.last_deadline_ticks - state.vi_first_deadline_ticks)
+                        : 0u) *
+                   1000u /
+                   static_cast<std::uint64_t>(galaxy::timing::kTimelineTicksPerSecond))
+               << " guest-hz-scheduled="
+               << (publication.last_deadline_ticks > state.vi_first_deadline_ticks
+                       ? (vi_scheduled_edges *
+                          static_cast<std::uint64_t>(galaxy::timing::kTimelineTicksPerSecond) /
+                          (publication.last_deadline_ticks - state.vi_first_deadline_ticks))
+                       : 0u)
+               << " guest-hz-delivered="
+               << (publication.last_deadline_ticks > state.vi_first_deadline_ticks
+                       ? (vi_delivered_interrupts *
+                          static_cast<std::uint64_t>(galaxy::timing::kTimelineTicksPerSecond) /
+                          (publication.last_deadline_ticks - state.vi_first_deadline_ticks))
+                       : 0u)
+               << " guest-hz-note=denominator-is-guest-timeline-not-host-sampling-cadence"
                << " broker-last-prepublication-ticks="
                << publication.last_prepublication_ticks
                << " broker-last-postpublication-ticks="
@@ -16829,6 +17021,18 @@ void dump_decrementer_deadline_audit(
            << " broker-publications="
             << state.decrementer_deadline_publications
             << " exact-fallbacks=" << state.decrementer_deadline_fallbacks
+            // A "fallback" is the CPU thread settling the edge from its
+            // immutable arm after the absolute deadline, which is a normal race
+            // against the broker worker and is documented as intended -- not a
+            // failure. The share therefore describes the guest's checkpoint
+            // density; the lateness magnitude below is what says whether any
+            // edge was actually missed.
+            << " settled-events=" << state.decrementer_deadline_settled_events
+            << " mean-lateness-ticks="
+            << (state.decrementer_deadline_settled_events == 0u
+                    ? 0u
+                    : state.decrementer_deadline_total_lateness_ticks /
+                          state.decrementer_deadline_settled_events)
             << " write-due-races=" << state.decrementer_write_due_races
             << " rebase-discards="
             << state.decrementer_deadline_rebase_discards
@@ -17032,6 +17236,14 @@ bool advance_pending_vi_boundary(
                 }
                 const auto elapsed =
                     std::chrono::steady_clock::now() - snapshot.started;
+                // Charge this poll's blocked interval to the boundary. `elapsed` is
+                // already computed for the budget check below, so this adds one
+                // duration_cast and one add -- no extra clock read on the VI path.
+                state.pending_vi_token_blocking_ns +=
+                    static_cast<std::uint64_t>(
+                        std::chrono::duration_cast<std::chrono::nanoseconds>(
+                            elapsed)
+                            .count());
                 if (elapsed >= std::chrono::milliseconds(
                                    galaxy::gx::
                                        kFramePeCooperativeWaitTimeoutMs)) {
@@ -17201,15 +17413,25 @@ bool advance_pending_vi_boundary(
                 } else {
                     ++state.pending_vi_await_dispatch_eligible;
                 }
-                (void)dispatch_external_interrupt(
-                    state,
-                    exact_resume,
-                    context,
-                    memory,
-                    exact_idle_ee);
+                // The boolean return was discarded here. It is the only signal
+                // that separates an advance which actually delivered the IRQ24
+                // from one that did not, and by inspection the two dominant
+                // branches can never deliver: when
+                // `state.external_dispatch.active()` holds, the callee either
+                // returns false at its PI cause&mask test or throws the nested
+                // guard, so every `await-external-active` advance is a no-op that
+                // still returns `true` to its caller. Counting the delivery makes
+                // that measurable instead of an argument from reading the code.
+                if (dispatch_external_interrupt(
+                        state,
+                        exact_resume,
+                        context,
+                        memory,
+                        exact_idle_ee)) {
+                    ++state.pending_vi_await_dispatch_delivered;
+                }
                 ++state.pending_vi_await_dispatch_returned;
-                return true;
-            case galaxy::vi::BoundaryPhase::Finalize:
+                return true;            case galaxy::vi::BoundaryPhase::Finalize:
                 throw RuntimeFailure(
                     "finalized VI boundary escaped the owning IRQ24 RFI");
             case galaxy::vi::BoundaryPhase::Empty:
@@ -17705,6 +17927,19 @@ bool finalize_vi_retrace(
     if (state.benchmark_vi_end != 0u) {
         if (!state.benchmark_vi_started &&
             state.vi_retrace_count >= state.benchmark_vi_start) {
+            // Announce the left edge. `vi_retrace_count` is otherwise never
+            // reported anywhere -- `GALAXY_TRACE_RUNTIME_SCAFFOLDING` is the only
+            // thing that prints it, and it prints at most one line in sixty --
+            // so without this line there is no way to learn which retrace the
+            // window actually opened on, and therefore no way to choose START
+            // for a later run except by guessing. START is a lower bound and the
+            // arming also waits for render idle, so the count here can exceed
+            // the requested START; this line is what makes that visible.
+            // Cheap, once per run, and only when a window was requested.
+            std::cout << "[benchmark] vi-window armed at retrace="
+                      << state.vi_retrace_count << " requested-start="
+                      << state.benchmark_vi_start << " requested-end="
+                      << state.benchmark_vi_end << '\n';
             // Define the left edge only after every pre-window render chunk is
             // complete. Otherwise old queued XFB work can inflate this window.
             galaxy::gx::wait_for_render_idle();
@@ -20308,6 +20543,8 @@ bool consume_decrementer_deadline_publication(RuntimeState& state) {
     }
     ++state.decrementer_deadline_publications;
     const std::uint64_t lateness = now_ticks - expected_arm->deadline_ticks;
+    ++state.decrementer_deadline_settled_events;
+    state.decrementer_deadline_total_lateness_ticks += lateness;
     if (lateness != 0u) {
         ++state.decrementer_deadline_late_events;
         state.decrementer_deadline_max_lateness_ticks =
@@ -20347,6 +20584,8 @@ bool synchronize_decrementer_deadline(RuntimeState& state) {
     }
     ++state.decrementer_deadline_fallbacks;
     const std::uint64_t lateness = now_ticks - arm->deadline_ticks;
+    ++state.decrementer_deadline_settled_events;
+    state.decrementer_deadline_total_lateness_ticks += lateness;
     if (lateness != 0u) {
         ++state.decrementer_deadline_late_events;
     }
@@ -25188,7 +25427,13 @@ void branch_checkpoint_body(
                           << '\n';
             }
         }
-        std::this_thread::yield();
+        // Handoff to the DSP worker rather than surrendering the slice. This
+        // runs on the simulation thread, which is the single-thread critical
+        // path, and the wait is normally only a few mailbox polls long.
+        // `SwitchToThread` yields to a thread ready on this processor and
+        // returns immediately when none is; the same primitive is used for the
+        // other DSP handoffs in this file.
+        SwitchToThread();
         if (trace_dsp_host()) {
             static std::uint64_t s_masked_dsp_task_waits = 0;
             ++s_masked_dsp_task_waits;
@@ -26810,6 +27055,36 @@ static bool gx_efb_peek(
     if (state == nullptr || memory == nullptr || value == nullptr) {
         return false;
     }
+    // Bracket the whole peek, not just one half: both the FIFO synchronization
+    // and the readback round-trip block this thread on the render thread, and the
+    // sum of the two is the number that matters. One clock read either side of a
+    // synchronized cross-thread round-trip cannot change what it measures.
+    const auto peek_start = std::chrono::steady_clock::now();
+    struct PeekAccounting {
+        RuntimeState& state;
+        std::chrono::steady_clock::time_point start;
+        std::chrono::steady_clock::time_point readback_start;
+        bool ok;
+        ~PeekAccounting() noexcept {
+            const auto stop = std::chrono::steady_clock::now();
+            const std::uint64_t ns = stop >= start
+                ? static_cast<std::uint64_t>(
+                      std::chrono::duration_cast<std::chrono::nanoseconds>(
+                          stop - start).count())
+                : 0u;
+            ++state.efb_peek_count;
+            state.efb_peek_ns += ns;
+            state.efb_peek_max_ns = std::max(state.efb_peek_max_ns, ns);
+            if (stop >= readback_start) {
+                state.efb_peek_readback_ns += static_cast<std::uint64_t>(
+                    std::chrono::duration_cast<std::chrono::nanoseconds>(
+                        stop - readback_start).count());
+            }
+            if (!ok) {
+                ++state.efb_peek_failures;
+            }
+        }
+    } peek_accounting{*state, peek_start, peek_start, false};
     {
         // Observe the existing FIFO/effects synchronization separately from
         // the exact-pixel request. Both remain in their original order; these
@@ -26819,15 +27094,26 @@ static bool gx_efb_peek(
             galaxy::cadence::TimingPhase::EfbPeekSynchronization);
         render_pending_gx_fifo_for_sync(*state, memory);
     }
+    // Boundary between the two waits. One extra clock read per peek, against a
+    // path that has already synchronized with another thread twice.
+    const auto peek_sync_end = std::chrono::steady_clock::now();
     galaxy::cadence::ScopedPhaseTimer readback_timer(
         state->cadence_diagnostics,
         galaxy::cadence::TimingPhase::EfbPeekReadback);
-    return galaxy::gx::peek_efb(
+    const bool peeked = galaxy::gx::peek_efb(
         x,
         y,
         depth ? galaxy::gx::EfbPeekKind::Depth
               : galaxy::gx::EfbPeekKind::Color,
         *value);
+    if (peek_sync_end >= peek_start) {
+        state->efb_peek_sync_ns += static_cast<std::uint64_t>(
+            std::chrono::duration_cast<std::chrono::nanoseconds>(
+                peek_sync_end - peek_start).count());
+    }
+    peek_accounting.readback_start = peek_sync_end;
+    peek_accounting.ok = peeked;
+    return peeked;
 }
 
 static HWND current_process_root_window_from_point(POINT cursor) noexcept {
@@ -27006,7 +27292,9 @@ static galaxy::host::HostPointerState runtime_host_pointer_state() noexcept {
     // Keep the mouse->IR bridge native while avoiding repeated Win32 cursor
     // queries during dense guest input polling. WM_MOUSEMOVE still refreshes
     // the renderer cache immediately; this just caps redundant host sampling.
-    const std::uint64_t host_pointer_poll_cache_ms =
+    // The environment is immutable for the process; querying it on every
+    // pointer poll costs a CRT environment lock and string search.
+    static const std::uint64_t host_pointer_poll_cache_ms =
         read_env_u64("GALAXY_HOST_POINTER_POLL_CACHE_MS", 1u);
     static std::mutex s_cache_mutex;
     static galaxy::host::HostPointerState s_cached_state{};
@@ -27938,15 +28226,93 @@ static void disable_runtime_dialogs() {
     SetErrorMode(error_mode);
 }
 
+static char const* priority_class_name(DWORD value) {
+    switch (value) {
+    case IDLE_PRIORITY_CLASS:         return "IDLE";
+    case BELOW_NORMAL_PRIORITY_CLASS: return "BELOW_NORMAL";
+    case NORMAL_PRIORITY_CLASS:       return "NORMAL";
+    case ABOVE_NORMAL_PRIORITY_CLASS: return "ABOVE_NORMAL";
+    case HIGH_PRIORITY_CLASS:         return "HIGH";
+    case REALTIME_PRIORITY_CLASS:     return "REALTIME";
+    default:                          return "unknown";
+    }
+}
+
+static char const* thread_priority_name(int value) {
+    switch (value) {
+    case THREAD_PRIORITY_IDLE:          return "IDLE";
+    case THREAD_PRIORITY_LOWEST:        return "LOWEST";
+    case THREAD_PRIORITY_BELOW_NORMAL:  return "BELOW_NORMAL";
+    case THREAD_PRIORITY_NORMAL:        return "NORMAL";
+    case THREAD_PRIORITY_ABOVE_NORMAL:  return "ABOVE_NORMAL";
+    case THREAD_PRIORITY_HIGHEST:       return "HIGHEST";
+    case THREAD_PRIORITY_TIME_CRITICAL: return "TIME_CRITICAL";
+    default:                            return "unknown";
+    }
+}
+
+// Base priority is a function of the process class AND the thread level, so
+// logging the two together is the only way to see what a thread's effective
+// priority actually is. Reading only the thread level is misleading whenever the
+// process class is not NORMAL: a thread left at THREAD_PRIORITY_NORMAL under
+// ABOVE_NORMAL_PRIORITY_CLASS has base 10, which is one level below this
+// function's own ABOVE_NORMAL thread (base 11) and level with a thread that a
+// NORMAL-class process would call ABOVE_NORMAL (base 9).
+//
+// Reported rather than asserted, because there is no single correct gradient: the
+// simulation, render, DSP and deadline-broker threads are all deliberately
+// ABOVE_NORMAL, and the only threads this must not outrank are the ones lowered
+// on purpose (PSO prewarm workers, frame telemetry). Those set their own level
+// and are therefore relative to this class, not absolute.
+static void report_effective_priorities() {
+    const DWORD process_class = GetPriorityClass(GetCurrentProcess());
+    SetLastError(ERROR_SUCCESS);
+    const int thread_level = GetThreadPriority(GetCurrentThread());
+    const DWORD thread_error = GetLastError();
+    std::fprintf(
+        stderr,
+        "[thread-priority] process-class=%s(0x%lx) this-thread-level=%s(%d) "
+        "this-thread-error=%lu note=base-priority-is-class-plus-level\n",
+        priority_class_name(process_class),
+        static_cast<unsigned long>(process_class),
+        thread_error == ERROR_SUCCESS ? thread_priority_name(thread_level) : "query-failed",
+        thread_level,
+        static_cast<unsigned long>(thread_error));
+}
+
 static void configure_runtime_scheduling() {
+    if (read_env_flag("GALAXY_POWER_THROTTLING_OPTOUT", true)) {
+        galaxy::host::opt_out_of_power_throttling_process();
+        galaxy::host::opt_out_of_power_throttling_thread();
+    }
     if (!read_env_flag("GALAXY_RUNTIME_HIGH_PRIORITY", true)) {
+        // Still report, so a recording made with the class left at NORMAL is
+        // distinguishable from one where the query simply did not run.
+        report_effective_priorities();
         return;
     }
     // Keep direct Release launches on the same scheduling path as diagnostics.
     // ABOVE_NORMAL avoids aggressive system-wide priority while reducing
     // occasional multimedia scheduling spikes in realtime VI playback.
-    SetPriorityClass(GetCurrentProcess(), ABOVE_NORMAL_PRIORITY_CLASS);
-    SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_ABOVE_NORMAL);
+    //
+    // NOTE: this raises the CLASS, which renumbers every thread in the process,
+    // not just this one. A thread nobody touches runs at THREAD_PRIORITY_NORMAL,
+    // so it moves from base 8 to base 10. Anything that must stay below the
+    // critical paths has to set its own level explicitly (the PSO prewarm workers
+    // and frame telemetry do; the snapshot copy workers do not).
+    if (SetPriorityClass(GetCurrentProcess(), ABOVE_NORMAL_PRIORITY_CLASS) == FALSE) {
+        std::fprintf(
+            stderr,
+            "[thread-priority] SetPriorityClass failed error=%lu\n",
+            static_cast<unsigned long>(GetLastError()));
+    }
+    if (SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_ABOVE_NORMAL) == FALSE) {
+        std::fprintf(
+            stderr,
+            "[thread-priority] SetThreadPriority failed error=%lu\n",
+            static_cast<unsigned long>(GetLastError()));
+    }
+    report_effective_priorities();
 }
 
 class ScopedSimulationCacheAffinity {
@@ -28299,6 +28665,20 @@ static void print_runtime_usage() {
 int wmain(int argc, wchar_t** argv) {
     // MUST be the very first line — before any allocation or assertion.
     disable_runtime_dialogs();
+    // Wall-clock anchor for the one-line VI-cadence summary at normal exit.
+    // `vi_retrace_count` is the guest's own 60 Hz timebase (kViRetracePeriodTicks
+    // = kWiiTimeBaseHz / 60, native_runtime.cpp:340) advanced by the only
+    // increment site at :17820. Dividing the final count by elapsed seconds
+    // therefore reports whether the guest's timebase is being honoured, at zero
+    // per-frame cost:
+    //   ~60/s  the simulation is keeping up with its own clock
+    //   < 60/s the simulation itself is being throttled
+    //   > 60/s the grid is being crossed faster than the guest's clock, which is
+    //          a correctness question rather than a performance one
+    // Until now the value was printed only from ~100 event- and trace-gated
+    // sites, so it was never readable at a fixed cadence and this comparison
+    // could not be made from a recording.
+    const auto session_start = std::chrono::steady_clock::now();
     // Process-local awareness must precede every HWND and input/render thread.
     // Output sizes, GetClientRect and mouse coordinates now use physical pixels.
     if (!SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2) &&
@@ -28350,10 +28730,80 @@ int wmain(int argc, wchar_t** argv) {
     RuntimeLaunchPaths launch_paths = default_runtime_launch_paths();
     std::cerr << "[runtime-build] " << NEBULA_RUNTIME_BUILD_IDENTITY << '\n';
     RuntimeState state{};
+    // The idle callback ring and stage history have only diagnostic consumers.
+    // Configure once before execution; routine monitoring keeps its independent
+    // new-frame/presentation counters without this per-checkpoint capture work.
+    state.inline_checkpoint_history_enabled =
+        read_env_flag("GALAXY_DIAGNOSTIC_CHECKPOINT_HISTORY", false) ||
+        read_env_flag("GALAXY_TRACE_INLINE_CHECKPOINT_SAMPLES", false) ||
+        read_env_flag("GALAXY_DIAGNOSTIC_AI_LATE_CHECKPOINT_SNAPSHOT", false) ||
+        read_env_flag("GALAXY_TRACE_HOST_PUMP_SUBPHASES", false) ||
+        trace_main_frame_enabled() || frame_activity_recording_enabled() ||
+        trace_checkpoint_hotspots_enabled() || trace_checkpoint_time_enabled() ||
+        trace_checkpoint_callback_time_enabled();
     galaxy::cadence::configure_global_session(
         read_env_flag("GALAXY_DIAGNOSTIC_FRAME_CADENCE", false));
     state.cadence_diagnostics =
         galaxy::cadence::global_session_if_enabled();
+    // Arm the bounded measurement window from the environment as well as from
+    // `--benchmark-vi-window`. Both launch paths -- tools/perf_session.ps1 and
+    // installer/src/Launcher -- build a command line of exactly two positional
+    // arguments and configure everything else through GALAXY_* environment
+    // variables, so a flag-only option is unreachable from either one. This
+    // window is the only place the runtime reports `vi-rate-hz` (simulation
+    // speed) and the frame-ms mean/p95/p99/max tail, and it also makes the
+    // measured window a fixed VI-retrace range, which is what makes two
+    // recordings comparable across machines and runs.
+    //
+    // Applied before argument parsing so the explicit flag below still wins,
+    // and validated identically: END must exceed START, otherwise the state is
+    // left disarmed exactly as a malformed flag would leave it. START is a
+    // lower bound, not an exact first tick -- the window opens at the first
+    // synchronized retrace whose count exceeds it -- so START=0 begins at the
+    // first synchronized retrace of the run.
+    //
+    // One further guard, because this is the one way an environment-supplied
+    // window can destroy a run instead of measuring it. The window arms at the
+    // first retrace past START AND after `wait_for_render_idle()`, so on a slow
+    // machine the count can already have passed a too-small END by the time it
+    // arms -- and the arming path throws
+    // "VI benchmark reached its end before a synchronized measurement window
+    // could start", failing the whole run. An environment typo would then look
+    // like a crash rather than a bad setting. Enforce a floor on the measured
+    // span so the run always yields a window, and say so loudly when the floor
+    // had to be used, because a window this short is reported, not trusted.
+    constexpr std::uint64_t kMinBenchmarkWindowRetraces = 60u;
+    {
+        std::uint64_t window_start =
+            read_env_u64("GALAXY_BENCHMARK_VI_WINDOW_START", 0u);
+        std::uint64_t window_end =
+            read_env_u64("GALAXY_BENCHMARK_VI_WINDOW_END", 0u);
+        if (window_end > 0u) {
+            if (window_end <= window_start) {
+                std::cerr << "[benchmark] VI window END=" << window_end
+                          << " does not exceed START=" << window_start
+                          << "; window not armed\n";
+                window_end = 0u;
+            } else if (window_end - window_start <
+                       kMinBenchmarkWindowRetraces) {
+                const std::uint64_t widened =
+                    window_start + kMinBenchmarkWindowRetraces;
+                std::cerr << "[benchmark] VI window span "
+                          << (window_end - window_start)
+                          << " retraces is below the "
+                          << kMinBenchmarkWindowRetraces
+                          << "-retrace floor; END widened from " << window_end
+                          << " to " << widened
+                          << ". A window this short may cover only boot, so"
+                             " treat its summary as reported, not trusted.\n";
+                window_end = widened;
+            }
+            if (window_end > 0u) {
+                state.benchmark_vi_start = window_start;
+                state.benchmark_vi_end = window_end;
+            }
+        }
+    }
     state.timeline = std::make_unique<galaxy::timing::RuntimeTimeline>(
         galaxy::timing::query_performance_counter_source());
     int positional_count = 0;
@@ -28634,6 +29084,54 @@ int wmain(int argc, wchar_t** argv) {
                 <<" query-total-us="<<state.native_mouse_query_ns/1000.0<<" query-max-us="<<state.native_mouse_query_max_ns/1000.0
                 <<" selected-to-store-total-us="<<state.native_mouse_selected_to_store_ns/1000.0
                 <<" selected-to-store-max-us="<<state.native_mouse_selected_to_store_max_ns/1000.0<<'\n';
+            // EFB peeks block the simulation thread on the render thread twice
+            // per call (pending-FIFO drain, then a frame-queue round-trip). The
+            // three numbers below are the only ones that say whether that
+            // dependency is negligible or dominant, because both existing peek
+            // phase timers require frame-cadence diagnostics to be enabled.
+            std::cerr<<"[gx-efb-peek-summary] count="<<state.efb_peek_count
+                <<" failures="<<state.efb_peek_failures
+                <<" blocked-total-us="<<state.efb_peek_ns/1000.0
+                <<" blocked-max-us="<<state.efb_peek_max_ns/1000.0
+                <<" blocked-mean-us="
+                <<(state.efb_peek_count!=0u
+                       ? (state.efb_peek_ns/1000.0)/state.efb_peek_count
+                       : 0.0)
+                <<" fifo-sync-total-us="<<state.efb_peek_sync_ns/1000.0
+                <<" round-trip-total-us="<<state.efb_peek_readback_ns/1000.0
+                <<" note=single-peek-costs-one-pending-fifo-drain-plus-one-frame-queue-round-trip\n";
+            std::cerr<<"[checkpoint-phase-summary] enabled="
+                <<(checkpoint_phase_timing_enabled() ? 1u : 0u)
+                <<" entries="
+                <<state.checkpoint_phase_entries
+                <<" total-us="<<state.checkpoint_phase_total_us
+                <<" mean-us="
+                <<(state.checkpoint_phase_entries!=0u
+                       ? static_cast<double>(state.checkpoint_phase_total_us)/
+                             static_cast<double>(state.checkpoint_phase_entries)
+                       : 0.0)
+                <<" scope=inclusive-wall-phase-invocations; nested spans may overlap; disabled means unmeasured\n";
+            // The checkpoint gate's own counters are maintained on the hot path with
+            // overflow-checked increments (checkpoint_gate.cpp:167-189) but were never
+            // printed anywhere outside the unit tests, so no recording could say how
+            // often each path runs. They are the multiplier A14-39 lacked and A14-40
+            // had to withdraw its estimate for: `full-scope-entries` is how often the
+            // expensive non-quiet path (validate_published_state + checked increments)
+            // runs, and `inline-scope-entries` is the cheap path that handles a
+            // checkpoint in generated code without entering the branch callback at all.
+            // Printing them costs nothing -- the values already exist.
+            {
+                const auto& gate_telemetry = state.checkpoint_gate.telemetry();
+                std::cerr<<"[checkpoint-gate-telemetry] activations="
+                    <<gate_telemetry.activations
+                    <<" full-scope-entries="<<gate_telemetry.full_scope_entries
+                    <<" max-full-depth="<<gate_telemetry.maximum_full_scope_depth
+                    <<" inline-scope-entries="<<gate_telemetry.inline_scope_entries
+                    <<" max-inline-depth="<<gate_telemetry.maximum_inline_scope_depth
+                    <<" transitions-to-full="<<gate_telemetry.transitions_to_full
+                    <<" transitions-to-inline="<<gate_telemetry.transitions_to_inline
+                    <<" note=full-scope-entries sizes the per-escalation diagnostic cost; inline entries never enter the branch callback\n";
+            }
             state.dump_native_input_anomalies(std::cerr);
             if (state.address_space != nullptr) {
                 galaxy::input::dump_native_hid_cadence_audit(
@@ -28658,6 +29156,31 @@ int wmain(int argc, wchar_t** argv) {
             }
             dump_frame_pe_wait_audit(state, std::cerr, "shutdown");
             dump_pending_vi_boundary_audit(state, std::cerr, "shutdown");
+            // Emit the checkpoint-timing block on the CLEAN exit path.
+            //
+            // Before this call, dump_checkpoint_timing was reachable only from a crash
+            // handler or from flag-gated paths: native_runtime.cpp:15940 (late-checkpoint
+            // path), :19561 (if (trace_main_frame_enabled())), and :30108/:30155 both
+            // inside wmain's terminal-diagnostics try block, whose catch prints "Terminal
+            // diagnostics failed". Nothing reached it on a normal run, so EVERY counter it
+            // prints was absent from every normal recording - not just one of them.
+            //
+            // Four independent reports converged on this, which is why the fix is one call
+            // rather than four: agent-6 (C0060) found [ai-dma-latch-contention] and
+            // [vi-deadline-latch-contention] computed at :3023-3033 with no guard around
+            // them yet absent from both retained logs; agent-12 reported seven more missing
+            // counters from the same body; agent-14 hit the same wall twice independently
+            // (a phase timer whose result is discarded below 1 ms, and the checkpoint
+            // gate's Telemetry, maintained with overflow-checked increments on the hottest
+            // path and read only by unit tests).
+            //
+            // All of these values are already computed, so this costs a few hundred bytes
+            // of stderr at shutdown and nothing at run time. Placement is deliberate: the
+            // two calls above emit [frame-pe-wait] and [pending-vi-boundary-audit], and
+            // both are present in BOTH retained recordings, which proves this lambda runs
+            // on a clean exit - so this call inherits a demonstrated-reachable site rather
+            // than a hoped-for one.
+            state.dump_checkpoint_timing(std::cerr);
         });
         if (state.deadline_broker != nullptr) {
             state.deadline_broker->stop();
@@ -28798,7 +29321,15 @@ int wmain(int argc, wchar_t** argv) {
             std::cerr << " actual-version=" << manifest->abi_version
                       << " actual-manifest-size=" << manifest->struct_size;
         }
-        std::cerr << '\n';
+        // The compiled modules are the only artifact that carries this version,
+        // and they are produced on the machine that runs them. A runtime
+        // replaced without recompiling them lands here on every launch, so name
+        // the remedy instead of leaving the operator with a bare exit code.
+        std::cerr << "\n[boot] The game and Home modules were built against a "
+                     "different galaxy/native_api.h than this runtime. Re-run "
+                     "Setup (or the launcher's recompile step) so "
+                     "RMGE01_game.dll and RMGE01_home_button.dll are rebuilt "
+                     "from the same source revision as NebulaRuntime.exe.\n";
         cleanup_module();
         return 5;
     }
@@ -28973,6 +29504,12 @@ int wmain(int argc, wchar_t** argv) {
         } else {
             std::cerr << " manifest=null\n";
         }
+        // Same remedy as the game-module ABI gate above: the sidecar is
+        // recompiled on this machine, so a runtime replaced on its own can
+        // never satisfy this check.
+        std::cerr << "[boot] Re-run Setup (or the launcher's recompile step) so "
+                     "RMGE01_home_button.dll is rebuilt from the same source "
+                     "revision as NebulaRuntime.exe.\n";
         cleanup_module();
         return 6;
     }
@@ -29693,6 +30230,39 @@ int wmain(int argc, wchar_t** argv) {
     state.runtime_boundary_self_counters.dump(std::cerr);
     dump_scene_nerve_owner(state, std::cerr);
     state.dump_lookup_cache_summary(std::cerr);
+
+    // One line, always emitted, reporting the guest's own 60 Hz timebase rate.
+    // This is the only place `vi_retrace_count` is printed unconditionally;
+    // every other site is event- or trace-gated, which made the guest's cadence
+    // unmeasurable from a recording. See the note at the `session_start` anchor.
+    {
+        const std::uint64_t session_us =
+            static_cast<std::uint64_t>(
+                std::chrono::duration_cast<std::chrono::microseconds>(
+                    std::chrono::steady_clock::now() - session_start)
+                    .count());
+        // Integer maths only, and guard the divide: a session short enough to
+        // truncate to zero microseconds would otherwise fault on shutdown.
+        // `vi_rate` is vi/second scaled by 1000, so `vi_rate / 1000` is the
+        // integer part and `(vi_rate % 1000) / 100` the first decimal. Derivation:
+        //   vi/s = vi_retrace_count * 1e6 / session_us
+        //   scaled by 1000  ->  * 1e9 / session_us
+        // session_us is at least 1 here, so the multiply is safe: it would need
+        // ~580,000 years at 60 VI/s to approach a 64-bit overflow.
+        const std::uint64_t vi_rate =
+            session_us == 0u
+                ? 0u
+                : (state.vi_retrace_count * 1'000'000'000ull +
+                   session_us / 2u) / session_us;
+        std::cout << "[vi-cadence] vi-retrace-count=" << state.vi_retrace_count
+                  << " session-us=" << session_us
+                  << " vi-per-second=" << (vi_rate / 1000u)
+                  << '.' << (vi_rate % 1000u) / 100u
+                  << " nominal-hz=60"
+                  << " expects=" << (session_us / 16667u)
+                  << '\n';
+    }
+
     const std::exception_ptr cleanup_failure = cleanup_module();
     const UINT exit_code = cleanup_failure == nullptr ? 0u : 9u;
     finish_process(exit_code);

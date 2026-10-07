@@ -103,16 +103,28 @@ bool rfi_uses_only_srr_pair() {
     return passed;
 }
 
+// The emitted continuations this fixture treats as statically translated.
+//
+// At namespace scope on purpose. It used to be a local `constexpr std::array`
+// inside `physical_rfi_aliases_bind_only_to_exact_static_continuations`, read by
+// the capture-less lambda `has_exact`. A lambda with no capture-default can only
+// name such a variable if it is not odr-used, which is an ODR subtlety MSVC
+// accepts and the pinned clang-cl (the compiler that actually builds this tree)
+// rejects with "variable 'translated' cannot be implicitly captured in a lambda
+// with no capture-default specified". A variable at namespace scope is reachable
+// from a capture-less lambda under every compiler, so hoisting it removes the
+// ambiguity without changing what the fixture tests.
+constexpr std::array kTranslatedContinuations{
+    0x004A8CD4u,
+    0x804A8CD4u,
+    0x90001000u,
+};
+
 bool physical_rfi_aliases_bind_only_to_exact_static_continuations() {
     constexpr std::uint32_t kMem1Size = 0x01800000u;
     constexpr std::uint32_t kMem2Size = 0x04000000u;
-    constexpr std::array translated{
-        0x004A8CD4u,
-        0x804A8CD4u,
-        0x90001000u,
-    };
     const auto has_exact = [](std::uint32_t address) {
-        for (const std::uint32_t candidate : translated) {
+        for (const std::uint32_t candidate : kTranslatedContinuations) {
             if (candidate == address) {
                 return true;
             }

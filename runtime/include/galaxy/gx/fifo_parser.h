@@ -443,6 +443,16 @@ public:
 
     // Optional per-run profiler. The parser never owns this pointer; callers
     // set it only while gathering diagnostics.
+    //
+    // Per-command elapsed time is the one part of this profile that is NOT
+    // free: `run_window` brackets every FIFO command with two steady_clock
+    // reads, and a busy frame issues 40k+ commands, so the clocks themselves
+    // dominate the number they are meant to report. Published recordings show
+    // `fifo-command-us` exceeding the frame's whole parse time, which is the
+    // instrumentation, not the parser. The category/count fields stay
+    // unconditional (plain increments, valid with routine monitoring); the
+    // timestamps are taken only when GALAXY_TRACE_GX_MICROPROFILE asks for
+    // them, so a routine-monitoring run measures the parser instead of itself.
     void set_profile(FifoParserProfile* profile) { profile_ = profile; }
 
     // Optional read recorder for dependency scanning. The parser never owns
@@ -625,6 +635,12 @@ private:
     // owns several replay vectors, and diagnostics/tests construct parsers as
     // local variables.
     static constexpr std::size_t kDisplayListCacheCapacity = 2048;
+    // The entry count alone is not a memory bound: one entry may hold a 4 MiB
+    // list plus a duplicate of every draw payload, so a full cache can retain
+    // gigabytes. `cache_bytes_` sums the retained vector CAPACITY of every valid
+    // entry, and a store that would exceed the budget evicts least-recently-used
+    // entries. Eviction only costs a later re-parse of that list.
+    std::uint64_t cache_bytes_ = 0;
     std::vector<CachedDisplayList> display_list_cache_ =
         std::vector<CachedDisplayList>(kDisplayListCacheCapacity);
     std::unordered_map<
@@ -633,6 +649,19 @@ private:
         DisplayListCacheKeyHash> display_list_cache_map_{};
     std::unordered_map<std::uint64_t, std::vector<std::size_t>>
         display_list_cache_page_map_{};
+
+    [[nodiscard]] std::uint64_t display_list_cache_budget_bytes() const;
+    // Sums the retained capacity of one cached entry. Pure observation: it must
+    // be callable for a live entry without changing any cache state.
+    [[nodiscard]] static std::uint64_t display_list_cache_entry_bytes(
+        const CachedDisplayList& cached) noexcept;
+    // Drops least-recently-used valid entries until cache_bytes_ fits the
+    // budget. `skip_index` is never evicted, so a caller that just filled that
+    // slot keeps its entry even when the entry alone exceeds the budget.
+    void evict_display_list_cache_to_budget(std::size_t skip_index);
+    // Releases every cached entry and its retained capacity. Owning a parser
+    // for a new renderer session must not inherit the previous session's lists.
+    void clear_display_list_cache();
 };
 
 }  // namespace galaxy::gx

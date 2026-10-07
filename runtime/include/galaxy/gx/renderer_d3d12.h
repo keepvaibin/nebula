@@ -90,17 +90,44 @@ struct SamplerTableKeyHasher {
 [[nodiscard]] SamplerTableKey make_sampler_table_key(
     const std::uint32_t keys[8], const RenderConfig& cfg) noexcept;
 
-// Device-free bookkeeping used by the renderer. reset() is legal only after
-// the owning frame slot's GPU fence completes; returned indices live for that
-// frame, never across a reset. No fallback on exhaustion or hash collision.
+// One cache describes one physical sampler heap. reset(config) starts a new
+// frame only after that heap's GPU fence completes. Unchanged tables survive;
+// every lookup pins its index for this frame, including pending draw batches.
+// At capacity, only a table not used this frame may be replaced. Thus history
+// cannot exhaust a legal frame, and no recorded draw's descriptors are changed.
+// A replacement reports created=true so the caller writes all eight samplers.
+// Configuration changes and unconditional reset invalidate all retained tables.
 class SamplerTableCache {
 public:
     struct Allocation { unsigned index; bool created; };
     [[nodiscard]] Allocation get_or_allocate(const SamplerTableKey& key);
-    void reset() noexcept { tables_.clear(); cursor_ = 8u; }
+    void reset(std::uint32_t config_key) noexcept {
+        if (config_key != config_key_ || frame_ == UINT64_MAX) {
+            reset();
+            config_key_ = config_key;
+        }
+        ++frame_;
+    }
+    // Unconditional clear for teardown paths, where the heap contents must not
+    // be assumed valid again.
+    void reset() noexcept {
+        tables_.clear();
+        cursor_ = 8u;
+        config_key_ = 0u;
+        frame_ = 0u;
+        eviction_cursor_ = 0u;
+    }
 private:
     std::unordered_map<SamplerTableKey, unsigned, SamplerTableKeyHasher> tables_;
     unsigned cursor_ = 8u;
+    std::uint32_t config_key_ = 0u;
+    static constexpr unsigned kDynamicTables = (kSamplerHeapSlots - 8u) / 8u;
+    // A bounded clock scan avoids repeatedly scanning all previously pinned
+    // entries for each miss. Reverse keys allow exception-safe map replacement.
+    std::array<SamplerTableKey, kDynamicTables> slot_keys_{};
+    std::array<std::uint64_t, kDynamicTables> slot_frames_{};
+    std::uint64_t frame_ = 0u;
+    unsigned eviction_cursor_ = 0u;
 };
 inline constexpr unsigned kEfbWidth = 640;
 inline constexpr unsigned kEfbHeight = 528;
@@ -191,6 +218,37 @@ public:
         ImmutableUploadToken& token);
     [[nodiscard]] std::uint64_t reused_bytes() const { return reused_bytes_; }
     [[nodiscard]] std::uint64_t copied_bytes() const { return copied_bytes_; }
+    // Number of upload_immutable() calls this frame. `reused_bytes()` and
+    // `copied_bytes()` are only meaningful *relative to this count*: both are
+    // zero for a frame in which the immutable path was never entered, which is
+    // indistinguishable on the timing line from a frame in which it was entered
+    // and classified every byte as a copy. Retained recordings showed
+    // `decoded-vtx-cache-hits=235` with both byte counters at 0 on the same frame,
+    // and the call count is the one field that separates "the reuse path is not
+    // reached" from "the counters are not observed". The increment is one add on
+    // a path that already does a memcpy or a map lookup, so it is not worth
+    // gating behind a trace flag of its own.
+    [[nodiscard]] std::uint64_t immutable_upload_calls() const {
+        return immutable_upload_calls_;
+    }
+
+    // Peak bytes used within a single frame segment, and the segment size. These
+    // decide whether the ring's configured size is real resident memory or just
+    // reserved address space. The rings are D3D12_HEAP_TYPE_UPLOAD
+    // CreateCommittedResource buffers that are mapped for the life of the
+    // process, so the *reservation* is bytes_per_frame * frames_in_flight --
+    // 240 MiB by default. But a mapped upload heap only has physical pages
+    // committed for the parts that were actually written, so the physical cost
+    // tracks the working set (peak cursor) rather than the reservation. Without
+    // this number, `bytes_per_frame * frames_in_flight` is an upper bound that
+    // reads like a measurement, and on the low-end target that difference decides
+    // whether trimming the defaults is worth anything. Exhaustion is fatal and
+    // loud, so the floor for any reduction is `peak_bytes_per_frame()`, not a
+    // guess.
+    [[nodiscard]] std::size_t peak_bytes_per_frame() const {
+        return peak_bytes_per_frame_;
+    }
+    [[nodiscard]] std::size_t bytes_per_frame() const { return bytes_per_frame_; }
 
     [[nodiscard]] ID3D12Resource* resource() const { return buffer_.Get(); }
     [[nodiscard]] D3D12_GPU_VIRTUAL_ADDRESS gpu_base() const { return gpu_base_; }
@@ -212,6 +270,8 @@ private:
     std::vector<std::uint64_t> slot_generations_;
     std::uint64_t reused_bytes_ = 0;
     std::uint64_t copied_bytes_ = 0;
+    std::uint64_t immutable_upload_calls_ = 0;
+    std::size_t peak_bytes_per_frame_ = 0;
 };
 
 // Shader-visible descriptor allocator with the same per-frame segmentation.
@@ -380,6 +440,23 @@ public:
     [[nodiscard]] UploadRing& matrix_ring() { return matrix_ring_; }
     [[nodiscard]] DescriptorRing& srv_ring() { return srv_ring_; }
     [[nodiscard]] unsigned frame_slot() const { return frame_slot_; }
+    // Live bytes held by the EFB-copy destination cache, in SCALED bytes (each
+    // destination is allocated at the internal EFB extent, so its `bytes` grows
+    // with efb_scale^2 while the 192 MiB budget stays fixed). Maintained but
+    // previously unreported, which left the one resolution-scaled GPU pool that
+    // is not a render target invisible to every recording: this runtime has three
+    // such pools (this one, the decoded texture map, and the fixed render
+    // targets) and only the fixed ones were observable. Report it against its
+    // budget so a run can say whether it is saturating rather than leaving the
+    // largest resolution-dependent allocation unmeasured.
+    [[nodiscard]] std::uint64_t efb_copy_dest_bytes() const {
+        return efb_copy_dests_bytes_;
+    }
+    // The copy-destination byte budget this session is running with (192 MiB
+    // default, GALAXY_EFB_COPY_DEST_BUDGET_MB overridable). Reported next to the
+    // live bytes so a recording states whether the pool is saturating rather than
+    // requiring the reader to know the default.
+    [[nodiscard]] static std::uint64_t efb_copy_dest_budget_bytes();
     [[nodiscard]] std::uint64_t last_latency_wait_us() const {
         return last_latency_wait_us_;
     }
@@ -549,9 +626,10 @@ private:
     D3D12_GPU_DESCRIPTOR_HANDLE default_sampler_table_{};
     std::array<std::uint32_t, kFramesInFlight> default_sampler_config_keys_{};
     std::array<bool, kFramesInFlight> default_sampler_valid_{};
-    // The active slot is reset at begin_frame after its fence. Older slots'
-    // descriptors remain untouched while their submitted draws are in flight.
-    SamplerTableCache sampler_tables_;
+    // Each cache describes tables actually written in its physical heap.
+    // Configuration invalidation happens only after that slot's fence; tables
+    // retained in another heap cannot establish a hit for the active heap.
+    std::array<SamplerTableCache, kFramesInFlight> sampler_tables_;
 
     UploadRing vertex_ring_;
     UploadRing index_ring_;
@@ -567,7 +645,11 @@ private:
     std::uint64_t last_timestamp_read_us_ = 0;
     std::uint64_t last_begin_reset_us_ = 0;
 
-    // Redundant-state elision for draw().
+    // Redundant-state elision for draw(). Every one of these is re-armed by
+    // invalidate_gx_bindings(), which begin_frame() calls after the upload rings
+    // for the new frame slot have been rewound and before any list is recorded.
+    // The vertex view is part of the set: its GPU VA comes from the per-frame
+    // vertex ring, so a stale entry can never survive that rewind.
     ID3D12PipelineState* bound_pipeline_ = nullptr;
     D3D12_GPU_VIRTUAL_ADDRESS bound_vs_constants_ = 0;
     D3D12_GPU_VIRTUAL_ADDRESS bound_ps_constants_ = 0;
@@ -576,6 +658,13 @@ private:
     D3D12_GPU_VIRTUAL_ADDRESS bound_matrix_palette_ = 0;
     D3D12_PRIMITIVE_TOPOLOGY bound_topology_ =
         D3D_PRIMITIVE_TOPOLOGY_UNDEFINED;
+    D3D12_VERTEX_BUFFER_VIEW bound_vertex_view_{};
+    bool bound_vertex_view_valid_ = false;
+    // The index view is a CPU-side 20-byte descriptor whose BufferLocation comes
+    // from the per-frame index ring, so like the vertex view it must be re-armed
+    // by invalidate_gx_bindings() after the ring for the new slot is rewound.
+    D3D12_INDEX_BUFFER_VIEW bound_index_view_{};
+    bool bound_index_view_valid_ = false;
     D3D12_RECT bound_scissor_{};
     // Successful nonempty GX input that produced the currently bound scissor.
     D3D12_RECT bound_scissor_input_{};
@@ -656,8 +745,43 @@ private:
         UINT height = 0;
         D3D12_CPU_DESCRIPTOR_HANDLE rtv{};
         bool rtv_valid = false;
+        // Last copy that used this destination, for the bound below. A copy
+        // destination is a pure function of its key, so dropping an entry can
+        // only cost a later re-creation; it can never change a presented pixel.
+        std::uint64_t last_used = 0;
+        // Resident bytes of `texture`, for the byte budget below.
+        std::uint64_t bytes = 0;
     };
+    // BOUNDED. This map holds one committed D3D12 texture per destination key.
+    // Each is that copy's SCALED destination extent at kEfbColorFormat (RGBA8),
+    // so the size varies with both the copy's logical extent and the internal
+    // scale. At the full 640x456 EFB extent: 1.11 MB at 1x, 17.81 MB at 4x,
+    // 40.08 MB at 6x. (An earlier note here said "~5 MiB at 4x and ~11 MiB at
+    // 6x", which understates a full-extent entry by ~3.5x — enough to mislead
+    // anyone choosing the default budget downward.) The map used to be unbounded
+    // — only a failed allocation (and full shutdown) ever removed an entry — so
+    // every distinct (addr, format, depth, bloom) the game had ever copied to
+    // stayed resident for the life of the process.
+    //
+    // Budgeted in BYTES, not entries: the per-entry cost varies with the scale
+    // AND with the copy extent, so an entry count cannot bound residency. The
+    // accounting charges the driver's own `GetResourceAllocationInfo` size rather
+    // than a computed w*h*bpp, so it follows the resource if the format changes.
+    // The default is deliberately well above any plausible per-scene working set
+    // (SMG double-buffers a handful of XFBs across a couple of formats plus one
+    // bloom workspace), so this should not thrash a legitimate set; it stops
+    // unbounded accumulation across scene transitions. Override with
+    // GALAXY_EFB_COPY_DEST_BUDGET_MB; 0 disables the bound.
+    //
+    // Note for the low-end target: the adapter there reports `vram-mb=128`, but on
+    // Intel integrated graphics that value is a FICTITIOUS compatibility constant
+    // emitted for applications that assume a discrete GPU — those parts have no
+    // separate memory bank, so a DEFAULT-heap texture is system memory either way.
+    // The reason to bound this map is that it was unbounded, not that it
+    // oversubscribes a 128 MB pool; there is no such pool.
     std::unordered_map<std::uint64_t, EfbCopyDest> efb_copy_dests_;
+    std::uint64_t efb_copy_dests_tick_ = 0;
+    std::uint64_t efb_copy_dests_bytes_ = 0;
     using RetiredResourceList =
         std::vector<Microsoft::WRL::ComPtr<ID3D12Resource>>;
     std::array<RetiredResourceList, kFramesInFlight>

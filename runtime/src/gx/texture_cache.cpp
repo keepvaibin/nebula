@@ -49,6 +49,42 @@ static constexpr UINT64 kUploadArenaChunkBytes = 16ull << 20;
 static constexpr std::uint64_t kContentCacheBudgetBytes = 64ull << 20;
 static constexpr std::size_t kContentCacheMaxEntries = 4096u;
 
+// Byte bound for the decoded GPU texture map (`entries_`), which previously had
+// none. Measured on the target low-end machine: the process working set climbs
+// 207 MB -> 6 GB across one 6-minute session and is still rising at exit, while
+// the new-frame rate decays 60 Hz -> ~5 Hz over the same interval. The decoded
+// map is the only runtime cache with no size bound and no byte bound, and its
+// only ceiling is `kSrvHeapCapacity`, reached by THROWING rather than evicting.
+//
+// The budget is sized in guest source bytes, matching what `guest_byte_size`
+// and `decoded_entry_guest_bytes()` already report, so the number the
+// [gx-texture-cache] line prints is directly comparable to this constant. The
+// resident GPU cost is that footprint scaled by the internal EFB scale, so this
+// is a conservative lower bound on real VRAM -- deliberately: the aim is to
+// bound unbounded growth, not to model the allocator. Overridable for testing.
+static constexpr std::uint64_t kDecodedResidentBudgetDefaultBytes = 64ull << 20;
+
+std::uint64_t decoded_resident_budget_bytes() {
+    static const std::uint64_t budget = [] {
+        char value[32]{};
+        std::size_t length = 0;
+        if (getenv_s(
+                &length, value, sizeof(value),
+                "GALAXY_GX_DECODED_TEXTURE_BUDGET_MB") != 0 ||
+            length <= 1u) {
+            return kDecodedResidentBudgetDefaultBytes;
+        }
+        const unsigned long mb = std::strtoul(value, nullptr, 10);
+        // 0 disables the bound, preserving the previous unbounded behaviour for
+        // anyone who needs to reproduce it.
+        if (mb == 0ul) {
+            return std::numeric_limits<std::uint64_t>::max();
+        }
+        return static_cast<std::uint64_t>(mb) << 20;
+    }();
+    return budget;
+}
+
 bool decoded_content_cache_enabled() {
     static const bool enabled = [] {
         char value[16]{};
@@ -1036,6 +1072,113 @@ bool TextureCache::preallocate_upload_arenas(unsigned frames_in_flight) {
     }
 }
 
+TextureCache::DecodedMapStats TextureCache::decoded_map_stats() const noexcept {
+    DecodedMapStats stats;
+    stats.resident_bytes = decoded_resident_bytes_;
+    stats.budget_bytes = decoded_resident_budget_bytes();
+    stats.evicted_bytes = decoded_evicted_bytes_;
+    stats.evicted_entries = decoded_evicted_entries_;
+    stats.entries = entries_.size();
+    stats.lru_entries = decoded_lru_.size();
+    return stats;
+}
+
+void TextureCache::decoded_lru_touch(const Key& key) {
+    const auto pos = decoded_lru_pos_.find(key);
+    if (pos == decoded_lru_pos_.end()) {
+        return;
+    }
+    decoded_lru_.splice(decoded_lru_.begin(), decoded_lru_, pos->second);
+    pos->second = decoded_lru_.begin();
+}
+
+void TextureCache::decoded_lru_forget(const Key& key) {
+    const auto pos = decoded_lru_pos_.find(key);
+    if (pos == decoded_lru_pos_.end()) {
+        return;
+    }
+    decoded_lru_.erase(pos->second);
+    decoded_lru_pos_.erase(pos);
+}
+
+void TextureCache::decoded_lru_release(const Key& key, Entry& entry) {
+    // Single removal path for the decoded map. Keeps the resident-byte total and
+    // the LRU exactly consistent with `entries_`; every explicit removal must go
+    // through here, because a total that drifts high would make the eviction
+    // loop evict textures that are still within budget.
+    decoded_resident_bytes_ -= std::min<std::uint64_t>(
+        decoded_resident_bytes_, entry.handle.guest_byte_size);
+    decoded_lru_forget(key);
+}
+
+void TextureCache::decoded_lru_track(const Key& key, std::uint64_t guest_bytes) {
+    // One insertion path, mirroring decoded_lru_release. Callers have already
+    // inserted into `entries_`; this is the only place that adds to the LRU or
+    // the resident total.
+    //
+    // `decoded_lru_pos_[key] = ...` overwrites rather than inserts when the key
+    // is already present, which would leave the previous list node in
+    // `decoded_lru_` with nothing pointing at it: an unreachable node that still
+    // counts toward `lru_entries` and can be selected as an eviction victim. That
+    // cannot happen given the current call sites (both push only after a failed
+    // `entries_.find`), but it is silent corruption if it ever does, so handle it
+    // explicitly instead of relying on the invariant holding forever.
+    const auto existing = decoded_lru_pos_.find(key);
+    if (existing != decoded_lru_pos_.end()) {
+        decoded_lru_.erase(existing->second);
+        decoded_lru_pos_.erase(existing);
+    }
+    decoded_lru_.push_front(key);
+    decoded_lru_pos_[key] = decoded_lru_.begin();
+    decoded_resident_bytes_ += guest_bytes;
+    decoded_lru_evict_to_budget();
+}
+
+void TextureCache::decoded_lru_evict_to_budget() {
+    const std::uint64_t budget = decoded_resident_budget_bytes();
+    if (decoded_resident_bytes_ <= budget) {
+        return;
+    }
+    // Retire rather than destroy: `retire()` parks the resource in the current
+    // frame slot's list, which is cleared only once that slot's fence has been
+    // waited on, so an already-submitted command list that still references this
+    // texture stays valid. Its CPU SRV slot is reclaimed at that same fence;
+    // live plus in-flight retired descriptors must fit kSrvHeapCapacity.
+    while (!decoded_lru_.empty() &&
+           decoded_resident_bytes_ > budget) {
+        const Key victim = decoded_lru_.back();
+        const auto it = entries_.find(victim);
+        if (it == entries_.end()) {
+            decoded_lru_.pop_back();
+            decoded_lru_pos_.erase(victim);
+            continue;
+        }
+        const std::uint64_t victim_bytes = it->second.handle.guest_byte_size;
+        decoded_evicted_bytes_ += victim_bytes;
+        ++decoded_evicted_entries_;
+        // Route the removal through the same helper the explicit invalidation
+        // paths use, rather than adjusting the total and popping the LRU inline
+        // here. Two implementations of "remove an entry" is exactly how the byte
+        // total and the LRU drift apart, and a total that drifts high makes this
+        // loop evict textures that are still within budget.
+        //
+        // `decoded_guest_envelope_` is deliberately left alone: it is a monotonic
+        // over-approximation (it only ever widens), so an evicted range keeps the
+        // envelope conservative. The cost is that a later scan may test as "may
+        // overlap" when it cannot, which loses a fast path and never returns a
+        // stale texture. It is rebuilt whenever `entries_` empties, so it cannot
+        // drift upward for the whole session.
+        decoded_lru_release(victim, it->second);
+        // Retired, not destroyed: `retire()` parks the resource in the current
+        // frame slot's list, which is cleared only after that slot's fence has
+        // been waited on, so an already-submitted command list that still
+        // references this texture stays valid. The SRV index also remains valid
+        // until that slot's next begin_frame, when it returns to the free list.
+        retire(std::move(it->second));
+        entries_.erase(it);
+    }
+}
+
 void TextureCache::retire(Entry&& entry) {
     if (!entry.texture) {
         return;
@@ -1073,10 +1216,38 @@ void TextureCache::shutdown() {
                   << " evicted-entries=" << content_evicted_entries_
                   << " evicted-bytes=" << content_evicted_bytes_
                   << " live-entries=" << content_entries_.size()
-                  << " live-bytes=" << content_bytes_ << '\n';
+                  << " live-bytes=" << content_bytes_
+                  // The two fields above describe the CPU-side content cache,
+                  // which IS bounded (64 MB + 4096 entries + LRU). These two
+                  // describe the decoded GPU-texture map (`entries_`) instead,
+                  // which is NOT bounded by anything except the SRV heap
+                  // capacity throwing. Both are reported on one line on purpose:
+                  // `live-entries` alone was ambiguous and left GPU residency
+                  // unmeasurable, which is the number needed to decide whether
+                  // that map requires a budget.
+                  << " decoded-map-entries=" << entries_.size()
+                  << " decoded-map-guest-bytes=" << decoded_entry_guest_bytes()
+                  // Residency of the decoded map against its bound, and what the
+                  // bound has cost. `decoded-map-guest-bytes` should now track
+                  // `decoded-map-resident-bytes` closely and stop at
+                  // `decoded-map-budget-bytes`; a growing gap between
+                  // `evicted-bytes` and a flat resident total is the expected
+                  // steady state once the route's texture set exceeds the budget.
+                  << " decoded-map-resident-bytes=" << decoded_resident_bytes_
+                  << " decoded-map-budget-bytes="
+                  << decoded_resident_budget_bytes()
+                  << " decoded-map-evicted-entries=" << decoded_evicted_entries_
+                  << " decoded-map-evicted-bytes=" << decoded_evicted_bytes_
+                  << " decoded-map-lru-entries=" << decoded_lru_.size()
+                  << '\n';
     }
     entries_.clear();
     decoded_guest_envelope_.clear();
+    decoded_lru_.clear();
+    decoded_lru_pos_.clear();
+    decoded_resident_bytes_ = 0;
+    decoded_evicted_bytes_ = 0;
+    decoded_evicted_entries_ = 0;
     content_entries_.clear();
     content_lru_.clear();
     content_bytes_ = 0;
@@ -1247,6 +1418,7 @@ bool TextureCache::load_tlut(
                 src_ptr + (begin - dest_byte_offset), end - begin) != 0;
         }
         if (changed) {
+            decoded_lru_release(it->first, it->second);
             retire(std::move(it->second));
             it = entries_.erase(it);
         } else {
@@ -1334,6 +1506,7 @@ bool TextureCache::register_efb_copy(
         const std::uint64_t entry_end =
             entry_begin + it->second.handle.guest_byte_size;
         if (overlaps(new_begin, new_end, entry_begin, entry_end)) {
+            decoded_lru_release(it->first, it->second);
             retire(std::move(it->second));
             it = entries_.erase(it);
             evicted_overlap = true;
@@ -1454,6 +1627,9 @@ void TextureCache::invalidate_all() {
     }
     entries_.clear();
     decoded_guest_envelope_.clear();
+    decoded_lru_.clear();
+    decoded_lru_pos_.clear();
+    decoded_resident_bytes_ = 0;
     // EFB aliases are NOT cleared here — their content lives on the GPU.
     // Retired SRV slots return to the free list after their frame-slot fence.
 }
@@ -1510,6 +1686,7 @@ std::size_t TextureCache::invalidate_guest_ranges(
                           << static_cast<unsigned>(it->first.generated_mips)
                           << '\n';
             }
+            decoded_lru_release(it->first, it->second);
             retire(std::move(it->second));
             it = entries_.erase(it);
             ++evicted;
@@ -1664,6 +1841,7 @@ TextureHandle TextureCache::get(
     {
         const auto it = entries_.find(key);
         if (it != entries_.end()) {
+            decoded_lru_touch(key);
             return it->second.handle;
         }
     }
@@ -1780,6 +1958,7 @@ TextureHandle TextureCache::get(
                 if (entries_.empty()) decoded_guest_envelope_.clear();
                 decoded_guest_envelope_.include(image.guest_addr, total_guest_size);
                 entries_.emplace(key, std::move(entry));
+                decoded_lru_track(key, total_guest_size);
                 return handle;
             }
         }
@@ -1872,7 +2051,9 @@ TextureHandle TextureCache::get(
                 dst_h);
         }
     }
-    const auto decode_end = std::chrono::steady_clock::now();
+    const auto decode_end = trace_stalls
+        ? std::chrono::steady_clock::now()
+        : std::chrono::steady_clock::time_point{};
 
     // 5. Upload to D3D12: one staging buffer holding every level at a
     // 512-aligned placed footprint (row pitch 256-aligned) → DEFAULT-heap
@@ -1940,7 +2121,9 @@ TextureHandle TextureCache::get(
             }
         }
     }
-    const auto staging_end = std::chrono::steady_clock::now();
+    const auto staging_end = trace_stalls
+        ? std::chrono::steady_clock::now()
+        : std::chrono::steady_clock::time_point{};
 
     ComPtr<ID3D12Resource> resource;
     {
@@ -1961,7 +2144,9 @@ TextureHandle TextureCache::get(
             nullptr, IID_PPV_ARGS(&resource)),
             "create default texture");
     }
-    const auto resource_end = std::chrono::steady_clock::now();
+    const auto resource_end = trace_stalls
+        ? std::chrono::steady_clock::now()
+        : std::chrono::steady_clock::time_point{};
 
     for (unsigned l = 0; l < levels; ++l) {
         const std::uint32_t lw = std::max<std::uint32_t>(1u, w >> l);
@@ -2008,7 +2193,9 @@ TextureHandle TextureCache::get(
     cpu.ptr += static_cast<SIZE_T>(srv_idx) * increment;
 
     device_->CreateShaderResourceView(resource.Get(), &srv_desc, cpu);
-    const auto upload_record_end = std::chrono::steady_clock::now();
+    const auto upload_record_end = trace_stalls
+        ? std::chrono::steady_clock::now()
+        : std::chrono::steady_clock::time_point{};
 
     const auto entry_build_start = trace_stalls
         ? std::chrono::steady_clock::now()
@@ -2114,6 +2301,7 @@ TextureHandle TextureCache::get(
     if (entries_.empty()) decoded_guest_envelope_.clear();
     decoded_guest_envelope_.include(image.guest_addr, total_guest_size);
     entries_.emplace(key, std::move(entry));
+    decoded_lru_track(key, total_guest_size);
     if (content_key.has_value()) {
         ++content_decoded_misses_;
         // The key lives in both the map and LRU list; count both copies.

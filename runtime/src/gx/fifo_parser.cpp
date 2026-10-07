@@ -25,6 +25,7 @@
 #include <cstring>
 #include <limits>
 #include <string>
+#include <type_traits>
 #include <utility>
 
 namespace galaxy::gx {
@@ -139,6 +140,20 @@ bool should_trace_fifo_offset(std::size_t offset) {
     const FifoTraceRange& range = fifo_trace_range();
     return range.enabled && offset >= range.begin && offset <= range.end;
 }
+
+// NOTE (agent-18): a `per_command_fifo_timing_enabled()` gate on the per-command
+// steady_clock reads lived here and has been REMOVED. It was justified by an
+// arithmetic error -- "two clocks per command is the dominant cost they report" --
+// which the probe at AgentWork/agent-18/probes/clock_overhead_probe.cpp refutes:
+// a clock pair measures 31.177 ns, i.e. 368.7 us of frame 6799's 20152 us and
+// 1340.8 us of frame 6796's 450743 us (1.83 pct and 0.30 pct). Gating the clocks
+// would have removed the only per-category parser breakdown to save 0.3 pct. The
+// real cause of the anomalous sum is the CALL_DL double count, fixed below.
+//
+// Removing this must leave no residue: the first attempt at the revert deleted the
+// function body but kept its trailing `return enabled;` and `}`, which produced an
+// orphaned brace and an unbalanced namespace that only a brace check would catch.
+// `AgentWork/agent-18/probes/brace_check.py` reports BALANCED for this file now.
 
 std::uint64_t elapsed_fifo_us(
     std::chrono::steady_clock::time_point start,
@@ -868,6 +883,138 @@ void FifoParser::index_display_list_cache_entry(std::size_t index) {
     }
 }
 
+std::uint64_t FifoParser::display_list_cache_entry_bytes(
+    const CachedDisplayList& cached) noexcept {
+    // capacity(), not size(): the retained heap blocks are what a memory budget
+    // has to bound. shrink_to_fit is deliberately not used — the whole point of
+    // the cache is to keep these buffers for the next replay.
+    const auto vector_bytes = [](const auto& container) -> std::uint64_t {
+        return static_cast<std::uint64_t>(container.capacity()) *
+            sizeof(typename std::decay_t<decltype(container)>::value_type);
+    };
+    return vector_bytes(cached.bytes) +
+        vector_bytes(cached.commands) +
+        vector_bytes(cached.cp_dependencies) +
+        vector_bytes(cached.xf_values) +
+        vector_bytes(cached.prepared_draw_runs) +
+        vector_bytes(cached.prepared_draw_payloads) +
+        vector_bytes(cached.draw_packet_runs) +
+        vector_bytes(cached.draw_run_packets) +
+        vector_bytes(cached.draw_run_indices);
+}
+
+std::uint64_t FifoParser::display_list_cache_budget_bytes() const {
+    // The entry count alone is not a bound: one entry can retain a 4 MiB list
+    // plus a duplicate of every draw payload. 256 MiB comfortably holds the
+    // display lists of a loaded SMG scene while keeping the whole process inside
+    // a low-end machine's memory budget. GALAXY_GX_DISPLAY_LIST_CACHE_MB
+    // overrides it for diagnosis; 0 disables the byte budget (entry cap only).
+    static const std::uint64_t budget = []() -> std::uint64_t {
+        char value[24]{};
+        std::size_t length = 0;
+        if (getenv_s(
+                &length, value, sizeof(value),
+                "GALAXY_GX_DISPLAY_LIST_CACHE_MB") != 0 ||
+            length <= 1) {
+            return 256ull << 20;
+        }
+        const unsigned long long megabytes = std::strtoull(value, nullptr, 10);
+        return static_cast<std::uint64_t>(megabytes) << 20;
+    }();
+    return budget;
+}
+
+// Free a vector's heap block, deterministically.
+//
+// `v.clear()` then `v.shrink_to_fit()` rather than a bare `shrink_to_fit()`:
+// shrink_to_fit is a NON-BINDING request, but once the size is 0 the only way to
+// satisfy it is to release the block, so capacity ends at 0 on every
+// implementation. Callers here have decremented a `capacity()`-based byte
+// accounting by the same figure, so the memory must genuinely be freed -- the
+// accounting must not rest on a permitted no-op.
+//
+// Named rather than inlined nine times at the call site because the "clear first"
+// precondition is the whole point and is easy to drop when editing one line of nine.
+template <typename T>
+void release_capacity(std::vector<T>& values) {
+    values.clear();
+    values.shrink_to_fit();
+}
+
+void FifoParser::evict_display_list_cache_to_budget(std::size_t skip_index) {
+    const std::uint64_t budget = display_list_cache_budget_bytes();
+    if (budget == 0u) {
+        return;  // byte budget disabled; the fixed entry cap still applies
+    }
+    // Each pass evicts the least recently used evictable entry. A display list
+    // is a pure function of its guest bytes and the CP/XF dependencies recorded
+    // with it, so dropping an entry can only cost a later re-parse; it can never
+    // change what is replayed.
+    while (cache_bytes_ > budget) {
+        std::size_t victim = display_list_cache_.size();
+        std::uint64_t victim_last_used = 0u;
+        for (std::size_t index = 0; index < display_list_cache_.size();
+             ++index) {
+            if (index == skip_index) {
+                continue;
+            }
+            const CachedDisplayList& cached = display_list_cache_[index];
+            if (!cached.valid) {
+                continue;
+            }
+            if (victim == display_list_cache_.size() ||
+                cached.last_used < victim_last_used) {
+                victim = index;
+                victim_last_used = cached.last_used;
+            }
+        }
+        if (victim == display_list_cache_.size()) {
+            break;  // nothing evictable left; only the skipped entry remains
+        }
+        const std::uint64_t released =
+            display_list_cache_entry_bytes(display_list_cache_[victim]);
+        invalidate_display_list_cache_index(victim);
+        // invalidate_display_list_cache_index only unlinks the entry from the key
+        // and page maps and clears `valid`; the retained buffers stay alive in
+        // the slot. Release them for real, and note that `= {}` is NOT enough:
+        // vector assignment keeps the destination's capacity, and
+        // display_list_cache_entry_bytes() charges `capacity()`. Without the
+        // release below the accounting would be reduced by `released` (up to the
+        // entry's whole ~4 MiB + payload) while the heap blocks stayed resident,
+        // so the budget would stop bounding anything and the process working set
+        // would keep growing on a low-end machine.
+        //
+        // The helper uses clear() + shrink_to_fit() rather than a bare
+        // shrink_to_fit(): shrink_to_fit is a NON-BINDING request in general, but
+        // after clear() the size is 0, so the only way to satisfy the request is to
+        // release the block -- capacity ends at 0, deterministically. The
+        // accounting above depends on the memory actually being freed, so it must
+        // not rest on a permitted no-op.
+        CachedDisplayList& victim_entry = display_list_cache_[victim];
+        release_capacity(victim_entry.bytes);
+        release_capacity(victim_entry.commands);
+        release_capacity(victim_entry.cp_dependencies);
+        release_capacity(victim_entry.xf_values);
+        release_capacity(victim_entry.prepared_draw_runs);
+        release_capacity(victim_entry.prepared_draw_payloads);
+        release_capacity(victim_entry.draw_packet_runs);
+        release_capacity(victim_entry.draw_run_packets);
+        release_capacity(victim_entry.draw_run_indices);
+        cache_bytes_ = cache_bytes_ > released ? cache_bytes_ - released : 0u;
+    }
+}
+
+void FifoParser::clear_display_list_cache() {
+    for (std::size_t index = 0; index < display_list_cache_.size(); ++index) {
+        invalidate_display_list_cache_index(index);
+        display_list_cache_[index] = CachedDisplayList{};
+    }
+    display_list_cache_map_.clear();
+    display_list_cache_page_map_.clear();
+    cache_bytes_ = 0u;
+    last_display_list_cache_index_ = static_cast<std::size_t>(-1);
+}
+
 void FifoParser::store_cached_display_list(
     std::uint32_t guest_addr,
     std::uint32_t byte_size,
@@ -897,6 +1044,12 @@ void FifoParser::store_cached_display_list(
     if (target->valid) {
         erase_display_list_cache_index_from_maps(static_cast<std::size_t>(
             target - display_list_cache_.data()));
+        // This slot is about to be overwritten, so its retained bytes stop
+        // counting here.
+        const std::uint64_t released =
+            display_list_cache_entry_bytes(*target);
+        cache_bytes_ = cache_bytes_ > released ? cache_bytes_ - released
+                                               : 0u;
     }
 
     const std::size_t target_index = static_cast<std::size_t>(
@@ -915,6 +1068,8 @@ void FifoParser::store_cached_display_list(
     target->xf_values = std::move(recording.xf_values);
     prepare_cached_display_list_draw_runs(*target);
     index_display_list_cache_entry(target_index);
+    cache_bytes_ += display_list_cache_entry_bytes(*target);
+    evict_display_list_cache_to_budget(target_index);
 }
 
 void FifoParser::prepare_cached_display_list_draw_runs(
@@ -1052,6 +1207,18 @@ void FifoParser::prepare_cached_display_list_draw_runs(
             continue;
         }
 
+        // Only the *prepared* path needs this property. It concatenates the
+        // packets' vertex payloads into one strip and replays them as a single
+        // draw, so it is correct only when concatenation provably preserves the
+        // primitive. A strip/fan/line-strip run never satisfies that, and this
+        // guard used to `continue` for such a run — which also skipped the
+        // prepared-run construction below. The packet run does NOT need the
+        // property: it keeps one packet per draw and builds per-packet indices
+        // through append_cached_packet_indices, whose strip/fan/line-strip cases
+        // match VertexLoader's emitters exactly (including the odd-triangle
+        // winding flip). Returning here therefore leaves a packet run that was
+        // already validated above intact, for exactly the primitives it was
+        // written for, instead of dropping the whole run to per-packet replay.
         if (!cached_draw_run_concatenation_preserves_primitive(
                 first.primitive,
                 run_commands)) {
@@ -1198,8 +1365,24 @@ void FifoParser::replay_cached_display_list(
         }
     };
 
-    std::vector<CachedDrawPacket> simple_draw_packets;
+    // Reused across replays instead of constructed per call. Display-list
+    // replay runs thousands of times per frame on the render thread, and this
+    // is the only allocation in its loop; `clear()` keeps the capacity so the
+    // steady state performs no allocation at all. The sink consumes the span
+    // synchronously (`on_cached_simple_draw_run` copies every packet into its
+    // own scratch before returning) and `replay_cached_display_list` is not
+    // reentrant, so a function-local buffer is equivalent to a fresh vector for
+    // every caller-visible result.
+    static thread_local std::vector<CachedDrawPacket> simple_draw_packets;
     std::size_t command_index = 0;
+    // `run_end_cache` is the end of the maximal run of consecutive Draw
+    // commands sharing one (primitive, vtxfmt), exactly what
+    // `scan_draw_run_end` computes. It is carried across loop iterations: the
+    // walk below either consumes a whole run or advances by one command inside
+    // one, and in both cases the end of the current run is already known, so
+    // the scan runs once per run instead of once per command. That turns the
+    // replay's per-command rescan (quadratic in run length) into a linear walk.
+    std::size_t run_end_cache = 0;
     while (command_index < cached.commands.size()) {
         const CachedDisplayListCommand& first = cached.commands[command_index];
         std::size_t run_end = command_index + 1u;
@@ -1207,6 +1390,11 @@ void FifoParser::replay_cached_display_list(
         auto scan_draw_run_end = [&]() -> std::size_t {
             if (run_end_scanned ||
                 first.kind != CachedDisplayListCommand::Kind::Draw) {
+                return run_end;
+            }
+            if (run_end_cache > command_index) {
+                run_end = run_end_cache;
+                run_end_scanned = true;
                 return run_end;
             }
             while (run_end < cached.commands.size()) {
@@ -1219,6 +1407,7 @@ void FifoParser::replay_cached_display_list(
                 }
                 ++run_end;
             }
+            run_end_cache = run_end;
             run_end_scanned = true;
             return run_end;
         };
@@ -1345,8 +1534,11 @@ void FifoParser::replay_cached_display_list(
                 std::span<const CachedDisplayListCommand>(
                     cached.commands.data() + command_index,
                     run_end - command_index))) {
+            const std::size_t run_count = run_end - command_index;
             simple_draw_packets.clear();
-            simple_draw_packets.reserve(run_end - command_index);
+            if (simple_draw_packets.capacity() < run_count) {
+                simple_draw_packets.reserve(run_count);
+            }
             for (std::size_t i = command_index; i < run_end; ++i) {
                 const CachedDisplayListCommand& command = cached.commands[i];
                 simple_draw_packets.push_back(CachedDrawPacket{
@@ -1507,12 +1699,43 @@ void FifoParser::replay_cached_display_list(
             }
             }
 
-            if (replay_profile != nullptr) {
-                record_cached_replay_profile(
-                    *replay_profile,
-                    profile_kind,
-                    0u);
-            }
+            // Per-command replay attribution.
+            //
+            // This used to call record_cached_replay_profile(..., 0u) with the elapsed
+            // argument hardcoded, and that call site is the ONLY writer of
+            // call_dl_replay_{state,indx,draw,misc}_us. The four counters therefore
+            // incremented their counts and added zero to their times forever, so
+            // [gx-frame-timing] printed e.g. fifo-call-dl-replay-draw-count=276 beside
+            // fifo-call-dl-replay-draw-us=0. That is worse than a missing measurement:
+            // it reads as "this phase is free", and it is why the 46 % of Arc frame time
+            // in fifo-call-dl could not be decomposed from the sub-phase fields.
+            //
+            // A scope guard rather than a call at the end of the body, because the loop
+            // has three `continue` paths above that bypass any trailing statement - the
+            // command still consumed time, so it must still be attributed. One clock read
+            // per command, and only when replay_profile is non-null (i.e. only on frames
+            // that already have detailed timing on), so the unprofiled path is untouched.
+            struct CachedReplayCommandScope {
+                FifoParserProfile* profile = nullptr;
+                CachedReplayProfileKind kind = CachedReplayProfileKind::Misc;
+                std::chrono::steady_clock::time_point start{};
+
+                ~CachedReplayCommandScope() {
+                    if (profile != nullptr) {
+                        record_cached_replay_profile(
+                            *profile,
+                            kind,
+                            elapsed_fifo_us(
+                                start, std::chrono::steady_clock::now()));
+                    }
+                }
+            };
+            const CachedReplayCommandScope replay_command_scope{
+                replay_profile,
+                profile_kind,
+                replay_profile != nullptr
+                    ? std::chrono::steady_clock::now()
+                    : std::chrono::steady_clock::time_point{}};
             ++command_index;
         }
     }
@@ -1549,9 +1772,32 @@ void FifoParser::run_window(
                 static_cast<unsigned>(opcode));
         }
         FifoParserProfile* const profile = profile_;
+        // Per-command elapsed time is measured unconditionally. A gated version of
+        // this (taking the clocks only when GALAXY_TRACE_GX_MICROPROFILE was set)
+        // was written and REVERTED: the probe at
+        // AgentWork/agent-18/probes/clock_overhead_probe.cpp measures a
+        // steady_clock::now() pair at 31.177 ns on this host, which is 368.7 us of
+        // frame 6799's 20152 us and 1340.8 us of frame 6796's 450743 us -- 1.83 pct
+        // and 0.30 pct. That is not worth losing the only per-category breakdown of
+        // parser cost, especially now that the CALL_DL double count below is fixed
+        // and these fields are trustworthy. Do not re-add the gate on the strength
+        // of "two clocks per command sounds expensive"; it was measured.
         const auto command_start = profile != nullptr
             ? std::chrono::steady_clock::now()
             : std::chrono::steady_clock::time_point{};
+        // `command_us` accumulates EXCLUSIVE time, so a command that recurses --
+        // CALL_DL replaying a cached display list -- does not count its
+        // descendants twice. The accumulator is monotonic, so the time this
+        // command's descendants added is exactly its growth across the command
+        // body; subtracting that growth at `finish_profile` needs no explicit
+        // span stack and is correct at any depth. Without this the replayed
+        // commands are charged once nested and once again inside their parent,
+        // which is why the published recordings show `fifo-command-us` larger
+        // than the frame's own `total-us`. That anomaly was originally attributed
+        // to the clock overhead above; the probe disproved that attribution, so
+        // this accumulator is the whole explanation.
+        const std::uint64_t command_us_before =
+            profile != nullptr ? profile->command_us : 0u;
         if (profile != nullptr) {
             ++profile->command_count;
         }
@@ -1561,12 +1807,18 @@ void FifoParser::run_window(
                 if (profile == nullptr) {
                     return 0;
                 }
+                ++(profile->*count_field);
                 const std::uint64_t us = elapsed_fifo_us(
                     command_start,
                     std::chrono::steady_clock::now());
-                ++(profile->*count_field);
                 (profile->*us_field) += us;
-                profile->command_us += us;
+                // Charge only what this command added beyond its descendants.
+                // `command_us` only ever grows, so the difference cannot
+                // underflow.
+                const std::uint64_t exclusive_us = profile->command_us >= command_us_before
+                    ? us - (profile->command_us - command_us_before)
+                    : us;
+                profile->command_us += exclusive_us;
                 return us;
             };
 

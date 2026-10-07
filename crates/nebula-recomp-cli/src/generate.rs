@@ -11,8 +11,8 @@ use crate::{
 use anyhow::{bail, Context, Result};
 use nebula_recomp_core::{
     analyze_input, lower_dsp_program_from_entry_vectors_with_static_memory_and_raw_provenance,
-    read_rmge01_ax_ucode, DspStaticMemoryImages, ModuleTranslationOptions, DSP_COEF_WORDS,
-    DSP_IROM_WORDS, RMGE01_DOL_SHA1, RMGE01_GAME_ID,
+    read_rmge01_ax_ucode, translation_coverage, DspStaticMemoryImages, ModuleTranslationOptions,
+    DSP_COEF_WORDS, DSP_IROM_WORDS, RMGE01_DOL_SHA1, RMGE01_GAME_ID,
 };
 use serde_json::json;
 use sha2::{Digest, Sha256};
@@ -20,7 +20,15 @@ use std::{fs, path::Path};
 
 /// Bump whenever generated source for the same game changes, so installers
 /// know that previously compiled modules can no longer be reused.
-pub const GENERATION_VERSION: u32 = 2;
+///
+/// 3: straight-line integer GPR residency was enabled for the release module.
+///    It has since been measured net-negative and turned **off** again
+///    (`AgentWork/agent-23/06-residency-measured-negative.md`), so the release
+///    module is byte-identical to a pre-3 build for every body that was
+///    eligible. The version is deliberately **not** reverted: existing v3
+///    modules are valid, and moving the number would invalidate compiled
+///    artefacts and caches for no functional reason.
+pub const GENERATION_VERSION: u32 = 3;
 
 /// Shard size and per-shard source budget of the qualified module build.
 pub const MODULE_SHARD_SIZE: usize = 64;
@@ -33,11 +41,29 @@ const DSP_IROM: &[u8] = include_bytes!("../../../third_party/dolphin-free-dsp-ro
 const DSP_COEF: &[u8] = include_bytes!("../../../third_party/dolphin-free-dsp-rom/dsp_coef.bin");
 
 /// Translation options of the qualified release module: inline widened-single
-/// scalar arithmetic and exact PSMTX local lanes; every trace/profile off.
+/// scalar arithmetic, exact PSMTX local lanes and straight-line integer GPR
+/// residency; every trace/profile off.
 pub fn release_module_options() -> ModuleTranslationOptions {
     ModuleTranslationOptions {
         inline_scalar_single_binary: true,
         exact_psmtx_local_lanes: true,
+        // Integer GPR residency is deliberately OFF. It is implemented
+        // (`translate::apply_integer_gpr_residency`) and correct, but it is
+        // measured net-negative: over 200 shards / 9,248 bodies it adds 2.73
+        // `PpcContext` accesses for every one it removes, and it loses in every
+        // bucket tried -- by entry-label count, body size and opaque-call count.
+        //
+        // The cause is reuse distance, not tuning. A resident register only pays
+        // when it is touched again before the next opaque call, and the emitted
+        // code makes a call (checkpoint, guest load, guest store, guest call)
+        // every few instructions. So the value would have stayed in a host
+        // register anyway, while the transform still pays a load per used
+        // register at each entry and a store set at each exit.
+        //
+        // Revisit only alongside a change that lengthens the call-free
+        // straight-line runs in the emitted code. See
+        // AgentWork/agent-23/06-residency-measured-negative.md.
+        guest_resident_integer: false,
         ..ModuleTranslationOptions::default()
     }
 }
@@ -66,8 +92,45 @@ set_target_properties(RMGE01_dsp PROPERTIES PREFIX "")
 if(MSVC)
     target_compile_options(RMGE01_dsp PRIVATE /EHsc /GS- /GR-)
     if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
-        # /O1 compiles in about 30 s; /O2 takes minutes and 5 GB for this file.
-        target_compile_options(RMGE01_dsp PRIVATE -w -fwrapv -fno-strict-aliasing /O1)
+        # This is the DSP's hot loop: the generated function is one giant
+        # straight-line state machine that retires ~11.2 M instructions/s, i.e.
+        # the whole ~1.5 k-instruction ucode program re-executes thousands of
+        # times per second, and it is 0.19 s of every second of process CPU on
+        # the reference machine.
+        #
+        # /O1 (= -Os) was chosen for build time, but clang-cl keeps the MINIMUM
+        # of all -O flags, so /O1 here also cancels the -O3 that
+        # CMAKE_CXX_FLAGS_RELEASE supplies for -DCMAKE_BUILD_TYPE=Release.
+        # Measured with the pinned toolchain on the generated 232 k-line TU:
+        #   /O1 -> object 4 214 901 B, compile 36 s
+        #   /O2 -> object 8 054 664 B, compile 5 min 12 s
+        # A 1.91x object for one translation unit is the signature of an
+        # optimiser that is now actually working: register allocation and
+        # cross-block redundancy elimination inside the giant function, plus
+        # inlining of the small helpers defined in dsp_context.h, none of which
+        # fold into the dispatch loop at -Os.
+        #
+        # CORRECTION: this comment previously claimed that /O2 also inlines the
+        # ~1.05 k galaxy::dsp_accumulator_* / dsp_product_* / dsp_condition_holds
+        # call sites in the generated code. That is WRONG and the claim has been
+        # removed. Those functions are *defined* in runtime/src/dsp_alu.cpp
+        # (dsp_alu.cpp:78, :207, :226, :252, :261, :267, :277) and have ZERO
+        # inline definitions in runtime/include/galaxy/dsp_alu.h - checked. They
+        # are compiled into galaxy_dsp_alu, a separate STATIC library
+        # (CMakeLists.txt:256-263, with no -flto), so no /O level on this module
+        # can inline across the translation-unit boundary. The generated module
+        # currently contains 1 143 such call sites and they remain real calls.
+        # Folding them would need LTO across both targets, which was assessed at
+        # roughly 1-2 % of total process CPU against a blast radius of every
+        # consumer of a prebuilt library, and was therefore not taken.
+        #
+        # The cost is paid once, at install time, on a machine that is already
+        # compiling 701 game-module translation units. Revert to /O1 only if
+        # install time becomes the binding constraint; the runtime effect of
+        # this flag is otherwise unmeasured. It is the one change in this tree
+        # with a plausible double-digit-percent effect on the DSP thread, which
+        # is ~19 % of process CPU, and no recording has yet measured it.
+        target_compile_options(RMGE01_dsp PRIVATE -w -fwrapv -fno-strict-aliasing /O2)
     endif()
     foreach(symbol IN ITEMS
             galaxy_rmge01_dsp_entry
@@ -174,18 +237,59 @@ pub fn generate_all(game: &Path, output: &Path) -> Result<()> {
     #[cfg(target_os = "windows")]
     crate::build_boot_image::run(game, &output.join("RMGE01_boot_image.bin"))?;
 
+    // Report the options that were actually used, not a second copy of them.
+    // The literals here previously disagreed with `release_module_options()` the
+    // moment that function's residency flag was turned off, so the manifest
+    // claimed `guestResidentInteger: true` for a module generated with it false.
+    // Nothing reads this file today, which is exactly why the drift was invisible;
+    // deriving it means the next flip cannot repeat it.
+    let module_options = release_module_options();
+
+    // Persist the translator's own coverage numbers.
+    //
+    // `interior_entry_points` in particular is otherwise unobtainable: the CLI
+    // computes it for `nebula-recomp coverage` (main.rs) and prints it to a
+    // console nobody captures, but it is the only number that separates "a
+    // function the guest can call" from "a lookup key that aliases another
+    // function's body". Two independent audits tried to recover it by scanning
+    // guest text for branch targets and produced contradictory answers
+    // (AgentWork/agent-17/16-kfunctions-is-not-a-function-list.md), because it
+    // needs the translator's own `discover_external_interior_targets`, which
+    // already exists here. Writing it costs one earlier pass over inputs that
+    // step 1 has already validated.
+    //
+    // This does not bump GENERATION_VERSION. That constant invalidates compiled
+    // modules and caches, and this changes only the manifest's contents - the
+    // generated source is untouched - so moving it would invalidate every
+    // existing artefact for nothing. generation.json is not part of the module
+    // key hash either.
+    let coverage = translation_coverage(game).with_context(|| {
+        format!(
+            "failed to compute translator coverage for {}",
+            game.display()
+        )
+    })?;
+
     let manifest = json!({
         "schema": "nebula.generation.v1",
         "generator": format!("nebula-recomp {}", env!("CARGO_PKG_VERSION")),
         "generationVersion": GENERATION_VERSION,
         "gameId": analysis.game_id,
         "mainDolSha1": analysis.main_dol_sha1,
+        "translationCoverage": {
+            "totalFunctions": coverage.total_functions,
+            "translatableFunctions": coverage.translatable_functions,
+            "translatableInstructions": coverage.translatable_instructions,
+            "interiorEntryPoints": coverage.interior_entry_points,
+            "blockedFunctions": coverage.blocked_functions,
+        },
         "moduleOptions": {
             "count": 0,
             "shardSize": MODULE_SHARD_SIZE,
             "shardSourceKiB": MODULE_SHARD_SOURCE_KIB,
-            "inlineScalarSingleBinary": true,
-            "exactPsmtxLocalLanes": true,
+            "inlineScalarSingleBinary": module_options.inline_scalar_single_binary,
+            "exactPsmtxLocalLanes": module_options.exact_psmtx_local_lanes,
+            "guestResidentInteger": module_options.guest_resident_integer,
         },
         "dspRoms": {
             "irom": sha256_hex(DSP_IROM),

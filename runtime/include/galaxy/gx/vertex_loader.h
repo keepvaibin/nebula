@@ -140,6 +140,13 @@ public:
         std::uint32_t precomputed_total_indices = 0,
         std::span<const std::uint16_t> precomputed_indices = {});
 
+    // `record_indexed_read_ranges` exists because the decoded-vertex cache is
+    // the only consumer of DecodedPacketRunVertices::guest_array_reads. When it
+    // is false the resolver's read-range accumulator is left null, which makes
+    // IndexedArrayResolver::record_read() an argument check instead of a
+    // min/max update on every indexed attribute of every decoded vertex, and
+    // leaves DecodedPacketRunVertices::guest_array_reads empty rather than
+    // filled and discarded.
     DecodedPacketRunVertices decode_cached_packet_run_vertices_with_layout(
         std::span<const std::byte> bytes,
         std::size_t base_offset,
@@ -151,7 +158,8 @@ public:
         std::size_t source_vertex_size,
         GuestMemoryV1* memory,
         std::uint32_t precomputed_total_vertices = 0,
-        std::uint32_t precomputed_total_indices = 0);
+        std::uint32_t precomputed_total_indices = 0,
+        bool record_indexed_read_ranges = true);
 
     LoadedPrimitive upload_cached_packet_run_vertices(
         std::span<const GxVertexOut> vertices,

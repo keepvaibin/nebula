@@ -133,6 +133,61 @@ GALAXY_ALWAYS_INLINE PpcFloatResult native_f32_normal_or_zero_result(
         rounded_up};
 }
 
+// Add/subtract/multiply core for operands the caller has already proved to be
+// finite normal-or-zero binary32 under nearest-even rounding.
+template <PpcFloatBinaryOperation Operation>
+GALAXY_ALWAYS_INLINE bool native_f32_binary_core(
+    std::uint32_t left,
+    std::uint32_t right,
+    PpcFloatResult& result) {
+    static_assert(Operation != PpcFloatBinaryOperation::Divide);
+    if constexpr (Operation == PpcFloatBinaryOperation::Add ||
+                  Operation == PpcFloatBinaryOperation::Subtract) {
+        if (!f32_add_sub_exact_in_double(left, right)) {
+            // Both operands are nonzero normal binary32 values, separated by
+            // more than 28 exponent steps. The smaller magnitude is strictly
+            // below half an ULP on either side of the larger value, including
+            // a binade boundary. Nearest-even therefore keeps the larger
+            // value. The sum is inexact; opposite effective signs round its
+            // magnitude up, and matching signs round it down. Derive those
+            // status bits directly instead of losing the small operand in
+            // binary64 or evaluating the software operation twice to recover
+            // FI/FR.
+            const std::uint32_t adjusted_right = right ^
+                (Operation == PpcFloatBinaryOperation::Subtract
+                     ? 0x80000000u : 0u);
+            const std::uint32_t dominant =
+                (left & 0x7FFFFFFFu) > (right & 0x7FFFFFFFu)
+                    ? left : adjusted_right;
+            result = PpcFloatResult{
+                widen_f32_bits(dominant), kXx, classify_f32(dominant), true,
+                ((left ^ adjusted_right) & 0x80000000u) != 0u};
+            return true;
+        }
+    }
+
+    const float left_value = std::bit_cast<float>(left);
+    const float right_value = std::bit_cast<float>(right);
+    double exact = 0.0;
+    float rounded = 0.0f;
+    if constexpr (Operation == PpcFloatBinaryOperation::Add) {
+        exact = static_cast<double>(left_value) + static_cast<double>(right_value);
+        rounded = left_value + right_value;
+    } else if constexpr (Operation == PpcFloatBinaryOperation::Subtract) {
+        exact = static_cast<double>(left_value) - static_cast<double>(right_value);
+        rounded = left_value - right_value;
+    } else {
+        exact = static_cast<double>(left_value) * static_cast<double>(right_value);
+        rounded = left_value * right_value;
+    }
+    const std::uint32_t rounded_bits = std::bit_cast<std::uint32_t>(rounded);
+    if (!native_f32_result_is_eligible(rounded_bits)) {
+        return false;
+    }
+    result = native_f32_normal_or_zero_result(rounded_bits, exact);
+    return true;
+}
+
 GALAXY_ALWAYS_INLINE bool native_f32_binary_fast(
     PpcFloatBinaryOperation operation,
     std::uint32_t left,
@@ -146,53 +201,20 @@ GALAXY_ALWAYS_INLINE bool native_f32_binary_fast(
         !native_f32_binary_inputs(left, right)) {
         return false;
     }
-    if ((operation == PpcFloatBinaryOperation::Add ||
-         operation == PpcFloatBinaryOperation::Subtract) &&
-        !f32_add_sub_exact_in_double(left, right)) {
-        // Both operands are nonzero normal binary32 values, separated by
-        // more than 28 exponent steps. The smaller magnitude is strictly
-        // below half an ULP on either side of the larger value, including
-        // a binade boundary. Nearest-even therefore keeps the larger value.
-        // The sum is inexact; opposite effective signs round its magnitude
-        // up, and matching signs round it down. Derive those status bits
-        // directly instead of losing the small operand in binary64 or
-        // evaluating the software operation twice to recover FI/FR.
-        const std::uint32_t adjusted_right = right ^
-            (operation == PpcFloatBinaryOperation::Subtract ? 0x80000000u : 0u);
-        const std::uint32_t dominant =
-            (left & 0x7FFFFFFFu) > (right & 0x7FFFFFFFu) ? left : adjusted_right;
-        result = PpcFloatResult{
-            widen_f32_bits(dominant), kXx, classify_f32(dominant), true,
-            ((left ^ adjusted_right) & 0x80000000u) != 0u};
-        return true;
-    }
-
-    const float left_value = std::bit_cast<float>(left);
-    const float right_value = std::bit_cast<float>(right);
-    double exact = 0.0;
-    float rounded = 0.0f;
     switch (operation) {
     case PpcFloatBinaryOperation::Add:
-        exact = static_cast<double>(left_value) + static_cast<double>(right_value);
-        rounded = left_value + right_value;
-        break;
+        return native_f32_binary_core<PpcFloatBinaryOperation::Add>(
+            left, right, result);
     case PpcFloatBinaryOperation::Subtract:
-        exact = static_cast<double>(left_value) - static_cast<double>(right_value);
-        rounded = left_value - right_value;
-        break;
+        return native_f32_binary_core<PpcFloatBinaryOperation::Subtract>(
+            left, right, result);
     case PpcFloatBinaryOperation::Multiply:
-        exact = static_cast<double>(left_value) * static_cast<double>(right_value);
-        rounded = left_value * right_value;
-        break;
+        return native_f32_binary_core<PpcFloatBinaryOperation::Multiply>(
+            left, right, result);
     case PpcFloatBinaryOperation::Divide:
         return false;
     }
-    const std::uint32_t rounded_bits = std::bit_cast<std::uint32_t>(rounded);
-    if (!native_f32_result_is_eligible(rounded_bits)) {
-        return false;
-    }
-    result = native_f32_normal_or_zero_result(rounded_bits, exact);
-    return true;
+    return false;
 }
 
 GALAXY_ALWAYS_INLINE bool exception_is_enabled(std::uint32_t fpscr, std::uint32_t exception_bits) {
@@ -206,6 +228,19 @@ GALAXY_ALWAYS_INLINE bool exception_is_enabled(std::uint32_t fpscr, std::uint32_
 
 GALAXY_ALWAYS_INLINE void apply_result_status(PpcContext* context, const PpcFloatResult& result) {
     std::uint32_t fpscr = context->fpscr;
+    // Common steady state: every raised exception bit is already sticky in
+    // FPSCR (so FX cannot change), no invalid-operation detail is recorded
+    // and no exception is enabled (so VX and FEX are clear). The general
+    // sequence below then reduces to replacing VX/FEX/FPRF/FR/FI, which this
+    // branch does directly with the same result.
+    constexpr std::uint32_t kEnableBits = kVe | kOe | kUe | kZe | kXe;
+    if ((result.exception_bits & ~fpscr) == 0u &&
+        (fpscr & (kInvalidDetailMask | kEnableBits)) == 0u) [[likely]] {
+        context->fpscr = (fpscr & ~(kFex | kVx | kFprfMask | kFr | kFi)) |
+            result.fprf | (result.inexact ? kFi : 0u) |
+            (result.rounded_up ? kFr : 0u);
+        return;
+    }
     if ((result.exception_bits & ~fpscr) != 0) {
         fpscr |= kFx;
     }
@@ -276,8 +311,10 @@ GALAXY_ALWAYS_INLINE bool try_commit_widened_scalar_binary(
     PpcFloatResult result{};
     // Classify before any NI result flush. A native subnormal that the old
     // path would flush to signed zero must still choose that complete path.
-    if (!float_native_detail::native_f32_binary_fast(
-            Operation, left_f32, right_f32, fpscr, result)) {
+    // The narrowing above already proved both operands finite normal-or-zero
+    // under nearest-even rounding, so the core skips those repeated checks.
+    if (!float_native_detail::native_f32_binary_core<Operation>(
+            left_f32, right_f32, result)) {
         return false;
     }
     float_native_detail::commit_scalar_result(
