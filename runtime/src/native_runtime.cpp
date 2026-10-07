@@ -3309,12 +3309,24 @@ private:
     std::uint32_t presence_{1u};
 };
 
+bool checkpoint_phase_timing_enabled() {
+    static const bool enabled =
+        trace_checkpoint_time_enabled() ||
+        trace_checkpoint_callback_time_enabled() ||
+        read_env_flag("GALAXY_TRACE_HOST_PUMP_SUBPHASES", false);
+    return enabled;
+}
+
 template <typename Callback>
 void run_timed_checkpoint_phase(
     RuntimeState& state,
     std::uint32_t guest_pc,
     const char* phase,
     Callback&& callback) {
+    if (!checkpoint_phase_timing_enabled()) {
+        std::forward<Callback>(callback)();
+        return;
+    }
     const auto started = std::chrono::steady_clock::now();
     const auto record_elapsed = [&]() noexcept {
         const auto elapsed_us =
