@@ -12,6 +12,7 @@
 //  - Indexed attributes resolve through GuestMemoryV1; unmapped → GxFatalError.
 
 #include "galaxy/gx/vertex_loader.h"
+#include "galaxy/gx/vertex_dequant.h"
 #include "galaxy/gx/dependency_event_capture.h"
 
 #include "galaxy/gx/fifo_parser.h"
@@ -289,21 +290,19 @@ private:
 // De-quantise a fixed-point scalar to float.
 [[nodiscard]] static float dequant_u8(std::uint8_t v, std::uint8_t shift)
 {
-    return static_cast<float>(v) / static_cast<float>(1u << shift);
+    return detail::dequantize_vertex_integer(v, shift);
 }
 [[nodiscard]] static float dequant_s8(std::uint8_t v, std::uint8_t shift)
 {
-    return static_cast<float>(static_cast<std::int8_t>(v)) /
-           static_cast<float>(1u << shift);
+    return detail::dequantize_vertex_integer(static_cast<std::int8_t>(v), shift);
 }
 [[nodiscard]] static float dequant_u16(std::uint16_t v, std::uint8_t shift)
 {
-    return static_cast<float>(v) / static_cast<float>(1u << shift);
+    return detail::dequantize_vertex_integer(v, shift);
 }
 [[nodiscard]] static float dequant_s16(std::uint16_t v, std::uint8_t shift)
 {
-    return static_cast<float>(static_cast<std::int16_t>(v)) /
-           static_cast<float>(1u << shift);
+    return detail::dequantize_vertex_integer(static_cast<std::int16_t>(v), shift);
 }
 
 // Decode `count` float32 big-endian components from `src` into `dst`.

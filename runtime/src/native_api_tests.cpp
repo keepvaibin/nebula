@@ -799,15 +799,19 @@ bool test_gpr_save_tracker_admission() {
                                 const auto mark = [&](bool present, std::uint32_t base,
                                                       std::uint32_t size, std::uint32_t page_shift,
                                                       std::uint32_t count, auto& bits) {
-                                    if (!present || page_shift >= 32u || count == 0u ||
-                                        begin < base || begin + 4u > std::uint64_t(base) + size ||
-                                        ((begin + 3u - base) >> page_shift) >= std::uint64_t(count) * 64u)
+                                    if (!present || page_shift >= 32u || count == 0u)
+                                        return false;
+                                    const auto overlap_begin = std::max<std::uint64_t>(begin, base);
+                                    const auto overlap_end = std::min<std::uint64_t>(begin + 4u, std::uint64_t(base) + size);
+                                    if (overlap_begin >= overlap_end ||
+                                        ((overlap_end - 1u - base) >> page_shift) >= std::uint64_t(count) * 64u)
                                         return false;
                                     for (std::uint32_t byte = 0u; byte < 4u; ++byte) {
+                                        if (begin + byte < base || begin + byte >= std::uint64_t(base) + size) continue;
                                         const auto page = (begin + byte - base) >> page_shift;
                                         bits[page / 64u] |= UINT64_C(1) << (page % 64u);
                                     }
-                                    return true;
+                                    return begin >= base && begin + 4u <= std::uint64_t(base) + size;
                                 };
                                 const bool shared_marked = mark(memory.dirty_page_words != nullptr,
                                     memory.dirty_tracked_base, memory.dirty_tracked_size,
@@ -1987,13 +1991,54 @@ int main() {
         }
         // Fast rejection must not turn wrapping, crossing, non-RAM or
         // untracked spans into apparently handled notifications.
-        for (const auto& span : std::array<std::array<std::uint32_t, 2>, 5>{{
+        for (const auto& span : std::array<std::array<std::uint32_t, 2>, 6>{{
                  {0x90008000u, 1u}, {0x90007FFFu, 2u}, {0xFFFFFFFFu, 2u},
-                 {0xCC008000u, 4u}, {0xB0000000u, 4u}}}) {
+                 {0xCC008000u, 4u}, {0xB0000000u, 4u}, {0x80000000u, 0x40000001u}}}) {
             passed &= expect(
                 !galaxy::guest_mark_dirty_page_fast(&tracked, span[0], span[1]) &&
                     !galaxy::guest_mark_cpu_dirty_page_fast(&tracked, span[0], span[1]),
                 "dirty fast path rejects non-RAM and incomplete tracked spans");
+        }
+    }
+
+    {
+        // A bulk write may be fully covered by renderer tracking while only
+        // crossing the edge of the independently pinned DSP audio range.
+        // Both overlaps must survive; full coverage alone controls fallback.
+        for (const auto physical_base : {0u, 0x10000000u}) {
+            for (const auto alias : {0u, 0x80000000u, 0xC0000000u}) {
+                for (const auto& span : std::array<std::array<std::uint32_t, 2>, 5>{{
+                        {0x70u, 0x20u}, {0xB0u, 0x20u}, {0x50u, 0x100u},
+                        {0x80u, 0x40u}, {0xE0u, 4u}}}) {
+                    std::atomic_uint64_t shared{};
+                    std::uint64_t cpu{};
+                    NotifyProbe probe{};
+                    galaxy::GuestMemoryV1 tracked{};
+                    tracked.user = &probe;
+                    tracked.notify_write = capture_notify_write;
+                    tracked.dirty_page_words = &shared;
+                    tracked.dirty_tracked_base = physical_base + 0x60u;
+                    tracked.dirty_tracked_size = 0x80u;
+                    tracked.dirty_page_shift = 4u;
+                    tracked.dirty_page_word_count = 1u;
+                    tracked.cpu_dirty_page_words = &cpu;
+                    tracked.cpu_dirty_tracked_base = physical_base + 0x80u;
+                    tracked.cpu_dirty_tracked_size = 0x40u;
+                    tracked.cpu_dirty_page_shift = 4u;
+                    tracked.cpu_dirty_page_word_count = 1u;
+                    galaxy::guest_notify_write(&tracked, alias | (physical_base + span[0]), span[1]);
+                    std::uint64_t expected_shared = 0u, expected_cpu = 0u;
+                    for (std::uint32_t byte = span[0]; byte < span[0] + span[1]; ++byte) {
+                        if (byte >= 0x60u && byte < 0xE0u) expected_shared |= UINT64_C(1) << ((byte - 0x60u) / 16u);
+                        if (byte >= 0x80u && byte < 0xC0u) expected_cpu |= UINT64_C(1) << ((byte - 0x80u) / 16u);
+                    }
+                    const bool full_shared = span[0] >= 0x60u && span[0] + span[1] <= 0xE0u;
+                    const bool full_cpu = span[0] >= 0x80u && span[0] + span[1] <= 0xC0u;
+                    passed &= expect(shared.load() == expected_shared && cpu == expected_cpu &&
+                            probe.writes == (full_shared || full_cpu ? 0u : 1u),
+                        "bulk notification preserves each partial dirty overlap and fallback coverage");
+                }
+            }
         }
     }
 

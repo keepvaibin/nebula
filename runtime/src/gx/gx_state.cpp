@@ -158,6 +158,25 @@ void validate_xf_write(
         reg == bp::kBpMask;
 }
 
+// Keep this predicate paired with dependency_shape_hash(). These are its
+// complete BP inputs, not the larger set affecting visual state. Uniform,
+// blend, scissor and copy writes must still execute, but cannot change the
+// cached hash of guest-memory dependency shape.
+[[nodiscard]] constexpr bool affects_dependency_shape(std::uint8_t reg) noexcept {
+    if (reg == bp::kGenMode || reg == bp::kIndRef ||
+        reg == bp::kTlutSrcAddr || reg == bp::kTlutDest ||
+        (reg >= bp::kTevOrderBase && reg < bp::kTevOrderBase + 8u) ||
+        (reg >= bp::kIndCmdBase && reg < bp::kIndCmdBase + kMaxTevStages)) {
+        return true;
+    }
+    // Texture banks are 0x80..0x9f and 0xa0..0xbf, four maps per bank.
+    if (reg < bp::kTexMode0Base || reg >= bp::kTexMode0Base + 0x40u) {
+        return false;
+    }
+    const unsigned offset = (reg - bp::kTexMode0Base) & 0x1fu;
+    return offset < 12u || (offset >= 20u && offset < 28u);
+}
+
 }  // namespace
 
 // ---------------------------------------------------------------------------
@@ -185,7 +204,9 @@ void GxState::load_cp(std::uint8_t reg, std::uint32_t value) {
 
     if (cp_[reg] != value) {
         cp_[reg] = value;
-        dependency_shape_hash_valid_ = false;
+        if ((dirty & kDirtyVcd) != 0u) {
+            dependency_shape_hash_valid_ = false;
+        }
         dirty_ |= dirty;
     }
 }
@@ -310,7 +331,6 @@ void GxState::load_bp(std::uint32_t command) {
             return;
         }
         bank = next;
-        dependency_shape_hash_valid_ = false;
         dirty_ |= kDirtyTevConstants;
         return;
     }
@@ -323,7 +343,9 @@ void GxState::load_bp(std::uint32_t command) {
         return;
     }
     bp_[reg] = next;
-    dependency_shape_hash_valid_ = false;
+    if (affects_dependency_shape(reg)) {
+        dependency_shape_hash_valid_ = false;
+    }
 
     // --------------- Dirty bit classification --------------------------------
 
@@ -338,7 +360,9 @@ void GxState::load_bp(std::uint32_t command) {
     // Indirect texture matrices 0x06-0x0E: three 2x3 offset matrices.
     if (reg >= bp::kIndMtxBase &&
         reg < bp::kIndMtxBase + bp::kIndMtxCount) {
-        dirty_ |= kDirtyTev;
+        // Coefficients and exponent are ind_mtx[] uniforms; stage matrix
+        // selection remains shader state in kIndCmdBase.
+        dirty_ |= kDirtyTevConstants;
         return;
     }
     // Scissor is dynamic and read directly for every draw.
@@ -373,13 +397,12 @@ void GxState::load_bp(std::uint32_t command) {
         dirty_ |= kDirtyTev;
         return;
     }
-    // Texture-coordinate S/T size registers, 0x30-0x3F. These feed rasterized
-    // texture coordinate state; mark shader/constants dirty until the frontend
-    // either proves all active writes are neutral or wires the decoded fields
-    // into the generated shaders.
+    // Texture-coordinate S/T sizes feed tex_dims[].zw and VS constants.
+    // Neither shader key contains these sizes. Preserve constant uploads
+    // without rebuilding a shader key or looking up the same pipeline.
     if (reg >= bp::kTexCoordSizeBase &&
         reg < bp::kTexCoordSizeBase + bp::kTexCoordSizeCount) {
-        dirty_ |= kDirtyTev | kDirtyVsConstants;
+        dirty_ |= kDirtyTevConstants | kDirtyVsConstants;
         return;
     }
     // TEV color env  0xC0-0xCF (even: color_env, odd: alpha_env, interleaved,
@@ -398,8 +421,15 @@ void GxState::load_bp(std::uint32_t command) {
 
     // Blend / PE
     case bp::kBlendMode:   // 0x41
-    case bp::kConstAlpha:  // 0x42
         dirty_ |= kDirtyRenderState | kDirtyTev | kDirtyTevConstants;
+        break;
+    case bp::kConstAlpha:  // 0x42
+        dirty_ |= kDirtyTevConstants;
+        // The enable flag affects shader outputs and blend routing; the
+        // replacement value is a uniform even while replacement is enabled.
+        if (((previous ^ next) & (1u << 8u)) != 0u) {
+            dirty_ |= kDirtyRenderState | kDirtyTev;
+        }
         break;
     case bp::kPeControl:   // 0x43
         dirty_ |= kDirtyRenderState | kDirtyTev;
@@ -423,7 +453,10 @@ void GxState::load_bp(std::uint32_t command) {
     // Alpha compare  0x49 (= kCopySrcTopLeft, but that constant is 0x49 only
     // in the copy block — let's use the actual address kAlphaCompare = 0xF3)
     case bp::kAlphaCompare:  // 0xF3
-        dirty_ |= kDirtyTev | kDirtyTevConstants;
+        dirty_ |= kDirtyTevConstants;
+        if (((previous ^ next) & 0x00ff0000u) != 0u) {
+            dirty_ |= kDirtyTev;
+        }
         break;
 
     // EFB copy block  0x49-0x54 (src rect, dest addr/stride, y-scale, clear,
@@ -500,11 +533,17 @@ void GxState::load_bp(std::uint32_t command) {
         dirty_ |= kDirtyTevConstants;
         break;
     case bp::kFogParam3:
-        dirty_ |= kDirtyTev | kDirtyTevConstants;
+        dirty_ |= kDirtyTevConstants;
+        if (((previous ^ next) & 0x00e00000u) != 0u) {
+            dirty_ |= kDirtyTev;
+        }
         break;
 
     // Z env  0xF4-0xF5
-    case bp::kTevZEnv0: case bp::kTevZEnv1:
+    case bp::kTevZEnv0:
+        dirty_ |= kDirtyTevConstants; // depth bias, not format/operation
+        break;
+    case bp::kTevZEnv1:
         dirty_ |= kDirtyTev;
         break;
 

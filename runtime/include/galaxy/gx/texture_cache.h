@@ -130,6 +130,8 @@ public:
     bool debug_invalidate_every_frame = false;
 
     [[nodiscard]] ID3D12DescriptorHeap* srv_heap() const;
+    [[nodiscard]] UINT srv_descriptor_stride() const noexcept { return srv_stride_; }
+    [[nodiscard]] D3D12_CPU_DESCRIPTOR_HANDLE null_srv() const noexcept { return null_srv_; }
 
     // Command list new-texture uploads are recorded on (CopyTextureRegion +
     // barrier to PIXEL_SHADER_RESOURCE).  Set by GxBackend each frame before
@@ -263,6 +265,8 @@ private:
 
     Microsoft::WRL::ComPtr<ID3D12Device> device_;
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> srv_heap_;
+    UINT srv_stride_ = 0u;
+    D3D12_CPU_DESCRIPTOR_HANDLE null_srv_{};
     ID3D12GraphicsCommandList* upload_list_ = nullptr;
     std::uint32_t next_srv_index_ = 0;
     std::vector<std::uint32_t> free_srv_indices_;

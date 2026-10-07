@@ -994,12 +994,23 @@ bool TextureCache::initialize(ID3D12Device* device) {
 
     D3D12_DESCRIPTOR_HEAP_DESC dhd{};
     dhd.Type           = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
-    dhd.NumDescriptors = kSrvHeapCapacity;
+    // Permanent null SRV is outside the allocatable texture slots.
+    dhd.NumDescriptors = kSrvHeapCapacity + 1u;
     dhd.Flags          = D3D12_DESCRIPTOR_HEAP_FLAG_NONE; // CPU-visible only
     dhd.NodeMask       = 0;
     if (FAILED(device->CreateDescriptorHeap(&dhd, IID_PPV_ARGS(&srv_heap_)))) {
         return false;
     }
+    srv_stride_ = device->GetDescriptorHandleIncrementSize(
+        D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+    null_srv_ = srv_heap_->GetCPUDescriptorHandleForHeapStart();
+    null_srv_.ptr += static_cast<SIZE_T>(kSrvHeapCapacity) * srv_stride_;
+    D3D12_SHADER_RESOURCE_VIEW_DESC null_desc{};
+    null_desc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+    null_desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+    null_desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+    null_desc.Texture2D.MipLevels = 1u;
+    device->CreateShaderResourceView(nullptr, &null_desc, null_srv_);
     return true;
 }
 
@@ -1119,6 +1130,8 @@ void TextureCache::shutdown() {
     level_offsets_scratch_.clear();
     level_pitches_scratch_.clear();
     srv_heap_.Reset();
+    srv_stride_ = 0u;
+    null_srv_ = {};
     device_.Reset();
     next_srv_index_ = 0u;
     free_srv_indices_.clear();

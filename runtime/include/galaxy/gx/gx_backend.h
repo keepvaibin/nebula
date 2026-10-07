@@ -709,7 +709,8 @@ private:
         std::uint64_t cache_token,
         std::size_t packet_run_index,
         PrimitiveClass primitive,
-        std::uint8_t vtxfmt) const;
+        std::uint8_t vtxfmt,
+        const VertexDescriptor& desc) const;
     [[nodiscard]] static bool capture_decoded_packet_run_dependencies(
         GuestMemoryV1* memory,
         const std::vector<VertexDecodeGuestRange>& dependencies,
@@ -770,6 +771,11 @@ private:
     PixelShaderKey ps_key_{};
     VertexShaderKey vs_key_{};
     RenderStateKey render_state_key_{};
+    std::uint64_t current_vs_hash_{};
+    std::uint64_t current_ps_hash_{};
+    bool shader_key_hashes_valid_ = false;
+    PsoKey current_pso_key_{};
+    bool current_pso_key_valid_ = false;
     ID3D12PipelineState* current_pipeline_ = nullptr;
     D3D12_GPU_VIRTUAL_ADDRESS current_vs_constants_ = 0;
     D3D12_GPU_VIRTUAL_ADDRESS current_ps_constants_ = 0;

@@ -14,6 +14,7 @@
 #include "galaxy/gx/gx_state.h"
 #include "galaxy/gx/renderer_d3d12.h"
 #include "galaxy/gx/vertex_loader.h"
+#include "galaxy/gx/vertex_dequant.h"
 
 #include <bit>
 #include <array>
@@ -33,6 +34,29 @@ bool expect(bool condition, const char* message) {
         std::cerr << "FAIL: " << message << '\n';
     }
     return condition;
+}
+
+bool fixed_vertex_dequantization_preserves_bits() {
+    // Independent division oracle for every U16/S16 source bit pattern and
+    // VAT fraction. U8/S8 are subsets of the same exact integer domain.
+    for (unsigned shift = 0u; shift <= 31u; ++shift) {
+        const volatile float divisor = static_cast<float>(1u << shift);
+        for (std::uint32_t raw = 0u; raw <= 0xffffu; ++raw) {
+            for (const std::int32_t value : {
+                    static_cast<std::int32_t>(raw),
+                    raw < 0x8000u ? static_cast<std::int32_t>(raw)
+                                  : static_cast<std::int32_t>(raw) - 0x10000}) {
+                const auto expected = std::bit_cast<std::uint32_t>(
+                    static_cast<float>(value) / divisor);
+                const auto actual = std::bit_cast<std::uint32_t>(
+                    galaxy::gx::detail::dequantize_vertex_integer(
+                        value, static_cast<std::uint8_t>(shift)));
+                if (!expect(actual == expected,
+                            "fixed vertex dequantization changed binary32 bits")) return false;
+            }
+        }
+    }
+    return true;
 }
 
 ComPtr<ID3D12Device> create_warp_device() {
@@ -738,6 +762,7 @@ bool immutable_upload_reuse_preserves_bytes(ID3D12Device* device) {
 }  // namespace
 
 int main() {
+    if (!fixed_vertex_dequantization_preserves_bits()) return 1;
     const ComPtr<ID3D12Device> device = create_warp_device();
     if (!expect(device != nullptr, "could not create D3D12 WARP device")) {
         return 1;
