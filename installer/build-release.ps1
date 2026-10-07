@@ -116,7 +116,9 @@ namespace Nebula
     }
     foreach ($pair in $runtimeFiles.GetEnumerator()) { $resources[$pair.Key] = $pair.Value }
     $resourceArgs = @($resources.GetEnumerator() | ForEach-Object { "/resource:$($_.Value),$($_.Key)" })
-    $setup = Join-Path $OutputDirectory 'Nebula-Setup.exe'
+    # Distinct beta assets protect older preview updater clients.
+    $setupName = if ($Version -match '-beta\.') { 'Nebula-Beta-Setup.exe' } else { 'Nebula-Setup.exe' }
+    $setup = Join-Path $OutputDirectory $setupName
     Invoke-Checked $csc (@('/nologo', '/target:winexe', '/platform:x64', '/optimize+', "/win32manifest:$manifestFile", "/out:$setup") + $references + $resourceArgs + $common +
         @(Get-ChildItem (Join-Path $src 'installer\src\Setup\*.cs') | ForEach-Object FullName))
 

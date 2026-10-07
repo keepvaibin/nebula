@@ -214,6 +214,16 @@ namespace Nebula.Setup
         {
             string json = Downloader.GetString("https://api.github.com/repos/" + BuildInfo.Repository + "/releases?per_page=30",
                 "application/vnd.github+json");
+            return SelectNewer(json, BuildInfo.Version);
+        }
+
+        // Betas require an explicit first download. Separate asset names also
+        // keep already-installed preview updaters (which lack this filter) from
+        // offering a beta as an ordinary update.
+        internal static ReleaseInfo SelectNewer(string json, string installedVersion)
+        {
+            bool beta = IsBetaVersion(installedVersion);
+            string setupName = beta ? "Nebula-Beta-Setup.exe" : "Nebula-Setup.exe";
             ReleaseInfo best = null;
             foreach (var item in (System.Collections.IList)Json.ParseAny(json))
             {
@@ -221,14 +231,15 @@ namespace Nebula.Setup
                 if (Json.Bool(release, "draft")) continue;
                 string tag = Json.Str(release, "tag_name") ?? "";
                 string version = tag.StartsWith("v") ? tag.Substring(1) : tag;
-                if (CompareVersions(version, best != null ? best.Version : BuildInfo.Version) <= 0) continue;
+                if (IsBetaVersion(version) != beta) continue;
+                if (CompareVersions(version, best != null ? best.Version : installedVersion) <= 0) continue;
                 string setup = null, signature = null;
                 foreach (var assetItem in Json.List(release, "assets") ?? new object[0])
                 {
                     var asset = (Dictionary<string, object>)assetItem;
                     string name = Json.Str(asset, "name");
-                    if (name == "Nebula-Setup.exe") setup = Json.Str(asset, "browser_download_url");
-                    if (name == "Nebula-Setup.exe.sig") signature = Json.Str(asset, "browser_download_url");
+                    if (name == setupName) setup = Json.Str(asset, "browser_download_url");
+                    if (name == setupName + ".sig") signature = Json.Str(asset, "browser_download_url");
                 }
                 if (setup == null || signature == null) continue;
                 best = new ReleaseInfo
@@ -238,6 +249,11 @@ namespace Nebula.Setup
                 };
             }
             return best;
+        }
+
+        internal static bool IsBetaVersion(string version)
+        {
+            return version != null && version.IndexOf("-beta.", StringComparison.OrdinalIgnoreCase) >= 0;
         }
 
         /// <summary>Download and authenticate a release setup; returns its path.</summary>
