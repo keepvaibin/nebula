@@ -1691,10 +1691,11 @@ EfbConversionShaderConstants make_efb_peek_conversion_constants(
 bool UploadRing::initialize(
     ID3D12Device* device, const char* name, std::size_t bytes_per_frame,
     unsigned frames_in_flight) {
-    name_             = name;
-    bytes_per_frame_  = bytes_per_frame;
-    frames_in_flight_ = frames_in_flight;
-
+    if (device == nullptr || bytes_per_frame == 0u || frames_in_flight == 0u ||
+        bytes_per_frame > std::numeric_limits<std::size_t>::max() / frames_in_flight) {
+        return false;
+    }
+    // Prepare all fallible state before replacing the retained mapped buffer.
     const std::size_t total = bytes_per_frame * frames_in_flight;
     D3D12_HEAP_PROPERTIES hp{};
     hp.Type = D3D12_HEAP_TYPE_UPLOAD;
@@ -1706,24 +1707,36 @@ bool UploadRing::initialize(
     rd.MipLevels        = 1;
     rd.SampleDesc.Count = 1;
     rd.Layout           = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+    Microsoft::WRL::ComPtr<ID3D12Resource> buffer;
     if (FAILED(device->CreateCommittedResource(
             &hp, D3D12_HEAP_FLAG_NONE, &rd,
             D3D12_RESOURCE_STATE_GENERIC_READ,
-            nullptr, IID_PPV_ARGS(&buffer_))))
+            nullptr, IID_PPV_ARGS(&buffer))))
         return false;
+    std::vector<std::uint64_t> generations(frames_in_flight, 0u);
     D3D12_RANGE no_read{0, 0};
     void* ptr = nullptr;
-    if (FAILED(buffer_->Map(0, &no_read, &ptr))) return false;
+    if (FAILED(buffer->Map(0, &no_read, &ptr))) return false;
+    const auto gpu_base = buffer->GetGPUVirtualAddress();
+    buffer_ = std::move(buffer);
     mapped_ = static_cast<std::byte*>(ptr);
-    gpu_base_ = buffer_->GetGPUVirtualAddress();
+    gpu_base_ = gpu_base;
+    name_ = name != nullptr ? name : "";
+    bytes_per_frame_ = bytes_per_frame;
+    frames_in_flight_ = frames_in_flight;
     static std::atomic<std::uint64_t> next_identity{1};
     resource_identity_ = next_identity.fetch_add(1, std::memory_order_relaxed);
-    slot_generations_.assign(frames_in_flight, 0);
+    slot_generations_ = std::move(generations);
+    segment_base_ = cursor_ = 0u;
+    active_slot_ = 0u;
+    frame_ready_ = false;
+    segment_allocation_pending_ = true;
+    reused_bytes_ = copied_bytes_ = 0u;
     return true;
 }
 
 void UploadRing::begin_frame(unsigned frame_slot) {
-    if (frame_slot >= frames_in_flight_) {
+    if (mapped_ == nullptr || frame_slot >= frames_in_flight_) {
         throw std::runtime_error("UploadRing frame slot is out of range");
     }
     active_slot_ = frame_slot;
@@ -1732,18 +1745,28 @@ void UploadRing::begin_frame(unsigned frame_slot) {
     copied_bytes_ = 0;
     segment_base_ = static_cast<std::size_t>(frame_slot) * bytes_per_frame_;
     cursor_       = segment_base_;
+    frame_ready_ = true;
 }
 
 UploadRing::Allocation UploadRing::allocate(std::size_t size, std::size_t alignment) {
-    const std::size_t aligned = (cursor_ + alignment - 1) & ~(alignment - 1);
-    const std::size_t end     = aligned + size;
-    if (end > segment_base_ + bytes_per_frame_)
+    if (!frame_ready_) {
+        throw std::runtime_error("UploadRing allocation before begin_frame");
+    }
+    if (alignment == 0u || (alignment & (alignment - 1u)) != 0u) {
+        throw std::runtime_error("UploadRing alignment is not a nonzero power of two");
+    }
+    // Unsigned negation gives the exact padding without cursor+alignment
+    // overflow. Prove both padding and payload fit before forming addresses.
+    const std::size_t padding = (std::size_t{0} - cursor_) & (alignment - 1u);
+    const std::size_t remaining = bytes_per_frame_ - (cursor_ - segment_base_);
+    if (padding > remaining || size > remaining - padding)
         throw std::runtime_error(
             std::string("UploadRing '") + name_ + "' exhausted: request " +
             std::to_string(size) + " B at frame-used " +
             std::to_string(cursor_ - segment_base_) + "/" +
             std::to_string(bytes_per_frame_) + " B");
-    cursor_ = end;
+    const std::size_t aligned = cursor_ + padding;
+    cursor_ = aligned + size;
     // Fence-only chunks reset the frame slot but never touch vertex bytes.
     // Count only segment uses that can actually replace their contents.
     if (size != 0 && segment_allocation_pending_) {
