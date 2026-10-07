@@ -2131,7 +2131,10 @@ TextureHandle TextureCache::get(
             const auto [it, inserted] = content_entries_.emplace(
                 std::move(*content_key),
                 ContentEntry{
-                    entries_.find(key)->second.texture,
+                    // A budget eviction may already have removed this entry.
+                    // Its returned resource remains owned through the frame's
+                    // retirement fence; retain it without another map lookup.
+                    ComPtr<ID3D12Resource>{result.resource},
                     retained_bytes,
                     content_lru_.begin()});
             if (inserted) {
