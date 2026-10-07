@@ -375,6 +375,77 @@ bool test_cmpr_tile_decode() {
     return true;
 }
 
+bool test_direct_color_tile_decode() {
+    using galaxy::gx::RGBA8;
+    using galaxy::gx::TexFormat;
+    constexpr std::array<std::uint32_t, 12> dimensions{
+        1u, 2u, 3u, 4u, 5u, 6u, 7u, 8u, 9u, 15u, 16u, 33u};
+    constexpr RGBA8 guard{0x91u, 0x38u, 0xE2u, 0x57u};
+    const auto same = [](RGBA8 a, RGBA8 b) {
+        return a.r == b.r && a.g == b.g && a.b == b.b && a.a == b.a;
+    };
+    // Independent arithmetic expansion of GX channel fields, including both
+    // RGB5A3 encodings. No production lookup/conversion helper is used here.
+    const auto color = [](std::uint16_t word, TexFormat format) -> RGBA8 {
+        const auto e5 = [](unsigned n) { return static_cast<std::uint8_t>(8u * n + n / 4u); };
+        if (format == TexFormat::RGB565) {
+            const unsigned green = (word / 32u) % 64u;
+            return {e5(word / 2048u), static_cast<std::uint8_t>(4u * green + green / 16u),
+                e5(word % 32u), 255u};
+        }
+        if (word >= 0x8000u) {
+            return {e5((word / 1024u) % 32u), e5((word / 32u) % 32u), e5(word % 32u), 255u};
+        }
+        const unsigned alpha = word / 4096u;
+        return {static_cast<std::uint8_t>(17u * ((word / 256u) % 16u)),
+            static_cast<std::uint8_t>(17u * ((word / 16u) % 16u)),
+            static_cast<std::uint8_t>(17u * (word % 16u)),
+            static_cast<std::uint8_t>(32u * alpha + 4u * alpha + alpha / 2u)};
+    };
+    for (const auto format : {TexFormat::RGB565, TexFormat::RGB5A3}) {
+        const auto check = [&](std::uint32_t width, std::uint32_t height,
+                               unsigned offset, bool all_words) {
+            const unsigned tiles_x = (width + 3u) / 4u;
+            const unsigned tiles_y = (height + 3u) / 4u;
+            const auto word_at = [all_words](unsigned index) {
+                return static_cast<std::uint16_t>(all_words ? index : index * 421u + 0x3d37u);
+            };
+            std::vector<std::uint8_t> source(offset + tiles_x * tiles_y * 32u);
+            for (unsigned index = 0; index < tiles_x * tiles_y * 16u; ++index) {
+                const auto word = word_at(index);
+                source[offset + index * 2u] = static_cast<std::uint8_t>(word / 256u);
+                source[offset + index * 2u + 1u] = static_cast<std::uint8_t>(word % 256u);
+            }
+            std::vector<RGBA8> output(width * height + 2u, guard);
+            galaxy::gx::detail::decode_color_tiles(format, source.data() + offset,
+                width, height, output.data() + 1u);
+            if (!expect(same(output.front(), guard) && same(output.back(), guard),
+                        "RGB565/RGB5A3 tiled decode stays within output")) return false;
+            for (unsigned y = 0; y < height; ++y) {
+                for (unsigned x = 0; x < width; ++x) {
+                    const unsigned index = ((y / 4u) * tiles_x + x / 4u) * 16u +
+                        (y % 4u) * 4u + x % 4u;
+                    if (!expect(same(output[1u + y * width + x], color(word_at(index), format)),
+                                "RGB565/RGB5A3 tile coordinates and channel expansion match oracle")) return false;
+                }
+            }
+            return true;
+        };
+        for (auto width : dimensions) {
+            for (auto height : dimensions) {
+                for (auto offset : {0u, 1u, 3u}) {
+                    if (!check(width, height, offset, false)) return false;
+                }
+            }
+        }
+        // Exactly 65536 pixels in full tiles: every possible color word once.
+        if (!check(256u, 256u, 1u, true)) return false;
+        galaxy::gx::detail::decode_color_tiles(format, nullptr, 0u, 9u, nullptr);
+        galaxy::gx::detail::decode_color_tiles(format, nullptr, 9u, 0u, nullptr);
+    }
+    return true;
+}
+
 bool test_small_index_tile_decode() {
     using galaxy::gx::RGBA8;
     using galaxy::gx::TexFormat;
@@ -2131,6 +2202,7 @@ bool test_warp_against_oracle() {
 
 int main() {
     bool passed = test_cpu_oracle();
+    passed &= test_direct_color_tile_decode();
     passed &= test_intensity_tile_decode();
     passed &= test_rgba8_tile_decode();
     passed &= test_generated_mip_uniform_alpha();

@@ -498,99 +498,48 @@ void decode_intensity_tiles_impl(
     }
 }
 
-static void decode_RGB565(
-    const std::uint8_t* src,
-    std::uint32_t width,
-    std::uint32_t height,
+template <TlutFormat Format>
+static void decode_color_tiles_impl(
+    const std::uint8_t* src, std::uint32_t width, std::uint32_t height,
     RGBA8* out) {
-    // Block: 4×4 pixels; two big-endian bytes per pixel.
-    const std::uint32_t blocks_x = (width  + 3u) / 4u;
+    static_assert(Format == TlutFormat::RGB565 || Format == TlutFormat::RGB5A3);
+    const std::uint32_t blocks_x = (width + 3u) / 4u;
     const std::uint32_t blocks_y = (height + 3u) / 4u;
     for (std::uint32_t by = 0; by < blocks_y; ++by) {
+        const std::uint32_t base_y = by * 4u;
+        const std::uint32_t rows = std::min(4u, height - base_y);
         for (std::uint32_t bx = 0; bx < blocks_x; ++bx) {
-            for (std::uint32_t py = 0; py < 4u; ++py) {
-                for (std::uint32_t px = 0; px < 4u; ++px) {
-                    const std::uint16_t v = read_be16(src); src += 2;
-                    const std::uint32_t ix = bx * 4u + px;
-                    const std::uint32_t iy = by * 4u + py;
-                    if (ix < width && iy < height) {
-                        const std::uint8_t r5 =
-                            static_cast<std::uint8_t>((v >> 11) & 0x1Fu);
-                        const std::uint8_t g6 =
-                            static_cast<std::uint8_t>((v >>  5) & 0x3Fu);
-                        const std::uint8_t b5 =
-                            static_cast<std::uint8_t>( v        & 0x1Fu);
-                        out[iy * width + ix] = RGBA8{
-                            static_cast<std::uint8_t>((r5 << 3) | (r5 >> 2)),
-                            static_cast<std::uint8_t>((g6 << 2) | (g6 >> 4)),
-                            static_cast<std::uint8_t>((b5 << 3) | (b5 >> 2)),
-                            0xFFu
-                        };
-                    }
+            const std::uint32_t base_x = bx * 4u;
+            const std::uint32_t columns = std::min(4u, width - base_x);
+            for (std::uint32_t py = 0; py < rows; ++py) {
+                const std::uint8_t* row = src + py * 8u;
+                RGBA8* dst = out + static_cast<std::size_t>(base_y + py) * width + base_x;
+                for (std::uint32_t px = 0; px < columns; ++px) {
+                    // Direct color and TLUT entries share the same GX word
+                    // encoding. Format is fixed for this entire decode.
+                    dst[px] = decode_tlut_entry(row + px * 2u, Format);
                 }
             }
-        }
-    }
-}
-
-static void decode_RGB5A3(
-    const std::uint8_t* src,
-    std::uint32_t width,
-    std::uint32_t height,
-    RGBA8* out) {
-    // Block: 4×4 pixels; two big-endian bytes per pixel.
-    const std::uint32_t blocks_x = (width  + 3u) / 4u;
-    const std::uint32_t blocks_y = (height + 3u) / 4u;
-    for (std::uint32_t by = 0; by < blocks_y; ++by) {
-        for (std::uint32_t bx = 0; bx < blocks_x; ++bx) {
-            for (std::uint32_t py = 0; py < 4u; ++py) {
-                for (std::uint32_t px = 0; px < 4u; ++px) {
-                    const std::uint16_t v = read_be16(src); src += 2;
-                    const std::uint32_t ix = bx * 4u + px;
-                    const std::uint32_t iy = by * 4u + py;
-                    if (ix < width && iy < height) {
-                        RGBA8 pixel{};
-                        if ((v & 0x8000u) != 0u) {
-                            // RGB555
-                            const std::uint8_t r5 =
-                                static_cast<std::uint8_t>((v >> 10) & 0x1Fu);
-                            const std::uint8_t g5 =
-                                static_cast<std::uint8_t>((v >>  5) & 0x1Fu);
-                            const std::uint8_t b5 =
-                                static_cast<std::uint8_t>( v        & 0x1Fu);
-                            pixel = RGBA8{
-                                static_cast<std::uint8_t>((r5 << 3) | (r5 >> 2)),
-                                static_cast<std::uint8_t>((g5 << 3) | (g5 >> 2)),
-                                static_cast<std::uint8_t>((b5 << 3) | (b5 >> 2)),
-                                0xFFu
-                            };
-                        } else {
-                            // RGBA3444
-                            const std::uint8_t a3 =
-                                static_cast<std::uint8_t>((v >> 12) & 0x7u);
-                            const std::uint8_t r4 =
-                                static_cast<std::uint8_t>((v >>  8) & 0xFu);
-                            const std::uint8_t g4 =
-                                static_cast<std::uint8_t>((v >>  4) & 0xFu);
-                            const std::uint8_t b4 =
-                                static_cast<std::uint8_t>( v        & 0xFu);
-                            pixel = RGBA8{
-                                static_cast<std::uint8_t>((r4 << 4) | r4),
-                                static_cast<std::uint8_t>((g4 << 4) | g4),
-                                static_cast<std::uint8_t>((b4 << 4) | b4),
-                                static_cast<std::uint8_t>(
-                                    (a3 << 5) | (a3 << 2) | (a3 >> 1))
-                            };
-                        }
-                        out[iy * width + ix] = pixel;
-                    }
-                }
-            }
+            src += 32u;
         }
     }
 }
 
 }  // namespace
+
+void detail::decode_color_tiles(
+    TexFormat format, const std::uint8_t* src,
+    std::uint32_t width, std::uint32_t height, RGBA8* out) {
+    switch (format) {
+    case TexFormat::RGB565:
+        decode_color_tiles_impl<TlutFormat::RGB565>(src, width, height, out);
+        break;
+    case TexFormat::RGB5A3:
+        decode_color_tiles_impl<TlutFormat::RGB5A3>(src, width, height, out);
+        break;
+    default: throw std::runtime_error("[TextureCache] unsupported direct color format");
+    }
+}
 
 void detail::decode_intensity_tiles(
     TexFormat format, const std::uint8_t* src,
@@ -1887,10 +1836,8 @@ TextureHandle TextureCache::get(
             detail::decode_intensity_tiles(image.format, src, lw, lh, out);
             break;
         case TexFormat::RGB565:
-            decode_RGB565(src, lw, lh, out);
-            break;
         case TexFormat::RGB5A3:
-            decode_RGB5A3(src, lw, lh, out);
+            detail::decode_color_tiles(image.format, src, lw, lh, out);
             break;
         case TexFormat::RGBA8:
             detail::decode_rgba8_tiles(src, lw, lh, out);

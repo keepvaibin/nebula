@@ -54,6 +54,10 @@ struct RGBA8 {
 };
 
 namespace detail {
+// Caller validates the complete 32-byte 4x4 tile footprint for RGB565/RGB5A3.
+// Clipped edge tiles advance by 32 source bytes and write valid pixels only.
+void decode_color_tiles(TexFormat format, const std::uint8_t* src,
+    std::uint32_t width, std::uint32_t height, RGBA8* out);
 // I4/I8/IA4/IA8 only. Caller validates the entire block-rounded source;
 // clipped rows still advance over each complete 32-byte tile.
 void decode_intensity_tiles(TexFormat format, const std::uint8_t* src,
