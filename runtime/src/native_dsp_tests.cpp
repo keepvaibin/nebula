@@ -5247,6 +5247,75 @@ bool test_diagnostic_snapshot_coherence() {
     return passed;
 }
 
+struct ExactAramSpanProbe {
+    std::array<bool, 1024> dirty{};
+    std::array<std::uint8_t, 1024> bytes{};
+    std::uint32_t cursor{};
+    std::uint64_t generation{};
+    std::uint32_t calls{};
+
+    static bool commit(void* user, std::uint64_t generation,
+        std::uint32_t address, const std::uint8_t* bytes, std::uint32_t size) noexcept {
+        auto& probe = *static_cast<ExactAramSpanProbe*>(user);
+        // Independent byte oracle: find the next complete dirty interval.
+        while (probe.cursor < probe.dirty.size() && !probe.dirty[probe.cursor]) ++probe.cursor;
+        const std::uint32_t begin = probe.cursor;
+        while (probe.cursor < probe.dirty.size() && probe.dirty[probe.cursor]) ++probe.cursor;
+        if (generation != probe.generation || address != begin || size == 0u ||
+            size != probe.cursor - begin || bytes == nullptr ||
+            std::memcmp(bytes, probe.bytes.data() + begin, size) != 0) return false;
+        ++probe.calls;
+        return true;
+    }
+};
+
+bool test_aram_exact_span_enumeration() {
+    using Boundary = galaxy::DspAramMirrorBoundary;
+    auto seed = std::make_unique<std::uint8_t[]>(Boundary::kMirrorSizeBytes);
+    seed[127] = 0x12u;
+    seed[128] = 0x34u;
+    auto boundary = std::make_unique<Boundary>();
+    if (!boundary->reset() || !boundary->cpu_stage_seed(1u,
+        std::span<const std::uint8_t>{seed.get(), Boundary::kMirrorSizeBytes})) return false;
+    AramMailProbe mail{boundary.get(), 1u, 127u, 0x1234u};
+    bool worker_ok = false;
+    std::thread worker([&] {
+        bool ok = boundary->worker_bind();
+        ok = ok && boundary->worker_apply_before_mail_consume(1u, &consume_aram_mail, &mail);
+        ExactAramSpanProbe probe{};
+        std::uint32_t random = 0x8261d539u;
+        for (unsigned pattern = 0u; pattern < 20u && ok; ++pattern) {
+            probe.dirty.fill(false);
+            probe.cursor = probe.calls = 0u;
+            probe.generation = pattern + 1u;
+            for (unsigned byte = 0u; byte < probe.dirty.size(); ++byte) {
+                random = random * 1664525u + 1013904223u;
+                probe.dirty[byte] = pattern == 0u ? false :
+                    pattern == 1u ? byte < 256u : // full words/pages and cross-page coalescing
+                    pattern == 2u ? (byte == 0u || byte == 63u || byte == 64u ||
+                        byte == 127u || byte == 128u || byte == 1023u) :
+                    pattern == 3u ? (byte >= 61u && byte < 195u) :
+                    pattern == 4u ? (byte % 2u == 0u) : (random >> 28u) < pattern % 16u;
+                probe.bytes[byte] = static_cast<std::uint8_t>(random >> 16u);
+            }
+            // Descending writes also exercise sorting of sparse dirty pages.
+            for (unsigned byte = static_cast<unsigned>(probe.dirty.size()); byte-- != 0u && ok;) {
+                if (probe.dirty[byte]) ok = boundary->worker_write_span(byte, &probe.bytes[byte], 1u);
+            }
+            ok = ok && boundary->worker_flush_outbound(probe.generation, &ExactAramSpanProbe::commit, &probe);
+            while (probe.cursor < probe.dirty.size() && !probe.dirty[probe.cursor]) ++probe.cursor;
+            ok = ok && probe.cursor == probe.dirty.size();
+        }
+        const bool detached = boundary->worker_detach();
+        worker_ok = ok && detached;
+    });
+    worker.join();
+    const auto snapshot = boundary->snapshot();
+    return expect(worker_ok && mail.observed_after_apply && !snapshot.failed &&
+        snapshot.outbound_flushes == 20u && snapshot.outbound_dirty_pages == 0u,
+        "DSP ARAM flush commits exactly the byte-oracle spans across full words, gaps, and sparse successive pages");
+}
+
 bool test_aram_mirror_boundary() {
     using Boundary = galaxy::DspAramMirrorBoundary;
     static_assert(!Boundary::kWorkerHotPathUsesBoundaryMutex);
@@ -6381,6 +6450,7 @@ int main() {
     passed &= test_mram_transaction_boundary();
     passed &= test_frame_pe_slice_services_pending_mram_before_ai();
     passed &= test_aram_mirror_boundary();
+    passed &= test_aram_exact_span_enumeration();
     passed &= test_ifx_ordering_hooks();
     passed &= test_clean_halt_ack_ordering();
     passed &= test_channel_selection_dma_probe();
