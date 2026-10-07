@@ -8753,7 +8753,7 @@ bool GxBackend::on_cached_packet_draw_run(
 
     D3D12_VERTEX_BUFFER_VIEW vbv{};
     vbv.BufferLocation =
-        renderer_.vertex_ring().resource()->GetGPUVirtualAddress()
+        renderer_.vertex_ring().gpu_base()
         + prim.vertex_byte_offset;
     vbv.SizeInBytes =
         prim.vertex_count * static_cast<UINT>(sizeof(GxVertexOut));
@@ -8762,7 +8762,7 @@ bool GxBackend::on_cached_packet_draw_run(
     D3D12_INDEX_BUFFER_VIEW ibv{};
     if (prim.indexed) {
         ibv.BufferLocation =
-            renderer_.index_ring().resource()->GetGPUVirtualAddress()
+            renderer_.index_ring().gpu_base()
             + static_cast<std::size_t>(prim.first_index) *
                   sizeof(std::uint16_t);
         ibv.SizeInBytes =
@@ -8936,7 +8936,7 @@ void GxBackend::on_cached_draw_run_draw(
 
     D3D12_VERTEX_BUFFER_VIEW vbv{};
     vbv.BufferLocation =
-        renderer_.vertex_ring().resource()->GetGPUVirtualAddress()
+        renderer_.vertex_ring().gpu_base()
         + prim.vertex_byte_offset;
     vbv.SizeInBytes =
         prim.vertex_count * static_cast<UINT>(sizeof(GxVertexOut));
@@ -8945,7 +8945,7 @@ void GxBackend::on_cached_draw_run_draw(
     D3D12_INDEX_BUFFER_VIEW ibv{};
     if (prim.indexed) {
         ibv.BufferLocation =
-            renderer_.index_ring().resource()->GetGPUVirtualAddress()
+            renderer_.index_ring().gpu_base()
             + static_cast<std::size_t>(prim.first_index) *
                   sizeof(std::uint16_t);
         ibv.SizeInBytes =
@@ -9157,7 +9157,7 @@ void GxBackend::on_draw(
     // offsets.  Both rings are persistently mapped upload buffers.
     D3D12_VERTEX_BUFFER_VIEW vbv{};
     vbv.BufferLocation =
-        renderer_.vertex_ring().resource()->GetGPUVirtualAddress()
+        renderer_.vertex_ring().gpu_base()
         + prim.vertex_byte_offset;
     vbv.SizeInBytes    =
         prim.vertex_count * static_cast<UINT>(sizeof(GxVertexOut));
@@ -9166,7 +9166,7 @@ void GxBackend::on_draw(
     D3D12_INDEX_BUFFER_VIEW ibv{};
     if (prim.indexed) {
         ibv.BufferLocation =
-            renderer_.index_ring().resource()->GetGPUVirtualAddress()
+            renderer_.index_ring().gpu_base()
             + static_cast<std::size_t>(prim.first_index) *
                   sizeof(std::uint16_t);
         ibv.SizeInBytes =
