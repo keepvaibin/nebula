@@ -34,6 +34,7 @@
 #include <cwchar>
 #include <iostream>
 #include <stdexcept>
+#include <sstream>
 
 #pragma comment(lib, "d3dcompiler.lib")
 
@@ -611,8 +612,8 @@ bool PipelineCache::initialize(
     std::filesystem::create_directories(cache_dir_, ec);
     // A failure here is non-fatal — we simply won't have disk persistence.
 
-    // Warm the DXBC cache from disk: run 2+ never invokes FXC for shaders
-    // seen on any earlier run.
+    // Warm valid saved stages. This cannot prepare genuinely new shader
+    // configurations or recover stages that never persisted successfully.
     load_disk_cache();
     load_pso_key_cache();
     if (pipeline_library_enabled()) {
@@ -622,6 +623,22 @@ bool PipelineCache::initialize(
     if (prewarm_jobs != 0 && pso_prewarm_blocking_enabled()) {
         wait_for_cached_pso_prewarm(prewarm_jobs);
     }
+
+    // One bounded startup record is useful even when gameplay diagnostics
+    // are off. It reports preparation, not an assertion of future coverage.
+    std::ostringstream ready;
+    ready << "[pipeline-cache-ready] pairs=" << shader_blobs_.size()
+          << " vertex-stages=" << vertex_shader_blobs_.size()
+          << " pixel-stages=" << pixel_shader_blobs_.size()
+          << " known-keys=" << warm_pso_keys_.size()
+          << " prewarm-enqueued=" << prewarm_jobs
+          << " published=" << published_.size()
+          << " pending=" << in_flight_.size()
+          << " shader-repair=" << shader_cache_repair_pending_
+          << " key-repair=" << pso_cache_repair_pending_
+          << " driver-library=" << (pipeline_library_ ? "available" : "unavailable")
+          << " loaded-library-bytes=" << pipeline_library_blob_.size() << '\n';
+    std::cerr << ready.str();
 
     return true;
 }
@@ -726,6 +743,9 @@ ID3D12PipelineState* PipelineCache::get(
     const ShaderPairKey shader_pair_hash{key.vs_hash, key.ps_hash};
     const bool blob_cache_hit =
         shader_blobs_.find(shader_pair_hash) != shader_blobs_.end();
+    const bool vs_cache_hit = vertex_shader_blobs_.contains(key.vs_hash);
+    const bool ps_cache_hit = pixel_shader_blobs_.contains(key.ps_hash);
+    const bool known_key = persisted_pso_keys_.contains(key);
     const ShaderPair* blobs = get_or_compile_blobs(key, ps_key, vs_key);
     const auto blobs_end = std::chrono::steady_clock::now();
 
@@ -752,7 +772,8 @@ ID3D12PipelineState* PipelineCache::get(
     const std::uint64_t total_us = elapsed_us(miss_start, pso_end);
     if (trace_gx_stalls_enabled() &&
         (total_us >= trace_gx_stall_threshold_us() || raw == nullptr)) {
-        std::cerr << "[gx-pso-miss] key=0x" << std::hex << key_hash
+        std::ostringstream message;
+        message << "[gx-pso-miss] key=0x" << std::hex << key_hash
                   << " vs=0x" << key.vs_hash
                   << " ps=0x" << key.ps_hash
                   << " blend=0x" << key.render_state.blend_bits
@@ -764,11 +785,15 @@ ID3D12PipelineState* PipelineCache::get(
                   << " cull=" << static_cast<unsigned>(key.render_state.cull)
                   << " pixfmt=" << static_cast<unsigned>(key.render_state.pixfmt)
                   << " blob-cache-hit=" << (blob_cache_hit ? 1 : 0)
+                  << " vs-cache-hit=" << (vs_cache_hit ? 1 : 0)
+                  << " ps-cache-hit=" << (ps_cache_hit ? 1 : 0)
+                  << " key-known=" << (known_key ? 1 : 0)
                   << " blob-us=" << elapsed_us(miss_start, blobs_end)
                   << " pso-us=" << elapsed_us(pso_start, pso_end)
                   << " total-us=" << total_us
                   << " success=" << (raw != nullptr ? 1 : 0)
                   << '\n';
+        std::cerr << message.str();
     }
     return raw;
 }
@@ -1170,6 +1195,12 @@ void PipelineCache::load_disk_cache() {
         // writer also validates a retained file prefix before persisting
         // new records. Invalid input is left untouched until replacement succeeds.
         shader_cache_repair_pending_ = true;
+        if (trace_gx_stalls_enabled()) {
+            std::ostringstream message;
+            message << "[shader-cache-rejected] reason=header-or-version magic=" << magic
+                    << " version=" << version << " expected-version=" << kShaderCacheVersion << '\n';
+            std::cerr << message.str();
+        }
         return;
     }
     unsigned loaded = 0;
@@ -1209,6 +1240,12 @@ void PipelineCache::load_pso_key_cache() {
         magic != kPsoKeyCacheMagic || version != kPsoKeyCacheVersion) {
         std::fclose(f);
         pso_cache_repair_pending_ = true;
+        if (trace_gx_stalls_enabled()) {
+            std::ostringstream message;
+            message << "[pso-key-cache-rejected] reason=header-or-version magic=" << magic
+                    << " version=" << version << " expected-version=" << kPsoKeyCacheVersion << '\n';
+            std::cerr << message.str();
+        }
         return;
     }
 
@@ -1445,17 +1482,27 @@ void PipelineCache::flush_pipeline_library() {
     pipeline_library_dirty_ = false;
 }
 
+bool PipelineCache::find_cached_shader_stages(
+    const PsoKey& key, ShaderPair& out) const {
+    out = {};
+    const auto vs = vertex_shader_blobs_.find(key.vs_hash);
+    const auto ps = pixel_shader_blobs_.find(key.ps_hash);
+    if (vs == vertex_shader_blobs_.end() || !vs->second ||
+        ps == pixel_shader_blobs_.end() || !ps->second) return false;
+    out.vs_hash = key.vs_hash;
+    out.ps_hash = key.ps_hash;
+    out.vs = vs->second;
+    out.ps = ps->second;
+    return true;
+}
+
 std::uint64_t PipelineCache::enqueue_cached_pso_prewarm(unsigned worker_count) {
     if (!pso_prewarm_enabled() || warm_pso_keys_.empty()) {
         return 0;
     }
 
-    const unsigned threads = std::clamp(worker_count, 1u, 4u);
-    workers_.reserve(threads);
-    for (unsigned i = 0; i < threads; ++i) {
-        workers_.emplace_back([this] { worker_main(); });
-    }
-
+    published_.reserve(warm_pso_keys_.size());
+    in_flight_.reserve(warm_pso_keys_.size());
     std::uint64_t enqueued = 0;
     const std::uint64_t limit = pso_prewarm_limit();
     {
@@ -1464,18 +1511,19 @@ std::uint64_t PipelineCache::enqueue_cached_pso_prewarm(unsigned worker_count) {
             if (enqueued >= limit) {
                 break;
             }
-            const auto blobs = shader_blobs_.find(
-                ShaderPairKey{key.vs_hash, key.ps_hash});
-            if (blobs == shader_blobs_.end() ||
-                !blobs->second.vs || !blobs->second.ps) {
+            // A failed/interrupted pair-file save can leave both component
+            // stages under other pairs. Their hashes fully identify the same
+            // DXBC needed here; exact-pair presence is not a prewarm condition.
+            ShaderPair stages{};
+            if (!find_cached_shader_stages(key, stages)) {
                 continue;
             }
             jobs_.push_back(CompileJob{
                 key,
                 PixelShaderKey{},
                 VertexShaderKey{},
-                blobs->second.vs,
-                blobs->second.ps,
+                stages.vs,
+                stages.ps,
                 true});
             in_flight_.insert(key);
             ++enqueued;
@@ -1486,6 +1534,12 @@ std::uint64_t PipelineCache::enqueue_cached_pso_prewarm(unsigned worker_count) {
                   << " cached PSO prewarm jobs\n";
     }
     if (enqueued != 0) {
+        const unsigned threads = static_cast<unsigned>(
+            std::min<std::uint64_t>(std::clamp(worker_count, 1u, 4u), enqueued));
+        workers_.reserve(threads);
+        for (unsigned i = 0; i < threads; ++i) {
+            workers_.emplace_back([this] { worker_main(); });
+        }
         job_cv_.notify_all();
     }
     return enqueued;
