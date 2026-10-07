@@ -189,6 +189,24 @@ earlier accepted checkpoints are retained. The unrelated pre-existing
   the recordings do not establish that this condition occurred. No FPS gain
   is asserted. Input deadline checks remain unchanged: inspection confirms the
   normal pending-report query is a single acquire load, not a mutex traversal.
+- **Vertex decode preparation:** ordinary draws and cached packet runs now
+  use the existing shared stream decoder. Static token comparison established
+  that the two former loop bodies were identical, apart from comments and the
+  cached decoder's final size guard. Prepare consumed attribute byte sizes,
+  indexed array bases/strides and default position matrix once for the fixed
+  draw/run CP layout. NBT vector sizes also reach the decoder already prepared.
+  Per-vertex indexed reads, dependency recording, guest address arithmetic,
+  component conversion, matrix bytes and absent-field initialization remain.
+  No guest FP helper or scheduling boundary changed. Added an unrun literal
+  mixed-layout fixture with three packets, S16/F32 inputs, both color widths,
+  texcoord7, matrix indices, absent invalid format, and changed array
+  bases/strides/default matrix between runs. Existing direct/cached NBT and
+  ByteDequant oracles remain. Removed source work is up to one size calculation
+  per consumed attribute and two CP array lookups per indexed attribute per
+  vertex, replaced by one preparation per draw/run. Compiler hoisting may have
+  already eliminated some of the old work; setup cost on tiny packets and
+  decode-miss throughput must be measured. The critical-path contribution,
+  resulting machine code, output correctness and FPS saving remain unverified.
 
 For the sustained CPU candidates, contribution and milliseconds saved are
 **unmeasured**. Code inspection establishes removed work: one allocation per

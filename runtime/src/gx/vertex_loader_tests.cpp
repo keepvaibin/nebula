@@ -537,6 +537,85 @@ bool cached_packet_run_preserves_triangle_strip_boundaries(
     return ok;
 }
 
+bool prepared_vertex_inputs_preserve_mixed_layouts() {
+    using namespace galaxy::gx;
+    constexpr std::uint32_t position_base = 0x1000u, color_base = 0x2000u, tex_base = 0x3000u;
+    std::array<std::byte, 64> positions{}, colors{}, texcoords{};
+    const auto put_u16 = [](auto& bytes, unsigned offset, std::int32_t value) {
+        const auto bits = static_cast<std::uint16_t>(value);
+        bytes[offset] = static_cast<std::byte>(bits >> 8u);
+        bytes[offset + 1u] = static_cast<std::byte>(bits & 0xffu);
+    };
+    std::array<galaxy::GuestMemoryRegionV1, 3> regions{{
+        {position_base, 64u, positions.data()}, {color_base, 64u, colors.data()},
+        {tex_base, 64u, texcoords.data()}}};
+    galaxy::GuestMemoryV1 memory{}; memory.regions = regions.data(); memory.region_count = 3u;
+    GxState state;
+    VertexLoader loader;
+    VertexDescriptor desc{};
+    desc.has_tex_matrix_index[7] = true;
+    desc.position = {VcdType::Index16, 1u, 3u, 1u}; // S16 xyz / 2
+    desc.normal = {VcdType::Direct, 0u, 4u, 0u}; // raw F32
+    desc.color[1] = {VcdType::Index8, 1u, 1u, 0u}; // RGB888
+    desc.texcoord[7] = {VcdType::Index8, 1u, 3u, 4u}; // S16 st / 16
+    desc.texcoord[0].format = 0xffu; // absent format must never be inspected
+    for (unsigned variant = 0u; variant < 2u; ++variant) {
+        const unsigned pos_offset = variant * 24u, other_offset = variant * 32u;
+        const unsigned pos_stride = variant == 0u ? 8u : 12u;
+        const unsigned color_stride = variant == 0u ? 4u : 6u;
+        const unsigned tex_stride = variant == 0u ? 4u : 6u;
+        desc.color[0] = {VcdType::Direct, 1u, static_cast<std::uint8_t>(variant == 0u ? 3u : 5u), 0u};
+        state.load_cp(cp::kMatrixIndexA, 9u + variant);
+        for (const auto [attr, address, stride] : {
+                 std::array<std::uint32_t, 3>{0u, position_base + pos_offset, pos_stride},
+                 std::array<std::uint32_t, 3>{3u, color_base + other_offset, color_stride},
+                 std::array<std::uint32_t, 3>{11u, tex_base + other_offset, tex_stride}}) {
+            state.load_cp(static_cast<std::uint8_t>(cp::kArrayBaseBase + attr), address);
+            state.load_cp(static_cast<std::uint8_t>(cp::kArrayStrideBase + attr), stride);
+        }
+        std::vector<std::byte> fifo;
+        std::vector<CachedDrawPacket> packets;
+        const unsigned stride = variant == 0u ? 19u : 21u;
+        if (!expect(VertexLoader::source_vertex_size(desc) == stride,
+                    "mixed layout has independent literal FIFO size")) return false;
+        for (unsigned vertex = 0u; vertex < 3u; ++vertex) {
+            put_u16(positions, pos_offset + vertex * pos_stride, 2 * (vertex + 1u + variant * 10u));
+            put_u16(positions, pos_offset + vertex * pos_stride + 2u, -2 * static_cast<std::int32_t>(vertex + 1u));
+            put_u16(positions, pos_offset + vertex * pos_stride + 4u, 6);
+            const unsigned color_offset = other_offset + vertex * color_stride;
+            colors[color_offset] = std::byte{0x20}; colors[color_offset + 1u] = static_cast<std::byte>(vertex);
+            colors[color_offset + 2u] = std::byte{0x80};
+            put_u16(texcoords, other_offset + vertex * tex_stride, 16 * (vertex + 1u));
+            put_u16(texcoords, other_offset + vertex * tex_stride + 2u, -16 * static_cast<std::int32_t>(vertex));
+            const std::size_t offset = fifo.size();
+            append_u16(fifo, 1u);
+            fifo.push_back(static_cast<std::byte>(30u + vertex));
+            append_u16(fifo, static_cast<std::uint16_t>(vertex));
+            append_f32_be(fifo, 0.0f); append_f32_be(fifo, 1.0f); append_f32_be(fifo, 0.0f);
+            if (variant == 0u) append_u16(fifo, 0x1234u);
+            else fifo.insert(fifo.end(), {std::byte{0x11}, std::byte{0x22}, std::byte{0x33}, std::byte{0x44}});
+            fifo.push_back(static_cast<std::byte>(vertex)); fifo.push_back(static_cast<std::byte>(vertex));
+            packets.push_back(CachedDrawPacket{0xb8u, 1u, offset, offset, stride});
+        }
+        const auto decoded = loader.decode_cached_packet_run_vertices_with_layout(
+            fifo, 0u, packets, PrimitiveClass::Points, 0u, state, desc, stride, &memory);
+        if (!expect(decoded.vertices.size() == 3u && decoded.guest_array_reads.size() == 3u,
+                    "mixed run preserves vertices and exactly three indexed dependencies")) return false;
+        for (unsigned vertex = 0u; vertex < 3u; ++vertex) {
+            const auto& out = decoded.vertices[vertex];
+            if (!expect(out.position[0] == static_cast<float>(vertex + 1u + variant * 10u) &&
+                        out.position[1] == -static_cast<float>(vertex + 1u) && out.position[2] == 3.0f &&
+                        out.normal[0] == 0.0f && out.normal[1] == 1.0f && out.normal[2] == 0.0f &&
+                        out.color0 == 0x11223344u && out.color1 == (0x200080ffu | (vertex << 16u)) &&
+                        out.uv[7][0] == static_cast<float>(vertex + 1u) && out.uv[7][1] == -static_cast<float>(vertex) &&
+                        out.uv[0][0] == 0.0f && out.uv[0][1] == 0.0f &&
+                        out.mtx_indices[0] == 9u + variant && out.mtx_indices[2] == 30u + vertex,
+                        "mixed decode preserves literal values and refreshes CP/format state between runs")) return false;
+        }
+    }
+    return true;
+}
+
 bool byte_dequant_and_nbt3_match_cached_decode(
     galaxy::gx::UploadRing& vertex_ring,
     galaxy::gx::UploadRing& index_ring) {
@@ -763,6 +842,7 @@ bool immutable_upload_reuse_preserves_bytes(ID3D12Device* device) {
 
 int main() {
     if (!fixed_vertex_dequantization_preserves_bits()) return 1;
+    if (!prepared_vertex_inputs_preserve_mixed_layouts()) return 1;
     const ComPtr<ID3D12Device> device = create_warp_device();
     if (!expect(device != nullptr, "could not create D3D12 WARP device")) {
         return 1;
