@@ -182,6 +182,8 @@ public:
     // Bump-allocates within the current frame segment.  Exhaustion is a
     // GxFatalError (sized for worst observed frame x margin, never silently
     // dropped geometry).
+    // Alignment must be a nonzero power of two. Rejected requests do not
+    // consume bytes or advance the segment's content generation.
     Allocation allocate(std::size_t size, std::size_t alignment);
 
     Allocation upload_immutable(
@@ -204,6 +206,7 @@ private:
     std::size_t cursor_ = 0;
     unsigned frames_in_flight_ = 0;
     unsigned active_slot_ = 0;
+    bool frame_ready_ = false;
     bool segment_allocation_pending_ = true;
     std::uint64_t resource_identity_ = 0;
     std::vector<std::uint64_t> slot_generations_;

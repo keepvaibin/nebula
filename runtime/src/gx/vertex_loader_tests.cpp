@@ -22,7 +22,9 @@
 #include <cstdint>
 #include <cstring>
 #include <iostream>
+#include <limits>
 #include <span>
+#include <stdexcept>
 #include <vector>
 
 namespace {
@@ -998,6 +1000,82 @@ bool generated_index_boundaries_preserve_topology(ID3D12Device* device) {
     return true;
 }
 
+bool upload_ring_rejected_requests_preserve_state(ID3D12Device* device) {
+    using galaxy::gx::UploadRing;
+    UploadRing ring;
+    const auto rejects = [](auto&& action, const char* message) {
+        try {
+            action();
+        } catch (const std::runtime_error&) {
+            return expect(true, message);
+        }
+        return expect(false, message);
+    };
+    bool ok = rejects([&] { ring.begin_frame(0u); },
+        "uninitialized upload ring cannot begin a frame");
+    if (!expect(ring.initialize(device, "bounds-test", 64u, 2u),
+        "upload bounds ring initialization failed")) return false;
+    ok = rejects([&] { (void)ring.allocate(1u, 1u); },
+        "upload allocation requires a begun frame") && ok;
+    ComPtr<ID3D12Resource> original{ring.resource()};
+    const auto gpu_base = original->GetGPUVirtualAddress();
+    ring.begin_frame(0u);
+    const auto first = ring.allocate(31u, 1u);
+    ok = expect(first.offset == 0u && first.gpu == gpu_base,
+        "first upload starts at mapped resource base") && ok;
+    std::memset(first.cpu, 0x36, 31u);
+    ok = rejects([&] { (void)ring.allocate(1u, 0u); },
+        "zero alignment is rejected without consuming upload space") && ok;
+    ok = rejects([&] { (void)ring.allocate(1u, 3u); },
+        "non-power-of-two alignment is rejected") && ok;
+    ok = rejects([&] { (void)ring.allocate(std::numeric_limits<std::size_t>::max(), 1u); },
+        "wrapped end offset cannot pass upload capacity checking") && ok;
+    const auto aligned = ring.allocate(1u, 2u);
+    ok = expect(aligned.offset == 32u && aligned.cpu == first.cpu + 32u &&
+        aligned.gpu == gpu_base + 32u,
+        "rejected requests preserve cursor and valid alignment padding") && ok;
+    const std::size_t high_alignment = std::size_t{1} <<
+        (std::numeric_limits<std::size_t>::digits - 1u);
+    ok = rejects([&] { (void)ring.allocate(1u, high_alignment); },
+        "unavailable large alignment padding is rejected") && ok;
+    const auto tail = ring.allocate(31u, 1u);
+    ok = expect(tail.offset == 33u,
+        "failed padding request preserves the first frame tail") && ok;
+    ok = rejects([&] { (void)ring.allocate(1u, 1u); },
+        "full frame cannot overflow into another upload segment") && ok;
+    ring.begin_frame(1u);
+    const auto second = ring.allocate(31u, 1u);
+    ok = expect(second.offset == 64u && second.gpu == gpu_base + 64u,
+        "second upload frame starts in its own segment") && ok;
+    ok = rejects([&] { ring.begin_frame(2u); },
+        "invalid upload frame leaves active cursor intact") && ok;
+    ok = rejects([&] { (void)ring.allocate(std::numeric_limits<std::size_t>::max(), 1u); },
+        "wrapped byte request is rejected in a nonzero segment") && ok;
+    ok = expect(ring.allocate(33u, 1u).offset == 95u,
+        "rejected slot and size preserve second frame tail") && ok;
+    ok = expect(!ring.initialize(device, "overflow", std::numeric_limits<std::size_t>::max(), 2u) &&
+        !ring.initialize(device, "zero", 0u, 2u) &&
+        !ring.initialize(nullptr, "null", 64u, 2u) && ring.resource() == original.Get(),
+        "rejected reinitialization keeps original mapped buffer and dimensions") && ok;
+    ring.begin_frame(1u);
+    ok = expect(ring.allocate(64u, 1u).offset == 64u,
+        "original segment limits survive rejected initialization") && ok;
+    // Test-only mapped memory read; production does not read UPLOAD memory.
+    for (unsigned i = 0u; i < 31u; ++i) {
+        if (!expect(first.cpu[i] == std::byte{0x36},
+            "other-frame allocations must not overwrite first-frame data")) return false;
+    }
+    if (!expect(ring.initialize(device, "replacement", 32u, 1u),
+        "replacement upload buffer initialization failed")) return false;
+    ok = rejects([&] { (void)ring.allocate(1u, 1u); },
+        "successful upload replacement requires a new frame") && ok;
+    ring.begin_frame(0u);
+    const auto replacement = ring.allocate(32u, 1u);
+    return expect(replacement.offset == 0u &&
+        replacement.gpu == ring.resource()->GetGPUVirtualAddress(),
+        "successful replacement refreshes upload addresses and cursors") && ok;
+}
+
 bool immutable_upload_reuse_preserves_bytes(ID3D12Device* device) {
     galaxy::gx::UploadRing ring;
     if (!expect(ring.initialize(device, "immutable-test", 4096, 2),
@@ -1127,6 +1205,7 @@ int main() {
     bool ok = true;
     ok = generated_index_boundaries_preserve_topology(device.Get()) && ok;
     ok = immutable_upload_reuse_preserves_bytes(device.Get()) && ok;
+    ok = upload_ring_rejected_requests_preserve_state(device.Get()) && ok;
     ok = byte_dequant_and_nbt3_match_cached_decode(vertex_ring, index_ring) && ok;
     ok = load_position_only_clears_reused_upload_memory(
              vertex_ring, index_ring) && ok;
