@@ -732,27 +732,39 @@ FifoParser::CachedDisplayList* FifoParser::find_cached_display_list(
         return nullptr;
     }
 
-    const std::vector<std::size_t> candidates = entries;
-    for (const std::size_t index : candidates) {
+    const auto inspect = [&](std::size_t index) -> CachedDisplayList* {
         if (index >= display_list_cache_.size()) {
-            continue;
+            return nullptr;
         }
         CachedDisplayList& cached = display_list_cache_[index];
         if (!cached.valid ||
             cached.guest_addr != canonical_addr ||
             cached.byte_size != byte_size) {
-            continue;
+            return nullptr;
         }
         if (cached.bytes.size() != bytes.size() ||
             !std::equal(bytes.begin(), bytes.end(), cached.bytes.begin())) {
             invalidate_display_list_cache_index(index);
-            continue;
+            return nullptr;
         }
         if (!display_list_dependencies_match(cached, state)) {
-            continue;
+            return nullptr;
         }
         cached.last_used = ++display_list_cache_tick_;
         return &cached;
+    };
+    // The ordinary single-variant hit needs no heap allocation. inspect() can
+    // erase the map entry on changed bytes, so consume its sole index first
+    // and do not touch entries afterward. Multi-variant invalidation retains
+    // the owned candidate list that protects iteration from map erasure.
+    if (entries.size() == 1u) {
+        return inspect(entries.front());
+    }
+    const std::vector<std::size_t> candidates = entries;
+    for (const std::size_t index : candidates) {
+        if (auto* cached = inspect(index)) {
+            return cached;
+        }
     }
 
     return nullptr;

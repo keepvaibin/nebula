@@ -6,6 +6,7 @@
 #include <bit>
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
 #include <chrono>
 #include <thread>
 #include <cstdlib>
@@ -804,6 +805,85 @@ public:
             snapshots.empty() && captured_bytes == 0u;
     }
 
+    static bool decoded_vertex_keys_track_only_consumed_state() {
+        auto backend = std::make_unique<GxBackend>();
+        auto& state = backend->state_;
+        state.load_cp(cp::kVcdLo, 1u << 9u); // direct position, no matrix index
+        state.load_cp(cp::kVatABase, 1u | (4u << 1u)); // F32 XYZ
+        std::vector<std::byte> bytes;
+        append_be_u16(bytes, 1u);
+        for (const std::uint32_t bits : {0x3f800000u, 0x40000000u, 0x40400000u})
+            append_be_u32(bytes, bits);
+        CachedDrawPacket packet{};
+        packet.vertex_count = 1u;
+        packet.draw_payload_size = 12u;
+        const auto key = [&] {
+            return backend->decoded_packet_run_cache_key(
+                1u, 0u, PrimitiveClass::Points, 0u, state.vertex_desc(0u));
+        };
+        VertexLoader loader;
+        const auto decode = [&](GuestMemoryV1* memory = nullptr) {
+            const auto desc = state.vertex_desc(0u);
+            return loader.decode_cached_packet_run_vertices_with_layout(
+                bytes, 0u, std::span<const CachedDrawPacket>(&packet, 1u),
+                PrimitiveClass::Points, 0u, state, desc,
+                VertexLoader::source_vertex_size(desc), memory);
+        };
+        const auto equal_vertices = [](const auto& a, const auto& b) {
+            return a.vertices.size() == b.vertices.size() &&
+                std::memcmp(a.vertices.data(), b.vertices.data(),
+                    a.vertices.size() * sizeof(GxVertexOut)) == 0;
+        };
+        const auto initial_key = key();
+        const auto initial = decode();
+        state.load_cp(cp::kMatrixIndexA, 0x123400u); // low six bits unchanged
+        state.load_cp(cp::kMatrixIndexB, 0x567890u);
+        for (unsigned attr = 0u; attr < 12u; ++attr) {
+            state.load_cp(static_cast<std::uint8_t>(cp::kArrayBaseBase + attr), 0x1000u + attr * 32u);
+            state.load_cp(static_cast<std::uint8_t>(cp::kArrayStrideBase + attr), 16u + attr);
+        }
+        if (!(key() == initial_key) || !equal_vertices(decode(), initial)) return false;
+        state.load_cp(cp::kMatrixIndexA, 3u);
+        if (key() == initial_key || equal_vertices(decode(), initial)) return false;
+
+        // A packet-owned PNMTXIDX supersedes the default CP position index.
+        state.load_cp(cp::kVcdLo, (1u << 9u) | 1u);
+        bytes.insert(bytes.begin() + 2u, std::byte{6u});
+        packet.draw_payload_size = 13u;
+        const auto packet_key = key();
+        const auto packet_owned = decode();
+        state.load_cp(cp::kMatrixIndexA, 12u);
+        if (!(key() == packet_key) || !equal_vertices(decode(), packet_owned)) return false;
+
+        // Indexed position base and stride really do change the decoded data.
+        state.load_cp(cp::kVcdLo, 2u << 9u); // Index8 position
+        state.load_cp(cp::kArrayBaseBase, 0x1000u);
+        state.load_cp(cp::kArrayStrideBase, 12u);
+        std::array<std::byte, 32> arrays{};
+        const std::array<std::uint32_t, 8> values{
+            0x3f800000u, 0x40000000u, 0x40400000u, 0u,
+            0x40800000u, 0x40a00000u, 0x40c00000u, 0u};
+        for (unsigned i = 0u; i < values.size(); ++i)
+            for (unsigned byte = 0u; byte < 4u; ++byte)
+                arrays[i * 4u + byte] = static_cast<std::byte>(values[i] >> (24u - byte * 8u));
+        GuestMemoryRegionV1 region{0x1000u, static_cast<std::uint32_t>(arrays.size()), arrays.data()};
+        GuestMemoryV1 memory{};
+        memory.regions = &region;
+        memory.region_count = 1u;
+        bytes = {std::byte{0u}, std::byte{1u}, std::byte{0u}};
+        packet.draw_payload_size = 1u;
+        const auto indexed_key = key();
+        const auto indexed = decode(&memory);
+        state.load_cp(cp::kArrayBaseBase, 0x1010u);
+        if (key() == indexed_key || equal_vertices(decode(&memory), indexed)) return false;
+        state.load_cp(cp::kArrayBaseBase, 0x1000u);
+        bytes[2] = std::byte{1u};
+        const auto stride_key = key();
+        const auto stride = decode(&memory);
+        state.load_cp(cp::kArrayStrideBase, 16u);
+        return !(key() == stride_key) && !equal_vertices(decode(&memory), stride);
+    }
+
     static bool worker_stage_seals_before_releasing(
         const NbtFixture& fixture,
         GuestMemoryV1& memory,
@@ -1100,6 +1180,10 @@ int main() {
     memory.cpu_dirty_page_word_count = 1u;
 
     bool ok = true;
+    ok = expect(
+             galaxy::gx::GxBackendMemorySnapshotTestAccess::
+                 decoded_vertex_keys_track_only_consumed_state(),
+             "decoded vertex key lost a consumed input or retained unrelated CPU state") && ok;
     ok = expect(
              galaxy::gx::GxBackendMemorySnapshotTestAccess::
                  immutable_nested_display_list_versions_and_reuse(),

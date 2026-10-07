@@ -4927,7 +4927,8 @@ GALAXY_ALWAYS_INLINE bool guest_dirty_page_range_fast(
     std::uint32_t page_shift,
     std::uint32_t page_word_count,
     std::uint32_t* first_page,
-    std::uint32_t* last_page) {
+    std::uint32_t* last_page,
+    bool clip_to_tracker = false) {
     if (size == 0u || page_word_count == 0u || page_shift >= 32u ||
         first_page == nullptr || last_page == nullptr) {
         return false;
@@ -4943,6 +4944,9 @@ GALAXY_ALWAYS_INLINE bool guest_dirty_page_range_fast(
     if (alias_tag != 0u && alias_tag != 0x80000000u &&
         alias_tag != 0xC0000000u) {
         return false;
+    }
+    if (((address ^ static_cast<std::uint32_t>(write_last)) & 0xE0000000u) != 0u) {
+        return false; // A span cannot cross physical/cached/uncached aliases.
     }
     const std::uint32_t physical_begin =
         static_cast<std::uint32_t>(address & 0x1FFFFFFFu);
@@ -4964,20 +4968,48 @@ GALAXY_ALWAYS_INLINE bool guest_dirty_page_range_fast(
     const std::uint64_t tracked_end = tracked_begin + tracked_size;
     const std::uint64_t physical_end =
         static_cast<std::uint64_t>(physical_last) + 1u;
-    if (physical_begin < tracked_begin || physical_end > tracked_end) {
+    if (!clip_to_tracker &&
+        (physical_begin < tracked_begin || physical_end > tracked_end)) {
         return false;
     }
+    const std::uint64_t overlap_begin = std::max<std::uint64_t>(physical_begin, tracked_begin);
+    const std::uint64_t overlap_end = std::min(physical_end, tracked_end);
+    if (overlap_begin >= overlap_end) return false;
 
     const auto first = static_cast<std::uint32_t>(
-        (physical_begin - tracked_begin) >> page_shift);
+        (overlap_begin - tracked_begin) >> page_shift);
     const auto last = static_cast<std::uint32_t>(
-        (physical_end - 1u - tracked_begin) >> page_shift);
+        (overlap_end - 1u - tracked_begin) >> page_shift);
     if (last / 64u >= page_word_count) {
         return false;
     }
     *first_page = first;
     *last_page = last;
     return true;
+}
+
+// Rare span crossing a tracker boundary. Keep this out of scalar-store code
+// and retain the full-coverage return value of the fast helpers: a partial
+// mark must not suppress the original notify_write fallback. Each tracker
+// owns its overlap independently, even when the other covers the whole write.
+template <typename Word>
+GALAXY_NOINLINE inline void guest_mark_partial_dirty_pages(
+    Word* words, std::uint32_t address, std::uint32_t size,
+    std::uint32_t base, std::uint32_t extent,
+    std::uint32_t shift, std::uint32_t word_count) {
+    std::uint32_t first = 0u, last = 0u;
+    if (words == nullptr || !guest_dirty_page_range_fast(
+            address, size, base, extent, shift, word_count, &first, &last, true)) return;
+    for (std::uint32_t page = first;; ++page) {
+        const std::uint64_t bit = UINT64_C(1) << (page % 64u);
+        if constexpr (std::is_same_v<Word, std::atomic_uint64_t>) {
+            if ((words[page / 64u].load(std::memory_order_relaxed) & bit) == 0u)
+                words[page / 64u].fetch_or(bit, std::memory_order_relaxed);
+        } else {
+            words[page / 64u] |= bit;
+        }
+        if (page == last) break;
+    }
 }
 
 GALAXY_ALWAYS_INLINE bool guest_mark_dirty_page_fast(
@@ -4998,6 +5030,9 @@ GALAXY_ALWAYS_INLINE bool guest_mark_dirty_page_fast(
             memory->dirty_page_word_count,
             &first_page,
             &last_page)) {
+        guest_mark_partial_dirty_pages(memory->dirty_page_words, address, size,
+            memory->dirty_tracked_base, memory->dirty_tracked_size,
+            memory->dirty_page_shift, memory->dirty_page_word_count);
         return false;
     }
 
@@ -5034,6 +5069,12 @@ GALAXY_ALWAYS_INLINE bool guest_mark_cpu_dirty_page_fast(
     if (physical_address < memory->cpu_dirty_tracked_base ||
         physical_address - memory->cpu_dirty_tracked_base >=
             memory->cpu_dirty_tracked_size) {
+        if (physical_address < memory->cpu_dirty_tracked_base &&
+            static_cast<std::uint64_t>(physical_address) + size > memory->cpu_dirty_tracked_base) {
+            guest_mark_partial_dirty_pages(memory->cpu_dirty_page_words, address, size,
+                memory->cpu_dirty_tracked_base, memory->cpu_dirty_tracked_size,
+                memory->cpu_dirty_page_shift, memory->cpu_dirty_page_word_count);
+        }
         return false;
     }
     std::uint32_t first_page = 0u;
@@ -5047,6 +5088,9 @@ GALAXY_ALWAYS_INLINE bool guest_mark_cpu_dirty_page_fast(
             memory->cpu_dirty_page_word_count,
             &first_page,
             &last_page)) {
+        guest_mark_partial_dirty_pages(memory->cpu_dirty_page_words, address, size,
+            memory->cpu_dirty_tracked_base, memory->cpu_dirty_tracked_size,
+            memory->cpu_dirty_page_shift, memory->cpu_dirty_page_word_count);
         return false;
     }
 

@@ -26,6 +26,7 @@
 #include <algorithm>
 #include <array>
 #include <atomic>
+#include <bit>
 #include <cctype>
 #include <chrono>
 #include <condition_variable>
@@ -14749,15 +14750,17 @@ void GuestAddressSpace::dsp_native_stage_aram_updates(
     for (std::size_t word_index = 0u;
          word_index < kDspNativeAramDirtyWordCount;
          ++word_index) {
-        const std::uint64_t bits =
-            std::exchange(dsp_native_aram_cpu_dirty_words_[word_index], 0u);
+        std::uint64_t bits = dsp_native_aram_cpu_dirty_words_[word_index];
         if (bits == 0u) {
             continue;
         }
-        for (std::uint32_t bit = 0u; bit < 64u; ++bit) {
-            if ((bits & (UINT64_C(1) << bit)) == 0u) {
-                continue;
-            }
+        // CPU-owned tracker; no worker clears or adds these bits. Empty words
+        // need no store, and nonempty words visit only their marked pages in
+        // the same ascending order as the old 64-bit scan.
+        dsp_native_aram_cpu_dirty_words_[word_index] = 0u;
+        while (bits != 0u) {
+            const auto bit = static_cast<std::uint32_t>(std::countr_zero(bits));
+            bits &= bits - 1u;
             const auto page_index = static_cast<std::uint32_t>(
                 word_index * 64u + bit);
             auto& update = dsp_native_aram_dirty_updates_[update_count++];

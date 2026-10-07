@@ -11,6 +11,7 @@
 #include <sstream>
 #include <string>
 #include <vector>
+#include <utility>
 
 namespace {
 
@@ -410,6 +411,105 @@ int main() try {
                 key.channel[3] == 0u,
                 "one-channel VS key did not pair color0 with alpha0")) {
             return 1;
+        }
+    }
+
+    {
+        // These writes change GPU uniforms, not shader programs. Exercise the
+        // enable/type transitions separately so narrowing dirty bits cannot
+        // accidentally reuse a pipeline when codegen actually changes.
+        GxState uniform_state;
+        const auto write = [&](std::uint8_t reg, std::uint32_t value) {
+            uniform_state.load_bp((static_cast<std::uint32_t>(reg) << 24u) | value);
+        };
+        const auto uniform_only = [&](std::uint8_t reg, std::uint32_t value) {
+            const auto ps = galaxy::gx::build_pixel_shader_key(uniform_state, 6u);
+            const auto vs = galaxy::gx::build_vertex_shader_key(uniform_state);
+            const auto rs = galaxy::gx::build_render_state_key(uniform_state);
+            (void)uniform_state.consume_dirty();
+            write(reg, value);
+            const auto dirty = uniform_state.consume_dirty();
+            return expect((dirty & GxState::kDirtyTevConstants) != 0u &&
+                    (dirty & (GxState::kDirtyTev | GxState::kDirtyXfShader |
+                              GxState::kDirtyRenderState)) == 0u &&
+                    ps == galaxy::gx::build_pixel_shader_key(uniform_state, 6u) &&
+                    vs == galaxy::gx::build_vertex_shader_key(uniform_state) &&
+                    rs == galaxy::gx::build_render_state_key(uniform_state),
+                "uniform-only BP update changed shader/pipeline state or lost its upload");
+        };
+        for (unsigned i = 0; i < galaxy::gx::bp::kIndMtxCount; ++i) {
+            if (!uniform_only(static_cast<std::uint8_t>(galaxy::gx::bp::kIndMtxBase + i), 0x123u + i)) return 1;
+        }
+        for (unsigned i = 0; i < galaxy::gx::bp::kTexCoordSizeCount; ++i) {
+            if (!uniform_only(static_cast<std::uint8_t>(galaxy::gx::bp::kTexCoordSizeBase + i), 0x123u + i)) return 1;
+        }
+        if (!uniform_only(galaxy::gx::bp::kTevZEnv0, 0x123456u) ||
+            !uniform_only(galaxy::gx::bp::kAlphaCompare, 0x3456u) ||
+            !uniform_only(galaxy::gx::bp::kFogParam3, 0x12345u) ||
+            !uniform_only(galaxy::gx::bp::kFogParam3, 0x112345u)) return 1;
+        write(galaxy::gx::bp::kPeControl, 1u); // RGBA6
+        write(galaxy::gx::bp::kBlendMode, 1u << 4u); // alpha update
+        write(galaxy::gx::bp::kConstAlpha, 0x100u);
+        if (!uniform_only(galaxy::gx::bp::kConstAlpha, 0x17fu)) return 1;
+        for (const auto& transition : std::array<std::pair<std::uint8_t, std::uint32_t>, 4>{
+                std::pair{galaxy::gx::bp::kConstAlpha, 0x7fu},
+                std::pair{galaxy::gx::bp::kAlphaCompare, 0x013456u},
+                std::pair{galaxy::gx::bp::kFogParam3, 0x212345u},
+                std::pair{galaxy::gx::bp::kTevZEnv1, 4u}}) {
+            const auto ps = galaxy::gx::build_pixel_shader_key(uniform_state, 6u);
+            (void)uniform_state.consume_dirty();
+            write(transition.first, transition.second);
+            if (!expect((uniform_state.consume_dirty() & GxState::kDirtyTev) != 0u &&
+                    !(ps == galaxy::gx::build_pixel_shader_key(uniform_state, 6u)),
+                    "shader-changing BP update failed to invalidate the pixel key")) return 1;
+        }
+        // Classify the effective masked value, not the unmasked command.
+        write(galaxy::gx::bp::kBpMask, 0xffffu);
+        if (!uniform_only(galaxy::gx::bp::kAlphaCompare, 0xffabcdu)) return 1;
+        const auto masked_ps = galaxy::gx::build_pixel_shader_key(uniform_state, 6u);
+        write(galaxy::gx::bp::kBpMask, 0xff0000u);
+        (void)uniform_state.consume_dirty();
+        write(galaxy::gx::bp::kAlphaCompare, 0xaa0000u);
+        if (!expect((uniform_state.consume_dirty() & GxState::kDirtyTev) != 0u &&
+                !(masked_ps == galaxy::gx::build_pixel_shader_key(uniform_state, 6u)),
+                "masked alpha predicate write retained a stale pixel key")) return 1;
+    }
+
+    {
+        // Compare the cached dependency hash to a fresh state rebuilt from the
+        // entire raw register file, after every classified write. This detects
+        // a missed invalidation without adding counters to production code.
+        GxState state;
+        for (unsigned reg = 0; reg < 256u; ++reg) {
+            if (reg == galaxy::gx::bp::kBpMask) continue;
+            (void)state.dependency_shape_hash();
+            try {
+                state.load_bp((reg << 24u) | (0x321u + reg));
+            } catch (const GxFatalError&) { continue; }
+            GxState fresh;
+            for (unsigned source = 0; source < 256u; ++source) {
+                if (source == galaxy::gx::bp::kBpMask) continue;
+                try { fresh.load_bp((source << 24u) | state.bp(static_cast<std::uint8_t>(source))); }
+                catch (const GxFatalError&) { }
+            }
+            if (!expect(state.dependency_shape_hash() == fresh.dependency_shape_hash(),
+                    "BP dependency shape hash retained stale inputs")) return 1;
+        }
+        for (unsigned reg = 0; reg < 256u; ++reg) {
+            (void)state.dependency_shape_hash();
+            try { state.load_cp(static_cast<std::uint8_t>(reg), 0x123u + reg); }
+            catch (const GxFatalError&) { continue; }
+            // Rebuild CP/BP to force an uncached hash of the same inputs.
+            GxState fresh;
+            for (unsigned source = 0; source < 256u; ++source) {
+                try { fresh.load_cp(static_cast<std::uint8_t>(source), state.cp(static_cast<std::uint8_t>(source))); }
+                catch (const GxFatalError&) { }
+                if (source == galaxy::gx::bp::kBpMask) continue;
+                try { fresh.load_bp((source << 24u) | state.bp(static_cast<std::uint8_t>(source))); }
+                catch (const GxFatalError&) { }
+            }
+            if (!expect(state.dependency_shape_hash() == fresh.dependency_shape_hash(),
+                    "CP dependency shape hash retained stale inputs")) return 1;
         }
     }
 

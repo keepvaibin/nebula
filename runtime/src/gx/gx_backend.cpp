@@ -2930,6 +2930,11 @@ void GxBackend::reset_fifo_session_state() {
     ps_key_ = {};
     vs_key_ = {};
     render_state_key_ = {};
+    current_vs_hash_ = 0u;
+    current_ps_hash_ = 0u;
+    shader_key_hashes_valid_ = false;
+    current_pso_key_ = {};
+    current_pso_key_valid_ = false;
     current_pipeline_ = nullptr;
     current_vs_constants_ = 0u;
     current_ps_constants_ = 0u;
@@ -3497,6 +3502,23 @@ void GxBackend::invalidate_immutable_range_cache(
 }
 
 void GxBackend::copy_memory_snapshot_storage(MemorySnapshot& snapshot) {
+    const auto copy_one = [](MemorySnapshotStorage* storage) {
+        std::memcpy(storage->bytes.data(), storage->source, storage->size);
+        storage->copied = true;
+        // Sealed packets own their bytes. Never retain a dormant live alias.
+        storage->source = nullptr;
+    };
+    if (!parallel_memory_snapshot_copy_enabled() || snapshot_copy_worker_count() <= 1u) {
+        // Normal serial capture needs no heap-allocated work list or second
+        // walk. Preserve storage order and detach each copied live alias.
+        for (MemorySnapshotStorage& storage : snapshot.storage) {
+            if (storage.used && !storage.copied &&
+                storage.source != nullptr && storage.size != 0u) {
+                copy_one(&storage);
+            }
+        }
+        return;
+    }
     std::vector<MemorySnapshotStorage*> pending;
     pending.reserve(snapshot.storage.size());
     std::uint64_t pending_bytes = 0;
@@ -3509,15 +3531,6 @@ void GxBackend::copy_memory_snapshot_storage(MemorySnapshot& snapshot) {
         pending_bytes += storage.size;
     }
 
-    const auto copy_one = [](MemorySnapshotStorage* storage) {
-        std::memcpy(storage->bytes.data(), storage->source, storage->size);
-        storage->copied = true;
-        // A sealed frame packet must not retain even a dormant alias into
-        // simulation-owned memory. Pool reuse is keyed by capacity, not by
-        // the former source address.
-        storage->source = nullptr;
-    };
-
     if (pending.empty()) {
         return;
     }
@@ -3525,8 +3538,7 @@ void GxBackend::copy_memory_snapshot_storage(MemorySnapshot& snapshot) {
     const std::size_t worker_count = std::min<std::size_t>(
         snapshot_copy_worker_count(),
         pending.size());
-    if (!parallel_memory_snapshot_copy_enabled() ||
-        worker_count <= 1u ||
+    if (worker_count <= 1u ||
         pending_bytes < snapshot_parallel_copy_threshold()) {
         for (MemorySnapshotStorage* storage : pending) {
             copy_one(storage);
@@ -4575,7 +4587,8 @@ GxBackend::DecodedPacketRunCacheKey GxBackend::decoded_packet_run_cache_key(
     std::uint64_t cache_token,
     std::size_t packet_run_index,
     PrimitiveClass primitive,
-    std::uint8_t vtxfmt) const {
+    std::uint8_t vtxfmt,
+    const VertexDescriptor& desc) const {
     DecodedPacketRunCacheKey key{};
     key.cache_token = cache_token;
     key.packet_run_index = packet_run_index;
@@ -4586,11 +4599,19 @@ GxBackend::DecodedPacketRunCacheKey GxBackend::decoded_packet_run_cache_key(
     key.vat_a = state_.cp(static_cast<std::uint8_t>(cp::kVatABase + vtxfmt));
     key.vat_b = state_.cp(static_cast<std::uint8_t>(cp::kVatBBase + vtxfmt));
     key.vat_c = state_.cp(static_cast<std::uint8_t>(cp::kVatCBase + vtxfmt));
-    key.matrix_index_a = state_.cp(cp::kMatrixIndexA);
-    key.matrix_index_b = state_.cp(cp::kMatrixIndexB);
+    // The decoder reads only the default position index, and only when the
+    // packet has no PNMTXIDX. Texture-matrix defaults are consumed by fresh
+    // VS constants, not by decoded vertices. Keep them out of this CPU cache.
+    key.matrix_index_a = desc.has_pn_matrix_index ? 0u :
+        state_.cp(cp::kMatrixIndexA) & 0x3fu;
     for (unsigned attr = 0; attr < 12u; ++attr) {
-        key.array_base_stride[attr * 2u] = state_.array_base(attr);
-        key.array_base_stride[attr * 2u + 1u] = state_.array_stride(attr);
+        const VcdType type = attr == 0u ? desc.position.vcd :
+            attr == 1u ? desc.normal.vcd :
+            attr < 4u ? desc.color[attr - 2u].vcd : desc.texcoord[attr - 4u].vcd;
+        if (type == VcdType::Index8 || type == VcdType::Index16) {
+            key.array_base_stride[attr * 2u] = state_.array_base(attr);
+            key.array_base_stride[attr * 2u + 1u] = state_.array_stride(attr);
+        }
     }
     return key;
 }
@@ -7061,7 +7082,8 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
         if (total_us >= trace_gx_stall_threshold_us() ||
             producer_wait_us >= trace_gx_stall_threshold_us() ||
             frame_microprofile_enabled_) {
-            std::cerr << "[gx-frame-timing] frame=" << frame_index_
+            std::ostringstream timing_message;
+            timing_message << "[gx-frame-timing] frame=" << frame_index_
                   << " fifo-bytes=" << fifo_size
                   << " total-us=" << total_us
                   << " parse-us=" << parse_us
@@ -7218,6 +7240,7 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
                   << " fifo-hw-noop-us="
                   << frame_fifo_profile_.hw_noop_us
                   << '\n';
+            std::cerr << timing_message.str();
             if (frame_microprofile_enabled_ &&
                 frame_fifo_profile_.call_dl_count != 0) {
                 std::array<
@@ -7616,7 +7639,8 @@ ID3D12PipelineState* GxBackend::flush_draw_state(
         return current_pipeline_;
     }
 
-    // Always rebuild keys (cheap) so the PSO lookup uses fresh data.
+    // Rebuild canonical keys only for their dirty inputs; hash only changed
+    // keys. Uniform updates still upload their constants below.
     const bool tev_dirty  = (dirty & GxState::kDirtyTev)         != 0;
     const bool rs_dirty   = (dirty & GxState::kDirtyRenderState)  != 0;
     const bool xf_dirty   = (dirty & GxState::kDirtyXfShader)    != 0;
@@ -7639,12 +7663,21 @@ ID3D12PipelineState* GxBackend::flush_draw_state(
     const bool tex_dirty = frame_bindings_dirty_ ||
         texture_bindings_dirty_ || texture_binding_changed;
 
-    if (tev_dirty) {
-        ps_key_ = build_pixel_shader_key(state_, renderer_.efb_scale());
+    if (tev_dirty || !shader_key_hashes_valid_) {
+        const auto next = build_pixel_shader_key(state_, renderer_.efb_scale());
+        if (!shader_key_hashes_valid_ || !(next == ps_key_)) {
+            ps_key_ = next;
+            current_ps_hash_ = ps_key_.hash();
+        }
     }
-    if (xf_dirty || vcd_dirty) {
-        vs_key_ = build_vertex_shader_key(state_);
+    if (xf_dirty || vcd_dirty || !shader_key_hashes_valid_) {
+        const auto next = build_vertex_shader_key(state_);
+        if (!shader_key_hashes_valid_ || !(next == vs_key_)) {
+            vs_key_ = next;
+            current_vs_hash_ = vs_key_.hash();
+        }
     }
+    shader_key_hashes_valid_ = true;
     if (rs_dirty) {
         render_state_key_ = build_render_state_key(state_);
     }
@@ -7655,15 +7688,19 @@ ID3D12PipelineState* GxBackend::flush_draw_state(
     if (current_pipeline_ == nullptr || tev_dirty || xf_dirty ||
         vcd_dirty || rs_dirty || topology_dirty) {
         const PsoKey pso_key{
-            vs_key_.hash(),
-            ps_key_.hash(),
+            current_vs_hash_,
+            current_ps_hash_,
             render_state_key_,
         };
         const auto pso_start = time_detail
             ? std::chrono::steady_clock::now()
             : std::chrono::steady_clock::time_point{};
-        current_pipeline_ =
-            pipeline_cache_.get(pso_key, ps_key_, vs_key_);
+        if (current_pipeline_ == nullptr || !current_pso_key_valid_ ||
+            !(current_pso_key_ == pso_key)) {
+            current_pipeline_ = pipeline_cache_.get(pso_key, ps_key_, vs_key_);
+            current_pso_key_ = pso_key;
+            current_pso_key_valid_ = current_pipeline_ != nullptr;
+        }
         if (time_detail) {
             frame_flush_pso_us_ +=
                 elapsed_us(pso_start, std::chrono::steady_clock::now());
@@ -7768,9 +7805,7 @@ ID3D12PipelineState* GxBackend::flush_draw_state(
         std::uint64_t texture_table_us = 0;
         std::uint64_t sampler_table_us = 0;
         ID3D12Device* dev = renderer_.device();
-        const UINT srv_stride =
-            dev->GetDescriptorHandleIncrementSize(
-                D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+        const UINT srv_stride = texture_cache_.srv_descriptor_stride();
         if (texture_bindings_dirty_) {
             prune_dirty_texture_binding_tables();
         }
@@ -7870,42 +7905,26 @@ ID3D12PipelineState* GxBackend::flush_draw_state(
                     DescriptorRing::Table tbl =
                         renderer_.srv_ring().allocate(num_maps);
 
+                    D3D12_CPU_DESCRIPTOR_HANDLE sources[kMaxTextureMaps]{};
+                    const auto heap_start =
+                        texture_cache_.srv_heap()->GetCPUDescriptorHandleForHeapStart();
                     for (unsigned m = 0; m < num_maps; ++m) {
                         const TextureHandle& th = texture_handles[m];
                         if (th.resource != nullptr) {
-                            // Copy the cache-heap SRV into the frame's
-                            // shader-visible ring.
-                            D3D12_CPU_DESCRIPTOR_HANDLE src{
-                                texture_cache_.srv_heap()
-                                    ->GetCPUDescriptorHandleForHeapStart().ptr
+                            sources[m] = D3D12_CPU_DESCRIPTOR_HANDLE{
+                                heap_start.ptr
                                 + static_cast<SIZE_T>(th.srv_index) *
                                     srv_stride
                             };
-                            D3D12_CPU_DESCRIPTOR_HANDLE dst{
-                                tbl.cpu.ptr +
-                                static_cast<SIZE_T>(m) * srv_stride
-                            };
-                            dev->CopyDescriptors(
-                                1, &dst, nullptr,
-                                1, &src, nullptr,
-                                D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
                         } else {
-                            // Write a null SRV (zero-descriptor) so the slot
-                            // is valid.
-                            D3D12_SHADER_RESOURCE_VIEW_DESC null_desc{};
-                            null_desc.ViewDimension =
-                                D3D12_SRV_DIMENSION_TEXTURE2D;
-                            null_desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
-                            null_desc.Shader4ComponentMapping =
-                                D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-                            D3D12_CPU_DESCRIPTOR_HANDLE dst{
-                                tbl.cpu.ptr +
-                                static_cast<SIZE_T>(m) * srv_stride
-                            };
-                            dev->CreateShaderResourceView(
-                                nullptr, &null_desc, dst);
+                            sources[m] = texture_cache_.null_srv();
                         }
                     }
+                    // CPU-only sources, one contiguous frame-owned table.
+                    const UINT destination_size = num_maps;
+                    dev->CopyDescriptors(1, &tbl.cpu, &destination_size,
+                        num_maps, sources, nullptr,
+                        D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
                     current_texture_table_ = tbl.gpu;
                     frame_texture_tables_.emplace(table_key, tbl.gpu);
                 }
@@ -8499,7 +8518,8 @@ bool GxBackend::on_cached_packet_draw_run(
                   cache_token,
                   packet_run_index,
                   primitive,
-                  vtxfmt)
+                  vtxfmt,
+                  layout.desc)
             : DecodedPacketRunCacheKey{};
     LoadedPrimitive prim{};
     bool decoded_cache_hit = false;
