@@ -2,6 +2,7 @@
 #include "galaxy/gx/dependency_draw_memo.h"
 #include "galaxy/gx/dependency_range_memo.h"
 #include "galaxy/gx/fifo_cache_fingerprint.h"
+#include "galaxy/gx/texture_sampling.h"
 
 #include <algorithm>
 #include <array>
@@ -187,6 +188,56 @@ struct MemorySnapshotNbtProbeResult {
 
 class GxBackendMemorySnapshotTestAccess {
 public:
+    static bool texture_dependency_memos_follow_sampled_maps() {
+        GxState state;
+        detail::BroadDrawDependencyMemo memo;
+        const auto write = [&state](std::uint8_t reg, std::uint32_t value) {
+            state.load_bp((static_cast<std::uint32_t>(reg) << 24u) | value);
+        };
+        write(bp::kGenMode, 1u);
+        write(bp::kTevOrderBase, 6u | (1u << 6u));
+        const auto unused_hash = state.dependency_shape_hash();
+        const auto unused_revision = state.dependency_shape_revision();
+        if (sampled_texture_map_mask(state) != 0u ||
+            memo.contains(unused_revision, 0u)) return false;
+        memo.mark(0u);
+        // Clamp, TEV swaps and z format affect rendering but not which
+        // guest texture ranges are read. Keep dependency reuse for them.
+        write(bp::kTevColorEnvBase, 1u << 19u);
+        write(bp::kTevAlphaEnvBase, 15u);
+        write(bp::kTevZEnv1, 3u);
+        if (state.dependency_shape_hash() != unused_hash ||
+            state.dependency_shape_revision() != unused_revision ||
+            !memo.contains(unused_revision, 0u)) return false;
+
+        write(bp::kTevColorEnvBase, (1u << 19u) | 8u);
+        const auto live_hash = state.dependency_shape_hash();
+        if (live_hash == unused_hash || sampled_texture_map_mask(state) != (1u << 6u) ||
+            memo.contains(state.dependency_shape_revision(), 0u)) return false;
+        memo.mark(0u);
+        write(bp::kTevColorEnvBase, (1u << 19u) | 9u);
+        if (state.dependency_shape_hash() != live_hash ||
+            memo.contains(state.dependency_shape_revision(), 0u)) return false;
+        write(bp::kTevColorEnvBase, 1u << 19u);
+        if (state.dependency_shape_hash() != unused_hash) return false;
+
+        write(bp::kTevAlphaEnvBase, 15u | (4u << 4u));
+        if (state.dependency_shape_hash() != live_hash ||
+            sampled_texture_map_mask(state) != (1u << 6u)) return false;
+        write(bp::kTevAlphaEnvBase, 15u);
+        if (state.dependency_shape_hash() != unused_hash) return false;
+
+        write(bp::kTevZEnv1, 4u | 3u);
+        const auto z_revision = state.dependency_shape_revision();
+        if (state.dependency_shape_hash() != live_hash ||
+            memo.contains(z_revision, 0u)) return false;
+        memo.mark(0u);
+        write(bp::kTevZEnv1, 4u | 1u); // same enablement, different z format
+        return state.dependency_shape_hash() == live_hash &&
+            state.dependency_shape_revision() == z_revision &&
+            memo.contains(z_revision, 0u);
+    }
+
     static bool broad_draw_memo_uses_exact_owner_revisions() {
         GxState state;
         detail::BroadDrawDependencyMemo memo;
@@ -1640,6 +1691,10 @@ int main() {
              galaxy::gx::GxBackendMemorySnapshotTestAccess::
                  broad_draw_memo_uses_exact_owner_revisions(),
              "broad dependency memo reused changed state or lost saturated revision safety") && ok;
+    ok = expect(
+             galaxy::gx::GxBackendMemorySnapshotTestAccess::
+                 texture_dependency_memos_follow_sampled_maps(),
+             "texture dependency memo reused newly sampled maps or invalidated uniform-only changes") && ok;
     ok = expect(
              galaxy::gx::GxBackendMemorySnapshotTestAccess::
                  direct_pe_cached_draw_runs_preserve_events(),
