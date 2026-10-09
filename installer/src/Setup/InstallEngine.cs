@@ -144,6 +144,7 @@ namespace Nebula.Setup
         private readonly object logLock = new object();
         private readonly Stopwatch clock = Stopwatch.StartNew();
         private string staging;
+        private bool preservingModules;
         private double stageBase, stageWeight;
 
         public InstallEngine(InstallRequest request, IInstallProgress progress, CancellationToken cancel)
@@ -164,6 +165,7 @@ namespace Nebula.Setup
 
         public string LogPath { get; private set; }
         public string InstalledVersionDir { get; private set; }
+        public string ModuleUpdateNotice { get; private set; }
         public TimeSpan Elapsed { get { return clock.Elapsed; } }
 
         /// <summary>Everything compiled modules depend on: generator, runtime, toolchain and recipe.</summary>
@@ -236,12 +238,28 @@ namespace Nebula.Setup
             try
             {
                 var current = InstalledInfo.Read(layout);
-                bool needInput = request.GameInput != null || !RetainedInputsValid() || !ContentValid();
+                preservingModules = current != null && request.Mode == InstallMode.Update;
+                if (preservingModules)
+                {
+                    preservingModules = request.GameInput == null && current.FilesIntact(ModuleFiles) && ContentValid();
+                    if (preservingModules)
+                    {
+                        try { ModuleCompatibility.Validate(current.Directory, Json.Parse(Payload.ReadText("module-compatibility.json"))); }
+                        catch (InvalidDataException error) { preservingModules = false; Log("Module validation requires rebuild fallback: " + error.Message); }
+                        catch (InvalidOperationException error) { preservingModules = false; Log("Module ABI requires rebuild fallback: " + error.Message); }
+                    }
+                    if (preservingModules && current.ModuleKey != ModuleKey &&
+                        !File.Exists(Path.Combine(current.Directory, "relink-cache", "manifest.json")))
+                    {
+                        preservingModules = false;
+                        Log("No retained objects for changed module dependencies. Rebuilding once as the last resort; this install will retain objects for later relinks.");
+                    }
+                }
+                bool needInput = !preservingModules && (request.GameInput != null || !RetainedInputsValid() || !ContentValid());
                 if (needInput && request.GameInput == null)
                     throw new InvalidOperationException("Choose your Super Mario Galaxy ISO, RVZ or extracted folder.");
 
-                bool reuseModules = current != null && current.ModuleKey == ModuleKey && request.Mode == InstallMode.Update
-                    && current.FilesIntact(ModuleFiles);
+                bool reuseModules = preservingModules;
                 Log("Reuse compiled modules: " + reuseModules);
 
                 // Downloads run while the game is extracted and recompiled.
@@ -279,6 +297,24 @@ namespace Nebula.Setup
                     Stage(0.20, 0.70, "Reusing the compiled game");
                     current.CopyFiles(app, ModuleFiles);
                     foreach (var dll in current.RuntimeDllNames()) current.CopyFiles(app, dll);
+                    string patchLibraries = Path.Combine(staging, "runtime-libs");
+                    foreach (var lib in RuntimeLibraries) Payload.Extract(lib, Path.Combine(patchLibraries, lib));
+                    try
+                    {
+                    bool linked = RelinkCache.Update(current.Directory, app, patchLibraries, toolchain.Id,
+                        delegate(IList<string> args) {
+                            if (!toolchain.IsReady) toolchain.Ensure(BackgroundProgress, Log, cancel);
+                            return RunTool(toolchain.LldLink, args, toolchain.BuildEnvironment(), Log);
+                        }, Log);
+                    if (!linked)
+                    {
+                        ModuleUpdateNotice = "Host updated. Existing game helpers retained: this older installation has no compiled-object cache.";
+                        Log(ModuleUpdateNotice);
+                    }
+                    ModuleCompatibility.Validate(app, Json.Parse(Payload.ReadText("module-compatibility.json")));
+                    }
+                    catch (InvalidDataException error) { Log("Retained object validation failed: " + error.Message); RebuildForUpdate(app); }
+                    catch (InvalidOperationException error) { Log("Relink path unavailable: " + error.Message); RebuildForUpdate(app); }
                 }
                 else
                 {
@@ -320,6 +356,26 @@ namespace Nebula.Setup
         }
 
         // ---- steps ---------------------------------------------------------------
+
+        private void RebuildForUpdate(string app)
+        {
+            cancel.ThrowIfCancellationRequested();
+            if (!RetainedInputsValid() || !ContentValid())
+                throw new InvalidOperationException("Relinking is unavailable and the retained game input is missing. Run Setup again and select your game to rebuild; the current install is unchanged.");
+            preservingModules = false;
+            ModuleUpdateNotice = null;
+            Stage(0.20, 0.70, "Rebuilding game modules (last-resort update)");
+            string expected = Path.GetFullPath(Path.Combine(staging, "app"));
+            if (!string.Equals(Path.GetFullPath(app), expected, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException("Invalid update staging path.");
+            FileUtil.DeleteTree(app);
+            Directory.CreateDirectory(app);
+            toolchain.Ensure(BackgroundProgress, Log, cancel);
+            string sourceDir = source.Ensure(layout.Sources, request.SourceOverride, BackgroundProgress, Log, cancel);
+            string gen = Path.Combine(staging, "fallback-generated");
+            RunRecomp(new[] {"generate", layout.GameInputs, "--output", gen}, null);
+            Build(sourceDir, gen, app);
+        }
 
         private void Identify(string input)
         {
@@ -416,6 +472,7 @@ namespace Nebula.Setup
             File.Copy(Path.Combine(build, "home", "RMGE01_home_button.dll"), Path.Combine(app, "RMGE01_home_button.dll"));
             File.Copy(Path.Combine(build, "dsp", "RMGE01_dsp.dll"), Path.Combine(app, "RMGE01_dsp.dll"));
             File.Copy(Path.Combine(gen, "RMGE01_boot_image.bin"), Path.Combine(app, "RMGE01_boot_image.bin"));
+            RelinkCache.Capture(build, app, libs, toolchain.Id);
         }
 
         /// <summary>
@@ -484,7 +541,8 @@ namespace Nebula.Setup
                 { "version", BuildInfo.Version },
                 { "commit", source.Commit },
                 { "repository", source.Repository },
-                { "moduleKey", ModuleKey },
+                { "moduleKey", preservingModules ? current.ModuleKey : ModuleKey },
+                { "moduleSourceCommit", preservingModules ? current.ModuleSourceCommit : source.Commit },
                 { "toolchain", toolchain.Id },
                 { "contentFormatVersion", ContentFormatVersion },
                 // The CPU target of the prebuilt runtime and of the prebuilt
@@ -494,7 +552,7 @@ namespace Nebula.Setup
                 // session must be able to prove which pair it measured instead
                 // of inferring it from file hashes alone.
                 { "runtimeIsa", RuntimeNativeIsa },
-                { "moduleIsa", NativeIsa },
+                { "moduleIsa", preservingModules ? current.ModuleIsa : NativeIsa },
                 { "installedUtc", DateTime.UtcNow.ToString("o") },
                 { "files", files }
             });

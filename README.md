@@ -1,9 +1,13 @@
 # Nebula
 
-A native Windows port of **Super Mario Galaxy**, built on your PC from your own
-copy of the game. Setup recompiles the game's PowerPC code to C++ and compiles
-it. Graphics use Direct3D 12 and audio XAudio2; the game's DSP audio program is
-recompiled too.
+A native Windows port of **Super Mario Galaxy**, using your own copy of the game.
+The engine, renderer, audio host and launcher ship prebuilt. Setup compiles the
+game-derived modules on first installation; compatible updates preserve that work.
+
+[Download the beta](https://github.com/keepvaibin/nebula/releases/tag/v0.1.1-beta.4)
+· [Controls](docs/KEYBOARD_CONTROLS.md)
+· [Beta 4 changes and evidence](docs/RELEASE_BETA4.md)
+· [Build guide](docs/BUILDING.md)
 
 Development preview. Not affiliated with Nintendo.
 
@@ -16,10 +20,22 @@ Development preview. Not affiliated with Nintendo.
 
 ## Install
 
-1. Download `Nebula-Setup.exe` from [Releases](https://github.com/keepvaibin/nebula/releases).
-2. Choose your game and click Install. It takes a few minutes.
+1. Download **Nebula-Beta-Setup.exe** from [Releases](https://github.com/keepvaibin/nebula/releases).
+2. On a fresh installation, choose your game and click **Install**. On an existing installation, click **Update**.
+3. Launch **Nebula**, choose your display settings, and press **Play**.
 
-`Nebula-Setup.exe` is not code-signed, so SmartScreen may warn on first run.
+The release has a detached signature checked by Nebula's updater. It is not
+Authenticode signed, so Windows SmartScreen may still warn on first run.
+
+Updates install the bundled public runtime. Compatible game DLLs stay unchanged
+unless updated public libraries need linking; new installations retain compiled
+objects for that step, without recompiling game source. Older installations that
+discarded those objects may need a one-time rebuild from their retained game input
+as a last resort. The updater also rebuilds if the module ABI is incompatible or
+the retained objects cannot be used safely. The old install stays available until
+the new version passes validation.
+Setup also offers **Uninstall** and **Restore the previous version**. Saves and
+settings are preserved by default.
 
 ## Playing
 

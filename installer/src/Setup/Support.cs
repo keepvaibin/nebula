@@ -42,6 +42,8 @@ namespace Nebula.Setup
         public string Directory { get; private set; }
         public string ModuleKey { get { return Json.Str(install, "moduleKey"); } }
         public string Commit { get { return Json.Str(install, "commit"); } }
+        public string ModuleSourceCommit { get { return Json.Str(install, "moduleSourceCommit") ?? Commit; } }
+        public string ModuleIsa { get { return Json.Str(install, "moduleIsa") ?? "SSE2"; } }
 
         public static InstalledInfo Read(InstallLayout layout)
         {

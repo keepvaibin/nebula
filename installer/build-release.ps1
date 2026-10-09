@@ -153,6 +153,21 @@ namespace Nebula
         'runtime-isa.txt' = $runtimeIsaPath
         'LICENSE' = (Join-Path $src 'LICENSE'); 'THIRD-PARTY-NOTICES.md' = (Join-Path $src 'THIRD-PARTY-NOTICES.md'); 'README.md' = (Join-Path $src 'README.md')
     }
+    $apiText = Get-Content -LiteralPath (Join-Path $src 'runtime/include/galaxy/native_api.h') -Raw
+    $dspText = Get-Content -LiteralPath (Join-Path $src 'runtime/include/galaxy/dsp_context.h') -Raw
+    $nativeAbi = [regex]::Match($apiText, 'kNativeAbiVersion\s*=\s*(\d+)').Groups[1].Value
+    $rsoAbi = [regex]::Match($apiText, 'kNativeRsoModuleAbiVersion\s*=\s*(\d+)').Groups[1].Value
+    $dspVersion = [regex]::Match($dspText, 'kDspGeneratedProbeContractVersion\s*=\s*(\d+)').Groups[1].Value
+    if (-not $nativeAbi -or -not $rsoAbi -or -not $dspVersion -or
+        $dspText -notmatch 'kDspGeneratedProbeCapabilitySelectionPublication\s*=\s*1u << 0u' -or
+        $dspText -notmatch 'kDspGeneratedProbeCapabilitySelectedChannelBranch\s*=\s*1u << 1u' -or
+        $dspText -notmatch 'kDspGeneratedProbeRequiredCapabilities\s*=\s*kDspGeneratedProbeCapabilitySelectionPublication\s*\|\s*kDspGeneratedProbeCapabilitySelectedChannelBranch\s*;') {
+        throw 'Module ABI contract changed; update the installer compatibility contract explicitly.'
+    }
+    $compatibilityPath = Join-Path $work 'module-compatibility.json'
+    [ordered]@{nativeAbi=[uint32]$nativeAbi;rsoAbi=[uint32]$rsoAbi;dspProbeVersion=[uint32]$dspVersion;dspCapabilities=3} |
+        ConvertTo-Json | Set-Content -LiteralPath $compatibilityPath -Encoding utf8
+    $resources['module-compatibility.json'] = $compatibilityPath
     foreach ($pair in $runtimeFiles.GetEnumerator()) { $resources[$pair.Key] = $pair.Value }
 
     # Public releases follow docs/CONTENT_POLICY.md: observed shader caches,

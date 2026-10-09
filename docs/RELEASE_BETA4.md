@@ -12,6 +12,12 @@ installation and offers Update when its packaged version is newer, preserving
 saves/settings and retaining the previous version for rollback. An existing
 installation can also use Check for updates to download a newer signed beta.
 
+Updates prefer compatible module reuse, then relinking of retained compiled
+objects against the supplied public libraries. Full module recompilation is a
+last resort for missing objects, incompatible ABI or unusable link inputs. New
+installs retain a private object cache for future relinks. The non-game host code
+always ships prebuilt. Uninstall and previous-version rollback remain available.
+
 Retained changes include exact snapshot lookup and paired arithmetic helpers,
 FIFO hashing and dependency processing, BP metadata lookup, cheaper negative DSP
 polls, checked host-only link optimization, correct texture allocation budgeting,
