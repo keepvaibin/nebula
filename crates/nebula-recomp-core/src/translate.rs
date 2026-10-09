@@ -171,6 +171,21 @@ pub struct ModuleTranslationOptions {
     /// Flat RAM read helpers derived from WiiCompiled. The Galaxy ABI checks
     /// the whole RAM span and keeps the device/fault fallback.
     pub flat_ram_reads: bool,
+    /// Flat RAM stores through the host's writable guest view, with the same
+    /// dirty-page publication as the checked path. Gather-pipe stores append
+    /// to the host's live burst buffer in place; devices and unmapped spans
+    /// keep the checked store.
+    pub flat_ram_writes: bool,
+    /// Native IEEE arithmetic for scalar and paired floating point. Ordinary
+    /// operands under nearest-even rounding compute in place; everything else
+    /// (non-finite or subnormal operands, binary32 rounding midpoints,
+    /// non-default rounding modes) takes the exact helper. FPSCR status bits
+    /// are not maintained on the native path.
+    pub native_float: bool,
+    /// `bctrl`/`bclrl` call a published native entry directly. Targets that
+    /// own a host transaction, pending device events and live external
+    /// interrupt dispatch all keep the cached service boundary.
+    pub direct_indirect_calls: bool,
     /// Experimental fused paired-single arithmetic/commit helper. Public
     /// entries, operand validation, FPSCR and precise FP faults are unaffected.
     pub fused_paired_binary: bool,
@@ -227,6 +242,9 @@ impl Default for ModuleTranslationOptions {
             guest_resident_leaf: false,
             typed_region_80165478: false,
             flat_ram_reads: false,
+            flat_ram_writes: false,
+            native_float: false,
+            direct_indirect_calls: false,
             fused_paired_binary: false,
             indexed_paired_binary: false,
             indexed_paired_ternary: false,
@@ -1968,6 +1986,9 @@ fn lower_words_for_module_with_call_return_entries_and_exact_fpu_flat_reads(
             callable_entries: Some(callable_entries),
             exact_fpu_functions: Some(exact_fpu_functions),
             flat_ram_reads: options.flat_ram_reads,
+            flat_ram_writes: options.flat_ram_writes,
+            native_float: options.native_float,
+            direct_indirect_calls: options.direct_indirect_calls,
             fused_paired_binary: options.fused_paired_binary,
             indexed_paired_binary: options.indexed_paired_binary,
             indexed_paired_ternary: options.indexed_paired_ternary,
@@ -2023,6 +2044,9 @@ fn lower_words_with_options(
             immediate_overrides,
             local_lane_profile: LocalLaneProfile::None,
             flat_ram_reads,
+            flat_ram_writes: false,
+            native_float: false,
+            direct_indirect_calls: false,
             fused_paired_binary: false,
             indexed_paired_binary: false,
             indexed_paired_ternary: false,
@@ -2049,6 +2073,9 @@ struct LoweringConfig<'a> {
     immediate_overrides: Option<&'a BTreeMap<u32, PpcImmediateOverride>>,
     local_lane_profile: LocalLaneProfile,
     flat_ram_reads: bool,
+    flat_ram_writes: bool,
+    native_float: bool,
+    direct_indirect_calls: bool,
     fused_paired_binary: bool,
     indexed_paired_binary: bool,
     indexed_paired_ternary: bool,
@@ -2926,6 +2953,9 @@ fn lower_words_with_config(
         immediate_overrides,
         local_lane_profile,
         flat_ram_reads,
+        flat_ram_writes,
+        native_float,
+        direct_indirect_calls,
         fused_paired_binary,
         indexed_paired_binary,
         indexed_paired_ternary,
@@ -2933,6 +2963,9 @@ fn lower_words_with_config(
         inline_scalar_single_binary,
         typed_region_gpr_mask,
     } = config;
+    // The paired/scalar local-lane proofs own their exact arithmetic text;
+    // native float only replaces the general lowering.
+    let native_float = native_float && local_lane_profile == LocalLaneProfile::None;
     if local_lane_profile != LocalLaneProfile::None
         && (!entries.is_empty() || immediate_overrides.is_some())
     {
@@ -2954,11 +2987,12 @@ fn lower_words_with_config(
             }
         }
     }
-    if flat_ram_reads {
+    if flat_ram_reads || flat_ram_writes {
         // Each invocation binds its own GuestMemoryV1 for its lifetime. The
-        // binding precedes interior-entry dispatch.
+        // binding precedes interior-entry dispatch. The writable view and the
+        // read view alias the same shared MEM1/MEM2 sections.
         output.push_str(
-            "    [[maybe_unused]] const std::byte* flat_guest_read_base = galaxy::guest_flat_read_base(memory);\n",
+            "    [[maybe_unused]] std::byte* const flat_guest_base = galaxy::fast::flat_base(memory);\n    [[maybe_unused]] const std::byte* flat_guest_read_base = flat_guest_base;\n",
         );
     }
     if local_lane_profile != LocalLaneProfile::None {
@@ -3406,10 +3440,10 @@ fn lower_words_with_config(
                         update,
                         immediate_override,
                     )?;
-                    let helper = match instruction.op {
-                        Opcode::Stb | Opcode::Stbu => "guest_store_u8",
-                        Opcode::Sth | Opcode::Sthu => "guest_store_u16",
-                        Opcode::Stw | Opcode::Stwu => "guest_store_u32",
+                    let (helper, width) = match instruction.op {
+                        Opcode::Stb | Opcode::Stbu => ("guest_store_u8", "std::uint8_t"),
+                        Opcode::Sth | Opcode::Sthu => ("guest_store_u16", "std::uint16_t"),
+                        Opcode::Stw | Opcode::Stwu => ("guest_store_u32", "std::uint32_t"),
                         _ => unreachable!(),
                     };
                     let value = match instruction.op {
@@ -3422,10 +3456,17 @@ fn lower_words_with_config(
                         Opcode::Stw | Opcode::Stwu => format!("context->gpr[{source}]"),
                         _ => unreachable!(),
                     };
-                    writeln!(
-                        output,
-                        "    galaxy::{helper}(memory, {ea}, {value}, services, 0x{pc:08X}u);"
-                    )
+                    if flat_ram_writes {
+                        writeln!(
+                            output,
+                            "    galaxy::fast::store<{width}>(flat_guest_base, memory, {ea}, {value}, services, 0x{pc:08X}u);"
+                        )
+                    } else {
+                        writeln!(
+                            output,
+                            "    galaxy::{helper}(memory, {ea}, {value}, services, 0x{pc:08X}u);"
+                        )
+                    }
                     .map_err(|_| TranslationError::Formatting)?;
                     if update {
                         writeln!(output, "    context->gpr[{base}] = {ea};")
@@ -3515,24 +3556,35 @@ fn lower_words_with_config(
                     } else {
                         indexed_effective_address_expression(base, index)
                     };
-                    let (helper, value) = match instruction.op {
+                    let (helper, width, value) = match instruction.op {
                         Opcode::Stbx | Opcode::Stbux => (
                             "guest_store_u8",
+                            "std::uint8_t",
                             format!("static_cast<std::uint8_t>(context->gpr[{source}])"),
                         ),
                         Opcode::Sthx | Opcode::Sthux => (
                             "guest_store_u16",
+                            "std::uint16_t",
                             format!("static_cast<std::uint16_t>(context->gpr[{source}])"),
                         ),
-                        Opcode::Stwx | Opcode::Stwux => {
-                            ("guest_store_u32", format!("context->gpr[{source}]"))
-                        }
+                        Opcode::Stwx | Opcode::Stwux => (
+                            "guest_store_u32",
+                            "std::uint32_t",
+                            format!("context->gpr[{source}]"),
+                        ),
                         _ => unreachable!(),
                     };
-                    writeln!(
-                        output,
-                        "    galaxy::{helper}(memory, {ea}, {value}, services, 0x{pc:08X}u);"
-                    )
+                    if flat_ram_writes {
+                        writeln!(
+                            output,
+                            "    galaxy::fast::store<{width}>(flat_guest_base, memory, {ea}, {value}, services, 0x{pc:08X}u);"
+                        )
+                    } else {
+                        writeln!(
+                            output,
+                            "    galaxy::{helper}(memory, {ea}, {value}, services, 0x{pc:08X}u);"
+                        )
+                    }
                     .map_err(|_| TranslationError::Formatting)?;
                     if update {
                         writeln!(output, "    context->gpr[{base}] = {ea};")
@@ -3610,10 +3662,22 @@ fn lower_words_with_config(
                     instruction.op,
                     Opcode::PsqL | Opcode::PsqLu | Opcode::PsqLx | Opcode::PsqLux
                 );
-                if is_load {
+                if is_load && flat_ram_reads {
+                    writeln!(
+                        output,
+                        "    galaxy::fast::psq_load(flat_guest_read_base, context, {register}u, memory, {ea}, {gqr_index}u, {one_element}, {d_form}, services, 0x{pc:08X}u);"
+                    )
+                    .map_err(|_| TranslationError::Formatting)?;
+                } else if is_load {
                     writeln!(
                         output,
                         "    galaxy::psq_load(context, {register}u, memory, {ea}, {gqr_index}u, {one_element}, {d_form}, services, 0x{pc:08X}u);"
+                    )
+                    .map_err(|_| TranslationError::Formatting)?;
+                } else if flat_ram_writes {
+                    writeln!(
+                        output,
+                        "    galaxy::fast::psq_store(flat_guest_base, context, {register}u, memory, {ea}, {gqr_index}u, {one_element}, {d_form}, services, 0x{pc:08X}u);"
                     )
                     .map_err(|_| TranslationError::Formatting)?;
                 } else {
@@ -3641,10 +3705,17 @@ fn lower_words_with_config(
                     immediate_override,
                 )?;
                 if matches!(instruction.op, Opcode::Lfs | Opcode::Lfsu) {
-                    writeln!(
-                        output,
-                        "    galaxy::load_fpr_single(context, {target}u, memory, {ea}, services, 0x{pc:08X}u);"
-                    )
+                    if flat_ram_reads {
+                        writeln!(
+                            output,
+                            "    galaxy::fast::load_fpr_single(flat_guest_read_base, context, {target}u, memory, {ea}, services, 0x{pc:08X}u);"
+                        )
+                    } else {
+                        writeln!(
+                            output,
+                            "    galaxy::load_fpr_single(context, {target}u, memory, {ea}, services, 0x{pc:08X}u);"
+                        )
+                    }
                     .map_err(|_| TranslationError::Formatting)?;
                     // RMGE01 inverse screen/layout conversions. The selected
                     // canvas also drives cursor drawing and pane hit tests.
@@ -3686,6 +3757,12 @@ fn lower_words_with_config(
                             "    galaxy::apply_experimental_rmge01_camera_aspect(context, services);\n",
                         );
                     }
+                } else if flat_ram_reads {
+                    writeln!(
+                        output,
+                        "    context->fpr_bits[{target}] = galaxy::fast::load_u64(flat_guest_read_base, memory, {ea}, services, 0x{pc:08X}u);"
+                    )
+                    .map_err(|_| TranslationError::Formatting)?;
                 } else {
                     writeln!(
                         output,
@@ -3711,9 +3788,22 @@ fn lower_words_with_config(
                     immediate_override,
                 )?;
                 if matches!(instruction.op, Opcode::Stfs | Opcode::Stfsu) {
+                    if flat_ram_writes {
+                        writeln!(
+                            output,
+                            "    galaxy::fast::store_fpr_single(flat_guest_base, context, {source}u, memory, {ea}, services, 0x{pc:08X}u);"
+                        )
+                    } else {
+                        writeln!(
+                            output,
+                            "    galaxy::store_fpr_single(context, {source}u, memory, {ea}, services, 0x{pc:08X}u);"
+                        )
+                    }
+                    .map_err(|_| TranslationError::Formatting)?;
+                } else if flat_ram_writes {
                     writeln!(
                         output,
-                        "    galaxy::store_fpr_single(context, {source}u, memory, {ea}, services, 0x{pc:08X}u);"
+                        "    galaxy::fast::store<std::uint64_t>(flat_guest_base, memory, {ea}, context->fpr_bits[{source}], services, 0x{pc:08X}u);"
                     )
                     .map_err(|_| TranslationError::Formatting)?;
                 } else {
@@ -3750,31 +3840,59 @@ fn lower_words_with_config(
                 };
                 match instruction.op {
                     Opcode::Lfsx | Opcode::Lfsux => {
-                        writeln!(
-                            output,
-                            "    galaxy::load_fpr_single(context, {register}u, memory, {ea}, services, 0x{pc:08X}u);"
-                        )
+                        if flat_ram_reads {
+                            writeln!(
+                                output,
+                                "    galaxy::fast::load_fpr_single(flat_guest_read_base, context, {register}u, memory, {ea}, services, 0x{pc:08X}u);"
+                            )
+                        } else {
+                            writeln!(
+                                output,
+                                "    galaxy::load_fpr_single(context, {register}u, memory, {ea}, services, 0x{pc:08X}u);"
+                            )
+                        }
                         .map_err(|_| TranslationError::Formatting)?;
                     }
                     Opcode::Lfdx | Opcode::Lfdux => {
-                        writeln!(
-                            output,
-                            "    context->fpr_bits[{register}] = galaxy::guest_load_u64(memory, {ea}, services, 0x{pc:08X}u);"
-                        )
+                        if flat_ram_reads {
+                            writeln!(
+                                output,
+                                "    context->fpr_bits[{register}] = galaxy::fast::load_u64(flat_guest_read_base, memory, {ea}, services, 0x{pc:08X}u);"
+                            )
+                        } else {
+                            writeln!(
+                                output,
+                                "    context->fpr_bits[{register}] = galaxy::guest_load_u64(memory, {ea}, services, 0x{pc:08X}u);"
+                            )
+                        }
                         .map_err(|_| TranslationError::Formatting)?;
                     }
                     Opcode::Stfsx | Opcode::Stfsux => {
-                        writeln!(
-                            output,
-                            "    galaxy::store_fpr_single(context, {register}u, memory, {ea}, services, 0x{pc:08X}u);"
-                        )
+                        if flat_ram_writes {
+                            writeln!(
+                                output,
+                                "    galaxy::fast::store_fpr_single(flat_guest_base, context, {register}u, memory, {ea}, services, 0x{pc:08X}u);"
+                            )
+                        } else {
+                            writeln!(
+                                output,
+                                "    galaxy::store_fpr_single(context, {register}u, memory, {ea}, services, 0x{pc:08X}u);"
+                            )
+                        }
                         .map_err(|_| TranslationError::Formatting)?;
                     }
                     Opcode::Stfdx | Opcode::Stfdux => {
-                        writeln!(
-                            output,
-                            "    galaxy::guest_store_u64(memory, {ea}, context->fpr_bits[{register}], services, 0x{pc:08X}u);"
-                        )
+                        if flat_ram_writes {
+                            writeln!(
+                                output,
+                                "    galaxy::fast::store<std::uint64_t>(flat_guest_base, memory, {ea}, context->fpr_bits[{register}], services, 0x{pc:08X}u);"
+                            )
+                        } else {
+                            writeln!(
+                                output,
+                                "    galaxy::guest_store_u64(memory, {ea}, context->fpr_bits[{register}], services, 0x{pc:08X}u);"
+                            )
+                        }
                         .map_err(|_| TranslationError::Formatting)?;
                     }
                     _ => unreachable!(),
@@ -3837,11 +3955,19 @@ fn lower_words_with_config(
             Opcode::Frsp => {
                 let target = gpr_rt(word);
                 let source = gpr_rb(word);
-                writeln!(
-                    output,
-                    "    const galaxy::PpcFloatResult result = galaxy::ppc_round_f64_to_f32(context->fpr_bits[{source}], context->fpscr);\n    galaxy::ppc_commit_scalar_result(context, {target}u, result, false, {}, services, 0x{pc:08X}u);",
-                    record_bit(word)
-                )
+                if native_float {
+                    writeln!(
+                        output,
+                        "    galaxy::fast::scalar_frsp(context, {target}u, {source}u, {}, services, 0x{pc:08X}u);",
+                        record_bit(word)
+                    )
+                } else {
+                    writeln!(
+                        output,
+                        "    const galaxy::PpcFloatResult result = galaxy::ppc_round_f64_to_f32(context->fpr_bits[{source}], context->fpscr);\n    galaxy::ppc_commit_scalar_result(context, {target}u, result, false, {}, services, 0x{pc:08X}u);",
+                        record_bit(word)
+                    )
+                }
                 .map_err(|_| TranslationError::Formatting)?;
             }
             Opcode::Fctiwz => {
@@ -3880,7 +4006,14 @@ fn lower_words_with_config(
                     instruction.op,
                     Opcode::Fadds | Opcode::Fsubs | Opcode::Fmuls | Opcode::Fdivs
                 );
-                if single {
+                if native_float {
+                    writeln!(
+                        output,
+                        "    galaxy::fast::scalar_binary<galaxy::PpcFloatBinaryOperation::{operation}, {single}>(context, {target}u, {left}u, {right}u, {}, services, 0x{pc:08X}u);",
+                        record_bit(word)
+                    )
+                    .map_err(|_| TranslationError::Formatting)?;
+                } else if single {
                     if inline_scalar_single_binary
                         && matches!(
                             instruction.op,
@@ -3934,7 +4067,14 @@ fn lower_words_with_config(
                     instruction.op,
                     Opcode::Fmadds | Opcode::Fmsubs | Opcode::Fnmadds | Opcode::Fnmsubs
                 );
-                if single && local_lane_profile != LocalLaneProfile::None {
+                if native_float {
+                    writeln!(
+                        output,
+                        "    galaxy::fast::scalar_ternary<galaxy::PpcFloatTernaryOperation::{operation}, {single}>(context, {target}u, {multiplicand}u, {multiplier}u, {addend}u, {}, services, 0x{pc:08X}u);",
+                        record_bit(word)
+                    )
+                    .map_err(|_| TranslationError::Formatting)?;
+                } else if single && local_lane_profile != LocalLaneProfile::None {
                     // This guarded local-lane proof already establishes exact
                     // binary32 sources and consumes these captured expressions.
                     writeln!(
@@ -4109,7 +4249,19 @@ fn lower_words_with_config(
                         record_bit(word)
                     )
                 };
-                if indexed_paired_binary && !fused_paired_binary {
+                if native_float {
+                    let lane = match instruction.op {
+                        Opcode::PsMuls0 => "Lane0",
+                        Opcode::PsMuls1 => "Lane1",
+                        _ => "Each",
+                    };
+                    writeln!(
+                        output,
+                        "    galaxy::fast::paired_binary<galaxy::PpcFloatBinaryOperation::{operation}, galaxy::fast::PairedLane::{lane}>(context, {target}u, {left}u, {right}u, {}, services, 0x{pc:08X}u);",
+                        record_bit(word)
+                    )
+                    .map_err(|_| TranslationError::Formatting)?;
+                } else if indexed_paired_binary && !fused_paired_binary {
                     let operation_index = match instruction.op {
                         Opcode::PsAdd => 0u32,
                         Opcode::PsSub => 1,
@@ -4171,7 +4323,19 @@ fn lower_words_with_config(
                         record_bit(word)
                     )
                 };
-                if indexed_paired_ternary && !fused_paired_ternary {
+                if native_float {
+                    let lane = match instruction.op {
+                        Opcode::PsMadds0 => "Lane0",
+                        Opcode::PsMadds1 => "Lane1",
+                        _ => "Each",
+                    };
+                    writeln!(
+                        output,
+                        "    galaxy::fast::paired_ternary<galaxy::PpcFloatTernaryOperation::{operation}, galaxy::fast::PairedLane::{lane}>(context, {target}u, {multiplicand}u, {multiplier}u, {addend}u, {}, services, 0x{pc:08X}u);",
+                        record_bit(word)
+                    )
+                    .map_err(|_| TranslationError::Formatting)?;
+                } else if indexed_paired_ternary && !fused_paired_ternary {
                     let operation_index = match instruction.op {
                         Opcode::PsMadd | Opcode::PsMadds0 | Opcode::PsMadds1 => 0u32,
                         Opcode::PsMsub => 1,
@@ -4201,6 +4365,14 @@ fn lower_words_with_config(
                 let right = gpr_rb(word);
                 let copy = fpr_c(word);
                 let status_from_lane1 = instruction.op == Opcode::PsSum1;
+                if native_float {
+                    writeln!(
+                        output,
+                        "    galaxy::fast::paired_sum<{status_from_lane1}>(context, {target}u, {left}u, {right}u, {copy}u, {}, services, 0x{pc:08X}u);",
+                        record_bit(word)
+                    )
+                    .map_err(|_| TranslationError::Formatting)?;
+                } else {
                 let lane0 = if status_from_lane1 {
                     format!(
                         "galaxy::ppc_f32_passthrough(galaxy::require_single_precision_bits(context->fpr_bits[{copy}], services, 0x{pc:08X}u))"
@@ -4221,6 +4393,7 @@ fn lower_words_with_config(
                     record_bit(word)
                 )
                 .map_err(|_| TranslationError::Formatting)?;
+                }
             }
             Opcode::PsCmpo0 | Opcode::PsCmpo1 | Opcode::PsCmpu0 | Opcode::PsCmpu1 => {
                 let field = (word >> 23) & 0x7;
@@ -5209,23 +5382,23 @@ fn lower_words_with_config(
                     writeln!(output, "    context->lr = 0x{:08X}u;", pc + 4)
                         .map_err(|_| TranslationError::Formatting)?;
                     if unconditional {
-                        emit_cached_guest_call(&mut output, "branch_target", pc)?;
+                        emit_indirect_guest_call(&mut output, "branch_target", pc, direct_indirect_calls)?;
                         emit_call_return_checkpoint(&mut output, pc)?;
                     } else {
                         writeln!(output, "    if ({condition}) {{")
                             .map_err(|_| TranslationError::Formatting)?;
-                        emit_cached_guest_call(&mut output, "branch_target", pc)?;
+                        emit_indirect_guest_call(&mut output, "branch_target", pc, direct_indirect_calls)?;
                         emit_call_return_checkpoint(&mut output, pc)?;
                         output.push_str("    }\n");
                     }
                 } else if unconditional {
-                    emit_cached_guest_call(&mut output, "branch_target", pc)?;
+                    emit_indirect_guest_call(&mut output, "branch_target", pc, direct_indirect_calls)?;
                     output.push_str("    return;\n");
                     final_instruction_is_terminal = true;
                 } else {
                     writeln!(output, "    if ({condition}) {{")
                         .map_err(|_| TranslationError::Formatting)?;
-                    emit_cached_guest_call(&mut output, "branch_target", pc)?;
+                    emit_indirect_guest_call(&mut output, "branch_target", pc, direct_indirect_calls)?;
                     output.push_str("        return;\n    }\n");
                 }
             }
@@ -5256,12 +5429,12 @@ fn lower_words_with_config(
                     writeln!(output, "    context->lr = 0x{:08X}u;", pc + 4)
                         .map_err(|_| TranslationError::Formatting)?;
                     if unconditional {
-                        emit_cached_guest_call(&mut output, "branch_target", pc)?;
+                        emit_indirect_guest_call(&mut output, "branch_target", pc, direct_indirect_calls)?;
                         emit_call_return_checkpoint(&mut output, pc)?;
                     } else {
                         writeln!(output, "    if ({condition}) {{")
                             .map_err(|_| TranslationError::Formatting)?;
-                        emit_cached_guest_call(&mut output, "branch_target", pc)?;
+                        emit_indirect_guest_call(&mut output, "branch_target", pc, direct_indirect_calls)?;
                         emit_call_return_checkpoint(&mut output, pc)?;
                         output.push_str("    }\n");
                     }
@@ -6504,6 +6677,50 @@ fn emit_cached_guest_call(
     writeln!(
         output,
         "    galaxy::call_guest_cached(services, {target_expression}, &cached_target_{pc:08X}, &cached_function_{pc:08X}, context, memory, 0x{pc:08X}u);"
+    )
+    .map_err(|_| TranslationError::Formatting)
+}
+
+// Indirect call sites whose host-side transaction is keyed on the calling
+// instruction rather than the callee. These always keep the audited cached
+// service boundary even when direct dispatch is enabled.
+fn indirect_call_site_requires_host(pc: u32) -> bool {
+    matches!(
+        pc,
+        0x804A_B468 // OSYieldThread -> SelectThread RFI return protocol
+            | 0x8038_5AD8 // Pointer field capture at the PE boundary
+            | 0x8034_BF8C // Retained mouse press: FileSelect pane selection
+            | 0x8036_FDD4 // MoviePlayerSimple movie-content marker
+            | 0x8036_FEC8 // MoviePlayerSimple stop-owned marker
+            | 0x8037_0278 // MoviePlayerSimple stop-owned marker
+            | 0x8039_D400 // GameSystemSceneController::drawScene scene marker
+    )
+}
+
+// `bctrl`/`bclrl`: the direct table call keeps the generated per-site cache
+// as its fallback so a withdrawn or null entry pays exactly the old cost.
+fn emit_indirect_guest_call(
+    output: &mut String,
+    target_expression: &str,
+    pc: u32,
+    direct: bool,
+) -> Result<(), TranslationError> {
+    if !direct || indirect_call_site_requires_host(pc) {
+        return emit_cached_guest_call(output, target_expression, pc);
+    }
+    writeln!(
+        output,
+        "    static std::uint32_t cached_target_{pc:08X} = 0u;"
+    )
+    .map_err(|_| TranslationError::Formatting)?;
+    writeln!(
+        output,
+        "    static galaxy::NativeGameFunction cached_function_{pc:08X} = nullptr;"
+    )
+    .map_err(|_| TranslationError::Formatting)?;
+    writeln!(
+        output,
+        "    galaxy::fast::call_guest_indirect(services, {target_expression}, &cached_target_{pc:08X}, &cached_function_{pc:08X}, context, memory, 0x{pc:08X}u);"
     )
     .map_err(|_| TranslationError::Formatting)
 }
@@ -9413,7 +9630,7 @@ fn emit_sharded_module_with_experiment(
         .map(|(function, _)| u64::from(function.size / 4))
         .sum();
     let mut module = String::from(
-        "#include \"functions.h\"\n\n#include <array>\n#include <cstddef>\n#include <cstring>\n\nnamespace {\n\nconst galaxy::NativeServicesV1* g_services = nullptr;\n\nstruct FunctionRecord {\n    std::uint32_t address;\n    galaxy::NativeGameFunction function;\n};\n\n",
+        "#include \"functions.h\"\n\n#include <array>\n#include <cstddef>\n#include <cstring>\n\nnamespace {\n\nconst galaxy::NativeServicesV1* g_services = nullptr;\n\nusing FunctionRecord = galaxy::FunctionRecordV1;\n\n",
     );
     writeln!(
         module,
@@ -9485,7 +9702,7 @@ fn emit_sharded_module_with_experiment(
     // omit it and the runtime declines the return protocol. Only this complete
     // RMGE01 generator emits the corresponding exact SelectThread branch.
     module.push_str(
-        "\nextern \"C\" GALAXY_MODULE_EXPORT std::uint32_t galaxy_yield_rfi_return_protocol() { return 1u; }\n",
+        "\nextern \"C\" GALAXY_MODULE_EXPORT std::uint32_t galaxy_yield_rfi_return_protocol() { return 1u; }\n\nextern \"C\" GALAXY_MODULE_EXPORT std::size_t galaxy_module_function_records(const galaxy::FunctionRecordV1** records) {\n    if (records == nullptr) {\n        return 0u;\n    }\n    *records = kFunctions.data();\n    return kFunctions.size();\n}\n",
     );
     files.push(GeneratedSource {
         name: "module.cpp".to_owned(),
@@ -9613,6 +9830,13 @@ fn emit_sharded_module_with_experiment(
          \x20       # the AVX2+OSXSAVE test, which says nothing about AVX-512 availability.\n\
          \x20       if(galaxy_native_isa_effective STREQUAL \"AVX2\")\n\
          \x20           target_compile_options(RMGE01_game PRIVATE -mavx2)\n\
+         \x20           # The native float fast paths call std::fma/std::fmaf explicitly for\n\
+         \x20           # every fused guest instruction. Advertising FMA3 lets those calls\n\
+         \x20           # become single vfmadd instructions; /clang:-ffp-contract=off above\n\
+         \x20           # still forbids the compiler from fusing any separate multiply and add,\n\
+         \x20           # so no non-fused guest result changes. The AVX2+OSXSAVE host probe\n\
+         \x20           # covers every x86-64 CPU that has AVX2 (all of them also have FMA3).\n\
+         \x20           target_compile_options(RMGE01_game PRIVATE -mfma)\n\
          \x20       endif()\n\
          \x20   else()\n\
          \x20       target_compile_options(RMGE01_game PRIVATE /W4 /WX /wd4702 /permissive- /EHsc /GS- /GR- /Oi /favor:INTEL64)\n\
@@ -10264,7 +10488,7 @@ mod tests {
         )
         .unwrap();
         assert!(flat.starts_with(
-            "    [[maybe_unused]] const std::byte* flat_guest_read_base = galaxy::guest_flat_read_base(memory);\n"
+            "    [[maybe_unused]] std::byte* const flat_guest_base = galaxy::fast::flat_base(memory);\n    [[maybe_unused]] const std::byte* flat_guest_read_base = flat_guest_base;\n"
         ));
         assert!(flat.contains("case 0x80004004u: goto label_80004004;"));
         assert!(flat.contains("guest_load_flat_or_checked_u8(flat_guest_read_base, memory, context->gpr[4] + 0x00000001u, services, 0x80004000u)"));
@@ -10308,8 +10532,75 @@ mod tests {
         )
         .unwrap();
         assert_eq!(flat.matches("guest_load_flat_or_checked_").count(), 1);
-        assert!(flat.contains("galaxy::load_fpr_single(context, 1u, memory,"));
+        // Flat reads also serve lfs; stores stay checked until flat_ram_writes.
+        assert!(flat.contains("galaxy::fast::load_fpr_single(flat_guest_read_base, context, 1u, memory,"));
         assert!(flat.contains("galaxy::guest_store_u32(memory,"));
+        let writes = lower_words_with_config(
+            0x8000_4000,
+            &bytes,
+            &BTreeSet::new(),
+            &BTreeSet::new(),
+            LoweringConfig {
+                flat_ram_reads: true,
+                flat_ram_writes: true,
+                ..LoweringConfig::default()
+            },
+        )
+        .unwrap();
+        assert!(writes.contains("galaxy::fast::store<std::uint32_t>(flat_guest_base, memory,"));
+        assert!(!writes.contains("galaxy::guest_store_u32(memory,"));
+    }
+
+    #[test]
+    fn native_float_and_direct_dispatch_lowering() {
+        let words: [u32; 5] = [
+            0xFC01_102A, // fadd f0,f1,f2
+            0xEC01_00B2, // fmuls f0,f1,f2 (frC = f2)
+            0xFC01_10BA, // fmadd f0,f1,f2,f2
+            0x1024_102A, // ps_add f1,f4,f2
+            0x4E80_0421, // bctrl
+        ];
+        let bytes = words
+            .iter()
+            .flat_map(|word| word.to_be_bytes())
+            .collect::<Vec<_>>();
+        let native = lower_words_with_config(
+            0x8000_4000,
+            &bytes,
+            &BTreeSet::new(),
+            &BTreeSet::new(),
+            LoweringConfig {
+                native_float: true,
+                direct_indirect_calls: true,
+                ..LoweringConfig::default()
+            },
+        )
+        .unwrap();
+        assert!(native.contains(
+            "galaxy::fast::scalar_binary<galaxy::PpcFloatBinaryOperation::Add, false>(context, 0u, 1u, 2u, false, services, 0x80004000u);"
+        ));
+        assert!(native.contains(
+            "galaxy::fast::scalar_binary<galaxy::PpcFloatBinaryOperation::Multiply, true>(context, 0u, 1u, 2u, false, services, 0x80004004u);"
+        ));
+        assert!(native.contains(
+            "galaxy::fast::scalar_ternary<galaxy::PpcFloatTernaryOperation::MultiplyAdd, false>(context, 0u, 1u, 2u, 2u, false, services, 0x80004008u);"
+        ));
+        assert!(native.contains(
+            "galaxy::fast::paired_binary<galaxy::PpcFloatBinaryOperation::Add, galaxy::fast::PairedLane::Each>(context, 1u, 4u, 2u, false, services, 0x8000400Cu);"
+        ));
+        assert!(native.contains(
+            "galaxy::fast::call_guest_indirect(services, branch_target, &cached_target_80004010, &cached_function_80004010, context, memory, 0x80004010u);"
+        ));
+        let checked = lower_words_with_config(
+            0x8000_4000,
+            &bytes,
+            &BTreeSet::new(),
+            &BTreeSet::new(),
+            LoweringConfig::default(),
+        )
+        .unwrap();
+        assert!(!checked.contains("galaxy::fast::"));
+        assert!(checked.contains("galaxy::call_guest_cached(services, branch_target,"));
     }
 
     #[test]
@@ -15221,15 +15512,19 @@ mod tests {
         // compiler honours, so -mavx2 has to be present here and /arch:AVX2 has
         // to stay confined to the non-Clang branch. This assertion exists
         // because the flag was silently absent once already: the template chose
-        // and announced AVX2 while emitting SSE2 machine code. Never -mfma
-        // (guest float results must stay bit-identical to SoftFloat) and never
+        // and announced AVX2 while emitting SSE2 machine code. -mfma is paired
+        // with -mavx2 so explicit std::fma calls in the native float fast paths
+        // become hardware instructions; contraction stays off. Never
         // -mavx512* (the host probe is the AVX2+OSXSAVE test).
         assert!(cmake
             .contents
             .contains("target_compile_options(RMGE01_game PRIVATE -mavx2)"));
         assert!(cmake.contents.contains(
             "if(galaxy_native_isa_effective STREQUAL \"AVX2\" AND NOT CMAKE_CXX_COMPILER_ID STREQUAL \"Clang\")"));
-        assert!(!cmake.contents.contains("-mfma"));
+        assert!(cmake
+            .contents
+            .contains("target_compile_options(RMGE01_game PRIVATE -mfma)"));
+        assert!(cmake.contents.contains("/clang:-ffp-contract=off"));
         assert!(!cmake.contents.contains("-mavx512"));
         let module = files
             .iter()

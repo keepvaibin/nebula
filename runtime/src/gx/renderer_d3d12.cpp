@@ -5470,6 +5470,191 @@ bool RendererD3D12::try_complete_pointer_depth_capture(
     return true;
 }
 
+bool RendererD3D12::ensure_async_depth_resources() {
+    if (async_depth_allocator_ && async_depth_command_list_ &&
+        async_depth_target_ && async_depth_readback_ && async_depth_rtv_heap_) {
+        return true;
+    }
+    // The conversion pipeline, root signature and EFB views are shared with
+    // the synchronous peek path; everything else here is private.
+    if (!ensure_peek_resources()) {
+        return false;
+    }
+    d3d_check(
+        device_->CreateCommandAllocator(
+            D3D12_COMMAND_LIST_TYPE_DIRECT,
+            IID_PPV_ARGS(&async_depth_allocator_)),
+        "async depth field command allocator");
+    d3d_check(
+        device_->CreateCommandList(
+            0,
+            D3D12_COMMAND_LIST_TYPE_DIRECT,
+            async_depth_allocator_.Get(),
+            nullptr,
+            IID_PPV_ARGS(&async_depth_command_list_)),
+        "async depth field command list");
+    d3d_check(async_depth_command_list_->Close(), "async depth field list close");
+    async_depth_command_list_->SetName(L"GxAsyncDepthFieldList");
+
+    D3D12_HEAP_PROPERTIES default_heap{};
+    default_heap.Type = D3D12_HEAP_TYPE_DEFAULT;
+    D3D12_RESOURCE_DESC target_desc{};
+    target_desc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+    target_desc.Width = kEfbWidth;
+    target_desc.Height = kEfbHeight;
+    target_desc.DepthOrArraySize = 1;
+    target_desc.MipLevels = 1;
+    target_desc.Format = kEfbColorFormat;
+    target_desc.SampleDesc.Count = 1;
+    target_desc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
+    target_desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
+    D3D12_CLEAR_VALUE target_clear{};
+    target_clear.Format = kEfbColorFormat;
+    target_clear.Color[3] = 1.0f;
+    d3d_check(
+        device_->CreateCommittedResource(
+            &default_heap,
+            D3D12_HEAP_FLAG_NONE,
+            &target_desc,
+            D3D12_RESOURCE_STATE_COPY_SOURCE,
+            &target_clear,
+            IID_PPV_ARGS(&async_depth_target_)),
+        "async depth field target");
+
+    D3D12_HEAP_PROPERTIES readback_heap{};
+    readback_heap.Type = D3D12_HEAP_TYPE_READBACK;
+    D3D12_RESOURCE_DESC readback_desc{};
+    readback_desc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+    readback_desc.Width = static_cast<UINT64>(kEfbWidth) * 4u * kEfbHeight;
+    readback_desc.Height = 1;
+    readback_desc.DepthOrArraySize = 1;
+    readback_desc.MipLevels = 1;
+    readback_desc.SampleDesc.Count = 1;
+    readback_desc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+    d3d_check(
+        device_->CreateCommittedResource(
+            &readback_heap,
+            D3D12_HEAP_FLAG_NONE,
+            &readback_desc,
+            D3D12_RESOURCE_STATE_COPY_DEST,
+            nullptr,
+            IID_PPV_ARGS(&async_depth_readback_)),
+        "async depth field readback");
+
+    D3D12_DESCRIPTOR_HEAP_DESC rtv_heap_desc{};
+    rtv_heap_desc.NumDescriptors = 1;
+    rtv_heap_desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
+    d3d_check(
+        device_->CreateDescriptorHeap(
+            &rtv_heap_desc, IID_PPV_ARGS(&async_depth_rtv_heap_)),
+        "async depth field RTV heap");
+    async_depth_rtv_ = async_depth_rtv_heap_->GetCPUDescriptorHandleForHeapStart();
+    device_->CreateRenderTargetView(
+        async_depth_target_.Get(), nullptr, async_depth_rtv_);
+    return true;
+}
+
+std::uint64_t RendererD3D12::submit_async_depth_field() {
+    if (async_depth_fence_ != 0u) {
+        return 0u;
+    }
+    if (!ensure_async_depth_resources()) {
+        return 0u;
+    }
+    constexpr UINT width = kEfbWidth;
+    constexpr UINT height = kEfbHeight;
+    constexpr UINT row_pitch = kEfbWidth * 4u;
+    static_assert(row_pitch % D3D12_TEXTURE_DATA_PITCH_ALIGNMENT == 0u);
+    ID3D12Resource* const target = async_depth_target_.Get();
+    ID3D12Resource* const readback = async_depth_readback_.Get();
+    ID3D12Resource* const src = efb_depth_.Get();
+
+    d3d_check(async_depth_allocator_->Reset(), "async depth allocator reset");
+    d3d_check(
+        async_depth_command_list_->Reset(async_depth_allocator_.Get(), nullptr),
+        "async depth command list reset");
+
+    D3D12_RESOURCE_BARRIER barriers[2]{};
+    barriers[0].Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+    barriers[0].Transition.pResource = src;
+    barriers[0].Transition.StateBefore = D3D12_RESOURCE_STATE_DEPTH_WRITE;
+    barriers[0].Transition.StateAfter = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+    barriers[0].Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+    barriers[1].Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+    barriers[1].Transition.pResource = target;
+    barriers[1].Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_SOURCE;
+    barriers[1].Transition.StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET;
+    barriers[1].Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+    async_depth_command_list_->ResourceBarrier(2, barriers);
+
+    ID3D12DescriptorHeap* heaps[] = {srv_ring_.heap()};
+    async_depth_command_list_->SetDescriptorHeaps(1, heaps);
+    async_depth_command_list_->OMSetRenderTargets(1, &async_depth_rtv_, FALSE, nullptr);
+    const D3D12_VIEWPORT viewport{
+        0.0f, 0.0f, static_cast<float>(width), static_cast<float>(height), 0.0f, 1.0f};
+    const D3D12_RECT scissor{0, 0, static_cast<LONG>(width), static_cast<LONG>(height)};
+    async_depth_command_list_->RSSetViewports(1, &viewport);
+    async_depth_command_list_->RSSetScissorRects(1, &scissor);
+    async_depth_command_list_->SetGraphicsRootSignature(s_conv_root_sig.Get());
+    async_depth_command_list_->SetPipelineState(conv_pipeline_.Get());
+    const EfbPeekSamplingGeometry sampling =
+        compute_efb_peek_sampling_geometry(0u, 0u, efb_scale_);
+    EfbConversionShaderConstants constants =
+        make_efb_peek_conversion_constants(sampling, EfbPeekKind::Depth);
+    constants.values[15] = -1.0f;
+    async_depth_command_list_->SetGraphicsRoot32BitConstants(
+        0, 16, constants.values.data(), 0);
+    async_depth_command_list_->SetGraphicsRootDescriptorTable(1, conv_efb_depth_srv_);
+    async_depth_command_list_->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+    async_depth_command_list_->DrawInstanced(3, 1, 0, 0);
+
+    std::swap(barriers[0].Transition.StateBefore, barriers[0].Transition.StateAfter);
+    std::swap(barriers[1].Transition.StateBefore, barriers[1].Transition.StateAfter);
+    async_depth_command_list_->ResourceBarrier(2, barriers);
+
+    D3D12_TEXTURE_COPY_LOCATION src_copy{};
+    src_copy.pResource = target;
+    src_copy.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
+    D3D12_TEXTURE_COPY_LOCATION dst_copy{};
+    dst_copy.pResource = readback;
+    dst_copy.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
+    dst_copy.PlacedFootprint.Footprint.Format = kEfbColorFormat;
+    dst_copy.PlacedFootprint.Footprint.Width = width;
+    dst_copy.PlacedFootprint.Footprint.Height = height;
+    dst_copy.PlacedFootprint.Footprint.Depth = 1;
+    dst_copy.PlacedFootprint.Footprint.RowPitch = row_pitch;
+    async_depth_command_list_->CopyTextureRegion(&dst_copy, 0, 0, 0, &src_copy, nullptr);
+
+    d3d_check(async_depth_command_list_->Close(), "async depth command list close");
+    ID3D12CommandList* lists[] = {async_depth_command_list_.Get()};
+    queue_->ExecuteCommandLists(1, lists);
+    const std::uint64_t fence_value = ++next_fence_value_;
+    const HRESULT signal_hr = queue_->Signal(fence_.Get(), fence_value);
+    if (FAILED(signal_hr)) {
+        dump_device_removal(device_.Get());
+        d3d_check(signal_hr, "async depth field queue signal");
+    }
+    async_depth_fence_ = fence_value;
+    return fence_value;
+}
+
+bool RendererD3D12::try_complete_async_depth_field(std::span<std::uint32_t> pixels) {
+    if (pixels.size() != static_cast<std::size_t>(kEfbWidth) * kEfbHeight) {
+        throw std::invalid_argument("async depth field requires 640x528 pixels");
+    }
+    if (async_depth_fence_ == 0u) {
+        return false;
+    }
+    if (completed_fence_value() < async_depth_fence_) {
+        return false;
+    }
+    std::uint32_t unused{};
+    copy_efb_readback_pixels(async_depth_readback_.Get(), kEfbWidth, kEfbHeight,
+        kEfbWidth * 4u, true, unused, pixels);
+    async_depth_fence_ = 0u;
+    return true;
+}
+
 bool RendererD3D12::read_efb_pixels(
     std::uint16_t x, std::uint16_t y, EfbPeekKind kind,
     std::uint32_t& value, std::span<std::uint32_t> depth_pixels,

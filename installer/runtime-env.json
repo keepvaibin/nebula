@@ -68,8 +68,12 @@
     "value": "262144"
   },
   {
+    "name": "GALAXY_FLAT_GUEST_MEMORY",
+    "value": "1"
+  },
+  {
     "name": "GALAXY_FLIP_DISCARD",
-    "value": "0"
+    "value": "1"
   },
   {
     "name": "GALAXY_FRAME_RATE_DECOUPLE",

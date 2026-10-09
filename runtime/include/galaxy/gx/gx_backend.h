@@ -44,6 +44,7 @@
 #include "galaxy/gx/gx_state.h"
 #include "galaxy/gx/pipeline_cache.h"
 #include "galaxy/gx/renderer_d3d12.h"
+#include "galaxy/gx/resident_vertex_arena.h"
 #include "galaxy/gx/shader_keys.h"
 #include "galaxy/gx/texture_cache.h"
 #include "galaxy/gx/uber_constants.h"
@@ -63,6 +64,7 @@
 #include <exception>
 #include <memory>
 #include <mutex>
+#include <span>
 #include <thread>
 #include <type_traits>
 #include <unordered_map>
@@ -240,6 +242,13 @@ public:
         std::uint16_t y,
         EfbPeekKind kind,
         std::uint32_t& value);
+    // Simulation thread: answer a depth peek from the latest published
+    // asynchronous depth field. Records the request so the render thread
+    // keeps producing fields while peeks continue.
+    [[nodiscard]] bool peek_efb_published(
+        std::uint16_t x,
+        std::uint16_t y,
+        std::uint32_t& value);
     void scan_pe_events_on_sim_thread(
         const std::byte* fifo_data,
         std::size_t fifo_size,
@@ -380,6 +389,10 @@ private:
         std::uint32_t first_index = 0;
         std::uint32_t index_count = 0;
         std::uint32_t draw_count = 0;
+        // Vertices live in resident_vertex_buffer_ instead of the frame vertex
+        // ring; vertex_byte_end/base_vertex are offsets in that buffer. Only
+        // another resident run can extend such a batch.
+        bool resident = false;
     };
 
     [[nodiscard]] static bool draw_calls_batch_compatible(
@@ -547,6 +560,11 @@ private:
     void execute_efb_peek_on_thread(FrameChunk& chunk);
     void poll_completed_pointer_depth_capture();
     void drain_pending_pointer_depth_capture();
+    // Render owner: completes an in-flight asynchronous depth field into the
+    // next publication slot, and submits a new one after a rendered chunk
+    // while the simulation thread keeps peeking.
+    void poll_async_depth_field();
+    void submit_async_depth_field_if_requested();
     void prepare_worker_memory_snapshot(FrameChunk& chunk);
     void mark_frame_cpu_reads_done(FrameChunk& chunk);
     void mark_frame_fifo_effects_done(FrameChunk& chunk);
@@ -743,6 +761,14 @@ private:
         std::uint64_t fence_value = 0;
         std::chrono::steady_clock::time_point started{};
     } pending_pointer_depth_capture_;
+    // Asynchronous EFB depth field for simulation-thread GXPeekZ. Three slots:
+    // the render owner fills the slot after the published one, then publishes
+    // it; readers only ever load the published slot.
+    std::array<std::vector<std::uint32_t>, 3> async_depth_fields_{};
+    std::atomic<int> async_depth_published_{-1};
+    std::atomic<bool> async_depth_requested_{false};
+    std::atomic<std::uint64_t> async_depth_published_answers_{0};
+    std::uint64_t async_depth_fields_completed_ = 0;
     FramePeCompletionContract frame_pe_completions_;
     std::size_t render_chunks_in_flight_ = 0;
     std::size_t present_chunks_in_flight_ = 0;
@@ -801,9 +827,34 @@ private:
     };
 
     struct DecodedPacketRunCacheEntry {
-        struct GuestDependencySnapshot {
-            std::uint32_t guest_base = 0;
+        // Every indirect vertex-array byte a decode read, as sorted, disjoint
+        // ranges whose copies live back to back in one buffer. The decoder
+        // records reads per attribute in read order, so non-monotonic index
+        // streams emit many overlapping chunks of the same array; validating
+        // those chunk by chunk cost one heap-pointer chase and one region
+        // lookup per chunk on every frame. Merging overlapping/adjacent reads
+        // covers exactly the same byte set, so a byte compare over the merged
+        // ranges accepts and rejects exactly the same guest memory.
+        struct GuestDependencySnapshots {
+            struct Range {
+                std::uint32_t guest_base = 0;
+                std::uint32_t size = 0;
+                std::size_t offset = 0;  // into `bytes`
+            };
+            std::vector<Range> ranges;
             std::vector<std::byte> bytes;
+
+            [[nodiscard]] bool empty() const noexcept { return ranges.empty(); }
+            [[nodiscard]] std::size_t size() const noexcept { return ranges.size(); }
+            [[nodiscard]] std::span<const std::byte> range_bytes(
+                std::size_t index) const noexcept {
+                const Range& range = ranges[index];
+                return {bytes.data() + range.offset, range.size};
+            }
+            void clear() noexcept {
+                ranges.clear();
+                bytes.clear();
+            }
         };
 
         DecodedPacketRunCacheKey key{};
@@ -812,6 +863,12 @@ private:
         std::size_t byte_size = 0;
         std::vector<GxVertexOut> vertices;
         ImmutableUploadToken upload_token;
+        // Block of `resident_vertices_` holding a copy of `vertices` that draws
+        // reference directly. Valid only while `resident_epoch` equals the
+        // arena epoch (0 = no block).
+        std::uint64_t resident_epoch = 0;
+        std::uint32_t resident_offset = 0;  // in vertices
+        std::uint32_t resident_units = 0;
         std::vector<VertexDecodeGuestRange> guest_array_reads;
         // Disjoint coarse masks prove that no dependency can overlap a dirty
         // range. All collisions still use the original exact range checks.
@@ -825,7 +882,7 @@ private:
         // full snapshot compare thousands of times, and no guest write can be
         // observed between the generation bump (which happens before the first
         // replay of the frame) and the end of the frame.
-        std::vector<GuestDependencySnapshot> guest_array_snapshots;
+        GuestDependencySnapshots guest_array_snapshots;
         // `decoded_packet_run_generation_` value at which `guest_array_snapshots`
         // was last proven equal to live guest memory. See the match function.
         std::uint64_t validated_generation = 0;
@@ -844,12 +901,15 @@ private:
         PrimitiveClass primitive,
         std::uint8_t vtxfmt,
         const VertexDescriptor& desc) const;
+    // Sorts and merges overlapping/adjacent reads (never across a gap, and
+    // never into a span that is not one contiguous host mapping), then copies
+    // each merged range. `captured_bytes` is the merged byte count, which is
+    // what the budget bounds. On failure `snapshots` is empty.
     [[nodiscard]] static bool capture_decoded_packet_run_dependencies(
         GuestMemoryV1* memory,
         const std::vector<VertexDecodeGuestRange>& dependencies,
         std::size_t byte_budget,
-        std::vector<DecodedPacketRunCacheEntry::GuestDependencySnapshot>&
-            snapshots,
+        DecodedPacketRunCacheEntry::GuestDependencySnapshots& snapshots,
         std::size_t& captured_bytes,
         bool regions_disjoint_sorted = false);
     // Returns true when the snapshots still describe live guest memory.
@@ -861,8 +921,7 @@ private:
         GuestMemoryV1* memory,
         std::uint64_t entry_generation,
         std::uint64_t current_generation,
-        const std::vector<
-            DecodedPacketRunCacheEntry::GuestDependencySnapshot>& snapshots,
+        const DecodedPacketRunCacheEntry::GuestDependencySnapshots& snapshots,
         std::uint64_t& new_generation,
         bool regions_disjoint_sorted = false) noexcept;
     void prune_decoded_packet_run_cache();
@@ -878,6 +937,28 @@ private:
         decoded_packet_run_cache_{};
     std::uint64_t decoded_packet_run_cache_tick_ = 0;
     std::size_t decoded_packet_run_cache_bytes_ = 0;
+    // GPU-resident decoded vertices (render thread only). One persistently
+    // mapped UPLOAD buffer, created lazily per device; see
+    // resident_vertex_arena.h for the block retirement rule.
+    static constexpr std::uint32_t kResidentDecodedVertexCapacity =
+        static_cast<std::uint32_t>(
+            kDecodedPacketRunCacheMaxBytes / sizeof(GxVertexOut));
+    ResidentVertexArena resident_vertices_;
+    Microsoft::WRL::ComPtr<ID3D12Resource> resident_vertex_buffer_;
+    std::byte* resident_vertex_mapped_ = nullptr;
+    D3D12_GPU_VIRTUAL_ADDRESS resident_vertex_gpu_ = 0;
+    ID3D12Device* resident_vertex_device_ = nullptr;
+    bool resident_vertex_buffer_failed_ = false;
+    std::uint64_t frame_resident_vertex_hits_ = 0;
+    std::uint64_t frame_resident_vertex_bytes_ = 0;
+    [[nodiscard]] bool ensure_resident_vertex_buffer();
+    void release_resident_vertex_buffer() noexcept;
+    // Returns the entry's block to the arena (deferred reuse). Every removal or
+    // replacement of a decoded_packet_run_cache_ entry must call this.
+    void release_decoded_entry_residency(DecodedPacketRunCacheEntry& entry) noexcept;
+    // Gives `entry` a resident block holding its vertices; false when disabled,
+    // out of space or the buffer could not be created (the ring path is used).
+    [[nodiscard]] bool make_decoded_entry_resident(DecodedPacketRunCacheEntry& entry);
     // Render-owner cache-off packet staging, bounded by the existing 8MiB cap.
     std::vector<GxVertexOut> decoded_packet_vertex_scratch_;
     bool stop_render_thread_ = false;

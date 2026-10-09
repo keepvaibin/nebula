@@ -738,6 +738,40 @@ bool immutable_vertex_upload_reuse_enabled() {
     return enabled;
 }
 
+// Validated decoded packet-run entries draw from one persistent buffer instead
+// of being copied into the frame vertex ring on every replay. Default on;
+// GALAXY_GX_RESIDENT_DECODED_VERTICES=0 restores the ring copy for A/B runs.
+bool resident_decoded_vertices_enabled() {
+    static const bool enabled = [] {
+        char value[16]{};
+        std::size_t length = 0;
+        if (getenv_s(&length, value, sizeof(value),
+                     "GALAXY_GX_RESIDENT_DECODED_VERTICES") != 0 ||
+            length <= 1u) {
+            return true;
+        }
+        return value[0] != '0' && value[0] != 'n' && value[0] != 'N';
+    }();
+    return enabled;
+}
+
+// First-use texture decodes run on TextureDecodePool workers when the chunk
+// carries a sealed memory snapshot. GALAXY_GX_ASYNC_TEXTURE_DECODE=0 keeps
+// every decode on the render thread.
+bool async_texture_decode_enabled() {
+    static const bool enabled = [] {
+        char value[16]{};
+        std::size_t length = 0;
+        if (getenv_s(&length, value, sizeof(value),
+                     "GALAXY_GX_ASYNC_TEXTURE_DECODE") != 0 ||
+            length <= 1u) {
+            return true;
+        }
+        return value[0] != '0' && value[0] != 'n' && value[0] != 'N';
+    }();
+    return enabled;
+}
+
 bool sorted_vertex_invalidation_enabled() {
     static const bool enabled = [] {
         char value[16]{};
@@ -3013,6 +3047,8 @@ void GxBackend::reset_fifo_session_state() {
     decoded_packet_run_cache_.clear();
     decoded_packet_run_cache_tick_ = 0u;
     decoded_packet_run_cache_bytes_ = 0u;
+    // Runs before the renderer (re)initializes: nothing can still read it.
+    release_resident_vertex_buffer();
     std::vector<GxVertexOut>{}.swap(decoded_packet_vertex_scratch_);
     vertex_layout_cache_ = {};
 
@@ -3498,6 +3534,11 @@ void GxBackend::shutdown() {
             "renderer drain failure: " +
             describe_exception(std::current_exception()));
     }
+    for (auto& [key, entry] : decoded_packet_run_cache_) {
+        (void)key;
+        release_decoded_entry_residency(entry);
+    }
+    release_resident_vertex_buffer();
     try {
         pipeline_cache_.shutdown();
     } catch (...) {
@@ -4977,35 +5018,84 @@ bool GxBackend::capture_decoded_packet_run_dependencies(
     GuestMemoryV1* memory,
     const std::vector<VertexDecodeGuestRange>& dependencies,
     std::size_t byte_budget,
-    std::vector<DecodedPacketRunCacheEntry::GuestDependencySnapshot>&
-        snapshots,
+    DecodedPacketRunCacheEntry::GuestDependencySnapshots& snapshots,
     std::size_t& captured_bytes,
     bool regions_disjoint_sorted) {
-    std::vector<DecodedPacketRunCacheEntry::GuestDependencySnapshot> captured;
-    captured.reserve(dependencies.size());
-    std::size_t total_bytes = 0u;
+    using Snapshots = DecodedPacketRunCacheEntry::GuestDependencySnapshots;
+    const auto fail = [&]() {
+        snapshots.clear();
+        captured_bytes = 0u;
+        return false;
+    };
+    struct Interval {
+        std::uint64_t begin = 0;
+        std::uint64_t end = 0;
+    };
+    std::vector<Interval> reads;
+    reads.reserve(dependencies.size());
     for (const VertexDecodeGuestRange& dependency : dependencies) {
         if (dependency.size == 0u) {
             continue;
         }
-        const std::size_t size = dependency.size;
+        const std::uint64_t begin = dependency.guest_base;
+        reads.push_back(Interval{begin, begin + dependency.size});
+    }
+    std::sort(reads.begin(), reads.end(),
+        [](const Interval& lhs, const Interval& rhs) noexcept {
+            return lhs.begin != rhs.begin ? lhs.begin < rhs.begin
+                                          : lhs.end < rhs.end;
+        });
+
+    // Merge only overlapping or touching reads: the union covers exactly the
+    // bytes that were read, never a gap. A merge must also stay inside one
+    // host mapping; two adjacent guest regions that are not contiguous on the
+    // host are kept as separate ranges.
+    const auto resolve = [&](std::uint64_t begin, std::uint64_t end)
+        -> const std::byte* {
+        if (end - begin >
+            static_cast<std::uint64_t>(std::numeric_limits<std::uint32_t>::max())) {
+            return nullptr;
+        }
+        return resolve_guest_const_bytes(
+            memory, static_cast<std::uint32_t>(begin),
+            static_cast<std::uint32_t>(end - begin), regions_disjoint_sorted);
+    };
+    std::vector<Interval> merged;
+    merged.reserve(reads.size());
+    for (const Interval& read : reads) {
+        if (!merged.empty() && read.begin <= merged.back().end) {
+            Interval& current = merged.back();
+            const std::uint64_t end = std::max(current.end, read.end);
+            if (end == current.end || resolve(current.begin, end) != nullptr) {
+                current.end = end;
+                continue;
+            }
+        }
+        merged.push_back(read);
+    }
+
+    std::size_t total_bytes = 0u;
+    for (const Interval& range : merged) {
+        const std::uint64_t size = range.end - range.begin;
         if (total_bytes > byte_budget || size > byte_budget - total_bytes) {
-            snapshots.clear();
-            captured_bytes = 0u;
-            return false;
+            return fail();
         }
-        const std::byte* source = resolve_guest_const_bytes(
-            memory, dependency.guest_base, dependency.size, regions_disjoint_sorted);
+        total_bytes += static_cast<std::size_t>(size);
+    }
+    Snapshots captured;
+    captured.ranges.reserve(merged.size());
+    captured.bytes.resize(total_bytes);
+    std::size_t offset = 0u;
+    for (const Interval& range : merged) {
+        const std::byte* source = resolve(range.begin, range.end);
         if (source == nullptr) {
-            snapshots.clear();
-            captured_bytes = 0u;
-            return false;
+            return fail();
         }
-        DecodedPacketRunCacheEntry::GuestDependencySnapshot snapshot{};
-        snapshot.guest_base = dependency.guest_base;
-        snapshot.bytes.assign(source, source + size);
-        total_bytes += size;
-        captured.push_back(std::move(snapshot));
+        const auto size = static_cast<std::uint32_t>(range.end - range.begin);
+        std::memcpy(captured.bytes.data() + offset, source, size);
+        captured.ranges.push_back(Snapshots::Range{
+            static_cast<std::uint32_t>(range.begin), size, offset});
+        offset += size;
     }
     snapshots = std::move(captured);
     captured_bytes = total_bytes;
@@ -5016,8 +5106,7 @@ bool GxBackend::decoded_packet_run_dependencies_match(
     GuestMemoryV1* memory,
     std::uint64_t entry_generation,
     std::uint64_t current_generation,
-    const std::vector<
-        DecodedPacketRunCacheEntry::GuestDependencySnapshot>& snapshots,
+    const DecodedPacketRunCacheEntry::GuestDependencySnapshots& snapshots,
     std::uint64_t& new_generation,
     bool regions_disjoint_sorted)
     noexcept {
@@ -5035,23 +5124,126 @@ bool GxBackend::decoded_packet_run_dependencies_match(
         !snapshots.empty()) {
         return true;
     }
-    for (const auto& snapshot : snapshots) {
-        if (snapshot.bytes.empty()) {
+    const std::size_t stored_bytes = snapshots.bytes.size();
+    for (const auto& range : snapshots.ranges) {
+        if (range.size == 0u) {
             continue;
         }
-        if (snapshot.bytes.size() >
-            static_cast<std::size_t>(std::numeric_limits<std::uint32_t>::max())) {
+        if (range.offset > stored_bytes ||
+            range.size > stored_bytes - range.offset) {
             return false;
         }
-        const auto size = static_cast<std::uint32_t>(snapshot.bytes.size());
         const std::byte* source = resolve_guest_const_bytes(
-            memory, snapshot.guest_base, size, regions_disjoint_sorted);
+            memory, range.guest_base, range.size, regions_disjoint_sorted);
         if (source == nullptr ||
-            std::memcmp(source, snapshot.bytes.data(), snapshot.bytes.size()) !=
-                0) {
+            std::memcmp(source, snapshots.bytes.data() + range.offset,
+                        range.size) != 0) {
             return false;
         }
     }
+    return true;
+}
+
+bool GxBackend::ensure_resident_vertex_buffer() {
+    ID3D12Device* const device = renderer_.device();
+    if (device == nullptr) {
+        return false;
+    }
+    if (resident_vertex_buffer_ && resident_vertex_device_ == device) {
+        return true;
+    }
+    if (resident_vertex_buffer_failed_ && resident_vertex_device_ == device) {
+        return false;
+    }
+    // A different device means the old one was shut down (drained) first.
+    release_resident_vertex_buffer();
+    resident_vertex_device_ = device;
+    D3D12_HEAP_PROPERTIES hp{};
+    hp.Type = D3D12_HEAP_TYPE_UPLOAD;
+    D3D12_RESOURCE_DESC rd{};
+    rd.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+    rd.Width = static_cast<UINT64>(kResidentDecodedVertexCapacity) *
+        sizeof(GxVertexOut);
+    rd.Height = 1;
+    rd.DepthOrArraySize = 1;
+    rd.MipLevels = 1;
+    rd.Format = DXGI_FORMAT_UNKNOWN;
+    rd.SampleDesc.Count = 1;
+    rd.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+    Microsoft::WRL::ComPtr<ID3D12Resource> buffer;
+    void* mapped = nullptr;
+    const D3D12_RANGE no_read{0, 0};
+    if (FAILED(device->CreateCommittedResource(
+            &hp, D3D12_HEAP_FLAG_NONE, &rd,
+            D3D12_RESOURCE_STATE_GENERIC_READ, nullptr,
+            IID_PPV_ARGS(&buffer))) ||
+        FAILED(buffer->Map(0, &no_read, &mapped)) || mapped == nullptr) {
+        // Not fatal: every hit keeps using the per-frame ring upload.
+        resident_vertex_buffer_failed_ = true;
+        std::cerr << "[gx-resident-vertices] buffer creation failed; "
+                     "decoded vertices stay on the frame ring\n";
+        return false;
+    }
+    buffer->SetName(L"GX resident decoded vertices");
+    resident_vertex_buffer_ = std::move(buffer);
+    resident_vertex_mapped_ = static_cast<std::byte*>(mapped);
+    resident_vertex_gpu_ = resident_vertex_buffer_->GetGPUVirtualAddress();
+    resident_vertices_.reset(kResidentDecodedVertexCapacity, kFramesInFlight);
+    return true;
+}
+
+void GxBackend::release_resident_vertex_buffer() noexcept {
+    // Callers guarantee the GPU no longer reads the buffer (session reset
+    // before renderer initialization, or shutdown after drain_gpu()). The
+    // arena reset bumps its epoch, so every entry's block becomes invalid.
+    resident_vertex_buffer_.Reset();
+    resident_vertex_mapped_ = nullptr;
+    resident_vertex_gpu_ = 0;
+    resident_vertex_device_ = nullptr;
+    resident_vertex_buffer_failed_ = false;
+    resident_vertices_.reset(0u, kFramesInFlight);
+}
+
+void GxBackend::release_decoded_entry_residency(
+    DecodedPacketRunCacheEntry& entry) noexcept {
+    if (entry.resident_epoch != 0u &&
+        entry.resident_epoch == resident_vertices_.epoch()) {
+        resident_vertices_.release(entry.resident_offset, entry.resident_units);
+    }
+    entry.resident_epoch = 0u;
+    entry.resident_offset = 0u;
+    entry.resident_units = 0u;
+}
+
+bool GxBackend::make_decoded_entry_resident(DecodedPacketRunCacheEntry& entry) {
+    if (!resident_decoded_vertices_enabled() || entry.vertices.empty() ||
+        entry.vertices.size() >
+            static_cast<std::size_t>(std::numeric_limits<std::uint32_t>::max())) {
+        return false;
+    }
+    if (!ensure_resident_vertex_buffer()) {
+        return false;
+    }
+    const auto units = static_cast<std::uint32_t>(entry.vertices.size());
+    if (entry.resident_epoch == resident_vertices_.epoch() &&
+        entry.resident_units == units) {
+        return true;
+    }
+    entry.resident_epoch = 0u;
+    const std::optional<std::uint32_t> offset = resident_vertices_.allocate(units);
+    if (!offset.has_value()) {
+        return false;
+    }
+    // Written once; the block is never rewritten while it belongs to this
+    // entry, so no in-flight frame can observe a partial update.
+    std::memcpy(
+        resident_vertex_mapped_ +
+            static_cast<std::size_t>(*offset) * sizeof(GxVertexOut),
+        entry.vertices.data(),
+        static_cast<std::size_t>(units) * sizeof(GxVertexOut));
+    entry.resident_epoch = resident_vertices_.epoch();
+    entry.resident_offset = *offset;
+    entry.resident_units = units;
     return true;
 }
 
@@ -5087,6 +5279,7 @@ void GxBackend::prune_decoded_packet_run_cache() {
             continue;
         }
         decoded_packet_run_cache_bytes_ -= it->second.byte_size;
+        release_decoded_entry_residency(it->second);
         decoded_packet_run_cache_.erase(it);
         ++frame_decoded_vertex_cache_evictions_;
     }
@@ -5171,6 +5364,7 @@ std::size_t GxBackend::invalidate_dirty_decoded_packet_run_ranges(
         }
         if (overlaps) {
             decoded_packet_run_cache_bytes_ -= it->second.byte_size;
+            release_decoded_entry_residency(it->second);
             it = decoded_packet_run_cache_.erase(it);
             ++invalidated;
         } else {
@@ -6088,6 +6282,9 @@ void GxBackend::present_cached_xfb(
 void GxBackend::render_thread_main() {
     (void)SetThreadDescription(GetCurrentThread(), L"Nebula GX Render");
     SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_ABOVE_NORMAL);
+    // Hybrid CPUs: keep the FIFO parser on performance cores with the
+    // simulation thread; the scheduler still balances inside that set.
+    (void)galaxy::host::pin_current_thread_to_performance_cores();
     {
         // Opt the whole process out of EcoQoS / execution-speed throttling so
         // hybrid CPUs (Intel P/E/LP-E cores, laptops) do not park the
@@ -6159,6 +6356,7 @@ void GxBackend::render_thread_main() {
         try {
             poll_completed_frame_effects();
             poll_completed_pointer_depth_capture();
+            poll_async_depth_field();
         } catch (...) {
             std::lock_guard<std::mutex> lock(queue_mutex_);
             fail_queued_utilities(std::current_exception());
@@ -6175,7 +6373,8 @@ void GxBackend::render_thread_main() {
                 (cfg.vsync_interval != 0u || cfg.max_fps > 0.0f);
             const bool poll_frame_effects = !pending_frame_effects_.empty();
             const bool poll_pointer_depth =
-                static_cast<bool>(pending_pointer_depth_capture_.capture);
+                static_cast<bool>(pending_pointer_depth_capture_.capture) ||
+                renderer_.async_depth_field_pending();
             if (idle_present || poll_frame_effects || poll_pointer_depth) {
                 // Completion polling occurs outside queue_mutex_ at the top of
                 // the worker loop. Yielding under an empty queue without checking
@@ -6253,6 +6452,7 @@ void GxBackend::render_thread_main() {
                 } else {
                     prepare_worker_memory_snapshot(chunk);
                     render_frame_on_thread(chunk);
+                    submit_async_depth_field_if_requested();
                 }
             } else if (idle_present) {
                 present_latest_frame_on_thread();
@@ -6336,6 +6536,56 @@ void GxBackend::render_thread_main() {
         const std::lock_guard<std::mutex> lock(queue_mutex_);
         fail_queued_utilities(std::current_exception());
     }
+}
+
+bool GxBackend::peek_efb_published(
+    std::uint16_t x,
+    std::uint16_t y,
+    std::uint32_t& value) {
+    if (!initialized_ || !async_render_thread_enabled() ||
+        x >= kEfbWidth || y >= kEfbHeight) {
+        return false;
+    }
+    async_depth_requested_.store(true, std::memory_order_release);
+    const int slot = async_depth_published_.load(std::memory_order_acquire);
+    if (slot < 0) {
+        return false;
+    }
+    const auto& field = async_depth_fields_[static_cast<std::size_t>(slot)];
+    if (field.size() != static_cast<std::size_t>(kEfbWidth) * kEfbHeight) {
+        return false;
+    }
+    value = field[static_cast<std::size_t>(y) * kEfbWidth + x];
+    async_depth_published_answers_.fetch_add(1u, std::memory_order_relaxed);
+    return true;
+}
+
+void GxBackend::poll_async_depth_field() {
+    if (!renderer_.async_depth_field_pending()) {
+        return;
+    }
+    const int published = async_depth_published_.load(std::memory_order_relaxed);
+    const int slot = published < 0 ? 0 : (published + 1) % 3;
+    auto& field = async_depth_fields_[static_cast<std::size_t>(slot)];
+    if (field.size() != static_cast<std::size_t>(kEfbWidth) * kEfbHeight) {
+        field.assign(static_cast<std::size_t>(kEfbWidth) * kEfbHeight, 0u);
+    }
+    if (renderer_.try_complete_async_depth_field(field)) {
+        ++async_depth_fields_completed_;
+        async_depth_published_.store(slot, std::memory_order_release);
+    }
+}
+
+void GxBackend::submit_async_depth_field_if_requested() {
+    if (!async_depth_requested_.load(std::memory_order_acquire)) {
+        return;
+    }
+    if (renderer_.async_depth_field_pending()) {
+        // Keep the request alive for the next rendered chunk.
+        return;
+    }
+    async_depth_requested_.store(false, std::memory_order_relaxed);
+    (void)renderer_.submit_async_depth_field();
 }
 
 void GxBackend::poll_completed_pointer_depth_capture() {
@@ -7042,6 +7292,8 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
     frame_efb_copy_us_ = 0;
     frame_decoded_vertex_cache_hits_ = 0;
     frame_decoded_vertex_cache_misses_ = 0;
+    frame_resident_vertex_hits_ = 0;
+    frame_resident_vertex_bytes_ = 0;
     frame_decoded_vertex_cache_evictions_ = 0;
     frame_decoded_vertex_cache_stale_rejects_ = 0;
     pending_draw_batch_ = {};
@@ -7062,6 +7314,9 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
         const cadence::ScopedPhaseTimer render_begin_timer{
             cadence_diagnostics_, cadence::TimingPhase::RenderBegin};
         renderer_.begin_frame(chunk.present_swap_chain);
+        // begin_frame() waited for this slot's previous frame: resident vertex
+        // blocks released kFramesInFlight render frames ago are now unused.
+        resident_vertices_.advance_frame();
         efb_copies_.begin_frame(renderer_.frame_slot(), kFramesInFlight);
         texture_cache_.begin_frame(renderer_.frame_slot(), kFramesInFlight);
         const auto retirement_revision = texture_cache_.retirement_revision();
@@ -7086,6 +7341,12 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
         // New decoded textures upload through this frame's command list.
         texture_cache_.set_upload_list(renderer_.command_list());
     }
+    // Workers may be filling this frame's texture staging from the chunk's
+    // memory snapshot; no exit from this function may leave them running.
+    struct TextureDecodeJoin {
+        TextureCache& cache;
+        ~TextureDecodeJoin() { cache.finish_pending_decodes_noexcept(); }
+    } texture_decode_join{texture_cache_};
     if (diagnostic_texture_invalidate_requested(frame_index_ + 1u)) {
         texture_cache_.invalidate_all();
         texture_handle_cache_.clear();
@@ -7274,6 +7535,12 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
             memory == &chunk.memory_snapshot.memory &&
             chunk.memory_snapshot.regions_disjoint_sorted;
         frame_services_ = services;
+        // A sealed snapshot keeps every texture's guest bytes immutable until
+        // this chunk is submitted, so first-use decodes may run on workers.
+        texture_cache_.set_async_decode_allowed(
+            async_texture_decode_enabled() &&
+            chunk.memory_snapshot_active && chunk.memory_snapshot.sealed &&
+            memory == &chunk.memory_snapshot.memory);
 
         try {
             if (pending_fifo_.empty()) {
@@ -7305,6 +7572,8 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
                 }
             }
         } catch (const GxFatalError& e) {
+            texture_cache_.set_async_decode_allowed(false);
+            texture_cache_.finish_pending_decodes_noexcept();
             parser_.set_profile(nullptr);
             frame_memory_ = nullptr;
             frame_memory_regions_disjoint_sorted_ = false;
@@ -7317,6 +7586,8 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
                       << std::dec << '\n';
             throw;
         } catch (...) {
+            texture_cache_.set_async_decode_allowed(false);
+            texture_cache_.finish_pending_decodes_noexcept();
             parser_.set_profile(nullptr);
             frame_memory_ = nullptr;
             frame_memory_regions_disjoint_sorted_ = false;
@@ -7326,6 +7597,7 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
             throw;
         }
 
+        texture_cache_.set_async_decode_allowed(false);
         frame_memory_   = nullptr;
         frame_memory_regions_disjoint_sorted_ = false;
         frame_services_ = nullptr;
@@ -7676,6 +7948,8 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
         GxBackend* backend;
         FrameChunk* chunk;
     } submission_context{this, &chunk};
+    // Every staging byte the command list copies from must be written.
+    texture_cache_.finish_pending_decodes();
     (void)renderer_.end_frame(
         present_swap_chain,
         [](void* opaque, std::uint64_t fence_value) {
@@ -8070,6 +8344,11 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
                   << frame_decoded_vertex_cache_evictions_
                   << " decoded-vtx-cache-stale-rejects="
                   << frame_decoded_vertex_cache_stale_rejects_
+                  << " resident-vtx-hits=" << frame_resident_vertex_hits_
+                  << " resident-vtx-bytes=" << frame_resident_vertex_bytes_
+                  << " resident-vtx-used-bytes="
+                  << static_cast<std::uint64_t>(resident_vertices_.used_units()) *
+                         sizeof(GxVertexOut)
                   << " decoded-vtx-cache-bytes="
                   << decoded_packet_run_cache_bytes_
                   // Decoded GPU texture residency against its bound. On the
@@ -9828,6 +10107,7 @@ bool GxBackend::on_cached_packet_draw_run(
             : DecodedPacketRunCacheKey{};
     LoadedPrimitive prim{};
     bool decoded_cache_hit = false;
+    bool batch_resident = false;
     if (decoded_cache_enabled) {
         if (auto it = decoded_packet_run_cache_.find(decoded_cache_key);
             it != decoded_packet_run_cache_.end()) {
@@ -9870,21 +10150,57 @@ bool GxBackend::on_cached_packet_draw_run(
                 const auto upload_start = time_detail
                     ? std::chrono::steady_clock::now()
                     : std::chrono::steady_clock::time_point{};
-                prim = vertex_loader_.upload_cached_packet_run_vertices(
-                    it->second.vertices,
-                    base_offset,
-                    packets,
-                    primitive,
-                    renderer_.vertex_ring(),
-                    renderer_.index_ring(),
+                // A validated entry draws straight from its resident block:
+                // no vertex bytes move. Only another resident run that ends
+                // exactly where this block starts can share its batch.
+                DecodedPacketRunCacheEntry& entry = it->second;
+                const bool resident = make_decoded_entry_resident(entry);
+                const std::size_t resident_byte_offset =
+                    static_cast<std::size_t>(entry.resident_offset) *
+                    sizeof(GxVertexOut);
+                if (append_to_pending &&
+                    (pending_draw_batch_.resident != resident ||
+                     (resident &&
+                      pending_draw_batch_.vertex_byte_end != resident_byte_offset))) {
+                    flush_pending_draw_batch();
+                    append_to_pending = false;
+                    cached_draw_run_batch_compatible_known_ = false;
+                }
+                const std::uint32_t index_batch_base =
                     append_to_pending && cached_draw_run_primitive_indexed_
                         ? pending_draw_batch_.base_vertex
-                        : 0u,
-                    append_to_pending && cached_draw_run_primitive_indexed_,
-                    it->second.total_indices,
-                    precomputed_indices,
-                    immutable_vertex_upload_reuse_enabled()
-                        ? &it->second.upload_token : nullptr);
+                        : 0u;
+                if (resident) {
+                    prim = vertex_loader_.upload_cached_packet_run_indices(
+                        resident_byte_offset,
+                        static_cast<std::uint32_t>(entry.vertices.size()),
+                        base_offset,
+                        packets,
+                        primitive,
+                        renderer_.index_ring(),
+                        index_batch_base,
+                        append_to_pending && cached_draw_run_primitive_indexed_,
+                        entry.total_indices,
+                        precomputed_indices);
+                    batch_resident = true;
+                    ++frame_resident_vertex_hits_;
+                    frame_resident_vertex_bytes_ +=
+                        entry.vertices.size() * sizeof(GxVertexOut);
+                } else {
+                    prim = vertex_loader_.upload_cached_packet_run_vertices(
+                        entry.vertices,
+                        base_offset,
+                        packets,
+                        primitive,
+                        renderer_.vertex_ring(),
+                        renderer_.index_ring(),
+                        index_batch_base,
+                        append_to_pending && cached_draw_run_primitive_indexed_,
+                        entry.total_indices,
+                        precomputed_indices,
+                        immutable_vertex_upload_reuse_enabled()
+                            ? &entry.upload_token : nullptr);
+                }
                 if (time_detail) {
                     frame_cached_vertex_upload_us_ +=
                         static_cast<std::uint64_t>(std::chrono::duration_cast<
@@ -9920,6 +10236,12 @@ bool GxBackend::on_cached_packet_draw_run(
                 // so do not ask for them at all.
                 decoded_cache_enabled,
                 reuse_packet_scratch ? &decoded_packet_vertex_scratch_ : nullptr);
+        if (append_to_pending && pending_draw_batch_.resident) {
+            // Ring vertices cannot extend a batch drawn from the resident buffer.
+            flush_pending_draw_batch();
+            append_to_pending = false;
+            cached_draw_run_batch_compatible_known_ = false;
+        }
         prim = vertex_loader_.upload_cached_packet_run_vertices(
             decoded.vertices,
             base_offset,
@@ -9944,8 +10266,7 @@ bool GxBackend::on_cached_packet_draw_run(
             // No cached entry borrows this vector and the next decode zeroes it.
             decoded.vertices.swap(decoded_packet_vertex_scratch_);
         }
-        std::vector<
-            DecodedPacketRunCacheEntry::GuestDependencySnapshot>
+        DecodedPacketRunCacheEntry::GuestDependencySnapshots
             dependency_snapshots;
         std::size_t dependency_snapshot_bytes = 0u;
         const bool dependencies_captured =
@@ -9969,7 +10290,15 @@ bool GxBackend::on_cached_packet_draw_run(
             // copied.
             entry.validated_generation = decoded_packet_run_generation_;
             entry.vertices = std::move(decoded.vertices);
-            entry.guest_array_reads = std::move(decoded.guest_array_reads);
+            // Eager invalidation tests overlap against the merged snapshot
+            // ranges: the same byte set as the raw per-attribute reads, with
+            // the duplicate chunks removed.
+            entry.guest_array_reads.clear();
+            entry.guest_array_reads.reserve(dependency_snapshots.ranges.size());
+            for (const auto& range : dependency_snapshots.ranges) {
+                entry.guest_array_reads.push_back(
+                    VertexDecodeGuestRange{range.guest_base, range.size});
+            }
             entry.guest_array_page_mask = 0u;
             for (const VertexDecodeGuestRange& dependency : entry.guest_array_reads) {
                 entry.guest_array_page_mask |= dependency_page_mask(
@@ -9981,6 +10310,7 @@ bool GxBackend::on_cached_packet_draw_run(
                     decoded_packet_run_cache_.find(decoded_cache_key);
                 existing != decoded_packet_run_cache_.end()) {
                 decoded_packet_run_cache_bytes_ -= existing->second.byte_size;
+                release_decoded_entry_residency(existing->second);
                 existing->second = std::move(entry);
                 decoded_packet_run_cache_bytes_ += existing->second.byte_size;
             } else {
@@ -9998,6 +10328,7 @@ bool GxBackend::on_cached_packet_draw_run(
                     decoded_packet_run_cache_.find(decoded_cache_key);
                 existing != decoded_packet_run_cache_.end()) {
                 decoded_packet_run_cache_bytes_ -= existing->second.byte_size;
+                release_decoded_entry_residency(existing->second);
                 decoded_packet_run_cache_.erase(existing);
                 ++frame_decoded_vertex_cache_evictions_;
             }
@@ -10058,7 +10389,8 @@ bool GxBackend::on_cached_packet_draw_run(
 
     D3D12_VERTEX_BUFFER_VIEW vbv{};
     vbv.BufferLocation =
-        renderer_.vertex_ring().gpu_base()
+        (batch_resident ? resident_vertex_gpu_
+                        : renderer_.vertex_ring().gpu_base())
         + prim.vertex_byte_offset;
     vbv.SizeInBytes =
         prim.vertex_count * static_cast<UINT>(sizeof(GxVertexOut));
@@ -10094,6 +10426,7 @@ bool GxBackend::on_cached_packet_draw_run(
     pending_draw_batch_.index_count = prim.index_count;
     pending_draw_batch_.draw_count =
         static_cast<std::uint32_t>(packets.size());
+    pending_draw_batch_.resident = batch_resident;
     return true;
 }
 
@@ -10146,7 +10479,7 @@ void GxBackend::on_cached_draw_run_draw(
             static_cast<std::uint16_t>(cursor.data[cursor.offset + 1]));
 
     bool append_to_pending = false;
-    if (pending_draw_batch_.active) {
+    if (pending_draw_batch_.active && !pending_draw_batch_.resident) {
         append_to_pending = cached_draw_run_batch_compatible_known_ ||
             draw_calls_batch_compatible(
                 pending_draw_batch_.call,
@@ -10389,7 +10722,7 @@ void GxBackend::on_draw(
     const bool primitive_indexed =
         primitive != PrimitiveClass::Triangles;
     bool append_to_pending =
-        pending_draw_batch_.active &&
+        pending_draw_batch_.active && !pending_draw_batch_.resident &&
         draw_calls_batch_compatible(
             pending_draw_batch_.call,
             state_call,

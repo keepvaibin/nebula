@@ -10085,7 +10085,10 @@ GuestAddressSpace::GuestAddressSpace(
       bt_virtual_input_cadence_(
           read_env_flag("GALAXY_STRICT_NATIVE_HID_CADENCE"),
           hid_timing_profile) {
-    if (read_env_flag("GALAXY_FLAT_GUEST_MEMORY")) {
+    // The flat 4 GiB guest view is the production memory model: generated
+    // loads and stores address MEM1/MEM2 directly through it. The vector
+    // backing remains for a second instance or an explicit opt-out.
+    if (read_env_flag("GALAXY_FLAT_GUEST_MEMORY", true)) {
         if (flat_guest_owner_.acquire()) {
             mem1_view_ = std::span<std::byte>(
                 flat_guest_memory::mem1_host_view(), kMem1Size);
@@ -10172,6 +10175,18 @@ GuestAddressSpace::GuestAddressSpace(
         }
         memory_.flat_guest_read_base = reinterpret_cast<const std::byte*>(
             flat_guest_memory::kGuestBase);
+        memory_.flat_guest_base = reinterpret_cast<std::byte*>(
+            flat_guest_memory::kGuestBase);
+    }
+    // Publish the live gather buffer only when no diagnostic observes
+    // individual gather-pipe writes; every such flag routes generated stores
+    // back through write_device, where those observers live.
+    if (!wgpipe_pe_scan_hint_enabled_ && !wgpipe_pe_ownership_trace_enabled_ &&
+        !wgpipe_profile_enabled_ && !direct_wgpipe_pe_events_ &&
+        !trace_gx_fifo_append_enabled_) {
+        memory_.wgpipe_gather_fast = wgpipe_gather_.data();
+        memory_.wgpipe_gather_count_fast = &wgpipe_gather_count_;
+        memory_.wgpipe_flush = &GuestAddressSpace::wgpipe_flush_callback;
     }
     initialize_devices();
     dsp_dusk_hle_enabled_ = read_env_flag("GALAXY_DUSK_DSP_HLE", false);
@@ -10976,6 +10991,16 @@ void GuestAddressSpace::trace_gx_fifo_append(
         std::fprintf(stderr, "\n");
         return;
     }
+}
+
+bool GuestAddressSpace::wgpipe_flush_callback(void* user) {
+    auto* const self = static_cast<GuestAddressSpace*>(user);
+    if (self == nullptr || self->wgpipe_gather_count_ != kGatherPipeBurstSize) {
+        return false;
+    }
+    self->flush_wgpipe_gather_burst(self->wgpipe_gather_);
+    self->wgpipe_gather_count_ = 0;
+    return true;
 }
 
 void GuestAddressSpace::flush_wgpipe_gather_burst(

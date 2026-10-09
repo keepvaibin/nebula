@@ -156,9 +156,10 @@ int main() {
         defaults.vsync_interval == 0 &&
             !defaults.wait_for_frame_latency &&
             defaults.swap_chain_frame_latency == 2 &&
-            !defaults.flip_discard &&
+            defaults.flip_discard &&
             defaults.max_fps == 60.0f,
-        "default Release config keeps a 60 Hz cap for non-realtime-VI launches");
+        "default Release config keeps a 60 Hz cap for non-realtime-VI launches "
+        "and the flip-discard swap chain");
 
     const galaxy::gx::GxTimingConfig timing_defaults{};
     passed &= expect(

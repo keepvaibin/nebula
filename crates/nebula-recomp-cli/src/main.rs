@@ -110,6 +110,15 @@ enum Command {
         /// Experimental WiiCompiled-derived flat RAM reads; checked fallback remains active.
         #[arg(long)]
         experimental_flat_ram_reads: bool,
+        /// Flat RAM stores through the writable guest view; checked fallback remains active.
+        #[arg(long)]
+        experimental_flat_ram_writes: bool,
+        /// Native IEEE scalar/paired arithmetic with exact fallbacks.
+        #[arg(long)]
+        experimental_native_float: bool,
+        /// Direct native dispatch for bctrl/bclrl targets published by the runtime.
+        #[arg(long)]
+        experimental_direct_indirect_calls: bool,
         /// Fused paired arithmetic/commit helper; exact guards and slow fallback.
         #[arg(long)]
         experimental_fused_paired_binary: bool,
@@ -443,6 +452,9 @@ fn main() -> Result<()> {
             experimental_guest_resident_integer,
             experimental_typed_region_80165478,
             experimental_flat_ram_reads,
+            experimental_flat_ram_writes,
+            experimental_native_float,
+            experimental_direct_indirect_calls,
             experimental_fused_paired_binary,
             experimental_indexed_paired_binary,
             experimental_indexed_paired_ternary,
@@ -471,6 +483,9 @@ fn main() -> Result<()> {
                 guest_resident_integer: experimental_guest_resident_integer,
                 typed_region_80165478: experimental_typed_region_80165478,
                 flat_ram_reads: experimental_flat_ram_reads,
+                flat_ram_writes: experimental_flat_ram_writes,
+                native_float: experimental_native_float,
+                direct_indirect_calls: experimental_direct_indirect_calls,
                 fused_paired_binary: experimental_fused_paired_binary,
                 indexed_paired_binary: experimental_indexed_paired_binary,
                 indexed_paired_ternary: experimental_indexed_paired_ternary,

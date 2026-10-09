@@ -449,6 +449,15 @@ public:
     [[nodiscard]] std::uint64_t submit_pointer_depth_capture();
     [[nodiscard]] bool try_complete_pointer_depth_capture(
         std::span<std::uint32_t> pixels);
+    // Render-owner only. Asynchronous 640x528 depth field for simulation-thread
+    // GXPeekZ, on private resources so it never contends with the pointer
+    // field above. Returns the fence value, or 0 when a capture is in flight.
+    [[nodiscard]] std::uint64_t submit_async_depth_field();
+    [[nodiscard]] bool try_complete_async_depth_field(
+        std::span<std::uint32_t> pixels);
+    [[nodiscard]] bool async_depth_field_pending() const noexcept {
+        return async_depth_fence_ != 0u;
+    }
     [[nodiscard]] bool peek_efb(
         std::uint16_t x,
         std::uint16_t y,
@@ -867,6 +876,14 @@ private:
     Microsoft::WRL::ComPtr<ID3D12Resource> pointer_depth_target_;
     Microsoft::WRL::ComPtr<ID3D12Resource> pointer_depth_readback_;
     std::uint64_t pointer_depth_capture_fence_ = 0;
+    Microsoft::WRL::ComPtr<ID3D12CommandAllocator> async_depth_allocator_;
+    Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> async_depth_command_list_;
+    Microsoft::WRL::ComPtr<ID3D12Resource> async_depth_target_;
+    Microsoft::WRL::ComPtr<ID3D12Resource> async_depth_readback_;
+    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> async_depth_rtv_heap_;
+    D3D12_CPU_DESCRIPTOR_HANDLE async_depth_rtv_{};
+    std::uint64_t async_depth_fence_ = 0;
+    bool ensure_async_depth_resources();
     bool read_efb_pixels(std::uint16_t x, std::uint16_t y, EfbPeekKind kind,
         std::uint32_t& value, std::span<std::uint32_t> depth_pixels,
         bool defer_pointer_depth = false);

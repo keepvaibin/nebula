@@ -71,6 +71,13 @@ bool peek_efb(
     return backend().peek_efb(x, y, kind, value);
 }
 
+bool peek_efb_published(
+    std::uint16_t x,
+    std::uint16_t y,
+    std::uint32_t& value) {
+    return backend().peek_efb_published(x, y, value);
+}
+
 void present_cached_xfb(
     std::uint32_t displayed_xfb_addr,
     bool present_swap_chain) {

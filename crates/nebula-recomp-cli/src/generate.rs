@@ -34,7 +34,9 @@ use std::{fs, path::Path};
 // 9: paired estimates use the corrected table/status boundary; regenerate modules.
 // 10: call-return policy and paired lane-fact corrections; regenerate modules.
 // 11: checked multi-register RAM helpers; regenerate affected modules.
-pub const GENERATION_VERSION: u32 = 11;
+// 12: native float, flat RAM reads/writes, direct indirect dispatch and the
+//     function-record export (native ABI 24); regenerate every module.
+pub const GENERATION_VERSION: u32 = 12;
 
 /// Shard size and per-shard source budget of the qualified module build.
 pub const MODULE_SHARD_SIZE: usize = 64;
@@ -52,6 +54,13 @@ const DSP_COEF: &[u8] = include_bytes!("../../../third_party/dolphin-free-dsp-ro
 pub fn release_module_options() -> ModuleTranslationOptions {
     ModuleTranslationOptions {
         inline_scalar_single_binary: true,
+        // Native execution model: flat RAM in both directions, native IEEE
+        // arithmetic with exact fallbacks, and direct dispatch for virtual
+        // calls. See galaxy/native_fast_paths.h for the admission rules.
+        flat_ram_reads: true,
+        flat_ram_writes: true,
+        native_float: true,
+        direct_indirect_calls: true,
         exact_psmtx_local_lanes: true,
         // General text-based GPR residency remains disabled. The prior emitted-
         // source census added 2.73 context accesses per removed access; this is
@@ -286,6 +295,10 @@ pub fn generate_all(game: &Path, output: &Path) -> Result<()> {
             "shardSize": MODULE_SHARD_SIZE,
             "shardSourceKiB": MODULE_SHARD_SOURCE_KIB,
             "inlineScalarSingleBinary": module_options.inline_scalar_single_binary,
+            "flatRamReads": module_options.flat_ram_reads,
+            "flatRamWrites": module_options.flat_ram_writes,
+            "nativeFloat": module_options.native_float,
+            "directIndirectCalls": module_options.direct_indirect_calls,
             "fusedPairedTernary": module_options.fused_paired_ternary,
             "exactPsmtxLocalLanes": module_options.exact_psmtx_local_lanes,
             "guestResidentInteger": module_options.guest_resident_integer,

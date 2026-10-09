@@ -116,6 +116,15 @@ void set_safety_scene_surround(float intensity) noexcept;
     EfbPeekKind kind,
     std::uint32_t& value);
 
+// Answers a depth peek from the most recently completed asynchronous EFB
+// depth field without any FIFO drain or GPU round trip. Returns false (and
+// records the request so the render thread starts producing fields) when no
+// field has been published yet; the caller then takes the exact path.
+[[nodiscard]] bool peek_efb_published(
+    std::uint16_t x,
+    std::uint16_t y,
+    std::uint32_t& value);
+
 // Present an already-rendered XFB after the guest VI callback has selected
 // the displayed buffer. This keeps the host swap-chain cadence tied to the
 // game's own XFB exchange instead of to the pre-VI FIFO copy point.

@@ -41,7 +41,7 @@ struct RenderConfig {
     bool     wait_for_frame_latency = false;
     unsigned swap_chain_frame_latency = 2;
     bool     allow_tearing = false;
-    bool     flip_discard = false;
+    bool     flip_discard = true;
 
     // Reserved for future native AA work. The live renderer currently clamps
     // this to 1 because its EFB/depth targets and PSOs are single-sample.

@@ -1372,6 +1372,16 @@ struct RuntimeState {
     };
 
     galaxy::ModuleLookupFn lookup{};
+    // ABI 24 direct dispatch: one native entry per 4-byte guest address from
+    // `direct_dispatch_base`, null where the call must keep the service path.
+    std::vector<galaxy::NativeGameFunction> direct_dispatch_table;
+    std::uint32_t direct_dispatch_base{};
+    std::uint32_t direct_dispatch_count{};
+    std::uint64_t efb_peek_published_count{};
+    // Idle-loop sleeps: bounded host waits taken at the guest scheduler's
+    // empty-run-queue checkpoint instead of spinning until the next deadline.
+    std::uint64_t idle_loop_sleeps{};
+    std::uint64_t idle_loop_sleep_us{};
     // The Home Button RSO is lowered from the validated user dump at install
     // time and loaded as a sibling native DLL. This is deliberately separate
     // from the DOL module ABI: dynamic RSO bytes never become executable at
@@ -14959,7 +14969,115 @@ bool external_cached_call_preserves_generic_body(
 bool needs_call_guest_intercept(
     const RuntimeState& state,
     std::uint32_t guest_address,
-    const galaxy::PpcContext* cached_context = nullptr) {
+    const galaxy::PpcContext* cached_context = nullptr);
+
+// Targets that own a host-side transaction when reached through a generated
+// indirect call. This mirrors the translator's `requires_host_guest_call`
+// list, the whole 0x8041xxxx intercept range, and every address the cached
+// call service compares against. A listed target keeps a null direct entry.
+bool direct_dispatch_target_requires_host(std::uint32_t target) {
+    if (!(target >= 0x80000000u && target < 0x81800000u)) {
+        return true;
+    }
+    if ((target >> 16u) == 0x8041u) {
+        return true;
+    }
+    switch (target) {
+        // Translator: requires_host_guest_call.
+        case 0x80385034u: case 0x803852BCu: case 0x8038BC80u: case 0x8038D2E4u:
+        case 0x803981A0u: case 0x80399058u: case 0x803990A8u: case 0x80399144u:
+        case 0x80399280u: case 0x8039B9E0u: case 0x8039EF50u: case 0x803CE128u:
+        case 0x803F81ACu: case 0x804077BCu: case 0x80409F48u: case 0x8040A2B4u:
+        case 0x8040ABF4u: case 0x8040ACE0u: case 0x8040CA60u: case 0x8041071Cu:
+        case 0x80418440u: case 0x804506D8u: case 0x804A095Cu: case 0x804A096Cu:
+        case 0x804A2FD8u: case 0x804A3734u: case 0x804A379Cu: case 0x804A381Cu:
+        case 0x804A3E94u: case 0x804A3F24u: case 0x804A6E20u: case 0x804A84F8u:
+        case 0x804A8A0Cu: case 0x804AB488u: case 0x804ABFBCu: case 0x804AC380u:
+        case 0x804B1E38u: case 0x804B1E7Cu: case 0x804B2730u: case 0x804BEF5Cu:
+        case 0x804BF2CCu: case 0x804CEE44u: case 0x804ECA00u: case 0x804F5500u:
+        case 0x8052B490u:
+        // Cached call service: entry hooks, mouse, movie, scheduler, queues.
+        case 0x8038D1CCu: case 0x80370398u: case 0x803A29B8u: case 0x80385AF0u:
+        case 0x804B9EC8u: case 0x803882F8u: case 0x804AB20Cu: case 0x8040B8F8u:
+        case 0x804A88E4u: case 0x804A89ACu: case 0x804A8A88u: case 0x804D1F10u:
+        case 0x805173E0u: case 0x803A38ECu: case 0x804CB2C0u: case 0x804CB420u:
+        case 0x80494390u: case 0x804946E8u: case 0x8049569Cu: case 0x80496900u:
+        case 0x80496980u: case 0x804969E0u: case 0x80496A60u: case 0x80496A80u:
+        case 0x80494C70u: case 0x801785ECu: case 0x8017866Cu: case 0x80178E64u:
+        case 0x80178F5Cu: case 0x8034C8E4u: case 0x8034C914u: case 0x803D42E8u:
+        case 0x803D42ECu: case 0x803FB5BCu: case 0x803FB680u: case 0x803FBAACu:
+        case 0x803FBB08u: case 0x803FC76Cu: case 0x803FC794u: case 0x80397A38u:
+        case 0x80397A84u: case 0x803989BCu: case 0x80398468u: case 0x803984BCu:
+        case 0x803CE030u: case 0x804DFF98u: case 0x804E0C98u: case 0x804E0ED0u:
+        case 0x804DC4D0u: case 0x804F2364u: case 0x80451198u: case 0x804D93C8u:
+        case 0x804D8ACCu: case 0x80399AF0u: case 0x803A00FCu: case 0x8000BA08u:
+        case 0x8000BB0Cu: case 0x80448024u: case 0x804414DCu: case 0x804414FCu:
+        case 0x80441400u: case 0x80455B64u: case 0x803404B0u: case 0x8034C184u:
+            return true;
+        default:
+            return false;
+    }
+}
+
+// Publishes the ABI 24 direct dispatch table from the module's own callable
+// entry records. Every call-tracing or profiling diagnostic disables it so
+// those observers keep seeing each indirect call at the service boundary.
+void build_direct_dispatch_table(
+    RuntimeState& state,
+    std::size_t (*function_records)(const galaxy::FunctionRecordV1**)) {
+    state.direct_dispatch_table.clear();
+    state.direct_dispatch_base = 0u;
+    state.direct_dispatch_count = 0u;
+    if (function_records == nullptr ||
+        !read_env_flag("GALAXY_DIRECT_DISPATCH", true) ||
+        state.trace_calls || state.profile_calls || state.profile_call_time ||
+        state.profile_call_self_time || state.max_calls != 0u ||
+        call_intercept_diagnostics_enabled() ||
+        runtime_boundary_self_probe_active(state)) {
+        std::cerr << "[direct-dispatch] disabled\n";
+        return;
+    }
+    const galaxy::FunctionRecordV1* records = nullptr;
+    const std::size_t count = function_records(&records);
+    if (records == nullptr || count == 0u) {
+        std::cerr << "[direct-dispatch] module publishes no function records\n";
+        return;
+    }
+    const std::uint32_t first = records[0].address & ~0xFFFu;
+    const std::uint32_t last = records[count - 1u].address;
+    if (last < first || last - first > 0x01800000u) {
+        std::cerr << "[direct-dispatch] record range rejected\n";
+        return;
+    }
+    const std::uint32_t span = (last - first) + 4u;
+    state.direct_dispatch_table.assign(span / 4u, nullptr);
+    std::size_t published = 0u;
+    std::size_t withheld = 0u;
+    for (std::size_t index = 0; index < count; ++index) {
+        const auto& record = records[index];
+        if (record.function == nullptr || record.address < first ||
+            record.address > last || (record.address & 3u) != 0u) {
+            continue;
+        }
+        if (direct_dispatch_target_requires_host(record.address) ||
+            galaxy::runtime::cached_call_has_required_entry_hook(record.address) ||
+            needs_call_guest_intercept(state, record.address, nullptr)) {
+            ++withheld;
+            continue;
+        }
+        state.direct_dispatch_table[(record.address - first) / 4u] = record.function;
+        ++published;
+    }
+    state.direct_dispatch_base = first;
+    state.direct_dispatch_count = span;
+    std::cerr << "[direct-dispatch] entries=" << published << " withheld=" << withheld
+              << " base=" << hexadecimal(first) << " span-bytes=" << span << '\n';
+}
+
+bool needs_call_guest_intercept(
+    const RuntimeState& state,
+    std::uint32_t guest_address,
+    const galaxy::PpcContext* cached_context) {
     static const bool retain_yield_select =
         read_env_flag("GALAXY_YIELD_SELECT_SAME_CONTEXT_RFI", false);
     static const bool return_yield_select =
@@ -17168,6 +17286,69 @@ void dump_nested_interrupt_audit(
 }
 
 bool trace_realtime_vi_wait(const RuntimeState& state);
+
+// The guest scheduler's idle loop (SelectThread with an empty run queue) is
+// translated code and would otherwise spin a whole host core until the next
+// VI, AI or decrementer deadline. On real hardware that spin costs nothing; on
+// a two-core laptop it starves the render thread. When nothing is pending and
+// the retrace is not yet due, wait on the same high-resolution timer the
+// VIWaitForRetrace path uses, capped by the AI DMA deadline and by a short
+// slice so input and decrementer deadlines published by other threads are
+// observed promptly. This changes no guest-visible state: the idle loop
+// resumes at the same checkpoint and re-evaluates its run queue exactly as
+// before.
+bool idle_loop_sleep_enabled() {
+    static const bool enabled = read_env_flag("GALAXY_IDLE_LOOP_SLEEP", true);
+    return enabled;
+}
+
+void idle_loop_wait_for_next_deadline(RuntimeState& state) {
+    if (!idle_loop_sleep_enabled() || state.vi_deadline_consumer == nullptr ||
+        state.vi_deadline_wait_active || state.deadline_events.mask() != 0u ||
+        state.dispatching_external_interrupt || state.dispatching_decrementer ||
+        state.dispatching_fpu_unavailable || state.dispatching_ipc_interrupt ||
+        state.servicing_native_input || state.gx_sync_capture_active ||
+        state.external_dispatch.active() || state.pending_vi_boundary.active()) {
+        return;
+    }
+    const std::uint64_t now_ticks = runtime_time_base_ticks(state);
+    const galaxy::timing::PeriodicDeadlineObservation observation =
+        state.vi_deadline_consumer->inspect(
+            state.deadline_events,
+            galaxy::timing::EventKind::VideoInterface,
+            now_ticks);
+    if (observation.status != galaxy::timing::PeriodicConsumeStatus::NotDue ||
+        now_ticks >= observation.expected_deadline_ticks) {
+        return;
+    }
+    const std::uint64_t ticks_remaining =
+        observation.expected_deadline_ticks - now_ticks;
+    auto wait_duration = std::chrono::duration_cast<std::chrono::steady_clock::duration>(
+        std::chrono::duration<double>(
+            static_cast<double>(ticks_remaining) /
+            static_cast<double>(galaxy::timing::kTimelineTicksPerSecond)));
+    wait_duration = cap_realtime_vi_wait_for_ai_dma(state, wait_duration);
+    static const auto max_slice = std::chrono::microseconds(std::clamp<std::uint64_t>(
+        read_env_u64("GALAXY_IDLE_LOOP_SLEEP_SLICE_US", 2000u), 100u, 8000u));
+    if (wait_duration > max_slice) {
+        wait_duration = max_slice;
+    }
+    // Leave the final stretch before the retrace to the existing polling so
+    // the edge is never delivered late by timer granularity.
+    constexpr auto kDeadlineGuard = std::chrono::microseconds(250);
+    if (wait_duration <= kDeadlineGuard) {
+        return;
+    }
+    wait_duration -= kDeadlineGuard;
+    const auto started = std::chrono::steady_clock::now();
+    if (!wait_realtime_vi_duration_high_res(wait_duration)) {
+        SwitchToThread();
+    }
+    ++state.idle_loop_sleeps;
+    state.idle_loop_sleep_us += static_cast<std::uint64_t>(
+        std::chrono::duration_cast<std::chrono::microseconds>(
+            std::chrono::steady_clock::now() - started).count());
+}
 
 void wait_for_exact_vi_deadline(
     RuntimeState& state,
@@ -25465,6 +25646,12 @@ void branch_checkpoint_body(
                 publish_next_inline_checkpoint_slow(state, context);
                 return;
             }
+        } else {
+            // Empty run queue: nothing can execute until a device deadline
+            // publishes. Sleep toward it instead of spinning (see
+            // idle_loop_wait_for_next_deadline); the generic checkpoint path
+            // below then services whatever became due.
+            idle_loop_wait_for_next_deadline(state);
         }
     }
     if (trace_jpa_resources_enabled() && guest_pc == 0x80441438u &&
@@ -27531,6 +27718,14 @@ static bool gx_efb_peek(
     if (state == nullptr || memory == nullptr || value == nullptr) {
         return false;
     }
+    // Depth peeks (StarPointer) are answered from the render thread's
+    // asynchronous depth field once one exists: no FIFO drain, no GPU round
+    // trip, one frame of staleness. The first peek of a session and every
+    // color peek keep the exact synchronous path below.
+    if (depth && galaxy::gx::peek_efb_published(x, y, *value)) {
+        ++state->efb_peek_published_count;
+        return true;
+    }
     // Bracket the whole peek, not just one half: both the FIFO synchronization
     // and the readback round-trip block this thread on the render thread, and the
     // sum of the two is the number that matters. One clock read either side of a
@@ -28887,11 +29082,20 @@ static void configure_runtime_scheduling() {
             "[thread-priority] SetPriorityClass failed error=%lu\n",
             static_cast<unsigned long>(GetLastError()));
     }
-    if (SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_ABOVE_NORMAL) == FALSE) {
+    // The simulation thread is the critical path of every frame: it must win
+    // against the render and DSP workers (ABOVE_NORMAL) when cores are scarce.
+    if (SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_HIGHEST) == FALSE) {
         std::fprintf(
             stderr,
             "[thread-priority] SetThreadPriority failed error=%lu\n",
             static_cast<unsigned long>(GetLastError()));
+    }
+    if (read_env_flag("GALAXY_PIN_PERFORMANCE_CORES", true)) {
+        const unsigned cores = galaxy::host::pin_current_thread_to_performance_cores();
+        std::fprintf(
+            stderr,
+            "[thread-placement] simulation thread performance-core set=%u\n",
+            cores);
     }
     report_effective_priorities();
 }
@@ -29677,7 +29881,13 @@ int wmain(int argc, wchar_t** argv) {
             // three numbers below are the only ones that say whether that
             // dependency is negligible or dominant, because both existing peek
             // phase timers require frame-cadence diagnostics to be enabled.
+            std::cerr<<"[idle-loop-sleep] waits="<<state.idle_loop_sleeps
+                <<" total-us="<<state.idle_loop_sleep_us
+                <<" direct-dispatch-entries="<<std::count_if(
+                    state.direct_dispatch_table.begin(), state.direct_dispatch_table.end(),
+                    [](galaxy::NativeGameFunction f){ return f != nullptr; })<<'\n';
             std::cerr<<"[gx-efb-peek-summary] count="<<state.efb_peek_count
+                <<" published-field-answers="<<state.efb_peek_published_count
                 <<" failures="<<state.efb_peek_failures
                 <<" blocked-total-us="<<state.efb_peek_ns/1000.0
                 <<" blocked-max-us="<<state.efb_peek_max_ns/1000.0
@@ -29932,6 +30142,10 @@ int wmain(int argc, wchar_t** argv) {
     }
 
     state.lookup = lookup_fn;
+    using ModuleFunctionRecordsFn =
+        std::size_t (*)(const galaxy::FunctionRecordV1**);
+    const auto function_records_fn = reinterpret_cast<ModuleFunctionRecordsFn>(
+        GetProcAddress(module, "galaxy_module_function_records"));
     using YieldRfiReturnProtocolFn = std::uint32_t (*)();
     const auto yield_protocol = reinterpret_cast<YieldRfiReturnProtocolFn>(
         GetProcAddress(module, "galaxy_yield_rfi_return_protocol"));
@@ -30190,6 +30404,13 @@ int wmain(int argc, wchar_t** argv) {
         return galaxy::g_experimental_dynamic_aspect_word.load(
             std::memory_order_acquire);
     };
+    build_direct_dispatch_table(state, function_records_fn);
+    if (!state.direct_dispatch_table.empty()) {
+        services.direct_dispatch = state.direct_dispatch_table.data();
+        services.direct_dispatch_base = state.direct_dispatch_base;
+        services.direct_dispatch_count = state.direct_dispatch_count;
+    }
+    services.direct_dispatch_suspended = state.external_dispatch.active_flag();
     state.services = &services;
     state.checkpoint_gate.bind(
         galaxy::checkpoint::PointerView{

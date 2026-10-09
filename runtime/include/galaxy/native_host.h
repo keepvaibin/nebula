@@ -1664,6 +1664,9 @@ private:
         WgpipePeOwnershipTraceRecord record);
     void dump_wgpipe_pe_ownership_trace() const;
     void flush_wgpipe_gather_burst(std::span<const std::byte, 32> bytes);
+    // GuestMemoryV1::wgpipe_flush: the generated module filled the published
+    // gather buffer; flush exactly one burst the way write_wgpipe_bytes does.
+    static bool wgpipe_flush_callback(void* user);
     void trace_gx_fifo_append(
         const char* source,
         std::size_t append_start,

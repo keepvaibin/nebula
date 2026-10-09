@@ -92,7 +92,7 @@ GALAXY_ALWAYS_INLINE void atomic_or_u64(
 // ABI 23 requires every renderer dirty-word producer to publish its summary.
 // ABI 22 modules used inline page-only stores: accepting them with a summary
 // drain would silently lose invalidations. Rebuild both game and Home sidecars.
-inline constexpr std::uint32_t kNativeAbiVersion = 23;
+inline constexpr std::uint32_t kNativeAbiVersion = 24;
 // Dynamic RSO sidecars have their own narrow ABI. They are generated at
 // installation from a validated disc module and contain only native C++; this
 // version is deliberately independent of the RMGE01 game-module manifest.
@@ -355,6 +355,19 @@ struct GuestMemoryV1 {
     std::atomic_uint64_t* dirty_word_summary{};
     std::uint32_t dirty_word_summary_count{};
     std::uint32_t dirty_word_summary_pad{};
+    // ABI 24: writable alias of the same six shared MEM1/MEM2 guest views as
+    // `flat_guest_read_base`. Generated stores write through it and publish
+    // the same dirty page the checked path publishes. Null when the host does
+    // not own the flat views; every fast path then takes the checked helper.
+    std::byte* flat_guest_base{};
+    // ABI 24: the host's live 32-byte write-gather buffer and fill count,
+    // published only while no FIFO diagnostic observes individual writes.
+    // Generated stores to the gather pipe append here; a full burst is
+    // handed back through `wgpipe_flush`, which performs exactly the host's
+    // burst flush. Null pointers keep every gather write on `write_device`.
+    std::byte* wgpipe_gather_fast{};
+    std::uint32_t* wgpipe_gather_count_fast{};
+    bool (*wgpipe_flush)(void* user){};
 };
 
 enum class LogLevelV1 : std::uint32_t {
@@ -463,6 +476,25 @@ struct NativeServicesV1 {
     // Upper 32 bits: generation; lower 16+16: positive client width/height,
     // or zero for default fitted 16:9 on an unsupported shape.
     std::uint64_t (*experimental_aspect_word)(void* user){};
+    // ABI 24: direct dispatch for generated indirect calls. Entry i covers
+    // guest address `direct_dispatch_base + 4 * i`; a null entry (or a null
+    // table) routes the call through `call_guest_cached`. The runtime leaves
+    // entries null for every target that owns a host transaction and raises
+    // `direct_dispatch_suspended` while an external interrupt dispatch is
+    // live; generated code also defers to the service while any device event
+    // is pending so the audited scheduling boundary is preserved.
+    const NativeGameFunction* direct_dispatch{};
+    std::uint32_t direct_dispatch_base{};
+    std::uint32_t direct_dispatch_count{};
+    const std::atomic_uint32_t* direct_dispatch_suspended{};
+};
+
+// ABI 24: one callable entry of the generated module, in ascending address
+// order. The module exports its complete table so the runtime can build the
+// direct dispatch table without probing every address.
+struct FunctionRecordV1 {
+    std::uint32_t address{};
+    NativeGameFunction function{};
 };
 
 // Guest-execution trace instrumentation is a developer bring-up aid. In a
@@ -14109,8 +14141,14 @@ GALAXY_MODULE_EXPORT void galaxy_module_entry(
     galaxy::GuestMemoryV1* memory);
 GALAXY_MODULE_EXPORT galaxy::NativeGameFunction galaxy_lookup_function(
     std::uint32_t guest_address);
+// ABI 24, optional: the module's complete ascending callable-entry table.
+GALAXY_MODULE_EXPORT std::size_t galaxy_module_function_records(
+    const galaxy::FunctionRecordV1** records);
 
 }
 
 // Shared guarded math after the complete ABI and guest helper declarations.
 #include "galaxy/ppc_float_native_inline.h"
+// Native fast paths for the generated module (flat RAM, native float, direct
+// dispatch). Declared last because they shadow the helpers above.
+#include "galaxy/native_fast_paths.h"

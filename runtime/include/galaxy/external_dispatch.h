@@ -1,5 +1,6 @@
 #pragma once
 
+#include <atomic>
 #include <cstdint>
 #include <limits>
 
@@ -122,6 +123,7 @@ public:
             kNoExternalInterrupt,
             0u,
             false};
+        active_flag_.store(1u, std::memory_order_release);
         return true;
     }
 
@@ -194,6 +196,7 @@ public:
         }
         completed = record_;
         record_ = {};
+        active_flag_.store(0u, std::memory_order_release);
         return true;
     }
 
@@ -201,9 +204,15 @@ public:
     [[nodiscard]] const ExternalDispatchRecord& record() const noexcept {
         return record_;
     }
+    // Lock-free mirror of `active()` for the generated module's direct
+    // dispatch gate. It changes only where `record_.active` changes.
+    [[nodiscard]] const std::atomic_uint32_t* active_flag() const noexcept {
+        return &active_flag_;
+    }
 
 private:
     ExternalDispatchRecord record_{};
+    std::atomic_uint32_t active_flag_{0u};
 };
 
 // A synchronous exception (notably lazy-FPU exception 7) can occur while a
