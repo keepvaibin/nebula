@@ -55,7 +55,9 @@ try {
     $resolved = (& git -C $repo rev-parse $Revision).Trim()
     if ($LASTEXITCODE -ne 0) { throw "Unknown revision $Revision" }
     $type = (& git -C $repo cat-file -t $resolved).Trim()
-    $gitTree = (& git -C $repo rev-parse "$resolved^{tree}").Trim()
+    if ($type -eq 'tree') { $gitTree = $resolved }
+    elseif ($type -eq 'commit') { $gitTree = (& git -C $repo show -s --format=%T $resolved).Trim() }
+    else { throw "Release revision must identify a commit or tree, not $type" }
     if ($LASTEXITCODE -ne 0) { throw "Source revision $resolved has no Git tree" }
     Write-Host "Building Nebula $Version from $type $resolved"
 
