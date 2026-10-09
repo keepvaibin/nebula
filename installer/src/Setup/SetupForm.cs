@@ -256,11 +256,9 @@ namespace Nebula.Setup
             if (mode == InstallMode.Install && game == null) { Fail("Choose your Super Mario Galaxy ISO, RVZ or extracted folder."); return; }
             if (game != null && !File.Exists(game) && !Directory.Exists(game)) { Fail("The selected game was not found: " + game); return; }
             var toolchain = new Toolchain(Json.Parse(Payload.ReadText("toolchain.json")), layout.Toolchains);
-            if (!toolchain.IsReady && !license.Checked)
+            if (mode != InstallMode.Update && !toolchain.IsReady && !license.Checked)
             {
-                if (mode == InstallMode.Update && MessageBox.Show(this, "This update needs the Microsoft Visual Studio Build Tools license. Accept it?\r\n" + toolchain.LicenseUrl,
-                    "Nebula Setup", MessageBoxButtons.YesNo) == DialogResult.Yes) { }
-                else { Fail("Accept the Microsoft Visual Studio Build Tools license to continue."); return; }
+                Fail("Accept the Microsoft Visual Studio Build Tools license to continue."); return;
             }
             var problems = InstallEngine.CheckRequirements(layout.Root.Length > 3 ? Path.GetDirectoryName(layout.Root) ?? layout.Root : layout.Root);
             if (problems.Count > 0) { Fail(string.Join("\r\n", problems)); return; }
@@ -300,7 +298,7 @@ namespace Nebula.Setup
             cancelButton.Click += delegate { Close(); };
             if (failure == null)
             {
-                step.Text = "Nebula " + BuildInfo.Version + " is installed and ready.";
+                step.Text = engine.ModuleUpdateNotice ?? ("Nebula " + BuildInfo.Version + " is installed and ready.");
                 overall.Value = overall.Maximum;
                 launch.Visible = true;
                 return;
