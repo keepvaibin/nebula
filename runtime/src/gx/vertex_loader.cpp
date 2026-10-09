@@ -1629,8 +1629,49 @@ LoadedPrimitive VertexLoader::upload_cached_packet_run_vertices(
     if (upload_token == nullptr) {
         std::memcpy(vb.cpu, decoded_vertices.data(), vb_size);
     }
+    return upload_cached_packet_run_indices(
+        vb.offset,
+        total_vertices,
+        base_offset,
+        packets,
+        primitive,
+        index_ring,
+        index_batch_base_vertex,
+        rebase_indices_to_batch_base,
+        total_indices,
+        precomputed_indices);
+}
+
+LoadedPrimitive VertexLoader::upload_cached_packet_run_indices(
+    std::size_t vertex_byte_offset,
+    std::uint32_t total_vertices,
+    std::size_t base_offset,
+    std::span<const CachedDrawPacket> packets,
+    PrimitiveClass primitive,
+    UploadRing& index_ring,
+    std::uint32_t index_batch_base_vertex,
+    bool rebase_indices_to_batch_base,
+    std::uint32_t total_indices,
+    std::span<const std::uint16_t> precomputed_indices) {
+    const std::size_t error_offset =
+        base_offset +
+        (!packets.empty() ? packets.front().local_opcode_offset : 0u);
+    const std::uint8_t error_opcode =
+        !packets.empty() ? packets.front().opcode : 0u;
+    if (total_vertices >
+        static_cast<std::uint32_t>(std::numeric_limits<std::uint16_t>::max())) {
+        throw GxFatalError(
+            "VertexLoader: cached packet run exceeded 16-bit vertex span",
+            error_offset,
+            error_opcode);
+    }
+    if (total_vertices == 0u) {
+        LoadedPrimitive empty{};
+        empty.source_class = primitive;
+        return empty;
+    }
     const std::uint32_t base_vertex =
-        static_cast<std::uint32_t>(vb.offset / sizeof(GxVertexOut));
+        static_cast<std::uint32_t>(vertex_byte_offset / sizeof(GxVertexOut));
     if (rebase_indices_to_batch_base &&
         base_vertex < index_batch_base_vertex) {
         throw GxFatalError(
@@ -1645,7 +1686,7 @@ LoadedPrimitive VertexLoader::upload_cached_packet_run_vertices(
     if (total_indices == 0u) {
         LoadedPrimitive prim{};
         prim.base_vertex = base_vertex;
-        prim.vertex_byte_offset = vb.offset;
+        prim.vertex_byte_offset = vertex_byte_offset;
         prim.vertex_count = total_vertices;
         prim.first_index = 0;
         prim.index_count = 0;
@@ -1661,7 +1702,7 @@ LoadedPrimitive VertexLoader::upload_cached_packet_run_vertices(
             })) {
         LoadedPrimitive prim{};
         prim.base_vertex = base_vertex;
-        prim.vertex_byte_offset = vb.offset;
+        prim.vertex_byte_offset = vertex_byte_offset;
         prim.vertex_count = total_vertices;
         prim.first_index = 0;
         prim.index_count = total_vertices;
@@ -1724,7 +1765,7 @@ LoadedPrimitive VertexLoader::upload_cached_packet_run_vertices(
 
     LoadedPrimitive prim{};
     prim.base_vertex = base_vertex;
-    prim.vertex_byte_offset = vb.offset;
+    prim.vertex_byte_offset = vertex_byte_offset;
     prim.vertex_count = total_vertices;
     prim.first_index = first_index;
     prim.index_count = idx_count;

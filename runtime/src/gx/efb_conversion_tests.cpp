@@ -17,6 +17,7 @@
 
 #include <algorithm>
 #include <array>
+#include <atomic>
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
@@ -1630,6 +1631,183 @@ V main(uint id : SV_VertexID) {
         return passed;
     }
 
+    // Async first-use decode must upload exactly the bytes the synchronous
+    // decode uploads, in the same frame, for every format family (full SIMD
+    // tiles and clipped edges), even when the TLUT bank is reloaded after the
+    // lookup and before the workers are joined.
+    bool test_async_texture_decode_matches_sync() {
+        using namespace galaxy::gx;
+        constexpr std::uint32_t address = 0x10000000u;
+        std::vector<std::byte> bytes(64u * 1024u);
+        for (std::size_t i = 0; i < bytes.size(); ++i) {
+            bytes[i] = static_cast<std::byte>((i * 2654435761u) >> 13u);
+        }
+        galaxy::GuestMemoryRegionV1 region{
+            address, static_cast<std::uint32_t>(bytes.size()), bytes.data()};
+        galaxy::GuestMemoryV1 memory{};
+        memory.region_count = 1u;
+        memory.regions = &region;
+        struct Case {
+            TexFormat format;
+            std::uint16_t width;
+            std::uint16_t height;
+            TlutFormat tlut;
+        };
+        const std::vector<Case> cases{
+            {TexFormat::RGBA8, 16u, 8u, TlutFormat::IA8},
+            {TexFormat::RGBA8, 13u, 7u, TlutFormat::IA8},
+            {TexFormat::CMPR, 16u, 16u, TlutFormat::IA8},
+            {TexFormat::CMPR, 12u, 9u, TlutFormat::IA8},
+            {TexFormat::RGB565, 8u, 8u, TlutFormat::IA8},
+            {TexFormat::RGB5A3, 12u, 8u, TlutFormat::IA8},
+            {TexFormat::IA8, 8u, 4u, TlutFormat::IA8},
+            {TexFormat::IA8, 5u, 6u, TlutFormat::IA8},
+            {TexFormat::I8, 16u, 8u, TlutFormat::IA8},
+            {TexFormat::I8, 5u, 3u, TlutFormat::IA8},
+            {TexFormat::I4, 8u, 8u, TlutFormat::IA8},
+            {TexFormat::C8, 8u, 4u, TlutFormat::RGB5A3},
+            {TexFormat::C4, 8u, 8u, TlutFormat::RGB565},
+        };
+        const auto run = [&](bool async) {
+            auto cache_owner = std::make_unique<TextureCache>();
+            TextureCache& cache = *cache_owner;
+            if (!cache.initialize(device_.Get())) {
+                throw std::runtime_error("initialize async decode cache");
+            }
+            cache.begin_frame(0u, kFramesInFlight);
+            ComPtr<ID3D12CommandAllocator> allocator;
+            ComPtr<ID3D12GraphicsCommandList> list;
+            check_hr(device_->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT,
+                IID_PPV_ARGS(&allocator)), "Create async decode allocator");
+            check_hr(device_->CreateCommandList(0u, D3D12_COMMAND_LIST_TYPE_DIRECT,
+                allocator.Get(), nullptr, IID_PPV_ARGS(&list)), "Create async decode list");
+            cache.set_upload_list(list.Get());
+            // 256-entry palette in slot 0 from guest bytes at +0x8000.
+            (void)cache.load_tlut((address + 0x8000u) >> 5u, 16u << 10u, &memory);
+            cache.set_async_decode_allowed(async);
+            std::vector<TextureHandle> handles;
+            std::uint32_t offset = 0u;
+            for (const Case& test : cases) {
+                TexImage image{};
+                image.guest_addr = address + offset;
+                image.width = test.width;
+                image.height = test.height;
+                image.format = test.format;
+                TexMode mode{};
+                mode.min_filter = TexMinFilter::Near;
+                handles.push_back(cache.get(image, mode, TlutRef{0u, test.tlut}, &memory));
+                offset += 0x400u;
+            }
+            // Reload the slot with different bytes before the join: queued
+            // jobs must decode with the palette captured at lookup time.
+            (void)cache.load_tlut((address + 0x9000u) >> 5u, 16u << 10u, &memory);
+            cache.set_async_decode_allowed(false);
+            cache.finish_pending_decodes();
+            if (async && cache.async_decode_jobs() != cases.size()) {
+                throw std::runtime_error("async decode path was not taken");
+            }
+
+            std::vector<ComPtr<ID3D12Resource>> readbacks;
+            std::vector<UINT> pitches;
+            for (std::size_t i = 0; i < cases.size(); ++i) {
+                const UINT pitch = (cases[i].width * 4u + 255u) & ~255u;
+                pitches.push_back(pitch);
+                D3D12_HEAP_PROPERTIES hp{};
+                hp.Type = D3D12_HEAP_TYPE_READBACK;
+                D3D12_RESOURCE_DESC rd{};
+                rd.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+                rd.Width = static_cast<UINT64>(pitch) * cases[i].height;
+                rd.Height = 1u;
+                rd.DepthOrArraySize = 1u;
+                rd.MipLevels = 1u;
+                rd.SampleDesc.Count = 1u;
+                rd.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+                ComPtr<ID3D12Resource> readback;
+                check_hr(device_->CreateCommittedResource(&hp, D3D12_HEAP_FLAG_NONE, &rd,
+                    D3D12_RESOURCE_STATE_COPY_DEST, nullptr, IID_PPV_ARGS(&readback)),
+                    "Create async decode readback");
+                D3D12_RESOURCE_BARRIER barrier{};
+                barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+                barrier.Transition.pResource = handles[i].resource;
+                barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+                barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+                barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_COPY_SOURCE;
+                list->ResourceBarrier(1u, &barrier);
+                D3D12_TEXTURE_COPY_LOCATION src{};
+                src.pResource = handles[i].resource;
+                src.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
+                D3D12_TEXTURE_COPY_LOCATION dst{};
+                dst.pResource = readback.Get();
+                dst.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
+                dst.PlacedFootprint.Footprint.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+                dst.PlacedFootprint.Footprint.Width = cases[i].width;
+                dst.PlacedFootprint.Footprint.Height = cases[i].height;
+                dst.PlacedFootprint.Footprint.Depth = 1u;
+                dst.PlacedFootprint.Footprint.RowPitch = pitch;
+                list->CopyTextureRegion(&dst, 0u, 0u, 0u, &src, nullptr);
+                std::swap(barrier.Transition.StateBefore, barrier.Transition.StateAfter);
+                list->ResourceBarrier(1u, &barrier);
+                readbacks.push_back(readback);
+            }
+            check_hr(list->Close(), "Close async decode list");
+            ID3D12CommandList* lists[] = {list.Get()};
+            queue_->ExecuteCommandLists(1u, lists);
+            ComPtr<ID3D12Fence> fence;
+            check_hr(device_->CreateFence(0u, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&fence)),
+                "Create async decode fence");
+            check_hr(queue_->Signal(fence.Get(), 1u), "Signal async decode fence");
+            if (fence->GetCompletedValue() < 1u) {
+                check_hr(fence->SetEventOnCompletion(1u, fence_event_), "Wait async decode");
+                WaitForSingleObject(fence_event_, INFINITE);
+            }
+            std::vector<std::vector<std::uint8_t>> pixels;
+            for (std::size_t i = 0; i < cases.size(); ++i) {
+                void* mapped = nullptr;
+                const D3D12_RANGE range{0u, static_cast<SIZE_T>(pitches[i]) * cases[i].height};
+                check_hr(readbacks[i]->Map(0u, &range, &mapped), "Map async decode readback");
+                std::vector<std::uint8_t> image;
+                for (UINT y = 0; y < cases[i].height; ++y) {
+                    const auto* row = static_cast<const std::uint8_t*>(mapped) +
+                        static_cast<std::size_t>(y) * pitches[i];
+                    image.insert(image.end(), row, row + cases[i].width * 4u);
+                }
+                const D3D12_RANGE no_write{0u, 0u};
+                readbacks[i]->Unmap(0u, &no_write);
+                pixels.push_back(std::move(image));
+            }
+            cache.set_upload_list(nullptr);
+            cache.shutdown();
+            return pixels;
+        };
+        const auto sync_pixels = run(false);
+        const auto async_pixels = run(true);
+        bool passed = true;
+        for (std::size_t i = 0; i < cases.size(); ++i) {
+            passed &= expect(sync_pixels[i] == async_pixels[i],
+                "async first-use decode uploads the same texels as the synchronous decode");
+        }
+        // Join contract: every job finishes, the first failure is rethrown
+        // exactly once, and later joins are clean.
+        TextureDecodePool pool(2u);
+        std::atomic<int> ran{0};
+        for (int i = 0; i < 64; ++i) {
+            pool.submit([&ran, i] {
+                ran.fetch_add(1);
+                if (i == 17) throw std::runtime_error("decode failure");
+            });
+        }
+        bool rethrown = false;
+        try {
+            pool.wait_all();
+        } catch (const std::runtime_error&) {
+            rethrown = true;
+        }
+        passed &= expect(rethrown && ran.load() == 64 && pool.outstanding() == 0u,
+            "decode pool joins every job and rethrows the first failure");
+        pool.wait_all();
+        return passed;
+    }
+
     bool test_texture_descriptor_retirement() {
         using namespace galaxy::gx;
         bool passed = true;
@@ -3074,6 +3252,7 @@ int main(int argc, char** argv) {
     try {
         WarpConversionHarness harness;
         passed &= harness.test_texture_descriptor_retirement();
+        passed &= harness.test_async_texture_decode_matches_sync();
         passed &= harness.test_xfb_retirement_rollback();
         passed &= harness.test_conversion_rtv_slot_identity();
         passed &= harness.test_descriptor_ring_allocation_identity();

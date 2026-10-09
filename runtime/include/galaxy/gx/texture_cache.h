@@ -31,6 +31,7 @@
 #include "galaxy/gx/gx_bitfields.h"
 #include "galaxy/gx/guest_range_envelope.h"
 #include "galaxy/gx/shader_keys.h"  // fnv1a64
+#include "galaxy/gx/texture_decode_pool.h"
 #include "galaxy/native_api.h"
 
 #include <array>
@@ -38,6 +39,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <list>
+#include <memory>
 #include <optional>
 #include <span>
 #include <string>
@@ -232,6 +234,23 @@ public:
     // Called after the renderer has waited for this frame slot's fence.
     void begin_frame(unsigned frame_slot, unsigned frames_in_flight);
 
+    // Asynchronous first-use decode. While allowed, a miss creates the texture,
+    // records its staging copy and SRV exactly as before, and hands only the
+    // CPU decode into that staging memory to a worker. The caller promises the
+    // guest bytes passed to get() stay unchanged until finish_pending_decodes()
+    // (true for a sealed frame memory snapshot). finish_pending_decodes() must
+    // run before the upload command list is executed; it rethrows the first
+    // decode failure. Debug paths that read decoded pixels stay synchronous.
+    void set_async_decode_allowed(bool allowed) noexcept {
+        async_decode_allowed_ = allowed;
+    }
+    void finish_pending_decodes();
+    // Unwinding-path join: never throws.
+    void finish_pending_decodes_noexcept() noexcept;
+    [[nodiscard]] std::uint64_t async_decode_jobs() const noexcept {
+        return async_decode_jobs_;
+    }
+
 private:
     DependencyEventSink* dependency_event_sink_ = nullptr;
     std::uint64_t debug_capture_frame_ = 0u;
@@ -383,6 +402,10 @@ private:
     // Keeping capacity between misses avoids heap churn during gameplay while
     // preserving exact decode bytes and GPU upload semantics.
     std::vector<std::vector<RGBA8>> level_pixels_scratch_;
+    std::unique_ptr<TextureDecodePool> decode_pool_;
+    bool async_decode_allowed_ = false;
+    bool async_decode_pending_ = false;
+    std::uint64_t async_decode_jobs_ = 0;
     std::vector<UINT64> level_offsets_scratch_;
     std::vector<UINT> level_pitches_scratch_;
     unsigned current_frame_slot_ = 0;

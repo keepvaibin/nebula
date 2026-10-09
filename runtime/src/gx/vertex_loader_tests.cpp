@@ -13,6 +13,7 @@
 #include "galaxy/gx/gx_bitfields.h"
 #include "galaxy/gx/gx_state.h"
 #include "galaxy/gx/renderer_d3d12.h"
+#include "galaxy/gx/resident_vertex_arena.h"
 #include "galaxy/gx/vertex_loader.h"
 #include "galaxy/gx/vertex_dequant.h"
 
@@ -1041,7 +1042,10 @@ bool generated_index_boundaries_preserve_topology(ID3D12Device* device) {
         }
         for (auto index : test.indices) largest_index = index > largest_index ? index : largest_index;
         const std::vector<GxVertexOut> decoded(total_vertices);
-        for (unsigned route : {0u, 1u, 2u}) {
+        // Route 3 is the resident path: vertices already live in a persistent
+        // buffer at `bias` and only indices are emitted. It must produce the
+        // same topology, rejection and rebasing as the ring upload routes.
+        for (unsigned route : {0u, 1u, 2u, 3u}) {
             const bool cached = route != 0u;
             if (!cached && test.packet_counts.size() != 1u) continue;
             const bool indexed = !test.indices.empty() &&
@@ -1057,7 +1061,18 @@ bool generated_index_boundaries_preserve_topology(ID3D12Device* device) {
                 LoadedPrimitive prim{};
                 bool rejected = false;
                 try {
-                    if (cached) {
+                    if (route == 3u) {
+                        prim = loader.upload_cached_packet_run_indices(
+                            static_cast<std::size_t>(bias) * sizeof(GxVertexOut),
+                            total_vertices, 0x1200u, packets, test.primitive,
+                            indices, 0u, true,
+                            static_cast<std::uint32_t>(test.indices.size()),
+                            std::span<const std::uint16_t>{test.indices});
+                        if (!expect(prim.vertex_count == 0u ||
+                                    prim.vertex_byte_offset ==
+                                        static_cast<std::size_t>(bias) * sizeof(GxVertexOut),
+                                    "resident run moved its vertex block")) return false;
+                    } else if (cached) {
                         prim = loader.upload_cached_packet_run_vertices(decoded, 0x1200u,
                             packets, test.primitive, vertices, indices, 0u, true,
                             static_cast<std::uint32_t>(test.indices.size()),
@@ -1288,8 +1303,44 @@ bool immutable_upload_reuse_preserves_bytes(ID3D12Device* device) {
 
 }  // namespace
 
+// Resident decoded-vertex blocks: first-fit keeps replay-order allocations
+// contiguous (so adjacent runs still batch), and a released block is never
+// handed out again until kFramesInFlight renderer frames have begun.
+bool resident_vertex_arena_defers_reuse_until_gpu_retirement() {
+    galaxy::gx::ResidentVertexArena arena;
+    arena.reset(100u, 2u);
+    const std::uint64_t epoch = arena.epoch();
+    const auto a = arena.allocate(30u);
+    const auto b = arena.allocate(20u);
+    const auto c = arena.allocate(50u);
+    if (!expect(a == 0u && b == 30u && c == 50u && !arena.allocate(1u) &&
+                arena.used_units() == 100u,
+                "arena must allocate first-fit and contiguously in request order")) return false;
+    arena.release(*b, 20u);  // released during frame 0, which may still draw it
+    if (!expect(!arena.allocate(1u), "released block reused in the same frame")) return false;
+    arena.advance_frame();   // frame 1 begins: frame 0 may still be on the GPU
+    if (!expect(!arena.allocate(1u), "released block reused one frame later")) return false;
+    arena.advance_frame();   // frame 2 begins: its slot fence covered frame 0
+    const auto reused = arena.allocate(20u);
+    if (!expect(reused == 30u && arena.used_units() == 100u,
+                "retired block must become reusable after frames_in_flight frames")) return false;
+    // Neighbouring retirements coalesce into one span.
+    arena.release(*a, 30u);
+    arena.release(*reused, 20u);
+    arena.advance_frame();
+    arena.advance_frame();
+    if (!expect(arena.free_block_count() == 1u && arena.allocate(50u) == 0u,
+                "adjacent retired blocks must coalesce")) return false;
+    if (!expect(arena.allocate(0u) == std::nullopt, "zero-unit allocation accepted")) return false;
+    arena.reset(10u, 2u);
+    return expect(arena.epoch() != epoch && arena.used_units() == 0u &&
+                  arena.retired_block_count() == 0u && arena.allocate(10u) == 0u,
+                  "reset must forget every block and change the epoch");
+}
+
 int main() {
     if (!indexed_dependencies_cover_nonmonotonic_reads()) return 1;
+    if (!resident_vertex_arena_defers_reuse_until_gpu_retirement()) return 1;
     if (!fixed_vertex_dequantization_preserves_bits()) return 1;
     if (!small_vertex_components_preserve_bits()) return 1;
     if (!cached_index_rebasing_matches_wide_arithmetic()) return 1;

@@ -8,9 +8,11 @@
 #include "galaxy/gx/gx_state.h"
 #include "galaxy/gx/pipeline_cache.h"
 #include "galaxy/gx/renderer_d3d12.h"
+#include "galaxy/gx/resident_vertex_arena.h"
 #include "galaxy/gx/shader_gen.h"
 #include "galaxy/gx/shader_keys.h"
 #include "galaxy/gx/texture_cache.h"
+#include "galaxy/gx/texture_decode_pool.h"
 #include "galaxy/gx/uber_constants.h"
 #include "galaxy/gx/vertex_loader.h"
 

@@ -175,6 +175,23 @@ public:
         std::span<const std::uint16_t> precomputed_indices = {},
         ImmutableUploadToken* upload_token = nullptr);
 
+    // Index half of upload_cached_packet_run_vertices for vertices that are
+    // already GPU-visible: `vertex_byte_offset` is where `vertex_count`
+    // canonical vertices start in their (caller-owned) buffer, and
+    // base_vertex = vertex_byte_offset / sizeof(GxVertexOut). Rebasing,
+    // non-indexed triangle detection and index emission are identical.
+    LoadedPrimitive upload_cached_packet_run_indices(
+        std::size_t vertex_byte_offset,
+        std::uint32_t vertex_count,
+        std::size_t base_offset,
+        std::span<const CachedDrawPacket> packets,
+        PrimitiveClass primitive,
+        UploadRing& index_ring,
+        std::uint32_t index_batch_base_vertex = 0,
+        bool rebase_indices_to_batch_base = false,
+        std::uint32_t total_indices = 0,
+        std::span<const std::uint16_t> precomputed_indices = {});
+
     [[nodiscard]] static std::size_t source_vertex_size(
         const VertexDescriptor& desc);
 private:

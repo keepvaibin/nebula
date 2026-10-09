@@ -1451,6 +1451,7 @@ private:
     std::uint64_t frame_flush_texture_us_ = 0;
     std::uint64_t frame_vertex_load_us_ = 0;
     std::uint64_t frame_cached_vertex_validation_us_ = 0;
+    std::uint64_t frame_texture_decode_join_us_ = 0;
     std::uint64_t frame_cached_vertex_upload_us_ = 0;
     std::uint64_t frame_draw_record_us_ = 0;
     std::uint64_t frame_efb_copy_us_ = 0;

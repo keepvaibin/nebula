@@ -24,6 +24,7 @@
 #include <algorithm>
 #include <array>
 #include <bit>
+#include <immintrin.h>  // SSE2 + SSSE3 pshufb decode kernels
 #include <cassert>
 #include <cerrno>
 #include <chrono>
@@ -35,6 +36,7 @@
 #include <optional>
 #include <sstream>
 #include <stdexcept>
+#include <thread>
 #include <vector>
 
 using Microsoft::WRL::ComPtr;
@@ -280,6 +282,71 @@ static const std::byte* resolve_guest_tex(
 // Big-endian 16-bit read from an arbitrary byte pointer (TLUT / texture data).
 // ---------------------------------------------------------------------------
 
+// --- SSE2/SSSE3 tile kernels ----------------------------------------------
+// Each kernel decodes one complete (unclipped) tile with exactly the scalar
+// arithmetic; clipped edge tiles keep the scalar loops. RGBA8 is stored as
+// bytes r,g,b,a, i.e. little-endian u32 r | g<<8 | b<<16 | a<<24.
+[[nodiscard]] static inline __m128i load_tile16(const std::uint8_t* p) noexcept {
+    return _mm_loadu_si128(reinterpret_cast<const __m128i*>(p));
+}
+static inline void store_pixels4(RGBA8* p, __m128i v) noexcept {
+    _mm_storeu_si128(reinterpret_cast<__m128i*>(p), v);
+}
+[[nodiscard]] static inline __m128i byteswap16x8(__m128i v) noexcept {
+    return _mm_or_si128(_mm_slli_epi16(v, 8), _mm_srli_epi16(v, 8));
+}
+// Bit replication of a narrow channel held in u16 lanes.
+[[nodiscard]] static inline __m128i expand5(__m128i x) noexcept {
+    return _mm_or_si128(_mm_slli_epi16(x, 3), _mm_srli_epi16(x, 2));
+}
+[[nodiscard]] static inline __m128i expand6(__m128i x) noexcept {
+    return _mm_or_si128(_mm_slli_epi16(x, 2), _mm_srli_epi16(x, 4));
+}
+[[nodiscard]] static inline __m128i expand4(__m128i x) noexcept {
+    return _mm_or_si128(_mm_slli_epi16(x, 4), x);
+}
+// 8 RGB565 words (native order) -> two rows of 4 RGBA8 pixels.
+static inline void rgb565x8_to_rgba(__m128i v, RGBA8* row0, RGBA8* row1) noexcept {
+    const __m128i m5 = _mm_set1_epi16(0x1F);
+    const __m128i m6 = _mm_set1_epi16(0x3F);
+    const __m128i r = expand5(_mm_srli_epi16(v, 11));
+    const __m128i g = expand6(_mm_and_si128(_mm_srli_epi16(v, 5), m6));
+    const __m128i b = expand5(_mm_and_si128(v, m5));
+    const __m128i rg = _mm_or_si128(r, _mm_slli_epi16(g, 8));
+    const __m128i ba = _mm_or_si128(b, _mm_set1_epi16(static_cast<short>(0xFF00)));
+    store_pixels4(row0, _mm_unpacklo_epi16(rg, ba));
+    store_pixels4(row1, _mm_unpackhi_epi16(rg, ba));
+}
+// 8 RGB5A3 words (native order) -> two rows of 4 RGBA8 pixels.
+static inline void rgb5a3x8_to_rgba(__m128i v, RGBA8* row0, RGBA8* row1) noexcept {
+    const __m128i m3 = _mm_set1_epi16(0x07);
+    const __m128i m4 = _mm_set1_epi16(0x0F);
+    const __m128i m5 = _mm_set1_epi16(0x1F);
+    const __m128i opaque = _mm_cmplt_epi16(v, _mm_setzero_si128());  // bit 15
+    const __m128i r555 = expand5(_mm_and_si128(_mm_srli_epi16(v, 10), m5));
+    const __m128i g555 = expand5(_mm_and_si128(_mm_srli_epi16(v, 5), m5));
+    const __m128i b555 = expand5(_mm_and_si128(v, m5));
+    const __m128i a3 = _mm_and_si128(_mm_srli_epi16(v, 12), m3);
+    const __m128i r4 = expand4(_mm_and_si128(_mm_srli_epi16(v, 8), m4));
+    const __m128i g4 = expand4(_mm_and_si128(_mm_srli_epi16(v, 4), m4));
+    const __m128i b4 = expand4(_mm_and_si128(v, m4));
+    const __m128i a8 = _mm_or_si128(
+        _mm_or_si128(_mm_slli_epi16(a3, 5), _mm_slli_epi16(a3, 2)),
+        _mm_srli_epi16(a3, 1));
+    const auto select = [opaque](__m128i when_opaque, __m128i otherwise) {
+        return _mm_or_si128(_mm_and_si128(opaque, when_opaque),
+                            _mm_andnot_si128(opaque, otherwise));
+    };
+    const __m128i r = select(r555, r4);
+    const __m128i g = select(g555, g4);
+    const __m128i b = select(b555, b4);
+    const __m128i a = select(_mm_set1_epi16(0xFF), a8);
+    const __m128i rg = _mm_or_si128(r, _mm_slli_epi16(g, 8));
+    const __m128i ba = _mm_or_si128(b, _mm_slli_epi16(a, 8));
+    store_pixels4(row0, _mm_unpacklo_epi16(rg, ba));
+    store_pixels4(row1, _mm_unpackhi_epi16(rg, ba));
+}
+
 [[nodiscard]] static inline std::uint16_t read_be16(const std::uint8_t* p) {
     return static_cast<std::uint16_t>(
         (static_cast<std::uint16_t>(p[0]) << 8) | p[1]);
@@ -496,6 +563,39 @@ void decode_intensity_tiles_impl(
         for (std::uint32_t bx = 0; bx < blocks_x; ++bx) {
             const std::uint32_t base_x = bx * block_width;
             const std::uint32_t columns = std::min(block_width, width - base_x);
+            if constexpr (Format == TexFormat::I8 || Format == TexFormat::IA8) {
+                if (rows == block_height && columns == block_width) {
+                    RGBA8* dst = out + static_cast<std::size_t>(base_y) * width + base_x;
+                    const std::size_t stride = width;
+                    const __m128i rows01 = load_tile16(src);
+                    const __m128i rows23 = load_tile16(src + 16u);
+                    if constexpr (Format == TexFormat::I8) {
+                        // 8 bytes per row; replicate each intensity 4 times.
+                        const __m128i q0 = _mm_setr_epi8(0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3);
+                        const __m128i q1 = _mm_setr_epi8(4, 4, 4, 4, 5, 5, 5, 5, 6, 6, 6, 6, 7, 7, 7, 7);
+                        const __m128i q2 = _mm_setr_epi8(8, 8, 8, 8, 9, 9, 9, 9, 10, 10, 10, 10, 11, 11, 11, 11);
+                        const __m128i q3 = _mm_setr_epi8(12, 12, 12, 12, 13, 13, 13, 13, 14, 14, 14, 14, 15, 15, 15, 15);
+                        store_pixels4(dst, _mm_shuffle_epi8(rows01, q0));
+                        store_pixels4(dst + 4u, _mm_shuffle_epi8(rows01, q1));
+                        store_pixels4(dst + stride, _mm_shuffle_epi8(rows01, q2));
+                        store_pixels4(dst + stride + 4u, _mm_shuffle_epi8(rows01, q3));
+                        store_pixels4(dst + 2u * stride, _mm_shuffle_epi8(rows23, q0));
+                        store_pixels4(dst + 2u * stride + 4u, _mm_shuffle_epi8(rows23, q1));
+                        store_pixels4(dst + 3u * stride, _mm_shuffle_epi8(rows23, q2));
+                        store_pixels4(dst + 3u * stride + 4u, _mm_shuffle_epi8(rows23, q3));
+                    } else {
+                        // (A, I) byte pairs -> I, I, I, A.
+                        const __m128i lo = _mm_setr_epi8(1, 1, 1, 0, 3, 3, 3, 2, 5, 5, 5, 4, 7, 7, 7, 6);
+                        const __m128i hi = _mm_setr_epi8(9, 9, 9, 8, 11, 11, 11, 10, 13, 13, 13, 12, 15, 15, 15, 14);
+                        store_pixels4(dst, _mm_shuffle_epi8(rows01, lo));
+                        store_pixels4(dst + stride, _mm_shuffle_epi8(rows01, hi));
+                        store_pixels4(dst + 2u * stride, _mm_shuffle_epi8(rows23, lo));
+                        store_pixels4(dst + 3u * stride, _mm_shuffle_epi8(rows23, hi));
+                    }
+                    src += 32u;
+                    continue;
+                }
+            }
             for (std::uint32_t py = 0; py < rows; ++py) {
                 const std::uint8_t* row = src + py * row_bytes;
                 RGBA8* dst = out + static_cast<std::size_t>(base_y + py) * width + base_x;
@@ -554,6 +654,21 @@ static void decode_color_tiles_impl(
         for (std::uint32_t bx = 0; bx < blocks_x; ++bx) {
             const std::uint32_t base_x = bx * 4u;
             const std::uint32_t columns = std::min(4u, width - base_x);
+            if (rows == 4u && columns == 4u) {
+                RGBA8* dst = out + static_cast<std::size_t>(base_y) * width + base_x;
+                const std::size_t stride = width;
+                const __m128i rows01 = byteswap16x8(load_tile16(src));
+                const __m128i rows23 = byteswap16x8(load_tile16(src + 16u));
+                if constexpr (Format == TlutFormat::RGB565) {
+                    rgb565x8_to_rgba(rows01, dst, dst + stride);
+                    rgb565x8_to_rgba(rows23, dst + 2u * stride, dst + 3u * stride);
+                } else {
+                    rgb5a3x8_to_rgba(rows01, dst, dst + stride);
+                    rgb5a3x8_to_rgba(rows23, dst + 2u * stride, dst + 3u * stride);
+                }
+                src += 32u;
+                continue;
+            }
             for (std::uint32_t py = 0; py < rows; ++py) {
                 const std::uint8_t* row = src + py * 8u;
                 RGBA8* dst = out + static_cast<std::size_t>(base_y + py) * width + base_x;
@@ -612,6 +727,25 @@ void detail::decode_rgba8_tiles(
         for (std::uint32_t bx = 0; bx < blocks_x; ++bx) {
             const std::uint32_t base_x = bx * 4u;
             const std::uint32_t columns = std::min(4u, width - base_x);
+            if (rows == 4u && columns == 4u) {
+                // unpack(AR, GB) gives bytes A,R,G,B per pixel; rotate each
+                // pixel right by one byte to R,G,B,A.
+                const auto rotate = [](__m128i x) {
+                    return _mm_or_si128(_mm_srli_epi32(x, 8), _mm_slli_epi32(x, 24));
+                };
+                const __m128i ar01 = load_tile16(src);
+                const __m128i ar23 = load_tile16(src + 16u);
+                const __m128i gb01 = load_tile16(src + 32u);
+                const __m128i gb23 = load_tile16(src + 48u);
+                RGBA8* dst = out + static_cast<std::size_t>(base_y) * width + base_x;
+                const std::size_t stride = width;
+                store_pixels4(dst, rotate(_mm_unpacklo_epi16(ar01, gb01)));
+                store_pixels4(dst + stride, rotate(_mm_unpackhi_epi16(ar01, gb01)));
+                store_pixels4(dst + 2u * stride, rotate(_mm_unpacklo_epi16(ar23, gb23)));
+                store_pixels4(dst + 3u * stride, rotate(_mm_unpackhi_epi16(ar23, gb23)));
+                src += 64u;
+                continue;
+            }
             const std::uint8_t* ar = src;
             const std::uint8_t* gb = src + 32u;
             for (std::uint32_t py = 0; py < rows; ++py) {
@@ -910,6 +1044,131 @@ namespace {
     }
 }
 
+[[nodiscard]] static bool texture_decode_format_supported(TexFormat format) {
+    switch (format) {
+    case TexFormat::I4:
+    case TexFormat::I8:
+    case TexFormat::IA4:
+    case TexFormat::IA8:
+    case TexFormat::RGB565:
+    case TexFormat::RGB5A3:
+    case TexFormat::RGBA8:
+    case TexFormat::C4:
+    case TexFormat::C8:
+    case TexFormat::C14X2:
+    case TexFormat::CMPR:
+        return true;
+    default:
+        return false;
+    }
+}
+
+// Decodes every guest-authored level (contiguous, block-aligned from `src`)
+// and generates any enhancement levels from the decoded level above. Pure:
+// reads only `src`/`palette`, writes only `level_pixels`. Runs on the render
+// thread or a TextureDecodePool worker.
+static void decode_texture_levels(
+    TexFormat format,
+    const std::uint8_t* src,
+    std::uint32_t w,
+    std::uint32_t h,
+    unsigned guest_levels,
+    unsigned levels,
+    bool generated_mips,
+    const std::uint8_t* palette,
+    TlutFormat tlut_format,
+    std::vector<std::vector<RGBA8>>& level_pixels) {
+    for (unsigned l = 0; l < guest_levels; ++l) {
+        const std::uint32_t lw = std::max<std::uint32_t>(1u, w >> l);
+        const std::uint32_t lh = std::max<std::uint32_t>(1u, h >> l);
+        level_pixels[l].resize(
+            static_cast<std::size_t>(lw) * static_cast<std::size_t>(lh));
+        RGBA8* out = level_pixels[l].data();
+
+        switch (format) {
+        case TexFormat::I4:
+        case TexFormat::I8:
+        case TexFormat::IA4:
+        case TexFormat::IA8:
+            detail::decode_intensity_tiles(format, src, lw, lh, out);
+            break;
+        case TexFormat::RGB565:
+        case TexFormat::RGB5A3:
+            detail::decode_color_tiles(format, src, lw, lh, out);
+            break;
+        case TexFormat::RGBA8:
+            detail::decode_rgba8_tiles(src, lw, lh, out);
+            break;
+        case TexFormat::C4:
+        case TexFormat::C8:
+            detail::decode_small_index_tiles(format, src, lw, lh,
+                palette, tlut_format, out);
+            break;
+        case TexFormat::C14X2:
+            detail::decode_c14x2_tiles(src, lw, lh,
+                palette, tlut_format, out);
+            break;
+        case TexFormat::CMPR:
+            detail::decode_cmpr_tiles(src, lw, lh, out);
+            break;
+        default:
+            throw std::runtime_error(
+                "[TextureCache] get: unhandled TexFormat");
+        }
+        src += tex_data_size(format, lw, lh);
+    }
+    if (generated_mips) {
+        for (unsigned l = 1; l < levels; ++l) {
+            const std::uint32_t src_w =
+                std::max<std::uint32_t>(1u, w >> (l - 1u));
+            const std::uint32_t src_h =
+                std::max<std::uint32_t>(1u, h >> (l - 1u));
+            const std::uint32_t dst_w = std::max<std::uint32_t>(1u, w >> l);
+            const std::uint32_t dst_h = std::max<std::uint32_t>(1u, h >> l);
+            detail::generate_rgba8_mip_level(
+                level_pixels[l - 1u],
+                src_w,
+                src_h,
+                level_pixels[l],
+                dst_w,
+                dst_h);
+        }
+    }
+}
+
+// Copies decoded levels into their placed footprints in mapped staging memory.
+static void write_staging_levels(
+    std::uint8_t* dst_base,
+    std::uint32_t w,
+    std::uint32_t h,
+    unsigned levels,
+    const UINT64* level_offset,
+    const UINT* level_pitch,
+    const std::vector<std::vector<RGBA8>>& level_pixels) {
+    for (unsigned l = 0; l < levels; ++l) {
+        const std::uint32_t lw = std::max<std::uint32_t>(1u, w >> l);
+        const std::uint32_t lh = std::max<std::uint32_t>(1u, h >> l);
+        const std::size_t row_bytes =
+            static_cast<std::size_t>(lw) * sizeof(RGBA8);
+        const auto* src_pixels = reinterpret_cast<const std::uint8_t*>(
+            level_pixels[l].data());
+        auto* dst_level = dst_base + level_offset[l];
+        if (static_cast<std::size_t>(level_pitch[l]) == row_bytes) {
+            std::memcpy(
+                dst_level,
+                src_pixels,
+                row_bytes * static_cast<std::size_t>(lh));
+            continue;
+        }
+        for (std::uint32_t row = 0; row < lh; ++row) {
+            std::memcpy(
+                dst_level + static_cast<std::size_t>(row) * level_pitch[l],
+                src_pixels + static_cast<std::size_t>(row) * row_bytes,
+                row_bytes);
+        }
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Create a non-shader-visible SRV for a buffer that holds texture data in a
 // linear (row-major) layout.  The renderer uses CopyDescriptors to stage
@@ -1018,9 +1277,27 @@ bool TextureCache::initialize(ID3D12Device* device) {
     return true;
 }
 
+void TextureCache::finish_pending_decodes() {
+    if (!async_decode_pending_ || !decode_pool_) {
+        return;
+    }
+    async_decode_pending_ = false;
+    decode_pool_->wait_all();
+}
+
+void TextureCache::finish_pending_decodes_noexcept() noexcept {
+    if (!async_decode_pending_ || !decode_pool_) {
+        return;
+    }
+    async_decode_pending_ = false;
+    (void)decode_pool_->wait_all_noexcept();
+}
+
 void TextureCache::begin_frame(
     unsigned frame_slot,
     unsigned frames_in_flight) {
+    // Staging memory of the slot being rewound must not still be written.
+    finish_pending_decodes();
     if (frames_in_flight == 0u || frame_slot >= frames_in_flight) {
         throw std::runtime_error("[TextureCache] invalid frame slot");
     }
@@ -1236,6 +1513,8 @@ void TextureCache::release_upload_arenas() {
 }
 
 void TextureCache::shutdown() {
+    finish_pending_decodes_noexcept();
+    decode_pool_.reset();
     if (decoded_content_cache_enabled()) {
         std::cerr << "[gx-content-cache] lookups=" << content_lookups_
                   << " exact-hits=" << content_hits_
@@ -2015,65 +2294,35 @@ TextureHandle TextureCache::get(
                       << '\n';
         }
     }
+    // Opt-in decoded-texture dump: GALAXY_GX_CAPTURE_TEXDIR=<dir> writes
+    // every newly decoded mip0 as <dir>/tex_<addr>_f<fmt>.ppm (RGB) and
+    // .pgm (alpha).  Zero cost unless the env var is set.
+    static const std::string tex_dump_dir = [] {
+        char value[MAX_PATH]{};
+        std::size_t length = 0;
+        if (getenv_s(&length, value, sizeof(value),
+                     "GALAXY_GX_CAPTURE_TEXDIR") != 0 || length <= 1) {
+            return std::string{};
+        }
+        return std::string(value);
+    }();
+    const bool palettized = image.format == TexFormat::C4 ||
+        image.format == TexFormat::C8 || image.format == TexFormat::C14X2;
+    // Only the pixel fill moves off-thread. Paths that inspect decoded pixels
+    // on this thread, and malformed palette formats whose decode must fail at
+    // the point of use, keep the synchronous decode.
+    const bool async_decode = async_decode_allowed_ &&
+        texture_decode_format_supported(image.format) &&
+        (!palettized || static_cast<unsigned>(tlut.format) <= 2u) &&
+        !trace_texture_uploads_enabled() && tex_dump_dir.empty();
     if (level_pixels_scratch_.size() < levels) {
         level_pixels_scratch_.resize(levels);
     }
     auto& level_pixels = level_pixels_scratch_;
-    for (unsigned l = 0; l < guest_levels; ++l) {
-        const std::uint32_t lw = std::max<std::uint32_t>(1u, w >> l);
-        const std::uint32_t lh = std::max<std::uint32_t>(1u, h >> l);
-        level_pixels[l].resize(
-            static_cast<std::size_t>(lw) * static_cast<std::size_t>(lh));
-        RGBA8* out = level_pixels[l].data();
-
-        switch (image.format) {
-        case TexFormat::I4:
-        case TexFormat::I8:
-        case TexFormat::IA4:
-        case TexFormat::IA8:
-            detail::decode_intensity_tiles(image.format, src, lw, lh, out);
-            break;
-        case TexFormat::RGB565:
-        case TexFormat::RGB5A3:
-            detail::decode_color_tiles(image.format, src, lw, lh, out);
-            break;
-        case TexFormat::RGBA8:
-            detail::decode_rgba8_tiles(src, lw, lh, out);
-            break;
-        case TexFormat::C4:
-        case TexFormat::C8:
-            detail::decode_small_index_tiles(image.format, src, lw, lh,
-                tlut_bank_ + tlut_byte_offset, tlut.format, out);
-            break;
-        case TexFormat::C14X2:
-            detail::decode_c14x2_tiles(src, lw, lh,
-                tlut_bank_ + tlut_byte_offset, tlut.format, out);
-            break;
-        case TexFormat::CMPR:
-            detail::decode_cmpr_tiles(src, lw, lh, out);
-            break;
-        default:
-            throw std::runtime_error(
-                "[TextureCache] get: unhandled TexFormat");
-        }
-        src += tex_data_size(image.format, lw, lh);
-    }
-    if (generated_mips) {
-        for (unsigned l = 1; l < levels; ++l) {
-            const std::uint32_t src_w =
-                std::max<std::uint32_t>(1u, w >> (l - 1u));
-            const std::uint32_t src_h =
-                std::max<std::uint32_t>(1u, h >> (l - 1u));
-            const std::uint32_t dst_w = std::max<std::uint32_t>(1u, w >> l);
-            const std::uint32_t dst_h = std::max<std::uint32_t>(1u, h >> l);
-            detail::generate_rgba8_mip_level(
-                level_pixels[l - 1u],
-                src_w,
-                src_h,
-                level_pixels[l],
-                dst_w,
-                dst_h);
-        }
+    if (!async_decode) {
+        decode_texture_levels(
+            image.format, src, w, h, guest_levels, levels, generated_mips,
+            tlut_bank_ + tlut_byte_offset, tlut.format, level_pixels);
     }
     const auto decode_end = trace_stalls
         ? std::chrono::steady_clock::now()
@@ -2116,34 +2365,56 @@ TextureHandle TextureCache::get(
     const UploadAllocation staging = allocate_upload_bytes(
         staging_size,
         D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT);
-    {
-        if (staging.cpu_base == nullptr) {
-            throw std::runtime_error(
-                "[TextureCache] upload arena is not mapped");
+    if (staging.cpu_base == nullptr) {
+        throw std::runtime_error(
+            "[TextureCache] upload arena is not mapped");
+    }
+    auto* const dst_base = staging.cpu_base + staging.offset;
+    if (async_decode) {
+        if (!decode_pool_) {
+            const unsigned hardware = std::thread::hardware_concurrency();
+            // Leave the render, simulation and PSO threads their cores.
+            const unsigned workers = std::clamp(hardware / 4u, 1u, 4u);
+            decode_pool_ = std::make_unique<TextureDecodePool>(workers);
         }
-        auto* dst_base = staging.cpu_base + staging.offset;
-        for (unsigned l = 0; l < levels; ++l) {
-            const std::uint32_t lw = std::max<std::uint32_t>(1u, w >> l);
-            const std::uint32_t lh = std::max<std::uint32_t>(1u, h >> l);
-            const std::size_t row_bytes =
-                static_cast<std::size_t>(lw) * sizeof(RGBA8);
-            const auto* src_pixels = reinterpret_cast<const std::uint8_t*>(
-                level_pixels[l].data());
-            auto* dst_level = dst_base + level_offset[l];
-            if (static_cast<std::size_t>(level_pitch[l]) == row_bytes) {
-                std::memcpy(
-                    dst_level,
-                    src_pixels,
-                    row_bytes * static_cast<std::size_t>(lh));
-                continue;
-            }
-            for (std::uint32_t row = 0; row < lh; ++row) {
-                std::memcpy(
-                    dst_level + static_cast<std::size_t>(row) * level_pitch[l],
-                    src_pixels + static_cast<std::size_t>(row) * row_bytes,
-                    row_bytes);
-            }
+        std::vector<UINT64> offsets(level_offset.begin(), level_offset.begin() + levels);
+        std::vector<UINT> pitches(level_pitch.begin(), level_pitch.begin() + levels);
+        // The palette bank can be reloaded later in this frame; the job owns
+        // the exact entries this texture was keyed with.
+        std::vector<std::uint8_t> palette;
+        if (palettized) {
+            palette.assign(tlut_bank_ + tlut_byte_offset,
+                           tlut_bank_ + tlut_byte_offset + required_palette_bytes);
         }
+        const TexFormat format = image.format;
+        const TlutFormat tlut_format = tlut.format;
+        // Not `src`: with the content cache on it points into a key that may
+        // be evicted before the job runs. The guest bytes are the same bytes
+        // and stay immutable until finish_pending_decodes() (caller contract).
+        const auto* const guest_src =
+            reinterpret_cast<const std::uint8_t*>(guest_bytes);
+        decode_pool_->submit(
+            [format, tlut_format, guest_src, w, h, guest_levels, levels,
+             generated_mips, dst_base, offsets = std::move(offsets),
+             pitches = std::move(pitches), palette = std::move(palette)]() {
+                thread_local std::vector<std::vector<RGBA8>> scratch;
+                if (scratch.size() < levels) {
+                    scratch.resize(levels);
+                }
+                decode_texture_levels(
+                    format, guest_src, w, h, guest_levels, levels,
+                    generated_mips, palette.empty() ? nullptr : palette.data(),
+                    tlut_format, scratch);
+                write_staging_levels(
+                    dst_base, w, h, levels, offsets.data(), pitches.data(),
+                    scratch);
+            });
+        async_decode_pending_ = true;
+        ++async_decode_jobs_;
+    } else {
+        write_staging_levels(
+            dst_base, w, h, levels, level_offset.data(), level_pitch.data(),
+            level_pixels);
     }
     const auto staging_end = trace_stalls
         ? std::chrono::steady_clock::now()
@@ -2276,21 +2547,10 @@ TextureHandle TextureCache::get(
         ? std::chrono::steady_clock::now()
         : std::chrono::steady_clock::time_point{};
 
-    // Opt-in decoded-texture dump: GALAXY_GX_CAPTURE_TEXDIR=<dir> writes
-    // every newly decoded mip0 as <dir>/tex_<addr>_f<fmt>.ppm (RGB) and
-    // .pgm (alpha).  Zero cost unless the env var is set.
+    // Decoded-texture dump (tex_dump_dir above); never async.
     const auto tex_dump_start = trace_stalls
         ? std::chrono::steady_clock::now()
         : std::chrono::steady_clock::time_point{};
-    static const std::string tex_dump_dir = [] {
-        char value[MAX_PATH]{};
-        std::size_t length = 0;
-        if (getenv_s(&length, value, sizeof(value),
-                     "GALAXY_GX_CAPTURE_TEXDIR") != 0 || length <= 1) {
-            return std::string{};
-        }
-        return std::string(value);
-    }();
     if (!tex_dump_dir.empty()) {
         const std::vector<RGBA8>& base = level_pixels[0];
         char path[MAX_PATH]{};
@@ -2410,6 +2670,7 @@ TextureHandle TextureCache::get(
                   << " guest-bytes=" << total_guest_size
                   << " staging-bytes=" << staging_size
                   << " srv=" << srv_idx
+                  << " async-decode=" << (async_decode ? 1u : 0u)
                   << " decode-us=" << elapsed_us(miss_start, decode_end)
                   << " staging-us=" << elapsed_us(decode_end, staging_end)
                   << " resource-us=" << elapsed_us(staging_end, resource_end)

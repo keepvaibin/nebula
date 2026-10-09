@@ -774,6 +774,131 @@ std::uint64_t bp_write_observation_digest() {
 }
 }
 
+// End-to-end contract the backend's decoded-vertex/resident batch cache relies
+// on. A sink that memoizes "decoded" packet runs by (cache_token,
+// packet_run_index) -- exactly the identity GxBackend keys its decoded vertex
+// cache with -- must (1) replay an unchanged CALL_DL without any per-packet
+// decode once it has seen the run, and (2) never see an old identity again after
+// the display-list bytes change, even with no dirty-range notification.
+bool test_unchanged_display_list_replays_prepared_packet_runs() {
+    struct MemoSink final : FifoSink {
+        [[nodiscard]] std::size_t draw_payload_size(
+            std::uint8_t, std::uint16_t vertex_count) const override {
+            return vertex_count;
+        }
+        void on_draw(PrimitiveClass, std::uint8_t, FifoCursor& cursor) override {
+            const std::uint16_t count = cursor.read_u16();
+            (void)cursor.take(count);
+            ++direct_draws;
+            decoded_vertices += count;
+        }
+        [[nodiscard]] bool on_cached_packet_draw_run(
+            std::uint64_t cache_token,
+            std::size_t packet_run_index,
+            PrimitiveClass,
+            std::uint8_t,
+            std::span<const std::byte>,
+            std::size_t,
+            std::span<const galaxy::gx::CachedDrawPacket> packets,
+            std::uint32_t total_vertices,
+            std::uint32_t,
+            std::span<const std::uint16_t>) override {
+            ++packet_runs;
+            replayed_draws += static_cast<int>(packets.size());
+            const auto key = std::make_pair(cache_token, packet_run_index);
+            if (std::find(seen.begin(), seen.end(), key) != seen.end()) {
+                ++memo_hits;
+            } else {
+                seen.push_back(key);
+                decoded_vertices += total_vertices;
+            }
+            last_token = cache_token;
+            return true;
+        }
+        void on_efb_copy(std::uint32_t) override {}
+        void on_pe_finish() override {}
+        void on_pe_token(std::uint16_t, bool) override {}
+        void on_invalidate_textures() override {}
+        void on_invalidate_vertex_cache() override {}
+
+        int direct_draws = 0;
+        int replayed_draws = 0;
+        int packet_runs = 0;
+        int memo_hits = 0;
+        std::uint64_t decoded_vertices = 0;
+        std::uint64_t last_token = 0;
+        std::vector<std::pair<std::uint64_t, std::size_t>> seen;
+    };
+
+    // Three triangle-strip packets (opcode 0x98, vtxfmt 0) of 3 one-byte
+    // vertices each: one packet run that cannot be concatenated.
+    std::array<std::byte, 64> guest{};
+    for (std::size_t packet = 0; packet < 3u; ++packet) {
+        const std::size_t at = packet * 6u;
+        guest[at + 0] = std::byte{0x98};
+        guest[at + 1] = std::byte{0x00};
+        guest[at + 2] = std::byte{0x03};
+        guest[at + 3] = static_cast<std::byte>(0x10u + packet);
+        guest[at + 4] = static_cast<std::byte>(0x20u + packet);
+        guest[at + 5] = static_cast<std::byte>(0x30u + packet);
+    }
+    galaxy::GuestMemoryV1 memory{};
+    memory.fast_regions[8].host_base = guest.data();
+    memory.fast_regions[8].size = static_cast<std::uint32_t>(guest.size());
+    const std::array<std::byte, 9> call{
+        std::byte{0x40}, std::byte{0x80}, std::byte{0}, std::byte{0}, std::byte{0},
+        std::byte{0}, std::byte{0}, std::byte{0}, std::byte{32}};
+    FifoParserProfile profile{};
+    FifoParser parser;
+    parser.set_profile(&profile);
+    GxState state;
+    MemoSink sink;
+    const auto run = [&] {
+        return parser.run_available(call, &memory, sink, state) == call.size();
+    };
+
+    // Frame 1: miss; the list executes directly and enters the cache.
+    if (!run() || !expect(profile.call_dl_cache_misses == 1u &&
+                          profile.call_dl_cache_stores == 1u &&
+                          sink.direct_draws == 3 && sink.packet_runs == 0,
+                          "first CALL_DL must execute and store the list")) return false;
+    // Frame 2: hit; the run is offered as one prepared packet run.
+    if (!run() || !expect(profile.call_dl_cache_hits == 1u &&
+                          sink.direct_draws == 3 && sink.packet_runs == 1 &&
+                          sink.replayed_draws == 3 && sink.memo_hits == 0,
+                          "cached CALL_DL must replay through the packet-run path")) return false;
+    const std::uint64_t token = sink.last_token;
+    const std::uint64_t decoded_after_first_replay = sink.decoded_vertices;
+    // Frames 3..5: the same identity every time, so nothing is decoded again.
+    for (int frame = 0; frame < 3; ++frame) {
+        if (!run()) return false;
+    }
+    if (!expect(token != 0u && sink.last_token == token &&
+                profile.call_dl_cache_hits == 4u && sink.packet_runs == 4 &&
+                sink.memo_hits == 3 && sink.direct_draws == 3 &&
+                sink.decoded_vertices == decoded_after_first_replay,
+                "unchanged CALL_DL must replay its prepared run without re-decoding")) return false;
+
+    // Edit one vertex byte, without any dirty notification.
+    guest[7 + 2] = std::byte{0x7F};
+    if (!run() || !expect(profile.call_dl_cache_misses == 2u &&
+                          profile.call_dl_cache_hits == 4u &&
+                          sink.direct_draws == 6 && sink.packet_runs == 4,
+                          "edited CALL_DL must miss and re-execute")) return false;
+    if (!run() || !expect(sink.packet_runs == 5 && sink.last_token != token &&
+                          sink.memo_hits == 3,
+                          "edited CALL_DL must replay under a new identity")) return false;
+    // A dirty-range invalidation also retires the identity.
+    const std::uint64_t edited_token = sink.last_token;
+    if (!expect(parser.invalidate_display_list_cache_range(0x00000004u, 1u) == 1u,
+                "dirty range overlapping the list must invalidate it")) return false;
+    if (!run() || !run() ||
+        !expect(profile.call_dl_cache_misses == 3u && sink.last_token != edited_token &&
+                sink.last_token != token,
+                "invalidated CALL_DL must not reuse a retired identity")) return false;
+    return true;
+}
+
 int main(int argc, char** argv) try {
     if (bp_write_observation_digest() != 0xb70fc6f9fdf8aea3ull) {
         std::cerr << "BP write observation regression\n";
@@ -782,6 +907,7 @@ int main(int argc, char** argv) try {
     if (argc == 2 && std::string(argv[1]) == "--benchmark-frozen-lookup") return benchmark_frozen_fifo_lookup();
     if (!test_frozen_fifo_lookup()) return 1;
     if (!test_display_list_variant_lookup_invalidation()) return 1;
+    if (!test_unchanged_display_list_replays_prepared_packet_runs()) return 1;
     if (!test_xf_matrix_span_updates()) return 1;
     if (!test_xf_palette_chunk_tracking()) return 1;
     test_dependency_hash_cache();

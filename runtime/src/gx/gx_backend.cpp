@@ -7285,6 +7285,7 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
     frame_matrix_upload_bytes_ = 0;
     frame_flush_constants_us_ = 0;
     frame_flush_texture_us_ = 0;
+    frame_texture_decode_join_us_ = 0;
     frame_vertex_load_us_ = 0;
     frame_cached_vertex_validation_us_ = 0;
     frame_cached_vertex_upload_us_ = 0;
@@ -7949,7 +7950,16 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
         FrameChunk* chunk;
     } submission_context{this, &chunk};
     // Every staging byte the command list copies from must be written.
-    texture_cache_.finish_pending_decodes();
+    {
+        const auto join_start = frame_timing_enabled
+            ? std::chrono::steady_clock::now()
+            : std::chrono::steady_clock::time_point{};
+        texture_cache_.finish_pending_decodes();
+        if (frame_timing_enabled) {
+            frame_texture_decode_join_us_ =
+                elapsed_us(join_start, std::chrono::steady_clock::now());
+        }
+    }
     (void)renderer_.end_frame(
         present_swap_chain,
         [](void* opaque, std::uint64_t fence_value) {
@@ -8322,6 +8332,8 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
                   << " flush-matrix-bytes=" << frame_matrix_upload_bytes_
                   << " flush-constants-us=" << frame_flush_constants_us_
                   << " flush-texture-us=" << frame_flush_texture_us_
+                  << " tex-decode-join-us=" << frame_texture_decode_join_us_
+                  << " tex-async-decodes-total=" << texture_cache_.async_decode_jobs()
                   << " vertex-load-us=" << frame_vertex_load_us_
                   << " cached-vertex-validation-us=" << frame_cached_vertex_validation_us_
                   << " cached-vertex-upload-us=" << frame_cached_vertex_upload_us_
