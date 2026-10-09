@@ -1114,8 +1114,9 @@ struct DspTimingScaleResult {
 };
 
 // Portable 128/64 restoring division. MSVC has no standard `__int128`; this
-// fixed 128-step path is used only for internal checkpoint arithmetic tests,
-// never as checkpoint authentication or in the per-instruction grant path.
+// fixed 128-step path supports internal checkpoint arithmetic checks and the
+// rare overflowing-QPC-product fallback on clang-cl. It is never checkpoint
+// authentication or part of the per-instruction grant path.
 [[nodiscard]] constexpr DspTimingScaleResult divide_u128_by_u64(
     DspTimingUnsigned128 dividend,
     std::uint64_t divisor) noexcept {

@@ -35,6 +35,24 @@ struct NativeIosClockSample {
     bool cycles_valid{};
 };
 
+// Ordinary history needs only one wall observation per endpoint. OS thread
+// counters and their bracketing clocks are intrusive diagnostics, selected by
+// the launcher for detailed recording. False validity flags retain "unknown"
+// rather than misreporting absent CPU/cycle data as zero execution cost.
+template <typename WallClock, typename ThreadCounters>
+NativeIosClockSample sample_native_ios_request_clock(
+    bool detailed, WallClock wall_clock, ThreadCounters thread_counters) noexcept {
+    NativeIosClockSample sample{};
+    sample.before_ns = wall_clock();
+    if (detailed) {
+        thread_counters(sample);
+        sample.after_ns = wall_clock();
+    } else {
+        sample.after_ns = sample.before_ns;
+    }
+    return sample;
+}
+
 struct NativeIosAnomalyRecord {
     std::uint64_t sequence{};
     NativeIosRequestIdentity identity{};

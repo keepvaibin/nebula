@@ -73,11 +73,42 @@ if(MSVC)
     endif()
     message(STATUS "Galaxy native CPU target: ${galaxy_native_isa_effective} (requested ${GALAXY_NATIVE_ISA})")
     if(galaxy_native_isa_effective STREQUAL "AVX2")
-        add_compile_options($<$<COMPILE_LANGUAGE:C,CXX>:/arch:AVX2>)
+        # /arch:AVX2 also makes FMA3 available to the code generator. Under
+        # /fp:precise that is only safe because Visual Studio 2022 changed the
+        # /fp:precise default to fp_contract(off) (documented in
+        # learn.microsoft.com/cpp/build/reference/fp-specify-floating-point-behavior).
+        # Before VS2022, /fp:precise defaulted to fp_contract(on), so an FMA3-
+        # capable target would let the compiler fuse a*b+c and round once.
+        # galaxy_ppc_float's TwoSum/TwoProduct error terms and every guest
+        # single-precision result are only exact because that cannot happen, so
+        # refuse the combination rather than emit a guest-visible FP difference.
+        if(NOT CMAKE_CXX_COMPILER_ID STREQUAL "Clang" AND MSVC_VERSION LESS 1930)
+            message(FATAL_ERROR
+                "GALAXY_NATIVE_ISA=AVX2 with ${CMAKE_CXX_COMPILER_ID} "
+                "${MSVC_VERSION} would allow floating-point contraction under "
+                "/fp:precise and change guest FP results. Use a Visual Studio "
+                "2022 (MSVC 19.30+) toolset, clang-cl, or GALAXY_NATIVE_ISA=SSE2.")
+        endif()
+        # /arch:AVX2 is an MSVC cl.exe spelling. Setup and build-release both
+        # drive this project with clang-cl (installer/toolchain.json pins it and
+        # InstallEngine passes -DCMAKE_CXX_COMPILER=<clang-cl>), where
+        # CMAKE_CXX_COMPILER_ID is "Clang" but MSVC is still true -- so the
+        # message above reported AVX2 while every translation unit was compiled
+        # for the SSE2 baseline and the runtime lost VEX encoding, the wider
+        # register file and vector integer compares. clang-cl accepts the
+        # GCC-style -mavx2. Deliberately NOT -mfma: guest float results must stay
+        # bit-identical to the SoftFloat reference and /fp:precise is mandatory.
+        # (clang's own -ffp-contract default is on, so withholding the FMA
+        # feature is what keeps contraction impossible on that path.)
+        if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+            add_compile_options($<$<COMPILE_LANGUAGE:C,CXX>:-mavx2>)
+        else()
+            add_compile_options($<$<COMPILE_LANGUAGE:C,CXX>:/arch:AVX2>)
+        endif()
     endif()
-    # NOTE: deliberately NOT enabling LTCG/IPO. The recompiled game module is
-    # ~51 MB; whole-program link on a weak install-time host can take very long
-    # or exhaust memory. Per-translation-unit /O2 keeps install cost bounded.
+    # Never enable IPO globally: the separately built game/DSP modules and their
+    # shipped arithmetic libraries must remain ordinary native objects. The
+    # bounded public-runtime target list below can optimize its own boundaries.
 endif()
 
 set(SOFTFLOAT_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/third_party/berkeley-softfloat-3")
@@ -163,6 +194,19 @@ set(
     f64_le_quiet
     f64_lt_quiet
     f64_isSignalingNaN
+    # Cold scalar-single FMA: extended exponent and round-to-odd precision.
+    f64_to_f128
+    f128_to_f32
+    f128_mulAdd
+    s_mulAddF128
+    s_normSubnormalF128Sig
+    s_roundPackToF128
+    s_normRoundPackToF128
+    s_mul128To256M
+    s_add256M
+    s_sub256M
+    s_shiftRightJam256M
+    s_shiftRightJam128Extra
 )
 list(TRANSFORM SOFTFLOAT_COMMON_NAMES PREPEND "${SOFTFLOAT_ROOT}/source/")
 list(TRANSFORM SOFTFLOAT_COMMON_NAMES APPEND ".c")
@@ -175,6 +219,9 @@ set(
     s_f64UIToCommonNaN
     s_commonNaNToF64UI
     s_propagateNaNF64UI
+    s_commonNaNToF128UI
+    s_f128UIToCommonNaN
+    s_propagateNaNF128UI
 )
 list(
     TRANSFORM
@@ -210,6 +257,7 @@ if(MSVC)
 endif()
 
 add_library(galaxy_ppc_float STATIC runtime/src/ppc_float.cpp)
+target_compile_definitions(galaxy_ppc_float PRIVATE SOFTFLOAT_FAST_INT64=1)
 target_include_directories(
     galaxy_ppc_float
     PUBLIC
@@ -264,7 +312,7 @@ elseif(EXISTS "${galaxy_generated_dsp_source}")
     target_sources(galaxy_native_dsp PRIVATE "${galaxy_generated_dsp_source}")
     target_compile_definitions(galaxy_native_dsp PUBLIC GALAXY_HAVE_NATIVE_DSP=1)
     message(STATUS
-        "Nebula: native DSP ucode present — GALAXY_HAVE_NATIVE_DSP=1")
+        "Nebula: native DSP ucode present â€” GALAXY_HAVE_NATIVE_DSP=1")
 else()
     message(STATUS
         "Nebula: no generated DSP ucode "
@@ -640,6 +688,34 @@ if(MSVC)
     target_compile_options(NebulaRuntime PRIVATE /GS- /GR- /Oi /favor:INTEL64)
     target_link_options(NebulaRuntime PRIVATE /STACK:268435456,1048576)
 endif()
+option(NEBULA_HOST_IPO "Optimize public host/runtime Release targets across source files" ON)
+set(nebula_host_ipo_effective OFF)
+if(NEBULA_HOST_IPO)
+    include(CheckIPOSupported)
+    check_ipo_supported(RESULT nebula_host_ipo_supported
+        OUTPUT nebula_host_ipo_error LANGUAGES CXX)
+    if(nebula_host_ipo_supported)
+        set(nebula_host_ipo_targets
+            NebulaRuntime galaxy_native_host galaxy_gx galaxy_native_input
+            galaxy_native_input_causality galaxy_host_pointer_events
+            galaxy_frame_cadence_diagnostics galaxy_scene_hint
+            galaxy_runtime_settings galaxy_runtime_timeline galaxy_runtime_instance
+            galaxy_checkpoint_gate galaxy_decrementer_deadline galaxy_atomic_file
+            galaxy_ai_pcm_identity)
+        # A source-built DSP probe can contain locally generated code. Only the
+        # public DLL-loading bridge is part of this bounded runtime IPO scope.
+        if(NEBULA_DSP_MODULE)
+            list(APPEND nebula_host_ipo_targets galaxy_native_dsp)
+        endif()
+        foreach(target IN LISTS nebula_host_ipo_targets)
+            set_property(TARGET ${target} PROPERTY INTERPROCEDURAL_OPTIMIZATION_RELEASE TRUE)
+        endforeach()
+        set(nebula_host_ipo_effective ON)
+    else()
+        message(STATUS "Public host IPO unavailable; retaining ordinary code generation: ${nebula_host_ipo_error}")
+    endif()
+endif()
+message(STATUS "Public host Release IPO: ${nebula_host_ipo_effective}; module-link libraries excluded")
 get_target_property(NEBULA_ID_TARGET_OPTIONS NebulaRuntime COMPILE_OPTIONS)
 if(NOT NEBULA_ID_TARGET_OPTIONS)
     set(NEBULA_ID_TARGET_OPTIONS "")
@@ -649,6 +725,23 @@ configure_file(cmake/runtime_identity_config.cmake.in runtime_identity_config.cm
 
 add_executable(galaxy_native_api_tests runtime/src/native_api_tests.cpp)
 target_link_libraries(galaxy_native_api_tests PRIVATE galaxy_runtime_abi galaxy_ppc_float)
+add_executable(galaxy_native_ios_clock_tests runtime/src/native_ios_clock_tests.cpp)
+target_link_libraries(galaxy_native_ios_clock_tests PRIVATE galaxy_runtime_abi)
+
+add_executable(galaxy_native_multiple_gpr_tests runtime/src/native_multiple_gpr_tests.cpp)
+target_link_libraries(galaxy_native_multiple_gpr_tests PRIVATE galaxy_runtime_abi)
+
+add_executable(galaxy_native_checkpoint_policy_tests runtime/src/native_checkpoint_policy_tests.cpp)
+target_link_libraries(galaxy_native_checkpoint_policy_tests PRIVATE galaxy_runtime_abi)
+
+add_executable(galaxy_native_cached_call_tests runtime/src/native_cached_call_tests.cpp)
+target_link_libraries(galaxy_native_cached_call_tests PRIVATE galaxy_runtime_abi)
+add_executable(galaxy_windows_power_tests runtime/src/windows_power_tests.cpp)
+target_link_libraries(galaxy_windows_power_tests PRIVATE galaxy_runtime_abi)
+add_executable(galaxy_native_zero_tests runtime/src/native_zero_tests.cpp)
+target_link_libraries(galaxy_native_zero_tests PRIVATE galaxy_runtime_abi)
+add_executable(galaxy_native_yaz0_span_tests runtime/src/native_yaz0_span_tests.cpp)
+target_link_libraries(galaxy_native_yaz0_span_tests PRIVATE galaxy_runtime_abi)
 if(MSVC)
     # This exhaustive helper test keeps many independent PpcContext fixtures
     # alive in one function; optimized MSVC currently reserves about 1.3 MiB
@@ -709,6 +802,7 @@ target_link_libraries(
 
 add_executable(galaxy_ppc_float_tests runtime/src/ppc_float_tests.cpp)
 target_link_libraries(galaxy_ppc_float_tests PRIVATE galaxy_ppc_float)
+target_compile_definitions(galaxy_ppc_float_tests PRIVATE SOFTFLOAT_FAST_INT64=1)
 target_include_directories(galaxy_ppc_float_tests PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}/runtime/softfloat")
 
@@ -723,7 +817,7 @@ target_link_libraries(
         galaxy_runtime_timeline)
 
 # Offline FXC validation of every ShaderGenerator codegen path (texgen,
-# lighting, TEV compare, swap tables, fog, ztex) — catches HLSL slips in the
+# lighting, TEV compare, swap tables, fog, ztex) â€” catches HLSL slips in the
 # gate instead of as invisible geometry mid-boot.
 add_executable(galaxy_shader_gen_tests runtime/src/gx/shader_gen_tests.cpp)
 target_link_libraries(galaxy_shader_gen_tests PRIVATE galaxy_gx)
@@ -734,6 +828,9 @@ target_link_libraries(galaxy_fifo_parser_tests PRIVATE galaxy_gx)
 add_executable(galaxy_vertex_loader_tests
     runtime/src/gx/vertex_loader_tests.cpp)
 target_link_libraries(galaxy_vertex_loader_tests PRIVATE galaxy_gx)
+
+add_executable(galaxy_vs_constants_tests runtime/src/gx/vs_constants_tests.cpp)
+target_link_libraries(galaxy_vs_constants_tests PRIVATE galaxy_gx)
 
 add_executable(galaxy_render_config_tests runtime/src/gx/render_config_tests.cpp)
 target_link_libraries(galaxy_render_config_tests PRIVATE galaxy_gx)
@@ -833,6 +930,14 @@ if(MSVC)
         galaxy_game_asset_extract_tests
         NebulaRuntime
         galaxy_native_api_tests
+        galaxy_native_ios_clock_tests
+        galaxy_native_multiple_gpr_tests
+        galaxy_native_checkpoint_policy_tests
+        galaxy_native_cached_call_tests
+        galaxy_windows_power_tests
+        galaxy_native_zero_tests
+        galaxy_native_yaz0_span_tests
+        galaxy_vs_constants_tests
         galaxy_native_host_tests
         galaxy_ppc_float
         galaxy_ppc_float_tests
@@ -867,6 +972,15 @@ function(galaxy_add_native_test name target)
 endfunction()
 
 galaxy_add_native_test(native_api_helpers galaxy_native_api_tests)
+galaxy_add_native_test(native_ios_clock_policy galaxy_native_ios_clock_tests)
+galaxy_add_native_test(native_multiple_gpr_policy galaxy_native_multiple_gpr_tests)
+galaxy_add_native_test(native_checkpoint_policy galaxy_native_checkpoint_policy_tests)
+galaxy_add_native_test(native_cached_call_boundary galaxy_native_cached_call_tests)
+galaxy_add_native_test(native_cached_call_trace_boundary galaxy_native_cached_call_tests --trace)
+galaxy_add_native_test(windows_power_policy_fallback galaxy_windows_power_tests)
+galaxy_add_native_test(native_zero_span_publication galaxy_native_zero_tests)
+galaxy_add_native_test(native_yaz0_span_publication galaxy_native_yaz0_span_tests)
+galaxy_add_native_test(vs_constant_preparation_cache galaxy_vs_constants_tests)
 galaxy_add_native_test(atomic_settings_file galaxy_atomic_file_tests)
 galaxy_add_native_test(runtime_instance_lease galaxy_runtime_instance_tests)
 galaxy_add_native_test(runtime_settings_helpers galaxy_runtime_settings_tests)
@@ -919,6 +1033,8 @@ galaxy_add_native_test(sampler_key_packing galaxy_sampler_key_tests)
 galaxy_add_native_test(xfb_present_selection galaxy_xfb_present_selection_tests)
 galaxy_add_native_test(efb_content_key_identity galaxy_efb_conversion_tests --content-key-hash)
 galaxy_add_native_test(efb_conversion_pipeline galaxy_efb_conversion_tests)
+galaxy_add_native_test(efb_oversized_content_retirement galaxy_efb_conversion_tests --oversized-content-cache)
+galaxy_add_native_test(efb_decoded_allocation_budget galaxy_efb_conversion_tests --decoded-allocation-budget)
 galaxy_add_native_test(line_point_raster galaxy_line_point_raster_tests)
 galaxy_add_native_test(cosmetic_game_asset_extract galaxy_game_asset_extract_tests)
 galaxy_add_native_test(sorted_dirty_ranges galaxy_sorted_dirty_ranges_tests)

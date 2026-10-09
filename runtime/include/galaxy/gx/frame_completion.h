@@ -9,11 +9,14 @@ namespace galaxy::gx {
 
 inline constexpr std::uint32_t kFramePeCompletionTimeoutMs = 30'000u;
 // Runtime waits are cooperative: one short native wait is followed by an
-// AI/input deadline service pass. The overall runtime budget is deliberately
-// much smaller than the low-level 30-second diagnostic fence timeout so a
-// wedged renderer hard-fails instead of freezing gameplay for half a minute.
+// AI/input deadline service pass. First-use pipelines on a valid scene can
+// take several seconds to prepare; the simulation owner must allow the same
+// completion budget as the backend instead of killing a still-progressing
+// frame after two seconds. Slices remain short, and a wedged renderer still
+// fails at the absolute backend deadline without replacing the owned result.
 inline constexpr std::uint32_t kFramePeCooperativeWaitSliceMs = 1u;
-inline constexpr std::uint32_t kFramePeCooperativeWaitTimeoutMs = 2'000u;
+inline constexpr std::uint32_t kFramePeCooperativeWaitTimeoutMs =
+    kFramePeCompletionTimeoutMs;
 
 struct FramePeCooperativeWaitStep {
     std::uint32_t wait_ms = 0;

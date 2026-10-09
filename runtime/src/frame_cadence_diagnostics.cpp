@@ -13,6 +13,7 @@ namespace {
 
 Session g_global_session{true};
 std::atomic<Session*> g_active_session{nullptr};
+constexpr std::size_t kMaxAttributionProbes = 64u;
 
 void update_max(
     std::atomic_uint64_t& destination,
@@ -276,7 +277,7 @@ void Session::record_guest_checkpoint(
     const std::size_t thread_mask = guest_thread_attribution_.size() - 1u;
     bool thread_recorded = false;
     for (std::size_t probe = 0u;
-         probe < guest_thread_attribution_.size();
+         probe < std::min(guest_thread_attribution_.size(), kMaxAttributionProbes);
          ++probe) {
         auto& slot = guest_thread_attribution_[
             (static_cast<std::size_t>(attribution_hash(thread_key)) + probe) &
@@ -301,7 +302,7 @@ void Session::record_guest_checkpoint(
 
     const std::size_t pc_mask = guest_pc_attribution_.size() - 1u;
     bool pc_recorded = false;
-    for (std::size_t probe = 0u; probe < guest_pc_attribution_.size(); ++probe) {
+    for (std::size_t probe = 0u; probe < std::min(guest_pc_attribution_.size(), kMaxAttributionProbes); ++probe) {
         auto& slot = guest_pc_attribution_[
             (static_cast<std::size_t>(attribution_hash(guest_pc)) + probe) &
             pc_mask];
@@ -324,7 +325,7 @@ void Session::record_guest_checkpoint(
     const std::size_t parent_mask = guest_parent_attribution_.size() - 1u;
     bool parent_recorded = false;
     for (std::size_t probe = 0u;
-         probe < guest_parent_attribution_.size();
+         probe < std::min(guest_parent_attribution_.size(), kMaxAttributionProbes);
          ++probe) {
         auto& slot = guest_parent_attribution_[
             (static_cast<std::size_t>(attribution_hash(parent_guest_pc)) +
@@ -441,6 +442,8 @@ void Session::dump_report(std::ostream& output, const char* tag) const {
            << " thread-table-overflows=" << guest.thread_table_overflows
            << " pc-entries=" << guest.pc_entries
            << " pc-table-overflows=" << guest.pc_table_overflows
+           << " attribution-max-probes=" << kMaxAttributionProbes
+           << " attribution-overflow=omitted-sampled-events"
            << " parent-entries=" << guest.parent_entries
            << " parent-table-overflows=" << guest.parent_table_overflows
            << '\n';

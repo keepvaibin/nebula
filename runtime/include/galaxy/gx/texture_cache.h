@@ -33,10 +33,12 @@
 #include "galaxy/gx/shader_keys.h"  // fnv1a64
 #include "galaxy/native_api.h"
 
+#include <array>
 #include <bitset>
 #include <cstddef>
 #include <cstdint>
 #include <list>
+#include <optional>
 #include <span>
 #include <string>
 #include <unordered_map>
@@ -141,6 +143,9 @@ public:
         const TexMode& mode,
         const TlutRef& tlut,
         GuestMemoryV1* memory);
+    // Render-owner only: register cached binding use without decoding/reading RAM.
+    // Retired/alias handles are harmless misses and never regain ownership.
+    void touch_cached_handle(const TextureHandle& handle);
 
     // BP 0x64/0x65: copy a palette from guest memory into the TMEM-modelled
     // TLUT bank. Return whether bytes changed; retire a texture only if bytes
@@ -186,6 +191,27 @@ public:
         return index >= kSrvHeapCapacity || retired_srv_indices_[index];
     }
 
+    // Guest source bytes are useful for invalidation diagnostics but do not
+    // describe decoded RGBA8 allocations. Keep this metric separate from the
+    // allocation budget; decoded textures use guest dimensions, not EFB scale.
+    [[nodiscard]] std::uint64_t decoded_entry_guest_bytes() const noexcept {
+        return decoded_guest_bytes_;
+    }
+
+    // The live map charges each entry's device-reported committed allocation.
+    // Shared content is conservatively charged per entry. Retired resources
+    // remain alive until their fence and are outside this live-map budget;
+    // this is not a measurement of total or unique physical VRAM residency.
+    struct DecodedMapStats {
+        std::uint64_t resident_bytes = 0;   // committed allocation bytes per live entry
+        std::uint64_t budget_bytes = 0;
+        std::uint64_t evicted_bytes = 0;
+        std::uint64_t evicted_entries = 0;
+        std::size_t entries = 0;
+        std::size_t lru_entries = 0;
+    };
+    [[nodiscard]] DecodedMapStats decoded_map_stats() const noexcept;
+
     // Command list new-texture uploads are recorded on (CopyTextureRegion +
     // barrier to PIXEL_SHADER_RESOURCE).  Set by GxBackend each frame before
     // parsing; decoded textures are DEFAULT-heap Texture2D resources, so the
@@ -230,6 +256,7 @@ private:
     struct Entry {
         Microsoft::WRL::ComPtr<ID3D12Resource> texture;
         TextureHandle handle;
+        std::uint64_t allocation_bytes = 0;
     };
     // Adapted from Aurora's MIT-licensed TextureContentKey and bounded LRU:
     // encounter/aurora@77326d45415a64c40e560cebd2cdef0a0f08d840,
@@ -268,6 +295,7 @@ private:
     struct ContentEntry {
         Microsoft::WRL::ComPtr<ID3D12Resource> texture;
         std::uint64_t bytes = 0;
+        std::uint64_t allocation_bytes = 0;
         std::list<ContentKey>::iterator lru;
     };
     struct EfbAliasKey {
@@ -285,6 +313,24 @@ private:
         }
     };
     void retire(Entry&& entry);
+    // Decoded-map LRU maintenance. `decoded_lru_touch` moves a key to the most
+    // recently used end; `decoded_lru_forget` removes it. Both are no-ops when
+    // the key is absent, so the invalidation paths can call them unguarded.
+    void decoded_lru_touch(const Key& key);
+    void decoded_lru_forget(const Key& key);
+    // Removes a key from the LRU and subtracts its footprint from the resident
+    // total. Every explicit `entries_` removal must call this so the total can
+    // never drift above the real residency.
+    void decoded_lru_release(const Key& key, Entry& entry);
+    // Records a newly inserted `entries_` entry in the LRU and adds its footprint
+    // to the resident total, then enforces the budget. The inverse of
+    // `decoded_lru_release`, and the only writer of `decoded_lru_` /
+    // `decoded_resident_bytes_` besides it, so the total cannot drift.
+    void decoded_lru_track(const Key& key);
+    // Pushes the decoded map back under its byte bound, oldest first, retiring
+    // each victim through `retire()` so no resource is destroyed while a
+    // submitted command list may still reference it.
+    void decoded_lru_evict_to_budget();
     void release_upload_arenas();
     struct UploadAllocation {
         ID3D12Resource* resource = nullptr;
@@ -309,6 +355,15 @@ private:
 
     std::unordered_map<Key, Entry, KeyHasher> entries_;
     detail::ConservativeGuestRangeEnvelope decoded_guest_envelope_;
+    // Bounded decoded allocation cache. Eviction retires resources and CPU
+    // descriptors through their frame slot, preserving in-flight GPU use.
+    std::list<Key> decoded_lru_;
+    std::unordered_map<Key, std::list<Key>::iterator, KeyHasher>
+        decoded_lru_pos_;
+    std::uint64_t decoded_resident_bytes_ = 0;
+    std::uint64_t decoded_guest_bytes_ = 0;
+    std::uint64_t decoded_evicted_bytes_ = 0;
+    std::uint64_t decoded_evicted_entries_ = 0;
     std::unordered_map<ContentKey, ContentEntry, ContentKeyHasher>
         content_entries_;
     std::list<ContentKey> content_lru_;
@@ -342,6 +397,9 @@ private:
     std::vector<std::uint32_t> free_srv_indices_;
     // Heap size and retirement bitmap must describe the same index domain.
     static constexpr std::uint32_t kSrvHeapCapacity = 4096u;
+    // Fixed storage: no allocation on cached binds. Resource identity is checked
+    // against entries_ before a copied key can affect its LRU position.
+    std::array<std::optional<Key>, kSrvHeapCapacity> decoded_srv_keys_{};
     std::bitset<kSrvHeapCapacity> retired_srv_indices_;
     // Kept monotonic across shutdown/reinitialization, like resource lifetimes.
     std::uint64_t retirement_revision_ = 0;

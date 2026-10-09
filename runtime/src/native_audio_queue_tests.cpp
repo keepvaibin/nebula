@@ -77,6 +77,67 @@ private:
 
 int main() {
     bool passed = true;
+    {
+        galaxy::host::NativeAudioRecoveryTask task;
+        std::atomic_bool entered{false}, release{false};
+        unsigned published = 0;
+        task.start([&] {
+            entered.store(true, std::memory_order_release);
+            entered.notify_one();
+            release.wait(false, std::memory_order_acquire);
+            published = 73;
+        });
+        entered.wait(false, std::memory_order_acquire);
+        bool duplicate_rejected = false;
+        try { task.start([] {}); }
+        catch (const std::logic_error&) { duplicate_rejected = true; }
+        bool nonblocking = task.active();
+        for (unsigned i = 0; i < 10000; ++i) nonblocking &= !task.finish_ready();
+        passed &= expect(nonblocking && duplicate_rejected,
+            "blocked endpoint job never blocks health polling or permits overlapping ownership");
+        release.store(true, std::memory_order_release);
+        release.notify_one();
+        task.finish();
+        passed &= expect(!task.active() && task.finish_ready() && published == 73,
+            "joining completed recovery publishes backend ownership and writes");
+        task.start([] { throw std::runtime_error("recovery failure"); });
+        bool failure_reported = false;
+        try { task.finish(); }
+        catch (const std::runtime_error&) { failure_reported = true; }
+        passed &= expect(failure_reported && !task.active() && task.finish_ready(),
+            "recovery exceptions are reported once after joining");
+        task.start([&] { published = 91; });
+        task.finish();
+        passed &= expect(published == 91, "recovery can retry after an acknowledged failure");
+    }
+    {
+        unsigned joined_at_destruction = 0;
+        { galaxy::host::NativeAudioRecoveryTask task;
+          task.start([&] { joined_at_destruction = 1; }); }
+        passed &= expect(joined_at_destruction == 1,
+            "recovery destruction joins before backend storage can be released");
+    }
+
+    for (const auto error : {0x80070490u, 0x88960004u, 0x88890004u}) {
+        passed &= expect(galaxy::host::native_audio_endpoint_error_recoverable(error, false),
+            "only known detached-endpoint errors can recover");
+        passed &= expect(!galaxy::host::native_audio_endpoint_error_recoverable(error, true),
+            "strict audio proof never accepts an unavailable endpoint");
+    }
+    for (const auto error : {0u, 0x80004005u, 0x8007000eu, 0x80070057u, 0x88960001u}) {
+        passed &= expect(!galaxy::host::native_audio_endpoint_error_recoverable(error, false),
+            "unknown, invalid-call and resource failures remain fatal");
+    }
+    passed &= expect(!galaxy::host::native_audio_endpoint_retry_due(999'999'999ull, 0u) &&
+        galaxy::host::native_audio_endpoint_retry_due(1'000'000'000ull, 0u) &&
+        !galaxy::host::native_audio_endpoint_retry_due(100u, 200u),
+        "endpoint retry is bounded to one per second without unsigned wrap");
+    galaxy::host::NativeAudioEmptyBoundaryTracker recreated_voice;
+    recreated_voice.reset_after_voice_destruction(8u);
+    passed &= expect(recreated_voice.observe(8u) == galaxy::host::NativeAudioEmptyBoundaryDisposition::None &&
+        recreated_voice.observe(9u) == galaxy::host::NativeAudioEmptyBoundaryDisposition::RecoverUnderrun &&
+        recreated_voice.observe(11u) == galaxy::host::NativeAudioEmptyBoundaryDisposition::FatalCounterDiscontinuity,
+        "a new voice starts after quiesced flush events but retains live discontinuity checks");
 
     {
         using galaxy::host::native_audio_dusk_sync_frame_shape_supported;

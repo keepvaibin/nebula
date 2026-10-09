@@ -371,6 +371,37 @@ int main() {
     }
 
     {
+        // A missing XFB whose last copy is still inside the preserve bound must
+        // be held, not replaced. last_valid's stamp (9) is 1 frame behind
+        // current_frame_stamp (10) and max_preserved_age is 2, so the miss is
+        // within the bound. (This case previously used current_frame_stamp=30
+        // against a stamp of 9 with a bound of 2 -- an age of 21 -- i.e. it
+        // asserted preservation *after* the bound had been exceeded, which is
+        // the multi-frame freeze the bound exists to break.)
+        const galaxy::gx::XfbPresentSelection selection =
+            galaxy::gx::select_xfb_for_present(
+                true,
+                nullptr,
+                &latest,
+                &last_valid,
+                10u,
+                2u,
+                never_presented);
+        passed &= expect(
+            selection.selected == &last_valid,
+            "missing explicit XFB preserves last valid selection inside the preserve bound");
+        passed &= expect(
+            selection.missing &&
+                selection.missing_preserved &&
+                !selection.missing_expired,
+            "missing explicit XFB inside the bound reports missing-preserved state");
+    }
+
+    {
+        // Past the bound the miss is sustained, so the selection must fall
+        // forward to latest() rather than re-present one frozen frame forever.
+        // last_valid's stamp (9) is 21 frames behind current_frame_stamp (30)
+        // and max_preserved_age is 2.
         const galaxy::gx::XfbPresentSelection selection =
             galaxy::gx::select_xfb_for_present(
                 true,
@@ -381,13 +412,35 @@ int main() {
                 2u,
                 never_presented);
         passed &= expect(
-            selection.selected == &last_valid,
-            "missing explicit XFB preserves last valid selection after age expiry");
+            selection.selected == &latest,
+            "missing explicit XFB past the preserve bound falls forward to latest");
         passed &= expect(
-            selection.missing &&
-                selection.missing_preserved &&
-                !selection.missing_expired,
-            "old missing explicit XFB reports missing-preserved state");
+            selection.missing && selection.missing_expired,
+            "an over-age missing explicit XFB reports missing-expired state");
+    }
+
+    {
+        // The bound must not expire a merely trailing buffer: a named XFB that
+        // is still receiving copies advances its stamp with the frame, so a
+        // double/triple-buffered flip never ages out. This is the case whose
+        // regression is the visible per-flip black/flash strobe.
+        const galaxy::gx::XfbTexture trailing_one_frame = make_xfb(0x01004000u, 29u);
+        const galaxy::gx::XfbPresentSelection selection =
+            galaxy::gx::select_xfb_for_present(
+                true,
+                &trailing_one_frame,
+                &latest,
+                &last_valid,
+                30u,
+                2u,
+                never_presented);
+        passed &= expect(
+            selection.selected == &trailing_one_frame,
+            "a stale-but-present named XFB is honoured, never aged out");
+        passed &= expect(
+            selection.requested_stale && selection.stale_preserved &&
+                !selection.stale_expired,
+            "a stale-but-present named XFB reports stale-preserved, not expired");
     }
 
     {

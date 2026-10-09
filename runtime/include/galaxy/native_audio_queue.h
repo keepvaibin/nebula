@@ -4,12 +4,66 @@
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
+#include <exception>
 #include <limits>
 #include <mutex>
 #include <span>
+#include <stdexcept>
+#include <thread>
 #include <utility>
 
 namespace galaxy::host {
+
+// One control owner. Backend fields belong exclusively to the job until the
+// owner reaps completion. active() deliberately stays true after the job ends
+// so readers cannot race its final writes before join establishes ownership.
+class NativeAudioRecoveryTask {
+public:
+    NativeAudioRecoveryTask() = default;
+    ~NativeAudioRecoveryTask() { if (thread_.joinable()) thread_.join(); }
+    NativeAudioRecoveryTask(const NativeAudioRecoveryTask&) = delete;
+    NativeAudioRecoveryTask& operator=(const NativeAudioRecoveryTask&) = delete;
+    [[nodiscard]] bool active() const noexcept { return thread_.joinable(); }
+    template<class Job> void start(Job&& job) {
+        if (active()) throw std::logic_error("audio recovery already owns the backend");
+        done_.store(false, std::memory_order_relaxed);
+        error_ = nullptr;
+        thread_ = std::thread([this, job = std::forward<Job>(job)]() mutable {
+            try { job(); } catch (...) { error_ = std::current_exception(); }
+            done_.store(true, std::memory_order_release);
+        });
+    }
+    [[nodiscard]] bool finish_ready() {
+        if (!active()) return true;
+        if (!done_.load(std::memory_order_acquire)) return false;
+        finish();
+        return true;
+    }
+    // Explicit shutdown may block. Routine health polling must use finish_ready.
+    void finish() {
+        if (thread_.joinable()) thread_.join();
+        if (error_) std::rethrow_exception(std::exchange(error_, nullptr));
+    }
+private:
+    std::thread thread_;
+    std::atomic_bool done_{false};
+    std::exception_ptr error_;
+};
+
+// HRESULT values are kept platform-independent for policy tests. Unexpected
+// engine/programming errors remain fatal, as does any failure in proof mode.
+[[nodiscard]] constexpr bool native_audio_endpoint_error_recoverable(
+    std::uint32_t error, bool strict_proof) noexcept {
+    return !strict_proof && (error == 0x80070490u || // ERROR_NOT_FOUND
+        error == 0x88960004u || // XAUDIO2_E_DEVICE_INVALIDATED
+        error == 0x88890004u);   // AUDCLNT_E_DEVICE_INVALIDATED
+}
+
+[[nodiscard]] constexpr bool native_audio_endpoint_retry_due(
+    std::uint64_t now_ns, std::uint64_t last_attempt_ns) noexcept {
+    return now_ns >= last_attempt_ns &&
+        now_ns - last_attempt_ns >= 1'000'000'000ull;
+}
 
 struct NativeAudioCallbackBufferObservation {
     bool completed{};
@@ -316,6 +370,11 @@ enum class NativeAudioEmptyBoundaryDisposition : std::uint8_t {
 // invariant failure rather than evidence that may be silently discarded.
 class NativeAudioEmptyBoundaryTracker final {
 public:
+    // Only after DestroyVoice has quiesced callbacks. Flush may produce
+    // several unstarted ends; they are not underruns of the next voice.
+    constexpr void reset_after_voice_destruction(std::uint64_t published) noexcept {
+        handled_empty_boundaries_ = published;
+    }
     [[nodiscard]] constexpr NativeAudioEmptyBoundaryDisposition observe(
         std::uint64_t published_empty_boundaries) noexcept {
         if (published_empty_boundaries == handled_empty_boundaries_) {
@@ -759,6 +818,7 @@ struct NativeAudioFrequencyRatioLedgerSnapshot {
     std::uint64_t apply_calls{};
     std::uint64_t change_actions{};
     std::uint64_t apply_errors{};
+    bool coherent = true;
 };
 
 class NativeAudioCallbackLedger final {
@@ -834,7 +894,8 @@ public:
     [[nodiscard]] NativeAudioFrequencyRatioLedgerSnapshot
     frequency_ratio_snapshot() const noexcept {
         NativeAudioFrequencyRatioLedgerSnapshot snapshot{};
-        for (;;) {
+        // Bounded diagnostic read: never wait for a descheduled callback.
+        for (unsigned attempt = 0; attempt < 16u; ++attempt) {
             const std::uint64_t before =
                 frequency_ratio_snapshot_sequence_.load(
                     std::memory_order_acquire);
@@ -856,6 +917,11 @@ public:
                 return snapshot;
             }
         }
+        snapshot.apply_calls = frequency_ratio_apply_calls_.load(std::memory_order_acquire);
+        snapshot.change_actions = frequency_ratio_change_actions_.load(std::memory_order_acquire);
+        snapshot.apply_errors = frequency_ratio_apply_errors_.load(std::memory_order_acquire);
+        snapshot.coherent = false;
+        return snapshot;
     }
 
     [[nodiscard]] std::uint64_t completed_buffers() const noexcept {

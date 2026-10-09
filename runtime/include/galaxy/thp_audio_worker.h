@@ -10,6 +10,7 @@
 // interleaved PCM exactly once for each strictly ordered audio callback.
 
 #include <algorithm>
+#include <array>
 #include <chrono>
 #include <condition_variable>
 #include <cstddef>
@@ -86,6 +87,14 @@ public:
             max_stereo_frames_per_frame_ == 0u) {
             return EnqueueStatus::InvalidInput;
         }
+        // Reject unavailable work before copying its entire encoded payload.
+        // Recheck after the copy because a callback may latch starvation.
+        {
+            std::lock_guard lock(mutex_);
+            if (stopping_ || decode_failed_ || starved_) return EnqueueStatus::Failed;
+            if (sequence != next_input_sequence_) return EnqueueStatus::WrongSequence;
+            if (outstanding_ == kGalaxyMovieSlots) return EnqueueStatus::Full;
+        }
         std::vector<std::byte> owned(encoded.begin(), encoded.end());
         {
             std::lock_guard lock(mutex_);
@@ -114,6 +123,10 @@ public:
     [[nodiscard]] DrainResult drain_callback(
         std::uint64_t callback_sequence,
         std::span<std::int16_t> interleaved_stereo) {
+        // At most 20 frames can retire in one drain. Move their storage out;
+        // destruction occurs after lock releases, without allocating here.
+        std::array<std::vector<std::int16_t>, kGalaxyMovieSlots> retired;
+        std::size_t retired_count = 0;
         std::lock_guard lock(mutex_);
         if (interleaved_stereo.empty() ||
             (interleaved_stereo.size() & 1u) != 0u) {
@@ -148,6 +161,7 @@ public:
             front.sample_offset += take;
             copied_samples += take;
             if (front.sample_offset == front.pcm.size()) {
+                retired[retired_count++] = std::move(front.pcm);
                 ready_.pop_front();
                 --outstanding_;
                 ++next_play_sequence_;
@@ -229,9 +243,14 @@ private:
                     decode_failed_ = true;
                     terminal = true;
                 } else {
-                    ready_.push_back({input.sequence, std::move(pcm), 0u});
-                    ++next_decoded_sequence_;
-                    ++stats_.decoded;
+                    try {
+                        ready_.push_back({input.sequence, std::move(pcm), 0u});
+                        ++next_decoded_sequence_;
+                        ++stats_.decoded;
+                    } catch (...) {
+                        decode_failed_ = true;
+                        terminal = true;
+                    }
                 }
             }
             decoded_ready_.notify_all();

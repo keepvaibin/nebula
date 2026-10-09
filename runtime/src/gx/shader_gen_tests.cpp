@@ -842,6 +842,45 @@ int main() {
                 label, sizeof(label), "ps_rgba6_output_%ux_compiles", scale);
             check_compiles(src, "ps_5_1", label);
         }
+        k.efb_scale_minus_one = 0xffu;
+        const auto uniform_src = gen.generate_ps(k);
+        check_contains(uniform_src,
+            "int2 dither_xy = int2(pin.pos.xy * ztex_params.y) & 1;",
+            "ps_rgba6_uniform_dither");
+        check_compiles(uniform_src, "ps_5_1", "ps_rgba6_uniform_dither_compiles");
+
+        // Pixel centers are half-integral, unlike edge coordinates. Exhaust
+        // both axes' full physical extent at every supported scale, including
+        // non-power-of-two reciprocal rounding and the last pixel.
+        bool coordinates_match = true;
+        for (unsigned scale = 1u; scale <= galaxy::gx::kMaxEfbScale; ++scale) {
+            const float reciprocal = 1.0f / static_cast<float>(scale);
+            for (unsigned n = 0u; n < 640u * scale; ++n) {
+                const float center = static_cast<float>(n) + 0.5f;
+                coordinates_match &= static_cast<unsigned>(center * reciprocal) == n / scale;
+            }
+        }
+        if (!coordinates_match) {
+            ++g_failures;
+            std::printf("FAILED: uniform dither crosses a logical pixel boundary\n");
+        }
+        GxState state;
+        state.load_bp((static_cast<std::uint32_t>(bp::kPeControl) << 24u) | 1u);
+        state.load_bp((static_cast<std::uint32_t>(bp::kBlendMode) << 24u) | (1u << 2u));
+        const auto canonical = build_pixel_shader_key(state, 1u);
+        bool keys_match = canonical.efb_scale_minus_one == 0xffu;
+        for (unsigned scale = 1u; scale <= galaxy::gx::kMaxEfbScale; ++scale) {
+            keys_match &= canonical == build_pixel_shader_key(state, scale);
+            auto legacy = canonical;
+            legacy.efb_scale_minus_one = static_cast<std::uint8_t>(scale - 1u);
+            keys_match &= !(canonical == legacy) && canonical.hash() != legacy.hash();
+        }
+        if (!keys_match) {
+            ++g_failures;
+            std::printf("FAILED: scale-independent key aliases a legacy shader\n");
+        }
+        std::printf("uniform dither: physical coordinates=%s canonical keys=%s\n",
+            coordinates_match ? "PASS" : "FAIL", keys_match ? "PASS" : "FAIL");
     }
 
     {   // A disabled texture stage is white when texgens exist.

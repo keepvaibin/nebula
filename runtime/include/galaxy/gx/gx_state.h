@@ -68,9 +68,67 @@ public:
         return xf_.data();
     }
 
+    // --- XF matrix-palette write tracking -----------------------------------
+    //
+    // Tracks which parts of the XF matrix palette the guest has written since
+    // the renderer last took a snapshot of it. `GxBackend::flush_draw_state`
+    // consumes this as a single question — *did anything in the palette move?* —
+    // and the answer decides whether the frame's existing GPU ring allocation
+    // for the palette can be reused or a fresh one is needed.
+    //
+    // Be precise about what this buys, because an earlier version of this
+    // comment claimed more: the snapshot itself is always the **whole** 6656
+    // bytes (`xf_raw()[0 .. kMatrixPaletteWords)`). A fresh ring allocation has
+    // no inherited contents, so its head and tail have to be written even when
+    // only one 4-row matrix changed. The saving is the *allocation*, not the
+    // copy: SMG re-loads matrices per object via LOAD_INDX, but a draw whose
+    // matrices did not move can keep the previous snapshot's GPU address and
+    // skip both the allocation and the memcpy.
+    //
+    // Granularity is 32 words: 128 bytes, which is a whole number of the 16-byte
+    // float4s the shader indexes (`mtx_palette[base + (w >> 2)]`), so a chunk
+    // boundary can never split an element the shader reads. That property is
+    // what keeps this safe to extend to a span-limited copy later if one is ever
+    // justified; nothing in the tree copies a partial span today.
+    static constexpr std::uint32_t kMatrixPaletteWords = 0x0680u;  // XF 0x0000-0x067F
+    static constexpr std::uint32_t kMatrixPaletteChunkWords = 32u;
+    static constexpr std::uint32_t kMatrixPaletteChunkCount =
+        kMatrixPaletteWords / kMatrixPaletteChunkWords;  // 52
+
+    // One bit per touched chunk. Re-armed per mutation and cleared by the
+    // consumer once it has snapshotted the palette; both run on the same thread
+    // that mutates the register file, so the bits need no atomics.
+    // Default-constructed (all zero) is the correct initial state: nothing has
+    // been snapshotted yet, so every chunk is unknown and a snapshot is owed.
+    [[nodiscard]] constexpr std::uint64_t xf_palette_dirty() const noexcept {
+        return xf_palette_dirty_;
+    }
+    static constexpr void clear_xf_palette_bits(
+        std::uint64_t& mask, std::uint32_t first, std::uint32_t last) noexcept {
+        const std::uint64_t span =
+            last + 1u >= 64u
+                ? ~std::uint64_t{0}
+                : ((std::uint64_t{1} << (last + 1u)) - 1u);
+        const std::uint64_t below =
+            first >= 64u
+                ? ~std::uint64_t{0}
+                : ((std::uint64_t{1} << first) - 1u);
+        mask &= ~(span & ~below);
+    }
+    void clear_xf_palette_dirty(std::uint32_t first, std::uint32_t last) noexcept {
+        clear_xf_palette_bits(xf_palette_dirty_, first, last);
+    }
+
     // Exact dependency-key hash. Cached with this parser-owned register file;
     // copies retain both banks and cache, CP/BP mutations invalidate it.
     [[nodiscard]] std::uint64_t dependency_shape_hash() const noexcept;
+    // Exactly the normalized words hashed above. Cross-owner caches must
+    // compare these words after their hash admission; a hash is not identity.
+    using DependencyShapeWords = std::array<std::uint32_t, 143>;
+    [[nodiscard]] const DependencyShapeWords& dependency_shape_words() const noexcept {
+        (void)dependency_shape_hash();
+        return dependency_shape_words_;
+    }
 
     // Local reuse while this exact register owner is mutated by its parser.
     // Copies/assignments can carry equal revisions for different banks: never
@@ -203,7 +261,12 @@ private:
     // BP write only.
     std::uint32_t bp_mask_ = 0x00FFFFFFu;
     std::uint32_t dirty_ = ~0u;
+    // Bits 0..kMatrixPaletteChunkCount-1: chunks of the XF matrix palette the
+    // guest has written since the last consumer snapshot. See
+    // xf_palette_dirty() for what the consumer does with them.
+    std::uint64_t xf_palette_dirty_ = 0u;
     mutable std::uint64_t dependency_shape_hash_ = 0u;
+    mutable DependencyShapeWords dependency_shape_words_{};
     mutable bool dependency_shape_hash_valid_ = false;
     std::uint64_t dependency_shape_revision_ = 1u;
 };

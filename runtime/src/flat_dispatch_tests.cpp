@@ -3,7 +3,9 @@
 #include <array>
 #include <cstdint>
 #include <iostream>
+#include <stdexcept>
 #include <string_view>
+#include <type_traits>
 #include <vector>
 
 namespace {
@@ -22,6 +24,7 @@ using galaxy::scheduler::GuestSleepIdentityDisposition;
 using galaxy::scheduler::GuestSleepIdentityEvidence;
 using galaxy::scheduler::GuestSleepQueueDisposition;
 using galaxy::scheduler::PendingContextTransfer;
+using galaxy::scheduler::ScopedContextTransfer;
 using galaxy::scheduler::PendingGuestSetCurrentContexts;
 
 bool expect(bool condition, std::string_view message) {
@@ -103,16 +106,28 @@ bool rfi_uses_only_srr_pair() {
     return passed;
 }
 
+// The emitted continuations this fixture treats as statically translated.
+//
+// At namespace scope on purpose. It used to be a local `constexpr std::array`
+// inside `physical_rfi_aliases_bind_only_to_exact_static_continuations`, read by
+// the capture-less lambda `has_exact`. A lambda with no capture-default can only
+// name such a variable if it is not odr-used, which is an ODR subtlety MSVC
+// accepts and the pinned clang-cl (the compiler that actually builds this tree)
+// rejects with "variable 'translated' cannot be implicitly captured in a lambda
+// with no capture-default specified". A variable at namespace scope is reachable
+// from a capture-less lambda under every compiler, so hoisting it removes the
+// ambiguity without changing what the fixture tests.
+constexpr std::array kTranslatedContinuations{
+    0x004A8CD4u,
+    0x804A8CD4u,
+    0x90001000u,
+};
+
 bool physical_rfi_aliases_bind_only_to_exact_static_continuations() {
     constexpr std::uint32_t kMem1Size = 0x01800000u;
     constexpr std::uint32_t kMem2Size = 0x04000000u;
-    constexpr std::array translated{
-        0x004A8CD4u,
-        0x804A8CD4u,
-        0x90001000u,
-    };
     const auto has_exact = [](std::uint32_t address) {
-        for (const std::uint32_t candidate : translated) {
+        for (const std::uint32_t candidate : kTranslatedContinuations) {
             if (candidate == address) {
                 return true;
             }
@@ -236,6 +251,97 @@ bool pending_osload_is_consumed_exactly_once() {
         pending.pending() == nullptr &&
             !pending.consume_exact(transfer),
         "normal and exceptional cleanup cannot consume twice");
+    return passed;
+}
+
+bool scoped_osload_cleanup_preserves_unwind_and_failure() {
+    static_assert(!std::is_copy_constructible_v<ScopedContextTransfer>);
+    static_assert(!std::is_move_constructible_v<ScopedContextTransfer>);
+    static_assert(std::is_nothrow_destructible_v<ScopedContextTransfer>);
+    const ContextTransferToken a{0x80650878u, 0x804A381Cu};
+    const ContextTransferToken b{0x809A00D8u, 0x804A381Cu};
+    struct ControlTransfer { std::uint32_t address; };
+    bool passed = true;
+    {
+        PendingContextTransfer pending;
+        passed &= expect(pending.begin(a), "scoped owner begins");
+        std::vector<unsigned> order;
+        struct InnerFrame {
+            PendingContextTransfer& pending;
+            ContextTransferToken token;
+            std::vector<unsigned>& order;
+            bool& observed;
+            ~InnerFrame() noexcept {
+                observed = pending.pending() != nullptr && *pending.pending() == token;
+                order.push_back(1u);
+            }
+        };
+        order.reserve(2u);
+        bool inner_saw_owner = false;
+        try {
+            ScopedContextTransfer owner{pending, a};
+            InnerFrame frame{pending, a, order, inner_saw_owner};
+            throw ControlTransfer{0x804AB30Cu};
+        } catch (const ControlTransfer& transfer) {
+            order.push_back(2u);
+            passed &= expect(transfer.address == 0x804AB30Cu,
+                "control transfer payload propagates unchanged");
+            passed &= expect(pending.pending() == nullptr &&
+                pending.cleanup_failure() == nullptr,
+                "owner is consumed before continuation catch");
+        }
+        passed &= expect(inner_saw_owner && order == std::vector<unsigned>({1u,2u}),
+            "inner frame destruction observes token before owner cleanup");
+        passed &= expect(pending.begin(a), "clean next transfer is allowed");
+        {
+            ScopedContextTransfer owner{pending, a};
+            passed &= expect(owner.finish() && !owner.finish(),
+                "normal/missing-body cleanup consumes exactly once");
+        }
+        passed &= expect(!pending.pending() && !pending.cleanup_failure(),
+            "destructor after explicit finish cannot fail or consume twice");
+    }
+    {
+        PendingContextTransfer pending;
+        passed &= expect(pending.begin(a), "generic failure owner begins");
+        try {
+            ScopedContextTransfer owner{pending, a};
+            if (!pending.begin(b)) throw std::runtime_error("recursive transfer rejected");
+        } catch (const std::runtime_error& error) {
+            passed &= expect(std::string_view(error.what()) == "recursive transfer rejected",
+                "ordinary error retains original exception after cleanup");
+        }
+        passed &= expect(!pending.pending() && !pending.cleanup_failure(),
+            "recursive rejection does not consume the wrong token");
+    }
+    for (const bool different_token : {false, true}) {
+        PendingContextTransfer pending;
+        passed &= expect(pending.begin(a), "malformed cleanup fixture begins");
+        try {
+            ScopedContextTransfer owner{pending, a};
+            passed &= expect(pending.consume_exact(a), "fixture removes original token");
+            if (different_token) passed &= expect(pending.begin(b), "fixture installs unrelated token");
+            throw ControlTransfer{0x804AB30Cu};
+        } catch (const ControlTransfer&) {
+            const auto* failed = pending.cleanup_failure();
+            passed &= expect(failed && *failed == a,
+                "failed unwind cleanup latches exact original ownership");
+            // The production retained/flat/FPU/control-exit gates inspect this
+            // same latch before any callback or continuation can be accepted.
+            bool continuation_ran = false;
+            if (failed == nullptr) continuation_ran = true;
+            passed &= expect(!continuation_ran, "failed cleanup rejects continuation");
+        }
+        passed &= expect(different_token ? pending.pending() && *pending.pending() == b : !pending.pending(),
+            "failed owner never erases an unrelated token");
+        if (different_token) passed &= expect(pending.consume_exact(b), "unrelated token remains independently owned");
+        passed &= expect(!pending.begin(a), "sticky cleanup failure blocks a new transfer even when empty");
+        {
+            ScopedContextTransfer repeated_failure{pending, b};
+        }
+        passed &= expect(pending.cleanup_failure() && *pending.cleanup_failure() == a,
+            "later cleanup failures cannot replace the first failure identity");
+    }
     return passed;
 }
 
@@ -1457,12 +1563,38 @@ bool long_self_lr_chain_uses_constant_native_stack() {
 
 }  // namespace
 
+bool bounded_stack_owner_memo_preserves_order_and_invalidation() {
+    using Memo = galaxy::scheduler::GuestStackOwnerMemo;
+    Memo memo;
+    memo.append(1, 0x80002000u, 0x80001000u);
+    memo.append(2, 0x80003000u, 0x80001800u);
+    if (memo.complete()) return false;
+    memo.finish();
+    if (!memo.complete() || memo.owner(0x80001900u) != 1u ||
+        memo.owner(0x80002800u) != 2u || memo.owner(0x90000000u) != 0u)
+        return false;
+    memo.disable();
+    memo.finish();
+    if (memo.complete()) return false;
+    // A fresh invocation must not inherit the previous roster's ownership.
+    Memo next;
+    for (std::uint32_t i = 0; i < 64; ++i)
+        next.append(100u + i, 0x90001000u + i * 0x1000u,
+                    0x90000000u + i * 0x1000u);
+    next.finish();
+    for (std::uint32_t i = 0; i < 64; ++i)
+        if (next.owner(0x90000008u + i * 0x1000u) != 100u + i)
+            return false;
+    return true;
+}
+
 int main() {
     bool passed = true;
     passed &= rfi_uses_only_srr_pair();
     passed &= physical_rfi_aliases_bind_only_to_exact_static_continuations();
     passed &= guest_stack_spans_accept_exact_mem2_without_weakening_identity();
     passed &= pending_osload_is_consumed_exactly_once();
+    passed &= scoped_osload_cleanup_preserves_unwind_and_failure();
     passed &= valid_guest_sleep_always_runs_translated_scheduler();
     passed &= guest_sleep_identity_is_strict_and_non_repairing();
     passed &= guest_exception_identity_is_strict_and_preserves_idle();
@@ -1475,6 +1607,7 @@ int main() {
     passed &= osset_rejects_unknown_or_malformed_transitions();
     passed &= osset_special_roles_are_exact();
     passed &= alternate_stack_backchain_preserves_exact_owner();
+    passed &= bounded_stack_owner_memo_preserves_order_and_invalidation();
     passed &= exact_lr_alias_chain_is_iterative();
     passed &= missing_initial_alias_never_invokes();
     passed &= stack_top_sentinel_is_not_success();

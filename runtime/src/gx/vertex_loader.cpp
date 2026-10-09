@@ -34,6 +34,7 @@
 #include <limits>
 #include <span>
 #include <string>
+#include <utility>
 
 namespace galaxy::gx {
 
@@ -72,6 +73,23 @@ struct RecordedIndexedArrayRange {
     std::uint32_t begin = 0;
     std::uint64_t end = 0;
 };
+
+// Upper bound on one recorded dependency span. `record_read` accumulates the
+// bytes an indexed attribute actually touched so the decoded-vertex cache can
+// snapshot them and later detect a guest write with a memcmp. Collapsing every
+// read of one attribute into a single [min,max) span made that span the whole
+// indexed array whenever a run's indices were scattered — measured at ~1 ms per
+// decoded-cache miss and 22 MB of cache growth in a single frame on the low-end
+// target. Splitting the accumulation at this granularity keeps the snapshot
+// proportional to the bytes actually read (plus bounded read-gap padding)
+// instead of proportional to the array's extent.
+constexpr std::uint32_t kRecordedRangeChunkBytes = 64u * 1024u;
+
+// A read within this distance of either edge of the current chunk is absorbed
+// into that chunk rather than opening a new one and padding the gap into the
+// snapshot. Beyond it the gap is skipped entirely: the snapshot must cover the
+// bytes that were read, and it does not have to cover bytes that were not.
+constexpr std::uint32_t kRecordedRangeGapBytes = 256u;
 
 [[noreturn]] static void throw_unmapped_indexed_array(
     std::uint32_t address,
@@ -128,18 +146,22 @@ public:
         return resolved;
     }
 
-    void emit_recorded_ranges() const {
+    void emit_recorded_ranges() {
         if (read_ranges_ == nullptr) {
             return;
         }
-        for (const RecordedIndexedArrayRange& range : read_range_accum_) {
-            if (!range.used || range.end <= range.begin) {
-                continue;
-            }
-            read_ranges_->push_back(VertexDecodeGuestRange{
-                range.begin,
-                static_cast<std::uint32_t>(range.end - range.begin),
-            });
+        // Closed chunks were already appended in read order; emit the one
+        // remaining active chunk per attribute in stable attribute order.
+        for (RecordedIndexedArrayRange& range : read_range_accum_) {
+            finish_chunk(range);
+        }
+        if (read_ranges_->empty()) {
+            // The decode result normally starts empty. Transfer the finished
+            // vector instead of allocating and copying the same ranges again.
+            *read_ranges_ = std::move(read_range_finished_);
+        } else {
+            read_ranges_->insert(read_ranges_->end(),
+                read_range_finished_.begin(), read_range_finished_.end());
         }
     }
 
@@ -161,15 +183,35 @@ private:
                 0,
                 0);
         }
-        RecordedIndexedArrayRange& range = read_range_accum_[attr_idx];
-        if (!range.used) {
-            range.used = true;
-            range.begin = address;
-            range.end = end;
+        RecordedIndexedArrayRange& current = read_range_accum_[attr_idx];
+        if (!current.used) {
+            current = RecordedIndexedArrayRange{true, address, end};
             return;
         }
-        range.begin = std::min(range.begin, address);
-        range.end = std::max(range.end, end);
+        // Extend the newest chunk while the read stays inside it or within the
+        // small padding window; otherwise close it and start a new one. The
+        // span always contains every byte that was read, so the snapshot still
+        // covers exactly the data the decode depended on.
+        const bool inside = address >= current.begin && end <= current.end;
+        if (inside) {
+            return;
+        }
+        const std::uint32_t extended_begin = std::min(current.begin, address);
+        const std::uint64_t extended_end = std::max(current.end, end);
+        const bool contiguous_enough =
+            address <= current.end + kRecordedRangeGapBytes &&
+            end + kRecordedRangeGapBytes >= current.begin;
+        const bool still_bounded =
+            extended_end - extended_begin <= kRecordedRangeChunkBytes;
+        if (contiguous_enough && still_bounded) {
+            // Indices need not be monotonic. Retain the entire union even
+            // when this read precedes the first read of the active chunk.
+            current.begin = extended_begin;
+            current.end = extended_end;
+            return;
+        }
+        finish_chunk(current);
+        current = RecordedIndexedArrayRange{true, address, end};
     }
 
     [[nodiscard]] ResolvedGuestPointer resolve_uncached(
@@ -226,7 +268,25 @@ private:
 
     GuestMemoryV1* memory_ = nullptr;
     std::array<ResolvedGuestRange, 16> ranges_{};
+    // Only the active chunk needs per-attribute state. Closed chunks already
+    // live in read_range_finished_; retaining them twice adds heap churn.
     std::array<RecordedIndexedArrayRange, 16> read_range_accum_{};
+    // Closed chunks, including a bounded gap-fill prefix for the span of the
+    // current chunk. Emitted after the last read so ranges reach the caller in
+    // a deterministic order.
+    std::vector<VertexDecodeGuestRange> read_range_finished_;
+
+    void finish_chunk(RecordedIndexedArrayRange& range) {
+        if (range.used && range.end > range.begin) {
+            read_range_finished_.push_back(VertexDecodeGuestRange{
+                range.begin,
+                static_cast<std::uint32_t>(range.end - range.begin),
+            });
+        }
+        range.used = false;
+        range.begin = 0;
+        range.end = 0;
+    }
     std::vector<VertexDecodeGuestRange>* read_ranges_ = nullptr;
     DependencyEventSink* dependency_event_sink_ = nullptr;
 };
@@ -643,6 +703,11 @@ struct PreparedVertexInputs {
     std::array<std::uint32_t, 12> array_strides{};
     std::uint32_t normal_vector_bytes = 0u;
     std::uint8_t default_position_matrix = 0u;
+    // Bit `ti` set when texture coordinate channel `ti` is present in the
+    // vertex stream (Direct/Index8/Index16). The decode loops use it to skip
+    // the channels that can only write two zeros and consume no bytes; SMG
+    // leaves six or seven of the eight channels empty on ordinary draws.
+    std::uint8_t active_texcoord_mask = 0u;
 };
 
 PreparedVertexInputs prepare_vertex_inputs(
@@ -679,6 +744,10 @@ PreparedVertexInputs prepare_vertex_inputs(
             inputs.array_bases[attr] = state.array_base(attr);
             inputs.array_strides[attr] = state.array_stride(attr);
         }
+        if (attr >= 4u) {
+            inputs.active_texcoord_mask |= static_cast<std::uint8_t>(
+                1u << (attr - 4u));
+        }
     }
     return inputs;
 }
@@ -692,6 +761,19 @@ void decode_vertex_stream(
     IndexedArrayResolver& array_resolver,
     std::size_t fifo_error_offset,
     GxVertexOut* verts) {
+    std::uint8_t has_tex_matrix_index_mask = 0u;
+    for (unsigned ti = 0; ti < 8; ++ti) {
+        if (desc.has_tex_matrix_index[ti]) {
+            has_tex_matrix_index_mask |= static_cast<std::uint8_t>(1u << ti);
+        }
+    }
+    // Both predicates are pure functions of the per-draw layout, so evaluate
+    // them once instead of once per vertex. `off != src_stride` below still
+    // proves the same byte consumption.
+    const bool normal_needs_three_indices = normal_uses_three_indices(desc);
+    const bool normal_carries_nbt = normal_has_nbt(desc);
+    const std::uint32_t normal_index_width =
+        (desc.normal.vcd == VcdType::Index8) ? 1u : 2u;
     for (std::uint32_t vi = 0; vi < vtx_count; ++vi) {
         GxVertexOut& out = verts[vi];
         const std::byte* vsrc =
@@ -704,8 +786,12 @@ void decode_vertex_stream(
         if (desc.has_pn_matrix_index) {
             pnmtx_idx = std::to_integer<std::uint8_t>(vsrc[off++]);
         }
+        // `desc.has_tex_matrix_index` is a per-draw constant, so its 8-bit
+        // pattern is available as a mask: iterate only the indices the stream
+        // actually carries and let the zero initializer above cover the rest.
+        // `off` therefore advances by exactly the same amount as before.
         for (unsigned ti = 0; ti < 8; ++ti) {
-            if (desc.has_tex_matrix_index[ti]) {
+            if ((has_tex_matrix_index_mask & (1u << ti)) != 0u) {
                 texmtx_idx[ti] = std::to_integer<std::uint8_t>(vsrc[off++]);
             }
         }
@@ -753,7 +839,7 @@ void decode_vertex_stream(
 
         if (desc.normal.vcd == VcdType::Direct) {
             const std::size_t sz = inputs.element_bytes[1u];
-            if (normal_has_nbt(desc)) {
+            if (normal_carries_nbt) {
                 decode_nbt(vsrc + off, out, desc.normal, inputs.normal_vector_bytes);
             } else {
                 decode_nrm(vsrc + off, out, desc.normal);
@@ -767,7 +853,7 @@ void decode_vertex_stream(
             const std::uint32_t arr_base = inputs.array_bases[attr_idx];
             const std::uint32_t arr_stride = inputs.array_strides[attr_idx];
 
-            if (!normal_uses_three_indices(desc)) {
+            if (!normal_needs_three_indices) {
                 std::uint32_t idx = 0;
                 if (desc.normal.vcd == VcdType::Index8) {
                     idx = std::to_integer<std::uint8_t>(vsrc[off]);
@@ -783,7 +869,7 @@ void decode_vertex_stream(
                     addr,
                     read_sz,
                     fifo_error_offset);
-                if (normal_has_nbt(desc)) {
+                if (normal_carries_nbt) {
                     decode_nbt(ap, out, desc.normal, inputs.normal_vector_bytes);
                 } else {
                     decode_nrm(ap, out, desc.normal);
@@ -791,8 +877,7 @@ void decode_vertex_stream(
                     zero_vec3(out.binormal);
                 }
             } else {
-                const std::size_t idx_bytes =
-                    (desc.normal.vcd == VcdType::Index8) ? 1u : 2u;
+                const std::size_t idx_bytes = normal_index_width;
                 std::uint32_t idx[3]{};
                 for (unsigned ni = 0; ni < 3; ++ni) {
                     if (desc.normal.vcd == VcdType::Index8) {
@@ -871,6 +956,27 @@ void decode_vertex_stream(
             float* uv = out.uv[ti];
             const unsigned attr_idx = 4u + ti;
 
+            // A channel absent from the stream must still deliver (0, 0) to the
+            // shader, which is what GX hardware and Dolphin supply for an absent
+            // attribute. `out` is raw upload-ring memory, NOT a value-initialized
+            // object: GxVertexOut has no default member initializers and
+            // UploadRing::allocate only bumps a cursor, so whatever the previous
+            // frame left at this offset is still there. Skipping the store would
+            // hand that stale pair to the vertex shader.
+            //
+            // The cached packet-run path already zeroes the identical fields
+            // (decoded.vertices.resize() value-initializes the whole 144-byte
+            // vertex, then the decode fills only the present channels), so
+            // restoring these stores also makes the two decode paths agree again.
+            // This is eight bytes per absent channel per vertex, not per
+            // component, and the D3D12 input layout binds all eight TEXCOORDs
+            // unconditionally whether or not the VS samples them.
+            if ((inputs.active_texcoord_mask & (1u << ti)) == 0u) {
+                out.uv[ti][0] = 0.0f;
+                out.uv[ti][1] = 0.0f;
+                continue;
+            }
+
             if (ta.vcd == VcdType::Direct) {
                 const std::size_t sz = inputs.element_bytes[attr_idx];
                 decode_tex(vsrc + off, uv, ta, desc.byte_dequant);
@@ -895,9 +1001,6 @@ void decode_vertex_stream(
                     static_cast<std::uint32_t>(elem_sz),
                     fifo_error_offset);
                 decode_tex(ap, uv, ta, desc.byte_dequant);
-            } else {
-                uv[0] = 0.0f;
-                uv[1] = 0.0f;
             }
         }
 
@@ -1364,7 +1467,9 @@ VertexLoader::decode_cached_packet_run_vertices_with_layout(
     std::size_t src_stride,
     GuestMemoryV1* memory,
     std::uint32_t precomputed_total_vertices,
-    std::uint32_t precomputed_total_indices) {
+    std::uint32_t precomputed_total_indices,
+    bool record_indexed_read_ranges,
+    std::vector<GxVertexOut>* reusable_vertices) {
     (void)vtxfmt;
     DecodedPacketRunVertices decoded{};
     if (packets.empty()) {
@@ -1443,10 +1548,16 @@ VertexLoader::decode_cached_packet_run_vertices_with_layout(
 
     decoded.total_vertices = total_vertices;
     decoded.total_indices = total_indices;
+    if (reusable_vertices != nullptr) {
+        decoded.vertices.swap(*reusable_vertices);
+        decoded.vertices.clear();
+    }
     decoded.vertices.resize(total_vertices);
 
     IndexedArrayResolver array_resolver(
-        memory, &decoded.guest_array_reads, dependency_event_sink_);
+        memory,
+        record_indexed_read_ranges ? &decoded.guest_array_reads : nullptr,
+        dependency_event_sink_);
     const PreparedVertexInputs inputs = prepare_vertex_inputs(desc, state);
     std::uint32_t dst_vertex = 0;
     for (const CachedDrawPacket& packet : packets) {

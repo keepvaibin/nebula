@@ -16,7 +16,7 @@ from the projects identified below. Upstream material remains subject to its
 applicable license, copyright notices, and disclaimers. Nebula's changes
 are not endorsed by the upstream projects.
 
-## Dusklight — CC0 1.0 Universal
+## Dusklight â€” CC0 1.0 Universal
 
 The opt-in DSP stereo adapter additionally adapts the current
 `src/dusk/audio/DuskDsp.cpp::ApplyPanning` no-signal routing policy at revision
@@ -60,7 +60,7 @@ CC0 declaration as proof of rights in underlying Twilight Princess material.
 The CC0 1.0 Universal legal code is available at
 <https://creativecommons.org/publicdomain/zero/1.0/legalcode>.
 
-## Aurora — MIT License
+## Aurora â€” MIT License
 
 - Upstream: <https://github.com/encounter/aurora>
 - Independently audited upstream revision:
@@ -107,7 +107,7 @@ notice:
 > OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 > SOFTWARE.
 
-## WiiCompiled — GNU General Public License version 3
+## WiiCompiled â€” GNU General Public License version 3
 
 The synthetic KPAD motion adapter added September 30, 2026 in
 `runtime/include/galaxy/synthetic_kpad_motion.h` adapts `Length`, `Distance`,
@@ -130,7 +130,7 @@ license text is in this repository's `LICENSE`. Imported source-level notices
 must remain intact, and modified versions must be identified as modified as
 required by GPLv3 section 5.
 
-## Berkeley SoftFloat Release 3e — BSD 3-Clause
+## Berkeley SoftFloat Release 3e â€” BSD 3-Clause
 
 Nebula vendors Berkeley SoftFloat Release 3e from John R. Hauser's
 official distribution for deterministic IEEE-754 operations.
@@ -173,14 +173,14 @@ history; the current project distribution is licensed under `GPL-3.0-only`.
 > OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 > SOFTWARE.
 
-## Dolphin free DSP ROM replacement — GPL-2.0-or-later
+## Dolphin free DSP ROM replacement â€” GPL-2.0-or-later
 
 `third_party/dolphin-free-dsp-rom/` holds the Dolphin Emulator Project's
 clean-room DSP instruction and coefficient ROMs (no Nintendo code). They are
 embedded in `nebula-recomp` and compiled into each local installation. Source,
 pinned revision, hashes and license texts are in that folder's `README.md`.
 
-## nod — MIT OR Apache-2.0
+## nod â€” MIT OR Apache-2.0
 
 `nebula-recomp` reads ISO, RVZ, WIA, WBFS, CISO and GCZ images with the `nod`
 crate 1.4.4 by Luke Street (<https://github.com/encounter/nod>), used under the
@@ -238,3 +238,19 @@ and its 2018 copy-filter documentation. No Dolphin implementation was copied
 or linked for this correction. Dolphin source is GPL-2.0-or-later.
 https://github.com/dolphin-emu/dolphin/blob/master/Source/Core/VideoCommon/TextureCacheBase.cpp
 https://dolphin-emu.org/blog/2018/06/03/dolphin-progress-report-april-and-may-2018/
+
+## Broadway floating-point estimate tables — GPL-2.0-or-later
+
+`runtime/include/galaxy/ppc_estimate.h` adapts the reciprocal and reciprocal-
+square-root estimate tables and interpolation from Dolphin's
+`Source/Core/Common/FloatUtils.cpp` at revision
+`e6f3ae17627e4344da95b13424af5baf4c892b08`, Copyright 2018 Dolphin Emulator
+Project, GPL-2.0-or-later. WiiCompiled's `runtime/include/isa/ppc_isa_float.h`
+at `6fa24737d3362b6cba8162671745262751f457b8` uses the same tables.
+
+The test-only `runtime/src/ppc_estimate_reference_tests.h` adapts that numerical
+reference plus `Source/UnitTests/Common/FloatUtilsTest.cpp` and
+`Source/UnitTests/Core/PowerPC/TestValues.h` from the same Dolphin revision,
+Copyright 2018, 2021 Dolphin Emulator Project, GPL-2.0-or-later. Upstream notices
+are retained. The combined work selects GPL version 3 and is conveyed under
+Nebula's GPL-3.0-only license. No retail game code or content is included here.

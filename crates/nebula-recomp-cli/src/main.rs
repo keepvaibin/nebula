@@ -100,6 +100,10 @@ enum Command {
         /// Experimental typed guest-register residency; off in production.
         #[arg(long)]
         experimental_guest_resident_leaf: bool,
+        /// Straight-line integer GPR residency as a post-pass over the lowered
+        /// body; reachable by default only through `release_module_options`.
+        #[arg(long)]
+        experimental_guest_resident_integer: bool,
         /// Exact RMGE01 0x80165478 private typed-region pilot; off by default.
         #[arg(long)]
         experimental_typed_region_80165478: bool,
@@ -109,6 +113,15 @@ enum Command {
         /// Fused paired arithmetic/commit helper; exact guards and slow fallback.
         #[arg(long)]
         experimental_fused_paired_binary: bool,
+        /// Indexed paired boundary; moving-route/new-shard validation pending.
+        #[arg(long, conflicts_with = "experimental_fused_paired_binary")]
+        experimental_indexed_paired_binary: bool,
+        /// Compact paired ternary boundary; broader route validation pending.
+        #[arg(long, conflicts_with = "experimental_fused_paired_ternary")]
+        experimental_indexed_paired_ternary: bool,
+        /// Paired ternary calculation/commit helper; off until gameplay validation.
+        #[arg(long)]
+        experimental_fused_paired_ternary: bool,
         /// In-header widened-single scalar add/subtract/multiply; off by default.
         #[arg(long)]
         experimental_inline_scalar_single_binary: bool,
@@ -427,9 +440,13 @@ fn main() -> Result<()> {
             shard_size,
             shard_source_kib,
             experimental_guest_resident_leaf,
+            experimental_guest_resident_integer,
             experimental_typed_region_80165478,
             experimental_flat_ram_reads,
             experimental_fused_paired_binary,
+            experimental_indexed_paired_binary,
+            experimental_indexed_paired_ternary,
+            experimental_fused_paired_ternary,
             experimental_inline_scalar_single_binary,
             exact_psmtx_local_lanes,
             no_exact_psmtx_local_lanes,
@@ -451,9 +468,13 @@ fn main() -> Result<()> {
         } => {
             let options = ModuleTranslationOptions {
                 guest_resident_leaf: experimental_guest_resident_leaf,
+                guest_resident_integer: experimental_guest_resident_integer,
                 typed_region_80165478: experimental_typed_region_80165478,
                 flat_ram_reads: experimental_flat_ram_reads,
                 fused_paired_binary: experimental_fused_paired_binary,
+                indexed_paired_binary: experimental_indexed_paired_binary,
+                indexed_paired_ternary: experimental_indexed_paired_ternary,
+                fused_paired_ternary: experimental_fused_paired_ternary,
                 inline_scalar_single_binary: experimental_inline_scalar_single_binary,
                 exact_psmtx_local_lanes: exact_psmtx_local_lanes && !no_exact_psmtx_local_lanes,
                 exact_psvec_cross_local_lanes,
@@ -1338,6 +1359,34 @@ fn dsp_ucode_entry_label(entry: DspUcodeEntry) -> &'static str {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn indexed_ternary_option_is_explicit_and_conflicts_with_fused() {
+        let cli = Cli::try_parse_from(["nebula-recomp", "translate-module", "dump",
+            "--output", "generated/module", "--experimental-indexed-paired-binary",
+            "--experimental-indexed-paired-ternary"]).unwrap();
+        assert!(matches!(cli.command, Command::TranslateModule {
+            experimental_indexed_paired_binary: true,
+            experimental_indexed_paired_ternary: true,
+            experimental_fused_paired_ternary: false, .. }));
+        assert!(Cli::try_parse_from(["nebula-recomp", "translate-module", "dump",
+            "--output", "generated/module", "--experimental-indexed-paired-ternary",
+            "--experimental-fused-paired-ternary"]).is_err());
+        let defaults = Cli::try_parse_from(["nebula-recomp", "translate-module", "dump",
+            "--output", "generated/module"]).unwrap();
+        assert!(matches!(defaults.command, Command::TranslateModule {
+            experimental_indexed_paired_ternary: false, .. }));
+    }
+    #[test]
+    fn indexed_paired_option_is_explicit_and_conflicts_with_fused() {
+        let cli = Cli::try_parse_from(["nebula-recomp", "translate-module", "dump",
+            "--output", "generated/module", "--experimental-indexed-paired-binary"]).unwrap();
+        assert!(matches!(cli.command, Command::TranslateModule {
+            experimental_indexed_paired_binary: true,
+            experimental_fused_paired_binary: false, .. }));
+        assert!(Cli::try_parse_from(["nebula-recomp", "translate-module", "dump",
+            "--output", "generated/module", "--experimental-indexed-paired-binary",
+            "--experimental-fused-paired-binary"]).is_err());
+    }
     use super::{write_generated_text_create_new, write_generated_text_if_changed, Cli, Command};
     use clap::Parser;
     use std::fs;
@@ -1357,6 +1406,9 @@ mod tests {
             Command::TranslateModule {
                 experimental_flat_ram_reads: false,
                 experimental_fused_paired_binary: false,
+                experimental_indexed_paired_binary: false,
+                experimental_indexed_paired_ternary: false,
+                experimental_fused_paired_ternary: false,
                 experimental_inline_scalar_single_binary: false,
                 exact_psmtx_local_lanes: true,
                 no_exact_psmtx_local_lanes: false,
@@ -1401,6 +1453,9 @@ mod tests {
             Command::TranslateModule {
                 experimental_inline_scalar_single_binary: true,
                 experimental_fused_paired_binary: false,
+                experimental_indexed_paired_binary: false,
+                experimental_indexed_paired_ternary: false,
+                experimental_fused_paired_ternary: false,
                 ..
             }
         ));
@@ -1417,6 +1472,9 @@ mod tests {
             fused_cli.command,
             Command::TranslateModule {
                 experimental_fused_paired_binary: true,
+                experimental_indexed_paired_binary: false,
+                experimental_indexed_paired_ternary: false,
+                experimental_fused_paired_ternary: false,
                 experimental_flat_ram_reads: false,
                 ..
             }
@@ -1560,6 +1618,21 @@ mod tests {
             "--trace-psvec-normalize-guard",
         ])
         .is_err());
+    }
+
+    #[test]
+    fn paired_ternary_lowering_is_an_independent_opt_in() {
+        let cli = Cli::try_parse_from([
+            "nebula-recomp", "translate-module", "dump", "--output", "generated/module",
+            "--experimental-fused-paired-ternary",
+        ]).unwrap();
+        assert!(matches!(cli.command, Command::TranslateModule {
+            experimental_fused_paired_ternary: true,
+            experimental_fused_paired_binary: false,
+                experimental_indexed_paired_binary: false,
+                experimental_indexed_paired_ternary: false,
+            ..
+        }));
     }
 
     #[test]

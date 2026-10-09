@@ -38,6 +38,9 @@ using NativeHostOwnershipTestHook = bool (*)(
     unsigned, const std::filesystem::path&, unsigned);
 void native_host_set_ownership_test_hook(NativeHostOwnershipTestHook hook);
 bool native_host_test_handle_cleanup();
+bool native_host_test_audio_recovery();
+bool native_host_test_audio_recovery_backpressure(unsigned test_case);
+bool native_host_test_concurrent_wav_dump();
 bool native_host_test_wav_dump(std::span<const std::byte> pcm,
     std::uint32_t rate, bool fail_finalization);
 void native_host_test_attach_nand_metadata(const std::filesystem::path& path);
@@ -1301,6 +1304,13 @@ galaxy::host::HostPointerState timed_host_pointer_provider() noexcept {
     return g_timed_host_pointer;
 }
 
+std::uint64_t g_replay_live_pointer_reads = 0u;
+
+galaxy::host::HostPointerState counted_replay_live_pointer_provider() noexcept {
+    ++g_replay_live_pointer_reads;
+    return g_timed_host_pointer;
+}
+
 std::uint64_t g_test_host_pointer_now_ms = 0u;
 
 std::uint64_t test_host_pointer_clock() noexcept {
@@ -1577,6 +1587,32 @@ bool inject_readdir_increment_failure(unsigned phase,
     return phase == 3u;
 }
 
+bool native_audio_recovery_backpressure_works(const std::filesystem::path& test_root) {
+    ScopedEnv normal_audio("GALAXY_STRICT_AUDIO_PROOF", "0");
+    ScopedEnv keep_silence("GALAXY_AUDIO_WAV_DUMP_SKIP_LEADING_SILENCE", "0");
+    bool passed = true;
+    constexpr std::array<std::byte, 4> pcm{
+        std::byte{0x34}, std::byte{0x12}, std::byte{0x78}, std::byte{0x56}};
+    for (unsigned test_case = 0u; test_case < 4u; ++test_case) {
+        const auto path = test_root /
+            (L"audio-backpressure-" + std::to_wstring(test_case) + L".wav");
+        ScopedWideEnv dump_path(L"GALAXY_AUDIO_WAV_DUMP", path);
+        passed &= expect(
+            galaxy::host::native_host_test_audio_recovery_backpressure(test_case),
+            "device loss releases full-queue backpressure while preserving fatal failures and PCM ownership");
+        if (test_case < 2u) {
+            const auto wav = galaxy::host::read_binary_file(path);
+            passed &= expect(wav.size() == 48u && wav[40] == std::byte{4} &&
+                std::equal(pcm.begin(), pcm.end(), wav.begin() + 44u),
+                "unheard PCM bypasses the blocked queue and is captured exactly once");
+        } else {
+            passed &= expect(!std::filesystem::exists(path),
+                "fatal producer failure cannot be reported as accepted unheard output");
+        }
+    }
+    return passed;
+}
+
 bool native_host_failure_ownership_works(const std::filesystem::path& test_root) {
     using namespace galaxy::host;
     bool passed = expect(native_host_test_handle_cleanup(),
@@ -1642,6 +1678,28 @@ bool native_host_failure_ownership_works(const std::filesystem::path& test_root)
         ScopedWideEnv dump_path(L"GALAXY_AUDIO_WAV_DUMP", moved / L"failed.wav");
         passed &= expect(!native_host_test_wav_dump(pcm, 32000u, false),
             "initial WAV artifact failure propagates as failure");
+    }
+    {
+        const auto concurrent_wav = root / L"concurrent.wav";
+        ScopedWideEnv dump_path(L"GALAXY_AUDIO_WAV_DUMP", concurrent_wav);
+        passed &= expect(native_host_test_concurrent_wav_dump(),
+            "offline owner and retiring audio worker serialize diagnostic writes");
+        const auto data = read_binary_file(concurrent_wav);
+        bool valid = data.size() == 6444u && data[40] == std::byte{0} &&
+            data[41] == std::byte{25};
+        unsigned counts[2]{};
+        if (valid) {
+            for (std::size_t offset = 44; offset < data.size(); offset += 16) {
+                const auto value = data[offset];
+                valid &= value == std::byte{1} || value == std::byte{2};
+                valid &= std::all_of(data.begin() + offset, data.begin() + offset + 16,
+                    [value](std::byte byte) { return byte == value; });
+                if (value == std::byte{1}) ++counts[0];
+                else if (value == std::byte{2}) ++counts[1];
+            }
+        }
+        passed &= expect(valid && counts[0] == 200 && counts[1] == 200,
+            "concurrent WAV has correct sizes and every intact PCM block exactly once");
     }
     std::error_code error;
     std::filesystem::remove_all(root, error);
@@ -8008,6 +8066,12 @@ bool native_bt_wiimote_protocol_path_works(
     ScopedEnv enable_native_bt("GALAXY_NATIVE_BT_WIIMOTE", "1");
     ScopedEnv disable_real_hid("GALAXY_REAL_WIIMOTE_HID", "0");
     ScopedEnv enable_input_trace("GALAXY_TRACE_BOOT_INPUT", "1");
+    // These protocol assertions inspect every sample's provenance, including
+    // neutral samples. Do not depend on the preceding case's shake tail or VI
+    // landing on the production trace sampler's periodic interval.
+    ScopedEnv input_trace_interval("GALAXY_TRACE_BOOT_INPUT_INTERVAL_VI", "1");
+    ScopedEnv enable_fresh_kpad_pointer(
+        "GALAXY_SYNTHETIC_KPAD_FRESH_MOUSE_POINTER", "1");
     ScopedEnv calibrated_mouse_x("GALAXY_MOUSE_IR_ABSOLUTE_X_SCALE", "0.38");
     ScopedEnv calibrated_mouse_y("GALAXY_MOUSE_IR_ABSOLUTE_Y_SCALE", "1.0");
 
@@ -12135,6 +12199,11 @@ bool native_bt_wiimote_protocol_path_works(
         passed &= expect(
             replay_acl[25] == 0x38u && replay_acl[26] == 0x37u,
             "native BT replay log encrypts keyboard movement as Nunchuk wire bytes");
+        passed &= expect(
+            memory.latest_native_pointer_active() &&
+                memory.latest_native_pointer_x() == 0.0f &&
+                memory.latest_native_pointer_y() == 0.0f,
+            "native BT replay publishes the same active pointer to the KPAD snapshot");
     }
     const std::string replay_trace_text = replay_trace.str();
     if (replay_trace_text.find("FAILED:") != std::string::npos) {
@@ -12153,6 +12222,75 @@ bool native_bt_wiimote_protocol_path_works(
 
     const galaxy::RuntimeSettings saved_replay_settings =
         galaxy::get_runtime_settings();
+    {
+        const auto isolated_path = std::filesystem::temp_directory_path() /
+            "galaxy_native_host_isolated_script_replay.tsv";
+        {
+            std::ofstream replay(isolated_path, std::ios::binary | std::ios::trunc);
+            replay << "meta\tkey_order\t"
+                   << "LButton,RButton,Space,Enter,Shift,LShift,RShift,"
+                   << "Left,Up,Right,Down,1,2,A,B,C,D,E,I,J,K,L,Q,R,S,W,Z,"
+                   << "Ctrl,LCtrl,RCtrl\n";
+            replay << "elapsed_ms\tgame_focused\tmouse_client_x\tmouse_client_y\t"
+                   << "client_w\tclient_h\tkeys_hold_hex\txinput_connected\t"
+                   << "xinput_buttons_hex\tleft_trigger\tright_trigger\t"
+                   << "thumb_lx\tthumb_ly\tthumb_rx\tthumb_ry\n";
+            replay << "0\t0\t-1\t-1\t1280\t720\t0x0\t0\t0x0\t0\t0\t0\t0\t0\t0\n";
+        }
+        const auto isolated_string = isolated_path.string();
+        ScopedEnv replay_log("GALAXY_INPUT_REPLAY_LOG", isolated_string.c_str());
+        ScopedHostPointerProvider hostile_live_pointer(&counted_replay_live_pointer_provider);
+        g_replay_live_pointer_reads = 0u;
+        galaxy::RuntimeSettings isolated_settings = saved_replay_settings;
+        isolated_settings.input_mode = galaxy::RuntimeInputMode::KeyboardMouse;
+        galaxy::set_runtime_settings(isolated_settings);
+        constexpr std::uint64_t kViTicks = 1'012'500u;
+        const auto pointer_duration = std::to_string(fake_ticks / kViTicks + 2u);
+        ScopedEnv pointer_x("GALAXY_INPUT_POINTER2_X", "0.5");
+        ScopedEnv pointer_y("GALAXY_INPUT_POINTER2_Y", "0.78");
+        ScopedEnv pointer_start("GALAXY_INPUT_POINTER2_VI", "0");
+        ScopedEnv pointer_end("GALAXY_INPUT_POINTER2_DURATION", pointer_duration.c_str());
+        {
+            ScopedEnv script_buttons("GALAXY_INPUT_AUTOPRESS_SCRIPT", "0:1000000:A+B");
+            ScopedEnv script_stop("GALAXY_INPUT_AUTOPRESS_SCRIPT_STOP_AT_MARIO_CONTROL", "0");
+            ScopedEnv script_stick("GALAXY_INPUT_STICK_SCRIPT", "0:1000000:0.7:0");
+            ScopedEnv script_relative("GALAXY_INPUT_STICK_SCRIPT_RELATIVE_MARIO_CONTROL", "0");
+            set_input_report_mode(0x37, "isolated replay accepts scripted menu pointer");
+            const auto* acl = read_bulk_acl(kRequest + 0x1B00, 31,
+                "isolated replay emits scripted buttons and IR through actual HID");
+            passed &= expect(acl[10] == 0u && acl[11] == 0x0Cu && acl[15] != 0xFFu,
+                "isolated replay retains script A+B and visible encoded IR");
+            const auto buttons = memory.consume_synthetic_kpad_buttons(true);
+            const auto point = memory.consume_synthetic_kpad_pointer(
+                buttons, true, galaxy::get_runtime_input_mode_state().generation);
+            const auto* snapshot = memory.latest_native_hid_snapshot();
+            passed &= expect(memory.latest_native_pointer_active() &&
+                memory.latest_native_pointer_x() == 0.5f &&
+                memory.latest_native_pointer_y() == 0.78f &&
+                point.sample.active && point.sample.x == 0.5f && point.sample.y == 0.78f &&
+                point.sample.origin == galaxy::host::SyntheticKpadPointerOrigin::Replay &&
+                !point.sample.refresh_mouse_allowed && point.sample.sequence == 0u &&
+                point.sample.acquired_ms == 0u && point.sample.production_wii_ticks == fake_ticks &&
+                (buttons.hold & 0x0C00u) == 0x0C00u && snapshot != nullptr &&
+                snapshot->nunchuk.stick_x > 0x7Bu && snapshot->nunchuk.stick_y == 0x81u,
+                "isolated replay preserves scripted KPAD geometry, buttons, stick and guest identity without invented physical timestamps");
+        }
+        fake_ticks += kViTicks * 3u;
+        set_input_report_mode(0x37, "isolated replay advances beyond pointer waypoint");
+        const auto* neutral_acl = read_bulk_acl(kRequest + 0x1B40, 31,
+            "isolated replay emits neutral input after scripted windows");
+        const auto neutral_buttons = memory.consume_synthetic_kpad_buttons(true);
+        const auto neutral_point = memory.consume_synthetic_kpad_pointer(
+            neutral_buttons, true, galaxy::get_runtime_input_mode_state().generation);
+        passed &= expect(neutral_acl[10] == 0u && neutral_acl[11] == 0u &&
+            !memory.latest_native_pointer_active() && !neutral_point.sample.active &&
+            neutral_point.sample.origin == galaxy::host::SyntheticKpadPointerOrigin::Replay &&
+            !neutral_point.sample.refresh_mouse_allowed && g_replay_live_pointer_reads == 0u,
+            "isolated replay never reads live cursor and expires scripted IR without holding a stale target");
+        galaxy::set_runtime_settings(saved_replay_settings);
+        std::error_code remove_error;
+        std::filesystem::remove(isolated_path, remove_error);
+    }
     galaxy::RuntimeSettings keyboard_mouse_replay_settings =
         saved_replay_settings;
     keyboard_mouse_replay_settings.input_mode =
@@ -14187,8 +14325,16 @@ bool checked_host_span_lookup_matches_regions(galaxy::host::GuestAddressSpace& m
     return passed;
 }
 
-int main() {
+int main(int argc, char** argv) {
     try {
+    if (argc == 2 && std::string_view(argv[1]) == "--audio-recovery") {
+        return galaxy::host::native_host_test_audio_recovery() ? 0 : 1;
+    }
+    if (argc == 3 && std::string_view(argv[1]) == "--audio-backpressure") {
+        const std::filesystem::path test_root(argv[2]);
+        std::filesystem::create_directories(test_root);
+        return native_audio_recovery_backpressure_works(test_root) ? 0 : 1;
+    }
     _putenv_s("GALAXY_AUDIO_DISABLE", "1");
     _putenv_s("GALAXY_DIRECT_WGPIPE_PE_EVENTS", "1");
     // Most NAND fixtures below assert the synchronous IOS mailbox contract.
@@ -14204,6 +14350,8 @@ int main() {
     ScopedWideEnv set_nand_root(L"GALAXY_NAND_ROOT", nand_test_root);
     bool passed = true;
     passed &= flat_guest_owner_abi_boundary_works();
+    passed &= native_audio_recovery_backpressure_works(
+        nand_test_root.parent_path() / L"audio-backpressure");
     passed &= native_host_failure_ownership_works(nand_test_root);
     std::cerr << "[native-host-test] native_nand_atomic_persistence_works\n";
     passed &= native_ios_anomaly_identity_and_bounds_work();
@@ -14716,18 +14864,23 @@ int main() {
         memory.read_u32(0x8000311C) == galaxy::host::GuestAddressSpace::kMem2Size,
         "IOS reports the retail MEM2 size");
     passed &= expect(
-        memory.read_u32(0x80003120) == 0x93400000,
-        "IOS reserves the upper MEM2 range");
+        memory.read_u32(0x80003120) == 0x93600000,
+        "IOS33 reports its retail MEM2 end, not the pre-IOS28 legacy end");
     passed &= expect(
         memory.read_u32(0x80003124) == 0x90000800,
         "MEM2 arena starts after the low-memory vectors");
     passed &= expect(
-        memory.read_u32(0x80003128) == 0x933E0000,
-        "MEM2 arena ends before the IOS IPC buffer");
+        memory.read_u32(0x80003128) == 0x935E0000,
+        "IOS33 MEM2 arena ends before IPC and retains the missing two MiB");
     passed &= expect(
-        memory.read_u32(0x80003130) == 0x933E0000 &&
-            memory.read_u32(0x80003134) == 0x93400000,
-        "IOS IPC buffer range is initialized");
+        memory.read_u32(0x80003130) == 0x935E0000 &&
+            memory.read_u32(0x80003134) == 0x93600000,
+        "IOS33 initializes the retail 128 KiB IPC range");
+    passed &= expect(
+        memory.read_u32(0x80003118) == 0x04000000u &&
+            memory.read_u32(0x80003120) - memory.read_u32(0x80003128) == 0x20000u &&
+            memory.read_u32(0x80003128) - 0x933E0000u == 0x200000u,
+        "IOS33 corrects arena ownership without increasing physical MEM2 or IPC size");
 
     {
         constexpr std::uint32_t kBoundaryArBackingBaseGlobal = 0x806A2C54u;
@@ -18461,12 +18614,25 @@ int main() {
     passed &= expect(
         memory.ai_audio_submit_count() == 3,
         "the already-serviced interruptible AI boundary is not submitted again");
-    passed &= expect(
-        memory.ai_dma_resync_events() == 0,
-        "late AI DMA catch-up does not skip ahead by resyncing");
-    passed &= expect(
-        memory.ai_dma_resync_missed_buffers() == 0,
-        "late AI DMA catch-up records no skipped buffer periods");
+    // Two assertions were REMOVED here (agent 6, fix 43):
+    //   ai_dma_resync_events() == 0, "late AI DMA catch-up does not skip ahead by resyncing"
+    //   ai_dma_resync_missed_buffers() == 0, "… records no skipped buffer periods"
+    //
+    // Both were TAUTOLOGIES. Their counters are zero-initialised and nothing in
+    // the runtime ever writes them (verified: 0 `++`/`+=`, 0 `=` assignments, no
+    // `resync` logic anywhere), so the getters can only return 0 and the
+    // assertions could never fail — including in a build that resynced on every
+    // buffer. Asserting that a constant equals zero is not a check.
+    //
+    // The invariant they were reaching for IS covered, by the real assertions
+    // immediately above and below: `ai_audio_submit_count() == 3` pins "submits
+    // one boundary and waits", and the masked-catch-up case is covered at
+    // "masked catch-up republishes the completion and following exact deadlines".
+    // The inert pair added no coverage.
+    //
+    // If a resync path is ever implemented, restore these assertions ONLY once
+    // the counters are actually incremented — at that point they become
+    // meaningful and this note is obsolete. See finding 39 and fix 42.
     passed &= expect(
         memory.ai_dma_next_completion_ticks() > second_ai_completion,
         "on-time masked AI service arms exactly the next real hardware boundary");

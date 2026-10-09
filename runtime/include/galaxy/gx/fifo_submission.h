@@ -152,7 +152,8 @@ public:
     }
 
     [[nodiscard]] bool mark_submitted(
-        std::uint64_t serial, FramePeCompletionToken token) noexcept {
+        std::uint64_t serial, FramePeCompletionToken token,
+        std::vector<std::byte>* released_fifo = nullptr) noexcept {
         const auto* next = next_to_submit();
         if (next == nullptr || next->serial != serial || !token ||
             (last_submitted_token_ &&
@@ -167,6 +168,9 @@ public:
                 // Backend now owns its independent FIFO copy. Later producer
                 // bytes cannot be reached or cleared through this vector.
                 entry.fifo.clear();
+                if (released_fifo != nullptr) {
+                    *released_fifo = std::move(entry.fifo);
+                }
                 last_submitted_token_ = token;
                 return true;
             }

@@ -22,7 +22,13 @@
 #include <wrl/client.h>
 
 #include "galaxy/gx/gx_bitfields.h"
+// kMaxEfbScale lives in render_config.h and std::clamp lives in <algorithm>.
+// This header uses both, so it must include both itself: it previously compiled
+// only because a transitive include supplied them, and that broke the moment the
+// include order above it changed. Direct includes here, not elsewhere.
+#include "galaxy/gx/render_config.h"
 
+#include <algorithm>
 #include <cstddef>
 #include "galaxy/gx/pointer_response.h"
 #include <cstdint>
@@ -158,14 +164,47 @@ struct ScaledEfbRect {
     }
 };
 
-[[nodiscard]] ScaledEfbRect compute_scaled_efb_rect(
+// Both helpers below are called from `RendererD3D12::draw`, i.e. once per draw
+// (tens of thousands of times per frame on a replayed display list). They lived
+// in `efb_copy.cpp`, so that translation unit could not inline them back into
+// the callers and every draw paid two real calls for twenty-odd instructions of
+// clamps and multiplies. Defining them here changes no arithmetic and no result
+// type; it only lets the compiler decide per call site.
+[[nodiscard]] inline ScaledEfbRect compute_scaled_efb_rect(
     std::int32_t logical_left,
     std::int32_t logical_top,
     std::int32_t logical_right,
     std::int32_t logical_bottom,
     unsigned logical_target_width,
     unsigned logical_target_height,
-    unsigned efb_scale) noexcept;
+    unsigned efb_scale) noexcept {
+    const std::int64_t scale = static_cast<std::int64_t>(
+        std::clamp(efb_scale, 1u, kMaxEfbScale));
+    // The public helper accepts arbitrary unsigned target extents, while its
+    // D3D12_RECT-compatible result is signed 32-bit. Saturate before the
+    // narrowing cast even though production EFB extents are much smaller.
+    constexpr std::int64_t kRectLimit =
+        std::numeric_limits<std::int32_t>::max();
+    const std::int64_t target_width = std::min(
+        static_cast<std::int64_t>(logical_target_width) * scale,
+        kRectLimit);
+    const std::int64_t target_height = std::min(
+        static_cast<std::int64_t>(logical_target_height) * scale,
+        kRectLimit);
+    const auto scaled_clamped = [scale](
+                                    std::int32_t coordinate,
+                                    std::int64_t maximum) {
+        return static_cast<std::int32_t>(std::clamp<std::int64_t>(
+            static_cast<std::int64_t>(coordinate) * scale,
+            0,
+            maximum));
+    };
+    return ScaledEfbRect{
+        scaled_clamped(logical_left, target_width),
+        scaled_clamped(logical_top, target_height),
+        scaled_clamped(logical_right, target_width),
+        scaled_clamped(logical_bottom, target_height)};
+}
 
 struct ScaledGxViewport {
     float x = 0.0f;
@@ -180,10 +219,39 @@ struct ScaledGxViewport {
     }
 };
 
-// XF layout: wd, ht, zRange, xOrig, yOrig, farZ.
-[[nodiscard]] ScaledGxViewport compute_scaled_gx_viewport(
+// XF layout: wd, ht, zRange, xOrig, yOrig, farZ. Defined here for the same
+// per-draw inlining reason as `compute_scaled_efb_rect` above.
+[[nodiscard]] inline ScaledGxViewport compute_scaled_gx_viewport(
     const float xf_viewport[6],
-    unsigned efb_scale) noexcept;
+    unsigned efb_scale) noexcept {
+    if (xf_viewport == nullptr) {
+        return {};
+    }
+    const float scale = static_cast<float>(
+        std::clamp(efb_scale, 1u, kMaxEfbScale));
+    const float wd = xf_viewport[0];
+    const float ht = xf_viewport[1];
+    const float z_range = xf_viewport[2];
+    const float x_origin = xf_viewport[3] - 342.0f;
+    const float y_origin = xf_viewport[4] - 342.0f;
+    const float far_z = xf_viewport[5];
+    constexpr float kZ24 = 16777216.0f;
+    float min_depth = std::clamp(1.0f - far_z / kZ24, 0.0f, 1.0f);
+    const float max_depth = std::clamp(
+        1.0f - (far_z - z_range) / kZ24,
+        0.0f,
+        1.0f);
+    if (min_depth > max_depth) {
+        min_depth = max_depth;
+    }
+    return ScaledGxViewport{
+        (x_origin - wd) * scale,
+        (y_origin + ht) * scale,
+        2.0f * wd * scale,
+        -2.0f * ht * scale,
+        min_depth,
+        max_depth};
+}
 
 struct EfbPeekSamplingGeometry {
     float src_x = 0.0f;

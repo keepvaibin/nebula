@@ -174,9 +174,35 @@ pub struct ModuleTranslationOptions {
     /// Experimental fused paired-single arithmetic/commit helper. Public
     /// entries, operand validation, FPSCR and precise FP faults are unaffected.
     pub fused_paired_binary: bool,
+    /// Four-register indexed paired boundary with library-local result packing.
+    /// Kept opt-in while moving-route and newly sharded cohorts are qualified.
+    pub indexed_paired_binary: bool,
+    /// Compact paired ternary boundary; opt-in pending broader qualification.
+    pub indexed_paired_ternary: bool,
+    /// Experimental paired ternary calculation/commit boundary. Both lane
+    /// operands are captured before a destination or status can be written.
+    pub fused_paired_ternary: bool,
     /// Experimental inline widened-single scalar add/subtract/multiply.
     /// Unhandled inputs, modes and results use the original lowering.
     pub inline_scalar_single_binary: bool,
+    /// Straight-line integer GPR residency across a whole function body.
+    ///
+    /// Every other field here is a local lowering decision; this one is a
+    /// function-wide property. The translated body names `context->gpr[N]` for
+    /// *every* guest register operand, so the host compiler cannot keep the
+    /// guest register file in registers: each operand is an independent 4-byte
+    /// access into `PpcContext`, and an opaque call in between (every
+    /// call-return checkpoint, every guest load or store) forces every later
+    /// read to be re-issued. The generated module therefore performs roughly
+    /// one `PpcContext` access per guest instruction.
+    ///
+    /// With this option the body instead keeps every directly-indexed GPR in a
+    /// function-local variable, so the host compiler's own register allocator
+    /// owns the guest register file across the straight-line body. Only the
+    /// function exit writes the locals back. See
+    /// [`apply_integer_gpr_residency`] for the eligibility rule, and why
+    /// interior entries and runtime-indexed GPR access are excluded.
+    pub guest_resident_integer: bool,
     pub exact_psmtx_local_lanes: bool,
     pub exact_psvec_cross_local_lanes: bool,
     pub exact_psvec_normalize_local_lanes: bool,
@@ -202,7 +228,11 @@ impl Default for ModuleTranslationOptions {
             typed_region_80165478: false,
             flat_ram_reads: false,
             fused_paired_binary: false,
+            indexed_paired_binary: false,
+            indexed_paired_ternary: false,
+            fused_paired_ternary: false,
             inline_scalar_single_binary: false,
+            guest_resident_integer: false,
             exact_psmtx_local_lanes: true,
             exact_psvec_cross_local_lanes: false,
             exact_psvec_normalize_local_lanes: false,
@@ -594,7 +624,8 @@ pub fn translate_module_with_options(
                     &resident_leaf_contracts,
                 )? {
                     Some(resident) => resident,
-                    None => {
+                    None => apply_residency_to_body(
+                        function.address,
                         lower_words_for_module_with_call_return_entries_and_exact_fpu_flat_reads(
                             function.address,
                             bytes,
@@ -603,20 +634,27 @@ pub fn translate_module_with_options(
                             &callable_entries,
                             &exact_fpu_functions,
                             &options,
-                        )?
-                    }
+                        )?,
+                        entries,
+                        &options,
+                    ),
                 },
             }
         } else {
-            lower_words_for_module_with_call_return_entries_and_exact_fpu_flat_reads(
+            apply_residency_to_body(
                 function.address,
-                bytes,
+                lower_words_for_module_with_call_return_entries_and_exact_fpu_flat_reads(
+                    function.address,
+                    bytes,
+                    entries,
+                    call_return_entries,
+                    &callable_entries,
+                    &exact_fpu_functions,
+                    &options,
+                )?,
                 entries,
-                call_return_entries,
-                &callable_entries,
-                &exact_fpu_functions,
                 &options,
-            )?
+            )
         };
     }
     let typed_region_80165478 = if options.typed_region_80165478 {
@@ -661,18 +699,22 @@ pub fn translate_module_with_options(
                     .ok_or(TranslationError::FunctionOutsideText {
                         address: function.address,
                     })?;
-                validate_psmtx_local_memory_contract(bytes)?;
-                Some(PsmtxLocalExperiment {
-                    body: lower_words_with_config(
+                let memory_plan = validate_psmtx_local_memory_contract(bytes)?;
+                let body = lower_words_with_config(
                         function.address,
                         bytes,
                         &BTreeSet::new(),
                         &BTreeSet::new(),
                         LoweringConfig {
                             local_lane_profile: LocalLaneProfile::PsmtxConcat,
+                            // Qualified only inside the guarded matrix leaf;
+                            // the global fused-paired option remains unchanged.
+                            fused_paired_binary: true,
                             ..LoweringConfig::default()
                         },
-                    )?,
+                    )?;
+                Some(PsmtxLocalExperiment {
+                    body: lower_psmtx_proven_memory(body, bytes, &memory_plan)?,
                     trace_guard: options.trace_psmtx_guard,
                 })
             }
@@ -1277,7 +1319,7 @@ fn rfi_unwind_continuations(
     let mut continuations = BTreeSet::new();
     // Indirect linked calls (bctrl/blrl: virtual dispatch, callbacks) can
     // reach any address-taken function, including the OSLockMutex/
-    // OSSleepThread → OSLoadContext chain, which the static taint cannot
+    // OSSleepThread ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ OSLoadContext chain, which the static taint cannot
     // follow. Functions containing one are tainted and their indirect return
     // sites become continuations.
     for source in functions {
@@ -1481,6 +1523,20 @@ fn lower_resident_integer_leaf(
 ) -> Option<String> {
     let (words, contract) =
         analyze_resident_integer_leaf(address, bytes, entries, call_return_entries)?;
+    // analyze_resident_integer_leaf already rejects any word it cannot classify and
+    // pushes exactly one entry per instruction, in order, so the opcode match below
+    // must accept every word it just accepted. Assert that instead of relying on
+    // it: falling out of the match at `_ => return None` abandons a half-written
+    // body, and the caller reads None as "not eligible" and re-lowers the function
+    // with the ordinary emitter. The shipped code would still be correct, but this
+    // tier would silently lose coverage -- and coverage is the point of the
+    // optimisation. An edit that adds an opcode to one match and not the other has
+    // to fail loudly in tests rather than quietly shrink the fast path.
+    debug_assert_eq!(
+        words.len(),
+        bytes.len() / 4,
+        "resident leaf analyzer/emitter opcode sets diverged at 0x{address:08X}"
+    );
     let live = contract.read_before_write.gpr | contract.possible_writes.gpr;
     let mut output = String::new();
     for index in 0..32 {
@@ -1913,6 +1969,9 @@ fn lower_words_for_module_with_call_return_entries_and_exact_fpu_flat_reads(
             exact_fpu_functions: Some(exact_fpu_functions),
             flat_ram_reads: options.flat_ram_reads,
             fused_paired_binary: options.fused_paired_binary,
+            indexed_paired_binary: options.indexed_paired_binary,
+            indexed_paired_ternary: options.indexed_paired_ternary,
+            fused_paired_ternary: options.fused_paired_ternary,
             inline_scalar_single_binary: options.inline_scalar_single_binary,
             ..LoweringConfig::default()
         },
@@ -1965,6 +2024,9 @@ fn lower_words_with_options(
             local_lane_profile: LocalLaneProfile::None,
             flat_ram_reads,
             fused_paired_binary: false,
+            indexed_paired_binary: false,
+            indexed_paired_ternary: false,
+            fused_paired_ternary: false,
             inline_scalar_single_binary: false,
             typed_region_gpr_mask: 0,
         },
@@ -1988,6 +2050,9 @@ struct LoweringConfig<'a> {
     local_lane_profile: LocalLaneProfile,
     flat_ram_reads: bool,
     fused_paired_binary: bool,
+    indexed_paired_binary: bool,
+    indexed_paired_ternary: bool,
+    fused_paired_ternary: bool,
     inline_scalar_single_binary: bool,
     typed_region_gpr_mask: u32,
 }
@@ -2062,29 +2127,40 @@ fn cache_typed_region_instruction(
     output: &mut String,
     start: usize,
     pc: u32,
+    word: u32,
     access: GuestGprAccess,
 ) -> Result<(), TranslationError> {
-    let mut instruction = output.split_off(start);
+    // Decoded only to identify the `or rD,rS,rS` encoding: that arm renders the
+    // shared source once, so the operand-count proof below must expect one fewer
+    // occurrence of it. No other opcode admitted by
+    // `typed_region_pure_gpr_access` can name one register in both source fields.
+    let decoded = Ins::new(word, Extensions::gekko_broadway());
+    let mut rendered = output.split_off(start);
     for register in 0..32 {
         let operand = format!("context->gpr[{register}]");
+        let collapsed_self_or = decoded.op == Opcode::Or
+            && access.first_source.is_some()
+            && access.first_source == access.second_source
+            && access.first_source == Some(register);
         let expected = usize::from(access.destination == register)
             + usize::from(access.first_source == Some(register))
-            + usize::from(access.second_source == Some(register));
-        if instruction.matches(&operand).count() != expected {
+            + usize::from(access.second_source == Some(register))
+            - usize::from(collapsed_self_or);
+        if rendered.matches(&operand).count() != expected {
             return Err(TranslationError::TypedRegionProof {
                 address: pc,
                 reason: format!("rendered r{register} operand count changed"),
             });
         }
-        instruction = instruction.replace(&operand, &format!("resident_r{register}"));
+        rendered = rendered.replace(&operand, &format!("resident_r{register}"));
     }
-    if instruction.contains("context->") {
+    if rendered.contains("context->") {
         return Err(TranslationError::TypedRegionProof {
             address: pc,
             reason: "pure integer instruction gained a hidden context effect".to_owned(),
         });
     }
-    output.push_str(&instruction);
+    output.push_str(&rendered);
     Ok(())
 }
 
@@ -2361,6 +2437,482 @@ fn integer_guest_load_expression(width: u32, ea: &str, pc: u32, flat_ram_reads: 
     }
 }
 
+// Straight-line integer GPR residency.
+//
+// The translated body names `context->gpr[N]` for every guest register
+// operand, so the host compiler treats each operand as an independent 4-byte
+// memory access into `PpcContext`. An opaque call in between -- the
+// call-return checkpoint after every guest call, every guest load or store --
+// forces every later read to be re-issued, so the guest register file is
+// effectively reloaded per instruction and the host register allocator is
+// never allowed to own it.
+//
+// This pass renames every *directly indexed* GPR access in the body to a
+// function-local variable. The body's own control flow is untouched: the
+// locals are loaded once at the single normal entry and written back once
+// before each `return`. That is exactly equivalent for straight-line code,
+// because nothing between those points can observe `context->gpr[]` except the
+// body itself.
+//
+// Eligibility is deliberately narrow, because three shapes would break that
+// equivalence, and each one is cheap to detect in the emitted text:
+//
+//   * interior entries and `call_return_*` continuations. Both are entered
+//     from outside this body, so both are repaired at their own label: an entry
+//     loads the locals, a continuation writes them back before the checkpoint
+//     that follows it runs.
+//   * runtime-indexed GPR access (`context->gpr[reg]`, emitted by the
+//     `lmw`/`stmw` register-range loops). A variable index means the resident
+//     set cannot be proven complete at that access, so such a body is rejected
+//     outright rather than left half-renamed.
+//   * a call that receives `context`, which may read or write the register file
+//     directly. Guest loads and stores receive `(memory, ...)` only, and the
+//     condition-register helpers touch `context->cr`, never `context->gpr`.
+//
+// `ensure_fpu_available` is deliberately *not* on that list even though it
+// takes `context`: its hot path is a read of `context->msr`, and its escalation
+// path re-enters at the `fpu_retry_<pc>` alias, which jumps to `label_<pc>` --
+// an entry label that already reloads the locals. Measured over 200 shards,
+// every one of 33,084 such aliases has that shape.
+//
+// Returns `None` when the body was left untouched, so the caller can keep the
+// original text without re-allocating it.
+/// End offset of a `call_return_<8 hex digits>:` label found at or after
+/// `from`, or `None`. Scanned by hand rather than with a regex so this file
+/// needs no new import.
+fn call_return_label_end(haystack: &str, from: usize) -> Option<usize> {
+    const PREFIX: &str = "call_return_";
+    let mut search = from;
+    while let Some(found) = haystack[search..].find(PREFIX) {
+        let at = search + found;
+        let suffix = at + PREFIX.len();
+        let digits = haystack[suffix..]
+            .bytes()
+            .take_while(|byte| byte.is_ascii_hexdigit())
+            .count();
+        if digits == 8 && haystack.as_bytes().get(suffix + digits) == Some(&b':') {
+            return Some(suffix + digits + 1);
+        }
+        search = suffix;
+    }
+    None
+}
+
+// A label definition is distinguished from a reference to it by the newline that
+// always follows the defining colon. This must NOT be a column-0 test: two of the
+// five call_return_ emission sites write the label inline, immediately after a
+// preceding statement's `\n`, so an inline definition is never at column 0:
+//
+//   writeln!(output, "call_return_{entry:08X}:")                      // col 0
+//   "\ncall_return_{return_pc:08X}:\n{checkpoint}    goto label_..."   // inline
+//
+// whereas every reference is `case 0x...u: goto <label>;` and therefore ends in a
+// semicolon. The terminator is what separates the two, so the caller passes a
+// needle already carrying its trailing newline.
+fn find_label_definition(haystack: &str, from: usize, needle: &str) -> Option<usize> {
+    debug_assert!(needle.ends_with('\n'), "a label needle must carry its terminator");
+    haystack[from..].find(needle).map(|offset| from + offset)
+}
+
+fn apply_integer_gpr_residency(
+    address: u32,
+    body: &str,
+    entries: &BTreeSet<u32>,
+) -> Option<String> {
+    /// A subscript is directly indexed only when it is entirely decimal digits.
+    /// That is the whole test: a directly indexed access is an lvalue or an
+    /// rvalue of `resident_rN` either way, so no read/write distinction is
+    /// required here.
+    fn literal_index(spec: &str) -> Option<u32> {
+        if spec.is_empty() || !spec.bytes().all(|byte| byte.is_ascii_digit()) {
+            return None;
+        }
+        spec.parse::<u32>().ok().filter(|index| *index < 32)
+    }
+
+    // Interior entry labels, as the emitter writes them. An entry outside the
+    // function's own range has no label in this body and is skipped rather than
+    // treated as an error.
+    let entry_labels: Vec<String> = entries
+        .iter()
+        .filter_map(|entry| {
+            entry
+                .checked_sub(address)
+                .filter(|offset| *offset % 4 == 0)
+                .map(|offset| format!("label_{:08X}:", address + offset))
+        })
+        .collect();
+    // A call that can observe the register file directly. Every one of these
+    // takes `context` as an argument; no guest load, guest store or
+    // condition-register helper does.
+    for callee in [
+        "call_guest(",
+        "call_guest_cached(",
+        "native_",
+        "branch_checkpoint(",
+        "branch_checkpoint_taken(",
+        "architectural_interrupt_checkpoint(",
+        "enter_guest_function(",
+        // A direct guest call. The emitter writes these as
+        // `rmge01::fn_XXXXXXXX(context, memory, services)` (`emit_resolved_generated_direct_call`,
+        // the tail-call and particle/JPA paths), i.e. the callee is handed the
+        // caller's `context` and will read its arguments out of `context->gpr[3..]`
+        // and publish its result back into `context->gpr[3]`. Renaming the caller's
+        // operand to a local would therefore publish stale arguments and then
+        // clobber the callee's result on writeback. Both directions are silent:
+        // the C++ still compiles and the module still loads.
+        //
+        // These were missing. The reason it went unnoticed is structural: the
+        // fenced implementation (`lower_resident_integer_direct_calls`, which syncs
+        // around direct calls with `emit_resident_gpr_sync`) is gated on
+        // `guest_resident_leaf` -- default `false`, and never set by the installer
+        // -- while this function is the one reached through the general
+        // `guest_resident_integer` option. The only tests that assert the fence
+        // call that other function directly, so they passed. See
+        // `AgentWork/agent-21/A21-9-*.md`.
+        //
+        // `guest_resident_integer` is `false` today (A23-7 measured the transform
+        // net-negative), so this list entry is dormant rather than load-bearing.
+        // It is here because that option is explicitly expected to be revisited
+        // once the emitted code has longer call-free straight-line runs, and a
+        // silent misexecution is not something a re-enable should have to
+        // rediscover.
+        //
+        // The net-negative result was re-derived structurally rather than trusted
+        // (AgentWork/agent-23/52-residency-resolved.md). Counting this function's
+        // own operand sets over the real module -- `U` loads at entry,
+        // `U * label_` reloads, and `W` stores per `call_return_` and per return --
+        // reproduces the earlier `saved` figure to 0.006 % (676,660 against
+        // 676,620) and gives `added` of at least 1.17x it. So the net is negative
+        // under either estimate of the writeback multiplicity.
+        //
+        // The reason is CALL DENSITY, not register reuse: the real module averages
+        // 5.16 written registers against 4.219 `call_return_` continuations and
+        // 1.683 returns per body, so every call publishes the locals and every
+        // continuation publishes them again. Extending this transform to more
+        // bodies cannot help while a body calls out ~4.2 times. The lever that
+        // could is narrowing the fence list above: each entry removed is up to
+        // `W` stores saved per call site. That requires proving the callee never
+        // observes `context->gpr[]`, which is why the list is conservative.
+        //
+        // Cheap and correct now. The better fix, when someone wants the coverage
+        // this gives up, is to make a direct call a sync point here: publish
+        // `store_lines` before it and reload `loads` after it, exactly as
+        // `emit_resident_gpr_sync` already does.
+        "rmge01::fn_",
+        "call_guest_resolved(",
+        "call_guest_direct_resolved(",
+        // Both of these take a `const PpcContext*` and only read it, so they
+        // are safe today. They are listed anyway so that a future edit which
+        // gives either one a non-const context cannot silently invalidate the
+        // writeback set of every body they appear in.
+        "trace_audio_function_entry(",
+        "trace_movie_function_entry(",
+    ] {
+        if body.contains(callee) {
+            return None;
+        }
+    }
+
+    const OPEN: &str = "context->gpr[";
+    let mut rewritten = String::with_capacity(body.len() + body.len() / 64);
+    let mut cursor = 0usize;
+    let mut used = [false; 32];
+    let mut renamed = 0usize;
+    while let Some(found) = body[cursor..].find(OPEN) {
+        let start = cursor + found;
+        let after_bracket = start + OPEN.len();
+        let Some(close_offset) = body[after_bracket..].find(']') else {
+            break;
+        };
+        let close = after_bracket + close_offset;
+        let spec = &body[after_bracket..close];
+        let Some(index) = literal_index(spec) else {
+            // Runtime-indexed access: reject the whole body rather than emit a
+            // mixture of resident and memory register state.
+            return None;
+        };
+        rewritten.push_str(&body[cursor..start]);
+        let _ = write!(rewritten, "resident_r{index}");
+        used[index as usize] = true;
+        cursor = close + 1;
+        renamed += 1;
+    }
+    if renamed == 0 {
+        return None;
+    }
+    rewritten.push_str(&body[cursor..]);
+
+    // Only the registers this body actually names get a local and a load. A
+    // typical translated function touches a handful of the 32, so this keeps
+    // the added stack traffic proportional to real register use instead of
+    // charging every function for all 32. The host compiler removes any local
+    // it proves dead.
+    // Two renderings of the same reload, because the two places it is emitted
+    // are in different scopes:
+    //
+    //   * at the function's normal entry the locals do not exist yet, so they are
+    //     *declared* there;
+    //   * at an interior-entry label they already exist, so they are only
+    //     *assigned*. Emitting the declaring form there is a redefinition
+    //     (C2374/C2086), which is what a body carrying an `entries` set hits the
+    //     moment it becomes eligible.
+    let mut loads = String::new();
+    let mut load_assignments = String::new();
+    for index in 0..32u32 {
+        if !used[index as usize] {
+            continue;
+        }
+        let _ = writeln!(
+            loads,
+            "    std::uint32_t resident_r{index} = context->gpr[{index}];"
+        );
+        let _ = writeln!(
+            load_assignments,
+            "    resident_r{index} = context->gpr[{index}];"
+        );
+    }
+    // Write back only the registers this body *writes*. A register that is only
+    // read still holds the value loaded at entry and can never have diverged:
+    // the eligibility rule above rejects every call that receives `context`, so
+    // nothing between the load and the return can change `context->gpr[]`
+    // behind this body's back. Omitting read-only registers is therefore both
+    // correct and narrower -- storing one back would clobber whatever a callee
+    // published into it before this function returned.
+    let mut store_lines: Vec<String> = Vec::new();
+    for index in 0..32u32 {
+        if !used[index as usize] {
+            continue;
+        }
+        let mut probe = String::with_capacity(24);
+        let _ = write!(probe, "resident_r{index} =");
+        // `resident_rN ==` is a comparison, not a store. Reject a doubled '='.
+        let assigned = rewritten.match_indices(&probe).any(|(offset, _)| {
+            !rewritten[offset + probe.len()..].starts_with('=')
+        });
+        if assigned {
+            store_lines.push(format!("context->gpr[{index}] = resident_r{index};"));
+        }
+    }
+    if store_lines.is_empty() {
+        return None;
+    }
+
+    // Place the loads at the normal entry, at *function scope*.
+    //
+    // This function is handed one of two shapes, and they must be distinguished
+    // by content rather than assumed:
+    //
+    //   * `lower_words_with_config` hands over the instruction stream only, so
+    //     the text starts with `    {` (or an interior-entry dispatch). The loads
+    //     go at offset 0.
+    //   * A complete function body starts with its signature line. The loads go
+    //     after the prologue, i.e. after the signature and any prologue text,
+    //     and before the first instruction block.
+    //
+    // Getting this wrong is not a formatting nit. Splicing the declarations
+    // *inside* the first `    { ... }` instruction block put every `resident_rN`
+    // out of scope at that block's closing brace, so the generated module failed
+    // to compile outright -- C2065 on every later use, across the whole module.
+    // The test bodies all carried signatures while the real generator passed
+    // bare instruction streams, which is exactly why the tests stayed green
+    // while the module could not build. Do not reintroduce a signature-shaped
+    // assumption here; `residency_declarations_land_at_function_scope_not_inside_a_block`
+    // pins both shapes.
+    let prologue_end = if body.starts_with("void ") || body.starts_with("[[") {
+        // A complete body: skip the signature line, then any prologue text the
+        // renderer emits (unused-parameter casts), and stop before the first
+        // instruction block. A dispatch switch ends at `goto fpu_normal_entry_`,
+        // which is the last prologue element when it is present.
+        let signature_end = body.find('\n').map_or(0, |newline| newline + 1);
+        let mut end = signature_end;
+        for cast in [
+            "    static_cast<void>(context);\n",
+            "    static_cast<void>(memory);\n",
+            "    static_cast<void>(services);\n",
+        ] {
+            if body.get(end..).is_some_and(|rest| rest.starts_with(cast)) {
+                end += cast.len();
+            }
+        }
+        if let Some(goto_at) = body.find("    goto fpu_normal_entry_") {
+            end = end.max(goto_at);
+        }
+        end
+    } else {
+        0
+    };
+    let (prefix, rest) = rewritten.split_at(prologue_end);
+
+    // Both label kinds need the locals repaired, for the same reason: the host
+    // arrived from outside this body, so memory is authoritative and the locals
+    // may be stale.
+    //
+    //   * an interior entry jumps to `label_<entry>` past the prologue, so the
+    //     locals have never been loaded at all;
+    //   * a `call_return_<pc>` continuation is entered after a nested guest call
+    //     ran, and that call updated `context->gpr[]` while the locals kept
+    //     their pre-call values.
+    //
+    // At an entry the locals are loaded; at a continuation they are written
+    // back. No other label needs anything, because every other label is a
+    // branch target inside this body and a branch does not touch the register
+    // file.
+    //
+    // This is a single left-to-right pass. `reload_cursor` advances past the
+    // inserted text, so a label introduced by one insert is never re-matched,
+    // and the writeback lines contain no label or gpr access of their own.
+    let mut reloaded = String::with_capacity(
+        rest.len() + entry_labels.len() * load_assignments.len() + rest.len() / 32,
+    );
+    let mut reload_cursor = 0usize;
+    loop {
+        let entry = entry_labels
+            .iter()
+            .filter_map(|label| {
+                find_label_definition(rest, reload_cursor, &format!("{label}\n"))
+                    .map(|offset| (offset, &rest[offset..offset + label.len()], false))
+            })
+            .min_by_key(|(offset, _, _)| *offset);
+        let continuation = call_return_label_end(rest, reload_cursor).and_then(|end| {
+            rest[..end - 1]
+                .rfind("call_return_")
+                .map(|name_start| (name_start, &rest[name_start..end], true))
+        });
+        let next = match (entry, continuation) {
+            (Some(a), Some(b)) => Some(if a.0 <= b.0 { a } else { b }),
+            (Some(a), None) => Some(a),
+            (None, Some(b)) => Some(b),
+            (None, None) => None,
+        };
+        let Some((at, label, is_continuation)) = next else {
+            break;
+        };
+        let after = at + label.len();
+        reloaded.push_str(&rest[reload_cursor..after]);
+        reloaded.push('\n');
+        if is_continuation {
+            for line in &store_lines {
+                reloaded.push_str(line);
+                reloaded.push('\n');
+            }
+        } else {
+            // An interior entry: the locals already exist at function scope, so
+            // this must assign, not re-declare them.
+            reloaded.push_str(&load_assignments);
+        }
+        reload_cursor = after;
+    }
+    reloaded.push_str(&rest[reload_cursor..]);
+    let rest = reloaded.as_str();
+
+    let mut output = String::with_capacity(rewritten.len() + loads.len() + rest.len());
+    output.push_str(prefix);
+    output.push_str(&loads);
+    let mut returned = false;
+    let mut cursor = 0usize;
+    // Two exits with nothing between them would otherwise each carry a full
+    // writeback set even though no local changed in between. Measured over 60
+    // shards, 1,383 of 2,707 bodies emitted such a duplicate pair -- 44,067
+    // redundant stores. They are dead (the same unchanged value written twice,
+    // so the compiler removes the first), but they are pure code-size growth on
+    // an already 51 MB module, so a set is emitted only when the locals may have
+    // moved since the previous one.
+    let mut last_writeback = 0usize;
+    // Match only a `return;` that stands alone on its line. That is exactly the set
+    // of true function exits, and every generated body ends with an indented
+    // `return;` alone on its line immediately before the closing brace.
+    //
+    // A substring search for `return;` is not equivalent: it also matches a
+    // `return;` that shares its line with other code, and the splice then lands at
+    // the start of that line instead of on the `return;` -- so the writeback runs on
+    // paths that never return. Measured over the first 40 shards of the retained
+    // module: 81 of 4 045 `return;` occurrences are mid-line, in exactly two shapes,
+    // `if ((true) && (galaxy::cr_bit(...))) return;` and `default: return;`.
+    // Neither is a function exit, so neither may carry a writeback.
+    //
+    // This walks lines rather than searching for the token, so a mid-line `return;`
+    // is skipped without being able to disturb the cursor. `line_start` is still the
+    // start of the `return;` line, so the `last_writeback` bookkeeping below is
+    // unchanged.
+    while cursor < rest.len() {
+        let line_start = cursor;
+        let line_end = rest[line_start..]
+            .find('\n')
+            .map_or(rest.len(), |offset| line_start + offset);
+        let line = &rest[line_start..line_end];
+        // Explicit rather than `trim_end()`: the exit test must not depend on how a
+        // trimming helper classifies whitespace, and this states the real condition
+        // -- the line ends with `return;` and everything before it is indentation.
+        if !line.ends_with("return;")
+            || !line[..line.len() - "return;".len()]
+                .bytes()
+                .all(|byte| byte == b' ' || byte == b'\t')
+        {
+            // Copy the skipped line INCLUDING its trailing newline. Advancing the
+            // cursor past the newline without emitting it would silently strip every
+            // newline before an exit while leaving non-exit lines untouched, which is
+            // still valid C++ but destroys the body formatting.
+            let copy_end = if line_end < rest.len() { line_end + 1 } else { line_end };
+            output.push_str(&rest[cursor..copy_end]);
+            cursor = copy_end;
+            continue;
+        }
+        // Everything before `return;` is indentation by construction, so this
+        // slice is the indent to reuse for the writeback lines.
+        let indent = &line[..line.len() - "return;".len()];
+        output.push_str(&rest[cursor..line_start]);
+        // A label means control arrived from elsewhere; `resident_r` means a
+        // local was named, which covers both a write and a re-read. Either way
+        // the previous set no longer describes this exit.
+        let since_previous = &rest[last_writeback..line_start];
+        if !returned || since_previous.contains(':') || since_previous.contains("resident_r") {
+            for line in &store_lines {
+                output.push_str(indent);
+                output.push_str(line);
+                output.push('\n');
+            }
+            last_writeback = line_start;
+        }
+        output.push_str(indent);
+        output.push_str("return;");
+        // Carry the exit line's newline through. `rest[cursor..]` is appended after
+        // the loop, so without this the trailing text would be glued onto `return;`.
+        if line_end < rest.len() {
+            output.push('\n');
+            cursor = line_end + 1;
+        } else {
+            cursor = rest.len();
+        }
+        returned = true;
+    }
+    if !returned {
+        // A body that faults through every path has no exit to attach the
+        // writeback to; keep the original text rather than inventing one.
+        return None;
+    }
+    output.push_str(&rest[cursor..]);
+    Some(output)
+}
+
+/// Apply straight-line GPR residency to one lowered body when the option is on.
+/// Returns the body unchanged otherwise, and also when the body is not eligible,
+/// so an ineligible function costs one string scan and no allocation.
+fn apply_residency_to_body(
+    address: u32,
+    body: String,
+    entries: &BTreeSet<u32>,
+    options: &ModuleTranslationOptions,
+) -> String {
+    if !options.guest_resident_integer {
+        return body;
+    }
+    match apply_integer_gpr_residency(address, &body, entries) {
+        Some(resident) => resident,
+        None => body,
+    }
+}
+
 fn lower_words_with_config(
     address: u32,
     bytes: &[u8],
@@ -2375,6 +2927,9 @@ fn lower_words_with_config(
         local_lane_profile,
         flat_ram_reads,
         fused_paired_binary,
+        indexed_paired_binary,
+        indexed_paired_ternary,
+        fused_paired_ternary,
         inline_scalar_single_binary,
         typed_region_gpr_mask,
     } = config;
@@ -2816,17 +3371,19 @@ fn lower_words_with_config(
                     true,
                     immediate_override,
                 )?;
-                let load = integer_guest_load_expression(
-                    4,
-                    &format!("{ea} + (reg - {target}u) * 4u"),
-                    pc,
-                    flat_ram_reads,
-                );
-                writeln!(
-                    output,
-                    "    for (std::uint32_t reg = {target}u; reg < 32u; ++reg) {{\n        context->gpr[reg] = {load};\n    }}"
-                )
-                .map_err(|_| TranslationError::Formatting)?;
+                if flat_ram_reads || target > 16 {
+                    // Preserve the flat-read experiment and small scalar suffixes.
+                    let load = integer_guest_load_expression(
+                        4, &format!("{ea} + (reg - {target}u) * 4u"), pc, flat_ram_reads,
+                    );
+                    writeln!(output,
+                        "    for (std::uint32_t reg = {target}u; reg < 32u; ++reg) {{\n        context->gpr[reg] = {load};\n    }}")
+                        .map_err(|_| TranslationError::Formatting)?;
+                } else {
+                    writeln!(output,
+                        "    galaxy::guest_load_multiple_gprs<{target}u>(context, memory, {ea}, services, 0x{pc:08X}u);")
+                        .map_err(|_| TranslationError::Formatting)?;
+                }
             }
             Opcode::Stb
             | Opcode::Stbu
@@ -2887,11 +3444,15 @@ fn lower_words_with_config(
                     true,
                     immediate_override,
                 )?;
-                writeln!(
-                    output,
-                    "    for (std::uint32_t reg = {source}u; reg < 32u; ++reg) {{\n        galaxy::guest_store_u32(memory, {ea} + (reg - {source}u) * 4u, context->gpr[reg], services, 0x{pc:08X}u);\n    }}"
-                )
-                .map_err(|_| TranslationError::Formatting)?;
+                if source <= 24 {
+                    writeln!(output,
+                        "    galaxy::guest_store_multiple_gprs<{source}u>(context, memory, {ea}, services, 0x{pc:08X}u);")
+                        .map_err(|_| TranslationError::Formatting)?;
+                } else {
+                    writeln!(output,
+                        "    for (std::uint32_t reg = {source}u; reg < 32u; ++reg) {{\n        galaxy::guest_store_u32(memory, {ea} + (reg - {source}u) * 4u, context->gpr[reg], services, 0x{pc:08X}u);\n    }}")
+                        .map_err(|_| TranslationError::Formatting)?;
+                }
             }
             Opcode::Lbzx
             | Opcode::Lbzux
@@ -3373,10 +3934,19 @@ fn lower_words_with_config(
                     instruction.op,
                     Opcode::Fmadds | Opcode::Fmsubs | Opcode::Fnmadds | Opcode::Fnmsubs
                 );
-                if single {
+                if single && local_lane_profile != LocalLaneProfile::None {
+                    // This guarded local-lane proof already establishes exact
+                    // binary32 sources and consumes these captured expressions.
                     writeln!(
                         output,
                         "    const std::uint32_t multiplicand = galaxy::require_single_precision_bits(context->fpr_bits[{multiplicand}], services, 0x{pc:08X}u);\n    const std::uint32_t multiplier = galaxy::require_single_precision_bits(context->fpr_bits[{multiplier}], services, 0x{pc:08X}u);\n    const std::uint32_t addend = galaxy::require_single_precision_bits(context->fpr_bits[{addend}], services, 0x{pc:08X}u);\n    const galaxy::PpcFloatResult result = galaxy::ppc_f32_ternary(galaxy::PpcFloatTernaryOperation::{operation}, multiplicand, multiplier, addend, context->fpscr);\n    galaxy::ppc_commit_scalar_result(context, {target}u, result, true, {}, services, 0x{pc:08X}u);",
+                        record_bit(word)
+                    )
+                    .map_err(|_| TranslationError::Formatting)?;
+                } else if single {
+                    writeln!(
+                        output,
+                        "    galaxy::ppc_commit_scalar_single_ternary(context, {target}u, galaxy::PpcFloatTernaryOperation::{operation}, {multiplicand}u, {multiplier}u, {addend}u, {}, services, 0x{pc:08X}u);",
                         record_bit(word)
                     )
                     .map_err(|_| TranslationError::Formatting)?;
@@ -3539,11 +4109,29 @@ fn lower_words_with_config(
                         record_bit(word)
                     )
                 };
+                if indexed_paired_binary && !fused_paired_binary {
+                    let operation_index = match instruction.op {
+                        Opcode::PsAdd => 0u32,
+                        Opcode::PsSub => 1,
+                        Opcode::PsMul | Opcode::PsMuls0 | Opcode::PsMuls1 => 2,
+                        Opcode::PsDiv => 3,
+                        _ => unreachable!(),
+                    };
+                    let descriptor = target | (left << 5) | (right << 10)
+                        | (operation_index << 15)
+                        | (u32::from(right_lane0 == "ps1_bits") << 17)
+                        | (u32::from(right_lane1 == "ps1_bits") << 18)
+                        | (u32::from(record_bit(word)) << 19);
+                    writeln!(output,
+                        "    galaxy::ppc_execute_indexed_paired_binary(context, 0x{descriptor:05X}u, services, 0x{pc:08X}u);")
+                        .map_err(|_| TranslationError::Formatting)?;
+                } else {
                 writeln!(
                     output,
                     "    galaxy::require_paired_single_mode(context, false, services, 0x{pc:08X}u);\n    const std::uint32_t left_ps0 = galaxy::require_single_precision_bits(context->fpr_bits[{left}], services, 0x{pc:08X}u);\n    const std::uint32_t left_ps1 = galaxy::require_single_precision_bits(context->ps1_bits[{left}], services, 0x{pc:08X}u);\n    const std::uint32_t right_ps0 = galaxy::require_single_precision_bits(context->{right_lane0}[{right}], services, 0x{pc:08X}u);\n    const std::uint32_t right_ps1 = galaxy::require_single_precision_bits(context->{right_lane1}[{right}], services, 0x{pc:08X}u);\n{arithmetic}"
                 )
                 .map_err(|_| TranslationError::Formatting)?;
+                }
             }
             Opcode::PsMadd
             | Opcode::PsMsub
@@ -3572,12 +4160,40 @@ fn lower_words_with_config(
                 } else {
                     "ps1_bits"
                 };
+                let arithmetic = if fused_paired_ternary {
+                    format!(
+                        "    galaxy::ppc_commit_paired_ternary_result(context, {target}u, galaxy::PpcFloatTernaryOperation::{operation}, multiplicand_ps0, multiplicand_ps1, multiplier_ps0, multiplier_ps1, addend_ps0, addend_ps1, {}, services, 0x{pc:08X}u);",
+                        record_bit(word)
+                    )
+                } else {
+                    format!(
+                        "    const galaxy::PpcFloatResult result_ps0 = galaxy::ppc_f32_ternary(galaxy::PpcFloatTernaryOperation::{operation}, multiplicand_ps0, multiplier_ps0, addend_ps0, context->fpscr);\n    const galaxy::PpcFloatResult result_ps1 = galaxy::ppc_f32_ternary(galaxy::PpcFloatTernaryOperation::{operation}, multiplicand_ps1, multiplier_ps1, addend_ps1, context->fpscr);\n    galaxy::ppc_commit_paired_result(context, {target}u, result_ps0, result_ps1, false, {}, services, 0x{pc:08X}u);",
+                        record_bit(word)
+                    )
+                };
+                if indexed_paired_ternary && !fused_paired_ternary {
+                    let operation_index = match instruction.op {
+                        Opcode::PsMadd | Opcode::PsMadds0 | Opcode::PsMadds1 => 0u32,
+                        Opcode::PsMsub => 1,
+                        Opcode::PsNmadd => 2,
+                        Opcode::PsNmsub => 3,
+                        _ => unreachable!(),
+                    };
+                    let descriptor = target | (multiplicand << 5) | (multiplier << 10)
+                        | (addend << 15) | (operation_index << 20)
+                        | (u32::from(multiplier_lane0 == "ps1_bits") << 22)
+                        | (u32::from(multiplier_lane1 == "ps1_bits") << 23)
+                        | (u32::from(record_bit(word)) << 24);
+                    writeln!(output,
+                        "    galaxy::ppc_execute_indexed_paired_ternary(context, 0x{descriptor:07X}u, services, 0x{pc:08X}u);")
+                        .map_err(|_| TranslationError::Formatting)?;
+                } else {
                 writeln!(
                     output,
-                    "    galaxy::require_paired_single_mode(context, false, services, 0x{pc:08X}u);\n    const std::uint32_t multiplicand_ps0 = galaxy::require_single_precision_bits(context->fpr_bits[{multiplicand}], services, 0x{pc:08X}u);\n    const std::uint32_t multiplicand_ps1 = galaxy::require_single_precision_bits(context->ps1_bits[{multiplicand}], services, 0x{pc:08X}u);\n    const std::uint32_t multiplier_ps0 = galaxy::require_single_precision_bits(context->{multiplier_lane0}[{multiplier}], services, 0x{pc:08X}u);\n    const std::uint32_t multiplier_ps1 = galaxy::require_single_precision_bits(context->{multiplier_lane1}[{multiplier}], services, 0x{pc:08X}u);\n    const std::uint32_t addend_ps0 = galaxy::require_single_precision_bits(context->fpr_bits[{addend}], services, 0x{pc:08X}u);\n    const std::uint32_t addend_ps1 = galaxy::require_single_precision_bits(context->ps1_bits[{addend}], services, 0x{pc:08X}u);\n    const galaxy::PpcFloatResult result_ps0 = galaxy::ppc_f32_ternary(galaxy::PpcFloatTernaryOperation::{operation}, multiplicand_ps0, multiplier_ps0, addend_ps0, context->fpscr);\n    const galaxy::PpcFloatResult result_ps1 = galaxy::ppc_f32_ternary(galaxy::PpcFloatTernaryOperation::{operation}, multiplicand_ps1, multiplier_ps1, addend_ps1, context->fpscr);\n    galaxy::ppc_commit_paired_result(context, {target}u, result_ps0, result_ps1, false, {}, services, 0x{pc:08X}u);",
-                    record_bit(word)
+                    "    galaxy::require_paired_single_mode(context, false, services, 0x{pc:08X}u);\n    const std::uint32_t multiplicand_ps0 = galaxy::require_single_precision_bits(context->fpr_bits[{multiplicand}], services, 0x{pc:08X}u);\n    const std::uint32_t multiplicand_ps1 = galaxy::require_single_precision_bits(context->ps1_bits[{multiplicand}], services, 0x{pc:08X}u);\n    const std::uint32_t multiplier_ps0 = galaxy::require_single_precision_bits(context->{multiplier_lane0}[{multiplier}], services, 0x{pc:08X}u);\n    const std::uint32_t multiplier_ps1 = galaxy::require_single_precision_bits(context->{multiplier_lane1}[{multiplier}], services, 0x{pc:08X}u);\n    const std::uint32_t addend_ps0 = galaxy::require_single_precision_bits(context->fpr_bits[{addend}], services, 0x{pc:08X}u);\n    const std::uint32_t addend_ps1 = galaxy::require_single_precision_bits(context->ps1_bits[{addend}], services, 0x{pc:08X}u);\n{arithmetic}"
                 )
                 .map_err(|_| TranslationError::Formatting)?;
+                }
             }
             Opcode::PsSum0 | Opcode::PsSum1 => {
                 let target = gpr_rt(word);
@@ -3632,7 +4248,7 @@ fn lower_words_with_config(
                 };
                 writeln!(
                     output,
-                    "    galaxy::require_paired_single_mode(context, false, services, 0x{pc:08X}u);\n    const std::uint32_t source_ps0 = galaxy::require_single_precision_bits(context->fpr_bits[{source}], services, 0x{pc:08X}u);\n    const std::uint32_t source_ps1 = galaxy::require_single_precision_bits(context->ps1_bits[{source}], services, 0x{pc:08X}u);\n    const galaxy::PpcFloatResult result_ps0 = galaxy::{helper}(source_ps0, context->fpscr);\n    const galaxy::PpcFloatResult result_ps1 = galaxy::{helper}(source_ps1, context->fpscr);\n    galaxy::ppc_commit_paired_result(context, {target}u, result_ps0, result_ps1, false, {}, services, 0x{pc:08X}u);",
+                    "    galaxy::require_paired_single_mode(context, false, services, 0x{pc:08X}u);\n    const std::uint32_t source_ps0 = galaxy::require_single_precision_bits(context->fpr_bits[{source}], services, 0x{pc:08X}u);\n    const std::uint32_t source_ps1 = galaxy::require_single_precision_bits(context->ps1_bits[{source}], services, 0x{pc:08X}u);\n    const galaxy::PpcFloatResult result_ps0 = galaxy::{helper}(source_ps0, context->fpscr);\n    const galaxy::PpcFloatResult result_ps1 = galaxy::{helper}(source_ps1, context->fpscr);\n    galaxy::ppc_commit_paired_estimate_result(context, {target}u, result_ps0, result_ps1, {}, services, 0x{pc:08X}u);",
                     record_bit(word)
                 )
                 .map_err(|_| TranslationError::Formatting)?;
@@ -3814,14 +4430,18 @@ fn lower_words_with_config(
                     Opcode::Add => {
                         writeln!(
                             output,
-                            "    context->gpr[{target}] = context->gpr[{left}] + context->gpr[{right}];"
+                            "    context->gpr[{target}] = {} + {};",
+                            gpr_u32_value_expression(left),
+                            gpr_u32_value_expression(right)
                         )
                         .map_err(|_| TranslationError::Formatting)?;
                     }
                     Opcode::Addc => {
                         writeln!(
                             output,
-                            "    const std::uint64_t result = static_cast<std::uint64_t>(context->gpr[{left}]) + context->gpr[{right}];"
+                            "    const std::uint64_t result = static_cast<std::uint64_t>({}) + {};",
+                            gpr_u32_value_expression(left),
+                            gpr_u32_value_expression(right)
                         )
                         .map_err(|_| TranslationError::Formatting)?;
                         writeln!(
@@ -3835,19 +4455,23 @@ fn lower_words_with_config(
                     Opcode::Subf => {
                         writeln!(
                             output,
-                            "    context->gpr[{target}] = context->gpr[{right}] - context->gpr[{left}];"
+                            "    context->gpr[{target}] = {} - {};",
+                            gpr_u32_value_expression(right),
+                            gpr_u32_value_expression(left)
                         )
                         .map_err(|_| TranslationError::Formatting)?;
                     }
                     Opcode::Subfc => {
                         writeln!(
                             output,
-                            "    const std::uint32_t left_value = context->gpr[{left}];"
+                            "    const std::uint32_t left_value = {};",
+                            gpr_u32_value_expression(left)
                         )
                         .map_err(|_| TranslationError::Formatting)?;
                         writeln!(
                             output,
-                            "    const std::uint32_t right_value = context->gpr[{right}];"
+                            "    const std::uint32_t right_value = {};",
+                            gpr_u32_value_expression(right)
                         )
                         .map_err(|_| TranslationError::Formatting)?;
                         writeln!(
@@ -3862,7 +4486,9 @@ fn lower_words_with_config(
                     Opcode::Mullw => {
                         writeln!(
                             output,
-                            "    const std::int64_t result = static_cast<std::int64_t>(static_cast<std::int32_t>(context->gpr[{left}])) * static_cast<std::int32_t>(context->gpr[{right}]);"
+                            "    const std::int64_t result = static_cast<std::int64_t>({}) * {};",
+                            gpr_s32_value_expression(left),
+                            gpr_s32_value_expression(right)
                         )
                         .map_err(|_| TranslationError::Formatting)?;
                         writeln!(
@@ -3874,7 +4500,8 @@ fn lower_words_with_config(
                     Opcode::Neg => {
                         writeln!(
                             output,
-                            "    context->gpr[{target}] = 0u - context->gpr[{left}];"
+                            "    context->gpr[{target}] = 0u - {};",
+                            gpr_u32_value_expression(left)
                         )
                         .map_err(|_| TranslationError::Formatting)?;
                     }
@@ -4001,7 +4628,8 @@ fn lower_words_with_config(
                     Opcode::Addic | Opcode::Addic_ => {
                         writeln!(
                             output,
-                            "    const std::uint64_t result = static_cast<std::uint64_t>(context->gpr[{source}]) + 0x{immediate:08X}u;"
+                            "    const std::uint64_t result = static_cast<std::uint64_t>({}) + 0x{immediate:08X}u;",
+                            gpr_u32_value_expression(source)
                         )
                         .map_err(|_| TranslationError::Formatting)?;
                         writeln!(
@@ -4022,7 +4650,8 @@ fn lower_words_with_config(
                     Opcode::Subfic => {
                         writeln!(
                             output,
-                            "    const std::uint32_t source_value = context->gpr[{source}];"
+                            "    const std::uint32_t source_value = {};",
+                            gpr_u32_value_expression(source)
                         )
                         .map_err(|_| TranslationError::Formatting)?;
                         writeln!(
@@ -4039,7 +4668,8 @@ fn lower_words_with_config(
                     Opcode::Mulli => {
                         writeln!(
                             output,
-                            "    const std::int64_t result = static_cast<std::int64_t>(static_cast<std::int32_t>(context->gpr[{source}])) * static_cast<std::int32_t>(0x{immediate:08X}u);"
+                            "    const std::int64_t result = static_cast<std::int64_t>({}) * static_cast<std::int32_t>(0x{immediate:08X}u);",
+                            gpr_s32_value_expression(source)
                         )
                         .map_err(|_| TranslationError::Formatting)?;
                         writeln!(
@@ -4063,6 +4693,15 @@ fn lower_words_with_config(
                     |access| access.second_source.expect("or second source"),
                 );
                 let expression = match instruction.op {
+                    // `or rA,rS,rS` IS the PowerPC register-to-register move.
+                    // Emitting `gpr[a] | gpr[a]` costs a redundant read of the
+                    // same 4-byte context slot plus a real OR on every `mr` in
+                    // the stream (253 occurrences in one 15k-line shard of the
+                    // installed module). `x | x` is exactly `x` for unsigned
+                    // operands with no trap representation, so a plain copy is
+                    // the same architectural result. The record_bit CR0 update
+                    // below still consumes gpr[target] unchanged.
+                    Opcode::Or if source == rhs => format!("context->gpr[{source}]"),
                     Opcode::Or => format!("context->gpr[{source}] | context->gpr[{rhs}]"),
                     Opcode::Orc => format!("context->gpr[{source}] | ~context->gpr[{rhs}]"),
                     Opcode::And => format!("context->gpr[{source}] & context->gpr[{rhs}]"),
@@ -4249,11 +4888,33 @@ fn lower_words_with_config(
                 let mask_begin = (word >> 6) & 0x1F;
                 let mask_end = (word >> 1) & 0x1F;
                 let mask = rotate_mask(mask_begin, mask_end);
-                writeln!(
-                    output,
-                    "    context->gpr[{target}] = std::rotl(context->gpr[{source}], {shift}) & 0x{mask:08X}u;"
-                )
-                .map_err(|_| TranslationError::Formatting)?;
+                // Only the shift == 0 form is folded: `rotl(v, 0) & mask` is
+                // exactly `v & mask`, so the rotate disappears and
+                // `clrlwi`/`clrrwi`-style masks become a single `and`
+                // (7,115 sites module-wide).
+                //
+                // The rotate itself is NOT removable for shift != 0. A
+                // pre-rotated-mask rewrite was tried here and is WRONG for
+                // shift != 0: rotating `v` by any amount other than `shift`
+                // moves `v`'s bits relative to a mask whose position is fixed
+                // by MB/ME, so only `rotl(v, shift) & mask` reproduces the ISA.
+                // Verified exhaustively over all 32x32x32 (SH, MB, ME) triples
+                // and 12 operand patterns: the pre-rotated form mismatched
+                // 319,448 of 393,216 encodings, while this form matched all of
+                // them. Do not "optimize" the rotate amount again.
+                if shift == 0 {
+                    writeln!(
+                        output,
+                        "    context->gpr[{target}] = (context->gpr[{source}] & 0x{mask:08X}u);"
+                    )
+                    .map_err(|_| TranslationError::Formatting)?;
+                } else {
+                    writeln!(
+                        output,
+                        "    context->gpr[{target}] = std::rotl(context->gpr[{source}], {shift}) & 0x{mask:08X}u;"
+                    )
+                    .map_err(|_| TranslationError::Formatting)?;
+                }
                 if record_bit(word) {
                     writeln!(
                         output,
@@ -4269,12 +4930,24 @@ fn lower_words_with_config(
                 let mask_begin = (word >> 6) & 0x1F;
                 let mask_end = (word >> 1) & 0x1F;
                 let mask = rotate_mask(mask_begin, mask_end);
-                writeln!(
-                    output,
-                    "    context->gpr[{target}] = (std::rotl(context->gpr[{source}], {shift}) & 0x{mask:08X}u) | (context->gpr[{target}] & 0x{:08X}u);",
-                    !mask
-                )
-                .map_err(|_| TranslationError::Formatting)?;
+                // Same shift == 0 fold as `Rlwinm`, and the same warning: the
+                // rotate amount must stay exactly `shift`. See the comment on
+                // the `Rlwinm` arm for the exhaustive equivalence result.
+                if shift == 0 {
+                    writeln!(
+                        output,
+                        "    context->gpr[{target}] = (context->gpr[{target}] & 0x{:08X}u) | (context->gpr[{source}] & 0x{mask:08X}u);",
+                        !mask
+                    )
+                    .map_err(|_| TranslationError::Formatting)?;
+                } else {
+                    writeln!(
+                        output,
+                        "    context->gpr[{target}] = (std::rotl(context->gpr[{source}], {shift}) & 0x{mask:08X}u) | (context->gpr[{target}] & 0x{:08X}u);",
+                        !mask
+                    )
+                    .map_err(|_| TranslationError::Formatting)?;
+                }
                 if record_bit(word) {
                     writeln!(
                         output,
@@ -4716,7 +5389,7 @@ fn lower_words_with_config(
             lane_facts[1][lane] = false;
         }
         if let Some(access) = typed_pure_access {
-            cache_typed_region_instruction(&mut output, typed_instruction_start, pc, access)?;
+            cache_typed_region_instruction(&mut output, typed_instruction_start, pc, word, access)?;
         }
         output.push_str("    }\n");
         output.push_str(&post_block_hooks);
@@ -4962,20 +5635,32 @@ fn cache_local_paired_instruction(
                 "paired merge source has no exact binary32 producer",
             ));
         }
+        // Capture both original sources before updating either destination.
+        // target == right can otherwise overwrite lane0 needed by merge00/10.
         writeln!(
             output,
-            "    lane0[{target}] = lane{}[{}];",
-            sources[0].0, sources[0].1
-        )
-        .map_err(|_| TranslationError::Formatting)?;
-        writeln!(
-            output,
-            "    lane1[{target}] = lane{}[{}];",
-            sources[1].0, sources[1].1
+            "    const std::uint32_t cached_merge_ps0 = lane{}[{}];\n    const std::uint32_t cached_merge_ps1 = lane{}[{}];\n    lane0[{target}] = cached_merge_ps0;\n    lane1[{target}] = cached_merge_ps1;",
+            sources[0].0, sources[0].1, sources[1].0, sources[1].1
         )
         .map_err(|_| TranslationError::Formatting)?;
         facts[0][target] = true;
         facts[1][target] = true;
+    } else if profile == LocalLaneProfile::PsvecCross && op == Opcode::PsNeg {
+        let source = gpr_rb(word) as usize;
+        // Negation changes only the sign bit and preserves exact binary32
+        // provenance. Unknown source lanes must invalidate old target facts;
+        // they must never cause a read of an uninitialized local cache entry.
+        let known = [facts[0][source], facts[1][source]];
+        for lane in 0..2 {
+            if known[lane] {
+                writeln!(
+                    output,
+                    "    lane{lane}[{target}] = lane{lane}[{source}] ^ 0x80000000u;"
+                )
+                .map_err(|_| TranslationError::Formatting)?;
+            }
+            facts[lane][target] = known[lane];
+        }
     } else if profile == LocalLaneProfile::PsvecNormalize
         && matches!(op, Opcode::Fmuls | Opcode::Fnmsubs)
     {
@@ -5002,12 +5687,13 @@ fn cache_local_paired_instruction(
 // Checks symbolically that every memory access lies inside the initial RAM
 // spans checked by the emitted guard. Roots identify initial registers; root
 // zero is an absolute address.
-fn validate_psmtx_local_memory_contract(bytes: &[u8]) -> Result<(), TranslationError> {
+fn validate_psmtx_local_memory_contract(bytes: &[u8]) -> Result<BTreeMap<u32, (u32, i64)>, TranslationError> {
     let address = 0x804B_5F3C;
     let mut registers: [Option<(u32, i64)>; 32] = [None; 32];
     for register in [1, 3, 4, 5] {
         registers[register] = Some((register as u32, 0));
     }
+    let mut accesses = BTreeMap::new();
     let mut returned = false;
     for (index, chunk) in bytes.chunks_exact(4).enumerate() {
         let pc = address + index as u32 * 4;
@@ -5061,6 +5747,7 @@ fn validate_psmtx_local_memory_contract(bytes: &[u8]) -> Result<(), TranslationE
                     "memory access leaves the guarded read/write spans",
                 ));
             }
+            accesses.insert(pc, (root, start));
             if op == Opcode::Stwu {
                 if base != 1 || root != 1 || start != -64 {
                     return Err(local_paired_proof_error(
@@ -5086,7 +5773,89 @@ fn validate_psmtx_local_memory_contract(bytes: &[u8]) -> Result<(), TranslationE
             "missing complete terminal return",
         ));
     }
-    Ok(())
+    Ok(accesses)
+}
+
+
+// The symbolic verifier supplies each pointer offset; never infer non-aliasing
+// from the API arguments. The canonical context and original instruction order
+// remain live throughout this leaf. Entry guards exclude callbacks, traces and
+// enabled FP exceptions, and the verifier excludes calls/checkpoints/state writes.
+fn lower_psmtx_proven_memory(
+    mut body: String,
+    bytes: &[u8],
+    accesses: &BTreeMap<u32, (u32, i64)>,
+) -> Result<String, TranslationError> {
+    fn replace_once(body: &mut String, pc: u32, old: &str, new: &str) -> Result<(), TranslationError> {
+        if body.matches(old).count() != 1 {
+            return Err(local_paired_proof_error(pc, "proved matrix memory emission changed"));
+        }
+        *body = body.replacen(old, new, 1);
+        Ok(())
+    }
+    let arrays = "    std::uint32_t lane0[32]{};\n    std::uint32_t lane1[32]{};\n";
+    replace_once(&mut body, 0x804B_5F3C, arrays, "")?;
+    for (index, chunk) in bytes.chunks_exact(4).enumerate() {
+        let pc = 0x804B_5F3C + index as u32 * 4;
+        let word = u32::from_be_bytes(chunk.try_into().expect("four-byte instruction"));
+        let op = Ins::new(word, Extensions::gekko_broadway()).op;
+        for guard in [
+            format!("    galaxy::ensure_fpu_available(services, 0x{pc:08X}u, context, memory);\n"),
+            format!("    galaxy::require_paired_single_mode(context, false, services, 0x{pc:08X}u);\n"),
+        ] {
+            if body.matches(&guard).count() > 1 {
+                return Err(local_paired_proof_error(pc, "duplicate matrix guard emission"));
+            }
+            body = body.replace(&guard, "");
+        }
+        let Some(&(root, start)) = accesses.get(&pc) else { continue; };
+        let (pointer, offset) = match root {
+            1 => ("frame", start + 64),
+            3 => ("input0", start),
+            4 => ("input1", start),
+            5 => ("output", start),
+            0 => ("constant", start - 0x8069_E148),
+            _ => return Err(local_paired_proof_error(pc, "unproved matrix pointer root")),
+        };
+        let pointer = format!("{pointer} + {offset}u");
+        let register = gpr_rt(word);
+        let ea = if matches!(op, Opcode::PsqL | Opcode::PsqSt | Opcode::Stwu) {
+            format!("ea_{pc:08X}")
+        } else {
+            effective_address_expression(gpr_ra(word), signed_immediate(word))
+        };
+        let (old, new) = match op {
+            Opcode::PsqL => (
+                format!("    galaxy::psq_load(context, {register}u, memory, {ea}, 0u, false, true, services, 0x{pc:08X}u);"),
+                format!("    load_pair({register}u, {pointer});"),
+            ),
+            Opcode::PsqSt => (
+                format!("    galaxy::psq_store(context, {register}u, memory, {ea}, 0u, false, true, services, 0x{pc:08X}u);"),
+                format!("    store_pair({register}u, {pointer}, {ea});"),
+            ),
+            Opcode::Stwu => (
+                format!("    galaxy::guest_store_u32(memory, {ea}, context->gpr[{register}], services, 0x{pc:08X}u);"),
+                format!("    store_value({pointer}, context->gpr[{register}], {ea});"),
+            ),
+            Opcode::Stfd => (
+                format!("    galaxy::guest_store_u64(memory, {ea}, context->fpr_bits[{register}], services, 0x{pc:08X}u);"),
+                format!("    store_value({pointer}, context->fpr_bits[{register}], {ea});"),
+            ),
+            Opcode::Lfd => (
+                format!("galaxy::guest_load_u64(memory, {ea}, services, 0x{pc:08X}u)"),
+                format!("galaxy::guest_flat_load_bytes<std::uint64_t>({pointer}, 0u)"),
+            ),
+            _ => return Err(local_paired_proof_error(pc, "unexpected proved memory opcode")),
+        };
+        replace_once(&mut body, pc, &old, &new)?;
+        if op == Opcode::PsqL {
+            for (lane, field) in ["fpr_bits", "ps1_bits"].iter().enumerate() {
+                replace_once(&mut body, pc,
+                    &format!("    lane{lane}[{register}] = galaxy::narrow_f64_to_f32_bits(context->{field}[{register}], services, 0x{pc:08X}u);\n"), "")?;
+            }
+        }
+    }
+    Ok(format!("{PSMTX_PROVEN_MEMORY_SOURCE}{body}"))
 }
 
 // The cross-product guard checks two 12-byte input spans and one 12-byte
@@ -5361,6 +6130,15 @@ fn emit_direct_guest_call_with_exact_fpu(
                 "    galaxy::call_guest_resolved(services, 0x{target:08X}u, &rmge01::fn_{owner:08X}, context, memory, 0x{pc:08X}u);"
             )
             .map_err(|_| TranslationError::Formatting)?;
+            if target == 0x804A_381C && pc == 0x804A_B414 {
+                // Optional runtime protocol1 can return only after the full
+                // original load/RFI restored this same SelectThread frame.
+                // It must execute the original OSSaveContext return checkpoint
+                // and epilogue, not the abandoned OSLoadContext fallthrough.
+                output.push_str(
+                    "    if (context->pc == 0x804AB30Cu) goto call_return_804AB30C;\n",
+                );
+            }
             emit_post_call_hook(output, target, pc)
         } else {
             emit_resolved_generated_direct_call(output, target, owner, pc)?;
@@ -5642,6 +6420,7 @@ fn publishes_movie_boundary_target_pc(target: u32, pc: u32) -> bool {
 
 fn requires_host_guest_call_at(target: u32, pc: u32) -> bool {
     requires_host_guest_call(target)
+        || (target == 0x804A_B20C && pc == 0x804A_B468)
         || (target == 0x804B_9EC8 && pc == 0x8038_5AD8)
         || (target == 0x803A_29B8 && pc == 0x8034_BF8C)
         || (target == 0x8038_D1CC && pc == 0x8036_FDD4)
@@ -7971,6 +8750,55 @@ fn render_psvec_normalize_local_experiment(experiment: &PsvecNormalizeLocalExper
 // These are hand-written proof predicates over the existing native ABI, not
 // a matrix implementation. The arithmetic body is emitted from the user's
 // verified dump by the ordinary instruction lowerer.
+const PSMTX_PROVEN_MEMORY_SOURCE: &str = r#"
+    // Entry proof covers every access in this straight-line leaf. There are
+    // no guest calls, checkpoints, mapping changes or observable write callbacks.
+    // Keep loads/stores at their original instruction positions: buffers may alias.
+    std::byte* const input0 = galaxy::resolve_guest_fast(memory, context->gpr[3], 48u);
+    std::byte* const input1 = galaxy::resolve_guest_fast(memory, context->gpr[4], 48u);
+    std::byte* const output = galaxy::resolve_guest_fast(memory, context->gpr[5], 48u);
+    std::byte* const frame = galaxy::resolve_guest_fast(memory, context->gpr[1] - 64u, 64u);
+    std::byte* const constant = galaxy::resolve_guest_fast(memory, 0x8069E148u, 8u);
+    std::uint32_t lane0[32]{};
+    std::uint32_t lane1[32]{};
+    const auto load_pair = [&](unsigned target, const std::byte* direct) {
+        lane0[target] = galaxy::guest_flat_load_bytes<std::uint32_t>(direct, 0u);
+        context->fpr_bits[target] = galaxy::widen_f32_bits(lane0[target]);
+        lane1[target] = galaxy::guest_flat_load_bytes<std::uint32_t>(direct, 4u);
+        context->ps1_bits[target] = galaxy::widen_f32_bits(lane1[target]);
+    };
+    const auto store_value = [&](std::byte* direct, auto value, std::uint32_t address) {
+        using T = decltype(value);
+        T swapped;
+        if constexpr (sizeof(T) == 4u) swapped = galaxy::byte_swap_u32(value);
+        else swapped = galaxy::byte_swap_u64(value);
+        std::memcpy(direct, &swapped, sizeof(T));
+        galaxy::guest_notify_write(memory, address, sizeof(T));
+    };
+    const auto store_pair = [&](unsigned reg, std::byte* direct, std::uint32_t address) {
+        const auto first = galaxy::byte_swap_u32(galaxy::narrow_paired_single_ftz(context->fpr_bits[reg]));
+        std::memcpy(direct, &first, 4u);
+        std::uint32_t shared_page = 0u;
+        const bool combined = memory->notify_write != nullptr && memory->dirty_page_words != nullptr &&
+            galaxy::guest_tracker_single_page(address, 8u, memory->dirty_tracked_base,
+                memory->dirty_tracked_size, memory->dirty_page_shift, memory->dirty_page_word_count, shared_page);
+        if (memory->notify_write != nullptr && !combined) {
+            galaxy::guest_notify_write(memory, address, 4u);
+            const auto second = galaxy::byte_swap_u32(galaxy::narrow_paired_single_ftz(context->ps1_bits[reg]));
+            std::memcpy(direct + 4u, &second, 4u);
+            galaxy::guest_notify_write(memory, address + 4u, 4u);
+            return;
+        }
+        const auto second = galaxy::byte_swap_u32(galaxy::narrow_paired_single_ftz(context->ps1_bits[reg]));
+        std::memcpy(direct + 4u, &second, 4u);
+        if (combined) galaxy::guest_notify_write_pair_admitted(memory, address, shared_page);
+        else if (!galaxy::guest_notify_write_pair_same_page(memory, address)) {
+            galaxy::guest_notify_write(memory, address, 4u);
+            galaxy::guest_notify_write(memory, address + 4u, 4u);
+        }
+    };
+"#;
+
 const PSMTX_LOCAL_GUARD_SOURCE: &str = r#"
 bool psmtx_plain_ram_span(galaxy::GuestMemoryV1* memory,
     std::uint32_t address, std::uint32_t size) {
@@ -8008,6 +8836,9 @@ std::uint32_t psmtx_local_guard(const galaxy::PpcContext* context,
          galaxy::trace_fileloader_temp_writes_enabled() ||
          galaxy::trace_u32_store_enabled() ||
          galaxy::trace_audio_control_writes_enabled())) return 8u;
+    // Proven direct memory lowering retains diagnostic accesses in the fallback.
+    if (galaxy::trace_fileloader_stack_enabled() || galaxy::trace_fileloader_temp_writes_enabled() ||
+        galaxy::trace_u32_store_enabled() || galaxy::trace_audio_control_writes_enabled()) return 8u;
     const std::uint32_t frame = context->gpr[1] - 0x40u;
     if (!psmtx_plain_ram_span(memory, context->gpr[3], 48u)) return 9u;
     if (!psmtx_plain_ram_span(memory, context->gpr[4], 48u)) return 10u;
@@ -8352,8 +9183,14 @@ fn emit_sharded_module_with_experiment(
         .iter()
         .map(|(_, owner)| *owner)
         .collect::<BTreeSet<_>>();
-    let mut header = String::from(
-        "#pragma once\n\n#include \"galaxy/native_api.h\"\n#include \"galaxy/ppc_float.h\"\n\nnamespace rmge01 {\n\n",
+    let paired_ternary_include = if functions.iter().any(|(_, body)|
+        body.contains("galaxy::ppc_commit_paired_ternary_result(")) {
+        "#include \"galaxy/ppc_paired_float.h\"\n"
+    } else {
+        ""
+    };
+    let mut header = format!(
+        "#pragma once\n\n#include \"galaxy/native_api.h\"\n#include \"galaxy/ppc_float.h\"\n{paired_ternary_include}\nnamespace rmge01 {{\n\n",
     );
     for (function, _) in functions {
         writeln!(
@@ -8644,6 +9481,12 @@ fn emit_sharded_module_with_experiment(
          \x20   entry(context, memory, g_services);\n\
          }\n",
     );
+    // Optional capability, separate from the ABI23 service layout. Old modules
+    // omit it and the runtime declines the return protocol. Only this complete
+    // RMGE01 generator emits the corresponding exact SelectThread branch.
+    module.push_str(
+        "\nextern \"C\" GALAXY_MODULE_EXPORT std::uint32_t galaxy_yield_rfi_return_protocol() { return 1u; }\n",
+    );
     files.push(GeneratedSource {
         name: "module.cpp".to_owned(),
         contents: module,
@@ -8750,14 +9593,37 @@ fn emit_sharded_module_with_experiment(
          \x20   # AUTO keeps old x64 hosts on SSE2 and selects AVX2/FMA only when safe.\n\
          \x20   # /fp:precise remains mandatory; never add /fp:fast.\n\
          \x20   if(CMAKE_CXX_COMPILER_ID STREQUAL \"Clang\")\n\
-         \x20       # clang-cl keeps MSVC's semantics here: no FMA contraction, wrapping\n\
+         \x20       # Forward contraction policy through the MSVC-style driver; keep wrapping\n\
          \x20       # signed arithmetic and no type-based alias analysis.\n\
-         \x20       target_compile_options(RMGE01_game PRIVATE /EHsc /GS- /GR- -w -ffp-contract=off -fwrapv -fno-strict-aliasing -fno-slp-vectorize)\n\
+         \x20       target_compile_options(RMGE01_game PRIVATE /EHsc /GS- /GR- -w /clang:-ffp-contract=off -fwrapv -fno-strict-aliasing)\n\
+         \x20       # The block above selects and REPORTS `galaxy_native_isa_effective`, and the\n\
+         \x20       # module compatibility key includes GALAXY_NATIVE_ISA -- but /arch:AVX2 below\n\
+         \x20       # is an MSVC cl.exe spelling, and Setup drives this graph with clang-cl where\n\
+         \x20       # CMAKE_CXX_COMPILER_ID is \"Clang\". Without the flag in this branch an AVX2\n\
+         \x20       # host is told \"Galaxy module CPU target: AVX2\" while every generated\n\
+         \x20       # translation unit is compiled for the SSE2 baseline: two hosts sharing one\n\
+         \x20       # module key can ship different machine code, and the translated code loses\n\
+         \x20       # VEX encoding (three-operand, non-destructive), the wider register file and\n\
+         \x20       # vector integer compares. clang-cl accepts the GCC-style -mavx2 (verified\n\
+         \x20       # against the pinned toolchain: a probe compiles to vpsrlvd/vpand on ymm with\n\
+         \x20       # it and to none without). The FMA flag is deliberately omitted -- FMA changes\n\
+         \x20       # results and /clang:-ffp-contract=off forbids contraction, so the target\n\
+         \x20       # must not advertise the feature. AVX-512 flags are deliberately omitted too --\n\
+         \x20       # the host probe above is the\n\
+         \x20       # the AVX2+OSXSAVE test, which says nothing about AVX-512 availability.\n\
+         \x20       if(galaxy_native_isa_effective STREQUAL \"AVX2\")\n\
+         \x20           target_compile_options(RMGE01_game PRIVATE -mavx2)\n\
+         \x20       endif()\n\
          \x20   else()\n\
          \x20       target_compile_options(RMGE01_game PRIVATE /W4 /WX /wd4702 /permissive- /EHsc /GS- /GR- /Oi /favor:INTEL64)\n\
          \x20   endif()\n\
-         \x20   if(galaxy_native_isa_effective STREQUAL \"AVX2\")\n\
+         \x20   if(galaxy_native_isa_effective STREQUAL \"AVX2\" AND NOT CMAKE_CXX_COMPILER_ID STREQUAL \"Clang\")\n\
          \x20       target_compile_options(RMGE01_game PRIVATE /arch:AVX2)\n\
+         \x20   endif()\n\
+         \x20   option(GALAXY_MODULE_DEBUG_INFO \"Emit a PDB for the generated RMGE01 game module\" OFF)\n\
+         \x20   if(GALAXY_MODULE_DEBUG_INFO)\n\
+         \x20       target_compile_options(RMGE01_game PRIVATE /Zi)\n\
+         \x20       target_link_options(RMGE01_game PRIVATE /DEBUG)\n\
          \x20   endif()\n\
          \x20   if(GALAXY_MODULE_ENABLE_LTCG AND NOT CMAKE_CXX_COMPILER_ID STREQUAL \"Clang\")\n\
          \x20       target_compile_options(RMGE01_game PRIVATE $<$<CONFIG:Release>:/GL> $<$<CONFIG:Release>:/Gw>)\n\
@@ -8799,6 +9665,18 @@ fn cpp_u32_literal(value: u32) -> String {
 
 fn gpr_expression(index: u32) -> String {
     format!("context->gpr[{index}]")
+}
+
+// Arithmetic value operands read all 32 GPRs, including r0. Only specific
+// encodings (addi/addis and effective-address RA=0) substitute literal zero;
+// the addressing helpers below implement those exceptions. For example,
+// li r0,7; add r3,r0,r4 must add 7, not silently discard the first operand.
+fn gpr_u32_value_expression(index: u32) -> String {
+    gpr_expression(index)
+}
+
+fn gpr_s32_value_expression(index: u32) -> String {
+    format!("static_cast<std::int32_t>({})", gpr_expression(index))
 }
 
 fn gpr_plus_u32_expression(base: u32, value: u32) -> String {
@@ -8917,28 +9795,52 @@ fn branch_is_unconditional(bo: u32) -> bool {
 }
 
 fn emit_branch_condition(
-    output: &mut String,
+    _output: &mut String,
     bo: u32,
     bi: u32,
 ) -> Result<String, TranslationError> {
-    if bo & 0x4 == 0 {
-        output.push_str("    context->ctr = context->ctr - 1u;\n");
-    }
+    // BO bits (bits 21-25 of the bc/bclr/bcctr word):
+    //   BO[0] (0x10) = do not test CR
+    //   BO[1] (0x08) = test CR bit == 1 (rather than == 0)
+    //   BO[2] (0x04) = do not decrement/test CTR
+    //   BO[3] (0x02) = test CTR == 0 after decrementing (rather than != 0)
+    //
+    // The previous form always built `(ctr_condition) && (cr_condition)` and
+    // substituted the literal `true` for the operand the encoding leaves
+    // untested. That is 79,297 sites emitting `(true) && (...)` and 1,129
+    // emitting `(...) && (true)` module-wide. The compiler folds the literal
+    // away, so this is chiefly an emitter/text-size fix, but it also removes
+    // the last place an untested operand is still materialised.
+    //
+    // CTR is decremented and tested in one expression so the counter-controlled
+    // loop-back edge carries a single read-modify-write of `context->ctr`
+    // instead of a separate store followed by a reload (1,129 such loops
+    // module-wide). Pre-decrement yields exactly the architectural value the
+    // instruction tests, and the post-instruction CTR is identical on both the
+    // taken and the fall-through path. All three call sites (`Bc`, `Bcctr`,
+    // `Bclr`) interpolate the result into an `if (...)`, and `Bcctr` rejects
+    // BO[2] == 0 outright, so the decrement is always evaluated exactly once.
     let ctr_condition = if bo & 0x4 != 0 {
-        "true".to_owned()
-    } else if bo & 0x2 == 0 {
-        "context->ctr != 0u".to_owned()
+        None
     } else {
-        "context->ctr == 0u".to_owned()
+        Some(format!(
+            "--context->ctr {} 0u",
+            if bo & 0x2 == 0 { "!=" } else { "==" }
+        ))
     };
     let cr_condition = if bo & 0x10 != 0 {
-        "true".to_owned()
+        None
     } else if bo & 0x8 != 0 {
-        format!("galaxy::cr_bit(context, {bi}u)")
+        Some(format!("galaxy::cr_bit(context, {bi}u)"))
     } else {
-        format!("!galaxy::cr_bit(context, {bi}u)")
+        Some(format!("!galaxy::cr_bit(context, {bi}u)"))
     };
-    Ok(format!("({ctr_condition}) && ({cr_condition})"))
+    Ok(match (ctr_condition, cr_condition) {
+        (None, None) => "true".to_owned(),
+        (Some(ctr), None) => ctr,
+        (None, Some(cr)) => cr,
+        (Some(ctr), Some(cr)) => format!("({ctr}) && ({cr})"),
+    })
 }
 
 fn internal_branch_targets(address: u32, bytes: &[u8]) -> std::collections::BTreeSet<u32> {
@@ -9239,7 +10141,11 @@ mod tests {
         )
         .unwrap();
         assert!(!ordinary.contains("resident_r"));
-        assert!(typed.contains("resident_r31 = resident_r3 | resident_r3;"));
+        // `or r31,r3,r3` is the move encoding, so the resident rewrite sees the
+        // collapsed copy form. cache_typed_region_instruction accounts for that
+        // one missing operand in its count proof.
+        assert!(typed.contains("resident_r31 = resident_r3;"));
+        assert!(!typed.contains("resident_r31 = resident_r3 | resident_r3;"));
         assert!(typed.contains("context->gpr[1] = resident_r1;"));
         assert!(typed.contains("resident_r1 = context->gpr[1];"));
         assert!(typed.contains("galaxy::call_guest_cached(services, branch_target"));
@@ -9279,6 +10185,43 @@ mod tests {
         assert!(files[2].contents.contains("&rmge01::fn_80165478}"));
         assert!(files[0].contents.contains("void fn_80165478_typed("));
         assert!(shards.contains(&"typed_region_80165478.cpp".to_owned()));
+    }
+
+    // Optional compilation seam: public synthetic words, no retail game code.
+    #[test]
+    fn multi_register_public_cpp_fixture() {
+        let mut cpp = String::from("#include \"galaxy/native_api.h\"\nnamespace public_synthetic {\n");
+        for first in 0u32..32 {
+            let pc = 0x8000_4000 + first * 12;
+            let words = [(46u32 << 26) | (first << 21) | (1 << 16) | 8,
+                         (47u32 << 26) | (first << 21) | (1 << 16) | 0xFFF8,
+                         0x4E80_0020];
+            let bytes = words.iter().flat_map(|word| word.to_be_bytes()).collect::<Vec<_>>();
+            let body = lower_words(pc, &bytes).unwrap();
+            assert!(body.contains("return;"));
+            writeln!(cpp, "void case_{first}(galaxy::PpcContext* context, galaxy::GuestMemoryV1* memory, const galaxy::NativeServicesV1* services) {{\n{body}}}").unwrap();
+        }
+        cpp.push_str("}\n");
+        if let Some(path) = std::env::var_os("GALAXY_MULTI_GPR_CPP_FIXTURE") {
+            let mut file = std::fs::OpenOptions::new().write(true).create_new(true).open(path).unwrap();
+            std::io::Write::write_all(&mut file, cpp.as_bytes()).unwrap();
+        }
+    }
+
+    #[test]
+    fn multi_register_default_lowering_uses_checked_span_helpers() {
+        for first in 0u32..32 {
+            let words = [(46u32 << 26) | (first << 21) | (1 << 16) | 8,
+                         (47u32 << 26) | (first << 21) | (1 << 16) | 0xFFF8,
+                         0x4E80_0020];
+            let bytes = words.iter().flat_map(|word| word.to_be_bytes()).collect::<Vec<_>>();
+            let body = lower_words(0x8000_4000, &bytes).unwrap();
+            assert_eq!(body.contains("guest_load_multiple_gprs"), first <= 16);
+            assert_eq!(body.contains("guest_store_multiple_gprs"), first <= 24);
+            assert_eq!(body.matches("for (std::uint32_t reg").count(),
+                usize::from(first > 16) + usize::from(first > 24));
+            assert!(body.contains("context->gpr[1] + 0xFFFFFFF8u"));
+        }
     }
 
     #[test]
@@ -9604,6 +10547,44 @@ mod tests {
     }
 
     #[test]
+    fn rlwinm_rotate_amount_matches_the_encoding() {
+        // Guards the rewrite that was tried and reverted: a pre-rotated-mask
+        // form (`rotl(v, 32-SH) & (MASK <<< (32-SH))`) is NOT equivalent to
+        // `rotl(v, SH) & MASK` for SH != 0, because rotating `v` by anything
+        // other than SH moves its bits relative to a mask whose position MB/ME
+        // fixes. An exhaustive check over all 32x32x32 (SH, MB, ME) triples
+        // mismatched 319,448 of 393,216 encodings, so the emitted rotate amount
+        // and mask must stay exactly `SH` and `rotate_mask(MB, ME)`.
+        //
+        // SH is bits 11-15, MB bits 6-10, ME bits 1-5.
+        let rlwinm = |sh: u32, mb: u32, me: u32| {
+            (21_u32 << 26) | (0 << 21) | (0 << 16) | (sh << 11) | (mb << 6) | (me << 1)
+        };
+        // slwi r0,r0,2  -> SH=2, MB=0, ME=29, MASK=0xFFFFFFFC
+        let rotated = lower_instruction_fixture(
+            0x8000_4000,
+            &[rlwinm(2, 0, 29), 0x4E80_0020],
+        );
+        assert!(
+            rotated.contains("std::rotl(context->gpr[0], 2) & 0xFFFFFFFCu;"),
+            "{rotated}"
+        );
+        // clrrwi r3,r4,31 -> SH=0, MB=0, ME=0, MASK=0x80000000
+        let zero_shift = lower_instruction_fixture(
+            0x8000_4000,
+            &[rlwinm(0, 0, 0), 0x4E80_0020],
+        );
+        assert!(
+            zero_shift.contains("context->gpr[0] = (context->gpr[0] & 0x80000000u);"),
+            "{zero_shift}"
+        );
+        assert!(
+            !zero_shift.contains("std::rotl"),
+            "shift == 0 must not emit a rotate: {zero_shift}"
+        );
+    }
+
+    #[test]
     fn shared_integer_operands_preserve_legacy_default_cpp_text() {
         // These are exact words from the verified 0x803A3B6C RMGE01 stream.
         // The expected lines are the pre-refactor emitter spellings, including
@@ -9619,12 +10600,57 @@ mod tests {
         for old_line in [
             "    context->gpr[11] = context->gpr[1] + 0x00000060u;",
             "    context->gpr[31] = 0x805C0000u;",
-            "    context->gpr[29] = context->gpr[3] | context->gpr[3];",
+            // `or r29,r3,r3` is the move encoding: it must lower to a copy, not
+            // to a self-or that re-reads the same 4 MB-context slot twice.
+            "    context->gpr[29] = context->gpr[3];",
+            // `rlwinm r0,r0,2,0,29` (slwi r0,r0,2): shift != 0, so the rotate
+            // stays exactly `shift` and only the mask is applied. The mask is
+            // the original MB..ME run (0xFFFFFFFC), not a pre-rotated one.
             "    context->gpr[0] = std::rotl(context->gpr[0], 2) & 0xFFFFFFFCu;",
         ] {
             assert_eq!(output.matches(old_line).count(), 1, "{old_line}");
         }
+        assert_eq!(
+            output
+                .matches("    context->gpr[29] = context->gpr[3] | context->gpr[3];")
+                .count(),
+            0,
+            "the self-or spelling must not survive for a register move"
+        );
         assert!(!output.contains("resident_r"));
+    }
+
+    /// `or rA,rS,rS` is the PowerPC register-to-register move and must lower to
+    /// a plain copy. A genuine `or` with distinct operands keeps the bitwise
+    /// form, and the recording (`or.`) form keeps the copy while still
+    /// publishing CR0 from the moved value.
+    #[test]
+    fn register_move_lowering_is_exactly_a_copy() {
+        for (word, expected, forbidden) in [
+            (
+                0x7ca5_2b78u32, // or r5,r5,r5
+                "    context->gpr[5] = context->gpr[5];",
+                "context->gpr[5] = context->gpr[5] | context->gpr[5];",
+            ),
+            (
+                0x7d27_4b78u32, // or r7,r9,r9
+                "    context->gpr[7] = context->gpr[9];",
+                "context->gpr[7] = context->gpr[9] | context->gpr[9];",
+            ),
+        ] {
+            let output = lower_instruction_fixture(0x8040_0000, &[word, 0x4e80_0020]);
+            assert!(output.contains(expected), "{expected}\n{output}");
+            assert!(!output.contains(forbidden), "{forbidden}\n{output}");
+        }
+
+        // or r5,r4,r5 -> rS=4, rA=5, rB=5: still not a move.
+        let distinct = lower_instruction_fixture(0x8040_0000, &[0x7c85_2b78, 0x4e80_0020]);
+        assert!(distinct.contains("    context->gpr[5] = context->gpr[4] | context->gpr[5];"));
+
+        // or. r7,r9,r9 must keep the copy and still record CR0.
+        let recorded = lower_instruction_fixture(0x8040_0000, &[0x7d27_4b79, 0x4e80_0020]);
+        assert!(recorded.contains("    context->gpr[7] = context->gpr[9];"));
+        assert!(recorded.contains("    galaxy::update_cr0(context, context->gpr[7]);"));
     }
 
     #[test]
@@ -9635,14 +10661,19 @@ mod tests {
         let output = lower_instruction_fixture(0x8049_44D0, &words);
         assert!(output.contains("    goto label_80494580;"));
         assert!(output.contains("label_80494580:"));
+        // The emitter no longer materialises the untested CTR/CR operand, so the
+        // guard is a bare CR test. Assert the condition and target rather than
+        // the removed `(true) &&` wrapper (79,297 sites emitted it module-wide;
+        // the compiler folded it away, but the text is gone now). BO[1] selects
+        // the tested polarity, so the two encodings must still differ.
         assert!(
-            !output.contains("if ((true) && (galaxy::cr_bit(context, 2u))) goto label_80494580;")
+            !output.contains("if (!galaxy::cr_bit(context, 2u)) goto label_80494580;")
         );
 
         words[0x5C / 4] = 0x4082_0054;
         let unmatched_opcode = lower_instruction_fixture(0x8049_44D0, &words);
         assert!(unmatched_opcode
-            .contains("if ((true) && (!galaxy::cr_bit(context, 2u))) goto label_80494580;"));
+            .contains("if (!galaxy::cr_bit(context, 2u)) goto label_80494580;"));
     }
 
     #[test]
@@ -10084,6 +11115,39 @@ mod tests {
         ]
     }
 
+    #[test]
+    fn proven_psmtx_memory_uses_symbolic_offsets_and_preserves_order() {
+        let words = local_lane_fixture_words();
+        let bytes: Vec<u8> = words.iter().flat_map(|word| word.to_be_bytes()).collect();
+        let plan = validate_psmtx_local_memory_contract(&bytes).unwrap();
+        let ordinary = lower_local_lane_fixture(&words).unwrap();
+        let lowered = lower_psmtx_proven_memory(ordinary.clone(), &bytes, &plan).unwrap();
+        assert!(!lowered.contains("galaxy::psq_load("));
+        assert!(!lowered.contains("galaxy::psq_store("));
+        assert!(!lowered.contains("require_paired_single_mode"));
+        assert!(!lowered.contains("ensure_fpu_available"));
+        assert!(lowered.contains("guest_notify_write_pair_admitted"));
+        assert!(lowered.find("load_pair(1u, input0 + 0u)").unwrap()
+            < lowered.find("load_pair(2u, input1 + 8u)").unwrap());
+        assert!(lowered.find("ppc_commit_paired_ternary_result").unwrap()
+            < lowered.find("store_pair(4u, output + 0u").unwrap());
+        assert_eq!(ordinary.matches("ppc_commit_paired_ternary_result").count(),
+            lowered.matches("ppc_commit_paired_ternary_result").count());
+        assert_eq!(ordinary.matches("context->gpr[1] =").count(),
+            lowered.matches("context->gpr[1] =").count());
+
+        // The plan is an instruction-derived root proof, not an assumption
+        // that an API register still equals its entry value at every access.
+        let changed: Vec<u32> = vec![0x3863_0008, 0xE023_0000, 0x4E80_0020];
+        let bytes: Vec<u8> = changed.iter().flat_map(|word| word.to_be_bytes()).collect();
+        let plan = validate_psmtx_local_memory_contract(&bytes).unwrap();
+        assert_eq!(plan.get(&0x804B_5F40), Some(&(3, 8)));
+        let body = lower_local_lane_fixture(&changed).unwrap();
+        let lowered = lower_psmtx_proven_memory(body, &bytes, &plan).unwrap();
+        assert!(lowered.contains("load_pair(1u, input0 + 8u)"));
+        assert!(lower_psmtx_proven_memory("changed emitter".into(), &bytes, &plan).is_err());
+    }
+
     fn lower_local_lane_fixture(words: &[u32]) -> Result<String, TranslationError> {
         let bytes: Vec<u8> = words.iter().flat_map(|word| word.to_be_bytes()).collect();
         lower_words_with_config(
@@ -10122,8 +11186,9 @@ mod tests {
         let cached = lower_normalize_local_lane_fixture(&words).unwrap();
         assert_eq!(
             ordinary.matches("require_single_precision_bits").count(),
-            24
+            21
         );
+        assert!(ordinary.contains("ppc_commit_scalar_single_ternary"));
         assert!(!cached.contains("require_single_precision_bits"));
         assert!(cached.contains("lane0[5] = galaxy::narrow_f64_to_f32_bits(result.bits"));
         assert!(cached.contains("const std::uint32_t multiplicand = lane0[6];"));
@@ -10139,7 +11204,10 @@ mod tests {
             "galaxy::psq_store",
         ] {
             assert_eq!(
-                ordinary.matches(needle).count(),
+                ordinary.matches(needle).count() + if matches!(needle,
+                    "galaxy::ppc_f32_ternary" | "galaxy::ppc_commit_scalar_result") {
+                    ordinary.matches("galaxy::ppc_commit_scalar_single_ternary").count()
+                } else { 0 },
                 cached.matches(needle).count(),
                 "architectural operation count changed for {needle}"
             );
@@ -10160,6 +11228,80 @@ mod tests {
         consumes_duplicated_ps1[12] = 0x1042_0172; // ps_mul f2, f2, f5
         let duplicated = lower_normalize_local_lane_fixture(&consumes_duplicated_ps1).unwrap();
         assert!(duplicated.contains("const std::uint32_t right_ps1 = lane1[5];"));
+    }
+
+    #[test]
+    fn cross_lane_merge_captures_sources_before_aliasing_destination() {
+        for (op, xo, lanes) in [
+            (Opcode::PsMerge00, 528u32, [0usize, 0usize]),
+            (Opcode::PsMerge01, 560, [0, 1]),
+            (Opcode::PsMerge10, 592, [1, 0]),
+            (Opcode::PsMerge11, 624, [1, 1]),
+        ] {
+            for target in 0..32 {
+                for left in 0..32 {
+                    for right in 0..32 {
+                        let word = (4 << 26) | (target << 21) | (left << 16)
+                            | (right << 11) | (xo << 1);
+                        let mut facts = [[true; 32]; 2];
+                        let mut output = String::new();
+                        cache_local_paired_instruction(&mut output, 0, &mut facts,
+                            LocalLaneProfile::PsvecCross, 0x804B6B40, word, op).unwrap();
+                        let capture0 = format!("const std::uint32_t cached_merge_ps0 = lane{}[{left}];", lanes[0]);
+                        let capture1 = format!("const std::uint32_t cached_merge_ps1 = lane{}[{right}];", lanes[1]);
+                        let write0 = format!("lane0[{target}] = cached_merge_ps0;");
+                        let write1 = format!("lane1[{target}] = cached_merge_ps1;");
+                        assert!(output.find(&capture0).unwrap() < output.find(&write0).unwrap());
+                        assert!(output.find(&capture1).unwrap() < output.find(&write0).unwrap());
+                        assert!(output.find(&write0).unwrap() < output.find(&write1).unwrap());
+                        assert!(facts[0][target as usize] && facts[1][target as usize]);
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn cross_lane_negation_preserves_known_provenance_and_invalidates_unknown() {
+        for source in 0..32 {
+            for target in 0..32 {
+                for known in [[false, false], [true, false], [false, true], [true, true]] {
+                    let word = (4 << 26) | (target << 21) | (source << 11) | (40 << 1);
+                    let mut facts = [[true; 32]; 2];
+                    facts[0][source] = known[0];
+                    facts[1][source] = known[1];
+                    let mut output = String::new();
+                    cache_local_paired_instruction(&mut output, 0, &mut facts,
+                        LocalLaneProfile::PsvecCross, 0x804B6B40, word as u32, Opcode::PsNeg).unwrap();
+                    for lane in 0..2 {
+                        assert_eq!(facts[lane][target], known[lane]);
+                        assert_eq!(output.contains(&format!(
+                            "lane{lane}[{target}] = lane{lane}[{source}] ^ 0x80000000u;")), known[lane]);
+                    }
+                }
+            }
+        }
+        // Exercise the complete public lowering path, including instruction
+        // scopes and subsequent arithmetic consuming the corrected cache.
+        let words: [u32; 6] = [
+            (56 << 26) | (1 << 21) | (3 << 16),
+            (56 << 26) | (2 << 21) | (3 << 16) | 8,
+            (4 << 26) | (2 << 21) | (1 << 16) | (2 << 11) | (528 << 1),
+            (4 << 26) | (2 << 21) | (2 << 11) | (40 << 1),
+            (4 << 26) | (3 << 21) | (2 << 16) | (1 << 6) | (25 << 1),
+            0x4E800020,
+        ];
+        let bytes: Vec<u8> = words.iter().flat_map(|word| word.to_be_bytes()).collect();
+        let cached = lower_words_with_config(0x804B6B3C, &bytes,
+            &BTreeSet::new(), &BTreeSet::new(), LoweringConfig {
+                local_lane_profile: LocalLaneProfile::PsvecCross,
+                ..LoweringConfig::default()
+            }).unwrap();
+        assert!(cached.contains("const std::uint32_t cached_merge_ps1 = lane0[2];"));
+        assert!(cached.contains("lane0[2] = lane0[2] ^ 0x80000000u;"));
+        assert!(cached.contains("lane1[2] = lane1[2] ^ 0x80000000u;"));
+        assert!(!cached.contains("require_single_precision_bits"));
+        assert!(cached.contains("const std::uint32_t left_ps0 = lane0[2];"));
     }
 
     #[test]
@@ -10901,6 +12043,23 @@ mod tests {
             .expect("ordinary external tail call is supported");
         assert!(ordinary.contains("galaxy::call_guest"));
         assert!(!ordinary.contains("rmge01::fn_"));
+    }
+
+    #[test]
+    fn exact_yield_rfi_return_protocol_edges() {
+        let entries = BTreeMap::from([(0x804A_B20C, 0x804A_B20C), (0x804A_381C, 0x804A_381C)]);
+        for (target, pc, routed, redirected) in [
+            (0x804A_B20C, 0x804A_B468, true, false),
+            (0x804A_B20C, 0x804A_B7AC, false, false),
+            (0x804A_B20C, 0x804A_B448, false, false),
+            (0x804A_381C, 0x804A_B414, true, true),
+            (0x804A_381C, 0x804A_3788, true, false),
+        ] {
+            let mut out = String::new();
+            emit_direct_guest_call(&mut out, target, pc, Some(&entries)).unwrap();
+            assert_eq!(out.contains("galaxy::call_guest_resolved"), routed, "{pc:08X}");
+            assert_eq!(out.contains("if (context->pc == 0x804AB30Cu) goto call_return_804AB30C;"), redirected, "{pc:08X}");
+        }
     }
 
     #[test]
@@ -12853,8 +14012,11 @@ mod tests {
             .expect("internal linked call with an alternate continuation path is supported");
 
         assert!(output.contains("case 0x80004008u: goto label_80004008;"));
+        // The untested CTR/CR operand is no longer materialised, so the guard is
+        // a bare CR test rather than `(true) && (...)`.
         assert!(
-            output.contains("if ((true) && (galaxy::cr_bit(context, 2u))) goto label_80004008;")
+            output.contains("if (galaxy::cr_bit(context, 2u)) goto label_80004008;"),
+            "{output}"
         );
         assert!(output.contains("case 0x80004008u: goto call_return_80004008;"));
         assert!(output.contains("label_80004008:\n    {"));
@@ -12936,7 +14098,23 @@ mod tests {
         assert!(output.contains("context->gpr[4] = context->gpr[3] & 0x000000FFu;"));
         assert!(output.contains("galaxy::set_xer_ca(context, result > 0xFFFFFFFFull);"));
         assert!(output.contains("galaxy::arithmetic_shift_right(source, 1u);"));
-        assert!(output.contains("std::rotl(context->gpr[6], 8)"));
+        // `rlwimi r7,r6,SH=8,MB=0,ME=7` is `rotl(rA, 8) & 0xFF000000` per the ISA:
+        // the field mask is rotate_mask(0, 7) == 0x000000FF and the ISA rotates the
+        // source by SH=8 before applying it. The rotate amount really is SH, and
+        // the cleared half of the insert really is 0x00FFFFFF.
+        //
+        // An earlier revision of this assertion expected the *pre-rotated-mask*
+        // form `rotl(gpr[6], 24) & 0x00FF0000u`. That is an equivalent-looking
+        // rewrite which is wrong for shift != 0; the proof is recorded on the
+        // Rlwinm/Rlwimi emitter (exhaustively checked over all 32x32x32 SH/MB/ME
+        // triples, where the pre-rotated form mismatched 319,448 of 393,216
+        // encodings and this form matched all of them). Do not restore it, and do
+        // not "optimize" the rotate amount back to `32 - SH`.
+        assert!(
+            output.contains("std::rotl(context->gpr[6], 8) & 0xFF000000u"),
+            "{output}"
+        );
+        assert!(output.contains("context->gpr[7] & 0x00FFFFFFu"));
     }
 
     #[test]
@@ -13170,7 +14348,7 @@ mod tests {
             3
         );
         assert_eq!(optimized.matches("ppc_f64_binary_to_f32(").count(), 4);
-        assert_eq!(optimized.matches("ppc_f32_ternary(").count(), 1);
+        assert_eq!(optimized.matches("ppc_commit_scalar_single_ternary(").count(), 1);
         assert_eq!(optimized.matches("ppc_f64_binary(").count(), 1);
         assert_eq!(optimized.matches("ppc_commit_paired_result(").count(), 1);
         for pc in ["80004004", "80004008"] {
@@ -13184,6 +14362,102 @@ mod tests {
         assert!(optimized.contains("context, 1u, left, right, true, services, 0x80004000u"));
         assert!(optimized.contains("context, 2u, left, right, false, services, 0x80004004u"));
         assert!(optimized.contains("PpcFloatBinaryOperation::Multiply, context->fpr_bits[1], context->fpr_bits[2], context->fpscr"));
+    }
+
+    #[test]
+    fn scalar_single_fma_boundary_preserves_operands_record_and_retry_entries() {
+        for (index, operation) in ["MultiplyAdd", "MultiplySubtract",
+            "NegativeMultiplyAdd", "NegativeMultiplySubtract"].iter().enumerate() {
+            let xo = [29u32, 28u32, 31u32, 30u32][index];
+            let word = (59u32 << 26) | (1 << 21) | (1 << 16) | (3 << 11)
+                | (2 << 6) | (xo << 1) | 1;
+            let words = [0x6000_0000, word, 0x4E80_0020];
+            let bytes: Vec<u8> = words.iter().flat_map(|word| word.to_be_bytes()).collect();
+            let output = lower_words_with_entries(0x8000_4000, &bytes,
+                &BTreeSet::from([0x8000_4004])).unwrap();
+            assert!(output.contains(&format!(
+                "ppc_commit_scalar_single_ternary(context, 1u, galaxy::PpcFloatTernaryOperation::{operation}, 1u, 2u, 3u, true, services, 0x80004004u)")));
+            assert!(output.contains("fpu_retry_80004004:"));
+            assert!(output.contains("ensure_fpu_available(services, 0x80004004u"));
+            assert!(!output.contains("require_single_precision_bits"));
+        }
+    }
+
+    #[test]
+    fn indexed_paired_binary_keeps_retry_and_decoded_descriptor() {
+        let forms = [(21u32, Opcode::PsAdd, 0u32, false, true),
+            (20, Opcode::PsSub, 1, false, true),
+            (25, Opcode::PsMul, 2, false, true),
+            (18, Opcode::PsDiv, 3, false, true),
+            (12, Opcode::PsMuls0, 2, false, false),
+            (13, Opcode::PsMuls1, 2, true, true)];
+        for (xo, opcode, operation, lane0, lane1) in forms {
+            for rc in [false, true] {
+                for (target, left, right) in [(3u32, 1u32, 2u32), (1, 1, 2), (2, 1, 2)] {
+                    let multiply = operation == 2;
+                    let word = (4u32 << 26) | (target << 21) | (left << 16)
+                        | (if multiply { right << 6 } else { right << 11 })
+                        | (xo << 1) | u32::from(rc);
+                    assert_eq!(Ins::new(word, Extensions::gekko_broadway()).op, opcode);
+                    let bytes: Vec<u8> = [word, word, 0x4E80_0020].iter()
+                        .flat_map(|word| word.to_be_bytes()).collect();
+                    let entries = BTreeSet::from([0x8000_4004]);
+                    let indexed = lower_words_with_config(0x8000_4000, &bytes, &entries,
+                        &BTreeSet::new(), LoweringConfig { indexed_paired_binary: true,
+                            ..LoweringConfig::default() }).unwrap();
+                    let descriptor = target | (left << 5) | (right << 10) | (operation << 15)
+                        | (u32::from(lane0) << 17) | (u32::from(lane1) << 18)
+                        | (u32::from(rc) << 19);
+                    assert!(indexed.contains(&format!("context, 0x{descriptor:05X}u, services, 0x80004000u)")));
+                    assert!(indexed.contains(&format!("context, 0x{descriptor:05X}u, services, 0x80004004u)")));
+                    assert_eq!(indexed.matches("ppc_execute_indexed_paired_binary").count(), 2);
+                    assert!(!indexed.contains("ppc_f32_binary("));
+                    assert!(!indexed.contains("require_single_precision_bits"));
+                    assert!(indexed.contains("case 0x80004004u: goto fpu_retry_80004004;"));
+                    assert!(indexed.contains("galaxy::ensure_fpu_available(services, 0x80004004u"));
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn indexed_paired_ternary_keeps_retry_and_decoded_descriptor() {
+        let forms = [(29u32, Opcode::PsMadd, 0u32, false, true),
+            (28, Opcode::PsMsub, 1, false, true),
+            (31, Opcode::PsNmadd, 2, false, true),
+            (30, Opcode::PsNmsub, 3, false, true),
+            (14, Opcode::PsMadds0, 0, false, false),
+            (15, Opcode::PsMadds1, 0, true, true)];
+        for (xo, opcode, operation, lane0, lane1) in forms {
+            for rc in [false, true] {
+                for (target, a, c, b) in [(3u32, 1u32, 2u32, 4u32),
+                    (1, 1, 2, 4), (2, 1, 2, 4), (4, 1, 2, 4), (31, 31, 31, 31)] {
+                    let word = (4u32 << 26) | (target << 21) | (a << 16)
+                        | (b << 11) | (c << 6) | (xo << 1) | u32::from(rc);
+                    assert_eq!(Ins::new(word, Extensions::gekko_broadway()).op, opcode);
+                    let bytes: Vec<u8> = [word, word, 0x4E80_0020].iter()
+                        .flat_map(|word| word.to_be_bytes()).collect();
+                    let entries = BTreeSet::from([0x8000_4004]);
+                    let indexed = lower_words_with_config(0x8000_4000, &bytes, &entries,
+                        &BTreeSet::new(), LoweringConfig { indexed_paired_ternary: true,
+                            ..LoweringConfig::default() }).unwrap();
+                    let descriptor = target | (a << 5) | (c << 10) | (b << 15)
+                        | (operation << 20) | (u32::from(lane0) << 22)
+                        | (u32::from(lane1) << 23) | (u32::from(rc) << 24);
+                    for pc in [0x8000_4000u32, 0x8000_4004] {
+                        assert!(indexed.contains(&format!(
+                            "context, 0x{descriptor:07X}u, services, 0x{pc:08X}u)")));
+                    }
+                    assert_eq!(indexed.matches("ppc_execute_indexed_paired_ternary").count(), 2);
+                    assert!(!indexed.contains("ppc_f32_ternary("));
+                    assert!(!indexed.contains("require_single_precision_bits"));
+                    assert!(indexed.contains("case 0x80004004u: goto fpu_retry_80004004;"));
+                    assert!(indexed.contains("galaxy::ensure_fpu_available(services, 0x80004004u"));
+                    let control = lower_words_with_entries(0x8000_4000, &bytes, &entries).unwrap();
+                    assert_eq!(control.matches("ppc_f32_ternary(").count(), 4);
+                }
+            }
+        }
     }
 
     #[test]
@@ -13237,6 +14511,64 @@ mod tests {
     }
 
     #[test]
+    fn fused_paired_ternary_preserves_alias_capture_broadcast_and_retry_entries() {
+        // Destination aliases each source in turn; RC alternates. The lane
+        // broadcasts in madds0/madds1 must survive the common helper boundary.
+        let forms = [
+            (29_u32, "MultiplyAdd", "fpr_bits", "ps1_bits"),
+            (28, "MultiplySubtract", "fpr_bits", "ps1_bits"),
+            (31, "NegativeMultiplyAdd", "fpr_bits", "ps1_bits"),
+            (30, "NegativeMultiplySubtract", "fpr_bits", "ps1_bits"),
+            (14, "MultiplyAdd", "fpr_bits", "fpr_bits"),
+            (15, "MultiplyAdd", "ps1_bits", "ps1_bits"),
+        ];
+        let mut words = Vec::new();
+        for (index, (xo, operation, lane0, lane1)) in forms.iter().enumerate() {
+            let target = [2_u32, 3, 4][index % 3];
+            let word = (4_u32 << 26) | (target << 21) | (2 << 16)
+                | (4 << 11) | (3 << 6) | (xo << 1) | (index as u32 & 1);
+            words.push(word);
+            let bytes: Vec<u8> = [word, 0x4E80_0020].iter()
+                .flat_map(|word| word.to_be_bytes()).collect();
+            let fused = lower_words_with_config(
+                0x8000_4000, &bytes, &BTreeSet::new(), &BTreeSet::new(),
+                LoweringConfig { fused_paired_ternary: true, ..LoweringConfig::default() },
+            ).unwrap();
+            assert_eq!(fused.matches("require_single_precision_bits").count(), 6);
+            assert!(fused.contains(&format!("context->{lane0}[3]")));
+            assert!(fused.contains(&format!("context->{lane1}[3]")));
+            let captures = fused.find("const std::uint32_t addend_ps1").unwrap();
+            let call = fused.find("ppc_commit_paired_ternary_result").unwrap();
+            assert!(captures < call);
+            assert!(fused.contains(&format!(
+                "context, {target}u, galaxy::PpcFloatTernaryOperation::{operation}, multiplicand_ps0, multiplicand_ps1, multiplier_ps0, multiplier_ps1, addend_ps0, addend_ps1, {}, services, 0x80004000u",
+                index & 1 != 0
+            )));
+            assert!(!fused.contains("ppc_f32_ternary("));
+            let control = lower_words(0x8000_4000, &bytes).unwrap();
+            assert!(!control.contains("ppc_commit_paired_ternary_result"));
+            assert_eq!(control.matches("ppc_f32_ternary(").count(), 2);
+            let function = FunctionRange { address: 0x8000_4000, size: 8 };
+            for (body, needs_header) in [(fused, true), (control, false)] {
+                let files = emit_sharded_module(&[(function, body)], &[], 1, function.address).unwrap();
+                let header = &files.iter().find(|f| f.name == "functions.h").unwrap().contents;
+                assert_eq!(header.contains("#include \"galaxy/ppc_paired_float.h\""), needs_header);
+            }
+        }
+        words.push(0x4E80_0020);
+        let bytes: Vec<u8> = words.iter().flat_map(|word| word.to_be_bytes()).collect();
+        let entries = BTreeSet::from([0x8000_4004]);
+        let fused = lower_words_with_config(
+            0x8000_4000, &bytes, &entries, &BTreeSet::new(),
+            LoweringConfig { fused_paired_ternary: true, ..LoweringConfig::default() },
+        ).unwrap();
+        assert!(fused.contains("case 0x80004004u: goto fpu_retry_80004004;"));
+        assert!(fused.contains("fpu_retry_80004004:"));
+        assert!(fused.contains("galaxy::ensure_fpu_available(services, 0x80004004u"));
+        assert_eq!(fused.matches("ppc_commit_paired_ternary_result").count(), 6);
+    }
+
+    #[test]
     fn lowers_paired_compare_and_fpscr_operations() {
         let ps_cmpo0 = (4_u32 << 26) | (2 << 23) | (3 << 16) | (4 << 11) | (32 << 1);
         let mffs = (63_u32 << 26) | (5 << 21) | (583 << 1);
@@ -13267,6 +14599,7 @@ mod tests {
         assert!(output.contains("ppc_f64_reciprocal_estimate"));
         assert!(output.contains("ppc_f64_reciprocal_sqrt_estimate"));
         assert!(output.contains("ppc_f32_reciprocal_sqrt_estimate"));
+        assert_eq!(output.matches("ppc_commit_paired_estimate_result").count(), 2);
         assert!(output.contains("select_nonnegative_ps0"));
     }
 
@@ -13497,7 +14830,7 @@ mod tests {
             .contains("if(GALAXY_MODULE_ENABLE_LTCG AND NOT CMAKE_CXX_COMPILER_ID STREQUAL \"Clang\")"));
         assert!(cmake
             .contents
-            .contains("-ffp-contract=off -fwrapv -fno-strict-aliasing"));
+            .contains("/clang:-ffp-contract=off -fwrapv -fno-strict-aliasing"));
         assert!(cmake
             .contents
             .contains("$<$<CONFIG:Release>:/GL> $<$<CONFIG:Release>:/Gw>"));
@@ -13882,6 +15215,22 @@ mod tests {
             .contents
             .contains("if(galaxy_native_isa_effective STREQUAL \"AVX2\")"));
         assert!(!cmake.contents.contains("/Oi /arch:AVX2 /favor:INTEL64"));
+        // The clang-cl branch must act on the ISA this template selects and
+        // reports. Setup compiles the module with clang-cl, where
+        // CMAKE_CXX_COMPILER_ID is "Clang" and /arch:AVX2 is not a spelling the
+        // compiler honours, so -mavx2 has to be present here and /arch:AVX2 has
+        // to stay confined to the non-Clang branch. This assertion exists
+        // because the flag was silently absent once already: the template chose
+        // and announced AVX2 while emitting SSE2 machine code. Never -mfma
+        // (guest float results must stay bit-identical to SoftFloat) and never
+        // -mavx512* (the host probe is the AVX2+OSXSAVE test).
+        assert!(cmake
+            .contents
+            .contains("target_compile_options(RMGE01_game PRIVATE -mavx2)"));
+        assert!(cmake.contents.contains(
+            "if(galaxy_native_isa_effective STREQUAL \"AVX2\" AND NOT CMAKE_CXX_COMPILER_ID STREQUAL \"Clang\")"));
+        assert!(!cmake.contents.contains("-mfma"));
+        assert!(!cmake.contents.contains("-mavx512"));
         let module = files
             .iter()
             .find(|file| file.name == "module.cpp")
@@ -16058,7 +17407,7 @@ mod tests {
     // and the helper are tested end-to-end.
     #[test]
     fn lowers_divw_to_helper_call() {
-        // divw r5, r3, r4  → encoding 0x7CA3_23D6
+        // divw r5, r3, r4  ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ encoding 0x7CA3_23D6
         let word: u32 = 0x7CA3_23D6;
         // Append blr so the function has a valid terminator.
         let full: Vec<u8> = word
@@ -16090,7 +17439,7 @@ mod tests {
 
     #[test]
     fn lowers_divwu_to_helper_call() {
-        // divwu r5, r3, r4 → encoding 0x7CA3_2396
+        // divwu r5, r3, r4 ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ encoding 0x7CA3_2396
         let word: u32 = 0x7CA3_2396;
         let full: Vec<u8> = word
             .to_be_bytes()
@@ -16102,6 +17451,452 @@ mod tests {
         assert!(
             output.contains("galaxy::divide_unsigned_word"),
             "divwu emits the deterministic unsigned helper"
+        );
+    }
+}
+
+// Straight-line integer GPR residency.
+//
+// Its own module so the block stays independent of the file's other test
+// organization: these tests call private items and build bodies in the exact
+// shape the emitter produces.
+#[cfg(test)]
+mod residency_tests {
+    use super::*;
+
+    const FN: u32 = 0x8000_4000;
+
+    /// One lowered body in the shape `lower_words_with_config` emits, including
+    /// the signature line and the interior-entry dispatch a real body has.
+    fn residency_body(dispatch: &str, instructions: &str) -> String {
+        format!(
+            "void fn_80004000(galaxy::PpcContext* __restrict context, galaxy::GuestMemoryV1* memory, const galaxy::NativeServicesV1* services) {{\n    static_cast<void>(context);\n{dispatch}{instructions}}}\n"
+        )
+    }
+
+    fn residency_dispatch() -> String {
+        String::from(
+            "    if (context->pc != 0x80004000u) [[unlikely]] {\n    switch (context->pc) {\n        case 0x80004008u: goto label_80004008;\n        default: galaxy::guest_execution_fault(services, context->pc, \"invalid interior function entry\");\n    }\n    }\n    goto fpu_normal_entry_80004000;\nfpu_normal_entry_80004000:\nlabel_80004008:\n",
+        )
+    }
+
+    fn residency_entries() -> BTreeSet<u32> {
+        [0x8000_4008_u32].into_iter().collect()
+    }
+
+    /// A body with no labels: the prologue is the only entry.
+    fn straight_body() -> String {
+        residency_body(
+            "",
+            "    {\n    context->gpr[3] = 0x80000000u;\n    }\n    {\n    context->gpr[0] = galaxy::guest_load_u16(memory, context->gpr[3] + 0x000030E4u, services, 0x80004004u);\n    }\n    {\n    return;\n    }\n",
+        )
+    }
+
+    /// A body in the shape `render_sharded_function_definition` actually emits,
+    /// prologue casts and all.
+    ///
+    /// This exists because the synthetic bodies above omit the three
+    /// `static_cast<void>` lines, and that omission hid a real defect: the
+    /// declaration block was spliced in after the signature but *before* those
+    /// casts, which put every `resident_rN` inside the first instruction block
+    /// instead of at function scope. The synthetic test passed; the generated
+    /// module did not compile (C2065 on every later use). Any test that asserts
+    /// where the declarations land must use this shape.
+    fn shard_shaped_body() -> String {
+        format!(
+            "void fn_80004000(galaxy::PpcContext* __restrict context, galaxy::GuestMemoryV1* memory, const galaxy::NativeServicesV1* services) {{\n    static_cast<void>(context);\n    static_cast<void>(memory);\n    static_cast<void>(services);\n{}}}",
+            shard_instructions()
+        )
+    }
+
+    /// Exactly what the shard renderer hands `apply_residency_to_body`: the
+    /// instruction stream alone, with no signature and no prologue.
+    ///
+    /// This is the shape the real module generator passes. `residency_body`
+    /// above wraps instructions in a signature, so it can never detect a
+    /// placement bug that depends on where the prologue ends -- which is how the
+    /// whole module came to be uncompilable while every test passed.
+    fn shard_instructions() -> &'static str {
+        "    {\n    context->gpr[3] = 0x80000000u;\n    }\n    {\n    context->gpr[0] = galaxy::guest_load_u16(memory, context->gpr[3] + 0x000030E4u, services, 0x80004004u);\n    }\n    {\n    return;\n    }\n"
+    }
+
+    #[test]
+    fn residency_declarations_land_at_function_scope_not_inside_a_block() {
+        // Regression test for the placement defect above. The declarations must
+        // precede the body's first `{`, because that brace opens the first
+        // instruction block and anything declared inside it is out of scope for
+        // every later block.
+        //
+        // Both input shapes must be covered, because the defect existed precisely
+        // because only the signature-bearing shape was tested:
+        //
+        //   1. a complete body, as the unit tests and one internal caller pass;
+        //   2. a bare instruction stream, which is what the real shard renderer
+        //      passes -- the shape the module generator actually uses.
+        let cases: [(&str, String); 2] = [
+            ("signature-shaped body", shard_shaped_body()),
+            ("bare instruction stream", shard_instructions().to_owned()),
+        ];
+        for (label, body) in cases {
+            let resident = apply_integer_gpr_residency(FN, &body, &BTreeSet::new())
+                .unwrap_or_else(|| panic!("{label} is eligible for residency"));
+
+            let declaration = resident
+                .find("std::uint32_t resident_r0 = context->gpr[0];")
+                .unwrap_or_else(|| panic!("{label}: the register is declared"));
+            let first_block = resident
+                .find("    {\n")
+                .unwrap_or_else(|| panic!("{label}: the body has at least one instruction block"));
+            assert!(
+                declaration < first_block,
+                "{label}: the declarations must precede the first instruction block, else \
+                 every later use is out of scope and the module does not compile"
+            );
+
+            let tail = &resident[first_block..];
+            assert!(
+                tail.contains("resident_r0") || tail.contains("resident_r3"),
+                "{label}: the instruction blocks reference the locals"
+            );
+        }
+
+        // For the signature-bearing shape the declarations must additionally stay
+        // inside the function, i.e. after the signature line.
+        let resident = apply_integer_gpr_residency(FN, &shard_shaped_body(), &BTreeSet::new())
+            .expect("signature-shaped body is eligible");
+        let signature = resident.find("services) {\n").unwrap();
+        let declaration = resident
+            .find("std::uint32_t resident_r0 = context->gpr[0];")
+            .unwrap();
+        assert!(signature < declaration);
+    }
+
+    #[test]
+    fn residency_renames_direct_register_access_and_writes_back_written_values() {
+        let resident = apply_integer_gpr_residency(FN, &straight_body(), &BTreeSet::new())
+            .expect("a straight-line body with one return is eligible");
+
+        // Declaration and load for every register the body names, placed after
+        // the signature and before the first instruction.
+        assert!(resident.contains("    std::uint32_t resident_r0 = context->gpr[0];\n"));
+        assert!(resident.contains("    std::uint32_t resident_r3 = context->gpr[3];\n"));
+        let signature = resident.find("services) {\n").unwrap();
+        let declaration = resident.find("std::uint32_t resident_r0").unwrap();
+        let first_body_access = resident.find("resident_r3 = 0x80000000u;").unwrap();
+        assert!(signature < declaration && declaration < first_body_access);
+
+        // Every operand was renamed, and no direct `context->gpr[N]` access
+        // survives in the instruction stream.
+        assert!(resident
+            .contains("resident_r0 = galaxy::guest_load_u16(memory, resident_r3 + 0x000030E4u"));
+        assert!(!resident.contains("context->gpr[3] = 0x80000000u"));
+
+        // The writeback covers exactly the registers this body writes. r0 is
+        // written by the load, so it is included; a register the body only
+        // reads keeps its loaded value and must not be restored over whatever a
+        // callee published into it.
+        assert!(resident.contains("    context->gpr[3] = resident_r3;\n    return;"));
+        assert!(resident.contains("context->gpr[0] = resident_r0;"));
+        assert!(!resident.contains("context->gpr[4] = resident_r4;"));
+    }
+
+    #[test]
+    fn residency_writeback_is_not_spliced_onto_a_mid_line_return() {
+        // Regression test. The exit finder used to search for the substring
+        // `return;` and splice the writeback at the start of *that line*, so a
+        // `return;` sharing its line with other code got the stores hoisted above
+        // it and they then ran on a path that never returns -- the function paid
+        // the writeback and kept using its locals.
+        //
+        // Both shapes below are live in the retained module (81 of 4 045 `return;`
+        // occurrences over the first 40 shards are mid-line);
+        // `functions_0000.cpp:23` and `functions_0002.cpp:9464` are the two forms.
+        // The suite passed against the defect because every existing body has its
+        // only `return;` alone on a line.
+        let body = residency_body(
+            "",
+            "    {\n    context->gpr[3] = 0x1u;\n    }\n    {\n    if ((true) && (!galaxy::cr_bit(context, 2u))) return;\n    }\n    {\n    return;\n    }\n",
+        );
+        let resident = apply_integer_gpr_residency(FN, &body, &BTreeSet::new())
+            .expect("a body whose exit is unconditional is eligible");
+
+        // The mid-line return survives verbatim: it is not an exit, so nothing may
+        // be inserted at the start of its line.
+        assert!(
+            resident.contains("    if ((true) && (!galaxy::cr_bit(context, 2u))) return;\n"),
+            "the mid-line return must be preserved exactly"
+        );
+        assert!(
+            !resident.contains("resident_r3;\n    if ((true)"),
+            "the writeback must not precede the mid-line return"
+        );
+
+        // Exactly one writeback, and it introduces the real exit.
+        assert_eq!(
+            resident.matches("context->gpr[3] = resident_r3;").count(),
+            1,
+            "one writeback for one true exit"
+        );
+        assert!(
+            resident.contains("    context->gpr[3] = resident_r3;\n    return;\n"),
+            "the writeback must immediately precede the standalone exit"
+        );
+
+        // The `default: return;` form of the same defect, reached through a switch
+        // dispatch rather than a conditional expression.
+        let switch_body = residency_body(
+            "",
+            "    {\n    context->gpr[3] = 0x1u;\n    }\n    {\n    switch (context->gpr[4]) {\n    default: return;\n    }\n    }\n    {\n    return;\n    }\n",
+        );
+        let switch_resident = apply_integer_gpr_residency(FN, &switch_body, &BTreeSet::new())
+            .expect("a body whose exit is unconditional is eligible");
+        assert!(
+            switch_resident.contains("    default: return;\n"),
+            "the mid-line `default: return;` must be preserved exactly"
+        );
+        assert!(
+            !switch_resident.contains("resident_r3;\n    default: return;"),
+            "the writeback must not precede `default: return;`"
+        );
+        assert_eq!(
+            switch_resident
+                .matches("context->gpr[3] = resident_r3;")
+                .count(),
+            1,
+            "one writeback for one true exit, switch form"
+        );
+
+        // A body whose only `return;` is mid-line has no exit to attach the
+        // writeback to, so it is refused rather than mis-spliced.
+        let no_exit = residency_body(
+            "",
+            "    {\n    context->gpr[3] = 0x1u;\n    }\n    {\n    if ((true) && (!galaxy::cr_bit(context, 2u))) return;\n    }\n",
+        );
+        assert!(
+            apply_integer_gpr_residency(FN, &no_exit, &BTreeSet::new()).is_none(),
+            "a body with no standalone exit is ineligible"
+        );
+    }
+
+    #[test]
+    fn residency_keeps_a_comparison_from_counting_as_a_write() {
+        let body = residency_body(
+            "",
+            "    {\n    context->gpr[3] = 0x1u;\n    }\n    {\n    if (context->gpr[5] == 0x2u) { context->gpr[3] = 0x3u; }\n    }\n    {\n    return;\n    }\n",
+        );
+        let resident = apply_integer_gpr_residency(FN, &body, &BTreeSet::new()).unwrap();
+        assert!(resident.contains("resident_r5 == 0x2u"));
+        assert!(resident.contains("context->gpr[3] = resident_r3;"));
+        assert!(!resident.contains("context->gpr[5] = resident_r5;"));
+    }
+
+    #[test]
+    fn residency_reloads_the_local_set_at_an_interior_entry() {
+        // An interior entry jumps past the prologue, so the locals must be
+        // reloaded at that label: the host re-entered the function from outside
+        // it, which makes memory authoritative there.
+        //
+        // The reload must be an *assignment*, not a declaration. The locals are
+        // already declared at function scope by the prologue, so re-declaring
+        // them here is C2374/C2086 -- and it is at function scope, so the
+        // redefinition is an error, not a shadow.
+        let body = residency_body(
+            &residency_dispatch(),
+            "    {\n    context->gpr[3] = 0x1u;\n    }\n    {\n    return;\n    }\n",
+        );
+        let resident = apply_integer_gpr_residency(FN, &body, &residency_entries())
+            .expect("an interior-entry body is eligible once its entry reloads the locals");
+
+        let label = resident
+            .find("label_80004008:\n")
+            .expect("the entry label is present");
+        let after_label = &resident[label..];
+        let reload = after_label
+            .find("    resident_r3 = context->gpr[3];")
+            .expect("the entry label reloads the register the body uses");
+        assert!(
+            !after_label.contains("std::uint32_t resident_r3 = context->gpr[3];\n    resident_r3 = context->gpr[3];"),
+            "the label must not re-declare the local"
+        );
+        // The reload must be the first thing after the label, and must come
+        // before any renamed instruction.
+        assert!(
+            reload < 64,
+            "reload should be adjacent to the label, got offset {reload}"
+        );
+        assert!(after_label.find("resident_r3 = 0x1u;").unwrap() > reload);
+
+        // Exactly one declaring occurrence in the whole body, and it sits in the
+        // prologue rather than at the label.
+        assert_eq!(
+            resident
+                .matches("std::uint32_t resident_r3 = context->gpr[3];")
+                .count(),
+            1,
+            "the local is declared exactly once"
+        );
+        assert!(resident.find("std::uint32_t resident_r3 = context->gpr[3];").unwrap() < label);
+
+        // The exit still publishes the register the body writes.
+        assert!(resident.contains("context->gpr[3] = resident_r3;"));
+    }
+
+    #[test]
+    fn residency_declines_runtime_indexed_register_access() {
+        let body = residency_body(
+            "",
+            "    {\n    for (std::uint32_t reg = 14u; reg < 32u; ++reg) {\n        context->gpr[reg] = 0u;\n    }\n    }\n    {\n    return;\n    }\n",
+        );
+        assert!(apply_integer_gpr_residency(FN, &body, &BTreeSet::new()).is_none());
+    }
+
+    #[test]
+    fn residency_declines_calls_that_can_observe_the_register_file() {
+        // `call_return_checkpoint` is deliberately absent from this list. It is no
+        // longer a rejection: a body containing it stays eligible, because
+        // `apply_integer_gpr_residency` writes the locals back at every
+        // `call_return_<pc>` continuation, so the checkpoint observes a register
+        // file that already agrees with the locals. See
+        // `residency_publishes_the_local_set_before_an_observing_call`.
+        //
+        // The callees below stay rejected because this body has no
+        // `call_return_` continuation at all, so nothing publishes the locals
+        // before one of them runs and each could observe a stale register file.
+        for callee in [
+            "galaxy::call_guest_cached(services, target, &cached_target_80004008, &cached_function_80004008, context, memory, 0x80004004u);",
+            "galaxy::native_savegpr_805174FC(context, memory, services, 0x80517534u);",
+            "galaxy::architectural_interrupt_checkpoint(services, 0x80004004u, context, memory);",
+        ] {
+            let body = residency_body(
+                "",
+                &format!(
+                    "    {{\n    context->gpr[3] = 0x1u;\n    }}\n    {{\n    {callee}\n    }}\n    {{\n    return;\n    }}\n"
+                ),
+            );
+            assert!(
+                apply_integer_gpr_residency(FN, &body, &BTreeSet::new()).is_none(),
+                "{callee} must decline residency"
+            );
+        }
+    }
+
+    #[test]
+    fn residency_publishes_the_local_set_before_an_observing_call() {
+        // The counterpart to the test above. A checkpoint reached from a
+        // `call_return_` continuation is eligible, and the writeback must land
+        // before the checkpoint runs or the callback would observe stale
+        // `context->gpr[]` values -- the failure the rejection list exists to
+        // prevent, now prevented by the continuation writeback instead.
+        let body = residency_body(
+            "",
+            "    {\n    context->gpr[3] = 0x1u;\n    }\n    {\n    return;\n    }\ncall_return_80004008:\n    galaxy::call_return_checkpoint(services, 0x80004004u, 0x80004008u, context, memory);\n    return;\n",
+        );
+        let resident = apply_integer_gpr_residency(FN, &body, &BTreeSet::new())
+            .expect("a checkpoint reached from a continuation stays eligible");
+
+        let checkpoint = resident
+            .find("galaxy::call_return_checkpoint(")
+            .expect("the checkpoint is retained");
+        let writeback = resident
+            .find("context->gpr[3] = resident_r3;")
+            .expect("the written register is published");
+        assert!(
+            writeback < checkpoint,
+            "writeback must precede the checkpoint so it cannot observe a stale register file"
+        );
+    }
+
+    #[test]
+    fn residency_declines_a_body_with_no_return() {
+        let body = residency_body(
+            "",
+            "    {\n    context->gpr[3] = 0x1u;\n    }\n    {\n    galaxy::guest_execution_fault(services, 0x80004004u, \"x\");\n    }\n",
+        );
+        assert!(apply_integer_gpr_residency(FN, &body, &BTreeSet::new()).is_none());
+    }
+
+    #[test]
+    fn residency_writes_back_the_locals_at_a_call_return_continuation() {
+        // A continuation is entered after a nested guest call, so the locals are
+        // stale there and must be written back -- before the checkpoint that
+        // follows the label runs, so the checkpoint sees the real register file.
+        //
+        // The nested call is a guest load rather than the `rmge01::fn_` direct call
+        // this fixture used to carry. That is deliberate: a direct call is now a
+        // decline (see `residency_declines_a_body_with_a_direct_guest_call`), so
+        // keeping one here would make the body ineligible and this test would stop
+        // exercising the continuation writeback at all. The load is not on the
+        // reject list and still produces the post-call `call_return_` continuation
+        // this test is about.
+        let body = residency_body(
+            "",
+            "    {\n    context->gpr[3] = 0x1u;\n    }\n    {\n    context->lr = 0x80004004u;\n    context->gpr[0] = galaxy::guest_load_u32(memory, context->gpr[3], services, 0x80005000u);\n    galaxy::call_return_checkpoint(services, 0x80004000u, 0x80004004u, context, memory);\n    }\nlabel_80004004:\n    {\n    return;\n    }\ncall_return_80004004:\n    galaxy::call_return_checkpoint(services, 0x80004000u, 0x80004004u, context, memory);\n    goto label_80004004;\n",
+        );
+        let resident = apply_integer_gpr_residency(FN, &body, &BTreeSet::new())
+            .expect("a body with a call-return continuation is eligible");
+
+        let label = resident
+            .find("call_return_80004004:\n")
+            .expect("the continuation label is present");
+        let after = &resident[label..];
+        let writeback = after
+            .find("context->gpr[3] = resident_r3;")
+            .expect("the continuation writes back the register the body writes");
+        let checkpoint = after
+            .find("galaxy::call_return_checkpoint(")
+            .expect("the checkpoint is present");
+        assert!(
+            writeback < checkpoint,
+            "the writeback must precede the checkpoint so it sees the real register file"
+        );
+    }
+
+    /// A body that hands the caller's `context` to another guest function must not
+    /// be renamed. The callee reads its arguments out of `context->gpr[3..]` and
+    /// publishes its result into `context->gpr[3]`; renaming the caller's operands
+    /// to locals would send stale arguments and then clobber the result on
+    /// writeback. Both failures are silent -- the C++ compiles and the module
+    /// loads -- so the decline has to be pinned by a test rather than by review.
+    ///
+    /// This guards the entry added to the decline list for
+    /// `AgentWork/agent-21/A21-9-*`. `guest_resident_integer` is off today, so a
+    /// regression here would not show up until someone re-enables it.
+    #[test]
+    fn residency_declines_a_body_with_a_direct_guest_call() {
+        for call in [
+            "    context->pc = 0x80005000u;\n    rmge01::fn_80005000(context, memory, services);\n",
+            "    galaxy::call_guest_resolved(services, 0x80005000u, &rmge01::fn_80005000, context, memory, 0x80004000u);\n",
+            "    galaxy::call_guest_direct_resolved(services, 0x80005000u, &rmge01::fn_80005000, context, memory, 0x80004000u);\n",
+        ] {
+            let body = residency_body(
+                "",
+                &format!(
+                    "    {{\n    context->gpr[3] = 0x1u;\n    }}\n    {{\n{call}    }}\n    {{\n    context->gpr[4] = context->gpr[3];\n    }}\n    {{\n    return;\n    }}\n"
+                ),
+            );
+            assert!(
+                apply_integer_gpr_residency(FN, &body, &BTreeSet::new()).is_none(),
+                "a body containing `{call}` must be declined: the callee sees `context`"
+            );
+        }
+    }
+
+    #[test]
+    fn residency_is_opt_in_and_preserves_the_body_otherwise() {
+        let body = straight_body();
+        let options = ModuleTranslationOptions::default();
+        assert!(!options.guest_resident_integer, "residency is opt-in");
+        assert_eq!(
+            apply_residency_to_body(FN, body.clone(), &BTreeSet::new(), &options),
+            body
+        );
+        let enabled = ModuleTranslationOptions {
+            guest_resident_integer: true,
+            ..ModuleTranslationOptions::default()
+        };
+        assert!(
+            apply_residency_to_body(FN, body, &BTreeSet::new(), &enabled)
+                .contains("resident_r3")
         );
     }
 }

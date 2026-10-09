@@ -11,6 +11,7 @@
 #include "galaxy/native_ios_anomaly.h"
 #include "galaxy/owned_storage_worker.h"
 #include "galaxy/runtime_settings.h"
+#include "galaxy/scope_exit.h"
 
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
@@ -28,6 +29,7 @@
 #include <atomic>
 #include <bit>
 #include <cctype>
+#include <cerrno>
 #include <chrono>
 #include <condition_variable>
 #include <cmath>
@@ -36,6 +38,7 @@
 #include <cstring>
 #include <deque>
 #include <fstream>
+#include <functional>
 #include <iomanip>
 #include <iostream>
 #include <limits>
@@ -84,30 +87,40 @@ bool host_ownership_test_point(unsigned phase,
 }
 #endif
 
+bool ios_anomaly_profiling_enabled();
+
+bool read_env_flag(const char* name, bool default_value);
+
+bool native_ios_detailed_counters_enabled() noexcept {
+    static const bool enabled =
+        read_env_flag("GALAXY_DIAGNOSTIC_IOS_COUNTERS", false);
+    return enabled;
+}
+
 NativeIosClockSample sample_native_ios_clock() noexcept {
     const auto now_ns = []() noexcept {
         return static_cast<std::uint64_t>(std::chrono::duration_cast<
             std::chrono::nanoseconds>(
                 std::chrono::steady_clock::now().time_since_epoch()).count());
     };
-    NativeIosClockSample sample{};
-    sample.before_ns = now_ns();
-    FILETIME created{}, exited{}, kernel{}, user{};
-    sample.cpu_valid = GetThreadTimes(
-        GetCurrentThread(), &created, &exited, &kernel, &user) != FALSE;
-    if (sample.cpu_valid) {
-        sample.cpu_100ns =
-            (static_cast<std::uint64_t>(kernel.dwHighDateTime) << 32u) +
-            kernel.dwLowDateTime +
-            (static_cast<std::uint64_t>(user.dwHighDateTime) << 32u) +
-            user.dwLowDateTime;
-    }
-    ULONG64 cycles{};
-    sample.cycles_valid =
-        QueryThreadCycleTime(GetCurrentThread(), &cycles) != FALSE;
-    sample.cycles = cycles;
-    sample.after_ns = now_ns();
-    return sample;
+    return sample_native_ios_request_clock(
+        native_ios_detailed_counters_enabled(), now_ns,
+        [](NativeIosClockSample& sample) noexcept {
+            FILETIME created{}, exited{}, kernel{}, user{};
+            sample.cpu_valid = GetThreadTimes(
+                GetCurrentThread(), &created, &exited, &kernel, &user) != FALSE;
+            if (sample.cpu_valid) {
+                sample.cpu_100ns =
+                    (static_cast<std::uint64_t>(kernel.dwHighDateTime) << 32u) +
+                    kernel.dwLowDateTime +
+                    (static_cast<std::uint64_t>(user.dwHighDateTime) << 32u) +
+                    user.dwLowDateTime;
+            }
+            ULONG64 cycles{};
+            sample.cycles_valid =
+                QueryThreadCycleTime(GetCurrentThread(), &cycles) != FALSE;
+            sample.cycles = cycles;
+        });
 }
 
 void dump_native_ios_anomalies(const NativeIosAnomalyLedger& ledger) {
@@ -140,8 +153,10 @@ void dump_native_ios_anomalies(const NativeIosAnomalyLedger& ledger) {
                << " unwound=" << record.unwound << '\n';
     }
     output << "[ios-anomaly-summary] schema=1 terminal=1"
+           << " enabled=" << ios_anomaly_profiling_enabled()
            << " scope=synchronous-request-after-identity-before-handler"
-           << " clock=steady-ns-with-bracketed-thread-counters"
+           << " clock=steady-ns-with-optional-bracketed-thread-counters"
+           << " detailed-counters=" << native_ios_detailed_counters_enabled()
            << " cpu-zero-delta=possibly-quantized"
            << " identity=request-entry-not-input-service-pc"
            << " device-map=0unknown,1nand,2fs,3es,4di,5bluetooth,6stm-immediate,7stm-eventhook,8other"
@@ -1238,6 +1253,11 @@ std::string read_env_path(const char* name) {
         return std::string{};
     }
     return std::string{buffer};
+}
+
+bool ios_anomaly_profiling_enabled() {
+    static const bool enabled = read_env_flag("GALAXY_TRACE_IOS_ANOMALIES", false);
+    return enabled;
 }
 
 bool trace_bluetooth() {
@@ -2402,11 +2422,6 @@ WgpipeProfileStats& wgpipe_profile_stats() {
     return stats;
 }
 
-bool wgpipe_profile_enabled() {
-    static const bool enabled = read_env_flag("GALAXY_PROFILE_WGPIPE");
-    return enabled;
-}
-
 void dump_wgpipe_profile() {
     const WgpipeProfileStats& stats = wgpipe_profile_stats();
     const std::uint64_t write_calls =
@@ -2444,10 +2459,8 @@ void dump_wgpipe_profile() {
 }
 
 void ensure_wgpipe_profile_registered() {
-    if (!wgpipe_profile_enabled()) {
-        return;
-    }
     static std::atomic_bool registered{false};
+    if (registered.load(std::memory_order_acquire)) return;
     bool expected = false;
     if (registered.compare_exchange_strong(
             expected, true, std::memory_order_acq_rel)) {
@@ -2455,10 +2468,13 @@ void ensure_wgpipe_profile_registered() {
     }
 }
 
+// Every caller already resolved `GALAXY_PROFILE_WGPIPE` into
+// `GuestAddressSpace::wgpipe_profile_enabled_` at construction, so these
+// recorders no longer re-test it: the previous form put a function-local
+// `static` guard (acquire load + test + branch) plus, on the first path into
+// it, a getenv_s CRT call in front of every gather-pipe write. They run only
+// when the owner asked for the profile, so the registration is still lazy.
 void record_wgpipe_write(std::size_t bytes) {
-    if (!wgpipe_profile_enabled()) {
-        return;
-    }
     ensure_wgpipe_profile_registered();
     WgpipeProfileStats& stats = wgpipe_profile_stats();
     stats.write_calls.fetch_add(1, std::memory_order_relaxed);
@@ -2466,9 +2482,6 @@ void record_wgpipe_write(std::size_t bytes) {
 }
 
 void record_wgpipe_flush(std::size_t bytes, bool live_fifo) {
-    if (!wgpipe_profile_enabled()) {
-        return;
-    }
     ensure_wgpipe_profile_registered();
     WgpipeProfileStats& stats = wgpipe_profile_stats();
     stats.gather_flushes.fetch_add(1, std::memory_order_relaxed);
@@ -2479,9 +2492,6 @@ void record_wgpipe_flush(std::size_t bytes, bool live_fifo) {
 }
 
 void record_wgpipe_cp_advance(std::uint32_t bytes) {
-    if (!wgpipe_profile_enabled()) {
-        return;
-    }
     ensure_wgpipe_profile_registered();
     WgpipeProfileStats& stats = wgpipe_profile_stats();
     stats.cp_advance_calls.fetch_add(1, std::memory_order_relaxed);
@@ -2489,9 +2499,6 @@ void record_wgpipe_cp_advance(std::uint32_t bytes) {
 }
 
 void record_wgpipe_pe_event(bool token) {
-    if (!wgpipe_profile_enabled()) {
-        return;
-    }
     ensure_wgpipe_profile_registered();
     WgpipeProfileStats& stats = wgpipe_profile_stats();
     if (token) {
@@ -2790,8 +2797,28 @@ public:
     AudioWavDump() = default;
 
     bool append(std::span<const std::byte> pcm_le, std::uint32_t sample_rate) {
+        // The control owner can capture unheard DMA while an old audio worker
+        // finishes its last buffer during device loss. Serialize diagnostics.
+        std::lock_guard<std::mutex> lock(mutex_);
+        return append_locked(pcm_le, sample_rate);
+    }
+
+    bool finish() {
+        std::lock_guard<std::mutex> lock(mutex_);
+        return finish_locked();
+    }
+
+#if defined(GALAXY_NATIVE_HOST_TEST_SUPPORT)
+    void fail_stream_for_test() {
+        std::lock_guard<std::mutex> lock(mutex_);
+        out_.setstate(std::ios::badbit);
+    }
+#endif
+
+private:
+    bool append_locked(std::span<const std::byte> pcm_le, std::uint32_t sample_rate) {
         if (out_.is_open() && sample_rate_ != sample_rate) {
-            if (!finish()) {
+            if (!finish_locked()) {
                 return false;
             }
             data_bytes_ = 0;
@@ -2823,7 +2850,7 @@ public:
             static_cast<std::streamsize>(write_size));
         if (!out_) {
             std::cerr << "[audio] WAV dump write failed: " << path_ << '\n';
-            finish();
+            finish_locked();
             disabled_ = true;
             return false;
         }
@@ -2831,7 +2858,7 @@ public:
         return true;
     }
 
-    bool finish() {
+    bool finish_locked() {
         if (!out_.is_open()) {
             return !disabled_;
         }
@@ -2853,11 +2880,8 @@ public:
         return true;
     }
 
-#if defined(GALAXY_NATIVE_HOST_TEST_SUPPORT)
-    void fail_stream_for_test() { out_.setstate(std::ios::badbit); }
-#endif
+    std::mutex mutex_;
 
-private:
     static bool is_silent_pcm(std::span<const std::byte> pcm_le) {
         return std::all_of(
             pcm_le.begin(),
@@ -2955,7 +2979,7 @@ private:
         write_u32_le(out_, 0u);
         if (!out_) {
             std::cerr << "[audio] WAV dump header failed: " << path_ << '\n';
-            finish();
+            finish_locked();
             disabled_ = true;
             return false;
         }
@@ -3019,6 +3043,20 @@ bool native_host_test_wav_dump(std::span<const std::byte> pcm,
     if (fail_finalization) dump.fail_stream_for_test();
     return dump.finish();
 }
+
+bool native_host_test_concurrent_wav_dump() {
+    AudioWavDump dump;
+    bool ok[2]{true, true};
+    const auto write = [&](unsigned lane) {
+        std::array<std::byte, 16> pcm;
+        pcm.fill(static_cast<std::byte>(lane + 1u));
+        for (unsigned i = 0; i < 200; ++i) ok[lane] &= dump.append(pcm, 32000u);
+    };
+    std::thread worker(write, 0u);
+    write(1u);
+    worker.join();
+    return ok[0] && ok[1] && dump.finish();
+}
 #endif
 
 class NativeAudioSink final : public IXAudio2VoiceCallback,
@@ -3031,6 +3069,7 @@ public:
         // counters are unavailable after release. Format only after stopping
         // the worker so terminal diagnostics cannot themselves starve audio.
         const AudioSinkStats route_health = stats();
+        const bool route_output_available = output_available();
         if (read_env_flag("GALAXY_TRACE_BOOT_LOG")) {
             std::cerr << "[boot] NativeAudioSink destructor begin\n";
         }
@@ -3051,6 +3090,7 @@ public:
                   << " voice-errors=" << terminal_health.voice_error_events
                   << " engine-critical-errors=" << terminal_health.engine_critical_error_events
                   << " callback-wake-errors=" << terminal_health.callback_wake_error_events
+                  << " frequency-ratio-snapshot-coherent=" << terminal_health.frequency_ratio_snapshot_coherent
                   << " frequency-ratio-errors=" << terminal_health.frequency_ratio_apply_error_events
                   << " pending-overflows=" << terminal_health.pending_overflow_events
                   << " engine-glitches=" << route_health.engine_glitches_since_start
@@ -3061,6 +3101,9 @@ public:
                   << " max-empty-us=" << route_health.max_empty_us
                   << " max-submit-gap-us=" << route_health.max_submit_delta_us
                   << " voice-recreations=" << route_health.voice_recreation_events
+                  << " endpoint-output-available=" << route_output_available
+                  << " endpoint-retry-attempts=" << endpoint_retry_attempts_
+                  << " endpoint-unheard-buffers=" << endpoint_unheard_buffers_.load()
                   << '\n';
         if (read_env_flag("GALAXY_TRACE_BOOT_LOG")) {
             std::cerr << "[boot] NativeAudioSink destructor end\n";
@@ -3214,14 +3257,17 @@ public:
         }
         const NativeAudioInitializationSnapshot initialization_before =
             initialization_gate_.snapshot();
-        const auto initialization_started =
-            std::chrono::steady_clock::now();
+        const bool measure_initialization = initialization_before.state !=
+            NativeAudioInitializationState::Ready;
+        const auto initialization_started = measure_initialization
+            ? std::chrono::steady_clock::now()
+            : std::chrono::steady_clock::time_point{};
         const bool initialized = initialization_gate_.ensure_ready_for_submit(
             [this] { return initialize_backend(); });
-        const auto initialization_wait_us_signed =
-            std::chrono::duration_cast<std::chrono::microseconds>(
-                std::chrono::steady_clock::now() - initialization_started)
-                .count();
+        const auto initialization_wait_us_signed = measure_initialization
+            ? std::chrono::duration_cast<std::chrono::microseconds>(
+                  std::chrono::steady_clock::now() - initialization_started).count()
+            : 0;
         const auto initialization_wait_us = static_cast<std::uint64_t>(
             std::max<std::int64_t>(initialization_wait_us_signed, 0));
         const NativeAudioInitializationSnapshot initialization_after =
@@ -3275,6 +3321,23 @@ public:
             return false;
         }
 
+        if (endpoint_recovery_task_.active() || endpoint_offline_ ||
+            endpoint_recovery_pending_.load(std::memory_order_acquire)) {
+            // The guest still produced this DMA at its normal AI deadline.
+            // It cannot be heard without a device; never report it as played.
+            endpoint_unheard_buffers_.fetch_add(1u, std::memory_order_relaxed);
+            // Preserve an explicitly requested PCM diagnostic even while the
+            // physical endpoint is absent. This remains unheard output.
+            if (get_env_path(L"GALAXY_AUDIO_WAV_DUMP").has_value()) {
+                std::vector<std::byte> pcm_le(source.size());
+                if (!native_audio_convert_wii_ai_pcm16(source, pcm_le) ||
+                    !wav_dump_.append(pcm_le, sample_rate)) {
+                    log_drop("offline audio WAV diagnostic failed");
+                    return false;
+                }
+            }
+            return true;
+        }
         auto buffer = std::make_unique<SubmittedBuffer>();
         buffer->sample_rate = sample_rate;
         buffer->source_address = source_address;
@@ -3307,10 +3370,72 @@ public:
     }
 
     std::uint64_t dropped_buffers() const {
-        return dropped_buffers_;
+        return dropped_buffers_.load(std::memory_order_relaxed) +
+            endpoint_unheard_buffers_.load(std::memory_order_relaxed);
+    }
+
+    bool output_available() const noexcept {
+        return !endpoint_recovery_task_.active() && initialized_ && !endpoint_offline_ &&
+            !endpoint_recovery_pending_.load(std::memory_order_acquire);
     }
 
     void poll_health() {
+        // The simulation must never wait for endpoint enumeration/creation.
+        // Backend fields are exclusively owned by the recovery task until this
+        // completed-only join; submit/output/stats avoid them during that time.
+        if (endpoint_recovery_task_.active()) {
+            try {
+                if (!endpoint_recovery_task_.finish_ready()) return;
+            } catch (...) {
+                strict_failure_.store(true, std::memory_order_release);
+                set_strict_failure_reason("native audio device recovery task failed");
+                return;
+            }
+            if (!endpoint_offline_ && !strict_failure_.load(std::memory_order_acquire)) {
+                std::cerr << "[audio] output device restored asynchronously; resuming PCM playback\n";
+            }
+        }
+        if (!strict_failure_.load(std::memory_order_acquire) &&
+            (endpoint_offline_ || endpoint_recovery_pending_.load(std::memory_order_acquire))) {
+            const auto now_ns = host_time_ns(std::chrono::steady_clock::now());
+            const bool lost = endpoint_recovery_pending_.load(std::memory_order_acquire);
+            if (lost || native_audio_endpoint_retry_due(now_ns, endpoint_last_attempt_ns_)) {
+                endpoint_last_attempt_ns_ = now_ns;
+                {
+                    std::lock_guard<std::mutex> lock(measurement_window_mutex_);
+                    if (measurement_window_active_) {
+                        measurement_window_active_ = false;
+                        std::cerr << "[audio] device interruption invalidated the audio measurement window; counters retained\n";
+                    }
+                }
+                endpoint_recovery_snapshot_ = stats();
+                ++endpoint_retry_attempts_;
+                if (com_initialized_) {
+                    endpoint_recovery_task_.start([this] {
+#if defined(GALAXY_NATIVE_HOST_TEST_SUPPORT)
+                        if (recovery_gate_for_test_) recovery_gate_for_test_();
+#endif
+                        (void)SetThreadDescription(GetCurrentThread(), L"Nebula Audio Device Recovery");
+                        const auto recovery_started = std::chrono::steady_clock::now();
+                        const HRESULT hr = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
+                        if (FAILED(hr)) throw std::runtime_error("audio recovery COM initialization failed");
+                        const ScopeExit release_com([]() noexcept { CoUninitialize(); });
+                        rebuild_endpoint();
+                        std::osyncstream(std::cerr)
+                            << "[audio-device-recovery] elapsed-us="
+                            << std::chrono::duration_cast<std::chrono::microseconds>(
+                                std::chrono::steady_clock::now() - recovery_started).count()
+                            << " output-ready=" << (initialized_ && !endpoint_offline_)
+                            << '\n';
+                    });
+                } else {
+                    // Preserve compatibility for an embedding that already put
+                    // the control thread in an STA. Nebula itself owns an MTA.
+                    rebuild_endpoint();
+                }
+                return;
+            }
+        }
         if (strict_audio_proof_enabled() &&
             query_engine_glitches_since_start() >
                 strict_engine_glitch_baseline_) {
@@ -3320,6 +3445,11 @@ public:
     }
 
     AudioSinkStats stats() const {
+        if (endpoint_recovery_task_.active()) {
+            auto snapshot = endpoint_recovery_snapshot_;
+            snapshot.dropped_buffers = dropped_buffers();
+            return snapshot;
+        }
         AudioSinkStats stats{};
         const NativeAudioFrequencyRatioLedgerSnapshot frequency_ratio =
             callback_ledger_.frequency_ratio_snapshot();
@@ -3356,7 +3486,7 @@ public:
             callback_ledger_.completed_buffers();
         stats.queue_empty_events =
             queue_empty_events_.load(std::memory_order_acquire);
-        stats.dropped_buffers = dropped_buffers_;
+        stats.dropped_buffers = dropped_buffers();
         stats.queue_wait_events =
             queue_wait_events_.load(std::memory_order_acquire);
         stats.total_queue_wait_ms =
@@ -3380,6 +3510,7 @@ public:
             callback_ledger_.engine_critical_errors();
         stats.callback_wake_error_events =
             callback_ledger_.callback_wake_errors();
+        stats.frequency_ratio_snapshot_coherent = frequency_ratio.coherent;
         stats.frequency_ratio_apply_calls =
             frequency_ratio.apply_calls;
         stats.frequency_ratio_change_actions =
@@ -3553,6 +3684,12 @@ public:
 
     void reset_measurement_window() {
         std::lock_guard<std::mutex> lock(measurement_window_mutex_);
+        // An interrupted endpoint cannot establish a clean playback window.
+        if (endpoint_recovery_task_.active() || endpoint_offline_ ||
+            endpoint_recovery_pending_.load(std::memory_order_acquire)) {
+            measurement_window_active_ = false;
+            return;
+        }
         measurement_window_accepted_buffers_ = 0u;
         measurement_window_accepted_rate_ledger_.reset();
         measurement_window_submission_ledger_.reset();
@@ -3574,6 +3711,122 @@ public:
         ++measurement_window_generation_;
         measurement_window_active_ = true;
     }
+
+#if defined(GALAXY_NATIVE_HOST_TEST_SUPPORT)
+    bool test_recovery_ownership() {
+        if (!preinitialize() || !com_initialized_) return false;
+        std::atomic_bool entered{false}, release{false};
+        // Always unblock on early exit, before this sink's destructor joins.
+        const ScopeExit unblock([&]() noexcept {
+            release.store(true, std::memory_order_release);
+            release.notify_one();
+            try { endpoint_recovery_task_.finish(); } catch (...) {}
+        });
+        recovery_gate_for_test_ = [&] {
+            entered.store(true, std::memory_order_release);
+            entered.notify_one();
+            release.wait(false, std::memory_order_acquire);
+        };
+        const auto before = stats();
+        endpoint_recovery_pending_.store(true, std::memory_order_release);
+        poll_health();
+        entered.wait(false, std::memory_order_acquire);
+        bool ok = endpoint_recovery_task_.active() && !output_available();
+        const std::array<std::byte, 16> pcm{};
+        const auto start = std::chrono::steady_clock::now();
+        for (unsigned i = 0; i < 1000; ++i) {
+            poll_health();
+            reset_measurement_window();
+            ok &= submit_pcm16_be_stereo(pcm, 32000u, 0u, 0u);
+            ok &= !output_available() && current_measurement_window_generation() == 0u;
+            ok &= stats().submitted_buffers == before.submitted_buffers;
+        }
+        const auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(
+            std::chrono::steady_clock::now() - start).count();
+        ok &= dropped_buffers() == before.dropped_buffers + 1000u;
+        std::cout << "[audio-recovery-test] blocked-owner-polls=1000 elapsed-us="
+                  << elapsed << " unplayed-buffers=1000\n";
+        release.store(true, std::memory_order_release);
+        release.notify_one();
+        endpoint_recovery_task_.finish();
+        poll_health();
+        ok &= !strict_failure() &&
+            initialization_thread_id_.load(std::memory_order_acquire) == GetCurrentThreadId();
+        recovery_gate_for_test_ = {};
+        return ok;
+    }
+
+    bool test_recovery_backpressure(unsigned test_case) {
+        // No device is needed: exercise the real producer wait and worker
+        // failure handoff with one retained buffer and an immediate timeout.
+        pending_queue_limit_ = 1u;
+        pending_queue_timeout_ms_ = 0u;
+        auto retained = std::make_unique<SubmittedBuffer>();
+        const auto* retained_address = retained.get();
+        pending_buffers_.push_back(std::move(retained));
+        pending_queue_depth_.store(1u, std::memory_order_release);
+        auto incoming = std::make_unique<SubmittedBuffer>();
+        incoming->sample_rate = 32'000u;
+        incoming->bytes = {std::byte{0x34}, std::byte{0x12},
+                           std::byte{0x78}, std::byte{0x56}};
+        std::atomic_bool entered_wait{false}, worker_finished{false};
+        bool worker_requested_recovery = false;
+        unsigned waits = 0u;
+        std::thread loss_worker;
+        const ScopeExit finish_worker([&]() noexcept {
+            entered_wait.store(true, std::memory_order_release);
+            entered_wait.notify_one();
+            if (loss_worker.joinable()) loss_worker.join();
+            pending_wait_for_test_ = {};
+        });
+        if (test_case == 0u) {
+            loss_worker = std::thread([&] {
+                entered_wait.wait(false, std::memory_order_acquire);
+                callback_ledger_.record_engine_critical_error(
+                    static_cast<std::int32_t>(HRESULT_FROM_WIN32(ERROR_NOT_FOUND)));
+                worker_requested_recovery = !process_callback_failures();
+                if (endpoint_recovery_pending_.load(std::memory_order_acquire)) {
+                    clear_pending_after_worker_failure();
+                }
+                worker_finished.store(true, std::memory_order_release);
+                worker_finished.notify_one();
+            });
+            pending_wait_for_test_ = [&] {
+                ++waits;
+                entered_wait.store(true, std::memory_order_release);
+                entered_wait.notify_one();
+                worker_finished.wait(false, std::memory_order_acquire);
+            };
+        } else if (test_case == 1u || test_case == 3u) {
+            endpoint_recovery_pending_.store(true, std::memory_order_release);
+            if (test_case == 3u) {
+                callback_ledger_.record_engine_critical_error(
+                    static_cast<std::int32_t>(E_FAIL));
+                strict_failure_.store(true, std::memory_order_release);
+                set_strict_failure_reason("injected unrelated fatal audio failure");
+            }
+        }
+        const bool submitted = enqueue_pending_buffer(std::move(incoming));
+        if (loss_worker.joinable()) loss_worker.join();
+        const bool recoverable = test_case < 2u;
+        const auto health = stats();
+        const bool preserved = pending_buffers_.size() == 1u &&
+            pending_buffers_.front().get() == retained_address &&
+            health.pending_buffers == 1u && health.submitted_buffers == 0u;
+        const bool recovered = submitted == recoverable &&
+            strict_failure() != recoverable &&
+            health.dropped_buffers == (recoverable ? 1u : 0u) &&
+            health.pending_overflow_events == (test_case == 2u ? 1u : 0u) &&
+            health.submit_failure_events == (test_case == 2u ? 1u : 0u);
+        const bool interleaving = test_case != 0u ||
+            (waits == 1u && worker_requested_recovery &&
+             endpoint_recovery_pending_.load(std::memory_order_acquire));
+        std::cout << "[audio-backpressure-test] case=" << test_case
+                  << " preserved=" << preserved << " recovered=" << recovered
+                  << " interleaving=" << interleaving << '\n';
+        return preserved && recovered && interleaving;
+    }
+#endif
 
 private:
     struct SubmittedBuffer {
@@ -3687,12 +3940,19 @@ private:
     }
 
     std::uint64_t query_engine_glitches_since_start() const noexcept {
+        if (endpoint_recovery_task_.active()) {
+            return endpoint_recovery_snapshot_.engine_glitches_since_start;
+        }
+        return query_backend_engine_glitches();
+    }
+
+    std::uint64_t query_backend_engine_glitches() const noexcept {
         if (engine_ == nullptr) {
-            return 0u;
+            return engine_glitches_before_restart_;
         }
         XAUDIO2_PERFORMANCE_DATA performance{};
         engine_->GetPerformanceData(&performance);
-        return performance.GlitchesSinceEngineStarted;
+        return engine_glitches_before_restart_ + performance.GlitchesSinceEngineStarted;
     }
 
     std::uint64_t current_measurement_window_generation() const {
@@ -3819,6 +4079,14 @@ private:
         bool acceptance_ledger_failed = false;
         {
             std::unique_lock<std::mutex> lock(pending_mutex_);
+            // Device loss can race submit_pcm16_be_stereo's offline check.
+            // The worker leaves pending PCM owned by recovery and stops
+            // draining it; the control owner must return before it can poll
+            // health and launch that recovery, including under backpressure.
+            if (endpoint_recovery_pending_.load(std::memory_order_acquire)) {
+                lock.unlock();
+                return preserve_unheard_buffer(*buffer);
+            }
             if (worker_stop_.load(std::memory_order_acquire)) {
                 submit_failure_events_.fetch_add(
                     1, std::memory_order_acq_rel);
@@ -3837,16 +4105,23 @@ private:
                               << " limit=" << pending_queue_limit_
                               << "; applying backpressure without dropping AI buffer\n";
                 }
+#if defined(GALAXY_NATIVE_HOST_TEST_SUPPORT)
+                if (pending_wait_for_test_) pending_wait_for_test_();
+#endif
                 pending_cv_.wait_for(lock, std::chrono::milliseconds(1));
+                if (strict_failure_.load(std::memory_order_acquire)) {
+                    return false;
+                }
+                if (endpoint_recovery_pending_.load(std::memory_order_acquire)) {
+                    lock.unlock();
+                    return preserve_unheard_buffer(*buffer);
+                }
                 if (worker_stop_.load(std::memory_order_acquire)) {
                     submit_failure_events_.fetch_add(
                         1, std::memory_order_acq_rel);
                     strict_failure_.store(true, std::memory_order_release);
                     set_strict_failure_reason(
                         "native audio worker stopped before submit");
-                    return false;
-                }
-                if (strict_failure_.load(std::memory_order_acquire)) {
                     return false;
                 }
                 const auto pending_wait_ms =
@@ -3865,6 +4140,10 @@ private:
                         "native audio pending queue remained full");
                     return false;
                 }
+            }
+            if (endpoint_recovery_pending_.load(std::memory_order_acquire)) {
+                lock.unlock();
+                return preserve_unheard_buffer(*buffer);
             }
             buffer->anomaly_sequence = ++accepted_sequence_;
             buffer->accepted_ns = host_time_ns(std::chrono::steady_clock::now());
@@ -3903,15 +4182,30 @@ private:
         return true;
     }
 
-    bool initialize_backend() {
+    bool preserve_unheard_buffer(const SubmittedBuffer& buffer) {
+        // This PCM never entered the pending FIFO or XAudio. Older queued
+        // buffers remain owned by recovery teardown and are counted there.
+        if (strict_failure_.load(std::memory_order_acquire)) return false;
+        endpoint_unheard_buffers_.fetch_add(1u, std::memory_order_relaxed);
+        if (get_env_path(L"GALAXY_AUDIO_WAV_DUMP").has_value() &&
+            !wav_dump_.append(buffer.bytes, buffer.sample_rate)) {
+            log_drop("offline audio WAV diagnostic failed");
+            return false;
+        }
+        return true;
+    }
+
+    bool initialize_backend(bool control_owner = true) {
         if (disabled_) {
             return false;
         }
         if (initialized_) {
             return true;
         }
-        initialization_thread_id_.store(
-            GetCurrentThreadId(), std::memory_order_release);
+        if (control_owner) {
+            initialization_thread_id_.store(
+                GetCurrentThreadId(), std::memory_order_release);
+        }
 
         if (read_env_flag("GALAXY_AUDIO_DISABLE")) {
             disabled_ = true;
@@ -3919,10 +4213,11 @@ private:
             return false;
         }
 
-        const HRESULT com_hr = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
-        if (SUCCEEDED(com_hr)) {
+        const HRESULT com_hr = control_owner && !com_initialized_
+            ? CoInitializeEx(nullptr, COINIT_MULTITHREADED) : S_FALSE;
+        if (SUCCEEDED(com_hr) && control_owner) {
             com_initialized_ = true;
-        } else if (com_hr != RPC_E_CHANGED_MODE) {
+        } else if (FAILED(com_hr) && com_hr != RPC_E_CHANGED_MODE) {
             strict_failure_.store(true, std::memory_order_release);
             set_strict_failure_reason("native audio COM initialization failed");
             std::cerr << "[audio] CoInitializeEx failed hr=0x" << std::hex
@@ -3964,7 +4259,7 @@ private:
                     "native audio worker event creation failed");
                 std::cerr << "[audio] CreateEventW for queue wake failed error="
                           << GetLastError() << '\n';
-                shutdown();
+                shutdown_backend(false);
                 return false;
             }
         }
@@ -3976,7 +4271,7 @@ private:
             set_strict_failure_reason("XAudio2 engine creation failed");
             std::cerr << "[audio] XAudio2Create failed hr=0x" << std::hex
                       << static_cast<unsigned long>(hr) << std::dec << '\n';
-            shutdown();
+            shutdown_backend(false);
             return false;
         }
         hr = engine_->RegisterForCallbacks(this);
@@ -3987,7 +4282,7 @@ private:
             std::cerr << "[audio] RegisterForCallbacks failed hr=0x"
                       << std::hex << static_cast<unsigned long>(hr)
                       << std::dec << '\n';
-            shutdown();
+            shutdown_backend(false);
             return false;
         }
         engine_callback_registered_ = true;
@@ -4073,8 +4368,9 @@ private:
                     endpoint_probe.last_active_endpoint_result = last_hr;
                     continue;
                 }
-                const std::wstring endpoint_id(raw_id);
-                CoTaskMemFree(raw_id);
+                const std::unique_ptr<wchar_t, decltype(&CoTaskMemFree)>
+                    endpoint_id_owner(raw_id, &CoTaskMemFree);
+                const std::wstring endpoint_id(endpoint_id_owner.get());
 
                 HRESULT endpoint_hr = engine_->CreateMasteringVoice(
                     &mastering_voice_,
@@ -4104,12 +4400,13 @@ private:
         hr = try_create_mastering_voice();
         if (FAILED(hr)) {
             const bool endpoint_not_found =
-                hr == HRESULT_FROM_WIN32(ERROR_NOT_FOUND);
+                native_audio_endpoint_error_recoverable(static_cast<std::uint32_t>(hr), false);
             if (endpoint_not_found) {
                 endpoint_unavailable_ = true;
-                strict_failure_.store(true, std::memory_order_release);
-                set_strict_failure_reason(
-                    "no usable Windows audio render endpoint");
+                if (strict_audio_proof_enabled()) {
+                    strict_failure_.store(true, std::memory_order_release);
+                    set_strict_failure_reason("no usable Windows audio render endpoint");
+                }
                 if (!endpoint_unavailable_logged_) {
                     endpoint_unavailable_logged_ = true;
                     std::cerr
@@ -4141,6 +4438,14 @@ private:
                     }
                     std::cerr << '\n';
                 }
+                if (!strict_audio_proof_enabled()) {
+                    shutdown_backend(false);
+                    if (strict_failure_.load(std::memory_order_acquire)) return false;
+                    // The logical sink remains usable; physical output does
+                    // not. poll_health retries without re-entering the gate.
+                    wait_for_endpoint_after_shutdown();
+                    return true;
+                }
             } else {
                 strict_failure_.store(true, std::memory_order_release);
                 set_strict_failure_reason(
@@ -4149,24 +4454,37 @@ private:
                           << std::hex << static_cast<unsigned long>(hr)
                           << std::dec << '\n';
             }
-            shutdown();
+            shutdown_backend(false);
             return false;
         }
         endpoint_unavailable_ = false;
+        endpoint_offline_ = false;
 
         hr = engine_->StartEngine();
         if (FAILED(hr)) {
+            if (native_audio_endpoint_error_recoverable(
+                    static_cast<std::uint32_t>(hr), strict_audio_proof_enabled())) {
+                shutdown_backend(false);
+                if (strict_failure_.load(std::memory_order_acquire)) return false;
+                wait_for_endpoint_after_shutdown();
+                return true;
+            }
             strict_failure_.store(true, std::memory_order_release);
             set_strict_failure_reason("XAudio2 engine start failed");
             std::cerr << "[audio] XAudio2 StartEngine failed hr=0x" << std::hex
                       << static_cast<unsigned long>(hr) << std::dec << '\n';
-            shutdown();
+            shutdown_backend(false);
             return false;
         }
-        strict_engine_glitch_baseline_ =
-            query_engine_glitches_since_start();
+        strict_engine_glitch_baseline_ = query_backend_engine_glitches();
         if (!create_source_voice()) {
-            shutdown();
+            const bool unavailable = endpoint_recovery_pending_.load(std::memory_order_acquire);
+            shutdown_backend(false);
+            if (unavailable && !strict_failure_.load(std::memory_order_acquire)) {
+                endpoint_recovery_pending_.store(false, std::memory_order_release);
+                wait_for_endpoint_after_shutdown();
+                return true;
+            }
             return false;
         }
 
@@ -4189,7 +4507,7 @@ private:
             set_strict_failure_reason("native audio worker thread failed");
             std::cerr << "[audio] failed to start native audio worker: "
                       << ex.what() << '\n';
-            shutdown();
+            shutdown_backend(false);
             return false;
         }
         initialized_ = true;
@@ -4203,11 +4521,41 @@ private:
         return true;
     }
 
+    void wait_for_endpoint_after_shutdown() noexcept {
+        endpoint_offline_ = true;
+        endpoint_last_attempt_ns_ = host_time_ns(std::chrono::steady_clock::now());
+        initialized_ = true;
+    }
+
+    void rebuild_endpoint() {
+        endpoint_recovery_teardown_ = true;
+        engine_glitches_before_restart_ = endpoint_recovery_snapshot_.engine_glitches_since_start;
+        shutdown_backend(false);
+        endpoint_recovery_teardown_ = false;
+        endpoint_recovery_pending_.store(false, std::memory_order_release);
+        if (!strict_failure_.load(std::memory_order_acquire)) {
+            (void)initialize_backend(false);
+        }
+    }
+
     void shutdown() {
+        try {
+            endpoint_recovery_task_.finish();
+        } catch (...) {
+            strict_failure_.store(true, std::memory_order_release);
+            set_strict_failure_reason("native audio device recovery task failed during shutdown");
+        }
+        shutdown_backend(true);
+    }
+
+    void shutdown_backend(bool release_control_com) {
         shutting_down_.store(true, std::memory_order_release);
         worker_stop_.store(true, std::memory_order_release);
         {
             std::lock_guard<std::mutex> lock(pending_mutex_);
+            if (endpoint_recovery_teardown_) {
+                endpoint_unheard_buffers_.fetch_add(pending_buffers_.size(), std::memory_order_relaxed);
+            }
             pending_buffers_.clear();
             pending_queue_depth_.store(0, std::memory_order_release);
         }
@@ -4218,9 +4566,17 @@ private:
         if (worker_thread_.joinable()) {
             worker_thread_.join();
         }
+        if (endpoint_recovery_teardown_) {
+            for (const auto& buffer : in_flight_buffers_) {
+                if (!buffer->completed.load(std::memory_order_acquire)) {
+                    endpoint_unheard_buffers_.fetch_add(1u, std::memory_order_relaxed);
+                }
+            }
+        }
         if (source_voice_ != nullptr) {
             const HRESULT stop_hr = source_voice_->Stop(0);
-            if (FAILED(stop_hr)) {
+            if (FAILED(stop_hr) && !native_audio_endpoint_error_recoverable(
+                    static_cast<std::uint32_t>(stop_hr), strict_audio_proof_enabled())) {
                 submit_failure_events_.fetch_add(
                     1u, std::memory_order_acq_rel);
                 strict_failure_.store(true, std::memory_order_release);
@@ -4231,7 +4587,8 @@ private:
                           << std::dec << '\n';
             }
             const HRESULT flush_hr = source_voice_->FlushSourceBuffers();
-            if (FAILED(flush_hr)) {
+            if (FAILED(flush_hr) && !native_audio_endpoint_error_recoverable(
+                    static_cast<std::uint32_t>(flush_hr), strict_audio_proof_enabled())) {
                 submit_failure_events_.fetch_add(
                     1u, std::memory_order_acq_rel);
                 strict_failure_.store(true, std::memory_order_release);
@@ -4250,6 +4607,8 @@ private:
         // DestroyVoice has quiesced callbacks; only this teardown boundary
         // accepts that legal outcome. Live playback retains its strict check.
         (void)account_started_and_reap_completed_buffers(true);
+        empty_boundary_tracker_.reset_after_voice_destruction(
+            callback_ledger_.empty_buffer_end_boundaries());
         (void)process_callback_failures();
         in_flight_buffers_.clear();
         callback_active_sample_rate_.store(
@@ -4267,7 +4626,7 @@ private:
             engine_->Release();
             engine_ = nullptr;
         }
-        if (com_initialized_) {
+        if (com_initialized_ && release_control_com) {
             CoUninitialize();
             com_initialized_ = false;
         }
@@ -4276,6 +4635,8 @@ private:
             buffer_end_event_ = nullptr;
         }
         playback_lifecycle_.reset();
+        empty_active_.store(false, std::memory_order_release);
+        has_last_submit_time_ = false;
         initialized_ = false;
         if (trace_audio_queue() &&
             (submitted_buffers_.load(std::memory_order_acquire) != 0 ||
@@ -4294,7 +4655,22 @@ private:
         }
     }
 
-    void audio_worker_loop() {
+    void audio_worker_loop() noexcept {
+        try {
+            audio_worker_body();
+        } catch (...) {
+            submit_failure_events_.fetch_add(1, std::memory_order_acq_rel);
+            strict_failure_.store(true, std::memory_order_release);
+            set_strict_failure_reason("native audio worker exception");
+            // Accepted buffers stay in in_flight_buffers_ until the stopped
+            // voice is destroyed. Unsubmitted buffers can be discarded.
+            try { clear_pending_after_worker_failure(); } catch (...) {}
+            pending_cv_.notify_all();
+            if (buffer_end_event_ != nullptr) (void)SetEvent(buffer_end_event_);
+        }
+    }
+
+    void audio_worker_body() {
         (void)SetThreadDescription(GetCurrentThread(), L"Nebula Audio Queue");
         const ScopedMmcssAudioThread mmcss_thread;
         std::uint64_t observed_callback_sequence =
@@ -4331,6 +4707,9 @@ private:
                 return;
             }
             if (!process_callback_failures()) {
+                if (buffer != nullptr && endpoint_recovery_pending_.load(std::memory_order_acquire)) {
+                    endpoint_unheard_buffers_.fetch_add(1u, std::memory_order_relaxed);
+                }
                 clear_pending_after_worker_failure();
                 return;
             }
@@ -4356,6 +4735,9 @@ private:
                 const unsigned queued = query_source_queue();
                 if (queued == 0u &&
                     !mark_source_queue_empty("worker-observed-callback")) {
+                    if (buffer != nullptr && endpoint_recovery_pending_.load(std::memory_order_acquire)) {
+                        endpoint_unheard_buffers_.fetch_add(1u, std::memory_order_relaxed);
+                    }
                     clear_pending_after_worker_failure();
                     return;
                 }
@@ -4363,7 +4745,10 @@ private:
             if (buffer == nullptr) {
                 continue;
             }
-            if (!submit_pending_to_xaudio(std::move(buffer))) {
+            if (!submit_pending_to_xaudio(buffer)) {
+                if (buffer != nullptr && endpoint_recovery_pending_.load(std::memory_order_acquire)) {
+                    endpoint_unheard_buffers_.fetch_add(1u, std::memory_order_relaxed);
+                }
                 clear_pending_after_worker_failure();
                 return;
             }
@@ -4371,7 +4756,8 @@ private:
     }
 
     void clear_pending_after_worker_failure() {
-        if (worker_stop_.load(std::memory_order_acquire)) {
+        if (worker_stop_.load(std::memory_order_acquire) ||
+            endpoint_recovery_pending_.load(std::memory_order_acquire)) {
             return;
         }
         std::lock_guard<std::mutex> lock(pending_mutex_);
@@ -4380,37 +4766,63 @@ private:
         pending_cv_.notify_all();
     }
 
+    bool request_endpoint_recovery(HRESULT error) noexcept {
+        if (!native_audio_endpoint_error_recoverable(
+                static_cast<std::uint32_t>(error), strict_audio_proof_enabled())) return false;
+        if (!shutting_down_.load(std::memory_order_acquire)) {
+            endpoint_recovery_pending_.store(true, std::memory_order_release);
+        }
+        return true;
+    }
+
     bool process_callback_failures() {
+        if (endpoint_recovery_pending_.load(std::memory_order_acquire) &&
+            !shutting_down_.load(std::memory_order_acquire)) return false;
         const std::uint64_t engine_errors =
             callback_ledger_.engine_critical_errors();
         if (engine_errors != handled_engine_critical_error_count_) {
             handled_engine_critical_error_count_ = engine_errors;
-            strict_failure_.store(true, std::memory_order_release);
-            set_strict_failure_reason("XAudio2 engine critical error");
-            if (!engine_critical_error_logged_) {
-                engine_critical_error_logged_ = true;
-                const auto error = static_cast<HRESULT>(
-                    callback_ledger_.last_engine_critical_error());
-                std::cerr << "[audio] XAudio2 engine critical error hr=0x"
-                          << std::hex << static_cast<unsigned long>(error)
-                          << std::dec << '\n';
+            const auto error = static_cast<HRESULT>(callback_ledger_.last_engine_critical_error());
+            if (native_audio_endpoint_error_recoverable(
+                    static_cast<std::uint32_t>(error), strict_audio_proof_enabled())) {
+                if (!shutting_down_.load(std::memory_order_acquire)) {
+                    std::cerr << "[audio] output endpoint unavailable hr=0x" << std::hex
+                              << static_cast<unsigned long>(error) << std::dec
+                              << "; scheduling device recovery\n";
+                    endpoint_recovery_pending_.store(true, std::memory_order_release);
+                    return false;
+                }
+            } else {
+                strict_failure_.store(true, std::memory_order_release);
+                set_strict_failure_reason("XAudio2 engine critical error");
+                if (!engine_critical_error_logged_) {
+                    engine_critical_error_logged_ = true;
+                    std::cerr << "[audio] XAudio2 engine critical error hr=0x"
+                              << std::hex << static_cast<unsigned long>(error)
+                              << std::dec << '\n';
+                }
+                return false;
             }
-            return false;
         }
         const std::uint64_t voice_errors = callback_ledger_.voice_errors();
         if (voice_errors != handled_voice_error_count_) {
             handled_voice_error_count_ = voice_errors;
-            strict_failure_.store(true, std::memory_order_release);
-            set_strict_failure_reason("XAudio2 voice error");
-            if (!voice_error_logged_) {
-                voice_error_logged_ = true;
-                const auto error = static_cast<HRESULT>(
-                    callback_ledger_.last_voice_error());
-                std::cerr << "[audio] XAudio2 voice error hr=0x" << std::hex
-                          << static_cast<unsigned long>(error) << std::dec
-                          << '\n';
+            const auto endpoint_error = static_cast<HRESULT>(callback_ledger_.last_voice_error());
+            if (request_endpoint_recovery(endpoint_error)) {
+                if (!shutting_down_.load(std::memory_order_acquire)) return false;
+            } else {
+                strict_failure_.store(true, std::memory_order_release);
+                set_strict_failure_reason("XAudio2 voice error");
+                if (!voice_error_logged_) {
+                    voice_error_logged_ = true;
+                    const auto error = static_cast<HRESULT>(
+                        callback_ledger_.last_voice_error());
+                    std::cerr << "[audio] XAudio2 voice error hr=0x" << std::hex
+                              << static_cast<unsigned long>(error) << std::dec
+                              << '\n';
+                }
+                return false;
             }
-            return false;
         }
         const std::uint64_t frequency_ratio_errors =
             callback_ledger_.frequency_ratio_apply_errors();
@@ -4418,19 +4830,24 @@ private:
             handled_frequency_ratio_apply_error_count_) {
             handled_frequency_ratio_apply_error_count_ =
                 frequency_ratio_errors;
-            strict_failure_.store(true, std::memory_order_release);
-            set_strict_failure_reason(
-                "XAudio2 OnBufferStart frequency-ratio apply failed");
-            if (!frequency_ratio_apply_error_logged_) {
-                frequency_ratio_apply_error_logged_ = true;
-                const auto error = static_cast<HRESULT>(
-                    callback_ledger_.last_frequency_ratio_apply_error());
-                std::cerr
-                    << "[audio] OnBufferStart SetFrequencyRatio failed hr=0x"
-                    << std::hex << static_cast<unsigned long>(error)
-                    << std::dec << '\n';
+            const auto endpoint_error = static_cast<HRESULT>(callback_ledger_.last_frequency_ratio_apply_error());
+            if (request_endpoint_recovery(endpoint_error)) {
+                if (!shutting_down_.load(std::memory_order_acquire)) return false;
+            } else {
+                strict_failure_.store(true, std::memory_order_release);
+                set_strict_failure_reason(
+                    "XAudio2 OnBufferStart frequency-ratio apply failed");
+                if (!frequency_ratio_apply_error_logged_) {
+                    frequency_ratio_apply_error_logged_ = true;
+                    const auto error = static_cast<HRESULT>(
+                        callback_ledger_.last_frequency_ratio_apply_error());
+                    std::cerr
+                        << "[audio] OnBufferStart SetFrequencyRatio failed hr=0x"
+                        << std::hex << static_cast<unsigned long>(error)
+                        << std::dec << '\n';
+                }
+                return false;
             }
-            return false;
         }
         const std::uint64_t callback_wake_errors =
             callback_ledger_.callback_wake_errors();
@@ -4552,6 +4969,11 @@ private:
             this);
         if (FAILED(hr)) {
             source_voice_ = nullptr;
+            if (native_audio_endpoint_error_recoverable(
+                    static_cast<std::uint32_t>(hr), strict_audio_proof_enabled())) {
+                endpoint_recovery_pending_.store(true, std::memory_order_release);
+                return false;
+            }
             submit_failure_events_.fetch_add(1, std::memory_order_acq_rel);
             strict_failure_.store(true, std::memory_order_release);
             set_strict_failure_reason("XAudio2 CreateSourceVoice failed");
@@ -4583,7 +5005,7 @@ private:
         return true;
     }
 
-    bool submit_pending_to_xaudio(std::unique_ptr<SubmittedBuffer> buffer) {
+    bool submit_pending_to_xaudio(std::unique_ptr<SubmittedBuffer>& buffer) {
         if (buffer == nullptr) {
             return true;
         }
@@ -4607,6 +5029,7 @@ private:
             if (worker_stop_.load(std::memory_order_acquire)) {
                 return false;
             }
+            if (!process_callback_failures()) return false;
             state.BuffersQueued = query_source_queue();
             if (state.BuffersQueued < queue_limit_) {
                 break;
@@ -4755,8 +5178,22 @@ private:
         xa_buffer.pContext = buffer.get();
 
         buffer->submit_begin_ns = host_time_ns(std::chrono::steady_clock::now());
+        // Admit durable storage before XAudio can observe the PCM/context.
+        // Allocation failure here leaves the engine untouched. Once accepted,
+        // worker failure preserves ownership until voice destruction/reaping.
+        auto* submitted_buffer = buffer.get();
+        in_flight_buffers_.push_back(std::move(buffer));
         const HRESULT hr = source_voice_->SubmitSourceBuffer(&xa_buffer);
         if (FAILED(hr)) {
+            buffer = std::move(in_flight_buffers_.back());
+            in_flight_buffers_.pop_back();
+        }
+        if (FAILED(hr)) {
+            if (native_audio_endpoint_error_recoverable(
+                    static_cast<std::uint32_t>(hr), strict_audio_proof_enabled())) {
+                endpoint_recovery_pending_.store(true, std::memory_order_release);
+                return false;
+            }
             submit_failure_events_.fetch_add(
                 1, std::memory_order_acq_rel);
             strict_failure_.store(
@@ -4806,10 +5243,10 @@ private:
                     1, std::memory_order_acq_rel);
             }
         }
-        if (buffer->anomaly_sequence <= 3u || submit_delta_us > 25'000u ||
+        if (submitted_buffer->anomaly_sequence <= 3u || submit_delta_us > 25'000u ||
             empty_active_.load(std::memory_order_acquire)) {
             auto record = buffer_anomaly_record(
-                NativeAudioAnomalyKind::Submitted, *buffer,
+                NativeAudioAnomalyKind::Submitted, *submitted_buffer,
                 host_time_ns(submit_time));
             record.previous_submit_ns = has_last_submit_time_
                 ? host_time_ns(last_submit_time_) : 0u;
@@ -4818,7 +5255,6 @@ private:
             record.completed = callback_ledger_.completed_buffers();
             (void)anomaly_ledger_.record(record);
         }
-        in_flight_buffers_.push_back(std::move(buffer));
         if (!record_measurement_window_submission(
                 buffer_measurement_generation,
                 buffer_sample_rate,
@@ -4900,6 +5336,7 @@ private:
         (void)anomaly_ledger_.record(start_record);
         const HRESULT hr = source_voice_->Start(0);
         if (FAILED(hr)) {
+            if (request_endpoint_recovery(hr)) return false;
             source_start_failure_events_.fetch_add(
                 1, std::memory_order_acq_rel);
             strict_failure_.store(
@@ -4992,10 +5429,10 @@ private:
     }
 
     void log_drop(const char* reason) {
-        ++dropped_buffers_;
+        const auto drops = dropped_buffers_.fetch_add(1u, std::memory_order_relaxed) + 1u;
         strict_failure_.store(true, std::memory_order_release);
         set_strict_failure_reason(reason);
-        if (dropped_buffers_ <= 8) {
+        if (drops <= 8) {
             std::cerr << "[audio] dropped AI buffer: " << reason << '\n';
         }
     }
@@ -5021,6 +5458,7 @@ private:
         }
         const HRESULT stop_hr = source_voice_->Stop(0);
         if (FAILED(stop_hr)) {
+            if (request_endpoint_recovery(stop_hr)) return false;
             submit_failure_events_.fetch_add(1, std::memory_order_acq_rel);
             strict_failure_.store(true, std::memory_order_release);
             set_strict_failure_reason(
@@ -5077,18 +5515,18 @@ private:
         return true;
     }
 
-    void STDMETHODCALLTYPE OnProcessingPassStart() override {}
-    void STDMETHODCALLTYPE OnProcessingPassEnd() override {}
-    void STDMETHODCALLTYPE OnCriticalError(HRESULT error) override {
+    void STDMETHODCALLTYPE OnProcessingPassStart() noexcept override {}
+    void STDMETHODCALLTYPE OnProcessingPassEnd() noexcept override {}
+    void STDMETHODCALLTYPE OnCriticalError(HRESULT error) noexcept override {
         callback_ledger_.record_engine_critical_error(
             static_cast<std::int32_t>(error));
         signal_callback_event();
     }
 
-    void STDMETHODCALLTYPE OnVoiceProcessingPassStart(UINT32) override {}
-    void STDMETHODCALLTYPE OnVoiceProcessingPassEnd() override {}
-    void STDMETHODCALLTYPE OnStreamEnd() override {}
-    void STDMETHODCALLTYPE OnBufferStart(void* context) override {
+    void STDMETHODCALLTYPE OnVoiceProcessingPassStart(UINT32) noexcept override {}
+    void STDMETHODCALLTYPE OnVoiceProcessingPassEnd() noexcept override {}
+    void STDMETHODCALLTYPE OnStreamEnd() noexcept override {}
+    void STDMETHODCALLTYPE OnBufferStart(void* context) noexcept override {
         auto* const buffer = static_cast<SubmittedBuffer*>(context);
         if (buffer == nullptr) {
             callback_ledger_.record_voice_error(
@@ -5178,13 +5616,13 @@ private:
         buffer->started.store(true, std::memory_order_release);
         signal_callback_event();
     }
-    void STDMETHODCALLTYPE OnLoopEnd(void*) override {}
-    void STDMETHODCALLTYPE OnVoiceError(void*, HRESULT error) override {
+    void STDMETHODCALLTYPE OnLoopEnd(void*) noexcept override {}
+    void STDMETHODCALLTYPE OnVoiceError(void*, HRESULT error) noexcept override {
         callback_ledger_.record_voice_error(
             static_cast<std::int32_t>(error));
         signal_callback_event();
     }
-    void STDMETHODCALLTYPE OnBufferEnd(void* context) override {
+    void STDMETHODCALLTYPE OnBufferEnd(void* context) noexcept override {
         auto* const buffer = static_cast<SubmittedBuffer*>(context);
         if (buffer == nullptr) {
             callback_ledger_.record_voice_error(
@@ -5277,7 +5715,7 @@ private:
     std::atomic_uint64_t empty_over_5_ms_{0};
     std::atomic_uint64_t last_empty_since_us_{0};
     std::atomic<std::uint32_t> max_empty_us_{0};
-    std::uint64_t dropped_buffers_{};
+    std::atomic_uint64_t dropped_buffers_{0};
     std::uint64_t handled_voice_error_count_{};
     std::uint64_t handled_engine_critical_error_count_{};
     std::uint64_t handled_frequency_ratio_apply_error_count_{};
@@ -5306,6 +5744,21 @@ private:
     bool initialized_{};
     bool endpoint_unavailable_{};
     bool endpoint_unavailable_logged_{};
+    // Callback/queue worker publishes requests. Recovery exclusively owns the
+    // graph while active; main-owner observers use the immutable snapshot.
+    NativeAudioRecoveryTask endpoint_recovery_task_;
+#if defined(GALAXY_NATIVE_HOST_TEST_SUPPORT)
+    std::function<void()> recovery_gate_for_test_;
+    std::function<void()> pending_wait_for_test_;
+#endif
+    AudioSinkStats endpoint_recovery_snapshot_{};
+    std::atomic_bool endpoint_recovery_pending_{false};
+    std::atomic_uint64_t endpoint_unheard_buffers_{0};
+    bool endpoint_offline_{};
+    bool endpoint_recovery_teardown_{};
+    std::uint64_t endpoint_last_attempt_ns_{};
+    std::uint64_t endpoint_retry_attempts_{};
+    std::uint64_t engine_glitches_before_restart_{};
     bool com_initialized_{};
     bool has_last_submit_time_{};
     NativeAudioPlaybackLifecycle playback_lifecycle_;
@@ -5339,17 +5792,20 @@ private:
 
     void set_strict_failure_reason(const char* reason) noexcept {
         bool notify = false;
-        {
+        try {
             std::lock_guard<std::mutex> lock(strict_failure_mutex_);
-            if (strict_failure_reason_.empty()) {
-                strict_failure_reason_ =
-                    reason != nullptr ? reason : "unknown";
+            if (strict_failure_reason_.front() == '\0') {
+                (void)strncpy_s(strict_failure_reason_.data(),
+                    strict_failure_reason_.size(),
+                    reason != nullptr ? reason : "unknown", _TRUNCATE);
                 notify = true;
             }
+        } catch (...) {
+            // Notification must still reach the simulation owner if reporting
+            // the original failure cannot acquire its diagnostic mutex.
+            notify = true;
         }
-        if (notify) {
-            failure_notifier_.publish();
-        }
+        if (notify) failure_notifier_.publish();
     }
 
 public:
@@ -5359,13 +5815,33 @@ public:
 
     std::string strict_failure_reason() const {
         std::lock_guard<std::mutex> lock(strict_failure_mutex_);
-        return strict_failure_reason_;
+        return std::string(strict_failure_reason_.data());
     }
 
 private:
     mutable std::mutex strict_failure_mutex_;
-    std::string strict_failure_reason_;
+    std::array<char, 256> strict_failure_reason_{};
 };
+
+#if defined(GALAXY_NATIVE_HOST_TEST_SUPPORT)
+bool native_host_test_audio_recovery() {
+    bool result = false;
+    std::thread owner([&] {
+        try {
+            NativeAudioSink sink;
+            result = sink.test_recovery_ownership();
+        } catch (...) { result = false; }
+    });
+    owner.join();
+    return result;
+}
+
+bool native_host_test_audio_recovery_backpressure(unsigned test_case) {
+    NativeAudioSink sink;
+    return sink.test_recovery_backpressure(test_case);
+}
+#endif
+
 
 static std::atomic<HostPointerProvider> g_host_pointer_provider{nullptr};
 static std::atomic<HostPointerTransitionProvider>
@@ -6092,16 +6568,31 @@ struct NativeInputReplayColumns {
 };
 
 std::optional<std::string> read_env_string(const char* name) {
-    constexpr std::size_t kMaxWindowsEnvironmentValueLength = 32767u;
-    std::vector<char> buffer(kMaxWindowsEnvironmentValueLength + 1u);
+    // Script/path configuration remains dynamically observable. Short values
+    // use stack storage; oversized values retain the checked heap fallback.
+    constexpr std::size_t kStackEnvironmentValueLength = 512u;
+    // Read only the initialized length returned by getenv_s on success.
+    // Unset/dynamic script values need no 512-byte zero-fill per query.
+    char stack_buffer[kStackEnvironmentValueLength];
     std::size_t length = 0;
     const errno_t result =
-        getenv_s(&length, buffer.data(), buffer.size(), name);
-    if (result != 0) {
+        getenv_s(&length, stack_buffer, sizeof(stack_buffer), name);
+    if (result == 0) {
+        if (length <= 1u) {
+            return std::nullopt;
+        }
+        return std::string(stack_buffer, length - 1u);
+    }
+    // The value exists but does not fit the stack buffer. `getenv_s` has
+    // already reported its size in `length`, so a single exactly-sized
+    // allocation replaces the old fixed 32 KiB one. A failure here can only
+    // mean "too long", which is the original message.
+    std::vector<char> buffer(length + 1u);
+    if (getenv_s(&length, buffer.data(), buffer.size(), name) != 0) {
         throw std::runtime_error(
             std::string("environment variable is too long: ") + name);
     }
-    if (length <= 1) {
+    if (length <= 1u) {
         return std::nullopt;
     }
     return std::string(buffer.data(), length - 1u);
@@ -6294,16 +6785,18 @@ std::uint64_t parse_replay_u64(
     const std::string& path,
     std::size_t line_number,
     int base = 10) {
-    if (field.empty() || field[0] == '-') {
+    if (field.empty() || field.find_first_not_of(" \t\r\n\v\f") == std::string::npos ||
+        field[field.find_first_not_of(" \t\r\n\v\f")] == '-') {
         std::ostringstream message;
         message << "invalid native input replay " << name << " at "
                 << path << ':' << line_number;
         throw std::runtime_error(message.str());
     }
     char* end = nullptr;
+    errno = 0;
     const unsigned long long parsed =
         std::strtoull(field.c_str(), &end, base);
-    if (end == field.c_str() || *end != '\0') {
+    if (errno == ERANGE || end == field.c_str() || *end != '\0') {
         std::ostringstream message;
         message << "invalid native input replay " << name << " at "
                 << path << ':' << line_number;
@@ -6324,14 +6817,27 @@ std::int64_t parse_replay_i64(
         throw std::runtime_error(message.str());
     }
     char* end = nullptr;
+    errno = 0;
     const long long parsed = std::strtoll(field.c_str(), &end, 10);
-    if (end == field.c_str() || *end != '\0') {
+    if (errno == ERANGE || end == field.c_str() || *end != '\0') {
         std::ostringstream message;
         message << "invalid native input replay " << name << " at "
                 << path << ':' << line_number;
         throw std::runtime_error(message.str());
     }
     return static_cast<std::int64_t>(parsed);
+}
+
+int parse_replay_int(
+    const std::string& field, const std::string& name,
+    const std::string& path, std::size_t line_number) {
+    const auto value = parse_replay_i64(field, name, path, line_number);
+    if (value < std::numeric_limits<int>::min() ||
+        value > std::numeric_limits<int>::max()) {
+        throw std::runtime_error("native input replay " + name +
+            " is out of range at " + path + ':' + std::to_string(line_number));
+    }
+    return static_cast<int>(value);
 }
 
 std::uint8_t parse_replay_u8(
@@ -6408,26 +6914,26 @@ NativeInputReplaySample parse_replay_sample(
         "game_focused",
         path,
         line_number);
-    sample.mouse_client_x = static_cast<int>(parse_replay_i64(
+    sample.mouse_client_x = parse_replay_int(
         replay_field(fields, columns.mouse_client_x, path, line_number),
         "mouse_client_x",
         path,
-        line_number));
-    sample.mouse_client_y = static_cast<int>(parse_replay_i64(
+        line_number);
+    sample.mouse_client_y = parse_replay_int(
         replay_field(fields, columns.mouse_client_y, path, line_number),
         "mouse_client_y",
         path,
-        line_number));
-    sample.client_w = static_cast<int>(parse_replay_i64(
+        line_number);
+    sample.client_w = parse_replay_int(
         replay_field(fields, columns.client_w, path, line_number),
         "client_w",
         path,
-        line_number));
-    sample.client_h = static_cast<int>(parse_replay_i64(
+        line_number);
+    sample.client_h = parse_replay_int(
         replay_field(fields, columns.client_h, path, line_number),
         "client_h",
         path,
-        line_number));
+        line_number);
     sample.keys_hold = parse_replay_u64(
         replay_field(fields, columns.keys_hold_hex, path, line_number),
         "keys_hold_hex",
@@ -6580,7 +7086,11 @@ const NativeInputReplaySample* native_input_replay_sample_for_vi(
     if (log == nullptr) {
         return nullptr;
     }
-    const std::uint64_t target_ms = (current_vi * 1000u) / 60u;
+    const auto seconds = current_vi / 60u;
+    const auto fraction = (current_vi % 60u) * 1000u / 60u;
+    const auto maximum = std::numeric_limits<std::uint64_t>::max();
+    const std::uint64_t target_ms = seconds > (maximum - fraction) / 1000u
+        ? maximum : seconds * 1000u + fraction;
     const auto it = std::upper_bound(
         log->samples.begin(),
         log->samples.end(),
@@ -7075,22 +7585,25 @@ void apply_pointer_script_envs(
         "GALAXY_INPUT_POINTER_X",
         "GALAXY_INPUT_POINTER_Y",
         nullptr);
-    for (int index = 2; index <= 6; ++index) {
-        const std::string x_env =
-            "GALAXY_INPUT_POINTER" + std::to_string(index) + "_X";
-        const std::string y_env =
-            "GALAXY_INPUT_POINTER" + std::to_string(index) + "_Y";
-        const std::string vi_env =
-            "GALAXY_INPUT_POINTER" + std::to_string(index) + "_VI";
-        const std::string duration_env =
-            "GALAXY_INPUT_POINTER" + std::to_string(index) + "_DURATION";
+    // Only the names are immutable. Continue reading values at every sample:
+    // diagnostic tools/tests may update them, and inactive waypoints retain
+    // their existing deferred duration validation and ordered precedence.
+    static constexpr std::array<std::array<const char*, 4>, 5> kWaypoints{{
+        {"GALAXY_INPUT_POINTER2_X", "GALAXY_INPUT_POINTER2_Y",
+         "GALAXY_INPUT_POINTER2_VI", "GALAXY_INPUT_POINTER2_DURATION"},
+        {"GALAXY_INPUT_POINTER3_X", "GALAXY_INPUT_POINTER3_Y",
+         "GALAXY_INPUT_POINTER3_VI", "GALAXY_INPUT_POINTER3_DURATION"},
+        {"GALAXY_INPUT_POINTER4_X", "GALAXY_INPUT_POINTER4_Y",
+         "GALAXY_INPUT_POINTER4_VI", "GALAXY_INPUT_POINTER4_DURATION"},
+        {"GALAXY_INPUT_POINTER5_X", "GALAXY_INPUT_POINTER5_Y",
+         "GALAXY_INPUT_POINTER5_VI", "GALAXY_INPUT_POINTER5_DURATION"},
+        {"GALAXY_INPUT_POINTER6_X", "GALAXY_INPUT_POINTER6_Y",
+         "GALAXY_INPUT_POINTER6_VI", "GALAXY_INPUT_POINTER6_DURATION"},
+    }};
+    for (const auto& waypoint : kWaypoints) {
         apply_pointer_pair_env(
-            overlay,
-            current_vi,
-            x_env.c_str(),
-            y_env.c_str(),
-            vi_env.c_str(),
-            duration_env.c_str());
+            overlay, current_vi, waypoint[0], waypoint[1],
+            waypoint[2], waypoint[3]);
     }
     apply_pointer_sweep_env(overlay, current_vi);
 }
@@ -7139,7 +7652,10 @@ galaxy::input::WiimoteInputSnapshot build_replayed_hid_input_snapshot(
     const NativeInputReplaySample& replay,
     const NativeInputScriptOverlay& script,
     galaxy::RuntimeInputMode input_mode,
-    bool ir_input_enabled) {
+    bool ir_input_enabled,
+    float& final_pointer_x,
+    float& final_pointer_y,
+    bool& final_pointer_active) {
     galaxy::input::WiimoteInputSnapshot snapshot{};
     const bool replay_controller_active = replay_xinput_has_input(replay);
     const bool force_controller =
@@ -7299,6 +7815,9 @@ galaxy::input::WiimoteInputSnapshot build_replayed_hid_input_snapshot(
     const bool ir_active = pointer_active && ir_input_enabled;
     galaxy::input::publish_wiimote_ir_dots(
         snapshot, s_replay_pointer_x, s_replay_pointer_y, ir_active);
+    final_pointer_x = s_replay_pointer_x;
+    final_pointer_y = s_replay_pointer_y;
+    final_pointer_active = pointer_active;
 
     const bool shake_pressed =
         script.shake ||
@@ -7424,17 +7943,30 @@ galaxy::input::WiimoteInputSnapshot build_native_hid_input_snapshot(
     if (const NativeInputReplaySample* replay =
             native_input_replay_sample_for_vi(current_vi);
         replay != nullptr) {
-        if (host_pointer_metadata != nullptr) {
-            host_pointer_metadata->replay_source = true;
-            host_pointer_metadata->pointer_origin = SyntheticKpadPointerOrigin::Replay;
-        }
-        return build_replayed_hid_input_snapshot(
+        float replay_pointer_x = 0.0f;
+        float replay_pointer_y = 0.0f;
+        bool replay_pointer_active = false;
+        const auto replay_snapshot = build_replayed_hid_input_snapshot(
             report_mode,
             current_vi,
             *replay,
             script,
             input_mode_state.mode,
-            ir_input_enabled);
+            ir_input_enabled,
+            replay_pointer_x,
+            replay_pointer_y,
+            replay_pointer_active);
+        if (host_pointer_metadata != nullptr) {
+            host_pointer_metadata->replay_source = true;
+            host_pointer_metadata->pointer_origin = SyntheticKpadPointerOrigin::Replay;
+            host_pointer_metadata->pointer_x = replay_pointer_x;
+            host_pointer_metadata->pointer_y = replay_pointer_y;
+            host_pointer_metadata->pointer_active = replay_pointer_active;
+            // Replay owns this point. Keep physical acquisition identity unset
+            // and refresh_mouse_allowed false so KPAD cannot replace it with
+            // a later live cursor sample. The HID boundary supplies guest ticks.
+        }
+        return replay_snapshot;
     }
 
     input_poll_diagnostic_stage(NativeInputPollStage::Focus);
@@ -9576,6 +10108,12 @@ GuestAddressSpace::GuestAddressSpace(
     wgpipe_pe_scan_hint_enabled_ = pe_scan_hints_enabled;
     wgpipe_pe_ownership_trace_enabled_ =
         read_env_flag("GALAXY_TRACE_WGPIPE_PE_OWNERSHIP", false);
+    // Launch-time switches read once instead of once per gather-pipe write.
+    wgpipe_profile_enabled_ = read_env_flag("GALAXY_PROFILE_WGPIPE", false);
+    direct_wgpipe_pe_events_ =
+        read_env_flag("GALAXY_DIRECT_WGPIPE_PE_EVENTS", false);
+    trace_gx_fifo_append_enabled_ =
+        read_env_flag("GALAXY_TRACE_GX_FIFO_APPEND_PATTERN", false);
     if (wgpipe_pe_ownership_trace_enabled_) {
         wgpipe_pe_trace_records_.reserve(kWgpipePeTraceCapacity);
         wgpipe_ownership_trace_records_.reserve(
@@ -9803,7 +10341,7 @@ bool GuestAddressSpace::preinitialize_native_audio() {
     std::ostream& output = initialized ? std::cout : std::cerr;
     std::osyncstream line(output);
     line << "[audio-init] pre-guest=1 mode=native result="
-         << (initialized ? "ready" : "failed")
+         << (initialized ? (native_audio_->output_available() ? "ready" : "waiting-for-device") : "failed")
          << " total-us=" << initialization_stats.preinitialize_elapsed_us
          << " attempts=" << initialization_stats.initialization_attempts
          << " thread=" << initialization_stats.initialization_thread_id;
@@ -10081,9 +10619,13 @@ void GuestAddressSpace::advance_cp_fifo(std::uint32_t new_wr_ptr) {
         cp_rd_ptr_ = new_wr_ptr;
         return;
     }
-    record_wgpipe_cp_advance(bytes_to_read);
-    static std::uint64_t s_cp_bytes_total = 0;
-    const bool first_ever = (s_cp_bytes_total == 0);
+    if (wgpipe_profile_enabled_) {
+        record_wgpipe_cp_advance(bytes_to_read);
+    }
+    // A plain member, not a function-local `static`: the `static` form costs a
+    // thread-safe-initialisation guard on every CP-ring advance, and it was only
+    // ever read to answer "is this the first advance?".
+    const bool first_ever = (cp_ring_bytes_total_ == 0u);
     // Copy ring-buffer bytes from physical MEM1 into gx_fifo_.
     std::uint32_t rd = cp_rd_ptr_;
     std::uint32_t remaining = bytes_to_read;
@@ -10104,12 +10646,14 @@ void GuestAddressSpace::advance_cp_fifo(std::uint32_t new_wr_ptr) {
                 gx_fifo_.end(),
                 mem1_view_.data() + rd,
                 mem1_view_.data() + rd + chunk);
-            trace_gx_fifo_append("cp-ring", append_start, chunk);
+            if (trace_gx_fifo_append_enabled_) {
+                trace_gx_fifo_append("cp-ring", append_start, chunk);
+            }
         }
         rd += chunk;
         remaining -= chunk;
     }
-    s_cp_bytes_total += bytes_to_read;
+    cp_ring_bytes_total_ += bytes_to_read;
     if (first_ever) {
         if (trace_host_startup()) {
             std::cout << "[cp] CP FIFO ring-buffer simulation active: first "
@@ -10358,9 +10902,10 @@ void GuestAddressSpace::trace_gx_fifo_append(
     const char* source,
     std::size_t append_start,
     std::size_t append_size) {
-    static const bool enabled =
-        read_env_flag("GALAXY_TRACE_GX_FIFO_APPEND_PATTERN", false);
-    if (!enabled || append_size == 0 || gx_fifo_.size() < 4) {
+    // The caller tests `trace_gx_fifo_append_enabled_` before calling, so this
+    // body is reached only under the opt-in trace. No per-call static guard and
+    // no getenv_s on the gather-pipe hot path any more.
+    if (append_size == 0 || gx_fifo_.size() < 4) {
         return;
     }
 
@@ -10476,9 +11021,13 @@ void GuestAddressSpace::flush_wgpipe_gather_burst(
     if (live_fifo) {
         const std::size_t append_start = gx_fifo_.size();
         gx_fifo_.insert(gx_fifo_.end(), bytes.begin(), bytes.end());
-        trace_gx_fifo_append("wgpipe-burst", append_start, bytes.size());
+        if (trace_gx_fifo_append_enabled_) {
+            trace_gx_fifo_append("wgpipe-burst", append_start, bytes.size());
+        }
     }
-    record_wgpipe_flush(bytes.size(), live_fifo);
+    if (wgpipe_profile_enabled_) {
+        record_wgpipe_flush(bytes.size(), live_fifo);
+    }
 }
 
 void GuestAddressSpace::flush_wgpipe_gather_tail_for_frame() {
@@ -10502,11 +11051,15 @@ void GuestAddressSpace::flush_wgpipe_gather_tail_for_frame() {
         wgpipe_gather_.begin(),
         wgpipe_gather_.begin() +
             static_cast<std::ptrdiff_t>(wgpipe_gather_count_));
-    trace_gx_fifo_append(
-        "wgpipe-tail",
-        append_start,
-        wgpipe_gather_count_);
-    record_wgpipe_flush(wgpipe_gather_count_, live_fifo);
+    if (trace_gx_fifo_append_enabled_) {
+        trace_gx_fifo_append(
+            "wgpipe-tail",
+            append_start,
+            wgpipe_gather_count_);
+    }
+    if (wgpipe_profile_enabled_) {
+        record_wgpipe_flush(wgpipe_gather_count_, live_fifo);
+    }
     wgpipe_gather_count_ = 0;
 }
 
@@ -10578,7 +11131,9 @@ void GuestAddressSpace::scan_direct_wgpipe_pe_events(
              static_cast<std::uint32_t>(wgpipe_recent_bytes_[4]);
         if (reg == 0x45u && (bp_val & 0x2u) != 0u) {
             raise_pe_finish();
-            record_wgpipe_pe_event(false);
+            if (wgpipe_profile_enabled_) {
+                record_wgpipe_pe_event(false);
+            }
             static int s_finish_log = 0;
             if (trace_host_startup() && ++s_finish_log <= 4) {
                 std::cout << "[pe-host] draw-done token #"
@@ -10588,7 +11143,9 @@ void GuestAddressSpace::scan_direct_wgpipe_pe_events(
             raise_pe_token(
                 static_cast<std::uint16_t>(bp_val & 0xFFFFu),
                 reg == 0x48u);
-            record_wgpipe_pe_event(true);
+            if (wgpipe_profile_enabled_) {
+                record_wgpipe_pe_event(true);
+            }
             static int s_token_log = 0;
             if (trace_host_startup() && reg == 0x48u &&
                 ++s_token_log <= 4) {
@@ -10603,7 +11160,14 @@ bool GuestAddressSpace::write_wgpipe_bytes(std::span<const std::byte> bytes) {
     if (bytes.empty()) {
         return true;
     }
-    record_wgpipe_write(bytes.size());
+    // Both of these are launch-time switches resolved in the constructor. They
+    // used to be re-tested here as function-local `static`s, which put a
+    // thread-safe-initialisation guard — and, for GALAXY_DIRECT_WGPIPE_PE_EVENTS,
+    // a getenv_s CRT call — in front of every guest GX command word and every
+    // vertex byte the gather pipe accepts.
+    if (wgpipe_profile_enabled_) {
+        record_wgpipe_write(bytes.size());
+    }
     std::uint32_t diagnostic_gather_before = 0u;
     bool diagnostic_live_before = false;
     if (wgpipe_pe_ownership_trace_enabled_) {
@@ -10615,9 +11179,7 @@ bool GuestAddressSpace::write_wgpipe_bytes(std::span<const std::byte> bytes) {
         record_wgpipe_pe_scan_hint(bytes);
     }
 
-    static const bool direct_pe_events =
-        read_env_flag("GALAXY_DIRECT_WGPIPE_PE_EVENTS", false);
-    if (direct_pe_events) {
+    if (direct_wgpipe_pe_events_) {
         scan_direct_wgpipe_pe_events(bytes);
     }
 
@@ -11252,6 +11814,12 @@ const GuestAddressSpace::DiscReadTicket* GuestAddressSpace::disc_read_ticket(
 
 void GuestAddressSpace::forget_disc_read_ticket(
     std::uint32_t physical_request) {
+    // Tickets are only created when `trace_di_io()` is on, but this erase runs
+    // unconditionally from the ack and latched-reply-release paths. Skip the
+    // hash and tree descent when there is nothing to erase.
+    if (disc_read_tickets_.empty()) {
+        return;
+    }
     disc_read_tickets_.erase(physical_request);
 }
 
@@ -12579,8 +13147,22 @@ bool GuestAddressSpace::write_device(
                     std::cout << std::dec << '\n';
                 }
             } else {
-                if (trace_di_io() &&
-                    latched_reply_requests_.erase(acked) != 0 &&
+                // Retire the request from the latched set unconditionally.
+                // `latched_reply_requests_.insert()` on the reply path
+                // (post_ios_reply) is unconditional, but this erase used to sit
+                // behind `trace_di_io() &&`. trace_di_io() folds to a
+                // compile-time false under the default GALAXY_GUEST_TRACE==0, so
+                // in every normal build the set was only ever inserted into and
+                // never removed from: one std::set node and one allocation leak
+                // per latched IOS reply for the whole session, plus a growing
+                // tree walked by the count() probes above.
+                //
+                // Only the logging stays gated; the set's contents are a pure
+                // function of the acknowledged request either way, so an
+                // instrumented build observes the same value it did before.
+                const bool latched_retired =
+                    latched_reply_requests_.erase(acked) != 0;
+                if (trace_di_io() && latched_retired &&
                     trace_di_io_counter_allows(s_ack_logs)) {
                     std::cout << "[ipc-ack] Y2 req=0x" << std::hex << acked
                               << " prev=0x" << previous_ctrl;
@@ -12675,42 +13257,45 @@ void GuestAddressSpace::complete_ios_request(std::uint32_t physical_request) {
         read_u32(physical_request + kIosRequestCommandOffset);
     const std::uint32_t handle =
         read_u32(physical_request + kIosRequestHandleOffset);
-    NativeIosRequestIdentity identity{};
-    identity.request = physical_request;
-    identity.command = command;
-    identity.handle = handle;
-    // Nonthrowing RAM-only capture preserves original fault/device ordering.
-    const auto diagnostic_physical = physical_request & 0x3FFFFFFFu;
-    if (diagnostic_physical <= kMem1Size - 32u ||
-        (diagnostic_physical >= 0x10000000u &&
-         diagnostic_physical <= 0x10000000u + kMem2Size - 32u)) {
-        if (const auto* arguments = pointer_or_null(physical_request + 0x0Cu, 20u)) {
-            identity.arguments_valid = true;
-            for (std::size_t i = 0; i < identity.arguments.size(); ++i) {
-                const auto* word = arguments + i * 4u;
-                identity.arguments[i] =
-                    (std::to_integer<std::uint32_t>(word[0]) << 24u) |
-                    (std::to_integer<std::uint32_t>(word[1]) << 16u) |
-                    (std::to_integer<std::uint32_t>(word[2]) << 8u) |
-                    std::to_integer<std::uint32_t>(word[3]);
+    std::optional<NativeIosRequestTrace> request_trace;
+    if (ios_anomaly_profiling_enabled()) {
+        NativeIosRequestIdentity identity{};
+        identity.request = physical_request;
+        identity.command = command;
+        identity.handle = handle;
+        // Nonthrowing RAM-only capture preserves original fault/device ordering.
+        const auto diagnostic_physical = physical_request & 0x3FFFFFFFu;
+        if (diagnostic_physical <= kMem1Size - 32u ||
+            (diagnostic_physical >= 0x10000000u &&
+             diagnostic_physical <= 0x10000000u + kMem2Size - 32u)) {
+            if (const auto* arguments = pointer_or_null(physical_request + 0x0Cu, 20u)) {
+                identity.arguments_valid = true;
+                for (std::size_t i = 0; i < identity.arguments.size(); ++i) {
+                    const auto* word = arguments + i * 4u;
+                    identity.arguments[i] =
+                        (std::to_integer<std::uint32_t>(word[0]) << 24u) |
+                        (std::to_integer<std::uint32_t>(word[1]) << 16u) |
+                        (std::to_integer<std::uint32_t>(word[2]) << 8u) |
+                        std::to_integer<std::uint32_t>(word[3]);
+                }
             }
         }
+        if (nand_files_.contains(handle)) {
+            identity.device = NativeIosDevice::Nand;
+        } else if (const auto path = ios_paths_.find(handle); path != ios_paths_.end()) {
+            const std::string_view name = path->second;
+            identity.device = name == kFsDevicePath ? NativeIosDevice::Fs :
+                name == kEsDevicePath ? NativeIosDevice::Es :
+                name == kDvdDevicePath ? NativeIosDevice::Di :
+                name == kBluetoothDevicePath ? NativeIosDevice::Bluetooth :
+                name == kStmImmediatePath ? NativeIosDevice::StmImmediate :
+                name == kStmEventHookPath ? NativeIosDevice::StmEventHook :
+                NativeIosDevice::Other;
+        }
+        request_trace.emplace(
+            *native_ios_anomalies_, identity, &sample_native_ios_clock);
     }
-    if (nand_files_.contains(handle)) {
-        identity.device = NativeIosDevice::Nand;
-    } else if (const auto path = ios_paths_.find(handle); path != ios_paths_.end()) {
-        const std::string_view name = path->second;
-        identity.device = name == kFsDevicePath ? NativeIosDevice::Fs :
-            name == kEsDevicePath ? NativeIosDevice::Es :
-            name == kDvdDevicePath ? NativeIosDevice::Di :
-            name == kBluetoothDevicePath ? NativeIosDevice::Bluetooth :
-            name == kStmImmediatePath ? NativeIosDevice::StmImmediate :
-            name == kStmEventHookPath ? NativeIosDevice::StmEventHook :
-            NativeIosDevice::Other;
-    }
-    NativeIosRequestTrace request_trace(
-        *native_ios_anomalies_, identity, &sample_native_ios_clock);
-    static int s_ios_request_count = 0;
+    static std::uint64_t s_ios_request_count = 0;
     ++s_ios_request_count;
     if (trace_ipc_host() &&
         (s_ios_request_count <= 32 || s_ios_request_count % 512 == 0)) {
@@ -13838,11 +14423,22 @@ bool GuestAddressSpace::handle_di_ioctl(
         if (byte_count > 0u) {
             copy_disc_bytes(out_buf, byte_offset, byte_count);
             note_disc_read_for_scene_hint(byte_offset, byte_count);
-            const DiscReadTicket ticket = make_disc_read_ticket(
-                physical_request, out_buf, byte_offset, byte_count,
-                /*ioctlv=*/false);
-            remember_disc_read_ticket(ticket);
+            // The read ticket exists only to be printed. Every reader
+            // (acknowledge_ios_request, post_ios_reply and the two latched-reply
+            // paths) is inside a `trace_di_io()` branch, while
+            // `make_disc_read_ticket` costs 64 iterations of `disc_byte_at`
+            // (each a range check plus a `disc_override_at` scan) plus two
+            // FNV-1a hashes, and `remember_disc_read_ticket` costs an
+            // unordered_map node allocation that `forget_disc_read_ticket`
+            // then frees. SMG streams from disc continuously, so a level load
+            // pays that thousands of times for a string nobody reads. Build it
+            // only when the trace that consumes it is on; the erase sites stay
+            // unconditional and become no-ops on an empty map.
             if (trace_di_io()) {
+                const DiscReadTicket ticket = make_disc_read_ticket(
+                    physical_request, out_buf, byte_offset, byte_count,
+                    /*ioctlv=*/false);
+                remember_disc_read_ticket(ticket);
                 std::cout << "[di-read-copy] seq=" << ticket.sequence
                           << " req=0x" << std::hex << ticket.request
                           << " dst=0x" << ticket.destination
@@ -13997,11 +14593,11 @@ bool GuestAddressSpace::handle_di_ioctlv(
         if (byte_count > 0u) {
             copy_disc_bytes(out_buf, byte_offset, byte_count);
             note_disc_read_for_scene_hint(byte_offset, byte_count);
-            const DiscReadTicket ticket = make_disc_read_ticket(
-                physical_request, out_buf, byte_offset, byte_count,
-                /*ioctlv=*/true);
-            remember_disc_read_ticket(ticket);
             if (trace_di_io()) {
+                const DiscReadTicket ticket = make_disc_read_ticket(
+                    physical_request, out_buf, byte_offset, byte_count,
+                    /*ioctlv=*/true);
+                remember_disc_read_ticket(ticket);
                 std::cout << "[di-read-copy] seq=" << ticket.sequence
                           << " req=0x" << std::hex << ticket.request
                           << " dst=0x" << ticket.destination
@@ -15587,7 +16183,10 @@ bool GuestAddressSpace::dsp_native_suppress_task_done_mail(
             std::cout << '\n';
             next_wait_log = now + std::chrono::milliseconds(50);
         }
-        std::this_thread::yield();
+        // Targeted handoff to the DSP worker; see the note on the to-DSP slot
+        // wait below. This loop is on the simulation thread, which is the
+        // single-thread critical path.
+        SwitchToThread();
     }
     if ((trace_dsp_host() || trace_native_frame) && wait_yields != 0u &&
         (dsp_native_suppressed_task_done_count_ <= 16u ||
@@ -15675,7 +16274,15 @@ void GuestAddressSpace::dsp_native_wait_for_sync_task_done(
             dsp_native_worker_->signal_work();
         }
         ++wait_yields;
-        std::this_thread::yield();
+        // This is a handoff to one specific thread, not a request to end the
+        // slice. `SwitchToThread` yields only to a thread that is ready on this
+        // processor and returns immediately when none is, which is the cheaper
+        // and more targeted primitive for a producer/consumer rendezvous; it is
+        // already the established pattern for the same DSP handoff in
+        // native_runtime.cpp. `std::this_thread::yield` additionally makes a
+        // full scheduler round trip, which this loop — which runs while the
+        // simulation thread is already the critical path — should not pay.
+        SwitchToThread();
     }
 }
 
@@ -15766,7 +16373,14 @@ void GuestAddressSpace::dsp_native_forward_mail(std::uint32_t mail) {
                       << std::dec << '\n';
             next_wait_log = now + std::chrono::milliseconds(50);
         }
-        std::this_thread::yield();
+        // Handoff to the DSP worker rather than surrendering the slice: this
+        // loop runs on the simulation thread, which is the single-thread
+        // critical path, and the wait is normally only a few mailbox polls long.
+        // `SwitchToThread` yields to a thread ready on this processor and returns
+        // immediately when none is -- the cheaper, more targeted primitive for a
+        // producer/consumer rendezvous. Same pattern already used for this exact
+        // DSP handoff in native_runtime.cpp.
+        SwitchToThread();
     }
     const auto waited_duration =
         std::chrono::steady_clock::now() - wait_start;
@@ -16442,7 +17056,12 @@ void GuestAddressSpace::dsp_native_pump() {
         }
         }
     }
+    // Empty polling does not consume a publication. Avoid taking exclusive
+    // ownership of the worker-shared cache line until an edge is observed.
+    // A publication after the negative load stays latched for the next pump;
+    // the positive path keeps the existing acquire/consume/coalescing order.
     const bool observed_dirq =
+        dsp_native_int_pending_.load(std::memory_order_acquire) &&
         dsp_native_int_pending_.exchange(false, std::memory_order_acq_rel);
     const std::uint16_t observed_visible_high =
         read_storage_be16(broadway_registers_, kDspMailboxFromHighOffset);
@@ -16545,7 +17164,9 @@ void GuestAddressSpace::poll_native_dsp(cadence::DspPollOrigin origin) {
         !dsp_native_->cpu_mail_consumed()) {
         cadence::ScopedPhaseTimer yield_timer(
             timing_session, cadence::dsp_poll_timing_phase(origin, true));
-        std::this_thread::yield();
+        // Targeted handoff to the DSP worker rather than a full slice surrender;
+        // see the note in dsp_native_forward_mail's wait loop.
+        SwitchToThread();
     }
 }
 
@@ -20517,26 +21138,32 @@ bool is_nonzero_decimal(std::string_view value) noexcept {
         value, [](char ch) { return ch >= '0' && ch <= '9'; });
 }
 
+std::size_t find_nand_marker(
+    std::string_view name, std::string_view marker, std::size_t start = 0u) noexcept {
+    if (start > name.size()) return std::string_view::npos;
+    const auto begin = name.begin() + start;
+    const auto found = std::search(begin, name.end(), marker.begin(), marker.end(),
+        [](char value, char expected) noexcept {
+            if (value >= 'A' && value <= 'Z') value = char(value + ('a' - 'A'));
+            return value == expected;
+        });
+    return found == name.end() ? std::string_view::npos
+                              : static_cast<std::size_t>(found - name.begin());
+}
+
 NandInternalNameKind classify_nand_internal_name(
     std::string_view name) noexcept {
-    std::string lower;
-    lower.reserve(name.size());
-    for (const char value : name) {
-        lower.push_back(static_cast<char>(std::tolower(
-            static_cast<unsigned char>(value))));
-    }
     const auto classify = [&](std::string_view marker,
                               NandInternalNameKind kind) {
-        const std::size_t marker_offset = lower.find(marker);
+        const std::size_t marker_offset = find_nand_marker(name, marker);
         if (marker_offset == std::string::npos) {
             return NandInternalNameKind::none;
         }
         if (marker_offset == 0u ||
-            lower.find(marker, marker_offset + 1u) != std::string::npos) {
+            find_nand_marker(name, marker, marker_offset + 1u) != std::string::npos) {
             return NandInternalNameKind::malformed_reserved;
         }
-        const std::string_view suffix(lower.data() + marker_offset + marker.size(),
-                                      lower.size() - marker_offset - marker.size());
+        const auto suffix = name.substr(marker_offset + marker.size());
         const std::size_t dot = suffix.find('.');
         if (dot == std::string_view::npos ||
             suffix.find('.', dot + 1u) != std::string_view::npos ||
@@ -20577,16 +21204,10 @@ bool is_nand_internal_temp_name(std::string_view name) noexcept {
 }
 
 bool contains_nand_reserved_marker(std::string_view name) noexcept {
-    std::string lower;
-    lower.reserve(name.size());
-    for (const char value : name) {
-        lower.push_back(static_cast<char>(std::tolower(
-            static_cast<unsigned char>(value))));
-    }
-    return lower.find(kNandCandidateMarker) != std::string::npos ||
-        lower.find(kNandDeleteMarker) != std::string::npos ||
-        lower.find(kNandRenameBackupMarker) != std::string::npos ||
-        lower.find(kNandRenameJournalMarker) != std::string::npos;
+    return find_nand_marker(name, kNandCandidateMarker) != std::string::npos ||
+        find_nand_marker(name, kNandDeleteMarker) != std::string::npos ||
+        find_nand_marker(name, kNandRenameBackupMarker) != std::string::npos ||
+        find_nand_marker(name, kNandRenameJournalMarker) != std::string::npos;
 }
 
 std::uint32_t validate_isfs_path(
@@ -20916,7 +21537,7 @@ std::uint32_t write_nand_metadata(
     if (existing.status == NandMetadataLoadStatus::ok) return kIsfsErrExists;
     if (existing.status != NandMetadataLoadStatus::missing) {
         return existing.status == NandMetadataLoadStatus::access_error
-            ? isfs_error_from_host_error(existing.host_error)
+            ? isfs_error_from_metadata_host_error(existing.host_error)
             : kIsfsErrAccess;
     }
 
@@ -26798,7 +27419,8 @@ void GuestAddressSpace::submit_ai_dma_audio(
         }
         submitted = native_audio_->submit_pcm16_be_stereo(
             pcm_source, sample_rate, address, ai_dma_active_start_ticks_);
-        sink_status = submitted ? "submitted" : "not-submitted";
+        sink_status = submitted ? (native_audio_->output_available()
+            ? "submitted" : "unheard-no-output-device") : "not-submitted";
         if (!submitted && !read_env_flag("GALAXY_AUDIO_DISABLE")) {
             // Normal playback skips analysis after the first audible DMA.
             // Preserve the exact failure evidence if a native sink refuses a
@@ -29950,18 +30572,13 @@ void GuestAddressSpace::service_virtual_wiimote_input_device(
         std::cerr << trace_line.str();
     }
     NativeHidHostPointerMetadata host_pointer_metadata{};
-    // Avoid even the atomic load in normal interactive play. The marker is a
-    // diagnostic timing input and is consumed only by explicitly relative
-    // stick scripts or marker-stopped button scripts.
-    const bool marker_timed_input_enabled =
-        read_env_flag(
-            "GALAXY_INPUT_STICK_SCRIPT_RELATIVE_MARIO_CONTROL") ||
-        read_env_flag(
-            "GALAXY_INPUT_AUTOPRESS_SCRIPT_STOP_AT_MARIO_CONTROL");
+    // Read the one-shot marker cheaply at the report boundary. Script helpers
+    // evaluate their selectors live; a process-static selector here would hide
+    // a published marker if timing was enabled after the first HID report.
+    // Each helper decides whether it uses the marker, so ordinary input and
+    // absolute scripts remain unchanged without repeated selector lookups.
     const std::optional<std::uint64_t> first_mario_control_vi =
-        marker_timed_input_enabled
-            ? native_input_first_mario_control_vi()
-            : std::nullopt;
+        native_input_first_mario_control_vi();
     const galaxy::input::WiimoteInputSnapshot snapshot =
         build_native_hid_input_snapshot(
             emitted_report_mode,
@@ -30604,10 +31221,15 @@ void load_boot_image(
 
 void initialize_wii_memory_values(GuestAddressSpace& address_space) {
     constexpr std::uint32_t kMem2ArenaBegin = 0x90000800;
-    constexpr std::uint32_t kIpcBufferBegin = 0x933E0000;
-    constexpr std::uint32_t kIosReservedBegin = 0x93400000;
+    constexpr std::uint32_t kIpcBufferBegin = 0x935E0000;
+    constexpr std::uint32_t kIosReservedBegin = 0x93600000;
 
-    // Retail IOS33 memory values normally installed before the apploader runs.
+    // RMGE01's TMD requests IOS33 (00000001-00000021). Its retail boot
+    // values are the IOS33 row in Dolphin Core/IOS/VersionInfo.cpp, extracted
+    // from the IOS binaries. The pre-IOS28 933E0000/93400000 legacy range
+    // wrongly removed 2 MiB from Galaxy's scene heaps and exhausted them on
+    // Observatory transitions. Physical MEM2 remains 64 MiB; the guest owns
+    // only the arena below IPC, and no guest allocation size is changed here.
     address_space.write_u32(0x80003100, GuestAddressSpace::kMem1Size);
     address_space.write_u32(0x80003104, GuestAddressSpace::kMem1Size);
     address_space.write_u32(0x80003118, GuestAddressSpace::kMem2Size);

@@ -123,6 +123,10 @@ struct DspNativeTelemetrySnapshot {
     // Host scheduling evidence only: number of event waits entered at an
     // exactly classified mailbox back-edge. This is not a DSP cycle count.
     std::uint64_t host_idle_waits{};
+    // Only the six worker instruction/idle counters share a publication. When
+    // false, individual counters remain acquired observations, but a caller
+    // must not infer their correlated interval or instruction liveness.
+    bool worker_counters_coherent = true;
 };
 
 // Opt-in, worker-owned broad evidence for the native JAudio DSP pipeline.
@@ -1431,7 +1435,10 @@ inline DspNativeTelemetrySnapshot dsp_native_telemetry_snapshot(
     std::uint64_t zero_queue_short_reentries = 0u;
     std::uint64_t zero_queue_complete_sequences = 0u;
     std::uint64_t command_wait_complete_sequences = 0u;
-    for (;;) {
+    bool coherent = false;
+    // This is optional evidence. A preempted publisher must never trap the
+    // simulation/diagnostic owner in an unbounded reader spin.
+    for (unsigned attempt = 0; attempt < 16u; ++attempt) {
         const auto sequence_before =
             state.worker_publication_sequence.load(std::memory_order_acquire);
         if ((sequence_before & 1u) != 0u) {
@@ -1452,10 +1459,19 @@ inline DspNativeTelemetrySnapshot dsp_native_telemetry_snapshot(
         const auto sequence_after =
             state.worker_publication_sequence.load(std::memory_order_acquire);
         if (sequence_before == sequence_after) {
+            coherent = true;
             break;
         }
     }
-    return DspNativeTelemetrySnapshot{
+    if (!coherent) {
+        retired_instructions = state.retired_instructions.load(std::memory_order_acquire);
+        zero_queue_idle_backedges = state.zero_queue_idle_backedges.load(std::memory_order_acquire);
+        command_wait_idle_backedges = state.command_wait_idle_backedges.load(std::memory_order_acquire);
+        zero_queue_short_reentries = state.zero_queue_short_reentries.load(std::memory_order_acquire);
+        zero_queue_complete_sequences = state.zero_queue_complete_sequences.load(std::memory_order_acquire);
+        command_wait_complete_sequences = state.command_wait_complete_sequences.load(std::memory_order_acquire);
+    }
+    auto snapshot = DspNativeTelemetrySnapshot{
         retired_instructions,
         zero_queue_idle_backedges,
         command_wait_idle_backedges,
@@ -1476,6 +1492,8 @@ inline DspNativeTelemetrySnapshot dsp_native_telemetry_snapshot(
         state.dma_out_bytes.load(std::memory_order_acquire),
         state.dma_out_nonzero_bytes.load(std::memory_order_acquire),
     };
+    snapshot.worker_counters_coherent = coherent;
+    return snapshot;
 }
 
 struct DspRmge01IdleSequenceTracker;
@@ -2501,6 +2519,22 @@ inline bool dsp_trace_ifx_sample(
     std::atomic<std::uint64_t>& counter,
     std::uint64_t first_count,
     std::uint64_t period) {
+    // Every caller uses the result only to decide whether to call
+    // dsp_trace_ifx_mail(), which itself returns immediately unless
+    // GALAXY_TRACE_DSP_IFX is set — but the callers reach this helper on
+    // *every* DMBH/CMBH/DMBL/CMBL register read, before that check. The
+    // fetch_add below is a locked read-modify-write (lock xadd), so with
+    // tracing off the DSP thread was paying 20-40 cycles and a contended
+    // cache line per mailbox read to feed counters whose values are never
+    // observed. dsp_trace_ifx_enabled() is a static-singleton env read
+    // (evaluated once, then a constant), so this early-out is free.
+    //
+    // Observed behaviour with tracing ON is bit-identical: the counters, the
+    // sampling decisions and the log lines are all unchanged. With tracing
+    // OFF the counters no longer advance, and nothing reads them on that path.
+    if (!dsp_trace_ifx_enabled()) {
+        return false;
+    }
     const std::uint64_t count =
         counter.fetch_add(1u, std::memory_order_relaxed) + 1u;
     return count <= first_count || (period != 0u && (count % period) == 0u);
@@ -3163,7 +3197,20 @@ inline void dsp_run_dma(DspContext& context) {
                 : "DSP DMA span exceeds DRAM");
     }
     dsp_external_validate_span(context, host_address, length);
-    std::array<std::uint8_t, 0x4000u> transfer_bytes{};
+    // Deliberately NOT value-initialised. `transfer` below is exactly
+    // [0, length) of this buffer, and both arms of the transfer write every one
+    // of those bytes before anything reads them:
+    //   to_host  -- the first loop writes transfer[0, length) from DSP memory,
+    //               then dsp_external_write_span reads it;
+    //   !to_host -- dsp_external_read_span writes transfer[0, length), then the
+    //               second loop reads it.
+    // The counting loop that follows also only reads [0, length). So the `{}`
+    // that used to be here zeroed 0x4000 bytes that were then immediately
+    // overwritten: measured DSP DMA traffic is ~14 k transfers/s with a mean
+    // payload of only 166-206 B, i.e. ~229 MB/s of dead stores, and because
+    // DspContext is ~30 KB the 16 KiB memset also evicts roughly half of L1D on
+    // every transfer.
+    std::array<std::uint8_t, 0x4000u> transfer_bytes;
     std::span<std::uint8_t> transfer{
         transfer_bytes.data(), static_cast<std::size_t>(length)};
     std::uint32_t transfer_nonzero = 0u;

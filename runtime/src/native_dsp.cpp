@@ -125,8 +125,8 @@ bool DspMramTransactionBoundary::configure_wake(
     WakeCallback callback,
     void* user) noexcept {
     const std::lock_guard lock(mutex_);
-    if (submitter_active_ || state_ == State::Pending ||
-        state_ == State::Completed) {
+    if (submitter_active_ || state_.load(std::memory_order_relaxed) == State::Pending ||
+        state_.load(std::memory_order_relaxed) == State::Completed) {
         return false;
     }
     wake_callback_ = callback;
@@ -138,12 +138,12 @@ bool DspMramTransactionBoundary::reset(
     std::chrono::milliseconds timeout) noexcept {
     const std::lock_guard lock(mutex_);
     if (timeout.count() <= 0 || wake_callback_ == nullptr || submitter_active_ ||
-        state_ == State::Pending || state_ == State::Completed) {
+        state_.load(std::memory_order_relaxed) == State::Pending || state_.load(std::memory_order_relaxed) == State::Completed) {
         return false;
     }
     service_thread_ = std::this_thread::get_id();
     timeout_ = timeout;
-    state_ = State::Idle;
+    state_.store(State::Idle, std::memory_order_relaxed);
     address_ = 0u;
     size_ = 0u;
     telemetry_.in_flight = 0u;
@@ -199,14 +199,14 @@ bool DspMramTransactionBoundary::submit(
     std::chrono::steady_clock::time_point deadline{};
     {
         std::lock_guard lock(mutex_);
-        if (submitter_active_ || state_ != State::Idle) {
+        if (submitter_active_ || state_.load(std::memory_order_relaxed) != State::Idle) {
             increment(telemetry_.rejected_requests);
             return false;
         }
         if (wake_callback_ == nullptr) {
             increment(telemetry_.rejected_requests);
             telemetry_.failed = true;
-            state_ = State::Failed;
+    state_.store(State::Failed, std::memory_order_relaxed);
             return false;
         }
 
@@ -223,7 +223,7 @@ bool DspMramTransactionBoundary::submit(
         telemetry_.in_flight = 1u;
         telemetry_.maximum_in_flight =
             std::max(telemetry_.maximum_in_flight, 1u);
-        state_ = State::Pending;
+    state_.store(State::Pending, std::memory_order_relaxed);
 
         // mutex unlock is the request publication release. service_one()
         // acquires the same mutex before observing metadata or payload bytes.
@@ -240,52 +240,57 @@ bool DspMramTransactionBoundary::submit(
         increment(telemetry_.wake_failures);
         increment(telemetry_.failed_services);
         telemetry_.failed = true;
-        if (state_ != State::Shutdown) {
-            state_ = State::Failed;
+        if (state_.load(std::memory_order_relaxed) != State::Shutdown) {
+    state_.store(State::Failed, std::memory_order_relaxed);
         }
-        completion_cv_.notify_all();
     }
 
-    if (state_ == State::Pending &&
+    if (state_.load(std::memory_order_relaxed) == State::Pending &&
         !completion_cv_.wait_until(
             lock,
             deadline,
-            [&] { return state_ != State::Pending; })) {
-        state_ = State::Failed;
+            [&] { return state_.load(std::memory_order_relaxed) != State::Pending; })) {
+    state_.store(State::Failed, std::memory_order_relaxed);
         increment(telemetry_.timeout_failures);
         increment(telemetry_.failed_services);
         telemetry_.failed = true;
-        completion_cv_.notify_all();
     }
 
-    const bool completed = state_ == State::Completed;
+    const bool completed = state_.load(std::memory_order_relaxed) == State::Completed;
     if (completed && direction == Direction::ReadFromMram) {
         std::memcpy(read_destination, bytes_.data(), size);
     }
     if (completed) {
-        state_ = State::Idle;
+    state_.store(State::Idle, std::memory_order_relaxed);
     }
     submitter_active_ = false;
     telemetry_.in_flight = 0u;
     address_ = 0u;
     size_ = 0u;
-    completion_cv_.notify_all();
+    // This is the only admitted submitter, and its own wait has finished.
+    // No service/reset/configure path waits on completion_cv_, so notifying
+    // here (or in this submitter's failure paths above) cannot wake anyone.
     return completed;
 }
 
 DspMramTransactionBoundary::ServiceResult
-DspMramTransactionBoundary::service_one(
+DspMramTransactionBoundary::service_pending(
     void* user,
     ReadService read,
     WriteService write) noexcept {
+    // The inline negative check may race a submit, cancellation or reset. The
+    // mutex remains authoritative for the payload, service thread and terminal
+    // state. A request published just after a negative check retains its wake
+    // and is serviced by a later pump, as before.
     std::unique_lock lock(mutex_);
-    if (state_ != State::Pending) {
+    if (state_.load(std::memory_order_relaxed) != State::Pending) {
         return ServiceResult::None;
     }
     if (service_thread_ != std::this_thread::get_id()) {
-        state_ = State::Failed;
+        state_.store(State::Failed, std::memory_order_relaxed);
         increment(telemetry_.failed_services);
         telemetry_.failed = true;
+        lock.unlock();
         completion_cv_.notify_all();
         return ServiceResult::WrongThread;
     }
@@ -295,38 +300,43 @@ DspMramTransactionBoundary::service_one(
         ? read != nullptr && read(user, address_, bytes_.data(), size_)
         : write != nullptr && write(user, address_, bytes_.data(), size_);
     if (!accepted) {
-        state_ = State::Failed;
+        state_.store(State::Failed, std::memory_order_relaxed);
         increment(telemetry_.failed_services);
         telemetry_.failed = true;
+        lock.unlock();
         completion_cv_.notify_all();
         return ServiceResult::Rejected;
     }
 
-    state_ = State::Completed;
+    state_.store(State::Completed, std::memory_order_relaxed);
     increment(telemetry_.completed_services);
+    // Payload and terminal state are published by this release. Let the
+    // notified submitter acquire the mutex without a second handoff; do not
+    // touch request data after unlocking because it may already be reused.
+    lock.unlock();
     completion_cv_.notify_all();
     return ServiceResult::Completed;
 }
 
 void DspMramTransactionBoundary::shutdown() noexcept {
     const std::lock_guard lock(mutex_);
-    if (state_ == State::Shutdown) {
+    if (state_.load(std::memory_order_relaxed) == State::Shutdown) {
         return;
     }
     if (submitter_active_ &&
-        (state_ == State::Pending || state_ == State::Completed)) {
+        (state_.load(std::memory_order_relaxed) == State::Pending || state_.load(std::memory_order_relaxed) == State::Completed)) {
         increment(telemetry_.shutdown_cancellations);
         increment(telemetry_.failed_services);
         telemetry_.failed = true;
     }
-    state_ = State::Shutdown;
+    state_.store(State::Shutdown, std::memory_order_relaxed);
     telemetry_.shutdown = true;
     completion_cv_.notify_all();
 }
 
 bool DspMramTransactionBoundary::pending() const noexcept {
     const std::lock_guard lock(mutex_);
-    return state_ == State::Pending;
+    return state_.load(std::memory_order_relaxed) == State::Pending;
 }
 
 DspMramTransactionBoundary::Snapshot
@@ -1648,10 +1658,6 @@ void NativeDspCoprocessor::record_hard_trap(std::uint16_t pc) {
 void NativeDspCoprocessor::clear_hard_trap() {
     hard_trap_pc_.store(0u, std::memory_order_release);
     hard_trap_flag_.store(false, std::memory_order_release);
-}
-
-bool NativeDspCoprocessor::hard_trap_active() const {
-    return hard_trap_flag_.load(std::memory_order_acquire);
 }
 
 std::uint16_t NativeDspCoprocessor::hard_trap_pc() const {

@@ -323,6 +323,41 @@ bool fifo_preclassifier_is_boundary_and_identity_exact() {
         "classifier preserves ordered FINISH/TOKEN identities");
 }
 
+bool frozen_preclassifier_preserves_order_and_partial_calls() {
+    std::array<std::array<std::byte, 32>, 64> bytes{};
+    std::array<galaxy::GuestMemoryRegionV1, 64> regions{};
+    std::vector<std::byte> fifo;
+    std::vector<FramePeEventSignature> expected;
+    for (std::uint32_t i = 0; i < regions.size(); ++i) {
+        regions[i] = {0x1000u + i * 64u, 32u, bytes[i].data()};
+        bytes[i][0] = std::byte{0x61}; bytes[i][1] = std::byte{0x48};
+        bytes[i][4] = static_cast<std::byte>(i);
+        const auto address = regions[i].guest_base;
+        fifo.push_back(std::byte{0x40});
+        for (unsigned shift = 0; shift < 4; ++shift)
+            fifo.push_back(static_cast<std::byte>(address >> (24u - 8u * shift)));
+        fifo.insert(fifo.end(), {std::byte{0},std::byte{0},std::byte{0},std::byte{32}});
+        expected.push_back({FramePeEventSignature::Kind::Token, static_cast<std::uint16_t>(i), true});
+    }
+    galaxy::GuestMemoryV1 memory{}; memory.regions = regions.data();
+    memory.region_count = static_cast<std::uint32_t>(regions.size());
+    for (std::size_t split = 0; split <= 9u; ++split) {
+        FramePeEventClassifier generic, frozen;
+        for (unsigned pass = 0; pass < 2u; ++pass) {
+            std::vector<FramePeEventSignature> a,b,all_a,all_b;
+            generic.classify(fifo.data(), split, &memory, a);
+            frozen.classify(fifo.data(), split, &memory, b, true);
+            all_a = a; all_b = b;
+            generic.classify(fifo.data()+split, fifo.size()-split, &memory, a);
+            frozen.classify(fifo.data()+split, fifo.size()-split, &memory, b, true);
+            all_a.insert(all_a.end(),a.begin(),a.end()); all_b.insert(all_b.end(),b.begin(),b.end());
+            if (!expect(all_a == expected && all_b == expected,
+                        "frozen classifier preserves cold/replay/split token order")) return false;
+        }
+    }
+    return true;
+}
+
 bool fifo_preclassifier_follows_display_lists() {
     FramePeEventClassifier classifier;
     classifier.reset();
@@ -656,13 +691,21 @@ bool reset_and_drain_audit_reject_pending_or_unconsumed() {
 
 bool cooperative_wait_policy_is_bounded_and_exact() {
     const auto first = frame_pe_cooperative_wait_step(0u);
-    const auto last = frame_pe_cooperative_wait_step(1'999u);
-    const auto expired = frame_pe_cooperative_wait_step(2'000u);
+    const auto first_use_scene = frame_pe_cooperative_wait_step(4'182u);
+    const auto last = frame_pe_cooperative_wait_step(
+        galaxy::gx::kFramePeCooperativeWaitTimeoutMs - 1u);
+    const auto expired = frame_pe_cooperative_wait_step(
+        galaxy::gx::kFramePeCooperativeWaitTimeoutMs);
     const auto clipped = frame_pe_cooperative_wait_step(8u, 10u, 4u);
     return expect(first.wait_ms == 1u && !first.timed_out,
                   "cooperative wait starts with one bounded slice") &&
         expect(last.wait_ms == 1u && !last.timed_out,
                "last in-budget millisecond remains serviceable") &&
+        expect(first_use_scene.wait_ms == 1u && !first_use_scene.timed_out,
+               "recorded 4.182-second first-use scene remains serviceable") &&
+        expect(galaxy::gx::kFramePeCooperativeWaitTimeoutMs ==
+                   galaxy::gx::kFramePeCompletionTimeoutMs,
+               "runtime and backend allow the same absolute completion budget") &&
         expect(expired.wait_ms == 0u && expired.timed_out,
                "cooperative wait hard-fails at its exact budget") &&
         expect(clipped.wait_ms == 2u && !clipped.timed_out,
@@ -1105,6 +1148,7 @@ bool completed_drawn_protocol_requires_real_finish_and_distinct_ram() {
 }  // namespace
 
 int main() {
+    if (!frozen_preclassifier_preserves_order_and_partial_calls()) return 1;
     bool ok = true;
     ok = ordered_fake_fence_completion() && ok;
     ok = detached_vi_receipts_share_global_fifo_order() && ok;
