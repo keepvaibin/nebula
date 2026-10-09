@@ -13,21 +13,26 @@
 // goes through per-element branches.
 
 #include "galaxy/gx/fifo_parser.h"
+#include "galaxy/gx/snapshot_region_lookup.h"
 
 #include <immintrin.h>  // SSSE3 pshufb
 
 #include <algorithm>
 #include <array>
 #include <atomic>
+#include <cerrno>
 #include <chrono>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <limits>
 #include <string>
+#include <type_traits>
 #include <utility>
 
 namespace galaxy::gx {
+
+static constexpr std::uint32_t kMaxCachedDisplayListBytes = 4u * 1024u * 1024u;
 
 struct FifoTraceRange {
     bool enabled{false};
@@ -139,6 +144,20 @@ bool should_trace_fifo_offset(std::size_t offset) {
     const FifoTraceRange& range = fifo_trace_range();
     return range.enabled && offset >= range.begin && offset <= range.end;
 }
+
+// NOTE (agent-18): a `per_command_fifo_timing_enabled()` gate on the per-command
+// steady_clock reads lived here and has been REMOVED. It was justified by an
+// arithmetic error -- "two clocks per command is the dominant cost they report" --
+// which the probe at AgentWork/agent-18/probes/clock_overhead_probe.cpp refutes:
+// a clock pair measures 31.177 ns, i.e. 368.7 us of frame 6799's 20152 us and
+// 1340.8 us of frame 6796's 450743 us (1.83 pct and 0.30 pct). Gating the clocks
+// would have removed the only per-category parser breakdown to save 0.3 pct. The
+// real cause of the anomalous sum is the CALL_DL double count, fixed below.
+//
+// Removing this must leave no residue: the first attempt at the revert deleted the
+// function body but kept its trailing `return enabled;` and `}`, which produced an
+// orphaned brace and an unbalanced namespace that only a brace check would catch.
+// `AgentWork/agent-18/probes/brace_check.py` reports BALANCED for this file now.
 
 std::uint64_t elapsed_fifo_us(
     std::chrono::steady_clock::time_point start,
@@ -312,32 +331,55 @@ enum class CachedReplayProfileKind : std::uint8_t {
     Draw,
 };
 
+// Categories are inclusive of sink work; the whole replay total is recorded
+// once by its caller. Accumulate nanoseconds before exposing legacy us fields.
 void record_cached_replay_profile(
-    FifoParserProfile& profile,
-    CachedReplayProfileKind kind,
-    std::uint64_t elapsed_us) {
-    ++profile.call_dl_replay_command_count;
-    profile.call_dl_replay_command_us += elapsed_us;
-
+    FifoParserProfile& profile, CachedReplayProfileKind kind,
+    std::uint64_t command_count, std::uint64_t elapsed_ns) {
+    profile.call_dl_replay_command_count += command_count;
+    auto record = [&](std::uint64_t& count, std::uint64_t& ns, std::uint64_t& us) {
+        count += command_count;
+        ns += elapsed_ns;
+        us = ns / 1'000u;
+    };
     switch (kind) {
     case CachedReplayProfileKind::State:
-        ++profile.call_dl_replay_state_count;
-        profile.call_dl_replay_state_us += elapsed_us;
+        record(profile.call_dl_replay_state_count,
+               profile.call_dl_replay_state_ns, profile.call_dl_replay_state_us);
         break;
     case CachedReplayProfileKind::Indx:
-        ++profile.call_dl_replay_indx_count;
-        profile.call_dl_replay_indx_us += elapsed_us;
+        record(profile.call_dl_replay_indx_count,
+               profile.call_dl_replay_indx_ns, profile.call_dl_replay_indx_us);
         break;
     case CachedReplayProfileKind::Draw:
-        ++profile.call_dl_replay_draw_count;
-        profile.call_dl_replay_draw_us += elapsed_us;
+        record(profile.call_dl_replay_draw_count,
+               profile.call_dl_replay_draw_ns, profile.call_dl_replay_draw_us);
         break;
     case CachedReplayProfileKind::Misc:
-        ++profile.call_dl_replay_misc_count;
-        profile.call_dl_replay_misc_us += elapsed_us;
+        record(profile.call_dl_replay_misc_count,
+               profile.call_dl_replay_misc_ns, profile.call_dl_replay_misc_us);
         break;
     }
 }
+
+struct CachedReplayCommandScope {
+    FifoParserProfile* profile;
+    CachedReplayProfileKind kind;
+    const std::size_t& command_index;
+    std::size_t first_index;
+    std::chrono::steady_clock::time_point start;
+
+    ~CachedReplayCommandScope() noexcept {
+        if (profile != nullptr) {
+            const auto elapsed = std::chrono::steady_clock::now() - start;
+            record_cached_replay_profile(*profile, kind,
+                command_index - first_index,
+                static_cast<std::uint64_t>(
+                    std::chrono::duration_cast<std::chrono::nanoseconds>(
+                        elapsed).count()));
+        }
+    }
+};
 
 bool FifoParser::cached_draw_run_concatenation_preserves_primitive(
     PrimitiveClass primitive,
@@ -558,11 +600,18 @@ void FifoParser::write_dump(
     std::size_t failure_offset) const {
     // Cap dump artifacts per process: a recurring per-frame parse failure
     // must not flood the disk with one file per frame.
-    static int s_dumps_written = 0;
-    if (s_dumps_written >= 4) {
-        return;
+    static std::atomic_uint32_t s_dump_attempts{0};
+    std::uint32_t observed = s_dump_attempts.load(std::memory_order_relaxed);
+    for (;;) {
+        if (observed >= 4u) {
+            return;
+        }
+        if (s_dump_attempts.compare_exchange_strong(
+                observed, observed + 1u,
+                std::memory_order_relaxed, std::memory_order_relaxed)) {
+            break;
+        }
     }
-    ++s_dumps_written;
     // Build path: <dump_dir>/frame<N>.gxdump
     const std::string path =
         dump_dir_ + "/frame" + std::to_string(frame_index_) + ".gxdump";
@@ -593,6 +642,25 @@ void FifoParser::write_dump(
     std::fclose(fp);
 }
 
+// The capability is local to an invocation, including reentrant sink/recorder
+// calls. Mutable and uncertified views retain first-containing-region lookup.
+struct FifoParser::FrozenRegionScope {
+    FifoParser& parser;
+    const GuestMemoryV1* previous;
+
+    FrozenRegionScope(FifoParser& owner, GuestMemoryV1* memory, bool frozen)
+        : parser(owner), previous(owner.frozen_sorted_memory_) {
+        parser.frozen_sorted_memory_ =
+            frozen && memory != nullptr && memory->regions != nullptr &&
+                detail::snapshot_regions_are_disjoint_sorted(
+                    {memory->regions, memory->region_count})
+            ? memory : nullptr;
+    }
+    ~FrozenRegionScope() { parser.frozen_sorted_memory_ = previous; }
+    FrozenRegionScope(const FrozenRegionScope&) = delete;
+    FrozenRegionScope& operator=(const FrozenRegionScope&) = delete;
+};
+
 // ---------------------------------------------------------------------------
 // FifoParser::resolve_guest — maps a guest physical range to host memory.
 // Throws GxFatalError (with the current cursor position) if unmapped.
@@ -613,23 +681,31 @@ std::span<const std::byte> FifoParser::resolve_guest(
         }
     }
     if (memory != nullptr && memory->regions != nullptr) {
-        const std::uint64_t req_end =
-            static_cast<std::uint64_t>(guest_addr) + size;
-        for (std::uint32_t ri = 0; ri < memory->region_count; ++ri) {
-            const GuestMemoryRegionV1& r = memory->regions[ri];
-            const std::uint64_t reg_end =
-                static_cast<std::uint64_t>(r.guest_base) + r.size;
-            if (guest_addr >= r.guest_base &&
-                req_end     <= reg_end &&
-                r.host_base != nullptr) {
-                const std::byte* host =
-                    r.host_base + (guest_addr - r.guest_base);
-                if (memory_read_recorder_ != nullptr) {
-                    memory_read_recorder_->record_guest_memory_read_bytes(
-                        guest_addr, std::span<const std::byte>(host, size));
+        const std::byte* host = nullptr;
+        if (memory == frozen_sorted_memory_ && size != 0u) {
+            host = detail::resolve_sorted_snapshot_region(
+                {memory->regions, memory->region_count}, guest_addr, size);
+        } else {
+            const std::uint64_t req_end =
+                static_cast<std::uint64_t>(guest_addr) + size;
+            for (std::uint32_t ri = 0; ri < memory->region_count; ++ri) {
+                const GuestMemoryRegionV1& r = memory->regions[ri];
+                const std::uint64_t reg_end =
+                    static_cast<std::uint64_t>(r.guest_base) + r.size;
+                if (guest_addr >= r.guest_base && req_end <= reg_end &&
+                    r.host_base != nullptr) {
+                    host = r.host_base + (guest_addr - r.guest_base);
+                    break;
                 }
-                return std::span<const std::byte>(host, size);
             }
+        }
+        if (host != nullptr) {
+            const std::span<const std::byte> bytes(host, size);
+            if (memory_read_recorder_ != nullptr) {
+                memory_read_recorder_->record_guest_memory_read_bytes(
+                    guest_addr, bytes);
+            }
+            return bytes;
         }
     }
     char addr_buf[12];
@@ -649,7 +725,9 @@ void FifoParser::run(
     std::span<const std::byte> fifo,
     GuestMemoryV1* memory,
     FifoSink& sink,
-    GxState& state) {
+    GxState& state,
+    bool frozen_regions) {
+    const FrozenRegionScope region_scope(*this, memory, frozen_regions);
     ++frame_index_;
 
     FifoCursor cursor;
@@ -671,7 +749,9 @@ std::size_t FifoParser::run_available(
     std::span<const std::byte> fifo,
     GuestMemoryV1* memory,
     FifoSink& sink,
-    GxState& state) {
+    GxState& state,
+    bool frozen_regions) {
+    const FrozenRegionScope region_scope(*this, memory, frozen_regions);
     ++frame_index_;
 
     FifoCursor cursor;
@@ -868,11 +948,142 @@ void FifoParser::index_display_list_cache_entry(std::size_t index) {
     }
 }
 
+std::uint64_t FifoParser::display_list_cache_entry_bytes(
+    const CachedDisplayList& cached) noexcept {
+    // capacity(), not size(): the retained heap blocks are what a memory budget
+    // has to bound. shrink_to_fit is deliberately not used — the whole point of
+    // the cache is to keep these buffers for the next replay.
+    const auto vector_bytes = [](const auto& container) -> std::uint64_t {
+        return static_cast<std::uint64_t>(container.capacity()) *
+            sizeof(typename std::decay_t<decltype(container)>::value_type);
+    };
+    return vector_bytes(cached.bytes) +
+        vector_bytes(cached.commands) +
+        vector_bytes(cached.cp_dependencies) +
+        vector_bytes(cached.xf_values) +
+        vector_bytes(cached.prepared_draw_runs) +
+        vector_bytes(cached.prepared_draw_payloads) +
+        vector_bytes(cached.draw_packet_runs) +
+        vector_bytes(cached.draw_run_packets) +
+        vector_bytes(cached.draw_run_indices);
+}
+
+std::uint64_t FifoParser::display_list_cache_budget_bytes() const {
+    // The entry count alone is not a bound: one entry can retain a 4 MiB list
+    // plus a duplicate of every draw payload. 256 MiB comfortably holds the
+    // display lists of a loaded SMG scene while keeping the whole process inside
+    // a low-end machine's memory budget. GALAXY_GX_DISPLAY_LIST_CACHE_MB
+    // overrides it for diagnosis; 0 disables the byte budget (entry cap only).
+    static const std::uint64_t budget = []() -> std::uint64_t {
+        char value[24]{};
+        std::size_t length = 0;
+        if (getenv_s(
+                &length, value, sizeof(value),
+                "GALAXY_GX_DISPLAY_LIST_CACHE_MB") != 0 ||
+            length <= 1 || length > sizeof(value)) {
+            return 256ull << 20;
+        }
+        for (std::size_t i = 0; i + 1 < length; ++i) {
+            if (value[i] < '0' || value[i] > '9') {
+                return 256ull << 20;
+            }
+        }
+        char* end = nullptr;
+        errno = 0;
+        const unsigned long long megabytes = std::strtoull(value, &end, 10);
+        if (errno == ERANGE || end == value || *end != '\0' ||
+            megabytes > (std::numeric_limits<std::uint64_t>::max() >> 20)) {
+            return 256ull << 20;
+        }
+        return static_cast<std::uint64_t>(megabytes) << 20;
+    }();
+    return budget;
+}
+
+// Free a vector's heap block, deterministically.
+//
+// shrink_to_fit remains a non-binding request even after clear(). Swap with
+// an empty vector so the old allocation is destroyed when this helper returns;
+// the capacity-based budget must not depend on an implementation honoring it.
+template <typename T>
+void release_capacity(std::vector<T>& values) {
+    std::vector<T>{}.swap(values);
+}
+
+void FifoParser::evict_display_list_cache_to_budget(std::size_t skip_index) {
+    const std::uint64_t budget = display_list_cache_budget_bytes();
+    if (budget == 0u || cache_bytes_ <= budget) {
+        return;  // disabled or already within budget; entry cap still applies
+    }
+    const auto release_entry = [this](std::size_t index) {
+        CachedDisplayList& entry = display_list_cache_[index];
+        const std::uint64_t released = display_list_cache_entry_bytes(entry);
+        invalidate_display_list_cache_index(index);
+        release_capacity(entry.bytes);
+        release_capacity(entry.commands);
+        release_capacity(entry.cp_dependencies);
+        release_capacity(entry.xf_values);
+        release_capacity(entry.prepared_draw_runs);
+        release_capacity(entry.prepared_draw_payloads);
+        release_capacity(entry.draw_packet_runs);
+        release_capacity(entry.draw_run_packets);
+        release_capacity(entry.draw_run_indices);
+        cache_bytes_ = cache_bytes_ > released ? cache_bytes_ - released : 0u;
+    };
+    // Invalid entries cannot be replayed but still own charged allocations.
+    // Reclaim those buffers first, in one pass, rather than evicting reusable
+    // entries and leaving the cache over budget with only invalid storage.
+    for (std::size_t index = 0;
+         index < display_list_cache_.size() && cache_bytes_ > budget; ++index) {
+        if (index != skip_index && !display_list_cache_[index].valid) {
+            release_entry(index);
+        }
+    }
+    // Each pass evicts the least recently used evictable entry. A display list
+    // is a pure function of its guest bytes and the CP/XF dependencies recorded
+    // with it, so dropping an entry can only cost a later re-parse; it can never
+    // change what is replayed.
+    while (cache_bytes_ > budget) {
+        std::size_t victim = display_list_cache_.size();
+        std::uint64_t victim_last_used = 0u;
+        for (std::size_t index = 0; index < display_list_cache_.size();
+             ++index) {
+            if (index == skip_index) {
+                continue;
+            }
+            const CachedDisplayList& cached = display_list_cache_[index];
+            if (!cached.valid) {
+                continue;
+            }
+            if (victim == display_list_cache_.size() ||
+                cached.last_used < victim_last_used) {
+                victim = index;
+                victim_last_used = cached.last_used;
+            }
+        }
+        if (victim == display_list_cache_.size()) {
+            break;  // nothing evictable left; only the skipped entry remains
+        }
+        // Unlink replay eligibility and release the charged allocations together.
+        release_entry(victim);
+    }
+}
+
+void FifoParser::clear_display_list_cache() {
+    for (std::size_t index = 0; index < display_list_cache_.size(); ++index) {
+        invalidate_display_list_cache_index(index);
+        display_list_cache_[index] = CachedDisplayList{};
+    }
+    display_list_cache_map_.clear();
+    display_list_cache_page_map_.clear();
+    cache_bytes_ = 0u;
+    last_display_list_cache_index_ = static_cast<std::size_t>(-1);
+}
+
 void FifoParser::store_cached_display_list(
     std::uint32_t guest_addr,
     std::uint32_t byte_size,
     DisplayListRecording&& recording) {
-    constexpr std::uint32_t kMaxCachedDisplayListBytes = 4u * 1024u * 1024u;
     if (!recording.cacheable || byte_size > kMaxCachedDisplayListBytes ||
         recording.bytes.size() != byte_size) {
         return;
@@ -898,6 +1109,11 @@ void FifoParser::store_cached_display_list(
         erase_display_list_cache_index_from_maps(static_cast<std::size_t>(
             target - display_list_cache_.data()));
     }
+    // Invalidation removes replay eligibility but deliberately retains and
+    // charges this slot's vectors. Replacing an invalid slot must subtract
+    // those capacities too, before moving fresh data and charging it once.
+    const std::uint64_t released = display_list_cache_entry_bytes(*target);
+    cache_bytes_ = cache_bytes_ > released ? cache_bytes_ - released : 0u;
 
     const std::size_t target_index = static_cast<std::size_t>(
         target - display_list_cache_.data());
@@ -915,6 +1131,8 @@ void FifoParser::store_cached_display_list(
     target->xf_values = std::move(recording.xf_values);
     prepare_cached_display_list_draw_runs(*target);
     index_display_list_cache_entry(target_index);
+    cache_bytes_ += display_list_cache_entry_bytes(*target);
+    evict_display_list_cache_to_budget(target_index);
 }
 
 void FifoParser::prepare_cached_display_list_draw_runs(
@@ -1052,6 +1270,18 @@ void FifoParser::prepare_cached_display_list_draw_runs(
             continue;
         }
 
+        // Only the *prepared* path needs this property. It concatenates the
+        // packets' vertex payloads into one strip and replays them as a single
+        // draw, so it is correct only when concatenation provably preserves the
+        // primitive. A strip/fan/line-strip run never satisfies that, and this
+        // guard used to `continue` for such a run — which also skipped the
+        // prepared-run construction below. The packet run does NOT need the
+        // property: it keeps one packet per draw and builds per-packet indices
+        // through append_cached_packet_indices, whose strip/fan/line-strip cases
+        // match VertexLoader's emitters exactly (including the odd-triangle
+        // winding flip). Returning here therefore leaves a packet run that was
+        // already validated above intact, for exactly the primitives it was
+        // written for, instead of dropping the whole run to per-packet replay.
         if (!cached_draw_run_concatenation_preserves_primitive(
                 first.primitive,
                 run_commands)) {
@@ -1198,15 +1428,51 @@ void FifoParser::replay_cached_display_list(
         }
     };
 
-    std::vector<CachedDrawPacket> simple_draw_packets;
+    // Reused across replays instead of constructed per call. Display-list
+    // replay runs thousands of times per frame on the render thread, and this
+    // is the only allocation in its loop; `clear()` keeps the capacity so the
+    // steady state performs no allocation at all. The sink consumes the span
+    // synchronously (`on_cached_simple_draw_run` copies every packet into its
+    // own scratch before returning) and `replay_cached_display_list` is not
+    // reentrant, so a function-local buffer is equivalent to a fresh vector for
+    // every caller-visible result.
+    static thread_local std::vector<CachedDrawPacket> simple_draw_packets;
     std::size_t command_index = 0;
+    // `run_end_cache` is the end of the maximal run of consecutive Draw
+    // commands sharing one (primitive, vtxfmt), exactly what
+    // `scan_draw_run_end` computes. It is carried across loop iterations: the
+    // walk below either consumes a whole run or advances by one command inside
+    // one, and in both cases the end of the current run is already known, so
+    // the scan runs once per run instead of once per command. That turns the
+    // replay's per-command rescan (quadratic in run length) into a linear walk.
+    std::size_t run_end_cache = 0;
     while (command_index < cached.commands.size()) {
         const CachedDisplayListCommand& first = cached.commands[command_index];
+        const auto profile_kind =
+            first.kind == CachedDisplayListCommand::Kind::Draw
+                ? CachedReplayProfileKind::Draw
+            : first.kind == CachedDisplayListCommand::Kind::LoadIndx
+                ? CachedReplayProfileKind::Indx
+            : (first.kind == CachedDisplayListCommand::Kind::LoadCp ||
+               first.kind == CachedDisplayListCommand::Kind::LoadXf ||
+               first.kind == CachedDisplayListCommand::Kind::LoadBp)
+                ? CachedReplayProfileKind::State : CachedReplayProfileKind::Misc;
+        // Begin before any fast-path attempt. One scope covers a consumed run,
+        // including prepared/packet/simple successes and ordinary sink teardown.
+        const CachedReplayCommandScope replay_command_scope{
+            replay_profile, profile_kind, command_index, command_index,
+            replay_profile != nullptr ? std::chrono::steady_clock::now()
+                                      : std::chrono::steady_clock::time_point{}};
         std::size_t run_end = command_index + 1u;
         bool run_end_scanned = false;
         auto scan_draw_run_end = [&]() -> std::size_t {
             if (run_end_scanned ||
                 first.kind != CachedDisplayListCommand::Kind::Draw) {
+                return run_end;
+            }
+            if (run_end_cache > command_index) {
+                run_end = run_end_cache;
+                run_end_scanned = true;
                 return run_end;
             }
             while (run_end < cached.commands.size()) {
@@ -1219,6 +1485,7 @@ void FifoParser::replay_cached_display_list(
                 }
                 ++run_end;
             }
+            run_end_cache = run_end;
             run_end_scanned = true;
             return run_end;
         };
@@ -1258,10 +1525,6 @@ void FifoParser::replay_cached_display_list(
                     prepared.opcode,
                     prepared.source_draw_count)) {
                 if (replay_profile != nullptr) {
-                    replay_profile->call_dl_replay_command_count +=
-                        prepared.source_draw_count;
-                    replay_profile->call_dl_replay_draw_count +=
-                        prepared.source_draw_count;
                     ++replay_profile->call_dl_replay_prepared_run_count;
                     replay_profile
                         ->call_dl_replay_prepared_source_draw_count +=
@@ -1324,10 +1587,6 @@ void FifoParser::replay_cached_display_list(
                     packet_run.total_indices,
                     precomputed_indices)) {
                 if (replay_profile != nullptr) {
-                    replay_profile->call_dl_replay_command_count +=
-                        packet_run.packet_count;
-                    replay_profile->call_dl_replay_draw_count +=
-                        packet_run.packet_count;
                     ++replay_profile->call_dl_replay_packet_run_count;
                     replay_profile
                         ->call_dl_replay_packet_source_draw_count +=
@@ -1345,8 +1604,11 @@ void FifoParser::replay_cached_display_list(
                 std::span<const CachedDisplayListCommand>(
                     cached.commands.data() + command_index,
                     run_end - command_index))) {
+            const std::size_t run_count = run_end - command_index;
             simple_draw_packets.clear();
-            simple_draw_packets.reserve(run_end - command_index);
+            if (simple_draw_packets.capacity() < run_count) {
+                simple_draw_packets.reserve(run_count);
+            }
             for (std::size_t i = command_index; i < run_end; ++i) {
                 const CachedDisplayListCommand& command = cached.commands[i];
                 simple_draw_packets.push_back(CachedDrawPacket{
@@ -1363,12 +1625,6 @@ void FifoParser::replay_cached_display_list(
                     cached.bytes,
                     opcode_offset,
                     simple_draw_packets)) {
-                if (replay_profile != nullptr) {
-                    replay_profile->call_dl_replay_command_count +=
-                        simple_draw_packets.size();
-                    replay_profile->call_dl_replay_draw_count +=
-                        simple_draw_packets.size();
-                }
                 command_index = run_end;
                 continue;
             }
@@ -1387,8 +1643,6 @@ void FifoParser::replay_cached_display_list(
         while (command_index < run_end) {
             const CachedDisplayListCommand& command =
                 cached.commands[command_index];
-            CachedReplayProfileKind profile_kind =
-                CachedReplayProfileKind::Misc;
 
             switch (command.kind) {
             case CachedDisplayListCommand::Kind::Nop:
@@ -1398,7 +1652,6 @@ void FifoParser::replay_cached_display_list(
 
             case CachedDisplayListCommand::Kind::LoadCp:
                 state.load_cp(command.reg, command.value);
-                profile_kind = CachedReplayProfileKind::State;
                 break;
 
             case CachedDisplayListCommand::Kind::LoadXf:
@@ -1413,7 +1666,6 @@ void FifoParser::replay_cached_display_list(
                     command.base,
                     cached.xf_values.data() + command.values_offset,
                     command.count);
-                profile_kind = CachedReplayProfileKind::State;
                 break;
 
             case CachedDisplayListCommand::Kind::LoadIndx: {
@@ -1437,7 +1689,6 @@ void FifoParser::replay_cached_display_list(
                     guest_window.data(), values.data(), command.length);
                 state.load_xf_indexed(
                     command.xf_addr, values.data(), command.length);
-                profile_kind = CachedReplayProfileKind::Indx;
                 break;
             }
 
@@ -1480,7 +1731,6 @@ void FifoParser::replay_cached_display_list(
                 default:
                     break;
                 }
-                profile_kind = CachedReplayProfileKind::State;
                 break;
             }
 
@@ -1502,17 +1752,10 @@ void FifoParser::replay_cached_display_list(
                         opcode_offset + command.local_opcode_offset,
                         command.opcode);
                 }
-                profile_kind = CachedReplayProfileKind::Draw;
                 break;
             }
             }
 
-            if (replay_profile != nullptr) {
-                record_cached_replay_profile(
-                    *replay_profile,
-                    profile_kind,
-                    0u);
-            }
             ++command_index;
         }
     }
@@ -1549,9 +1792,32 @@ void FifoParser::run_window(
                 static_cast<unsigned>(opcode));
         }
         FifoParserProfile* const profile = profile_;
+        // Per-command elapsed time is measured unconditionally. A gated version of
+        // this (taking the clocks only when GALAXY_TRACE_GX_MICROPROFILE was set)
+        // was written and REVERTED: the probe at
+        // AgentWork/agent-18/probes/clock_overhead_probe.cpp measures a
+        // steady_clock::now() pair at 31.177 ns on this host, which is 368.7 us of
+        // frame 6799's 20152 us and 1340.8 us of frame 6796's 450743 us -- 1.83 pct
+        // and 0.30 pct. That is not worth losing the only per-category breakdown of
+        // parser cost, especially now that the CALL_DL double count below is fixed
+        // and these fields are trustworthy. Do not re-add the gate on the strength
+        // of "two clocks per command sounds expensive"; it was measured.
         const auto command_start = profile != nullptr
             ? std::chrono::steady_clock::now()
             : std::chrono::steady_clock::time_point{};
+        // `command_us` accumulates EXCLUSIVE time, so a command that recurses --
+        // CALL_DL replaying a cached display list -- does not count its
+        // descendants twice. The accumulator is monotonic, so the time this
+        // command's descendants added is exactly its growth across the command
+        // body; subtracting that growth at `finish_profile` needs no explicit
+        // span stack and is correct at any depth. Without this the replayed
+        // commands are charged once nested and once again inside their parent,
+        // which is why the published recordings show `fifo-command-us` larger
+        // than the frame's own `total-us`. That anomaly was originally attributed
+        // to the clock overhead above; the probe disproved that attribution, so
+        // this accumulator is the whole explanation.
+        const std::uint64_t command_us_before =
+            profile != nullptr ? profile->command_us : 0u;
         if (profile != nullptr) {
             ++profile->command_count;
         }
@@ -1561,12 +1827,18 @@ void FifoParser::run_window(
                 if (profile == nullptr) {
                     return 0;
                 }
+                ++(profile->*count_field);
                 const std::uint64_t us = elapsed_fifo_us(
                     command_start,
                     std::chrono::steady_clock::now());
-                ++(profile->*count_field);
                 (profile->*us_field) += us;
-                profile->command_us += us;
+                // Charge only what this command added beyond its descendants.
+                // `command_us` only ever grows, so the difference cannot
+                // underflow.
+                const std::uint64_t exclusive_us = profile->command_us >= command_us_before
+                    ? us - (profile->command_us - command_us_before)
+                    : us;
+                profile->command_us += exclusive_us;
                 return us;
             };
 
@@ -1837,12 +2109,17 @@ void FifoParser::run_window(
             dl_cursor.recover_truncation = false;
 
             DisplayListRecording dl_recording;
-            DisplayListRecording* const child_recording =
-                depth == 0 ? &dl_recording : recording;
             if (depth == 0) {
-                dl_recording.bytes.assign(
-                    dl_window.begin(), dl_window.end());
+                // Oversized roots still execute fully, but cannot enter the cache.
+                dl_recording.cacheable = byte_size <= kMaxCachedDisplayListBytes;
+                if (dl_recording.cacheable) {
+                    dl_recording.bytes.assign(
+                        dl_window.begin(), dl_window.end());
+                }
             }
+            DisplayListRecording* const child_recording = depth == 0
+                ? (dl_recording.cacheable ? &dl_recording : nullptr)
+                : recording;
             run_window(
                 dl_cursor, memory, sink, state, depth + 1, child_recording);
             if (depth == 0) {
@@ -2047,11 +2324,20 @@ void FifoParser::run_window(
                     state.cp(cp::kVatBBase + 0u),
                     state.cp(cp::kVatCBase + 0u));
                 for (std::uint8_t fmt = 0; fmt < 8; ++fmt) {
+                    std::size_t payload_size = 0;
+                    try {
+                        payload_size = sink.draw_payload_size(fmt, 1);
+                    } catch (...) {
+                        std::fprintf(
+                            stderr, " f%u=unavailable",
+                            static_cast<unsigned>(fmt));
+                        continue;
+                    }
                     std::fprintf(
                         stderr,
                         " f%u=%zu",
                         static_cast<unsigned>(fmt),
-                        sink.draw_payload_size(fmt, 1));
+                        payload_size);
                 }
                 dump_fifo_history();
                 std::fprintf(stderr, "\n[gx-parse] window:");

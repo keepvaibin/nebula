@@ -98,6 +98,8 @@ struct HuffmanTable {
   std::array<u16, 17> firstCodes{};
   std::array<u16, 17> symbolOffsets{};
   std::array<u8, 256> symbols{};
+  std::array<u8, 256> prefixSymbols{};
+  std::array<u8, 256> prefixLengths{};
   bool valid = false;
 };
 
@@ -212,6 +214,19 @@ s32 parse_huffman_tables(const u8* data, size_t size, DecodeContext& context) no
       }
       table.firstCodes[length] = static_cast<u16>(code);
       table.symbolOffsets[length] = symbolOffset;
+      if (length <= 8) {
+        const unsigned suffixBits = 8u - static_cast<unsigned>(length);
+        for (unsigned i = 0; i < count; ++i) {
+          const unsigned first = (code + i) << suffixBits;
+          const unsigned end = std::min(256u, first + (1u << suffixBits));
+          for (unsigned prefix = first; prefix < end; ++prefix) {
+            // The canonical-code bound above rejects oversubscribed tables;
+            // shorter valid codes and their suffix ranges cannot overlap.
+            table.prefixLengths[prefix] = static_cast<u8>(length);
+            table.prefixSymbols[prefix] = table.symbols[symbolOffset + i];
+          }
+        }
+      }
       code = (code + count) << 1;
       symbolOffset = static_cast<u16>(symbolOffset + count);
     }
@@ -337,14 +352,33 @@ public:
   bool valid() const noexcept { return mValid; }
 
   u32 read(u8 count) noexcept {
-    u32 value = 0;
-    for (u8 i = 0; i < count; ++i) {
-      const size_t bytePosition = mBitPosition >> 3;
-      if (bytePosition >= mData.size()) { mValid = false; return 0; }
-      value = (value << 1) | ((mData[bytePosition] >> (7 - (mBitPosition & 7))) & 1);
-      ++mBitPosition;
+    if (count == 0) return 0;
+    const size_t bytePosition = mBitPosition >> 3;
+    const unsigned bitOffset = static_cast<unsigned>(mBitPosition & 7);
+    const unsigned byteCount = (bitOffset + count + 7u) >> 3;
+    if (bytePosition > mData.size() || byteCount > mData.size() - bytePosition) {
+      // The original reader consumes the available bits before reporting EOF.
+      if (bytePosition < mData.size()) mBitPosition = mData.size() * 8;
+      mValid = false;
+      return 0;
     }
-    return value;
+    u32 value = 0;
+    for (unsigned i = 0; i < byteCount; ++i)
+      value = (value << 8) | mData[bytePosition + i];
+    mBitPosition += count;
+    return (value >> (byteCount * 8u - bitOffset - count)) & ((u32{1} << count) - 1u);
+  }
+
+  bool peek_byte(u8& value) const noexcept {
+    if (!mValid) return false;
+    const size_t bytePosition = mBitPosition >> 3;
+    if (bytePosition >= mData.size()) return false;
+    const unsigned bitOffset = static_cast<unsigned>(mBitPosition & 7);
+    if (bitOffset == 0) { value = mData[bytePosition]; return true; }
+    if (mData.size() - bytePosition < 2) return false;
+    value = static_cast<u8>((static_cast<u32>(mData[bytePosition]) << bitOffset) |
+                          (mData[bytePosition + 1] >> (8u - bitOffset)));
+    return true;
   }
 
   void byte_align() noexcept { mBitPosition = (mBitPosition + 7) & ~size_t{7}; }
@@ -356,6 +390,12 @@ private:
 };
 
 bool decode_huffman(BitReader& reader, const HuffmanTable& table, u8& symbol) noexcept {
+  u8 prefix = 0;
+  if (reader.peek_byte(prefix) && table.prefixLengths[prefix] != 0) {
+    (void)reader.read(table.prefixLengths[prefix]);
+    symbol = table.prefixSymbols[prefix];
+    return true;
+  }
   u32 code = 0;
   for (size_t length = 1; length <= 16; ++length) {
     code = (code << 1) | reader.read(1);

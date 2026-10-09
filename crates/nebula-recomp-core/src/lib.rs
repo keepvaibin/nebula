@@ -13,6 +13,12 @@ mod rso;
 mod sel;
 mod translate;
 
+// CR0 record/compare -> branch fusion. Additive and unit-tested; not yet called
+// from the lowering loop. See the module header for the safety model and for the
+// operand trap an earlier revision of it fell into.
+pub mod cr0_fusion;
+pub use cr0_fusion::{fuse_cr0_branches, Cr0FusionStats};
+
 pub use boot_image::{
     build_rmge01_boot_image, parse_rmge01_boot_image, BootImageArtifact, BootImageError,
     BootImageManifest, BootImageSection, BootImageSectionKind, RMGE01_BOOT_IMAGE_DIGEST_SHA256,

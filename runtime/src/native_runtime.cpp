@@ -4,6 +4,7 @@
 #include "galaxy/checkpoint_gate.h"
 #include "galaxy/decrementer_deadline.h"
 #include "galaxy/external_dispatch.h"
+#include "galaxy/native_call_admission.h"
 #include "galaxy/experimental_ultrawide_aspect.h"
 #include "galaxy/layout_aspect.h"
 #include "galaxy/flat_dispatch.h"
@@ -17,6 +18,7 @@
 #include "galaxy/ppc_float.h"
 #include "galaxy/psmtx_guard_trace.h"
 #include "galaxy/native_host.h"
+#include "galaxy/dsp_timing_runtime.h"
 #include "galaxy/native_thp_video.h"
 #include "galaxy/native_thp_boundary_probe.h"
 #include "galaxy/native_mouse_pointer.h"
@@ -42,6 +44,8 @@
 #include <DbgHelp.h>
 #include <Shellapi.h>
 #include <timeapi.h>
+
+#include "galaxy/windows_power.h"
 
 #include <algorithm>
 #include <array>
@@ -306,16 +310,29 @@ bool active_boundary_recovery_enabled();
 std::uint64_t host_qpc_milliseconds() {
     static const LARGE_INTEGER frequency = [] {
         LARGE_INTEGER value{};
-        QueryPerformanceFrequency(&value);
+        if (!QueryPerformanceFrequency(&value)) value.QuadPart = 0;
         return value;
     }();
     LARGE_INTEGER counter{};
-    QueryPerformanceCounter(&counter);
-    if (frequency.QuadPart <= 0) {
+    if (frequency.QuadPart <= 0 || !QueryPerformanceCounter(&counter) ||
+        counter.QuadPart < 0) {
         return GetTickCount64();
     }
-    return static_cast<std::uint64_t>(
-        (counter.QuadPart * 1000ll) / frequency.QuadPart);
+    std::uint64_t high = 0;
+    const auto low = _umul128(static_cast<std::uint64_t>(counter.QuadPart),
+                             1000u, &high);
+    const auto divisor = static_cast<std::uint64_t>(frequency.QuadPart);
+    if (high >= divisor) return GetTickCount64();
+    if (high == 0u) return low / divisor;
+#if defined(__clang__)
+    // clang-cl does not expose MSVC's _udiv128. Only a scaled counter that
+    // exceeds 64 bits needs this exact, bounded portable fallback.
+    return galaxy::dsp_timing_runtime::detail::divide_u128_by_u64(
+        {high, low}, divisor).quotient;
+#else
+    std::uint64_t remainder = 0;
+    return _udiv128(high, low, divisor, &remainder);
+#endif
 }
 
 // The translated OSLoadContext call boundary owns this token. The RFI hook
@@ -569,6 +586,16 @@ std::string hexadecimal(std::uint32_t value) {
     return output.str();
 }
 
+void require_context_transfer_cleanup() {
+    if (const auto* failed = g_pending_os_load_context.cleanup_failure();
+        failed != nullptr) {
+        throw RuntimeFailure(
+            "OSLoadContext lost pending transfer ownership while unwinding"
+            " target=" + hexadecimal(failed->target_context) +
+            " call=" + hexadecimal(failed->call_pc));
+    }
+}
+
 // ── Cooperative fiber scheduler ─────────────────────────────────────────
 std::string format_context_stack(const std::vector<std::uint32_t>& stack) {
     std::ostringstream output;
@@ -776,6 +803,18 @@ struct NativeMouseDepthFrame {
     std::uint64_t aspect_word{}, mode_generation{}, store_serial{}, generation{};
     unsigned screen_width{}, screen_height{}, framebuffer_width{};
     bool valid{};
+};
+
+// Stack-owned proof for one exact generated SelectThread return protocol.
+// Only its OSLoadContext wrapper may mark/consume it. It never authorizes a
+// different scheduler continuation or a return through an arbitrary caller.
+struct YieldRfiReturnProof {
+    galaxy::PpcContext* context{};
+    galaxy::GuestMemoryV1* memory{};
+    std::uint32_t thread{}, physical_context{}, sp{}, lr{}, r30{}, r31{};
+    std::uint64_t full_depth{}, inline_depth{};
+    std::uint32_t checkpoint_pc{};
+    bool loading{}, completed{}, consumed{};
 };
 
 struct RuntimeState {
@@ -1033,8 +1072,8 @@ struct RuntimeState {
     // post-RFI arbitration and continuation handoff. Keep those few state
     // transitions in memory while a just-completed VI is outstanding so a
     // later cadence failure can distinguish the host arbitration path from a
-    // guest continuation that stopped reaching safepoints. This is bounded
-    // and has no successful-path logging.
+    // guest continuation that stopped reaching safepoints. Collection is
+    // opt-in: bounded retention still incurs clock and stack reads per record.
     struct ViPostRfiHandoffRecord {
         std::uint64_t sequence{};
         std::uint64_t serial{};
@@ -1342,10 +1381,16 @@ struct RuntimeState {
     std::uint32_t home_button_rso_base{};
     bool trace_home_button_rso_state =
         read_env_flag("GALAXY_TRACE_HOME_BUTTON_RSO_STATE", false);
+    // Scene-allocation diagnosis only. The allocator remains translated;
+    // disabled runs retain its cached native-call path and do no heap reads.
+    bool trace_scene_solid_allocations =
+        read_env_flag("GALAXY_TRACE_SCENE_SOLID_ALLOCATIONS", false);
+    std::uint32_t scene_solid_allocation_records{};
     static constexpr std::size_t kHomeButtonRsoCheckpointCapacity = 128u;
     std::array<HomeButtonRsoCheckpointRecord, kHomeButtonRsoCheckpointCapacity>
         home_button_rso_checkpoint_records{};
     std::size_t home_button_rso_checkpoint_record_count{};
+    std::uint64_t home_button_rso_checkpoint_read_failures{};
     std::uint64_t home_button_rso_checkpoint_sequence{};
     bool home_button_rso_checkpoint_last_valid{};
     std::uint32_t home_button_rso_checkpoint_last_pc{};
@@ -1363,10 +1408,24 @@ struct RuntimeState {
     std::array<SchedulerTransitionRecord, kSchedulerTransitionCapacity>
         scheduler_transition_records{};
     std::size_t scheduler_transition_record_count{};
+    std::uint64_t scheduler_transition_read_failures{};
     std::uint64_t scheduler_transition_sequence{};
     bool scheduler_transition_last_valid{};
     std::uint32_t scheduler_transition_last_context{};
     std::uint32_t scheduler_transition_last_thread{};
+    // Bounded provenance counts for the same opt-in scheduler window. These
+    // identify transfers, not elapsed time or individual guest instructions.
+    struct RfiSourceCount {
+        std::uint32_t rfi_pc{}, load_call_pc{}, exception{}, interrupt{};
+        std::uint32_t load_return_pc{}, resume_pc{}, loaded_context{}, resume_frame_lr{};
+        std::uint64_t count{};
+    };
+    std::array<RfiSourceCount, 128> rfi_source_counts{};
+    std::size_t rfi_source_kind_count{};
+    std::uint64_t rfi_source_overflow{};
+    // Diagnostic provenance only. LR is captured before the translated load
+    // restores its saved LR. The exact transfer owner remains the pending token.
+    std::uint32_t rfi_osload_entry_return_pc{};
     static constexpr std::size_t kLookupCacheSize = 16'384u;
     mutable std::array<LookupCacheEntry, kLookupCacheSize> lookup_cache{};
     bool trace_lookup_cache =
@@ -1412,6 +1471,9 @@ struct RuntimeState {
     std::uint64_t checkpoint_rfi_proof_preparations{},checkpoint_rfi_pending_empty_bypasses{};
     std::array<std::uint64_t,static_cast<std::size_t>(galaxy::interrupt::CheckpointRfiProof::Mismatch::Count)> checkpoint_rfi_mismatches{};
     std::uint64_t checkpoint_rfi_bad_source{},checkpoint_rfi_unmapped_site{},checkpoint_rfi_changed_thread{},checkpoint_rfi_changed_scope{};
+    std::uint64_t yield_select_rfi_caught{}, yield_select_rfi_retained{}, yield_select_rfi_rejected{};
+    YieldRfiReturnProof* yield_rfi_return_proof{};
+    bool yield_rfi_return_protocol{};
     galaxy::cadence::ViRecord active_cadence_record{};
     bool active_cadence_record_valid{};
     bool cadence_report_dumped{};
@@ -1581,6 +1643,7 @@ struct RuntimeState {
     std::array<InlineCheckpointRecord, kInlineCheckpointTimingCapacity>
         inline_checkpoint_records{};
     std::size_t inline_checkpoint_record_count{};
+    bool inline_checkpoint_history_enabled{};
     static constexpr std::size_t kViBoundaryCompletionTimingCapacity = 128u;
     std::array<
         ViBoundaryCompletionRecord,
@@ -1597,6 +1660,9 @@ struct RuntimeState {
         kViPostRfiHandoffTimingCapacity>
         vi_post_rfi_handoff_records{};
     std::uint64_t checkpoint_timing_sequence{};
+    // Inclusive wall-phase totals, collected only with explicit timing enabled.
+    std::uint64_t checkpoint_phase_total_us{};
+    std::uint64_t checkpoint_phase_entries{};
     std::size_t checkpoint_gap_record_count{};
     std::size_t checkpoint_phase_record_count{};
     std::size_t native_input_service_record_count{};
@@ -1605,6 +1671,11 @@ struct RuntimeState {
     std::size_t vi_boundary_completion_record_count{};
     std::size_t vi_service_checkpoint_record_count{};
     std::size_t vi_post_rfi_handoff_record_count{};
+    const bool vi_post_rfi_handoff_recording_enabled{
+        read_env_flag("GALAXY_TRACE_VI_POST_RFI_HANDOFF", false) ||
+        read_env_flag("GALAXY_DIAGNOSTIC_AI_LATE_CHECKPOINT_SNAPSHOT", false) ||
+        read_env_flag("GALAXY_TRACE_MAIN_FRAME", false)};
+    // Required continuation ownership is independent of diagnostic collection.
     std::uint64_t vi_post_rfi_handoff_serial{};
     bool last_vi_service_checkpoint_active{};
     std::uint64_t last_vi_service_checkpoint_vi{};
@@ -1640,6 +1711,15 @@ struct RuntimeState {
     std::uint64_t pending_vi_boundary_advance_calls{};
     std::uint64_t pending_vi_token_blocking_polls{};
     std::uint64_t pending_vi_token_nonblocking_polls{};
+    // Wall time the guest spent in the TokenPending phase while its context was the
+    // one the boundary blocks, i.e. actually waiting on draw/PE completion. Counts
+    // alone cannot distinguish "the guest waits 60 times for a microsecond" from
+    // "the guest waits 60 times for 16 ms", and that difference decides whether the
+    // render cadence is set by guest work or by waiting for the renderer. This is
+    // the measurement `MEASUREMENT-CAVEATS.md` says the current recordings lack for
+    // within-frame attribution.
+    std::uint64_t pending_vi_token_blocking_ns{};
+    std::uint64_t pending_vi_token_completion_ns{};
     std::uint64_t pending_vi_token_blocking_completions{};
     std::uint64_t pending_vi_token_nonblocking_completions{};
     std::uint64_t pending_vi_token_blocking_incomplete{};
@@ -1648,6 +1728,10 @@ struct RuntimeState {
     std::uint64_t pending_vi_await_ee_masked{};
     std::uint64_t pending_vi_await_dispatch_eligible{};
     std::uint64_t pending_vi_await_dispatch_returned{};
+    // Counts accepted IRQ24 handlers owned by this AwaitViRfi transaction.
+    // Accepted external entry unwinds the caller instead of returning true;
+    // normal dispatch returns are separate no-delivery attempts.
+    std::uint64_t pending_vi_await_dispatch_delivered{};
     std::uint64_t external_dispatch_vi_owner_serial{};
     bool dispatching_external_interrupt{};
     bool dispatching_vi_retrace{};
@@ -1725,6 +1809,13 @@ struct RuntimeState {
     // await the restored edge instead of applying it against rebased time.
     std::uint64_t decrementer_deadline_rebase_discards{};
     std::uint64_t decrementer_deadline_late_events{};
+    // Sum of lateness over every settled edge, so the audit can report a mean
+    // and not only a count. A count of "late" events says nothing on its own:
+    // sub-microsecond scheduling jitter and a missed 428 ms deadline both
+    // increment it. The maximum beside it is a single outlier; the mean is what
+    // says whether the typical edge is on time.
+    std::uint64_t decrementer_deadline_total_lateness_ticks{};
+    std::uint64_t decrementer_deadline_settled_events{};
     std::uint64_t decrementer_deadline_max_lateness_ticks{};
     std::uint8_t bluetooth_device_state{0xFFu};
     std::uint64_t bluetooth_state_checks{};
@@ -1818,6 +1909,7 @@ struct RuntimeState {
     std::uint32_t native_thp_last_source_frame{};
     std::uint64_t native_thp_video_fallbacks{};
     std::uint64_t native_thp_video_compares{};
+    galaxy::thp::VideoScratch native_thp_video_scratch;
     bool trace_native_thp_boundary =
         read_env_flag("GALAXY_TRACE_NATIVE_THP_BOUNDARY", false);
     galaxy::diagnostics::NativeThpBoundaryProbe native_thp_boundary_probe;
@@ -1852,6 +1944,22 @@ struct RuntimeState {
     std::uint64_t native_mouse_submission_serial{}, native_mouse_submitted{}, native_mouse_consumed{};
     std::uint64_t native_mouse_select_ns{}, native_mouse_query_ns{}, native_mouse_query_max_ns{};
     std::uint64_t native_mouse_selected_to_store_ns{}, native_mouse_selected_to_store_max_ns{};
+    // EFB peeks. Each one is the simulation thread synchronising with the render
+    // thread twice: render_pending_gx_fifo_for_sync() drains the pending FIFO and
+    // gx::peek_efb() then round-trips through the frame queue and blocks on a
+    // condition variable until the render thread services the request. That is a
+    // hard producer/consumer dependency on the exact path the objective asks
+    // about ("if waits dominate, identify the dependency"), and nothing counted
+    // it: both existing phase timers are inert unless frame-cadence diagnostics
+    // are on, so no recording can say whether peeks are negligible or the
+    // dominant stall. Counted unconditionally because the two clock reads are
+    // bounded well below the round-trip they bracket.
+    std::uint64_t efb_peek_count{}, efb_peek_ns{}, efb_peek_max_ns{}, efb_peek_failures{};
+    // Split, because the two halves are different dependencies: the first waits
+    // for the render thread to consume already-submitted GX work, the second
+    // waits for a freshly queued request to be serviced. A fix for one is not a
+    // fix for the other.
+    std::uint64_t efb_peek_sync_ns{}, efb_peek_readback_ns{};
     unsigned native_mouse_trace_rows{}, native_mouse_callback_trace_rows{};
     std::uint64_t native_mouse_callback_entries{};
     std::array<std::uint32_t,2> native_mouse_trace_xy{};
@@ -2623,7 +2731,7 @@ struct RuntimeState {
         // Keep this trail strictly scoped to the verified scheduler-idle
         // continuation. Other callbacks would turn it into a high-frequency
         // trace and perturb the cadence being diagnosed.
-        if (guest_pc != 0x804AB360u) {
+        if (!inline_checkpoint_history_enabled || guest_pc != 0x804AB360u) {
             return;
         }
         InlineCheckpointRecord& record = inline_checkpoint_records[
@@ -2659,7 +2767,7 @@ struct RuntimeState {
     void mark_inline_checkpoint_stage(
         const galaxy::PpcContext* context,
         const char* stage) noexcept {
-        if (inline_checkpoint_record_count == 0u) {
+        if (!inline_checkpoint_history_enabled || inline_checkpoint_record_count == 0u) {
             return;
         }
         InlineCheckpointRecord& record = inline_checkpoint_records[
@@ -2724,7 +2832,8 @@ struct RuntimeState {
         const char* stage,
         std::uint32_t transfer_address,
         const galaxy::PpcContext* context) noexcept {
-        if (vi_post_rfi_handoff_serial == 0u) {
+        if (vi_post_rfi_handoff_serial == 0u ||
+            !vi_post_rfi_handoff_recording_enabled) {
             return;
         }
         ViPostRfiHandoffRecord& record = vi_post_rfi_handoff_records[
@@ -2807,6 +2916,10 @@ struct RuntimeState {
     }
 
     void dump_checkpoint_timing(std::ostream& output) const {
+        output << "[inline-checkpoint-history] enabled="
+               << (inline_checkpoint_history_enabled ? 1 : 0)
+               << " captured=" << inline_checkpoint_record_count
+               << " scope=diagnostic-history-not-total-guest-checkpoints\n";
         const std::size_t gap_count = std::min(
             checkpoint_gap_record_count, checkpoint_gap_records.size());
         const std::size_t gap_start =
@@ -3057,6 +3170,9 @@ struct RuntimeState {
                    << " external="
                    << (record.external_dispatch_active ? 1 : 0) << '\n';
         }
+        output << "[vi-post-rfi-handoff-summary] enabled="
+               << (vi_post_rfi_handoff_recording_enabled ? 1 : 0)
+               << " records=" << vi_post_rfi_handoff_record_count << '\n';
         const std::size_t handoff_count = std::min(
             vi_post_rfi_handoff_record_count,
             vi_post_rfi_handoff_records.size());
@@ -3182,6 +3298,7 @@ void dump_failure_worker_quiescence(
            << " snapshot-failed=" << (evidence.snapshot_failed ? 1 : 0)
            << " native-running-before="
            << (evidence.dsp.native_dsp_running ? 1 : 0)
+           << " worker-counters-coherent=" << evidence.telemetry.worker_counters_coherent
            << " retired-before=" << evidence.telemetry.retired_instructions
            << " dma-in-before=" << evidence.telemetry.dma_in_transfers
            << " dma-out-before=" << evidence.telemetry.dma_out_transfers
@@ -3215,9 +3332,8 @@ void dump_failure_worker_quiescence(
 
 // Extend existing fixed callback-timer/deferred main-frame pattern, not a ring.
 bool runtime_boundary_self_probe_active(const RuntimeState& state) {
-    if (!galaxy::main_frame_trace_window_active(state.services)) return false;
     static const bool enabled = read_env_flag("GALAXY_TRACE_RUNTIME_BOUNDARY_SELF", false);
-    return enabled;
+    return enabled && galaxy::main_frame_trace_window_active(state.services);
 }
 
 class RuntimeBoundarySelfScope final {
@@ -3327,12 +3443,22 @@ void run_timed_checkpoint_phase(
         std::forward<Callback>(callback)();
         return;
     }
-    const auto started = std::chrono::steady_clock::now();
+    // Record enabled phases on both normal return and native unwinds.
+    std::optional<std::chrono::steady_clock::time_point> started;
     const auto record_elapsed = [&]() noexcept {
+        if (!started.has_value()) {
+            return;
+        }
         const auto elapsed_us =
             std::chrono::duration_cast<std::chrono::microseconds>(
-                std::chrono::steady_clock::now() - started)
+                std::chrono::steady_clock::now() - *started)
                 .count();
+        // These inclusive wall spans may overlap in nested service calls.
+        if (elapsed_us > 0) {
+            state.checkpoint_phase_total_us +=
+                static_cast<std::uint64_t>(elapsed_us);
+        }
+        ++state.checkpoint_phase_entries;
         if (elapsed_us >= 1'000) {
             state.record_checkpoint_phase(
                 phase, static_cast<std::uint64_t>(elapsed_us), guest_pc);
@@ -3341,6 +3467,7 @@ void run_timed_checkpoint_phase(
     // Retain timing on GuestTransfer and other native unwinds without an
     // additional catch/rethrow search. The original exception keeps unwinding.
     const galaxy::ScopeExit record_scope(record_elapsed);
+    started = std::chrono::steady_clock::now();
     std::forward<Callback>(callback)();
 }
 
@@ -4439,7 +4566,14 @@ std::uint64_t ticks_per_checkpoint() {
     return ticks;
 }
 
-// Opt-in only (default off, unchanged behavior): GALAXY_THROTTLE_CPU_TIME_SAMPLING.
+// Diagnostic CPU-time sampling cache, disabled by default.
+// runtime_time_base_ticks samples GetThreadTimes on every invocation when this
+// flag is off. Callers include guest TB/DEC services, input/device handling and
+// architectural checkpoints; it is not restricted to the quiet checkpoint path.
+// The sample contributes to host-suspension detection. A cached baseline can
+// include CPU work before the current interval and suppress a real suspension
+// candidate, so monotonicity alone does not justify enabling this experiment.
+// No production syscall count or exclusive self-time is established here.
 bool throttle_cpu_time_sampling_enabled() {
     static const bool enabled =
         read_env_flag("GALAXY_THROTTLE_CPU_TIME_SAMPLING", false);
@@ -4451,6 +4585,12 @@ bool throttle_cpu_time_sampling_enabled() {
 // value alone does not prove that recovery decisions remain equivalent.
 // This stays opt-in. Checkpoint timings include surrounding work and cannot
 // establish the syscall's self-time or justify enabling this control.
+//
+// For the record, so nobody re-derives it: one GetThreadTimes(GetCurrentThread())
+// measured 144.56 ns/call on the current host against 7.04 ns for a raw rdtsc
+// (AgentWork/agent-20/bench/gt_bench.rs, rustc -O, 2e6 iterations). That is a
+// real kernel transition and worth avoiding *if* a profile ever puts it on a
+// hot path. On the recorded configuration it does not.
 std::uint64_t throttled_thread_cpu_time_100ns() noexcept {
     thread_local std::uint64_t s_cached_value = 0;
     thread_local std::chrono::steady_clock::time_point s_cached_at{};
@@ -4499,9 +4639,10 @@ std::uint64_t runtime_time_base_ticks(RuntimeState& state) {
             state.host_pause_candidate_cpu_begin_100ns =
                 state.last_timebase_cpu_time_100ns;
             state.host_pause_candidate_cpu_end_100ns = cpu_time_100ns;
-            // A normal VI wait is bounded by the next retrace and cannot meet
-            // this one-and-a-half-retrace threshold. If a timed VI wait is
-            // descheduled past it, retain the no-CPU candidate now and recover
+            // A normal VI wait ends at the next retrace. An interval reaching
+            // the one-retrace threshold is only a candidate; recovery still
+            // needs the separate deadline/backlog/ownership proof. If a timed
+            // VI wait is descheduled, retain the no-CPU candidate now and recover
             // only after the wait scope has unwound. Suppressing candidate
             // capture while vi_deadline_wait_active loses exactly that
             // host-suspension proof and turns a verified scheduling
@@ -4512,9 +4653,9 @@ std::uint64_t runtime_time_base_ticks(RuntimeState& state) {
     }
     state.last_timebase_ticks = ticks;
     state.last_timebase_qpc = cpu_time_100ns != 0u ? sampled_qpc : 0u;
-    if (cpu_time_100ns != 0u) {
-        state.last_timebase_cpu_time_100ns = cpu_time_100ns;
-    }
+    // An unavailable CPU sample invalidates its paired wall-time baseline.
+    // Retaining an older CPU endpoint would compare unequal intervals later.
+    state.last_timebase_cpu_time_100ns = cpu_time_100ns;
     // Generated DEC/TB operations sample this service before they mutate a
     // PpcContext timer field. Recover at this first post-suspension boundary:
     // exposing the raw value would stamp the context with discarded host time
@@ -11075,49 +11216,58 @@ void record_home_button_rso_checkpoint(
     RuntimeState& state,
     std::uint32_t checkpoint_pc,
     const galaxy::PpcContext* context) noexcept {
-    if (!state.trace_home_button_rso_state || context == nullptr ||
-        (!is_home_button_rso_resume_address(state, checkpoint_pc) &&
-         !is_home_button_rso_resume_address(state, context->pc))) {
-        return;
-    }
+    try {
+        if (!state.trace_home_button_rso_state || context == nullptr ||
+            (!is_home_button_rso_resume_address(state, checkpoint_pc) &&
+             !is_home_button_rso_resume_address(state, context->pc))) {
+            return;
+        }
 
-    // A tight guest loop can execute the same static checkpoint tens of
-    // thousands of times before a memory fault. Keep its first state and
-    // preserve the preceding control-flow transitions that explain it.
-    if (state.home_button_rso_checkpoint_last_valid &&
-        state.home_button_rso_checkpoint_last_pc == checkpoint_pc &&
-        state.home_button_rso_checkpoint_last_resume_pc == context->pc) {
-        return;
-    }
-    state.home_button_rso_checkpoint_last_valid = true;
-    state.home_button_rso_checkpoint_last_pc = checkpoint_pc;
-    state.home_button_rso_checkpoint_last_resume_pc = context->pc;
+        // A tight guest loop can execute the same static checkpoint tens of
+        // thousands of times before a memory fault. Keep its first state and
+        // preserve the preceding control-flow transitions that explain it.
+        if (state.home_button_rso_checkpoint_last_valid &&
+            state.home_button_rso_checkpoint_last_pc == checkpoint_pc &&
+            state.home_button_rso_checkpoint_last_resume_pc == context->pc) {
+            return;
+        }
+        state.home_button_rso_checkpoint_last_valid = true;
+        state.home_button_rso_checkpoint_last_pc = checkpoint_pc;
+        state.home_button_rso_checkpoint_last_resume_pc = context->pc;
 
-    RuntimeState::HomeButtonRsoCheckpointRecord& record =
-        state.home_button_rso_checkpoint_records[
-            state.home_button_rso_checkpoint_record_count %
-            state.home_button_rso_checkpoint_records.size()];
-    record.sequence = ++state.home_button_rso_checkpoint_sequence;
-    record.checkpoint = state.checkpoint_count;
-    record.vi = state.vi_retrace_count;
-    record.checkpoint_pc = checkpoint_pc;
-    record.resume_pc = context->pc;
-    record.lr = context->lr;
-    record.ctr = context->ctr;
-    record.r1 = context->gpr[1];
-    record.r3 = context->gpr[3];
-    record.r4 = context->gpr[4];
-    record.r5 = context->gpr[5];
-    record.r27 = context->gpr[27];
-    record.r29 = context->gpr[29];
-    record.r30 = context->gpr[30];
-    record.r31 = context->gpr[31];
-    ++state.home_button_rso_checkpoint_record_count;
+        RuntimeState::HomeButtonRsoCheckpointRecord& record =
+            state.home_button_rso_checkpoint_records[
+                state.home_button_rso_checkpoint_record_count %
+                state.home_button_rso_checkpoint_records.size()];
+        record.sequence = ++state.home_button_rso_checkpoint_sequence;
+        record.checkpoint = state.checkpoint_count;
+        record.vi = state.vi_retrace_count;
+        record.checkpoint_pc = checkpoint_pc;
+        record.resume_pc = context->pc;
+        record.lr = context->lr;
+        record.ctr = context->ctr;
+        record.r1 = context->gpr[1];
+        record.r3 = context->gpr[3];
+        record.r4 = context->gpr[4];
+        record.r5 = context->gpr[5];
+        record.r27 = context->gpr[27];
+        record.r29 = context->gpr[29];
+        record.r30 = context->gpr[30];
+        record.r31 = context->gpr[31];
+        ++state.home_button_rso_checkpoint_record_count;
+    } catch (...) {
+        ++state.home_button_rso_checkpoint_read_failures;
+        state.home_button_rso_checkpoint_last_valid = false;
+    }
 }
 
 void dump_home_button_rso_checkpoint_trace(
     const RuntimeState& state,
     std::ostream& output) {
+    if (state.home_button_rso_checkpoint_read_failures != 0u) {
+        output << "[home-button-rso-checkpoint] omitted-read-failures="
+               << state.home_button_rso_checkpoint_read_failures << '\n';
+    }
     const std::size_t count = std::min(
         state.home_button_rso_checkpoint_record_count,
         state.home_button_rso_checkpoint_records.size());
@@ -14436,54 +14586,88 @@ void record_scheduler_transition(
     RuntimeState& state,
     const galaxy::PpcContext& context,
     std::uint32_t resume_pc) noexcept {
-    if (!state.trace_scheduler_transitions || state.address_space == nullptr ||
-        (state.trace_scheduler_transitions_start_vi != 0u &&
-         state.vi_retrace_count <
-             state.trace_scheduler_transitions_start_vi) ||
-        (state.trace_scheduler_transitions_end_vi != 0u &&
-         state.vi_retrace_count > state.trace_scheduler_transitions_end_vi)) {
-        return;
-    }
+    try {
+        if (!state.trace_scheduler_transitions || state.address_space == nullptr ||
+            (state.trace_scheduler_transitions_start_vi != 0u &&
+             state.vi_retrace_count <
+                 state.trace_scheduler_transitions_start_vi) ||
+            (state.trace_scheduler_transitions_end_vi != 0u &&
+             state.vi_retrace_count > state.trace_scheduler_transitions_end_vi)) {
+            return;
+        }
 
-    const auto& address_space = *state.address_space;
-    constexpr std::uint32_t kCurrentContextAddress = 0x800000D4u;
-    constexpr std::uint32_t kCurrentThreadAddress = 0x800000E4u;
-    const std::uint32_t current_context =
-        address_space.read_u32(kCurrentContextAddress);
-    const std::uint32_t current_thread =
-        address_space.read_u32(kCurrentThreadAddress);
-    if (state.scheduler_transition_last_valid &&
-        state.scheduler_transition_last_context == current_context &&
-        state.scheduler_transition_last_thread == current_thread) {
-        return;
-    }
+        const auto& address_space = *state.address_space;
+        constexpr std::uint32_t kCurrentContextAddress = 0x800000D4u;
+        constexpr std::uint32_t kCurrentThreadAddress = 0x800000E4u;
+        const std::uint32_t current_context =
+            address_space.read_u32(kCurrentContextAddress);
+        const std::uint32_t current_thread =
+            address_space.read_u32(kCurrentThreadAddress);
+        if (state.scheduler_transition_last_valid &&
+            state.scheduler_transition_last_context == current_context &&
+            state.scheduler_transition_last_thread == current_thread) {
+            return;
+        }
 
-    state.scheduler_transition_last_valid = true;
-    state.scheduler_transition_last_context = current_context;
-    state.scheduler_transition_last_thread = current_thread;
-    const bool thread_mapped =
-        address_space.pointer_or_null(current_thread, 0x2CCu) != nullptr;
-    RuntimeState::SchedulerTransitionRecord& record =
-        state.scheduler_transition_records[
-            state.scheduler_transition_record_count %
-            state.scheduler_transition_records.size()];
-    record.sequence = ++state.scheduler_transition_sequence;
-    record.checkpoint = state.checkpoint_count;
-    record.vi = state.vi_retrace_count;
-    record.current_context = current_context;
-    record.current_thread = current_thread;
-    record.thread_state =
-        thread_mapped ? (address_space.read_u32(current_thread + 0x2C8u) >> 16u)
-                      : 0u;
-    record.resume_pc = resume_pc;
-    record.lr = context.lr;
-    record.r1 = context.gpr[1];
-    ++state.scheduler_transition_record_count;
+        state.scheduler_transition_last_valid = true;
+        state.scheduler_transition_last_context = current_context;
+        state.scheduler_transition_last_thread = current_thread;
+        const bool thread_mapped =
+            address_space.pointer_or_null(current_thread, 0x2CCu) != nullptr;
+        RuntimeState::SchedulerTransitionRecord& record =
+            state.scheduler_transition_records[
+                state.scheduler_transition_record_count %
+                state.scheduler_transition_records.size()];
+        record.sequence = ++state.scheduler_transition_sequence;
+        record.checkpoint = state.checkpoint_count;
+        record.vi = state.vi_retrace_count;
+        record.current_context = current_context;
+        record.current_thread = current_thread;
+        record.thread_state =
+            thread_mapped ? (address_space.read_u32(current_thread + 0x2C8u) >> 16u)
+                          : 0u;
+        record.resume_pc = resume_pc;
+        record.lr = context.lr;
+        record.r1 = context.gpr[1];
+        ++state.scheduler_transition_record_count;
+    } catch (...) {
+        ++state.scheduler_transition_read_failures;
+        state.scheduler_transition_last_valid = false;
+    }
 }
 
 void dump_scheduler_transition_trace(const RuntimeState& state) {
     if (!state.trace_scheduler_transitions) {
         return;
+    }
+
+    std::cout << "[scheduler-transition-evidence] omitted-read-failures="
+              << state.scheduler_transition_read_failures << '\n';
+    std::cout << "[yield-select-retention] caught=" << state.yield_select_rfi_caught
+              << " retained=" << state.yield_select_rfi_retained
+              << " rejected=" << state.yield_select_rfi_rejected << '\n';
+    std::uint64_t source_total = state.rfi_source_overflow;
+    for (std::size_t i = 0; i < state.rfi_source_kind_count; ++i) {
+        source_total += state.rfi_source_counts[i].count;
+    }
+    std::cout << "[rfi-source-summary] start-vi="
+              << state.trace_scheduler_transitions_start_vi
+              << " end-vi=" << state.trace_scheduler_transitions_end_vi
+              << " total=" << source_total
+              << " kinds=" << state.rfi_source_kind_count
+              << " capacity=" << state.rfi_source_counts.size()
+              << " overflow=" << state.rfi_source_overflow << '\n';
+    for (std::size_t i = 0; i < state.rfi_source_kind_count; ++i) {
+        const auto& source = state.rfi_source_counts[i];
+        std::cout << "[rfi-source-count] pc=" << hexadecimal(source.rfi_pc)
+                  << " load-call=" << hexadecimal(source.load_call_pc)
+                  << " exception=" << source.exception
+                  << " interrupt=" << source.interrupt
+                  << " load-return=" << hexadecimal(source.load_return_pc)
+                  << " resume=" << hexadecimal(source.resume_pc)
+                  << " loaded-context=" << hexadecimal(source.loaded_context)
+                  << " resume-frame-lr=" << hexadecimal(source.resume_frame_lr)
+                  << " count=" << source.count << '\n';
     }
 
     const std::size_t count = std::min(
@@ -14735,18 +14919,71 @@ bool call_intercept_diagnostics_enabled() {
     return enabled;
 }
 
-bool needs_call_guest_intercept(
+bool external_cached_call_preserves_generic_body(
     const RuntimeState& state,
     std::uint32_t guest_address) {
+    // Preserve the existing diagnostic route conservatively. Some generic
+    // entry logs have selectors outside the normal intercept target filter.
+    static const bool diagnostics =
+        call_intercept_diagnostics_enabled() || trace_runtime_scaffolding() ||
+        trace_scene_changes() || trace_save_sequence_enabled() ||
+        trace_model_resource_enabled() || trace_jutvideo_mq() ||
+        trace_home_button_resolver_enabled() ||
+        trace_scene_nerve_owner_enabled() || trace_scene_nerve_children_enabled() ||
+        read_env_flag("GALAXY_TRACE_MEM2_MQ", false) ||
+        read_env_flag("GALAXY_TRACE_ARCHIVE_MQ", false) ||
+        !read_env_flag("GALAXY_CACHED_CALL_LEAN_DIAGNOSTICS", true);
+    if (diagnostics || state.trace_calls || state.profile_calls ||
+        state.profile_call_time || state.profile_call_self_time ||
+        state.max_calls != 0u || runtime_boundary_self_probe_active(state)) {
+        return true;
+    }
+    // These unconditional diagnostics/metadata were reached by the previous
+    // broad external-dispatch gate even without an opt-in trace. Keep them,
+    // including the functional opening-route marker's one-shot publication.
+    if (is_route_marker_mario_control_address(guest_address)) {
+        return true;
+    }
+    switch (guest_address) {
+        case 0x8000BA08u: // NW4R panic arguments
+        case 0x8000BB0Cu:
+        case 0x80409F48u: // Suspicious allocation diagnostic
+        case 0x80416BA8u: // Unmapped model-name table diagnostic
+        case 0x804AC380u: // Tick count/first/last metadata
+            return true;
+        default:
+            return false;
+    }
+}
+
+bool needs_call_guest_intercept(
+    const RuntimeState& state,
+    std::uint32_t guest_address,
+    const galaxy::PpcContext* cached_context = nullptr) {
+    static const bool retain_yield_select =
+        read_env_flag("GALAXY_YIELD_SELECT_SAME_CONTEXT_RFI", false);
+    static const bool return_yield_select =
+        read_env_flag("GALAXY_YIELD_SELECT_RFI_RETURN", false);
+    if ((retain_yield_select || (return_yield_select && state.yield_rfi_return_protocol)) &&
+        guest_address == 0x804AB20Cu) {
+        return true;
+    }
+    if (state.trace_scene_solid_allocations && guest_address == 0x8040B8F8u) {
+        return true;
+    }
     // These dynamically selected callbacks must retain their mouse transaction
     // after the generated indirect-call cache warms up.
     if ((state.native_mouse_pointer_frame && guest_address==0x80385AF0u) ||
         (state.monitor_mouse_latency && guest_address==0x803882F8u)) return true;
-    // The translated external dispatcher selects its registered leaf through a
-    // cached indirect call.  While one exception is in flight every call must
-    // cross this boundary so the exact 0x804A87E4 selection site cannot bypass
-    // durable source/handler ownership after its cache becomes warm.
-    if (state.external_dispatch.active()) {
+    // Selection still crosses the exact owner boundary on every warm hit,
+    // including duplicate selections. Ordinary nested calls inherit that
+    // scope. The generic body supplies no cached context, retaining its full
+    // external-dispatch route after its required entry hooks have run.
+    if (state.external_dispatch.active() &&
+        galaxy::runtime::external_dispatch_requires_cached_boundary(
+            true, cached_context != nullptr,
+            cached_context != nullptr ? cached_context->lr : 0u,
+            external_cached_call_preserves_generic_body(state, guest_address))) {
         return true;
     }
     if (state.trace_calls) {
@@ -14891,26 +15128,46 @@ bool needs_call_guest_intercept(
             return false;
     }
 
+    // These targets reach the host boundary only for opt-in trace output; the
+    // translated body runs unchanged either way. The JKR allocator/free entries
+    // and OSGetTick are invoked through virtual/indirect calls many times per
+    // frame, so keeping them on the cached native path matters.
+    static const bool trace_only_targets_intercepted =
+        trace_runtime_scaffolding() || trace_scene_changes();
+    if (trace_only_targets_intercepted) {
+        switch (guest_address) {
+            case 0x8038BC80u:
+            case 0x803981A0u:
+            case 0x8039B9E0u:
+            case 0x803F81ACu:
+            case 0x80409F48u:
+            case 0x8040A2B4u:
+            case 0x8040ABF4u:
+            case 0x8040ACE0u:
+            case 0x8040CA60u:
+            case 0x80418440u:
+            case 0x804A8A0Cu:
+            case 0x804AB488u:
+            case 0x804B1E38u:
+            case 0x804B1E7Cu:
+                return true;
+            default:
+                break;
+        }
+    }
+    if (guest_address == 0x804AC380u) {
+        return state.trace_ticks;
+    }
+
     switch (guest_address) {
         case 0x00000000u:
-        case 0x8038BC80u:
-        case 0x803981A0u:
         case 0x80399058u:
         case 0x803990A8u:
         case 0x80399144u:
         case 0x80399280u:
-        case 0x8039B9E0u:
         case 0x8039EF50u:
         case 0x803CE128u:
-        case 0x803F81ACu:
-        case 0x804077BCu:
-        case 0x80409F48u:
-        case 0x8040A2B4u:
-        case 0x8040ABF4u:
-        case 0x8040ACE0u:
-        case 0x8040CA60u:
         case 0x8041071Cu:
-        case 0x80418440u:
         case 0x804506D8u: // KPADRead: synthetic keyboard/mouse pointer boundary
         case 0x804A095Cu:
         case 0x804A096Cu:
@@ -14921,17 +15178,9 @@ bool needs_call_guest_intercept(
         case 0x804A3E94u:
         case 0x804A3F24u:
         case 0x804A84F8u:
-        case 0x804A8A0Cu:
-        case 0x804AB488u:
         case 0x804ABFBCu:
-        case 0x804AC380u:
-        case 0x804B1E38u:
-        case 0x804B1E7Cu:
-        case 0x804B2730u:
         case 0x804BEF5Cu:
         case 0x804BF2CCu:
-        case 0x804CEE44u:
-        case 0x804ECA00u:
         case 0x804F5500u:
         case 0x8052B490u:
             return true;
@@ -15384,9 +15633,12 @@ void submit_gx_at_draw_done_wait(
     const auto bytes = capture->fifo_size;
     const auto token = galaxy::gx::render_frame(
         capture->fifo.data(), bytes, memory, state.services, false, 0u);
-    if (!state.pending_draw_done_submissions.mark_submitted(serial, token)) {
+    std::vector<std::byte> released_fifo;
+    if (!state.pending_draw_done_submissions.mark_submitted(
+            serial, token, &released_fifo)) {
         throw RuntimeFailure("draw-done render submission returned invalid ownership");
     }
+    state.address_space->recycle_gx_fifo(std::move(released_fifo));
     ++state.draw_done_submit_count;
     state.draw_done_submit_bytes += bytes;
     // Do not poll, dispatch an interrupt, service devices, or wait for the GPU
@@ -16253,6 +16505,15 @@ void dump_pending_vi_boundary_audit(
                galaxy::vi::BoundaryPhase::Finalize)]
         << " token-blocking-polls="
         << state.pending_vi_token_blocking_polls
+        // Nanoseconds, and the fields sum to the blocked share of the session. Pair
+        // with the session wall time from process.csv: if
+        // (token-blocking-ns + token-completion-ns) is a large fraction of wall time,
+        // the guest's render cadence is set by waiting for the render thread rather
+        // than by guest execution.
+        << " token-blocking-ns="
+        << state.pending_vi_token_blocking_ns
+        << " token-completion-ns="
+        << state.pending_vi_token_completion_ns
         << " token-nonblocking-polls="
         << state.pending_vi_token_nonblocking_polls
         << " token-blocking-completions="
@@ -16269,6 +16530,10 @@ void dump_pending_vi_boundary_audit(
         << " await-dispatch-eligible="
         << state.pending_vi_await_dispatch_eligible
         << " await-dispatch-returned="
+        << state.pending_vi_await_dispatch_returned
+        << " await-dispatch-delivered="
+        << state.pending_vi_await_dispatch_delivered
+        << " await-dispatch-noop="
         << state.pending_vi_await_dispatch_returned
         << " active=" << (state.pending_vi_boundary.active() ? 1 : 0)
         << " active-phase="
@@ -16720,8 +16985,15 @@ void dump_exact_vi_deadline_audit(
     output << "[vi-deadline-audit] tag=" << tag
            << " armed=" << (state.vi_deadline_consumer != nullptr ? 1 : 0)
            << " first-deadline=" << state.vi_first_deadline_ticks;
+    // Hoisted out of the consumer block below: the guest-rate fields further down need
+    // these two counts, and `stats` is scoped to the `if` that reads them. Zero when
+    // there is no consumer, so the rates print as 0 rather than as garbage.
+    std::uint64_t vi_scheduled_edges = 0u;
+    std::uint64_t vi_delivered_interrupts = 0u;
     if (state.vi_deadline_consumer != nullptr) {
         const auto& stats = state.vi_deadline_consumer->stats();
+        vi_scheduled_edges = stats.scheduled_edges;
+        vi_delivered_interrupts = stats.delivered_interrupts;
         output << " scheduled=" << stats.scheduled_edges
                << " delivered=" << stats.delivered_edges
                << " delivered-interrupts=" << stats.delivered_interrupts
@@ -16748,6 +17020,39 @@ void dump_exact_vi_deadline_audit(
                << " broker-last-sequence=" << publication.last_sequence
                << " broker-last-deadline-ticks="
                << publication.last_deadline_ticks
+               // Guest-active window and the two rates that follow from it, printed so
+               // that nobody has to choose a denominator again.
+               //
+               // Why this exists: three defensible denominators for the same numerator
+               // gave three answers a whole Hz apart on the Arc recording - 371.86 s of
+               // process.csv wall (includes pre-guest startup) gave 58.88 Hz, the
+               // present-stats span of 365.40 s (omits the window the first sample
+               // closes) gave 59.92 Hz, and the guest's own timeline gives 59.59 Hz.
+               // Agent 15 published 58.88, agent 14 "corrected" it to 59.92, and both
+               // were estimates; the timeline anchor settles it at 59.59 Hz delivered
+               // against a 59.99 Hz schedule (145 coalesced edges = 0.66%).
+               //
+               // The host sampling cadence is not the guest's clock. Both endpoints are
+               // already in scope here, so emitting them costs nothing.
+               << " guest-active-ms="
+               << ((publication.last_deadline_ticks > state.vi_first_deadline_ticks
+                        ? (publication.last_deadline_ticks - state.vi_first_deadline_ticks)
+                        : 0u) *
+                   1000u /
+                   static_cast<std::uint64_t>(galaxy::timing::kTimelineTicksPerSecond))
+               << " guest-hz-scheduled="
+               << (publication.last_deadline_ticks > state.vi_first_deadline_ticks
+                       ? (vi_scheduled_edges *
+                          static_cast<std::uint64_t>(galaxy::timing::kTimelineTicksPerSecond) /
+                          (publication.last_deadline_ticks - state.vi_first_deadline_ticks))
+                       : 0u)
+               << " guest-hz-delivered="
+               << (publication.last_deadline_ticks > state.vi_first_deadline_ticks
+                       ? (vi_delivered_interrupts *
+                          static_cast<std::uint64_t>(galaxy::timing::kTimelineTicksPerSecond) /
+                          (publication.last_deadline_ticks - state.vi_first_deadline_ticks))
+                       : 0u)
+               << " guest-hz-note=denominator-is-guest-timeline-not-host-sampling-cadence"
                << " broker-last-prepublication-ticks="
                << publication.last_prepublication_ticks
                << " broker-last-postpublication-ticks="
@@ -16829,6 +17134,18 @@ void dump_decrementer_deadline_audit(
            << " broker-publications="
             << state.decrementer_deadline_publications
             << " exact-fallbacks=" << state.decrementer_deadline_fallbacks
+            // A "fallback" is the CPU thread settling the edge from its
+            // immutable arm after the absolute deadline, which is a normal race
+            // against the broker worker and is documented as intended -- not a
+            // failure. The share therefore describes the guest's checkpoint
+            // density; the lateness magnitude below is what says whether any
+            // edge was actually missed.
+            << " settled-events=" << state.decrementer_deadline_settled_events
+            << " mean-lateness-ticks="
+            << (state.decrementer_deadline_settled_events == 0u
+                    ? 0u
+                    : state.decrementer_deadline_total_lateness_ticks /
+                          state.decrementer_deadline_settled_events)
             << " write-due-races=" << state.decrementer_write_due_races
             << " rebase-discards="
             << state.decrementer_deadline_rebase_discards
@@ -17030,17 +17347,23 @@ bool advance_pending_vi_boundary(
                 } else {
                     ++state.pending_vi_token_nonblocking_polls;
                 }
-                const auto elapsed =
-                    std::chrono::steady_clock::now() - snapshot.started;
-                if (elapsed >= std::chrono::milliseconds(
-                                   galaxy::gx::
-                                       kFramePeCooperativeWaitTimeoutMs)) {
-                    throw RuntimeFailure(
-                        "persistent VI PE token exceeded its absolute budget"
-                        " serial=" + std::to_string(snapshot.serial) +
-                        " token=" + std::to_string(snapshot.token.epoch) +
-                        ":" + std::to_string(snapshot.token.value));
-                }
+                const auto poll_start = std::chrono::steady_clock::now();
+                const auto elapsed = poll_start - snapshot.started;
+                // Each case invocation charges only its own wall interval,
+                // including service/park and unwind. Boundary age overlaps on
+                // successive polls and includes time spent running other owners.
+                const galaxy::ScopeExit account_blocked_poll([&]() noexcept {
+                    if (blocks_current) {
+                        const auto duration = std::chrono::steady_clock::now() -
+                            poll_start;
+                        if (duration > std::chrono::steady_clock::duration::zero()) {
+                            state.pending_vi_token_blocking_ns +=
+                                static_cast<std::uint64_t>(
+                                    std::chrono::duration_cast<std::chrono::nanoseconds>(
+                                        duration).count());
+                        }
+                    }
+                });
 
                 // See wait_for_frame_pe_completion_cooperatively: the
                 // persistent boundary must not park the simulation thread in
@@ -17056,6 +17379,16 @@ bool advance_pending_vi_boundary(
                         "persistent VI PE token failed"
                         " serial=" + std::to_string(snapshot.serial) +
                         " error=" + error.what());
+                }
+                // Observe an already published completion before declaring an
+                // expired absolute budget. This does not extend the deadline.
+                if (!complete && elapsed >= std::chrono::milliseconds(
+                        galaxy::gx::kFramePeCooperativeWaitTimeoutMs)) {
+                    throw RuntimeFailure(
+                        "persistent VI PE token exceeded its absolute budget"
+                        " serial=" + std::to_string(snapshot.serial) +
+                        " token=" + std::to_string(snapshot.token.epoch) +
+                        ":" + std::to_string(snapshot.token.value));
                 }
                 ++state.frame_pe_wait_slice_count;
                 if (complete &&
@@ -17201,12 +17534,14 @@ bool advance_pending_vi_boundary(
                 } else {
                     ++state.pending_vi_await_dispatch_eligible;
                 }
+                // Accepted entry transfers to the guest and cannot return here.
+                // IRQ24 delivery is counted at the exact selected-handler gate.
                 (void)dispatch_external_interrupt(
-                    state,
-                    exact_resume,
-                    context,
-                    memory,
-                    exact_idle_ee);
+                        state,
+                        exact_resume,
+                        context,
+                        memory,
+                        exact_idle_ee);
                 ++state.pending_vi_await_dispatch_returned;
                 return true;
             case galaxy::vi::BoundaryPhase::Finalize:
@@ -17597,11 +17932,13 @@ bool dispatch_vi_retrace(
         throw RuntimeFailure(
             "non-empty persistent VI capture returned no PE completion token");
     }
+    std::vector<std::byte> released_fifo;
     if (!state.pending_vi_boundary.mark_submitted(
-            frame_pe_completion, rendered_retrace_frame)) {
+            frame_pe_completion, rendered_retrace_frame, &released_fifo)) {
         throw RuntimeFailure(
             "VI render submission lost persistent token ownership");
     }
+    state.address_space->recycle_gx_fifo(std::move(released_fifo));
     if (frame_pe_completion &&
         state.pending_vi_boundary.snapshot().render_completion_independent) {
         const auto snapshot = state.pending_vi_boundary.snapshot();
@@ -17705,6 +18042,19 @@ bool finalize_vi_retrace(
     if (state.benchmark_vi_end != 0u) {
         if (!state.benchmark_vi_started &&
             state.vi_retrace_count >= state.benchmark_vi_start) {
+            // Announce the left edge. `vi_retrace_count` is otherwise never
+            // reported anywhere -- `GALAXY_TRACE_RUNTIME_SCAFFOLDING` is the only
+            // thing that prints it, and it prints at most one line in sixty --
+            // so without this line there is no way to learn which retrace the
+            // window actually opened on, and therefore no way to choose START
+            // for a later run except by guessing. START is a lower bound and the
+            // arming also waits for render idle, so the count here can exceed
+            // the requested START; this line is what makes that visible.
+            // Cheap, once per run, and only when a window was requested.
+            std::cout << "[benchmark] vi-window armed at retrace="
+                      << state.vi_retrace_count << " requested-start="
+                      << state.benchmark_vi_start << " requested-end="
+                      << state.benchmark_vi_end << '\n';
             // Define the left edge only after every pre-window render chunk is
             // complete. Otherwise old queued XFB work can inflate this window.
             galaxy::gx::wait_for_render_idle();
@@ -18182,6 +18532,14 @@ bool finalize_vi_retrace(
                 state.address_space != nullptr
                     ? state.address_space->dsp_native_telemetry()
                     : galaxy::DspNativeTelemetrySnapshot{};
+            const bool dsp_worker_interval_coherent = dsp_native_end.worker_counters_coherent &&
+                state.benchmark_start_dsp_native_telemetry.worker_counters_coherent;
+            const auto dsp_worker_delta = [dsp_worker_interval_coherent, saturating_sub](
+                std::uint64_t end, std::uint64_t begin) {
+                return dsp_worker_interval_coherent
+                    ? std::to_string(saturating_sub(end, begin))
+                    : std::string{"unavailable"};
+            };
             const galaxy::DspMramTransactionBoundary::Snapshot
                 dsp_mram_transactions_end =
                     state.address_space != nullptr
@@ -18751,6 +19109,7 @@ bool finalize_vi_retrace(
                       << " audio-started-rate-change-events="
                       << audio_end
                              .measurement_window_started_sample_rate_change_events
+                      << " audio-frequency-ratio-snapshot-coherent=" << audio_end.frequency_ratio_snapshot_coherent
                       << " audio-frequency-ratio-apply-calls="
                       << audio_end
                              .measurement_window_frequency_ratio_apply_calls
@@ -18898,33 +19257,34 @@ bool finalize_vi_retrace(
                              g_audio_ring_flushes.load(
                                  std::memory_order_acquire),
                              state.benchmark_start_audio_ring_flushes)
+                      << " dsp-native-worker-interval-coherent=" << dsp_worker_interval_coherent
                       << " dsp-native-retired-instructions="
-                      << saturating_sub(
+                      << dsp_worker_delta(
                              dsp_native_end.retired_instructions,
                              state.benchmark_start_dsp_native_telemetry
                                  .retired_instructions)
                       << " dsp-native-zero-queue-idle-backedges="
-                      << saturating_sub(
+                      << dsp_worker_delta(
                              dsp_native_end.zero_queue_idle_backedges,
                              state.benchmark_start_dsp_native_telemetry
                                  .zero_queue_idle_backedges)
                       << " dsp-native-command-wait-idle-backedges="
-                      << saturating_sub(
+                      << dsp_worker_delta(
                              dsp_native_end.command_wait_idle_backedges,
                              state.benchmark_start_dsp_native_telemetry
                                  .command_wait_idle_backedges)
                       << " dsp-native-zero-queue-short-reentries="
-                      << saturating_sub(
+                      << dsp_worker_delta(
                              dsp_native_end.zero_queue_short_reentries,
                              state.benchmark_start_dsp_native_telemetry
                                  .zero_queue_short_reentries)
                       << " dsp-native-zero-queue-complete-sequences="
-                      << saturating_sub(
+                      << dsp_worker_delta(
                              dsp_native_end.zero_queue_complete_sequences,
                              state.benchmark_start_dsp_native_telemetry
                                  .zero_queue_complete_sequences)
                       << " dsp-native-command-wait-complete-sequences="
-                      << saturating_sub(
+                      << dsp_worker_delta(
                              dsp_native_end.command_wait_complete_sequences,
                              state.benchmark_start_dsp_native_telemetry
                                  .command_wait_complete_sequences)
@@ -19598,18 +19958,35 @@ bool guest_thread_stack_bounds(
 // context being saved/loaded.  (The main thread legitimately runs on the
 // 0x816FFxxx arena stack outside its recorded range — owner-based matching
 // ignores that instead of false-positive flooding.)
-std::uint32_t guest_r1_owner_thread(
+template <bool CollectRoster>
+std::uint32_t guest_r1_owner_thread_impl(
     galaxy::GuestMemoryV1* memory,
     const galaxy::NativeServicesV1* services,
-    std::uint32_t r1) {
+    std::uint32_t r1,
+    galaxy::scheduler::GuestStackOwnerMemo* memo = nullptr) {
     constexpr std::uint32_t kActiveThreadQueueHead = 0x800000DCu;
     constexpr std::uint32_t kActiveThreadNextOffset = 0x2FCu;
     constexpr std::uint32_t kStackBaseOffset = 0x304u;
     constexpr std::uint32_t kStackEndOffset = 0x308u;
+    if constexpr (CollectRoster) {
+        if (memo != nullptr && memo->complete()) return memo->owner(r1);
+        if (memo != nullptr && galaxy::resolve_guest_fast(
+                memory, kActiveThreadQueueHead, sizeof(std::uint32_t)) == nullptr) {
+            memo->disable();
+        }
+    }
     std::uint32_t thread = galaxy::guest_load_u32(
         memory, kActiveThreadQueueHead, services, 0u);
     for (int i = 0; i < 64 &&
             thread >= 0x80000000u && thread < 0x82000000u; ++i) {
+        // This covers the link and both bounds. A device/fault callback could
+        // change earlier entries, so such an access forbids memo publication.
+        if constexpr (CollectRoster) {
+            if (memo != nullptr && galaxy::resolve_guest_fast(
+                    memory, thread + kActiveThreadNextOffset, 0x10u) == nullptr) {
+                memo->disable();
+            }
+        }
         const std::uint32_t stack_base = galaxy::guest_load_u32(
             memory, thread + kStackBaseOffset, services, 0u);
         const std::uint32_t stack_end = galaxy::guest_load_u32(
@@ -19622,6 +19999,11 @@ std::uint32_t guest_r1_owner_thread(
                 galaxy::host::GuestAddressSpace::kMem2Size) &&
             galaxy::resolve_guest_fast(
                 memory, stack_end, stack_base - stack_end) != nullptr;
+        if constexpr (CollectRoster) {
+            if (memo != nullptr && valid_stack_span) {
+                memo->append(thread, stack_base, stack_end);
+            }
+        }
         if (valid_stack_span && galaxy::scheduler::guest_stack_span_contains(
                 stack_base, stack_end, r1)) {
             return thread;
@@ -19629,10 +20011,20 @@ std::uint32_t guest_r1_owner_thread(
         thread = galaxy::guest_load_u32(
             memory, thread + kActiveThreadNextOffset, services, 0u);
     }
+    if constexpr (CollectRoster) {
+        if (memo != nullptr) memo->finish();
+    }
     return 0u;
 }
 
-std::uint32_t resolve_guest_stack_owner_thread(
+std::uint32_t guest_r1_owner_thread(
+    galaxy::GuestMemoryV1* memory,
+    const galaxy::NativeServicesV1* services,
+    std::uint32_t r1) {
+    return guest_r1_owner_thread_impl<false>(memory, services, r1);
+}
+
+__declspec(noinline) std::uint32_t resolve_guest_stack_owner_thread_slow(
     RuntimeState& state,
     galaxy::GuestMemoryV1* memory,
     std::uint32_t r1,
@@ -19641,20 +20033,41 @@ std::uint32_t resolve_guest_stack_owner_thread(
         memory == nullptr) {
         return 0u;
     }
+    galaxy::scheduler::GuestStackOwnerMemo memo;
     return galaxy::scheduler::resolve_guest_stack_owner(
         r1,
         [&](std::uint32_t frame) {
-            return guest_r1_owner_thread(memory, state.services, frame);
+            return guest_r1_owner_thread_impl<true>(memory, state.services, frame, &memo);
         },
         [&](std::uint32_t frame, std::uint32_t& previous_r1) {
             if (!mapped_guest_range(
                     state.address_space, frame, sizeof(std::uint32_t))) {
                 return false;
             }
+            if (galaxy::resolve_guest_fast(
+                    memory, frame, sizeof(std::uint32_t)) == nullptr) {
+                memo.disable();
+            }
             previous_r1 = galaxy::guest_load_u32(
                 memory, frame, state.services, guest_pc);
             return true;
         });
+}
+
+std::uint32_t resolve_guest_stack_owner_thread(
+    RuntimeState& state,
+    galaxy::GuestMemoryV1* memory,
+    std::uint32_t r1,
+    std::uint32_t guest_pc) {
+    if (state.address_space == nullptr || state.services == nullptr ||
+        memory == nullptr || r1 == 0u || (r1 & 7u) != 0u) {
+        return 0u;
+    }
+    const auto owner = guest_r1_owner_thread(memory, state.services, r1);
+    if (owner != 0u) return owner;
+    // Keep the bounded roster buffer and alternate-stack work out of the
+    // ordinary function's stack frame and instruction stream.
+    return resolve_guest_stack_owner_thread_slow(state, memory, r1, guest_pc);
 }
 
 const char* guest_exception_identity_reason(
@@ -20308,6 +20721,8 @@ bool consume_decrementer_deadline_publication(RuntimeState& state) {
     }
     ++state.decrementer_deadline_publications;
     const std::uint64_t lateness = now_ticks - expected_arm->deadline_ticks;
+    ++state.decrementer_deadline_settled_events;
+    state.decrementer_deadline_total_lateness_ticks += lateness;
     if (lateness != 0u) {
         ++state.decrementer_deadline_late_events;
         state.decrementer_deadline_max_lateness_ticks =
@@ -20347,6 +20762,8 @@ bool synchronize_decrementer_deadline(RuntimeState& state) {
     }
     ++state.decrementer_deadline_fallbacks;
     const std::uint64_t lateness = now_ticks - arm->deadline_ticks;
+    ++state.decrementer_deadline_settled_events;
+    state.decrementer_deadline_total_lateness_ticks += lateness;
     if (lateness != 0u) {
         ++state.decrementer_deadline_late_events;
     }
@@ -20633,6 +21050,7 @@ void dispatch_decrementer(
         // also the normal decrementer completion edge. Service only a real
         // broker publication and retain its exact batch identity before the
         // non-local transfer resumes another guest context.
+        require_context_transfer_cleanup();
         if (state.deadline_events.pending(
                 galaxy::timing::EventKind::InputReport) != 0u) {
             service_native_input_with_ai_deadline_priority(
@@ -20743,6 +21161,7 @@ void log_message(void* user, galaxy::LogLevelV1 level, const char* message) {
 // post-RFI edge, after all wrapper/checkpoint ownership guards have unwound.
 void arbitrate_after_completed_rfi(RuntimeState& state, std::uint32_t address,
                                  galaxy::PpcContext* context, galaxy::GuestMemoryV1* memory) {
+    require_context_transfer_cleanup();
     state.record_vi_post_rfi_handoff("entry", address, context);
     (void)synchronize_decrementer_deadline(state);
     state.record_vi_post_rfi_handoff("after-decrementer-sync", address, context);
@@ -20758,6 +21177,155 @@ void arbitrate_after_completed_rfi(RuntimeState& state, std::uint32_t address,
 
 void branch_checkpoint(void* user,std::uint32_t guest_pc,
                        galaxy::PpcContext* context,galaxy::GuestMemoryV1* memory);
+
+bool exact_yield_rfi_return_state(
+    const RuntimeState& state, const YieldRfiReturnProof& proof,
+    const galaxy::PpcContext* context, const galaxy::GuestMemoryV1* memory) {
+    return context == proof.context && memory == proof.memory &&
+        context->pc == 0x804AB30Cu && context->gpr[3] == 1u &&
+        context->gpr[1] == proof.sp - 0x10u &&
+        state.address_space->read_u32(0x800000D4u) == proof.thread &&
+        state.address_space->read_u32(0x800000E4u) == proof.thread &&
+        state.address_space->read_u32(0x800000C0u) == proof.physical_context &&
+        !state.dispatching_external_interrupt && !state.dispatching_decrementer &&
+        !state.dispatching_fpu_unavailable && !state.external_dispatch.active() &&
+        !state.dispatching_ipc_interrupt && !state.servicing_native_input && !state.gx_sync_capture_active &&
+        state.checkpoint_rfi_proof == nullptr && g_branch_checkpoint_callback_depth == 0u &&
+        g_active_branch_checkpoint_pc == proof.checkpoint_pc && g_live_ctx_stack.empty() &&
+        state.checkpoint_gate.full_scope_depth() == proof.full_depth &&
+        state.checkpoint_gate.inline_scope_depth() == proof.inline_depth &&
+        state.address_space->read_u32(proof.sp - 0x10u) == proof.sp &&
+        state.address_space->read_u32(proof.sp + 0x04u) == proof.lr &&
+        state.address_space->read_u32(proof.sp - 0x08u) == proof.r30 &&
+        state.address_space->read_u32(proof.sp - 0x04u) == proof.r31;
+}
+
+bool execute_yield_select_with_rfi_return(
+    RuntimeState& state, galaxy::NativeGameFunction body,
+    galaxy::PpcContext* context, galaxy::GuestMemoryV1* memory, bool enabled) {
+    if (!enabled || !state.yield_rfi_return_protocol || body == nullptr ||
+        context == nullptr || memory == nullptr || state.address_space == nullptr ||
+        state.yield_rfi_return_proof != nullptr || context->lr != 0x804AB46Cu ||
+        context->gpr[3] != 1u || context->gpr[1] < 0x10u ||
+        !mapped_guest_range(state.address_space, context->gpr[1] - 0x10u, 0x18u) ||
+        state.dispatching_external_interrupt || state.dispatching_decrementer ||
+        state.dispatching_fpu_unavailable || state.external_dispatch.active() ||
+        state.dispatching_ipc_interrupt || state.servicing_native_input || state.gx_sync_capture_active ||
+        state.checkpoint_rfi_proof != nullptr || g_branch_checkpoint_callback_depth != 0u ||
+        state.checkpoint_gate.full_scope_depth() != 0u ||
+        state.checkpoint_gate.inline_scope_depth() != 0u ||
+        !g_live_ctx_stack.empty() || g_pending_os_load_context.pending() != nullptr) return false;
+    require_context_transfer_cleanup();
+    const auto thread = state.address_space->read_u32(0x800000E4u);
+    if (state.address_space->read_u32(0x800000D4u) != thread ||
+        !valid_guest_os_context(state.address_space, thread)) return false;
+    YieldRfiReturnProof proof{context, memory, thread,
+        state.address_space->read_u32(0x800000C0u), context->gpr[1], context->lr,
+        context->gpr[30], context->gpr[31], state.checkpoint_gate.full_scope_depth(),
+        state.checkpoint_gate.inline_scope_depth(), g_active_branch_checkpoint_pc};
+    state.yield_rfi_return_proof = &proof;
+    const galaxy::ScopeExit clear_proof([&]() noexcept { state.yield_rfi_return_proof = nullptr; });
+    // Execute all original scheduler/save/load work. A changed thread or any
+    // interrupt still throws the original transfer and unwinds this scope.
+    body(context, memory, state.services);
+    // SelectThread may return normally without a context load. If it used the
+    // protocol, its generated branch already executed the original save-call
+    // return checkpoint and epilogue, once, in this same native invocation.
+    if (proof.completed != proof.consumed || proof.loading ||
+        g_pending_os_load_context.pending() != nullptr ||
+        context->gpr[1] != proof.sp || context->lr != proof.lr ||
+        state.address_space->read_u32(0x800000D4u) != proof.thread ||
+        state.address_space->read_u32(0x800000E4u) != proof.thread) {
+        throw RuntimeFailure("SelectThread RFI return protocol lost its exact caller/ownership");
+    }
+    return true;
+}
+
+// Retain only OSYieldThread's linked SelectThread invocation. The scheduler,
+// context stores/restores and RFI still run unchanged. A different thread,
+// saved continuation or owned exception keeps the ordinary flat unwind.
+bool execute_yield_select_retaining_same_context(
+    RuntimeState& state, galaxy::NativeGameFunction body,
+    galaxy::PpcContext* context, galaxy::GuestMemoryV1* memory, bool enabled) {
+    if (!enabled || body == nullptr || context == nullptr || memory == nullptr ||
+        state.address_space == nullptr || context->lr != 0x804AB46Cu ||
+        context->gpr[3] != 1u || context->gpr[1] < 0x10u ||
+        !mapped_guest_range(state.address_space, context->gpr[1] - 0x10u, 0x18u) ||
+        state.dispatching_external_interrupt || state.dispatching_decrementer ||
+        state.dispatching_fpu_unavailable || state.external_dispatch.active() ||
+        state.checkpoint_rfi_proof != nullptr || g_branch_checkpoint_callback_depth != 0u ||
+        !g_live_ctx_stack.empty() || g_pending_os_load_context.pending() != nullptr) {
+        return false;
+    }
+    require_context_transfer_cleanup();
+    const auto entry_context = state.address_space->read_u32(0x800000D4u);
+    const auto entry_thread = state.address_space->read_u32(0x800000E4u);
+    if (entry_context != entry_thread || !valid_guest_os_context(state.address_space, entry_context)) {
+        return false;
+    }
+    const auto resume = state.lookup_function(0x804AB30Cu);
+    if (resume == nullptr) return false;
+    const auto entry_sp = context->gpr[1];
+    const auto entry_lr = context->lr;
+    const auto entry_r30 = context->gpr[30];
+    const auto entry_r31 = context->gpr[31];
+    const auto physical_context = state.address_space->read_u32(0x800000C0u);
+    const auto full_depth = state.checkpoint_gate.full_scope_depth();
+    const auto inline_depth = state.checkpoint_gate.inline_scope_depth();
+    const auto checkpoint_pc = g_active_branch_checkpoint_pc;
+    const bool census = state.trace_scheduler_transitions &&
+        (state.trace_scheduler_transitions_start_vi == 0u ||
+         state.vi_retrace_count >= state.trace_scheduler_transitions_start_vi) &&
+        (state.trace_scheduler_transitions_end_vi == 0u ||
+         state.vi_retrace_count < state.trace_scheduler_transitions_end_vi);
+    try {
+        body(context, memory, state.services);
+        return true;
+    } catch (const GuestTransfer& transfer) {
+        require_context_transfer_cleanup();
+        if (census) ++state.yield_select_rfi_caught;
+        const bool exact = transfer.exception() == 0u &&
+            transfer.load_call_pc() == 0x804A381Cu && transfer.loaded_context() == entry_context &&
+            transfer.address() == 0x804AB30Cu && context->pc == 0x804AB30Cu &&
+            context->gpr[3] == 1u && context->gpr[1] == entry_sp - 0x10u &&
+            state.address_space->read_u32(0x800000D4u) == entry_context &&
+            state.address_space->read_u32(0x800000E4u) == entry_thread &&
+            state.address_space->read_u32(0x800000C0u) == physical_context &&
+            !state.dispatching_external_interrupt && !state.dispatching_decrementer &&
+            !state.dispatching_fpu_unavailable && !state.external_dispatch.active() &&
+            state.checkpoint_rfi_proof == nullptr && g_branch_checkpoint_callback_depth == 0u &&
+            g_active_branch_checkpoint_pc == checkpoint_pc && g_live_ctx_stack.empty() &&
+            g_pending_os_load_context.pending() == nullptr &&
+            state.checkpoint_gate.full_scope_depth() == full_depth &&
+            state.checkpoint_gate.inline_scope_depth() == inline_depth &&
+            state.address_space->read_u32(entry_sp - 0x10u) == entry_sp &&
+            state.address_space->read_u32(entry_sp + 0x04u) == entry_lr &&
+            state.address_space->read_u32(entry_sp - 0x08u) == entry_r30 &&
+            state.address_space->read_u32(entry_sp - 0x04u) == entry_r31;
+        if (!exact) {
+            if (census) ++state.yield_select_rfi_rejected;
+            throw;
+        }
+        if (census) ++state.yield_select_rfi_retained;
+        if (transfer.unwind_start_ns() != 0u) {
+            const auto arrived = galaxy::cadence::steady_now_ns_if_enabled(state.cadence_diagnostics);
+            if (arrived >= transfer.unwind_start_ns()) state.cadence_diagnostics->record_phase(
+                galaxy::cadence::TimingPhase::GuestTransferUnwind, arrived - transfer.unwind_start_ns());
+        }
+        // Match the flat dispatcher's post-RFI device arbitration before the
+        // original call-return checkpoint and SelectThread's exact epilogue.
+        // A new transfer from either operation propagates unchanged.
+        arbitrate_after_completed_rfi(state, transfer.address(), context, memory);
+        context->pc = transfer.address();
+        resume(context, memory, state.services);
+        if (context->gpr[1] != entry_sp || context->lr != entry_lr ||
+            state.address_space->read_u32(0x800000D4u) != entry_context ||
+            state.address_space->read_u32(0x800000E4u) != entry_thread) {
+            throw RuntimeFailure("retained SelectThread did not return to its exact OSYieldThread caller");
+        }
+        return true;
+    }
+}
 
 void branch_checkpoint_retaining_same_context(
     void* user,std::uint32_t guest_pc,galaxy::PpcContext* context,galaxy::GuestMemoryV1* memory) {
@@ -20800,6 +21368,7 @@ void branch_checkpoint_retaining_same_context(
     try {
         branch_checkpoint(user,guest_pc,context,memory);
     } catch (const GuestTransfer& transfer) {
+        require_context_transfer_cleanup();
         ++state.checkpoint_rfi_caught;
         const bool source_ok=galaxy::interrupt::validated_checkpoint_rfi_source(
             transfer.loaded_context(),transfer.load_call_pc(),interrupted_context);
@@ -21012,7 +21581,6 @@ bool try_native_thp_wrapper(RuntimeState& state, galaxy::PpcContext* context,
         plane_size(width / 2u, height / 2u)};
     std::array<std::uint32_t, 3> addresses{};
     std::array<std::byte*, 3> destinations{};
-    std::array<std::vector<std::uint8_t>, 3> planes{};
     for (std::size_t i = 0; i < 3; ++i) {
         addresses[i] = mem.read_u32(wrapper + 0x1D8u + static_cast<std::uint32_t>(i) * 4u);
         destinations[i] = mem.pointer_or_null(addresses[i], sizes[i]);
@@ -21023,9 +21591,13 @@ bool try_native_thp_wrapper(RuntimeState& state, galaxy::PpcContext* context,
                 snapshot->plane_mapped_mask |= 1u << i;
         }
         if (destinations[i] == nullptr) return fallback(Reason::PlaneMapping);
-        planes[i].resize(sizes[i]);
     }
     if (source == nullptr) return fallback(Reason::SourceMapping);
+    galaxy::thp::VideoScratch::Lease scratch(state.native_thp_video_scratch);
+    auto& planes = scratch.planes;
+    for (std::size_t i = 0; i < planes.size(); ++i) {
+        scratch.resize_zeroed(i, sizes[i]);
+    }
     const auto start = std::chrono::steady_clock::now();
     const auto result = galaxy::thp::decode_video(
         {reinterpret_cast<const std::uint8_t*>(source), size},
@@ -21280,8 +21852,10 @@ void call_guest_impl_body(
                             const auto* owned=state.pending_draw_done_submissions.next_to_submit();
                             if (!owned || owned->serial!=serial) throw RuntimeFailure("mouse depth FIFO lost ordered ownership");
                             const auto receipt=galaxy::gx::render_frame(owned->fifo.data(),owned->fifo_size,memory,state.services,false,0u);
-                            if (!state.pending_draw_done_submissions.mark_submitted(serial,receipt))
+                            std::vector<std::byte> released_fifo;
+                            if (!state.pending_draw_done_submissions.mark_submitted(serial,receipt,&released_fifo))
                                 throw RuntimeFailure("mouse depth FIFO lacks ordered completion receipt");
+                            state.address_space->recycle_gx_fifo(std::move(released_fifo));
                             state.native_mouse_submission_serial=serial;
                             ++state.native_mouse_submitted;
                         }
@@ -21397,8 +21971,18 @@ void call_guest_impl_body(
                 state.native_mouse_field_wait_ns+=waited;
                 state.native_mouse_field_wait_max_ns=std::max(state.native_mouse_field_wait_max_ns,waited);
             }
+            // Native device servicing can change the input owner or resize
+            // the window while this exact depth field is awaited. Recheck
+            // those identities before consuming any pixel from it.
+            const auto store_mode = galaxy::get_runtime_input_mode_state();
+            const auto store_aspect_word = galaxy::experimental_dynamic_aspect_requested() ?
+                state.services->experimental_aspect_word(state.services->user) : 0u;
+            const bool store_owner_matches =
+                store_mode.mode == galaxy::RuntimeInputMode::KeyboardMouse &&
+                store_mode.generation == mouse_mode.generation &&
+                store_aspect_word == mouse_aspect_word;
             if (matches && frame->capture->error) std::rethrow_exception(frame->capture->error);
-            matches=matches && frame->capture->complete.load(std::memory_order_acquire) && frame->capture->success;
+            matches=matches && store_owner_matches && frame->capture->complete.load(std::memory_order_acquire) && frame->capture->success;
             const bool depth_complete=frame && frame->capture->complete.load(std::memory_order_acquire);
             const bool depth_success=depth_complete && frame->capture->success;
             const bool initial_identity_match=matches;
@@ -21414,7 +21998,7 @@ void call_guest_impl_body(
                     if(mem.read_u32(view+i*4u)!=frame->view_matrix[i]) {matches=false;view_mismatch=static_cast<int>(i);break;}
                 }
             }
-            const bool screen_only=state.native_mouse_pointer_frame && state.synthetic_kpad_fresh_mouse_pointer &&
+            const bool screen_only=store_owner_matches && state.native_mouse_pointer_frame && state.synthetic_kpad_fresh_mouse_pointer &&
                 selected.active && selected.origin==galaxy::host::SyntheticKpadPointerOrigin::PhysicalMouse &&
                 selected.mode_generation==mouse_mode.generation && native_mouse_file_select_mode(state,*context);
             unsigned screen_width=frame ? frame->screen_width : 0u;
@@ -21453,17 +22037,19 @@ void call_guest_impl_body(
                 }
                 ++state.native_mouse_queries;
             } else ++state.native_mouse_fallbacks;
+            const auto stored_ns=static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(
+                std::chrono::steady_clock::now().time_since_epoch()).count());
             if(state.monitor_mouse_latency) {
                 state.native_mouse_past_stamp=query ? galaxy::gx::PointerResponseStamp{
-                    state.synthetic_pointer_last_read_serial,mouse_mode.generation,state.native_mouse_select_ns,selected_ns,0u,
+                    state.synthetic_pointer_last_read_serial,mouse_mode.generation,state.native_mouse_select_ns,stored_ns,0u,
                     std::bit_cast<std::uint32_t>(query->screen_x),std::bit_cast<std::uint32_t>(query->screen_y),
                     state.native_mouse_acquisition_age_ms,state.native_mouse_acquisition_age_known} : state.native_mouse_info_stamp;
-                state.native_mouse_past_stamp.processed_ns=selected_ns;
+                state.native_mouse_past_stamp.processed_ns=stored_ns;
             }
             const auto elapsed=static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now().time_since_epoch()).count())-selected_ns;
             state.native_mouse_query_ns+=elapsed;
             state.native_mouse_query_max_ns=std::max(state.native_mouse_query_max_ns,elapsed);
-            const auto age=state.native_mouse_select_ns ? selected_ns-state.native_mouse_select_ns : 0u;
+            const auto age=state.native_mouse_select_ns && stored_ns>=state.native_mouse_select_ns ? stored_ns-state.native_mouse_select_ns : 0u;
             state.native_mouse_selected_to_store_ns+=age;
             state.native_mouse_selected_to_store_max_ns=std::max(state.native_mouse_selected_to_store_max_ns,age);
             if(trace_mouse_past) {
@@ -21473,7 +22059,7 @@ void call_guest_impl_body(
                 std::ostringstream row;
                 row<<"[mouse-pointer-frame] vi="<<state.vi_retrace_count<<" serial="<<state.synthetic_pointer_last_read_serial
                    <<" sample-host-ms="<<selected.acquired_ms<<" selection-to-store-us="<<age/1000.0
-                   <<" store-steady-ns="<<selected_ns<<" depth-generation="<<(frame?frame->generation:0u)
+                   <<" store-steady-ns="<<stored_ns<<" depth-generation="<<(frame?frame->generation:0u)
                    <<" repaired="<<bool(query)<<" identity-matched="<<matches<<" screen-only="<<screen_only
                    <<" depth-complete="<<depth_complete<<" depth-success="<<depth_success
                    <<" frame-valid="<<(frame && frame->valid)<<" initial-identity-match="<<initial_identity_match
@@ -21552,6 +22138,15 @@ void call_guest_impl_body(
     if (!needs_call_guest_intercept(state, guest_address)) {
         goto execute_translated;
     }
+    if (guest_address == 0x804AB20Cu) {
+        static const bool return_enabled = read_env_flag("GALAXY_YIELD_SELECT_RFI_RETURN", false);
+        static const bool enabled =
+            read_env_flag("GALAXY_YIELD_SELECT_SAME_CONTEXT_RFI", false);
+        const auto body = resolved_function != nullptr ? resolved_function : state.lookup_function(guest_address);
+        if (execute_yield_select_with_rfi_return(state, body, context, memory, return_enabled)) return;
+        if (execute_yield_select_retaining_same_context(state, body, context, memory, enabled)) return;
+        goto execute_translated;
+    }
     // PROBE(strap-src): one-shot fingerprints of the WiiRemoteStrapReplace.arc
     // staging buffer (DI read dst 0x808DE1A0, Yaz0 stream) and the suspected
     // 0x9A820-byte decompress destination at 0x811F0000 (holds the four
@@ -21591,6 +22186,7 @@ void call_guest_impl_body(
     // Record its requested target for the RFI boundary to validate. This call
     // boundary remains the sole owner and consumes the token exactly once.
     if (guest_address == 0x804A381Cu) {
+        require_context_transfer_cleanup();
         const galaxy::scheduler::ContextTransferToken token{
             context->gpr[3], guest_address};
         if (!g_pending_os_load_context.begin(token)) {
@@ -21602,12 +22198,17 @@ void call_guest_impl_body(
                     hexadecimal(
                         pending != nullptr ? pending->target_context : 0u));
         }
+        galaxy::scheduler::ScopedContextTransfer owner{
+            g_pending_os_load_context, token};
+        if (state.trace_scheduler_transitions) {
+            state.rfi_osload_entry_return_pc = context->lr;
+        }
         galaxy::NativeGameFunction os_load_context = resolved_function;
         if (os_load_context == nullptr) {
             os_load_context = state.lookup_function(guest_address);
         }
         if (os_load_context == nullptr) {
-            if (!g_pending_os_load_context.consume_exact(token)) {
+            if (!owner.finish()) {
                 throw RuntimeFailure(
                     "OSLoadContext lost pending transfer ownership while "
                     "reporting a missing translated body");
@@ -21616,24 +22217,49 @@ void call_guest_impl_body(
                 "no exact translated OSLoadContext body at " +
                 hexadecimal(guest_address));
         }
-        try {
-            // Execute RMGE01's statically recompiled OSLoadContext body. It
-            // owns the SDK's conditional GPR restore, state-bit clear, and
-            // GQR1..7 behavior; duplicating that sequence in the host caused
-            // the abandoned caller's registers to be restored incorrectly.
-            os_load_context(context, memory, state.services);
-        } catch (...) {
-            if (!g_pending_os_load_context.consume_exact(token)) {
-                throw RuntimeFailure(
-                    "OSLoadContext lost pending transfer ownership while "
-                    "unwinding target=" + hexadecimal(token.target_context));
-            }
-            throw;
-        }
-        if (!g_pending_os_load_context.consume_exact(token)) {
+        // The translated body owns conditional GPR restore, state-bit clear
+        // and GQR1..7. On RFI the owner consumes its token at this same unwind
+        // boundary, without catching and dispatching the exception again.
+        auto* const proof = state.yield_rfi_return_proof;
+        const bool protocol_load = proof != nullptr && !proof->loading &&
+            !proof->completed && !proof->consumed && proof->context == context &&
+            proof->memory == memory && context->lr == 0x804AB418u &&
+            context->gpr[1] == proof->sp - 0x10u;
+        if (protocol_load) proof->loading = true;
+        const galaxy::ScopeExit reset_loading([&]() noexcept {
+            if (protocol_load) proof->loading = false;
+        });
+        os_load_context(context, memory, state.services);
+        if (!owner.finish()) {
             throw RuntimeFailure(
                 "OSLoadContext lost pending transfer ownership on normal "
                 "return target=" + hexadecimal(token.target_context));
+        }
+        if (protocol_load && proof->completed && !proof->consumed &&
+            exact_yield_rfi_return_state(state, *proof, context, memory)) {
+            proof->loading = false;
+            proof->consumed = true;
+            // The ownership token is finished before device arbitration, just
+            // as at the ordinary flat catch. Disable this proof before any
+            // new exception can enter another scheduler/load boundary.
+            state.yield_rfi_return_proof = nullptr;
+            if (state.trace_scheduler_transitions &&
+                (state.trace_scheduler_transitions_start_vi == 0u ||
+                 state.vi_retrace_count >= state.trace_scheduler_transitions_start_vi) &&
+                (state.trace_scheduler_transitions_end_vi == 0u ||
+                 state.vi_retrace_count < state.trace_scheduler_transitions_end_vi)) {
+                ++state.yield_select_rfi_retained;
+            }
+            arbitrate_after_completed_rfi(state, context->pc, context, memory);
+            // Only this exact continuation has a generated non-local return
+            // edge. Guest-executing arbitration currently transfers instead
+            // of returning; fail closed if a future service clobbers its frame.
+            if (context->pc != 0x804AB30Cu || context->gpr[3] != 1u ||
+                context->gpr[1] != proof->sp - 0x10u) {
+                throw RuntimeFailure(
+                    "OSLoadContext RFI return arbitration changed its continuation");
+            }
+            return;
         }
         throw RuntimeFailure(
             "translated OSLoadContext returned without RFI transfer"
@@ -21799,6 +22425,66 @@ void call_guest_impl_body(
                       << hexadecimal(context->lr) << '\n';
         }
     }
+    // JKRSolidHeap::do_alloc: observe entry before the translated allocator
+    // changes volatile registers. Only MEM2 solid heaps reaching the recorded
+    // scene arena end, at most 512 records per
+    // run, and never enabled by routine monitoring. The exp-heap diagnostic
+    // above cannot describe this bump allocator's scene allocation ledger.
+    if (guest_address == 0x8040B8F8u && state.trace_scene_solid_allocations &&
+        state.scene_solid_allocation_records < 512u &&
+        state.address_space != nullptr) {
+        const auto& space = *state.address_space;
+        const std::uint32_t heap = context->gpr[3];
+        if (heap >= 0x90000000u && heap < 0x94000000u &&
+            mapped_guest_range(&space, heap, 0x80u) &&
+            space.read_u32(heap + 0x34u) ==
+                space.read_u32(0x80003120u) - 0x20000u) {
+            ++state.scene_solid_allocation_records;
+            const std::uint32_t video = space.read_u32(0x806A2850u);
+            const std::uint32_t mode = mapped_guest_range(&space, video, 8u)
+                ? space.read_u32(video + 4u) : 0u;
+            const bool mode_valid = mapped_guest_range(&space, mode, 12u);
+            const auto mode_halfword = [&](std::uint32_t offset) {
+                return mode_valid
+                    ? ((space.read_u32(mode + (offset & ~3u)) >>
+                        ((offset & 2u) == 0u ? 16u : 0u)) & 0xFFFFu)
+                    : 0u;
+            };
+            std::cout << "[scene-solid-alloc] record="
+                      << state.scene_solid_allocation_records
+                      << " vi=" << state.vi_retrace_count
+                      << " heap=" << hexadecimal(heap)
+                      << " size=" << context->gpr[4]
+                      << " align=" << static_cast<std::int32_t>(context->gpr[5])
+                      << " lr=" << hexadecimal(context->lr)
+                      << " start=" << hexadecimal(space.read_u32(heap + 0x30u))
+                      << " capacity=" << space.read_u32(heap + 0x38u)
+                      << " free=" << space.read_u32(heap + 0x6Cu)
+                      << " head=" << hexadecimal(space.read_u32(heap + 0x70u))
+                      << " tail=" << hexadecimal(space.read_u32(heap + 0x74u))
+                      << " video=" << hexadecimal(video)
+                      << " mode=" << hexadecimal(mode)
+                      << " fb-width=" << mode_halfword(4u)
+                      << " efb-height=" << mode_halfword(6u)
+                      << " xfb-height=" << mode_halfword(8u)
+                      << " home-base=" << hexadecimal(state.home_button_rso_base)
+                      << " stack:";
+            // ABI back-chain frames are observations, not an inferred caller.
+            // Validate each mapped frame and a strictly increasing MEM1 chain.
+            std::uint32_t stack = context->gpr[1];
+            for (unsigned depth = 0u; depth < 8u; ++depth) {
+                if ((stack & 3u) != 0u || stack < 0x80000000u ||
+                    stack >= 0x81800000u ||
+                    !mapped_guest_range(&space, stack, 8u)) break;
+                std::cout << ' ' << hexadecimal(stack) << ':'
+                          << hexadecimal(space.read_u32(stack + 4u));
+                const std::uint32_t next = space.read_u32(stack);
+                if (next <= stack) break;
+                stack = next;
+            }
+            std::cout << '\n';
+        }
+    }
     // HeapMemoryWatcher::memoryErrorCallback (0x8039EF50): a JKR heap alloc
     // failed.  Log which heap and how big before the guest panics.
     if (guest_address == 0x8039EF50u) {
@@ -21830,6 +22516,7 @@ void call_guest_impl_body(
                   << hexadecimal(state.address_space != nullptr
                          ? state.address_space->read_u32(0x800000E4u)
                          : 0u)
+                  << " home-base=" << hexadecimal(state.home_button_rso_base)
                   << '\n';
         std::cout << "[heap-oom] recent-calls:";
         state.print_recent_reverse(std::cout, 32);
@@ -21984,6 +22671,10 @@ void call_guest_impl_body(
         const auto* snapshot = state.address_space->latest_native_hid_snapshot();
         if (chan == 0u && capacity >= 1u && status_ptr != 0u &&
             synthetic_source && snapshot != nullptr) {
+            // Prove the complete output span before consuming button/pointer
+            // edges. A late unmapped store must not consume an undelivered input.
+            (void)galaxy::resolve_guest(
+                memory, status_ptr, 0x84u, state.services, guest_address);
             const auto buttons = state.address_space->consume_synthetic_kpad_buttons(
                 state.synthetic_button_edges);
             const std::uint32_t hold = buttons.hold;
@@ -22462,13 +23153,13 @@ void call_guest_impl_body(
                             context->gpr[1] >= 0x40u
                                 ? context->gpr[1] - 0x40u
                                 : context->gpr[1];
-                        const std::uint32_t scan_end =
-                            context->gpr[1] <= 0xFFFFFF3Fu
-                                ? context->gpr[1] + 0xC0u
-                                : 0xFFFFFFFFu;
-                        for (std::uint32_t address = scan_start;
-                             address < scan_end;
-                             address += 4u) {
+                        const std::uint64_t scan_end =
+                            std::min(std::uint64_t{1} << 32u,
+                                static_cast<std::uint64_t>(context->gpr[1]) + 0xC0u);
+                        for (std::uint64_t cursor = scan_start;
+                             cursor + 4u <= scan_end;
+                             cursor += 4u) {
+                            const auto address = static_cast<std::uint32_t>(cursor);
                             if (!mapped_guest_range(address_space, address, 4u)) {
                                 continue;
                             }
@@ -23033,10 +23724,10 @@ void call_guest_impl_body(
     // It MUST run natively so the counter incremented by the VI retrace
     // handler (0x804B1628) is observed.  No intercept here.
     // Diagnostic: trace fn_80418440 callers.
-    if (guest_address == 0x80418440u) {
-        static int s_calls = 0;
-        ++s_calls;
-        if (trace_runtime_scaffolding() && s_calls <= 3) {
+    if (guest_address == 0x80418440u && trace_runtime_scaffolding()) {
+        static unsigned s_calls = 0;
+        if (s_calls < 3u) {
+            ++s_calls;
             std::cout << "[retry] fn_80418440 call #"
                       << s_calls << " lr=0x"
                       << std::hex << context->lr
@@ -23087,7 +23778,12 @@ void call_guest_impl_body(
             }
             return;
         }
-        if (context->gpr[1] < 0x80000000u || context->gpr[1] >= 0x93400000u) {
+        // Validate the translated prologue's frame, not a legacy IOS end.
+        // IOS33 can allocate stacks above93400000. The32-byte frame plus
+        // saved LR at incoming r1+4 must all belong to mapped cached RAM.
+        if (context->gpr[1] < 0x80000020u ||
+            !mapped_guest_range(*state.address_space,
+                                context->gpr[1] - 0x20u, 0x28u)) {
             throw RuntimeFailure(
                 "OSWakeupThread non-empty queue reached with unsupported stack "
                 "r1=" + hexadecimal(context->gpr[1]) +
@@ -23269,6 +23965,17 @@ execute_translated:
         context != nullptr ? context->gpr[5] : 0u;
     galaxy::input::NativeInputCausalityTracker::Token
         native_ir_decoder_token = 0u;
+    galaxy::input::NativeInputCausalityTracker::Token native_kpad_sample_token = 0u;
+    // Own rollback before either begin call. Diagnostics, lookup, the body and
+    // post-body observation may all unwind while a token is live.
+    const galaxy::ScopeExit abort_input_transaction([&]() noexcept {
+        if (native_ir_decoder_token != 0u) {
+            state.native_input_causality.abort_report_decoder(native_ir_decoder_token);
+        }
+        if (native_kpad_sample_token != 0u) {
+            state.native_input_causality.abort_kpad_sample(native_kpad_sample_token);
+        }
+    });
     std::uint32_t native_ir_decoder_wpad = 0u;
     std::uint8_t native_ir_decoder_active_before = 0xFFu;
     bool native_ir_decoder_commit_state_valid = false;
@@ -23349,10 +24056,9 @@ execute_translated:
     // 0x8045120C (target 0x804D93C8). Recursive callbacks create a distinct
     // LIFO frame; two copy checkpoints in one frame are therefore ambiguous,
     // not two candidates from which the proof may choose.
-    const galaxy::input::NativeInputCausalityTracker::Token
-        native_kpad_sample_token = trace_native_kpad_sample
-            ? state.native_input_causality.begin_kpad_sample(trace_arg3)
-            : 0u;
+    native_kpad_sample_token = trace_native_kpad_sample
+        ? state.native_input_causality.begin_kpad_sample(trace_arg3)
+        : 0u;
     galaxy::input::NativeInputCausalKpadSample native_kpad_causal_sample{};
     bool have_native_kpad_causal_sample = false;
     std::uint64_t wpad_command_call_index = 0;
@@ -23446,12 +24152,10 @@ execute_translated:
     if (state.profile_call_self_time) {
         state.begin_call_self_time(guest_address);
     }
-    // Zero input tokens own no rollback; self-time profiling is startup-only.
-    // Keep the complete translated body/commit/observation transaction inside
-    // the handler whenever any owner is live.
+    // Input rollback is owned by the scope above. Only enabled self-time
+    // profiling needs this body's exceptional cancellation handler.
     galaxy::run_with_optional_exception_handler(
-        native_ir_decoder_token != 0u || native_kpad_sample_token != 0u ||
-            state.profile_call_self_time,
+        state.profile_call_self_time,
         [&]() {
         function(context, memory, state.services);
         if (state.monitor_mouse_latency && guest_address==0x80385034u &&
@@ -23525,10 +24229,6 @@ execute_translated:
         }
         },
         [&]() {
-        state.native_input_causality.abort_report_decoder(
-            native_ir_decoder_token);
-        state.native_input_causality.abort_kpad_sample(
-            native_kpad_sample_token);
         if (state.profile_call_self_time) {
             state.cancel_call_self_time(guest_address);
         }
@@ -23559,11 +24259,13 @@ execute_translated:
         }
         state.native_input_causality.finish_report_decoder(
             native_ir_decoder_token, committed_slot, committed);
+        native_ir_decoder_token = 0u;
     }
     if (native_kpad_sample_token != 0u) {
         native_kpad_causal_sample =
             state.native_input_causality.finish_kpad_sample(
                 native_kpad_sample_token);
+        native_kpad_sample_token = 0u;
         have_native_kpad_causal_sample = true;
     }
     if (state.profile_call_self_time) {
@@ -23850,42 +24552,6 @@ void call_guest_impl(
     bool ipc_pass_active = false;
     bool dsp_depth_active = false;
 
-    switch (interrupt) {
-        case 5u:
-            state.dispatching_ai_interrupt = true;
-            break;
-        case 6u:
-            state.dispatching_aram_dma_interrupt = true;
-            break;
-        case 7u:
-            state.dispatching_dsp_interrupt = true;
-            ++state.dsp_interrupt_depth;
-            dsp_depth_active = true;
-            break;
-        case 18u:
-        case 19u:
-            state.dispatching_pe_interrupt = true;
-            break;
-        case 24u:
-            state.dispatching_vi_retrace = true;
-            break;
-        case 27u: {
-            state.dispatching_ipc_interrupt = true;
-            const std::uint32_t control = galaxy::guest_load_u32(
-                memory,
-                kIpcControlRegister,
-                state.services,
-                context->pc);
-            state.ipc_reply_handler_active =
-                previous_ipc_reply || (control & 0x14u) == 0x14u;
-            state.address_space->begin_ipc_interrupt_handler_pass();
-            ipc_pass_active = true;
-            break;
-        }
-        default:
-            break;
-    }
-
     const auto restore_source_scope = [&]() noexcept {
         if (ipc_pass_active) {
             state.address_space->end_ipc_interrupt_handler_pass();
@@ -23906,6 +24572,49 @@ void call_guest_impl(
 
     {
         const galaxy::ScopeExit source_scope(restore_source_scope);
+        switch (interrupt) {
+            case 5u:
+                state.dispatching_ai_interrupt = true;
+                break;
+            case 6u:
+                state.dispatching_aram_dma_interrupt = true;
+                break;
+            case 7u:
+                state.dispatching_dsp_interrupt = true;
+                ++state.dsp_interrupt_depth;
+                dsp_depth_active = true;
+                break;
+            case 18u:
+            case 19u:
+                state.dispatching_pe_interrupt = true;
+                break;
+            case 24u:
+                state.dispatching_vi_retrace = true;
+                if (state.external_dispatch_vi_owner_serial != 0u &&
+                    state.pending_vi_boundary.active() &&
+                    state.pending_vi_boundary.snapshot().serial ==
+                        state.external_dispatch_vi_owner_serial &&
+                    state.pending_vi_boundary.snapshot().phase ==
+                        galaxy::vi::BoundaryPhase::AwaitViRfi) {
+                    ++state.pending_vi_await_dispatch_delivered;
+                }
+                break;
+            case 27u: {
+                state.dispatching_ipc_interrupt = true;
+                const std::uint32_t control = galaxy::guest_load_u32(
+                    memory,
+                    kIpcControlRegister,
+                    state.services,
+                    context->pc);
+                state.ipc_reply_handler_active =
+                    previous_ipc_reply || (control & 0x14u) == 0x14u;
+                state.address_space->begin_ipc_interrupt_handler_pass();
+                ipc_pass_active = true;
+                break;
+            }
+            default:
+                break;
+        }
         call_guest_impl_body(
             user, guest_address, resolved_function, context, memory);
     }
@@ -24906,7 +25615,8 @@ void branch_checkpoint_body(
     if (trace_save_ipc() && guest_pc == 0x804AC164u &&
         state.address_space != nullptr && context != nullptr) {
         const std::uint32_t queue = context->gpr[30];
-        if (queue >= 0x933E0000u && queue < 0x93400000u) {
+        if (queue >= state.address_space->read_u32(0x80003130u) &&
+            queue < state.address_space->read_u32(0x80003134u)) {
             const std::uint32_t wake_thread = context->gpr[8];
             std::cout << "[save-ipc] oswakeup-loop"
                       << " vi=" << state.vi_retrace_count
@@ -25188,7 +25898,13 @@ void branch_checkpoint_body(
                           << '\n';
             }
         }
-        std::this_thread::yield();
+        // Handoff to the DSP worker rather than surrendering the slice. This
+        // runs on the simulation thread, which is the single-thread critical
+        // path, and the wait is normally only a few mailbox polls long.
+        // `SwitchToThread` yields to a thread ready on this processor and
+        // returns immediately when none is; the same primitive is used for the
+        // other DSP handoffs in this file.
+        SwitchToThread();
         if (trace_dsp_host()) {
             static std::uint64_t s_masked_dsp_task_waits = 0;
             ++s_masked_dsp_task_waits;
@@ -26501,6 +27217,7 @@ void run_guest_entry(
     bool arbitrate_after_rfi = false;
     std::uint32_t transfer_address = 0u;
     for (;;) {
+        require_context_transfer_cleanup();
         try {
             if (initial_entry) {
                 initial_entry = false;
@@ -26621,6 +27338,7 @@ void run_guest_entry(
             }
             throw RuntimeFailure(message.str());
         } catch (const GuestTransfer& transfer) {
+            require_context_transfer_cleanup();
             // Guest execution has stopped at RFI. Bound only the host throw,
             // translated-frame destruction and catch arrival, excluding the
             // guest interrupt body and subsequent continuation dispatch.
@@ -26635,7 +27353,10 @@ void run_guest_entry(
             }
             transfer_address = transfer.address();
             arbitrate_after_rfi = true;
-        } catch (const RuntimeFailure&) {
+        } catch (...) {
+            // Benchmark/quit are control exceptions too. A lost cleanup token
+            // must become a failure here, rather than a nominal success outside.
+            require_context_transfer_cleanup();
             throw;
         }
     }
@@ -26810,6 +27531,44 @@ static bool gx_efb_peek(
     if (state == nullptr || memory == nullptr || value == nullptr) {
         return false;
     }
+    // Bracket the whole peek, not just one half: both the FIFO synchronization
+    // and the readback round-trip block this thread on the render thread, and the
+    // sum of the two is the number that matters. One clock read either side of a
+    // synchronized cross-thread round-trip cannot change what it measures.
+    const auto peek_start = std::chrono::steady_clock::now();
+    struct PeekAccounting {
+        RuntimeState& state;
+        std::chrono::steady_clock::time_point start;
+        std::chrono::steady_clock::time_point readback_start;
+        bool readback_started;
+        bool ok;
+        ~PeekAccounting() noexcept {
+            const auto stop = std::chrono::steady_clock::now();
+            const std::uint64_t ns = stop >= start
+                ? static_cast<std::uint64_t>(
+                      std::chrono::duration_cast<std::chrono::nanoseconds>(
+                          stop - start).count())
+                : 0u;
+            ++state.efb_peek_count;
+            state.efb_peek_ns += ns;
+            state.efb_peek_max_ns = std::max(state.efb_peek_max_ns, ns);
+            if (readback_started && readback_start >= start) {
+                state.efb_peek_sync_ns += static_cast<std::uint64_t>(
+                    std::chrono::duration_cast<std::chrono::nanoseconds>(
+                        readback_start - start).count());
+            } else {
+                state.efb_peek_sync_ns += ns;
+            }
+            if (readback_started && stop >= readback_start) {
+                state.efb_peek_readback_ns += static_cast<std::uint64_t>(
+                    std::chrono::duration_cast<std::chrono::nanoseconds>(
+                        stop - readback_start).count());
+            }
+            if (!ok) {
+                ++state.efb_peek_failures;
+            }
+        }
+    } peek_accounting{*state, peek_start, {}, false, false};
     {
         // Observe the existing FIFO/effects synchronization separately from
         // the exact-pixel request. Both remain in their original order; these
@@ -26819,15 +27578,22 @@ static bool gx_efb_peek(
             galaxy::cadence::TimingPhase::EfbPeekSynchronization);
         render_pending_gx_fifo_for_sync(*state, memory);
     }
+    // Boundary between the two waits. One extra clock read per peek, against a
+    // path that has already synchronized with another thread twice.
+    const auto peek_sync_end = std::chrono::steady_clock::now();
+    peek_accounting.readback_start = peek_sync_end;
+    peek_accounting.readback_started = true;
     galaxy::cadence::ScopedPhaseTimer readback_timer(
         state->cadence_diagnostics,
         galaxy::cadence::TimingPhase::EfbPeekReadback);
-    return galaxy::gx::peek_efb(
+    const bool peeked = galaxy::gx::peek_efb(
         x,
         y,
         depth ? galaxy::gx::EfbPeekKind::Depth
               : galaxy::gx::EfbPeekKind::Color,
         *value);
+    peek_accounting.ok = peeked;
+    return peeked;
 }
 
 static HWND current_process_root_window_from_point(POINT cursor) noexcept {
@@ -27006,7 +27772,9 @@ static galaxy::host::HostPointerState runtime_host_pointer_state() noexcept {
     // Keep the mouse->IR bridge native while avoiding repeated Win32 cursor
     // queries during dense guest input polling. WM_MOUSEMOVE still refreshes
     // the renderer cache immediately; this just caps redundant host sampling.
-    const std::uint64_t host_pointer_poll_cache_ms =
+    // The environment is immutable for the process; querying it on every
+    // pointer poll costs a CRT environment lock and string search.
+    static const std::uint64_t host_pointer_poll_cache_ms =
         read_env_u64("GALAXY_HOST_POINTER_POLL_CACHE_MS", 1u);
     static std::mutex s_cache_mutex;
     static galaxy::host::HostPointerState s_cached_state{};
@@ -27083,6 +27851,16 @@ void record_direct_edge_profile(
     galaxy::record_direct_edge_profile_local(caller_pc, callee_pc, cycles);
 }
 
+bool cached_call_diagnostics_enabled() {
+    // These selectors are process-lifetime values. Keep live scheduling,
+    // interception and per-state profiling decisions outside this aggregate.
+    static const bool enabled =
+        !read_env_flag("GALAXY_CACHED_CALL_LEAN_DIAGNOSTICS", true) ||
+        trace_main_frame_enabled() ||
+        trace_scene_nerve_owner_enabled() || trace_scene_nerve_children_enabled();
+    return enabled;
+}
+
 void call_guest_cached(
     void* user,
     std::uint32_t guest_address,
@@ -27136,14 +27914,25 @@ void call_guest_cached(
     // the scene marker. Never persist it in the generated target cache: input
     // transactions and exception ownership may change before the next call.
     const bool requires_intercept =
-        function != nullptr && needs_call_guest_intercept(state, guest_address);
+        function != nullptr &&
+        (galaxy::runtime::cached_call_has_required_entry_hook(guest_address) ||
+         needs_call_guest_intercept(state, guest_address, context));
     if (function != nullptr && !requires_intercept) {
+        const bool account_external_call = state.external_dispatch.active();
+        if (account_external_call && !state.servicing_native_input &&
+            state.deadline_events.pending(
+                galaxy::timing::EventKind::InputReport) != 0u) {
+            // Keep the second input/AI deadline observation previously made
+            // at call_guest_impl entry. It advances devices with EE masked;
+            // the enclosing source owner and this guest call remain intact.
+            service_native_input_with_ai_deadline_priority(state, context, memory);
+        }
         if (publish_lookup_cache) {
             *cached_address = guest_address;
             *cached_function = function;
         }
         const bool account_cached_call =
-            state.profile_calls || state.profile_call_time ||
+            account_external_call || state.profile_calls || state.profile_call_time ||
             state.profile_call_self_time || state.trace_calls ||
             state.max_calls != 0u;
         if (account_cached_call) {
@@ -27153,6 +27942,21 @@ void call_guest_cached(
             record_frame_activity(state, guest_address);
         }
         context->pc = guest_address;
+        if (!cached_call_diagnostics_enabled() &&
+            !state.profile_call_time && !state.profile_call_self_time &&
+            !runtime_boundary_self_scope.active()) {
+            // Input/AI deadlines and live intercept ownership were handled
+            // above. Only disabled diagnostic wrappers are omitted here.
+            // A callee can open a new post-RFI handoff, so retain both records
+            // even when no handoff was active at entry. Exceptions propagate
+            // exactly as in the original path with no active postlude.
+            state.record_vi_post_rfi_handoff(
+                "cached-call-enter", guest_address, context);
+            function(context, memory, state.services);
+            state.record_vi_post_rfi_handoff(
+                "cached-call-return", guest_address, context);
+            return;
+        }
         const std::uint32_t main_frame_dynamic_return_pc = context->lr;
         const bool trace_main_frame_dynamic_call =
             trace_main_frame_vi_window(state) &&
@@ -27467,6 +28271,7 @@ void fpu_unavailable(
                 interrupted_context,
                 state.dispatching_fpu_unavailable);
         } catch (const FpuRetryTransfer& transfer) {
+            require_context_transfer_cleanup();
             const std::uint32_t current_context =
                 state.address_space->read_u32(kCurrentContextAddress);
             const std::uint32_t current_physical_context =
@@ -27763,6 +28568,56 @@ void return_from_interrupt(
 
     record_scheduler_transition(state, *context, resume_pc);
 
+    if (state.trace_scheduler_transitions &&
+        (state.trace_scheduler_transitions_start_vi == 0u ||
+         state.vi_retrace_count >= state.trace_scheduler_transitions_start_vi) &&
+        (state.trace_scheduler_transitions_end_vi == 0u ||
+         state.vi_retrace_count <= state.trace_scheduler_transitions_end_vi)) {
+        const std::uint32_t load_call_pc = has_load_frame ? load_frame.call_pc : 0u;
+        const std::uint32_t exception = state.dispatching_external_interrupt ? 4u :
+            state.dispatching_decrementer ? 8u : 0u;
+        const std::uint32_t interrupt = external_route ==
+                galaxy::interrupt::ExternalRfiRouteResult::ConsumedExternalDispatch
+            ? external_record.selected_interrupt : 0xFFFFFFFFu;
+        const std::uint32_t load_return_pc = has_load_frame
+            ? state.rfi_osload_entry_return_pc : 0u;
+        std::uint32_t resume_frame_lr = 0u;
+        // This is the selected context's saved SelectThread frame, not the
+        // caller of the current load. Read it only for the exact known resume
+        // and a fully mapped range; malformed stacks must not gain new faults
+        // merely because the diagnostic window is enabled.
+        if (has_load_frame && load_return_pc == 0x804AB418u &&
+            architectural_resume_pc == 0x804AB30Cu && context->gpr[3] == 1u &&
+            mapped_guest_range(state.address_space, context->gpr[1], 0x18u)) {
+            resume_frame_lr = state.address_space->read_u32(
+                context->gpr[1] + 0x14u);
+        }
+        std::size_t slot = 0;
+        for (; slot < state.rfi_source_kind_count; ++slot) {
+            const auto& source = state.rfi_source_counts[slot];
+            if (source.rfi_pc == guest_pc && source.load_call_pc == load_call_pc &&
+                source.exception == exception && source.interrupt == interrupt &&
+                source.load_return_pc == load_return_pc &&
+                source.resume_pc == architectural_resume_pc &&
+                source.loaded_context == ctx_ptr &&
+                source.resume_frame_lr == resume_frame_lr) {
+                break;
+            }
+        }
+        if (slot == state.rfi_source_counts.size()) {
+            ++state.rfi_source_overflow;
+        } else {
+            if (slot == state.rfi_source_kind_count) {
+                state.rfi_source_counts[slot] =
+                    {guest_pc, load_call_pc, exception, interrupt,
+                     load_return_pc, architectural_resume_pc, ctx_ptr,
+                     resume_frame_lr, 0u};
+                ++state.rfi_source_kind_count;
+            }
+            ++state.rfi_source_counts[slot].count;
+        }
+    }
+
     if (state.trace_transfers) {
         std::cerr << "[flat-dispatch] RFI transfer"
                   << " source=" << (has_load_frame ? "OSLoadContext" : "direct")
@@ -27777,6 +28632,20 @@ void return_from_interrupt(
                       << hexadecimal(external_record.selected_handler);
         }
         std::cerr << '\n';
+    }
+
+    if (auto* proof = state.yield_rfi_return_proof;
+        proof != nullptr && proof->loading && !proof->completed && !proof->consumed &&
+        guest_pc == 0x804A38F0u &&
+        has_load_frame && load_frame.call_pc == 0x804A381Cu &&
+        load_frame.target_context == proof->thread && ctx_ptr == proof->thread &&
+        exact_yield_rfi_return_state(state, *proof, context, memory)) {
+        // Only a module advertising protocol1 can take this path. Its exact
+        // SelectThread load call tests the restored PC and jumps to the
+        // original 804AB30C call-return label instead of falling through to
+        // 804AB418. The load owner still consumes its token in its wrapper.
+        proof->completed = true;
+        return;
     }
 
     // Do not invoke the target recursively and do not restore the abandoned
@@ -27938,15 +28807,93 @@ static void disable_runtime_dialogs() {
     SetErrorMode(error_mode);
 }
 
+static char const* priority_class_name(DWORD value) {
+    switch (value) {
+    case IDLE_PRIORITY_CLASS:         return "IDLE";
+    case BELOW_NORMAL_PRIORITY_CLASS: return "BELOW_NORMAL";
+    case NORMAL_PRIORITY_CLASS:       return "NORMAL";
+    case ABOVE_NORMAL_PRIORITY_CLASS: return "ABOVE_NORMAL";
+    case HIGH_PRIORITY_CLASS:         return "HIGH";
+    case REALTIME_PRIORITY_CLASS:     return "REALTIME";
+    default:                          return "unknown";
+    }
+}
+
+static char const* thread_priority_name(int value) {
+    switch (value) {
+    case THREAD_PRIORITY_IDLE:          return "IDLE";
+    case THREAD_PRIORITY_LOWEST:        return "LOWEST";
+    case THREAD_PRIORITY_BELOW_NORMAL:  return "BELOW_NORMAL";
+    case THREAD_PRIORITY_NORMAL:        return "NORMAL";
+    case THREAD_PRIORITY_ABOVE_NORMAL:  return "ABOVE_NORMAL";
+    case THREAD_PRIORITY_HIGHEST:       return "HIGHEST";
+    case THREAD_PRIORITY_TIME_CRITICAL: return "TIME_CRITICAL";
+    default:                            return "unknown";
+    }
+}
+
+// Base priority is a function of the process class AND the thread level, so
+// logging the two together is the only way to see what a thread's effective
+// priority actually is. Reading only the thread level is misleading whenever the
+// process class is not NORMAL: a thread left at THREAD_PRIORITY_NORMAL under
+// ABOVE_NORMAL_PRIORITY_CLASS has base 10, which is one level below this
+// function's own ABOVE_NORMAL thread (base 11) and level with a thread that a
+// NORMAL-class process would call ABOVE_NORMAL (base 9).
+//
+// Reported rather than asserted, because there is no single correct gradient: the
+// simulation, render, DSP and deadline-broker threads are all deliberately
+// ABOVE_NORMAL, and the only threads this must not outrank are the ones lowered
+// on purpose (PSO prewarm workers, frame telemetry). Those set their own level
+// and are therefore relative to this class, not absolute.
+static void report_effective_priorities() {
+    const DWORD process_class = GetPriorityClass(GetCurrentProcess());
+    SetLastError(ERROR_SUCCESS);
+    const int thread_level = GetThreadPriority(GetCurrentThread());
+    const DWORD thread_error = GetLastError();
+    std::fprintf(
+        stderr,
+        "[thread-priority] process-class=%s(0x%lx) this-thread-level=%s(%d) "
+        "this-thread-error=%lu note=base-priority-is-class-plus-level\n",
+        priority_class_name(process_class),
+        static_cast<unsigned long>(process_class),
+        thread_error == ERROR_SUCCESS ? thread_priority_name(thread_level) : "query-failed",
+        thread_level,
+        static_cast<unsigned long>(thread_error));
+}
+
 static void configure_runtime_scheduling() {
+    if (read_env_flag("GALAXY_POWER_THROTTLING_OPTOUT", true)) {
+        galaxy::host::opt_out_of_power_throttling_process();
+        galaxy::host::opt_out_of_power_throttling_thread();
+    }
     if (!read_env_flag("GALAXY_RUNTIME_HIGH_PRIORITY", true)) {
+        // Still report, so a recording made with the class left at NORMAL is
+        // distinguishable from one where the query simply did not run.
+        report_effective_priorities();
         return;
     }
     // Keep direct Release launches on the same scheduling path as diagnostics.
     // ABOVE_NORMAL avoids aggressive system-wide priority while reducing
     // occasional multimedia scheduling spikes in realtime VI playback.
-    SetPriorityClass(GetCurrentProcess(), ABOVE_NORMAL_PRIORITY_CLASS);
-    SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_ABOVE_NORMAL);
+    //
+    // NOTE: this raises the CLASS, which renumbers every thread in the process,
+    // not just this one. A thread nobody touches runs at THREAD_PRIORITY_NORMAL,
+    // so it moves from base 8 to base 10. Anything that must stay below the
+    // critical paths has to set its own level explicitly (the PSO prewarm workers
+    // and frame telemetry do; the snapshot copy workers do not).
+    if (SetPriorityClass(GetCurrentProcess(), ABOVE_NORMAL_PRIORITY_CLASS) == FALSE) {
+        std::fprintf(
+            stderr,
+            "[thread-priority] SetPriorityClass failed error=%lu\n",
+            static_cast<unsigned long>(GetLastError()));
+    }
+    if (SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_ABOVE_NORMAL) == FALSE) {
+        std::fprintf(
+            stderr,
+            "[thread-priority] SetThreadPriority failed error=%lu\n",
+            static_cast<unsigned long>(GetLastError()));
+    }
+    report_effective_priorities();
 }
 
 class ScopedSimulationCacheAffinity {
@@ -28299,6 +29246,20 @@ static void print_runtime_usage() {
 int wmain(int argc, wchar_t** argv) {
     // MUST be the very first line — before any allocation or assertion.
     disable_runtime_dialogs();
+    // Wall-clock anchor for the one-line VI-cadence summary at normal exit.
+    // `vi_retrace_count` is the guest's own 60 Hz timebase (kViRetracePeriodTicks
+    // = kWiiTimeBaseHz / 60, native_runtime.cpp:340) advanced by the only
+    // increment site at :17820. Dividing the final count by elapsed seconds
+    // therefore reports whether the guest's timebase is being honoured, at zero
+    // per-frame cost:
+    //   ~60/s  the simulation is keeping up with its own clock
+    //   < 60/s the simulation itself is being throttled
+    //   > 60/s the grid is being crossed faster than the guest's clock, which is
+    //          a correctness question rather than a performance one
+    // Until now the value was printed only from ~100 event- and trace-gated
+    // sites, so it was never readable at a fixed cadence and this comparison
+    // could not be made from a recording.
+    const auto session_start = std::chrono::steady_clock::now();
     // Process-local awareness must precede every HWND and input/render thread.
     // Output sizes, GetClientRect and mouse coordinates now use physical pixels.
     if (!SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2) &&
@@ -28350,10 +29311,87 @@ int wmain(int argc, wchar_t** argv) {
     RuntimeLaunchPaths launch_paths = default_runtime_launch_paths();
     std::cerr << "[runtime-build] " << NEBULA_RUNTIME_BUILD_IDENTITY << '\n';
     RuntimeState state{};
+    // The idle callback ring and stage history have only diagnostic consumers.
+    // Configure once before execution; routine monitoring keeps its independent
+    // new-frame/presentation counters without this per-checkpoint capture work.
+    state.inline_checkpoint_history_enabled =
+        read_env_flag("GALAXY_DIAGNOSTIC_CHECKPOINT_HISTORY", false) ||
+        read_env_flag("GALAXY_TRACE_INLINE_CHECKPOINT_SAMPLES", false) ||
+        read_env_flag("GALAXY_DIAGNOSTIC_AI_LATE_CHECKPOINT_SNAPSHOT", false) ||
+        read_env_flag("GALAXY_TRACE_HOST_PUMP_SUBPHASES", false) ||
+        trace_main_frame_enabled() || frame_activity_recording_enabled() ||
+        trace_checkpoint_hotspots_enabled() || trace_checkpoint_time_enabled() ||
+        trace_checkpoint_callback_time_enabled();
     galaxy::cadence::configure_global_session(
         read_env_flag("GALAXY_DIAGNOSTIC_FRAME_CADENCE", false));
     state.cadence_diagnostics =
         galaxy::cadence::global_session_if_enabled();
+    // Arm the bounded measurement window from the environment as well as from
+    // `--benchmark-vi-window`. Both launch paths -- tools/perf_session.ps1 and
+    // installer/src/Launcher -- build a command line of exactly two positional
+    // arguments and configure everything else through GALAXY_* environment
+    // variables, so a flag-only option is unreachable from either one. This
+    // window is the only place the runtime reports `vi-rate-hz` (simulation
+    // speed) and the frame-ms mean/p95/p99/max tail, and it also makes the
+    // measured window a fixed VI-retrace range, which is what makes two
+    // recordings comparable across machines and runs.
+    //
+    // Applied before argument parsing so the explicit flag below still wins,
+    // END must exceed START, otherwise the state is
+    // left disarmed exactly as a malformed flag would leave it. START is a
+    // lower bound, not an exact first tick -- the window opens at the first
+    // synchronized retrace whose count exceeds it -- so START=0 begins at the
+    // first synchronized retrace of the run.
+    //
+    // One further guard, because this is the one way an environment-supplied
+    // window can destroy a run instead of measuring it. The window arms at the
+    // first retrace past START AND after `wait_for_render_idle()`, so on a slow
+    // machine the count can already have passed a too-small END by the time it
+    // arms -- and the arming path throws
+    // "VI benchmark reached its end before a synchronized measurement window
+    // could start", failing the whole run. An environment typo would then look
+    // like a crash rather than a bad setting. Enforce a floor on the measured
+    // span to reduce this risk, and say so loudly when the floor
+    // had to be used, because a window this short is reported, not trusted.
+    constexpr std::uint64_t kMinBenchmarkWindowRetraces = 60u;
+    {
+        std::uint64_t window_start =
+            read_env_u64("GALAXY_BENCHMARK_VI_WINDOW_START", 0u);
+        std::uint64_t window_end =
+            read_env_u64("GALAXY_BENCHMARK_VI_WINDOW_END", 0u);
+        if (window_end > 0u) {
+            if (window_end <= window_start) {
+                std::cerr << "[benchmark] VI window END=" << window_end
+                          << " does not exceed START=" << window_start
+                          << "; window not armed\n";
+                window_end = 0u;
+            } else if (window_end - window_start <
+                       kMinBenchmarkWindowRetraces) {
+                if (window_start > std::numeric_limits<std::uint64_t>::max() -
+                        kMinBenchmarkWindowRetraces) {
+                    std::cerr << "[benchmark] VI window floor exceeds the counter "
+                                 "range; window not armed\n";
+                    window_end = 0u;
+                } else {
+                    const std::uint64_t widened =
+                        window_start + kMinBenchmarkWindowRetraces;
+                    std::cerr << "[benchmark] VI window span "
+                              << (window_end - window_start)
+                              << " retraces is below the "
+                              << kMinBenchmarkWindowRetraces
+                              << "-retrace floor; END widened from " << window_end
+                              << " to " << widened
+                              << ". A window this short may cover only boot, so"
+                                 " treat its summary as reported, not trusted.\n";
+                    window_end = widened;
+                }
+            }
+            if (window_end > 0u) {
+                state.benchmark_vi_start = window_start;
+                state.benchmark_vi_end = window_end;
+            }
+        }
+    }
     state.timeline = std::make_unique<galaxy::timing::RuntimeTimeline>(
         galaxy::timing::query_performance_counter_source());
     int positional_count = 0;
@@ -28634,6 +29672,54 @@ int wmain(int argc, wchar_t** argv) {
                 <<" query-total-us="<<state.native_mouse_query_ns/1000.0<<" query-max-us="<<state.native_mouse_query_max_ns/1000.0
                 <<" selected-to-store-total-us="<<state.native_mouse_selected_to_store_ns/1000.0
                 <<" selected-to-store-max-us="<<state.native_mouse_selected_to_store_max_ns/1000.0<<'\n';
+            // EFB peeks block the simulation thread on the render thread twice
+            // per call (pending-FIFO drain, then a frame-queue round-trip). The
+            // three numbers below are the only ones that say whether that
+            // dependency is negligible or dominant, because both existing peek
+            // phase timers require frame-cadence diagnostics to be enabled.
+            std::cerr<<"[gx-efb-peek-summary] count="<<state.efb_peek_count
+                <<" failures="<<state.efb_peek_failures
+                <<" blocked-total-us="<<state.efb_peek_ns/1000.0
+                <<" blocked-max-us="<<state.efb_peek_max_ns/1000.0
+                <<" blocked-mean-us="
+                <<(state.efb_peek_count!=0u
+                       ? (state.efb_peek_ns/1000.0)/state.efb_peek_count
+                       : 0.0)
+                <<" fifo-sync-total-us="<<state.efb_peek_sync_ns/1000.0
+                <<" round-trip-total-us="<<state.efb_peek_readback_ns/1000.0
+                <<" note=single-peek-costs-one-pending-fifo-drain-plus-one-frame-queue-round-trip\n";
+            std::cerr<<"[checkpoint-phase-summary] enabled="
+                <<(checkpoint_phase_timing_enabled() ? 1u : 0u)
+                <<" entries="
+                <<state.checkpoint_phase_entries
+                <<" total-us="<<state.checkpoint_phase_total_us
+                <<" mean-us="
+                <<(state.checkpoint_phase_entries!=0u
+                       ? static_cast<double>(state.checkpoint_phase_total_us)/
+                             static_cast<double>(state.checkpoint_phase_entries)
+                       : 0.0)
+                <<" scope=inclusive-wall-phase-invocations; nested spans may overlap; disabled means unmeasured\n";
+            // The checkpoint gate's own counters are maintained on the hot path with
+            // overflow-checked increments (checkpoint_gate.cpp:167-189) but were never
+            // printed anywhere outside the unit tests, so no recording could say how
+            // often each path runs. They are the multiplier A14-39 lacked and A14-40
+            // had to withdraw its estimate for: `full-scope-entries` is how often the
+            // expensive non-quiet path (validate_published_state + checked increments)
+            // runs, and `inline-scope-entries` is the cheap path that handles a
+            // checkpoint in generated code without entering the branch callback at all.
+            // Printing them costs nothing -- the values already exist.
+            {
+                const auto& gate_telemetry = state.checkpoint_gate.telemetry();
+                std::cerr<<"[checkpoint-gate-telemetry] activations="
+                    <<gate_telemetry.activations
+                    <<" full-scope-entries="<<gate_telemetry.full_scope_entries
+                    <<" max-full-depth="<<gate_telemetry.maximum_full_scope_depth
+                    <<" inline-scope-entries="<<gate_telemetry.inline_scope_entries
+                    <<" max-inline-depth="<<gate_telemetry.maximum_inline_scope_depth
+                    <<" transitions-to-full="<<gate_telemetry.transitions_to_full
+                    <<" transitions-to-inline="<<gate_telemetry.transitions_to_inline
+                    <<" note=full-scope-entries sizes the per-escalation diagnostic cost; inline entries never enter the branch callback\n";
+            }
             state.dump_native_input_anomalies(std::cerr);
             if (state.address_space != nullptr) {
                 galaxy::input::dump_native_hid_cadence_audit(
@@ -28658,6 +29744,31 @@ int wmain(int argc, wchar_t** argv) {
             }
             dump_frame_pe_wait_audit(state, std::cerr, "shutdown");
             dump_pending_vi_boundary_audit(state, std::cerr, "shutdown");
+            // Emit the checkpoint-timing block on the CLEAN exit path.
+            //
+            // Before this call, dump_checkpoint_timing was reachable only from a crash
+            // handler or from flag-gated paths: native_runtime.cpp:15940 (late-checkpoint
+            // path), :19561 (if (trace_main_frame_enabled())), and :30108/:30155 both
+            // inside wmain's terminal-diagnostics try block, whose catch prints "Terminal
+            // diagnostics failed". Nothing reached it on a normal run, so EVERY counter it
+            // prints was absent from every normal recording - not just one of them.
+            //
+            // Four independent reports converged on this, which is why the fix is one call
+            // rather than four: agent-6 (C0060) found [ai-dma-latch-contention] and
+            // [vi-deadline-latch-contention] computed at :3023-3033 with no guard around
+            // them yet absent from both retained logs; agent-12 reported seven more missing
+            // counters from the same body; agent-14 hit the same wall twice independently
+            // (a phase timer whose result is discarded below 1 ms, and the checkpoint
+            // gate's Telemetry, maintained with overflow-checked increments on the hottest
+            // path and read only by unit tests).
+            //
+            // All of these values are already computed, so this costs a few hundred bytes
+            // of stderr at shutdown and nothing at run time. Placement is deliberate: the
+            // two calls above emit [frame-pe-wait] and [pending-vi-boundary-audit], and
+            // both are present in BOTH retained recordings, which proves this lambda runs
+            // on a clean exit - so this call inherits a demonstrated-reachable site rather
+            // than a hoped-for one.
+            state.dump_checkpoint_timing(std::cerr);
         });
         if (state.deadline_broker != nullptr) {
             state.deadline_broker->stop();
@@ -28798,18 +29909,33 @@ int wmain(int argc, wchar_t** argv) {
             std::cerr << " actual-version=" << manifest->abi_version
                       << " actual-manifest-size=" << manifest->struct_size;
         }
-        std::cerr << '\n';
+        // The compiled modules are the only artifact that carries this version,
+        // and they are produced on the machine that runs them. A runtime
+        // replaced without recompiling them lands here on every launch, so name
+        // the remedy instead of leaving the operator with a bare exit code.
+        std::cerr << "\n[boot] The game and Home modules were built against a "
+                     "different galaxy/native_api.h than this runtime. Re-run "
+                     "Setup (or the launcher's recompile step) so "
+                     "RMGE01_game.dll and RMGE01_home_button.dll are rebuilt "
+                     "from the same source revision as NebulaRuntime.exe.\n";
         cleanup_module();
         return 5;
     }
+    const auto bounded_manifest_field = [](const auto& field) {
+        return std::string_view(field, strnlen_s(field, sizeof(field)));
+    };
     if (trace_boot_log_enabled()) {
-        std::cout << "[boot] Loaded " << manifest->game_id
+        std::cout << "[boot] Loaded " << bounded_manifest_field(manifest->game_id)
                   << "  functions=" << manifest->translated_function_count
                   << "  entry=" << hexadecimal(manifest->guest_entry_point)
                   << '\n';
     }
 
     state.lookup = lookup_fn;
+    using YieldRfiReturnProtocolFn = std::uint32_t (*)();
+    const auto yield_protocol = reinterpret_cast<YieldRfiReturnProtocolFn>(
+        GetProcAddress(module, "galaxy_yield_rfi_return_protocol"));
+    state.yield_rfi_return_protocol = yield_protocol != nullptr && yield_protocol() == 1u;
 
     // ── Guest address space (memory + IOS device simulation) ────────────────
     galaxy::host::GuestAddressSpace address_space(
@@ -28881,8 +30007,8 @@ int wmain(int argc, wchar_t** argv) {
         manifest->guest_entry_point != boot_image.entry_point) {
         std::cerr
             << "[boot] Native module/game identity mismatch: module game_id="
-            << manifest->game_id
-            << " module_sha1=" << manifest->main_dol_sha1
+            << bounded_manifest_field(manifest->game_id)
+            << " module_sha1=" << bounded_manifest_field(manifest->main_dol_sha1)
             << " dol_sha1=" << dol_sha1
             << " module_entry=" << hexadecimal(manifest->guest_entry_point)
             << " boot_image_entry=" << hexadecimal(boot_image.entry_point)
@@ -28973,6 +30099,12 @@ int wmain(int argc, wchar_t** argv) {
         } else {
             std::cerr << " manifest=null\n";
         }
+        // Same remedy as the game-module ABI gate above: the sidecar is
+        // recompiled on this machine, so a runtime replaced on its own can
+        // never satisfy this check.
+        std::cerr << "[boot] Re-run Setup (or the launcher's recompile step) so "
+                     "RMGE01_home_button.dll is rebuilt from the same source "
+                     "revision as NebulaRuntime.exe.\n";
         cleanup_module();
         return 6;
     }
@@ -29693,6 +30825,39 @@ int wmain(int argc, wchar_t** argv) {
     state.runtime_boundary_self_counters.dump(std::cerr);
     dump_scene_nerve_owner(state, std::cerr);
     state.dump_lookup_cache_summary(std::cerr);
+
+    // One line, always emitted, reporting the guest's own 60 Hz timebase rate.
+    // This is the only place `vi_retrace_count` is printed unconditionally;
+    // every other site is event- or trace-gated, which made the guest's cadence
+    // unmeasurable from a recording. See the note at the `session_start` anchor.
+    {
+        const std::uint64_t session_us =
+            static_cast<std::uint64_t>(
+                std::chrono::duration_cast<std::chrono::microseconds>(
+                    std::chrono::steady_clock::now() - session_start)
+                    .count());
+        // Integer maths only, and guard the divide: a session short enough to
+        // truncate to zero microseconds would otherwise fault on shutdown.
+        // `vi_rate` is vi/second scaled by 1000, so `vi_rate / 1000` is the
+        // integer part and `(vi_rate % 1000) / 100` the first decimal. Derivation:
+        //   vi/s = vi_retrace_count * 1e6 / session_us
+        //   scaled by 1000  ->  * 1e9 / session_us
+        // session_us is at least 1 here, so the multiply is safe: it would need
+        // ~580,000 years at 60 VI/s to approach a 64-bit overflow.
+        const std::uint64_t vi_rate =
+            session_us == 0u
+                ? 0u
+                : (state.vi_retrace_count * 1'000'000'000ull +
+                   session_us / 2u) / session_us;
+        std::cout << "[vi-cadence] vi-retrace-count=" << state.vi_retrace_count
+                  << " session-us=" << session_us
+                  << " vi-per-second=" << (vi_rate / 1000u)
+                  << '.' << (vi_rate % 1000u) / 100u
+                  << " nominal-hz=60"
+                  << " expects=" << (session_us / 16667u)
+                  << '\n';
+    }
+
     const std::exception_ptr cleanup_failure = cleanup_module();
     const UINT exit_code = cleanup_failure == nullptr ? 0u : 9u;
     finish_process(exit_code);

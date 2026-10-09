@@ -254,7 +254,8 @@ public:
 
     [[nodiscard]] bool mark_submitted(
         gx::FramePeCompletionToken token,
-        bool rendered_retrace_frame) noexcept {
+        bool rendered_retrace_frame,
+        std::vector<std::byte>* released_fifo = nullptr) noexcept {
         if (snapshot_.phase != BoundaryPhase::Captured &&
             snapshot_.phase != BoundaryPhase::SubmitPending) {
             return false;
@@ -265,6 +266,11 @@ public:
         snapshot_.token = token;
         snapshot_.rendered_retrace_frame = rendered_retrace_frame;
         captured_fifo_.clear();
+        // The backend has copied the FIFO before a successful submit returns.
+        // Release only storage, preserving size/identity/token in snapshot_.
+        if (released_fifo != nullptr) {
+            *released_fifo = std::move(captured_fifo_);
+        }
         if (token) {
             snapshot_.phase = BoundaryPhase::TokenPending;
         } else {

@@ -257,6 +257,92 @@ struct MemorySnapshotNbtProbeResult {
 
 class GxBackendMemorySnapshotTestAccess {
 public:
+    static bool storage_index_preserves_linear_alias_selection() {
+        auto backend = std::make_unique<GxBackend>();
+        GxBackend::MemorySnapshot snapshot;
+        std::vector<std::byte> source(65536u);
+        struct Expected { std::byte* source; std::uint32_t size; std::byte value; };
+        std::vector<Expected> expected;
+        std::uint32_t random = 0x8badf00du;
+        for (std::uint32_t round = 0u; round < 8u; ++round) {
+            backend->capture_memory_snapshot(nullptr, snapshot, {}, true, false);
+            expected.clear();
+            const std::uint32_t count = round == 1u ? 8u : 3000u;
+            for (std::uint32_t i = 0u; i < count; ++i) {
+                random = random * 1664525u + 1013904223u;
+                const auto key = (random >> 8u) % (round == 1u ? 4u : 2000u);
+                std::byte* address = source.data() + key * 16u;
+                const std::uint32_t size = 1u + ((random >> 28u) % 4u);
+                std::size_t index = 0u;
+                while (index < expected.size() &&
+                    (expected[index].source != address || expected[index].size != size)) ++index;
+                const bool fresh = index == expected.size();
+                if (fresh) expected.push_back({address, size, static_cast<std::byte>(i & 255u)});
+                auto* entry = GxBackend::snapshot_storage_for(snapshot, address, size);
+                if (entry != &snapshot.storage[index] || !entry->used ||
+                    entry->source != address || entry->size != size || entry->bytes.size() != size) return false;
+                if (fresh) entry->bytes[0] = expected[index].value;
+                else if (entry->bytes[0] != expected[index].value) return false;
+                if (i == 1500u) {
+                    // Indexed slots must remain valid after queue ownership moves.
+                    auto moved = std::move(snapshot);
+                    snapshot = std::move(moved);
+                }
+            }
+            if (GxBackend::snapshot_storage_for(snapshot, nullptr, 1u) != nullptr ||
+                GxBackend::snapshot_storage_for(snapshot, source.data(), 0u) != nullptr) return false;
+        }
+        return true;
+    }
+
+    static bool sorted_lookup_follows_owned_snapshot() {
+        constexpr std::uint32_t base = 0x80000000u;
+        std::vector<std::byte> live(4096u, std::byte{0x31});
+        GuestMemoryRegionV1 region{base, static_cast<std::uint32_t>(live.size()), live.data()};
+        GuestMemoryV1 source{};
+        source.regions = &region; source.region_count = 1u;
+        std::vector<GuestMemoryRange> ranges;
+        for (std::uint32_t i = 0; i < 64u; ++i) ranges.push_back({base + i*64u, 32u});
+        auto backend = std::make_unique<GxBackend>();
+        GxBackend::MemorySnapshot snapshot;
+        backend->capture_memory_snapshot(&source, snapshot, ranges, true, false);
+        if (!snapshot.sealed || !snapshot.regions_disjoint_sorted || snapshot.regions.size()!=64u)
+            return false;
+        auto moved = std::move(snapshot);
+        if (moved.memory.regions != moved.regions.data() || !moved.regions_disjoint_sorted)
+            return false;
+        using Dependency = GxBackend::DecodedPacketRunCacheEntry::GuestDependencySnapshot;
+        std::vector<Dependency> saved;
+        const std::vector<VertexDecodeGuestRange> dependencies{{base + 63u*64u + 8u, 16u}};
+        std::size_t bytes = 0u;
+        std::uint64_t generation = 0u;
+        if (!GxBackend::capture_decoded_packet_run_dependencies(
+                &moved.memory, dependencies, 16u, saved, bytes, true) || bytes!=16u ||
+            !GxBackend::decoded_packet_run_dependencies_match(
+                &moved.memory, 0u, 7u, saved, generation, true) || generation!=7u)
+            return false;
+        // Exact byte validation remains mandatory on an unvalidated generation.
+        moved.regions.back().host_base[8u] = std::byte{0xA1};
+        if (GxBackend::decoded_packet_run_dependencies_match(
+                &moved.memory, 0u, 8u, saved, generation, true)) return false;
+        moved.regions.back().host_base[8u] = std::byte{0x31};
+        std::vector<std::byte> fast(4096u, std::byte{0x72});
+        moved.memory.fast_regions[8] = {4096u, fast.data()};
+        if (GxBackend::decoded_packet_run_dependencies_match(
+                &moved.memory, 0u, 8u, saved, generation, true)) return false;
+        std::vector<Dependency> fast_saved;
+        if (!GxBackend::capture_decoded_packet_run_dependencies(
+                &moved.memory, dependencies, 16u, fast_saved, bytes, true) ||
+            fast_saved.size()!=1u || fast_saved[0].bytes!=std::vector<std::byte>(16u,std::byte{0x72}))
+            return false;
+        moved.memory.fast_regions[8] = {};
+        // Reusing a pooled object for a live/non-strict/null view clears the
+        // previous certificate, even if its backing storage is retained.
+        backend->capture_memory_snapshot(&source, moved, {}, false, false);
+        if (!moved.sealed || moved.regions_disjoint_sorted) return false;
+        backend->capture_memory_snapshot(nullptr, moved, {}, true, false);
+        return !moved.sealed && !moved.regions_disjoint_sorted && moved.regions.empty();
+    }
     static bool texture_dependency_memos_follow_sampled_maps() {
         GxState state;
         detail::BroadDrawDependencyMemo memo;
@@ -442,6 +528,12 @@ public:
             bp_write(bp::kPeToken, 0xABCDu);  // existing 0x1234 -> 0x12CD
             bp_write(bp::kPeTokenInt, 0x5678u);
 
+            // CALL_DL lengths are rounded down to a 32-byte GX block. Keep
+            // every event inside the submitted extent, including the suffix
+            // after the zero-count draw, rather than silently truncating it.
+            list.resize((list.size() + 31u) & ~std::size_t{31u},
+                        std::byte{op::kNop});
+
             GuestMemoryRegionV1 region{address,
                 static_cast<std::uint32_t>(list.size()), list.data()};
             GuestMemoryV1 memory{};
@@ -484,6 +576,11 @@ public:
                         call.data(), call.size(), &memory, &services);
                 }
                 if (events != expected || !backend->event_pending_fifo_.empty()) {
+                    std::cerr << "PE fixture event mismatch primitive=" << static_cast<unsigned>(primitive)
+                              << " round=" << round << " pending=" << backend->event_pending_fifo_.size()
+                              << " events=";
+                    for (const auto event : events) std::cerr << std::hex << event << ',';
+                    std::cerr << std::dec << '\n';
                     return false;
                 }
             }
@@ -491,6 +588,10 @@ public:
             if (profile.call_dl_cache_hits != 2u ||
                 profile.call_dl_replay_prepared_run_count != (packet_only ? 0u : 4u) ||
                 profile.call_dl_replay_packet_run_count != (packet_only ? 4u : 0u)) {
+                std::cerr << "PE fixture cache mismatch primitive=" << static_cast<unsigned>(primitive)
+                          << " hits=" << profile.call_dl_cache_hits
+                          << " prepared=" << profile.call_dl_replay_prepared_run_count
+                          << " packet=" << profile.call_dl_replay_packet_run_count << '\n';
                 return false;
             }
             // Different VCD with the same two-byte stride still requires cold
@@ -532,13 +633,31 @@ public:
         bool hit = false;
         backend->collect_memory_dependency_ranges(
             first.data(), first.size(), &memory, ranges, hit);
+        // Obtain the other FIFO's hash from production, not a parallel helper.
+        // A fixture with an unused hash algorithm can otherwise pass without
+        // ever reaching the exact-byte guard it claims to exercise.
+        auto other = std::make_unique<GxBackend>();
+        other->collect_memory_dependency_ranges(
+            second.data(), second.size(), &memory, ranges, hit);
+        std::uint64_t second_hash = 0u;
+        unsigned other_entries = 0u;
+        for (const auto& entry : other->dependency_range_cache_) {
+            if (entry.valid) {
+                second_hash = entry.fifo_hash;
+                ++other_entries;
+            }
+        }
+        if (other_entries != 1u) return false;
+        unsigned collisions = 0u;
         for (auto& entry : backend->dependency_range_cache_) {
             if (entry.valid) {
                 // Manufacture a lookup collision with equal initial state and
                 // length, but different actual FIFO bytes and resulting state.
-                entry.fifo_hash = dependency_fifo_fingerprint(second);
+                entry.fifo_hash = second_hash;
+                ++collisions;
             }
         }
+        if (collisions != 1u) return false;
         backend->dependency_state_ = initial;
         backend->collect_memory_dependency_ranges(
             second.data(), second.size(), &memory, ranges, hit);
@@ -859,7 +978,7 @@ public:
         return true;
     }
 
-    static bool dirty_drain_preserves_every_word_and_legacy_publication() {
+    static bool dirty_drain_preserves_every_word_and_span() {
         auto backend = std::make_unique<GxBackend>();
         GuestMemoryV1 memory{};
         backend->install_guest_dirty_tracker(&memory);
@@ -891,15 +1010,9 @@ public:
                 if (!ranges.empty()) return false;
             }
         }
-        // Older translated modules know only the original page-word fields.
-        // They can publish directly without a summary or host callback. The
-        // runtime must keep their invalidations observable until every producer
-        // has explicitly negotiated the summarized-publication capability.
-        const auto page = (base - memory.dirty_tracked_base) >> memory.dirty_page_shift;
-        memory.dirty_page_words[page / 64u].fetch_or(
-            std::uint64_t{1} << (page % 64u), std::memory_order_relaxed);
-        backend->drain_guest_memory_writes(ranges);
-        return ranges.size() == 1u && ranges[0].guest_addr == base && ranges[0].size == 32u;
+        // ABI 23 rejects legacy page-only game/Home modules before execution.
+        // Accepted callers publish through the public notification paths above.
+        return true;
     }
 
     static bool dependency_discovery_is_independent_and_tracks_dl_versions() {
@@ -1056,7 +1169,6 @@ public:
         backend->texture_handle_cache_.emplace(handle_key, handle);
         backend->frame_texture_handle_cache_.emplace(handle_key, handle);
         backend->frame_texture_binding_tables_.emplace(binding_key, tables);
-        backend->persistent_texture_binding_tables_.emplace(binding_key, tables);
         backend->frame_texture_tables_.emplace(GxBackend::TextureTableKey{}, D3D12_GPU_DESCRIPTOR_HANDLE{});
         backend->texture_bindings_dirty_ = false;
         backend->current_texture_binding_key_valid_ = true;
@@ -1064,7 +1176,6 @@ public:
         if (backend->texture_handle_cache_.size() != 1u ||
             backend->frame_texture_handle_cache_.size() != 1u ||
             backend->frame_texture_binding_tables_.size() != 1u ||
-            backend->persistent_texture_binding_tables_.size() != 1u ||
             backend->frame_texture_tables_.size() != 1u ||
             backend->texture_bindings_dirty_ || !backend->current_texture_binding_key_valid_) return false;
         bytes[0] = std::byte{0xff};
@@ -1072,7 +1183,6 @@ public:
         return backend->texture_handle_cache_.empty() &&
             backend->frame_texture_handle_cache_.empty() &&
             backend->frame_texture_binding_tables_.empty() &&
-            backend->persistent_texture_binding_tables_.empty() &&
             backend->frame_texture_tables_.empty() &&
             backend->texture_bindings_dirty_ && !backend->current_texture_binding_key_valid_;
     }
@@ -1352,11 +1462,21 @@ public:
             GxBackend::DecodedPacketRunCacheEntry::GuestDependencySnapshot>
             snapshots;
         std::size_t captured_bytes = 0u;
+        // Generation 0 is the "never validated" sentinel, so a fresh snapshot
+        // set is always compared at least once. Every check below drives the
+        // current generation explicitly, which is exactly the "the cache holds a
+        // key whose snapshots were recorded before this guest write batch" case.
+        constexpr std::uint64_t kUnvalidatedGeneration = 0u;
+        constexpr std::uint64_t kCurrentGeneration = 7u;
+        constexpr std::uint64_t kOtherGeneration = 9u;
+        std::uint64_t matched_generation = 0u;
         if (!GxBackend::capture_decoded_packet_run_dependencies(
                 &memory, dependencies, 7u, snapshots, captured_bytes) ||
             captured_bytes != 7u || snapshots.size() != 2u ||
             !GxBackend::decoded_packet_run_dependencies_match(
-                &memory, snapshots)) {
+                &memory, kUnvalidatedGeneration, kCurrentGeneration, snapshots,
+                matched_generation) ||
+            matched_generation != kCurrentGeneration) {
             return false;
         }
 
@@ -1365,20 +1485,51 @@ public:
         // no dirty-page notification was delivered.
         live[0] = std::byte{0xFE};
         if (!GxBackend::decoded_packet_run_dependencies_match(
-                &memory, snapshots)) {
+                &memory, kUnvalidatedGeneration, kCurrentGeneration, snapshots,
+                matched_generation)) {
             return false;
         }
         const std::byte original = live[17];
         live[17] = std::byte{0xA5};
         if (GxBackend::decoded_packet_run_dependencies_match(
-                &memory, snapshots)) {
+                &memory, kUnvalidatedGeneration, kCurrentGeneration, snapshots,
+                matched_generation)) {
             return false;
         }
         live[17] = original;
         if (!GxBackend::decoded_packet_run_dependencies_match(
-                &memory, snapshots)) {
+                &memory, kUnvalidatedGeneration, kCurrentGeneration, snapshots,
+                matched_generation)) {
             return false;
         }
+        // Once an entry is recorded as validated for the generation that
+        // matched, the same generation must short-circuit to "still valid"
+        // without consulting guest memory. That is the property the per-frame
+        // replay path relies on: the write below is deliberately NOT reflected
+        // in a new generation, exactly as a write that lands after the frame's
+        // snapshot can never reach this replay.
+        live[17] = std::byte{0x5A};
+        if (!GxBackend::decoded_packet_run_dependencies_match(
+                &memory, matched_generation, kCurrentGeneration, snapshots,
+                matched_generation)) {
+            return false;
+        }
+        // The same entry must NOT be trusted under a different generation, and
+        // must be caught by the byte compare there. This is the invariant that
+        // makes the short-circuit safe: a new write batch always changes the
+        // generation, and the changed generation always re-reads guest memory.
+        if (GxBackend::decoded_packet_run_dependencies_match(
+                &memory, kCurrentGeneration, kOtherGeneration, snapshots,
+                matched_generation)) {
+            return false;
+        }
+        live[17] = original;
+        if (!GxBackend::decoded_packet_run_dependencies_match(
+                &memory, kCurrentGeneration, kOtherGeneration, snapshots,
+                matched_generation)) {
+            return false;
+        }
+        matched_generation = 0u;
 
         // A descriptor with no backing storage must not become a non-null
         // pointer through address-offset arithmetic. It also cannot shadow
@@ -1387,14 +1538,20 @@ public:
             {kBase, static_cast<std::uint32_t>(live.size()), nullptr}, region}};
         memory.regions = nullable_regions.data();
         memory.region_count = 2u;
-        if (!GxBackend::decoded_packet_run_dependencies_match(&memory, snapshots) ||
+        // Drive the full byte compare (generation 0) rather than the per-frame
+        // short-circuit, so an unbacked descriptor is still exercised.
+        if (!GxBackend::decoded_packet_run_dependencies_match(
+                &memory, kUnvalidatedGeneration, kCurrentGeneration, snapshots,
+                matched_generation) ||
             !GxBackend::capture_decoded_packet_run_dependencies(
                 &memory, dependencies, 7u, snapshots, captured_bytes) ||
             captured_bytes != 7u || snapshots.size() != 2u ||
             snapshots[0].bytes != std::vector<std::byte>(live.begin() + 4u, live.begin() + 8u) ||
             snapshots[1].bytes != std::vector<std::byte>(live.begin() + 16u, live.begin() + 19u)) return false;
         memory.region_count = 1u; // only the unbacked descriptor remains
-        if (GxBackend::decoded_packet_run_dependencies_match(&memory, snapshots)) return false;
+        if (GxBackend::decoded_packet_run_dependencies_match(
+                &memory, kUnvalidatedGeneration, kCurrentGeneration, snapshots,
+                matched_generation)) return false;
         captured_bytes = 99u;
         if (GxBackend::capture_decoded_packet_run_dependencies(
                 &memory, dependencies, 7u, snapshots, captured_bytes) ||
@@ -1706,6 +1863,10 @@ public:
 
 int main() {
     if (!expect(galaxy::gx::GxBackendMemorySnapshotTestAccess::
+        storage_index_preserves_linear_alias_selection(),
+        "snapshot storage preserves exact aliases, first-free slots, growth, small reuse, and moves")) return 1;
+
+    if (!expect(galaxy::gx::GxBackendMemorySnapshotTestAccess::
         dependency_cache_rejects_fifo_fingerprint_collision(),
         "FIFO fingerprint collision must compare bytes and preserve actual resulting state")) return 1;
     const bool mask_preserved = galaxy::gx::GxBackendMemorySnapshotTestAccess::
@@ -1725,8 +1886,8 @@ int main() {
         dirty_writes_respect_efb_copy_boundaries(),
         "writes adjacent to a GX copy must not invalidate its GPU contents; overlapping writes must")) return 1;
     if (!expect(galaxy::gx::GxBackendMemorySnapshotTestAccess::
-        dirty_drain_preserves_every_word_and_legacy_publication(),
-        "dirty drain must retain every same-group word, span interior and legacy publication")) return 1;
+        dirty_drain_preserves_every_word_and_span(),
+        "dirty drain must retain every same-group word and span interior")) return 1;
     if (!expect(galaxy::gx::GxBackendMemorySnapshotTestAccess::
         dependency_discovery_is_independent_and_tracks_dl_versions(),
         "dependency discovery must not wait for rendering and must track dirty nested DL versions")) return 1;
@@ -1757,6 +1918,9 @@ int main() {
     if (!expect(galaxy::gx::GxBackendMemorySnapshotTestAccess::
         snapshot_range_merge_preserves_exact_owned_bytes(),
         "range merge preserves sorted disjoint snapshot ownership across overlaps, zeros and u32 ends")) return 1;
+    if (!expect(galaxy::gx::GxBackendMemorySnapshotTestAccess::
+        sorted_lookup_follows_owned_snapshot(),
+        "sorted lookup certifies exact owned output, survives moves, rejects byte changes and resets on view reuse")) return 1;
 
     const NbtFixture fixture = make_shared_index_nbt_fixture();
     std::vector<std::byte> live_bytes(kRequiredArrayBytes);

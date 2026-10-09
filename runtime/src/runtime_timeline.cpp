@@ -904,7 +904,28 @@ void PendingEventLatch::lock_slot(std::size_t slot) noexcept {
         if (spins != std::numeric_limits<std::uint64_t>::max()) {
             ++spins;
         }
-        std::this_thread::yield();
+        // Every holder of this slot lock does only a handful of atomic
+        // operations before releasing it (see the lock_slot/unlock_slot pairs
+        // above), so contention is short by construction and the wait should be
+        // a true local spin. `std::this_thread::yield()` is the wrong primitive
+        // for that: it hands the remainder of the time slice to another runnable
+        // thread and costs a ring transition, which on a loaded CPU is far more
+        // than the critical section it is waiting for. That matters here because
+        // these slots back the VI, input, audio and DSP deadline edges.
+        //
+        // A bounded pause-spin covers the ordinary short hold without ever
+        // entering the scheduler; only a genuinely long hold falls through to
+        // yield, which keeps the pathological case from burning a core.
+        constexpr std::uint64_t kPauseSpins = 1024u;
+        if (spins <= kPauseSpins) {
+#if defined(_M_X64) || defined(_M_IX86)
+            _mm_pause();
+#else
+            std::this_thread::yield();
+#endif
+        } else {
+            std::this_thread::yield();
+        }
     }
     if (spins == 0u) {
         return;

@@ -32,7 +32,8 @@ inline constexpr std::uint16_t kNativeDspControlHalt = 0x0004;
 // until the CPU commits the complete span or a bounded failure occurs. There
 // is deliberately no request queue and no worker-side GuestMemory alias. The
 // owner must call shutdown() and join its submitting worker before destroying
-// this boundary; GuestAddressSpace enforces that lifetime order explicitly.
+// this boundary, and must retain it until any active service_one() call has
+// returned. GuestAddressSpace services and destroys it on the same CPU owner.
 class DspMramTransactionBoundary {
 public:
     static constexpr std::uint32_t kMaximumSpanBytes = 0x4000u;
@@ -117,7 +118,16 @@ public:
     [[nodiscard]] ServiceResult service_one(
         void* user,
         ReadService read,
-        WriteService write) noexcept;
+        WriteService write) noexcept {
+        // The ordinary pump has nothing to service. Keep this existing atomic
+        // admission at the caller so it does not set up three callback arguments
+        // and cross an out-of-line boundary just to return None. A concurrent
+        // submit still publishes its wake; the locked path rechecks Pending.
+        if (state_.load(std::memory_order_relaxed) != State::Pending) {
+            return ServiceResult::None;
+        }
+        return service_pending(user, read, write);
+    }
 
     // Wakes a blocked submitter and prevents future requests until reset().
     void shutdown() noexcept;
@@ -125,6 +135,11 @@ public:
     [[nodiscard]] Snapshot snapshot() const noexcept;
 
 private:
+    [[nodiscard]] ServiceResult service_pending(
+        void* user,
+        ReadService read,
+        WriteService write) noexcept;
+
     enum class State : std::uint8_t {
         Idle,
         Pending,
@@ -149,7 +164,13 @@ private:
     std::thread::id service_thread_{};
     std::chrono::milliseconds timeout_{kDefaultTimeout};
     Direction direction_{Direction::ReadFromMram};
-    State state_{State::Idle};
+    // Atomic so service_one() can reject the overwhelmingly common "nothing is
+    // pending" call with a relaxed load instead of taking mutex_. Only
+    // State::Pending has side effects, so a relaxed load that misses a
+    // concurrent submit merely defers service to the next pump -- the designed
+    // behaviour for a wake arriving between pumps. Every other comparison of
+    // this member still runs under mutex_.
+    std::atomic<State> state_{State::Idle};
     std::uint32_t address_{};
     std::uint32_t size_{};
     bool submitter_active_{};
@@ -533,7 +554,9 @@ public:
     [[nodiscard]] bool abort_requested() const;
     void record_hard_trap(std::uint16_t pc);
     void clear_hard_trap();
-    [[nodiscard]] bool hard_trap_active() const;
+    [[nodiscard]] bool hard_trap_active() const {
+        return hard_trap_flag_.load(std::memory_order_acquire);
+    }
     [[nodiscard]] std::uint16_t hard_trap_pc() const;
     void request_external_interrupt(std::uint16_t vector);
     [[nodiscard]] bool enter_pending_external_interrupt();

@@ -24,7 +24,7 @@ struct ContextTransferToken {
 class PendingContextTransfer final {
 public:
     [[nodiscard]] bool begin(ContextTransferToken token) noexcept {
-        if (pending_.has_value()) {
+        if (pending_.has_value() || cleanup_failure_.has_value()) {
             return false;
         }
         pending_ = token;
@@ -43,8 +43,51 @@ public:
         return true;
     }
 
+    // Sticky failure: a control-transfer catch must reject continuation before
+    // guest work resumes. Failed cleanup never erases a different pending token.
+    [[nodiscard]] const ContextTransferToken* cleanup_failure() const noexcept {
+        return cleanup_failure_.has_value() ? &*cleanup_failure_ : nullptr;
+    }
+
 private:
+    friend class ScopedContextTransfer;
+    [[nodiscard]] bool finish_owner(ContextTransferToken token) noexcept {
+        if (consume_exact(token)) {
+            return true;
+        }
+        if (!cleanup_failure_.has_value()) {
+            cleanup_failure_ = token;
+        }
+        return false;
+    }
     std::optional<ContextTransferToken> pending_;
+    std::optional<ContextTransferToken> cleanup_failure_;
+};
+
+// Construct only after begin(token) succeeds. This owns exactly the translated
+// OSLoadContext call boundary: RFI can inspect its token until stack unwinding
+// reaches this scope. No catch/rethrow or exception from a destructor is needed.
+class ScopedContextTransfer final {
+public:
+    ScopedContextTransfer(PendingContextTransfer& pending,
+                          ContextTransferToken token) noexcept
+        : pending_(pending), token_(token) {}
+    ~ScopedContextTransfer() noexcept { (void)finish(); }
+    ScopedContextTransfer(const ScopedContextTransfer&) = delete;
+    ScopedContextTransfer& operator=(const ScopedContextTransfer&) = delete;
+
+    [[nodiscard]] bool finish() noexcept {
+        if (!active_) {
+            return false;
+        }
+        active_ = false;
+        return pending_.finish_owner(token_);
+    }
+
+private:
+    PendingContextTransfer& pending_;
+    ContextTransferToken token_;
+    bool active_{true};
 };
 
 // The statically recompiled instruction stream owns all exception-prologue and
@@ -764,6 +807,38 @@ classify_guest_set_current_context(
     }
     return GuestSetCurrentContextDisposition::RejectUnknownRole;
 }
+
+// Invocation-local roster evidence. Publish only after a complete ordered scan
+// of ordinary RAM, and discard before any callback or guest reentry. This is
+// deliberately not a cache across scheduling boundaries or guest writes.
+class GuestStackOwnerMemo final {
+public:
+    void append(std::uint32_t thread, std::uint32_t base,
+                std::uint32_t end) noexcept {
+        if (!enabled_) return;
+        if (count_ == spans_.size()) { disable(); return; }
+        spans_[count_++] = {thread, base, end};
+    }
+    void finish() noexcept { complete_ = enabled_; }
+    void disable() noexcept { enabled_ = false; complete_ = false; }
+    [[nodiscard]] bool complete() const noexcept { return complete_; }
+    [[nodiscard]] std::uint32_t owner(std::uint32_t r1) const noexcept {
+        if (!complete_) return 0u;
+        for (std::size_t i = 0; i < count_; ++i) {
+            const auto& span = spans_[i];
+            if (guest_stack_span_contains(span.base, span.end, r1)) {
+                return span.thread;
+            }
+        }
+        return 0u;
+    }
+private:
+    struct Span { std::uint32_t thread, base, end; };
+    std::array<Span, 64> spans_; // Only the initialized prefix is consulted.
+    std::size_t count_{};
+    bool enabled_{true};
+    bool complete_{};
+};
 
 // OSSwitchFiber/OSSwitchFiberEx preserve the displaced r1 in the backchain at
 // the root of the alternate stack. Resolve that exact ABI chain iteratively so

@@ -369,6 +369,12 @@ struct FifoParserProfile {
     std::uint64_t call_dl_replay_draw_us = 0;
     std::uint64_t call_dl_replay_misc_count = 0;
     std::uint64_t call_dl_replay_misc_us = 0;
+    // Preserve sub-microsecond category work across commands/runs. The public
+    // us totals above are derived from these inclusive category accumulators.
+    std::uint64_t call_dl_replay_state_ns = 0;
+    std::uint64_t call_dl_replay_indx_ns = 0;
+    std::uint64_t call_dl_replay_draw_ns = 0;
+    std::uint64_t call_dl_replay_misc_ns = 0;
     std::uint64_t call_dl_profile_overflow = 0;
     CallDisplayListEntry
         call_dl_entries[kCallDisplayListEntryCapacity]{};
@@ -427,7 +433,8 @@ public:
         std::span<const std::byte> fifo,
         GuestMemoryV1* memory,
         FifoSink& sink,
-        GxState& state);
+        GxState& state,
+        bool frozen_regions = false);
 
     // Parses all complete top-level commands. If the capture ends in the
     // middle of a command, returns that command's start offset so the caller
@@ -436,13 +443,25 @@ public:
         std::span<const std::byte> fifo,
         GuestMemoryV1* memory,
         FifoSink& sink,
-        GxState& state);
+        GxState& state,
+        bool frozen_regions = false);
+
+    // frozen_regions promises the region pointer, count and descriptors stay
+    // immutable throughout this invocation, including sink/recorder callbacks.
+    // Each invocation still
+    // verifies sorted, disjoint, mapped extents before using indexed lookup.
+    // Generic inputs retain first-containing-region resolution and fast-region
+    // precedence. Nested calls and exceptions restore the enclosing capability.
 
     // Directory for .gxdump failure artifacts (default: current directory).
     void set_dump_dir(std::string dump_dir);
 
     // Optional per-run profiler. The parser never owns this pointer; callers
     // set it only while gathering diagnostics.
+    //
+    // A nonnull profile enables both counts and per-command clocks. Ordinary
+    // parsing uses a null profile. Cached replay categories include sink work
+    // and batched run teardown; the replay total is inclusive, recorded once.
     void set_profile(FifoParserProfile* profile) { profile_ = profile; }
 
     // Optional read recorder for dependency scanning. The parser never owns
@@ -459,6 +478,8 @@ public:
         std::uint32_t size);
 
 private:
+    struct FrozenRegionScope;
+    const GuestMemoryV1* frozen_sorted_memory_ = nullptr;
     struct CachedDisplayListCommand {
         enum class Kind : std::uint8_t {
             Nop,
@@ -545,13 +566,17 @@ private:
     struct DisplayListCacheKeyHash {
         [[nodiscard]] std::size_t operator()(
             const DisplayListCacheKey& key) const noexcept {
-            std::uint64_t hash = 1469598103934665603ull;
-            auto mix = [&hash](std::uint64_t value) {
-                hash ^= value;
-                hash *= 1099511628211ull;
-            };
-            mix(key.guest_addr);
-            mix(key.byte_size);
+            // CALL_DL addresses and sizes are 32-byte aligned. Whole-word
+            // FNV mixing leaves five identical low bits, producing long
+            // chains in power-of-two bucket tables. Mix high bits downward
+            // before bucket selection; exact key equality still decides hits.
+            std::uint64_t hash = (std::uint64_t{key.guest_addr} << 32u) |
+                key.byte_size;
+            hash ^= hash >> 30u;
+            hash *= 0xBF58476D1CE4E5B9ull;
+            hash ^= hash >> 27u;
+            hash *= 0x94D049BB133111EBull;
+            hash ^= hash >> 31u;
             return static_cast<std::size_t>(hash);
         }
     };
@@ -625,6 +650,13 @@ private:
     // owns several replay vectors, and diagnostics/tests construct parsers as
     // local variables.
     static constexpr std::size_t kDisplayListCacheCapacity = 2048;
+    // The entry count alone is not a memory bound: one entry may hold a 4 MiB
+    // list plus a duplicate of every draw payload, so a full cache can retain
+    // gigabytes. `cache_bytes_` sums retained vector CAPACITY, including invalid
+    // slots whose buffers await reuse. A store over budget reclaims invalid
+    // storage before evicting least-recently-used valid entries. Eviction only
+    // costs a later re-parse of that list.
+    std::uint64_t cache_bytes_ = 0;
     std::vector<CachedDisplayList> display_list_cache_ =
         std::vector<CachedDisplayList>(kDisplayListCacheCapacity);
     std::unordered_map<
@@ -633,6 +665,20 @@ private:
         DisplayListCacheKeyHash> display_list_cache_map_{};
     std::unordered_map<std::uint64_t, std::vector<std::size_t>>
         display_list_cache_page_map_{};
+
+    [[nodiscard]] std::uint64_t display_list_cache_budget_bytes() const;
+    // Sums the retained capacity of one cached entry. Pure observation: it must
+    // be callable for a live entry without changing any cache state.
+    [[nodiscard]] static std::uint64_t display_list_cache_entry_bytes(
+        const CachedDisplayList& cached) noexcept;
+    // Releases invalid storage, then drops least-recently-used valid entries
+    // until cache_bytes_ fits the budget. `skip_index` is never evicted, so a
+    // caller that just filled that slot keeps its entry even when the entry
+    // alone exceeds the budget.
+    void evict_display_list_cache_to_budget(std::size_t skip_index);
+    // Releases every cached entry and its retained capacity. Owning a parser
+    // for a new renderer session must not inherit the previous session's lists.
+    void clear_display_list_cache();
 };
 
 }  // namespace galaxy::gx

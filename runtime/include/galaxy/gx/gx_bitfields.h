@@ -646,6 +646,8 @@ struct EfbCopyParams {
         clear_ar,
         clear_gb,
         clear_z,
+        0u, // Filters are latched separately by GxState.
+        0u,
     };
 }
 

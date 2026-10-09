@@ -4806,7 +4806,7 @@ fn emit_static_transfer_with_post_commit_interrupt_acceptance(
     accept_pending_external_interrupt: bool,
 ) -> Result<(), DspLoweringError> {
     if let Some(loop_end_word) = layout.loop_end_word_for_instruction(decoded) {
-        emit_loop_checkpoint(cpp, loop_end_word, 4);
+        emit_loop_checkpoint(cpp, loop_end_word, decoded.address, 4);
     }
     emit_raw_instruction_commit(cpp, 4);
     if accept_pending_external_interrupt {
@@ -4830,7 +4830,7 @@ fn emit_dynamic_transfer(
         cpp.push_str(&format!(
             "ctx.pc = static_cast<std::uint16_t>({target_expression});\n"
         ));
-        emit_loop_checkpoint(cpp, loop_end_word, indent_spaces);
+        emit_loop_checkpoint(cpp, loop_end_word, decoded.address, indent_spaces);
         emit_raw_instruction_commit(cpp, indent_spaces);
         emit_dynamic_backedge_interrupt_checkpoint(cpp, decoded, "ctx.pc", indent_spaces);
         emit_dynamic_dsp_goto(cpp, "ctx.pc", indent_spaces);
@@ -4887,7 +4887,12 @@ fn emit_raw_instruction_commit(cpp: &mut String, indent_spaces: usize) {
     cpp.push_str("galaxy::dsp_raw_instruction_boundary_commit(ctx, raw_instruction_boundary);\n");
 }
 
-fn emit_loop_checkpoint(cpp: &mut String, address: u16, indent_spaces: usize) {
+fn emit_loop_checkpoint(
+    cpp: &mut String,
+    address: u16,
+    instruction_address: u16,
+    indent_spaces: usize,
+) {
     emit_indent(cpp, indent_spaces);
     cpp.push_str(&format!(
         "if (ctx.st[2] != 0u && ctx.st[2] == {} && ctx.st[3] != 0u) {{\n",
@@ -4908,6 +4913,22 @@ fn emit_loop_checkpoint(cpp: &mut String, address: u16, indent_spaces: usize) {
     emit_raw_instruction_commit(cpp, indent_spaces + 8);
     emit_indent(cpp, indent_spaces + 8);
     cpp.push_str("galaxy::dsp_accept_pending_external_interrupt(ctx);\n");
+    // The loop stack is guest state, so the target can differ from the label
+    // that normally repeats. Inspect the architectural PC after the observer
+    // commit and interrupt boundary, retaining the dispatcher for every other
+    // target. A direct repeat must also perform its idle-sequence reset.
+    // The opcode label can differ from the final word used by BLOOP hardware.
+    emit_indent(cpp, indent_spaces + 8);
+    cpp.push_str(&format!(
+        "if (ctx.pc == {}) {{\n",
+        cpp_u16_literal(instruction_address)
+    ));
+    emit_indent(cpp, indent_spaces + 12);
+    cpp.push_str("galaxy::dsp_native_reset_idle_sequence_progress(ctx);\n");
+    emit_indent(cpp, indent_spaces + 12);
+    cpp.push_str(&format!("goto pc_{instruction_address:04X};\n"));
+    emit_indent(cpp, indent_spaces + 8);
+    cpp.push_str("}\n");
     emit_dynamic_dsp_goto(cpp, "ctx.pc", indent_spaces + 8);
     emit_indent(cpp, indent_spaces + 4);
     cpp.push_str("}\n");
@@ -9217,7 +9238,7 @@ mod tests {
         assert!(generated
             .cpp
             .contains(
-                "const auto loop_target_0001 = ctx.st[0];\n            ctx.pc = static_cast<std::uint16_t>(loop_target_0001);\n            galaxy::dsp_raw_instruction_boundary_commit(ctx, raw_instruction_boundary);\n            galaxy::dsp_accept_pending_external_interrupt(ctx);\n            goto pc_dispatch;"
+                "const auto loop_target_0001 = ctx.st[0];\n            ctx.pc = static_cast<std::uint16_t>(loop_target_0001);\n            galaxy::dsp_raw_instruction_boundary_commit(ctx, raw_instruction_boundary);\n            galaxy::dsp_accept_pending_external_interrupt(ctx);\n            if (ctx.pc == 0x0001u) {\n                galaxy::dsp_native_reset_idle_sequence_progress(ctx);\n                goto pc_0001;\n            }\n            goto pc_dispatch;"
             ));
         assert!(generated.cpp.contains("goto pc_dispatch;"));
         assert!(generated
@@ -9313,6 +9334,9 @@ mod tests {
             .cpp
             .contains("if (ctx.st[2] != 0u && ctx.st[2] == 0x0004u && ctx.st[3] != 0u)"));
         assert!(generated.cpp.contains("    goto pc_0005;\n"));
+        let block = generated_instruction_block(&generated.cpp, 0x0003);
+        assert!(block.contains("if (ctx.pc == 0x0003u) {\n                galaxy::dsp_native_reset_idle_sequence_progress(ctx);\n                goto pc_0003;\n            }\n            goto pc_dispatch;"));
+        assert!(!block.contains("goto pc_0004;"));
     }
 
     #[test]

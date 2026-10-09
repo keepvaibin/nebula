@@ -33,14 +33,66 @@
 #if defined(_MSC_VER)
 #define GALAXY_ALWAYS_INLINE __forceinline
 #define GALAXY_NOINLINE __declspec(noinline)
+#define GALAXY_UNLIKELY [[unlikely]]
+#define GALAXY_LIKELY [[likely]]
 #else
 #define GALAXY_ALWAYS_INLINE inline __attribute__((always_inline))
 #define GALAXY_NOINLINE __attribute__((noinline))
+#define GALAXY_UNLIKELY [[unlikely]]
+#define GALAXY_LIKELY [[likely]]
 #endif
 
 namespace galaxy {
 
-inline constexpr std::uint32_t kNativeAbiVersion = 22;
+// Inline-only atomic accessors for hot generated-code helpers. clang-cl does
+// not inline the MSVC STL's std::atomic member functions into very large
+// translated functions, so each `->load()` became a real call per guest call
+// return or store. On x86-64 an acquire/relaxed load is a plain aligned load
+// plus a compiler barrier, and fetch_or is one locked instruction.
+static_assert(sizeof(std::atomic<std::uint32_t>) == 4u &&
+              sizeof(std::atomic<std::uint64_t>) == 8u &&
+              std::atomic<std::uint32_t>::is_always_lock_free &&
+              std::atomic<std::uint64_t>::is_always_lock_free);
+
+GALAXY_ALWAYS_INLINE std::uint32_t atomic_load_u32(
+    const std::atomic<std::uint32_t>* value) noexcept {
+#if defined(_MSC_VER) && (defined(_M_X64) || defined(_M_IX86))
+    const std::uint32_t loaded =
+        *reinterpret_cast<const volatile std::uint32_t*>(value);
+    _ReadWriteBarrier();
+    return loaded;
+#else
+    return value->load(std::memory_order_acquire);
+#endif
+}
+
+GALAXY_ALWAYS_INLINE std::uint64_t atomic_load_u64(
+    const std::atomic<std::uint64_t>* value) noexcept {
+#if defined(_MSC_VER) && defined(_M_X64)
+    const std::uint64_t loaded =
+        *reinterpret_cast<const volatile std::uint64_t*>(value);
+    _ReadWriteBarrier();
+    return loaded;
+#else
+    return value->load(std::memory_order_relaxed);
+#endif
+}
+
+GALAXY_ALWAYS_INLINE void atomic_or_u64(
+    std::atomic<std::uint64_t>* value, std::uint64_t bits) noexcept {
+#if defined(_MSC_VER) && defined(_M_X64)
+    (void)_InterlockedOr64(
+        reinterpret_cast<volatile long long*>(value),
+        static_cast<long long>(bits));
+#else
+    value->fetch_or(bits, std::memory_order_relaxed);
+#endif
+}
+
+// ABI 23 requires every renderer dirty-word producer to publish its summary.
+// ABI 22 modules used inline page-only stores: accepting them with a summary
+// drain would silently lose invalidations. Rebuild both game and Home sidecars.
+inline constexpr std::uint32_t kNativeAbiVersion = 23;
 // Dynamic RSO sidecars have their own narrow ABI. They are generated at
 // installation from a validated disc module and contain only native C++; this
 // version is deliberately independent of the RMGE01 game-module manifest.
@@ -294,6 +346,15 @@ struct GuestMemoryV1 {
     // MEM1/MEM2 guest views. Only read helpers may use it; stores must retain
     // the checked device and dirty-publication path.
     const std::byte* flat_guest_read_base{};
+    // Summary bitmap for `dirty_page_words`, one bit per 64-bit page word.
+    // Non-null only for the renderer tracker; `dirty_page_words` itself is the
+    // authoritative page bitmap. Every ABI-23 producer also publishes summary
+    // bits; older modules are rejected by the game/Home ABI gates. Appending
+    // preserves prior field offsets, but does not make page-only publication
+    // compatible with a summary-only drain.
+    std::atomic_uint64_t* dirty_word_summary{};
+    std::uint32_t dirty_word_summary_count{};
+    std::uint32_t dirty_word_summary_pad{};
 };
 
 enum class LogLevelV1 : std::uint32_t {
@@ -4705,22 +4766,56 @@ inline void trace_audio_control_zero(
     std::abort();
 }
 
+// Admission for one fixed-width scalar guest access. `out` is written only when
+// the span is admitted, so a caller's fast path can branch straight to its own
+// store/load: the pointer it receives is already proven in range, and the
+// caller never re-tests it.
+//
+// This is shared by generated scalar loads/stores and native span helpers.
+// A static opcode or call-site census does not establish invocation frequency
+// or exclusive frame cost; those require a matched runtime measurement.
+//
+// The accepted set is exactly
+// `host_base != nullptr && offset + size <= region.size` with `offset =
+// address & 0x0FFFFFFFu`, evaluated in 64 bits so the sum cannot wrap.
+//
+// Two rewrites of this test were tried and BOTH ARE WRONG; do not retry them:
+//   * `size > region.size - offset` silently ACCEPTS spans with
+//     `offset > region.size`, because the unsigned subtraction wraps to a value
+//     `>= 0x8000_0000` while `size` is at most 64. Verified over 702
+//     (offset, region.size, size) triples: 420 mismatches, every one of them a
+//     false accept, i.e. an out-of-bounds host access.
+//   * dropping `size <= region.size` as "implied by the offset test" has the
+//     same failure mode through the same wrap.
+// The predicate is a guard, not a hot arithmetic path: it must stay exact.
+GALAXY_ALWAYS_INLINE bool guest_region_admit(
+    GuestMemoryV1* memory,
+    std::uint32_t address,
+    std::uint32_t size,
+    std::byte*& out) noexcept {
+    if (memory == nullptr) GALAXY_UNLIKELY {
+        return false;
+    }
+    const GuestMemoryFastRegionV1& region =
+        memory->fast_regions[address >> 28];
+    std::byte* const host_base = region.host_base;
+    if (host_base == nullptr) GALAXY_UNLIKELY {
+        return false;
+    }
+    const std::uint32_t offset = address & 0x0FFFFFFFu;
+    if (static_cast<std::uint64_t>(offset) + size > region.size) GALAXY_UNLIKELY {
+        return false;
+    }
+    out = host_base + offset;
+    return true;
+}
+
 GALAXY_ALWAYS_INLINE std::byte* resolve_guest_fast(
     GuestMemoryV1* memory,
     std::uint32_t address,
     std::uint32_t size) {
-    if (memory == nullptr) {
-        return nullptr;
-    }
-    const GuestMemoryFastRegionV1& region =
-        memory->fast_regions[address >> 28];
-    const std::uint32_t offset = address & 0x0FFFFFFFu;
-    if (region.host_base != nullptr &&
-        size <= region.size &&
-        offset <= region.size - size) {
-        return region.host_base + offset;
-    }
-    return nullptr;
+    std::byte* direct = nullptr;
+    return guest_region_admit(memory, address, size, direct) ? direct : nullptr;
 }
 
 inline std::byte* resolve_guest(
@@ -4751,22 +4846,46 @@ inline std::byte* resolve_guest(
     guest_memory_fault(services, guest_pc, address);
 }
 
+// Cold tails of scalar guest accesses: device (MMIO) transfers, partial or
+// aliased mappings and faults. Kept out of line so every translated load and
+// store carries only the checked-RAM fast path instead of the device call and
+// the complete region search; behaviour is unchanged.
+template <typename T>
+GALAXY_NOINLINE inline T guest_load_slow(
+    GuestMemoryV1* memory,
+    std::uint32_t address,
+    const NativeServicesV1* services,
+    std::uint32_t guest_pc) {
+    std::byte device_value[sizeof(T)]{};
+    const std::byte* value =
+        memory != nullptr && memory->read_device != nullptr &&
+                memory->read_device(
+                    memory->user, address, sizeof(T), device_value)
+            ? device_value
+            : resolve_guest(memory, address, sizeof(T), services, guest_pc);
+    T result{};
+    std::memcpy(&result, value, sizeof(result));
+    if constexpr (sizeof(T) == 2u) {
+        return byte_swap_u16(result);
+    } else if constexpr (sizeof(T) == 4u) {
+        return byte_swap_u32(result);
+    } else if constexpr (sizeof(T) == 8u) {
+        return byte_swap_u64(result);
+    } else {
+        return result;
+    }
+}
+
 GALAXY_ALWAYS_INLINE std::uint8_t guest_load_u8(
     GuestMemoryV1* memory,
     std::uint32_t address,
     const NativeServicesV1* services,
     std::uint32_t guest_pc) {
-    if (const std::byte* direct =
-            resolve_guest_fast(memory, address, 1);
-        direct != nullptr) {
+    std::byte* direct = nullptr;
+    if (guest_region_admit(memory, address, 1, direct)) GALAXY_LIKELY {
         return static_cast<std::uint8_t>(*direct);
     }
-    std::byte device_value{};
-    if (memory != nullptr && memory->read_device != nullptr &&
-        memory->read_device(memory->user, address, 1, &device_value)) {
-        return static_cast<std::uint8_t>(device_value);
-    }
-    return static_cast<std::uint8_t>(*resolve_guest(memory, address, 1, services, guest_pc));
+    return guest_load_slow<std::uint8_t>(memory, address, services, guest_pc);
 }
 
 GALAXY_ALWAYS_INLINE std::uint16_t guest_load_u16(
@@ -4774,18 +4893,13 @@ GALAXY_ALWAYS_INLINE std::uint16_t guest_load_u16(
     std::uint32_t address,
     const NativeServicesV1* services,
     std::uint32_t guest_pc) {
-    std::byte device_value[2]{};
-    const std::byte* value = resolve_guest_fast(memory, address, 2);
-    if (value == nullptr) {
-        value =
-            memory != nullptr && memory->read_device != nullptr &&
-                    memory->read_device(memory->user, address, 2, device_value)
-                ? device_value
-                : resolve_guest(memory, address, 2, services, guest_pc);
+    std::byte* direct = nullptr;
+    if (guest_region_admit(memory, address, 2, direct)) GALAXY_LIKELY {
+        std::uint16_t result{};
+        std::memcpy(&result, direct, sizeof(result));
+        return byte_swap_u16(result);
     }
-    std::uint16_t result{};
-    std::memcpy(&result, value, sizeof(result));
-    return byte_swap_u16(result);
+    return guest_load_slow<std::uint16_t>(memory, address, services, guest_pc);
 }
 
 GALAXY_ALWAYS_INLINE std::uint32_t guest_load_u32(
@@ -4793,18 +4907,15 @@ GALAXY_ALWAYS_INLINE std::uint32_t guest_load_u32(
     std::uint32_t address,
     const NativeServicesV1* services,
     std::uint32_t guest_pc) {
-    std::byte device_value[4]{};
-    const std::byte* value = resolve_guest_fast(memory, address, 4);
-    if (value == nullptr) {
-        value =
-            memory != nullptr && memory->read_device != nullptr &&
-                    memory->read_device(memory->user, address, 4, device_value)
-                ? device_value
-                : resolve_guest(memory, address, 4, services, guest_pc);
-    }
     std::uint32_t result{};
-    std::memcpy(&result, value, sizeof(result));
-    result = byte_swap_u32(result);
+    std::byte* direct = nullptr;
+    if (guest_region_admit(memory, address, 4, direct)) GALAXY_LIKELY {
+        std::memcpy(&result, direct, sizeof(result));
+        result = byte_swap_u32(result);
+    } else {
+        result = guest_load_slow<std::uint32_t>(
+            memory, address, services, guest_pc);
+    }
     if (trace_fileloader_stack_enabled()) {
         trace_fileloader_stack_u32(
             services, "load32", guest_pc, address, result);
@@ -4817,18 +4928,13 @@ GALAXY_ALWAYS_INLINE std::uint64_t guest_load_u64(
     std::uint32_t address,
     const NativeServicesV1* services,
     std::uint32_t guest_pc) {
-    std::byte device_value[8]{};
-    const std::byte* value = resolve_guest_fast(memory, address, 8);
-    if (value == nullptr) {
-        value =
-            memory != nullptr && memory->read_device != nullptr &&
-                    memory->read_device(memory->user, address, 8, device_value)
-                ? device_value
-                : resolve_guest(memory, address, 8, services, guest_pc);
+    std::byte* direct = nullptr;
+    if (guest_region_admit(memory, address, 8, direct)) GALAXY_LIKELY {
+        std::uint64_t result{};
+        std::memcpy(&result, direct, sizeof(result));
+        return byte_swap_u64(result);
     }
-    std::uint64_t result{};
-    std::memcpy(&result, value, sizeof(result));
-    return byte_swap_u64(result);
+    return guest_load_slow<std::uint64_t>(memory, address, services, guest_pc);
 }
 
 // WiiCompiled GPLv3 flat-read adaptation at an explicit Galaxy RAM boundary.
@@ -5018,6 +5124,31 @@ GALAXY_NOINLINE inline void guest_mark_dirty_page_words(
     }
 }
 
+// Two-level publication for the renderer tracker. Besides the page bit in
+// `words`, set a summary bit that covers the whole 64-bit page word, so the
+// consumer can skip empty groups of words instead of reading all 131,072 of
+// them. The bit is published unconditionally: it is only ever cleared by the
+// frame drain, and only in the same word-group iteration in which that word's
+// bits were exchanged, so a set bit always implies that some producer has
+// published into the group since the last drain. The summary bitmap is reached
+// through the tracker pointer itself. Legacy page-only producers are not
+// compatible with summary skipping: ABI 23 rejects older game/Home modules.
+GALAXY_ALWAYS_INLINE void guest_publish_dirty_word_summary(
+    std::atomic_uint64_t* summary, std::uint32_t word_index) {
+    if (summary == nullptr) {
+        return;
+    }
+    std::atomic_uint64_t& group = summary[word_index / 64u];
+    const std::uint64_t bit = 1ull << (word_index % 64u);
+    // A summary bit stays set for the rest of the frame once published, so the
+    // load hits an L1-resident word for every store after the first one into
+    // that group and the locked OR is skipped. That keeps the steady-state
+    // scalar store no more expensive than its page-bit publication beside it.
+    if ((atomic_load_u64(&group) & bit) == 0u) {
+        atomic_or_u64(&group, bit);
+    }
+}
+
 // Rare span crossing a tracker boundary. Keep this out of scalar-store code
 // and retain the full-coverage return value of the fast helpers: a partial
 // mark must not suppress the original notify_write fallback. Each tracker
@@ -5031,6 +5162,29 @@ GALAXY_NOINLINE inline void guest_mark_partial_dirty_pages(
     if (words == nullptr || !guest_dirty_page_range_fast(
             address, size, base, extent, shift, word_count, &first, &last, true)) return;
     guest_mark_dirty_page_words(words, first, last);
+}
+
+// Renderer-tracker partial span: same overlap rules, plus the summary bits.
+GALAXY_NOINLINE inline void guest_mark_partial_dirty_pages_summarized(
+    std::atomic_uint64_t* words, std::atomic_uint64_t* summary,
+    std::uint32_t address, std::uint32_t size,
+    std::uint32_t base, std::uint32_t extent,
+    std::uint32_t shift, std::uint32_t word_count) {
+    std::uint32_t first = 0u, last = 0u;
+    if (words == nullptr || !guest_dirty_page_range_fast(
+            address, size, base, extent, shift, word_count, &first, &last, true)) return;
+    const std::uint32_t first_word = first / 64u;
+    const std::uint32_t last_word = last / 64u;
+    for (std::uint32_t word = first_word;; ++word) {
+        const std::uint32_t low = word == first_word ? first % 64u : 0u;
+        const std::uint32_t high = word == last_word ? last % 64u : 63u;
+        const std::uint64_t mask =
+            (UINT64_MAX << low) & (UINT64_MAX >> (63u - high));
+        if ((words[word].load(std::memory_order_relaxed) & mask) != mask)
+            words[word].fetch_or(mask, std::memory_order_relaxed);
+        guest_publish_dirty_word_summary(summary, word);
+        if (word == last_word) break;
+    }
 }
 
 GALAXY_ALWAYS_INLINE bool guest_mark_dirty_page_fast(
@@ -5051,7 +5205,9 @@ GALAXY_ALWAYS_INLINE bool guest_mark_dirty_page_fast(
             memory->dirty_page_word_count,
             &first_page,
             &last_page)) {
-        guest_mark_partial_dirty_pages(memory->dirty_page_words, address, size,
+        guest_mark_partial_dirty_pages_summarized(
+            memory->dirty_page_words, memory->dirty_word_summary,
+            address, size,
             memory->dirty_tracked_base, memory->dirty_tracked_size,
             memory->dirty_page_shift, memory->dirty_page_word_count);
         return false;
@@ -5066,16 +5222,29 @@ GALAXY_ALWAYS_INLINE bool guest_mark_dirty_page_fast(
         // this notification. A worker may add other bits, so the first mark
         // remains an atomic OR rather than a load/modify/store. Once marked,
         // avoid another locked instruction for every store to the same page.
-        if ((dirty_word.load(std::memory_order_relaxed) & bit) == 0u) {
-            dirty_word.fetch_or(bit, std::memory_order_relaxed);
+        if ((atomic_load_u64(&dirty_word) & bit) == 0u) {
+            atomic_or_u64(&dirty_word, bit);
         }
+        // The summary bit must be re-armed even when the page bit is already
+        // set: the drain clears summary bits for every group it visits, so a
+        // producer that skips this store could leave the group marked empty
+        // while its word still holds bits published after the drain's read.
+        guest_publish_dirty_word_summary(memory->dirty_word_summary, word);
     } else {
         guest_mark_dirty_page_words(memory->dirty_page_words, first_page, last_page);
+        for (std::uint32_t word = first_page / 64u;; ++word) {
+            guest_publish_dirty_word_summary(memory->dirty_word_summary, word);
+            if (word == last_page / 64u) break;
+        }
     }
     return true;
 }
-
-GALAXY_ALWAYS_INLINE bool guest_mark_cpu_dirty_page_fast(
+// Kept out of line on purpose: its remaining in-line work is the complete
+// alias/window/tracker/page validation, and force-inlining it put ~90
+// instruction slots and a stack-frame adjustment between every guest store and
+// that store's exit. Callers reach it only after their own cheap reject, so the
+// shared body is the only thing a scalar store carries.
+inline bool guest_mark_cpu_dirty_page_fast(
     GuestMemoryV1* memory,
     std::uint32_t address,
     std::uint32_t size) {
@@ -5123,14 +5292,105 @@ GALAXY_ALWAYS_INLINE bool guest_mark_cpu_dirty_page_fast(
     return true;
 }
 
-GALAXY_ALWAYS_INLINE void guest_notify_write(
+// Single-page admission for one tracker. Returns true, and the page index, only
+// when `guest_dirty_page_range_fast` (clip_to_tracker == false) accepts the span
+// and the span lies in one page; every other span returns false and takes the
+// complete policy. The terms below restate that function one for one, so there is
+// no sentinel: a caller reads `page` only when this returns true.
+//   * a size outside 1..32, a shift of 32 or more or an empty bitmap admits
+//     nothing (every caller sends 1..32 bytes; larger spans use the full policy);
+//   * only alias tags 0x00000000, 0x80000000 and 0xC0000000 are valid;
+//   * a span must not cross the 29-bit physical alias;
+//   * the span lies in MEM1 [0, 0x01800000) or MEM2 [0x10000000, 0x14000000);
+//   * the span lies inside the tracked extent (the sum is formed in 64 bits, so a
+//     span starting below `tracked_base` cannot wrap back inside);
+//   * the page index lies inside the bitmap (`page / 64 < page_word_count`).
+GALAXY_ALWAYS_INLINE bool guest_tracker_single_page(
+    std::uint32_t address,
+    std::uint32_t size,
+    std::uint32_t tracked_base,
+    std::uint32_t tracked_size,
+    std::uint32_t page_shift,
+    std::uint32_t page_word_count,
+    std::uint32_t& page) noexcept {
+    if (size - 1u >= 32u || page_shift >= 32u || page_word_count == 0u) GALAXY_UNLIKELY {
+        return false;
+    }
+    // Tag bits 31..29: 000, 100 and 110 are valid; 001, 010, 011, 101 and 111 are not.
+    if ((address & 0x20000000u) != 0u || (address >> 30) == 1u) GALAXY_UNLIKELY {
+        return false;
+    }
+    const std::uint32_t physical = address & 0x1FFFFFFFu;
+    const std::uint32_t physical_last = physical + (size - 1u);
+    if (physical_last > 0x1FFFFFFFu) GALAXY_UNLIKELY {
+        return false;  // Crosses a physical/cached/uncached alias boundary.
+    }
+    const bool in_mem1 = physical_last < 0x01800000u;
+    const bool in_mem2 = physical >= 0x10000000u && physical_last < 0x14000000u;
+    if (!in_mem1 && !in_mem2) GALAXY_UNLIKELY {
+        return false;
+    }
+    if (physical < tracked_base) GALAXY_UNLIKELY {
+        return false;
+    }
+    const std::uint32_t relative = physical - tracked_base;
+    const std::uint64_t relative_last = std::uint64_t{relative} + (size - 1u);
+    if (relative_last >= tracked_size) GALAXY_UNLIKELY {
+        return false;
+    }
+    const std::uint32_t first = relative >> page_shift;
+    if (first != static_cast<std::uint32_t>(relative_last >> page_shift)) GALAXY_UNLIKELY {
+        return false;  // Spans more than one page.
+    }
+    if ((first >> 6u) >= page_word_count) GALAXY_UNLIKELY {
+        return false;
+    }
+    page = first;
+    return true;
+}
+
+// Compatibility spelling for callers that only need the single-page answer:
+// the page index, or 0xFFFFFFFF when the span is not admitted as one page. Both
+// the sentinel and any admitted page are distinguishable (an admitted page is
+// below 2^29). Currently unreferenced.
+GALAXY_ALWAYS_INLINE std::uint32_t guest_single_page_dirty_index(
+    std::uint32_t address,
+    std::uint32_t size,
+    std::uint32_t tracked_base,
+    std::uint32_t tracked_size,
+    std::uint32_t page_shift,
+    std::uint32_t page_word_count) {
+    std::uint32_t page = 0u;
+    return guest_tracker_single_page(
+               address, size, tracked_base, tracked_size, page_shift,
+               page_word_count, page)
+        ? page
+        : 0xFFFFFFFFu;
+}
+
+// Same admission for the independent CPU tracker, read from its own geometry.
+GALAXY_ALWAYS_INLINE bool guest_cpu_tracker_single_page(
+    const GuestMemoryV1* memory,
+    std::uint32_t address,
+    std::uint32_t size,
+    std::uint32_t& page) noexcept {
+    return guest_tracker_single_page(
+        address,
+        size,
+        memory->cpu_dirty_tracked_base,
+        memory->cpu_dirty_tracked_size,
+        memory->cpu_dirty_page_shift,
+        memory->cpu_dirty_page_word_count,
+        page);
+}
+
+// Complete notification policy: both trackers, partial overlaps, multi-page
+// spans and the host callback for writes no tracker fully covers. Kept out of
+// line so scalar stores carry only the single-page shortcut below.
+GALAXY_NOINLINE inline void guest_notify_write_general(
     GuestMemoryV1* memory,
     std::uint32_t address,
     std::uint32_t size) {
-    if (memory == nullptr || size == 0u) {
-        return;
-    }
-
     const bool marked_shared =
         guest_mark_dirty_page_fast(memory, address, size);
     const bool marked_cpu =
@@ -5144,13 +5404,183 @@ GALAXY_ALWAYS_INLINE void guest_notify_write(
     }
 }
 
+GALAXY_ALWAYS_INLINE void guest_notify_write(
+    GuestMemoryV1* memory,
+    std::uint32_t address,
+    std::uint32_t size) {
+    if (memory == nullptr || size == 0u) {
+        return;
+    }
+    if (size <= 32u && memory->dirty_page_words != nullptr) [[likely]] {
+        std::uint32_t shared_page = 0u;
+        // `shared_page` is read only when the span is admitted as one page.
+        if (guest_tracker_single_page(
+                address, size,
+                memory->dirty_tracked_base, memory->dirty_tracked_size,
+                memory->dirty_page_shift, memory->dirty_page_word_count,
+                shared_page)) GALAXY_LIKELY {
+            const std::uint64_t bit = 1ull << (shared_page & 63u);
+            auto& dirty_word = memory->dirty_page_words[shared_page >> 6u];
+            if ((atomic_load_u64(&dirty_word) & bit) == 0u) {
+                atomic_or_u64(&dirty_word, bit);
+            }
+            guest_publish_dirty_word_summary(memory->dirty_word_summary, shared_page >> 6u);
+            // The renderer tracker fully covered this write, so the host
+            // callback is suppressed. Only the independent CPU tracker (a small
+            // MEM2 window) may still need its own overlap marked.
+            if (memory->cpu_dirty_page_words == nullptr) [[likely]] {
+                return;
+            }
+            // Cheap window reject first. The CPU tracker normally covers the
+            // pinned MEM2 audio backing, so almost every MEM1/stack/object store
+            // is outside it — and `guest_cpu_tracker_single_page` below would walk
+            // its complete admission kernel only to be
+            // discarded, after which `guest_mark_cpu_dirty_page_fast` would
+            // re-derive this identical predicate as its own first six
+            // instructions. This is the same test, on the same two fields, so it
+            // admits and rejects exactly the same set; the only stores that now
+            // enter the kernel are the ones whose result is used.
+            //
+            // The one case this must not swallow is a span that starts below the
+            // tracked base and reaches into it: that overlaps the tracker and
+            // still owns work, so it falls through to the complete policy rather
+            // than returning here.
+            const std::uint32_t cpu_physical = address & 0x1FFFFFFFu;
+            if (cpu_physical < memory->cpu_dirty_tracked_base ||
+                cpu_physical - memory->cpu_dirty_tracked_base >=
+                    memory->cpu_dirty_tracked_size) {
+                if (cpu_physical < memory->cpu_dirty_tracked_base &&
+                    static_cast<std::uint64_t>(cpu_physical) + size >
+                        memory->cpu_dirty_tracked_base) {
+                    (void)guest_mark_cpu_dirty_page_fast(memory, address, size);
+                    return;
+                }
+                // The shared tracker already covers the span (so the callback is
+                // suppressed) and the CPU window is disjoint from it: nothing to mark.
+                return;
+            }
+            // The same kernel rejects every MEM1 store and every store below the
+            // ARAM window, and marks the same bit the complete check would.
+            std::uint32_t cpu_page = 0u;
+            if (guest_cpu_tracker_single_page(memory, address, size, cpu_page)) GALAXY_LIKELY {
+                memory->cpu_dirty_page_words[cpu_page >> 6u] |=
+                    1ull << (cpu_page & 63u);
+                return;
+            }
+            (void)guest_mark_cpu_dirty_page_fast(memory, address, size);
+            return;
+        }
+    }
+    guest_notify_write_general(memory, address, size);
+}
+
+// Two adjacent 4-byte stores that are known to land in the same tracker page,
+// published with one page lookup instead of two.
+//
+// This exists for the paired-single store path, whose fast path writes its two
+// halves to `address` and `address + 4`. They share a tracker page unless the
+// pair straddles a page boundary; the caller falls back to the two-call form in that
+// case. Nothing else changes: the same page bit and the same summary bit are
+// published that `guest_notify_write(memory, address, 4)` followed by
+// `guest_notify_write(memory, address + 4, 4)` would publish, because the
+// single-page shortcut is decided solely by the first address's page when the
+// span stays inside that page.
+//
+// The caller must already have admitted the complete 8-byte span to this
+// renderer tracker page. Tracker metadata remains owned by this CPU write;
+// no observer callback may run between admission and publication.
+GALAXY_ALWAYS_INLINE void guest_notify_write_pair_admitted(
+    GuestMemoryV1* memory,
+    std::uint32_t address,
+    std::uint32_t page) {
+    const std::uint32_t bit_index = page & 63u;
+    const std::uint64_t bit = 1ull << bit_index;
+    auto& dirty_word = memory->dirty_page_words[page >> 6u];
+    if ((atomic_load_u64(&dirty_word) & bit) == 0u) {
+        atomic_or_u64(&dirty_word, bit);
+    }
+    guest_publish_dirty_word_summary(memory->dirty_word_summary, page >> 6u);
+    // Both halves are inside the renderer tracker, so the host callback is
+    // suppressed. Only the independent CPU tracker (a small MEM2 window) may
+    // still need its own overlap, and only when either half reaches it.
+    if (memory->cpu_dirty_page_words == nullptr) GALAXY_LIKELY {
+        return;
+    }
+    // The complete pair was admitted to ordinary RAM above. Most pairs are
+    // MEM1/stack writes, outside the independent MEM2 CPU tracker. Reject only
+    // a disjoint span; a pair reaching into the window still needs the exact
+    // per-lane partial-publication policy below.
+    const std::uint32_t cpu_physical = address & 0x1FFFFFFFu;
+    if (cpu_physical < memory->cpu_dirty_tracked_base) {
+        if (static_cast<std::uint64_t>(cpu_physical) + 8u <=
+            memory->cpu_dirty_tracked_base) {
+            return;
+        }
+    } else if (cpu_physical - memory->cpu_dirty_tracked_base >=
+               memory->cpu_dirty_tracked_size) {
+        return;
+    }
+    // A fully admitted single CPU page for the 8-byte span covers both halves
+    // with that one page. Anything else (partial overlap, a span past a
+    // truncated bitmap, a wrapped or malformed window) keeps the two original
+    // 4-byte marks: clipping the combined span is not equivalent when the
+    // second half is rejected but the first is not.
+    std::uint32_t cpu_page = 0u;
+    if (guest_cpu_tracker_single_page(memory, address, 8u, cpu_page)) {
+        memory->cpu_dirty_page_words[cpu_page >> 6u] |= 1ull << (cpu_page & 63u);
+        return;
+    }
+    (void)guest_mark_cpu_dirty_page_fast(memory, address, 4u);
+    (void)guest_mark_cpu_dirty_page_fast(memory, address + 4u, 4u);
+}
+
+GALAXY_ALWAYS_INLINE bool guest_notify_write_pair_same_page(
+    GuestMemoryV1* memory,
+    std::uint32_t address) {
+    if (memory == nullptr || memory->dirty_page_words == nullptr) {
+        return false;
+    }
+    // Same single-page admission as the scalar store path, over both lanes.
+    std::uint32_t page = 0u;
+    if (!guest_tracker_single_page(
+            address, 8u, memory->dirty_tracked_base, memory->dirty_tracked_size,
+            memory->dirty_page_shift, memory->dirty_page_word_count, page)) GALAXY_UNLIKELY {
+        return false;
+    }
+    guest_notify_write_pair_admitted(memory, address, page);
+    return true;
+}
+
 GALAXY_ALWAYS_INLINE bool guest_is_wgpipe_address(std::uint32_t address) {
     const std::uint32_t high = address & 0xFF000000u;
     return (high == 0x0C000000u || high == 0xCC000000u) &&
            (address & 0x00FFF000u) == 0x00008000u;
 }
 
+// The WGPIPE ownership trace is a guest-execution trace, exactly like
+// trace_fileloader_stack_enabled / trace_audio_pointer_store_enabled /
+// trace_audio_control_writes_enabled / trace_resource_status_writes_enabled
+// above, so it carries the same compile-time fold. Without it this was the one
+// gate in `guest_wgpipe_batch_requires_scalar_path()` that could NOT fold: the
+// other three already compile to a literal `false` under the default
+// GALAXY_GUEST_TRACE==0, leaving this one Meyers-singleton load as the entire
+// surviving body of a predicate the translator emits at every proven WGPIPE
+// batch (117 sites in the current generated corpus).
+//
+// The comment at the top of this trace block states the invariant this restores:
+// "In a shipping build it must compile out entirely: the trace_*_enabled() gates
+// sit on the hottest paths ... With GALAXY_GUEST_TRACE==0 (the default) the hot
+// gates fold to a compile-time false so the compiler deletes the branch and the
+// trace call outright." This one did not.
+//
+// Behaviour is unchanged in both configurations. With tracing compiled in
+// (GALAXY_GUEST_TRACE=1) the env lookup and its meaning are byte-identical. With
+// it compiled out, the ownership trace was already unreachable through this
+// predicate - the runtime switch that actually drives the trace is
+// `GuestAddressSpace::wgpipe_pe_ownership_trace_enabled_`, set from the same env
+// var on the host side and untouched here.
 inline bool trace_wgpipe_pe_ownership_enabled() {
+#if GALAXY_GUEST_TRACE
     static const bool enabled = [] {
         char value[16]{};
         std::size_t length = 0;
@@ -5162,6 +5592,9 @@ inline bool trace_wgpipe_pe_ownership_enabled() {
                length > 1 && value[0] != '0';
     }();
     return enabled;
+#else
+    return false;
+#endif
 }
 
 // A traced scalar store observes the instruction before its device write. The
@@ -5201,31 +5634,65 @@ GALAXY_ALWAYS_INLINE void guest_write_wgpipe_bytes(
     }
 }
 
+// Cold tail of a scalar store (see guest_load_slow): device write, otherwise a
+// checked resolve (faulting when unmapped), byte copy and dirty notification.
+// `Reversed` selects the little-endian byte order used by stwbrx/sthbrx.
+template <typename T, bool Reversed = false>
+GALAXY_NOINLINE inline void guest_store_slow(
+    GuestMemoryV1* memory,
+    std::uint32_t address,
+    T value,
+    const NativeServicesV1* services,
+    std::uint32_t guest_pc) {
+    std::byte output[sizeof(T)]{};
+    for (std::size_t index = 0; index < sizeof(T); ++index) {
+        const std::size_t shift =
+            (Reversed ? index : sizeof(T) - 1u - index) * 8u;
+        output[index] = static_cast<std::byte>(value >> shift);
+    }
+    if (memory != nullptr && memory->write_device != nullptr &&
+        memory->write_device(memory->user, address, sizeof(T), output)) {
+        return;
+    }
+    std::byte* destination =
+        resolve_guest(memory, address, sizeof(T), services, guest_pc);
+    if constexpr (sizeof(T) == 4u && !Reversed) {
+        if (trace_u32_store_enabled()) {
+            trace_fileloader_stack_u32(
+                services, "store32", guest_pc, address, value);
+            trace_audio_pointer_store_u32(
+                services, "store32", guest_pc, address, value);
+            trace_audio_control_write(
+                memory, services, "store32", guest_pc, address, 4, value);
+            trace_resource_status_store_u32(
+                memory, services, "store32", guest_pc, address, value);
+        }
+    }
+    for (std::size_t index = 0; index < sizeof(T); ++index) {
+        destination[index] = output[index];
+    }
+    guest_notify_write(memory, address, sizeof(T));
+}
+
 GALAXY_ALWAYS_INLINE void guest_store_u8(
     GuestMemoryV1* memory,
     std::uint32_t address,
     std::uint8_t value,
     const NativeServicesV1* services,
     std::uint32_t guest_pc) {
-    const std::byte output = static_cast<std::byte>(value);
     trace_fileloader_temp_write(
         memory, services, "store8", guest_pc, address, 1u, value);
     if (trace_audio_control_writes_enabled()) {
         trace_audio_control_write(
             memory, services, "store8", guest_pc, address, 1, value);
     }
-    if (std::byte* direct = resolve_guest_fast(memory, address, 1);
-        direct != nullptr) {
-        *direct = output;
+    std::byte* direct = nullptr;
+    if (guest_region_admit(memory, address, 1, direct)) GALAXY_LIKELY {
+        *direct = static_cast<std::byte>(value);
         guest_notify_write(memory, address, 1);
         return;
     }
-    if (memory != nullptr && memory->write_device != nullptr &&
-        memory->write_device(memory->user, address, 1, &output)) {
-        return;
-    }
-    *resolve_guest(memory, address, 1, services, guest_pc) = output;
-    guest_notify_write(memory, address, 1);
+    guest_store_slow<std::uint8_t>(memory, address, value, services, guest_pc);
 }
 
 GALAXY_ALWAYS_INLINE void guest_store_u16(
@@ -5234,31 +5701,20 @@ GALAXY_ALWAYS_INLINE void guest_store_u16(
     std::uint16_t value,
     const NativeServicesV1* services,
     std::uint32_t guest_pc) {
-    const std::byte output[2]{
-        static_cast<std::byte>(value >> 8),
-        static_cast<std::byte>(value),
-    };
     trace_fileloader_temp_write(
         memory, services, "store16", guest_pc, address, 2u, value);
     if (trace_audio_control_writes_enabled()) {
         trace_audio_control_write(
             memory, services, "store16", guest_pc, address, 2, value);
     }
-    if (std::byte* direct = resolve_guest_fast(memory, address, 2);
-        direct != nullptr) {
+    std::byte* direct = nullptr;
+    if (guest_region_admit(memory, address, 2, direct)) GALAXY_LIKELY {
         const std::uint16_t swapped = byte_swap_u16(value);
         std::memcpy(direct, &swapped, sizeof(swapped));
         guest_notify_write(memory, address, 2);
         return;
     }
-    if (memory != nullptr && memory->write_device != nullptr &&
-        memory->write_device(memory->user, address, 2, output)) {
-        return;
-    }
-    std::byte* destination = resolve_guest(memory, address, 2, services, guest_pc);
-    destination[0] = output[0];
-    destination[1] = output[1];
-    guest_notify_write(memory, address, 2);
+    guest_store_slow<std::uint16_t>(memory, address, value, services, guest_pc);
 }
 
 GALAXY_ALWAYS_INLINE void guest_store_u32(
@@ -5267,16 +5723,10 @@ GALAXY_ALWAYS_INLINE void guest_store_u32(
     std::uint32_t value,
     const NativeServicesV1* services,
     std::uint32_t guest_pc) {
-    const std::byte output[4]{
-        static_cast<std::byte>(value >> 24),
-        static_cast<std::byte>(value >> 16),
-        static_cast<std::byte>(value >> 8),
-        static_cast<std::byte>(value),
-    };
     trace_fileloader_temp_write(
         memory, services, "store32", guest_pc, address, 4u, value);
-    if (std::byte* direct = resolve_guest_fast(memory, address, 4);
-        direct != nullptr) {
+    std::byte* direct = nullptr;
+    if (guest_region_admit(memory, address, 4, direct)) GALAXY_LIKELY {
         if (trace_u32_store_enabled()) {
             trace_fileloader_stack_u32(
                 services, "store32", guest_pc, address, value);
@@ -5292,25 +5742,7 @@ GALAXY_ALWAYS_INLINE void guest_store_u32(
         guest_notify_write(memory, address, 4);
         return;
     }
-    if (memory != nullptr && memory->write_device != nullptr &&
-        memory->write_device(memory->user, address, 4, output)) {
-        return;
-    }
-    std::byte* destination = resolve_guest(memory, address, 4, services, guest_pc);
-    if (trace_u32_store_enabled()) {
-        trace_fileloader_stack_u32(
-            services, "store32", guest_pc, address, value);
-        trace_audio_pointer_store_u32(
-            services, "store32", guest_pc, address, value);
-        trace_audio_control_write(
-            memory, services, "store32", guest_pc, address, 4, value);
-        trace_resource_status_store_u32(
-            memory, services, "store32", guest_pc, address, value);
-    }
-    for (std::size_t index = 0; index < 4; ++index) {
-        destination[index] = output[index];
-    }
-    guest_notify_write(memory, address, 4);
+    guest_store_slow<std::uint32_t>(memory, address, value, services, guest_pc);
 }
 
 GALAXY_ALWAYS_INLINE void guest_store_u16_reversed(
@@ -5319,24 +5751,14 @@ GALAXY_ALWAYS_INLINE void guest_store_u16_reversed(
     std::uint16_t value,
     const NativeServicesV1* services,
     std::uint32_t guest_pc) {
-    const std::byte output[2]{
-        static_cast<std::byte>(value),
-        static_cast<std::byte>(value >> 8),
-    };
-    if (std::byte* direct = resolve_guest_fast(memory, address, 2);
-        direct != nullptr) {
+    std::byte* direct = nullptr;
+    if (guest_region_admit(memory, address, 2, direct)) GALAXY_LIKELY {
         std::memcpy(direct, &value, sizeof(value));
         guest_notify_write(memory, address, 2);
         return;
     }
-    if (memory != nullptr && memory->write_device != nullptr &&
-        memory->write_device(memory->user, address, 2, output)) {
-        return;
-    }
-    std::byte* destination = resolve_guest(memory, address, 2, services, guest_pc);
-    destination[0] = output[0];
-    destination[1] = output[1];
-    guest_notify_write(memory, address, 2);
+    guest_store_slow<std::uint16_t, true>(
+        memory, address, value, services, guest_pc);
 }
 
 GALAXY_ALWAYS_INLINE void guest_store_u32_reversed(
@@ -5345,27 +5767,14 @@ GALAXY_ALWAYS_INLINE void guest_store_u32_reversed(
     std::uint32_t value,
     const NativeServicesV1* services,
     std::uint32_t guest_pc) {
-    const std::byte output[4]{
-        static_cast<std::byte>(value),
-        static_cast<std::byte>(value >> 8),
-        static_cast<std::byte>(value >> 16),
-        static_cast<std::byte>(value >> 24),
-    };
-    if (std::byte* direct = resolve_guest_fast(memory, address, 4);
-        direct != nullptr) {
+    std::byte* direct = nullptr;
+    if (guest_region_admit(memory, address, 4, direct)) GALAXY_LIKELY {
         std::memcpy(direct, &value, sizeof(value));
         guest_notify_write(memory, address, 4);
         return;
     }
-    if (memory != nullptr && memory->write_device != nullptr &&
-        memory->write_device(memory->user, address, 4, output)) {
-        return;
-    }
-    std::byte* destination = resolve_guest(memory, address, 4, services, guest_pc);
-    for (std::size_t index = 0; index < 4; ++index) {
-        destination[index] = output[index];
-    }
-    guest_notify_write(memory, address, 4);
+    guest_store_slow<std::uint32_t, true>(
+        memory, address, value, services, guest_pc);
 }
 
 inline void guest_store_u64(
@@ -5374,38 +5783,125 @@ inline void guest_store_u64(
     std::uint64_t value,
     const NativeServicesV1* services,
     std::uint32_t guest_pc) {
-    const std::byte output[8]{
-        static_cast<std::byte>(value >> 56),
-        static_cast<std::byte>(value >> 48),
-        static_cast<std::byte>(value >> 40),
-        static_cast<std::byte>(value >> 32),
-        static_cast<std::byte>(value >> 24),
-        static_cast<std::byte>(value >> 16),
-        static_cast<std::byte>(value >> 8),
-        static_cast<std::byte>(value),
-    };
     trace_fileloader_temp_write(
         memory, services, "store64", guest_pc, address, 8u, value);
     if (trace_audio_control_writes_enabled()) {
         trace_audio_control_write(
             memory, services, "store64", guest_pc, address, 8, value);
     }
-    if (std::byte* direct = resolve_guest_fast(memory, address, 8);
-        direct != nullptr) {
+    std::byte* direct = nullptr;
+    if (guest_region_admit(memory, address, 8, direct)) GALAXY_LIKELY {
         const std::uint64_t swapped = byte_swap_u64(value);
         std::memcpy(direct, &swapped, sizeof(swapped));
         guest_notify_write(memory, address, 8);
         return;
     }
-    if (memory != nullptr && memory->write_device != nullptr &&
-        memory->write_device(memory->user, address, 8, output)) {
-        return;
+    guest_store_slow<std::uint64_t>(memory, address, value, services, guest_pc);
+}
+
+// Compare live host object ranges without overflowing an end pointer.
+inline bool guest_host_spans_overlap(
+    const void* first, std::size_t first_size,
+    const void* second, std::size_t second_size) noexcept {
+    if (first == nullptr || second == nullptr || first_size == 0u || second_size == 0u) {
+        return false;
     }
-    std::byte* destination = resolve_guest(memory, address, 8, services, guest_pc);
-    for (std::size_t index = 0; index < 8; ++index) {
-        destination[index] = output[index];
+    const auto a = reinterpret_cast<std::uintptr_t>(first);
+    const auto b = reinterpret_cast<std::uintptr_t>(second);
+    return a <= b ? b - a < first_size : a - b < second_size;
+}
+
+// Publication may touch bitmap storage but cannot rewrite the capability
+// metadata used by subsequent words. Foreign host layouts use scalar policy.
+inline bool guest_store_multiple_policy_is_stable(
+    const PpcContext* context, const GuestMemoryV1* memory,
+    const std::byte* direct, std::uint32_t bytes) noexcept {
+    return !guest_host_spans_overlap(context, sizeof(*context), memory, sizeof(*memory)) &&
+        !guest_host_spans_overlap(direct, bytes, memory, sizeof(*memory)) &&
+        !guest_host_spans_overlap(memory->dirty_page_words,
+            std::size_t{memory->dirty_page_word_count} * sizeof(std::atomic_uint64_t),
+            memory, sizeof(*memory)) &&
+        !guest_host_spans_overlap(memory->dirty_word_summary,
+            std::size_t{memory->dirty_word_summary_count} * sizeof(std::atomic_uint64_t),
+            memory, sizeof(*memory));
+}
+
+// A PPC lmw has no recognition boundary between words. Admit the complete
+// RAM span once, but keep each load and context assignment ordered, including
+// source/context aliasing. Incomplete spans retain partial effects and faults.
+template <std::uint32_t FirstRegister>
+inline void guest_load_multiple_gprs(
+    PpcContext* context, GuestMemoryV1* memory, std::uint32_t address,
+    const NativeServicesV1* services, std::uint32_t guest_pc) {
+    static_assert(FirstRegister < 32u);
+    constexpr std::uint32_t bytes = (32u - FirstRegister) * 4u;
+    if constexpr (FirstRegister <= 16u) {
+        if (!trace_fileloader_stack_enabled() && memory != nullptr &&
+            !guest_host_spans_overlap(context, sizeof(*context), memory, sizeof(*memory))) {
+            if (const std::byte* direct = resolve_guest_fast(memory, address, bytes)) {
+                for (std::uint32_t reg = FirstRegister; reg < 32u; ++reg) {
+                    std::uint32_t value;
+                    std::memcpy(&value, direct + (reg - FirstRegister) * 4u, 4u);
+                    context->gpr[reg] = byte_swap_u32(value);
+                }
+                return;
+            }
+        }
     }
-    guest_notify_write(memory, address, 8);
+    for (std::uint32_t reg = FirstRegister; reg < 32u; ++reg) {
+        context->gpr[reg] = guest_load_u32(
+            memory, address + (reg - FirstRegister) * 4u, services, guest_pc);
+    }
+}
+
+// Preserve source reads, writes and publication after every word. The fast
+// span needs complete shared coverage, stable policy metadata and no observer.
+// CPU overlap, devices, partial trackers, wraps and small suffixes stay scalar.
+template <std::uint32_t FirstRegister>
+inline void guest_store_multiple_gprs(
+    PpcContext* context, GuestMemoryV1* memory, std::uint32_t address,
+    const NativeServicesV1* services, std::uint32_t guest_pc) {
+    static_assert(FirstRegister < 32u);
+    constexpr std::uint32_t bytes = (32u - FirstRegister) * 4u;
+    if constexpr (FirstRegister <= 24u) {
+        if (memory != nullptr && memory->dirty_page_words != nullptr &&
+            !trace_fileloader_temp_writes_enabled() && !trace_u32_store_enabled()) {
+            if (std::byte* direct = resolve_guest_fast(memory, address, bytes)) {
+                const std::uint32_t physical = address & 0x1FFFFFFFu;
+                const bool outside_cpu = memory->cpu_dirty_page_words == nullptr ||
+                    std::uint64_t{physical} + bytes <= memory->cpu_dirty_tracked_base ||
+                    physical >= std::uint64_t{memory->cpu_dirty_tracked_base} +
+                        memory->cpu_dirty_tracked_size;
+                std::uint32_t first_page = 0u, last_page = 0u;
+                if (outside_cpu && memory->dirty_page_shift >= 2u &&
+                    ((physical - memory->dirty_tracked_base) & 3u) == 0u &&
+                    guest_store_multiple_policy_is_stable(context, memory, direct, bytes) &&
+                    guest_dirty_page_range_fast(address, bytes,
+                        memory->dirty_tracked_base, memory->dirty_tracked_size,
+                        memory->dirty_page_shift, memory->dirty_page_word_count,
+                        &first_page, &last_page) &&
+                    (memory->dirty_word_summary == nullptr ||
+                     (last_page >> 12u) < memory->dirty_word_summary_count)) {
+                    const std::uint32_t relative = physical - memory->dirty_tracked_base;
+                    for (std::uint32_t reg = FirstRegister; reg < 32u; ++reg) {
+                        const std::uint32_t offset = (reg - FirstRegister) * 4u;
+                        const std::uint32_t value = byte_swap_u32(context->gpr[reg]);
+                        std::memcpy(direct + offset, &value, 4u);
+                        const std::uint32_t page = (relative + offset) >> memory->dirty_page_shift;
+                        const std::uint64_t bit = 1ull << (page & 63u);
+                        auto& word = memory->dirty_page_words[page >> 6u];
+                        if ((atomic_load_u64(&word) & bit) == 0u) atomic_or_u64(&word, bit);
+                        guest_publish_dirty_word_summary(memory->dirty_word_summary, page >> 6u);
+                    }
+                    return;
+                }
+            }
+        }
+    }
+    for (std::uint32_t reg = FirstRegister; reg < 32u; ++reg) {
+        guest_store_u32(memory, address + (reg - FirstRegister) * 4u,
+            context->gpr[reg], services, guest_pc);
+    }
 }
 
 inline void guest_zero(
@@ -5459,23 +5955,26 @@ inline void native_store_guest_f32_fast(
 }
 
 inline void full_memory_fence();
-inline void compare_unsigned(
+// The attribute must match the definitions below, or a caller reached through
+// this forward declaration (e.g. `native_audio_interleave_i16_804878BC` at
+// ~6228) would not be force-inlined.
+GALAXY_ALWAYS_INLINE void compare_unsigned(
     PpcContext* context,
     std::uint32_t field_index,
     std::uint32_t left,
     std::uint32_t right);
-inline void compare_signed(
+GALAXY_ALWAYS_INLINE void compare_signed(
     PpcContext* context,
     std::uint32_t field_index,
     std::int32_t left,
     std::int32_t right);
-inline void compare_f64(
+GALAXY_ALWAYS_INLINE void compare_f64(
     PpcContext* context,
     std::uint32_t field_index,
     std::uint64_t left,
     std::uint64_t right,
     bool ordered);
-inline bool cr_bit(const PpcContext* context, std::uint32_t index);
+GALAXY_ALWAYS_INLINE bool cr_bit(const PpcContext* context, std::uint32_t index);
 
 struct NativeCacheRangeV1 {
     std::uint32_t start{};
@@ -5602,6 +6101,44 @@ inline void native_memmove(
         size);
 }
 
+// Invocation-local RAM capability for callback-free native byte decoders.
+// A hit reads the CURRENT byte from the admitted backing; it never snapshots
+// values, prefetches an unrequested byte or admits a future faulting span.
+// Mappings are stable until the decoder's final/partial write notification.
+class NativeGuestByteReader {
+public:
+    NativeGuestByteReader(GuestMemoryV1* memory, const NativeServicesV1* services,
+        std::uint32_t guest_pc) : memory_(memory), services_(services), pc_(guest_pc) {}
+
+    GALAXY_ALWAYS_INLINE std::uint8_t read(std::uint32_t address) {
+        const auto offset = address - base_;
+        if (offset < size_) GALAXY_LIKELY {
+            return static_cast<std::uint8_t>(host_[offset]);
+        }
+        auto* const byte = resolve_guest(memory_, address, 1u, services_, pc_);
+        // Only retain the first-precedence fixed fast mapping, bounded by its
+        // high-nibble window. List mappings can overlap or have different next-
+        // address precedence, so those keep their original per-byte lookup.
+        if (memory_ != nullptr) {
+            const auto& region = memory_->fast_regions[address >> 28u];
+            const auto local = address & 0x0FFFFFFFu;
+            if (region.host_base != nullptr && local < region.size) {
+                base_ = address & 0xF0000000u;
+                size_ = std::min(region.size, std::uint32_t{0x10000000u});
+                host_ = region.host_base;
+            }
+        }
+        return static_cast<std::uint8_t>(*byte);
+    }
+private:
+    GuestMemoryV1* memory_;
+    const NativeServicesV1* services_;
+    std::uint32_t pc_;
+    std::uint32_t base_ = 0u;
+    std::uint32_t size_ = 0u;
+    const std::byte* host_ = nullptr;
+};
+
 inline bool native_yaz0_decode_803989BC(
     PpcContext* context,
     GuestMemoryV1* memory,
@@ -5647,9 +6184,9 @@ inline bool native_yaz0_decode_803989BC(
     std::uint32_t valid_bits = 0u;
     std::uint32_t code_byte = 0u;
 
+    NativeGuestByteReader source_bytes(memory, services, guest_pc);
     const auto read_byte = [&](std::uint32_t address) -> std::uint8_t {
-        return static_cast<std::uint8_t>(
-            *resolve_guest(memory, address, 1u, services, guest_pc));
+        return source_bytes.read(address);
     };
 
     while (dest_cursor < output_size) {
@@ -5729,9 +6266,9 @@ inline bool native_yaz0_decode_tail_803989BC(
             "native_yaz0_decode_tail_803989BC invalid bit count");
     }
 
+    NativeGuestByteReader source_bytes(memory, services, guest_pc);
     const auto read_byte = [&](std::uint32_t address) -> std::uint8_t {
-        return static_cast<std::uint8_t>(
-            *resolve_guest(memory, address, 1u, services, guest_pc));
+        return source_bytes.read(address);
     };
 
     const auto can_read_compressed = [&](std::uint32_t count) -> bool {
@@ -5826,7 +6363,7 @@ inline void call_guest(
     GuestMemoryV1* memory,
     std::uint32_t caller_pc);
 
-inline void call_guest_cached(
+GALAXY_ALWAYS_INLINE void call_guest_cached(
     const NativeServicesV1* services,
     std::uint32_t guest_address,
     std::uint32_t* cached_address,
@@ -5872,7 +6409,7 @@ GALAXY_ALWAYS_INLINE void native_input_trace_copy_pre_checkpoint(
     PpcContext* context,
     GuestMemoryV1* memory);
 
-inline void update_cr0(PpcContext* context, std::uint32_t value);
+GALAXY_ALWAYS_INLINE void update_cr0(PpcContext* context, std::uint32_t value);
 
 inline void native_yaz0_decode_or_fallback_803989BC(
     PpcContext* context,
@@ -6831,12 +7368,12 @@ inline void native_resource_entry_count_8040FC80(
     context->ctr = 0u;
 }
 
-inline void ensure_fpu_available(const NativeServicesV1* services,
+GALAXY_ALWAYS_INLINE void ensure_fpu_available(const NativeServicesV1* services,
     std::uint32_t guest_pc, PpcContext* context, GuestMemoryV1* memory);
-inline void load_fpr_single(PpcContext* context, std::uint32_t index,
+GALAXY_ALWAYS_INLINE void load_fpr_single(PpcContext* context, std::uint32_t index,
     GuestMemoryV1* memory, std::uint32_t address,
     const NativeServicesV1* services, std::uint32_t guest_pc);
-inline void store_fpr_single(const PpcContext* context, std::uint32_t index,
+GALAXY_ALWAYS_INLINE void store_fpr_single(const PpcContext* context, std::uint32_t index,
     GuestMemoryV1* memory, std::uint32_t address,
     const NativeServicesV1* services, std::uint32_t guest_pc);
 inline void psq_load(PpcContext* context, std::uint32_t target,
@@ -7074,7 +7611,7 @@ label_8000C5A4:
     context->gpr[1] = context->gpr[1] + 0x20u;
 }
 
-inline void call_guest_cached(
+GALAXY_ALWAYS_INLINE void call_guest_cached(
     const NativeServicesV1* services,
     std::uint32_t guest_address,
     std::uint32_t* cached_address,
@@ -7169,9 +7706,11 @@ inline void native_savegpr_805174FC(
                     auto& word = memory->dirty_page_words[page / 64u];
                     // Retain the original mark after each word, including the
                     // atomic first publication and concurrent worker bits.
-                    if ((word.load(std::memory_order_relaxed) & bit) == 0u) {
-                        word.fetch_or(bit, std::memory_order_relaxed);
+                    if ((atomic_load_u64(&word) & bit) == 0u) {
+                        atomic_or_u64(&word, bit);
                     }
+                    guest_publish_dirty_word_summary(
+                        memory->dirty_word_summary, page / 64u);
                 }
                 return;
             }
@@ -7473,19 +8012,23 @@ inline void native_vec_zero(
     guest_notify_write(memory, context->gpr[3], 12u);
 }
 
-// A stored single consumes only the conversion bits, without publishing
-// arithmetic exception/status fields. Exact widened normals and signed zero
-// require no rounding under any FPSCR mode; every other encoding retains the
-// complete existing conversion. Guest write/fault/notification order stays
-// at each original call site.
+// stfs converts the FPR encoding to its architectural single-store bit
+// slice, independently of FPSCR RN/NI. It is not frsp or a rounded arithmetic
+// conversion: signaling NaNs retain their payload/quiet bit and no FP status
+// is published. The tiny-value arm follows hardware-tested Gekko/Broadway
+// conversion behavior also used by Dolphin and WiiCompiled.
 GALAXY_ALWAYS_INLINE std::uint32_t native_stored_single_bits(
     std::uint64_t bits,
-    std::uint32_t fpscr) {
-    std::uint32_t output = 0u;
-    if (float_native_detail::try_narrow_normal_or_zero_widened_f32(bits, output)) {
-        return output;
+    std::uint32_t /*fpscr*/) {
+    const auto exponent = static_cast<std::uint32_t>((bits >> 52u) & 0x7FFu);
+    if (exponent >= 874u && exponent <= 896u) {
+        const std::uint64_t significand =
+            0x0010000000000000ull | (bits & 0x000FFFFFFFFFFFFFull);
+        return (static_cast<std::uint32_t>(bits >> 32u) & 0x80000000u) |
+            static_cast<std::uint32_t>(significand >> (926u - exponent));
     }
-    return ppc_narrow_f64_to_f32(bits, fpscr).bits;
+    return (static_cast<std::uint32_t>(bits >> 32u) & 0xC0000000u) |
+        (static_cast<std::uint32_t>(bits >> 29u) & 0x3FFFFFFFu);
 }
 
 inline void native_vec_set_from_fprs(
@@ -7548,21 +8091,21 @@ inline void native_vec_add(
         guest_pc);
 }
 
-inline void load_fpr_single(
+GALAXY_ALWAYS_INLINE void load_fpr_single(
     PpcContext* context,
     std::uint32_t index,
     GuestMemoryV1* memory,
     std::uint32_t address,
     const NativeServicesV1* services,
     std::uint32_t guest_pc);
-inline void store_fpr_single(
+GALAXY_ALWAYS_INLINE void store_fpr_single(
     const PpcContext* context,
     std::uint32_t index,
     GuestMemoryV1* memory,
     std::uint32_t address,
     const NativeServicesV1* services,
     std::uint32_t guest_pc);
-inline std::uint32_t require_single_precision_bits(
+GALAXY_ALWAYS_INLINE std::uint32_t require_single_precision_bits(
     std::uint64_t bits,
     const NativeServicesV1* services,
     std::uint32_t guest_pc);
@@ -7726,13 +8269,13 @@ inline void native_ring_vec_fetch(
 
     const std::uint32_t head =
         guest_load_u32(memory, self_addr + 0x624u, services, guest_pc);
-    std::int32_t relative =
-        static_cast<std::int32_t>(head) - static_cast<std::int32_t>(index);
-    if (relative < 0) {
-        relative += 0x80;
+    // Broadway subtraction wraps to 32 bits before its signed comparison.
+    std::uint32_t relative = head - index;
+    if (static_cast<std::int32_t>(relative) < 0) {
+        relative += 0x80u;
     }
     const std::uint32_t src_addr =
-        self_addr + 0x24u + static_cast<std::uint32_t>(relative) * 12u;
+        self_addr + 0x24u + relative * 12u;
     guest_store_u32(
         memory,
         out_addr + 0u,
@@ -7754,14 +8297,14 @@ inline void native_ring_vec_fetch(
     context->gpr[3] = 1;
 }
 
-inline void load_fpr_single(
+GALAXY_ALWAYS_INLINE void load_fpr_single(
     PpcContext* context,
     std::uint32_t index,
     GuestMemoryV1* memory,
     std::uint32_t address,
     const NativeServicesV1* services,
     std::uint32_t guest_pc);
-inline std::uint32_t require_single_precision_bits(
+GALAXY_ALWAYS_INLINE std::uint32_t require_single_precision_bits(
     std::uint64_t bits,
     const NativeServicesV1* services,
     std::uint32_t guest_pc);
@@ -7920,14 +8463,14 @@ inline bool native_fast_host_float_helpers_enabled() {
     return enabled;
 }
 
-inline void load_fpr_single(
+GALAXY_ALWAYS_INLINE void load_fpr_single(
     PpcContext* context,
     std::uint32_t index,
     GuestMemoryV1* memory,
     std::uint32_t address,
     const NativeServicesV1* services,
     std::uint32_t guest_pc);
-inline std::uint32_t require_single_precision_bits(
+GALAXY_ALWAYS_INLINE std::uint32_t require_single_precision_bits(
     std::uint64_t bits,
     const NativeServicesV1* services,
     std::uint32_t guest_pc);
@@ -7956,7 +8499,7 @@ inline void psq_store(
     bool d_form,
     const NativeServicesV1* services,
     std::uint32_t guest_pc);
-inline std::uint64_t widen_f32_bits(std::uint32_t bits);
+GALAXY_ALWAYS_INLINE std::uint64_t widen_f32_bits(std::uint32_t bits);
 inline std::uint32_t narrow_paired_single_ftz(std::uint64_t bits);
 
 inline void native_psmtx_identity_804B5EDC(
@@ -9273,7 +9816,7 @@ inline bool paired_singles_enabled(const PpcContext* context) {
     return (context->hid2 & kHid2Pse) != 0;
 }
 
-inline std::uint64_t widen_f32_bits(std::uint32_t bits) {
+GALAXY_NOINLINE inline std::uint64_t widen_f32_bits_special(std::uint32_t bits) {
     const std::uint64_t sign = static_cast<std::uint64_t>(bits >> 31) << 63;
     const std::uint32_t exponent = (bits >> 23) & 0xFFu;
     const std::uint32_t fraction = bits & 0x007FFFFFu;
@@ -9303,7 +9846,22 @@ inline std::uint64_t widen_f32_bits(std::uint32_t bits) {
     return sign | wide_exponent | wide_fraction;
 }
 
-inline void load_fpr_single(
+// Normal binary32 values and signed zero widen with two integer operations;
+// NaN, infinity and subnormals take the out-of-line complete conversion.
+GALAXY_ALWAYS_INLINE std::uint64_t widen_f32_bits(std::uint32_t bits) {
+    const std::uint32_t magnitude = bits & 0x7FFFFFFFu;
+    const std::uint64_t sign = static_cast<std::uint64_t>(bits >> 31) << 63;
+    if (magnitude - 0x00800000u < 0x7F000000u) [[likely]] {
+        return sign | ((static_cast<std::uint64_t>(magnitude) << 29) +
+                       0x3800000000000000ull);
+    }
+    if (magnitude == 0u) {
+        return sign;
+    }
+    return widen_f32_bits_special(bits);
+}
+
+GALAXY_ALWAYS_INLINE void load_fpr_single(
     PpcContext* context,
     std::uint32_t index,
     GuestMemoryV1* memory,
@@ -9343,7 +9901,23 @@ inline std::uint32_t narrow_f64_to_f32_bits(
     return output;
 }
 
-inline std::uint32_t require_single_precision_bits(
+GALAXY_NOINLINE inline std::uint32_t require_single_precision_bits_slow(
+    std::uint64_t bits,
+    const NativeServicesV1* services,
+    std::uint32_t guest_pc) {
+    const std::uint32_t narrowed =
+        narrow_f64_to_f32_bits(bits, services, guest_pc);
+    if (widen_f32_bits(narrowed) != bits) {
+        guest_execution_fault(
+            services,
+            guest_pc,
+            "single-precision instruction received a non-single operand");
+    }
+    return narrowed;
+}
+
+// Keep the proven normal/zero path at the caller; share conversion and faults.
+GALAXY_ALWAYS_INLINE std::uint32_t require_single_precision_bits(
     std::uint64_t bits,
     const NativeServicesV1* services,
     std::uint32_t guest_pc) {
@@ -9362,18 +9936,10 @@ inline std::uint32_t require_single_precision_bits(
     if (magnitude == 0u) {
         return sign;
     }
-    const std::uint32_t narrowed =
-        narrow_f64_to_f32_bits(bits, services, guest_pc);
-    if (widen_f32_bits(narrowed) != bits) {
-        guest_execution_fault(
-            services,
-            guest_pc,
-            "single-precision instruction received a non-single operand");
-    }
-    return narrowed;
+    return require_single_precision_bits_slow(bits, services, guest_pc);
 }
 
-inline void store_fpr_single(
+GALAXY_ALWAYS_INLINE void store_fpr_single(
     const PpcContext* context,
     std::uint32_t index,
     GuestMemoryV1* memory,
@@ -9727,8 +10293,16 @@ inline std::uint32_t psq_element_size(
     }
 }
 
+// Exact 2^exponent for the 6-bit signed GQR scale range (-32..31) and its
+// negation (-31..32). Scaling a finite double by a power of two is the same
+// operation std::ldexp performs, without the library call.
+inline double psq_power_of_two(std::int32_t exponent) {
+    return std::bit_cast<double>(
+        static_cast<std::uint64_t>(1023 + exponent) << 52);
+}
+
 inline std::uint64_t psq_load_integer_bits(std::int32_t value, std::int32_t scale) {
-    const double scaled = std::ldexp(static_cast<double>(value), -scale);
+    const double scaled = static_cast<double>(value) * psq_power_of_two(-scale);
     return std::bit_cast<std::uint64_t>(scaled);
 }
 
@@ -9786,7 +10360,7 @@ inline std::uint32_t psq_quantize_unsigned(
     if ((bits & 0x7FF0000000000000ull) == 0x7FF0000000000000ull) {
         return maximum;
     }
-    const double scaled = std::ldexp(std::bit_cast<double>(bits), scale);
+    const double scaled = std::bit_cast<double>(bits) * psq_power_of_two(scale);
     if (scaled >= static_cast<double>(maximum)) {
         return maximum;
     }
@@ -9812,7 +10386,7 @@ inline std::int32_t psq_quantize_signed(
     if ((bits & 0x7FF0000000000000ull) == 0x7FF0000000000000ull) {
         return negative ? minimum : maximum;
     }
-    const double scaled = std::ldexp(std::bit_cast<double>(bits), scale);
+    const double scaled = std::bit_cast<double>(bits) * psq_power_of_two(scale);
     if (scaled >= static_cast<double>(maximum)) {
         return maximum;
     }
@@ -9942,13 +10516,48 @@ inline void psq_store(
             const std::uint32_t first = byte_swap_u32(
                 narrow_paired_single_ftz(context->fpr_bits[source]));
             std::memcpy(direct, &first, sizeof(first));
-            guest_notify_write(memory, address, 4u);
-            if (!one_element) {
-                const std::uint32_t second = byte_swap_u32(
-                    narrow_paired_single_ftz(context->ps1_bits[source]));
-                std::memcpy(direct + 4u, &second, sizeof(second));
-                guest_notify_write(memory, address + 4u, 4u);
+            // Runtime RAM has a callback even when the dirty tracker fully
+            // owns a write and suppresses that callback. In that case both
+            // lanes can use the existing same-page publication path. Prove
+            // complete coverage; a partial tracker or an observable callback
+            // must retain lane-zero notification before evaluating lane one.
+            bool pair_observer_suppressed = false;
+            std::uint32_t shared_page = 0u;
+            if (!one_element && memory->notify_write != nullptr &&
+                memory->dirty_page_words != nullptr) {
+                pair_observer_suppressed = guest_tracker_single_page(
+                    address, 8u, memory->dirty_tracked_base,
+                    memory->dirty_tracked_size, memory->dirty_page_shift,
+                    memory->dirty_page_word_count, shared_page);
             }
+            if (one_element ||
+                (memory->notify_write != nullptr && !pair_observer_suppressed)) {
+                // An observer may inspect RAM or affect the next lane's mapping
+                // and value. Notify lane zero before evaluating/storing lane one.
+                guest_notify_write(memory, address, 4u);
+                if (!one_element) {
+                    psq_store_element(
+                        memory, address + 4u, context->ps1_bits[source],
+                        0u, 0, services, guest_pc);
+                }
+                return;
+            }
+            const std::uint32_t second = byte_swap_u32(
+                narrow_paired_single_ftz(context->ps1_bits[source]));
+            std::memcpy(direct + 4u, &second, sizeof(second));
+            if (pair_observer_suppressed) {
+                guest_notify_write_pair_admitted(memory, address, shared_page);
+                return;
+            }
+            // Both halves share a tracker page unless the pair straddles one.
+            // Publish them with a single lookup in the common case; the helper
+            // declines (having changed nothing) on a straddling pair and the
+            // two scalar notifications below then run exactly as before.
+            if (guest_notify_write_pair_same_page(memory, address)) {
+                return;
+            }
+            guest_notify_write(memory, address, 4u);
+            guest_notify_write(memory, address + 4u, 4u);
             return;
         }
     }
@@ -10029,23 +10638,50 @@ inline std::uint32_t divide_unsigned_word(
     return divisor == 0u ? 0x00000000u : quotient;
 }
 
-inline void update_cr0(PpcContext* context, std::uint32_t value) {
-    std::uint32_t field = 0;
-    const std::int32_t signed_value = static_cast<std::int32_t>(value);
-    if (signed_value < 0) {
-        field = 0x8;
-    } else if (signed_value > 0) {
-        field = 0x4;
-    } else {
-        field = 0x2;
-    }
+// Force-inlined like `compare_signed` below: emitted at ~4,752 sites, so a
+// non-inlined call here lands on the simulation thread for every record-form
+// integer instruction.
+GALAXY_ALWAYS_INLINE void update_cr0(PpcContext* context, std::uint32_t value) {
+    // One read-modify-write of `context->cr` instead of the previous
+    // write-then-second-RMW (`set_cr_field` inlined on top of the explicit
+    // update). Every recorded integer instruction (`andi.`, `add.`, `mr.`,
+    // `cmpwi`, the `stwu` chain, ...) runs this, so the second load/store of
+    // `cr` was pure repetition on the simulation thread's critical path.
+    //
+    // The field is selected with two masks and no data-dependent branch:
+    //   nonzero  = -(value != 0)          -> all ones exactly when value != 0
+    //   negative = -(value >= 0x80000000) -> all ones exactly when LT
+    //   field = (negative & 8) | (nonzero & ~negative & 4) | (~nonzero & 2)
+    // i.e. LT=8 when the sign bit is set, GT=4 when it is clear and the value is
+    // non-zero, EQ=2 when the value is zero. That is exactly the
+    // (`value < 0 ? 8 : value > 0 ? 4 : 2`) mapping the ternary produced.
+    //
+    // Verified against that ternary over 4,013 values (4,000 pseudo-random plus
+    // the sign/zero/adjacent boundaries). An earlier attempt here used
+    // `(value & 0x80000000u) >> 27` for LT and omitted the EQ term entirely; it
+    // returned 0 for value == 0 and 20 for negative values, so do not
+    // "simplify" this back to a single sign mask.
+    const std::uint32_t nonzero = static_cast<std::uint32_t>(
+        -(static_cast<std::int32_t>(value != 0u)));
+    const std::uint32_t negative = static_cast<std::uint32_t>(
+        -(static_cast<std::int32_t>(value >= 0x80000000u)));
+    std::uint32_t field = (negative & 0x8u) |
+        (nonzero & ~negative & 0x4u) | (~nonzero & 0x2u);
     if ((context->xer & 0x80000000u) != 0) {
-        field |= 0x1;
+        field |= 0x1u;
     }
     context->cr = (context->cr & 0x0FFFFFFFu) | (field << 28);
 }
 
-inline void set_cr_field(PpcContext* context, std::uint32_t index, std::uint32_t field) {
+// Force-inlined like `compare_signed`/`compare_unsigned` below: `cr_bit` is
+// emitted at ~83,709 sites, `update_cr0` at ~4,752 and `set_cr_bit` at ~2,206
+// module-wide, so a plain `inline` that a non-Release configuration declines to
+// inline puts a real call on the simulation thread's critical path for every
+// record-form integer instruction and every conditional branch.
+GALAXY_ALWAYS_INLINE void set_cr_field(
+    PpcContext* context,
+    std::uint32_t index,
+    std::uint32_t field) {
     const std::uint32_t shift = (7u - index) * 4u;
     const std::uint32_t mask = 0xFu << shift;
     context->cr = (context->cr & ~mask) | ((field & 0xFu) << shift);
@@ -10156,7 +10792,7 @@ inline void record_invalid_fp_exception(PpcContext* context, std::uint32_t detai
     refresh_fpscr_summaries(context);
 }
 
-inline void compare_f64(
+GALAXY_NOINLINE inline void compare_f64_slow(
     PpcContext* context,
     std::uint32_t field_index,
     std::uint64_t left,
@@ -10208,35 +10844,83 @@ inline void compare_f64(
     set_cr_field(context, field_index, result);
 }
 
-inline void compare_signed(
+// Two orderable operands (no NaN) classify with three host compares; NaN
+// handling and FPSCR exception recording stay out of line.
+GALAXY_ALWAYS_INLINE void compare_f64(
+    PpcContext* context,
+    std::uint32_t field_index,
+    std::uint64_t left,
+    std::uint64_t right,
+    bool ordered) {
+    if ((left & 0x7FFFFFFFFFFFFFFFull) <= 0x7FF0000000000000ull &&
+        (right & 0x7FFFFFFFFFFFFFFFull) <= 0x7FF0000000000000ull) [[likely]] {
+        const double left_value = std::bit_cast<double>(left);
+        const double right_value = std::bit_cast<double>(right);
+        const std::uint32_t ordered_result =
+            left_value < right_value ? 0x8u
+            : (left_value > right_value ? 0x4u : 0x2u);
+        context->fpscr = (context->fpscr & ~0x0000F000u) | (ordered_result << 12);
+        set_cr_field(context, field_index, ordered_result);
+        return;
+    }
+    compare_f64_slow(context, field_index, left, right, ordered);
+}
+
+// Integer comparison. `cmpi`/`cmpli` are ~4% of all guest instructions
+// (opcode census) and the generated code immediately feeds the result to
+// `cr_bit` in the following branch, so this is one of the hottest helpers in
+// the program. The old form wrote the CR field inside `set_cr_field` and then
+// read `context->cr` back through `cr_bit` in the branch, i.e. two dependent
+// round trips through the 4 MB PpcContext for one guest instruction.
+//
+// The field is selected branchlessly: `-(left < right)` and `-(left > right)`
+// are all-ones masks, and the PowerPC CR field is exactly LT=8, GT=4, EQ=2, so
+// `(lt & 8) | (~lt & gt & 4) | (~lt & ~gt & 2)` is the same value as the
+// three-way ternary chain without a data-dependent branch. EQ is forced when
+// neither LT nor GT holds, which matches the ternary exactly.
+GALAXY_ALWAYS_INLINE void compare_signed(
     PpcContext* context,
     std::uint32_t field_index,
     std::int32_t left,
     std::int32_t right) {
-    std::uint32_t field = left < right ? 0x8u : (left > right ? 0x4u : 0x2u);
+    const std::uint32_t less = static_cast<std::uint32_t>(
+        -(static_cast<std::int32_t>(left < right)));
+    const std::uint32_t greater = static_cast<std::uint32_t>(
+        -(static_cast<std::int32_t>(left > right)));
+    std::uint32_t field = (less & 0x8u) | (~less & greater & 0x4u) |
+        (~less & ~greater & 0x2u);
     if ((context->xer & 0x80000000u) != 0) {
         field |= 0x1u;
     }
     set_cr_field(context, field_index, field);
 }
 
-inline void compare_unsigned(
+GALAXY_ALWAYS_INLINE void compare_unsigned(
     PpcContext* context,
     std::uint32_t field_index,
     std::uint32_t left,
     std::uint32_t right) {
-    std::uint32_t field = left < right ? 0x8u : (left > right ? 0x4u : 0x2u);
+    // `!(left < right)` and `left > right` are the same predicate for unsigned
+    // operands, so one carry-free compare yields both masks (and `~(left !=
+    // right)` is the EQ mask) instead of two independent comparisons that
+    // cannot be combined.
+    const std::uint32_t not_less = static_cast<std::uint32_t>(
+        -(static_cast<std::int32_t>(left >= right)));
+    const std::uint32_t unequal = static_cast<std::uint32_t>(
+        -(static_cast<std::int32_t>(left != right)));
+    std::uint32_t field = (~not_less & 0x8u) |
+        (not_less & unequal & 0x4u) | (~unequal & 0x2u);
     if ((context->xer & 0x80000000u) != 0) {
         field |= 0x1u;
     }
     set_cr_field(context, field_index, field);
 }
 
-inline bool cr_bit(const PpcContext* context, std::uint32_t index) {
+GALAXY_ALWAYS_INLINE bool cr_bit(const PpcContext* context, std::uint32_t index) {
     return ((context->cr >> (31u - index)) & 1u) != 0;
 }
 
-inline void set_cr_bit(PpcContext* context, std::uint32_t index, bool value) {
+GALAXY_ALWAYS_INLINE void set_cr_bit(PpcContext* context, std::uint32_t index, bool value) {
     const std::uint32_t mask = 1u << (31u - index);
     context->cr = value ? context->cr | mask : context->cr & ~mask;
 }
@@ -10552,7 +11236,7 @@ inline void dispatch_program_trap(
     services->program_trap(services->user, guest_pc, instruction, context, memory);
 }
 
-inline void ensure_fpu_available(
+GALAXY_NOINLINE inline void ensure_fpu_available_slow(
     const NativeServicesV1* services,
     std::uint32_t guest_pc,
     PpcContext* context,
@@ -10561,7 +11245,7 @@ inline void ensure_fpu_available(
         guest_execution_fault(
             services, guest_pc, "floating-point instruction has no PPC context");
     }
-    if ((context->msr & kMsrFloatingPointAvailable) != 0u) [[likely]] {
+    if ((context->msr & kMsrFloatingPointAvailable) != 0u) {
         return;
     }
     if (services == nullptr || services->fpu_unavailable == nullptr) {
@@ -10580,6 +11264,20 @@ inline void ensure_fpu_available(
             guest_pc,
             "native FPU-unavailable exception service returned without exact restart state");
     }
+}
+
+// MSR[FP] is almost always set: keep only that test at each translated
+// floating-point site and leave the exception machinery out of line.
+GALAXY_ALWAYS_INLINE void ensure_fpu_available(
+    const NativeServicesV1* services,
+    std::uint32_t guest_pc,
+    PpcContext* context,
+    GuestMemoryV1* memory) {
+    if (context != nullptr &&
+        (context->msr & kMsrFloatingPointAvailable) != 0u) [[likely]] {
+        return;
+    }
+    ensure_fpu_available_slow(services, guest_pc, context, memory);
 }
 
 inline bool trap_word_immediate_condition(
@@ -10942,6 +11640,16 @@ static_assert(!is_route_marker_generated_direct_entry(0x802AFD84u));
 static_assert(is_mario_control_generated_direct_entry(0x802B0D0Cu));
 static_assert(!is_mario_control_generated_direct_entry(0x802AFD80u));
 
+inline constexpr std::size_t kProfileMaxProbes = 64u;
+inline std::atomic<std::uint64_t>& direct_edge_profile_dropped() {
+    static std::atomic<std::uint64_t> count{0};
+    return count;
+}
+inline std::atomic<std::uint64_t>& jpa_profile_dropped() {
+    static std::atomic<std::uint64_t> count{0};
+    return count;
+}
+
 struct DirectEdgeProfileSlot {
     std::atomic<std::uint64_t> key{0};
     std::atomic<std::uint64_t> calls{0};
@@ -11000,8 +11708,10 @@ inline void dump_direct_edge_profile() {
 
     std::fprintf(
         stderr,
-        "[direct-edge-profile] edges=%zu",
-        snapshots.size());
+        "[direct-edge-profile] edges=%zu max-probes=%zu omitted-events=%llu",
+        snapshots.size(), kProfileMaxProbes,
+        static_cast<unsigned long long>(direct_edge_profile_dropped().load(
+            std::memory_order_relaxed)));
     const std::size_t limit = std::min<std::size_t>(snapshots.size(), 128);
     for (std::size_t index = 0; index < limit; ++index) {
         const Snapshot& snapshot = snapshots[index];
@@ -11025,6 +11735,7 @@ inline void dump_direct_edge_profile() {
 
 inline void ensure_direct_edge_profile_registered() {
     static std::atomic_bool registered{false};
+    if (registered.load(std::memory_order_acquire)) return;
     bool expected = false;
     if (registered.compare_exchange_strong(
             expected, true, std::memory_order_acq_rel)) {
@@ -11040,31 +11751,35 @@ inline void record_direct_edge_profile_local(
     const std::uint64_t key =
         (static_cast<std::uint64_t>(caller_pc) << 32) |
         static_cast<std::uint64_t>(callee_pc);
+    if (key == 0u) {
+        direct_edge_profile_dropped().fetch_add(1, std::memory_order_relaxed);
+        return;
+    }
     auto& slots = direct_edge_profile_slots();
     const std::uint64_t hash = direct_edge_profile_hash(key);
-    for (std::size_t probe = 0; probe < slots.size(); ++probe) {
+    for (std::size_t probe = 0; probe < std::min(slots.size(), kProfileMaxProbes); ++probe) {
         DirectEdgeProfileSlot& slot =
             slots[(hash + probe) & (slots.size() - 1u)];
         std::uint64_t observed =
             slot.key.load(std::memory_order_acquire);
+        if (observed == 0 && slot.key.compare_exchange_strong(
+                observed, key, std::memory_order_acq_rel)) {
+            observed = key;
+        }
+        // A losing insert may have found this same key. Add to zero-initialized
+        // counters instead of overwriting a concurrently published increment.
         if (observed == key) {
             slot.calls.fetch_add(1, std::memory_order_relaxed);
             slot.cycles.fetch_add(cycles, std::memory_order_relaxed);
             return;
         }
-        if (observed == 0 &&
-            slot.key.compare_exchange_strong(
-                observed, key, std::memory_order_acq_rel)) {
-            slot.calls.store(1, std::memory_order_relaxed);
-            slot.cycles.store(cycles, std::memory_order_relaxed);
-            return;
-        }
     }
+    direct_edge_profile_dropped().fetch_add(1, std::memory_order_relaxed);
     static std::atomic_bool overflow_reported{false};
     bool expected = false;
     if (overflow_reported.compare_exchange_strong(
             expected, true, std::memory_order_acq_rel)) {
-        std::fprintf(stderr, "[direct-edge-profile] table overflow\n");
+        std::fprintf(stderr, "[direct-edge-profile] probe limit reached; events omitted\n");
     }
 }
 
@@ -11191,6 +11906,9 @@ inline void dump_jpa_profile() {
         static_cast<unsigned long long>(child_calls),
         static_cast<unsigned long long>(
             counters.child_callbacks.load(std::memory_order_relaxed)));
+    std::fprintf(stderr, " max-probes=%zu omitted-target-events=%llu",
+        kProfileMaxProbes, static_cast<unsigned long long>(
+            jpa_profile_dropped().load(std::memory_order_relaxed)));
     const std::size_t limit = std::min<std::size_t>(snapshots.size(), 32);
     for (std::size_t index = 0; index < limit; ++index) {
         const std::uint32_t kind =
@@ -11212,6 +11930,7 @@ inline void ensure_jpa_profile_registered() {
         return;
     }
     static std::atomic_bool registered{false};
+    if (registered.load(std::memory_order_acquire)) return;
     bool expected = false;
     if (registered.compare_exchange_strong(
             expected, true, std::memory_order_acq_rel)) {
@@ -11235,29 +11954,34 @@ inline void record_jpa_target(std::uint32_t kind, std::uint32_t target) {
     const std::uint64_t key =
         (static_cast<std::uint64_t>(kind) << 32) |
         static_cast<std::uint64_t>(target & 0xFFFFFFFCu);
+    if (key == 0u) {
+        jpa_profile_dropped().fetch_add(1, std::memory_order_relaxed);
+        return;
+    }
     auto& slots = jpa_target_profile_slots();
     const std::uint64_t hash = jpa_profile_hash(key);
-    for (std::size_t probe = 0; probe < slots.size(); ++probe) {
+    for (std::size_t probe = 0; probe < std::min(slots.size(), kProfileMaxProbes); ++probe) {
         JpaTargetProfileSlot& slot =
             slots[(hash + probe) & (slots.size() - 1u)];
         std::uint64_t observed =
             slot.key.load(std::memory_order_acquire);
+        if (observed == 0 && slot.key.compare_exchange_strong(
+                observed, key, std::memory_order_acq_rel)) {
+            observed = key;
+        }
+        // A losing insert may have found this same key. Add to zero-initialized
+        // counters instead of overwriting a concurrently published increment.
         if (observed == key) {
             slot.calls.fetch_add(1, std::memory_order_relaxed);
             return;
         }
-        if (observed == 0 &&
-            slot.key.compare_exchange_strong(
-                observed, key, std::memory_order_acq_rel)) {
-            slot.calls.store(1, std::memory_order_relaxed);
-            return;
-        }
     }
+    jpa_profile_dropped().fetch_add(1, std::memory_order_relaxed);
     static std::atomic_bool overflow_reported{false};
     bool expected = false;
     if (overflow_reported.compare_exchange_strong(
             expected, true, std::memory_order_acq_rel)) {
-        std::fprintf(stderr, "[jpa-profile] target table overflow\n");
+        std::fprintf(stderr, "[jpa-profile] target probe limit reached; events omitted\n");
     }
 }
 
@@ -11339,7 +12063,7 @@ inline void trace_function_async_gameplay_pointer_consumer(
         services, kFunctionAsyncTracePointerConsumer, context, memory);
 }
 
-inline void call_guest_cached(
+GALAXY_NOINLINE inline void call_guest_cached_diagnostic(
     const NativeServicesV1* services,
     std::uint32_t guest_address,
     std::uint32_t* cached_address,
@@ -11517,6 +12241,50 @@ inline void call_guest_cached(
             services->log(services->user, LogLevelV1::Warning, message);
         }
     }
+}
+
+[[noreturn]] GALAXY_NOINLINE inline void call_guest_cached_unavailable(
+    const NativeServicesV1* services,
+    std::uint32_t caller_pc) {
+    if (services != nullptr && services->fatal != nullptr) {
+        services->fatal(services->user, caller_pc,
+            "native cached guest-call service is unavailable");
+    }
+    std::abort();
+}
+
+GALAXY_ALWAYS_INLINE bool cached_call_trace_enabled() {
+    // These two selectors were already process-constant environment statics.
+    // Cache only trace policy; the runtime profiling window must remain live.
+    static const bool enabled = trace_save_sequence_function_entries_enabled() ||
+        trace_scenario_opening_state_enabled();
+    return enabled;
+}
+
+GALAXY_ALWAYS_INLINE void call_guest_cached(
+    const NativeServicesV1* services,
+    std::uint32_t guest_address,
+    std::uint32_t* cached_address,
+    NativeGameFunction* cached_function,
+    PpcContext* context,
+    GuestMemoryV1* memory,
+    std::uint32_t caller_pc) {
+    if (services == nullptr || services->call_guest_cached == nullptr ||
+        cached_address == nullptr || cached_function == nullptr) GALAXY_UNLIKELY {
+        call_guest_cached_unavailable(services, caller_pc);
+    }
+    // Keep the existing window-first profile predicate: it must not initialize
+    // the profiler's environment singleton outside the runtime-owned window.
+    if (cached_call_trace_enabled() ||
+        profile_generated_direct_edges_active(services)) GALAXY_UNLIKELY {
+        call_guest_cached_diagnostic(services, guest_address, cached_address,
+            cached_function, context, memory, caller_pc);
+        return;
+    }
+    // A cached target is only a lookup shortcut. Input, DMA, exceptions and
+    // interceptor ownership still belong to this mandatory runtime boundary.
+    services->call_guest_cached(services->user, guest_address, cached_address,
+        cached_function, context, memory);
 }
 
 inline void native_jpa_direction_callback_803A3BB4(
@@ -12063,12 +12831,15 @@ inline std::uint64_t g_checkpoint_escalate_trace = 0u;
 inline std::uint64_t g_checkpoint_escalate_watermark = 0u;
 inline std::uint64_t g_checkpoint_escalate_watermark_throttled = 0u;
 
-GALAXY_ALWAYS_INLINE void branch_checkpoint_taken(
+// Complete adaptive-checkpoint policy. `counted_checkpoint` is the counter
+// value when the inline fast path below already advanced it (0: not yet).
+GALAXY_NOINLINE inline void branch_checkpoint_taken_slow(
     const NativeServicesV1* services,
     std::uint32_t guest_pc,
     std::uint32_t resume_pc,
     PpcContext* context,
-    GuestMemoryV1* memory) {
+    GuestMemoryV1* memory,
+    std::uint64_t counted_checkpoint) {
     if (services == nullptr || services->branch_checkpoint == nullptr) {
         guest_execution_fault(
             services, guest_pc, "native branch-checkpoint service is unavailable");
@@ -12076,10 +12847,12 @@ GALAXY_ALWAYS_INLINE void branch_checkpoint_taken(
     constexpr std::uint32_t kRepeatPcSlowInterval = 256u;
     if (services->checkpoint_counter != nullptr &&
         services->checkpoint_next_slow != nullptr) {
-        const std::uint64_t checkpoint = ++(*services->checkpoint_counter);
+        const std::uint64_t checkpoint = counted_checkpoint != 0u
+            ? counted_checkpoint
+            : ++(*services->checkpoint_counter);
         const bool event_pending =
             services->pending_event_mask != nullptr &&
-            services->pending_event_mask->load(std::memory_order_acquire) != 0u;
+            atomic_load_u32(services->pending_event_mask) != 0u;
         const bool trace_native_input_checkpoint =
             (services->runtime_flags & kNativeServiceFlagTraceWpadReadCopies) != 0u &&
             is_native_input_trace_call_return_pc(guest_pc);
@@ -12089,6 +12862,12 @@ GALAXY_ALWAYS_INLINE void branch_checkpoint_taken(
             // This site would otherwise escalate purely from watermark
             // expiry (no real event, no trace). Check the repeat-PC streak
             // before paying the full callback cost.
+            //
+            // This is now the only place the streak is maintained, so it is a
+            // real count: the fast path in branch_checkpoint_taken no longer
+            // zeroes it. The decay is `guest_pc != repeat_pc`, i.e. it resets
+            // exactly when escalation moves to different code, which is the
+            // documented intent.
             ++g_checkpoint_escalate_watermark;
             if (guest_pc == g_checkpoint_repeat_pc) {
                 ++g_checkpoint_repeat_streak;
@@ -12117,6 +12896,52 @@ GALAXY_ALWAYS_INLINE void branch_checkpoint_taken(
     trace_strlen_stall_checkpoint(services, guest_pc, context, memory);
     context->pc = resume_pc;
     services->branch_checkpoint(services->user, guest_pc, context, memory);
+}
+
+// Hot path of every translated backward branch and call return: advance the
+// counter and, unless it reached the published watermark, an event is pending
+// or WPAD copy tracing is on, leave after a handful of instructions. The
+// escalation bookkeeping (identical to the slow function) stays out of line.
+GALAXY_ALWAYS_INLINE void branch_checkpoint_taken(
+    const NativeServicesV1* services,
+    std::uint32_t guest_pc,
+    std::uint32_t resume_pc,
+    PpcContext* context,
+    GuestMemoryV1* memory) {
+    if (services != nullptr && services->branch_checkpoint != nullptr &&
+        services->checkpoint_counter != nullptr &&
+        services->checkpoint_next_slow != nullptr &&
+        services->pending_event_mask != nullptr &&
+        (services->runtime_flags & kNativeServiceFlagTraceWpadReadCopies) == 0u)
+        [[likely]] {
+        const std::uint64_t checkpoint = ++(*services->checkpoint_counter);
+        if (checkpoint < *services->checkpoint_next_slow &&
+            atomic_load_u32(services->pending_event_mask) == 0u) [[likely]] {
+            // Non-escalating path: no guest_pc was consumed and no escalation
+            // decision was made, so the repeat-PC streak has nothing to record.
+            //
+            // It used to be cleared here, which made the streak always exactly
+            // zero when branch_checkpoint_taken_slow read it. The throttle below
+            // requires `streak > 1`, so it could never fire: every watermark
+            // escalation paid the full host callback, and
+            // g_checkpoint_escalate_watermark_throttled stayed 0. Clearing it
+            // here is also what the decay was *meant* to be -- but the decay
+            // belongs where the state is read, because the slow function can be
+            // reached without passing through this fast path at all (the whole
+            // `[[likely]]` guard can be false, and call_return_checkpoint's
+            // general path reaches branch_checkpoint_taken directly).
+            //
+            // Leaving it untouched keeps two global stores off the hottest path
+            // in the process: this is force-inlined at every translated backward
+            // branch and every translated call return.
+            return;
+        }
+        branch_checkpoint_taken_slow(
+            services, guest_pc, resume_pc, context, memory, checkpoint);
+        return;
+    }
+    branch_checkpoint_taken_slow(
+        services, guest_pc, resume_pc, context, memory, 0u);
 }
 
 GALAXY_ALWAYS_INLINE void branch_checkpoint(
@@ -12166,7 +12991,7 @@ GALAXY_ALWAYS_INLINE void architectural_interrupt_checkpoint(
     services->branch_checkpoint(services->user, guest_pc, context, memory);
 }
 
-GALAXY_ALWAYS_INLINE void call_return_checkpoint(
+GALAXY_NOINLINE inline void call_return_checkpoint_general(
     const NativeServicesV1* services,
     std::uint32_t call_pc,
     std::uint32_t return_pc,
@@ -12180,7 +13005,7 @@ GALAXY_ALWAYS_INLINE void call_return_checkpoint(
             "native call-return checkpoint services are unavailable");
     }
     const bool event_pending =
-        services->pending_event_mask->load(std::memory_order_acquire) != 0u;
+        atomic_load_u32(services->pending_event_mask) != 0u;
     const bool trace_native_input_checkpoint =
         (services->runtime_flags & kNativeServiceFlagTraceWpadReadCopies) != 0u &&
         is_native_input_trace_call_return_pc(call_pc);
@@ -12194,6 +13019,36 @@ GALAXY_ALWAYS_INLINE void call_return_checkpoint(
         return;
     }
     branch_checkpoint_taken(
+        services, call_pc, return_pc, context, memory);
+}
+
+// An adaptive call return must always enter the counted branch policy. That
+// policy already observes pending events; a preliminary peek cannot suppress
+// counting or deliver anything, so it only duplicates the atomic load. Keep
+// trace and malformed service tables on the complete policy. An empty ordinary
+// nonadaptive return performs the same validated observation inline.
+GALAXY_ALWAYS_INLINE void call_return_checkpoint(
+    const NativeServicesV1* services,
+    std::uint32_t call_pc,
+    std::uint32_t return_pc,
+    PpcContext* context,
+    GuestMemoryV1* memory) {
+    if (services != nullptr && services->branch_checkpoint != nullptr &&
+        services->pending_event_mask != nullptr &&
+        (services->runtime_flags & kNativeServiceFlagTraceWpadReadCopies) == 0u) {
+        if ((services->runtime_flags &
+             kNativeServiceFlagAdaptiveCallReturnCheckpoints) != 0u) {
+            if (services->checkpoint_counter != nullptr &&
+                services->checkpoint_next_slow != nullptr) [[likely]] {
+                branch_checkpoint_taken(
+                    services, call_pc, return_pc, context, memory);
+                return;
+            }
+        } else if (atomic_load_u32(services->pending_event_mask) == 0u) [[likely]] {
+            return;
+        }
+    }
+    call_return_checkpoint_general(
         services, call_pc, return_pc, context, memory);
 }
 
@@ -12240,8 +13095,7 @@ inline void native_name_obj_dispatch_core_802617B4(
     const std::uint32_t record_table =
         guest_load_u32(memory, base, services, 0x802617CCu);
     const std::uint32_t record =
-        record_table + static_cast<std::uint32_t>(
-                           static_cast<std::int32_t>(context->gpr[4]) * 0x14);
+        record_table + context->gpr[4] * 0x14u;
     context->gpr[29] = base;
     context->gpr[31] = record;
 
@@ -12690,8 +13544,7 @@ inline void native_actor_list_apply_80448710(
     context->lr = 0x80448724u;
     native_savegpr_805174FC(context, memory, services, 0x80517538u);
 
-    context->gpr[0] = static_cast<std::uint32_t>(
-        static_cast<std::int32_t>(context->gpr[4]) * 0x0C);
+    context->gpr[0] = context->gpr[4] * 0x0Cu;
     context->gpr[4] =
         guest_load_u32(memory, context->gpr[3], services, 0x80448728u);
     context->gpr[29] = context->gpr[3];

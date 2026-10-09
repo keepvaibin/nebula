@@ -299,6 +299,7 @@ struct AudioSinkStats {
     std::uint64_t frequency_ratio_apply_calls{};
     std::uint64_t frequency_ratio_change_actions{};
     std::uint64_t frequency_ratio_apply_error_events{};
+    bool frequency_ratio_snapshot_coherent = true;
     std::uint64_t source_voice_creation_events{};
     std::uint64_t voice_recreation_events{};
     std::uint64_t rate_drain_events{};
@@ -889,13 +890,33 @@ public:
 
     // Filled by the WGPIPE write intercept.
     const std::vector<std::byte>& gx_fifo_data() const { return gx_fifo_; }
-    // Moves the completed FIFO epoch out. A fresh vector is installed before any
+    // Moves the completed FIFO epoch out and installs a fresh vector before any
     // render wait or guest interrupt can unwind the stack, so later WGPIPE writes
     // cannot mutate the captured frame.
+    //
+    // Successful submission can return the released producer storage through
+    // recycle_gx_fifo(). Retain at most one producer and one spare allocation,
+    // each capped at 256 KiB. A large capture does not enlarge this pool.
     std::vector<std::byte> take_gx_fifo() {
-        std::vector<std::byte> captured = std::move(gx_fifo_);
-        gx_fifo_.clear();
+        std::vector<std::byte> captured;
+        swap(captured, gx_fifo_);
+        swap(gx_fifo_, gx_fifo_spare_);
         return captured;
+    }
+    // Simulation owner only, after the backend owns an independent FIFO copy
+    // and all CPU reads of the submitted source are complete. This does not
+    // retire, consume or otherwise alter the submission's PE receipt.
+    void recycle_gx_fifo(std::vector<std::byte>&& released) noexcept {
+        constexpr std::size_t kRetainedFifoCapacityBytes = 256u * 1024u;
+        if (released.capacity() > kRetainedFifoCapacityBytes) {
+            return;
+        }
+        released.clear();
+        if (gx_fifo_.empty() && gx_fifo_.capacity() < released.capacity()) {
+            gx_fifo_.swap(released);
+        } else if (gx_fifo_spare_.capacity() < released.capacity()) {
+            gx_fifo_spare_.swap(released);
+        }
     }
     void clear_gx_fifo() { gx_fifo_.clear(); }
     bool gx_fifo_pe_scan_pending(std::size_t scanned_byte_count) const {
@@ -1582,6 +1603,8 @@ private:
     std::uint64_t disc_read_ticket_sequence_ = 0;
     std::unordered_map<std::uint32_t, DiscReadTicket> disc_read_tickets_;
     std::vector<std::byte> gx_fifo_;
+    // Released submission backing buffer; bounded by recycle_gx_fifo().
+    std::vector<std::byte> gx_fifo_spare_;
     // CP FIFO ring simulation. When the game writes the CP write pointer
     // (0x0C000034/36), the new bytes are copied from MEM1 into gx_fifo_ without
     // real CP DMA.
@@ -1654,10 +1677,30 @@ private:
     bool cpu_fifo_wrap_{false};
     std::array<std::byte, 32> wgpipe_gather_{};
     std::uint32_t wgpipe_gather_count_{0};
+    // Cumulative bytes copied out of the emulated CP FIFO ring. Replaces a
+    // function-local `static` whose only reader asked whether this was the first
+    // advance, so the whole thing costs one member load instead of a
+    // thread-safe-initialisation guard per advance.
+    std::uint64_t cp_ring_bytes_total_{0};
     static constexpr std::size_t kWgpipePeTraceCapacity = 512u;
     static constexpr std::size_t kWgpipeOwnershipTraceCapacity = 8192u;
     bool wgpipe_pe_scan_hint_enabled_{};
     bool wgpipe_pe_ownership_trace_enabled_{};
+    // `GALAXY_PROFILE_WGPIPE` and `GALAXY_DIRECT_WGPIPE_PE_EVENTS` are
+    // launch-time switches, but every guest GX command word and every vertex
+    // byte reaches write_wgpipe_bytes(). Evaluating them through a
+    // function-local `static` costs a thread-safe-initialisation guard
+    // (one acquire load + test + branch) and, for the flag reader itself, a
+    // getenv_s CRT call on *every* write. Resolve both once here and let the
+    // hot path read a plain bool member.
+    bool wgpipe_profile_enabled_{};
+    bool direct_wgpipe_pe_events_{};
+    // `GALAXY_TRACE_GX_FIFO_APPEND_PATTERN`. `trace_gx_fifo_append` is called
+    // once per WGPIPE write and once per CP-ring advance, and its gate used to be
+    // a function-local `static` that ran `read_env_flag` — so every one of those
+    // calls paid a thread-safe-initialisation guard, and the gate itself was an
+    // out-of-line call. Resolved once here.
+    bool trace_gx_fifo_append_enabled_{};
     std::array<std::uint8_t, 5> wgpipe_pe_ownership_recent_bytes_{};
     std::uint32_t wgpipe_pe_ownership_recent_count_{};
     std::uint64_t wgpipe_pe_ownership_trace_sequence_{};
@@ -1701,6 +1744,26 @@ private:
     std::uint64_t ai_dma_next_interrupt_ticks_{};
     std::uint64_t ai_dma_interrupt_pending_since_ticks_{};
     std::uint64_t ai_dma_last_duration_ticks_{};
+    // STRUCTURALLY INERT — both fields are zero-initialised and NOTHING WRITES
+    // THEM. Verified: `++`/`+=` on either name appears 0 times across
+    // `runtime/src/*.cpp`, `runtime/src/gx/*.cpp` and the headers; no `=`
+    // assignment either; no `resync` logic exists anywhere in `runtime/`; and
+    // the names are unchanged since the initial public snapshot commit.
+    //
+    // So the getters below can only ever return 0, and the benchmark report
+    // prints that 0 as `ai-dma-resync-events=` / `ai-dma-resync-missed-buffers=`.
+    // READ IT AS "NOT MEASURED", NOT AS "NO PROBLEM". Note the report prints
+    // `ai-dma-missed-buffer-estimate` immediately beside them, and THAT one is
+    // live — which makes the inert pair easy to mistake for a second, agreeing
+    // signal.
+    //
+    // Consequence for tests: `native_host_tests.cpp` asserts both are `== 0`
+    // under messages about catch-up not resyncing. Those assertions are
+    // TAUTOLOGIES and would pass in a build that resynced on every buffer.
+    //
+    // Deliberately NOT wired up: nothing in the tree defines what a resync event
+    // is, so incrementing them would mean inventing the semantic. Either define
+    // the condition and count it, or delete the pair and its assertions.
     std::uint64_t ai_dma_resync_events_{};
     std::uint64_t ai_dma_resync_missed_buffers_{};
     std::uint64_t ai_dma_notified_deadline_ticks_{};

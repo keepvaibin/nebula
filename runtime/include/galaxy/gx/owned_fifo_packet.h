@@ -10,6 +10,7 @@
 // THIRD-PARTY-NOTICES.md (Aurora MIT notice). Galaxy replaces WebGPU objects with
 // opaque GX FIFO bytes, owned guest dependencies, and ordered PE/XFB effects.
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <iterator>
@@ -128,8 +129,8 @@ public:
                      "owned GX dependency staging exceeds packet limit");
         // Reserve both contiguous arrays before inserting the interval, so
         // none of the subsequent byte/descriptor appends can allocate.
-        dependency_bytes_.reserve(dependency_bytes_.size() + bytes.size());
-        dependencies_.reserve(dependencies_.size() + 1u);
+        reserve_append(dependency_bytes_, bytes.size(), limits_.dependency_bytes);
+        reserve_append(dependencies_, 1u, limits_.dependencies);
         dependency_intervals_.emplace(guest_base, end);
         const auto offset = static_cast<std::uint32_t>(dependency_bytes_.size());
         dependency_bytes_.insert(
@@ -175,9 +176,9 @@ public:
                      "owned GX dependency staging exceeds packet limit");
         // All possible allocations precede any visible mutation. Byte and
         // aggregate appends below cannot allocate once these reserves pass.
-        dependency_bytes_.reserve(dependency_bytes_.size() + bytes.size());
-        dependencies_.reserve(dependencies_.size() + 1u);
-        ops_.reserve(ops_.size() + 1u);
+        reserve_append(dependency_bytes_, bytes.size(), limits_.dependency_bytes);
+        reserve_append(dependencies_, 1u, limits_.dependencies);
+        reserve_append(ops_, 1u, limits_.ordered_ops);
         const auto index = dependencies_.size();
         const auto offset = static_cast<std::uint32_t>(dependency_bytes_.size());
         dependency_bytes_.insert(
@@ -335,6 +336,22 @@ public:
     }
 
 private:
+    template<class T>
+    static void reserve_append(
+        std::vector<T>& values, std::size_t incoming, std::size_t limit) {
+        // Admission already checked size + incoming against the packet limit.
+        // Grow geometrically without exceeding that limit. All reserves still
+        // precede visible byte/descriptor/operation publication.
+        const auto required = values.size() + incoming;
+        if (required <= values.capacity()) {
+            return;
+        }
+        const auto capacity = std::min(values.capacity(), limit);
+        const auto growth = std::min(limit - capacity,
+            std::max<std::size_t>(capacity / 2u, 1u));
+        values.reserve(std::max(required, capacity + growth));
+    }
+
     static void require_room(
         std::size_t used,
         std::size_t incoming,

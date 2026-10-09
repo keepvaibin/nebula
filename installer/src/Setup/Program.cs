@@ -44,9 +44,11 @@ namespace Nebula.Setup
                 if (options.ContainsKey("rollback")) { Integration.Rollback(layout); return 0; }
                 if (!options.ContainsKey("accept-build-tools-license"))
                     throw new InvalidOperationException("Unattended installs must pass --accept-build-tools-license.");
+                var current = InstalledInfo.Read(layout);
                 var request = new InstallRequest
                 {
-                    Mode = options.ContainsKey("apply-update") ? InstallMode.Update : (InstalledInfo.Read(layout) != null ? InstallMode.Repair : InstallMode.Install),
+                    Mode = current == null ? InstallMode.Install :
+                        (options.ContainsKey("apply-update") ? InstallMode.Update : InstallIntent.ForPackage(current.Version, BuildInfo.Version)),
                     GameInput = options.ContainsKey("input") ? options["input"] : null,
                     InstallRoot = root,
                     SourceOverride = options.ContainsKey("source") ? options["source"] : null,

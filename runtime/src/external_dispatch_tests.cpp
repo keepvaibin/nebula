@@ -1,5 +1,8 @@
 #include "galaxy/external_dispatch.h"
+#include "galaxy/native_call_admission.h"
+#include "galaxy/scope_exit.h"
 
+#include <array>
 #include <cstdlib>
 #include <iostream>
 
@@ -388,6 +391,123 @@ void test_rejected_ordinary_rfi_preserves_incomplete_dispatch() {
         "rejected ordinary RFI leaves all incomplete-dispatch evidence intact");
 }
 
+void test_cached_entry_hooks_survive_warm_calls() {
+    using galaxy::runtime::cached_call_has_required_entry_hook;
+    // Entry/exit sides of each transaction must stay paired even when a
+    // generated indirect-call site has already resolved its target.
+    constexpr std::array movie_targets{0x8038D1CCu, 0x80370398u, 0x8038D2E4u};
+    for (const auto address : movie_targets) {
+        require(cached_call_has_required_entry_hook(address),
+                "warm movie draw/stop/THP calls retain their entry hooks");
+    }
+    constexpr std::array pointer_targets{
+        0x803A29B8u, 0x80385AF0u, 0x804B9EC8u, 0x80385034u, 0x803852BCu};
+    for (const auto address : pointer_targets) {
+        require(cached_call_has_required_entry_hook(address),
+                "warm pointer selection/capture/store/restore retains entry hooks");
+    }
+    require(!cached_call_has_required_entry_hook(0x804A88E4u) &&
+                !cached_call_has_required_entry_hook(0x8037039Cu) &&
+                !cached_call_has_required_entry_hook(0x803852C0u),
+            "ordinary callbacks and neighboring instructions are not entry hooks");
+}
+
+void test_cached_dispatch_admission_is_live() {
+    using namespace galaxy::interrupt;
+    using galaxy::runtime::external_dispatch_requires_cached_boundary;
+    // The function target can remain warm while LR and external ownership
+    // change. Never use the first call's admission for the next call.
+    constexpr std::uint32_t warm_target = 0x804C8140u;
+    ExternalDispatchTracker tracker;
+    require(!external_dispatch_requires_cached_boundary(
+                false, true, kExternalDispatcherHandlerReturnLr, false),
+            "an inactive dispatcher does not create a handler selection");
+    require(tracker.begin(0x80650878u, 0x80300010u, 0x80u, 0x80u),
+            "warm-cache fixture begins an external dispatch");
+    require(external_dispatch_requires_cached_boundary(
+                tracker.active(), false, 0u, false),
+            "unknown context conservatively retains the full boundary");
+    require(external_dispatch_requires_cached_boundary(
+                tracker.active(), true, 0x804A8900u, true),
+            "additional generic-body work cannot use the direct path");
+    require(!external_dispatch_requires_cached_boundary(
+                tracker.active(), true, 0x804A8900u, false),
+            "ordinary nested calls can inherit the existing source scope");
+    require(external_dispatch_requires_cached_boundary(
+                tracker.active(), true, kExternalDispatcherHandlerReturnLr, false),
+            "the exact selection LR crosses ownership even with a warm target");
+    require(tracker.enter_handler(valid_call()) ==
+                ExternalHandlerCallDisposition::Accepted,
+            "warm handler selection still uses exact tracker validation");
+    const auto selected = tracker.record();
+    auto nested_call = valid_call();
+    nested_call.return_lr = 0x804A8900u;
+    require(nested_call.target == warm_target &&
+                tracker.enter_handler(nested_call) ==
+                    ExternalHandlerCallDisposition::NotDispatcherSelection &&
+                same_record(tracker.record(), selected),
+            "the same cached target from another caller cannot select a source");
+    require(external_dispatch_requires_cached_boundary(
+                tracker.active(), true, kExternalDispatcherHandlerReturnLr, false) &&
+                tracker.enter_handler(valid_call()) ==
+                    ExternalHandlerCallDisposition::RejectDuplicateSelection &&
+                same_record(tracker.record(), selected),
+            "a second warm selection is rejected without changing ownership");
+}
+
+void test_cached_nested_call_preserves_source_scope_and_unwind() {
+    using namespace galaxy::interrupt;
+    using galaxy::runtime::external_dispatch_requires_cached_boundary;
+    struct GuestTransferForTest {};
+    for (const bool throw_from_nested : {false, true}) {
+        ExternalDispatchTracker tracker;
+        require(tracker.begin(0x80650878u, 0x80300010u, 0x80u, 0x80u),
+                "source-scope fixture begins an external dispatch");
+        bool source_scope_active = false;
+        unsigned nested_calls = 0u;
+        bool propagated = false;
+        try {
+            require(external_dispatch_requires_cached_boundary(
+                        tracker.active(), true,
+                        kExternalDispatcherHandlerReturnLr, false),
+                    "selected owner enters through the full boundary");
+            require(tracker.enter_handler(valid_call()) ==
+                        ExternalHandlerCallDisposition::Accepted,
+                    "selected owner is validated before its nested call");
+            {
+                source_scope_active = true;
+                const galaxy::ScopeExit restore([&]() noexcept {
+                    source_scope_active = false;
+                });
+                const auto before_nested = tracker.record();
+                require(!external_dispatch_requires_cached_boundary(
+                            tracker.active(), true, 0x804C8210u, false),
+                        "an ordinary nested call uses the direct route");
+                ++nested_calls;
+                require(source_scope_active &&
+                            same_record(tracker.record(), before_nested),
+                        "a direct nested call retains exact enclosing ownership");
+                if (throw_from_nested) throw GuestTransferForTest{};
+            }
+            require(tracker.finish_handler(5u, 0x804C8140u) ==
+                        ExternalHandlerReturnDisposition::Accepted,
+                    "only normal selected-handler return finishes ownership");
+        } catch (const GuestTransferForTest&) {
+            propagated = true;
+        }
+        require(!source_scope_active && nested_calls == 1u &&
+                    propagated == throw_from_nested,
+                "source scope restores and a guest transfer propagates once");
+        ExternalDispatchRecord completed{};
+        const auto route = route_external_rfi(
+            tracker, RfiRouteSource::Ordinary, completed);
+        require(route == (throw_from_nested
+                    ? ExternalRfiRouteResult::RejectedExternalDispatch
+                    : ExternalRfiRouteResult::ConsumedExternalDispatch),
+                "RFI cannot consume an unfinished handler after nested unwind");
+    }
+}
+
 }  // namespace
 
 int main() {
@@ -400,6 +520,9 @@ int main() {
     test_vi_boundary_owner_requires_exact_dispatch_identity();
     test_synchronous_exception_rfi_preserves_outer_dispatch();
     test_rejected_ordinary_rfi_preserves_incomplete_dispatch();
+    test_cached_entry_hooks_survive_warm_calls();
+    test_cached_dispatch_admission_is_live();
+    test_cached_nested_call_preserves_source_scope_and_unwind();
     std::cout << "external interrupt dispatch contracts passed\n";
     return 0;
 }

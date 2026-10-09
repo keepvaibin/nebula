@@ -1603,7 +1603,13 @@ std::string ShaderGenerator::generate_ps(const PixelShaderKey& key) const {
                                kMaxEfbScale - 1u) + 1u;
         s << "    // Flipper RGBA6 2x2 Bayer dither, applied before fog.\n";
         s << "    int3 dither_rgb = int3(round(saturate(frag.rgb) * 255.0));\n";
-        if (efb_scale == 1u) {
+        if (key.efb_scale_minus_one == 0xffu) {
+            // Single-sample pixel centers N+0.5 remain safely inside the
+            // same logical pixel after a float reciprocal/multiply: at the
+            // supported scales/extents, rounding cannot cross a boundary.
+            // Keep legacy key branches unchanged for persistent DXBC reuse.
+            s << "    int2 dither_xy = int2(pin.pos.xy * ztex_params.y) & 1;\n";
+        } else if (efb_scale == 1u) {
             // Keep the native-resolution shader byte-for-byte equivalent.
             s << "    int2 dither_xy = int2(pin.pos.xy) & 1;\n";
         } else {

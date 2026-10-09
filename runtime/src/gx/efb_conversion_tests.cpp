@@ -962,6 +962,13 @@ V main(uint id : SV_VertexID) {
         return result;
     }
 
+    std::vector<Pixel> run_gx_grid(const GxPixelCase& input, UINT size) {
+        const std::vector<std::uint8_t> bytes{
+            input.texture.r, input.texture.g, input.texture.b, input.texture.a};
+        return run_bytes(DXGI_FORMAT_R8G8B8A8_UNORM, bytes,
+            1u, 1u, size, {}, &input);
+    }
+
     std::vector<Pixel> run_color(
         const std::array<Pixel, 3>& rows,
         unsigned scale,
@@ -1177,6 +1184,141 @@ V main(uint id : SV_VertexID) {
         return passed;
     }
 
+    bool test_persistent_conversion_sources() {
+        using namespace galaxy::gx;
+        const auto sampling = compute_efb_peek_sampling_geometry(0u, 0u, 1u);
+        const std::vector<std::uint8_t> color{18u, 52u, 86u, 120u};
+        bool passed = expect_pixel(run_bytes(kEfbColorFormat, color, 1u, 1u,
+            1u, make_efb_peek_conversion_constants(sampling, EfbPeekKind::Color),
+            nullptr, nullptr, true).front(), {18u, 52u, 86u, 120u},
+            "persistent color source survives frame descriptor overwrite/rewind");
+        // Native R24/X8 views, not the R32 float fixture used by the broader
+        // shader oracle. Endpoints are exact under both UNORM and reversed Z.
+        for (const auto depth : {0u, 0x00ffffffu}) {
+            const std::vector<std::uint8_t> bytes{
+                static_cast<std::uint8_t>(depth),
+                static_cast<std::uint8_t>(depth >> 8u),
+                static_cast<std::uint8_t>(depth >> 16u), 0u};
+            const std::uint8_t expected = depth == 0u ? 255u : 0u;
+            passed &= expect_pixel(run_bytes(kEfbDepthResourceFormat, bytes,
+                1u, 1u, 1u,
+                make_efb_peek_conversion_constants(sampling, EfbPeekKind::Depth),
+                nullptr, nullptr, true).front(),
+                {expected, expected, expected, 255u},
+                "persistent native depth view survives frame descriptor overwrite/rewind");
+        }
+        return passed;
+    }
+
+    bool test_identity_efb_copy() {
+        using namespace galaxy::gx;
+        auto params = make_filter_params({0u, 0u, 21u, 22u, 21u, 0u, 0u});
+        params.src_x = params.src_y = 0u;
+        params.src_width = params.src_height = 16u;
+        params.target_format = 6u;
+        bool passed = expect(detail::efb_identity_copy_box(params, false, 1u,
+            16u, 16u).has_value(), "identity RGBA8 filter is admitted");
+        for (unsigned flag = 0u; flag < 14u; ++flag) {
+            auto rejected = params;
+            switch (flag) {
+            case 0u: rejected.target_format = 4u; break;
+            case 1u: rejected.intensity = true; break;
+            case 2u: rejected.yuv = true; break;
+            case 3u: rejected.gamma = 1u; break;
+            case 4u: rejected.half_scale = true; break;
+            case 5u: rejected.scale_y = true; break;
+            case 6u: rejected.frame_to_field = 1u; break;
+            case 7u: rejected.copy_to_xfb = true; break;
+            case 8u: rejected.src_width = 0u; break;
+            case 9u: rejected.src_x = kEfbWidth - 15u; break;
+            case 10u: rejected.src_y = kEfbHeight - 15u; break;
+            case 11u: rejected.filter0_raw |= 1u; break;
+            case 12u: rejected.filter1_raw |= 1u << 6u; break;
+            case 13u: rejected.filter1_raw += 1u; break;
+            }
+            passed &= expect(!detail::efb_identity_copy_box(rejected, false,
+                1u, 16u, 16u), "nonidentity copy cannot bypass conversion");
+        }
+        passed &= expect(!detail::efb_identity_copy_box(params, true, 1u, 16u, 16u) &&
+            !detail::efb_identity_copy_box(params, false, 1u, 15u, 16u) &&
+            !detail::efb_identity_copy_box(params, false, 1u, 16u, 15u),
+            "depth and destination resampling cannot bypass conversion");
+        std::size_t checked = 0u;
+        // Actual EFB extents stress sampler coordinate precision, including
+        // 16x, while upload only initializes the tested rect and its neighbors.
+        for (const unsigned scale : {1u, 3u, 6u, 16u}) {
+            const UINT source_width = kEfbWidth * scale;
+            const UINT source_height = kEfbHeight * scale;
+            const UINT size = 16u * scale;
+            for (const auto origin : {std::array<unsigned, 2>{0u, 0u},
+                    std::array<unsigned, 2>{319u, 255u},
+                    std::array<unsigned, 2>{624u, 512u}}) {
+                params.src_x = static_cast<std::uint16_t>(origin[0]);
+                params.src_y = static_cast<std::uint16_t>(origin[1]);
+                params.clamp_top = params.clamp_bottom = origin[0] != 319u;
+                const auto box = detail::efb_identity_copy_box(params, false,
+                    scale, size, size);
+                if (!expect(box.has_value(), "bounded scaled identity copy admitted")) return false;
+                D3D12_BOX upload_box{
+                    box->left == 0u ? 0u : box->left - 1u,
+                    box->top == 0u ? 0u : box->top - 1u, 0u,
+                    std::min(source_width, box->right + 1u),
+                    std::min(source_height, box->bottom + 1u), 1u};
+                const UINT upload_width = upload_box.right - upload_box.left;
+                const UINT upload_height = upload_box.bottom - upload_box.top;
+                const auto source_pixel = [](unsigned x, unsigned y) {
+                    // All 256 byte values and alpha extremes, with independent
+                    // spatial changes so accidental linear blends are visible.
+                    return Pixel{static_cast<std::uint8_t>(x * 73u + y * 19u),
+                        static_cast<std::uint8_t>(x * 29u + y * 113u),
+                        static_cast<std::uint8_t>(x ^ (y * 37u)),
+                        static_cast<std::uint8_t>(x * 151u + y * 61u)};
+                };
+                std::vector<std::uint8_t> bytes(upload_width * upload_height * 4u);
+                for (unsigned y = 0u; y < upload_height; ++y) {
+                    for (unsigned x = 0u; x < upload_width; ++x) {
+                        const auto p = source_pixel(x + upload_box.left, y + upload_box.top);
+                        const auto offset = (y * upload_width + x) * 4u;
+                        bytes[offset] = p.r; bytes[offset + 1u] = p.g;
+                        bytes[offset + 2u] = p.b; bytes[offset + 3u] = p.a;
+                    }
+                }
+                const auto sampling = compute_efb_copy_sampling_geometry(params, size, size, scale);
+                const auto constants = make_efb_conversion_constants(params,
+                    false, false, false, 6u, sampling.src_x, sampling.src_y,
+                    sampling.step_x, sampling.step_y, sampling.filter_row_offset,
+                    scale, kEfbHeight);
+                const auto reference = run_bytes(kEfbColorFormat, bytes,
+                    source_width, source_height, size, constants, nullptr,
+                    nullptr, false, nullptr, &upload_box);
+                const auto copied = run_bytes(kEfbColorFormat, bytes,
+                    source_width, source_height, size, constants, nullptr,
+                    nullptr, false, &*box, &upload_box);
+                for (unsigned y = 0u; y < size; ++y) {
+                    for (unsigned x = 0u; x < size; ++x) {
+                        const auto expected = source_pixel(box->left + x, box->top + y);
+                        const auto index = y * size + x;
+                        if (!expect_pixel(reference[index], expected,
+                                "identity shader returns exact source RGBA8 bytes") ||
+                            !expect_pixel(copied[index], reference[index],
+                                "copy command matches conversion shader including alpha")) {
+                            std::fprintf(stderr, "identity mismatch scale=%u origin=%u,%u pixel=%u,%u\n",
+                                scale, origin[0], origin[1], x, y);
+                            return false;
+                        }
+                        ++checked;
+                    }
+                }
+            }
+        }
+        params.filter0_raw = params.filter1_raw = 0u;
+        passed &= expect(detail::efb_identity_copy_box(params, false, 1u, 16u, 16u).has_value(),
+            "uninitialized all-zero filter retains existing identity fallback");
+        std::printf("Identity EFB copy: %zu exact shader/copy/source pixels: %s\n",
+            checked, passed ? "PASS" : "FAIL");
+        return passed;
+    }
+
     bool test_conversion_rtv_slot_identity() {
         using namespace galaxy::gx;
         D3D12_DESCRIPTOR_HEAP_DESC heap_desc{};
@@ -1198,7 +1340,13 @@ V main(uint id : SV_VertexID) {
         desc.SampleDesc.Count = 1u;
         desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
         ComPtr<ID3D12Resource> a, b;
-        for (auto* target : {&a, &b}) {
+        // A plain array rather than a braced-init-list: the elements of an
+        // `initializer_list` deduce to `ComPtr<ID3D12Resource>* const`, which
+        // `auto*` cannot bind (the original error here) and which `auto&&` binds
+        // as a const `ComPtrRef` proxy that has no `operator->`. An array keeps
+        // the element type a plain non-const `ComPtr*`, so the body is unchanged.
+        std::array<ComPtr<ID3D12Resource>*, 2> targets{&a, &b};
+        for (auto* target : targets) {
             check_hr(device_->CreateCommittedResource(&properties, D3D12_HEAP_FLAG_NONE,
                 &desc, D3D12_RESOURCE_STATE_RENDER_TARGET, nullptr,
                 IID_PPV_ARGS(target->ReleaseAndGetAddressOf())), "Create scratch RTV identity target");
@@ -1306,6 +1454,99 @@ V main(uint id : SV_VertexID) {
         // No command lists are submitted; production begin_frame calls are
         // preceded by the corresponding renderer fence waits.
         manager.shutdown();
+        return passed;
+    }
+
+    bool test_decoded_allocation_budget() {
+        using namespace galaxy::gx;
+        auto owner = std::make_unique<TextureCache>();
+        TextureCache& cache = *owner;
+        if (!cache.initialize(device_.Get())) {
+            throw std::runtime_error("initialize allocation budget cache");
+        }
+        cache.begin_frame(0u, kFramesInFlight);
+        ComPtr<ID3D12CommandAllocator> allocator;
+        ComPtr<ID3D12GraphicsCommandList> list;
+        check_hr(device_->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT,
+            IID_PPV_ARGS(&allocator)), "Create allocation budget allocator");
+        check_hr(device_->CreateCommandList(0u, D3D12_COMMAND_LIST_TYPE_DIRECT,
+            allocator.Get(), nullptr, IID_PPV_ARGS(&list)), "Create allocation budget list");
+        cache.set_upload_list(list.Get());
+        constexpr std::uint32_t address = 0x10000000u;
+        constexpr std::uint32_t stride = 512u;
+        std::vector<std::byte> bytes(32768u);
+        for (unsigned i = 0u; i < 18u; ++i) bytes[i * stride] = static_cast<std::byte>(i);
+        galaxy::GuestMemoryRegionV1 region{
+            address, static_cast<std::uint32_t>(bytes.size()), bytes.data()};
+        galaxy::GuestMemoryV1 memory{};
+        memory.regions = &region;
+        memory.region_count = 1u;
+        TexImage image{};
+        image.guest_addr = address;
+        image.width = image.height = 32u;
+        image.format = TexFormat::CMPR;
+        TexMode mode{};
+        mode.min_filter = TexMinFilter::Near;
+        const auto first = cache.get(image, mode, TlutRef{}, &memory);
+        const auto desc = first.resource->GetDesc();
+        const auto allocation = device_->GetResourceAllocationInfo(0u, 1u, &desc).SizeInBytes;
+        bool passed = expect(allocation > first.guest_byte_size &&
+            cache.decoded_map_stats().resident_bytes == allocation &&
+            cache.decoded_entry_guest_bytes() == stride,
+            "compressed texture charges device allocation, preserving guest-byte metric");
+        const auto again = cache.get(image, mode, TlutRef{}, &memory);
+        passed &= expect(again.resource == first.resource &&
+            cache.decoded_map_stats().resident_bytes == allocation,
+            "ordinary texture hit does not charge allocation twice");
+        TextureHandle last{};
+        for (unsigned i = 1u; i < 18u; ++i) {
+            image.guest_addr = address + i * stride;
+            last = cache.get(image, mode, TlutRef{}, &memory);
+        }
+        const auto stats = cache.decoded_map_stats();
+        passed &= expect(stats.budget_bytes == (1u << 20u) &&
+            stats.resident_bytes <= stats.budget_bytes && stats.evicted_entries > 0u &&
+            stats.resident_bytes == stats.entries * allocation &&
+            stats.evicted_bytes == stats.evicted_entries * allocation &&
+            stats.entries == stats.lru_entries && cache.srv_index_retired(first.srv_index),
+            "allocation budget evicts compressed entries before guest bytes reach the bound");
+        passed &= expect(first.resource->GetDesc().Width == 32u &&
+            first.srv_index != last.srv_index,
+            "budget eviction keeps the old resource and descriptor alive for this frame");
+        cache.invalidate_all();
+        passed &= expect(cache.decoded_map_stats().resident_bytes == 0u &&
+            cache.decoded_entry_guest_bytes() == 0u && cache.decoded_map_stats().lru_entries == 0u,
+            "invalidation clears allocation and guest-byte accounting together");
+        image.guest_addr = address;
+        const auto content_hit = cache.get(image, mode, TlutRef{}, &memory);
+        passed &= expect(content_hit.resource == first.resource &&
+            content_hit.srv_index != first.srv_index &&
+            cache.decoded_map_stats().resident_bytes == allocation,
+            "content reuse carries allocation size through the new address-cache entry");
+        cache.begin_frame(1u, kFramesInFlight);
+        passed &= expect(cache.srv_index_retired(first.srv_index),
+            "another frame slot cannot reclaim a budget-evicted descriptor");
+        image.guest_addr = address + 16384u;
+        image.width = image.height = 128u;
+        image.format = TexFormat::I4;
+        mode.min_filter = TexMinFilter::NearMipNear;
+        mode.max_lod_x16 = 7u * 16u;
+        const auto mipped = cache.get(image, mode, TlutRef{}, &memory);
+        const auto mip_desc = mipped.resource->GetDesc();
+        const auto mip_allocation = device_->GetResourceAllocationInfo(0u, 1u, &mip_desc).SizeInBytes;
+        passed &= expect(mip_desc.MipLevels > 1u &&
+            cache.decoded_map_stats().resident_bytes == allocation + mip_allocation,
+            "mipped compressed texture charges its complete allocation");
+        std::printf("Decoded allocation budget: source=%u allocation=%llu live=%llu evicted=%llu\n",
+            stride, static_cast<unsigned long long>(allocation),
+            static_cast<unsigned long long>(stats.resident_bytes),
+            static_cast<unsigned long long>(stats.evicted_bytes));
+        // No lists are submitted here. Production waits each owning slot's
+        // fence before begin_frame reclaims its descriptors and resources.
+        cache.set_upload_list(nullptr);
+        cache.shutdown();
+        passed &= expect(cache.decoded_map_stats().resident_bytes == 0u &&
+            cache.decoded_entry_guest_bytes() == 0u, "shutdown resets both accounting domains");
         return passed;
     }
 
@@ -1458,6 +1699,69 @@ V main(uint id : SV_VertexID) {
             !cache.srv_index_retired(reclaimed.srv_index) &&
             cache.retirement_revision() == initial_revision + 1u,
             "owning slot reclaims the descriptor without another retirement");
+        cache.set_upload_list(nullptr);
+        cache.shutdown();
+        return passed;
+    }
+
+    bool test_oversized_content_texture_retirement() {
+        using namespace galaxy::gx;
+        bool passed = true;
+        auto cache_owner = std::make_unique<TextureCache>();
+        TextureCache& cache = *cache_owner;
+        if (!cache.initialize(device_.Get())) {
+            throw std::runtime_error("initialize oversized content cache");
+        }
+        cache.begin_frame(0u, kFramesInFlight);
+        ComPtr<ID3D12CommandAllocator> allocator;
+        ComPtr<ID3D12GraphicsCommandList> list;
+        check_hr(device_->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT,
+            IID_PPV_ARGS(&allocator)), "Create oversized texture allocator");
+        check_hr(device_->CreateCommandList(0u, D3D12_COMMAND_LIST_TYPE_DIRECT,
+            allocator.Get(), nullptr, IID_PPV_ARGS(&list)), "Create oversized texture command list");
+        cache.set_upload_list(list.Get());
+        constexpr std::uint32_t address = 0x10000000u;
+        constexpr std::uint16_t width = 1024u, height = 512u;
+        constexpr std::uint32_t size = width * height * 4u;
+        static_assert(size > (1u << 20u));
+        std::vector<std::byte> bytes(size, std::byte{0x55});
+        galaxy::GuestMemoryRegionV1 region{address, size, bytes.data()};
+        galaxy::GuestMemoryV1 memory{};
+        memory.region_count = 1u;
+        memory.regions = &region;
+        TexImage image{};
+        image.guest_addr = address;
+        image.width = width;
+        image.height = height;
+        image.format = TexFormat::RGBA8;
+        TexMode mode{};
+        mode.min_filter = TexMinFilter::Near;
+        const auto revision = cache.retirement_revision();
+        // The isolated test process enables the content cache and limits the
+        // decoded map to 1MiB. This 2MiB entry therefore evicts itself inside
+        // get(), before its content-cache resource is published.
+        const auto decoded = cache.get(image, mode, TlutRef{}, &memory);
+        passed &= expect(decoded.resource != nullptr &&
+            decoded.guest_byte_size == size && cache.srv_index_retired(decoded.srv_index) &&
+            cache.retirement_revision() == revision + 1u,
+            "oversized first decode returns a fence-retained resource after self-eviction");
+        const auto reused = cache.get(image, mode, TlutRef{}, &memory);
+        passed &= expect(reused.resource == decoded.resource &&
+            reused.srv_index != decoded.srv_index && cache.srv_index_retired(reused.srv_index) &&
+            cache.retirement_revision() == revision + 2u,
+            "content hit reuses the resource with a distinct still-valid CPU descriptor");
+        passed &= expect(reused.resource->GetDesc().Width == width &&
+            reused.resource->GetDesc().Height == height,
+            "self-evicted content resource remains bindable through the frame");
+        cache.begin_frame(1u, kFramesInFlight);
+        cache.begin_frame(0u, kFramesInFlight);
+        // No list is submitted. Production waits the owning slot's fence before
+        // reclamation; the content cache still owns this resource afterward.
+        const auto after_fence = cache.get(image, mode, TlutRef{}, &memory);
+        passed &= expect(after_fence.resource == decoded.resource &&
+            after_fence.srv_index == reused.srv_index &&
+            cache.retirement_revision() == revision + 3u,
+            "content retention survives decoded-resource fence reclamation");
         cache.set_upload_list(nullptr);
         cache.shutdown();
         return passed;
@@ -1677,7 +1981,9 @@ private:
         UINT source_height,
         UINT dest_size,
         const galaxy::gx::EfbConversionShaderConstants& constants,
-        const GxPixelCase* gx = nullptr, float* depth_result = nullptr) {
+        const GxPixelCase* gx = nullptr, float* depth_result = nullptr,
+        bool persistent_source = false, const D3D12_BOX* identity_box = nullptr,
+        const D3D12_BOX* source_upload_box = nullptr) {
         const D3D12_HEAP_PROPERTIES default_heap =
             heap_properties(D3D12_HEAP_TYPE_DEFAULT);
         const D3D12_HEAP_PROPERTIES upload_heap =
@@ -1719,8 +2025,12 @@ PSIn main(uint id : SV_VertexID) {
             gx_constants->Unmap(0u, nullptr);
         }
 
-        const D3D12_RESOURCE_DESC source_desc =
-            texture_desc(source_format, source_width, source_height);
+        const bool native_depth = source_format == galaxy::gx::kEfbDepthResourceFormat;
+        const D3D12_RESOURCE_DESC source_desc = texture_desc(source_format,
+            source_width, source_height, native_depth
+                ? D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL
+                : (identity_box != nullptr ? D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET
+                                           : D3D12_RESOURCE_FLAG_NONE));
         ComPtr<ID3D12Resource> source;
         check_hr(
             device_->CreateCommittedResource(
@@ -1732,12 +2042,19 @@ PSIn main(uint id : SV_VertexID) {
                 IID_PPV_ARGS(&source)),
             "Create source texture");
 
+        auto source_upload_desc = source_desc;
+        if (source_upload_box != nullptr) {
+            source_upload_desc.Width = source_upload_box->right - source_upload_box->left;
+            source_upload_desc.Height = source_upload_box->bottom - source_upload_box->top;
+        }
+        const UINT upload_width = static_cast<UINT>(source_upload_desc.Width);
+        const UINT upload_height = source_upload_desc.Height;
         D3D12_PLACED_SUBRESOURCE_FOOTPRINT source_footprint{};
         UINT source_rows = 0u;
         UINT64 source_row_size = 0u;
         UINT64 source_upload_size = 0u;
         device_->GetCopyableFootprints(
-            &source_desc,
+            &source_upload_desc,
             0u,
             1u,
             0u,
@@ -1746,7 +2063,7 @@ PSIn main(uint id : SV_VertexID) {
             &source_row_size,
             &source_upload_size);
         static_cast<void>(source_row_size);
-        if (source_rows != source_height) {
+        if (source_rows != upload_height) {
             throw std::runtime_error("unexpected source footprint row count");
         }
         ComPtr<ID3D12Resource> upload;
@@ -1764,13 +2081,13 @@ PSIn main(uint id : SV_VertexID) {
         const D3D12_RANGE no_read{0u, 0u};
         check_hr(upload->Map(0u, &no_read, &upload_mapping), "Map source upload");
         const std::size_t tight_row_bytes =
-            static_cast<std::size_t>(source_width) * 4u;
-        if (source_bytes.size() != tight_row_bytes * source_height) {
+            static_cast<std::size_t>(upload_width) * 4u;
+        if (source_bytes.size() != tight_row_bytes * upload_height) {
             throw std::runtime_error("source byte count does not match dimensions");
         }
         auto* upload_base = static_cast<std::uint8_t*>(upload_mapping) +
             source_footprint.Offset;
-        for (UINT y = 0u; y < source_height; ++y) {
+        for (UINT y = 0u; y < upload_height; ++y) {
             std::memcpy(
                 upload_base +
                     static_cast<std::size_t>(y) *
@@ -1792,7 +2109,8 @@ PSIn main(uint id : SV_VertexID) {
                 &default_heap,
                 D3D12_HEAP_FLAG_NONE,
                 &dest_desc,
-                D3D12_RESOURCE_STATE_RENDER_TARGET,
+                identity_box != nullptr ? D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE
+                                        : D3D12_RESOURCE_STATE_RENDER_TARGET,
                 nullptr,
                 IID_PPV_ARGS(&destination)),
             "Create conversion destination");
@@ -1815,7 +2133,7 @@ PSIn main(uint id : SV_VertexID) {
         D3D12_PLACED_SUBRESOURCE_FOOTPRINT depth_footprint{};
         if (gx != nullptr) {
             const auto depth_desc = texture_desc(galaxy::gx::kEfbDepthResourceFormat,
-                1u, 1u, D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL);
+                dest_size, dest_size, D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL);
             check_hr(device_->CreateCommittedResource(&default_heap, D3D12_HEAP_FLAG_NONE,
                 &depth_desc, D3D12_RESOURCE_STATE_DEPTH_WRITE, nullptr, IID_PPV_ARGS(&depth)), "Create GX depth");
             D3D12_DESCRIPTOR_HEAP_DESC heap{};
@@ -1841,19 +2159,51 @@ PSIn main(uint id : SV_VertexID) {
         srv_heap_desc.NumDescriptors = gx != nullptr ? 8u : 1u;
         srv_heap_desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
         ComPtr<ID3D12DescriptorHeap> srv_heap;
-        check_hr(
-            device_->CreateDescriptorHeap(
-                &srv_heap_desc, IID_PPV_ARGS(&srv_heap)),
-            "Create SRV heap");
+        galaxy::gx::DescriptorRing source_ring;
+        ComPtr<ID3D12Resource> companion_source;
+        D3D12_GPU_DESCRIPTOR_HANDLE source_gpu{};
         D3D12_SHADER_RESOURCE_VIEW_DESC srv_desc{};
-        srv_desc.Format = source_format;
+        srv_desc.Format = native_depth ? galaxy::gx::kEfbDepthSrvFormat : source_format;
         srv_desc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
         srv_desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
         srv_desc.Texture2D.MipLevels = 1u;
-        device_->CreateShaderResourceView(
-            source.Get(),
-            &srv_desc,
-            srv_heap->GetCPUDescriptorHandleForHeapStart());
+        if (persistent_source) {
+            if (gx != nullptr || !source_ring.initialize(device_.Get(),
+                D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 4u, 2u, 2u)) {
+                throw std::runtime_error("Create persistent source test ring");
+            }
+            const auto companion_desc = texture_desc(native_depth
+                ? galaxy::gx::kEfbColorFormat : galaxy::gx::kEfbDepthResourceFormat,
+                1u, 1u, native_depth ? D3D12_RESOURCE_FLAG_NONE
+                                     : D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL);
+            check_hr(device_->CreateCommittedResource(&default_heap,
+                D3D12_HEAP_FLAG_NONE, &companion_desc,
+                D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, nullptr,
+                IID_PPV_ARGS(&companion_source)), "Create companion EFB source");
+            const auto views = galaxy::gx::detail::create_efb_conversion_source_views(
+                device_.Get(), native_depth ? companion_source.Get() : source.Get(),
+                native_depth ? source.Get() : companion_source.Get(), source_ring);
+            source_gpu = views[native_depth ? 1u : 0u];
+            srv_heap = source_ring.heap();
+            // Poison every frame descriptor and reuse both segments. Only the
+            // persistent source view can produce the expected non-null pixels.
+            const UINT stride = device_->GetDescriptorHandleIncrementSize(
+                D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+            for (unsigned frame = 0u; frame < 6u; ++frame) {
+                source_ring.begin_frame(frame % 2u);
+                auto table = source_ring.allocate(4u);
+                for (unsigned i = 0u; i < 4u; ++i) {
+                    device_->CreateShaderResourceView(nullptr, &srv_desc, table.cpu);
+                    table.cpu.ptr += stride;
+                }
+            }
+        } else {
+            check_hr(device_->CreateDescriptorHeap(&srv_heap_desc,
+                IID_PPV_ARGS(&srv_heap)), "Create SRV heap");
+            device_->CreateShaderResourceView(source.Get(), &srv_desc,
+                srv_heap->GetCPUDescriptorHandleForHeapStart());
+            source_gpu = srv_heap->GetGPUDescriptorHandleForHeapStart();
+        }
         ComPtr<ID3D12DescriptorHeap> sampler_heap;
         if (gx != nullptr) {
             auto srv = srv_heap->GetCPUDescriptorHandleForHeapStart();
@@ -1932,13 +2282,16 @@ PSIn main(uint id : SV_VertexID) {
         source_location.pResource = source.Get();
         source_location.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
         command_list->CopyTextureRegion(
-            &source_location, 0u, 0u, 0u, &upload_location, nullptr);
+            &source_location, source_upload_box != nullptr ? source_upload_box->left : 0u,
+            source_upload_box != nullptr ? source_upload_box->top : 0u, 0u,
+            &upload_location, nullptr);
         D3D12_RESOURCE_BARRIER source_barrier{};
         source_barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
         source_barrier.Transition.pResource = source.Get();
         source_barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_DEST;
         source_barrier.Transition.StateAfter =
-            D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+            identity_box != nullptr ? D3D12_RESOURCE_STATE_RENDER_TARGET
+                                    : D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
         source_barrier.Transition.Subresource =
             D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
         command_list->ResourceBarrier(1u, &source_barrier);
@@ -1977,16 +2330,22 @@ PSIn main(uint id : SV_VertexID) {
             ID3D12DescriptorHeap* descriptor_heaps[] = {srv_heap.Get()};
             command_list->SetDescriptorHeaps(1u, descriptor_heaps);
             command_list->SetGraphicsRoot32BitConstants(0u, 16u, constants.values.data(), 0u);
-            command_list->SetGraphicsRootDescriptorTable(1u, srv_heap->GetGPUDescriptorHandleForHeapStart());
+            command_list->SetGraphicsRootDescriptorTable(1u, source_gpu);
         }
         command_list->IASetPrimitiveTopology(
             D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-        command_list->DrawInstanced(3u, 1u, 0u, 0u);
+        if (identity_box != nullptr) {
+            galaxy::gx::detail::record_efb_identity_copy(command_list.Get(),
+                source.Get(), destination.Get(), *identity_box);
+        } else {
+            command_list->DrawInstanced(3u, 1u, 0u, 0u);
+        }
 
         D3D12_RESOURCE_BARRIER dest_barrier{};
         dest_barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
         dest_barrier.Transition.pResource = destination.Get();
-        dest_barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
+        dest_barrier.Transition.StateBefore = identity_box != nullptr
+            ? D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE : D3D12_RESOURCE_STATE_RENDER_TARGET;
         dest_barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_COPY_SOURCE;
         dest_barrier.Transition.Subresource =
             D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
@@ -2098,6 +2457,76 @@ GxPixelCase gx_pixel_fixture() {
     input.state.zmode_bits = 31u; // Enable, ALWAYS, update.
     for (auto& dims : input.constants.tex_dims) std::fill(std::begin(dims), std::end(dims), 1.0f);
     return input;
+}
+
+bool test_uniform_dither_readbacks() {
+    bool passed = true;
+    try {
+        WarpConversionHarness harness;
+        std::size_t checked = 0u;
+        for (unsigned scale = 1u; scale <= galaxy::gx::kMaxEfbScale; ++scale) {
+            for (bool fog : {false, true}) {
+                auto input = gx_pixel_fixture();
+                input.texture = {2u, 65u, 126u, 120u};
+                input.shader.stages[0].color_env =
+                    (input.shader.stages[0].color_env & ~15u) | 8u; // D = texture.
+                input.shader.stages[0].alpha_env =
+                    (input.shader.stages[0].alpha_env & ~(7u << 4u)) | (4u << 4u);
+                // The base depth fixture deliberately does not rely on TEV's
+                // texture swap. This color oracle requires explicit RGBA.
+                input.shader.stages[0].ksel =
+                    (input.shader.stages[0].ksel & ((1u << 18u) - 1u)) | (0xe4u << 18u);
+                input.state.pixfmt = 1u;
+                input.shader.output_flags = 1u | 8u;
+                input.shader.efb_scale_minus_one = static_cast<std::uint8_t>(scale - 1u);
+                input.constants.ztex_params[1] = 1.0f / static_cast<float>(scale);
+                if (fog) {
+                    input.shader.fog_type = 2u;
+                    input.constants.fog_params[0] = 1.0f;
+                    input.constants.fog_params[5] = 1.0f;
+                    input.constants.fog_params[7] = 1.0f;
+                }
+                // Four logical pixels per axis test both pattern phases,
+                // every subpixel, and multiple boundaries for odd scales.
+                const unsigned size = 4u * scale;
+                const auto legacy = harness.run_gx_grid(input, size);
+                input.shader.efb_scale_minus_one = 0xffu;
+                const auto uniform = harness.run_gx_grid(input, size);
+                passed &= expect(legacy == uniform,
+                    "uniform dither matches every legacy GPU pixel, including fog and alpha");
+                checked += uniform.size();
+                if (!fog) {
+                    bool oracle_matches = true;
+                    for (unsigned y = 0u; y < size; ++y) {
+                        for (unsigned x = 0u; x < size; ++x) {
+                            const unsigned dx = (x / scale) & 1u;
+                            const unsigned dy = (y / scale) & 1u;
+                            const unsigned d = (dx ^ dy) * 2u + dy;
+                            const auto channel = [d](unsigned value) {
+                                return static_cast<std::uint8_t>(std::lround(
+                                    static_cast<double>((value - (value >> 6u) + d) >> 2u) * 255.0 / 63.0));
+                            };
+                            const Pixel expected{channel(2u), channel(65u), channel(126u), 121u};
+                            const auto actual = uniform[static_cast<std::size_t>(y) * size + x];
+                            if (oracle_matches && actual != expected) {
+                                std::fprintf(stderr, "dither oracle scale=%u pixel=%u,%u\n", scale, x, y);
+                                expect_pixel(actual, expected, "first dither oracle mismatch");
+                            }
+                            oracle_matches &= actual == expected;
+                        }
+                    }
+                    passed &= expect(oracle_matches,
+                        "GPU RGBA6 dither agrees with independent integer Bayer/quantization oracle");
+                }
+            }
+        }
+        std::printf("uniform dither WARP: %zu pixels across all scales/fog states: %s\n",
+            checked, passed ? "PASS" : "FAIL");
+    } catch (const std::exception& e) {
+        std::fprintf(stderr, "FAILED: WARP uniform dither: %s\n", e.what());
+        passed = false;
+    }
+    return passed;
 }
 
 bool test_gx_pixel_readbacks() {
@@ -2589,6 +3018,15 @@ bool test_warp_against_oracle() {
 }  // namespace
 
 int main(int argc, char** argv) {
+    if (argc == 2 && std::strcmp(argv[1], "--identity-efb-copy") == 0) {
+        try {
+            WarpConversionHarness harness;
+            return harness.test_identity_efb_copy() ? 0 : 1;
+        } catch (const std::exception& error) {
+            std::fprintf(stderr, "FAILED: identity EFB copy: %s\n", error.what());
+            return 1;
+        }
+    }
     if (argc == 2 && std::strcmp(argv[1], "--content-key-hash") == 0) {
         if (_putenv_s("GALAXY_GX_CONTENT_TEXTURE_CACHE", "1") != 0 ||
             _putenv_s("GALAXY_GX_DECODED_TEXTURE_BUDGET_MB", "0") != 0) {
@@ -2603,6 +3041,25 @@ int main(int argc, char** argv) {
             return 1;
         }
     }
+    if (argc == 2 && (std::strcmp(argv[1], "--oversized-content-cache") == 0 ||
+                     std::strcmp(argv[1], "--decoded-allocation-budget") == 0)) {
+        // Cache settings are memoized on first access: use a fresh process and
+        // configure the CRT environment before any harness/cache construction.
+        if (_putenv_s("GALAXY_GX_CONTENT_TEXTURE_CACHE", "1") != 0 ||
+            _putenv_s("GALAXY_GX_DECODED_TEXTURE_BUDGET_MB", "1") != 0) {
+            std::fprintf(stderr, "FAILED: configure oversized content cache regression\n");
+            return 1;
+        }
+        try {
+            WarpConversionHarness harness;
+            return (std::strcmp(argv[1], "--decoded-allocation-budget") == 0
+                ? harness.test_decoded_allocation_budget()
+                : harness.test_oversized_content_texture_retirement()) ? 0 : 1;
+        } catch (const std::exception& error) {
+            std::fprintf(stderr, "FAILED: oversized content cache regression: %s\n", error.what());
+            return 1;
+        }
+    }
     bool passed = test_cpu_oracle();
     passed &= test_direct_color_tile_decode();
     passed &= test_intensity_tile_decode();
@@ -2613,12 +3070,15 @@ int main(int argc, char** argv) {
     passed &= test_clear_precision();
     passed &= test_warp_against_oracle();
     passed &= test_gx_pixel_readbacks();
+    passed &= test_uniform_dither_readbacks();
     try {
         WarpConversionHarness harness;
         passed &= harness.test_texture_descriptor_retirement();
         passed &= harness.test_xfb_retirement_rollback();
         passed &= harness.test_conversion_rtv_slot_identity();
         passed &= harness.test_descriptor_ring_allocation_identity();
+        passed &= harness.test_persistent_conversion_sources();
+        passed &= harness.test_identity_efb_copy();
         passed &= harness.test_xfb_idle_pool_admission();
         passed &= harness.test_texture_cache_ranges();
         passed &= test_scaled_xfb_filter();

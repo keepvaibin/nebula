@@ -4,6 +4,8 @@
 #include <stdexcept>
 
 #include <array>
+#include <chrono>
+#include <functional>
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
@@ -175,6 +177,202 @@ bool expect(bool condition, const char* message) {
     return condition;
 }
 
+
+std::array<std::byte, 9> frozen_lookup_call(std::uint32_t address, std::uint32_t size = 32u) {
+    std::array<std::byte, 9> call{std::byte{0x40}};
+    for (unsigned i = 0; i < 4u; ++i) {
+        call[1u + i] = static_cast<std::byte>(address >> (24u - 8u * i));
+        call[5u + i] = static_cast<std::byte>(size >> (24u - 8u * i));
+    }
+    return call;
+}
+
+struct LookupReadRecorder final : galaxy::gx::FifoGuestMemoryReadRecorder {
+    std::vector<std::byte> bytes;
+    std::vector<std::uint32_t> ranges;
+    std::vector<std::uint32_t> shapes;
+    std::function<void()> callback;
+    void record_guest_memory_read(std::uint32_t address, std::uint32_t size) override {
+        ranges.push_back(address);
+        ranges.push_back(size);
+    }
+    void record_guest_memory_read_bytes(std::uint32_t address,
+                                       std::span<const std::byte> data) override {
+        record_guest_memory_read(address, static_cast<std::uint32_t>(data.size()));
+        bytes.insert(bytes.end(), data.begin(), data.end());
+        if (callback) callback();
+    }
+    void record_guest_dependency_shape_read(std::uint32_t address, std::uint32_t size) override {
+        shapes.push_back(address);
+        shapes.push_back(size);
+    }
+};
+
+bool test_frozen_fifo_lookup() {
+    // Exercise both cold CALL_DL decoding and cached LOAD_INDX replay. The
+    // recorder is compared byte for byte, including order and shape callbacks.
+    for (const std::uint32_t count : {64u, 1024u}) {
+        std::vector<std::array<std::byte, 64>> storage(count);
+        std::vector<galaxy::GuestMemoryRegionV1> regions(count);
+        std::vector<std::byte> fifo;
+        for (std::uint32_t i = 0; i < count; ++i) {
+            auto& bytes = storage[i];
+            bytes[0] = std::byte{0x20}; // indexed matrix word at the fixed array base
+            bytes[5] = std::byte{0x90}; // one-vertex draw
+            bytes[7] = std::byte{1};
+            bytes[8] = static_cast<std::byte>(i);
+            bytes[32] = std::byte{0x3F};
+            bytes[33] = std::byte{0x80};
+            regions[i] = {0x1000u + i * 128u, 64u, bytes.data()};
+        }
+        for (std::uint32_t i = 0; i < count * 2u; ++i) {
+            const auto call = frozen_lookup_call(regions[(i * 53u) % count].guest_base);
+            fifo.insert(fifo.end(), call.begin(), call.end());
+        }
+        galaxy::GuestMemoryV1 memory{};
+        memory.regions = regions.data(); memory.region_count = count;
+        FifoParser generic, indexed;
+        LookupReadRecorder a, b;
+        generic.set_memory_read_recorder(&a); indexed.set_memory_read_recorder(&b);
+        TestSink sink_a, sink_b;
+        GxState state_a, state_b;
+        state_a.load_cp(0xACu, regions.back().guest_base + 32u);
+        state_b.load_cp(0xACu, regions.back().guest_base + 32u);
+        for (unsigned pass = 0; pass < 2u; ++pass) {
+            generic.run(fifo, &memory, sink_a, state_a);
+            if (!expect(indexed.run_available(fifo, &memory, sink_b, state_b, true) == fifo.size(),
+                        "frozen parse consumes the same commands")) return false;
+            if (!expect(a.ranges == b.ranges && a.bytes == b.bytes && a.shapes == b.shapes &&
+                        sink_a.draws == sink_b.draws && sink_a.last_draw_payload_first == sink_b.last_draw_payload_first &&
+                        state_a.xf(0) == 0x3F800000u && state_b.xf(0) == state_a.xf(0) &&
+                        state_a.consume_dirty() == state_b.consume_dirty(),
+                        "cold/cached frozen parser preserves reads, draws, XF and dirty state")) return false;
+        }
+    }
+
+    std::array<std::byte, 64> first{}, second{};
+    first[0] = second[0] = std::byte{0x90};
+    first[2] = second[2] = std::byte{1};
+    first[3] = std::byte{0xA1}; second[3] = std::byte{0xB2};
+    using Region = galaxy::GuestMemoryRegionV1;
+    const auto compare = [&](std::vector<Region> regions, std::uint32_t address,
+                             std::uint32_t size, int expected_draws,
+                             std::uint8_t expected_payload, bool fast = false) {
+        galaxy::GuestMemoryV1 memory{};
+        memory.regions = regions.data();
+        memory.region_count = static_cast<std::uint32_t>(regions.size());
+        if (fast) { memory.fast_regions[8].host_base = second.data(); memory.fast_regions[8].size = 64u; }
+        FifoParser a, b;
+        a.set_dump_dir("."); b.set_dump_dir(".");
+        TestSink sa, sb; GxState ga, gb;
+        LookupReadRecorder ra, rb;
+        a.set_memory_read_recorder(&ra); b.set_memory_read_recorder(&rb);
+        const auto command = frozen_lookup_call(address, size);
+        std::string error_a, error_b;
+        std::size_t offset_a = 0, offset_b = 0;
+        try { a.run(command, &memory, sa, ga); }
+        catch (const GxFatalError& e) { error_a = e.what(); offset_a = e.fifo_offset(); }
+        try { b.run(command, &memory, sb, gb, true); }
+        catch (const GxFatalError& e) { error_b = e.what(); offset_b = e.fifo_offset(); }
+        return expect(error_a == error_b && offset_a == offset_b &&
+                      (expected_draws < 0 ? !error_a.empty() : error_a.empty() && sa.draws == expected_draws) &&
+                      sa.draws == sb.draws && sa.last_draw_payload_first == expected_payload &&
+                      sa.last_draw_payload_first == sb.last_draw_payload_first &&
+                      ra.ranges == rb.ranges && ra.bytes == rb.bytes && ra.shapes == rb.shapes,
+                      "uncertified/boundary/fast views preserve generic result and fault");
+    };
+    if (!compare({{0x1000u,64u,first.data()},{0x1000u,64u,second.data()}},0x1000u,32u,1,0xA1u) ||
+        !compare({{0x2000u,64u,second.data()},{0x1000u,64u,first.data()}},0x1000u,32u,1,0xA1u) ||
+        !compare({{0x1000u,64u,nullptr},{0x1000u,64u,second.data()}},0x1000u,32u,1,0xB2u) ||
+        !compare({{0x1000u,16u,first.data()},{0x1010u,16u,second.data()}},0x1000u,32u,-1,0u) ||
+        !compare({{0x1000u,0u,first.data()},{0x1000u,64u,second.data()}},0x1000u,32u,1,0xB2u) ||
+        !compare({{0xFFFFFFE0u,64u,first.data()}},0xFFFFFFE0u,64u,1,0xA1u) ||
+        !compare({{0x1000u,64u,first.data()}},0x0FE0u,32u,-1,0u) ||
+        !compare({{0x1000u,64u,first.data()}},0x1040u,32u,-1,0u) ||
+        !compare({},0x1000u,32u,-1,0u) ||
+        !compare({},0x1000u,0u,0,0u) ||
+        !compare({{0x80000000u,64u,first.data()}},0x80000000u,32u,1,0xB2u,true)) return false;
+
+    // Reuse one parser after changing/reordering a previously certified view.
+    std::array<Region,2> regions{{{0x1000u,64u,first.data()},{0x2000u,64u,second.data()}}};
+    galaxy::GuestMemoryV1 memory{};
+    memory.regions = regions.data(); memory.region_count = 2;
+    FifoParser parser; parser.set_dump_dir("."); TestSink sink; GxState state;
+    const auto call = frozen_lookup_call(0x1000u);
+    parser.run(call, &memory, sink, state, true);
+    std::swap(regions[0], regions[1]);
+    parser.run(call, &memory, sink, state, true);
+    if (!expect(sink.draws == 2 && sink.last_draw_payload_first == 0xA1u,
+                "each invocation recertifies changed view")) return false;
+    std::swap(regions[0], regions[1]);
+    LookupReadRecorder recorder;
+    parser.set_memory_read_recorder(&recorder);
+    bool nested = false, nested_ok = false;
+    recorder.callback = [&] {
+        if (nested) return;
+        nested = true;
+        std::array<Region,2> inner_regions{{{0x1000u,64u,second.data()},{0x1000u,64u,first.data()}}};
+        galaxy::GuestMemoryV1 inner{};
+        inner.regions = inner_regions.data(); inner.region_count = 2;
+        TestSink inner_sink; GxState inner_state;
+        parser.run(call, &inner, inner_sink, inner_state); // generic nested invocation
+        try { parser.run(frozen_lookup_call(0x3000u), &inner, inner_sink, inner_state, true); }
+        catch (const GxFatalError&) { nested_ok = inner_sink.last_draw_payload_first == 0xB2u; }
+    };
+    std::vector<std::byte> twice(call.begin(), call.end()); twice.insert(twice.end(), call.begin(), call.end());
+    parser.run(twice, &memory, sink, state, true);
+    if (!expect(nested_ok && sink.draws == 4 && sink.last_draw_payload_first == 0xA1u,
+                "nested calls and nested faults preserve outer view")) return false;
+    // Top-level failure must also release the capability before a generic run.
+    parser.set_memory_read_recorder(nullptr);
+    try { parser.run(frozen_lookup_call(0x3000u), &memory, sink, state, true); }
+    catch (const GxFatalError&) {}
+    std::swap(regions[0], regions[1]);
+    parser.run(call, &memory, sink, state);
+    const std::array<std::byte, 2> truncated{std::byte{0x40},std::byte{0}};
+    if (!expect(parser.run_available(truncated, &memory, sink, state, true) == 0u && sink.draws == 5,
+                "fault and incomplete command restore invocation scope")) return false;
+    std::cout << "PASS frozen FIFO cold/replay reads, boundary layouts, recertification and nested scope\n";
+    return true;
+}
+
+int benchmark_frozen_fifo_lookup() {
+    // Full parser workload, including certification, command decoding and cached
+    // display-list validation. No profiling clock or read recorder in the loop.
+    for (const std::uint32_t count : {64u, 1024u}) {
+        std::vector<std::array<std::byte,32>> storage(count);
+        std::vector<galaxy::GuestMemoryRegionV1> regions(count);
+        std::vector<std::byte> fifo;
+        for (std::uint32_t i = 0; i < count; ++i) {
+            storage[i][0]=std::byte{0x90}; storage[i][2]=std::byte{1}; storage[i][3]=std::byte{0xA1};
+            regions[i]={0x1000u+i*64u,32u,storage[i].data()};
+        }
+        for (std::uint32_t i=0; i<4096u; ++i) {
+            const auto call=frozen_lookup_call(regions[(i*53u)%count].guest_base);
+            fifo.insert(fifo.end(),call.begin(),call.end());
+        }
+        galaxy::GuestMemoryV1 memory{}; memory.regions=regions.data(); memory.region_count=count;
+        FifoParser a,b; TestSink sa,sb; GxState ga,gb;
+        a.run(fifo,&memory,sa,ga,false); b.run(fifo,&memory,sb,gb,true);
+        const auto measure=[&](bool frozen) {
+            auto& parser=frozen?b:a; auto& sink=frozen?sb:sa; auto& state=frozen?gb:ga;
+            const auto start=std::chrono::steady_clock::now();
+            for (unsigned repeat=0; repeat<64u; ++repeat) parser.run(fifo,&memory,sink,state,frozen);
+            return std::chrono::duration<double,std::micro>(std::chrono::steady_clock::now()-start).count()/64.0;
+        };
+        for (unsigned pair=0; pair<4u; ++pair) {
+            double generic=0,indexed=0;
+            if ((pair&1u)==0u) {generic=measure(false);indexed=measure(true);}
+            else {indexed=measure(true);generic=measure(false);}
+            if (!expect(sa.draws==sb.draws && sa.last_draw_payload_first==sb.last_draw_payload_first,
+                        "benchmark output equality")) return 1;
+            std::cout<<"regions="<<count<<" commands=4096 pair="<<pair<<" generic_us="<<generic
+                     <<" frozen_us="<<indexed<<" draws="<<sa.draws<<'\n';
+        }
+    }
+    return 0;
+}
+
 bool test_display_list_variant_lookup_invalidation() {
     for (const unsigned variants : {2u, 8u, 9u}) {
         std::array<std::byte, 64> bytes{};
@@ -191,7 +389,7 @@ bool test_display_list_variant_lookup_invalidation() {
         TestSink sink;
         const std::array<std::byte, 9> call{
             std::byte{0x40}, std::byte{0x80}, std::byte{0}, std::byte{0}, std::byte{0},
-            std::byte{0}, std::byte{0}, std::byte{0}, std::byte{16}};
+            std::byte{0}, std::byte{0}, std::byte{0}, std::byte{32}};
         auto other = call;
         other[4] = std::byte{32};  // A different all-NOP list.
         const auto run = [&](const auto& command) {
@@ -279,7 +477,16 @@ bool test_xf_matrix_span_updates() {
                 }
             }
         }
-        for (const std::uint16_t bank : {0x0040u, 0x0420u, 0x05F0u}) {
+        // The element type is `std::uint16_t`, so each literal must be spelled as
+        // one: an unsuffixed `0x0040u` is `unsigned int`, which MSVC reports as
+        // C4244 (possible loss of data) inside a braced initializer list. The
+        // project builds with `/WX`, so that warning is a build error. Same repair
+        // as the `{0x0000u, 0x0040u, 0x0400u, 0x0500u, 0x0600u, 0x1009u}` list
+        // lower in this file.
+        for (const std::uint16_t bank :
+             {static_cast<std::uint16_t>(0x0040u),
+              static_cast<std::uint16_t>(0x0420u),
+              static_cast<std::uint16_t>(0x05F0u)}) {
             for (const unsigned dst_offset : {0u, 1u, 2u}) {
                 GxState state;
                 state.load_xf(bank, values.data(), 32u);
@@ -298,6 +505,88 @@ bool test_xf_matrix_span_updates() {
             }
         }
     }
+    return true;
+}
+
+// `GxState::xf_palette_dirty()` exists so the renderer can decide whether the
+// frame's existing GPU snapshot of the XF matrix palette can be reused instead
+// of allocating a fresh one. The renderer half is untestable without a D3D12
+// device, but the producer contract is exactly testable here, and it is the half
+// that can silently go wrong: a chunk the guest wrote but never armed would let
+// the renderer reuse a snapshot that is missing that write.
+bool test_xf_palette_chunk_tracking() {
+    // A using-declaration cannot name a namespace (`xf` is one), so this must be
+    // qualified at each use. The rest of this file already spells
+    // `galaxy::gx::xf::...` out; this line and the one below were the exceptions.
+    GxState state;
+    // A consumer that has uploaded nothing starts with an all-clear mask and
+    // compensates with "not yet valid", so the first upload is always full.
+    if (!expect(state.xf_palette_dirty() == 0u,
+                "palette dirty mask starts clear")) return false;
+
+    // A chunk is 32 words = 128 bytes, a whole number of the 16-byte float4s
+    // the shader indexes, so one 4-row object matrix can never span a chunk
+    // boundary without arming both sides of it.
+    const std::array<std::uint32_t, 12> object_matrix{
+        1u, 2u, 3u, 4u, 5u, 6u, 7u, 8u, 9u, 10u, 11u, 12u};
+    state.load_xf(0x0040u, object_matrix.data(), 12u);
+    (void)state.consume_dirty();
+    if (!expect(state.xf_palette_dirty() == (1ull << 2u),
+                "one object matrix arms exactly its own palette chunk")) return false;
+
+    // Only touched chunks are armed: a second object in a distant chunk must
+    // add its bit and leave the first one alone.
+    state.load_xf(0x0400u, object_matrix.data(), 12u);
+    (void)state.consume_dirty();
+    if (!expect(state.xf_palette_dirty() == ((1ull << 2u) | (1ull << 32u)),
+                "a distant second matrix adds only its own chunk bit")) return false;
+
+    // A span that crosses a chunk boundary arms both chunks, and clearing the
+    // span as a whole is what the uploader does, so the result must be clean.
+    state.load_xf(0x001Eu, object_matrix.data(), 4u);
+    (void)state.consume_dirty();
+    if (!expect(state.xf_palette_dirty() ==
+                    (((1ull << 2u) | (1ull << 32u)) | 0x1u | 0x2u),
+                "a span crossing a chunk boundary arms both chunks")) return false;
+    state.clear_xf_palette_dirty(0u, GxState::kMatrixPaletteChunkCount - 1u);
+    if (!expect(state.xf_palette_dirty() == 0u,
+                "clearing the whole palette span leaves no armed chunk")) return false;
+
+    // `load_xf_indexed` is the path SMG actually uses for object/skin matrices
+    // (LOAD_INDX A-D), so it has to arm the same bits as the direct write, and a
+    // re-issued write of identical data must leave the mask at rest — the
+    // renderer would otherwise re-upload a span that did not move.
+    const std::array<std::uint32_t, 12> skin_matrix{
+        21u, 22u, 23u, 24u, 25u, 26u, 27u, 28u, 29u, 30u, 31u, 32u};
+    state.load_xf_indexed(0x0080u, skin_matrix.data(), 12u);
+    (void)state.consume_dirty();
+    if (!expect(state.xf_palette_dirty() == (1ull << 4u),
+                "an indexed matrix write arms its chunk like a direct one")) return false;
+    state.load_xf_indexed(0x0080u, skin_matrix.data(), 12u);
+    (void)state.consume_dirty();
+    if (!expect(state.xf_palette_dirty() == (1ull << 4u),
+                "rewriting identical indexed matrix data arms nothing new")) return false;
+    state.clear_xf_palette_dirty(4u, 4u);
+    if (!expect(state.xf_palette_dirty() == 0u,
+                "clearing one chunk clears exactly that chunk")) return false;
+    // Clearing a span that was never armed is a no-op, not an underflow.
+    state.load_xf_indexed(0x0080u, skin_matrix.data(), 12u);
+    (void)state.consume_dirty();
+    state.clear_xf_palette_dirty(4u, GxState::kMatrixPaletteChunkCount - 1u);
+    if (!expect(state.xf_palette_dirty() == 0u,
+                "clearing a trailing span clears only what was armed")) return false;
+
+    // Palette tracking is a property of matrix memory only. The XF high bank
+    // cannot alias it (`validate_xf_write` classifies every address), and a CP
+    // write touches neither, so neither may arm a chunk: an over-armed bit only
+    // costs an upload, but an assertion here is what keeps a future high-bank
+    // write from silently sharing the low bank's state.
+    state.load_xf(
+        static_cast<std::uint16_t>(galaxy::gx::xf::kNumTexGens),
+        object_matrix.data(), 1u);
+    state.load_cp(galaxy::gx::cp::kMatrixIndexA, 7u);
+    if (!expect(state.xf_palette_dirty() == 0u,
+                "high-bank and CP writes never arm a palette chunk")) return false;
     return true;
 }
 
@@ -438,13 +727,63 @@ void test_dependency_hash_cache() {
         }
         std::cout<<"PASS 32768 mutation/copy/reset/XF/mask/TEV/dirty/unknown sequences plus256BP registers, "<<dependency_hash_checks<<" independent exact hash dependency_hash_checks\n";
 
-    
+
 }
 }
 
-int main() try {
+namespace {
+// Golden observation stream produced by the pre-table public GxState source
+// SHA256 5b6086e311213272bf404ff47744de03581bc27e69a1fb96f2931b22ce484ed6.
+// 46422 writes cover every BP address/bit, masks, shared TEV banks, copies and
+// faults. Exact binary streams were also compared before retaining this digest.
+std::uint64_t bp_write_observation_digest() {
+    GxState state;
+    std::uint64_t digest=1469598103934665603ull;
+    const auto word=[&](std::uint32_t value) {
+        for(unsigned i=0;i<4;++i) {
+            const auto byte=static_cast<unsigned char>(value>>(i*8));
+            digest=(digest^byte)*1099511628211ull;
+        }
+    };
+    const auto observe=[&](std::uint32_t command) {
+        bool fault=false;
+        try { state.load_bp(command); } catch(const galaxy::gx::GxFatalError& e) {
+            fault=true; word(e.opcode()); word(static_cast<std::uint32_t>(e.fifo_offset()));
+            for(char c:std::string(e.what())) word(static_cast<unsigned char>(c));
+        }
+        word(command);word(fault);word(state.pending_bp_write_mask());word(state.consume_dirty());
+        auto revision=state.dependency_shape_revision();word(static_cast<std::uint32_t>(revision));word(static_cast<std::uint32_t>(revision>>32));
+        auto hash=state.dependency_shape_hash();word(static_cast<std::uint32_t>(hash));word(static_cast<std::uint32_t>(hash>>32));
+        for(unsigned i=0;i<256;++i)word(state.bp(static_cast<std::uint8_t>(i)));
+        for(const auto& color:state.tev_register_values())for(auto value:color)word(static_cast<std::uint32_t>(value));
+        for(auto value:state.tev_konst_colors())word(value);
+        for(auto value:state.dependency_shape_words())word(value);
+    };
+    for(unsigned reg=0;reg<256;++reg)for(unsigned bit=0;bit<24;++bit) {
+        observe(0xfeffffffu);observe((reg<<24)|(1u<<bit));
+        observe(0xfe000000u|(1u<<bit));observe(reg<<24);
+    }
+    std::uint32_t random=0xAB72831u;
+    for(unsigned i=0;i<16384;++i) {
+        random=random*1664525u+1013904223u;
+        if(i%3==0)observe(0xfe000000u|(random&0xffffff));
+        observe(((i&255u)<<24)|(random&0xffffff));
+        if(i%7==0){GxState copy=state;state=copy;}
+    }
+    return digest;
+}
+}
+
+int main(int argc, char** argv) try {
+    if (bp_write_observation_digest() != 0xb70fc6f9fdf8aea3ull) {
+        std::cerr << "BP write observation regression\n";
+        return 1;
+    }
+    if (argc == 2 && std::string(argv[1]) == "--benchmark-frozen-lookup") return benchmark_frozen_fifo_lookup();
+    if (!test_frozen_fifo_lookup()) return 1;
     if (!test_display_list_variant_lookup_invalidation()) return 1;
     if (!test_xf_matrix_span_updates()) return 1;
+    if (!test_xf_palette_chunk_tracking()) return 1;
     test_dependency_hash_cache();
     static_assert(galaxy::gx::bp::kBpMask == 0xFEu);
 
@@ -928,7 +1267,13 @@ int main() try {
         (void)indexed.consume_dirty();
         std::array<std::uint32_t, 12> words{};
         for (unsigned i = 0u; i < words.size(); ++i) words[i] = 0x3f800000u + i;
-        for (const std::uint16_t base : {0x0000u, 0x0040u, 0x0400u, 0x0500u, 0x0600u, 0x1009u}) {
+        for (const std::uint16_t base :
+             {static_cast<std::uint16_t>(0x0000u),
+              static_cast<std::uint16_t>(0x0040u),
+              static_cast<std::uint16_t>(0x0400u),
+              static_cast<std::uint16_t>(0x0500u),
+              static_cast<std::uint16_t>(0x0600u),
+              static_cast<std::uint16_t>(0x1009u)}) {
             const auto count = static_cast<std::uint16_t>(base == 0x1009u ? 4u : words.size());
             direct.load_xf(base, words.data(), count);
             indexed.load_xf_indexed(base, words.data(), count);
@@ -1591,6 +1936,70 @@ int main() try {
         }
 
         internal_cp_parser.set_profile(nullptr);
+    }
+
+    {
+        // Use the actual shader key as the dependency oracle, independently of
+        // the BP dirty predicate. Exercise every blend word and every bit edge
+        // with each PE format, destination-alpha mode and tested EFB scale.
+        std::uint64_t checked = 0u;
+        for (std::uint32_t format = 0u; format < 4u; ++format) {
+            for (std::uint32_t replacement : {0u, 0x17fu}) {
+                for (std::uint32_t scale : {1u, 6u}) {
+                    GxState blend_state;
+                    const auto write = [&](std::uint8_t reg, std::uint32_t word) {
+                        blend_state.load_bp((static_cast<std::uint32_t>(reg) << 24u) | word);
+                    };
+                    write(galaxy::gx::bp::kGenMode, 15u << 10u);
+                    write(galaxy::gx::bp::kPeControl, format);
+                    write(galaxy::gx::bp::kConstAlpha, replacement);
+                    for (std::uint32_t word = 0u; word < 0x10000u; ++word) {
+                        write(galaxy::gx::bp::kBlendMode, word);
+                        const auto before = galaxy::gx::build_pixel_shader_key(blend_state, scale);
+                        for (unsigned bit = 0u; bit < 16u; ++bit) {
+                            (void)blend_state.consume_dirty();
+                            write(galaxy::gx::bp::kBlendMode, word ^ (1u << bit));
+                            const auto dirty = blend_state.consume_dirty();
+                            const auto after = galaxy::gx::build_pixel_shader_key(blend_state, scale);
+                            if ((dirty & GxState::kDirtyRenderState) == 0u ||
+                                (dirty & GxState::kDirtyTevConstants) != 0u ||
+                                (!(before == after) && (dirty & GxState::kDirtyTev) == 0u) ||
+                                ((bit == 1u || bit == 3u || bit >= 12u) &&
+                                 (dirty & GxState::kDirtyTev) != 0u)) {
+                                std::cerr << "blend dependency mismatch format=" << format
+                                          << " replacement=" << replacement << " scale=" << scale
+                                          << " word=" << word << " bit=" << bit << '\n';
+                                return 1;
+                            }
+                            write(galaxy::gx::bp::kBlendMode, word);
+                            ++checked;
+                        }
+                    }
+                }
+            }
+        }
+        // Partial BP writes must classify the effective merged value; the next
+        // full write must not inherit the previous one-shot register mask.
+        GxState masked_blend;
+        masked_blend.load_bp((0x41u << 24u) | 0x411u);
+        (void)masked_blend.consume_dirty();
+        masked_blend.load_bp((0xfeu << 24u) | (1u << 3u));
+        masked_blend.load_bp((0x41u << 24u) | 0x408u);
+        const auto masked_dirty = masked_blend.consume_dirty();
+        if (!expect(masked_blend.bp(0x41u) == 0x419u &&
+                    masked_dirty == GxState::kDirtyRenderState,
+                    "masked color write must retain blend and skip shader/constants work")) return 1;
+        masked_blend.load_bp((0x41u << 24u) | 0x511u);
+        if (!expect(masked_blend.consume_dirty() == GxState::kDirtyRenderState,
+                    "source alpha factor4-to5 changes blend PSO but not shader/constants")) return 1;
+        masked_blend.load_bp((0x42u << 24u) | 0x180u);
+        masked_blend.load_bp((0x43u << 24u) | 1u);
+        const auto coalesced = masked_blend.consume_dirty();
+        if (!expect((coalesced & (GxState::kDirtyTev | GxState::kDirtyTevConstants |
+                                  GxState::kDirtyRenderState)) ==
+                    (GxState::kDirtyTev | GxState::kDirtyTevConstants | GxState::kDirtyRenderState),
+                    "destination-alpha/format writes must retain coalesced invalidation")) return 1;
+        std::cout << "blend dependency oracle: " << checked << " bit transitions passed\n";
     }
 
     bool strict_failed = false;

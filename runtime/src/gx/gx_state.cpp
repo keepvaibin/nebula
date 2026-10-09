@@ -21,6 +21,14 @@ namespace galaxy::gx {
 
 namespace {
 
+// Bit span covering palette chunks `first`..`last` inclusive. Callers guarantee
+// last < 64 (52 chunks exist) and first <= last, so the shift is never wide.
+[[nodiscard]] constexpr std::uint64_t xf_palette_span_bits(
+    std::uint32_t first, std::uint32_t last) noexcept {
+    return ((std::uint64_t{1} << (last + 1u)) - 1u) &
+        ~((std::uint64_t{1} << first) - 1u);
+}
+
 [[noreturn]] void throw_unknown_cp_write(
     std::uint8_t reg,
     std::uint32_t value) {
@@ -200,6 +208,242 @@ void validate_xf_write(
     return offset < 12u || (offset >= 20u && offset < 28u);
 }
 
+// Evaluated only while building the immutable register table. Keeping the
+// readable classifier here makes register additions explicit and auditable.
+[[nodiscard]] constexpr std::uint32_t bp_dirty_flags_for_table(
+    std::uint8_t reg) {
+    std::uint32_t flags = 0u;
+    // --------------- Dirty bit classification --------------------------------
+
+    // Display-copy filter/sample-pattern registers (0x01-0x04) are latched
+    // copy state. The current renderer's non-AA XFB path consumes BP 0x53/0x54
+    // filter weights; keep these named and stored so they are not treated as
+    // unknown hardware writes.
+    if (reg >= bp::kDisplayCopyFilterBase &&
+        reg < bp::kDisplayCopyFilterBase + 4u) {
+        return flags;
+    }
+    // Indirect texture matrices 0x06-0x0E: three 2x3 offset matrices.
+    if (reg >= bp::kIndMtxBase &&
+        reg < bp::kIndMtxBase + bp::kIndMtxCount) {
+        // Coefficients and exponent are ind_mtx[] uniforms; stage matrix
+        // selection remains shader state in kIndCmdBase.
+        flags |= GxState::kDirtyTevConstants;
+        return flags;
+    }
+    // Scissor is dynamic and read directly for every draw.
+    if (reg == bp::kScissorTopLeft || reg == bp::kScissorBottomRight) {
+        return flags;
+    }
+    // Line/point size is consumed by the geometry-stage tail of b0.
+    if (reg == bp::kSuLpSize) {
+        flags |= GxState::kDirtyVsConstants;
+        return flags;
+    }
+    // Perf-query triangle/quad counters: stored but never consulted.
+    if (reg >= bp::kPerf0TriBase && reg < bp::kPerf0TriBase + 2u) {
+        return flags;
+    }
+    // Indirect texture scale/reference.
+    if (reg >= bp::kRas1Ss0 && reg <= bp::kIndRef) {
+        flags |= GxState::kDirtyTev;
+        return flags;
+    }
+    // BP 0x00 gen_mode — but this is listed separately below.
+    // Indirect texture stage commands  0x10-0x1F
+    if (reg >= bp::kIndCmdBase && reg < bp::kIndCmdBase + 0x10u) {
+        flags |= GxState::kDirtyTev;
+        return flags;
+    }
+    if (reg == bp::kIndMask) {
+        return flags;
+    }
+    // TEV order (TREF)  0x28-0x2F
+    if (reg >= bp::kTevOrderBase && reg < bp::kTevOrderBase + 8u) {
+        flags |= GxState::kDirtyTev;
+        return flags;
+    }
+    // Texture-coordinate S/T sizes feed tex_dims[].zw and VS constants.
+    // Neither shader key contains these sizes. Preserve constant uploads
+    // without rebuilding a shader key or looking up the same pipeline.
+    if (reg >= bp::kTexCoordSizeBase &&
+        reg < bp::kTexCoordSizeBase + bp::kTexCoordSizeCount) {
+        flags |= GxState::kDirtyTevConstants | GxState::kDirtyVsConstants;
+        return flags;
+    }
+    // TEV color env  0xC0-0xCF (even: color_env, odd: alpha_env, interleaved,
+    // 16 stages = 32 registers)
+    if (reg >= bp::kTevColorEnvBase && reg < bp::kTevColorEnvBase + 0x20u) {
+        flags |= GxState::kDirtyTev;
+        return flags;
+    }
+
+    switch (reg) {
+    // Gen mode
+    case bp::kGenMode:
+        flags |= GxState::kDirtyTev | GxState::kDirtyXfShader | GxState::kDirtyRenderState |
+                  GxState::kDirtyVsConstants;
+        break;
+
+    // Blend / PE
+    case bp::kBlendMode:   // 0x41
+        // Every effective blend/mask change still updates the fixed-function
+        // pipeline. PS code consumes only enable/subtract/dither/alpha-update
+        // and whether either factor reads the TEV source alpha (factor4/5).
+        // PS uniforms read constant destination alpha from BP0x42, not here.
+        flags |= GxState::kDirtyRenderState;
+        break;
+    case bp::kConstAlpha:  // 0x42
+        flags |= GxState::kDirtyTevConstants;
+        // The enable flag affects shader outputs and blend routing; the
+        // replacement value is a uniform even while replacement is enabled.
+        break;
+    case bp::kPeControl:   // 0x43
+        flags |= GxState::kDirtyRenderState | GxState::kDirtyTev;
+        break;
+    case bp::kFieldMask:   // 0x44
+        flags |= GxState::kDirtyRenderState;
+        break;
+
+    // Z mode
+    case bp::kZMode:       // 0x40
+        flags |= GxState::kDirtyRenderState;
+        break;
+
+    // PE events
+    case bp::kPeDone:      // 0x45
+    case bp::kBusClock0:   // 0x46
+    case bp::kPeToken:     // 0x47
+    case bp::kPeTokenInt:  // 0x48
+        break;
+
+    // Alpha compare  0x49 (= kCopySrcTopLeft, but that constant is 0x49 only
+    // in the copy block — let's use the actual address kAlphaCompare = 0xF3)
+    case bp::kAlphaCompare:  // 0xF3
+        flags |= GxState::kDirtyTevConstants;
+        break;
+
+    // EFB copy block  0x49-0x54 (src rect, dest addr/stride, y-scale, clear,
+    // execute, filter)
+    case 0x49u: case 0x4Au: case 0x4Bu: case 0x4Cu: case 0x4Du:
+    case 0x4Eu: case 0x4Fu: case 0x50u: case 0x51u: case 0x52u:
+    case 0x53u: case 0x54u:
+        break;
+    case bp::kCopyClearBoundingBox1:  // 0x55
+    case bp::kCopyClearBoundingBox2:  // 0x56
+    case bp::kCopyClearPixelPerf:     // 0x57
+    case bp::kRevBits:                // 0x58
+        break;
+
+    // Scissor offset  0x59
+    case bp::kScissorOffset:
+        break;
+
+    // TLUT load  0x64-0x65
+    case bp::kTlutSrcAddr:  // 0x64
+    case bp::kTlutDest:     // 0x65
+        flags |= GxState::kDirtyTex;
+        break;
+
+    // GXInvalidateTexAll signal  0x66-0x67
+    case bp::kTexInvalidate:
+    case bp::kPerf1:
+        flags |= GxState::kDirtyTex;
+        break;
+
+    case bp::kFieldMode:
+        flags |= GxState::kDirtyTev;
+        break;
+    case bp::kBusClock1:
+        break;
+
+    // Texture units  maps 0-3: 0x80-0x9F, maps 4-7: 0xA0-0xBF (with
+    // kTexHighBankOffset = 0x20 offset).  Covers mode0, mode1, image0-3, tlut.
+    case 0x80u: case 0x81u: case 0x82u: case 0x83u:  // TexMode0 maps 0-3
+    case 0x84u: case 0x85u: case 0x86u: case 0x87u:  // TexMode1 maps 0-3
+    case 0x88u: case 0x89u: case 0x8Au: case 0x8Bu:  // TexImage0 maps 0-3
+    case 0x8Cu: case 0x8Du: case 0x8Eu: case 0x8Fu:  // TexImage1 maps 0-3
+    case 0x90u: case 0x91u: case 0x92u: case 0x93u:  // TexImage2 maps 0-3
+    case 0x94u: case 0x95u: case 0x96u: case 0x97u:  // TexImage3 maps 0-3
+    case 0x98u: case 0x99u: case 0x9Au: case 0x9Bu:  // TexTlut maps 0-3
+    case 0x9Cu: case 0x9Du: case 0x9Eu: case 0x9Fu:  // (padding / mode2)
+    // Maps 4-7 at +0x20:
+    case 0xA0u: case 0xA1u: case 0xA2u: case 0xA3u:
+    case 0xA4u: case 0xA5u: case 0xA6u: case 0xA7u:
+    case 0xA8u: case 0xA9u: case 0xAAu: case 0xABu:
+    case 0xACu: case 0xADu: case 0xAEu: case 0xAFu:
+    case 0xB0u: case 0xB1u: case 0xB2u: case 0xB3u:
+    case 0xB4u: case 0xB5u: case 0xB6u: case 0xB7u:
+    case 0xB8u: case 0xB9u: case 0xBAu: case 0xBBu:
+    case 0xBCu: case 0xBDu: case 0xBEu: case 0xBFu:
+        flags |= GxState::kDirtyTex;
+        break;
+
+    // TEV register colors  0xE0-0xE7 (blending-register RA/BG pairs; konst
+    // writes never reach here — bit 23 routed them to konst_ra_bg_ above).
+    case 0xE0u: case 0xE1u: case 0xE2u: case 0xE3u:
+    case 0xE4u: case 0xE5u: case 0xE6u: case 0xE7u:
+        flags |= GxState::kDirtyTevConstants;
+        break;
+
+    // Fog range-adjust parameters  0xE8-0xED
+    case 0xE8u: case 0xE9u: case 0xEAu: case 0xEBu: case 0xECu: case 0xEDu:
+        flags |= GxState::kDirtyTevConstants;
+        break;
+
+    // Fog parameters  0xEE-0xF2
+    case bp::kFogParam0: case bp::kFogParam1: case bp::kFogParam2:
+    case bp::kFogColor:
+        flags |= GxState::kDirtyTevConstants;
+        break;
+    case bp::kFogParam3:
+        flags |= GxState::kDirtyTevConstants;
+        break;
+
+    // Z env  0xF4-0xF5
+    case bp::kTevZEnv0:
+        flags |= GxState::kDirtyTevConstants; // depth bias, not format/operation
+        break;
+    case bp::kTevZEnv1:
+        flags |= GxState::kDirtyTev;
+        break;
+
+    // TEV KSEL  0xF6-0xFD  (2 stages per register, 8 registers for 16 stages)
+    case 0xF6u: case 0xF7u: case 0xF8u: case 0xF9u:
+    case 0xFAu: case 0xFBu: case 0xFCu: case 0xFDu:
+        flags |= GxState::kDirtyTev;
+        break;
+
+    // Explicitly classified raw/no-dirty registers reach this case. Unknown
+    // addresses were rejected before the write mask or register file changed.
+    default:
+        break;
+    }
+    return flags;
+}
+
+struct BpWriteMetadata {
+    std::uint32_t flags;
+    std::uint32_t dependency_mask;
+};
+constexpr auto kBpWriteMetadata = [] {
+    std::array<BpWriteMetadata, 256> metadata{};
+    for (unsigned reg = 0u; reg < metadata.size(); ++reg) {
+        const auto index = static_cast<std::uint8_t>(reg);
+        auto& info = metadata[reg];
+        if (!is_classified_bp_register(index)) {
+            continue;
+        }
+        info.flags = bp_dirty_flags_for_table(index);
+        for (unsigned bit = 0u; bit < 24u; ++bit) {
+            if (affects_dependency_shape(index, 1u << bit)) {
+                info.dependency_mask |= 1u << bit;
+            }
+        }
+    }
+    return metadata;
+}();
+
 }  // namespace
 
 // ---------------------------------------------------------------------------
@@ -226,6 +470,9 @@ void GxState::load_cp(std::uint8_t reg, std::uint32_t value) {
     }
 
     if (cp_[reg] != value) {
+        if (reg == cp::kVcdLo && ((cp_[reg] ^ value) & 1u) != 0u) {
+            dirty |= kDirtyVsConstants;
+        }
         cp_[reg] = value;
         if ((dirty & kDirtyVcd) != 0u) {
             invalidate_dependency_shape();
@@ -261,7 +508,26 @@ void GxState::apply_validated_xf(
                 changed = true;
             }
         }
-        if (changed) dirty_ |= kDirtyXfMatrices;
+        if (changed) {
+            dirty_ |= kDirtyXfMatrices;
+            // Record which palette chunks moved. The renderer consumes this as
+            // one question — "did anything in the palette move?" — and uses the
+            // answer to decide whether the frame's existing palette ring
+            // allocation can be reused. The snapshot it takes is always the
+            // whole 6656 bytes; see `xf_palette_dirty()` for why. `changed` is
+            // already the "did any word differ" test, so the extra cost is one
+            // 64-bit compare on the writes that turn out to change nothing (a
+            // re-issued LOAD_INDX, which is common).
+            const std::uint32_t first = base / kMatrixPaletteChunkWords;
+            const std::uint32_t last =
+                static_cast<std::uint32_t>(base + count - 1u) /
+                kMatrixPaletteChunkWords;
+            const std::uint64_t bits =
+                xf_palette_span_bits(first, last);
+            if ((xf_palette_dirty_ & bits) != bits) {
+                xf_palette_dirty_ |= bits;
+            }
+        }
         return;
     }
     for (std::uint16_t i = 0; i < count; ++i) {
@@ -374,218 +640,43 @@ void GxState::load_bp(std::uint32_t command) {
         return;
     }
     bp_[reg] = next;
-    if (affects_dependency_shape(reg, previous ^ next)) {
+    // Delay table access until the value changed. Repeated unchanged writes
+    // retain the original register-only validation and no-change fast path.
+    const auto metadata = kBpWriteMetadata[reg];
+    if (((previous ^ next) & metadata.dependency_mask) != 0u) {
         invalidate_dependency_shape();
     }
 
-    // --------------- Dirty bit classification --------------------------------
-
-    // Display-copy filter/sample-pattern registers (0x01-0x04) are latched
-    // copy state. The current renderer's non-AA XFB path consumes BP 0x53/0x54
-    // filter weights; keep these named and stored so they are not treated as
-    // unknown hardware writes.
-    if (reg >= bp::kDisplayCopyFilterBase &&
-        reg < bp::kDisplayCopyFilterBase + 4u) {
-        return;
-    }
-    // Indirect texture matrices 0x06-0x0E: three 2x3 offset matrices.
-    if (reg >= bp::kIndMtxBase &&
-        reg < bp::kIndMtxBase + bp::kIndMtxCount) {
-        // Coefficients and exponent are ind_mtx[] uniforms; stage matrix
-        // selection remains shader state in kIndCmdBase.
-        dirty_ |= kDirtyTevConstants;
-        return;
-    }
-    // Scissor is dynamic and read directly for every draw.
-    if (reg == bp::kScissorTopLeft || reg == bp::kScissorBottomRight) {
-        return;
-    }
-    // Line/point size is consumed by the geometry-stage tail of b0.
-    if (reg == bp::kSuLpSize) {
-        dirty_ |= kDirtyVsConstants;
-        return;
-    }
-    // Perf-query triangle/quad counters: stored but never consulted.
-    if (reg >= bp::kPerf0TriBase && reg < bp::kPerf0TriBase + 2u) {
-        return;
-    }
-    // Indirect texture scale/reference.
-    if (reg >= bp::kRas1Ss0 && reg <= bp::kIndRef) {
-        dirty_ |= kDirtyTev;
-        return;
-    }
-    // BP 0x00 gen_mode — but this is listed separately below.
-    // Indirect texture stage commands  0x10-0x1F
-    if (reg >= bp::kIndCmdBase && reg < bp::kIndCmdBase + 0x10u) {
-        dirty_ |= kDirtyTev;
-        return;
-    }
-    if (reg == bp::kIndMask) {
-        return;
-    }
-    // TEV order (TREF)  0x28-0x2F
-    if (reg >= bp::kTevOrderBase && reg < bp::kTevOrderBase + 8u) {
-        dirty_ |= kDirtyTev;
-        return;
-    }
-    // Texture-coordinate S/T sizes feed tex_dims[].zw and VS constants.
-    // Neither shader key contains these sizes. Preserve constant uploads
-    // without rebuilding a shader key or looking up the same pipeline.
-    if (reg >= bp::kTexCoordSizeBase &&
-        reg < bp::kTexCoordSizeBase + bp::kTexCoordSizeCount) {
-        dirty_ |= kDirtyTevConstants | kDirtyVsConstants;
-        return;
-    }
-    // TEV color env  0xC0-0xCF (even: color_env, odd: alpha_env, interleaved,
-    // 16 stages = 32 registers)
-    if (reg >= bp::kTevColorEnvBase && reg < bp::kTevColorEnvBase + 0x20u) {
-        dirty_ |= kDirtyTev;
-        return;
-    }
-
+    // Register-only classification is already compiled into the descriptor.
+    // These four writes additionally inspect exactly which value bits changed.
+    dirty_ |= metadata.flags;
     switch (reg) {
-    // Gen mode
-    case bp::kGenMode:
-        dirty_ |= kDirtyTev | kDirtyXfShader | kDirtyRenderState |
-                  kDirtyVsConstants;
+    case bp::kBlendMode: {
+        const auto reads_source_alpha = [](std::uint32_t word) {
+            return ((word >> 5u) & 6u) == 4u || ((word >> 8u) & 6u) == 4u;
+        };
+        constexpr std::uint32_t kShaderScalarMask = 0x815u;
+        if (((previous ^ next) & kShaderScalarMask) != 0u ||
+            reads_source_alpha(previous) != reads_source_alpha(next)) {
+            dirty_ |= kDirtyTev;
+        }
         break;
-
-    // Blend / PE
-    case bp::kBlendMode:   // 0x41
-        dirty_ |= kDirtyRenderState | kDirtyTev | kDirtyTevConstants;
-        break;
-    case bp::kConstAlpha:  // 0x42
-        dirty_ |= kDirtyTevConstants;
-        // The enable flag affects shader outputs and blend routing; the
-        // replacement value is a uniform even while replacement is enabled.
+    }
+    case bp::kConstAlpha:
         if (((previous ^ next) & (1u << 8u)) != 0u) {
             dirty_ |= kDirtyRenderState | kDirtyTev;
         }
         break;
-    case bp::kPeControl:   // 0x43
-        dirty_ |= kDirtyRenderState | kDirtyTev;
-        break;
-    case bp::kFieldMask:   // 0x44
-        dirty_ |= kDirtyRenderState;
-        break;
-
-    // Z mode
-    case bp::kZMode:       // 0x40
-        dirty_ |= kDirtyRenderState;
-        break;
-
-    // PE events
-    case bp::kPeDone:      // 0x45
-    case bp::kBusClock0:   // 0x46
-    case bp::kPeToken:     // 0x47
-    case bp::kPeTokenInt:  // 0x48
-        break;
-
-    // Alpha compare  0x49 (= kCopySrcTopLeft, but that constant is 0x49 only
-    // in the copy block — let's use the actual address kAlphaCompare = 0xF3)
-    case bp::kAlphaCompare:  // 0xF3
-        dirty_ |= kDirtyTevConstants;
+    case bp::kAlphaCompare:
         if (((previous ^ next) & 0x00ff0000u) != 0u) {
             dirty_ |= kDirtyTev;
         }
         break;
-
-    // EFB copy block  0x49-0x54 (src rect, dest addr/stride, y-scale, clear,
-    // execute, filter)
-    case 0x49u: case 0x4Au: case 0x4Bu: case 0x4Cu: case 0x4Du:
-    case 0x4Eu: case 0x4Fu: case 0x50u: case 0x51u: case 0x52u:
-    case 0x53u: case 0x54u:
-        break;
-    case bp::kCopyClearBoundingBox1:  // 0x55
-    case bp::kCopyClearBoundingBox2:  // 0x56
-    case bp::kCopyClearPixelPerf:     // 0x57
-    case bp::kRevBits:                // 0x58
-        break;
-
-    // Scissor offset  0x59
-    case bp::kScissorOffset:
-        break;
-
-    // TLUT load  0x64-0x65
-    case bp::kTlutSrcAddr:  // 0x64
-    case bp::kTlutDest:     // 0x65
-        dirty_ |= kDirtyTex;
-        break;
-
-    // GXInvalidateTexAll signal  0x66-0x67
-    case bp::kTexInvalidate:
-    case bp::kPerf1:
-        dirty_ |= kDirtyTex;
-        break;
-
-    case bp::kFieldMode:
-        dirty_ |= kDirtyTev;
-        break;
-    case bp::kBusClock1:
-        break;
-
-    // Texture units  maps 0-3: 0x80-0x9F, maps 4-7: 0xA0-0xBF (with
-    // kTexHighBankOffset = 0x20 offset).  Covers mode0, mode1, image0-3, tlut.
-    case 0x80u: case 0x81u: case 0x82u: case 0x83u:  // TexMode0 maps 0-3
-    case 0x84u: case 0x85u: case 0x86u: case 0x87u:  // TexMode1 maps 0-3
-    case 0x88u: case 0x89u: case 0x8Au: case 0x8Bu:  // TexImage0 maps 0-3
-    case 0x8Cu: case 0x8Du: case 0x8Eu: case 0x8Fu:  // TexImage1 maps 0-3
-    case 0x90u: case 0x91u: case 0x92u: case 0x93u:  // TexImage2 maps 0-3
-    case 0x94u: case 0x95u: case 0x96u: case 0x97u:  // TexImage3 maps 0-3
-    case 0x98u: case 0x99u: case 0x9Au: case 0x9Bu:  // TexTlut maps 0-3
-    case 0x9Cu: case 0x9Du: case 0x9Eu: case 0x9Fu:  // (padding / mode2)
-    // Maps 4-7 at +0x20:
-    case 0xA0u: case 0xA1u: case 0xA2u: case 0xA3u:
-    case 0xA4u: case 0xA5u: case 0xA6u: case 0xA7u:
-    case 0xA8u: case 0xA9u: case 0xAAu: case 0xABu:
-    case 0xACu: case 0xADu: case 0xAEu: case 0xAFu:
-    case 0xB0u: case 0xB1u: case 0xB2u: case 0xB3u:
-    case 0xB4u: case 0xB5u: case 0xB6u: case 0xB7u:
-    case 0xB8u: case 0xB9u: case 0xBAu: case 0xBBu:
-    case 0xBCu: case 0xBDu: case 0xBEu: case 0xBFu:
-        dirty_ |= kDirtyTex;
-        break;
-
-    // TEV register colors  0xE0-0xE7 (blending-register RA/BG pairs; konst
-    // writes never reach here — bit 23 routed them to konst_ra_bg_ above).
-    case 0xE0u: case 0xE1u: case 0xE2u: case 0xE3u:
-    case 0xE4u: case 0xE5u: case 0xE6u: case 0xE7u:
-        dirty_ |= kDirtyTevConstants;
-        break;
-
-    // Fog range-adjust parameters  0xE8-0xED
-    case 0xE8u: case 0xE9u: case 0xEAu: case 0xEBu: case 0xECu: case 0xEDu:
-        dirty_ |= kDirtyTevConstants;
-        break;
-
-    // Fog parameters  0xEE-0xF2
-    case bp::kFogParam0: case bp::kFogParam1: case bp::kFogParam2:
-    case bp::kFogColor:
-        dirty_ |= kDirtyTevConstants;
-        break;
     case bp::kFogParam3:
-        dirty_ |= kDirtyTevConstants;
         if (((previous ^ next) & 0x00e00000u) != 0u) {
             dirty_ |= kDirtyTev;
         }
         break;
-
-    // Z env  0xF4-0xF5
-    case bp::kTevZEnv0:
-        dirty_ |= kDirtyTevConstants; // depth bias, not format/operation
-        break;
-    case bp::kTevZEnv1:
-        dirty_ |= kDirtyTev;
-        break;
-
-    // TEV KSEL  0xF6-0xFD  (2 stages per register, 8 registers for 16 stages)
-    case 0xF6u: case 0xF7u: case 0xF8u: case 0xF9u:
-    case 0xFAu: case 0xFBu: case 0xFCu: case 0xFDu:
-        dirty_ |= kDirtyTev;
-        break;
-
-    // Explicitly classified raw/no-dirty registers reach this case. Unknown
-    // addresses were rejected before the write mask or register file changed.
     default:
         break;
     }
@@ -758,7 +849,10 @@ std::uint64_t GxState::dependency_shape_hash() const noexcept {
         return dependency_shape_hash_;
     }
     const GxState& state = *this;
-    const auto fnv1a_mix_u32 = [](std::uint64_t hash, std::uint32_t value) noexcept {
+    std::size_t signature_index = 0;
+    const auto fnv1a_mix_u32 = [this, &signature_index](
+        std::uint64_t hash, std::uint32_t value) noexcept {
+        dependency_shape_words_[signature_index++] = value;
         for (unsigned shift = 0; shift < 32u; shift += 8u) {
             hash ^= (value >> shift) & 0xFFu;
             hash *= 1099511628211ull;

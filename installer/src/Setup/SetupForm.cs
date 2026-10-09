@@ -75,7 +75,9 @@ namespace Nebula.Setup
             {
                 AddLabel(choose, "Installed: Nebula " + installed.Version + (installed.Previous != null ? " (previous " + installed.Previous + " kept)" : ""), 20, y, 720, 22);
                 y += 26;
-                modeRepair.Text = "Repair this version";
+                modeRepair.Text = InstallIntent.ForPackage(installed.Version, BuildInfo.Version) == InstallMode.Update
+                    ? "Update to Nebula " + BuildInfo.Version + " (keeps saves and settings)"
+                    : "Install or repair Nebula " + BuildInfo.Version;
                 modeRepair.Checked = true;
                 modeRestore.Text = "Restore the previous version" + (installed.Previous != null ? " (" + installed.Previous + ")" : " (none available)");
                 modeRestore.Enabled = installed.Previous != null;
@@ -153,12 +155,13 @@ namespace Nebula.Setup
             summary.Location = new Point(20, y);
             summary.Size = new Size(720, 170);
             summary.Text =
-                "This is responsible for checking your game, recompiling it and compiling it into a Windows program on this PC. " +
-                "It downloads a C++ compiler (" + FileUtil.FormatBytes(toolchain.DownloadBytes) + ").\r\n\r\n" +
+                "The Nebula engine and launcher are included, ready to run. Only your game is compiled on this PC when needed. " +
+                "Compatible game modules are reused during updates. If needed, Setup downloads a C++ compiler (" + FileUtil.FormatBytes(toolchain.DownloadBytes) + ").\r\n\r\n" +
                 "Needs: Windows 10/11 64-bit, 8 GB RAM, " + FileUtil.FormatBytes(InstallEngine.RequiredFreeBytes) + " free disk space, a DirectX 12 GPU.";
             choose.Controls.Add(summary);
 
-            start.Text = installed == null ? "Install" : "Continue";
+            start.Text = installed == null ? "Install" :
+                (InstallIntent.ForPackage(installed.Version, BuildInfo.Version) == InstallMode.Update ? "Update" : "Continue");
             start.Location = new Point(530, 596);
             start.Size = new Size(100, 32);
             start.Click += delegate { OnStart(); };
@@ -240,7 +243,8 @@ namespace Nebula.Setup
                     return;
                 }
                 layout = new InstallLayout(root.Text.Trim());
-                StartWork(installed == null ? InstallMode.Install : InstallMode.Repair);
+                installed = InstalledInfo.Read(layout);
+                StartWork(InstallIntent.ForPackage(installed == null ? null : installed.Version, BuildInfo.Version));
             }
             catch (Exception error) { MessageBox.Show(this, error.Message, "Nebula Setup", MessageBoxButtons.OK, MessageBoxIcon.Error); }
         }
