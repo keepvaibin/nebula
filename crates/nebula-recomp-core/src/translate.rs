@@ -2425,6 +2425,23 @@ fn integer_guest_load_expression(width: u32, ea: &str, pc: u32, flat_ram_reads: 
     }
 }
 
+/// Development aid: `NEBULA_RESIDENCY_ADDRESS_RANGE=hexlow-hexhigh` limits the
+/// residency pass to functions whose start address lies in that range, so a
+/// miscompiled function can be bisected without touching the module options.
+fn residency_address_selected(address: u32) -> bool {
+    use std::sync::OnceLock;
+    static RANGE: OnceLock<Option<(u32, u32)>> = OnceLock::new();
+    let range = RANGE.get_or_init(|| {
+        let text = std::env::var("NEBULA_RESIDENCY_ADDRESS_RANGE").ok()?;
+        let (low, high) = text.split_once('-')?;
+        Some((
+            u32::from_str_radix(low.trim(), 16).ok()?,
+            u32::from_str_radix(high.trim(), 16).ok()?,
+        ))
+    });
+    range.map_or(true, |(low, high)| address >= low && address <= high)
+}
+
 /// Apply guest register residency (`crate::residency`) to one lowered body
 /// when the option is on. Returns the body unchanged otherwise, and also when
 /// the body has a shape the pass does not handle.
@@ -2434,8 +2451,8 @@ fn apply_residency_to_body(
     entries: &BTreeSet<u32>,
     options: &ModuleTranslationOptions,
 ) -> String {
-    let _ = (address, entries);
-    if !options.guest_resident_integer {
+    let _ = entries;
+    if !options.guest_resident_integer || !residency_address_selected(address) {
         return body;
     }
     match crate::residency::apply_register_residency(&body) {
