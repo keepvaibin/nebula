@@ -1384,6 +1384,7 @@ struct RuntimeState {
     // Idle-loop sleeps: bounded host waits taken at the guest scheduler's
     // empty-run-queue checkpoint instead of spinning until the next deadline.
     std::uint64_t idle_loop_sleeps{};
+    bool idle_wake_event_registered{};
     std::uint64_t idle_loop_sleep_wakes{};
     std::uint64_t idle_loop_sleep_timeouts{};
     std::uint64_t idle_loop_sleep_us{};
@@ -17326,13 +17327,16 @@ bool trace_realtime_vi_wait(const RuntimeState& state);
 // observed promptly. This changes no guest-visible state: the idle loop
 // resumes at the same checkpoint and re-evaluates its run queue exactly as
 // before.
-// The wait is event-driven: the thread blocks on the deadline latch's mask
-// word (WaitOnAddress), which every publication (VI, AI, DEC, input, DSP, IOS)
-// wakes through PendingEventLatch::wake_idle_waiters, and which the render
-// thread wakes for PE finish/token levels through the address space's idle
-// wake callback. The timeout is bounded by the next VI deadline and the AI DMA
-// deadline, so a missed wake cannot delay a device edge beyond the existing
-// polling guard. GALAXY_IDLE_LOOP_SLEEP=0 restores the spinning idle loop.
+// The wait is event-driven: the thread blocks on an auto-reset event that
+// every publication (VI, AI, DEC, input, DSP, IOS) signals through
+// PendingEventLatch::wake_idle_waiters, and which the render thread signals
+// for PE finish/token levels through the address space's idle wake callback,
+// together with a high-resolution waitable timer armed for the next VI or AI
+// DMA deadline. The first version used WaitOnAddress with a millisecond
+// timeout; its timeouts are quantized to the system clock interrupt, and the
+// laptop session of 2026-10-10 showed 117 idle-loop checkpoint gaps of 16.9
+// to 33 ms (one and two clock ticks) that turned into 50 ms frame intervals
+// and late AI DMA. GALAXY_IDLE_LOOP_SLEEP=0 restores the spinning idle loop.
 bool idle_loop_sleep_enabled() {
     static const bool enabled = read_env_flag("GALAXY_IDLE_LOOP_SLEEP", true);
     return enabled;
@@ -17365,13 +17369,14 @@ void idle_loop_wait_for_next_deadline(RuntimeState& state) {
             static_cast<double>(galaxy::timing::kTimelineTicksPerSecond)));
     wait_duration = cap_realtime_vi_wait_for_ai_dma(state, wait_duration);
     static const auto max_slice = std::chrono::microseconds(std::clamp<std::uint64_t>(
-        read_env_u64("GALAXY_IDLE_LOOP_SLEEP_SLICE_US", 4000u), 100u, 16000u));
+        read_env_u64("GALAXY_IDLE_LOOP_SLEEP_SLICE_US", 16000u), 100u, 16000u));
     if (wait_duration > max_slice) {
         wait_duration = max_slice;
     }
     // Leave the final stretch before the retrace to the existing polling so
-    // the edge is never delivered late by timer granularity.
-    constexpr auto kDeadlineGuard = std::chrono::microseconds(250);
+    // the edge is never delivered late by timer granularity (the
+    // high-resolution timer wakes within about half a millisecond).
+    constexpr auto kDeadlineGuard = std::chrono::microseconds(500);
     if (wait_duration <= kDeadlineGuard) {
         return;
     }
@@ -17387,22 +17392,48 @@ void idle_loop_wait_for_next_deadline(RuntimeState& state) {
         return;
     }
     const auto started = std::chrono::steady_clock::now();
-    // Block on the event mask word: any publication or PE wake ends the wait
-    // immediately; otherwise the bounded timeout returns to the checkpoint.
-    const std::atomic_uint32_t* mask_address = state.deadline_events.mask_address();
-    std::uint32_t expected_idle_mask = 0u;
-    const DWORD timeout_ms = static_cast<DWORD>(std::max<std::int64_t>(
-        1, std::chrono::duration_cast<std::chrono::milliseconds>(wait_duration).count()));
-    if (!WaitOnAddress(
-            const_cast<std::atomic_uint32_t*>(mask_address),
-            &expected_idle_mask,
-            sizeof(expected_idle_mask),
-            timeout_ms)) {
-        if (GetLastError() == ERROR_TIMEOUT) {
-            ++state.idle_loop_sleep_timeouts;
+    // One auto-reset wake event and one high-resolution timer for the
+    // simulation thread. A publication that lands between the mask test above
+    // and the wait leaves the event signaled, so the wait returns at once.
+    struct IdleWaitHandles {
+        HANDLE event{};
+        HANDLE timer{};
+        IdleWaitHandles() {
+            event = CreateEventW(nullptr, FALSE, FALSE, nullptr);
+            timer = CreateWaitableTimerExW(
+                nullptr, nullptr, CREATE_WAITABLE_TIMER_HIGH_RESOLUTION,
+                TIMER_MODIFY_STATE | SYNCHRONIZE);
+            if (timer == nullptr) {
+                timer = CreateWaitableTimerExW(
+                    nullptr, nullptr, 0, TIMER_MODIFY_STATE | SYNCHRONIZE);
+            }
         }
-    } else {
+    };
+    static IdleWaitHandles handles;
+    if (handles.event == nullptr || handles.timer == nullptr) {
+        return;
+    }
+    if (!state.idle_wake_event_registered) {
+        state.deadline_events.set_idle_wake_event(handles.event);
+        state.idle_wake_event_registered = true;
+        // Anything published before the registration is already in the mask
+        // and was tested above; nothing can be lost.
+    }
+    LARGE_INTEGER due_time{};
+    due_time.QuadPart = -static_cast<long long>(
+        std::chrono::duration_cast<std::chrono::nanoseconds>(wait_duration).count() / 100);
+    if (due_time.QuadPart >= 0) {
+        return;
+    }
+    if (SetWaitableTimer(handles.timer, &due_time, 0, nullptr, nullptr, FALSE) == FALSE) {
+        return;
+    }
+    const HANDLE wait_handles[2] = {handles.event, handles.timer};
+    const DWORD waited = WaitForMultipleObjects(2, wait_handles, FALSE, 100u);
+    if (waited == WAIT_OBJECT_0) {
         ++state.idle_loop_sleep_wakes;
+    } else {
+        ++state.idle_loop_sleep_timeouts;
     }
     ++state.idle_loop_sleeps;
     state.idle_loop_sleep_us += static_cast<std::uint64_t>(
@@ -22153,6 +22184,11 @@ void call_guest_impl_body(
                         if (state.native_mouse_async_depth && !capture_in_flight && frame.capture->success) {
                             // The previous scene's field is complete: it becomes the
                             // readable buffer and its predecessor is recaptured.
+                            if (!frame.worker_accounted) {
+                                state.native_mouse_worker_ns+=frame.capture->worker_ns;
+                                state.native_mouse_worker_max_ns=std::max(state.native_mouse_worker_max_ns,frame.capture->worker_ns);
+                                frame.worker_accounted=true;
+                            }
                             if (!frame.ready) frame.ready = std::make_shared<galaxy::gx::PointerDepthCapture>();
                             std::swap(frame.capture, frame.ready);
                             frame.capture->success = false;
@@ -22161,6 +22197,21 @@ void call_guest_impl_body(
                             // Asynchronous mode: the GPU still owns this scene's field.
                             // Keep this scene's matrices; the query reads `ready`.
                             ++state.native_mouse_capture_busy;
+                        } else if (state.native_mouse_async_depth) {
+                            // In-frame capture: this frame's own submission records
+                            // the field when the render thread reaches the FIFO
+                            // offset of this boundary. No mid-frame FIFO split, no
+                            // utility chunk, no wait (the split cost 2.4 ms per
+                            // frame of simulation time on the 185H laptop).
+                            const auto started = std::chrono::steady_clock::now();
+                            state.address_space->flush_wgpipe_gather_tail_for_frame();
+                            galaxy::gx::attach_pointer_depth_capture(
+                                frame.capture, state.address_space->gx_fifo_data().size());
+                            frame.worker_accounted=false;
+                            ++state.native_mouse_submitted;
+                            const auto elapsed = static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now()-started).count());
+                            state.native_mouse_capture_ns += elapsed;
+                            state.native_mouse_capture_max_ns = std::max(state.native_mouse_capture_max_ns, elapsed);
                         } else {
                         if (!frame.worker_accounted) {
                             state.native_mouse_worker_ns+=frame.capture->worker_ns;

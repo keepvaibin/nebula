@@ -447,6 +447,15 @@ public:
     // Render-owner only. Keeps shared GXPeek utility resources owned until the
     // entire exact field has been copied by try_complete_pointer_depth_capture.
     [[nodiscard]] std::uint64_t submit_pointer_depth_capture();
+    // Records the pointer depth field capture into the frame's own command
+    // list at the current point of the stream (the simulation thread marks the
+    // FIFO offset of the scene boundary). The readback completes at this
+    // frame's fence; try_complete_pointer_depth_capture publishes it. False
+    // while another pointer field is still owned.
+    [[nodiscard]] bool record_pointer_depth_capture_in_frame();
+    [[nodiscard]] std::uint64_t pointer_depth_capture_fence() const noexcept {
+        return pointer_depth_capture_fence_;
+    }
     [[nodiscard]] bool try_complete_pointer_depth_capture(
         std::span<std::uint32_t> pixels);
     // Render-owner only. Asynchronous 640x528 EFB fields (depth for GXPeekZ,
@@ -883,6 +892,8 @@ private:
     Microsoft::WRL::ComPtr<ID3D12Resource> pointer_depth_target_;
     Microsoft::WRL::ComPtr<ID3D12Resource> pointer_depth_readback_;
     std::uint64_t pointer_depth_capture_fence_ = 0;
+    bool pointer_depth_in_frame_pending_ = false;
+    bool ensure_pointer_depth_resources();
     struct AsyncPeekField {
         Microsoft::WRL::ComPtr<ID3D12CommandAllocator> allocator;
         Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> command_list;

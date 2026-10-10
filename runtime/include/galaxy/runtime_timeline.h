@@ -345,6 +345,13 @@ public:
     bool publish(EventKind kind, std::uint64_t count = 1) noexcept;
     // Wakes a simulation thread blocked in WaitOnAddress on mask_address().
     void wake_idle_waiters() noexcept;
+    // Optional auto-reset event that wake_idle_waiters also signals. The
+    // simulation thread's idle wait blocks on it together with a
+    // high-resolution waitable timer, because WaitOnAddress timeouts are
+    // quantized to the system clock interrupt (16 to 33 ms observed).
+    void set_idle_wake_event(void* event) noexcept {
+        idle_wake_event_.store(event, std::memory_order_release);
+    }
     // Publishes one exact periodic edge. Identity and count are updated under
     // the same per-kind lock, so a consumer can never drain a singleton count
     // while accidentally observing the following edge's sequence/deadline.
@@ -433,6 +440,7 @@ private:
     std::array<std::atomic_uint64_t, kEventKindCount> total_spins_{};
     std::array<std::atomic_uint64_t, kEventKindCount> max_spins_{};
     std::atomic_uint32_t mask_{0};
+    std::atomic<void*> idle_wake_event_{nullptr};
 };
 
 enum class PeriodicConsumeStatus : std::uint8_t {

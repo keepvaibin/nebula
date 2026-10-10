@@ -59,6 +59,11 @@ bool enqueue_pointer_depth_capture(const std::shared_ptr<PointerDepthCapture>& c
     return backend().enqueue_pointer_depth_capture(capture);
 }
 
+void attach_pointer_depth_capture(
+    const std::shared_ptr<PointerDepthCapture>& capture, std::size_t fifo_offset) {
+    backend().attach_pointer_depth_capture(capture, fifo_offset);
+}
+
 bool capture_pointer_depth(std::span<std::uint32_t> pixels) {
     return backend().capture_pointer_depth(pixels);
 }

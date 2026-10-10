@@ -4312,6 +4312,10 @@ std::uint64_t RendererD3D12::end_frame(
     const std::uint64_t submitted_frame = frame_index_ + 1u;
     const std::uint64_t submitted_fence = ++next_fence_value_;
     fence_values_[frame_slot_] = submitted_fence;
+    if (pointer_depth_in_frame_pending_) {
+        pointer_depth_capture_fence_ = submitted_fence;
+        pointer_depth_in_frame_pending_ = false;
+    }
     const HRESULT signal_hr = queue_->Signal(fence_.Get(), submitted_fence);
     if (FAILED(signal_hr)) {
         dump_device_removal(device_.Get());
@@ -5435,6 +5439,110 @@ bool RendererD3D12::peek_efb(
     return read_efb_pixels(x, y, kind, value, {});
 }
 
+bool RendererD3D12::ensure_pointer_depth_resources() {
+    if (pointer_depth_target_ && pointer_depth_readback_) {
+        return true;
+    }
+    if (!ensure_peek_resources()) {
+        return false;
+    }
+    constexpr UINT width = kEfbWidth;
+    constexpr UINT height = kEfbHeight;
+    constexpr UINT row_pitch = kEfbWidth * 4u;
+    ComPtr<ID3D12Resource> target_candidate;
+    ComPtr<ID3D12Resource> readback_candidate;
+    D3D12_HEAP_PROPERTIES hp{};
+    hp.Type = D3D12_HEAP_TYPE_DEFAULT;
+    D3D12_RESOURCE_DESC td = peek_target_->GetDesc();
+    td.Width = width; td.Height = height;
+    d3d_check(device_->CreateCommittedResource(&hp, D3D12_HEAP_FLAG_NONE,
+        &td, D3D12_RESOURCE_STATE_COPY_SOURCE, nullptr,
+        IID_PPV_ARGS(&target_candidate)), "pointer depth target");
+    hp.Type = D3D12_HEAP_TYPE_READBACK;
+    D3D12_RESOURCE_DESC rd = peek_readback_->GetDesc();
+    rd.Width = static_cast<UINT64>(row_pitch) * height;
+    d3d_check(device_->CreateCommittedResource(&hp, D3D12_HEAP_FLAG_NONE,
+        &rd, D3D12_RESOURCE_STATE_COPY_DEST, nullptr,
+        IID_PPV_ARGS(&readback_candidate)), "pointer depth readback");
+    pointer_depth_target_ = std::move(target_candidate);
+    pointer_depth_readback_ = std::move(readback_candidate);
+    return true;
+}
+
+// Mid-stream pointer depth field: the same conversion draw and readback copy
+// as the utility path, recorded into the frame's command list so the frame's
+// own submission carries it. No FIFO split, no utility chunk, no wait.
+bool RendererD3D12::record_pointer_depth_capture_in_frame() {
+    if (pointer_depth_in_frame_pending_ || pointer_depth_capture_fence_ != 0u) {
+        return false;
+    }
+    if (!ensure_pointer_depth_resources()) {
+        return false;
+    }
+    constexpr UINT width = kEfbWidth;
+    constexpr UINT height = kEfbHeight;
+    constexpr UINT row_pitch = kEfbWidth * 4u;
+    ID3D12Resource* const target = pointer_depth_target_.Get();
+    ID3D12Resource* const readback = pointer_depth_readback_.Get();
+    ID3D12Resource* const src = efb_depth_.Get();
+
+    D3D12_RESOURCE_BARRIER barriers[2]{};
+    barriers[0].Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+    barriers[0].Transition.pResource = src;
+    barriers[0].Transition.StateBefore = D3D12_RESOURCE_STATE_DEPTH_WRITE;
+    barriers[0].Transition.StateAfter = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+    barriers[0].Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+    barriers[1].Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+    barriers[1].Transition.pResource = target;
+    barriers[1].Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_SOURCE;
+    barriers[1].Transition.StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET;
+    barriers[1].Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+    command_list_->ResourceBarrier(2, barriers);
+
+    const D3D12_CPU_DESCRIPTOR_HANDLE rtv = allocate_conversion_rtv(target);
+    command_list_->OMSetRenderTargets(1, &rtv, FALSE, nullptr);
+    const D3D12_VIEWPORT viewport{
+        0.0f, 0.0f, static_cast<float>(width), static_cast<float>(height), 0.0f, 1.0f};
+    const D3D12_RECT scissor{0, 0, static_cast<LONG>(width), static_cast<LONG>(height)};
+    command_list_->RSSetViewports(1, &viewport);
+    command_list_->RSSetScissorRects(1, &scissor);
+    command_list_->SetGraphicsRootSignature(s_conv_root_sig.Get());
+    command_list_->SetPipelineState(conv_pipeline_.Get());
+    const EfbPeekSamplingGeometry sampling =
+        compute_efb_peek_sampling_geometry(0u, 0u, efb_scale_);
+    EfbConversionShaderConstants constants =
+        make_efb_peek_conversion_constants(sampling, EfbPeekKind::Depth);
+    constants.values[15] = -1.0f;
+    command_list_->SetGraphicsRoot32BitConstants(0, 16, constants.values.data(), 0);
+    command_list_->SetGraphicsRootDescriptorTable(1, conv_efb_depth_srv_);
+    command_list_->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+    command_list_->DrawInstanced(3, 1, 0, 0);
+
+    std::swap(barriers[0].Transition.StateBefore, barriers[0].Transition.StateAfter);
+    std::swap(barriers[1].Transition.StateBefore, barriers[1].Transition.StateAfter);
+    command_list_->ResourceBarrier(2, barriers);
+
+    D3D12_TEXTURE_COPY_LOCATION src_copy{};
+    src_copy.pResource = target;
+    src_copy.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
+    D3D12_TEXTURE_COPY_LOCATION dst_copy{};
+    dst_copy.pResource = readback;
+    dst_copy.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
+    dst_copy.PlacedFootprint.Footprint.Format = kEfbColorFormat;
+    dst_copy.PlacedFootprint.Footprint.Width = width;
+    dst_copy.PlacedFootprint.Footprint.Height = height;
+    dst_copy.PlacedFootprint.Footprint.Depth = 1;
+    dst_copy.PlacedFootprint.Footprint.RowPitch = row_pitch;
+    command_list_->CopyTextureRegion(&dst_copy, 0, 0, 0, &src_copy, nullptr);
+
+    // Restore the GX drawing state exactly as record_conversion_blit does.
+    command_list_->SetGraphicsRootSignature(root_signature_.Get());
+    invalidate_gx_bindings();
+    bind_efb(nullptr);
+    pointer_depth_in_frame_pending_ = true;
+    return true;
+}
+
 bool RendererD3D12::capture_pointer_depth(std::span<std::uint32_t> pixels) {
     if (pixels.size() != kEfbWidth * kEfbHeight) {
         throw std::invalid_argument("pointer depth field requires 640x528 pixels");
@@ -5457,6 +5565,9 @@ bool RendererD3D12::try_complete_pointer_depth_capture(
         throw std::invalid_argument("pointer depth field requires 640x528 pixels");
     }
     if (pointer_depth_capture_fence_ == 0u) {
+        if (pointer_depth_in_frame_pending_) {
+            return false;  // recorded in the open frame; fenced at end_frame
+        }
         throw std::logic_error("pointer depth completion has no owned fence");
     }
     if (completed_fence_value() < pointer_depth_capture_fence_) {
@@ -5680,24 +5791,8 @@ bool RendererD3D12::read_efb_pixels(
     const UINT width = field ? kEfbWidth : 1u;
     const UINT height = field ? kEfbHeight : 1u;
     const UINT row_pitch = field ? kEfbWidth * 4u : peek_readback_row_pitch_;
-    if (field && (!pointer_depth_target_ || !pointer_depth_readback_)) {
-        ComPtr<ID3D12Resource> target_candidate;
-        ComPtr<ID3D12Resource> readback_candidate;
-        D3D12_HEAP_PROPERTIES hp{};
-        hp.Type = D3D12_HEAP_TYPE_DEFAULT;
-        D3D12_RESOURCE_DESC td = peek_target_->GetDesc();
-        td.Width = width; td.Height = height;
-        d3d_check(device_->CreateCommittedResource(&hp, D3D12_HEAP_FLAG_NONE,
-            &td, D3D12_RESOURCE_STATE_COPY_SOURCE, nullptr,
-            IID_PPV_ARGS(&target_candidate)), "pointer depth target");
-        hp.Type = D3D12_HEAP_TYPE_READBACK;
-        D3D12_RESOURCE_DESC rd = peek_readback_->GetDesc();
-        rd.Width = static_cast<UINT64>(row_pitch) * height;
-        d3d_check(device_->CreateCommittedResource(&hp, D3D12_HEAP_FLAG_NONE,
-            &rd, D3D12_RESOURCE_STATE_COPY_DEST, nullptr,
-            IID_PPV_ARGS(&readback_candidate)), "pointer depth readback");
-        pointer_depth_target_ = std::move(target_candidate);
-        pointer_depth_readback_ = std::move(readback_candidate);
+    if (field && !ensure_pointer_depth_resources()) {
+        return false;
     }
     ID3D12Resource* target = field ? pointer_depth_target_.Get() : peek_target_.Get();
     ID3D12Resource* readback = field ? pointer_depth_readback_.Get() : peek_readback_.Get();

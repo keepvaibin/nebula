@@ -229,6 +229,12 @@ public:
         std::uint32_t timeout_ms);
     [[nodiscard]] bool capture_pointer_depth(std::span<std::uint32_t> pixels);
     [[nodiscard]] bool enqueue_pointer_depth_capture(const std::shared_ptr<PointerDepthCapture>& capture);
+    // Simulation thread: the next render_frame submission records this
+    // pointer depth field when its parser reaches `fifo_offset` bytes into the
+    // submitted FIFO (the offset of the current gather tail at the scene
+    // boundary). The capture is owned by the render thread until it publishes.
+    void attach_pointer_depth_capture(
+        const std::shared_ptr<PointerDepthCapture>& capture, std::size_t fifo_offset);
     void set_prerecorded_movie_content(bool movie) noexcept { producer_movie_content_=movie; }
     void set_safety_scene_surround(float intensity) noexcept { producer_safety_surround_=intensity; }
     void set_pointer_response(PointerResponseStamp stamp) noexcept {
@@ -519,6 +525,10 @@ private:
         bool efb_peek_only = false;
         EfbPeekRequest* efb_peek_request = nullptr;
         std::shared_ptr<PointerDepthCapture> pointer_depth_capture;
+        // In-frame pointer field: recorded when the parser reaches this
+        // offset of the chunk's FIFO (the scene boundary).
+        std::size_t pointer_depth_capture_fifo_offset = 0;
+        bool pointer_depth_in_frame = false;
         std::uint64_t dependency_scan_ns = 0;
         std::uint64_t snapshot_ns = 0;
         std::uint64_t snapshot_bytes = 0;
@@ -583,6 +593,8 @@ private:
         bool count_game_xfb_present = true);
     void present_latest_frame_on_thread();
     PointerResponseStamp producer_pointer_response_{}, render_pointer_response_{}, last_response_{};
+    std::shared_ptr<PointerDepthCapture> producer_pointer_depth_capture_;
+    std::size_t producer_pointer_depth_capture_offset_ = 0;
     bool producer_movie_content_{},render_movie_content_{};
     float producer_safety_surround_{},render_safety_surround_{};
     std::array<std::uint64_t,512> pointer_latency_bins_{};
@@ -762,6 +774,9 @@ private:
         std::uint64_t fence_value = 0;
         std::chrono::steady_clock::time_point started{};
     } pending_pointer_depth_capture_;
+    void take_attached_pointer_depth_capture(FrameChunk& chunk, std::size_t fifo_size);
+    void record_pointer_depth_capture_in_frame(FrameChunk& chunk);
+    void adopt_pointer_depth_fence_if_needed();
     // Asynchronous EFB depth field for simulation-thread GXPeekZ. Three slots:
     // the render owner fills the slot after the published one, then publishes
     // it; readers only ever load the published slot.

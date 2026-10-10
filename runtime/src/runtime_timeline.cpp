@@ -784,6 +784,9 @@ std::size_t PendingEventLatch::index(EventKind kind) noexcept {
 // sleeps on the mask word itself (WaitOnAddress); wake it after the bit lands.
 void PendingEventLatch::wake_idle_waiters() noexcept {
     WakeByAddressAll(static_cast<void*>(&mask_));
+    if (void* const event = idle_wake_event_.load(std::memory_order_acquire)) {
+        SetEvent(static_cast<HANDLE>(event));
+    }
 }
 
 bool PendingEventLatch::publish(EventKind kind, std::uint64_t count) noexcept {

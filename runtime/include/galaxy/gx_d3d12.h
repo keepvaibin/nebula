@@ -105,6 +105,10 @@ void wait_for_frame_pe_completion(FramePeCompletionToken token);
 // The caller owns the output until this render utility completes.
 [[nodiscard]] bool capture_pointer_depth(std::span<std::uint32_t> pixels);
     [[nodiscard]] bool enqueue_pointer_depth_capture(const std::shared_ptr<PointerDepthCapture>& capture);
+// The next render_frame submission records the field when its parser reaches
+// `fifo_offset` bytes into the submitted FIFO; completion publishes as above.
+void attach_pointer_depth_capture(
+    const std::shared_ptr<PointerDepthCapture>& capture, std::size_t fifo_offset);
 void set_pointer_response(PointerResponseStamp stamp) noexcept;
 // Simulation producer; copied into each owned FIFO chunk and selected XFB.
 void set_prerecorded_movie_content(bool movie) noexcept;

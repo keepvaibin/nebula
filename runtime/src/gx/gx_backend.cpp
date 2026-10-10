@@ -5438,6 +5438,7 @@ FramePeCompletionToken GxBackend::render_frame(
     if (!async_render_thread_enabled()) {
         FrameChunk chunk;
         chunk.pointer_response=producer_pointer_response_;
+        take_attached_pointer_depth_capture(chunk, fifo_size);
         chunk.prerecorded_movie=producer_movie_content_;
         chunk.safety_surround=producer_safety_surround_;
         chunk.services = services;
@@ -5540,6 +5541,7 @@ FramePeCompletionToken GxBackend::render_frame(
         : std::chrono::steady_clock::time_point{};
     FrameChunk chunk;
     chunk.pointer_response=producer_pointer_response_;
+    take_attached_pointer_depth_capture(chunk, fifo_size);
     chunk.prerecorded_movie=producer_movie_content_;
     chunk.safety_surround=producer_safety_surround_;
     chunk.services = services;
@@ -6110,6 +6112,65 @@ bool GxBackend::wait_for_frame_pe_completion_for(
     }
 }
 
+void GxBackend::attach_pointer_depth_capture(
+    const std::shared_ptr<PointerDepthCapture>& capture, std::size_t fifo_offset) {
+    if (!initialized_ || !capture) return;
+    if (!capture->complete.exchange(false, std::memory_order_acq_rel))
+        throw std::logic_error("pointer depth capture reused while owned by render worker");
+    capture->success = false; capture->error = nullptr; capture->worker_ns = 0u;
+    if (producer_pointer_depth_capture_) {
+        // Two boundaries without a submission between them: the older request
+        // can no longer be placed. Release it unsuccessful.
+        producer_pointer_depth_capture_->publish_complete();
+    }
+    producer_pointer_depth_capture_ = capture;
+    producer_pointer_depth_capture_offset_ = fifo_offset;
+}
+
+void GxBackend::take_attached_pointer_depth_capture(FrameChunk& chunk, std::size_t fifo_size) {
+    if (!producer_pointer_depth_capture_) return;
+    if (producer_pointer_depth_capture_offset_ <= fifo_size) {
+        chunk.pointer_depth_capture = std::move(producer_pointer_depth_capture_);
+        chunk.pointer_depth_capture_fifo_offset = producer_pointer_depth_capture_offset_;
+        chunk.pointer_depth_in_frame = true;
+    } else {
+        producer_pointer_depth_capture_->publish_complete();
+    }
+    producer_pointer_depth_capture_.reset();
+    producer_pointer_depth_capture_offset_ = 0;
+}
+
+// Render thread, inside the frame's parse: the field joins this command list.
+void GxBackend::record_pointer_depth_capture_in_frame(FrameChunk& chunk) {
+    auto capture = std::move(chunk.pointer_depth_capture);
+    chunk.pointer_depth_capture.reset();
+    chunk.pointer_depth_in_frame = false;
+    if (!capture) return;
+    const auto start = std::chrono::steady_clock::now();
+    bool recorded = false;
+    try {
+        recorded = renderer_.record_pointer_depth_capture_in_frame();
+    } catch (...) {
+        capture->error = std::current_exception();
+    }
+    if (!recorded) {
+        capture->success = false;
+        capture->publish_complete();
+        return;
+    }
+    const std::lock_guard<std::mutex> lock(queue_mutex_);
+    // The fence is assigned at end_frame; adopt_pointer_depth_fence_if_needed
+    // copies it before any wait or completion poll.
+    pending_pointer_depth_capture_ = {std::move(capture), 0u, start};
+}
+
+void GxBackend::adopt_pointer_depth_fence_if_needed() {
+    if (pending_pointer_depth_capture_.capture &&
+        pending_pointer_depth_capture_.fence_value == 0u) {
+        pending_pointer_depth_capture_.fence_value = renderer_.pointer_depth_capture_fence();
+    }
+}
+
 bool GxBackend::enqueue_pointer_depth_capture(const std::shared_ptr<PointerDepthCapture>& capture) {
     if (!initialized_ || !capture) return false;
     if (!capture->complete.exchange(false,std::memory_order_acq_rel))
@@ -6605,6 +6666,7 @@ void GxBackend::poll_completed_pointer_depth_capture() {
     if (!pending_pointer_depth_capture_.capture) {
         return;
     }
+    adopt_pointer_depth_fence_if_needed();
     auto capture = pending_pointer_depth_capture_.capture;
     if (!renderer_.try_complete_pointer_depth_capture(capture->pixels)) {
         return;
@@ -6623,6 +6685,7 @@ void GxBackend::poll_completed_pointer_depth_capture() {
 }
 
 void GxBackend::drain_pending_pointer_depth_capture() {
+    adopt_pointer_depth_fence_if_needed();
     if (pending_pointer_depth_capture_.capture) {
         // Scalar game peeks and a second field share the utility allocator and
         // descriptors. Preserve the first field before either can reuse them.
@@ -7557,25 +7620,48 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
             memory == &chunk.memory_snapshot.memory);
 
         try {
+            // An in-frame pointer depth field splits the run at the marked
+            // offset: everything before it is drawn, the field is recorded
+            // into this frame's command list, then the rest runs. A command
+            // straddling the marker simply finishes in the second run.
+            const bool capture_in_frame =
+                chunk.pointer_depth_in_frame && chunk.pointer_depth_capture != nullptr;
+            const auto run_stream = [&](std::span<const std::byte> stream,
+                                        std::size_t marker) -> std::size_t {
+                if (!capture_in_frame || marker > stream.size()) {
+                    return parser_.run_available(
+                        stream, memory, *this, state_,
+                        frame_memory_regions_disjoint_sorted_);
+                }
+                std::size_t consumed = marker == 0u ? 0u : parser_.run_available(
+                    stream.first(marker), memory, *this, state_,
+                    frame_memory_regions_disjoint_sorted_);
+                record_pointer_depth_capture_in_frame(chunk);
+                if (consumed < stream.size()) {
+                    consumed += parser_.run_available(
+                        stream.subspan(consumed), memory, *this, state_,
+                        frame_memory_regions_disjoint_sorted_);
+                }
+                return consumed;
+            };
             if (pending_fifo_.empty()) {
                 const std::span<const std::byte> fifo(fifo_data, fifo_size);
                 const std::size_t consumed =
-                    parser_.run_available(
-                        fifo, memory, *this, state_,
-                        frame_memory_regions_disjoint_sorted_);
+                    run_stream(fifo, chunk.pointer_depth_capture_fifo_offset);
                 if (consumed < fifo.size()) {
                     pending_fifo_.assign(
                         fifo.begin() + static_cast<std::ptrdiff_t>(consumed),
                         fifo.end());
                 }
             } else {
+                const std::size_t pending_prefix = pending_fifo_.size();
                 if (fifo_data != nullptr && fifo_size > 0) {
                     pending_fifo_.insert(
                         pending_fifo_.end(), fifo_data, fifo_data + fifo_size);
                 }
-                const std::size_t consumed = parser_.run_available(
-                    pending_fifo_, memory, *this, state_,
-                    frame_memory_regions_disjoint_sorted_);
+                const std::size_t consumed = run_stream(
+                    pending_fifo_,
+                    pending_prefix + chunk.pointer_depth_capture_fifo_offset);
                 if (consumed == pending_fifo_.size()) {
                     pending_fifo_.clear();
                 } else if (consumed > 0) {
