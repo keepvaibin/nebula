@@ -69,15 +69,12 @@ pub fn release_module_options() -> ModuleTranslationOptions {
         // under the experiment versus the native generic lowering elsewhere in
         // the same range at 8 to 60 ns. Let the generic native lowering own it.
         exact_psmtx_local_lanes: false,
-        // General text-based GPR residency remains disabled. The prior emitted-
-        // source census added 2.73 context accesses per removed access; this is
-        // not a linked-code or gameplay benchmark. The CPU audit also found
-        // conditional-return and ordinary FP-label writeback counterexamples.
-        // Keep this pass off. Broader residency needs typed effect/entry/exit
-        // proofs, not a global switch or a claim that the current pass is correct.
-        // See AgentWork/agent-23/06-residency-measured-negative.md and the
-        // Agent 1 CPU audit findings N21/N22/N89.
-        guest_resident_integer: false,
+        // Register residency (crate::residency): GPRs, LR and CTR live in host
+        // locals between synchronization points; every context-receiving call
+        // that is not proven to leave the integer file alone stores first and
+        // reloads afterwards, interior entries reload through stubs, and every
+        // return stores. Unknown helpers are full synchronization points.
+        guest_resident_integer: true,
         ..ModuleTranslationOptions::default()
     }
 }

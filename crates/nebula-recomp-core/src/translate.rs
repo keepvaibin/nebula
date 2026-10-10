@@ -215,7 +215,7 @@ pub struct ModuleTranslationOptions {
     /// function-local variable, so the host compiler's own register allocator
     /// owns the guest register file across the straight-line body. Only the
     /// function exit writes the locals back. See
-    /// [`apply_integer_gpr_residency`] for the eligibility rule, and why
+    /// `crate::residency::apply_register_residency` for the rule, and why
     /// interior entries and runtime-indexed GPR access are excluded.
     pub guest_resident_integer: bool,
     pub exact_psmtx_local_lanes: bool,
@@ -2425,477 +2425,20 @@ fn integer_guest_load_expression(width: u32, ea: &str, pc: u32, flat_ram_reads: 
     }
 }
 
-// Straight-line integer GPR residency.
-//
-// The translated body names `context->gpr[N]` for every guest register
-// operand, so the host compiler treats each operand as an independent 4-byte
-// memory access into `PpcContext`. An opaque call in between -- the
-// call-return checkpoint after every guest call, every guest load or store --
-// forces every later read to be re-issued, so the guest register file is
-// effectively reloaded per instruction and the host register allocator is
-// never allowed to own it.
-//
-// This pass renames every *directly indexed* GPR access in the body to a
-// function-local variable. The body's own control flow is untouched: the
-// locals are loaded once at the single normal entry and written back once
-// before each `return`. That is exactly equivalent for straight-line code,
-// because nothing between those points can observe `context->gpr[]` except the
-// body itself.
-//
-// Eligibility is deliberately narrow, because three shapes would break that
-// equivalence, and each one is cheap to detect in the emitted text:
-//
-//   * interior entries and `call_return_*` continuations. Both are entered
-//     from outside this body, so both are repaired at their own label: an entry
-//     loads the locals, a continuation writes them back before the checkpoint
-//     that follows it runs.
-//   * runtime-indexed GPR access (`context->gpr[reg]`, emitted by the
-//     `lmw`/`stmw` register-range loops). A variable index means the resident
-//     set cannot be proven complete at that access, so such a body is rejected
-//     outright rather than left half-renamed.
-//   * a call that receives `context`, which may read or write the register file
-//     directly. Guest loads and stores receive `(memory, ...)` only, and the
-//     condition-register helpers touch `context->cr`, never `context->gpr`.
-//
-// `ensure_fpu_available` is deliberately *not* on that list even though it
-// takes `context`: its hot path is a read of `context->msr`, and its escalation
-// path re-enters at the `fpu_retry_<pc>` alias, which jumps to `label_<pc>` --
-// an entry label that already reloads the locals. Measured over 200 shards,
-// every one of 33,084 such aliases has that shape.
-//
-// Returns `None` when the body was left untouched, so the caller can keep the
-// original text without re-allocating it.
-/// End offset of a `call_return_<8 hex digits>:` label found at or after
-/// `from`, or `None`. Scanned by hand rather than with a regex so this file
-/// needs no new import.
-fn call_return_label_end(haystack: &str, from: usize) -> Option<usize> {
-    const PREFIX: &str = "call_return_";
-    let mut search = from;
-    while let Some(found) = haystack[search..].find(PREFIX) {
-        let at = search + found;
-        let suffix = at + PREFIX.len();
-        let digits = haystack[suffix..]
-            .bytes()
-            .take_while(|byte| byte.is_ascii_hexdigit())
-            .count();
-        if digits == 8 && haystack.as_bytes().get(suffix + digits) == Some(&b':') {
-            return Some(suffix + digits + 1);
-        }
-        search = suffix;
-    }
-    None
-}
-
-// A label definition is distinguished from a reference to it by the newline that
-// always follows the defining colon. This must NOT be a column-0 test: two of the
-// five call_return_ emission sites write the label inline, immediately after a
-// preceding statement's `\n`, so an inline definition is never at column 0:
-//
-//   writeln!(output, "call_return_{entry:08X}:")                      // col 0
-//   "\ncall_return_{return_pc:08X}:\n{checkpoint}    goto label_..."   // inline
-//
-// whereas every reference is `case 0x...u: goto <label>;` and therefore ends in a
-// semicolon. The terminator is what separates the two, so the caller passes a
-// needle already carrying its trailing newline.
-fn find_label_definition(haystack: &str, from: usize, needle: &str) -> Option<usize> {
-    debug_assert!(needle.ends_with('\n'), "a label needle must carry its terminator");
-    haystack[from..].find(needle).map(|offset| from + offset)
-}
-
-fn apply_integer_gpr_residency(
-    address: u32,
-    body: &str,
-    entries: &BTreeSet<u32>,
-) -> Option<String> {
-    /// A subscript is directly indexed only when it is entirely decimal digits.
-    /// That is the whole test: a directly indexed access is an lvalue or an
-    /// rvalue of `resident_rN` either way, so no read/write distinction is
-    /// required here.
-    fn literal_index(spec: &str) -> Option<u32> {
-        if spec.is_empty() || !spec.bytes().all(|byte| byte.is_ascii_digit()) {
-            return None;
-        }
-        spec.parse::<u32>().ok().filter(|index| *index < 32)
-    }
-
-    // Interior entry labels, as the emitter writes them. An entry outside the
-    // function's own range has no label in this body and is skipped rather than
-    // treated as an error.
-    let entry_labels: Vec<String> = entries
-        .iter()
-        .filter_map(|entry| {
-            entry
-                .checked_sub(address)
-                .filter(|offset| *offset % 4 == 0)
-                .map(|offset| format!("label_{:08X}:", address + offset))
-        })
-        .collect();
-    // A call that can observe the register file directly. Every one of these
-    // takes `context` as an argument; no guest load, guest store or
-    // condition-register helper does.
-    for callee in [
-        "call_guest(",
-        "call_guest_cached(",
-        "native_",
-        "branch_checkpoint(",
-        "branch_checkpoint_taken(",
-        "architectural_interrupt_checkpoint(",
-        "enter_guest_function(",
-        // A direct guest call. The emitter writes these as
-        // `rmge01::fn_XXXXXXXX(context, memory, services)` (`emit_resolved_generated_direct_call`,
-        // the tail-call and particle/JPA paths), i.e. the callee is handed the
-        // caller's `context` and will read its arguments out of `context->gpr[3..]`
-        // and publish its result back into `context->gpr[3]`. Renaming the caller's
-        // operand to a local would therefore publish stale arguments and then
-        // clobber the callee's result on writeback. Both directions are silent:
-        // the C++ still compiles and the module still loads.
-        //
-        // These were missing. The reason it went unnoticed is structural: the
-        // fenced implementation (`lower_resident_integer_direct_calls`, which syncs
-        // around direct calls with `emit_resident_gpr_sync`) is gated on
-        // `guest_resident_leaf` -- default `false`, and never set by the installer
-        // -- while this function is the one reached through the general
-        // `guest_resident_integer` option. The only tests that assert the fence
-        // call that other function directly, so they passed. See
-        // `AgentWork/agent-21/A21-9-*.md`.
-        //
-        // `guest_resident_integer` is `false` today (A23-7 measured the transform
-        // net-negative), so this list entry is dormant rather than load-bearing.
-        // It is here because that option is explicitly expected to be revisited
-        // once the emitted code has longer call-free straight-line runs, and a
-        // silent misexecution is not something a re-enable should have to
-        // rediscover.
-        //
-        // The net-negative result was re-derived structurally rather than trusted
-        // (AgentWork/agent-23/52-residency-resolved.md). Counting this function's
-        // own operand sets over the real module -- `U` loads at entry,
-        // `U * label_` reloads, and `W` stores per `call_return_` and per return --
-        // reproduces the earlier `saved` figure to 0.006 % (676,660 against
-        // 676,620) and gives `added` of at least 1.17x it. So the net is negative
-        // under either estimate of the writeback multiplicity.
-        //
-        // The reason is CALL DENSITY, not register reuse: the real module averages
-        // 5.16 written registers against 4.219 `call_return_` continuations and
-        // 1.683 returns per body, so every call publishes the locals and every
-        // continuation publishes them again. Extending this transform to more
-        // bodies cannot help while a body calls out ~4.2 times. The lever that
-        // could is narrowing the fence list above: each entry removed is up to
-        // `W` stores saved per call site. That requires proving the callee never
-        // observes `context->gpr[]`, which is why the list is conservative.
-        //
-        // Cheap and correct now. The better fix, when someone wants the coverage
-        // this gives up, is to make a direct call a sync point here: publish
-        // `store_lines` before it and reload `loads` after it, exactly as
-        // `emit_resident_gpr_sync` already does.
-        "rmge01::fn_",
-        "call_guest_resolved(",
-        "call_guest_direct_resolved(",
-        // Both of these take a `const PpcContext*` and only read it, so they
-        // are safe today. They are listed anyway so that a future edit which
-        // gives either one a non-const context cannot silently invalidate the
-        // writeback set of every body they appear in.
-        "trace_audio_function_entry(",
-        "trace_movie_function_entry(",
-    ] {
-        if body.contains(callee) {
-            return None;
-        }
-    }
-
-    const OPEN: &str = "context->gpr[";
-    let mut rewritten = String::with_capacity(body.len() + body.len() / 64);
-    let mut cursor = 0usize;
-    let mut used = [false; 32];
-    let mut renamed = 0usize;
-    while let Some(found) = body[cursor..].find(OPEN) {
-        let start = cursor + found;
-        let after_bracket = start + OPEN.len();
-        let Some(close_offset) = body[after_bracket..].find(']') else {
-            break;
-        };
-        let close = after_bracket + close_offset;
-        let spec = &body[after_bracket..close];
-        let Some(index) = literal_index(spec) else {
-            // Runtime-indexed access: reject the whole body rather than emit a
-            // mixture of resident and memory register state.
-            return None;
-        };
-        rewritten.push_str(&body[cursor..start]);
-        let _ = write!(rewritten, "resident_r{index}");
-        used[index as usize] = true;
-        cursor = close + 1;
-        renamed += 1;
-    }
-    if renamed == 0 {
-        return None;
-    }
-    rewritten.push_str(&body[cursor..]);
-
-    // Only the registers this body actually names get a local and a load. A
-    // typical translated function touches a handful of the 32, so this keeps
-    // the added stack traffic proportional to real register use instead of
-    // charging every function for all 32. The host compiler removes any local
-    // it proves dead.
-    // Two renderings of the same reload, because the two places it is emitted
-    // are in different scopes:
-    //
-    //   * at the function's normal entry the locals do not exist yet, so they are
-    //     *declared* there;
-    //   * at an interior-entry label they already exist, so they are only
-    //     *assigned*. Emitting the declaring form there is a redefinition
-    //     (C2374/C2086), which is what a body carrying an `entries` set hits the
-    //     moment it becomes eligible.
-    let mut loads = String::new();
-    let mut load_assignments = String::new();
-    for index in 0..32u32 {
-        if !used[index as usize] {
-            continue;
-        }
-        let _ = writeln!(
-            loads,
-            "    std::uint32_t resident_r{index} = context->gpr[{index}];"
-        );
-        let _ = writeln!(
-            load_assignments,
-            "    resident_r{index} = context->gpr[{index}];"
-        );
-    }
-    // Write back only the registers this body *writes*. A register that is only
-    // read still holds the value loaded at entry and can never have diverged:
-    // the eligibility rule above rejects every call that receives `context`, so
-    // nothing between the load and the return can change `context->gpr[]`
-    // behind this body's back. Omitting read-only registers is therefore both
-    // correct and narrower -- storing one back would clobber whatever a callee
-    // published into it before this function returned.
-    let mut store_lines: Vec<String> = Vec::new();
-    for index in 0..32u32 {
-        if !used[index as usize] {
-            continue;
-        }
-        let mut probe = String::with_capacity(24);
-        let _ = write!(probe, "resident_r{index} =");
-        // `resident_rN ==` is a comparison, not a store. Reject a doubled '='.
-        let assigned = rewritten.match_indices(&probe).any(|(offset, _)| {
-            !rewritten[offset + probe.len()..].starts_with('=')
-        });
-        if assigned {
-            store_lines.push(format!("context->gpr[{index}] = resident_r{index};"));
-        }
-    }
-    if store_lines.is_empty() {
-        return None;
-    }
-
-    // Place the loads at the normal entry, at *function scope*.
-    //
-    // This function is handed one of two shapes, and they must be distinguished
-    // by content rather than assumed:
-    //
-    //   * `lower_words_with_config` hands over the instruction stream only, so
-    //     the text starts with `    {` (or an interior-entry dispatch). The loads
-    //     go at offset 0.
-    //   * A complete function body starts with its signature line. The loads go
-    //     after the prologue, i.e. after the signature and any prologue text,
-    //     and before the first instruction block.
-    //
-    // Getting this wrong is not a formatting nit. Splicing the declarations
-    // *inside* the first `    { ... }` instruction block put every `resident_rN`
-    // out of scope at that block's closing brace, so the generated module failed
-    // to compile outright -- C2065 on every later use, across the whole module.
-    // The test bodies all carried signatures while the real generator passed
-    // bare instruction streams, which is exactly why the tests stayed green
-    // while the module could not build. Do not reintroduce a signature-shaped
-    // assumption here; `residency_declarations_land_at_function_scope_not_inside_a_block`
-    // pins both shapes.
-    let prologue_end = if body.starts_with("void ") || body.starts_with("[[") {
-        // A complete body: skip the signature line, then any prologue text the
-        // renderer emits (unused-parameter casts), and stop before the first
-        // instruction block. A dispatch switch ends at `goto fpu_normal_entry_`,
-        // which is the last prologue element when it is present.
-        let signature_end = body.find('\n').map_or(0, |newline| newline + 1);
-        let mut end = signature_end;
-        for cast in [
-            "    static_cast<void>(context);\n",
-            "    static_cast<void>(memory);\n",
-            "    static_cast<void>(services);\n",
-        ] {
-            if body.get(end..).is_some_and(|rest| rest.starts_with(cast)) {
-                end += cast.len();
-            }
-        }
-        if let Some(goto_at) = body.find("    goto fpu_normal_entry_") {
-            end = end.max(goto_at);
-        }
-        end
-    } else {
-        0
-    };
-    let (prefix, rest) = rewritten.split_at(prologue_end);
-
-    // Both label kinds need the locals repaired, for the same reason: the host
-    // arrived from outside this body, so memory is authoritative and the locals
-    // may be stale.
-    //
-    //   * an interior entry jumps to `label_<entry>` past the prologue, so the
-    //     locals have never been loaded at all;
-    //   * a `call_return_<pc>` continuation is entered after a nested guest call
-    //     ran, and that call updated `context->gpr[]` while the locals kept
-    //     their pre-call values.
-    //
-    // At an entry the locals are loaded; at a continuation they are written
-    // back. No other label needs anything, because every other label is a
-    // branch target inside this body and a branch does not touch the register
-    // file.
-    //
-    // This is a single left-to-right pass. `reload_cursor` advances past the
-    // inserted text, so a label introduced by one insert is never re-matched,
-    // and the writeback lines contain no label or gpr access of their own.
-    let mut reloaded = String::with_capacity(
-        rest.len() + entry_labels.len() * load_assignments.len() + rest.len() / 32,
-    );
-    let mut reload_cursor = 0usize;
-    loop {
-        let entry = entry_labels
-            .iter()
-            .filter_map(|label| {
-                find_label_definition(rest, reload_cursor, &format!("{label}\n"))
-                    .map(|offset| (offset, &rest[offset..offset + label.len()], false))
-            })
-            .min_by_key(|(offset, _, _)| *offset);
-        let continuation = call_return_label_end(rest, reload_cursor).and_then(|end| {
-            rest[..end - 1]
-                .rfind("call_return_")
-                .map(|name_start| (name_start, &rest[name_start..end], true))
-        });
-        let next = match (entry, continuation) {
-            (Some(a), Some(b)) => Some(if a.0 <= b.0 { a } else { b }),
-            (Some(a), None) => Some(a),
-            (None, Some(b)) => Some(b),
-            (None, None) => None,
-        };
-        let Some((at, label, is_continuation)) = next else {
-            break;
-        };
-        let after = at + label.len();
-        reloaded.push_str(&rest[reload_cursor..after]);
-        reloaded.push('\n');
-        if is_continuation {
-            for line in &store_lines {
-                reloaded.push_str(line);
-                reloaded.push('\n');
-            }
-        } else {
-            // An interior entry: the locals already exist at function scope, so
-            // this must assign, not re-declare them.
-            reloaded.push_str(&load_assignments);
-        }
-        reload_cursor = after;
-    }
-    reloaded.push_str(&rest[reload_cursor..]);
-    let rest = reloaded.as_str();
-
-    let mut output = String::with_capacity(rewritten.len() + loads.len() + rest.len());
-    output.push_str(prefix);
-    output.push_str(&loads);
-    let mut returned = false;
-    let mut cursor = 0usize;
-    // Two exits with nothing between them would otherwise each carry a full
-    // writeback set even though no local changed in between. Measured over 60
-    // shards, 1,383 of 2,707 bodies emitted such a duplicate pair -- 44,067
-    // redundant stores. They are dead (the same unchanged value written twice,
-    // so the compiler removes the first), but they are pure code-size growth on
-    // an already 51 MB module, so a set is emitted only when the locals may have
-    // moved since the previous one.
-    let mut last_writeback = 0usize;
-    // Match only a `return;` that stands alone on its line. That is exactly the set
-    // of true function exits, and every generated body ends with an indented
-    // `return;` alone on its line immediately before the closing brace.
-    //
-    // A substring search for `return;` is not equivalent: it also matches a
-    // `return;` that shares its line with other code, and the splice then lands at
-    // the start of that line instead of on the `return;` -- so the writeback runs on
-    // paths that never return. Measured over the first 40 shards of the retained
-    // module: 81 of 4 045 `return;` occurrences are mid-line, in exactly two shapes,
-    // `if ((true) && (galaxy::cr_bit(...))) return;` and `default: return;`.
-    // Neither is a function exit, so neither may carry a writeback.
-    //
-    // This walks lines rather than searching for the token, so a mid-line `return;`
-    // is skipped without being able to disturb the cursor. `line_start` is still the
-    // start of the `return;` line, so the `last_writeback` bookkeeping below is
-    // unchanged.
-    while cursor < rest.len() {
-        let line_start = cursor;
-        let line_end = rest[line_start..]
-            .find('\n')
-            .map_or(rest.len(), |offset| line_start + offset);
-        let line = &rest[line_start..line_end];
-        // Explicit rather than `trim_end()`: the exit test must not depend on how a
-        // trimming helper classifies whitespace, and this states the real condition
-        // -- the line ends with `return;` and everything before it is indentation.
-        if !line.ends_with("return;")
-            || !line[..line.len() - "return;".len()]
-                .bytes()
-                .all(|byte| byte == b' ' || byte == b'\t')
-        {
-            // Copy the skipped line INCLUDING its trailing newline. Advancing the
-            // cursor past the newline without emitting it would silently strip every
-            // newline before an exit while leaving non-exit lines untouched, which is
-            // still valid C++ but destroys the body formatting.
-            let copy_end = if line_end < rest.len() { line_end + 1 } else { line_end };
-            output.push_str(&rest[cursor..copy_end]);
-            cursor = copy_end;
-            continue;
-        }
-        // Everything before `return;` is indentation by construction, so this
-        // slice is the indent to reuse for the writeback lines.
-        let indent = &line[..line.len() - "return;".len()];
-        output.push_str(&rest[cursor..line_start]);
-        // A label means control arrived from elsewhere; `resident_r` means a
-        // local was named, which covers both a write and a re-read. Either way
-        // the previous set no longer describes this exit.
-        let since_previous = &rest[last_writeback..line_start];
-        if !returned || since_previous.contains(':') || since_previous.contains("resident_r") {
-            for line in &store_lines {
-                output.push_str(indent);
-                output.push_str(line);
-                output.push('\n');
-            }
-            last_writeback = line_start;
-        }
-        output.push_str(indent);
-        output.push_str("return;");
-        // Carry the exit line's newline through. `rest[cursor..]` is appended after
-        // the loop, so without this the trailing text would be glued onto `return;`.
-        if line_end < rest.len() {
-            output.push('\n');
-            cursor = line_end + 1;
-        } else {
-            cursor = rest.len();
-        }
-        returned = true;
-    }
-    if !returned {
-        // A body that faults through every path has no exit to attach the
-        // writeback to; keep the original text rather than inventing one.
-        return None;
-    }
-    output.push_str(&rest[cursor..]);
-    Some(output)
-}
-
-/// Apply straight-line GPR residency to one lowered body when the option is on.
-/// Returns the body unchanged otherwise, and also when the body is not eligible,
-/// so an ineligible function costs one string scan and no allocation.
+/// Apply guest register residency (`crate::residency`) to one lowered body
+/// when the option is on. Returns the body unchanged otherwise, and also when
+/// the body has a shape the pass does not handle.
 fn apply_residency_to_body(
     address: u32,
     body: String,
     entries: &BTreeSet<u32>,
     options: &ModuleTranslationOptions,
 ) -> String {
+    let _ = (address, entries);
     if !options.guest_resident_integer {
         return body;
     }
-    match apply_integer_gpr_residency(address, &body, entries) {
+    match crate::residency::apply_register_residency(&body) {
         Some(resident) => resident,
         None => body,
     }
@@ -3310,13 +2853,16 @@ fn lower_words_with_config(
                     immediate_override,
                 )?;
                 if flat_ram_reads || target > 16 {
-                    // Preserve the flat-read experiment and small scalar suffixes.
-                    let load = integer_guest_load_expression(
-                        4, &format!("{ea} + (reg - {target}u) * 4u"), pc, flat_ram_reads,
-                    );
-                    writeln!(output,
-                        "    for (std::uint32_t reg = {target}u; reg < 32u; ++reg) {{\n        context->gpr[reg] = {load};\n    }}")
-                        .map_err(|_| TranslationError::Formatting)?;
+                    // One statement per register (no runtime-indexed GPR access),
+                    // so the register residency pass can keep the body resident.
+                    for reg in target..32 {
+                        let offset = (reg - target) * 4;
+                        let load = integer_guest_load_expression(
+                            4, &format!("{ea} + 0x{offset:08X}u"), pc, flat_ram_reads,
+                        );
+                        writeln!(output, "    context->gpr[{reg}] = {load};")
+                            .map_err(|_| TranslationError::Formatting)?;
+                    }
                 } else {
                     writeln!(output,
                         "    galaxy::guest_load_multiple_gprs<{target}u>(context, memory, {ea}, services, 0x{pc:08X}u);")
@@ -3394,9 +2940,19 @@ fn lower_words_with_config(
                         "    galaxy::guest_store_multiple_gprs<{source}u>(context, memory, {ea}, services, 0x{pc:08X}u);")
                         .map_err(|_| TranslationError::Formatting)?;
                 } else {
-                    writeln!(output,
-                        "    for (std::uint32_t reg = {source}u; reg < 32u; ++reg) {{\n        galaxy::guest_store_u32(memory, {ea} + (reg - {source}u) * 4u, context->gpr[reg], services, 0x{pc:08X}u);\n    }}")
+                    // One statement per register (no runtime-indexed GPR access),
+                    // so the register residency pass can keep the body resident.
+                    for reg in source..32 {
+                        let offset = (reg - source) * 4;
+                        if flat_ram_writes {
+                            writeln!(output,
+                                "    galaxy::fast::store<std::uint32_t>(flat_guest_base, memory, {ea} + 0x{offset:08X}u, context->gpr[{reg}], services, 0x{pc:08X}u);")
+                        } else {
+                            writeln!(output,
+                                "    galaxy::guest_store_u32(memory, {ea} + 0x{offset:08X}u, context->gpr[{reg}], services, 0x{pc:08X}u);")
+                        }
                         .map_err(|_| TranslationError::Formatting)?;
+                    }
                 }
             }
             Opcode::Lbzx
@@ -10344,8 +9900,22 @@ mod tests {
             let body = lower_words(0x8000_4000, &bytes).unwrap();
             assert_eq!(body.contains("guest_load_multiple_gprs"), first <= 16);
             assert_eq!(body.contains("guest_store_multiple_gprs"), first <= 24);
-            assert_eq!(body.matches("for (std::uint32_t reg").count(),
-                usize::from(first > 16) + usize::from(first > 24));
+            // Large register suffixes lower to one statement per register, so no
+            // runtime-indexed GPR access remains for the residency pass.
+            assert!(!body.contains("for (std::uint32_t reg"));
+            assert!(!body.contains("context->gpr[reg]"));
+            if first > 16 {
+                assert_eq!(
+                    body.matches("galaxy::guest_load_u32(memory, ea_80004000 + 0x").count(),
+                    (32 - first) as usize
+                );
+            }
+            if first > 24 {
+                assert_eq!(
+                    body.matches("galaxy::guest_store_u32(memory, ea_80004004 + 0x").count(),
+                    (32 - first) as usize
+                );
+            }
             assert!(body.contains("context->gpr[1] + 0xFFFFFFF8u"));
         }
     }
@@ -10405,8 +9975,9 @@ mod tests {
             "update-form RA must commit after a successful load"
         );
         assert!(flat.contains("guest_load_flat_or_checked_u32(flat_guest_read_base, memory, context->gpr[10] + context->gpr[11], services, 0x8000400Cu)"));
-        assert!(flat.contains("guest_load_flat_or_checked_u32(flat_guest_read_base, memory, ea_80004010 + (reg - 24u) * 4u, services, 0x80004010u)"));
-        assert_eq!(flat.matches("guest_load_flat_or_checked_").count(), 5);
+        assert!(flat.contains("context->gpr[24] = galaxy::guest_load_flat_or_checked_u32(flat_guest_read_base, memory, ea_80004010 + 0x00000000u, services, 0x80004010u)"));
+        assert!(flat.contains("context->gpr[31] = galaxy::guest_load_flat_or_checked_u32(flat_guest_read_base, memory, ea_80004010 + 0x0000001Cu, services, 0x80004010u)"));
+        assert_eq!(flat.matches("guest_load_flat_or_checked_").count(), 12);
         assert!(!flat.contains("guest_store_flat"));
     }
 
@@ -10751,7 +10322,7 @@ mod tests {
         //
         // SH is bits 11-15, MB bits 6-10, ME bits 1-5.
         let rlwinm = |sh: u32, mb: u32, me: u32| {
-            (21_u32 << 26) | (0 << 21) | (0 << 16) | (sh << 11) | (mb << 6) | (me << 1)
+            (21_u32 << 26) | (sh << 11) | (mb << 6) | (me << 1)
         };
         // slwi r0,r0,2  -> SH=2, MB=0, ME=29, MASK=0xFFFFFFFC
         let rotated = lower_instruction_fixture(
@@ -17631,424 +17202,11 @@ mod residency_tests {
 
     const FN: u32 = 0x8000_4000;
 
-    /// One lowered body in the shape `lower_words_with_config` emits, including
-    /// the signature line and the interior-entry dispatch a real body has.
-    fn residency_body(dispatch: &str, instructions: &str) -> String {
-        format!(
-            "void fn_80004000(galaxy::PpcContext* __restrict context, galaxy::GuestMemoryV1* memory, const galaxy::NativeServicesV1* services) {{\n    static_cast<void>(context);\n{dispatch}{instructions}}}\n"
-        )
-    }
-
-    fn residency_dispatch() -> String {
-        String::from(
-            "    if (context->pc != 0x80004000u) [[unlikely]] {\n    switch (context->pc) {\n        case 0x80004008u: goto label_80004008;\n        default: galaxy::guest_execution_fault(services, context->pc, \"invalid interior function entry\");\n    }\n    }\n    goto fpu_normal_entry_80004000;\nfpu_normal_entry_80004000:\nlabel_80004008:\n",
-        )
-    }
-
-    fn residency_entries() -> BTreeSet<u32> {
-        [0x8000_4008_u32].into_iter().collect()
-    }
-
-    /// A body with no labels: the prologue is the only entry.
-    fn straight_body() -> String {
-        residency_body(
-            "",
-            "    {\n    context->gpr[3] = 0x80000000u;\n    }\n    {\n    context->gpr[0] = galaxy::guest_load_u16(memory, context->gpr[3] + 0x000030E4u, services, 0x80004004u);\n    }\n    {\n    return;\n    }\n",
-        )
-    }
-
-    /// A body in the shape `render_sharded_function_definition` actually emits,
-    /// prologue casts and all.
-    ///
-    /// This exists because the synthetic bodies above omit the three
-    /// `static_cast<void>` lines, and that omission hid a real defect: the
-    /// declaration block was spliced in after the signature but *before* those
-    /// casts, which put every `resident_rN` inside the first instruction block
-    /// instead of at function scope. The synthetic test passed; the generated
-    /// module did not compile (C2065 on every later use). Any test that asserts
-    /// where the declarations land must use this shape.
-    fn shard_shaped_body() -> String {
-        format!(
-            "void fn_80004000(galaxy::PpcContext* __restrict context, galaxy::GuestMemoryV1* memory, const galaxy::NativeServicesV1* services) {{\n    static_cast<void>(context);\n    static_cast<void>(memory);\n    static_cast<void>(services);\n{}}}",
-            shard_instructions()
-        )
-    }
-
-    /// Exactly what the shard renderer hands `apply_residency_to_body`: the
-    /// instruction stream alone, with no signature and no prologue.
-    ///
-    /// This is the shape the real module generator passes. `residency_body`
-    /// above wraps instructions in a signature, so it can never detect a
-    /// placement bug that depends on where the prologue ends -- which is how the
-    /// whole module came to be uncompilable while every test passed.
-    fn shard_instructions() -> &'static str {
-        "    {\n    context->gpr[3] = 0x80000000u;\n    }\n    {\n    context->gpr[0] = galaxy::guest_load_u16(memory, context->gpr[3] + 0x000030E4u, services, 0x80004004u);\n    }\n    {\n    return;\n    }\n"
-    }
-
-    #[test]
-    fn residency_declarations_land_at_function_scope_not_inside_a_block() {
-        // Regression test for the placement defect above. The declarations must
-        // precede the body's first `{`, because that brace opens the first
-        // instruction block and anything declared inside it is out of scope for
-        // every later block.
-        //
-        // Both input shapes must be covered, because the defect existed precisely
-        // because only the signature-bearing shape was tested:
-        //
-        //   1. a complete body, as the unit tests and one internal caller pass;
-        //   2. a bare instruction stream, which is what the real shard renderer
-        //      passes -- the shape the module generator actually uses.
-        let cases: [(&str, String); 2] = [
-            ("signature-shaped body", shard_shaped_body()),
-            ("bare instruction stream", shard_instructions().to_owned()),
-        ];
-        for (label, body) in cases {
-            let resident = apply_integer_gpr_residency(FN, &body, &BTreeSet::new())
-                .unwrap_or_else(|| panic!("{label} is eligible for residency"));
-
-            let declaration = resident
-                .find("std::uint32_t resident_r0 = context->gpr[0];")
-                .unwrap_or_else(|| panic!("{label}: the register is declared"));
-            let first_block = resident
-                .find("    {\n")
-                .unwrap_or_else(|| panic!("{label}: the body has at least one instruction block"));
-            assert!(
-                declaration < first_block,
-                "{label}: the declarations must precede the first instruction block, else \
-                 every later use is out of scope and the module does not compile"
-            );
-
-            let tail = &resident[first_block..];
-            assert!(
-                tail.contains("resident_r0") || tail.contains("resident_r3"),
-                "{label}: the instruction blocks reference the locals"
-            );
-        }
-
-        // For the signature-bearing shape the declarations must additionally stay
-        // inside the function, i.e. after the signature line.
-        let resident = apply_integer_gpr_residency(FN, &shard_shaped_body(), &BTreeSet::new())
-            .expect("signature-shaped body is eligible");
-        let signature = resident.find("services) {\n").unwrap();
-        let declaration = resident
-            .find("std::uint32_t resident_r0 = context->gpr[0];")
-            .unwrap();
-        assert!(signature < declaration);
-    }
-
-    #[test]
-    fn residency_renames_direct_register_access_and_writes_back_written_values() {
-        let resident = apply_integer_gpr_residency(FN, &straight_body(), &BTreeSet::new())
-            .expect("a straight-line body with one return is eligible");
-
-        // Declaration and load for every register the body names, placed after
-        // the signature and before the first instruction.
-        assert!(resident.contains("    std::uint32_t resident_r0 = context->gpr[0];\n"));
-        assert!(resident.contains("    std::uint32_t resident_r3 = context->gpr[3];\n"));
-        let signature = resident.find("services) {\n").unwrap();
-        let declaration = resident.find("std::uint32_t resident_r0").unwrap();
-        let first_body_access = resident.find("resident_r3 = 0x80000000u;").unwrap();
-        assert!(signature < declaration && declaration < first_body_access);
-
-        // Every operand was renamed, and no direct `context->gpr[N]` access
-        // survives in the instruction stream.
-        assert!(resident
-            .contains("resident_r0 = galaxy::guest_load_u16(memory, resident_r3 + 0x000030E4u"));
-        assert!(!resident.contains("context->gpr[3] = 0x80000000u"));
-
-        // The writeback covers exactly the registers this body writes. r0 is
-        // written by the load, so it is included; a register the body only
-        // reads keeps its loaded value and must not be restored over whatever a
-        // callee published into it.
-        assert!(resident.contains("    context->gpr[3] = resident_r3;\n    return;"));
-        assert!(resident.contains("context->gpr[0] = resident_r0;"));
-        assert!(!resident.contains("context->gpr[4] = resident_r4;"));
-    }
-
-    #[test]
-    fn residency_writeback_is_not_spliced_onto_a_mid_line_return() {
-        // Regression test. The exit finder used to search for the substring
-        // `return;` and splice the writeback at the start of *that line*, so a
-        // `return;` sharing its line with other code got the stores hoisted above
-        // it and they then ran on a path that never returns -- the function paid
-        // the writeback and kept using its locals.
-        //
-        // Both shapes below are live in the retained module (81 of 4 045 `return;`
-        // occurrences over the first 40 shards are mid-line);
-        // `functions_0000.cpp:23` and `functions_0002.cpp:9464` are the two forms.
-        // The suite passed against the defect because every existing body has its
-        // only `return;` alone on a line.
-        let body = residency_body(
-            "",
-            "    {\n    context->gpr[3] = 0x1u;\n    }\n    {\n    if ((true) && (!galaxy::cr_bit(context, 2u))) return;\n    }\n    {\n    return;\n    }\n",
-        );
-        let resident = apply_integer_gpr_residency(FN, &body, &BTreeSet::new())
-            .expect("a body whose exit is unconditional is eligible");
-
-        // The mid-line return survives verbatim: it is not an exit, so nothing may
-        // be inserted at the start of its line.
-        assert!(
-            resident.contains("    if ((true) && (!galaxy::cr_bit(context, 2u))) return;\n"),
-            "the mid-line return must be preserved exactly"
-        );
-        assert!(
-            !resident.contains("resident_r3;\n    if ((true)"),
-            "the writeback must not precede the mid-line return"
-        );
-
-        // Exactly one writeback, and it introduces the real exit.
-        assert_eq!(
-            resident.matches("context->gpr[3] = resident_r3;").count(),
-            1,
-            "one writeback for one true exit"
-        );
-        assert!(
-            resident.contains("    context->gpr[3] = resident_r3;\n    return;\n"),
-            "the writeback must immediately precede the standalone exit"
-        );
-
-        // The `default: return;` form of the same defect, reached through a switch
-        // dispatch rather than a conditional expression.
-        let switch_body = residency_body(
-            "",
-            "    {\n    context->gpr[3] = 0x1u;\n    }\n    {\n    switch (context->gpr[4]) {\n    default: return;\n    }\n    }\n    {\n    return;\n    }\n",
-        );
-        let switch_resident = apply_integer_gpr_residency(FN, &switch_body, &BTreeSet::new())
-            .expect("a body whose exit is unconditional is eligible");
-        assert!(
-            switch_resident.contains("    default: return;\n"),
-            "the mid-line `default: return;` must be preserved exactly"
-        );
-        assert!(
-            !switch_resident.contains("resident_r3;\n    default: return;"),
-            "the writeback must not precede `default: return;`"
-        );
-        assert_eq!(
-            switch_resident
-                .matches("context->gpr[3] = resident_r3;")
-                .count(),
-            1,
-            "one writeback for one true exit, switch form"
-        );
-
-        // A body whose only `return;` is mid-line has no exit to attach the
-        // writeback to, so it is refused rather than mis-spliced.
-        let no_exit = residency_body(
-            "",
-            "    {\n    context->gpr[3] = 0x1u;\n    }\n    {\n    if ((true) && (!galaxy::cr_bit(context, 2u))) return;\n    }\n",
-        );
-        assert!(
-            apply_integer_gpr_residency(FN, &no_exit, &BTreeSet::new()).is_none(),
-            "a body with no standalone exit is ineligible"
-        );
-    }
-
-    #[test]
-    fn residency_keeps_a_comparison_from_counting_as_a_write() {
-        let body = residency_body(
-            "",
-            "    {\n    context->gpr[3] = 0x1u;\n    }\n    {\n    if (context->gpr[5] == 0x2u) { context->gpr[3] = 0x3u; }\n    }\n    {\n    return;\n    }\n",
-        );
-        let resident = apply_integer_gpr_residency(FN, &body, &BTreeSet::new()).unwrap();
-        assert!(resident.contains("resident_r5 == 0x2u"));
-        assert!(resident.contains("context->gpr[3] = resident_r3;"));
-        assert!(!resident.contains("context->gpr[5] = resident_r5;"));
-    }
-
-    #[test]
-    fn residency_reloads_the_local_set_at_an_interior_entry() {
-        // An interior entry jumps past the prologue, so the locals must be
-        // reloaded at that label: the host re-entered the function from outside
-        // it, which makes memory authoritative there.
-        //
-        // The reload must be an *assignment*, not a declaration. The locals are
-        // already declared at function scope by the prologue, so re-declaring
-        // them here is C2374/C2086 -- and it is at function scope, so the
-        // redefinition is an error, not a shadow.
-        let body = residency_body(
-            &residency_dispatch(),
-            "    {\n    context->gpr[3] = 0x1u;\n    }\n    {\n    return;\n    }\n",
-        );
-        let resident = apply_integer_gpr_residency(FN, &body, &residency_entries())
-            .expect("an interior-entry body is eligible once its entry reloads the locals");
-
-        let label = resident
-            .find("label_80004008:\n")
-            .expect("the entry label is present");
-        let after_label = &resident[label..];
-        let reload = after_label
-            .find("    resident_r3 = context->gpr[3];")
-            .expect("the entry label reloads the register the body uses");
-        assert!(
-            !after_label.contains("std::uint32_t resident_r3 = context->gpr[3];\n    resident_r3 = context->gpr[3];"),
-            "the label must not re-declare the local"
-        );
-        // The reload must be the first thing after the label, and must come
-        // before any renamed instruction.
-        assert!(
-            reload < 64,
-            "reload should be adjacent to the label, got offset {reload}"
-        );
-        assert!(after_label.find("resident_r3 = 0x1u;").unwrap() > reload);
-
-        // Exactly one declaring occurrence in the whole body, and it sits in the
-        // prologue rather than at the label.
-        assert_eq!(
-            resident
-                .matches("std::uint32_t resident_r3 = context->gpr[3];")
-                .count(),
-            1,
-            "the local is declared exactly once"
-        );
-        assert!(resident.find("std::uint32_t resident_r3 = context->gpr[3];").unwrap() < label);
-
-        // The exit still publishes the register the body writes.
-        assert!(resident.contains("context->gpr[3] = resident_r3;"));
-    }
-
-    #[test]
-    fn residency_declines_runtime_indexed_register_access() {
-        let body = residency_body(
-            "",
-            "    {\n    for (std::uint32_t reg = 14u; reg < 32u; ++reg) {\n        context->gpr[reg] = 0u;\n    }\n    }\n    {\n    return;\n    }\n",
-        );
-        assert!(apply_integer_gpr_residency(FN, &body, &BTreeSet::new()).is_none());
-    }
-
-    #[test]
-    fn residency_declines_calls_that_can_observe_the_register_file() {
-        // `call_return_checkpoint` is deliberately absent from this list. It is no
-        // longer a rejection: a body containing it stays eligible, because
-        // `apply_integer_gpr_residency` writes the locals back at every
-        // `call_return_<pc>` continuation, so the checkpoint observes a register
-        // file that already agrees with the locals. See
-        // `residency_publishes_the_local_set_before_an_observing_call`.
-        //
-        // The callees below stay rejected because this body has no
-        // `call_return_` continuation at all, so nothing publishes the locals
-        // before one of them runs and each could observe a stale register file.
-        for callee in [
-            "galaxy::call_guest_cached(services, target, &cached_target_80004008, &cached_function_80004008, context, memory, 0x80004004u);",
-            "galaxy::native_savegpr_805174FC(context, memory, services, 0x80517534u);",
-            "galaxy::architectural_interrupt_checkpoint(services, 0x80004004u, context, memory);",
-        ] {
-            let body = residency_body(
-                "",
-                &format!(
-                    "    {{\n    context->gpr[3] = 0x1u;\n    }}\n    {{\n    {callee}\n    }}\n    {{\n    return;\n    }}\n"
-                ),
-            );
-            assert!(
-                apply_integer_gpr_residency(FN, &body, &BTreeSet::new()).is_none(),
-                "{callee} must decline residency"
-            );
-        }
-    }
-
-    #[test]
-    fn residency_publishes_the_local_set_before_an_observing_call() {
-        // The counterpart to the test above. A checkpoint reached from a
-        // `call_return_` continuation is eligible, and the writeback must land
-        // before the checkpoint runs or the callback would observe stale
-        // `context->gpr[]` values -- the failure the rejection list exists to
-        // prevent, now prevented by the continuation writeback instead.
-        let body = residency_body(
-            "",
-            "    {\n    context->gpr[3] = 0x1u;\n    }\n    {\n    return;\n    }\ncall_return_80004008:\n    galaxy::call_return_checkpoint(services, 0x80004004u, 0x80004008u, context, memory);\n    return;\n",
-        );
-        let resident = apply_integer_gpr_residency(FN, &body, &BTreeSet::new())
-            .expect("a checkpoint reached from a continuation stays eligible");
-
-        let checkpoint = resident
-            .find("galaxy::call_return_checkpoint(")
-            .expect("the checkpoint is retained");
-        let writeback = resident
-            .find("context->gpr[3] = resident_r3;")
-            .expect("the written register is published");
-        assert!(
-            writeback < checkpoint,
-            "writeback must precede the checkpoint so it cannot observe a stale register file"
-        );
-    }
-
-    #[test]
-    fn residency_declines_a_body_with_no_return() {
-        let body = residency_body(
-            "",
-            "    {\n    context->gpr[3] = 0x1u;\n    }\n    {\n    galaxy::guest_execution_fault(services, 0x80004004u, \"x\");\n    }\n",
-        );
-        assert!(apply_integer_gpr_residency(FN, &body, &BTreeSet::new()).is_none());
-    }
-
-    #[test]
-    fn residency_writes_back_the_locals_at_a_call_return_continuation() {
-        // A continuation is entered after a nested guest call, so the locals are
-        // stale there and must be written back -- before the checkpoint that
-        // follows the label runs, so the checkpoint sees the real register file.
-        //
-        // The nested call is a guest load rather than the `rmge01::fn_` direct call
-        // this fixture used to carry. That is deliberate: a direct call is now a
-        // decline (see `residency_declines_a_body_with_a_direct_guest_call`), so
-        // keeping one here would make the body ineligible and this test would stop
-        // exercising the continuation writeback at all. The load is not on the
-        // reject list and still produces the post-call `call_return_` continuation
-        // this test is about.
-        let body = residency_body(
-            "",
-            "    {\n    context->gpr[3] = 0x1u;\n    }\n    {\n    context->lr = 0x80004004u;\n    context->gpr[0] = galaxy::guest_load_u32(memory, context->gpr[3], services, 0x80005000u);\n    galaxy::call_return_checkpoint(services, 0x80004000u, 0x80004004u, context, memory);\n    }\nlabel_80004004:\n    {\n    return;\n    }\ncall_return_80004004:\n    galaxy::call_return_checkpoint(services, 0x80004000u, 0x80004004u, context, memory);\n    goto label_80004004;\n",
-        );
-        let resident = apply_integer_gpr_residency(FN, &body, &BTreeSet::new())
-            .expect("a body with a call-return continuation is eligible");
-
-        let label = resident
-            .find("call_return_80004004:\n")
-            .expect("the continuation label is present");
-        let after = &resident[label..];
-        let writeback = after
-            .find("context->gpr[3] = resident_r3;")
-            .expect("the continuation writes back the register the body writes");
-        let checkpoint = after
-            .find("galaxy::call_return_checkpoint(")
-            .expect("the checkpoint is present");
-        assert!(
-            writeback < checkpoint,
-            "the writeback must precede the checkpoint so it sees the real register file"
-        );
-    }
-
-    /// A body that hands the caller's `context` to another guest function must not
-    /// be renamed. The callee reads its arguments out of `context->gpr[3..]` and
-    /// publishes its result into `context->gpr[3]`; renaming the caller's operands
-    /// to locals would send stale arguments and then clobber the result on
-    /// writeback. Both failures are silent -- the C++ compiles and the module
-    /// loads -- so the decline has to be pinned by a test rather than by review.
-    ///
-    /// This guards the entry added to the decline list for
-    /// `AgentWork/agent-21/A21-9-*`. `guest_resident_integer` is off today, so a
-    /// regression here would not show up until someone re-enables it.
-    #[test]
-    fn residency_declines_a_body_with_a_direct_guest_call() {
-        for call in [
-            "    context->pc = 0x80005000u;\n    rmge01::fn_80005000(context, memory, services);\n",
-            "    galaxy::call_guest_resolved(services, 0x80005000u, &rmge01::fn_80005000, context, memory, 0x80004000u);\n",
-            "    galaxy::call_guest_direct_resolved(services, 0x80005000u, &rmge01::fn_80005000, context, memory, 0x80004000u);\n",
-        ] {
-            let body = residency_body(
-                "",
-                &format!(
-                    "    {{\n    context->gpr[3] = 0x1u;\n    }}\n    {{\n{call}    }}\n    {{\n    context->gpr[4] = context->gpr[3];\n    }}\n    {{\n    return;\n    }}\n"
-                ),
-            );
-            assert!(
-                apply_integer_gpr_residency(FN, &body, &BTreeSet::new()).is_none(),
-                "a body containing `{call}` must be declined: the callee sees `context`"
-            );
-        }
-    }
-
     #[test]
     fn residency_is_opt_in_and_preserves_the_body_otherwise() {
-        let body = straight_body();
+        let body = String::from(
+            "    {\n    context->gpr[3] = 0x80000000u;\n    }\n    {\n    return;\n    }\n",
+        );
         let options = ModuleTranslationOptions::default();
         assert!(!options.guest_resident_integer, "residency is opt-in");
         assert_eq!(
@@ -18061,7 +17219,7 @@ mod residency_tests {
         };
         assert!(
             apply_residency_to_body(FN, body, &BTreeSet::new(), &enabled)
-                .contains("resident_r3")
+                .contains("gr3")
         );
     }
 }

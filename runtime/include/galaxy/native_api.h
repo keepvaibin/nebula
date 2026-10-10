@@ -12939,6 +12939,49 @@ GALAXY_ALWAYS_INLINE void branch_checkpoint(
         services, guest_pc, guest_pc, context, memory);
 }
 
+// Register-resident bodies split a backward-branch checkpoint in two: this
+// inline test advances the counter and reports whether the complete policy
+// must run (non-zero: the counted checkpoint, or 1 when the service table is
+// incomplete and the policy counts for itself), and the generated code then
+// stores its resident registers, calls branch_checkpoint_taken_slow with that
+// count and reloads. Observes exactly the same conditions as
+// branch_checkpoint_taken's fast path.
+inline constexpr std::uint64_t kBranchCheckpointNotCounted =
+    ~static_cast<std::uint64_t>(0);
+
+GALAXY_ALWAYS_INLINE std::uint64_t branch_checkpoint_due(
+    const NativeServicesV1* services) {
+    if (services != nullptr && services->branch_checkpoint != nullptr &&
+        services->checkpoint_counter != nullptr &&
+        services->checkpoint_next_slow != nullptr &&
+        services->pending_event_mask != nullptr &&
+        (services->runtime_flags & kNativeServiceFlagTraceWpadReadCopies) == 0u)
+        [[likely]] {
+        const std::uint64_t checkpoint = ++(*services->checkpoint_counter);
+        if (checkpoint < *services->checkpoint_next_slow &&
+            atomic_load_u32(services->pending_event_mask) == 0u) [[likely]] {
+            return 0u;
+        }
+        return checkpoint;
+    }
+    return kBranchCheckpointNotCounted;
+}
+
+// Cold half of a register-resident backward-branch checkpoint. Takes the value
+// branch_checkpoint_due returned; a not-counted sentinel means the complete
+// policy counts for itself, exactly as branch_checkpoint_taken's own slow path.
+GALAXY_NOINLINE inline void branch_checkpoint_taken_counted(
+    const NativeServicesV1* services,
+    std::uint32_t guest_pc,
+    std::uint32_t resume_pc,
+    PpcContext* context,
+    GuestMemoryV1* memory,
+    std::uint64_t counted) {
+    branch_checkpoint_taken_slow(
+        services, guest_pc, resume_pc, context, memory,
+        counted == kBranchCheckpointNotCounted ? 0u : counted);
+}
+
 // mtmsr is an architectural interrupt-recognition boundary.  This statically
 // emitted checkpoint deliberately bypasses the adaptive branch gate so a DEC
 // request latched while MSR[EE] was clear is taken before the next translated

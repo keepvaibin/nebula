@@ -9,6 +9,7 @@ mod game;
 pub mod guest_abi_effect;
 pub mod guest_cfg_liveness;
 pub mod guest_ppc_effect;
+mod residency;
 mod rso;
 mod sel;
 mod translate;
