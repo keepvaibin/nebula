@@ -54,6 +54,7 @@ namespace Nebula.Launcher
             env["GALAXY_DIAGNOSTIC_IOS_COUNTERS"] = detailed ? "1" : "0";
             env["GALAXY_TRACE_NATIVE_THP_BOUNDARY"] = detailed ? "1" : "0";
             env["GALAXY_TRACE_GX_STALLS"] = detailed ? "1" : "0";
+            env["GALAXY_SIM_PROFILE"] = detailed ? "1" : "0";
             env["GALAXY_GPU_TIMESTAMPS"] = detailed ? "1" : "0";
             env["GALAXY_TRACE_GX_MICROPROFILE"] = "0";
             env["GALAXY_GX_FRAME_TIMING_SAMPLE"] = detailed ? "32" : "0";

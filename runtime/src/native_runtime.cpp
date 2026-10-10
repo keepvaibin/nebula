@@ -68,6 +68,7 @@
 #include <iomanip>
 #include <initializer_list>
 #include <intrin.h>
+#include <Psapi.h>
 #include <iostream>
 #include <limits>
 #include <memory>
@@ -578,6 +579,138 @@ Function load_export(HMODULE module, const char* name) {
     }
     return reinterpret_cast<Function>(address);
 }
+
+std::string hexadecimal(std::uint32_t value);
+
+// ─── Simulation-thread sampling profiler (GALAXY_SIM_PROFILE=1) ──────────────
+// A below-normal thread suspends the simulation thread every
+// GALAXY_SIM_PROFILE_INTERVAL_US microseconds (default 1000), reads its
+// instruction pointer and attributes it to a translated guest function (module
+// function records sorted by native entry), to the runtime image (16-byte
+// buckets, resolved offline against the PDB) or to other modules (kernel waits
+// and system DLLs). Printed at shutdown as [sim-profile] lines. Opt-in: a
+// suspend/resume pair costs the simulation thread a few microseconds per sample.
+class SimulationProfiler {
+public:
+    ~SimulationProfiler() {
+        if (worker_.joinable()) {
+            running_.store(false, std::memory_order_release);
+            worker_.join();
+        }
+        if (target_ != nullptr) CloseHandle(target_);
+    }
+
+    void start(const galaxy::FunctionRecordV1* records, std::size_t count, HMODULE module) {
+        interval_us_ = std::clamp<std::uint64_t>(read_env_u64("GALAXY_SIM_PROFILE_INTERVAL_US", 1000u), 100u, 100000u);
+        target_ = OpenThread(THREAD_GET_CONTEXT | THREAD_SUSPEND_RESUME | THREAD_QUERY_INFORMATION, FALSE, GetCurrentThreadId());
+        if (target_ == nullptr) return;
+        MODULEINFO info{};
+        if (module != nullptr && K32GetModuleInformation(GetCurrentProcess(), module, &info, sizeof(info))) {
+            module_base_ = reinterpret_cast<std::uintptr_t>(info.lpBaseOfDll);
+            module_end_ = module_base_ + info.SizeOfImage;
+        }
+        if (K32GetModuleInformation(GetCurrentProcess(), GetModuleHandleW(nullptr), &info, sizeof(info))) {
+            host_base_ = reinterpret_cast<std::uintptr_t>(info.lpBaseOfDll);
+            host_end_ = host_base_ + info.SizeOfImage;
+        }
+        entries_.reserve(count);
+        for (std::size_t i = 0; i < count; ++i) {
+            if (records[i].function == nullptr) continue;
+            entries_.emplace_back(reinterpret_cast<std::uintptr_t>(records[i].function), records[i].address);
+        }
+        std::sort(entries_.begin(), entries_.end());
+        // Interior entries share their owner's body: keep the lowest guest address per native entry.
+        entries_.erase(std::unique(entries_.begin(), entries_.end(),
+            [](const auto& a, const auto& b) { return a.first == b.first; }), entries_.end());
+        guest_counts_.assign(entries_.size(), 0u);
+        running_.store(true, std::memory_order_release);
+        worker_ = std::thread([this] { run(); });
+    }
+
+    void stop_and_print(std::ostream& out) {
+        if (!worker_.joinable()) return;
+        running_.store(false, std::memory_order_release);
+        worker_.join();
+        CloseHandle(target_);
+        target_ = nullptr;
+        const std::uint64_t total = samples_;
+        if (total == 0u) return;
+        out << "[sim-profile] samples=" << total << " interval-us=" << interval_us_
+            << " guest=" << guest_samples_ << " host=" << host_samples_ << " other=" << other_samples_
+            << " context-failures=" << context_failures_ << '\n';
+        std::vector<std::size_t> order(entries_.size());
+        for (std::size_t i = 0; i < order.size(); ++i) order[i] = i;
+        std::sort(order.begin(), order.end(), [&](std::size_t a, std::size_t b) { return guest_counts_[a] > guest_counts_[b]; });
+        for (std::size_t i = 0; i < order.size() && i < 48u && guest_counts_[order[i]] != 0u; ++i) {
+            out << "[sim-profile-guest] fn=" << hexadecimal(entries_[order[i]].second)
+                << " samples=" << guest_counts_[order[i]]
+                << " pct=" << (100.0 * static_cast<double>(guest_counts_[order[i]]) / static_cast<double>(total)) << '\n';
+        }
+        std::vector<std::pair<std::uint64_t, std::uintptr_t>> host(host_buckets_.begin(), host_buckets_.end());
+        std::sort(host.begin(), host.end(), [](const auto& a, const auto& b) { return a.second > b.second; });
+        for (std::size_t i = 0; i < host.size() && i < 32u; ++i) {
+            out << "[sim-profile-host] NebulaRuntime+0x" << std::hex << (host[i].first << 4u) << std::dec
+                << " samples=" << host[i].second
+                << " pct=" << (100.0 * static_cast<double>(host[i].second) / static_cast<double>(total)) << '\n';
+        }
+    }
+
+private:
+    void run() {
+        (void)SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_BELOW_NORMAL);
+        HANDLE timer = CreateWaitableTimerExW(nullptr, nullptr, CREATE_WAITABLE_TIMER_HIGH_RESOLUTION, TIMER_ALL_ACCESS);
+        while (running_.load(std::memory_order_acquire)) {
+            if (timer != nullptr) {
+                LARGE_INTEGER due{};
+                due.QuadPart = -static_cast<long long>(interval_us_ * 10u);
+                if (SetWaitableTimer(timer, &due, 0, nullptr, nullptr, FALSE)) {
+                    WaitForSingleObject(timer, 50u);
+                }
+            } else {
+                Sleep(1);
+            }
+            if (SuspendThread(target_) == static_cast<DWORD>(-1)) continue;
+            CONTEXT ctx{};
+            ctx.ContextFlags = CONTEXT_CONTROL;
+            const bool ok = GetThreadContext(target_, &ctx) != FALSE;
+            ResumeThread(target_);
+            ++samples_;
+            if (!ok) { ++context_failures_; continue; }
+            classify(static_cast<std::uintptr_t>(ctx.Rip));
+        }
+        if (timer != nullptr) CloseHandle(timer);
+    }
+
+    void classify(std::uintptr_t rip) {
+        if (rip >= module_base_ && rip < module_end_ && !entries_.empty()) {
+            auto it = std::upper_bound(entries_.begin(), entries_.end(), std::make_pair(rip, ~0u));
+            if (it != entries_.begin()) {
+                --it;
+                ++guest_counts_[static_cast<std::size_t>(it - entries_.begin())];
+                ++guest_samples_;
+                return;
+            }
+        }
+        if (rip >= host_base_ && rip < host_end_) {
+            ++host_buckets_[(rip - host_base_) >> 4u];
+            ++host_samples_;
+            return;
+        }
+        ++other_samples_;
+    }
+
+    HANDLE target_{};
+    std::thread worker_;
+    std::atomic<bool> running_{false};
+    std::uint64_t interval_us_ = 1000u;
+    std::uintptr_t module_base_ = 0, module_end_ = 0, host_base_ = 0, host_end_ = 0;
+    std::vector<std::pair<std::uintptr_t, std::uint32_t>> entries_;
+    std::vector<std::uint64_t> guest_counts_;
+    std::unordered_map<std::uint64_t, std::uint64_t> host_buckets_;
+    std::uint64_t samples_ = 0, guest_samples_ = 0, host_samples_ = 0, other_samples_ = 0, context_failures_ = 0;
+};
+
+SimulationProfiler g_sim_profiler;
 
 std::string hexadecimal(std::uint32_t value) {
     std::ostringstream output;
@@ -30132,6 +30265,7 @@ int wmain(int argc, wchar_t** argv) {
                 <<" owner-saves="<<state.eager_fpu_owner_saves<<'\n';
             std::cerr<<"[float-mode] fast="<<((state.module_float_flags & galaxy::kModuleFloatFlagFastFloat) != 0u)
                 <<" ftz-daz="<<state.fast_float_mxcsr<<'\n';
+            g_sim_profiler.stop_and_print(std::cerr);
             std::cerr<<"[gx-efb-peek-summary] count="<<state.efb_peek_count
                 <<" published-field-answers="<<state.efb_peek_published_count
                 <<" failures="<<state.efb_peek_failures
@@ -30409,6 +30543,11 @@ int wmain(int argc, wchar_t** argv) {
     const auto yield_protocol = reinterpret_cast<YieldRfiReturnProtocolFn>(
         GetProcAddress(module, "galaxy_yield_rfi_return_protocol"));
     state.yield_rfi_return_protocol = yield_protocol != nullptr && yield_protocol() == 1u;
+    if (read_env_flag("GALAXY_SIM_PROFILE", false) && function_records_fn != nullptr) {
+        const galaxy::FunctionRecordV1* records = nullptr;
+        const std::size_t record_count = function_records_fn(&records);
+        g_sim_profiler.start(records, record_count, module);
+    }
 
     // ── Guest address space (memory + IOS device simulation) ────────────────
     galaxy::host::GuestAddressSpace address_space(

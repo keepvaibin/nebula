@@ -240,6 +240,10 @@
     "value": "2"
   },
   {
+    "name": "GALAXY_SIM_PROFILE",
+    "value": "1"
+  },
+  {
     "name": "GALAXY_RENDER_WORKER_MEMORY_SNAPSHOT",
     "value": "0"
   },
