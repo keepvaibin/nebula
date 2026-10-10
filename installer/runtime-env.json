@@ -237,7 +237,7 @@
   },
   {
     "name": "GALAXY_RENDER_QUEUE_DEPTH",
-    "value": "4"
+    "value": "2"
   },
   {
     "name": "GALAXY_RENDER_WORKER_MEMORY_SNAPSHOT",
@@ -277,7 +277,7 @@
   },
   {
     "name": "GALAXY_SWAP_CHAIN_FRAME_LATENCY",
-    "value": "2"
+    "value": "1"
   },
   {
     "name": "GALAXY_SYNTHETIC_KPAD_FRESH_MOUSE_POINTER",
