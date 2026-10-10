@@ -5470,9 +5470,10 @@ bool RendererD3D12::try_complete_pointer_depth_capture(
     return true;
 }
 
-bool RendererD3D12::ensure_async_depth_resources() {
-    if (async_depth_allocator_ && async_depth_command_list_ &&
-        async_depth_target_ && async_depth_readback_ && async_depth_rtv_heap_) {
+bool RendererD3D12::ensure_async_peek_field_resources(
+    AsyncPeekField& field, EfbPeekKind kind) {
+    if (field.allocator && field.command_list && field.target &&
+        field.readback && field.rtv_heap) {
         return true;
     }
     // The conversion pipeline, root signature and EFB views are shared with
@@ -5480,21 +5481,23 @@ bool RendererD3D12::ensure_async_depth_resources() {
     if (!ensure_peek_resources()) {
         return false;
     }
+    const bool is_depth = kind == EfbPeekKind::Depth;
     d3d_check(
         device_->CreateCommandAllocator(
             D3D12_COMMAND_LIST_TYPE_DIRECT,
-            IID_PPV_ARGS(&async_depth_allocator_)),
-        "async depth field command allocator");
+            IID_PPV_ARGS(&field.allocator)),
+        "async peek field command allocator");
     d3d_check(
         device_->CreateCommandList(
             0,
             D3D12_COMMAND_LIST_TYPE_DIRECT,
-            async_depth_allocator_.Get(),
+            field.allocator.Get(),
             nullptr,
-            IID_PPV_ARGS(&async_depth_command_list_)),
-        "async depth field command list");
-    d3d_check(async_depth_command_list_->Close(), "async depth field list close");
-    async_depth_command_list_->SetName(L"GxAsyncDepthFieldList");
+            IID_PPV_ARGS(&field.command_list)),
+        "async peek field command list");
+    d3d_check(field.command_list->Close(), "async peek field list close");
+    field.command_list->SetName(
+        is_depth ? L"GxAsyncDepthFieldList" : L"GxAsyncColorFieldList");
 
     D3D12_HEAP_PROPERTIES default_heap{};
     default_heap.Type = D3D12_HEAP_TYPE_DEFAULT;
@@ -5518,8 +5521,8 @@ bool RendererD3D12::ensure_async_depth_resources() {
             &target_desc,
             D3D12_RESOURCE_STATE_COPY_SOURCE,
             &target_clear,
-            IID_PPV_ARGS(&async_depth_target_)),
-        "async depth field target");
+            IID_PPV_ARGS(&field.target)),
+        "async peek field target");
 
     D3D12_HEAP_PROPERTIES readback_heap{};
     readback_heap.Type = D3D12_HEAP_TYPE_READBACK;
@@ -5538,46 +5541,50 @@ bool RendererD3D12::ensure_async_depth_resources() {
             &readback_desc,
             D3D12_RESOURCE_STATE_COPY_DEST,
             nullptr,
-            IID_PPV_ARGS(&async_depth_readback_)),
-        "async depth field readback");
+            IID_PPV_ARGS(&field.readback)),
+        "async peek field readback");
 
     D3D12_DESCRIPTOR_HEAP_DESC rtv_heap_desc{};
     rtv_heap_desc.NumDescriptors = 1;
     rtv_heap_desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
     d3d_check(
         device_->CreateDescriptorHeap(
-            &rtv_heap_desc, IID_PPV_ARGS(&async_depth_rtv_heap_)),
-        "async depth field RTV heap");
-    async_depth_rtv_ = async_depth_rtv_heap_->GetCPUDescriptorHandleForHeapStart();
-    device_->CreateRenderTargetView(
-        async_depth_target_.Get(), nullptr, async_depth_rtv_);
+            &rtv_heap_desc, IID_PPV_ARGS(&field.rtv_heap)),
+        "async peek field RTV heap");
+    field.rtv = field.rtv_heap->GetCPUDescriptorHandleForHeapStart();
+    device_->CreateRenderTargetView(field.target.Get(), nullptr, field.rtv);
     return true;
 }
 
-std::uint64_t RendererD3D12::submit_async_depth_field() {
-    if (async_depth_fence_ != 0u) {
+std::uint64_t RendererD3D12::submit_async_peek_field(EfbPeekKind kind) {
+    AsyncPeekField& field = async_peek_fields_[async_peek_field_index(kind)];
+    if (field.fence != 0u) {
         return 0u;
     }
-    if (!ensure_async_depth_resources()) {
+    if (!ensure_async_peek_field_resources(field, kind)) {
         return 0u;
     }
+    const bool is_depth = kind == EfbPeekKind::Depth;
     constexpr UINT width = kEfbWidth;
     constexpr UINT height = kEfbHeight;
     constexpr UINT row_pitch = kEfbWidth * 4u;
     static_assert(row_pitch % D3D12_TEXTURE_DATA_PITCH_ALIGNMENT == 0u);
-    ID3D12Resource* const target = async_depth_target_.Get();
-    ID3D12Resource* const readback = async_depth_readback_.Get();
-    ID3D12Resource* const src = efb_depth_.Get();
+    ID3D12Resource* const target = field.target.Get();
+    ID3D12Resource* const readback = field.readback.Get();
+    ID3D12Resource* const src = is_depth ? efb_depth_.Get() : efb_color_.Get();
+    ID3D12GraphicsCommandList* const list = field.command_list.Get();
 
-    d3d_check(async_depth_allocator_->Reset(), "async depth allocator reset");
+    d3d_check(field.allocator->Reset(), "async peek field allocator reset");
     d3d_check(
-        async_depth_command_list_->Reset(async_depth_allocator_.Get(), nullptr),
-        "async depth command list reset");
+        list->Reset(field.allocator.Get(), nullptr),
+        "async peek field command list reset");
 
     D3D12_RESOURCE_BARRIER barriers[2]{};
     barriers[0].Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
     barriers[0].Transition.pResource = src;
-    barriers[0].Transition.StateBefore = D3D12_RESOURCE_STATE_DEPTH_WRITE;
+    barriers[0].Transition.StateBefore =
+        is_depth ? D3D12_RESOURCE_STATE_DEPTH_WRITE
+                 : D3D12_RESOURCE_STATE_RENDER_TARGET;
     barriers[0].Transition.StateAfter = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
     barriers[0].Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
     barriers[1].Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
@@ -5585,32 +5592,32 @@ std::uint64_t RendererD3D12::submit_async_depth_field() {
     barriers[1].Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_SOURCE;
     barriers[1].Transition.StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET;
     barriers[1].Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
-    async_depth_command_list_->ResourceBarrier(2, barriers);
+    list->ResourceBarrier(2, barriers);
 
     ID3D12DescriptorHeap* heaps[] = {srv_ring_.heap()};
-    async_depth_command_list_->SetDescriptorHeaps(1, heaps);
-    async_depth_command_list_->OMSetRenderTargets(1, &async_depth_rtv_, FALSE, nullptr);
+    list->SetDescriptorHeaps(1, heaps);
+    list->OMSetRenderTargets(1, &field.rtv, FALSE, nullptr);
     const D3D12_VIEWPORT viewport{
         0.0f, 0.0f, static_cast<float>(width), static_cast<float>(height), 0.0f, 1.0f};
     const D3D12_RECT scissor{0, 0, static_cast<LONG>(width), static_cast<LONG>(height)};
-    async_depth_command_list_->RSSetViewports(1, &viewport);
-    async_depth_command_list_->RSSetScissorRects(1, &scissor);
-    async_depth_command_list_->SetGraphicsRootSignature(s_conv_root_sig.Get());
-    async_depth_command_list_->SetPipelineState(conv_pipeline_.Get());
+    list->RSSetViewports(1, &viewport);
+    list->RSSetScissorRects(1, &scissor);
+    list->SetGraphicsRootSignature(s_conv_root_sig.Get());
+    list->SetPipelineState(conv_pipeline_.Get());
     const EfbPeekSamplingGeometry sampling =
         compute_efb_peek_sampling_geometry(0u, 0u, efb_scale_);
     EfbConversionShaderConstants constants =
-        make_efb_peek_conversion_constants(sampling, EfbPeekKind::Depth);
+        make_efb_peek_conversion_constants(sampling, kind);
     constants.values[15] = -1.0f;
-    async_depth_command_list_->SetGraphicsRoot32BitConstants(
-        0, 16, constants.values.data(), 0);
-    async_depth_command_list_->SetGraphicsRootDescriptorTable(1, conv_efb_depth_srv_);
-    async_depth_command_list_->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-    async_depth_command_list_->DrawInstanced(3, 1, 0, 0);
+    list->SetGraphicsRoot32BitConstants(0, 16, constants.values.data(), 0);
+    list->SetGraphicsRootDescriptorTable(
+        1, is_depth ? conv_efb_depth_srv_ : conv_efb_color_srv_);
+    list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+    list->DrawInstanced(3, 1, 0, 0);
 
     std::swap(barriers[0].Transition.StateBefore, barriers[0].Transition.StateAfter);
     std::swap(barriers[1].Transition.StateBefore, barriers[1].Transition.StateAfter);
-    async_depth_command_list_->ResourceBarrier(2, barriers);
+    list->ResourceBarrier(2, barriers);
 
     D3D12_TEXTURE_COPY_LOCATION src_copy{};
     src_copy.pResource = target;
@@ -5623,35 +5630,37 @@ std::uint64_t RendererD3D12::submit_async_depth_field() {
     dst_copy.PlacedFootprint.Footprint.Height = height;
     dst_copy.PlacedFootprint.Footprint.Depth = 1;
     dst_copy.PlacedFootprint.Footprint.RowPitch = row_pitch;
-    async_depth_command_list_->CopyTextureRegion(&dst_copy, 0, 0, 0, &src_copy, nullptr);
+    list->CopyTextureRegion(&dst_copy, 0, 0, 0, &src_copy, nullptr);
 
-    d3d_check(async_depth_command_list_->Close(), "async depth command list close");
-    ID3D12CommandList* lists[] = {async_depth_command_list_.Get()};
+    d3d_check(list->Close(), "async peek field command list close");
+    ID3D12CommandList* lists[] = {list};
     queue_->ExecuteCommandLists(1, lists);
     const std::uint64_t fence_value = ++next_fence_value_;
     const HRESULT signal_hr = queue_->Signal(fence_.Get(), fence_value);
     if (FAILED(signal_hr)) {
         dump_device_removal(device_.Get());
-        d3d_check(signal_hr, "async depth field queue signal");
+        d3d_check(signal_hr, "async peek field queue signal");
     }
-    async_depth_fence_ = fence_value;
+    field.fence = fence_value;
     return fence_value;
 }
 
-bool RendererD3D12::try_complete_async_depth_field(std::span<std::uint32_t> pixels) {
+bool RendererD3D12::try_complete_async_peek_field(
+    EfbPeekKind kind, std::span<std::uint32_t> pixels) {
     if (pixels.size() != static_cast<std::size_t>(kEfbWidth) * kEfbHeight) {
-        throw std::invalid_argument("async depth field requires 640x528 pixels");
+        throw std::invalid_argument("async peek field requires 640x528 pixels");
     }
-    if (async_depth_fence_ == 0u) {
+    AsyncPeekField& field = async_peek_fields_[async_peek_field_index(kind)];
+    if (field.fence == 0u) {
         return false;
     }
-    if (completed_fence_value() < async_depth_fence_) {
+    if (completed_fence_value() < field.fence) {
         return false;
     }
     std::uint32_t unused{};
-    copy_efb_readback_pixels(async_depth_readback_.Get(), kEfbWidth, kEfbHeight,
-        kEfbWidth * 4u, true, unused, pixels);
-    async_depth_fence_ = 0u;
+    copy_efb_readback_pixels(field.readback.Get(), kEfbWidth, kEfbHeight,
+        kEfbWidth * 4u, kind == EfbPeekKind::Depth, unused, pixels);
+    field.fence = 0u;
     return true;
 }
 
@@ -5804,9 +5813,12 @@ void RendererD3D12::copy_efb_readback_pixels(
         for (std::size_t row = 0; row < height; ++row) {
             const auto* pixel = rgba + row * row_pitch;
             for (std::size_t col = 0; col < width; ++col, pixel += 4) {
-                depth_pixels[row * width + col] =
+                const std::uint32_t rgb =
                     (static_cast<std::uint32_t>(pixel[0]) << 16u) |
                     (static_cast<std::uint32_t>(pixel[1]) << 8u) | pixel[2];
+                depth_pixels[row * width + col] = is_depth
+                    ? rgb
+                    : (static_cast<std::uint32_t>(pixel[3]) << 24u) | rgb;
             }
         }
     }

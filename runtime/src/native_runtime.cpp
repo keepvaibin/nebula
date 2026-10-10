@@ -27818,11 +27818,17 @@ static bool gx_efb_peek(
     if (state == nullptr || memory == nullptr || value == nullptr) {
         return false;
     }
-    // Depth peeks (StarPointer) are answered from the render thread's
-    // asynchronous depth field once one exists: no FIFO drain, no GPU round
-    // trip, one frame of staleness. The first peek of a session and every
-    // color peek keep the exact synchronous path below.
-    if (depth && galaxy::gx::peek_efb_published(x, y, *value)) {
+    // Depth and color peeks are answered from the render thread's
+    // asynchronous EFB fields once one of that kind exists: no FIFO drain, no
+    // GPU round trip, one frame of staleness. Only the first peek of each kind
+    // in a session takes the exact synchronous path below. (Measured A/B on
+    // the 9950X3D: 32,851 synchronous color peeks in five minutes blocked the
+    // simulation thread 7.3 s in total, up to 8.1 ms at once.)
+    if (galaxy::gx::peek_efb_published(
+            x, y,
+            depth ? galaxy::gx::EfbPeekKind::Depth
+                  : galaxy::gx::EfbPeekKind::Color,
+            *value)) {
         ++state->efb_peek_published_count;
         return true;
     }

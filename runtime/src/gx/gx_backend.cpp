@@ -6359,7 +6359,7 @@ void GxBackend::render_thread_main() {
         try {
             poll_completed_frame_effects();
             poll_completed_pointer_depth_capture();
-            poll_async_depth_field();
+            poll_async_peek_fields();
         } catch (...) {
             std::lock_guard<std::mutex> lock(queue_mutex_);
             fail_queued_utilities(std::current_exception());
@@ -6377,7 +6377,7 @@ void GxBackend::render_thread_main() {
             const bool poll_frame_effects = !pending_frame_effects_.empty();
             const bool poll_pointer_depth =
                 static_cast<bool>(pending_pointer_depth_capture_.capture) ||
-                renderer_.async_depth_field_pending();
+                renderer_.any_async_peek_field_pending();
             if (idle_present || poll_frame_effects || poll_pointer_depth) {
                 // Completion polling occurs outside queue_mutex_ at the top of
                 // the worker loop. Yielding under an empty queue without checking
@@ -6455,7 +6455,7 @@ void GxBackend::render_thread_main() {
                 } else {
                     prepare_worker_memory_snapshot(chunk);
                     render_frame_on_thread(chunk);
-                    submit_async_depth_field_if_requested();
+                    submit_async_peek_fields_if_requested();
                 }
             } else if (idle_present) {
                 present_latest_frame_on_thread();
@@ -6544,51 +6544,61 @@ void GxBackend::render_thread_main() {
 bool GxBackend::peek_efb_published(
     std::uint16_t x,
     std::uint16_t y,
+    EfbPeekKind kind,
     std::uint32_t& value) {
     if (!initialized_ || !async_render_thread_enabled() ||
         x >= kEfbWidth || y >= kEfbHeight) {
         return false;
     }
-    async_depth_requested_.store(true, std::memory_order_release);
-    const int slot = async_depth_published_.load(std::memory_order_acquire);
+    AsyncPeekFieldState& state = async_peek_[async_peek_kind_index(kind)];
+    state.requested.store(true, std::memory_order_release);
+    const int slot = state.published.load(std::memory_order_acquire);
     if (slot < 0) {
         return false;
     }
-    const auto& field = async_depth_fields_[static_cast<std::size_t>(slot)];
+    const auto& field = state.fields[static_cast<std::size_t>(slot)];
     if (field.size() != static_cast<std::size_t>(kEfbWidth) * kEfbHeight) {
         return false;
     }
     value = field[static_cast<std::size_t>(y) * kEfbWidth + x];
-    async_depth_published_answers_.fetch_add(1u, std::memory_order_relaxed);
+    state.published_answers.fetch_add(1u, std::memory_order_relaxed);
     return true;
 }
 
-void GxBackend::poll_async_depth_field() {
-    if (!renderer_.async_depth_field_pending()) {
-        return;
-    }
-    const int published = async_depth_published_.load(std::memory_order_relaxed);
-    const int slot = published < 0 ? 0 : (published + 1) % 3;
-    auto& field = async_depth_fields_[static_cast<std::size_t>(slot)];
-    if (field.size() != static_cast<std::size_t>(kEfbWidth) * kEfbHeight) {
-        field.assign(static_cast<std::size_t>(kEfbWidth) * kEfbHeight, 0u);
-    }
-    if (renderer_.try_complete_async_depth_field(field)) {
-        ++async_depth_fields_completed_;
-        async_depth_published_.store(slot, std::memory_order_release);
+void GxBackend::poll_async_peek_fields() {
+    for (std::size_t index = 0; index < async_peek_.size(); ++index) {
+        const EfbPeekKind kind = async_peek_kind_at(index);
+        if (!renderer_.async_peek_field_pending(kind)) {
+            continue;
+        }
+        AsyncPeekFieldState& state = async_peek_[index];
+        const int published = state.published.load(std::memory_order_relaxed);
+        const int slot = published < 0 ? 0 : (published + 1) % 3;
+        auto& field = state.fields[static_cast<std::size_t>(slot)];
+        if (field.size() != static_cast<std::size_t>(kEfbWidth) * kEfbHeight) {
+            field.assign(static_cast<std::size_t>(kEfbWidth) * kEfbHeight, 0u);
+        }
+        if (renderer_.try_complete_async_peek_field(kind, field)) {
+            ++state.completed;
+            state.published.store(slot, std::memory_order_release);
+        }
     }
 }
 
-void GxBackend::submit_async_depth_field_if_requested() {
-    if (!async_depth_requested_.load(std::memory_order_acquire)) {
-        return;
+void GxBackend::submit_async_peek_fields_if_requested() {
+    for (std::size_t index = 0; index < async_peek_.size(); ++index) {
+        const EfbPeekKind kind = async_peek_kind_at(index);
+        AsyncPeekFieldState& state = async_peek_[index];
+        if (!state.requested.load(std::memory_order_acquire)) {
+            continue;
+        }
+        if (renderer_.async_peek_field_pending(kind)) {
+            // Keep the request alive for the next rendered chunk.
+            continue;
+        }
+        state.requested.store(false, std::memory_order_relaxed);
+        (void)renderer_.submit_async_peek_field(kind);
     }
-    if (renderer_.async_depth_field_pending()) {
-        // Keep the request alive for the next rendered chunk.
-        return;
-    }
-    async_depth_requested_.store(false, std::memory_order_relaxed);
-    (void)renderer_.submit_async_depth_field();
 }
 
 void GxBackend::poll_completed_pointer_depth_capture() {

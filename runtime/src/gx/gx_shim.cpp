@@ -74,8 +74,9 @@ bool peek_efb(
 bool peek_efb_published(
     std::uint16_t x,
     std::uint16_t y,
+    EfbPeekKind kind,
     std::uint32_t& value) {
-    return backend().peek_efb_published(x, y, value);
+    return backend().peek_efb_published(x, y, kind, value);
 }
 
 void present_cached_xfb(

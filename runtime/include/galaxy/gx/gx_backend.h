@@ -242,12 +242,13 @@ public:
         std::uint16_t y,
         EfbPeekKind kind,
         std::uint32_t& value);
-    // Simulation thread: answer a depth peek from the latest published
-    // asynchronous depth field. Records the request so the render thread
-    // keeps producing fields while peeks continue.
+    // Simulation thread: answer a depth or color peek from the latest
+    // published asynchronous EFB field of that kind. Records the request so
+    // the render thread keeps producing fields while peeks continue.
     [[nodiscard]] bool peek_efb_published(
         std::uint16_t x,
         std::uint16_t y,
+        EfbPeekKind kind,
         std::uint32_t& value);
     void scan_pe_events_on_sim_thread(
         const std::byte* fifo_data,
@@ -563,8 +564,8 @@ private:
     // Render owner: completes an in-flight asynchronous depth field into the
     // next publication slot, and submits a new one after a rendered chunk
     // while the simulation thread keeps peeking.
-    void poll_async_depth_field();
-    void submit_async_depth_field_if_requested();
+    void poll_async_peek_fields();
+    void submit_async_peek_fields_if_requested();
     void prepare_worker_memory_snapshot(FrameChunk& chunk);
     void mark_frame_cpu_reads_done(FrameChunk& chunk);
     void mark_frame_fifo_effects_done(FrameChunk& chunk);
@@ -764,11 +765,21 @@ private:
     // Asynchronous EFB depth field for simulation-thread GXPeekZ. Three slots:
     // the render owner fills the slot after the published one, then publishes
     // it; readers only ever load the published slot.
-    std::array<std::vector<std::uint32_t>, 3> async_depth_fields_{};
-    std::atomic<int> async_depth_published_{-1};
-    std::atomic<bool> async_depth_requested_{false};
-    std::atomic<std::uint64_t> async_depth_published_answers_{0};
-    std::uint64_t async_depth_fields_completed_ = 0;
+    // One set per peek kind: [0] depth, [1] color (async_peek_kind_index).
+    struct AsyncPeekFieldState {
+        std::array<std::vector<std::uint32_t>, 3> fields{};
+        std::atomic<int> published{-1};
+        std::atomic<bool> requested{false};
+        std::atomic<std::uint64_t> published_answers{0};
+        std::uint64_t completed = 0;
+    };
+    static constexpr std::size_t async_peek_kind_index(EfbPeekKind kind) noexcept {
+        return kind == EfbPeekKind::Depth ? 0u : 1u;
+    }
+    static constexpr EfbPeekKind async_peek_kind_at(std::size_t index) noexcept {
+        return index == 0u ? EfbPeekKind::Depth : EfbPeekKind::Color;
+    }
+    std::array<AsyncPeekFieldState, 2> async_peek_{};
     FramePeCompletionContract frame_pe_completions_;
     std::size_t render_chunks_in_flight_ = 0;
     std::size_t present_chunks_in_flight_ = 0;
