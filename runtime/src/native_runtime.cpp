@@ -796,6 +796,9 @@ struct RuntimeBoundarySelfCounters {
 
 struct NativeMouseDepthFrame {
     std::shared_ptr<galaxy::gx::PointerDepthCapture> capture=std::make_shared<galaxy::gx::PointerDepthCapture>();
+    // Asynchronous mode: the most recent completed field. Owned by the
+    // simulation thread until the next boundary swaps it with `capture`.
+    std::shared_ptr<galaxy::gx::PointerDepthCapture> ready;
     bool worker_accounted{true};
     std::array<std::uint32_t, 13u> projection_viewport{};
     std::array<std::uint32_t, 12u> view_matrix{};
@@ -1752,6 +1755,9 @@ struct RuntimeState {
     // Eager FPU (ABI 25): owner switches performed by the runtime in place of
     // the guest's lazy exception-7 handler, and how many saved a prior owner.
     std::uint64_t eager_fpu_switches{};
+    // galaxy_module_float_flags: fast float module; MXCSR FTZ|DAZ applied.
+    std::uint32_t module_float_flags{};
+    bool fast_float_mxcsr{};
     std::uint64_t eager_fpu_owner_saves{};
     std::uint64_t nested_async_acceptance_count{};
     std::uint64_t eligible_nested_external_suppressed{};
@@ -1946,6 +1952,15 @@ struct RuntimeState {
     bool native_mouse_acquisition_age_known{};
     bool native_mouse_pointer_frame = read_env_flag("GALAXY_NATIVE_MOUSE_POINTER_FRAME", false);
     bool native_mouse_cooperative_depth_wait = read_env_flag("GALAXY_NATIVE_MOUSE_COOPERATIVE_DEPTH_WAIT", false);
+    // The pointer query answers from the previous scene's owned depth field
+    // (double-buffered) instead of waiting for this scene's capture to come
+    // back from the GPU. In the 9950X3D A/B that wait ran 12,229 times in
+    // five minutes, 11.7 s in total and 82 ms at worst. The pointer's screen
+    // position is still the current sample; only its depth is one scene old.
+    // GALAXY_NATIVE_MOUSE_ASYNC_DEPTH=0 restores the same-scene wait.
+    bool native_mouse_async_depth = read_env_flag("GALAXY_NATIVE_MOUSE_ASYNC_DEPTH", true);
+    std::uint64_t native_mouse_async_depth_answers{};
+    std::uint64_t native_mouse_async_depth_missing{};
     bool trace_native_mouse_pointer = read_env_flag("GALAXY_TRACE_NATIVE_MOUSE_POINTER", false);
     std::unique_ptr<NativeMouseDepthFrame> native_mouse_depth;
     std::uint32_t native_mouse_restore_controller{};
@@ -22128,12 +22143,25 @@ void call_guest_impl_body(
                         // arbitration queue. Never probe a younger receipt out
                         // of order or submit while a VI/sync owner is active.
                         (void)poll_draw_done_submissions(state);
+                        const bool capture_in_flight = !frame.capture->complete.load(std::memory_order_acquire);
                         if (state.pending_vi_boundary.active() || state.gx_sync_capture_active ||
-                            !frame.capture->complete.load(std::memory_order_acquire) ||
+                            (capture_in_flight && !state.native_mouse_async_depth) ||
                             state.native_mouse_submission_serial!=0u) {
                             ++state.native_mouse_capture_busy;
                         } else {
-                        if (frame.capture->error) std::rethrow_exception(frame.capture->error);
+                        if (!capture_in_flight && frame.capture->error) std::rethrow_exception(frame.capture->error);
+                        if (state.native_mouse_async_depth && !capture_in_flight && frame.capture->success) {
+                            // The previous scene's field is complete: it becomes the
+                            // readable buffer and its predecessor is recaptured.
+                            if (!frame.ready) frame.ready = std::make_shared<galaxy::gx::PointerDepthCapture>();
+                            std::swap(frame.capture, frame.ready);
+                            frame.capture->success = false;
+                        }
+                        if (capture_in_flight) {
+                            // Asynchronous mode: the GPU still owns this scene's field.
+                            // Keep this scene's matrices; the query reads `ready`.
+                            ++state.native_mouse_capture_busy;
+                        } else {
                         if (!frame.worker_accounted) {
                             state.native_mouse_worker_ns+=frame.capture->worker_ns;
                             state.native_mouse_worker_max_ns=std::max(state.native_mouse_worker_max_ns,frame.capture->worker_ns);
@@ -22172,6 +22200,7 @@ void call_guest_impl_body(
                         const auto elapsed = static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now()-started).count());
                         state.native_mouse_capture_ns += elapsed;
                         state.native_mouse_capture_max_ns = std::max(state.native_mouse_capture_max_ns, elapsed);
+                        }
                         for (unsigned i=0; i<13u; ++i) frame.projection_viewport[i]=mem.read_u32(self+0x0cu+i*4u);
                         const auto view=pointer_view();
                         if (!view) throw RuntimeFailure("native mouse depth capture lacks camera matrix");
@@ -22240,7 +22269,7 @@ void call_guest_impl_body(
             // before drawing, targeting or click processing can use the point.
             // Never silently fall back to stale coordinates just because the
             // render owner is still publishing this exact scene result.
-            if (matches && !frame->capture->complete.load(std::memory_order_acquire)) {
+            if (matches && !state.native_mouse_async_depth && !frame->capture->complete.load(std::memory_order_acquire)) {
                 const auto begin=std::chrono::steady_clock::now();
                 if (state.native_mouse_cooperative_depth_wait) {
                     // Keep this query's sample and owned field fixed. Native
@@ -22289,9 +22318,15 @@ void call_guest_impl_body(
                 store_mode.generation == mouse_mode.generation &&
                 store_aspect_word == mouse_aspect_word;
             if (matches && frame->capture->error) std::rethrow_exception(frame->capture->error);
-            matches=matches && store_owner_matches && frame->capture->complete.load(std::memory_order_acquire) && frame->capture->success;
-            const bool depth_complete=frame && frame->capture->complete.load(std::memory_order_acquire);
-            const bool depth_success=depth_complete && frame->capture->success;
+            // Asynchronous mode reads the previous scene's completed field.
+            const galaxy::gx::PointerDepthCapture* depth_field =
+                state.native_mouse_async_depth ? frame ? frame->ready.get() : nullptr : frame ? frame->capture.get() : nullptr;
+            const bool depth_complete=depth_field && depth_field->complete.load(std::memory_order_acquire);
+            const bool depth_success=depth_complete && depth_field->success;
+            if (matches && state.native_mouse_async_depth) {
+                if (depth_success) ++state.native_mouse_async_depth_answers; else ++state.native_mouse_async_depth_missing;
+            }
+            matches=matches && store_owner_matches && depth_success;
             const bool initial_identity_match=matches;
             int projection_mismatch=-1,view_mismatch=-1;
             if (matches) for(unsigned i=0;i<13u;++i) {
@@ -22339,7 +22374,7 @@ void call_guest_impl_body(
                     // a new query or run inverse projection on that pairing.
                     galaxy::guest_store_u8(memory,self+0x21u,0u,state.services,context->pc);
                 } else {
-                    galaxy::guest_store_u32(memory,self+0x24u,frame->capture->pixels[query->efb_y*640u+query->efb_x],state.services,context->pc);
+                    galaxy::guest_store_u32(memory,self+0x24u,depth_field->pixels[query->efb_y*640u+query->efb_x],state.services,context->pc);
                     galaxy::guest_store_u8(memory,self+0x21u,1u,state.services,context->pc);
                 }
                 ++state.native_mouse_queries;
@@ -30029,7 +30064,7 @@ int wmain(int argc, wchar_t** argv) {
                 <<" capture-total-us="<<state.native_mouse_capture_ns/1000.0<<" capture-max-us="<<state.native_mouse_capture_max_ns/1000.0
                 <<" query-total-us="<<state.native_mouse_query_ns/1000.0<<" query-max-us="<<state.native_mouse_query_max_ns/1000.0
                 <<" selected-to-store-total-us="<<state.native_mouse_selected_to_store_ns/1000.0
-                <<" selected-to-store-max-us="<<state.native_mouse_selected_to_store_max_ns/1000.0<<'\n';
+                <<" selected-to-store-max-us="<<state.native_mouse_selected_to_store_max_ns/1000.0<<" async-depth-answers="<<state.native_mouse_async_depth_answers<<" async-depth-missing="<<state.native_mouse_async_depth_missing<<'\n';
             // EFB peeks block the simulation thread on the render thread twice
             // per call (pending-FIFO drain, then a frame-queue round-trip). The
             // three numbers below are the only ones that say whether that
@@ -30044,6 +30079,8 @@ int wmain(int argc, wchar_t** argv) {
                     [](galaxy::NativeGameFunction f){ return f != nullptr; })<<'\n';
             std::cerr<<"[eager-fpu] switches="<<state.eager_fpu_switches
                 <<" owner-saves="<<state.eager_fpu_owner_saves<<'\n';
+            std::cerr<<"[float-mode] fast="<<((state.module_float_flags & galaxy::kModuleFloatFlagFastFloat) != 0u)
+                <<" ftz-daz="<<state.fast_float_mxcsr<<'\n';
             std::cerr<<"[gx-efb-peek-summary] count="<<state.efb_peek_count
                 <<" published-field-answers="<<state.efb_peek_published_count
                 <<" failures="<<state.efb_peek_failures
@@ -30262,6 +30299,19 @@ int wmain(int argc, wchar_t** argv) {
     if (!manifest_fn || !init_fn || !entry_fn || !lookup_fn) {
         cleanup_module();
         return 4;
+    }
+    // Optional export: the module's float model. A fast float module runs
+    // native IEEE arithmetic; give it the Gekko's non-IEEE denormal handling
+    // (flush-to-zero, denormals-are-zero) on this simulation thread, which
+    // also keeps denormal operands off the slow microcode path.
+    if (const auto float_flags_fn = reinterpret_cast<std::uint32_t (*)()>(
+            GetProcAddress(module, "galaxy_module_float_flags"))) {
+        state.module_float_flags = float_flags_fn();
+        if ((state.module_float_flags & galaxy::kModuleFloatFlagFastFloat) != 0u &&
+            read_env_flag("GALAXY_FAST_FLOAT_FTZ_DAZ", true)) {
+            _mm_setcsr(_mm_getcsr() | 0x8040u);
+            state.fast_float_mxcsr = true;
+        }
     }
 
     const galaxy::GameModuleManifestV1* manifest = manifest_fn();
