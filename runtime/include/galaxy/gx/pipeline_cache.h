@@ -77,6 +77,11 @@ public:
     struct Item {
         PsoKey key{};
         Microsoft::WRL::ComPtr<ID3D12PipelineState> pipeline;
+        // Re-optimization of a fast first-use compile: the optimized blobs
+        // ride along so the render thread can persist them.
+        bool reoptimize = false;
+        Microsoft::WRL::ComPtr<ID3DBlob> vs_blob;
+        Microsoft::WRL::ComPtr<ID3DBlob> ps_blob;
     };
 
     PsoCompletionQueue();
@@ -180,6 +185,7 @@ private:
         Microsoft::WRL::ComPtr<ID3DBlob> vs_blob;
         Microsoft::WRL::ComPtr<ID3DBlob> ps_blob;
         bool use_cached_blobs = false;
+        bool reoptimize = false;
     };
 
     // Render-thread-only published map.
@@ -255,6 +261,17 @@ private:
     // on the render thread's hottest path.
     std::uint64_t specialized_hits_ = 0;
     std::uint64_t uber_fallbacks_ = 0;
+    // Fast first-use compiles (FXC without optimization, published at once)
+    // and the optimized replacements published later by a worker. Replaced
+    // pipelines stay alive here: frames in flight may still reference them.
+    std::uint64_t fast_first_compiles_ = 0;
+    std::uint64_t reoptimized_pipelines_ = 0;
+    std::vector<Microsoft::WRL::ComPtr<ID3D12PipelineState>> retired_pipelines_;
+    void ensure_compile_workers(unsigned count);
+    void remember_reoptimized_pair(
+        const PsoKey& key,
+        const Microsoft::WRL::ComPtr<ID3DBlob>& vs,
+        const Microsoft::WRL::ComPtr<ID3DBlob>& ps);
 
     // Compiled DXBC pair shared by every render-state variant of one
     // (vs_hash, ps_hash) — a new blend/z mode never re-runs FXC, only the
@@ -276,6 +293,8 @@ private:
         }
     };
     std::unordered_map<ShaderPairKey, ShaderPair, ShaderPairKeyHasher> shader_blobs_;
+    // Blobs of the current fast first-use compile (valid until the next one).
+    ShaderPair fast_pair_scratch_{};
     std::unordered_map<std::uint64_t, Microsoft::WRL::ComPtr<ID3DBlob>>
         vertex_shader_blobs_;
     std::unordered_map<std::uint64_t, Microsoft::WRL::ComPtr<ID3DBlob>>
@@ -358,7 +377,9 @@ private:
     [[nodiscard]] const ShaderPair* get_or_compile_blobs(
         const PsoKey& key,
         const PixelShaderKey& ps_key,
-        const VertexShaderKey& vs_key);
+        const VertexShaderKey& vs_key,
+        bool fast_first,
+        bool* fast_compiled);
     // Opt-in fresh-cache seed import; see pipeline_cache.cpp. Never throws.
     void import_fresh_cache_seed() noexcept;
     void load_disk_cache();
@@ -378,7 +399,8 @@ private:
         create_or_load_pso(
             const PsoKey& key,
             ID3DBlob* vs_blob,
-            ID3DBlob* ps_blob);
+            ID3DBlob* ps_blob,
+        bool store_in_library = true);
 
     void worker_main();
     [[nodiscard]] ID3D12PipelineState* get_or_create_uber(

@@ -447,7 +447,7 @@ struct PipelineCachePersistenceTestAccess {
         cache.pixel_shader_blobs_.emplace(record.ps_hash, shader_blob(false, id));
     }
     static bool publish_stages(PipelineCache& cache, unsigned id) {
-        return cache.get_or_compile_blobs(key(id), PixelShaderKey{}, VertexShaderKey{}) != nullptr;
+        return cache.get_or_compile_blobs(key(id), PixelShaderKey{}, VertexShaderKey{}, false, nullptr) != nullptr;
     }
     static bool stages_present(const PipelineCache& cache, unsigned id) {
         const auto record = key(id);

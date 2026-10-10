@@ -273,20 +273,23 @@ D3D12_LOGIC_OP gx_logic_op(std::uint32_t m) {
 }
 
 // Compile one HLSL source; logs the compiler error (capped) on failure.
-Microsoft::WRL::ComPtr<ID3DBlob> compile_shader(
+// `fast` skips FXC optimization: the first-use path publishes that pipeline
+// at once and a worker replaces it with the level-1 build (see get()).
+Microsoft::WRL::ComPtr<ID3DBlob> compile_shader_with_level(
     const std::string& src,
     const char* target,
-    const char* label) {
+    const char* label,
+    bool fast) {
     Microsoft::WRL::ComPtr<ID3DBlob> code, errors;
     // Level 1: the driver re-optimizes DXBC when it builds the PSO, so FXC's
     // level 3 only lengthens the synchronous first-use miss on the render
     // thread (measured 12-21 ms per shader pair at level 3).
+    const UINT flags = D3DCOMPILE_ENABLE_STRICTNESS |
+        D3DCOMPILE_PACK_MATRIX_ROW_MAJOR |
+        (fast ? D3DCOMPILE_SKIP_OPTIMIZATION : D3DCOMPILE_OPTIMIZATION_LEVEL1);
     const HRESULT hr = D3DCompile(
         src.data(), src.size(), label, nullptr, nullptr, "main", target,
-        D3DCOMPILE_ENABLE_STRICTNESS |
-            D3DCOMPILE_PACK_MATRIX_ROW_MAJOR |
-            D3DCOMPILE_OPTIMIZATION_LEVEL1,
-        0, &code, &errors);
+        flags, 0, &code, &errors);
     if (FAILED(hr)) {
         static std::atomic<int> s_err_logs{0};
         if (s_err_logs.fetch_add(1) < 4) {
@@ -300,6 +303,29 @@ Microsoft::WRL::ComPtr<ID3DBlob> compile_shader(
         return nullptr;
     }
     return code;
+}
+
+Microsoft::WRL::ComPtr<ID3DBlob> compile_shader(
+    const std::string& src, const char* target, const char* label) {
+    return compile_shader_with_level(src, target, label, false);
+}
+
+Microsoft::WRL::ComPtr<ID3DBlob> compile_shader_fast(
+    const std::string& src, const char* target, const char* label) {
+    return compile_shader_with_level(src, target, label, true);
+}
+
+bool pso_fast_first_compile_enabled() {
+    static const bool enabled = [] {
+        char value[8]{};
+        std::size_t length = 0;
+        if (getenv_s(&length, value, sizeof(value), "GALAXY_PSO_FAST_FIRST_COMPILE") != 0 ||
+            length == 0) {
+            return true;
+        }
+        return value[0] != '0';
+    }();
+    return enabled;
 }
 
 // Translate a RenderStateKey + compiled shaders into a full PSO desc.
@@ -717,6 +743,7 @@ void PipelineCache::shutdown() {
 
     published_.clear();
     uber_.clear();
+    retired_pipelines_.clear();
     in_flight_.clear();
     vertex_shader_blobs_.clear();
     pixel_shader_blobs_.clear();
@@ -854,13 +881,22 @@ ID3D12PipelineState* PipelineCache::get(
     const bool vs_cache_hit = vertex_shader_blobs_.contains(key.vs_hash);
     const bool ps_cache_hit = pixel_shader_blobs_.contains(key.ps_hash);
     const bool known_key = persisted_pso_keys_.contains(key);
-    const ShaderPair* blobs = get_or_compile_blobs(key, ps_key, vs_key);
+    // Fast first use when a worker can re-optimize afterwards: an unoptimized
+    // FXC build publishes now (several times faster than level 1; the laptop
+    // session measured 20 to 163 ms per level-1 miss, 798 ms for one frame),
+    // the level-1 pair and its pipeline follow from a worker and replace it.
+    bool fast_compiled = false;
+    const bool fast_first = pso_fast_first_compile_enabled() &&
+        !stopping_.load(std::memory_order_relaxed);
+    const ShaderPair* blobs =
+        get_or_compile_blobs(key, ps_key, vs_key, fast_first, &fast_compiled);
     const auto blobs_end = std::chrono::steady_clock::now();
 
     Microsoft::WRL::ComPtr<ID3D12PipelineState> pso;
     const auto pso_start = std::chrono::steady_clock::now();
     if (blobs != nullptr && blobs->vs && blobs->ps) {
-        pso = create_or_load_pso(key, blobs->vs.Get(), blobs->ps.Get());
+        pso = create_or_load_pso(
+            key, blobs->vs.Get(), blobs->ps.Get(), /*store_in_library=*/!fast_compiled);
     }
     const auto pso_end = std::chrono::steady_clock::now();
     // Preserve map ownership if a completion populated this key during the
@@ -881,6 +917,20 @@ ID3D12PipelineState* PipelineCache::get(
         last_hit_key_ = memoized;
         last_hit_pipeline_ = raw;
         last_hit_owner_ = published_it->second;
+    }
+    if (raw != nullptr && fast_compiled) {
+        ++fast_first_compiles_;
+        ensure_compile_workers(1u);
+        {
+            std::lock_guard<std::mutex> lock(job_mutex_);
+            CompileJob job{};
+            job.key = key;
+            job.ps_key = ps_key;
+            job.vs_key = vs_key;
+            job.reoptimize = true;
+            jobs_.push_back(std::move(job));
+        }
+        job_cv_.notify_one();
     }
     const std::uint64_t total_us = elapsed_us(miss_start, pso_end);
     if (trace_gx_stalls_enabled() &&
@@ -921,6 +971,7 @@ ID3D12PipelineState* PipelineCache::get(
                   << ((blob_cache_hit ? 0u : 1u) +
                       (vs_cache_hit ? 0u : 1u) + (ps_cache_hit ? 0u : 1u))
                   << " success=" << (raw != nullptr ? 1 : 0)
+                  << " fast=" << (fast_compiled ? 1 : 0)
                   << '\n';
         std::cerr << message.str();
     }
@@ -960,8 +1011,18 @@ void PipelineCache::drain_completions() {
                     .emplace(memoized, std::move(item.pipeline)).first;
             } else if (!published_it->second) {
                 published_it->second = std::move(item.pipeline);
+            } else if (item.reoptimize) {
+                // The optimized build replaces the fast first-use pipeline.
+                // Frames in flight may still execute the old one: retire it
+                // instead of releasing it.
+                retired_pipelines_.push_back(std::move(published_it->second));
+                published_it->second = std::move(item.pipeline);
+                ++reoptimized_pipelines_;
             }
             remember_pso_key(item.key);
+            if (item.reoptimize && item.vs_blob && item.ps_blob) {
+                remember_reoptimized_pair(item.key, item.vs_blob, item.ps_blob);
+            }
         }
     }
 }
@@ -1110,7 +1171,10 @@ void PipelineCache::wait_for_worker_completion(
 const PipelineCache::ShaderPair* PipelineCache::get_or_compile_blobs(
     const PsoKey& key,
     const PixelShaderKey& ps_key,
-    const VertexShaderKey& vs_key) {
+    const VertexShaderKey& vs_key,
+    bool fast_first,
+    bool* fast_compiled) {
+    if (fast_compiled != nullptr) *fast_compiled = false;
     const ShaderPairKey ph{key.vs_hash, key.ps_hash};
     {
         const auto it = shader_blobs_.find(ph);
@@ -1148,6 +1212,29 @@ const PipelineCache::ShaderPair* PipelineCache::get_or_compile_blobs(
     // says what shader compilation cost the session, and it is the term the
     // stall attribution needs.
     const auto compile_start = std::chrono::steady_clock::now();
+    if ((need_vs || need_ps) && fast_first && fast_compiled != nullptr) {
+        // Fast first use: unoptimized FXC for the missing stages, kept out of
+        // every cache (a worker compiles and persists the optimized pair).
+        if (need_vs && need_ps) {
+            auto compiled = compile_independent_shader_pair(
+                generator_.generate_vs(vs_key), generator_.generate_ps(ps_key),
+                compile_shader_fast);
+            pair.vs = std::move(compiled.first);
+            pair.ps = std::move(compiled.second);
+        } else if (need_vs) {
+            pair.vs = compile_shader_fast(generator_.generate_vs(vs_key), "vs_5_1", "gx_vs");
+        } else {
+            pair.ps = compile_shader_fast(generator_.generate_ps(ps_key), "ps_5_1", "gx_ps");
+        }
+        blob_compile_us_ +=
+            elapsed_us(compile_start, std::chrono::steady_clock::now());
+        if (!pair.vs || !pair.ps) {
+            return nullptr;
+        }
+        *fast_compiled = true;
+        fast_pair_scratch_ = std::move(pair);
+        return &fast_pair_scratch_;
+    }
     if (need_vs && need_ps) {
         const std::string vs_src = generator_.generate_vs(vs_key);
         const std::string ps_src = generator_.generate_ps(ps_key);
@@ -2182,7 +2269,8 @@ void PipelineCache::load_pipeline_library() {
 Microsoft::WRL::ComPtr<ID3D12PipelineState> PipelineCache::create_or_load_pso(
     const PsoKey& key,
     ID3DBlob* vs_blob,
-    ID3DBlob* ps_blob) {
+    ID3DBlob* ps_blob,
+    bool store_in_library) {
 #if defined(GALAXY_PIPELINE_CACHE_PERSISTENCE_TEST_IO)
     if (pipeline_test_creator != nullptr) return pipeline_test_creator(key);
 #endif
@@ -2223,7 +2311,7 @@ Microsoft::WRL::ComPtr<ID3D12PipelineState> PipelineCache::create_or_load_pso(
     }
     pso_compiles_.fetch_add(1, std::memory_order_relaxed);
 
-    {
+    if (store_in_library) {
         std::lock_guard<std::mutex> lock(pipeline_library_mutex_);
         if (pipeline_library_) {
             const HRESULT store_hr =
@@ -2764,6 +2852,49 @@ ID3D12PipelineState* PipelineCache::get_or_create_uber(
 // worker_main — compile thread
 // ---------------------------------------------------------------------------
 
+void PipelineCache::ensure_compile_workers(unsigned count) {
+    if (!workers_.empty() || stopping_.load(std::memory_order_relaxed)) {
+        return;
+    }
+    const unsigned threads = std::clamp(count, 1u, 2u);
+    workers_.reserve(threads);
+    for (unsigned i = 0; i < threads; ++i) {
+        workers_.emplace_back([this] {
+            // Same priority rule as the prewarm workers: the render thread
+            // must always win the core.
+            (void)SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_BELOW_NORMAL);
+            worker_main();
+        });
+    }
+}
+
+// Render thread: the optimized pair of a fast first-use compile enters the
+// stage and pair caches and the disk cache, exactly as a synchronous level-1
+// compile would have.
+void PipelineCache::remember_reoptimized_pair(
+    const PsoKey& key,
+    const Microsoft::WRL::ComPtr<ID3DBlob>& vs,
+    const Microsoft::WRL::ComPtr<ID3DBlob>& ps) {
+    const ShaderPairKey ph{key.vs_hash, key.ps_hash};
+    vertex_shader_blobs_.try_emplace(key.vs_hash, vs);
+    pixel_shader_blobs_.try_emplace(key.ps_hash, ps);
+    if (shader_blobs_.contains(ph)) {
+        return;
+    }
+    ShaderPair pair{};
+    pair.vs = vs;
+    pair.ps = ps;
+    pair.vs_hash = key.vs_hash;
+    pair.ps_hash = key.ps_hash;
+    if (!shader_cache_at_capacity_) unsaved_blobs_.push_back(ph);
+    try {
+        shader_blobs_.emplace(ph, std::move(pair));
+    } catch (...) {
+        if (!shader_cache_at_capacity_) unsaved_blobs_.pop_back();
+        throw;
+    }
+}
+
 void PipelineCache::worker_main() {
     for (;;) {
         CompileJob job{};
@@ -2795,6 +2926,11 @@ void PipelineCache::worker_main() {
         completion.key = job.key;
         if (vs && ps) {
             completion.pipeline = create_or_load_pso(job.key, vs.Get(), ps.Get());
+        }
+        if (job.reoptimize) {
+            completion.reoptimize = true;
+            completion.vs_blob = vs;
+            completion.ps_blob = ps;
         }
 
         completions_.push(std::move(completion));
