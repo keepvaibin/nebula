@@ -725,6 +725,9 @@ configure_file(cmake/runtime_identity_config.cmake.in runtime_identity_config.cm
 
 add_executable(galaxy_native_api_tests runtime/src/native_api_tests.cpp)
 target_link_libraries(galaxy_native_api_tests PRIVATE galaxy_runtime_abi galaxy_ppc_float)
+add_executable(galaxy_native_fast_float_tests runtime/src/native_fast_float_tests.cpp)
+target_compile_definitions(galaxy_native_fast_float_tests PRIVATE GALAXY_FAST_FLOAT=1)
+target_link_libraries(galaxy_native_fast_float_tests PRIVATE galaxy_runtime_abi galaxy_ppc_float)
 add_executable(galaxy_native_ios_clock_tests runtime/src/native_ios_clock_tests.cpp)
 target_link_libraries(galaxy_native_ios_clock_tests PRIVATE galaxy_runtime_abi)
 
@@ -930,6 +933,7 @@ if(MSVC)
         galaxy_game_asset_extract_tests
         NebulaRuntime
         galaxy_native_api_tests
+        galaxy_native_fast_float_tests
         galaxy_native_ios_clock_tests
         galaxy_native_multiple_gpr_tests
         galaxy_native_checkpoint_policy_tests
@@ -972,6 +976,7 @@ function(galaxy_add_native_test name target)
 endfunction()
 
 galaxy_add_native_test(native_api_helpers galaxy_native_api_tests)
+galaxy_add_native_test(native_fast_float galaxy_native_fast_float_tests)
 galaxy_add_native_test(native_ios_clock_policy galaxy_native_ios_clock_tests)
 galaxy_add_native_test(native_multiple_gpr_policy galaxy_native_multiple_gpr_tests)
 galaxy_add_native_test(native_checkpoint_policy galaxy_native_checkpoint_policy_tests)

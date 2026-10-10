@@ -38,7 +38,7 @@ use std::{fs, path::Path};
 //     function-record export (native ABI 24); regenerate every module.
 // 13: eager FPU (no MSR[FP] guards or exception-7 retry entries; native ABI
 //     25); regenerate every module.
-pub const GENERATION_VERSION: u32 = 13;
+pub const GENERATION_VERSION: u32 = 14;
 
 /// Shard size and per-shard source budget of the qualified module build.
 pub const MODULE_SHARD_SIZE: usize = 64;
@@ -62,6 +62,10 @@ pub fn release_module_options() -> ModuleTranslationOptions {
         flat_ram_reads: true,
         flat_ram_writes: true,
         native_float: true,
+        // Fast float (GALAXY_FAST_FLOAT=1): no exact fallback, no FPSCR
+        // status, flush-to-zero on the simulation thread. The user approved
+        // Dolphin/WiiCompiled float accuracy for performance on 2026-10-10.
+        fast_float: true,
         direct_indirect_calls: true,
         // The exact PSMTX local-lane experiment emits out-of-line exact paired
         // helpers for every lane operation. Measured on the SDK matrix library
@@ -273,6 +277,7 @@ pub fn generate_all(game: &Path, output: &Path) -> Result<()> {
             "flatRamReads": module_options.flat_ram_reads,
             "flatRamWrites": module_options.flat_ram_writes,
             "nativeFloat": module_options.native_float,
+            "fastFloat": module_options.fast_float,
             "directIndirectCalls": module_options.direct_indirect_calls,
             "fusedPairedTernary": module_options.fused_paired_ternary,
             "exactPsmtxLocalLanes": module_options.exact_psmtx_local_lanes,

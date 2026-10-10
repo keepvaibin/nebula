@@ -104,6 +104,14 @@ enum Command {
         /// body; reachable by default only through `release_module_options`.
         #[arg(long)]
         experimental_guest_resident_integer: bool,
+        /// FPR/PS1 residency on top of the integer pass; measured slower on
+        /// RMGE01 (exact float fallbacks force spills), so off everywhere.
+        #[arg(long)]
+        experimental_guest_resident_float: bool,
+        /// Fast float: native IEEE arithmetic with no exact fallback (the
+        /// release default through `release_module_options`).
+        #[arg(long)]
+        fast_float: bool,
         /// Exact RMGE01 0x80165478 private typed-region pilot; off by default.
         #[arg(long)]
         experimental_typed_region_80165478: bool,
@@ -450,6 +458,8 @@ fn main() -> Result<()> {
             shard_source_kib,
             experimental_guest_resident_leaf,
             experimental_guest_resident_integer,
+            experimental_guest_resident_float,
+            fast_float,
             experimental_typed_region_80165478,
             experimental_flat_ram_reads,
             experimental_flat_ram_writes,
@@ -481,6 +491,8 @@ fn main() -> Result<()> {
             let options = ModuleTranslationOptions {
                 guest_resident_leaf: experimental_guest_resident_leaf,
                 guest_resident_integer: experimental_guest_resident_integer,
+                guest_resident_float: experimental_guest_resident_float,
+                fast_float,
                 typed_region_80165478: experimental_typed_region_80165478,
                 flat_ram_reads: experimental_flat_ram_reads,
                 flat_ram_writes: experimental_flat_ram_writes,

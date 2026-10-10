@@ -14122,6 +14122,12 @@ using NativeRsoResumeFn = bool (*) (
     GuestMemoryV1* memory,
     const NativeServicesV1* services);
 
+// galaxy_module_float_flags: the module was compiled with GALAXY_FAST_FLOAT=1
+// (native IEEE float, no exact fallback). The runtime then runs the
+// simulation thread with flush-to-zero and denormals-are-zero, the Gekko's
+// non-IEEE mode.
+inline constexpr std::uint32_t kModuleFloatFlagFastFloat = 1u;
+
 static_assert(std::is_standard_layout_v<PpcContext>);
 static_assert(std::is_standard_layout_v<NativeServicesV1>);
 static_assert(std::is_standard_layout_v<GameModuleManifestV1>);
@@ -14141,6 +14147,9 @@ GALAXY_MODULE_EXPORT galaxy::NativeGameFunction galaxy_lookup_function(
 // ABI 24, optional: the module's complete ascending callable-entry table.
 GALAXY_MODULE_EXPORT std::size_t galaxy_module_function_records(
     const galaxy::FunctionRecordV1** records);
+// Optional: galaxy::kModuleFloatFlag* bits. Absent means the exact float
+// model.
+GALAXY_MODULE_EXPORT std::uint32_t galaxy_module_float_flags();
 
 }
 

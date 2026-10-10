@@ -21,6 +21,9 @@ use thiserror::Error;
 pub enum TranslationError {
     #[error(transparent)]
     Game(#[from] GameError),
+    /// `fast_float` without `native_float` has no helpers to switch.
+    #[error("fast_float requires native_float")]
+    FastFloatRequiresNativeFloat,
     #[error("no configured function begins at 0x{0:08X}")]
     FunctionNotFound(u32),
     #[error("function 0x{address:08X} is not fully contained in a DOL text section")]
@@ -218,6 +221,21 @@ pub struct ModuleTranslationOptions {
     /// `crate::residency::apply_register_residency` for the rule, and why
     /// interior entries and runtime-indexed GPR access are excluded.
     pub guest_resident_integer: bool,
+    /// Fast float: the module is compiled with `GALAXY_FAST_FLOAT=1`, so the
+    /// native float helpers run plain IEEE arithmetic (fused multiply-add,
+    /// one rounding to binary32 for the single forms, 25-bit multiplier
+    /// rounding, saturating fctiwz) with no exact fallback and no FPSCR
+    /// status. Dolphin/WiiCompiled accuracy instead of bit-exact Gekko
+    /// results; the exact fallback calls were what kept guest floats out of
+    /// host registers. The module exports `galaxy_module_float_flags` so the
+    /// runtime can select flush-to-zero on the simulation thread. Requires
+    /// `native_float`.
+    pub fast_float: bool,
+    /// Also keep the FPR/PS1 file in host locals (requires
+    /// `guest_resident_integer`). Measured slower than integer-only residency
+    /// on the RMGE01 module (87.9 vs 83.2 ns per benchmark call): the exact
+    /// float fallbacks force spills around every helper call. Off by default.
+    pub guest_resident_float: bool,
     pub exact_psmtx_local_lanes: bool,
     pub exact_psvec_cross_local_lanes: bool,
     pub exact_psvec_normalize_local_lanes: bool,
@@ -251,6 +269,8 @@ impl Default for ModuleTranslationOptions {
             fused_paired_ternary: false,
             inline_scalar_single_binary: false,
             guest_resident_integer: false,
+            fast_float: false,
+            guest_resident_float: false,
             exact_psmtx_local_lanes: true,
             exact_psvec_cross_local_lanes: false,
             exact_psvec_normalize_local_lanes: false,
@@ -817,6 +837,12 @@ pub fn translate_module_with_options(
             typed_region_80165478: typed_region_80165478.as_deref(),
         },
     )?;
+    if options.fast_float {
+        if !options.native_float {
+            return Err(TranslationError::FastFloatRequiresNativeFloat);
+        }
+        apply_fast_float_mode(&mut source_files);
+    }
     if options.trace_end_frame_spans {
         insert_end_frame_span_markers(&mut source_files, shard_source_bytes)?;
     }
@@ -2455,7 +2481,7 @@ fn apply_residency_to_body(
     if !options.guest_resident_integer || !residency_address_selected(address) {
         return body;
     }
-    match crate::residency::apply_register_residency(&body) {
+    match crate::residency::apply_register_residency(&body, options.guest_resident_float) {
         Some(resident) => resident,
         None => body,
     }
@@ -3458,11 +3484,19 @@ fn lower_words_with_config(
             Opcode::Fctiwz => {
                 let target = gpr_rt(word);
                 let source = gpr_rb(word);
-                writeln!(
-                    output,
-                    "    const galaxy::PpcFloatResult result = galaxy::ppc_f64_to_i32_round_zero(context->fpr_bits[{source}], context->fpscr);\n    galaxy::ppc_commit_scalar_result(context, {target}u, result, false, {}, services, 0x{pc:08X}u);",
-                    record_bit(word)
-                )
+                if native_float {
+                    writeln!(
+                        output,
+                        "    galaxy::fast::fctiwz(context, {target}u, {source}u, {}, services, 0x{pc:08X}u);",
+                        record_bit(word)
+                    )
+                } else {
+                    writeln!(
+                        output,
+                        "    const galaxy::PpcFloatResult result = galaxy::ppc_f64_to_i32_round_zero(context->fpr_bits[{source}], context->fpscr);\n    galaxy::ppc_commit_scalar_result(context, {target}u, result, false, {}, services, 0x{pc:08X}u);",
+                        record_bit(word)
+                    )
+                }
                 .map_err(|_| TranslationError::Formatting)?;
             }
             Opcode::Fadd
@@ -6434,6 +6468,34 @@ const END_FRAME_SPAN_LABELS: [u32; 8] = [
     0x803A_093C,
     0x803A_0940,
 ];
+
+/// Fast float: every translation unit that includes `galaxy/native_api.h`
+/// directly defines `GALAXY_FAST_FLOAT` first (the shards include it through
+/// `functions.h`), and the module unit exports the float flags the runtime
+/// reads before it starts guest code.
+fn apply_fast_float_mode(source_files: &mut [GeneratedSource]) {
+    const DEFINE: &str = "#define GALAXY_FAST_FLOAT 1\n";
+    const INCLUDE: &str = "#include \"galaxy/native_api.h\"";
+    const PRAGMA: &str = "#pragma once\n";
+    for file in source_files.iter_mut() {
+        if file.contents.contains(INCLUDE) && !file.contents.contains(DEFINE) {
+            if let Some(rest) = file.contents.strip_prefix(PRAGMA) {
+                file.contents = format!("{PRAGMA}{DEFINE}{rest}");
+            } else {
+                file.contents = format!("{DEFINE}{}", file.contents);
+            }
+        }
+        if file.contents.contains("galaxy_module_manifest() {")
+            && !file.contents.contains("galaxy_module_float_flags()")
+        {
+            file.contents.push_str(
+                "\nextern \"C\" std::uint32_t galaxy_module_float_flags() {\n\
+                 \x20   return galaxy::kModuleFloatFlagFastFloat;\n\
+                 }\n",
+            );
+        }
+    }
+}
 
 fn insert_end_frame_span_markers(
     files: &mut [GeneratedSource],
@@ -17238,5 +17300,59 @@ mod residency_tests {
             apply_residency_to_body(FN, body, &BTreeSet::new(), &enabled)
                 .contains("gr3")
         );
+    }
+
+    #[test]
+    fn fast_float_mode_defines_the_macro_and_exports_the_float_flags() {
+        let mut files = vec![
+            GeneratedSource {
+                name: "functions.h".to_owned(),
+                contents: "#pragma once
+
+#include \"galaxy/native_api.h\"
+".to_owned(),
+            },
+            GeneratedSource {
+                name: "functions_0000.cpp".to_owned(),
+                contents: "#include \"functions.h\"
+".to_owned(),
+            },
+            GeneratedSource {
+                name: "module.cpp".to_owned(),
+                contents: "#include \"functions.h\"
+extern \"C\" const galaxy::GameModuleManifestV1* galaxy_module_manifest() {
+    return &kManifest;
+}
+".to_owned(),
+            },
+            GeneratedSource {
+                name: "helpers.cpp".to_owned(),
+                contents: "#include \"galaxy/native_api.h\"
+".to_owned(),
+            },
+        ];
+        apply_fast_float_mode(&mut files);
+        assert!(files[0]
+            .contents
+            .starts_with("#pragma once
+#define GALAXY_FAST_FLOAT 1
+
+#include \"galaxy/native_api.h\""));
+        assert_eq!(files[1].contents, "#include \"functions.h\"
+");
+        assert!(!files[2].contents.contains("GALAXY_FAST_FLOAT"));
+        assert!(files[2].contents.ends_with(
+            "extern \"C\" std::uint32_t galaxy_module_float_flags() {
+    return galaxy::kModuleFloatFlagFastFloat;
+}
+"
+        ));
+        assert!(files[3].contents.starts_with("#define GALAXY_FAST_FLOAT 1
+#include"));
+        // Idempotent.
+        let again = files.clone();
+        apply_fast_float_mode(&mut files);
+        assert_eq!(files[0].contents, again[0].contents);
+        assert_eq!(files[2].contents, again[2].contents);
     }
 }
