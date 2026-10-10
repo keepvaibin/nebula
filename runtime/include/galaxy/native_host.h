@@ -592,11 +592,28 @@ public:
     // interrupt-control clear bit.
     void raise_pe_finish() {
         pe_finish_pending_.store(true, std::memory_order_release);
+        wake_idle_simulation();
     }
     void raise_pe_token(std::uint16_t token, bool interrupt) {
         pe_token_value_.store(token, std::memory_order_release);
         if (interrupt) {
             pe_token_pending_.store(true, std::memory_order_release);
+            wake_idle_simulation();
+        }
+    }
+    // The simulation thread's idle loop blocks until a device event is
+    // published. Device levels raised outside the deadline latch (PE finish
+    // and token from the render thread) wake it through this callback.
+    using IdleWakeCallback = void (*)(void* user) noexcept;
+    void set_idle_wake_callback(IdleWakeCallback callback, void* user) noexcept {
+        idle_wake_user_ = user;
+        idle_wake_callback_.store(callback, std::memory_order_release);
+    }
+    void wake_idle_simulation() noexcept {
+        if (IdleWakeCallback callback =
+                idle_wake_callback_.load(std::memory_order_acquire);
+            callback != nullptr) {
+            callback(idle_wake_user_);
         }
     }
     // PE interrupts are levels: observing one does not acknowledge it. The
@@ -1722,6 +1739,8 @@ private:
     // exact 32-bit W1C writes to PI_INTSR clear only this PI-owned latch.
     std::uint32_t pi_interrupt_cause_latch_{};
     std::atomic_bool pe_finish_pending_{false};
+    std::atomic<IdleWakeCallback> idle_wake_callback_{nullptr};
+    void* idle_wake_user_{nullptr};
     std::atomic_bool pe_token_pending_{false};
     std::atomic<std::uint16_t> pe_token_value_{0};
     // DSP mailbox: a to-DSP mail is a 16-bit high write (0x5000) then a low write

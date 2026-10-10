@@ -343,6 +343,8 @@ public:
     PendingEventLatch() = default;
 
     bool publish(EventKind kind, std::uint64_t count = 1) noexcept;
+    // Wakes a simulation thread blocked in WaitOnAddress on mask_address().
+    void wake_idle_waiters() noexcept;
     // Publishes one exact periodic edge. Identity and count are updated under
     // the same per-kind lock, so a consumer can never drain a singleton count
     // while accidentally observing the following edge's sequence/deadline.

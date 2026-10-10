@@ -1381,6 +1381,8 @@ struct RuntimeState {
     // Idle-loop sleeps: bounded host waits taken at the guest scheduler's
     // empty-run-queue checkpoint instead of spinning until the next deadline.
     std::uint64_t idle_loop_sleeps{};
+    std::uint64_t idle_loop_sleep_wakes{};
+    std::uint64_t idle_loop_sleep_timeouts{};
     std::uint64_t idle_loop_sleep_us{};
     // The Home Button RSO is lowered from the validated user dump at install
     // time and loaded as a sibling native DLL. This is deliberately separate
@@ -17309,12 +17311,15 @@ bool trace_realtime_vi_wait(const RuntimeState& state);
 // observed promptly. This changes no guest-visible state: the idle loop
 // resumes at the same checkpoint and re-evaluates its run queue exactly as
 // before.
-// Opt-in until the wake path also covers PE completions, DSP mail and IPC
-// publications with an event rather than a timer slice: a recorded laptop
-// session with this on failed the exact VI cadence check (the render thread's
-// independent VI completion raced the simulation thread's consumer).
+// The wait is event-driven: the thread blocks on the deadline latch's mask
+// word (WaitOnAddress), which every publication (VI, AI, DEC, input, DSP, IOS)
+// wakes through PendingEventLatch::wake_idle_waiters, and which the render
+// thread wakes for PE finish/token levels through the address space's idle
+// wake callback. The timeout is bounded by the next VI deadline and the AI DMA
+// deadline, so a missed wake cannot delay a device edge beyond the existing
+// polling guard. GALAXY_IDLE_LOOP_SLEEP=0 restores the spinning idle loop.
 bool idle_loop_sleep_enabled() {
-    static const bool enabled = read_env_flag("GALAXY_IDLE_LOOP_SLEEP", false);
+    static const bool enabled = read_env_flag("GALAXY_IDLE_LOOP_SLEEP", true);
     return enabled;
 }
 
@@ -17345,7 +17350,7 @@ void idle_loop_wait_for_next_deadline(RuntimeState& state) {
             static_cast<double>(galaxy::timing::kTimelineTicksPerSecond)));
     wait_duration = cap_realtime_vi_wait_for_ai_dma(state, wait_duration);
     static const auto max_slice = std::chrono::microseconds(std::clamp<std::uint64_t>(
-        read_env_u64("GALAXY_IDLE_LOOP_SLEEP_SLICE_US", 2000u), 100u, 8000u));
+        read_env_u64("GALAXY_IDLE_LOOP_SLEEP_SLICE_US", 4000u), 100u, 16000u));
     if (wait_duration > max_slice) {
         wait_duration = max_slice;
     }
@@ -17356,14 +17361,47 @@ void idle_loop_wait_for_next_deadline(RuntimeState& state) {
         return;
     }
     wait_duration -= kDeadlineGuard;
+    // Device levels raised outside the latch are checked once more here; if
+    // one is already up there is work to do and no reason to block.
+    if (state.address_space->pe_finish_pending() ||
+        state.address_space->pe_token_pending() ||
+        state.address_space->dsp_interrupt_pending() ||
+        state.address_space->aram_dma_interrupt_pending() ||
+        state.address_space->ai_dma_interrupt_pending() ||
+        state.address_space->ipc_interrupt_pending()) {
+        return;
+    }
     const auto started = std::chrono::steady_clock::now();
-    if (!wait_realtime_vi_duration_high_res(wait_duration)) {
-        SwitchToThread();
+    // Block on the event mask word: any publication or PE wake ends the wait
+    // immediately; otherwise the bounded timeout returns to the checkpoint.
+    const std::atomic_uint32_t* mask_address = state.deadline_events.mask_address();
+    std::uint32_t expected_idle_mask = 0u;
+    const DWORD timeout_ms = static_cast<DWORD>(std::max<std::int64_t>(
+        1, std::chrono::duration_cast<std::chrono::milliseconds>(wait_duration).count()));
+    if (!WaitOnAddress(
+            const_cast<std::atomic_uint32_t*>(mask_address),
+            &expected_idle_mask,
+            sizeof(expected_idle_mask),
+            timeout_ms)) {
+        if (GetLastError() == ERROR_TIMEOUT) {
+            ++state.idle_loop_sleep_timeouts;
+        }
+    } else {
+        ++state.idle_loop_sleep_wakes;
     }
     ++state.idle_loop_sleeps;
     state.idle_loop_sleep_us += static_cast<std::uint64_t>(
         std::chrono::duration_cast<std::chrono::microseconds>(
             std::chrono::steady_clock::now() - started).count());
+}
+
+#pragma comment(lib, "Synchronization.lib")
+
+void wake_idle_simulation_thread(void* user) noexcept {
+    auto* state = static_cast<RuntimeState*>(user);
+    if (state != nullptr) {
+        state->deadline_events.wake_idle_waiters();
+    }
 }
 
 void wait_for_exact_vi_deadline(
@@ -29998,6 +30036,8 @@ int wmain(int argc, wchar_t** argv) {
             // dependency is negligible or dominant, because both existing peek
             // phase timers require frame-cadence diagnostics to be enabled.
             std::cerr<<"[idle-loop-sleep] waits="<<state.idle_loop_sleeps
+                <<" wakes="<<state.idle_loop_sleep_wakes
+                <<" timeouts="<<state.idle_loop_sleep_timeouts
                 <<" total-us="<<state.idle_loop_sleep_us
                 <<" direct-dispatch-entries="<<std::count_if(
                     state.direct_dispatch_table.begin(), state.direct_dispatch_table.end(),
@@ -30283,6 +30323,8 @@ int wmain(int argc, wchar_t** argv) {
     // AISCNT must tick off the deterministic checkpoint clock, not the host
     // wall clock — otherwise renderer/compile cost changes the boot schedule.
     address_space.set_tick_source(&host_time_base_ticks, &state);
+    // PE finish/token levels from the render thread wake the idle-loop wait.
+    address_space.set_idle_wake_callback(&wake_idle_simulation_thread, &state);
     address_space.set_native_audio_failure_callback(
         &on_native_audio_failure, &state);
     address_space.set_native_input_failure_callback(

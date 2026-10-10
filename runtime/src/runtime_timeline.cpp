@@ -5,6 +5,7 @@
 #endif
 #define WIN32_LEAN_AND_MEAN
 #include <Windows.h>
+#pragma comment(lib, "Synchronization.lib")
 
 #include <algorithm>
 #include <chrono>
@@ -779,6 +780,12 @@ std::size_t PendingEventLatch::index(EventKind kind) noexcept {
     return value < kEventKindCount ? value : kEventKindCount;
 }
 
+// Any publication may unblock the simulation thread's idle-loop wait, which
+// sleeps on the mask word itself (WaitOnAddress); wake it after the bit lands.
+void PendingEventLatch::wake_idle_waiters() noexcept {
+    WakeByAddressAll(static_cast<void*>(&mask_));
+}
+
 bool PendingEventLatch::publish(EventKind kind, std::uint64_t count) noexcept {
     const std::size_t slot = index(kind);
     if (slot == kEventKindCount || count == 0) {
@@ -797,6 +804,7 @@ bool PendingEventLatch::publish(EventKind kind, std::uint64_t count) noexcept {
     }
     counts_[slot].store(current + count, std::memory_order_release);
     mask_.fetch_or(event_bit(kind), std::memory_order_release);
+    wake_idle_waiters();
     unlock_slot(slot);
     return true;
 }
@@ -848,6 +856,7 @@ bool PendingEventLatch::publish_periodic(
     }
     counts_[slot].store(current + 1u, std::memory_order_release);
     mask_.fetch_or(event_bit(event.kind), std::memory_order_release);
+    wake_idle_waiters();
     unlock_slot(slot);
     return true;
 }
@@ -867,6 +876,7 @@ bool PendingEventLatch::publish_replaceable(
     replaceable_generations_[slot].store(
         generation, std::memory_order_release);
     mask_.fetch_or(event_bit(kind), std::memory_order_release);
+    wake_idle_waiters();
     unlock_slot(slot);
     return true;
 }
