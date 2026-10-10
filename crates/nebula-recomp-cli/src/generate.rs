@@ -38,7 +38,7 @@ use std::{fs, path::Path};
 //     function-record export (native ABI 24); regenerate every module.
 // 13: eager FPU (no MSR[FP] guards or exception-7 retry entries; native ABI
 //     25); regenerate every module.
-pub const GENERATION_VERSION: u32 = 14;
+pub const GENERATION_VERSION: u32 = 15;
 
 /// Shard size and per-shard source budget of the qualified module build.
 pub const MODULE_SHARD_SIZE: usize = 64;

@@ -173,7 +173,7 @@ fn classify(callee: &str, floats: bool) -> Sync {
     let name = callee.strip_prefix("galaxy::").unwrap_or(callee);
     if callee_leaves_register_file_alone(callee) {
         Sync::None
-    } else if name == "branch_checkpoint_taken" {
+    } else if name == "branch_checkpoint_taken" || name == "branch_checkpoint_taken_budgeted" {
         Sync::Checkpoint
     } else if name == "ppc_commit_scalar_result" && floats {
         Sync::FprTarget
@@ -735,9 +735,14 @@ pub fn apply_register_residency(body: &str, floats: bool) -> Option<String> {
             rewritten.push_str(before);
             match classify(&call.callee, floats) {
                 Sync::Checkpoint => {
+                    let due = if call.callee.ends_with("_budgeted") {
+                        "galaxy::branch_checkpoint_due_budgeted"
+                    } else {
+                        "galaxy::branch_checkpoint_due"
+                    };
                     let _ = write!(
                         rewritten,
-                        "if (const std::uint64_t counted__ = galaxy::branch_checkpoint_due(services); counted__ != 0u) [[unlikely]] {{ {stores}galaxy::branch_checkpoint_taken_counted({args}, counted__); {reloads}}}"
+                        "if (const std::uint64_t counted__ = {due}(services); counted__ != 0u) [[unlikely]] {{ {stores}galaxy::branch_checkpoint_taken_counted({args}, counted__); {reloads}}}"
                     );
                 }
                 Sync::Full => {
@@ -920,5 +925,13 @@ mod tests {
     #[test]
     fn body_without_register_accesses_is_left_alone() {
         assert!(apply_register_residency("    return;\n", false).is_none());
+    }
+
+    #[test]
+    fn budgeted_backward_branch_checkpoint_splits_inside_the_budget_test() {
+        let body = "    [[maybe_unused]] std::uint32_t checkpoint_budget__ = galaxy::kBranchCheckpointBudget;\n    label_80004000:\n    context->gpr[3] = context->gpr[3] + 1u;\n    if (context->gpr[3] < 10u) { if (--checkpoint_budget__ == 0u) [[unlikely]] { checkpoint_budget__ = galaxy::kBranchCheckpointBudget; galaxy::branch_checkpoint_taken_budgeted(services, 0x80004004u, 0x80004000u, context, memory); } goto label_80004000; }\n    return;\n";
+        let out = apply_register_residency(body, false).expect("eligible");
+        assert!(out.contains("if (const std::uint64_t counted__ = galaxy::branch_checkpoint_due_budgeted(services); counted__ != 0u) [[unlikely]] { context->gpr[3] = gr3; galaxy::branch_checkpoint_taken_counted(services, 0x80004004u, 0x80004000u, context, memory, counted__); gr3 = context->gpr[3]; }"));
+        assert!(out.contains("if (--checkpoint_budget__ == 0u) [[unlikely]] { checkpoint_budget__ = galaxy::kBranchCheckpointBudget; if (const std::uint64_t counted__"));
     }
 }

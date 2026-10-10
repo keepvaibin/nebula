@@ -2542,6 +2542,12 @@ fn lower_words_with_config(
             "    [[maybe_unused]] std::byte* const flat_guest_base = galaxy::fast::flat_base(memory);\n    [[maybe_unused]] const std::byte* flat_guest_read_base = flat_guest_base;\n",
         );
     }
+    // Budgeted backward-branch checkpoints (galaxy::kBranchCheckpointBudget):
+    // the full checkpoint test runs every N backward branches of this
+    // activation; the other iterations cost a decrement and a branch.
+    output.push_str(
+        "    [[maybe_unused]] std::uint32_t checkpoint_budget__ = galaxy::kBranchCheckpointBudget;\n",
+    );
     if local_lane_profile != LocalLaneProfile::None {
         output.push_str("    std::uint32_t lane0[32]{};\n    std::uint32_t lane1[32]{};\n");
     }
@@ -4754,7 +4760,7 @@ fn lower_words_with_config(
                     if target <= pc {
                         writeln!(
                             output,
-                            "    galaxy::branch_checkpoint_taken(services, 0x{pc:08X}u, 0x{target:08X}u, context, memory);"
+                            "    if (--checkpoint_budget__ == 0u) [[unlikely]] {{ checkpoint_budget__ = galaxy::kBranchCheckpointBudget; galaxy::branch_checkpoint_taken_budgeted(services, 0x{pc:08X}u, 0x{target:08X}u, context, memory); }}"
                         )
                         .map_err(|_| TranslationError::Formatting)?;
                     }
@@ -4816,7 +4822,7 @@ fn lower_words_with_config(
                             if target <= pc {
                                 writeln!(
                                 output,
-                                "    galaxy::branch_checkpoint_taken(services, 0x{pc:08X}u, 0x{target:08X}u, context, memory);"
+                                "    if (--checkpoint_budget__ == 0u) [[unlikely]] {{ checkpoint_budget__ = galaxy::kBranchCheckpointBudget; galaxy::branch_checkpoint_taken_budgeted(services, 0x{pc:08X}u, 0x{target:08X}u, context, memory); }}"
                             )
                             .map_err(|_| TranslationError::Formatting)?;
                             }
@@ -4827,7 +4833,7 @@ fn lower_words_with_config(
                             if target <= pc {
                                 writeln!(
                                 output,
-                                "    if ({condition}) {{ galaxy::branch_checkpoint_taken(services, 0x{pc:08X}u, 0x{target:08X}u, context, memory); goto label_{target:08X}; }}"
+                                "    if ({condition}) {{ if (--checkpoint_budget__ == 0u) [[unlikely]] {{ checkpoint_budget__ = galaxy::kBranchCheckpointBudget; galaxy::branch_checkpoint_taken_budgeted(services, 0x{pc:08X}u, 0x{target:08X}u, context, memory); }} goto label_{target:08X}; }}"
                             )
                             .map_err(|_| TranslationError::Formatting)?;
                             } else {
@@ -13548,7 +13554,7 @@ mod tests {
         let bytes: Vec<u8> = words.iter().flat_map(|word| word.to_be_bytes()).collect();
         let output = lower_words_with_entries(0x8000_4000, &bytes, &BTreeSet::from([0x8000_4004]))
             .expect("interior entry is supported");
-        assert!(output.starts_with("    if (context->pc != 0x80004000u) [[unlikely]] {\n"));
+        assert!(output.starts_with("    [[maybe_unused]] std::uint32_t checkpoint_budget__ = galaxy::kBranchCheckpointBudget;\n    if (context->pc != 0x80004000u) [[unlikely]] {\n"));
         assert!(output.contains("    switch (context->pc) {\n"));
         assert!(output.contains("case 0x80004004u: goto label_80004004;"));
         assert!(output.contains(
@@ -13672,7 +13678,7 @@ mod tests {
         let conditional = lower_words(0x8000_4000, &conditional_bytes)
             .expect("backward conditional branch is supported");
         assert!(conditional.contains(
-            "galaxy::branch_checkpoint_taken(services, 0x80004004u, 0x80004000u, context, memory); goto label_80004000;"
+            "if (--checkpoint_budget__ == 0u) [[unlikely]] { checkpoint_budget__ = galaxy::kBranchCheckpointBudget; galaxy::branch_checkpoint_taken_budgeted(services, 0x80004004u, 0x80004000u, context, memory); } goto label_80004000;"
         ));
 
         let unconditional_words = [0x38A5_0001_u32, 0x4BFF_FFFC];
@@ -13683,7 +13689,7 @@ mod tests {
         let unconditional = lower_words(0x8000_5000, &unconditional_bytes)
             .expect("backward unconditional branch is supported");
         assert!(unconditional.contains(
-            "galaxy::branch_checkpoint_taken(services, 0x80005004u, 0x80005000u, context, memory);"
+            "galaxy::branch_checkpoint_taken_budgeted(services, 0x80005004u, 0x80005000u, context, memory);"
         ));
     }
 

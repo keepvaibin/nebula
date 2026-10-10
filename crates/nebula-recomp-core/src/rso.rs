@@ -960,7 +960,19 @@ fn rewrite_dynamic_pc_literals(
         let expected_start = format!(
             "    if (context->pc != 0x{canonical_address:08X}u) [[unlikely]] {{\n    switch (context->pc) {{"
         );
-        if !body.starts_with(&expected_start) {
+        // The lowerer may place function-scope declarations (checkpoint
+        // budget, flat base) before the dispatch; every goto target lies after
+        // them. Keep that preamble verbatim and require nothing else there.
+        let dispatch_start = body.find(&expected_start).ok_or(
+            RsoNativeSidecarError::MissingInteriorDispatch {
+                section: code_section,
+            },
+        )?;
+        let preamble = &body[..dispatch_start];
+        if !preamble
+            .lines()
+            .all(|line| line.starts_with("    ") && line.trim_end().ends_with(';'))
+        {
             return Err(RsoNativeSidecarError::MissingInteriorDispatch {
                 section: code_section,
             });
@@ -974,7 +986,7 @@ fn rewrite_dynamic_pc_literals(
                 section: code_section,
             })?;
         let dispatch_cases_end = dispatch_end - dispatch_end_marker.len();
-        let dispatch_cases = body[expected_start.len()..dispatch_cases_end]
+        let dispatch_cases = body[dispatch_start + expected_start.len()..dispatch_cases_end]
             .strip_prefix('\n')
             .ok_or_else(|| RsoNativeSidecarError::InvalidInteriorDispatch {
                 section: code_section,
@@ -1043,6 +1055,7 @@ fn rewrite_dynamic_pc_literals(
             });
         }
         let mut rewritten = String::new();
+        rewritten.push_str(preamble);
         rewritten.push_str("    if (context->pc != rso_pc(0x00000000u)) [[unlikely]] {\n");
         // Dispatch validated instruction offsets once. A linear relocated-address
         // comparison for every label makes each Home-menu re-entry O(code size).

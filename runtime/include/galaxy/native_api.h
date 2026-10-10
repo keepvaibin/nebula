@@ -6385,6 +6385,15 @@ GALAXY_ALWAYS_INLINE void call_guest_cached(
     GuestMemoryV1* memory,
     std::uint32_t caller_pc);
 
+// Backward-branch checkpoints are budgeted: a translated function keeps a
+// local countdown and runs the checkpoint test only every
+// kBranchCheckpointBudget backward branches (two register instructions on the
+// other iterations instead of four service loads, a counter store and an
+// atomic load). The checkpoint counter advances by the budget per test so the
+// count-based schedules keep their rate. Interrupt recognition latency grows
+// by at most that many iterations of one loop.
+inline constexpr std::uint32_t kBranchCheckpointBudget = 32u;
+
 GALAXY_ALWAYS_INLINE void branch_checkpoint(
     const NativeServicesV1* services,
     std::uint32_t guest_pc,
@@ -12980,6 +12989,44 @@ GALAXY_NOINLINE inline void branch_checkpoint_taken_counted(
     branch_checkpoint_taken_slow(
         services, guest_pc, resume_pc, context, memory,
         counted == kBranchCheckpointNotCounted ? 0u : counted);
+}
+
+// Budgeted variants for generated backward branches: the same gate as
+// branch_checkpoint_due / branch_checkpoint_taken, reached once every
+// kBranchCheckpointBudget backward branches of a function activation, and
+// advancing the checkpoint counter by the budget so the count-based schedules
+// (inline slow interval, AI DMA probe gap, Yaz0 poll interval) keep their
+// guest-progress calibration.
+GALAXY_ALWAYS_INLINE std::uint64_t branch_checkpoint_due_budgeted(
+    const NativeServicesV1* services) {
+    if (services != nullptr && services->branch_checkpoint != nullptr &&
+        services->checkpoint_counter != nullptr &&
+        services->checkpoint_next_slow != nullptr &&
+        services->pending_event_mask != nullptr &&
+        (services->runtime_flags & kNativeServiceFlagTraceWpadReadCopies) == 0u)
+        [[likely]] {
+        const std::uint64_t checkpoint =
+            (*services->checkpoint_counter += kBranchCheckpointBudget);
+        if (checkpoint < *services->checkpoint_next_slow &&
+            atomic_load_u32(services->pending_event_mask) == 0u) [[likely]] {
+            return 0u;
+        }
+        return checkpoint;
+    }
+    return kBranchCheckpointNotCounted;
+}
+
+GALAXY_ALWAYS_INLINE void branch_checkpoint_taken_budgeted(
+    const NativeServicesV1* services,
+    std::uint32_t guest_pc,
+    std::uint32_t resume_pc,
+    PpcContext* context,
+    GuestMemoryV1* memory) {
+    const std::uint64_t counted = branch_checkpoint_due_budgeted(services);
+    if (counted == 0u) [[likely]] {
+        return;
+    }
+    branch_checkpoint_taken_counted(services, guest_pc, resume_pc, context, memory, counted);
 }
 
 // mtmsr is an architectural interrupt-recognition boundary.  This statically
