@@ -6284,7 +6284,10 @@ void GxBackend::render_thread_main() {
     SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_ABOVE_NORMAL);
     // Hybrid CPUs: keep the FIFO parser on performance cores with the
     // simulation thread; the scheduler still balances inside that set.
-    (void)galaxy::host::pin_current_thread_to_performance_cores();
+    // Opt-in together with the simulation thread's placement.
+    if (read_env_u64("GALAXY_PIN_PERFORMANCE_CORES", 0u) != 0u) {
+        (void)galaxy::host::pin_current_thread_to_performance_cores();
+    }
     {
         // Opt the whole process out of EcoQoS / execution-speed throttling so
         // hybrid CPUs (Intel P/E/LP-E cores, laptops) do not park the

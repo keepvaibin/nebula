@@ -6503,10 +6503,200 @@ bool test_native_audio_bus_controls() {
     return passed;
 }
 
+struct EntryMarkerPair {
+    galaxy::DspContext assigned{};
+    galaxy::DspContext entered{};
+    std::uint64_t assigned_pending{};
+    std::uint64_t entered_pending{};
+    galaxy::DspRmge01IdleSequenceTracker assigned_tracker{};
+    galaxy::DspRmge01IdleSequenceTracker entered_tracker{};
+    galaxy::DspNativeTelemetryState assigned_telemetry{};
+    galaxy::DspNativeTelemetryState entered_telemetry{};
+    bool agree = true;
+    std::uint64_t steps{};
+
+    EntryMarkerPair() {
+        assigned.last_retired_pc.pending_entries = &assigned_pending;
+        entered.last_retired_pc.pending_entries = &entered_pending;
+        assigned.last_retired_pc.idle_sequence_tracker = &assigned_tracker;
+        entered.last_retired_pc.idle_sequence_tracker = &entered_tracker;
+        assigned.host_telemetry = &assigned_telemetry;
+        entered.host_telemetry = &entered_telemetry;
+    }
+
+    template <std::uint16_t Pc>
+    void step() {
+        assigned.last_retired_pc = Pc;
+        entered.last_retired_pc.enter<Pc>();
+        ++steps;
+        agree &= static_cast<std::uint16_t>(assigned.last_retired_pc) ==
+                     static_cast<std::uint16_t>(entered.last_retired_pc) &&
+                 assigned_tracker.kind == entered_tracker.kind &&
+                 assigned_tracker.progress == entered_tracker.progress;
+    }
+
+    template <std::uint16_t... Pcs>
+    void steps_of() {
+        (step<Pcs>(), ...);
+    }
+
+    [[nodiscard]] bool published_counts_agree() {
+        galaxy::dsp_native_telemetry_publish_pending_worker_counts(assigned);
+        galaxy::dsp_native_telemetry_publish_pending_worker_counts(entered);
+        const auto a = galaxy::dsp_native_telemetry_snapshot(assigned_telemetry);
+        const auto b = galaxy::dsp_native_telemetry_snapshot(entered_telemetry);
+        return a.retired_instructions == steps &&
+               b.retired_instructions == steps &&
+               entered.last_retired_pc.unpublished_entries == 0u &&
+               entered_pending == 0u && assigned_pending == 0u;
+    }
+};
+
+bool generated_entry_marker_matches_assignment_marker() {
+    bool passed = true;
+    EntryMarkerPair pair;
+    // Ordinary PCs, a complete zero-queue sequence, a broken sequence, a
+    // complete command-wait sequence, back-to-back fronts and suffix-only
+    // entries all keep identical PC, tracker and count state.
+    pair.steps_of<0x0000u, 0x0ECAu, 0x0ECBu>();
+    pair.steps_of<0x002Bu, 0x07F6u, 0x07F8u, 0x07FAu, 0x07FCu, 0x07FDu,
+                  0x081Eu, 0x0820u>();
+    passed &= expect(
+        pair.agree &&
+            pair.entered_tracker.kind ==
+                galaxy::DspRmge01IdleBackEdgeKind::ZeroQueue &&
+            pair.entered_tracker.progress == 8u,
+        "generated entry markers complete the zero-queue idle sequence");
+    pair.steps_of<0x002Bu, 0x07F6u, 0x0ECAu, 0x07F8u>();
+    passed &= expect(
+        pair.agree &&
+            pair.entered_tracker.kind ==
+                galaxy::DspRmge01IdleBackEdgeKind::None &&
+            pair.entered_tracker.progress == 0u,
+        "a generated non-sequence entry resets a partial idle sequence");
+    pair.steps_of<0x0293u, 0x0294u, 0x0295u, 0x0297u, 0x0299u, 0x029Au,
+                  0x0293u, 0x002Bu, 0x0820u, 0x029Au, 0x0100u>();
+    passed &= expect(pair.agree, "generated entry markers track command-wait sequences exactly");
+    passed &= expect(
+        pair.published_counts_agree(),
+        "generated entry markers publish the same retired-instruction count");
+
+    pair.entered_tracker = {galaxy::DspRmge01IdleBackEdgeKind::None, 3u};
+    pair.assigned_tracker = pair.entered_tracker;
+    pair.steps_of<0x0100u>();
+    passed &= expect(
+        pair.agree && pair.entered_tracker.progress == 0u,
+        "a generated entry clears any non-reset tracker state");
+
+    galaxy::DspContext uncounted{};
+    uncounted.last_retired_pc.enter<0x0123u>();
+    passed &= expect(
+        uncounted.last_retired_pc.pc == 0x0123u &&
+            uncounted.last_retired_pc.unpublished_entries == 0u,
+        "generated entry markers count only when a pending accumulator is installed");
+    return passed;
+}
+
+bool generated_data_accessors_match_data_memory_helpers() {
+    bool passed = true;
+    auto make_context = [] {
+        auto context = std::make_unique<galaxy::DspContext>();
+        for (std::size_t i = 0; i < context->dram.size(); ++i) {
+            context->dram[i] = static_cast<std::uint16_t>(i * 0x9E37u + 1u);
+        }
+        for (std::size_t i = 0; i < context->coef.size(); ++i) {
+            context->coef[i] = static_cast<std::uint16_t>(i * 0x7F4Au + 3u);
+        }
+        context->coef_loaded = true;
+        context->ifx[0xa0u] = 0x1357u;
+        context->ifx[galaxy::kDspIfxFormat] = 0x000Au;
+        context->pc = 0x0EEEu;
+        return context;
+    };
+    const std::uint16_t addresses[] = {
+        0x0000u, 0x0001u, 0x0352u, 0x0FFFu, 0x1000u, 0x1003u, 0x17FFu,
+        0x1800u, 0x2000u, 0x7FFFu, 0x8000u, 0xE000u, 0xFFA0u, 0xFFD1u,
+    };
+    for (const auto address : addresses) {
+        auto reference = make_context();
+        auto generated = make_context();
+        const auto expected = galaxy::dsp_data_read(*reference, address);
+        const auto actual =
+            galaxy::dsp_data_read_at(*generated, 0x0ECAu, address);
+        const std::uint16_t expected_pc =
+            (address & 0xf000u) == 0u ? 0x0EEEu : 0x0ECAu;
+        passed &= expect(
+            expected == actual && generated->pc == expected_pc,
+            "dsp_data_read_at matches dsp_data_read and publishes PC only off DRAM");
+
+        auto written_reference = make_context();
+        auto written_generated = make_context();
+        if ((address & 0xf000u) != 0x1000u) {
+            galaxy::dsp_data_write(*written_reference, address, 0xBEEFu);
+            galaxy::dsp_data_write_at(*written_generated, 0x0ECBu, address, 0xBEEFu);
+            const std::uint16_t expected_write_pc =
+                (address & 0xf000u) == 0u ? 0x0EEEu : 0x0ECBu;
+            passed &= expect(
+                written_reference->dram == written_generated->dram &&
+                    written_reference->ifx == written_generated->ifx &&
+                    written_generated->pc == expected_write_pc,
+                "dsp_data_write_at matches dsp_data_write and publishes PC only off DRAM");
+        }
+    }
+
+    // A recorded DRAM write is observable by the causal recorder, which keys
+    // on the PC, so it takes the exact helper path with the instruction PC.
+    auto recorded = make_context();
+    auto recorder = std::make_unique<galaxy::DspAudioCausalRecorder>();
+    recorded->audio_causal_recorder = recorder.get();
+    galaxy::dsp_data_write_at(*recorded, 0x0715u, 0x0500u, 0x0001u);
+    passed &= expect(
+        recorded->pc == 0x0715u && recorded->dram[0x0500u] == 0x0001u,
+        "a recorded DRAM write publishes the instruction PC before the store");
+    return passed;
+}
+
+bool pending_external_interrupt_fast_check_preserves_acceptance() {
+    bool passed = true;
+    std::atomic<std::uint16_t> vector{galaxy::kDspNoPendingExternalInterrupt};
+    galaxy::DspContext context{};
+    context.host_external_interrupt = &vector;
+    context.sr = galaxy::kDspSrExtIntEnable;
+    context.pc = 0x0123u;
+    galaxy::dsp_accept_pending_external_interrupt(context);
+    passed &= expect(
+        context.pc == 0x0123u && context.stack_pointers[0] == 0u &&
+            vector.load() == galaxy::kDspNoPendingExternalInterrupt,
+        "no pending external interrupt leaves the DSP untouched");
+
+    vector.store(0x000Eu);
+    context.sr = 0u;
+    galaxy::dsp_accept_pending_external_interrupt(context);
+    passed &= expect(
+        vector.load() == 0x000Eu && context.pc == 0x0123u,
+        "a masked pending external interrupt stays pending");
+
+    context.sr = galaxy::kDspSrExtIntEnable;
+    bool thrown = false;
+    try {
+        galaxy::dsp_accept_pending_external_interrupt(context);
+    } catch (const galaxy::DspExternalInterruptRequested&) {
+        thrown = true;
+    }
+    passed &= expect(
+        thrown && context.pc == 0x000Eu && context.st[0] == 0x0123u &&
+            vector.load() == galaxy::kDspNoPendingExternalInterrupt,
+        "an enabled pending external interrupt is accepted exactly once");
+    return passed;
+}
+
 }  // namespace
 
 int main() {
     bool passed = true;
+    passed &= generated_entry_marker_matches_assignment_marker();
+    passed &= generated_data_accessors_match_data_memory_helpers();
+    passed &= pending_external_interrupt_fast_check_preserves_acceptance();
     passed &= raw_instruction_provenance_captures_exact_prestate_and_identity();
     passed &= sbset_eie_post_retirement_interrupt_stacks_fallthrough_once();
     passed &= raw_instruction_memory_operands_are_decoder_planned_and_frozen();

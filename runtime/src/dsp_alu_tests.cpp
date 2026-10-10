@@ -1471,6 +1471,50 @@ int main() {
             bridge_probe.last_exception == galaxy::DspAcceleratorException::SampleReadEnd,
         "DSP guest-memory bridge forwards accelerator exceptions to the host callback");
 
+    // Generated DSP code calls the header-inline ALU directly; the exported
+    // functions must stay the same semantics, not a second implementation.
+    {
+        bool same = true;
+        std::uint64_t state = 0x9E3779B97F4A7C15ull;
+        auto next = [&state] {
+            state ^= state << 13u;
+            state ^= state >> 7u;
+            state ^= state << 17u;
+            return state;
+        };
+        for (int i = 0; i < 200000; ++i) {
+            const auto a = static_cast<std::int64_t>(next());
+            const auto b = galaxy::dsp_sign_extend_accumulator(next());
+            const auto s = static_cast<std::uint16_t>(next());
+            const auto u = static_cast<std::uint16_t>(next());
+            const auto v = static_cast<std::uint16_t>(next());
+            const galaxy::DspProductParts p{
+                static_cast<std::uint16_t>(next()), static_cast<std::uint16_t>(next()),
+                static_cast<std::uint16_t>(next()), static_cast<std::uint16_t>(next())};
+            const auto add = galaxy::dsp_accumulator_add(a, b, s);
+            const auto add_inline = galaxy::dsp_inline::dsp_accumulator_add(a, b, s);
+            const auto sub = galaxy::dsp_accumulator_subtract(a, b, s);
+            const auto sub_inline = galaxy::dsp_inline::dsp_accumulator_subtract(a, b, s);
+            const auto madd = galaxy::dsp_product_multiply_add(
+                p, u, v, galaxy::DspMultiplyOperandMode::UnsignedWhenSrUnsigned, s);
+            const auto madd_inline = galaxy::dsp_inline::dsp_product_multiply_add(
+                p, u, v, galaxy::DspMultiplyOperandMode::UnsignedWhenSrUnsigned, s);
+            same &= add.value == add_inline.value && add.status == add_inline.status &&
+                    sub.value == sub_inline.value && sub.status == sub_inline.status &&
+                    madd.low == madd_inline.low && madd.mid == madd_inline.mid &&
+                    madd.high == madd_inline.high && madd.mid2 == madd_inline.mid2 &&
+                    galaxy::dsp_read_accumulator_mid(a, s) ==
+                        galaxy::dsp_inline::dsp_read_accumulator_mid(a, s) &&
+                    galaxy::dsp_write_accumulator_mid(a, u, s) ==
+                        galaxy::dsp_inline::dsp_write_accumulator_mid(a, u, s) &&
+                    galaxy::dsp_increase_address(u, static_cast<std::int16_t>(v), s) ==
+                        galaxy::dsp_inline::dsp_increase_address(
+                            u, static_cast<std::int16_t>(v), s) &&
+                    galaxy::dsp_round_product(p) == galaxy::dsp_inline::dsp_round_product(p);
+        }
+        passed &= expect(same, "exported DSP ALU functions match the generated-code inline ALU");
+    }
+
     galaxy::dsp_stack_push(mutable_context, 0, 0x1111);
     galaxy::dsp_stack_push(mutable_context, 0, 0x2222);
     passed &= expect(galaxy::dsp_stack_pop(mutable_context, 0) == 0x2222,

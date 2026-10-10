@@ -17297,8 +17297,12 @@ bool trace_realtime_vi_wait(const RuntimeState& state);
 // observed promptly. This changes no guest-visible state: the idle loop
 // resumes at the same checkpoint and re-evaluates its run queue exactly as
 // before.
+// Opt-in until the wake path also covers PE completions, DSP mail and IPC
+// publications with an event rather than a timer slice: a recorded laptop
+// session with this on failed the exact VI cadence check (the render thread's
+// independent VI completion raced the simulation thread's consumer).
 bool idle_loop_sleep_enabled() {
-    static const bool enabled = read_env_flag("GALAXY_IDLE_LOOP_SLEEP", true);
+    static const bool enabled = read_env_flag("GALAXY_IDLE_LOOP_SLEEP", false);
     return enabled;
 }
 
@@ -29090,7 +29094,10 @@ static void configure_runtime_scheduling() {
             "[thread-priority] SetThreadPriority failed error=%lu\n",
             static_cast<unsigned long>(GetLastError()));
     }
-    if (read_env_flag("GALAXY_PIN_PERFORMANCE_CORES", true)) {
+    // Opt-in: a recorded Core Ultra 9 185H session showed the boot-time set
+    // was 3 to 6 logical CPUs (parked cores were excluded), which confined
+    // the simulation and render threads to a fraction of the chip.
+    if (read_env_flag("GALAXY_PIN_PERFORMANCE_CORES", false)) {
         const unsigned cores = galaxy::host::pin_current_thread_to_performance_cores();
         std::fprintf(
             stderr,

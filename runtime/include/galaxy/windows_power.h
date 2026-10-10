@@ -105,14 +105,18 @@ inline unsigned pin_current_thread_to_performance_cores() noexcept {
                     if (info->Size == 0) {
                         break;
                     }
+                    // Parked is a transient power state, not a capability:
+                    // the scheduler unparks cores under load, so every
+                    // logical CPU of the class belongs in the set.
                     if (info->Type == CpuSetInformation &&
-                        info->CpuSet.EfficiencyClass == best_class &&
-                        !info->CpuSet.Parked) {
+                        info->CpuSet.EfficiencyClass == best_class) {
                         ids[id_count++] = info->CpuSet.Id;
                     }
                     offset += info->Size;
                 }
-                if (id_count != 0 && set_cpu_sets(GetCurrentThread(), ids, id_count)) {
+                // Fewer than four logical CPUs cannot host the simulation and
+                // render threads plus their helpers without contention.
+                if (id_count >= 4u && set_cpu_sets(GetCurrentThread(), ids, id_count)) {
                     selected = static_cast<unsigned>(id_count);
                 }
                 HeapFree(GetProcessHeap(), 0, ids);

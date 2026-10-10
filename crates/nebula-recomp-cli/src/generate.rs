@@ -61,7 +61,12 @@ pub fn release_module_options() -> ModuleTranslationOptions {
         flat_ram_writes: true,
         native_float: true,
         direct_indirect_calls: true,
-        exact_psmtx_local_lanes: true,
+        // The exact PSMTX local-lane experiment emits out-of-line exact paired
+        // helpers for every lane operation. Measured on the SDK matrix library
+        // with the controlled module benchmark: PSMTXConcat 434 ns per call
+        // under the experiment versus the native generic lowering elsewhere in
+        // the same range at 8 to 60 ns. Let the generic native lowering own it.
+        exact_psmtx_local_lanes: false,
         // General text-based GPR residency remains disabled. The prior emitted-
         // source census added 2.73 context accesses per removed access; this is
         // not a linked-code or gameplay benchmark. The CPU audit also found
@@ -99,44 +104,15 @@ set_target_properties(RMGE01_dsp PROPERTIES PREFIX "")
 if(MSVC)
     target_compile_options(RMGE01_dsp PRIVATE /EHsc /GS- /GR-)
     if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
-        # This is the DSP's hot loop: the generated function is one giant
-        # straight-line state machine that retires ~11.2 M instructions/s, i.e.
-        # the whole ~1.5 k-instruction ucode program re-executes thousands of
-        # times per second, and it is 0.19 s of every second of process CPU on
-        # the reference machine.
-        #
-        # /O1 (= -Os) was chosen for build time, but clang-cl keeps the MINIMUM
-        # of all -O flags, so /O1 here also cancels the -O3 that
-        # CMAKE_CXX_FLAGS_RELEASE supplies for -DCMAKE_BUILD_TYPE=Release.
-        # Measured with the pinned toolchain on the generated 232 k-line TU:
-        #   /O1 -> object 4 214 901 B, compile 36 s
-        #   /O2 -> object 8 054 664 B, compile 5 min 12 s
-        # A 1.91x object for one translation unit is the signature of an
-        # optimiser that is now actually working: register allocation and
-        # cross-block redundancy elimination inside the giant function, plus
-        # inlining of the small helpers defined in dsp_context.h, none of which
-        # fold into the dispatch loop at -Os.
-        #
-        # CORRECTION: this comment previously claimed that /O2 also inlines the
-        # ~1.05 k galaxy::dsp_accumulator_* / dsp_product_* / dsp_condition_holds
-        # call sites in the generated code. That is WRONG and the claim has been
-        # removed. Those functions are *defined* in runtime/src/dsp_alu.cpp
-        # (dsp_alu.cpp:78, :207, :226, :252, :261, :267, :277) and have ZERO
-        # inline definitions in runtime/include/galaxy/dsp_alu.h - checked. They
-        # are compiled into galaxy_dsp_alu, a separate STATIC library
-        # (CMakeLists.txt:256-263, with no -flto), so no /O level on this module
-        # can inline across the translation-unit boundary. The generated module
-        # currently contains 1 143 such call sites and they remain real calls.
-        # Folding them would need LTO across both targets, which was assessed at
-        # roughly 1-2 % of total process CPU against a blast radius of every
-        # consumer of a prebuilt library, and was therefore not taken.
-        #
-        # The cost is paid once, at install time, on a machine that is already
-        # compiling 701 game-module translation units. Revert to /O1 only if
-        # install time becomes the binding constraint; the runtime effect of
-        # this flag is otherwise unmeasured. It is the one change in this tree
-        # with a plausible double-digit-percent effect on the DSP thread, which
-        # is ~19 % of process CPU, and no recording has yet measured it.
+        # The generated function is the DSP thread's hot loop, so it is built
+        # at /O2 (clang-cl keeps the minimum of all -O flags, so a lower level
+        # here would also cancel the Release default). The ALU helpers it calls
+        # are header-inline (galaxy::dsp_inline in dsp_context.h) and the raw
+        # instruction provenance observer is compiled out of product builds, so
+        # the TU no longer pays one EH-cleanup scope per DSP instruction.
+        # clang-cl 22.1.6, 32-thread reference machine, one TU, /O2:
+        #   out-of-line ALU + per-instruction scopes: 295 s
+        #   current generator:                        21-28 s
         target_compile_options(RMGE01_dsp PRIVATE -w -fwrapv -fno-strict-aliasing /O2)
     endif()
     foreach(symbol IN ITEMS

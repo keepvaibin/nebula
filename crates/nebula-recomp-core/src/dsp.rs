@@ -1712,6 +1712,16 @@ fn lower_decoded_instructions(
     cpp.push_str(function_name);
     cpp.push_str("(galaxy::DspContext& ctx) {\n");
     cpp.push_str("    (void)ctx;\n");
+    // Raw instruction provenance is a test/capture instrument that the product
+    // never installs. It is compiled only into provenance builds; a product
+    // build handed an observer hard-fails instead of silently not observing.
+    cpp.push_str(&format!("#if !defined({DSP_RAW_PROVENANCE_MACRO})\n"));
+    cpp.push_str("    if (ctx.raw_instruction_boundary_observer != nullptr) {\n");
+    cpp.push_str(&format!(
+        "        galaxy::dsp_hard_trap(ctx, ctx.pc, \"DSP raw instruction observer requires a {DSP_RAW_PROVENANCE_MACRO} build\");\n"
+    ));
+    cpp.push_str("    }\n");
+    cpp.push_str("#endif\n");
     if has_static_memory(static_memory) {
         cpp.push_str("    galaxy_dsp_load_static_memory(ctx);\n");
     }
@@ -1730,6 +1740,13 @@ fn lower_decoded_instructions(
     }
 
     for instruction in decoded {
+        let next_address = layout.instruction_after(instruction.address);
+        let skip_address = next_address.and_then(|next| layout.instruction_after(next));
+        let mut body = String::new();
+        emit_lowered_dsp_instruction(&mut body, instruction, next_address, skip_address, &layout)?;
+        let body = bind_data_access_pc(&body, instruction.address);
+        let stores_pc_on_entry = lowered_body_observes_pc(&body);
+
         cpp.push('\n');
         cpp.push_str(&dsp_label(instruction.address));
         cpp.push_str(":\n{\n");
@@ -1737,18 +1754,18 @@ fn lower_decoded_instructions(
             "    // {:04X}: {:04X}\n",
             instruction.address, instruction.raw_word
         ));
+        if stores_pc_on_entry {
+            cpp.push_str(&format!(
+                "    ctx.pc = {};\n",
+                cpp_u16_literal(instruction.address)
+            ));
+        }
         cpp.push_str(&format!(
-            "    ctx.pc = {};\n",
+            "    ctx.last_retired_pc.enter<{}>();\n",
             cpp_u16_literal(instruction.address)
         ));
-        cpp.push_str(&format!(
-            "    ctx.last_retired_pc = {};\n",
-            cpp_u16_literal(instruction.address)
-        ));
-        emit_raw_instruction_boundary_scope(&mut cpp, instruction);
-        let next_address = layout.instruction_after(instruction.address);
-        let skip_address = next_address.and_then(|next| layout.instruction_after(next));
-        emit_lowered_dsp_instruction(&mut cpp, instruction, next_address, skip_address, &layout)?;
+        emit_raw_instruction_boundary_scope(&mut cpp, instruction, !stores_pc_on_entry);
+        cpp.push_str(&body);
         cpp.push_str("}\n");
     }
 
@@ -1770,7 +1787,74 @@ fn lower_decoded_instructions(
     })
 }
 
-fn emit_raw_instruction_boundary_scope(cpp: &mut String, decoded: &DecodedDspInstruction) {
+/// Preprocessor switch that compiles the raw instruction provenance observer
+/// into generated DSP code. Product modules are built without it.
+pub const DSP_RAW_PROVENANCE_MACRO: &str = "GALAXY_DSP_RAW_INSTRUCTION_PROVENANCE";
+
+/// Rewrites one lowered instruction's data-memory accesses to the accessors
+/// that carry the instruction address, so the instruction only publishes
+/// `ctx.pc` when an access leaves DRAM (see `dsp_data_read_at` in
+/// dsp_context.h).
+fn bind_data_access_pc(body: &str, address: u16) -> String {
+    let pc = cpp_u16_literal(address);
+    body.replace(
+        "galaxy::dsp_data_read(ctx, ",
+        &format!("galaxy::dsp_data_read_at(ctx, {pc}, "),
+    )
+    .replace(
+        "galaxy::dsp_data_write(ctx, ",
+        &format!("galaxy::dsp_data_write_at(ctx, {pc}, "),
+    )
+}
+
+/// Conservative test for whether a lowered instruction body can observe the
+/// architectural PC: it reads or writes `ctx.pc`, leaves the function, or hands
+/// the context to any helper other than the PC-carrying data accessors. Only
+/// bodies that cannot observe it skip the entry `ctx.pc` store; lines compiled
+/// only into provenance builds are excluded because those builds always store
+/// the PC before the observer scope.
+fn lowered_body_observes_pc(body: &str) -> bool {
+    let mut in_provenance_block = false;
+    for line in body.lines() {
+        let line = line.trim_start();
+        if line.starts_with("#if defined(") && line.contains(DSP_RAW_PROVENANCE_MACRO) {
+            in_provenance_block = true;
+            continue;
+        }
+        if in_provenance_block {
+            if line.starts_with("#endif") {
+                in_provenance_block = false;
+            }
+            continue;
+        }
+        let scrubbed = line
+            .replace("galaxy::dsp_data_read_at(ctx, ", "")
+            .replace("galaxy::dsp_data_write_at(ctx, ", "");
+        if scrubbed.contains("(ctx,")
+            || scrubbed.contains("(ctx)")
+            || scrubbed.contains("ctx.pc")
+            || scrubbed.contains("return")
+            || scrubbed.contains("throw")
+            || scrubbed.starts_with('#')
+        {
+            return true;
+        }
+    }
+    false
+}
+
+fn emit_raw_instruction_boundary_scope(
+    cpp: &mut String,
+    decoded: &DecodedDspInstruction,
+    store_pc_for_observer: bool,
+) {
+    cpp.push_str(&format!("#if defined({DSP_RAW_PROVENANCE_MACRO})\n"));
+    if store_pc_for_observer {
+        cpp.push_str(&format!(
+            "    ctx.pc = {};\n",
+            cpp_u16_literal(decoded.address)
+        ));
+    }
     let (bundle_kind, parallel_primary_word, parallel_extension, parallel_extension_mask) =
         if matches!(decoded.instruction, DspInstruction::Parallel { .. }) {
             let extension_mask = if decoded.raw_word >> 12 == 0x3 {
@@ -1877,6 +1961,7 @@ fn emit_raw_instruction_boundary_scope(cpp: &mut String, decoded: &DecodedDspIns
     cpp.push_str(
         "    galaxy::dsp_raw_instruction_boundary_require_ready(ctx, raw_instruction_boundary);\n",
     );
+    cpp.push_str("#endif\n");
 }
 
 /// Decode every instruction reachable from `entry_points` by following static
@@ -2410,7 +2495,7 @@ fn emit_lowered_dsp_instruction(
                     cpp_u16_literal(skip_address)
                 ));
                 cpp.push_str(&format!(
-                    "    if (galaxy::dsp_condition_holds(galaxy::DspCondition::{}, ctx.sr)) {{\n",
+                    "    if (galaxy::dsp_inline::dsp_condition_holds(galaxy::DspCondition::{}, ctx.sr)) {{\n",
                     condition_cpp_name(condition)
                 ));
                 cpp.push_str(&format!(
@@ -2422,7 +2507,7 @@ fn emit_lowered_dsp_instruction(
                 return Ok(());
             }
             cpp.push_str(&format!(
-                "    if (galaxy::dsp_condition_holds(galaxy::DspCondition::{}, ctx.sr)) {{\n",
+                "    if (galaxy::dsp_inline::dsp_condition_holds(galaxy::DspCondition::{}, ctx.sr)) {{\n",
                 condition_cpp_name(condition)
             ));
             emit_raw_instruction_commit(cpp, 8);
@@ -2478,7 +2563,7 @@ fn emit_lowered_dsp_instruction(
                     cpp_u16_literal(fallthrough)
                 ));
                 cpp.push_str(&format!(
-                    "    if (galaxy::dsp_condition_holds(galaxy::DspCondition::{}, ctx.sr)) {{\n",
+                    "    if (galaxy::dsp_inline::dsp_condition_holds(galaxy::DspCondition::{}, ctx.sr)) {{\n",
                     condition_cpp_name(condition)
                 ));
                 cpp.push_str(&format!(
@@ -2490,7 +2575,7 @@ fn emit_lowered_dsp_instruction(
                 return Ok(());
             }
             cpp.push_str(&format!(
-                "    if (galaxy::dsp_condition_holds(galaxy::DspCondition::{}, ctx.sr)) {{\n",
+                "    if (galaxy::dsp_inline::dsp_condition_holds(galaxy::DspCondition::{}, ctx.sr)) {{\n",
                 condition_cpp_name(condition)
             ));
             emit_raw_instruction_commit(cpp, 8);
@@ -2534,7 +2619,7 @@ fn emit_lowered_dsp_instruction(
                     cpp_u16_literal(fallthrough)
                 ));
                 cpp.push_str(&format!(
-                    "    if (galaxy::dsp_condition_holds(galaxy::DspCondition::{}, ctx.sr)) {{\n",
+                    "    if (galaxy::dsp_inline::dsp_condition_holds(galaxy::DspCondition::{}, ctx.sr)) {{\n",
                     condition_cpp_name(condition)
                 ));
                 cpp.push_str(&format!(
@@ -2546,7 +2631,7 @@ fn emit_lowered_dsp_instruction(
                 return Ok(());
             }
             cpp.push_str(&format!(
-                "    if (galaxy::dsp_condition_holds(galaxy::DspCondition::{}, ctx.sr)) {{\n",
+                "    if (galaxy::dsp_inline::dsp_condition_holds(galaxy::DspCondition::{}, ctx.sr)) {{\n",
                 condition_cpp_name(condition)
             ));
             cpp.push_str(&format!(
@@ -2604,7 +2689,7 @@ fn emit_lowered_dsp_instruction(
                     cpp_u16_literal(return_address)
                 ));
                 cpp.push_str(&format!(
-                    "    if (galaxy::dsp_condition_holds(galaxy::DspCondition::{}, ctx.sr)) {{\n",
+                    "    if (galaxy::dsp_inline::dsp_condition_holds(galaxy::DspCondition::{}, ctx.sr)) {{\n",
                     condition_cpp_name(condition)
                 ));
                 emit_dsp_call_stack_push(cpp, return_address, 8);
@@ -2617,7 +2702,7 @@ fn emit_lowered_dsp_instruction(
                 return Ok(());
             }
             cpp.push_str(&format!(
-                "    if (galaxy::dsp_condition_holds(galaxy::DspCondition::{}, ctx.sr)) {{\n",
+                "    if (galaxy::dsp_inline::dsp_condition_holds(galaxy::DspCondition::{}, ctx.sr)) {{\n",
                 condition_cpp_name(condition)
             ));
             emit_dsp_call_stack_push(cpp, return_address, 8);
@@ -2664,7 +2749,7 @@ fn emit_lowered_dsp_instruction(
                     cpp_u16_literal(return_address)
                 ));
                 cpp.push_str(&format!(
-                    "    if (galaxy::dsp_condition_holds(galaxy::DspCondition::{}, ctx.sr)) {{\n",
+                    "    if (galaxy::dsp_inline::dsp_condition_holds(galaxy::DspCondition::{}, ctx.sr)) {{\n",
                     condition_cpp_name(condition)
                 ));
                 cpp.push_str(&format!(
@@ -2677,7 +2762,7 @@ fn emit_lowered_dsp_instruction(
                 return Ok(());
             }
             cpp.push_str(&format!(
-                "    if (galaxy::dsp_condition_holds(galaxy::DspCondition::{}, ctx.sr)) {{\n",
+                "    if (galaxy::dsp_inline::dsp_condition_holds(galaxy::DspCondition::{}, ctx.sr)) {{\n",
                 condition_cpp_name(condition)
             ));
             cpp.push_str(&format!(
@@ -2733,7 +2818,7 @@ fn emit_lowered_dsp_instruction(
                     cpp_u16_literal(fallthrough)
                 ));
                 cpp.push_str(&format!(
-                    "    if (galaxy::dsp_condition_holds(galaxy::DspCondition::{}, ctx.sr)) {{\n",
+                    "    if (galaxy::dsp_inline::dsp_condition_holds(galaxy::DspCondition::{}, ctx.sr)) {{\n",
                     condition_cpp_name(condition)
                 ));
                 cpp.push_str(&format!(
@@ -2744,7 +2829,7 @@ fn emit_lowered_dsp_instruction(
                 return Ok(());
             }
             cpp.push_str(&format!(
-                "    if (galaxy::dsp_condition_holds(galaxy::DspCondition::{}, ctx.sr)) {{\n",
+                "    if (galaxy::dsp_inline::dsp_condition_holds(galaxy::DspCondition::{}, ctx.sr)) {{\n",
                 condition_cpp_name(condition)
             ));
             cpp.push_str(&format!(
@@ -2802,7 +2887,7 @@ fn emit_lowered_dsp_instruction(
                     cpp_u16_literal(fallthrough)
                 ));
                 cpp.push_str(&format!(
-                    "    if (galaxy::dsp_condition_holds(galaxy::DspCondition::{}, ctx.sr)) {{\n",
+                    "    if (galaxy::dsp_inline::dsp_condition_holds(galaxy::DspCondition::{}, ctx.sr)) {{\n",
                     condition_cpp_name(condition)
                 ));
                 cpp.push_str("        ctx.sr = galaxy::dsp_stack_pop(ctx, 1);\n");
@@ -2814,7 +2899,7 @@ fn emit_lowered_dsp_instruction(
                 return Ok(());
             }
             cpp.push_str(&format!(
-                "    if (galaxy::dsp_condition_holds(galaxy::DspCondition::{}, ctx.sr)) {{\n",
+                "    if (galaxy::dsp_inline::dsp_condition_holds(galaxy::DspCondition::{}, ctx.sr)) {{\n",
                 condition_cpp_name(condition)
             ));
             cpp.push_str("        ctx.sr = galaxy::dsp_stack_pop(ctx, 1);\n");
@@ -3268,7 +3353,7 @@ fn emit_parallel_load_single_with_primary(
     emit_parallel_primary(cpp, primary, decoded)?;
     if let Some(index) = mid_target {
         cpp.push_str(&format!(
-            "    ctx.ac[{index}] = galaxy::dsp_write_accumulator_mid(ctx.ac[{index}], static_cast<std::uint16_t>({value_name}), {status_name});\n"
+            "    ctx.ac[{index}] = galaxy::dsp_inline::dsp_write_accumulator_mid(ctx.ac[{index}], static_cast<std::uint16_t>({value_name}), {status_name});\n"
         ));
     } else {
         emit_register_write(cpp, target, &value_name, decoded)?;
@@ -3542,7 +3627,7 @@ fn emit_accumulator_operation(
             let target_index = accumulator_index(target);
             let result_name = format!("accumulator_{:04X}", decoded.address);
             cpp.push_str(&format!(
-                "    const auto {result_name} = galaxy::dsp_accumulator_negate(ctx.ac[{target_index}], ctx.sr);\n"
+                "    const auto {result_name} = galaxy::dsp_inline::dsp_accumulator_negate(ctx.ac[{target_index}], ctx.sr);\n"
             ));
             emit_accumulator_result_commit(cpp, target_index, &result_name);
             Ok(())
@@ -3559,7 +3644,7 @@ fn emit_accumulator_operation(
             let target_index = accumulator_index(target);
             let result_name = format!("accumulator_{:04X}", decoded.address);
             cpp.push_str(&format!(
-                "    const auto {result_name} = galaxy::dsp_accumulator_set_value(ctx.ac[{target_index}], ctx.sr);\n"
+                "    const auto {result_name} = galaxy::dsp_inline::dsp_accumulator_set_value(ctx.ac[{target_index}], ctx.sr);\n"
             ));
             emit_accumulator_status_commit(cpp, &result_name);
             Ok(())
@@ -3567,14 +3652,14 @@ fn emit_accumulator_operation(
         DspAccumulatorOperation::TestAxHigh { ax } => {
             let ax_index = ax_register_index(ax);
             cpp.push_str(&format!(
-                "    ctx.sr = galaxy::dsp_status_16(static_cast<std::int16_t>(ctx.ax[{ax_index}][1]), false, false, false, ctx.sr);\n"
+                "    ctx.sr = galaxy::dsp_inline::dsp_status_16(static_cast<std::int16_t>(ctx.ax[{ax_index}][1]), false, false, false, ctx.sr);\n"
             ));
             Ok(())
         }
         DspAccumulatorOperation::CompareAccumulators => {
             let result_name = format!("accumulator_{:04X}", decoded.address);
             cpp.push_str(&format!(
-                "    const auto {result_name} = galaxy::dsp_accumulator_subtract(ctx.ac[0], ctx.ac[1], ctx.sr);\n"
+                "    const auto {result_name} = galaxy::dsp_inline::dsp_accumulator_subtract(ctx.ac[0], ctx.ac[1], ctx.sr);\n"
             ));
             emit_accumulator_status_commit(cpp, &result_name);
             Ok(())
@@ -3584,7 +3669,7 @@ fn emit_accumulator_operation(
             let ax_index = ax_register_index(ax);
             let result_name = format!("accumulator_{:04X}", decoded.address);
             cpp.push_str(&format!(
-                "    const auto {result_name} = galaxy::dsp_accumulator_subtract(ctx.ac[{accumulator_index}], galaxy::dsp_accumulator_from_signed_mid(ctx.ax[{ax_index}][1]), ctx.sr);\n"
+                "    const auto {result_name} = galaxy::dsp_inline::dsp_accumulator_subtract(ctx.ac[{accumulator_index}], galaxy::dsp_inline::dsp_accumulator_from_signed_mid(ctx.ax[{ax_index}][1]), ctx.sr);\n"
             ));
             emit_accumulator_status_commit(cpp, &result_name);
             Ok(())
@@ -3626,7 +3711,7 @@ fn emit_accumulator_operation(
             };
             let result_name = format!("accumulator_{:04X}", decoded.address);
             cpp.push_str(&format!(
-                "    const auto {result_name} = galaxy::dsp_accumulator_shift_by_signed_count(ctx.ac[0], {arithmetic_right}, galaxy::dsp_read_accumulator_mid_raw(ctx.ac[1]), ctx.sr);\n"
+                "    const auto {result_name} = galaxy::dsp_inline::dsp_accumulator_shift_by_signed_count(ctx.ac[0], {arithmetic_right}, galaxy::dsp_inline::dsp_read_accumulator_mid_raw(ctx.ac[1]), ctx.sr);\n"
             ));
             emit_accumulator_result_commit(cpp, 0, &result_name);
             Ok(())
@@ -3636,7 +3721,7 @@ fn emit_accumulator_operation(
             let ax_index = ax_register_index(ax);
             let result_name = format!("accumulator_{:04X}", decoded.address);
             cpp.push_str(&format!(
-                "    const auto {result_name} = galaxy::dsp_accumulator_add_rounded_product_and_ax_clear_low(ctx.prod, ctx.ax[{ax_index}][0], ctx.ax[{ax_index}][1], ctx.sr);\n"
+                "    const auto {result_name} = galaxy::dsp_inline::dsp_accumulator_add_rounded_product_and_ax_clear_low(ctx.prod, ctx.ax[{ax_index}][0], ctx.ax[{ax_index}][1], ctx.sr);\n"
             ));
             emit_accumulator_result_commit(cpp, target_index, &result_name);
             Ok(())
@@ -3655,7 +3740,7 @@ fn emit_accumulator_shift_operation(
     let result_name = format!("accumulator_{:04X}", decoded.address);
     let kind_name = accumulator_shift_kind_cpp_name(kind);
     cpp.push_str(&format!(
-        "    const auto {result_name} = galaxy::dsp_accumulator_shift(ctx.ac[{target_index}], galaxy::DspAccumulatorShiftKind::{kind_name}, {amount}u, ctx.sr);\n"
+        "    const auto {result_name} = galaxy::dsp_inline::dsp_accumulator_shift(ctx.ac[{target_index}], galaxy::DspAccumulatorShiftKind::{kind_name}, {amount}u, ctx.sr);\n"
     ));
     emit_accumulator_result_commit(cpp, target_index, &result_name);
 }
@@ -3670,7 +3755,7 @@ fn emit_binary_accumulator_helper_call(
     let target_index = accumulator_index(target);
     let result_name = format!("accumulator_{:04X}", decoded.address);
     cpp.push_str(&format!(
-        "    const auto {result_name} = galaxy::{helper_name}(ctx.ac[{target_index}], {operand_expression}, ctx.sr);\n"
+        "    const auto {result_name} = galaxy::dsp_inline::{helper_name}(ctx.ac[{target_index}], {operand_expression}, ctx.sr);\n"
     ));
     emit_accumulator_result_commit(cpp, target_index, &result_name);
 }
@@ -3684,7 +3769,7 @@ fn emit_unary_accumulator_helper_call(
     let target_index = accumulator_index(target);
     let result_name = format!("accumulator_{:04X}", decoded.address);
     cpp.push_str(&format!(
-        "    const auto {result_name} = galaxy::{helper_name}(ctx.ac[{target_index}], ctx.sr);\n"
+        "    const auto {result_name} = galaxy::dsp_inline::{helper_name}(ctx.ac[{target_index}], ctx.sr);\n"
     ));
     emit_accumulator_result_commit(cpp, target_index, &result_name);
 }
@@ -3698,7 +3783,7 @@ fn emit_set_accumulator_operation(
     let target_index = accumulator_index(target);
     let result_name = format!("accumulator_{:04X}", decoded.address);
     cpp.push_str(&format!(
-        "    const auto {result_name} = galaxy::dsp_accumulator_set_value({value_expression}, ctx.sr);\n"
+        "    const auto {result_name} = galaxy::dsp_inline::dsp_accumulator_set_value({value_expression}, ctx.sr);\n"
     ));
     emit_accumulator_result_commit(cpp, target_index, &result_name);
 }
@@ -3721,7 +3806,7 @@ fn accumulator_operand_expression(operand: DspAccumulatorOperand) -> String {
         }
         DspAccumulatorOperand::One => "1".to_string(),
         DspAccumulatorOperand::MidUnit => "0x00010000ll".to_string(),
-        DspAccumulatorOperand::Product => "galaxy::dsp_product_value(ctx.prod)".to_string(),
+        DspAccumulatorOperand::Product => "galaxy::dsp_inline::dsp_product_value(ctx.prod)".to_string(),
         DspAccumulatorOperand::Ax(ax) => accumulator_ax_expression(ax),
         DspAccumulatorOperand::AxPartShifted(part) => accumulator_ax_part_shifted_expression(part),
         DspAccumulatorOperand::AxLowUnsigned(ax) => {
@@ -3747,12 +3832,12 @@ fn accumulator_move_source_expression(source: DspAccumulatorMoveSource) -> Strin
 
 fn accumulator_ax_expression(ax: DspAxRegister) -> String {
     let ax_index = ax_register_index(ax);
-    format!("galaxy::dsp_accumulator_from_ax_pair(ctx.ax[{ax_index}][0], ctx.ax[{ax_index}][1])")
+    format!("galaxy::dsp_inline::dsp_accumulator_from_ax_pair(ctx.ax[{ax_index}][0], ctx.ax[{ax_index}][1])")
 }
 
 fn accumulator_ax_part_shifted_expression(part: DspAxPart) -> String {
     format!(
-        "galaxy::dsp_accumulator_from_signed_mid(ctx.ax[{}][{}])",
+        "galaxy::dsp_inline::dsp_accumulator_from_signed_mid(ctx.ax[{}][{}])",
         ax_register_index(part.register),
         register_half_index(part.half)
     )
@@ -3802,7 +3887,7 @@ fn emit_logic_operation(
         let count_expression = logic_shift_count_expression(operand);
         let result_name = format!("logic_{:04X}", decoded.address);
         cpp.push_str(&format!(
-            "    const auto {result_name} = galaxy::dsp_accumulator_shift_by_register_count(ctx.ac[{target_index}], {arithmetic_right}, {count_expression}, ctx.sr);\n"
+            "    const auto {result_name} = galaxy::dsp_inline::dsp_accumulator_shift_by_register_count(ctx.ac[{target_index}], {arithmetic_right}, {count_expression}, ctx.sr);\n"
         ));
         emit_accumulator_result_commit(cpp, target_index, &result_name);
         return Ok(());
@@ -3860,13 +3945,13 @@ fn emit_product_operation(
 ) -> Result<(), DspLoweringError> {
     match operation {
         DspProductOperation::Clear => {
-            cpp.push_str("    ctx.prod = galaxy::dsp_cleared_product();\n");
+            cpp.push_str("    ctx.prod = galaxy::dsp_inline::dsp_cleared_product();\n");
             Ok(())
         }
         DspProductOperation::Test => {
             let result_name = format!("product_{:04X}", decoded.address);
             cpp.push_str(&format!(
-                "    const auto {result_name} = galaxy::dsp_accumulator_set_value(galaxy::dsp_product_value(ctx.prod), ctx.sr);\n"
+                "    const auto {result_name} = galaxy::dsp_inline::dsp_accumulator_set_value(galaxy::dsp_inline::dsp_product_value(ctx.prod), ctx.sr);\n"
             ));
             emit_accumulator_status_commit(cpp, &result_name);
             Ok(())
@@ -4010,9 +4095,9 @@ fn emit_product_operation(
 
 fn product_move_value_expression(mode: DspProductMoveMode) -> String {
     match mode {
-        DspProductMoveMode::Raw => "galaxy::dsp_product_value(ctx.prod)".to_string(),
-        DspProductMoveMode::Negated => "-galaxy::dsp_product_value(ctx.prod)".to_string(),
-        DspProductMoveMode::HighMidClearLow => "galaxy::dsp_round_product(ctx.prod)".to_string(),
+        DspProductMoveMode::Raw => "galaxy::dsp_inline::dsp_product_value(ctx.prod)".to_string(),
+        DspProductMoveMode::Negated => "-galaxy::dsp_inline::dsp_product_value(ctx.prod)".to_string(),
+        DspProductMoveMode::HighMidClearLow => "galaxy::dsp_inline::dsp_round_product(ctx.prod)".to_string(),
     }
 }
 
@@ -4051,7 +4136,7 @@ fn emit_product_accumulate(
     mode: &str,
 ) {
     cpp.push_str(&format!(
-        "    ctx.prod = galaxy::{helper_name}(ctx.prod, {left_expression}, {right_expression}, {mode}, ctx.sr);\n"
+        "    ctx.prod = galaxy::dsp_inline::{helper_name}(ctx.prod, {left_expression}, {right_expression}, {mode}, ctx.sr);\n"
     ));
 }
 
@@ -4066,7 +4151,7 @@ fn emit_product_multiply_with_accumulator(
     let result_name = format!("accumulator_{:04X}", decoded.address);
     let accumulator_expression = product_accumulator_action_expression(action, target_index);
     cpp.push_str(&format!(
-        "    const auto {result_name} = galaxy::dsp_accumulator_set_value({accumulator_expression}, ctx.sr);\n"
+        "    const auto {result_name} = galaxy::dsp_inline::dsp_accumulator_set_value({accumulator_expression}, ctx.sr);\n"
     ));
     cpp.push_str(&format!("    ctx.prod = {product_expression};\n"));
     emit_accumulator_result_commit(cpp, target_index, &result_name);
@@ -4078,13 +4163,13 @@ fn product_accumulator_action_expression(
 ) -> String {
     match action {
         DspMultiplyAccumulatorAction::AddPreviousProduct => {
-            format!("ctx.ac[{target_index}] + galaxy::dsp_product_value(ctx.prod)")
+            format!("ctx.ac[{target_index}] + galaxy::dsp_inline::dsp_product_value(ctx.prod)")
         }
         DspMultiplyAccumulatorAction::MovePreviousProduct => {
-            "galaxy::dsp_product_value(ctx.prod)".to_string()
+            "galaxy::dsp_inline::dsp_product_value(ctx.prod)".to_string()
         }
         DspMultiplyAccumulatorAction::MoveRoundedPreviousProduct => {
-            "galaxy::dsp_round_product(ctx.prod)".to_string()
+            "galaxy::dsp_inline::dsp_round_product(ctx.prod)".to_string()
         }
     }
 }
@@ -4094,7 +4179,7 @@ fn product_multiply_expression(
     right_expression: &str,
     mode: &str,
 ) -> String {
-    format!("galaxy::dsp_product_multiply({left_expression}, {right_expression}, {mode}, ctx.sr)")
+    format!("galaxy::dsp_inline::dsp_product_multiply({left_expression}, {right_expression}, {mode}, ctx.sr)")
 }
 
 fn ax_pair_low_expression(ax: DspAxRegister) -> String {
@@ -4107,7 +4192,7 @@ fn ax_pair_high_expression(ax: DspAxRegister) -> String {
 
 fn accumulator_mid_raw_expression(accumulator: DspAccumulator) -> String {
     format!(
-        "galaxy::dsp_read_accumulator_mid_raw(ctx.ac[{}])",
+        "galaxy::dsp_inline::dsp_read_accumulator_mid_raw(ctx.ac[{}])",
         accumulator_index(accumulator)
     )
 }
@@ -4159,7 +4244,7 @@ fn emit_logic_helper_call(
     operand_expression: Option<String>,
 ) {
     cpp.push_str(&format!(
-        "    const auto {result_name} = galaxy::{helper_name}(ctx.ac[{target_index}]"
+        "    const auto {result_name} = galaxy::dsp_inline::{helper_name}(ctx.ac[{target_index}]"
     ));
     if let Some(operand_expression) = operand_expression {
         cpp.push_str(", ");
@@ -4175,7 +4260,7 @@ fn logic_operand_expression(operand: DspLogicOperand) -> String {
         }
         DspLogicOperand::AccumulatorMid(accumulator) => {
             format!(
-                "galaxy::dsp_read_accumulator_mid_raw(ctx.ac[{}])",
+                "galaxy::dsp_inline::dsp_read_accumulator_mid_raw(ctx.ac[{}])",
                 accumulator_index(accumulator)
             )
         }
@@ -4189,7 +4274,7 @@ fn logic_shift_count_expression(operand: DspLogicOperand) -> String {
         }
         DspLogicOperand::AccumulatorMid(accumulator) => {
             format!(
-                "galaxy::dsp_read_accumulator_mid_raw(ctx.ac[{}])",
+                "galaxy::dsp_inline::dsp_read_accumulator_mid_raw(ctx.ac[{}])",
                 accumulator_index(accumulator)
             )
         }
@@ -4292,7 +4377,7 @@ fn emit_immediate_accumulator_operation(
     let target_index = accumulator_index(target);
     let result_name = format!("accumulator_{:04X}", decoded.address);
     cpp.push_str(&format!(
-        "    const auto {result_name} = galaxy::{helper_name}(ctx.ac[{target_index}], {value_expression}, ctx.sr);\n"
+        "    const auto {result_name} = galaxy::dsp_inline::{helper_name}(ctx.ac[{target_index}], {value_expression}, ctx.sr);\n"
     ));
     if commit_accumulator {
         emit_accumulator_result_commit(cpp, target_index, &result_name);
@@ -4329,13 +4414,13 @@ fn emit_immediate_field_test(
     let target_index = accumulator_index(target);
     let value_literal = cpp_u16_literal(value);
     cpp.push_str(&format!(
-        "    ctx.sr = galaxy::dsp_logic_zero_status((galaxy::dsp_read_accumulator_mid_raw(ctx.ac[{target_index}]) & {value_literal}) == {expected_expression}, ctx.sr);\n"
+        "    ctx.sr = galaxy::dsp_inline::dsp_logic_zero_status((galaxy::dsp_inline::dsp_read_accumulator_mid_raw(ctx.ac[{target_index}]) & {value_literal}) == {expected_expression}, ctx.sr);\n"
     ));
 }
 
 fn signed_mid_expression(value: u16) -> String {
     format!(
-        "galaxy::dsp_accumulator_from_signed_mid({})",
+        "galaxy::dsp_inline::dsp_accumulator_from_signed_mid({})",
         cpp_u16_literal(value)
     )
 }
@@ -4417,7 +4502,7 @@ fn emit_instruction_memory_load(
     let target_index = accumulator_index(target);
     let address_index = address_register_index(address);
     cpp.push_str(&format!(
-        "    ctx.ac[{target_index}] = galaxy::dsp_write_accumulator_mid(ctx.ac[{target_index}], galaxy::dsp_iram_read(ctx, ctx.ar[{address_index}]), ctx.sr);\n"
+        "    ctx.ac[{target_index}] = galaxy::dsp_inline::dsp_write_accumulator_mid(ctx.ac[{target_index}], galaxy::dsp_iram_read(ctx, ctx.ar[{address_index}]), ctx.sr);\n"
     ));
 }
 
@@ -4608,19 +4693,19 @@ fn emit_accumulator_part_write(
     match part {
         DspAccumulatorPart::Low => {
             cpp.push_str(&format!(
-                "    ctx.ac[{index}] = galaxy::dsp_write_accumulator_low(ctx.ac[{index}], static_cast<std::uint16_t>({value_expression}));\n"
+                "    ctx.ac[{index}] = galaxy::dsp_inline::dsp_write_accumulator_low(ctx.ac[{index}], static_cast<std::uint16_t>({value_expression}));\n"
             ));
             Ok(())
         }
         DspAccumulatorPart::Mid => {
             cpp.push_str(&format!(
-                "    ctx.ac[{index}] = galaxy::dsp_write_accumulator_mid(ctx.ac[{index}], static_cast<std::uint16_t>({value_expression}), ctx.sr);\n"
+                "    ctx.ac[{index}] = galaxy::dsp_inline::dsp_write_accumulator_mid(ctx.ac[{index}], static_cast<std::uint16_t>({value_expression}), ctx.sr);\n"
             ));
             Ok(())
         }
         DspAccumulatorPart::High => {
             cpp.push_str(&format!(
-                "    ctx.ac[{index}] = galaxy::dsp_write_accumulator_high(ctx.ac[{index}], static_cast<std::uint16_t>({value_expression}));\n"
+                "    ctx.ac[{index}] = galaxy::dsp_inline::dsp_write_accumulator_high(ctx.ac[{index}], static_cast<std::uint16_t>({value_expression}));\n"
             ));
             Ok(())
         }
@@ -4660,14 +4745,14 @@ fn register_read_expression(register: DspRegister) -> String {
             register,
             part: DspAccumulatorPart::Low,
         } => format!(
-            "galaxy::dsp_read_accumulator_low(ctx.ac[{}])",
+            "galaxy::dsp_inline::dsp_read_accumulator_low(ctx.ac[{}])",
             accumulator_index(register)
         ),
         DspRegister::Accumulator {
             register,
             part: DspAccumulatorPart::Mid,
         } => format!(
-            "galaxy::dsp_read_accumulator_mid(ctx.ac[{}], ctx.sr)",
+            "galaxy::dsp_inline::dsp_read_accumulator_mid(ctx.ac[{}], ctx.sr)",
             accumulator_index(register)
         ),
         DspRegister::Accumulator {
@@ -4679,7 +4764,7 @@ fn register_read_expression(register: DspRegister) -> String {
 
 fn accumulator_high_read_expression(register: DspAccumulator) -> String {
     format!(
-        "galaxy::dsp_read_accumulator_high(ctx.ac[{}])",
+        "galaxy::dsp_inline::dsp_read_accumulator_high(ctx.ac[{}])",
         accumulator_index(register)
     )
 }
@@ -4883,8 +4968,10 @@ fn emit_dynamic_backedge_interrupt_checkpoint(
 }
 
 fn emit_raw_instruction_commit(cpp: &mut String, indent_spaces: usize) {
+    cpp.push_str(&format!("#if defined({DSP_RAW_PROVENANCE_MACRO})\n"));
     emit_indent(cpp, indent_spaces);
     cpp.push_str("galaxy::dsp_raw_instruction_boundary_commit(ctx, raw_instruction_boundary);\n");
+    cpp.push_str("#endif\n");
 }
 
 fn emit_loop_checkpoint(
@@ -4993,27 +5080,27 @@ fn emit_address_operation(cpp: &mut String, operation: DspAddressOperation) {
         DspAddressOperation::Decrement { address } => {
             let address_index = address_register_index(address);
             cpp.push_str(&format!(
-                "    ctx.ar[{address_index}] = galaxy::dsp_decrement_address(ctx.ar[{address_index}], ctx.wr[{address_index}]);\n"
+                "    ctx.ar[{address_index}] = galaxy::dsp_inline::dsp_decrement_address(ctx.ar[{address_index}], ctx.wr[{address_index}]);\n"
             ));
         }
         DspAddressOperation::Increment { address } => {
             let address_index = address_register_index(address);
             cpp.push_str(&format!(
-                "    ctx.ar[{address_index}] = galaxy::dsp_increment_address(ctx.ar[{address_index}], ctx.wr[{address_index}]);\n"
+                "    ctx.ar[{address_index}] = galaxy::dsp_inline::dsp_increment_address(ctx.ar[{address_index}], ctx.wr[{address_index}]);\n"
             ));
         }
         DspAddressOperation::SubtractIndex { address, index } => {
             let address_index = address_register_index(address);
             let index_index = index_register_index(index);
             cpp.push_str(&format!(
-                "    ctx.ar[{address_index}] = galaxy::dsp_decrease_address(ctx.ar[{address_index}], ctx.ix[{index_index}], ctx.wr[{address_index}]);\n"
+                "    ctx.ar[{address_index}] = galaxy::dsp_inline::dsp_decrease_address(ctx.ar[{address_index}], ctx.ix[{index_index}], ctx.wr[{address_index}]);\n"
             ));
         }
         DspAddressOperation::AddIndex { address, index } => {
             let address_index = address_register_index(address);
             let index_index = index_register_index(index);
             cpp.push_str(&format!(
-                "    ctx.ar[{address_index}] = galaxy::dsp_increase_address(ctx.ar[{address_index}], ctx.ix[{index_index}], ctx.wr[{address_index}]);\n"
+                "    ctx.ar[{address_index}] = galaxy::dsp_inline::dsp_increase_address(ctx.ar[{address_index}], ctx.ix[{index_index}], ctx.wr[{address_index}]);\n"
             ));
         }
     }
@@ -5025,17 +5112,17 @@ fn emit_address_update(cpp: &mut String, address: DspAddressRegister, update: Ds
         DspAddressUpdate::None => {}
         DspAddressUpdate::Decrement => {
             cpp.push_str(&format!(
-                "    ctx.ar[{address_index}] = galaxy::dsp_decrement_address(ctx.ar[{address_index}], ctx.wr[{address_index}]);\n"
+                "    ctx.ar[{address_index}] = galaxy::dsp_inline::dsp_decrement_address(ctx.ar[{address_index}], ctx.wr[{address_index}]);\n"
             ));
         }
         DspAddressUpdate::Increment => {
             cpp.push_str(&format!(
-                "    ctx.ar[{address_index}] = galaxy::dsp_increment_address(ctx.ar[{address_index}], ctx.wr[{address_index}]);\n"
+                "    ctx.ar[{address_index}] = galaxy::dsp_inline::dsp_increment_address(ctx.ar[{address_index}], ctx.wr[{address_index}]);\n"
             ));
         }
         DspAddressUpdate::AddIndex => {
             cpp.push_str(&format!(
-                "    ctx.ar[{address_index}] = galaxy::dsp_increase_address(ctx.ar[{address_index}], ctx.ix[{address_index}], ctx.wr[{address_index}]);\n"
+                "    ctx.ar[{address_index}] = galaxy::dsp_inline::dsp_increase_address(ctx.ar[{address_index}], ctx.ix[{address_index}], ctx.wr[{address_index}]);\n"
             ));
         }
     }
@@ -8732,7 +8819,7 @@ mod tests {
                 "galaxy::DspGeneratedMemoryAddressSourceKind::DirectPage",
                 "0x0055u}",
                 "galaxy::dsp_raw_instruction_boundary_require_ready(ctx, raw_instruction_boundary);",
-                "galaxy::dsp_data_write(ctx, static_cast<std::uint16_t>((ctx.cr << 8u) | 0x55u)",
+                "galaxy::dsp_data_write_at(ctx, 0x0000u, static_cast<std::uint16_t>((ctx.cr << 8u) | 0x55u)",
             ],
         );
 
@@ -8802,7 +8889,7 @@ mod tests {
         assert_ordered_substrings(
             conditional_block,
             &[
-                "if (galaxy::dsp_condition_holds",
+                "if (galaxy::dsp_inline::dsp_condition_holds",
                 "galaxy::dsp_raw_instruction_boundary_commit(ctx, raw_instruction_boundary);",
                 "goto pc_0003;",
                 "galaxy::dsp_raw_instruction_boundary_commit(ctx, raw_instruction_boundary);",
@@ -8867,7 +8954,7 @@ mod tests {
             lower_dsp_program_to_cpp(0x0000, &[0x0021, 0x0021], "galaxy_dsp_halt_pc_test").unwrap();
 
         assert!(generated.cpp.contains(
-            "    ctx.pc = 0x0000u;\n    ctx.halted = true;\n    galaxy::dsp_raw_instruction_boundary_commit(ctx, raw_instruction_boundary);\n    return;\n"
+            "    ctx.pc = 0x0000u;\n    ctx.halted = true;\n#if defined(GALAXY_DSP_RAW_INSTRUCTION_PROVENANCE)\n    galaxy::dsp_raw_instruction_boundary_commit(ctx, raw_instruction_boundary);\n#endif\n    return;\n"
         ));
     }
 
@@ -8938,7 +9025,7 @@ mod tests {
         assert_eq!(generated.instruction_count, 3);
         assert!(generated
             .cpp
-            .contains("if (galaxy::dsp_condition_holds(galaxy::DspCondition::Zero, ctx.sr))"));
+            .contains("if (galaxy::dsp_inline::dsp_condition_holds(galaxy::DspCondition::Zero, ctx.sr))"));
         assert!(generated.cpp.contains("    goto pc_0003;\n"));
         assert!(generated.cpp.contains("    goto pc_0002;\n"));
     }
@@ -8967,7 +9054,7 @@ mod tests {
         assert_eq!(generated.instruction_count, 3);
         assert!(generated
             .cpp
-            .contains("    galaxy::dsp_stack_push(ctx, 0, 0x0002u);\n    galaxy::dsp_raw_instruction_boundary_commit(ctx, raw_instruction_boundary);\n    goto pc_0003;\n"));
+            .contains("    galaxy::dsp_stack_push(ctx, 0, 0x0002u);\n#if defined(GALAXY_DSP_RAW_INSTRUCTION_PROVENANCE)\n    galaxy::dsp_raw_instruction_boundary_commit(ctx, raw_instruction_boundary);\n#endif\n    goto pc_0003;\n"));
     }
 
     #[test]
@@ -8982,10 +9069,10 @@ mod tests {
         assert_eq!(generated.instruction_count, 3);
         assert!(generated
             .cpp
-            .contains("if (galaxy::dsp_condition_holds(galaxy::DspCondition::Zero, ctx.sr))"));
+            .contains("if (galaxy::dsp_inline::dsp_condition_holds(galaxy::DspCondition::Zero, ctx.sr))"));
         assert!(generated
             .cpp
-            .contains("        galaxy::dsp_stack_push(ctx, 0, 0x0002u);\n        galaxy::dsp_raw_instruction_boundary_commit(ctx, raw_instruction_boundary);\n        goto pc_0003;\n"));
+            .contains("        galaxy::dsp_stack_push(ctx, 0, 0x0002u);\n#if defined(GALAXY_DSP_RAW_INSTRUCTION_PROVENANCE)\n        galaxy::dsp_raw_instruction_boundary_commit(ctx, raw_instruction_boundary);\n#endif\n        goto pc_0003;\n"));
         assert!(generated.cpp.contains("    goto pc_0002;\n"));
     }
 
@@ -9180,7 +9267,7 @@ mod tests {
         assert_eq!(generated.instruction_count, 2);
         assert!(generated
             .cpp
-            .contains("if (galaxy::dsp_condition_holds(galaxy::DspCondition::Zero, ctx.sr))"));
+            .contains("if (galaxy::dsp_inline::dsp_condition_holds(galaxy::DspCondition::Zero, ctx.sr))"));
         assert!(generated
             .cpp
             .contains("const auto return_target_0000 = galaxy::dsp_stack_pop(ctx, 0);"));
@@ -9195,7 +9282,7 @@ mod tests {
         assert_eq!(generated.instruction_count, 3);
         assert!(generated
             .cpp
-            .contains("if (galaxy::dsp_condition_holds(galaxy::DspCondition::Zero, ctx.sr))"));
+            .contains("if (galaxy::dsp_inline::dsp_condition_holds(galaxy::DspCondition::Zero, ctx.sr))"));
         assert!(generated.cpp.contains("        goto pc_0001;\n"));
         assert!(generated.cpp.contains("    goto pc_0002;\n"));
     }
@@ -9238,7 +9325,7 @@ mod tests {
         assert!(generated
             .cpp
             .contains(
-                "const auto loop_target_0001 = ctx.st[0];\n            ctx.pc = static_cast<std::uint16_t>(loop_target_0001);\n            galaxy::dsp_raw_instruction_boundary_commit(ctx, raw_instruction_boundary);\n            galaxy::dsp_accept_pending_external_interrupt(ctx);\n            if (ctx.pc == 0x0001u) {\n                galaxy::dsp_native_reset_idle_sequence_progress(ctx);\n                goto pc_0001;\n            }\n            goto pc_dispatch;"
+                "const auto loop_target_0001 = ctx.st[0];\n            ctx.pc = static_cast<std::uint16_t>(loop_target_0001);\n#if defined(GALAXY_DSP_RAW_INSTRUCTION_PROVENANCE)\n            galaxy::dsp_raw_instruction_boundary_commit(ctx, raw_instruction_boundary);\n#endif\n            galaxy::dsp_accept_pending_external_interrupt(ctx);\n            if (ctx.pc == 0x0001u) {\n                galaxy::dsp_native_reset_idle_sequence_progress(ctx);\n                goto pc_0001;\n            }\n            goto pc_dispatch;"
             ));
         assert!(generated.cpp.contains("goto pc_dispatch;"));
         assert!(generated
@@ -9299,7 +9386,7 @@ mod tests {
 
         assert_eq!(generated.instruction_count, 4);
         assert!(generated.cpp.contains(
-            "const auto block_loop_count_0002 = static_cast<std::uint16_t>(galaxy::dsp_read_accumulator_mid(ctx.ac[0], ctx.sr));"
+            "const auto block_loop_count_0002 = static_cast<std::uint16_t>(galaxy::dsp_inline::dsp_read_accumulator_mid(ctx.ac[0], ctx.sr));"
         ));
         assert!(generated
             .cpp
@@ -9365,15 +9452,15 @@ mod tests {
         assert_eq!(generated.instruction_count, 5);
         assert!(generated
             .cpp
-            .contains("ctx.ar[1] = galaxy::dsp_decrement_address(ctx.ar[1], ctx.wr[1]);"));
+            .contains("ctx.ar[1] = galaxy::dsp_inline::dsp_decrement_address(ctx.ar[1], ctx.wr[1]);"));
         assert!(generated
             .cpp
-            .contains("ctx.ar[2] = galaxy::dsp_increment_address(ctx.ar[2], ctx.wr[2]);"));
+            .contains("ctx.ar[2] = galaxy::dsp_inline::dsp_increment_address(ctx.ar[2], ctx.wr[2]);"));
         assert!(generated.cpp.contains(
-            "ctx.ar[3] = galaxy::dsp_decrease_address(ctx.ar[3], ctx.ix[3], ctx.wr[3]);"
+            "ctx.ar[3] = galaxy::dsp_inline::dsp_decrease_address(ctx.ar[3], ctx.ix[3], ctx.wr[3]);"
         ));
         assert!(generated.cpp.contains(
-            "ctx.ar[3] = galaxy::dsp_increase_address(ctx.ar[3], ctx.ix[2], ctx.wr[3]);"
+            "ctx.ar[3] = galaxy::dsp_inline::dsp_increase_address(ctx.ar[3], ctx.ix[2], ctx.wr[3]);"
         ));
     }
 
@@ -9401,7 +9488,7 @@ mod tests {
         .unwrap();
 
         assert!(generated.cpp.contains(
-            "ctx.sr = static_cast<std::uint16_t>(ctx.sr | 0x0800u);\n    galaxy::dsp_raw_instruction_boundary_commit(ctx, raw_instruction_boundary);\n    ctx.pc = 0x0001u;\n    galaxy::dsp_accept_pending_external_interrupt(ctx);\n    goto pc_0001;"
+            "ctx.sr = static_cast<std::uint16_t>(ctx.sr | 0x0800u);\n#if defined(GALAXY_DSP_RAW_INSTRUCTION_PROVENANCE)\n    galaxy::dsp_raw_instruction_boundary_commit(ctx, raw_instruction_boundary);\n#endif\n    ctx.pc = 0x0001u;\n    galaxy::dsp_accept_pending_external_interrupt(ctx);\n    goto pc_0001;"
         ));
     }
 
@@ -9450,16 +9537,16 @@ mod tests {
 
         assert_eq!(generated.instruction_count, 5);
         assert!(generated.cpp.contains(
-            "const auto logic_0000 = galaxy::dsp_accumulator_mid_xor(ctx.ac[0], ctx.ax[0][1], ctx.sr);"
+            "const auto logic_0000 = galaxy::dsp_inline::dsp_accumulator_mid_xor(ctx.ac[0], ctx.ax[0][1], ctx.sr);"
         ));
         assert!(generated.cpp.contains(
-            "const auto logic_0001 = galaxy::dsp_accumulator_mid_and(ctx.ac[0], ctx.ax[0][1], ctx.sr);"
+            "const auto logic_0001 = galaxy::dsp_inline::dsp_accumulator_mid_and(ctx.ac[0], ctx.ax[0][1], ctx.sr);"
         ));
         assert!(generated.cpp.contains(
-            "const auto logic_0002 = galaxy::dsp_accumulator_mid_or(ctx.ac[0], galaxy::dsp_read_accumulator_mid_raw(ctx.ac[1]), ctx.sr);"
+            "const auto logic_0002 = galaxy::dsp_inline::dsp_accumulator_mid_or(ctx.ac[0], galaxy::dsp_inline::dsp_read_accumulator_mid_raw(ctx.ac[1]), ctx.sr);"
         ));
         assert!(generated.cpp.contains(
-            "const auto logic_0003 = galaxy::dsp_accumulator_mid_not(ctx.ac[0], ctx.sr);"
+            "const auto logic_0003 = galaxy::dsp_inline::dsp_accumulator_mid_not(ctx.ac[0], ctx.sr);"
         ));
         assert!(generated
             .cpp
@@ -9478,16 +9565,16 @@ mod tests {
 
         assert_eq!(generated.instruction_count, 5);
         assert!(generated.cpp.contains(
-            "const auto logic_0000 = galaxy::dsp_accumulator_shift_by_register_count(ctx.ac[0], false, ctx.ax[0][1], ctx.sr);"
+            "const auto logic_0000 = galaxy::dsp_inline::dsp_accumulator_shift_by_register_count(ctx.ac[0], false, ctx.ax[0][1], ctx.sr);"
         ));
         assert!(generated.cpp.contains(
-            "const auto logic_0001 = galaxy::dsp_accumulator_shift_by_register_count(ctx.ac[1], true, ctx.ax[0][1], ctx.sr);"
+            "const auto logic_0001 = galaxy::dsp_inline::dsp_accumulator_shift_by_register_count(ctx.ac[1], true, ctx.ax[0][1], ctx.sr);"
         ));
         assert!(generated.cpp.contains(
-            "const auto logic_0002 = galaxy::dsp_accumulator_shift_by_register_count(ctx.ac[1], false, galaxy::dsp_read_accumulator_mid_raw(ctx.ac[0]), ctx.sr);"
+            "const auto logic_0002 = galaxy::dsp_inline::dsp_accumulator_shift_by_register_count(ctx.ac[1], false, galaxy::dsp_inline::dsp_read_accumulator_mid_raw(ctx.ac[0]), ctx.sr);"
         ));
         assert!(generated.cpp.contains(
-            "const auto logic_0003 = galaxy::dsp_accumulator_shift_by_register_count(ctx.ac[1], true, galaxy::dsp_read_accumulator_mid_raw(ctx.ac[0]), ctx.sr);"
+            "const auto logic_0003 = galaxy::dsp_inline::dsp_accumulator_shift_by_register_count(ctx.ac[1], true, galaxy::dsp_inline::dsp_read_accumulator_mid_raw(ctx.ac[0]), ctx.sr);"
         ));
         assert!(generated.cpp.contains("ctx.ac[1] = logic_0003.value;"));
         assert!(generated.cpp.contains("ctx.sr = logic_0003.status;"));
@@ -9502,7 +9589,7 @@ mod tests {
         assert_eq!(generated.instruction_count, 2);
         assert!(generated
             .cpp
-            .contains("ctx.prod = galaxy::dsp_cleared_product();"));
+            .contains("ctx.prod = galaxy::dsp_inline::dsp_cleared_product();"));
         assert!(generated.cpp.contains("    goto pc_0001;\n"));
     }
 
@@ -9517,17 +9604,17 @@ mod tests {
 
         assert_eq!(generated.instruction_count, 5);
         assert!(generated.cpp.contains(
-            "const auto product_0000 = galaxy::dsp_accumulator_set_value(galaxy::dsp_product_value(ctx.prod), ctx.sr);"
+            "const auto product_0000 = galaxy::dsp_inline::dsp_accumulator_set_value(galaxy::dsp_inline::dsp_product_value(ctx.prod), ctx.sr);"
         ));
         assert!(generated.cpp.contains("ctx.sr = product_0000.status;"));
         assert!(generated.cpp.contains(
-            "const auto accumulator_0001 = galaxy::dsp_accumulator_set_value(galaxy::dsp_product_value(ctx.prod), ctx.sr);"
+            "const auto accumulator_0001 = galaxy::dsp_inline::dsp_accumulator_set_value(galaxy::dsp_inline::dsp_product_value(ctx.prod), ctx.sr);"
         ));
         assert!(generated.cpp.contains(
-            "const auto accumulator_0002 = galaxy::dsp_accumulator_set_value(-galaxy::dsp_product_value(ctx.prod), ctx.sr);"
+            "const auto accumulator_0002 = galaxy::dsp_inline::dsp_accumulator_set_value(-galaxy::dsp_inline::dsp_product_value(ctx.prod), ctx.sr);"
         ));
         assert!(generated.cpp.contains(
-            "const auto accumulator_0003 = galaxy::dsp_accumulator_set_value(galaxy::dsp_round_product(ctx.prod), ctx.sr);"
+            "const auto accumulator_0003 = galaxy::dsp_inline::dsp_accumulator_set_value(galaxy::dsp_inline::dsp_round_product(ctx.prod), ctx.sr);"
         ));
         assert!(generated
             .cpp
@@ -9546,28 +9633,28 @@ mod tests {
 
         assert_eq!(generated.instruction_count, 6);
         assert!(generated.cpp.contains(
-            "ctx.prod = galaxy::dsp_product_multiply(ctx.ax[0][1], ctx.ax[0][1], galaxy::DspMultiplyOperandMode::Signed, ctx.sr);"
+            "ctx.prod = galaxy::dsp_inline::dsp_product_multiply(ctx.ax[0][1], ctx.ax[0][1], galaxy::DspMultiplyOperandMode::Signed, ctx.sr);"
         ));
         assert!(generated.cpp.contains(
-            "ctx.prod = galaxy::dsp_product_multiply(ctx.ax[1][0], ctx.ax[1][1], galaxy::DspMultiplyOperandMode::Signed, ctx.sr);"
+            "ctx.prod = galaxy::dsp_inline::dsp_product_multiply(ctx.ax[1][0], ctx.ax[1][1], galaxy::DspMultiplyOperandMode::Signed, ctx.sr);"
         ));
         assert!(generated.cpp.contains(
-            "const auto accumulator_0002 = galaxy::dsp_accumulator_set_value(ctx.ac[1] + galaxy::dsp_product_value(ctx.prod), ctx.sr);"
+            "const auto accumulator_0002 = galaxy::dsp_inline::dsp_accumulator_set_value(ctx.ac[1] + galaxy::dsp_inline::dsp_product_value(ctx.prod), ctx.sr);"
         ));
         assert!(generated.cpp.contains(
-            "ctx.prod = galaxy::dsp_product_multiply(ctx.ax[0][0], ctx.ax[0][1], galaxy::DspMultiplyOperandMode::Signed, ctx.sr);"
+            "ctx.prod = galaxy::dsp_inline::dsp_product_multiply(ctx.ax[0][0], ctx.ax[0][1], galaxy::DspMultiplyOperandMode::Signed, ctx.sr);"
         ));
         assert!(generated
             .cpp
             .contains("ctx.ac[1] = accumulator_0002.value;"));
         assert!(generated.cpp.contains(
-            "const auto accumulator_0003 = galaxy::dsp_accumulator_set_value(galaxy::dsp_product_value(ctx.prod), ctx.sr);"
+            "const auto accumulator_0003 = galaxy::dsp_inline::dsp_accumulator_set_value(galaxy::dsp_inline::dsp_product_value(ctx.prod), ctx.sr);"
         ));
         assert!(generated.cpp.contains(
-            "ctx.prod = galaxy::dsp_product_multiply(ctx.ax[1][0], ctx.ax[1][1], galaxy::DspMultiplyOperandMode::Signed, ctx.sr);"
+            "ctx.prod = galaxy::dsp_inline::dsp_product_multiply(ctx.ax[1][0], ctx.ax[1][1], galaxy::DspMultiplyOperandMode::Signed, ctx.sr);"
         ));
         assert!(generated.cpp.contains(
-            "const auto accumulator_0004 = galaxy::dsp_accumulator_set_value(galaxy::dsp_round_product(ctx.prod), ctx.sr);"
+            "const auto accumulator_0004 = galaxy::dsp_inline::dsp_accumulator_set_value(galaxy::dsp_inline::dsp_round_product(ctx.prod), ctx.sr);"
         ));
         assert!(generated.cpp.contains("    goto pc_0005;\n"));
     }
@@ -9583,16 +9670,16 @@ mod tests {
 
         assert_eq!(generated.instruction_count, 5);
         assert!(generated.cpp.contains(
-            "ctx.prod = galaxy::dsp_product_multiply(ctx.ax[0][0], ctx.ax[1][0], galaxy::DspMultiplyOperandMode::UnsignedWhenSrUnsigned, ctx.sr);"
+            "ctx.prod = galaxy::dsp_inline::dsp_product_multiply(ctx.ax[0][0], ctx.ax[1][0], galaxy::DspMultiplyOperandMode::UnsignedWhenSrUnsigned, ctx.sr);"
         ));
         assert!(generated.cpp.contains(
-            "ctx.prod = galaxy::dsp_product_multiply(ctx.ax[0][0], ctx.ax[1][1], galaxy::DspMultiplyOperandMode::MixedUnsignedLeftWhenSrUnsigned, ctx.sr);"
+            "ctx.prod = galaxy::dsp_inline::dsp_product_multiply(ctx.ax[0][0], ctx.ax[1][1], galaxy::DspMultiplyOperandMode::MixedUnsignedLeftWhenSrUnsigned, ctx.sr);"
         ));
         assert!(generated.cpp.contains(
-            "ctx.prod = galaxy::dsp_product_multiply(ctx.ax[1][0], ctx.ax[0][1], galaxy::DspMultiplyOperandMode::MixedUnsignedLeftWhenSrUnsigned, ctx.sr);"
+            "ctx.prod = galaxy::dsp_inline::dsp_product_multiply(ctx.ax[1][0], ctx.ax[0][1], galaxy::DspMultiplyOperandMode::MixedUnsignedLeftWhenSrUnsigned, ctx.sr);"
         ));
         assert!(generated.cpp.contains(
-            "ctx.prod = galaxy::dsp_product_multiply(ctx.ax[0][1], ctx.ax[1][1], galaxy::DspMultiplyOperandMode::Signed, ctx.sr);"
+            "ctx.prod = galaxy::dsp_inline::dsp_product_multiply(ctx.ax[0][1], ctx.ax[1][1], galaxy::DspMultiplyOperandMode::Signed, ctx.sr);"
         ));
         assert!(generated.cpp.contains("    goto pc_0004;\n"));
     }
@@ -9608,10 +9695,10 @@ mod tests {
 
         assert_eq!(generated.instruction_count, 3);
         assert!(generated.cpp.contains(
-            "ctx.prod = galaxy::dsp_product_multiply_add(ctx.prod, ctx.ax[0][1], ctx.ax[1][1], galaxy::DspMultiplyOperandMode::Signed, ctx.sr);"
+            "ctx.prod = galaxy::dsp_inline::dsp_product_multiply_add(ctx.prod, ctx.ax[0][1], ctx.ax[1][1], galaxy::DspMultiplyOperandMode::Signed, ctx.sr);"
         ));
         assert!(generated.cpp.contains(
-            "ctx.prod = galaxy::dsp_product_multiply_subtract(ctx.prod, ctx.ax[0][1], ctx.ax[1][1], galaxy::DspMultiplyOperandMode::Signed, ctx.sr);"
+            "ctx.prod = galaxy::dsp_inline::dsp_product_multiply_subtract(ctx.prod, ctx.ax[0][1], ctx.ax[1][1], galaxy::DspMultiplyOperandMode::Signed, ctx.sr);"
         ));
         assert!(generated.cpp.contains("    goto pc_0002;\n"));
     }
@@ -9627,19 +9714,19 @@ mod tests {
 
         assert_eq!(generated.instruction_count, 4);
         assert!(generated.cpp.contains(
-            "const auto accumulator_0000 = galaxy::dsp_accumulator_set_value(ctx.ac[1] + galaxy::dsp_product_value(ctx.prod), ctx.sr);"
+            "const auto accumulator_0000 = galaxy::dsp_inline::dsp_accumulator_set_value(ctx.ac[1] + galaxy::dsp_inline::dsp_product_value(ctx.prod), ctx.sr);"
         ));
         assert!(generated.cpp.contains(
-            "ctx.prod = galaxy::dsp_product_multiply(ctx.ax[0][1], ctx.ax[1][1], galaxy::DspMultiplyOperandMode::Signed, ctx.sr);"
+            "ctx.prod = galaxy::dsp_inline::dsp_product_multiply(ctx.ax[0][1], ctx.ax[1][1], galaxy::DspMultiplyOperandMode::Signed, ctx.sr);"
         ));
         assert!(generated
             .cpp
             .contains("ctx.ac[1] = accumulator_0000.value;"));
         assert!(generated.cpp.contains(
-            "const auto accumulator_0001 = galaxy::dsp_accumulator_set_value(galaxy::dsp_product_value(ctx.prod), ctx.sr);"
+            "const auto accumulator_0001 = galaxy::dsp_inline::dsp_accumulator_set_value(galaxy::dsp_inline::dsp_product_value(ctx.prod), ctx.sr);"
         ));
         assert!(generated.cpp.contains(
-            "const auto accumulator_0002 = galaxy::dsp_accumulator_set_value(galaxy::dsp_round_product(ctx.prod), ctx.sr);"
+            "const auto accumulator_0002 = galaxy::dsp_inline::dsp_accumulator_set_value(galaxy::dsp_inline::dsp_round_product(ctx.prod), ctx.sr);"
         ));
         assert!(generated.cpp.contains("    goto pc_0003;\n"));
     }
@@ -9655,25 +9742,25 @@ mod tests {
 
         assert_eq!(generated.instruction_count, 4);
         assert!(generated.cpp.contains(
-            "const auto accumulator_0000 = galaxy::dsp_accumulator_set_value(ctx.ac[1] + galaxy::dsp_product_value(ctx.prod), ctx.sr);"
+            "const auto accumulator_0000 = galaxy::dsp_inline::dsp_accumulator_set_value(ctx.ac[1] + galaxy::dsp_inline::dsp_product_value(ctx.prod), ctx.sr);"
         ));
         assert!(generated.cpp.contains(
-            "ctx.prod = galaxy::dsp_product_multiply(ctx.ax[1][0], ctx.ax[0][1], galaxy::DspMultiplyOperandMode::MixedUnsignedLeftWhenSrUnsigned, ctx.sr);"
+            "ctx.prod = galaxy::dsp_inline::dsp_product_multiply(ctx.ax[1][0], ctx.ax[0][1], galaxy::DspMultiplyOperandMode::MixedUnsignedLeftWhenSrUnsigned, ctx.sr);"
         ));
         assert!(generated
             .cpp
             .contains("ctx.ac[1] = accumulator_0000.value;"));
         assert!(generated.cpp.contains(
-            "const auto accumulator_0001 = galaxy::dsp_accumulator_set_value(galaxy::dsp_product_value(ctx.prod), ctx.sr);"
+            "const auto accumulator_0001 = galaxy::dsp_inline::dsp_accumulator_set_value(galaxy::dsp_inline::dsp_product_value(ctx.prod), ctx.sr);"
         ));
         assert!(generated.cpp.contains(
-            "ctx.prod = galaxy::dsp_product_multiply(ctx.ax[0][0], ctx.ax[1][1], galaxy::DspMultiplyOperandMode::MixedUnsignedLeftWhenSrUnsigned, ctx.sr);"
+            "ctx.prod = galaxy::dsp_inline::dsp_product_multiply(ctx.ax[0][0], ctx.ax[1][1], galaxy::DspMultiplyOperandMode::MixedUnsignedLeftWhenSrUnsigned, ctx.sr);"
         ));
         assert!(generated.cpp.contains(
-            "const auto accumulator_0002 = galaxy::dsp_accumulator_set_value(galaxy::dsp_round_product(ctx.prod), ctx.sr);"
+            "const auto accumulator_0002 = galaxy::dsp_inline::dsp_accumulator_set_value(galaxy::dsp_inline::dsp_round_product(ctx.prod), ctx.sr);"
         ));
         assert!(generated.cpp.contains(
-            "ctx.prod = galaxy::dsp_product_multiply(ctx.ax[0][0], ctx.ax[1][0], galaxy::DspMultiplyOperandMode::UnsignedWhenSrUnsigned, ctx.sr);"
+            "ctx.prod = galaxy::dsp_inline::dsp_product_multiply(ctx.ax[0][0], ctx.ax[1][0], galaxy::DspMultiplyOperandMode::UnsignedWhenSrUnsigned, ctx.sr);"
         ));
         assert!(generated.cpp.contains("    goto pc_0003;\n"));
     }
@@ -9692,37 +9779,37 @@ mod tests {
 
         assert_eq!(generated.instruction_count, 11);
         assert!(generated.cpp.contains(
-            "ctx.prod = galaxy::dsp_product_multiply(galaxy::dsp_read_accumulator_mid_raw(ctx.ac[1]), ctx.ax[1][1], galaxy::DspMultiplyOperandMode::Signed, ctx.sr);"
+            "ctx.prod = galaxy::dsp_inline::dsp_product_multiply(galaxy::dsp_inline::dsp_read_accumulator_mid_raw(ctx.ac[1]), ctx.ax[1][1], galaxy::DspMultiplyOperandMode::Signed, ctx.sr);"
         ));
         assert!(generated.cpp.contains(
-            "const auto accumulator_0001 = galaxy::dsp_accumulator_set_value(ctx.ac[1] + galaxy::dsp_product_value(ctx.prod), ctx.sr);"
+            "const auto accumulator_0001 = galaxy::dsp_inline::dsp_accumulator_set_value(ctx.ac[1] + galaxy::dsp_inline::dsp_product_value(ctx.prod), ctx.sr);"
         ));
         assert!(generated.cpp.contains(
-            "ctx.prod = galaxy::dsp_product_multiply(galaxy::dsp_read_accumulator_mid_raw(ctx.ac[0]), ctx.ax[1][1], galaxy::DspMultiplyOperandMode::Signed, ctx.sr);"
+            "ctx.prod = galaxy::dsp_inline::dsp_product_multiply(galaxy::dsp_inline::dsp_read_accumulator_mid_raw(ctx.ac[0]), ctx.ax[1][1], galaxy::DspMultiplyOperandMode::Signed, ctx.sr);"
         ));
         assert!(generated.cpp.contains(
-            "const auto accumulator_0002 = galaxy::dsp_accumulator_set_value(galaxy::dsp_product_value(ctx.prod), ctx.sr);"
+            "const auto accumulator_0002 = galaxy::dsp_inline::dsp_accumulator_set_value(galaxy::dsp_inline::dsp_product_value(ctx.prod), ctx.sr);"
         ));
         assert!(generated.cpp.contains(
-            "const auto accumulator_0003 = galaxy::dsp_accumulator_set_value(galaxy::dsp_round_product(ctx.prod), ctx.sr);"
+            "const auto accumulator_0003 = galaxy::dsp_inline::dsp_accumulator_set_value(galaxy::dsp_inline::dsp_round_product(ctx.prod), ctx.sr);"
         ));
         assert!(generated.cpp.contains(
-            "ctx.prod = galaxy::dsp_product_multiply_add(ctx.prod, galaxy::dsp_read_accumulator_mid_raw(ctx.ac[1]), ctx.ax[1][1], galaxy::DspMultiplyOperandMode::Signed, ctx.sr);"
+            "ctx.prod = galaxy::dsp_inline::dsp_product_multiply_add(ctx.prod, galaxy::dsp_inline::dsp_read_accumulator_mid_raw(ctx.ac[1]), ctx.ax[1][1], galaxy::DspMultiplyOperandMode::Signed, ctx.sr);"
         ));
         assert!(generated.cpp.contains(
-            "ctx.prod = galaxy::dsp_product_multiply_subtract(ctx.prod, galaxy::dsp_read_accumulator_mid_raw(ctx.ac[1]), ctx.ax[1][1], galaxy::DspMultiplyOperandMode::Signed, ctx.sr);"
+            "ctx.prod = galaxy::dsp_inline::dsp_product_multiply_subtract(ctx.prod, galaxy::dsp_inline::dsp_read_accumulator_mid_raw(ctx.ac[1]), ctx.ax[1][1], galaxy::DspMultiplyOperandMode::Signed, ctx.sr);"
         ));
         assert!(generated.cpp.contains(
-            "ctx.prod = galaxy::dsp_product_multiply_add(ctx.prod, ctx.ax[1][0], ctx.ax[1][1], galaxy::DspMultiplyOperandMode::Signed, ctx.sr);"
+            "ctx.prod = galaxy::dsp_inline::dsp_product_multiply_add(ctx.prod, ctx.ax[1][0], ctx.ax[1][1], galaxy::DspMultiplyOperandMode::Signed, ctx.sr);"
         ));
         assert!(generated.cpp.contains(
-            "ctx.prod = galaxy::dsp_product_multiply_subtract(ctx.prod, ctx.ax[1][0], ctx.ax[1][1], galaxy::DspMultiplyOperandMode::Signed, ctx.sr);"
+            "ctx.prod = galaxy::dsp_inline::dsp_product_multiply_subtract(ctx.prod, ctx.ax[1][0], ctx.ax[1][1], galaxy::DspMultiplyOperandMode::Signed, ctx.sr);"
         ));
         assert!(generated.cpp.contains(
-            "ctx.prod = galaxy::dsp_product_multiply_add(ctx.prod, ctx.ax[0][0], ctx.ax[1][0], galaxy::DspMultiplyOperandMode::Signed, ctx.sr);"
+            "ctx.prod = galaxy::dsp_inline::dsp_product_multiply_add(ctx.prod, ctx.ax[0][0], ctx.ax[1][0], galaxy::DspMultiplyOperandMode::Signed, ctx.sr);"
         ));
         assert!(generated.cpp.contains(
-            "ctx.prod = galaxy::dsp_product_multiply_subtract(ctx.prod, ctx.ax[0][0], ctx.ax[1][0], galaxy::DspMultiplyOperandMode::Signed, ctx.sr);"
+            "ctx.prod = galaxy::dsp_inline::dsp_product_multiply_subtract(ctx.prod, ctx.ax[0][0], ctx.ax[1][0], galaxy::DspMultiplyOperandMode::Signed, ctx.sr);"
         ));
         assert!(generated.cpp.contains("    goto pc_000A;\n"));
     }
@@ -9738,14 +9825,14 @@ mod tests {
 
         assert_eq!(generated.instruction_count, 5);
         assert!(generated.cpp.contains(
-            "const auto accumulator_0000 = galaxy::dsp_accumulator_add(ctx.ac[0], ctx.ac[1], ctx.sr);"
+            "const auto accumulator_0000 = galaxy::dsp_inline::dsp_accumulator_add(ctx.ac[0], ctx.ac[1], ctx.sr);"
         ));
         assert!(generated.cpp.contains(
-            "const auto logic_0001 = galaxy::dsp_accumulator_mid_xor(ctx.ac[1], ctx.ax[1][1], ctx.sr);"
+            "const auto logic_0001 = galaxy::dsp_inline::dsp_accumulator_mid_xor(ctx.ac[1], ctx.ax[1][1], ctx.sr);"
         ));
         assert!(generated
             .cpp
-            .contains("ctx.prod = galaxy::dsp_cleared_product();"));
+            .contains("ctx.prod = galaxy::dsp_inline::dsp_cleared_product();"));
         assert!(generated
             .cpp
             .contains("ctx.sr = static_cast<std::uint16_t>(ctx.sr & ~0x2000u);"));
@@ -9764,16 +9851,16 @@ mod tests {
         assert_eq!(generated.instruction_count, 3);
         assert!(generated
             .cpp
-            .contains("ctx.ar[3] = galaxy::dsp_decrement_address(ctx.ar[3], ctx.wr[3]);"));
+            .contains("ctx.ar[3] = galaxy::dsp_inline::dsp_decrement_address(ctx.ar[3], ctx.wr[3]);"));
         assert!(generated.cpp.contains(
-            "const auto logic_0001 = galaxy::dsp_accumulator_mid_xor(ctx.ac[1], ctx.ax[1][1], ctx.sr);"
+            "const auto logic_0001 = galaxy::dsp_inline::dsp_accumulator_mid_xor(ctx.ac[1], ctx.ax[1][1], ctx.sr);"
         ));
         assert!(generated
             .cpp
             .contains("ctx.ac[1] = logic_0001.accumulator;"));
         assert!(generated
             .cpp
-            .contains("ctx.ar[1] = galaxy::dsp_increment_address(ctx.ar[1], ctx.wr[1]);"));
+            .contains("ctx.ar[1] = galaxy::dsp_inline::dsp_increment_address(ctx.ar[1], ctx.wr[1]);"));
         assert!(generated.cpp.contains("    goto pc_0002;\n"));
     }
 
@@ -9790,27 +9877,27 @@ mod tests {
         assert_ordered_substrings(
             &generated.cpp,
             &[
-                "const auto parallel_0000_value = galaxy::dsp_read_accumulator_mid(ctx.ac[1], ctx.sr);",
-                "const auto logic_0000 = galaxy::dsp_accumulator_mid_xor(ctx.ac[1], ctx.ax[1][1], ctx.sr);",
+                "const auto parallel_0000_value = galaxy::dsp_inline::dsp_read_accumulator_mid(ctx.ac[1], ctx.sr);",
+                "const auto logic_0000 = galaxy::dsp_inline::dsp_accumulator_mid_xor(ctx.ac[1], ctx.ax[1][1], ctx.sr);",
                 "ctx.ax[1][1] = static_cast<std::uint16_t>(parallel_0000_value);",
             ],
         );
         assert_ordered_substrings(
             &generated.cpp,
             &[
-                "const auto parallel_0001_value = static_cast<std::uint16_t>(galaxy::dsp_read_accumulator_mid(ctx.ac[1], ctx.sr));",
-                "galaxy::dsp_data_write(ctx, ctx.ar[3], parallel_0001_value);",
-                "const auto logic_0001 = galaxy::dsp_accumulator_mid_xor(ctx.ac[1], ctx.ax[1][1], ctx.sr);",
-                "ctx.ar[3] = galaxy::dsp_increment_address(ctx.ar[3], ctx.wr[3]);",
+                "const auto parallel_0001_value = static_cast<std::uint16_t>(galaxy::dsp_inline::dsp_read_accumulator_mid(ctx.ac[1], ctx.sr));",
+                "galaxy::dsp_data_write_at(ctx, 0x0001u, ctx.ar[3], parallel_0001_value);",
+                "const auto logic_0001 = galaxy::dsp_inline::dsp_accumulator_mid_xor(ctx.ac[1], ctx.ax[1][1], ctx.sr);",
+                "ctx.ar[3] = galaxy::dsp_inline::dsp_increment_address(ctx.ar[3], ctx.wr[3]);",
             ],
         );
         assert_ordered_substrings(
             &generated.cpp,
             &[
-                "const auto parallel_0002_value = galaxy::dsp_data_read(ctx, ctx.ar[0]);",
-                "const auto logic_0002 = galaxy::dsp_accumulator_mid_xor(ctx.ac[1], ctx.ax[1][1], ctx.sr);",
+                "const auto parallel_0002_value = galaxy::dsp_data_read_at(ctx, 0x0002u, ctx.ar[0]);",
+                "const auto logic_0002 = galaxy::dsp_inline::dsp_accumulator_mid_xor(ctx.ac[1], ctx.ax[1][1], ctx.sr);",
                 "ctx.ax[0][0] = static_cast<std::uint16_t>(parallel_0002_value);",
-                "ctx.ar[0] = galaxy::dsp_increment_address(ctx.ar[0], ctx.wr[0]);",
+                "ctx.ar[0] = galaxy::dsp_inline::dsp_increment_address(ctx.ar[0], ctx.wr[0]);",
             ],
         );
         assert!(generated.cpp.contains("    goto pc_0003;\n"));
@@ -9828,22 +9915,22 @@ mod tests {
                 (
                     0x70u16,
                     0,
-                    "galaxy::dsp_increment_address(ctx.ar[0], ctx.wr[0])",
+                    "galaxy::dsp_inline::dsp_increment_address(ctx.ar[0], ctx.wr[0])",
                 ),
                 (
                     0x74,
                     0,
-                    "galaxy::dsp_increase_address(ctx.ar[0], ctx.ix[0], ctx.wr[0])",
+                    "galaxy::dsp_inline::dsp_increase_address(ctx.ar[0], ctx.ix[0], ctx.wr[0])",
                 ),
                 (
                     0x78,
                     1,
-                    "galaxy::dsp_increment_address(ctx.ar[0], ctx.wr[0])",
+                    "galaxy::dsp_inline::dsp_increment_address(ctx.ar[0], ctx.wr[0])",
                 ),
                 (
                     0x7C,
                     1,
-                    "galaxy::dsp_increase_address(ctx.ar[0], ctx.ix[0], ctx.wr[0])",
+                    "galaxy::dsp_inline::dsp_increase_address(ctx.ar[0], ctx.ix[0], ctx.wr[0])",
                 ),
             ] {
                 let generated = lower_dsp_program_to_cpp(
@@ -9853,13 +9940,13 @@ mod tests {
                 )
                 .unwrap();
                 let writeback = format!(
-                    "ctx.ac[{accumulator}] = galaxy::dsp_write_accumulator_mid(ctx.ac[{accumulator}], static_cast<std::uint16_t>(parallel_0000_value), parallel_0000_load_status);"
+                    "ctx.ac[{accumulator}] = galaxy::dsp_inline::dsp_write_accumulator_mid(ctx.ac[{accumulator}], static_cast<std::uint16_t>(parallel_0000_value), parallel_0000_load_status);"
                 );
                 assert_ordered_substrings(
                     &generated.cpp,
                     &[
                         "const auto parallel_0000_load_status = ctx.sr;",
-                        "const auto parallel_0000_value = galaxy::dsp_data_read(ctx, ctx.ar[0]);",
+                        "const auto parallel_0000_value = galaxy::dsp_data_read_at(ctx, 0x0000u, ctx.ar[0]);",
                         mode_write,
                         &writeback,
                         update,
@@ -9885,31 +9972,31 @@ mod tests {
         assert_ordered_substrings(
             &generated.cpp,
             &[
-                "const auto parallel_0000_store_value = static_cast<std::uint16_t>(galaxy::dsp_read_accumulator_mid(ctx.ac[0], ctx.sr));",
-                "galaxy::dsp_data_write(ctx, ctx.ar[3], parallel_0000_store_value);",
-                "const auto parallel_0000_load_value = galaxy::dsp_data_read(ctx, ctx.ar[0]);",
-                "const auto accumulator_0000 = galaxy::dsp_accumulator_add(ctx.ac[0], ctx.ac[1], ctx.sr);",
+                "const auto parallel_0000_store_value = static_cast<std::uint16_t>(galaxy::dsp_inline::dsp_read_accumulator_mid(ctx.ac[0], ctx.sr));",
+                "galaxy::dsp_data_write_at(ctx, 0x0000u, ctx.ar[3], parallel_0000_store_value);",
+                "const auto parallel_0000_load_value = galaxy::dsp_data_read_at(ctx, 0x0000u, ctx.ar[0]);",
+                "const auto accumulator_0000 = galaxy::dsp_inline::dsp_accumulator_add(ctx.ac[0], ctx.ac[1], ctx.sr);",
                 "ctx.ax[0][0] = static_cast<std::uint16_t>(parallel_0000_load_value);",
-                "ctx.ar[3] = galaxy::dsp_increment_address(ctx.ar[3], ctx.wr[3]);",
-                "ctx.ar[0] = galaxy::dsp_increment_address(ctx.ar[0], ctx.wr[0]);",
+                "ctx.ar[3] = galaxy::dsp_inline::dsp_increment_address(ctx.ar[3], ctx.wr[3]);",
+                "ctx.ar[0] = galaxy::dsp_inline::dsp_increment_address(ctx.ar[0], ctx.wr[0]);",
             ],
         );
         assert_ordered_substrings(
             &generated.cpp,
             &[
-                "const auto parallel_load_0001_primary = galaxy::dsp_data_read(ctx, ctx.ar[0]);",
-                "const auto parallel_load_0001_secondary = ((ctx.ar[0] & 0xFC00u) == (ctx.ar[3] & 0xFC00u)) ? parallel_load_0001_primary : galaxy::dsp_data_read(ctx, ctx.ar[3]);",
-                "const auto accumulator_0001 = galaxy::dsp_accumulator_add(ctx.ac[0], ctx.ac[1], ctx.sr);",
+                "const auto parallel_load_0001_primary = galaxy::dsp_data_read_at(ctx, 0x0001u, ctx.ar[0]);",
+                "const auto parallel_load_0001_secondary = ((ctx.ar[0] & 0xFC00u) == (ctx.ar[3] & 0xFC00u)) ? parallel_load_0001_primary : galaxy::dsp_data_read_at(ctx, 0x0001u, ctx.ar[3]);",
+                "const auto accumulator_0001 = galaxy::dsp_inline::dsp_accumulator_add(ctx.ac[0], ctx.ac[1], ctx.sr);",
                 "ctx.ax[1][1] = static_cast<std::uint16_t>(parallel_load_0001_primary);",
                 "ctx.ax[1][0] = static_cast<std::uint16_t>(parallel_load_0001_secondary);",
-                "ctx.ar[0] = galaxy::dsp_increase_address(ctx.ar[0], ctx.ix[0], ctx.wr[0]);",
+                "ctx.ar[0] = galaxy::dsp_inline::dsp_increase_address(ctx.ar[0], ctx.ix[0], ctx.wr[0]);",
             ],
         );
         assert_ordered_substrings(
             &generated.cpp,
             &[
-                "const auto parallel_load_0002_primary = galaxy::dsp_data_read(ctx, ctx.ar[0]);",
-                "const auto accumulator_0002 = galaxy::dsp_accumulator_add(ctx.ac[0], ctx.ac[1], ctx.sr);",
+                "const auto parallel_load_0002_primary = galaxy::dsp_data_read_at(ctx, 0x0002u, ctx.ar[0]);",
+                "const auto accumulator_0002 = galaxy::dsp_inline::dsp_accumulator_add(ctx.ac[0], ctx.ac[1], ctx.sr);",
                 "ctx.ax[0][0] = static_cast<std::uint16_t>(parallel_load_0002_primary);",
                 "ctx.ax[1][0] = static_cast<std::uint16_t>(parallel_load_0002_secondary);",
             ],
@@ -9924,7 +10011,7 @@ mod tests {
 
         assert_eq!(generated.instruction_count, 2);
         assert!(generated.cpp.contains(
-            "ctx.ax[1][1] = static_cast<std::uint16_t>(galaxy::dsp_read_accumulator_mid(ctx.ac[1], ctx.sr));"
+            "ctx.ax[1][1] = static_cast<std::uint16_t>(galaxy::dsp_inline::dsp_read_accumulator_mid(ctx.ac[1], ctx.sr));"
         ));
         assert!(generated.cpp.contains("    goto pc_0001;\n"));
     }
@@ -9940,19 +10027,19 @@ mod tests {
 
         assert_eq!(generated.instruction_count, 4);
         assert!(generated.cpp.contains(
-            "galaxy::dsp_data_write(ctx, ctx.ar[3], static_cast<std::uint16_t>(galaxy::dsp_read_accumulator_mid(ctx.ac[1], ctx.sr)));"
+            "galaxy::dsp_data_write_at(ctx, 0x0000u, ctx.ar[3], static_cast<std::uint16_t>(galaxy::dsp_inline::dsp_read_accumulator_mid(ctx.ac[1], ctx.sr)));"
         ));
         assert!(generated
             .cpp
-            .contains("ctx.ar[3] = galaxy::dsp_increment_address(ctx.ar[3], ctx.wr[3]);"));
+            .contains("ctx.ar[3] = galaxy::dsp_inline::dsp_increment_address(ctx.ar[3], ctx.wr[3]);"));
         assert!(generated.cpp.contains(
-            "ctx.ac[1] = galaxy::dsp_write_accumulator_mid(ctx.ac[1], static_cast<std::uint16_t>(galaxy::dsp_data_read(ctx, ctx.ar[3])), ctx.sr);"
+            "ctx.ac[1] = galaxy::dsp_inline::dsp_write_accumulator_mid(ctx.ac[1], static_cast<std::uint16_t>(galaxy::dsp_data_read_at(ctx, 0x0001u, ctx.ar[3])), ctx.sr);"
         ));
         assert!(generated.cpp.contains(
-            "ctx.ac[0] = galaxy::dsp_write_accumulator_low(ctx.ac[0], static_cast<std::uint16_t>(galaxy::dsp_data_read(ctx, ctx.ar[3])));"
+            "ctx.ac[0] = galaxy::dsp_inline::dsp_write_accumulator_low(ctx.ac[0], static_cast<std::uint16_t>(galaxy::dsp_data_read_at(ctx, 0x0002u, ctx.ar[3])));"
         ));
         assert!(generated.cpp.contains(
-            "ctx.ar[3] = galaxy::dsp_increase_address(ctx.ar[3], ctx.ix[3], ctx.wr[3]);"
+            "ctx.ar[3] = galaxy::dsp_inline::dsp_increase_address(ctx.ar[3], ctx.ix[3], ctx.wr[3]);"
         ));
         assert!(generated.cpp.contains("    goto pc_0003;\n"));
     }
@@ -9968,28 +10055,28 @@ mod tests {
 
         assert_eq!(generated.instruction_count, 3);
         assert!(generated.cpp.contains(
-            "galaxy::dsp_data_write(ctx, ctx.ar[3], static_cast<std::uint16_t>(galaxy::dsp_read_accumulator_mid(ctx.ac[0], ctx.sr)));"
+            "galaxy::dsp_data_write_at(ctx, 0x0000u, ctx.ar[3], static_cast<std::uint16_t>(galaxy::dsp_inline::dsp_read_accumulator_mid(ctx.ac[0], ctx.sr)));"
         ));
         assert!(generated.cpp.contains(
-            "ctx.ax[0][0] = static_cast<std::uint16_t>(galaxy::dsp_data_read(ctx, ctx.ar[0]));"
+            "ctx.ax[0][0] = static_cast<std::uint16_t>(galaxy::dsp_data_read_at(ctx, 0x0000u, ctx.ar[0]));"
         ));
         assert!(generated
             .cpp
-            .contains("ctx.ar[3] = galaxy::dsp_increment_address(ctx.ar[3], ctx.wr[3]);"));
+            .contains("ctx.ar[3] = galaxy::dsp_inline::dsp_increment_address(ctx.ar[3], ctx.wr[3]);"));
         assert!(generated
             .cpp
-            .contains("ctx.ar[0] = galaxy::dsp_increment_address(ctx.ar[0], ctx.wr[0]);"));
+            .contains("ctx.ar[0] = galaxy::dsp_inline::dsp_increment_address(ctx.ar[0], ctx.wr[0]);"));
         assert!(generated.cpp.contains(
-            "galaxy::dsp_data_write(ctx, ctx.ar[0], static_cast<std::uint16_t>(galaxy::dsp_read_accumulator_mid(ctx.ac[0], ctx.sr)));"
+            "galaxy::dsp_data_write_at(ctx, 0x0001u, ctx.ar[0], static_cast<std::uint16_t>(galaxy::dsp_inline::dsp_read_accumulator_mid(ctx.ac[0], ctx.sr)));"
         ));
         assert!(generated.cpp.contains(
-            "ctx.ax[0][1] = static_cast<std::uint16_t>(galaxy::dsp_data_read(ctx, ctx.ar[3]));"
+            "ctx.ax[0][1] = static_cast<std::uint16_t>(galaxy::dsp_data_read_at(ctx, 0x0001u, ctx.ar[3]));"
         ));
         assert!(generated.cpp.contains(
-            "ctx.ar[3] = galaxy::dsp_increase_address(ctx.ar[3], ctx.ix[3], ctx.wr[3]);"
+            "ctx.ar[3] = galaxy::dsp_inline::dsp_increase_address(ctx.ar[3], ctx.ix[3], ctx.wr[3]);"
         ));
         assert!(generated.cpp.contains(
-            "ctx.ar[0] = galaxy::dsp_increase_address(ctx.ar[0], ctx.ix[0], ctx.wr[0]);"
+            "ctx.ar[0] = galaxy::dsp_inline::dsp_increase_address(ctx.ar[0], ctx.ix[0], ctx.wr[0]);"
         ));
         assert!(generated.cpp.contains("    goto pc_0002;\n"));
     }
@@ -10006,7 +10093,7 @@ mod tests {
             .cpp
             .contains("const auto selection_0715_address = ctx.ar[0];"));
         assert!(handler.cpp.contains(
-            "galaxy::dsp_data_write(ctx, selection_0715_address, selection_0715_value);"
+            "galaxy::dsp_data_write_at(ctx, 0x0715u, selection_0715_address, selection_0715_value);"
         ));
         assert!(handler.cpp.contains(
             "galaxy::dsp_channel_selection_dma_probe_record_selection_write(ctx.channel_selection_dma_probe, selection_0715_address, selection_0715_value);"
@@ -10088,10 +10175,10 @@ mod tests {
 
         assert_eq!(generated.instruction_count, 3);
         assert!(generated.cpp.contains(
-            "const auto parallel_load_0000_primary = galaxy::dsp_data_read(ctx, ctx.ar[0]);"
+            "const auto parallel_load_0000_primary = galaxy::dsp_data_read_at(ctx, 0x0000u, ctx.ar[0]);"
         ));
         assert!(generated.cpp.contains(
-            "const auto parallel_load_0000_secondary = ((ctx.ar[0] & 0xFC00u) == (ctx.ar[3] & 0xFC00u)) ? parallel_load_0000_primary : galaxy::dsp_data_read(ctx, ctx.ar[3]);"
+            "const auto parallel_load_0000_secondary = ((ctx.ar[0] & 0xFC00u) == (ctx.ar[3] & 0xFC00u)) ? parallel_load_0000_primary : galaxy::dsp_data_read_at(ctx, 0x0000u, ctx.ar[3]);"
         ));
         assert!(generated
             .cpp
@@ -10100,10 +10187,10 @@ mod tests {
             .cpp
             .contains("ctx.ax[1][0] = static_cast<std::uint16_t>(parallel_load_0000_secondary);"));
         assert!(generated.cpp.contains(
-            "ctx.ar[0] = galaxy::dsp_increase_address(ctx.ar[0], ctx.ix[0], ctx.wr[0]);"
+            "ctx.ar[0] = galaxy::dsp_inline::dsp_increase_address(ctx.ar[0], ctx.ix[0], ctx.wr[0]);"
         ));
         assert!(generated.cpp.contains(
-            "const auto parallel_load_0001_primary = galaxy::dsp_data_read(ctx, ctx.ar[0]);"
+            "const auto parallel_load_0001_primary = galaxy::dsp_data_read_at(ctx, 0x0001u, ctx.ar[0]);"
         ));
         assert!(generated
             .cpp
@@ -10125,20 +10212,20 @@ mod tests {
 
         assert_eq!(generated.instruction_count, 5);
         assert!(generated.cpp.contains(
-            "const auto accumulator_0000 = galaxy::dsp_accumulator_add(ctx.ac[1], ctx.ac[0], ctx.sr);"
+            "const auto accumulator_0000 = galaxy::dsp_inline::dsp_accumulator_add(ctx.ac[1], ctx.ac[0], ctx.sr);"
         ));
         assert!(generated
             .cpp
             .contains("ctx.ac[1] = accumulator_0000.value;"));
         assert!(generated.cpp.contains("ctx.sr = accumulator_0000.status;"));
         assert!(generated.cpp.contains(
-            "const auto accumulator_0001 = galaxy::dsp_accumulator_subtract(ctx.ac[1], 1, ctx.sr);"
+            "const auto accumulator_0001 = galaxy::dsp_inline::dsp_accumulator_subtract(ctx.ac[1], 1, ctx.sr);"
         ));
         assert!(generated.cpp.contains(
-            "const auto accumulator_0002 = galaxy::dsp_accumulator_add(ctx.ac[1], 0x00010000ll, ctx.sr);"
+            "const auto accumulator_0002 = galaxy::dsp_inline::dsp_accumulator_add(ctx.ac[1], 0x00010000ll, ctx.sr);"
         ));
         assert!(generated.cpp.contains(
-            "const auto accumulator_0003 = galaxy::dsp_accumulator_negate(ctx.ac[1], ctx.sr);"
+            "const auto accumulator_0003 = galaxy::dsp_inline::dsp_accumulator_negate(ctx.ac[1], ctx.sr);"
         ));
         assert!(generated
             .cpp
@@ -10157,19 +10244,19 @@ mod tests {
 
         assert_eq!(generated.instruction_count, 6);
         assert!(generated.cpp.contains(
-            "const auto accumulator_0000 = galaxy::dsp_accumulator_add(ctx.ac[1], galaxy::dsp_accumulator_from_signed_mid(ctx.ax[1][1]), ctx.sr);"
+            "const auto accumulator_0000 = galaxy::dsp_inline::dsp_accumulator_add(ctx.ac[1], galaxy::dsp_inline::dsp_accumulator_from_signed_mid(ctx.ax[1][1]), ctx.sr);"
         ));
         assert!(generated.cpp.contains(
-            "const auto accumulator_0001 = galaxy::dsp_accumulator_add(ctx.ac[1], galaxy::dsp_accumulator_from_ax_pair(ctx.ax[1][0], ctx.ax[1][1]), ctx.sr);"
+            "const auto accumulator_0001 = galaxy::dsp_inline::dsp_accumulator_add(ctx.ac[1], galaxy::dsp_inline::dsp_accumulator_from_ax_pair(ctx.ax[1][0], ctx.ax[1][1]), ctx.sr);"
         ));
         assert!(generated.cpp.contains(
-            "const auto accumulator_0002 = galaxy::dsp_accumulator_add(ctx.ac[1], static_cast<std::int64_t>(ctx.ax[1][0]), ctx.sr);"
+            "const auto accumulator_0002 = galaxy::dsp_inline::dsp_accumulator_add(ctx.ac[1], static_cast<std::int64_t>(ctx.ax[1][0]), ctx.sr);"
         ));
         assert!(generated.cpp.contains(
-            "const auto accumulator_0003 = galaxy::dsp_accumulator_subtract(ctx.ac[1], galaxy::dsp_accumulator_from_signed_mid(ctx.ax[1][1]), ctx.sr);"
+            "const auto accumulator_0003 = galaxy::dsp_inline::dsp_accumulator_subtract(ctx.ac[1], galaxy::dsp_inline::dsp_accumulator_from_signed_mid(ctx.ax[1][1]), ctx.sr);"
         ));
         assert!(generated.cpp.contains(
-            "const auto accumulator_0004 = galaxy::dsp_accumulator_subtract(ctx.ac[1], galaxy::dsp_accumulator_from_ax_pair(ctx.ax[1][0], ctx.ax[1][1]), ctx.sr);"
+            "const auto accumulator_0004 = galaxy::dsp_inline::dsp_accumulator_subtract(ctx.ac[1], galaxy::dsp_inline::dsp_accumulator_from_ax_pair(ctx.ax[1][0], ctx.ax[1][1]), ctx.sr);"
         ));
         assert!(generated
             .cpp
@@ -10190,34 +10277,34 @@ mod tests {
 
         assert_eq!(generated.instruction_count, 10);
         assert!(generated.cpp.contains(
-            "const auto accumulator_0000 = galaxy::dsp_accumulator_set_value(0, ctx.sr);"
+            "const auto accumulator_0000 = galaxy::dsp_inline::dsp_accumulator_set_value(0, ctx.sr);"
         ));
         assert!(generated
             .cpp
             .contains("ctx.ac[0] = accumulator_0000.value;"));
         assert!(generated.cpp.contains(
-            "const auto accumulator_0001 = galaxy::dsp_accumulator_clear_low(ctx.ac[1], ctx.sr);"
+            "const auto accumulator_0001 = galaxy::dsp_inline::dsp_accumulator_clear_low(ctx.ac[1], ctx.sr);"
         ));
         assert!(generated.cpp.contains(
-            "const auto accumulator_0002 = galaxy::dsp_accumulator_set_value(ctx.ac[1], ctx.sr);"
+            "const auto accumulator_0002 = galaxy::dsp_inline::dsp_accumulator_set_value(ctx.ac[1], ctx.sr);"
         ));
         assert!(generated.cpp.contains(
-            "const auto accumulator_0003 = galaxy::dsp_accumulator_subtract(ctx.ac[0], ctx.ac[1], ctx.sr);"
+            "const auto accumulator_0003 = galaxy::dsp_inline::dsp_accumulator_subtract(ctx.ac[0], ctx.ac[1], ctx.sr);"
         ));
         assert!(generated.cpp.contains(
-            "const auto accumulator_0004 = galaxy::dsp_accumulator_subtract(ctx.ac[1], galaxy::dsp_accumulator_from_signed_mid(ctx.ax[1][1]), ctx.sr);"
+            "const auto accumulator_0004 = galaxy::dsp_inline::dsp_accumulator_subtract(ctx.ac[1], galaxy::dsp_inline::dsp_accumulator_from_signed_mid(ctx.ax[1][1]), ctx.sr);"
         ));
         assert!(generated.cpp.contains(
-            "const auto accumulator_0005 = galaxy::dsp_accumulator_absolute(ctx.ac[1], ctx.sr);"
+            "const auto accumulator_0005 = galaxy::dsp_inline::dsp_accumulator_absolute(ctx.ac[1], ctx.sr);"
         ));
         assert!(generated.cpp.contains(
-            "const auto accumulator_0006 = galaxy::dsp_accumulator_set_value(galaxy::dsp_accumulator_from_signed_mid(ctx.ax[1][1]), ctx.sr);"
+            "const auto accumulator_0006 = galaxy::dsp_inline::dsp_accumulator_set_value(galaxy::dsp_inline::dsp_accumulator_from_signed_mid(ctx.ax[1][1]), ctx.sr);"
         ));
         assert!(generated.cpp.contains(
-            "const auto accumulator_0007 = galaxy::dsp_accumulator_set_value(galaxy::dsp_accumulator_from_ax_pair(ctx.ax[1][0], ctx.ax[1][1]), ctx.sr);"
+            "const auto accumulator_0007 = galaxy::dsp_inline::dsp_accumulator_set_value(galaxy::dsp_inline::dsp_accumulator_from_ax_pair(ctx.ax[1][0], ctx.ax[1][1]), ctx.sr);"
         ));
         assert!(generated.cpp.contains(
-            "const auto accumulator_0008 = galaxy::dsp_accumulator_set_value(ctx.ac[0], ctx.sr);"
+            "const auto accumulator_0008 = galaxy::dsp_inline::dsp_accumulator_set_value(ctx.ac[0], ctx.sr);"
         ));
         assert!(generated.cpp.contains("    goto pc_0009;\n"));
     }
@@ -10229,7 +10316,7 @@ mod tests {
 
         assert_eq!(generated.instruction_count, 2);
         assert!(generated.cpp.contains(
-            "ctx.sr = galaxy::dsp_status_16(static_cast<std::int16_t>(ctx.ax[1][1]), false, false, false, ctx.sr);"
+            "ctx.sr = galaxy::dsp_inline::dsp_status_16(static_cast<std::int16_t>(ctx.ax[1][1]), false, false, false, ctx.sr);"
         ));
         assert!(generated.cpp.contains("    goto pc_0001;\n"));
     }
@@ -10247,31 +10334,31 @@ mod tests {
 
         assert_eq!(generated.instruction_count, 10);
         assert!(generated.cpp.contains(
-            "const auto accumulator_0000 = galaxy::dsp_accumulator_shift(ctx.ac[1], galaxy::DspAccumulatorShiftKind::LogicalLeft, 31u, ctx.sr);"
+            "const auto accumulator_0000 = galaxy::dsp_inline::dsp_accumulator_shift(ctx.ac[1], galaxy::DspAccumulatorShiftKind::LogicalLeft, 31u, ctx.sr);"
         ));
         assert!(generated.cpp.contains(
-            "const auto accumulator_0001 = galaxy::dsp_accumulator_shift(ctx.ac[1], galaxy::DspAccumulatorShiftKind::LogicalRight, 63u, ctx.sr);"
+            "const auto accumulator_0001 = galaxy::dsp_inline::dsp_accumulator_shift(ctx.ac[1], galaxy::DspAccumulatorShiftKind::LogicalRight, 63u, ctx.sr);"
         ));
         assert!(generated.cpp.contains(
-            "const auto accumulator_0002 = galaxy::dsp_accumulator_shift(ctx.ac[1], galaxy::DspAccumulatorShiftKind::ArithmeticLeft, 2u, ctx.sr);"
+            "const auto accumulator_0002 = galaxy::dsp_inline::dsp_accumulator_shift(ctx.ac[1], galaxy::DspAccumulatorShiftKind::ArithmeticLeft, 2u, ctx.sr);"
         ));
         assert!(generated.cpp.contains(
-            "const auto accumulator_0003 = galaxy::dsp_accumulator_shift(ctx.ac[1], galaxy::DspAccumulatorShiftKind::ArithmeticRight, 61u, ctx.sr);"
+            "const auto accumulator_0003 = galaxy::dsp_inline::dsp_accumulator_shift(ctx.ac[1], galaxy::DspAccumulatorShiftKind::ArithmeticRight, 61u, ctx.sr);"
         ));
         assert!(generated.cpp.contains(
-            "const auto accumulator_0004 = galaxy::dsp_accumulator_shift(ctx.ac[1], galaxy::DspAccumulatorShiftKind::LogicalLeft, 16u, ctx.sr);"
+            "const auto accumulator_0004 = galaxy::dsp_inline::dsp_accumulator_shift(ctx.ac[1], galaxy::DspAccumulatorShiftKind::LogicalLeft, 16u, ctx.sr);"
         ));
         assert!(generated.cpp.contains(
-            "const auto accumulator_0005 = galaxy::dsp_accumulator_shift(ctx.ac[1], galaxy::DspAccumulatorShiftKind::LogicalRight, 16u, ctx.sr);"
+            "const auto accumulator_0005 = galaxy::dsp_inline::dsp_accumulator_shift(ctx.ac[1], galaxy::DspAccumulatorShiftKind::LogicalRight, 16u, ctx.sr);"
         ));
         assert!(generated.cpp.contains(
-            "const auto accumulator_0006 = galaxy::dsp_accumulator_shift(ctx.ac[1], galaxy::DspAccumulatorShiftKind::ArithmeticRight, 16u, ctx.sr);"
+            "const auto accumulator_0006 = galaxy::dsp_inline::dsp_accumulator_shift(ctx.ac[1], galaxy::DspAccumulatorShiftKind::ArithmeticRight, 16u, ctx.sr);"
         ));
         assert!(generated.cpp.contains(
-            "const auto accumulator_0007 = galaxy::dsp_accumulator_shift_by_signed_count(ctx.ac[0], false, galaxy::dsp_read_accumulator_mid_raw(ctx.ac[1]), ctx.sr);"
+            "const auto accumulator_0007 = galaxy::dsp_inline::dsp_accumulator_shift_by_signed_count(ctx.ac[0], false, galaxy::dsp_inline::dsp_read_accumulator_mid_raw(ctx.ac[1]), ctx.sr);"
         ));
         assert!(generated.cpp.contains(
-            "const auto accumulator_0008 = galaxy::dsp_accumulator_shift_by_signed_count(ctx.ac[0], true, galaxy::dsp_read_accumulator_mid_raw(ctx.ac[1]), ctx.sr);"
+            "const auto accumulator_0008 = galaxy::dsp_inline::dsp_accumulator_shift_by_signed_count(ctx.ac[0], true, galaxy::dsp_inline::dsp_read_accumulator_mid_raw(ctx.ac[1]), ctx.sr);"
         ));
         assert!(generated
             .cpp
@@ -10290,10 +10377,10 @@ mod tests {
 
         assert_eq!(generated.instruction_count, 3);
         assert!(generated.cpp.contains(
-            "const auto accumulator_0000 = galaxy::dsp_accumulator_add(ctx.ac[1], galaxy::dsp_product_value(ctx.prod), ctx.sr);"
+            "const auto accumulator_0000 = galaxy::dsp_inline::dsp_accumulator_add(ctx.ac[1], galaxy::dsp_inline::dsp_product_value(ctx.prod), ctx.sr);"
         ));
         assert!(generated.cpp.contains(
-            "const auto accumulator_0001 = galaxy::dsp_accumulator_subtract(ctx.ac[1], galaxy::dsp_product_value(ctx.prod), ctx.sr);"
+            "const auto accumulator_0001 = galaxy::dsp_inline::dsp_accumulator_subtract(ctx.ac[1], galaxy::dsp_inline::dsp_product_value(ctx.prod), ctx.sr);"
         ));
         assert!(generated
             .cpp
@@ -10308,7 +10395,7 @@ mod tests {
 
         assert_eq!(generated.instruction_count, 2);
         assert!(generated.cpp.contains(
-            "const auto accumulator_0000 = galaxy::dsp_accumulator_add_rounded_product_and_ax_clear_low(ctx.prod, ctx.ax[1][0], ctx.ax[1][1], ctx.sr);"
+            "const auto accumulator_0000 = galaxy::dsp_inline::dsp_accumulator_add_rounded_product_and_ax_clear_low(ctx.prod, ctx.ax[1][0], ctx.ax[1][1], ctx.sr);"
         ));
         assert!(generated
             .cpp
@@ -10328,13 +10415,13 @@ mod tests {
 
         assert_eq!(generated.instruction_count, 4);
         assert!(generated.cpp.contains(
-            "const auto logic_0000 = galaxy::dsp_accumulator_mid_xor(ctx.ac[0], 0x00FFu, ctx.sr);"
+            "const auto logic_0000 = galaxy::dsp_inline::dsp_accumulator_mid_xor(ctx.ac[0], 0x00FFu, ctx.sr);"
         ));
         assert!(generated.cpp.contains(
-            "const auto logic_0002 = galaxy::dsp_accumulator_mid_and(ctx.ac[0], 0x0F0Fu, ctx.sr);"
+            "const auto logic_0002 = galaxy::dsp_inline::dsp_accumulator_mid_and(ctx.ac[0], 0x0F0Fu, ctx.sr);"
         ));
         assert!(generated.cpp.contains(
-            "const auto logic_0004 = galaxy::dsp_accumulator_mid_or(ctx.ac[0], 0xF000u, ctx.sr);"
+            "const auto logic_0004 = galaxy::dsp_inline::dsp_accumulator_mid_or(ctx.ac[0], 0xF000u, ctx.sr);"
         ));
         assert!(generated
             .cpp
@@ -10356,30 +10443,30 @@ mod tests {
 
         assert_eq!(generated.instruction_count, 8);
         assert!(generated.cpp.contains(
-            "const auto accumulator_0000 = galaxy::dsp_accumulator_add(ctx.ac[0], 8323072ll, ctx.sr);"
+            "const auto accumulator_0000 = galaxy::dsp_inline::dsp_accumulator_add(ctx.ac[0], 8323072ll, ctx.sr);"
         ));
         assert!(generated
             .cpp
             .contains("ctx.ac[0] = accumulator_0000.value;"));
         assert!(generated.cpp.contains(
-            "const auto accumulator_0001 = galaxy::dsp_accumulator_add(ctx.ac[1], -8388608ll, ctx.sr);"
+            "const auto accumulator_0001 = galaxy::dsp_inline::dsp_accumulator_add(ctx.ac[1], -8388608ll, ctx.sr);"
         ));
         assert!(generated.cpp.contains(
-            "const auto accumulator_0002 = galaxy::dsp_accumulator_subtract(ctx.ac[1], -65536ll, ctx.sr);"
+            "const auto accumulator_0002 = galaxy::dsp_inline::dsp_accumulator_subtract(ctx.ac[1], -65536ll, ctx.sr);"
         ));
         assert!(generated.cpp.contains("ctx.sr = accumulator_0002.status;"));
         assert!(generated.cpp.contains(
-            "const auto accumulator_0003 = galaxy::dsp_accumulator_add(ctx.ac[0], galaxy::dsp_accumulator_from_signed_mid(0x8000u), ctx.sr);"
+            "const auto accumulator_0003 = galaxy::dsp_inline::dsp_accumulator_add(ctx.ac[0], galaxy::dsp_inline::dsp_accumulator_from_signed_mid(0x8000u), ctx.sr);"
         ));
         assert!(generated.cpp.contains(
-            "const auto accumulator_0005 = galaxy::dsp_accumulator_subtract(ctx.ac[1], galaxy::dsp_accumulator_from_signed_mid(0x0001u), ctx.sr);"
+            "const auto accumulator_0005 = galaxy::dsp_inline::dsp_accumulator_subtract(ctx.ac[1], galaxy::dsp_inline::dsp_accumulator_from_signed_mid(0x0001u), ctx.sr);"
         ));
         assert!(generated.cpp.contains("ctx.sr = accumulator_0005.status;"));
         assert!(generated.cpp.contains(
-            "ctx.sr = galaxy::dsp_logic_zero_status((galaxy::dsp_read_accumulator_mid_raw(ctx.ac[0]) & 0x00F0u) == 0u, ctx.sr);"
+            "ctx.sr = galaxy::dsp_inline::dsp_logic_zero_status((galaxy::dsp_inline::dsp_read_accumulator_mid_raw(ctx.ac[0]) & 0x00F0u) == 0u, ctx.sr);"
         ));
         assert!(generated.cpp.contains(
-            "ctx.sr = galaxy::dsp_logic_zero_status((galaxy::dsp_read_accumulator_mid_raw(ctx.ac[1]) & 0x00F0u) == 0x00F0u, ctx.sr);"
+            "ctx.sr = galaxy::dsp_inline::dsp_logic_zero_status((galaxy::dsp_inline::dsp_read_accumulator_mid_raw(ctx.ac[1]) & 0x00F0u) == 0x00F0u, ctx.sr);"
         ));
         assert!(generated.cpp.contains("    goto pc_000B;\n"));
     }
@@ -10398,22 +10485,22 @@ mod tests {
 
         assert_eq!(generated.instruction_count, 7);
         assert!(generated.cpp.contains(
-            "ctx.ax[0][0] = static_cast<std::uint16_t>(galaxy::dsp_data_read(ctx, 0x0123u));"
+            "ctx.ax[0][0] = static_cast<std::uint16_t>(galaxy::dsp_data_read_at(ctx, 0x0000u, 0x0123u));"
         ));
         assert!(generated.cpp.contains(
-            "galaxy::dsp_data_write(ctx, 0x0124u, static_cast<std::uint16_t>(ctx.ax[0][0]));"
+            "galaxy::dsp_data_write_at(ctx, 0x0002u, 0x0124u, static_cast<std::uint16_t>(ctx.ax[0][0]));"
         ));
         assert!(generated.cpp.contains(
-            "galaxy::dsp_data_write(ctx, 0x0001u, static_cast<std::uint16_t>(0xBEEFu));"
+            "galaxy::dsp_data_write_at(ctx, 0x0004u, 0x0001u, static_cast<std::uint16_t>(0xBEEFu));"
         ));
         assert!(generated.cpp.contains(
-            "ctx.ax[0][0] = static_cast<std::uint16_t>(galaxy::dsp_data_read(ctx, static_cast<std::uint16_t>((ctx.cr << 8u) | 0x04u)));"
+            "ctx.ax[0][0] = static_cast<std::uint16_t>(galaxy::dsp_data_read_at(ctx, 0x0006u, static_cast<std::uint16_t>((ctx.cr << 8u) | 0x04u)));"
         ));
         assert!(generated.cpp.contains(
-            "galaxy::dsp_data_write(ctx, 0x0125u, static_cast<std::uint16_t>(galaxy::dsp_read_accumulator_high(ctx.ac[0])));"
+            "galaxy::dsp_data_write_at(ctx, 0x0007u, 0x0125u, static_cast<std::uint16_t>(galaxy::dsp_inline::dsp_read_accumulator_high(ctx.ac[0])));"
         ));
         assert!(generated.cpp.contains(
-            "galaxy::dsp_data_write(ctx, static_cast<std::uint16_t>((ctx.cr << 8u) | 0x06u), static_cast<std::uint16_t>(galaxy::dsp_read_accumulator_high(ctx.ac[1])));"
+            "galaxy::dsp_data_write_at(ctx, 0x0009u, static_cast<std::uint16_t>((ctx.cr << 8u) | 0x06u), static_cast<std::uint16_t>(galaxy::dsp_inline::dsp_read_accumulator_high(ctx.ac[1])));"
         ));
     }
 
@@ -10425,7 +10512,7 @@ mod tests {
 
         assert_eq!(generated.instruction_count, 2);
         assert!(generated.cpp.contains(
-            "ctx.ax[0][0] = static_cast<std::uint16_t>(galaxy::dsp_data_read(ctx, 0x1003u));"
+            "ctx.ax[0][0] = static_cast<std::uint16_t>(galaxy::dsp_data_read_at(ctx, 0x0000u, 0x1003u));"
         ));
     }
 
@@ -10440,13 +10527,13 @@ mod tests {
 
         assert_eq!(generated.instruction_count, 4);
         assert!(generated.cpp.contains(
-            "ctx.ax[0][0] = static_cast<std::uint16_t>(galaxy::dsp_data_read(ctx, 0xFFFCu));"
+            "ctx.ax[0][0] = static_cast<std::uint16_t>(galaxy::dsp_data_read_at(ctx, 0x0000u, 0xFFFCu));"
         ));
         assert!(generated.cpp.contains(
-            "galaxy::dsp_data_write(ctx, 0xFFFDu, static_cast<std::uint16_t>(ctx.ax[0][0]));"
+            "galaxy::dsp_data_write_at(ctx, 0x0002u, 0xFFFDu, static_cast<std::uint16_t>(ctx.ax[0][0]));"
         ));
         assert!(generated.cpp.contains(
-            "galaxy::dsp_data_write(ctx, 0xFFFCu, static_cast<std::uint16_t>(0xDCD1u));"
+            "galaxy::dsp_data_write_at(ctx, 0x0004u, 0xFFFCu, static_cast<std::uint16_t>(0xDCD1u));"
         ));
     }
 
@@ -10461,13 +10548,13 @@ mod tests {
 
         assert_eq!(generated.instruction_count, 4);
         assert!(generated.cpp.contains(
-            "ctx.ax[0][0] = static_cast<std::uint16_t>(galaxy::dsp_data_read(ctx, ctx.ar[0]));"
+            "ctx.ax[0][0] = static_cast<std::uint16_t>(galaxy::dsp_data_read_at(ctx, 0x0000u, ctx.ar[0]));"
         ));
         assert!(generated.cpp.contains(
-            "galaxy::dsp_data_write(ctx, ctx.ar[0], static_cast<std::uint16_t>(ctx.ax[0][0]));"
+            "galaxy::dsp_data_write_at(ctx, 0x0001u, ctx.ar[0], static_cast<std::uint16_t>(ctx.ax[0][0]));"
         ));
         assert!(generated.cpp.contains(
-            "galaxy::dsp_data_write(ctx, ctx.ar[0], static_cast<std::uint16_t>(galaxy::dsp_read_accumulator_high(ctx.ac[0])));"
+            "galaxy::dsp_data_write_at(ctx, 0x0002u, ctx.ar[0], static_cast<std::uint16_t>(galaxy::dsp_inline::dsp_read_accumulator_high(ctx.ac[0])));"
         ));
     }
 
@@ -10482,25 +10569,25 @@ mod tests {
 
         assert_eq!(generated.instruction_count, 5);
         assert!(generated.cpp.contains(
-            "ctx.ax[1][1] = static_cast<std::uint16_t>(galaxy::dsp_data_read(ctx, ctx.ar[3]));"
+            "ctx.ax[1][1] = static_cast<std::uint16_t>(galaxy::dsp_data_read_at(ctx, 0x0000u, ctx.ar[3]));"
         ));
         assert!(generated
             .cpp
-            .contains("ctx.ar[3] = galaxy::dsp_decrement_address(ctx.ar[3], ctx.wr[3]);"));
+            .contains("ctx.ar[3] = galaxy::dsp_inline::dsp_decrement_address(ctx.ar[3], ctx.wr[3]);"));
         assert!(generated.cpp.contains(
-            "ctx.prod.high = static_cast<std::uint16_t>(galaxy::dsp_data_read(ctx, ctx.ar[1]));"
+            "ctx.prod.high = static_cast<std::uint16_t>(galaxy::dsp_data_read_at(ctx, 0x0001u, ctx.ar[1]));"
         ));
         assert!(generated
             .cpp
-            .contains("ctx.ar[1] = galaxy::dsp_increment_address(ctx.ar[1], ctx.wr[1]);"));
+            .contains("ctx.ar[1] = galaxy::dsp_inline::dsp_increment_address(ctx.ar[1], ctx.wr[1]);"));
         assert!(generated.cpp.contains(
-            "galaxy::dsp_data_write(ctx, ctx.ar[3], static_cast<std::uint16_t>(ctx.ax[0][0]));"
+            "galaxy::dsp_data_write_at(ctx, 0x0002u, ctx.ar[3], static_cast<std::uint16_t>(ctx.ax[0][0]));"
         ));
         assert!(generated.cpp.contains(
-            "galaxy::dsp_data_write(ctx, ctx.ar[0], static_cast<std::uint16_t>(galaxy::dsp_read_accumulator_mid(ctx.ac[1], ctx.sr)));"
+            "galaxy::dsp_data_write_at(ctx, 0x0003u, ctx.ar[0], static_cast<std::uint16_t>(galaxy::dsp_inline::dsp_read_accumulator_mid(ctx.ac[1], ctx.sr)));"
         ));
         assert!(generated.cpp.contains(
-            "ctx.ar[0] = galaxy::dsp_increase_address(ctx.ar[0], ctx.ix[0], ctx.wr[0]);"
+            "ctx.ar[0] = galaxy::dsp_inline::dsp_increase_address(ctx.ar[0], ctx.ix[0], ctx.wr[0]);"
         ));
     }
 
@@ -10517,22 +10604,22 @@ mod tests {
 
         assert_eq!(generated.instruction_count, 7);
         assert!(generated.cpp.contains(
-            "ctx.ac[0] = galaxy::dsp_write_accumulator_low(ctx.ac[0], static_cast<std::uint16_t>(0x5678u));"
+            "ctx.ac[0] = galaxy::dsp_inline::dsp_write_accumulator_low(ctx.ac[0], static_cast<std::uint16_t>(0x5678u));"
         ));
         assert!(generated.cpp.contains(
-            "ctx.ac[0] = galaxy::dsp_write_accumulator_mid(ctx.ac[0], static_cast<std::uint16_t>(0x1234u), ctx.sr);"
+            "ctx.ac[0] = galaxy::dsp_inline::dsp_write_accumulator_mid(ctx.ac[0], static_cast<std::uint16_t>(0x1234u), ctx.sr);"
         ));
         assert!(generated.cpp.contains(
-            "ctx.ac[0] = galaxy::dsp_write_accumulator_low(ctx.ac[0], static_cast<std::uint16_t>(galaxy::dsp_data_read(ctx, static_cast<std::uint16_t>((ctx.cr << 8u) | 0x01u))));"
+            "ctx.ac[0] = galaxy::dsp_inline::dsp_write_accumulator_low(ctx.ac[0], static_cast<std::uint16_t>(galaxy::dsp_data_read_at(ctx, 0x0004u, static_cast<std::uint16_t>((ctx.cr << 8u) | 0x01u))));"
         ));
         assert!(generated.cpp.contains(
-            "ctx.ac[0] = galaxy::dsp_write_accumulator_mid(ctx.ac[0], static_cast<std::uint16_t>(galaxy::dsp_data_read(ctx, static_cast<std::uint16_t>((ctx.cr << 8u) | 0x02u))), ctx.sr);"
+            "ctx.ac[0] = galaxy::dsp_inline::dsp_write_accumulator_mid(ctx.ac[0], static_cast<std::uint16_t>(galaxy::dsp_data_read_at(ctx, 0x0005u, static_cast<std::uint16_t>((ctx.cr << 8u) | 0x02u))), ctx.sr);"
         ));
         assert!(generated.cpp.contains(
-            "galaxy::dsp_data_write(ctx, static_cast<std::uint16_t>((ctx.cr << 8u) | 0x20u), static_cast<std::uint16_t>(galaxy::dsp_read_accumulator_low(ctx.ac[0])));"
+            "galaxy::dsp_data_write_at(ctx, 0x0006u, static_cast<std::uint16_t>((ctx.cr << 8u) | 0x20u), static_cast<std::uint16_t>(galaxy::dsp_inline::dsp_read_accumulator_low(ctx.ac[0])));"
         ));
         assert!(generated.cpp.contains(
-            "galaxy::dsp_data_write(ctx, static_cast<std::uint16_t>((ctx.cr << 8u) | 0x21u), static_cast<std::uint16_t>(galaxy::dsp_read_accumulator_mid(ctx.ac[0], ctx.sr)));"
+            "galaxy::dsp_data_write_at(ctx, 0x0007u, static_cast<std::uint16_t>((ctx.cr << 8u) | 0x21u), static_cast<std::uint16_t>(galaxy::dsp_inline::dsp_read_accumulator_mid(ctx.ac[0], ctx.sr)));"
         ));
     }
 
@@ -10553,7 +10640,7 @@ mod tests {
             .cpp
             .contains("ctx.ix[0] = static_cast<std::int16_t>(0xFFFFu);"));
         assert!(generated.cpp.contains(
-            "ctx.ac[0] = galaxy::dsp_write_accumulator_high(ctx.ac[0], static_cast<std::uint16_t>(0xFF80u));"
+            "ctx.ac[0] = galaxy::dsp_inline::dsp_write_accumulator_high(ctx.ac[0], static_cast<std::uint16_t>(0xFF80u));"
         ));
         assert!(generated
             .cpp
@@ -10608,7 +10695,7 @@ mod tests {
                     lower_dsp_program_to_cpp(0, &[base | byte, 0x0021], "signed_lris_ac").unwrap();
                 let status = if part == "mid" { ", ctx.sr" } else { "" };
                 assert!(generated.cpp.contains(&format!(
-                    "ctx.ac[{accumulator}] = galaxy::dsp_write_accumulator_{part}(ctx.ac[{accumulator}], static_cast<std::uint16_t>(0x{expected}u){status});"
+                    "ctx.ac[{accumulator}] = galaxy::dsp_inline::dsp_write_accumulator_{part}(ctx.ac[{accumulator}], static_cast<std::uint16_t>(0x{expected}u){status});"
                 )));
             }
         }
@@ -10631,10 +10718,10 @@ mod tests {
             .cpp
             .contains("ctx.prod.high = static_cast<std::uint16_t>(ctx.wr[2]);"));
         assert!(generated.cpp.contains(
-            "ctx.ac[0] = galaxy::dsp_write_accumulator_high(ctx.ac[0], static_cast<std::uint16_t>(ctx.ax[0][0]));"
+            "ctx.ac[0] = galaxy::dsp_inline::dsp_write_accumulator_high(ctx.ac[0], static_cast<std::uint16_t>(ctx.ax[0][0]));"
         ));
         assert!(generated.cpp.contains(
-            "ctx.ax[0][0] = static_cast<std::uint16_t>(galaxy::dsp_read_accumulator_high(ctx.ac[0]));"
+            "ctx.ax[0][0] = static_cast<std::uint16_t>(galaxy::dsp_inline::dsp_read_accumulator_high(ctx.ac[0]));"
         ));
     }
 
@@ -10654,7 +10741,7 @@ mod tests {
             .cpp
             .contains("galaxy::dsp_stack_push(ctx, 0, static_cast<std::uint16_t>(0x1111u));"));
         assert!(generated.cpp.contains(
-            "galaxy::dsp_data_write(ctx, 0x0123u, static_cast<std::uint16_t>(galaxy::dsp_stack_pop(ctx, 0)));"
+            "galaxy::dsp_data_write_at(ctx, 0x0002u, 0x0123u, static_cast<std::uint16_t>(galaxy::dsp_stack_pop(ctx, 0)));"
         ));
         assert!(generated
             .cpp
@@ -10736,10 +10823,10 @@ mod tests {
 
         assert_eq!(generated.instruction_count, 2);
         assert!(generated.cpp.contains(
-            "ctx.ac[1] = galaxy::dsp_write_accumulator_mid(ctx.ac[1], galaxy::dsp_iram_read(ctx, ctx.ar[0]), ctx.sr);"
+            "ctx.ac[1] = galaxy::dsp_inline::dsp_write_accumulator_mid(ctx.ac[1], galaxy::dsp_iram_read(ctx, ctx.ar[0]), ctx.sr);"
         ));
         assert!(generated.cpp.contains(
-            "ctx.ar[0] = galaxy::dsp_increase_address(ctx.ar[0], ctx.ix[0], ctx.wr[0]);"
+            "ctx.ar[0] = galaxy::dsp_inline::dsp_increase_address(ctx.ar[0], ctx.ix[0], ctx.wr[0]);"
         ));
     }
 
@@ -10788,6 +10875,115 @@ mod tests {
                 word: 0x0275,
                 reason: "conditional IF skip target outside lowered DSP program",
             })
+        );
+    }
+
+    #[test]
+    fn stores_entry_pc_only_for_instructions_that_can_observe_it() {
+        // CLR ac0; LR ax0.l,@ar0; LRI st0,#0x1111; HALT.
+        let generated = lower_dsp_program_to_cpp(
+            0x0000,
+            &[0x8100, 0x1818, 0x008c, 0x1111, 0x0021],
+            "dsp_lazy_pc_test",
+        )
+        .unwrap();
+        let provenance_pc = |address: u16| {
+            format!(
+                "#if defined({DSP_RAW_PROVENANCE_MACRO})\n    ctx.pc = 0x{address:04X}u;\n    galaxy::DspRawInstructionBoundaryScope"
+            )
+        };
+
+        // Pure ALU: no context helper can observe the PC, so only provenance
+        // builds store it; the retirement marker is unconditional.
+        let alu = generated_instruction_block(&generated.cpp, 0x0000);
+        assert!(alu.contains("    // 0000: 8100\n    ctx.last_retired_pc.enter<0x0000u>();\n#if defined("));
+        assert!(alu.contains(&provenance_pc(0x0000)));
+        assert_eq!(alu.matches("ctx.pc = ").count(), 1);
+
+        // A data access carries its own address and publishes it only when the
+        // access leaves DRAM.
+        let load = generated_instruction_block(&generated.cpp, 0x0001);
+        assert!(load.contains("    // 0001: 1818\n    ctx.last_retired_pc.enter<0x0001u>();\n"));
+        assert!(load.contains(&provenance_pc(0x0001)));
+        assert!(load.contains(
+            "ctx.ax[0][0] = static_cast<std::uint16_t>(galaxy::dsp_data_read_at(ctx, 0x0001u, ctx.ar[0]));"
+        ));
+        assert!(!load.contains("galaxy::dsp_data_read(ctx"));
+        assert_eq!(load.matches("ctx.pc = ").count(), 1);
+
+        // Any other context helper keeps the unconditional entry store.
+        let push = generated_instruction_block(&generated.cpp, 0x0002);
+        assert!(push.contains("    // 0002: 008C\n    ctx.pc = 0x0002u;\n    ctx.last_retired_pc.enter<0x0002u>();\n"));
+        assert!(!push.contains(&provenance_pc(0x0002)));
+        assert!(push.contains("galaxy::dsp_stack_push(ctx, 0, static_cast<std::uint16_t>(0x1111u));"));
+
+        let halt = generated_instruction_block(&generated.cpp, 0x0004);
+        assert!(halt.contains("    // 0004: 0021\n    ctx.pc = 0x0004u;\n"));
+    }
+
+    #[test]
+    fn raw_instruction_provenance_is_compiled_only_into_provenance_builds() {
+        let generated = lower_dsp_program_to_cpp(
+            0x0000,
+            &[0x8100, 0x0021],
+            "dsp_provenance_switch_test",
+        )
+        .unwrap();
+        let entry = &generated.cpp[generated
+            .cpp
+            .find("extern \"C\" void dsp_provenance_switch_test(")
+            .unwrap()..];
+        assert!(entry.contains(&format!(
+            "    (void)ctx;\n#if !defined({DSP_RAW_PROVENANCE_MACRO})\n    if (ctx.raw_instruction_boundary_observer != nullptr) {{\n        galaxy::dsp_hard_trap(ctx, ctx.pc, \"DSP raw instruction observer requires a {DSP_RAW_PROVENANCE_MACRO} build\");\n    }}\n#endif\n"
+        )));
+        // Every scope, readiness check and commit sits inside the switch.
+        let mut in_provenance = false;
+        for line in entry.lines() {
+            if line == format!("#if defined({DSP_RAW_PROVENANCE_MACRO})") {
+                assert!(!in_provenance);
+                in_provenance = true;
+            } else if line == "#endif" {
+                in_provenance = false;
+            } else if line.contains("raw_instruction_boundary") && !line.contains("_observer != nullptr") {
+                assert!(in_provenance, "unguarded provenance line: {line}");
+            }
+        }
+        assert_eq!(
+            entry.matches(&format!("#if defined({DSP_RAW_PROVENANCE_MACRO})")).count(),
+            entry.matches("galaxy::DspRawInstructionBoundaryScope").count()
+                + entry.matches("galaxy::dsp_raw_instruction_boundary_commit").count()
+        );
+    }
+
+    #[test]
+    fn pc_observation_scan_is_conservative() {
+        assert!(!lowered_body_observes_pc(
+            "    ctx.ax[0][0] = static_cast<std::uint16_t>(galaxy::dsp_data_read_at(ctx, 0x0001u, ctx.ar[0]));\n    goto pc_0002;\n"
+        ));
+        assert!(!lowered_body_observes_pc(
+            "    galaxy::dsp_data_write_at(ctx, 0x0001u, ctx.ar[3], static_cast<std::uint16_t>(ctx.ax[0][0]));\n"
+        ));
+        assert!(!lowered_body_observes_pc(&format!(
+            "#if defined({DSP_RAW_PROVENANCE_MACRO})\n    galaxy::dsp_raw_instruction_boundary_commit(ctx, raw_instruction_boundary);\n#endif\n    goto pc_0001;\n"
+        )));
+        for observing in [
+            "    galaxy::dsp_stack_push(ctx, 0, 0x0002u);\n",
+            "    galaxy::dsp_accept_pending_external_interrupt(ctx);\n",
+            "    ctx.pc = 0x0001u;\n",
+            "    if (ctx.pc == 0x0001u) {\n",
+            "    return;\n",
+            "    galaxy::dsp_hard_trap(ctx, 0x0001u, \"trap\");\n",
+            "    galaxy::dsp_iram_read(ctx, ctx.ar[0]);\n",
+            "#if defined(SOMETHING_ELSE)\n",
+        ] {
+            assert!(lowered_body_observes_pc(observing), "{observing}");
+        }
+        assert_eq!(
+            bind_data_access_pc(
+                "galaxy::dsp_data_read(ctx, ctx.ar[0]); galaxy::dsp_data_write(ctx, 0x0001u, 1);",
+                0x0ECA
+            ),
+            "galaxy::dsp_data_read_at(ctx, 0x0ECAu, ctx.ar[0]); galaxy::dsp_data_write_at(ctx, 0x0ECAu, 0x0001u, 1);"
         );
     }
 }
