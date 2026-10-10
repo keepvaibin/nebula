@@ -541,6 +541,9 @@ pub fn translate_module_with_options(
         .iter()
         .map(|(function, _)| *function)
         .collect::<Vec<_>>();
+    // Functions that execute FP instructions stay on the generic native float
+    // lowering; hand-written substitutions for them use exact out-of-line
+    // helpers and measured slower (module benchmark, SDK matrix library).
     let mut exact_fpu_functions = BTreeSet::new();
     for function in &ranges {
         let bytes = function_bytes(&loaded.dol.sections, &loaded.dol_bytes, *function).ok_or(
@@ -963,11 +966,10 @@ fn mapped_function_containing(functions: &[FunctionRange], address: u32) -> Opti
     (address < end).then_some(function)
 }
 
-// Broadway raises exception 7 before any FP or paired-single instruction
-// while MSR[FP] is clear. The handler's same-PC RFI is normally caught inside
-// the AOT guard, but a pending asynchronous exception taken at that RFI
-// abandons the native frame, so interior guarded PCs also get static
-// continuation aliases.
+// Floating-point and paired-single opcodes. Under eager FPU no MSR[FP] guard
+// is emitted for them; the predicate only keeps functions that execute FP
+// instructions on the generic native float lowering instead of a hand-written
+// substitution (those use the out-of-line exact helpers and measured slower).
 fn opcode_requires_fpu(opcode: Opcode) -> bool {
     matches!(
         opcode,
@@ -1058,27 +1060,6 @@ fn opcode_requires_fpu(opcode: Opcode) -> bool {
     )
 }
 
-// One MSR[FP] check covers a straight-line region, since ordinary PPC
-// instructions do not change MSR[FP]. The opcodes below write machine state
-// or may enter a service/continuation that returns with a different MSR, so
-// the check is repeated after them and the next FP instruction stays the
-// exact exception-7 restart point.
-fn opcode_invalidates_fpu_availability_proof(opcode: Opcode) -> bool {
-    matches!(
-        opcode,
-        Opcode::B
-            | Opcode::Bc
-            | Opcode::Bcctr
-            | Opcode::Bclr
-            | Opcode::Sc
-            | Opcode::Twi
-            | Opcode::Rfi
-            | Opcode::Mtmsr
-            // A DEC write can immediately enter an asynchronous boundary.
-            // Other SPR writes are rare enough to treat the same way.
-            | Opcode::Mtspr
-    )
-}
 
 fn function_requires_fpu(bytes: &[u8]) -> bool {
     bytes.chunks_exact(4).any(|chunk| {
@@ -1088,9 +1069,9 @@ fn function_requires_fpu(bytes: &[u8]) -> bool {
 }
 
 // Some entry/direct-call substitutions touch FPR/PS/FPSCR directly or fold
-// in a tail-called FP routine even when the wrapper has no FP opcode. They
-// cannot reproduce the suppressed-instruction boundary, so those call
-// chains are kept.
+// in a tail-called FP routine even when the wrapper has no FP opcode. Those
+// substitutions use the exact out-of-line float helpers and are slower than
+// the generic native lowering, so the translated bodies are kept.
 fn native_substitution_uses_fpu(address: u32) -> bool {
     native_pure_helper(address).is_some_and(|helper| helper.uses_fpu)
         || audited_inline_wrapper_uses_fpu(address)
@@ -1122,7 +1103,6 @@ fn discover_external_interior_targets_with_call_returns(
             continue;
         };
         targets.extend(backward_branch_resume_entries(source.address, bytes));
-        targets.extend(interior_fpu_retry_entries(source.address, bytes));
         targets.extend(architectural_interrupt_resume_entries(
             source.address,
             bytes,
@@ -1150,25 +1130,6 @@ fn discover_external_interior_targets_with_call_returns(
         }
     }
     targets
-}
-
-// Exception 7 suppresses the faulting FP instruction. If its RFI re-enables
-// EE, a pending external/decrementer exception can be taken first: it
-// records the suppressed PC in SRR0 and unwinds the AOT guard, so the later
-// RFI needs a static entry at that instruction. Function starts are already
-// entries and are not added again.
-fn interior_fpu_retry_entries(address: u32, bytes: &[u8]) -> BTreeSet<u32> {
-    bytes
-        .chunks_exact(4)
-        .enumerate()
-        .skip(1)
-        .filter_map(|(index, chunk)| {
-            let pc = address.checked_add(index as u32 * 4)?;
-            let word = u32::from_be_bytes(chunk.try_into().expect("four-byte instruction"));
-            let instruction = Ins::new(word, Extensions::gekko_broadway());
-            opcode_requires_fpu(instruction.op).then_some(pc)
-        })
-        .collect()
 }
 
 // mtmsr and mtspr DEC are interrupt-recognition points. Either can enter a
@@ -3020,28 +2981,6 @@ fn lower_words_with_config(
         .collect::<BTreeSet<_>>();
     let mut branch_targets = internal_branch_targets(address, bytes);
     branch_targets.extend(call_return_targets.iter().copied());
-    // Every potentially suppressed FP instruction gets an interior alias so
-    // an exception-7 RFI can restart there. Aliases that are not branch
-    // targets go through a guarded reentry stub, so the straight-line path
-    // keeps its MSR[FP] check.
-    let structural_reentry_targets = branch_targets.clone();
-    let fpu_retry_entries = entries
-        .iter()
-        .copied()
-        .filter(|entry| {
-            if structural_reentry_targets.contains(entry) {
-                return false;
-            }
-            debug_assert!(*entry > address && *entry < function_end && *entry % 4 == 0);
-            let offset = (*entry - address) as usize;
-            let word = u32::from_be_bytes(
-                bytes[offset..offset + 4]
-                    .try_into()
-                    .expect("interior entry remains instruction-aligned"),
-            );
-            opcode_requires_fpu(Ins::new(word, Extensions::gekko_broadway()).op)
-        })
-        .collect::<BTreeSet<_>>();
     if !entries.is_empty() {
         writeln!(
             output,
@@ -3050,12 +2989,8 @@ fn lower_words_with_config(
         .map_err(|_| TranslationError::Formatting)?;
         for entry in entries {
             debug_assert!(*entry > address && *entry < function_end && *entry % 4 == 0);
-            if !fpu_retry_entries.contains(entry) {
-                branch_targets.insert(*entry);
-            }
-            let destination = if fpu_retry_entries.contains(entry) {
-                "fpu_retry"
-            } else if external_call_return_entries.contains(entry) {
+            branch_targets.insert(*entry);
+            let destination = if external_call_return_entries.contains(entry) {
                 "call_return"
             } else {
                 "label"
@@ -3070,19 +3005,6 @@ fn lower_words_with_config(
             output,
             "        default: galaxy::guest_execution_fault(services, context->pc, \"invalid interior function entry\");\n    }}\n    }}"
         )
-            .map_err(|_| TranslationError::Formatting)?;
-    }
-    if !fpu_retry_entries.is_empty() {
-        writeln!(output, "    goto fpu_normal_entry_{address:08X};")
-            .map_err(|_| TranslationError::Formatting)?;
-        for entry in &fpu_retry_entries {
-            writeln!(
-                output,
-                "fpu_retry_{entry:08X}:\n    galaxy::ensure_fpu_available(services, 0x{entry:08X}u, context, memory);\n    goto label_{entry:08X};"
-            )
-            .map_err(|_| TranslationError::Formatting)?;
-        }
-        writeln!(output, "fpu_normal_entry_{address:08X}:")
             .map_err(|_| TranslationError::Formatting)?;
     }
     let wgpipe_store_runs = if local_lane_profile == LocalLaneProfile::None {
@@ -3101,11 +3023,6 @@ fn lower_words_with_config(
         .flat_map(|run| run.stores.iter().skip(1).map(|store| store.pc))
         .collect::<BTreeSet<_>>();
     let mut final_instruction_is_terminal = false;
-    // True when the current straight-line path has already checked MSR[FP].
-    // Reset at every control-flow label and at any instruction that can
-    // transfer control or change architectural state. FP retry aliases use
-    // the reentry stubs above and do not reset it.
-    let mut fpu_availability_proven = false;
     for (index, chunk) in bytes.chunks_exact(4).enumerate() {
         let pc = address + index as u32 * 4;
         if wgpipe_store_continuations.contains(&pc) {
@@ -3156,7 +3073,6 @@ fn lower_words_with_config(
             }
         }
         let has_reentry_label = branch_targets.contains(&pc);
-        let has_fpu_retry_label = fpu_retry_entries.contains(&pc);
         if has_reentry_label {
             if typed_region_gpr_mask != 0 {
                 emit_resident_gpr_sync(&mut output, typed_region_gpr_mask, false)?;
@@ -3165,17 +3081,6 @@ fn lower_words_with_config(
             if typed_region_gpr_mask != 0 {
                 emit_resident_gpr_sync(&mut output, typed_region_gpr_mask, true)?;
             }
-            fpu_availability_proven = false;
-        } else if has_fpu_retry_label {
-            writeln!(output, "label_{pc:08X}:").map_err(|_| TranslationError::Formatting)?;
-        }
-        if opcode_requires_fpu(instruction.op) && !fpu_availability_proven {
-            writeln!(
-                output,
-                "    galaxy::ensure_fpu_available(services, 0x{pc:08X}u, context, memory);"
-            )
-            .map_err(|_| TranslationError::Formatting)?;
-            fpu_availability_proven = true;
         }
         // FunctionAsync lifecycle markers run before the instruction at `pc`,
         // after the previous one has committed, so return-continuation
@@ -3236,7 +3141,6 @@ fn lower_words_with_config(
         }
         let typed_pure_access = if typed_region_gpr_mask != 0
             && !has_reentry_label
-            && !has_fpu_retry_label
             && function_async_marker.is_none()
             && main_frame_stage_marker(address, pc).is_none()
         {
@@ -3902,12 +3806,20 @@ fn lower_words_with_config(
                         .map_err(|_| TranslationError::Formatting)?;
                 }
             }
-            Opcode::Dcbf
-            | Opcode::Dcbi
-            | Opcode::Dcbst
-            | Opcode::Icbi
-            | Opcode::Isync
-            | Opcode::Sync => {
+            Opcode::Dcbf | Opcode::Dcbst => {
+                // Flush-based coherency: the flushed line is what the GP and
+                // DSP observe, so this is where dirty tracking is published.
+                let base = gpr_ra(word);
+                let index = gpr_rb(word);
+                let ea = emit_indexed_effective_address(&mut output, pc, base, index)?;
+                writeln!(output, "    galaxy::fast::dcache_flush_line(memory, {ea});")
+                    .map_err(|_| TranslationError::Formatting)?;
+            }
+            Opcode::Dcbi | Opcode::Icbi => {
+                // Every store is already in RAM: invalidating a line has no
+                // effect the guest can observe, and no code is modified.
+            }
+            Opcode::Isync | Opcode::Sync => {
                 output.push_str("    galaxy::full_memory_fence();\n");
             }
             Opcode::Dcbt => {
@@ -5568,14 +5480,6 @@ fn lower_words_with_config(
         output.push_str(&post_block_hooks);
         if typed_region_gpr_mask != 0 && typed_pure_access.is_none() {
             emit_resident_gpr_sync(&mut output, typed_region_gpr_mask, true)?;
-        }
-        // The diagnostic callbacks above are host service boundaries when
-        // active, so the MSR[FP] guard is re-established after one.
-        if function_async_marker.is_some()
-            || main_frame_stage_marker(address, pc).is_some()
-            || opcode_invalidates_fpu_availability_proof(instruction.op)
-        {
-            fpu_availability_proven = false;
         }
     }
     if !final_instruction_is_terminal
@@ -7934,9 +7838,7 @@ fn insert_jpa_hot_draw_edge_profile(
         profiled = profiled.replacen(&call, &replacement, 1);
     }
     const DECLARATION_ANCHOR: &str = "    static_cast<void>(services);\n";
-    let begin_anchor = format!(
-        "label_{JPA_HOT_DRAW_BODY_REGION_START:08X}:\n    galaxy::ensure_fpu_available(services, 0x{JPA_HOT_DRAW_BODY_REGION_START:08X}u, context, memory);\n"
-    );
+    let begin_anchor = format!("label_{JPA_HOT_DRAW_BODY_REGION_START:08X}:\n");
     let end_return_pc = JPA_HOT_DRAW_BODY_REGION_END + 4;
     let end_anchor = format!(
         "    {{\n    const std::uint32_t branch_target = context->ctr & 0xFFFFFFFCu;\n    context->lr = 0x{end_return_pc:08X}u;\n"
@@ -12048,10 +11950,8 @@ mod tests {
             .unwrap();
         assert!(fallback.contents.contains("void fn_804B6BCC_exact("));
         assert!(fallback.contents.contains(&exact_body));
-        // Each retained retry name appears once in the entry switch and once
-        // on its exact label.
-        assert_eq!(fallback.contents.matches("fpu_retry_804B6B").count(), 24);
-        assert_eq!(fallback.contents.matches("fpu_retry_804B6C").count(), 6);
+        assert!(!fallback.contents.contains("fpu_retry_"));
+        assert!(!fallback.contents.contains("ensure_fpu_available"));
         assert!(!fallback.contents.contains("void fn_804B6BCC("));
         let wrapper = output
             .iter()
@@ -13733,14 +13633,12 @@ mod tests {
     }
 
     #[test]
-    fn fpu_function_body_keeps_exact_guarded_translation() {
+    fn fpu_function_body_keeps_generic_native_translation() {
         let function = FunctionRange {
             address: 0x8001_CF80,
             size: 0x24,
         };
-        let exact_body =
-            "    galaxy::ensure_fpu_available(services, 0x8001CF80u, context, memory);\n    /* exact FP body marker */\n    return;\n"
-                .to_owned();
+        let exact_body = "    /* exact FP body marker */\n    return;\n".to_owned();
         let files = emit_sharded_module_with_exact_fpu(
             &[(function, exact_body)],
             &[],
@@ -13748,13 +13646,13 @@ mod tests {
             function.address,
             &BTreeSet::from([function.address]),
         )
-        .expect("exact guarded FP module emits");
+        .expect("FP module emits");
         let source = files
             .iter()
             .find(|file| file.name == "functions_0000.cpp")
             .expect("function shard exists");
         assert!(source.contents.contains("exact FP body marker"));
-        assert!(source.contents.contains("ensure_fpu_available"));
+        assert!(!source.contents.contains("ensure_fpu_available"));
         assert!(!source.contents.contains("native_vec_add_8001CF80"));
     }
 
@@ -14435,7 +14333,7 @@ mod tests {
     }
 
     #[test]
-    fn coalesces_fpu_guards_across_straight_line_integer_and_fpu_instructions() {
+    fn eager_fpu_emits_no_msr_guard_for_mixed_integer_and_fpu_instructions() {
         let words = [
             0x3860_0001_u32, // addi r3, r0, 1
             0xEC21_182A,     // fadds f1, f1, f3
@@ -14446,17 +14344,12 @@ mod tests {
         let bytes: Vec<u8> = words.iter().flat_map(|word| word.to_be_bytes()).collect();
         let output = lower_words(0x8000_4000, &bytes).expect("mixed integer/FP body supported");
 
-        assert_eq!(output.matches("galaxy::ensure_fpu_available(").count(), 1);
-        assert!(output
-            .contains("galaxy::ensure_fpu_available(services, 0x80004004u, context, memory);"));
-        assert!(!output
-            .contains("galaxy::ensure_fpu_available(services, 0x8000400Cu, context, memory);"));
-        assert!(!output
-            .contains("galaxy::ensure_fpu_available(services, 0x80004000u, context, memory);"));
+        assert!(!output.contains("ensure_fpu_available"));
+        assert!(!output.contains("fpu_retry"));
     }
 
     #[test]
-    fn fpu_guard_restarts_after_mtmsr_boundary() {
+    fn eager_fpu_emits_no_msr_guard_after_mtmsr_boundary() {
         let words = [
             0xEC21_182A_u32, // fadds f1, f1, f3
             0x7C60_0124,     // mtmsr r3
@@ -14465,17 +14358,15 @@ mod tests {
         ];
         let bytes: Vec<u8> = words.iter().flat_map(|word| word.to_be_bytes()).collect();
         let output = lower_words(0x8000_4000, &bytes)
-            .expect("mtmsr boundary with exact FP guards is supported");
+            .expect("mtmsr boundary with FP instructions is supported");
 
-        assert_eq!(output.matches("galaxy::ensure_fpu_available(").count(), 2);
-        assert!(output
-            .contains("galaxy::ensure_fpu_available(services, 0x80004000u, context, memory);"));
-        assert!(output
-            .contains("galaxy::ensure_fpu_available(services, 0x80004008u, context, memory);"));
+        assert!(!output.contains("ensure_fpu_available"));
+        // mtmsr remains an interrupt-recognition boundary with its own alias.
+        assert!(output.contains("galaxy::architectural_interrupt_checkpoint("));
     }
 
     #[test]
-    fn interior_fpu_retry_requires_exact_static_continuation_aliases() {
+    fn eager_fpu_adds_no_interior_entries_for_fp_instructions() {
         let words = [
             0x3860_0001_u32, // addi r3, r0, 1
             0xEC21_182A,     // fadds f1, f1, f3
@@ -14497,29 +14388,12 @@ mod tests {
         }];
 
         let aliases = discover_alias_entries(&sections, &bytes, &functions);
-        assert_eq!(
-            aliases,
-            vec![(0x8000_4004, 0x8000_4000), (0x8000_4008, 0x8000_4000)]
-        );
-        let entries = aliases
-            .iter()
-            .map(|(entry, _)| *entry)
-            .collect::<BTreeSet<_>>();
+        assert!(aliases.is_empty());
 
-        let output = lower_words_with_entries(0x8000_4000, &bytes, &entries)
-            .expect("interior FP retry aliases lower into the owning static body");
-        assert!(output
-            .contains("galaxy::ensure_fpu_available(services, 0x80004004u, context, memory);"));
-        assert!(output
-            .contains("galaxy::ensure_fpu_available(services, 0x80004008u, context, memory);"));
-        assert!(output.contains("case 0x80004004u: goto fpu_retry_80004004;"));
-        assert!(output.contains("case 0x80004008u: goto fpu_retry_80004008;"));
-        assert!(output.contains("fpu_retry_80004004:"));
-        assert!(output.contains("fpu_retry_80004008:"));
-        // The entry at 0x80004004 needs a normal-path guard plus its exact
-        // restart stub. The following alias restarts through its own stub,
-        // while the ordinary fallthrough keeps the established MSR[FP] proof.
-        assert_eq!(output.matches("galaxy::ensure_fpu_available(").count(), 3);
+        let output = lower_words_with_entries(0x8000_4000, &bytes, &BTreeSet::new())
+            .expect("straight-line FP body lowers without interior entries");
+        assert!(!output.contains("switch (context->pc)"));
+        assert!(!output.contains("ensure_fpu_available"));
     }
 
     #[test]
@@ -14643,9 +14517,8 @@ mod tests {
         assert_eq!(optimized.matches("ppc_f64_binary(").count(), 1);
         assert_eq!(optimized.matches("ppc_commit_paired_result(").count(), 1);
         for pc in ["80004004", "80004008"] {
-            assert!(optimized.contains(&format!("case 0x{pc}u: goto fpu_retry_{pc};")));
-            assert!(optimized.contains(&format!("fpu_retry_{pc}:")));
-            assert!(optimized.contains(&format!("ensure_fpu_available(services, 0x{pc}u")));
+            assert!(optimized.contains(&format!("case 0x{pc}u: goto label_{pc};")));
+            assert!(!optimized.contains("ensure_fpu_available"));
         }
         let capture = optimized.find("const std::uint64_t right =").unwrap();
         let call = optimized.find("try_commit_widened_scalar_binary").unwrap();
@@ -14668,8 +14541,7 @@ mod tests {
                 &BTreeSet::from([0x8000_4004])).unwrap();
             assert!(output.contains(&format!(
                 "ppc_commit_scalar_single_ternary(context, 1u, galaxy::PpcFloatTernaryOperation::{operation}, 1u, 2u, 3u, true, services, 0x80004004u)")));
-            assert!(output.contains("fpu_retry_80004004:"));
-            assert!(output.contains("ensure_fpu_available(services, 0x80004004u"));
+            assert!(!output.contains("ensure_fpu_available"));
             assert!(!output.contains("require_single_precision_bits"));
         }
     }
@@ -14704,8 +14576,8 @@ mod tests {
                     assert_eq!(indexed.matches("ppc_execute_indexed_paired_binary").count(), 2);
                     assert!(!indexed.contains("ppc_f32_binary("));
                     assert!(!indexed.contains("require_single_precision_bits"));
-                    assert!(indexed.contains("case 0x80004004u: goto fpu_retry_80004004;"));
-                    assert!(indexed.contains("galaxy::ensure_fpu_available(services, 0x80004004u"));
+                    assert!(indexed.contains("case 0x80004004u: goto label_80004004;"));
+                    assert!(!indexed.contains("ensure_fpu_available"));
                 }
             }
         }
@@ -14742,8 +14614,8 @@ mod tests {
                     assert_eq!(indexed.matches("ppc_execute_indexed_paired_ternary").count(), 2);
                     assert!(!indexed.contains("ppc_f32_ternary("));
                     assert!(!indexed.contains("require_single_precision_bits"));
-                    assert!(indexed.contains("case 0x80004004u: goto fpu_retry_80004004;"));
-                    assert!(indexed.contains("galaxy::ensure_fpu_available(services, 0x80004004u"));
+                    assert!(indexed.contains("case 0x80004004u: goto label_80004004;"));
+                    assert!(!indexed.contains("ensure_fpu_available"));
                     let control = lower_words_with_entries(0x8000_4000, &bytes, &entries).unwrap();
                     assert_eq!(control.matches("ppc_f32_ternary(").count(), 4);
                 }
@@ -14769,9 +14641,8 @@ mod tests {
             },
         )
         .unwrap();
-        assert!(fused.contains("case 0x80004004u: goto fpu_retry_80004004;"));
-        assert!(fused.contains("fpu_retry_80004004:"));
-        assert!(fused.contains("galaxy::ensure_fpu_available(services, 0x80004004u"));
+        assert!(fused.contains("case 0x80004004u: goto label_80004004;"));
+        assert!(!fused.contains("ensure_fpu_available"));
         assert_eq!(fused.matches("require_single_precision_bits").count(), 8);
         assert_eq!(fused.matches("require_paired_single_mode").count(), 2);
         assert_eq!(fused.matches("ppc_commit_paired_binary_result").count(), 2);
@@ -14853,9 +14724,8 @@ mod tests {
             0x8000_4000, &bytes, &entries, &BTreeSet::new(),
             LoweringConfig { fused_paired_ternary: true, ..LoweringConfig::default() },
         ).unwrap();
-        assert!(fused.contains("case 0x80004004u: goto fpu_retry_80004004;"));
-        assert!(fused.contains("fpu_retry_80004004:"));
-        assert!(fused.contains("galaxy::ensure_fpu_available(services, 0x80004004u"));
+        assert!(fused.contains("case 0x80004004u: goto label_80004004;"));
+        assert!(!fused.contains("ensure_fpu_available"));
         assert_eq!(fused.matches("ppc_commit_paired_ternary_result").count(), 6);
     }
 

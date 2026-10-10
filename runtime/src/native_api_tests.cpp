@@ -785,8 +785,8 @@ bool test_vector_copy_instruction_effects() {
         context.ps1_bits[0] == values[0] && context.fpr_bits[2] == sentinel && context.ps1_bits[2] == sentinel,
         "paired vector copy respects GQR0 quantization, the scalar third component and untouched register two");
 
-    // An unavailable FPU retries the first real instruction. A fault at the
-    // third load keeps the first two FPR effects and performs no output store.
+    // Eager FPU: MSR[FP] is never tested by the helper. A fault at the third
+    // load keeps the first two FPR effects and performs no output store.
     std::copy(source.begin(), source.end(), ram.begin());
     FpuUnavailableProbe probe{};
     galaxy::NativeServicesV1 services{}; services.user = &probe;
@@ -798,10 +798,10 @@ bool test_vector_copy_instruction_effects() {
     bool faulted = false;
     try { galaxy::native_vec_copy_12(&context, &memory, &services, 0x8001CF64u); }
     catch (GprSpanFault fault) { faulted = fault.pc == 0x8001CF6Cu; }
-    passed &= expect(faulted && probe.calls == 1u && probe.guest_pc == 0x8001CF64u &&
+    passed &= expect(faulted && probe.calls == 0u &&
         context.fpr_bits[2] == values[2] && context.fpr_bits[1] == values[1] &&
         context.fpr_bits[0] == sentinel && ram == before_fault,
-        "vector copy restores FPU retry and exact partial-load fault effects before any output store");
+        "vector copy keeps exact partial-load fault effects before any output store without an FPU retry");
     return passed;
 }
 
@@ -5499,63 +5499,6 @@ int main() {
 
     galaxy::NativeServicesV1 services{};
     services.time_base_ticks = &fixed_time_base;
-    {
-        FpuUnavailableProbe probe{};
-        galaxy::NativeServicesV1 fpu_services{};
-        fpu_services.user = &probe;
-        fpu_services.fpu_unavailable = &simulate_fpu_unavailable;
-        galaxy::PpcContext fpu_context{};
-        galaxy::GuestMemoryV1 fpu_memory{};
-
-        fpu_context.msr = galaxy::kMsrFloatingPointAvailable;
-        galaxy::ensure_fpu_available(
-            &fpu_services, 0x80001234u, &fpu_context, &fpu_memory);
-        passed &= expect(
-            probe.calls == 0u,
-            "MSR[FP]-enabled AOT instruction bypasses the exception service");
-
-        fpu_context.msr = 0u;
-        fpu_context.pc = 0x80000000u;
-        galaxy::ensure_fpu_available(
-            &fpu_services, 0x80005678u, &fpu_context, &fpu_memory);
-        passed &= expect(
-            probe.calls == 1u &&
-                probe.guest_pc == 0x80005678u &&
-                probe.context == &fpu_context && probe.memory == &fpu_memory &&
-                fpu_context.pc == 0x80005678u &&
-                (fpu_context.msr & galaxy::kMsrFloatingPointAvailable) != 0u,
-            "MSR[FP]-disabled AOT instruction returns only after one exact same-PC exception retry");
-
-        fpu_services.fatal = &throw_execution_fault;
-        probe.enable_fp = false;
-        fpu_context.msr = 0u;
-        fpu_context.pc = 0x80000000u;
-        bool rejected_missing_fp = false;
-        try {
-            galaxy::ensure_fpu_available(
-                &fpu_services, 0x80006780u, &fpu_context, &fpu_memory);
-        } catch (const SimulatedExecutionFault&) {
-            rejected_missing_fp = true;
-        }
-        passed &= expect(
-            rejected_missing_fp,
-            "FPU exception service cannot return without enabling MSR[FP]");
-
-        probe.enable_fp = true;
-        probe.resume_pc_delta = 4u;
-        fpu_context.msr = 0u;
-        fpu_context.pc = 0x80000000u;
-        bool rejected_wrong_pc = false;
-        try {
-            galaxy::ensure_fpu_available(
-                &fpu_services, 0x80007890u, &fpu_context, &fpu_memory);
-        } catch (const SimulatedExecutionFault&) {
-            rejected_wrong_pc = true;
-        }
-        passed &= expect(
-            rejected_wrong_pc,
-            "FPU exception service cannot return at a different instruction PC");
-    }
     {
         constexpr std::uint32_t kGuestContext = 0x80001000u;
         constexpr std::uint32_t kResumeAddress = 0x804BD818u;

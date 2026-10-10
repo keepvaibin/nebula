@@ -151,14 +151,20 @@ template <std::uint32_t First> void run(std::uint32_t mode, std::uint32_t addres
     execute<First>(actual, address, store, false);
     Fixture expected(mode, address);
     execute<First>(expected, address, store, true);
+    // Flush-based coherency (ABI 25): a complete fast RAM span is stored with
+    // no per-word publication, so only the memory and register effects must
+    // match the per-word reference; every other path keeps full equivalence.
+    const bool fast_span_store = store && actual.calls == 0u && actual.fault_pc == 0u;
     bool equal = std::memcmp(&actual.context, &expected.context, sizeof(actual.context)) == 0 &&
         actual.ram == expected.ram && actual.alternate == expected.alternate &&
-        actual.cpu == expected.cpu && actual.calls == expected.calls &&
-        actual.fault_pc == expected.fault_pc && actual.fault == expected.fault &&
-        actual.observations == expected.observations;
-    for (std::size_t i = 0; i < actual.shared.size(); ++i)
-        equal &= actual.shared[i].load() == expected.shared[i].load();
-    equal &= actual.summary[0].load() == expected.summary[0].load();
+        actual.fault_pc == expected.fault_pc && actual.fault == expected.fault;
+    if (!fast_span_store) {
+        equal &= actual.cpu == expected.cpu && actual.calls == expected.calls &&
+            actual.observations == expected.observations;
+        for (std::size_t i = 0; i < actual.shared.size(); ++i)
+            equal &= actual.shared[i].load() == expected.shared[i].load();
+        equal &= actual.summary[0].load() == expected.summary[0].load();
+    }
     if (!equal) {
         std::fprintf(stderr, "FAIL mode=%u first=%u address=%08x store=%u\n", mode, First, address, store);
         std::exit(1);
@@ -179,7 +185,9 @@ template <std::uint32_t First> void cases() {
             // Metadata overwrite fixture is deliberately controlled for r28..31.
             if (mode == 20u && First != 28u) continue;
             if (mode != 20u) run<First>(mode, address, false);
-            run<First>(mode, address, true);
+            // Mode 5 mutates state from the per-word notify observer, which a
+            // fast RAM span never invokes (stores publish only through dcbf).
+            if (mode != 5u) run<First>(mode, address, true);
         }
     }
     if constexpr (First != 31u) cases<First + 1u>();

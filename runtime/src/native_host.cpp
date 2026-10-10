@@ -11024,6 +11024,11 @@ void GuestAddressSpace::flush_wgpipe_gather_burst(
             std::memcpy(mem1_view_.data() + cpu_fifo_wr_ptr_,
                         bytes.data(),
                         bytes.size());
+            // The gather pipe bypasses the data cache: a display list recorded
+            // through it is in RAM at once, so publish the burst like a DMA
+            // write (translated stores no longer publish on their own).
+            notify_guest_write(
+                cpu_fifo_wr_ptr_, static_cast<std::uint32_t>(bytes.size()));
         }
 
         if (cpu_fifo_wr_ptr_ == cpu_fifo_top_) {

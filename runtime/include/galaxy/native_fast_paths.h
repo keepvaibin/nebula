@@ -106,9 +106,13 @@ GALAXY_ALWAYS_INLINE void checked_store(
     }
 }
 
-// Flat store: RAM spans write through the shared guest view and publish the
-// same dirty page the checked path publishes. Gather-pipe stores append in
-// place. Everything else keeps the checked device/fault path.
+// Flat store: RAM spans write through the shared guest view with no
+// publication (ABI 25, flush-based coherency). On the Wii a CPU store lands in
+// the data cache; the GP and DSP observe it only after dcbf/dcbst (DCFlushRange,
+// DCStoreRange), DMA, or the write-gather pipe. The translator therefore
+// publishes dirty lines from the cache instructions (dcache_flush_line below)
+// and the host publishes its own DMA/device writes. Gather-pipe stores append
+// in place. Everything else keeps the checked device/fault path.
 template <typename T>
 GALAXY_ALWAYS_INLINE void store(
     std::byte* base,
@@ -121,7 +125,6 @@ GALAXY_ALWAYS_INLINE void store(
     const T swapped = swap_to_big_endian<T>(value);
     if (base != nullptr && flat_span(address, sizeof(T))) GALAXY_LIKELY {
         std::memcpy(base + address, &swapped, sizeof(T));
-        guest_notify_write(memory, address, sizeof(T));
         return;
     }
     if (wgpipe_address(address) && memory != nullptr) {
@@ -131,6 +134,16 @@ GALAXY_ALWAYS_INLINE void store(
         }
     }
     checked_store<T>(memory, address, value, services, guest_pc);
+}
+
+// dcbf / dcbst: the 32-byte data cache line containing `address` reaches RAM.
+// Publishes that line to the renderer and CPU dirty trackers exactly as a
+// 32-byte guest write would; this is the only publication translated stores
+// perform (see `store` above).
+GALAXY_ALWAYS_INLINE void dcache_flush_line(
+    GuestMemoryV1* memory,
+    std::uint32_t address) {
+    guest_notify_write(memory, address & 0xFFFFFFE0u, 32u);
 }
 
 GALAXY_ALWAYS_INLINE std::uint8_t load_u8(
@@ -272,7 +285,6 @@ GALAXY_ALWAYS_INLINE void psq_store(
                 const std::uint32_t first = byte_swap_u32(
                     narrow_paired_single_ftz(context->fpr_bits[source]));
                 std::memcpy(base + address, &first, sizeof(first));
-                guest_notify_write(memory, address, 4u);
                 return;
             }
         } else if (flat_span(address, 8u)) GALAXY_LIKELY {
@@ -282,10 +294,6 @@ GALAXY_ALWAYS_INLINE void psq_store(
                 narrow_paired_single_ftz(context->ps1_bits[source]));
             std::memcpy(base + address, &first, sizeof(first));
             std::memcpy(base + address + 4u, &second, sizeof(second));
-            if (!guest_notify_write_pair_same_page(memory, address)) {
-                guest_notify_write(memory, address, 4u);
-                guest_notify_write(memory, address + 4u, 4u);
-            }
             return;
         }
     }

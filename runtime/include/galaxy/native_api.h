@@ -92,7 +92,7 @@ GALAXY_ALWAYS_INLINE void atomic_or_u64(
 // ABI 23 requires every renderer dirty-word producer to publish its summary.
 // ABI 22 modules used inline page-only stores: accepting them with a summary
 // drain would silently lose invalidations. Rebuild both game and Home sidecars.
-inline constexpr std::uint32_t kNativeAbiVersion = 24;
+inline constexpr std::uint32_t kNativeAbiVersion = 25;
 // Dynamic RSO sidecars have their own narrow ABI. They are generated at
 // installation from a validated disc module and contain only native C++; this
 // version is deliberately independent of the RMGE01 game-module manifest.
@@ -5895,38 +5895,18 @@ inline void guest_store_multiple_gprs(
     const NativeServicesV1* services, std::uint32_t guest_pc) {
     static_assert(FirstRegister < 32u);
     constexpr std::uint32_t bytes = (32u - FirstRegister) * 4u;
+    // Flush-based coherency (ABI 25): a complete RAM span is written in place
+    // with no per-word publication; dcbf/dcbst publish the lines later.
     if constexpr (FirstRegister <= 24u) {
-        if (memory != nullptr && memory->dirty_page_words != nullptr &&
-            !trace_fileloader_temp_writes_enabled() && !trace_u32_store_enabled()) {
+        if (memory != nullptr && !trace_fileloader_temp_writes_enabled() &&
+            !trace_u32_store_enabled() &&
+            !guest_host_spans_overlap(context, sizeof(*context), memory, sizeof(*memory))) {
             if (std::byte* direct = resolve_guest_fast(memory, address, bytes)) {
-                const std::uint32_t physical = address & 0x1FFFFFFFu;
-                const bool outside_cpu = memory->cpu_dirty_page_words == nullptr ||
-                    std::uint64_t{physical} + bytes <= memory->cpu_dirty_tracked_base ||
-                    physical >= std::uint64_t{memory->cpu_dirty_tracked_base} +
-                        memory->cpu_dirty_tracked_size;
-                std::uint32_t first_page = 0u, last_page = 0u;
-                if (outside_cpu && memory->dirty_page_shift >= 2u &&
-                    ((physical - memory->dirty_tracked_base) & 3u) == 0u &&
-                    guest_store_multiple_policy_is_stable(context, memory, direct, bytes) &&
-                    guest_dirty_page_range_fast(address, bytes,
-                        memory->dirty_tracked_base, memory->dirty_tracked_size,
-                        memory->dirty_page_shift, memory->dirty_page_word_count,
-                        &first_page, &last_page) &&
-                    (memory->dirty_word_summary == nullptr ||
-                     (last_page >> 12u) < memory->dirty_word_summary_count)) {
-                    const std::uint32_t relative = physical - memory->dirty_tracked_base;
-                    for (std::uint32_t reg = FirstRegister; reg < 32u; ++reg) {
-                        const std::uint32_t offset = (reg - FirstRegister) * 4u;
-                        const std::uint32_t value = byte_swap_u32(context->gpr[reg]);
-                        std::memcpy(direct + offset, &value, 4u);
-                        const std::uint32_t page = (relative + offset) >> memory->dirty_page_shift;
-                        const std::uint64_t bit = 1ull << (page & 63u);
-                        auto& word = memory->dirty_page_words[page >> 6u];
-                        if ((atomic_load_u64(&word) & bit) == 0u) atomic_or_u64(&word, bit);
-                        guest_publish_dirty_word_summary(memory->dirty_word_summary, page >> 6u);
-                    }
-                    return;
+                for (std::uint32_t reg = FirstRegister; reg < 32u; ++reg) {
+                    const std::uint32_t value = byte_swap_u32(context->gpr[reg]);
+                    std::memcpy(direct + (reg - FirstRegister) * 4u, &value, 4u);
                 }
+                return;
             }
         }
     }
@@ -5945,11 +5925,12 @@ inline void guest_zero(
     if (trace_audio_control_writes_enabled()) {
         trace_audio_control_zero(memory, services, guest_pc, address, size);
     }
+    // dcbz allocates a zeroed cache line; like every other CPU store it reaches
+    // the GP/DSP view only through a later dcbf/dcbst (flush-based coherency).
     std::byte* output = resolve_guest(memory, address, size, services, guest_pc);
     for (std::uint32_t index = 0; index < size; ++index) {
         output[index] = std::byte{0};
     }
-    guest_notify_write(memory, address, size);
 }
 
 inline std::uint32_t narrow_f64_to_f32_bits(
@@ -11268,48 +11249,21 @@ inline void dispatch_program_trap(
     services->program_trap(services->user, guest_pc, instruction, context, memory);
 }
 
-GALAXY_NOINLINE inline void ensure_fpu_available_slow(
-    const NativeServicesV1* services,
-    std::uint32_t guest_pc,
-    PpcContext* context,
-    GuestMemoryV1* memory) {
-    if (context == nullptr) {
-        guest_execution_fault(
-            services, guest_pc, "floating-point instruction has no PPC context");
-    }
-    if ((context->msr & kMsrFloatingPointAvailable) != 0u) {
-        return;
-    }
-    if (services == nullptr || services->fpu_unavailable == nullptr) {
-        guest_execution_fault(
-            services, guest_pc, "native FPU-unavailable exception service is unavailable");
-    }
-    // The service normally returns into this live AOT guard. If exception-7's
-    // exact RFI exposes a pending asynchronous exception first, it may instead
-    // unwind this frame; the statically emitted exact alias then owns the
-    // eventual retry at guest_pc.
-    services->fpu_unavailable(services->user, guest_pc, context, memory);
-    if ((context->msr & kMsrFloatingPointAvailable) == 0u ||
-        context->pc != guest_pc) {
-        guest_execution_fault(
-            services,
-            guest_pc,
-            "native FPU-unavailable exception service returned without exact restart state");
-    }
-}
-
-// MSR[FP] is almost always set: keep only that test at each translated
-// floating-point site and leave the exception machinery out of line.
+// Eager FPU (ABI 25): the runtime keeps the live FPR/PS/FPSCR file equal to
+// the current OSContext's at every context switch (OSSetCurrentContext,
+// OSLoadContext, exception entry and RFI), performing the lazy save/load the
+// game's exception-7 handler would have done at the first FP instruction.
+// Translated code therefore never tests MSR[FP]; this remains only for the
+// hand-written lowerings that still name it.
 GALAXY_ALWAYS_INLINE void ensure_fpu_available(
     const NativeServicesV1* services,
     std::uint32_t guest_pc,
     PpcContext* context,
     GuestMemoryV1* memory) {
-    if (context != nullptr &&
-        (context->msr & kMsrFloatingPointAvailable) != 0u) [[likely]] {
-        return;
-    }
-    ensure_fpu_available_slow(services, guest_pc, context, memory);
+    static_cast<void>(services);
+    static_cast<void>(guest_pc);
+    static_cast<void>(context);
+    static_cast<void>(memory);
 }
 
 inline bool trap_word_immediate_condition(

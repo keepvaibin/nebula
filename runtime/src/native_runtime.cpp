@@ -1747,6 +1747,10 @@ struct RuntimeState {
     bool dispatching_vi_retrace{};
     bool dispatching_decrementer{};
     bool dispatching_fpu_unavailable{};
+    // Eager FPU (ABI 25): owner switches performed by the runtime in place of
+    // the guest's lazy exception-7 handler, and how many saved a prior owner.
+    std::uint64_t eager_fpu_switches{};
+    std::uint64_t eager_fpu_owner_saves{};
     std::uint64_t nested_async_acceptance_count{};
     std::uint64_t eligible_nested_external_suppressed{};
     galaxy::interrupt::FpuRetryProvenance fpu_retry_provenance{};
@@ -15315,7 +15319,13 @@ void validate_guest_exception_identity(
     std::uint32_t guest_pc,
     const char* tag);
 
-// Forward declaration (defined after dispatch_vi_retrace).
+// Forward declarations (defined after dispatch_vi_retrace).
+void eager_fpu_context_switch(
+    RuntimeState& state,
+    galaxy::PpcContext* context,
+    galaxy::GuestMemoryV1* memory,
+    std::uint32_t target_context,
+    std::uint32_t guest_pc);
 void save_exception_context(
     const galaxy::PpcContext& context,
     std::uint32_t resume_address,
@@ -15542,6 +15552,8 @@ bool dispatch_external_interrupt(
         interrupted_context,
         resume_address,
         "external-interrupt");
+    eager_fpu_context_switch(
+        state, context, memory, interrupted_context, resume_address);
     save_exception_context(
         *context,
         resume_address,
@@ -20783,6 +20795,76 @@ bool guest_context_r1_cross_thread(
     return owner_thread != 0u && owner_thread != guest_context;
 }
 
+// Eager FPU (native ABI 25). Translated code no longer tests MSR[FP] before a
+// floating-point instruction, so the runtime must keep the live FPR/PS/FPSCR
+// file equal to the FPU image of the context about to execute. This performs
+// exactly what RMGE01's exception-7 handler (0x804A3C9C) does at the first FP
+// instruction of a non-owner context: publish the new owner in __OSFPUContext,
+// save the previous owner's registers with the translated 0x804A3604 body
+// (which sets OS_CONTEXT_STATE_FPSAVED and honours HID2[PSE]), load the new
+// owner's image with the translated 0x804A34E0 body (which skips contexts whose
+// image was never saved), and set MSR[FP] in both the live MSR and the
+// context's SRR1 image. It runs at every point where the executing context
+// can change: OSSetCurrentContext, the OSLoadContext boundary, exception entry
+// and RFI. Only the moment differs from hardware; the resulting register file,
+// context images and __OSFPUContext are identical to the lazy sequence.
+void eager_fpu_context_switch(
+    RuntimeState& state,
+    galaxy::PpcContext* context,
+    galaxy::GuestMemoryV1* memory,
+    std::uint32_t target_context,
+    std::uint32_t guest_pc) {
+    constexpr std::uint32_t kFpuContextAddress = 0x800000D8u;
+    constexpr std::uint32_t kSrr1Offset = 0x19Cu;
+    constexpr std::uint32_t kSaveFpuContextRoutine = 0x804A3604u;  // r5 = context
+    constexpr std::uint32_t kLoadFpuContextRoutine = 0x804A34E0u;  // r4 = context
+    if (state.address_space == nullptr || context == nullptr ||
+        memory == nullptr || state.services == nullptr ||
+        !valid_guest_os_context(state.address_space, target_context)) {
+        return;
+    }
+    const std::uint32_t owner =
+        state.address_space->read_u32(kFpuContextAddress);
+    if (owner == target_context) {
+        return;
+    }
+    const galaxy::NativeGameFunction save_routine =
+        state.lookup_function(kSaveFpuContextRoutine);
+    const galaxy::NativeGameFunction load_routine =
+        state.lookup_function(kLoadFpuContextRoutine);
+    if (save_routine == nullptr || load_routine == nullptr) {
+        throw RuntimeFailure(
+            "eager FPU switch lacks the translated FPU context routines at " +
+            hexadecimal(guest_pc));
+    }
+    const std::uint32_t saved_gpr3 = context->gpr[3];
+    const std::uint32_t saved_gpr4 = context->gpr[4];
+    const std::uint32_t saved_gpr5 = context->gpr[5];
+    const std::uint32_t saved_cr = context->cr;
+    const std::uint32_t saved_pc = context->pc;
+    state.address_space->write_u32(kFpuContextAddress, target_context);
+    if (owner != 0u && valid_guest_os_context(state.address_space, owner)) {
+        context->gpr[5] = owner;
+        context->pc = kSaveFpuContextRoutine;
+        save_routine(context, memory, state.services);
+        ++state.eager_fpu_owner_saves;
+    }
+    context->gpr[4] = target_context;
+    context->pc = kLoadFpuContextRoutine;
+    load_routine(context, memory, state.services);
+    context->gpr[3] = saved_gpr3;
+    context->gpr[4] = saved_gpr4;
+    context->gpr[5] = saved_gpr5;
+    context->cr = saved_cr;
+    context->pc = saved_pc;
+    state.address_space->write_u32(
+        target_context + kSrr1Offset,
+        state.address_space->read_u32(target_context + kSrr1Offset) |
+            galaxy::kMsrFloatingPointAvailable);
+    context->msr |= galaxy::kMsrFloatingPointAvailable;
+    ++state.eager_fpu_switches;
+}
+
 void save_exception_context(
     const galaxy::PpcContext& context,
     std::uint32_t resume_address,
@@ -21151,6 +21233,8 @@ void dispatch_decrementer(
         interrupted_context,
         resume_address,
         "decrementer");
+    eager_fpu_context_switch(
+        state, context, memory, interrupted_context, resume_address);
     save_exception_context(
         *context,
         resume_address,
@@ -22388,6 +22472,10 @@ void call_guest_impl_body(
         if (state.trace_scheduler_transitions) {
             state.rfi_osload_entry_return_pc = context->lr;
         }
+        // Eager FPU: the context named by r3 executes after this RFI, so its
+        // FPU image must be live before the translated body restores GPRs.
+        eager_fpu_context_switch(
+            state, context, memory, context->gpr[3], guest_address);
         galaxy::NativeGameFunction os_load_context = resolved_function;
         if (os_load_context == nullptr) {
             os_load_context = state.lookup_function(guest_address);
@@ -24401,6 +24489,14 @@ execute_translated:
         }
         commit_guest_set_current_context(
             state, *context, prepared_set_current_context);
+        if (guest_address == 0x804A3734u) {
+            // Eager FPU: the translated OSSetCurrentContext has installed r3
+            // as __OSCurrentContext (and cleared MSR[FP] when it was not the
+            // FPU owner). Make it the owner now, as the first FP instruction
+            // would have through exception 7.
+            eager_fpu_context_switch(
+                state, context, memory, context->gpr[3], guest_address);
+        }
         if (trace_main_frame_dynamic_call) {
             record_main_frame_dynamic_call(
                 state,
@@ -28606,6 +28702,13 @@ void return_from_interrupt(
     const std::uint32_t resume_pc =
         normalize_executable_address(state, architectural_resume_pc);
     context->pc = resume_pc;
+    // Eager FPU: the context resumed by this RFI is __OSCurrentContext.
+    eager_fpu_context_switch(
+        state,
+        context,
+        memory,
+        state.address_space->read_u32(0x800000D4u),
+        guest_pc);
     const bool synchronous_fpu_retry = state.dispatching_fpu_unavailable;
     if (synchronous_fpu_retry) {
         constexpr std::uint32_t kCurrentContextAddress = 0x800000D4u;
@@ -29893,6 +29996,8 @@ int wmain(int argc, wchar_t** argv) {
                 <<" direct-dispatch-entries="<<std::count_if(
                     state.direct_dispatch_table.begin(), state.direct_dispatch_table.end(),
                     [](galaxy::NativeGameFunction f){ return f != nullptr; })<<'\n';
+            std::cerr<<"[eager-fpu] switches="<<state.eager_fpu_switches
+                <<" owner-saves="<<state.eager_fpu_owner_saves<<'\n';
             std::cerr<<"[gx-efb-peek-summary] count="<<state.efb_peek_count
                 <<" published-field-answers="<<state.efb_peek_published_count
                 <<" failures="<<state.efb_peek_failures

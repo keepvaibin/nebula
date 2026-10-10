@@ -36,7 +36,9 @@ use std::{fs, path::Path};
 // 11: checked multi-register RAM helpers; regenerate affected modules.
 // 12: native float, flat RAM reads/writes, direct indirect dispatch and the
 //     function-record export (native ABI 24); regenerate every module.
-pub const GENERATION_VERSION: u32 = 12;
+// 13: eager FPU (no MSR[FP] guards or exception-7 retry entries; native ABI
+//     25); regenerate every module.
+pub const GENERATION_VERSION: u32 = 13;
 
 /// Shard size and per-shard source budget of the qualified module build.
 pub const MODULE_SHARD_SIZE: usize = 64;

@@ -45,7 +45,8 @@ int main() {
                 probe.bytes.fill(std::byte{0xa5});
                 probe.offset = offset; probe.size = size; probe.notifications = 0u;
                 galaxy::guest_zero(&memory, base + offset, size, &services, pc);
-                passed &= probe.notifications == (size != 0u ? 1u : 0u) && probe.published_complete;
+                // Flush-based coherency (ABI 25): dcbz publishes nothing; dcbf does.
+                passed &= probe.notifications == 0u;
                 for (std::uint32_t i = 0; i < probe.bytes.size(); ++i)
                     passed &= probe.bytes[i] == (i >= offset && i - offset < size ?
                         std::byte{0} : std::byte{0xa5});
@@ -60,6 +61,6 @@ int main() {
         passed &= faulted && probe.notifications == 0u;
         for (auto byte : probe.bytes) passed &= byte == std::byte{0xa5};
     }
-    std::puts(passed ? "Guest zero span/publication checks passed" : "Guest zero checks FAILED");
+    std::puts(passed ? "Guest zero span checks passed" : "Guest zero checks FAILED");
     return passed ? 0 : 1;
 }
