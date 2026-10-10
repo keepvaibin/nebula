@@ -1253,6 +1253,8 @@ bool TextureCache::initialize(ID3D12Device* device) {
     next_srv_index_ = 0u;
     free_srv_indices_.clear();
     retired_srv_indices_.reset();
+    texture_pool_.clear();
+    texture_pool_bytes_ = 0;
 
     D3D12_DESCRIPTOR_HEAP_DESC dhd{};
     dhd.Type           = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
@@ -1320,8 +1322,9 @@ void TextureCache::begin_frame(
     // Reserve before publishing any slots, so allocation failure cannot leave
     // a partially reclaimed list that would publish duplicate slots on retry.
     free_srv_indices_.reserve(free_srv_indices_.size() + retired.size());
-    for (const Entry& entry : retired) {
+    for (Entry& entry : retired) {
         free_srv_indices_.push_back(entry.handle.srv_index);
+        pool_retired_texture(entry);
     }
     retired.clear();
     upload_arenas_[frame_slot].active_chunk = 0;
@@ -1484,6 +1487,67 @@ void TextureCache::decoded_lru_evict_to_budget() {
     }
 }
 
+namespace {
+std::uint64_t texture_pool_cap_bytes() {
+    static const std::uint64_t cap = [] {
+        char value[16]{};
+        std::size_t length = 0;
+        if (getenv_s(&length, value, sizeof(value), "GALAXY_TEXTURE_POOL_MB") == 0 &&
+            length > 0) {
+            const unsigned long mb = std::strtoul(value, nullptr, 10);
+            return static_cast<std::uint64_t>(mb) << 20;
+        }
+        return std::uint64_t{256} << 20;
+    }();
+    return cap;
+}
+}  // namespace
+
+// Called from begin_frame for a slot whose fence has been waited on: the
+// texture is GPU-idle and still in the shader-resource state.
+void TextureCache::pool_retired_texture(Entry& entry) {
+    if (!entry.texture || entry.handle.from_efb_copy || entry.allocation_bytes == 0u) {
+        return;
+    }
+    if (texture_pool_bytes_ + entry.allocation_bytes > texture_pool_cap_bytes()) {
+        ++texture_pool_drops_;
+        return;
+    }
+    const D3D12_RESOURCE_DESC desc = entry.texture->GetDesc();
+    if (desc.Dimension != D3D12_RESOURCE_DIMENSION_TEXTURE2D ||
+        desc.Format != DXGI_FORMAT_R8G8B8A8_UNORM ||
+        desc.Flags != D3D12_RESOURCE_FLAG_NONE || desc.DepthOrArraySize != 1u ||
+        desc.SampleDesc.Count != 1u) {
+        return;
+    }
+    texture_pool_.push_back(PooledTexture{
+        std::move(entry.texture),
+        static_cast<std::uint32_t>(desc.Width),
+        static_cast<std::uint32_t>(desc.Height),
+        static_cast<std::uint32_t>(desc.MipLevels),
+        entry.allocation_bytes});
+    texture_pool_bytes_ += entry.allocation_bytes;
+}
+
+bool TextureCache::take_pooled_texture(
+    std::uint32_t width, std::uint32_t height, unsigned levels,
+    Microsoft::WRL::ComPtr<ID3D12Resource>& texture, std::uint64_t& allocation_bytes) {
+    for (std::size_t i = 0; i < texture_pool_.size(); ++i) {
+        PooledTexture& pooled = texture_pool_[i];
+        if (pooled.width != width || pooled.height != height || pooled.levels != levels) {
+            continue;
+        }
+        texture = std::move(pooled.texture);
+        allocation_bytes = pooled.allocation_bytes;
+        texture_pool_bytes_ -= pooled.allocation_bytes;
+        texture_pool_[i] = std::move(texture_pool_.back());
+        texture_pool_.pop_back();
+        ++texture_pool_reuses_;
+        return true;
+    }
+    return false;
+}
+
 void TextureCache::retire(Entry&& entry) {
     if (!entry.texture) {
         return;
@@ -1558,6 +1622,8 @@ void TextureCache::shutdown() {
     efb_aliases_.clear();
     alias_guest_envelope_.clear();
     retired_entries_.clear();
+    texture_pool_.clear();
+    texture_pool_bytes_ = 0;
     release_upload_arenas();
     upload_arenas_.clear();
     level_pixels_scratch_.clear();
@@ -2422,7 +2488,18 @@ TextureHandle TextureCache::get(
 
     ComPtr<ID3D12Resource> resource;
     std::uint64_t allocation_bytes = 0;
-    {
+    const bool reused_resource = take_pooled_texture(w, h, levels, resource, allocation_bytes);
+    if (reused_resource) {
+        // A retired texture rests in the shader-resource state; the copies
+        // below expect the copy-destination state.
+        D3D12_RESOURCE_BARRIER bar{};
+        bar.Type                   = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+        bar.Transition.pResource   = resource.Get();
+        bar.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+        bar.Transition.StateBefore = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+        bar.Transition.StateAfter  = D3D12_RESOURCE_STATE_COPY_DEST;
+        upload_list_->ResourceBarrier(1, &bar);
+    } else {
         D3D12_HEAP_PROPERTIES hp{};
         hp.Type = D3D12_HEAP_TYPE_DEFAULT;
         D3D12_RESOURCE_DESC rd{};

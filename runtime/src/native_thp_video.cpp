@@ -5,6 +5,7 @@
 // reject restart streams, SDK quarter-IDCT policy, no Aurora runtime dependency.
 #include "galaxy/native_thp_video.h"
 #include <cstddef>
+#include <cstring>
 #include <type_traits>
 using u8 = std::uint8_t;
 using u16 = std::uint16_t;
@@ -346,62 +347,83 @@ s32 parse_headers(std::span<const u8> file, DecodeContext& context) noexcept {
   }
 }
 
+// Bit reader with a 64-bit cache. Bytes past the end read as zero and mark
+// the reader invalid once more bits than the stream holds have been consumed,
+// which is the observable behavior of the byte-at-a-time reader it replaces
+// (that one consumed the available bits before reporting EOF). The scalar
+// reader cost 4 to 6 ms per 640x368 frame on the simulation thread.
 class BitReader {
 public:
-  BitReader(std::span<const u8> data, size_t byteOffset) noexcept : mData{data}, mBitPosition{byteOffset * 8} {}
-  bool valid() const noexcept { return mValid; }
+  BitReader(std::span<const u8> data, size_t byteOffset) noexcept
+      : mData{data}, mBytePosition{byteOffset},
+        mAvailableBits{byteOffset <= data.size() ? (data.size() - byteOffset) * 8 : 0} {}
+
+  bool valid() const noexcept { return mConsumedBits <= mAvailableBits; }
 
   u32 read(u8 count) noexcept {
     if (count == 0) return 0;
-    const size_t bytePosition = mBitPosition >> 3;
-    const unsigned bitOffset = static_cast<unsigned>(mBitPosition & 7);
-    const unsigned byteCount = (bitOffset + count + 7u) >> 3;
-    if (bytePosition > mData.size() || byteCount > mData.size() - bytePosition) {
-      // The original reader consumes the available bits before reporting EOF.
-      if (bytePosition < mData.size()) mBitPosition = mData.size() * 8;
-      mValid = false;
-      return 0;
-    }
-    u32 value = 0;
-    for (unsigned i = 0; i < byteCount; ++i)
-      value = (value << 8) | mData[bytePosition + i];
-    mBitPosition += count;
-    return (value >> (byteCount * 8u - bitOffset - count)) & ((u32{1} << count) - 1u);
+    if (mBitCount < count) refill();
+    const u32 value = static_cast<u32>(mCache >> (64u - count));
+    mCache <<= count;
+    mBitCount -= count;
+    mConsumedBits += count;
+    return value;
   }
 
-  bool peek_byte(u8& value) const noexcept {
-    if (!mValid) return false;
-    const size_t bytePosition = mBitPosition >> 3;
-    if (bytePosition >= mData.size()) return false;
-    const unsigned bitOffset = static_cast<unsigned>(mBitPosition & 7);
-    if (bitOffset == 0) { value = mData[bytePosition]; return true; }
-    if (mData.size() - bytePosition < 2) return false;
-    value = static_cast<u8>((static_cast<u32>(mData[bytePosition]) << bitOffset) |
-                          (mData[bytePosition + 1] >> (8u - bitOffset)));
+  u32 peek(u8 count) noexcept {
+    if (mBitCount < count) refill();
+    return static_cast<u32>(mCache >> (64u - count));
+  }
+
+  void skip(u8 count) noexcept {
+    mCache <<= count;
+    mBitCount -= count;
+    mConsumedBits += count;
+  }
+
+  bool peek_byte(u8& value) noexcept {
+    if (!valid() || mAvailableBits - mConsumedBits < 8) return false;
+    value = static_cast<u8>(peek(8));
     return true;
   }
 
-  void byte_align() noexcept { mBitPosition = (mBitPosition + 7) & ~size_t{7}; }
+  void byte_align() noexcept {
+    const unsigned remainder = static_cast<unsigned>(mConsumedBits & 7u);
+    if (remainder != 0) skip(static_cast<u8>(8u - remainder));
+  }
 
 private:
+  void refill() noexcept {
+    while (mBitCount <= 56) {
+      const std::uint64_t byte = mBytePosition < mData.size() ? mData[mBytePosition] : 0u;
+      ++mBytePosition;
+      mCache |= byte << (56u - mBitCount);
+      mBitCount += 8;
+    }
+  }
+
   std::span<const u8> mData;
-  bool mValid = true;
-  size_t mBitPosition;
+  size_t mBytePosition;
+  size_t mAvailableBits;
+  size_t mConsumedBits = 0;
+  std::uint64_t mCache = 0;
+  unsigned mBitCount = 0;
 };
 
 bool decode_huffman(BitReader& reader, const HuffmanTable& table, u8& symbol) noexcept {
   u8 prefix = 0;
   if (reader.peek_byte(prefix) && table.prefixLengths[prefix] != 0) {
-    (void)reader.read(table.prefixLengths[prefix]);
+    reader.skip(table.prefixLengths[prefix]);
     symbol = table.prefixSymbols[prefix];
     return true;
   }
-  u32 code = 0;
-  for (size_t length = 1; length <= 16; ++length) {
-    code = (code << 1) | reader.read(1);
+  for (u8 length = 1; length <= 16; ++length) {
+    const u32 code = reader.peek(length);
     const u32 firstCode = table.firstCodes[length];
     const u32 count = table.counts[length];
-    if (reader.valid() && code >= firstCode && code - firstCode < count) {
+    if (code >= firstCode && code - firstCode < count) {
+      reader.skip(length);
+      if (!reader.valid()) return false;
       symbol = table.symbols[table.symbolOffsets[length] + code - firstCode];
       return true;
     }
@@ -589,6 +611,15 @@ std::array<u8, 64> inverse_dct(const std::array<s16, 64>& coefficients,
 
 void write_block(u8* output, u16 width, u16 height, u16 blockX, u16 blockY, const std::array<u8, 64>& pixels) noexcept {
   const size_t tilesPerRow = (width + 7) / 8;
+  if ((blockX & 7u) == 0u && blockX + 8u <= width && blockY + 8u <= height) {
+    // Whole block: each 8-pixel row is 8 contiguous bytes of one 8x4 tile.
+    for (u16 row = 0; row < 8; ++row) {
+      const u16 y = static_cast<u16>(blockY + row);
+      const size_t tile = static_cast<size_t>(y / 4) * tilesPerRow + blockX / 8;
+      std::memcpy(output + tile * 32 + static_cast<size_t>(y & 3) * 8, &pixels[row * 8], 8);
+    }
+    return;
+  }
   for (u16 row = 0; row < 8 && blockY + row < height; ++row) {
     for (u16 column = 0; column < 8 && blockX + column < width; ++column) {
       const u16 x = blockX + column;

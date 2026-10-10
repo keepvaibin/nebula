@@ -397,6 +397,25 @@ private:
     std::unordered_map<EfbAliasKey, Entry, EfbAliasKeyHasher> efb_aliases_;
     detail::ConservativeGuestRangeEnvelope alias_guest_envelope_;
     std::vector<std::vector<Entry>> retired_entries_;
+    // Recycled decoded-texture resources. CreateCommittedResource for a
+    // first-use texture measured 24 to 36 ms on the 185H's Arc driver (one
+    // texture-flush stall of 43 ms); a GPU-idle retired texture of the same
+    // size and mip count is reused instead. RGBA8 2D, no flags, PSR state.
+    struct PooledTexture {
+        Microsoft::WRL::ComPtr<ID3D12Resource> texture;
+        std::uint32_t width = 0;
+        std::uint32_t height = 0;
+        std::uint32_t levels = 0;
+        std::uint64_t allocation_bytes = 0;
+    };
+    std::vector<PooledTexture> texture_pool_;
+    std::uint64_t texture_pool_bytes_ = 0;
+    std::uint64_t texture_pool_reuses_ = 0;
+    std::uint64_t texture_pool_drops_ = 0;
+    void pool_retired_texture(Entry& entry);
+    bool take_pooled_texture(
+        std::uint32_t width, std::uint32_t height, unsigned levels,
+        Microsoft::WRL::ComPtr<ID3D12Resource>& texture, std::uint64_t& allocation_bytes);
     std::vector<UploadArenaFrame> upload_arenas_;
     // Render-thread scratch storage for first-use texture decode/upload.
     // Keeping capacity between misses avoids heap churn during gameplay while
