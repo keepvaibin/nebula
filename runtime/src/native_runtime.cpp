@@ -16936,6 +16936,7 @@ bool dispatch_ai_dma_interrupts(
     // a few native bookkeeping ticks, even though no guest code ran between
     // the two samples. A fresh sample below remains the authority for actual
     // DMA servicing after recovery has either completed or declined.
+    const bool recovery_observation_fresh = !deadline_publication;
     const std::uint64_t recovery_observation_ticks = deadline_publication
         ? deadline_publication_ticks
         : runtime_time_base_ticks(state);
@@ -16965,7 +16966,12 @@ bool dispatch_ai_dma_interrupts(
     }
     // A successful rebase ends at recovery_observation_ticks. This fresh
     // sample retains the tiny interval of native work that followed it.
-    const std::uint64_t now_ticks = runtime_time_base_ticks(state);
+    // Without a recovery attempt only host bookkeeping ran since a fresh
+    // observation, so it is reused.
+    const std::uint64_t now_ticks =
+        recovery_observation_fresh && !host_pause_recovery_attempted
+            ? recovery_observation_ticks
+            : runtime_time_base_ticks(state);
     const std::uint64_t device_completion_ticks =
         state.address_space->ai_dma_next_completion_ticks();
     const bool service_is_due =
@@ -21988,13 +21994,21 @@ bool consume_decrementer_deadline_publication(RuntimeState& state) {
 // A forced mtmsr/RFI/DEC-write boundary can reach the CPU thread after the
 // absolute edge but before the worker publishes it; settle that exact edge
 // from its immutable arm rather than delaying or dropping the request.
-bool synchronize_decrementer_deadline(RuntimeState& state) {
+// `sampled_now_ticks` is a timeline sample the caller took with no guest code
+// since (0 = none). It only decides "not yet due"; a due deadline is settled
+// with a fresh sample. The broker's publication remains the primary path.
+bool synchronize_decrementer_deadline(
+    RuntimeState& state,
+    std::uint64_t sampled_now_ticks = 0u) {
     if (state.pending_transfer.active) return false;
     if (consume_decrementer_deadline_publication(state)) {
         return true;
     }
     const auto arm = state.decrementer_deadline.arm();
     if (!arm.has_value()) {
+        return false;
+    }
+    if (sampled_now_ticks != 0u && sampled_now_ticks < arm->deadline_ticks) {
         return false;
     }
     const std::uint64_t now_ticks = runtime_time_base_ticks(state);
@@ -26811,10 +26825,12 @@ void branch_checkpoint_body(
     if (static_cast<RuntimeState*>(user)->pending_transfer.active) return;
     auto& state = *static_cast<RuntimeState*>(user);
     g_census_checkpoint_bodies.fetch_add(1u, std::memory_order_relaxed);
+    // Reused by the decrementer check while no preflight phase has run.
+    std::uint64_t checkpoint_now = 0u;
     if (state.timeline != nullptr) {
         constexpr std::uint64_t kCheckpointGapReportTicks =
             galaxy::timing::kViPeriodTicks;
-        const std::uint64_t checkpoint_now = state.timeline->now_ticks();
+        checkpoint_now = state.timeline->now_ticks();
         if (state.last_checkpoint_wall_ticks != 0u &&
             checkpoint_now >= state.last_checkpoint_wall_ticks &&
             checkpoint_now - state.last_checkpoint_wall_ticks >=
@@ -26830,6 +26846,7 @@ void branch_checkpoint_body(
     }
     if (state.deadline_events.pending(
             galaxy::timing::EventKind::Dsp) != 0u) {
+        checkpoint_now = 0u;
         run_timed_checkpoint_phase(
             state, guest_pc, "checkpoint-preflight-dsp", [&] {
                 service_native_dsp_mram_wake(state);
@@ -26859,6 +26876,7 @@ void branch_checkpoint_body(
     // checks remain necessary for an edge that crosses during this checkpoint.
     if (state.deadline_events.pending(
             galaxy::timing::EventKind::InputReport) != 0u) {
+        checkpoint_now = 0u;
         run_timed_checkpoint_phase(
             state, guest_pc, "input-preflight", [&] {
                 service_native_input_with_ai_deadline_priority(
@@ -26868,6 +26886,7 @@ void branch_checkpoint_body(
     }
     if (state.deadline_events.pending(
             galaxy::timing::EventKind::IosCompletion) != 0u) {
+        checkpoint_now = 0u;
         run_timed_checkpoint_phase(
             state, guest_pc, "checkpoint-preflight-ios", [&] {
                 service_native_ios_completion_wake(state);
@@ -26881,7 +26900,7 @@ void branch_checkpoint_body(
             const galaxy::ScopeExit sync_postlude([&]() noexcept {
                 native_sync_scope.postlude_begin();
             });
-            (void)synchronize_decrementer_deadline(state);
+            (void)synchronize_decrementer_deadline(state, checkpoint_now);
         });
     if (state.pending_transfer.active) return;
     if (state.deadline_events.pending(
@@ -31588,6 +31607,10 @@ int wmain(int argc, wchar_t** argv) {
                           << g_census_checkpoint_bodies.load(std::memory_order_relaxed)
                           << " thread-cpu-time=" << g_census_cpu_time_calls.load(std::memory_order_relaxed)
                           << " thread-cycles=" << g_census_cycle_calls.load(std::memory_order_relaxed)
+                          << " broker-replacements="
+                          << (state.deadline_broker != nullptr ? state.deadline_broker->schedule_changes() : 0u)
+                          << " broker-wakes="
+                          << (state.deadline_broker != nullptr ? state.deadline_broker->worker_wakes() : 0u)
                           << '\n';
                 std::cerr << "[fastmem] handled-reads=" << faults.handled_reads
                           << " handled-writes=" << faults.handled_writes

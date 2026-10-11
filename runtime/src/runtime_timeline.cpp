@@ -490,18 +490,11 @@ std::uint64_t RuntimeTimeline::now_ticks(std::uint64_t* sampled_counter) noexcep
     if (sampled_counter != nullptr) {
         *sampled_counter = observed;
     }
-    std::uint64_t monotonic_counter =
-        last_counter_.load(std::memory_order_acquire);
-    while (observed > monotonic_counter &&
-           !last_counter_.compare_exchange_weak(
-               monotonic_counter,
-               observed,
-               std::memory_order_acq_rel,
-               std::memory_order_acquire)) {
-    }
-    if (observed > monotonic_counter) {
-        monotonic_counter = observed;
-    }
+    // The returned ticks are clamped monotonic across threads below, so a
+    // counter that reads behind another thread's yields that thread's later
+    // result either way; a second shared CAS on the raw counter only cost a
+    // locked instruction per read (about 177,000 reads per second).
+    const std::uint64_t monotonic_counter = observed;
 
     const std::uint64_t delta =
         monotonic_counter >= epoch_counter_
@@ -1716,6 +1709,7 @@ DeadlineBroker::~DeadlineBroker() {
 }
 
 void DeadlineBroker::notify_worker() noexcept {
+    worker_wakes_.fetch_add(1u, std::memory_order_relaxed);
     if (wake_event_ != nullptr) {
         static_cast<void>(SetEvent(static_cast<HANDLE>(wake_event_)));
     }
@@ -1770,6 +1764,7 @@ void DeadlineBroker::replace_once(
     std::uint64_t deadline_ticks,
     std::uint64_t generation) {
     bool wake = true;
+    schedule_changes_.fetch_add(1u, std::memory_order_relaxed);
     {
         const std::lock_guard<std::mutex> lock(mutex_);
         if (stopping_) {

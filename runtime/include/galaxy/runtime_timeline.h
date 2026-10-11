@@ -676,10 +676,19 @@ public:
         const std::vector<PeriodicDeadlineRestore>& periodic_restores,
         const std::vector<ReplaceableDeadlineRestore>& replaceable_restores);
     void throw_if_failed();
+    // Census: schedule changes and the subset that had to wake the worker.
+    [[nodiscard]] std::uint64_t schedule_changes() const noexcept {
+        return schedule_changes_.load(std::memory_order_relaxed);
+    }
+    [[nodiscard]] std::uint64_t worker_wakes() const noexcept {
+        return worker_wakes_.load(std::memory_order_relaxed);
+    }
 
 private:
     void worker_loop() noexcept;
     void notify_worker() noexcept;
+    std::atomic<std::uint64_t> schedule_changes_{0};
+    std::atomic<std::uint64_t> worker_wakes_{0};
 
     RuntimeTimeline& timeline_;
     PendingEventLatch& latch_;
