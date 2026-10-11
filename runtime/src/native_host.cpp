@@ -91,6 +91,7 @@ bool host_ownership_test_point(unsigned phase,
 bool ios_anomaly_profiling_enabled();
 
 bool read_env_flag(const char* name, bool default_value);
+std::optional<std::string> read_env_string(const char* name);
 
 bool native_ios_detailed_counters_enabled() noexcept {
     static const bool enabled =
@@ -1200,15 +1201,13 @@ float read_env_float_setting(
     float default_value,
     float min_value,
     float max_value) {
-    char buffer[64]{};
-    std::size_t length = 0;
-    if (getenv_s(&length, buffer, sizeof(buffer), name) != 0) {
-        throw std::runtime_error(
-            std::string("environment variable is too long: ") + name);
-    }
-    if (length <= 1) {
+    // Read through the cached string reader: these settings are queried on
+    // every input report (deadzones, trigger thresholds).
+    const std::optional<std::string> value = read_env_string(name);
+    if (!value.has_value()) {
         return default_value;
     }
+    const char* const buffer = value->c_str();
     char* end = nullptr;
     const float parsed = std::strtof(buffer, &end);
     if (end == buffer || *end != '\0' || !std::isfinite(parsed)) {
@@ -1223,15 +1222,13 @@ int read_env_int_setting(
     int default_value,
     int min_value,
     int max_value) {
-    char buffer[64]{};
-    std::size_t length = 0;
-    if (getenv_s(&length, buffer, sizeof(buffer), name) != 0) {
-        throw std::runtime_error(
-            std::string("environment variable is too long: ") + name);
-    }
-    if (length <= 1) {
+    // Read through the cached string reader: these settings are queried on
+    // every input report (deadzones, trigger thresholds).
+    const std::optional<std::string> value = read_env_string(name);
+    if (!value.has_value()) {
         return default_value;
     }
+    const char* const buffer = value->c_str();
     char* end = nullptr;
     const long parsed = std::strtol(buffer, &end, 10);
     if (end == buffer || *end != '\0') {
@@ -1325,15 +1322,13 @@ bool trace_input_proof_compact() {
 std::uint64_t read_env_u64_setting(
     const char* name,
     std::uint64_t default_value) {
-    char buffer[64]{};
-    std::size_t length = 0;
-    if (getenv_s(&length, buffer, sizeof(buffer), name) != 0) {
-        throw std::runtime_error(
-            std::string("environment variable is too long: ") + name);
-    }
-    if (length <= 1) {
+    // Read through the cached string reader: these settings are queried on
+    // every input report (deadzones, trigger thresholds).
+    const std::optional<std::string> value = read_env_string(name);
+    if (!value.has_value()) {
         return default_value;
     }
+    const char* const buffer = value->c_str();
     char* end = nullptr;
     const unsigned long long parsed = std::strtoull(buffer, &end, 10);
     if (end == buffer || *end != '\0') {
@@ -6615,9 +6610,9 @@ struct NativeInputReplayColumns {
     std::size_t thumb_ry = 0;
 };
 
-std::optional<std::string> read_env_string(const char* name) {
-    // Script/path configuration remains dynamically observable. Short values
-    // use stack storage; oversized values retain the checked heap fallback.
+std::optional<std::string> read_env_string_uncached(const char* name) {
+    // Short values use stack storage; oversized values retain the checked
+    // heap fallback.
     constexpr std::size_t kStackEnvironmentValueLength = 512u;
     // Read only the initialized length returned by getenv_s on success.
     // Unset/dynamic script values need no 512-byte zero-fill per query.
@@ -6644,6 +6639,49 @@ std::optional<std::string> read_env_string(const char* name) {
         return std::nullopt;
     }
     return std::string(buffer.data(), length - 1u);
+}
+
+// The input poll reads its replay, script and stick configuration through
+// this function several times per report, and getenv_s scans the whole
+// environment block each time (the profiler's ucrt strchr time). Once the
+// runtime has finished configuring (the same switch as the flag cache; tests
+// keep live values because they never set it) a value is read once per
+// literal name and served from this table.
+struct EnvStringCacheSlot {
+    std::atomic<const char*> name{nullptr};
+    std::atomic<int> state{0};  // 0 filling, 1 absent, 2 present
+    std::string value;
+};
+EnvStringCacheSlot g_env_string_cache[128];
+
+std::optional<std::string> read_env_string(const char* name) {
+    if (!g_env_flag_cache_enabled.load(std::memory_order_acquire)) {
+        return read_env_string_uncached(name);
+    }
+    const auto key = reinterpret_cast<std::uintptr_t>(name);
+    std::size_t index = static_cast<std::size_t>((key >> 3u) ^ (key >> 11u)) & 127u;
+    for (std::size_t probe = 0; probe < 8u; ++probe, index = (index + 1u) & 127u) {
+        EnvStringCacheSlot& slot = g_env_string_cache[index];
+        const char* const owner = slot.name.load(std::memory_order_acquire);
+        if (owner == name) {
+            const int state = slot.state.load(std::memory_order_acquire);
+            if (state == 1) return std::nullopt;
+            if (state == 2) return slot.value;
+            break;
+        }
+        if (owner == nullptr) {
+            const char* expected = nullptr;
+            if (!slot.name.compare_exchange_strong(expected, name, std::memory_order_acq_rel)) {
+                if (expected == name) break;
+                continue;
+            }
+            std::optional<std::string> value = read_env_string_uncached(name);
+            if (value.has_value()) slot.value = *value;
+            slot.state.store(value.has_value() ? 2 : 1, std::memory_order_release);
+            return value;
+        }
+    }
+    return read_env_string_uncached(name);
 }
 
 std::optional<std::uint64_t> read_env_u64_optional(const char* name) {
