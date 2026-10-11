@@ -17,6 +17,7 @@
 #include <d3dcompiler.h>
 #include <dxgi1_6.h>
 #include <dwmapi.h>
+#include <immintrin.h>
 #pragma warning(pop)
 
 #include <algorithm>
@@ -3632,6 +3633,9 @@ void RendererD3D12::shutdown() {
     peek_target_.Reset();
     pointer_depth_target_.Reset();
     pointer_depth_readback_.Reset();
+    for (auto& readback : pointer_depth_ring_) readback.Reset();
+    pointer_depth_ring_rgba_.fill(nullptr);
+    pointer_depth_pending_rgba_ = nullptr;
     peek_readback_.Reset();
     peek_rtv_heap_.Reset();
     peek_rtv_ = {};
@@ -5726,12 +5730,27 @@ bool RendererD3D12::ensure_pointer_depth_resources() {
     hp.Type = D3D12_HEAP_TYPE_READBACK;
     D3D12_RESOURCE_DESC rd = peek_readback_->GetDesc();
     rd.Width = static_cast<UINT64>(row_pitch) * height;
-    d3d_check(device_->CreateCommittedResource(&hp, D3D12_HEAP_FLAG_NONE,
-        &rd, D3D12_RESOURCE_STATE_COPY_DEST, nullptr,
-        IID_PPV_ARGS(&readback_candidate)), "pointer depth readback");
+    std::array<ComPtr<ID3D12Resource>, kPointerDepthRing> ring;
+    for (auto& readback : ring) {
+        d3d_check(device_->CreateCommittedResource(&hp, D3D12_HEAP_FLAG_NONE,
+            &rd, D3D12_RESOURCE_STATE_COPY_DEST, nullptr,
+            IID_PPV_ARGS(&readback)), "pointer depth readback");
+    }
+    readback_candidate = ring[0];
+    for (std::size_t i = 0; i < kPointerDepthRing; ++i) {
+        pointer_depth_ring_rgba_[i] = pin_readback_mapping(ring[i].Get());
+    }
+    pointer_depth_ring_ = std::move(ring);
+    pointer_depth_ring_next_ = 0;
     pointer_depth_target_ = std::move(target_candidate);
     pointer_depth_readback_ = std::move(readback_candidate);
     return true;
+}
+
+void RendererD3D12::select_pointer_depth_destination() {
+    pointer_depth_readback_ = pointer_depth_ring_[pointer_depth_ring_next_];
+    pointer_depth_pending_rgba_ = pointer_depth_ring_rgba_[pointer_depth_ring_next_];
+    pointer_depth_ring_next_ = (pointer_depth_ring_next_ + 1u) % kPointerDepthRing;
 }
 
 // Mid-stream pointer depth field: the same conversion draw and readback copy
@@ -5747,6 +5766,7 @@ bool RendererD3D12::record_pointer_depth_capture_in_frame() {
     constexpr UINT width = kEfbWidth;
     constexpr UINT height = kEfbHeight;
     constexpr UINT row_pitch = kEfbWidth * 4u;
+    select_pointer_depth_destination();
     ID3D12Resource* const target = pointer_depth_target_.Get();
     ID3D12Resource* const readback = pointer_depth_readback_.Get();
     ID3D12Resource* const src = efb_depth_.Get();
@@ -5824,6 +5844,23 @@ std::uint64_t RendererD3D12::submit_pointer_depth_capture() {
     return pointer_depth_capture_fence_;
 }
 
+bool RendererD3D12::try_complete_pointer_depth_capture_in_place(
+    const std::uint8_t*& rgba) {
+    rgba = nullptr;
+    if (pointer_depth_capture_fence_ == 0u) {
+        if (pointer_depth_in_frame_pending_) {
+            return false;  // recorded in the open frame; fenced at end_frame
+        }
+        throw std::logic_error("pointer depth completion has no owned fence");
+    }
+    if (completed_fence_value() < pointer_depth_capture_fence_) {
+        return false;
+    }
+    rgba = pointer_depth_pending_rgba_;
+    pointer_depth_capture_fence_ = 0u;
+    return true;
+}
+
 bool RendererD3D12::try_complete_pointer_depth_capture(
     std::span<std::uint32_t> pixels) {
     if (pixels.size() != kEfbWidth * kEfbHeight) {
@@ -5849,7 +5886,7 @@ bool RendererD3D12::try_complete_pointer_depth_capture(
 bool RendererD3D12::ensure_async_peek_field_resources(
     AsyncPeekField& field, EfbPeekKind kind) {
     if (field.allocator && field.command_list && field.target &&
-        field.readback && field.rtv_heap) {
+        field.readbacks[0] && field.rtv_heap) {
         return true;
     }
     // The conversion pipeline, root signature and EFB views are shared with
@@ -5910,15 +5947,21 @@ bool RendererD3D12::ensure_async_peek_field_resources(
     readback_desc.MipLevels = 1;
     readback_desc.SampleDesc.Count = 1;
     readback_desc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
-    d3d_check(
-        device_->CreateCommittedResource(
-            &readback_heap,
-            D3D12_HEAP_FLAG_NONE,
-            &readback_desc,
-            D3D12_RESOURCE_STATE_COPY_DEST,
-            nullptr,
-            IID_PPV_ARGS(&field.readback)),
-        "async peek field readback");
+    for (std::size_t slot = 0; slot < kAsyncPeekFieldSlots; ++slot) {
+        d3d_check(
+            device_->CreateCommittedResource(
+                &readback_heap,
+                D3D12_HEAP_FLAG_NONE,
+                &readback_desc,
+                D3D12_RESOURCE_STATE_COPY_DEST,
+                nullptr,
+                IID_PPV_ARGS(&field.readbacks[slot])),
+            "async peek field readback");
+        field.rgba[slot] = pin_readback_mapping(field.readbacks[slot].Get());
+        if (field.rgba[slot] == nullptr) {
+            throw std::runtime_error("async peek field readback could not be mapped");
+        }
+    }
 
     D3D12_DESCRIPTOR_HEAP_DESC rtv_heap_desc{};
     rtv_heap_desc.NumDescriptors = 1;
@@ -5932,9 +5975,9 @@ bool RendererD3D12::ensure_async_peek_field_resources(
     return true;
 }
 
-std::uint64_t RendererD3D12::submit_async_peek_field(EfbPeekKind kind) {
+std::uint64_t RendererD3D12::submit_async_peek_field(EfbPeekKind kind, std::size_t slot) {
     AsyncPeekField& field = async_peek_fields_[async_peek_field_index(kind)];
-    if (field.fence != 0u) {
+    if (field.fence != 0u || slot >= kAsyncPeekFieldSlots) {
         return 0u;
     }
     if (!ensure_async_peek_field_resources(field, kind)) {
@@ -5946,7 +5989,7 @@ std::uint64_t RendererD3D12::submit_async_peek_field(EfbPeekKind kind) {
     constexpr UINT row_pitch = kEfbWidth * 4u;
     static_assert(row_pitch % D3D12_TEXTURE_DATA_PITCH_ALIGNMENT == 0u);
     ID3D12Resource* const target = field.target.Get();
-    ID3D12Resource* const readback = field.readback.Get();
+    ID3D12Resource* const readback = field.readbacks[slot].Get();
     ID3D12Resource* const src = is_depth ? efb_depth_.Get() : efb_color_.Get();
     ID3D12GraphicsCommandList* const list = field.command_list.Get();
 
@@ -6021,11 +6064,7 @@ std::uint64_t RendererD3D12::submit_async_peek_field(EfbPeekKind kind) {
     return fence_value;
 }
 
-bool RendererD3D12::try_complete_async_peek_field(
-    EfbPeekKind kind, std::span<std::uint32_t> pixels) {
-    if (pixels.size() != static_cast<std::size_t>(kEfbWidth) * kEfbHeight) {
-        throw std::invalid_argument("async peek field requires 640x528 pixels");
-    }
+bool RendererD3D12::try_complete_async_peek_field(EfbPeekKind kind) {
     AsyncPeekField& field = async_peek_fields_[async_peek_field_index(kind)];
     if (field.fence == 0u) {
         return false;
@@ -6033,11 +6072,14 @@ bool RendererD3D12::try_complete_async_peek_field(
     if (completed_fence_value() < field.fence) {
         return false;
     }
-    std::uint32_t unused{};
-    copy_efb_readback_pixels(field.readback.Get(), kEfbWidth, kEfbHeight,
-        kEfbWidth * 4u, kind == EfbPeekKind::Depth, unused, pixels);
     field.fence = 0u;
     return true;
+}
+
+const std::uint8_t* RendererD3D12::async_peek_field_rgba(
+    EfbPeekKind kind, std::size_t slot) const noexcept {
+    return slot < kAsyncPeekFieldSlots
+        ? async_peek_fields_[async_peek_field_index(kind)].rgba[slot] : nullptr;
 }
 
 bool RendererD3D12::read_efb_pixels(
@@ -6058,6 +6100,9 @@ bool RendererD3D12::read_efb_pixels(
     const UINT row_pitch = field ? kEfbWidth * 4u : peek_readback_row_pitch_;
     if (field && !ensure_pointer_depth_resources()) {
         return false;
+    }
+    if (field) {
+        select_pointer_depth_destination();
     }
     ID3D12Resource* target = field ? pointer_depth_target_.Get() : peek_target_.Get();
     ID3D12Resource* readback = field ? pointer_depth_readback_.Get() : peek_readback_.Get();
@@ -6158,6 +6203,17 @@ bool RendererD3D12::read_efb_pixels(
     return true;
 }
 
+// A readback heap may stay mapped while the GPU writes it (D3D12 leaves the
+// synchronization to the fences the callers already wait on). The reference
+// taken here is never released; the resource's destruction ends the mapping.
+const std::uint8_t* RendererD3D12::pin_readback_mapping(ID3D12Resource* readback) {
+    if (readback == nullptr) return nullptr;
+    void* mapped = nullptr;
+    const D3D12_RANGE no_read{0, 0};
+    if (FAILED(readback->Map(0, &no_read, &mapped))) return nullptr;
+    return static_cast<const std::uint8_t*>(mapped);
+}
+
 void RendererD3D12::copy_efb_readback_pixels(
     ID3D12Resource* readback, UINT width, UINT height, UINT row_pitch,
     bool is_depth, std::uint32_t& value,
@@ -6170,13 +6226,30 @@ void RendererD3D12::copy_efb_readback_pixels(
         "GXPeek readback map");
     const auto* rgba = static_cast<const std::uint8_t*>(mapped);
     if (!depth_pixels.empty()) {
+        // RGBA8 bytes to 0x00RRGGBB (depth) or 0xAARRGGBB (colour): a byte
+        // shuffle per four pixels. The full 640x528 field is converted for
+        // every published peek field and pointer-depth capture; the scalar
+        // loop was the render thread's largest single cost on the gameplay
+        // route (19.5 % of its running samples).
+        const __m128i order = is_depth
+            ? _mm_setr_epi8(2, 1, 0, -128, 6, 5, 4, -128, 10, 9, 8, -128, 14, 13, 12, -128)
+            : _mm_setr_epi8(2, 1, 0, 3, 6, 5, 4, 7, 10, 9, 8, 11, 14, 13, 12, 15);
         for (std::size_t row = 0; row < height; ++row) {
-            const auto* pixel = rgba + row * row_pitch;
-            for (std::size_t col = 0; col < width; ++col, pixel += 4) {
+            const std::uint8_t* source = rgba + row * row_pitch;
+            std::uint32_t* destination = depth_pixels.data() + row * width;
+            std::size_t col = 0;
+            for (; col + 4u <= width; col += 4u) {
+                const __m128i quad = _mm_loadu_si128(
+                    reinterpret_cast<const __m128i*>(source + col * 4u));
+                _mm_storeu_si128(reinterpret_cast<__m128i*>(destination + col),
+                                 _mm_shuffle_epi8(quad, order));
+            }
+            for (; col < width; ++col) {
+                const std::uint8_t* pixel = source + col * 4u;
                 const std::uint32_t rgb =
                     (static_cast<std::uint32_t>(pixel[0]) << 16u) |
                     (static_cast<std::uint32_t>(pixel[1]) << 8u) | pixel[2];
-                depth_pixels[row * width + col] = is_depth
+                destination[col] = is_depth
                     ? rgb
                     : (static_cast<std::uint32_t>(pixel[3]) << 24u) | rgb;
             }

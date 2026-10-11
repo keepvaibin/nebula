@@ -43,6 +43,7 @@
 #include <Windows.h>
 #include <bcrypt.h>
 #include <DbgHelp.h>
+#include <TlHelp32.h>
 #include <Shellapi.h>
 #include <timeapi.h>
 
@@ -780,6 +781,72 @@ public:
         worker_ = std::thread([this] { run(); });
     }
 
+    // Attaches to the first thread whose description is `name` once it exists
+    // (polled for up to a minute from the sampling thread). No guest records:
+    // every sample is runtime or system code.
+    void start_named(const wchar_t* name, std::string tag) {
+        tag_ = std::move(tag);
+        interval_us_ = std::clamp<std::uint64_t>(read_env_u64("GALAXY_SIM_PROFILE_INTERVAL_US", 1000u), 100u, 100000u);
+        MODULEINFO info{};
+        if (K32GetModuleInformation(GetCurrentProcess(), GetModuleHandleW(nullptr), &info, sizeof(info))) {
+            host_base_ = reinterpret_cast<std::uintptr_t>(info.lpBaseOfDll);
+            host_end_ = host_base_ + info.SizeOfImage;
+        }
+        if (const HMODULE ntdll = GetModuleHandleW(L"ntdll.dll")) {
+            for (const char* stub : {"NtWaitForMultipleObjects", "NtWaitForSingleObject",
+                                     "NtDelayExecution", "NtWaitForAlertByThreadId",
+                                     "NtWaitForKeyedEvent", "NtRemoveIoCompletionEx",
+                                     "NtSignalAndWaitForSingleObject", "NtWaitForWorkViaWorkerFactory"}) {
+                if (const auto address = reinterpret_cast<std::uintptr_t>(GetProcAddress(ntdll, stub))) {
+                    wait_stubs_.push_back(address);
+                }
+            }
+        }
+        running_.store(true, std::memory_order_release);
+        worker_ = std::thread([this, wanted = std::wstring(name)] {
+            for (int attempt = 0; attempt < 600 && target_ == nullptr &&
+                                  running_.load(std::memory_order_acquire); ++attempt) {
+                attach_named(wanted);
+                if (target_ == nullptr) Sleep(100);
+            }
+            if (target_ != nullptr) run();
+        });
+    }
+
+    void attach_named(const std::wstring& wanted) {
+        const HANDLE snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD, 0);
+        if (snapshot == INVALID_HANDLE_VALUE) return;
+        THREADENTRY32 entry{};
+        entry.dwSize = sizeof(entry);
+        const DWORD pid = GetCurrentProcessId();
+        for (BOOL more = Thread32First(snapshot, &entry); more; more = Thread32Next(snapshot, &entry)) {
+            if (entry.th32OwnerProcessID != pid) continue;
+            const HANDLE thread = OpenThread(THREAD_GET_CONTEXT | THREAD_SUSPEND_RESUME |
+                                             THREAD_QUERY_INFORMATION, FALSE, entry.th32ThreadID);
+            if (thread == nullptr) continue;
+            PWSTR description = nullptr;
+            const bool match = SUCCEEDED(GetThreadDescription(thread, &description)) &&
+                description != nullptr && wanted == description;
+            if (description != nullptr) LocalFree(description);
+            if (!match) { CloseHandle(thread); continue; }
+            // NtQueryInformationThread(ThreadBasicInformation) names its TEB.
+            struct BasicInformation {
+                LONG exit_status; PVOID teb; HANDLE client_process; HANDLE client_thread; ULONG_PTR affinity; LONG priority; LONG base_priority;
+            } basic{};
+            using QueryFn = LONG(NTAPI*)(HANDLE, ULONG, PVOID, ULONG, PULONG);
+            const auto query = reinterpret_cast<QueryFn>(
+                GetProcAddress(GetModuleHandleW(L"ntdll.dll"), "NtQueryInformationThread"));
+            if (query == nullptr || query(thread, 0u, &basic, sizeof(basic), nullptr) < 0 || basic.teb == nullptr) {
+                CloseHandle(thread);
+                continue;
+            }
+            teb_ = basic.teb;
+            target_ = thread;
+            break;
+        }
+        CloseHandle(snapshot);
+    }
+
     void stop_and_print(std::ostream& out) {
         if (!worker_.joinable()) return;
         running_.store(false, std::memory_order_release);
@@ -791,21 +858,27 @@ public:
         const auto pct = [total](std::uint64_t n) {
             return 100.0 * static_cast<double>(n) / static_cast<double>(total);
         };
-        out << "[sim-profile] samples=" << total << " interval-us=" << interval_us_
+        out << '[' << tag_ << "] samples=" << total << " interval-us=" << interval_us_
             << " running=" << running_samples_ << " blocked=" << blocked_samples_
             << " guest=" << guest_samples_ << " host=" << host_samples_ << " other=" << other_samples_
             << " context-failures=" << context_failures_ << " walk-faults=" << walk_faults_
             << " stack-frames-max=" << kMaxFrames << '\n';
         static const std::size_t guest_rows = static_cast<std::size_t>(
             std::clamp<std::uint64_t>(read_env_u64("GALAXY_SIM_PROFILE_ROWS", 48u), 16u, 100000u));
-        print_guest(out, "[sim-profile-guest]", guest_counts_, guest_rows, pct);
-        print_guest(out, "[sim-profile-guest-caller]", guest_caller_counts_, 32u, pct);
-        print_guest(out, "[sim-profile-blocked-guest]", guest_blocked_counts_, 16u, pct);
-        print_addresses(out, "[sim-profile-host]", host_buckets_, 40u, pct);
-        print_addresses(out, "[sim-profile-other]", other_buckets_, 40u, pct);
-        print_addresses(out, "[sim-profile-other-caller]", other_caller_buckets_, 32u, pct);
-        print_addresses(out, "[sim-profile-blocked-site]", blocked_sites_, 24u, pct);
-        print_addresses(out, "[sim-profile-blocked-leaf]", blocked_leaves_, 12u, pct);
+        const auto tag = [this](const char* suffix) { return '[' + tag_ + suffix + ']'; };
+        print_guest(out, tag("-guest").c_str(), guest_counts_, guest_rows, pct);
+        print_guest(out, tag("-guest-caller").c_str(), guest_caller_counts_, 32u, pct);
+        print_guest(out, tag("-blocked-guest").c_str(), guest_blocked_counts_, 16u, pct);
+        print_addresses(out, tag("-host").c_str(), host_buckets_, 40u, pct);
+        print_addresses(out, tag("-other").c_str(), other_buckets_, 40u, pct);
+        static const std::size_t function_rows = static_cast<std::size_t>(
+            std::clamp<std::uint64_t>(read_env_u64("GALAXY_SIM_PROFILE_FN_ROWS", 60u), 8u, 100000u));
+        print_functions(out, tag("-host-fn").c_str(), host_buckets_, function_rows, pct);
+        print_functions(out, tag("-other-fn").c_str(), other_buckets_, function_rows, pct);
+        print_functions(out, tag("-other-caller-fn").c_str(), other_caller_buckets_, function_rows, pct);
+        print_addresses(out, tag("-other-caller").c_str(), other_caller_buckets_, 32u, pct);
+        print_addresses(out, tag("-blocked-site").c_str(), blocked_sites_, 24u, pct);
+        print_addresses(out, tag("-blocked-leaf").c_str(), blocked_leaves_, 12u, pct);
     }
 
 private:
@@ -833,6 +906,38 @@ private:
             out << tag << ' ' << describe(rows[i].first << 4u)
                 << " samples=" << rows[i].second << " pct=" << pct(rows[i].second) << '\n';
         }
+    }
+
+    // Sums 16-byte buckets per containing symbol (module name when unresolved).
+    template <typename Pct>
+    void print_functions(std::ostream& out, const char* tag,
+                         const std::unordered_map<std::uintptr_t, std::uint64_t>& buckets,
+                         std::size_t limit, Pct pct) {
+        ensure_symbols();
+        std::unordered_map<std::string, std::uint64_t> totals;
+        for (const auto& [bucket, count] : buckets) totals[function_name(bucket << 4u)] += count;
+        std::vector<std::pair<std::string, std::uint64_t>> rows(totals.begin(), totals.end());
+        std::sort(rows.begin(), rows.end(), [](const auto& a, const auto& b) { return a.second > b.second; });
+        for (std::size_t i = 0; i < rows.size() && i < limit; ++i) {
+            out << tag << ' ' << rows[i].first << " samples=" << rows[i].second
+                << " pct=" << pct(rows[i].second) << '\n';
+        }
+    }
+
+    std::string function_name(std::uintptr_t address) {
+        if (symbols_ready_) {
+            alignas(SYMBOL_INFO) char storage[sizeof(SYMBOL_INFO) + 256u]{};
+            auto* symbol = reinterpret_cast<SYMBOL_INFO*>(storage);
+            symbol->SizeOfStruct = sizeof(SYMBOL_INFO);
+            symbol->MaxNameLen = 255u;
+            DWORD64 displacement = 0u;
+            if (SymFromAddr(GetCurrentProcess(), static_cast<DWORD64>(address), &displacement, symbol)) {
+                return std::string(symbol->Name);
+            }
+        }
+        const std::string text = describe(address);
+        const auto plus = text.find('+');
+        return plus == std::string::npos ? text : text.substr(0, plus);
     }
 
     // "NebulaRuntime+0x1234 name+0x10" or "ntdll.dll+0x5678 NtWaitForSingleObject+0x14".
@@ -1099,6 +1204,7 @@ private:
 
     HANDLE target_{};
     void* teb_{};
+    std::string tag_ = "sim-profile";
     std::uint64_t walk_faults_{};
     std::thread worker_;
     std::atomic<bool> running_{false};
@@ -1122,6 +1228,7 @@ private:
 };
 
 SimulationProfiler g_sim_profiler;
+SimulationProfiler g_render_profiler;
 
 std::string hexadecimal(std::uint32_t value) {
     std::ostringstream output;
@@ -23380,7 +23487,7 @@ void call_guest_impl_body(
                     // a new query or run inverse projection on that pairing.
                     galaxy::guest_store_u8(memory,self+0x21u,0u,state.services,context->pc);
                 } else {
-                    galaxy::guest_store_u32(memory,self+0x24u,depth_field->pixels[query->efb_y*640u+query->efb_x],state.services,context->pc);
+                    galaxy::guest_store_u32(memory,self+0x24u,depth_field->depth_at(query->efb_y*640u+query->efb_x),state.services,context->pc);
                     galaxy::guest_store_u8(memory,self+0x21u,1u,state.services,context->pc);
                 }
                 ++state.native_mouse_queries;
@@ -31332,6 +31439,7 @@ int wmain(int argc, wchar_t** argv) {
             std::cerr<<"[float-mode] fast="<<((state.module_float_flags & galaxy::kModuleFloatFlagFastFloat) != 0u)
                 <<" ftz-daz="<<state.fast_float_mxcsr<<'\n';
             g_sim_profiler.stop_and_print(std::cerr);
+            g_render_profiler.stop_and_print(std::cerr);
             {
                 const auto faults = galaxy::host::flat_guest_memory::fault_stats();
                 std::cerr << "[transfer] flag-returns=" << state.flag_transfer_count
@@ -31663,6 +31771,9 @@ int wmain(int argc, wchar_t** argv) {
         const galaxy::FunctionRecordV1* records = nullptr;
         const std::size_t record_count = function_records_fn(&records);
         g_sim_profiler.start(records, record_count, module);
+    }
+    if (read_env_flag("GALAXY_RENDER_PROFILE", false)) {
+        g_render_profiler.start_named(L"Nebula GX Render", "render-profile");
     }
 
     // ── Guest address space (memory + IOS device simulation) ────────────────

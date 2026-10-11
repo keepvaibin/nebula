@@ -788,7 +788,11 @@ private:
     // it; readers only ever load the published slot.
     // One set per peek kind: [0] depth, [1] color (async_peek_kind_index).
     struct AsyncPeekFieldState {
-        std::array<std::vector<std::uint32_t>, 3> fields{};
+        // Mapped readback bytes of each slot (RGBA8, 640x528), written by the
+        // render thread before the slot is published.
+        std::array<const std::uint8_t*, 3> rgba{};
+        // Slot the in-flight field writes; render thread only.
+        int pending_slot = -1;
         std::atomic<int> published{-1};
         std::atomic<bool> requested{false};
         std::atomic<std::uint64_t> published_answers{0};

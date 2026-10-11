@@ -456,15 +456,23 @@ public:
     [[nodiscard]] std::uint64_t pointer_depth_capture_fence() const noexcept {
         return pointer_depth_capture_fence_;
     }
+    // In place: on completion `rgba` names the mapped field (null when the
+    // readback could not be mapped; the span overload converts instead).
+    [[nodiscard]] bool try_complete_pointer_depth_capture_in_place(
+        const std::uint8_t*& rgba);
     [[nodiscard]] bool try_complete_pointer_depth_capture(
         std::span<std::uint32_t> pixels);
     // Render-owner only. Asynchronous 640x528 EFB fields (depth for GXPeekZ,
     // color for GXPeekARGB) for the simulation thread, each on private
     // resources so they never contend with the pointer field above or with
     // each other. Returns the fence value, or 0 when that field is in flight.
-    [[nodiscard]] std::uint64_t submit_async_peek_field(EfbPeekKind kind);
-    [[nodiscard]] bool try_complete_async_peek_field(
-        EfbPeekKind kind, std::span<std::uint32_t> pixels);
+    static constexpr std::size_t kAsyncPeekFieldSlots = 3u;
+    // Captures the field into readback `slot` (0..2). Completion leaves it
+    // there; async_peek_field_rgba names the mapped bytes (RGBA8, 640x528).
+    [[nodiscard]] std::uint64_t submit_async_peek_field(EfbPeekKind kind, std::size_t slot);
+    [[nodiscard]] bool try_complete_async_peek_field(EfbPeekKind kind);
+    [[nodiscard]] const std::uint8_t* async_peek_field_rgba(
+        EfbPeekKind kind, std::size_t slot) const noexcept;
     [[nodiscard]] bool async_peek_field_pending(EfbPeekKind kind) const noexcept {
         return async_peek_fields_[async_peek_field_index(kind)].fence != 0u;
     }
@@ -898,13 +906,23 @@ private:
     Microsoft::WRL::ComPtr<ID3D12Resource> pointer_depth_target_;
     Microsoft::WRL::ComPtr<ID3D12Resource> pointer_depth_readback_;
     std::uint64_t pointer_depth_capture_fence_ = 0;
+    // Pointer depth fields rotate through mapped readbacks so a published
+    // field stays readable while the next ones are captured (the consumer
+    // reads at most the two newest; four leave margin).
+    static constexpr std::size_t kPointerDepthRing = 4u;
+    std::array<Microsoft::WRL::ComPtr<ID3D12Resource>, kPointerDepthRing> pointer_depth_ring_;
+    std::array<const std::uint8_t*, kPointerDepthRing> pointer_depth_ring_rgba_{};
+    std::size_t pointer_depth_ring_next_ = 0;
+    const std::uint8_t* pointer_depth_pending_rgba_ = nullptr;
     bool pointer_depth_in_frame_pending_ = false;
     bool ensure_pointer_depth_resources();
     struct AsyncPeekField {
         Microsoft::WRL::ComPtr<ID3D12CommandAllocator> allocator;
         Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> command_list;
         Microsoft::WRL::ComPtr<ID3D12Resource> target;
-        Microsoft::WRL::ComPtr<ID3D12Resource> readback;
+        // One mapped readback per published slot of GxBackend's field ring.
+        std::array<Microsoft::WRL::ComPtr<ID3D12Resource>, kAsyncPeekFieldSlots> readbacks;
+        std::array<const std::uint8_t*, kAsyncPeekFieldSlots> rgba{};
         Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> rtv_heap;
         D3D12_CPU_DESCRIPTOR_HANDLE rtv{};
         std::uint64_t fence = 0;
@@ -915,6 +933,8 @@ private:
     bool read_efb_pixels(std::uint16_t x, std::uint16_t y, EfbPeekKind kind,
         std::uint32_t& value, std::span<std::uint32_t> depth_pixels,
         bool defer_pointer_depth = false);
+    static const std::uint8_t* pin_readback_mapping(ID3D12Resource* readback);
+    void select_pointer_depth_destination();
     void copy_efb_readback_pixels(ID3D12Resource* readback, UINT width,
         UINT height, UINT row_pitch, bool is_depth, std::uint32_t& value,
         std::span<std::uint32_t> depth_pixels);

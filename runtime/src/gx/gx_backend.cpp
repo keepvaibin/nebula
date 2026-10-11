@@ -6170,6 +6170,7 @@ void GxBackend::attach_pointer_depth_capture(
     if (!capture->complete.exchange(false, std::memory_order_acq_rel))
         throw std::logic_error("pointer depth capture reused while owned by render worker");
     capture->success = false; capture->error = nullptr; capture->worker_ns = 0u;
+    capture->rgba = nullptr;
     if (producer_pointer_depth_capture_) {
         // Two boundaries without a submission between them: the older request
         // can no longer be placed. Release it unsuccessful.
@@ -6227,7 +6228,7 @@ bool GxBackend::enqueue_pointer_depth_capture(const std::shared_ptr<PointerDepth
     if (!initialized_ || !capture) return false;
     if (!capture->complete.exchange(false,std::memory_order_acq_rel))
         throw std::logic_error("pointer depth capture reused while owned by render worker");
-    capture->success=false; capture->error=nullptr; capture->worker_ns=0u;
+    capture->success=false; capture->error=nullptr; capture->worker_ns=0u; capture->rgba=nullptr;
     try {
         if (!async_render_thread_enabled()) {
             const auto start=std::chrono::steady_clock::now();
@@ -6676,11 +6677,17 @@ bool GxBackend::peek_efb_published(
     if (slot < 0) {
         return false;
     }
-    const auto& field = state.fields[static_cast<std::size_t>(slot)];
-    if (field.size() != static_cast<std::size_t>(kEfbWidth) * kEfbHeight) {
+    const std::uint8_t* field = state.rgba[static_cast<std::size_t>(slot)];
+    if (field == nullptr) {
         return false;
     }
-    value = field[static_cast<std::size_t>(y) * kEfbWidth + x];
+    // Same packing the full-field conversion produced: 0x00RRGGBB for depth,
+    // 0xAARRGGBB for colour.
+    const std::uint8_t* pixel =
+        field + (static_cast<std::size_t>(y) * kEfbWidth + x) * 4u;
+    const std::uint32_t rgb = (std::uint32_t{pixel[0]} << 16u) |
+        (std::uint32_t{pixel[1]} << 8u) | pixel[2];
+    value = kind == EfbPeekKind::Depth ? rgb : (std::uint32_t{pixel[3]} << 24u) | rgb;
     state.published_answers.fetch_add(1u, std::memory_order_relaxed);
     return true;
 }
@@ -6692,13 +6699,12 @@ void GxBackend::poll_async_peek_fields() {
             continue;
         }
         AsyncPeekFieldState& state = async_peek_[index];
-        const int published = state.published.load(std::memory_order_relaxed);
-        const int slot = published < 0 ? 0 : (published + 1) % 3;
-        auto& field = state.fields[static_cast<std::size_t>(slot)];
-        if (field.size() != static_cast<std::size_t>(kEfbWidth) * kEfbHeight) {
-            field.assign(static_cast<std::size_t>(kEfbWidth) * kEfbHeight, 0u);
+        const int slot = state.pending_slot;
+        if (slot < 0) {
+            continue;
         }
-        if (renderer_.try_complete_async_peek_field(kind, field)) {
+        if (renderer_.try_complete_async_peek_field(kind)) {
+            state.pending_slot = -1;
             ++state.completed;
             state.published.store(slot, std::memory_order_release);
         }
@@ -6717,7 +6723,19 @@ void GxBackend::submit_async_peek_fields_if_requested() {
             continue;
         }
         state.requested.store(false, std::memory_order_relaxed);
-        (void)renderer_.submit_async_peek_field(kind);
+        // Never the published slot: a reader may be converting its pixel.
+        const int published = state.published.load(std::memory_order_relaxed);
+        const int slot = published < 0 ? 0 : (published + 1) % 3;
+        if (renderer_.submit_async_peek_field(kind, static_cast<std::size_t>(slot)) != 0u) {
+            // The slot pointers are fixed once the resources exist; record
+            // them before the first publication so readers never race a write.
+            if (state.rgba[0] == nullptr) {
+                for (std::size_t i = 0; i < state.rgba.size(); ++i) {
+                    state.rgba[i] = renderer_.async_peek_field_rgba(kind, i);
+                }
+            }
+            state.pending_slot = slot;
+        }
     }
 }
 
@@ -6727,8 +6745,13 @@ void GxBackend::poll_completed_pointer_depth_capture() {
     }
     adopt_pointer_depth_fence_if_needed();
     auto capture = pending_pointer_depth_capture_.capture;
-    if (!renderer_.try_complete_pointer_depth_capture(capture->pixels)) {
+    const std::uint8_t* rgba = nullptr;
+    if (!renderer_.try_complete_pointer_depth_capture_in_place(rgba)) {
         return;
+    }
+    capture->rgba = rgba;
+    if (rgba == nullptr) {
+        throw std::runtime_error("pointer depth readback is not mapped");
     }
     capture->success = true;
     capture->worker_ns = static_cast<std::uint64_t>(

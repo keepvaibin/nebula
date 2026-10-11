@@ -15,6 +15,17 @@ namespace galaxy::gx {
 // work and renderer failure.
 struct PointerDepthCapture {
     std::array<std::uint32_t,640u*528u> pixels{};
+    // Set by the asynchronous render path: the field stays in a persistently
+    // mapped readback buffer of the renderer's capture ring (640x528 RGBA8,
+    // rows contiguous) and a query converts only its pixel. Null: `pixels`.
+    const std::uint8_t* rgba{};
+    [[nodiscard]] std::uint32_t depth_at(std::size_t index) const noexcept {
+        if (rgba != nullptr) {
+            const std::uint8_t* pixel = rgba + index * 4u;
+            return (std::uint32_t{pixel[0]} << 16u) | (std::uint32_t{pixel[1]} << 8u) | pixel[2];
+        }
+        return pixels[index];
+    }
     std::atomic<bool> complete{true};
     bool success{};
     std::exception_ptr error;
