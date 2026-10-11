@@ -295,6 +295,30 @@ bool capture_pixel_frame_requested(std::uint64_t frame) {
            std::binary_search(frames.begin(), frames.end(), frame);
 }
 
+// Test aid for runs without a display: every Nth swap-chain present is read
+// back and written to GALAXY_PRESENT_SNAPSHOT_DIR\present_<n>.ppm.
+std::string present_snapshot_path() {
+    static const std::uint64_t every = [] {
+        char value[32]{};
+        std::size_t length = 0;
+        return getenv_s(&length, value, sizeof(value),
+                        "GALAXY_PRESENT_SNAPSHOT_EVERY") == 0 && length > 1u
+            ? std::strtoull(value, nullptr, 10) : 0ull;
+    }();
+    static const std::string directory = [] {
+        char value[MAX_PATH]{};
+        std::size_t length = 0;
+        return getenv_s(&length, value, sizeof(value),
+                        "GALAXY_PRESENT_SNAPSHOT_DIR") == 0 && length > 1u
+            ? std::string(value) : std::string{};
+    }();
+    static std::uint64_t presents = 0u;
+    if (every == 0u || directory.empty() || ++presents % every != 0u) {
+        return {};
+    }
+    return directory + "\\present_" + std::to_string(presents) + ".ppm";
+}
+
 bool capture_present_requested(std::uint64_t request) {
     static const std::vector<std::uint64_t> requests =
         read_u64_list_env("GALAXY_GX_CAPTURE_PRESENT_REQUESTS");
@@ -7285,12 +7309,21 @@ void GxBackend::present_cached_xfb_on_thread(
         renderer_.debug_log_backbuffer_readback();
         renderer_.set_debug_capture_paths({}, path);
     }
+    const std::string snapshot_path =
+        (capture_present || !count_game_xfb_present) ? std::string{} : present_snapshot_path();
+    if (!snapshot_path.empty()) {
+        renderer_.set_debug_capture_paths({}, snapshot_path);
+    }
     renderer_.begin_frame(true);
     // Present-only frames do not acquire or resize XFB textures. Keep
     // EfbCopyManager retirement/recycling tied to render frames that can
     // actually produce GXCopyDisp resources; otherwise the split
     // render-then-present cadence advances XFB lifetime twice per VI.
-    const bool capture_recorded = renderer_.present(selected, capture_present);
+    const bool capture_recorded = renderer_.present(
+        selected, capture_present || !snapshot_path.empty());
+    if (!snapshot_path.empty()) {
+        renderer_.set_debug_capture_paths({}, {});
+    }
     renderer_.end_frame();
     if (capture_present) {
         renderer_.set_debug_capture_paths({}, {});
@@ -8073,7 +8106,15 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
         const auto present_record_start = frame_timing_enabled
             ? std::chrono::steady_clock::now()
             : std::chrono::steady_clock::time_point{};
-        renderer_.present(selected_xfb, capture_backbuffer);
+        const std::string snapshot_path =
+            capture_backbuffer ? std::string{} : present_snapshot_path();
+        if (!snapshot_path.empty()) {
+            renderer_.set_debug_capture_paths({}, snapshot_path);
+        }
+        renderer_.present(selected_xfb, capture_backbuffer || !snapshot_path.empty());
+        if (!snapshot_path.empty()) {
+            renderer_.set_debug_capture_paths({}, {});
+        }
         if (frame_timing_enabled) {
             present_record_us =
                 elapsed_us(present_record_start, std::chrono::steady_clock::now());

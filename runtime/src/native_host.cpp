@@ -14431,12 +14431,39 @@ void GuestAddressSpace::service_ai_dma(
                now_ticks >= dry_run_next_completion) {
             ++periods_needed;
             if (periods_needed > kMaxCatchUpBuffers) {
-                std::ostringstream message;
-                message << "AI DMA missed " << kMaxCatchUpBuffers
-                        << "+ consecutive hardware buffer deadlines: now="
-                        << now_ticks
-                        << " completion=" << ai_dma_next_completion_ticks_;
-                throw std::runtime_error(message.str());
+                // A host stall this long (a page-in, a first-use pipeline
+                // compile, the OS descheduling the process on a loaded
+                // laptop) is not a guest error, and ending the game for it
+                // is the worst outcome. Replaying the current shadow buffer
+                // once per missed period would invent PCM history, so the
+                // missed periods are dropped: the completion clock advances
+                // to the newest elapsed boundary and the loop below delivers
+                // that one boundary with the current buffer. The listener
+                // hears a gap.
+                const std::uint64_t period = ai_dma_shadow_blocks_ == 0u
+                    ? 0u
+                    : ai_dma_duration_ticks(
+                          ai_dma_shadow_blocks_, ai_dma_sample_rate());
+                if (period == 0u || now_ticks < ai_dma_next_completion_ticks_) {
+                    std::ostringstream message;
+                    message << "AI DMA missed " << kMaxCatchUpBuffers
+                            << "+ consecutive hardware buffer deadlines: now="
+                            << now_ticks
+                            << " completion=" << ai_dma_next_completion_ticks_;
+                    throw std::runtime_error(message.str());
+                }
+                const std::uint64_t dropped =
+                    (now_ticks - ai_dma_next_completion_ticks_) / period;
+                ai_dma_next_completion_ticks_ += dropped * period;
+                ++ai_dma_resync_events_;
+                ai_dma_resync_missed_buffers_ += dropped;
+                if (ai_dma_resync_events_ <= 8u || ai_dma_resync_events_ % 64u == 0u) {
+                    std::cerr << "[ai-dma-resync] events=" << ai_dma_resync_events_
+                              << " dropped-periods=" << dropped
+                              << " period-ticks=" << period
+                              << " now=" << now_ticks << '\n';
+                }
+                break;
             }
             if (ai_dma_shadow_blocks_ == 0u) {
                 // latch_ai_dma_transfer() would stop DMA here (no further

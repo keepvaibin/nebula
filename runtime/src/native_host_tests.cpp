@@ -18580,25 +18580,23 @@ int main(int argc, char** argv) {
         guest_memory, 0xCC005036, 0x8002, nullptr, 0x80004000);
     const std::uint64_t late_ai_now =
         second_ai_completion + ai_duration_ticks * 18u + 123u;
-    passed &= expect_runtime_error(
-        [&] {
-            memory.service_ai_dma(
-                late_ai_now,
-                galaxy::host::AiDmaServiceMode::ExternalInterruptsMasked);
-        },
-        "EE masking cannot authorize retrospective reads of mutable PCM history");
-    passed &= expect(
-        memory.ai_audio_submit_count() == 2,
-        "failed masked AI DMA catch-up has no sink or transfer side effects");
+    // A masked service 18 periods behind (a host stall) drops the missed
+    // periods instead of failing: only the newest elapsed boundary is
+    // delivered, with the current shadow buffer, and the clock restarts after
+    // it. No PCM history is replayed.
     memory.service_ai_dma(
         late_ai_now,
-        galaxy::host::AiDmaServiceMode::Interruptible);
+        galaxy::host::AiDmaServiceMode::ExternalInterruptsMasked);
+    passed &= expect(
+        memory.ai_dma_resync_events() == 1u &&
+            memory.ai_dma_resync_missed_buffers() == 18u,
+        "stalled masked AI service resyncs once and records the dropped periods");
     passed &= expect(
         memory.ai_dma_interrupt_pending() &&
             memory.ai_audio_submit_count() == 3 &&
             memory.ai_dma_next_completion_ticks() ==
-                second_ai_completion + ai_duration_ticks,
-        "late interruptible AI service submits one boundary and waits for the guest callback");
+                second_ai_completion + ai_duration_ticks * 19u,
+        "stalled masked AI service submits only the newest boundary and arms the next one");
     memory.service_ai_dma(
         late_ai_now,
         galaxy::host::AiDmaServiceMode::Interruptible);
