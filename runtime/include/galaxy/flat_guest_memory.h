@@ -65,6 +65,11 @@ struct FaultStats {
     // The sixteen 4-byte guest addresses with the most faults.
     std::uint32_t hot_addresses[16]{};
     std::uint64_t hot_address_counts[16]{};
+    // The 32 faulting host instructions with the most faults, with the guest
+    // address of the latest fault at each.
+    std::uintptr_t hot_sites[32]{};
+    std::uint32_t hot_site_addresses[32]{};
+    std::uint64_t hot_site_counts[32]{};
 };
 [[nodiscard]] FaultStats fault_stats() noexcept;
 // Message describing the last unhandled fault, empty when none.

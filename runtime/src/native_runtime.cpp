@@ -870,6 +870,18 @@ public:
         print_guest(out, tag("-guest").c_str(), guest_counts_, guest_rows, pct);
         print_guest(out, tag("-guest-caller").c_str(), guest_caller_counts_, 32u, pct);
         print_guest(out, tag("-blocked-guest").c_str(), guest_blocked_counts_, 16u, pct);
+        {
+            static const std::size_t rva_rows = static_cast<std::size_t>(
+                std::clamp<std::uint64_t>(read_env_u64("GALAXY_SIM_PROFILE_RVA_ROWS", 400u), 16u, 1000000u));
+            std::vector<std::pair<std::uint64_t, std::uintptr_t>> rows;
+            rows.reserve(module_buckets_.size());
+            for (const auto& [bucket, count] : module_buckets_) rows.emplace_back(count, bucket);
+            std::sort(rows.begin(), rows.end(), std::greater<>());
+            for (std::size_t i = 0; i < rows.size() && i < rva_rows; ++i) {
+                out << tag("-module-rva") << " rva=0x" << std::hex << (rows[i].second << 4u) << std::dec
+                    << " samples=" << rows[i].first << '\n';
+            }
+        }
         print_addresses(out, tag("-host").c_str(), host_buckets_, 40u, pct);
         print_addresses(out, tag("-other").c_str(), other_buckets_, 40u, pct);
         static const std::size_t function_rows = static_cast<std::size_t>(
@@ -1179,6 +1191,7 @@ private:
         ++running_samples_;
         if (guest_index(rip, index)) {
             ++guest_counts_[index];
+            ++module_buckets_[(rip - module_base_) >> 4u];
             ++guest_samples_;
             return;
         }
@@ -1217,6 +1230,9 @@ private:
     std::vector<std::uint64_t> guest_caller_counts_;
     std::vector<std::uint64_t> guest_blocked_counts_;
     std::unordered_map<std::uintptr_t, std::uint64_t> host_buckets_;
+    // Module samples by 16-byte RVA bucket, resolved offline with the
+    // module's linker map (function records only name the nearest entry).
+    std::unordered_map<std::uintptr_t, std::uint64_t> module_buckets_;
     std::unordered_map<std::uintptr_t, std::uint64_t> other_buckets_;
     std::unordered_map<std::uintptr_t, std::uint64_t> other_caller_buckets_;
     std::vector<std::uintptr_t> wait_stubs_;
@@ -1229,6 +1245,10 @@ private:
 };
 
 SimulationProfiler g_sim_profiler;
+// The loaded module's function records (guest address, native entry), for
+// attributing host addresses in shutdown diagnostics.
+const galaxy::FunctionRecordV1* g_module_function_records = nullptr;
+std::size_t g_module_function_record_count = 0u;
 SimulationProfiler g_render_profiler;
 SimulationProfiler g_named_thread_profiler;
 
@@ -18228,13 +18248,14 @@ void idle_loop_wait_for_next_deadline(RuntimeState& state) {
     if (wait_duration > max_slice) {
         wait_duration = max_slice;
     }
-    // Leave a short final stretch to the existing polling. VI edges arrive
-    // through the broker's publication wake, not this timer; a 500 us guard
-    // spun the guest idle loop for no gain in edge timeliness (gameplay route:
-    // simulation thread 30.3 -> 26.6 % of a core at 100 us, VI delivery
-    // lateness p99 0.63 -> 0.57 ms). The timer still covers AI deadlines.
+    // Optional final stretch left to polling. VI edges arrive through the
+    // broker's publication wake, not this timer, so no guard is needed: the
+    // 100 us guard spun the guest idle loop (SelectThread) before every VI
+    // edge, 5 % of the simulation thread's guest time; removing it measured
+    // 18.6 -> 17.3 % of a core (gameplay route, 3 rounds) with VI delivery
+    // lateness p99 0.52 -> 0.57 ms. The timer still covers AI deadlines.
     static const auto kDeadlineGuard = std::chrono::microseconds(std::clamp<std::uint64_t>(
-        read_env_u64("GALAXY_IDLE_LOOP_GUARD_US", 100u), 0u, 2000u));
+        read_env_u64("GALAXY_IDLE_LOOP_GUARD_US", 0u), 0u, 2000u));
     if (wait_duration <= kDeadlineGuard) {
         return;
     }
@@ -31644,6 +31665,28 @@ int wmain(int argc, wchar_t** argv) {
                     std::cerr << "[fastmem-hot-address] guest=" << hexadecimal(faults.hot_addresses[i])
                               << " faults=" << faults.hot_address_counts[i] << '\n';
                 }
+                for (std::size_t i = 0; i < 32u && faults.hot_site_counts[i] != 0u; ++i) {
+                    const std::uintptr_t rip = faults.hot_sites[i];
+                    std::uint32_t owner = 0u;
+                    std::uintptr_t owner_entry = 0u;
+                    for (std::size_t r = 0; r < g_module_function_record_count; ++r) {
+                        const auto entry = reinterpret_cast<std::uintptr_t>(g_module_function_records[r].function);
+                        if (entry <= rip && entry > owner_entry) {
+                            owner_entry = entry;
+                            owner = g_module_function_records[r].address;
+                        }
+                    }
+                    HMODULE site_module = nullptr;
+                    GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS |
+                                           GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                                       reinterpret_cast<LPCWSTR>(rip), &site_module);
+                    std::cerr << "[fastmem-hot-site] rva=0x" << std::hex
+                              << (rip - reinterpret_cast<std::uintptr_t>(site_module)) << std::dec
+                              << " nearest-entry-fn=" << hexadecimal(owner)
+                              << " entry-offset=0x" << std::hex << (rip - owner_entry) << std::dec
+                              << " guest=" << hexadecimal(faults.hot_site_addresses[i])
+                              << " faults=" << faults.hot_site_counts[i] << '\n';
+                }
             }
             std::cerr<<"[gx-efb-peek-summary] count="<<state.efb_peek_count
                 <<" published-field-answers="<<state.efb_peek_published_count
@@ -31943,6 +31986,9 @@ int wmain(int argc, wchar_t** argv) {
     const auto yield_protocol = reinterpret_cast<YieldRfiReturnProtocolFn>(
         GetProcAddress(module, "galaxy_yield_rfi_return_protocol"));
     state.yield_rfi_return_protocol = yield_protocol != nullptr && yield_protocol() == 1u;
+    if (function_records_fn != nullptr) {
+        g_module_function_record_count = function_records_fn(&g_module_function_records);
+    }
     if (read_env_flag("GALAXY_SIM_PROFILE", false) && function_records_fn != nullptr) {
         const galaxy::FunctionRecordV1* records = nullptr;
         const std::size_t record_count = function_records_fn(&records);

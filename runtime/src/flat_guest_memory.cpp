@@ -210,6 +210,29 @@ std::uint32_t g_fault_addresses[kFaultAddressSlots]{};
 std::uint64_t g_fault_address_counts[kFaultAddressSlots]{};
 std::size_t g_fault_address_used = 0u;
 
+// Faulting host instructions identify the generated access site.
+constexpr std::size_t kFaultSiteSlots = 512u;
+std::uintptr_t g_fault_sites[kFaultSiteSlots]{};
+std::uint32_t g_fault_site_addresses[kFaultSiteSlots]{};
+std::uint64_t g_fault_site_counts[kFaultSiteSlots]{};
+std::size_t g_fault_site_used = 0u;
+
+void count_fault_site(std::uintptr_t rip, std::uint32_t guest_address) noexcept {
+    for (std::size_t i = 0; i < g_fault_site_used; ++i) {
+        if (g_fault_sites[i] == rip) {
+            ++g_fault_site_counts[i];
+            g_fault_site_addresses[i] = guest_address;
+            return;
+        }
+    }
+    if (g_fault_site_used < kFaultSiteSlots) {
+        g_fault_sites[g_fault_site_used] = rip;
+        g_fault_site_addresses[g_fault_site_used] = guest_address;
+        g_fault_site_counts[g_fault_site_used] = 1u;
+        ++g_fault_site_used;
+    }
+}
+
 void count_fault_page(std::uint32_t guest_address) noexcept {
     const std::uint32_t page = guest_address >> 12u;
     std::size_t i = 0;
@@ -748,6 +771,7 @@ LONG WINAPI fastmem_vectored_handler(EXCEPTION_POINTERS* pointers) noexcept {
         return EXCEPTION_CONTINUE_SEARCH;
     }
     count_fault_page(guest_address);
+    count_fault_site(static_cast<std::uintptr_t>(context->Rip), guest_address);
     if ((guest_address & 0xFFFF0000u) == 0xE0000000u) {
         g_fault_locked_cache.fetch_add(1u, std::memory_order_relaxed);
     } else if ((guest_address & 0xFF000000u) == 0xCC000000u || (guest_address & 0xFF000000u) == 0x0C000000u) {
@@ -881,6 +905,19 @@ FaultStats fault_stats() noexcept {
         taken_address[best] = true;
         stats.hot_addresses[rank] = g_fault_addresses[best];
         stats.hot_address_counts[rank] = g_fault_address_counts[best];
+    }
+    bool taken_site[kFaultSiteSlots]{};
+    for (std::size_t rank = 0; rank < 32u; ++rank) {
+        std::size_t best = kFaultSiteSlots;
+        for (std::size_t i = 0; i < g_fault_site_used; ++i) {
+            if (taken_site[i]) continue;
+            if (best == kFaultSiteSlots || g_fault_site_counts[i] > g_fault_site_counts[best]) best = i;
+        }
+        if (best == kFaultSiteSlots) break;
+        taken_site[best] = true;
+        stats.hot_sites[rank] = g_fault_sites[best];
+        stats.hot_site_addresses[rank] = g_fault_site_addresses[best];
+        stats.hot_site_counts[rank] = g_fault_site_counts[best];
     }
     return stats;
 }
