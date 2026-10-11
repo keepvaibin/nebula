@@ -1405,6 +1405,7 @@ fn render_native_sidecar_cpp(
 "#;
     let call_trace_replacement = r#"    trace_static_home_button_rso_state("call-enter", context, services, false);
     const std::uint32_t native_caller_return = context->lr & 0xFFFFFFFCu;
+    const std::uint32_t entry_r1 = context->gpr[1];
     for (;;) {
         bool returned_to_native_caller = false;
         execute_static_rso(
@@ -1415,10 +1416,23 @@ fn render_native_sidecar_cpp(
         if (galaxy::transfer_pending(services)) {
             return true;
         }
-        if (!returned_to_native_caller ||
-            context->pc == native_caller_return) {
+        if (!returned_to_native_caller) {
+            // The code left through a tail call (b or bctr) whose callee has
+            // returned: execution continues at the link register, as after
+            // a blr.
+            context->pc = context->lr & 0xFFFFFFFCu;
+        }
+        if (context->pc == native_caller_return) {
             trace_static_home_button_rso_state(
                 "call-exit", context, services, returned_to_native_caller);
+            return true;
+        }
+        // A return above this call's entry frame left the call through an
+        // outer frame: the runtime continues at context->pc, which differs
+        // from the caller's return address.
+        if (context->gpr[1] > entry_r1) {
+            trace_static_home_button_rso_state(
+                "call-exit-outer", context, services, returned_to_native_caller);
             return true;
         }
         const std::uint32_t code_start = layout.sections[kCodeSection];

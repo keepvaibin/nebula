@@ -6677,6 +6677,7 @@ fn requires_host_guest_call(target: u32) -> bool {
             | 0x804A_6E20
             | 0x804A_84F8
             | 0x804A_8A0C
+            | 0x804A_B20C // SelectThread: host scheduler on the cooperative path
             | 0x804A_B488
             | 0x804A_BFBC
             | 0x804A_C380
@@ -12696,8 +12697,8 @@ mod tests {
         let entries = BTreeMap::from([(0x804A_B20C, 0x804A_B20C), (0x804A_381C, 0x804A_381C)]);
         for (target, pc, routed, redirected) in [
             (0x804A_B20C, 0x804A_B468, true, false),
-            (0x804A_B20C, 0x804A_B7AC, false, false),
-            (0x804A_B20C, 0x804A_B448, false, false),
+            (0x804A_B20C, 0x804A_B7AC, true, false),
+            (0x804A_B20C, 0x804A_B448, true, false),
             (0x804A_381C, 0x804A_B414, true, true),
             (0x804A_381C, 0x804A_3788, true, false),
         ] {

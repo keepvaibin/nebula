@@ -4,6 +4,7 @@
 #include "galaxy/checkpoint_gate.h"
 #include "galaxy/decrementer_deadline.h"
 #include "galaxy/external_dispatch.h"
+#include "galaxy/coop_scheduler.h"
 #include "galaxy/native_call_admission.h"
 #include "galaxy/experimental_ultrawide_aspect.h"
 #include "galaxy/layout_aspect.h"
@@ -2153,6 +2154,18 @@ struct RuntimeState {
     mutable std::uint64_t lookup_cache_collisions{};
     mutable std::uint64_t lookup_cache_null_results{};
     galaxy::NativeServicesV1* services{};
+    // Cooperative scheduler (GALAXY_COOP=1): guest threads on fibers and
+    // interrupt-level work as plain calls; null on the exception-transfer path.
+    std::unique_ptr<galaxy::coop::Scheduler> coop{};
+    galaxy::GuestMemoryV1* coop_memory{};
+    // A delivered handler made a thread ready: the SDK's end-of-interrupt
+    // reschedule runs when the runtime callback that delivered it returns.
+    bool coop_reschedule_pending{};
+    std::uint64_t coop_external_deliveries{};
+    std::uint64_t coop_alarm_deliveries{};
+    std::uint64_t coop_alarm_rearms{};
+    std::uint64_t coop_reschedules{};
+    std::uint64_t coop_boundary_rewaits{};
     std::uint64_t call_count{};
     std::uint64_t max_calls{};
     std::uint64_t checkpoint_count{};
@@ -15850,6 +15863,11 @@ bool needs_call_guest_intercept(
     const RuntimeState& state,
     std::uint32_t guest_address,
     const galaxy::PpcContext* cached_context) {
+    // Cooperative scheduler boundaries: SelectThread, OSCreateThread.
+    if (state.coop != nullptr &&
+        (guest_address == 0x804AB20Cu || guest_address == 0x804AB488u)) {
+        return true;
+    }
     static const bool retain_yield_select =
         read_env_flag("GALAXY_YIELD_SELECT_SAME_CONTEXT_RFI", false);
     static const bool return_yield_select =
@@ -16215,6 +16233,462 @@ void run_translated_exception_wrapper(
         " pc=" + hexadecimal(context->pc));
 }
 
+// ── Cooperative scheduler (GALAXY_COOP=1) ───────────────────────────────────
+// Guest threads run on fibers (coop_scheduler.h). Interrupt-level guest work is
+// an ordinary call on the current fiber: the selected external handler, or the
+// due alarm's handler, runs with the scheduler disabled and MSR[EE] clear on a
+// frame below the interrupted r1, and the interrupted register file is
+// restored afterwards. The SDK's end-of-interrupt reschedule is left pending
+// until the checkpoint callback that delivered the interrupt has returned,
+// where no runtime scope is live. No OSContext is saved and no exception
+// wrapper, OSLoadContext or RFI runs.
+namespace coop_rt {
+inline constexpr std::uint32_t kInterruptHandlerTablePointer = 0x806A2D08u;
+inline constexpr std::uint32_t kInterruptPrioTable = 0x805DC258u;
+inline constexpr std::uint32_t kInterruptPrioTableEntries = 12u;
+inline constexpr std::uint32_t kInterruptMaskOs = 0x800000C4u;
+inline constexpr std::uint32_t kInterruptMaskUser = 0x800000C8u;
+inline constexpr std::uint32_t kLastInterruptSrr0 = 0x806A2CF8u;
+inline constexpr std::uint32_t kLastInterrupt = 0x806A2CFCu;      // u16
+inline constexpr std::uint32_t kLastInterruptTime = 0x806A2D00u;  // u64
+inline constexpr std::uint32_t kAlarmQueue = 0x806A2CB0u;         // head, tail
+inline constexpr std::uint32_t kSystemTimeOffset = 0x800030D8u;   // u64
+inline constexpr std::uint32_t kInsertAlarm = 0x804A1F14u;
+inline constexpr std::uint32_t kPpcMtdec = 0x804A095Cu;
+inline constexpr std::uint32_t kDecrementerExceptionCallback = 0x804A2370u;
+inline constexpr std::uint32_t kOsExitThread = 0x804AB6F4u;
+inline constexpr std::uint32_t kSelectThread = 0x804AB20Cu;
+inline constexpr std::uint32_t kOsCreateThread = 0x804AB488u;
+inline constexpr std::uint32_t kOsLoadContext = 0x804A381Cu;
+inline constexpr std::uint32_t kSelectThreadIdleBranch = 0x804AB360u;
+// ExternalInterruptHandler's 8-byte frame plus __OSDispatchInterrupt's 0x20,
+// rounded up.
+inline constexpr std::uint32_t kExternalHandlerFrameBytes = 0x30u;
+// DecrementerExceptionCallback's frame holds an OSContext (0x2C8 bytes).
+inline constexpr std::uint32_t kAlarmHandlerFrameBytes = 0x300u;
+inline constexpr std::uint32_t kAlarmExceptionContextOffset = 0x18u;
+}  // namespace coop_rt
+
+bool coop_scheduler_requested() {
+    static const bool enabled = read_env_flag("GALAXY_COOP", false);
+    return enabled;
+}
+
+const galaxy::coop::GuestRam& coop_ram() {
+    static const galaxy::coop::GuestRam ram{reinterpret_cast<std::byte*>(
+        galaxy::host::flat_guest_memory::kGuestBase)};
+    return ram;
+}
+
+void call_guest_impl(
+    void* user,
+    std::uint32_t guest_address,
+    galaxy::NativeGameFunction resolved_function,
+    galaxy::PpcContext* context,
+    galaxy::GuestMemoryV1* memory);
+
+// Whether the SDK's end-of-interrupt reschedule would switch now: the
+// scheduler is enabled and a ready thread outranks the running one (from the
+// idle context, any ready thread).
+bool coop_preemption_due(const RuntimeState& state) {
+    namespace os = galaxy::coop::os;
+    if (state.coop == nullptr) {
+        return false;
+    }
+    const auto& ram = coop_ram();
+    if (static_cast<std::int32_t>(ram.load32(os::kReschedule)) > 0) {
+        return false;
+    }
+    const std::uint32_t bits = ram.load32(os::kRunQueueBits);
+    if (bits == 0u) {
+        return false;
+    }
+    const std::uint32_t current_context = ram.load32(os::kCurrentContext);
+    const std::uint32_t current = ram.load32(os::kCurrentThread);
+    if (current == 0u) {
+        return current_context == os::kIdleContext;
+    }
+    if (current_context != current) {
+        return false;
+    }
+    return static_cast<std::int32_t>(std::countl_zero(bits)) <
+        static_cast<std::int32_t>(ram.load32(current + os::kThreadPriority));
+}
+
+// Interrupt-level bookkeeping of an external dispatch whose handler returned:
+// per-source counts and, for IRQ24, the VI boundary completion. The exception
+// path runs it at the dispatch's RFI, the cooperative path after the handler.
+void complete_external_dispatch(
+    RuntimeState& state,
+    const galaxy::interrupt::ExternalDispatchRecord& external_record,
+    std::uint32_t resume_pc,
+    galaxy::PpcContext* context) {
+    switch (external_record.selected_interrupt) {
+        case 5u:
+            ++state.ai_interrupt_count;
+            break;
+        case 6u:
+            ++state.aram_dma_interrupt_count;
+            break;
+        case 7u:
+            ++state.dsp_interrupt_count;
+            break;
+        case 18u:
+        case 19u:
+            ++state.pe_interrupt_count;
+            break;
+        case 24u: {
+            const std::uint64_t owner_serial =
+                state.external_dispatch_vi_owner_serial;
+            if (owner_serial == 0u ||
+                !state.pending_vi_boundary.active() ||
+                !state.pending_vi_boundary.confirm_vi_rfi(
+                    owner_serial, external_record.selected_interrupt)) {
+                throw RuntimeFailure(
+                    "IRQ24 RFI has no matching persistent VI boundary"
+                    " owner=" + std::to_string(owner_serial));
+            }
+            const auto pending = state.pending_vi_boundary.snapshot();
+            const std::uint32_t displayed_xfb_addr =
+                current_displayed_xfb_addr(state);
+            if (pending.rendered_retrace_frame &&
+                (!pending.present_in_render_frame ||
+                 !pending.present_this_vi)) {
+                galaxy::gx::present_cached_xfb(
+                    displayed_xfb_addr, pending.present_this_vi);
+            }
+            const std::uint64_t xfb_copies_after_present =
+                galaxy::gx::xfb_copy_count();
+            if (!state.pending_vi_boundary.set_xfb_copies_after_present(
+                    xfb_copies_after_present)) {
+                throw RuntimeFailure(
+                    "IRQ24 RFI could not persist final XFB accounting");
+            }
+            galaxy::vi::BoundarySnapshot completed{};
+            if (!state.pending_vi_boundary.finish(completed)) {
+                throw RuntimeFailure(
+                    "IRQ24 RFI could not release its completed VI boundary");
+            }
+            state.record_vi_boundary_completion(completed);
+            state.external_dispatch_vi_owner_serial = 0u;
+            (void)finalize_vi_retrace(
+                state,
+                completed.rendered_fifo_size,
+                completed.rendered_retrace_frame,
+                completed.present_this_vi,
+                completed.present_in_render_frame,
+                /*presentation_already_completed=*/true,
+                completed.xfb_copies_before_render,
+                completed.xfb_copies_after_present,
+                external_record.selected_handler);
+            state.record_vi_boundary_finalize_completion(completed);
+            state.vi_post_rfi_handoff_serial = completed.serial;
+            state.record_vi_post_rfi_handoff(
+                "after-vi-finalize", resume_pc, context);
+            break;
+        }
+        case 27u:
+            ++state.ipc_interrupt_count;
+            break;
+        default:
+            break;
+    }
+    state.external_dispatch_vi_owner_serial = 0u;
+}
+
+// The interrupt __OSDispatchInterrupt (0x804A8578) selects for this PI cause
+// and mask, or 32 for none: its cause decode, the OS and user masks at
+// 0x800000C4/C8, and the guest's own InterruptPrioTable.
+std::uint32_t coop_select_external_interrupt(
+    RuntimeState& state,
+    galaxy::GuestMemoryV1* memory,
+    std::uint32_t pi_cause,
+    std::uint32_t pi_mask,
+    std::uint32_t guest_pc) {
+    const std::uint32_t intsr = pi_cause & ~0x00010000u;
+    if (intsr == 0u || (intsr & pi_mask) == 0u) {
+        return 32u;
+    }
+    const auto load16 = [&](std::uint32_t address) -> std::uint32_t {
+        return galaxy::guest_load_u16(memory, address, state.services, guest_pc);
+    };
+    const auto load32 = [&](std::uint32_t address) {
+        return galaxy::guest_load_u32(memory, address, state.services, guest_pc);
+    };
+    std::uint32_t cause = 0u;
+    if ((intsr & 0x80u) != 0u) {
+        const std::uint32_t reg = load16(0xCC00401Eu);
+        if ((reg & 0x01u) != 0u) cause |= 0x80000000u;
+        if ((reg & 0x02u) != 0u) cause |= 0x40000000u;
+        if ((reg & 0x04u) != 0u) cause |= 0x20000000u;
+        if ((reg & 0x08u) != 0u) cause |= 0x10000000u;
+        if ((reg & 0x10u) != 0u) cause |= 0x08000000u;
+    }
+    if ((intsr & 0x40u) != 0u) {
+        const std::uint32_t reg = load16(0xCC00500Au);
+        if ((reg & 0x08u) != 0u) cause |= 0x04000000u;
+        if ((reg & 0x20u) != 0u) cause |= 0x02000000u;
+        if ((reg & 0x80u) != 0u) cause |= 0x01000000u;
+    }
+    if ((intsr & 0x20u) != 0u && (load32(0xCD006C00u) & 0x08u) != 0u) {
+        cause |= 0x00800000u;
+    }
+    if ((intsr & 0x10u) != 0u) {
+        std::uint32_t reg = load32(0xCD006800u);
+        if ((reg & 0x002u) != 0u) cause |= 0x00400000u;
+        if ((reg & 0x008u) != 0u) cause |= 0x00200000u;
+        if ((reg & 0x800u) != 0u) cause |= 0x00100000u;
+        reg = load32(0xCD006814u);
+        if ((reg & 0x002u) != 0u) cause |= 0x00080000u;
+        if ((reg & 0x008u) != 0u) cause |= 0x00040000u;
+        if ((reg & 0x800u) != 0u) cause |= 0x00020000u;
+        reg = load32(0xCD006828u);
+        if ((reg & 0x002u) != 0u) cause |= 0x00010000u;
+        if ((reg & 0x008u) != 0u) cause |= 0x00008000u;
+    }
+    if ((intsr & 0x2000u) != 0u) cause |= 0x00000020u;  // HSP
+    if ((intsr & 0x1000u) != 0u) cause |= 0x00000040u;  // DEBUG
+    if ((intsr & 0x0400u) != 0u) cause |= 0x00001000u;  // PE finish
+    if ((intsr & 0x0200u) != 0u) cause |= 0x00002000u;  // PE token
+    if ((intsr & 0x0100u) != 0u) cause |= 0x00000080u;  // VI
+    if ((intsr & 0x0008u) != 0u) cause |= 0x00000800u;  // SI
+    if ((intsr & 0x0004u) != 0u) cause |= 0x00000400u;  // DI
+    if ((intsr & 0x0002u) != 0u) cause |= 0x00000200u;  // RSW
+    if ((intsr & 0x0800u) != 0u) cause |= 0x00004000u;  // CP
+    if ((intsr & 0x0001u) != 0u) cause |= 0x00000100u;  // PI error
+    if ((intsr & 0x4000u) != 0u) cause |= 0x00000010u;  // ACR (IPC)
+    const auto& ram = coop_ram();
+    const std::uint32_t unmasked = cause &
+        ~(ram.load32(coop_rt::kInterruptMaskOs) |
+          ram.load32(coop_rt::kInterruptMaskUser));
+    if (unmasked == 0u) {
+        return 32u;
+    }
+    for (std::uint32_t entry = 0u; entry < coop_rt::kInterruptPrioTableEntries;
+         ++entry) {
+        const std::uint32_t bits = unmasked &
+            ram.load32(coop_rt::kInterruptPrioTable + entry * 4u);
+        if (bits != 0u) {
+            return static_cast<std::uint32_t>(std::countl_zero(bits));
+        }
+    }
+    return 32u;
+}
+
+// Runs the external handler the SDK dispatcher would select, now, on the
+// current fiber. The per-source scopes and the selected-handler record are the
+// exception path's own (call_guest_impl recognizes the dispatcher's return
+// LR); the RFI's completion runs right after the handler.
+bool coop_dispatch_external_interrupt(
+    RuntimeState& state,
+    std::uint32_t resume_address,
+    galaxy::PpcContext* context,
+    galaxy::GuestMemoryV1* memory,
+    bool exact_idle_ee) {
+    namespace os = galaxy::coop::os;
+    const auto& ram = coop_ram();
+    if (!guest_external_interrupts_enabled(context) &&
+        !(exact_idle_ee && ram.load32(os::kCurrentContext) == os::kIdleContext)) {
+        return false;
+    }
+    // Handlers run with EE clear; a level raised meanwhile stays latched.
+    if (state.external_dispatch.active() || state.dispatching_decrementer) {
+        return false;
+    }
+    const std::uint32_t pi_cause = galaxy::guest_load_u32(
+        memory, 0xCC003000u, state.services, resume_address);
+    const std::uint32_t pi_mask = galaxy::guest_load_u32(
+        memory, 0xCC003004u, state.services, resume_address);
+    const std::uint32_t interrupt = coop_select_external_interrupt(
+        state, memory, pi_cause, pi_mask, resume_address);
+    if (interrupt >= 32u) {
+        return false;
+    }
+    const std::uint32_t handler = ram.load32(
+        ram.load32(coop_rt::kInterruptHandlerTablePointer) + interrupt * 4u);
+    if (handler == 0u) {
+        return false;
+    }
+    const std::uint32_t interrupted_context = ram.load32(os::kCurrentContext);
+    if (interrupt > 4u) {
+        // __OSLastInterrupt, __OSLastInterruptTime, __OSLastInterruptSrr0.
+        const std::uint64_t now =
+            galaxy::read_time_base(context, state.services, resume_address);
+        ram.store16(coop_rt::kLastInterrupt, static_cast<std::uint16_t>(interrupt));
+        ram.store32(coop_rt::kLastInterruptTime, static_cast<std::uint32_t>(now >> 32u));
+        ram.store32(coop_rt::kLastInterruptTime + 4u, static_cast<std::uint32_t>(now));
+        ram.store32(coop_rt::kLastInterruptSrr0, resume_address);
+    }
+    if (!state.external_dispatch.begin(
+            interrupted_context, resume_address, pi_cause, pi_mask)) {
+        throw RuntimeFailure(
+            "cooperative external interrupt could not own the dispatch record"
+            " irq=" + std::to_string(interrupt) +
+            " context=" + hexadecimal(interrupted_context));
+    }
+    state.external_dispatch_vi_owner_serial = 0u;
+    if (state.pending_vi_boundary.active() &&
+        state.pending_vi_boundary.snapshot().phase ==
+            galaxy::vi::BoundaryPhase::AwaitViRfi) {
+        state.external_dispatch_vi_owner_serial =
+            state.pending_vi_boundary.snapshot().serial;
+    }
+
+    galaxy::coop::ThreadRegisters interrupted{};
+    galaxy::coop::save_thread_registers(*context, interrupted);
+    {
+        auto full_checkpoint_scope = state.checkpoint_gate.full_scope();
+        (void)full_checkpoint_scope;
+        const bool previous_dispatching = state.dispatching_external_interrupt;
+        state.dispatching_external_interrupt = true;
+        const galaxy::ScopeExit restore_dispatching([&]() noexcept {
+            state.dispatching_external_interrupt = previous_dispatching;
+        });
+        // OSDisableScheduler; handler(interrupt, context); OSEnableScheduler.
+        ram.store32(os::kReschedule, ram.load32(os::kReschedule) + 1u);
+        const std::uint32_t frame =
+            (interrupted.gpr[1] - coop_rt::kExternalHandlerFrameBytes) & ~0xFu;
+        ram.store32(frame, interrupted.gpr[1]);
+        context->gpr[1] = frame;
+        context->gpr[3] = interrupt;
+        context->gpr[4] = interrupted_context;
+        context->msr &= ~kMsrExternalInterruptEnable;
+        context->lr = galaxy::interrupt::kExternalDispatcherHandlerReturnLr;
+        context->pc = handler;
+        {
+            auto translated_checkpoint_scope = state.checkpoint_gate.inline_scope();
+            (void)translated_checkpoint_scope;
+            call_guest_impl(&state, handler, nullptr, context, memory);
+        }
+        ram.store32(os::kReschedule, ram.load32(os::kReschedule) - 1u);
+    }
+    galaxy::coop::load_thread_registers(interrupted, *context);
+
+    galaxy::interrupt::ExternalDispatchRecord completed{};
+    if (!state.external_dispatch.take_for_rfi(completed)) {
+        throw RuntimeFailure(
+            "cooperative external handler did not complete"
+            " irq=" + std::to_string(interrupt) +
+            " handler=" + hexadecimal(handler));
+    }
+    complete_external_dispatch(state, completed, resume_address, context);
+    ++state.coop_external_deliveries;
+    if (ram.load32(os::kRunQueueHint) != 0u) {
+        state.coop_reschedule_pending = true;
+    }
+    return true;
+}
+
+// DecrementerExceptionCallback (0x804A2370) for a due DEC request: a due head
+// alarm is unlinked, a periodic alarm is re-inserted through the guest's
+// InsertAlarm, the timer is re-armed for the new head through PPCMtdec, and the
+// handler runs with the scheduler disabled and a temporary exception context
+// current, in the SDK's order.
+void coop_deliver_alarm(
+    RuntimeState& state,
+    galaxy::PpcContext* context,
+    galaxy::GuestMemoryV1* memory) {
+    namespace os = galaxy::coop::os;
+    const auto& ram = coop_ram();
+    galaxy::coop::ThreadRegisters interrupted{};
+    galaxy::coop::save_thread_registers(*context, interrupted);
+    const std::uint32_t interrupted_context = ram.load32(os::kCurrentContext);
+    bool delivered = false;
+    {
+        auto full_checkpoint_scope = state.checkpoint_gate.full_scope();
+        (void)full_checkpoint_scope;
+        const bool previous_dispatching = state.dispatching_decrementer;
+        state.dispatching_decrementer = true;
+        const galaxy::ScopeExit restore_dispatching([&]() noexcept {
+            state.dispatching_decrementer = previous_dispatching;
+        });
+        auto translated_checkpoint_scope = state.checkpoint_gate.inline_scope();
+        (void)translated_checkpoint_scope;
+        const std::uint32_t frame =
+            (interrupted.gpr[1] - coop_rt::kAlarmHandlerFrameBytes) & ~0xFu;
+        ram.store32(frame, interrupted.gpr[1]);
+        context->gpr[1] = frame;
+        context->msr &= ~kMsrExternalInterruptEnable;
+        const auto call = [&](std::uint32_t function) {
+            context->gpr[1] = frame;
+            context->lr = coop_rt::kDecrementerExceptionCallback;
+            context->pc = function;
+            call_guest_impl(&state, function, nullptr, context, memory);
+        };
+        const auto system_time = [&] {
+            return galaxy::read_time_base(
+                       context, state.services,
+                       coop_rt::kDecrementerExceptionCallback) +
+                ram.load64(coop_rt::kSystemTimeOffset);
+        };
+        const auto set_timer = [&](std::uint32_t alarm) {
+            const auto delta = static_cast<std::int64_t>(
+                ram.load64(alarm + 0x08u) - system_time());
+            context->gpr[3] = delta < 0
+                ? 0u
+                : (delta < 0x80000000ll ? static_cast<std::uint32_t>(delta)
+                                        : 0x7FFFFFFFu);
+            call(coop_rt::kPpcMtdec);
+        };
+        const std::uint32_t alarm = ram.load32(coop_rt::kAlarmQueue);
+        if (alarm != 0u) {
+            if (static_cast<std::int64_t>(system_time()) <
+                static_cast<std::int64_t>(ram.load64(alarm + 0x08u))) {
+                set_timer(alarm);
+            } else {
+                const std::uint32_t next = ram.load32(alarm + 0x14u);
+                ram.store32(coop_rt::kAlarmQueue, next);
+                if (next == 0u) {
+                    ram.store32(coop_rt::kAlarmQueue + 4u, 0u);
+                } else {
+                    ram.store32(next + 0x10u, 0u);
+                }
+                const std::uint32_t handler = ram.load32(alarm);
+                ram.store32(alarm, 0u);
+                if (static_cast<std::int64_t>(ram.load64(alarm + 0x18u)) > 0) {
+                    context->gpr[3] = alarm;
+                    context->gpr[5] = 0u;
+                    context->gpr[6] = 0u;
+                    context->gpr[7] = handler;
+                    call(coop_rt::kInsertAlarm);
+                    ++state.coop_alarm_rearms;
+                }
+                if (const std::uint32_t head = ram.load32(coop_rt::kAlarmQueue);
+                    head != 0u) {
+                    set_timer(head);
+                }
+                // OSDisableScheduler; OSClearContext and OSSetCurrentContext of
+                // the frame's exception context; handler(alarm, context).
+                ram.store32(os::kReschedule, ram.load32(os::kReschedule) + 1u);
+                const std::uint32_t exception_context =
+                    frame + coop_rt::kAlarmExceptionContextOffset;
+                ram.store16(exception_context + os::kContextMode, 0u);
+                ram.store16(exception_context + os::kContextState, 0u);
+                ram.store32(os::kCurrentContext, exception_context);
+                ram.store32(os::kCurrentContextPhysical,
+                            exception_context & 0x3FFFFFFFu);
+                if (handler != 0u) {
+                    context->gpr[3] = alarm;
+                    context->gpr[4] = interrupted_context;
+                    call(handler);
+                }
+                ram.store32(os::kCurrentContext, interrupted_context);
+                ram.store32(os::kCurrentContextPhysical,
+                            interrupted_context & 0x3FFFFFFFu);
+                ram.store32(os::kReschedule, ram.load32(os::kReschedule) - 1u);
+                delivered = true;
+            }
+        }
+    }
+    galaxy::coop::load_thread_registers(interrupted, *context);
+    if (delivered) {
+        ++state.coop_alarm_deliveries;
+        if (ram.load32(os::kRunQueueHint) != 0u) {
+            state.coop_reschedule_pending = true;
+        }
+    }
+}
+
 // Enter Broadway's one architectural external-interrupt vector. Device code
 // only advances and latches hardware levels; RMGE01's translated dispatcher
 // reads PI_INTSR/PI_INTMR and chooses the registered OS interrupt itself.
@@ -16227,6 +16701,10 @@ bool dispatch_external_interrupt(
     galaxy::GuestMemoryV1* memory,
     bool exact_idle_ee = false) {
     if (state.pending_transfer.active) return false;
+    if (state.coop != nullptr) {
+        return coop_dispatch_external_interrupt(
+            state, resume_address, context, memory, exact_idle_ee);
+    }
     constexpr std::uint32_t kPiInterruptCause = 0xCC003000u;
     constexpr std::uint32_t kPiInterruptMask = 0xCC003004u;
     constexpr std::uint32_t kCurrentContextAddress = 0x800000D4u;
@@ -18505,7 +18983,12 @@ bool advance_pending_vi_boundary(
             if (galaxy::gx::quit_requested()) {
                 throw RuntimeQuitRequested{};
             }
-            if (!blocks_current) {
+            // Cooperative path: a delivery that readied a higher-priority
+            // thread ends this wait so that thread runs, as the exception
+            // path's transfer did. The blocked thread re-enters the wait
+            // before it runs guest code again (coop_branch_checkpoint).
+            if (!blocks_current ||
+                (state.coop_reschedule_pending && coop_preemption_due(state))) {
                 return true;
             }
             galaxy::timeline::record(galaxy::timeline::Event::PeWaitBegin);
@@ -18634,7 +19117,8 @@ bool advance_pending_vi_boundary(
                     if (galaxy::gx::quit_requested()) {
                         throw RuntimeQuitRequested{};
                     }
-                    if (!blocks_current) {
+                    if (!blocks_current ||
+                        (state.coop_reschedule_pending && coop_preemption_due(state))) {
                         return true;
                     }
                     galaxy::timeline::record(galaxy::timeline::Event::PeWaitBegin);
@@ -18676,13 +19160,18 @@ bool advance_pending_vi_boundary(
                 if ((cause & mask) != 0u &&
                     (guest_external_interrupts_enabled(context) ||
                      exact_idle_ee)) {
-                    (void)dispatch_external_interrupt(
+                    const bool delivered = dispatch_external_interrupt(
                         state,
                         exact_resume,
                         context,
                         memory,
                         exact_idle_ee);
-                if (state.pending_transfer.active) return true;
+                    if (state.pending_transfer.active) return true;
+                    // Cooperative path: the handler returned here, and a
+                    // checkpoint inside it may have advanced this boundary.
+                    if (delivered && state.coop != nullptr) {
+                        continue;
+                    }
                 }
 
                 constexpr std::uint32_t kViVerticalInterruptRegister =
@@ -22288,6 +22777,11 @@ void dispatch_decrementer(
         }
     }
 
+    if (state.coop != nullptr) {
+        ++state.decrementer_count;
+        coop_deliver_alarm(state, context, memory);
+        return;
+    }
     validate_guest_exception_identity(
         state,
         memory,
@@ -23238,6 +23732,73 @@ void run_jaudio_host_command(
     }
 }
 
+// Continues guest execution at `target` from the flat continuation chain:
+// every translated frame returns (or unwinds) to run_guest_flat, as after an
+// RFI that resumes elsewhere.
+void raise_flat_transfer(RuntimeState& state, std::uint32_t target) {
+    if (state.pending_transfer.active) {
+        throw RuntimeFailure(
+            "flat transfer to " + hexadecimal(target) + " while the transfer to " +
+            hexadecimal(state.pending_transfer.address) + " is pending");
+    }
+    const std::uint64_t now_ns =
+        galaxy::cadence::steady_now_ns_if_enabled(state.cadence_diagnostics);
+    static const bool trace_flag = read_env_flag("GALAXY_TRACE_FLAG_TRANSFER", false);
+    if (trace_flag && state.address_space != nullptr) {
+        std::cerr << "[flag-raise] target=" << hexadecimal(target)
+                  << " E4=" << hexadecimal(state.address_space->read_u32(0x800000E4u))
+                  << '\n';
+    }
+    if (state.flag_transfer_enabled) {
+        state.pending_transfer = {true, target, 0u, 0u, 0u, now_ns};
+        state.deadline_events.set_transfer_pending();
+        ++state.flag_transfer_count;
+        return;
+    }
+    ++state.exception_transfer_count;
+    throw GuestTransfer(target, now_ns);
+}
+
+// Scheduler boundaries of the cooperative path: SelectThread is the host
+// scheduler, OSCreateThread retires a fiber left by an exited thread at the
+// same address, and OSLoadContext has no caller left to transfer to.
+bool coop_call_intercept(
+    RuntimeState& state,
+    std::uint32_t guest_address,
+    galaxy::NativeGameFunction resolved_function,
+    galaxy::PpcContext* context,
+    galaxy::GuestMemoryV1* memory) {
+    switch (guest_address) {
+        case coop_rt::kSelectThread:
+            state.coop_reschedule_pending = false;
+            state.coop->select_thread(context->gpr[3] != 0u);
+            return true;
+        case coop_rt::kOsCreateThread: {
+            const std::uint32_t thread = context->gpr[3];
+            const galaxy::NativeGameFunction body = resolved_function != nullptr
+                ? resolved_function
+                : state.lookup_function(guest_address);
+            if (body == nullptr) {
+                throw RuntimeFailure("no translated OSCreateThread at 0x804AB488");
+            }
+            context->pc = guest_address;
+            body(context, memory, state.services);
+            if (context->gpr[3] != 0u) {
+                state.coop->on_thread_created(thread);
+            }
+            return true;
+        }
+        case coop_rt::kOsLoadContext:
+            throw RuntimeFailure(
+                "OSLoadContext reached on the cooperative path (the module must"
+                " route SelectThread 0x804AB20C through the host)"
+                " target=" + hexadecimal(context->gpr[3]) +
+                " lr=" + hexadecimal(context->lr));
+        default:
+            return false;
+    }
+}
+
 void call_guest_impl_body(
     void* user,
     std::uint32_t guest_address,
@@ -23250,6 +23811,10 @@ void call_guest_impl_body(
             "translated code called a guest function while a flat transfer is "
             "pending (missing transfer check) target=" + hexadecimal(guest_address) +
             " resume=" + hexadecimal(state.pending_transfer.address));
+    }
+    if (state.coop != nullptr &&
+        coop_call_intercept(state, guest_address, resolved_function, context, memory)) {
+        return;
     }
     PreparedGuestSetCurrentContext prepared_set_current_context{};
     // Exact MoviePlayerSimple quad draw and stop-owned wrapper boundaries.
@@ -24169,6 +24734,13 @@ void call_guest_impl_body(
         if (sleep_fn == nullptr) {
             throw RuntimeFailure(
                 "no translated OSSleepThread at 0x804ABFBC");
+        }
+        if (state.coop != nullptr) {
+            // Blocks in the host SelectThread and returns once this thread
+            // is selected again.
+            context->pc = 0x804ABFBCu;
+            sleep_fn(context, memory, state.services);
+            return;
         }
         // Track the sleeping context only for diagnostics and interrupt
         // ownership while translated OSSleepThread runs. A successful
@@ -25222,6 +25794,13 @@ void call_guest_impl_body(
                         memory,
                         state.services)) {
                     if (state.pending_transfer.active) return;
+                    // The guest left the call through a frame above it (the
+                    // sidecar stopped at context->pc): no translated caller
+                    // frame may continue, so resume there from the flat chain.
+                    if (context->pc != (lr & 0xFFFFFFFCu)) {
+                        raise_flat_transfer(state, context->pc);
+                        return;
+                    }
                     // Selection is consumed only at a completed retail return.
                     if (state.monitor_mouse_latency && entry != nullptr) {
                         constexpr bool opened = false;
@@ -28903,9 +29482,230 @@ bool take_pending_flat_transfer(RuntimeState& state, std::uint32_t& transfer_add
     return true;
 }
 
-void run_guest_entry(
+template <typename Start>
+void run_guest_flat(
     RuntimeState& state,
-    galaxy::ModuleEntryFn entry,
+    Start&& start,
+    galaxy::PpcContext* context,
+    galaxy::GuestMemoryV1* memory);
+
+// First run of a thread on its new fiber: OSLoadContext of a context that
+// never ran (exception bit clear) restores r0-r31, CR, LR, CTR, XER, GQR1-7,
+// SRR0 and SRR1; the FPU image only when the context holds one, as the lazy
+// FPU switch would. The entry returns through LR = OSExitThread with its
+// result in r3.
+void coop_run_new_thread(
+    void* user,
+    std::uint32_t thread,
+    galaxy::PpcContext* context) {
+    namespace os = galaxy::coop::os;
+    auto& state = *static_cast<RuntimeState*>(user);
+    const auto& ram = coop_ram();
+    for (std::uint32_t i = 0u; i < 32u; ++i) {
+        context->gpr[i] = ram.load32(thread + i * 4u);
+    }
+    context->cr = ram.load32(thread + os::kContextCr);
+    context->lr = ram.load32(thread + os::kContextLr);
+    context->ctr = ram.load32(thread + os::kContextCtr);
+    context->xer = ram.load32(thread + os::kContextXer);
+    for (std::uint32_t i = 1u; i < 8u; ++i) {
+        context->gqr[i] = ram.load32(thread + os::kContextGqr + i * 4u);
+    }
+    if ((ram.load16(thread + os::kContextState) & os::kContextStateFpSaved) != 0u) {
+        // __OSLoadFPUContext: psq_l (GQR0) of the {ps0, ps1} singles, then lfd.
+        context->fpscr = ram.load32(thread + os::kContextFpscr);
+        for (std::uint32_t i = 0u; i < 32u; ++i) {
+            context->ps1_bits[i] = galaxy::widen_f32_bits(
+                ram.load32(thread + os::kContextPsf + i * 8u + 4u));
+            context->fpr_bits[i] = ram.load64(thread + os::kContextFpr + i * 8u);
+        }
+    }
+    const std::uint32_t entry = ram.load32(thread + os::kContextSrr0);
+    context->msr = ram.load32(thread + os::kContextSrr1) | os::kMsrFloatingPoint;
+    run_guest_flat(state, [&] {
+        context->pc = entry;
+        call_guest_impl(&state, entry, nullptr, context, state.coop_memory);
+        if (state.pending_transfer.active) {
+            return;
+        }
+        context->pc = coop_rt::kOsExitThread;
+        call_guest_impl(&state, coop_rt::kOsExitThread, nullptr, context, state.coop_memory);
+    }, context, state.coop_memory);
+}
+
+// No runnable thread: one pass of the SDK idle loop, which spins at 0x804AB360
+// with interrupts enabled. The checkpoint body sleeps toward the next deadline
+// there and delivers whatever became due; SelectThread then reads the queues.
+// The AI-DMA probe is scheduled in checkpoint counts, which advance only while
+// guest code runs. With no thread runnable the idle loop tests the device's
+// completion time itself, so a due AI boundary is serviced on this pass
+// instead of after the broker's publication.
+bool coop_idle_ai_due(RuntimeState& state) {
+    if (state.timeline == nullptr || state.address_space == nullptr ||
+        (!state.address_space->ai_dma_playing() &&
+         !state.address_space->ai_dma_interrupt_pending())) {
+        return false;
+    }
+    const std::uint64_t due = state.address_space->ai_dma_next_completion_ticks();
+    if (due == 0u || state.timeline->now_ticks() < due) {
+        return false;
+    }
+    state.next_ai_dma_probe_checkpoint = state.checkpoint_count;
+    return true;
+}
+
+// Inside the AI-DMA margin the idle wait does not sleep (the armed timer is
+// less punctual than a spin). Spin on what ends the margin, a latched event, a
+// raised PE level or the AI deadline, for at most 20 us per pass instead of
+// running the whole service pass for every probe.
+void coop_idle_spin(RuntimeState& state) {
+    if (state.timeline == nullptr || state.address_space == nullptr) {
+        return;
+    }
+    constexpr std::uint64_t kSpinTicks =
+        galaxy::timing::kTimelineTicksPerSecond / 50'000u;
+    const std::uint64_t start = state.timeline->now_ticks();
+    const std::uint64_t ai_due =
+        state.address_space->ai_dma_next_completion_ticks();
+    for (;;) {
+        if (state.deadline_events.mask() != 0u ||
+            state.address_space->pe_finish_pending() ||
+            state.address_space->pe_token_pending()) {
+            return;
+        }
+        const std::uint64_t now = state.timeline->now_ticks();
+        if (now - start >= kSpinTicks || (ai_due != 0u && now >= ai_due)) {
+            return;
+        }
+        _mm_pause();
+    }
+}
+
+void coop_idle(void* user, galaxy::PpcContext* context) {
+    auto& state = *static_cast<RuntimeState*>(user);
+    galaxy::coop::ThreadRegisters parked{};
+    galaxy::coop::save_thread_registers(*context, parked);
+    context->msr |= kMsrExternalInterruptEnable;
+    context->pc = coop_rt::kSelectThreadIdleBranch;
+    (void)coop_idle_ai_due(state);
+    const std::uint64_t sleeps_before = state.idle_loop_sleeps;
+    branch_checkpoint(
+        user, coop_rt::kSelectThreadIdleBranch, context, state.coop_memory);
+    galaxy::coop::load_thread_registers(parked, *context);
+    state.coop_reschedule_pending = false;
+    if (state.idle_loop_sleeps == sleeps_before &&
+        coop_ram().load32(galaxy::coop::os::kRunQueueBits) == 0u) {
+        coop_idle_spin(state);
+    }
+}
+
+void coop_call_guest(void* user, std::uint32_t function, galaxy::PpcContext* context) {
+    auto& state = *static_cast<RuntimeState*>(user);
+    context->pc = function;
+    call_guest_impl(&state, function, nullptr, context, state.coop_memory);
+}
+
+// The runtime's live scope depths belong to the native call chain of one
+// fiber: the checkpoint gate's and the checkpoint callback identity.
+void coop_exchange_chain(
+    void* user,
+    galaxy::coop::ChainState& parked,
+    const galaxy::coop::ChainState& resumed) {
+    auto& state = *static_cast<RuntimeState*>(user);
+    const galaxy::coop::ChainState next = resumed;
+    galaxy::checkpoint::GateController::ChainDepths gate{};
+    state.checkpoint_gate.exchange_chain(
+        gate,
+        galaxy::checkpoint::GateController::ChainDepths{next.words[0], next.words[1]});
+    parked.words[0] = gate.full_depth;
+    parked.words[1] = gate.inline_depth;
+    parked.words[2] = g_branch_checkpoint_callback_depth;
+    parked.words[3] = g_active_branch_checkpoint_pc;
+    g_branch_checkpoint_callback_depth = next.words[2];
+    g_active_branch_checkpoint_pc = static_cast<std::uint32_t>(next.words[3]);
+}
+
+// The SDK's end-of-interrupt __OSReschedule for deliveries made during the
+// callback that just returned. Interrupts are disabled across the switch as in
+// the exception handler; the interrupted register file is restored when this
+// thread runs again.
+void coop_reschedule(RuntimeState& state, galaxy::PpcContext* context) {
+    if (!guest_external_interrupts_enabled(context)) {
+        return;
+    }
+    state.coop_reschedule_pending = false;
+    if (coop_ram().load32(galaxy::coop::os::kRunQueueHint) == 0u) {
+        return;
+    }
+    galaxy::coop::ThreadRegisters interrupted{};
+    galaxy::coop::save_thread_registers(*context, interrupted);
+    context->msr &= ~kMsrExternalInterruptEnable;
+    ++state.coop_reschedules;
+    state.coop->select_thread(false);
+    galaxy::coop::load_thread_registers(interrupted, *context);
+}
+
+void coop_branch_checkpoint(
+    void* user,
+    std::uint32_t guest_pc,
+    galaxy::PpcContext* context,
+    galaxy::GuestMemoryV1* memory) {
+    auto& state = *static_cast<RuntimeState*>(user);
+    for (;;) {
+        const std::uint64_t bodies =
+            g_census_checkpoint_bodies.load(std::memory_order_relaxed);
+        branch_checkpoint(user, guest_pc, context, memory);
+        if (state.coop_reschedule_pending) {
+            coop_reschedule(state, context);
+        }
+        // A frame boundary that still blocks this thread: the exception path
+        // resumed such a thread only inside the boundary's wait, never in
+        // guest code, so the wait continues here. A passive callback (no body
+        // ran) leaves it to the next checkpoint.
+        if (g_census_checkpoint_bodies.load(std::memory_order_relaxed) == bodies ||
+            !state.pending_vi_boundary.active() ||
+            !state.pending_vi_boundary.blocks_context(
+                coop_ram().load32(galaxy::coop::os::kCurrentContext))) {
+            return;
+        }
+        ++state.coop_boundary_rewaits;
+    }
+}
+
+void start_cooperative_scheduler(
+    RuntimeState& state,
+    galaxy::PpcContext* context,
+    galaxy::GuestMemoryV1* memory) {
+    if (!galaxy::host::flat_guest_memory::is_initialized()) {
+        throw RuntimeFailure(
+            "the cooperative scheduler needs the flat guest memory view");
+    }
+    if (state.profile_call_self_time) {
+        throw RuntimeFailure(
+            "call self-time profiling keeps one call stack; it does not support"
+            " GALAXY_COOP=1");
+    }
+    galaxy::coop::Scheduler::Host host{};
+    host.user = &state;
+    host.run_new_thread = &coop_run_new_thread;
+    host.idle = &coop_idle;
+    host.call_guest = &coop_call_guest;
+    host.exchange_chain = &coop_exchange_chain;
+    state.coop_memory = memory;
+    state.coop = std::make_unique<galaxy::coop::Scheduler>(host, coop_ram(), context);
+    state.coop->attach_boot_fiber();
+    state.services->branch_checkpoint = &coop_branch_checkpoint;
+}
+
+// Runs the guest code `start` enters. It never ends normally: an RFI that
+// resumes elsewhere unwinds to here as a flat transfer and continues through
+// the flat continuation chain. On the cooperative path thread switches are
+// fiber switches, and only direct RFI helpers (the real-mode BAT setup in
+// OSInit) still take this path.
+template <typename Start>
+void run_guest_flat(
+    RuntimeState& state,
+    Start&& start,
     galaxy::PpcContext* context,
     galaxy::GuestMemoryV1* memory) {
     bool initial_entry = true;
@@ -28916,7 +29716,7 @@ void run_guest_entry(
         try {
             if (initial_entry) {
                 initial_entry = false;
-                entry(context, memory);
+                start();
                 if (take_pending_flat_transfer(state, transfer_address)) {
                     // Flag-based RFI out of the boot thread: the entry
                     // function returned because the resumed context is
@@ -28977,6 +29777,16 @@ void run_guest_entry(
                     },
                     [&](std::uint32_t address,
                         galaxy::NativeGameFunction resume_fn) {
+                        static const bool trace_hops =
+                            read_env_flag("GALAXY_TRACE_FLAT_HOPS", false);
+                        if (trace_hops) {
+                            std::cerr << "[flat-hop] pc=" << hexadecimal(address)
+                                      << " lr=" << hexadecimal(context->lr)
+                                      << " r1=" << hexadecimal(context->gpr[1])
+                                      << " r3=" << hexadecimal(context->gpr[3])
+                                      << " r31=" << hexadecimal(context->gpr[31])
+                                      << '\n';
+                        }
                         context->pc = address;
                         scene_nerve_child_resume(state, address, context);
                         scene_nerve_owner_resume(state, address, context);
@@ -29075,6 +29885,17 @@ void run_guest_entry(
             throw;
         }
     }
+}
+
+void run_guest_entry(
+    RuntimeState& state,
+    galaxy::ModuleEntryFn entry,
+    galaxy::PpcContext* context,
+    galaxy::GuestMemoryV1* memory) {
+    if (coop_scheduler_requested()) {
+        start_cooperative_scheduler(state, context, memory);
+    }
+    run_guest_flat(state, [&] { entry(context, memory); }, context, memory);
 }
 
 // ─── wmain ───────────────────────────────────────────────────────────────────
@@ -30242,77 +31063,7 @@ void return_from_interrupt(
     }
     if (external_route ==
         galaxy::interrupt::ExternalRfiRouteResult::ConsumedExternalDispatch) {
-        switch (external_record.selected_interrupt) {
-            case 5u:
-                ++state.ai_interrupt_count;
-                break;
-            case 6u:
-                ++state.aram_dma_interrupt_count;
-                break;
-            case 7u:
-                ++state.dsp_interrupt_count;
-                break;
-            case 18u:
-            case 19u:
-                ++state.pe_interrupt_count;
-                break;
-            case 24u: {
-                const std::uint64_t owner_serial =
-                    state.external_dispatch_vi_owner_serial;
-                if (owner_serial == 0u ||
-                    !state.pending_vi_boundary.active() ||
-                    !state.pending_vi_boundary.confirm_vi_rfi(
-                        owner_serial, external_record.selected_interrupt)) {
-                    throw RuntimeFailure(
-                        "IRQ24 RFI has no matching persistent VI boundary"
-                        " owner=" + std::to_string(owner_serial));
-                }
-                const auto pending = state.pending_vi_boundary.snapshot();
-                const std::uint32_t displayed_xfb_addr =
-                    current_displayed_xfb_addr(state);
-                if (pending.rendered_retrace_frame &&
-                    (!pending.present_in_render_frame ||
-                     !pending.present_this_vi)) {
-                    galaxy::gx::present_cached_xfb(
-                        displayed_xfb_addr, pending.present_this_vi);
-                }
-                const std::uint64_t xfb_copies_after_present =
-                    galaxy::gx::xfb_copy_count();
-                if (!state.pending_vi_boundary.set_xfb_copies_after_present(
-                        xfb_copies_after_present)) {
-                    throw RuntimeFailure(
-                        "IRQ24 RFI could not persist final XFB accounting");
-                }
-                galaxy::vi::BoundarySnapshot completed{};
-                if (!state.pending_vi_boundary.finish(completed)) {
-                    throw RuntimeFailure(
-                        "IRQ24 RFI could not release its completed VI boundary");
-                }
-                state.record_vi_boundary_completion(completed);
-                state.external_dispatch_vi_owner_serial = 0u;
-                (void)finalize_vi_retrace(
-                    state,
-                    completed.rendered_fifo_size,
-                    completed.rendered_retrace_frame,
-                    completed.present_this_vi,
-                    completed.present_in_render_frame,
-                    /*presentation_already_completed=*/true,
-                    completed.xfb_copies_before_render,
-                    completed.xfb_copies_after_present,
-                    external_record.selected_handler);
-                state.record_vi_boundary_finalize_completion(completed);
-                state.vi_post_rfi_handoff_serial = completed.serial;
-                state.record_vi_post_rfi_handoff(
-                    "after-vi-finalize", resume_pc, context);
-                break;
-            }
-            case 27u:
-                ++state.ipc_interrupt_count;
-                break;
-            default:
-                break;
-        }
-        state.external_dispatch_vi_owner_serial = 0u;
+        complete_external_dispatch(state, external_record, resume_pc, context);
     }
 
     record_scheduler_transition(state, *context, resume_pc);
@@ -31603,6 +32354,17 @@ int wmain(int argc, wchar_t** argv) {
                 const auto faults = galaxy::host::flat_guest_memory::fault_stats();
                 std::cerr << "[transfer] flag-returns=" << state.flag_transfer_count
                           << " exception-unwinds=" << state.exception_transfer_count << '\n';
+                if (state.coop != nullptr) {
+                    std::cerr << "[coop] switches=" << state.coop->switches()
+                              << " fibers=" << state.coop->fibers_created()
+                              << " idle-entries=" << state.coop->idle_entries()
+                              << " idle-passes=" << state.coop->idle_passes()
+                              << " external=" << state.coop_external_deliveries
+                              << " alarms=" << state.coop_alarm_deliveries
+                              << " alarm-rearms=" << state.coop_alarm_rearms
+                              << " reschedules=" << state.coop_reschedules
+                              << " boundary-rewaits=" << state.coop_boundary_rewaits << '\n';
+                }
                 if (state.jaudio_host_mixer) {
                     const auto& mix = state.jaudio_mixer.stats();
                     std::cerr << "[jaudio] commands=" << state.jaudio_commands

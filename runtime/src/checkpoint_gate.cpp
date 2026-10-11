@@ -270,6 +270,21 @@ void GateController::leave_inline_scope(
     full_scope_depth_ = saved_full_depth;
 }
 
+void GateController::exchange_chain(
+    ChainDepths& parked,
+    ChainDepths resumed) noexcept {
+    parked = ChainDepths{full_scope_depth_, inline_scope_depth_};
+    full_scope_depth_ = resumed.full_depth;
+    inline_scope_depth_ = resumed.inline_depth;
+    const bool publish_inline = bound_ && activated_ &&
+        requested_mode_ == RequestedMode::Inline && full_scope_depth_ == 0u;
+    if (publish_inline && !inline_published_) {
+        publish_inline_unchecked();
+    } else if (!publish_inline && inline_published_) {
+        publish_full_unchecked();
+    }
+}
+
 void GateController::validate_published_state() const {
     if (!published_state_is_valid()) {
         throw std::logic_error(

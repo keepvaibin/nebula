@@ -4678,7 +4678,10 @@ std::uint64_t RendererD3D12::end_frame(
                                  timeline_present_ordinal);
             // The OS's own record of which refresh showed which present.
             DXGI_FRAME_STATISTICS statistics{};
-            if (SUCCEEDED(swap_chain_->GetFrameStatistics(&statistics))) {
+            // An occluded or not yet displayed swap chain reports a zero
+            // sync time; that is no timeline instant.
+            if (SUCCEEDED(swap_chain_->GetFrameStatistics(&statistics)) &&
+                statistics.SyncQPCTime.QuadPart != 0) {
                 galaxy::timeline::record_at(
                     galaxy::timeline::Event::DisplayStats,
                     static_cast<std::uint64_t>(statistics.SyncQPCTime.QuadPart),
@@ -4696,7 +4699,8 @@ std::uint64_t RendererD3D12::end_frame(
                 }();
                 DWM_TIMING_INFO timing{};
                 timing.cbSize = sizeof(timing);
-                if (dwm_timing != nullptr && SUCCEEDED(dwm_timing(nullptr, &timing))) {
+                if (dwm_timing != nullptr && SUCCEEDED(dwm_timing(nullptr, &timing)) &&
+                    timing.qpcVBlank != 0u) {
                     galaxy::timeline::record_at(galaxy::timeline::Event::VBlank, timing.qpcVBlank,
                                             timing.qpcRefreshPeriod);
                 }

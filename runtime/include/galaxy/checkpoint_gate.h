@@ -159,6 +159,16 @@ public:
     // fatal ownership violation.
     [[nodiscard]] InlineScope inline_scope();
 
+    // Live scope depths of one native call chain. A guest fiber parks its
+    // chain's depths when it switches away; exchange_chain() installs another
+    // chain's (or the empty chain's) and republishes the gate pointers for the
+    // installed full depth.
+    struct ChainDepths {
+        std::uint64_t full_depth{};
+        std::uint64_t inline_depth{};
+    };
+    void exchange_chain(ChainDepths& parked, ChainDepths resumed) noexcept;
+
     [[nodiscard]] RequestedMode requested_mode() const noexcept {
         return requested_mode_;
     }
