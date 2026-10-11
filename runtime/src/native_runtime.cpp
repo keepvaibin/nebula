@@ -1229,6 +1229,7 @@ private:
 
 SimulationProfiler g_sim_profiler;
 SimulationProfiler g_render_profiler;
+SimulationProfiler g_named_thread_profiler;
 
 std::string hexadecimal(std::uint32_t value) {
     std::ostringstream output;
@@ -31440,6 +31441,7 @@ int wmain(int argc, wchar_t** argv) {
                 <<" ftz-daz="<<state.fast_float_mxcsr<<'\n';
             g_sim_profiler.stop_and_print(std::cerr);
             g_render_profiler.stop_and_print(std::cerr);
+            g_named_thread_profiler.stop_and_print(std::cerr);
             {
                 const auto faults = galaxy::host::flat_guest_memory::fault_stats();
                 std::cerr << "[transfer] flag-returns=" << state.flag_transfer_count
@@ -31774,6 +31776,15 @@ int wmain(int argc, wchar_t** argv) {
     }
     if (read_env_flag("GALAXY_RENDER_PROFILE", false)) {
         g_render_profiler.start_named(L"Nebula GX Render", "render-profile");
+    }
+    // GALAXY_PROFILE_THREAD=<thread description>, e.g. "Nebula Native DSP":
+    // [thread-profile*] lines for any named runtime thread.
+    {
+        wchar_t name[128]{};
+        const DWORD length = GetEnvironmentVariableW(L"GALAXY_PROFILE_THREAD", name, 128u);
+        if (length > 0u && length < 128u) {
+            g_named_thread_profiler.start_named(name, "thread-profile");
+        }
     }
 
     // ── Guest address space (memory + IOS device simulation) ────────────────
