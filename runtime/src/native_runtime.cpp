@@ -18,6 +18,7 @@
 #include "galaxy/ppc_float.h"
 #include "galaxy/psmtx_guard_trace.h"
 #include "galaxy/native_host.h"
+#include "galaxy/jaudio_host_mixer.h"
 #include "galaxy/flat_guest_memory.h"
 #include "galaxy/dsp_timing_runtime.h"
 #include "galaxy/native_thp_video.h"
@@ -2288,6 +2289,12 @@ struct RuntimeState {
     std::uint32_t flag_transfer_kinds{7u};
     std::uint32_t module_transfer_flags{};
     std::uint64_t flag_transfer_count{};
+    // GALAXY_JAUDIO_HOST_MIXER: DspBoot and DSPSendCommands2 run on the
+    // host and no DSP task boots (SDK_REPLACEMENT_PLAN.md section 4).
+    bool jaudio_host_mixer{};
+    galaxy::host::JAudioHostMixer jaudio_mixer;
+    std::uint64_t jaudio_commands{};
+    std::uint64_t jaudio_dsp_messages{};
     std::uint64_t exception_transfer_count{};
     std::uint64_t host_pause_active_vi_ai_recoveries{};
     // Counted separately from host_pause_active_vi_ai_recoveries so the two
@@ -15754,6 +15761,7 @@ bool direct_dispatch_target_requires_host(std::uint32_t target) {
         case 0x803F81ACu: case 0x804077BCu: case 0x80409F48u: case 0x8040A2B4u:
         case 0x8040ABF4u: case 0x8040ACE0u: case 0x8040CA60u: case 0x8041071Cu:
         case 0x80418440u: case 0x804506D8u: case 0x804A095Cu: case 0x804A096Cu:
+        case 0x804961E0u: case 0x804962C0u:
         case 0x804A2FD8u: case 0x804A3734u: case 0x804A379Cu: case 0x804A381Cu:
         case 0x804A3E94u: case 0x804A3F24u: case 0x804A6E20u: case 0x804A84F8u:
         case 0x804A8A0Cu: case 0x804AB488u: case 0x804ABFBCu: case 0x804AC380u:
@@ -15985,6 +15993,9 @@ bool needs_call_guest_intercept(
                     break;
             }
         }
+    }
+    if (guest_address == 0x804961E0u || guest_address == 0x804962C0u) {
+        return state.jaudio_host_mixer;  // DspBoot / DSPSendCommands2
     }
     switch (guest_address >> 16) {
         case 0x0000u:
@@ -23095,6 +23106,103 @@ bool native_mouse_file_select_mode(const RuntimeState& state, const galaxy::PpcC
     return mapped_guest_range(mem,object+0xd0u,4u) && mem->read_u32(object+0xd0u)==5u;
 }
 
+std::byte* jaudio_guest_resolve(void* user, std::uint32_t address, std::uint32_t size) {
+    return static_cast<galaxy::host::GuestAddressSpace*>(user)->pointer_or_null(address, size);
+}
+
+// DspBoot (0x804961E0) and DSPSendCommands2 (0x804962C0) as host calls.
+// No DSP task boots: DspRunningStatus is set as DspHandShake would set it,
+// command callbacks (DsetupTable and DsetVARAM wait on them) run at once,
+// and each mixed subframe posts AUDIOMSG_DSP to the JASAudioThread queue
+// exactly as JASAudioThread::DSPCallback (0x80494CC0) does.
+void run_jaudio_host_command(
+    RuntimeState& state,
+    galaxy::PpcContext* context,
+    galaxy::GuestMemoryV1* memory,
+    std::uint32_t guest_address) {
+    auto& space = *state.address_space;
+    const galaxy::host::JAudioGuestMemory guest{&space, &jaudio_guest_resolve};
+    ++state.jaudio_commands;
+    if (guest_address == 0x804961E0u) {
+        if (std::byte* running = space.pointer_or_null(0x806A2BF8u, 1u)) {
+            *running = std::byte{1};
+        }
+        return;
+    }
+    const std::uint32_t messages = context->gpr[3];
+    const std::uint32_t count = context->gpr[4];
+    const std::uint32_t callback = context->gpr[5];
+    const std::uint32_t words = std::max<std::uint32_t>(count, 1u);
+    if (words > 8u || !mapped_guest_range(&space, messages, words * 4u)) {
+        throw RuntimeFailure("DSPSendCommands2 message block is not mapped: msgs=" +
+                             hexadecimal(messages) + " count=" + std::to_string(count));
+    }
+    const auto word = [&](std::uint32_t index) {
+        return space.read_u32(messages + index * 4u);
+    };
+    const std::uint32_t command = word(0u);
+    context->gpr[3] = 1u;
+    if (count == 0u) {
+        if (!state.jaudio_mixer.release_halt(command, guest)) {
+            return;
+        }
+        const std::uint32_t instance = space.read_u32(context->gpr[13] - 0x678Cu);
+        if (instance == 0u) {
+            return;
+        }
+        const galaxy::NativeGameFunction send = state.lookup_function(0x804A88E4u);
+        if (send == nullptr) {
+            throw RuntimeFailure("no translated OSSendMessage at 0x804A88E4");
+        }
+        ++state.jaudio_dsp_messages;
+        // Tail call: OSSendMessage(&thread->queue, AUDIOMSG_DSP, NOBLOCK)
+        // returns to DSPSendCommands2's caller.
+        context->gpr[3] = instance + 0x30u;
+        context->gpr[4] = 1u;
+        context->gpr[5] = 0u;
+        context->pc = 0x804A88E4u;
+        send(context, memory, state.services);
+        return;
+    }
+    switch (command >> 24u) {
+    case 0x81u:
+        if (count >= 5u) {
+            state.jaudio_mixer.setup(command, word(1u), word(2u), word(3u), word(4u), guest);
+        } else {
+            state.jaudio_mixer.note_ignored_command();
+        }
+        break;
+    case 0x8Eu:
+        state.jaudio_mixer.set_varam(count >= 2u ? word(1u) : 0u);
+        break;
+    case 0x82u:
+        state.jaudio_mixer.sync_frame(
+            command, count >= 2u ? word(1u) : 0u, count >= 3u ? word(2u) : 0u,
+            count >= 4u ? word(3u) : 0u, count >= 5u ? word(4u) : 0u, guest);
+        break;
+    default:
+        state.jaudio_mixer.note_ignored_command();
+        break;
+    }
+    if (callback != 0u) {
+        // DspStartWork + DspFinishWork collapse: the work is done now.
+        const galaxy::NativeGameFunction finish = state.lookup_function(callback);
+        if (finish == nullptr) {
+            throw RuntimeFailure("JAudio command callback has no translated function at " +
+                                 hexadecimal(callback));
+        }
+        const std::uint32_t saved_lr = context->lr;
+        context->gpr[3] = 0u;
+        context->pc = callback;
+        finish(context, memory, state.services);
+        if (state.pending_transfer.active) {
+            return;
+        }
+        context->lr = saved_lr;
+        context->gpr[3] = 1u;
+    }
+}
+
 void call_guest_impl_body(
     void* user,
     std::uint32_t guest_address,
@@ -23168,6 +23276,11 @@ void call_guest_impl_body(
     }
     context->pc = guest_address;
     state.record_call(guest_address);
+    if ((guest_address == 0x804961E0u || guest_address == 0x804962C0u) &&
+        state.jaudio_host_mixer && state.address_space != nullptr) {
+        run_jaudio_host_command(state, context, memory, guest_address);
+        return;
+    }
     if (guest_address == 0x8038D2E4u &&
         try_native_thp_wrapper(state, context, memory, resolved_function)) return;
     // Mouse-only position/depth transaction. The field is captured once at
@@ -31446,6 +31559,27 @@ int wmain(int argc, wchar_t** argv) {
                 const auto faults = galaxy::host::flat_guest_memory::fault_stats();
                 std::cerr << "[transfer] flag-returns=" << state.flag_transfer_count
                           << " exception-unwinds=" << state.exception_transfer_count << '\n';
+                if (state.jaudio_host_mixer) {
+                    const auto& mix = state.jaudio_mixer.stats();
+                    std::cerr << "[jaudio] commands=" << state.jaudio_commands
+                              << " dsp-messages=" << state.jaudio_dsp_messages
+                              << " setups=" << mix.setups << " frames=" << mix.frames
+                              << " subframes=" << mix.subframes
+                              << " channel-renders=" << mix.channel_renders
+                              << " adpcm-blocks=" << mix.adpcm_blocks
+                              << " pcm=" << mix.pcm_renders << " streams=" << mix.stream_renders
+                              << " oscillators=" << mix.oscillator_renders
+                              << " fir=" << mix.fir_renders << " iir=" << mix.iir_renders
+                              << " auto-mixer=" << mix.auto_mixer_renders
+                              << " fx-line-subframes=" << mix.fx_line_subframes
+                              << " unresolved=" << mix.unresolved_reads
+                              << " unsupported-osc=" << mix.unsupported_oscillators
+                              << " ignored=" << mix.ignored_commands
+                              << " stray=" << mix.stray_releases
+                              << " four-channel=" << mix.four_channel_frames
+                              << " varam=" << hexadecimal(state.jaudio_mixer.varam())
+                              << " mix-ms=" << mix.mix_ns / 1000000u << '\n';
+                }
                 std::cerr << "[host-census] time-base-reads="
                           << g_census_time_base_calls.load(std::memory_order_relaxed)
                           << " guest-time-base-reads="
@@ -31721,6 +31855,8 @@ int wmain(int argc, wchar_t** argv) {
         read_env_flag("GALAXY_FLAG_TRANSFER", true);
     state.flag_transfer_kinds =
         static_cast<std::uint32_t>(read_env_u64("GALAXY_FLAG_TRANSFER_KINDS", 7u)) & 7u;
+    state.jaudio_host_mixer = read_env_flag("GALAXY_JAUDIO_HOST_MIXER", true);
+    std::cerr << "[jaudio] host-mixer=" << state.jaudio_host_mixer << '\n';
     std::cerr << "[transfer] mode=" << (state.flag_transfer_enabled ? "flag" : "exception")
               << " kinds=" << state.flag_transfer_kinds
               << " module-flags=" << state.module_transfer_flags << '\n';

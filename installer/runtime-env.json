@@ -116,6 +116,10 @@
     "value": "1"
   },
   {
+    "name": "GALAXY_JAUDIO_HOST_MIXER",
+    "value": "1"
+  },
+  {
     "name": "GALAXY_HIDE_OS_CURSOR",
     "value": "1"
   },

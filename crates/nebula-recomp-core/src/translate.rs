@@ -6314,6 +6314,8 @@ fn requires_host_guest_call(target: u32) -> bool {
             | 0x8041_071C
             | 0x8041_8440
             | 0x8045_06D8 // KPADRead: synthetic pointer/status host boundary
+            | 0x8049_61E0 // DspBoot: host JAudio mixer (no DSP task)
+            | 0x8049_62C0 // DSPSendCommands2: JAudio DSP commands as host calls
             | 0x804A_095C
             | 0x804A_096C
             | 0x804A_2FD8

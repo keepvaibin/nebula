@@ -515,6 +515,19 @@ if(MSVC)
     target_compile_options(galaxy_scene_hint PRIVATE /GS- /GR- /Oi /favor:INTEL64)
 endif()
 
+# Host JAudio mixer: the game's DSP command interface as host calls.
+add_library(galaxy_jaudio_mixer STATIC runtime/src/jaudio_host_mixer.cpp)
+target_include_directories(
+    galaxy_jaudio_mixer
+    PUBLIC
+        "${CMAKE_CURRENT_SOURCE_DIR}/runtime/include"
+)
+if(MSVC)
+    target_compile_options(galaxy_jaudio_mixer PRIVATE /GS- /GR- /Oi /favor:INTEL64)
+endif()
+add_executable(galaxy_jaudio_mixer_tests runtime/src/jaudio_host_mixer_tests.cpp)
+target_link_libraries(galaxy_jaudio_mixer_tests PRIVATE galaxy_jaudio_mixer)
+
 add_library(galaxy_native_host STATIC
     runtime/src/native_host.cpp
     runtime/src/flat_guest_memory.cpp)
@@ -687,7 +700,8 @@ target_link_libraries(
         galaxy_ppc_float
         galaxy_checkpoint_gate
         galaxy_decrementer_deadline
-        galaxy_runtime_timeline)
+        galaxy_runtime_timeline
+        galaxy_jaudio_mixer)
 target_link_libraries(NebulaRuntime PRIVATE galaxy_runtime_instance)
 target_link_libraries(NebulaRuntime PRIVATE xinput9_1_0)
 target_link_libraries(NebulaRuntime PRIVATE dbghelp)
@@ -705,7 +719,8 @@ if(MSVC)
             galaxy_runtime_timeline galaxy_runtime_instance galaxy_checkpoint_gate
             galaxy_decrementer_deadline galaxy_frame_cadence_diagnostics
             galaxy_native_input_causality galaxy_host_pointer_events galaxy_scene_hint
-            galaxy_ppc_float galaxy_dsp_alu galaxy_runtime_settings galaxy_atomic_file)
+            galaxy_ppc_float galaxy_dsp_alu galaxy_runtime_settings galaxy_atomic_file
+            galaxy_jaudio_mixer)
         if(TARGET ${galaxy_symbol_target})
             target_compile_options(${galaxy_symbol_target} PRIVATE /Zi)
         endif()
@@ -739,7 +754,7 @@ if(NEBULA_HOST_IPO)
             galaxy_frame_cadence_diagnostics galaxy_scene_hint
             galaxy_runtime_settings galaxy_runtime_timeline galaxy_runtime_instance
             galaxy_checkpoint_gate galaxy_decrementer_deadline galaxy_atomic_file
-            galaxy_ai_pcm_identity)
+            galaxy_ai_pcm_identity galaxy_jaudio_mixer)
         # A source-built DSP probe can contain locally generated code. Only the
         # public DLL-loading bridge is part of this bounded runtime IPO scope.
         if(NEBULA_DSP_MODULE)
@@ -963,6 +978,8 @@ if(MSVC)
         galaxy_native_host
         galaxy_native_host_test_support
         galaxy_native_audio_queue_tests
+        galaxy_jaudio_mixer
+        galaxy_jaudio_mixer_tests
         galaxy_native_thp_video_tests
         galaxy_thp_audio_worker_tests
         galaxy_owned_fifo_packet_tests
@@ -1028,6 +1045,7 @@ galaxy_add_native_test(atomic_settings_file galaxy_atomic_file_tests)
 galaxy_add_native_test(runtime_instance_lease galaxy_runtime_instance_tests)
 galaxy_add_native_test(runtime_settings_helpers galaxy_runtime_settings_tests)
 galaxy_add_native_test(runtime_timeline_helpers galaxy_runtime_timeline_tests)
+galaxy_add_native_test(jaudio_host_mixer galaxy_jaudio_mixer_tests)
 galaxy_add_native_test(
     decrementer_deadline_policy
     galaxy_decrementer_deadline_tests)
