@@ -6,6 +6,7 @@
 #define WIN32_LEAN_AND_MEAN
 #include <Windows.h>
 #pragma comment(lib, "Synchronization.lib")
+#include "galaxy/windows_power.h"
 
 #include <algorithm>
 #include <chrono>
@@ -1951,6 +1952,7 @@ bool DeadlineBroker::rebase_and_restore_after_host_suspension(
 }
 
 void DeadlineBroker::worker_loop() noexcept {
+    galaxy::host::name_current_thread(L"Nebula Deadline Broker");
     try {
         // Do this on the worker itself before it reads the timeline or
         // publishes any deadline.  Any scheduling failure is caught below and

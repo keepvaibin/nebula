@@ -255,6 +255,7 @@ namespace Nebula.Launcher
                     return;
                 }
                 string session = Sessions.Create("diagnostics");
+                start.EnvironmentVariables["GALAXY_CRASH_DUMP_DIR"] = session;
                 var launchFiles = new Dictionary<string, object>();
                 foreach (string name in new[] { "NebulaRuntime.exe", "RMGE01_game.dll", "RMGE01_home_button.dll",
                     "RMGE01_dsp.dll", "RMGE01_boot_image.bin", "runtime-env.json", "Nebula.exe" })
@@ -301,6 +302,37 @@ namespace Nebula.Launcher
     /// <summary>Per-launch folders under the sessions directory; never reused.</summary>
     internal static class Sessions
     {
+        [DllImport("kernel32.dll")] private static extern IntPtr OpenThread(uint access, bool inherit, uint id);
+        [DllImport("kernel32.dll")] private static extern bool CloseHandle(IntPtr handle);
+        [DllImport("kernel32.dll")] private static extern int GetThreadDescription(IntPtr thread, out IntPtr description);
+        [DllImport("kernel32.dll")] private static extern IntPtr LocalFree(IntPtr memory);
+        private static readonly Dictionary<int, string> threadNames = new Dictionary<int, string>();
+
+        /// <summary>The runtime names its threads (SetThreadDescription); unnamed threads stay empty.</summary>
+        private static string ThreadName(int id)
+        {
+            string name;
+            if (threadNames.TryGetValue(id, out name) && name.Length != 0) return name;
+            name = "";
+            try
+            {
+                IntPtr handle = OpenThread(0x0800 /* THREAD_QUERY_LIMITED_INFORMATION */, false, (uint)id);
+                if (handle != IntPtr.Zero)
+                {
+                    IntPtr text;
+                    if (GetThreadDescription(handle, out text) >= 0 && text != IntPtr.Zero)
+                    {
+                        name = (Marshal.PtrToStringUni(text) ?? "").Replace(',', ' ');
+                        LocalFree(text);
+                    }
+                    CloseHandle(handle);
+                }
+            }
+            catch (EntryPointNotFoundException) { }
+            threadNames[id] = name;
+            return name;
+        }
+
         public static string Create(string kind)
         {
             string parent = Path.Combine(NebulaPaths.Sessions, kind);
@@ -352,7 +384,7 @@ namespace Nebula.Launcher
                     // session_report.ps1's existing threads.csv parser reads it
                     // unchanged.
                     threads = new StreamWriter(Path.Combine(session, "threads.csv"));
-                    threads.WriteLine("elapsedSeconds,threadId,cpu100ns,threadState,waitReason,priorityLevel");
+                    threads.WriteLine("elapsedSeconds,threadId,cpu100ns,threadState,waitReason,priorityLevel,name");
                 }
                 while (!process.WaitForExit(1000))
                 {
@@ -377,13 +409,14 @@ namespace Nebula.Launcher
                                 string waitReason = threadState == System.Diagnostics.ThreadState.Wait ? t.WaitReason.ToString() : "";
                                 threads.WriteLine(string.Format(
                                     System.Globalization.CultureInfo.InvariantCulture,
-                                    "{0:F3},{1},{2},{3},{4},{5}",
+                                    "{0:F3},{1},{2},{3},{4},{5},{6}",
                                     elapsed,
                                     t.Id,
                                     t.TotalProcessorTime.Ticks,
                                     threadState,
                                     waitReason,
-                                    t.PriorityLevel));
+                                    t.PriorityLevel,
+                                    ThreadName(t.Id)));
                             }
                             catch (Exception) { }
                         }

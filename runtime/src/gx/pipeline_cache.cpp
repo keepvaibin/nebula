@@ -23,6 +23,7 @@
 #include <d3dcompiler.h>
 #include <d3d12shader.h>
 #include <Windows.h>
+#include "galaxy/windows_power.h"
 #pragma warning(pop)
 
 #include <atomic>
@@ -2488,6 +2489,7 @@ std::uint64_t PipelineCache::enqueue_cached_pso_prewarm(unsigned worker_count) {
                 // background work whose late or missed job is retried by the
                 // synchronous first-use path. This does not serialize anything
                 // or change which pipeline is returned.
+                galaxy::host::name_current_thread(L"Nebula PSO Prewarm");
                 (void)SetThreadPriority(
                     GetCurrentThread(), THREAD_PRIORITY_BELOW_NORMAL);
                 worker_main();
@@ -2770,6 +2772,7 @@ void PipelineCache::flush_disk_async() {
         snapshot->pending_psos = unsaved_pso_keys_.size();
         auto* batch = snapshot.get();
         disk_writer_ = std::thread([batch] {
+            galaxy::host::name_current_thread(L"Nebula PSO Disk Writer");
             (void)SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_BELOW_NORMAL);
             try { batch->result = flush_disk_records(*batch); }
             catch (...) {
@@ -2862,6 +2865,7 @@ void PipelineCache::ensure_compile_workers(unsigned count) {
         workers_.emplace_back([this] {
             // Same priority rule as the prewarm workers: the render thread
             // must always win the core.
+            galaxy::host::name_current_thread(L"Nebula PSO Compile");
             (void)SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_BELOW_NORMAL);
             worker_main();
         });

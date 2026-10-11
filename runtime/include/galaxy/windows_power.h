@@ -10,7 +10,22 @@
 #endif
 #include <Windows.h>
 
+#include <cstddef>
+#include <cstdio>
+
 namespace galaxy::host {
+
+// Names the calling thread for debuggers, profilers and minidumps, and logs the
+// mapping once so a crash line's thread id identifies the thread's role.
+inline void name_current_thread(const wchar_t* name) noexcept {
+    (void)SetThreadDescription(GetCurrentThread(), name);
+    char narrow[96]{};
+    for (std::size_t i = 0; name[i] != L'\0' && i + 1u < sizeof(narrow); ++i) {
+        narrow[i] = name[i] < 0x80 ? static_cast<char>(name[i]) : '?';
+    }
+    std::fprintf(stderr, "[thread] name=%s id=%lu\n", narrow,
+                 static_cast<unsigned long>(GetCurrentThreadId()));
+}
 
 // Request execution-speed QoS for the process and calling thread, and retain
 // the process's timer-resolution requests when Windows supports that policy.
@@ -130,6 +145,7 @@ inline unsigned pin_current_thread_to_performance_cores() noexcept {
 }  // namespace galaxy::host
 #else
 namespace galaxy::host {
+inline void name_current_thread(const wchar_t*) noexcept {}
 inline void opt_out_of_power_throttling_process() noexcept {}
 inline void opt_out_of_power_throttling_thread() noexcept {}
 inline unsigned pin_current_thread_to_performance_cores() noexcept { return 0u; }

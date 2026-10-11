@@ -11,6 +11,8 @@
 #include <thread>
 #include <utility>
 
+#include "galaxy/windows_power.h"
+
 namespace galaxy::input {
 
 bool parse_native_input_script_u64(
@@ -556,6 +558,7 @@ struct NativeHidIoWorker::Impl {
     }
 
     void output_loop() noexcept {
+        galaxy::host::name_current_thread(L"Nebula HID Output");
         try {
             for (;;) {
                 std::vector<std::byte> report;
@@ -638,6 +641,7 @@ struct NativeHidIoWorker::Impl {
     }
 
     void coordinator_loop() noexcept {
+        galaxy::host::name_current_thread(L"Nebula HID Input");
         std::thread output_thread;
         try {
             backend->open();

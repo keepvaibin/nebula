@@ -16,6 +16,7 @@
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
 #include <Windows.h>
+#include "galaxy/windows_power.h"
 #include <SetupAPI.h>
 #include <Xinput.h>
 #include <bcrypt.h>
@@ -3451,7 +3452,7 @@ public:
 #if defined(GALAXY_NATIVE_HOST_TEST_SUPPORT)
                         if (recovery_gate_for_test_) recovery_gate_for_test_();
 #endif
-                        (void)SetThreadDescription(GetCurrentThread(), L"Nebula Audio Device Recovery");
+                        galaxy::host::name_current_thread(L"Nebula Audio Device Recovery");
                         const auto recovery_started = std::chrono::steady_clock::now();
                         const HRESULT hr = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
                         if (FAILED(hr)) throw std::runtime_error("audio recovery COM initialization failed");
@@ -4707,7 +4708,7 @@ private:
     }
 
     void audio_worker_body() {
-        (void)SetThreadDescription(GetCurrentThread(), L"Nebula Audio Queue");
+        galaxy::host::name_current_thread(L"Nebula Audio Queue");
         const ScopedMmcssAudioThread mmcss_thread;
         std::uint64_t observed_callback_sequence =
             callback_ledger_.event_sequence();
@@ -9970,6 +9971,7 @@ struct GuestAddressSpace::AsyncDiscState {
 
 private:
     void run() noexcept {
+        galaxy::host::name_current_thread(L"Nebula Async Disc");
         (void)SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_ABOVE_NORMAL);
         for (;;) {
             Job job;

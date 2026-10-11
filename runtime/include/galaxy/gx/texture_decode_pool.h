@@ -27,10 +27,13 @@ namespace galaxy::gx {
 
 class TextureDecodePool {
 public:
-    explicit TextureDecodePool(unsigned worker_count) {
+    explicit TextureDecodePool(unsigned worker_count, void (*thread_start)() = nullptr) {
         workers_.reserve(worker_count);
         for (unsigned i = 0; i < worker_count; ++i) {
-            workers_.emplace_back([this] { worker_main(); });
+            workers_.emplace_back([this, thread_start] {
+                if (thread_start != nullptr) thread_start();
+                worker_main();
+            });
         }
     }
 

@@ -663,6 +663,7 @@ public:
 
 private:
     void run() noexcept {
+        galaxy::host::name_current_thread(L"Nebula THP Decode");
         (void)SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_ABOVE_NORMAL);
         for (;;) {
             std::unique_ptr<Job> job;
@@ -874,6 +875,7 @@ private:
     }
 
     void run() {
+        galaxy::host::name_current_thread(L"Nebula Sim Profiler");
         (void)SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_BELOW_NORMAL);
         HANDLE timer = CreateWaitableTimerExW(nullptr, nullptr, CREATE_WAITABLE_TIMER_HIGH_RESOLUTION, TIMER_ALL_ACCESS);
         ULONG64 last_cycles = 0u;
@@ -29994,6 +29996,41 @@ static_assert(!parse_unsigned_decimal(L"-1") && !parse_unsigned_decimal(L"+1"));
 static_assert(!parse_unsigned_decimal(L" 1") && !parse_unsigned_decimal(L"1ms"));
 static_assert(!parse_unsigned_decimal(L""));
 
+static wchar_t g_crash_dump_dir[MAX_PATH]{};
+static bool g_crash_dump_full = false;
+
+// Resolved and created once at startup so the filter neither depends on the
+// working directory nor has to create a directory tree while the process is
+// failing. GALAXY_CRASH_DUMP_DIR wins (the launcher points it at the recording
+// folder); otherwise %LOCALAPPDATA%\Nebula\crashdumps.
+static void prepare_crash_dump_directory() {
+    wchar_t buffer[MAX_PATH]{};
+    std::wstring dir;
+    DWORD len = GetEnvironmentVariableW(L"GALAXY_CRASH_DUMP_DIR", buffer, MAX_PATH);
+    if (len > 0 && len < MAX_PATH) {
+        dir.assign(buffer, len);
+    } else {
+        len = GetEnvironmentVariableW(L"LOCALAPPDATA", buffer, MAX_PATH);
+        dir = (len > 0 && len < MAX_PATH)
+            ? std::wstring(buffer, len) + L"\\Nebula\\crashdumps"
+            : std::wstring(L"crashdumps");
+    }
+    // CreateDirectoryW creates one level; create every component in turn.
+    for (std::size_t i = 1; i <= dir.size(); ++i) {
+        if (i == dir.size() || dir[i] == L'\\' || dir[i] == L'/') {
+            const std::wstring prefix = dir.substr(0, i);
+            if (prefix.back() != L':') (void)CreateDirectoryW(prefix.c_str(), nullptr);
+        }
+    }
+    wcsncpy_s(g_crash_dump_dir, dir.c_str(), _TRUNCATE);
+    g_crash_dump_full = read_env_flag("GALAXY_CRASH_DUMP_FULL", false);
+    char narrow[MAX_PATH * 3]{};
+    (void)WideCharToMultiByte(CP_UTF8, 0, g_crash_dump_dir, -1, narrow,
+                              static_cast<int>(sizeof(narrow)), nullptr, nullptr);
+    std::fprintf(stderr, "[crash-dump] dir=%s full-memory=%d\n", narrow,
+                 g_crash_dump_full ? 1 : 0);
+}
+
 // ── Silent-crash harness (runs before any other CRT init via wmain) ──────
 // Disables ALL modal dialogs — assertion, abort, error, and WerFault.
 // SEM_NOGPFAULTERRORBOX below (needed so an unhandled exception during an
@@ -30008,13 +30045,8 @@ static_assert(!parse_unsigned_decimal(L""));
 // philosophy exists to surface, not hide.
 static LONG WINAPI galaxy_unhandled_exception_filter(
     EXCEPTION_POINTERS* exception_info) {
-    wchar_t dump_dir[MAX_PATH]{};
-    DWORD len = GetEnvironmentVariableW(
-        L"GALAXY_CRASH_DUMP_DIR", dump_dir, MAX_PATH);
-    std::wstring dir = (len > 0 && len < MAX_PATH)
-        ? std::wstring(dump_dir, len)
-        : std::wstring(L"generated\\diagnostics");
-    CreateDirectoryW(dir.c_str(), nullptr);
+    const std::wstring dir = g_crash_dump_dir[0] != L'\0'
+        ? std::wstring(g_crash_dump_dir) : std::wstring(L".");
     wchar_t path[MAX_PATH]{};
     swprintf_s(
         path, L"%s\\NebulaRuntime_crash_%lu.dmp", dir.c_str(),
@@ -30030,9 +30062,16 @@ static LONG WINAPI galaxy_unhandled_exception_filter(
         mei.ClientPointers = FALSE;
         const BOOL written = MiniDumpWriteDump(
             GetCurrentProcess(), GetCurrentProcessId(), file,
-            static_cast<MINIDUMP_TYPE>(
-                MiniDumpWithFullMemory | MiniDumpWithHandleData |
-                MiniDumpWithThreadInfo),
+            static_cast<MINIDUMP_TYPE>(g_crash_dump_full
+                ? (MiniDumpWithFullMemory | MiniDumpWithHandleData |
+                   MiniDumpWithThreadInfo)
+                // Stacks, registers, referenced heap, module data and the
+                // full memory map: about 100 MB instead of the whole mapped
+                // disc image and guest views. GALAXY_CRASH_DUMP_FULL=1 for all.
+                : (MiniDumpWithDataSegs | MiniDumpWithHandleData |
+                   MiniDumpWithThreadInfo | MiniDumpWithFullMemoryInfo |
+                   MiniDumpWithIndirectlyReferencedMemory |
+                   MiniDumpWithUnloadedModules | MiniDumpWithProcessThreadData)),
             &mei, nullptr, nullptr);
         const DWORD dump_error = written ? ERROR_SUCCESS : GetLastError();
         CloseHandle(file);
@@ -30144,6 +30183,7 @@ static void disable_runtime_dialogs() {
     _CrtSetReportFile(_CRT_ERROR, _CRTDBG_FILE_STDERR);
     // Suppress the Abort/Retry/Ignore message box that _CrtDbgReport shows.
     _set_abort_behavior(0, _WRITE_ABORT_MSG | _CALL_REPORTFAULT);
+    prepare_crash_dump_directory();
     SetUnhandledExceptionFilter(galaxy_unhandled_exception_filter);
     std::set_terminate(galaxy_terminate_handler);
     // Suppress Windows critical-error and GPFault dialogs -- diagnostic
@@ -30634,8 +30674,17 @@ int wmain(int argc, wchar_t** argv) {
         std::cerr<<"[display] cannot establish physical-pixel DPI awareness error="<<GetLastError()<<'\n';
         return 9;
     }
-    (void)SetThreadDescription(GetCurrentThread(), L"Nebula Simulation/Main");
+    galaxy::host::name_current_thread(L"Nebula Simulation/Main");
     const ScopedTimerResolution timer_resolution;
+    // Validation hook for the minidump path: a worker thread faults after boot
+    // has installed every handler, like the crash seen on the laptop.
+    if (read_env_flag("GALAXY_CRASH_TEST", false)) {
+        std::thread([] {
+            galaxy::host::name_current_thread(L"Nebula Crash Test");
+            Sleep(5000);
+            *static_cast<volatile int*>(nullptr) = 1;
+        }).detach();
+    }
     configure_runtime_scheduling();
     const ScopedMmcssGamesThread mmcss_games_thread;
     ScopedSimulationCacheAffinity simulation_cache_affinity;

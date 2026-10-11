@@ -3,6 +3,7 @@
 #include <Windows.h>
 
 #include "galaxy/frame_telemetry.h"
+#include "galaxy/windows_power.h"
 
 #include <algorithm>
 #include <chrono>
@@ -73,7 +74,7 @@ struct Publisher::Impl {
     }
 
     void run() noexcept {
-        (void)SetThreadDescription(GetCurrentThread(), L"Nebula Frame Telemetry");
+        galaxy::host::name_current_thread(L"Nebula Frame Telemetry");
         (void)SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_BELOW_NORMAL);
         while (true) {
             publish(true);

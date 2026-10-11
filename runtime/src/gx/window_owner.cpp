@@ -1,4 +1,5 @@
 #include "galaxy/gx/window_owner.h"
+#include "galaxy/windows_power.h"
 #include <future>
 #include <stdexcept>
 #include <utility>
@@ -15,6 +16,7 @@ HWND WindowOwner::start(WindowOwnerConfig config) {
     std::promise<Started> ready;
     auto startup = ready.get_future();
     thread_ = std::thread([config = std::move(config), ready = std::move(ready)]() mutable {
+        galaxy::host::name_current_thread(L"Nebula Window");
         HWND window = CreateWindowExW(
             config.extended_style, config.class_name.c_str(), config.title.c_str(),
             config.style, config.x, config.y, config.width, config.height,

@@ -20,6 +20,7 @@
 #include "galaxy/gx/dependency_event_capture.h"
 
 #include "galaxy/gx/render_config.h"
+#include "galaxy/windows_power.h"
 
 #include <algorithm>
 #include <array>
@@ -2441,7 +2442,9 @@ TextureHandle TextureCache::get(
             const unsigned hardware = std::thread::hardware_concurrency();
             // Leave the render, simulation and PSO threads their cores.
             const unsigned workers = std::clamp(hardware / 4u, 1u, 4u);
-            decode_pool_ = std::make_unique<TextureDecodePool>(workers);
+            decode_pool_ = std::make_unique<TextureDecodePool>(workers, [] {
+                galaxy::host::name_current_thread(L"Nebula Texture Decode");
+            });
         }
         std::vector<UINT64> offsets(level_offset.begin(), level_offset.begin() + levels);
         std::vector<UINT> pitches(level_pitch.begin(), level_pitch.begin() + levels);

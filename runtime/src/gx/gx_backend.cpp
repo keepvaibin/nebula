@@ -6347,7 +6347,7 @@ void GxBackend::present_cached_xfb(
 // Consumer loop (render thread): frames execute in submission order; queued
 // frames are drained before a stop so the last presents land.
 void GxBackend::render_thread_main() {
-    (void)SetThreadDescription(GetCurrentThread(), L"Nebula GX Render");
+    galaxy::host::name_current_thread(L"Nebula GX Render");
     SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_ABOVE_NORMAL);
     // Hybrid CPUs: keep the FIFO parser on performance cores with the
     // simulation thread; the scheduler still balances inside that set.

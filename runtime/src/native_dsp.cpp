@@ -6,6 +6,7 @@
 #endif
 #include <Windows.h>
 #endif
+#include "galaxy/windows_power.h"
 
 #include <algorithm>
 #include <bit>
@@ -2032,7 +2033,7 @@ bool NativeDspWorker::wait_for_completed_runs(
 
 void NativeDspWorker::thread_main() {
 #if defined(_WIN32)
-    (void)SetThreadDescription(GetCurrentThread(), L"Nebula Native DSP");
+    galaxy::host::name_current_thread(L"Nebula Native DSP");
 #endif
     configure_native_dsp_worker_scheduling();
     {
