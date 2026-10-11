@@ -1845,6 +1845,7 @@ fn lower_resident_integer_direct_calls(
                 });
                 let lean_contract = lean_body_call_contract(
                     target,
+                    pc,
                     Some(callable_entries),
                     Some(exact_fpu_functions),
                 );
@@ -5202,7 +5203,7 @@ fn lower_words_with_config(
                         )?;
                     }
                     if link {
-                        if lean_body_call_contract(target, callable_entries, exact_fpu_functions)
+                        if lean_body_call_contract(target, pc, callable_entries, exact_fpu_functions)
                             .is_none()
                         {
                             emit_call_return_checkpoint(&mut output, pc)?;
@@ -5259,9 +5260,13 @@ fn lower_words_with_config(
                             }
                         }
                     } else if link {
-                        let checkpoint =
-                            lean_body_call_contract(target, callable_entries, exact_fpu_functions)
-                                .is_none();
+                        let checkpoint = lean_body_call_contract(
+                            target,
+                            pc,
+                            callable_entries,
+                            exact_fpu_functions,
+                        )
+                        .is_none();
                         if unconditional {
                             emit_direct_guest_call_with_exact_fpu(
                                 &mut output,
@@ -6261,7 +6266,7 @@ fn emit_direct_guest_call_with_exact_fpu(
     {
         let requires_exact_fpu_restart =
             exact_fpu_functions.is_some_and(|functions| functions.contains(&target));
-        let native_helper = if requires_exact_fpu_restart {
+        let native_helper = if requires_exact_fpu_restart || is_wpad_read_copy(target, pc) {
             None
         } else {
             native_pure_helper(target)
@@ -6607,6 +6612,20 @@ fn lean_sdk_math_symbol(address: u32) -> Option<&'static str> {
         0x800D_76B0 => Some("lean_tvec3_squared_distance"),
         0x8001_6FBC => Some("lean_jgeom_sqrt"),
         0x8002_0530 => Some("lean_jgeom_inv_sqrt"),
+        // MSL string routines and two RMGE01 wrappers of them.
+        0x8051_6E80 => Some("lean_strlen"),
+        0x8051_E830 => Some("lean_strcmp"),
+        0x8051_E94C => Some("lean_strncmp"),
+        0x8051_EA04 => Some("lean_strstr"),
+        0x8052_2E8C => Some("lean_strcasecmp"),
+        0x803F_D4A0 => Some("lean_mr_is_equal_string"),
+        0x8001_5394 => Some("lean_lyt_equals_res_name"),
+        // GD display-list writers and memcpy.
+        0x8042_0B3C => Some("lean_gd_write_u32"),
+        0x8042_CDC4 => Some("lean_gd_write_u32"),
+        0x8042_F3B0 => Some("lean_gd_write_u32"),
+        0x8044_A498 => Some("lean_gd_pad_curr32"),
+        0x8000_4338 => Some("lean_memcpy"),
         _ => None,
     }
 }
@@ -6668,6 +6687,13 @@ pub(crate) fn lean_call_contract(symbol: &str) -> Option<LeanCallContract> {
             "lean_j3d_hermite_s16" => (&[3, 4, 5, 6, 7, 8], &[], &[1], &[1]),
             "lean_jgeom_sqrt" | "lean_jgeom_inv_sqrt" => (&[], &[], &[1], &[1]),
             "lean_gx_load_light_obj_imm" => (&[2, 3, 4], &[], &[], &[]),
+            "lean_strlen" => (&[3], &[3], &[], &[]),
+            "lean_strcmp" | "lean_strstr" | "lean_strcasecmp" | "lean_mr_is_equal_string"
+            | "lean_lyt_equals_res_name" => (&[3, 4], &[3], &[], &[]),
+            "lean_strncmp" => (&[3, 4, 5], &[3], &[], &[]),
+            "lean_gd_write_u32" => (&[3, 13], &[], &[], &[]),
+            "lean_gd_pad_curr32" => (&[13], &[], &[], &[]),
+            "lean_memcpy" => (&[3, 4, 5], &[], &[], &[]),
             _ => return None,
         };
     Some(LeanCallContract {
@@ -6678,17 +6704,29 @@ pub(crate) fn lean_call_contract(symbol: &str) -> Option<LeanCallContract> {
     })
 }
 
+/// The five direct WPADRead calls to memcpy, whose call-return checkpoint
+/// verifies the copied bytes for the native input trace.
+fn is_wpad_read_copy(target: u32, pc: u32) -> bool {
+    target == 0x8000_4338
+        && matches!(
+            pc,
+            0x804D_945C | 0x804D_947C | 0x804D_949C | 0x804D_94B0 | 0x804D_94C4
+        )
+}
+
 /// The register contract of a linked direct call that
 /// `emit_direct_guest_call_with_exact_fpu` lowers to a lean host body: a
 /// callable target outside the exact-FPU set (no lean target is an audited
 /// inline wrapper).
 fn lean_body_call_contract(
     target: u32,
+    pc: u32,
     callable_entries: Option<&BTreeMap<u32, u32>>,
     exact_fpu_functions: Option<&BTreeSet<u32>>,
 ) -> Option<LeanCallContract> {
     if !callable_entries.is_some_and(|entries| entries.contains_key(&target))
         || exact_fpu_functions.is_some_and(|functions| functions.contains(&target))
+        || is_wpad_read_copy(target, pc)
     {
         return None;
     }
@@ -6900,6 +6938,42 @@ fn native_function_body(address: u32) -> Option<&'static str> {
         // RVL SDK math library: lean host bodies (see lean_sdk_math_symbol).
         0x804B_5EDC => Some(
             "    galaxy::lean_psmtx_identity(context, memory, services, 0x804B5EDCu);\n    return;\n",
+        ),
+        0x8042_0B3C => Some(
+            "    galaxy::lean_gd_write_u32(context, memory, services, 0x80420B3Cu);\n    return;\n",
+        ),
+        0x8042_CDC4 => Some(
+            "    galaxy::lean_gd_write_u32(context, memory, services, 0x8042CDC4u);\n    return;\n",
+        ),
+        0x8042_F3B0 => Some(
+            "    galaxy::lean_gd_write_u32(context, memory, services, 0x8042F3B0u);\n    return;\n",
+        ),
+        0x8044_A498 => Some(
+            "    galaxy::lean_gd_pad_curr32(context, memory, services, 0x8044A498u);\n    return;\n",
+        ),
+        0x8000_4338 => Some(
+            "    galaxy::lean_memcpy(context, memory, services, 0x80004338u);\n    return;\n",
+        ),
+        0x8051_6E80 => Some(
+            "    galaxy::lean_strlen(context, memory, services, 0x80516E80u);\n    return;\n",
+        ),
+        0x8051_E830 => Some(
+            "    galaxy::lean_strcmp(context, memory, services, 0x8051E830u);\n    return;\n",
+        ),
+        0x8051_E94C => Some(
+            "    galaxy::lean_strncmp(context, memory, services, 0x8051E94Cu);\n    return;\n",
+        ),
+        0x8051_EA04 => Some(
+            "    galaxy::lean_strstr(context, memory, services, 0x8051EA04u);\n    return;\n",
+        ),
+        0x8052_2E8C => Some(
+            "    galaxy::lean_strcasecmp(context, memory, services, 0x80522E8Cu);\n    return;\n",
+        ),
+        0x803F_D4A0 => Some(
+            "    galaxy::lean_mr_is_equal_string(context, memory, services, 0x803FD4A0u);\n    return;\n",
+        ),
+        0x8001_5394 => Some(
+            "    galaxy::lean_lyt_equals_res_name(context, memory, services, 0x80015394u);\n    return;\n",
         ),
         0x8001_8B14 => Some(
             "    galaxy::lean_tvec3_copy(context, memory, services, 0x80018B14u);\n    return;\n",
@@ -13752,15 +13826,15 @@ mod tests {
         )
         .expect("ordinary direct memmove call lowers");
         assert!(!ordinary.contains("native_input_trace_copy_pre_checkpoint"));
+        assert!(ordinary.contains("galaxy::lean_memcpy(context, memory, services, 0x80004338u);"));
+        assert!(!traced.contains("lean_memcpy"));
     }
 
     #[test]
     fn restartability_sensitive_direct_calls_use_exact_generated_functions() {
         for (target, retired_helper) in [
-            (0x8000_4338_u32, "native_memmove"),
             (0x8000_7D2C_u32, "native_resfont_get_char_width_80007D2C"),
             (0x8000_C53C_u32, "native_particle_list_apply_8000C53C"),
-            (0x8001_5394_u32, "native_strncmp_eq_16_80015394"),
             (0x800C_9078_u32, "native_ptmf_wrapper_800C9078"),
             (0x800C_9248_u32, "rmge01::fn_803C73CC"),
             (0x800C_9AAC_u32, "native_ptmf_wrapper_800C9AAC"),
@@ -13810,9 +13884,6 @@ mod tests {
             (0x804B_A6B0_u32, "native_gx_begin_804BA6B0"),
             (0x804B_A7FC_u32, "native_gx_send_zero_primitive_804BA7FC"),
             (0x804B_DEA8_u32, "native_gx_begin_804BDEA8"),
-            (0x8051_6E80_u32, "native_strlen_80516E80"),
-            (0x8051_E830_u32, "native_strcmp_8051E830"),
-            (0x8051_EA04_u32, "native_strstr"),
         ] {
             let source = target - 8;
             let words = [0x4800_0009_u32, 0x4E80_0020];
@@ -14582,10 +14653,8 @@ mod tests {
     #[test]
     fn restartability_sensitive_functions_are_never_replaced() {
         for address in [
-            0x8000_4338_u32,
-            0x8000_7D2C,
+            0x8000_7D2C_u32,
             0x8000_C53C_u32,
-            0x8001_5394,
             0x800C_8C64,
             0x800C_9078,
             0x800C_9248,
@@ -14624,9 +14693,6 @@ mod tests {
             0x804B_A6B0,
             0x804B_A7FC,
             0x804B_DEA8,
-            0x8051_6E80,
-            0x8051_E830,
-            0x8051_EA04,
         ] {
             assert_eq!(native_pure_helper(address), None);
             assert_eq!(native_function_body(address), None);

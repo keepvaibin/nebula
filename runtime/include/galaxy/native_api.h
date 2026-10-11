@@ -10050,6 +10050,240 @@ inline void lean_jgeom_inv_sqrt(PpcContext* context, GuestMemoryV1*, const Nativ
     sdk_math::return_f32(context, static_cast<float>(1.0 / std::sqrt(x)));
 }
 
+// MSL string routines and two RMGE01 wrappers of them (tier 3). Bytes are read
+// as the translated code reads them (flat view, checked outside RAM); the only
+// result the PPC ABI exposes is r3, which matches the originals.
+namespace cstring {
+
+GALAXY_ALWAYS_INLINE const std::byte* view(const GuestMemoryV1* memory) {
+    return memory != nullptr ? memory->flat_guest_read_base : nullptr;
+}
+
+GALAXY_ALWAYS_INLINE std::uint32_t at(const std::byte* view, GuestMemoryV1* memory,
+                                      std::uint32_t address, const NativeServicesV1* services,
+                                      std::uint32_t pc) {
+    return guest_load_flat_or_checked_u8(view, memory, address, services, pc);
+}
+
+// strncmp over at most `count` bytes: (u8)a[i] - (u8)b[i] at the first
+// difference, 0 at a common terminator or after `count` equal bytes.
+GALAXY_ALWAYS_INLINE std::uint32_t compare(GuestMemoryV1* memory, std::uint32_t a, std::uint32_t b,
+                                           std::uint32_t count, const NativeServicesV1* services,
+                                           std::uint32_t pc) {
+    const std::byte* v = view(memory);
+    for (std::uint32_t i = 0; i != count; ++i) {
+        const std::uint32_t x = at(v, memory, a + i, services, pc);
+        const std::uint32_t y = at(v, memory, b + i, services, pc);
+        if (x != y) {
+            return x - y;
+        }
+        if (x == 0u) {
+            return 0u;
+        }
+    }
+    return 0u;
+}
+
+}  // namespace cstring
+
+// size_t strlen(const char* s)
+inline void lean_strlen(PpcContext* context, GuestMemoryV1* memory,
+                        const NativeServicesV1* services, std::uint32_t pc) {
+    const std::byte* v = cstring::view(memory);
+    const std::uint32_t s = context->gpr[3];
+    std::uint32_t n = 0u;
+    while (cstring::at(v, memory, s + n, services, pc) != 0u) {
+        ++n;
+    }
+    context->gpr[3] = n;
+}
+
+// int strcmp(const char* a, const char* b). The original compares words when
+// both strings share an alignment; the result is the bytewise one.
+inline void lean_strcmp(PpcContext* context, GuestMemoryV1* memory,
+                        const NativeServicesV1* services, std::uint32_t pc) {
+    context->gpr[3] =
+        cstring::compare(memory, context->gpr[3], context->gpr[4], 0xFFFFFFFFu, services, pc);
+}
+
+// int strncmp(const char* a, const char* b, size_t n)
+inline void lean_strncmp(PpcContext* context, GuestMemoryV1* memory,
+                         const NativeServicesV1* services, std::uint32_t pc) {
+    context->gpr[3] = cstring::compare(memory, context->gpr[3], context->gpr[4],
+                                       context->gpr[5], services, pc);
+}
+
+// char* strstr(const char* s, const char* pattern): s itself for a null or
+// empty pattern, 0 when there is no match.
+inline void lean_strstr(PpcContext* context, GuestMemoryV1* memory,
+                        const NativeServicesV1* services, std::uint32_t pc) {
+    const std::uint32_t pattern = context->gpr[4];
+    if (pattern == 0u) {
+        return;
+    }
+    const std::byte* v = cstring::view(memory);
+    const std::uint32_t first = cstring::at(v, memory, pattern, services, pc);
+    if (first == 0u) {
+        return;
+    }
+    for (std::uint32_t p = context->gpr[3];; ++p) {
+        const std::uint32_t c = cstring::at(v, memory, p, services, pc);
+        if (c == 0u) {
+            context->gpr[3] = 0u;
+            return;
+        }
+        if (c != first) {
+            continue;
+        }
+        for (std::uint32_t k = 1u;; ++k) {
+            const std::uint32_t expected = cstring::at(v, memory, pattern + k, services, pc);
+            if (expected == 0u) {
+                context->gpr[3] = p;
+                return;
+            }
+            if (cstring::at(v, memory, p + k, services, pc) != expected) {
+                break;
+            }
+        }
+    }
+}
+
+// int strcasecmp(const char* a, const char* b), MSL with locale: each byte is
+// sign-extended and, when not negative, replaced by the sign-extended entry
+// of the current locale's lower-case map (pointer at +0x10 of the ctype
+// component at *(0x805F51F8 + 0x38)); returns -1, 0 or 1.
+inline void lean_strcasecmp(PpcContext* context, GuestMemoryV1* memory,
+                            const NativeServicesV1* services, std::uint32_t pc) {
+    const std::byte* v = cstring::view(memory);
+    const std::uint32_t ctype = guest_load_flat_or_checked_u32(
+        v, memory, 0x805F51F8u + 0x38u, services, pc);
+    const std::uint32_t lower = guest_load_flat_or_checked_u32(
+        v, memory, ctype + 0x10u, services, pc);
+    const auto fold = [&](std::uint32_t byte) {
+        const auto c = static_cast<std::int32_t>(static_cast<std::int8_t>(byte));
+        if (c < 0) {
+            return c;
+        }
+        return static_cast<std::int32_t>(static_cast<std::int8_t>(
+            cstring::at(v, memory, lower + static_cast<std::uint32_t>(c), services, pc)));
+    };
+    std::uint32_t a = context->gpr[3];
+    std::uint32_t b = context->gpr[4];
+    for (;; ++a, ++b) {
+        const std::int32_t x = fold(cstring::at(v, memory, a, services, pc));
+        const std::int32_t y = fold(cstring::at(v, memory, b, services, pc));
+        if (x < y) {
+            context->gpr[3] = 0xFFFFFFFFu;
+            return;
+        }
+        if (x > y) {
+            context->gpr[3] = 1u;
+            return;
+        }
+        if (x == 0) {
+            context->gpr[3] = 0u;
+            return;
+        }
+    }
+}
+
+// bool MR::isEqualString(const char* a, const char* b): strcmp(a, b) == 0.
+inline void lean_mr_is_equal_string(PpcContext* context, GuestMemoryV1* memory,
+                                    const NativeServicesV1* services, std::uint32_t pc) {
+    context->gpr[3] = cstring::compare(memory, context->gpr[3], context->gpr[4], 0xFFFFFFFFu,
+                                       services, pc) == 0u
+        ? 1u
+        : 0u;
+}
+
+// bool nw4r::lyt::detail::EqualsResName(const char* a, const char* b):
+// strncmp(a, b, 16) == 0.
+inline void lean_lyt_equals_res_name(PpcContext* context, GuestMemoryV1* memory,
+                                     const NativeServicesV1* services, std::uint32_t pc) {
+    context->gpr[3] =
+        cstring::compare(memory, context->gpr[3], context->gpr[4], 16u, services, pc) == 0u
+        ? 1u
+        : 0u;
+}
+
+// GD display-list writers. __GDCurrentDL (r13 - 0x23B8) points at the GDLObj
+// whose write pointer is at +8; the originals store one byte at a time and
+// advance the pointer after each. The game flushes the list before
+// GXCallDisplayList, which publishes it as for translated stores.
+namespace gd {
+
+GALAXY_ALWAYS_INLINE std::uint32_t current_dl(std::uint32_t r13, GuestMemoryV1* memory,
+                                              const NativeServicesV1* services, std::uint32_t pc) {
+    return guest_load_u32(memory, r13 - 0x23B8u, services, pc);
+}
+
+}  // namespace gd
+
+// J3DGDWrite_u32(u32) (three identical local copies): appends r3 big-endian.
+inline void lean_gd_write_u32(PpcContext* context, GuestMemoryV1* memory,
+                              const NativeServicesV1* services, std::uint32_t pc) {
+    const std::uint32_t dl = gd::current_dl(context->gpr[13], memory, services, pc);
+    const std::uint32_t ptr = guest_load_u32(memory, dl + 8u, services, pc);
+    native_store_guest_u32_fast(resolve_guest(memory, ptr, 4u, services, pc), 0u,
+                                context->gpr[3]);
+    guest_store_u32(memory, dl + 8u, ptr + 4u, services, pc);
+}
+
+// GDPadCurr32(): zero bytes up to the next 32-byte boundary.
+inline void lean_gd_pad_curr32(PpcContext* context, GuestMemoryV1* memory,
+                               const NativeServicesV1* services, std::uint32_t pc) {
+    const std::uint32_t dl = gd::current_dl(context->gpr[13], memory, services, pc);
+    const std::uint32_t ptr = guest_load_u32(memory, dl + 8u, services, pc);
+    const std::uint32_t misalign = ptr & 31u;
+    if (misalign == 0u) {
+        return;
+    }
+    const std::uint32_t count = 32u - misalign;
+    std::memset(resolve_guest(memory, ptr, count, services, pc), 0, count);
+    guest_store_u32(memory, dl + 8u, ptr + count, services, pc);
+}
+
+// void* memcpy(void* dst, const void* src, size_t n) (0x80004338): a byte
+// copy that runs backward when src < dst (unsigned), so overlapping ranges
+// move as with memmove; r3 stays dst. Ranges outside RAM keep the original's
+// byte order through the device-aware accessors.
+inline void lean_memcpy(PpcContext* context, GuestMemoryV1* memory,
+                        const NativeServicesV1* services, std::uint32_t pc) {
+    const std::uint32_t dst = context->gpr[3];
+    const std::uint32_t src = context->gpr[4];
+    const std::uint32_t n = context->gpr[5];
+    if (n == 0u) {
+        return;
+    }
+    const auto in_ram = [](std::uint32_t address, std::uint32_t size) {
+        const std::uint32_t alias = address & 0xF0000000u;
+        const std::uint32_t offset = address & 0x0FFFFFFFu;
+        const std::uint32_t limit =
+            alias == 0x00000000u || alias == 0x80000000u || alias == 0xC0000000u
+            ? 0x01800000u
+            : alias == 0x10000000u || alias == 0x90000000u || alias == 0xD0000000u
+                ? 0x04000000u
+                : 0u;
+        return size <= limit && offset <= limit - size;
+    };
+    if (in_ram(dst, n) && in_ram(src, n)) {
+        std::memmove(resolve_guest(memory, dst, n, services, pc),
+                     resolve_guest(memory, src, n, services, pc), n);
+        return;
+    }
+    if (src < dst) {
+        for (std::uint32_t i = n; i-- > 0u;) {
+            guest_store_u8(memory, dst + i, guest_load_u8(memory, src + i, services, pc),
+                           services, pc);
+        }
+    } else {
+        for (std::uint32_t i = 0u; i < n; ++i) {
+            guest_store_u8(memory, dst + i, guest_load_u8(memory, src + i, services, pc),
+                           services, pc);
+        }
+    }
+}
+
 inline void native_psmtx_identity_804B5EDC(
     PpcContext* context,
     GuestMemoryV1* memory,
