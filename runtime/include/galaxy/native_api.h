@@ -8666,6 +8666,338 @@ inline void psq_store(
 GALAXY_ALWAYS_INLINE std::uint64_t widen_f32_bits(std::uint32_t bits);
 inline std::uint32_t narrow_paired_single_ftz(std::uint64_t bits);
 
+// Lean host bodies for the SDK paired-single matrix/vector library
+// (RVL_SDK mtx/vec/quat). Fast float: no bit-exactness and no reproduction of
+// volatile registers or the routines' private stack frames, which the PPC ABI
+// does not let callers observe. Effects kept: the memory results (plain stores,
+// as translated code makes them; the game's cache flushes publish GPU-visible
+// data) and the documented f1 / r3 return values. GQR0 is the
+// unquantized float format (OSInit), so psq_l/psq_st with GQR0 are plain
+// big-endian f32 accesses.
+namespace sdk_math {
+
+GALAXY_ALWAYS_INLINE const std::byte* read_span(
+    GuestMemoryV1* memory, std::uint32_t address, std::uint32_t size,
+    const NativeServicesV1* services, std::uint32_t pc) {
+    return resolve_guest(memory, address, size, services, pc);
+}
+
+GALAXY_ALWAYS_INLINE void load_f32s(const std::byte* base, float* out, std::uint32_t count) {
+    for (std::uint32_t i = 0; i < count; ++i) {
+        out[i] = native_load_guest_f32_fast(base, i * 4u);
+    }
+}
+
+GALAXY_ALWAYS_INLINE void store_f32s(
+    GuestMemoryV1* memory, std::uint32_t address, const float* values,
+    std::uint32_t count, const NativeServicesV1* services, std::uint32_t pc) {
+    std::byte* base = resolve_guest(memory, address, count * 4u, services, pc);
+    for (std::uint32_t i = 0; i < count; ++i) {
+        native_store_guest_u32_fast(base, i * 4u, std::bit_cast<std::uint32_t>(values[i]));
+    }
+}
+
+GALAXY_ALWAYS_INLINE float fpr_f32(const PpcContext* context, std::uint32_t index) {
+    return static_cast<float>(std::bit_cast<double>(context->fpr_bits[index]));
+}
+
+GALAXY_ALWAYS_INLINE void return_f32(PpcContext* context, float value) {
+    const std::uint64_t bits = std::bit_cast<std::uint64_t>(static_cast<double>(value));
+    context->fpr_bits[1] = bits;
+    context->ps1_bits[1] = bits;
+}
+
+}  // namespace sdk_math
+
+// PSMTXIdentity(m)
+inline void lean_psmtx_identity(PpcContext* context, GuestMemoryV1* memory,
+                                const NativeServicesV1* services, std::uint32_t pc) {
+    const float m[12] = {1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0};
+    sdk_math::store_f32s(memory, context->gpr[3], m, 12u, services, pc);
+}
+
+// PSMTXCopy(src, dst)
+inline void lean_psmtx_copy(PpcContext* context, GuestMemoryV1* memory,
+                            const NativeServicesV1* services, std::uint32_t pc) {
+    float m[12];
+    sdk_math::load_f32s(sdk_math::read_span(memory, context->gpr[3], 48u, services, pc), m, 12u);
+    sdk_math::store_f32s(memory, context->gpr[4], m, 12u, services, pc);
+}
+
+// PSMTXConcat(a, b, ab): ab = a * b (3x4 affine); ab may alias a or b.
+inline void lean_psmtx_concat(PpcContext* context, GuestMemoryV1* memory,
+                              const NativeServicesV1* services, std::uint32_t pc) {
+    float a[12];
+    float b[12];
+    sdk_math::load_f32s(sdk_math::read_span(memory, context->gpr[3], 48u, services, pc), a, 12u);
+    sdk_math::load_f32s(sdk_math::read_span(memory, context->gpr[4], 48u, services, pc), b, 12u);
+    float r[12];
+    for (std::uint32_t row = 0; row < 3u; ++row) {
+        const float* ar = a + row * 4u;
+        for (std::uint32_t col = 0; col < 4u; ++col) {
+            float value = ar[0] * b[col] + ar[1] * b[4u + col] + ar[2] * b[8u + col];
+            if (col == 3u) {
+                value += ar[3];
+            }
+            r[row * 4u + col] = value;
+        }
+    }
+    sdk_math::store_f32s(memory, context->gpr[5], r, 12u, services, pc);
+}
+
+// u32 PSMTXInverse(src, inv): 0 (inv untouched) when the 3x3 part is singular.
+inline void lean_psmtx_inverse(PpcContext* context, GuestMemoryV1* memory,
+                               const NativeServicesV1* services, std::uint32_t pc) {
+    float m[12];
+    sdk_math::load_f32s(sdk_math::read_span(memory, context->gpr[3], 48u, services, pc), m, 12u);
+    const float det =
+        m[0] * m[5] * m[10] + m[1] * m[6] * m[8] + m[2] * m[4] * m[9] -
+        m[8] * m[5] * m[2] - m[4] * m[1] * m[10] - m[0] * m[9] * m[6];
+    if (det == 0.0f) {
+        context->gpr[3] = 0u;
+        return;
+    }
+    const float d = 1.0f / det;
+    float r[12];
+    r[0] = (m[5] * m[10] - m[9] * m[6]) * d;
+    r[1] = -(m[1] * m[10] - m[9] * m[2]) * d;
+    r[2] = (m[1] * m[6] - m[5] * m[2]) * d;
+    r[4] = -(m[4] * m[10] - m[8] * m[6]) * d;
+    r[5] = (m[0] * m[10] - m[8] * m[2]) * d;
+    r[6] = -(m[0] * m[6] - m[4] * m[2]) * d;
+    r[8] = (m[4] * m[9] - m[8] * m[5]) * d;
+    r[9] = -(m[0] * m[9] - m[8] * m[1]) * d;
+    r[10] = (m[0] * m[5] - m[4] * m[1]) * d;
+    r[3] = -r[0] * m[3] - r[1] * m[7] - r[2] * m[11];
+    r[7] = -r[4] * m[3] - r[5] * m[7] - r[6] * m[11];
+    r[11] = -r[8] * m[3] - r[9] * m[7] - r[10] * m[11];
+    sdk_math::store_f32s(memory, context->gpr[4], r, 12u, services, pc);
+    context->gpr[3] = 1u;
+}
+
+// PSMTXRotTrig(m, axis, sinA, cosA): axis x/y/z in either case; anything else
+// leaves m untouched.
+inline void lean_psmtx_rot_trig(PpcContext* context, GuestMemoryV1* memory,
+                                const NativeServicesV1* services, std::uint32_t pc) {
+    const std::uint32_t axis = context->gpr[4] | 0x20u;  // ori r4,r4,0x20; cmplwi
+    const float s = sdk_math::fpr_f32(context, 1u);
+    const float c = sdk_math::fpr_f32(context, 2u);
+    float m[12];
+    if (axis == 'x') {
+        const float v[12] = {1, 0, 0, 0, 0, c, -s, 0, 0, s, c, 0};
+        std::memcpy(m, v, sizeof(m));
+    } else if (axis == 'y') {
+        const float v[12] = {c, 0, s, 0, 0, 1, 0, 0, -s, 0, c, 0};
+        std::memcpy(m, v, sizeof(m));
+    } else if (axis == 'z') {
+        const float v[12] = {c, -s, 0, 0, s, c, 0, 0, 0, 0, 1, 0};
+        std::memcpy(m, v, sizeof(m));
+    } else {
+        return;
+    }
+    sdk_math::store_f32s(memory, context->gpr[3], m, 12u, services, pc);
+}
+
+// PSMTXTrans(m, x, y, z)
+inline void lean_psmtx_trans(PpcContext* context, GuestMemoryV1* memory,
+                             const NativeServicesV1* services, std::uint32_t pc) {
+    const float m[12] = {1, 0, 0, sdk_math::fpr_f32(context, 1u),
+                         0, 1, 0, sdk_math::fpr_f32(context, 2u),
+                         0, 0, 1, sdk_math::fpr_f32(context, 3u)};
+    sdk_math::store_f32s(memory, context->gpr[3], m, 12u, services, pc);
+}
+
+// PSMTXTransApply(src, dst, x, y, z)
+inline void lean_psmtx_trans_apply(PpcContext* context, GuestMemoryV1* memory,
+                                   const NativeServicesV1* services, std::uint32_t pc) {
+    float m[12];
+    sdk_math::load_f32s(sdk_math::read_span(memory, context->gpr[3], 48u, services, pc), m, 12u);
+    m[3] += sdk_math::fpr_f32(context, 1u);
+    m[7] += sdk_math::fpr_f32(context, 2u);
+    m[11] += sdk_math::fpr_f32(context, 3u);
+    sdk_math::store_f32s(memory, context->gpr[4], m, 12u, services, pc);
+}
+
+// PSMTXScale(m, x, y, z)
+inline void lean_psmtx_scale(PpcContext* context, GuestMemoryV1* memory,
+                             const NativeServicesV1* services, std::uint32_t pc) {
+    const float m[12] = {sdk_math::fpr_f32(context, 1u), 0, 0, 0,
+                         0, sdk_math::fpr_f32(context, 2u), 0, 0,
+                         0, 0, sdk_math::fpr_f32(context, 3u), 0};
+    sdk_math::store_f32s(memory, context->gpr[3], m, 12u, services, pc);
+}
+
+// PSMTXScaleApply(src, dst, x, y, z): row i scaled by the i-th factor.
+inline void lean_psmtx_scale_apply(PpcContext* context, GuestMemoryV1* memory,
+                                   const NativeServicesV1* services, std::uint32_t pc) {
+    float m[12];
+    sdk_math::load_f32s(sdk_math::read_span(memory, context->gpr[3], 48u, services, pc), m, 12u);
+    for (std::uint32_t row = 0; row < 3u; ++row) {
+        const float k = sdk_math::fpr_f32(context, 1u + row);
+        for (std::uint32_t col = 0; col < 4u; ++col) {
+            m[row * 4u + col] *= k;
+        }
+    }
+    sdk_math::store_f32s(memory, context->gpr[4], m, 12u, services, pc);
+}
+
+// PSMTXQuat(m, q): rotation from a (not necessarily unit) quaternion.
+inline void lean_psmtx_quat(PpcContext* context, GuestMemoryV1* memory,
+                            const NativeServicesV1* services, std::uint32_t pc) {
+    float q[4];
+    sdk_math::load_f32s(sdk_math::read_span(memory, context->gpr[4], 16u, services, pc), q, 4u);
+    const float x = q[0];
+    const float y = q[1];
+    const float z = q[2];
+    const float w = q[3];
+    const float s = 2.0f / (x * x + y * y + z * z + w * w);
+    const float m[12] = {
+        1.0f - s * (y * y + z * z), s * (x * y - w * z), s * (x * z + w * y), 0.0f,
+        s * (x * y + w * z), 1.0f - s * (x * x + z * z), s * (y * z - w * x), 0.0f,
+        s * (x * z - w * y), s * (y * z + w * x), 1.0f - s * (x * x + y * y), 0.0f};
+    sdk_math::store_f32s(memory, context->gpr[3], m, 12u, services, pc);
+}
+
+// PSMTXMultVec(m, src, dst): dst = m * (src, 1)
+inline void lean_psmtx_mult_vec(PpcContext* context, GuestMemoryV1* memory,
+                                const NativeServicesV1* services, std::uint32_t pc) {
+    float m[12];
+    float v[3];
+    sdk_math::load_f32s(sdk_math::read_span(memory, context->gpr[3], 48u, services, pc), m, 12u);
+    sdk_math::load_f32s(sdk_math::read_span(memory, context->gpr[4], 12u, services, pc), v, 3u);
+    float r[3];
+    for (std::uint32_t row = 0; row < 3u; ++row) {
+        r[row] = m[row * 4u] * v[0] + m[row * 4u + 1u] * v[1] + m[row * 4u + 2u] * v[2] +
+            m[row * 4u + 3u];
+    }
+    sdk_math::store_f32s(memory, context->gpr[5], r, 3u, services, pc);
+}
+
+// PSMTXMultVecSR(m, src, dst): rotation/scale part only.
+inline void lean_psmtx_mult_vec_sr(PpcContext* context, GuestMemoryV1* memory,
+                                   const NativeServicesV1* services, std::uint32_t pc) {
+    float m[12];
+    float v[3];
+    sdk_math::load_f32s(sdk_math::read_span(memory, context->gpr[3], 48u, services, pc), m, 12u);
+    sdk_math::load_f32s(sdk_math::read_span(memory, context->gpr[4], 12u, services, pc), v, 3u);
+    float r[3];
+    for (std::uint32_t row = 0; row < 3u; ++row) {
+        r[row] = m[row * 4u] * v[0] + m[row * 4u + 1u] * v[1] + m[row * 4u + 2u] * v[2];
+    }
+    sdk_math::store_f32s(memory, context->gpr[5], r, 3u, services, pc);
+}
+
+// PSVECAdd / PSVECSubtract(a, b, dst)
+inline void lean_psvec_add(PpcContext* context, GuestMemoryV1* memory,
+                           const NativeServicesV1* services, std::uint32_t pc) {
+    float a[3];
+    float b[3];
+    sdk_math::load_f32s(sdk_math::read_span(memory, context->gpr[3], 12u, services, pc), a, 3u);
+    sdk_math::load_f32s(sdk_math::read_span(memory, context->gpr[4], 12u, services, pc), b, 3u);
+    const float r[3] = {a[0] + b[0], a[1] + b[1], a[2] + b[2]};
+    sdk_math::store_f32s(memory, context->gpr[5], r, 3u, services, pc);
+}
+
+inline void lean_psvec_subtract(PpcContext* context, GuestMemoryV1* memory,
+                                const NativeServicesV1* services, std::uint32_t pc) {
+    float a[3];
+    float b[3];
+    sdk_math::load_f32s(sdk_math::read_span(memory, context->gpr[3], 12u, services, pc), a, 3u);
+    sdk_math::load_f32s(sdk_math::read_span(memory, context->gpr[4], 12u, services, pc), b, 3u);
+    const float r[3] = {a[0] - b[0], a[1] - b[1], a[2] - b[2]};
+    sdk_math::store_f32s(memory, context->gpr[5], r, 3u, services, pc);
+}
+
+// PSVECScale(src, dst, scale)
+inline void lean_psvec_scale(PpcContext* context, GuestMemoryV1* memory,
+                             const NativeServicesV1* services, std::uint32_t pc) {
+    float v[3];
+    sdk_math::load_f32s(sdk_math::read_span(memory, context->gpr[3], 12u, services, pc), v, 3u);
+    const float k = sdk_math::fpr_f32(context, 1u);
+    const float r[3] = {v[0] * k, v[1] * k, v[2] * k};
+    sdk_math::store_f32s(memory, context->gpr[4], r, 3u, services, pc);
+}
+
+// PSVECNormalize(src, dst): reciprocal square root, as frsqrte + Newton.
+inline void lean_psvec_normalize(PpcContext* context, GuestMemoryV1* memory,
+                                 const NativeServicesV1* services, std::uint32_t pc) {
+    float v[3];
+    sdk_math::load_f32s(sdk_math::read_span(memory, context->gpr[3], 12u, services, pc), v, 3u);
+    const float k = 1.0f / std::sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);
+    const float r[3] = {v[0] * k, v[1] * k, v[2] * k};
+    sdk_math::store_f32s(memory, context->gpr[4], r, 3u, services, pc);
+}
+
+// f32 PSVECMag(v): 0 for a zero vector.
+inline void lean_psvec_mag(PpcContext* context, GuestMemoryV1* memory,
+                           const NativeServicesV1* services, std::uint32_t pc) {
+    float v[3];
+    sdk_math::load_f32s(sdk_math::read_span(memory, context->gpr[3], 12u, services, pc), v, 3u);
+    const float sq = v[0] * v[0] + v[1] * v[1] + v[2] * v[2];
+    sdk_math::return_f32(context, sq == 0.0f ? 0.0f : std::sqrt(sq));
+}
+
+// f32 PSVECDotProduct(a, b)
+inline void lean_psvec_dot(PpcContext* context, GuestMemoryV1* memory,
+                           const NativeServicesV1* services, std::uint32_t pc) {
+    float a[3];
+    float b[3];
+    sdk_math::load_f32s(sdk_math::read_span(memory, context->gpr[3], 12u, services, pc), a, 3u);
+    sdk_math::load_f32s(sdk_math::read_span(memory, context->gpr[4], 12u, services, pc), b, 3u);
+    sdk_math::return_f32(context, a[0] * b[0] + a[1] * b[1] + a[2] * b[2]);
+}
+
+// PSVECCrossProduct(a, b, dst); dst may alias a or b.
+inline void lean_psvec_cross(PpcContext* context, GuestMemoryV1* memory,
+                             const NativeServicesV1* services, std::uint32_t pc) {
+    float a[3];
+    float b[3];
+    sdk_math::load_f32s(sdk_math::read_span(memory, context->gpr[3], 12u, services, pc), a, 3u);
+    sdk_math::load_f32s(sdk_math::read_span(memory, context->gpr[4], 12u, services, pc), b, 3u);
+    const float r[3] = {a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2],
+                        a[0] * b[1] - a[1] * b[0]};
+    sdk_math::store_f32s(memory, context->gpr[5], r, 3u, services, pc);
+}
+
+// f32 PSVECDistance(a, b): 0 when the points coincide.
+inline void lean_psvec_distance(PpcContext* context, GuestMemoryV1* memory,
+                                const NativeServicesV1* services, std::uint32_t pc) {
+    float a[3];
+    float b[3];
+    sdk_math::load_f32s(sdk_math::read_span(memory, context->gpr[3], 12u, services, pc), a, 3u);
+    sdk_math::load_f32s(sdk_math::read_span(memory, context->gpr[4], 12u, services, pc), b, 3u);
+    const float dx = a[0] - b[0];
+    const float dy = a[1] - b[1];
+    const float dz = a[2] - b[2];
+    const float sq = dx * dx + dy * dy + dz * dz;
+    sdk_math::return_f32(context, sq == 0.0f ? 0.0f : std::sqrt(sq));
+}
+
+// PSQUATMultiply(p, q, pq); pq may alias p or q.
+inline void lean_psquat_multiply(PpcContext* context, GuestMemoryV1* memory,
+                                 const NativeServicesV1* services, std::uint32_t pc) {
+    float p[4];
+    float q[4];
+    sdk_math::load_f32s(sdk_math::read_span(memory, context->gpr[3], 16u, services, pc), p, 4u);
+    sdk_math::load_f32s(sdk_math::read_span(memory, context->gpr[4], 16u, services, pc), q, 4u);
+    const float r[4] = {
+        p[3] * q[0] + p[0] * q[3] + p[1] * q[2] - p[2] * q[1],
+        p[3] * q[1] + p[1] * q[3] + p[2] * q[0] - p[0] * q[2],
+        p[3] * q[2] + p[2] * q[3] + p[0] * q[1] - p[1] * q[0],
+        p[3] * q[3] - p[0] * q[0] - p[1] * q[1] - p[2] * q[2]};
+    sdk_math::store_f32s(memory, context->gpr[5], r, 4u, services, pc);
+}
+
+// f32 PSQUATDotProduct(p, q)
+inline void lean_psquat_dot(PpcContext* context, GuestMemoryV1* memory,
+                            const NativeServicesV1* services, std::uint32_t pc) {
+    float p[4];
+    float q[4];
+    sdk_math::load_f32s(sdk_math::read_span(memory, context->gpr[3], 16u, services, pc), p, 4u);
+    sdk_math::load_f32s(sdk_math::read_span(memory, context->gpr[4], 16u, services, pc), q, 4u);
+    sdk_math::return_f32(context, p[0] * q[0] + p[1] * q[1] + p[2] * q[2] + p[3] * q[3]);
+}
+
 inline void native_psmtx_identity_804B5EDC(
     PpcContext* context,
     GuestMemoryV1* memory,

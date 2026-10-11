@@ -383,7 +383,8 @@ pub fn translate_one(input: &Path, address: u32) -> Result<TranslationUnit, Tran
     let cpp = emit_module(
         function,
         &body,
-        function_requires_fpu(bytes) || native_substitution_uses_fpu(function.address),
+        (function_requires_fpu(bytes) || native_substitution_uses_fpu(function.address))
+            && lean_sdk_math_symbol(function.address).is_none(),
     )?;
 
     Ok(TranslationUnit {
@@ -571,12 +572,16 @@ pub fn translate_module_with_options(
                 address: function.address,
             },
         )?;
-        if function_requires_fpu(bytes) || native_substitution_uses_fpu(function.address) {
+        if (function_requires_fpu(bytes) || native_substitution_uses_fpu(function.address))
+            && lean_sdk_math_symbol(function.address).is_none()
+        {
             exact_fpu_functions.insert(function.address);
         }
     }
     let call_return_entries =
         call_return_continuations(&loaded.dol.sections, &loaded.dol_bytes, &ranges);
+    let device_pointer_globals =
+        discover_device_pointer_globals(&loaded.dol.sections, &loaded.dol_bytes, &ranges);
     let aliases = discover_alias_entries_with_call_returns(
         &loaded.dol.sections,
         &loaded.dol_bytes,
@@ -674,6 +679,7 @@ pub fn translate_module_with_options(
                             call_return_entries,
                             &callable_entries,
                             &exact_fpu_functions,
+                            &device_pointer_globals,
                             &options,
                         )?,
                         entries,
@@ -691,6 +697,7 @@ pub fn translate_module_with_options(
                     call_return_entries,
                     &callable_entries,
                     &exact_fpu_functions,
+                    &device_pointer_globals,
                     &options,
                 )?,
                 entries,
@@ -1952,6 +1959,7 @@ fn lower_words_for_module_with_call_return_entries_and_exact_fpu(
         call_return_entries,
         callable_entries,
         exact_fpu_functions,
+        &BTreeMap::new(),
         &ModuleTranslationOptions::default(),
     )
 }
@@ -1963,6 +1971,7 @@ fn lower_words_for_module_with_call_return_entries_and_exact_fpu_flat_reads(
     call_return_entries: &BTreeSet<u32>,
     callable_entries: &BTreeMap<u32, u32>,
     exact_fpu_functions: &BTreeSet<u32>,
+    device_pointer_globals: &BTreeMap<i32, u32>,
     options: &ModuleTranslationOptions,
 ) -> Result<String, TranslationError> {
     lower_words_with_config(
@@ -1973,6 +1982,7 @@ fn lower_words_for_module_with_call_return_entries_and_exact_fpu_flat_reads(
         LoweringConfig {
             callable_entries: Some(callable_entries),
             exact_fpu_functions: Some(exact_fpu_functions),
+            device_pointer_globals: Some(device_pointer_globals),
             flat_ram_reads: options.flat_ram_reads,
             flat_ram_writes: options.flat_ram_writes,
             native_float: options.native_float,
@@ -2041,6 +2051,7 @@ fn lower_words_with_options(
             fused_paired_ternary: false,
             inline_scalar_single_binary: false,
             typed_region_gpr_mask: 0,
+            device_pointer_globals: None,
         },
     )
 }
@@ -2070,6 +2081,7 @@ struct LoweringConfig<'a> {
     fused_paired_ternary: bool,
     inline_scalar_single_binary: bool,
     typed_region_gpr_mask: u32,
+    device_pointer_globals: Option<&'a BTreeMap<i32, u32>>,
 }
 
 // The typed-region pilot has a single DOL owner; its public body still
@@ -2396,80 +2408,294 @@ fn is_flat_ram_address(address: u32) -> bool {
     }
 }
 
-/// Integer loads and stores whose effective address is a translation-time
-/// constant outside the RAM aliases of the flat guest view: device registers
-/// (0xCC00xxxx, 0xCD00xxxx), the locked cache (0xE000xxxx) and anything
-/// unmapped. Under fastmem such a site takes a host page fault on every
-/// execution (the SDK's DSP mailbox poll, IPC, PI and VI register accesses
-/// were 3.2 million faults in a two-minute title-screen session); these sites
-/// lower to the checked helper, which reaches the device directly. The
-/// write-gather pipe keeps its flat form: `fast::store` tests for it inline
-/// and appends to the gather buffer. Constants are tracked exactly as for the
-/// WGPIPE store runs (dropped at every join and after every branch), so a
-/// dynamic object or stack access can never be misclassified.
+/// SDA (r13-relative) words that every store in the program sets to one
+/// device register base: GXInit's `__cpReg`, `__piReg`, `__peReg` and
+/// `__memReg`. A load of one of these reads that constant. Keyed by the r13
+/// displacement (r13 holds `_SDA_BASE_` for the whole program).
+fn discover_device_pointer_globals(
+    sections: &[DolSection],
+    dol_bytes: &[u8],
+    functions: &[FunctionRange],
+) -> BTreeMap<i32, u32> {
+    let mut slots: BTreeMap<i32, Option<u32>> = BTreeMap::new();
+    for function in functions {
+        let Some(bytes) = function_bytes(sections, dol_bytes, *function) else {
+            continue;
+        };
+        let joins = internal_branch_targets(function.address, bytes);
+        let mut constants: [Option<u32>; 32] = [None; 32];
+        for (index, chunk) in bytes.chunks_exact(4).enumerate() {
+            let pc = function.address + index as u32 * 4;
+            let word = u32::from_be_bytes(chunk.try_into().expect("four-byte instruction"));
+            let opcode = Ins::new(word, Extensions::gekko_broadway()).op;
+            if joins.contains(&pc) {
+                constants.fill(None);
+            }
+            let stores_r13 = gpr_ra(word) == 13
+                && matches!(
+                    opcode,
+                    Opcode::Stw
+                        | Opcode::Stwu
+                        | Opcode::Sth
+                        | Opcode::Sthu
+                        | Opcode::Stb
+                        | Opcode::Stbu
+                        | Opcode::Stmw
+                        | Opcode::Stfs
+                        | Opcode::Stfsu
+                        | Opcode::Stfd
+                        | Opcode::Stfdu
+                        | Opcode::PsqSt
+                        | Opcode::PsqStu
+                );
+            if stores_r13 {
+                let displacement = signed_immediate(word);
+                let value = (opcode == Opcode::Stw)
+                    .then(|| constants[gpr_rt(word) as usize])
+                    .flatten()
+                    .filter(|value| is_device_register_base(*value));
+                let slot = slots.entry(displacement).or_insert(value);
+                if *slot != value {
+                    *slot = None;
+                }
+            }
+            advance_constant_gprs(&mut constants, word, opcode, false);
+        }
+    }
+    slots
+        .into_iter()
+        .filter_map(|(displacement, value)| value.map(|value| (displacement, value)))
+        .collect()
+}
+
+/// A Hollywood/Flipper register address (cached or uncached physical alias)
+/// other than the write-gather pipe.
+fn is_device_register_base(address: u32) -> bool {
+    matches!(address >> 24, 0x0C | 0x0D | 0xCC | 0xCD) && !is_wgpipe_address(address)
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+struct DeviceScanState {
+    constants: [Option<u32>; 32],
+}
+
+impl DeviceScanState {
+    const UNKNOWN: Self = Self {
+        constants: [None; 32],
+    };
+
+    fn meet(&mut self, other: &Self) -> bool {
+        let mut changed = false;
+        for (mine, theirs) in self.constants.iter_mut().zip(other.constants.iter()) {
+            if mine.is_some() && *mine != *theirs {
+                *mine = None;
+                changed = true;
+            }
+        }
+        changed
+    }
+}
+
+/// Integer loads and stores whose effective address is outside the RAM
+/// aliases of the flat guest view: device registers (0xCC00xxxx, 0xCD00xxxx),
+/// the locked cache (0xE000xxxx) and anything unmapped. Under fastmem such a
+/// site takes a host page fault on every execution (2.2 million in a ten-minute
+/// gameplay session before this analysis: IPC control polls, VI retrace
+/// reads, GX FIFO save and token handlers); these sites lower to the checked
+/// helper, which reaches the device directly and also admits RAM, so a
+/// misclassified site is slower, never wrong. The write-gather pipe keeps its
+/// flat form: `fast::store` tests for it inline and appends to the gather
+/// buffer.
+///
+/// GPR constants (lis/addi/ori chains, `mr`, and loads of the SDA device
+/// pointer globals) are propagated over the function's control-flow graph and
+/// met at joins; a call clobbers the volatile GPRs. Interior entries that no
+/// direct branch or call return explains (jump-table and other address-taken
+/// labels) start unknown. An indexed access with a device-register constant on
+/// one side and an unknown index on the other (`__IPCRegs[index]`) is a
+/// device access.
 fn discover_static_device_access_pcs(
     address: u32,
     bytes: &[u8],
-    interior_targets: &BTreeSet<u32>,
+    entries: &BTreeSet<u32>,
     immediate_overrides: Option<&BTreeMap<u32, PpcImmediateOverride>>,
+    device_pointer_globals: Option<&BTreeMap<i32, u32>>,
 ) -> BTreeSet<u32> {
-    let mut constants: [Option<u32>; 32] = [None; 32];
-    let mut pcs = BTreeSet::new();
-    for (index, chunk) in bytes.chunks_exact(4).enumerate() {
+    let words: Vec<u32> = bytes
+        .chunks_exact(4)
+        .map(|chunk| u32::from_be_bytes(chunk.try_into().expect("four-byte instruction")))
+        .collect();
+    let count = words.len();
+    let end = address.wrapping_add(bytes.len() as u32);
+    let index_of = |target: u32| {
+        (target >= address && target < end && (target - address) % 4 == 0)
+            .then(|| ((target - address) / 4) as usize)
+    };
+    let mut explained = BTreeSet::new();
+    let mut successors: Vec<Vec<usize>> = Vec::with_capacity(count);
+    for (index, &word) in words.iter().enumerate() {
         let pc = address + index as u32 * 4;
-        let word = u32::from_be_bytes(chunk.try_into().expect("four-byte instruction"));
-        let opcode = Ins::new(word, Extensions::gekko_broadway()).op;
-        if interior_targets.contains(&pc) {
-            constants.fill(None);
-        }
-        let overridden = immediate_overrides.is_some_and(|overrides| overrides.contains_key(&pc));
-        if !overridden {
-            let base = |register: u32| {
-                if register == 0 {
-                    Some(0u32)
-                } else {
-                    constants[register as usize]
+        let instruction = Ins::new(word, Extensions::gekko_broadway());
+        let link = word & 1 != 0;
+        let next = (index + 1 < count).then_some(index + 1);
+        let bo = (word >> 21) & 0x1F;
+        let mut edges = Vec::new();
+        match instruction.op {
+            Opcode::B => {
+                if link {
+                    edges.extend(next);
+                } else if let Some(target) = index_of(branch_target(pc, word)) {
+                    edges.push(target);
+                    explained.insert(address + target as u32 * 4);
                 }
-            };
-            let effective = match opcode {
-                Opcode::Lbz
-                | Opcode::Lbzu
-                | Opcode::Lhz
-                | Opcode::Lhzu
-                | Opcode::Lha
-                | Opcode::Lhau
-                | Opcode::Lwz
-                | Opcode::Lwzu
-                | Opcode::Stb
-                | Opcode::Stbu
-                | Opcode::Sth
-                | Opcode::Sthu
-                | Opcode::Stw
-                | Opcode::Stwu => base(gpr_ra(word))
-                    .map(|value| value.wrapping_add(signed_immediate(word) as u32)),
-                Opcode::Lbzx
-                | Opcode::Lbzux
-                | Opcode::Lhzx
-                | Opcode::Lhzux
-                | Opcode::Lhax
-                | Opcode::Lhaux
-                | Opcode::Lwzx
-                | Opcode::Lwzux
-                | Opcode::Stbx
-                | Opcode::Stbux
-                | Opcode::Sthx
-                | Opcode::Sthux
-                | Opcode::Stwx
-                | Opcode::Stwux => base(gpr_ra(word))
-                    .zip(constants[gpr_rb(word) as usize])
-                    .map(|(left, right)| left.wrapping_add(right)),
-                _ => None,
-            };
-            if effective.is_some_and(|ea| !is_flat_ram_address(ea) && !is_wgpipe_address(ea)) {
-                pcs.insert(pc);
+            }
+            Opcode::Bc => {
+                if let Some(target) = index_of(conditional_branch_target(pc, word)) {
+                    edges.push(target);
+                    explained.insert(address + target as u32 * 4);
+                }
+                if link || !branch_is_unconditional(bo) {
+                    edges.extend(next);
+                }
+            }
+            Opcode::Bclr | Opcode::Bcctr => {
+                if link || !branch_is_unconditional(bo) {
+                    edges.extend(next);
+                }
+            }
+            Opcode::Rfi => {}
+            _ => edges.extend(next),
+        }
+        if link && instruction.is_branch() {
+            if let Some(next) = next {
+                explained.insert(address + next as u32 * 4);
             }
         }
-        advance_constant_gprs(&mut constants, word, opcode, overridden);
+        successors.push(edges);
+    }
+
+    let mut states: Vec<Option<DeviceScanState>> = vec![None; count];
+    let mut pending = Vec::new();
+    if count != 0 {
+        states[0] = Some(DeviceScanState::UNKNOWN);
+        pending.push(0usize);
+    }
+    for entry in entries {
+        if explained.contains(entry) {
+            continue;
+        }
+        if let Some(index) = index_of(*entry) {
+            states[index] = Some(DeviceScanState::UNKNOWN);
+            pending.push(index);
+        }
+    }
+    let transfer = |state: &DeviceScanState, pc: u32, word: u32| {
+        let instruction = Ins::new(word, Extensions::gekko_broadway());
+        let opcode = instruction.op;
+        let overridden = immediate_overrides.is_some_and(|overrides| overrides.contains_key(&pc));
+        let mut next = *state;
+        advance_constant_gprs(&mut next.constants, word, opcode, overridden);
+        if instruction.is_branch() {
+            // advance_constant_gprs drops everything at a branch for the
+            // straight-line WGPIPE scan; branches define no GPR.
+            next.constants = state.constants;
+        }
+        if !overridden && opcode == Opcode::Lwz && gpr_ra(word) == 13 {
+            if let Some(value) = device_pointer_globals
+                .and_then(|globals| globals.get(&signed_immediate(word)))
+            {
+                next.constants[gpr_rt(word) as usize] = Some(*value);
+            }
+        }
+        if (instruction.is_branch() && word & 1 != 0) || opcode == Opcode::Sc {
+            for volatile in [0usize, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12] {
+                next.constants[volatile] = None;
+            }
+        }
+        next
+    };
+    while let Some(index) = pending.pop() {
+        let Some(state) = states[index] else {
+            continue;
+        };
+        let pc = address + index as u32 * 4;
+        let out = transfer(&state, pc, words[index]);
+        for &successor in &successors[index] {
+            match &mut states[successor] {
+                Some(existing) => {
+                    if existing.meet(&out) {
+                        pending.push(successor);
+                    }
+                }
+                slot @ None => {
+                    *slot = Some(out);
+                    pending.push(successor);
+                }
+            }
+        }
+    }
+
+    let mut pcs = BTreeSet::new();
+    for (index, &word) in words.iter().enumerate() {
+        let Some(state) = states[index] else {
+            continue;
+        };
+        let pc = address + index as u32 * 4;
+        if immediate_overrides.is_some_and(|overrides| overrides.contains_key(&pc)) {
+            continue;
+        }
+        let constants = &state.constants;
+        let base = |register: u32| {
+            if register == 0 {
+                Some(0u32)
+            } else {
+                constants[register as usize]
+            }
+        };
+        let opcode = Ins::new(word, Extensions::gekko_broadway()).op;
+        let device = match opcode {
+            Opcode::Lbz
+            | Opcode::Lbzu
+            | Opcode::Lhz
+            | Opcode::Lhzu
+            | Opcode::Lha
+            | Opcode::Lhau
+            | Opcode::Lwz
+            | Opcode::Lwzu
+            | Opcode::Stb
+            | Opcode::Stbu
+            | Opcode::Sth
+            | Opcode::Sthu
+            | Opcode::Stw
+            | Opcode::Stwu => base(gpr_ra(word))
+                .map(|value| value.wrapping_add(signed_immediate(word) as u32))
+                .is_some_and(|ea| !is_flat_ram_address(ea) && !is_wgpipe_address(ea)),
+            Opcode::Lbzx
+            | Opcode::Lbzux
+            | Opcode::Lhzx
+            | Opcode::Lhzux
+            | Opcode::Lhax
+            | Opcode::Lhaux
+            | Opcode::Lwzx
+            | Opcode::Lwzux
+            | Opcode::Stbx
+            | Opcode::Stbux
+            | Opcode::Sthx
+            | Opcode::Sthux
+            | Opcode::Stwx
+            | Opcode::Stwux => match (base(gpr_ra(word)), constants[gpr_rb(word) as usize]) {
+                (Some(left), Some(right)) => {
+                    let ea = left.wrapping_add(right);
+                    !is_flat_ram_address(ea) && !is_wgpipe_address(ea)
+                }
+                (Some(known), None) | (None, Some(known)) => is_device_register_base(known),
+                (None, None) => false,
+            },
+            _ => false,
+        };
+        if device {
+            pcs.insert(pc);
+        }
     }
     pcs
 }
@@ -2661,6 +2887,7 @@ fn lower_words_with_config(
         fused_paired_ternary,
         inline_scalar_single_binary,
         typed_region_gpr_mask,
+        device_pointer_globals,
     } = config;
     // The paired/scalar local-lane proofs own their exact arithmetic text;
     // native float only replaces the general lowering.
@@ -2769,7 +2996,13 @@ fn lower_words_with_config(
     let static_device_pcs = if (flat_ram_reads || flat_ram_writes)
         && local_lane_profile == LocalLaneProfile::None
     {
-        discover_static_device_access_pcs(address, bytes, &branch_targets, immediate_overrides)
+        discover_static_device_access_pcs(
+            address,
+            bytes,
+            entries,
+            immediate_overrides,
+            device_pointer_globals,
+        )
     } else {
         BTreeSet::new()
     };
@@ -4920,7 +5153,10 @@ fn lower_words_with_config(
                     writeln!(output, "    context->lr = 0x{:08X}u;", pc + 4)
                         .map_err(|_| TranslationError::Formatting)?;
                 }
-                if target >= address && target < function_end {
+                let gpr_save_restore = if link { gpr_save_restore_entry(target) } else { None };
+                if let Some((first, save)) = gpr_save_restore {
+                    emit_gpr_save_restore(&mut output, first, save, pc, flat_ram_reads, flat_ram_writes)?;
+                } else if target >= address && target < function_end {
                     if target <= pc {
                         writeln!(
                             output,
@@ -5836,6 +6072,60 @@ fn validate_psvec_normalize_local_memory_contract(bytes: &[u8]) -> Result<(), Tr
     Ok(())
 }
 
+/// CodeWarrior's register save/restore helpers: `_savegpr_N` at
+/// 0x805174FC + 4(N-14) is `stw rN..r31, -0x80+4N(r11)` then `blr`;
+/// `_restgpr_N` at 0x80517548 + 4(N-14) is the matching `lwz` run. A linked
+/// call to entry N returns (first register, is-save).
+fn gpr_save_restore_entry(target: u32) -> Option<(u32, bool)> {
+    match target {
+        0x8051_74FC..=0x8051_7540 if (target - 0x8051_74FC) % 4 == 0 => {
+            Some((14 + (target - 0x8051_74FC) / 4, true))
+        }
+        0x8051_7548..=0x8051_758C if (target - 0x8051_7548) % 4 == 0 => {
+            Some((14 + (target - 0x8051_7548) / 4, false))
+        }
+        _ => None,
+    }
+}
+
+/// `bl _savegpr_N` / `bl _restgpr_N` lowered inline as the helper's own
+/// store/load run (one statement per register, so the residency pass keeps the
+/// registers in host locals). The helpers contain no call, branch or
+/// interrupt boundary, so the call-return checkpoint is not needed.
+fn emit_gpr_save_restore(
+    output: &mut String,
+    first: u32,
+    save: bool,
+    pc: u32,
+    flat_ram_reads: bool,
+    flat_ram_writes: bool,
+) -> Result<(), TranslationError> {
+    for reg in first..32 {
+        let ea = format!("context->gpr[11] + 0x{:08X}u", 0xFFFF_FF80u32.wrapping_add(reg * 4));
+        if save {
+            if flat_ram_writes {
+                writeln!(
+                    output,
+                    "    galaxy::fast::store<std::uint32_t>(flat_guest_base, memory, {ea}, context->gpr[{reg}], services, 0x{pc:08X}u);"
+                )
+            } else {
+                writeln!(
+                    output,
+                    "    galaxy::guest_store_u32(memory, {ea}, context->gpr[{reg}], services, 0x{pc:08X}u);"
+                )
+            }
+        } else {
+            writeln!(
+                output,
+                "    context->gpr[{reg}] = {};",
+                integer_guest_load_expression(4, &ea, pc, flat_ram_reads)
+            )
+        }
+        .map_err(|_| TranslationError::Formatting)?;
+    }
+    Ok(())
+}
+
 fn emit_call_return_checkpoint(output: &mut String, call_pc: u32) -> Result<(), TranslationError> {
     writeln!(
         output,
@@ -6202,7 +6492,42 @@ impl NativePureHelper {
     }
 }
 
+/// RVL SDK paired-single math library routines with lean host bodies
+/// (`galaxy::lean_*` in native_api.h): fast float, ABI-visible effects only.
+/// Eager FPU (ABI 25) means translated code never raises exception 7, so
+/// these need no exact-FPU restart and replace both the body and direct calls.
+fn lean_sdk_math_symbol(address: u32) -> Option<&'static str> {
+    match address {
+        0x804B_5EDC => Some("lean_psmtx_identity"),
+        0x804B_5F08 => Some("lean_psmtx_copy"),
+        0x804B_5F3C => Some("lean_psmtx_concat"),
+        0x804B_6008 => Some("lean_psmtx_inverse"),
+        0x804B_61C8 => Some("lean_psmtx_rot_trig"),
+        0x804B_63A4 => Some("lean_psmtx_trans"),
+        0x804B_63D8 => Some("lean_psmtx_trans_apply"),
+        0x804B_6424 => Some("lean_psmtx_scale"),
+        0x804B_644C => Some("lean_psmtx_scale_apply"),
+        0x804B_64A4 => Some("lean_psmtx_quat"),
+        0x804B_683C => Some("lean_psmtx_mult_vec"),
+        0x804B_6890 => Some("lean_psmtx_mult_vec_sr"),
+        0x804B_6B68 => Some("lean_psvec_add"),
+        0x804B_6B8C => Some("lean_psvec_subtract"),
+        0x804B_6BB0 => Some("lean_psvec_scale"),
+        0x804B_6BCC => Some("lean_psvec_normalize"),
+        0x804B_6C54 => Some("lean_psvec_mag"),
+        0x804B_6C98 => Some("lean_psvec_dot"),
+        0x804B_6CB8 => Some("lean_psvec_cross"),
+        0x804B_6CF4 => Some("lean_psvec_distance"),
+        0x804B_6D48 => Some("lean_psquat_multiply"),
+        0x804B_6DA4 => Some("lean_psquat_dot"),
+        _ => None,
+    }
+}
+
 fn native_pure_helper(target: u32) -> Option<NativePureHelper> {
+    if let Some(symbol) = lean_sdk_math_symbol(target) {
+        return Some(NativePureHelper::integer(symbol));
+    }
     match target {
         0x8000_72B4 => Some(NativePureHelper::integer(
             "native_read_next_char_utf16_800072B4",
@@ -6233,12 +6558,6 @@ fn native_pure_helper(target: u32) -> Option<NativePureHelper> {
         0x8044_727C => Some(NativePureHelper::integer("native_jpa_random_i16_8044727C")),
         0x8044_8D54 => Some(NativePureHelper::integer("native_jpa_actor_check_80448D54")),
         0x8044_8D94 => Some(NativePureHelper::integer("native_jpa_actor_check_80448D94")),
-        0x804B_5EDC => Some(NativePureHelper::fpu("native_psmtx_identity_804B5EDC")),
-        0x804B_5F08 => Some(NativePureHelper::fpu("native_psmtx_copy_804B5F08")),
-        0x804B_63D8 => Some(NativePureHelper::fpu("native_psmtx_trans_apply_804B63D8")),
-        0x804B_6424 => Some(NativePureHelper::fpu("native_psmtx_scale_804B6424")),
-        0x804B_6BCC => Some(NativePureHelper::fpu("native_psvec_normalize_804B6BCC")),
-        0x804B_6CB8 => Some(NativePureHelper::fpu("native_psvec_cross_product")),
         0x804B_D28C => Some(NativePureHelper::integer(
             "native_gx_set_chan_color_804BD28C",
         )),
@@ -6410,6 +6729,73 @@ fn emit_indirect_guest_call(
 
 fn native_function_body(address: u32) -> Option<&'static str> {
     match address {
+        // RVL SDK math library: lean host bodies (see lean_sdk_math_symbol).
+        0x804B_5EDC => Some(
+            "    galaxy::lean_psmtx_identity(context, memory, services, 0x804B5EDCu);\n    return;\n",
+        ),
+        0x804B_5F08 => Some(
+            "    galaxy::lean_psmtx_copy(context, memory, services, 0x804B5F08u);\n    return;\n",
+        ),
+        0x804B_5F3C => Some(
+            "    galaxy::lean_psmtx_concat(context, memory, services, 0x804B5F3Cu);\n    return;\n",
+        ),
+        0x804B_6008 => Some(
+            "    galaxy::lean_psmtx_inverse(context, memory, services, 0x804B6008u);\n    return;\n",
+        ),
+        0x804B_61C8 => Some(
+            "    galaxy::lean_psmtx_rot_trig(context, memory, services, 0x804B61C8u);\n    return;\n",
+        ),
+        0x804B_63A4 => Some(
+            "    galaxy::lean_psmtx_trans(context, memory, services, 0x804B63A4u);\n    return;\n",
+        ),
+        0x804B_63D8 => Some(
+            "    galaxy::lean_psmtx_trans_apply(context, memory, services, 0x804B63D8u);\n    return;\n",
+        ),
+        0x804B_6424 => Some(
+            "    galaxy::lean_psmtx_scale(context, memory, services, 0x804B6424u);\n    return;\n",
+        ),
+        0x804B_644C => Some(
+            "    galaxy::lean_psmtx_scale_apply(context, memory, services, 0x804B644Cu);\n    return;\n",
+        ),
+        0x804B_64A4 => Some(
+            "    galaxy::lean_psmtx_quat(context, memory, services, 0x804B64A4u);\n    return;\n",
+        ),
+        0x804B_683C => Some(
+            "    galaxy::lean_psmtx_mult_vec(context, memory, services, 0x804B683Cu);\n    return;\n",
+        ),
+        0x804B_6890 => Some(
+            "    galaxy::lean_psmtx_mult_vec_sr(context, memory, services, 0x804B6890u);\n    return;\n",
+        ),
+        0x804B_6B68 => Some(
+            "    galaxy::lean_psvec_add(context, memory, services, 0x804B6B68u);\n    return;\n",
+        ),
+        0x804B_6B8C => Some(
+            "    galaxy::lean_psvec_subtract(context, memory, services, 0x804B6B8Cu);\n    return;\n",
+        ),
+        0x804B_6BB0 => Some(
+            "    galaxy::lean_psvec_scale(context, memory, services, 0x804B6BB0u);\n    return;\n",
+        ),
+        0x804B_6BCC => Some(
+            "    galaxy::lean_psvec_normalize(context, memory, services, 0x804B6BCCu);\n    return;\n",
+        ),
+        0x804B_6C54 => Some(
+            "    galaxy::lean_psvec_mag(context, memory, services, 0x804B6C54u);\n    return;\n",
+        ),
+        0x804B_6C98 => Some(
+            "    galaxy::lean_psvec_dot(context, memory, services, 0x804B6C98u);\n    return;\n",
+        ),
+        0x804B_6CB8 => Some(
+            "    galaxy::lean_psvec_cross(context, memory, services, 0x804B6CB8u);\n    return;\n",
+        ),
+        0x804B_6CF4 => Some(
+            "    galaxy::lean_psvec_distance(context, memory, services, 0x804B6CF4u);\n    return;\n",
+        ),
+        0x804B_6D48 => Some(
+            "    galaxy::lean_psquat_multiply(context, memory, services, 0x804B6D48u);\n    return;\n",
+        ),
+        0x804B_6DA4 => Some(
+            "    galaxy::lean_psquat_dot(context, memory, services, 0x804B6DA4u);\n    return;\n",
+        ),
         0x8000_72B4 => Some(
             "    galaxy::native_read_next_char_utf16_800072B4(context, memory, services, 0x800072B4u);\n    return;\n",
         ),
@@ -6457,21 +6843,6 @@ fn native_function_body(address: u32) -> Option<&'static str> {
         ),
         0x8044_8D94 => Some(
             "    galaxy::native_jpa_actor_check_80448D94(context, memory, services, 0x80448D94u);\n    return;\n",
-        ),
-        0x804B_5EDC => Some(
-            "    galaxy::native_psmtx_identity_804B5EDC(context, memory, services, 0x804B5EDCu);\n    return;\n",
-        ),
-        0x804B_5F08 => Some(
-            "    galaxy::native_psmtx_copy_804B5F08(context, memory, services, 0x804B5F08u);\n    return;\n",
-        ),
-        0x804B_63D8 => Some(
-            "    galaxy::native_psmtx_trans_apply_804B63D8(context, memory, services, 0x804B63D8u);\n    return;\n",
-        ),
-        0x804B_6424 => Some(
-            "    galaxy::native_psmtx_scale_804B6424(context, memory, services, 0x804B6424u);\n    return;\n",
-        ),
-        0x804B_6BCC => Some(
-            "    galaxy::native_psvec_normalize_804B6BCC(context, memory, services, 0x804B6BCCu);\n    return;\n",
         ),
         0x804B_E1D8 => Some(
             "    galaxy::native_gx_load_pos_mtx_imm_804BE1D8(context, memory, services, 0x804BE1D8u);\n    return;\n",
@@ -10304,6 +10675,84 @@ mod tests {
         assert_eq!(flat.matches("galaxy::fast::store<").count(), 1);
     }
 
+    fn device_pcs(
+        words: &[u32],
+        entries: &[u32],
+        globals: &BTreeMap<i32, u32>,
+    ) -> BTreeSet<u32> {
+        let bytes = words
+            .iter()
+            .flat_map(|word| word.to_be_bytes())
+            .collect::<Vec<_>>();
+        discover_static_device_access_pcs(
+            0x8000_5000,
+            &bytes,
+            &entries.iter().copied().collect(),
+            None,
+            Some(globals),
+        )
+    }
+
+    #[test]
+    fn device_constants_survive_loop_joins_and_indexed_register_files() {
+        // IPC control poll: the base is set before the loop head.
+        let poll = [
+            (15 << 26) | (3 << 21) | 0xCD00,             // lis r3,0xCD00
+            (32 << 26) | (3 << 16) | 0x0004,             // lwz r0,4(r3)
+            (28 << 26) | (0 << 16) | 0x0004,             // andi. r0,r0,4
+            (16 << 26) | (12 << 21) | (2 << 16) | 0xFFF8, // beq 0x80005004
+            0x4E80_0020,
+        ];
+        assert_eq!(device_pcs(&poll, &[], &BTreeMap::new()), BTreeSet::from([0x8000_5004]));
+        // IPCWriteReg: __IPCRegs[index] = value.
+        let indexed = [
+            (21 << 26) | (3 << 21) | (2 << 11) | (29 << 1), // rlwinm r0,r3,2,0,29
+            (15 << 26) | (3 << 21) | 0xCD00,                // lis r3,0xCD00
+            (31 << 26) | (4 << 21) | (3 << 16) | (151 << 1), // stwx r4,r3,r0
+            0x4E80_0020,
+        ];
+        assert_eq!(
+            device_pcs(&indexed, &[], &BTreeMap::new()),
+            BTreeSet::from([0x8000_5008])
+        );
+        // An address-taken label no branch explains starts unknown.
+        let entered = [
+            (15 << 26) | (3 << 21) | 0xCD00, // lis r3,0xCD00
+            (32 << 26) | (3 << 16) | 0x0004, // lwz r0,4(r3)
+            0x4E80_0020,
+        ];
+        assert!(device_pcs(&entered, &[0x8000_5004], &BTreeMap::new()).is_empty());
+    }
+
+    #[test]
+    fn device_pointer_globals_and_joins_follow_every_path() {
+        // __cpReg is a device base until a call clobbers the volatile copy.
+        let globals = BTreeMap::from([(-0x1DF4, 0xCC00_0000)]);
+        let global = [
+            (32 << 26) | (4 << 21) | (13 << 16) | 0xE20C, // lwz r4,-0x1DF4(r13)
+            (44 << 26) | (5 << 21) | (4 << 16) | 0x0002,  // sth r5,2(r4)
+            (18 << 26) | 0x0100 | 1,                      // bl
+            (44 << 26) | (5 << 21) | (4 << 16) | 0x0002,  // sth r5,2(r4)
+            0x4E80_0020,
+        ];
+        assert_eq!(device_pcs(&global, &[], &globals), BTreeSet::from([0x8000_5004]));
+        assert!(device_pcs(&global, &[], &BTreeMap::new()).is_empty());
+        let joins = [
+            (11 << 26) | (3 << 16),                       // cmpwi r3,0
+            (16 << 26) | (12 << 21) | (2 << 16) | 0x000C, // beq 0x80005010
+            (15 << 26) | (4 << 21) | 0xCD00,              // lis r4,0xCD00
+            (18 << 26) | 0x0008,                          // b 0x80005014
+            (32 << 26) | (4 << 21) | (1 << 16),           // lwz r4,0(r1)
+            (32 << 26) | (4 << 16) | 0x0004,              // lwz r0,4(r4): RAM on one path
+            (15 << 26) | (5 << 21) | 0xCC00,              // lis r5,0xCC00
+            (16 << 26) | (12 << 21) | (2 << 16) | 0x0008, // beq 0x80005024
+            0x6000_0000,                                  // nop
+            (40 << 26) | (5 << 16) | 0x2002,              // lhz r0,0x2002(r5): VI on both
+            0x4E80_0020,
+        ];
+        assert_eq!(device_pcs(&joins, &[], &BTreeMap::new()), BTreeSet::from([0x8000_5024]));
+    }
+
     #[test]
     fn flat_ram_integer_loads_leave_fp_and_checked_store_paths_unchanged() {
         let words: [u32; 4] = [
@@ -12583,7 +13032,7 @@ mod tests {
         )
         .expect("native pure helper direct call is supported");
         assert!(helper.contains(
-            "galaxy::native_psvec_cross_product(context, memory, services, 0x804B6CB8u);"
+            "galaxy::lean_psvec_cross(context, memory, services, 0x804B6CB8u);"
         ));
         assert!(!helper.contains("galaxy::call_guest_resolved"));
 
@@ -12660,7 +13109,7 @@ mod tests {
         )
         .expect("native PS vector normalize direct call is supported");
         assert!(normalize.contains(
-            "galaxy::native_psvec_normalize_804B6BCC(context, memory, services, 0x804B6BCCu);"
+            "galaxy::lean_psvec_normalize(context, memory, services, 0x804B6BCCu);"
         ));
         assert!(!normalize.contains("galaxy::call_guest_resolved"));
 
@@ -12749,13 +13198,13 @@ mod tests {
             (
                 0x804B_5ED4,
                 0x804B_5EDC,
-                "galaxy::native_psmtx_identity_804B5EDC(context, memory, services, 0x804B5EDCu);",
+                "galaxy::lean_psmtx_identity(context, memory, services, 0x804B5EDCu);",
                 "PSMTXIdentity native helper direct call is supported",
             ),
             (
                 0x804B_5F00,
                 0x804B_5F08,
-                "galaxy::native_psmtx_copy_804B5F08(context, memory, services, 0x804B5F08u);",
+                "galaxy::lean_psmtx_copy(context, memory, services, 0x804B5F08u);",
                 "PSMTXCopy native helper direct call is supported",
             ),
         ] {
@@ -12906,9 +13355,14 @@ mod tests {
             &BTreeSet::new(),
             &callable_entries,
         )
-        .expect("savegpr interior native helper direct call is supported");
-        assert!(savegpr
-            .contains("galaxy::native_savegpr_805174FC(context, memory, services, 0x80517538u);"));
+        .expect("savegpr interior entry lowers inline");
+        // _savegpr_29: stw r29..r31, -12/-8/-4(r11), no call or return boundary.
+        assert!(savegpr.contains("context->gpr[11] + 0xFFFFFFF4u, context->gpr[29], services, 0x80517530u);"));
+        assert!(savegpr.contains("context->gpr[11] + 0xFFFFFFFCu, context->gpr[31], services, 0x80517530u);"));
+        assert!(!savegpr.contains("context->gpr[28]"));
+        assert!(savegpr.contains("context->lr = 0x80517534u;"));
+        assert!(!savegpr.contains("native_savegpr"));
+        assert!(!savegpr.contains("call_return_checkpoint(services, 0x80517530u"));
         assert!(!savegpr.contains("rmge01::fn_805174FC"));
         assert!(!savegpr.contains("galaxy::call_guest_resolved"));
 
@@ -12924,9 +13378,12 @@ mod tests {
             &BTreeSet::new(),
             &callable_entries,
         )
-        .expect("restgpr interior native helper direct call is supported");
-        assert!(restgpr
-            .contains("galaxy::native_restgpr_80517548(context, memory, services, 0x80517584u);"));
+        .expect("restgpr interior entry lowers inline");
+        // _restgpr_29: lwz r29..r31, -12/-8/-4(r11).
+        assert!(restgpr.contains("context->gpr[29] = "));
+        assert!(restgpr.contains("context->gpr[11] + 0xFFFFFFF4u"));
+        assert!(restgpr.contains("context->gpr[31] = "));
+        assert!(!restgpr.contains("native_restgpr"));
         assert!(!restgpr.contains("rmge01::fn_80517548"));
         assert!(!restgpr.contains("galaxy::call_guest_resolved"));
     }
@@ -13020,7 +13477,6 @@ mod tests {
             (0x804A_2F50_u32, "native_cache_maintenance_range"),
             (0x804A_2F80_u32, "native_cache_maintenance_range"),
             (0x804A_2FAC_u32, "native_cache_maintenance_range"),
-            (0x804B_5F3C_u32, "native_psmtx_concat_804B5F3C"),
             (0x804B_A6B0_u32, "native_gx_begin_804BA6B0"),
             (0x804B_A7FC_u32, "native_gx_send_zero_primitive_804BA7FC"),
             (0x804B_DEA8_u32, "native_gx_begin_804BDEA8"),
@@ -13432,35 +13888,35 @@ mod tests {
                     address: 0x804B_5EDC,
                     size: 0x2C,
                 },
-                "galaxy::native_psmtx_identity_804B5EDC(context, memory, services, 0x804B5EDCu);",
+                "galaxy::lean_psmtx_identity(context, memory, services, 0x804B5EDCu);",
             ),
             (
                 FunctionRange {
                     address: 0x804B_5F08,
                     size: 0x34,
                 },
-                "galaxy::native_psmtx_copy_804B5F08(context, memory, services, 0x804B5F08u);",
+                "galaxy::lean_psmtx_copy(context, memory, services, 0x804B5F08u);",
             ),
             (
                 FunctionRange {
                     address: 0x804B_63D8,
                     size: 0x4C,
                 },
-                "galaxy::native_psmtx_trans_apply_804B63D8(context, memory, services, 0x804B63D8u);",
+                "galaxy::lean_psmtx_trans_apply(context, memory, services, 0x804B63D8u);",
             ),
             (
                 FunctionRange {
                     address: 0x804B_6424,
                     size: 0x28,
                 },
-                "galaxy::native_psmtx_scale_804B6424(context, memory, services, 0x804B6424u);",
+                "galaxy::lean_psmtx_scale(context, memory, services, 0x804B6424u);",
             ),
             (
                 FunctionRange {
                     address: 0x804B_6BCC,
                     size: 0x44,
                 },
-                "galaxy::native_psvec_normalize_804B6BCC(context, memory, services, 0x804B6BCCu);",
+                "galaxy::lean_psvec_normalize(context, memory, services, 0x804B6BCCu);",
             ),
             (
                 FunctionRange {
@@ -13562,12 +14018,6 @@ mod tests {
             0x8044_0CDC,
             0x8044_65A0,
             0x8044_65CC,
-            0x804B_5EDC,
-            0x804B_5F08,
-            0x804B_63D8,
-            0x804B_6424,
-            0x804B_6BCC,
-            0x804B_6CB8,
             0x804B_E1D8,
         ] {
             assert!(
@@ -13577,6 +14027,21 @@ mod tests {
         }
         for address in [0x8000_72B4_u32, 0x803A_33AC, 0x8044_727C, 0x804B_E59C] {
             assert!(!native_substitution_uses_fpu(address));
+        }
+        // SDK paired-single math has lean host bodies and needs no exact FPU.
+        for address in [
+            0x804B_5EDC_u32,
+            0x804B_5F08,
+            0x804B_5F3C,
+            0x804B_63D8,
+            0x804B_6424,
+            0x804B_6BCC,
+            0x804B_6CB8,
+        ] {
+            assert!(!native_substitution_uses_fpu(address));
+            let symbol = lean_sdk_math_symbol(address).expect("lean SDK math routine");
+            assert_eq!(native_pure_helper(address), Some(NativePureHelper::integer(symbol)));
+            assert!(native_function_body(address).is_some_and(|body| body.contains(symbol)));
         }
 
         assert_eq!(native_pure_helper(0x803E_4D24), None);
@@ -13629,7 +14094,6 @@ mod tests {
             0x804A_2F50,
             0x804A_2F80,
             0x804A_2FAC,
-            0x804B_5F3C,
             0x804B_A6B0,
             0x804B_A7FC,
             0x804B_DEA8,
