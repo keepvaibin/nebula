@@ -38,6 +38,7 @@
 #include <charconv>
 #include <cstdio>
 #include <cstdlib>
+#include <intrin.h>
 #include <cstring>
 #include <filesystem>
 #include <iostream>
@@ -7390,6 +7391,24 @@ void GxBackend::present_cached_xfb_on_thread(
 }
 
 void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
+    // GALAXY_DIAG_RENDER_BURN_US: busy CPU time per render chunk (diagnostic,
+    // emulates a slower render thread).
+    {
+        static const std::uint64_t burn_us = [] {
+            char value[24]{};
+            std::size_t length = 0;
+            if (getenv_s(&length, value, sizeof(value), "GALAXY_DIAG_RENDER_BURN_US") != 0 || length <= 1u) {
+                return std::uint64_t{0};
+            }
+            return static_cast<std::uint64_t>(std::strtoull(value, nullptr, 10));
+        }();
+        if (burn_us != 0u) {
+            const auto until = std::chrono::steady_clock::now() + std::chrono::microseconds(burn_us);
+            while (std::chrono::steady_clock::now() < until) {
+                _mm_pause();
+            }
+        }
+    }
     render_pointer_response_=chunk.pointer_response;
     render_movie_content_=chunk.prerecorded_movie;
     render_safety_surround_=chunk.safety_surround;

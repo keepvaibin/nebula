@@ -5363,6 +5363,20 @@ std::uint64_t throttled_thread_cpu_time_100ns() noexcept {
     return s_cached_value;
 }
 
+// GALAXY_DIAG_SIM_BURN_US: busy CPU time added to the simulation thread at
+// every VI delivery, to emulate a slower processor when looking for
+// serialization (frames lost while total work is still under a frame).
+void diag_sim_burn() {
+    static const std::uint64_t burn_us = read_env_u64("GALAXY_DIAG_SIM_BURN_US", 0u);
+    if (burn_us == 0u) {
+        return;
+    }
+    const auto until = std::chrono::steady_clock::now() + std::chrono::microseconds(burn_us);
+    while (std::chrono::steady_clock::now() < until) {
+        _mm_pause();
+    }
+}
+
 std::uint64_t runtime_time_base_ticks(RuntimeState& state) {
     g_census_time_base_calls.fetch_add(1u, std::memory_order_relaxed);
     update_native_audio_output_gate(state, true);
@@ -18979,6 +18993,7 @@ bool dispatch_vi_retrace(
     state.last_vi_delivery_ticks = observation_ticks;
     galaxy::timeline::record(galaxy::timeline::Event::ViEdge, vi_edge->sequence,
                          vi_edge->deadline_ticks);
+    diag_sim_burn();
     state.last_vi_delivery_cpu_time_100ns =
         current_thread_cpu_time_100ns();
     state.last_vi_delivery_cycle_count = current_thread_cycle_count();
