@@ -144,6 +144,14 @@ def main():
     print(f'[timeline-gpu] all-command-lists exec-ms {stats(gpu_exec_all)}')
 
     # ---------------------------------------------------------------- VI
+    # VI delivery lateness: consume time minus the deadline (timeline ticks
+    # at 60.75 MHz). The two clocks share no known offset, so report the
+    # spread above the run's smallest value: a constant offset cancels.
+    edge_records = [r for r in records if r[1] == 12]
+    if edge_records:
+        raw = [r[0] * ms - r[3] / 60750.0 for r in edge_records]
+        floor = min(raw)
+        print(f'[timeline-vi] delivery-lateness-above-min-ms {stats([x - floor for x in raw])}')
     vi_edges = [r[0] for r in records if r[1] == 12]
     vi_latched = [r[0] for r in records if r[1] == 13]
     intervals = [(b - a) * ms for a, b in zip(vi_edges, vi_edges[1:])]

@@ -796,7 +796,9 @@ public:
             << " guest=" << guest_samples_ << " host=" << host_samples_ << " other=" << other_samples_
             << " context-failures=" << context_failures_ << " walk-faults=" << walk_faults_
             << " stack-frames-max=" << kMaxFrames << '\n';
-        print_guest(out, "[sim-profile-guest]", guest_counts_, 48u, pct);
+        static const std::size_t guest_rows = static_cast<std::size_t>(
+            std::clamp<std::uint64_t>(read_env_u64("GALAXY_SIM_PROFILE_ROWS", 48u), 16u, 100000u));
+        print_guest(out, "[sim-profile-guest]", guest_counts_, guest_rows, pct);
         print_guest(out, "[sim-profile-guest-caller]", guest_caller_counts_, 32u, pct);
         print_guest(out, "[sim-profile-blocked-guest]", guest_blocked_counts_, 16u, pct);
         print_addresses(out, "[sim-profile-host]", host_buckets_, 40u, pct);
@@ -18083,10 +18085,13 @@ void idle_loop_wait_for_next_deadline(RuntimeState& state) {
     if (wait_duration > max_slice) {
         wait_duration = max_slice;
     }
-    // Leave the final stretch before the retrace to the existing polling so
-    // the edge is never delivered late by timer granularity (the
-    // high-resolution timer wakes within about half a millisecond).
-    constexpr auto kDeadlineGuard = std::chrono::microseconds(500);
+    // Leave a short final stretch to the existing polling. VI edges arrive
+    // through the broker's publication wake, not this timer; a 500 us guard
+    // spun the guest idle loop for no gain in edge timeliness (gameplay route:
+    // simulation thread 30.3 -> 26.6 % of a core at 100 us, VI delivery
+    // lateness p99 0.63 -> 0.57 ms). The timer still covers AI deadlines.
+    static const auto kDeadlineGuard = std::chrono::microseconds(std::clamp<std::uint64_t>(
+        read_env_u64("GALAXY_IDLE_LOOP_GUARD_US", 100u), 0u, 2000u));
     if (wait_duration <= kDeadlineGuard) {
         return;
     }
@@ -22082,6 +22087,41 @@ void dispatch_decrementer(
     if (!state.decrementer_deadline.take_pending_request()) {
         throw RuntimeFailure(
             "decrementer dispatch lost its pending architectural request");
+    }
+    // Diagnostic: which guest alarms are queued, and how far each is from
+    // due, every time a decrementer exception is delivered. AlarmQueue
+    // (0x806A2CB0) heads RMGE01's OSAlarm list: handler +0, fire +8, next +14,
+    // period +18.
+    static const bool trace_dec_alarms = read_env_flag("GALAXY_TRACE_DEC_ALARMS", false);
+    if (trace_dec_alarms && state.address_space != nullptr) {
+        static std::uint64_t deliveries = 0u;
+        ++deliveries;
+        if (deliveries <= 64u || deliveries % 500u == 0u) {
+            const std::uint64_t now = runtime_time_base_ticks(state);
+            constexpr double kTicksPerUs =
+                static_cast<double>(galaxy::timing::kTimelineTicksPerSecond) / 1e6;
+            std::ostringstream line;
+            line << "[dec-alarm] n=" << deliveries << " resume=" << hexadecimal(resume_address)
+                 << " dec-start=" << hexadecimal(context->decrementer_start_value);
+            std::uint32_t alarm = state.address_space->read_u32(0x806A2CB0u);
+            for (int i = 0; i < 6 && alarm != 0u &&
+                 mapped_guest_range(state.address_space, alarm, 0x28u); ++i) {
+                const std::uint32_t alarm_handler = state.address_space->read_u32(alarm);
+                const std::uint64_t fire =
+                    (static_cast<std::uint64_t>(state.address_space->read_u32(alarm + 8u)) << 32u) |
+                    state.address_space->read_u32(alarm + 12u);
+                const std::uint64_t period =
+                    (static_cast<std::uint64_t>(state.address_space->read_u32(alarm + 0x18u)) << 32u) |
+                    state.address_space->read_u32(alarm + 0x1Cu);
+                line << " [" << hexadecimal(alarm_handler) << " due-us="
+                     << static_cast<long long>(
+                            static_cast<double>(static_cast<std::int64_t>(fire - now)) / kTicksPerUs)
+                     << " period-us="
+                     << static_cast<long long>(static_cast<double>(period) / kTicksPerUs) << ']';
+                alarm = state.address_space->read_u32(alarm + 0x14u);
+            }
+            std::cerr << line.str() << '\n';
+        }
     }
 
     validate_guest_exception_identity(
