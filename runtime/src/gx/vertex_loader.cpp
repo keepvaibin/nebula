@@ -775,7 +775,11 @@ void decode_vertex_stream(
     const std::uint32_t normal_index_width =
         (desc.normal.vcd == VcdType::Index8) ? 1u : 2u;
     for (std::uint32_t vi = 0; vi < vtx_count; ++vi) {
-        GxVertexOut& out = verts[vi];
+        // Decode into cached memory and write the finished vertex with one
+        // sequential copy. `verts` is normally upload-heap memory, which is
+        // write-combined on a discrete GPU: the scattered field stores (the
+        // zeroing of absent texture coordinates above all) each stalled there.
+        GxVertexOut out;
         const std::byte* vsrc =
             raw_ptr + static_cast<std::size_t>(vi) * src_stride;
         std::size_t off = 0;
@@ -1010,6 +1014,7 @@ void decode_vertex_stream(
                 fifo_error_offset,
                 0);
         }
+        std::memcpy(verts + vi, &out, sizeof(GxVertexOut));
     }
 }
 
