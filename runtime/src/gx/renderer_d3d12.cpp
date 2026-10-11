@@ -10,11 +10,13 @@
 #include "galaxy/runtime_settings.h"
 #include "galaxy/scope_exit.h"
 #include "galaxy/native_host.h"
+#include "galaxy/frame_timeline.h"
 
 #pragma warning(push, 0)
 #include <d3d12sdklayers.h>
 #include <d3dcompiler.h>
 #include <dxgi1_6.h>
+#include <dwmapi.h>
 #pragma warning(pop)
 
 #include <algorithm>
@@ -4253,7 +4255,15 @@ void RendererD3D12::begin_frame(bool present_swap_chain) {
         const auto fence_wait_start = collect_begin_timing
             ? std::chrono::steady_clock::now()
             : std::chrono::steady_clock::time_point{};
+        const bool timeline_slot_wait =
+            galaxy::timeline::enabled() && completed_fence_value() < wait_val;
+        if (timeline_slot_wait) {
+            galaxy::timeline::record(galaxy::timeline::Event::SlotWaitBegin, wait_val);
+        }
         wait_for_fence_value(wait_val);
+        if (timeline_slot_wait) {
+            galaxy::timeline::record(galaxy::timeline::Event::SlotWaitEnd, wait_val);
+        }
         if (collect_begin_timing) {
             last_frame_slot_wait_us_ = elapsed_us(
                 fence_wait_start,
@@ -4275,6 +4285,38 @@ void RendererD3D12::begin_frame(bool present_swap_chain) {
             const auto* timestamps =
                 reinterpret_cast<const std::uint64_t*>(
                     static_cast<const std::byte*>(mapped) + offset);
+            if (galaxy::timeline::enabled() && timestamps[1] >= timestamps[0]) {
+                // GPU ticks map onto QPC through a calibration pair refreshed
+                // every 60 frames; the two clocks drift by parts per million.
+                static std::uint64_t calibration_gpu = 0u;
+                static std::uint64_t calibration_qpc = 0u;
+                static unsigned calibration_age = 0u;
+                if (calibration_qpc == 0u || ++calibration_age >= 60u) {
+                    UINT64 gpu = 0u;
+                    UINT64 cpu = 0u;
+                    if (SUCCEEDED(queue_->GetClockCalibration(&gpu, &cpu))) {
+                        calibration_gpu = gpu;
+                        calibration_qpc = cpu;
+                        calibration_age = 0u;
+                    }
+                }
+                if (calibration_qpc != 0u && qpc_frequency_.QuadPart > 0) {
+                    const double scale =
+                        static_cast<double>(qpc_frequency_.QuadPart) /
+                        static_cast<double>(timestamp_frequency_);
+                    const auto to_qpc = [&](std::uint64_t gpu_ticks) {
+                        const double delta = static_cast<double>(
+                            static_cast<std::int64_t>(gpu_ticks - calibration_gpu));
+                        return static_cast<std::uint64_t>(
+                            static_cast<std::int64_t>(calibration_qpc) +
+                            static_cast<std::int64_t>(delta * scale));
+                    };
+                    galaxy::timeline::record_at(galaxy::timeline::Event::GpuBegin,
+                                            to_qpc(timestamps[0]), wait_val);
+                    galaxy::timeline::record_at(galaxy::timeline::Event::GpuEnd,
+                                            to_qpc(timestamps[1]), wait_val);
+                }
+            }
             if (timestamps[1] >= timestamps[0]) {
                 const double gpu_ms =
                     static_cast<double>(timestamps[1] - timestamps[0]) *
@@ -4561,7 +4603,42 @@ std::uint64_t RendererD3D12::end_frame(
         const auto stall_watch_present_start = stall_watch
             ? std::chrono::steady_clock::now()
             : std::chrono::steady_clock::time_point{};
+        static std::uint64_t timeline_present_ordinal = 0u;
+        const bool timeline_present = galaxy::timeline::enabled();
+        if (timeline_present) {
+            galaxy::timeline::record(galaxy::timeline::Event::PresentBegin,
+                                 ++timeline_present_ordinal, vsync);
+        }
         const HRESULT present_hr = swap_chain_->Present(vsync, present_flags);
+        if (timeline_present) {
+            galaxy::timeline::record(galaxy::timeline::Event::PresentEnd,
+                                 timeline_present_ordinal);
+            // The OS's own record of which refresh showed which present.
+            DXGI_FRAME_STATISTICS statistics{};
+            if (SUCCEEDED(swap_chain_->GetFrameStatistics(&statistics))) {
+                galaxy::timeline::record_at(
+                    galaxy::timeline::Event::DisplayStats,
+                    static_cast<std::uint64_t>(statistics.SyncQPCTime.QuadPart),
+                    (static_cast<std::uint64_t>(statistics.PresentCount) << 32u) |
+                        statistics.PresentRefreshCount,
+                    statistics.SyncRefreshCount);
+            }
+            if (timeline_present_ordinal % 30u == 1u) {
+                using DwmTimingFn = HRESULT(WINAPI*)(HWND, DWM_TIMING_INFO*);
+                static const DwmTimingFn dwm_timing = [] {
+                    const HMODULE dwm = LoadLibraryW(L"dwmapi.dll");
+                    return dwm == nullptr ? nullptr
+                        : reinterpret_cast<DwmTimingFn>(
+                              GetProcAddress(dwm, "DwmGetCompositionTimingInfo"));
+                }();
+                DWM_TIMING_INFO timing{};
+                timing.cbSize = sizeof(timing);
+                if (dwm_timing != nullptr && SUCCEEDED(dwm_timing(nullptr, &timing))) {
+                    galaxy::timeline::record_at(galaxy::timeline::Event::VBlank, timing.qpcVBlank,
+                                            timing.qpcRefreshPeriod);
+                }
+            }
+        }
         if (stall_watch) {
             const double stall_watch_ms =
                 std::chrono::duration<double, std::milli>(

@@ -382,6 +382,9 @@ GxTimingConfig resolve_gx_timing_config_from_environment() {
     config.render_live_memory_reads =
         !config.render_live_memory_wait && !config.render_memory_snapshot &&
         read_env_bool("GALAXY_RENDER_LIVE_MEMORY", false);
+    config.pe_events_at_consumption = read_env_bool(
+        "GALAXY_PE_EVENTS_AT_CONSUMPTION",
+        config.pe_events_at_consumption);
     return config;
 }
 

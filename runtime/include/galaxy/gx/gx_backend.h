@@ -227,6 +227,7 @@ public:
     [[nodiscard]] bool wait_for_frame_pe_completion_for(
         FramePeCompletionToken token,
         std::uint32_t timeout_ms);
+    [[nodiscard]] bool render_queue_has_space();
     [[nodiscard]] bool capture_pointer_depth(std::span<std::uint32_t> pixels);
     [[nodiscard]] bool enqueue_pointer_depth_capture(const std::shared_ptr<PointerDepthCapture>& capture);
     // Simulation thread: the next render_frame submission records this

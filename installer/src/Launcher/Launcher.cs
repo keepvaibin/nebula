@@ -256,6 +256,7 @@ namespace Nebula.Launcher
                 }
                 string session = Sessions.Create("diagnostics");
                 start.EnvironmentVariables["GALAXY_CRASH_DUMP_DIR"] = session;
+                start.EnvironmentVariables["GALAXY_FRAME_TIMELINE_PATH"] = Path.Combine(session, "timeline.bin");
                 var launchFiles = new Dictionary<string, object>();
                 foreach (string name in new[] { "NebulaRuntime.exe", "RMGE01_game.dll", "RMGE01_home_button.dll",
                     "RMGE01_dsp.dll", "RMGE01_boot_image.bin", "runtime-env.json", "Nebula.exe" })

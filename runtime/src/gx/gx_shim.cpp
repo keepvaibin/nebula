@@ -51,6 +51,10 @@ bool wait_for_frame_pe_completion_for(
     return backend().wait_for_frame_pe_completion_for(token, timeout_ms);
 }
 
+bool render_queue_has_space() {
+    return backend().render_queue_has_space();
+}
+
 void set_pointer_response(PointerResponseStamp stamp) noexcept { backend().set_pointer_response(stamp); }
 void set_prerecorded_movie_content(bool movie) noexcept { backend().set_prerecorded_movie_content(movie); }
 void set_safety_scene_surround(float intensity) noexcept { backend().set_safety_scene_surround(intensity); }

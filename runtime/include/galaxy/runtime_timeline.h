@@ -363,7 +363,9 @@ public:
 
     bool publish(EventKind kind, std::uint64_t count = 1) noexcept;
     // Wakes a simulation thread blocked in WaitOnAddress on mask_address().
-    void wake_idle_waiters() noexcept;
+    // `source` is the EventKind that published (timeline attribution only);
+    // 100 marks a host wake that is not a latch publication (PE, IOS).
+    void wake_idle_waiters(std::uint32_t source = 100u) noexcept;
     void set_transfer_pending() noexcept;
     void clear_transfer_pending() noexcept;
     // Optional auto-reset event that wake_idle_waiters also signals. The

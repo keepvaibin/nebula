@@ -98,6 +98,10 @@ void wait_for_frame_pe_completion(FramePeCompletionToken token);
     FramePeCompletionToken token,
     std::uint32_t timeout_ms);
 
+// Nonblocking: true when render_frame would enqueue without waiting for the
+// render thread (fewer than the configured depth of render chunks queued).
+[[nodiscard]] bool render_queue_has_space();
+
 // Synchronously reads the native EFB at Wii EFB coordinates. This is the
 // device boundary used by GXPeekARGB/GXPeekZ; callers must pass untranslated
 // 640x528 EFB coordinates.

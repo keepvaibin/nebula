@@ -108,6 +108,14 @@ struct GxTimingConfig {
     // model). PE completion stays on real GPU fences, so the game's own
     // GXDrawDone discipline bounds how far ahead it writes.
     bool render_live_memory_reads = false;
+    // With pe_events_gpu_fence, deliver a capture's PE finish/token events as
+    // soon as its command list is submitted (every guest-memory read of the
+    // capture, including texture decodes, is complete by then) instead of at
+    // the GPU fence. Nothing the GPU produces is read back by the CPU through
+    // guest memory (EFB copies stay GPU resources; peeks use asynchronous
+    // fields), so the GPU's execution time no longer serializes the game's
+    // GXDrawDone. GALAXY_PE_EVENTS_AT_CONSUMPTION=0 restores fence delivery.
+    bool pe_events_at_consumption = true;
 };
 
 struct RenderFeatureStatus {

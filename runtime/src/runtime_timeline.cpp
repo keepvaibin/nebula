@@ -7,6 +7,7 @@
 #include <Windows.h>
 #pragma comment(lib, "Synchronization.lib")
 #include "galaxy/windows_power.h"
+#include "galaxy/frame_timeline.h"
 
 #include <algorithm>
 #include <chrono>
@@ -874,11 +875,12 @@ void PendingEventLatch::clear_transfer_pending() noexcept {
     mask_.fetch_and(~event_bit(EventKind::Transfer), std::memory_order_release);
 }
 
-void PendingEventLatch::wake_idle_waiters() noexcept {
+void PendingEventLatch::wake_idle_waiters(std::uint32_t source) noexcept {
     if (!idle_waiting_.load(std::memory_order_seq_cst)) {
         return;
     }
     if (void* const event = idle_wake_event_.load(std::memory_order_acquire)) {
+        galaxy::timeline::record(galaxy::timeline::Event::IdleWake, source);
         SetEvent(static_cast<HANDLE>(event));
     }
 }
@@ -901,7 +903,7 @@ bool PendingEventLatch::publish(EventKind kind, std::uint64_t count) noexcept {
     }
     counts_[slot].store(current + count, std::memory_order_release);
     mask_.fetch_or(event_bit(kind), std::memory_order_release);
-    wake_idle_waiters();
+    wake_idle_waiters(static_cast<std::uint32_t>(kind));
     unlock_slot(slot);
     return true;
 }
@@ -953,7 +955,7 @@ bool PendingEventLatch::publish_periodic(
     }
     counts_[slot].store(current + 1u, std::memory_order_release);
     mask_.fetch_or(event_bit(event.kind), std::memory_order_release);
-    wake_idle_waiters();
+    wake_idle_waiters(static_cast<std::uint32_t>(event.kind));
     unlock_slot(slot);
     return true;
 }
@@ -973,7 +975,7 @@ bool PendingEventLatch::publish_replaceable(
     replaceable_generations_[slot].store(
         generation, std::memory_order_release);
     mask_.fetch_or(event_bit(kind), std::memory_order_release);
-    wake_idle_waiters();
+    wake_idle_waiters(static_cast<std::uint32_t>(kind));
     unlock_slot(slot);
     return true;
 }

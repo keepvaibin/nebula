@@ -47,6 +47,7 @@
 #include <timeapi.h>
 
 #include "galaxy/windows_power.h"
+#include "galaxy/frame_timeline.h"
 
 #include <algorithm>
 #include <array>
@@ -741,6 +742,9 @@ public:
         interval_us_ = std::clamp<std::uint64_t>(read_env_u64("GALAXY_SIM_PROFILE_INTERVAL_US", 1000u), 100u, 100000u);
         target_ = OpenThread(THREAD_GET_CONTEXT | THREAD_SUSPEND_RESUME | THREAD_QUERY_INFORMATION, FALSE, GetCurrentThreadId());
         if (target_ == nullptr) return;
+        // The walk bounds every unwound frame by the target's current stack
+        // base, read from its TEB at each sample (fibers switch stacks).
+        teb_ = NtCurrentTeb();
         MODULEINFO info{};
         if (module != nullptr && K32GetModuleInformation(GetCurrentProcess(), module, &info, sizeof(info))) {
             module_base_ = reinterpret_cast<std::uintptr_t>(info.lpBaseOfDll);
@@ -790,7 +794,8 @@ public:
         out << "[sim-profile] samples=" << total << " interval-us=" << interval_us_
             << " running=" << running_samples_ << " blocked=" << blocked_samples_
             << " guest=" << guest_samples_ << " host=" << host_samples_ << " other=" << other_samples_
-            << " context-failures=" << context_failures_ << " stack-frames-max=" << kMaxFrames << '\n';
+            << " context-failures=" << context_failures_ << " walk-faults=" << walk_faults_
+            << " stack-frames-max=" << kMaxFrames << '\n';
         print_guest(out, "[sim-profile-guest]", guest_counts_, 48u, pct);
         print_guest(out, "[sim-profile-guest-caller]", guest_caller_counts_, 32u, pct);
         print_guest(out, "[sim-profile-blocked-guest]", guest_blocked_counts_, 16u, pct);
@@ -904,7 +909,11 @@ private:
             const bool cycles_ok = QueryThreadCycleTime(target_, &cycles) != FALSE;
             std::uintptr_t frames[kMaxFrames]{};
             std::size_t frame_count = 0u;
-            if (ok) frame_count = walk(ctx, frames);
+            if (ok) {
+                const auto* tib = static_cast<const NT_TIB*>(teb_);
+                frame_count = walk(ctx, frames,
+                    reinterpret_cast<std::uintptr_t>(tib->StackBase));
+            }
             ResumeThread(target_);
             ++samples_;
             if (!ok) { ++context_failures_; continue; }
@@ -977,11 +986,35 @@ private:
         }
         return nullptr;
     }
+    // RtlVirtualUnwind reads the stack slots its unwind codes name. A frame
+    // caught mid-prologue or with no valid unwind state yields a garbage RSP,
+    // and unwinding the next frame from it faulted inside ntdll (crash dump
+    // of 2026-10-11: SimulationProfiler::run -> RtlVirtualUnwind ->
+    // RtlpUnwindPrologue reading address 9), taking the game down. Each step
+    // is guarded and every unwound RSP must rise strictly below the stack base.
+    static bool guarded_virtual_unwind(std::uintptr_t image_base,
+                                       const RUNTIME_FUNCTION* function,
+                                       CONTEXT* ctx) noexcept {
+        __try {
+            void* handler_data = nullptr;
+            DWORD64 establisher = 0u;
+            RtlVirtualUnwind(UNW_FLAG_NHANDLER, image_base, ctx->Rip,
+                const_cast<PRUNTIME_FUNCTION>(function), ctx, &handler_data,
+                &establisher, nullptr);
+            return true;
+        } __except (EXCEPTION_EXECUTE_HANDLER) {
+            return false;
+        }
+    }
     // Return addresses above rip, innermost first, from the suspended thread's
     // own stack (leaf frames return through [rsp]; unknown images end the walk).
-    std::size_t walk(CONTEXT ctx, std::uintptr_t* frames) noexcept {
+    std::size_t walk(CONTEXT ctx, std::uintptr_t* frames,
+                     std::uintptr_t stack_base) noexcept {
         std::size_t count = 0u;
         for (; count < kMaxFrames; ++count) {
+            const std::uintptr_t rsp_before = static_cast<std::uintptr_t>(ctx.Rsp);
+            if (rsp_before == 0u || rsp_before % 8u != 0u ||
+                rsp_before >= stack_base) break;
             const ImageTables* image = image_for(static_cast<std::uintptr_t>(ctx.Rip));
             if (image == nullptr) break;
             const RUNTIME_FUNCTION* function = function_for(*image, static_cast<std::uintptr_t>(ctx.Rip));
@@ -991,13 +1024,12 @@ private:
                 if (IsBadReadPtr(slot, sizeof(*slot))) break;
                 ctx.Rip = *slot;
                 ctx.Rsp += 8u;
-            } else {
-                void* handler_data = nullptr;
-                DWORD64 establisher = 0u;
-                RtlVirtualUnwind(UNW_FLAG_NHANDLER, image->base, ctx.Rip,
-                    const_cast<PRUNTIME_FUNCTION>(function), &ctx, &handler_data, &establisher, nullptr);
+            } else if (!guarded_virtual_unwind(image->base, function, &ctx)) {
+                ++walk_faults_;
+                break;
             }
-            if (ctx.Rip == 0u) break;
+            if (ctx.Rip == 0u || static_cast<std::uintptr_t>(ctx.Rsp) <= rsp_before ||
+                static_cast<std::uintptr_t>(ctx.Rsp) >= stack_base) break;
             frames[count] = static_cast<std::uintptr_t>(ctx.Rip);
         }
         return count;
@@ -1064,6 +1096,8 @@ private:
     }
 
     HANDLE target_{};
+    void* teb_{};
+    std::uint64_t walk_faults_{};
     std::thread worker_;
     std::atomic<bool> running_{false};
     std::uint64_t interval_us_ = 1000u;
@@ -2303,6 +2337,11 @@ struct RuntimeState {
     std::uint64_t draw_done_submit_deferred{};
     std::uint64_t draw_done_submit_count{};
     std::uint64_t draw_done_submit_bytes{};
+    bool gx_stream_active{};
+    std::uint64_t gx_stream_submits{};
+    std::uint64_t gx_stream_bytes{};
+    std::uint64_t gx_stream_deferred{};
+    std::uint64_t gx_stream_queue_full{};
     std::uint64_t draw_done_consumed_count{};
     std::uint64_t vi_detached_pe_submitted{};
     std::uint64_t vi_detached_pe_consumed{};
@@ -16378,6 +16417,7 @@ void submit_gx_at_draw_done_wait(
     }
     const auto bytes = capture->fifo_size;
     join_native_thp_video_decode(state);
+    galaxy::timeline::record(galaxy::timeline::Event::SubmitSource, 2u);
     const auto token = galaxy::gx::render_frame(
         capture->fifo.data(), bytes, memory, state.services, false, 0u);
     std::vector<std::byte> released_fifo;
@@ -16391,6 +16431,65 @@ void submit_gx_at_draw_done_wait(
     // Do not poll, dispatch an interrupt, service devices, or wait for the GPU
     // here. The original translated OSSleepThread must first insert its queue
     // entry under the original EE-disabled critical section.
+}
+
+// Streamed submission (GALAXY_GX_FIFO_STREAM_KB, default 32): when the live
+// FIFO crosses the threshold in the middle of a frame, hand the completed
+// bursts to the render thread right away so its parse and command recording
+// overlap the game's own work, as the hardware GP consumes its FIFO while the
+// CPU writes it. The capture uses the ordered off-VI submission owner of the
+// draw-done path, so token order and consumption are unchanged. Nothing here
+// blocks: a full render queue or an active VI/sync capture defers the bytes
+// to the next flush or to the frame boundary that takes them anyway.
+std::size_t stream_gx_fifo_submission(void* user) {
+    auto& state = *static_cast<RuntimeState*>(user);
+    // A deferred attempt retries once another 8 KB has accumulated.
+    constexpr std::size_t kRetryGrowth = 8u * 1024u;
+    if (state.address_space == nullptr) {
+        return std::numeric_limits<std::size_t>::max();
+    }
+    const std::size_t pending_bytes = state.address_space->gx_fifo_data().size();
+    if (state.gx_stream_active ||
+        state.pending_vi_boundary.active() || state.gx_sync_capture_active ||
+        state.pending_transfer.active ||
+        state.pending_draw_done_submissions.next_to_submit() != nullptr ||
+        g_thp_async_decoder.submitted() != g_thp_async_decoder.joined()) {
+        ++state.gx_stream_deferred;
+        return pending_bytes + kRetryGrowth;
+    }
+    if (pending_bytes == 0u) {
+        return 0u;
+    }
+    if (!galaxy::gx::render_queue_has_space()) {
+        ++state.gx_stream_queue_full;
+        return pending_bytes + kRetryGrowth;
+    }
+    struct ScopedStream {
+        bool& active;
+        ~ScopedStream() noexcept { active = false; }
+    } scoped_stream{state.gx_stream_active};
+    state.gx_stream_active = true;
+    galaxy::GuestMemoryV1* const memory = state.address_space->guest_memory();
+    const auto serial = state.pending_draw_done_submissions.capture(
+        state.address_space->take_gx_fifo(), std::chrono::steady_clock::now());
+    state.pe_scanned_fifo_bytes = 0u;
+    const auto* capture = state.pending_draw_done_submissions.next_to_submit();
+    if (capture == nullptr || capture->serial != serial) {
+        throw RuntimeFailure("streamed FIFO capture lost submission order");
+    }
+    const auto bytes = capture->fifo_size;
+    galaxy::timeline::record(galaxy::timeline::Event::SubmitSource, 5u);
+    const auto token = galaxy::gx::render_frame(
+        capture->fifo.data(), bytes, memory, state.services, false, 0u);
+    std::vector<std::byte> released_fifo;
+    if (!state.pending_draw_done_submissions.mark_submitted(
+            serial, token, &released_fifo)) {
+        throw RuntimeFailure("streamed FIFO submission returned invalid ownership");
+    }
+    state.address_space->recycle_gx_fifo(std::move(released_fifo));
+    ++state.gx_stream_submits;
+    state.gx_stream_bytes += bytes;
+    return 0u;
 }
 
 bool render_pending_gx_fifo_for_sync(
@@ -16419,6 +16518,7 @@ bool render_pending_gx_fifo_for_sync(
         return false;
     }
     join_native_thp_video_decode(state);
+    galaxy::timeline::record(galaxy::timeline::Event::SubmitSource, 3u);
     const galaxy::gx::FramePeCompletionToken completion =
         galaxy::gx::render_frame(
             fifo.data(),
@@ -17162,6 +17262,7 @@ void wait_for_frame_pe_completion_cooperatively(
             return;
         }
 
+        galaxy::timeline::record(galaxy::timeline::Event::PeWaitBegin);
         if (!wait_realtime_vi_duration_high_res(
                 std::chrono::milliseconds(step.wait_ms))) {
             // A failed high-resolution timer setup must not turn this
@@ -17170,6 +17271,7 @@ void wait_for_frame_pe_completion_cooperatively(
             // allowing the render worker to publish the PE completion.
             SwitchToThread();
         }
+        galaxy::timeline::record(galaxy::timeline::Event::PeWaitEnd);
     }
 }
 
@@ -18049,7 +18151,9 @@ void idle_loop_wait_for_next_deadline(RuntimeState& state) {
         (void)CancelWaitableTimer(handles.timer);
         return;
     }
+    galaxy::timeline::record(galaxy::timeline::Event::IdleWaitBegin);
     const DWORD waited = WaitForMultipleObjects(2, wait_handles, FALSE, 100u);
+    galaxy::timeline::record(galaxy::timeline::Event::IdleWaitEnd, waited == WAIT_OBJECT_0 ? 1u : 0u);
     state.deadline_events.set_idle_waiting(false);
     if (waited == WAIT_OBJECT_0) {
         ++state.idle_loop_sleep_wakes;
@@ -18223,10 +18327,12 @@ bool advance_pending_vi_boundary(
             if (!blocks_current) {
                 return true;
             }
+            galaxy::timeline::record(galaxy::timeline::Event::PeWaitBegin);
             if (!wait_realtime_vi_duration_high_res(std::chrono::milliseconds(
                     galaxy::gx::kFramePeCooperativeWaitSliceMs))) {
                 SwitchToThread();
             }
+            galaxy::timeline::record(galaxy::timeline::Event::PeWaitEnd);
             continue;
         }
         const std::size_t phase_index = static_cast<std::size_t>(phase);
@@ -18350,11 +18456,13 @@ bool advance_pending_vi_boundary(
                     if (!blocks_current) {
                         return true;
                     }
+                    galaxy::timeline::record(galaxy::timeline::Event::PeWaitBegin);
                     if (!wait_realtime_vi_duration_high_res(
                             std::chrono::milliseconds(
                                 galaxy::gx::kFramePeCooperativeWaitSliceMs))) {
                         SwitchToThread();
                     }
+                    galaxy::timeline::record(galaxy::timeline::Event::PeWaitEnd);
                     continue;
                 }
                 continue;
@@ -18416,6 +18524,7 @@ bool advance_pending_vi_boundary(
                         "persistent VI boundary could not latch its device "
                         "level");
                 }
+                galaxy::timeline::record(galaxy::timeline::Event::ViLatched, state.vi_retrace_count);
                 if (state.active_cadence_record_valid &&
                     state.cadence_diagnostics != nullptr) {
                     state.active_cadence_record.vi_latched_ns =
@@ -18707,6 +18816,8 @@ bool dispatch_vi_retrace(
         return false;
     }
     state.last_vi_delivery_ticks = observation_ticks;
+    galaxy::timeline::record(galaxy::timeline::Event::ViEdge, vi_edge->sequence,
+                         vi_edge->deadline_ticks);
     state.last_vi_delivery_cpu_time_100ns =
         current_thread_cpu_time_100ns();
     state.last_vi_delivery_cycle_count = current_thread_cycle_count();
@@ -18812,6 +18923,9 @@ bool dispatch_vi_retrace(
                 state.cadence_diagnostics);
     }
     if (rendered_retrace_frame) join_native_thp_video_decode(state);
+    if (rendered_retrace_frame) {
+        galaxy::timeline::record(galaxy::timeline::Event::SubmitSource, 1u);
+    }
     const galaxy::gx::FramePeCompletionToken frame_pe_completion =
         rendered_retrace_frame
         ? galaxy::gx::render_frame(
@@ -22994,6 +23108,7 @@ void call_guest_impl_body(
                             const auto* owned=state.pending_draw_done_submissions.next_to_submit();
                             if (!owned || owned->serial!=serial) throw RuntimeFailure("mouse depth FIFO lost ordered ownership");
                             join_native_thp_video_decode(state);
+                            galaxy::timeline::record(galaxy::timeline::Event::SubmitSource, 4u);
                             const auto receipt=galaxy::gx::render_frame(owned->fifo.data(),owned->fifo_size,memory,state.services,false,0u);
                             std::vector<std::byte> released_fifo;
                             if (!state.pending_draw_done_submissions.mark_submitted(serial,receipt,&released_fifo))
@@ -30675,6 +30790,7 @@ int wmain(int argc, wchar_t** argv) {
         return 9;
     }
     galaxy::host::name_current_thread(L"Nebula Simulation/Main");
+    galaxy::timeline::initialize_from_environment();
     const ScopedTimerResolution timer_resolution;
     // Validation hook for the minidump path: a worker thread faults after boot
     // has installed every handler, like the crash seen on the laptop.
@@ -31267,6 +31383,10 @@ int wmain(int argc, wchar_t** argv) {
             best_effort_report([&] {
                 std::cerr<<"[mouse-depth-submit-audit] submitted="<<state.native_mouse_submitted
                     <<" consumed="<<state.native_mouse_consumed<<" pending-serial="<<state.native_mouse_submission_serial<<'\n';
+                std::cerr << "[gx-stream-audit] submits=" << state.gx_stream_submits
+                          << " bytes=" << state.gx_stream_bytes
+                          << " deferred=" << state.gx_stream_deferred
+                          << " queue-full=" << state.gx_stream_queue_full << '\n';
                 std::cerr << "[draw-done-submit-audit] enabled="
                           << (submit_gx_at_draw_done_wait_enabled() ? 1 : 0)
                           << " attempts=" << state.draw_done_submit_attempts
@@ -31310,6 +31430,8 @@ int wmain(int argc, wchar_t** argv) {
             }
             gx_initialized = false;
         }
+        // The render thread has stopped; every record is complete.
+        galaxy::timeline::dump();
         best_effort_report([&] {
             if (state.cadence_diagnostics != nullptr &&
                 !state.cadence_report_dumped) {
@@ -31477,6 +31599,20 @@ int wmain(int argc, wchar_t** argv) {
     address_space.set_tick_source(&host_time_base_ticks, &state);
     // PE finish/token levels from the render thread wake the idle-loop wait.
     address_space.set_idle_wake_callback(&wake_idle_simulation_thread, &state);
+    {
+        // Streaming relies on the same ownership rules as the draw-done
+        // submission: live render-memory reads and an asynchronous renderer.
+        const std::uint64_t stream_kb =
+            read_env_u64("GALAXY_GX_FIFO_STREAM_KB", 32u);
+        const auto& timing = galaxy::gx::get_gx_timing_config();
+        if (stream_kb != 0u && submit_gx_at_draw_done_wait_enabled() &&
+            read_env_flag("GALAXY_ASYNC_RENDER_THREAD", true) &&
+            timing.render_live_memory_reads && timing.pe_events_gpu_fence) {
+            address_space.set_fifo_stream_callback(
+                &stream_gx_fifo_submission, &state,
+                static_cast<std::size_t>(std::clamp<std::uint64_t>(stream_kb, 4u, 4096u)) * 1024u);
+        }
+    }
     address_space.set_native_audio_failure_callback(
         &on_native_audio_failure, &state);
     address_space.set_native_input_failure_callback(

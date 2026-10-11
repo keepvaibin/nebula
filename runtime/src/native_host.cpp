@@ -11309,6 +11309,7 @@ bool GuestAddressSpace::wgpipe_flush_callback(void* user) {
         return false;
     }
     self->drain_wgpipe_gather_bursts();
+    self->maybe_stream_gx_fifo();
     return true;
 }
 
@@ -11615,6 +11616,9 @@ bool GuestAddressSpace::write_wgpipe_bytes(std::span<const std::byte> bytes) {
         if (wgpipe_gather_count_ >= flush_at) {
             drain_wgpipe_gather_bursts();
         }
+    }
+    if (wgpipe_feeds_live_fifo()) {
+        maybe_stream_gx_fifo();
     }
 
     if (wgpipe_pe_ownership_trace_enabled_) {

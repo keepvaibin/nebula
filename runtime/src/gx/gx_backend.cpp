@@ -26,6 +26,7 @@
 #include "galaxy/gx/uber_constants.h"
 #include "galaxy/gx/render_config.h"
 #include "galaxy/windows_power.h"
+#include "galaxy/frame_timeline.h"
 #include "galaxy/gx/sorted_dirty_ranges.h"
 #include "galaxy/gx/snapshot_region_lookup.h"
 
@@ -4564,6 +4565,8 @@ void GxBackend::record_pointer_response(const XfbTexture& texture) noexcept {
 
 void GxBackend::record_presented_xfb_copy(
     const XfbTexture& texture) noexcept {
+    galaxy::timeline::record(galaxy::timeline::Event::XfbPresented, texture.guest_addr,
+                         texture.copy_serial);
     record_pointer_response(texture);
     ++stat_xfb_present_presented_;
     const XfbSerialAccountingEvent event =
@@ -5522,6 +5525,7 @@ FramePeCompletionToken GxBackend::render_frame(
         }
         return {};
     }
+    galaxy::timeline::record(galaxy::timeline::Event::SubmitBegin, fifo_size);
     // This start sample must be taken on exactly the frames that will consume
     // it, which is `producer_time_detail` below -- NOT the narrower
     // `trace_gx_stats || trace_gx_stalls` it used to test. The wait is measured
@@ -5867,6 +5871,8 @@ FramePeCompletionToken GxBackend::render_frame(
             cadence_diagnostics_->record_token_issued(submitted_token.kind);
         }
     }
+    galaxy::timeline::record(galaxy::timeline::Event::SubmitEnd, submitted_token.value,
+                             static_cast<std::uint64_t>(submitted_token.kind));
     return submitted_token;
 }
 
@@ -6075,6 +6081,7 @@ bool GxBackend::wait_for_frame_pe_completion_for(
             if (frame_pe_completions_.probe_wait(token) ==
                 FramePeWaitState::Complete) {
                 frame_pe_completions_.consume_wait(token);
+                galaxy::timeline::record(galaxy::timeline::Event::TokenConsumed, token.value);
                 return true;
             }
             if (!asynchronous) {
@@ -6116,6 +6123,21 @@ bool GxBackend::wait_for_frame_pe_completion_for(
         std::this_thread::sleep_for(
             std::min(deadline - now, one_millisecond));
     }
+}
+
+bool GxBackend::render_queue_has_space() {
+    if (!initialized_ || !async_render_thread_enabled()) {
+        return false;
+    }
+    const std::size_t depth = get_gx_timing_config().render_queue_depth;
+    std::lock_guard<std::mutex> lock(queue_mutex_);
+    if (stop_render_thread_ || render_thread_error_ != nullptr) {
+        return false;
+    }
+    const auto queued = static_cast<std::size_t>(std::count_if(
+        frame_queue_.begin(), frame_queue_.end(),
+        [](const FrameChunk& queued_chunk) { return !queued_chunk.present_only; }));
+    return queued < depth;
 }
 
 void GxBackend::attach_pointer_depth_capture(
@@ -6489,6 +6511,9 @@ void GxBackend::render_thread_main() {
                 } else if (chunk.present_only) {
                     ++present_chunks_in_flight_;
                 } else {
+                    galaxy::timeline::record(galaxy::timeline::Event::RenderBegin,
+                                        chunk.pe_completion_token.value,
+                                        chunk.fifo.size());
                     ++render_chunks_in_flight_;
                     ++render_cpu_reads_in_flight_;
                     chunk.cpu_reads_pending = true;
@@ -6902,6 +6927,7 @@ void GxBackend::mark_frame_cpu_reads_done(FrameChunk& chunk) {
     if (!chunk.cpu_reads_pending) {
         return;
     }
+    galaxy::timeline::record(galaxy::timeline::Event::RenderReadsDone, chunk.pe_completion_token.value);
     {
         std::lock_guard<std::mutex> lock(queue_mutex_);
         if (render_cpu_reads_in_flight_ != 0u) {
@@ -6944,6 +6970,21 @@ void GxBackend::queue_frame_fifo_effects_fence(
         // succeeded, before optional presentation. Resolve at that exact
         // submission boundary; later work is
         // queue-ordered and no GPU-idle wait is warranted.
+        mark_frame_fifo_effects_done(chunk);
+        return;
+    }
+    if (get_gx_timing_config().pe_events_at_consumption) {
+        // The capture has been consumed: parsed, every texture decode joined
+        // and its command list submitted in queue order. Raise its PE events
+        // now, in FIFO order, then resolve the token at this submission
+        // boundary exactly like an event-free capture.
+        for (const PeEvent& event : chunk.pe_events) {
+            deliver_pe_event(chunk.services, event);
+            galaxy::timeline::record(
+                galaxy::timeline::Event::PeDelivered,
+                event.kind == PeEvent::Kind::Finish ? 1u : 2u, event.token);
+        }
+        chunk.pe_events.clear();
         mark_frame_fifo_effects_done(chunk);
         return;
     }
@@ -7003,8 +7044,13 @@ void GxBackend::poll_completed_frame_effects() {
                           frame.diagnostic_fence_bound_ns
                     : 0u);
         }
+        galaxy::timeline::record(galaxy::timeline::Event::FenceObserved, frame.fence_value,
+                                 frame.pe_completion_token.value);
         for (const PeEvent& event : frame.pe_events) {
             deliver_pe_event(frame.services, event);
+            galaxy::timeline::record(galaxy::timeline::Event::PeDelivered,
+                                 event.kind == PeEvent::Kind::Finish ? 1u : 2u,
+                                 event.token);
         }
         {
             std::lock_guard<std::mutex> lock(queue_mutex_);
@@ -8080,6 +8126,11 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
         present_swap_chain,
         [](void* opaque, std::uint64_t fence_value) {
             auto& context = *static_cast<SubmissionContext*>(opaque);
+            galaxy::timeline::record(
+                galaxy::timeline::Event::RenderSubmitted,
+                context.chunk->pe_completion_token.value,
+                fence_value |
+                    (context.chunk->pe_events.empty() ? 0u : (1ull << 63u)));
             context.backend->queue_frame_fifo_effects_fence(
                 *context.chunk, fence_value);
             // Deliver only events whose actual signaled fence is complete.
@@ -11484,6 +11535,9 @@ void GxBackend::on_efb_copy(std::uint32_t exec_command) {
     if (frame_dependency_event_sink_ != nullptr && params.copy_to_xfb) {
         frame_dependency_event_sink_->xfb_copy(
             params.dest_addr, exec_command);
+    }
+    if (params.copy_to_xfb) {
+        galaxy::timeline::record(galaxy::timeline::Event::XfbCopy, params.dest_addr);
     }
     const std::uint32_t effective_exec_command =
         state_.bp(bp::kCopyExecute);

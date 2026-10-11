@@ -609,6 +609,28 @@ public:
     // The simulation thread's idle loop blocks until a device event is
     // published. Device levels raised outside the deadline latch (PE finish
     // and token from the render thread) wake it through this callback.
+    // Streamed GX submission: once the live FIFO holds at least
+    // `threshold_bytes`, the gather-pipe flush that generated code triggers
+    // when its write-gather buffer fills calls `callback`, which may take the
+    // completed bursts and hand them to the renderer before the frame
+    // boundary (the hardware GP consumes its FIFO while the CPU still writes
+    // it). Explicit frame-boundary flushes never call it. The callback
+    // returns the FIFO size at which it wants to be called again; taking the
+    // FIFO resets that to the threshold, which a return of 0 also selects.
+    using FifoStreamCallback = std::size_t (*)(void* user);
+    void set_fifo_stream_callback(FifoStreamCallback callback, void* user,
+                                  std::size_t threshold_bytes) noexcept {
+        fifo_stream_callback_ = callback;
+        fifo_stream_user_ = user;
+        fifo_stream_threshold_ = threshold_bytes;
+        fifo_stream_next_ = threshold_bytes;
+    }
+    void maybe_stream_gx_fifo() {
+        if (fifo_stream_callback_ != nullptr && gx_fifo_.size() >= fifo_stream_next_) {
+            const std::size_t next = fifo_stream_callback_(fifo_stream_user_);
+            fifo_stream_next_ = next == 0u ? fifo_stream_threshold_ : next;
+        }
+    }
     using IdleWakeCallback = void (*)(void* user) noexcept;
     void set_idle_wake_callback(IdleWakeCallback callback, void* user) noexcept {
         idle_wake_user_ = user;
@@ -928,6 +950,7 @@ public:
         std::vector<std::byte> captured;
         swap(captured, gx_fifo_);
         swap(gx_fifo_, gx_fifo_spare_);
+        fifo_stream_next_ = fifo_stream_threshold_;
         return captured;
     }
     // Simulation owner only, after the backend owns an independent FIFO copy
@@ -945,7 +968,10 @@ public:
             gx_fifo_spare_.swap(released);
         }
     }
-    void clear_gx_fifo() { gx_fifo_.clear(); }
+    void clear_gx_fifo() {
+        gx_fifo_.clear();
+        fifo_stream_next_ = fifo_stream_threshold_;
+    }
     bool gx_fifo_pe_scan_pending(std::size_t scanned_byte_count) const {
         return gx_pe_scan_hint_pending_ &&
             (wgpipe_gather_count_ != 0u ||
@@ -1798,6 +1824,10 @@ private:
     std::atomic_bool pe_finish_pending_{false};
     std::atomic<IdleWakeCallback> idle_wake_callback_{nullptr};
     void* idle_wake_user_{nullptr};
+    FifoStreamCallback fifo_stream_callback_{nullptr};
+    void* fifo_stream_user_{nullptr};
+    std::size_t fifo_stream_threshold_{0};
+    std::size_t fifo_stream_next_{0};
     std::atomic_bool pe_token_pending_{false};
     std::atomic<std::uint16_t> pe_token_value_{0};
     // DSP mailbox: a to-DSP mail is a 16-bit high write (0x5000) then a low write
