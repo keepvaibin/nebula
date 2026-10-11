@@ -24,6 +24,7 @@
 #include "galaxy/gx/line_point_raster.h"
 #include "galaxy/gx/texture_sampling.h"
 #include "galaxy/gx/uber_constants.h"
+#include "galaxy/gx/uber_shaders.h"
 #include "galaxy/gx/render_config.h"
 #include "galaxy/windows_power.h"
 #include "galaxy/frame_timeline.h"
@@ -3105,6 +3106,7 @@ void GxBackend::reset_fifo_session_state() {
     current_pso_key_ = {};
     current_pso_key_valid_ = false;
     current_pipeline_ = nullptr;
+    current_pipeline_is_uber_ = false;
     current_vs_constants_ = 0u;
     cpu_vs_constants_ = {};
     current_ps_constants_ = 0u;
@@ -9283,6 +9285,7 @@ ID3D12PipelineState* GxBackend::flush_draw_state(
         (!matrix_palette_stale_ || !current_palette_required_) &&
         !inline_matrices_stale_ &&
         current_pipeline_ != nullptr &&
+        !current_pipeline_is_uber_ &&
         current_vs_constants_ != 0 &&
         current_ps_constants_ != 0 &&
         (current_texture_map_mask_ == 0u ||
@@ -9366,8 +9369,8 @@ ID3D12PipelineState* GxBackend::flush_draw_state(
         render_state_key_.primitive_topology != topology_key;
     render_state_key_.primitive_topology = topology_key;
 
-    if (current_pipeline_ == nullptr || tev_dirty || xf_dirty ||
-        vcd_dirty || rs_dirty || topology_dirty) {
+    if (current_pipeline_ == nullptr || current_pipeline_is_uber_ ||
+        tev_dirty || xf_dirty || vcd_dirty || rs_dirty || topology_dirty) {
         const PsoKey pso_key{
             current_vs_hash_,
             current_ps_hash_,
@@ -9398,6 +9401,7 @@ ID3D12PipelineState* GxBackend::flush_draw_state(
         // which pipeline is resolved.
         const bool pso_key_changed =
             current_pipeline_ == nullptr ||
+            current_pipeline_is_uber_ ||
             !current_pso_key_valid_ ||
             current_pso_key_hash_ != pso_key_hash ||
             !(current_pso_key_ == pso_key);
@@ -9421,6 +9425,7 @@ ID3D12PipelineState* GxBackend::flush_draw_state(
                 memo_slot.hash == pso_key_hash &&
                 memo_slot.pipeline != nullptr &&
                 memo_slot.key == pso_key;
+            bool resolved_uber = false;
             if (memo_hit) {
                 resolved = memo_slot.pipeline;
                 // Always-on, not gated by time_detail: the memo hit ratio and
@@ -9435,6 +9440,7 @@ ID3D12PipelineState* GxBackend::flush_draw_state(
                     ? std::chrono::steady_clock::now()
                     : std::chrono::steady_clock::time_point{};
                 resolved = pipeline_cache_.get(pso_key, ps_key_, vs_key_);
+                resolved_uber = pipeline_cache_.last_get_used_uber();
                 if (time_detail) {
                     const std::uint64_t get_us =
                         elapsed_us(get_start, std::chrono::steady_clock::now());
@@ -9442,13 +9448,16 @@ ID3D12PipelineState* GxBackend::flush_draw_state(
                     frame_pso_get_max_us_ =
                         std::max(frame_pso_get_max_us_, get_us);
                 }
-                if (resolved != nullptr) {
+                // An uber stand-in is never memoized: the next resolution
+                // should find the specialization once it is published.
+                if (resolved != nullptr && !resolved_uber) {
                     memo_slot.hash = pso_key_hash;
                     memo_slot.key = pso_key;
                     memo_slot.pipeline = resolved;
                 }
             }
             current_pipeline_ = resolved;
+            current_pipeline_is_uber_ = resolved_uber;
             current_pso_key_ = pso_key;
             current_pso_key_hash_ = pso_key_hash;
             current_pso_key_valid_ = current_pipeline_ != nullptr;
@@ -9548,7 +9557,7 @@ ID3D12PipelineState* GxBackend::flush_draw_state(
     }
 
     // Upload VS constants when scalar state or fixed inline matrices change.
-    if (vs_c_dirty || inline_matrices_stale_ ||
+    if (vs_c_dirty || xf_dirty || vcd_dirty || inline_matrices_stale_ ||
         frame_bindings_dirty_ || dirty == ~0u) {
         const auto constants_start = time_detail
             ? std::chrono::steady_clock::now()
@@ -9558,6 +9567,7 @@ ID3D12PipelineState* GxBackend::flush_draw_state(
         UploadRing::Allocation vs_alloc =
             renderer_.constant_ring().allocate(sizeof(GxVsConstants), 256u);
         std::memcpy(vs_alloc.cpu, &vs_c, sizeof(vs_c));
+        apply_uber_vs_key(vs_key_, *reinterpret_cast<GxVsConstants*>(vs_alloc.cpu));
         current_vs_constants_ = vs_alloc.gpu;
         inline_matrices_stale_ = false;
         ++stat_inline_matrix_uploads_;
@@ -9576,6 +9586,7 @@ ID3D12PipelineState* GxBackend::flush_draw_state(
         GxPsConstants ps_c{};
         fill_ps_constants(state_, ps_c);
         ps_c.ztex_params[1] = 1.0f / static_cast<float>(renderer_.efb_scale());
+        apply_uber_ps_key(ps_key_, ps_c);
 
         UploadRing::Allocation ps_alloc =
             renderer_.constant_ring().allocate(sizeof(GxPsConstants), 256u);

@@ -1084,6 +1084,9 @@ private:
     std::uint64_t current_pso_key_hash_ = 0u;
     D3D12_GPU_VIRTUAL_ADDRESS current_vs_constants_ = 0;
     VsConstantsCpuCache cpu_vs_constants_{};
+    // current_pipeline_ is an uber pipeline standing in for a specialization
+    // that is still compiling: resolve the key again on the next draw.
+    bool current_pipeline_is_uber_ = false;
     D3D12_GPU_VIRTUAL_ADDRESS current_ps_constants_ = 0;
     D3D12_GPU_DESCRIPTOR_HANDLE current_texture_table_{};
     D3D12_GPU_DESCRIPTOR_HANDLE current_sampler_table_{};

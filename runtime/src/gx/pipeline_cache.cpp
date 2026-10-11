@@ -15,12 +15,14 @@
 
 #include "galaxy/gx/renderer_d3d12.h"
 #include "galaxy/gx/shader_gen.h"
+#include "galaxy/gx/uber_shaders.h"
 #include "galaxy/gx/shader_keys.h"
 #include "galaxy/gx/shader_pair_compile.h"
 #include "galaxy/scope_exit.h"
 
 #pragma warning(push, 0)
 #include <d3dcompiler.h>
+#include <fstream>
 #include <d3d12shader.h>
 #include <Windows.h>
 #include "galaxy/windows_power.h"
@@ -665,15 +667,36 @@ bool PipelineCache::initialize(
         return false;
     }
 
-    // worker_count retained in the signature for the M8 hybrid-uber plan;
-    // the current policy compiles synchronously on first miss (a one-time
-    // hitch per material instead of invisible geometry — see get()).
     stopping_.store(false, std::memory_order_relaxed);
+
 
     // Create the cache directory if it does not exist.
     std::error_code ec;
     std::filesystem::create_directories(cache_dir_, ec);
     // A failure here is non-fatal — we simply won't have disk persistence.
+
+    // Uber pipelines (GALAXY_GX_UBER): 1 = hybrid (default), force = every
+    // draw, 0 = off (first-use misses compile synchronously, see get()).
+    {
+        char value[16]{};
+        std::size_t length = 0;
+        const bool present = getenv_s(&length, value, sizeof(value), "GALAXY_GX_UBER") == 0 &&
+            length > 1u;
+        const std::string mode = present ? std::string(value) : std::string("1");
+        uber_mode_ = mode == "force" ? UberMode::Force
+                   : (mode == "0" || mode == "off") ? UberMode::Off
+                   : UberMode::Hybrid;
+    }
+    uber_blobs_ready_.store(false, std::memory_order_relaxed);
+    if (uber_mode_ == UberMode::Force) {
+        compile_uber_blobs();
+    } else if (uber_mode_ == UberMode::Hybrid) {
+        uber_compile_thread_ = std::thread([this] {
+            galaxy::host::name_current_thread(L"Nebula Uber Compile");
+            (void)SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_BELOW_NORMAL);
+            compile_uber_blobs();
+        });
+    }
 
     // Opt-in (GALAXY_SHADER_SEED_DIRECTORY): populate a FRESH user cache from a
     // validated seed pair before the loaders below read it. A no-op otherwise.
@@ -739,11 +762,27 @@ void PipelineCache::shutdown() {
         }
     }
     workers_.clear();
+    if (uber_compile_thread_.joinable()) {
+        uber_compile_thread_.join();
+    }
     drain_completions();
     flush_disk();
+    if (uber_mode_ != UberMode::Off) {
+        std::cerr << "[uber-pipeline] mode="
+                  << (uber_mode_ == UberMode::Force ? "force" : "hybrid")
+                  << " blobs-ready=" << (uber_blobs_ready_.load(std::memory_order_acquire) ? 1 : 0)
+                  << " uber-psos=" << uber_psos_.size()
+                  << " resolutions=" << uber_resolutions_
+                  << " async-specializations=" << uber_async_specializations_
+                  << " sync-misses=" << uber_fallbacks_ << '\n';
+    }
 
     published_.clear();
-    uber_.clear();
+    uber_psos_.clear();
+    uber_pending_.clear();
+    uber_vs_blob_.Reset();
+    for (auto& blob : uber_ps_blobs_) blob.Reset();
+    uber_blobs_ready_.store(false, std::memory_order_relaxed);
     retired_pipelines_.clear();
     in_flight_.clear();
     vertex_shader_blobs_.clear();
@@ -787,6 +826,15 @@ ID3D12PipelineState* PipelineCache::get(
     if (worker_failed_.load(std::memory_order_acquire)) [[unlikely]] {
         std::lock_guard<std::mutex> lock(job_mutex_);
         if (worker_error_) std::rethrow_exception(worker_error_);
+    }
+    last_get_used_uber_ = false;
+    if (uber_mode_ == UberMode::Force) [[unlikely]] {
+        if (ID3D12PipelineState* uber = uber_pipeline(
+                key.render_state, uber_ps_variant(ps_key), /*create_now=*/true)) {
+            last_get_used_uber_ = true;
+            ++uber_resolutions_;
+            return uber;
+        }
     }
     // 0. One-entry memo of the last successful resolution. This is in front of
     // the map probe because a busy frame alternates between a small number of
@@ -847,6 +895,16 @@ ID3D12PipelineState* PipelineCache::get(
             return it->second.Get();
         }
         if (in_flight_.find(memoized) != in_flight_.end()) {
+            // Its specialization is compiling: draw with the uber pipeline
+            // instead of waiting for the worker.
+            if (uber_mode_ == UberMode::Hybrid) {
+                if (ID3D12PipelineState* uber = uber_pipeline(
+                        key.render_state, uber_ps_variant(ps_key), /*create_now=*/false)) {
+                    last_get_used_uber_ = true;
+                    ++uber_resolutions_;
+                    return uber;
+                }
+            }
             ID3D12PipelineState* in_flight_pso = nullptr;
             if (wait_for_in_flight_pso(memoized, in_flight_pso) &&
                 in_flight_pso != nullptr) {
@@ -859,6 +917,43 @@ ID3D12PipelineState* PipelineCache::get(
                 }
                 return in_flight_pso;
             }
+        }
+    }
+
+    // 1b. Hybrid uber: when this render state's uber pipeline exists, draw
+    // with it and compile the specialization on a worker. Otherwise
+    // uber_pipeline() queued that uber PSO for later misses and this one
+    // compiles synchronously below.
+    if (uber_mode_ == UberMode::Hybrid) {
+        const unsigned variant = uber_ps_variant(ps_key);
+        if (ID3D12PipelineState* uber = uber_pipeline(
+                key.render_state, variant, /*create_now=*/false)) {
+            enqueue_async_specialization(memoized, ps_key, vs_key);
+            last_get_used_uber_ = true;
+            ++uber_resolutions_;
+            return uber;
+        }
+        static int s_uber_miss_logs = 0;
+        if (s_uber_miss_logs < 64) {
+            ++s_uber_miss_logs;
+            UberPsoKey probe{};
+            probe.render_state.blend_bits = key.render_state.blend_bits;
+            probe.render_state.zmode_bits = key.render_state.zmode_bits;
+            probe.render_state.cull = key.render_state.cull;
+            probe.render_state.pixfmt = key.render_state.pixfmt;
+            probe.render_state.primitive_topology = key.render_state.primitive_topology;
+            probe.variant = variant;
+            const auto built = uber_psos_.find(probe);
+            std::cerr << "[uber-miss] blend=0x" << std::hex << key.render_state.blend_bits
+                      << " z=0x" << key.render_state.zmode_bits << std::dec
+                      << " cull=" << static_cast<unsigned>(key.render_state.cull)
+                      << " pixfmt=" << static_cast<unsigned>(key.render_state.pixfmt)
+                      << " topo=" << static_cast<unsigned>(key.render_state.primitive_topology)
+                      << " variant=" << variant
+                      << " blobs=" << (uber_blobs_ready_.load(std::memory_order_acquire) ? 1 : 0)
+                      << " pending=" << (uber_pending_.contains(probe) ? 1 : 0)
+                      << " failed=" << (built != uber_psos_.end() && !built->second ? 1 : 0)
+                      << '\n';
         }
     }
 
@@ -991,8 +1086,20 @@ void PipelineCache::drain_completions() {
     // queue turns out to be empty: the cost is one null store on a path that
     // already runs once per frame.
     clear_last_hit_memo();
+    if (uber_mode_ == UberMode::Hybrid && !uber_prewarm_enqueued_ &&
+        uber_blobs_ready_.load(std::memory_order_acquire)) {
+        uber_prewarm_enqueued_ = true;
+        enqueue_uber_prewarm();
+    }
     PsoCompletionQueue::Item item;
     while (completions_.try_pop(item)) {
+        if (item.uber) {
+            UberPsoKey uber_key{item.key.render_state, item.uber_variant};
+            uber_pending_.erase(uber_key);
+            // A failed build stays recorded as null so it is not retried.
+            uber_psos_[uber_key] = std::move(item.pipeline);
+            continue;
+        }
         // The completed job has no remaining worker/queue owner. Retire its
         // marker before publication or persistence allocations can throw,
         // otherwise a caught retry waits for a completion already consumed.
@@ -1021,7 +1128,7 @@ void PipelineCache::drain_completions() {
                 ++reoptimized_pipelines_;
             }
             remember_pso_key(item.key);
-            if (item.reoptimize && item.vs_blob && item.ps_blob) {
+            if ((item.reoptimize || item.remember_pair) && item.vs_blob && item.ps_blob) {
                 remember_reoptimized_pair(item.key, item.vs_blob, item.ps_blob);
             }
         }
@@ -2830,25 +2937,334 @@ PipelineCache::CompileStats PipelineCache::compile_stats() const {
 }
 
 // ---------------------------------------------------------------------------
-// get_or_create_uber — render thread only
+// Uber pipelines
 // ---------------------------------------------------------------------------
 
-ID3D12PipelineState* PipelineCache::get_or_create_uber(
-    const RenderStateKey& render_state) {
+// RMGE01 render states (blend_bits, zmode_bits, cull, pixfmt, topology) taken
+// from the pipeline caches of complete play sessions (531 pipelines, 64
+// states). Uber pipelines for these are built in the background as soon as the
+// uber DXBC exists, so a first-use material in a fresh install finds one.
+namespace {
+struct KnownRenderState {
+    std::uint32_t blend_bits;
+    std::uint16_t zmode_bits;
+    std::uint8_t cull;
+    std::uint8_t pixfmt;
+    std::uint8_t topology;
+};
+constexpr KnownRenderState kKnownRenderStates[] = {
+    {0x06000000u, 0x0017u, 1u, 1u, 3u},
+    {0x02000000u, 0x0017u, 1u, 1u, 3u},
+    {0x06000000u, 0x0017u, 0u, 1u, 3u},
+    {0x02000000u, 0x0017u, 0u, 1u, 3u},
+    {0x0a0000b1u, 0x0000u, 0u, 1u, 3u},
+    {0x0a0000b1u, 0x0007u, 0u, 1u, 3u},
+    {0x0a000031u, 0x0007u, 0u, 1u, 3u},
+    {0x0a000031u, 0x0007u, 1u, 1u, 3u},
+    {0x0a0000b1u, 0x0007u, 1u, 1u, 3u},
+    {0x02000025u, 0x0007u, 1u, 1u, 3u},
+    {0x0e0000b1u, 0x0000u, 0u, 1u, 3u},
+    {0x0a000031u, 0x0000u, 0u, 1u, 3u},
+    {0x04000027u, 0x000du, 1u, 1u, 3u},
+    {0x04000025u, 0x000du, 2u, 1u, 3u},
+    {0x020000b1u, 0x0000u, 0u, 0u, 3u},
+    {0x060000ddu, 0x0000u, 1u, 1u, 3u},
+    {0x0400003du, 0x0000u, 1u, 1u, 3u},
+    {0x04000000u, 0x0007u, 0u, 1u, 3u},
+    {0x00000000u, 0x001fu, 2u, 1u, 3u},
+    {0x0a000031u, 0x0017u, 2u, 1u, 3u},
+    {0x06000000u, 0x001fu, 1u, 1u, 3u},
+    {0x02000000u, 0x0000u, 0u, 1u, 3u},
+    {0x06000000u, 0x0000u, 0u, 1u, 3u},
+    {0x04000000u, 0x000du, 1u, 1u, 3u},
+    {0x04000000u, 0x0000u, 1u, 1u, 3u},
+    {0x0a000051u, 0x0007u, 1u, 1u, 3u},
+    {0x02000025u, 0x0000u, 0u, 1u, 3u},
+    {0x0e000031u, 0x0007u, 0u, 1u, 3u},
+    {0x1e0000b1u, 0x000fu, 0u, 1u, 3u},
+    {0x02000025u, 0x0007u, 2u, 1u, 3u},
+    {0x00000000u, 0x001fu, 1u, 1u, 3u},
+    {0x0e000031u, 0x0000u, 0u, 1u, 3u},
+    {0x16000025u, 0x0007u, 1u, 1u, 3u},
+    {0x00000000u, 0x001fu, 1u, 0u, 3u},
+    {0x02000000u, 0x0000u, 0u, 0u, 3u},
+    {0x02000000u, 0x001fu, 1u, 0u, 3u},
+    {0x02000000u, 0x0007u, 1u, 1u, 3u},
+    {0x0a000031u, 0x0017u, 1u, 1u, 3u},
+    {0x04000019u, 0x0000u, 0u, 1u, 3u},
+    {0x1e000051u, 0x0007u, 0u, 1u, 3u},
+    {0x04000027u, 0x0007u, 2u, 1u, 3u},
+    {0x0a000031u, 0x0017u, 0u, 1u, 3u},
+    {0x160000f9u, 0x0000u, 0u, 1u, 3u},
+    {0x02000025u, 0x0007u, 0u, 1u, 3u},
+    {0x16000045u, 0x0007u, 0u, 1u, 3u},
+    {0x04000000u, 0x0000u, 0u, 1u, 3u},
+    {0x04000025u, 0x0007u, 1u, 1u, 3u},
+    {0x040000f9u, 0x0000u, 0u, 1u, 3u},
+    {0x04000000u, 0x000fu, 0u, 1u, 3u},
+    {0x0a000051u, 0x0017u, 1u, 1u, 3u},
+    {0x02000045u, 0x0007u, 1u, 1u, 3u},
+    {0x0a000031u, 0x0019u, 2u, 1u, 3u},
+    {0x1e0000b1u, 0x0007u, 1u, 1u, 3u},
+    {0x1e0000b1u, 0x0017u, 1u, 1u, 3u},
+    {0x02000005u, 0x0017u, 2u, 1u, 3u},
+    {0x0a0000b1u, 0x0017u, 1u, 1u, 3u},
+    {0x02000009u, 0x0000u, 0u, 1u, 3u},
+    {0x02000027u, 0x0007u, 1u, 1u, 3u},
+    {0x0e0000b1u, 0x0007u, 0u, 1u, 3u},
+    {0x0e0000b1u, 0x0007u, 1u, 1u, 3u},
+    {0x16000025u, 0x0017u, 1u, 1u, 3u},
+    {0x02000025u, 0x0017u, 1u, 1u, 3u},
+    {0x06000000u, 0x0017u, 2u, 1u, 3u},
+    {0x0a000031u, 0x0000u, 0u, 1u, 2u},
+};
+}  // namespace
 
-    const std::uint64_t rs_hash =
-        fnv1a64(&render_state, sizeof(render_state));
-
-    const auto it = uber_.find(rs_hash);
-    if (it != uber_.end()) {
-        return it->second.Get();
+// Uber compile thread (or initialize() in force mode). D3DCompile is
+// thread-safe; the blobs are published once, with release ordering.
+void PipelineCache::compile_uber_blobs() noexcept {
+    try {
+        const auto start = std::chrono::steady_clock::now();
+        const std::string vs_source(uber_vs_source());
+        const std::string ps_source(uber_ps_source());
+        uber_source_hash_ = combine64(
+            fnv1a64(vs_source.data(), vs_source.size()),
+            fnv1a64(ps_source.data(), ps_source.size()));
+        // uber.bin: u64 source hash, then 1 + kUberPsVariants records of
+        // (u32 size, DXBC bytes). A different hash is a different build.
+        const std::filesystem::path cache_path = cache_dir_ / "uber.bin";
+        {
+            std::ifstream in(cache_path, std::ios::binary);
+            std::uint64_t hash = 0u;
+            if (in && in.read(reinterpret_cast<char*>(&hash), sizeof(hash)) &&
+                hash == uber_source_hash_) {
+                std::array<Microsoft::WRL::ComPtr<ID3DBlob>, 1u + kUberPsVariants> blobs{};
+                bool loaded = true;
+                for (auto& blob : blobs) {
+                    std::uint32_t size = 0u;
+                    if (!in.read(reinterpret_cast<char*>(&size), sizeof(size)) ||
+                        size == 0u || size > (8u << 20u) ||
+                        FAILED(D3DCreateBlob(size, &blob)) ||
+                        !in.read(static_cast<char*>(blob->GetBufferPointer()), size)) {
+                        loaded = false;
+                        break;
+                    }
+                }
+                if (loaded) {
+                    uber_vs_blob_ = blobs[0];
+                    for (unsigned variant = 0; variant < kUberPsVariants; ++variant) {
+                        uber_ps_blobs_[variant] = blobs[1u + variant];
+                    }
+                    uber_blobs_ready_.store(true, std::memory_order_release);
+                    std::cerr << "[uber-pipeline] shaders loaded from cache\n";
+                    return;
+                }
+            }
+        }
+        Microsoft::WRL::ComPtr<ID3DBlob> vs = compile_shader(vs_source, "vs_5_1", "gx_uber_vs");
+        std::array<Microsoft::WRL::ComPtr<ID3DBlob>, kUberPsVariants> ps{};
+        bool complete = static_cast<bool>(vs);
+        for (unsigned variant = 0; complete && variant < kUberPsVariants; ++variant) {
+            std::string source;
+            source.reserve(ps_source.size() + 96u);
+            source += "#define UBER_DUAL_SRC ";
+            source += uber_ps_variant_dual_source(variant) ? "1\n" : "0\n";
+            source += "#define UBER_EXPORT_DEPTH ";
+            source += uber_ps_variant_export_depth(variant) ? "1\n" : "0\n";
+            source += "#define UBER_EARLY_DEPTH ";
+            source += uber_ps_variant_early_depth(variant) ? "1\n" : "0\n";
+            source += ps_source;
+            ps[variant] = compile_shader(source, "ps_5_1", "gx_uber_ps");
+            complete = static_cast<bool>(ps[variant]);
+        }
+        const auto elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+            std::chrono::steady_clock::now() - start).count();
+        if (!complete) {
+            std::cerr << "[uber-pipeline] shader compile failed; first-use misses stay synchronous\n";
+            return;
+        }
+        uber_vs_blob_ = std::move(vs);
+        uber_ps_blobs_ = std::move(ps);
+        uber_blobs_ready_.store(true, std::memory_order_release);
+        {
+            // Written beside the cache and renamed, so a reader never sees a
+            // partial file. Optional: a failure only costs the next compile.
+            const std::filesystem::path temp_path = cache_dir_ / "uber.bin.tmp";
+            {
+                std::ofstream out(temp_path, std::ios::binary | std::ios::trunc);
+                out.write(reinterpret_cast<const char*>(&uber_source_hash_), sizeof(uber_source_hash_));
+                const auto write_blob = [&out](ID3DBlob* blob) {
+                    const auto size = static_cast<std::uint32_t>(blob->GetBufferSize());
+                    out.write(reinterpret_cast<const char*>(&size), sizeof(size));
+                    out.write(static_cast<const char*>(blob->GetBufferPointer()), size);
+                };
+                write_blob(uber_vs_blob_.Get());
+                for (const auto& blob : uber_ps_blobs_) write_blob(blob.Get());
+            }
+            std::error_code ec;
+            std::filesystem::rename(temp_path, cache_path, ec);
+        }
+        std::cerr << "[uber-pipeline] shaders ready compile-ms=" << elapsed_ms
+                  << " vs-bytes=" << uber_vs_blob_->GetBufferSize()
+                  << " ps-bytes=" << uber_ps_blobs_[0]->GetBufferSize() << '\n';
+    } catch (...) {
+        // Optional: without uber blobs every miss keeps the synchronous path.
     }
+}
 
-    // Future native-feature work can compile an uber PSO from embedded DXBC
-    // here. For now insert nullptr so subsequent lookups hit the map and do
-    // not repeatedly reach this path.
-    uber_.emplace(rs_hash, Microsoft::WRL::ComPtr<ID3D12PipelineState>{});
+// Render thread. Returns the uber pipeline for this render state and output
+// variant when it exists. Otherwise queues its build (or, with create_now,
+// builds it here) once the uber DXBC is ready.
+ID3D12PipelineState* PipelineCache::uber_pipeline(
+    const RenderStateKey& render_state, unsigned variant, bool create_now) {
+    if (!uber_blobs_ready_.load(std::memory_order_acquire)) {
+        return nullptr;
+    }
+    if (!uber_prewarm_enqueued_) {
+        uber_prewarm_enqueued_ = true;
+        enqueue_uber_prewarm();
+    }
+    UberPsoKey key{};
+    key.render_state.blend_bits = render_state.blend_bits;
+    key.render_state.zmode_bits = render_state.zmode_bits;
+    key.render_state.cull = render_state.cull;
+    key.render_state.pixfmt = render_state.pixfmt;
+    key.render_state.primitive_topology = render_state.primitive_topology;
+    key.variant = variant;
+    if (const auto it = uber_psos_.find(key); it != uber_psos_.end()) {
+        return it->second.Get();  // null: its build failed, never retried
+    }
+    if (create_now) {
+        auto pso = create_uber_pso(key.render_state, variant);
+        ID3D12PipelineState* raw = pso.Get();
+        uber_psos_[key] = std::move(pso);
+        return raw;
+    }
+    enqueue_uber_pso(key);
     return nullptr;
+}
+
+void PipelineCache::enqueue_uber_pso(const UberPsoKey& key) {
+    if (uber_pending_.contains(key) || stopping_.load(std::memory_order_relaxed)) {
+        return;
+    }
+    CompileJob job{};
+    job.key.render_state = key.render_state;
+    job.uber = true;
+    job.uber_variant = key.variant;
+    ensure_compile_workers(2u);
+    {
+        std::lock_guard<std::mutex> lock(job_mutex_);
+        jobs_.push_back(std::move(job));
+    }
+    uber_pending_.insert(key);
+    job_cv_.notify_one();
+}
+
+// Render states this cache has seen before, each with the early-depth
+// variant (dual-source when the blend state reads SRC1 alpha): the common
+// case, built in the background so first-use materials meet a ready uber
+// pipeline. Other variants are built on their first miss.
+void PipelineCache::enqueue_uber_prewarm() {
+    std::unordered_set<UberPsoKey, UberPsoKeyHasher> seen;
+    // Early-Z first (most materials), then late-Z (alpha-tested materials,
+    // about as common in RMGE01), then the Z-texture depth export. A blend
+    // state reading SRC1 alpha needs the dual-source variant of each.
+    const auto add = [&](unsigned pass, std::uint32_t blend_bits, std::uint16_t zmode_bits,
+                         std::uint8_t cull, std::uint8_t pixfmt, std::uint8_t topology) {
+        UberPsoKey key{};
+        key.render_state.blend_bits = blend_bits;
+        key.render_state.zmode_bits = zmode_bits;
+        key.render_state.cull = cull;
+        key.render_state.pixfmt = pixfmt;
+        key.render_state.primitive_topology = topology;
+        const unsigned dual = (blend_bits & (1u << 27u)) != 0u ? 1u : 0u;
+        key.variant = (pass == 0u ? 4u : pass == 1u ? 0u : 2u) + dual;
+        if (seen.insert(key).second && !uber_psos_.contains(key)) {
+            enqueue_uber_pso(key);
+        }
+    };
+    for (unsigned pass = 0u; pass < 3u; ++pass) {
+        for (const PsoKey& known : warm_pso_keys_) {
+            add(pass, known.render_state.blend_bits, known.render_state.zmode_bits,
+                known.render_state.cull, known.render_state.pixfmt,
+                known.render_state.primitive_topology);
+        }
+        for (const KnownRenderState& known : kKnownRenderStates) {
+            add(pass, known.blend_bits, known.zmode_bits, known.cull, known.pixfmt,
+                known.topology);
+        }
+    }
+}
+
+// Any thread (compile workers, or the render thread in force mode).
+Microsoft::WRL::ComPtr<ID3D12PipelineState> PipelineCache::create_uber_pso(
+    const RenderStateKey& render_state, unsigned variant) {
+    if (!uber_blobs_ready_.load(std::memory_order_acquire) || variant >= kUberPsVariants) {
+        return nullptr;
+    }
+    ID3DBlob* vs = uber_vs_blob_.Get();
+    ID3DBlob* ps = uber_ps_blobs_[variant].Get();
+    const D3D12_GRAPHICS_PIPELINE_STATE_DESC pd = make_gx_pso_desc(
+        root_signature_.Get(), render_state, vs, ps,
+        line_geometry_shader_.Get(), point_geometry_shader_.Get());
+    wchar_t name[160]{};
+    swprintf_s(name, L"uber_%016llx_%08x_%08x_%02x_%02x_%02x_%u",
+        static_cast<unsigned long long>(uber_source_hash_),
+        render_state.blend_bits, render_state.zmode_bits,
+        static_cast<unsigned>(render_state.cull),
+        static_cast<unsigned>(render_state.pixfmt),
+        static_cast<unsigned>(render_state.primitive_topology), variant);
+    {
+        std::lock_guard<std::mutex> lock(pipeline_library_mutex_);
+        if (pipeline_library_) {
+            Microsoft::WRL::ComPtr<ID3D12PipelineState> cached;
+            if (SUCCEEDED(pipeline_library_->LoadGraphicsPipeline(name, &pd, IID_PPV_ARGS(&cached)))) {
+                return cached;
+            }
+        }
+    }
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> pso = create_gx_pso(
+        device_.Get(), root_signature_.Get(), render_state, vs, ps,
+        line_geometry_shader_.Get(), point_geometry_shader_.Get());
+    if (pso) {
+        std::lock_guard<std::mutex> lock(pipeline_library_mutex_);
+        if (pipeline_library_ && SUCCEEDED(pipeline_library_->StorePipeline(name, pso.Get()))) {
+            pipeline_library_dirty_ = true;
+        }
+    }
+    return pso;
+}
+
+// Render thread: the specialization of a key now drawing with an uber
+// pipeline. Cached DXBC is reused; a new pair is compiled and then cached.
+void PipelineCache::enqueue_async_specialization(
+    const MemoizedPsoKey& memoized,
+    const PixelShaderKey& ps_key,
+    const VertexShaderKey& vs_key) {
+    if (in_flight_.contains(memoized) || stopping_.load(std::memory_order_relaxed)) {
+        return;
+    }
+    CompileJob job{};
+    job.key = memoized.key;
+    job.ps_key = ps_key;
+    job.vs_key = vs_key;
+    ShaderPair stages{};
+    if (find_cached_shader_stages(job.key, stages) && stages.vs && stages.ps) {
+        job.use_cached_blobs = true;
+        job.vs_blob = stages.vs;
+        job.ps_blob = stages.ps;
+    } else {
+        job.remember_pair = true;
+    }
+    ensure_compile_workers(2u);
+    {
+        std::lock_guard<std::mutex> lock(job_mutex_);
+        jobs_.push_back(std::move(job));
+    }
+    in_flight_.insert(memoized);
+    ++uber_async_specializations_;
+    job_cv_.notify_one();
 }
 
 // ---------------------------------------------------------------------------
@@ -2917,6 +3333,20 @@ void PipelineCache::worker_main() {
         }
 
         try {
+        if (job.uber) {
+            PsoCompletionQueue::Item completion;
+            completion.key = job.key;
+            completion.uber = true;
+            completion.uber_variant = job.uber_variant;
+            completion.pipeline = create_uber_pso(job.key.render_state, job.uber_variant);
+            completions_.push(std::move(completion));
+            {
+                std::lock_guard<std::mutex> lock(job_mutex_);
+                ++completion_sequence_;
+            }
+            completion_cv_.notify_all();
+            continue;
+        }
         Microsoft::WRL::ComPtr<ID3DBlob> vs = job.vs_blob;
         Microsoft::WRL::ComPtr<ID3DBlob> ps = job.ps_blob;
         if (!job.use_cached_blobs) {
@@ -2933,6 +3363,10 @@ void PipelineCache::worker_main() {
         }
         if (job.reoptimize) {
             completion.reoptimize = true;
+            completion.vs_blob = vs;
+            completion.ps_blob = ps;
+        } else if (job.remember_pair) {
+            completion.remember_pair = true;
             completion.vs_blob = vs;
             completion.ps_blob = ps;
         }

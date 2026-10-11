@@ -578,6 +578,22 @@ if(MSVC)
             /favor:INTEL64)
 endif()
 
+# Uber shader sources (runtime/src/gx/uber_*.hlsl) become NUL-terminated char
+# arrays in a generated translation unit. Editing a source re-runs configure.
+set(galaxy_uber_embed_cpp "${CMAKE_CURRENT_BINARY_DIR}/generated/uber_shader_embed.cpp")
+set(galaxy_uber_embed_body "")
+foreach(galaxy_uber_stage vs ps)
+    set(galaxy_uber_hlsl "${CMAKE_CURRENT_SOURCE_DIR}/runtime/src/gx/uber_${galaxy_uber_stage}.hlsl")
+    set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${galaxy_uber_hlsl}")
+    file(READ "${galaxy_uber_hlsl}" galaxy_uber_hex HEX)
+    string(REGEX REPLACE "([0-9a-f][0-9a-f])" "0x\\1," galaxy_uber_hex "${galaxy_uber_hex}")
+    string(APPEND galaxy_uber_embed_body
+        "extern const char galaxy_uber_${galaxy_uber_stage}_hlsl[] = {${galaxy_uber_hex}0x00};\n")
+endforeach()
+file(CONFIGURE OUTPUT "${galaxy_uber_embed_cpp}"
+    CONTENT "namespace galaxy::gx {\n${galaxy_uber_embed_body}}\n"
+    @ONLY)
+
 # galaxy_gx: static lib used by NebulaRuntime and the renderer tests.
 # The public API (gx_d3d12.h) is implemented by gx_shim.cpp over GxBackend.
 add_library(galaxy_gx STATIC
@@ -595,6 +611,8 @@ add_library(galaxy_gx STATIC
     runtime/src/gx/line_point_raster.cpp
     runtime/src/gx/pipeline_cache.cpp
     runtime/src/gx/shader_gen.cpp
+    runtime/src/gx/uber_shaders.cpp
+    ${galaxy_uber_embed_cpp}
     runtime/src/gx/fifo_parser.cpp
     runtime/src/gx/gx_backend.cpp
     runtime/src/frame_telemetry.cpp
@@ -678,6 +696,20 @@ if(MSVC)
     # /OPT keeps the Release layout, /PDBALTPATH keeps build paths out of the image.
     target_compile_options(NebulaRuntime PRIVATE /Zi)
     target_link_options(NebulaRuntime PRIVATE /DEBUG /OPT:REF /OPT:ICF /PDBALTPATH:NebulaRuntime.pdb)
+    # The libraries linked into the runtime carry private symbols too: without
+    # them a sample in a static function (the GX vertex decoder, FIFO parser
+    # helpers) resolves to the nearest public name. Debug information only;
+    # code generation is unchanged.
+    foreach(galaxy_symbol_target
+            galaxy_gx galaxy_native_host galaxy_native_input galaxy_native_dsp
+            galaxy_runtime_timeline galaxy_runtime_instance galaxy_checkpoint_gate
+            galaxy_decrementer_deadline galaxy_frame_cadence_diagnostics
+            galaxy_native_input_causality galaxy_host_pointer_events galaxy_scene_hint
+            galaxy_ppc_float galaxy_dsp_alu galaxy_runtime_settings galaxy_atomic_file)
+        if(TARGET ${galaxy_symbol_target})
+            target_compile_options(${galaxy_symbol_target} PRIVATE /Zi)
+        endif()
+    endforeach()
 endif()
 if(MSVC)
     # Generated DSP probe/entry functions are referenced through the native

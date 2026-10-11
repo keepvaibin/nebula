@@ -56,6 +56,11 @@ struct alignas(256) GxPsConstants {
     std::uint32_t ind_cmd[4][4];
     std::int32_t ind_mtx[6][4];
     std::uint32_t ind_misc[4];
+    // Uber pixel shader only; specialized shaders bake these from the key:
+    // x num_tev_stages | num_texgens << 8 | num_chans << 16 | fog_type << 24,
+    // y alpha_comp0 | alpha_comp1 << 8 | alpha_logic << 16 | flags << 24,
+    // z output_flags | efb_scale_minus_one << 16, w zero.
+    std::uint32_t uber_ps_header[4];
 };
 
 static_assert(offsetof(GxPsConstants, stage_config) == 0);
@@ -68,6 +73,7 @@ static_assert(offsetof(GxPsConstants, ztex_params) == 560);
 static_assert(offsetof(GxPsConstants, ind_cmd) == 576);
 static_assert(offsetof(GxPsConstants, ind_mtx) == 640);
 static_assert(offsetof(GxPsConstants, ind_misc) == 736);
+static_assert(offsetof(GxPsConstants, uber_ps_header) == 752);
 static_assert(sizeof(GxPsConstants) == 768);
 
 // Vertex-stage constants (root CBV b0).  The XF matrix palette itself rides
@@ -106,6 +112,13 @@ struct alignas(256) GxVsConstants {
     // Line mask, point mask, line divisor, point divisor for GX texture
     // coordinate offsets. Geometry shaders read this at packoffset(c66).
     std::uint32_t line_point_tex_offsets[4];
+    // Uber vertex shader only: the draw's VertexShaderKey (num_texgens,
+    // num_chans, flags, texmtx_idx_mask; texgen, post_texgen and channel
+    // control words). Specialized shaders bake these and never read them.
+    std::uint32_t uber_vs_header[4];
+    std::uint32_t uber_texgen[kMaxTexGens];
+    std::uint32_t uber_post_texgen[kMaxTexGens];
+    std::uint32_t uber_channel[4];
 };
 
 static_assert(offsetof(GxVsConstants, projection) == 0);
@@ -119,6 +132,10 @@ static_assert(offsetof(GxVsConstants, inline_tex_matrices) == 272);
 static_assert(offsetof(GxVsConstants, inline_post_matrices) == 656);
 static_assert(offsetof(GxVsConstants, line_point_raster) == 1040);
 static_assert(offsetof(GxVsConstants, line_point_tex_offsets) == 1056);
+static_assert(offsetof(GxVsConstants, uber_vs_header) == 1072);
+static_assert(offsetof(GxVsConstants, uber_texgen) == 1088);
+static_assert(offsetof(GxVsConstants, uber_post_texgen) == 1120);
+static_assert(offsetof(GxVsConstants, uber_channel) == 1152);
 static_assert(sizeof(GxVsConstants) == 1280);
 
 #if defined(_MSC_VER)

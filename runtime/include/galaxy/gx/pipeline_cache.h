@@ -41,8 +41,10 @@
 #include <wrl/client.h>
 
 #include "galaxy/gx/shader_gen.h"
+#include "galaxy/gx/uber_shaders.h"
 #include "galaxy/gx/shader_keys.h"
 
+#include <array>
 #include <atomic>
 #include <condition_variable>
 #include <chrono>
@@ -82,6 +84,12 @@ public:
         bool reoptimize = false;
         Microsoft::WRL::ComPtr<ID3DBlob> vs_blob;
         Microsoft::WRL::ComPtr<ID3DBlob> ps_blob;
+        // A specialization compiled while its draws used the uber pipeline:
+        // its pair is cached and persisted like a synchronous compile's.
+        bool remember_pair = false;
+        // An uber pipeline for key.render_state and this output variant.
+        bool uber = false;
+        unsigned uber_variant = 0;
     };
 
     PsoCompletionQueue();
@@ -145,6 +153,10 @@ public:
     // Stats for the on-screen debug overlay / logs.
     [[nodiscard]] std::uint64_t specialized_hits() const;
     [[nodiscard]] std::uint64_t uber_fallbacks() const;
+    // True when the last get() returned an uber pipeline: the draw's
+    // specialized pipeline is compiling, so the caller must not memoize the
+    // result and should resolve the key again on a later draw.
+    [[nodiscard]] bool last_get_used_uber() const noexcept { return last_get_used_uber_; }
 
     // Routine, clock-free compile accounting. Every first-use pipeline this
     // process had to build is counted here, including the ones far below
@@ -186,6 +198,10 @@ private:
         Microsoft::WRL::ComPtr<ID3DBlob> ps_blob;
         bool use_cached_blobs = false;
         bool reoptimize = false;
+        bool remember_pair = false;
+        // Builds the uber pipeline for key.render_state / uber_variant.
+        bool uber = false;
+        unsigned uber_variant = 0;
     };
 
     // Render-thread-only published map.
@@ -213,9 +229,53 @@ private:
     }
     // Keys with a specialization already in flight (render-thread-only).
     std::unordered_set<MemoizedPsoKey, MemoizedPsoKeyHasher> in_flight_;
-    // Uber PSOs per RenderStateKey hash, created lazily from embedded DXBC.
-    std::unordered_map<std::uint64_t,
-        Microsoft::WRL::ComPtr<ID3D12PipelineState>> uber_;
+    // Uber pipelines (uber_shaders.h). The DXBC is compiled once per session
+    // on uber_compile_thread_ and is read-only once uber_blobs_ready_ is set;
+    // PSOs per (render state, output variant) are built by the compile
+    // workers and published to uber_psos_ by drain_completions().
+    enum class UberMode : std::uint8_t { Off, Hybrid, Force };
+    struct UberPsoKey {
+        RenderStateKey render_state{};
+        std::uint32_t variant = 0;
+        [[nodiscard]] bool operator==(const UberPsoKey& other) const noexcept {
+            return render_state == other.render_state && variant == other.variant;
+        }
+    };
+    struct UberPsoKeyHasher {
+        [[nodiscard]] std::size_t operator()(const UberPsoKey& key) const noexcept {
+            std::uint64_t hash = mix64(key.render_state.blend_bits);
+            hash = combine64(hash, key.render_state.zmode_bits);
+            hash = combine64(hash,
+                static_cast<std::uint64_t>(key.render_state.cull) |
+                (static_cast<std::uint64_t>(key.render_state.pixfmt) << 8) |
+                (static_cast<std::uint64_t>(key.render_state.primitive_topology) << 16));
+            return static_cast<std::size_t>(combine64(hash, key.variant));
+        }
+    };
+    UberMode uber_mode_ = UberMode::Off;
+    std::thread uber_compile_thread_;
+    std::atomic<bool> uber_blobs_ready_{false};
+    Microsoft::WRL::ComPtr<ID3DBlob> uber_vs_blob_;
+    std::array<Microsoft::WRL::ComPtr<ID3DBlob>, kUberPsVariants> uber_ps_blobs_{};
+    std::uint64_t uber_source_hash_ = 0;
+    std::unordered_map<UberPsoKey, Microsoft::WRL::ComPtr<ID3D12PipelineState>,
+        UberPsoKeyHasher> uber_psos_;
+    std::unordered_set<UberPsoKey, UberPsoKeyHasher> uber_pending_;
+    bool uber_prewarm_enqueued_ = false;
+    bool last_get_used_uber_ = false;
+    std::uint64_t uber_resolutions_ = 0;
+    std::uint64_t uber_async_specializations_ = 0;
+    void compile_uber_blobs() noexcept;
+    [[nodiscard]] ID3D12PipelineState* uber_pipeline(
+        const RenderStateKey& render_state, unsigned variant, bool create_now);
+    [[nodiscard]] Microsoft::WRL::ComPtr<ID3D12PipelineState> create_uber_pso(
+        const RenderStateKey& render_state, unsigned variant);
+    void enqueue_uber_pso(const UberPsoKey& key);
+    void enqueue_uber_prewarm();
+    void enqueue_async_specialization(
+        const MemoizedPsoKey& memoized,
+        const PixelShaderKey& ps_key,
+        const VertexShaderKey& vs_key);
 
     PsoCompletionQueue completions_;
 
@@ -403,8 +463,6 @@ private:
         bool store_in_library = true);
 
     void worker_main();
-    [[nodiscard]] ID3D12PipelineState* get_or_create_uber(
-        const RenderStateKey& render_state);
 
     std::mutex pipeline_library_mutex_;
     bool pipeline_library_dirty_ = false;

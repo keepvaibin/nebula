@@ -36,6 +36,8 @@
 #include <stdexcept>
 #include <thread>
 
+#include "galaxy/gx/uber_shaders.h"
+
 #pragma comment(lib, "d3dcompiler.lib")
 
 namespace {
@@ -1193,6 +1195,39 @@ int main() {
     }
 
     check_independent_pair_compilation();
+
+    {   // Uber pipeline sources (embedded uber_vs.hlsl / uber_ps.hlsl).
+        check_compiles(std::string(uber_vs_source()), "vs_5_1", "uber_vs");
+        for (unsigned variant = 0; variant < kUberPsVariants; ++variant) {
+            std::string source = "#define UBER_DUAL_SRC ";
+            source += uber_ps_variant_dual_source(variant) ? "1" : "0";
+            source += "\n#define UBER_EXPORT_DEPTH ";
+            source += uber_ps_variant_export_depth(variant) ? "1" : "0";
+            source += "\n#define UBER_EARLY_DEPTH ";
+            source += uber_ps_variant_early_depth(variant) ? "1" : "0";
+            source += "\n";
+            source += uber_ps_source();
+            const std::string label = "uber_ps_variant_" + std::to_string(variant);
+            check_compiles(source, "ps_5_1", label.c_str());
+        }
+        PixelShaderKey key{};
+        const auto expect_variant = [&](std::uint8_t flags, unsigned expected) {
+            key.flags = flags;
+            if (uber_ps_variant(key) != expected) {
+                ++g_failures;
+                std::printf("FAILED: uber variant flags=0x%02x got %u expected %u\n",
+                    static_cast<unsigned>(flags), uber_ps_variant(key), expected);
+            }
+        };
+        expect_variant(0x00u, 4u);  // early depth
+        expect_variant(0x80u, 5u);  // early depth, dual source
+        expect_variant(0x01u, 0u);  // late depth
+        expect_variant(0x81u, 1u);  // late depth, dual source
+        expect_variant(0x03u, 2u);  // late Z texture exports depth
+        expect_variant(0x83u, 3u);
+        expect_variant(0x02u, 4u);  // early Z texture keeps geometric depth
+    }
+
     if (g_failures == 0) {
         std::printf("all shader-gen compile checks passed\n");
     } else {
