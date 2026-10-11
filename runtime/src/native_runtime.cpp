@@ -2751,7 +2751,7 @@ struct RuntimeState {
     std::uint64_t masked_pe_schedule_suppressed{};
     std::uint64_t masked_pe_fast_service_suppressed{};
     bool quiet_architecture_checkpoints =
-        read_env_flag("GALAXY_QUIET_ARCHITECTURE_CHECKPOINTS", false);
+        read_env_flag("GALAXY_QUIET_ARCHITECTURE_CHECKPOINTS", true);
     std::uint64_t quiet_architecture_checkpoint_returns{};
     std::uint64_t yaz0_fast_checkpoint_skips{};
     std::uint64_t yaz0_fast_checkpoint_polls{};
@@ -16270,7 +16270,7 @@ inline constexpr std::uint32_t kAlarmExceptionContextOffset = 0x18u;
 }  // namespace coop_rt
 
 bool coop_scheduler_requested() {
-    static const bool enabled = read_env_flag("GALAXY_COOP", false);
+    static const bool enabled = read_env_flag("GALAXY_COOP", true);
     return enabled;
 }
 
@@ -29893,7 +29893,13 @@ void run_guest_entry(
     galaxy::PpcContext* context,
     galaxy::GuestMemoryV1* memory) {
     if (coop_scheduler_requested()) {
-        start_cooperative_scheduler(state, context, memory);
+        if ((state.module_transfer_flags &
+             galaxy::kModuleTransferFlagHostSelectThread) != 0u) {
+            start_cooperative_scheduler(state, context, memory);
+        } else {
+            std::cerr << "[coop] the module runs SelectThread translated;"
+                         " using the exception-transfer scheduler\n";
+        }
     }
     run_guest_flat(state, [&] { entry(context, memory); }, context, memory);
 }

@@ -15544,6 +15544,9 @@ inline constexpr std::uint32_t kModuleFloatFlagFastFloat = 1u;
 // kPendingEventTransferBit and returns, so the runtime may complete an RFI
 // by returning instead of throwing GuestTransfer.
 inline constexpr std::uint32_t kModuleTransferFlagFlagReturn = 1u;
+// Every call to SelectThread (0x804AB20C) is routed through the host, so the
+// runtime's cooperative scheduler can replace it.
+inline constexpr std::uint32_t kModuleTransferFlagHostSelectThread = 2u;
 
 static_assert(std::is_standard_layout_v<PpcContext>);
 static_assert(std::is_standard_layout_v<NativeServicesV1>);

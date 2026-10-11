@@ -7155,7 +7155,8 @@ fn apply_fast_float_mode(source_files: &mut [GeneratedSource]) {
         {
             file.contents.push_str(
                 "\nextern \"C\" std::uint32_t galaxy_module_transfer_flags() {\n\
-                 \x20   return galaxy::kModuleTransferFlagFlagReturn;\n\
+                 \x20   return galaxy::kModuleTransferFlagFlagReturn |\n\
+                 \x20       galaxy::kModuleTransferFlagHostSelectThread;\n\
                  }\n",
             );
         }
@@ -18171,7 +18172,8 @@ extern \"C\" const galaxy::GameModuleManifestV1* galaxy_module_manifest() {
 }
 
 extern \"C\" std::uint32_t galaxy_module_transfer_flags() {
-    return galaxy::kModuleTransferFlagFlagReturn;
+    return galaxy::kModuleTransferFlagFlagReturn |
+        galaxy::kModuleTransferFlagHostSelectThread;
 }
 "
         ));
