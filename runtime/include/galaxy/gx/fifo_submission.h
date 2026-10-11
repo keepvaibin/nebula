@@ -18,9 +18,11 @@ namespace galaxy::gx {
     bool render_live_memory_wait,
     bool render_memory_snapshot,
     bool sim_thread_pe_scan,
-    bool direct_wgpipe_pe_events) noexcept {
+    bool direct_wgpipe_pe_events,
+    bool render_live_memory_reads = false) noexcept {
     const bool render_memory_owned =
-        render_live_memory_wait || render_memory_snapshot;
+        render_live_memory_wait || render_memory_snapshot ||
+        render_live_memory_reads;
     return pe_events_gpu_fence && async_render_thread && render_memory_owned &&
            !sim_thread_pe_scan && !direct_wgpipe_pe_events;
 }

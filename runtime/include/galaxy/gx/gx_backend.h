@@ -759,6 +759,11 @@ private:
     // caught.
     std::vector<std::vector<std::byte>> fifo_pool_;
     std::vector<std::vector<GuestMemoryRange>> memory_range_pool_;
+    // Dirty-range vectors travel with the chunk; recycled like the FIFO so
+    // the producer does not grow a fresh vector every frame.
+    std::vector<std::vector<GuestWriteRange>> dirty_range_pool_;
+    // Producer-thread scratch for drain_guest_memory_writes.
+    std::vector<GuestWriteRange> drain_scratch_ranges_;
     std::vector<MemorySnapshot> memory_snapshot_pool_;
     static constexpr std::size_t kImmutableRangeCacheMaxEntries = 2048u;
     static constexpr std::size_t kImmutableRangeCacheMaxBytes =

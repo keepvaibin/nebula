@@ -1446,6 +1446,10 @@ void submit_ios_request(
         memory, 0xCD000000, request, nullptr, 0x80004000);
     galaxy::guest_store_u32(
         memory, 0xCD000004, 0x31, nullptr, 0x80004000);
+    // Disc reads complete on a worker; the tests observe the completed state.
+    if (auto* owner = galaxy::host::GuestAddressSpace::owner_of(memory)) {
+        owner->wait_for_async_disc_reads();
+    }
 }
 
 void send_dsp_mail(
@@ -19455,6 +19459,7 @@ int main(int argc, char** argv) {
     memory.write_u32(kDiAsyncReadReq + 0x24, 0x81234000u);
     memory.begin_ipc_interrupt_handler_pass();
     submit_ios_request(guest_memory, kDiAsyncReadReq);
+    memory.wait_for_async_disc_reads();
     passed &= expect(
         (ipc_control(guest_memory) & 0x02u) != 0u,
         "async DI submit inside IPC handler still raises IOS ack");
@@ -19565,6 +19570,7 @@ int main(int argc, char** argv) {
     memory.write_u32(kDiReadReq + 0x1C, 0x20u);
     memory.write_u32(kDiReadReq + 0x20, 0);
     submit_ios_request(guest_memory, kDiReadReq);
+    memory.wait_for_async_disc_reads();
     passed &= expect(
         memory.read_u32(kDiReadReq + 4) == 2,
         "DVDLowRead rejects a null output buffer");
@@ -19593,6 +19599,7 @@ int main(int argc, char** argv) {
     memory.write_u32(kDiReadvReq + 0x18, kDiReadvVectors);
     memory.write_u32(kDiReadvReq + 0x20, 0);
     submit_ios_request(guest_memory, kDiReadvReq);
+    memory.wait_for_async_disc_reads();
     passed &= expect(
         memory.read_u32(kDiReadvReq + 4) == 2,
         "DVDLowRead ioctlv rejects a short output buffer");
@@ -19615,12 +19622,14 @@ int main(int argc, char** argv) {
     memory.write_u32(kDiReadvVectors + 0x14u, 0x20u);
     ios_ioctlv_request(memory, guest_memory, kDiReadvReq, di_handle,
         0x71u, 2u, 1u, kDiReadvVectors);
+    memory.wait_for_async_disc_reads();
     passed &= expect(memory.read_u32(kDiReadvReq + 4u) == 1u &&
         std::memcmp(memory.pointer(kDiOutBuf, 0x20u), di_pak_bytes.data(), 0x20u) == 0,
         "DVDLowRead ioctlv selects output0 after two input descriptors");
     acknowledge_ios_reply(guest_memory);
     ios_ioctlv_request(memory, guest_memory, kDiReadvReq, di_handle,
         0x71u, std::numeric_limits<std::uint32_t>::max(), 1u, kDiReadvVectors);
+    memory.wait_for_async_disc_reads();
     passed &= expect(memory.read_u32(kDiReadvReq + 4u) == 2u &&
         ios_reply_available(guest_memory),
         "DVDLowRead rejects vector-count extent overflow without wrapping");

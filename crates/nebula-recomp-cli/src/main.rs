@@ -1098,7 +1098,11 @@ pub(crate) fn generate_home_button_sidecar(game: &Path, output: &Path) -> Result
         .context("failed to statically lower the Home Button RSO")?;
     fs::create_dir_all(output)
         .with_context(|| format!("failed to create sidecar output {}", output.display()))?;
-    write_generated_text_if_changed(&output.join("home_button_native.cpp"), &sidecar.cpp)
+    // The sidecar's checkpoints need the same transfer tests as the game
+    // module (flag-based interrupt return, generation 17).
+    let sidecar_cpp =
+        nebula_recomp_core::apply_transfer_returns(sidecar.cpp.clone());
+    write_generated_text_if_changed(&output.join("home_button_native.cpp"), &sidecar_cpp)
         .with_context(|| format!("failed to write native sidecar under {}", output.display()))?;
     write_generated_text_if_changed(&output.join("CMakeLists.txt"), &sidecar.cmake)
         .with_context(|| format!("failed to write sidecar CMake under {}", output.display()))?;

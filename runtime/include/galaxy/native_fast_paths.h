@@ -44,8 +44,15 @@ inline constexpr std::uint32_t kFlatAliasBytes[16] = {
 };
 
 GALAXY_ALWAYS_INLINE bool flat_span(std::uint32_t address, std::uint32_t width) noexcept {
+#if GALAXY_FASTMEM_ACTIVE
+    // Every access goes through the view; the fault handler owns the rest.
+    (void)address;
+    (void)width;
+    return true;
+#else
     // offset < 2^28 and width <= 8, so the sum cannot wrap.
     return (address & 0x0FFFFFFFu) + width <= kFlatAliasBytes[address >> 28u];
+#endif
 }
 
 GALAXY_ALWAYS_INLINE std::byte* flat_base(const GuestMemoryV1* memory) noexcept {
@@ -73,13 +80,13 @@ GALAXY_ALWAYS_INLINE bool wgpipe_append(
         return false;
     }
     const std::uint32_t used = *count;
-    if (used + Width > 32u) {
+    if (used + Width > kWgpipeGatherFastBytes) {
         return false;
     }
     std::memcpy(gather + used, big_endian_bytes, Width);
     const std::uint32_t next = used + static_cast<std::uint32_t>(Width);
     *count = next;
-    if (next == 32u) {
+    if (next == kWgpipeGatherFastBytes) {
         return memory->wgpipe_flush(memory->user);
     }
     return true;
@@ -133,10 +140,22 @@ GALAXY_ALWAYS_INLINE void store(
     std::uint32_t guest_pc) {
     static_assert(std::is_integral_v<T> && std::is_unsigned_v<T>);
     const T swapped = swap_to_big_endian<T>(value);
+#if GALAXY_FASTMEM_ACTIVE
+    if (base != nullptr) GALAXY_LIKELY {
+        // The write-gather pipe (0xCC008000 and its physical alias) is the
+        // one device every GX command stores to; one masked compare keeps it
+        // off the fault path. Everything else stores through the view.
+        if ((address & 0x3FFFF000u) != 0x0C008000u) GALAXY_LIKELY {
+            guest_flat_store_bytes<T>(base, address, value);
+            return;
+        }
+    }
+#else
     if (base != nullptr && flat_span(address, sizeof(T))) GALAXY_LIKELY {
         std::memcpy(base + address, &swapped, sizeof(T));
         return;
     }
+#endif
     if (wgpipe_address(address) && memory != nullptr) {
         if (wgpipe_append<sizeof(T)>(
                 memory, reinterpret_cast<const std::byte*>(&swapped))) {
@@ -160,7 +179,7 @@ GALAXY_ALWAYS_INLINE std::uint8_t load_u8(
     const std::byte* base, GuestMemoryV1* memory, std::uint32_t address,
     const NativeServicesV1* services, std::uint32_t guest_pc) {
     if (base != nullptr && flat_span(address, 1u)) GALAXY_LIKELY {
-        return static_cast<std::uint8_t>(base[address]);
+        return guest_flat_load_bytes<std::uint8_t>(base, address);
     }
     return guest_load_u8(memory, address, services, guest_pc);
 }
@@ -246,7 +265,7 @@ GALAXY_ALWAYS_INLINE void psq_load(
                     case 4u:
                         return psq_load_integer_bits(
                             static_cast<std::int32_t>(
-                                static_cast<std::uint8_t>(base[lane_address])),
+                                guest_flat_load_bytes<std::uint8_t>(base, lane_address)),
                             scale);
                     case 5u:
                         return psq_load_integer_bits(
@@ -256,7 +275,7 @@ GALAXY_ALWAYS_INLINE void psq_load(
                     case 6u:
                         return psq_load_integer_bits(
                             static_cast<std::int32_t>(
-                                static_cast<std::int8_t>(base[lane_address])),
+                                static_cast<std::int8_t>(guest_flat_load_bytes<std::uint8_t>(base, lane_address))),
                             scale);
                     default:
                         return psq_load_integer_bits(
@@ -288,13 +307,16 @@ GALAXY_ALWAYS_INLINE void psq_store(
     constexpr std::uint32_t kHid2Lsqe = 0x80000000u;
     constexpr std::uint32_t kHid2Pse = 0x20000000u;
     const std::uint32_t required = kHid2Pse | (d_form ? kHid2Lsqe : 0u);
+    // Under fastmem the gather pipe must not take the fault path (it is the
+    // hottest device store there is); the exact helper appends it in place.
     if (base != nullptr && type == 0u &&
+        (!GALAXY_FASTMEM_ACTIVE || (address & 0x3FFFF000u) != 0x0C008000u) &&
         (context->hid2 & required) == required) GALAXY_LIKELY {
         if (one_element) {
             if (flat_span(address, 4u)) GALAXY_LIKELY {
                 const std::uint32_t first = byte_swap_u32(
                     narrow_paired_single_ftz(context->fpr_bits[source]));
-                std::memcpy(base + address, &first, sizeof(first));
+                guest_flat_store_raw<std::uint32_t>(base, address, first);
                 return;
             }
         } else if (flat_span(address, 8u)) GALAXY_LIKELY {
@@ -302,8 +324,8 @@ GALAXY_ALWAYS_INLINE void psq_store(
                 narrow_paired_single_ftz(context->fpr_bits[source]));
             const std::uint32_t second = byte_swap_u32(
                 narrow_paired_single_ftz(context->ps1_bits[source]));
-            std::memcpy(base + address, &first, sizeof(first));
-            std::memcpy(base + address + 4u, &second, sizeof(second));
+            guest_flat_store_raw<std::uint32_t>(base, address, first);
+            guest_flat_store_raw<std::uint32_t>(base, address + 4u, second);
             return;
         }
     }
@@ -1156,7 +1178,7 @@ GALAXY_ALWAYS_INLINE void psq_load_r(
                     case 4u:
                         return psq_load_integer_bits(
                             static_cast<std::int32_t>(
-                                static_cast<std::uint8_t>(base[lane_address])),
+                                guest_flat_load_bytes<std::uint8_t>(base, lane_address)),
                             scale);
                     case 5u:
                         return psq_load_integer_bits(
@@ -1166,7 +1188,7 @@ GALAXY_ALWAYS_INLINE void psq_load_r(
                     case 6u:
                         return psq_load_integer_bits(
                             static_cast<std::int32_t>(
-                                static_cast<std::int8_t>(base[lane_address])),
+                                static_cast<std::int8_t>(guest_flat_load_bytes<std::uint8_t>(base, lane_address))),
                             scale);
                     default:
                         return psq_load_integer_bits(
@@ -1200,13 +1222,16 @@ GALAXY_ALWAYS_INLINE void psq_store_r(
     constexpr std::uint32_t kHid2Lsqe = 0x80000000u;
     constexpr std::uint32_t kHid2Pse = 0x20000000u;
     const std::uint32_t required = kHid2Pse | (d_form ? kHid2Lsqe : 0u);
+    // Under fastmem the gather pipe must not take the fault path (it is the
+    // hottest device store there is); the exact helper appends it in place.
     if (base != nullptr && type == 0u &&
+        (!GALAXY_FASTMEM_ACTIVE || (address & 0x3FFFF000u) != 0x0C008000u) &&
         (context->hid2 & required) == required) GALAXY_LIKELY {
         if (one_element) {
             if (flat_span(address, 4u)) GALAXY_LIKELY {
                 const std::uint32_t first = byte_swap_u32(
                     narrow_paired_single_ftz(fpr[source]));
-                std::memcpy(base + address, &first, sizeof(first));
+                guest_flat_store_raw<std::uint32_t>(base, address, first);
                 return;
             }
         } else if (flat_span(address, 8u)) GALAXY_LIKELY {
@@ -1214,8 +1239,8 @@ GALAXY_ALWAYS_INLINE void psq_store_r(
                 narrow_paired_single_ftz(fpr[source]));
             const std::uint32_t second = byte_swap_u32(
                 narrow_paired_single_ftz(ps1[source]));
-            std::memcpy(base + address, &first, sizeof(first));
-            std::memcpy(base + address + 4u, &second, sizeof(second));
+            guest_flat_store_raw<std::uint32_t>(base, address, first);
+            guest_flat_store_raw<std::uint32_t>(base, address + 4u, second);
             return;
         }
     }

@@ -974,6 +974,14 @@ bool draw_done_policy_accepts_owned_snapshot_without_live_aliases() {
                 true, true, false, false, false, false),
             "draw-done submission rejects unowned render memory") ||
         !expect(
+            draw_done_submission_policy_valid(
+                true, true, false, false, false, false, true),
+            "draw-done submission accepts live render reads") ||
+        !expect(
+            !draw_done_submission_policy_valid(
+                false, true, false, false, false, false, true),
+            "live render reads still require real PE fences") ||
+        !expect(
             !draw_done_submission_policy_valid(
                 false, true, false, true, false, false),
             "draw-done submission still requires real PE fences") ||

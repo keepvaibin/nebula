@@ -13,6 +13,7 @@ mod residency;
 mod rso;
 mod sel;
 mod translate;
+pub use translate::apply_transfer_returns;
 
 // CR0 record/compare -> branch fusion. Additive and unit-tested; not yet called
 // from the lowering loop. See the module header for the safety model and for the

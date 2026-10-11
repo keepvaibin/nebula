@@ -604,6 +604,11 @@ private:
         unsigned height,
         unsigned row_pitch);
     bool create_efb_targets(unsigned efb_scale);
+    // Live internal-resolution change, applied between frames by begin_frame
+    // when get_render_config().efb_scale differs from the live targets.
+    void apply_pending_efb_scale();
+    // (Re)creates the EFB color/depth conversion SRVs in their fixed slots.
+    void refresh_efb_conversion_source_views();
     bool create_root_signature();
     bool create_sampler_heap();
     void reset_sampler_frame(); // only after this slot's fence completes
@@ -873,6 +878,7 @@ private:
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> conv_rtv_heap_;
     D3D12_CPU_DESCRIPTOR_HANDLE conv_scratch_rtv_{};
     detail::ConversionRtvSlot conv_scratch_rtv_slot_;
+    std::optional<DescriptorRing::Table> conv_efb_source_table_;
     D3D12_GPU_DESCRIPTOR_HANDLE conv_efb_color_srv_{};
     D3D12_GPU_DESCRIPTOR_HANDLE conv_efb_depth_srv_{};
     Microsoft::WRL::ComPtr<ID3D12PipelineState> clear_rgb_pipeline_;

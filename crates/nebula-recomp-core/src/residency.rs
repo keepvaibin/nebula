@@ -165,6 +165,8 @@ enum Sync {
     Full,
     /// `branch_checkpoint_taken`: inline test, cold synchronized block.
     Checkpoint,
+    /// `call_return_checkpoint`: inline test, cold synchronized block.
+    CallReturn,
     /// `ppc_commit_scalar_result(context, T, ...)`: synchronize FPR/PS1 `T`.
     FprTarget,
 }
@@ -175,6 +177,8 @@ fn classify(callee: &str, floats: bool) -> Sync {
         Sync::None
     } else if name == "branch_checkpoint_taken" || name == "branch_checkpoint_taken_budgeted" {
         Sync::Checkpoint
+    } else if name == "call_return_checkpoint" {
+        Sync::CallReturn
     } else if name == "ppc_commit_scalar_result" && floats {
         Sync::FprTarget
     } else {
@@ -742,7 +746,16 @@ pub fn apply_register_residency(body: &str, floats: bool) -> Option<String> {
                     };
                     let _ = write!(
                         rewritten,
-                        "if (const std::uint64_t counted__ = {due}(services); counted__ != 0u) [[unlikely]] {{ {stores}galaxy::branch_checkpoint_taken_counted({args}, counted__); {reloads}}}"
+                        "if (const std::uint64_t counted__ = {due}(services); counted__ != 0u) [[unlikely]] {{ GALAXY_RETURN_IF_TRANSFER_PENDING(services); {stores}galaxy::branch_checkpoint_taken_counted({args}, counted__); {reloads}GALAXY_RETURN_IF_TRANSFER_PENDING(services); }}"
+                    );
+                }
+                // A completed call already reloaded the callee's results; the
+                // checkpoint's own synchronization is needed only when its
+                // policy runs, which is the cold branch.
+                Sync::CallReturn => {
+                    let _ = write!(
+                        rewritten,
+                        "if (const std::uint64_t counted__ = galaxy::call_return_checkpoint_due(services); counted__ != 0u) [[unlikely]] {{ GALAXY_RETURN_IF_TRANSFER_PENDING(services); {stores}galaxy::call_return_checkpoint_counted({args}, counted__); {reloads}GALAXY_RETURN_IF_TRANSFER_PENDING(services); }}"
                     );
                 }
                 Sync::Full => {
@@ -829,7 +842,7 @@ mod tests {
             "    { context->gpr[3] = gr3; context->lr = glr; rmge01::fn_80002000(context, memory, services); gr3 = context->gpr[3]; gr31 = context->gpr[31]; glr = context->lr; }\n"
         ));
         assert!(out.contains(
-            "    { context->gpr[3] = gr3; context->lr = glr; galaxy::call_return_checkpoint(services, 0x8000100Cu, 0x80001010u, context, memory); gr3 = context->gpr[3]; gr31 = context->gpr[31]; glr = context->lr; }\n"
+            "    if (const std::uint64_t counted__ = galaxy::call_return_checkpoint_due(services); counted__ != 0u) [[unlikely]] { GALAXY_RETURN_IF_TRANSFER_PENDING(services); context->gpr[3] = gr3; context->lr = glr; galaxy::call_return_checkpoint_counted(services, 0x8000100Cu, 0x80001010u, context, memory, counted__); gr3 = context->gpr[3]; gr31 = context->gpr[31]; glr = context->lr; GALAXY_RETURN_IF_TRANSFER_PENDING(services); }\n"
         ));
     }
 
@@ -875,7 +888,7 @@ mod tests {
         let body = "label_80004000:\n    {\n    context->gpr[3] = context->gpr[3] + 0x00000001u;\n    }\n    {\n    if (--context->ctr != 0u) { galaxy::branch_checkpoint_taken(services, 0x80004008u, 0x80004000u, context, memory); goto label_80004000; }\n    }\n    return;\n";
         let out = apply_register_residency(body, false).expect("eligible");
         assert!(out.contains(
-            "if (--gctr != 0u) { if (const std::uint64_t counted__ = galaxy::branch_checkpoint_due(services); counted__ != 0u) [[unlikely]] { context->gpr[3] = gr3; context->ctr = gctr; galaxy::branch_checkpoint_taken_counted(services, 0x80004008u, 0x80004000u, context, memory, counted__); gr3 = context->gpr[3]; gctr = context->ctr; } goto label_80004000; }"
+            "if (--gctr != 0u) { if (const std::uint64_t counted__ = galaxy::branch_checkpoint_due(services); counted__ != 0u) [[unlikely]] { GALAXY_RETURN_IF_TRANSFER_PENDING(services); context->gpr[3] = gr3; context->ctr = gctr; galaxy::branch_checkpoint_taken_counted(services, 0x80004008u, 0x80004000u, context, memory, counted__); gr3 = context->gpr[3]; gctr = context->ctr; GALAXY_RETURN_IF_TRANSFER_PENDING(services); } goto label_80004000; }"
         ));
     }
 
@@ -886,7 +899,7 @@ mod tests {
         assert!(out.contains("        case 0x80004008u: goto resident_entry_80004008;\n"));
         assert!(out.contains("        case 0x80004010u: goto call_return_80004010;\n"));
         assert!(out.ends_with("resident_entry_80004008:\n    gr3 = context->gpr[3]; gr4 = context->gpr[4]; \n    goto label_80004008;\n"));
-        assert!(out.contains("    { context->gpr[3] = gr3; context->gpr[4] = gr4; galaxy::call_return_checkpoint(services, 0x8000400Cu, 0x80004010u, context, memory); gr3 = context->gpr[3]; gr4 = context->gpr[4]; }\n"));
+        assert!(out.contains("    if (const std::uint64_t counted__ = galaxy::call_return_checkpoint_due(services); counted__ != 0u) [[unlikely]] { GALAXY_RETURN_IF_TRANSFER_PENDING(services); context->gpr[3] = gr3; context->gpr[4] = gr4; galaxy::call_return_checkpoint_counted(services, 0x8000400Cu, 0x80004010u, context, memory, counted__); gr3 = context->gpr[3]; gr4 = context->gpr[4]; GALAXY_RETURN_IF_TRANSFER_PENDING(services); }\n"));
     }
 
     #[test]
@@ -931,7 +944,7 @@ mod tests {
     fn budgeted_backward_branch_checkpoint_splits_inside_the_budget_test() {
         let body = "    [[maybe_unused]] std::uint32_t checkpoint_budget__ = galaxy::kBranchCheckpointBudget;\n    label_80004000:\n    context->gpr[3] = context->gpr[3] + 1u;\n    if (context->gpr[3] < 10u) { if (--checkpoint_budget__ == 0u) [[unlikely]] { checkpoint_budget__ = galaxy::kBranchCheckpointBudget; galaxy::branch_checkpoint_taken_budgeted(services, 0x80004004u, 0x80004000u, context, memory); } goto label_80004000; }\n    return;\n";
         let out = apply_register_residency(body, false).expect("eligible");
-        assert!(out.contains("if (const std::uint64_t counted__ = galaxy::branch_checkpoint_due_budgeted(services); counted__ != 0u) [[unlikely]] { context->gpr[3] = gr3; galaxy::branch_checkpoint_taken_counted(services, 0x80004004u, 0x80004000u, context, memory, counted__); gr3 = context->gpr[3]; }"));
+        assert!(out.contains("if (const std::uint64_t counted__ = galaxy::branch_checkpoint_due_budgeted(services); counted__ != 0u) [[unlikely]] { GALAXY_RETURN_IF_TRANSFER_PENDING(services); context->gpr[3] = gr3; galaxy::branch_checkpoint_taken_counted(services, 0x80004004u, 0x80004000u, context, memory, counted__); gr3 = context->gpr[3]; GALAXY_RETURN_IF_TRANSFER_PENDING(services); }"));
         assert!(out.contains("if (--checkpoint_budget__ == 0u) [[unlikely]] { checkpoint_budget__ = galaxy::kBranchCheckpointBudget; if (const std::uint64_t counted__"));
     }
 }

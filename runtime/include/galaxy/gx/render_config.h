@@ -4,9 +4,10 @@
 // galaxy::gx::initialize(); mutate via set_render_config() at runtime
 // (changes are polled on begin_frame through a lock-protected snapshot).
 //
-// Settings that require re-creating GPU resources (efb_scale, window
-// dimensions) only take effect when the renderer is reinitialized. The
-// remaining implemented settings are live-hot. Fields reserved for future
+// efb_scale is applied live: the render thread re-creates the EFB targets at
+// the next frame boundary when the configured value differs from the live
+// one. Window dimensions change through the window itself (resize, or the
+// overlay's output presets). The remaining implemented settings are live-hot. Fields reserved for future
 // renderer work are clamped off until the renderer has the required native
 // D3D12 path and capability checks.
 
@@ -101,6 +102,12 @@ struct GxTimingConfig {
     bool pe_events_gpu_fence = true;
     bool render_live_memory_wait = true;
     bool render_memory_snapshot = false;
+    // GALAXY_RENDER_LIVE_MEMORY=1 with neither the live-read barrier nor the
+    // snapshot: the render thread reads guest RAM directly while the
+    // simulation runs ahead (the hardware's GP model, Dolphin's dual-core
+    // model). PE completion stays on real GPU fences, so the game's own
+    // GXDrawDone discipline bounds how far ahead it writes.
+    bool render_live_memory_reads = false;
 };
 
 struct RenderFeatureStatus {
@@ -145,10 +152,8 @@ struct RenderFeatureCaps {
 [[nodiscard]] RenderConfig get_render_config();
 void set_render_config(const RenderConfig& cfg);
 
-// EFB scale is fixed by the D3D12 resources created during initialization.
-// The native settings overlay therefore stages a separate, persisted value
-// for the next process start instead of making get_render_config() disagree
-// with the resources used by the live renderer.
+// The persisted EFB scale for the next process start. The overlay sets it
+// together with the live value so config.ini and the running renderer agree.
 [[nodiscard]] unsigned get_next_start_efb_scale();
 void stage_next_start_efb_scale(unsigned efb_scale);
 [[nodiscard]] RenderFeatureCaps get_render_feature_caps();

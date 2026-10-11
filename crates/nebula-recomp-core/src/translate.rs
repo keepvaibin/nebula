@@ -697,6 +697,7 @@ pub fn translate_module_with_options(
                 &options,
             )
         };
+        *body = apply_transfer_returns(std::mem::take(body));
     }
     let typed_region_80165478 = if options.typed_region_80165478 {
         const ADDRESS: u32 = 0x8016_5478;
@@ -2268,52 +2269,12 @@ fn discover_wgpipe_store_runs(
             }
         }
 
-        let prior = constants;
-        for definition in Ins::new(*word, Extensions::gekko_broadway()).defs() {
-            if let Argument::GPR(register) = definition {
-                constants[register.0 as usize] = None;
-            }
-        }
-        if !immediate_overrides.is_some_and(|overrides| overrides.contains_key(pc)) {
-            match opcode {
-                Opcode::Addi | Opcode::Addis => {
-                    let target = gpr_rt(*word) as usize;
-                    let base = gpr_ra(*word);
-                    let base = if base == 0 {
-                        Some(0u32)
-                    } else {
-                        prior[base as usize]
-                    };
-                    let scale = if *opcode == Opcode::Addis { 65_536 } else { 1 };
-                    constants[target] = base.map(|value| {
-                        value.wrapping_add((signed_immediate(*word).wrapping_mul(scale)) as u32)
-                    });
-                }
-                Opcode::Ori | Opcode::Oris | Opcode::Xori | Opcode::Xoris => {
-                    let source = prior[gpr_rt(*word) as usize];
-                    let immediate = u32::from((*word & 0xFFFF) as u16)
-                        << if matches!(opcode, Opcode::Oris | Opcode::Xoris) {
-                            16
-                        } else {
-                            0
-                        };
-                    constants[gpr_ra(*word) as usize] = source.map(|value| {
-                        if matches!(opcode, Opcode::Ori | Opcode::Oris) {
-                            value | immediate
-                        } else {
-                            value ^ immediate
-                        }
-                    });
-                }
-                Opcode::Or if gpr_rt(*word) == gpr_rb(*word) => {
-                    constants[gpr_ra(*word) as usize] = prior[gpr_rt(*word) as usize];
-                }
-                _ => {}
-            }
-        }
-        if Ins::new(*word, Extensions::gekko_broadway()).is_branch() {
-            constants.fill(None);
-        }
+        advance_constant_gprs(
+            &mut constants,
+            *word,
+            *opcode,
+            immediate_overrides.is_some_and(|overrides| overrides.contains_key(pc)),
+        );
     }
 
     let mut runs = BTreeMap::new();
@@ -2364,6 +2325,153 @@ fn discover_wgpipe_store_runs(
 fn is_wgpipe_address(address: u32) -> bool {
     let high = address & 0xFF00_0000;
     (high == 0x0C00_0000 || high == 0xCC00_0000) && address & 0x00FF_F000 == 0x0000_8000
+}
+
+/// One instruction's effect on the local constant-GPR tracking shared by the
+/// WGPIPE store runs and the static device-address discovery: every GPR the
+/// instruction defines is dropped, then lis/addi/addis, ori/oris/xori/xoris
+/// and `mr` chains propagate a known value; any branch drops everything.
+fn advance_constant_gprs(
+    constants: &mut [Option<u32>; 32],
+    word: u32,
+    opcode: Opcode,
+    overridden: bool,
+) {
+    let prior = *constants;
+    for definition in Ins::new(word, Extensions::gekko_broadway()).defs() {
+        if let Argument::GPR(register) = definition {
+            constants[register.0 as usize] = None;
+        }
+    }
+    if !overridden {
+        match opcode {
+            Opcode::Addi | Opcode::Addis => {
+                let target = gpr_rt(word) as usize;
+                let base = gpr_ra(word);
+                let base = if base == 0 {
+                    Some(0u32)
+                } else {
+                    prior[base as usize]
+                };
+                let scale = if opcode == Opcode::Addis { 65_536 } else { 1 };
+                constants[target] = base.map(|value| {
+                    value.wrapping_add((signed_immediate(word).wrapping_mul(scale)) as u32)
+                });
+            }
+            Opcode::Ori | Opcode::Oris | Opcode::Xori | Opcode::Xoris => {
+                let source = prior[gpr_rt(word) as usize];
+                let immediate = u32::from((word & 0xFFFF) as u16)
+                    << if matches!(opcode, Opcode::Oris | Opcode::Xoris) {
+                        16
+                    } else {
+                        0
+                    };
+                constants[gpr_ra(word) as usize] = source.map(|value| {
+                    if matches!(opcode, Opcode::Ori | Opcode::Oris) {
+                        value | immediate
+                    } else {
+                        value ^ immediate
+                    }
+                });
+            }
+            Opcode::Or if gpr_rt(word) == gpr_rb(word) => {
+                constants[gpr_ra(word) as usize] = prior[gpr_rt(word) as usize];
+            }
+            _ => {}
+        }
+    }
+    if Ins::new(word, Extensions::gekko_broadway()).is_branch() {
+        constants.fill(None);
+    }
+}
+
+/// Whether the flat guest view maps this address as RAM (MEM1 at its three
+/// aliases, MEM2 at its three). Everything else faults under fastmem.
+fn is_flat_ram_address(address: u32) -> bool {
+    let offset = address & 0x0FFF_FFFF;
+    match address & 0xF000_0000 {
+        0x0000_0000 | 0x8000_0000 | 0xC000_0000 => offset < 0x0180_0000,
+        0x1000_0000 | 0x9000_0000 | 0xD000_0000 => offset < 0x0400_0000,
+        _ => false,
+    }
+}
+
+/// Integer loads and stores whose effective address is a translation-time
+/// constant outside the RAM aliases of the flat guest view: device registers
+/// (0xCC00xxxx, 0xCD00xxxx), the locked cache (0xE000xxxx) and anything
+/// unmapped. Under fastmem such a site takes a host page fault on every
+/// execution (the SDK's DSP mailbox poll, IPC, PI and VI register accesses
+/// were 3.2 million faults in a two-minute title-screen session); these sites
+/// lower to the checked helper, which reaches the device directly. The
+/// write-gather pipe keeps its flat form: `fast::store` tests for it inline
+/// and appends to the gather buffer. Constants are tracked exactly as for the
+/// WGPIPE store runs (dropped at every join and after every branch), so a
+/// dynamic object or stack access can never be misclassified.
+fn discover_static_device_access_pcs(
+    address: u32,
+    bytes: &[u8],
+    interior_targets: &BTreeSet<u32>,
+    immediate_overrides: Option<&BTreeMap<u32, PpcImmediateOverride>>,
+) -> BTreeSet<u32> {
+    let mut constants: [Option<u32>; 32] = [None; 32];
+    let mut pcs = BTreeSet::new();
+    for (index, chunk) in bytes.chunks_exact(4).enumerate() {
+        let pc = address + index as u32 * 4;
+        let word = u32::from_be_bytes(chunk.try_into().expect("four-byte instruction"));
+        let opcode = Ins::new(word, Extensions::gekko_broadway()).op;
+        if interior_targets.contains(&pc) {
+            constants.fill(None);
+        }
+        let overridden = immediate_overrides.is_some_and(|overrides| overrides.contains_key(&pc));
+        if !overridden {
+            let base = |register: u32| {
+                if register == 0 {
+                    Some(0u32)
+                } else {
+                    constants[register as usize]
+                }
+            };
+            let effective = match opcode {
+                Opcode::Lbz
+                | Opcode::Lbzu
+                | Opcode::Lhz
+                | Opcode::Lhzu
+                | Opcode::Lha
+                | Opcode::Lhau
+                | Opcode::Lwz
+                | Opcode::Lwzu
+                | Opcode::Stb
+                | Opcode::Stbu
+                | Opcode::Sth
+                | Opcode::Sthu
+                | Opcode::Stw
+                | Opcode::Stwu => base(gpr_ra(word))
+                    .map(|value| value.wrapping_add(signed_immediate(word) as u32)),
+                Opcode::Lbzx
+                | Opcode::Lbzux
+                | Opcode::Lhzx
+                | Opcode::Lhzux
+                | Opcode::Lhax
+                | Opcode::Lhaux
+                | Opcode::Lwzx
+                | Opcode::Lwzux
+                | Opcode::Stbx
+                | Opcode::Stbux
+                | Opcode::Sthx
+                | Opcode::Sthux
+                | Opcode::Stwx
+                | Opcode::Stwux => base(gpr_ra(word))
+                    .zip(constants[gpr_rb(word) as usize])
+                    .map(|(left, right)| left.wrapping_add(right)),
+                _ => None,
+            };
+            if effective.is_some_and(|ea| !is_flat_ram_address(ea) && !is_wgpipe_address(ea)) {
+                pcs.insert(pc);
+            }
+        }
+        advance_constant_gprs(&mut constants, word, opcode, overridden);
+    }
+    pcs
 }
 
 fn emit_wgpipe_store_run(
@@ -2449,6 +2557,50 @@ fn integer_guest_load_expression(width: u32, ea: &str, pc: u32, flat_ram_reads: 
     } else {
         format!("galaxy::guest_load_{suffix}(memory, {ea}, services, 0x{pc:08X}u)")
     }
+}
+
+/// Flag-based interrupt return (generation 17): every checkpoint whose cold
+/// path the residency pass did not already rewrite becomes the macro form
+/// whose cold block tests `kPendingEventTransferBit` and returns, and every
+/// architectural interrupt checkpoint (mtmsr) and system call is followed by
+/// the same test. A resident body's cold blocks carry the test from the
+/// residency templates; its remaining `galaxy::call_return_checkpoint(`
+/// occurrences are none, so this pass only touches non-resident text.
+pub fn apply_transfer_returns(body: String) -> String {
+    let mut out = body
+        .replace(
+            "galaxy::call_return_checkpoint(services,",
+            "GALAXY_CALL_RETURN_CHECKPOINT(services,",
+        )
+        .replace(
+            "galaxy::branch_checkpoint_taken_budgeted(services,",
+            "GALAXY_BRANCH_CHECKPOINT_TAKEN_BUDGETED(services,",
+        )
+        .replace(
+            "galaxy::branch_checkpoint_taken(services,",
+            "GALAXY_BRANCH_CHECKPOINT_TAKEN(services,",
+        );
+    for marker in [
+        "galaxy::architectural_interrupt_checkpoint(services,",
+        "galaxy::dispatch_system_call(services,",
+        "galaxy::write_decrementer_and_notify(context,",
+    ] {
+        let mut rebuilt = String::with_capacity(out.len() + 256);
+        let mut cursor = 0usize;
+        while let Some(found) = out[cursor..].find(marker) {
+            let at = cursor + found;
+            let Some(end) = out[at..].find(");") else {
+                break;
+            };
+            let stop = at + end + 2;
+            rebuilt.push_str(&out[cursor..stop]);
+            rebuilt.push_str(" GALAXY_RETURN_IF_TRANSFER_PENDING(services);");
+            cursor = stop;
+        }
+        rebuilt.push_str(&out[cursor..]);
+        out = rebuilt;
+    }
+    out
 }
 
 /// Development aid: `NEBULA_RESIDENCY_ADDRESS_RANGE=hexlow-hexhigh` limits the
@@ -2614,6 +2766,13 @@ fn lower_words_with_config(
         .values()
         .flat_map(|run| run.stores.iter().skip(1).map(|store| store.pc))
         .collect::<BTreeSet<_>>();
+    let static_device_pcs = if (flat_ram_reads || flat_ram_writes)
+        && local_lane_profile == LocalLaneProfile::None
+    {
+        discover_static_device_access_pcs(address, bytes, &branch_targets, immediate_overrides)
+    } else {
+        BTreeSet::new()
+    };
     let mut final_instruction_is_terminal = false;
     for (index, chunk) in bytes.chunks_exact(4).enumerate() {
         let pc = address + index as u32 * 4;
@@ -2622,6 +2781,11 @@ fn lower_words_with_config(
         }
         let word = u32::from_be_bytes(chunk.try_into().expect("four-byte instruction"));
         let instruction = Ins::new(word, Extensions::gekko_broadway());
+        // A statically known device address never goes through the flat view:
+        // the checked helper reaches the device without a host page fault.
+        let static_device = static_device_pcs.contains(&pc);
+        let flat_ram_reads = flat_ram_reads && !static_device;
+        let flat_ram_writes = flat_ram_writes && !static_device;
         let instruction_output_start = output.len();
         if local_lane_profile != LocalLaneProfile::None {
             require_local_paired_opcode(local_lane_profile, pc, word, instruction.op)?;
@@ -6480,7 +6644,7 @@ const END_FRAME_SPAN_LABELS: [u32; 8] = [
 /// `functions.h`), and the module unit exports the float flags the runtime
 /// reads before it starts guest code.
 fn apply_fast_float_mode(source_files: &mut [GeneratedSource]) {
-    const DEFINE: &str = "#define GALAXY_FAST_FLOAT 1\n";
+    const DEFINE: &str = "#define GALAXY_FAST_FLOAT 1\n#define GALAXY_FASTMEM 1\n";
     const INCLUDE: &str = "#include \"galaxy/native_api.h\"";
     const PRAGMA: &str = "#pragma once\n";
     for file in source_files.iter_mut() {
@@ -6497,6 +6661,15 @@ fn apply_fast_float_mode(source_files: &mut [GeneratedSource]) {
             file.contents.push_str(
                 "\nextern \"C\" std::uint32_t galaxy_module_float_flags() {\n\
                  \x20   return galaxy::kModuleFloatFlagFastFloat;\n\
+                 }\n",
+            );
+        }
+        if file.contents.contains("galaxy_module_manifest() {")
+            && !file.contents.contains("galaxy_module_transfer_flags()")
+        {
+            file.contents.push_str(
+                "\nextern \"C\" std::uint32_t galaxy_module_transfer_flags() {\n\
+                 \x20   return galaxy::kModuleTransferFlagFlagReturn;\n\
                  }\n",
             );
         }
@@ -9380,6 +9553,8 @@ fn emit_sharded_module_with_experiment(
          \x20           # so no non-fused guest result changes. The AVX2+OSXSAVE host probe\n\
          \x20           # covers every x86-64 CPU that has AVX2 (all of them also have FMA3).\n\
          \x20           target_compile_options(RMGE01_game PRIVATE -mfma)\n\
+         \x20           # Fastmem loads and stores are movbe (every AVX2 CPU has MOVBE).\n\
+         \x20           target_compile_options(RMGE01_game PRIVATE -mmovbe)\n\
          \x20       endif()\n\
          \x20   else()\n\
          \x20       target_compile_options(RMGE01_game PRIVATE /W4 /WX /wd4702 /permissive- /EHsc /GS- /GR- /Oi /favor:INTEL64)\n\
@@ -10064,6 +10239,67 @@ mod tests {
         assert!(flat.contains("context->gpr[31] = galaxy::guest_load_flat_or_checked_u32(flat_guest_read_base, memory, ea_80004010 + 0x0000001Cu, services, 0x80004010u)"));
         assert_eq!(flat.matches("guest_load_flat_or_checked_").count(), 12);
         assert!(!flat.contains("guest_store_flat"));
+    }
+
+    #[test]
+    fn transfer_returns_follow_every_checkpoint_and_interrupt_boundary() {
+        let body = "call_return_80004008:\n    galaxy::call_return_checkpoint(services, 0x80004004u, 0x80004008u, context, memory);\n    if (--checkpoint_budget__ == 0u) [[unlikely]] { checkpoint_budget__ = galaxy::kBranchCheckpointBudget; galaxy::branch_checkpoint_taken_budgeted(services, 0x80004010u, 0x80004000u, context, memory); }\n    context->msr = context->gpr[3];\n    std::atomic_thread_fence(std::memory_order_seq_cst);\n    galaxy::architectural_interrupt_checkpoint(services, 0x80004014u, 0x80004018u, context, memory);\n    if (const std::uint64_t counted__ = galaxy::call_return_checkpoint_due(services); counted__ != 0u) [[unlikely]] { galaxy::call_return_checkpoint_counted(services, 0x80004020u, 0x80004024u, context, memory, counted__); GALAXY_RETURN_IF_TRANSFER_PENDING(services); }\n".to_owned();
+        let out = apply_transfer_returns(body);
+        assert!(out.contains("call_return_80004008:\n    GALAXY_CALL_RETURN_CHECKPOINT(services, 0x80004004u, 0x80004008u, context, memory);\n"));
+        assert!(out.contains("GALAXY_BRANCH_CHECKPOINT_TAKEN_BUDGETED(services, 0x80004010u, 0x80004000u, context, memory); }"));
+        assert!(out.contains("galaxy::architectural_interrupt_checkpoint(services, 0x80004014u, 0x80004018u, context, memory); GALAXY_RETURN_IF_TRANSFER_PENDING(services);\n"));
+        // The resident split is left alone.
+        assert!(out.contains("galaxy::call_return_checkpoint_counted(services, 0x80004020u, 0x80004024u, context, memory, counted__); GALAXY_RETURN_IF_TRANSFER_PENDING(services); }"));
+        assert_eq!(out.matches("GALAXY_RETURN_IF_TRANSFER_PENDING").count(), 2);
+    }
+
+    #[test]
+    fn statically_known_device_addresses_bypass_the_flat_view() {
+        let words: [u32; 10] = [
+            (15 << 26) | (3 << 21) | 0xCC00,                 // lis r3,0xCC00
+            (40 << 26) | (0 << 21) | (3 << 16) | 0x5000,     // lhz r0,0x5000(r3)  DSP mailbox
+            (15 << 26) | (4 << 21) | 0xCD00,                 // lis r4,0xCD00
+            (32 << 26) | (5 << 21) | (4 << 16) | 0x0004,     // lwz r5,4(r4)       IPC
+            (36 << 26) | (5 << 21) | (3 << 16) | 0x3000,     // stw r5,0x3000(r3)  PI
+            (15 << 26) | (6 << 21) | 0x8000,                 // lis r6,0x8000
+            (32 << 26) | (7 << 21) | (6 << 16) | 0x00E4,     // lwz r7,0xE4(r6)    RAM
+            (15 << 26) | (8 << 21) | 0xCC01,                 // lis r8,0xCC01
+            (36 << 26) | (9 << 21) | (8 << 16) | 0x8000,     // stw r9,-0x8000(r8) WGPIPE
+            0x4E80_0020,
+        ];
+        let bytes = words
+            .iter()
+            .flat_map(|word| word.to_be_bytes())
+            .collect::<Vec<_>>();
+        let flat = lower_words_with_config(
+            0x8000_4000,
+            &bytes,
+            &BTreeSet::new(),
+            &BTreeSet::new(),
+            LoweringConfig {
+                flat_ram_reads: true,
+                flat_ram_writes: true,
+                ..LoweringConfig::default()
+            },
+        )
+        .unwrap();
+        assert!(flat.contains(
+            "galaxy::guest_load_u16(memory, context->gpr[3] + 0x00005000u, services, 0x80004004u)"
+        ));
+        assert!(flat.contains(
+            "galaxy::guest_load_u32(memory, context->gpr[4] + 0x00000004u, services, 0x8000400Cu)"
+        ));
+        assert!(flat.contains(
+            "galaxy::guest_store_u32(memory, context->gpr[3] + 0x00003000u, context->gpr[5], services, 0x80004010u)"
+        ));
+        assert!(flat.contains(
+            "galaxy::guest_load_flat_or_checked_u32(flat_guest_read_base, memory, context->gpr[6] + 0x000000E4u, services, 0x80004018u)"
+        ));
+        assert!(flat.contains(
+            "galaxy::fast::store<std::uint32_t>(flat_guest_base, memory, context->gpr[8]"
+        ));
+        assert_eq!(flat.matches("guest_load_flat_or_checked_").count(), 1);
+        assert_eq!(flat.matches("galaxy::fast::store<").count(), 1);
     }
 
     #[test]
@@ -17342,6 +17578,7 @@ extern \"C\" const galaxy::GameModuleManifestV1* galaxy_module_manifest() {
             .contents
             .starts_with("#pragma once
 #define GALAXY_FAST_FLOAT 1
+#define GALAXY_FASTMEM 1
 
 #include \"galaxy/native_api.h\""));
         assert_eq!(files[1].contents, "#include \"functions.h\"
@@ -17351,9 +17588,14 @@ extern \"C\" const galaxy::GameModuleManifestV1* galaxy_module_manifest() {
             "extern \"C\" std::uint32_t galaxy_module_float_flags() {
     return galaxy::kModuleFloatFlagFastFloat;
 }
+
+extern \"C\" std::uint32_t galaxy_module_transfer_flags() {
+    return galaxy::kModuleTransferFlagFlagReturn;
+}
 "
         ));
         assert!(files[3].contents.starts_with("#define GALAXY_FAST_FLOAT 1
+#define GALAXY_FASTMEM 1
 #include"));
         // Idempotent.
         let again = files.clone();

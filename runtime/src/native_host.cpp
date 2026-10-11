@@ -1096,7 +1096,7 @@ std::optional<std::filesystem::path> get_env_path(const wchar_t* name) {
     return std::filesystem::path(buffer);
 }
 
-bool read_env_flag(const char* name, bool default_value = false) {
+bool read_env_flag_uncached(const char* name, bool default_value) {
     char buffer[32]{};
     std::size_t length = 0;
     if (getenv_s(&length, buffer, sizeof(buffer), name) != 0 ||
@@ -1105,6 +1105,42 @@ bool read_env_flag(const char* name, bool default_value = false) {
     }
     return buffer[0] != '0' && buffer[0] != 'f' && buffer[0] != 'F' &&
            buffer[0] != 'n' && buffer[0] != 'N';
+}
+
+// Literal name pointers identify flags; repeated reads are a few loads. The
+// cache is enabled once the runtime has finished configuring (tests toggle
+// variables between address spaces and must keep seeing live values).
+struct EnvFlagCacheSlot {
+    std::atomic<const char*> name{nullptr};
+    std::atomic<int> value{0};
+};
+EnvFlagCacheSlot g_env_flag_cache[256];
+std::atomic<bool> g_env_flag_cache_enabled{false};
+
+bool read_env_flag(const char* name, bool default_value = false) {
+    if (!g_env_flag_cache_enabled.load(std::memory_order_acquire)) {
+        return read_env_flag_uncached(name, default_value);
+    }
+    const auto key = reinterpret_cast<std::uintptr_t>(name);
+    std::size_t index = static_cast<std::size_t>((key >> 3u) ^ (key >> 13u)) & 255u;
+    for (std::size_t probe = 0; probe < 8u; ++probe, index = (index + 1u) & 255u) {
+        EnvFlagCacheSlot& slot = g_env_flag_cache[index];
+        const char* const owner = slot.name.load(std::memory_order_acquire);
+        if (owner == name) {
+            const int value = slot.value.load(std::memory_order_acquire);
+            if (value != 0) return value > 0;
+            break;
+        }
+        if (owner == nullptr) {
+            const bool result = read_env_flag_uncached(name, default_value);
+            const char* expected = nullptr;
+            if (slot.name.compare_exchange_strong(expected, name, std::memory_order_acq_rel)) {
+                slot.value.store(result ? 1 : -1, std::memory_order_release);
+            }
+            return result;
+        }
+    }
+    return read_env_flag_uncached(name, default_value);
 }
 
 thread_local NativeInputPollBreakdown s_input_poll_breakdown{};
@@ -6366,11 +6402,22 @@ NativeHidControllerState poll_native_hid_controller() {
     bool have_first_connected = false;
     const std::int16_t left_deadzone = xinput_left_deadzone();
     const std::int16_t pointer_deadzone = xinput_pointer_deadzone();
+    // XInputGetState on a slot with no controller enumerates devices and
+    // costs hundreds of microseconds (p50 274 us, p90 913 us per 10 ms report
+    // in a keyboard-and-mouse session). A failed slot is retried every two
+    // seconds instead of on every report, as XInput's own documentation advises.
+    static ULONGLONG s_slot_retry_at[XUSER_MAX_COUNT]{};
+    const ULONGLONG now_ms = GetTickCount64();
     for (DWORD slot = 0; slot < XUSER_MAX_COUNT; ++slot) {
-        XINPUT_STATE state{};
-        if (XInputGetState(slot, &state) != ERROR_SUCCESS) {
+        if (now_ms < s_slot_retry_at[slot]) {
             continue;
         }
+        XINPUT_STATE state{};
+        if (XInputGetState(slot, &state) != ERROR_SUCCESS) {
+            s_slot_retry_at[slot] = now_ms + 2000u;
+            continue;
+        }
+        s_slot_retry_at[slot] = 0u;
         NativeHidControllerState controller{};
         controller.connected = true;
         controller.slot = slot;
@@ -9855,13 +9902,255 @@ struct GuestAddressSpace::AsyncNandState {
     bool shutting_down{};
 };
 
+// One FIFO of /dev/di reads. The worker copies each request from the mapped
+// game.pak into guest RAM (taking the page faults there), then marks it done
+// and wakes the simulation thread, which publishes the dirty range and the
+// IPC reply in request order. The DVD driver issues one command at a time, so
+// the queue is normally one deep; its order is still the guest's order.
+struct GuestAddressSpace::AsyncDiscState {
+    struct Job {
+        std::uint32_t request{};
+        std::uint32_t destination{};
+        std::uint64_t offset{};
+        std::uint32_t size{};
+        bool ioctlv{};
+        std::uint64_t copy_us{};
+    };
+    explicit AsyncDiscState(const GuestAddressSpace& owner) : owner_(owner) {
+        prefetch_bytes_ = read_env_u64_setting("GALAXY_DISC_PREFETCH_BYTES", 4u * 1024u * 1024u);
+        thread_ = std::thread([this] { run(); });
+    }
+    ~AsyncDiscState() { shutdown(); }
+
+    void submit(Job job) {
+        std::lock_guard lock(mutex_);
+        ++submitted_;
+        queue_.push_back(job);
+        condition_.notify_one();
+    }
+    bool completion_pending() const noexcept {
+        return ready_.load(std::memory_order_acquire);
+    }
+    std::deque<Job> take_completed() {
+        std::lock_guard lock(mutex_);
+        std::deque<Job> result;
+        result.swap(done_);
+        ready_.store(false, std::memory_order_release);
+        return result;
+    }
+    void set_wake(void (*wake)(void*) noexcept, void* user) noexcept {
+        std::lock_guard lock(mutex_);
+        wake_ = wake;
+        wake_user_ = user;
+        if (wake_ != nullptr && ready_.load(std::memory_order_relaxed)) wake_(wake_user_);
+    }
+    void shutdown() {
+        {
+            std::lock_guard lock(mutex_);
+            stopping_ = true;
+            wake_ = nullptr;
+            wake_user_ = nullptr;
+        }
+        condition_.notify_one();
+        if (thread_.joinable()) thread_.join();
+    }
+    std::uint64_t submitted() const noexcept { return submitted_; }
+    std::uint64_t completed() const noexcept { return completed_; }
+    std::uint64_t bytes() const noexcept { return bytes_; }
+    std::uint64_t copy_total_us() const noexcept { return copy_total_us_; }
+    std::uint64_t copy_max_us() const noexcept { return copy_max_us_; }
+    std::exception_ptr failure() {
+        std::lock_guard lock(mutex_);
+        return failure_;
+    }
+    void wait_idle() {
+        std::unique_lock lock(mutex_);
+        idle_condition_.wait(lock, [&] { return queue_.empty() && !busy_; });
+    }
+
+private:
+    void run() noexcept {
+        (void)SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_ABOVE_NORMAL);
+        for (;;) {
+            Job job;
+            {
+                std::unique_lock lock(mutex_);
+                condition_.wait(lock, [&] { return stopping_ || !queue_.empty(); });
+                if (stopping_) return;
+                job = queue_.front();
+                queue_.pop_front();
+                busy_ = true;
+            }
+            const auto started = std::chrono::steady_clock::now();
+            std::exception_ptr failure;
+            try {
+                owner_.copy_disc_bytes_raw(job.destination, job.offset, job.size);
+            } catch (...) {
+                failure = std::current_exception();
+            }
+            job.copy_us = static_cast<std::uint64_t>(
+                std::chrono::duration_cast<std::chrono::microseconds>(
+                    std::chrono::steady_clock::now() - started).count());
+            prefetch_after(job.offset + job.size);
+            {
+                std::lock_guard lock(mutex_);
+                ++completed_;
+                bytes_ += job.size;
+                copy_total_us_ += job.copy_us;
+                copy_max_us_ = std::max(copy_max_us_, job.copy_us);
+                if (failure && !failure_) failure_ = failure;
+                done_.push_back(job);
+                ready_.store(true, std::memory_order_release);
+                busy_ = false;
+                if (wake_ != nullptr) wake_(wake_user_);
+            }
+            idle_condition_.notify_all();
+        }
+    }
+    // Streaming reads (BGM, cutscene, archives) are sequential; ask the memory
+    // manager for the next span now so the following request is a cache hit.
+    void prefetch_after(std::uint64_t offset) noexcept {
+        if (prefetch_bytes_ == 0u || owner_.pak_view_ == nullptr ||
+            offset >= owner_.pak_size_) {
+            return;
+        }
+        const std::uint64_t length =
+            std::min<std::uint64_t>(prefetch_bytes_, owner_.pak_size_ - offset);
+        WIN32_MEMORY_RANGE_ENTRY range{};
+        range.VirtualAddress = const_cast<std::byte*>(owner_.pak_view_ + offset);
+        range.NumberOfBytes = static_cast<SIZE_T>(length);
+        (void)PrefetchVirtualMemory(GetCurrentProcess(), 1u, &range, 0u);
+    }
+
+    const GuestAddressSpace& owner_;
+    std::mutex mutex_;
+    std::condition_variable condition_;
+    std::condition_variable idle_condition_;
+    std::deque<Job> queue_;
+    std::deque<Job> done_;
+    std::atomic<bool> ready_{false};
+    bool busy_ = false;
+    bool stopping_ = false;
+    void (*wake_)(void*) noexcept = nullptr;
+    void* wake_user_ = nullptr;
+    std::exception_ptr failure_;
+    std::uint64_t prefetch_bytes_ = 0;
+    std::uint64_t submitted_ = 0;
+    std::uint64_t completed_ = 0;
+    std::uint64_t bytes_ = 0;
+    std::uint64_t copy_total_us_ = 0;
+    std::uint64_t copy_max_us_ = 0;
+    std::thread thread_;
+};
+
+bool GuestAddressSpace::submit_async_disc_read(
+    std::uint32_t physical_request, std::uint32_t guest_dest,
+    std::uint64_t disc_offset, std::uint32_t size, bool ioctlv) {
+    if (!async_disc_) return false;
+    AsyncDiscState::Job job{};
+    job.request = physical_request;
+    job.destination = guest_dest;
+    job.offset = disc_offset;
+    job.size = size;
+    job.ioctlv = ioctlv;
+    async_disc_->submit(job);
+    return true;
+}
+
+void GuestAddressSpace::service_async_disc_completions() {
+    if (!async_disc_ || !async_disc_->completion_pending()) return;
+    if (auto failure = async_disc_->failure()) std::rethrow_exception(failure);
+    for (const auto& job : async_disc_->take_completed()) {
+        notify_guest_write(job.destination, job.size);
+        note_disc_read_for_scene_hint(job.offset, job.size);
+        if (trace_di_io()) {
+            const DiscReadTicket ticket = make_disc_read_ticket(
+                job.request, job.destination, job.offset, job.size, job.ioctlv);
+            remember_disc_read_ticket(ticket);
+            std::cout << "[di-read-copy] seq=" << ticket.sequence
+                      << " req=0x" << std::hex << ticket.request
+                      << " dst=0x" << ticket.destination
+                      << " off=0x" << ticket.disc_offset
+                      << " len=0x" << ticket.size
+                      << " srcHash=0x" << ticket.source_hash
+                      << " dstHash=0x" << ticket.destination_hash
+                      << " match=" << std::dec
+                      << (ticket.destination_matches_source ? 1 : 0)
+                      << " ioctlv=" << (job.ioctlv ? 1 : 0)
+                      << " async-copy-us=" << job.copy_us << '\n';
+        }
+        reply_ios_request(job.request, kDiResultTransferComplete);
+    }
+}
+
+void GuestAddressSpace::wait_for_async_disc_reads() {
+    if (!async_disc_) return;
+    async_disc_->wait_idle();
+    service_async_disc_completions();
+}
+
+namespace {
+std::mutex g_live_address_spaces_mutex;
+std::vector<GuestAddressSpace*> g_live_address_spaces;
+}  // namespace
+
+void set_env_flag_cache_enabled(bool enabled) noexcept {
+    g_env_flag_cache_enabled.store(enabled, std::memory_order_release);
+}
+
+GuestAddressSpace* GuestAddressSpace::owner_of(const GuestMemoryV1* memory) noexcept {
+    if (memory == nullptr) return nullptr;
+    const std::lock_guard<std::mutex> lock(g_live_address_spaces_mutex);
+    for (GuestAddressSpace* owner : g_live_address_spaces) {
+        if (owner->guest_memory() == memory) return owner;
+    }
+    return nullptr;
+}
+
+void GuestAddressSpace::finish_async_disc_shutdown() {
+    if (!async_disc_) return;
+    async_disc_->shutdown();
+    std::osyncstream(std::cout)
+        << "[async-disc-audit] enabled=1 submitted=" << async_disc_->submitted()
+        << " completed=" << async_disc_->completed()
+        << " bytes=" << async_disc_->bytes()
+        << " copy-total-us=" << async_disc_->copy_total_us()
+        << " copy-max-us=" << async_disc_->copy_max_us() << '\n';
+}
+
+bool GuestAddressSpace::fault_access(
+    std::uint32_t address, std::uint32_t size, bool write,
+    std::byte* image) noexcept {
+    try {
+        if (write) {
+            if (write_device(address, size, image)) return true;
+            if (std::byte* region = pointer_or_null(address, size)) {
+                std::memcpy(region, image, size);
+                notify_guest_write(address, size);
+                return true;
+            }
+            return false;
+        }
+        if (read_device(address, size, image)) return true;
+        if (const std::byte* region = pointer_or_null(address, size)) {
+            std::memcpy(image, region, size);
+            return true;
+        }
+        return false;
+    } catch (...) {
+        return false;
+    }
+}
+
 void GuestAddressSpace::set_native_ios_completion_wake_callback(
     void (*callback)(void*) noexcept, void* user) noexcept {
     if (async_nand_) async_nand_->worker.set_wake(callback, user);
+    if (async_disc_) async_disc_->set_wake(callback, user);
 }
 
 bool GuestAddressSpace::native_ios_completion_pending() const noexcept {
-    return async_nand_ && async_nand_->worker.completion_pending();
+    return (async_nand_ && async_nand_->worker.completion_pending()) ||
+           (async_disc_ && async_disc_->completion_pending());
 }
 
 bool GuestAddressSpace::defer_native_ios_filesystem_request(std::uint32_t request) {
@@ -9986,6 +10275,7 @@ bool GuestAddressSpace::begin_native_nand_write(
 }
 
 void GuestAddressSpace::service_native_ios_completions() {
+    service_async_disc_completions();
     if (!async_nand_ || async_nand_->draining) return;
     auto& state = *async_nand_;
     if (!state.worker.completion_pending()) return;
@@ -10047,6 +10337,7 @@ void GuestAddressSpace::service_native_ios_completions() {
 }
 
 void GuestAddressSpace::finish_native_ios_shutdown() {
+    finish_async_disc_shutdown();
     if (!async_nand_) return;
     auto& state = *async_nand_;
     state.worker.set_wake(nullptr, nullptr);
@@ -10105,6 +10396,12 @@ GuestAddressSpace::GuestAddressSpace(
     native_ios_anomalies_ = std::make_unique<NativeIosAnomalyLedger>();
     if (read_env_flag("GALAXY_ASYNC_NAND_WRITES", true))
         async_nand_ = std::make_unique<AsyncNandState>();
+    if (read_env_flag("GALAXY_ASYNC_DISC_READS", true))
+        async_disc_ = std::make_unique<AsyncDiscState>(*this);
+    {
+        const std::lock_guard<std::mutex> lock(g_live_address_spaces_mutex);
+        g_live_address_spaces.push_back(this);
+    }
     // Only the opt-in simulation-thread PE scanner consumes these hints.
     // The normal renderer parses FIFO boundaries and publishes real fence
     // completions independently, so it needs no per-byte hint maintenance.
@@ -10181,13 +10478,11 @@ GuestAddressSpace::GuestAddressSpace(
     // Publish the live gather buffer only when no diagnostic observes
     // individual gather-pipe writes; every such flag routes generated stores
     // back through write_device, where those observers live.
-    if (!wgpipe_pe_scan_hint_enabled_ && !wgpipe_pe_ownership_trace_enabled_ &&
+    wgpipe_fast_allowed_ =
+        !wgpipe_pe_scan_hint_enabled_ && !wgpipe_pe_ownership_trace_enabled_ &&
         !wgpipe_profile_enabled_ && !direct_wgpipe_pe_events_ &&
-        !trace_gx_fifo_append_enabled_) {
-        memory_.wgpipe_gather_fast = wgpipe_gather_.data();
-        memory_.wgpipe_gather_count_fast = &wgpipe_gather_count_;
-        memory_.wgpipe_flush = &GuestAddressSpace::wgpipe_flush_callback;
-    }
+        !trace_gx_fifo_append_enabled_;
+    refresh_wgpipe_fast_publication();
     initialize_devices();
     dsp_dusk_hle_enabled_ = read_env_flag("GALAXY_DUSK_DSP_HLE", false);
     if (dsp_dusk_hle_enabled_) {
@@ -10239,6 +10534,12 @@ GuestAddressSpace::GuestAddressSpace(
 }
 
 GuestAddressSpace::~GuestAddressSpace() {
+    {
+        const std::lock_guard<std::mutex> lock(g_live_address_spaces_mutex);
+        g_live_address_spaces.erase(
+            std::remove(g_live_address_spaces.begin(), g_live_address_spaces.end(), this),
+            g_live_address_spaces.end());
+    }
     if (read_env_flag("GALAXY_TRACE_BOOT_LOG")) {
         std::cerr << "[boot] GuestAddressSpace destructor begin\n";
     }
@@ -10993,14 +11294,81 @@ void GuestAddressSpace::trace_gx_fifo_append(
     }
 }
 
+void GuestAddressSpace::refresh_wgpipe_fast_publication() noexcept {
+    const bool allow = wgpipe_fast_allowed_ && wgpipe_feeds_live_fifo();
+    memory_.wgpipe_gather_fast = allow ? wgpipe_gather_.data() : nullptr;
+    memory_.wgpipe_gather_count_fast = allow ? &wgpipe_gather_count_ : nullptr;
+    memory_.wgpipe_flush = allow ? &GuestAddressSpace::wgpipe_flush_callback : nullptr;
+}
+
 bool GuestAddressSpace::wgpipe_flush_callback(void* user) {
     auto* const self = static_cast<GuestAddressSpace*>(user);
-    if (self == nullptr || self->wgpipe_gather_count_ != kGatherPipeBurstSize) {
+    if (self == nullptr || self->wgpipe_gather_count_ < kGatherPipeBurstSize) {
         return false;
     }
-    self->flush_wgpipe_gather_burst(self->wgpipe_gather_);
-    self->wgpipe_gather_count_ = 0;
+    self->drain_wgpipe_gather_bursts();
     return true;
+}
+
+void GuestAddressSpace::drain_wgpipe_gather_bursts() {
+    const std::uint32_t count = wgpipe_gather_count_;
+    if (count < kGatherPipeBurstSize) {
+        return;
+    }
+    const std::uint32_t complete = count & ~(kGatherPipeBurstSize - 1u);
+    const bool live_fifo = wgpipe_feeds_live_fifo();
+    const bool cpu_fifo_valid =
+        cpu_fifo_base_ < kMem1Size &&
+        cpu_fifo_top_ < kMem1Size &&
+        cpu_fifo_top_ >= cpu_fifo_base_ &&
+        cpu_fifo_top_ + kGatherPipeBurstSize <= kMem1Size;
+    if (cpu_fifo_valid) {
+        if (cpu_fifo_wr_ptr_ < cpu_fifo_base_ ||
+            cpu_fifo_wr_ptr_ > cpu_fifo_top_ ||
+            ((cpu_fifo_wr_ptr_ - cpu_fifo_base_) &
+             (kGatherPipeBurstSize - 1u)) != 0u) {
+            cpu_fifo_wr_ptr_ = cpu_fifo_base_;
+        }
+        // Bursts land in the ring in order; a run ends at the wrap. The ring
+        // top is the last burst's address, so the run may include it.
+        std::uint32_t offset = 0u;
+        while (offset < complete) {
+            const std::uint32_t until_wrap =
+                cpu_fifo_top_ + kGatherPipeBurstSize - cpu_fifo_wr_ptr_;
+            const std::uint32_t run = std::min(complete - offset, until_wrap);
+            std::memcpy(mem1_view_.data() + cpu_fifo_wr_ptr_,
+                        wgpipe_gather_.data() + offset, run);
+            // The gather pipe bypasses the data cache: a display list recorded
+            // through it is in RAM at once, so publish the run like a DMA write.
+            notify_guest_write(cpu_fifo_wr_ptr_, run);
+            cpu_fifo_wr_ptr_ += run;
+            if (cpu_fifo_wr_ptr_ > cpu_fifo_top_) {
+                cpu_fifo_wr_ptr_ = cpu_fifo_base_;
+                cpu_fifo_wrap_ = true;
+            }
+            offset += run;
+        }
+        const std::uint32_t pi_write =
+            (cpu_fifo_wr_ptr_ & kFifoAddressMask) |
+            (cpu_fifo_wrap_ ? kPiCpWrapMask : 0u);
+        write_storage_be32(broadway_registers_, kPiCpWrite, pi_write);
+    }
+    if (live_fifo) {
+        const std::size_t append_start = gx_fifo_.size();
+        gx_fifo_.insert(gx_fifo_.end(), wgpipe_gather_.begin(),
+                        wgpipe_gather_.begin() + static_cast<std::ptrdiff_t>(complete));
+        if (trace_gx_fifo_append_enabled_) {
+            trace_gx_fifo_append("wgpipe-burst", append_start, complete);
+        }
+    }
+    if (wgpipe_profile_enabled_) {
+        record_wgpipe_flush(complete, live_fifo);
+    }
+    const std::uint32_t tail = count - complete;
+    if (tail != 0u) {
+        std::memmove(wgpipe_gather_.data(), wgpipe_gather_.data() + complete, tail);
+    }
+    wgpipe_gather_count_ = tail;
 }
 
 void GuestAddressSpace::flush_wgpipe_gather_burst(
@@ -11061,6 +11429,7 @@ void GuestAddressSpace::flush_wgpipe_gather_burst(
 }
 
 void GuestAddressSpace::flush_wgpipe_gather_tail_for_frame() {
+    drain_wgpipe_gather_bursts();
     if (wgpipe_gather_count_ == 0) {
         return;
     }
@@ -11216,7 +11585,7 @@ bool GuestAddressSpace::write_wgpipe_bytes(std::span<const std::byte> bytes) {
     std::span<const std::byte> remaining = bytes;
     while (!remaining.empty()) {
         const std::size_t gather_space =
-            kGatherPipeBurstSize - wgpipe_gather_count_;
+            kWgpipeGatherFastBytes - wgpipe_gather_count_;
         const std::size_t chunk_size =
             std::min(gather_space, remaining.size());
         std::byte* const destination =
@@ -11235,9 +11604,14 @@ bool GuestAddressSpace::write_wgpipe_bytes(std::span<const std::byte> bytes) {
         }
         wgpipe_gather_count_ += static_cast<std::uint32_t>(chunk_size);
         remaining = remaining.subspan(chunk_size);
-        if (wgpipe_gather_count_ == kGatherPipeBurstSize) {
-            flush_wgpipe_gather_burst(wgpipe_gather_);
-            wgpipe_gather_count_ = 0;
+        // Live FIFO: one host pass per buffer. Memory-backed FIFO (display
+        // list recording) and diagnostic observers: every burst as it fills.
+        const std::uint32_t flush_at =
+            wgpipe_fast_allowed_ && wgpipe_feeds_live_fifo()
+                ? kWgpipeGatherFastBytes
+                : kGatherPipeBurstSize;
+        if (wgpipe_gather_count_ >= flush_at) {
+            drain_wgpipe_gather_bursts();
         }
     }
 
@@ -11735,6 +12109,19 @@ void GuestAddressSpace::copy_disc_bytes(
     std::uint32_t guest_dest,
     std::uint64_t disc_offset,
     std::uint32_t size) {
+    copy_disc_bytes_raw(guest_dest, disc_offset, size);
+    notify_guest_write(guest_dest, size);
+}
+
+void GuestAddressSpace::copy_disc_bytes_raw(
+    std::uint32_t guest_dest,
+    std::uint64_t disc_offset,
+    std::uint32_t size) const {
+    const auto copy = [this](std::uint32_t address, std::span<const std::byte> source) {
+        const auto count = static_cast<std::uint32_t>(source.size());
+        const std::byte* destination = pointer(address, count);
+        std::memcpy(const_cast<std::byte*>(destination), source.data(), source.size());
+    };
     if (!disc_read_in_range(disc_offset, size)) {
         std::ostringstream message;
         message << "disc read out of range: offset=0x" << std::hex
@@ -12237,6 +12624,11 @@ bool GuestAddressSpace::read_device(
             std::memset(output, 0, size);
             return true;
         }
+        // CP/PE/VI/PI registers observe the FIFO: staged bursts land first.
+        if ((hi == 0x0C000000u || hi == 0xCC000000u) &&
+            (address & 0x00FFC000u) == 0u) {
+            drain_wgpipe_gather_bursts();
+        }
     }
     if (broadway_register_access_overlaps(
             address, size, 0x6000u, 0x28u)) {
@@ -12361,8 +12753,27 @@ bool GuestAddressSpace::read_device(
             dsp_native_pump();
             if (dsp_native_ != nullptr && offset == kDspMailboxToHighOffset &&
                 size == 2u) {
-                const std::uint16_t native_high =
+                // The DSP driver spins on this bit until the coprocessor takes
+                // the mail. Under fastmem every spin iteration is a fault, so
+                // wait here, briefly, for the worker instead of returning a
+                // still-busy slot fifty times (3.8 million such reads in a
+                // two-minute session).
+                std::uint16_t native_high =
                     dsp_native_->cpu_peek_to_dsp_mailbox_high();
+                if ((native_high & kDspMailboxReady) != 0u) {
+                    const auto wait_started = std::chrono::steady_clock::now();
+                    for (unsigned spin = 0; (native_high & kDspMailboxReady) != 0u; ++spin) {
+                        if ((spin & 63u) == 63u) {
+                            dsp_native_pump();
+                            if (std::chrono::steady_clock::now() - wait_started >
+                                std::chrono::microseconds(200)) {
+                                break;
+                            }
+                        }
+                        YieldProcessor();
+                        native_high = dsp_native_->cpu_peek_to_dsp_mailbox_high();
+                    }
+                }
                 const std::uint16_t native_low =
                     dsp_native_->cpu_peek_to_dsp_mailbox_low();
                 const bool staged_visible =
@@ -12579,7 +12990,6 @@ bool GuestAddressSpace::write_device(
     std::uint32_t address,
     std::uint32_t size,
     const std::byte* input) {
-    std::uint32_t offset = 0;
     if (input == nullptr) {
         return false;
     }
@@ -12595,7 +13005,27 @@ bool GuestAddressSpace::write_device(
             (address & 0x00FFF000u) == 0x00008000u) {
             return write_wgpipe_bytes(std::span<const std::byte>(input, size));
         }
+        // CP/PE/VI/PI register writes (FIFO base/top/pointer changes,
+        // display-list redirection) apply after the staged bursts landed,
+        // and the live gather publication follows the new FIFO ownership.
+        if ((hi == 0x0C000000u || hi == 0xCC000000u) &&
+            (address & 0x00FFC000u) == 0u) {
+            drain_wgpipe_gather_bursts();
+            struct Republish {
+                GuestAddressSpace* self;
+                ~Republish() { self->refresh_wgpipe_fast_publication(); }
+            } republish{this};
+            return write_device_register(address, size, input);
+        }
     }
+    return write_device_register(address, size, input);
+}
+
+bool GuestAddressSpace::write_device_register(
+    std::uint32_t address,
+    std::uint32_t size,
+    const std::byte* input) {
+    std::uint32_t offset = 0;
     if (broadway_register_access_overlaps(
             address, size, 0x6000u, 0x28u)) {
         reject_legacy_direct_di_access("write", address, size);
@@ -14450,6 +14880,11 @@ bool GuestAddressSpace::handle_di_ioctl(
         if (!require_output(byte_count, "Read")) {
             return true;
         }
+        if (byte_count > 0u &&
+            submit_async_disc_read(
+                physical_request, out_buf, byte_offset, byte_count, false)) {
+            return true;
+        }
         if (byte_count > 0u) {
             copy_disc_bytes(out_buf, byte_offset, byte_count);
             note_disc_read_for_scene_hint(byte_offset, byte_count);
@@ -14618,6 +15053,11 @@ bool GuestAddressSpace::handle_di_ioctlv(
                       << byte_offset << " len 0x" << byte_count
                       << " pak_size 0x" << pak_size_ << std::dec << '\n';
             reply_ios_request(physical_request, kDiResultDriveError);
+            return true;
+        }
+        if (byte_count > 0u &&
+            submit_async_disc_read(
+                physical_request, out_buf, byte_offset, byte_count, true)) {
             return true;
         }
         if (byte_count > 0u) {

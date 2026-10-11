@@ -13,6 +13,8 @@
 #include <limits>
 #include <stdexcept>
 #include <system_error>
+#include <intrin.h>
+#include <algorithm>
 #include <utility>
 
 namespace galaxy::timing {
@@ -26,6 +28,22 @@ std::uint64_t read_query_performance_counter(void*) noexcept {
         return 0;
     }
     return static_cast<std::uint64_t>(value.QuadPart);
+}
+
+constexpr unsigned kTscDivisorShift = 3u;
+
+std::uint64_t read_time_stamp_counter(void*) noexcept {
+    return __rdtsc() >> kTscDivisorShift;
+}
+
+bool processor_reports_invariant_tsc() noexcept {
+    int registers[4]{};
+    __cpuid(registers, 0x80000000);
+    if (static_cast<unsigned>(registers[0]) < 0x80000007u) {
+        return false;
+    }
+    __cpuid(registers, 0x80000007);
+    return (static_cast<unsigned>(registers[3]) & (1u << 8u)) != 0u;
 }
 
 std::uint64_t saturating_add(
@@ -347,6 +365,55 @@ CounterSource query_performance_counter_source() {
         unsigned_frequency};
 }
 
+std::optional<CounterSource> invariant_tsc_counter_source(unsigned calibration_ms) {
+    if (!processor_reports_invariant_tsc()) {
+        return std::nullopt;
+    }
+    LARGE_INTEGER frequency{};
+    if (QueryPerformanceFrequency(&frequency) == FALSE || frequency.QuadPart <= 0) {
+        return std::nullopt;
+    }
+    const auto qpc = [] {
+        LARGE_INTEGER value{};
+        QueryPerformanceCounter(&value);
+        return static_cast<std::uint64_t>(value.QuadPart);
+    };
+    const std::uint64_t qpc_window =
+        static_cast<std::uint64_t>(frequency.QuadPart) * std::max(calibration_ms, 1u) / 1000u;
+    const std::uint64_t qpc_begin = qpc();
+    const std::uint64_t tsc_begin = __rdtsc();
+    std::uint64_t qpc_end = qpc_begin;
+    while (qpc_end - qpc_begin < qpc_window) {
+        YieldProcessor();
+        qpc_end = qpc();
+    }
+    const std::uint64_t tsc_end = __rdtsc();
+    const std::uint64_t qpc_elapsed = qpc_end - qpc_begin;
+    const std::uint64_t tsc_elapsed = tsc_end - tsc_begin;
+    if (qpc_elapsed == 0u || tsc_elapsed == 0u || tsc_elapsed > (std::uint64_t{1} << 40u)) {
+        return std::nullopt;
+    }
+    // tsc_hz = tsc_elapsed * qpf / qpc_elapsed, in 128-bit arithmetic.
+    std::uint64_t high = 0u;
+    const std::uint64_t low = _umul128(
+        tsc_elapsed, static_cast<std::uint64_t>(frequency.QuadPart), &high);
+    if (high >= qpc_elapsed) {
+        return std::nullopt;
+    }
+    std::uint64_t remainder = 0u;
+    const std::uint64_t tsc_hz = _udiv128(high, low, qpc_elapsed, &remainder);
+    const std::uint64_t source_hz = tsc_hz >> kTscDivisorShift;
+    if (source_hz <= kTimelineTicksPerSecond ||
+        source_hz > kMaximumSupportedCounterFrequency) {
+        return std::nullopt;
+    }
+    CounterSource source{};
+    source.read = &read_time_stamp_counter;
+    source.user = nullptr;
+    source.frequency = source_hz;
+    return source;
+}
+
 std::uint64_t scale_counter_delta(
     std::uint64_t counter_delta,
     std::uint64_t counter_frequency,
@@ -406,6 +473,14 @@ RuntimeTimeline::RuntimeTimeline(
     }
     epoch_counter_ = source_.read(source_.user);
     last_counter_.store(epoch_counter_, std::memory_order_release);
+    if (source_.frequency != 10'000'000ull &&
+        source_.frequency > kTimelineTicksPerSecond) {
+        // floor(ticks_per_second * 2^64 / frequency): exact to one tick for
+        // any delta below 2^64 counter units, monotone in the delta.
+        std::uint64_t remainder = 0u;
+        scale_fixed64_ = _udiv128(
+            kTimelineTicksPerSecond, 0u, source_.frequency, &remainder);
+    }
 }
 
 std::uint64_t RuntimeTimeline::now_ticks(std::uint64_t* sampled_counter) noexcept {
@@ -431,8 +506,15 @@ std::uint64_t RuntimeTimeline::now_ticks(std::uint64_t* sampled_counter) noexcep
             ? monotonic_counter - epoch_counter_
             : 0;
     bool conversion_saturated = false;
-    const std::uint64_t scaled = scale_counter_delta(
-        delta, source_.frequency, &conversion_saturated);
+    std::uint64_t scaled = 0u;
+    if (scale_fixed64_ != 0u) {
+        std::uint64_t high = 0u;
+        (void)_umul128(delta, scale_fixed64_, &high);
+        scaled = high;
+    } else {
+        scaled = scale_counter_delta(
+            delta, source_.frequency, &conversion_saturated);
+    }
     bool add_saturated = conversion_saturated;
     const std::uint64_t host_candidate =
         saturating_add(epoch_ticks_, scaled, add_saturated);
@@ -780,10 +862,21 @@ std::size_t PendingEventLatch::index(EventKind kind) noexcept {
     return value < kEventKindCount ? value : kEventKindCount;
 }
 
-// Any publication may unblock the simulation thread's idle-loop wait, which
-// sleeps on the mask word itself (WaitOnAddress); wake it after the bit lands.
+// Any publication may unblock the simulation thread's idle-loop wait; the
+// event is signaled only while that thread has announced it is waiting (see
+// set_idle_waiting), after the mask bit has landed.
+void PendingEventLatch::set_transfer_pending() noexcept {
+    mask_.fetch_or(event_bit(EventKind::Transfer), std::memory_order_release);
+}
+
+void PendingEventLatch::clear_transfer_pending() noexcept {
+    mask_.fetch_and(~event_bit(EventKind::Transfer), std::memory_order_release);
+}
+
 void PendingEventLatch::wake_idle_waiters() noexcept {
-    WakeByAddressAll(static_cast<void*>(&mask_));
+    if (!idle_waiting_.load(std::memory_order_seq_cst)) {
+        return;
+    }
     if (void* const event = idle_wake_event_.load(std::memory_order_acquire)) {
         SetEvent(static_cast<HANDLE>(event));
     }
@@ -1657,20 +1750,23 @@ void DeadlineBroker::schedule_once(
     EventKind kind,
     std::uint64_t deadline_ticks,
     std::optional<std::uint64_t> sequence) {
+    bool wake = true;
     {
         const std::lock_guard<std::mutex> lock(mutex_);
         if (stopping_) {
             throw std::runtime_error("deadline broker is stopping");
         }
         schedule_.schedule_once(kind, deadline_ticks, sequence);
+        wake = deadline_ticks < worker_wait_until_ticks_;
     }
-    notify_worker();
+    if (wake) notify_worker();
 }
 
 void DeadlineBroker::replace_once(
     EventKind kind,
     std::uint64_t deadline_ticks,
     std::uint64_t generation) {
+    bool wake = true;
     {
         const std::lock_guard<std::mutex> lock(mutex_);
         if (stopping_) {
@@ -1681,8 +1777,9 @@ void DeadlineBroker::replace_once(
         // mutex. Clearing here therefore linearizes replacement against both
         // scheduled and already-published older generations.
         latch_.clear_replaceable(kind);
+        wake = deadline_ticks < worker_wait_until_ticks_;
     }
-    notify_worker();
+    if (wake) notify_worker();
 }
 
 void DeadlineBroker::restore_replaceable_after_host_suspension(
@@ -1878,11 +1975,15 @@ void DeadlineBroker::worker_loop() noexcept {
                 if (due.empty()) {
                     const std::optional<std::uint64_t> next =
                         schedule_.next_deadline_ticks();
+                    worker_wait_until_ticks_ = next.has_value()
+                        ? *next
+                        : std::numeric_limits<std::uint64_t>::max();
                     if (next.has_value() && *next > now_ticks) {
                         wait_duration =
                             timeline_wait_duration(*next - now_ticks);
                     }
                 } else {
+                    worker_wait_until_ticks_ = 0u;
                     // Publication stays under `mutex_`: replace_once/cancel_once
                     // cannot return while an obsolete event is still in flight.
                     for (const DeadlineEvent& event : due) {

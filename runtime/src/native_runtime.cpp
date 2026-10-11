@@ -18,6 +18,7 @@
 #include "galaxy/ppc_float.h"
 #include "galaxy/psmtx_guard_trace.h"
 #include "galaxy/native_host.h"
+#include "galaxy/flat_guest_memory.h"
 #include "galaxy/dsp_timing_runtime.h"
 #include "galaxy/native_thp_video.h"
 #include "galaxy/native_thp_boundary_probe.h"
@@ -50,6 +51,7 @@
 #include <algorithm>
 #include <array>
 #include <atomic>
+#include <condition_variable>
 #include <bit>
 #include <cctype>
 #include <cmath>
@@ -139,7 +141,14 @@ private:
 // Wall-clock time alone cannot distinguish a guest thread that was executing
 // without reaching a service point from one descheduled by the host. Sample
 // current-thread CPU time only at bounded AI-DMA diagnostic boundaries.
+std::atomic<std::uint64_t> g_census_cpu_time_calls{0};
+std::atomic<std::uint64_t> g_census_cycle_calls{0};
+std::atomic<std::uint64_t> g_census_time_base_calls{0};
+std::atomic<std::uint64_t> g_census_guest_time_base_calls{0};
+std::atomic<std::uint64_t> g_census_checkpoint_bodies{0};
+
 std::uint64_t current_thread_cpu_time_100ns() noexcept {
+    g_census_cpu_time_calls.fetch_add(1u, std::memory_order_relaxed);
     FILETIME creation{};
     FILETIME exit{};
     FILETIME kernel{};
@@ -163,6 +172,7 @@ std::uint64_t current_thread_cpu_time_100ns() noexcept {
 // not converted into a duration because Windows does not promise a fixed
 // frequency for this API across every supported processor.
 std::uint64_t current_thread_cycle_count() noexcept {
+    g_census_cycle_calls.fetch_add(1u, std::memory_order_relaxed);
     ULONG64 cycles{};
     if (QueryThreadCycleTime(GetCurrentThread(), &cycles) == FALSE) {
         return 0u;
@@ -581,15 +591,141 @@ Function load_export(HMODULE module, const char* name) {
 }
 
 std::string hexadecimal(std::uint32_t value);
+struct RuntimeState;
+void join_native_thp_video_decode(RuntimeState& state);
+
+// ─── THP video decode-ahead ──────────────────────────────────────────────────
+// THPSimplePlayerWrapper::videoDecode hands the frame's JPEG payload to one
+// worker and returns at once; the decoded planes land in guest RAM when the
+// simulation thread joins the job, which it does before every GX frame
+// submission (the planes are only ever read by the renderer) and before the
+// next decode. The decode overlaps the game's own frame work instead of
+// stalling it. GALAXY_NATIVE_THP_ASYNC_DECODE=0 restores the inline decode.
+class NativeThpAsyncDecoder {
+public:
+    struct Job {
+        std::vector<std::uint8_t> source;
+        std::uint16_t width{};
+        std::uint16_t height{};
+        std::array<std::uint32_t, 3> sizes{};
+        std::array<std::uint32_t, 3> addresses{};
+        std::array<std::vector<std::uint8_t>, 3> planes;
+        std::int32_t status{};
+        std::uint64_t decode_us{};
+    };
+    ~NativeThpAsyncDecoder() {
+        {
+            std::lock_guard lock(mutex_);
+            stopping_ = true;
+        }
+        condition_.notify_all();
+        if (worker_.joinable()) worker_.join();
+    }
+    std::unique_ptr<Job> acquire_job() {
+        std::lock_guard lock(mutex_);
+        if (spare_) return std::move(spare_);
+        return std::make_unique<Job>();
+    }
+    void submit(std::unique_ptr<Job> job) {
+        std::lock_guard lock(mutex_);
+        if (!worker_.joinable()) worker_ = std::thread([this] { run(); });
+        pending_ = std::move(job);
+        in_flight_ = true;
+        ++submitted_;
+        condition_.notify_all();
+    }
+    // Null when nothing was submitted since the last take; otherwise waits
+    // for the worker and returns the finished job.
+    std::unique_ptr<Job> take_finished(std::uint64_t& waited_us) {
+        std::unique_lock lock(mutex_);
+        waited_us = 0u;
+        if (!in_flight_ && !finished_) return nullptr;
+        const auto started = std::chrono::steady_clock::now();
+        condition_.wait(lock, [&] { return finished_ != nullptr; });
+        waited_us = static_cast<std::uint64_t>(
+            std::chrono::duration_cast<std::chrono::microseconds>(
+                std::chrono::steady_clock::now() - started).count());
+        wait_total_us_ += waited_us;
+        wait_max_us_ = std::max(wait_max_us_, waited_us);
+        ++joined_;
+        return std::move(finished_);
+    }
+    void recycle(std::unique_ptr<Job> job) {
+        std::lock_guard lock(mutex_);
+        spare_ = std::move(job);
+    }
+    std::uint64_t submitted() const noexcept { return submitted_; }
+    std::uint64_t joined() const noexcept { return joined_; }
+    std::uint64_t wait_total_us() const noexcept { return wait_total_us_; }
+    std::uint64_t wait_max_us() const noexcept { return wait_max_us_; }
+    std::uint64_t decode_total_us() const noexcept { return decode_total_us_; }
+    std::uint64_t decode_max_us() const noexcept { return decode_max_us_; }
+
+private:
+    void run() noexcept {
+        (void)SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_ABOVE_NORMAL);
+        for (;;) {
+            std::unique_ptr<Job> job;
+            {
+                std::unique_lock lock(mutex_);
+                condition_.wait(lock, [&] { return stopping_ || pending_ != nullptr; });
+                if (stopping_) return;
+                job = std::move(pending_);
+            }
+            const auto started = std::chrono::steady_clock::now();
+            job->status = galaxy::thp::decode_video(
+                {job->source.data(), job->source.size()},
+                job->width, job->height,
+                std::span<std::uint8_t>(job->planes[0]),
+                std::span<std::uint8_t>(job->planes[1]),
+                std::span<std::uint8_t>(job->planes[2]));
+            job->decode_us = static_cast<std::uint64_t>(
+                std::chrono::duration_cast<std::chrono::microseconds>(
+                    std::chrono::steady_clock::now() - started).count());
+            {
+                std::lock_guard lock(mutex_);
+                decode_total_us_ += job->decode_us;
+                decode_max_us_ = std::max(decode_max_us_, job->decode_us);
+                finished_ = std::move(job);
+                in_flight_ = false;
+            }
+            condition_.notify_all();
+        }
+    }
+
+    std::mutex mutex_;
+    std::condition_variable condition_;
+    std::thread worker_;
+    std::unique_ptr<Job> pending_;
+    std::unique_ptr<Job> finished_;
+    std::unique_ptr<Job> spare_;
+    bool in_flight_ = false;
+    bool stopping_ = false;
+    std::uint64_t submitted_ = 0, joined_ = 0;
+    std::uint64_t wait_total_us_ = 0, wait_max_us_ = 0;
+    std::uint64_t decode_total_us_ = 0, decode_max_us_ = 0;
+};
+
+NativeThpAsyncDecoder g_thp_async_decoder;
+
+bool native_thp_async_decode_enabled() {
+    static const bool enabled = read_env_flag("GALAXY_NATIVE_THP_ASYNC_DECODE", true);
+    return enabled;
+}
 
 // ─── Simulation-thread sampling profiler (GALAXY_SIM_PROFILE=1) ──────────────
 // A below-normal thread suspends the simulation thread every
 // GALAXY_SIM_PROFILE_INTERVAL_US microseconds (default 1000), reads its
-// instruction pointer and attributes it to a translated guest function (module
-// function records sorted by native entry), to the runtime image (16-byte
-// buckets, resolved offline against the PDB) or to other modules (kernel waits
-// and system DLLs). Printed at shutdown as [sim-profile] lines. Opt-in: a
-// suspend/resume pair costs the simulation thread a few microseconds per sample.
+// register context and classifies the sample:
+//   - running or blocked (QueryThreadCycleTime advanced since the last sample);
+//   - by instruction pointer: a translated guest function (module function
+//     records sorted by native entry), the runtime image (16-byte buckets), or
+//     another module (CRT, ntdll, kernel32: memcpy, waits, exception unwinds);
+//   - by the first guest frame on the stack, so host and foreign time is also
+//     charged to the guest function that called into the runtime;
+//   - blocked samples by the innermost runtime frame (the wait site).
+// Printed at shutdown as [sim-profile*] lines; runtime and system addresses
+// resolve through dbghelp when NebulaRuntime.pdb sits beside the executable.
 class SimulationProfiler {
 public:
     ~SimulationProfiler() {
@@ -623,6 +759,18 @@ public:
         entries_.erase(std::unique(entries_.begin(), entries_.end(),
             [](const auto& a, const auto& b) { return a.first == b.first; }), entries_.end());
         guest_counts_.assign(entries_.size(), 0u);
+        guest_caller_counts_.assign(entries_.size(), 0u);
+        guest_blocked_counts_.assign(entries_.size(), 0u);
+        if (const HMODULE ntdll = GetModuleHandleW(L"ntdll.dll")) {
+            for (const char* name : {"NtWaitForMultipleObjects", "NtWaitForSingleObject",
+                                     "NtDelayExecution", "NtWaitForAlertByThreadId",
+                                     "NtWaitForKeyedEvent", "NtRemoveIoCompletionEx",
+                                     "NtSignalAndWaitForSingleObject", "NtWaitForWorkViaWorkerFactory"}) {
+                if (const auto address = reinterpret_cast<std::uintptr_t>(GetProcAddress(ntdll, name))) {
+                    wait_stubs_.push_back(address);
+                }
+            }
+        }
         running_.store(true, std::memory_order_release);
         worker_ = std::thread([this] { run(); });
     }
@@ -635,31 +783,108 @@ public:
         target_ = nullptr;
         const std::uint64_t total = samples_;
         if (total == 0u) return;
+        const auto pct = [total](std::uint64_t n) {
+            return 100.0 * static_cast<double>(n) / static_cast<double>(total);
+        };
         out << "[sim-profile] samples=" << total << " interval-us=" << interval_us_
+            << " running=" << running_samples_ << " blocked=" << blocked_samples_
             << " guest=" << guest_samples_ << " host=" << host_samples_ << " other=" << other_samples_
-            << " context-failures=" << context_failures_ << '\n';
-        std::vector<std::size_t> order(entries_.size());
-        for (std::size_t i = 0; i < order.size(); ++i) order[i] = i;
-        std::sort(order.begin(), order.end(), [&](std::size_t a, std::size_t b) { return guest_counts_[a] > guest_counts_[b]; });
-        for (std::size_t i = 0; i < order.size() && i < 48u && guest_counts_[order[i]] != 0u; ++i) {
-            out << "[sim-profile-guest] fn=" << hexadecimal(entries_[order[i]].second)
-                << " samples=" << guest_counts_[order[i]]
-                << " pct=" << (100.0 * static_cast<double>(guest_counts_[order[i]]) / static_cast<double>(total)) << '\n';
-        }
-        std::vector<std::pair<std::uint64_t, std::uintptr_t>> host(host_buckets_.begin(), host_buckets_.end());
-        std::sort(host.begin(), host.end(), [](const auto& a, const auto& b) { return a.second > b.second; });
-        for (std::size_t i = 0; i < host.size() && i < 32u; ++i) {
-            out << "[sim-profile-host] NebulaRuntime+0x" << std::hex << (host[i].first << 4u) << std::dec
-                << " samples=" << host[i].second
-                << " pct=" << (100.0 * static_cast<double>(host[i].second) / static_cast<double>(total)) << '\n';
-        }
+            << " context-failures=" << context_failures_ << " stack-frames-max=" << kMaxFrames << '\n';
+        print_guest(out, "[sim-profile-guest]", guest_counts_, 48u, pct);
+        print_guest(out, "[sim-profile-guest-caller]", guest_caller_counts_, 32u, pct);
+        print_guest(out, "[sim-profile-blocked-guest]", guest_blocked_counts_, 16u, pct);
+        print_addresses(out, "[sim-profile-host]", host_buckets_, 40u, pct);
+        print_addresses(out, "[sim-profile-other]", other_buckets_, 40u, pct);
+        print_addresses(out, "[sim-profile-other-caller]", other_caller_buckets_, 32u, pct);
+        print_addresses(out, "[sim-profile-blocked-site]", blocked_sites_, 24u, pct);
+        print_addresses(out, "[sim-profile-blocked-leaf]", blocked_leaves_, 12u, pct);
     }
 
 private:
+    static constexpr std::size_t kMaxFrames = 24u;
+
+    template <typename Pct>
+    void print_guest(std::ostream& out, const char* tag, const std::vector<std::uint64_t>& counts,
+                     std::size_t limit, Pct pct) const {
+        std::vector<std::size_t> order(entries_.size());
+        for (std::size_t i = 0; i < order.size(); ++i) order[i] = i;
+        std::sort(order.begin(), order.end(), [&](std::size_t a, std::size_t b) { return counts[a] > counts[b]; });
+        for (std::size_t i = 0; i < order.size() && i < limit && counts[order[i]] != 0u; ++i) {
+            out << tag << " fn=" << hexadecimal(entries_[order[i]].second)
+                << " samples=" << counts[order[i]] << " pct=" << pct(counts[order[i]]) << '\n';
+        }
+    }
+
+    template <typename Pct>
+    void print_addresses(std::ostream& out, const char* tag,
+                         const std::unordered_map<std::uintptr_t, std::uint64_t>& buckets,
+                         std::size_t limit, Pct pct) {
+        std::vector<std::pair<std::uintptr_t, std::uint64_t>> rows(buckets.begin(), buckets.end());
+        std::sort(rows.begin(), rows.end(), [](const auto& a, const auto& b) { return a.second > b.second; });
+        for (std::size_t i = 0; i < rows.size() && i < limit; ++i) {
+            out << tag << ' ' << describe(rows[i].first << 4u)
+                << " samples=" << rows[i].second << " pct=" << pct(rows[i].second) << '\n';
+        }
+    }
+
+    // "NebulaRuntime+0x1234 name+0x10" or "ntdll.dll+0x5678 NtWaitForSingleObject+0x14".
+    std::string describe(std::uintptr_t address) {
+        std::ostringstream text;
+        HMODULE module = nullptr;
+        if (GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                               reinterpret_cast<LPCWSTR>(address), &module) && module != nullptr) {
+            wchar_t path[MAX_PATH]{};
+            const DWORD length = GetModuleFileNameW(module, path, MAX_PATH);
+            std::wstring name(path, path + length);
+            const auto slash = name.find_last_of(L"\\/");
+            if (slash != std::wstring::npos) name = name.substr(slash + 1u);
+            const auto dot = name.find_last_of(L'.');
+            if (dot != std::wstring::npos && name.substr(dot) == L".exe") name = name.substr(0, dot);
+            for (const wchar_t c : name) text << static_cast<char>(c < 128 ? c : '?');
+            text << "+0x" << std::hex << (address - reinterpret_cast<std::uintptr_t>(module)) << std::dec;
+        } else {
+            text << "0x" << std::hex << address << std::dec;
+        }
+        ensure_symbols();
+        if (symbols_ready_) {
+            alignas(SYMBOL_INFO) char storage[sizeof(SYMBOL_INFO) + 256u]{};
+            auto* symbol = reinterpret_cast<SYMBOL_INFO*>(storage);
+            symbol->SizeOfStruct = sizeof(SYMBOL_INFO);
+            symbol->MaxNameLen = 255u;
+            DWORD64 displacement = 0u;
+            if (SymFromAddr(GetCurrentProcess(), static_cast<DWORD64>(address), &displacement, symbol)) {
+                text << ' ' << symbol->Name << "+0x" << std::hex << displacement << std::dec;
+            }
+        }
+        return text.str();
+    }
+
+    void ensure_symbols() {
+        if (symbols_attempted_) return;
+        symbols_attempted_ = true;
+        SymSetOptions(SYMOPT_UNDNAME | SYMOPT_DEFERRED_LOADS | SYMOPT_NO_PROMPTS);
+        wchar_t exe[MAX_PATH]{};
+        const DWORD length = GetModuleFileNameW(nullptr, exe, MAX_PATH);
+        std::wstring directory(exe, exe + length);
+        const auto slash = directory.find_last_of(L"\\/");
+        if (slash != std::wstring::npos) directory.resize(slash);
+        // A second initialization is refused but leaves the first one usable.
+        symbols_ready_ = SymInitializeW(GetCurrentProcess(), directory.c_str(), TRUE) != FALSE ||
+                         GetLastError() == ERROR_INVALID_PARAMETER;
+    }
+
     void run() {
         (void)SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_BELOW_NORMAL);
         HANDLE timer = CreateWaitableTimerExW(nullptr, nullptr, CREATE_WAITABLE_TIMER_HIGH_RESOLUTION, TIMER_ALL_ACCESS);
+        ULONG64 last_cycles = 0u;
+        (void)QueryThreadCycleTime(target_, &last_cycles);
+        std::uint64_t since_refresh = 0u;
+        refresh_images();
         while (running_.load(std::memory_order_acquire)) {
+            if (++since_refresh * interval_us_ >= 1'000'000u) {
+                since_refresh = 0u;
+                refresh_images();
+            }
             if (timer != nullptr) {
                 LARGE_INTEGER due{};
                 due.QuadPart = -static_cast<long long>(interval_us_ * 10u);
@@ -671,32 +896,169 @@ private:
             }
             if (SuspendThread(target_) == static_cast<DWORD>(-1)) continue;
             CONTEXT ctx{};
-            ctx.ContextFlags = CONTEXT_CONTROL;
+            ctx.ContextFlags = CONTEXT_FULL;
             const bool ok = GetThreadContext(target_, &ctx) != FALSE;
+            ULONG64 cycles = last_cycles;
+            const bool cycles_ok = QueryThreadCycleTime(target_, &cycles) != FALSE;
+            std::uintptr_t frames[kMaxFrames]{};
+            std::size_t frame_count = 0u;
+            if (ok) frame_count = walk(ctx, frames);
             ResumeThread(target_);
             ++samples_;
             if (!ok) { ++context_failures_; continue; }
-            classify(static_cast<std::uintptr_t>(ctx.Rip));
+            // A thread suspended inside a wait system call stub is blocked;
+            // cycle deltas cannot tell (the suspend APC itself runs cycles).
+            (void)cycles_ok;
+            last_cycles = cycles;
+            bool blocked = false;
+            for (const std::uintptr_t stub : wait_stubs_) {
+                if (ctx.Rip >= stub && ctx.Rip < stub + 32u) { blocked = true; break; }
+            }
+            classify(static_cast<std::uintptr_t>(ctx.Rip), blocked, frames, frame_count);
         }
         if (timer != nullptr) CloseHandle(timer);
     }
 
-    void classify(std::uintptr_t rip) {
-        if (rip >= module_base_ && rip < module_end_ && !entries_.empty()) {
-            auto it = std::upper_bound(entries_.begin(), entries_.end(), std::make_pair(rip, ~0u));
-            if (it != entries_.begin()) {
-                --it;
-                ++guest_counts_[static_cast<std::size_t>(it - entries_.begin())];
-                ++guest_samples_;
-                return;
+    // The target is suspended during the walk, so nothing here may take a
+    // lock it could hold (RtlLookupFunctionEntry takes the loader lock; a
+    // walk through it deadlocked a boot). The unwind tables of every loaded
+    // image are read from the images themselves and cached while the target
+    // runs; RtlVirtualUnwind itself only reads memory.
+    struct ImageTables {
+        std::uintptr_t base{};
+        std::uintptr_t end{};
+        const RUNTIME_FUNCTION* entries{};
+        std::size_t count{};
+    };
+    void refresh_images() {
+        HMODULE modules[512]{};
+        DWORD needed = 0u;
+        if (!K32EnumProcessModules(GetCurrentProcess(), modules, sizeof(modules), &needed)) return;
+        const std::size_t total = std::min<std::size_t>(needed / sizeof(HMODULE), std::size(modules));
+        std::vector<ImageTables> tables;
+        tables.reserve(total);
+        for (std::size_t i = 0; i < total; ++i) {
+            const auto base = reinterpret_cast<std::uintptr_t>(modules[i]);
+            const auto* dos = reinterpret_cast<const IMAGE_DOS_HEADER*>(base);
+            if (dos->e_magic != IMAGE_DOS_SIGNATURE) continue;
+            const auto* nt = reinterpret_cast<const IMAGE_NT_HEADERS64*>(base + static_cast<std::uintptr_t>(dos->e_lfanew));
+            if (nt->Signature != IMAGE_NT_SIGNATURE || nt->OptionalHeader.Magic != IMAGE_NT_OPTIONAL_HDR64_MAGIC) continue;
+            const IMAGE_DATA_DIRECTORY& directory = nt->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_EXCEPTION];
+            ImageTables image{};
+            image.base = base;
+            image.end = base + nt->OptionalHeader.SizeOfImage;
+            if (directory.VirtualAddress != 0u && directory.Size >= sizeof(RUNTIME_FUNCTION)) {
+                image.entries = reinterpret_cast<const RUNTIME_FUNCTION*>(base + directory.VirtualAddress);
+                image.count = directory.Size / sizeof(RUNTIME_FUNCTION);
             }
+            tables.push_back(image);
         }
-        if (rip >= host_base_ && rip < host_end_) {
-            ++host_buckets_[(rip - host_base_) >> 4u];
-            ++host_samples_;
+        std::sort(tables.begin(), tables.end(), [](const auto& a, const auto& b) { return a.base < b.base; });
+        images_.swap(tables);
+    }
+    const ImageTables* image_for(std::uintptr_t address) const noexcept {
+        auto it = std::upper_bound(images_.begin(), images_.end(), address,
+            [](std::uintptr_t value, const ImageTables& image) { return value < image.base; });
+        if (it == images_.begin()) return nullptr;
+        --it;
+        return address < it->end ? &*it : nullptr;
+    }
+    static const RUNTIME_FUNCTION* function_for(const ImageTables& image, std::uintptr_t address) noexcept {
+        const auto rva = static_cast<DWORD>(address - image.base);
+        std::size_t low = 0u, high = image.count;
+        while (low < high) {
+            const std::size_t middle = (low + high) / 2u;
+            const RUNTIME_FUNCTION& entry = image.entries[middle];
+            if (rva < entry.BeginAddress) high = middle;
+            else if (rva >= entry.EndAddress) low = middle + 1u;
+            else return &entry;
+        }
+        return nullptr;
+    }
+    // Return addresses above rip, innermost first, from the suspended thread's
+    // own stack (leaf frames return through [rsp]; unknown images end the walk).
+    std::size_t walk(CONTEXT ctx, std::uintptr_t* frames) noexcept {
+        std::size_t count = 0u;
+        for (; count < kMaxFrames; ++count) {
+            const ImageTables* image = image_for(static_cast<std::uintptr_t>(ctx.Rip));
+            if (image == nullptr) break;
+            const RUNTIME_FUNCTION* function = function_for(*image, static_cast<std::uintptr_t>(ctx.Rip));
+            if (function == nullptr) {
+                if (ctx.Rsp == 0u || ctx.Rsp % 8u != 0u) break;
+                const auto* slot = reinterpret_cast<const std::uint64_t*>(ctx.Rsp);
+                if (IsBadReadPtr(slot, sizeof(*slot))) break;
+                ctx.Rip = *slot;
+                ctx.Rsp += 8u;
+            } else {
+                void* handler_data = nullptr;
+                DWORD64 establisher = 0u;
+                RtlVirtualUnwind(UNW_FLAG_NHANDLER, image->base, ctx.Rip,
+                    const_cast<PRUNTIME_FUNCTION>(function), &ctx, &handler_data, &establisher, nullptr);
+            }
+            if (ctx.Rip == 0u) break;
+            frames[count] = static_cast<std::uintptr_t>(ctx.Rip);
+        }
+        return count;
+    }
+
+    bool guest_index(std::uintptr_t address, std::size_t& index) const noexcept {
+        if (address < module_base_ || address >= module_end_ || entries_.empty()) return false;
+        auto it = std::upper_bound(entries_.begin(), entries_.end(), std::make_pair(address, ~0u));
+        if (it == entries_.begin()) return false;
+        --it;
+        index = static_cast<std::size_t>(it - entries_.begin());
+        return true;
+    }
+    bool in_host(std::uintptr_t address) const noexcept {
+        return address >= host_base_ && address < host_end_;
+    }
+    static bool is_allocator_frame(std::uintptr_t address) noexcept {
+        static const std::uintptr_t new_entry =
+            reinterpret_cast<std::uintptr_t>(static_cast<void* (*)(std::size_t)>(&::operator new));
+        static const std::uintptr_t delete_entry =
+            reinterpret_cast<std::uintptr_t>(static_cast<void (*)(void*) noexcept>(&::operator delete));
+        return (address >= new_entry && address < new_entry + 128u) ||
+               (address >= delete_entry && address < delete_entry + 128u);
+    }
+
+    void classify(std::uintptr_t rip, bool blocked, const std::uintptr_t* frames, std::size_t frame_count) {
+        std::size_t index = 0u;
+        if (blocked) {
+            ++blocked_samples_;
+            ++blocked_leaves_[rip >> 4u];
+            for (std::size_t i = 0; i < frame_count; ++i) {
+                if (in_host(frames[i])) { ++blocked_sites_[frames[i] >> 4u]; break; }
+            }
+            for (std::size_t i = 0; i < frame_count; ++i) {
+                if (guest_index(frames[i], index)) { ++guest_blocked_counts_[index]; break; }
+            }
             return;
         }
-        ++other_samples_;
+        ++running_samples_;
+        if (guest_index(rip, index)) {
+            ++guest_counts_[index];
+            ++guest_samples_;
+            return;
+        }
+        if (in_host(rip)) {
+            ++host_buckets_[rip >> 4u];
+            ++host_samples_;
+        } else {
+            ++other_buckets_[rip >> 4u];
+            ++other_samples_;
+            // The first runtime frame names the caller; an allocator entry
+            // (operator new/delete) is skipped so the attribution reaches the
+            // code that allocates.
+            for (std::size_t i = 0; i < frame_count; ++i) {
+                if (!in_host(frames[i])) continue;
+                if (is_allocator_frame(frames[i]) && i + 1u < frame_count) continue;
+                ++other_caller_buckets_[frames[i] >> 4u];
+                break;
+            }
+        }
+        for (std::size_t i = 0; i < frame_count; ++i) {
+            if (guest_index(frames[i], index)) { ++guest_caller_counts_[index]; break; }
+        }
     }
 
     HANDLE target_{};
@@ -705,9 +1067,20 @@ private:
     std::uint64_t interval_us_ = 1000u;
     std::uintptr_t module_base_ = 0, module_end_ = 0, host_base_ = 0, host_end_ = 0;
     std::vector<std::pair<std::uintptr_t, std::uint32_t>> entries_;
+    std::vector<ImageTables> images_;
     std::vector<std::uint64_t> guest_counts_;
-    std::unordered_map<std::uint64_t, std::uint64_t> host_buckets_;
-    std::uint64_t samples_ = 0, guest_samples_ = 0, host_samples_ = 0, other_samples_ = 0, context_failures_ = 0;
+    std::vector<std::uint64_t> guest_caller_counts_;
+    std::vector<std::uint64_t> guest_blocked_counts_;
+    std::unordered_map<std::uintptr_t, std::uint64_t> host_buckets_;
+    std::unordered_map<std::uintptr_t, std::uint64_t> other_buckets_;
+    std::unordered_map<std::uintptr_t, std::uint64_t> other_caller_buckets_;
+    std::vector<std::uintptr_t> wait_stubs_;
+    std::unordered_map<std::uintptr_t, std::uint64_t> blocked_sites_;
+    std::unordered_map<std::uintptr_t, std::uint64_t> blocked_leaves_;
+    std::uint64_t samples_ = 0, running_samples_ = 0, blocked_samples_ = 0;
+    std::uint64_t guest_samples_ = 0, host_samples_ = 0, other_samples_ = 0, context_failures_ = 0;
+    bool symbols_attempted_ = false;
+    bool symbols_ready_ = false;
 };
 
 SimulationProfiler g_sim_profiler;
@@ -728,6 +1101,8 @@ void require_context_transfer_cleanup() {
             " call=" + hexadecimal(failed->call_pc));
     }
 }
+
+bool take_pending_flat_transfer(RuntimeState& state, std::uint32_t& transfer_address);
 
 // ── Cooperative fiber scheduler ─────────────────────────────────────────
 std::string format_context_stack(const std::vector<std::uint32_t>& stack) {
@@ -1746,6 +2121,24 @@ struct RuntimeState {
     bool host_pause_candidate_valid{};
     bool host_pause_recovery_active{};
     std::uint64_t host_pause_recoveries{};
+    std::uint64_t cached_cpu_time_100ns{};
+    std::uint64_t cached_cpu_time_qpc{};
+    // Flag-based interrupt return (F20-lite): the RFI service records the
+    // transfer here and returns; every host frame returns until the flat
+    // dispatcher consumes it. Replaces the GuestTransfer throw when the
+    // module advertises kModuleTransferFlagFlagReturn.
+    struct PendingFlatTransfer {
+        bool active{};
+        std::uint32_t address{};
+        std::uint32_t exception{};
+        std::uint32_t loaded_context{};
+        std::uint32_t load_call_pc{};
+        std::uint64_t unwind_start_ns{};
+    } pending_transfer{};
+    bool flag_transfer_enabled{};
+    std::uint32_t module_transfer_flags{};
+    std::uint64_t flag_transfer_count{};
+    std::uint64_t exception_transfer_count{};
     std::uint64_t host_pause_active_vi_ai_recoveries{};
     // Counted separately from host_pause_active_vi_ai_recoveries so the two
     // independent evidence sources (AI DMA crossing vs. the backlog-successor
@@ -3696,7 +4089,45 @@ std::uint32_t read_env_u32_auto(const char* name, std::uint32_t fallback) {
     return static_cast<std::uint32_t>(std::strtoul(value, nullptr, 0));
 }
 
+// Callers pass string literals, so the name pointer identifies the flag; a
+// small lock-free table makes repeated reads of one flag a few loads instead
+// of a CRT environment search (strchr showed up in the simulation profile).
+struct EnvFlagCacheSlot {
+    std::atomic<const char*> name{nullptr};
+    std::atomic<int> value{0};
+};
+EnvFlagCacheSlot g_env_flag_cache[256];
+std::atomic<bool> g_env_flag_cache_enabled{false};
+
+bool read_env_flag_uncached(const char* name, bool fallback);
+
 bool read_env_flag(const char* name, bool fallback) {
+    if (!g_env_flag_cache_enabled.load(std::memory_order_acquire)) {
+        return read_env_flag_uncached(name, fallback);
+    }
+    const auto key = reinterpret_cast<std::uintptr_t>(name);
+    std::size_t index = static_cast<std::size_t>((key >> 3u) ^ (key >> 13u)) & 255u;
+    for (std::size_t probe = 0; probe < 8u; ++probe, index = (index + 1u) & 255u) {
+        EnvFlagCacheSlot& slot = g_env_flag_cache[index];
+        const char* const owner = slot.name.load(std::memory_order_acquire);
+        if (owner == name) {
+            const int value = slot.value.load(std::memory_order_acquire);
+            if (value != 0) return value > 0;
+            break;  // being filled by another thread; fall through
+        }
+        if (owner == nullptr) {
+            const bool result = read_env_flag_uncached(name, fallback);
+            const char* expected = nullptr;
+            if (slot.name.compare_exchange_strong(expected, name, std::memory_order_acq_rel)) {
+                slot.value.store(result ? 1 : -1, std::memory_order_release);
+            }
+            return result;
+        }
+    }
+    return read_env_flag_uncached(name, fallback);
+}
+
+bool read_env_flag_uncached(const char* name, bool fallback) {
     char value[16]{};
     std::size_t length = 0;
     if (getenv_s(&length, value, sizeof(value), name) != 0 || length <= 1) {
@@ -3777,7 +4208,7 @@ void flight_record_config(
         "window=%ux%u vsync=%u wait_latency=%u swap_latency=%u "
         "flip_discard=%u allow_tearing=%u async_render=%u "
         "queue_depth=%llu vi_fifo_wait=%u pe_gpu_fence=%u "
-        "live_memory_wait=%u memory_snapshot=%u "
+        "live_memory_wait=%u memory_snapshot=%u live_memory_reads=%u "
         "fast_thp=%u mipmaps=%u aniso=%u lod_bias=%u input_mode=%s\n",
         static_cast<unsigned long long>(host_qpc_milliseconds()),
         config.efb_scale,
@@ -3794,6 +4225,7 @@ void flight_record_config(
         timing.pe_events_gpu_fence ? 1u : 0u,
         timing.render_live_memory_wait ? 1u : 0u,
         timing.render_memory_snapshot ? 1u : 0u,
+        timing.render_live_memory_reads ? 1u : 0u,
         read_env_flag("GALAXY_FAST_THP_CHECKPOINTS", true) ? 1u : 0u,
         config.enhanced_mipmaps ? 1u : 0u,
         config.anisotropic_filtering,
@@ -4770,6 +5202,7 @@ std::uint64_t throttled_thread_cpu_time_100ns() noexcept {
 }
 
 std::uint64_t runtime_time_base_ticks(RuntimeState& state) {
+    g_census_time_base_calls.fetch_add(1u, std::memory_order_relaxed);
     update_native_audio_output_gate(state, true);
     if (state.timeline == nullptr) {
         throw RuntimeFailure("runtime timeline is unavailable");
@@ -4779,9 +5212,24 @@ std::uint64_t runtime_time_base_ticks(RuntimeState& state) {
     if (state.timeline->saturated()) {
         throw RuntimeFailure("runtime timeline counter overflowed");
     }
-    const std::uint64_t cpu_time_100ns = throttle_cpu_time_sampling_enabled()
-        ? throttled_thread_cpu_time_100ns()
-        : current_thread_cpu_time_100ns();
+    // GetThreadTimes is a kernel transition on every time-base read (3 percent
+    // of all simulation-thread samples in a profiled session). The suspension
+    // candidate test needs the thread's CPU time only at millisecond
+    // granularity: a sample is reused while the sampled QPC is less than one
+    // millisecond past it, which can only over-report elapsed CPU time by that
+    // much and therefore never manufactures a candidate.
+    const std::uint64_t qpc_per_millisecond =
+        std::max<std::uint64_t>(state.timeline->counter_frequency() / 1000u, 1u);
+    std::uint64_t cpu_time_100ns = state.cached_cpu_time_100ns;
+    if (throttle_cpu_time_sampling_enabled()) {
+        cpu_time_100ns = throttled_thread_cpu_time_100ns();
+    } else if (cpu_time_100ns == 0u || sampled_qpc == 0u ||
+               sampled_qpc < state.cached_cpu_time_qpc ||
+               sampled_qpc - state.cached_cpu_time_qpc >= qpc_per_millisecond) {
+        cpu_time_100ns = current_thread_cpu_time_100ns();
+        state.cached_cpu_time_100ns = cpu_time_100ns;
+        state.cached_cpu_time_qpc = sampled_qpc;
+    }
     if (!state.host_pause_recovery_active &&
         state.last_timebase_ticks != 0u &&
         ticks >= state.last_timebase_ticks &&
@@ -7039,6 +7487,12 @@ bool independent_vi_pe_capture_allowed(
     bool rendered_retrace, bool present_in_render) {
     if (!independent_vi_pe_completion_enabled()) return false;
     const auto& timing = galaxy::gx::get_gx_timing_config();
+    // Live reads (GALAXY_RENDER_LIVE_MEMORY=1): the render thread reads guest
+    // RAM directly while the simulation runs ahead, the hardware's own GP model
+    // and Dolphin's dual-core model. The game's GXDrawDone discipline and its
+    // triple-buffered frame data are what keep that correct; the per-frame
+    // snapshot (dependency scan plus 3 to 6 MB copied on the simulation
+    // thread each frame) is what it replaces.
     if (!galaxy::gx::independent_vi_pe_policy_valid(
             timing.pe_events_gpu_fence,
             read_env_flag("GALAXY_ASYNC_RENDER_THREAD", true),
@@ -7048,7 +7502,7 @@ bool independent_vi_pe_capture_allowed(
             // That phase cannot advance to token ownership until render_frame
             // seals and detaches its snapshot, classifies that exact view and
             // retains it through recording. Failed capture never admits VI.
-            timing.render_memory_snapshot)) {
+            timing.render_memory_snapshot || timing.render_live_memory_reads)) {
         throw RuntimeFailure(
             "independent VI delivery requires real GPU fences and protected "
             "memory ownership, with no synthetic PE publication");
@@ -15491,7 +15945,7 @@ void save_exception_context(
 // Unlike the transitional direct-leaf path above, a translated wrapper must
 // finish through OSLoadContext/RFI and GuestTransfer. A normal return would
 // mean that guest exception/scheduler policy was silently bypassed.
-[[noreturn]] void run_translated_exception_wrapper(
+void run_translated_exception_wrapper(
     RuntimeState& state,
     galaxy::PpcContext* context,
     galaxy::GuestMemoryV1* memory,
@@ -15583,6 +16037,11 @@ void save_exception_context(
         (void)translated_checkpoint_scope;
         wrapper(context, memory, state.services);
     }
+    if (state.pending_transfer.active) {
+        // Flag-based RFI: the handler completed and the resumed context is
+        // loaded; unwind by returning.
+        return;
+    }
     throw RuntimeFailure(
         "translated exception wrapper returned without OSLoadContext/RFI"
         " exception=" + std::to_string(entry.exception) +
@@ -15601,6 +16060,7 @@ bool dispatch_external_interrupt(
     galaxy::PpcContext* context,
     galaxy::GuestMemoryV1* memory,
     bool exact_idle_ee = false) {
+    if (state.pending_transfer.active) return false;
     constexpr std::uint32_t kPiInterruptCause = 0xCC003000u;
     constexpr std::uint32_t kPiInterruptMask = 0xCC003004u;
     constexpr std::uint32_t kCurrentContextAddress = 0x800000D4u;
@@ -15732,6 +16192,7 @@ bool dispatch_external_interrupt(
         kEntry,
         interrupted_context,
         state.dispatching_external_interrupt);
+    return true;
 }
 
 // When realtime VI is active, force=true means "this guest wait is allowed to
@@ -15747,6 +16208,7 @@ void dispatch_ipc_interrupt(
     galaxy::PpcContext* context,
     galaxy::GuestMemoryV1* memory,
     std::uint32_t resume_pc = 0u) {
+    if (state.pending_transfer.active) return;
     if (state.address_space == nullptr) {
         return;
     }
@@ -15886,11 +16348,12 @@ void submit_gx_at_draw_done_wait(
             timing.render_live_memory_wait,
             timing.render_memory_snapshot,
             sim_thread_pe_scan_enabled(),
-            read_env_flag("GALAXY_DIRECT_WGPIPE_PE_EVENTS", false))) {
+            read_env_flag("GALAXY_DIRECT_WGPIPE_PE_EVENTS", false),
+            timing.render_live_memory_reads)) {
         throw RuntimeFailure(
             "draw-done submission requires async rendering, real PE fences, "
-            "a live-memory barrier or sealed memory snapshot, and no "
-            "simulation-thread PE scan");
+            "a live-memory barrier, live reads or a sealed memory snapshot, "
+            "and no simulation-thread PE scan");
     }
     if (guest_external_interrupts_enabled(context)) {
         throw RuntimeFailure("GXDrawDone sleep boundary unexpectedly enabled EE");
@@ -15912,6 +16375,7 @@ void submit_gx_at_draw_done_wait(
         throw RuntimeFailure("draw-done FIFO capture lost submission order");
     }
     const auto bytes = capture->fifo_size;
+    join_native_thp_video_decode(state);
     const auto token = galaxy::gx::render_frame(
         capture->fifo.data(), bytes, memory, state.services, false, 0u);
     std::vector<std::byte> released_fifo;
@@ -15952,6 +16416,7 @@ bool render_pending_gx_fifo_for_sync(
         }
         return false;
     }
+    join_native_thp_video_decode(state);
     const galaxy::gx::FramePeCompletionToken completion =
         galaxy::gx::render_frame(
             fifo.data(),
@@ -15980,6 +16445,7 @@ void dispatch_pe_interrupts(
     galaxy::PpcContext* context,
     galaxy::GuestMemoryV1* memory,
     std::uint32_t resume_pc = 0u) {
+    if (state.pending_transfer.active) return;
     if (state.address_space == nullptr) {
         return;
     }
@@ -16000,6 +16466,7 @@ void dispatch_aram_dma_interrupt(
     galaxy::PpcContext* context,
     galaxy::GuestMemoryV1* memory,
     std::uint32_t resume_pc = 0u) {
+    if (state.pending_transfer.active) return;
     if (state.address_space == nullptr) {
         return;
     }
@@ -16020,6 +16487,7 @@ void dispatch_dsp_interrupts(
     galaxy::PpcContext* context,
     galaxy::GuestMemoryV1* memory,
     std::uint32_t resume_pc = 0u) {
+    if (state.pending_transfer.active) return;
     if (state.address_space == nullptr) {
         return;
     }
@@ -16037,6 +16505,7 @@ void dispatch_dsp_interface_interrupts(
     galaxy::PpcContext* context,
     galaxy::GuestMemoryV1* memory,
     std::uint32_t resume_pc = 0u) {
+    if (state.pending_transfer.active) return;
     // AI, ARAM, and DSP share one PI DSP-interface cause. Poll the native
     // device once and let RMGE01 disambiguate its DSPCR sub-source.
     dispatch_dsp_interrupts(state, context, memory, resume_pc);
@@ -16206,6 +16675,7 @@ bool dispatch_ai_dma_interrupts(
     galaxy::PpcContext* context,
     galaxy::GuestMemoryV1* memory,
     std::uint32_t resume_pc = 0u) {
+    if (state.pending_transfer.active) return false;
     if (state.dispatching_ai_interrupt) {
         // Preserve a newly published later boundary until the current guest AI
         // callback finishes its W1C and shadow-register writes.  Consuming the
@@ -16389,6 +16859,7 @@ std::uint32_t dispatch_due_ai_dma_interrupts(
     galaxy::GuestMemoryV1* memory,
     std::uint32_t max_dispatches = 8u,
     std::uint32_t resume_pc = 0u) {
+    if (state.pending_transfer.active) return 0u;
     const bool deadline_pending =
         state.deadline_events.pending_replaceable_generation(
             galaxy::timing::EventKind::AudioDma) != 0u;
@@ -16435,6 +16906,7 @@ void service_native_input_with_ai_deadline_priority(
     galaxy::PpcContext* context,
     galaxy::GuestMemoryV1* memory,
     std::uint32_t resume_pc = 0u) {
+    if (state.pending_transfer.active) return;
     using galaxy::host::ai_dma_timing::ai_device_transaction_owned;
     using galaxy::host::ai_dma_timing::ai_probe_precedes_native_input;
     using galaxy::host::ai_dma_timing::ScopedExactWordBitClear;
@@ -17476,6 +17948,7 @@ bool idle_loop_sleep_enabled() {
 }
 
 void idle_loop_wait_for_next_deadline(RuntimeState& state) {
+    if (state.pending_transfer.active) return;
     if (!idle_loop_sleep_enabled() || state.vi_deadline_consumer == nullptr ||
         state.vi_deadline_wait_active || state.deadline_events.mask() != 0u ||
         state.dispatching_external_interrupt || state.dispatching_decrementer ||
@@ -17562,7 +18035,20 @@ void idle_loop_wait_for_next_deadline(RuntimeState& state) {
         return;
     }
     const HANDLE wait_handles[2] = {handles.event, handles.timer};
+    // Announce the wait, then re-test the mask: a publication that landed
+    // before the announcement never signaled the event, one that lands after
+    // it does. Either way nothing is lost and no publisher signals an event
+    // nobody waits on.
+    state.deadline_events.set_idle_waiting(true);
+    if (state.deadline_events.mask() != 0u ||
+        state.address_space->pe_finish_pending() ||
+        state.address_space->pe_token_pending()) {
+        state.deadline_events.set_idle_waiting(false);
+        (void)CancelWaitableTimer(handles.timer);
+        return;
+    }
     const DWORD waited = WaitForMultipleObjects(2, wait_handles, FALSE, 100u);
+    state.deadline_events.set_idle_waiting(false);
     if (waited == WAIT_OBJECT_0) {
         ++state.idle_loop_sleep_wakes;
     } else {
@@ -17631,7 +18117,9 @@ void wait_for_exact_vi_deadline(
         // DEC may become eligible before the VI edge while the guest is in
         // this hardware wait. Its final arbiter re-inspects VI and defers DEC
         // once the immutable retrace deadline is due or awaiting publication.
+        if (state.pending_transfer.active) return;
         dispatch_decrementer(state, context->pc, context, memory);
+        if (state.pending_transfer.active) return;
         galaxy::gx::pump_messages();
         if (galaxy::gx::quit_requested()) {
             throw RuntimeQuitRequested{};
@@ -17903,6 +18391,7 @@ bool advance_pending_vi_boundary(
                         context,
                         memory,
                         exact_idle_ee);
+                if (state.pending_transfer.active) return true;
                 }
 
                 constexpr std::uint32_t kViVerticalInterruptRegister =
@@ -17956,6 +18445,7 @@ bool advance_pending_vi_boundary(
                         context,
                         memory,
                         exact_idle_ee);
+                if (state.pending_transfer.active) return true;
                 ++state.pending_vi_await_dispatch_returned;
                 return true;
             case galaxy::vi::BoundaryPhase::Finalize:
@@ -17974,6 +18464,7 @@ bool dispatch_vi_retrace(
     bool force,
     bool idle_ee_override,
     std::uint32_t resume_pc) {
+    if (state.pending_transfer.active) return false;
     constexpr std::uint32_t kViInterrupt = 24;
     constexpr std::uint32_t kInterruptHandlerTable = 0x80003040u;
     constexpr std::uint32_t kCurrentContextAddress = 0x800000D4u;
@@ -18051,6 +18542,7 @@ bool dispatch_vi_retrace(
 
     if (force) {
         wait_for_exact_vi_deadline(state, context, memory);
+        if (state.pending_transfer.active) return false;
     }
 
     // The immutable timeline origin and pending latch are the sole cadence
@@ -18317,6 +18809,7 @@ bool dispatch_vi_retrace(
             galaxy::cadence::steady_now_ns_if_enabled(
                 state.cadence_diagnostics);
     }
+    if (rendered_retrace_frame) join_native_thp_video_decode(state);
     const galaxy::gx::FramePeCompletionToken frame_pe_completion =
         rendered_retrace_frame
         ? galaxy::gx::render_frame(
@@ -21088,7 +21581,9 @@ void save_exception_context(
     std::uint32_t guest_context,
     galaxy::GuestMemoryV1* memory,
     const galaxy::NativeServicesV1* services) {
-    {
+    static const bool trace_context_poison =
+        read_env_flag("GALAXY_TRACE_CONTEXT_POISON", false);
+    if (trace_context_poison) {
         std::uint32_t owner_thread = 0u;
         if (guest_context_r1_cross_thread(
                 memory, services, guest_context, context.gpr[1],
@@ -21223,6 +21718,7 @@ bool consume_decrementer_deadline_publication(RuntimeState& state) {
 // absolute edge but before the worker publishes it; settle that exact edge
 // from its immutable arm rather than delaying or dropping the request.
 bool synchronize_decrementer_deadline(RuntimeState& state) {
+    if (state.pending_transfer.active) return false;
     if (consume_decrementer_deadline_publication(state)) {
         return true;
     }
@@ -21276,6 +21772,7 @@ bool arbitrate_external_before_decrementer(
     std::uint32_t resume_address,
     galaxy::PpcContext* context,
     galaxy::GuestMemoryV1* memory) {
+    if (state.pending_transfer.active) return false;
     if (context == nullptr || memory == nullptr || state.services == nullptr ||
         state.address_space == nullptr) {
         throw RuntimeFailure(
@@ -21360,6 +21857,7 @@ void dispatch_decrementer(
     std::uint32_t resume_address,
     galaxy::PpcContext* context,
     galaxy::GuestMemoryV1* memory) {
+    if (state.pending_transfer.active) return;
     constexpr std::uint32_t kCurrentContextAddress = 0x800000D4u;
     constexpr auto kEntry = galaxy::interrupt::kDecrementerExceptionEntry;
 
@@ -21531,6 +22029,15 @@ void dispatch_decrementer(
             kEntry,
             interrupted_context,
             state.dispatching_decrementer);
+        if (state.pending_transfer.active) {
+            require_context_transfer_cleanup();
+            if (state.deadline_events.pending(
+                    galaxy::timing::EventKind::InputReport) != 0u) {
+                service_native_input_with_ai_deadline_priority(
+                    state, context, memory, resume_address);
+            }
+            return;
+        }
     } catch (...) {
         // A successful translated RFI exits through GuestTransfer, so this is
         // also the normal decrementer completion edge. Service only a real
@@ -21853,6 +22360,51 @@ void branch_checkpoint_retaining_same_context(
     } scope(state,proof);
     try {
         branch_checkpoint(user,guest_pc,context,memory);
+        if (state.pending_transfer.active) {
+            const auto pending = state.pending_transfer;
+            require_context_transfer_cleanup();
+            ++state.checkpoint_rfi_caught;
+            const bool source_ok=galaxy::interrupt::validated_checkpoint_rfi_source(
+                pending.loaded_context,pending.load_call_pc,interrupted_context);
+            const bool site_ok=state.lookup_function(pending.address)!=nullptr;
+            const bool thread_ok=state.address_space->read_u32(0x800000E4u)==interrupted_thread;
+            const bool scope_ok=g_branch_checkpoint_callback_depth==callback_depth &&
+                g_active_branch_checkpoint_pc==callback_pc &&
+                state.checkpoint_gate.full_scope_depth()==full_depth &&
+                state.checkpoint_gate.inline_scope_depth()==inline_depth;
+            state.checkpoint_rfi_bad_source+=!source_ok;
+            state.checkpoint_rfi_unmapped_site+=!site_ok;
+            state.checkpoint_rfi_changed_thread+=!thread_ok;
+            state.checkpoint_rfi_changed_scope+=!scope_ok;
+            const bool ownership_clear=source_ok && site_ok && thread_ok && scope_ok &&
+                !state.dispatching_external_interrupt &&
+                !state.dispatching_decrementer && !state.dispatching_fpu_unavailable &&
+                !state.external_dispatch.active() && g_pending_os_load_context.pending()==nullptr;
+            const auto mismatch=proof.mismatch(*context,pending.address,pending.exception,
+                    state.address_space->read_u32(0x800000D4u),
+                    state.address_space->read_u32(0x800000C0u),g_live_ctx_stack.size(),true,
+                    state.address_space->read_u32(0x800000E4u));
+            ++state.checkpoint_rfi_mismatches[static_cast<std::size_t>(mismatch)];
+            static const bool trace_flag = read_env_flag("GALAXY_TRACE_FLAG_TRANSFER", false);
+            if (trace_flag) {
+                std::cerr << "[flag-retain] site=" << hexadecimal(guest_pc)
+                          << " resume=" << hexadecimal(pending.address)
+                          << " ok=" << (ownership_clear ? 1 : 0)
+                          << " mismatch=" << static_cast<unsigned>(mismatch)
+                          << " ctx-pc=" << hexadecimal(context->pc)
+                          << " E4=" << hexadecimal(state.address_space->read_u32(0x800000E4u)) << '\n';
+            }
+            if (!ownership_clear || mismatch!=galaxy::interrupt::CheckpointRfiProof::Mismatch::None) {
+                ++state.checkpoint_rfi_rejected;
+                return;  // stays pending: the translated frames unwind by returning
+            }
+            ++state.checkpoint_rfi_accepted;
+            std::uint32_t resume_address = 0u;
+            (void)take_pending_flat_transfer(state, resume_address);
+            state.checkpoint_rfi_proof=nullptr;
+            arbitrate_after_completed_rfi(state,resume_address,context,memory);
+            return;
+        }
     } catch (const GuestTransfer& transfer) {
         require_context_transfer_cleanup();
         ++state.checkpoint_rfi_caught;
@@ -21978,6 +22530,36 @@ void dump_native_thp_boundary_probe(const RuntimeState& state,
            << " zero-without-bit=unobserved terminal=1\n";
 }
 
+void join_native_thp_video_decode(RuntimeState& state) {
+    std::uint64_t waited_us = 0u;
+    auto job = g_thp_async_decoder.take_finished(waited_us);
+    if (!job) return;
+    if (job->status != 0) {
+        // The game has already consumed the decode status; the planes keep
+        // the previous frame's image for this one frame.
+        ++state.native_thp_video_fallbacks;
+        if (state.native_thp_video_fallbacks < 8u)
+            std::cerr << "[thp-hle-fallback] status=" << job->status << " size=" << job->source.size() << " async=1\n";
+    } else if (state.address_space != nullptr) {
+        for (std::size_t i = 0; i < 3; ++i) {
+            if (state.address_space->pointer_or_null(job->addresses[i], job->sizes[i]) == nullptr) continue;
+            state.address_space->copy(
+                job->addresses[i],
+                std::span<const std::byte>(
+                    reinterpret_cast<const std::byte*>(job->planes[i].data()), job->sizes[i]));
+        }
+    }
+    const auto joined = g_thp_async_decoder.joined();
+    if (joined <= 4u || joined % 256u == 0u)
+        std::cout << "[thp-hle-video-join] joined=" << joined
+                  << " decode-us=" << job->decode_us << " waited-us=" << waited_us
+                  << " decode-mean-us=" << g_thp_async_decoder.decode_total_us() / std::max<std::uint64_t>(1u, joined)
+                  << " decode-max-us=" << g_thp_async_decoder.decode_max_us()
+                  << " wait-mean-us=" << g_thp_async_decoder.wait_total_us() / std::max<std::uint64_t>(1u, joined)
+                  << " wait-max-us=" << g_thp_async_decoder.wait_max_us() << '\n';
+    g_thp_async_decoder.recycle(std::move(job));
+}
+
 bool try_native_thp_wrapper(RuntimeState& state, galaxy::PpcContext* context,
     galaxy::GuestMemoryV1* memory, galaxy::NativeGameFunction original) {
     static const auto mode = read_env_u64("GALAXY_NATIVE_THP_VIDEO_DECODE", 0u);
@@ -22079,6 +22661,37 @@ bool try_native_thp_wrapper(RuntimeState& state, galaxy::PpcContext* context,
         if (destinations[i] == nullptr) return fallback(Reason::PlaneMapping);
     }
     if (source == nullptr) return fallback(Reason::SourceMapping);
+    if (mode == 1u && native_thp_async_decode_enabled()) {
+        // A frame still in flight (no submission since) lands first so the
+        // planes always hold the newest completed image in order.
+        join_native_thp_video_decode(state);
+        auto job = g_thp_async_decoder.acquire_job();
+        job->source.assign(reinterpret_cast<const std::uint8_t*>(source),
+                           reinterpret_cast<const std::uint8_t*>(source) + size);
+        job->width = static_cast<std::uint16_t>(width);
+        job->height = static_cast<std::uint16_t>(height);
+        job->sizes = sizes;
+        job->addresses = addresses;
+        for (std::size_t i = 0; i < 3; ++i) job->planes[i].assign(sizes[i], 0u);
+        job->status = 0;
+        finish_trace(Reason::AdmittedNative);
+        g_thp_async_decoder.submit(std::move(job));
+        mem.write_u32(wrapper + 0x1E4u, mem.read_u32(record + 4u));
+        context->gpr[3] = 1u;
+        ++state.native_thp_video_decodes;
+        if (state.trace_native_thp_boundary) {
+            const auto ns = static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now().time_since_epoch()).count());
+            if (state.native_thp_first_decode_ns == 0u) state.native_thp_first_decode_ns = ns;
+            state.native_thp_last_decode_ns = ns;
+            state.native_thp_last_source_frame = mem.read_u32(record + 4u);
+        }
+        if (state.native_thp_video_decodes <= 8u || state.native_thp_video_decodes % 64u == 0u)
+            std::cout << "[thp-hle-video] frame=" << state.native_thp_video_decodes
+                      << " source-frame=" << mem.read_u32(record + 4u)
+                      << " vi=" << state.vi_retrace_count
+                      << " dimensions=" << width << 'x' << height << " async=1\n";
+        return true;
+    }
     galaxy::thp::VideoScratch::Lease scratch(state.native_thp_video_scratch);
     auto& planes = scratch.planes;
     for (std::size_t i = 0; i < planes.size(); ++i) {
@@ -22110,6 +22723,7 @@ bool try_native_thp_wrapper(RuntimeState& state, galaxy::PpcContext* context,
         finish_trace(Reason::AdmittedCompare);
         const auto translated_start = std::chrono::steady_clock::now();
         original(context, memory, state.services);
+        if (state.pending_transfer.active) return true;
         const auto translated_ms = std::chrono::duration<double, std::milli>(
             std::chrono::steady_clock::now() - translated_start).count();
         std::uint64_t different = 0u, error_sum = 0u, samples = 0u;
@@ -22181,6 +22795,12 @@ void call_guest_impl_body(
     galaxy::PpcContext* context,
     galaxy::GuestMemoryV1* memory) {
     auto& state = *static_cast<RuntimeState*>(user);
+    if (state.pending_transfer.active) {
+        throw RuntimeFailure(
+            "translated code called a guest function while a flat transfer is "
+            "pending (missing transfer check) target=" + hexadecimal(guest_address) +
+            " resume=" + hexadecimal(state.pending_transfer.address));
+    }
     PreparedGuestSetCurrentContext prepared_set_current_context{};
     // Exact MoviePlayerSimple quad draw and stop-owned wrapper boundaries.
     // Original bodies and timing execute normally. The marker travels with
@@ -22355,7 +22975,8 @@ void call_guest_impl_body(
                         if (!galaxy::gx::draw_done_submission_policy_valid(timing.pe_events_gpu_fence,
                             read_env_flag("GALAXY_ASYNC_RENDER_THREAD",true),timing.render_live_memory_wait,
                             timing.render_memory_snapshot,sim_thread_pe_scan_enabled(),
-                            read_env_flag("GALAXY_DIRECT_WGPIPE_PE_EVENTS",false)))
+                            read_env_flag("GALAXY_DIRECT_WGPIPE_PE_EVENTS",false),
+                            timing.render_live_memory_reads))
                             throw RuntimeFailure("mouse scene depth requires protected FIFO memory and real PE completion");
                         const auto started = std::chrono::steady_clock::now();
                         state.address_space->flush_wgpipe_gather_tail_for_frame();
@@ -22370,6 +22991,7 @@ void call_guest_impl_body(
                             state.pe_scanned_fifo_bytes=0u;
                             const auto* owned=state.pending_draw_done_submissions.next_to_submit();
                             if (!owned || owned->serial!=serial) throw RuntimeFailure("mouse depth FIFO lost ordered ownership");
+                            join_native_thp_video_decode(state);
                             const auto receipt=galaxy::gx::render_frame(owned->fifo.data(),owned->fifo_size,memory,state.services,false,0u);
                             std::vector<std::byte> released_fifo;
                             if (!state.pending_draw_done_submissions.mark_submitted(serial,receipt,&released_fifo))
@@ -22765,6 +23387,7 @@ void call_guest_impl_body(
                 "OSLoadContext lost pending transfer ownership on normal "
                 "return target=" + hexadecimal(token.target_context));
         }
+        if (state.pending_transfer.active) return;
         if (protocol_load && proof->completed && !proof->consumed &&
             exact_yield_rfi_return_state(state, *proof, context, memory)) {
             proof->loading = false;
@@ -23106,12 +23729,14 @@ void call_guest_impl_body(
                 });
                 sleep_fn(context, memory, state.services);
             }
+            if (state.pending_transfer.active) return;
             throw RuntimeFailure(
                 "translated OSSleepThread returned without a flat context "
                 "transfer for ctx=" + hexadecimal(sleeping_ctx));
         }
         context->pc = 0x804ABFBCu;
         sleep_fn(context, memory, state.services);
+        if (state.pending_transfer.active) return;
         throw RuntimeFailure(
             "translated OSSleepThread returned without a flat context "
             "transfer and no valid current OSContext");
@@ -24138,6 +24763,7 @@ void call_guest_impl_body(
                         context,
                         memory,
                         state.services)) {
+                    if (state.pending_transfer.active) return;
                     // Selection is consumed only at a completed retail return.
                     if (state.monitor_mouse_latency && entry != nullptr) {
                         constexpr bool opened = false;
@@ -24688,6 +25314,7 @@ execute_translated:
         state.profile_call_self_time,
         [&]() {
         function(context, memory, state.services);
+        if (state.pending_transfer.active) return;
         if (state.monitor_mouse_latency && guest_address==0x80385034u &&
             state.address_space && mapped_guest_range(state.address_space,mouse_boundary_object,0x74u) &&
             state.address_space->read_u32(mouse_boundary_object)==0u) {
@@ -24769,6 +25396,7 @@ execute_translated:
         [&]() {
         if (state.profile_call_self_time) {
             state.cancel_call_self_time(guest_address);
+    if (state.pending_transfer.active) return;
         }
         });
     if (native_ir_decoder_token != 0u) {
@@ -25757,7 +26385,9 @@ void branch_checkpoint_body(
     galaxy::PpcContext* context,
     galaxy::GuestMemoryV1* memory,
     bool inline_gate) {
+    if (static_cast<RuntimeState*>(user)->pending_transfer.active) return;
     auto& state = *static_cast<RuntimeState*>(user);
+    g_census_checkpoint_bodies.fetch_add(1u, std::memory_order_relaxed);
     if (state.timeline != nullptr) {
         constexpr std::uint64_t kCheckpointGapReportTicks =
             galaxy::timing::kViPeriodTicks;
@@ -25781,6 +26411,7 @@ void branch_checkpoint_body(
             state, guest_pc, "checkpoint-preflight-dsp", [&] {
                 service_native_dsp_mram_wake(state);
             });
+        if (state.pending_transfer.active) return;
     }
     if (state.deadline_broker != nullptr &&
         state.deadline_broker->failed()) {
@@ -25810,6 +26441,7 @@ void branch_checkpoint_body(
                 service_native_input_with_ai_deadline_priority(
                     state, context, memory, resume_pc);
             });
+        if (state.pending_transfer.active) return;
     }
     if (state.deadline_events.pending(
             galaxy::timing::EventKind::IosCompletion) != 0u) {
@@ -25817,6 +26449,7 @@ void branch_checkpoint_body(
             state, guest_pc, "checkpoint-preflight-ios", [&] {
                 service_native_ios_completion_wake(state);
             });
+        if (state.pending_transfer.active) return;
     }
     run_timed_checkpoint_phase(
         state, guest_pc, "decrementer-sync", [&] {
@@ -25827,6 +26460,7 @@ void branch_checkpoint_body(
             });
             (void)synchronize_decrementer_deadline(state);
         });
+    if (state.pending_transfer.active) return;
     if (state.deadline_events.pending(
             galaxy::timing::EventKind::RuntimeFailure) != 0u) {
         try {
@@ -25936,7 +26570,9 @@ void branch_checkpoint_body(
                 wake_osreceive_sleepers_with_queued_messages(
                     state, context, memory, guest_pc, "checkpoint");
             });
+        if (state.pending_transfer.active) return;
     }
+    if (state.pending_transfer.active) return;
     if ((guest_pc == 0x804AB360u || guest_pc == 0x804AB370u) &&
         state.address_space != nullptr &&
         context != nullptr) {
@@ -25977,6 +26613,7 @@ void branch_checkpoint_body(
                             /*idle_ee_override=*/false,
                             resume_pc);
                     });
+                if (state.pending_transfer.active) return;
             }
             const bool ai_deadline_due =
                 state.deadline_events.pending_replaceable_generation(
@@ -25998,6 +26635,7 @@ void branch_checkpoint_body(
                             /*max_dispatches=*/8u,
                             resume_pc);
                     });
+                if (state.pending_transfer.active) return;
             }
             if (!decrementer_needs_dispatch(state, context)) {
                 publish_next_inline_checkpoint_slow(state, context);
@@ -26084,6 +26722,7 @@ void branch_checkpoint_body(
                         << state.null_call_trace(*context) << '\n';
                     dump_native_bt_guest_state(std::cerr, *state.address_space);
                 });
+            if (state.pending_transfer.active) return;
         }
     }
     if (state.address_space != nullptr && context != nullptr &&
@@ -26130,6 +26769,7 @@ void branch_checkpoint_body(
                     }
                     dump_native_bt_guest_state(std::cerr, *state.address_space);
                 });
+            if (state.pending_transfer.active) return;
         }
     }
     if (frame_activity_recording_enabled()) {
@@ -26269,6 +26909,7 @@ void branch_checkpoint_body(
                     state.address_space->poll_native_dsp(
                         galaxy::cadence::DspPollOrigin::CheckpointPreflight);
                 });
+            if (state.pending_transfer.active) return;
         }
         const bool vi_service_due =
             galaxy::vi::checkpoint_video_service_due(
@@ -26513,6 +27154,7 @@ void branch_checkpoint_body(
                     /*idle_ee_override=*/false,
                     resume_pc);
             });
+        if (state.pending_transfer.active) return;
     }
 
     // AI remains the leading service on every checkpoint with no VI
@@ -26530,6 +27172,7 @@ void branch_checkpoint_body(
                     /*max_dispatches=*/8u,
                     resume_pc);
             });
+        if (state.pending_transfer.active) return;
     }
 
     if (state.deadline_events.pending(
@@ -26539,6 +27182,7 @@ void branch_checkpoint_body(
                 service_native_input_with_ai_deadline_priority(
                     state, context, memory, resume_pc);
             });
+        if (state.pending_transfer.active) return;
     }
     if (state.deadline_events.pending_replaceable_generation(
             galaxy::timing::EventKind::AudioDma) != 0u) {
@@ -26551,6 +27195,7 @@ void branch_checkpoint_body(
                     /*max_dispatches=*/8u,
                     resume_pc);
             });
+        if (state.pending_transfer.active) return;
     }
     if (state.address_space != nullptr &&
         (state.address_space->pe_finish_pending() ||
@@ -26562,6 +27207,7 @@ void branch_checkpoint_body(
             state, guest_pc, "pe", [&] {
                 dispatch_pe_interrupts(state, context, memory, resume_pc);
             });
+        if (state.pending_transfer.active) return;
     }
     // The IPC reply interrupt (27) is an EXTERNAL interrupt: hardware masks it
     // while MSR[EE]=0.  The IPC client (__ios_Ipc2, 0x804D2490; __ipcReg*,
@@ -26588,6 +27234,7 @@ void branch_checkpoint_body(
             state, guest_pc, "ipc", [&] {
                 dispatch_ipc_interrupt(state, context, memory, resume_pc);
             });
+        if (state.pending_transfer.active) return;
     }
 
     // r26 flip monitor: catch the exact PC where FileLoaderThread's r26 transitions
@@ -26633,6 +27280,7 @@ void branch_checkpoint_body(
             dispatch_dsp_interface_interrupts(
                 state, context, memory, resume_pc);
         });
+    if (state.pending_transfer.active) return;
     // AI DMA completion: dispatch only when the active buffer duration elapses.
     if (state.address_space != nullptr &&
         (state.deadline_events.pending_replaceable_generation(
@@ -26652,6 +27300,7 @@ void branch_checkpoint_body(
                         /*max_dispatches=*/8u,
                         resume_pc);
                 });
+            if (state.pending_transfer.active) return;
         }
     } else {
         state.next_ai_dma_probe_checkpoint = 0;
@@ -26668,6 +27317,7 @@ void branch_checkpoint_body(
             // exact DEC edge before this instruction is allowed to resume.
             dispatch_decrementer(state, resume_pc, context, memory);
         });
+    if (state.pending_transfer.active) return;
     // A translated decrementer handler can run scheduler work long enough for
     // a fresh VI edge. Preserve the durable VI transaction if the handler
     // returns through an unusual non-transfer test path.
@@ -26687,6 +27337,7 @@ void branch_checkpoint_body(
                     /*idle_ee_override=*/false,
                     resume_pc);
             });
+        if (state.pending_transfer.active) return;
     }
 
     // (Deleted: the "GX state-pump" force-write of 0x80900BA4 into
@@ -26734,6 +27385,7 @@ void branch_checkpoint_body(
                     throw RuntimeQuitRequested{};
                 }
             });
+        if (state.pending_transfer.active) return;
     }
     if (state.max_checkpoints != 0 &&
         state.checkpoint_count > state.max_checkpoints) {
@@ -26748,6 +27400,7 @@ void branch_checkpoint(
     std::uint32_t guest_pc,
     galaxy::PpcContext* context,
     galaxy::GuestMemoryV1* memory) {
+    if (static_cast<RuntimeState*>(user)->pending_transfer.active) return;
     auto& state = *static_cast<RuntimeState*>(user);
     RuntimeBoundarySelfScope runtime_boundary_self_scope(state, 1u);
     struct ScopedCallbackProfile final {
@@ -27161,6 +27814,7 @@ std::uint32_t wake_osreceive_sleepers_with_queued_messages(
     galaxy::GuestMemoryV1* memory,
     std::uint32_t guest_pc,
     const char* reason) {
+    if (state.pending_transfer.active) return 0u;
     // This is a bring-up-era lost-wakeup repair that manually mutates the
     // guest scheduler queues. Keep it available for A/B diagnostics, but do
     // not run it in normal native mode: real producers must wake
@@ -27430,6 +28084,7 @@ void pump_os_events_except_vi(
     galaxy::PpcContext* context,
     galaxy::GuestMemoryV1* memory,
     bool idle_ee_override) {
+    if (state.pending_transfer.active) return;
     if (state.address_space == nullptr) return;
     service_native_ios_completion_wake(state);
     // IOS IPC reply/ack → OS interrupt 27 → IPCInterruptHandler.  This is
@@ -27474,6 +28129,7 @@ void pump_due_os_events_except_vi(
     galaxy::PpcContext* context,
     galaxy::GuestMemoryV1* memory,
     std::uint32_t max_ai_dispatches = 2u) {
+    if (state.pending_transfer.active) return;
     if (state.address_space == nullptr) return;
     if (state.deadline_events.pending_replaceable_generation(
             galaxy::timing::EventKind::AudioDma) != 0u ||
@@ -27512,6 +28168,7 @@ void pump_os_events(
     RuntimeState& state,
     galaxy::PpcContext* context,
     galaxy::GuestMemoryV1* memory) {
+    if (state.pending_transfer.active) return;
     dispatch_vi_retrace(state, context, memory);
     // The final decrementer arbiter re-polls VI after every other device so a
     // retrace crossing during this pump still has external priority.
@@ -27752,6 +28409,39 @@ bool on_guest_sleep_thread(
     return false;
 }
 
+// Consumes a flag-based transfer at the flat dispatcher: clears the mask bit
+// so checkpoints stop escalating, records the unwind span, and hands back the
+// resume address exactly as the GuestTransfer catch block does.
+bool take_pending_flat_transfer(RuntimeState& state, std::uint32_t& transfer_address) {
+    if (!state.pending_transfer.active) {
+        return false;
+    }
+    const auto pending = state.pending_transfer;
+    state.pending_transfer = {};
+    state.deadline_events.clear_transfer_pending();
+    require_context_transfer_cleanup();
+    static const bool trace_flag = read_env_flag("GALAXY_TRACE_FLAG_TRANSFER", false);
+    if (trace_flag) {
+        std::cerr << "[flag-take] resume=" << hexadecimal(pending.address)
+                  << " pc=" << hexadecimal(state.pending_transfer.address)
+                  << " E4=" << hexadecimal(state.address_space->read_u32(0x800000E4u))
+                  << " D4=" << hexadecimal(state.address_space->read_u32(0x800000D4u))
+                  << " depth=" << g_branch_checkpoint_callback_depth
+                  << " live=" << g_live_ctx_stack.size() << '\n';
+    }
+    if (pending.unwind_start_ns != 0u) {
+        const auto arrived = galaxy::cadence::steady_now_ns_if_enabled(
+            state.cadence_diagnostics);
+        if (arrived >= pending.unwind_start_ns) {
+            state.cadence_diagnostics->record_phase(
+                galaxy::cadence::TimingPhase::GuestTransferUnwind,
+                arrived - pending.unwind_start_ns);
+        }
+    }
+    transfer_address = pending.address;
+    return true;
+}
+
 void run_guest_entry(
     RuntimeState& state,
     galaxy::ModuleEntryFn entry,
@@ -27766,6 +28456,14 @@ void run_guest_entry(
             if (initial_entry) {
                 initial_entry = false;
                 entry(context, memory);
+                if (take_pending_flat_transfer(state, transfer_address)) {
+                    // Flag-based RFI out of the boot thread: the entry
+                    // function returned because the resumed context is
+                    // elsewhere, exactly where the GuestTransfer catch
+                    // used to land.
+                    arbitrate_after_rfi = true;
+                    continue;
+                }
                 throw RuntimeFailure(
                     "guest entry returned at " +
                     std::to_string(state.call_count) + " calls and " +
@@ -27782,6 +28480,10 @@ void run_guest_entry(
             if (arbitrate_after_rfi) {
                 arbitrate_after_rfi = false;
                 arbitrate_after_completed_rfi(state,transfer_address,context,memory);
+                if (take_pending_flat_transfer(state, transfer_address)) {
+                    arbitrate_after_rfi = true;
+                    continue;
+                }
             }
 
             state.record_vi_post_rfi_handoff(
@@ -27821,6 +28523,10 @@ void run_guest_entry(
                         before_hop_r1 = context->gpr[1];
                         before_hop_lr = context->lr;
                         resume_fn(context, memory, state.services);
+                        if (state.pending_transfer.active) {
+                            // Stop the chain; the loop consumes the transfer.
+                            return std::uint32_t{0u};
+                        }
                         return context->lr;
                     },
                     [&](std::uint32_t returned_lr) {
@@ -27838,6 +28544,10 @@ void run_guest_entry(
                         return backchain <= 4u && saved_lr == returned_lr;
                     });
 
+            if (take_pending_flat_transfer(state, transfer_address)) {
+                arbitrate_after_rfi = true;
+                continue;
+            }
             if (stop.reason ==
                 galaxy::scheduler::FlatContinuationStopReason::
                     StackTopSentinel) {
@@ -28022,6 +28732,7 @@ static void notify_guest_memory_write(
 }
 
 static std::uint64_t host_time_base_ticks(void* user) {
+    g_census_guest_time_base_calls.fetch_add(1u, std::memory_order_relaxed);
     auto* state = static_cast<RuntimeState*>(user);
     if (state == nullptr) {
         return 0;
@@ -28427,6 +29138,12 @@ void call_guest_cached(
     galaxy::PpcContext* context,
     galaxy::GuestMemoryV1* memory) {
     auto& state = *static_cast<RuntimeState*>(user);
+    if (state.pending_transfer.active) {
+        throw RuntimeFailure(
+            "translated code made a cached guest call while a flat transfer is "
+            "pending (missing transfer check) resume=" +
+            hexadecimal(state.pending_transfer.address));
+    }
     if (!state.servicing_native_input &&
         state.deadline_events.pending(
             galaxy::timing::EventKind::InputReport) != 0u) {
@@ -28828,6 +29545,12 @@ void fpu_unavailable(
                 kEntry,
                 interrupted_context,
                 state.dispatching_fpu_unavailable);
+            if (state.pending_transfer.active) {
+                throw RuntimeFailure(
+                    "FPU-unavailable handler produced an unrelated flat transfer"
+                    " expected=" + hexadecimal(guest_pc) +
+                    " transfer=" + hexadecimal(state.pending_transfer.address));
+            }
         } catch (const FpuRetryTransfer& transfer) {
             require_context_transfer_cleanup();
             const std::uint32_t current_context =
@@ -29216,6 +29939,30 @@ void return_from_interrupt(
     // Do not invoke the target recursively and do not restore the abandoned
     // caller. Unwind all translated C++ frames to run_guest_entry, which owns
     // the single native execution timeline.
+    if (state.flag_transfer_enabled && !state.pending_transfer.active) {
+        state.pending_transfer = {
+            true,
+            resume_pc,
+            state.dispatching_external_interrupt ? 4u : state.dispatching_decrementer ? 8u : 0u,
+            has_load_frame ? ctx_ptr : 0u,
+            has_load_frame ? load_frame.call_pc : 0u,
+            galaxy::cadence::steady_now_ns_if_enabled(state.cadence_diagnostics)};
+        state.deadline_events.set_transfer_pending();
+        ++state.flag_transfer_count;
+        static const bool trace_flag = read_env_flag("GALAXY_TRACE_FLAG_TRANSFER", false);
+        if (trace_flag) {
+            std::cerr << "[flag-set] rfi=" << hexadecimal(guest_pc)
+                      << " resume=" << hexadecimal(resume_pc)
+                      << " exc=" << state.pending_transfer.exception
+                      << " loaded=" << hexadecimal(state.pending_transfer.loaded_context)
+                      << " E4=" << hexadecimal(state.address_space->read_u32(0x800000E4u))
+                      << " D4=" << hexadecimal(state.address_space->read_u32(0x800000D4u))
+                      << " depth=" << g_branch_checkpoint_callback_depth
+                      << " live=" << g_live_ctx_stack.size() << '\n';
+        }
+        return;
+    }
+    ++state.exception_transfer_count;
     throw GuestTransfer(
         resume_pc,
         galaxy::cadence::steady_now_ns_if_enabled(state.cadence_diagnostics),
@@ -29306,6 +30053,49 @@ static LONG WINAPI galaxy_unhandled_exception_filter(
             "[crash] unhandled exception 0x%08lX at 0x%p -- minidump create failed error=%lu path=%ls\n",
             exception_info->ExceptionRecord->ExceptionCode,
             exception_info->ExceptionRecord->ExceptionAddress, create_error, path);
+    }
+    {
+        const auto faults = galaxy::host::flat_guest_memory::fault_stats();
+        const auto* code = reinterpret_cast<const unsigned char*>(
+            exception_info->ExceptionRecord->ExceptionAddress);
+        HMODULE crash_module = nullptr;
+        wchar_t crash_module_path[MAX_PATH]{};
+        if (GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                               static_cast<LPCWSTR>(exception_info->ExceptionRecord->ExceptionAddress), &crash_module) &&
+            crash_module != nullptr) {
+            GetModuleFileNameW(crash_module, crash_module_path, MAX_PATH);
+        }
+        std::fprintf(stderr, "[crash] module=%ls offset=0x%llx rcx=0x%llx rdx=0x%llx r8=0x%llx r9=0x%llx rax=0x%llx\n",
+            crash_module_path,
+            static_cast<unsigned long long>(
+                reinterpret_cast<std::uintptr_t>(exception_info->ExceptionRecord->ExceptionAddress) -
+                reinterpret_cast<std::uintptr_t>(crash_module)),
+            static_cast<unsigned long long>(exception_info->ContextRecord->Rcx),
+            static_cast<unsigned long long>(exception_info->ContextRecord->Rdx),
+            static_cast<unsigned long long>(exception_info->ContextRecord->R8),
+            static_cast<unsigned long long>(exception_info->ContextRecord->R9),
+            static_cast<unsigned long long>(exception_info->ContextRecord->Rax));
+        for (std::size_t i = 0; i < 8u && faults.hot_counts[i] != 0u; ++i) {
+            std::fprintf(stderr, "[crash] fastmem-hot-page guest=0x%08X faults=%llu\n",
+                static_cast<unsigned>(faults.hot_pages[i] << 12u),
+                static_cast<unsigned long long>(faults.hot_counts[i]));
+        }
+        for (std::size_t i = 0; i < 16u && faults.hot_address_counts[i] != 0u; ++i) {
+            std::fprintf(stderr, "[crash] fastmem-hot-address guest=0x%08X faults=%llu\n",
+                static_cast<unsigned>(faults.hot_addresses[i]),
+                static_cast<unsigned long long>(faults.hot_address_counts[i]));
+        }
+        std::fprintf(stderr,
+            "[crash] fastmem handled-reads=%llu handled-writes=%llu unhandled=%llu last=\"%s\" code=%02X %02X %02X %02X %02X %02X %02X %02X fault-address=0x%p thread=%lu\n",
+            static_cast<unsigned long long>(faults.handled_reads),
+            static_cast<unsigned long long>(faults.handled_writes),
+            static_cast<unsigned long long>(faults.unhandled),
+            galaxy::host::flat_guest_memory::last_unhandled_fault_message(),
+            code[0], code[1], code[2], code[3], code[4], code[5], code[6], code[7],
+            exception_info->ExceptionRecord->NumberParameters >= 2u
+                ? reinterpret_cast<void*>(exception_info->ExceptionRecord->ExceptionInformation[1])
+                : nullptr,
+            static_cast<unsigned long>(GetCurrentThreadId()));
     }
     std::fflush(stderr);
     return EXCEPTION_EXECUTE_HANDLER;
@@ -29969,8 +30759,18 @@ int wmain(int argc, wchar_t** argv) {
             }
         }
     }
-    state.timeline = std::make_unique<galaxy::timing::RuntimeTimeline>(
-        galaxy::timing::query_performance_counter_source());
+    state.timeline = std::make_unique<galaxy::timing::RuntimeTimeline>([] {
+        // One rdtsc per timeline read instead of a QueryPerformanceCounter
+        // call (GALAXY_TSC_CLOCK=0 keeps QPC).
+        if (read_env_flag("GALAXY_TSC_CLOCK", true)) {
+            if (const auto tsc = galaxy::timing::invariant_tsc_counter_source(40u)) {
+                std::cerr << "[timeline] source=tsc counter-hz=" << tsc->frequency << '\n';
+                return *tsc;
+            }
+            std::cerr << "[timeline] source=qpc (no invariant TSC)\n";
+        }
+        return galaxy::timing::query_performance_counter_source();
+    }());
     int positional_count = 0;
     for (int i = 1; i < argc; ++i) {
         const std::wstring arg = argv[i];
@@ -30266,6 +31066,37 @@ int wmain(int argc, wchar_t** argv) {
             std::cerr<<"[float-mode] fast="<<((state.module_float_flags & galaxy::kModuleFloatFlagFastFloat) != 0u)
                 <<" ftz-daz="<<state.fast_float_mxcsr<<'\n';
             g_sim_profiler.stop_and_print(std::cerr);
+            {
+                const auto faults = galaxy::host::flat_guest_memory::fault_stats();
+                std::cerr << "[transfer] flag-returns=" << state.flag_transfer_count
+                          << " exception-unwinds=" << state.exception_transfer_count << '\n';
+                std::cerr << "[host-census] time-base-reads="
+                          << g_census_time_base_calls.load(std::memory_order_relaxed)
+                          << " guest-time-base-reads="
+                          << g_census_guest_time_base_calls.load(std::memory_order_relaxed)
+                          << " checkpoint-bodies="
+                          << g_census_checkpoint_bodies.load(std::memory_order_relaxed)
+                          << " thread-cpu-time=" << g_census_cpu_time_calls.load(std::memory_order_relaxed)
+                          << " thread-cycles=" << g_census_cycle_calls.load(std::memory_order_relaxed)
+                          << '\n';
+                std::cerr << "[fastmem] handled-reads=" << faults.handled_reads
+                          << " handled-writes=" << faults.handled_writes
+                          << " locked-cache=" << faults.locked_cache
+                          << " mmio=" << faults.mmio
+                          << " unhandled=" << faults.unhandled;
+                if (faults.unhandled != 0u) {
+                    std::cerr << " last=\"" << galaxy::host::flat_guest_memory::last_unhandled_fault_message() << '"';
+                }
+                std::cerr << '\n';
+                for (std::size_t i = 0; i < 8u && faults.hot_counts[i] != 0u; ++i) {
+                    std::cerr << "[fastmem-hot-page] guest=" << hexadecimal(faults.hot_pages[i] << 12u)
+                              << " faults=" << faults.hot_counts[i] << '\n';
+                }
+                for (std::size_t i = 0; i < 16u && faults.hot_address_counts[i] != 0u; ++i) {
+                    std::cerr << "[fastmem-hot-address] guest=" << hexadecimal(faults.hot_addresses[i])
+                              << " faults=" << faults.hot_address_counts[i] << '\n';
+                }
+            }
             std::cerr<<"[gx-efb-peek-summary] count="<<state.efb_peek_count
                 <<" published-field-answers="<<state.efb_peek_published_count
                 <<" failures="<<state.efb_peek_failures
@@ -30499,6 +31330,16 @@ int wmain(int argc, wchar_t** argv) {
         }
     }
 
+    if (const auto transfer_flags_fn = reinterpret_cast<std::uint32_t (*)()>(
+            GetProcAddress(module, "galaxy_module_transfer_flags"))) {
+        state.module_transfer_flags = transfer_flags_fn();
+    }
+    state.flag_transfer_enabled =
+        (state.module_transfer_flags & galaxy::kModuleTransferFlagFlagReturn) != 0u &&
+        read_env_flag("GALAXY_FLAG_TRANSFER", false);
+    std::cerr << "[transfer] mode=" << (state.flag_transfer_enabled ? "flag" : "exception")
+              << " module-flags=" << state.module_transfer_flags << '\n';
+
     const galaxy::GameModuleManifestV1* manifest = manifest_fn();
     if (!manifest || manifest->abi_version != galaxy::kNativeAbiVersion ||
         manifest->struct_size < sizeof(galaxy::GameModuleManifestV1)) {
@@ -30559,6 +31400,28 @@ int wmain(int argc, wchar_t** argv) {
     address_space.preload_native_input_replay_log();
     state.address_space = &address_space;
     g_memory_notify_runtime_state = &state;
+    // Configuration is read; from here every flag read is a few loads.
+    g_env_flag_cache_enabled.store(true, std::memory_order_release);
+    galaxy::host::set_env_flag_cache_enabled(true);
+    // Fastmem modules fault on every non-RAM access; the handler completes
+    // them through the address space on this (the simulation) thread.
+    if (state.address_space != nullptr &&
+        galaxy::host::flat_guest_memory::is_initialized()) {
+        galaxy::host::flat_guest_memory::FaultAccessCallbacks callbacks{};
+        callbacks.read = [](void* user, std::uint32_t address, std::uint32_t size,
+                            std::byte* image) noexcept {
+            return static_cast<galaxy::host::GuestAddressSpace*>(user)->fault_access(
+                address, size, false, image);
+        };
+        callbacks.write = [](void* user, std::uint32_t address, std::uint32_t size,
+                             const std::byte* image) noexcept {
+            return static_cast<galaxy::host::GuestAddressSpace*>(user)->fault_access(
+                address, size, true, const_cast<std::byte*>(image));
+        };
+        callbacks.user = state.address_space;
+        callbacks.thread_id = GetCurrentThreadId();
+        galaxy::host::flat_guest_memory::install_fault_handler(callbacks);
+    }
     address_space.guest_memory()->notify_write = &notify_guest_memory_write;
     // AISCNT must tick off the deterministic checkpoint clock, not the host
     // wall clock — otherwise renderer/compile cost changes the boot schedule.

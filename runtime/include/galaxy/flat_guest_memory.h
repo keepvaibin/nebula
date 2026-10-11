@@ -40,6 +40,36 @@ void initialize();
     std::uint32_t guest_address,
     std::uint32_t size) noexcept;
 
+// Fastmem fault handling. A module compiled with GALAXY_FASTMEM performs every
+// RAM access through the view; accesses outside the mapped aliases fault into
+// a vectored handler that decodes the instruction and completes the access
+// through these callbacks with the bytes in guest memory-image order.
+struct FaultAccessCallbacks {
+    bool (*read)(void* user, std::uint32_t address, std::uint32_t size,
+                 std::byte* image) noexcept {};
+    bool (*write)(void* user, std::uint32_t address, std::uint32_t size,
+                  const std::byte* image) noexcept {};
+    void* user{};
+    unsigned long thread_id{};
+};
+void install_fault_handler(const FaultAccessCallbacks& callbacks);
+struct FaultStats {
+    std::uint64_t handled_reads{};
+    std::uint64_t handled_writes{};
+    std::uint64_t locked_cache{};
+    std::uint64_t mmio{};
+    std::uint64_t unhandled{};
+    // The eight 4 KiB guest pages with the most faults (page, count).
+    std::uint32_t hot_pages[8]{};
+    std::uint64_t hot_counts[8]{};
+    // The sixteen 4-byte guest addresses with the most faults.
+    std::uint32_t hot_addresses[16]{};
+    std::uint64_t hot_address_counts[16]{};
+};
+[[nodiscard]] FaultStats fault_stats() noexcept;
+// Message describing the last unhandled fault, empty when none.
+[[nodiscard]] const char* last_unhandled_fault_message() noexcept;
+
 // Only one live GuestAddressSpace may own the process-global section views.
 // A second instance can retain independent vector-backed memory.
 class OwnerLease {

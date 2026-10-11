@@ -28,6 +28,11 @@
 
 namespace galaxy::host {
 
+// Environment flags read through native_host.cpp's read_env_flag are cached by
+// literal name once this is enabled (the runtime enables it after boot
+// configuration; tests leave it off so ScopedEnv changes stay visible).
+void set_env_flag_cache_enabled(bool enabled) noexcept;
+
 // Phases of the opt-in slow-input anomaly ledger. Host steady-clock
 // diagnostics only; they do not sample or alter Wii time.
 enum class NativeInputPollStage : std::size_t {
@@ -906,7 +911,11 @@ public:
     bool ipc_interrupt_pending() const;
 
     // Filled by the WGPIPE write intercept.
-    const std::vector<std::byte>& gx_fifo_data() const { return gx_fifo_; }
+    // The observable GX stream: every complete staged burst lands first.
+    const std::vector<std::byte>& gx_fifo_data() const {
+        const_cast<GuestAddressSpace*>(this)->drain_wgpipe_gather_bursts();
+        return gx_fifo_;
+    }
     // Moves the completed FIFO epoch out and installs a fresh vector before any
     // render wait or guest interrupt can unwind the stack, so later WGPIPE writes
     // cannot mutate the captured frame.
@@ -915,6 +924,7 @@ public:
     // recycle_gx_fifo(). Retain at most one producer and one spare allocation,
     // each capped at 256 KiB. A large capture does not enlarge this pool.
     std::vector<std::byte> take_gx_fifo() {
+        drain_wgpipe_gather_bursts();
         std::vector<std::byte> captured;
         swap(captured, gx_fifo_);
         swap(gx_fifo_, gx_fifo_spare_);
@@ -1022,6 +1032,10 @@ private:
         std::uint32_t size,
         std::byte* output);
     bool write_device(
+        std::uint32_t address,
+        std::uint32_t size,
+        const std::byte* input);
+    bool write_device_register(
         std::uint32_t address,
         std::uint32_t size,
         const std::byte* input);
@@ -1193,6 +1207,43 @@ private:
         std::uint32_t request, std::uint32_t handle, std::uint32_t length,
         NandBacking candidate);
     void finish_native_ios_shutdown();
+public:
+    // Completes one fastmem fault (an access outside the mapped RAM aliases)
+    // with bytes in guest memory-image order: devices first, then any other
+    // region (locked cache). False leaves the fault to the default path.
+    [[nodiscard]] bool fault_access(
+        std::uint32_t address, std::uint32_t size, bool write,
+        std::byte* image) noexcept;
+private:
+    // Asynchronous /dev/di reads: the copy from the memory-mapped game.pak
+    // (and its page-ins) runs on a dedicated worker; the IPC reply is posted
+    // from the simulation thread when the copy has landed in guest RAM.
+    struct AsyncDiscState;
+    std::unique_ptr<AsyncDiscState> async_disc_;
+    [[nodiscard]] bool submit_async_disc_read(
+        std::uint32_t physical_request, std::uint32_t guest_dest,
+        std::uint64_t disc_offset, std::uint32_t size, bool ioctlv);
+    void service_async_disc_completions();
+    void finish_async_disc_shutdown();
+public:
+    // Moves every complete 32-byte burst staged in the gather buffer into the
+    // CPU FIFO (and the live GX stream); the partial tail stays staged. Runs
+    // before anything that can observe the FIFO: register accesses, the frame
+    // handoff, the frame-boundary tail flush.
+    void drain_wgpipe_gather_bursts();
+    // Generated stores append to the live gather buffer only while the CPU
+    // FIFO is the live GP FIFO; while it feeds a memory-backed display list
+    // every burst lands in RAM as it completes, through the device path.
+    void refresh_wgpipe_fast_publication() noexcept;
+    bool wgpipe_fast_allowed_ = false;
+    // Blocks until every submitted disc read has landed, then publishes the
+    // replies (tests and shutdown; the runtime never waits on the worker).
+    void wait_for_async_disc_reads();
+    // The live address space whose guest memory table this is, or null for a
+    // table that no live instance owns (hand-built test tables included).
+    [[nodiscard]] static GuestAddressSpace* owner_of(
+        const GuestMemoryV1* memory) noexcept;
+private:
     // Present in all builds so the layout matches; only test support sets it.
     void (*native_nand_test_before_persist_)(void*){};
     void* native_nand_test_before_persist_user_{};
@@ -1225,6 +1276,12 @@ private:
         std::uint32_t guest_dest,
         std::uint64_t disc_offset,
         std::uint32_t size);
+    // The copy alone, with no dirty publication; safe from a worker thread
+    // because the region tables and the pak view are immutable after boot.
+    void copy_disc_bytes_raw(
+        std::uint32_t guest_dest,
+        std::uint64_t disc_offset,
+        std::uint32_t size) const;
     DiscReadTicket make_disc_read_ticket(
         std::uint32_t physical_request,
         std::uint32_t guest_dest,
@@ -1695,7 +1752,7 @@ private:
     std::uint32_t cpu_fifo_top_{0};
     std::uint32_t cpu_fifo_wr_ptr_{0};
     bool cpu_fifo_wrap_{false};
-    std::array<std::byte, 32> wgpipe_gather_{};
+    std::array<std::byte, kWgpipeGatherFastBytes> wgpipe_gather_{};
     std::uint32_t wgpipe_gather_count_{0};
     // Cumulative bytes copied out of the emulated CP FIFO ring. Replaces a
     // function-local `static` whose only reader asked whether this was the first

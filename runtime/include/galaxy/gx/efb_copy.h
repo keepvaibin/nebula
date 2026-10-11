@@ -276,6 +276,10 @@ class EfbCopyManager {
 public:
     bool initialize(ID3D12Device* device, unsigned efb_scale);
     void shutdown();
+    // Live internal-resolution change: later acquisitions re-create any XFB
+    // texture whose physical extent no longer matches.
+    void set_efb_scale(unsigned efb_scale) noexcept;
+    [[nodiscard]] unsigned efb_scale() const noexcept { return efb_scale_; }
     void begin_frame(unsigned frame_slot, unsigned frames_in_flight);
 
     // Returns the XFB texture registered at the copy destination, creating

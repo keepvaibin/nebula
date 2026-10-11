@@ -378,6 +378,10 @@ EfbPeekSamplingGeometry compute_efb_peek_sampling_geometry(
         integer_scale * integer_scale};
 }
 
+void EfbCopyManager::set_efb_scale(unsigned efb_scale) noexcept {
+    efb_scale_ = std::clamp(efb_scale, 1u, kMaxEfbScale);
+}
+
 XfbTexture* EfbCopyManager::acquire_xfb(
     const EfbCopyParams& params,
     std::uint64_t frame_index) {

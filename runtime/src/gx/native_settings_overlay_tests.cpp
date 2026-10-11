@@ -100,8 +100,8 @@ int main() {
     passed &= expect(snapshot.tab_count == 4u, "video/input/audio/caps tabs exist");
     passed &= expect(snapshot.tab == 0u && snapshot.row == 0u, "video row zero is selected");
     passed &= expect(
-        snapshot.row_count == 2u,
-        "video tab exposes restart scale and the read-only fixed present profile");
+        snapshot.row_count == 4u,
+        "video tab exposes live scale, output size, display mode and the read-only present profile");
 
     passed &= expect(key(VK_F1, true), "repeated F1 is consumed");
     passed &= expect(
@@ -122,26 +122,26 @@ int main() {
     render.max_fps = 60.0f;
     galaxy::gx::set_render_config(render);
     galaxy::gx::stage_next_start_efb_scale(render.efb_scale);
-    passed &= expect(key(VK_DOWN), "down selects the present profile row");
+    passed &= expect(key(VK_DOWN) && key(VK_DOWN) && key(VK_DOWN), "down selects the present profile row");
     passed &= expect(key(VK_RIGHT), "read-only present row still consumes navigation");
     passed &= expect(
         galaxy::gx::get_render_config().vsync_interval == 0u &&
             galaxy::gx::get_render_config().max_fps == 60.0f &&
             !galaxy::gx::native_settings_overlay_snapshot().dirty,
         "fixed Release present profile cannot be mutated in-game");
-    passed &= expect(key(VK_UP), "up returns to the scale row");
+    passed &= expect(key(VK_UP) && key(VK_UP) && key(VK_UP), "up returns to the scale row");
     passed &= expect(key(VK_RIGHT), "right adjusts the selected scale row");
     passed &= expect(
-        galaxy::gx::get_render_config().efb_scale == 3u &&
+        galaxy::gx::get_render_config().efb_scale == 4u &&
             galaxy::gx::get_next_start_efb_scale() == 4u &&
             galaxy::gx::native_settings_overlay_snapshot().dirty,
-        "scale stages 4x for restart without changing live 3x GPU resources");
+        "scale changes live to 4x and stages 4x for the next start");
     passed &= expect(key(VK_RIGHT) && key(VK_RIGHT),
                      "scale selector reaches the opt-in 6x setting");
     passed &= expect(
-        galaxy::gx::get_render_config().efb_scale == 3u &&
+        galaxy::gx::get_render_config().efb_scale == 6u &&
             galaxy::gx::get_next_start_efb_scale() == 6u,
-        "opt-in 6x remains staged until the renderer restarts");
+        "opt-in 6x is live and staged");
 
     galaxy::RuntimeSettings runtime{};
     runtime.input_mode = galaxy::RuntimeInputMode::KeyboardMouse;

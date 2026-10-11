@@ -5480,7 +5480,7 @@ FramePeCompletionToken GxBackend::render_frame(
         throw std::logic_error(
             "[GxBackend] worker memory snapshot has no guest memory owner");
     }
-    std::vector<GuestWriteRange> drained_dirty_ranges;
+    std::vector<GuestWriteRange>& drained_dirty_ranges = drain_scratch_ranges_;
     drain_guest_memory_writes(drained_dirty_ranges);
     coalesce_dirty_ranges(drained_dirty_ranges);
     if (fifo_empty) {
@@ -5616,6 +5616,11 @@ FramePeCompletionToken GxBackend::render_frame(
             chunk.fifo = std::move(fifo_pool_.back());
             fifo_pool_.pop_back();
             chunk.fifo.clear();
+        }
+        if (!dirty_range_pool_.empty()) {
+            chunk.dirty_ranges = std::move(dirty_range_pool_.back());
+            dirty_range_pool_.pop_back();
+            chunk.dirty_ranges.clear();
         }
         if ((snapshot_memory || worker_snapshot) &&
             !memory_snapshot_pool_.empty()) {
@@ -5938,7 +5943,8 @@ void GxBackend::wait_for_render_cpu_reads_idle() {
     // Live-memory mode is deliberately unchanged: there `chunk.memory` is live
     // guest RAM and the full drain is a real correctness requirement.
     const std::size_t queue_depth_limit = timing.render_queue_depth;
-    const bool renderer_owns_its_memory = timing.render_memory_snapshot;
+    const bool renderer_owns_its_memory =
+        timing.render_memory_snapshot || timing.render_live_memory_reads;
 
     std::unique_lock<std::mutex> lock(queue_mutex_);
     const auto queued_render_chunks = [this] {
@@ -6572,6 +6578,10 @@ void GxBackend::render_thread_main() {
             // kChunkPoolRetainedBuffers in gx_backend.h.
             if (fifo_pool_.size() < kChunkPoolRetainedBuffers) {
                 fifo_pool_.push_back(std::move(chunk.fifo));
+            }
+            if (chunk.dirty_ranges.capacity() != 0u &&
+                dirty_range_pool_.size() < kChunkPoolRetainedBuffers) {
+                dirty_range_pool_.push_back(std::move(chunk.dirty_ranges));
             }
             if (!chunk.memory_ranges.empty()) {
                 if (memory_range_pool_.size() < kChunkPoolRetainedBuffers) {
@@ -7390,6 +7400,13 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
     {
         const cadence::ScopedPhaseTimer render_begin_timer{
             cadence_diagnostics_, cadence::TimingPhase::RenderBegin};
+        {
+            const unsigned wanted =
+                std::clamp(get_render_config().efb_scale, 1u, kMaxEfbScale);
+            if (wanted != efb_copies_.efb_scale()) {
+                efb_copies_.set_efb_scale(wanted);
+            }
+        }
         renderer_.begin_frame(chunk.present_swap_chain);
         // begin_frame() waited for this slot's previous frame: resident vertex
         // blocks released kFramesInFlight render frames ago are now unused.

@@ -70,6 +70,16 @@ struct CounterSource {
 // resources and remains valid for the process lifetime.
 CounterSource query_performance_counter_source();
 
+// Returns a raw time-stamp-counter source (rdtsc divided by 8, so the
+// frequency stays inside the supported range) when the processor reports an
+// invariant TSC, calibrated against QueryPerformanceCounter over
+// `calibration_ms`. A timeline read is then one rdtsc instead of a
+// QueryPerformanceCounter call: the simulation thread reads the time base
+// more than a hundred thousand times per second (guest OSGetTick/OSGetTime,
+// checkpoints, device deadlines) and the QPC call was 2 percent of its
+// running samples. Empty when the TSC is not invariant or calibration fails.
+std::optional<CounterSource> invariant_tsc_counter_source(unsigned calibration_ms);
+
 // Converts a counter delta into the Wii's 60.75 MHz time-base domain without
 // floating point. Overflow saturates and is reported through `saturated`.
 std::uint64_t scale_counter_delta(
@@ -128,6 +138,10 @@ private:
         std::uint64_t last_guest_ticks,
         std::uint64_t observed_host_ticks) const noexcept;
     CounterSource source_{};
+    // ticks per counter unit as a 0.64 fixed-point fraction, used instead of
+    // the two divisions of scale_counter_delta when the counter is faster
+    // than the time base (every TSC source); 0 selects the exact path.
+    std::uint64_t scale_fixed64_{};
     std::uint64_t epoch_counter_{};
     std::uint64_t epoch_ticks_{};
     std::atomic_uint64_t discarded_host_ticks_{};
@@ -147,7 +161,12 @@ enum class EventKind : std::uint8_t {
     // Native storage completion is a host wake, not a guest interrupt or a
     // periodic device deadline. Guest IPC IRQ eligibility still obeys MSR[EE].
     IosCompletion = 6,
-    Count = 7,
+    // Flag-based interrupt return: the simulation thread sets this bit when
+    // an RFI resumes elsewhere and clears it at the flat dispatcher. It is a
+    // mask bit only (no deadline, no count); it makes every translated
+    // checkpoint escalate so the native stack unwinds by plain returns.
+    Transfer = 7,
+    Count = 8,
 };
 
 inline constexpr std::size_t kEventKindCount =
@@ -345,12 +364,22 @@ public:
     bool publish(EventKind kind, std::uint64_t count = 1) noexcept;
     // Wakes a simulation thread blocked in WaitOnAddress on mask_address().
     void wake_idle_waiters() noexcept;
+    void set_transfer_pending() noexcept;
+    void clear_transfer_pending() noexcept;
     // Optional auto-reset event that wake_idle_waiters also signals. The
     // simulation thread's idle wait blocks on it together with a
     // high-resolution waitable timer, because WaitOnAddress timeouts are
     // quantized to the system clock interrupt (16 to 33 ms observed).
     void set_idle_wake_event(void* event) noexcept {
         idle_wake_event_.store(event, std::memory_order_release);
+    }
+    // The simulation thread announces that it is about to block on the wake
+    // event (and re-tests the mask afterwards); publishers signal the event
+    // only while this is set, so a publication from a thread that is not
+    // waited on costs no kernel transition. Sequentially consistent on both
+    // sides so a publication can never slip between the test and the wait.
+    void set_idle_waiting(bool waiting) noexcept {
+        idle_waiting_.store(waiting, std::memory_order_seq_cst);
     }
     // Publishes one exact periodic edge. Identity and count are updated under
     // the same per-kind lock, so a consumer can never drain a singleton count
@@ -441,6 +470,7 @@ private:
     std::array<std::atomic_uint64_t, kEventKindCount> max_spins_{};
     std::atomic_uint32_t mask_{0};
     std::atomic<void*> idle_wake_event_{nullptr};
+    std::atomic<bool> idle_waiting_{false};
 };
 
 enum class PeriodicConsumeStatus : std::uint8_t {
@@ -653,6 +683,10 @@ private:
     PendingEventLatch& latch_;
     DeadlineSchedule schedule_{};
     mutable std::mutex mutex_{};
+    // The deadline the worker is currently sleeping toward (all ones while it
+    // waits for a signal only). A new or replaced deadline wakes it only when
+    // it is earlier; a later one is picked up when the worker next recomputes.
+    std::uint64_t worker_wait_until_ticks_ = 0u;
     // Auto-reset Win32 event stored opaquely to keep this public runtime
     // contract free of platform headers. The worker combines it with a
     // high-resolution waitable timer, so schedule changes never wait behind a

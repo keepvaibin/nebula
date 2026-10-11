@@ -92,7 +92,11 @@ GALAXY_ALWAYS_INLINE void atomic_or_u64(
 // ABI 23 requires every renderer dirty-word producer to publish its summary.
 // ABI 22 modules used inline page-only stores: accepting them with a summary
 // drain would silently lose invalidations. Rebuild both game and Home sidecars.
-inline constexpr std::uint32_t kNativeAbiVersion = 25;
+inline constexpr std::uint32_t kNativeAbiVersion = 26;
+// ABI 26: the host's live gather buffer holds kWgpipeGatherFastBytes (a whole
+// multiple of the 32-byte hardware burst); generated stores append in place
+// and cross into the host once per buffer instead of once per burst.
+inline constexpr std::uint32_t kWgpipeGatherFastBytes = 4096u;
 // Dynamic RSO sidecars have their own narrow ABI. They are generated at
 // installation from a validated disc module and contain only native C++; this
 // version is deliberately independent of the RMGE01 game-module manifest.
@@ -4981,12 +4985,31 @@ GALAXY_ALWAYS_INLINE const std::byte* guest_flat_read_base(
         : nullptr;
 }
 
+// Fastmem (generation 16, GALAXY_FASTMEM): a module compiled with clang
+// performs every RAM access through the flat 4 GiB guest view with no range
+// test. The view maps MEM1/MEM2 at their six aliases and nothing else, so an
+// MMIO, locked-cache or unmapped access faults; the runtime's vectored handler
+// (flat_guest_memory::install_fault_handler) decodes the faulting instruction
+// (only the forms emitted below: movbe loads/stores, movzx byte loads, mov
+// byte stores and plain mov stores), performs the access through the device
+// path, writes the register and resumes. The write-gather pipe keeps its one
+// inline test because every GX command passes through it.
+#if defined(GALAXY_FASTMEM) && GALAXY_FASTMEM && defined(__clang__)
+#define GALAXY_FASTMEM_ACTIVE 1
+#else
+#define GALAXY_FASTMEM_ACTIVE 0
+#endif
+
 GALAXY_ALWAYS_INLINE bool guest_flat_ram_span(
     std::uint32_t address,
     std::uint32_t width) noexcept {
     if (width == 0u) {
         return false;
     }
+#if GALAXY_FASTMEM_ACTIVE
+    (void)address;
+    return true;
+#else
     const std::uint32_t alias = address & 0xF0000000u;
     const std::uint32_t offset = address & 0x0FFFFFFFu;
     const std::uint32_t size =
@@ -4998,6 +5021,77 @@ GALAXY_ALWAYS_INLINE bool guest_flat_ram_span(
                   ? 0x04000000u
                   : 0u;
     return size != 0u && width <= size && offset <= size - width;
+#endif
+}
+
+#if GALAXY_FASTMEM_ACTIVE
+// Every guest access is a plain load or store through the view. The compiler
+// is free to fold a load into arithmetic, merge adjacent stores, vectorize or
+// forward a stored value to a later load: the fault handler
+// (flat_guest_memory.cpp) decodes every integer and vector memory form clang
+// emits for these templates and completes a device access of any width, so
+// nothing here constrains code generation. GALAXY_FASTMEM_VOLATILE=1 restores
+// the one-instruction-per-access forms (measured 2x slower per call on the
+// module benchmark, 60.9 against 31.4 ns) for bisecting a fault-decoder gap.
+#if !defined(GALAXY_FASTMEM_VOLATILE)
+#define GALAXY_FASTMEM_VOLATILE 0
+#endif
+#if GALAXY_FASTMEM_VOLATILE
+#define GALAXY_FASTMEM_ACCESS_QUALIFIER volatile
+#else
+#define GALAXY_FASTMEM_ACCESS_QUALIFIER
+#endif
+template <typename T>
+GALAXY_ALWAYS_INLINE T guest_flat_load_bytes(
+    const std::byte* base,
+    std::uint32_t address) noexcept {
+    static_assert(std::is_integral_v<T> && std::is_unsigned_v<T>);
+    const T raw = *reinterpret_cast<const GALAXY_FASTMEM_ACCESS_QUALIFIER T*>(base + address);
+    if constexpr (sizeof(T) == 2u) {
+        return byte_swap_u16(raw);
+    } else if constexpr (sizeof(T) == 4u) {
+        return byte_swap_u32(raw);
+    } else if constexpr (sizeof(T) == 8u) {
+        return byte_swap_u64(raw);
+    } else {
+        return raw;
+    }
+}
+
+// Stores of a host-order value as big-endian guest bytes.
+template <typename T>
+GALAXY_ALWAYS_INLINE void guest_flat_store_bytes(
+    std::byte* base,
+    std::uint32_t address,
+    T value) noexcept {
+    static_assert(std::is_integral_v<T> && std::is_unsigned_v<T>);
+    T raw = value;
+    if constexpr (sizeof(T) == 2u) {
+        raw = byte_swap_u16(value);
+    } else if constexpr (sizeof(T) == 4u) {
+        raw = byte_swap_u32(value);
+    } else if constexpr (sizeof(T) == 8u) {
+        raw = byte_swap_u64(value);
+    }
+    *reinterpret_cast<GALAXY_FASTMEM_ACCESS_QUALIFIER T*>(base + address) = raw;
+}
+
+// Stores of bytes already in guest (memory image) order.
+template <typename T>
+GALAXY_ALWAYS_INLINE void guest_flat_store_raw(
+    std::byte* base,
+    std::uint32_t address,
+    T raw) noexcept {
+    static_assert(std::is_integral_v<T> && std::is_unsigned_v<T>);
+    *reinterpret_cast<GALAXY_FASTMEM_ACCESS_QUALIFIER T*>(base + address) = raw;
+}
+#else
+template <typename T>
+GALAXY_ALWAYS_INLINE void guest_flat_store_raw(
+    std::byte* base,
+    std::uint32_t address,
+    T raw) noexcept {
+    std::memcpy(base + address, &raw, sizeof(raw));
 }
 
 template <typename T>
@@ -5018,6 +5112,7 @@ GALAXY_ALWAYS_INLINE T guest_flat_load_bytes(
         return value;
     }
 }
+#endif
 
 GALAXY_ALWAYS_INLINE std::uint8_t guest_load_flat_or_checked_u8(
     const std::byte* flat_base,
@@ -5048,7 +5143,7 @@ GALAXY_ALWAYS_INLINE std::uint32_t guest_load_flat_or_checked_u32(
     const NativeServicesV1* services,
     std::uint32_t guest_pc) {
     return flat_base != nullptr && guest_flat_ram_span(address, 4u) &&
-                   !trace_fileloader_stack_enabled()
+                   (GALAXY_FASTMEM_ACTIVE || !trace_fileloader_stack_enabled())
         ? guest_flat_load_bytes<std::uint32_t>(flat_base, address)
         : guest_load_u32(memory, address, services, guest_pc);
 }
@@ -6433,6 +6528,27 @@ GALAXY_ALWAYS_INLINE void native_input_trace_copy_pre_checkpoint(
 
 GALAXY_ALWAYS_INLINE void update_cr0(PpcContext* context, std::uint32_t value);
 
+// Flag-based interrupt return (generation 17). When the runtime completes an
+// RFI that resumes elsewhere it sets this bit in the pending-event mask and
+// returns through every host frame instead of throwing GuestTransfer. The
+// bit makes every checkpoint fast path escalate to its cold block, and the
+// cold blocks below return from the translated function without touching
+// the context (the RFI already loaded the resumed context), so the native
+// stack unwinds by plain returns to the runtime's flat dispatcher. The
+// C++ unwinder cost about ten percent of the simulation thread's running
+// samples on the title screen.
+inline constexpr std::uint32_t kPendingEventTransferBit = 1u << 7u;
+
+GALAXY_ALWAYS_INLINE bool transfer_pending(
+    const NativeServicesV1* services) noexcept {
+    return services != nullptr && services->pending_event_mask != nullptr &&
+        (atomic_load_u32(services->pending_event_mask) &
+         kPendingEventTransferBit) != 0u;
+}
+
+#define GALAXY_RETURN_IF_TRANSFER_PENDING(services) \
+    do { if (galaxy::transfer_pending(services)) [[unlikely]] return; } while (false)
+
 inline void native_yaz0_decode_or_fallback_803989BC(
     PpcContext* context,
     GuestMemoryV1* memory,
@@ -6744,6 +6860,7 @@ label_804955B8:
             context,
             memory,
             0x804955D0u);
+        GALAXY_RETURN_IF_TRANSFER_PENDING(services);
     }
 label_804955D4:
     context->gpr[0] =
@@ -6761,6 +6878,7 @@ label_804955D4:
             context,
             memory,
             0x804955DCu);
+        GALAXY_RETURN_IF_TRANSFER_PENDING(services);
     }
 label_804955E0:
     context->gpr[30] = context->gpr[30] + 0x00000001u;
@@ -6783,6 +6901,7 @@ label_804955EC:
             context,
             memory,
             0x804955F4u);
+        GALAXY_RETURN_IF_TRANSFER_PENDING(services);
     }
 label_804955F8:
     context->gpr[0] =
@@ -6941,6 +7060,7 @@ inline void native_audio_message_loop_80494B2C(
             context,
             memory,
             0x80494B7Cu);
+        GALAXY_RETURN_IF_TRANSFER_PENDING(services);
     }
 label_80494B80:
     context->gpr[3] = 0x80490000u;
@@ -6957,6 +7077,7 @@ label_80494B80:
             context,
             memory,
             0x80494B88u);
+        GALAXY_RETURN_IF_TRANSFER_PENDING(services);
     }
 label_80494B8C:
     {
@@ -6971,6 +7092,7 @@ label_80494B8C:
             context,
             memory,
             0x80494B8Cu);
+        GALAXY_RETURN_IF_TRANSFER_PENDING(services);
     }
 label_80494B90:
     {
@@ -6985,6 +7107,7 @@ label_80494B90:
             context,
             memory,
             0x80494B90u);
+        GALAXY_RETURN_IF_TRANSFER_PENDING(services);
     }
 label_80494B94:
     {
@@ -6999,6 +7122,7 @@ label_80494B94:
             context,
             memory,
             0x80494B94u);
+        GALAXY_RETURN_IF_TRANSFER_PENDING(services);
     }
 label_80494B98:
     context->gpr[4] = 0x805F0000u;
@@ -7018,6 +7142,7 @@ label_80494B98:
             context,
             memory,
             0x80494BACu);
+        GALAXY_RETURN_IF_TRANSFER_PENDING(services);
     }
 label_80494BB0:
     context->gpr[3] = context->gpr[31] | context->gpr[31];
@@ -7033,6 +7158,7 @@ label_80494BB0:
             context,
             memory,
             0x80494BB4u);
+        GALAXY_RETURN_IF_TRANSFER_PENDING(services);
     }
 label_80494BB8:
     {
@@ -7047,6 +7173,7 @@ label_80494BB8:
             context,
             memory,
             0x80494BB8u);
+        GALAXY_RETURN_IF_TRANSFER_PENDING(services);
     }
 label_80494BBC:
     context->gpr[31] = 0x805E0000u;
@@ -7067,6 +7194,7 @@ label_80494BC0:
             context,
             memory,
             0x80494BCCu);
+        GALAXY_RETURN_IF_TRANSFER_PENDING(services);
     }
 label_80494BD0:
     context->gpr[0] =
@@ -7128,6 +7256,7 @@ label_80494BF8:
             context,
             memory,
             0x80494C04u);
+        GALAXY_RETURN_IF_TRANSFER_PENDING(services);
     }
 label_80494C08:
     context->gpr[3] = context->gpr[30] + 0x0000007Cu;
@@ -7143,6 +7272,7 @@ label_80494C08:
             context,
             memory,
             0x80494C0Cu);
+        GALAXY_RETURN_IF_TRANSFER_PENDING(services);
     }
 label_80494C10:
     {
@@ -7157,6 +7287,7 @@ label_80494C10:
             context,
             memory,
             0x80494C10u);
+        GALAXY_RETURN_IF_TRANSFER_PENDING(services);
     }
 label_80494C14:
     {
@@ -7171,6 +7302,7 @@ label_80494C14:
             context,
             memory,
             0x80494C14u);
+        GALAXY_RETURN_IF_TRANSFER_PENDING(services);
     }
 label_80494C18:
     goto label_80494BC0;
@@ -7204,6 +7336,7 @@ label_80494C1C:
             context,
             memory,
             0x80494C38u);
+        GALAXY_RETURN_IF_TRANSFER_PENDING(services);
     }
 label_80494C3C:
     {
@@ -7218,6 +7351,7 @@ label_80494C3C:
             context,
             memory,
             0x80494C3Cu);
+        GALAXY_RETURN_IF_TRANSFER_PENDING(services);
     }
 label_80494C40:
     goto label_80494BC0;
@@ -7237,6 +7371,7 @@ label_80494C44:
             context,
             memory,
             0x80494C4Cu);
+        GALAXY_RETURN_IF_TRANSFER_PENDING(services);
     }
 label_80494C50:
     {
@@ -7251,6 +7386,7 @@ label_80494C50:
             context,
             memory,
             0x80494C50u);
+        GALAXY_RETURN_IF_TRANSFER_PENDING(services);
     }
 label_80494C54:
     context->gpr[3] = 0x00000002u;
@@ -7266,6 +7402,7 @@ label_80494C54:
             context,
             memory,
             0x80494C58u);
+        GALAXY_RETURN_IF_TRANSFER_PENDING(services);
     }
 label_80494C5C:
     goto label_80494BC0;
@@ -7283,6 +7420,7 @@ label_80494C60:
             context,
             memory,
             0x80494C60u);
+        GALAXY_RETURN_IF_TRANSFER_PENDING(services);
     }
 label_80494C64:
     context->gpr[3] = 0x00000000u;
@@ -7298,6 +7436,7 @@ label_80494C64:
             context,
             memory,
             0x80494C68u);
+        GALAXY_RETURN_IF_TRANSFER_PENDING(services);
     }
 label_80494C6C:
     goto label_80494BC0;
@@ -7576,6 +7715,7 @@ inline void native_particle_list_apply_8000C53C(
             context,
             memory,
             0x8000C574u);
+        GALAXY_RETURN_IF_TRANSFER_PENDING(services);
     }
 
 label_8000C578:
@@ -7607,6 +7747,7 @@ label_8000C580:
             context,
             memory,
             0x8000C594u);
+        GALAXY_RETURN_IF_TRANSFER_PENDING(services);
     }
 
 label_8000C598:
@@ -7865,6 +8006,7 @@ label_80488368:
             context,
             memory,
             0x80488380u);
+        GALAXY_RETURN_IF_TRANSFER_PENDING(services);
     }
 
 label_80488384:
@@ -9478,6 +9620,7 @@ inline void native_gx_begin_804BA6B0(
             context,
             memory,
             0x804BA6E8u);
+        GALAXY_RETURN_IF_TRANSFER_PENDING(services);
         call_return_checkpoint(
             services, 0x804BA6E8u, 0x804BA6ECu, context, memory);
     }
@@ -9696,6 +9839,7 @@ inline void native_gx_begin_804BDEA8(
             context,
             memory,
             0x804BDED8u);
+        GALAXY_RETURN_IF_TRANSFER_PENDING(services);
     }
 
     context->gpr[0] =
@@ -13128,6 +13272,74 @@ GALAXY_ALWAYS_INLINE void call_return_checkpoint(
         services, call_pc, return_pc, context, memory);
 }
 
+// Register-resident bodies split a call-return checkpoint like a backward
+// branch: this inline test observes exactly the conditions under which
+// call_return_checkpoint leaves its fast paths (adaptive: the counted branch
+// policy; otherwise: a pending event), and the generated code synchronizes
+// its resident registers only around the cold half.
+GALAXY_ALWAYS_INLINE std::uint64_t call_return_checkpoint_due(
+    const NativeServicesV1* services) {
+    if (services != nullptr && services->branch_checkpoint != nullptr &&
+        services->pending_event_mask != nullptr &&
+        (services->runtime_flags & kNativeServiceFlagTraceWpadReadCopies) == 0u)
+        [[likely]] {
+        if ((services->runtime_flags &
+             kNativeServiceFlagAdaptiveCallReturnCheckpoints) != 0u) {
+            if (services->checkpoint_counter != nullptr &&
+                services->checkpoint_next_slow != nullptr) [[likely]] {
+                return branch_checkpoint_due(services);
+            }
+            return kBranchCheckpointNotCounted;
+        }
+        if (atomic_load_u32(services->pending_event_mask) == 0u) [[likely]] {
+            return 0u;
+        }
+    }
+    return kBranchCheckpointNotCounted;
+}
+
+GALAXY_NOINLINE inline void call_return_checkpoint_counted(
+    const NativeServicesV1* services,
+    std::uint32_t call_pc,
+    std::uint32_t return_pc,
+    PpcContext* context,
+    GuestMemoryV1* memory,
+    std::uint64_t counted) {
+    if (counted == kBranchCheckpointNotCounted) {
+        call_return_checkpoint_general(
+            services, call_pc, return_pc, context, memory);
+        return;
+    }
+    branch_checkpoint_taken_counted(
+        services, call_pc, return_pc, context, memory, counted);
+}
+
+
+// Non-resident bodies: the same split the residency pass emits for resident
+// ones, with the transfer test in the cold block.
+#define GALAXY_CALL_RETURN_CHECKPOINT(services, call_pc, return_pc, context, memory) \
+    do { \
+        if (const std::uint64_t counted__ = galaxy::call_return_checkpoint_due(services); \
+            counted__ != 0u) [[unlikely]] { \
+            if (galaxy::transfer_pending(services)) [[unlikely]] return; \
+            galaxy::call_return_checkpoint_counted( \
+                services, call_pc, return_pc, context, memory, counted__); \
+            if (galaxy::transfer_pending(services)) [[unlikely]] return; \
+        } \
+    } while (false)
+
+#define GALAXY_BRANCH_CHECKPOINT_TAKEN_BUDGETED(services, guest_pc, resume_pc, context, memory) \
+    do { \
+        galaxy::branch_checkpoint_taken_budgeted(services, guest_pc, resume_pc, context, memory); \
+        if (galaxy::transfer_pending(services)) [[unlikely]] return; \
+    } while (false)
+
+#define GALAXY_BRANCH_CHECKPOINT_TAKEN(services, guest_pc, resume_pc, context, memory) \
+    do { \
+        galaxy::branch_checkpoint_taken(services, guest_pc, resume_pc, context, memory); \
+        if (galaxy::transfer_pending(services)) [[unlikely]] return; \
+    } while (false)
+
 GALAXY_ALWAYS_INLINE void native_input_trace_copy_pre_checkpoint(
     const NativeServicesV1* services,
     std::uint32_t call_pc,
@@ -13653,6 +13865,7 @@ inline void native_actor_list_apply_80448710(
             context,
             memory,
             0x8044874Cu);
+        GALAXY_RETURN_IF_TRANSFER_PENDING(services);
 
         compare_signed(
             context,
@@ -13682,6 +13895,7 @@ inline void native_actor_list_apply_80448710(
             context,
             memory,
             0x8044876Cu);
+        GALAXY_RETURN_IF_TRANSFER_PENDING(services);
     }
 
     context->gpr[11] = frame + 0x20u;
@@ -14084,6 +14298,7 @@ inline void native_jpa_draw_particle_list_callback(
             context,
             memory,
             caller_pc);
+        GALAXY_RETURN_IF_TRANSFER_PENDING(services);
         return;
     }
 }
@@ -14175,6 +14390,12 @@ using NativeRsoResumeFn = bool (*) (
 // non-IEEE mode.
 inline constexpr std::uint32_t kModuleFloatFlagFastFloat = 1u;
 
+// galaxy_module_transfer_flags: every checkpoint cold path and every
+// architectural interrupt checkpoint in the module tests
+// kPendingEventTransferBit and returns, so the runtime may complete an RFI
+// by returning instead of throwing GuestTransfer.
+inline constexpr std::uint32_t kModuleTransferFlagFlagReturn = 1u;
+
 static_assert(std::is_standard_layout_v<PpcContext>);
 static_assert(std::is_standard_layout_v<NativeServicesV1>);
 static_assert(std::is_standard_layout_v<GameModuleManifestV1>);
@@ -14197,6 +14418,7 @@ GALAXY_MODULE_EXPORT std::size_t galaxy_module_function_records(
 // Optional: galaxy::kModuleFloatFlag* bits. Absent means the exact float
 // model.
 GALAXY_MODULE_EXPORT std::uint32_t galaxy_module_float_flags();
+GALAXY_MODULE_EXPORT std::uint32_t galaxy_module_transfer_flags();
 
 }
 

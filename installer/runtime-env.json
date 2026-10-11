@@ -117,7 +117,7 @@
   },
   {
     "name": "GALAXY_HOST_POINTER_POLL_CACHE_MS",
-    "value": "1"
+    "value": "4"
   },
   {
     "name": "GALAXY_INDEPENDENT_VI_PE_COMPLETION",
@@ -217,7 +217,7 @@
   },
   {
     "name": "GALAXY_REALTIME_VI_POLL_CHECKPOINTS",
-    "value": "2048"
+    "value": "8192"
   },
   {
     "name": "GALAXY_RENDER_IMMUTABLE_RANGE_OWNERSHIP",
@@ -229,10 +229,14 @@
   },
   {
     "name": "GALAXY_RENDER_MEMORY_SNAPSHOT",
-    "value": "1"
+    "value": "0"
   },
   {
     "name": "GALAXY_RENDER_MEMORY_SNAPSHOT_COMPACT",
+    "value": "1"
+  },
+  {
+    "name": "GALAXY_RENDER_LIVE_MEMORY",
     "value": "1"
   },
   {

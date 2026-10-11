@@ -86,6 +86,13 @@ static std::string s_native_settings_content_root;
 static constexpr wchar_t kWindowClass[] = L"NebulaRuntimeWndR";
 static constexpr DWORD kWindowStyle =
     WS_OVERLAPPEDWINDOW;
+// Window-thread requests from the native settings overlay: a client size in
+// (wParam, lParam) and a display mode (wParam != 0 selects borderless).
+static constexpr UINT kClientSizeMessage = WM_USER + 0x41;
+static constexpr UINT kDisplayModeMessage = WM_USER + 0x42;
+static std::atomic<std::uintptr_t> s_native_settings_window{0};
+static std::atomic<bool> s_borderless_active{false};
+static RECT s_windowed_rect{};
 
 #ifndef GALAXY_WITH_STREAMLINE_BRIDGE
 #define GALAXY_WITH_STREAMLINE_BRIDGE 0
@@ -240,7 +247,7 @@ float step_gain(float current, int delta) {
 
 unsigned native_settings_row_count(unsigned tab) {
     switch (tab % kNativeSettingsTabCount) {
-    case 0: return 2u;
+    case 0: return 4u;
     case 1: return 1u;
     case 2: return 5u;
     case 3: return 5u;
@@ -259,15 +266,57 @@ void adjust_native_setting(int delta) {
     }
 
     if (tab == 0u) {
+        const HWND window = reinterpret_cast<HWND>(
+            s_native_settings_window.load(std::memory_order_acquire));
         if (row == 0u) {
-            const unsigned current = get_next_start_efb_scale();
+            // Internal resolution changes live: the render thread re-creates
+            // the EFB targets at the next frame boundary.
+            RenderConfig render = get_render_config();
+            const unsigned current = std::clamp(render.efb_scale, 1u, kMaxEfbScale);
             const unsigned next = static_cast<unsigned>(std::clamp(
                 static_cast<int>(current) + delta,
                 1,
                 static_cast<int>(kMaxEfbScale)));
             if (next != current) {
+                render.efb_scale = next;
+                set_render_config(render);
                 stage_next_start_efb_scale(next);
                 s_native_settings_dirty.store(true, std::memory_order_release);
+            }
+        } else if (row == 1u) {
+            static constexpr std::array<std::pair<unsigned, unsigned>, 9> kOutputPresets{{
+                {854u, 480u}, {1280u, 720u}, {1600u, 900u}, {1920u, 1080u},
+                {2560u, 1440u}, {3440u, 1440u}, {3840u, 2160u}, {5120u, 2880u},
+                {7680u, 4320u}}};
+            const unsigned height = s_bb_height;
+            std::size_t index = 0u;
+            for (std::size_t i = 0; i < kOutputPresets.size(); ++i) {
+                if (kOutputPresets[i].second <= height) index = i;
+            }
+            if (delta > 0 && index + 1u < kOutputPresets.size()) {
+                ++index;
+            } else if (delta < 0 && index > 0u) {
+                --index;
+            } else {
+                return;
+            }
+            const auto [width, wanted_height] = kOutputPresets[index];
+            if (window != nullptr) {
+                (void)PostMessageW(window, kClientSizeMessage,
+                                   static_cast<WPARAM>(width),
+                                   static_cast<LPARAM>(wanted_height));
+            }
+            RenderConfig render = get_render_config();
+            render.window_width = width;
+            render.window_height = wanted_height;
+            set_render_config(render);
+            s_native_settings_dirty.store(true, std::memory_order_release);
+        } else if (row == 2u) {
+            const bool borderless =
+                !s_borderless_active.load(std::memory_order_acquire);
+            if (window != nullptr) {
+                (void)PostMessageW(window, kDisplayModeMessage,
+                                   borderless ? 1u : 0u, 0);
             }
         }
         return;
@@ -1026,7 +1075,77 @@ void update_pointer_button(HWND hwnd, LPARAM lp, bool left, bool down) {
         publication.absolute_acquired_ms);
 }
 
+static void apply_requested_display_mode(HWND hwnd, bool borderless) {
+    if (borderless == s_borderless_active.load(std::memory_order_acquire)) {
+        return;
+    }
+    if (borderless) {
+        (void)GetWindowRect(hwnd, &s_windowed_rect);
+        HMONITOR monitor = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
+        MONITORINFO info{};
+        info.cbSize = sizeof(info);
+        if (!GetMonitorInfoW(monitor, &info)) {
+            return;
+        }
+        (void)SetWindowLongPtrW(
+            hwnd, GWL_STYLE, static_cast<LONG_PTR>(WS_POPUP | WS_VISIBLE));
+        (void)SetWindowPos(
+            hwnd, HWND_TOP, info.rcMonitor.left, info.rcMonitor.top,
+            info.rcMonitor.right - info.rcMonitor.left,
+            info.rcMonitor.bottom - info.rcMonitor.top,
+            SWP_FRAMECHANGED | SWP_NOACTIVATE);
+        s_borderless_active.store(true, std::memory_order_release);
+        return;
+    }
+    (void)SetWindowLongPtrW(
+        hwnd, GWL_STYLE, static_cast<LONG_PTR>(kWindowStyle | WS_VISIBLE));
+    const RECT restored = s_windowed_rect;
+    int width = restored.right - restored.left;
+    int height = restored.bottom - restored.top;
+    int x = restored.left;
+    int y = restored.top;
+    if (width <= 0 || height <= 0) {
+        RECT frame{0, 0, 1280, 720};
+        (void)AdjustWindowRectExForDpi(
+            &frame, kWindowStyle, FALSE, WS_EX_APPWINDOW, GetDpiForWindow(hwnd));
+        width = frame.right - frame.left;
+        height = frame.bottom - frame.top;
+        x = 64;
+        y = 64;
+    }
+    (void)SetWindowPos(
+        hwnd, nullptr, x, y, width, height,
+        SWP_NOZORDER | SWP_FRAMECHANGED | SWP_NOACTIVATE);
+    s_borderless_active.store(false, std::memory_order_release);
+}
+
+static void apply_requested_client_size(HWND hwnd, int width, int height) {
+    if (width <= 0 || height <= 0) {
+        return;
+    }
+    if (s_borderless_active.load(std::memory_order_acquire)) {
+        apply_requested_display_mode(hwnd, false);
+    }
+    RECT frame{0, 0, width, height};
+    const DWORD style = static_cast<DWORD>(GetWindowLongPtrW(hwnd, GWL_STYLE));
+    const DWORD ex_style = static_cast<DWORD>(GetWindowLongPtrW(hwnd, GWL_EXSTYLE));
+    if (!AdjustWindowRectExForDpi(&frame, style, FALSE, ex_style, GetDpiForWindow(hwnd))) {
+        return;
+    }
+    (void)SetWindowPos(
+        hwnd, nullptr, 0, 0, frame.right - frame.left, frame.bottom - frame.top,
+        SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED);
+}
+
 LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
+    if (msg == kClientSizeMessage) {
+        apply_requested_client_size(hwnd, static_cast<int>(wp), static_cast<int>(lp));
+        return 0;
+    }
+    if (msg == kDisplayModeMessage) {
+        apply_requested_display_mode(hwnd, wp != 0u);
+        return 0;
+    }
     if (msg == WM_CREATE) {
         s_pointer_hwnd.store(reinterpret_cast<std::uintptr_t>(hwnd),
                              std::memory_order_release);
@@ -2670,11 +2789,75 @@ bool RendererD3D12::create_conversion_pipeline() {
         conv_scratch_rtv_slot_.reset();
     }
 
-    const auto source_views = detail::create_efb_conversion_source_views(
-        device_.Get(), efb_color_.Get(), efb_depth_.Get(), srv_ring_);
-    conv_efb_color_srv_ = source_views[0];
-    conv_efb_depth_srv_ = source_views[1];
+    refresh_efb_conversion_source_views();
     return true;
+}
+
+void RendererD3D12::refresh_efb_conversion_source_views() {
+    if (!efb_color_ || !efb_depth_) {
+        throw std::runtime_error("EFB conversion source resource unavailable");
+    }
+    if (!conv_efb_source_table_) {
+        conv_efb_source_table_ = srv_ring_.allocate_persistent(2u);
+    }
+    const UINT stride = device_->GetDescriptorHandleIncrementSize(
+        D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+    D3D12_SHADER_RESOURCE_VIEW_DESC view{};
+    view.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+    view.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+    view.Texture2D.MipLevels = 1u;
+    view.Format = kEfbColorFormat;
+    device_->CreateShaderResourceView(
+        efb_color_.Get(), &view, conv_efb_source_table_->cpu);
+    auto depth_cpu = conv_efb_source_table_->cpu;
+    depth_cpu.ptr += stride;
+    view.Format = kEfbDepthSrvFormat;
+    device_->CreateShaderResourceView(efb_depth_.Get(), &view, depth_cpu);
+    conv_efb_color_srv_ = conv_efb_source_table_->gpu;
+    auto depth_gpu = conv_efb_source_table_->gpu;
+    depth_gpu.ptr += stride;
+    conv_efb_depth_srv_ = depth_gpu;
+}
+
+void RendererD3D12::apply_pending_efb_scale() {
+    const unsigned wanted =
+        std::clamp(get_render_config().efb_scale, 1u, kMaxEfbScale);
+    if (wanted == efb_scale_ || !device_ || !efb_color_) {
+        return;
+    }
+    // Between frames with nothing recording; the GPU must be done with the
+    // old targets and every scaled copy destination before they go away.
+    wait_for_gpu();
+    efb_copy_dests_.clear();
+    efb_copy_dests_bytes_ = 0u;
+    efb_copy_dests_tick_ = 0u;
+    for (auto& retired : retired_efb_copy_textures_) {
+        retired.clear();
+    }
+    readback_buf_.Reset();
+    readback_pending_ = false;
+    readback_fence_value_ = 0u;
+    efb_color_.Reset();
+    efb_depth_.Reset();
+    dsv_heap_.Reset();
+    const unsigned previous = efb_scale_;
+    unsigned applied = wanted;
+    if (!create_efb_targets(wanted)) {
+        applied = previous;
+        if (!create_efb_targets(previous)) {
+            throw std::runtime_error("EFB targets could not be re-created");
+        }
+        RenderConfig render = get_render_config();
+        render.efb_scale = previous;
+        set_render_config(render);
+    }
+    efb_scale_ = applied;
+    refresh_efb_conversion_source_views();
+    invalidate_gx_bindings();
+    bound_scissor_input_scale_ = 0u;
+    std::cout << "[Renderer] internal resolution " << previous << "x -> "
+              << applied << "x (" << kEfbWidth * applied << "x"
+              << kEfbHeight * applied << ")\n";
 }
 
 std::array<D3D12_GPU_DESCRIPTOR_HANDLE, 2>
@@ -2853,6 +3036,9 @@ bool RendererD3D12::initialize(int window_width, int window_height, unsigned efb
             window_x, window_y, static_cast<int>(outer_width),
             static_cast<int>(outer_height), !hidden_window});
         if (!window_) { std::cerr << "[Renderer] CreateWindow failed\n"; return false; }
+        s_native_settings_window.store(
+            reinterpret_cast<std::uintptr_t>(window_), std::memory_order_release);
+        s_borderless_active.store(fullscreen_window, std::memory_order_release);
         // A centered geometry seed is not evidence that the OS cursor is in
         // the client. The first real message or authoritative cursor poll
         // acquires visibility.
@@ -3436,6 +3622,7 @@ void RendererD3D12::shutdown() {
     conv_scratch_rtv_ = {};
     conv_efb_color_srv_ = {};
     conv_efb_depth_srv_ = {};
+    conv_efb_source_table_.reset();
     next_fence_value_ = 0;
     peek_command_list_.Reset();
     peek_allocator_.Reset();
@@ -4049,6 +4236,7 @@ void RendererD3D12::begin_frame(bool present_swap_chain) {
     // its own full GPU-idle wait, so it belongs before any per-slot state
     // below is touched.
     apply_pending_resize();
+    apply_pending_efb_scale();
     frame_slot_ = static_cast<unsigned>(frame_index_ % kFramesInFlight);
     last_latency_wait_us_ = 0;
     last_frame_slot_wait_us_ = 0;
@@ -6309,15 +6497,31 @@ std::string native_settings_row_text(
     switch (tab % kNativeSettingsTabCount) {
     case 0:
         switch (row) {
-        case 0:
+        case 0: {
+            const unsigned scale = std::clamp(render.efb_scale, 1u, kMaxEfbScale);
             std::snprintf(
                 text,
                 sizeof(text),
-                "INTERNAL RES: %uX -> %uX RESTART",
-                std::clamp(render.efb_scale, 1u, kMaxEfbScale),
-                get_next_start_efb_scale());
+                "INTERNAL RES: %uX (%ux%u)",
+                scale,
+                kEfbWidth * scale,
+                kEfbHeight * scale);
             return text;
+        }
         case 1:
+            std::snprintf(
+                text,
+                sizeof(text),
+                "OUTPUT: %ux%u",
+                static_cast<unsigned>(s_bb_width),
+                static_cast<unsigned>(s_bb_height));
+            return text;
+        case 2:
+            return std::string("DISPLAY: ") +
+                   (s_borderless_active.load(std::memory_order_acquire)
+                        ? "BORDERLESS FULLSCREEN"
+                        : "WINDOWED");
+        case 3:
             if (render.max_fps <= 0.0f) {
                 return std::string("PRESENT: VSYNC ") +
                        (render.vsync_interval == 0u ? "OFF" : "ON") +

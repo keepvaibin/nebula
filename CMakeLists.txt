@@ -674,6 +674,12 @@ target_link_libraries(NebulaRuntime PRIVATE galaxy_runtime_instance)
 target_link_libraries(NebulaRuntime PRIVATE xinput9_1_0)
 target_link_libraries(NebulaRuntime PRIVATE dbghelp)
 if(MSVC)
+    # Public symbols for the built-in sampling profiler and offline analysis;
+    # /OPT keeps the Release layout, /PDBALTPATH keeps build paths out of the image.
+    target_compile_options(NebulaRuntime PRIVATE /Zi)
+    target_link_options(NebulaRuntime PRIVATE /DEBUG /OPT:REF /OPT:ICF /PDBALTPATH:NebulaRuntime.pdb)
+endif()
+if(MSVC)
     # Generated DSP probe/entry functions are referenced through the native
     # host, but the production link proof also requires archive retention to
     # be explicit in the final executable graph.  WHOLE_ARCHIVE prevents a

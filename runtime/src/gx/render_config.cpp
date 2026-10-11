@@ -379,6 +379,9 @@ GxTimingConfig resolve_gx_timing_config_from_environment() {
         !config.render_live_memory_wait);
     config.render_memory_snapshot =
         !config.render_live_memory_wait && snapshot_requested;
+    config.render_live_memory_reads =
+        !config.render_live_memory_wait && !config.render_memory_snapshot &&
+        read_env_bool("GALAXY_RENDER_LIVE_MEMORY", false);
     return config;
 }
 
