@@ -2174,6 +2174,10 @@ struct RuntimeState {
         std::uint64_t unwind_start_ns{};
     } pending_transfer{};
     bool flag_transfer_enabled{};
+    // Diagnostic bisection: bit 0 thread switch (exception 0), bit 1
+    // external interrupt (4), bit 2 decrementer (8). A cleared bit keeps
+    // that class on GuestTransfer unwinding.
+    std::uint32_t flag_transfer_kinds{7u};
     std::uint32_t module_transfer_flags{};
     std::uint64_t flag_transfer_count{};
     std::uint64_t exception_transfer_count{};
@@ -21949,6 +21953,7 @@ bool arbitrate_external_before_decrementer(
         dispatch_dsp_interface_interrupts(
             state, context, memory, resume_address);
     }
+    if (state.pending_transfer.active) return true;
 
     bool force_due_vi_publication = false;
     bool vi_blocks_decrementer = false;
@@ -21978,6 +21983,10 @@ bool arbitrate_external_before_decrementer(
             /*force=*/force_due_vi_publication,
             /*idle_ee_override=*/false,
             resume_address);
+        // A flag-based RFI out of the VI handler already loaded the resumed
+        // context; this instruction boundary no longer exists, so DEC must
+        // not be accepted on it (GuestTransfer used to skip the rest).
+        if (state.pending_transfer.active) return true;
     }
     if (dispatch_external_interrupt(
             state, resume_address, context, memory)) {
@@ -22019,6 +22028,7 @@ void dispatch_decrementer(
     }
     if (arbitrate_external_before_decrementer(
             state, resume_address, context, memory) ||
+        state.pending_transfer.active ||
         !decrementer_needs_dispatch(state, context)) {
         return;
     }
@@ -22404,6 +22414,10 @@ bool execute_yield_select_with_rfi_return(
     // Execute all original scheduler/save/load work. A changed thread or any
     // interrupt still throws the original transfer and unwinds this scope.
     body(context, memory, state.services);
+    // A switch to another thread (or any interrupt) completed by flag: the
+    // resumed context is loaded and this caller no longer exists, exactly
+    // where GuestTransfer used to unwind through this scope.
+    if (state.pending_transfer.active) return true;
     // SelectThread may return normally without a context load. If it used the
     // protocol, its generated branch already executed the original save-call
     // return checkpoint and epilogue, once, in this same native invocation.
@@ -22492,8 +22506,10 @@ bool execute_yield_select_retaining_same_context(
         // original call-return checkpoint and SelectThread's exact epilogue.
         // A new transfer from either operation propagates unchanged.
         arbitrate_after_completed_rfi(state, transfer.address(), context, memory);
+        if (state.pending_transfer.active) return true;
         context->pc = transfer.address();
         resume(context, memory, state.services);
+        if (state.pending_transfer.active) return true;
         if (context->gpr[1] != entry_sp || context->lr != entry_lr ||
             state.address_space->read_u32(0x800000D4u) != entry_context ||
             state.address_space->read_u32(0x800000E4u) != entry_thread) {
@@ -23588,9 +23604,11 @@ void call_guest_impl_body(
                 ++state.yield_select_rfi_retained;
             }
             arbitrate_after_completed_rfi(state, context->pc, context, memory);
+            // Guest-executing arbitration transfers (by flag: it returns with
+            // the resumed context loaded and this continuation abandoned).
+            if (state.pending_transfer.active) return;
             // Only this exact continuation has a generated non-local return
-            // edge. Guest-executing arbitration currently transfers instead
-            // of returning; fail closed if a future service clobbers its frame.
+            // edge. Fail closed if a future service clobbers its frame.
             if (context->pc != 0x804AB30Cu || context->gpr[3] != 1u ||
                 context->gpr[1] != proof->sp - 0x10u) {
                 throw RuntimeFailure(
@@ -30123,11 +30141,27 @@ void return_from_interrupt(
     // Do not invoke the target recursively and do not restore the abandoned
     // caller. Unwind all translated C++ frames to run_guest_entry, which owns
     // the single native execution timeline.
-    if (state.flag_transfer_enabled && !state.pending_transfer.active) {
+    const std::uint32_t transfer_exception =
+        state.dispatching_external_interrupt ? 4u : state.dispatching_decrementer ? 8u : 0u;
+    if (state.pending_transfer.active) {
+        // Guest code ran after an RFI had already loaded another resume
+        // point: some host path continued past a dispatch instead of
+        // returning. Fail at the second RFI rather than mix the two.
+        throw RuntimeFailure(
+            "guest RFI at " + hexadecimal(guest_pc) + " resume=" + hexadecimal(resume_pc) +
+            " exception=" + std::to_string(transfer_exception) +
+            " while flag transfer to " + hexadecimal(state.pending_transfer.address) +
+            " exception=" + std::to_string(state.pending_transfer.exception) +
+            " is still pending");
+    }
+    const std::uint32_t transfer_kind_bit =
+        transfer_exception == 4u ? 2u : transfer_exception == 8u ? 4u : 1u;
+    if (state.flag_transfer_enabled && !state.pending_transfer.active &&
+        (state.flag_transfer_kinds & transfer_kind_bit) != 0u) {
         state.pending_transfer = {
             true,
             resume_pc,
-            state.dispatching_external_interrupt ? 4u : state.dispatching_decrementer ? 8u : 0u,
+            transfer_exception,
             has_load_frame ? ctx_ptr : 0u,
             has_load_frame ? load_frame.call_pc : 0u,
             galaxy::cadence::steady_now_ns_if_enabled(state.cadence_diagnostics)};
@@ -31575,7 +31609,10 @@ int wmain(int argc, wchar_t** argv) {
     state.flag_transfer_enabled =
         (state.module_transfer_flags & galaxy::kModuleTransferFlagFlagReturn) != 0u &&
         read_env_flag("GALAXY_FLAG_TRANSFER", false);
+    state.flag_transfer_kinds =
+        static_cast<std::uint32_t>(read_env_u64("GALAXY_FLAG_TRANSFER_KINDS", 7u)) & 7u;
     std::cerr << "[transfer] mode=" << (state.flag_transfer_enabled ? "flag" : "exception")
+              << " kinds=" << state.flag_transfer_kinds
               << " module-flags=" << state.module_transfer_flags << '\n';
 
     const galaxy::GameModuleManifestV1* manifest = manifest_fn();

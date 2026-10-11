@@ -1409,6 +1409,12 @@ fn render_native_sidecar_cpp(
         bool returned_to_native_caller = false;
         execute_static_rso(
             context, memory, services, layout, &returned_to_native_caller);
+        // A flag-based RFI inside the sidecar returned through its checkpoints
+        // without completing the call; the context belongs to the resumed
+        // thread now. Hand the pending transfer to the runtime unexamined.
+        if (galaxy::transfer_pending(services)) {
+            return true;
+        }
         if (!returned_to_native_caller ||
             context->pc == native_caller_return) {
             trace_static_home_button_rso_state(
