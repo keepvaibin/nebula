@@ -100,6 +100,10 @@ struct FramePeEventSignature {
 
 class FramePeEventClassifier final : private FifoSink {
 public:
+    // event_only selects the parser's classify-only mode. With
+    // GALAXY_PE_CLASSIFY_VERIFY=1 a full-mode classifier runs on the same
+    // bytes and every difference is reported.
+    explicit FramePeEventClassifier(bool event_only = true);
     void reset();
     void classify(
         const std::byte* fifo_data,
@@ -153,6 +157,11 @@ private:
 
     GxState state_{};
     FifoParser parser_{};
+    bool event_only_ = true;
+    std::unique_ptr<FramePeEventClassifier> verifier_;
+    std::vector<FramePeEventSignature> verifier_events_;
+    std::uint64_t verified_chunks_ = 0;
+    std::uint64_t verify_mismatches_ = 0;
     std::vector<std::byte> pending_fifo_;
     std::vector<FramePeEventSignature>* active_events_ = nullptr;
     // Memo for draw_payload_size(). This classifier runs a second full pass over

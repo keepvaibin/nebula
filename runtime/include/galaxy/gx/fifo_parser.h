@@ -470,6 +470,15 @@ public:
         memory_read_recorder_ = recorder;
     }
 
+    // PE event classification only (FramePeEventClassifier): XF and indexed
+    // loads leave the state untouched, and a cached display list with no PE
+    // register write replays as its CP writes and its last BP command. The
+    // classifier reads only CP registers (draw sizes), the BP mask and the PE
+    // registers, so its events and command boundaries are unchanged.
+    void set_event_classification_only(bool enabled) {
+        event_classification_only_ = enabled;
+    }
+
     // Invalidates cached CALL_DL replays whose guest byte window overlaps a
     // dirty guest-memory range. The address may be physical or a MEM1/MEM2
     // cached/uncached CPU alias.
@@ -550,6 +559,12 @@ private:
         std::vector<CachedDrawPacketRun> draw_packet_runs;
         std::vector<CachedDrawPacket> draw_run_packets;
         std::vector<std::uint16_t> draw_run_indices;
+        // Event-classification summary, built on the first classify-only
+        // replay: 0 unbuilt, 1 no PE register write, 2 full replay.
+        mutable std::uint8_t classify_summary = 0;
+        mutable bool classify_has_bp = false;
+        mutable std::uint32_t classify_last_bp = 0;
+        mutable std::vector<std::pair<std::uint8_t, std::uint32_t>> classify_cp_writes;
     };
 
     struct DisplayListCacheKey {
@@ -605,6 +620,9 @@ private:
     void invalidate_display_list_cache_index(std::size_t index);
     void index_display_list_cache_entry(std::size_t index);
 
+    bool replay_event_free_display_list(
+        const CachedDisplayList& cached,
+        GxState& state) const;
     void replay_cached_display_list(
         const CachedDisplayList& cached,
         GuestMemoryV1* memory,
@@ -640,6 +658,7 @@ private:
     std::uint64_t frame_index_ = 0;
     FifoParserProfile* profile_ = nullptr;
     FifoGuestMemoryReadRecorder* memory_read_recorder_ = nullptr;
+    bool event_classification_only_ = false;
     std::uint64_t display_list_cache_tick_ = 0;
     std::uint64_t display_list_cache_token_ = 0;
     std::size_t last_display_list_cache_index_ = static_cast<std::size_t>(-1);

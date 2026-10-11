@@ -2866,13 +2866,31 @@ static_assert(
 
 }  // anonymous namespace
 
+FramePeEventClassifier::FramePeEventClassifier(bool event_only)
+    : event_only_(event_only) {
+    parser_.set_event_classification_only(event_only_);
+    static const bool verify = [] {
+        char value[16]{};
+        std::size_t length = 0;
+        return getenv_s(&length, value, sizeof(value), "GALAXY_PE_CLASSIFY_VERIFY") == 0 &&
+            length > 1u && value[0] != '0';
+    }();
+    if (event_only_ && verify) {
+        verifier_ = std::make_unique<FramePeEventClassifier>(false);
+    }
+}
+
 void FramePeEventClassifier::reset() {
     if (active_events_ != nullptr) {
         throw std::logic_error(
             "GX PE event classifier reset during an active parse");
     }
+    if (verifier_ != nullptr) {
+        verifier_->reset();
+    }
     state_ = GxState{};
     parser_ = FifoParser{};
+    parser_.set_event_classification_only(event_only_);
     parser_.set_dump_dir("generated");
     pending_fifo_.clear();
 }
@@ -2921,11 +2939,31 @@ void FramePeEventClassifier::classify(
         throw;
     }
     active_events_ = nullptr;
+    if (verifier_ != nullptr) {
+        verifier_->classify(fifo_data, fifo_size, memory, verifier_events_, frozen_regions);
+        ++verified_chunks_;
+        if (verifier_events_ != events) {
+            ++verify_mismatches_;
+            if (verify_mismatches_ <= 16u) {
+                std::cerr << "[pe-classify-verify] mismatch chunk=" << verified_chunks_
+                          << " lean-events=" << events.size()
+                          << " full-events=" << verifier_events_.size()
+                          << " fifo-bytes=" << fifo_size << '\n';
+            }
+        }
+        if ((verified_chunks_ % 6000u) == 0u) {
+            std::cerr << "[pe-classify-verify] chunks=" << verified_chunks_
+                      << " mismatches=" << verify_mismatches_ << '\n';
+        }
+    }
 }
 
 std::size_t FramePeEventClassifier::invalidate_display_list_cache_range(
     std::uint32_t guest_addr,
     std::uint32_t size) {
+    if (verifier_ != nullptr) {
+        (void)verifier_->invalidate_display_list_cache_range(guest_addr, size);
+    }
     return parser_.invalidate_display_list_cache_range(guest_addr, size);
 }
 

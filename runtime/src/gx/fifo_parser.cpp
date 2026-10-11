@@ -1129,6 +1129,7 @@ void FifoParser::store_cached_display_list(
     target->commands = std::move(recording.commands);
     target->cp_dependencies = std::move(recording.cp_dependencies);
     target->xf_values = std::move(recording.xf_values);
+    target->classify_summary = 0u;
     prepare_cached_display_list_draw_runs(*target);
     index_display_list_cache_entry(target_index);
     cache_bytes_ += display_list_cache_entry_bytes(*target);
@@ -1400,12 +1401,55 @@ std::size_t FifoParser::invalidate_display_list_cache_range(
     return invalidated;
 }
 
+// Classify-only replay of a cached list with no PE register write: its CP
+// writes in order, then its last BP command, which leaves the one-shot mask as
+// the full replay does (armed by a final mask write, otherwise spent). Lists
+// that write PE_DONE/PE_TOKEN/PE_TOKEN_INT take the full replay.
+bool FifoParser::replay_event_free_display_list(
+    const CachedDisplayList& cached,
+    GxState& state) const {
+    if (cached.classify_summary == 0u) {
+        cached.classify_cp_writes.clear();
+        cached.classify_has_bp = false;
+        cached.classify_summary = 1u;
+        for (const CachedDisplayListCommand& command : cached.commands) {
+            if (command.kind == CachedDisplayListCommand::Kind::LoadCp) {
+                cached.classify_cp_writes.emplace_back(command.reg, command.value);
+            } else if (command.kind == CachedDisplayListCommand::Kind::LoadBp) {
+                const auto reg = static_cast<std::uint8_t>(command.command >> 24);
+                if (reg == bp::kPeDone || reg == bp::kPeToken ||
+                    reg == bp::kPeTokenInt) {
+                    cached.classify_summary = 2u;
+                    cached.classify_cp_writes.clear();
+                    break;
+                }
+                cached.classify_has_bp = true;
+                cached.classify_last_bp = command.command;
+            }
+        }
+    }
+    if (cached.classify_summary != 1u) {
+        return false;
+    }
+    for (const auto& [reg, value] : cached.classify_cp_writes) {
+        state.load_cp(reg, value);
+    }
+    if (cached.classify_has_bp) {
+        state.load_bp(cached.classify_last_bp);
+    }
+    return true;
+}
+
 void FifoParser::replay_cached_display_list(
     const CachedDisplayList& cached,
     GuestMemoryV1* memory,
     FifoSink& sink,
     GxState& state,
     std::size_t opcode_offset) const {
+    if (event_classification_only_ &&
+        replay_event_free_display_list(cached, state)) {
+        return;
+    }
     FifoCursor replay_context;
     replay_context.data = cached.bytes;
     replay_context.offset = 0;
@@ -1904,7 +1948,9 @@ void FifoParser::run_window(
             std::array<std::uint32_t, 16> values{};
             const auto raw = cursor.take(static_cast<std::size_t>(count) * 4u);
             swap32_block(raw.data(), values.data(), count);
-            state.load_xf(base, values.data(), count);
+            if (!event_classification_only_) {
+                state.load_xf(base, values.data(), count);
+            }
             if (recording != nullptr && recording->cacheable) {
                 CachedDisplayListCommand command;
                 command.kind = CachedDisplayListCommand::Kind::LoadXf;
@@ -1967,12 +2013,14 @@ void FifoParser::run_window(
 
             const std::uint32_t byte_size =
                 static_cast<std::uint32_t>(length) * 4u;
-            const auto guest_window =
-                resolve_guest(memory, guest_addr, byte_size, cursor);
+            if (!event_classification_only_) {
+                const auto guest_window =
+                    resolve_guest(memory, guest_addr, byte_size, cursor);
 
-            std::array<std::uint32_t, 16> values{};
-            swap32_block(guest_window.data(), values.data(), length);
-            state.load_xf_indexed(xf_addr, values.data(), length);
+                std::array<std::uint32_t, 16> values{};
+                swap32_block(guest_window.data(), values.data(), length);
+                state.load_xf_indexed(xf_addr, values.data(), length);
+            }
             if (recording != nullptr && recording->cacheable) {
                 CachedDisplayListCommand command;
                 command.kind = CachedDisplayListCommand::Kind::LoadIndx;
