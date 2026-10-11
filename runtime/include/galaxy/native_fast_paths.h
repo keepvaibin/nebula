@@ -329,6 +329,49 @@ GALAXY_ALWAYS_INLINE void psq_store(
             return;
         }
     }
+    // Quantized stores (u8/u16/s8/s16 with the GQR scale) and binary32 stores
+    // to the write-gather pipe: lane by lane through store<T>, like any other
+    // translated store (flat RAM without per-store publication, in-place
+    // gather-pipe append, checked device path otherwise). Same quantization
+    // helpers as the exact path.
+    if (base != nullptr && (context->hid2 & required) == required &&
+        (type == 0u || (type >= 4u && type <= 7u))) GALAXY_LIKELY {
+        const std::int32_t scale = psq_store_scale(gqr);
+        const auto store_lane = [&](std::uint32_t lane_address, std::uint64_t bits) {
+            switch (type) {
+            case 0u:
+                store<std::uint32_t>(base, memory, lane_address,
+                    narrow_paired_single_ftz(bits), services, guest_pc);
+                return;
+            case 4u:
+                store<std::uint8_t>(base, memory, lane_address,
+                    static_cast<std::uint8_t>(psq_quantize_unsigned(bits, scale, 0xFFu)),
+                    services, guest_pc);
+                return;
+            case 5u:
+                store<std::uint16_t>(base, memory, lane_address,
+                    static_cast<std::uint16_t>(psq_quantize_unsigned(bits, scale, 0xFFFFu)),
+                    services, guest_pc);
+                return;
+            case 6u:
+                store<std::uint8_t>(base, memory, lane_address,
+                    static_cast<std::uint8_t>(psq_quantize_signed(bits, scale, -128, 127)),
+                    services, guest_pc);
+                return;
+            default:
+                store<std::uint16_t>(base, memory, lane_address,
+                    static_cast<std::uint16_t>(psq_quantize_signed(bits, scale, -32768, 32767)),
+                    services, guest_pc);
+                return;
+            }
+        };
+        store_lane(address, context->fpr_bits[source]);
+        if (!one_element) {
+            const std::uint32_t element = type == 0u ? 4u : ((type & 1u) != 0u ? 2u : 1u);
+            store_lane(address + element, context->ps1_bits[source]);
+        }
+        return;
+    }
     galaxy::psq_store(
         context, source, memory, address, gqr_index, one_element, d_form,
         services, guest_pc);

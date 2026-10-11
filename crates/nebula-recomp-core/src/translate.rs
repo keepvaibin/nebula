@@ -6548,6 +6548,10 @@ fn lean_sdk_math_symbol(address: u32) -> Option<&'static str> {
         0x804B_6328 => Some("lean_psmtx_rot_axis_rad"),
         0x804B_6548 => Some("lean_c_mtx_look_at"),
         0x804B_6F90 => Some("lean_c_quat_slerp"),
+        // GX immediate XF loads (one batched gather-pipe write per command).
+        0x804B_E1D8 => Some("native_gx_load_pos_mtx_imm_804BE1D8"),
+        0x804B_E2A0 => Some("lean_gx_load_tex_mtx_imm"),
+        0x804B_B8A8 => Some("lean_gx_load_light_obj_imm"),
         _ => None,
     }
 }
@@ -6592,7 +6596,6 @@ fn native_pure_helper(target: u32) -> Option<NativePureHelper> {
         // Stateful functions with nested calls or interruptible loops are not
         // substituted: a hand-written replacement would skip call-return
         // checkpoints and resume-visible CR/GPR effects.
-        0x804B_E1D8 => Some(NativePureHelper::fpu("native_gx_load_pos_mtx_imm_804BE1D8")),
         0x804B_E59C => Some(NativePureHelper::integer("native_gx_set_array_804BE59C")),
         0x8042_E100 => Some(NativePureHelper::integer("native_stride6_offset8_8042E100")),
         0x8051_73E0 => Some(NativePureHelper::integer("native_ptmf_scall_805173E0")),
@@ -6823,6 +6826,12 @@ fn native_function_body(address: u32) -> Option<&'static str> {
         ),
         0x804B_6DA4 => Some(
             "    galaxy::lean_psquat_dot(context, memory, services, 0x804B6DA4u);\n    return;\n",
+        ),
+        0x804B_E2A0 => Some(
+            "    galaxy::lean_gx_load_tex_mtx_imm(context, memory, services, 0x804BE2A0u);\n    return;\n",
+        ),
+        0x804B_B8A8 => Some(
+            "    galaxy::lean_gx_load_light_obj_imm(context, memory, services, 0x804BB8A8u);\n    return;\n",
         ),
         0x8042_4978 => Some(
             "    galaxy::lean_j3d_mtx33_copy(context, memory, services, 0x80424978u);\n    return;\n",
@@ -14121,7 +14130,6 @@ mod tests {
             0x8044_0CDC,
             0x8044_65A0,
             0x8044_65CC,
-            0x804B_E1D8,
         ] {
             assert!(
                 native_substitution_uses_fpu(address),
@@ -14140,6 +14148,9 @@ mod tests {
             0x804B_6424,
             0x804B_6BCC,
             0x804B_6CB8,
+            0x804B_E1D8,
+            0x804B_E2A0,
+            0x804B_B8A8,
         ] {
             assert!(!native_substitution_uses_fpu(address));
             let symbol = lean_sdk_math_symbol(address).expect("lean SDK math routine");

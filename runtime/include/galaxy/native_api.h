@@ -9731,6 +9731,90 @@ inline void lean_c_quat_slerp(PpcContext* context, GuestMemoryV1* memory,
     sdk_math::store_f32s(memory, context->gpr[5], r, 4u, services, pc);
 }
 
+// ---- GX immediate XF loads through the write-gather pipe ----
+// The SDK streams matrices and light objects with psq_l/psq_st (GQR0) into
+// the pipe, one gather-pipe store per lane. These build the same command
+// bytes and hand them to the pipe in one or two device writes. A lane copied
+// through psq_l/psq_st keeps its exact store image (single denormals flush to
+// zero, as on the translated path); words the SDK copies with lwz/stw stay raw.
+namespace gx_lean {
+
+constexpr std::uint32_t kWgpipe = 0xCC008000u;
+
+GALAXY_ALWAYS_INLINE void put_be32(std::byte* out, std::uint32_t value) {
+    out[0] = static_cast<std::byte>(value >> 24);
+    out[1] = static_cast<std::byte>(value >> 16);
+    out[2] = static_cast<std::byte>(value >> 8);
+    out[3] = static_cast<std::byte>(value);
+}
+
+GALAXY_ALWAYS_INLINE std::uint32_t paired_copy(const std::byte* source, std::uint32_t offset) {
+    return narrow_paired_single_ftz(widen_f32_bits(native_load_guest_u32_fast(source, offset)));
+}
+
+template <std::size_t ByteCount>
+GALAXY_ALWAYS_INLINE void write_pipe(
+    GuestMemoryV1* memory, const std::array<std::byte, ByteCount>& bytes,
+    const NativeServicesV1* services, std::uint32_t pc) {
+    guest_write_wgpipe_bytes(memory, kWgpipe, bytes, services, pc);
+}
+
+template <std::uint32_t Words>
+GALAXY_ALWAYS_INLINE void load_xf_paired(
+    GuestMemoryV1* memory, std::uint32_t source, std::uint32_t header,
+    const NativeServicesV1* services, std::uint32_t pc) {
+    std::array<std::byte, 5u + Words * 4u> bytes{};
+    bytes[0] = std::byte{0x10};
+    put_be32(&bytes[1], header);
+    const std::byte* words = resolve_guest(memory, source, Words * 4u, services, pc);
+    for (std::uint32_t i = 0; i < Words; ++i) {
+        put_be32(&bytes[5u + i * 4u], paired_copy(words, i * 4u));
+    }
+    write_pipe(memory, bytes, services, pc);
+}
+
+}  // namespace gx_lean
+
+// void GXLoadTexMtxImm(const f32 m[][4], u32 id, GXTexMtxType type): id >= 64
+// (GX_PTTEXMTX0) addresses the post-transform bank at 0x500. The header counts
+// 8 words for type 1 (2x4) and 12 otherwise; 12 words are sent for type 0.
+inline void lean_gx_load_tex_mtx_imm(PpcContext* context, GuestMemoryV1* memory,
+                                     const NativeServicesV1* services, std::uint32_t pc) {
+    const std::uint32_t id = context->gpr[4];
+    const std::uint32_t type = context->gpr[5];
+    const std::uint32_t base = id >= 0x40u ? ((id - 0x40u) << 2) + 0x500u : id << 2;
+    const std::uint32_t count = type == 1u ? 8u : 12u;
+    const std::uint32_t header = base | ((count - 1u) << 16);
+    if (type == 0u) {
+        gx_lean::load_xf_paired<12u>(memory, context->gpr[3], header, services, pc);
+    } else {
+        gx_lean::load_xf_paired<8u>(memory, context->gpr[3], header, services, pc);
+    }
+}
+
+// void GXLoadLightObjImm(const GXLightObj* obj, GXLightID light): 16 XF words
+// at 0x600 + 16 * light index: three zero words, the color (lwz/stw), then the
+// 12 position/direction/attenuation words (psq). Sets __GXData->bpSentNot.
+inline void lean_gx_load_light_obj_imm(PpcContext* context, GuestMemoryV1* memory,
+                                       const NativeServicesV1* services, std::uint32_t pc) {
+    const std::uint32_t slot =
+        std::rotl(31u - static_cast<std::uint32_t>(std::countl_zero(context->gpr[4])), 4) & 0x70u;
+    const std::byte* object = resolve_guest(memory, context->gpr[3], 0x40u, services, pc);
+    std::array<std::byte, 21> head{};
+    head[0] = std::byte{0x10};
+    gx_lean::put_be32(&head[1], (0x600u + slot) | 0x000F0000u);
+    gx_lean::put_be32(&head[17], native_load_guest_u32_fast(object, 0x0Cu));
+    std::array<std::byte, 48> tail{};
+    for (std::uint32_t i = 0; i < 12u; ++i) {
+        gx_lean::put_be32(&tail[i * 4u], gx_lean::paired_copy(object, 0x10u + i * 4u));
+    }
+    gx_lean::write_pipe(memory, head, services, pc);
+    gx_lean::write_pipe(memory, tail, services, pc);
+    const std::uint32_t gx_data =
+        guest_load_u32(memory, context->gpr[2] + 0x2500u, services, pc);
+    guest_store_u16(memory, gx_data + 2u, 1u, services, pc);
+}
+
 inline void native_psmtx_identity_804B5EDC(
     PpcContext* context,
     GuestMemoryV1* memory,
