@@ -596,6 +596,11 @@ public:
 private:
     void invalidate_gx_bindings();
     void pace_present_if_needed(unsigned vsync_interval, float max_fps);
+    // VSYNC ON presents each frame for round(refresh / 60) refreshes on a
+    // panel whose rate is a multiple of 60 Hz (120, 180, 240), so every
+    // frame stays on screen equally long; other rates keep one refresh.
+    [[nodiscard]] UINT present_sync_interval(unsigned configured);
+    void refresh_display_rate();
     void wait_for_frame_latency_if_needed(bool collect_present_telemetry);
     void wait_for_gpu();            // shutdown/resize only
     // Applies a pending live window resize, if one is recorded (see
@@ -817,6 +822,14 @@ private:
     std::uint64_t telemetry_gpu_samples_ = 0;
     std::uint64_t telemetry_no_xfb_present_count_ = 0;
     std::uint64_t telemetry_backbuffer_clear_count_ = 0;
+    // Refresh rate of the swap chain's output (EnumDisplaySettings) and, per
+    // telemetry window, how many refreshes each displayed frame stayed on
+    // screen (DXGI frame statistics; index 4 counts 4 or more).
+    double display_refresh_hz_ = 0.0;
+    std::uint64_t display_refresh_presents_ = 0;
+    UINT last_stats_present_count_ = 0;
+    UINT last_stats_present_refresh_count_ = 0;
+    std::array<std::uint64_t, 5> telemetry_shown_refreshes_{};
 
     // EFB->texture copy destinations, keyed by (guest dest address, copy
     // format, depth-source) — SMG reuses one address with different copy

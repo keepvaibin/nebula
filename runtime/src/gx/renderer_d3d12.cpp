@@ -4450,6 +4450,49 @@ void RendererD3D12::wait_for_frame_latency_if_needed(
     }
 }
 
+void RendererD3D12::refresh_display_rate() {
+    if (swap_chain_ == nullptr) {
+        return;
+    }
+    Microsoft::WRL::ComPtr<IDXGIOutput> output;
+    DXGI_OUTPUT_DESC desc{};
+    if (FAILED(swap_chain_->GetContainingOutput(&output)) ||
+        FAILED(output->GetDesc(&desc))) {
+        return;
+    }
+    DEVMODEW mode{};
+    mode.dmSize = sizeof(mode);
+    if (EnumDisplaySettingsW(desc.DeviceName, ENUM_CURRENT_SETTINGS, &mode) == FALSE ||
+        mode.dmDisplayFrequency <= 1u) {
+        return;
+    }
+    const double hz = static_cast<double>(mode.dmDisplayFrequency);
+    if (hz != display_refresh_hz_) {
+        std::cerr << "[display] refresh-hz=" << hz << '\n';
+    }
+    display_refresh_hz_ = hz;
+}
+
+UINT RendererD3D12::present_sync_interval(unsigned configured) {
+    if (configured != 1u) {
+        return configured;
+    }
+    if (display_refresh_presents_++ % 120u == 0u) {
+        refresh_display_rate();
+    }
+    const double hz = display_refresh_hz_;
+    if (hz <= 0.0) {
+        return 1u;
+    }
+    // EnumDisplaySettings reports whole hertz: 119 for 119.88, 239 for 239.76.
+    const double multiple = std::round(hz / 60.0);
+    if (multiple >= 2.0 && multiple <= 4.0 &&
+        std::abs(hz - 60.0 * multiple) <= 0.015 * hz) {
+        return static_cast<UINT>(multiple);
+    }
+    return 1u;
+}
+
 void RendererD3D12::pace_present_if_needed(
     unsigned vsync_interval,
     float max_fps) {
@@ -4592,7 +4635,7 @@ std::uint64_t RendererD3D12::end_frame(
 
     if (present_swap_chain) {
         const RenderConfig cfg = get_render_config();
-        const UINT vsync = std::min(2u, cfg.vsync_interval);
+        const UINT vsync = present_sync_interval(std::min(2u, cfg.vsync_interval));
         const UINT present_flags =
             (vsync == 0 && tearing_supported_ && !exclusive_fullscreen_active_) ? DXGI_PRESENT_ALLOW_TEARING
                                                : 0u;
@@ -4679,6 +4722,21 @@ std::uint64_t RendererD3D12::end_frame(
         has_presented_swap_chain_ = true;
         if (collect_present_telemetry) {
             QueryPerformanceCounter(&present_end);
+            DXGI_FRAME_STATISTICS shown{};
+            if (SUCCEEDED(swap_chain_->GetFrameStatistics(&shown)) &&
+                shown.PresentCount != last_stats_present_count_) {
+                if (last_stats_present_count_ != 0u &&
+                    shown.PresentCount == last_stats_present_count_ + 1u) {
+                    const UINT refreshes =
+                        shown.PresentRefreshCount - last_stats_present_refresh_count_;
+                    ++telemetry_shown_refreshes_[std::min<UINT>(refreshes, 4u)];
+                }
+                last_stats_present_count_ = shown.PresentCount;
+                last_stats_present_refresh_count_ = shown.PresentRefreshCount;
+            }
+            if (display_refresh_hz_ == 0.0) {
+                refresh_display_rate();
+            }
         }
 
         if (collect_present_telemetry && qpc_frequency_.QuadPart != 0) {
@@ -4799,8 +4857,16 @@ std::uint64_t RendererD3D12::end_frame(
                     << telemetry_no_xfb_present_count_
                     << " backbuffer-clears="
                     << telemetry_backbuffer_clear_count_
+                    << " refresh-hz=" << display_refresh_hz_
+                    << " shown-refreshes(0/1/2/3/4+)="
+                    << telemetry_shown_refreshes_[0] << '/'
+                    << telemetry_shown_refreshes_[1] << '/'
+                    << telemetry_shown_refreshes_[2] << '/'
+                    << telemetry_shown_refreshes_[3] << '/'
+                    << telemetry_shown_refreshes_[4]
                     << '\n';
                 std::cerr << message.str();
+                telemetry_shown_refreshes_ = {};
 
                 telemetry_window_start_qpc_ = present_end.QuadPart;
                 telemetry_first_serial_start_ = progress.first_serial_presentations;

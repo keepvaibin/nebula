@@ -683,6 +683,21 @@ bool frame_gx_timing_sample_enabled(std::uint64_t frame_index) {
 // it, and at the recommended `-Sample 300` it suppressed the samples entirely.
 // The ring bounds its own occupancy by reservoir sampling instead.
 
+// GALAXY_PE_PRECLASSIFY=0 skips the simulation thread's second FIFO parse;
+// every capture then takes the render thread's resolution path.
+bool pe_preclassify_enabled() {
+    static const bool enabled = [] {
+        char value[16]{};
+        std::size_t length = 0;
+        if (getenv_s(&length, value, sizeof(value), "GALAXY_PE_PRECLASSIFY") != 0 ||
+            length <= 1u) {
+            return true;
+        }
+        return value[0] != '0' && value[0] != 'n' && value[0] != 'N';
+    }();
+    return enabled;
+}
+
 bool display_list_dirty_invalidate_enabled() {
     static const bool enabled = [] {
         char value[16]{};
@@ -5764,7 +5779,7 @@ FramePeCompletionToken GxBackend::render_frame(
         chunk.memory_snapshot_active = true;
         chunk.immutable_range_ownership = immutable_range_ownership;
     }
-    if (timing.pe_events_gpu_fence && !worker_snapshot) {
+    if (timing.pe_events_gpu_fence && !worker_snapshot && pe_preclassify_enabled()) {
         // Classify the immutable FIFO copy and the exact memory view the
         // render parser will consume. In snapshot mode, classifying live guest
         // memory before capture allowed a concurrent native DMA write to make
