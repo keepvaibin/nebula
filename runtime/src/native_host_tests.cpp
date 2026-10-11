@@ -13910,20 +13910,11 @@ bool native_dsp_mram_transaction_path_works(
             write_succeeded.store(false, std::memory_order_release);
         }
     });
-    const bool write_wake = wait_for_native_dsp_test(
-        [&] {
-            return probe.wake_count.load(std::memory_order_acquire) >= 1u;
-        },
-        std::chrono::seconds(1));
-    std::array<std::byte, kSpanSize> untouched{};
-    untouched.fill(std::byte{0x11});
-    const bool write_invisible_before_service =
-        std::memcmp(
-            memory.pointer(kMramAddress, kSpanSize),
-            untouched.data(),
-            untouched.size()) == 0;
-    memory.poll_native_dsp();
+    // Outside the CPU-tracked audio backing the write copies on the DSP
+    // thread itself: no wake and no CPU service.
     write_worker.join();
+    const bool write_wake =
+        probe.wake_count.load(std::memory_order_acquire) == 0u;
     bool write_exact = true;
     const std::byte* const written =
         memory.pointer(kMramAddress, kSpanSize);
@@ -13932,7 +13923,7 @@ bool native_dsp_mram_transaction_path_works(
             written[offset] == static_cast<std::byte>(0x40u + offset);
     }
     passed &= expect(
-        write_wake && write_invisible_before_service && write_exact &&
+        write_wake && write_exact &&
             write_succeeded.load(std::memory_order_acquire) &&
             probe.dirty_count.load(std::memory_order_acquire) == 1u &&
             probe.dirty_address.load(std::memory_order_acquire) ==
@@ -13962,19 +13953,11 @@ bool native_dsp_mram_transaction_path_works(
             read_succeeded.store(false, std::memory_order_release);
         }
     });
-    const bool read_wake = wait_for_native_dsp_test(
-        [&] {
-            return probe.wake_count.load(std::memory_order_acquire) >= 2u;
-        },
-        std::chrono::seconds(1));
-    bool dram_invisible_before_service = true;
-    for (std::uint32_t offset = 0u; offset < kSpanSize; ++offset) {
-        dram_invisible_before_service = dram_invisible_before_service &&
-            galaxy::dsp_dma_read_byte(
-                context, false, kDspByteAddress + offset) == 0x77u;
-    }
-    memory.poll_native_dsp();
+    // A main-RAM read copies on the DSP thread itself, as the hardware DMA
+    // engine reads RAM while the CPU runs: no wake and no CPU service.
     read_worker.join();
+    const bool read_wake =
+        probe.wake_count.load(std::memory_order_acquire) == 0u;
     bool read_exact = true;
     for (std::uint32_t offset = 0u; offset < kSpanSize; ++offset) {
         read_exact = read_exact &&
@@ -13984,13 +13967,14 @@ bool native_dsp_mram_transaction_path_works(
     }
     const auto stats = memory.dsp_native_mram_transaction_stats();
     passed &= expect(
-        read_wake && dram_invisible_before_service && read_exact &&
+        read_wake && read_exact &&
             read_succeeded.load(std::memory_order_acquire) &&
-            stats.read_requests == 1u && stats.write_requests == 1u &&
-            stats.completed_services == 2u && stats.service_calls == 2u &&
-            stats.maximum_in_flight == 1u && stats.timeout_failures == 0u &&
-            stats.failed_services == 0u,
-        "product MRAM telemetry proves two whole-span services and no worker-side fallback");
+            memory.dsp_native_direct_mram_read_count() == 1u &&
+            memory.dsp_native_direct_mram_write_count() == 1u &&
+            stats.read_requests == 0u && stats.write_requests == 0u &&
+            stats.completed_services == 0u && stats.service_calls == 0u &&
+            stats.timeout_failures == 0u && stats.failed_services == 0u,
+        "product MRAM read and write copy on the DSP worker with no CPU rendezvous");
 
     // Mapping ownership is CPU-side too: the worker may publish an
     // arithmetically valid address, but it cannot inspect GuestMemory regions.
@@ -14016,7 +14000,7 @@ bool native_dsp_mram_transaction_path_works(
     });
     const bool invalid_wake = wait_for_native_dsp_test(
         [&] {
-            return probe.wake_count.load(std::memory_order_acquire) >= 3u;
+            return probe.wake_count.load(std::memory_order_acquire) >= 1u;
         },
         std::chrono::seconds(1));
     passed &= expect_runtime_error(
@@ -14028,8 +14012,8 @@ bool native_dsp_mram_transaction_path_works(
         invalid_wake &&
             invalid_hard_trapped.load(std::memory_order_acquire) &&
             probe.dirty_count.load(std::memory_order_acquire) == 1u &&
-            rejected_stats.service_calls == 3u &&
-            rejected_stats.completed_services == 2u &&
+            rejected_stats.service_calls == 1u &&
+            rejected_stats.completed_services == 0u &&
             rejected_stats.failed_services == 1u,
         "unmapped product MRAM span rejects coherently with no write or dirty publication");
 

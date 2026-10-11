@@ -10110,6 +10110,20 @@ GuestAddressSpace* GuestAddressSpace::owner_of(const GuestMemoryV1* memory) noex
 }
 
 void GuestAddressSpace::finish_async_disc_shutdown() {
+    {
+        const auto mram = dsp_native_mram_transactions_.snapshot();
+        std::osyncstream(std::cout)
+            << "[dsp-mram-audit] direct-reads="
+            << dsp_native_direct_mram_reads_.load(std::memory_order_relaxed)
+            << " direct-read-bytes="
+            << dsp_native_direct_mram_read_bytes_.load(std::memory_order_relaxed)
+            << " direct-writes="
+            << dsp_native_direct_mram_writes_.load(std::memory_order_relaxed)
+            << " rendezvous-reads=" << mram.read_requests
+            << " rendezvous-writes=" << mram.write_requests
+            << " wakes=" << mram.wake_publications
+            << " services=" << mram.completed_services << '\n';
+    }
     if (!async_disc_) return;
     async_disc_->shutdown();
     std::osyncstream(std::cout)
@@ -15954,7 +15968,24 @@ bool GuestAddressSpace::dsp_native_read_mram_span(
         }
         return false;
     }
-    if (!dsp_native_mram_transactions_.submit_read(
+    // The hardware DSP's DMA engine reads main RAM while the CPU runs; the
+    // game orders it with cache flushes and mailbox messages, which reach
+    // this worker after the CPU's earlier stores (x86 keeps store order). A
+    // read therefore copies straight from the immutable RAM mapping here
+    // instead of waking the simulation thread to copy it at a safepoint:
+    // that rendezvous was about 6,000 round trips per second in gameplay.
+    // Unmapped spans still take the rendezvous and its diagnostics.
+    // GALAXY_DSP_DIRECT_MRAM_READS=0 restores the rendezvous for every read.
+    static const bool direct_reads =
+        read_env_flag("GALAXY_DSP_DIRECT_MRAM_READS", true);
+    const std::byte* const direct_source = direct_reads
+        ? static_cast<const GuestAddressSpace*>(this)->pointer_or_null(address, size)
+        : nullptr;
+    if (direct_source != nullptr) {
+        std::memcpy(destination, direct_source, size);
+        dsp_native_direct_mram_reads_.fetch_add(1u, std::memory_order_relaxed);
+        dsp_native_direct_mram_read_bytes_.fetch_add(size, std::memory_order_relaxed);
+    } else if (!dsp_native_mram_transactions_.submit_read(
             address, destination, size)) {
         const auto snapshot = dsp_native_mram_transactions_.snapshot();
         // Process-exit preparation deliberately cancels the one in-flight
@@ -16092,7 +16123,32 @@ bool GuestAddressSpace::dsp_native_write_mram_span(
         }
         return false;
     }
-    if (!dsp_native_mram_transactions_.submit_write(address, source, size)) {
+    // Writes copy on the worker as reads do, with the same ordering argument:
+    // the DSP announces completion through its mailbox after the stores. The
+    // renderer's dirty pages are marked atomically. The CPU-side audio-backing
+    // tracker is marked without atomics on the simulation thread, so a span
+    // that touches it keeps the CPU rendezvous.
+    // GALAXY_DSP_DIRECT_MRAM_WRITES=0 restores the rendezvous for every write.
+    static const bool direct_writes =
+        read_env_flag("GALAXY_DSP_DIRECT_MRAM_WRITES", true);
+    std::byte* direct_destination = nullptr;
+    if (direct_writes) {
+        const std::uint64_t physical = address & 0x1FFFFFFFu;
+        const std::uint64_t tracked_begin = memory_.cpu_dirty_tracked_base;
+        const std::uint64_t tracked_end =
+            tracked_begin + memory_.cpu_dirty_tracked_size;
+        const bool touches_cpu_tracker =
+            memory_.cpu_dirty_page_words != nullptr &&
+            physical < tracked_end && physical + size > tracked_begin;
+        if (!touches_cpu_tracker) {
+            direct_destination = pointer_or_null(address, size);
+        }
+    }
+    if (direct_destination != nullptr) {
+        std::memcpy(direct_destination, source, size);
+        notify_guest_write(address, size);
+        dsp_native_direct_mram_writes_.fetch_add(1u, std::memory_order_relaxed);
+    } else if (!dsp_native_mram_transactions_.submit_write(address, source, size)) {
         const auto snapshot = dsp_native_mram_transactions_.snapshot();
         // Generated DSP code treats a rejected host span as a hard trap.  The
         // successful path remains entirely silent; this terminal diagnostic

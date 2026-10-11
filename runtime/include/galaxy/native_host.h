@@ -927,6 +927,12 @@ public:
     dsp_native_mram_transaction_stats() const noexcept {
         return dsp_native_mram_transactions_.snapshot();
     }
+    [[nodiscard]] std::uint64_t dsp_native_direct_mram_read_count() const noexcept {
+        return dsp_native_direct_mram_reads_.load(std::memory_order_relaxed);
+    }
+    [[nodiscard]] std::uint64_t dsp_native_direct_mram_write_count() const noexcept {
+        return dsp_native_direct_mram_writes_.load(std::memory_order_relaxed);
+    }
     DspDebugSnapshot dsp_debug_snapshot() const;
     DspAudioStats dsp_audio_stats() const { return dsp_audio_stats_; }
     IpcDebugSnapshot ipc_debug_snapshot() const;
@@ -2011,6 +2017,9 @@ private:
     // cancels this slot and joins the worker before member teardown.
     galaxy::DspAramMirrorBoundary dsp_native_aram_boundary_{};
     galaxy::DspMramTransactionBoundary dsp_native_mram_transactions_{};
+    std::atomic<std::uint64_t> dsp_native_direct_mram_reads_{};
+    std::atomic<std::uint64_t> dsp_native_direct_mram_read_bytes_{};
+    std::atomic<std::uint64_t> dsp_native_direct_mram_writes_{};
     galaxy::DspMramTransactionBoundary
         dsp_native_aram_commit_transactions_{};
     // Owns the selected-channel identity boundary for the process lifetime.

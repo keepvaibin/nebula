@@ -18108,6 +18108,11 @@ void idle_loop_wait_for_next_deadline(RuntimeState& state) {
     struct IdleWaitHandles {
         HANDLE event{};
         HANDLE timer{};
+        // Timeline tick the timer is armed for, 0 when it is not armed. A
+        // wait ended by the wake event leaves the timer pending, and the next
+        // wait almost always targets the same VI or AI edge, so re-arming it
+        // (one NtSetTimerEx per wait, thousands per second) is skipped.
+        std::uint64_t armed_target_ticks{};
         IdleWaitHandles() {
             event = CreateEventW(nullptr, FALSE, FALSE, nullptr);
             timer = CreateWaitableTimerExW(
@@ -18135,8 +18140,25 @@ void idle_loop_wait_for_next_deadline(RuntimeState& state) {
     if (due_time.QuadPart >= 0) {
         return;
     }
-    if (SetWaitableTimer(handles.timer, &due_time, 0, nullptr, nullptr, FALSE) == FALSE) {
-        return;
+    static const bool keep_armed_timer =
+        read_env_flag("GALAXY_IDLE_TIMER_KEEP_ARMED", true);
+    const std::uint64_t target_ticks = now_ticks + static_cast<std::uint64_t>(
+        std::chrono::duration<double>(wait_duration).count() *
+        static_cast<double>(galaxy::timing::kTimelineTicksPerSecond));
+    // 20 microseconds of tolerance: the same edge recomputed from a later
+    // clock read lands within rounding of the armed target.
+    constexpr std::uint64_t kSameTargetTicks =
+        galaxy::timing::kTimelineTicksPerSecond / 50'000u;
+    const std::uint64_t armed = handles.armed_target_ticks;
+    const bool same_target = keep_armed_timer && armed != 0u &&
+        (target_ticks > armed ? target_ticks - armed : armed - target_ticks) <=
+            kSameTargetTicks;
+    if (!same_target) {
+        if (SetWaitableTimer(handles.timer, &due_time, 0, nullptr, nullptr, FALSE) == FALSE) {
+            handles.armed_target_ticks = 0u;
+            return;
+        }
+        handles.armed_target_ticks = target_ticks;
     }
     const HANDLE wait_handles[2] = {handles.event, handles.timer};
     // Announce the wait, then re-test the mask: a publication that landed
@@ -18149,11 +18171,16 @@ void idle_loop_wait_for_next_deadline(RuntimeState& state) {
         state.address_space->pe_token_pending()) {
         state.deadline_events.set_idle_waiting(false);
         (void)CancelWaitableTimer(handles.timer);
+        handles.armed_target_ticks = 0u;
         return;
     }
     galaxy::timeline::record(galaxy::timeline::Event::IdleWaitBegin);
     const DWORD waited = WaitForMultipleObjects(2, wait_handles, FALSE, 100u);
     galaxy::timeline::record(galaxy::timeline::Event::IdleWaitEnd, waited == WAIT_OBJECT_0 ? 1u : 0u);
+    if (waited != WAIT_OBJECT_0) {
+        // The timer fired (or the bounded wait expired): it is no longer armed.
+        handles.armed_target_ticks = 0u;
+    }
     state.deadline_events.set_idle_waiting(false);
     if (waited == WAIT_OBJECT_0) {
         ++state.idle_loop_sleep_wakes;
