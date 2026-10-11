@@ -68,6 +68,10 @@
     "value": "262144"
   },
   {
+    "name": "GALAXY_FLAG_TRANSFER",
+    "value": "1"
+  },
+  {
     "name": "GALAXY_FLAT_GUEST_MEMORY",
     "value": "1"
   },
@@ -224,6 +228,10 @@
     "value": "0"
   },
   {
+    "name": "GALAXY_RENDER_LIVE_MEMORY",
+    "value": "1"
+  },
+  {
     "name": "GALAXY_RENDER_LIVE_MEMORY_WAIT",
     "value": "0"
   },
@@ -236,16 +244,8 @@
     "value": "1"
   },
   {
-    "name": "GALAXY_RENDER_LIVE_MEMORY",
-    "value": "1"
-  },
-  {
     "name": "GALAXY_RENDER_QUEUE_DEPTH",
     "value": "2"
-  },
-  {
-    "name": "GALAXY_SIM_PROFILE",
-    "value": "0"
   },
   {
     "name": "GALAXY_RENDER_WORKER_MEMORY_SNAPSHOT",
@@ -262,6 +262,10 @@
   {
     "name": "GALAXY_SIMULATION_LARGEST_CACHE",
     "value": "1"
+  },
+  {
+    "name": "GALAXY_SIM_PROFILE",
+    "value": "0"
   },
   {
     "name": "GALAXY_SKIP_DUPLICATE_XFB_PRESENTS",

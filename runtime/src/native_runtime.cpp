@@ -31608,7 +31608,7 @@ int wmain(int argc, wchar_t** argv) {
     }
     state.flag_transfer_enabled =
         (state.module_transfer_flags & galaxy::kModuleTransferFlagFlagReturn) != 0u &&
-        read_env_flag("GALAXY_FLAG_TRANSFER", false);
+        read_env_flag("GALAXY_FLAG_TRANSFER", true);
     state.flag_transfer_kinds =
         static_cast<std::uint32_t>(read_env_u64("GALAXY_FLAG_TRANSFER_KINDS", 7u)) & 7u;
     std::cerr << "[transfer] mode=" << (state.flag_transfer_enabled ? "flag" : "exception")
