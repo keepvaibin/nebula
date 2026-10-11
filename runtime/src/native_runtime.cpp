@@ -308,6 +308,18 @@ bool guest_external_interrupts_enabled(const galaxy::PpcContext* context) {
 
 bool read_env_flag(const char* name, bool fallback);
 std::uint64_t read_env_u64(const char* name, std::uint64_t fallback);
+
+// Single-flag diagnostic gates sit on hot paths (every runtime-dispatched
+// guest call). A constant-initialized atomic per gate avoids the thread-safe
+// static guard check on each call; the environment is read once, on first use.
+inline bool cached_env_gate(std::atomic<std::int8_t>& cached, const char* name, bool fallback) {
+    std::int8_t value = cached.load(std::memory_order_relaxed);
+    if (value < 0) [[unlikely]] {
+        value = read_env_flag(name, fallback) ? 1 : 0;
+        cached.store(value, std::memory_order_relaxed);
+    }
+    return value != 0;
+}
 std::uint32_t read_env_u32_auto(const char* name, std::uint32_t fallback);
 bool trace_boot_input_enabled();
 bool trace_boot_log_enabled();
@@ -713,8 +725,8 @@ private:
 NativeThpAsyncDecoder g_thp_async_decoder;
 
 bool native_thp_async_decode_enabled() {
-    static const bool enabled = read_env_flag("GALAXY_NATIVE_THP_ASYNC_DECODE", true);
-    return enabled;
+    static std::atomic<std::int8_t> cached{-1};
+    return cached_env_gate(cached, "GALAXY_NATIVE_THP_ASYNC_DECODE", true);
 }
 
 // ─── Simulation-thread sampling profiler (GALAXY_SIM_PROFILE=1) ──────────────
@@ -2061,6 +2073,9 @@ struct RuntimeState {
     std::uint64_t idle_loop_sleeps{};
     bool idle_wake_event_registered{};
     std::uint64_t idle_loop_sleep_wakes{};
+    // Why the idle-loop wait returned without blocking (index = reason in
+    // idle_loop_wait_for_next_deadline's order).
+    std::array<std::uint64_t, 10> idle_loop_skips{};
     std::uint64_t idle_loop_sleep_timeouts{};
     std::uint64_t idle_loop_sleep_us{};
     // The Home Button RSO is lowered from the validated user dump at install
@@ -4218,9 +4233,8 @@ void run_timed_checkpoint_phase(
 // It only observes existing host work; it never changes guest scheduling,
 // device ordering, or translated control flow.
 bool trace_host_pump_subphases_enabled() {
-    static const bool enabled =
-        read_env_flag("GALAXY_TRACE_HOST_PUMP_SUBPHASES", false);
-    return enabled;
+    static std::atomic<std::int8_t> cached{-1};
+    return cached_env_gate(cached, "GALAXY_TRACE_HOST_PUMP_SUBPHASES", false);
 }
 
 template <typename Callback>
@@ -4243,9 +4257,8 @@ bool frame_activity_recording_enabled();
 void record_frame_activity(RuntimeState& state, std::uint32_t address);
 
 bool trace_xfb_state_enabled() {
-    static const bool enabled =
-        read_env_flag("GALAXY_TRACE_XFB_STATE", false);
-    return enabled;
+    static std::atomic<std::int8_t> cached{-1};
+    return cached_env_gate(cached, "GALAXY_TRACE_XFB_STATE", false);
 }
 
 std::uint64_t read_env_u64(const char* name, std::uint64_t fallback) {
@@ -4591,27 +4604,23 @@ void flight_record_vi(
 }
 
 bool trace_bluetooth() {
-    static const bool enabled =
-        read_env_flag("GALAXY_TRACE_BLUETOOTH", false);
-    return enabled;
+    static std::atomic<std::int8_t> cached{-1};
+    return cached_env_gate(cached, "GALAXY_TRACE_BLUETOOTH", false);
 }
 
 bool trace_decrementer() {
-    static const bool enabled =
-        read_env_flag("GALAXY_TRACE_DECREMENTER", false);
-    return enabled;
+    static std::atomic<std::int8_t> cached{-1};
+    return cached_env_gate(cached, "GALAXY_TRACE_DECREMENTER", false);
 }
 
 bool trace_dsp_host() {
-    static const bool enabled =
-        read_env_flag("GALAXY_TRACE_DSP_HOST", false);
-    return enabled;
+    static std::atomic<std::int8_t> cached{-1};
+    return cached_env_gate(cached, "GALAXY_TRACE_DSP_HOST", false);
 }
 
 bool trace_ai_dma_timing() {
-    static const bool enabled =
-        read_env_flag("GALAXY_TRACE_AI_DMA_TIMING", false);
-    return enabled;
+    static std::atomic<std::int8_t> cached{-1};
+    return cached_env_gate(cached, "GALAXY_TRACE_AI_DMA_TIMING", false);
 }
 
 bool trace_guest_u32(
@@ -4965,39 +4974,33 @@ void trace_dsp_exec_task_wait_snapshot(
 }
 
 bool trace_di_io() {
-    static const bool enabled =
-        read_env_flag("GALAXY_TRACE_DI_IO", false);
-    return enabled;
+    static std::atomic<std::int8_t> cached{-1};
+    return cached_env_gate(cached, "GALAXY_TRACE_DI_IO", false);
 }
 
 bool trace_scene_changes() {
-    static const bool enabled =
-        read_env_flag("GALAXY_TRACE_SCENE_CHANGES", false);
-    return enabled;
+    static std::atomic<std::int8_t> cached{-1};
+    return cached_env_gate(cached, "GALAXY_TRACE_SCENE_CHANGES", false);
 }
 
 bool trace_runtime_scaffolding() {
-    static const bool enabled =
-        read_env_flag("GALAXY_TRACE_RUNTIME_SCAFFOLD", false);
-    return enabled;
+    static std::atomic<std::int8_t> cached{-1};
+    return cached_env_gate(cached, "GALAXY_TRACE_RUNTIME_SCAFFOLD", false);
 }
 
 bool trace_checkpoint_hotspots_enabled() {
-    static const bool enabled =
-        read_env_flag("GALAXY_TRACE_CHECKPOINT_HOTSPOTS", false);
-    return enabled;
+    static std::atomic<std::int8_t> cached{-1};
+    return cached_env_gate(cached, "GALAXY_TRACE_CHECKPOINT_HOTSPOTS", false);
 }
 
 bool trace_checkpoint_time_enabled() {
-    static const bool enabled =
-        read_env_flag("GALAXY_TRACE_CHECKPOINT_TIME", false);
-    return enabled;
+    static std::atomic<std::int8_t> cached{-1};
+    return cached_env_gate(cached, "GALAXY_TRACE_CHECKPOINT_TIME", false);
 }
 
 bool trace_checkpoint_callback_time_enabled() {
-    static const bool enabled =
-        read_env_flag("GALAXY_TRACE_CHECKPOINT_CALLBACK_TIME", false);
-    return enabled;
+    static std::atomic<std::int8_t> cached{-1};
+    return cached_env_gate(cached, "GALAXY_TRACE_CHECKPOINT_CALLBACK_TIME", false);
 }
 
 bool branch_checkpoint_live_context_trace_enabled() {
@@ -5014,9 +5017,8 @@ bool branch_checkpoint_live_context_trace_enabled() {
 }
 
 bool trace_thread_roster_enabled() {
-    static const bool enabled =
-        read_env_flag("GALAXY_TRACE_THREAD_ROSTER", false);
-    return enabled;
+    static std::atomic<std::int8_t> cached{-1};
+    return cached_env_gate(cached, "GALAXY_TRACE_THREAD_ROSTER", false);
 }
 
 // Enabled by default after end-to-end validation against an actual Windows
@@ -5026,27 +5028,23 @@ bool trace_thread_roster_enabled() {
 // The opt-out exists for controlled A/B diagnostics; it never enables a less
 // strict recovery path.
 bool active_boundary_recovery_enabled() {
-    static const bool enabled = read_env_flag(
-        "GALAXY_ACTIVE_BOUNDARY_RECOVERY", true);
-    return enabled;
+    static std::atomic<std::int8_t> cached{-1};
+    return cached_env_gate(cached, "GALAXY_ACTIVE_BOUNDARY_RECOVERY", true);
 }
 
 bool trace_save_ipc() {
-    static const bool enabled =
-        read_env_flag("GALAXY_TRACE_SAVE_IPC", false);
-    return enabled;
+    static std::atomic<std::int8_t> cached{-1};
+    return cached_env_gate(cached, "GALAXY_TRACE_SAVE_IPC", false);
 }
 
 bool trace_ipc_sync_sleep_probe() {
-    static const bool enabled =
-        read_env_flag("GALAXY_TRACE_IPC_SYNC_SLEEP_PROBE", false);
-    return enabled;
+    static std::atomic<std::int8_t> cached{-1};
+    return cached_env_gate(cached, "GALAXY_TRACE_IPC_SYNC_SLEEP_PROBE", false);
 }
 
 bool trace_jutvideo_mq() {
-    static const bool enabled =
-        read_env_flag("GALAXY_TRACE_JUTVIDEO_MQ", false);
-    return enabled;
+    static std::atomic<std::int8_t> cached{-1};
+    return cached_env_gate(cached, "GALAXY_TRACE_JUTVIDEO_MQ", false);
 }
 
 std::size_t jutvideo_mq_trace_capacity() {
@@ -5065,21 +5063,18 @@ std::size_t jutvideo_mq_trace_capacity() {
 }
 
 bool trace_suspicious_message_mq() {
-    static const bool enabled =
-        read_env_flag("GALAXY_TRACE_SUSPICIOUS_MQ", false);
-    return enabled;
+    static std::atomic<std::int8_t> cached{-1};
+    return cached_env_gate(cached, "GALAXY_TRACE_SUSPICIOUS_MQ", false);
 }
 
 bool trace_usb_callback_context() {
-    static const bool enabled =
-        read_env_flag("GALAXY_TRACE_USB_CALLBACK_CONTEXT", false);
-    return enabled;
+    static std::atomic<std::int8_t> cached{-1};
+    return cached_env_gate(cached, "GALAXY_TRACE_USB_CALLBACK_CONTEXT", false);
 }
 
 bool trace_native_dsp_race_enabled() {
-    static const bool enabled =
-        read_env_flag("GALAXY_TRACE_NATIVE_DSP_RACE", false);
-    return enabled;
+    static std::atomic<std::int8_t> cached{-1};
+    return cached_env_gate(cached, "GALAXY_TRACE_NATIVE_DSP_RACE", false);
 }
 
 bool trace_native_dsp_race_active(const RuntimeState& state) {
@@ -5102,9 +5097,8 @@ bool trace_boot_log_enabled() {
 }
 
 bool trace_osreport() {
-    static const bool enabled =
-        read_env_flag("GALAXY_TRACE_OSREPORT", false);
-    return enabled;
+    static std::atomic<std::int8_t> cached{-1};
+    return cached_env_gate(cached, "GALAXY_TRACE_OSREPORT", false);
 }
 
 bool realtime_vi_active(const RuntimeState& state) {
@@ -5129,9 +5123,8 @@ void update_native_audio_output_gate(
 }
 
 bool high_res_vi_wait_enabled() {
-    static const bool enabled =
-        read_env_flag("GALAXY_HIGH_RES_VI_WAIT", true);
-    return enabled;
+    static std::atomic<std::int8_t> cached{-1};
+    return cached_env_gate(cached, "GALAXY_HIGH_RES_VI_WAIT", true);
 }
 
 #ifndef CREATE_WAITABLE_TIMER_HIGH_RESOLUTION
@@ -5201,9 +5194,8 @@ std::chrono::steady_clock::duration realtime_vi_near_due_retry_window() {
 }
 
 bool realtime_vi_near_due_wait_enabled() {
-    static const bool enabled =
-        read_env_flag("GALAXY_REALTIME_VI_NEAR_DUE_WAIT", true);
-    return enabled;
+    static std::atomic<std::int8_t> cached{-1};
+    return cached_env_gate(cached, "GALAXY_REALTIME_VI_NEAR_DUE_WAIT", true);
 }
 
 // When the guest is spinning EE-masked inside __DSPHandler waiting on a DSP
@@ -5214,15 +5206,13 @@ bool realtime_vi_near_due_wait_enabled() {
 // picture. This diagnostic path may poll an already-pending real edge with an
 // explicit masked-delivery override; it never waits for or fabricates one.
 bool masked_dsp_wait_vi_pump_enabled() {
-    static const bool enabled =
-        read_env_flag("GALAXY_DSP_NATIVE_MASKED_VI_PUMP", false);
-    return enabled;
+    static std::atomic<std::int8_t> cached{-1};
+    return cached_env_gate(cached, "GALAXY_DSP_NATIVE_MASKED_VI_PUMP", false);
 }
 
 bool fast_thp_checkpoints_enabled() {
-    static const bool enabled =
-        read_env_flag("GALAXY_FAST_THP_CHECKPOINTS", true);
-    return enabled;
+    static std::atomic<std::int8_t> cached{-1};
+    return cached_env_gate(cached, "GALAXY_FAST_THP_CHECKPOINTS", true);
 }
 
 std::uint64_t fast_thp_checkpoint_interval() {
@@ -5234,21 +5224,18 @@ std::uint64_t fast_thp_checkpoint_interval() {
 }
 
 bool fast_yaz0_checkpoints_enabled() {
-    static const bool enabled =
-        read_env_flag("GALAXY_FAST_YAZ0_CHECKPOINTS", true);
-    return enabled;
+    static std::atomic<std::int8_t> cached{-1};
+    return cached_env_gate(cached, "GALAXY_FAST_YAZ0_CHECKPOINTS", true);
 }
 
 bool defer_yaz0_loop_interrupts_enabled() {
-    static const bool enabled =
-        read_env_flag("GALAXY_DEFER_YAZ0_LOOP_INTERRUPTS", true);
-    return enabled;
+    static std::atomic<std::int8_t> cached{-1};
+    return cached_env_gate(cached, "GALAXY_DEFER_YAZ0_LOOP_INTERRUPTS", true);
 }
 
 bool protect_yaz0_edge_checkpoints_enabled() {
-    static const bool enabled =
-        read_env_flag("GALAXY_PROTECT_YAZ0_EDGE_CHECKPOINTS", true);
-    return enabled;
+    static std::atomic<std::int8_t> cached{-1};
+    return cached_env_gate(cached, "GALAXY_PROTECT_YAZ0_EDGE_CHECKPOINTS", true);
 }
 
 std::uint64_t fast_yaz0_checkpoint_interval() {
@@ -5312,27 +5299,23 @@ bool should_present_vi_frame(const RuntimeState& state, bool use_realtime_vi) {
 }
 
 bool present_in_render_frame_enabled() {
-    static const bool enabled =
-        read_env_flag("GALAXY_PRESENT_IN_RENDER_FRAME", false);
-    return enabled;
+    static std::atomic<std::int8_t> cached{-1};
+    return cached_env_gate(cached, "GALAXY_PRESENT_IN_RENDER_FRAME", false);
 }
 
 bool sim_thread_pe_scan_enabled() {
-    static const bool enabled =
-        read_env_flag("GALAXY_SCAN_PE_EVENTS_ON_SIM_THREAD", false);
-    return enabled;
+    static std::atomic<std::int8_t> cached{-1};
+    return cached_env_gate(cached, "GALAXY_SCAN_PE_EVENTS_ON_SIM_THREAD", false);
 }
 
 bool submit_gx_at_draw_done_wait_enabled() {
-    static const bool enabled =
-        read_env_flag("GALAXY_SUBMIT_GX_AT_DRAW_DONE_WAIT", true);
-    return enabled;
+    static std::atomic<std::int8_t> cached{-1};
+    return cached_env_gate(cached, "GALAXY_SUBMIT_GX_AT_DRAW_DONE_WAIT", true);
 }
 
 bool independent_vi_pe_completion_enabled() {
-    static const bool enabled =
-        read_env_flag("GALAXY_INDEPENDENT_VI_PE_COMPLETION", false);
-    return enabled;
+    static std::atomic<std::int8_t> cached{-1};
+    return cached_env_gate(cached, "GALAXY_INDEPENDENT_VI_PE_COMPLETION", false);
 }
 
 std::uint64_t ticks_per_checkpoint() {
@@ -5354,9 +5337,8 @@ std::uint64_t ticks_per_checkpoint() {
 // candidate, so monotonicity alone does not justify enabling this experiment.
 // No production syscall count or exclusive self-time is established here.
 bool throttle_cpu_time_sampling_enabled() {
-    static const bool enabled =
-        read_env_flag("GALAXY_THROTTLE_CPU_TIME_SAMPLING", false);
-    return enabled;
+    static std::atomic<std::int8_t> cached{-1};
+    return cached_env_gate(cached, "GALAXY_THROTTLE_CPU_TIME_SAMPLING", false);
 }
 
 // Diagnostic A/B control for repeated GetThreadTimes calls. Caching changes
@@ -6257,9 +6239,8 @@ void trace_dsp_wait_loop(
 }
 
 bool trace_main_frame_enabled() {
-    static const bool enabled =
-        read_env_flag("GALAXY_TRACE_MAIN_FRAME", false);
-    return enabled;
+    static std::atomic<std::int8_t> cached{-1};
+    return cached_env_gate(cached, "GALAXY_TRACE_MAIN_FRAME", false);
 }
 
 bool frame_activity_recording_enabled() {
@@ -6269,19 +6250,19 @@ bool frame_activity_recording_enabled() {
     // which turns a bounded diagnostic into a self-induced cadence failure
     // before its requested window is reached.  Only the explicit activity
     // recorder needs those broad accounting hooks.
-    static const bool enabled =
-        read_env_flag("GALAXY_RECORD_FRAME_ACTIVITY", false);
-    return enabled;
+    static std::atomic<std::int8_t> cached{-1};
+    return cached_env_gate(cached, "GALAXY_RECORD_FRAME_ACTIVITY", false);
 }
 
 bool trace_route_markers_enabled() {
-    static const bool enabled =
-        read_env_flag("GALAXY_TRACE_ROUTE_MARKERS", false);
-    return enabled;
+    static std::atomic<std::int8_t> cached{-1};
+    return cached_env_gate(cached, "GALAXY_TRACE_ROUTE_MARKERS", false);
 }
 
 bool trace_main_frame_relative_to_mario_control_enabled() {
-    static const bool enabled = [] {
+    static std::atomic<std::int8_t> cached{-1};
+    std::int8_t value = cached.load(std::memory_order_relaxed);
+    if (value < 0) [[unlikely]] {
         const bool start_present = env_value_present(
             "GALAXY_TRACE_MAIN_FRAME_AFTER_MARIO_CONTROL_START_VI");
         const bool end_present = env_value_present(
@@ -6290,21 +6271,20 @@ bool trace_main_frame_relative_to_mario_control_enabled() {
             throw RuntimeFailure(
                 "relative main-frame trace requires both start and end offsets");
         }
-        return start_present;
-    }();
-    return enabled;
+        value = start_present ? 1 : 0;
+        cached.store(value, std::memory_order_relaxed);
+    }
+    return value != 0;
 }
 
 bool native_input_stick_script_relative_mario_control_enabled() {
-    static const bool enabled = read_env_flag(
-        "GALAXY_INPUT_STICK_SCRIPT_RELATIVE_MARIO_CONTROL", false);
-    return enabled;
+    static std::atomic<std::int8_t> cached{-1};
+    return cached_env_gate(cached, "GALAXY_INPUT_STICK_SCRIPT_RELATIVE_MARIO_CONTROL", false);
 }
 
 bool native_input_autopress_script_stop_at_mario_control_enabled() {
-    static const bool enabled = read_env_flag(
-        "GALAXY_INPUT_AUTOPRESS_SCRIPT_STOP_AT_MARIO_CONTROL", false);
-    return enabled;
+    static std::atomic<std::int8_t> cached{-1};
+    return cached_env_gate(cached, "GALAXY_INPUT_AUTOPRESS_SCRIPT_STOP_AT_MARIO_CONTROL", false);
 }
 
 bool native_input_mario_control_marker_enabled() {
@@ -6344,9 +6324,8 @@ bool trace_main_frame_vi_window(const RuntimeState& state) {
 }
 
 bool trace_scene_nerve_owner_enabled() {
-    static const bool enabled =
-        read_env_flag("GALAXY_TRACE_SCENE_NERVE_OWNER", false);
-    return enabled;
+    static std::atomic<std::int8_t> cached{-1};
+    return cached_env_gate(cached, "GALAXY_TRACE_SCENE_NERVE_OWNER", false);
 }
 
 bool trace_scene_nerve_owner_active(const RuntimeState& state) {
@@ -6384,29 +6363,25 @@ bool trace_scene_nerve_owner_active(const RuntimeState& state) {
 // TraceMainFrame cannot silently turn into tens of thousands of per-frame
 // timing samples.
 bool trace_main_frame_draw_dispatch_enabled() {
-    static const bool enabled =
-        read_env_flag("GALAXY_TRACE_MAIN_FRAME_DRAW_DISPATCH", false);
-    return enabled;
+    static std::atomic<std::int8_t> cached{-1};
+    return cached_env_gate(cached, "GALAXY_TRACE_MAIN_FRAME_DRAW_DISPATCH", false);
 }
 
 // Decoded PTMF member targets for the existing bounded frame trace only.
 // This does not enable general call profiling or synchronous logging.
 bool trace_main_frame_member_targets_enabled() {
-    static const bool enabled =
-        read_env_flag("GALAXY_TRACE_MAIN_FRAME_MEMBER_TARGETS", false);
-    return enabled;
+    static std::atomic<std::int8_t> cached{-1};
+    return cached_env_gate(cached, "GALAXY_TRACE_MAIN_FRAME_MEMBER_TARGETS", false);
 }
 
 bool trace_boot_input_enabled() {
-    static const bool enabled =
-        read_env_flag("GALAXY_TRACE_BOOT_INPUT", false);
-    return enabled;
+    static std::atomic<std::int8_t> cached{-1};
+    return cached_env_gate(cached, "GALAXY_TRACE_BOOT_INPUT", false);
 }
 
 bool trace_native_input_stack_enabled() {
-    static const bool enabled =
-        read_env_flag("GALAXY_TRACE_NATIVE_INPUT_STACK", false);
-    return enabled;
+    static std::atomic<std::int8_t> cached{-1};
+    return cached_env_gate(cached, "GALAXY_TRACE_NATIVE_INPUT_STACK", false);
 }
 
 bool trace_native_input_stack_compact_enabled() {
@@ -6442,9 +6417,8 @@ bool trace_native_input_stack_vi_window(const RuntimeState& state) {
 }
 
 bool trace_file_select_enabled() {
-    static const bool enabled =
-        read_env_flag("GALAXY_TRACE_FILE_SELECT", false);
-    return enabled;
+    static std::atomic<std::int8_t> cached{-1};
+    return cached_env_gate(cached, "GALAXY_TRACE_FILE_SELECT", false);
 }
 
 bool trace_file_select_vi_window(const RuntimeState& state) {
@@ -6460,9 +6434,8 @@ bool trace_file_select_vi_window(const RuntimeState& state) {
 }
 
 bool trace_file_select_full_enabled() {
-    static const bool enabled =
-        read_env_flag("GALAXY_TRACE_FILE_SELECT_FULL", false);
-    return enabled;
+    static std::atomic<std::int8_t> cached{-1};
+    return cached_env_gate(cached, "GALAXY_TRACE_FILE_SELECT_FULL", false);
 }
 
 bool trace_file_select_compact_enabled() {
@@ -6473,63 +6446,53 @@ bool trace_file_select_compact_enabled() {
 }
 
 bool trace_file_select_save_sequence_enabled() {
-    static const bool enabled =
-        read_env_flag("GALAXY_TRACE_FILE_SELECT_SAVE_SEQUENCE", true);
-    return enabled;
+    static std::atomic<std::int8_t> cached{-1};
+    return cached_env_gate(cached, "GALAXY_TRACE_FILE_SELECT_SAVE_SEQUENCE", true);
 }
 
 bool trace_save_sequence_enabled() {
-    static const bool enabled =
-        read_env_flag("GALAXY_TRACE_SAVE_SEQUENCE", false);
-    return enabled;
+    static std::atomic<std::int8_t> cached{-1};
+    return cached_env_gate(cached, "GALAXY_TRACE_SAVE_SEQUENCE", false);
 }
 
 bool trace_audio_starts_enabled() {
-    static const bool enabled =
-        read_env_flag("GALAXY_TRACE_AUDIO_STARTS", false);
-    return enabled;
+    static std::atomic<std::int8_t> cached{-1};
+    return cached_env_gate(cached, "GALAXY_TRACE_AUDIO_STARTS", false);
 }
 
 bool trace_audio_thread_loop_enabled() {
-    static const bool enabled =
-        read_env_flag("GALAXY_TRACE_AUDIO_THREAD_LOOP", false);
-    return enabled;
+    static std::atomic<std::int8_t> cached{-1};
+    return cached_env_gate(cached, "GALAXY_TRACE_AUDIO_THREAD_LOOP", false);
 }
 
 bool trace_ptmf_targets_enabled() {
-    static const bool enabled =
-        read_env_flag("GALAXY_TRACE_PTMF_TARGETS", false);
-    return enabled;
+    static std::atomic<std::int8_t> cached{-1};
+    return cached_env_gate(cached, "GALAXY_TRACE_PTMF_TARGETS", false);
 }
 
 bool trace_jpa_init_enabled() {
-    static const bool enabled =
-        read_env_flag("GALAXY_TRACE_JPA_INIT", false);
-    return enabled;
+    static std::atomic<std::int8_t> cached{-1};
+    return cached_env_gate(cached, "GALAXY_TRACE_JPA_INIT", false);
 }
 
 bool trace_jpa_resources_enabled() {
-    static const bool enabled =
-        read_env_flag("GALAXY_TRACE_JPA_RESOURCES", false);
-    return enabled;
+    static std::atomic<std::int8_t> cached{-1};
+    return cached_env_gate(cached, "GALAXY_TRACE_JPA_RESOURCES", false);
 }
 
 bool trace_home_button_rso_enabled() {
-    static const bool enabled =
-        read_env_flag("GALAXY_TRACE_HOME_BUTTON_RSO", false);
-    return enabled;
+    static std::atomic<std::int8_t> cached{-1};
+    return cached_env_gate(cached, "GALAXY_TRACE_HOME_BUTTON_RSO", false);
 }
 
 bool trace_home_button_rso_layout_enabled() {
-    static const bool enabled =
-        read_env_flag("GALAXY_TRACE_HOME_BUTTON_RSO_LAYOUT", false);
-    return enabled;
+    static std::atomic<std::int8_t> cached{-1};
+    return cached_env_gate(cached, "GALAXY_TRACE_HOME_BUTTON_RSO_LAYOUT", false);
 }
 
 bool trace_home_button_resolver_enabled() {
-    static const bool enabled =
-        read_env_flag("GALAXY_TRACE_HOME_BUTTON_RESOLVER", false);
-    return enabled;
+    static std::atomic<std::int8_t> cached{-1};
+    return cached_env_gate(cached, "GALAXY_TRACE_HOME_BUTTON_RESOLVER", false);
 }
 
 bool trace_vi_window(
@@ -8181,9 +8144,8 @@ bool mapped_guest_range(
 }
 
 bool trace_fileloader_flow_enabled() {
-    static const bool enabled =
-        read_env_flag("GALAXY_TRACE_FILELOADER_FLOW", false);
-    return enabled;
+    static std::atomic<std::int8_t> cached{-1};
+    return cached_env_gate(cached, "GALAXY_TRACE_FILELOADER_FLOW", false);
 }
 
 std::uint32_t trace_fileloader_entry_filter() {
@@ -8193,9 +8155,8 @@ std::uint32_t trace_fileloader_entry_filter() {
 }
 
 bool trace_rarc_mount_enabled() {
-    static const bool enabled =
-        read_env_flag("GALAXY_TRACE_RARC_MOUNT", false);
-    return enabled;
+    static std::atomic<std::int8_t> cached{-1};
+    return cached_env_gate(cached, "GALAXY_TRACE_RARC_MOUNT", false);
 }
 
 std::uint64_t trace_rarc_mount_limit() {
@@ -9702,9 +9663,8 @@ void log_fileloader_call_entry(
 }
 
 bool trace_model_resource_enabled() {
-    static const bool enabled =
-        read_env_flag("GALAXY_TRACE_MODEL_RESOURCE", false);
-    return enabled;
+    static std::atomic<std::int8_t> cached{-1};
+    return cached_env_gate(cached, "GALAXY_TRACE_MODEL_RESOURCE", false);
 }
 
 void append_model_object_summary(
@@ -10084,9 +10044,8 @@ void resolve_function_async_exec_info(
 }
 
 bool function_async_proof_enabled() {
-    static const bool enabled =
-        read_env_flag("GALAXY_REQUIRE_GUEST_ASYNC_PROOF", false);
-    return enabled;
+    static std::atomic<std::int8_t> cached{-1};
+    return cached_env_gate(cached, "GALAXY_REQUIRE_GUEST_ASYNC_PROOF", false);
 }
 
 void register_function_async_main_queue(
@@ -12649,9 +12608,8 @@ std::uint32_t scene_nerve_movement_category_for_return(std::uint32_t pc) {
 }
 
 bool trace_scene_nerve_children_enabled() {
-    static const bool enabled =
-        read_env_flag("GALAXY_TRACE_SCENE_NERVE_CHILD", false);
-    return enabled;
+    static std::atomic<std::int8_t> cached{-1};
+    return cached_env_gate(cached, "GALAXY_TRACE_SCENE_NERVE_CHILD", false);
 }
 
 std::uint8_t scene_nerve_child_phase_for_return(std::uint32_t pc) {
@@ -15156,9 +15114,8 @@ void dump_xfb_state_trace(
 // idle from one whose retrace producer was never installed, without adding
 // I/O or scheduler work to any realtime checkpoint.
 bool benchmark_guest_state_enabled() {
-    static const bool enabled =
-        read_env_flag("GALAXY_BENCHMARK_GUEST_STATE", false);
-    return enabled;
+    static std::atomic<std::int8_t> cached{-1};
+    return cached_env_gate(cached, "GALAXY_BENCHMARK_GUEST_STATE", false);
 }
 
 // The Bluetooth/WPAD dump is intentionally benchmark-end-only.  The full
@@ -15166,9 +15123,8 @@ bool benchmark_guest_state_enabled() {
 // its guest queues while they are live would perturb the exact VI cadence that
 // this runtime is required to preserve.
 bool benchmark_bluetooth_state_enabled() {
-    static const bool enabled =
-        read_env_flag("GALAXY_BENCHMARK_BLUETOOTH_STATE", false);
-    return enabled;
+    static std::atomic<std::int8_t> cached{-1};
+    return cached_env_gate(cached, "GALAXY_BENCHMARK_BLUETOOTH_STATE", false);
 }
 
 // This deliberately reports only after the benchmark interval. The counters
@@ -15176,9 +15132,8 @@ bool benchmark_bluetooth_state_enabled() {
 // they prove transport activity without making any claim about which game UI
 // subsequently consumed an input.
 bool benchmark_virtual_input_state_enabled() {
-    static const bool enabled =
-        read_env_flag("GALAXY_BENCHMARK_INPUT_STATE", false);
-    return enabled;
+    static std::atomic<std::int8_t> cached{-1};
+    return cached_env_gate(cached, "GALAXY_BENCHMARK_INPUT_STATE", false);
 }
 
 void dump_benchmark_virtual_input_state(
@@ -18212,18 +18167,33 @@ bool trace_realtime_vi_wait(const RuntimeState& state);
 // to 33 ms (one and two clock ticks) that turned into 50 ms frame intervals
 // and late AI DMA. GALAXY_IDLE_LOOP_SLEEP=0 restores the spinning idle loop.
 bool idle_loop_sleep_enabled() {
-    static const bool enabled = read_env_flag("GALAXY_IDLE_LOOP_SLEEP", true);
-    return enabled;
+    static std::atomic<std::int8_t> cached{-1};
+    return cached_env_gate(cached, "GALAXY_IDLE_LOOP_SLEEP", true);
 }
 
 void idle_loop_wait_for_next_deadline(RuntimeState& state) {
-    if (state.pending_transfer.active) return;
+    if (state.pending_transfer.active) {
+        ++state.idle_loop_skips[0];
+        return;
+    }
     if (!idle_loop_sleep_enabled() || state.vi_deadline_consumer == nullptr ||
-        state.vi_deadline_wait_active || state.deadline_events.mask() != 0u ||
-        state.dispatching_external_interrupt || state.dispatching_decrementer ||
+        state.vi_deadline_wait_active) {
+        ++state.idle_loop_skips[1];
+        return;
+    }
+    if (state.deadline_events.mask() != 0u) {
+        ++state.idle_loop_skips[2];
+        return;
+    }
+    if (state.dispatching_external_interrupt || state.dispatching_decrementer ||
         state.dispatching_fpu_unavailable || state.dispatching_ipc_interrupt ||
         state.servicing_native_input || state.gx_sync_capture_active ||
-        state.external_dispatch.active() || state.pending_vi_boundary.active()) {
+        state.external_dispatch.active()) {
+        ++state.idle_loop_skips[3];
+        return;
+    }
+    if (state.pending_vi_boundary.active()) {
+        ++state.idle_loop_skips[4];
         return;
     }
     const std::uint64_t now_ticks = runtime_time_base_ticks(state);
@@ -18234,6 +18204,7 @@ void idle_loop_wait_for_next_deadline(RuntimeState& state) {
             now_ticks);
     if (observation.status != galaxy::timing::PeriodicConsumeStatus::NotDue ||
         now_ticks >= observation.expected_deadline_ticks) {
+        ++state.idle_loop_skips[5];
         return;
     }
     const std::uint64_t ticks_remaining =
@@ -18257,6 +18228,7 @@ void idle_loop_wait_for_next_deadline(RuntimeState& state) {
     static const auto kDeadlineGuard = std::chrono::microseconds(std::clamp<std::uint64_t>(
         read_env_u64("GALAXY_IDLE_LOOP_GUARD_US", 0u), 0u, 2000u));
     if (wait_duration <= kDeadlineGuard) {
+        ++state.idle_loop_skips[6];
         return;
     }
     wait_duration -= kDeadlineGuard;
@@ -18268,6 +18240,7 @@ void idle_loop_wait_for_next_deadline(RuntimeState& state) {
         state.address_space->aram_dma_interrupt_pending() ||
         state.address_space->ai_dma_interrupt_pending() ||
         state.address_space->ipc_interrupt_pending()) {
+        ++state.idle_loop_skips[7];
         return;
     }
     const auto started = std::chrono::steady_clock::now();
@@ -18341,6 +18314,7 @@ void idle_loop_wait_for_next_deadline(RuntimeState& state) {
         state.deadline_events.set_idle_waiting(false);
         (void)CancelWaitableTimer(handles.timer);
         handles.armed_target_ticks = 0u;
+        ++state.idle_loop_skips[8];
         return;
     }
     galaxy::timeline::record(galaxy::timeline::Event::IdleWaitBegin);
@@ -26308,9 +26282,8 @@ bool inline_branch_checkpoint_gate_activated(const RuntimeState& state) {
 }
 
 bool trace_inline_checkpoint_samples_enabled() {
-    static const bool enabled =
-        read_env_flag("GALAXY_TRACE_INLINE_CHECKPOINT_SAMPLES", false);
-    return enabled;
+    static std::atomic<std::int8_t> cached{-1};
+    return cached_env_gate(cached, "GALAXY_TRACE_INLINE_CHECKPOINT_SAMPLES", false);
 }
 
 void activate_inline_checkpoint_gate(RuntimeState& state) {
@@ -28281,9 +28254,8 @@ bool looks_like_guest_message_queue(
     std::uint32_t mq);
 
 bool synthetic_osreceive_wake_enabled() {
-    static const bool enabled =
-        read_env_flag("GALAXY_SYNTHETIC_OSRECEIVE_WAKE", false);
-    return enabled;
+    static std::atomic<std::int8_t> cached{-1};
+    return cached_env_gate(cached, "GALAXY_SYNTHETIC_OSRECEIVE_WAKE", false);
 }
 
 std::uint32_t wake_osreceive_sleepers_with_queued_messages(
@@ -31600,6 +31572,12 @@ int wmain(int argc, wchar_t** argv) {
                 <<" wakes="<<state.idle_loop_sleep_wakes
                 <<" timeouts="<<state.idle_loop_sleep_timeouts
                 <<" total-us="<<state.idle_loop_sleep_us
+                <<" skips(transfer/off/mask/dispatch/vi-boundary/vi-due/short/levels/retest)="
+                <<state.idle_loop_skips[0]<<'/'<<state.idle_loop_skips[1]<<'/'
+                <<state.idle_loop_skips[2]<<'/'<<state.idle_loop_skips[3]<<'/'
+                <<state.idle_loop_skips[4]<<'/'<<state.idle_loop_skips[5]<<'/'
+                <<state.idle_loop_skips[6]<<'/'<<state.idle_loop_skips[7]<<'/'
+                <<state.idle_loop_skips[8]
                 <<" direct-dispatch-entries="<<std::count_if(
                     state.direct_dispatch_table.begin(), state.direct_dispatch_table.end(),
                     [](galaxy::NativeGameFunction f){ return f != nullptr; })<<'\n';
