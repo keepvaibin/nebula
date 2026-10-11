@@ -466,6 +466,18 @@ int signed_lparam_y(LPARAM lp) {
     return static_cast<int>(static_cast<short>((lp >> 16) & 0xFFFF));
 }
 
+// GALAXY_GPU_PREFERENCE=low selects the minimum-power (integrated) adapter
+// first, e.g. to measure on a hybrid machine's iGPU.
+DXGI_GPU_PREFERENCE adapter_preference() {
+    char value[16]{};
+    std::size_t length = 0;
+    if (getenv_s(&length, value, sizeof(value), "GALAXY_GPU_PREFERENCE") == 0 &&
+        length > 1 && (value[0] == 'l' || value[0] == 'L' || value[0] == 'm' || value[0] == 'M')) {
+        return DXGI_GPU_PREFERENCE_MINIMUM_POWER;
+    }
+    return DXGI_GPU_PREFERENCE_HIGH_PERFORMANCE;
+}
+
 bool trace_present_stats_enabled() {
     static const bool enabled = [] {
         char value[16]{};
@@ -1891,6 +1903,10 @@ bool UploadRing::initialize(
     void* ptr = nullptr;
     if (FAILED(buffer->Map(0, &no_read, &ptr))) return false;
     const auto gpu_base = buffer->GetGPUVirtualAddress();
+    // GPU address ranges, so a DRED page-fault address can be attributed.
+    std::cout << "[ring] name=" << (name != nullptr ? name : "") << " gpu=0x"
+              << std::hex << gpu_base << "-0x" << (gpu_base + total) << std::dec
+              << " bytes=" << total << '\n';
     buffer_ = std::move(buffer);
     mapped_ = static_cast<std::byte*>(ptr);
     gpu_base_ = gpu_base;
@@ -3126,7 +3142,7 @@ bool RendererD3D12::initialize(int window_width, int window_height, unsigned efb
             for (UINT index = 0u;; ++index) {
                 ComPtr<IDXGIAdapter1> candidate;
                 const HRESULT result = preferred_factory->EnumAdapterByGpuPreference(
-                    index, DXGI_GPU_PREFERENCE_HIGH_PERFORMANCE,
+                    index, adapter_preference(),
                     IID_PPV_ARGS(&candidate));
                 if (result == DXGI_ERROR_NOT_FOUND) {
                     break;

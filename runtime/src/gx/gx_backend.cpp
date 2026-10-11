@@ -9641,10 +9641,12 @@ ID3D12PipelineState* GxBackend::flush_draw_state(
             prune_dirty_texture_binding_tables();
         }
 
-        if (texture_map_mask == 0u) {
-            current_texture_table_ = {};
-            current_sampler_table_ = {};
-        } else {
+        // A draw that samples no map still gets real tables (null SRVs and
+        // the default samplers): the renderer skips null tables, which leaves
+        // the root tables undefined after a command-list reset, and an uber
+        // pixel shader samples every enabled map even when the combiner
+        // ignores it (an AMD iGPU page-faulted on exactly that).
+        {
             bool binding_cache_hit = false;
             // Texture tables point into the frame-local shader-visible SRV
             // segment, so only the per-frame binding cache may own them.
