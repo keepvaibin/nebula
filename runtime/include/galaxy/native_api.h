@@ -8998,6 +8998,739 @@ inline void lean_psquat_dot(PpcContext* context, GuestMemoryV1* memory,
     sdk_math::return_f32(context, p[0] * q[0] + p[1] * q[1] + p[2] * q[2] + p[3] * q[3]);
 }
 
+namespace sdk_math {
+
+// JMath::sSinCosTable (TSinCosTable<14, f32>, .bss): 16384 (sin, cos) f32
+// pairs built at boot by the table constructor (0x80441134); read in place.
+constexpr std::uint32_t kJMathSinCosTable = 0x805FB300u;
+
+GALAXY_ALWAYS_INLINE std::byte* write_span(
+    GuestMemoryV1* memory, std::uint32_t address, std::uint32_t size,
+    const NativeServicesV1* services, std::uint32_t pc) {
+    return resolve_guest(memory, address, size, services, pc);
+}
+
+GALAXY_ALWAYS_INLINE void put_f32s(std::byte* base, const float* values, std::uint32_t count) {
+    for (std::uint32_t i = 0; i < count; ++i) {
+        native_store_guest_u32_fast(base, i * 4u, std::bit_cast<std::uint32_t>(values[i]));
+    }
+}
+
+GALAXY_ALWAYS_INLINE std::uint32_t load_u16(const std::byte* base, std::uint32_t offset) {
+    return (std::to_integer<std::uint32_t>(base[offset]) << 8) |
+        std::to_integer<std::uint32_t>(base[offset + 1u]);
+}
+
+GALAXY_ALWAYS_INLINE float load_f32_at(
+    GuestMemoryV1* memory, std::uint32_t address,
+    const NativeServicesV1* services, std::uint32_t pc) {
+    return native_load_guest_f32_fast(read_span(memory, address, 4u, services, pc), 0u);
+}
+
+// lha + int-to-float (exact).
+GALAXY_ALWAYS_INLINE float load_s16_at(
+    GuestMemoryV1* memory, std::uint32_t address,
+    const NativeServicesV1* services, std::uint32_t pc) {
+    const std::uint32_t bits = load_u16(read_span(memory, address, 2u, services, pc), 0u);
+    return static_cast<float>(static_cast<std::int16_t>(static_cast<std::uint16_t>(bits)));
+}
+
+// psq_l w=1 lane 0 through a GQR's load type (bits 16..18) and load scale
+// (bits 24..29, signed): value * 2^-scale; type 0 is plain f32.
+GALAXY_ALWAYS_INLINE float psq_load_one(
+    GuestMemoryV1* memory, std::uint32_t address, std::uint32_t gqr,
+    const NativeServicesV1* services, std::uint32_t pc) {
+    if ((gqr & 0x3F070000u) == 0x00070000u) {  // s16, scale 0
+        return load_s16_at(memory, address, services, pc);
+    }
+    std::int32_t value = 0;
+    switch ((gqr >> 16) & 7u) {
+    case 0u:
+        return load_f32_at(memory, address, services, pc);
+    case 4u:
+        value = std::to_integer<std::int32_t>(read_span(memory, address, 1u, services, pc)[0]);
+        break;
+    case 5u:
+        value = static_cast<std::int32_t>(
+            load_u16(read_span(memory, address, 2u, services, pc), 0u));
+        break;
+    case 6u:
+        value = static_cast<std::int8_t>(
+            std::to_integer<std::uint8_t>(read_span(memory, address, 1u, services, pc)[0]));
+        break;
+    case 7u:
+        value = static_cast<std::int16_t>(static_cast<std::uint16_t>(
+            load_u16(read_span(memory, address, 2u, services, pc), 0u)));
+        break;
+    default:
+        guest_execution_fault(services, pc, "reserved paired-single load type");
+    }
+    std::int32_t scale = static_cast<std::int32_t>((gqr >> 24) & 0x3Fu);
+    if (scale >= 32) {
+        scale -= 64;
+    }
+    const double factor =
+        std::bit_cast<double>(static_cast<std::uint64_t>(1023 - scale) << 52);
+    return static_cast<float>(static_cast<double>(value) * factor);
+}
+
+// fctiwz: truncate toward zero, saturating; NaN -> 0x80000000.
+GALAXY_ALWAYS_INLINE std::uint32_t truncate_s32_bits(double value) {
+    if (!(value > -2147483649.0)) {
+        return 0x80000000u;
+    }
+    if (value >= 2147483648.0) {
+        return 0x7FFFFFFFu;
+    }
+    return static_cast<std::uint32_t>(static_cast<std::int32_t>(value));
+}
+
+// (sin, cos) of a 16-bit binary angle: pair (u16(angle) >> 2), i.e.
+// rlwinm(angle, 1, 15, 28).
+GALAXY_ALWAYS_INLINE void jmath_sincos_s16(
+    GuestMemoryV1* memory, std::uint32_t angle, float* sin_cos,
+    const NativeServicesV1* services, std::uint32_t pc) {
+    const std::uint32_t offset = std::rotl(angle, 1) & 0x0001FFF8u;
+    load_f32s(read_span(memory, kJMathSinCosTable + offset, 8u, services, pc), sin_cos, 2u);
+}
+
+GALAXY_ALWAYS_INLINE void set_f32(PpcContext* context, std::uint32_t index, float value) {
+    const std::uint64_t bits = std::bit_cast<std::uint64_t>(static_cast<double>(value));
+    context->fpr_bits[index] = bits;
+    context->ps1_bits[index] = bits;
+}
+
+// 3x4 affine product (PSMTXConcat): r = a * b.
+GALAXY_ALWAYS_INLINE void concat34(const float* a, const float* b, float* r) {
+    for (std::uint32_t row = 0; row < 3u; ++row) {
+        const float* ar = a + row * 4u;
+        for (std::uint32_t col = 0; col < 4u; ++col) {
+            float value = ar[0] * b[col] + ar[1] * b[4u + col] + ar[2] * b[8u + col];
+            if (col == 3u) {
+                value += ar[3];
+            }
+            r[row * 4u + col] = value;
+        }
+    }
+}
+
+// J3DGetTranslateRotateMtx: Rz * Ry * Rx | t. Each angle as (sin, cos).
+GALAXY_ALWAYS_INLINE void euler_translate_mtx(
+    const float* x, const float* y, const float* z,
+    float tx, float ty, float tz, float* m) {
+    const float sx = x[0];
+    const float cx = x[1];
+    const float sy = y[0];
+    const float cy = y[1];
+    const float sz = z[0];
+    const float cz = z[1];
+    m[0] = cz * cy;
+    m[1] = sx * cz * sy - cx * sz;
+    m[2] = sx * sz + cx * cz * sy;
+    m[3] = tx;
+    m[4] = sz * cy;
+    m[5] = cx * cz + sx * sz * sy;
+    m[6] = cx * sz * sy - sx * cz;
+    m[7] = ty;
+    m[8] = -sy;
+    m[9] = cy * sx;
+    m[10] = cy * cx;
+    m[11] = tz;
+}
+
+// J3DGetTextureMtx (translation in column 2) / J3DGetTextureMtxOld (column 3).
+// srt: f32 scaleX, scaleY; s16 rotation (+8); f32 transX (+0xC), transY (+0x10).
+// center: f32 x, y.
+GALAXY_ALWAYS_INLINE void texture_srt_mtx(
+    GuestMemoryV1* memory, std::uint32_t srt_address, std::uint32_t center_address,
+    std::uint32_t column, float* m, const NativeServicesV1* services, std::uint32_t pc) {
+    const std::byte* srt = read_span(memory, srt_address, 0x14u, services, pc);
+    const float sx = native_load_guest_f32_fast(srt, 0x00u);
+    const float sy = native_load_guest_f32_fast(srt, 0x04u);
+    const std::uint32_t angle = load_u16(srt, 0x08u);
+    const float tx = native_load_guest_f32_fast(srt, 0x0Cu);
+    const float ty = native_load_guest_f32_fast(srt, 0x10u);
+    float center[2];
+    load_f32s(read_span(memory, center_address, 8u, services, pc), center, 2u);
+    float sc[2];
+    jmath_sincos_s16(memory, angle, sc, services, pc);
+    const float s = sc[0];
+    const float c = sc[1];
+    const float u = tx + (center[0] + ((-(sx * c)) * center[0] + (sx * s) * center[1]));
+    const float v = ty + (center[1] + ((-(sy * s)) * center[0] - (sy * c) * center[1]));
+    for (std::uint32_t i = 0; i < 12u; ++i) {
+        m[i] = 0.0f;
+    }
+    m[0] = sx * c;
+    m[1] = -(sx * s);
+    m[column] = u;
+    m[4] = sy * s;
+    m[5] = sy * c;
+    m[4u + column] = v;
+    m[10] = 1.0f;
+}
+
+// J3DPSCalcInverseTranspose / PSMTXInvXpose: cofactors of the 3x3 part and
+// the determinant (expanded down column 0).
+GALAXY_ALWAYS_INLINE float cofactors33(const float* m, float* c) {
+    c[0] = m[5] * m[10] - m[9] * m[6];
+    c[1] = m[6] * m[8] - m[10] * m[4];
+    c[2] = m[4] * m[9] - m[5] * m[8];
+    c[3] = m[9] * m[2] - m[1] * m[10];
+    c[4] = m[10] * m[0] - m[2] * m[8];
+    c[5] = m[1] * m[8] - m[0] * m[9];
+    c[6] = m[1] * m[6] - m[5] * m[2];
+    c[7] = m[2] * m[4] - m[6] * m[0];
+    c[8] = m[0] * m[5] - m[1] * m[4];
+    return m[0] * c[0] + m[4] * c[3] + m[8] * c[6];
+}
+
+// J3DHermiteInterpolation<s16> operation order.
+GALAXY_ALWAYS_INLINE float hermite_s16_form(
+    float frame, float t0, float v0, float tan0, float t1, float v1, float tan1) {
+    const float dt = t1 - t0;
+    const float u = (frame - t0) / dt;
+    const float a = (v1 - v0) - dt * tan0;
+    const float f = ((tan1 * dt + v0) - v1) - a;
+    const float u2 = u * u;
+    const float f3 = u2 * f;
+    return (a * u2 + ((dt * tan0 + f3) * u + v0)) - f3;
+}
+
+// J3DHermiteInterpolation<f32> (JMAHermiteInterpolation) operation order.
+GALAXY_ALWAYS_INLINE float hermite_f32_form(
+    float frame, float t0, float v0, float tan0, float t1, float v1, float tan1) {
+    const float d = frame - t0;
+    const float u = d / (t1 - t0);
+    const float u2 = u * u;
+    const float w = u2 - u;
+    const float h = (u + u) * w - u2;
+    const float base = h * (v0 - v1) + v0;
+    float k = tan0 * w + tan0;
+    k = tan1 * w + k;
+    k = u * tan0 - k;
+    return base - d * k;
+}
+
+}  // namespace sdk_math
+
+// ---- Section A: pure leaves ----
+
+// void J3DPSMtx33Copy(Mtx33 src, Mtx33 dst)
+inline void lean_j3d_mtx33_copy(PpcContext* context, GuestMemoryV1* memory,
+                                const NativeServicesV1* services, std::uint32_t pc) {
+    float m[9];
+    sdk_math::load_f32s(sdk_math::read_span(memory, context->gpr[3], 36u, services, pc), m, 9u);
+    sdk_math::store_f32s(memory, context->gpr[4], m, 9u, services, pc);
+}
+
+// void J3DPSMtx33CopyFrom34(Mtx src, Mtx33 dst): 3x3 part of a 3x4.
+inline void lean_j3d_mtx33_copy_from34(PpcContext* context, GuestMemoryV1* memory,
+                                       const NativeServicesV1* services, std::uint32_t pc) {
+    float m[11];
+    sdk_math::load_f32s(sdk_math::read_span(memory, context->gpr[3], 44u, services, pc), m, 11u);
+    const float r[9] = {m[0], m[1], m[2], m[4], m[5], m[6], m[8], m[9], m[10]};
+    sdk_math::store_f32s(memory, context->gpr[4], r, 9u, services, pc);
+}
+
+// void J3DPSMtxArrayConcat(Mtx a, Mtx* b, Mtx* ab, u32 count): ab[i] = a * b[i].
+// a and b[i] are read before ab[i] is written, a again for every element.
+// count == 0 (the original loops 2^32 times) is a no-op.
+inline void lean_j3d_psmtx_array_concat(PpcContext* context, GuestMemoryV1* memory,
+                                        const NativeServicesV1* services, std::uint32_t pc) {
+    const std::uint32_t a_address = context->gpr[3];
+    std::uint32_t b_address = context->gpr[4];
+    std::uint32_t ab_address = context->gpr[5];
+    for (std::uint32_t n = context->gpr[6]; n != 0u; --n) {
+        float a[12];
+        float b[12];
+        float r[12];
+        sdk_math::load_f32s(sdk_math::read_span(memory, a_address, 48u, services, pc), a, 12u);
+        sdk_math::load_f32s(sdk_math::read_span(memory, b_address, 48u, services, pc), b, 12u);
+        sdk_math::concat34(a, b, r);
+        sdk_math::store_f32s(memory, ab_address, r, 12u, services, pc);
+        b_address += 48u;
+        ab_address += 48u;
+    }
+}
+
+// u32 J3DPSCalcInverseTranspose(Mtx src, Mtx33 dst): dst = cofactors / det;
+// 0 (dst untouched) when det == 0, else 1.
+inline void lean_j3d_calc_inverse_transpose(PpcContext* context, GuestMemoryV1* memory,
+                                            const NativeServicesV1* services,
+                                            std::uint32_t pc) {
+    float m[11];
+    sdk_math::load_f32s(sdk_math::read_span(memory, context->gpr[3], 44u, services, pc), m, 11u);
+    float c[9];
+    const float det = sdk_math::cofactors33(m, c);
+    if (det == 0.0f) {
+        context->gpr[3] = 0u;
+        return;
+    }
+    const float d = 1.0f / det;
+    for (std::uint32_t i = 0; i < 9u; ++i) {
+        c[i] *= d;
+    }
+    sdk_math::store_f32s(memory, context->gpr[4], c, 9u, services, pc);
+    context->gpr[3] = 1u;
+}
+
+// u32 PSMTXInvXpose(Mtx src, Mtx dst): as above with a 3x4 dst, column 3 = 0.
+inline void lean_psmtx_inv_xpose(PpcContext* context, GuestMemoryV1* memory,
+                                 const NativeServicesV1* services, std::uint32_t pc) {
+    float m[11];
+    sdk_math::load_f32s(sdk_math::read_span(memory, context->gpr[3], 44u, services, pc), m, 11u);
+    float c[9];
+    const float det = sdk_math::cofactors33(m, c);
+    if (det == 0.0f) {
+        context->gpr[3] = 0u;
+        return;
+    }
+    const float d = 1.0f / det;
+    const float r[12] = {c[0] * d, c[1] * d, c[2] * d, 0.0f,
+                         c[3] * d, c[4] * d, c[5] * d, 0.0f,
+                         c[6] * d, c[7] * d, c[8] * d, 0.0f};
+    sdk_math::store_f32s(memory, context->gpr[4], r, 12u, services, pc);
+    context->gpr[3] = 1u;
+}
+
+// void J3DGetTranslateRotateMtx(const J3DTransformInfo& info, Mtx m)
+// info: s16 rotation x/y/z at +0xC/+0xE/+0x10, f32 translation at +0x14; scale unused.
+inline void lean_j3d_translate_rotate_mtx_info(PpcContext* context, GuestMemoryV1* memory,
+                                               const NativeServicesV1* services,
+                                               std::uint32_t pc) {
+    const std::byte* info =
+        sdk_math::read_span(memory, context->gpr[3] + 0x0Cu, 0x14u, services, pc);
+    float x[2];
+    float y[2];
+    float z[2];
+    sdk_math::jmath_sincos_s16(memory, sdk_math::load_u16(info, 0u), x, services, pc);
+    sdk_math::jmath_sincos_s16(memory, sdk_math::load_u16(info, 2u), y, services, pc);
+    sdk_math::jmath_sincos_s16(memory, sdk_math::load_u16(info, 4u), z, services, pc);
+    float m[12];
+    sdk_math::euler_translate_mtx(x, y, z, native_load_guest_f32_fast(info, 0x08u),
+                                  native_load_guest_f32_fast(info, 0x0Cu),
+                                  native_load_guest_f32_fast(info, 0x10u), m);
+    sdk_math::store_f32s(memory, context->gpr[4], m, 12u, services, pc);
+}
+
+// void J3DGetTranslateRotateMtx(s16 rx, s16 ry, s16 rz, f32 tx, f32 ty, f32 tz, Mtx m)
+inline void lean_j3d_translate_rotate_mtx(PpcContext* context, GuestMemoryV1* memory,
+                                          const NativeServicesV1* services, std::uint32_t pc) {
+    float x[2];
+    float y[2];
+    float z[2];
+    sdk_math::jmath_sincos_s16(memory, context->gpr[3], x, services, pc);
+    sdk_math::jmath_sincos_s16(memory, context->gpr[4], y, services, pc);
+    sdk_math::jmath_sincos_s16(memory, context->gpr[5], z, services, pc);
+    float m[12];
+    sdk_math::euler_translate_mtx(x, y, z, sdk_math::fpr_f32(context, 1u),
+                                  sdk_math::fpr_f32(context, 2u),
+                                  sdk_math::fpr_f32(context, 3u), m);
+    sdk_math::store_f32s(memory, context->gpr[6], m, 12u, services, pc);
+}
+
+// void J3DGetTextureMtx(const J3DTextureSRTInfo& srt, const Vec& center, Mtx m)
+inline void lean_j3d_texture_mtx(PpcContext* context, GuestMemoryV1* memory,
+                                 const NativeServicesV1* services, std::uint32_t pc) {
+    float m[12];
+    sdk_math::texture_srt_mtx(memory, context->gpr[3], context->gpr[4], 2u, m, services, pc);
+    sdk_math::store_f32s(memory, context->gpr[5], m, 12u, services, pc);
+}
+
+// void J3DGetTextureMtxOld(const J3DTextureSRTInfo& srt, const Vec& center, Mtx m)
+inline void lean_j3d_texture_mtx_old(PpcContext* context, GuestMemoryV1* memory,
+                                     const NativeServicesV1* services, std::uint32_t pc) {
+    float m[12];
+    sdk_math::texture_srt_mtx(memory, context->gpr[3], context->gpr[4], 3u, m, services, pc);
+    sdk_math::store_f32s(memory, context->gpr[5], m, 12u, services, pc);
+}
+
+// void J3DScaleNrmMtx(Mtx m, const Vec& s): m[i][0..2] *= s; column 3 kept.
+// s is re-read for every row after the previous row is stored.
+inline void lean_j3d_scale_nrm_mtx(PpcContext* context, GuestMemoryV1* memory,
+                                   const NativeServicesV1* services, std::uint32_t pc) {
+    const std::byte* scale = sdk_math::read_span(memory, context->gpr[4], 12u, services, pc);
+    for (std::uint32_t row = 0; row < 3u; ++row) {
+        const std::uint32_t address = context->gpr[3] + row * 16u;
+        float s[3];
+        float v[3];
+        sdk_math::load_f32s(scale, s, 3u);
+        sdk_math::load_f32s(sdk_math::read_span(memory, address, 12u, services, pc), v, 3u);
+        const float r[3] = {v[0] * s[0], v[1] * s[1], v[2] * s[2]};
+        sdk_math::store_f32s(memory, address, r, 3u, services, pc);
+    }
+}
+
+// void J3DScaleNrmMtx33(Mtx33 m, const Vec& s): m[i][j] *= s[j].
+inline void lean_j3d_scale_nrm_mtx33(PpcContext* context, GuestMemoryV1* memory,
+                                     const NativeServicesV1* services, std::uint32_t pc) {
+    float s[3];
+    float m[9];
+    sdk_math::load_f32s(sdk_math::read_span(memory, context->gpr[4], 12u, services, pc), s, 3u);
+    sdk_math::load_f32s(sdk_math::read_span(memory, context->gpr[3], 36u, services, pc), m, 9u);
+    for (std::uint32_t i = 0; i < 9u; ++i) {
+        m[i] *= s[i % 3u];
+    }
+    sdk_math::store_f32s(memory, context->gpr[3], m, 9u, services, pc);
+}
+
+// void J3DMtxProjConcat(Mtx a, Mtx44 b, Mtx ab): ab = a (rows as 4-vectors) * b.
+// Same order as the original (per row: a row, then two columns at a time, each
+// read before it is written), so ab may alias a or b.
+inline void lean_j3d_mtx_proj_concat(PpcContext* context, GuestMemoryV1* memory,
+                                     const NativeServicesV1* services, std::uint32_t pc) {
+    const std::byte* a = sdk_math::read_span(memory, context->gpr[3], 48u, services, pc);
+    const std::byte* b = sdk_math::read_span(memory, context->gpr[4], 64u, services, pc);
+    std::byte* ab = sdk_math::write_span(memory, context->gpr[5], 48u, services, pc);
+    for (std::uint32_t row = 0; row < 3u; ++row) {
+        float ar[4];
+        sdk_math::load_f32s(a + row * 16u, ar, 4u);
+        for (std::uint32_t half = 0; half < 2u; ++half) {
+            float bc[8];
+            for (std::uint32_t k = 0; k < 4u; ++k) {
+                sdk_math::load_f32s(b + k * 16u + half * 8u, bc + k * 2u, 2u);
+            }
+            float r[2];
+            for (std::uint32_t lane = 0; lane < 2u; ++lane) {
+                r[lane] = ar[0] * bc[lane] + ar[1] * bc[2u + lane] +
+                    ar[2] * bc[4u + lane] + ar[3] * bc[6u + lane];
+            }
+            sdk_math::put_f32s(ab + row * 16u + half * 8u, r, 2u);
+        }
+    }
+}
+
+// void JMAVECScaleAdd(const Vec* a, const Vec* b, Vec* dst, f32 s): dst = a * s + b
+inline void lean_jma_vec_scale_add(PpcContext* context, GuestMemoryV1* memory,
+                                   const NativeServicesV1* services, std::uint32_t pc) {
+    float a[3];
+    float b[3];
+    sdk_math::load_f32s(sdk_math::read_span(memory, context->gpr[3], 12u, services, pc), a, 3u);
+    sdk_math::load_f32s(sdk_math::read_span(memory, context->gpr[4], 12u, services, pc), b, 3u);
+    const float s = sdk_math::fpr_f32(context, 1u);
+    const float r[3] = {a[0] * s + b[0], a[1] * s + b[1], a[2] * s + b[2]};
+    sdk_math::store_f32s(memory, context->gpr[5], r, 3u, services, pc);
+}
+
+// void JMAVECLerp(const Vec* a, const Vec* b, Vec* dst, f32 t): dst = (b - a) * t + a
+inline void lean_jma_vec_lerp(PpcContext* context, GuestMemoryV1* memory,
+                              const NativeServicesV1* services, std::uint32_t pc) {
+    float a[3];
+    float b[3];
+    sdk_math::load_f32s(sdk_math::read_span(memory, context->gpr[3], 12u, services, pc), a, 3u);
+    sdk_math::load_f32s(sdk_math::read_span(memory, context->gpr[4], 12u, services, pc), b, 3u);
+    const float t = sdk_math::fpr_f32(context, 1u);
+    const float r[3] = {(b[0] - a[0]) * t + a[0], (b[1] - a[1]) * t + a[1],
+                        (b[2] - a[2]) * t + a[2]};
+    sdk_math::store_f32s(memory, context->gpr[5], r, 3u, services, pc);
+}
+
+// void JMAQuatLerp(const Quaternion* p, const Quaternion* q, f32 t, Quaternion* dst):
+// dst = p + t * (q - p), or p + t * (-q - p) when dot(p, q) < 0.
+inline void lean_jma_quat_lerp(PpcContext* context, GuestMemoryV1* memory,
+                               const NativeServicesV1* services, std::uint32_t pc) {
+    float p[4];
+    float q[4];
+    sdk_math::load_f32s(sdk_math::read_span(memory, context->gpr[3], 16u, services, pc), p, 4u);
+    sdk_math::load_f32s(sdk_math::read_span(memory, context->gpr[4], 16u, services, pc), q, 4u);
+    const float nt = -sdk_math::fpr_f32(context, 1u);
+    const float dot = (p[0] * q[0] + p[2] * q[2]) + (p[1] * q[1] + p[3] * q[3]);
+    float r[4];
+    if (dot < 0.0f) {
+        for (std::uint32_t i = 0; i < 4u; ++i) {
+            r[i] = p[i] + nt * (p[i] + q[i]);
+        }
+    } else {
+        for (std::uint32_t i = 0; i < 4u; ++i) {
+            r[i] = p[i] + nt * (p[i] - q[i]);
+        }
+    }
+    sdk_math::store_f32s(memory, context->gpr[5], r, 4u, services, pc);
+}
+
+// f32 J3DHermiteInterpolation<s16>(f32 frame, const s16* t0, const s16* v0,
+//     const s16* tan0, const s16* t1, const s16* v1, const s16* tan1)
+// Inputs are psq_l w=1 through GQR5 (read at call time).
+inline void lean_j3d_hermite_s16(PpcContext* context, GuestMemoryV1* memory,
+                                 const NativeServicesV1* services, std::uint32_t pc) {
+    const std::uint32_t gqr = context->gqr[5];
+    const float t0 = sdk_math::psq_load_one(memory, context->gpr[3], gqr, services, pc);
+    const float v0 = sdk_math::psq_load_one(memory, context->gpr[4], gqr, services, pc);
+    const float tan0 = sdk_math::psq_load_one(memory, context->gpr[5], gqr, services, pc);
+    const float t1 = sdk_math::psq_load_one(memory, context->gpr[6], gqr, services, pc);
+    const float v1 = sdk_math::psq_load_one(memory, context->gpr[7], gqr, services, pc);
+    const float tan1 = sdk_math::psq_load_one(memory, context->gpr[8], gqr, services, pc);
+    sdk_math::return_f32(context, sdk_math::hermite_s16_form(
+        sdk_math::fpr_f32(context, 1u), t0, v0, tan0, t1, v1, tan1));
+}
+
+// f32 J3DGetKeyFrameInterpolation<f32>(f32 frame, J3DAnmKeyTableBase* table, f32* data)
+// table: u16 count (+0), u16 type (+4). Key = {time, value, tangent} when
+// type == 0, else {time, value, inTangent, outTangent}. frame < time[0] ->
+// value[0]; frame >= time[last] -> value[last]; else binary search and Hermite
+// (J3DHermiteInterpolation<f32>, 0x80433CFC, is part of this function).
+// Index arithmetic wraps as the original (count == 0 reads key -1).
+inline void lean_j3d_keyframe_f32(PpcContext* context, GuestMemoryV1* memory,
+                                  const NativeServicesV1* services, std::uint32_t pc) {
+    const float frame = sdk_math::fpr_f32(context, 1u);
+    std::uint32_t key = context->gpr[4];
+    if (frame < sdk_math::load_f32_at(memory, key, services, pc)) {
+        sdk_math::return_f32(context, sdk_math::load_f32_at(memory, key + 4u, services, pc));
+        return;
+    }
+    const std::byte* table = sdk_math::read_span(memory, context->gpr[3], 6u, services, pc);
+    const std::uint32_t type = sdk_math::load_u16(table, 4u);
+    std::uint32_t count = sdk_math::load_u16(table, 0u);
+    const std::uint32_t stride = type == 0u ? 12u : 16u;
+    const std::uint32_t last = key + (count - 1u) * stride;
+    if (sdk_math::load_f32_at(memory, last, services, pc) <= frame) {
+        sdk_math::return_f32(context, sdk_math::load_f32_at(memory, last + 4u, services, pc));
+        return;
+    }
+    while (count > 1u) {
+        const std::uint32_t half = count >> 1;
+        const std::uint32_t offset = half * stride;
+        if (frame >= sdk_math::load_f32_at(memory, key + offset, services, pc)) {
+            key += offset;
+            count -= half;
+        } else {
+            count = half;
+        }
+    }
+    float k0[2];
+    float k1[4];  // tan0, t1, v1, tan1
+    sdk_math::load_f32s(sdk_math::read_span(memory, key, 8u, services, pc), k0, 2u);
+    sdk_math::load_f32s(sdk_math::read_span(memory, key + (type == 0u ? 8u : 12u), 16u,
+                                            services, pc), k1, 4u);
+    sdk_math::return_f32(context, sdk_math::hermite_f32_form(
+        frame, k0[0], k0[1], k1[0], k1[1], k1[2], k1[3]));
+}
+
+// void PSMTX44Copy(Mtx44 src, Mtx44 dst): 8-byte chunks in order.
+inline void lean_psmtx44_copy(PpcContext* context, GuestMemoryV1* memory,
+                              const NativeServicesV1* services, std::uint32_t pc) {
+    const std::byte* src = sdk_math::read_span(memory, context->gpr[3], 64u, services, pc);
+    std::byte* dst = sdk_math::write_span(memory, context->gpr[4], 64u, services, pc);
+    for (std::uint32_t i = 0; i < 8u; ++i) {
+        float pair[2];
+        sdk_math::load_f32s(src + i * 8u, pair, 2u);
+        sdk_math::put_f32s(dst + i * 8u, pair, 2u);
+    }
+}
+
+// void PSMTXMultVecArraySR(Mtx m, const Vec* src, Vec* dst, u32 count):
+// dst[i] = m(3x3) * src[i]. Software-pipelined like the original: src[i + 1]
+// is read before dst[i] is written. count < 2 is undefined in the original
+// (ctr wraps); here count 0 is a no-op and count 1 transforms one vector.
+inline void lean_psmtx_mult_vec_array_sr(PpcContext* context, GuestMemoryV1* memory,
+                                         const NativeServicesV1* services, std::uint32_t pc) {
+    const std::uint32_t count = context->gpr[6];
+    if (count == 0u) {
+        return;
+    }
+    float m[11];
+    sdk_math::load_f32s(sdk_math::read_span(memory, context->gpr[3], 44u, services, pc), m, 11u);
+    std::uint32_t src = context->gpr[4];
+    std::uint32_t dst = context->gpr[5];
+    float v[3];
+    sdk_math::load_f32s(sdk_math::read_span(memory, src, 12u, services, pc), v, 3u);
+    for (std::uint32_t i = 0; i < count; ++i) {
+        const float r[3] = {m[0] * v[0] + m[1] * v[1] + m[2] * v[2],
+                            m[4] * v[0] + m[5] * v[1] + m[6] * v[2],
+                            m[8] * v[0] + m[9] * v[1] + m[10] * v[2]};
+        if (i + 1u < count) {
+            src += 12u;
+            sdk_math::load_f32s(sdk_math::read_span(memory, src, 12u, services, pc), v, 3u);
+        }
+        sdk_math::store_f32s(memory, dst, r, 3u, services, pc);
+        dst += 12u;
+    }
+}
+
+// ---- Section B: pure composites (direct calls to verified-pure leaves) ----
+
+// f32 J3DGetKeyFrameInterpolation<s16>(f32 frame, J3DAnmKeyTableBase* table, s16* data)
+// As the f32 form with 2-byte elements: the bounds checks and the search read
+// keys with lha (unscaled); the Hermite step (J3DHermiteInterpolation<s16>)
+// reads its six inputs through GQR5.
+inline void lean_j3d_keyframe_s16(PpcContext* context, GuestMemoryV1* memory,
+                                  const NativeServicesV1* services, std::uint32_t pc) {
+    const float frame = sdk_math::fpr_f32(context, 1u);
+    std::uint32_t key = context->gpr[4];
+    if (frame < sdk_math::load_s16_at(memory, key, services, pc)) {
+        sdk_math::return_f32(context, sdk_math::load_s16_at(memory, key + 2u, services, pc));
+        return;
+    }
+    const std::byte* table = sdk_math::read_span(memory, context->gpr[3], 6u, services, pc);
+    const std::uint32_t type = sdk_math::load_u16(table, 4u);
+    std::uint32_t count = sdk_math::load_u16(table, 0u);
+    const std::uint32_t stride = type == 0u ? 6u : 8u;
+    const std::uint32_t last = key + (count - 1u) * stride;
+    if (sdk_math::load_s16_at(memory, last, services, pc) <= frame) {
+        sdk_math::return_f32(context, sdk_math::load_s16_at(memory, last + 2u, services, pc));
+        return;
+    }
+    while (count > 1u) {
+        const std::uint32_t half = count >> 1;
+        const std::uint32_t offset = half * stride;
+        if (frame >= sdk_math::load_s16_at(memory, key + offset, services, pc)) {
+            key += offset;
+            count -= half;
+        } else {
+            count = half;
+        }
+    }
+    const std::uint32_t gqr = context->gqr[5];
+    const std::uint32_t tan0 = key + (type == 0u ? 4u : 6u);
+    const float t0 = sdk_math::psq_load_one(memory, key, gqr, services, pc);
+    const float v0 = sdk_math::psq_load_one(memory, key + 2u, gqr, services, pc);
+    const float d0 = sdk_math::psq_load_one(memory, tan0, gqr, services, pc);
+    const float t1 = sdk_math::psq_load_one(memory, tan0 + 2u, gqr, services, pc);
+    const float v1 = sdk_math::psq_load_one(memory, tan0 + 4u, gqr, services, pc);
+    const float d1 = sdk_math::psq_load_one(memory, tan0 + 6u, gqr, services, pc);
+    sdk_math::return_f32(context, sdk_math::hermite_s16_form(frame, t0, v0, d0, t1, v1, d1));
+}
+
+// void JMAMTXApplyScale(const Mtx src, Mtx dst, f32 x, f32 y, f32 z):
+// dst = src * Scale(x, y, z) (PSMTXScale + PSMTXConcat); dst may alias src.
+inline void lean_jma_mtx_apply_scale(PpcContext* context, GuestMemoryV1* memory,
+                                     const NativeServicesV1* services, std::uint32_t pc) {
+    float m[12];
+    sdk_math::load_f32s(sdk_math::read_span(memory, context->gpr[3], 48u, services, pc), m, 12u);
+    const float k[3] = {sdk_math::fpr_f32(context, 1u), sdk_math::fpr_f32(context, 2u),
+                        sdk_math::fpr_f32(context, 3u)};
+    for (std::uint32_t row = 0; row < 3u; ++row) {
+        for (std::uint32_t col = 0; col < 3u; ++col) {
+            m[row * 4u + col] *= k[col];
+        }
+    }
+    sdk_math::store_f32s(memory, context->gpr[4], m, 12u, services, pc);
+}
+
+// void PSMTXRotRad(Mtx m, char axis, f32 rad) (JMath table variant at 0x803A3164):
+// index = fctiwz(|rad| * 2607.5945) & 0x3FFF into sSinCosTable, sin negated for
+// rad < 0, then PSMTXRotTrig(m, (s8)axis, sin, cos).
+inline void lean_psmtx_rot_rad(PpcContext* context, GuestMemoryV1* memory,
+                               const NativeServicesV1* services, std::uint32_t pc) {
+    constexpr float kRadToIndex = std::bit_cast<float>(0x4522F983u);      // r2+0x1824
+    constexpr float kNegRadToIndex = std::bit_cast<float>(0xC522F983u);   // r2+0x1820
+    const float rad = sdk_math::fpr_f32(context, 1u);
+    float sin_a;
+    if (rad < 0.0f) {
+        const std::uint32_t offset =
+            (sdk_math::truncate_s32_bits(rad * kNegRadToIndex) << 3) & 0x0001FFF8u;
+        sin_a = -sdk_math::load_f32_at(memory, sdk_math::kJMathSinCosTable + offset,
+                                       services, pc);
+    } else {
+        const std::uint32_t offset =
+            (sdk_math::truncate_s32_bits(rad * kRadToIndex) << 3) & 0x0001FFF8u;
+        sin_a = sdk_math::load_f32_at(memory, sdk_math::kJMathSinCosTable + offset,
+                                      services, pc);
+    }
+    const float abs_rad = rad < 0.0f ? -rad : rad;
+    const std::uint32_t cos_offset =
+        (sdk_math::truncate_s32_bits(abs_rad * kRadToIndex) << 3) & 0x0001FFF8u;
+    const float cos_a = sdk_math::load_f32_at(
+        memory, sdk_math::kJMathSinCosTable + cos_offset + 4u, services, pc);
+    context->gpr[4] = static_cast<std::uint32_t>(
+        static_cast<std::int32_t>(static_cast<std::int8_t>(context->gpr[4] & 0xFFu)));
+    sdk_math::set_f32(context, 1u, sin_a);
+    sdk_math::set_f32(context, 2u, cos_a);
+    lean_psmtx_rot_trig(context, memory, services, pc);
+}
+
+// void PSMTXRotAxisRad(Mtx m, const Vec* axis, f32 rad): sin/cos in double
+// (MSL sin/cos), axis normalized by 1/sqrt, then __PSMTXRotAxisRadInternal.
+inline void lean_psmtx_rot_axis_rad(PpcContext* context, GuestMemoryV1* memory,
+                                    const NativeServicesV1* services, std::uint32_t pc) {
+    const double rad = static_cast<double>(sdk_math::fpr_f32(context, 1u));
+    const float s = static_cast<float>(std::sin(rad));
+    const float c = static_cast<float>(std::cos(rad));
+    float a[3];
+    sdk_math::load_f32s(sdk_math::read_span(memory, context->gpr[4], 12u, services, pc), a, 3u);
+    const float k = 1.0f / std::sqrt((a[0] * a[0] + a[2] * a[2]) + a[1] * a[1]);
+    const float x = a[0] * k;
+    const float y = a[1] * k;
+    const float z = a[2] * k;
+    const float t = 1.0f - c;
+    const float tx = t * x;
+    const float ty = t * y;
+    const float tz = t * z;
+    const float m[12] = {
+        tx * x + c, tx * y - s * z, tx * z + s * y, 0.0f,
+        tx * y + s * z, ty * y + c, ty * z - s * x, 0.0f,
+        tx * z - s * y, ty * z + s * x, tz * z + c, 0.0f};
+    sdk_math::store_f32s(memory, context->gpr[3], m, 12u, services, pc);
+}
+
+// void C_MTXLookAt(Mtx m, const Vec* camPos, const Vec* camUp, const Vec* target):
+// look = normalize(camPos - target), right = normalize(camUp x look),
+// up = look x right; rows right / up / look, translation -dot(camPos, row).
+inline void lean_c_mtx_look_at(PpcContext* context, GuestMemoryV1* memory,
+                               const NativeServicesV1* services, std::uint32_t pc) {
+    float eye[3];
+    float up[3];
+    float at[3];
+    sdk_math::load_f32s(sdk_math::read_span(memory, context->gpr[4], 12u, services, pc), eye, 3u);
+    sdk_math::load_f32s(sdk_math::read_span(memory, context->gpr[5], 12u, services, pc), up, 3u);
+    sdk_math::load_f32s(sdk_math::read_span(memory, context->gpr[6], 12u, services, pc), at, 3u);
+    float look[3] = {eye[0] - at[0], eye[1] - at[1], eye[2] - at[2]};
+    const float kl = 1.0f / std::sqrt(look[0] * look[0] + look[1] * look[1] + look[2] * look[2]);
+    for (float& value : look) {
+        value *= kl;
+    }
+    float right[3] = {up[1] * look[2] - up[2] * look[1], up[2] * look[0] - up[0] * look[2],
+                      up[0] * look[1] - up[1] * look[0]};
+    const float kr =
+        1.0f / std::sqrt(right[0] * right[0] + right[1] * right[1] + right[2] * right[2]);
+    for (float& value : right) {
+        value *= kr;
+    }
+    const float up2[3] = {look[1] * right[2] - look[2] * right[1],
+                          look[2] * right[0] - look[0] * right[2],
+                          look[0] * right[1] - look[1] * right[0]};
+    const float m[12] = {
+        right[0], right[1], right[2],
+        -((eye[0] * right[0] + eye[1] * right[1]) + eye[2] * right[2]),
+        up2[0], up2[1], up2[2],
+        -((eye[0] * up2[0] + eye[1] * up2[1]) + eye[2] * up2[2]),
+        look[0], look[1], look[2],
+        -((eye[0] * look[0] + eye[1] * look[1]) + eye[2] * look[2])};
+    sdk_math::store_f32s(memory, context->gpr[3], m, 12u, services, pc);
+}
+
+// void C_QUATSlerp(const Quaternion* p, const Quaternion* q, Quaternion* r, f32 t):
+// cos = dot(p, q), negated with q's weight when < 0; slerp (MSL acos/sin in
+// double) when cos <= 0.99999 (0x3F7FFF58), else lerp; NaN cos lerps.
+inline void lean_c_quat_slerp(PpcContext* context, GuestMemoryV1* memory,
+                              const NativeServicesV1* services, std::uint32_t pc) {
+    float p[4];
+    float q[4];
+    sdk_math::load_f32s(sdk_math::read_span(memory, context->gpr[3], 16u, services, pc), p, 4u);
+    sdk_math::load_f32s(sdk_math::read_span(memory, context->gpr[4], 16u, services, pc), q, 4u);
+    const float t = sdk_math::fpr_f32(context, 1u);
+    float cos_t = p[3] * q[3] + (p[2] * q[2] + (p[0] * q[0] + p[1] * q[1]));
+    float tq = 1.0f;
+    if (cos_t < 0.0f) {
+        cos_t = -cos_t;
+        tq = -tq;
+    }
+    float tp;
+    if (cos_t <= std::bit_cast<float>(0x3F7FFF58u)) {
+        const float theta = static_cast<float>(std::acos(static_cast<double>(cos_t)));
+        const float sin_theta = static_cast<float>(std::sin(static_cast<double>(theta)));
+        tp = static_cast<float>(std::sin(static_cast<double>((1.0f - t) * theta))) / sin_theta;
+        tq = tq * (static_cast<float>(std::sin(static_cast<double>(t * theta))) / sin_theta);
+    } else {
+        tq = tq * t;
+        tp = 1.0f - t;
+    }
+    const float r[4] = {tp * p[0] + tq * q[0], tp * p[1] + tq * q[1],
+                        tp * p[2] + tq * q[2], tp * p[3] + tq * q[3]};
+    sdk_math::store_f32s(memory, context->gpr[5], r, 4u, services, pc);
+}
+
 inline void native_psmtx_identity_804B5EDC(
     PpcContext* context,
     GuestMemoryV1* memory,

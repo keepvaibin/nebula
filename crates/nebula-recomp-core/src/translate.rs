@@ -6492,8 +6492,9 @@ impl NativePureHelper {
     }
 }
 
-/// RVL SDK paired-single math library routines with lean host bodies
-/// (`galaxy::lean_*` in native_api.h): fast float, ABI-visible effects only.
+/// RVL SDK paired-single math, J3D and JMath matrix/vector/keyframe routines
+/// with lean host bodies (`galaxy::lean_*` in native_api.h): fast float,
+/// ABI-visible effects only.
 /// Eager FPU (ABI 25) means translated code never raises exception 7, so
 /// these need no exact-FPU restart and replace both the body and direct calls.
 fn lean_sdk_math_symbol(address: u32) -> Option<&'static str> {
@@ -6520,6 +6521,33 @@ fn lean_sdk_math_symbol(address: u32) -> Option<&'static str> {
         0x804B_6CF4 => Some("lean_psvec_distance"),
         0x804B_6D48 => Some("lean_psquat_multiply"),
         0x804B_6DA4 => Some("lean_psquat_dot"),
+        // J3D / JMath / SDK C-math (tier 2, section A).
+        0x8042_4978 => Some("lean_j3d_mtx33_copy"),
+        0x8042_49A4 => Some("lean_j3d_mtx33_copy_from34"),
+        0x8042_29B8 => Some("lean_j3d_psmtx_array_concat"),
+        0x8042_22AC => Some("lean_j3d_calc_inverse_transpose"),
+        0x8042_2374 => Some("lean_j3d_translate_rotate_mtx_info"),
+        0x8042_2464 => Some("lean_j3d_translate_rotate_mtx"),
+        0x8042_2514 => Some("lean_j3d_texture_mtx"),
+        0x8042_25C8 => Some("lean_j3d_texture_mtx_old"),
+        0x8042_27DC => Some("lean_j3d_scale_nrm_mtx"),
+        0x8042_2840 => Some("lean_j3d_scale_nrm_mtx33"),
+        0x8042_2894 => Some("lean_j3d_mtx_proj_concat"),
+        0x8044_0EF8 => Some("lean_jma_vec_scale_add"),
+        0x8044_0F1C => Some("lean_jma_vec_lerp"),
+        0x8044_0DFC => Some("lean_jma_quat_lerp"),
+        0x8043_3B88 => Some("lean_j3d_hermite_s16"),
+        0x8043_3BDC => Some("lean_j3d_keyframe_f32"),
+        0x804B_6100 => Some("lean_psmtx_inv_xpose"),
+        0x804B_6B24 => Some("lean_psmtx44_copy"),
+        0x804B_68E4 => Some("lean_psmtx_mult_vec_array_sr"),
+        // Tier 2, section B (pure composites).
+        0x8043_39B8 => Some("lean_j3d_keyframe_s16"),
+        0x8044_0F48 => Some("lean_jma_mtx_apply_scale"),
+        0x803A_3164 => Some("lean_psmtx_rot_rad"),
+        0x804B_6328 => Some("lean_psmtx_rot_axis_rad"),
+        0x804B_6548 => Some("lean_c_mtx_look_at"),
+        0x804B_6F90 => Some("lean_c_quat_slerp"),
         _ => None,
     }
 }
@@ -6795,6 +6823,81 @@ fn native_function_body(address: u32) -> Option<&'static str> {
         ),
         0x804B_6DA4 => Some(
             "    galaxy::lean_psquat_dot(context, memory, services, 0x804B6DA4u);\n    return;\n",
+        ),
+        0x8042_4978 => Some(
+            "    galaxy::lean_j3d_mtx33_copy(context, memory, services, 0x80424978u);\n    return;\n",
+        ),
+        0x8042_49A4 => Some(
+            "    galaxy::lean_j3d_mtx33_copy_from34(context, memory, services, 0x804249A4u);\n    return;\n",
+        ),
+        0x8042_29B8 => Some(
+            "    galaxy::lean_j3d_psmtx_array_concat(context, memory, services, 0x804229B8u);\n    return;\n",
+        ),
+        0x8042_22AC => Some(
+            "    galaxy::lean_j3d_calc_inverse_transpose(context, memory, services, 0x804222ACu);\n    return;\n",
+        ),
+        0x8042_2374 => Some(
+            "    galaxy::lean_j3d_translate_rotate_mtx_info(context, memory, services, 0x80422374u);\n    return;\n",
+        ),
+        0x8042_2464 => Some(
+            "    galaxy::lean_j3d_translate_rotate_mtx(context, memory, services, 0x80422464u);\n    return;\n",
+        ),
+        0x8042_2514 => Some(
+            "    galaxy::lean_j3d_texture_mtx(context, memory, services, 0x80422514u);\n    return;\n",
+        ),
+        0x8042_25C8 => Some(
+            "    galaxy::lean_j3d_texture_mtx_old(context, memory, services, 0x804225C8u);\n    return;\n",
+        ),
+        0x8042_27DC => Some(
+            "    galaxy::lean_j3d_scale_nrm_mtx(context, memory, services, 0x804227DCu);\n    return;\n",
+        ),
+        0x8042_2840 => Some(
+            "    galaxy::lean_j3d_scale_nrm_mtx33(context, memory, services, 0x80422840u);\n    return;\n",
+        ),
+        0x8042_2894 => Some(
+            "    galaxy::lean_j3d_mtx_proj_concat(context, memory, services, 0x80422894u);\n    return;\n",
+        ),
+        0x8044_0EF8 => Some(
+            "    galaxy::lean_jma_vec_scale_add(context, memory, services, 0x80440EF8u);\n    return;\n",
+        ),
+        0x8044_0F1C => Some(
+            "    galaxy::lean_jma_vec_lerp(context, memory, services, 0x80440F1Cu);\n    return;\n",
+        ),
+        0x8044_0DFC => Some(
+            "    galaxy::lean_jma_quat_lerp(context, memory, services, 0x80440DFCu);\n    return;\n",
+        ),
+        0x8043_3B88 => Some(
+            "    galaxy::lean_j3d_hermite_s16(context, memory, services, 0x80433B88u);\n    return;\n",
+        ),
+        0x8043_3BDC => Some(
+            "    galaxy::lean_j3d_keyframe_f32(context, memory, services, 0x80433BDCu);\n    return;\n",
+        ),
+        0x804B_6100 => Some(
+            "    galaxy::lean_psmtx_inv_xpose(context, memory, services, 0x804B6100u);\n    return;\n",
+        ),
+        0x804B_6B24 => Some(
+            "    galaxy::lean_psmtx44_copy(context, memory, services, 0x804B6B24u);\n    return;\n",
+        ),
+        0x804B_68E4 => Some(
+            "    galaxy::lean_psmtx_mult_vec_array_sr(context, memory, services, 0x804B68E4u);\n    return;\n",
+        ),
+        0x8043_39B8 => Some(
+            "    galaxy::lean_j3d_keyframe_s16(context, memory, services, 0x804339B8u);\n    return;\n",
+        ),
+        0x8044_0F48 => Some(
+            "    galaxy::lean_jma_mtx_apply_scale(context, memory, services, 0x80440F48u);\n    return;\n",
+        ),
+        0x803A_3164 => Some(
+            "    galaxy::lean_psmtx_rot_rad(context, memory, services, 0x803A3164u);\n    return;\n",
+        ),
+        0x804B_6328 => Some(
+            "    galaxy::lean_psmtx_rot_axis_rad(context, memory, services, 0x804B6328u);\n    return;\n",
+        ),
+        0x804B_6548 => Some(
+            "    galaxy::lean_c_mtx_look_at(context, memory, services, 0x804B6548u);\n    return;\n",
+        ),
+        0x804B_6F90 => Some(
+            "    galaxy::lean_c_quat_slerp(context, memory, services, 0x804B6F90u);\n    return;\n",
         ),
         0x8000_72B4 => Some(
             "    galaxy::native_read_next_char_utf16_800072B4(context, memory, services, 0x800072B4u);\n    return;\n",
