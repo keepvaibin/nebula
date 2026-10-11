@@ -1810,6 +1810,55 @@ void FifoParser::replay_cached_display_list(
     }
 }
 
+// Whether the bytes after a top-level opcode hold the whole command. A command
+// split by a chunk boundary then stops the window at its opcode, which is what
+// the FifoNeedMoreData unwind from inside the command produced, without
+// throwing (one C++ exception per split command per parser otherwise).
+// Opcodes not listed keep the cursor's own checks.
+static bool top_level_command_complete(
+    const FifoCursor& cursor,
+    std::uint8_t opcode,
+    const FifoSink& sink) {
+    const std::size_t available = cursor.data.size() - cursor.offset;
+    const auto u16_at = [&](std::size_t at) {
+        return static_cast<std::uint16_t>(
+            (std::to_integer<std::uint32_t>(cursor.data[cursor.offset + at]) << 8) |
+            std::to_integer<std::uint32_t>(cursor.data[cursor.offset + at + 1u]));
+    };
+    switch (opcode) {
+    case op::kLoadCpReg:
+        return available >= 5u;
+    case op::kLoadXfReg:
+        return available >= 4u &&
+            available >= 4u + 4u * ((static_cast<std::size_t>(u16_at(0)) & 0xFu) + 1u);
+    case op::kLoadIndxA:
+    case op::kLoadIndxB:
+    case op::kLoadIndxC:
+    case op::kLoadIndxD:
+    case op::kLoadBpReg:
+        return available >= 4u;
+    case op::kCallDisplayList:
+        return available >= 8u;
+    default:
+        if (opcode >= op::kDrawFirst && opcode <= op::kDrawLast) {
+            if (available < 2u) {
+                return false;
+            }
+            // A GX vertex is at most 129 bytes (direct position, NBT normal,
+            // two colors, eight texture coordinates, nine matrix indices), so
+            // most draws are proven complete without the layout lookup.
+            constexpr std::size_t kVertexBytesBound = 160u;
+            const std::uint16_t vertex_count = u16_at(0);
+            if (available - 2u >= static_cast<std::size_t>(vertex_count) * kVertexBytesBound) {
+                return true;
+            }
+            return available - 2u >= sink.draw_payload_size(
+                static_cast<std::uint8_t>(opcode & 0x07u), vertex_count);
+        }
+        return true;
+    }
+}
+
 void FifoParser::run_window(
     FifoCursor& cursor,
     GuestMemoryV1* memory,
@@ -1823,6 +1872,11 @@ void FifoParser::run_window(
             cursor.base_offset + local_opcode_offset;
         cursor.command_offset = opcode_offset;
         const std::uint8_t opcode = cursor.read_u8();
+        if (depth == 0 && cursor.recover_truncation &&
+            !top_level_command_complete(cursor, opcode, sink)) {
+            cursor.offset = local_opcode_offset;
+            return;
+        }
         if (fifo_history_enabled()) {
             record_fifo_history(opcode_offset, opcode);
         }

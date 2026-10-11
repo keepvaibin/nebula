@@ -893,6 +893,11 @@ public:
                 out << tag("-module-rva") << " rva=0x" << std::hex << (rows[i].second << 4u) << std::dec
                     << " samples=" << rows[i].first << '\n';
             }
+            for (const auto& [pair, count] : module_caller_pairs_) {
+                out << tag("-module-pair") << " rva=0x" << std::hex << ((pair >> 32u) << 4u)
+                    << " caller=0x" << ((pair & 0xFFFFFFFFu) << 4u) << std::dec
+                    << " samples=" << count << '\n';
+            }
         }
         print_addresses(out, tag("-host").c_str(), host_buckets_, 40u, pct);
         print_addresses(out, tag("-other").c_str(), other_buckets_, 40u, pct);
@@ -1204,6 +1209,10 @@ private:
         if (guest_index(rip, index)) {
             ++guest_counts_[index];
             ++module_buckets_[(rip - module_base_) >> 4u];
+            if (frame_count != 0u && frames[0] >= module_base_ && frames[0] < module_end_) {
+                ++module_caller_pairs_[(((rip - module_base_) >> 4u) << 32u) |
+                                       ((frames[0] - module_base_) >> 4u)];
+            }
             ++guest_samples_;
             return;
         }
@@ -1245,6 +1254,8 @@ private:
     // Module samples by 16-byte RVA bucket, resolved offline with the
     // module's linker map (function records only name the nearest entry).
     std::unordered_map<std::uintptr_t, std::uint64_t> module_buckets_;
+    // (sample bucket << 32 | first return-address bucket), both module RVAs >> 4.
+    std::unordered_map<std::uint64_t, std::uint64_t> module_caller_pairs_;
     std::unordered_map<std::uintptr_t, std::uint64_t> other_buckets_;
     std::unordered_map<std::uintptr_t, std::uint64_t> other_caller_buckets_;
     std::vector<std::uintptr_t> wait_stubs_;
