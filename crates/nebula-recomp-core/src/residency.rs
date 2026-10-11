@@ -157,12 +157,26 @@ fn float_helper_index_positions(callee: &str) -> Option<&'static [usize]> {
     })
 }
 
+/// Resident registers a lean host body (`galaxy::lean_*`, see
+/// `translate::lean_call_contract`) reads from or writes to `context`. Bit N is
+/// GPR or FPR N; an FPR entry covers ps0 and ps1.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub(crate) struct LeanCallContract {
+    pub gpr_reads: u32,
+    pub gpr_writes: u32,
+    pub fpr_reads: u32,
+    pub fpr_writes: u32,
+}
+
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum Sync {
     /// No resident register effect.
     None,
     /// Store the written locals first, reload every local afterwards.
     Full,
+    /// A lean host body: store the written locals it may read or write,
+    /// reload the used locals it writes.
+    Lean(LeanCallContract),
     /// `branch_checkpoint_taken`: inline test, cold synchronized block.
     Checkpoint,
     /// `call_return_checkpoint`: inline test, cold synchronized block.
@@ -179,6 +193,8 @@ fn classify(callee: &str, floats: bool) -> Sync {
         Sync::Checkpoint
     } else if name == "call_return_checkpoint" {
         Sync::CallReturn
+    } else if let Some(contract) = crate::translate::lean_call_contract(name) {
+        Sync::Lean(contract)
     } else if name == "ppc_commit_scalar_result" && floats {
         Sync::FprTarget
     } else {
@@ -557,6 +573,37 @@ fn reload_sequence(used: &[bool; SLOTS]) -> String {
     out
 }
 
+/// The entries of `flags` named by a GPR mask and an FPR mask (FPRs with
+/// their PS1 halves).
+fn contract_slots(flags: &[bool; SLOTS], gpr_mask: u32, fpr_mask: u32) -> [bool; SLOTS] {
+    let mut slots = [false; SLOTS];
+    for index in 0..32 {
+        if gpr_mask & (1u32 << index) != 0 {
+            slots[index] = flags[index];
+        }
+        if fpr_mask & (1u32 << index) != 0 {
+            slots[fpr_slot(index)] = flags[fpr_slot(index)];
+            slots[ps1_slot(index)] = flags[ps1_slot(index)];
+        }
+    }
+    slots
+}
+
+/// Stores before a lean body: the written locals it may read or write (a
+/// register it writes on some paths only must hold the current value).
+fn lean_store_sequence(written: &[bool; SLOTS], contract: LeanCallContract) -> String {
+    store_sequence(&contract_slots(
+        written,
+        contract.gpr_reads | contract.gpr_writes,
+        contract.fpr_reads | contract.fpr_writes,
+    ))
+}
+
+/// Reloads after a lean body: the used locals it writes.
+fn lean_reload_sequence(used: &[bool; SLOTS], contract: LeanCallContract) -> String {
+    reload_sequence(&contract_slots(used, contract.gpr_writes, contract.fpr_writes))
+}
+
 fn declarations(used: &[bool; SLOTS]) -> String {
     let mut out = String::new();
     for (slot, flag) in used.iter().enumerate() {
@@ -765,6 +812,15 @@ pub fn apply_register_residency(body: &str, floats: bool) -> Option<String> {
                         call.callee_text
                     );
                 }
+                Sync::Lean(contract) => {
+                    let _ = write!(
+                        rewritten,
+                        "{{ {}{}({args}); {}}}",
+                        lean_store_sequence(&written, contract),
+                        call.callee_text,
+                        lean_reload_sequence(&used, contract)
+                    );
+                }
                 Sync::FprTarget => {
                     let arguments = split_arguments(args);
                     let index = literal_register_index(arguments.get(1)?)?;
@@ -907,6 +963,28 @@ mod tests {
         let body = "    {\n    context->gpr[11] = context->gpr[1] + 0x00000010u;\n    galaxy::native_savegpr_805174FC(context, memory, services, 0x80517538u);\n    }\n    return;\n";
         let out = apply_register_residency(body, false).expect("eligible");
         assert!(out.contains("{ context->gpr[11] = gr11; galaxy::native_savegpr_805174FC(context, memory, services, 0x80517538u); gr1 = context->gpr[1]; gr11 = context->gpr[11]; }"));
+    }
+
+    #[test]
+    fn lean_body_synchronizes_only_its_contract_registers() {
+        // lean_tvec3_add_assign reads r3 and r4. r3 is written in the body, so
+        // it is stored; r4 is only read, so the context already holds it.
+        // Nothing is reloaded: the body writes no register.
+        let body = "    {\n    context->gpr[3] = context->gpr[31] + 0x00000010u;\n    }\n    {\n    context->lr = 0x80001010u;\n    galaxy::lean_tvec3_add_assign(context, memory, services, 0x80018BA0u);\n    }\n    {\n    context->gpr[31] = context->gpr[3];\n    context->fpr_bits[2] = context->fpr_bits[1];\n    }\n    return;\n";
+        let out = apply_register_residency(body, true).expect("eligible");
+        assert!(out.contains(
+            "    { context->gpr[3] = gr3; galaxy::lean_tvec3_add_assign(context, memory, services, 0x80018BA0u); }\n"
+        ));
+    }
+
+    #[test]
+    fn lean_body_result_registers_are_reloaded() {
+        // lean_tvec3_dot reads r3 and r4 and returns f1 (ps0 and ps1).
+        let body = "    {\n    context->gpr[4] = context->gpr[30];\n    context->fpr_bits[1] = context->fpr_bits[31];\n    }\n    {\n    galaxy::lean_tvec3_dot(context, memory, services, 0x8001CF44u);\n    }\n    {\n    context->fpr_bits[30] = context->fpr_bits[1];\n    context->ps1_bits[30] = context->ps1_bits[1];\n    }\n    return;\n";
+        let out = apply_register_residency(body, true).expect("eligible");
+        assert!(out.contains(
+            "    { context->gpr[4] = gr4; context->fpr_bits[1] = fpr[1]; galaxy::lean_tvec3_dot(context, memory, services, 0x8001CF44u); fpr[1] = context->fpr_bits[1]; ps1[1] = context->ps1_bits[1]; }\n"
+        ));
     }
 
     #[test]

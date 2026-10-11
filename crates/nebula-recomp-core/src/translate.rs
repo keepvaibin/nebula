@@ -5,6 +5,7 @@ use crate::{
         GuestInstructionEffect, GuestRegisterSet, GuestResidencyBoundarySync,
     },
     guest_ppc_effect::{guest_integer_gpr_access, GuestGprAccess},
+    residency::LeanCallContract,
     rmge01_function_map, DolSection, DolSectionKind, FunctionRange, RMGE01_DOL_SHA1,
 };
 use powerpc::{Argument, Extensions, Ins, Opcode};
@@ -1842,12 +1843,22 @@ fn lower_resident_integer_direct_calls(
                         && pc != 0x803A_BDF0
                         && !(target == 0x8039_8D3C && pc == 0x8039_8E7C)
                 });
-                let sync = verified_owner.map_or_else(GuestResidencyBoundarySync::full, |_| {
-                    GuestResidencyBoundarySync::from_optional_callee_contract(
-                        leaf_contracts.get(&target),
-                    )
-                });
-                emit_resident_gpr_sync(&mut output, sync.flush.gpr & local_gpr_mask, false)?;
+                let lean_contract = lean_body_call_contract(
+                    target,
+                    Some(callable_entries),
+                    Some(exact_fpu_functions),
+                );
+                let (flush_gpr, reload_gpr) = if let Some(contract) = lean_contract {
+                    (contract.gpr_reads | contract.gpr_writes, contract.gpr_writes)
+                } else {
+                    let sync = verified_owner.map_or_else(GuestResidencyBoundarySync::full, |_| {
+                        GuestResidencyBoundarySync::from_optional_callee_contract(
+                            leaf_contracts.get(&target),
+                        )
+                    });
+                    (sync.flush.gpr, sync.reload.gpr)
+                };
+                emit_resident_gpr_sync(&mut output, flush_gpr & local_gpr_mask, false)?;
                 if let Some(owner) = verified_owner {
                     emit_resolved_generated_direct_call(&mut output, target, owner, pc)?;
                 } else {
@@ -1859,12 +1870,14 @@ fn lower_resident_integer_direct_calls(
                         Some(exact_fpu_functions),
                     )?;
                 }
-                emit_resident_gpr_sync(&mut output, sync.reload.gpr & local_gpr_mask, true)?;
-                // The checkpoint can inspect or change the whole context, so
-                // linked calls do a full flush/reload even for a pure callee.
-                emit_resident_gpr_sync(&mut output, local_gpr_mask, false)?;
-                emit_call_return_checkpoint(&mut output, pc)?;
-                emit_resident_gpr_sync(&mut output, local_gpr_mask, true)?;
+                emit_resident_gpr_sync(&mut output, reload_gpr & local_gpr_mask, true)?;
+                if lean_contract.is_none() {
+                    // The checkpoint can inspect or change the whole context, so
+                    // linked calls do a full flush/reload even for a pure callee.
+                    emit_resident_gpr_sync(&mut output, local_gpr_mask, false)?;
+                    emit_call_return_checkpoint(&mut output, pc)?;
+                    emit_resident_gpr_sync(&mut output, local_gpr_mask, true)?;
+                }
             }
             Opcode::Bclr => {
                 emit_resident_gpr_sync(&mut output, local_gpr_mask, false)?;
@@ -5189,7 +5202,11 @@ fn lower_words_with_config(
                         )?;
                     }
                     if link {
-                        emit_call_return_checkpoint(&mut output, pc)?;
+                        if lean_body_call_contract(target, callable_entries, exact_fpu_functions)
+                            .is_none()
+                        {
+                            emit_call_return_checkpoint(&mut output, pc)?;
+                        }
                     } else {
                         output.push_str("    return;\n");
                         final_instruction_is_terminal = true;
@@ -5242,6 +5259,9 @@ fn lower_words_with_config(
                             }
                         }
                     } else if link {
+                        let checkpoint =
+                            lean_body_call_contract(target, callable_entries, exact_fpu_functions)
+                                .is_none();
                         if unconditional {
                             emit_direct_guest_call_with_exact_fpu(
                                 &mut output,
@@ -5250,7 +5270,9 @@ fn lower_words_with_config(
                                 callable_entries,
                                 exact_fpu_functions,
                             )?;
-                            emit_call_return_checkpoint(&mut output, pc)?;
+                            if checkpoint {
+                                emit_call_return_checkpoint(&mut output, pc)?;
+                            }
                         } else {
                             writeln!(output, "    if ({condition}) {{")
                                 .map_err(|_| TranslationError::Formatting)?;
@@ -5261,7 +5283,9 @@ fn lower_words_with_config(
                                 callable_entries,
                                 exact_fpu_functions,
                             )?;
-                            emit_call_return_checkpoint(&mut output, pc)?;
+                            if checkpoint {
+                                emit_call_return_checkpoint(&mut output, pc)?;
+                            }
                             output.push_str("    }\n");
                         }
                     } else if unconditional {
@@ -6552,8 +6576,123 @@ fn lean_sdk_math_symbol(address: u32) -> Option<&'static str> {
         0x804B_E1D8 => Some("native_gx_load_pos_mtx_imm_804BE1D8"),
         0x804B_E2A0 => Some("lean_gx_load_tex_mtx_imm"),
         0x804B_B8A8 => Some("lean_gx_load_light_obj_imm"),
+        // Tier 3: JGeometry TVec3<f32> operators, TUtil<f32> and JMath copies.
+        0x8001_8B14 => Some("lean_tvec3_copy"),
+        0x8001_8B8C => Some("lean_tvec3_copy"),
+        0x8001_CF64 => Some("lean_tvec3_copy"),
+        0x8004_E9F0 => Some("lean_tvec3_copy"),
+        0x8003_CD3C => Some("lean_jmath_ps_copy12"),
+        0x8038_623C => Some("lean_jmath_ps_copy16"),
+        0x8001_8BA0 => Some("lean_tvec3_add_assign"),
+        0x8001_CF80 => Some("lean_tvec3_add_assign"),
+        0x8001_FD94 => Some("lean_tvec3_sub_assign"),
+        0x8002_04F0 => Some("lean_tvec3_sub_assign"),
+        0x8002_5F68 => Some("lean_tvec3_sub3"),
+        0x8001_DC74 => Some("lean_psvec_subtract"),
+        0x8001_DDF8 => Some("lean_tvec3_plus"),
+        0x8001_8BD4 => Some("lean_tvec3_minus"),
+        0x8001_8B28 => Some("lean_tvec3_times"),
+        0x8002_3404 => Some("lean_tvec3_scale_assign"),
+        0x8001_FD6C => Some("lean_tvec3_scale_assign"),
+        0x8005_4D64 => Some("lean_tvec3_scale_from"),
+        0x8002_0514 => Some("lean_tvec3_negate"),
+        0x8001_6F70 => Some("lean_tvec3_splat"),
+        0x8004_E9E0 => Some("lean_tvec3_splat"),
+        0x8001_6F80 => Some("lean_tvec3_set3"),
+        0x8001_8BC4 => Some("lean_tvec3_set3"),
+        0x8001_8A98 => Some("lean_tvec3_zero"),
+        0x8003_71D8 => Some("lean_tvec3_from_ints"),
+        0x8001_CF44 => Some("lean_tvec3_dot"),
+        0x8007_743C => Some("lean_tvec3_squared"),
+        0x800D_76B0 => Some("lean_tvec3_squared_distance"),
+        0x8001_6FBC => Some("lean_jgeom_sqrt"),
+        0x8002_0530 => Some("lean_jgeom_inv_sqrt"),
         _ => None,
     }
+}
+
+/// Resident registers each lean host body reads from or writes to `context`.
+/// A call site of a body listed here synchronizes only those registers and has
+/// no call-return checkpoint: the body is a leaf with no checkpoint, callback
+/// or transfer. A body that is not listed stays a full synchronization point
+/// with the usual checkpoint. `lean_call_contracts_cover_the_bodies` checks the
+/// entries against the bodies in native_api.h.
+pub(crate) fn lean_call_contract(symbol: &str) -> Option<LeanCallContract> {
+    const fn mask(registers: &[u32]) -> u32 {
+        let mut bits = 0u32;
+        let mut index = 0;
+        while index < registers.len() {
+            bits |= 1u32 << registers[index];
+            index += 1;
+        }
+        bits
+    }
+    // (GPRs read, GPRs written, FPRs read, FPRs written)
+    let (gpr_reads, gpr_writes, fpr_reads, fpr_writes): (&[u32], &[u32], &[u32], &[u32]) =
+        match symbol {
+            "lean_psmtx_identity" => (&[3], &[], &[], &[]),
+            "lean_psmtx_copy" | "lean_psmtx44_copy" | "lean_psmtx_quat"
+            | "lean_psvec_normalize" | "lean_j3d_mtx33_copy" | "lean_j3d_mtx33_copy_from34"
+            | "lean_j3d_translate_rotate_mtx_info" | "lean_j3d_scale_nrm_mtx"
+            | "lean_j3d_scale_nrm_mtx33" | "lean_tvec3_copy" | "lean_jmath_ps_copy12"
+            | "lean_jmath_ps_copy16" | "lean_tvec3_add_assign" | "lean_tvec3_sub_assign"
+            | "lean_tvec3_negate" => (&[3, 4], &[], &[], &[]),
+            "lean_psmtx_concat" | "lean_psmtx_mult_vec" | "lean_psmtx_mult_vec_sr"
+            | "lean_psvec_add" | "lean_psvec_subtract" | "lean_psvec_cross"
+            | "lean_psquat_multiply" | "lean_j3d_texture_mtx" | "lean_j3d_texture_mtx_old"
+            | "lean_j3d_mtx_proj_concat" | "lean_gx_load_tex_mtx_imm" | "lean_tvec3_sub3"
+            | "lean_tvec3_plus" | "lean_tvec3_minus" => (&[3, 4, 5], &[], &[], &[]),
+            "lean_psmtx_mult_vec_array_sr" | "lean_j3d_psmtx_array_concat"
+            | "lean_c_mtx_look_at" | "lean_tvec3_from_ints" => (&[3, 4, 5, 6], &[], &[], &[]),
+            "lean_psmtx_inverse" | "lean_psmtx_inv_xpose" | "lean_j3d_calc_inverse_transpose" => {
+                (&[3, 4], &[3], &[], &[])
+            }
+            "lean_psmtx_rot_trig" => (&[3, 4], &[], &[1, 2], &[]),
+            "lean_psmtx_rot_rad" => (&[3, 4], &[4], &[1, 2], &[1, 2]),
+            "lean_psmtx_trans" | "lean_psmtx_scale" => (&[3], &[], &[1, 2, 3], &[]),
+            "lean_psmtx_trans_apply" | "lean_psmtx_scale_apply" | "lean_jma_mtx_apply_scale" => {
+                (&[3, 4], &[], &[1, 2, 3], &[])
+            }
+            "lean_psvec_scale" | "lean_psmtx_rot_axis_rad" | "lean_tvec3_times"
+            | "lean_tvec3_scale_from" => (&[3, 4], &[], &[1], &[]),
+            "lean_tvec3_scale_assign" | "lean_tvec3_splat" => (&[3], &[], &[1], &[]),
+            "lean_tvec3_set3" => (&[3], &[], &[1, 2, 3], &[]),
+            "lean_tvec3_zero" => (&[3], &[], &[], &[]),
+            "lean_psvec_mag" | "lean_tvec3_squared" => (&[3], &[], &[], &[1]),
+            "lean_psvec_dot" | "lean_psvec_distance" | "lean_psquat_dot" | "lean_tvec3_dot"
+            | "lean_tvec3_squared_distance" => (&[3, 4], &[], &[], &[1]),
+            "lean_jma_vec_scale_add" | "lean_jma_vec_lerp" | "lean_jma_quat_lerp"
+            | "lean_c_quat_slerp" => (&[3, 4, 5], &[], &[1], &[]),
+            "lean_j3d_translate_rotate_mtx" => (&[3, 4, 5, 6], &[], &[1, 2, 3], &[]),
+            "lean_j3d_keyframe_f32" | "lean_j3d_keyframe_s16" => (&[3, 4], &[], &[1], &[1]),
+            "lean_j3d_hermite_s16" => (&[3, 4, 5, 6, 7, 8], &[], &[1], &[1]),
+            "lean_jgeom_sqrt" | "lean_jgeom_inv_sqrt" => (&[], &[], &[1], &[1]),
+            "lean_gx_load_light_obj_imm" => (&[2, 3, 4], &[], &[], &[]),
+            _ => return None,
+        };
+    Some(LeanCallContract {
+        gpr_reads: mask(gpr_reads),
+        gpr_writes: mask(gpr_writes),
+        fpr_reads: mask(fpr_reads),
+        fpr_writes: mask(fpr_writes),
+    })
+}
+
+/// The register contract of a linked direct call that
+/// `emit_direct_guest_call_with_exact_fpu` lowers to a lean host body: a
+/// callable target outside the exact-FPU set (no lean target is an audited
+/// inline wrapper).
+fn lean_body_call_contract(
+    target: u32,
+    callable_entries: Option<&BTreeMap<u32, u32>>,
+    exact_fpu_functions: Option<&BTreeSet<u32>>,
+) -> Option<LeanCallContract> {
+    if !callable_entries.is_some_and(|entries| entries.contains_key(&target))
+        || exact_fpu_functions.is_some_and(|functions| functions.contains(&target))
+    {
+        return None;
+    }
+    lean_sdk_math_symbol(target).and_then(lean_call_contract)
 }
 
 fn native_pure_helper(target: u32) -> Option<NativePureHelper> {
@@ -6565,9 +6704,6 @@ fn native_pure_helper(target: u32) -> Option<NativePureHelper> {
             "native_read_next_char_utf16_800072B4",
         )),
         0x8009_7278 => Some(NativePureHelper::integer("native_add_12_80097278")),
-        0x8001_CF80 => Some(NativePureHelper::fpu("native_vec_add_8001CF80")),
-        0x8001_6F80 | 0x8001_8BC4 => Some(NativePureHelper::fpu("native_vec_set_from_fprs")),
-        0x8001_FD6C => Some(NativePureHelper::fpu("native_vec_scale_8001FD6C")),
         0x803A_33AC => Some(NativePureHelper::integer("native_noop_803A33AC")),
         0x803A_387C => Some(NativePureHelper::fpu("native_mtx_scale_803A387C")),
         0x8034_4A54 => Some(NativePureHelper::integer(
@@ -6765,6 +6901,96 @@ fn native_function_body(address: u32) -> Option<&'static str> {
         0x804B_5EDC => Some(
             "    galaxy::lean_psmtx_identity(context, memory, services, 0x804B5EDCu);\n    return;\n",
         ),
+        0x8001_8B14 => Some(
+            "    galaxy::lean_tvec3_copy(context, memory, services, 0x80018B14u);\n    return;\n",
+        ),
+        0x8001_8B8C => Some(
+            "    galaxy::lean_tvec3_copy(context, memory, services, 0x80018B8Cu);\n    return;\n",
+        ),
+        0x8001_CF64 => Some(
+            "    galaxy::lean_tvec3_copy(context, memory, services, 0x8001CF64u);\n    return;\n",
+        ),
+        0x8004_E9F0 => Some(
+            "    galaxy::lean_tvec3_copy(context, memory, services, 0x8004E9F0u);\n    return;\n",
+        ),
+        0x8003_CD3C => Some(
+            "    galaxy::lean_jmath_ps_copy12(context, memory, services, 0x8003CD3Cu);\n    return;\n",
+        ),
+        0x8038_623C => Some(
+            "    galaxy::lean_jmath_ps_copy16(context, memory, services, 0x8038623Cu);\n    return;\n",
+        ),
+        0x8001_8BA0 => Some(
+            "    galaxy::lean_tvec3_add_assign(context, memory, services, 0x80018BA0u);\n    return;\n",
+        ),
+        0x8001_CF80 => Some(
+            "    galaxy::lean_tvec3_add_assign(context, memory, services, 0x8001CF80u);\n    return;\n",
+        ),
+        0x8001_FD94 => Some(
+            "    galaxy::lean_tvec3_sub_assign(context, memory, services, 0x8001FD94u);\n    return;\n",
+        ),
+        0x8002_04F0 => Some(
+            "    galaxy::lean_tvec3_sub_assign(context, memory, services, 0x800204F0u);\n    return;\n",
+        ),
+        0x8002_5F68 => Some(
+            "    galaxy::lean_tvec3_sub3(context, memory, services, 0x80025F68u);\n    return;\n",
+        ),
+        0x8001_DC74 => Some(
+            "    galaxy::lean_psvec_subtract(context, memory, services, 0x8001DC74u);\n    return;\n",
+        ),
+        0x8001_DDF8 => Some(
+            "    galaxy::lean_tvec3_plus(context, memory, services, 0x8001DDF8u);\n    return;\n",
+        ),
+        0x8001_8BD4 => Some(
+            "    galaxy::lean_tvec3_minus(context, memory, services, 0x80018BD4u);\n    return;\n",
+        ),
+        0x8001_8B28 => Some(
+            "    galaxy::lean_tvec3_times(context, memory, services, 0x80018B28u);\n    return;\n",
+        ),
+        0x8002_3404 => Some(
+            "    galaxy::lean_tvec3_scale_assign(context, memory, services, 0x80023404u);\n    return;\n",
+        ),
+        0x8001_FD6C => Some(
+            "    galaxy::lean_tvec3_scale_assign(context, memory, services, 0x8001FD6Cu);\n    return;\n",
+        ),
+        0x8005_4D64 => Some(
+            "    galaxy::lean_tvec3_scale_from(context, memory, services, 0x80054D64u);\n    return;\n",
+        ),
+        0x8002_0514 => Some(
+            "    galaxy::lean_tvec3_negate(context, memory, services, 0x80020514u);\n    return;\n",
+        ),
+        0x8001_6F70 => Some(
+            "    galaxy::lean_tvec3_splat(context, memory, services, 0x80016F70u);\n    return;\n",
+        ),
+        0x8004_E9E0 => Some(
+            "    galaxy::lean_tvec3_splat(context, memory, services, 0x8004E9E0u);\n    return;\n",
+        ),
+        0x8001_6F80 => Some(
+            "    galaxy::lean_tvec3_set3(context, memory, services, 0x80016F80u);\n    return;\n",
+        ),
+        0x8001_8BC4 => Some(
+            "    galaxy::lean_tvec3_set3(context, memory, services, 0x80018BC4u);\n    return;\n",
+        ),
+        0x8001_8A98 => Some(
+            "    galaxy::lean_tvec3_zero(context, memory, services, 0x80018A98u);\n    return;\n",
+        ),
+        0x8003_71D8 => Some(
+            "    galaxy::lean_tvec3_from_ints(context, memory, services, 0x800371D8u);\n    return;\n",
+        ),
+        0x8001_CF44 => Some(
+            "    galaxy::lean_tvec3_dot(context, memory, services, 0x8001CF44u);\n    return;\n",
+        ),
+        0x8007_743C => Some(
+            "    galaxy::lean_tvec3_squared(context, memory, services, 0x8007743Cu);\n    return;\n",
+        ),
+        0x800D_76B0 => Some(
+            "    galaxy::lean_tvec3_squared_distance(context, memory, services, 0x800D76B0u);\n    return;\n",
+        ),
+        0x8001_6FBC => Some(
+            "    galaxy::lean_jgeom_sqrt(context, memory, services, 0x80016FBCu);\n    return;\n",
+        ),
+        0x8002_0530 => Some(
+            "    galaxy::lean_jgeom_inv_sqrt(context, memory, services, 0x80020530u);\n    return;\n",
+        ),
         0x804B_5F08 => Some(
             "    galaxy::lean_psmtx_copy(context, memory, services, 0x804B5F08u);\n    return;\n",
         ),
@@ -6918,12 +7144,6 @@ fn native_function_body(address: u32) -> Option<&'static str> {
         0x803A_33AC => Some("    galaxy::native_noop_803A33AC(context, memory, services, 0x803A33ACu);\n    return;\n"),
         0x803A_387C => Some(
             "    galaxy::native_mtx_scale_803A387C(context, memory, services, 0x803A387Cu);\n    return;\n",
-        ),
-        0x8001_CF80 => Some(
-            "    galaxy::native_vec_add_8001CF80(context, memory, services, 0x8001CF80u);\n    return;\n",
-        ),
-        0x8001_FD6C => Some(
-            "    galaxy::native_vec_scale_8001FD6C(context, memory, services, 0x8001FD6Cu);\n    return;\n",
         ),
         0x8034_4A54 => Some(
             "    galaxy::native_indexed_word_load_80344A54(context, memory, services, 0x80344A54u);\n    return;\n",
@@ -12834,24 +13054,24 @@ mod tests {
     #[test]
     fn fpu_functions_bypass_entry_only_native_call_substitutions() {
         let callable_entries = BTreeMap::from([
-            (0x8001_CF80, 0x8001_CF80),
+            (0x803A_387C, 0x803A_387C),
             (0x8044_0CDC, 0x8044_0CDC),
             (0x8043_3590, 0x8043_3590),
         ]);
-        let exact_fpu_functions = BTreeSet::from([0x8001_CF80, 0x8044_0CDC]);
+        let exact_fpu_functions = BTreeSet::from([0x803A_387C, 0x8044_0CDC]);
 
         let mut pure_helper = String::new();
         emit_direct_guest_call_with_exact_fpu(
             &mut pure_helper,
-            0x8001_CF80,
+            0x803A_387C,
             0x8000_4000,
             Some(&callable_entries),
             Some(&exact_fpu_functions),
         )
         .expect("FP pure-helper target falls back to exact generated function");
-        assert!(pure_helper.contains("context->pc = 0x8001CF80u;"));
-        assert!(pure_helper.contains("rmge01::fn_8001CF80(context, memory, services);"));
-        assert!(!pure_helper.contains("native_vec_add_8001CF80"));
+        assert!(pure_helper.contains("context->pc = 0x803A387Cu;"));
+        assert!(pure_helper.contains("rmge01::fn_803A387C(context, memory, services);"));
+        assert!(!pure_helper.contains("native_mtx_scale_803A387C"));
 
         let mut inline_wrapper = String::new();
         emit_direct_guest_call_with_exact_fpu(
@@ -13267,14 +13487,14 @@ mod tests {
             (
                 0x8001_CF78,
                 0x8001_CF80,
-                "galaxy::native_vec_add_8001CF80(context, memory, services, 0x8001CF80u);",
-                "native vector-add helper direct call is supported",
+                "galaxy::lean_tvec3_add_assign(context, memory, services, 0x8001CF80u);",
+                "lean vector-add direct call is supported",
             ),
             (
                 0x8001_FD64,
                 0x8001_FD6C,
-                "galaxy::native_vec_scale_8001FD6C(context, memory, services, 0x8001FD6Cu);",
-                "native vector-scale helper direct call is supported",
+                "galaxy::lean_tvec3_scale_assign(context, memory, services, 0x8001FD6Cu);",
+                "lean vector-scale direct call is supported",
             ),
         ] {
             let vec_words = [0x4800_0009_u32, 0x4E80_0020];
@@ -13541,10 +13761,6 @@ mod tests {
             (0x8000_7D2C_u32, "native_resfont_get_char_width_80007D2C"),
             (0x8000_C53C_u32, "native_particle_list_apply_8000C53C"),
             (0x8001_5394_u32, "native_strncmp_eq_16_80015394"),
-            (0x8001_8A98_u32, "native_vec_zero"),
-            (0x8001_8B8C_u32, "native_vec_copy_12"),
-            (0x8001_8BA0_u32, "native_vec_add"),
-            (0x8001_CF64_u32, "native_vec_copy_12"),
             (0x800C_9078_u32, "native_ptmf_wrapper_800C9078"),
             (0x800C_9248_u32, "rmge01::fn_803C73CC"),
             (0x800C_9AAC_u32, "native_ptmf_wrapper_800C9AAC"),
@@ -13930,14 +14146,14 @@ mod tests {
                     address: 0x8001_CF80,
                     size: 0x24,
                 },
-                "galaxy::native_vec_add_8001CF80(context, memory, services, 0x8001CF80u);",
+                "galaxy::lean_tvec3_add_assign(context, memory, services, 0x8001CF80u);",
             ),
             (
                 FunctionRange {
                     address: 0x8001_FD6C,
                     size: 0x28,
                 },
-                "galaxy::native_vec_scale_8001FD6C(context, memory, services, 0x8001FD6Cu);",
+                "galaxy::lean_tvec3_scale_assign(context, memory, services, 0x8001FD6Cu);",
             ),
             (
                 FunctionRange {
@@ -14099,8 +14315,8 @@ mod tests {
     #[test]
     fn fpu_function_body_keeps_generic_native_translation() {
         let function = FunctionRange {
-            address: 0x8001_CF80,
-            size: 0x24,
+            address: 0x803A_387C,
+            size: 0x6C,
         };
         let exact_body = "    /* exact FP body marker */\n    return;\n".to_owned();
         let files = emit_sharded_module_with_exact_fpu(
@@ -14117,17 +14333,13 @@ mod tests {
             .expect("function shard exists");
         assert!(source.contents.contains("exact FP body marker"));
         assert!(!source.contents.contains("ensure_fpu_available"));
-        assert!(!source.contents.contains("native_vec_add_8001CF80"));
+        assert!(!source.contents.contains("native_mtx_scale_803A387C"));
     }
 
     #[test]
     fn fpu_native_substitution_metadata_is_complete_and_transitive_wrapper_is_retired() {
         for address in [
-            0x8001_6F80_u32,
-            0x8001_8BC4,
-            0x8001_CF80,
-            0x8001_FD6C,
-            0x803A_387C,
+            0x803A_387C_u32,
             0x803E_595C,
             0x8044_0CDC,
             0x8044_65A0,
@@ -14153,6 +14365,36 @@ mod tests {
             0x804B_E1D8,
             0x804B_E2A0,
             0x804B_B8A8,
+            0x8001_8B14,
+            0x8001_8B8C,
+            0x8001_CF64,
+            0x8004_E9F0,
+            0x8003_CD3C,
+            0x8038_623C,
+            0x8001_8BA0,
+            0x8001_CF80,
+            0x8001_FD94,
+            0x8002_04F0,
+            0x8002_5F68,
+            0x8001_DC74,
+            0x8001_DDF8,
+            0x8001_8BD4,
+            0x8001_8B28,
+            0x8002_3404,
+            0x8001_FD6C,
+            0x8005_4D64,
+            0x8002_0514,
+            0x8001_6F70,
+            0x8004_E9E0,
+            0x8001_6F80,
+            0x8001_8BC4,
+            0x8001_8A98,
+            0x8003_71D8,
+            0x8001_CF44,
+            0x8007_743C,
+            0x800D_76B0,
+            0x8001_6FBC,
+            0x8002_0530,
         ] {
             assert!(!native_substitution_uses_fpu(address));
             let symbol = lean_sdk_math_symbol(address).expect("lean SDK math routine");
@@ -14164,6 +14406,179 @@ mod tests {
         assert_eq!(native_function_body(0x803E_4D24), None);
     }
 
+    fn lean_addresses() -> Vec<(u32, &'static str)> {
+        (0x8000_0000_u32..0x8060_0000)
+            .step_by(4)
+            .filter_map(|address| lean_sdk_math_symbol(address).map(|symbol| (address, symbol)))
+            .collect()
+    }
+
+    #[test]
+    fn lean_bodies_have_contracts_and_are_not_inline_wrappers() {
+        let addresses = lean_addresses();
+        assert!(addresses.len() > 70);
+        for (address, symbol) in addresses {
+            // The exact paired-single helper keeps the full boundary.
+            if symbol == "native_gx_load_pos_mtx_imm_804BE1D8" {
+                assert_eq!(lean_call_contract(symbol), None);
+                continue;
+            }
+            assert!(lean_call_contract(symbol).is_some(), "{symbol} has no contract");
+            let entries = BTreeMap::from([(address, address)]);
+            let mut output = String::new();
+            assert!(
+                !emit_audited_inline_wrapper_call(&mut output, address, Some(&entries))
+                    .expect("wrapper query"),
+                "0x{address:08X} is an audited inline wrapper"
+            );
+        }
+    }
+
+    /// Registers a lean body in native_api.h names literally. A nested lean
+    /// call contributes that body's contract; any other use of `context`
+    /// fails, except the dynamic FPR reads listed in `dynamic`.
+    fn lean_body_register_uses(
+        header: &str,
+        symbol: &str,
+        dynamic: &[(&str, &[u32])],
+    ) -> LeanCallContract {
+        let start = header
+            .find(&format!("inline void {symbol}("))
+            .unwrap_or_else(|| panic!("{symbol} is not defined in native_api.h"));
+        let open = start + header[start..].find('{').expect("body opens");
+        let end = open + header[open..].find("\n}\n").expect("body closes");
+        let body = &header[open..end];
+        let mut uses = LeanCallContract {
+            gpr_reads: 0,
+            gpr_writes: 0,
+            fpr_reads: 0,
+            fpr_writes: 0,
+        };
+        let literal = |text: &str| -> Option<u32> {
+            let digits: String = text.chars().take_while(char::is_ascii_digit).collect();
+            digits.parse().ok()
+        };
+        let assigned = |rest: &str| {
+            let rest = rest.trim_start();
+            rest.starts_with('=') && !rest.starts_with("==")
+        };
+        let bytes = body.as_bytes();
+        let mut search = 0usize;
+        while let Some(offset) = body[search..].find("context") {
+            let at = search + offset;
+            search = at + "context".len();
+            if at > 0 && (bytes[at - 1].is_ascii_alphanumeric() || bytes[at - 1] == b'_') {
+                continue;
+            }
+            let after = &body[search..];
+            if after.starts_with(|c: char| c.is_ascii_alphanumeric() || c == '_') {
+                continue;
+            }
+            let before = &body[..at];
+            if let Some(rest) = after.strip_prefix("->gpr[") {
+                let index = literal(rest).expect("literal GPR index");
+                let close = rest.find(']').expect("GPR index closes");
+                if assigned(&rest[close + 1..]) {
+                    uses.gpr_writes |= 1 << index;
+                } else {
+                    uses.gpr_reads |= 1 << index;
+                }
+            } else if let Some(rest) = after
+                .strip_prefix("->fpr_bits[")
+                .or_else(|| after.strip_prefix("->ps1_bits["))
+            {
+                let index = literal(rest).expect("literal FPR index");
+                let close = rest.find(']').expect("FPR index closes");
+                if assigned(&rest[close + 1..]) {
+                    uses.fpr_writes |= 1 << index;
+                } else {
+                    uses.fpr_reads |= 1 << index;
+                }
+            } else if after.starts_with("->gqr[") {
+                // Not a resident register.
+            } else if before.ends_with("fpr_f32(") {
+                match literal(after.trim_start_matches(", ")) {
+                    Some(index) if after[2..].trim_start_matches(char::is_numeric).starts_with("u)") => {
+                        uses.fpr_reads |= 1 << index;
+                    }
+                    _ => {
+                        let (_, registers) = dynamic
+                            .iter()
+                            .find(|(name, _)| *name == symbol)
+                            .unwrap_or_else(|| panic!("{symbol}: unlisted dynamic FPR read"));
+                        for index in *registers {
+                            uses.fpr_reads |= 1 << index;
+                        }
+                    }
+                }
+            } else if before.ends_with("return_f32(") {
+                uses.fpr_writes |= 1 << 1;
+            } else if before.ends_with("set_f32(") {
+                uses.fpr_writes |= 1 << literal(after.trim_start_matches(", ")).expect("literal");
+            } else if let Some(name_start) = before.rfind(|c: char| !(c.is_ascii_alphanumeric() || c == '_' || c == '(')) {
+                let callee = before[name_start + 1..].trim_end_matches('(');
+                let nested = lean_call_contract(callee)
+                    .unwrap_or_else(|| panic!("{symbol}: context passed to {callee}"));
+                uses.gpr_reads |= nested.gpr_reads;
+                uses.gpr_writes |= nested.gpr_writes;
+                uses.fpr_reads |= nested.fpr_reads;
+                uses.fpr_writes |= nested.fpr_writes;
+            }
+        }
+        uses
+    }
+
+    #[test]
+    fn lean_call_contracts_cover_the_bodies() {
+        const HEADER: &str = include_str!("../../../runtime/include/galaxy/native_api.h");
+        let dynamic: &[(&str, &[u32])] = &[("lean_psmtx_scale_apply", &[1, 2, 3])];
+        let mut checked = BTreeSet::new();
+        for (_, symbol) in lean_addresses() {
+            let Some(contract) = lean_call_contract(symbol) else {
+                continue;
+            };
+            if !checked.insert(symbol) {
+                continue;
+            }
+            let uses = lean_body_register_uses(HEADER, symbol, dynamic);
+            assert_eq!(uses.gpr_reads & !contract.gpr_reads, 0, "{symbol} GPR reads");
+            assert_eq!(uses.gpr_writes & !contract.gpr_writes, 0, "{symbol} GPR writes");
+            assert_eq!(uses.fpr_reads & !contract.fpr_reads, 0, "{symbol} FPR reads");
+            assert_eq!(uses.fpr_writes & !contract.fpr_writes, 0, "{symbol} FPR writes");
+        }
+        assert!(checked.len() > 60);
+    }
+
+    #[test]
+    fn lean_calls_have_no_call_return_checkpoint() {
+        let words = [0x4800_0009_u32, 0x4E80_0020]; // bl +8; blr
+        let bytes: Vec<u8> = words.iter().flat_map(|word| word.to_be_bytes()).collect();
+        for (target, expected) in [
+            (
+                0x8001_8BA0_u32,
+                "galaxy::lean_tvec3_add_assign(context, memory, services, 0x80018BA0u);",
+            ),
+            (
+                0x804B_5F3C_u32,
+                "galaxy::lean_psmtx_concat(context, memory, services, 0x804B5F3Cu);",
+            ),
+        ] {
+            let callable_entries = BTreeMap::from([(target, target)]);
+            let lowered =
+                lower_words_for_module(target - 8, &bytes, &BTreeSet::new(), &callable_entries)
+                    .expect("lean call lowers");
+            assert!(lowered.contains(expected));
+            assert!(!lowered.contains("call_return_checkpoint"));
+        }
+        // The exact paired-single GX helper keeps its checkpoint.
+        let target = 0x804B_E1D8_u32;
+        let callable_entries = BTreeMap::from([(target, target)]);
+        let lowered =
+            lower_words_for_module(target - 8, &bytes, &BTreeSet::new(), &callable_entries)
+                .expect("GX helper call lowers");
+        assert!(lowered.contains("galaxy::call_return_checkpoint(services, "));
+    }
+
     #[test]
     fn restartability_sensitive_functions_are_never_replaced() {
         for address in [
@@ -14171,10 +14586,6 @@ mod tests {
             0x8000_7D2C,
             0x8000_C53C_u32,
             0x8001_5394,
-            0x8001_8A98,
-            0x8001_8B8C,
-            0x8001_8BA0,
-            0x8001_CF64,
             0x800C_8C64,
             0x800C_9078,
             0x800C_9248,
