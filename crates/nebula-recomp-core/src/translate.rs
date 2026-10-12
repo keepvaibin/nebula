@@ -5805,9 +5805,7 @@ fn lower_words_with_config(
                         && save
                         && !has_reentry_label
                         && pc > address
-                        && r11_is_stack_frame_pointer(
-                            word_at(bytes, address, pc - 4),
-                        );
+                        && r11_is_stack_frame_pointer(word_at(bytes, address, pc - 4));
                     emit_gpr_save_restore(
                         &mut output,
                         first,
@@ -12337,7 +12335,14 @@ mod tests {
     #[test]
     fn stack_r11_stores_off_keeps_the_gather_pipe_test_in_savegpr() {
         let out = lower_with(&SAVEGPR_FROM_FRAME, flat_config(false, false));
-        assert_eq!(out.matches("galaxy::fast::store<std::uint32_t>(flat_guest_base, memory, context->gpr[11] + ").count(), 7, "{out}");
+        assert_eq!(
+            out.matches(
+                "galaxy::fast::store<std::uint32_t>(flat_guest_base, memory, context->gpr[11] + "
+            )
+            .count(),
+            7,
+            "{out}"
+        );
         assert!(!out.contains("store_stack"), "{out}");
     }
 
