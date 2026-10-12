@@ -160,7 +160,9 @@ void test_many_records() {
     }
     h.begin_scene(3, nullptr);
     unsigned matched = 0;
-    for (unsigned i = 3000u; i-- > 0;) {
+    // Draw order repeats with neighbouring pairs swapped.
+    for (unsigned n = 0; n < 3000u; ++n) {
+        const unsigned i = n ^ 1u;
         const TransformRecord* m = h.add(make(100u + (i % 37u),
             static_cast<float>(i % 50u) * 20.0f + 0.5f,
             static_cast<float>(i / 50u) * 20.0f, -500.0f));

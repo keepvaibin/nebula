@@ -88,8 +88,18 @@ private:
     std::vector<TransformRecord> current_;
     std::vector<TransformRecord> previous_;
     std::vector<std::int32_t> current_match_;
-    std::vector<std::int32_t> previous_next_;   // same-signature chain
-    std::vector<std::int32_t> table_;           // signature -> chain head
+    // Previous records grouped by signature (draw order inside a group);
+    // the open-addressed table maps a signature to its group.
+    struct Group {
+        std::uint64_t signature = 0;
+        std::uint32_t begin = 0;
+        std::uint32_t end = 0;
+        std::uint32_t first_unclaimed = 0;
+        bool used = false;
+    };
+    [[nodiscard]] std::size_t find_group(std::uint64_t signature) const noexcept;
+    std::vector<std::int32_t> grouped_;         // previous indices by group
+    std::vector<Group> table_;
     std::vector<std::uint8_t> claimed_;
     std::size_t table_mask_ = 0;
     std::uint64_t current_frame_ = 0;

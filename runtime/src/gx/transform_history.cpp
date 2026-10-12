@@ -66,7 +66,7 @@ void TransformHistory::reserve(std::size_t records) {
     current_.reserve(records);
     previous_.reserve(records);
     current_match_.reserve(records);
-    previous_next_.reserve(records);
+    grouped_.reserve(records);
     claimed_.reserve(records);
     std::size_t table = 64u;
     while (table < records * 2u) table <<= 1u;
@@ -123,25 +123,42 @@ void TransformHistory::begin_scene(std::uint64_t frame, const Affine34* view) {
     scene_open_ = true;
 }
 
+std::size_t TransformHistory::find_group(std::uint64_t signature) const noexcept {
+    std::size_t slot = static_cast<std::size_t>(signature ^ (signature >> 29u)) & table_mask_;
+    while (table_[slot].used && table_[slot].signature != signature) {
+        slot = (slot + 1u) & table_mask_;
+    }
+    return slot;
+}
+
 void TransformHistory::build_previous_index() {
     const std::size_t count = previous_.size();
     std::size_t size = 64u;
     while (size < count * 2u) size <<= 1u;
-    table_.assign(size, -1);
+    table_.assign(size, Group{});
     table_mask_ = size - 1u;
-    previous_next_.assign(count, -1);
     claimed_.assign(count, 0u);
-    // Reverse insertion keeps each chain in draw order.
-    for (std::size_t n = count; n-- > 0;) {
-        const std::uint64_t sig = previous_[n].signature;
-        std::size_t slot = static_cast<std::size_t>(sig ^ (sig >> 29u)) & table_mask_;
-        // Each slot heads one signature's chain; probe past other signatures.
-        while (table_[slot] >= 0 &&
-               previous_[static_cast<std::size_t>(table_[slot])].signature != sig) {
-            slot = (slot + 1u) & table_mask_;
-        }
-        previous_next_[n] = table_[slot];
-        table_[slot] = static_cast<std::int32_t>(n);
+    grouped_.assign(count, -1);
+    // Count per signature, lay the groups out contiguously, then fill them
+    // in draw order.
+    for (std::size_t n = 0; n < count; ++n) {
+        Group& group = table_[find_group(previous_[n].signature)];
+        group.used = true;
+        group.signature = previous_[n].signature;
+        ++group.end;
+    }
+    std::uint32_t offset = 0;
+    for (Group& group : table_) {
+        if (!group.used) continue;
+        const std::uint32_t size_of = group.end;
+        group.begin = offset;
+        group.first_unclaimed = offset;
+        group.end = offset;  // fill cursor
+        offset += size_of;
+    }
+    for (std::size_t n = 0; n < count; ++n) {
+        Group& group = table_[find_group(previous_[n].signature)];
+        grouped_[group.end++] = static_cast<std::int32_t>(n);
     }
 }
 
@@ -160,25 +177,35 @@ const TransformRecord* TransformHistory::add(const TransformRecord& record) {
                                        record.translation[2] * record.translation[2]);
         const float limit = 0.25f * length + 1.0f;
         float best_d2 = limit * limit;
-        const std::uint64_t sig = record.signature;
-        std::size_t slot = static_cast<std::size_t>(sig ^ (sig >> 29u)) & table_mask_;
-        while (table_[slot] >= 0 &&
-               previous_[static_cast<std::size_t>(table_[slot])].signature != sig) {
-            slot = (slot + 1u) & table_mask_;
-        }
-        for (std::int32_t n = table_[slot]; n >= 0;
-             n = previous_next_[static_cast<std::size_t>(n)]) {
-            const auto index = static_cast<std::size_t>(n);
-            if (claimed_[index] != 0u) continue;
-            const TransformRecord& prev = previous_[index];
-            const float dx = prev.translation[0] - predicted[0];
-            const float dy = prev.translation[1] - predicted[1];
-            const float dz = prev.translation[2] - predicted[2];
-            const float d2 = dx * dx + dy * dy + dz * dz;
-            if (d2 <= best_d2) {
-                best_d2 = d2;
-                best = n;
-                if (d2 == 0.0f) break;
+        // A static object differs from its prediction only by rounding.
+        const float exact = 1e-3f * (length + 1.0f);
+        const float exact_d2 = exact * exact;
+        Group& group = table_[find_group(record.signature)];
+        if (group.used) {
+            // Draw order mostly repeats: claimed records gather at the front
+            // and the match is among the first unclaimed ones. The scan is
+            // bounded so large groups (coins, star bits) stay linear.
+            constexpr unsigned kWindow = 48u;
+            while (group.first_unclaimed < group.end &&
+                   claimed_[static_cast<std::size_t>(grouped_[group.first_unclaimed])] != 0u) {
+                ++group.first_unclaimed;
+            }
+            unsigned scanned = 0;
+            for (std::uint32_t i = group.first_unclaimed; i < group.end && scanned < kWindow; ++i) {
+                const std::int32_t n = grouped_[i];
+                const auto index = static_cast<std::size_t>(n);
+                if (claimed_[index] != 0u) continue;
+                ++scanned;
+                const TransformRecord& prev = previous_[index];
+                const float dx = prev.translation[0] - predicted[0];
+                const float dy = prev.translation[1] - predicted[1];
+                const float dz = prev.translation[2] - predicted[2];
+                const float d2 = dx * dx + dy * dy + dz * dz;
+                if (d2 <= best_d2) {
+                    best_d2 = d2;
+                    best = n;
+                    if (d2 <= exact_d2) break;
+                }
             }
         }
         if (best >= 0) {
