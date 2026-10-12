@@ -537,6 +537,7 @@ public:
     [[nodiscard]] ID3D12RootSignature* root_signature() const {
         return root_signature_.Get();
     }
+    [[nodiscard]] double display_refresh_hz() const noexcept { return display_refresh_hz_; }
     [[nodiscard]] UploadRing& vertex_ring() { return vertex_ring_; }
     [[nodiscard]] UploadRing& index_ring() { return index_ring_; }
     [[nodiscard]] UploadRing& constant_ring() { return constant_ring_; }
@@ -625,10 +626,11 @@ public:
 private:
     void invalidate_gx_bindings();
     void pace_present_if_needed(unsigned vsync_interval, float max_fps);
-    // VSYNC ON presents each frame for round(refresh / 60) refreshes on a
-    // panel whose rate is a multiple of 60 Hz (120, 180, 240), so every
-    // frame stays on screen equally long; other rates keep one refresh.
-    [[nodiscard]] UINT present_sync_interval(unsigned configured);
+    // VSYNC ON presents each frame for round(refresh / rate) refreshes when
+    // the refresh is a multiple of the present rate (60 at 120 Hz, 30 at
+    // 60 Hz), so every frame stays on screen equally long; other rates keep
+    // one refresh.
+    [[nodiscard]] UINT present_sync_interval(unsigned configured, float max_fps);
     void refresh_display_rate();
     void wait_for_frame_latency_if_needed(bool collect_present_telemetry);
     void wait_for_gpu();            // shutdown/resize only

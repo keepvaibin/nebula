@@ -340,6 +340,17 @@ bool display_settings_differ(const RenderConfig& a, const RenderConfig& b) {
          (a.window_width != b.window_width || a.window_height != b.window_height));
 }
 
+const MonitorInfo* settings_monitor(const RenderConfig& render);
+
+// The refresh rate the picture will be shown at with these settings.
+unsigned settings_refresh_hz(const RenderConfig& render) {
+    const MonitorInfo* monitor = settings_monitor(render);
+    if (render.display_mode == kDisplayExclusive && render.fullscreen_refresh_hz != 0u) {
+        return render.fullscreen_refresh_hz;
+    }
+    return monitor != nullptr ? monitor->current.refresh_hz : 0u;
+}
+
 const MonitorInfo* settings_monitor(const RenderConfig& render) {
     return find_monitor(s_settings_monitors, widen_utf8(render.monitor.data()));
 }
@@ -438,6 +449,7 @@ unsigned pending_settings_changes() {
     changes += d.internal_follow_window != live.internal_follow_window ||
         (!d.internal_follow_window && d.efb_scale != live.efb_scale);
     changes += d.vsync_interval != live.vsync_interval;
+    changes += d.max_fps != live.max_fps;
     changes += d.aa_mode != live.aa_mode;
     changes += d.smaa_quality != live.smaa_quality;
     changes += d.upscaler != live.upscaler;
@@ -452,7 +464,7 @@ unsigned pending_settings_changes() {
 
 unsigned native_settings_row_count(unsigned tab) {
     switch (tab % kNativeSettingsTabCount) {
-    case 0: return 7u;
+    case 0: return 8u;
     case 1: return 9u;
     case 2: return 1u;
     case 3: return 6u;
@@ -525,6 +537,7 @@ void apply_native_settings_draft() {
     applied.internal_follow_window = next.internal_follow_window;
     applied.efb_scale = next.efb_scale;
     applied.vsync_interval = next.vsync_interval;
+    applied.max_fps = next.max_fps;
     applied.aa_mode = next.aa_mode;
     applied.smaa_quality = next.smaa_quality;
     applied.upscaler = next.upscaler;
@@ -706,7 +719,18 @@ void adjust_native_setting_unlogged(int delta) {
             }
             return;
         }
-        case 6:
+        case 6: {  // frame rate
+            const auto rates = frame_rate_options(settings_refresh_hz(draft));
+            const auto current = static_cast<unsigned>(std::lround(std::max(0.0f, draft.max_fps)));
+            std::size_t index = rates.size() - 1u;  // unlimited
+            for (std::size_t i = 0; i + 1u < rates.size(); ++i) {
+                if (current != 0u && rates[i] <= current) index = i;
+            }
+            const std::size_t next = step(static_cast<unsigned>(index), static_cast<unsigned>(rates.size()));
+            draft.max_fps = static_cast<float>(rates[next]);
+            return;
+        }
+        case 7:
             draft.vsync_interval = draft.vsync_interval == 0u ? 1u : 0u;
             return;
         default:
@@ -5425,7 +5449,7 @@ void RendererD3D12::refresh_display_rate() {
     display_refresh_hz_ = hz;
 }
 
-UINT RendererD3D12::present_sync_interval(unsigned configured) {
+UINT RendererD3D12::present_sync_interval(unsigned configured, float max_fps) {
     if (configured != 1u) {
         return configured;
     }
@@ -5437,9 +5461,10 @@ UINT RendererD3D12::present_sync_interval(unsigned configured) {
         return 1u;
     }
     // EnumDisplaySettings reports whole hertz: 119 for 119.88, 239 for 239.76.
-    const double multiple = std::round(hz / 60.0);
+    const double rate = present_frame_rate(max_fps, configured, hz);
+    const double multiple = std::round(hz / rate);
     if (multiple >= 2.0 && multiple <= 4.0 &&
-        std::abs(hz - 60.0 * multiple) <= 0.015 * hz) {
+        std::abs(hz - rate * multiple) <= 0.015 * hz) {
         return static_cast<UINT>(multiple);
     }
     return 1u;
@@ -5587,7 +5612,7 @@ std::uint64_t RendererD3D12::end_frame(
 
     if (present_swap_chain) {
         const RenderConfig cfg = get_render_config();
-        const UINT vsync = present_sync_interval(std::min(2u, cfg.vsync_interval));
+        const UINT vsync = present_sync_interval(std::min(2u, cfg.vsync_interval), cfg.max_fps);
         const UINT present_flags =
             (vsync == 0 && tearing_supported_ && !exclusive_fullscreen_active_) ? DXGI_PRESENT_ALLOW_TEARING
                                                : 0u;
@@ -8091,7 +8116,13 @@ std::string native_settings_row_text(
                           scale >= settings_scale_cap(render) ? " MAX" : "");
             return text;
         }
-        case 6:
+        case 6: {
+            const auto rate = static_cast<unsigned>(std::lround(std::max(0.0f, render.max_fps)));
+            if (rate == 0u) return "FRAME RATE: UNLIMITED";
+            std::snprintf(text, sizeof(text), "FRAME RATE: %u", rate);
+            return text;
+        }
+        case 7:
             return std::string("VSYNC: ") + (render.vsync_interval == 0u ? "OFF" : "ON");
         default:
             return {};

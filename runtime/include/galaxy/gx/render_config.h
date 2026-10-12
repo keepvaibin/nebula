@@ -11,8 +11,10 @@
 // renderer work are clamped off until the renderer has the required native
 // D3D12 path and capability checks.
 
+#include <algorithm>
 #include <array>
 #include <cstdint>
+#include <vector>
 
 namespace galaxy::gx {
 
@@ -144,6 +146,34 @@ struct RenderConfig {
     // Wider pictures show the game's cut-offs at their sides.
     unsigned draw_distance       = 2;
 };
+
+// Frame-rate choices for a display refreshing at refresh_hz (0 = unknown):
+// the standard rates it can show, its own rate when that is not one of them,
+// then 0 for unlimited. 59 Hz reports count as 60.
+inline constexpr unsigned kStandardFrameRates[] = {30u, 60u, 120u, 144u, 165u, 240u, 360u};
+inline std::vector<unsigned> frame_rate_options(unsigned refresh_hz) {
+    std::vector<unsigned> options;
+    bool listed = false;
+    for (const unsigned rate : kStandardFrameRates) {
+        if (refresh_hz != 0u && rate > refresh_hz + 1u) break;
+        options.push_back(rate);
+        listed = listed || (refresh_hz + 1u >= rate && refresh_hz <= rate + 1u);
+    }
+    if (refresh_hz > 30u && !listed) {
+        options.insert(std::upper_bound(options.begin(), options.end(), refresh_hz), refresh_hz);
+    }
+    options.push_back(0u);
+    return options;
+}
+
+// Frames per second the game picture is presented at. The game renders 60;
+// lower rates present the newest frame on their own cadence. VSync limits
+// the rate to the display's.
+inline double present_frame_rate(float max_fps, unsigned vsync_interval, double refresh_hz) {
+    double rate = max_fps > 0.0f ? std::min(60.0, static_cast<double>(max_fps)) : 60.0;
+    if (vsync_interval != 0u && refresh_hz > 1.0) rate = std::min(rate, refresh_hz);
+    return rate;
+}
 
 inline constexpr unsigned kDisplayWindowed = 0u;
 inline constexpr unsigned kDisplayBorderless = 1u;

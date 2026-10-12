@@ -4,6 +4,7 @@
 #define NOMINMAX
 #include <Windows.h>
 
+#include <algorithm>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -77,6 +78,28 @@ private:
 
 int main() {
     bool passed = true;
+
+    {
+        using galaxy::gx::frame_rate_options;
+        const auto same = [](const std::vector<unsigned>& got, std::initializer_list<unsigned> want) {
+            return std::equal(got.begin(), got.end(), want.begin(), want.end());
+        };
+        if (!same(frame_rate_options(220u), {30u, 60u, 120u, 144u, 165u, 220u, 0u}) ||
+            !same(frame_rate_options(50u), {30u, 50u, 0u}) ||
+            !same(frame_rate_options(59u), {30u, 60u, 0u}) ||
+            !same(frame_rate_options(144u), {30u, 60u, 120u, 144u, 0u}) ||
+            !same(frame_rate_options(75u), {30u, 60u, 75u, 0u}) ||
+            !same(frame_rate_options(0u), {30u, 60u, 120u, 144u, 165u, 240u, 360u, 0u})) {
+            std::cerr << "frame-rate choices must be the standard rates up to the display rate, the display rate, then unlimited\n";
+            passed = false;
+        }
+        using galaxy::gx::present_frame_rate;
+        if (present_frame_rate(30.0f, 1u, 144.0) != 30.0 || present_frame_rate(144.0f, 1u, 144.0) != 60.0 ||
+            present_frame_rate(60.0f, 1u, 50.0) != 50.0 || present_frame_rate(0.0f, 0u, 50.0) != 60.0) {
+            std::cerr << "present rate must follow the cap, the game rate and VSync\n";
+            passed = false;
+        }
+    }
 
     {
         const auto root = std::filesystem::temp_directory_path() /

@@ -6544,6 +6544,30 @@ bool GxBackend::peek_efb(
     return request.success;
 }
 
+bool GxBackend::skip_for_present_rate() {
+    const RenderConfig cfg = get_render_config();
+    const double rate = present_frame_rate(cfg.max_fps, cfg.vsync_interval, renderer_.display_refresh_hz());
+    if (rate >= 59.0) {
+        next_rate_present_qpc_ = 0;
+        return false;
+    }
+    static const std::int64_t frequency = [] {
+        LARGE_INTEGER value{};
+        QueryPerformanceFrequency(&value);
+        return static_cast<std::int64_t>(value.QuadPart);
+    }();
+    LARGE_INTEGER now{};
+    QueryPerformanceCounter(&now);
+    const auto period = static_cast<std::int64_t>(static_cast<double>(frequency) / rate);
+    // A stall restarts the cadence instead of releasing a burst of presents.
+    if (next_rate_present_qpc_ == 0 || now.QuadPart - next_rate_present_qpc_ > period) {
+        next_rate_present_qpc_ = now.QuadPart;
+    }
+    if (now.QuadPart + period / 4 < next_rate_present_qpc_) return true;
+    next_rate_present_qpc_ += period;
+    return false;
+}
+
 void GxBackend::present_cached_xfb(
     std::uint32_t displayed_xfb_addr,
     bool present_swap_chain) {
@@ -7463,6 +7487,10 @@ void GxBackend::present_cached_xfb_on_thread(
         duplicate_stamp &&
         skip_duplicate_xfb_presents_enabled() &&
         !native_settings_overlay_visible();
+    if (count_game_xfb_present && !skip_duplicate_present &&
+        !native_settings_overlay_visible() && skip_for_present_rate()) {
+        return;
+    }
     if (count_game_xfb_present && trace_xfb_present_enabled() &&
         (present_requests <= 8u ||
          present_requests % trace_xfb_present_interval() == 0u)) {
@@ -8366,12 +8394,19 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
         skip_duplicate_xfb_presents_enabled() &&
         !capture_this_frame &&
         !native_settings_overlay_visible();
+    const bool skip_rate_present =
+        chunk.present_swap_chain &&
+        selected_xfb != nullptr &&
+        !skip_duplicate_present &&
+        !capture_this_frame &&
+        !native_settings_overlay_visible() &&
+        skip_for_present_rate();
     const bool capture_backbuffer =
         capture_this_frame && selected_xfb != nullptr;
     const bool present_swap_chain =
         capture_backbuffer ||
         (chunk.present_swap_chain && selected_xfb != nullptr &&
-         !skip_duplicate_present);
+         !skip_duplicate_present && !skip_rate_present);
     const auto pre_present_end = frame_timing_enabled
         ? std::chrono::steady_clock::now()
         : std::chrono::steady_clock::time_point{};

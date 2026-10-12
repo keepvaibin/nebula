@@ -100,9 +100,9 @@ int main() {
     passed &= expect(snapshot.tab_count == 5u, "display/graphics/input/audio/caps tabs exist");
     passed &= expect(snapshot.tab == 0u && snapshot.row == 0u, "display row zero is selected");
     passed &= expect(
-        snapshot.row_count == 7u,
+        snapshot.row_count == 8u,
         "display tab has monitor, mode, resolution, refresh rate, aspect ratio, "
-        "internal resolution and vsync");
+        "internal resolution, frame rate and vsync");
 
     passed &= expect(key(VK_F1, true), "repeated F1 is consumed");
     passed &= expect(
@@ -190,7 +190,15 @@ int main() {
     passed &= expect(
         galaxy::gx::get_render_config().display_mode == galaxy::gx::kDisplayWindowed,
         "windowed is restored");
-    for (int i = 0; i < 5; ++i) passed &= expect(key(VK_DOWN), "down moves to vsync");
+    for (int i = 0; i < 5; ++i) passed &= expect(key(VK_DOWN), "down moves to the frame rate");
+    passed &= expect(key(VK_LEFT), "left lowers the frame rate in the draft");
+    passed &= expect(
+        galaxy::gx::native_settings_draft_for_tests().max_fps == 30.0f &&
+            galaxy::gx::get_render_config().max_fps == 60.0f,
+        "30 is the frame rate below 60 and waits for apply");
+    passed &= expect(key(VK_BACK) && galaxy::gx::native_settings_draft_for_tests().max_fps == 60.0f,
+                     "undo restores the frame rate");
+    passed &= expect(key(VK_DOWN), "down moves to vsync");
     passed &= expect(key(VK_RIGHT), "vsync toggles in the draft");
     passed &= expect(
         galaxy::gx::native_settings_draft_for_tests().vsync_interval == 1u &&

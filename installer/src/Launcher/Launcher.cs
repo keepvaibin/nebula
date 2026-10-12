@@ -161,7 +161,7 @@ namespace Nebula.Launcher
         private bool loading;
 
         private readonly ComboBox monitor = new ComboBox(), mode = new ComboBox(), resolution = new ComboBox(), refresh = new ComboBox();
-        private readonly ComboBox aspect = new ComboBox(), internalScale = new ComboBox();
+        private readonly ComboBox aspect = new ComboBox(), internalScale = new ComboBox(), frameRate = new ComboBox();
         private readonly CheckBox vsync = new CheckBox();
         private readonly ComboBox antiAliasing = new ComboBox(), aaQuality = new ComboBox(), upscaler = new ComboBox(),
             textureFilter = new ComboBox(), lighting = new ComboBox(), drawDistance = new ComboBox();
@@ -173,6 +173,7 @@ namespace Nebula.Launcher
         private readonly Label contentLabel = new Label();
         private readonly List<Size> resolutionChoices = new List<Size>();
         private readonly List<int> refreshChoices = new List<int>();
+        private readonly List<int> frameRateChoices = new List<int>();
 
         public SettingsForm(LaunchSession session)
         {
@@ -213,6 +214,7 @@ namespace Nebula.Launcher
             Row(display, "Refresh rate", refresh, ref y);
             Row(display, "Aspect ratio", aspect, ref y);
             Row(display, "Internal resolution", internalScale, ref y);
+            Row(display, "Frame rate", frameRate, ref y);
             vsync.Text = "Vertical sync";
             vsync.Location = new Point(12, y);
             vsync.Size = new Size(600, 28);
@@ -312,6 +314,7 @@ namespace Nebula.Launcher
             monitor.SelectedIndexChanged += delegate { if (!loading) { graphics.FullscreenWidth = graphics.FullscreenHeight = graphics.FullscreenRefresh = 0; RefreshDisplayChoices(); } };
             mode.SelectedIndexChanged += delegate { if (!loading) RefreshDisplayChoices(); };
             resolution.SelectedIndexChanged += delegate { if (!loading) RefreshRefreshChoices(); };
+            refresh.SelectedIndexChanged += delegate { if (!loading) RefreshFrameRateChoices(); };
             UiScale.Apply(this);
         }
 
@@ -455,7 +458,29 @@ namespace Nebula.Launcher
             }
             resolution.Enabled = mode.SelectedIndex != 1;
             RefreshScaleChoices();
+            RefreshFrameRateChoices();
             loading = false;
+        }
+
+        // Frame rate: the choices the display's refresh rate allows.
+        private void RefreshFrameRateChoices()
+        {
+            var screen = SelectedMonitor;
+            int hz = mode.SelectedIndex == 2 && refresh.SelectedIndex >= 0 && refresh.SelectedIndex < refreshChoices.Count
+                ? refreshChoices[refresh.SelectedIndex] : screen.Refresh;
+            int want = frameRate.SelectedIndex >= 0 && frameRate.SelectedIndex < frameRateChoices.Count
+                ? frameRateChoices[frameRate.SelectedIndex] : graphics.FrameRate;
+            frameRateChoices.Clear();
+            frameRateChoices.AddRange(GraphicsSettings.FrameRates(hz));
+            frameRate.Items.Clear();
+            int selected = frameRateChoices.Count - 1;
+            for (int i = 0; i < frameRateChoices.Count; i++)
+            {
+                int rate = frameRateChoices[i];
+                frameRate.Items.Add(rate == 0 ? "Unlimited" : rate + " FPS");
+                if (want != 0 && rate != 0 && rate <= want) selected = i;
+            }
+            frameRate.SelectedIndex = selected;
         }
 
         // Internal resolution: matching the output, or 1x up to the scale that
@@ -503,6 +528,8 @@ namespace Nebula.Launcher
                 graphics.MatchOutput = internalScale.SelectedIndex <= 0;
                 if (!graphics.MatchOutput) graphics.EfbScale = internalScale.SelectedIndex;
                 graphics.VSync = vsync.Checked;
+                if (frameRate.SelectedIndex >= 0 && frameRate.SelectedIndex < frameRateChoices.Count)
+                    graphics.FrameRate = frameRateChoices[frameRate.SelectedIndex];
                 graphics.AntiAliasing = antiAliasing.SelectedIndex;
                 graphics.Quality = aaQuality.SelectedIndex;
                 graphics.Upscaler = upscaler.SelectedIndex;

@@ -22,6 +22,28 @@ namespace Nebula.Launcher
         public static readonly string[] LightingModes = { "Per pixel (enhanced)", "Per vertex (original)" };
         public static readonly string[] DrawDistances = { "Original", "2x", "4x", "8x" };
         private static readonly int[] Anisotropy = { 1, 2, 4, 8, 16 };
+        private static readonly int[] StandardFrameRates = { 30, 60, 120, 144, 165, 240, 360 };
+
+        // The runtime's frame_rate_options: standard rates the display can
+        // show, its own rate when that is not one of them, then 0 (unlimited).
+        public static List<int> FrameRates(int refreshHz)
+        {
+            var rates = new List<int>();
+            bool listed = false;
+            foreach (int rate in StandardFrameRates)
+            {
+                if (refreshHz != 0 && rate > refreshHz + 1) break;
+                rates.Add(rate);
+                listed = listed || (refreshHz + 1 >= rate && refreshHz <= rate + 1);
+            }
+            if (refreshHz > 30 && !listed)
+            {
+                int at = rates.FindIndex(r => r > refreshHz);
+                rates.Insert(at < 0 ? rates.Count : at, refreshHz);
+            }
+            rates.Add(0);
+            return rates;
+        }
 
         public int DisplayMode = 0;
         public string Monitor = "";
@@ -31,6 +53,7 @@ namespace Nebula.Launcher
         public int EfbScale = 2;
         public bool MatchOutput = true;
         public bool VSync = false;
+        public int FrameRate = 60;
         public int AntiAliasing = 2, Quality = 2, Upscaler = 1, Sharpness = 20, TextureFilter = 3, DrawDistance = 2;
         public bool GeneratedMipmaps = true, PerPixelLighting = true, HudOutputResolution = false;
 
@@ -56,6 +79,11 @@ namespace Nebula.Launcher
             string follow, vsync;
             if (values.TryGetValue("internal_follow_window", out follow)) settings.MatchOutput = follow.Trim() != "0";
             if (values.TryGetValue("vsync_interval", out vsync)) settings.VSync = vsync.Trim() != "0";
+            string fps;
+            double rate;
+            if (values.TryGetValue("max_fps", out fps) &&
+                double.TryParse(fps.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out rate) &&
+                rate >= 0 && rate <= 1000) settings.FrameRate = (int)Math.Round(rate);
             settings.AntiAliasing = Choice(values, "aa", AntiAliasingModes.Length, settings.AntiAliasing);
             settings.Quality = Choice(values, "smaa_quality", AntiAliasingQualities.Length, settings.Quality);
             settings.Upscaler = Choice(values, "upscaler", Upscalers.Length, settings.Upscaler);
@@ -89,6 +117,7 @@ namespace Nebula.Launcher
             Set(lines, "efb_scale", EfbScale);
             Set(lines, "internal_follow_window", MatchOutput ? 1 : 0);
             Set(lines, "vsync_interval", VSync ? 1 : 0);
+            Set(lines, "max_fps", FrameRate);
             Set(lines, "aa", AntiAliasing);
             Set(lines, "smaa_quality", Quality);
             Set(lines, "upscaler", Upscaler);

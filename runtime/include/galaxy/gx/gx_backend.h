@@ -1051,6 +1051,10 @@ private:
     std::atomic<std::uint64_t> last_presented_xfb_serial_{
         ~std::uint64_t{0}};
     std::atomic<std::uint32_t> last_presented_xfb_addr_{0};
+    // Present rates below the game's 60 Hz show the newest frame on their own
+    // cadence (30 Hz presents every other frame at full game speed).
+    [[nodiscard]] bool skip_for_present_rate();
+    std::int64_t next_rate_present_qpc_ = 0;
 
     // GX texture base registers store physical addresses (MEM1 0x00000000 and
     // MEM2 0x10000000), while the CPU can write through cached/uncached
