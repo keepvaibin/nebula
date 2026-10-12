@@ -6669,7 +6669,7 @@ bool pad_has_input(const galaxy::input::PadSample& sample) {
 
 // Runs the overlay chord and navigation over every connected pad at once and
 // applies its hidden/neutral decision back to each pad.
-bool route_native_settings_pads(std::span<LivePad> pads) {
+bool route_native_settings_pads(std::span<LivePad> pads, bool capture_finished) {
     static std::uint16_t s_capture_hold = 0u;
     std::uint16_t word = 0u;
     float stick_x = 0.0f;
@@ -6685,7 +6685,7 @@ bool route_native_settings_pads(std::span<LivePad> pads) {
     }
     // A capture's press stays away from the overlay's navigation until it is
     // released, and while capturing the pad reaches neither overlay nor game.
-    if (g_binding_capture_armed.load(std::memory_order_acquire) != 0u) {
+    if (capture_finished || g_binding_capture_armed.load(std::memory_order_acquire) != 0u) {
         s_capture_hold = word;
         for (LivePad& pad : pads) {
             pad.sample.buttons = 0u;
@@ -6721,13 +6721,14 @@ bool route_native_settings_pads(std::span<LivePad> pads) {
     return neutral;
 }
 
-void service_binding_capture(std::span<const LivePad> pads) {
+// Returns true on the report that completes a capture.
+bool service_binding_capture(std::span<const LivePad> pads) {
     static galaxy::input::PadSample s_baseline{};
     static std::uint32_t s_baseline_for = 0u;
     const std::uint32_t armed = g_binding_capture_armed.load(std::memory_order_acquire);
     if (armed == 0u) {
         s_baseline_for = 0u;
-        return;
+        return false;
     }
     const auto scheme = static_cast<galaxy::input::ControlScheme>(armed - 1u);
     const LivePad* match = nullptr;
@@ -6738,21 +6739,21 @@ void service_binding_capture(std::span<const LivePad> pads) {
         }
     }
     if (match == nullptr) {
-        return;
+        return false;
     }
     if (s_baseline_for != armed) {
         s_baseline = match->sample;
         s_baseline_for = armed;
-        return;
+        return false;
     }
     const auto source = galaxy::input::detect_pad_capture(s_baseline, match->sample);
     s_baseline = match->sample;
     if (!source) {
-        return;
+        return false;
     }
     std::uint32_t expected = armed;
     if (!g_binding_capture_armed.compare_exchange_strong(expected, 0u, std::memory_order_acq_rel)) {
-        return;
+        return false;
     }
     g_binding_capture_result.store(
         0x10000u | (static_cast<std::uint32_t>(source->kind) << 8u) | source->code,
@@ -6762,6 +6763,7 @@ void service_binding_capture(std::span<const LivePad> pads) {
     if (sink != nullptr) {
         sink(kBindingCaptureKey);
     }
+    return true;
 }
 
 bool advance_nunchuk_shake_accel(
@@ -8487,8 +8489,8 @@ galaxy::input::WiimoteInputSnapshot build_native_hid_input_snapshot(
         }
     }
     const std::span<LivePad> live_pads(pads.data(), pad_count);
-    service_binding_capture(live_pads);
-    (void)route_native_settings_pads(live_pads);
+    const bool capture_finished = service_binding_capture(live_pads);
+    (void)route_native_settings_pads(live_pads, capture_finished);
     if (!controller_mode_polls) {
         for (LivePad& pad : live_pads) {
             pad = {};
