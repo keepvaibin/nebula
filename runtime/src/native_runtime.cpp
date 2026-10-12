@@ -23700,6 +23700,18 @@ bool try_native_thp_wrapper(RuntimeState& state, galaxy::PpcContext* context,
     return true;
 }
 
+// Every host pointer source (mouse, pointer keys, stick, gyro, script,
+// replay) is answered by the owned scene-depth field. The guest's own
+// StarPointerPeekZ GXPeekZ reads the published EFB depth after the frame's
+// later passes, which put Star Bits past the drawn pointer.
+bool native_pointer_depth_origin(galaxy::host::SyntheticKpadPointerOrigin origin) noexcept {
+    return origin != galaxy::host::SyntheticKpadPointerOrigin::None;
+}
+
+bool native_pointer_depth_mode(galaxy::RuntimeInputMode mode) noexcept {
+    return mode != galaxy::RuntimeInputMode::RealWiimote;
+}
+
 // Exact 803FA3E4 object chain and StarPointerOnOffController::mMode.
 // FileSelect uses screen/pane and explicit WithoutCheckZ targets. Its shared
 // draw path also emits tokens, but mouse targeting needs no scene-depth field.
@@ -24291,10 +24303,8 @@ void call_guest_impl_body(
     // before GXSetDrawSync and before image effects/copies/clears.
     if (guest_address == 0x804B9EC8u && context->lr==0x80385ADCu && state.native_mouse_pointer_frame &&
         state.address_space != nullptr &&
-        (mouse_mode.mode == galaxy::RuntimeInputMode::KeyboardMouse ||
-         (mouse_mode.mode == galaxy::RuntimeInputMode::Auto &&
-          state.synthetic_pointer_last_read.sample.origin ==
-              galaxy::host::SyntheticKpadPointerOrigin::PhysicalMouse)) &&
+        native_pointer_depth_mode(mouse_mode.mode) &&
+        native_pointer_depth_origin(state.synthetic_pointer_last_read.sample.origin) &&
         // A mouse may enter and press after this scene boundary. Keep this
         // owned field available even when the preceding sample was outside.
         !native_mouse_file_select_mode(state,*context)) {
@@ -24446,8 +24456,7 @@ void call_guest_impl_body(
         state.native_mouse_restore_controller=0u;
     }
     if (guest_address == 0x80385034u && state.address_space != nullptr &&
-        (mouse_mode.mode == galaxy::RuntimeInputMode::KeyboardMouse ||
-         mouse_mode.mode == galaxy::RuntimeInputMode::Auto)) {
+        native_pointer_depth_mode(mouse_mode.mode)) {
         auto& mem=*state.address_space;
         const auto self=context->gpr[3];
         if (mapped_guest_range(&mem,self,0x74u) && mem.read_u32(self)==0u) {
@@ -24458,7 +24467,7 @@ void call_guest_impl_body(
             bool matches=state.native_mouse_pointer_frame && state.synthetic_kpad_fresh_mouse_pointer &&
                 frame && frame->valid && frame->controller==self && frame->mode_generation==mouse_mode.generation &&
                 selected.active && selected.mode_generation==mouse_mode.generation &&
-                selected.origin==galaxy::host::SyntheticKpadPointerOrigin::PhysicalMouse &&
+                native_pointer_depth_origin(selected.origin) &&
                 frame->store_serial+1u==state.native_mouse_store_serial &&
                 frame->aspect_word==mouse_aspect_word &&
                 mapped_guest_range(&mem,context->gpr[4],28u) && mapped_guest_range(&mem,context->gpr[5],24u);
@@ -24539,7 +24548,7 @@ void call_guest_impl_body(
                 }
             }
             const bool screen_only=store_owner_matches && state.native_mouse_pointer_frame && state.synthetic_kpad_fresh_mouse_pointer &&
-                selected.active && selected.origin==galaxy::host::SyntheticKpadPointerOrigin::PhysicalMouse &&
+                selected.active && native_pointer_depth_origin(selected.origin) &&
                 selected.mode_generation==mouse_mode.generation && native_mouse_file_select_mode(state,*context);
             unsigned screen_width=frame ? frame->screen_width : 0u;
             unsigned screen_height=frame ? frame->screen_height : 0u;
