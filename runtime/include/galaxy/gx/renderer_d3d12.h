@@ -259,6 +259,7 @@ public:
         return peak_bytes_per_frame_;
     }
     [[nodiscard]] std::size_t bytes_per_frame() const { return bytes_per_frame_; }
+    [[nodiscard]] std::size_t cursor() const { return cursor_; }
 
     [[nodiscard]] ID3D12Resource* resource() const { return buffer_.Get(); }
     [[nodiscard]] D3D12_GPU_VIRTUAL_ADDRESS gpu_base() const { return gpu_base_; }
@@ -440,10 +441,15 @@ public:
     void record_motion_debug_view();
     // The temporal history no longer matches the picture (scene cut).
     void reset_temporal_history() noexcept { temporal_history_valid_ = false; }
-    // Frames back whose matrix-ring palettes are still alive while this
-    // frame executes (0 outside temporal mode).
+    // Matrix-ring segment advances back whose palettes are still alive while
+    // this frame executes (0 outside temporal mode). In temporal mode the
+    // segment advances only after frames that wrote palettes, so present and
+    // peek frames do not age the previous scene's palettes.
     [[nodiscard]] unsigned matrix_history_frames() const noexcept {
         return matrix_segments_ - kFramesInFlight;
+    }
+    [[nodiscard]] std::uint64_t matrix_segment_serial() const noexcept {
+        return matrix_segment_serial_;
     }
     [[nodiscard]] std::uint64_t frame_index() const noexcept { return frame_index_; }
     // The scene camera's clip planes and vertical field of view (radians).
@@ -812,6 +818,12 @@ private:
     // Matrix ring segments: kFramesInFlight, plus two in temporal mode so the
     // previous render frame's palettes outlive the frame that reads them.
     unsigned matrix_segments_ = kFramesInFlight;
+    unsigned matrix_segment_ = 0;
+    std::uint64_t matrix_segment_serial_ = 0;
+    std::array<std::uint64_t, kFramesInFlight + 2u> matrix_segment_fence_{};
+    std::size_t matrix_begin_cursor_ = 0;
+    bool matrix_segment_used_ = false;
+    bool matrix_segment_started_ = false;
 
     // Backbuffers + present blit.
     static constexpr unsigned kSwapChainBuffers = 3;

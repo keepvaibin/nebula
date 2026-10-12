@@ -297,12 +297,6 @@ static void apply_env_overrides(RenderConfig& cfg) {
     apply_env(cfg, "GALAXY_DRAW_DISTANCE", "draw_distance");
 }
 
-// Temporal upscaling stays opt-in until its motion vectors are validated;
-// a saved upscaler=2 must not switch it on by itself.
-static bool experimental_temporal_upscaler_allowed() {
-    return read_env_bool("GALAXY_EXPERIMENTAL_TEMPORAL_UPSCALER", false);
-}
-
 static void clamp_unimplemented_features(RenderConfig& cfg) {
     // Keep config/env keys parseable for forward compatibility, but never let
     // the live renderer claim unsupported paths are active.
@@ -318,7 +312,7 @@ static void clamp_unimplemented_features(RenderConfig& cfg) {
     cfg.anisotropic_filtering = std::clamp(cfg.anisotropic_filtering, 1u, 16u);
     cfg.aa_mode = std::min(cfg.aa_mode, 2u);
     cfg.smaa_quality = std::min(cfg.smaa_quality, 3u);
-    cfg.upscaler = std::min(cfg.upscaler, experimental_temporal_upscaler_allowed() ? 2u : 1u);
+    cfg.upscaler = std::min(cfg.upscaler, 2u);
     cfg.temporal_quality = std::min(cfg.temporal_quality, 4u);
     cfg.sharpness = std::min(cfg.sharpness, 100u);
     // Win32 client geometry is signed-int based even though DXGI dimensions

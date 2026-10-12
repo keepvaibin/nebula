@@ -453,6 +453,7 @@ unsigned pending_settings_changes() {
     changes += d.aa_mode != live.aa_mode;
     changes += d.smaa_quality != live.smaa_quality;
     changes += d.upscaler != live.upscaler;
+    changes += d.temporal_quality != live.temporal_quality;
     changes += d.sharpness != live.sharpness;
     changes += d.anisotropic_filtering != live.anisotropic_filtering;
     changes += d.enhanced_mipmaps != live.enhanced_mipmaps;
@@ -465,7 +466,7 @@ unsigned pending_settings_changes() {
 unsigned native_settings_row_count(unsigned tab) {
     switch (tab % kNativeSettingsTabCount) {
     case 0: return 8u;
-    case 1: return 9u;
+    case 1: return 10u;
     case 2: return 1u;
     case 3: return 6u;
     case 4: return 5u;
@@ -541,6 +542,7 @@ void apply_native_settings_draft() {
     applied.aa_mode = next.aa_mode;
     applied.smaa_quality = next.smaa_quality;
     applied.upscaler = next.upscaler;
+    applied.temporal_quality = next.temporal_quality;
     applied.sharpness = next.sharpness;
     applied.anisotropic_filtering = next.anisotropic_filtering;
     applied.enhanced_mipmaps = next.enhanced_mipmaps;
@@ -743,12 +745,17 @@ void adjust_native_setting_unlogged(int delta) {
         switch (row) {
         case 0: draft.aa_mode = step(std::min(draft.aa_mode, 2u), 3u); break;
         case 1: draft.smaa_quality = step(std::min(draft.smaa_quality, 3u), 4u); break;
-        case 2: draft.upscaler = step(std::min(draft.upscaler, 1u), 2u); break;
-        case 3:
+        case 2: {
+            const unsigned count = fsr3_available() ? 3u : 2u;
+            draft.upscaler = step(std::min(draft.upscaler, count - 1u), count);
+            break;
+        }
+        case 3: draft.temporal_quality = step(std::min(draft.temporal_quality, 4u), 5u); break;
+        case 4:
             draft.sharpness = static_cast<unsigned>(std::clamp(
                 static_cast<int>(std::min(draft.sharpness, 100u)) + delta * 10, 0, 100));
             break;
-        case 4: {
+        case 5: {
             std::size_t index = 0u;
             for (std::size_t i = 0; i < kAnisotropy.size(); ++i) {
                 if (kAnisotropy[i] <= draft.anisotropic_filtering) index = i;
@@ -757,10 +764,10 @@ void adjust_native_setting_unlogged(int delta) {
                 static_cast<unsigned>(index), static_cast<unsigned>(kAnisotropy.size()))];
             break;
         }
-        case 5: draft.enhanced_mipmaps = !draft.enhanced_mipmaps; break;
-        case 6: draft.per_pixel_lighting = !draft.per_pixel_lighting; break;
-        case 7: draft.hud_output_resolution = !draft.hud_output_resolution; break;
-        case 8: draft.draw_distance = step(std::min(draft.draw_distance, 3u), 4u); break;
+        case 6: draft.enhanced_mipmaps = !draft.enhanced_mipmaps; break;
+        case 7: draft.per_pixel_lighting = !draft.per_pixel_lighting; break;
+        case 8: draft.hud_output_resolution = !draft.hud_output_resolution; break;
+        case 9: draft.draw_distance = step(std::min(draft.draw_distance, 3u), 4u); break;
         default: return;
         }
         return;
@@ -5243,6 +5250,10 @@ void RendererD3D12::begin_frame(bool present_swap_chain) {
                 throw std::runtime_error("matrix ring resize failed");
             }
             matrix_segments_ = segments;
+            matrix_segment_ = 0u;
+            matrix_segment_fence_.fill(0u);
+            matrix_segment_used_ = false;
+            matrix_segment_started_ = false;
         }
     }
     frame_slot_ = static_cast<unsigned>(frame_index_ % kFramesInFlight);
@@ -5364,7 +5375,23 @@ void RendererD3D12::begin_frame(bool present_swap_chain) {
     vertex_ring_  .begin_frame(frame_slot_);
     index_ring_   .begin_frame(frame_slot_);
     constant_ring_.begin_frame(frame_slot_);
-    matrix_ring_  .begin_frame(static_cast<unsigned>(frame_index_ % matrix_segments_));
+    if (matrix_segments_ == kFramesInFlight) {
+        matrix_ring_.begin_frame(frame_slot_);
+    } else {
+        // Temporal mode: a frame that wrote no palette keeps appending to the
+        // current segment, so the previous scene's palettes stay addressable
+        // across present, peek and utility frames.
+        if (matrix_segment_used_ || !matrix_segment_started_) {
+            matrix_segment_ = (matrix_segment_ + 1u) % matrix_segments_;
+            ++matrix_segment_serial_;
+            if (matrix_segment_fence_[matrix_segment_] != 0u) {
+                wait_for_fence_value(matrix_segment_fence_[matrix_segment_]);
+            }
+            matrix_ring_.begin_frame(matrix_segment_);
+            matrix_segment_started_ = true;
+        }
+        matrix_begin_cursor_ = matrix_ring_.cursor();
+    }
     bound_rt_aux_ = 0u;
     srv_ring_     .begin_frame(frame_slot_);
     reset_sampler_frame();
@@ -5596,6 +5623,10 @@ std::uint64_t RendererD3D12::end_frame(
     const std::uint64_t submitted_frame = frame_index_ + 1u;
     const std::uint64_t submitted_fence = ++next_fence_value_;
     fence_values_[frame_slot_] = submitted_fence;
+    if (matrix_segments_ != kFramesInFlight) {
+        matrix_segment_used_ = matrix_ring_.cursor() != matrix_begin_cursor_;
+        matrix_segment_fence_[matrix_segment_] = submitted_fence;
+    }
     if (pointer_depth_in_frame_pending_) {
         pointer_depth_capture_fence_ = submitted_fence;
         pointer_depth_in_frame_pending_ = false;
@@ -8272,26 +8303,32 @@ std::string native_settings_row_text(
         switch (row) {
         case 0: return std::string("ANTI-ALIASING: ") + kAa[std::min(render.aa_mode, 2u)];
         case 1: return std::string("AA QUALITY: ") + kQuality[std::min(render.smaa_quality, 3u)];
-        case 2:
-            return std::string("UPSCALER: ") +
-                   (std::min(render.upscaler, 1u) == 1u ? "FSR 1" : "BILINEAR");
-        case 3:
+        case 2: {
+            static constexpr const char* kUpscalers[] = {"BILINEAR", "FSR 1", "FSR 3"};
+            return std::string("UPSCALER: ") + kUpscalers[std::min(render.upscaler, 2u)];
+        }
+        case 3: {
+            static constexpr const char* kTemporal[] = {
+                "NATIVE AA", "QUALITY", "BALANCED", "PERFORMANCE", "ULTRA PERFORMANCE"};
+            return std::string("FSR 3 QUALITY: ") + kTemporal[std::min(render.temporal_quality, 4u)];
+        }
+        case 4:
             std::snprintf(text, sizeof(text), "SHARPENING: %u%%", std::min(render.sharpness, 100u));
             return text;
-        case 4:
+        case 5:
             if (render.anisotropic_filtering <= 1u) return "TEXTURES: TRILINEAR";
             std::snprintf(text, sizeof(text), "TEXTURES: %uX ANISOTROPIC",
                           std::min(render.anisotropic_filtering, 16u));
             return text;
-        case 5:
-            return std::string("MIPMAPS: ") + (render.enhanced_mipmaps ? "GENERATED" : "ORIGINAL");
         case 6:
+            return std::string("MIPMAPS: ") + (render.enhanced_mipmaps ? "GENERATED" : "ORIGINAL");
+        case 7:
             return std::string("LIGHTING: ") +
                    (render.per_pixel_lighting ? "PER PIXEL" : "PER VERTEX");
-        case 7:
+        case 8:
             return std::string("2D LAYER: ") +
                    (render.hud_output_resolution ? "DISPLAY RES" : "INTERNAL RES");
-        case 8: {
+        case 9: {
             static constexpr const char* kDistances[] = {"ORIGINAL", "2X", "4X", "8X"};
             return std::string("DRAW DISTANCE: ") + kDistances[std::min(render.draw_distance, 3u)];
         }
@@ -9588,9 +9625,9 @@ NativeSettingsLayout compute_native_settings_layout(
     layout.row_step = compact
         ? 14
         : std::max(32, layout.text_scale * 9 + 8);
-    // Tall enough for the longest page (nine rows) above the footer.
+    // Tall enough for the longest page (ten rows) above the footer.
     const int footer_block = compact ? 62 : 82;
-    constexpr int kLongestPageRows = 9;
+    constexpr int kLongestPageRows = 10;
     const int needed_height = (layout.rows_y - layout.panel_y) +
         (kLongestPageRows - 1) * layout.row_step + layout.text_scale * 7 + 8 +
         footer_block;
@@ -9602,7 +9639,7 @@ NativeSettingsLayout compute_native_settings_layout(
     // A short window tightens the rows rather than dropping the menu.
     const int rows_room = layout.footer_y - 8 - layout.text_scale * 7 - layout.rows_y;
     if ((kLongestPageRows - 1) * layout.row_step > rows_room) {
-        layout.row_step = std::max(layout.text_scale * 7 + 4,
+        layout.row_step = std::max(layout.text_scale * 7 + 2,
                                    rows_room / (kLongestPageRows - 1));
     }
 

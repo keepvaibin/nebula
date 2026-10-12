@@ -6462,7 +6462,7 @@ void GxBackend::on_fifo_marker(FifoMarker marker, const std::array<float, 12>* v
             if (view != nullptr) {
                 for (unsigned i = 0; i < 12u; ++i) camera[i] = (*view)[i];
             }
-            transform_history_.begin_scene(renderer_.frame_index(),
+            transform_history_.begin_scene(renderer_.matrix_segment_serial(),
                                            view != nullptr ? &camera : nullptr);
         } else {
             transform_history_.reset();
