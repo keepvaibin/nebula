@@ -31,7 +31,27 @@ namespace Nebula
         private const int EfbWidth = 640, EfbHeight = 528;
 
         public static readonly string[] Presets = { "480p", "720p", "1080p", "1440p", "2K / QHD (1440p)", "4K (2160p)" };
-        public static readonly string[] Aspects = { "4:3", "16:9", "16:10", "21:9", "32:9" };
+        public const string MatchDisplayAspect = "Match display";
+        public static readonly string[] Aspects = { MatchDisplayAspect, "4:3", "16:9", "16:10", "21:9", "32:9" };
+
+        /// <summary>
+        /// The aspect a selection stands for. "Match display" is the display's
+        /// own width:height in lowest terms (2560x1600 is 8:5), limited to the
+        /// supported 4:3 to 32:9 range; other selections pass through.
+        /// </summary>
+        public static string ResolveAspect(string selection, int displayWidth, int displayHeight)
+        {
+            if (!string.Equals((selection ?? "").Trim(), MatchDisplayAspect, StringComparison.OrdinalIgnoreCase))
+                return selection;
+            if (displayWidth <= 0 || displayHeight <= 0) return "16:9";
+            double ratio = displayWidth / (double)displayHeight;
+            if (ratio <= 4.0 / 3.0 + 1e-9) return "4:3";
+            if (ratio >= 32.0 / 9.0 - 1e-9) return "32:9";
+            int a = displayWidth, b = displayHeight;
+            while (b != 0) { int t = a % b; a = b; b = t; }
+            var culture = CultureInfo.InvariantCulture;
+            return (displayWidth / a).ToString(culture) + ":" + (displayHeight / a).ToString(culture);
+        }
 
         public static double AspectRatio(string aspect)
         {

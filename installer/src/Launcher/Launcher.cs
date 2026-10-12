@@ -156,7 +156,7 @@ namespace Nebula.Launcher
         private void LoadSettings()
         {
             output.SelectedIndex = 0;
-            aspect.Text = "16:9";
+            aspect.Text = DisplaySettings.MatchDisplayAspect;
             internalTarget.SelectedIndex = 0;
             try
             {
@@ -167,7 +167,11 @@ namespace Nebula.Launcher
                 if (portable && savedContent != null && File.Exists(Path.Combine(savedContent, "game.pak"))) content = savedContent;
                 int index = output.Items.IndexOf(Json.Str(settings, "output") ?? "");
                 if (index >= 0) output.SelectedIndex = index;
-                if (Json.Str(settings, "aspect") != null) aspect.Text = Json.Str(settings, "aspect");
+                string savedAspect = Json.Str(settings, "aspect");
+                // Settings written before "Match display" existed hold the old
+                // 16:9 default; they follow the display from now on.
+                if (savedAspect != null && !(savedAspect == "16:9" && Json.Long(settings, "settingsVersion") < 2))
+                    aspect.Text = savedAspect;
                 index = internalTarget.Items.IndexOf(Json.Str(settings, "internal") ?? "");
                 if (index >= 0) internalTarget.SelectedIndex = index;
                 long width = Json.Long(settings, "customWidth"), height = Json.Long(settings, "customHeight");
@@ -181,7 +185,7 @@ namespace Nebula.Launcher
         {
             Json.Save(settingsFile, new Dictionary<string, object>
             {
-                { "output", output.Text }, { "aspect", aspect.Text }, { "internal", internalTarget.Text },
+                { "settingsVersion", 2 }, { "output", output.Text }, { "aspect", aspect.Text }, { "internal", internalTarget.Text },
                 { "customWidth", (int)customWidth.Value }, { "customHeight", (int)customHeight.Value }, { "content", content }
             });
         }
@@ -193,17 +197,19 @@ namespace Nebula.Launcher
             {
                 int width, height;
                 borderless = output.SelectedIndex == 0;
+                var screen = Screen.PrimaryScreen.Bounds;
+                string aspectText = DisplaySettings.ResolveAspect(aspect.Text, screen.Width, screen.Height);
                 if (borderless)
                 {
-                    var screen = Screen.PrimaryScreen.Bounds;
                     width = screen.Width;
                     height = screen.Height;
                 }
-                else DisplaySettings.OutputPreset(output.Text, aspect.Text, out width, out height);
-                outputInfo.Text = string.Format("{0}: {1} × {2} physical pixels.", borderless ? "Borderless display" : "Window", width, height);
+                else DisplaySettings.OutputPreset(output.Text, aspectText, out width, out height);
+                outputInfo.Text = string.Format("{0}: {1} × {2} physical pixels. Aspect {3}.",
+                    borderless ? "Borderless display" : "Window", width, height, aspectText);
                 string selection = internalTarget.Text;
                 if (selection != "Match Output" && selection != "Custom") selection = DisplaySettings.PresetHeight(selection).ToString();
-                plan = DisplaySettings.Resolve(width, height, aspect.Text, selection, (int)customWidth.Value, (int)customHeight.Value);
+                plan = DisplaySettings.Resolve(width, height, aspectText, selection, (int)customWidth.Value, (int)customHeight.Value);
                 info.ForeColor = SystemColors.ControlText;
                 info.Text = string.Format(
                     "Game picture: {0}×{1}, centered at ({2},{3}).\r\nInternal scale: {6}x. Scene {4}×{5}; frame buffer {7}×{8}.\r\n" +
