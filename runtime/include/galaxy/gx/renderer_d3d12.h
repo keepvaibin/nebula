@@ -488,6 +488,8 @@ public:
     // Last reason a sub-frame was not recorded (diagnostics).
     [[nodiscard]] unsigned replay_failure() const noexcept { return replay_failure_; }
     void note_replay_failure(unsigned reason) noexcept { replay_failure_ = reason; }
+    // The next sub-frame's backbuffer is read back to the debug capture path.
+    void set_subframe_capture(bool capture) noexcept { subframe_capture_ = capture; }
     // False (nothing recorded) when the log is gone or has no display copy.
     // `record_constants[i]` replaces the VS constants of draws of record i.
     bool present_replay_subframe(std::span<const D3D12_GPU_VIRTUAL_ADDRESS> record_constants);
@@ -922,6 +924,7 @@ private:
     bool replay_valid_ = false;
     bool replay_has_swaps_ = false;
     unsigned replay_failure_ = 0;
+    bool subframe_capture_ = false;
     unsigned replay_scene_count_ = 0;
     unsigned replay_segment_ = 0;
     std::uint64_t replay_serial_ = 0;

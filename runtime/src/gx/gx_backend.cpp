@@ -6773,6 +6773,7 @@ void GxBackend::start_interp_sequence(std::uint32_t xfb_addr) {
     if (!renderer_.start_replay_playback()) {
         return;
     }
+    ++interp_sequence_serial_;
     interp_sequence_.active = true;
     interp_sequence_.flush_requested = false;
     interp_sequence_.scene = interp_log_scene_;
@@ -6784,6 +6785,22 @@ void GxBackend::start_interp_sequence(std::uint32_t xfb_addr) {
     interp_sequence_.step_qpc =
         frequency / (60 * static_cast<std::int64_t>(interp_frames_ + 1u));
     interp_sequence_.due_qpc = now.QuadPart;
+}
+
+std::string GxBackend::interp_snapshot_path(const char* suffix) const {
+    static const std::string directory = [] {
+        char value[MAX_PATH]{};
+        std::size_t length = 0;
+        return getenv_s(&length, value, sizeof(value), "GALAXY_INTERP_SNAPSHOT_DIR") == 0 &&
+                       length > 1u
+            ? std::string(value) : std::string{};
+    }();
+    static const std::uint64_t first = read_env_u64("GALAXY_INTERP_SNAPSHOT_FIRST", 0u);
+    static const std::uint64_t last = read_env_u64("GALAXY_INTERP_SNAPSHOT_LAST", 0u);
+    if (directory.empty() || interp_sequence_serial_ < first || interp_sequence_serial_ > last) {
+        return {};
+    }
+    return directory + "\\seq_" + std::to_string(interp_sequence_serial_) + "_" + suffix + ".ppm";
 }
 
 std::int64_t GxBackend::interp_wait_ms() const {
@@ -6811,7 +6828,17 @@ void GxBackend::advance_interp_sequence(bool flush) {
             const float t = static_cast<float>(sequence.next + 1u) /
                             static_cast<float>(sequence.subframes + 1u);
             const auto start = std::chrono::steady_clock::now();
+            const std::string snapshot =
+                interp_snapshot_path(("sub" + std::to_string(sequence.next + 1u)).c_str());
+            if (!snapshot.empty()) {
+                renderer_.set_debug_capture_paths({}, snapshot);
+                renderer_.set_subframe_capture(true);
+            }
             const bool presented = render_interp_subframe(t);
+            if (!snapshot.empty()) {
+                renderer_.set_subframe_capture(false);
+                renderer_.set_debug_capture_paths({}, {});
+            }
             interp_cpu_ms_ += std::chrono::duration<double, std::milli>(
                 std::chrono::steady_clock::now() - start).count();
             if (presented) {
@@ -6829,7 +6856,9 @@ void GxBackend::advance_interp_sequence(bool flush) {
             interp_dropped_ += sequence.subframes - sequence.next;
         }
         sequence.active = false;
+        interp_snapshot_path_ = interp_snapshot_path("real");
         present_cached_xfb_on_thread(sequence.xfb_addr, false, true);
+        interp_snapshot_path_.clear();
         static const bool trace = read_env_u64("GALAXY_TRACE_PRESENT_STATS", 0u) != 0u;
         if (trace) {
             static const std::int64_t frequency = [] {
@@ -6882,11 +6911,38 @@ bool GxBackend::render_interp_subframe(float t) {
     constexpr std::size_t kWords = kMatrixPaletteWords;
     interp_record_vas_.assign(count, 0u);
     alignas(16) static thread_local std::uint32_t palette[kMatrixPaletteWords];
+    const bool camera_still = camera == affine_identity();
     for (std::size_t r = 0; r < count; ++r) {
-        GxVsConstants constants = scene.constants[r];
         const std::int32_t m = scene.prev_index[r];
         const bool prev_data = before_scene.valid && m >= 0 &&
             static_cast<std::size_t>(m) < before_scene.constants.size();
+        // Records that did not move keep the constants the frame recorded
+        // (a zero address leaves the draw's own).
+        if (scene.per_vertex[r] == 0u) {
+            const bool same_tex = !prev_data ||
+                std::memcmp(before_scene.constants[static_cast<std::size_t>(m)].inline_tex_matrices,
+                            scene.constants[r].inline_tex_matrices,
+                            sizeof(scene.constants[r].inline_tex_matrices)) == 0;
+            if (same_tex && scene.from[r] == scene.current[r]) {
+                continue;
+            }
+        } else if (const std::int32_t shadow = scene.palette[r];
+                   shadow >= 0 && static_cast<std::size_t>(shadow) < scene.palette_count) {
+            const std::uint32_t* now_words =
+                scene.palettes.data() + static_cast<std::size_t>(shadow) * kWords;
+            const std::int32_t before = prev_data ? before_scene.palette[static_cast<std::size_t>(m)] : -1;
+            if (before >= 0 && static_cast<std::size_t>(before) < before_scene.palette_count) {
+                if (std::memcmp(before_scene.palettes.data() + static_cast<std::size_t>(before) * kWords,
+                                now_words, 256u * sizeof(std::uint32_t)) == 0) {
+                    continue;
+                }
+            } else if (camera_still) {
+                continue;
+            }
+        } else {
+            continue;
+        }
+        GxVsConstants constants = scene.constants[r];
         if (scene.per_vertex[r] == 0u) {
             const Affine34 at = affine_interpolate(scene.from[r], scene.current[r], t);
             std::memcpy(constants.inline_pos_matrix, at.data(), sizeof(constants.inline_pos_matrix));
@@ -8007,8 +8063,8 @@ void GxBackend::present_cached_xfb_on_thread(
         renderer_.debug_log_backbuffer_readback();
         renderer_.set_debug_capture_paths({}, path);
     }
-    const std::string snapshot_path =
-        (capture_present || !count_game_xfb_present) ? std::string{} : present_snapshot_path();
+    const std::string snapshot_path = !interp_snapshot_path_.empty() ? interp_snapshot_path_
+        : (capture_present || !count_game_xfb_present) ? std::string{} : present_snapshot_path();
     if (!snapshot_path.empty()) {
         renderer_.set_debug_capture_paths({}, snapshot_path);
     }

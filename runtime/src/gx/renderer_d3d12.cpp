@@ -6514,7 +6514,7 @@ bool RendererD3D12::present_replay_subframe(
         command_list_->SetGraphicsRootSignature(root_signature_.Get());
         invalidate_gx_bindings();
     }
-    (void)present(&subframe_xfb_, false);
+    (void)present(&subframe_xfb_, subframe_capture_);
     if (subframe_query_heap_) {
         command_list_->EndQuery(subframe_query_heap_.Get(), D3D12_QUERY_TYPE_TIMESTAMP,
                                 index * 2u + 1u);

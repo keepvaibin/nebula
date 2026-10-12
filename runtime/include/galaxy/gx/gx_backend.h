@@ -706,6 +706,11 @@ private:
     // A ready frame's present arrived inside a render chunk: the render loop
     // finishes the playing sequence, then starts this one.
     bool interp_start_pending_ = false;
+    std::uint64_t interp_sequence_serial_ = 0;
+    // GALAXY_INTERP_SNAPSHOT_DIR/_FIRST/_LAST: sequences whose sub-frames and
+    // real frame are read back (seq_<n>_sub<i>.ppm, seq_<n>_real.ppm).
+    std::string interp_snapshot_path_;
+    [[nodiscard]] std::string interp_snapshot_path(const char* suffix) const;
     void run_pending_interp_start();
     InterpSequence interp_sequence_{};
     // A recorded frame whose present arrives as a separate VI present.
