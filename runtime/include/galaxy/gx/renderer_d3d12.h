@@ -624,6 +624,9 @@ private:
     // With internal_follow_window, re-derive efb_scale from the settled
     // window size (see RenderConfig::internal_follow_window).
     void follow_window_internal_resolution();
+    // Hands changed presentation settings (overlay or config) to the
+    // post-processor at the frame boundary.
+    void sync_post_process_settings();
     UINT follow_window_width_ = 0;
     UINT follow_window_height_ = 0;
     double follow_window_aspect_ = 0.0;

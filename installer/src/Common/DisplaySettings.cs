@@ -15,6 +15,8 @@ namespace Nebula
         public int EfbScale;
         public int SceneWidth, SceneHeight, BackingWidth, BackingHeight;
         public int ContentLeft, ContentTop, ContentWidth, ContentHeight;
+        /// <summary>Picture shape and internal resolution keep following the window after launch.</summary>
+        public bool FollowWindowAspect, FollowWindowResolution;
     }
 
     /// <summary>

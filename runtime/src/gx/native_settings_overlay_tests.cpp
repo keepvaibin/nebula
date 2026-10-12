@@ -97,11 +97,12 @@ int main() {
     passed &= expect(!snapshot.visible, "overlay starts hidden");
     passed &= expect(!snapshot.dirty, "overlay starts clean");
     passed &= expect(!snapshot.save_error, "overlay starts without a save error");
-    passed &= expect(snapshot.tab_count == 4u, "video/input/audio/caps tabs exist");
+    passed &= expect(snapshot.tab_count == 5u, "video/graphics/input/audio/caps tabs exist");
     passed &= expect(snapshot.tab == 0u && snapshot.row == 0u, "video row zero is selected");
     passed &= expect(
-        snapshot.row_count == 4u,
-        "video tab exposes live scale, output size, display mode and the read-only present profile");
+        snapshot.row_count == 5u,
+        "video tab exposes live scale, output size, display mode, the read-only present profile "
+        "and resolution-follows-window");
 
     passed &= expect(key(VK_F1, true), "repeated F1 is consumed");
     passed &= expect(
@@ -143,12 +144,50 @@ int main() {
             galaxy::gx::get_next_start_efb_scale() == 6u,
         "opt-in 6x is live and staged");
 
+    passed &= expect(key(VK_DOWN) && key(VK_DOWN) && key(VK_DOWN) && key(VK_DOWN),
+                     "down selects the resolution-follows-window row");
+    const bool follow_before = galaxy::gx::get_render_config().internal_follow_window;
+    passed &= expect(key(VK_RIGHT), "follow-window row toggles");
+    passed &= expect(
+        galaxy::gx::get_render_config().internal_follow_window == !follow_before,
+        "resolution-follows-window changes live");
+
+    render = galaxy::gx::get_render_config();
+    render.aa_mode = 2u;
+    render.smaa_quality = 2u;
+    render.upscaler = 1u;
+    render.sharpness = 20u;
+    render.anisotropic_filtering = 8u;
+    render.enhanced_mipmaps = true;
+    galaxy::gx::set_render_config(render);
+    passed &= expect(key(VK_TAB), "Tab enters the graphics page");
+    snapshot = galaxy::gx::native_settings_overlay_snapshot();
+    passed &= expect(snapshot.tab == 1u && snapshot.row_count == 6u,
+                     "graphics page has AA, SMAA quality, upscaler, sharpening, textures and mipmaps");
+    passed &= expect(key(VK_LEFT), "left lowers the anti-aliasing mode");
+    passed &= expect(galaxy::gx::get_render_config().aa_mode == 1u, "AUTO steps down to SMAA");
+    passed &= expect(key(VK_DOWN) && key(VK_RIGHT), "SMAA quality row is adjustable");
+    passed &= expect(galaxy::gx::get_render_config().smaa_quality == 3u, "HIGH steps up to ULTRA");
+    passed &= expect(key(VK_RIGHT), "quality stops at its last value");
+    passed &= expect(galaxy::gx::get_render_config().smaa_quality == 3u, "ULTRA is the highest quality");
+    passed &= expect(key(VK_DOWN) && key(VK_LEFT), "upscaler row is adjustable");
+    passed &= expect(galaxy::gx::get_render_config().upscaler == 0u, "FSR 1 steps down to bilinear");
+    passed &= expect(key(VK_DOWN) && key(VK_RIGHT), "sharpening row is adjustable");
+    passed &= expect(galaxy::gx::get_render_config().sharpness == 30u, "sharpening moves in steps of ten");
+    passed &= expect(key(VK_DOWN) && key(VK_RIGHT), "texture filtering row is adjustable");
+    passed &= expect(galaxy::gx::get_render_config().anisotropic_filtering == 16u,
+                     "8x anisotropic steps up to 16x");
+    passed &= expect(key(VK_DOWN) && key(VK_RIGHT), "mipmap row toggles");
+    passed &= expect(!galaxy::gx::get_render_config().enhanced_mipmaps, "generated mipmaps switch off");
+    passed &= expect(galaxy::gx::native_settings_overlay_snapshot().dirty,
+                     "graphics changes mark the settings for saving");
+
     galaxy::RuntimeSettings runtime{};
     runtime.input_mode = galaxy::RuntimeInputMode::KeyboardMouse;
     galaxy::set_runtime_settings(runtime);
     passed &= expect(key(VK_TAB), "Tab enters the input page");
     snapshot = galaxy::gx::native_settings_overlay_snapshot();
-    passed &= expect(snapshot.tab == 1u && snapshot.row_count == 1u, "input page is read-only");
+    passed &= expect(snapshot.tab == 2u && snapshot.row_count == 1u, "input page is read-only");
     passed &= expect(key(VK_RIGHT), "input-page adjustment is consumed");
     passed &= expect(
         galaxy::get_runtime_settings().input_mode ==
@@ -189,7 +228,7 @@ int main() {
 
     passed &= expect(key(VK_TAB), "Tab enters the capability page");
     snapshot = galaxy::gx::native_settings_overlay_snapshot();
-    passed &= expect(snapshot.tab == 3u && snapshot.row_count == 5u, "capability page has five status rows");
+    passed &= expect(snapshot.tab == 4u && snapshot.row_count == 5u, "capability page has five status rows");
     passed &= expect(key(VK_TAB), "Tab navigation wraps");
     passed &= expect(
         galaxy::gx::native_settings_overlay_snapshot().tab == 0u,
@@ -203,8 +242,16 @@ int main() {
         !galaxy::gx::compute_native_settings_layout(426u, 240u, 0u)
              .supported,
         "layout fails closed below the advertised compact width");
+    const auto tiny_graphics =
+        galaxy::gx::compute_native_settings_layout(427u, 240u, 1u);
+    passed &= expect(
+        layout_inside(tiny_graphics, 427u, 240u) &&
+            tiny_graphics.rows_y + 5 * tiny_graphics.row_step +
+                    tiny_graphics.text_scale * 7 + 8 <=
+                tiny_graphics.footer_y,
+        "427x240 fits the six graphics rows above the compact footer");
     const auto tiny_caps =
-        galaxy::gx::compute_native_settings_layout(427u, 240u, 3u);
+        galaxy::gx::compute_native_settings_layout(427u, 240u, 4u);
     passed &= expect(
         layout_inside(tiny_caps, 427u, 240u) &&
             tiny_caps.rows_y + 4 * tiny_caps.row_step +
@@ -214,7 +261,7 @@ int main() {
                 tiny_caps.panel_y + tiny_caps.panel_height,
         "427x240 capability rows do not overlap the compact footer");
     const auto compact =
-        galaxy::gx::compute_native_settings_layout(854u, 480u, 3u);
+        galaxy::gx::compute_native_settings_layout(854u, 480u, 4u);
     passed &= expect(
         layout_inside(compact, 854u, 480u) &&
             compact.rows_y + 4 * compact.row_step +
@@ -224,7 +271,7 @@ int main() {
                 compact.panel_y + compact.panel_height,
         "854x480 capability layout stays inside the backbuffer without footer overlap");
     const auto ultra_hd =
-        galaxy::gx::compute_native_settings_layout(3840u, 2160u, 3u);
+        galaxy::gx::compute_native_settings_layout(3840u, 2160u, 4u);
     passed &= expect(
         layout_inside(ultra_hd, 3840u, 2160u) && ultra_hd.text_scale == 4 &&
             ultra_hd.footer_y + 2 * 28 + 14 <=

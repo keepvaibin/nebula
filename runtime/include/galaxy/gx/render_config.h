@@ -71,12 +71,12 @@ struct RenderConfig {
 
     // D3D12 anisotropic filtering for mipmapped GX samplers. 1 disables it;
     // 2/4/8/16 map directly to D3D12_SAMPLER_DESC::MaxAnisotropy.
-    unsigned anisotropic_filtering = 1;
+    unsigned anisotropic_filtering = 8;
 
     // Generate native mip chains for color textures that the game samples with
     // linear filtering but without authored GX mips. Authored mips are still
     // decoded from guest memory unchanged.
-    bool     enhanced_mipmaps    = false;
+    bool     enhanced_mipmaps    = true;
 
     // Presentation image quality (post_process.h), applied to the presented
     // frame on the render thread. aa_mode: 0 off, 1 SMAA, 2 auto (SMAA unless

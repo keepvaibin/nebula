@@ -136,7 +136,10 @@ std::atomic<bool> s_quit_requested{false};
 // Publish/consume both dimensions together; exchange cannot clear a newer size.
 std::atomic<std::uint64_t> s_pending_resize_extent{0};
 
-constexpr unsigned kNativeSettingsTabCount = 4;
+constexpr unsigned kNativeSettingsTabCount = 5;
+// Set by the overlay when "resolution follows window" is switched on, so the
+// render thread re-derives the scale for the current window right away.
+std::atomic<bool> s_follow_window_rearm{false};
 
 std::uint64_t elapsed_us(
     std::chrono::steady_clock::time_point begin,
@@ -209,6 +212,15 @@ void copy_adapter_description(
     }
 }
 
+PostProcessSettings post_process_settings_from(const RenderConfig& cfg) noexcept {
+    PostProcessSettings post{};
+    post.aa = static_cast<PostProcessSettings::Aa>(std::min(cfg.aa_mode, 2u));
+    post.smaa_quality = static_cast<std::uint8_t>(std::min(cfg.smaa_quality, 3u));
+    post.upscaler = static_cast<PostProcessSettings::Upscaler>(std::min(cfg.upscaler, 1u));
+    post.sharpness = static_cast<std::uint8_t>(std::min(cfg.sharpness, 100u));
+    return post;
+}
+
 bool flush_native_settings_if_dirty() {
     const std::lock_guard<std::recursive_mutex> lock(s_native_settings_mutex);
     if (!s_native_settings_dirty.load(std::memory_order_acquire)) {
@@ -250,10 +262,11 @@ float step_gain(float current, int delta) {
 
 unsigned native_settings_row_count(unsigned tab) {
     switch (tab % kNativeSettingsTabCount) {
-    case 0: return 4u;
-    case 1: return 1u;
-    case 2: return 5u;
+    case 0: return 5u;
+    case 1: return 6u;
+    case 2: return 1u;
     case 3: return 5u;
+    case 4: return 5u;
     default: return 0u;
     }
 }
@@ -321,18 +334,59 @@ void adjust_native_setting(int delta) {
                 (void)PostMessageW(window, kDisplayModeMessage,
                                    borderless ? 1u : 0u, 0);
             }
+        } else if (row == 4u) {
+            RenderConfig render = get_render_config();
+            render.internal_follow_window = !render.internal_follow_window;
+            set_render_config(render);
+            if (render.internal_follow_window) {
+                s_follow_window_rearm.store(true, std::memory_order_release);
+            }
+            s_native_settings_dirty.store(true, std::memory_order_release);
         }
         return;
     }
 
-    RuntimeSettings settings = get_runtime_settings();
     if (tab == 1u) {
+        // Image quality: applied by the render thread at the next frame.
+        RenderConfig render = get_render_config();
+        const auto step = [delta](unsigned value, unsigned count) {
+            return static_cast<unsigned>(std::clamp(
+                static_cast<int>(value) + delta, 0, static_cast<int>(count) - 1));
+        };
+        static constexpr std::array<unsigned, 5> kAnisotropy{1u, 2u, 4u, 8u, 16u};
+        switch (row) {
+        case 0: render.aa_mode = step(std::min(render.aa_mode, 2u), 3u); break;
+        case 1: render.smaa_quality = step(std::min(render.smaa_quality, 3u), 4u); break;
+        case 2: render.upscaler = step(std::min(render.upscaler, 1u), 2u); break;
+        case 3:
+            render.sharpness = static_cast<unsigned>(std::clamp(
+                static_cast<int>(std::min(render.sharpness, 100u)) + delta * 10, 0, 100));
+            break;
+        case 4: {
+            std::size_t index = 0u;
+            for (std::size_t i = 0; i < kAnisotropy.size(); ++i) {
+                if (kAnisotropy[i] <= render.anisotropic_filtering) index = i;
+            }
+            render.anisotropic_filtering = kAnisotropy[step(
+                static_cast<unsigned>(index), static_cast<unsigned>(kAnisotropy.size()))];
+            break;
+        }
+        case 5: render.enhanced_mipmaps = !render.enhanced_mipmaps; break;
+        default: return;
+        }
+        set_render_config(render);
+        s_native_settings_dirty.store(true, std::memory_order_release);
+        return;
+    }
+
+    RuntimeSettings settings = get_runtime_settings();
+    if (tab == 2u) {
         // Input-source changes require device capability/preflight ownership.
         // Keep the live source visible, but never switch to absent hardware
         // from an in-game key press.
         return;
     }
-    if (tab == 2u) {
+    if (tab == 3u) {
         bool changed = false;
         switch (row) {
         case 0: {
@@ -2869,6 +2923,10 @@ void RendererD3D12::follow_window_internal_resolution() {
     const auto aspect = galaxy::experimental_effective_host_aspect();
     const double content_aspect =
         aspect ? aspect->content_aspect : galaxy::kWiiContentAspect;
+    if (s_follow_window_rearm.load(std::memory_order_relaxed) &&
+        s_follow_window_rearm.exchange(false, std::memory_order_acq_rel)) {
+        follow_window_width_ = 0u;
+    }
     if (s_bb_width == follow_window_width_ && s_bb_height == follow_window_height_ &&
         content_aspect == follow_window_aspect_) {
         return;
@@ -2898,6 +2956,18 @@ void RendererD3D12::follow_window_internal_resolution() {
         render.efb_scale = scale;
         set_render_config(render);
         stage_next_start_efb_scale(scale);
+    }
+}
+
+void RendererD3D12::sync_post_process_settings() {
+    if (!post_process_.ready()) {
+        return;
+    }
+    const PostProcessSettings next = post_process_settings_from(get_render_config());
+    const PostProcessSettings& current = post_process_.settings();
+    if (next.aa != current.aa || next.smaa_quality != current.smaa_quality ||
+        next.upscaler != current.upscaler || next.sharpness != current.sharpness) {
+        post_process_.apply_settings(next, frame_index_, kFramesInFlight);
     }
 }
 
@@ -3581,11 +3651,7 @@ bool RendererD3D12::initialize(int window_width, int window_height, unsigned efb
         // Presentation post-processing (SMAA, FSR 1, RCAS, box resample).
         {
             const RenderConfig cfg = get_render_config();
-            PostProcessSettings post{};
-            post.aa = static_cast<PostProcessSettings::Aa>(std::min(cfg.aa_mode, 2u));
-            post.smaa_quality = static_cast<std::uint8_t>(std::min(cfg.smaa_quality, 3u));
-            post.upscaler = static_cast<PostProcessSettings::Upscaler>(std::min(cfg.upscaler, 1u));
-            post.sharpness = static_cast<std::uint8_t>(std::min(cfg.sharpness, 100u));
+            const PostProcessSettings post = post_process_settings_from(cfg);
             if (!cfg.post_process) {
                 std::cerr << "[post-process] off; presenting with the plain blit\n";
             } else if (!post_process_.initialize(device_.Get(), post)) {
@@ -4342,6 +4408,7 @@ void RendererD3D12::begin_frame(bool present_swap_chain) {
     apply_pending_resize();
     follow_window_internal_resolution();
     apply_pending_efb_scale();
+    sync_post_process_settings();
     frame_slot_ = static_cast<unsigned>(frame_index_ % kFramesInFlight);
     last_latency_wait_us_ = 0;
     last_frame_slot_wait_us_ = 0;
@@ -6870,13 +6937,39 @@ std::string native_settings_row_text(
                 render.vsync_interval == 0u ? "OFF" : "ON",
                 static_cast<double>(render.max_fps));
             return text;
+        case 4:
+            return std::string("RES FOLLOWS WINDOW: ") +
+                   (render.internal_follow_window ? "ON" : "OFF");
         default:
             return {};
         }
-    case 1:
+    case 1: {
+        static constexpr const char* kAa[] = {"OFF", "SMAA", "AUTO"};
+        static constexpr const char* kQuality[] = {"LOW", "MEDIUM", "HIGH", "ULTRA"};
+        switch (row) {
+        case 0: return std::string("ANTI-ALIASING: ") + kAa[std::min(render.aa_mode, 2u)];
+        case 1: return std::string("SMAA QUALITY: ") + kQuality[std::min(render.smaa_quality, 3u)];
+        case 2:
+            return std::string("UPSCALER: ") +
+                   (std::min(render.upscaler, 1u) == 1u ? "FSR 1" : "BILINEAR");
+        case 3:
+            std::snprintf(text, sizeof(text), "SHARPENING: %u%%", std::min(render.sharpness, 100u));
+            return text;
+        case 4:
+            if (render.anisotropic_filtering <= 1u) return "TEXTURES: TRILINEAR";
+            std::snprintf(text, sizeof(text), "TEXTURES: %uX ANISOTROPIC",
+                          std::min(render.anisotropic_filtering, 16u));
+            return text;
+        case 5:
+            return std::string("GENERATED MIPMAPS: ") + (render.enhanced_mipmaps ? "ON" : "OFF");
+        default:
+            return {};
+        }
+    }
+    case 2:
         return std::string("ACTIVE SOURCE (LAUNCHER): ") +
                runtime_input_mode_name(runtime.input_mode);
-    case 2:
+    case 3:
         switch (row) {
         case 0: return std::string("MASTER: ") + percent_text(runtime.audio.master);
         case 1: return std::string("MUSIC: ") + percent_text(runtime.audio.music);
@@ -6885,7 +6978,7 @@ std::string native_settings_row_text(
         case 4: return std::string("AMBIENCE: ") + percent_text(runtime.audio.ambience);
         default: return {};
         }
-    case 3:
+    case 4:
         switch (row) {
         case 0:
             std::snprintf(
@@ -7059,15 +7152,19 @@ void draw_native_settings_overlay(RendererD3D12& renderer) {
         "NATIVE SETTINGS",
         text);
 
-    const char* tabs[] = {"VIDEO", "INPUT", "AUDIO", "CAPS"};
+    const char* tabs[] = {"VIDEO", "GRAPHICS", "INPUT", "AUDIO", "CAPS"};
+    static_assert(std::size(tabs) == kNativeSettingsTabCount);
     int tab_x = panel_x + 28;
-    const int tab_step = std::max(100, (panel_w - 56) / 4);
+    // Five labels share the panel width; the longest is eight 6-unit glyphs
+    // plus a gap, so the label scale shrinks on narrow panels.
+    const int tab_step = (panel_w - 56) / 5;
+    const int tab_scale = std::clamp(tab_step / 54, 1, scale);
     for (unsigned i = 0; i < kNativeSettingsTabCount; ++i) {
         ui_text(
             renderer,
             tab_x,
             panel_y + (scale == 1 ? 30 : 70),
-            scale,
+            tab_scale,
             tabs[i],
             i == tab ? accent : muted);
         tab_x += tab_step;

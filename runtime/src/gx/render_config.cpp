@@ -545,6 +545,8 @@ bool save_render_config_to_file() {
              << "smaa_quality=" << cfg.smaa_quality << '\n'
              << "upscaler=" << cfg.upscaler << '\n'
              << "sharpness=" << cfg.sharpness << '\n'
+             << "internal_follow_window="
+             << (cfg.internal_follow_window ? 1u : 0u) << '\n'
              << "window_width=" << cfg.window_width << '\n'
              << "window_height=" << cfg.window_height << '\n';
     if (!contents) {

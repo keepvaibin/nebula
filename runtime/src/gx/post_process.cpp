@@ -120,6 +120,81 @@ PostProcessPlan plan_post_process(
     return plan;
 }
 
+bool PostProcessor::create_pipeline(D3D12_SHADER_BYTECODE vs, D3D12_SHADER_BYTECODE ps,
+                                    DXGI_FORMAT format, int stencil,
+                                    ComPtr<ID3D12PipelineState>& out) {
+    D3D12_GRAPHICS_PIPELINE_STATE_DESC pd{};
+    pd.pRootSignature = root_signature_.Get();
+    pd.VS = vs;
+    pd.PS = ps;
+    pd.BlendState.RenderTarget[0].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
+    pd.SampleMask = UINT_MAX;
+    pd.RasterizerState.FillMode = D3D12_FILL_MODE_SOLID;
+    pd.RasterizerState.CullMode = D3D12_CULL_MODE_NONE;
+    pd.RasterizerState.DepthClipEnable = TRUE;
+    pd.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+    pd.NumRenderTargets = 1;
+    pd.RTVFormats[0] = format;
+    pd.SampleDesc.Count = 1;
+    // stencil: 0 none, 1 write 1 where the pixel shader keeps the pixel,
+    // 2 draw only where the stencil is 1 (SMAA's edge mask).
+    if (stencil != 0) {
+        pd.DSVFormat = kStencilFormat;
+        auto& ds = pd.DepthStencilState;
+        ds.DepthEnable = FALSE;
+        ds.StencilEnable = TRUE;
+        ds.StencilReadMask = 0xFF;
+        ds.StencilWriteMask = 0xFF;
+        D3D12_DEPTH_STENCILOP_DESC op{};
+        op.StencilFailOp = D3D12_STENCIL_OP_KEEP;
+        op.StencilDepthFailOp = D3D12_STENCIL_OP_KEEP;
+        op.StencilPassOp = stencil == 1 ? D3D12_STENCIL_OP_REPLACE : D3D12_STENCIL_OP_KEEP;
+        op.StencilFunc = stencil == 1 ? D3D12_COMPARISON_FUNC_ALWAYS
+                                      : D3D12_COMPARISON_FUNC_EQUAL;
+        ds.FrontFace = op;
+        ds.BackFace = op;
+    }
+    return SUCCEEDED(device_->CreateGraphicsPipelineState(&pd, IID_PPV_ARGS(&out)));
+}
+
+bool PostProcessor::create_smaa_pipelines(unsigned quality,
+                                          ComPtr<ID3D12PipelineState>& edges,
+                                          ComPtr<ID3D12PipelineState>& weights) {
+    static constexpr ShaderBytes kEdgesPs[4] = {
+        bytes(g_post_smaa_edges_ps_low), bytes(g_post_smaa_edges_ps_medium),
+        bytes(g_post_smaa_edges_ps_high), bytes(g_post_smaa_edges_ps_ultra)};
+    static constexpr ShaderBytes kWeightsVs[4] = {
+        bytes(g_post_smaa_weights_vs_low), bytes(g_post_smaa_weights_vs_medium),
+        bytes(g_post_smaa_weights_vs_high), bytes(g_post_smaa_weights_vs_ultra)};
+    static constexpr ShaderBytes kWeightsPs[4] = {
+        bytes(g_post_smaa_weights_ps_low), bytes(g_post_smaa_weights_ps_medium),
+        bytes(g_post_smaa_weights_ps_high), bytes(g_post_smaa_weights_ps_ultra)};
+    const unsigned q = std::min(quality, 3u);
+    return create_pipeline(code(bytes(g_post_smaa_edges_vs)), code(kEdgesPs[q]), kEdgesFormat, 1, edges) &&
+           create_pipeline(code(kWeightsVs[q]), code(kWeightsPs[q]), kColorFormat, 2, weights);
+}
+
+void PostProcessor::apply_settings(const PostProcessSettings& settings,
+                                   std::uint64_t frame_index, unsigned frames_in_flight) {
+    PostProcessSettings next = settings;
+    next.smaa_quality = std::min<std::uint8_t>(next.smaa_quality, 3u);
+    if (ready_ && next.smaa_quality != settings_.smaa_quality) {
+        ComPtr<ID3D12PipelineState> edges, weights;
+        if (!create_smaa_pipelines(next.smaa_quality, edges, weights)) {
+            std::cerr << "[post-process] SMAA quality " << unsigned(next.smaa_quality)
+                      << " pipelines failed; keeping " << unsigned(settings_.smaa_quality) << '\n';
+            next.smaa_quality = settings_.smaa_quality;
+        } else {
+            const std::uint64_t release = frame_index + frames_in_flight;
+            retired_.push_back({nullptr, release, std::move(smaa_edges_)});
+            retired_.push_back({nullptr, release, std::move(smaa_weights_)});
+            smaa_edges_ = std::move(edges);
+            smaa_weights_ = std::move(weights);
+        }
+    }
+    settings_ = next;
+}
+
 bool PostProcessor::initialize(ID3D12Device* device, const PostProcessSettings& settings) {
     shutdown();
     device_ = device;
@@ -167,59 +242,12 @@ bool PostProcessor::initialize(ID3D12Device* device, const PostProcessSettings& 
         return false;
     }
 
-    const auto pipeline = [&](ShaderBytes vs, ShaderBytes ps, DXGI_FORMAT rt,
-                              int stencil, ComPtr<ID3D12PipelineState>& out) {
-        D3D12_GRAPHICS_PIPELINE_STATE_DESC pd{};
-        pd.pRootSignature = root_signature_.Get();
-        pd.VS = code(vs);
-        pd.PS = code(ps);
-        pd.BlendState.RenderTarget[0].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
-        pd.SampleMask = UINT_MAX;
-        pd.RasterizerState.FillMode = D3D12_FILL_MODE_SOLID;
-        pd.RasterizerState.CullMode = D3D12_CULL_MODE_NONE;
-        pd.RasterizerState.DepthClipEnable = TRUE;
-        pd.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
-        pd.NumRenderTargets = 1;
-        pd.RTVFormats[0] = rt;
-        pd.SampleDesc.Count = 1;
-        // stencil: 0 none, 1 write 1 where the pixel shader keeps the pixel,
-        // 2 draw only where the stencil is 1 (SMAA's edge mask).
-        if (stencil != 0) {
-            pd.DSVFormat = kStencilFormat;
-            auto& ds = pd.DepthStencilState;
-            ds.DepthEnable = FALSE;
-            ds.StencilEnable = TRUE;
-            ds.StencilReadMask = 0xFF;
-            ds.StencilWriteMask = 0xFF;
-            D3D12_DEPTH_STENCILOP_DESC op{};
-            op.StencilFailOp = D3D12_STENCIL_OP_KEEP;
-            op.StencilDepthFailOp = D3D12_STENCIL_OP_KEEP;
-            op.StencilPassOp = stencil == 1 ? D3D12_STENCIL_OP_REPLACE : D3D12_STENCIL_OP_KEEP;
-            op.StencilFunc = stencil == 1 ? D3D12_COMPARISON_FUNC_ALWAYS
-                                          : D3D12_COMPARISON_FUNC_EQUAL;
-            ds.FrontFace = op;
-            ds.BackFace = op;
-        }
-        return SUCCEEDED(device_->CreateGraphicsPipelineState(&pd, IID_PPV_ARGS(&out)));
-    };
-
-    static constexpr ShaderBytes kEdgesPs[4] = {
-        bytes(g_post_smaa_edges_ps_low), bytes(g_post_smaa_edges_ps_medium),
-        bytes(g_post_smaa_edges_ps_high), bytes(g_post_smaa_edges_ps_ultra)};
-    static constexpr ShaderBytes kWeightsVs[4] = {
-        bytes(g_post_smaa_weights_vs_low), bytes(g_post_smaa_weights_vs_medium),
-        bytes(g_post_smaa_weights_vs_high), bytes(g_post_smaa_weights_vs_ultra)};
-    static constexpr ShaderBytes kWeightsPs[4] = {
-        bytes(g_post_smaa_weights_ps_low), bytes(g_post_smaa_weights_ps_medium),
-        bytes(g_post_smaa_weights_ps_high), bytes(g_post_smaa_weights_ps_ultra)};
-    const unsigned q = settings_.smaa_quality;
     const bool ok =
-        pipeline(bytes(g_post_smaa_edges_vs), kEdgesPs[q], kEdgesFormat, 1, smaa_edges_) &&
-        pipeline(kWeightsVs[q], kWeightsPs[q], kColorFormat, 2, smaa_weights_) &&
-        pipeline(bytes(g_post_smaa_blend_vs), bytes(g_post_smaa_blend_ps), kColorFormat, 0, smaa_blend_) &&
-        pipeline(bytes(g_post_fullscreen_vs), bytes(g_post_fsr_easu_ps), kColorFormat, 0, easu_) &&
-        pipeline(bytes(g_post_fullscreen_vs), bytes(g_post_fsr_rcas_ps), kColorFormat, 0, rcas_) &&
-        pipeline(bytes(g_post_fullscreen_vs), bytes(g_post_resample_ps), kColorFormat, 0, resample_);
+        create_smaa_pipelines(settings_.smaa_quality, smaa_edges_, smaa_weights_) &&
+        create_pipeline(code(bytes(g_post_smaa_blend_vs)), code(bytes(g_post_smaa_blend_ps)), kColorFormat, 0, smaa_blend_) &&
+        create_pipeline(code(bytes(g_post_fullscreen_vs)), code(bytes(g_post_fsr_easu_ps)), kColorFormat, 0, easu_) &&
+        create_pipeline(code(bytes(g_post_fullscreen_vs)), code(bytes(g_post_fsr_rcas_ps)), kColorFormat, 0, rcas_) &&
+        create_pipeline(code(bytes(g_post_fullscreen_vs)), code(bytes(g_post_resample_ps)), kColorFormat, 0, resample_);
     if (!ok) {
         std::cerr << "[post-process] pipeline creation failed\n";
         shutdown();

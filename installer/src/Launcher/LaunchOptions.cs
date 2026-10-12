@@ -34,9 +34,12 @@ namespace Nebula.Launcher
             env["GALAXY_EXCLUSIVE_FULLSCREEN"] = "0";
             env["GALAXY_EFB_SCALE"] = plan.EfbScale.ToString();
             env["GALAXY_EXPERIMENTAL_NATIVE_4_3"] = plan.NativeFourThree ? "1" : "0";
-            env["GALAXY_EXPERIMENTAL_DYNAMIC_ASPECT"] = "0";
+            // A followed window shape is latched at frame boundaries and
+            // excludes the fixed-aspect experiments.
+            env["GALAXY_EXPERIMENTAL_DYNAMIC_ASPECT"] = plan.FollowWindowAspect ? "1" : "0";
             env["GALAXY_EXPERIMENTAL_ULTRAWIDE_ASPECT"] =
-                plan.NativeFourThree || Math.Abs(plan.AspectRatio - 16.0 / 9.0) < 1e-10 ? "" : plan.Aspect;
+                plan.FollowWindowAspect || plan.NativeFourThree || Math.Abs(plan.AspectRatio - 16.0 / 9.0) < 1e-10 ? "" : plan.Aspect;
+            env["GALAXY_INTERNAL_FOLLOW_WINDOW"] = plan.FollowWindowResolution ? "1" : "0";
             env["GALAXY_NATIVE_THP_VIDEO_DECODE"] = "1";
             env["GALAXY_DUSK_DSP_HLE"] = "0";
             ApplyRecording(start, recording);

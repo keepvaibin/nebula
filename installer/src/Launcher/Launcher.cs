@@ -43,7 +43,11 @@ namespace Nebula.Launcher
         private readonly NumericUpDown customWidth = new NumericUpDown(), customHeight = new NumericUpDown();
         private readonly Label outputInfo = new Label(), info = new Label();
         private readonly ComboBox recording = new ComboBox();
+        private readonly ComboBox antiAliasing = new ComboBox(), aaQuality = new ComboBox(), upscaler = new ComboBox(), textureFilter = new ComboBox();
+        private readonly NumericUpDown sharpness = new NumericUpDown();
+        private readonly CheckBox mipmaps = new CheckBox();
         private readonly Button play = new Button();
+        private GraphicsSettings graphics = new GraphicsSettings();
         private DisplayPlan plan;
         private bool borderless;
 
@@ -58,47 +62,75 @@ namespace Nebula.Launcher
             Font = new Font("Segoe UI", 10f);
 
             AutoScaleMode = AutoScaleMode.None;
-            ClientSize = new Size(760, 564);
+            ClientSize = new Size(760, 524);
             FormBorderStyle = FormBorderStyle.FixedDialog;
             MaximizeBox = false;
             StartPosition = FormStartPosition.CenterScreen;
 
-            AddLabel("Output / window", 20, 20, 300);
+            var tabs = new TabControl { Location = new Point(12, 12), Size = new Size(736, 420) };
+            var display = new TabPage("Display");
+            var image = new TabPage("Graphics");
+            var diagnostics = new TabPage("Diagnostics");
+            tabs.TabPages.AddRange(new[] { display, image, diagnostics });
+            Controls.Add(tabs);
+
+            AddLabel(display, "Output / window", 12, 16, 300);
             output.Items.Add("Match Display (borderless)");
             output.Items.AddRange(DisplaySettings.Presets);
-            Combo(output, 340, 17, true);
-            outputInfo.Location = new Point(20, 54);
-            outputInfo.Size = new Size(720, 26);
-            Controls.Add(outputInfo);
-            AddLabel("Gameplay / camera aspect", 20, 92, 300);
+            Combo(display, output, 320, 13, true);
+            outputInfo.Location = new Point(12, 50);
+            outputInfo.Size = new Size(700, 26);
+            display.Controls.Add(outputInfo);
+            AddLabel(display, "Gameplay / camera aspect", 12, 88, 300);
             aspect.Items.AddRange(DisplaySettings.Aspects);
-            Combo(aspect, 340, 89, false);
-            AddLabel("Internal 3D resolution", 20, 132, 300);
+            Combo(display, aspect, 320, 85, false);
+            AddLabel(display, "Internal 3D resolution", 12, 128, 300);
             internalTarget.Items.Add("Match Output");
             internalTarget.Items.AddRange(DisplaySettings.Presets);
             internalTarget.Items.Add("Custom");
-            Combo(internalTarget, 340, 129, true);
-            AddLabel("Custom internal width × height", 20, 172, 300);
-            Number(customWidth, 340, 169, 320, 16384, 1920);
-            Number(customHeight, 480, 169, 240, 8448, 1080);
-            info.Location = new Point(20, 210);
-            info.Size = new Size(720, 120);
-            Controls.Add(info);
-            AddLabel("Recording", 20, 342, 300);
-            recording.Items.AddRange(new[] { "No recording", "Lightweight recording", "Detailed recording" });
-            Combo(recording, 340, 339, true);
-            recording.SelectedIndex = 0;
-            AddLabel("Detailed recording may reduce performance. Saves use the normal Nebula folder.", 20, 378, 720);
+            Combo(display, internalTarget, 320, 125, true);
+            AddLabel(display, "Custom internal width × height", 12, 168, 300);
+            Number(display, customWidth, 320, 165, 320, 16384, 1920);
+            Number(display, customHeight, 460, 165, 240, 8448, 1080);
+            info.Location = new Point(12, 206);
+            info.Size = new Size(700, 170);
+            display.Controls.Add(info);
 
-            var import = Button("Import a GalaxyRecomp save…", 20, 436, 250);
-            import.Click += delegate { ImportSave(); };
-            var saves = Button("Open save folder", 280, 436, 160);
-            saves.Click += delegate { Directory.CreateDirectory(NebulaPaths.Saves); Process.Start("explorer.exe", "\"" + NebulaPaths.Saves + "\""); };
-            var sessions = Button("Open diagnostics", 450, 436, 150);
+            AddLabel(image, "Anti-aliasing", 12, 16, 300);
+            antiAliasing.Items.AddRange(GraphicsSettings.AntiAliasingModes);
+            Combo(image, antiAliasing, 320, 13, true);
+            AddLabel(image, "Anti-aliasing quality", 12, 56, 300);
+            aaQuality.Items.AddRange(GraphicsSettings.AntiAliasingQualities);
+            Combo(image, aaQuality, 320, 53, true);
+            AddLabel(image, "Upscaling", 12, 96, 300);
+            upscaler.Items.AddRange(GraphicsSettings.Upscalers);
+            Combo(image, upscaler, 320, 93, true);
+            AddLabel(image, "Sharpening (0-100)", 12, 136, 300);
+            Number(image, sharpness, 320, 133, 0, 100, 20);
+            AddLabel(image, "Texture filtering", 12, 176, 300);
+            textureFilter.Items.AddRange(GraphicsSettings.TextureFilters);
+            Combo(image, textureFilter, 320, 173, true);
+            mipmaps.Text = "Generate mipmaps for textures that have none";
+            mipmaps.Location = new Point(12, 214);
+            mipmaps.Size = new Size(600, 28);
+            image.Controls.Add(mipmaps);
+            AddLabel(image, "These also change during play: F1, Graphics page.", 12, 262, 700);
+
+            AddLabel(diagnostics, "Recording", 12, 16, 300);
+            recording.Items.AddRange(new[] { "No recording", "Lightweight recording", "Detailed recording" });
+            Combo(diagnostics, recording, 320, 13, true);
+            recording.SelectedIndex = 0;
+            AddLabel(diagnostics, "Detailed recording may reduce performance. Saves use the normal Nebula folder.", 12, 52, 700);
+            var sessions = Button(diagnostics, "Open diagnostics", 12, 92, 180);
             sessions.Click += delegate { Directory.CreateDirectory(NebulaPaths.Sessions); Process.Start("explorer.exe", "\"" + NebulaPaths.Sessions + "\""); };
-            var chooseContent = Button("Choose game content…", 20, 476, 250);
+
+            var import = Button(this, "Import a GalaxyRecomp save…", 12, 442, 250);
+            import.Click += delegate { ImportSave(); };
+            var saves = Button(this, "Open save folder", 270, 442, 160);
+            saves.Click += delegate { Directory.CreateDirectory(NebulaPaths.Saves); Process.Start("explorer.exe", "\"" + NebulaPaths.Saves + "\""); };
+            var chooseContent = Button(this, "Choose game content…", 438, 442, 190);
             chooseContent.Click += delegate { ChooseContent(); };
-            var update = Button(portable ? "Beta releases" : "Check for updates", 20, 514, 170);
+            var update = Button(this, portable ? "Beta releases" : "Check for updates", 12, 482, 170);
             update.Click += delegate
             {
                 if (portable) { Process.Start("https://github.com/" + BuildInfo.Repository + "/releases"); return; }
@@ -106,7 +138,7 @@ namespace Nebula.Launcher
                 if (File.Exists(setup)) Process.Start(new ProcessStartInfo(setup, "--update") { WorkingDirectory = root });
             };
             play.Text = "Play";
-            play.Location = new Point(620, 510);
+            play.Location = new Point(628, 476);
             play.Size = new Size(120, 36);
             play.Click += delegate { Play(); };
             Controls.Add(play);
@@ -123,38 +155,45 @@ namespace Nebula.Launcher
             UiScale.Apply(this);
         }
 
-        private void AddLabel(string text, int x, int y, int width)
+        private static void AddLabel(Control parent, string text, int x, int y, int width)
         {
-            Controls.Add(new Label { Text = text, Location = new Point(x, y), Size = new Size(width, 26) });
+            parent.Controls.Add(new Label { Text = text, Location = new Point(x, y), Size = new Size(width, 26) });
         }
 
-        private void Combo(ComboBox box, int x, int y, bool list)
+        private static void Combo(Control parent, ComboBox box, int x, int y, bool list)
         {
             box.Location = new Point(x, y);
-            box.Width = 400;
+            box.Width = 390;
             box.DropDownStyle = list ? ComboBoxStyle.DropDownList : ComboBoxStyle.DropDown;
-            Controls.Add(box);
+            parent.Controls.Add(box);
         }
 
-        private void Number(NumericUpDown box, int x, int y, int min, int max, int value)
+        private static void Number(Control parent, NumericUpDown box, int x, int y, int min, int max, int value)
         {
             box.Location = new Point(x, y);
             box.Size = new Size(120, 28);
             box.Minimum = min;
             box.Maximum = max;
             box.Value = value;
-            Controls.Add(box);
+            parent.Controls.Add(box);
         }
 
-        private Button Button(string text, int x, int y, int width)
+        private static Button Button(Control parent, string text, int x, int y, int width)
         {
             var button = new Button { Text = text, Location = new Point(x, y), Size = new Size(width, 32) };
-            Controls.Add(button);
+            parent.Controls.Add(button);
             return button;
         }
 
         private void LoadSettings()
         {
+            graphics = GraphicsSettings.Load();
+            antiAliasing.SelectedIndex = graphics.AntiAliasing;
+            aaQuality.SelectedIndex = graphics.Quality;
+            upscaler.SelectedIndex = graphics.Upscaler;
+            sharpness.Value = graphics.Sharpness;
+            textureFilter.SelectedIndex = graphics.TextureFilter;
+            mipmaps.Checked = graphics.GeneratedMipmaps;
             output.SelectedIndex = 0;
             aspect.Text = DisplaySettings.MatchDisplayAspect;
             internalTarget.SelectedIndex = 0;
@@ -210,12 +249,23 @@ namespace Nebula.Launcher
                 string selection = internalTarget.Text;
                 if (selection != "Match Output" && selection != "Custom") selection = DisplaySettings.PresetHeight(selection).ToString();
                 plan = DisplaySettings.Resolve(width, height, aspectText, selection, (int)customWidth.Value, (int)customHeight.Value);
+                // "Match display" keeps following the window's shape after
+                // launch; "Match Output" keeps the internal resolution
+                // following its size.
+                plan.FollowWindowAspect = string.Equals(aspect.Text.Trim(), DisplaySettings.MatchDisplayAspect,
+                    StringComparison.OrdinalIgnoreCase) && !plan.NativeFourThree;
+                plan.FollowWindowResolution = selection == "Match Output";
                 info.ForeColor = SystemColors.ControlText;
                 info.Text = string.Format(
                     "Game picture: {0}×{1}, centered at ({2},{3}).\r\nInternal scale: {6}x. Scene {4}×{5}; frame buffer {7}×{8}.\r\n" +
-                    "Choose 480p internal resolution for lower GPU load.",
+                    "{9}Choose 480p internal resolution for lower GPU load.",
                     plan.ContentWidth, plan.ContentHeight, plan.ContentLeft, plan.ContentTop, plan.SceneWidth, plan.SceneHeight,
-                    plan.EfbScale, plan.BackingWidth, plan.BackingHeight);
+                    plan.EfbScale, plan.BackingWidth, plan.BackingHeight,
+                    plan.FollowWindowAspect || plan.FollowWindowResolution
+                        ? "Resizing the window during play keeps the " +
+                          (plan.FollowWindowAspect && plan.FollowWindowResolution ? "picture shape and resolution" :
+                           plan.FollowWindowAspect ? "picture shape" : "internal resolution") + " matched.\r\n"
+                        : "");
                 play.Enabled = true;
             }
             catch (Exception error)
@@ -250,6 +300,13 @@ namespace Nebula.Launcher
                 LaunchOptions.ValidatePair(app);
                 if (portable) LaunchOptions.PreserveUserData(NebulaPaths.DataRoot, "portable-" + BuildInfo.Version);
                 SaveSettings();
+                graphics.AntiAliasing = antiAliasing.SelectedIndex;
+                graphics.Quality = aaQuality.SelectedIndex;
+                graphics.Upscaler = upscaler.SelectedIndex;
+                graphics.Sharpness = (int)sharpness.Value;
+                graphics.TextureFilter = textureFilter.SelectedIndex;
+                graphics.GeneratedMipmaps = mipmaps.Checked;
+                graphics.Save(plan.FollowWindowResolution);
                 Directory.CreateDirectory(NebulaPaths.Saves);
                 var mode = (RecordingMode)recording.SelectedIndex;
                 var start = LaunchOptions.Create(app, content, FileUtil.FinalPath(NebulaPaths.Saves), plan, borderless, mode);

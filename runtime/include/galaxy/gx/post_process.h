@@ -82,6 +82,12 @@ public:
 
     [[nodiscard]] const PostProcessSettings& settings() const noexcept { return settings_; }
 
+    // Takes new settings between frames on the render thread. A quality
+    // change rebuilds the two SMAA pipelines (the old ones are released
+    // `frames_in_flight` frames later); everything else is read per frame.
+    void apply_settings(const PostProcessSettings& settings,
+                        std::uint64_t frame_index, unsigned frames_in_flight);
+
 private:
     struct Target {
         Microsoft::WRL::ComPtr<ID3D12Resource> resource;
@@ -94,6 +100,7 @@ private:
     struct Retired {
         Microsoft::WRL::ComPtr<ID3D12Resource> resource;
         std::uint64_t release_after_frame = 0;
+        Microsoft::WRL::ComPtr<ID3D12PipelineState> pipeline;
     };
     struct Constants {
         float rt_metrics[4];
@@ -106,6 +113,12 @@ private:
     };
     static_assert(sizeof(Constants) == 28u * 4u);
 
+    bool create_pipeline(D3D12_SHADER_BYTECODE vs, D3D12_SHADER_BYTECODE ps,
+                         DXGI_FORMAT format, int stencil,
+                         Microsoft::WRL::ComPtr<ID3D12PipelineState>& out);
+    bool create_smaa_pipelines(unsigned quality,
+                               Microsoft::WRL::ComPtr<ID3D12PipelineState>& edges,
+                               Microsoft::WRL::ComPtr<ID3D12PipelineState>& weights);
     bool ensure_target(Target& target, unsigned width, unsigned height,
                        DXGI_FORMAT format, unsigned rtv_slot,
                        std::uint64_t frame_index, unsigned frames_in_flight);
