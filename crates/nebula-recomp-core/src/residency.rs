@@ -753,7 +753,9 @@ fn abi_call_marker(trimmed: &str) -> Option<u32> {
 /// A guest call the EABI contract may cover: a translated function or the
 /// indirect-call fast path.
 fn abi_callee(callee: &str) -> bool {
-    callee.starts_with("rmge01::fn_") || callee == "galaxy::fast::call_guest_indirect"
+    callee.starts_with("rmge01::fn_")
+        || callee == "galaxy::fast::call_guest_indirect"
+        || callee == "galaxy::fast::call_guest_indirect_site"
 }
 
 /// Replaces every `GALAXY_GUEST_RETURN;` with a stored-back return.
@@ -1433,5 +1435,17 @@ mod tests {
         // f9 is volatile: neither stored nor reloaded; f1 goes out and comes
         // back (the body never names its ps1 lane, so that stays in context).
         assert!(out.contains("    { context->lr = glr; context->fpr_bits[1] = fpr[1]; context->fpr_bits[30] = fpr[30]; rmge01::fn_80002000(context, memory, services); fpr[1] = context->fpr_bits[1]; }\n"), "{out}");
+    }
+
+    #[test]
+    fn abi_marker_covers_the_site_cached_indirect_call() {
+        let body = "    {\n    context->gpr[0] = context->lr;\n    context->lr = 0x80001010u;\n    GALAXY_ABI_CALL(0x8000100Cu);\n    galaxy::fast::call_guest_indirect_site(services, branch_target, &cached_target_8000100C, &cached_function_8000100C, &site_target_8000100C, &site_function_8000100C, context, memory, 0x8000100Cu);\n    }\n    return;\n";
+        let plan = abi_plan();
+        let out = apply_register_residency_with_abi(body, false, Some(&plan)).expect("eligible");
+        assert!(
+            out.contains("{ context->lr = glr; galaxy::fast::call_guest_indirect_site("),
+            "{out}"
+        );
+        assert!(out.contains("0x8000100Cu); }\n"), "{out}");
     }
 }

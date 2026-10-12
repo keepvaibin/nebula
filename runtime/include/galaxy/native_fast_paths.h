@@ -2062,5 +2062,62 @@ GALAXY_ALWAYS_INLINE void call_guest_indirect(
         caller_pc);
 }
 
+// Translator --bctrl-site-cache: call_guest_indirect with a per-site cache of
+// the last published direct entry it called. The runtime builds the
+// direct-dispatch table once, at module load, and never changes an entry, so
+// a cached entry stays valid for the module's lifetime; the pending-event and
+// suspension gates are still tested on every call, exactly as before. A hit
+// skips the service-table loads and the table access (one 8-byte entry per
+// guest word over the whole text, about 10 MB, so a cold line on a 4 MB L3).
+// `site_address` starts at kNoIndirectSite, which no target equals: generated
+// code always passes an aligned address (`ctr & ~3`, `lr & ~3`).
+inline constexpr std::uint32_t kNoIndirectSite = 0xFFFFFFFFu;
+
+GALAXY_ALWAYS_INLINE bool direct_dispatch_open(const NativeServicesV1* services) noexcept {
+    return atomic_load_u32(services->pending_event_mask) == 0u &&
+        atomic_load_u32(services->direct_dispatch_suspended) == 0u;
+}
+
+GALAXY_ALWAYS_INLINE void call_guest_indirect_site(
+    const NativeServicesV1* services,
+    std::uint32_t guest_address,
+    std::uint32_t* cached_address,
+    NativeGameFunction* cached_function,
+    std::uint32_t* site_address,
+    NativeGameFunction* site_function,
+    PpcContext* context,
+    GuestMemoryV1* memory,
+    std::uint32_t caller_pc) {
+    if (*site_address == guest_address) GALAXY_LIKELY {
+        // Only a published entry is ever cached, so the table is live.
+        if (direct_dispatch_open(services)) GALAXY_LIKELY {
+            context->pc = guest_address;
+            (*site_function)(context, memory, services);
+            return;
+        }
+    } else if (services != nullptr && services->direct_dispatch != nullptr) GALAXY_LIKELY {
+        // The rotation moves a misaligned offset's low bits to the top, so one
+        // unsigned compare is both the range and the alignment test.
+        const std::uint32_t index =
+            std::rotr(guest_address - services->direct_dispatch_base, 2);
+        if (index < (services->direct_dispatch_count >> 2u)) GALAXY_LIKELY {
+            const NativeGameFunction function = services->direct_dispatch[index];
+            if (function != nullptr) GALAXY_LIKELY {
+                *site_function = function;
+                std::atomic_signal_fence(std::memory_order_release);
+                *site_address = guest_address;
+                if (direct_dispatch_open(services)) GALAXY_LIKELY {
+                    context->pc = guest_address;
+                    function(context, memory, services);
+                    return;
+                }
+            }
+        }
+    }
+    call_guest_indirect_boundary(
+        services, guest_address, cached_address, cached_function, context, memory,
+        caller_pc);
+}
+
 }  // namespace fast
 }  // namespace galaxy

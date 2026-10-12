@@ -306,6 +306,12 @@ pub struct ModuleTranslationOptions {
     /// update, no commit helper, CR field only for the compares. Requires
     /// `fast_float`.
     pub fast_float_forms: bool,
+    /// Every direct-dispatch `bctrl`/`bclrl`/`bctr` site caches the last
+    /// published direct entry it called (`fast::call_guest_indirect_site`): a
+    /// repeat target skips the service-table loads and the 10 MB table
+    /// access. The event and suspension gates are still tested on every
+    /// call. Requires `direct_indirect_calls`.
+    pub bctrl_site_cache: bool,
     pub exact_psmtx_local_lanes: bool,
     pub exact_psvec_cross_local_lanes: bool,
     pub exact_psvec_normalize_local_lanes: bool,
@@ -350,6 +356,7 @@ impl Default for ModuleTranslationOptions {
             abi_exit_sync: false,
             single_float_arithmetic: false,
             fast_float_forms: false,
+            bctrl_site_cache: false,
             exact_psmtx_local_lanes: true,
             exact_psvec_cross_local_lanes: false,
             exact_psvec_normalize_local_lanes: false,
@@ -565,6 +572,12 @@ pub fn validate_module_options(options: &ModuleTranslationOptions) -> Result<(),
         return Err(TranslationError::OptionRequires {
             option: "fast_float_forms",
             requires: "fast_float",
+        });
+    }
+    if options.bctrl_site_cache && !options.direct_indirect_calls {
+        return Err(TranslationError::OptionRequires {
+            option: "bctrl_site_cache",
+            requires: "direct_indirect_calls",
         });
     }
     Ok(())
@@ -2644,6 +2657,7 @@ fn lower_words_for_module_with_call_return_entries_and_exact_fpu_flat_reads(
             abi_call_markers: options.abi_call_sync,
             guest_return_macro: options.abi_exit_sync,
             fast_float_forms: options.fast_float_forms,
+            bctrl_site_cache: options.bctrl_site_cache,
             ..LoweringConfig::default()
         },
     )
@@ -2711,6 +2725,7 @@ fn lower_words_with_options(
             abi_call_markers: false,
             guest_return_macro: false,
             fast_float_forms: false,
+            bctrl_site_cache: false,
         },
     )
 }
@@ -2752,6 +2767,8 @@ struct LoweringConfig<'a> {
     /// The `galaxy::fast` estimate, select and compare forms
     /// (--fast-float-forms).
     fast_float_forms: bool,
+    /// Per-site direct entry cache at indirect calls (--bctrl-site-cache).
+    bctrl_site_cache: bool,
 }
 
 // The typed-region pilot has a single DOL owner; its public body still
@@ -3715,6 +3732,7 @@ fn lower_words_with_config(
         abi_call_markers,
         guest_return_macro,
         fast_float_forms,
+        bctrl_site_cache,
     } = config;
     // Suffix of the flat-view float load/store helpers: `_hw` converts binary32
     // lanes with the host's cvtss2sd/cvtsd2ss.
@@ -6319,6 +6337,7 @@ fn lower_words_with_config(
                             "branch_target",
                             pc,
                             direct_indirect_calls,
+                            bctrl_site_cache,
                         )?;
                         emit_call_return_checkpoint(&mut output, pc)?;
                     } else {
@@ -6330,6 +6349,7 @@ fn lower_words_with_config(
                             "branch_target",
                             pc,
                             direct_indirect_calls,
+                            bctrl_site_cache,
                         )?;
                         emit_call_return_checkpoint(&mut output, pc)?;
                         output.push_str("    }\n");
@@ -6340,6 +6360,7 @@ fn lower_words_with_config(
                         "branch_target",
                         pc,
                         direct_indirect_calls,
+                        bctrl_site_cache,
                     )?;
                     output.push_str("    return;\n");
                     final_instruction_is_terminal = true;
@@ -6351,6 +6372,7 @@ fn lower_words_with_config(
                         "branch_target",
                         pc,
                         direct_indirect_calls,
+                        bctrl_site_cache,
                     )?;
                     output.push_str("        return;\n    }\n");
                 }
@@ -6386,6 +6408,7 @@ fn lower_words_with_config(
                             "branch_target",
                             pc,
                             direct_indirect_calls,
+                            bctrl_site_cache,
                         )?;
                         emit_call_return_checkpoint(&mut output, pc)?;
                     } else {
@@ -6397,6 +6420,7 @@ fn lower_words_with_config(
                             "branch_target",
                             pc,
                             direct_indirect_calls,
+                            bctrl_site_cache,
                         )?;
                         emit_call_return_checkpoint(&mut output, pc)?;
                         output.push_str("    }\n");
@@ -8084,6 +8108,7 @@ fn emit_indirect_guest_call(
     target_expression: &str,
     pc: u32,
     direct: bool,
+    site_cache: bool,
 ) -> Result<(), TranslationError> {
     if !direct || indirect_call_site_requires_host(pc) {
         return emit_cached_guest_call(output, target_expression, pc);
@@ -8098,6 +8123,15 @@ fn emit_indirect_guest_call(
         "    static galaxy::NativeGameFunction cached_function_{pc:08X} = nullptr;"
     )
     .map_err(|_| TranslationError::Formatting)?;
+    if site_cache {
+        // --bctrl-site-cache: the last published direct entry this site called.
+        writeln!(
+            output,
+            "    static std::uint32_t site_target_{pc:08X} = galaxy::fast::kNoIndirectSite;\n    static galaxy::NativeGameFunction site_function_{pc:08X} = nullptr;\n    galaxy::fast::call_guest_indirect_site(services, {target_expression}, &cached_target_{pc:08X}, &cached_function_{pc:08X}, &site_target_{pc:08X}, &site_function_{pc:08X}, context, memory, 0x{pc:08X}u);"
+        )
+        .map_err(|_| TranslationError::Formatting)?;
+        return Ok(());
+    }
     writeln!(
         output,
         "    galaxy::fast::call_guest_indirect(services, {target_expression}, &cached_target_{pc:08X}, &cached_function_{pc:08X}, context, memory, 0x{pc:08X}u);"
@@ -12727,6 +12761,33 @@ mod tests {
             resident.contains("if (galaxy::fast::duplicates_single(context)) ps1[6] = estimate;"),
             "{resident}"
         );
+    }
+
+    #[test]
+    fn bctrl_site_cache_follows_its_flag() {
+        let config = |bctrl_site_cache| LoweringConfig {
+            direct_indirect_calls: true,
+            bctrl_site_cache,
+            ..flat_config(false, false)
+        };
+        // bctrl; blr
+        let words = [0x4E80_0421, 0x4E80_0020];
+        let off = lower_with(&words, config(false));
+        assert!(off.contains("    galaxy::fast::call_guest_indirect(services, branch_target, &cached_target_80004000, &cached_function_80004000, context, memory, 0x80004000u);\n"), "{off}");
+        assert!(!off.contains("site_"), "{off}");
+        let on = lower_with(&words, config(true));
+        assert!(on.contains("    static std::uint32_t site_target_80004000 = galaxy::fast::kNoIndirectSite;\n    static galaxy::NativeGameFunction site_function_80004000 = nullptr;\n    galaxy::fast::call_guest_indirect_site(services, branch_target, &cached_target_80004000, &cached_function_80004000, &site_target_80004000, &site_function_80004000, context, memory, 0x80004000u);\n"), "{on}");
+        assert!(!on.contains("galaxy::fast::call_guest_indirect("), "{on}");
+        assert!(matches!(
+            validate_module_options(&ModuleTranslationOptions {
+                bctrl_site_cache: true,
+                ..ModuleTranslationOptions::default()
+            }),
+            Err(TranslationError::OptionRequires {
+                requires: "direct_indirect_calls",
+                ..
+            })
+        ));
     }
 
     #[test]

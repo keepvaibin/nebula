@@ -183,6 +183,10 @@ enum Command {
         /// updates or exact commit helpers (needs --fast-float).
         #[arg(long)]
         fast_float_forms: bool,
+        /// Indirect calls cache their last published direct entry per site
+        /// (needs --experimental-direct-indirect-calls).
+        #[arg(long)]
+        bctrl_site_cache: bool,
         /// Retained compatibility spelling; exact PSMTX local lanes are enabled by default.
         #[arg(long, default_value_t = true)]
         exact_psmtx_local_lanes: bool,
@@ -533,6 +537,7 @@ fn main() -> Result<()> {
             abi_exit_sync,
             single_float_arithmetic,
             fast_float_forms,
+            bctrl_site_cache,
             exact_psmtx_local_lanes,
             no_exact_psmtx_local_lanes,
             exact_psvec_cross_local_lanes,
@@ -575,6 +580,7 @@ fn main() -> Result<()> {
                 abi_exit_sync,
                 single_float_arithmetic,
                 fast_float_forms,
+                bctrl_site_cache,
                 exact_psmtx_local_lanes: exact_psmtx_local_lanes && !no_exact_psmtx_local_lanes,
                 exact_psvec_cross_local_lanes,
                 exact_psvec_normalize_local_lanes,
@@ -1164,6 +1170,7 @@ fn probe_options(list: &str) -> Result<ModuleTranslationOptions> {
             "abi-exit-sync" => options.abi_exit_sync = true,
             "single-float-arithmetic" => options.single_float_arithmetic = true,
             "fast-float-forms" => options.fast_float_forms = true,
+            "bctrl-site-cache" => options.bctrl_site_cache = true,
             other => bail!("unknown module option {other}"),
         }
     }
@@ -1729,6 +1736,21 @@ mod tests {
             Command::TranslateModule {
                 fast_float_forms: true,
                 single_float_arithmetic: false,
+                ..
+            }
+        ));
+        assert!(matches!(
+            parse(&[]),
+            Command::TranslateModule {
+                bctrl_site_cache: false,
+                ..
+            }
+        ));
+        assert!(matches!(
+            parse(&["--bctrl-site-cache"]),
+            Command::TranslateModule {
+                bctrl_site_cache: true,
+                fast_float_forms: false,
                 ..
             }
         ));
