@@ -158,7 +158,20 @@ namespace Nebula.Launcher
         private readonly List<MonitorEntry> monitors = DisplayInfo.Enumerate();
         private GraphicsSettings graphics = GraphicsSettings.Load();
         private AudioSettings audio = AudioSettings.Load();
+        private readonly ControlsSettings controls = ControlsSettings.Load();
         private bool loading;
+        private readonly ComboBox inputSource = new ComboBox(), editScheme = new ComboBox(), motion = new ComboBox();
+        private readonly ListView bindingList = new ListView();
+        private readonly NumericUpDown pointerSpeed = new NumericUpDown(), stickDeadzone = new NumericUpDown(),
+            pointerDeadzone = new NumericUpDown(), shakeSensitivity = new NumericUpDown();
+        private readonly CheckBox invertPointer = new CheckBox(), gyroPointer = new CheckBox();
+        private readonly Label captureLabel = new Label();
+        private int captureTarget = -1;
+        private DateTime captureDeadline;
+        private PadCaptureReader padReader;
+        private PadCaptureReader.Sample captureBaseline;
+        private readonly System.Windows.Forms.Timer captureTimer = new System.Windows.Forms.Timer { Interval = 15 };
+        private CaptureFilter captureFilter;
 
         private readonly ComboBox monitor = new ComboBox(), mode = new ComboBox(), resolution = new ComboBox(), refresh = new ComboBox();
         private readonly ComboBox aspect = new ComboBox(), internalScale = new ComboBox(), frameRate = new ComboBox();
@@ -195,7 +208,7 @@ namespace Nebula.Launcher
             var intro = new Label
             {
                 Location = new Point(12, 10), Size = new Size(736, 40),
-                Text = "In game: F1, or View + Menu on a controller."
+                Text = "In game: F1, View + Menu (Xbox) or Minus + Plus (Switch) opens the settings."
             };
             Controls.Add(intro);
 
@@ -203,8 +216,9 @@ namespace Nebula.Launcher
             var display = new TabPage("Display");
             var image = new TabPage("Graphics");
             var sound = new TabPage("Audio");
+            var input = new TabPage("Controls");
             var advanced = new TabPage("Advanced");
-            tabs.TabPages.AddRange(new[] { display, image, sound, advanced });
+            tabs.TabPages.AddRange(new[] { display, image, input, sound, advanced });
             Controls.Add(tabs);
 
             int y = 16;
@@ -268,6 +282,8 @@ namespace Nebula.Launcher
                 sound.Controls.Add(value);
             }
 
+            BuildControlsTab(input);
+
             y = 16;
             Label(advanced, "Game content", 12, y + 3);
             contentLabel.Location = new Point(200, y + 3);
@@ -316,6 +332,249 @@ namespace Nebula.Launcher
             resolution.SelectedIndexChanged += delegate { if (!loading) RefreshRefreshChoices(); };
             refresh.SelectedIndexChanged += delegate { if (!loading) RefreshFrameRateChoices(); };
             UiScale.Apply(this);
+        }
+
+        // ---- Controls -----------------------------------------------------------
+        private int Scheme { get { return Math.Max(0, editScheme.SelectedIndex); } }
+
+        private void BuildControlsTab(TabPage page)
+        {
+            int y = 12;
+            SmallLabel(page, "Input", 12, y + 3, 180);
+            Combo(page, inputSource, 200, y);
+            inputSource.Width = 300;
+            inputSource.Items.AddRange(new object[] { "Keyboard and mouse", "Controller (Xbox, Switch Pro, Pro Controller 2)" });
+            if (controls.InputMode == 2) { inputSource.Items.Add("Wii Remote"); inputSource.Enabled = false; }
+            y += 36;
+            SmallLabel(page, "Edit controls for", 12, y + 3, 180);
+            Combo(page, editScheme, 200, y);
+            editScheme.Width = 300;
+            editScheme.Items.AddRange(ControlsSettings.SchemeLabels);
+            y += 40;
+
+            bindingList.Location = new Point(12, y);
+            bindingList.Size = new Size(440, 434 - y - 8);
+            bindingList.View = View.Details;
+            bindingList.FullRowSelect = true;
+            bindingList.MultiSelect = false;
+            bindingList.HideSelection = false;
+            bindingList.HeaderStyle = ColumnHeaderStyle.Nonclickable;
+            bindingList.Columns.Add("Wii input", 170);
+            bindingList.Columns.Add("Bound to", 226);
+            for (int t = 0; t < ControlsSettings.TargetCount; t++)
+                bindingList.Items.Add(new ListViewItem(new[] { ControlsSettings.TargetLabels[t], "" }));
+            bindingList.DoubleClick += delegate { StartCapture(); };
+            page.Controls.Add(bindingList);
+
+            int x = 466;
+            Button(page, "Add input…", x, y, 120).Click += delegate { StartCapture(); };
+            Button(page, "Clear", x + 128, y, 120).Click += delegate
+            {
+                int target = SelectedTarget();
+                if (target < 0) return;
+                controls.Bindings[Scheme][target] = new InputSource[0];
+                RefreshBindings();
+            };
+            y += 38;
+            Button(page, "Reset to defaults", x, y, 248).Click += delegate
+            {
+                EndCapture();
+                controls.Bindings[Scheme] = ControlsSettings.DefaultTable(Scheme);
+                controls.Tuning[Scheme] = ControlsSettings.DefaultTuning(Scheme);
+                LoadTuning();
+                RefreshBindings();
+            };
+            y += 36;
+            captureLabel.Location = new Point(x, y);
+            captureLabel.Size = new Size(250, 44);
+            page.Controls.Add(captureLabel);
+            y += 46;
+
+            TuningRow(page, "Pointer speed", pointerSpeed, x, ref y, 0.2m, 6.0m, 0.2m, 1);
+            TuningRow(page, "Stick deadzone %", stickDeadzone, x, ref y, 0m, 50m, 2m, 0);
+            TuningRow(page, "Pointer stick deadzone %", pointerDeadzone, x, ref y, 0m, 50m, 2m, 0);
+            invertPointer.Text = "Invert pointer Y";
+            invertPointer.Location = new Point(x, y);
+            invertPointer.Size = new Size(250, 24);
+            page.Controls.Add(invertPointer);
+            y += 28;
+            SmallLabel(page, "Motion", x, y + 3, 88);
+            motion.Location = new Point(x + 92, y);
+            motion.Width = 158;
+            motion.DropDownStyle = ComboBoxStyle.DropDownList;
+            motion.Items.AddRange(ControlsSettings.MotionLabels);
+            page.Controls.Add(motion);
+            y += 30;
+            TuningRow(page, "Shake sensitivity", shakeSensitivity, x, ref y, 1m, 5m, 1m, 0);
+            gyroPointer.Text = "Gyro pointer";
+            gyroPointer.Location = new Point(x, y);
+            gyroPointer.Size = new Size(250, 24);
+            page.Controls.Add(gyroPointer);
+
+            pointerSpeed.ValueChanged += delegate { if (!loading) controls.Tuning[Scheme].PointerSpeed = (float)pointerSpeed.Value; };
+            stickDeadzone.ValueChanged += delegate { if (!loading) controls.Tuning[Scheme].StickDeadzone = (float)stickDeadzone.Value / 100f; };
+            pointerDeadzone.ValueChanged += delegate { if (!loading) controls.Tuning[Scheme].PointerDeadzone = (float)pointerDeadzone.Value / 100f; };
+            shakeSensitivity.ValueChanged += delegate { if (!loading) controls.Tuning[Scheme].ShakeSensitivity = (int)shakeSensitivity.Value; };
+            invertPointer.CheckedChanged += delegate { if (!loading) controls.Tuning[Scheme].InvertPointerY = invertPointer.Checked; };
+            gyroPointer.CheckedChanged += delegate { if (!loading) controls.Tuning[Scheme].GyroPointer = gyroPointer.Checked; };
+            motion.SelectedIndexChanged += delegate { if (!loading) controls.Tuning[Scheme].Motion = Math.Max(0, motion.SelectedIndex); };
+            editScheme.SelectedIndexChanged += delegate { EndCapture(); LoadTuning(); RefreshBindings(); };
+
+            inputSource.SelectedIndex = Math.Min(controls.InputMode, inputSource.Items.Count - 1);
+            editScheme.SelectedIndex = controls.InputMode == 1 ? ControlsSettings.Xbox : ControlsSettings.Keyboard;
+            captureTimer.Tick += delegate { PollCapture(); };
+            FormClosed += delegate { EndCapture(); };
+        }
+
+        private static void SmallLabel(Control parent, string text, int x, int y, int width)
+        {
+            parent.Controls.Add(new Label { Text = text, Location = new Point(x, y), Size = new Size(width, 24) });
+        }
+
+        private static void TuningRow(Control parent, string label, NumericUpDown box, int x, ref int y,
+            decimal min, decimal max, decimal step, int decimals)
+        {
+            parent.Controls.Add(new Label { Text = label, Location = new Point(x, y + 3), Size = new Size(170, 24) });
+            box.Location = new Point(x + 172, y);
+            box.Size = new Size(78, 26);
+            box.Minimum = min;
+            box.Maximum = max;
+            box.Increment = step;
+            box.DecimalPlaces = decimals;
+            parent.Controls.Add(box);
+            y += 30;
+        }
+
+        private static decimal Clamp(NumericUpDown box, double value)
+        {
+            return Math.Max(box.Minimum, Math.Min(box.Maximum, (decimal)Math.Round(value, box.DecimalPlaces)));
+        }
+
+        private void LoadTuning()
+        {
+            loading = true;
+            var t = controls.Tuning[Scheme];
+            bool pad = Scheme != ControlsSettings.Keyboard, imu = ControlsSettings.HasMotion(Scheme);
+            pointerSpeed.Value = Clamp(pointerSpeed, t.PointerSpeed);
+            stickDeadzone.Value = Clamp(stickDeadzone, t.StickDeadzone * 100.0);
+            pointerDeadzone.Value = Clamp(pointerDeadzone, t.PointerDeadzone * 100.0);
+            invertPointer.Checked = t.InvertPointerY;
+            motion.SelectedIndex = Math.Max(0, Math.Min(2, t.Motion));
+            shakeSensitivity.Value = Clamp(shakeSensitivity, t.ShakeSensitivity);
+            gyroPointer.Checked = t.GyroPointer;
+            stickDeadzone.Enabled = pointerDeadzone.Enabled = pad;
+            motion.Enabled = shakeSensitivity.Enabled = gyroPointer.Enabled = imu;
+            loading = false;
+        }
+
+        private void RefreshBindings()
+        {
+            for (int t = 0; t < ControlsSettings.TargetCount; t++)
+                bindingList.Items[t].SubItems[1].Text = captureTarget == t
+                    ? "Press an input…" : ControlsSettings.FormatBindings(Scheme, controls.Bindings[Scheme][t]);
+        }
+
+        private int SelectedTarget()
+        {
+            return bindingList.SelectedIndices.Count == 1 ? bindingList.SelectedIndices[0] : -1;
+        }
+
+        private void StartCapture()
+        {
+            int target = SelectedTarget();
+            if (target < 0) { captureLabel.Text = "Select a Wii input first."; return; }
+            EndCapture();
+            captureTarget = target;
+            captureDeadline = DateTime.UtcNow.AddSeconds(8);
+            captureBaseline = null;
+            if (Scheme == ControlsSettings.Keyboard)
+            {
+                captureLabel.Text = "Press a key or mouse button. Esc cancels.";
+            }
+            else
+            {
+                captureLabel.Text = "Press a button, push a stick or pull a trigger. Esc cancels.";
+                padReader = new PadCaptureReader(Scheme != ControlsSettings.Xbox);
+            }
+            captureFilter = new CaptureFilter(this);
+            Application.AddMessageFilter(captureFilter);
+            captureTimer.Start();
+            RefreshBindings();
+        }
+
+        private void EndCapture()
+        {
+            captureTimer.Stop();
+            if (captureFilter != null) { Application.RemoveMessageFilter(captureFilter); captureFilter = null; }
+            if (padReader != null) { padReader.Dispose(); padReader = null; }
+            if (captureTarget >= 0) { captureTarget = -1; RefreshBindings(); }
+        }
+
+        private void FinishCapture(InputSource source)
+        {
+            int target = captureTarget;
+            int scheme = Scheme;
+            EndCapture();
+            if (target < 0) return;
+            if (!ControlsSettings.Allowed(scheme, target, source))
+            {
+                captureLabel.Text = ControlsSettings.FormatSource(scheme, source) + " cannot drive " + ControlsSettings.TargetLabels[target] + ".";
+                return;
+            }
+            controls.Bindings[scheme][target] = ControlsSettings.AddBinding(controls.Bindings[scheme][target], source);
+            captureLabel.Text = "";
+            RefreshBindings();
+        }
+
+        private void PollCapture()
+        {
+            if (captureTarget < 0) return;
+            if (DateTime.UtcNow > captureDeadline) { EndCapture(); captureLabel.Text = ""; return; }
+            if (padReader == null) return;
+            var sample = padReader.Read(Scheme);
+            if (!sample.Connected) { captureLabel.Text = "No " + ControlsSettings.SchemeLabels[Scheme] + " found. Esc cancels."; return; }
+            if (captureBaseline == null) { captureBaseline = sample; return; }
+            InputSource source;
+            if (PadCaptureReader.Detect(captureBaseline, sample, out source)) FinishCapture(source);
+            else captureBaseline = sample;
+        }
+
+        [DllImport("user32.dll")] private static extern uint MapVirtualKeyW(uint code, uint mapType);
+
+        // Window messages while a binding waits for an input: keys and mouse
+        // buttons bind (keyboard scheme) and Esc cancels; nothing else reacts.
+        private sealed class CaptureFilter : IMessageFilter
+        {
+            private readonly SettingsForm form;
+            public CaptureFilter(SettingsForm form) { this.form = form; }
+            public bool PreFilterMessage(ref Message m)
+            {
+                const int WM_KEYDOWN = 0x100, WM_SYSKEYDOWN = 0x104, WM_LBUTTONDOWN = 0x201, WM_RBUTTONDOWN = 0x204,
+                    WM_MBUTTONDOWN = 0x207, WM_XBUTTONDOWN = 0x20B, WM_KEYUP = 0x101, WM_SYSKEYUP = 0x105;
+                int msg = m.Msg;
+                if (msg == WM_KEYUP || msg == WM_SYSKEYUP) return true;
+                bool keyboardScheme = form.Scheme == ControlsSettings.Keyboard;
+                if (msg == WM_KEYDOWN || msg == WM_SYSKEYDOWN)
+                {
+                    int vk = (int)(m.WParam.ToInt64() & 0xFF);
+                    long lp = m.LParam.ToInt64();
+                    if (vk == 0x1B) { form.EndCapture(); form.captureLabel.Text = ""; return true; }
+                    if (!keyboardScheme) return true;
+                    if (vk == 0x10) vk = (int)MapVirtualKeyW((uint)((lp >> 16) & 0xFF), 3) == 0xA1 ? 0xA1 : 0xA0;
+                    else if (vk == 0x11) vk = (lp & (1L << 24)) != 0 ? 0xA3 : 0xA2;
+                    form.FinishCapture(new InputSource(SourceKind.Key, vk));
+                    return true;
+                }
+                if (msg == WM_LBUTTONDOWN || msg == WM_RBUTTONDOWN || msg == WM_MBUTTONDOWN || msg == WM_XBUTTONDOWN)
+                {
+                    if (!keyboardScheme) return false;
+                    int button = msg == WM_LBUTTONDOWN ? 0 : msg == WM_RBUTTONDOWN ? 1 : msg == WM_MBUTTONDOWN ? 2
+                        : (((m.WParam.ToInt64() >> 16) & 0xFFFF) == 1 ? 3 : 4);
+                    form.FinishCapture(new InputSource(SourceKind.Mouse, button));
+                    return true;
+                }
+                return false;
+            }
         }
 
         private static void Label(Control parent, string text, int x, int y)
@@ -542,6 +801,9 @@ namespace Nebula.Launcher
                 graphics.Save();
                 for (int i = 0; i < volumes.Length; i++) audio.Percent[i] = volumes[i].Value;
                 audio.Save();
+                EndCapture();
+                if (controls.InputMode != 2) controls.InputMode = Math.Max(0, inputSource.SelectedIndex);
+                controls.Save();
                 session.Recording = (RecordingMode)Math.Max(0, recording.SelectedIndex);
                 session.Save();
                 return true;
