@@ -477,7 +477,13 @@ void test_motion() {
 
 }  // namespace
 
-int main() {
+int main(int argc, char** argv) {
+    // The launcher's ControlsSettings mirrors these defaults; this prints them
+    // for a cross-check.
+    if (argc > 1 && std::strcmp(argv[1], "--print-defaults") == 0) {
+        std::cout << format_controls_settings(default_controls_config());
+        return 0;
+    }
     test_names_round_trip();
     test_ini_round_trip();
     test_evaluation();
