@@ -63,6 +63,42 @@ void test_affine() {
     check(!affine_inverse(singular, inv), "singular rejected");
 }
 
+void test_interpolate() {
+    const Affine34 a = rotation_y(0.0f, 0.0f, 0.0f, -10.0f);
+    const Affine34 b = rotation_y(1.5707963f, 10.0f, 0.0f, -10.0f);
+    const Affine34 mid = affine_interpolate(a, b, 0.5f);
+    const Affine34 expect = rotation_y(0.7853982f, 5.0f, 0.0f, -10.0f);
+    bool ok = true;
+    for (unsigned i = 0; i < 12u; ++i) ok = ok && near(mid[i], expect[i], 1e-4f);
+    check(ok, "slerp halfway between 0 and 90 degrees is 45 degrees");
+    const Affine34 at0 = affine_interpolate(a, b, 0.0f);
+    const Affine34 at1 = affine_interpolate(a, b, 1.0f);
+    bool ends = true;
+    for (unsigned i = 0; i < 12u; ++i) ends = ends && near(at0[i], a[i]) && near(at1[i], b[i]);
+    check(ends, "interpolation ends at its inputs");
+    Affine34 sa = rotation_y(0.3f, 0.0f, 0.0f, 0.0f);
+    Affine34 sb = rotation_y(0.5f, 0.0f, 0.0f, 0.0f);
+    for (unsigned r = 0; r < 3u; ++r) {
+        sa[r * 4u + 0u] *= 2.0f;
+        sb[r * 4u + 0u] *= 4.0f;
+    }
+    const Affine34 sm = affine_interpolate(sa, sb, 0.5f);
+    const float sx = std::sqrt(sm[0] * sm[0] + sm[4] * sm[4] + sm[8] * sm[8]);
+    const float sy = std::sqrt(sm[1] * sm[1] + sm[5] * sm[5] + sm[9] * sm[9]);
+    check(near(sx, 3.0f, 1e-3f) && near(sy, 1.0f, 1e-3f), "per-axis scale lerps");
+    check(near(std::atan2(sm[2], sm[10]), 0.4f, 1e-3f), "rotation slerps under scale");
+    // Shear: element-wise.
+    Affine34 shear = affine_identity();
+    shear[1] = 0.5f;
+    const Affine34 lm = affine_interpolate(affine_identity(), shear, 0.5f);
+    check(near(lm[1], 0.25f) && near(lm[0], 1.0f), "shear lerps element-wise");
+    // 180 degree flip stays a rotation (no collapse through the origin).
+    const Affine34 flip = rotation_y(3.1415926f, 0.0f, 0.0f, 0.0f);
+    const Affine34 half = affine_interpolate(affine_identity(), flip, 0.5f);
+    const float len = std::sqrt(half[0] * half[0] + half[4] * half[4] + half[8] * half[8]);
+    check(near(len, 1.0f, 1e-3f), "half of a flip keeps unit scale");
+}
+
 void test_matching_reordered() {
     TransformHistory h;
     h.reserve(16);
@@ -179,6 +215,7 @@ void test_many_records() {
 
 int main() {
     test_affine();
+    test_interpolate();
     test_matching_reordered();
     test_claimed_once_and_threshold();
     test_camera_delta();

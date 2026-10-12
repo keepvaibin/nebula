@@ -26,6 +26,10 @@ using Affine34 = std::array<float, 12>;
 // False (and identity) when the 3x3 part is singular.
 [[nodiscard]] bool affine_inverse(const Affine34& m, Affine34& out) noexcept;
 void affine_transform_point(const Affine34& m, const float p[3], float out[3]) noexcept;
+// The transform at t between a (t = 0) and b (t = 1): translation and scale
+// lerp, rotation slerp (after removing per-axis scale). Matrices with shear,
+// mismatched handedness or no clean rotation lerp element-wise.
+[[nodiscard]] Affine34 affine_interpolate(const Affine34& a, const Affine34& b, float t) noexcept;
 
 inline constexpr std::uint32_t kNoPaletteOffset = 0xFFFFFFFFu;
 

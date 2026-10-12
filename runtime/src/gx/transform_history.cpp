@@ -62,6 +62,117 @@ void affine_transform_point(const Affine34& m, const float p[3], float out[3]) n
     out[2] = m[8] * x + m[9] * y + m[10] * z + m[11];
 }
 
+namespace {
+
+struct Decomposed {
+    float q[4];      // rotation quaternion x, y, z, w
+    float scale[3];  // per-axis (column) scale; scale[0] < 0 for mirrored
+    bool valid;
+};
+
+Decomposed decompose(const Affine34& m) noexcept {
+    Decomposed d{};
+    float col[3][3];
+    for (unsigned c = 0; c < 3u; ++c) {
+        for (unsigned r = 0; r < 3u; ++r) col[c][r] = m[r * 4u + c];
+    }
+    for (unsigned c = 0; c < 3u; ++c) {
+        d.scale[c] = std::sqrt(col[c][0] * col[c][0] + col[c][1] * col[c][1] +
+                               col[c][2] * col[c][2]);
+        if (!(d.scale[c] > 1e-12f)) return d;
+    }
+    const float det = m[0] * (m[5] * m[10] - m[6] * m[9]) -
+                      m[1] * (m[4] * m[10] - m[6] * m[8]) +
+                      m[2] * (m[4] * m[9] - m[5] * m[8]);
+    if (det < 0.0f) d.scale[0] = -d.scale[0];
+    float r[3][3];  // r[row][col]
+    for (unsigned c = 0; c < 3u; ++c) {
+        for (unsigned row = 0; row < 3u; ++row) r[row][c] = col[c][row] / d.scale[c];
+    }
+    // Orthonormal within a small tolerance, else no clean rotation.
+    for (unsigned a = 0; a < 3u; ++a) {
+        for (unsigned b = a + 1u; b < 3u; ++b) {
+            const float dot = r[0][a] * r[0][b] + r[1][a] * r[1][b] + r[2][a] * r[2][b];
+            if (std::fabs(dot) > 2e-3f) return d;
+        }
+    }
+    const float trace = r[0][0] + r[1][1] + r[2][2];
+    if (trace > 0.0f) {
+        const float s = 0.5f / std::sqrt(trace + 1.0f);
+        d.q[3] = 0.25f / s;
+        d.q[0] = (r[2][1] - r[1][2]) * s;
+        d.q[1] = (r[0][2] - r[2][0]) * s;
+        d.q[2] = (r[1][0] - r[0][1]) * s;
+    } else if (r[0][0] > r[1][1] && r[0][0] > r[2][2]) {
+        const float s = 2.0f * std::sqrt(1.0f + r[0][0] - r[1][1] - r[2][2]);
+        d.q[3] = (r[2][1] - r[1][2]) / s;
+        d.q[0] = 0.25f * s;
+        d.q[1] = (r[0][1] + r[1][0]) / s;
+        d.q[2] = (r[0][2] + r[2][0]) / s;
+    } else if (r[1][1] > r[2][2]) {
+        const float s = 2.0f * std::sqrt(1.0f + r[1][1] - r[0][0] - r[2][2]);
+        d.q[3] = (r[0][2] - r[2][0]) / s;
+        d.q[0] = (r[0][1] + r[1][0]) / s;
+        d.q[1] = 0.25f * s;
+        d.q[2] = (r[1][2] + r[2][1]) / s;
+    } else {
+        const float s = 2.0f * std::sqrt(1.0f + r[2][2] - r[0][0] - r[1][1]);
+        d.q[3] = (r[1][0] - r[0][1]) / s;
+        d.q[0] = (r[0][2] + r[2][0]) / s;
+        d.q[1] = (r[1][2] + r[2][1]) / s;
+        d.q[2] = 0.25f * s;
+    }
+    d.valid = std::isfinite(d.q[0]) && std::isfinite(d.q[1]) &&
+              std::isfinite(d.q[2]) && std::isfinite(d.q[3]);
+    return d;
+}
+
+}  // namespace
+
+Affine34 affine_interpolate(const Affine34& a, const Affine34& b, float t) noexcept {
+    Affine34 out{};
+    const Decomposed da = decompose(a);
+    const Decomposed db = decompose(b);
+    if (!da.valid || !db.valid || (da.scale[0] < 0.0f) != (db.scale[0] < 0.0f)) {
+        for (unsigned i = 0; i < 12u; ++i) out[i] = a[i] + (b[i] - a[i]) * t;
+        return out;
+    }
+    float qb[4]{db.q[0], db.q[1], db.q[2], db.q[3]};
+    float dot = da.q[0] * qb[0] + da.q[1] * qb[1] + da.q[2] * qb[2] + da.q[3] * qb[3];
+    if (dot < 0.0f) {
+        for (float& v : qb) v = -v;
+        dot = -dot;
+    }
+    float wa = 1.0f - t, wb = t;
+    if (dot < 0.9995f) {
+        const float theta = std::acos(std::min(dot, 1.0f));
+        const float sin_theta = std::sin(theta);
+        wa = std::sin((1.0f - t) * theta) / sin_theta;
+        wb = std::sin(t * theta) / sin_theta;
+    }
+    float q[4];
+    float norm = 0.0f;
+    for (unsigned i = 0; i < 4u; ++i) {
+        q[i] = da.q[i] * wa + qb[i] * wb;
+        norm += q[i] * q[i];
+    }
+    norm = 1.0f / std::sqrt(norm);
+    for (float& v : q) v *= norm;
+    const float x = q[0], y = q[1], z = q[2], w = q[3];
+    const float rot[3][3] = {
+        {1.0f - 2.0f * (y * y + z * z), 2.0f * (x * y - z * w), 2.0f * (x * z + y * w)},
+        {2.0f * (x * y + z * w), 1.0f - 2.0f * (x * x + z * z), 2.0f * (y * z - x * w)},
+        {2.0f * (x * z - y * w), 2.0f * (y * z + x * w), 1.0f - 2.0f * (x * x + y * y)}};
+    for (unsigned c = 0; c < 3u; ++c) {
+        const float s = da.scale[c] + (db.scale[c] - da.scale[c]) * t;
+        for (unsigned r = 0; r < 3u; ++r) out[r * 4u + c] = rot[r][c] * s;
+    }
+    for (unsigned r = 0; r < 3u; ++r) {
+        out[r * 4u + 3u] = a[r * 4u + 3u] + (b[r * 4u + 3u] - a[r * 4u + 3u]) * t;
+    }
+    return out;
+}
+
 void TransformHistory::reserve(std::size_t records) {
     current_.reserve(records);
     previous_.reserve(records);
