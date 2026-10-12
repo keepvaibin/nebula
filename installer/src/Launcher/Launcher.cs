@@ -99,7 +99,7 @@ namespace Nebula.Launcher
             {
                 if (!File.Exists(Path.Combine(Content, "game.pak")))
                     return "Nebula could not find the game content (game.pak). Choose it in Nebula settings.";
-                if (Process.GetProcessesByName("NebulaRuntime").Length != 0)
+                if (RuntimeLeaseHeld())
                     return "Nebula is already running.";
                 LaunchOptions.ValidatePair(App);
                 if (Portable) LaunchOptions.PreserveUserData(NebulaPaths.DataRoot, "portable-" + BuildInfo.Version);
@@ -114,6 +114,23 @@ namespace Nebula.Launcher
                 return null;
             }
             catch (Exception error) { return error.Message; }
+        }
+
+        // The runtime owns a named mutex while it runs (runtime_instance.cpp);
+        // automated sessions use private lease names (GALAXY_INSTANCE_LEASE), so
+        // only the player's lease counts, not every NebulaRuntime.exe process.
+        private static bool RuntimeLeaseHeld()
+        {
+            Mutex lease;
+            if (!Mutex.TryOpenExisting(@"Local\Nebula.RMGE01.NativeRuntime", out lease)) return false;
+            using (lease)
+            {
+                bool acquired;
+                try { acquired = lease.WaitOne(0); }
+                catch (AbandonedMutexException) { acquired = true; }
+                if (acquired) lease.ReleaseMutex();
+                return !acquired;
+            }
         }
 
         private void StartRecorded(ProcessStartInfo start)
