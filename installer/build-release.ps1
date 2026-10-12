@@ -154,12 +154,18 @@ namespace Nebula
     $references = @('/r:System.Web.Extensions.dll', '/r:System.IO.Compression.dll', '/r:System.IO.Compression.FileSystem.dll',
         '/r:System.Windows.Forms.dll', '/r:System.Drawing.dll', '/r:System.Core.dll')
     $manifestFile = Join-Path $src 'installer\app.manifest'
+    $iconFile = Join-Path $src 'installer\assets\nebula.ico'
+    $launcherSources = @(Get-ChildItem (Join-Path $src 'installer\src\Launcher\*.cs') | ForEach-Object FullName)
     $launcher = Join-Path $work 'Nebula.exe'
-    Invoke-Checked $csc (@('/nologo', '/target:winexe', '/platform:x64', '/optimize+', "/win32manifest:$manifestFile", "/out:$launcher") + $references + $common +
-        @(Get-ChildItem (Join-Path $src 'installer\src\Launcher\*.cs') | ForEach-Object FullName))
+    Invoke-Checked $csc (@('/nologo', '/target:winexe', '/platform:x64', '/optimize+', "/win32manifest:$manifestFile", "/win32icon:$iconFile", "/out:$launcher") + $references + $common +
+        $launcherSources)
+    # Same program; always opens the settings window instead of the game.
+    $settingsApp = Join-Path $work 'NebulaSettings.exe'
+    Invoke-Checked $csc (@('/nologo', '/target:winexe', '/platform:x64', '/optimize+', '/define:NEBULA_SETTINGS_APP', "/win32manifest:$manifestFile", "/win32icon:$iconFile", "/out:$settingsApp") + $references + $common +
+        $launcherSources)
 
     $resources = @{
-        'nebula-recomp.exe' = $recomp; 'Nebula.exe' = $launcher; 'source-manifest.json' = $manifestPath
+        'nebula-recomp.exe' = $recomp; 'Nebula.exe' = $launcher; 'NebulaSettings.exe' = $settingsApp; 'source-manifest.json' = $manifestPath
         'toolchain.json' = (Join-Path $src 'installer\toolchain.json'); 'runtime-env.json' = (Join-Path $src 'installer\runtime-env.json')
         'runtime-isa.txt' = $runtimeIsaPath
         'LICENSE' = (Join-Path $src 'LICENSE'); 'THIRD-PARTY-NOTICES.md' = (Join-Path $src 'THIRD-PARTY-NOTICES.md'); 'README.md' = (Join-Path $src 'README.md')
@@ -191,7 +197,7 @@ namespace Nebula
     # standard asset name. Keep beta assets separate even for those clients.
     $setupName = if ($Version -match '-beta\.') { 'Nebula-Beta-Setup.exe' } else { 'Nebula-Setup.exe' }
     $setup = Join-Path $OutputDirectory $setupName
-    Invoke-Checked $csc (@('/nologo', '/target:winexe', '/platform:x64', '/optimize+', "/win32manifest:$manifestFile", "/out:$setup") + $references + $resourceArgs + $common +
+    Invoke-Checked $csc (@('/nologo', '/target:winexe', '/platform:x64', '/optimize+', "/win32manifest:$manifestFile", "/win32icon:$iconFile", "/out:$setup") + $references + $resourceArgs + $common +
         @(Get-ChildItem (Join-Path $src 'installer\src\Setup\*.cs') | ForEach-Object FullName))
 
     # 5. Signature and checksums.

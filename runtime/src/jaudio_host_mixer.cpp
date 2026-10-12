@@ -127,6 +127,37 @@ void JAudioHostMixer::set_varam(std::uint32_t address) noexcept {
     varam_ = address & 0x7FFF'FFFFu;
 }
 
+void JAudioHostMixer::set_bus_gains(const galaxy::audio::NativeAudioBusGains& gains) noexcept {
+    using galaxy::audio::native_audio_gain_to_q16;
+    bus_gain_q16_ = {native_audio_gain_to_q16(gains.music), native_audio_gain_to_q16(gains.voice),
+                     native_audio_gain_to_q16(gains.sfx), native_audio_gain_to_q16(gains.ambience),
+                     native_audio_gain_to_q16(gains.cutscene)};
+    bus_gains_set_ = true;
+}
+
+void JAudioHostMixer::classify_channel(std::uint32_t index, const std::byte* record,
+                                       bool starting, const JAudioGuestMemory& memory) {
+    const auto read_u32 = [&memory](std::uint32_t address) -> std::uint32_t {
+        if (address < 0x8000'0000u) {
+            return 0u;
+        }
+        const std::byte* word = memory.at(address, 4u);
+        return word != nullptr ? be32(word, 0u) : 0u;
+    };
+    JAudioChannelCategory& category = categories_[index];
+    category.decision = galaxy::audio::classify_jaudio_channel(
+        read_u32, index, be16(record, 0x064u), be16(record, 0x100u), &category.owner);
+    ++stats_.category_decisions;
+    if (category.decision.classification == galaxy::audio::NativeAudioBusClassification::OwnerSoundId) {
+        category_retries_[index] = 0u;
+    } else if (starting) {
+        ++stats_.category_owner_misses;
+        category_retries_[index] = 8u;
+    } else {
+        --category_retries_[index];
+    }
+}
+
 void JAudioHostMixer::sync_frame(std::uint32_t command, std::uint32_t left,
                                  std::uint32_t right, std::uint32_t aux_a,
                                  std::uint32_t aux_b,
@@ -285,11 +316,21 @@ void JAudioHostMixer::render_channel(std::byte* record, std::uint32_t index,
     }
     apply_fir(record, out);
     apply_iir(record, out);
-    if (bus_controls_ != nullptr) {
-        galaxy::audio::native_dsp_audio_bus_begin_channel(
-            bus_state_, static_cast<std::uint16_t>(index), bus_controls_);
-        for (std::uint32_t k = 0; k < kSamples; ++k) {
-            out[k] = galaxy::audio::native_dsp_audio_bus_apply_sample(bus_state_, out[k]);
+    if (bus_gains_set_) {
+        const bool starting = be16(record, 0x008u) != 0u;
+        if (starting || category_retries_[index] != 0u) {
+            classify_channel(index, record, starting, memory);
+        }
+        const galaxy::audio::NativeAudioBus bus = categories_[index].decision.bus;
+        galaxy::audio::NativeAudioBusRamp& ramp = bus_state_.ramps[index];
+        galaxy::audio::native_audio_bus_set_ramp_target(
+            ramp, bus_gain_q16_[static_cast<std::size_t>(bus)], bus);
+        if (ramp.remaining != 0u || ramp.current_q16 != galaxy::audio::kNativeAudioUnityGainQ16) {
+            bus_state_.active_channel = static_cast<std::uint16_t>(index);
+            bus_state_.active_channel_valid = true;
+            for (std::uint32_t k = 0; k < kSamples; ++k) {
+                out[k] = galaxy::audio::native_dsp_audio_bus_apply_sample(bus_state_, out[k]);
+            }
         }
     }
     if (be16(record, 0x058u) != 0u) {

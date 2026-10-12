@@ -58,7 +58,15 @@ struct JAudioHostMixerStats {
     std::uint64_t ignored_commands{};
     std::uint64_t stray_releases{};
     std::uint64_t four_channel_frames{};
+    std::uint64_t category_decisions{};
+    std::uint64_t category_owner_misses{};
     std::uint64_t mix_ns{};
+};
+
+// A channel's volume category and the owner it was decided from.
+struct JAudioChannelCategory {
+    galaxy::audio::NativeAudioBusDecision decision{};
+    galaxy::audio::JAudioChannelOwner owner{};
 };
 
 class JAudioHostMixer {
@@ -80,11 +88,16 @@ public:
     // the caller then posts the game's AUDIOMSG_DSP.
     bool release_halt(std::uint32_t message, const JAudioGuestMemory& memory);
     void note_ignored_command() noexcept { ++stats_.ignored_commands; }
-    // Per-channel bus gains (music, voice, SFX, ambience, cutscene) published
-    // by the runtime once per audio frame; each channel ramps to its gain
-    // after its filters, before its bus sends. Null leaves every gain at 1.
-    void set_bus_controls(const galaxy::audio::NativeAudioBusControls* controls) noexcept {
-        bus_controls_ = controls;
+    // Volume categories. The runtime passes the category gains once per audio
+    // frame (`master` is applied at the output, not here). A channel's
+    // category is decided once per sound, at the sound's first render --
+    // TChannel +0x008 is set by playStart and cleared after that render --
+    // when the game has linked the channel to its owner; the gain then
+    // applies from the sound's first sample. A changed gain ramps over 80
+    // samples. Until the first call every gain is 1.
+    void set_bus_gains(const galaxy::audio::NativeAudioBusGains& gains) noexcept;
+    [[nodiscard]] const JAudioChannelCategory& channel_category(std::uint32_t channel) const noexcept {
+        return categories_[channel < categories_.size() ? channel : 0u];
     }
     [[nodiscard]] std::uint32_t channel_table() const noexcept { return channel_table_; }
 
@@ -110,6 +123,8 @@ private:
     };
 
     void mix_subframe(const JAudioGuestMemory& memory);
+    void classify_channel(std::uint32_t index, const std::byte* record, bool starting,
+                          const JAudioGuestMemory& memory);
     void render_channel(std::byte* record, std::uint32_t index,
                         const JAudioGuestMemory& memory);
     std::uint32_t render_source(std::byte* record, std::int16_t* out,
@@ -169,7 +184,12 @@ private:
     std::uint32_t subframes_{};
     std::uint32_t next_subframe_{};
     bool frame_active_{};
-    const galaxy::audio::NativeAudioBusControls* bus_controls_{};
+    bool bus_gains_set_{};
+    std::array<std::uint32_t, 5> bus_gain_q16_{};
+    std::array<JAudioChannelCategory, 64> categories_{};
+    // Renders left in which an owner that was unresolved at the sound's start
+    // is looked up again.
+    std::array<std::uint8_t, 64> category_retries_{};
     galaxy::audio::NativeDspAudioBusState bus_state_{};
     JAudioHostMixerStats stats_{};
 };

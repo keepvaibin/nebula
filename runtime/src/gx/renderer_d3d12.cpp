@@ -3747,6 +3747,10 @@ bool RendererD3D12::initialize(int window_width, int window_height, unsigned efb
         // Keep a normal class cursor whenever the unfocused window receives
         // hit testing. WM_SETCURSOR hides it only while this game owns focus.
         wc.hCursor       = LoadCursorA(nullptr, IDC_ARROW);
+        wc.hIcon         = static_cast<HICON>(LoadImageW(wc.hInstance, MAKEINTRESOURCEW(1), IMAGE_ICON,
+            GetSystemMetrics(SM_CXICON), GetSystemMetrics(SM_CYICON), LR_DEFAULTCOLOR));
+        wc.hIconSm       = static_cast<HICON>(LoadImageW(wc.hInstance, MAKEINTRESOURCEW(1), IMAGE_ICON,
+            GetSystemMetrics(SM_CXSMICON), GetSystemMetrics(SM_CYSMICON), LR_DEFAULTCOLOR));
         wc.lpszClassName = kWindowClass;
         RegisterClassExW(&wc);
 
@@ -8298,7 +8302,7 @@ void draw_native_settings_overlay(RendererD3D12& renderer) {
         panel_x + 28,
         panel_y + (scale == 1 ? 10 : 24),
         scale,
-        "NATIVE SETTINGS",
+        "SETTINGS",
         text);
 
     const char* tabs[] = {"DISPLAY", "GRAPHICS", "INPUT", "AUDIO", "CAPS"};
@@ -8378,10 +8382,10 @@ void draw_native_settings_overlay(RendererD3D12& renderer) {
     } else if (s_settings_applied_ms != 0u && now_ms - s_settings_applied_ms < 2500u) {
         status = "APPLIED";
         status_color = accent;
-    } else {
-        status = tab == 3u ? "AUDIO CHANGES ARE LIVE" : "NO CHANGES";
     }
-    ui_text(renderer, panel_x + 28, footer_y, footer_scale, status, status_color);
+    if (!status.empty()) {
+        ui_text(renderer, panel_x + 28, footer_y, footer_scale, status, status_color);
+    }
     ui_text(
         renderer,
         panel_x + 28,

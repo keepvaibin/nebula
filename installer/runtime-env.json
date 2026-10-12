@@ -48,10 +48,6 @@
     "value": "1"
   },
   {
-    "name": "GALAXY_EXCLUSIVE_FULLSCREEN",
-    "value": "0"
-  },
-  {
     "name": "GALAXY_FAST_THP_CHECKPOINTS",
     "value": "1"
   },
@@ -86,10 +82,6 @@
   {
     "name": "GALAXY_FRAME_TELEMETRY",
     "value": "1"
-  },
-  {
-    "name": "GALAXY_FULLSCREEN",
-    "value": "0"
   },
   {
     "name": "GALAXY_GPU_TIMESTAMPS",
@@ -144,8 +136,8 @@
     "value": "keyboard_mouse"
   },
   {
-    "value": "1",
-    "name": "GALAXY_LAYOUT_ASPECT_REPAIRS"
+    "name": "GALAXY_LAYOUT_ASPECT_REPAIRS",
+    "value": "1"
   },
   {
     "name": "GALAXY_MOUSE_IR_ABSOLUTE_X_SCALE",
@@ -168,8 +160,8 @@
     "value": "120"
   },
   {
-    "value": "1",
-    "name": "GALAXY_NATIVE_BLOOM_WORKSPACE"
+    "name": "GALAXY_NATIVE_BLOOM_WORKSPACE",
+    "value": "1"
   },
   {
     "name": "GALAXY_NATIVE_BT_WIIMOTE",
@@ -180,8 +172,8 @@
     "value": "1"
   },
   {
-    "value": "1",
-    "name": "GALAXY_NATIVE_MOUSE_COOPERATIVE_DEPTH_WAIT"
+    "name": "GALAXY_NATIVE_MOUSE_COOPERATIVE_DEPTH_WAIT",
+    "value": "1"
   },
   {
     "name": "GALAXY_NATIVE_MOUSE_POINTER_FRAME",

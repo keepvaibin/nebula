@@ -23690,9 +23690,8 @@ std::byte* jaudio_guest_resolve(void* user, std::uint32_t address, std::uint32_t
 // The movie player (THPSimplePlayerWrapper::mixAudio) multiplies each
 // sample by VolumeTable[volume], 128 halfwords at 0x805C5D08 that nothing
 // else reads, rising from 0 to 32768. The cutscene volume rescales the table.
-void apply_movie_volume(RuntimeState& state, galaxy::host::GuestAddressSpace& space) {
+void apply_movie_volume(RuntimeState& state, galaxy::host::GuestAddressSpace& space, float gain) {
     constexpr std::uint32_t kMovieVolumeTable = 0x805C5D08u;
-    const float gain = galaxy::get_runtime_settings().audio.cutscene;
     if (state.movie_volume_disabled || gain == state.movie_volume_gain) {
         return;
     }
@@ -23726,6 +23725,37 @@ void apply_movie_volume(RuntimeState& state, galaxy::host::GuestAddressSpace& sp
         table[i * 2u + 1u] = static_cast<std::byte>(scaled & 0xFFu);
     }
     state.movie_volume_gain = gain;
+}
+
+// Volume categories for the host mixer, once per audio frame; the master
+// gain applies at the output. With GALAXY_AUDIO_BUS_TRACE each channel's
+// category is logged when a new sound changes it.
+void update_jaudio_categories(RuntimeState& state, galaxy::host::GuestAddressSpace& space) {
+    const galaxy::RuntimeAudioSettings audio = galaxy::get_runtime_settings().audio;
+    state.jaudio_mixer.set_bus_gains({1.0f, audio.music, audio.voice, audio.sfx, audio.ambience, audio.cutscene});
+    apply_movie_volume(state, space, audio.cutscene);
+    static const bool trace = read_env_flag("GALAXY_AUDIO_BUS_TRACE", false);
+    if (!trace) {
+        return;
+    }
+    static std::array<std::uint64_t, 64> traced{};
+    static constexpr const char* kRoutes[] = {"format", "se", "seq", "stream"};
+    static constexpr const char* kBuses[] = {"music", "voice", "sfx", "ambience", "cutscene"};
+    for (std::uint32_t channel = 0; channel < traced.size(); ++channel) {
+        const galaxy::host::JAudioChannelCategory& category = state.jaudio_mixer.channel_category(channel);
+        const std::uint64_t key = (static_cast<std::uint64_t>(category.owner.route) << 40u) |
+                                  (static_cast<std::uint64_t>(category.decision.bus) << 32u) |
+                                  category.owner.sound_id;
+        if (key != traced[channel]) {
+            traced[channel] = key;
+            std::ostringstream line;
+            line << "[audio-bus] ch=" << channel
+                 << " route=" << kRoutes[static_cast<unsigned>(category.owner.route)]
+                 << " id=0x" << std::hex << category.owner.sound_id << std::dec
+                 << " bus=" << kBuses[static_cast<unsigned>(category.decision.bus)] << '\n';
+            std::cerr << line.str();
+        }
+    }
 }
 
 // DspBoot (0x804961E0) and DSPSendCommands2 (0x804962C0) as host calls.
@@ -23786,7 +23816,7 @@ void run_jaudio_host_command(
     case 0x81u:
         if (count >= 5u) {
             state.jaudio_mixer.setup(command, word(1u), word(2u), word(3u), word(4u), guest);
-            state.jaudio_mixer.set_bus_controls(space.audio_bus_controls());
+            update_jaudio_categories(state, space);
         } else {
             state.jaudio_mixer.note_ignored_command();
         }
@@ -23795,10 +23825,7 @@ void run_jaudio_host_command(
         state.jaudio_mixer.set_varam(count >= 2u ? word(1u) : 0u);
         break;
     case 0x82u:
-        // Volume categories: each channel's bus from its JAudio owner, and
-        // the movie table, once per audio frame.
-        space.refresh_dsp_audio_bus_controls(state.jaudio_mixer.channel_table());
-        apply_movie_volume(state, space);
+        update_jaudio_categories(state, space);
         state.jaudio_mixer.sync_frame(
             command, count >= 2u ? word(1u) : 0u, count >= 3u ? word(2u) : 0u,
             count >= 4u ? word(3u) : 0u, count >= 5u ? word(4u) : 0u, guest);
@@ -32635,6 +32662,8 @@ int wmain(int argc, wchar_t** argv) {
                               << " ignored=" << mix.ignored_commands
                               << " stray=" << mix.stray_releases
                               << " four-channel=" << mix.four_channel_frames
+                              << " category-decisions=" << mix.category_decisions
+                              << " category-owner-misses=" << mix.category_owner_misses
                               << " varam=" << hexadecimal(state.jaudio_mixer.varam())
                               << " mix-ms=" << mix.mix_ns / 1000000u << '\n';
                 }

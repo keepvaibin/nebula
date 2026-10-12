@@ -742,6 +742,17 @@ private:
     std::condition_variable queue_cv_;        // consumer: work or stop
     std::condition_variable queue_space_cv_;  // producer: slot free
     std::deque<FrameChunk> frame_queue_;
+    // Steady-clock time the render thread took the render chunk it is
+    // executing (0 between chunks); written under queue_mutex_. While one
+    // chunk has run for kRenderStallNs (a burst of first-use textures or
+    // pipelines), the producer may queue up to kStalledRenderQueueDepth
+    // chunks, so the game reaches its own GPU wait -- where its audio thread
+    // keeps running -- instead of blocking here.
+    std::uint64_t render_chunk_started_ns_ = 0;
+    std::uint64_t stalled_queue_admissions_ = 0;
+    std::size_t stalled_queue_max_depth_ = 0;
+    static constexpr std::uint64_t kRenderStallNs = 20'000'000u;
+    static constexpr std::size_t kStalledRenderQueueDepth = 8u;
     // Recycled per-frame chunk buffers. The point of these pools is to avoid
     // re-allocating a buffer every frame, which a *bounded* number of retained
     // buffers does just as well as an unbounded one: the queue depth is capped

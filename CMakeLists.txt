@@ -772,6 +772,11 @@ add_custom_target(nebula_runtime_identity
     BYPRODUCTS "${CMAKE_CURRENT_BINARY_DIR}/nebula_build_identity.h"
     VERBATIM)
 add_dependencies(NebulaRuntime nebula_runtime_identity)
+# Executable and game-window icon (resource 1).
+set(NEBULA_ICON "${CMAKE_CURRENT_SOURCE_DIR}/installer/assets/nebula.ico")
+file(CONFIGURE OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/nebula_runtime.rc" CONTENT "1 ICON \"@NEBULA_ICON@\"\n" @ONLY)
+target_sources(NebulaRuntime PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/nebula_runtime.rc")
+set_source_files_properties("${CMAKE_CURRENT_BINARY_DIR}/nebula_runtime.rc" PROPERTIES OBJECT_DEPENDS "${NEBULA_ICON}")
 target_include_directories(NebulaRuntime PRIVATE "${CMAKE_CURRENT_BINARY_DIR}")
 add_executable(galaxy_native_thp_video_tests runtime/src/native_thp_video_tests.cpp runtime/src/native_thp_video.cpp)
 target_link_libraries(galaxy_native_thp_video_tests PRIVATE galaxy_runtime_abi)

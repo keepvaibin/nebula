@@ -560,6 +560,35 @@ bool trace_xfb_causal_deferred_frame(std::uint64_t frame) {
     return frame >= start_frame && frame - start_frame < max_frames;
 }
 
+// Test hook: GALAXY_TEST_RENDER_STALL_MS=<ms>,<every N render chunks> makes
+// the render thread sleep, to reproduce a slow GPU/driver on any machine.
+struct RenderStallInjection {
+    std::uint32_t ms = 0u;
+    std::uint32_t every = 0u;
+};
+
+const RenderStallInjection& render_stall_injection() {
+    static const RenderStallInjection injection = [] {
+        RenderStallInjection result{};
+        char value[32]{};
+        std::size_t length = 0;
+        if (getenv_s(&length, value, sizeof(value), "GALAXY_TEST_RENDER_STALL_MS") != 0 || length <= 1) {
+            return result;
+        }
+        const char* end = value + length - 1;
+        const char* comma = std::find(static_cast<const char*>(value), end, ',');
+        std::from_chars(value, comma, result.ms);
+        if (comma != end) {
+            std::from_chars(comma + 1, end, result.every);
+        }
+        if (result.every == 0u) {
+            result.ms = 0u;
+        }
+        return result;
+    }();
+    return injection;
+}
+
 bool trace_gx_stalls_enabled() {
     static const bool enabled = [] {
         char value[16]{};
@@ -3537,6 +3566,8 @@ void GxBackend::shutdown() {
     emit_deferred_gx_stats();
     emit_deferred_xfb_causal_trace();
     std::cerr << "[scene-markers] handled=" << scene_markers_seen_ << std::endl;
+    std::cerr << "[render-queue] stalled-admissions=" << stalled_queue_admissions_
+              << " stalled-max-depth=" << stalled_queue_max_depth_ << '\n';
 
     std::string shutdown_failures;
     const auto append_shutdown_failure = [&shutdown_failures](
@@ -5680,11 +5711,31 @@ FramePeCompletionToken GxBackend::render_frame(
         };
         const std::uint64_t diagnostic_queue_wait_start_ns =
             cadence::steady_now_ns_if_enabled(cadence_diagnostics_);
-        queue_space_cv_.wait(lock, [this, queue_depth_limit, &queued_render_chunks] {
-            return queued_render_chunks() < queue_depth_limit ||
-                   stop_render_thread_ ||
-                   render_thread_error_ != nullptr;
-        });
+        const std::size_t stalled_depth_limit =
+            std::max(queue_depth_limit, kStalledRenderQueueDepth);
+        for (;;) {
+            if (stop_render_thread_ || render_thread_error_ != nullptr) {
+                break;
+            }
+            const std::size_t queued = queued_render_chunks();
+            if (queued < queue_depth_limit) {
+                break;
+            }
+            if (queued >= stalled_depth_limit || render_chunk_started_ns_ == 0u) {
+                queue_space_cv_.wait(lock);
+                continue;
+            }
+            const std::uint64_t now = static_cast<std::uint64_t>(
+                std::chrono::duration_cast<std::chrono::nanoseconds>(
+                    std::chrono::steady_clock::now().time_since_epoch()).count());
+            const std::uint64_t stalled_at = render_chunk_started_ns_ + kRenderStallNs;
+            if (now >= stalled_at) {
+                ++stalled_queue_admissions_;
+                stalled_queue_max_depth_ = std::max(stalled_queue_max_depth_, queued + 1u);
+                break;
+            }
+            queue_space_cv_.wait_for(lock, std::chrono::nanoseconds(stalled_at - now));
+        }
         if (cadence_diagnostics_ != nullptr) {
             const std::uint64_t diagnostic_queue_wait_end_ns =
                 cadence::steady_now_ns_if_enabled(cadence_diagnostics_);
@@ -6689,6 +6740,9 @@ void GxBackend::render_thread_main() {
                     galaxy::timeline::record(galaxy::timeline::Event::RenderBegin,
                                         chunk.pe_completion_token.value,
                                         chunk.fifo.size());
+                    render_chunk_started_ns_ = static_cast<std::uint64_t>(
+                        std::chrono::duration_cast<std::chrono::nanoseconds>(
+                            std::chrono::steady_clock::now().time_since_epoch()).count());
                     ++render_chunks_in_flight_;
                     ++render_cpu_reads_in_flight_;
                     chunk.cpu_reads_pending = true;
@@ -6721,7 +6775,17 @@ void GxBackend::render_thread_main() {
                         false);
                 } else {
                     prepare_worker_memory_snapshot(chunk);
+                    if (const RenderStallInjection& stall = render_stall_injection(); stall.ms != 0u) {
+                        static std::uint32_t chunks = 0u;
+                        if (++chunks % stall.every == 0u) {
+                            Sleep(stall.ms);
+                        }
+                    }
                     render_frame_on_thread(chunk);
+                    {
+                        std::lock_guard<std::mutex> lock(queue_mutex_);
+                        render_chunk_started_ns_ = 0u;
+                    }
                     submit_async_peek_fields_if_requested();
                 }
             } else if (idle_present) {

@@ -10,8 +10,12 @@ namespace Nebula.Launcher
 
     internal static class LaunchOptions
     {
-        public static ProcessStartInfo Create(string app, string content, string saves,
-            DisplayPlan plan, bool borderless, RecordingMode recording)
+        /// <summary>
+        /// The runtime reads display and graphics settings from config.ini (the
+        /// settings app and the in-game menu edit it); only paths and diagnostics
+        /// travel on the command line and in the environment.
+        /// </summary>
+        public static ProcessStartInfo Create(string app, string content, string saves, RecordingMode recording)
         {
             var start = new ProcessStartInfo(Path.Combine(app, "NebulaRuntime.exe"),
                 ProcessRunner.Quote(content) + " " + ProcessRunner.Quote(Path.Combine(app, "RMGE01_game.dll")));
@@ -28,18 +32,6 @@ namespace Nebula.Launcher
             }
             var env = start.EnvironmentVariables;
             env["GALAXY_NAND_ROOT"] = saves;
-            env["GALAXY_WINDOW_WIDTH"] = plan.OutputWidth.ToString();
-            env["GALAXY_WINDOW_HEIGHT"] = plan.OutputHeight.ToString();
-            env["GALAXY_FULLSCREEN"] = borderless ? "1" : "0";
-            env["GALAXY_EXCLUSIVE_FULLSCREEN"] = "0";
-            env["GALAXY_EFB_SCALE"] = plan.EfbScale.ToString();
-            env["GALAXY_EXPERIMENTAL_NATIVE_4_3"] = plan.NativeFourThree ? "1" : "0";
-            // A followed window shape is latched at frame boundaries and
-            // excludes the fixed-aspect experiments.
-            env["GALAXY_EXPERIMENTAL_DYNAMIC_ASPECT"] = plan.FollowWindowAspect ? "1" : "0";
-            env["GALAXY_EXPERIMENTAL_ULTRAWIDE_ASPECT"] =
-                plan.FollowWindowAspect || plan.NativeFourThree || Math.Abs(plan.AspectRatio - 16.0 / 9.0) < 1e-10 ? "" : plan.Aspect;
-            env["GALAXY_INTERNAL_FOLLOW_WINDOW"] = plan.FollowWindowResolution ? "1" : "0";
             env["GALAXY_NATIVE_THP_VIDEO_DECODE"] = "1";
             env["GALAXY_DUSK_DSP_HLE"] = "0";
             ApplyRecording(start, recording);

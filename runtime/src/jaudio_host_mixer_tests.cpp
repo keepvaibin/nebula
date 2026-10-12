@@ -21,7 +21,8 @@ void expect(bool condition, const char* what, long long actual = 0) {
 
 // Flat MEM1 image at 0x80000000.
 struct Guest {
-    std::vector<std::byte> bytes = std::vector<std::byte>(0x200000);
+    // Up to 0x80700000: JASDSPChannel::sDspChannels is at 0x806A2BD0.
+    std::vector<std::byte> bytes = std::vector<std::byte>(0x700000);
 
     static std::byte* resolve(void* user, std::uint32_t address, std::uint32_t size) {
         auto& guest = *static_cast<Guest*>(user);
@@ -331,42 +332,69 @@ void test_square_oscillator() {
     expect(guest.get16(r + 0x060u) == ((80u * 0x800u) & 0xFFFFu), "oscillator phase saved", guest.get16(r + 0x060u));
 }
 
-// Volume categories: each channel takes its bus gain after its filters; a
-// change ramps over one subframe and leaves other channels unchanged.
-void test_bus_controls() {
-    using galaxy::audio::NativeAudioBus;
+// Volume categories: a sound's category is decided at its first render, so
+// its gain applies from its first sample (the muted-music leak at a sound's
+// start); a gain change ramps over one subframe; a new sound on the channel
+// takes its own category at once, without a ramp from the previous owner.
+void test_bus_categories() {
+    using galaxy::audio::kJasDspChannelsPointer;
     Guest guest;
     JAudioHostMixer mixer;
     start(mixer, guest);
-    galaxy::audio::NativeAudioBusControls controls;
-    std::array<NativeAudioBus, galaxy::audio::NativeAudioBusControls::kChannelCount> buses{};
-    buses.fill(NativeAudioBus::Sfx);
-    buses[0] = NativeAudioBus::Music;
-    controls.publish({1.0f, 0.5f, 1.0f, 1.0f, 1.0f, 1.0f}, buses);
-    mixer.set_bus_controls(&controls);
+    // DSP channel 0 belongs to a JAISe whose sound ID is a PLAYER_VOICE cue;
+    // channel 1 has no owner and plays PCM16 (music by format).
+    constexpr std::uint32_t kDspChannels = 0x80100000u;
+    constexpr std::uint32_t kJasChannel = 0x80101000u;
+    constexpr std::uint32_t kTrack = 0x80102000u;
+    constexpr std::uint32_t kStream = 0x80104000u;
+    guest.put32(kJasDspChannelsPointer, kDspChannels);
+    guest.put32(kDspChannels + 0x14u, kJasChannel);
+    guest.put32(kJasChannel + 0x08u, kDspChannels);
+    guest.put32(kJasChannel + 0x10u, kTrack + 0x180u);  // TChannelMgr in the track
+    guest.put32(kTrack + 0x180u + 0x4Cu, kTrack);
+    guest.put32(kTrack - 0xC8u, kTrack - 0xC8u);        // JAISe JSULink
+    guest.put32(kTrack - 0xC8u + 0x28u, 0x00010005u);   // section 0, PLAYER_VOICE
+    mixer.set_bus_gains({1.0f, 0.0f, 0.5f, 1.0f, 1.0f, 1.0f});
     pcm16_channel(guest, 0, 0x4000, 4096);
     pcm16_channel(guest, 1, 0x4000, 4096);
-    guest.put16(record(0) + 0x010u, 0x0D00u);  // music channel -> L
+    guest.put16(record(0) + 0x010u, 0x0D00u);  // voice channel -> L
     guest.put16(record(0) + 0x012u, 0x4000u);
     guest.put16(record(0) + 0x014u, 0x4000u);
-    guest.put16(record(1) + 0x010u, 0x0D60u);  // SFX channel -> R
+    guest.put16(record(1) + 0x010u, 0x0D60u);  // music channel -> R
     guest.put16(record(1) + 0x012u, 0x4000u);
     guest.put16(record(1) + 0x014u, 0x4000u);
     frame(mixer, guest);
     subframe(mixer, guest, 0xC000u);
     // The first three samples come from the reset resampler history.
-    expect(guest.gets16(kLeft + 3u * 2u) == 0x2000, "bus gain applies without a fade-in", guest.gets16(kLeft + 3u * 2u));
-    expect(guest.gets16(kLeft + 79u * 2u) == 0x2000, "music at half", guest.gets16(kLeft + 79u * 2u));
-    expect(guest.gets16(kRight + 79u * 2u) == 0x4000, "SFX at unity", guest.gets16(kRight + 79u * 2u));
-    controls.publish({1.0f, 0.0f, 1.0f, 1.0f, 1.0f, 1.0f}, buses);
+    expect(guest.gets16(kLeft + 3u * 2u) == 0x2000, "voice at half from its first sample", guest.gets16(kLeft + 3u * 2u));
+    expect(guest.gets16(kLeft + 79u * 2u) == 0x2000, "voice at half", guest.gets16(kLeft + 79u * 2u));
+    int loud = 0;
+    for (std::uint32_t k = 0; k < 80u; ++k) {
+        loud += guest.gets16(kRight + k * 2u) != 0 ? 1 : 0;
+    }
+    expect(loud == 0, "muted music silent from its first sample", loud);
+    expect(mixer.channel_category(0u).decision.bus == galaxy::audio::NativeAudioBus::Voice, "owner category");
+    expect(mixer.channel_category(1u).decision.bus == galaxy::audio::NativeAudioBus::Music, "format category");
+    expect(mixer.stats().category_owner_misses == 1u, "one sound without an owner",
+           static_cast<long long>(mixer.stats().category_owner_misses));
+
+    mixer.set_bus_gains({1.0f, 0.0f, 0.0f, 1.0f, 1.0f, 1.0f});
     subframe(mixer, guest, 0xC000u);
     const std::int16_t first = guest.gets16(kLeft + 80u * 2u);
     expect(first > 0x1F00 && first < 0x2000, "mute ramps from the previous gain", first);
     expect(guest.gets16(kLeft + 159u * 2u) == 0, "mute reached within a subframe", guest.gets16(kLeft + 159u * 2u));
-    expect(guest.gets16(kRight + 159u * 2u) == 0x4000, "other buses unchanged", guest.gets16(kRight + 159u * 2u));
-    mixer.set_bus_controls(nullptr);
+
+    // A new sound on channel 0: a music stream (JASAramStream lists the
+    // channel; its JAIStream holds a section-2 ID). Music is at unity.
+    guest.put32(kJasChannel + 0x10u, kStream);
+    guest.put32(kStream + 0x90u, kJasChannel);
+    guest.put32(kStream - 0xA8u + 0x18u, 0x02000001u);
+    guest.put16(record(0) + 0x008u, 1u);  // playStart
+    mixer.set_bus_gains({1.0f, 1.0f, 0.0f, 1.0f, 1.0f, 1.0f});
     subframe(mixer, guest, 0xC000u);
-    expect(guest.gets16(kLeft + 239u * 2u) == 0x4000, "no controls: unity", guest.gets16(kLeft + 239u * 2u));
+    expect(guest.gets16(kLeft + 160u * 2u) == 0x4000, "new sound at its own gain at once", guest.gets16(kLeft + 160u * 2u));
+    expect(mixer.channel_category(0u).owner.route == galaxy::audio::JAudioOwnerRoute::Stream, "stream owner");
+    expect(guest.gets16(kRight + 239u * 2u) == 0x4000, "unmuted music", guest.gets16(kRight + 239u * 2u));
 }
 
 void test_stray_release() {
@@ -394,7 +422,7 @@ int main() {
     test_fir_delay();
     test_iir_average();
     test_square_oscillator();
-    test_bus_controls();
+    test_bus_categories();
     test_stray_release();
     if (g_failures != 0) {
         std::fprintf(stderr, "%d failure(s)\n", g_failures);

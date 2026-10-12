@@ -12,6 +12,9 @@ namespace Nebula.Launcher
 {
     internal static class Program
     {
+        // Nebula.exe starts the game; the first run (and --settings) shows the
+        // settings first. NebulaSettings.exe is the same program built with
+        // NEBULA_SETTINGS_APP and always opens the settings.
         [STAThread]
         private static int Main(string[] args)
         {
@@ -20,8 +23,20 @@ namespace Nebula.Launcher
             Application.SetCompatibleTextRenderingDefault(false);
             try
             {
-                var form = new LauncherForm();
-                Application.Run(form);
+                var session = new LaunchSession();
+#if NEBULA_SETTINGS_APP
+                bool showSettings = true;
+#else
+                bool showSettings = args.Any(a => string.Equals(a, "--settings", StringComparison.OrdinalIgnoreCase)) ||
+                    !session.SetupComplete;
+#endif
+                if (!showSettings)
+                {
+                    string error = session.TryLaunch();
+                    if (error == null) return 0;
+                    MessageBox.Show(error, "Nebula", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                }
+                Application.Run(new SettingsForm(session));
                 return 0;
             }
             catch (Exception error)
@@ -32,168 +47,292 @@ namespace Nebula.Launcher
         }
     }
 
-    /// <summary>Play settings and launch.</summary>
-    internal sealed class LauncherForm : Form
+    /// <summary>Where the game is and how it was last started (settings.json).</summary>
+    internal sealed class LaunchSession
     {
-        private readonly string app = AppDomain.CurrentDomain.BaseDirectory.TrimEnd('\\');
-        private string content;
-        private readonly bool portable;
-        private string settingsFile { get { return portable ? Path.Combine(app, "portable-settings.json") : NebulaPaths.SettingsFile; } }
-        private readonly ComboBox output = new ComboBox(), aspect = new ComboBox(), internalTarget = new ComboBox();
-        private readonly NumericUpDown customWidth = new NumericUpDown(), customHeight = new NumericUpDown();
-        private readonly Label outputInfo = new Label(), info = new Label();
-        private readonly ComboBox recording = new ComboBox();
-        private readonly ComboBox antiAliasing = new ComboBox(), aaQuality = new ComboBox(), upscaler = new ComboBox(), textureFilter = new ComboBox(), lighting = new ComboBox();
-        private readonly NumericUpDown sharpness = new NumericUpDown();
-        private readonly CheckBox mipmaps = new CheckBox(), hudOutput = new CheckBox();
-        private readonly NumericUpDown[] volumes = new NumericUpDown[AudioSettings.Names.Length];
-        private readonly Button play = new Button();
-        private GraphicsSettings graphics = new GraphicsSettings();
-        private AudioSettings audio = new AudioSettings();
-        private DisplayPlan plan;
-        private bool borderless;
+        public readonly string App = AppDomain.CurrentDomain.BaseDirectory.TrimEnd('\\');
+        public readonly bool Portable;
+        public readonly string Root;
+        public string Content;
+        public bool SetupComplete;
+        public RecordingMode Recording = RecordingMode.None;
 
-        public LauncherForm()
+        public string SettingsFile { get { return Portable ? Path.Combine(App, "portable-settings.json") : NebulaPaths.SettingsFile; } }
+
+        public LaunchSession()
         {
             // versions\<version>\ -> install root -> content
-            portable = File.Exists(Path.Combine(app, "portable.json"));
-            string root = portable ? (NebulaPaths.RegisteredInstallRoot ?? NebulaPaths.DefaultInstallRoot) : Path.GetDirectoryName(Path.GetDirectoryName(app));
-            content = Path.Combine(root, "content");
-            if (File.Exists(Path.Combine(app, "content", "game.pak"))) content = Path.Combine(app, "content");
-            Text = portable ? "Nebula Beta" : "Nebula";
-            Font = new Font("Segoe UI", 10f);
+            Portable = File.Exists(Path.Combine(App, "portable.json"));
+            Root = Portable ? (NebulaPaths.RegisteredInstallRoot ?? NebulaPaths.DefaultInstallRoot) : Path.GetDirectoryName(Path.GetDirectoryName(App));
+            Content = Path.Combine(Root, "content");
+            if (File.Exists(Path.Combine(App, "content", "game.pak"))) Content = Path.Combine(App, "content");
+            try
+            {
+                if (!File.Exists(SettingsFile)) return;
+                var settings = Json.Load(SettingsFile);
+                string savedContent = Json.Str(settings, "content");
+                if (savedContent != null && File.Exists(Path.Combine(savedContent, "game.pak"))) Content = savedContent;
+                SetupComplete = Json.Long(settings, "settingsVersion") >= 3;
+                long recording = Json.Long(settings, "recording");
+                if (recording >= 0 && recording <= 2) Recording = (RecordingMode)recording;
+            }
+            catch (Exception) { }
+        }
 
+        public void Save()
+        {
+            Json.Save(SettingsFile, new Dictionary<string, object>
+            {
+                { "settingsVersion", 3 }, { "content", Content }, { "recording", (int)Recording }
+            });
+            SetupComplete = true;
+        }
+
+        /// <summary>Starts the game; returns an error message instead of throwing.</summary>
+        public string TryLaunch()
+        {
+            try
+            {
+                if (!File.Exists(Path.Combine(Content, "game.pak")))
+                    return "Nebula could not find the game content (game.pak). Choose it in Nebula settings.";
+                if (Process.GetProcessesByName("NebulaRuntime").Length != 0)
+                    return "Nebula is already running.";
+                LaunchOptions.ValidatePair(App);
+                if (Portable) LaunchOptions.PreserveUserData(NebulaPaths.DataRoot, "portable-" + BuildInfo.Version);
+                Directory.CreateDirectory(NebulaPaths.Saves);
+                var start = LaunchOptions.Create(App, Content, FileUtil.FinalPath(NebulaPaths.Saves), Recording);
+                if (Recording == RecordingMode.None)
+                {
+                    using (Process.Start(start)) { }
+                    return null;
+                }
+                StartRecorded(start);
+                return null;
+            }
+            catch (Exception error) { return error.Message; }
+        }
+
+        private void StartRecorded(ProcessStartInfo start)
+        {
+            string session = Sessions.Create("diagnostics");
+            start.EnvironmentVariables["GALAXY_CRASH_DUMP_DIR"] = session;
+            start.EnvironmentVariables["GALAXY_FRAME_TIMELINE_PATH"] = Path.Combine(session, "timeline.bin");
+            var launchFiles = new Dictionary<string, object>();
+            foreach (string name in new[] { "NebulaRuntime.exe", "RMGE01_game.dll", "RMGE01_home_button.dll",
+                "RMGE01_dsp.dll", "RMGE01_boot_image.bin", "runtime-env.json", "Nebula.exe" })
+            {
+                string path = Path.Combine(App, name);
+                if (File.Exists(path)) launchFiles[name] = FileUtil.Sha256File(path);
+            }
+            var launchEnvironment = new Dictionary<string, object>();
+            foreach (string name in start.EnvironmentVariables.Keys)
+                if (name.StartsWith("GALAXY_", StringComparison.OrdinalIgnoreCase)) launchEnvironment[name] = start.EnvironmentVariables[name];
+            var graphics = GraphicsSettings.Load();
+            var sessionInfo = new Dictionary<string, object>
+            {
+                { "startUtc", DateTime.UtcNow.ToString("o") }, { "pid", null }, { "monitoring", true },
+                { "recording", Recording.ToString() }, { "content", Content }, { "saves", start.EnvironmentVariables["GALAXY_NAND_ROOT"] },
+                { "app", App }, { "displayMode", graphics.DisplayMode }, { "window", graphics.WindowWidth + "x" + graphics.WindowHeight },
+                { "aspect", graphics.Aspect }, { "efbScale", graphics.MatchOutput ? 0 : graphics.EfbScale },
+                { "detailedRendererTimings", Recording == RecordingMode.Detailed },
+                { "launchFileSha256", launchFiles }, { "environment", launchEnvironment }
+            };
+            Json.Save(Path.Combine(session, "session.json"), sessionInfo);
+            var game = Process.Start(start);
+            // Start draining redirected output before any further file work.
+            Sessions.Capture(game, session, true);
+            sessionInfo["pid"] = game.Id;
+            try { Json.Save(Path.Combine(session, "session.json"), sessionInfo); }
+            catch (IOException) { } // The pre-launch identity and live reader remain.
+            catch (UnauthorizedAccessException) { }
+        }
+    }
+
+    /// <summary>
+    /// Nebula settings: the same choices as the in-game menu (F1, or View+Menu on a
+    /// controller), saved to the same files.
+    /// </summary>
+    internal sealed class SettingsForm : Form
+    {
+        private readonly LaunchSession session;
+        private readonly List<MonitorEntry> monitors = DisplayInfo.Enumerate();
+        private GraphicsSettings graphics = GraphicsSettings.Load();
+        private AudioSettings audio = AudioSettings.Load();
+        private bool loading;
+
+        private readonly ComboBox monitor = new ComboBox(), mode = new ComboBox(), resolution = new ComboBox(), refresh = new ComboBox();
+        private readonly ComboBox aspect = new ComboBox(), internalScale = new ComboBox();
+        private readonly CheckBox vsync = new CheckBox();
+        private readonly ComboBox antiAliasing = new ComboBox(), aaQuality = new ComboBox(), upscaler = new ComboBox(),
+            textureFilter = new ComboBox(), lighting = new ComboBox(), drawDistance = new ComboBox();
+        private readonly NumericUpDown sharpness = new NumericUpDown();
+        private readonly CheckBox mipmaps = new CheckBox(), hudOutput = new CheckBox();
+        private readonly TrackBar[] volumes = new TrackBar[AudioSettings.Names.Length];
+        private readonly Label[] volumeValues = new Label[AudioSettings.Names.Length];
+        private readonly ComboBox recording = new ComboBox();
+        private readonly Label contentLabel = new Label();
+        private readonly List<Size> resolutionChoices = new List<Size>();
+        private readonly List<int> refreshChoices = new List<int>();
+
+        public SettingsForm(LaunchSession session)
+        {
+            this.session = session;
+            bool firstRun = !session.SetupComplete;
+#if NEBULA_SETTINGS_APP
+            Text = "Nebula settings";
+#else
+            Text = firstRun ? "Welcome to Nebula" : "Nebula settings";
+#endif
+            try { Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath); } catch (Exception) { }
+            Font = new Font("Segoe UI", 10f);
             AutoScaleMode = AutoScaleMode.None;
-            ClientSize = new Size(760, 524);
+            ClientSize = new Size(760, 560);
             FormBorderStyle = FormBorderStyle.FixedDialog;
             MaximizeBox = false;
             StartPosition = FormStartPosition.CenterScreen;
 
-            var tabs = new TabControl { Location = new Point(12, 12), Size = new Size(736, 420) };
+            var intro = new Label
+            {
+                Location = new Point(12, 10), Size = new Size(736, 40),
+                Text = "In game: F1, or View + Menu on a controller."
+            };
+            Controls.Add(intro);
+
+            var tabs = new TabControl { Location = new Point(12, 54), Size = new Size(736, 440) };
             var display = new TabPage("Display");
             var image = new TabPage("Graphics");
             var sound = new TabPage("Audio");
-            var diagnostics = new TabPage("Diagnostics");
-            tabs.TabPages.AddRange(new[] { display, image, sound, diagnostics });
+            var advanced = new TabPage("Advanced");
+            tabs.TabPages.AddRange(new[] { display, image, sound, advanced });
             Controls.Add(tabs);
 
-            AddLabel(display, "Output / window", 12, 16, 300);
-            output.Items.Add("Match Display (borderless)");
-            output.Items.AddRange(DisplaySettings.Presets);
-            Combo(display, output, 320, 13, true);
-            outputInfo.Location = new Point(12, 50);
-            outputInfo.Size = new Size(700, 26);
-            display.Controls.Add(outputInfo);
-            AddLabel(display, "Gameplay / camera aspect", 12, 88, 300);
-            aspect.Items.AddRange(DisplaySettings.Aspects);
-            Combo(display, aspect, 320, 85, false);
-            AddLabel(display, "Internal 3D resolution", 12, 128, 300);
-            internalTarget.Items.Add("Match Output");
-            internalTarget.Items.AddRange(DisplaySettings.Presets);
-            internalTarget.Items.Add("Custom");
-            Combo(display, internalTarget, 320, 125, true);
-            AddLabel(display, "Custom internal width × height", 12, 168, 300);
-            Number(display, customWidth, 320, 165, 320, 16384, 1920);
-            Number(display, customHeight, 460, 165, 240, 8448, 1080);
-            info.Location = new Point(12, 206);
-            info.Size = new Size(700, 170);
-            display.Controls.Add(info);
+            int y = 16;
+            Row(display, "Monitor", monitor, ref y);
+            Row(display, "Display mode", mode, ref y);
+            Row(display, "Resolution", resolution, ref y);
+            Row(display, "Refresh rate", refresh, ref y);
+            Row(display, "Aspect ratio", aspect, ref y);
+            Row(display, "Internal resolution", internalScale, ref y);
+            vsync.Text = "Vertical sync";
+            vsync.Location = new Point(12, y);
+            vsync.Size = new Size(600, 28);
+            display.Controls.Add(vsync);
+            for (int i = 0; i < monitors.Count; i++) monitor.Items.Add(monitors[i].Label(i));
+            mode.Items.AddRange(GraphicsSettings.DisplayModes);
+            aspect.Items.AddRange(GraphicsSettings.Aspects);
 
-            AddLabel(image, "Anti-aliasing", 12, 16, 300);
-            antiAliasing.Items.AddRange(GraphicsSettings.AntiAliasingModes);
-            Combo(image, antiAliasing, 320, 13, true);
-            AddLabel(image, "Anti-aliasing quality", 12, 56, 300);
-            aaQuality.Items.AddRange(GraphicsSettings.AntiAliasingQualities);
-            Combo(image, aaQuality, 320, 53, true);
-            AddLabel(image, "Upscaling", 12, 96, 300);
-            upscaler.Items.AddRange(GraphicsSettings.Upscalers);
-            Combo(image, upscaler, 320, 93, true);
-            AddLabel(image, "Sharpening (0-100)", 12, 136, 300);
-            Number(image, sharpness, 320, 133, 0, 100, 20);
-            AddLabel(image, "Texture filtering", 12, 176, 300);
-            textureFilter.Items.AddRange(GraphicsSettings.TextureFilters);
-            Combo(image, textureFilter, 320, 173, true);
-            AddLabel(image, "Lighting", 12, 216, 300);
-            lighting.Items.AddRange(GraphicsSettings.LightingModes);
-            Combo(image, lighting, 320, 213, true);
-            mipmaps.Text = "Generate mipmaps for textures that have none";
-            mipmaps.Location = new Point(12, 254);
+            y = 16;
+            Row(image, "Anti-aliasing", antiAliasing, ref y);
+            Row(image, "Anti-aliasing quality", aaQuality, ref y);
+            Row(image, "Upscaling", upscaler, ref y);
+            Label(image, "Sharpening (0-100)", 12, y + 3);
+            sharpness.Location = new Point(320, y);
+            sharpness.Size = new Size(120, 28);
+            sharpness.Minimum = 0;
+            sharpness.Maximum = 100;
+            sharpness.Increment = 10;
+            image.Controls.Add(sharpness);
+            y += 40;
+            Row(image, "Texture filtering", textureFilter, ref y);
+            Row(image, "Lighting", lighting, ref y);
+            Row(image, "Draw distance", drawDistance, ref y);
+            mipmaps.Text = "Generated mipmaps";
+            mipmaps.Location = new Point(12, y);
             mipmaps.Size = new Size(600, 28);
             image.Controls.Add(mipmaps);
-            hudOutput.Text = "Draw the HUD and menus at display resolution";
-            hudOutput.Location = new Point(12, 286);
+            y += 32;
+            hudOutput.Text = "HUD at display resolution";
+            hudOutput.Location = new Point(12, y);
             hudOutput.Size = new Size(600, 28);
             image.Controls.Add(hudOutput);
-            AddLabel(image, "These also change during play (F1, or View+Menu on a controller), except mipmaps.", 12, 330, 700);
+            antiAliasing.Items.AddRange(GraphicsSettings.AntiAliasingModes);
+            aaQuality.Items.AddRange(GraphicsSettings.AntiAliasingQualities);
+            upscaler.Items.AddRange(GraphicsSettings.Upscalers);
+            textureFilter.Items.AddRange(GraphicsSettings.TextureFilters);
+            lighting.Items.AddRange(GraphicsSettings.LightingModes);
+            drawDistance.Items.AddRange(GraphicsSettings.DrawDistances);
 
             for (int i = 0; i < volumes.Length; i++)
             {
-                AddLabel(sound, AudioSettings.Names[i] + " volume (%)", 12, 16 + i * 40, 300);
-                volumes[i] = new NumericUpDown { Increment = 5 };
-                Number(sound, volumes[i], 320, 13 + i * 40, 0, 200, 100);
+                int row = 16 + i * 52;
+                Label(sound, AudioSettings.Names[i], 12, row + 6);
+                var bar = new TrackBar { Location = new Point(200, row), Size = new Size(420, 45), Minimum = 0, Maximum = 200, TickFrequency = 25, SmallChange = 5, LargeChange = 25 };
+                var value = new Label { Location = new Point(630, row + 6), Size = new Size(80, 26) };
+                int index = i;
+                bar.ValueChanged += delegate { volumeValues[index].Text = volumes[index].Value + "%"; };
+                volumes[i] = bar;
+                volumeValues[i] = value;
+                sound.Controls.Add(bar);
+                sound.Controls.Add(value);
             }
-            AddLabel(sound, "Cutscenes covers in-engine cutscene sounds and the movies. These also change during play.", 12, 16 + volumes.Length * 40, 700);
 
-            AddLabel(diagnostics, "Recording", 12, 16, 300);
+            y = 16;
+            Label(advanced, "Game content", 12, y + 3);
+            contentLabel.Location = new Point(200, y + 3);
+            contentLabel.Size = new Size(380, 26);
+            contentLabel.AutoEllipsis = true;
+            advanced.Controls.Add(contentLabel);
+            Button(advanced, "Change…", 590, y, 120).Click += delegate { ChooseContent(); };
+            y += 44;
+            Label(advanced, "Recording (next launch)", 12, y + 3);
             recording.Items.AddRange(new[] { "No recording", "Lightweight recording", "Detailed recording" });
-            Combo(diagnostics, recording, 320, 13, true);
-            recording.SelectedIndex = 0;
-            AddLabel(diagnostics, "Detailed recording may reduce performance. Saves use the normal Nebula folder.", 12, 52, 700);
-            var sessions = Button(diagnostics, "Open diagnostics", 12, 92, 180);
-            sessions.Click += delegate { Directory.CreateDirectory(NebulaPaths.Sessions); Process.Start("explorer.exe", "\"" + NebulaPaths.Sessions + "\""); };
-
-            var import = Button(this, "Import a GalaxyRecomp save…", 12, 442, 250);
-            import.Click += delegate { ImportSave(); };
-            var saves = Button(this, "Open save folder", 270, 442, 160);
-            saves.Click += delegate { Directory.CreateDirectory(NebulaPaths.Saves); Process.Start("explorer.exe", "\"" + NebulaPaths.Saves + "\""); };
-            var chooseContent = Button(this, "Choose game content…", 438, 442, 190);
-            chooseContent.Click += delegate { ChooseContent(); };
-            var update = Button(this, portable ? "Beta releases" : "Check for updates", 12, 482, 170);
-            update.Click += delegate
+            Combo(advanced, recording, 320, y);
+            y += 44;
+            Button(advanced, "Import a GalaxyRecomp save…", 12, y, 250).Click += delegate { ImportSave(); };
+            Button(advanced, "Open save folder", 270, y, 170).Click += delegate
             {
-                if (portable) { Process.Start("https://github.com/" + BuildInfo.Repository + "/releases"); return; }
-                string setup = Path.Combine(root, "Nebula-Setup.exe");
-                if (File.Exists(setup)) Process.Start(new ProcessStartInfo(setup, "--update") { WorkingDirectory = root });
+                Directory.CreateDirectory(NebulaPaths.Saves);
+                Process.Start("explorer.exe", "\"" + NebulaPaths.Saves + "\"");
             };
-            play.Text = "Play";
-            play.Location = new Point(628, 476);
-            play.Size = new Size(120, 36);
-            play.Click += delegate { Play(); };
+            Button(advanced, "Open diagnostics", 448, y, 170).Click += delegate
+            {
+                Directory.CreateDirectory(NebulaPaths.Sessions);
+                Process.Start("explorer.exe", "\"" + NebulaPaths.Sessions + "\"");
+            };
+            y += 44;
+            Button(advanced, session.Portable ? "Beta releases" : "Check for updates", 12, y, 200).Click += delegate
+            {
+                if (session.Portable) { Process.Start("https://github.com/" + BuildInfo.Repository + "/releases"); return; }
+                string setup = Path.Combine(session.Root, "Nebula-Setup.exe");
+                if (File.Exists(setup)) Process.Start(new ProcessStartInfo(setup, "--update") { WorkingDirectory = session.Root });
+            };
+
+            var play = new Button { Text = "Save and play", Location = new Point(608, 508), Size = new Size(140, 38) };
+            play.Click += delegate { if (Commit()) Play(); };
             Controls.Add(play);
             AcceptButton = play;
+            var save = new Button { Text = "Save", Location = new Point(496, 508), Size = new Size(104, 38) };
+            save.Click += delegate { if (Commit()) Close(); };
+            Controls.Add(save);
+#if !NEBULA_SETTINGS_APP
+            save.Visible = !firstRun;
+#endif
 
-            LoadSettings();
-            EventHandler changed = delegate { Recalculate(); };
-            output.SelectedIndexChanged += changed;
-            aspect.TextChanged += changed;
-            internalTarget.SelectedIndexChanged += changed;
-            customWidth.ValueChanged += changed;
-            customHeight.ValueChanged += changed;
-            Recalculate();
+            LoadValues();
+            monitor.SelectedIndexChanged += delegate { if (!loading) { graphics.FullscreenWidth = graphics.FullscreenHeight = graphics.FullscreenRefresh = 0; RefreshDisplayChoices(); } };
+            mode.SelectedIndexChanged += delegate { if (!loading) RefreshDisplayChoices(); };
+            resolution.SelectedIndexChanged += delegate { if (!loading) RefreshRefreshChoices(); };
             UiScale.Apply(this);
         }
 
-        private static void AddLabel(Control parent, string text, int x, int y, int width)
+        private static void Label(Control parent, string text, int x, int y)
         {
-            parent.Controls.Add(new Label { Text = text, Location = new Point(x, y), Size = new Size(width, 26) });
+            parent.Controls.Add(new Label { Text = text, Location = new Point(x, y), Size = new Size(300, 26) });
         }
 
-        private static void Combo(Control parent, ComboBox box, int x, int y, bool list)
+        private static void Combo(Control parent, ComboBox box, int x, int y)
         {
             box.Location = new Point(x, y);
             box.Width = 390;
-            box.DropDownStyle = list ? ComboBoxStyle.DropDownList : ComboBoxStyle.DropDown;
+            box.DropDownStyle = ComboBoxStyle.DropDownList;
             parent.Controls.Add(box);
         }
 
-        private static void Number(Control parent, NumericUpDown box, int x, int y, int min, int max, int value)
+        private static void Row(Control parent, string label, ComboBox box, ref int y)
         {
-            box.Location = new Point(x, y);
-            box.Size = new Size(120, 28);
-            box.Minimum = min;
-            box.Maximum = max;
-            box.Value = value;
-            parent.Controls.Add(box);
+            Label(parent, label, 12, y + 3);
+            Combo(parent, box, 320, y);
+            y += 40;
         }
 
         private static Button Button(Control parent, string text, int x, int y, int width)
@@ -203,100 +342,201 @@ namespace Nebula.Launcher
             return button;
         }
 
-        private void LoadSettings()
+        private MonitorEntry SelectedMonitor
         {
-            graphics = GraphicsSettings.Load();
+            get { return monitor.SelectedIndex >= 0 && monitor.SelectedIndex < monitors.Count ? monitors[monitor.SelectedIndex] : DisplayInfo.Find(monitors, ""); }
+        }
+
+        private void LoadValues()
+        {
+            loading = true;
+            var current = DisplayInfo.Find(monitors, graphics.Monitor);
+            monitor.SelectedIndex = Math.Max(0, monitors.IndexOf(current));
+            mode.SelectedIndex = Math.Max(0, Math.Min(graphics.DisplayMode, GraphicsSettings.DisplayModes.Length - 1));
+            aspect.SelectedIndex = Math.Max(0, Math.Min(graphics.Aspect, GraphicsSettings.Aspects.Length - 1));
+            vsync.Checked = graphics.VSync;
             antiAliasing.SelectedIndex = graphics.AntiAliasing;
             aaQuality.SelectedIndex = graphics.Quality;
             upscaler.SelectedIndex = graphics.Upscaler;
             sharpness.Value = graphics.Sharpness;
             textureFilter.SelectedIndex = graphics.TextureFilter;
-            mipmaps.Checked = graphics.GeneratedMipmaps;
             lighting.SelectedIndex = graphics.PerPixelLighting ? 0 : 1;
+            drawDistance.SelectedIndex = graphics.DrawDistance;
+            mipmaps.Checked = graphics.GeneratedMipmaps;
             hudOutput.Checked = graphics.HudOutputResolution;
-            audio = AudioSettings.Load();
-            for (int i = 0; i < volumes.Length; i++) volumes[i].Value = audio.Percent[i];
-            output.SelectedIndex = 0;
-            aspect.Text = DisplaySettings.MatchDisplayAspect;
-            internalTarget.SelectedIndex = 0;
-            try
+            for (int i = 0; i < volumes.Length; i++)
             {
-                string loadPath = File.Exists(settingsFile) ? settingsFile : NebulaPaths.SettingsFile;
-                if (!File.Exists(loadPath)) { if(portable) { output.SelectedIndex = 2; internalTarget.SelectedIndex = 1; } return; }
-                var settings = Json.Load(loadPath);
-                string savedContent = Json.Str(settings, "content");
-                if (portable && savedContent != null && File.Exists(Path.Combine(savedContent, "game.pak"))) content = savedContent;
-                int index = output.Items.IndexOf(Json.Str(settings, "output") ?? "");
-                if (index >= 0) output.SelectedIndex = index;
-                string savedAspect = Json.Str(settings, "aspect");
-                // Settings written before "Match display" existed hold the old
-                // 16:9 default; they follow the display from now on.
-                if (savedAspect != null && !(savedAspect == "16:9" && Json.Long(settings, "settingsVersion") < 2))
-                    aspect.Text = savedAspect;
-                index = internalTarget.Items.IndexOf(Json.Str(settings, "internal") ?? "");
-                if (index >= 0) internalTarget.SelectedIndex = index;
-                long width = Json.Long(settings, "customWidth"), height = Json.Long(settings, "customHeight");
-                if (width >= customWidth.Minimum && width <= customWidth.Maximum) customWidth.Value = width;
-                if (height >= customHeight.Minimum && height <= customHeight.Maximum) customHeight.Value = height;
+                volumes[i].Value = Math.Max(0, Math.Min(200, audio.Percent[i]));
+                volumeValues[i].Text = volumes[i].Value + "%";
             }
-            catch (Exception) { }
+            recording.SelectedIndex = (int)session.Recording;
+            contentLabel.Text = session.Content;
+            loading = false;
+            RefreshDisplayChoices();
         }
 
-        private void SaveSettings()
+        // Resolution: window sizes that fit the monitor (windowed), the desktop
+        // (borderless) or the monitor's own modes (fullscreen).
+        private void RefreshDisplayChoices()
         {
-            Json.Save(settingsFile, new Dictionary<string, object>
+            loading = true;
+            var screen = SelectedMonitor;
+            resolution.Items.Clear();
+            resolutionChoices.Clear();
+            int selected = 0;
+            if (mode.SelectedIndex == 1)
             {
-                { "settingsVersion", 2 }, { "output", output.Text }, { "aspect", aspect.Text }, { "internal", internalTarget.Text },
-                { "customWidth", (int)customWidth.Value }, { "customHeight", (int)customHeight.Value }, { "content", content }
-            });
+                resolutionChoices.Add(new Size(screen.Width, screen.Height));
+                resolution.Items.Add(string.Format("{0} × {1} (desktop)", screen.Width, screen.Height));
+            }
+            else if (mode.SelectedIndex == 2)
+            {
+                foreach (var size in screen.Resolutions()) resolutionChoices.Add(size);
+                int wantW = graphics.FullscreenWidth != 0 ? graphics.FullscreenWidth : screen.Width;
+                int wantH = graphics.FullscreenHeight != 0 ? graphics.FullscreenHeight : screen.Height;
+                for (int i = 0; i < resolutionChoices.Count; i++)
+                {
+                    var s = resolutionChoices[i];
+                    resolution.Items.Add(string.Format("{0} × {1}{2}", s.Width, s.Height, s.Width == screen.Width && s.Height == screen.Height ? " (desktop)" : ""));
+                    if (s.Width == wantW && s.Height == wantH) selected = i;
+                }
+            }
+            else
+            {
+                var frame = SystemInformation.FrameBorderSize;
+                int maxW = screen.WorkArea.Width - 2 * frame.Width - 16;
+                int maxH = screen.WorkArea.Height - SystemInformation.CaptionHeight - 2 * frame.Height - 16;
+                var sizes = new List<Size> { new Size(854, 480), new Size(1024, 768), new Size(1280, 720), new Size(1280, 800),
+                    new Size(1366, 768), new Size(1440, 900), new Size(1600, 900), new Size(1680, 1050), new Size(1920, 1080),
+                    new Size(1920, 1200), new Size(2560, 1080), new Size(2560, 1440), new Size(2560, 1600), new Size(3440, 1440),
+                    new Size(3840, 1080), new Size(3840, 2160), new Size(5120, 1440), new Size(5120, 2160) };
+                sizes.AddRange(screen.Resolutions());
+                foreach (var size in sizes.Distinct().Where(s => s.Width <= maxW && s.Height <= maxH).OrderBy(s => (long)s.Width * s.Height))
+                    resolutionChoices.Add(size);
+                if (resolutionChoices.Count == 0) resolutionChoices.Add(new Size(854, 480));
+                long want = (long)graphics.WindowWidth * graphics.WindowHeight;
+                for (int i = 0; i < resolutionChoices.Count; i++)
+                {
+                    var s = resolutionChoices[i];
+                    resolution.Items.Add(string.Format("{0} × {1}", s.Width, s.Height));
+                    if ((long)s.Width * s.Height <= want) selected = i;
+                }
+            }
+            resolution.SelectedIndex = Math.Min(selected, resolution.Items.Count - 1);
+            loading = false;
+            RefreshRefreshChoices();
         }
 
-        private void Recalculate()
+        private void RefreshRefreshChoices()
         {
-            customWidth.Enabled = customHeight.Enabled = internalTarget.Text == "Custom";
+            loading = true;
+            var screen = SelectedMonitor;
+            refresh.Items.Clear();
+            refreshChoices.Clear();
+            if (mode.SelectedIndex == 2 && resolution.SelectedIndex >= 0)
+            {
+                var size = resolutionChoices[resolution.SelectedIndex];
+                int want = graphics.FullscreenRefresh != 0 ? graphics.FullscreenRefresh : screen.Refresh;
+                int selected = 0;
+                foreach (int rate in screen.RefreshRates(size.Width, size.Height))
+                {
+                    if (rate == want) selected = refreshChoices.Count;
+                    refreshChoices.Add(rate);
+                    refresh.Items.Add(rate + " Hz");
+                }
+                refresh.Enabled = true;
+                if (refresh.Items.Count > 0) refresh.SelectedIndex = selected;
+            }
+            else
+            {
+                refresh.Items.Add(string.Format("Desktop ({0} Hz)", screen.Refresh));
+                refresh.SelectedIndex = 0;
+                refresh.Enabled = false;
+            }
+            resolution.Enabled = mode.SelectedIndex != 1;
+            RefreshScaleChoices();
+            loading = false;
+        }
+
+        // Internal resolution: matching the output, or 1x up to the scale that
+        // fills the selected display (the runtime applies the same limit).
+        private void RefreshScaleChoices()
+        {
+            var screen = SelectedMonitor;
+            int outW = screen.Width, outH = screen.Height;
+            if (mode.SelectedIndex == 2 && resolution.SelectedIndex >= 0)
+            {
+                outW = resolutionChoices[resolution.SelectedIndex].Width;
+                outH = resolutionChoices[resolution.SelectedIndex].Height;
+            }
+            int cap = DisplayInfo.ScaleCovering(outW, outH);
+            int previous = internalScale.SelectedIndex;
+            bool hadItems = internalScale.Items.Count > 0;
+            internalScale.Items.Clear();
+            internalScale.Items.Add("Match output");
+            for (int s = 1; s <= cap; s++)
+                internalScale.Items.Add(string.Format("{0}x ({1} × {2})", s, 640 * s, 528 * s));
+            int want = hadItems ? previous : (graphics.MatchOutput ? 0 : Math.Min(graphics.EfbScale, cap));
+            internalScale.SelectedIndex = Math.Max(0, Math.Min(want, internalScale.Items.Count - 1));
+        }
+
+        private bool Commit()
+        {
             try
             {
-                int width, height;
-                borderless = output.SelectedIndex == 0;
-                var screen = Screen.PrimaryScreen.Bounds;
-                string aspectText = DisplaySettings.ResolveAspect(aspect.Text, screen.Width, screen.Height);
-                if (borderless)
+                var screen = SelectedMonitor;
+                graphics.Monitor = screen != null ? screen.Device : "";
+                graphics.DisplayMode = Math.Max(0, mode.SelectedIndex);
+                if (resolution.SelectedIndex >= 0 && resolution.SelectedIndex < resolutionChoices.Count)
                 {
-                    width = screen.Width;
-                    height = screen.Height;
+                    var size = resolutionChoices[resolution.SelectedIndex];
+                    if (graphics.DisplayMode == 0) { graphics.WindowWidth = size.Width; graphics.WindowHeight = size.Height; }
+                    if (graphics.DisplayMode == 2)
+                    {
+                        graphics.FullscreenWidth = size.Width;
+                        graphics.FullscreenHeight = size.Height;
+                        graphics.FullscreenRefresh = refresh.SelectedIndex >= 0 && refresh.SelectedIndex < refreshChoices.Count
+                            ? refreshChoices[refresh.SelectedIndex] : 0;
+                    }
                 }
-                else DisplaySettings.OutputPreset(output.Text, aspectText, out width, out height);
-                outputInfo.Text = string.Format("{0}: {1} × {2} physical pixels. Aspect {3}.",
-                    borderless ? "Borderless display" : "Window", width, height, aspectText);
-                string selection = internalTarget.Text;
-                if (selection != "Match Output" && selection != "Custom") selection = DisplaySettings.PresetHeight(selection).ToString();
-                plan = DisplaySettings.Resolve(width, height, aspectText, selection, (int)customWidth.Value, (int)customHeight.Value);
-                // "Match display" keeps following the window's shape after
-                // launch; "Match Output" keeps the internal resolution
-                // following its size.
-                plan.FollowWindowAspect = string.Equals(aspect.Text.Trim(), DisplaySettings.MatchDisplayAspect,
-                    StringComparison.OrdinalIgnoreCase) && !plan.NativeFourThree;
-                plan.FollowWindowResolution = selection == "Match Output";
-                info.ForeColor = SystemColors.ControlText;
-                info.Text = string.Format(
-                    "Game picture: {0}×{1}, centered at ({2},{3}).\r\nInternal scale: {6}x. Scene {4}×{5}; frame buffer {7}×{8}.\r\n" +
-                    "{9}Choose 480p internal resolution for lower GPU load.",
-                    plan.ContentWidth, plan.ContentHeight, plan.ContentLeft, plan.ContentTop, plan.SceneWidth, plan.SceneHeight,
-                    plan.EfbScale, plan.BackingWidth, plan.BackingHeight,
-                    plan.FollowWindowAspect || plan.FollowWindowResolution
-                        ? "Resizing the window during play keeps the " +
-                          (plan.FollowWindowAspect && plan.FollowWindowResolution ? "picture shape and resolution" :
-                           plan.FollowWindowAspect ? "picture shape" : "internal resolution") + " matched.\r\n"
-                        : "");
-                play.Enabled = true;
+                graphics.Aspect = Math.Max(0, aspect.SelectedIndex);
+                graphics.MatchOutput = internalScale.SelectedIndex <= 0;
+                if (!graphics.MatchOutput) graphics.EfbScale = internalScale.SelectedIndex;
+                graphics.VSync = vsync.Checked;
+                graphics.AntiAliasing = antiAliasing.SelectedIndex;
+                graphics.Quality = aaQuality.SelectedIndex;
+                graphics.Upscaler = upscaler.SelectedIndex;
+                graphics.Sharpness = (int)sharpness.Value;
+                graphics.TextureFilter = textureFilter.SelectedIndex;
+                graphics.PerPixelLighting = lighting.SelectedIndex == 0;
+                graphics.DrawDistance = drawDistance.SelectedIndex;
+                graphics.GeneratedMipmaps = mipmaps.Checked;
+                graphics.HudOutputResolution = hudOutput.Checked;
+                graphics.Save();
+                for (int i = 0; i < volumes.Length; i++) audio.Percent[i] = volumes[i].Value;
+                audio.Save();
+                session.Recording = (RecordingMode)Math.Max(0, recording.SelectedIndex);
+                session.Save();
+                return true;
             }
             catch (Exception error)
             {
-                plan = null;
-                info.ForeColor = Color.DarkRed;
-                info.Text = error.Message;
-                play.Enabled = false;
+                MessageBox.Show(this, "Settings could not be saved: " + error.Message, "Nebula", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return false;
             }
+        }
+
+        private void Play()
+        {
+            if (!File.Exists(Path.Combine(session.Content, "game.pak")) && !ChooseContent()) return;
+            string error = session.TryLaunch();
+            if (error != null)
+            {
+                MessageBox.Show(this, error, "Nebula", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
+            }
+            // A recording keeps this process alive (its capture thread) until the game exits.
+            Close();
         }
 
         private bool ChooseContent()
@@ -304,74 +544,10 @@ namespace Nebula.Launcher
             using (var dialog = new OpenFileDialog { Title = "Choose game.pak from your Nebula installation", Filter = "Nebula game content|game.pak", CheckFileExists = true })
             {
                 if (dialog.ShowDialog(this) != DialogResult.OK) return false;
-                content = Path.GetDirectoryName(dialog.FileName);
-                SaveSettings();
+                session.Content = Path.GetDirectoryName(dialog.FileName);
+                contentLabel.Text = session.Content;
                 return true;
             }
-        }
-
-        private void Play()
-        {
-            Recalculate();
-            if (plan == null) return;
-            try
-            {
-                if (!File.Exists(Path.Combine(content, "game.pak")) && !ChooseContent()) return;
-                if (Process.GetProcessesByName("NebulaRuntime").Length != 0)
-                    throw new InvalidOperationException("Close the running Nebula game before starting another copy.");
-                LaunchOptions.ValidatePair(app);
-                if (portable) LaunchOptions.PreserveUserData(NebulaPaths.DataRoot, "portable-" + BuildInfo.Version);
-                SaveSettings();
-                graphics.AntiAliasing = antiAliasing.SelectedIndex;
-                graphics.Quality = aaQuality.SelectedIndex;
-                graphics.Upscaler = upscaler.SelectedIndex;
-                graphics.Sharpness = (int)sharpness.Value;
-                graphics.TextureFilter = textureFilter.SelectedIndex;
-                graphics.GeneratedMipmaps = mipmaps.Checked;
-                graphics.PerPixelLighting = lighting.SelectedIndex == 0;
-                graphics.HudOutputResolution = hudOutput.Checked;
-                graphics.Save(plan.FollowWindowResolution);
-                for (int i = 0; i < volumes.Length; i++) audio.Percent[i] = (int)volumes[i].Value;
-                audio.Save();
-                Directory.CreateDirectory(NebulaPaths.Saves);
-                var mode = (RecordingMode)recording.SelectedIndex;
-                var start = LaunchOptions.Create(app, content, FileUtil.FinalPath(NebulaPaths.Saves), plan, borderless, mode);
-                // Normal play has no recording folder, redirected log pipes or sampler.
-                if (mode == RecordingMode.None)
-                {
-                    using (var process = Process.Start(start)) { }
-                    Close();
-                    return;
-                }
-                string session = Sessions.Create("diagnostics");
-                start.EnvironmentVariables["GALAXY_CRASH_DUMP_DIR"] = session;
-                start.EnvironmentVariables["GALAXY_FRAME_TIMELINE_PATH"] = Path.Combine(session, "timeline.bin");
-                var launchFiles = new Dictionary<string, object>();
-                foreach (string name in new[] { "NebulaRuntime.exe", "RMGE01_game.dll", "RMGE01_home_button.dll",
-                    "RMGE01_dsp.dll", "RMGE01_boot_image.bin", "runtime-env.json", "Nebula.exe" })
-                    launchFiles[name] = FileUtil.Sha256File(Path.Combine(app, name));
-                var launchEnvironment = new Dictionary<string, object>();
-                foreach (string name in start.EnvironmentVariables.Keys)
-                    if (name.StartsWith("GALAXY_", StringComparison.OrdinalIgnoreCase)) launchEnvironment[name] = start.EnvironmentVariables[name];
-                var sessionInfo = new Dictionary<string, object>
-                {
-                    { "startUtc", DateTime.UtcNow.ToString("o") }, { "pid", null }, { "monitoring", true },
-                    { "recording", mode.ToString() }, { "content", content }, { "saves", start.EnvironmentVariables["GALAXY_NAND_ROOT"] },
-                    { "app", app }, { "output", plan.OutputWidth + "x" + plan.OutputHeight }, { "aspect", plan.Aspect },
-                    { "efbScale", plan.EfbScale }, { "borderless", borderless }, { "detailedRendererTimings", mode == RecordingMode.Detailed },
-                    { "launchFileSha256", launchFiles }, { "environment", launchEnvironment }
-                };
-                Json.Save(Path.Combine(session, "session.json"), sessionInfo);
-                var game = Process.Start(start);
-                // Start draining redirected output before any further file work.
-                Sessions.Capture(game, session, true);
-                sessionInfo["pid"] = game.Id;
-                try { Json.Save(Path.Combine(session, "session.json"), sessionInfo); }
-                catch (IOException) { } // The pre-launch identity and live reader remain.
-                catch (UnauthorizedAccessException) { }
-                Close();
-            }
-            catch (Exception error) { MessageBox.Show(this, error.Message, "Nebula", MessageBoxButtons.OK, MessageBoxIcon.Error); }
         }
 
         private void ImportSave()

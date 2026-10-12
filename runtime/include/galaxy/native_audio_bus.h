@@ -92,6 +92,97 @@ native_audio_bus_from_channel_format(
     return {};
 }
 
+// The JAudio2 owner of one DSP channel, through the game's structures (field
+// offsets from the Petari layouts, docs/PROVENANCE.md), every link checked:
+//   JASDSPChannel::sDspChannels: 64 x 0x1C; +0x14 callback data. A
+//     JASChannel's DSP channel has the JASChannel as callback data, and the
+//     JASChannel points back at it (+0x08 mDspCh).
+//   JASChannel +0x10 callback data: its track's TChannelMgr (+0x4C mTrack;
+//     the track lists the manager at +0x170..+0x17C or embeds it at +0x180),
+//     or its JASAramStream (+0x90 mChannels[6] lists the channel).
+//   JASTrack +0x12C mParent up to the output track, embedded in a JAISe at
+//     +0xC8 (a JAISe begins with its JSULink, whose +0 points at it) or in a
+//     JAISeq at +0xA8. JAISound::mSoundID is JAISe +0x28, JAISeq +0x18,
+//     JAIStream +0x18 (its JASAramStream at +0xA8).
+enum class JAudioOwnerRoute : std::uint8_t { Format, Se, Seq, Stream };
+
+struct JAudioChannelOwner {
+    JAudioOwnerRoute route{JAudioOwnerRoute::Format};
+    std::uint32_t sound_id{};
+};
+
+inline constexpr std::uint32_t kJasDspChannelsPointer = 0x806A2BD0u;
+inline constexpr std::uint32_t kJasDspChannelSize = 0x1cu;
+
+// `read_u32(address)` returns the big-endian guest word, or 0 if unmapped.
+template <class ReadU32>
+[[nodiscard]] JAudioChannelOwner resolve_jaudio_channel_owner(
+    const ReadU32& read_u32,
+    std::uint32_t index) noexcept {
+    const std::uint32_t table = read_u32(kJasDspChannelsPointer);
+    if (table == 0u) {
+        return {};
+    }
+    const std::uint32_t dsp_channel = table + index * kJasDspChannelSize;
+    const std::uint32_t channel = read_u32(dsp_channel + 0x14u);
+    if (channel == 0u || read_u32(channel + 0x08u) != dsp_channel) {
+        return {};
+    }
+    const std::uint32_t data = read_u32(channel + 0x10u);
+    if (data == 0u) {
+        return {};
+    }
+    const std::uint32_t track = read_u32(data + 0x4cu);
+    bool track_owned = track != 0u && track + 0x180u == data;
+    for (std::uint32_t k = 0u; !track_owned && track != 0u && k < 4u; ++k) {
+        track_owned = read_u32(track + 0x170u + k * 4u) == data;
+    }
+    if (track_owned) {
+        std::uint32_t root = track;
+        for (std::uint32_t depth = 0u; depth < 16u; ++depth) {
+            const std::uint32_t parent = read_u32(root + 0x12cu);
+            if (parent == 0u || parent == root) {
+                break;
+            }
+            root = parent;
+        }
+        const std::uint32_t se = root - 0xc8u;
+        if (read_u32(se) == se) {
+            return {JAudioOwnerRoute::Se, read_u32(se + 0x28u)};
+        }
+        return {JAudioOwnerRoute::Seq, read_u32(root - 0xa8u + 0x18u)};
+    }
+    for (std::uint32_t k = 0u; k < 6u; ++k) {
+        if (read_u32(data + 0x90u + k * 4u) == channel) {
+            return {JAudioOwnerRoute::Stream, read_u32(data - 0xa8u + 0x18u)};
+        }
+    }
+    return {};
+}
+
+// The category of the sound on DSP channel `index`: its owner's sound ID,
+// else the channel record's sample format (TChannel +0x064, +0x100), else SFX.
+template <class ReadU32>
+[[nodiscard]] NativeAudioBusDecision classify_jaudio_channel(
+    const ReadU32& read_u32,
+    std::uint32_t index,
+    std::uint16_t block_samples,
+    std::uint16_t block_bytes,
+    JAudioChannelOwner* owner_out = nullptr) noexcept {
+    const JAudioChannelOwner owner = resolve_jaudio_channel_owner(read_u32, index);
+    if (owner_out != nullptr) {
+        *owner_out = owner;
+    }
+    NativeAudioBusDecision decision{};
+    if (owner.route != JAudioOwnerRoute::Format) {
+        decision = native_audio_bus_from_sound_id(owner.sound_id);
+    }
+    if (decision.classification != NativeAudioBusClassification::OwnerSoundId) {
+        decision = native_audio_bus_from_channel_format(block_samples, block_bytes);
+    }
+    return decision;
+}
+
 // Per-bus gains. `master` multiplies each bus here; the runtime publishes 1
 // because it applies the master gain once, at the final output, so that it
 // also covers audio mixed outside these channels (the movie player).

@@ -16403,22 +16403,9 @@ bool GuestAddressSpace::dsp_native_write_aram_u16(
 }
 
 void GuestAddressSpace::refresh_dsp_audio_bus_controls(std::uint32_t channel_table) {
-    // Each DSP channel's owner, through JAudio2's structures (field offsets
-    // from the Petari layouts, docs/PROVENANCE.md), every link checked:
-    //   JASDSPChannel::sDspChannels: 64 x 0x1C; +0x14 callback data. A
-    //     JASChannel's DSP channel has the JASChannel as callback data, and
-    //     the JASChannel points back at it (+0x08 mDspCh).
-    //   JASChannel +0x10 callback data: its track's TChannelMgr (+0x4C mTrack;
-    //     the track lists the manager at +0x170..+0x17C or embeds it at
-    //     +0x180), or its JASAramStream (+0x90 mChannels[6] lists the
-    //     channel).
-    //   JASTrack +0x12C mParent up to the output track, embedded in a JAISe
-    //     at +0xC8 (a JAISe begins with its JSULink, whose +0 points at it) or
-    //     in a JAISeq at +0xA8. JAISound::mSoundID is JAISe +0x28, JAISeq
-    //     +0x18, JAIStream +0x18 (its JASAramStream at +0xA8).
-    // An unresolved owner falls back to the channel's sample format.
-    constexpr std::uint32_t kDspChannelsPointer = 0x806A2BD0u;
-    constexpr std::uint32_t kDspChannelSize = 0x1cu;
+    // Used by the LLE DSP path only, at each sync mail: every channel's owner
+    // (classify_jaudio_channel). The host mixer decides a channel's category
+    // once per sound, at its first render, instead.
     constexpr std::uint32_t kChannelSize = 0x180u;
     std::array<galaxy::audio::NativeAudioBus,
                galaxy::audio::NativeAudioBusControls::kChannelCount>
@@ -16432,54 +16419,6 @@ void GuestAddressSpace::refresh_dsp_audio_bus_controls(std::uint32_t channel_tab
         const std::byte* value = pointer_or_null(address, sizeof(std::uint32_t));
         return value != nullptr ? read_be32_at(value) : 0u;
     };
-    enum class Route : std::uint8_t { Format, Se, Seq, Stream };
-    struct Owner {
-        Route route{Route::Format};
-        std::uint32_t sound_id{};
-    };
-    const auto resolve = [&read_u32](std::uint32_t dsp_channel) -> Owner {
-        const std::uint32_t channel = read_u32(dsp_channel + 0x14u);
-        if (channel == 0u || read_u32(channel + 0x08u) != dsp_channel) {
-            return {};
-        }
-        const std::uint32_t data = read_u32(channel + 0x10u);
-        if (data == 0u) {
-            return {};
-        }
-        const std::uint32_t track = read_u32(data + 0x4cu);
-        bool track_owned = track != 0u && track + 0x180u == data;
-        for (std::uint32_t k = 0u; !track_owned && track != 0u && k < 4u; ++k) {
-            track_owned = read_u32(track + 0x170u + k * 4u) == data;
-        }
-        if (track_owned) {
-            std::uint32_t root = track;
-            for (std::uint32_t depth = 0u; depth < 16u; ++depth) {
-                const std::uint32_t parent = read_u32(root + 0x12cu);
-                if (parent == 0u || parent == root) {
-                    break;
-                }
-                root = parent;
-            }
-            const std::uint32_t se = root - 0xc8u;
-            if (read_u32(se) == se) {
-                return {Route::Se, read_u32(se + 0x28u)};
-            }
-            return {Route::Seq, read_u32(root - 0xa8u + 0x18u)};
-        }
-        for (std::uint32_t k = 0u; k < 6u; ++k) {
-            if (read_u32(data + 0x90u + k * 4u) == channel) {
-                return {Route::Stream, read_u32(data - 0xa8u + 0x18u)};
-            }
-        }
-        return {};
-    };
-
-    static const bool trace = read_env_flag("GALAXY_AUDIO_BUS_TRACE");
-    static std::array<std::uint64_t,
-                      galaxy::audio::NativeAudioBusControls::kChannelCount>
-        traced{};
-
-    const std::uint32_t dsp_channels = read_u32(kDspChannelsPointer);
     const std::uint32_t table =
         channel_table != 0u ? channel_table : dsp_channel_table_addr_;
     const std::byte* records = table != 0u
@@ -16488,40 +16427,14 @@ void GuestAddressSpace::refresh_dsp_audio_bus_controls(std::uint32_t channel_tab
               static_cast<std::uint32_t>(buses.size()) * kChannelSize)
         : nullptr;
     for (std::size_t index = 0u; index < buses.size(); ++index) {
-        const Owner owner = dsp_channels != 0u
-            ? resolve(dsp_channels + static_cast<std::uint32_t>(index) * kDspChannelSize)
-            : Owner{};
-        galaxy::audio::NativeAudioBusDecision decision{};
-        if (owner.route != Route::Format) {
-            decision = galaxy::audio::native_audio_bus_from_sound_id(owner.sound_id);
-        }
-        if (decision.classification !=
-                galaxy::audio::NativeAudioBusClassification::OwnerSoundId &&
-            records != nullptr) {
-            const std::byte* record = records + index * kChannelSize;
-            decision = galaxy::audio::native_audio_bus_from_channel_format(
-                read_be16_at(record, 0x64u),
-                read_be16_at(record, 0x100u));
-        }
-        buses[index] = decision.bus;
-        if (trace) {
-            const std::uint64_t key =
-                (static_cast<std::uint64_t>(owner.route) << 40u) |
-                (static_cast<std::uint64_t>(decision.bus) << 32u) |
-                owner.sound_id;
-            if (key != traced[index]) {
-                traced[index] = key;
-                static constexpr const char* kRoutes[] = {"format", "se", "seq", "stream"};
-                static constexpr const char* kBuses[] = {
-                    "music", "voice", "sfx", "ambience", "cutscene"};
-                std::ostringstream line;
-                line << "[audio-bus] ch=" << index
-                     << " route=" << kRoutes[static_cast<unsigned>(owner.route)]
-                     << " id=0x" << std::hex << owner.sound_id << std::dec
-                     << " bus=" << kBuses[static_cast<unsigned>(decision.bus)] << '\n';
-                std::cerr << line.str();
-            }
-        }
+        const std::byte* record =
+            records != nullptr ? records + index * kChannelSize : nullptr;
+        buses[index] = galaxy::audio::classify_jaudio_channel(
+            read_u32,
+            static_cast<std::uint32_t>(index),
+            record != nullptr ? read_be16_at(record, 0x64u) : std::uint16_t{0},
+            record != nullptr ? read_be16_at(record, 0x100u) : std::uint16_t{0})
+            .bus;
     }
 
     const galaxy::RuntimeAudioSettings settings =

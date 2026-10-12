@@ -541,7 +541,7 @@ namespace Nebula.Setup
             if (!File.Exists(Path.Combine(app, "vcruntime140.dll")) && current != null)
                 foreach (var dll in current.RuntimeDllNames()) current.CopyFiles(app, dll);
             Payload.Extract(RuntimePayload("NebulaRuntime.exe"), Path.Combine(app, "NebulaRuntime.exe"));
-            foreach (var name in new[] { "Nebula.exe", "runtime-env.json", "LICENSE", "THIRD-PARTY-NOTICES.md", "README.md", "nebula-recomp.exe" })
+            foreach (var name in new[] { "Nebula.exe", "NebulaSettings.exe", "runtime-env.json", "LICENSE", "THIRD-PARTY-NOTICES.md", "README.md", "nebula-recomp.exe" })
                 Payload.Extract(name, Path.Combine(app, name));
             File.WriteAllText(Path.Combine(app, "runtime-isa.txt"), RuntimeNativeIsa);
 
@@ -573,7 +573,7 @@ namespace Nebula.Setup
         /// <summary>Load each compiled module and check its exports before switching.</summary>
         private void ValidateApp(string app)
         {
-            foreach (var name in ModuleFiles.Concat(new[] { "NebulaRuntime.exe", "Nebula.exe" }))
+            foreach (var name in ModuleFiles.Concat(new[] { "NebulaRuntime.exe", "Nebula.exe", "NebulaSettings.exe" }))
                 if (!File.Exists(Path.Combine(app, name))) throw new InvalidOperationException("The new version is missing " + name + ".");
             var exports = new Dictionary<string, string[]>
             {
