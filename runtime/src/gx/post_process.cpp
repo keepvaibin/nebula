@@ -212,6 +212,23 @@ void set_reason(std::array<char, N>& out, const char* text) noexcept {
     std::snprintf(out.data(), out.size(), "%s", text);
 }
 
+// GALAXY_TEST_POST_FAULT=smaa|selftest|fxaa|targets (comma-separated) makes
+// that step fail, so tests can show each fallback and status text.
+bool test_fault(const char* name) noexcept {
+    char value[64]{};
+    std::size_t length = 0;
+    if (getenv_s(&length, value, sizeof(value), "GALAXY_TEST_POST_FAULT") != 0 || length <= 1u) {
+        return false;
+    }
+    const std::size_t n = std::strlen(name);
+    for (const char* p = value; (p = std::strstr(p, name)) != nullptr; p += n) {
+        const bool starts = p == value || p[-1] == ',';
+        const bool ends = p[n] == '\0' || p[n] == ',';
+        if (starts && ends) return true;
+    }
+    return false;
+}
+
 }  // namespace
 
 bool PostProcessor::initialize(ID3D12Device* device, ID3D12CommandQueue* queue,
@@ -278,10 +295,12 @@ bool PostProcessor::initialize(ID3D12Device* device, ID3D12CommandQueue* queue,
         shutdown();
         return false;
     }
-    const bool smaa_pipelines =
+    fault_selftest_ = test_fault("selftest");
+    fault_targets_ = test_fault("targets");
+    const bool smaa_pipelines = !test_fault("smaa") &&
         create_smaa_pipelines(settings_.smaa_quality, smaa_edges_, smaa_weights_) &&
         create_pipeline(code(bytes(g_post_smaa_blend_vs)), code(bytes(g_post_smaa_blend_ps)), kColorFormat, 0, smaa_blend_);
-    const bool fxaa_pipeline =
+    const bool fxaa_pipeline = !test_fault("fxaa") &&
         create_pipeline(code(bytes(g_post_fullscreen_vs)), code(bytes(g_post_fxaa_ps)), kColorFormat, 0, fxaa_);
 
     D3D12_DESCRIPTOR_HEAP_DESC hd{};
@@ -541,7 +560,7 @@ bool PostProcessor::record_aa(ID3D12GraphicsCommandList* list, DescriptorRing& s
                               AaRun pass, ID3D12Resource* source,
                               unsigned width, unsigned height,
                               std::uint64_t frame_index, unsigned frames_in_flight) {
-    if (pass == AaRun::kNone ||
+    if (pass == AaRun::kNone || (fault_targets_ && frame_index != 0u) ||
         !ensure_target(antialiased_, width, height, kColorFormat, 2u, frame_index, frames_in_flight)) {
         return false;
     }
@@ -764,7 +783,8 @@ void PostProcessor::self_test(ID3D12CommandQueue* queue) {
         }
         // A working pass blends a few dozen pixels along the steps and
         // leaves flat areas alone.
-        const bool passed = changed >= 8u && stray == 0u;
+        const bool passed = changed >= 8u && stray == 0u &&
+            !(fault_selftest_ && passes[i] == AaRun::kSmaa);
         std::cerr << "[post-process] self-test " << (passes[i] == AaRun::kSmaa ? "smaa" : "fxaa")
                   << " changed=" << changed << " stray=" << stray << '\n';
         if (!passed) fail(passes[i], "SELF-TEST");

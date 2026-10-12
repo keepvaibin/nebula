@@ -5,6 +5,7 @@
 #include <dxgi1_4.h>
 
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <iostream>
 #include <string>
@@ -153,6 +154,20 @@ void self_test_on_warp() {
     expect(s.smaa_ok, "smaa self-test passes");
     expect(s.fxaa_ok, "fxaa self-test passes");
     expect(device->GetDeviceRemovedReason() == S_OK, "device alive after self-test");
+    // Injected failures: each AA pass is replaced or reported, the chain stays up.
+    _putenv_s("GALAXY_TEST_POST_FAULT", "selftest");
+    galaxy::gx::PostProcessor no_smaa;
+    expect(no_smaa.initialize(device.Get(), queue.Get(), PostProcessSettings{}), "initialize with a failing smaa self-test");
+    expect(!no_smaa.status().smaa_ok && no_smaa.status().fxaa_ok &&
+               std::strcmp(no_smaa.status().smaa_reason.data(), "SELF-TEST") == 0,
+           "smaa self-test failure reported, fxaa kept");
+    _putenv_s("GALAXY_TEST_POST_FAULT", "smaa,fxaa");
+    galaxy::gx::PostProcessor no_aa;
+    expect(no_aa.initialize(device.Get(), queue.Get(), PostProcessSettings{}), "scaling survives failed aa pipelines");
+    expect(!no_aa.status().smaa_ok && !no_aa.status().fxaa_ok &&
+               std::strcmp(no_aa.status().smaa_reason.data(), "PIPELINES") == 0,
+           "aa pipeline failures reported");
+    _putenv_s("GALAXY_TEST_POST_FAULT", "");
     galaxy::gx::PostProcessor nothing;
     expect(!nothing.initialize(nullptr, nullptr, PostProcessSettings{}), "no device: initialize fails");
     expect(!nothing.status().initialized && !nothing.status().smaa_ok, "no device: nothing available");

@@ -196,6 +196,8 @@ private:
     PostProcessSettings settings_{};
     bool ready_ = false;
     PostProcessStatus status_{};
+    bool fault_selftest_ = false;  // GALAXY_TEST_POST_FAULT
+    bool fault_targets_ = false;
     Microsoft::WRL::ComPtr<ID3D12RootSignature> root_signature_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> smaa_edges_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> smaa_weights_;
