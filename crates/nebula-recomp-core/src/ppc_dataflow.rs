@@ -19,7 +19,8 @@
 //! register live there.
 
 use powerpc::{Extensions, Ins, Opcode};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
+use std::fmt::Write as _;
 
 /// A set of guest registers. CR is field-granular (CR0..CR7), XER is split into
 /// the carry bit (CA) and the summary/overflow bits (SO, OV).
@@ -619,7 +620,12 @@ pub fn effect(pc: u32, word: u32) -> Option<Effect> {
             let target = branch_target(pc, word);
             if word & 1 != 0 {
                 writes.lr = true;
-                flow = Flow::Call(target);
+                // `bl $+4` materialises the PC in LR and falls through.
+                flow = if target == pc.wrapping_add(4) {
+                    Flow::Next
+                } else {
+                    Flow::Call(target)
+                };
             } else {
                 flow = Flow::Branch(target);
             }
@@ -779,31 +785,69 @@ impl FunctionLiveness {
 }
 
 /// Backward liveness over the function at `start`. `exit_live` is live at
-/// every return and at every branch out of the function; `call_model` gives a
-/// direct call's reads and clobbers by target (indirect calls use the EABI
-/// model); `entries` are interior entries (everything is live before them,
-/// since control can arrive with any state).
+/// every return; `call_model` gives a call's reads and clobbers by target
+/// (`None`: an indirect call). A branch out of the function is a tail call:
+/// live there are the target's reads, LR and `exit_live`. Interior entries
+/// need no special case: liveness at a point is what the code after it reads,
+/// however control arrives.
 #[must_use]
 pub fn analyze_liveness(
     start: u32,
     words: &[u32],
     exit_live: Regs,
-    call_model: &dyn Fn(u32) -> CallModel,
-    entries: &[u32],
+    call_model: &dyn Fn(Option<u32>) -> CallModel,
 ) -> FunctionLiveness {
-    let count = words.len();
-    let effects: Vec<Option<Effect>> = words
+    analyze_effects(
+        start,
+        decode(start, words, &|_| None),
+        exit_live,
+        call_model,
+    )
+}
+
+/// A call to a helper the translator lowers in place (`bl _savegpr_N`,
+/// `bl _restgpr_N`): its register reads and writes, by target.
+pub type InlineCalls<'a> = dyn Fn(u32) -> Option<(Regs, Regs)> + 'a;
+
+/// The effects of a function's instructions, with in-place helper calls
+/// replaced by their register effects.
+#[must_use]
+pub fn decode(start: u32, words: &[u32], inline_calls: &InlineCalls<'_>) -> Vec<Option<Effect>> {
+    words
         .iter()
         .enumerate()
-        .map(|(index, word)| effect(start + index as u32 * 4, *word))
-        .collect();
+        .map(|(index, word)| {
+            let decoded = effect(start + index as u32 * 4, *word)?;
+            match decoded.flow {
+                Flow::Call(target) => match inline_calls(target) {
+                    Some((reads, writes)) => Some(Effect {
+                        reads: decoded.reads.union(reads),
+                        writes: decoded.writes.union(writes),
+                        flow: Flow::Next,
+                        boundary: false,
+                    }),
+                    None => Some(decoded),
+                },
+                _ => Some(decoded),
+            }
+        })
+        .collect()
+}
+
+/// `analyze_liveness` over decoded effects.
+#[must_use]
+pub fn analyze_effects(
+    start: u32,
+    effects: Vec<Option<Effect>>,
+    exit_live: Regs,
+    call_model: &dyn Fn(Option<u32>) -> CallModel,
+) -> FunctionLiveness {
+    let count = effects.len();
     let index_of = |pc: u32| -> Option<usize> {
         let offset = pc.checked_sub(start)?;
         let index = (offset / 4) as usize;
         (offset % 4 == 0 && index < count).then_some(index)
     };
-    let mut entry_indices: Vec<usize> = entries.iter().filter_map(|pc| index_of(*pc)).collect();
-    entry_indices.sort_unstable();
     let mut live_before = vec![Regs::default(); count];
     let mut live_after = vec![Regs::default(); count];
     loop {
@@ -820,11 +864,20 @@ pub fn analyze_liveness(
             let target_live = |target: u32| -> Regs {
                 match index_of(target) {
                     Some(target) => live_before[target],
-                    None => exit_live,
+                    None => exit_live.union(call_model(Some(target)).uses).union(Regs {
+                        lr: true,
+                        ..Regs::default()
+                    }),
                 }
             };
             let (after, before) = match effects[index] {
                 None => (Regs::ALL, Regs::ALL),
+                // `bl` into the function's own body: a local subroutine whose
+                // `blr` returns inside the function. Not modelled.
+                Some(Effect {
+                    flow: Flow::Call(target),
+                    ..
+                }) if index_of(target).is_some() => (Regs::ALL, Regs::ALL),
                 Some(effect) => {
                     let after = match effect.flow {
                         Flow::Next => next(index),
@@ -837,7 +890,7 @@ pub fn analyze_liveness(
                     };
                     let before = match effect.flow {
                         Flow::Call(target) => {
-                            let model = call_model(target);
+                            let model = call_model(Some(target));
                             after
                                 .minus(model.clobbers)
                                 .minus(effect.writes)
@@ -845,7 +898,7 @@ pub fn analyze_liveness(
                                 .union(effect.reads)
                         }
                         Flow::IndirectCall => {
-                            let model = CallModel::abi();
+                            let model = call_model(None);
                             after
                                 .minus(model.clobbers)
                                 .minus(effect.writes)
@@ -857,11 +910,6 @@ pub fn analyze_liveness(
                     };
                     (after, before)
                 }
-            };
-            let before = if entry_indices.binary_search(&index).is_ok() {
-                before.union(Regs::ALL)
-            } else {
-                before
             };
             if after != live_after[index] || before != live_before[index] {
                 live_after[index] = after;
@@ -911,16 +959,23 @@ impl AbiFacts {
     }
 }
 
-/// The EABI facts of the function at `start`.
+/// The EABI facts of the function at `start`, every call under the EABI
+/// model.
 #[must_use]
-pub fn abi_facts(start: u32, words: &[u32], entries: &[u32]) -> AbiFacts {
-    let liveness = analyze_liveness(
-        start,
-        words,
-        abi::return_live(),
-        &|_| CallModel::abi(),
-        entries,
-    );
+pub fn abi_facts(start: u32, words: &[u32]) -> AbiFacts {
+    abi_facts_with(start, decode(start, words, &|_| None), &|_| {
+        CallModel::abi()
+    })
+}
+
+/// The EABI facts of the function at `start` under a call model.
+#[must_use]
+pub fn abi_facts_with(
+    start: u32,
+    effects: Vec<Option<Effect>>,
+    call_model: &dyn Fn(Option<u32>) -> CallModel,
+) -> AbiFacts {
+    let liveness = analyze_effects(start, effects, abi::return_live(), call_model);
     let mut facts = AbiFacts {
         entry_live: liveness.entry_live(),
         ..AbiFacts::default()
@@ -936,15 +991,11 @@ pub fn abi_facts(start: u32, words: &[u32], entries: &[u32]) -> AbiFacts {
             let clobbered = abi::call_clobbers();
             let read_after = liveness.live_after[index]
                 .intersect(clobbered)
+                .minus(abi_results())
+                // LR after a call is the return address, which the caller
+                // itself sets; CR, XER and FPSCR live in the context.
                 .minus(Regs {
-                    gpr: abi::RESULT_GPRS,
-                    fpr: abi::RESULT_FPRS,
-                    ..Regs::default()
-                })
-                // XER, FPSCR and LR are not modelled as call results; their
-                // reads after a call (mfxer, mffs, mflr) are rare and
-                // covered by the context, which keeps them.
-                .minus(Regs {
+                    cr: u8::MAX,
                     lr: true,
                     ca: true,
                     so: true,
@@ -959,17 +1010,14 @@ pub fn abi_facts(start: u32, words: &[u32], entries: &[u32]) -> AbiFacts {
     if facts.undecodable {
         return facts;
     }
-    let nonvolatile = Regs {
-        gpr: abi::NONVOLATILE_GPRS,
-        fpr: abi::NONVOLATILE_FPRS,
-        cr: abi::NONVOLATILE_CR,
-        ..Regs::default()
-    };
-    facts.nonvolatile_clobbers = facts.writes.intersect(nonvolatile).minus(facts.entry_live);
+    facts.nonvolatile_clobbers = facts
+        .writes
+        .intersect(nonvolatile())
+        .minus(facts.entry_live);
     facts.scratch_entry_reads = facts
         .entry_live
         .minus(abi::call_uses())
-        .minus(nonvolatile)
+        .minus(nonvolatile())
         .minus(Regs {
             lr: true,
             fpscr: true,
@@ -1004,6 +1052,588 @@ pub fn dead_flag_writes(liveness: &FunctionLiveness) -> BTreeMap<u32, Regs> {
         }
     }
     dead
+}
+
+/// One translated function as the module ABI analysis sees it.
+#[derive(Clone, Debug)]
+pub struct AbiFunctionInput<'a> {
+    pub start: u32,
+    pub words: &'a [u32],
+    /// The function's body is not its guest code (host substitution, lean
+    /// body, audited wrapper): direct callers keep full synchronization.
+    pub native: bool,
+}
+
+/// Why a function keeps full context synchronization at its calls, at its
+/// returns and when called directly.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub enum AbiOptOut {
+    /// A host substitution or lean body.
+    Native,
+    /// An instruction form the effect decoder does not model.
+    Undecodable,
+    /// `bl` into its own body (a local subroutine returning inside it).
+    InternalLink,
+}
+
+impl AbiOptOut {
+    #[must_use]
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Native => "native",
+            Self::Undecodable => "undecodable",
+            Self::InternalLink => "internal-link",
+        }
+    }
+}
+
+/// The ABI facts of one function the code generator uses.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct FunctionAbi {
+    pub opt_out: Option<AbiOptOut>,
+    /// Volatile non-argument registers read at entry; callers store them.
+    pub entry_extra: Regs,
+    /// Non-volatile registers that may differ when a call returns: the
+    /// function's own unsaved writes and those of everything it calls.
+    pub clobbers: Regs,
+    /// Call sites after which a volatile register other than the results
+    /// is read before being rewritten, with those registers.
+    pub reads_after_calls: BTreeMap<u32, Regs>,
+    /// Direct calls: (pc, target).
+    pub direct_calls: Vec<(u32, u32)>,
+    /// Branches to another function's start (tail calls): (pc, target).
+    pub tail_calls: Vec<(u32, u32)>,
+    /// The function makes an indirect call or computed jump.
+    pub indirect_calls: bool,
+    /// Indirect calls (`bctrl`, `blrl`) by pc.
+    pub indirect_call_sites: Vec<u32>,
+    /// Non-volatile registers the function saves and restores: it reads
+    /// them before it writes them. A callee's clobber of one stays hidden.
+    pub saved: Regs,
+}
+
+/// What a caller synchronizes around one call under the EABI contract.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct CallSync {
+    /// Registers stored to the context before the call (when written).
+    pub store: Regs,
+    /// Registers reloaded from the context after it (when used).
+    pub reload: Regs,
+}
+
+/// Module-wide EABI facts (translator --abi-call-sync / --abi-exit-sync).
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct ModuleAbi {
+    pub functions: BTreeMap<u32, FunctionAbi>,
+    /// Volatile registers some caller reads after a call. They stay fully
+    /// synchronized: stored before and reloaded after every call, and
+    /// stored at every return.
+    pub always_synced: Regs,
+    /// The contract of an unknown (indirect) callee, or `None` when an
+    /// address-taken function is opted out.
+    pub indirect: Option<CallSync>,
+}
+
+/// Registers a callee may read under the EABI: the arguments, the stack and
+/// small-data bases, every non-volatile register (it saves them) and LR.
+#[must_use]
+pub fn abi_call_store() -> Regs {
+    Regs {
+        gpr: abi::ARGUMENT_GPRS | abi::NONVOLATILE_GPRS,
+        fpr: abi::ARGUMENT_FPRS | abi::NONVOLATILE_FPRS,
+        lr: true,
+        ..Regs::default()
+    }
+}
+
+/// Registers that carry a result back.
+#[must_use]
+pub fn abi_results() -> Regs {
+    Regs {
+        gpr: abi::RESULT_GPRS,
+        fpr: abi::RESULT_FPRS,
+        ..Regs::default()
+    }
+}
+
+/// Registers a caller may observe after a return: the results, every
+/// non-volatile register and LR.
+#[must_use]
+pub fn abi_exit_store() -> Regs {
+    Regs {
+        gpr: abi::RESULT_GPRS | abi::NONVOLATILE_GPRS,
+        fpr: abi::RESULT_FPRS | abi::NONVOLATILE_FPRS,
+        lr: true,
+        ..Regs::default()
+    }
+}
+
+/// The registers translated code may hold in host locals: GPRs, FPRs (both
+/// lanes), LR and CTR. CR, XER and FPSCR always live in the context.
+fn resident() -> Regs {
+    Regs {
+        gpr: u32::MAX,
+        fpr: u32::MAX,
+        lr: true,
+        ctr: true,
+        ..Regs::default()
+    }
+}
+
+fn nonvolatile() -> Regs {
+    Regs {
+        gpr: abi::NONVOLATILE_GPRS,
+        fpr: abi::NONVOLATILE_FPRS,
+        cr: abi::NONVOLATILE_CR,
+        ..Regs::default()
+    }
+}
+
+impl ModuleAbi {
+    /// Analyzes every function. `address_taken` lists the functions whose
+    /// address appears in data or is materialized in code (possible indirect
+    /// call targets); empty means any function may be one.
+    #[must_use]
+    pub fn analyze(
+        functions: &[AbiFunctionInput<'_>],
+        address_taken: &BTreeSet<u32>,
+        inline_calls: &InlineCalls<'_>,
+    ) -> Self {
+        let mut module = Self::default();
+        let starts: BTreeSet<u32> = functions.iter().map(|function| function.start).collect();
+        let decoded: BTreeMap<u32, Vec<Option<Effect>>> = functions
+            .iter()
+            .map(|function| {
+                (
+                    function.start,
+                    decode(function.start, function.words, inline_calls),
+                )
+            })
+            .collect();
+        for function in functions {
+            let effects = &decoded[&function.start];
+            let facts = abi_facts_with(function.start, effects.clone(), &|_| CallModel::abi());
+            let end = function.start.wrapping_add(function.words.len() as u32 * 4);
+            let mut direct_calls = Vec::new();
+            let mut tail_calls = Vec::new();
+            let mut indirect_calls = false;
+            let mut indirect_call_sites = Vec::new();
+            let mut internal_link = false;
+            for (index, effect) in effects.iter().enumerate() {
+                let pc = function.start + index as u32 * 4;
+                match effect.map(|effect| effect.flow) {
+                    Some(Flow::Call(target)) if target >= function.start && target < end => {
+                        internal_link = true;
+                    }
+                    Some(Flow::Call(target)) => direct_calls.push((pc, target)),
+                    Some(Flow::Branch(target) | Flow::CondBranch(target))
+                        if (target < function.start || target >= end)
+                            && starts.contains(&target) =>
+                    {
+                        tail_calls.push((pc, target));
+                    }
+                    Some(Flow::IndirectCall) => {
+                        indirect_calls = true;
+                        indirect_call_sites.push(pc);
+                    }
+                    Some(Flow::IndirectJump) => indirect_calls = true,
+                    _ => {}
+                }
+            }
+            let opt_out = if function.native {
+                Some(AbiOptOut::Native)
+            } else if facts.undecodable {
+                Some(AbiOptOut::Undecodable)
+            } else if internal_link {
+                Some(AbiOptOut::InternalLink)
+            } else {
+                None
+            };
+            // A host substitution implements a C function: it reads its
+            // arguments and writes its results only, so a tail call to it
+            // adds nothing. Unmodelled guest code may do anything.
+            let (entry_extra, clobbers) = match opt_out {
+                None => (
+                    facts.scratch_entry_reads.intersect(resident()),
+                    facts.nonvolatile_clobbers.intersect(resident()),
+                ),
+                Some(AbiOptOut::Native) => (Regs::default(), Regs::default()),
+                Some(_) => (Regs::ALL, Regs::ALL),
+            };
+            module.functions.insert(
+                function.start,
+                FunctionAbi {
+                    opt_out,
+                    entry_extra,
+                    clobbers,
+                    reads_after_calls: BTreeMap::new(),
+                    direct_calls,
+                    tail_calls,
+                    indirect_calls,
+                    indirect_call_sites,
+                    saved: facts
+                        .writes
+                        .intersect(facts.entry_live)
+                        .intersect(nonvolatile()),
+                },
+            );
+        }
+        // Which argument registers each function really reads at entry, as a
+        // fixed point over the call graph. Calling a function then makes only
+        // those live, so `bl A; bl B` does not count B's unused argument
+        // registers as reads after A. Opted-out functions and targets outside
+        // the module read every argument; an indirect callee reads none (a
+        // compiled caller never passes a value through an argument register
+        // it set before an earlier call).
+        let arguments = Regs {
+            gpr: abi::ARGUMENT_GPRS,
+            fpr: abi::ARGUMENT_FPRS,
+            ..Regs::default()
+        };
+        let mut argument_reads: BTreeMap<u32, Regs> = module
+            .functions
+            .iter()
+            .map(|(start, function)| {
+                let reads = if function.opt_out.is_some() {
+                    arguments
+                } else {
+                    Regs::default()
+                };
+                (*start, reads)
+            })
+            .collect();
+        let mut callers: BTreeMap<u32, BTreeSet<u32>> = BTreeMap::new();
+        for (start, function) in &module.functions {
+            for (_, target) in function.direct_calls.iter().chain(&function.tail_calls) {
+                callers.entry(*target).or_default().insert(*start);
+            }
+        }
+        let precise_model = |reads: &BTreeMap<u32, Regs>, target: Option<u32>| -> CallModel {
+            let base = Regs {
+                gpr: (1 << 1) | (1 << 2) | (1 << 13),
+                ..Regs::default()
+            };
+            let uses = match target {
+                Some(target) => base.union(reads.get(&target).copied().unwrap_or(arguments)),
+                None => base,
+            };
+            CallModel {
+                uses,
+                clobbers: abi::call_clobbers(),
+            }
+        };
+        let mut worklist: BTreeSet<u32> = module
+            .functions
+            .iter()
+            .filter(|(_, function)| function.opt_out.is_none())
+            .map(|(start, _)| *start)
+            .collect();
+        while let Some(start) = worklist.pop_first() {
+            let liveness = analyze_effects(
+                start,
+                decoded[&start].clone(),
+                abi::return_live(),
+                &|target| precise_model(&argument_reads, target),
+            );
+            let reads = liveness.entry_live().intersect(arguments);
+            if reads != argument_reads[&start] {
+                argument_reads.insert(start, reads);
+                if let Some(callers) = callers.get(&start) {
+                    worklist.extend(
+                        callers
+                            .iter()
+                            .filter(|caller| module.functions[*caller].opt_out.is_none()),
+                    );
+                }
+            }
+        }
+        for (start, function) in module.functions.iter_mut() {
+            if function.opt_out.is_some() {
+                continue;
+            }
+            function.reads_after_calls =
+                abi_facts_with(*start, decoded[start].clone(), &|target| {
+                    precise_model(&argument_reads, target)
+                })
+                .volatile_reads_after_calls;
+        }
+        // Volatile registers read after calls, by any analyzable function.
+        for function in module.functions.values() {
+            if function.opt_out.is_some() {
+                continue;
+            }
+            for registers in function.reads_after_calls.values() {
+                module.always_synced = module.always_synced.union(*registers);
+            }
+        }
+        // Transitive facts. A call returns with the non-volatile registers its
+        // callees clobbered and it did not save itself (an indirect call or a
+        // computed jump may reach any function); a tail call also needs its
+        // target's entry registers.
+        let indirect_target =
+            |start: &u32| address_taken.is_empty() || address_taken.contains(start);
+        loop {
+            let any_clobbers = module
+                .functions
+                .iter()
+                .filter(|(start, _)| indirect_target(start))
+                .fold(Regs::default(), |all, (_, function)| {
+                    all.union(function.clobbers)
+                });
+            let snapshot: BTreeMap<u32, (Regs, Regs)> = module
+                .functions
+                .iter()
+                .map(|(start, function)| (*start, (function.entry_extra, function.clobbers)))
+                .collect();
+            let mut changed = false;
+            for function in module.functions.values_mut() {
+                if function.opt_out.is_some() {
+                    continue;
+                }
+                let mut inherited = Regs::default();
+                let mut entry_extra = function.entry_extra;
+                // Targets outside the module are trusted.
+                for (_, target) in &function.direct_calls {
+                    if let Some((_, callee)) = snapshot.get(target) {
+                        inherited = inherited.union(*callee);
+                    }
+                }
+                for (_, target) in &function.tail_calls {
+                    if let Some((callee_entry, callee)) = snapshot.get(target) {
+                        inherited = inherited.union(*callee);
+                        entry_extra = entry_extra.union(*callee_entry);
+                    }
+                }
+                if function.indirect_calls {
+                    inherited = inherited.union(any_clobbers);
+                }
+                let clobbers = function.clobbers.union(
+                    inherited
+                        .intersect(nonvolatile())
+                        .intersect(resident())
+                        .minus(function.saved),
+                );
+                if clobbers != function.clobbers || entry_extra != function.entry_extra {
+                    function.clobbers = clobbers;
+                    function.entry_extra = entry_extra;
+                    changed = true;
+                }
+            }
+            if !changed {
+                break;
+            }
+        }
+        let indirect_safe = !address_taken.iter().any(|address| {
+            module.functions.get(address).is_some_and(|function| {
+                matches!(
+                    function.opt_out,
+                    Some(AbiOptOut::Undecodable | AbiOptOut::InternalLink)
+                )
+            })
+        });
+        if indirect_safe {
+            let mut entry_extra = Regs::default();
+            let mut clobbers = Regs::default();
+            for (start, function) in &module.functions {
+                if function.opt_out.is_some() || !indirect_target(start) {
+                    continue;
+                }
+                entry_extra = entry_extra.union(function.entry_extra);
+                clobbers = clobbers.union(function.clobbers);
+            }
+            module.indirect = Some(CallSync {
+                store: abi_call_store()
+                    .union(entry_extra)
+                    .union(module.always_synced),
+                reload: abi_results().union(clobbers).union(module.always_synced),
+            });
+        }
+        module
+    }
+
+    /// The synchronization of the call at `call_pc` in `caller` to `target`
+    /// (`None`: an indirect call), or `None` when the call must keep full
+    /// synchronization (an opted-out caller or callee, or an unknown target).
+    #[must_use]
+    pub fn call_sync(&self, caller: u32, call_pc: u32, target: Option<u32>) -> Option<CallSync> {
+        let caller = self.functions.get(&caller)?;
+        if caller.opt_out.is_some() {
+            return None;
+        }
+        let base = match target {
+            Some(target) => {
+                let callee = self.functions.get(&target)?;
+                if callee.opt_out.is_some() {
+                    return None;
+                }
+                CallSync {
+                    store: abi_call_store().union(callee.entry_extra),
+                    reload: abi_results().union(callee.clobbers),
+                }
+            }
+            None => self.indirect?,
+        };
+        let site = caller
+            .reads_after_calls
+            .get(&call_pc)
+            .copied()
+            .unwrap_or_default()
+            .union(self.always_synced);
+        Some(CallSync {
+            store: base.store.union(site),
+            reload: base.reload.union(site),
+        })
+    }
+
+    /// The registers a return of `function` stores, or `None` for full
+    /// stores (an opted-out function).
+    #[must_use]
+    pub fn exit_stores(&self, function: u32) -> Option<Regs> {
+        let function = self.functions.get(&function)?;
+        if function.opt_out.is_some() {
+            return None;
+        }
+        Some(abi_exit_store().union(self.always_synced))
+    }
+
+    /// Every call site of `function` that may use the EABI contract, by
+    /// call pc.
+    #[must_use]
+    pub fn call_sites(&self, function: u32) -> BTreeMap<u32, CallSync> {
+        let Some(facts) = self.functions.get(&function) else {
+            return BTreeMap::new();
+        };
+        let direct = facts
+            .direct_calls
+            .iter()
+            .filter_map(|(pc, target)| Some((*pc, self.call_sync(function, *pc, Some(*target))?)));
+        let indirect = facts
+            .indirect_call_sites
+            .iter()
+            .filter_map(|pc| Some((*pc, self.call_sync(function, *pc, None)?)));
+        direct.chain(indirect).collect()
+    }
+
+    /// The opt-out list and the non-ABI facts as JSON, for the module
+    /// manifest (`abi_contract.json`).
+    #[must_use]
+    pub fn manifest_json(&self) -> String {
+        let mut out = String::from("{\n  \"schema\": \"nebula.abi-contract.v1\",\n");
+        let opted_out: Vec<_> = self
+            .functions
+            .iter()
+            .filter_map(|(start, function)| Some((*start, function.opt_out?)))
+            .collect();
+        let non_abi: Vec<_> = self
+            .functions
+            .iter()
+            .filter(|(_, function)| {
+                function.opt_out.is_none()
+                    && (!function.entry_extra.is_empty()
+                        || !function.clobbers.is_empty()
+                        || !function.reads_after_calls.is_empty())
+            })
+            .collect();
+        let sites: usize = self
+            .functions
+            .keys()
+            .map(|start| self.call_sites(*start).len())
+            .sum();
+        let _ = write!(
+            out,
+            "  \"functions\": {},\n  \"optedOut\": {},\n  \"nonAbiFacts\": {},\n  \"abiCallSites\": {sites},\n  \"alwaysSynced\": \"{}\",\n",
+            self.functions.len(),
+            opted_out.len(),
+            non_abi.len(),
+            self.always_synced.describe()
+        );
+        match self.indirect {
+            Some(sync) => {
+                let _ = writeln!(
+                    out,
+                    "  \"indirectCall\": {{\"storeExtra\": \"{}\", \"reloadExtra\": \"{}\"}},",
+                    sync.store.minus(abi_call_store()).describe(),
+                    sync.reload.minus(abi_results()).describe()
+                );
+            }
+            None => out.push_str("  \"indirectCall\": null,\n"),
+        }
+        out.push_str("  \"optOut\": [");
+        for (index, (start, reason)) in opted_out.iter().enumerate() {
+            let _ = write!(
+                out,
+                "{}\n    {{\"address\": \"0x{start:08X}\", \"reason\": \"{}\"}}",
+                if index == 0 { "" } else { "," },
+                reason.name()
+            );
+        }
+        out.push_str(if opted_out.is_empty() {
+            "],\n"
+        } else {
+            "\n  ],\n"
+        });
+        out.push_str("  \"nonAbi\": [");
+        for (index, (start, function)) in non_abi.iter().enumerate() {
+            let reads_after: Vec<String> = function
+                .reads_after_calls
+                .iter()
+                .map(|(pc, registers)| format!("0x{pc:08X}: {}", registers.describe()))
+                .collect();
+            let _ = write!(
+                out,
+                "{}\n    {{\"address\": \"0x{start:08X}\", \"entryExtra\": \"{}\", \"clobbers\": \"{}\", \"readsAfterCalls\": \"{}\"}}",
+                if index == 0 { "" } else { "," },
+                function.entry_extra.describe(),
+                function.clobbers.describe(),
+                reads_after.join("; ")
+            );
+        }
+        out.push_str(if non_abi.is_empty() {
+            "]\n}\n"
+        } else {
+            "\n  ]\n}\n"
+        });
+        out
+    }
+}
+
+impl Regs {
+    /// `r0 r12 f1 cr0 lr ctr ca so fpscr`, or `-` for the empty set.
+    #[must_use]
+    pub fn describe(self) -> String {
+        let mut parts = Vec::new();
+        for index in 0..32 {
+            if self.gpr & (1 << index) != 0 {
+                parts.push(format!("r{index}"));
+            }
+        }
+        for index in 0..32 {
+            if self.fpr & (1 << index) != 0 {
+                parts.push(format!("f{index}"));
+            }
+        }
+        for field in 0..8 {
+            if self.cr & (1 << field) != 0 {
+                parts.push(format!("cr{field}"));
+            }
+        }
+        for (flag, name) in [
+            (self.lr, "lr"),
+            (self.ctr, "ctr"),
+            (self.ca, "ca"),
+            (self.so, "so"),
+            (self.fpscr, "fpscr"),
+        ] {
+            if flag {
+                parts.push(name.to_owned());
+            }
+        }
+        if parts.is_empty() {
+            "-".to_owned()
+        } else {
+            parts.join(" ")
+        }
+    }
 }
 
 #[cfg(test)]
@@ -1108,7 +1738,7 @@ mod tests {
             addi(1, 1, 16),
             BLR,
         ];
-        let facts = abi_facts(start, &words, &[]);
+        let facts = abi_facts(start, &words);
         assert!(facts.abi_conformant(), "{facts:?}");
         // r1, r3 (argument), r31 (saved) and LR are read at entry.
         assert!(facts.entry_live.gpr & (1 << 1) != 0);
@@ -1122,23 +1752,17 @@ mod tests {
         let start = 0x8000_4000;
         // Reads r5 after a call: lwz r5 is not done; add r3,r5,r5 after bl.
         let after_call = [bl(start, 0x8000_5000), x(3, 5, 5, 266, false), BLR];
-        let facts = abi_facts(start, &after_call, &[]);
+        let facts = abi_facts(start, &after_call);
         assert_eq!(
             facts.volatile_reads_after_calls.get(&start).map(|r| r.gpr),
             Some(1 << 5)
         );
         // Reads r12 at entry (scratch).
         let scratch = [x(3, 12, 12, 266, false), BLR];
-        assert_eq!(
-            abi_facts(start, &scratch, &[]).scratch_entry_reads.gpr,
-            1 << 12
-        );
+        assert_eq!(abi_facts(start, &scratch).scratch_entry_reads.gpr, 1 << 12);
         // Writes r31 without saving it.
         let clobber = [addi(31, 0, 1), BLR];
-        assert_eq!(
-            abi_facts(start, &clobber, &[]).nonvolatile_clobbers.gpr,
-            1 << 31
-        );
+        assert_eq!(abi_facts(start, &clobber).nonvolatile_clobbers.gpr, 1 << 31);
     }
 
     #[test]
@@ -1154,13 +1778,7 @@ mod tests {
             BLR,
             BLR,
         ];
-        let liveness = analyze_liveness(
-            start,
-            &words,
-            abi::return_live(),
-            &|_| CallModel::abi(),
-            &[],
-        );
+        let liveness = analyze_liveness(start, &words, abi::return_live(), &|_| CallModel::abi());
         let dead = dead_flag_writes(&liveness);
         assert_eq!(dead.get(&start).map(|r| r.cr), Some(1));
         assert_eq!(dead.get(&(start + 4)).map(|r| r.ca), Some(true));
@@ -1171,19 +1789,234 @@ mod tests {
     }
 
     #[test]
-    fn interior_entries_and_unknown_forms_are_conservative() {
+    fn unknown_forms_and_local_subroutines_are_conservative() {
         let start = 0x8000_4000;
-        let words = [addi(3, 0, 1), x(3, 3, 3, 266, true), BLR];
-        let liveness = analyze_liveness(
-            start,
-            &words,
-            abi::return_live(),
-            &|_| CallModel::abi(),
-            &[start + 4],
-        );
-        assert_eq!(liveness.live_before[1], Regs::ALL);
         let unknown = [0x0000_0000, BLR];
-        let facts = abi_facts(start, &unknown, &[]);
+        let facts = abi_facts(start, &unknown);
         assert!(facts.undecodable && !facts.abi_conformant());
+        // bl $+4 materialises the PC and falls through; a bl to any other
+        // address in the body is a local subroutine: everything is live.
+        assert_eq!(effect(0x100, bl(0x100, 0x104)).unwrap().flow, Flow::Next);
+        let local = [bl(start, start + 8), BLR, addi(3, 0, 1), BLR];
+        let liveness = analyze_liveness(start, &local, abi::return_live(), &|_| CallModel::abi());
+        assert_eq!(liveness.live_before[0], Regs::ALL);
+    }
+
+    #[test]
+    fn tail_branch_keeps_the_target_arguments_live() {
+        let start = 0x8000_4000;
+        // addi r3,r3,1; b 0x80005000
+        let branch = (18 << 26) | ((0x8000_5000u32 - (start + 4)) & 0x03FF_FFFC);
+        let words = [addi(3, 3, 1), branch];
+        let liveness = analyze_liveness(start, &words, abi::return_live(), &|_| CallModel::abi());
+        assert!(
+            liveness.live_after[0].gpr & (1 << 4) != 0,
+            "r4 is an argument"
+        );
+        assert!(
+            liveness.live_after[0].lr,
+            "the tail callee returns through LR"
+        );
+    }
+
+    const CALLER: u32 = 0x8000_4000;
+    const LEAF: u32 = 0x8000_5000;
+    const OTHER: u32 = 0x8000_6000;
+
+    /// stwu r1,-16(r1); mflr r0; stw r0,20(r1); stw r31,12(r1); mr r31,r3;
+    /// bl LEAF; add r3,r31,r3; bl OTHER; lwz r0,20(r1); lwz r31,12(r1);
+    /// mtlr r0; addi r1,r1,16; blr
+    fn caller_words() -> Vec<u32> {
+        vec![
+            (37 << 26) | (1 << 21) | (1 << 16) | 0xFFF0,
+            0x7C08_02A6,
+            stw(0, 20, 1),
+            stw(31, 12, 1),
+            x(3, 31, 3, 444, false),
+            bl(CALLER + 20, LEAF),
+            x(3, 31, 3, 266, false),
+            bl(CALLER + 28, OTHER),
+            lwz(0, 20, 1),
+            lwz(31, 12, 1),
+            0x7C08_03A6,
+            addi(1, 1, 16),
+            BLR,
+        ]
+    }
+
+    fn module(leaf: &[u32], other: &[u32], native_other: bool) -> ModuleAbi {
+        let caller = caller_words();
+        ModuleAbi::analyze(
+            &[
+                AbiFunctionInput {
+                    start: CALLER,
+                    words: &caller,
+                    native: false,
+                },
+                AbiFunctionInput {
+                    start: LEAF,
+                    words: leaf,
+                    native: false,
+                },
+                AbiFunctionInput {
+                    start: OTHER,
+                    words: other,
+                    native: native_other,
+                },
+            ],
+            &BTreeSet::new(),
+            &|_| None,
+        )
+    }
+
+    #[test]
+    fn conformant_calls_store_the_abi_set_and_reload_the_results() {
+        let leaf = [addi(3, 3, 1), BLR];
+        let abi = module(&leaf, &leaf, false);
+        assert!(abi.always_synced.is_empty(), "{abi:?}");
+        let sync = abi.call_sync(CALLER, CALLER + 20, Some(LEAF)).unwrap();
+        assert_eq!(sync.store, abi_call_store());
+        assert_eq!(sync.reload, abi_results());
+        assert_eq!(abi.exit_stores(CALLER), Some(abi_exit_store()));
+        assert_eq!(abi.call_sites(CALLER).len(), 2);
+        // `bl LEAF; ...; bl OTHER`: OTHER reads only r3, so no argument
+        // register counts as read after the first call.
+        assert!(abi.functions[&CALLER].reads_after_calls.is_empty());
+    }
+
+    #[test]
+    fn non_abi_callees_add_their_registers_to_the_call() {
+        // Reads r12 at entry; writes r30 without saving it.
+        let leaf = [x(3, 12, 3, 266, false), addi(30, 0, 7), BLR];
+        let other = [addi(3, 3, 1), BLR];
+        let abi = module(&leaf, &other, false);
+        let sync = abi.call_sync(CALLER, CALLER + 20, Some(LEAF)).unwrap();
+        assert_eq!(sync.store.gpr & (1 << 12), 1 << 12);
+        assert_eq!(sync.reload.gpr & (1 << 30), 1 << 30);
+        // The caller saves r31 but not r30, so it passes r30 on.
+        assert_eq!(abi.functions[&CALLER].clobbers.gpr & (1 << 30), 1 << 30);
+        assert_eq!(abi.functions[&CALLER].clobbers.gpr & (1 << 31), 0);
+    }
+
+    #[test]
+    fn a_volatile_read_after_a_call_is_synchronized_everywhere() {
+        // OTHER reads r5 after calling LEAF.
+        let leaf = [addi(3, 3, 1), BLR];
+        let other = [
+            (37 << 26) | (1 << 21) | (1 << 16) | 0xFFF0,
+            0x7C08_02A6,
+            stw(0, 20, 1),
+            bl(OTHER + 12, LEAF),
+            x(3, 5, 3, 266, false),
+            lwz(0, 20, 1),
+            0x7C08_03A6,
+            addi(1, 1, 16),
+            BLR,
+        ];
+        let abi = module(&leaf, &other, false);
+        assert_eq!(abi.always_synced.gpr, 1 << 5);
+        let sync = abi.call_sync(CALLER, CALLER + 20, Some(LEAF)).unwrap();
+        assert_eq!(sync.store.gpr & (1 << 5), 1 << 5);
+        assert_eq!(sync.reload.gpr & (1 << 5), 1 << 5);
+        assert_eq!(abi.exit_stores(LEAF).unwrap().gpr & (1 << 5), 1 << 5);
+    }
+
+    #[test]
+    fn opted_out_functions_keep_full_synchronization() {
+        let leaf = [bl(LEAF, LEAF + 8), BLR, addi(3, 0, 1), BLR];
+        let other = [addi(3, 3, 1), BLR];
+        let abi = module(&leaf, &other, true);
+        assert_eq!(abi.functions[&LEAF].opt_out, Some(AbiOptOut::InternalLink));
+        assert_eq!(abi.functions[&OTHER].opt_out, Some(AbiOptOut::Native));
+        assert_eq!(abi.call_sync(CALLER, CALLER + 20, Some(LEAF)), None);
+        assert_eq!(abi.call_sync(CALLER, CALLER + 28, Some(OTHER)), None);
+        assert_eq!(abi.exit_stores(LEAF), None);
+        // An address-taken function the analysis cannot vouch for makes every
+        // indirect call fully synchronized.
+        let caller = caller_words();
+        let taken = ModuleAbi::analyze(
+            &[
+                AbiFunctionInput {
+                    start: CALLER,
+                    words: &caller,
+                    native: false,
+                },
+                AbiFunctionInput {
+                    start: LEAF,
+                    words: &leaf,
+                    native: false,
+                },
+            ],
+            &BTreeSet::from([LEAF]),
+            &|_| None,
+        );
+        assert_eq!(taken.indirect, None);
+        let json = taken.manifest_json();
+        assert!(
+            json.contains("\"address\": \"0x80005000\", \"reason\": \"internal-link\""),
+            "{json}"
+        );
+        assert!(json.contains("\"indirectCall\": null"), "{json}");
+    }
+
+    #[test]
+    fn register_save_helpers_are_modelled_in_place() {
+        const SAVE_25: u32 = 0x8051_7518;
+        const REST_25: u32 = 0x8051_7564;
+        let inline = |target: u32| match target {
+            SAVE_25 => Some((
+                Regs::gpr(11).union(Regs {
+                    gpr: u32::MAX << 25,
+                    ..Regs::default()
+                }),
+                Regs::default(),
+            )),
+            REST_25 => Some((
+                Regs::gpr(11),
+                Regs {
+                    gpr: u32::MAX << 25,
+                    ..Regs::default()
+                },
+            )),
+            _ => None,
+        };
+        // stwu r1,-64(r1); addi r11,r1,64; bl _savegpr_25; mr r25,r3;
+        // bl LEAF; mr r3,r25; addi r11,r1,64; bl _restgpr_25; addi r1,r1,64; blr
+        let words = [
+            (37 << 26) | (1 << 21) | (1 << 16) | 0xFFC0,
+            addi(11, 1, 64),
+            bl(CALLER + 8, SAVE_25),
+            x(3, 25, 3, 444, false),
+            bl(CALLER + 16, LEAF),
+            x(25, 3, 25, 444, false),
+            addi(11, 1, 64),
+            bl(CALLER + 28, REST_25),
+            addi(1, 1, 64),
+            BLR,
+        ];
+        let leaf = [addi(3, 3, 1), BLR];
+        let abi = ModuleAbi::analyze(
+            &[
+                AbiFunctionInput {
+                    start: CALLER,
+                    words: &words,
+                    native: false,
+                },
+                AbiFunctionInput {
+                    start: LEAF,
+                    words: &leaf,
+                    native: false,
+                },
+            ],
+            &BTreeSet::new(),
+            &inline,
+        );
+        let caller = &abi.functions[&CALLER];
+        // The helpers are not calls; r25..r31 are saved and restored.
+        assert_eq!(caller.direct_calls, vec![(CALLER + 16, LEAF)]);
+        assert!(caller.clobbers.is_empty(), "{caller:?}");
+        assert_eq!(caller.saved.gpr & (1 << 25), 1 << 25);
+        assert!(caller.reads_after_calls.is_empty(), "{caller:?}");
+        assert!(abi.always_synced.is_empty());
     }
 }

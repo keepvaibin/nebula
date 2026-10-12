@@ -39,8 +39,20 @@
 //! body) for shapes it does not handle: a runtime-indexed register access, a
 //! synchronizing call used as an expression, two synchronizing calls on one
 //! line, or a float helper with a non-literal register argument.
+//!
+//! Under the EABI contract (translator `--abi-call-sync`, `--abi-exit-sync`;
+//! see `crate::ppc_dataflow::ModuleAbi`) the translator marks a call to a
+//! translated function, or an indirect call, with `GALAXY_ABI_CALL(0x<pc>u);`
+//! and a `blr` with `GALAXY_GUEST_RETURN;` (both no-ops in a body this pass
+//! leaves alone). A marked call stores only the written locals the callee may
+//! read (arguments, stack and small-data bases, non-volatile registers, LR,
+//! plus the callee's recorded extras) and reloads only the results and the
+//! registers the callee may clobber; a marked return stores only what a caller
+//! may observe. A marker whose next synchronizing call is not a translated or
+//! indirect guest call is dropped, so that call keeps the full sequence.
 
-use std::collections::BTreeSet;
+use crate::ppc_dataflow::{CallSync, Regs};
+use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Write as _;
 
 const LR: usize = 32;
@@ -685,6 +697,62 @@ fn declarations(used: &[bool; SLOTS]) -> String {
     out
 }
 
+/// EABI synchronization of one function (see the module documentation).
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct AbiResidency {
+    /// Call sites marked `GALAXY_ABI_CALL(0x<pc>u);` that use the contract,
+    /// by call pc. A marked site missing here keeps full synchronization.
+    pub call_sites: BTreeMap<u32, CallSync>,
+    /// Registers stored at `GALAXY_GUEST_RETURN;`, or `None` for every
+    /// written local.
+    pub exit: Option<Regs>,
+}
+
+/// The local slots of a register set (an FPR covers both lanes).
+fn register_slots(registers: Regs) -> [bool; SLOTS] {
+    let mut slots = [false; SLOTS];
+    for index in 0..32 {
+        slots[index] = registers.gpr & (1u32 << index) != 0;
+        slots[fpr_slot(index)] = registers.fpr & (1u32 << index) != 0;
+        slots[ps1_slot(index)] = registers.fpr & (1u32 << index) != 0;
+    }
+    slots[LR] = registers.lr;
+    slots[CTR] = registers.ctr;
+    slots
+}
+
+fn masked(flags: &[bool; SLOTS], registers: Regs) -> [bool; SLOTS] {
+    let mask = register_slots(registers);
+    let mut out = [false; SLOTS];
+    for slot in 0..SLOTS {
+        out[slot] = flags[slot] && mask[slot];
+    }
+    out
+}
+
+/// `GALAXY_ABI_CALL(0x8000400Cu);` -> 0x8000400C.
+fn abi_call_marker(trimmed: &str) -> Option<u32> {
+    let hex = trimmed
+        .strip_prefix("GALAXY_ABI_CALL(0x")?
+        .strip_suffix("u);")?;
+    u32::from_str_radix(hex, 16).ok()
+}
+
+/// A guest call the EABI contract may cover: a translated function or the
+/// indirect-call fast path.
+fn abi_callee(callee: &str) -> bool {
+    callee.starts_with("rmge01::fn_") || callee == "galaxy::fast::call_guest_indirect"
+}
+
+/// Replaces every `GALAXY_GUEST_RETURN;` with a stored-back return.
+fn store_before_guest_returns(line: &str, stores: &str) -> String {
+    const GUEST_RETURN: &str = "GALAXY_GUEST_RETURN;";
+    if !line.contains(GUEST_RETURN) {
+        return line.to_owned();
+    }
+    line.replace(GUEST_RETURN, &format!("{{ {stores}return; }}"))
+}
+
 /// Replaces every statement-position `return;` with a stored-back return.
 fn store_before_returns(line: &str, stores: &str) -> String {
     const RETURN: &str = "return;";
@@ -711,7 +779,18 @@ fn store_before_returns(line: &str, stores: &str) -> String {
 
 /// Applies the residency transform to one lowered body. See the module
 /// documentation for the contract.
+#[cfg(test)]
 pub fn apply_register_residency(body: &str, floats: bool) -> Option<String> {
+    apply_register_residency_with_abi(body, floats, None)
+}
+
+/// `apply_register_residency` with the EABI synchronization of marked calls
+/// and returns (`None`: every marker keeps full synchronization).
+pub fn apply_register_residency_with_abi(
+    body: &str,
+    floats: bool,
+    abi: Option<&AbiResidency>,
+) -> Option<String> {
     let Renamed { text, mut used } = rename_register_accesses(body, floats)?;
     let mut helper_written = [false; SLOTS];
     let text = if floats {
@@ -744,6 +823,14 @@ pub fn apply_register_residency(body: &str, floats: bool) -> Option<String> {
     }
     let stores = store_sequence(&written);
     let reloads = reload_sequence(&used);
+    let exit_stores = match abi.and_then(|abi| abi.exit) {
+        Some(exit) => store_sequence(&masked(&written, exit)),
+        None => stores.clone(),
+    };
+    // The contract of the call announced by the last marker, until the next
+    // synchronizing call or label consumes or drops it.
+    let mut pending_abi: Option<CallSync> = None;
+    let mut pending_depth = 0i64;
 
     let mut output = String::with_capacity(text.len() + text.len() / 8);
     let mut entries: BTreeSet<String> = BTreeSet::new();
@@ -842,6 +929,19 @@ pub fn apply_register_residency(body: &str, floats: bool) -> Option<String> {
             continue;
         }
 
+        // EABI call markers: remembered for the next synchronizing call in
+        // the same block, dropped at a label or when the block closes.
+        if let Some(pc) = abi_call_marker(trimmed) {
+            pending_abi = abi.and_then(|abi| abi.call_sites.get(&pc).copied());
+            pending_depth = depth_before[line_index];
+            continue;
+        }
+        if depth_before[line_index] < pending_depth
+            || (!line.starts_with(' ') && line.trim_end().ends_with(':'))
+        {
+            pending_abi = None;
+        }
+
         // Context-receiving calls.
         let tokens = bare_context_tokens(line);
         let mut calls: Vec<ContextCall> = Vec::new();
@@ -879,6 +979,7 @@ pub fn apply_register_residency(body: &str, floats: bool) -> Option<String> {
             return None;
         }
         let line = if let Some(call) = syncing.pop() {
+            let abi_sync = pending_abi.take().filter(|_| abi_callee(&call.callee));
             let before = &line[..call.callee_start];
             let args = &line[call.args_start..call.args_end];
             let after = &line[call.args_end + 2..]; // past `);`
@@ -932,13 +1033,24 @@ pub fn apply_register_residency(body: &str, floats: bool) -> Option<String> {
                         );
                     }
                 }
-                Sync::Full => {
-                    let _ = write!(
-                        rewritten,
-                        "{{ {stores}{}({args}); {reloads}}}",
-                        call.callee_text
-                    );
-                }
+                Sync::Full => match abi_sync {
+                    Some(sync) => {
+                        let _ = write!(
+                            rewritten,
+                            "{{ {}{}({args}); {}}}",
+                            store_sequence(&masked(&written, sync.store)),
+                            call.callee_text,
+                            reload_sequence(&masked(&used, sync.reload))
+                        );
+                    }
+                    None => {
+                        let _ = write!(
+                            rewritten,
+                            "{{ {stores}{}({args}); {reloads}}}",
+                            call.callee_text
+                        );
+                    }
+                },
                 Sync::Lean(contract) => {
                     let _ = write!(
                         rewritten,
@@ -970,6 +1082,7 @@ pub fn apply_register_residency(body: &str, floats: bool) -> Option<String> {
         };
 
         let line = store_before_returns(&line, &stores);
+        let line = store_before_guest_returns(&line, &exit_stores);
         output.push_str(&line);
         output.push_str(newline);
         if let Some((after_line, site)) = resume_label_after {
@@ -1239,5 +1352,74 @@ mod tests {
         let out = apply_register_residency(body, false).expect("eligible");
         assert!(out.contains("if (const std::uint64_t counted__ = galaxy::branch_checkpoint_due_budgeted(services); counted__ != 0u) [[unlikely]] { GALAXY_RETURN_IF_TRANSFER_PENDING(services); context->gpr[3] = gr3; galaxy::branch_checkpoint_taken_counted(services, 0x80004004u, 0x80004000u, context, memory, counted__); gr3 = context->gpr[3]; GALAXY_RETURN_IF_TRANSFER_PENDING(services); }"));
         assert!(out.contains("if (--checkpoint_budget__ == 0u) [[unlikely]] { checkpoint_budget__ = galaxy::kBranchCheckpointBudget; if (const std::uint64_t counted__"));
+    }
+
+    const ABI_BODY: &str = "    {\n    context->gpr[0] = context->lr;\n    context->gpr[3] = context->gpr[31];\n    context->gpr[12] = 0x00000001u;\n    }\n    {\n    context->lr = 0x80001010u;\n    GALAXY_ABI_CALL(0x8000100Cu);\n    context->pc = 0x80002000u;\n    rmge01::fn_80002000(context, memory, services);\n    }\n    {\n    context->lr = 0x80001018u;\n    GALAXY_ABI_CALL(0x80001014u);\n    galaxy::call_guest_resolved(services, 0x80003000u, &rmge01::fn_80003000, context, memory, 0x80001014u);\n    }\n    if (context->gpr[3] == 0u) GALAXY_GUEST_RETURN;\n    return;\n";
+
+    fn abi_plan() -> AbiResidency {
+        let sync = CallSync {
+            store: crate::ppc_dataflow::abi_call_store(),
+            reload: crate::ppc_dataflow::abi_results(),
+        };
+        AbiResidency {
+            call_sites: BTreeMap::from([(0x8000_100C, sync), (0x8000_1014, sync)]),
+            exit: Some(crate::ppc_dataflow::abi_exit_store()),
+        }
+    }
+
+    #[test]
+    fn abi_marked_call_synchronizes_the_contract_registers_only() {
+        let plan = abi_plan();
+        let out =
+            apply_register_residency_with_abi(ABI_BODY, false, Some(&plan)).expect("eligible");
+        // r0 and r12 are volatile non-arguments: not stored; r31 is only read:
+        // already in the context; only the result r3 is reloaded.
+        assert!(out.contains(
+            "    { context->gpr[3] = gr3; context->lr = glr; rmge01::fn_80002000(context, memory, services); gr3 = context->gpr[3]; }\n"
+        ), "{out}");
+        assert!(!out.contains("GALAXY_ABI_CALL"), "{out}");
+        // The marker before a runtime-routed call is dropped: full sync.
+        assert!(out.contains(
+            "    { context->gpr[0] = gr0; context->gpr[3] = gr3; context->gpr[12] = gr12; context->lr = glr; galaxy::call_guest_resolved(services, 0x80003000u, &rmge01::fn_80003000, context, memory, 0x80001014u); gr0 = context->gpr[0]; gr3 = context->gpr[3]; gr12 = context->gpr[12]; gr31 = context->gpr[31]; glr = context->lr; }\n"
+        ), "{out}");
+        // A guest return stores what a caller may observe; a plain return
+        // stores every written local.
+        assert!(
+            out.contains(
+                "    if (gr3 == 0u) { context->gpr[3] = gr3; context->lr = glr; return; }\n"
+            ),
+            "{out}"
+        );
+        assert!(out.contains("    { context->gpr[0] = gr0; context->gpr[3] = gr3; context->gpr[12] = gr12; context->lr = glr; return; }\n"), "{out}");
+    }
+
+    #[test]
+    fn abi_markers_without_a_plan_keep_full_synchronization() {
+        for plan in [None, Some(AbiResidency::default())] {
+            let out = apply_register_residency_with_abi(ABI_BODY, false, plan.as_ref())
+                .expect("eligible");
+            assert!(out.contains(
+                "    { context->gpr[0] = gr0; context->gpr[3] = gr3; context->gpr[12] = gr12; context->lr = glr; rmge01::fn_80002000(context, memory, services); gr0 = context->gpr[0]; gr3 = context->gpr[3]; gr12 = context->gpr[12]; gr31 = context->gpr[31]; glr = context->lr; }\n"
+            ), "{out}");
+            assert!(out.contains("    if (gr3 == 0u) { context->gpr[0] = gr0; context->gpr[3] = gr3; context->gpr[12] = gr12; context->lr = glr; return; }\n"), "{out}");
+        }
+    }
+
+    #[test]
+    fn abi_marker_does_not_leak_past_its_block() {
+        let body = "    {\n    context->gpr[3] = context->gpr[4];\n    GALAXY_ABI_CALL(0x8000100Cu);\n    }\n    {\n    rmge01::fn_80002000(context, memory, services);\n    }\n    return;\n";
+        let plan = abi_plan();
+        let out = apply_register_residency_with_abi(body, false, Some(&plan)).expect("eligible");
+        assert!(out.contains("    { context->gpr[3] = gr3; rmge01::fn_80002000(context, memory, services); gr3 = context->gpr[3]; gr4 = context->gpr[4]; }\n"), "{out}");
+    }
+
+    #[test]
+    fn abi_call_covers_both_lanes_of_float_arguments_and_results() {
+        let body = "    {\n    context->fpr_bits[1] = context->fpr_bits[31];\n    context->fpr_bits[9] = context->fpr_bits[31];\n    context->lr = 0x80001010u;\n    GALAXY_ABI_CALL(0x8000100Cu);\n    context->pc = 0x80002000u;\n    rmge01::fn_80002000(context, memory, services);\n    }\n    {\n    context->fpr_bits[30] = context->fpr_bits[1];\n    }\n    return;\n";
+        let plan = abi_plan();
+        let out = apply_register_residency_with_abi(body, true, Some(&plan)).expect("eligible");
+        // f9 is volatile: neither stored nor reloaded; f1 goes out and comes
+        // back (the body never names its ps1 lane, so that stays in context).
+        assert!(out.contains("    { context->lr = glr; context->fpr_bits[1] = fpr[1]; context->fpr_bits[30] = fpr[30]; rmge01::fn_80002000(context, memory, services); fpr[1] = context->fpr_bits[1]; }\n"), "{out}");
     }
 }

@@ -84,5 +84,6 @@ pub use translate::{
     translate_module, translate_module_with_options, translate_module_with_source_budget,
     translate_one, translation_coverage, validate_module_options, GeneratedSource,
     ModuleTranslationOptions, PpcImmediateKind, PpcImmediateOverride, TranslationCoverage,
-    TranslationError, TranslationModule, TranslationUnit, DEFAULT_MODULE_SHARD_SOURCE_KIB,
+    TranslationError, TranslationModule, TranslationUnit, ABI_CONTRACT_FILE,
+    DEFAULT_MODULE_SHARD_SOURCE_KIB,
 };

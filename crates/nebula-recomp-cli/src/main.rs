@@ -165,6 +165,16 @@ enum Command {
         /// paired fast paths, ps1 written for every single-precision result.
         #[arg(long)]
         assume_paired_singles: bool,
+        /// Translated and indirect calls synchronize resident registers under
+        /// the PowerPC EABI contract; functions the analysis cannot vouch for
+        /// keep full synchronization and are listed in abi_contract.json
+        /// (needs --experimental-guest-resident-integer).
+        #[arg(long)]
+        abi_call_sync: bool,
+        /// A blr stores only the registers a caller may observe (needs
+        /// --experimental-guest-resident-integer).
+        #[arg(long)]
+        abi_exit_sync: bool,
         /// Retained compatibility spelling; exact PSMTX local lanes are enabled by default.
         #[arg(long, default_value_t = true)]
         exact_psmtx_local_lanes: bool,
@@ -511,6 +521,8 @@ fn main() -> Result<()> {
             flat_view_only,
             stack_r11_stores,
             assume_paired_singles,
+            abi_call_sync,
+            abi_exit_sync,
             exact_psmtx_local_lanes,
             no_exact_psmtx_local_lanes,
             exact_psvec_cross_local_lanes,
@@ -549,6 +561,8 @@ fn main() -> Result<()> {
                 flat_view_only,
                 stack_r11_stores,
                 assume_paired_singles,
+                abi_call_sync,
+                abi_exit_sync,
                 exact_psmtx_local_lanes: exact_psmtx_local_lanes && !no_exact_psmtx_local_lanes,
                 exact_psvec_cross_local_lanes,
                 exact_psvec_normalize_local_lanes,
@@ -1134,6 +1148,8 @@ fn probe_options(list: &str) -> Result<ModuleTranslationOptions> {
             "flat-view-only" => options.flat_view_only = true,
             "stack-r11-stores" => options.stack_r11_stores = true,
             "assume-paired-singles" => options.assume_paired_singles = true,
+            "abi-call-sync" => options.abi_call_sync = true,
+            "abi-exit-sync" => options.abi_exit_sync = true,
             other => bail!("unknown module option {other}"),
         }
     }
@@ -1152,6 +1168,12 @@ pub(crate) fn generate_module_sources(
         .with_context(|| format!("failed to generate module from {}", input.display()))?;
     fs::create_dir_all(output).with_context(|| format!("failed to create {}", output.display()))?;
     for source in module.source_files {
+        if source.name == nebula_recomp_core::ABI_CONTRACT_FILE {
+            println!(
+                "EABI register contract (opt-out list): {}",
+                output.join(&source.name).display()
+            );
+        }
         let path = output.join(source.name);
         write_generated_text_if_changed(&path, &source.contents)
             .with_context(|| format!("failed to write {}", path.display()))?;
@@ -1645,6 +1667,30 @@ mod tests {
             Command::TranslateModule {
                 assume_paired_singles: true,
                 stack_r11_stores: false,
+                ..
+            }
+        ));
+        assert!(matches!(
+            parse(&[]),
+            Command::TranslateModule {
+                abi_call_sync: false,
+                abi_exit_sync: false,
+                ..
+            }
+        ));
+        assert!(matches!(
+            parse(&["--abi-call-sync"]),
+            Command::TranslateModule {
+                abi_call_sync: true,
+                abi_exit_sync: false,
+                ..
+            }
+        ));
+        assert!(matches!(
+            parse(&["--abi-exit-sync"]),
+            Command::TranslateModule {
+                abi_exit_sync: true,
+                abi_call_sync: false,
                 ..
             }
         ));

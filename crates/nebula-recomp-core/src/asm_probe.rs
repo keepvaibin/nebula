@@ -15,6 +15,7 @@
 //! game data is involved.
 
 use crate::function_map::FunctionRange;
+use crate::ppc_dataflow::{AbiFunctionInput, ModuleAbi};
 use crate::translate::{
     lower_probe_function, module_option_passes, probe_function_needs_fpu,
     probe_is_checkpoint_free_leaf, render_probe_module, GeneratedSource, ModuleTranslationOptions,
@@ -664,6 +665,23 @@ pub fn translate_probe_module(
         .filter(|probe| probe_is_checkpoint_free_leaf(probe.address, &bytes[&probe.address]))
         .map(|probe| probe.address)
         .collect();
+    // The corpus is a module of its own for the EABI analysis: no host
+    // substitutions and no data to take addresses from.
+    let module_abi = (options.abi_call_sync || options.abi_exit_sync).then(|| {
+        let inputs: Vec<AbiFunctionInput<'_>> = probes
+            .iter()
+            .map(|probe| AbiFunctionInput {
+                start: probe.address,
+                words: &probe.words,
+                native: false,
+            })
+            .collect();
+        ModuleAbi::analyze(
+            &inputs,
+            &BTreeSet::new(),
+            &crate::translate::abi_inline_call,
+        )
+    });
     let mut functions = Vec::with_capacity(probes.len());
     for probe in &probes {
         let body = lower_probe_function(
@@ -673,6 +691,7 @@ pub fn translate_probe_module(
             &exact_fpu_functions,
             &checkpoint_free_leaves,
             options,
+            module_abi.as_ref(),
         )?;
         functions.push((
             FunctionRange {
@@ -684,6 +703,12 @@ pub fn translate_probe_module(
     }
     let mut sources = render_probe_module(&functions, &exact_fpu_functions)?;
     module_option_passes(&mut sources, options);
+    if let Some(module_abi) = &module_abi {
+        sources.push(GeneratedSource {
+            name: crate::translate::ABI_CONTRACT_FILE.to_owned(),
+            contents: module_abi.manifest_json(),
+        });
+    }
     Ok(ProbeModule { sources, probes })
 }
 
@@ -761,5 +786,68 @@ mod tests {
             "rmge01::fn_{:08X}(context, memory, services);",
             at("callee_leaf")
         )));
+    }
+
+    fn release_with(extra: impl Fn(&mut ModuleTranslationOptions)) -> ModuleTranslationOptions {
+        let mut options = ModuleTranslationOptions {
+            inline_scalar_single_binary: true,
+            flat_ram_reads: true,
+            flat_ram_writes: true,
+            native_float: true,
+            fast_float: true,
+            direct_indirect_calls: true,
+            exact_psmtx_local_lanes: false,
+            guest_resident_integer: true,
+            ..ModuleTranslationOptions::default()
+        };
+        extra(&mut options);
+        options
+    }
+
+    fn probe_body(module: &ProbeModule, address: u32) -> String {
+        let signature = format!("void fn_{address:08X}(");
+        let shard = module
+            .sources
+            .iter()
+            .find(|source| {
+                source.name.starts_with("functions_") && source.contents.contains(&signature)
+            })
+            .expect("probe shard");
+        let start = shard.contents.find(&signature).unwrap();
+        let end = start + shard.contents[start..].find("\n}\n").unwrap();
+        shard.contents[start..end].to_owned()
+    }
+
+    #[test]
+    fn abi_sync_narrows_the_direct_and_virtual_call_sequences() {
+        let call_direct = PROBE_BASE + 15 * PROBE_SLOT;
+        let call_virtual = PROBE_BASE + 17 * PROBE_SLOT;
+        let full = translate_probe_module(&release_with(|_| {})).unwrap();
+        let body = probe_body(&full, call_direct);
+        assert!(body.contains("{ context->gpr[0] = gr0; context->gpr[1] = gr1; context->gpr[3] = gr3; context->gpr[31] = gr31; context->lr = glr; rmge01::fn_80701000(context, memory, services); gr0 = context->gpr[0]; gr1 = context->gpr[1]; gr3 = context->gpr[3]; gr31 = context->gpr[31]; glr = context->lr; }"), "{body}");
+        assert!(body.contains("{ context->gpr[0] = gr0; context->gpr[1] = gr1; context->gpr[3] = gr3; context->gpr[31] = gr31; context->lr = glr; return; }"), "{body}");
+        let abi = translate_probe_module(&release_with(|options| {
+            options.abi_call_sync = true;
+            options.abi_exit_sync = true;
+        }))
+        .unwrap();
+        let body = probe_body(&abi, call_direct);
+        assert!(body.contains("{ context->gpr[1] = gr1; context->gpr[3] = gr3; context->gpr[31] = gr31; context->lr = glr; rmge01::fn_80701000(context, memory, services); gr3 = context->gpr[3]; }"), "{body}");
+        assert!(body.contains("{ context->gpr[1] = gr1; context->gpr[3] = gr3; context->gpr[31] = gr31; context->lr = glr; return; }"), "{body}");
+        assert!(!body.contains("GALAXY_ABI_CALL"), "{body}");
+        // The virtual call: r12 and CTR are volatile non-arguments.
+        let body = probe_body(&abi, call_virtual);
+        assert!(body.contains("{ context->gpr[1] = gr1; context->gpr[3] = gr3; context->gpr[31] = gr31; context->lr = glr; galaxy::fast::call_guest_indirect("), "{body}");
+        assert!(
+            body.contains("0x80711020u); gr3 = context->gpr[3]; }"),
+            "{body}"
+        );
+        // The other probes are unchanged by the flags except for their calls
+        // and returns: a leaf without calls keeps its body.
+        let leaf = PROBE_BASE;
+        assert_eq!(
+            probe_body(&abi, leaf).replace("GALAXY_GUEST_RETURN;", "return;"),
+            probe_body(&full, leaf)
+        );
     }
 }

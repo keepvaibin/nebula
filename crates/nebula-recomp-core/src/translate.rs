@@ -5,7 +5,8 @@ use crate::{
         GuestInstructionEffect, GuestRegisterSet, GuestResidencyBoundarySync,
     },
     guest_ppc_effect::{guest_integer_gpr_access, GuestGprAccess},
-    residency::LeanCallContract,
+    ppc_dataflow::{AbiFunctionInput, ModuleAbi, Regs},
+    residency::{AbiResidency, LeanCallContract},
     rmge01_function_map, DolSection, DolSectionKind, FunctionRange, RMGE01_DOL_SHA1,
 };
 use powerpc::{Argument, Extensions, Ins, Opcode};
@@ -276,6 +277,22 @@ pub struct ModuleTranslationOptions {
     /// defines `GALAXY_ASSUME_PAIRED_SINGLES`, which removes the HID2 test from
     /// every psq and paired fast path and writes ps1 for every single result.
     pub assume_paired_singles: bool,
+    /// Calls to translated functions and indirect calls synchronize the
+    /// resident registers under the PowerPC EABI contract
+    /// (`crate::ppc_dataflow::ModuleAbi`): before the call only the written
+    /// locals a callee may read (arguments, r1/r2/r13, non-volatile
+    /// registers, LR and the callee's recorded extras) are stored; after it
+    /// only the results and the registers the callee may clobber are
+    /// reloaded. Functions the analysis cannot vouch for (host
+    /// substitutions, unmodelled forms, local `bl` subroutines) keep full
+    /// synchronization at their calls and when called, and the list is
+    /// written to `abi_contract.json`. Requires `guest_resident_integer`.
+    pub abi_call_sync: bool,
+    /// A `blr` of a function the ABI analysis vouches for stores only the
+    /// registers a caller may observe (r3/r4, f1/f2, the non-volatile
+    /// registers, LR and the module's non-ABI extras) instead of every
+    /// written local. Requires `guest_resident_integer`.
+    pub abi_exit_sync: bool,
     pub exact_psmtx_local_lanes: bool,
     pub exact_psvec_cross_local_lanes: bool,
     pub exact_psvec_normalize_local_lanes: bool,
@@ -316,6 +333,8 @@ impl Default for ModuleTranslationOptions {
             flat_view_only: false,
             stack_r11_stores: false,
             assume_paired_singles: false,
+            abi_call_sync: false,
+            abi_exit_sync: false,
             exact_psmtx_local_lanes: true,
             exact_psvec_cross_local_lanes: false,
             exact_psvec_normalize_local_lanes: false,
@@ -509,6 +528,18 @@ pub fn validate_module_options(options: &ModuleTranslationOptions) -> Result<(),
             requires: "flat_ram_writes",
         });
     }
+    if options.abi_call_sync && !options.guest_resident_integer {
+        return Err(TranslationError::OptionRequires {
+            option: "abi_call_sync",
+            requires: "guest_resident_integer",
+        });
+    }
+    if options.abi_exit_sync && !options.guest_resident_integer {
+        return Err(TranslationError::OptionRequires {
+            option: "abi_exit_sync",
+            requires: "guest_resident_integer",
+        });
+    }
     Ok(())
 }
 
@@ -700,6 +731,9 @@ pub fn translate_module_with_options(
         .chain(aliases.iter().copied())
         .collect::<BTreeMap<_, _>>();
     let empty_entries = BTreeSet::new();
+    let module_abi = (options.abi_call_sync || options.abi_exit_sync)
+        .then(|| module_abi_facts(&loaded.dol.sections, &loaded.dol_bytes, &ranges))
+        .transpose()?;
     // As in WiiCompiled, caller residency narrows a call boundary only for a
     // callee with a fully known contract: the proven integer leaves decoded
     // below. Substitutions, FP bodies and leaves with interior entries stay
@@ -732,6 +766,10 @@ pub fn translate_module_with_options(
         }
     }
     for (function, body) in &mut translated {
+        let abi = module_abi
+            .as_ref()
+            .map(|module_abi| function_abi_residency(module_abi, function.address, &options));
+        let abi = abi.as_ref();
         let entries = entries_by_function
             .get(&function.address)
             .unwrap_or(&empty_entries);
@@ -776,6 +814,7 @@ pub fn translate_module_with_options(
                         )?,
                         entries,
                         &options,
+                        abi,
                     ),
                 },
             }
@@ -795,6 +834,7 @@ pub fn translate_module_with_options(
                 )?,
                 entries,
                 &options,
+                abi,
             )
         };
         *body = apply_transfer_returns(std::mem::take(body));
@@ -970,6 +1010,12 @@ pub fn translate_module_with_options(
         insert_top_self_closure_edge_profile(&mut source_files, shard_source_bytes)?;
     }
     validate_function_shard_source_budget(&source_files, shard_source_bytes)?;
+    if let Some(module_abi) = &module_abi {
+        source_files.push(GeneratedSource {
+            name: ABI_CONTRACT_FILE.to_owned(),
+            contents: module_abi.manifest_json(),
+        });
+    }
     Ok(TranslationModule {
         total_functions: functions.len() as u64,
         translated_functions: translated.len() as u64,
@@ -2568,6 +2614,8 @@ fn lower_words_for_module_with_call_return_entries_and_exact_fpu_flat_reads(
             hw_float_conversions: options.hw_float_conversions,
             flat_view_only: options.flat_view_only,
             stack_r11_stores: options.stack_r11_stores,
+            abi_call_markers: options.abi_call_sync,
+            guest_return_macro: options.abi_exit_sync,
             ..LoweringConfig::default()
         },
     )
@@ -2632,6 +2680,8 @@ fn lower_words_with_options(
             hw_float_conversions: false,
             flat_view_only: false,
             stack_r11_stores: false,
+            abi_call_markers: false,
+            guest_return_macro: false,
         },
     )
 }
@@ -2666,6 +2716,10 @@ struct LoweringConfig<'a> {
     hw_float_conversions: bool,
     flat_view_only: bool,
     stack_r11_stores: bool,
+    /// Mark linked calls with `GALAXY_ABI_CALL(0x<pc>u);` (--abi-call-sync).
+    abi_call_markers: bool,
+    /// Lower `blr` to `GALAXY_GUEST_RETURN;` (--abi-exit-sync).
+    guest_return_macro: bool,
 }
 
 // The typed-region pilot has a single DOL owner; its public body still
@@ -3449,15 +3503,154 @@ fn apply_residency_to_body(
     body: String,
     entries: &BTreeSet<u32>,
     options: &ModuleTranslationOptions,
+    abi: Option<&AbiResidency>,
 ) -> String {
     let _ = entries;
     if !options.guest_resident_integer || !residency_address_selected(address) {
         return body;
     }
-    match crate::residency::apply_register_residency(&body, options.guest_resident_float) {
+    match crate::residency::apply_register_residency_with_abi(
+        &body,
+        options.guest_resident_float,
+        abi,
+    ) {
         Some(resident) => resident,
         None => body,
     }
+}
+
+/// The module manifest of the EABI analysis (`--abi-call-sync`,
+/// `--abi-exit-sync`): the opt-out list and every non-ABI fact.
+pub const ABI_CONTRACT_FILE: &str = "abi_contract.json";
+
+/// EABI facts of every translated function (see `crate::ppc_dataflow`).
+fn module_abi_facts(
+    sections: &[DolSection],
+    dol_bytes: &[u8],
+    ranges: &[FunctionRange],
+) -> Result<ModuleAbi, TranslationError> {
+    let mut words_by_function = Vec::with_capacity(ranges.len());
+    for function in ranges {
+        let bytes = function_bytes(sections, dol_bytes, *function).ok_or(
+            TranslationError::FunctionOutsideText {
+                address: function.address,
+            },
+        )?;
+        words_by_function.push(
+            bytes
+                .chunks_exact(4)
+                .map(|chunk| u32::from_be_bytes(chunk.try_into().expect("four-byte instruction")))
+                .collect::<Vec<_>>(),
+        );
+    }
+    let inputs = ranges
+        .iter()
+        .zip(&words_by_function)
+        .map(|(function, words)| AbiFunctionInput {
+            start: function.address,
+            words,
+            native: abi_native_function(function.address),
+        })
+        .collect::<Vec<_>>();
+    let address_taken = discover_address_taken_functions(sections, dol_bytes, ranges);
+    Ok(ModuleAbi::analyze(
+        &inputs,
+        &address_taken,
+        &abi_inline_call,
+    ))
+}
+
+/// The register effects of a call the translator lowers in place: `bl
+/// _savegpr_N` reads r11 and rN..r31 (it stores them below r11), `bl
+/// _restgpr_N` reads r11 and writes rN..r31.
+pub(crate) fn abi_inline_call(target: u32) -> Option<(Regs, Regs)> {
+    let (first, save) = gpr_save_restore_entry(target)?;
+    let run = Regs {
+        gpr: u32::MAX << first,
+        ..Regs::default()
+    };
+    let frame = Regs::gpr(11);
+    Some(if save {
+        (frame.union(run), Regs::default())
+    } else {
+        (frame, run)
+    })
+}
+
+/// A function whose generated body is not its guest code: a host
+/// substitution or a pure helper the caller invokes directly.
+fn abi_native_function(address: u32) -> bool {
+    native_function_body(address).is_some() || native_pure_helper(address).is_some()
+}
+
+/// The residency plan of one function under the module's EABI facts.
+fn function_abi_residency(
+    module_abi: &ModuleAbi,
+    address: u32,
+    options: &ModuleTranslationOptions,
+) -> AbiResidency {
+    AbiResidency {
+        call_sites: if options.abi_call_sync {
+            module_abi.call_sites(address)
+        } else {
+            BTreeMap::new()
+        },
+        exit: if options.abi_exit_sync {
+            module_abi.exit_stores(address)
+        } else {
+            None
+        },
+    }
+}
+
+/// Possible indirect-call targets: functions whose start address appears as
+/// a word anywhere in the image (vtables, callback and jump tables, data
+/// pointers) or is built in code by `lis` followed by `addi`/`ori` on the
+/// same register. Over-approximate: a spurious match only keeps a function in
+/// the set.
+fn discover_address_taken_functions(
+    sections: &[DolSection],
+    dol_bytes: &[u8],
+    functions: &[FunctionRange],
+) -> BTreeSet<u32> {
+    let starts: BTreeSet<u32> = functions.iter().map(|function| function.address).collect();
+    let mut taken = BTreeSet::new();
+    for section in sections {
+        let Some(bytes) = dol_bytes.get(section.file_range()) else {
+            continue;
+        };
+        let mut high: [Option<u32>; 32] = [None; 32];
+        for chunk in bytes.chunks_exact(4) {
+            let word = u32::from_be_bytes(chunk.try_into().expect("four-byte word"));
+            if starts.contains(&word) {
+                taken.insert(word);
+            }
+            if section.kind != DolSectionKind::Text {
+                continue;
+            }
+            let rd = gpr_rt(word) as usize;
+            let ra = gpr_ra(word) as usize;
+            let immediate = word & 0xFFFF;
+            let value = match word >> 26 {
+                // lis rD, hi
+                15 if ra == 0 => {
+                    high[rd] = Some(immediate << 16);
+                    continue;
+                }
+                // addi rD, rA, lo
+                14 if ra != 0 => {
+                    high[ra].map(|base| base.wrapping_add(immediate as u16 as i16 as i32 as u32))
+                }
+                // ori rA, rS, lo
+                24 => high[rd].map(|base| base | immediate),
+                _ => None,
+            };
+            if let Some(value) = value.filter(|value| starts.contains(value)) {
+                taken.insert(value);
+            }
+        }
+    }
+    taken
 }
 
 fn lower_words_with_config(
@@ -3487,6 +3680,8 @@ fn lower_words_with_config(
         hw_float_conversions,
         flat_view_only,
         stack_r11_stores,
+        abi_call_markers,
+        guest_return_macro,
     } = config;
     // Suffix of the flat-view float load/store helpers: `_hw` converts binary32
     // lanes with the host's cvtss2sd/cvtsd2ss.
@@ -5838,6 +6033,9 @@ fn lower_words_with_config(
                             .expect("audited native tail call target was checked");
                         emit_resolved_generated_direct_call(&mut output, target, owner, pc)?;
                     } else {
+                        if link {
+                            emit_abi_call_marker(&mut output, abi_call_markers, pc)?;
+                        }
                         emit_direct_guest_call_with_exact_fpu(
                             &mut output,
                             target,
@@ -5936,6 +6134,7 @@ fn lower_words_with_config(
                             checkpoint_free_callees,
                         );
                         if unconditional {
+                            emit_abi_call_marker(&mut output, abi_call_markers, pc)?;
                             emit_direct_guest_call_with_exact_fpu(
                                 &mut output,
                                 target,
@@ -5949,6 +6148,7 @@ fn lower_words_with_config(
                         } else {
                             writeln!(output, "    if ({condition}) {{")
                                 .map_err(|_| TranslationError::Formatting)?;
+                            emit_abi_call_marker(&mut output, abi_call_markers, pc)?;
                             emit_direct_guest_call_with_exact_fpu(
                                 &mut output,
                                 target,
@@ -6004,6 +6204,7 @@ fn lower_words_with_config(
                     writeln!(output, "    context->lr = 0x{:08X}u;", pc + 4)
                         .map_err(|_| TranslationError::Formatting)?;
                     if unconditional {
+                        emit_abi_call_marker(&mut output, abi_call_markers, pc)?;
                         emit_indirect_guest_call(
                             &mut output,
                             "branch_target",
@@ -6014,6 +6215,7 @@ fn lower_words_with_config(
                     } else {
                         writeln!(output, "    if ({condition}) {{")
                             .map_err(|_| TranslationError::Formatting)?;
+                        emit_abi_call_marker(&mut output, abi_call_markers, pc)?;
                         emit_indirect_guest_call(
                             &mut output,
                             "branch_target",
@@ -6069,6 +6271,7 @@ fn lower_words_with_config(
                     writeln!(output, "    context->lr = 0x{:08X}u;", pc + 4)
                         .map_err(|_| TranslationError::Formatting)?;
                     if unconditional {
+                        emit_abi_call_marker(&mut output, abi_call_markers, pc)?;
                         emit_indirect_guest_call(
                             &mut output,
                             "branch_target",
@@ -6079,6 +6282,7 @@ fn lower_words_with_config(
                     } else {
                         writeln!(output, "    if ({condition}) {{")
                             .map_err(|_| TranslationError::Formatting)?;
+                        emit_abi_call_marker(&mut output, abi_call_markers, pc)?;
                         emit_indirect_guest_call(
                             &mut output,
                             "branch_target",
@@ -6090,7 +6294,11 @@ fn lower_words_with_config(
                     }
                 } else if unconditional {
                     if internal_return_targets.is_empty() {
-                        output.push_str("    return;\n");
+                        output.push_str(if guest_return_macro {
+                            "    GALAXY_GUEST_RETURN;\n"
+                        } else {
+                            "    return;\n"
+                        });
                     } else if share_lr_continuation_dispatch {
                         output.push_str("    goto lr_continuation_dispatch;\n");
                     } else {
@@ -6107,7 +6315,12 @@ fn lower_words_with_config(
                     final_instruction_is_terminal = true;
                 } else {
                     if internal_return_targets.is_empty() {
-                        writeln!(output, "    if ({condition}) return;")
+                        let statement = if guest_return_macro {
+                            "GALAXY_GUEST_RETURN;"
+                        } else {
+                            "return;"
+                        };
+                        writeln!(output, "    if ({condition}) {statement}")
                             .map_err(|_| TranslationError::Formatting)?;
                     } else if share_lr_continuation_dispatch {
                         writeln!(
@@ -6902,6 +7115,21 @@ fn emit_gpr_save_restore(
             )
         }
         .map_err(|_| TranslationError::Formatting)?;
+    }
+    Ok(())
+}
+
+/// `--abi-call-sync`: announces a linked call to the residency pass, which
+/// synchronizes it under the EABI contract when the module analysis vouches
+/// for the call (`crate::residency::AbiResidency`). A no-op macro otherwise.
+fn emit_abi_call_marker(
+    output: &mut String,
+    enabled: bool,
+    call_pc: u32,
+) -> Result<(), TranslationError> {
+    if enabled {
+        writeln!(output, "    GALAXY_ABI_CALL(0x{call_pc:08X}u);")
+            .map_err(|_| TranslationError::Formatting)?;
     }
     Ok(())
 }
@@ -8340,8 +8568,10 @@ pub(crate) fn lower_probe_function(
     exact_fpu_functions: &BTreeSet<u32>,
     checkpoint_free_leaves: &BTreeSet<u32>,
     options: &ModuleTranslationOptions,
+    module_abi: Option<&ModuleAbi>,
 ) -> Result<String, TranslationError> {
     let entries = BTreeSet::new();
+    let abi = module_abi.map(|module_abi| function_abi_residency(module_abi, address, options));
     let body = lower_words_for_module_with_call_return_entries_and_exact_fpu_flat_reads(
         address,
         bytes,
@@ -8354,7 +8584,11 @@ pub(crate) fn lower_probe_function(
         options,
     )?;
     Ok(apply_transfer_returns(apply_residency_to_body(
-        address, body, &entries, options,
+        address,
+        body,
+        &entries,
+        options,
+        abi.as_ref(),
     )))
 }
 
@@ -12290,6 +12524,122 @@ mod tests {
         }
     }
 
+    /// bl 0x80005000; bctrl; beqlr; blr
+    const ABI_SEQUENCE: [u32; 4] = [
+        (18 << 26) | 0x1000 | 1,
+        0x4E80_0421,
+        0x4D82_0020,
+        0x4E80_0020,
+    ];
+
+    #[test]
+    fn abi_markers_follow_their_flags_and_change_nothing_else() {
+        let entries = BTreeMap::from([(0x8000_5000, 0x8000_5000)]);
+        let config = |abi_call_markers, guest_return_macro| LoweringConfig {
+            callable_entries: Some(&entries),
+            direct_indirect_calls: true,
+            abi_call_markers,
+            guest_return_macro,
+            ..flat_config(false, false)
+        };
+        let off = lower_with(&ABI_SEQUENCE, config(false, false));
+        assert!(!off.contains("GALAXY_ABI_CALL"), "{off}");
+        assert!(!off.contains("GALAXY_GUEST_RETURN"), "{off}");
+        let on = lower_with(&ABI_SEQUENCE, config(true, true));
+        assert!(on.contains("    context->lr = 0x80004004u;\n    GALAXY_ABI_CALL(0x80004000u);\n    context->pc = 0x80005000u;\n    rmge01::fn_80005000(context, memory, services);\n"), "{on}");
+        assert!(
+            on.contains("    context->lr = 0x80004008u;\n    GALAXY_ABI_CALL(0x80004004u);\n"),
+            "{on}"
+        );
+        assert!(on.contains(") GALAXY_GUEST_RETURN;\n"), "{on}");
+        assert!(on.contains("\n    GALAXY_GUEST_RETURN;\n"), "{on}");
+        let unmarked = on
+            .replace("    GALAXY_ABI_CALL(0x80004000u);\n", "")
+            .replace("    GALAXY_ABI_CALL(0x80004004u);\n", "")
+            .replace("GALAXY_GUEST_RETURN;", "return;");
+        assert_eq!(unmarked, off);
+        // Each flag alone.
+        let calls = lower_with(&ABI_SEQUENCE, config(true, false));
+        assert!(calls.contains("GALAXY_ABI_CALL") && !calls.contains("GALAXY_GUEST_RETURN"));
+        let exits = lower_with(&ABI_SEQUENCE, config(false, true));
+        assert!(!exits.contains("GALAXY_ABI_CALL") && exits.contains("GALAXY_GUEST_RETURN"));
+    }
+
+    #[test]
+    fn abi_sync_options_need_register_residency() {
+        for options in [
+            ModuleTranslationOptions {
+                abi_call_sync: true,
+                ..ModuleTranslationOptions::default()
+            },
+            ModuleTranslationOptions {
+                abi_exit_sync: true,
+                ..ModuleTranslationOptions::default()
+            },
+        ] {
+            assert!(matches!(
+                validate_module_options(&options),
+                Err(TranslationError::OptionRequires {
+                    requires: "guest_resident_integer",
+                    ..
+                })
+            ));
+            assert!(validate_module_options(&ModuleTranslationOptions {
+                guest_resident_integer: true,
+                ..options
+            })
+            .is_ok());
+        }
+    }
+
+    #[test]
+    fn address_taken_functions_come_from_data_words_and_lis_pairs() {
+        let functions = [
+            FunctionRange {
+                address: 0x8000_4000,
+                size: 8,
+            },
+            FunctionRange {
+                address: 0x8000_5000,
+                size: 8,
+            },
+            FunctionRange {
+                address: 0x8000_6000,
+                size: 8,
+            },
+        ];
+        // text: lis r12,0x8000; addi r12,r12,0x5000; blr; data: 0x80006000
+        let text: Vec<u8> = [0x3D80_8000u32, 0x398C_5000, 0x4E80_0020, 0]
+            .iter()
+            .flat_map(|word| word.to_be_bytes())
+            .collect();
+        let data = 0x8000_6000u32.to_be_bytes();
+        let mut image = text.clone();
+        image.extend_from_slice(&data);
+        let sections = [
+            DolSection {
+                name: "text0".to_owned(),
+                kind: DolSectionKind::Text,
+                index: 0,
+                file_offset: 0,
+                address: 0x8000_3000,
+                size: text.len() as u32,
+            },
+            DolSection {
+                name: "data0".to_owned(),
+                kind: DolSectionKind::Data,
+                index: 1,
+                file_offset: text.len() as u32,
+                address: 0x8040_0000,
+                size: 4,
+            },
+        ];
+        assert_eq!(
+            discover_address_taken_functions(&sections, &image, &functions),
+            BTreeSet::from([0x8000_5000, 0x8000_6000])
+        );
+    }
+
     /// stmw r22,8(r3); stmw r20,-0x30(r1); dcbz r3,r4; blr
     const FLAT_VIEW_SEQUENCE: [u32; 4] = [
         (47 << 26) | (22 << 21) | (3 << 16) | 0x0008,
@@ -12406,6 +12756,11 @@ mod tests {
             },
             ModuleTranslationOptions {
                 stack_r11_stores: true,
+                ..base
+            },
+            ModuleTranslationOptions {
+                abi_call_sync: true,
+                abi_exit_sync: true,
                 ..base
             },
         ] {
@@ -20471,14 +20826,16 @@ mod residency_tests {
         let options = ModuleTranslationOptions::default();
         assert!(!options.guest_resident_integer, "residency is opt-in");
         assert_eq!(
-            apply_residency_to_body(FN, body.clone(), &BTreeSet::new(), &options),
+            apply_residency_to_body(FN, body.clone(), &BTreeSet::new(), &options, None),
             body
         );
         let enabled = ModuleTranslationOptions {
             guest_resident_integer: true,
             ..ModuleTranslationOptions::default()
         };
-        assert!(apply_residency_to_body(FN, body, &BTreeSet::new(), &enabled).contains("gr3"));
+        assert!(
+            apply_residency_to_body(FN, body, &BTreeSet::new(), &enabled, None).contains("gr3")
+        );
     }
 
     #[test]
@@ -20582,7 +20939,7 @@ extern \"C\" std::uint32_t galaxy_module_transfer_flags() {
             ..ModuleTranslationOptions::default()
         };
         let resident =
-            apply_residency_to_body(FN, body.clone(), &BTreeSet::new(), &resident_options);
+            apply_residency_to_body(FN, body.clone(), &BTreeSet::new(), &resident_options, None);
         (
             apply_transfer_returns(body),
             apply_transfer_returns(resident),

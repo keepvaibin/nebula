@@ -6593,6 +6593,14 @@ GALAXY_ALWAYS_INLINE bool transfer_pending(
 #define GALAXY_RETURN_IF_TRANSFER_PENDING(services) \
     do { if (galaxy::transfer_pending(services)) [[unlikely]] return; } while (false)
 
+// EABI register synchronization (translator --abi-call-sync / --abi-exit-sync).
+// The translator announces a linked guest call with GALAXY_ABI_CALL(call pc)
+// and lowers a blr to GALAXY_GUEST_RETURN; its register-residency pass replaces
+// both with the contract's store and reload sequences. In a body the pass
+// leaves on the context they are a no-op and a plain return.
+#define GALAXY_ABI_CALL(call_pc) static_cast<void>(0)
+#define GALAXY_GUEST_RETURN return
+
 inline void native_yaz0_decode_or_fallback_803989BC(
     PpcContext* context,
     GuestMemoryV1* memory,
