@@ -170,9 +170,14 @@ alpha-cutout bugs.
 ## Presentation chain and future upscalers, frame generation, ray tracing
 
 Present runs `PostProcessor` (`post_process.{h,cpp,hlsl}`) on the selected
-XFB: SMAA 1x at game resolution, then FSR 1 EASU or a footprint box resample
-to the window, then RCAS. Settings apply live (launcher config.ini, overlay
-GRAPHICS page). Effect copies up to 320x228 stay at native size
+XFB: SMAA 1x or FXAA at game resolution, then FSR 1 EASU or a footprint box
+resample to the window, then RCAS. Settings apply live (launcher config.ini,
+overlay GRAPHICS page). At start-up the SMAA lookup textures are uploaded and
+both AA passes run on a synthetic stair-stepped edge; a pass that fails is
+replaced (SMAA by FXAA) and the overlay's ANTI-ALIASING row and CAPS page say
+so. `[present-stats]` (GALAXY_TRACE_PRESENT_STATS=1) carries session totals:
+post-frames, aa-wanted-frames, smaa-frames, fxaa-frames and aa-skipped-frames
+(AA wanted, no pass ran). Effect copies up to 320x228 stay at native size
 (`copy_efb_to_texture`), so bloom, depth of field and shadow captures keep the
 game's own blur footprints at any internal scale.
 
