@@ -655,6 +655,48 @@ private:
     D3D12_GPU_VIRTUAL_ADDRESS draw_matrix_palette_ = 0;
     D3D12_GPU_VIRTUAL_ADDRESS temporal_vs_palette_va_ = 0;
     TransformHistory transform_history_;
+    // The scene records transforms (temporal upscaling or interpolation).
+    bool history_scene_ = false;
+    // Interpolated redraw (present rate above 60, temporal upscaler off):
+    // this render chunk records a replay log and per-record VS constants.
+    bool interp_recording_ = false;
+    unsigned interp_frames_ = 0;          // interpolated frames per game frame
+    unsigned interp_scenes_in_chunk_ = 0;
+    std::int32_t current_replay_record_ = -1;
+    std::int32_t current_palette_shadow_ = -1;
+    struct InterpScene {
+        std::vector<GxVsConstants> constants;   // per record, as uploaded
+        std::vector<std::int32_t> palette;      // per record: shadow index or -1
+        std::vector<std::uint32_t> palettes;    // kMatrixPaletteWords per shadow
+        std::size_t palette_count = 0;
+    };
+    InterpScene interp_cur_;
+    InterpScene interp_prev_;
+    bool interp_scene_ready_ = false;     // interp_cur_ matches the history's current scene
+    struct InterpSequence {
+        bool active = false;
+        std::uint32_t xfb_addr = 0;
+        unsigned subframes = 0;
+        unsigned next = 0;
+        std::int64_t due_qpc = 0;
+        std::int64_t step_qpc = 0;
+    };
+    InterpSequence interp_sequence_{};
+    // A recorded frame whose present arrives as a separate VI present.
+    bool interp_log_waiting_ = false;
+    std::uint32_t interp_log_xfb_ = 0;
+    void start_interp_sequence(std::uint32_t xfb_addr);
+    std::vector<D3D12_GPU_VIRTUAL_ADDRESS> interp_record_vas_;
+    std::uint64_t interp_presented_ = 0;
+    std::uint64_t interp_dropped_ = 0;
+    double interp_cpu_ms_ = 0.0;
+    std::int64_t interp_stats_qpc_ = 0;
+    // Render thread: steps the interpolation sequence of the latest frame
+    // (one sub-frame or the real frame when due; `flush` presents the real
+    // frame now and drops the remaining sub-frames).
+    void advance_interp_sequence(bool flush);
+    bool render_interp_subframe(float t);
+    [[nodiscard]] std::int64_t interp_wait_ms() const;
     std::uint64_t motion_trace_scenes_ = 0;
     bool scene_camera_captured_ = false;
     float scene_jitter_px_[2]{};

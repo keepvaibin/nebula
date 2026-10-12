@@ -83,6 +83,8 @@ static ComPtr<ID3D12RootSignature> s_conv_root_sig;
 static ComPtr<ID3D12RootSignature> s_clear_root_sig;
 // Cached backbuffer dimensions set during initialize.
 static UINT s_bb_width  = 1280;
+// Swap-chain presents per second (any source), for the FRAME RATE row.
+static std::atomic<double> s_measured_present_hz{0.0};
 static UINT s_bb_height =  720;
 
 // See set_native_settings_content_root in gx_d3d12.h. The setter itself is
@@ -5698,11 +5700,11 @@ void RendererD3D12::present_to_swap_chain() {
             measured_present_count_ = 0u;
         } else if (qpc_frequency_.QuadPart > 0 &&
                    now.QuadPart - measured_present_window_qpc_ >= qpc_frequency_.QuadPart) {
-            measured_present_hz_.store(
-                static_cast<double>(measured_present_count_) *
-                    static_cast<double>(qpc_frequency_.QuadPart) /
-                    static_cast<double>(now.QuadPart - measured_present_window_qpc_),
-                std::memory_order_relaxed);
+            const double hz = static_cast<double>(measured_present_count_) *
+                static_cast<double>(qpc_frequency_.QuadPart) /
+                static_cast<double>(now.QuadPart - measured_present_window_qpc_);
+            measured_present_hz_.store(hz, std::memory_order_relaxed);
+            s_measured_present_hz.store(hz, std::memory_order_relaxed);
             measured_present_window_qpc_ = now.QuadPart;
             measured_present_count_ = 0u;
         }
@@ -8647,8 +8649,12 @@ std::string native_settings_row_text(
         }
         case 6: {
             const auto rate = static_cast<unsigned>(std::lround(std::max(0.0f, render.max_fps)));
-            if (rate == 0u) return "FRAME RATE: UNLIMITED";
-            std::snprintf(text, sizeof(text), "FRAME RATE: %u", rate);
+            const double measured = s_measured_present_hz.load(std::memory_order_relaxed);
+            if (rate == 0u) {
+                std::snprintf(text, sizeof(text), "FRAME RATE: UNLIMITED  %.1f", measured);
+            } else {
+                std::snprintf(text, sizeof(text), "FRAME RATE: %u  %.1f", rate, measured);
+            }
             return text;
         }
         case 7:
