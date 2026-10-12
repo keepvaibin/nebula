@@ -175,6 +175,14 @@ enum Command {
         /// --experimental-guest-resident-integer).
         #[arg(long)]
         abi_exit_sync: bool,
+        /// Single-precision and paired arithmetic in binary32 (no 25-bit
+        /// multiplier rounding, no binary64 round trip; needs --fast-float).
+        #[arg(long)]
+        single_float_arithmetic: bool,
+        /// fres/frsqrte/ps_res/ps_rsqrte/fsel/ps_sel/fcmp/ps_cmp without FPSCR
+        /// updates or exact commit helpers (needs --fast-float).
+        #[arg(long)]
+        fast_float_forms: bool,
         /// Retained compatibility spelling; exact PSMTX local lanes are enabled by default.
         #[arg(long, default_value_t = true)]
         exact_psmtx_local_lanes: bool,
@@ -523,6 +531,8 @@ fn main() -> Result<()> {
             assume_paired_singles,
             abi_call_sync,
             abi_exit_sync,
+            single_float_arithmetic,
+            fast_float_forms,
             exact_psmtx_local_lanes,
             no_exact_psmtx_local_lanes,
             exact_psvec_cross_local_lanes,
@@ -563,6 +573,8 @@ fn main() -> Result<()> {
                 assume_paired_singles,
                 abi_call_sync,
                 abi_exit_sync,
+                single_float_arithmetic,
+                fast_float_forms,
                 exact_psmtx_local_lanes: exact_psmtx_local_lanes && !no_exact_psmtx_local_lanes,
                 exact_psvec_cross_local_lanes,
                 exact_psvec_normalize_local_lanes,
@@ -1150,6 +1162,8 @@ fn probe_options(list: &str) -> Result<ModuleTranslationOptions> {
             "assume-paired-singles" => options.assume_paired_singles = true,
             "abi-call-sync" => options.abi_call_sync = true,
             "abi-exit-sync" => options.abi_exit_sync = true,
+            "single-float-arithmetic" => options.single_float_arithmetic = true,
+            "fast-float-forms" => options.fast_float_forms = true,
             other => bail!("unknown module option {other}"),
         }
     }
@@ -1691,6 +1705,30 @@ mod tests {
             Command::TranslateModule {
                 abi_exit_sync: true,
                 abi_call_sync: false,
+                ..
+            }
+        ));
+        assert!(matches!(
+            parse(&[]),
+            Command::TranslateModule {
+                single_float_arithmetic: false,
+                fast_float_forms: false,
+                ..
+            }
+        ));
+        assert!(matches!(
+            parse(&["--single-float-arithmetic"]),
+            Command::TranslateModule {
+                single_float_arithmetic: true,
+                fast_float_forms: false,
+                ..
+            }
+        ));
+        assert!(matches!(
+            parse(&["--fast-float-forms"]),
+            Command::TranslateModule {
+                fast_float_forms: true,
+                single_float_arithmetic: false,
                 ..
             }
         ));

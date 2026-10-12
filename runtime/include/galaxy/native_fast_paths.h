@@ -31,6 +31,24 @@ namespace fast {
 
 inline constexpr bool kFastFloat = GALAXY_FAST_FLOAT != 0;
 
+// Binary32 arithmetic (translator --single-float-arithmetic, fast-float
+// modules only): the single-precision and paired-single forms round their
+// operands to binary32 and compute in binary32 (mulss/addss/vfmadd*ss and the
+// ps vector forms) instead of computing in binary64 with the Gekko's 25-bit
+// multiplier rounding and narrowing the result. For binary32 operands, add,
+// subtract, multiply and divide give the same result either way (binary64
+// holds every exact binary32 sum, product and quotient to within one rounding
+// that cannot change the binary32 result; the 25-bit multiplier rounding is
+// the identity on a binary32 value). They differ only for a binary64 operand
+// (it is rounded first) and in the fused forms' double-rounding corners. In
+// exchange, a chain of single operations stays in binary32 registers: the
+// compiler folds every narrow(widen(x)) pair.
+#ifndef GALAXY_SINGLE_FLOAT_ARITHMETIC
+#define GALAXY_SINGLE_FLOAT_ARITHMETIC 0
+#endif
+inline constexpr bool kSingleFloatArithmetic =
+    kFastFloat && GALAXY_SINGLE_FLOAT_ARITHMETIC != 0;
+
 // Paired singles always on (translator --assume-paired-singles): RMGE01 sets
 // HID2[PSE] and HID2[LSQE] in __init_hardware, before any game code, and never
 // clears them. A paired or quantized instruction with either bit clear is an
@@ -815,6 +833,16 @@ template <PpcFloatBinaryOperation Operation, bool Single>
 GALAXY_ALWAYS_INLINE void scalar_binary_fast(
     PpcContext* context, std::uint64_t* fpr, std::uint64_t* ps1, std::uint32_t target,
     std::uint32_t left_register, std::uint32_t right_register, bool record) noexcept {
+    if constexpr (Single && kSingleFloatArithmetic) {
+        const float result = binary_op_f32<Operation>(
+            static_cast<float>(as_f64(fpr[left_register])),
+            static_cast<float>(as_f64(fpr[right_register])));
+        write_single(context, fpr, ps1, target, as_bits(static_cast<double>(result)), true);
+        if (record) {
+            update_cr1_from_fpscr(context);
+        }
+        return;
+    }
     const double left = as_f64(fpr[left_register]);
     std::uint64_t right_bits = fpr[right_register];
     if constexpr (Single && Operation == PpcFloatBinaryOperation::Multiply) {
@@ -836,6 +864,17 @@ GALAXY_ALWAYS_INLINE void scalar_ternary_fast(
     PpcContext* context, std::uint64_t* fpr, std::uint64_t* ps1, std::uint32_t target,
     std::uint32_t multiplicand_register, std::uint32_t multiplier_register,
     std::uint32_t addend_register, bool record) noexcept {
+    if constexpr (Single && kSingleFloatArithmetic) {
+        const float result = ternary_op_f32<Operation>(
+            static_cast<float>(as_f64(fpr[multiplicand_register])),
+            static_cast<float>(as_f64(fpr[multiplier_register])),
+            static_cast<float>(as_f64(fpr[addend_register])));
+        write_single(context, fpr, ps1, target, as_bits(static_cast<double>(result)), true);
+        if (record) {
+            update_cr1_from_fpscr(context);
+        }
+        return;
+    }
     const double a = as_f64(fpr[multiplicand_register]);
     std::uint64_t c_bits = fpr[multiplier_register];
     if constexpr (Single) {
@@ -1071,6 +1110,56 @@ GALAXY_ALWAYS_INLINE Pair ternary_pair(Pair a, Pair c, Pair b) noexcept {
     return _mm_set_pd(lane1, lane0);
 #endif
 }
+// Binary32 pairs (kSingleFloatArithmetic): both lanes rounded to binary32
+// once, in the low two lanes of a binary32 vector.
+using SinglePair = __m128;
+
+GALAXY_ALWAYS_INLINE SinglePair to_single_pair(Pair value) noexcept {
+    return _mm_cvtpd_ps(value);
+}
+
+GALAXY_ALWAYS_INLINE Pair from_single_pair(SinglePair value) noexcept {
+    return _mm_cvtps_pd(value);
+}
+
+template <PpcFloatBinaryOperation Operation>
+GALAXY_ALWAYS_INLINE SinglePair binary_single_pair(SinglePair left, SinglePair right) noexcept {
+    if constexpr (Operation == PpcFloatBinaryOperation::Add) {
+        return _mm_add_ps(left, right);
+    } else if constexpr (Operation == PpcFloatBinaryOperation::Subtract) {
+        return _mm_sub_ps(left, right);
+    } else if constexpr (Operation == PpcFloatBinaryOperation::Multiply) {
+        return _mm_mul_ps(left, right);
+    } else {
+        return _mm_div_ps(left, right);
+    }
+}
+
+template <PpcFloatTernaryOperation Operation>
+GALAXY_ALWAYS_INLINE SinglePair ternary_single_pair(
+    SinglePair a, SinglePair c, SinglePair b) noexcept {
+#if defined(__FMA__) || defined(__AVX2__)
+    if constexpr (Operation == PpcFloatTernaryOperation::MultiplyAdd) {
+        return _mm_fmadd_ps(a, c, b);
+    } else if constexpr (Operation == PpcFloatTernaryOperation::MultiplySubtract) {
+        return _mm_fmsub_ps(a, c, b);
+    } else if constexpr (Operation == PpcFloatTernaryOperation::NegativeMultiplyAdd) {
+        return _mm_fnmsub_ps(a, c, b);
+    } else {
+        return _mm_fnmadd_ps(a, c, b);
+    }
+#else
+    alignas(16) float a_lanes[4];
+    alignas(16) float c_lanes[4];
+    alignas(16) float b_lanes[4];
+    _mm_store_ps(a_lanes, a);
+    _mm_store_ps(c_lanes, c);
+    _mm_store_ps(b_lanes, b);
+    return _mm_setr_ps(
+        ternary_op_f32<Operation>(a_lanes[0], c_lanes[0], b_lanes[0]),
+        ternary_op_f32<Operation>(a_lanes[1], c_lanes[1], b_lanes[1]), 0.0F, 0.0F);
+#endif
+}
 #else
 #error "fast float paired singles require x86-64"
 #endif
@@ -1091,6 +1180,14 @@ GALAXY_ALWAYS_INLINE void paired_binary_fast(
     std::uint32_t left_register, std::uint32_t right_register, bool record) noexcept {
     const Pair left = make_pair(fpr[left_register], ps1[left_register]);
     Pair right = select_lanes<Lane>(fpr[right_register], ps1[right_register]);
+    if constexpr (kSingleFloatArithmetic) {
+        write_pair(
+            context, fpr, ps1, target,
+            from_single_pair(binary_single_pair<Operation>(
+                to_single_pair(left), to_single_pair(right))),
+            record);
+        return;
+    }
     if constexpr (Operation == PpcFloatBinaryOperation::Multiply) {
         right = round_multiplier_25(right);
     }
@@ -1104,6 +1201,18 @@ GALAXY_ALWAYS_INLINE void paired_ternary_fast(
     PpcContext* context, std::uint64_t* fpr, std::uint64_t* ps1, std::uint32_t target,
     std::uint32_t multiplicand_register, std::uint32_t multiplier_register,
     std::uint32_t addend_register, bool record) noexcept {
+    if constexpr (kSingleFloatArithmetic) {
+        const SinglePair a = to_single_pair(
+            make_pair(fpr[multiplicand_register], ps1[multiplicand_register]));
+        const SinglePair c = to_single_pair(
+            select_lanes<Lane>(fpr[multiplier_register], ps1[multiplier_register]));
+        const SinglePair b =
+            to_single_pair(make_pair(fpr[addend_register], ps1[addend_register]));
+        write_pair(
+            context, fpr, ps1, target,
+            from_single_pair(ternary_single_pair<Operation>(a, c, b)), record);
+        return;
+    }
     const Pair a = make_pair(fpr[multiplicand_register], ps1[multiplicand_register]);
     const Pair c = round_multiplier_25(
         select_lanes<Lane>(fpr[multiplier_register], ps1[multiplier_register]));
@@ -1118,8 +1227,11 @@ GALAXY_ALWAYS_INLINE void paired_sum_fast(
     PpcContext* context, std::uint64_t* fpr, std::uint64_t* ps1, std::uint32_t target,
     std::uint32_t left_register, std::uint32_t right_register, std::uint32_t copy_register,
     bool record) noexcept {
-    const std::uint64_t sum =
-        single_result_bits(as_f64(fpr[left_register]) + as_f64(ps1[right_register]));
+    const std::uint64_t sum = kSingleFloatArithmetic
+        ? as_bits(static_cast<double>(
+              static_cast<float>(as_f64(fpr[left_register])) +
+              static_cast<float>(as_f64(ps1[right_register]))))
+        : single_result_bits(as_f64(fpr[left_register]) + as_f64(ps1[right_register]));
     if constexpr (SumInLane1) {
         const std::uint64_t copy = fpr[copy_register];
         fpr[target] = copy;
@@ -1852,6 +1964,52 @@ GALAXY_ALWAYS_INLINE void fctiwz_r(
         fctiwz(context, target, source_register, record, services, guest_pc);
         resident_detail::sync_out(context, fpr, ps1, target);
     }
+}
+
+// ---------------------------------------------------------------------------
+// Fast float forms (translator --fast-float-forms, fast-float modules)
+// ---------------------------------------------------------------------------
+//
+// fres, frsqrte, ps_res, ps_rsqrte, fsel, ps_sel, fcmpu, fcmpo and ps_cmp* in
+// the fast-float accuracy class. They update no FPSCR field and take no exact
+// commit path; the generated code writes the register file directly, so the
+// residency pass keeps the operands in host locals.
+//   - The estimates return the correctly rounded reciprocal (square root),
+//     binary32 for fres/ps_res/ps_rsqrte and binary64 for frsqrte, where the
+//     Gekko returns a 12-bit-accurate table estimate. Game code refines the
+//     estimate with Newton-Raphson steps, which converge from either.
+//   - fsel and ps_sel select on `value >= 0.0`: a NaN selects the second
+//     operand and -0.0 the first, as the hardware does.
+//   - The compares set the CR field (LT, GT, EQ or FU) and nothing else: no
+//     FPSCR[FPCC], no VXSNAN/VXVC.
+
+GALAXY_ALWAYS_INLINE std::uint64_t reciprocal_single_bits(std::uint64_t source) noexcept {
+    return fast_float_detail::single_result_bits(1.0 / fast_float_detail::as_f64(source));
+}
+
+GALAXY_ALWAYS_INLINE std::uint64_t reciprocal_sqrt_bits(std::uint64_t source) noexcept {
+    return fast_float_detail::as_bits(1.0 / std::sqrt(fast_float_detail::as_f64(source)));
+}
+
+GALAXY_ALWAYS_INLINE std::uint64_t reciprocal_sqrt_single_bits(std::uint64_t source) noexcept {
+    return fast_float_detail::single_result_bits(
+        1.0 / std::sqrt(fast_float_detail::as_f64(source)));
+}
+
+GALAXY_ALWAYS_INLINE bool select_nonnegative(std::uint64_t selector) noexcept {
+    return fast_float_detail::as_f64(selector) >= 0.0;
+}
+
+GALAXY_ALWAYS_INLINE void compare_f64_cr(
+    PpcContext* context, std::uint32_t field_index, std::uint64_t left,
+    std::uint64_t right) noexcept {
+    const double left_value = fast_float_detail::as_f64(left);
+    const double right_value = fast_float_detail::as_f64(right);
+    const std::uint32_t result = left_value < right_value ? 0x8u
+        : left_value > right_value                        ? 0x4u
+        : left_value == right_value                       ? 0x2u
+                                                          : 0x1u;
+    set_cr_field(context, field_index, result);
 }
 
 // ---------------------------------------------------------------------------

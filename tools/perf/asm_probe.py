@@ -98,6 +98,49 @@ def compile_static(zig, src, workdir):
     return totals
 
 
+def float_library(workdir):
+    """The runtime's exact float library (runtime/src/ppc_float.cpp over the
+    Berkeley SoftFloat subset CMakeLists.txt builds), for probes that still
+    take an exact float path. Built once per output directory."""
+    library = workdir / 'libprobe_float.a'
+    if library.exists():
+        return library
+    objects_dir = workdir / 'float_objects'
+    objects_dir.mkdir(parents=True, exist_ok=True)
+    cmake = (REPO / 'CMakeLists.txt').read_text()
+
+    def names(variable):
+        block = re.search(r'set\(\s*' + variable + r'\s*\n(.*?)\n\)', cmake, re.S).group(1)
+        return [line.strip() for line in block.splitlines()
+                if line.strip() and not line.strip().startswith('#')]
+
+    root = REPO / 'third_party' / 'berkeley-softfloat-3' / 'source'
+    sources = [root / f'{name}.c' for name in names('SOFTFLOAT_COMMON_NAMES')]
+    sources += [root / '8086-SSE' / f'{name}.c' for name in names('SOFTFLOAT_SPECIALIZE_NAMES')]
+    softfloat_flags = ['-O2', '-DSOFTFLOAT_FAST_INT64=1', '-DSOFTFLOAT_FAST_DIV32TO16=1',
+                       '-DSOFTFLOAT_FAST_DIV64TO32=1', '-DINLINE_LEVEL=5',
+                       '-I', str(REPO / 'runtime' / 'softfloat'), '-I', str(root / 'include'),
+                       '-I', str(root / '8086-SSE')]
+    cc = os.environ.get('CC', 'clang')
+    clang = os.environ.get('CXX', 'clang++')
+
+    def one(source):
+        obj = objects_dir / (source.stem + '.o')
+        run([cc, *softfloat_flags, '-c', str(source), '-o', str(obj)])
+        return obj
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=os.cpu_count() or 4) as pool:
+        objects = list(pool.map(one, sources))
+    ppc_float = objects_dir / 'ppc_float.o'
+    run([clang, '-std=c++20', '-O2', '-mavx2', '-mfma', '-DSOFTFLOAT_FAST_INT64=1',
+         '-include', str(STUB), '-I', str(REPO / 'runtime' / 'include'),
+         '-I', str(REPO / 'runtime' / 'softfloat'), '-I', str(root / 'include'),
+         '-c', str(REPO / 'runtime' / 'src' / 'ppc_float.cpp'),
+         '-o', str(ppc_float)])
+    run(['ar', 'rcs', str(library), str(ppc_float), *map(str, objects)])
+    return library
+
+
 def compile_dynamic(src, workdir, probes):
     clang = os.environ.get('CXX', 'clang++')
     flags = CODEGEN + ['-include', str(STUB), '-I', str(REPO / 'runtime' / 'include'), '-I', str(src)]
@@ -111,7 +154,8 @@ def compile_dynamic(src, workdir, probes):
     with concurrent.futures.ThreadPoolExecutor(max_workers=os.cpu_count() or 4) as pool:
         objects = list(pool.map(one, units))
     binary = workdir / 'probe_driver'
-    run([clang, '-rdynamic', *map(str, objects), '-o', str(binary)])
+    run([clang, '-rdynamic', *map(str, objects), str(float_library(workdir.parent.parent)),
+         '-o', str(binary)])
     run([str(binary), *[p['address'] for p in probes]])
     out = workdir / 'callgrind.out'
     run(['valgrind', '--tool=callgrind', f'--callgrind-out-file={out}', str(binary),

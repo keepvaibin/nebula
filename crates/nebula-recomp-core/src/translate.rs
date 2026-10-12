@@ -293,6 +293,19 @@ pub struct ModuleTranslationOptions {
     /// registers, LR and the module's non-ABI extras) instead of every
     /// written local. Requires `guest_resident_integer`.
     pub abi_exit_sync: bool,
+    /// Fast-float module whose single-precision and paired-single arithmetic
+    /// rounds its operands to binary32 and computes in binary32
+    /// (`functions.h` defines `GALAXY_SINGLE_FLOAT_ARITHMETIC`), instead of
+    /// computing in binary64 with the 25-bit multiplier rounding and
+    /// narrowing. A chain of single operations then stays in binary32
+    /// registers. Requires `fast_float`.
+    pub single_float_arithmetic: bool,
+    /// `fres`, `frsqrte`, `ps_res`, `ps_rsqrte`, `fsel`, `ps_sel`, `fcmpu`,
+    /// `fcmpo` and `ps_cmp*` lower to the `galaxy::fast` forms: correctly
+    /// rounded reciprocals instead of the exact estimate tables, no FPSCR
+    /// update, no commit helper, CR field only for the compares. Requires
+    /// `fast_float`.
+    pub fast_float_forms: bool,
     pub exact_psmtx_local_lanes: bool,
     pub exact_psvec_cross_local_lanes: bool,
     pub exact_psvec_normalize_local_lanes: bool,
@@ -335,6 +348,8 @@ impl Default for ModuleTranslationOptions {
             assume_paired_singles: false,
             abi_call_sync: false,
             abi_exit_sync: false,
+            single_float_arithmetic: false,
+            fast_float_forms: false,
             exact_psmtx_local_lanes: true,
             exact_psvec_cross_local_lanes: false,
             exact_psvec_normalize_local_lanes: false,
@@ -538,6 +553,18 @@ pub fn validate_module_options(options: &ModuleTranslationOptions) -> Result<(),
         return Err(TranslationError::OptionRequires {
             option: "abi_exit_sync",
             requires: "guest_resident_integer",
+        });
+    }
+    if options.single_float_arithmetic && !options.fast_float {
+        return Err(TranslationError::OptionRequires {
+            option: "single_float_arithmetic",
+            requires: "fast_float",
+        });
+    }
+    if options.fast_float_forms && !options.fast_float {
+        return Err(TranslationError::OptionRequires {
+            option: "fast_float_forms",
+            requires: "fast_float",
         });
     }
     Ok(())
@@ -2616,6 +2643,7 @@ fn lower_words_for_module_with_call_return_entries_and_exact_fpu_flat_reads(
             stack_r11_stores: options.stack_r11_stores,
             abi_call_markers: options.abi_call_sync,
             guest_return_macro: options.abi_exit_sync,
+            fast_float_forms: options.fast_float_forms,
             ..LoweringConfig::default()
         },
     )
@@ -2682,6 +2710,7 @@ fn lower_words_with_options(
             stack_r11_stores: false,
             abi_call_markers: false,
             guest_return_macro: false,
+            fast_float_forms: false,
         },
     )
 }
@@ -2720,6 +2749,9 @@ struct LoweringConfig<'a> {
     abi_call_markers: bool,
     /// Lower `blr` to `GALAXY_GUEST_RETURN;` (--abi-exit-sync).
     guest_return_macro: bool,
+    /// The `galaxy::fast` estimate, select and compare forms
+    /// (--fast-float-forms).
+    fast_float_forms: bool,
 }
 
 // The typed-region pilot has a single DOL owner; its public body still
@@ -3682,6 +3714,7 @@ fn lower_words_with_config(
         stack_r11_stores,
         abi_call_markers,
         guest_return_macro,
+        fast_float_forms,
     } = config;
     // Suffix of the flat-view float load/store helpers: `_hw` converts binary32
     // lanes with the host's cvtss2sd/cvtsd2ss.
@@ -4848,9 +4881,40 @@ fn lower_words_with_config(
                 let selector = gpr_ra(word);
                 let negative = gpr_rb(word);
                 let nonnegative = fpr_c(word);
+                if fast_float_forms {
+                    writeln!(
+                        output,
+                        "    context->fpr_bits[{target}] = galaxy::fast::select_nonnegative(context->fpr_bits[{selector}]) ? context->fpr_bits[{nonnegative}] : context->fpr_bits[{negative}];"
+                    )
+                } else {
+                    writeln!(
+                        output,
+                        "    const std::uint64_t selector = context->fpr_bits[{selector}];\n    const bool select_nonnegative = !galaxy::f64_is_nan(selector) && ((selector & 0x8000000000000000ull) == 0 || (selector & 0x7FFFFFFFFFFFFFFFull) == 0);\n    context->fpr_bits[{target}] = select_nonnegative ? context->fpr_bits[{nonnegative}] : context->fpr_bits[{negative}];"
+                    )
+                }
+                .map_err(|_| TranslationError::Formatting)?;
+                if record_bit(word) {
+                    output.push_str("    galaxy::update_cr1_from_fpscr(context);\n");
+                }
+            }
+            Opcode::Fres if fast_float_forms => {
+                let target = gpr_rt(word);
+                let source = gpr_rb(word);
                 writeln!(
                     output,
-                    "    const std::uint64_t selector = context->fpr_bits[{selector}];\n    const bool select_nonnegative = !galaxy::f64_is_nan(selector) && ((selector & 0x8000000000000000ull) == 0 || (selector & 0x7FFFFFFFFFFFFFFFull) == 0);\n    context->fpr_bits[{target}] = select_nonnegative ? context->fpr_bits[{nonnegative}] : context->fpr_bits[{negative}];"
+                    "    {{ const std::uint64_t estimate = galaxy::fast::reciprocal_single_bits(context->fpr_bits[{source}]); context->fpr_bits[{target}] = estimate; if (galaxy::fast::duplicates_single(context)) context->ps1_bits[{target}] = estimate; }}"
+                )
+                .map_err(|_| TranslationError::Formatting)?;
+                if record_bit(word) {
+                    output.push_str("    galaxy::update_cr1_from_fpscr(context);\n");
+                }
+            }
+            Opcode::Frsqrte if fast_float_forms => {
+                let target = gpr_rt(word);
+                let source = gpr_rb(word);
+                writeln!(
+                    output,
+                    "    context->fpr_bits[{target}] = galaxy::fast::reciprocal_sqrt_bits(context->fpr_bits[{source}]);"
                 )
                 .map_err(|_| TranslationError::Formatting)?;
                 if record_bit(word) {
@@ -5154,11 +5218,35 @@ fn lower_words_with_config(
                     "fpr_bits"
                 };
                 let ordered = matches!(instruction.op, Opcode::PsCmpo0 | Opcode::PsCmpo1);
+                if fast_float_forms {
+                    writeln!(
+                        output,
+                        "    galaxy::require_paired_single_mode(context, false, services, 0x{pc:08X}u);\n    galaxy::fast::compare_f64_cr(context, {field}u, context->{lane}[{left}], context->{lane}[{right}]);"
+                    )
+                } else {
+                    writeln!(
+                        output,
+                        "    galaxy::require_paired_single_mode(context, false, services, 0x{pc:08X}u);\n    galaxy::compare_f64(context, {field}u, context->{lane}[{left}], context->{lane}[{right}], {ordered});"
+                    )
+                }
+                .map_err(|_| TranslationError::Formatting)?;
+            }
+            Opcode::PsRes | Opcode::PsRsqrte if fast_float_forms => {
+                let target = gpr_rt(word);
+                let source = gpr_rb(word);
+                let estimate = if instruction.op == Opcode::PsRes {
+                    "reciprocal_single_bits"
+                } else {
+                    "reciprocal_sqrt_single_bits"
+                };
                 writeln!(
                     output,
-                    "    galaxy::require_paired_single_mode(context, false, services, 0x{pc:08X}u);\n    galaxy::compare_f64(context, {field}u, context->{lane}[{left}], context->{lane}[{right}], {ordered});"
+                    "    galaxy::require_paired_single_mode(context, false, services, 0x{pc:08X}u);\n    {{ const std::uint64_t estimate_ps0 = galaxy::fast::{estimate}(context->fpr_bits[{source}]); const std::uint64_t estimate_ps1 = galaxy::fast::{estimate}(context->ps1_bits[{source}]); context->fpr_bits[{target}] = estimate_ps0; context->ps1_bits[{target}] = estimate_ps1; }}"
                 )
                 .map_err(|_| TranslationError::Formatting)?;
+                if record_bit(word) {
+                    output.push_str("    galaxy::update_cr1_from_fpscr(context);\n");
+                }
             }
             Opcode::PsRes | Opcode::PsRsqrte => {
                 let target = gpr_rt(word);
@@ -5174,6 +5262,20 @@ fn lower_words_with_config(
                     record_bit(word)
                 )
                 .map_err(|_| TranslationError::Formatting)?;
+            }
+            Opcode::PsSel if fast_float_forms => {
+                let target = gpr_rt(word);
+                let selector = gpr_ra(word);
+                let negative = gpr_rb(word);
+                let nonnegative = fpr_c(word);
+                writeln!(
+                    output,
+                    "    galaxy::require_paired_single_mode(context, false, services, 0x{pc:08X}u);\n    {{ const std::uint64_t selected_ps0 = galaxy::fast::select_nonnegative(context->fpr_bits[{selector}]) ? context->fpr_bits[{nonnegative}] : context->fpr_bits[{negative}]; const std::uint64_t selected_ps1 = galaxy::fast::select_nonnegative(context->ps1_bits[{selector}]) ? context->ps1_bits[{nonnegative}] : context->ps1_bits[{negative}]; context->fpr_bits[{target}] = selected_ps0; context->ps1_bits[{target}] = selected_ps1; }}"
+                )
+                .map_err(|_| TranslationError::Formatting)?;
+                if record_bit(word) {
+                    output.push_str("    galaxy::update_cr1_from_fpscr(context);\n");
+                }
             }
             Opcode::PsSel => {
                 let target = gpr_rt(word);
@@ -5949,10 +6051,17 @@ fn lower_words_with_config(
                 let left = gpr_ra(word);
                 let right = gpr_rb(word);
                 let ordered = instruction.op == Opcode::Fcmpo;
-                writeln!(
-                    output,
-                    "    galaxy::compare_f64(context, {field}u, context->fpr_bits[{left}], context->fpr_bits[{right}], {ordered});"
-                )
+                if fast_float_forms {
+                    writeln!(
+                        output,
+                        "    galaxy::fast::compare_f64_cr(context, {field}u, context->fpr_bits[{left}], context->fpr_bits[{right}]);"
+                    )
+                } else {
+                    writeln!(
+                        output,
+                        "    galaxy::compare_f64(context, {field}u, context->fpr_bits[{left}], context->fpr_bits[{right}], {ordered});"
+                    )
+                }
                 .map_err(|_| TranslationError::Formatting)?;
             }
             Opcode::Sc => {
@@ -8649,6 +8758,9 @@ fn apply_module_options(source_files: &mut [GeneratedSource], options: &ModuleTr
     }
     if options.assume_paired_singles {
         define_before_runtime_header(source_files, "GALAXY_ASSUME_PAIRED_SINGLES");
+    }
+    if options.single_float_arithmetic {
+        define_before_runtime_header(source_files, "GALAXY_SINGLE_FLOAT_ARITHMETIC");
     }
 }
 
@@ -12524,6 +12636,127 @@ mod tests {
         }
     }
 
+    /// fsel f3,f1,f2,f4; frsqrte f5,f2; fres f6,f2; fcmpo cr1,f5,f6;
+    /// ps_res f7,f2; ps_rsqrte f8,f2; ps_sel f9,f1,f2,f4; ps_cmpu0 cr2,f1,f2;
+    /// blr
+    const FLOAT_FORMS_SEQUENCE: [u32; 9] = [
+        (63 << 26) | (3 << 21) | (1 << 16) | (4 << 11) | (2 << 6) | (23 << 1),
+        (63 << 26) | (5 << 21) | (2 << 11) | (26 << 1),
+        (59 << 26) | (6 << 21) | (2 << 11) | (24 << 1),
+        (63 << 26) | (1 << 23) | (5 << 16) | (6 << 11) | (32 << 1),
+        (4 << 26) | (7 << 21) | (2 << 11) | (24 << 1),
+        (4 << 26) | (8 << 21) | (2 << 11) | (26 << 1),
+        (4 << 26) | (9 << 21) | (1 << 16) | (4 << 11) | (2 << 6) | (23 << 1),
+        (4 << 26) | (2 << 23) | (1 << 16) | (2 << 11),
+        0x4E80_0020,
+    ];
+
+    #[test]
+    fn fast_float_forms_off_keeps_the_exact_estimates_and_compares() {
+        let out = lower_with(
+            &FLOAT_FORMS_SEQUENCE,
+            LoweringConfig {
+                native_float: true,
+                ..flat_config(false, false)
+            },
+        );
+        assert!(
+            out.contains(
+                "galaxy::ppc_f64_reciprocal_sqrt_estimate(context->fpr_bits[2], context->fpscr);"
+            ),
+            "{out}"
+        );
+        assert!(
+            out.contains("galaxy::ppc_f64_reciprocal_estimate(source, context->fpscr);"),
+            "{out}"
+        );
+        assert!(out.contains("    galaxy::compare_f64(context, 1u, context->fpr_bits[5], context->fpr_bits[6], true);\n"), "{out}");
+        assert!(out.contains("galaxy::compare_f64(context, 2u, context->fpr_bits[1], context->fpr_bits[2], false);"), "{out}");
+        assert!(out.contains("galaxy::f64_is_nan(selector)"), "{out}");
+        assert!(
+            out.contains("galaxy::ppc_commit_paired_estimate_result("),
+            "{out}"
+        );
+        for form in [
+            "fast::select_nonnegative",
+            "fast::reciprocal_",
+            "fast::compare_f64_cr",
+            "fast::duplicates_single",
+        ] {
+            assert!(!out.contains(form), "{form}{out}");
+        }
+    }
+
+    #[test]
+    fn fast_float_forms_write_the_register_file_without_fpscr_or_commits() {
+        let out = lower_with(
+            &FLOAT_FORMS_SEQUENCE,
+            LoweringConfig {
+                native_float: true,
+                fast_float_forms: true,
+                ..flat_config(false, false)
+            },
+        );
+        for line in [
+            "    context->fpr_bits[3] = galaxy::fast::select_nonnegative(context->fpr_bits[1]) ? context->fpr_bits[2] : context->fpr_bits[4];\n",
+            "    context->fpr_bits[5] = galaxy::fast::reciprocal_sqrt_bits(context->fpr_bits[2]);\n",
+            "    { const std::uint64_t estimate = galaxy::fast::reciprocal_single_bits(context->fpr_bits[2]); context->fpr_bits[6] = estimate; if (galaxy::fast::duplicates_single(context)) context->ps1_bits[6] = estimate; }\n",
+            "    galaxy::fast::compare_f64_cr(context, 1u, context->fpr_bits[5], context->fpr_bits[6]);\n",
+            "    { const std::uint64_t estimate_ps0 = galaxy::fast::reciprocal_single_bits(context->fpr_bits[2]); const std::uint64_t estimate_ps1 = galaxy::fast::reciprocal_single_bits(context->ps1_bits[2]); context->fpr_bits[7] = estimate_ps0; context->ps1_bits[7] = estimate_ps1; }\n",
+            "    { const std::uint64_t estimate_ps0 = galaxy::fast::reciprocal_sqrt_single_bits(context->fpr_bits[2]); const std::uint64_t estimate_ps1 = galaxy::fast::reciprocal_sqrt_single_bits(context->ps1_bits[2]); context->fpr_bits[8] = estimate_ps0; context->ps1_bits[8] = estimate_ps1; }\n",
+            "    { const std::uint64_t selected_ps0 = galaxy::fast::select_nonnegative(context->fpr_bits[1]) ? context->fpr_bits[2] : context->fpr_bits[4]; const std::uint64_t selected_ps1 = galaxy::fast::select_nonnegative(context->ps1_bits[1]) ? context->ps1_bits[2] : context->ps1_bits[4]; context->fpr_bits[9] = selected_ps0; context->ps1_bits[9] = selected_ps1; }\n",
+            "    galaxy::fast::compare_f64_cr(context, 2u, context->fpr_bits[1], context->fpr_bits[2]);\n",
+        ] {
+            assert!(out.contains(line), "{line}{out}");
+        }
+        assert!(!out.contains("fpscr"), "{out}");
+        assert!(!out.contains("commit"), "{out}");
+        // Every float operand stays in host locals under float residency: the
+        // forms are no synchronization point.
+        let resident = crate::residency::apply_register_residency_with_abi(&out, true, None)
+            .expect("eligible");
+        assert!(
+            !resident.contains("context->fpr_bits[5] = fpr[5]; galaxy::fast::compare_f64_cr"),
+            "{resident}"
+        );
+        assert!(
+            resident.contains("galaxy::fast::compare_f64_cr(context, 1u, fpr[5], fpr[6]);"),
+            "{resident}"
+        );
+        assert!(
+            resident.contains("if (galaxy::fast::duplicates_single(context)) ps1[6] = estimate;"),
+            "{resident}"
+        );
+    }
+
+    #[test]
+    fn float_options_need_fast_float() {
+        for options in [
+            ModuleTranslationOptions {
+                single_float_arithmetic: true,
+                ..ModuleTranslationOptions::default()
+            },
+            ModuleTranslationOptions {
+                fast_float_forms: true,
+                ..ModuleTranslationOptions::default()
+            },
+        ] {
+            assert!(matches!(
+                validate_module_options(&options),
+                Err(TranslationError::OptionRequires {
+                    requires: "fast_float",
+                    ..
+                })
+            ));
+            assert!(validate_module_options(&ModuleTranslationOptions {
+                native_float: true,
+                fast_float: true,
+                ..options
+            })
+            .is_ok());
+        }
+    }
+
     /// bl 0x80005000; bctrl; beqlr; blr
     const ABI_SEQUENCE: [u32; 4] = [
         (18 << 26) | 0x1000 | 1,
@@ -12761,6 +12994,7 @@ mod tests {
             ModuleTranslationOptions {
                 abi_call_sync: true,
                 abi_exit_sync: true,
+                fast_float_forms: true,
                 ..base
             },
         ] {
@@ -12791,6 +13025,15 @@ mod tests {
             .contains("#define GALAXY_ASSUME_PAIRED_SINGLES 1\n"));
         assert!(!paired[0].contents.contains("GALAXY_FLAT_VIEW_ONLY"));
         assert_eq!(paired[1..], sources()[1..]);
+        let single = switched(ModuleTranslationOptions {
+            single_float_arithmetic: true,
+            ..base
+        });
+        assert!(single[0]
+            .contents
+            .contains("#define GALAXY_SINGLE_FLOAT_ARITHMETIC 1\n"));
+        assert!(!single[0].contents.contains("GALAXY_ASSUME_PAIRED_SINGLES"));
+        assert_eq!(single[1..], sources()[1..]);
         let gate = switched(ModuleTranslationOptions {
             checkpoint_globals: true,
             ..base

@@ -135,6 +135,9 @@ fn callee_leaves_register_file_alone(callee: &str) -> bool {
             | "fast::paired_ternary_r"
             | "fast::paired_sum_r"
             | "fast::fctiwz_r"
+            // --fast-float-forms: CR field only; HID2 only.
+            | "fast::compare_f64_cr"
+            | "fast::duplicates_single"
     )
 }
 
