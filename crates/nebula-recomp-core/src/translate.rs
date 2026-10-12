@@ -136,7 +136,7 @@ pub struct TranslationUnit {
     pub cpp: String,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GeneratedSource {
     pub name: String,
     pub contents: String,
@@ -251,6 +251,13 @@ pub struct ModuleTranslationOptions {
     /// Requires `flat_ram_reads` and `flat_ram_writes`: the conversions live
     /// in the flat-view helpers, and the checked helpers keep the exact ones.
     pub hw_float_conversions: bool,
+    /// Checkpoint tests read a module-global snapshot of the inline gate
+    /// (`galaxy::g_module_checkpoint_gate`, defined in `module.cpp` and
+    /// exported as `galaxy_module_checkpoint_gate`) instead of re-reading the
+    /// service table after every call. The runtime keeps the snapshot current
+    /// with `galaxy::refresh_module_checkpoint_gate`; an empty snapshot sends
+    /// every checkpoint to the complete service-table policy.
+    pub checkpoint_globals: bool,
     pub exact_psmtx_local_lanes: bool,
     pub exact_psvec_cross_local_lanes: bool,
     pub exact_psvec_normalize_local_lanes: bool,
@@ -287,6 +294,7 @@ impl Default for ModuleTranslationOptions {
             fast_float: false,
             guest_resident_float: false,
             hw_float_conversions: false,
+            checkpoint_globals: false,
             exact_psmtx_local_lanes: true,
             exact_psvec_cross_local_lanes: false,
             exact_psvec_normalize_local_lanes: false,
@@ -897,6 +905,9 @@ pub fn translate_module_with_options(
     )?;
     if options.fast_float {
         apply_fast_float_mode(&mut source_files);
+    }
+    if options.checkpoint_globals {
+        apply_checkpoint_globals(&mut source_files);
     }
     if options.trace_end_frame_spans {
         insert_end_frame_span_markers(&mut source_files, shard_source_bytes)?;
@@ -8205,6 +8216,83 @@ fn apply_fast_float_mode(source_files: &mut [GeneratedSource]) {
             );
         }
     }
+}
+
+/// `--checkpoint-globals`: every checkpoint test of the generated sources
+/// reads the module's gate snapshot (`*_g` helpers and `_G` macros in
+/// `galaxy/native_api.h`). Every unit that includes the runtime header
+/// directly (`functions.h` for the shards) enables the helpers first, and
+/// `module.cpp` defines the snapshot and exports it.
+/// The rewrite is textual over the final sources, so it covers every lowering
+/// path (resident and non-resident bodies, shared cold blocks, continuation
+/// stubs, the local-lane translation units) the same way.
+fn apply_checkpoint_globals(source_files: &mut [GeneratedSource]) {
+    const DEFINE: &str = "#define GALAXY_MODULE_CHECKPOINT_GLOBALS 1\n";
+    const INCLUDE: &str = "#include \"galaxy/native_api.h\"";
+    const PRAGMA: &str = "#pragma once\n";
+    for file in source_files.iter_mut() {
+        // Like the fast-float define: every unit that includes the runtime
+        // header directly (the shards include it through functions.h).
+        if file.contents.contains(INCLUDE) && !file.contents.contains(DEFINE) {
+            file.contents = match file.contents.strip_prefix(PRAGMA) {
+                Some(rest) => format!("{PRAGMA}{DEFINE}{rest}"),
+                None => format!("{DEFINE}{}", file.contents),
+            };
+        }
+        file.contents = rewrite_checkpoint_globals(&file.contents);
+        if file.contents.contains("galaxy_module_manifest() {")
+            && !file.contents.contains("galaxy_module_checkpoint_gate()")
+        {
+            file.contents.push_str(
+                "\ngalaxy::ModuleCheckpointGateV1 galaxy::g_module_checkpoint_gate{};\n\n\
+                 extern \"C\" galaxy::ModuleCheckpointGateV1* galaxy_module_checkpoint_gate() {\n\
+                 \x20   return &galaxy::g_module_checkpoint_gate;\n\
+                 }\n",
+            );
+        }
+    }
+}
+
+/// The checkpoint call sites of one generated source, switched to the module
+/// gate snapshot. Every replaced spelling is a complete call or macro name.
+fn rewrite_checkpoint_globals(source: &str) -> String {
+    const REWRITES: [(&str, &str); 7] = [
+        (
+            "galaxy::call_return_checkpoint_due(services)",
+            "galaxy::call_return_checkpoint_due_g(services)",
+        ),
+        (
+            "galaxy::branch_checkpoint_due_budgeted(services)",
+            "galaxy::branch_checkpoint_due_budgeted_g(services)",
+        ),
+        (
+            "galaxy::branch_checkpoint_due(services)",
+            "galaxy::branch_checkpoint_due_g(services)",
+        ),
+        (
+            "GALAXY_CALL_RETURN_CHECKPOINT(services,",
+            "GALAXY_CALL_RETURN_CHECKPOINT_G(services,",
+        ),
+        (
+            "GALAXY_BRANCH_CHECKPOINT_TAKEN_BUDGETED(services,",
+            "GALAXY_BRANCH_CHECKPOINT_TAKEN_BUDGETED_G(services,",
+        ),
+        (
+            "GALAXY_BRANCH_CHECKPOINT_TAKEN(services,",
+            "GALAXY_BRANCH_CHECKPOINT_TAKEN_G(services,",
+        ),
+        (
+            "GALAXY_RETURN_IF_TRANSFER_PENDING(services)",
+            "GALAXY_RETURN_IF_TRANSFER_PENDING_G(services)",
+        ),
+    ];
+    let mut out = source.to_owned();
+    for (from, to) in REWRITES {
+        if out.contains(from) {
+            out = out.replace(from, to);
+        }
+    }
+    out
 }
 
 fn insert_end_frame_span_markers(
@@ -19961,5 +20049,158 @@ extern \"C\" std::uint32_t galaxy_module_transfer_flags() {
         apply_fast_float_mode(&mut files);
         assert_eq!(files[0].contents, again[0].contents);
         assert_eq!(files[2].contents, again[2].contents);
+    }
+
+    /// addi r3,r3,-1; bl 0x80004014; cmpwi r3,0; bne 0x80004000; blr: one
+    /// call-return checkpoint and one budgeted backward-branch checkpoint.
+    /// Returns the non-resident and the resident lowering, after the
+    /// transfer-return pass, as the module pipeline produces them.
+    fn loop_with_call() -> (String, String) {
+        let words: [u32; 5] = [
+            (14 << 26) | (3 << 21) | (3 << 16) | 0xFFFF,
+            0x4800_0011,
+            (11 << 26) | (3 << 16),
+            (16 << 26) | (4 << 21) | (2 << 16) | 0xFFF4,
+            0x4E80_0020,
+        ];
+        let bytes: Vec<u8> = words.iter().flat_map(|word| word.to_be_bytes()).collect();
+        let callable = BTreeMap::from([(0x8000_4014_u32, 0x8000_4014_u32)]);
+        let body = lower_words_for_module_with_call_return_entries_and_exact_fpu_flat_reads(
+            FN,
+            &bytes,
+            &BTreeSet::new(),
+            &BTreeSet::new(),
+            &callable,
+            &BTreeSet::new(),
+            &BTreeSet::new(),
+            &BTreeMap::new(),
+            &ModuleTranslationOptions::default(),
+        )
+        .unwrap();
+        let resident_options = ModuleTranslationOptions {
+            guest_resident_integer: true,
+            ..ModuleTranslationOptions::default()
+        };
+        let resident =
+            apply_residency_to_body(FN, body.clone(), &BTreeSet::new(), &resident_options);
+        (
+            apply_transfer_returns(body),
+            apply_transfer_returns(resident),
+        )
+    }
+
+    const SERVICE_TABLE_CHECKPOINTS: [&str; 7] = [
+        "galaxy::call_return_checkpoint_due(services)",
+        "galaxy::branch_checkpoint_due_budgeted(services)",
+        "galaxy::branch_checkpoint_due(services)",
+        "GALAXY_CALL_RETURN_CHECKPOINT(services,",
+        "GALAXY_BRANCH_CHECKPOINT_TAKEN_BUDGETED(services,",
+        "GALAXY_BRANCH_CHECKPOINT_TAKEN(services,",
+        "GALAXY_RETURN_IF_TRANSFER_PENDING(services)",
+    ];
+
+    #[test]
+    fn checkpoint_globals_off_keeps_the_service_table_checkpoints() {
+        let (plain, resident) = loop_with_call();
+        assert!(plain.contains(
+            "    GALAXY_CALL_RETURN_CHECKPOINT(services, 0x80004004u, 0x80004008u, context, memory);\n"
+        ));
+        assert!(plain.contains("GALAXY_BRANCH_CHECKPOINT_TAKEN_BUDGETED(services, 0x8000400Cu, 0x80004000u, context, memory);"));
+        assert!(resident.contains("    if (const std::uint64_t counted__ = galaxy::call_return_checkpoint_due(services); counted__ != 0u) [[unlikely]] { shared_counted__ = counted__; shared_site__ = 0u; goto shared_call_return__; }\n"));
+        assert!(resident.contains("galaxy::branch_checkpoint_due_budgeted(services); counted__ != 0u) [[unlikely]] { GALAXY_RETURN_IF_TRANSFER_PENDING(services);"));
+        for text in [&plain, &resident] {
+            assert!(!text.contains("_g(services)"), "{text}");
+            assert!(!text.contains("_G(services"), "{text}");
+        }
+    }
+
+    #[test]
+    fn checkpoint_globals_read_the_module_snapshot_at_every_checkpoint() {
+        let (plain, resident) = loop_with_call();
+        let plain_g = rewrite_checkpoint_globals(&plain);
+        let resident_g = rewrite_checkpoint_globals(&resident);
+        assert!(plain_g.contains(
+            "    GALAXY_CALL_RETURN_CHECKPOINT_G(services, 0x80004004u, 0x80004008u, context, memory);\n"
+        ));
+        assert!(plain_g.contains("GALAXY_BRANCH_CHECKPOINT_TAKEN_BUDGETED_G(services, 0x8000400Cu, 0x80004000u, context, memory);"));
+        assert!(resident_g.contains("    if (const std::uint64_t counted__ = galaxy::call_return_checkpoint_due_g(services); counted__ != 0u) [[unlikely]] { shared_counted__ = counted__; shared_site__ = 0u; goto shared_call_return__; }\n"));
+        assert!(resident_g.contains("galaxy::branch_checkpoint_due_budgeted_g(services); counted__ != 0u) [[unlikely]] { GALAXY_RETURN_IF_TRANSFER_PENDING_G(services);"));
+        assert!(resident_g.contains("shared_call_return__:\n    {\n    static constexpr std::uint32_t shared_call_return_sites__[][2] = {{0x80004004u, 0x80004008u}};\n    GALAXY_RETURN_IF_TRANSFER_PENDING_G(services);\n"));
+        for (before, after) in [(&plain, &plain_g), (&resident, &resident_g)] {
+            for spelling in SERVICE_TABLE_CHECKPOINTS {
+                assert!(!after.contains(spelling), "{spelling} left in\n{after}");
+            }
+            // Only the checkpoint spellings change; everything else, the policy
+            // calls in the cold blocks included, is untouched.
+            let restored = after
+                .replace("_due_g(services)", "_due(services)")
+                .replace("_due_budgeted_g(services)", "_due_budgeted(services)")
+                .replace("_G(services", "(services");
+            assert_eq!(&restored, before);
+        }
+        // Idempotent.
+        assert_eq!(rewrite_checkpoint_globals(&resident_g), resident_g);
+    }
+
+    #[test]
+    fn checkpoint_globals_define_the_macro_and_export_the_gate() {
+        let files = || {
+            vec![
+                GeneratedSource {
+                    name: "functions.h".to_owned(),
+                    contents: "#pragma once\n\n#include \"galaxy/native_api.h\"\n".to_owned(),
+                },
+                GeneratedSource {
+                    name: "functions_0000.cpp".to_owned(),
+                    contents: "#include \"functions.h\"\n    GALAXY_CALL_RETURN_CHECKPOINT(services, 0x80004004u, 0x80004008u, context, memory);\n".to_owned(),
+                },
+                GeneratedSource {
+                    name: "module.cpp".to_owned(),
+                    contents: "#include \"functions.h\"\nextern \"C\" const galaxy::GameModuleManifestV1* galaxy_module_manifest() {\n    return &kManifest;\n}\n".to_owned(),
+                },
+            ]
+        };
+        let mut generated = files();
+        apply_checkpoint_globals(&mut generated);
+        assert_eq!(
+            generated[0].contents,
+            "#pragma once\n#define GALAXY_MODULE_CHECKPOINT_GLOBALS 1\n\n#include \"galaxy/native_api.h\"\n"
+        );
+        assert_eq!(
+            generated[1].contents,
+            "#include \"functions.h\"\n    GALAXY_CALL_RETURN_CHECKPOINT_G(services, 0x80004004u, 0x80004008u, context, memory);\n"
+        );
+        assert!(generated[2].contents.ends_with(
+            "\ngalaxy::ModuleCheckpointGateV1 galaxy::g_module_checkpoint_gate{};\n\n\
+             extern \"C\" galaxy::ModuleCheckpointGateV1* galaxy_module_checkpoint_gate() {\n\
+             \x20   return &galaxy::g_module_checkpoint_gate;\n\
+             }\n"
+        ));
+        assert!(!generated[2].contents.contains("#define"));
+        // Idempotent, and independent of the fast-float pass order.
+        let once = generated.clone();
+        apply_checkpoint_globals(&mut generated);
+        assert_eq!(generated, once);
+        let mut fast_first = files();
+        apply_fast_float_mode(&mut fast_first);
+        apply_checkpoint_globals(&mut fast_first);
+        let mut globals_first = files();
+        apply_checkpoint_globals(&mut globals_first);
+        apply_fast_float_mode(&mut globals_first);
+        for file in fast_first.iter().chain(&globals_first) {
+            if file.name == "functions.h" {
+                assert!(file
+                    .contents
+                    .contains("#define GALAXY_MODULE_CHECKPOINT_GLOBALS 1\n"));
+                assert!(file.contents.contains("#define GALAXY_FAST_FLOAT 1\n"));
+            }
+        }
+        assert_eq!(fast_first[1], globals_first[1]);
+        for module in [&fast_first[2], &globals_first[2]] {
+            assert!(module.contents.contains("galaxy_module_float_flags() {"));
+            assert!(module
+                .contents
+                .contains("galaxy_module_checkpoint_gate() {"));
+        }
     }
 }

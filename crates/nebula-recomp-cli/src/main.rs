@@ -147,6 +147,11 @@ enum Command {
         /// read and write options).
         #[arg(long)]
         hw_float_conversions: bool,
+        /// Checkpoint tests read a module-global gate snapshot that the runtime
+        /// refreshes, instead of the service table (an older runtime leaves it
+        /// empty: every checkpoint then takes the complete policy).
+        #[arg(long)]
+        checkpoint_globals: bool,
         /// Retained compatibility spelling; exact PSMTX local lanes are enabled by default.
         #[arg(long, default_value_t = true)]
         exact_psmtx_local_lanes: bool,
@@ -476,6 +481,7 @@ fn main() -> Result<()> {
             experimental_fused_paired_ternary,
             experimental_inline_scalar_single_binary,
             hw_float_conversions,
+            checkpoint_globals,
             exact_psmtx_local_lanes,
             no_exact_psmtx_local_lanes,
             exact_psvec_cross_local_lanes,
@@ -510,6 +516,7 @@ fn main() -> Result<()> {
                 fused_paired_ternary: experimental_fused_paired_ternary,
                 inline_scalar_single_binary: experimental_inline_scalar_single_binary,
                 hw_float_conversions,
+                checkpoint_globals,
                 exact_psmtx_local_lanes: exact_psmtx_local_lanes && !no_exact_psmtx_local_lanes,
                 exact_psvec_cross_local_lanes,
                 exact_psvec_normalize_local_lanes,
@@ -1497,6 +1504,22 @@ mod tests {
             parse(&["--hw-float-conversions"]),
             Command::TranslateModule {
                 hw_float_conversions: true,
+                checkpoint_globals: false,
+                ..
+            }
+        ));
+        assert!(matches!(
+            parse(&[]),
+            Command::TranslateModule {
+                checkpoint_globals: false,
+                ..
+            }
+        ));
+        assert!(matches!(
+            parse(&["--checkpoint-globals"]),
+            Command::TranslateModule {
+                checkpoint_globals: true,
+                hw_float_conversions: false,
                 ..
             }
         ));
