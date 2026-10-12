@@ -12,6 +12,7 @@
 
 #include <array>
 #include <cstdint>
+#include <string>
 #include <vector>
 
 namespace galaxy::gx {
@@ -20,15 +21,17 @@ class DescriptorRing;
 
 // Presentation image quality, applied to the presented XFB on the render
 // thread only.
-//   aa:          SMAA 1x at the game image's resolution. kAuto runs it only
-//                when the game image is not already supersampled (less than
-//                1.5 source pixels per window pixel on either axis).
+//   aa:          SMAA 1x or FXAA at the game image's resolution, before any
+//                scaling. kAuto runs SMAA only when the game image is not
+//                already supersampled (less than 1.5 source pixels per window
+//                pixel on either axis). SMAA falls back to FXAA when its
+//                pipelines, lookup textures or start-up self-test fail.
 //   upscaler:    FidelityFX FSR 1 EASU when the game image is smaller than the
 //                window on both axes; otherwise a footprint box filter, which
 //                averages every source pixel when the image is reduced.
 //   sharpness:   FidelityFX RCAS strength, 0-100; 0 skips the pass.
 struct PostProcessSettings {
-    enum class Aa : std::uint8_t { kOff = 0, kSmaa = 1, kAuto = 2 };
+    enum class Aa : std::uint8_t { kOff = 0, kSmaa = 1, kAuto = 2, kFxaa = 3 };
     enum class Upscaler : std::uint8_t { kBilinear = 0, kFsr1 = 1 };
     Aa aa = Aa::kAuto;
     std::uint8_t smaa_quality = 2;  // 0 low, 1 medium, 2 high, 3 ultra
@@ -39,7 +42,10 @@ struct PostProcessSettings {
 // Which passes one frame runs, decided from sizes and settings alone so the
 // choice is testable without a device.
 struct PostProcessPlan {
+    bool aa_wanted = false; // the settings ask for an AA pass this frame
+    bool supersampled = false;
     bool smaa = false;
+    bool fxaa = false;
     bool easu = false;     // EASU into the window-sized intermediate
     bool resample = false; // box filter (or identity copy) step
     bool rcas = false;
@@ -47,10 +53,45 @@ struct PostProcessPlan {
     bool resample_to_target = false;
 };
 
+// smaa_available / fxaa_available: the pass passed its start-up self-test.
 [[nodiscard]] PostProcessPlan plan_post_process(
     unsigned source_width, unsigned source_height,
     unsigned target_width, unsigned target_height,
-    const PostProcessSettings& settings) noexcept;
+    const PostProcessSettings& settings,
+    bool smaa_available = true, bool fxaa_available = true) noexcept;
+
+enum class AaRun : std::uint8_t { kNone = 0, kSmaa = 1, kFxaa = 2 };
+
+// What the presentation chain can do and did last frame; published by the
+// renderer for the settings overlay and the logs.
+struct PostProcessStatus {
+    bool initialized = false;  // the chain exists (otherwise the plain blit)
+    bool smaa_ok = false;      // pipelines, lookup textures and self-test
+    bool fxaa_ok = false;
+    std::array<char, 40> smaa_reason{};  // why SMAA is unavailable
+    std::array<char, 40> fxaa_reason{};
+    std::array<char, 40> skip_reason{};  // why last frame's wanted AA did not run
+    AaRun last_run = AaRun::kNone;
+    bool last_wanted = false;
+    bool last_supersampled = false;
+    std::uint8_t live_aa = 0;       // PostProcessSettings::Aa the chain uses
+    std::uint8_t live_quality = 0;
+    std::uint64_t frames = 0;       // totals since start
+    std::uint64_t aa_wanted_frames = 0;
+    std::uint64_t smaa_frames = 0;
+    std::uint64_t fxaa_frames = 0;
+    std::uint64_t aa_skipped_frames = 0;  // wanted, no AA pass ran
+};
+
+// Overlay row text. draft_aa is the overlay's unapplied value: the live state
+// is shown only while it matches what the chain runs.
+[[nodiscard]] std::string anti_aliasing_row_text(
+    unsigned draft_aa, unsigned draft_quality, const PostProcessStatus& status);
+[[nodiscard]] std::string post_process_caps_text(const PostProcessStatus& status);
+
+// Thread-safe copy for readers off the render thread.
+[[nodiscard]] PostProcessStatus get_post_process_status();
+void set_post_process_status(const PostProcessStatus& status);
 
 class PostProcessor {
 public:
@@ -59,12 +100,18 @@ public:
     PostProcessor& operator=(const PostProcessor&) = delete;
     ~PostProcessor() { shutdown(); }
 
-    // Builds the root signature and every pipeline the settings can use
-    // (shaders are precompiled into the runtime). Returns false when the
-    // device rejects any of it; the caller then keeps its plain blit.
-    bool initialize(ID3D12Device* device, const PostProcessSettings& settings);
+    // Builds the root signature and every pipeline (shaders are precompiled
+    // into the runtime), uploads the SMAA lookup textures on `queue` and
+    // runs the SMAA and FXAA self-tests before returning, so status() is
+    // final before the first present. Returns false when the scaling passes
+    // cannot be built; the caller then keeps its plain blit. An AA pass that
+    // fails is reported in status() and replaced (SMAA -> FXAA -> none).
+    bool initialize(ID3D12Device* device, ID3D12CommandQueue* queue,
+                    const PostProcessSettings& settings);
     void shutdown() noexcept;
     [[nodiscard]] bool ready() const noexcept { return ready_; }
+    // Capabilities, self-test results, last frame's AA pass and totals.
+    [[nodiscard]] const PostProcessStatus& status() const noexcept { return status_; }
 
     // Records the chain from `source` (RGBA8, PIXEL_SHADER_RESOURCE) into the
     // `viewport` rectangle of `target_rtv`. Intermediate targets are kept
@@ -124,9 +171,17 @@ private:
                        std::uint64_t frame_index, unsigned frames_in_flight);
     void transition(ID3D12GraphicsCommandList* list, Target& target,
                     D3D12_RESOURCE_STATES state);
-    void upload_lookup_textures(ID3D12GraphicsCommandList* list,
-                                std::uint64_t frame_index,
-                                unsigned frames_in_flight);
+    // Records the lookup-texture copies; the staging buffers go to `staging`.
+    bool record_lookup_upload(ID3D12GraphicsCommandList* list,
+                              std::vector<Microsoft::WRL::ComPtr<ID3D12Resource>>& staging);
+    // SMAA or FXAA from `source` into antialiased_ (source-sized); false when
+    // an intermediate target cannot be created.
+    bool record_aa(ID3D12GraphicsCommandList* list, DescriptorRing& srv_ring, AaRun pass,
+                   ID3D12Resource* source, unsigned width, unsigned height,
+                   std::uint64_t frame_index, unsigned frames_in_flight);
+    // Uploads the lookup textures and runs both AA passes on a synthetic
+    // stair-stepped edge, on `queue`, waiting for the GPU.
+    void self_test(ID3D12CommandQueue* queue);
     // Binds `inputs` as t0..t2 and draws the full-target triangle into the
     // render target the caller has bound, inside `viewport`.
     void draw(ID3D12GraphicsCommandList* list, DescriptorRing& srv_ring,
@@ -140,11 +195,12 @@ private:
     ID3D12Device* device_ = nullptr;
     PostProcessSettings settings_{};
     bool ready_ = false;
-    bool lookup_uploaded_ = false;
+    PostProcessStatus status_{};
     Microsoft::WRL::ComPtr<ID3D12RootSignature> root_signature_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> smaa_edges_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> smaa_weights_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> smaa_blend_;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> fxaa_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> easu_;
     // RCAS and the resample run into intermediates and into the back buffer;
     // both use RGBA8, so one pipeline each serves every target.

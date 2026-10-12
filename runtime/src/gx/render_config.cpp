@@ -176,7 +176,7 @@ static void apply_kv(RenderConfig& cfg, const char* key, const char* val) {
     else if (std::strcmp(key, "internal_follow_window") == 0) cfg.internal_follow_window = parse_bool(val, cfg.internal_follow_window);
     else if (std::strcmp(key, "hud_output_resolution") == 0) cfg.hud_output_resolution = parse_bool(val, cfg.hud_output_resolution);
     else if (std::strcmp(key, "aa") == 0) {
-        static constexpr const char* kNames[] = {"off", "smaa", "auto"};
+        static constexpr const char* kNames[] = {"off", "smaa", "auto", "fxaa"};
         cfg.aa_mode = parse_choice(val, kNames, cfg.aa_mode);
     } else if (std::strcmp(key, "smaa_quality") == 0) {
         static constexpr const char* kNames[] = {"low", "medium", "high", "ultra"};
@@ -316,7 +316,7 @@ static void clamp_unimplemented_features(RenderConfig& cfg) {
     }
     cfg.texture_lod_bias = std::min(cfg.texture_lod_bias, 8u);
     cfg.anisotropic_filtering = std::clamp(cfg.anisotropic_filtering, 1u, 16u);
-    cfg.aa_mode = std::min(cfg.aa_mode, 2u);
+    cfg.aa_mode = std::min(cfg.aa_mode, 3u);
     cfg.smaa_quality = std::min(cfg.smaa_quality, 3u);
     cfg.upscaler = std::min(cfg.upscaler, experimental_temporal_upscaler_allowed() ? 2u : 1u);
     cfg.temporal_quality = std::min(cfg.temporal_quality, 4u);

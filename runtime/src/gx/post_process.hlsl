@@ -173,6 +173,84 @@ float4 PSMain(FullscreenOut i) : SV_Target {
 }
 #endif
 
+#if defined(PASS_FXAA)
+// Fast approximate AA (the FXAA quality-preset method, written for Nebula):
+// find the local luma edge, walk along it in both directions to its ends,
+// and resample the pixel across the edge by its position along the span;
+// a 3x3 contrast term softens single-pixel features. Needs no lookup
+// textures, so it is the fallback when SMAA is unavailable.
+Texture2D inputTex : register(t0);
+float FxaaLuma(float3 c) { return dot(c, float3(0.299, 0.587, 0.114)); }
+float FxaaLumaAt(float2 uv) { return FxaaLuma(inputTex.SampleLevel(LinearSampler, uv, 0).rgb); }
+float FxaaLumaOff(float2 uv, int2 o) { return FxaaLuma(inputTex.SampleLevel(PointSampler, uv, 0, o).rgb); }
+FullscreenOut VSMain(uint id : SV_VertexID) { return FullscreenTriangle(id); }
+float4 PSMain(FullscreenOut i) : SV_Target {
+    const float2 texel = g_rt_metrics.xy;
+    const float2 uv = (float2(ViewportPixel(i.pos)) + 0.5) * texel;
+    const float3 center = inputTex.SampleLevel(PointSampler, uv, 0).rgb;
+    const float lc = FxaaLuma(center);
+    const float ln = FxaaLumaOff(uv, int2(0, -1));
+    const float ls = FxaaLumaOff(uv, int2(0, 1));
+    const float lw = FxaaLumaOff(uv, int2(-1, 0));
+    const float le = FxaaLumaOff(uv, int2(1, 0));
+    const float lmax = max(lc, max(max(ln, ls), max(lw, le)));
+    const float lmin = min(lc, min(min(ln, ls), min(lw, le)));
+    const float range = lmax - lmin;
+    if (range < max(0.0312, lmax * 0.125)) return float4(center, 1.0);
+    const float lnw = FxaaLumaOff(uv, int2(-1, -1));
+    const float lne = FxaaLumaOff(uv, int2(1, -1));
+    const float lsw = FxaaLumaOff(uv, int2(-1, 1));
+    const float lse = FxaaLumaOff(uv, int2(1, 1));
+    // Edge orientation from second differences of the 3x3 block.
+    const float horizontal = abs(lnw + lne - 2.0 * ln) + 2.0 * abs(lw + le - 2.0 * lc) + abs(lsw + lse - 2.0 * ls);
+    const float vertical = abs(lnw + lsw - 2.0 * lw) + 2.0 * abs(ln + ls - 2.0 * lc) + abs(lne + lse - 2.0 * le);
+    const bool horz = horizontal >= vertical;
+    // The neighbour across the edge with the larger contrast.
+    float l1 = horz ? ln : lw;
+    float l2 = horz ? ls : le;
+    const float g1 = abs(l1 - lc);
+    const float g2 = abs(l2 - lc);
+    const bool negative = g1 >= g2;
+    float across = horz ? texel.y : texel.x;
+    float lpair;
+    if (negative) { across = -across; lpair = l1; } else { lpair = l2; }
+    const float gradient = 0.25 * max(g1, g2);
+    const float lavg = 0.5 * (lpair + lc);
+    // Walk along the edge, half a pixel over towards the chosen neighbour.
+    float2 start = uv;
+    if (horz) start.y += 0.5 * across; else start.x += 0.5 * across;
+    const float2 along = horz ? float2(texel.x, 0.0) : float2(0.0, texel.y);
+    static const float kSteps[10] = {1.0, 1.0, 1.0, 1.5, 2.0, 2.0, 2.0, 4.0, 8.0, 8.0};
+    float2 pn = start - along;
+    float2 pp = start + along;
+    float en = FxaaLumaAt(pn) - lavg;
+    float ep = FxaaLumaAt(pp) - lavg;
+    bool dn = abs(en) >= gradient;
+    bool dp = abs(ep) >= gradient;
+    [loop] for (int s = 1; s < 10 && !(dn && dp); ++s) {
+        if (!dn) { pn -= along * kSteps[s]; en = FxaaLumaAt(pn) - lavg; dn = abs(en) >= gradient; }
+        if (!dp) { pp += along * kSteps[s]; ep = FxaaLumaAt(pp) - lavg; dp = abs(ep) >= gradient; }
+    }
+    const float distn = horz ? uv.x - pn.x : uv.y - pn.y;
+    const float distp = horz ? pp.x - uv.x : pp.y - uv.y;
+    const bool nearer_negative = distn < distp;
+    const float dist = min(distn, distp);
+    const float span = distn + distp;
+    // Blend only when the nearer end's luma moves away from the centre's side.
+    const bool centre_below = lc - lavg < 0.0;
+    const bool correct = ((nearer_negative ? en : ep) < 0.0) != centre_below;
+    float offset = correct ? 0.5 - dist / span : 0.0;
+    // Sub-pixel term from the 3x3 average.
+    const float l3x3 = (2.0 * (ln + ls + lw + le) + lnw + lne + lsw + lse) / 12.0;
+    const float sub = saturate(abs(l3x3 - lc) / range);
+    const float sub2 = (-2.0 * sub + 3.0) * sub * sub;
+    offset = max(offset, sub2 * sub2 * 0.75);
+    float2 final_uv = uv;
+    if (horz) final_uv.y += offset * across; else final_uv.x += offset * across;
+    return float4(inputTex.SampleLevel(LinearSampler, final_uv, 0).rgb, 1.0);
+}
+#endif
+
 #if defined(PASS_RESAMPLE)
 // Box filter over each target pixel's source footprint: one bilinear tap per
 // axis when enlarging, up to eight evenly spaced bilinear taps per axis when

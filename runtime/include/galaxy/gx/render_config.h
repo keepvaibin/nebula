@@ -87,7 +87,8 @@ struct RenderConfig {
 
     // Presentation image quality (post_process.h), applied to the presented
     // frame on the render thread. aa_mode: 0 off, 1 SMAA, 2 auto (SMAA unless
-    // the game image already has 1.5x the window's pixels on both axes).
+    // the game image already has 1.5x the window's pixels on both axes),
+    // 3 FXAA.
     // smaa_quality: 0 low .. 3 ultra. upscaler: 0 bilinear, 1 FidelityFX
     // FSR 1 when the game image is smaller than the window, 2 FidelityFX FSR 3
     // (temporal: jittered 3D scene, upscaled before the 2D layer; the scene

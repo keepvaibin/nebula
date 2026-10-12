@@ -656,6 +656,7 @@ function(galaxy_post_shader name pass preset library stage entry)
 endfunction()
 galaxy_post_shader(post_fullscreen_vs PASS_RESAMPLE - none vs_5_0 VSMain)
 galaxy_post_shader(post_resample_ps PASS_RESAMPLE - none ps_5_0 PSMain)
+galaxy_post_shader(post_fxaa_ps PASS_FXAA - none ps_5_0 PSMain)
 galaxy_post_shader(post_fsr_easu_ps PASS_FSR_EASU - fsr ps_5_0 PSMain)
 galaxy_post_shader(post_fsr_rcas_ps PASS_FSR_RCAS - fsr ps_5_0 PSMain)
 galaxy_post_shader(post_smaa_edges_vs PASS_SMAA_EDGES SMAA_PRESET_HIGH smaa vs_5_0 VSMain)
@@ -1031,6 +1032,10 @@ add_executable(galaxy_native_settings_overlay_tests
     runtime/src/gx/native_settings_overlay_tests.cpp)
 target_link_libraries(galaxy_native_settings_overlay_tests PRIVATE galaxy_gx)
 
+add_executable(galaxy_post_process_tests
+    runtime/src/gx/post_process_tests.cpp)
+target_link_libraries(galaxy_post_process_tests PRIVATE galaxy_gx)
+
 if(MSVC)
     foreach(
         target
@@ -1111,6 +1116,7 @@ if(MSVC)
         galaxy_same_context_rfi_tests
         galaxy_pipeline_cache_persistence_tests
         galaxy_native_settings_overlay_tests
+        galaxy_post_process_tests
     )
         target_compile_options(${target} PRIVATE /W4 /WX /permissive- /EHsc)
     endforeach()
@@ -1196,6 +1202,7 @@ galaxy_add_native_test(pipeline_cache_persistence galaxy_pipeline_cache_persiste
 galaxy_add_native_test(
     native_settings_overlay
     galaxy_native_settings_overlay_tests)
+galaxy_add_native_test(post_process galaxy_post_process_tests)
 galaxy_add_native_test(shader_gen_compiles galaxy_shader_gen_tests)
 galaxy_add_native_test(fifo_parser_streaming galaxy_fifo_parser_tests)
 galaxy_add_native_test(vertex_loader_defaults galaxy_vertex_loader_tests)

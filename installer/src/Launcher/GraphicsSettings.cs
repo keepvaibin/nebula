@@ -15,7 +15,7 @@ namespace Nebula.Launcher
     {
         public static readonly string[] DisplayModes = { "Windowed", "Borderless fullscreen", "Fullscreen" };
         public static readonly string[] Aspects = { "Auto (match the window)", "4:3", "16:10", "16:9", "21:9", "32:9" };
-        public static readonly string[] AntiAliasingModes = { "Off", "SMAA", "Auto (SMAA unless supersampled)" };
+        public static readonly string[] AntiAliasingModes = { "Off", "SMAA", "Auto (SMAA unless supersampled)", "FXAA" };
         public static readonly string[] AntiAliasingQualities = { "Low", "Medium", "High", "Ultra" };
         public static readonly string[] Upscalers = { "Bilinear", "AMD FidelityFX FSR 1" };
         public static readonly string[] TextureFilters = { "Trilinear", "2x anisotropic", "4x anisotropic", "8x anisotropic", "16x anisotropic" };

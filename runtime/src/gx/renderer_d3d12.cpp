@@ -285,7 +285,7 @@ void copy_adapter_description(
 
 PostProcessSettings post_process_settings_from(const RenderConfig& cfg) noexcept {
     PostProcessSettings post{};
-    post.aa = static_cast<PostProcessSettings::Aa>(std::min(cfg.aa_mode, 2u));
+    post.aa = static_cast<PostProcessSettings::Aa>(std::min(cfg.aa_mode, 3u));
     post.smaa_quality = static_cast<std::uint8_t>(std::min(cfg.smaa_quality, 3u));
     post.upscaler = static_cast<PostProcessSettings::Upscaler>(std::min(cfg.upscaler, 1u));
     post.sharpness = static_cast<std::uint8_t>(std::min(cfg.sharpness, 100u));
@@ -468,7 +468,7 @@ unsigned native_settings_row_count(unsigned tab) {
     case 1: return 9u;
     case 2: return 1u;
     case 3: return 6u;
-    case 4: return 5u;
+    case 4: return 6u;
     default: return 0u;
     }
 }
@@ -741,7 +741,7 @@ void adjust_native_setting_unlogged(int delta) {
     if (tab == 1u) {
         static constexpr std::array<unsigned, 5> kAnisotropy{1u, 2u, 4u, 8u, 16u};
         switch (row) {
-        case 0: draft.aa_mode = step(std::min(draft.aa_mode, 2u), 3u); break;
+        case 0: draft.aa_mode = step(std::min(draft.aa_mode, 3u), 4u); break;
         case 1: draft.smaa_quality = step(std::min(draft.smaa_quality, 3u), 4u); break;
         case 2: draft.upscaler = step(std::min(draft.upscaler, 1u), 2u); break;
         case 3:
@@ -4273,11 +4273,19 @@ bool RendererD3D12::initialize(int window_width, int window_height, unsigned efb
         {
             const RenderConfig cfg = get_render_config();
             const PostProcessSettings post = post_process_settings_from(cfg);
+            PostProcessStatus off{};
+            off.live_aa = static_cast<std::uint8_t>(post.aa);
+            off.live_quality = post.smaa_quality;
             if (!cfg.post_process) {
                 std::cerr << "[post-process] off; presenting with the plain blit\n";
-            } else if (!post_process_.initialize(device_.Get(), post)) {
+                std::snprintf(off.skip_reason.data(), off.skip_reason.size(), "OFF IN CONFIG");
+                set_post_process_status(off);
+            } else if (!post_process_.initialize(device_.Get(), queue_.Get(), post)) {
                 std::cerr << "[post-process] unavailable; presenting with the plain blit\n";
+                std::snprintf(off.skip_reason.data(), off.skip_reason.size(), "INIT FAILED");
+                set_post_process_status(off);
             } else {
+                set_post_process_status(post_process_.status());
                 std::cerr << "[post-process] aa=" << cfg.aa_mode << " smaa-quality=" << cfg.smaa_quality
                           << " upscaler=" << cfg.upscaler << " sharpness=" << cfg.sharpness << '\n';
             }
@@ -5838,6 +5846,11 @@ std::uint64_t RendererD3D12::end_frame(
                     << telemetry_no_xfb_present_count_
                     << " backbuffer-clears="
                     << telemetry_backbuffer_clear_count_
+                    << " post-frames-total=" << post_process_.status().frames
+                    << " aa-wanted-frames-total=" << post_process_.status().aa_wanted_frames
+                    << " smaa-frames-total=" << post_process_.status().smaa_frames
+                    << " fxaa-frames-total=" << post_process_.status().fxaa_frames
+                    << " aa-skipped-frames-total=" << post_process_.status().aa_skipped_frames
                     << " refresh-hz=" << display_refresh_hz_
                     << " shown-refreshes(0/1/2/3/4+)="
                     << telemetry_shown_refreshes_[0] << '/'
@@ -8129,10 +8142,9 @@ std::string native_settings_row_text(
         }
     }
     case 1: {
-        static constexpr const char* kAa[] = {"OFF", "SMAA", "AUTO"};
         static constexpr const char* kQuality[] = {"LOW", "MEDIUM", "HIGH", "ULTRA"};
         switch (row) {
-        case 0: return std::string("ANTI-ALIASING: ") + kAa[std::min(render.aa_mode, 2u)];
+        case 0: return anti_aliasing_row_text(render.aa_mode, render.smaa_quality, get_post_process_status());
         case 1: return std::string("AA QUALITY: ") + kQuality[std::min(render.smaa_quality, 3u)];
         case 2:
             return std::string("UPSCALER: ") +
@@ -8195,6 +8207,8 @@ std::string native_settings_row_text(
         case 4:
             return std::string("DLFG: ") +
                    exposed_text(caps.dlss_frame_generation);
+        case 5:
+            return post_process_caps_text(get_post_process_status());
         default:
             return {};
         }
@@ -8670,6 +8684,16 @@ bool RendererD3D12::present(
             command_list_.Get(), srv_ring_, source->texture.Get(),
             static_cast<unsigned>(source_desc.Width), source_desc.Height,
             back_rtv, vp, frame_index_, kFramesInFlight);
+        // The overlay reads a copy: publish when what it shows changes.
+        const PostProcessStatus& post = post_process_.status();
+        static PostProcessStatus published{};
+        if (post.last_run != published.last_run || post.last_wanted != published.last_wanted ||
+            post.last_supersampled != published.last_supersampled || post.live_aa != published.live_aa ||
+            post.live_quality != published.live_quality || published.frames == 0u ||
+            post.aa_skipped_frames != published.aa_skipped_frames) {
+            published = post;
+            set_post_process_status(post);
+        }
     } else {
         // One-slot SRV in the frame's ring for the XFB texture.
         const DescriptorRing::Table tbl = srv_ring_.allocate(1);

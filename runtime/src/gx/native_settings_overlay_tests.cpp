@@ -324,7 +324,7 @@ int main() {
 
     passed &= expect(key(VK_TAB), "Tab enters the capability page");
     snapshot = galaxy::gx::native_settings_overlay_snapshot();
-    passed &= expect(snapshot.tab == 4u && snapshot.row_count == 5u, "capability page has five status rows");
+    passed &= expect(snapshot.tab == 4u && snapshot.row_count == 6u, "capability page has six status rows");
     passed &= expect(key(VK_TAB), "Tab navigation wraps");
     passed &= expect(
         galaxy::gx::native_settings_overlay_snapshot().tab == 0u,

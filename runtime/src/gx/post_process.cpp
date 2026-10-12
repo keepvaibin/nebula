@@ -4,8 +4,11 @@
 #include <algorithm>
 #include <bit>
 #include <cmath>
+#include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <iostream>
+#include <mutex>
 
 // SMAA lookup textures (third_party/smaa, MIT).
 #include "AreaTex.h"
@@ -31,6 +34,7 @@
 #include "post_fsr_easu_ps.h"
 #include "post_fsr_rcas_ps.h"
 #include "post_resample_ps.h"
+#include "post_fxaa_ps.h"
 
 namespace galaxy::gx {
 namespace {
@@ -94,18 +98,22 @@ D3D12_SHADER_BYTECODE code(ShaderBytes shader) noexcept {
 PostProcessPlan plan_post_process(
     unsigned source_width, unsigned source_height,
     unsigned target_width, unsigned target_height,
-    const PostProcessSettings& settings) noexcept {
+    const PostProcessSettings& settings,
+    bool smaa_available, bool fxaa_available) noexcept {
     PostProcessPlan plan{};
     if (source_width == 0u || source_height == 0u ||
         target_width == 0u || target_height == 0u) {
         return plan;
     }
     // Supersampled: at least 1.5 source pixels per window pixel on both axes.
-    const bool supersampled =
+    plan.supersampled =
         source_width * 2u >= target_width * 3u &&
         source_height * 2u >= target_height * 3u;
-    plan.smaa = settings.aa == PostProcessSettings::Aa::kSmaa ||
-        (settings.aa == PostProcessSettings::Aa::kAuto && !supersampled);
+    const bool smaa_wanted = settings.aa == PostProcessSettings::Aa::kSmaa ||
+        (settings.aa == PostProcessSettings::Aa::kAuto && !plan.supersampled);
+    plan.aa_wanted = smaa_wanted || settings.aa == PostProcessSettings::Aa::kFxaa;
+    plan.smaa = smaa_wanted && smaa_available;
+    plan.fxaa = plan.aa_wanted && !plan.smaa && fxaa_available;
     const bool same_size =
         source_width == target_width && source_height == target_height;
     const bool enlarging = target_width >= source_width &&
@@ -178,7 +186,7 @@ void PostProcessor::apply_settings(const PostProcessSettings& settings,
                                    std::uint64_t frame_index, unsigned frames_in_flight) {
     PostProcessSettings next = settings;
     next.smaa_quality = std::min<std::uint8_t>(next.smaa_quality, 3u);
-    if (ready_ && next.smaa_quality != settings_.smaa_quality) {
+    if (ready_ && status_.smaa_ok && next.smaa_quality != settings_.smaa_quality) {
         ComPtr<ID3D12PipelineState> edges, weights;
         if (!create_smaa_pipelines(next.smaa_quality, edges, weights)) {
             std::cerr << "[post-process] SMAA quality " << unsigned(next.smaa_quality)
@@ -193,14 +201,31 @@ void PostProcessor::apply_settings(const PostProcessSettings& settings,
         }
     }
     settings_ = next;
+    status_.live_aa = static_cast<std::uint8_t>(settings_.aa);
+    status_.live_quality = settings_.smaa_quality;
 }
 
-bool PostProcessor::initialize(ID3D12Device* device, const PostProcessSettings& settings) {
+namespace {
+
+template <std::size_t N>
+void set_reason(std::array<char, N>& out, const char* text) noexcept {
+    std::snprintf(out.data(), out.size(), "%s", text);
+}
+
+}  // namespace
+
+bool PostProcessor::initialize(ID3D12Device* device, ID3D12CommandQueue* queue,
+                               const PostProcessSettings& settings) {
     shutdown();
     device_ = device;
     settings_ = settings;
     settings_.smaa_quality = std::min<std::uint8_t>(settings_.smaa_quality, 3u);
-    if (device_ == nullptr) {
+    status_ = {};
+    status_.live_aa = static_cast<std::uint8_t>(settings_.aa);
+    status_.live_quality = settings_.smaa_quality;
+    set_reason(status_.smaa_reason, "INIT FAILED");
+    set_reason(status_.fxaa_reason, "INIT FAILED");
+    if (device_ == nullptr || queue == nullptr) {
         return false;
     }
 
@@ -242,17 +267,22 @@ bool PostProcessor::initialize(ID3D12Device* device, const PostProcessSettings& 
         return false;
     }
 
-    const bool ok =
-        create_smaa_pipelines(settings_.smaa_quality, smaa_edges_, smaa_weights_) &&
-        create_pipeline(code(bytes(g_post_smaa_blend_vs)), code(bytes(g_post_smaa_blend_ps)), kColorFormat, 0, smaa_blend_) &&
+    // The scaling passes are required; each AA pass is optional and only
+    // reported when it cannot be built.
+    const bool scaling =
         create_pipeline(code(bytes(g_post_fullscreen_vs)), code(bytes(g_post_fsr_easu_ps)), kColorFormat, 0, easu_) &&
         create_pipeline(code(bytes(g_post_fullscreen_vs)), code(bytes(g_post_fsr_rcas_ps)), kColorFormat, 0, rcas_) &&
         create_pipeline(code(bytes(g_post_fullscreen_vs)), code(bytes(g_post_resample_ps)), kColorFormat, 0, resample_);
-    if (!ok) {
+    if (!scaling) {
         std::cerr << "[post-process] pipeline creation failed\n";
         shutdown();
         return false;
     }
+    const bool smaa_pipelines =
+        create_smaa_pipelines(settings_.smaa_quality, smaa_edges_, smaa_weights_) &&
+        create_pipeline(code(bytes(g_post_smaa_blend_vs)), code(bytes(g_post_smaa_blend_ps)), kColorFormat, 0, smaa_blend_);
+    const bool fxaa_pipeline =
+        create_pipeline(code(bytes(g_post_fullscreen_vs)), code(bytes(g_post_fxaa_ps)), kColorFormat, 0, fxaa_);
 
     D3D12_DESCRIPTOR_HEAP_DESC hd{};
     hd.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
@@ -285,22 +315,33 @@ bool PostProcessor::initialize(ID3D12Device* device, const PostProcessSettings& 
             &heap, D3D12_HEAP_FLAG_NONE, &rd, D3D12_RESOURCE_STATE_COPY_DEST,
             nullptr, IID_PPV_ARGS(&out)));
     };
-    if (!texture(AREATEX_WIDTH, AREATEX_HEIGHT, DXGI_FORMAT_R8G8_UNORM, area_texture_) ||
-        !texture(SEARCHTEX_WIDTH, SEARCHTEX_HEIGHT, DXGI_FORMAT_R8_UNORM, search_texture_)) {
-        shutdown();
-        return false;
-    }
-    lookup_uploaded_ = false;
+    const bool lookup_textures =
+        texture(AREATEX_WIDTH, AREATEX_HEIGHT, DXGI_FORMAT_R8G8_UNORM, area_texture_) &&
+        texture(SEARCHTEX_WIDTH, SEARCHTEX_HEIGHT, DXGI_FORMAT_R8_UNORM, search_texture_);
     ready_ = true;
+
+    set_reason(status_.smaa_reason, !smaa_pipelines ? "PIPELINES" : !lookup_textures ? "LOOKUP" : "");
+    set_reason(status_.fxaa_reason, fxaa_pipeline ? "" : "PIPELINES");
+    status_.smaa_ok = smaa_pipelines && lookup_textures;
+    status_.fxaa_ok = fxaa_pipeline;
+    self_test(queue);
+    status_.initialized = true;
+    std::cerr << "[post-process] self-test smaa=" << (status_.smaa_ok ? "pass" : "fail")
+              << (status_.smaa_ok ? "" : " smaa-reason=") << status_.smaa_reason.data()
+              << " fxaa=" << (status_.fxaa_ok ? "pass" : "fail")
+              << (status_.fxaa_ok ? "" : " fxaa-reason=") << status_.fxaa_reason.data() << '\n';
     return true;
 }
 
 void PostProcessor::shutdown() noexcept {
     ready_ = false;
-    lookup_uploaded_ = false;
+    status_.initialized = false;
+    status_.smaa_ok = false;
+    status_.fxaa_ok = false;
     smaa_edges_.Reset();
     smaa_weights_.Reset();
     smaa_blend_.Reset();
+    fxaa_.Reset();
     easu_.Reset();
     rcas_.Reset();
     resample_.Reset();
@@ -391,9 +432,8 @@ void PostProcessor::transition(ID3D12GraphicsCommandList* list, Target& target,
     target.state = state;
 }
 
-void PostProcessor::upload_lookup_textures(ID3D12GraphicsCommandList* list,
-                                           std::uint64_t frame_index,
-                                           unsigned frames_in_flight) {
+bool PostProcessor::record_lookup_upload(ID3D12GraphicsCommandList* list,
+                                         std::vector<ComPtr<ID3D12Resource>>& staging) {
     const auto upload = [&](ID3D12Resource* destination, const unsigned char* data,
                             unsigned width, unsigned height, unsigned pitch,
                             DXGI_FORMAT format) {
@@ -409,24 +449,24 @@ void PostProcessor::upload_lookup_textures(ID3D12GraphicsCommandList* list,
         rd.MipLevels = 1;
         rd.SampleDesc.Count = 1;
         rd.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
-        ComPtr<ID3D12Resource> staging;
+        ComPtr<ID3D12Resource> buffer;
         if (FAILED(device_->CreateCommittedResource(
                 &heap, D3D12_HEAP_FLAG_NONE, &rd, D3D12_RESOURCE_STATE_GENERIC_READ,
-                nullptr, IID_PPV_ARGS(&staging)))) {
+                nullptr, IID_PPV_ARGS(&buffer)))) {
             return false;
         }
         unsigned char* mapped = nullptr;
         const D3D12_RANGE none{0, 0};
-        if (FAILED(staging->Map(0, &none, reinterpret_cast<void**>(&mapped)))) {
+        if (FAILED(buffer->Map(0, &none, reinterpret_cast<void**>(&mapped)))) {
             return false;
         }
         for (unsigned row = 0; row < height; ++row) {
             std::memcpy(mapped + static_cast<std::size_t>(row) * aligned,
                         data + static_cast<std::size_t>(row) * pitch, pitch);
         }
-        staging->Unmap(0, nullptr);
+        buffer->Unmap(0, nullptr);
         D3D12_TEXTURE_COPY_LOCATION src{};
-        src.pResource = staging.Get();
+        src.pResource = buffer.Get();
         src.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
         src.PlacedFootprint.Footprint.Format = format;
         src.PlacedFootprint.Footprint.Width = width;
@@ -445,14 +485,13 @@ void PostProcessor::upload_lookup_textures(ID3D12GraphicsCommandList* list,
         b.Transition.StateAfter = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
         b.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
         list->ResourceBarrier(1, &b);
-        retired_.push_back({std::move(staging), frame_index + frames_in_flight});
+        staging.push_back(std::move(buffer));
         return true;
     };
-    lookup_uploaded_ =
-        upload(area_texture_.Get(), areaTexBytes, AREATEX_WIDTH, AREATEX_HEIGHT,
-               AREATEX_PITCH, DXGI_FORMAT_R8G8_UNORM) &&
-        upload(search_texture_.Get(), searchTexBytes, SEARCHTEX_WIDTH,
-               SEARCHTEX_HEIGHT, SEARCHTEX_PITCH, DXGI_FORMAT_R8_UNORM);
+    return upload(area_texture_.Get(), areaTexBytes, AREATEX_WIDTH, AREATEX_HEIGHT,
+                  AREATEX_PITCH, DXGI_FORMAT_R8G8_UNORM) &&
+           upload(search_texture_.Get(), searchTexBytes, SEARCHTEX_WIDTH,
+                  SEARCHTEX_HEIGHT, SEARCHTEX_PITCH, DXGI_FORMAT_R8_UNORM);
 }
 
 void PostProcessor::draw(ID3D12GraphicsCommandList* list, DescriptorRing& srv_ring,
@@ -498,6 +537,243 @@ void PostProcessor::draw(ID3D12GraphicsCommandList* list, DescriptorRing& srv_ri
     list->DrawInstanced(3, 1, 0, 0);
 }
 
+bool PostProcessor::record_aa(ID3D12GraphicsCommandList* list, DescriptorRing& srv_ring,
+                              AaRun pass, ID3D12Resource* source,
+                              unsigned width, unsigned height,
+                              std::uint64_t frame_index, unsigned frames_in_flight) {
+    if (pass == AaRun::kNone ||
+        !ensure_target(antialiased_, width, height, kColorFormat, 2u, frame_index, frames_in_flight)) {
+        return false;
+    }
+    if (pass == AaRun::kSmaa &&
+        !(ensure_target(edges_, width, height, kEdgesFormat, 0u, frame_index, frames_in_flight) &&
+          ensure_target(weights_, width, height, kColorFormat, 1u, frame_index, frames_in_flight) &&
+          ensure_target(stencil_, width, height, kStencilFormat, 0u, frame_index, frames_in_flight))) {
+        return false;
+    }
+    list->SetGraphicsRootSignature(root_signature_.Get());
+    list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+    const D3D12_VIEWPORT viewport{
+        0.0f, 0.0f, static_cast<float>(width), static_cast<float>(height), 0.0f, 1.0f};
+    Constants c{};
+    c.rt_metrics[0] = 1.0f / static_cast<float>(width);
+    c.rt_metrics[1] = 1.0f / static_cast<float>(height);
+    c.rt_metrics[2] = static_cast<float>(width);
+    c.rt_metrics[3] = static_cast<float>(height);
+    if (pass == AaRun::kFxaa) {
+        transition(list, antialiased_, D3D12_RESOURCE_STATE_RENDER_TARGET);
+        list->OMSetRenderTargets(1, &antialiased_.rtv, FALSE, nullptr);
+        draw(list, srv_ring, fxaa_.Get(), {source}, {kColorFormat}, viewport, c);
+        transition(list, antialiased_, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+        return true;
+    }
+    constexpr float kZero[4] = {0.0f, 0.0f, 0.0f, 0.0f};
+    const D3D12_CPU_DESCRIPTOR_HANDLE dsv = stencil_.rtv;
+    transition(list, edges_, D3D12_RESOURCE_STATE_RENDER_TARGET);
+    list->ClearRenderTargetView(edges_.rtv, kZero, 0, nullptr);
+    list->ClearDepthStencilView(dsv, D3D12_CLEAR_FLAG_STENCIL, 1.0f, 0, 0, nullptr);
+    list->OMSetRenderTargets(1, &edges_.rtv, FALSE, &dsv);
+    list->OMSetStencilRef(1);
+    draw(list, srv_ring, smaa_edges_.Get(), {source}, {kColorFormat}, viewport, c);
+    transition(list, edges_, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+    transition(list, weights_, D3D12_RESOURCE_STATE_RENDER_TARGET);
+    list->ClearRenderTargetView(weights_.rtv, kZero, 0, nullptr);
+    list->OMSetRenderTargets(1, &weights_.rtv, FALSE, &dsv);
+    draw(list, srv_ring, smaa_weights_.Get(),
+         {edges_.resource.Get(), area_texture_.Get(), search_texture_.Get()},
+         {kEdgesFormat, DXGI_FORMAT_R8G8_UNORM, DXGI_FORMAT_R8_UNORM},
+         viewport, c);
+    transition(list, weights_, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+    transition(list, antialiased_, D3D12_RESOURCE_STATE_RENDER_TARGET);
+    list->OMSetRenderTargets(1, &antialiased_.rtv, FALSE, nullptr);
+    draw(list, srv_ring, smaa_blend_.Get(), {source, weights_.resource.Get()},
+         {kColorFormat, kColorFormat}, viewport, c);
+    transition(list, antialiased_, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+    return true;
+}
+
+void PostProcessor::self_test(ID3D12CommandQueue* queue) {
+    const auto fail = [&](AaRun pass, const char* why) {
+        if (pass != AaRun::kFxaa && status_.smaa_ok) {
+            status_.smaa_ok = false;
+            set_reason(status_.smaa_reason, why);
+        }
+        if (pass != AaRun::kSmaa && status_.fxaa_ok) {
+            status_.fxaa_ok = false;
+            set_reason(status_.fxaa_reason, why);
+        }
+    };
+    if (!status_.smaa_ok && !status_.fxaa_ok) {
+        return;
+    }
+    ComPtr<ID3D12CommandAllocator> allocator;
+    ComPtr<ID3D12GraphicsCommandList> list;
+    ComPtr<ID3D12Fence> fence;
+    DescriptorRing ring;
+    if (FAILED(device_->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&allocator))) ||
+        FAILED(device_->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, allocator.Get(), nullptr,
+                                          IID_PPV_ARGS(&list))) ||
+        FAILED(device_->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&fence))) ||
+        !ring.initialize(device_, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 16u, 1u)) {
+        fail(AaRun::kNone, "SELF-TEST SETUP");
+        return;
+    }
+    ring.begin_frame(0);
+    std::vector<ComPtr<ID3D12Resource>> keep;
+    if (status_.smaa_ok && !record_lookup_upload(list.Get(), keep)) {
+        fail(AaRun::kSmaa, "LOOKUP");
+    }
+
+    // A white-over-black edge stepping down one row every four columns: the
+    // jagged case both passes exist for.
+    constexpr unsigned kSize = 32u;
+    constexpr unsigned kPitch = 256u;  // kSize * 4 rounded up to the copy alignment
+    const auto edge_row = [](unsigned x) { return 10u + x / 4u; };
+    std::array<unsigned char, kPitch * kSize> pattern{};
+    for (unsigned y = 0; y < kSize; ++y) {
+        for (unsigned x = 0; x < kSize; ++x) {
+            unsigned char* p = &pattern[y * kPitch + x * 4u];
+            const unsigned char v = y < edge_row(x) ? 255u : 0u;
+            p[0] = p[1] = p[2] = v;
+            p[3] = 255u;
+        }
+    }
+    D3D12_HEAP_PROPERTIES def{}, up{}, rb{};
+    def.Type = D3D12_HEAP_TYPE_DEFAULT;
+    up.Type = D3D12_HEAP_TYPE_UPLOAD;
+    rb.Type = D3D12_HEAP_TYPE_READBACK;
+    D3D12_RESOURCE_DESC td{};
+    td.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+    td.Width = kSize;
+    td.Height = kSize;
+    td.DepthOrArraySize = 1;
+    td.MipLevels = 1;
+    td.Format = kColorFormat;
+    td.SampleDesc.Count = 1;
+    D3D12_RESOURCE_DESC bd{};
+    bd.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+    bd.Width = sizeof(pattern);
+    bd.Height = 1;
+    bd.DepthOrArraySize = 1;
+    bd.MipLevels = 1;
+    bd.SampleDesc.Count = 1;
+    bd.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+    ComPtr<ID3D12Resource> source, upload, readback;
+    unsigned char* mapped = nullptr;
+    const D3D12_RANGE none{0, 0};
+    if (FAILED(device_->CreateCommittedResource(&def, D3D12_HEAP_FLAG_NONE, &td, D3D12_RESOURCE_STATE_COPY_DEST,
+                                                nullptr, IID_PPV_ARGS(&source))) ||
+        FAILED(device_->CreateCommittedResource(&up, D3D12_HEAP_FLAG_NONE, &bd, D3D12_RESOURCE_STATE_GENERIC_READ,
+                                                nullptr, IID_PPV_ARGS(&upload))) ||
+        FAILED(upload->Map(0, &none, reinterpret_cast<void**>(&mapped)))) {
+        fail(AaRun::kNone, "SELF-TEST SETUP");
+        return;
+    }
+    std::memcpy(mapped, pattern.data(), pattern.size());
+    upload->Unmap(0, nullptr);
+    bd.Width = 2u * sizeof(pattern);
+    if (FAILED(device_->CreateCommittedResource(&rb, D3D12_HEAP_FLAG_NONE, &bd, D3D12_RESOURCE_STATE_COPY_DEST,
+                                                nullptr, IID_PPV_ARGS(&readback)))) {
+        fail(AaRun::kNone, "SELF-TEST SETUP");
+        return;
+    }
+    D3D12_TEXTURE_COPY_LOCATION from{};
+    from.pResource = upload.Get();
+    from.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
+    from.PlacedFootprint.Footprint = {kColorFormat, kSize, kSize, 1, kPitch};
+    D3D12_TEXTURE_COPY_LOCATION to{};
+    to.pResource = source.Get();
+    to.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
+    list->CopyTextureRegion(&to, 0, 0, 0, &from, nullptr);
+    D3D12_RESOURCE_BARRIER b{};
+    b.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+    b.Transition.pResource = source.Get();
+    b.Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_DEST;
+    b.Transition.StateAfter = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+    b.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+    list->ResourceBarrier(1, &b);
+    ID3D12DescriptorHeap* heaps[] = {ring.heap()};
+    list->SetDescriptorHeaps(1, heaps);
+
+    const AaRun passes[2] = {AaRun::kSmaa, AaRun::kFxaa};
+    bool recorded[2] = {false, false};
+    for (unsigned i = 0; i < 2u; ++i) {
+        const bool ok = passes[i] == AaRun::kSmaa ? status_.smaa_ok : status_.fxaa_ok;
+        if (!ok) continue;
+        if (!record_aa(list.Get(), ring, passes[i], source.Get(), kSize, kSize, 0u, 0u)) {
+            fail(passes[i], "NO MEMORY");
+            continue;
+        }
+        transition(list.Get(), antialiased_, D3D12_RESOURCE_STATE_COPY_SOURCE);
+        D3D12_TEXTURE_COPY_LOCATION src{};
+        src.pResource = antialiased_.resource.Get();
+        src.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
+        D3D12_TEXTURE_COPY_LOCATION dst{};
+        dst.pResource = readback.Get();
+        dst.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
+        dst.PlacedFootprint.Offset = i * sizeof(pattern);
+        dst.PlacedFootprint.Footprint = {kColorFormat, kSize, kSize, 1, kPitch};
+        list->CopyTextureRegion(&dst, 0, 0, 0, &src, nullptr);
+        transition(list.Get(), antialiased_, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+        recorded[i] = true;
+    }
+    if (FAILED(list->Close())) {
+        fail(AaRun::kNone, "SELF-TEST SETUP");
+        return;
+    }
+    ID3D12CommandList* lists[] = {list.Get()};
+    queue->ExecuteCommandLists(1, lists);
+    HANDLE event = CreateEventW(nullptr, FALSE, FALSE, nullptr);
+    const bool done = event != nullptr && SUCCEEDED(queue->Signal(fence.Get(), 1)) &&
+        SUCCEEDED(fence->SetEventOnCompletion(1, event)) &&
+        WaitForSingleObject(event, 5000) == WAIT_OBJECT_0;
+    if (event != nullptr) CloseHandle(event);
+    if (!done || device_->GetDeviceRemovedReason() != S_OK) {
+        // The GPU may still own these: keep them for the processor's life.
+        retired_.push_back({std::move(source), UINT64_MAX});
+        retired_.push_back({std::move(upload), UINT64_MAX});
+        retired_.push_back({std::move(readback), UINT64_MAX});
+        for (auto& r : keep) retired_.push_back({std::move(r), UINT64_MAX});
+        retired_.push_back({std::move(edges_.resource), UINT64_MAX});
+        retired_.push_back({std::move(weights_.resource), UINT64_MAX});
+        retired_.push_back({std::move(antialiased_.resource), UINT64_MAX});
+        retired_.push_back({std::move(stencil_.resource), UINT64_MAX});
+        edges_ = weights_ = antialiased_ = stencil_ = {};
+        fail(AaRun::kNone, done ? "DEVICE REMOVED" : "GPU TIMEOUT");
+        return;
+    }
+    const D3D12_RANGE all{0, static_cast<SIZE_T>(2u * sizeof(pattern))};
+    unsigned char* out = nullptr;
+    if (FAILED(readback->Map(0, &all, reinterpret_cast<void**>(&out)))) {
+        fail(AaRun::kNone, "SELF-TEST SETUP");
+        return;
+    }
+    for (unsigned i = 0; i < 2u; ++i) {
+        if (!recorded[i]) continue;
+        unsigned changed = 0u, stray = 0u;
+        for (unsigned y = 0; y < kSize; ++y) {
+            for (unsigned x = 0; x < kSize; ++x) {
+                const unsigned char* a = &pattern[y * kPitch + x * 4u];
+                const unsigned char* c = out + i * sizeof(pattern) + y * kPitch + x * 4u;
+                int delta = 0;
+                for (unsigned k = 0; k < 3u; ++k) delta = std::max(delta, std::abs(int(a[k]) - int(c[k])));
+                const int distance = std::abs(int(y) - int(edge_row(x)));
+                if (delta > 24) ++changed;
+                if (distance >= 3 && delta > 4) ++stray;
+            }
+        }
+        // A working pass blends a few dozen pixels along the steps and
+        // leaves flat areas alone.
+        const bool passed = changed >= 8u && stray == 0u;
+        std::cerr << "[post-process] self-test " << (passes[i] == AaRun::kSmaa ? "smaa" : "fxaa")
+                  << " changed=" << changed << " stray=" << stray << '\n';
+        if (!passed) fail(passes[i], "SELF-TEST");
+    }
+    readback->Unmap(0, &none);
+    // The GPU is idle: drop the 32x32 targets now instead of at the first frame.
+    edges_ = weights_ = antialiased_ = stencil_ = {};
+}
+
 void PostProcessor::record(ID3D12GraphicsCommandList* list,
                            DescriptorRing& srv_ring,
                            ID3D12Resource* source,
@@ -511,17 +787,39 @@ void PostProcessor::record(ID3D12GraphicsCommandList* list,
     const unsigned target_width = static_cast<unsigned>(viewport.Width);
     const unsigned target_height = static_cast<unsigned>(viewport.Height);
     PostProcessPlan plan = plan_post_process(
-        source_width, source_height, target_width, target_height, settings_);
-    if (plan.smaa && !lookup_uploaded_) {
-        upload_lookup_textures(list, frame_index, frames_in_flight);
-        plan.smaa = lookup_uploaded_;
+        source_width, source_height, target_width, target_height, settings_,
+        status_.smaa_ok, status_.fxaa_ok);
+
+    ID3D12Resource* image = source;
+    AaRun ran = AaRun::kNone;
+    if (plan.smaa || plan.fxaa) {
+        const AaRun pass = plan.smaa ? AaRun::kSmaa : AaRun::kFxaa;
+        if (record_aa(list, srv_ring, pass, source, source_width, source_height,
+                      frame_index, frames_in_flight)) {
+            ran = pass;
+        } else if (pass == AaRun::kSmaa && status_.fxaa_ok &&
+                   record_aa(list, srv_ring, AaRun::kFxaa, source, source_width, source_height,
+                             frame_index, frames_in_flight)) {
+            ran = AaRun::kFxaa;
+        }
+        if (ran != AaRun::kNone) image = antialiased_.resource.Get();
+    }
+    ++status_.frames;
+    status_.last_run = ran;
+    status_.last_wanted = plan.aa_wanted;
+    status_.last_supersampled = plan.supersampled;
+    status_.smaa_frames += ran == AaRun::kSmaa;
+    status_.fxaa_frames += ran == AaRun::kFxaa;
+    if (plan.aa_wanted) {
+        ++status_.aa_wanted_frames;
+        if (ran == AaRun::kNone) {
+            ++status_.aa_skipped_frames;
+            set_reason(status_.skip_reason, plan.smaa || plan.fxaa ? "NO MEMORY" : "SMAA+FXAA FAILED");
+        }
     }
 
     list->SetGraphicsRootSignature(root_signature_.Get());
     list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-
-    const D3D12_VIEWPORT source_viewport{
-        0.0f, 0.0f, static_cast<float>(source_width), static_cast<float>(source_height), 0.0f, 1.0f};
     const D3D12_VIEWPORT window_sized{
         0.0f, 0.0f, static_cast<float>(target_width), static_cast<float>(target_height), 0.0f, 1.0f};
     Constants c{};
@@ -529,38 +827,6 @@ void PostProcessor::record(ID3D12GraphicsCommandList* list,
     c.rt_metrics[1] = 1.0f / static_cast<float>(source_height);
     c.rt_metrics[2] = static_cast<float>(source_width);
     c.rt_metrics[3] = static_cast<float>(source_height);
-
-    ID3D12Resource* image = source;
-    if (plan.smaa &&
-        ensure_target(edges_, source_width, source_height, kEdgesFormat, 0u, frame_index, frames_in_flight) &&
-        ensure_target(weights_, source_width, source_height, kColorFormat, 1u, frame_index, frames_in_flight) &&
-        ensure_target(antialiased_, source_width, source_height, kColorFormat, 2u, frame_index, frames_in_flight) &&
-        ensure_target(stencil_, source_width, source_height, kStencilFormat, 0u, frame_index, frames_in_flight)) {
-        constexpr float kZero[4] = {0.0f, 0.0f, 0.0f, 0.0f};
-        const D3D12_CPU_DESCRIPTOR_HANDLE dsv = stencil_.rtv;
-        transition(list, edges_, D3D12_RESOURCE_STATE_RENDER_TARGET);
-        list->ClearRenderTargetView(edges_.rtv, kZero, 0, nullptr);
-        list->ClearDepthStencilView(dsv, D3D12_CLEAR_FLAG_STENCIL, 1.0f, 0, 0, nullptr);
-        list->OMSetRenderTargets(1, &edges_.rtv, FALSE, &dsv);
-        list->OMSetStencilRef(1);
-        draw(list, srv_ring, smaa_edges_.Get(), {source}, {kColorFormat},
-             source_viewport, c);
-        transition(list, edges_, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-        transition(list, weights_, D3D12_RESOURCE_STATE_RENDER_TARGET);
-        list->ClearRenderTargetView(weights_.rtv, kZero, 0, nullptr);
-        list->OMSetRenderTargets(1, &weights_.rtv, FALSE, &dsv);
-        draw(list, srv_ring, smaa_weights_.Get(),
-             {edges_.resource.Get(), area_texture_.Get(), search_texture_.Get()},
-             {kEdgesFormat, DXGI_FORMAT_R8G8_UNORM, DXGI_FORMAT_R8_UNORM},
-             source_viewport, c);
-        transition(list, weights_, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-        transition(list, antialiased_, D3D12_RESOURCE_STATE_RENDER_TARGET);
-        list->OMSetRenderTargets(1, &antialiased_.rtv, FALSE, nullptr);
-        draw(list, srv_ring, smaa_blend_.Get(), {source, weights_.resource.Get()},
-             {kColorFormat, kColorFormat}, source_viewport, c);
-        transition(list, antialiased_, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-        image = antialiased_.resource.Get();
-    }
 
     // Window-sized intermediate for a scaling step that RCAS then reads.
     const bool needs_scaled = (plan.easu || plan.resample) && plan.rcas;
@@ -624,6 +890,66 @@ void PostProcessor::record(ID3D12GraphicsCommandList* list,
         into(true, vp, s);
         draw(list, srv_ring, rcas_.Get(), {image}, {kColorFormat}, vp, s);
     }
+}
+
+namespace {
+
+std::mutex g_status_mutex;
+PostProcessStatus g_status{};
+
+}  // namespace
+
+PostProcessStatus get_post_process_status() {
+    const std::lock_guard<std::mutex> lock(g_status_mutex);
+    return g_status;
+}
+
+void set_post_process_status(const PostProcessStatus& status) {
+    const std::lock_guard<std::mutex> lock(g_status_mutex);
+    g_status = status;
+}
+
+std::string anti_aliasing_row_text(unsigned draft_aa, unsigned draft_quality,
+                                   const PostProcessStatus& status) {
+    static constexpr const char* kAa[] = {"OFF", "SMAA", "AUTO", "FXAA"};
+    static constexpr const char* kQuality[] = {"LOW", "MEDIUM", "HIGH", "ULTRA"};
+    const unsigned aa = std::min(draft_aa, 3u);
+    std::string text = std::string("ANTI-ALIASING: ") + kAa[aa];
+    if (aa == 0u) return text;
+    if (!status.initialized) {
+        return text + " - NOT RUNNING: " +
+               (status.skip_reason[0] != '\0' ? status.skip_reason.data() : "POST-PROCESS OFF");
+    }
+    // An unapplied choice, or nothing presented yet: the name alone.
+    const bool uses_quality = aa == 1u || aa == 2u;
+    if (aa != status.live_aa || (uses_quality && std::min(draft_quality, 3u) != status.live_quality) ||
+        status.frames == 0u) {
+        return text;
+    }
+    const std::string smaa = std::string("SMAA ") + kQuality[std::min(draft_quality, 3u)];
+    switch (status.last_run) {
+    case AaRun::kSmaa:
+        return aa == 2u ? text + " - " + smaa : "ANTI-ALIASING: " + smaa;
+    case AaRun::kFxaa:
+        if (aa == 3u) return text;
+        return text + " - NOT RUNNING: " + status.smaa_reason.data() + ", FXAA ON";
+    case AaRun::kNone:
+        break;
+    }
+    if (aa == 2u && !status.last_wanted) return text + " - OFF, SUPERSAMPLED";
+    return text + " - NOT RUNNING: " + status.skip_reason.data();
+}
+
+std::string post_process_caps_text(const PostProcessStatus& status) {
+    if (!status.initialized) {
+        return std::string("POST-PROCESS: OFF") +
+               (status.skip_reason[0] != '\0' ? std::string(" (") + status.skip_reason.data() + ")" : "");
+    }
+    const auto result = [](bool ok, const char* reason) {
+        return ok ? std::string("PASS") : std::string("FAIL (") + reason + ")";
+    };
+    return "POST-PROCESS: SMAA " + result(status.smaa_ok, status.smaa_reason.data()) +
+           "  FXAA " + result(status.fxaa_ok, status.fxaa_reason.data());
 }
 
 }  // namespace galaxy::gx
