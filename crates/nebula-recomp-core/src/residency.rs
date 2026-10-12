@@ -121,6 +121,30 @@ fn callee_leaves_register_file_alone(callee: &str) -> bool {
     )
 }
 
+/// Float helpers that read and write only FPR/PS1, FPSCR, GQR, HID2 and CR
+/// through `context`, never a GPR, LR or CTR (their address operands are
+/// passed by value). Without float residency the context holds the float
+/// registers, so they are not synchronization points for the resident integer
+/// locals.
+fn fpr_only_helper(callee: &str) -> bool {
+    let name = callee.strip_prefix("galaxy::").unwrap_or(callee);
+    matches!(
+        name,
+        "fast::load_fpr_single"
+            | "fast::store_fpr_single"
+            | "fast::psq_load"
+            | "fast::psq_store"
+            | "fast::scalar_binary"
+            | "fast::scalar_ternary"
+            | "fast::scalar_frsp"
+            | "fast::paired_binary"
+            | "fast::paired_ternary"
+            | "fast::paired_sum"
+            | "fast::fctiwz"
+            | "ppc_commit_scalar_result"
+    )
+}
+
 /// Position (0-based, in the argument list) of the register the `_r` float
 /// helper writes, if any.
 fn float_helper_target_position(callee: &str) -> Option<usize> {
@@ -187,7 +211,7 @@ enum Sync {
 
 fn classify(callee: &str, floats: bool) -> Sync {
     let name = callee.strip_prefix("galaxy::").unwrap_or(callee);
-    if callee_leaves_register_file_alone(callee) {
+    if callee_leaves_register_file_alone(callee) || (!floats && fpr_only_helper(callee)) {
         Sync::None
     } else if name == "branch_checkpoint_taken" || name == "branch_checkpoint_taken_budgeted" {
         Sync::Checkpoint
@@ -1067,6 +1091,15 @@ mod tests {
         let body = "    {\n    context->gpr[11] = context->gpr[1] + 0x00000010u;\n    galaxy::native_savegpr_805174FC(context, memory, services, 0x80517538u);\n    }\n    return;\n";
         let out = apply_register_residency(body, false).expect("eligible");
         assert!(out.contains("{ context->gpr[11] = gr11; galaxy::native_savegpr_805174FC(context, memory, services, 0x80517538u); gr1 = context->gpr[1]; gr11 = context->gpr[11]; }"));
+    }
+
+    #[test]
+    fn float_helpers_need_no_integer_synchronization_without_float_residency() {
+        let body = "    {\n    context->gpr[3] = context->gpr[3] + 0x00000004u;\n    }\n    {\n    galaxy::fast::psq_store(flat_guest_base, context, 1u, memory, context->gpr[3], 0u, false, true, services, 0x80004004u);\n    }\n    {\n    galaxy::fast::scalar_binary<galaxy::PpcFloatBinaryOperation::Add, true>(context, 1u, 2u, 3u, false, services, 0x80004008u);\n    }\n    {\n    context->gpr[4] = context->gpr[3];\n    }\n    return;\n";
+        let out = apply_register_residency(body, false).expect("eligible");
+        assert!(out.contains("    galaxy::fast::psq_store(flat_guest_base, context, 1u, memory, gr3, 0u, false, true, services, 0x80004004u);\n"));
+        assert!(out.contains("    galaxy::fast::scalar_binary<galaxy::PpcFloatBinaryOperation::Add, true>(context, 1u, 2u, 3u, false, services, 0x80004008u);\n"));
+        assert!(!out.contains("gr3 = context->gpr[3]; "));
     }
 
     #[test]

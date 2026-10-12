@@ -8666,6 +8666,24 @@ inline void psq_store(
 GALAXY_ALWAYS_INLINE std::uint64_t widen_f32_bits(std::uint32_t bits);
 inline std::uint32_t narrow_paired_single_ftz(std::uint64_t bits);
 
+// Host bytes of a guest RAM span for the lean host bodies. A fastmem module
+// reaches RAM through the flat view, as its translated code does (an access
+// outside RAM faults there); other builds use the checked span lookup.
+GALAXY_ALWAYS_INLINE std::byte* lean_guest_span(
+    GuestMemoryV1* memory,
+    std::uint32_t address,
+    std::uint32_t size,
+    const NativeServicesV1* services,
+    std::uint32_t guest_pc) {
+#if GALAXY_FASTMEM_ACTIVE
+    if (memory != nullptr && memory->struct_size >= sizeof(GuestMemoryV1) &&
+        memory->flat_guest_base != nullptr) GALAXY_LIKELY {
+        return memory->flat_guest_base + address;
+    }
+#endif
+    return resolve_guest(memory, address, size, services, guest_pc);
+}
+
 // Lean host bodies for the SDK paired-single matrix/vector library
 // (RVL_SDK mtx/vec/quat). Fast float: no bit-exactness and no reproduction of
 // volatile registers or the routines' private stack frames, which the PPC ABI
@@ -8679,7 +8697,7 @@ namespace sdk_math {
 GALAXY_ALWAYS_INLINE const std::byte* read_span(
     GuestMemoryV1* memory, std::uint32_t address, std::uint32_t size,
     const NativeServicesV1* services, std::uint32_t pc) {
-    return resolve_guest(memory, address, size, services, pc);
+    return lean_guest_span(memory, address, size, services, pc);
 }
 
 GALAXY_ALWAYS_INLINE void load_f32s(const std::byte* base, float* out, std::uint32_t count) {
@@ -8691,7 +8709,7 @@ GALAXY_ALWAYS_INLINE void load_f32s(const std::byte* base, float* out, std::uint
 GALAXY_ALWAYS_INLINE void store_f32s(
     GuestMemoryV1* memory, std::uint32_t address, const float* values,
     std::uint32_t count, const NativeServicesV1* services, std::uint32_t pc) {
-    std::byte* base = resolve_guest(memory, address, count * 4u, services, pc);
+    std::byte* base = lean_guest_span(memory, address, count * 4u, services, pc);
     for (std::uint32_t i = 0; i < count; ++i) {
         native_store_guest_u32_fast(base, i * 4u, std::bit_cast<std::uint32_t>(values[i]));
     }
@@ -9839,7 +9857,7 @@ GALAXY_ALWAYS_INLINE void copy_bits(GuestMemoryV1* memory, std::uint32_t destina
                                     std::uint32_t pc) {
     std::byte bits[Size];
     std::memcpy(bits, sdk_math::read_span(memory, source, Size, services, pc), Size);
-    std::memcpy(resolve_guest(memory, destination, Size, services, pc), bits, Size);
+    std::memcpy(lean_guest_span(memory, destination, Size, services, pc), bits, Size);
 }
 
 // a * b + c rounded once to f32, as ps_madd: the f64 product of two f32 values
@@ -9883,36 +9901,36 @@ GALAXY_ALWAYS_INLINE void scale(GuestMemoryV1* memory, std::uint32_t destination
 
 // TVec3::operator=, TVec3(const TVec3&), TVec3(const Vec&), set(const TVec3&):
 // *r3 = *r4.
-inline void lean_tvec3_copy(PpcContext* context, GuestMemoryV1* memory,
+GALAXY_ALWAYS_INLINE void lean_tvec3_copy(PpcContext* context, GuestMemoryV1* memory,
                             const NativeServicesV1* services, std::uint32_t pc) {
     tvec3::copy_bits<12u>(memory, context->gpr[3], context->gpr[4], services, pc);
 }
 
 // JMath::gekko_ps_copy12 / gekko_ps_copy16(dst, src): 12 or 16 f32 values.
-inline void lean_jmath_ps_copy12(PpcContext* context, GuestMemoryV1* memory,
+GALAXY_ALWAYS_INLINE void lean_jmath_ps_copy12(PpcContext* context, GuestMemoryV1* memory,
                                  const NativeServicesV1* services, std::uint32_t pc) {
     tvec3::copy_bits<48u>(memory, context->gpr[3], context->gpr[4], services, pc);
 }
 
-inline void lean_jmath_ps_copy16(PpcContext* context, GuestMemoryV1* memory,
+GALAXY_ALWAYS_INLINE void lean_jmath_ps_copy16(PpcContext* context, GuestMemoryV1* memory,
                                  const NativeServicesV1* services, std::uint32_t pc) {
     tvec3::copy_bits<64u>(memory, context->gpr[3], context->gpr[4], services, pc);
 }
 
 // operator+= / add(v): *r3 += *r4.
-inline void lean_tvec3_add_assign(PpcContext* context, GuestMemoryV1* memory,
+GALAXY_ALWAYS_INLINE void lean_tvec3_add_assign(PpcContext* context, GuestMemoryV1* memory,
                                   const NativeServicesV1* services, std::uint32_t pc) {
     tvec3::add(memory, context->gpr[3], context->gpr[3], context->gpr[4], services, pc);
 }
 
 // operator-= / sub(v): *r3 -= *r4.
-inline void lean_tvec3_sub_assign(PpcContext* context, GuestMemoryV1* memory,
+GALAXY_ALWAYS_INLINE void lean_tvec3_sub_assign(PpcContext* context, GuestMemoryV1* memory,
                                   const NativeServicesV1* services, std::uint32_t pc) {
     tvec3::subtract(memory, context->gpr[3], context->gpr[3], context->gpr[4], services, pc);
 }
 
 // sub(a, b): *r3 = *r4 - *r5.
-inline void lean_tvec3_sub3(PpcContext* context, GuestMemoryV1* memory,
+GALAXY_ALWAYS_INLINE void lean_tvec3_sub3(PpcContext* context, GuestMemoryV1* memory,
                             const NativeServicesV1* services, std::uint32_t pc) {
     tvec3::subtract(memory, context->gpr[3], context->gpr[4], context->gpr[5], services, pc);
 }
@@ -9920,19 +9938,19 @@ inline void lean_tvec3_sub3(PpcContext* context, GuestMemoryV1* memory,
 // operator+(v) const / operator-(v) const / operator*(f) const, returned
 // through r3: the original copy-constructs *this (r4) into the result before it
 // reads the other operand (r5 or f1).
-inline void lean_tvec3_plus(PpcContext* context, GuestMemoryV1* memory,
+GALAXY_ALWAYS_INLINE void lean_tvec3_plus(PpcContext* context, GuestMemoryV1* memory,
                             const NativeServicesV1* services, std::uint32_t pc) {
     tvec3::copy_bits<12u>(memory, context->gpr[3], context->gpr[4], services, pc);
     tvec3::add(memory, context->gpr[3], context->gpr[3], context->gpr[5], services, pc);
 }
 
-inline void lean_tvec3_minus(PpcContext* context, GuestMemoryV1* memory,
+GALAXY_ALWAYS_INLINE void lean_tvec3_minus(PpcContext* context, GuestMemoryV1* memory,
                              const NativeServicesV1* services, std::uint32_t pc) {
     tvec3::copy_bits<12u>(memory, context->gpr[3], context->gpr[4], services, pc);
     tvec3::subtract(memory, context->gpr[3], context->gpr[3], context->gpr[5], services, pc);
 }
 
-inline void lean_tvec3_times(PpcContext* context, GuestMemoryV1* memory,
+GALAXY_ALWAYS_INLINE void lean_tvec3_times(PpcContext* context, GuestMemoryV1* memory,
                              const NativeServicesV1* services, std::uint32_t pc) {
     tvec3::copy_bits<12u>(memory, context->gpr[3], context->gpr[4], services, pc);
     tvec3::scale(memory, context->gpr[3], context->gpr[3], sdk_math::fpr_f32(context, 1u),
@@ -9940,35 +9958,35 @@ inline void lean_tvec3_times(PpcContext* context, GuestMemoryV1* memory,
 }
 
 // operator*=(f) / scale(f): *r3 *= f1.
-inline void lean_tvec3_scale_assign(PpcContext* context, GuestMemoryV1* memory,
+GALAXY_ALWAYS_INLINE void lean_tvec3_scale_assign(PpcContext* context, GuestMemoryV1* memory,
                                     const NativeServicesV1* services, std::uint32_t pc) {
     tvec3::scale(memory, context->gpr[3], context->gpr[3], sdk_math::fpr_f32(context, 1u),
                  services, pc);
 }
 
 // scale(f, v): *r3 = *r4 * f1.
-inline void lean_tvec3_scale_from(PpcContext* context, GuestMemoryV1* memory,
+GALAXY_ALWAYS_INLINE void lean_tvec3_scale_from(PpcContext* context, GuestMemoryV1* memory,
                                   const NativeServicesV1* services, std::uint32_t pc) {
     tvec3::scale(memory, context->gpr[3], context->gpr[4], sdk_math::fpr_f32(context, 1u),
                  services, pc);
 }
 
 // operator-() const: *r3 = -*r4 (sign bits flipped).
-inline void lean_tvec3_negate(PpcContext* context, GuestMemoryV1* memory,
+GALAXY_ALWAYS_INLINE void lean_tvec3_negate(PpcContext* context, GuestMemoryV1* memory,
                               const NativeServicesV1* services, std::uint32_t pc) {
     const std::byte* source = sdk_math::read_span(memory, context->gpr[4], 12u, services, pc);
     std::uint32_t bits[3];
     for (std::uint32_t i = 0; i < 3u; ++i) {
         bits[i] = native_load_guest_u32_fast(source, i * 4u) ^ 0x80000000u;
     }
-    std::byte* destination = resolve_guest(memory, context->gpr[3], 12u, services, pc);
+    std::byte* destination = lean_guest_span(memory, context->gpr[3], 12u, services, pc);
     for (std::uint32_t i = 0; i < 3u; ++i) {
         native_store_guest_u32_fast(destination, i * 4u, bits[i]);
     }
 }
 
 // TVec3(f) / setAll(f): x = y = z = f1.
-inline void lean_tvec3_splat(PpcContext* context, GuestMemoryV1* memory,
+GALAXY_ALWAYS_INLINE void lean_tvec3_splat(PpcContext* context, GuestMemoryV1* memory,
                              const NativeServicesV1* services, std::uint32_t pc) {
     const float k = sdk_math::fpr_f32(context, 1u);
     const float r[3] = {k, k, k};
@@ -9976,7 +9994,7 @@ inline void lean_tvec3_splat(PpcContext* context, GuestMemoryV1* memory,
 }
 
 // set(x, y, z) / TVec3(x, y, z): f1, f2, f3.
-inline void lean_tvec3_set3(PpcContext* context, GuestMemoryV1* memory,
+GALAXY_ALWAYS_INLINE void lean_tvec3_set3(PpcContext* context, GuestMemoryV1* memory,
                             const NativeServicesV1* services, std::uint32_t pc) {
     const float r[3] = {sdk_math::fpr_f32(context, 1u), sdk_math::fpr_f32(context, 2u),
                         sdk_math::fpr_f32(context, 3u)};
@@ -9984,13 +10002,13 @@ inline void lean_tvec3_set3(PpcContext* context, GuestMemoryV1* memory,
 }
 
 // zero(): the constant the original loads from r2 - 0x7EAC is 0.0f.
-inline void lean_tvec3_zero(PpcContext* context, GuestMemoryV1* memory,
+GALAXY_ALWAYS_INLINE void lean_tvec3_zero(PpcContext* context, GuestMemoryV1* memory,
                             const NativeServicesV1* services, std::uint32_t pc) {
-    std::memset(resolve_guest(memory, context->gpr[3], 12u, services, pc), 0, 12u);
+    std::memset(lean_guest_span(memory, context->gpr[3], 12u, services, pc), 0, 12u);
 }
 
 // TVec3<f32>(int x, int y, int z): r4, r5, r6 as signed integers.
-inline void lean_tvec3_from_ints(PpcContext* context, GuestMemoryV1* memory,
+GALAXY_ALWAYS_INLINE void lean_tvec3_from_ints(PpcContext* context, GuestMemoryV1* memory,
                                  const NativeServicesV1* services, std::uint32_t pc) {
     const float r[3] = {static_cast<float>(static_cast<std::int32_t>(context->gpr[4])),
                         static_cast<float>(static_cast<std::int32_t>(context->gpr[5])),
@@ -9999,7 +10017,7 @@ inline void lean_tvec3_from_ints(PpcContext* context, GuestMemoryV1* memory,
 }
 
 // f32 dot(v) const: (x*x' + y*y') + z*z', the first sum fused (ps_madd).
-inline void lean_tvec3_dot(PpcContext* context, GuestMemoryV1* memory,
+GALAXY_ALWAYS_INLINE void lean_tvec3_dot(PpcContext* context, GuestMemoryV1* memory,
                            const NativeServicesV1* services, std::uint32_t pc) {
     float a[3];
     float b[3];
@@ -10009,7 +10027,7 @@ inline void lean_tvec3_dot(PpcContext* context, GuestMemoryV1* memory,
 }
 
 // f32 squared() const: (z*z + x*x) + y*y.
-inline void lean_tvec3_squared(PpcContext* context, GuestMemoryV1* memory,
+GALAXY_ALWAYS_INLINE void lean_tvec3_squared(PpcContext* context, GuestMemoryV1* memory,
                                const NativeServicesV1* services, std::uint32_t pc) {
     float v[3];
     tvec3::load(memory, context->gpr[3], v, services, pc);
@@ -10017,7 +10035,7 @@ inline void lean_tvec3_squared(PpcContext* context, GuestMemoryV1* memory,
 }
 
 // f32 squared(v) const: |*r3 - *r4|^2 = (dx*dx + dy*dy) + dz*dz.
-inline void lean_tvec3_squared_distance(PpcContext* context, GuestMemoryV1* memory,
+GALAXY_ALWAYS_INLINE void lean_tvec3_squared_distance(PpcContext* context, GuestMemoryV1* memory,
                                         const NativeServicesV1* services, std::uint32_t pc) {
     float a[3];
     float b[3];
@@ -10032,7 +10050,7 @@ inline void lean_tvec3_squared_distance(PpcContext* context, GuestMemoryV1* memo
 // TUtil<f32>::sqrt(x) / inv_sqrt(x): f1 is left as is for x <= 0 (compared
 // with the 0.0f at r2 - 0x7EEC / r2 - 0x7E2C). The originals refine frsqrte by
 // one Newton step; these use the host square root.
-inline void lean_jgeom_sqrt(PpcContext* context, GuestMemoryV1*, const NativeServicesV1*,
+GALAXY_ALWAYS_INLINE void lean_jgeom_sqrt(PpcContext* context, GuestMemoryV1*, const NativeServicesV1*,
                             std::uint32_t) {
     const double x = std::bit_cast<double>(context->fpr_bits[1]);
     if (x <= 0.0) {
@@ -10041,7 +10059,7 @@ inline void lean_jgeom_sqrt(PpcContext* context, GuestMemoryV1*, const NativeSer
     sdk_math::return_f32(context, static_cast<float>(std::sqrt(x)));
 }
 
-inline void lean_jgeom_inv_sqrt(PpcContext* context, GuestMemoryV1*, const NativeServicesV1*,
+GALAXY_ALWAYS_INLINE void lean_jgeom_inv_sqrt(PpcContext* context, GuestMemoryV1*, const NativeServicesV1*,
                                 std::uint32_t) {
     const double x = std::bit_cast<double>(context->fpr_bits[1]);
     if (x <= 0.0) {
@@ -10212,35 +10230,38 @@ inline void lean_lyt_equals_res_name(PpcContext* context, GuestMemoryV1* memory,
 // GXCallDisplayList, which publishes it as for translated stores.
 namespace gd {
 
-GALAXY_ALWAYS_INLINE std::uint32_t current_dl(std::uint32_t r13, GuestMemoryV1* memory,
-                                              const NativeServicesV1* services, std::uint32_t pc) {
-    return guest_load_u32(memory, r13 - 0x23B8u, services, pc);
+// The GDLObj __GDCurrentDL points at: start, length, write pointer (+8).
+GALAXY_ALWAYS_INLINE std::byte* current_dl(std::uint32_t r13, GuestMemoryV1* memory,
+                                           const NativeServicesV1* services, std::uint32_t pc) {
+    const std::uint32_t dl = native_load_guest_u32_fast(
+        lean_guest_span(memory, r13 - 0x23B8u, 4u, services, pc), 0u);
+    return lean_guest_span(memory, dl, 12u, services, pc);
 }
 
 }  // namespace gd
 
 // J3DGDWrite_u32(u32) (three identical local copies): appends r3 big-endian.
-inline void lean_gd_write_u32(PpcContext* context, GuestMemoryV1* memory,
+GALAXY_ALWAYS_INLINE void lean_gd_write_u32(PpcContext* context, GuestMemoryV1* memory,
                               const NativeServicesV1* services, std::uint32_t pc) {
-    const std::uint32_t dl = gd::current_dl(context->gpr[13], memory, services, pc);
-    const std::uint32_t ptr = guest_load_u32(memory, dl + 8u, services, pc);
-    native_store_guest_u32_fast(resolve_guest(memory, ptr, 4u, services, pc), 0u,
+    std::byte* const dl = gd::current_dl(context->gpr[13], memory, services, pc);
+    const std::uint32_t ptr = native_load_guest_u32_fast(dl, 8u);
+    native_store_guest_u32_fast(lean_guest_span(memory, ptr, 4u, services, pc), 0u,
                                 context->gpr[3]);
-    guest_store_u32(memory, dl + 8u, ptr + 4u, services, pc);
+    native_store_guest_u32_fast(dl, 8u, ptr + 4u);
 }
 
 // GDPadCurr32(): zero bytes up to the next 32-byte boundary.
-inline void lean_gd_pad_curr32(PpcContext* context, GuestMemoryV1* memory,
+GALAXY_ALWAYS_INLINE void lean_gd_pad_curr32(PpcContext* context, GuestMemoryV1* memory,
                                const NativeServicesV1* services, std::uint32_t pc) {
-    const std::uint32_t dl = gd::current_dl(context->gpr[13], memory, services, pc);
-    const std::uint32_t ptr = guest_load_u32(memory, dl + 8u, services, pc);
+    std::byte* const dl = gd::current_dl(context->gpr[13], memory, services, pc);
+    const std::uint32_t ptr = native_load_guest_u32_fast(dl, 8u);
     const std::uint32_t misalign = ptr & 31u;
     if (misalign == 0u) {
         return;
     }
     const std::uint32_t count = 32u - misalign;
-    std::memset(resolve_guest(memory, ptr, count, services, pc), 0, count);
-    guest_store_u32(memory, dl + 8u, ptr + count, services, pc);
+    std::memset(lean_guest_span(memory, ptr, count, services, pc), 0, count);
+    native_store_guest_u32_fast(dl, 8u, ptr + count);
 }
 
 // void* memcpy(void* dst, const void* src, size_t n) (0x80004338): a byte

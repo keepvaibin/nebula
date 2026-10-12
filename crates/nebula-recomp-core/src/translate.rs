@@ -1582,6 +1582,91 @@ fn fusible_compare_branches(
     fused
 }
 
+/// Integer record forms whose CR0 is set from their GPR result.
+fn records_cr0_from_result(word: u32) -> bool {
+    match Ins::new(word, Extensions::gekko_broadway()).op {
+        Opcode::Andi_ | Opcode::Andis_ | Opcode::Addic_ => true,
+        Opcode::Add
+        | Opcode::Addc
+        | Opcode::Adde
+        | Opcode::Addme
+        | Opcode::Addze
+        | Opcode::Subf
+        | Opcode::Subfc
+        | Opcode::Subfe
+        | Opcode::Subfme
+        | Opcode::Subfze
+        | Opcode::Neg
+        | Opcode::Mullw
+        | Opcode::Mulhw
+        | Opcode::Mulhwu
+        | Opcode::Divw
+        | Opcode::Divwu
+        | Opcode::And
+        | Opcode::Andc
+        | Opcode::Or
+        | Opcode::Orc
+        | Opcode::Xor
+        | Opcode::Nand
+        | Opcode::Nor
+        | Opcode::Eqv
+        | Opcode::Slw
+        | Opcode::Srw
+        | Opcode::Sraw
+        | Opcode::Srawi
+        | Opcode::Cntlzw
+        | Opcode::Extsb
+        | Opcode::Extsh
+        | Opcode::Rlwinm
+        | Opcode::Rlwimi
+        | Opcode::Rlwnm => word & 1 != 0,
+        _ => false,
+    }
+}
+
+/// Record forms whose CR0 only feeds the conditional branch right after
+/// them, under the same rules as `fusible_compare_branches`: the branch then
+/// tests the recorded GPR and the record form writes no CR.
+fn fusible_record_branches(
+    address: u32,
+    bytes: &[u8],
+    branch_targets: &BTreeSet<u32>,
+) -> BTreeSet<u32> {
+    let end = address.wrapping_add(bytes.len() as u32);
+    let words: Vec<u32> = bytes
+        .chunks_exact(4)
+        .map(|chunk| u32::from_be_bytes(chunk.try_into().expect("four-byte instruction")))
+        .collect();
+    let mut fused = BTreeSet::new();
+    for (index, pair) in words.windows(2).enumerate() {
+        let (record, branch) = (pair[0], pair[1]);
+        let record_pc = address + index as u32 * 4;
+        let branch_pc = record_pc + 4;
+        if !records_cr0_from_result(record)
+            || Ins::new(branch, Extensions::gekko_broadway()).op != Opcode::Bc
+            || branch & 3 != 0
+            || branch_targets.contains(&branch_pc)
+        {
+            continue;
+        }
+        let bo = (branch >> 21) & 0x1F;
+        let bi = (branch >> 16) & 0x1F;
+        if bo & 0x14 != 0x04 || bi > 2 {
+            continue;
+        }
+        let target = conditional_branch_target(branch_pc, branch);
+        let taken_dead = if target >= address && target < end {
+            cr_field_dead_from(address, bytes, target, 0)
+        } else {
+            cr_field_dead_across_call(0)
+        };
+        if taken_dead && cr_field_dead_from(address, bytes, branch_pc + 4, 0) {
+            fused.insert(record_pc);
+        }
+    }
+    fused
+}
+
 fn function_contains_rfi(bytes: &[u8]) -> bool {
     bytes.chunks_exact(4).any(|chunk| {
         let word = u32::from_be_bytes(chunk.try_into().expect("four-byte instruction"));
@@ -3362,6 +3447,16 @@ fn lower_words_with_config(
         .values()
         .map(|(compare_pc, _)| *compare_pc)
         .collect::<BTreeSet<_>>();
+    let fused_records = if local_lane_profile == LocalLaneProfile::None
+        && immediate_overrides.is_none()
+        && typed_region_gpr_mask == 0
+    {
+        fusible_record_branches(address, bytes, &branch_targets)
+    } else {
+        BTreeSet::new()
+    };
+    // Branch pc -> the GPR its fused record form wrote.
+    let mut fused_record_registers: BTreeMap<u32, u32> = BTreeMap::new();
     if typed_region_gpr_mask != 0 && !wgpipe_store_runs.is_empty() {
         return Err(TranslationError::TypedRegionProof {
             address,
@@ -5606,9 +5701,19 @@ fn lower_words_with_config(
                     let bo = (word >> 21) & 0x1F;
                     let bi = (word >> 16) & 0x1F;
                     let unconditional = branch_is_unconditional(bo);
-                    let condition = match fused_compare_branches.get(&pc) {
-                        Some((_, predicate)) if bo & 0x08 != 0 => format!("({predicate})"),
-                        Some((_, predicate)) => format!("!({predicate})"),
+                    let fused_predicate = fused_compare_branches
+                        .get(&pc)
+                        .map(|(_, predicate)| predicate.clone())
+                        .or_else(|| {
+                            fused_record_registers.get(&pc).map(|register| match bi % 4 {
+                                0 => format!("static_cast<std::int32_t>(context->gpr[{register}]) < 0"),
+                                1 => format!("static_cast<std::int32_t>(context->gpr[{register}]) > 0"),
+                                _ => format!("context->gpr[{register}] == 0u"),
+                            })
+                        });
+                    let condition = match fused_predicate {
+                        Some(predicate) if bo & 0x08 != 0 => format!("({predicate})"),
+                        Some(predicate) => format!("!({predicate})"),
                         None => emit_branch_condition(&mut output, bo, bi)?,
                     };
                     if link {
@@ -5819,6 +5924,26 @@ fn lower_words_with_config(
                     address: pc,
                     opcode: format!("{:?}", instruction.op),
                 });
+            }
+        }
+        if fused_records.contains(&pc) {
+            // The next branch tests the recorded register; drop the CR0 write.
+            const RECORD: &str = "    galaxy::update_cr0(context, context->gpr[";
+            let emitted = &output[instruction_output_start..];
+            if emitted.matches(RECORD).count() == 1 {
+                let at = instruction_output_start + emitted.find(RECORD).expect("counted above");
+                let register = output[at + RECORD.len()..]
+                    .split(']')
+                    .next()
+                    .and_then(|digits| digits.parse::<u32>().ok());
+                let line_end = output[at..].find('\n').map(|offset| at + offset + 1);
+                if let (Some(register), Some(line_end)) = (register, line_end) {
+                    output.replace_range(
+                        at..line_end,
+                        "    // CR0 record fused into the next branch\n",
+                    );
+                    fused_record_registers.insert(pc + 4, register);
+                }
             }
         }
         if local_lane_profile != LocalLaneProfile::None {
@@ -14917,7 +15042,7 @@ mod tests {
         dynamic: &[(&str, &[u32])],
     ) -> LeanCallContract {
         let start = header
-            .find(&format!("inline void {symbol}("))
+            .find(&format!(" void {symbol}("))
             .unwrap_or_else(|| panic!("{symbol} is not defined in native_api.h"));
         let open = start + header[start..].find('{').expect("body opens");
         let end = open + header[open..].find("\n}\n").expect("body closes");
@@ -15087,6 +15212,25 @@ mod tests {
         // CR2 is preserved across returns, so a compare into it stays.
         let callee_saved = word_bytes(&[0x2D03_0000, 0x418A_0008, 0x4E80_0020, 0x4E80_0020]);
         assert!(fusible_compare_branches(address, &callee_saved, &BTreeSet::new()).is_empty());
+    }
+
+    #[test]
+    fn record_form_branch_tests_the_recorded_register() {
+        // rlwinm. r0,r3,0,31,31; beq +8; li r3,1; blr; blr
+        let bytes = word_bytes(&[0x5460_07FF, 0x4182_000C, 0x3860_0001, 0x4E80_0020, 0x4E80_0020]);
+        assert_eq!(fusible_record_branches(0x8000_4000, &bytes, &BTreeSet::new()), BTreeSet::from([0x8000_4000]));
+        let lowered = lower_words(0x8000_4000, &bytes).expect("lowers");
+        assert!(lowered.contains("// CR0 record fused into the next branch"));
+        assert!(!lowered.contains("update_cr0"));
+        assert!(lowered.contains("if ((context->gpr[0] == 0u)) goto label_80004010;"));
+        // mr. r31,r3; blt +8; blr; blr: the signed result is tested.
+        let bytes = word_bytes(&[0x7C7F_1B79, 0x4180_0008, 0x4E80_0020, 0x4E80_0020]);
+        let lowered = lower_words(0x8000_4000, &bytes).expect("lowers");
+        assert!(lowered.contains("if ((static_cast<std::int32_t>(context->gpr[31]) < 0)) goto label_8000400C;"));
+        // A later beq reads CR0 again, so the record form keeps its write.
+        let bytes = word_bytes(&[0x5460_07FF, 0x4182_000C, 0x3860_0001, 0x4182_0008, 0x4E80_0020, 0x4E80_0020]);
+        assert!(fusible_record_branches(0x8000_4000, &bytes, &BTreeSet::new()).is_empty());
+        assert!(lower_words(0x8000_4000, &bytes).expect("lowers").contains("galaxy::update_cr0(context, context->gpr[0]);"));
     }
 
     #[test]
