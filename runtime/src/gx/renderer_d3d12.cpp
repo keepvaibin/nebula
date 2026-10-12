@@ -5409,6 +5409,9 @@ void RendererD3D12::begin_frame(bool present_swap_chain) {
             if (replay_valid_ && ring_segment_ == replay_segment_) {
                 replay_valid_ = false;
             }
+            if (run_valid_ && ring_segment_ == run_segment_) {
+                run_valid_ = false;
+            }
             if (ring_segment_fence_[ring_segment_] != 0u) {
                 wait_for_fence_value(ring_segment_fence_[ring_segment_]);
             }
@@ -6244,6 +6247,22 @@ void RendererD3D12::publish_replay_log() {
     play_start_output_active_ = replay_start_output_active_;
 }
 
+bool RendererD3D12::start_replay_playback() {
+    if (!replay_valid_) {
+        return false;
+    }
+    std::swap(play_ops_, run_ops_);
+    std::swap(play_draws_, run_draws_);
+    std::swap(play_viewports_, run_viewports_);
+    std::swap(play_clears_, run_clears_);
+    std::swap(play_copies_, run_copies_);
+    run_start_output_active_ = play_start_output_active_;
+    run_segment_ = replay_segment_;
+    run_valid_ = true;
+    replay_valid_ = false;
+    return true;
+}
+
 void RendererD3D12::begin_replay_record() {
     replay_scene_count_ = 0u;
     replay_has_swaps_ = false;
@@ -6366,12 +6385,15 @@ void RendererD3D12::execute_replay_copy(const ReplayCopy& copy) {
 
 bool RendererD3D12::present_replay_subframe(
     std::span<const D3D12_GPU_VIRTUAL_ADDRESS> record_constants) {
-    if (!replay_valid_ || !device_ || !swap_chain_) {
-        replay_failure_ = replay_valid_ ? 2u : 1u;
+    if (ring_mode_ != RingMode::Interp && replay_valid_ && !run_valid_) {
+        (void)start_replay_playback();
+    }
+    if (!run_valid_ || !device_ || !swap_chain_) {
+        replay_failure_ = run_valid_ ? 2u : 1u;
         return false;
     }
     const ReplayCopy* display = nullptr;
-    for (const ReplayCopy& copy : play_copies_) {
+    for (const ReplayCopy& copy : run_copies_) {
         if (copy.mode == 1u) display = &copy;
     }
     if (display == nullptr) {
@@ -6425,14 +6447,14 @@ bool RendererD3D12::present_replay_subframe(
     const bool interp_rings = ring_mode_ == RingMode::Interp;
     ID3D12DescriptorHeap* heaps[] = {
         srv_ring_.heap(),
-        interp_rings ? sampler_heaps_[replay_segment_].Get() : sampler_heap_.Get()};
+        interp_rings ? sampler_heaps_[run_segment_].Get() : sampler_heap_.Get()};
     command_list_->SetDescriptorHeaps(2, heaps);
     command_list_->SetGraphicsRootSignature(root_signature_.Get());
     invalidate_gx_bindings();
     bound_rt_aux_ = 0u;
 
     const bool output_before = output_efb_active_;
-    if (output_efb_active_ != play_start_output_active_) {
+    if (output_efb_active_ != run_start_output_active_) {
         swap_efb_sets();
     }
     // The private EFB (at the live EFB's scale) stands in for the sub-frame.
@@ -6446,10 +6468,10 @@ bool RendererD3D12::present_replay_subframe(
     replay_playing_ = true;
     bind_efb(nullptr);
     const auto far_values = make_efb_clear_values(0u, 0u, 0x00FFFFFFu, 0u);
-    for (const ReplayOp& op : play_ops_) {
+    for (const ReplayOp& op : run_ops_) {
         switch (op.kind) {
         case ReplayKind::Draw: {
-            DrawCall call = play_draws_[op.index];
+            DrawCall call = run_draws_[op.index];
             if (call.replay_record >= 0 &&
                 static_cast<std::size_t>(call.replay_record) < record_constants.size() &&
                 record_constants[static_cast<std::size_t>(call.replay_record)] != 0u) {
@@ -6459,17 +6481,17 @@ bool RendererD3D12::present_replay_subframe(
             break;
         }
         case ReplayKind::BindEfb: {
-            const ReplayViewport& viewport = play_viewports_[op.index];
+            const ReplayViewport& viewport = run_viewports_[op.index];
             bind_efb(viewport.valid ? viewport.values : nullptr);
             break;
         }
         case ReplayKind::Clear: {
-            const ReplayClear& c = play_clears_[op.index];
+            const ReplayClear& c = run_clears_[op.index];
             clear_efb(c.ar, c.gb, c.z24, c.color, c.alpha, c.depth, c.x, c.y, c.w, c.h, c.format);
             break;
         }
         case ReplayKind::Copy:
-            execute_replay_copy(play_copies_[op.index]);
+            execute_replay_copy(run_copies_[op.index]);
             break;
         case ReplayKind::SwapEfbSets:
             swap_efb_sets();
@@ -6510,9 +6532,11 @@ bool RendererD3D12::present_replay_subframe(
     // The sub-frame read the recorded frame's segments and appended to the
     // current ones: neither may be rewound before it completes.
     fence_values_[replay_source_slot_] = std::max(fence_values_[replay_source_slot_], fence);
+    fence_values_[(replay_source_slot_ + 1u) % kFramesInFlight] =
+        std::max(fence_values_[(replay_source_slot_ + 1u) % kFramesInFlight], fence);
     fence_values_[frame_slot_] = std::max(fence_values_[frame_slot_], fence);
     if (interp_rings) {
-        ring_segment_fence_[replay_segment_] = std::max(ring_segment_fence_[replay_segment_], fence);
+        ring_segment_fence_[run_segment_] = std::max(ring_segment_fence_[run_segment_], fence);
         ring_segment_fence_[ring_segment_] = std::max(ring_segment_fence_[ring_segment_], fence);
     } else if (matrix_segments_ != kFramesInFlight) {
         matrix_segment_fence_[matrix_segment_] = std::max(matrix_segment_fence_[matrix_segment_], fence);

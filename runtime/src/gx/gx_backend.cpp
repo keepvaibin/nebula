@@ -6476,15 +6476,18 @@ void GxBackend::on_fifo_marker(FifoMarker marker, const std::array<float, 12>* v
         if (interp_recording_) {
             note_interp_log_completion();
             renderer_.note_replay_scene();
-            interp_scene_ = (interp_scene_ + 1u) % 3u;
+            interp_scene_ = (interp_scene_ + 1u) % 4u;
+            if (interp_sequence_.active &&
+                (interp_scene_ == interp_sequence_.scene ||
+                 interp_scene_ == (interp_sequence_.scene + 3u) % 4u)) {
+                // The playing scene's inputs are about to be reused.
+                interp_dropped_ += interp_sequence_.subframes - interp_sequence_.next;
+                interp_sequence_.subframes = interp_sequence_.next;
+                interp_sequence_.flush_requested = true;
+            }
             if (interp_scene_ == interp_log_scene_) {
-                // Two scenes since the log: its inputs are about to be reused.
-                if (interp_sequence_.active) {
-                    interp_dropped_ += interp_sequence_.subframes - interp_sequence_.next;
-                    interp_sequence_.subframes = interp_sequence_.next;
-                    interp_sequence_.flush_requested = true;
-                }
                 interp_log_waiting_ = false;
+                interp_start_pending_ = false;
             }
             interp_scenes_[interp_scene_].clear();
             interp_scenes_[interp_scene_].valid = true;
@@ -6738,15 +6741,25 @@ void GxBackend::note_interp_log_completion() {
     if (!renderer_.replay_available()) {
         return;
     }
-    if (interp_sequence_.active) {
-        // The previous frame's sequence ends before this frame's begins
-        // (called inside a render chunk: the render loop flushes it).
-        interp_sequence_.flush_requested = true;
-    }
     interp_log_scene_ = interp_scene_;
     interp_log_waiting_ = interp_scenes_[interp_log_scene_].valid &&
         !native_settings_overlay_visible();
     interp_log_xfb_ = renderer_.replay_xfb_addr();
+}
+
+void GxBackend::run_pending_interp_start() {
+    if (!interp_start_pending_) {
+        return;
+    }
+    interp_start_pending_ = false;
+    if (interp_sequence_.active) {
+        advance_interp_sequence(true);
+    }
+    if (interp_log_waiting_ && renderer_.replay_available()) {
+        interp_log_waiting_ = false;
+        start_interp_sequence(interp_log_xfb_);
+        advance_interp_sequence(false);
+    }
 }
 
 void GxBackend::start_interp_sequence(std::uint32_t xfb_addr) {
@@ -6757,8 +6770,12 @@ void GxBackend::start_interp_sequence(std::uint32_t xfb_addr) {
     }();
     LARGE_INTEGER now{};
     QueryPerformanceCounter(&now);
+    if (!renderer_.start_replay_playback()) {
+        return;
+    }
     interp_sequence_.active = true;
     interp_sequence_.flush_requested = false;
+    interp_sequence_.scene = interp_log_scene_;
     interp_sequence_.xfb_addr = xfb_addr;
     interp_sequence_.subframes = interp_frames_;
     interp_sequence_.next = 0u;
@@ -6790,7 +6807,7 @@ void GxBackend::advance_interp_sequence(bool flush) {
             return;
         }
         InterpSequence& sequence = interp_sequence_;
-        if (!flush && sequence.next < sequence.subframes && renderer_.replay_available()) {
+        if (!flush && sequence.next < sequence.subframes && renderer_.replay_playing()) {
             const float t = static_cast<float>(sequence.next + 1u) /
                             static_cast<float>(sequence.subframes + 1u);
             const auto start = std::chrono::steady_clock::now();
@@ -6853,8 +6870,8 @@ void GxBackend::advance_interp_sequence(bool flush) {
 // its transform between the matched previous record (or the camera delta)
 // and the latest, then the latest frame's operations replayed with them.
 bool GxBackend::render_interp_subframe(float t) {
-    const InterpScene& scene = interp_scenes_[interp_log_scene_];
-    const InterpScene& before_scene = interp_scenes_[(interp_log_scene_ + 2u) % 3u];
+    const InterpScene& scene = interp_scenes_[interp_sequence_.scene];
+    const InterpScene& before_scene = interp_scenes_[(interp_sequence_.scene + 3u) % 4u];
     if (!scene.valid) {
         renderer_.note_replay_failure(9u);
         return false;
@@ -7221,6 +7238,7 @@ void GxBackend::render_thread_main() {
                         }
                     }
                     render_frame_on_thread(chunk);
+                    run_pending_interp_start();
                     {
                         std::lock_guard<std::mutex> lock(queue_mutex_);
                         render_chunk_started_ns_ = 0u;
@@ -8853,19 +8871,17 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
                       << " sequence=" << (interp_sequence_.active ? 1 : 0)
                       << " present=" << (present_swap_chain ? 1 : 0) << '\n';
         }
-        // A newer frame presents now: the pending frame is superseded.
-        if (interp_sequence_.active && interp_sequence_.flush_requested && present_swap_chain) {
-            interp_dropped_ += interp_sequence_.subframes - interp_sequence_.next;
-            interp_sequence_.active = false;
-        }
-        // The frame's own present: the sub-frames come first, the real frame
-        // after them.
+        // The ready frame's own present: its sub-frames come first, the real
+        // frame after them (started by the render loop after this chunk).
         if (interp_log_waiting_ && present_swap_chain && !capture_backbuffer &&
             selected_xfb != nullptr && selected_xfb->guest_addr == interp_log_xfb_ &&
-            !interp_sequence_.active && renderer_.replay_available()) {
-            interp_log_waiting_ = false;
-            start_interp_sequence(interp_log_xfb_);
+            renderer_.replay_available()) {
+            interp_start_pending_ = true;
             present_swap_chain = false;
+        } else if (interp_sequence_.active && present_swap_chain) {
+            // Another frame presents now: the playing one is superseded.
+            interp_dropped_ += interp_sequence_.subframes - interp_sequence_.next;
+            interp_sequence_.active = false;
         }
     }
     const auto pre_present_end = frame_timing_enabled

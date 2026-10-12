@@ -683,7 +683,9 @@ private:
             palette.clear(); per_vertex.clear(); palette_count = 0; valid = false;
         }
     };
-    std::array<InterpScene, 3> interp_scenes_{};
+    // Recording, ready (log completed), playing, and the playing scene's
+    // predecessor (previous palettes and texture matrices).
+    std::array<InterpScene, 4> interp_scenes_{};
     unsigned interp_scene_ = 0;           // scene being recorded
     unsigned interp_log_scene_ = 0;       // scene of the completed log
     std::uint64_t interp_seen_serial_ = 0;
@@ -699,7 +701,12 @@ private:
         // Set inside a render chunk (no frame may be recorded there): the
         // render loop presents the real frame before anything else.
         bool flush_requested = false;
+        unsigned scene = 0;               // interp_scenes_ index being interpolated
     };
+    // A ready frame's present arrived inside a render chunk: the render loop
+    // finishes the playing sequence, then starts this one.
+    bool interp_start_pending_ = false;
+    void run_pending_interp_start();
     InterpSequence interp_sequence_{};
     // A recorded frame whose present arrives as a separate VI present.
     bool interp_log_waiting_ = false;

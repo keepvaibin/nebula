@@ -471,6 +471,10 @@ public:
     void end_replay_record(bool keep);
     [[nodiscard]] bool replay_recording() const noexcept { return replay_recording_; }
     [[nodiscard]] bool replay_available() const noexcept { return replay_valid_; }
+    // Moves the completed log to playback (sub-frames then replay it); false
+    // when none is ready.
+    bool start_replay_playback();
+    [[nodiscard]] bool replay_playing() const noexcept { return run_valid_; }
     // Interpolation mode: present rate above 60, temporal upscaler off,
     // GALAXY_EXPERIMENTAL_INTERPOLATION=1. Rings then keep one segment per
     // game frame (advanced at the first frame after a display copy) and the
@@ -904,6 +908,16 @@ private:
     std::vector<ReplayCopy> play_copies_;
     bool play_start_output_active_ = false;
     void publish_replay_log();
+    // The log being interpolated (moved from play_* by start_replay_playback),
+    // so a newer completed log can wait while sub-frames of this one run.
+    std::vector<ReplayOp> run_ops_;
+    std::vector<DrawCall> run_draws_;
+    std::vector<ReplayViewport> run_viewports_;
+    std::vector<ReplayClear> run_clears_;
+    std::vector<ReplayCopy> run_copies_;
+    bool run_start_output_active_ = false;
+    bool run_valid_ = false;
+    unsigned run_segment_ = 0;
     bool replay_recording_ = false;
     bool replay_valid_ = false;
     bool replay_has_swaps_ = false;
