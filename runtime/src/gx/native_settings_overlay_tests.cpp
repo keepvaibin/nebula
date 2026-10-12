@@ -324,8 +324,8 @@ int main() {
     // The scheme row switches the table shown.
     passed &= expect(key(VK_DOWN) && key(VK_DOWN) && key(VK_RIGHT), "scheme row selects Xbox");
     snapshot = galaxy::gx::native_settings_overlay_snapshot();
-    passed &= expect(snapshot.row_count == 32u, "Xbox adds stick and pointer deadzones");
-    passed &= expect(key(VK_RIGHT) && galaxy::gx::native_settings_overlay_snapshot().row_count == 36u,
+    passed &= expect(snapshot.row_count == 33u, "Xbox adds stick and pointer deadzones and pointer hide");
+    passed &= expect(key(VK_RIGHT) && galaxy::gx::native_settings_overlay_snapshot().row_count == 37u,
                      "Switch Pro adds motion, sensitivity, gyro and gyro sensitivity rows");
     passed &= expect(galaxy::gx::native_settings_overlay_snapshot().pending_changes == 0u,
                      "choosing the scheme to edit is not a change");

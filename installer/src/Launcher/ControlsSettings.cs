@@ -26,6 +26,7 @@ namespace Nebula.Launcher
         public float StickDeadzone, PointerDeadzone, PointerSpeed = 1.6f;
         public bool InvertPointerY, GyroPointer;
         public float GyroSensitivity = 1.0f;
+        public float PointerHideSeconds, PointerHideRadius = 0.03f;
         public int Motion; // 0 off, 1 Wii Remote, 2 Nunchuk
         public int ShakeSensitivity = 3;
         public SchemeTuning Clone() { return (SchemeTuning)MemberwiseClone(); }
@@ -41,7 +42,7 @@ namespace Nebula.Launcher
         public const int SchemeCount = 4, TargetCount = 25, Slots = 4;
         public const int JumpBack = 24;
         // runtime_settings.ini controls_version (input_bindings.h kControlsVersion).
-        public const int ControlsVersion = 2;
+        public const int ControlsVersion = 3;
         public const int ModeAuto = 0, ModeKeyboardMouse = 1, ModeController = 2, ModeRealWiimote = 3;
         public const int Keyboard = 0, Xbox = 1, SwitchPro = 2, SwitchPro2 = 3;
         public static readonly string[] SchemeIds = { "keyboard", "xbox", "switch_pro", "switch_pro2" };
@@ -146,13 +147,8 @@ namespace Nebula.Launcher
             return t;
         }
 
-        /// <summary>
-        /// Super Mario Galaxy on Nintendo Switch: A or B jump (B backs out of
-        /// menus), ZR Star Bits, ZL crouch, L camera, X/Y or shake spin, R
-        /// recenters, gyro points, right stick turns the camera (pointer when
-        /// the gyro is off). Xbox the same shape with the right stick as pointer.
-        /// </summary>
-        public static InputSource[][] DefaultTable(int scheme)
+        /// <summary>The defaults shipped in controls version 2 (Native29), for migration.</summary>
+        public static InputSource[][] Version2Table(int scheme)
         {
             var t = LegacyTable(scheme);
             if (scheme == Keyboard) return t;
@@ -179,6 +175,23 @@ namespace Nebula.Launcher
             return t;
         }
 
+        /// <summary>
+        /// Super Mario Galaxy on Switch with Star Bits on the left shoulder
+        /// only: A or B jump (B backs out of menus), L/LB Star Bits, both
+        /// triggers crouch, left-stick click camera, X/Y (Xbox also RB) or shake
+        /// spin, R / right-stick click recenters, gyro points, right stick turns
+        /// the camera (pointer when the gyro is off; Xbox: pointer).
+        /// </summary>
+        public static InputSource[][] DefaultTable(int scheme)
+        {
+            var t = Version2Table(scheme);
+            if (scheme == Keyboard) return t;
+            t[1] = new[] { Button(LeftShoulder) };
+            t[16] = new[] { Pos(LeftTrigger), Pos(RightTrigger) };
+            t[15] = new[] { Button(LeftStick) };
+            return t;
+        }
+
         public static SchemeTuning LegacyTuning(int scheme)
         {
             var t = new SchemeTuning();
@@ -187,6 +200,7 @@ namespace Nebula.Launcher
                 t.StickDeadzone = 7849.0f / 32767.0f;
                 t.PointerDeadzone = 8689.0f / 32767.0f;
                 t.PointerSpeed = 2.4f;
+                t.PointerHideSeconds = 4.0f;
             }
             else if (HasMotion(scheme))
             {
@@ -194,6 +208,7 @@ namespace Nebula.Launcher
                 t.PointerDeadzone = 0.12f;
                 t.PointerSpeed = 2.4f;
                 t.Motion = 1;
+                t.PointerHideSeconds = 4.0f;
             }
             return t;
         }
@@ -213,17 +228,21 @@ namespace Nebula.Launcher
         }
 
         /// <summary>Moves bindings and tuning that still equal the legacy defaults to the current defaults (runtime migrate_legacy_controls).</summary>
-        private void MigrateLegacy()
+        private void MigrateLegacy(int version)
         {
             for (int s = 0; s < SchemeCount; s++)
             {
                 var legacy = LegacyTable(s);
+                var version2 = Version2Table(s);
                 var current = DefaultTable(s);
                 for (int t = 0; t < TargetCount; t++)
-                    if (SameBindings(Bindings[s][t], legacy[t]) && !SameBindings(legacy[t], current[t])) Bindings[s][t] = current[t];
-                if (Tuning[s].GyroPointer == LegacyTuning(s).GyroPointer) Tuning[s].GyroPointer = DefaultTuning(s).GyroPointer;
+                {
+                    bool old = SameBindings(Bindings[s][t], legacy[t]) || SameBindings(Bindings[s][t], version2[t]);
+                    if (old && !SameBindings(Bindings[s][t], current[t])) Bindings[s][t] = current[t];
+                }
+                if (version < 2 && Tuning[s].GyroPointer == LegacyTuning(s).GyroPointer) Tuning[s].GyroPointer = DefaultTuning(s).GyroPointer;
             }
-            if (InputMode == ModeKeyboardMouse) InputMode = ModeAuto;
+            if (version < 2 && InputMode == ModeKeyboardMouse) InputMode = ModeAuto;
         }
 
         // ---- names ---------------------------------------------------------------
@@ -340,7 +359,7 @@ namespace Nebula.Launcher
                 if (key == "controls_version") { int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out version); continue; }
                 settings.Apply(key, value);
             }
-            if (lines.Length != 0 && version < ControlsVersion) settings.MigrateLegacy();
+            if (lines.Length != 0 && version < ControlsVersion) settings.MigrateLegacy(version);
             return settings;
         }
 
@@ -392,6 +411,8 @@ namespace Nebula.Launcher
                 case "invert_pointer_y": t.InvertPointerY = value == "1" || value.ToLowerInvariant() == "true"; break;
                 case "gyro_pointer": t.GyroPointer = value == "1" || value.ToLowerInvariant() == "true"; break;
                 case "gyro_sensitivity": if (parsed) t.GyroSensitivity = Math.Max(0.2f, Math.Min(5f, f)); break;
+                case "pointer_hide_seconds": if (parsed) t.PointerHideSeconds = Math.Max(0f, Math.Min(60f, f)); break;
+                case "pointer_hide_radius": if (parsed) t.PointerHideRadius = Math.Max(0f, Math.Min(0.5f, f)); break;
                 case "shake_sensitivity": if (parsed) t.ShakeSensitivity = Math.Max(1, Math.Min(5, (int)Math.Round(f))); break;
                 case "motion": { int m = Array.IndexOf(MotionNames, value.ToLowerInvariant()); if (m >= 0) t.Motion = m; break; }
             }
@@ -416,6 +437,8 @@ namespace Nebula.Launcher
                 {
                     lines.Add(new KeyValuePair<string, string>("tune." + p + "stick_deadzone", F(tuning.StickDeadzone)));
                     lines.Add(new KeyValuePair<string, string>("tune." + p + "pointer_deadzone", F(tuning.PointerDeadzone)));
+                    lines.Add(new KeyValuePair<string, string>("tune." + p + "pointer_hide_seconds", F(tuning.PointerHideSeconds)));
+                    lines.Add(new KeyValuePair<string, string>("tune." + p + "pointer_hide_radius", F(tuning.PointerHideRadius)));
                 }
                 lines.Add(new KeyValuePair<string, string>("tune." + p + "pointer_speed", F(tuning.PointerSpeed)));
                 lines.Add(new KeyValuePair<string, string>("tune." + p + "invert_pointer_y", tuning.InvertPointerY ? "1" : "0"));

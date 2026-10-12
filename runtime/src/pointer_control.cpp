@@ -71,18 +71,53 @@ StickVector stick_pointer_velocity(StickVector stick, float speed) noexcept {
     return {stick.x * scale, stick.y * scale};
 }
 
+bool PointerRestHide::update(float x, float y, std::uint64_t now_us, bool controller_owned,
+                             bool reveal, float hide_seconds, float radius) noexcept {
+    const auto settle = [&] {
+        anchor_x = x;
+        anchor_y = y;
+        since_us = now_us;
+    };
+    if (!controller_owned || reveal || !(hide_seconds > 0.0f)) {
+        hidden = false;
+        settle();
+        return false;
+    }
+    if (hidden) {
+        return true;
+    }
+    const float dx = x - anchor_x;
+    const float dy = y - anchor_y;
+    if (dx * dx + dy * dy > radius * radius || now_us < since_us) {
+        settle();
+        return false;
+    }
+    if (static_cast<double>(now_us - since_us) >= static_cast<double>(hide_seconds) * 1e6) {
+        hidden = true;
+    }
+    return hidden;
+}
+
 PlayContext play_context_from_star_pointer_mode(std::uint32_t mode) noexcept {
+    // Only screens with a Back action are menus; every other mode (game,
+    // demos, base, star bit targets, launch stars, unknown values) keeps B
+    // as jump, so B never shoots Star Bits.
     switch (mode) {
-    case 15:  // 1P invalid, 2P valid (Co-Star)
-    case 18:  // launch star
-    case 20:  // blue star (pull star)
-    case 21:  // blue star ready
-    case 22:  // star bit target
-    case 23:  // big bubble
-    case 25:  // game
-        return PlayContext::Play;
-    default:
+    case 0:   // HOME button menu
+    case 1:   // error window
+    case 2:   // pause menu
+    case 3:   // logo
+    case 4:   // title
+    case 5:   // file select
+    case 6:   // scenario (star) select
+    case 7:   // pause menu, galaxy map
+    case 8:   // yes/no choice
+    case 9:   // picture book
+    case 16:  // dome sphere selector (galaxy choice)
+    case 17:  // dome sphere selector, finger
         return PlayContext::Menu;
+    default:
+        return PlayContext::Play;
     }
 }
 

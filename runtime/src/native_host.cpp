@@ -8495,7 +8495,7 @@ galaxy::input::WiimoteInputSnapshot build_native_hid_input_snapshot(
     std::optional<std::uint64_t> first_mario_control_vi,
     bool ir_input_enabled = true,
     NativeHidHostPointerMetadata* host_pointer_metadata = nullptr,
-    galaxy::input::PlayContext play_context = galaxy::input::PlayContext::Menu) {
+    galaxy::input::PlayContext play_context = galaxy::input::PlayContext::Play) {
     if (host_pointer_metadata != nullptr) {
         *host_pointer_metadata = {};
         host_pointer_metadata->input_mode_generation =
@@ -8696,6 +8696,9 @@ galaxy::input::WiimoteInputSnapshot build_native_hid_input_snapshot(
     float gyro_y = 0.0f;
     float pad_pointer_speed = 0.0f;
     bool pad_gyro_pointing = false;
+    // Rest-hide tuning of the pad that points (gyro first, then the stick).
+    float pointer_hide_seconds = 0.0f;
+    float pointer_hide_radius = 0.03f;
     static std::array<std::uint32_t, XUSER_MAX_COUNT + kMaxSwitchPads> s_pad_previous_pressed{};
     if (use_pads) {
         for (std::size_t index = 0; index < live_pads.size(); ++index) {
@@ -8717,11 +8720,17 @@ galaxy::input::WiimoteInputSnapshot build_native_hid_input_snapshot(
                 std::fabs(pad_logic_all.pointer_x) + std::fabs(pad_logic_all.pointer_y)) {
                 pad_pointer_speed = speed;
             }
+            if (!pad_gyro_pointing) {
+                pointer_hide_seconds = tuning.pointer_hide_seconds;
+                pointer_hide_radius = tuning.pointer_hide_radius;
+            }
             pad_logic_all = galaxy::input::merge_logical_input(pad_logic_all, pad_logic);
             motion_shake_remote = motion_shake_remote || pad.shake_remote;
             motion_shake_nunchuk = motion_shake_nunchuk || pad.shake_nunchuk;
             if (gyro_pointing) {
                 pad_gyro_pointing = true;
+                pointer_hide_seconds = tuning.pointer_hide_seconds;
+                pointer_hide_radius = tuning.pointer_hide_radius;
                 gyro_x += pad.gyro_x;
                 gyro_y += tuning.invert_pointer_y ? -pad.gyro_y : pad.gyro_y;
             }
@@ -9140,6 +9149,20 @@ galaxy::input::WiimoteInputSnapshot build_native_hid_input_snapshot(
         owner != galaxy::input::PointerSource::Gyro) {
         pointer_active = true;
         pointer_source = "controller";
+    }
+    // Rest hide (Switch ports): a still controller pointer disappears until
+    // recentered; a stick push also brings a stick pointer back.
+    static galaxy::input::PointerRestHide s_rest_hide{};
+    const bool controller_owned = owner == galaxy::input::PointerSource::Stick ||
+                                  owner == galaxy::input::PointerSource::Gyro ||
+                                  (owner == galaxy::input::PointerSource::None && use_pads);
+    const bool rest_hidden = s_rest_hide.update(
+        s_pointer_x, s_pointer_y, now_us, controller_owned,
+        recenter_pressed || (owner == galaxy::input::PointerSource::Stick && activity.stick),
+        pointer_hide_seconds, pointer_hide_radius);
+    if (rest_hidden) {
+        pointer_active = false;
+        pointer_source = "controller-rest-hidden";
     }
     if (script.has_pointer &&
         (script_pointer_force_enabled() || !live_mouse_recent ||
@@ -31658,7 +31681,7 @@ galaxy::input::PlayContext read_play_context(const GuestAddressSpace& space,
     const std::optional<std::uint32_t> mode = read_star_pointer_mode(space);
     const galaxy::input::PlayContext context = mode
         ? galaxy::input::play_context_from_star_pointer_mode(*mode)
-        : galaxy::input::PlayContext::Menu;
+        : galaxy::input::PlayContext::Play;
     static std::uint32_t s_traced_mode = 0xFFFFFFFFu;
     const std::uint32_t traced = mode ? *mode : 0xFFFFFFFEu;
     if (traced != s_traced_mode) {

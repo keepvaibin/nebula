@@ -175,6 +175,11 @@ struct SchemeTuning {
     std::uint8_t shake_sensitivity = 3;  // 1 (strong shake) .. 5 (light)
     bool gyro_pointer = false;
     float gyro_sensitivity = 1.0f;  // 1: a picture width per 40 degrees of turn
+    // A controller pointer that rests within pointer_hide_radius (pointer
+    // units) for pointer_hide_seconds disappears until the recenter button
+    // (or, for the stick, a push); 0 seconds never hides.
+    float pointer_hide_seconds = 0.0f;
+    float pointer_hide_radius = 0.03f;
     friend bool operator==(const SchemeTuning&, const SchemeTuning&) = default;
 };
 
@@ -204,15 +209,18 @@ struct ControlsConfig {
 }
 
 [[nodiscard]] BindingTable default_binding_table(ControlScheme scheme);
-// The defaults shipped before controls version 2 (Native28), for migration.
+// The defaults shipped before controls version 2 (Native28) and in version 2
+// (Native29), for migration.
 [[nodiscard]] BindingTable legacy_binding_table(ControlScheme scheme);
+[[nodiscard]] BindingTable version2_binding_table(ControlScheme scheme);
 [[nodiscard]] SchemeTuning legacy_scheme_tuning(ControlScheme scheme);
-// runtime_settings.ini `controls_version`; files without it predate version 2.
-inline constexpr unsigned kControlsVersion = 2;
-// Moves every binding list and tuning value that still equals the legacy
-// default to the current default; values the player changed stay. Returns the
+// runtime_settings.ini `controls_version`; files without it are version 1.
+inline constexpr unsigned kControlsVersion = 3;
+// For a file of `version`: every binding list that still equals an earlier
+// version's default takes the current default, and the gyro switch of a
+// version-1 file its new default; values the player changed stay. Returns the
 // number of entries changed.
-unsigned migrate_legacy_controls(ControlsConfig& config) noexcept;
+unsigned migrate_legacy_controls(ControlsConfig& config, unsigned version) noexcept;
 [[nodiscard]] SchemeTuning default_scheme_tuning(ControlScheme scheme);
 [[nodiscard]] ControlsConfig default_controls_config();
 

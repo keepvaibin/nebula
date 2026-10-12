@@ -133,7 +133,7 @@ void test_ini_round_trip() {
     expect(parsed == config, "controls survive the ini round trip exactly");
     expect(text.find("bind.keyboard.a=Space, Enter, MouseLeft\n") != std::string::npos,
            "keyboard A line is stable text");
-    expect(text.find("bind.xbox.b=RT\n") != std::string::npos, "xbox B line is stable text");
+    expect(text.find("bind.xbox.b=LB\n") != std::string::npos, "xbox B line is stable text");
     expect(text.find("bind.xbox.jump_back=B\n") != std::string::npos, "xbox jump/back line is stable text");
     expect(text.find("bind.switch_pro.a=A\n") != std::string::npos, "switch A line is stable text");
     expect(!apply_controls_setting(parsed, "audio_master_gain", "1"), "foreign keys are not owned");
@@ -174,13 +174,13 @@ void test_evaluation() {
     sample.axes[static_cast<std::size_t>(PadAxis::RightTrigger)] = 96.0f / 255.0f;
     const float threshold = 96.0f / 255.0f;
     LogicalInput pad = evaluate_pad_bindings(config.table(ControlScheme::Xbox), sample, threshold);
-    expect(pad.held(WiiTarget::A) && pad.held(WiiTarget::C), "XInput A and LB map to A and C");
-    expect(pad.held(WiiTarget::B), "right trigger at the threshold presses B");
+    expect(pad.held(WiiTarget::A) && pad.held(WiiTarget::B), "XInput A and LB map to A and B");
+    expect(pad.held(WiiTarget::Z), "right trigger at the threshold presses Z");
     expect(approx(pad.stick_x, -0.4f) && !pad.held(WiiTarget::StickLeft), "analog stick passes through");
     expect(approx(pad.pointer_y, 0.8f), "right stick drives the pointer");
     sample.axes[static_cast<std::size_t>(PadAxis::RightTrigger)] = 95.0f / 255.0f;
     pad = evaluate_pad_bindings(config.table(ControlScheme::Xbox), sample, threshold);
-    expect(!pad.held(WiiTarget::B), "below the threshold the trigger is released");
+    expect(!pad.held(WiiTarget::Z), "below the threshold the trigger is released");
 
     // Axis direction bound to a digital target.
     BindingTable custom = config.table(ControlScheme::Xbox);
@@ -328,8 +328,8 @@ void test_switch_pro_decoding() {
     const LogicalInput logic = evaluate_pad_bindings(
         default_binding_table(ControlScheme::SwitchPro), sample, 96.0f / 255.0f);
     expect(logic.held(WiiTarget::A) && logic.held(WiiTarget::B) && logic.held(WiiTarget::Plus) &&
-               logic.held(WiiTarget::Home) && logic.held(WiiTarget::DpadUp) && logic.held(WiiTarget::C) && !logic.held(WiiTarget::Shake),
-           "Switch defaults: A->A, ZR->B, Plus, Home, D-pad, L->C");
+               logic.held(WiiTarget::Home) && logic.held(WiiTarget::DpadUp) && logic.held(WiiTarget::Z) && !logic.held(WiiTarget::Shake),
+           "Switch defaults: A->A, L->B, ZR->Z, Plus, Home, D-pad");
 
     // Simple 0x3F report (Bluetooth default mode).
     std::vector<std::uint8_t> simple(12, 0);
@@ -669,6 +669,37 @@ void test_stick_pointer() {
     }
 }
 
+void test_rest_hide() {
+    PointerRestHide hide{};
+    std::uint64_t t = 1'000'000;
+    // Tremor within the radius for 4 s hides; reveal shows; bigger moves reset.
+    bool hidden = false;
+    for (int i = 0; i < 400; ++i, t += 10'000) {
+        hidden = hide.update(0.2f + ((i & 1) ? 0.01f : -0.01f), 0.1f, t, true, false, 4.0f, 0.03f);
+        if (i == 390) expect(!hidden, "still visible before the hide delay");
+    }
+    hidden = hide.update(0.2f, 0.1f, t + 200'000, true, false, 4.0f, 0.03f);
+    expect(hidden, "a pointer resting within the radius for the delay hides");
+    expect(hide.update(0.9f, 0.5f, t + 300'000, true, false, 4.0f, 0.03f),
+           "a hidden gyro pointer stays hidden when moved (only recenter brings it back)");
+    expect(!hide.update(0.0f, 0.0f, t + 400'000, true, true, 4.0f, 0.03f), "recenter brings it back");
+    PointerRestHide moving{};
+    t = 0;
+    bool ever = false;
+    for (int i = 0; i < 1000; ++i, t += 10'000) {
+        ever |= moving.update(i * 0.001f, 0.0f, t, true, false, 4.0f, 0.03f);  // 0.1 units/s drift
+    }
+    expect(!ever, "a slowly moving pointer never hides");
+    PointerRestHide mouse{};
+    ever = false;
+    for (int i = 0; i < 1000; ++i) ever |= mouse.update(0.0f, 0.0f, i * 10'000ull, false, false, 4.0f, 0.03f);
+    expect(!ever, "a mouse-owned pointer never rest-hides");
+    PointerRestHide never{};
+    ever = false;
+    for (int i = 0; i < 1000; ++i) ever |= never.update(0.0f, 0.0f, i * 10'000ull, true, false, 0.0f, 0.03f);
+    expect(!ever, "0 seconds never hides");
+}
+
 void test_jump_back() {
     JumpBackLatch latch{};
     auto out = latch.update(true, PlayContext::Play);
@@ -681,12 +712,14 @@ void test_jump_back() {
     expect(!out.a && out.b, "B backs out of menus");
     out = latch.update(true, PlayContext::Play);
     expect(!out.a && out.b, "a held back press stays back when play resumes");
-    expect(play_context_from_star_pointer_mode(25) == PlayContext::Play, "game mode is play");
-    expect(play_context_from_star_pointer_mode(22) == PlayContext::Play, "star bit target is play");
-    for (const std::uint32_t menu : {0u, 2u, 4u, 5u, 6u, 7u, 8u, 9u, 12u, 16u, 17u, 24u, 99u}) {
+    for (const std::uint32_t play : {10u, 11u, 12u, 13u, 14u, 15u, 18u, 19u, 20u, 21u, 22u, 23u, 24u, 25u, 99u}) {
+        expect(play_context_from_star_pointer_mode(play) == PlayContext::Play,
+               "game, demos, targets, launch stars, base and unknown modes keep B as jump");
+    }
+    for (const std::uint32_t menu : {0u, 1u, 2u, 3u, 4u, 5u, 6u, 7u, 8u, 9u, 16u, 17u}) {
         expect(play_context_from_star_pointer_mode(menu) == PlayContext::Menu,
-               "HOME, pause, title, file select, scenario select, yes/no, picture book, demos, "
-               "sphere selector, base and unknown modes are menus");
+               "HOME, error, pause, logo, title, file select, scenario select, yes/no, picture book "
+               "and sphere selector are menus");
     }
 }
 
@@ -699,9 +732,10 @@ void test_defaults_and_migration() {
     const InputSource zl{SourceKind::AxisPositive, static_cast<std::uint8_t>(PadAxis::LeftTrigger)};
     expect(only(sw[WiiTarget::A], {SourceKind::Button, pad::kEastBit}), "Switch: A is Wii A");
     expect(only(sw[WiiTarget::JumpBack], {SourceKind::Button, pad::kSouthBit}), "Switch: B is jump/back");
-    expect(only(sw[WiiTarget::B], zr), "Switch: ZR shoots Star Bits (Wii B)");
-    expect(only(sw[WiiTarget::Z], zl), "Switch: ZL crouches (Wii Z)");
-    expect(sw[WiiTarget::C][0] == InputSource{SourceKind::Button, pad::kLeftShoulderBit}, "Switch: L resets the camera");
+    expect(only(sw[WiiTarget::B], {SourceKind::Button, pad::kLeftShoulderBit}), "Switch: only L shoots Star Bits (Wii B)");
+    expect(sw[WiiTarget::Z][0] == zl && sw[WiiTarget::Z][1] == zr && sw[WiiTarget::Z][2].empty(),
+           "Switch: ZL and ZR crouch (Wii Z)");
+    expect(only(sw[WiiTarget::C], {SourceKind::Button, pad::kLeftStickBit}), "Switch: left-stick click resets the camera");
     expect(only(sw[WiiTarget::PointerRecenter], {SourceKind::Button, pad::kRightShoulderBit}), "Switch: R recenters");
     expect(sw[WiiTarget::Shake][2].empty(), "Switch: shake is X, Y (and motion), not R");
     expect(sw[WiiTarget::DpadLeft][1] == InputSource{SourceKind::AxisNegative, static_cast<std::uint8_t>(PadAxis::RightX)},
@@ -709,8 +743,9 @@ void test_defaults_and_migration() {
     expect(config.tune(ControlScheme::SwitchPro).gyro_pointer && config.tune(ControlScheme::SwitchPro2).gyro_pointer,
            "gyro pointer on by default for both Switch schemes");
     expect(only(xb[WiiTarget::JumpBack], {SourceKind::Button, pad::kEastBit}), "Xbox: B is jump/back");
-    expect(only(xb[WiiTarget::B], zr) && only(xb[WiiTarget::Z], zl), "Xbox: RT Star Bits, LT crouch");
-    expect(xb[WiiTarget::C][0] == InputSource{SourceKind::Button, pad::kLeftShoulderBit}, "Xbox: LB resets the camera");
+    expect(only(xb[WiiTarget::B], {SourceKind::Button, pad::kLeftShoulderBit}), "Xbox: only LB shoots Star Bits");
+    expect(xb[WiiTarget::Z][0] == zl && xb[WiiTarget::Z][1] == zr, "Xbox: LT and RT crouch");
+    expect(only(xb[WiiTarget::C], {SourceKind::Button, pad::kLeftStickBit}), "Xbox: LS click resets the camera");
     expect(xb[WiiTarget::Shake][2] == InputSource{SourceKind::Button, pad::kRightShoulderBit}, "Xbox: RB spins");
     expect(only(xb[WiiTarget::PointerRecenter], {SourceKind::Button, pad::kRightStickBit}), "Xbox: RS recenters");
     expect(!config.tune(ControlScheme::Xbox).gyro_pointer, "Xbox has no gyro");
@@ -752,7 +787,7 @@ void test_defaults_and_migration() {
         migrated.tables[i][WiiTarget::JumpBack] =
             default_binding_table(static_cast<ControlScheme>(i))[WiiTarget::JumpBack];
     }
-    const unsigned changed = migrate_legacy_controls(migrated);
+    const unsigned changed = migrate_legacy_controls(migrated, 1u);
     expect(changed > 0u, "migration changes the old defaults");
     expect(migrated.table(ControlScheme::SwitchPro) == default_binding_table(ControlScheme::SwitchPro),
            "an untouched Switch table becomes the new defaults");
@@ -762,7 +797,26 @@ void test_defaults_and_migration() {
     expect(migrated.table(ControlScheme::Xbox)[WiiTarget::Z] == default_binding_table(ControlScheme::Xbox)[WiiTarget::Z],
            "other Xbox defaults move");
     ControlsConfig again = migrated;
-    expect(migrate_legacy_controls(again) == 0u || again == migrated, "migration is idempotent on new defaults");
+    expect(migrate_legacy_controls(again, 3u) == 0u && again == migrated, "migration is idempotent on new defaults");
+    // A version-2 (Native29) file: its defaults move, the gyro switch the
+    // player turned off stays off.
+    ControlsConfig v2{};
+    for (std::size_t i = 0; i < kControlSchemeCount; ++i) {
+        v2.tables[i] = version2_binding_table(static_cast<ControlScheme>(i));
+        v2.tuning[i] = default_scheme_tuning(static_cast<ControlScheme>(i));
+    }
+    v2.tune(ControlScheme::SwitchPro).gyro_pointer = false;
+    v2.table(ControlScheme::SwitchPro)[WiiTarget::Shake] = {};
+    add_binding(v2.table(ControlScheme::SwitchPro)[WiiTarget::Shake], {SourceKind::Button, pad::kNorthBit});
+    expect(migrate_legacy_controls(v2, 2u) > 0u, "version-2 defaults migrate");
+    expect(v2.table(ControlScheme::Xbox) == default_binding_table(ControlScheme::Xbox),
+           "an untouched version-2 Xbox table becomes the version-3 defaults");
+    expect(v2.table(ControlScheme::SwitchPro)[WiiTarget::B] == default_binding_table(ControlScheme::SwitchPro)[WiiTarget::B],
+           "version-2 ZR Star Bits move to L");
+    expect(!v2.tune(ControlScheme::SwitchPro).gyro_pointer, "a version-2 gyro choice stays");
+    expect(v2.table(ControlScheme::SwitchPro)[WiiTarget::Shake][0] == InputSource{SourceKind::Button, pad::kNorthBit} &&
+               v2.table(ControlScheme::SwitchPro)[WiiTarget::Shake][1].empty(),
+           "a changed version-2 binding stays");
 }
 
 void test_kpad_dots_stable() {
@@ -853,6 +907,7 @@ int main(int argc, char** argv) {
     test_pointer_ownership();
     test_stick_pointer();
     test_jump_back();
+    test_rest_hide();
     test_defaults_and_migration();
     test_kpad_dots_stable();
     if (g_failures != 0) {
