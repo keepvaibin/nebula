@@ -97,6 +97,35 @@
 
 namespace {
 
+// Reads a loaded module's whole image into memory on a background-priority
+// thread. The game module holds ~200 MB of code; running a part of it for
+// the first time otherwise page-faults it in from disk on the simulation
+// thread, mid-frame. GALAXY_PREFETCH_MODULES=0 turns this off.
+void prefetch_module_image_async(HMODULE module) noexcept {
+    static const bool enabled = [] {
+        char value[8]{};
+        std::size_t length = 0;
+        return !(getenv_s(&length, value, sizeof(value), "GALAXY_PREFETCH_MODULES") == 0 &&
+                 length == 2u && value[0] == '0');
+    }();
+    if (!enabled || module == nullptr) return;
+    const auto* base = reinterpret_cast<const unsigned char*>(module);
+    const auto* dos = reinterpret_cast<const IMAGE_DOS_HEADER*>(base);
+    if (dos->e_magic != IMAGE_DOS_SIGNATURE) return;
+    const auto* nt = reinterpret_cast<const IMAGE_NT_HEADERS*>(base + dos->e_lfanew);
+    if (nt->Signature != IMAGE_NT_SIGNATURE) return;
+    const SIZE_T size = nt->OptionalHeader.SizeOfImage;
+    try {
+        std::thread([base, size] {
+            (void)SetThreadPriority(GetCurrentThread(), THREAD_MODE_BACKGROUND_BEGIN);
+            galaxy::host::name_current_thread(L"Nebula Module Prefetch");
+            WIN32_MEMORY_RANGE_ENTRY range{const_cast<unsigned char*>(base), size};
+            (void)PrefetchVirtualMemory(GetCurrentProcess(), 1u, &range, 0u);
+        }).detach();
+    } catch (...) {
+    }
+}
+
 class RuntimeFailure final : public std::runtime_error {
 public:
     using std::runtime_error::runtime_error;
@@ -32173,6 +32202,7 @@ int wmain(int argc, wchar_t** argv) {
                    << L"  error=" << GetLastError() << L'\n';
         return 3;
     }
+    prefetch_module_image_async(module);
     HMODULE home_button_rso_module = nullptr;
     bool gx_initialized = false;
     auto cleanup_module = [&]() -> std::exception_ptr {
@@ -32895,6 +32925,7 @@ int wmain(int argc, wchar_t** argv) {
     }
     home_button_rso_module = LoadLibraryExW(
         home_button_rso_path.c_str(), nullptr, kModuleSearchFlags);
+    prefetch_module_image_async(home_button_rso_module);
     if (home_button_rso_module == nullptr) {
         std::wcerr << L"[boot] Failed to load Home Button native sidecar: "
                    << home_button_rso_path.c_str()

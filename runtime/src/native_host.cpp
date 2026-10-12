@@ -5882,6 +5882,11 @@ static std::atomic<HostPointerClock> g_host_pointer_clock{nullptr};
 static std::atomic<NativeKeyboardCaptureProvider>
     g_native_keyboard_capture_provider{nullptr};
 static galaxy::input::NativeWindowKeyPressLatch g_window_key_presses;
+static galaxy::input::NativeWindowKeyHeldState g_window_keys_held;
+
+void publish_native_window_key_state(std::uint32_t key, bool down) noexcept {
+    g_window_keys_held.set(key, down);
+}
 
 void publish_native_window_key_press(std::uint32_t key) noexcept {
     g_window_key_presses.publish(key);
@@ -5895,6 +5900,7 @@ void publish_native_window_key_press(std::uint32_t key) noexcept {
 
 void clear_native_window_key_presses() noexcept {
     g_window_key_presses.clear();
+    g_window_keys_held.clear();
 }
 
 struct HostPointerTransitionConsumerState {
@@ -8088,7 +8094,8 @@ galaxy::input::WiimoteInputSnapshot build_native_hid_input_snapshot(
             [](int vk) {
                 const bool pressed = g_window_key_presses.consume(
                     static_cast<std::uint32_t>(vk));
-                return pressed || (GetAsyncKeyState(vk) & 0x8000) != 0;
+                return pressed ||
+                    g_window_keys_held.held(static_cast<std::uint32_t>(vk));
             });
     const auto key = [&](int vk) {
         return galaxy::input::native_key_level(
@@ -10023,6 +10030,9 @@ private:
             }
             const auto started = std::chrono::steady_clock::now();
             std::exception_ptr failure;
+            // Fault the request in with large reads first; copying from the
+            // mapped view alone pages it in a cluster at a time.
+            prefetch_span(job.offset, job.size);
             try {
                 owner_.copy_disc_bytes_raw(job.destination, job.offset, job.size);
             } catch (...) {
@@ -10031,7 +10041,7 @@ private:
             job.copy_us = static_cast<std::uint64_t>(
                 std::chrono::duration_cast<std::chrono::microseconds>(
                     std::chrono::steady_clock::now() - started).count());
-            prefetch_after(job.offset + job.size);
+            if (prefetch_bytes_ != 0u) prefetch_span(job.offset + job.size, prefetch_bytes_);
             {
                 std::lock_guard lock(mutex_);
                 ++completed_;
@@ -10047,15 +10057,16 @@ private:
             idle_condition_.notify_all();
         }
     }
-    // Streaming reads (BGM, cutscene, archives) are sequential; ask the memory
-    // manager for the next span now so the following request is a cache hit.
-    void prefetch_after(std::uint64_t offset) noexcept {
-        if (prefetch_bytes_ == 0u || owner_.pak_view_ == nullptr ||
+    // Streaming reads (BGM, cutscene, archives) are sequential; after each
+    // request the memory manager is also asked for the next span, so the
+    // following request is a cache hit.
+    void prefetch_span(std::uint64_t offset, std::uint64_t bytes) noexcept {
+        if (bytes == 0u || owner_.pak_view_ == nullptr ||
             offset >= owner_.pak_size_) {
             return;
         }
         const std::uint64_t length =
-            std::min<std::uint64_t>(prefetch_bytes_, owner_.pak_size_ - offset);
+            std::min<std::uint64_t>(bytes, owner_.pak_size_ - offset);
         WIN32_MEMORY_RANGE_ENTRY range{};
         range.VirtualAddress = const_cast<std::byte*>(owner_.pak_view_ + offset);
         range.NumberOfBytes = static_cast<SIZE_T>(length);

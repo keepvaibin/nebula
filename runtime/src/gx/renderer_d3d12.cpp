@@ -1244,16 +1244,31 @@ LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         if (native_settings_handle_window_key(wp, was_down)) {
             return 0;
         }
-        if (!was_down && !galaxy::host::native_keyboard_capture_active()) {
+        if (!galaxy::host::native_keyboard_capture_active()) {
             const UINT key = static_cast<UINT>(wp);
             const UINT mapped_shift = key == VK_SHIFT
                 ? MapVirtualKeyA(
                     (static_cast<UINT>(lp) >> 16u) & 0xffu,
                     MAPVK_VSC_TO_VK_EX) : 0u;
-            galaxy::host::publish_native_window_key_press(
+            const std::uint32_t normalized =
                 galaxy::input::normalize_native_window_key(key, mapped_shift,
-                    (static_cast<UINT>(lp) & (1u << 24u)) != 0u));
+                    (static_cast<UINT>(lp) & (1u << 24u)) != 0u);
+            if (!was_down) {
+                galaxy::host::publish_native_window_key_press(normalized);
+            }
+            galaxy::host::publish_native_window_key_state(normalized, true);
         }
+    }
+    if (msg == WM_KEYUP || msg == WM_SYSKEYUP) {
+        const UINT key = static_cast<UINT>(wp);
+        const UINT mapped_shift = key == VK_SHIFT
+            ? MapVirtualKeyA(
+                (static_cast<UINT>(lp) >> 16u) & 0xffu,
+                MAPVK_VSC_TO_VK_EX) : 0u;
+        galaxy::host::publish_native_window_key_state(
+            galaxy::input::normalize_native_window_key(key, mapped_shift,
+                (static_cast<UINT>(lp) & (1u << 24u)) != 0u),
+            false);
     }
     if (msg == WM_SETCURSOR && LOWORD(lp) == HTCLIENT) {
         const bool focused =

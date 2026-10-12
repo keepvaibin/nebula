@@ -234,6 +234,9 @@ void install_native_keyboard_capture_provider(
 [[nodiscard]] bool native_keyboard_capture_active() noexcept;
 void publish_native_window_key_press(std::uint32_t key) noexcept;
 void clear_native_window_key_presses() noexcept;
+// Window-thread key level (down on WM_KEYDOWN, up on WM_KEYUP); cleared with
+// the press latch.
+void publish_native_window_key_state(std::uint32_t key, bool down) noexcept;
 
 struct AudioSinkStats {
     std::uint64_t initialization_attempts{};
