@@ -770,18 +770,18 @@ pub fn translate_module_with_options(
                     })?;
                 let memory_plan = validate_psmtx_local_memory_contract(bytes)?;
                 let body = lower_words_with_config(
-                        function.address,
-                        bytes,
-                        &BTreeSet::new(),
-                        &BTreeSet::new(),
-                        LoweringConfig {
-                            local_lane_profile: LocalLaneProfile::PsmtxConcat,
-                            // Qualified only inside the guarded matrix leaf;
-                            // the global fused-paired option remains unchanged.
-                            fused_paired_binary: true,
-                            ..LoweringConfig::default()
-                        },
-                    )?;
+                    function.address,
+                    bytes,
+                    &BTreeSet::new(),
+                    &BTreeSet::new(),
+                    LoweringConfig {
+                        local_lane_profile: LocalLaneProfile::PsmtxConcat,
+                        // Qualified only inside the guarded matrix leaf;
+                        // the global fused-paired option remains unchanged.
+                        fused_paired_binary: true,
+                        ..LoweringConfig::default()
+                    },
+                )?;
                 Some(PsmtxLocalExperiment {
                     body: lower_psmtx_proven_memory(body, bytes, &memory_plan)?,
                     trace_guard: options.trace_psmtx_guard,
@@ -1114,7 +1114,6 @@ fn opcode_requires_fpu(opcode: Opcode) -> bool {
     )
 }
 
-
 fn function_requires_fpu(bytes: &[u8]) -> bool {
     bytes.chunks_exact(4).any(|chunk| {
         let word = u32::from_be_bytes(chunk.try_into().expect("four-byte instruction"));
@@ -1307,7 +1306,9 @@ enum CrFieldStep {
     /// Writes the whole field before reading it.
     Kill,
     /// Leaves the function; the field is dead there iff `dead`.
-    Exit { dead: bool },
+    Exit {
+        dead: bool,
+    },
     Next,
     Jump(u32),
     /// Falls through and may also branch to the target.
@@ -1335,14 +1336,26 @@ fn cr_field_step(pc: u32, word: u32, field: u32, start: u32, end: u32) -> CrFiel
     let link = word & 1 != 0;
     match Ins::new(word, Extensions::gekko_broadway()).op {
         Opcode::Cmpi | Opcode::Cmpli | Opcode::Cmp | Opcode::Cmpl => {
-            if crf_d == field { CrFieldStep::Kill } else { CrFieldStep::Next }
+            if crf_d == field {
+                CrFieldStep::Kill
+            } else {
+                CrFieldStep::Next
+            }
         }
         Opcode::Mcrxr => {
-            if crf_d == field { CrFieldStep::Kill } else { CrFieldStep::Next }
+            if crf_d == field {
+                CrFieldStep::Kill
+            } else {
+                CrFieldStep::Next
+            }
         }
         Opcode::Mtcrf => {
             let fxm = (word >> 12) & 0xFF;
-            if fxm & (0x80 >> field) != 0 { CrFieldStep::Kill } else { CrFieldStep::Next }
+            if fxm & (0x80 >> field) != 0 {
+                CrFieldStep::Kill
+            } else {
+                CrFieldStep::Next
+            }
         }
         Opcode::Mfcr => CrFieldStep::Live,
         Opcode::Mcrf => {
@@ -1370,7 +1383,11 @@ fn cr_field_step(pc: u32, word: u32, field: u32, start: u32, end: u32) -> CrFiel
         }
         // Integer record forms write CR0 from their result.
         Opcode::Andi_ | Opcode::Andis_ | Opcode::Addic_ | Opcode::Stwcx_ => {
-            if field == 0 { CrFieldStep::Kill } else { CrFieldStep::Next }
+            if field == 0 {
+                CrFieldStep::Kill
+            } else {
+                CrFieldStep::Next
+            }
         }
         Opcode::Add
         | Opcode::Addc
@@ -1406,16 +1423,24 @@ fn cr_field_step(pc: u32, word: u32, field: u32, start: u32, end: u32) -> CrFiel
         | Opcode::Rlwinm
         | Opcode::Rlwimi
         | Opcode::Rlwnm => {
-            if field == 0 && link { CrFieldStep::Kill } else { CrFieldStep::Next }
+            if field == 0 && link {
+                CrFieldStep::Kill
+            } else {
+                CrFieldStep::Next
+            }
         }
         Opcode::B => {
             let target = branch_target(pc, word);
             if link {
-                CrFieldStep::Exit { dead: cr_field_dead_across_call(field) }
+                CrFieldStep::Exit {
+                    dead: cr_field_dead_across_call(field),
+                }
             } else if word & 2 == 0 && target >= start && target < end {
                 CrFieldStep::Jump(target)
             } else {
-                CrFieldStep::Exit { dead: cr_field_dead_across_call(field) }
+                CrFieldStep::Exit {
+                    dead: cr_field_dead_across_call(field),
+                }
             }
         }
         Opcode::Bc => {
@@ -1432,7 +1457,9 @@ fn cr_field_step(pc: u32, word: u32, field: u32, start: u32, end: u32) -> CrFiel
             match (target >= start && target < end, always) {
                 (true, true) => CrFieldStep::Jump(target),
                 (true, false) => CrFieldStep::Fork(target),
-                (false, true) => CrFieldStep::Exit { dead: cr_field_dead_across_call(field) },
+                (false, true) => CrFieldStep::Exit {
+                    dead: cr_field_dead_across_call(field),
+                },
                 (false, false) => {
                     if cr_field_dead_across_call(field) {
                         CrFieldStep::NextAfterDeadExit
@@ -1452,7 +1479,9 @@ fn cr_field_step(pc: u32, word: u32, field: u32, start: u32, end: u32) -> CrFiel
                 return CrFieldStep::Live;
             }
             if bo & 0x14 == 0x14 {
-                CrFieldStep::Exit { dead: cr_field_dead_at_return(field) }
+                CrFieldStep::Exit {
+                    dead: cr_field_dead_at_return(field),
+                }
             } else if cr_field_dead_at_return(field) {
                 CrFieldStep::NextAfterDeadExit
             } else {
@@ -1464,7 +1493,11 @@ fn cr_field_step(pc: u32, word: u32, field: u32, start: u32, end: u32) -> CrFiel
         }
         _ if opcode == 19 => {
             // Remaining XL forms: isync is the only other one the game uses.
-            if word == 0x4C00_012C { CrFieldStep::Next } else { CrFieldStep::Live }
+            if word == 0x4C00_012C {
+                CrFieldStep::Next
+            } else {
+                CrFieldStep::Live
+            }
         }
         _ => CrFieldStep::Next,
     }
@@ -1491,7 +1524,9 @@ fn cr_field_dead_from(address: u32, bytes: &[u8], from: u32, field: u32) -> bool
             }
             let offset = (pc - address) as usize;
             let word = u32::from_be_bytes(
-                bytes[offset..offset + 4].try_into().expect("four-byte instruction"),
+                bytes[offset..offset + 4]
+                    .try_into()
+                    .expect("four-byte instruction"),
             );
             match cr_field_step(pc, word, field, address, end) {
                 CrFieldStep::Live => return false,
@@ -1536,8 +1571,10 @@ fn fusible_compare_branches(
         let compare_pc = address + index as u32 * 4;
         let branch_pc = compare_pc + 4;
         let op = Ins::new(compare, Extensions::gekko_broadway()).op;
-        if !matches!(op, Opcode::Cmpi | Opcode::Cmpli | Opcode::Cmp | Opcode::Cmpl)
-            || compare & 0x0020_0000 != 0
+        if !matches!(
+            op,
+            Opcode::Cmpi | Opcode::Cmpli | Opcode::Cmp | Opcode::Cmpl
+        ) || compare & 0x0020_0000 != 0
             || Ins::new(branch, Extensions::gekko_broadway()).op != Opcode::Bc
             || branch & 3 != 0
             || branch_targets.contains(&branch_pc)
@@ -1563,21 +1600,36 @@ fn fusible_compare_branches(
         let (left, right) = match op {
             Opcode::Cmpi => (
                 format!("static_cast<std::int32_t>(context->gpr[{ra}])"),
-                format!("static_cast<std::int32_t>(0x{:08X}u)", signed_immediate(compare) as u32),
+                format!(
+                    "static_cast<std::int32_t>(0x{:08X}u)",
+                    signed_immediate(compare) as u32
+                ),
             ),
             Opcode::Cmp => (
                 format!("static_cast<std::int32_t>(context->gpr[{ra}])"),
-                format!("static_cast<std::int32_t>(context->gpr[{}])", gpr_rb(compare)),
+                format!(
+                    "static_cast<std::int32_t>(context->gpr[{}])",
+                    gpr_rb(compare)
+                ),
             ),
-            Opcode::Cmpli => (format!("context->gpr[{ra}]"), format!("0x{:08X}u", compare & 0xFFFF)),
-            _ => (format!("context->gpr[{ra}]"), format!("context->gpr[{}]", gpr_rb(compare))),
+            Opcode::Cmpli => (
+                format!("context->gpr[{ra}]"),
+                format!("0x{:08X}u", compare & 0xFFFF),
+            ),
+            _ => (
+                format!("context->gpr[{ra}]"),
+                format!("context->gpr[{}]", gpr_rb(compare)),
+            ),
         };
         let relation = match bi % 4 {
             0 => "<",
             1 => ">",
             _ => "==",
         };
-        fused.insert(branch_pc, (compare_pc, format!("{left} {relation} {right}")));
+        fused.insert(
+            branch_pc,
+            (compare_pc, format!("{left} {relation} {right}")),
+        );
     }
     fused
 }
@@ -2276,7 +2328,10 @@ fn lower_resident_integer_direct_calls(
                     Some(exact_fpu_functions),
                 );
                 let (flush_gpr, reload_gpr) = if let Some(contract) = lean_contract {
-                    (contract.gpr_reads | contract.gpr_writes, contract.gpr_writes)
+                    (
+                        contract.gpr_reads | contract.gpr_writes,
+                        contract.gpr_writes,
+                    )
                 } else {
                     let sync = verified_owner.map_or_else(GuestResidencyBoundarySync::full, |_| {
                         GuestResidencyBoundarySync::from_optional_callee_contract(
@@ -2952,7 +3007,11 @@ impl DeviceScanState {
 /// pointer) always addresses RAM, so its stores skip the write-gather-pipe
 /// test (`fast::store_stack`).
 fn flat_store_helper(base: u32) -> &'static str {
-    if base == 1 { "store_stack" } else { "store" }
+    if base == 1 {
+        "store_stack"
+    } else {
+        "store"
+    }
 }
 
 /// Integer loads and stores whose effective address is outside the RAM
@@ -3060,8 +3119,8 @@ fn discover_static_device_access_pcs(
             next.constants = state.constants;
         }
         if !overridden && opcode == Opcode::Lwz && gpr_ra(word) == 13 {
-            if let Some(value) = device_pointer_globals
-                .and_then(|globals| globals.get(&signed_immediate(word)))
+            if let Some(value) =
+                device_pointer_globals.and_then(|globals| globals.get(&signed_immediate(word)))
             {
                 next.constants[gpr_rt(word) as usize] = Some(*value);
             }
@@ -3475,19 +3534,18 @@ fn lower_words_with_config(
         .values()
         .flat_map(|run| run.stores.iter().skip(1).map(|store| store.pc))
         .collect::<BTreeSet<_>>();
-    let static_device_pcs = if (flat_ram_reads || flat_ram_writes)
-        && local_lane_profile == LocalLaneProfile::None
-    {
-        discover_static_device_access_pcs(
-            address,
-            bytes,
-            entries,
-            immediate_overrides,
-            device_pointer_globals,
-        )
-    } else {
-        BTreeSet::new()
-    };
+    let static_device_pcs =
+        if (flat_ram_reads || flat_ram_writes) && local_lane_profile == LocalLaneProfile::None {
+            discover_static_device_access_pcs(
+                address,
+                bytes,
+                entries,
+                immediate_overrides,
+                device_pointer_globals,
+            )
+        } else {
+            BTreeSet::new()
+        };
     let mut final_instruction_is_terminal = false;
     for (index, chunk) in bytes.chunks_exact(4).enumerate() {
         let pc = address + index as u32 * 4;
@@ -3777,7 +3835,10 @@ fn lower_words_with_config(
                     for reg in target..32 {
                         let offset = (reg - target) * 4;
                         let load = integer_guest_load_expression(
-                            4, &format!("{ea} + 0x{offset:08X}u"), pc, flat_ram_reads,
+                            4,
+                            &format!("{ea} + 0x{offset:08X}u"),
+                            pc,
+                            flat_ram_reads,
                         );
                         writeln!(output, "    context->gpr[{reg}] = {load};")
                             .map_err(|_| TranslationError::Formatting)?;
@@ -4108,7 +4169,10 @@ fn lower_words_with_config(
                     };
                     if let Some((lane, half)) = layout_constant {
                         output.push_str(&site_hook_call(
-                            pc, "LayoutConstant", (lane as u32) | (u32::from(half) << 8)));
+                            pc,
+                            "LayoutConstant",
+                            (lane as u32) | (u32::from(half) << 8),
+                        ));
                     }
                     // As in Dusklight CC0, menu panes stay circular through a
                     // wider root canvas with inverse horizontal child scale.
@@ -4662,7 +4726,9 @@ fn lower_words_with_config(
                         Opcode::PsDiv => 3,
                         _ => unreachable!(),
                     };
-                    let descriptor = target | (left << 5) | (right << 10)
+                    let descriptor = target
+                        | (left << 5)
+                        | (right << 10)
                         | (operation_index << 15)
                         | (u32::from(right_lane0 == "ps1_bits") << 17)
                         | (u32::from(right_lane1 == "ps1_bits") << 18)
@@ -4671,7 +4737,7 @@ fn lower_words_with_config(
                         "    galaxy::ppc_execute_indexed_paired_binary(context, 0x{descriptor:05X}u, services, 0x{pc:08X}u);")
                         .map_err(|_| TranslationError::Formatting)?;
                 } else {
-                writeln!(
+                    writeln!(
                     output,
                     "    galaxy::require_paired_single_mode(context, false, services, 0x{pc:08X}u);\n    const std::uint32_t left_ps0 = galaxy::require_single_precision_bits(context->fpr_bits[{left}], services, 0x{pc:08X}u);\n    const std::uint32_t left_ps1 = galaxy::require_single_precision_bits(context->ps1_bits[{left}], services, 0x{pc:08X}u);\n    const std::uint32_t right_ps0 = galaxy::require_single_precision_bits(context->{right_lane0}[{right}], services, 0x{pc:08X}u);\n    const std::uint32_t right_ps1 = galaxy::require_single_precision_bits(context->{right_lane1}[{right}], services, 0x{pc:08X}u);\n{arithmetic}"
                 )
@@ -4736,8 +4802,11 @@ fn lower_words_with_config(
                         Opcode::PsNmsub => 3,
                         _ => unreachable!(),
                     };
-                    let descriptor = target | (multiplicand << 5) | (multiplier << 10)
-                        | (addend << 15) | (operation_index << 20)
+                    let descriptor = target
+                        | (multiplicand << 5)
+                        | (multiplier << 10)
+                        | (addend << 15)
+                        | (operation_index << 20)
                         | (u32::from(multiplier_lane0 == "ps1_bits") << 22)
                         | (u32::from(multiplier_lane1 == "ps1_bits") << 23)
                         | (u32::from(record_bit(word)) << 24);
@@ -4745,7 +4814,7 @@ fn lower_words_with_config(
                         "    galaxy::ppc_execute_indexed_paired_ternary(context, 0x{descriptor:07X}u, services, 0x{pc:08X}u);")
                         .map_err(|_| TranslationError::Formatting)?;
                 } else {
-                writeln!(
+                    writeln!(
                     output,
                     "    galaxy::require_paired_single_mode(context, false, services, 0x{pc:08X}u);\n    const std::uint32_t multiplicand_ps0 = galaxy::require_single_precision_bits(context->fpr_bits[{multiplicand}], services, 0x{pc:08X}u);\n    const std::uint32_t multiplicand_ps1 = galaxy::require_single_precision_bits(context->ps1_bits[{multiplicand}], services, 0x{pc:08X}u);\n    const std::uint32_t multiplier_ps0 = galaxy::require_single_precision_bits(context->{multiplier_lane0}[{multiplier}], services, 0x{pc:08X}u);\n    const std::uint32_t multiplier_ps1 = galaxy::require_single_precision_bits(context->{multiplier_lane1}[{multiplier}], services, 0x{pc:08X}u);\n    const std::uint32_t addend_ps0 = galaxy::require_single_precision_bits(context->fpr_bits[{addend}], services, 0x{pc:08X}u);\n    const std::uint32_t addend_ps1 = galaxy::require_single_precision_bits(context->ps1_bits[{addend}], services, 0x{pc:08X}u);\n{arithmetic}"
                 )
@@ -4766,21 +4835,21 @@ fn lower_words_with_config(
                     )
                     .map_err(|_| TranslationError::Formatting)?;
                 } else {
-                let lane0 = if status_from_lane1 {
-                    format!(
+                    let lane0 = if status_from_lane1 {
+                        format!(
                         "galaxy::ppc_f32_passthrough(galaxy::require_single_precision_bits(context->fpr_bits[{copy}], services, 0x{pc:08X}u))"
                     )
-                } else {
-                    "galaxy::ppc_f32_binary(galaxy::PpcFloatBinaryOperation::Add, left_ps0, right_ps1, context->fpscr)".to_owned()
-                };
-                let lane1 = if status_from_lane1 {
-                    "galaxy::ppc_f32_binary(galaxy::PpcFloatBinaryOperation::Add, left_ps0, right_ps1, context->fpscr)".to_owned()
-                } else {
-                    format!(
+                    } else {
+                        "galaxy::ppc_f32_binary(galaxy::PpcFloatBinaryOperation::Add, left_ps0, right_ps1, context->fpscr)".to_owned()
+                    };
+                    let lane1 = if status_from_lane1 {
+                        "galaxy::ppc_f32_binary(galaxy::PpcFloatBinaryOperation::Add, left_ps0, right_ps1, context->fpscr)".to_owned()
+                    } else {
+                        format!(
                         "galaxy::ppc_f32_passthrough(galaxy::require_single_precision_bits(context->ps1_bits[{copy}], services, 0x{pc:08X}u))"
                     )
-                };
-                writeln!(
+                    };
+                    writeln!(
                     output,
                     "    galaxy::require_paired_single_mode(context, false, services, 0x{pc:08X}u);\n    const std::uint32_t left_ps0 = galaxy::require_single_precision_bits(context->fpr_bits[{left}], services, 0x{pc:08X}u);\n    const std::uint32_t right_ps1 = galaxy::require_single_precision_bits(context->ps1_bits[{right}], services, 0x{pc:08X}u);\n    const galaxy::PpcFloatResult result_ps0 = {lane0};\n    const galaxy::PpcFloatResult result_ps1 = {lane1};\n    galaxy::ppc_commit_paired_result(context, {target}u, result_ps0, result_ps1, {status_from_lane1}, {}, services, 0x{pc:08X}u);",
                     record_bit(word)
@@ -5631,9 +5700,20 @@ fn lower_words_with_config(
                     writeln!(output, "    context->lr = 0x{:08X}u;", pc + 4)
                         .map_err(|_| TranslationError::Formatting)?;
                 }
-                let gpr_save_restore = if link { gpr_save_restore_entry(target) } else { None };
+                let gpr_save_restore = if link {
+                    gpr_save_restore_entry(target)
+                } else {
+                    None
+                };
                 if let Some((first, save)) = gpr_save_restore {
-                    emit_gpr_save_restore(&mut output, first, save, pc, flat_ram_reads, flat_ram_writes)?;
+                    emit_gpr_save_restore(
+                        &mut output,
+                        first,
+                        save,
+                        pc,
+                        flat_ram_reads,
+                        flat_ram_writes,
+                    )?;
                 } else if target >= address && target < function_end {
                     if target <= pc {
                         writeln!(
@@ -5702,11 +5782,17 @@ fn lower_words_with_config(
                         .get(&pc)
                         .map(|(_, predicate)| predicate.clone())
                         .or_else(|| {
-                            fused_record_registers.get(&pc).map(|register| match bi % 4 {
-                                0 => format!("static_cast<std::int32_t>(context->gpr[{register}]) < 0"),
-                                1 => format!("static_cast<std::int32_t>(context->gpr[{register}]) > 0"),
-                                _ => format!("context->gpr[{register}] == 0u"),
-                            })
+                            fused_record_registers
+                                .get(&pc)
+                                .map(|register| match bi % 4 {
+                                    0 => format!(
+                                        "static_cast<std::int32_t>(context->gpr[{register}]) < 0"
+                                    ),
+                                    1 => format!(
+                                        "static_cast<std::int32_t>(context->gpr[{register}]) > 0"
+                                    ),
+                                    _ => format!("context->gpr[{register}] == 0u"),
+                                })
                         });
                     let condition = match fused_predicate {
                         Some(predicate) if bo & 0x08 != 0 => format!("({predicate})"),
@@ -5818,23 +5904,43 @@ fn lower_words_with_config(
                     writeln!(output, "    context->lr = 0x{:08X}u;", pc + 4)
                         .map_err(|_| TranslationError::Formatting)?;
                     if unconditional {
-                        emit_indirect_guest_call(&mut output, "branch_target", pc, direct_indirect_calls)?;
+                        emit_indirect_guest_call(
+                            &mut output,
+                            "branch_target",
+                            pc,
+                            direct_indirect_calls,
+                        )?;
                         emit_call_return_checkpoint(&mut output, pc)?;
                     } else {
                         writeln!(output, "    if ({condition}) {{")
                             .map_err(|_| TranslationError::Formatting)?;
-                        emit_indirect_guest_call(&mut output, "branch_target", pc, direct_indirect_calls)?;
+                        emit_indirect_guest_call(
+                            &mut output,
+                            "branch_target",
+                            pc,
+                            direct_indirect_calls,
+                        )?;
                         emit_call_return_checkpoint(&mut output, pc)?;
                         output.push_str("    }\n");
                     }
                 } else if unconditional {
-                    emit_indirect_guest_call(&mut output, "branch_target", pc, direct_indirect_calls)?;
+                    emit_indirect_guest_call(
+                        &mut output,
+                        "branch_target",
+                        pc,
+                        direct_indirect_calls,
+                    )?;
                     output.push_str("    return;\n");
                     final_instruction_is_terminal = true;
                 } else {
                     writeln!(output, "    if ({condition}) {{")
                         .map_err(|_| TranslationError::Formatting)?;
-                    emit_indirect_guest_call(&mut output, "branch_target", pc, direct_indirect_calls)?;
+                    emit_indirect_guest_call(
+                        &mut output,
+                        "branch_target",
+                        pc,
+                        direct_indirect_calls,
+                    )?;
                     output.push_str("        return;\n    }\n");
                 }
             }
@@ -5863,12 +5969,22 @@ fn lower_words_with_config(
                     writeln!(output, "    context->lr = 0x{:08X}u;", pc + 4)
                         .map_err(|_| TranslationError::Formatting)?;
                     if unconditional {
-                        emit_indirect_guest_call(&mut output, "branch_target", pc, direct_indirect_calls)?;
+                        emit_indirect_guest_call(
+                            &mut output,
+                            "branch_target",
+                            pc,
+                            direct_indirect_calls,
+                        )?;
                         emit_call_return_checkpoint(&mut output, pc)?;
                     } else {
                         writeln!(output, "    if ({condition}) {{")
                             .map_err(|_| TranslationError::Formatting)?;
-                        emit_indirect_guest_call(&mut output, "branch_target", pc, direct_indirect_calls)?;
+                        emit_indirect_guest_call(
+                            &mut output,
+                            "branch_target",
+                            pc,
+                            direct_indirect_calls,
+                        )?;
                         emit_call_return_checkpoint(&mut output, pc)?;
                         output.push_str("    }\n");
                     }
@@ -5974,7 +6090,10 @@ fn lower_words_with_config(
         };
         if let Some((lane, inverse)) = layout_vertical_fit {
             post_block_hooks.push_str(&site_hook_call(
-                pc, "LayoutVerticalFit", (lane as u32) | (u32::from(inverse) << 8)));
+                pc,
+                "LayoutVerticalFit",
+                (lane as u32) | (u32::from(inverse) << 8),
+            ));
         }
         let home_geometry = match (address, function_end, pc, word) {
             (0x8036_26CC, 0x8036_284C, 0x8036_27F0, 0xEC63_2028) => Some((0, 3)),
@@ -5987,7 +6106,11 @@ fn lower_words_with_config(
         };
         if let Some((kind, lane)) = home_geometry {
             // Game kinds 0 and 1 have fixed lanes; Home RSO kinds name theirs.
-            let argument = if kind < 2 { kind as u32 } else { (kind as u32) | ((lane as u32) << 8) };
+            let argument = if kind < 2 {
+                kind as u32
+            } else {
+                (kind as u32) | ((lane as u32) << 8)
+            };
             post_block_hooks.push_str(&site_hook_call(pc, "HomeGeometry", argument));
         }
         // These hooks change the canonical context after the guest operation,
@@ -6296,7 +6419,9 @@ fn cache_local_paired_instruction(
 // Checks symbolically that every memory access lies inside the initial RAM
 // spans checked by the emitted guard. Roots identify initial registers; root
 // zero is an absolute address.
-fn validate_psmtx_local_memory_contract(bytes: &[u8]) -> Result<BTreeMap<u32, (u32, i64)>, TranslationError> {
+fn validate_psmtx_local_memory_contract(
+    bytes: &[u8],
+) -> Result<BTreeMap<u32, (u32, i64)>, TranslationError> {
     let address = 0x804B_5F3C;
     let mut registers: [Option<(u32, i64)>; 32] = [None; 32];
     for register in [1, 3, 4, 5] {
@@ -6385,7 +6510,6 @@ fn validate_psmtx_local_memory_contract(bytes: &[u8]) -> Result<BTreeMap<u32, (u
     Ok(accesses)
 }
 
-
 // The symbolic verifier supplies each pointer offset; never infer non-aliasing
 // from the API arguments. The canonical context and original instruction order
 // remain live throughout this leaf. Entry guards exclude callbacks, traces and
@@ -6395,9 +6519,17 @@ fn lower_psmtx_proven_memory(
     bytes: &[u8],
     accesses: &BTreeMap<u32, (u32, i64)>,
 ) -> Result<String, TranslationError> {
-    fn replace_once(body: &mut String, pc: u32, old: &str, new: &str) -> Result<(), TranslationError> {
+    fn replace_once(
+        body: &mut String,
+        pc: u32,
+        old: &str,
+        new: &str,
+    ) -> Result<(), TranslationError> {
         if body.matches(old).count() != 1 {
-            return Err(local_paired_proof_error(pc, "proved matrix memory emission changed"));
+            return Err(local_paired_proof_error(
+                pc,
+                "proved matrix memory emission changed",
+            ));
         }
         *body = body.replacen(old, new, 1);
         Ok(())
@@ -6410,14 +6542,21 @@ fn lower_psmtx_proven_memory(
         let op = Ins::new(word, Extensions::gekko_broadway()).op;
         for guard in [
             format!("    galaxy::ensure_fpu_available(services, 0x{pc:08X}u, context, memory);\n"),
-            format!("    galaxy::require_paired_single_mode(context, false, services, 0x{pc:08X}u);\n"),
+            format!(
+                "    galaxy::require_paired_single_mode(context, false, services, 0x{pc:08X}u);\n"
+            ),
         ] {
             if body.matches(&guard).count() > 1 {
-                return Err(local_paired_proof_error(pc, "duplicate matrix guard emission"));
+                return Err(local_paired_proof_error(
+                    pc,
+                    "duplicate matrix guard emission",
+                ));
             }
             body = body.replace(&guard, "");
         }
-        let Some(&(root, start)) = accesses.get(&pc) else { continue; };
+        let Some(&(root, start)) = accesses.get(&pc) else {
+            continue;
+        };
         let (pointer, offset) = match root {
             1 => ("frame", start + 64),
             3 => ("input0", start),
@@ -6620,7 +6759,10 @@ fn emit_gpr_save_restore(
     flat_ram_writes: bool,
 ) -> Result<(), TranslationError> {
     for reg in first..32 {
-        let ea = format!("context->gpr[11] + 0x{:08X}u", 0xFFFF_FF80u32.wrapping_add(reg * 4));
+        let ea = format!(
+            "context->gpr[11] + 0x{:08X}u",
+            0xFFFF_FF80u32.wrapping_add(reg * 4)
+        );
         if save {
             if flat_ram_writes {
                 writeln!(
@@ -6804,9 +6946,7 @@ fn emit_direct_guest_call_with_exact_fpu(
                 // original load/RFI restored this same SelectThread frame.
                 // It must execute the original OSSaveContext return checkpoint
                 // and epilogue, not the abandoned OSLoadContext fallthrough.
-                output.push_str(
-                    "    if (context->pc == 0x804AB30Cu) goto call_return_804AB30C;\n",
-                );
+                output.push_str("    if (context->pc == 0x804AB30Cu) goto call_return_804AB30C;\n");
             }
             emit_post_call_hook(output, target, pc)
         } else {
@@ -7169,19 +7309,39 @@ pub(crate) fn lean_call_contract(symbol: &str) -> Option<LeanCallContract> {
     let (gpr_reads, gpr_writes, fpr_reads, fpr_writes): (&[u32], &[u32], &[u32], &[u32]) =
         match symbol {
             "lean_psmtx_identity" => (&[3], &[], &[], &[]),
-            "lean_psmtx_copy" | "lean_psmtx44_copy" | "lean_psmtx_quat"
-            | "lean_psvec_normalize" | "lean_j3d_mtx33_copy" | "lean_j3d_mtx33_copy_from34"
-            | "lean_j3d_translate_rotate_mtx_info" | "lean_j3d_scale_nrm_mtx"
-            | "lean_j3d_scale_nrm_mtx33" | "lean_tvec3_copy" | "lean_jmath_ps_copy12"
-            | "lean_jmath_ps_copy16" | "lean_tvec3_add_assign" | "lean_tvec3_sub_assign"
+            "lean_psmtx_copy"
+            | "lean_psmtx44_copy"
+            | "lean_psmtx_quat"
+            | "lean_psvec_normalize"
+            | "lean_j3d_mtx33_copy"
+            | "lean_j3d_mtx33_copy_from34"
+            | "lean_j3d_translate_rotate_mtx_info"
+            | "lean_j3d_scale_nrm_mtx"
+            | "lean_j3d_scale_nrm_mtx33"
+            | "lean_tvec3_copy"
+            | "lean_jmath_ps_copy12"
+            | "lean_jmath_ps_copy16"
+            | "lean_tvec3_add_assign"
+            | "lean_tvec3_sub_assign"
             | "lean_tvec3_negate" => (&[3, 4], &[], &[], &[]),
-            "lean_psmtx_concat" | "lean_psmtx_mult_vec" | "lean_psmtx_mult_vec_sr"
-            | "lean_psvec_add" | "lean_psvec_subtract" | "lean_psvec_cross"
-            | "lean_psquat_multiply" | "lean_j3d_texture_mtx" | "lean_j3d_texture_mtx_old"
-            | "lean_j3d_mtx_proj_concat" | "lean_gx_load_tex_mtx_imm" | "lean_tvec3_sub3"
-            | "lean_tvec3_plus" | "lean_tvec3_minus" => (&[3, 4, 5], &[], &[], &[]),
-            "lean_psmtx_mult_vec_array_sr" | "lean_j3d_psmtx_array_concat"
-            | "lean_c_mtx_look_at" | "lean_tvec3_from_ints" => (&[3, 4, 5, 6], &[], &[], &[]),
+            "lean_psmtx_concat"
+            | "lean_psmtx_mult_vec"
+            | "lean_psmtx_mult_vec_sr"
+            | "lean_psvec_add"
+            | "lean_psvec_subtract"
+            | "lean_psvec_cross"
+            | "lean_psquat_multiply"
+            | "lean_j3d_texture_mtx"
+            | "lean_j3d_texture_mtx_old"
+            | "lean_j3d_mtx_proj_concat"
+            | "lean_gx_load_tex_mtx_imm"
+            | "lean_tvec3_sub3"
+            | "lean_tvec3_plus"
+            | "lean_tvec3_minus" => (&[3, 4, 5], &[], &[], &[]),
+            "lean_psmtx_mult_vec_array_sr"
+            | "lean_j3d_psmtx_array_concat"
+            | "lean_c_mtx_look_at"
+            | "lean_tvec3_from_ints" => (&[3, 4, 5, 6], &[], &[], &[]),
             "lean_psmtx_inverse" | "lean_psmtx_inv_xpose" | "lean_j3d_calc_inverse_transpose" => {
                 (&[3, 4], &[3], &[], &[])
             }
@@ -7191,15 +7351,22 @@ pub(crate) fn lean_call_contract(symbol: &str) -> Option<LeanCallContract> {
             "lean_psmtx_trans_apply" | "lean_psmtx_scale_apply" | "lean_jma_mtx_apply_scale" => {
                 (&[3, 4], &[], &[1, 2, 3], &[])
             }
-            "lean_psvec_scale" | "lean_psmtx_rot_axis_rad" | "lean_tvec3_times"
+            "lean_psvec_scale"
+            | "lean_psmtx_rot_axis_rad"
+            | "lean_tvec3_times"
             | "lean_tvec3_scale_from" => (&[3, 4], &[], &[1], &[]),
             "lean_tvec3_scale_assign" | "lean_tvec3_splat" => (&[3], &[], &[1], &[]),
             "lean_tvec3_set3" => (&[3], &[], &[1, 2, 3], &[]),
             "lean_tvec3_zero" => (&[3], &[], &[], &[]),
             "lean_psvec_mag" | "lean_tvec3_squared" => (&[3], &[], &[], &[1]),
-            "lean_psvec_dot" | "lean_psvec_distance" | "lean_psquat_dot" | "lean_tvec3_dot"
+            "lean_psvec_dot"
+            | "lean_psvec_distance"
+            | "lean_psquat_dot"
+            | "lean_tvec3_dot"
             | "lean_tvec3_squared_distance" => (&[3, 4], &[], &[], &[1]),
-            "lean_jma_vec_scale_add" | "lean_jma_vec_lerp" | "lean_jma_quat_lerp"
+            "lean_jma_vec_scale_add"
+            | "lean_jma_vec_lerp"
+            | "lean_jma_quat_lerp"
             | "lean_c_quat_slerp" => (&[3, 4, 5], &[], &[1], &[]),
             "lean_j3d_translate_rotate_mtx" => (&[3, 4, 5, 6], &[], &[1, 2, 3], &[]),
             "lean_j3d_keyframe_f32" | "lean_j3d_keyframe_s16" => (&[3, 4], &[], &[1], &[1]),
@@ -7207,7 +7374,10 @@ pub(crate) fn lean_call_contract(symbol: &str) -> Option<LeanCallContract> {
             "lean_jgeom_sqrt" | "lean_jgeom_inv_sqrt" => (&[], &[], &[1], &[1]),
             "lean_gx_load_light_obj_imm" => (&[2, 3, 4], &[], &[], &[]),
             "lean_strlen" => (&[3], &[3], &[], &[]),
-            "lean_strcmp" | "lean_strstr" | "lean_strcasecmp" | "lean_mr_is_equal_string"
+            "lean_strcmp"
+            | "lean_strstr"
+            | "lean_strcasecmp"
+            | "lean_mr_is_equal_string"
             | "lean_lyt_equals_res_name" => (&[3, 4], &[3], &[], &[]),
             "lean_strncmp" => (&[3, 4, 5], &[3], &[], &[]),
             "lean_gd_write_u32" => (&[3, 13], &[], &[], &[]),
@@ -10443,8 +10613,10 @@ fn emit_sharded_module_with_experiment(
         .iter()
         .map(|(_, owner)| *owner)
         .collect::<BTreeSet<_>>();
-    let paired_ternary_include = if functions.iter().any(|(_, body)|
-        body.contains("galaxy::ppc_commit_paired_ternary_result(")) {
+    let paired_ternary_include = if functions
+        .iter()
+        .any(|(_, body)| body.contains("galaxy::ppc_commit_paired_ternary_result("))
+    {
         "#include \"galaxy/ppc_paired_float.h\"\n"
     } else {
         ""
@@ -11429,20 +11601,30 @@ mod tests {
     // Optional compilation seam: public synthetic words, no retail game code.
     #[test]
     fn multi_register_public_cpp_fixture() {
-        let mut cpp = String::from("#include \"galaxy/native_api.h\"\nnamespace public_synthetic {\n");
+        let mut cpp =
+            String::from("#include \"galaxy/native_api.h\"\nnamespace public_synthetic {\n");
         for first in 0u32..32 {
             let pc = 0x8000_4000 + first * 12;
-            let words = [(46u32 << 26) | (first << 21) | (1 << 16) | 8,
-                         (47u32 << 26) | (first << 21) | (1 << 16) | 0xFFF8,
-                         0x4E80_0020];
-            let bytes = words.iter().flat_map(|word| word.to_be_bytes()).collect::<Vec<_>>();
+            let words = [
+                (46u32 << 26) | (first << 21) | (1 << 16) | 8,
+                (47u32 << 26) | (first << 21) | (1 << 16) | 0xFFF8,
+                0x4E80_0020,
+            ];
+            let bytes = words
+                .iter()
+                .flat_map(|word| word.to_be_bytes())
+                .collect::<Vec<_>>();
             let body = lower_words(pc, &bytes).unwrap();
             assert!(body.contains("return;"));
             writeln!(cpp, "void case_{first}(galaxy::PpcContext* context, galaxy::GuestMemoryV1* memory, const galaxy::NativeServicesV1* services) {{\n{body}}}").unwrap();
         }
         cpp.push_str("}\n");
         if let Some(path) = std::env::var_os("GALAXY_MULTI_GPR_CPP_FIXTURE") {
-            let mut file = std::fs::OpenOptions::new().write(true).create_new(true).open(path).unwrap();
+            let mut file = std::fs::OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .open(path)
+                .unwrap();
             std::io::Write::write_all(&mut file, cpp.as_bytes()).unwrap();
         }
     }
@@ -11450,10 +11632,15 @@ mod tests {
     #[test]
     fn multi_register_default_lowering_uses_checked_span_helpers() {
         for first in 0u32..32 {
-            let words = [(46u32 << 26) | (first << 21) | (1 << 16) | 8,
-                         (47u32 << 26) | (first << 21) | (1 << 16) | 0xFFF8,
-                         0x4E80_0020];
-            let bytes = words.iter().flat_map(|word| word.to_be_bytes()).collect::<Vec<_>>();
+            let words = [
+                (46u32 << 26) | (first << 21) | (1 << 16) | 8,
+                (47u32 << 26) | (first << 21) | (1 << 16) | 0xFFF8,
+                0x4E80_0020,
+            ];
+            let bytes = words
+                .iter()
+                .flat_map(|word| word.to_be_bytes())
+                .collect::<Vec<_>>();
             let body = lower_words(0x8000_4000, &bytes).unwrap();
             assert_eq!(body.contains("guest_load_multiple_gprs"), first <= 16);
             assert_eq!(body.contains("guest_store_multiple_gprs"), first <= 24);
@@ -11463,13 +11650,15 @@ mod tests {
             assert!(!body.contains("context->gpr[reg]"));
             if first > 16 {
                 assert_eq!(
-                    body.matches("galaxy::guest_load_u32(memory, ea_80004000 + 0x").count(),
+                    body.matches("galaxy::guest_load_u32(memory, ea_80004000 + 0x")
+                        .count(),
                     (32 - first) as usize
                 );
             }
             if first > 24 {
                 assert_eq!(
-                    body.matches("galaxy::guest_store_u32(memory, ea_80004004 + 0x").count(),
+                    body.matches("galaxy::guest_store_u32(memory, ea_80004004 + 0x")
+                        .count(),
                     (32 - first) as usize
                 );
             }
@@ -11553,15 +11742,15 @@ mod tests {
     #[test]
     fn statically_known_device_addresses_bypass_the_flat_view() {
         let words: [u32; 10] = [
-            (15 << 26) | (3 << 21) | 0xCC00,                 // lis r3,0xCC00
-            (40 << 26) | (0 << 21) | (3 << 16) | 0x5000,     // lhz r0,0x5000(r3)  DSP mailbox
-            (15 << 26) | (4 << 21) | 0xCD00,                 // lis r4,0xCD00
-            (32 << 26) | (5 << 21) | (4 << 16) | 0x0004,     // lwz r5,4(r4)       IPC
-            (36 << 26) | (5 << 21) | (3 << 16) | 0x3000,     // stw r5,0x3000(r3)  PI
-            (15 << 26) | (6 << 21) | 0x8000,                 // lis r6,0x8000
-            (32 << 26) | (7 << 21) | (6 << 16) | 0x00E4,     // lwz r7,0xE4(r6)    RAM
-            (15 << 26) | (8 << 21) | 0xCC01,                 // lis r8,0xCC01
-            (36 << 26) | (9 << 21) | (8 << 16) | 0x8000,     // stw r9,-0x8000(r8) WGPIPE
+            (15 << 26) | (3 << 21) | 0xCC00,             // lis r3,0xCC00
+            (40 << 26) | (0 << 21) | (3 << 16) | 0x5000, // lhz r0,0x5000(r3)  DSP mailbox
+            (15 << 26) | (4 << 21) | 0xCD00,             // lis r4,0xCD00
+            (32 << 26) | (5 << 21) | (4 << 16) | 0x0004, // lwz r5,4(r4)       IPC
+            (36 << 26) | (5 << 21) | (3 << 16) | 0x3000, // stw r5,0x3000(r3)  PI
+            (15 << 26) | (6 << 21) | 0x8000,             // lis r6,0x8000
+            (32 << 26) | (7 << 21) | (6 << 16) | 0x00E4, // lwz r7,0xE4(r6)    RAM
+            (15 << 26) | (8 << 21) | 0xCC01,             // lis r8,0xCC01
+            (36 << 26) | (9 << 21) | (8 << 16) | 0x8000, // stw r9,-0x8000(r8) WGPIPE
             0x4E80_0020,
         ];
         let bytes = words
@@ -11599,11 +11788,7 @@ mod tests {
         assert_eq!(flat.matches("galaxy::fast::store<").count(), 1);
     }
 
-    fn device_pcs(
-        words: &[u32],
-        entries: &[u32],
-        globals: &BTreeMap<i32, u32>,
-    ) -> BTreeSet<u32> {
+    fn device_pcs(words: &[u32], entries: &[u32], globals: &BTreeMap<i32, u32>) -> BTreeSet<u32> {
         let bytes = words
             .iter()
             .flat_map(|word| word.to_be_bytes())
@@ -11621,13 +11806,16 @@ mod tests {
     fn device_constants_survive_loop_joins_and_indexed_register_files() {
         // IPC control poll: the base is set before the loop head.
         let poll = [
-            (15 << 26) | (3 << 21) | 0xCD00,             // lis r3,0xCD00
-            (32 << 26) | (3 << 16) | 0x0004,             // lwz r0,4(r3)
-            (28 << 26) | (0 << 16) | 0x0004,             // andi. r0,r0,4
+            (15 << 26) | (3 << 21) | 0xCD00,              // lis r3,0xCD00
+            (32 << 26) | (3 << 16) | 0x0004,              // lwz r0,4(r3)
+            (28 << 26) | (0 << 16) | 0x0004,              // andi. r0,r0,4
             (16 << 26) | (12 << 21) | (2 << 16) | 0xFFF8, // beq 0x80005004
             0x4E80_0020,
         ];
-        assert_eq!(device_pcs(&poll, &[], &BTreeMap::new()), BTreeSet::from([0x8000_5004]));
+        assert_eq!(
+            device_pcs(&poll, &[], &BTreeMap::new()),
+            BTreeSet::from([0x8000_5004])
+        );
         // IPCWriteReg: __IPCRegs[index] = value.
         let indexed = [
             (21 << 26) | (3 << 21) | (2 << 11) | (29 << 1), // rlwinm r0,r3,2,0,29
@@ -11659,7 +11847,10 @@ mod tests {
             (44 << 26) | (5 << 21) | (4 << 16) | 0x0002,  // sth r5,2(r4)
             0x4E80_0020,
         ];
-        assert_eq!(device_pcs(&global, &[], &globals), BTreeSet::from([0x8000_5004]));
+        assert_eq!(
+            device_pcs(&global, &[], &globals),
+            BTreeSet::from([0x8000_5004])
+        );
         assert!(device_pcs(&global, &[], &BTreeMap::new()).is_empty());
         let joins = [
             (11 << 26) | (3 << 16),                       // cmpwi r3,0
@@ -11674,7 +11865,10 @@ mod tests {
             (40 << 26) | (5 << 16) | 0x2002,              // lhz r0,0x2002(r5): VI on both
             0x4E80_0020,
         ];
-        assert_eq!(device_pcs(&joins, &[], &BTreeMap::new()), BTreeSet::from([0x8000_5024]));
+        assert_eq!(
+            device_pcs(&joins, &[], &BTreeMap::new()),
+            BTreeSet::from([0x8000_5024])
+        );
     }
 
     #[test]
@@ -11702,7 +11896,8 @@ mod tests {
         .unwrap();
         assert_eq!(flat.matches("guest_load_flat_or_checked_").count(), 1);
         // Flat reads also serve lfs; stores stay checked until flat_ram_writes.
-        assert!(flat.contains("galaxy::fast::load_fpr_single(flat_guest_read_base, context, 1u, memory,"));
+        assert!(flat
+            .contains("galaxy::fast::load_fpr_single(flat_guest_read_base, context, 1u, memory,"));
         assert!(flat.contains("galaxy::guest_store_u32(memory,"));
         let writes = lower_words_with_config(
             0x8000_4000,
@@ -11723,7 +11918,13 @@ mod tests {
     #[test]
     fn stack_pointer_stores_skip_the_gather_pipe_test() {
         // stwu r1,-0x10(r1); stw r0,0x14(r1); stw r0,0x8(r3); stfd f31,0x8(r1); blr
-        let words = [0x9421_FFF0u32, 0x9001_0014, 0x9003_0008, 0xDBE1_0008, 0x4E80_0020];
+        let words = [
+            0x9421_FFF0u32,
+            0x9001_0014,
+            0x9003_0008,
+            0xDBE1_0008,
+            0x4E80_0020,
+        ];
         let bytes: Vec<u8> = words.iter().flat_map(|w| w.to_be_bytes()).collect();
         let out = lower_words_with_config(
             0x8000_4000,
@@ -11737,9 +11938,21 @@ mod tests {
             },
         )
         .unwrap();
-        assert_eq!(out.matches("galaxy::fast::store_stack<std::uint32_t>(").count(), 2, "{out}");
-        assert_eq!(out.matches("galaxy::fast::store_stack<std::uint64_t>(").count(), 1);
-        assert_eq!(out.matches("galaxy::fast::store<std::uint32_t>(").count(), 1);
+        assert_eq!(
+            out.matches("galaxy::fast::store_stack<std::uint32_t>(")
+                .count(),
+            2,
+            "{out}"
+        );
+        assert_eq!(
+            out.matches("galaxy::fast::store_stack<std::uint64_t>(")
+                .count(),
+            1
+        );
+        assert_eq!(
+            out.matches("galaxy::fast::store<std::uint32_t>(").count(),
+            1
+        );
     }
 
     #[test]
@@ -12043,23 +12256,16 @@ mod tests {
         // and mask must stay exactly `SH` and `rotate_mask(MB, ME)`.
         //
         // SH is bits 11-15, MB bits 6-10, ME bits 1-5.
-        let rlwinm = |sh: u32, mb: u32, me: u32| {
-            (21_u32 << 26) | (sh << 11) | (mb << 6) | (me << 1)
-        };
+        let rlwinm =
+            |sh: u32, mb: u32, me: u32| (21_u32 << 26) | (sh << 11) | (mb << 6) | (me << 1);
         // slwi r0,r0,2  -> SH=2, MB=0, ME=29, MASK=0xFFFFFFFC
-        let rotated = lower_instruction_fixture(
-            0x8000_4000,
-            &[rlwinm(2, 0, 29), 0x4E80_0020],
-        );
+        let rotated = lower_instruction_fixture(0x8000_4000, &[rlwinm(2, 0, 29), 0x4E80_0020]);
         assert!(
             rotated.contains("std::rotl(context->gpr[0], 2) & 0xFFFFFFFCu;"),
             "{rotated}"
         );
         // clrrwi r3,r4,31 -> SH=0, MB=0, ME=0, MASK=0x80000000
-        let zero_shift = lower_instruction_fixture(
-            0x8000_4000,
-            &[rlwinm(0, 0, 0), 0x4E80_0020],
-        );
+        let zero_shift = lower_instruction_fixture(0x8000_4000, &[rlwinm(0, 0, 0), 0x4E80_0020]);
         assert!(
             zero_shift.contains("context->gpr[0] = (context->gpr[0] & 0x80000000u);"),
             "{zero_shift}"
@@ -12152,14 +12358,11 @@ mod tests {
         // the removed `(true) &&` wrapper (79,297 sites emitted it module-wide;
         // the compiler folded it away, but the text is gone now). BO[1] selects
         // the tested polarity, so the two encodings must still differ.
-        assert!(
-            !output.contains("if (!galaxy::cr_bit(context, 2u)) goto label_80494580;")
-        );
+        assert!(!output.contains("if (!galaxy::cr_bit(context, 2u)) goto label_80494580;"));
 
         words[0x5C / 4] = 0x4082_0054;
         let unmatched_opcode = lower_instruction_fixture(0x8049_44D0, &words);
-        assert!(unmatched_opcode
-            .contains("if (!galaxy::cr_bit(context, 2u)) goto label_80494580;"));
+        assert!(unmatched_opcode.contains("if (!galaxy::cr_bit(context, 2u)) goto label_80494580;"));
     }
 
     #[test]
@@ -12193,7 +12396,9 @@ mod tests {
         // closes right after the block.
         for callee in ["0x80400988u", "0x80402D30u"] {
             let call = output.find(callee).expect("call is emitted");
-            let open = output[..call].rfind(enter).expect("enter precedes the call");
+            let open = output[..call]
+                .rfind(enter)
+                .expect("enter precedes the call");
             assert!(!output[open..call].contains(exit));
             let close = output[call..].find(exit).expect("exit follows the call") + call;
             assert!(!output[call..close].contains(enter));
@@ -12232,7 +12437,12 @@ mod tests {
         words[(0x8034_10AC - 0x8034_103C) / 4] = 0x807F_0034;
         *words.last_mut().unwrap() = 0x4E80_0020;
         let hook = "galaxy::site_hook(services, context, memory, 0x803410ACu, galaxy::SiteHookKind::MultiSceneModel, 0u);";
-        assert_eq!(lower_instruction_fixture(0x8034_103C, &words).matches(hook).count(), 1);
+        assert_eq!(
+            lower_instruction_fixture(0x8034_103C, &words)
+                .matches(hook)
+                .count(),
+            1
+        );
         assert!(!lower_instruction_fixture(0x8034_1038, &words).contains(hook));
         words[(0x8034_10AC - 0x8034_103C) / 4] = 0x807F_0030;
         assert!(!lower_instruction_fixture(0x8034_103C, &words).contains(hook));
@@ -12256,9 +12466,7 @@ mod tests {
         words.pop();
         *words.last_mut().unwrap() = 0x4E80_0020;
         let shortened = lower_instruction_fixture(0x8036_7D28, &words);
-        assert!(
-            !shortened.contains(backing) && !shortened.contains(hud)
-        );
+        assert!(!shortened.contains(backing) && !shortened.contains(hud));
     }
 
     #[test]
@@ -12651,14 +12859,22 @@ mod tests {
         assert!(!lowered.contains("require_paired_single_mode"));
         assert!(!lowered.contains("ensure_fpu_available"));
         assert!(lowered.contains("guest_notify_write_pair_admitted"));
-        assert!(lowered.find("load_pair(1u, input0 + 0u)").unwrap()
-            < lowered.find("load_pair(2u, input1 + 8u)").unwrap());
-        assert!(lowered.find("ppc_commit_paired_ternary_result").unwrap()
-            < lowered.find("store_pair(4u, output + 0u").unwrap());
-        assert_eq!(ordinary.matches("ppc_commit_paired_ternary_result").count(),
-            lowered.matches("ppc_commit_paired_ternary_result").count());
-        assert_eq!(ordinary.matches("context->gpr[1] =").count(),
-            lowered.matches("context->gpr[1] =").count());
+        assert!(
+            lowered.find("load_pair(1u, input0 + 0u)").unwrap()
+                < lowered.find("load_pair(2u, input1 + 8u)").unwrap()
+        );
+        assert!(
+            lowered.find("ppc_commit_paired_ternary_result").unwrap()
+                < lowered.find("store_pair(4u, output + 0u").unwrap()
+        );
+        assert_eq!(
+            ordinary.matches("ppc_commit_paired_ternary_result").count(),
+            lowered.matches("ppc_commit_paired_ternary_result").count()
+        );
+        assert_eq!(
+            ordinary.matches("context->gpr[1] =").count(),
+            lowered.matches("context->gpr[1] =").count()
+        );
 
         // The plan is an instruction-derived root proof, not an assumption
         // that an API register still equals its entry value at every access.
@@ -12728,10 +12944,17 @@ mod tests {
             "galaxy::psq_store",
         ] {
             assert_eq!(
-                ordinary.matches(needle).count() + if matches!(needle,
-                    "galaxy::ppc_f32_ternary" | "galaxy::ppc_commit_scalar_result") {
-                    ordinary.matches("galaxy::ppc_commit_scalar_single_ternary").count()
-                } else { 0 },
+                ordinary.matches(needle).count()
+                    + if matches!(
+                        needle,
+                        "galaxy::ppc_f32_ternary" | "galaxy::ppc_commit_scalar_result"
+                    ) {
+                        ordinary
+                            .matches("galaxy::ppc_commit_scalar_single_ternary")
+                            .count()
+                    } else {
+                        0
+                    },
                 cached.matches(needle).count(),
                 "architectural operation count changed for {needle}"
             );
@@ -12765,14 +12988,28 @@ mod tests {
             for target in 0..32 {
                 for left in 0..32 {
                     for right in 0..32 {
-                        let word = (4 << 26) | (target << 21) | (left << 16)
-                            | (right << 11) | (xo << 1);
+                        let word =
+                            (4 << 26) | (target << 21) | (left << 16) | (right << 11) | (xo << 1);
                         let mut facts = [[true; 32]; 2];
                         let mut output = String::new();
-                        cache_local_paired_instruction(&mut output, 0, &mut facts,
-                            LocalLaneProfile::PsvecCross, 0x804B6B40, word, op).unwrap();
-                        let capture0 = format!("const std::uint32_t cached_merge_ps0 = lane{}[{left}];", lanes[0]);
-                        let capture1 = format!("const std::uint32_t cached_merge_ps1 = lane{}[{right}];", lanes[1]);
+                        cache_local_paired_instruction(
+                            &mut output,
+                            0,
+                            &mut facts,
+                            LocalLaneProfile::PsvecCross,
+                            0x804B6B40,
+                            word,
+                            op,
+                        )
+                        .unwrap();
+                        let capture0 = format!(
+                            "const std::uint32_t cached_merge_ps0 = lane{}[{left}];",
+                            lanes[0]
+                        );
+                        let capture1 = format!(
+                            "const std::uint32_t cached_merge_ps1 = lane{}[{right}];",
+                            lanes[1]
+                        );
                         let write0 = format!("lane0[{target}] = cached_merge_ps0;");
                         let write1 = format!("lane1[{target}] = cached_merge_ps1;");
                         assert!(output.find(&capture0).unwrap() < output.find(&write0).unwrap());
@@ -12795,12 +13032,24 @@ mod tests {
                     facts[0][source] = known[0];
                     facts[1][source] = known[1];
                     let mut output = String::new();
-                    cache_local_paired_instruction(&mut output, 0, &mut facts,
-                        LocalLaneProfile::PsvecCross, 0x804B6B40, word as u32, Opcode::PsNeg).unwrap();
+                    cache_local_paired_instruction(
+                        &mut output,
+                        0,
+                        &mut facts,
+                        LocalLaneProfile::PsvecCross,
+                        0x804B6B40,
+                        word as u32,
+                        Opcode::PsNeg,
+                    )
+                    .unwrap();
                     for lane in 0..2 {
                         assert_eq!(facts[lane][target], known[lane]);
-                        assert_eq!(output.contains(&format!(
-                            "lane{lane}[{target}] = lane{lane}[{source}] ^ 0x80000000u;")), known[lane]);
+                        assert_eq!(
+                            output.contains(&format!(
+                                "lane{lane}[{target}] = lane{lane}[{source}] ^ 0x80000000u;"
+                            )),
+                            known[lane]
+                        );
                     }
                 }
             }
@@ -12816,11 +13065,17 @@ mod tests {
             0x4E800020,
         ];
         let bytes: Vec<u8> = words.iter().flat_map(|word| word.to_be_bytes()).collect();
-        let cached = lower_words_with_config(0x804B6B3C, &bytes,
-            &BTreeSet::new(), &BTreeSet::new(), LoweringConfig {
+        let cached = lower_words_with_config(
+            0x804B6B3C,
+            &bytes,
+            &BTreeSet::new(),
+            &BTreeSet::new(),
+            LoweringConfig {
                 local_lane_profile: LocalLaneProfile::PsvecCross,
                 ..LoweringConfig::default()
-            }).unwrap();
+            },
+        )
+        .unwrap();
         assert!(cached.contains("const std::uint32_t cached_merge_ps1 = lane0[2];"));
         assert!(cached.contains("lane0[2] = lane0[2] ^ 0x80000000u;"));
         assert!(cached.contains("lane1[2] = lane1[2] ^ 0x80000000u;"));
@@ -13579,8 +13834,16 @@ mod tests {
         ] {
             let mut out = String::new();
             emit_direct_guest_call(&mut out, target, pc, Some(&entries)).unwrap();
-            assert_eq!(out.contains("galaxy::call_guest_resolved"), routed, "{pc:08X}");
-            assert_eq!(out.contains("if (context->pc == 0x804AB30Cu) goto call_return_804AB30C;"), redirected, "{pc:08X}");
+            assert_eq!(
+                out.contains("galaxy::call_guest_resolved"),
+                routed,
+                "{pc:08X}"
+            );
+            assert_eq!(
+                out.contains("if (context->pc == 0x804AB30Cu) goto call_return_804AB30C;"),
+                redirected,
+                "{pc:08X}"
+            );
         }
     }
 
@@ -14021,9 +14284,9 @@ mod tests {
             &callable_entries,
         )
         .expect("native pure helper direct call is supported");
-        assert!(helper.contains(
-            "galaxy::lean_psvec_cross(context, memory, services, 0x804B6CB8u);"
-        ));
+        assert!(
+            helper.contains("galaxy::lean_psvec_cross(context, memory, services, 0x804B6CB8u);")
+        );
         assert!(!helper.contains("galaxy::call_guest_resolved"));
 
         let noop_words = [0x4800_0009_u32, 0x4E80_0020]; // bl 0x803A33AC
@@ -14098,9 +14361,8 @@ mod tests {
             &callable_entries,
         )
         .expect("native PS vector normalize direct call is supported");
-        assert!(normalize.contains(
-            "galaxy::lean_psvec_normalize(context, memory, services, 0x804B6BCCu);"
-        ));
+        assert!(normalize
+            .contains("galaxy::lean_psvec_normalize(context, memory, services, 0x804B6BCCu);"));
         assert!(!normalize.contains("galaxy::call_guest_resolved"));
 
         let normalize_wrapper_words = [0x4800_0009_u32, 0x4E80_0020]; // bl 0x803E4D24
@@ -14347,8 +14609,10 @@ mod tests {
         )
         .expect("savegpr interior entry lowers inline");
         // _savegpr_29: stw r29..r31, -12/-8/-4(r11), no call or return boundary.
-        assert!(savegpr.contains("context->gpr[11] + 0xFFFFFFF4u, context->gpr[29], services, 0x80517530u);"));
-        assert!(savegpr.contains("context->gpr[11] + 0xFFFFFFFCu, context->gpr[31], services, 0x80517530u);"));
+        assert!(savegpr
+            .contains("context->gpr[11] + 0xFFFFFFF4u, context->gpr[29], services, 0x80517530u);"));
+        assert!(savegpr
+            .contains("context->gpr[11] + 0xFFFFFFFCu, context->gpr[31], services, 0x80517530u);"));
         assert!(!savegpr.contains("context->gpr[28]"));
         assert!(savegpr.contains("context->lr = 0x80517534u;"));
         assert!(!savegpr.contains("native_savegpr"));
@@ -15051,7 +15315,10 @@ mod tests {
         ] {
             assert!(!native_substitution_uses_fpu(address));
             let symbol = lean_sdk_math_symbol(address).expect("lean SDK math routine");
-            assert_eq!(native_pure_helper(address), Some(NativePureHelper::integer(symbol)));
+            assert_eq!(
+                native_pure_helper(address),
+                Some(NativePureHelper::integer(symbol))
+            );
             assert!(native_function_body(address).is_some_and(|body| body.contains(symbol)));
         }
 
@@ -15076,7 +15343,10 @@ mod tests {
                 assert_eq!(lean_call_contract(symbol), None);
                 continue;
             }
-            assert!(lean_call_contract(symbol).is_some(), "{symbol} has no contract");
+            assert!(
+                lean_call_contract(symbol).is_some(),
+                "{symbol} has no contract"
+            );
             let entries = BTreeMap::from([(address, address)]);
             let mut output = String::new();
             assert!(
@@ -15151,7 +15421,11 @@ mod tests {
                 // Not a resident register.
             } else if before.ends_with("fpr_f32(") {
                 match literal(after.trim_start_matches(", ")) {
-                    Some(index) if after[2..].trim_start_matches(char::is_numeric).starts_with("u)") => {
+                    Some(index)
+                        if after[2..]
+                            .trim_start_matches(char::is_numeric)
+                            .starts_with("u)") =>
+                    {
                         uses.fpr_reads |= 1 << index;
                     }
                     _ => {
@@ -15168,7 +15442,9 @@ mod tests {
                 uses.fpr_writes |= 1 << 1;
             } else if before.ends_with("set_f32(") {
                 uses.fpr_writes |= 1 << literal(after.trim_start_matches(", ")).expect("literal");
-            } else if let Some(name_start) = before.rfind(|c: char| !(c.is_ascii_alphanumeric() || c == '_' || c == '(')) {
+            } else if let Some(name_start) =
+                before.rfind(|c: char| !(c.is_ascii_alphanumeric() || c == '_' || c == '('))
+            {
                 let callee = before[name_start + 1..].trim_end_matches('(');
                 let nested = lean_call_contract(callee)
                     .unwrap_or_else(|| panic!("{symbol}: context passed to {callee}"));
@@ -15194,10 +15470,26 @@ mod tests {
                 continue;
             }
             let uses = lean_body_register_uses(HEADER, symbol, dynamic);
-            assert_eq!(uses.gpr_reads & !contract.gpr_reads, 0, "{symbol} GPR reads");
-            assert_eq!(uses.gpr_writes & !contract.gpr_writes, 0, "{symbol} GPR writes");
-            assert_eq!(uses.fpr_reads & !contract.fpr_reads, 0, "{symbol} FPR reads");
-            assert_eq!(uses.fpr_writes & !contract.fpr_writes, 0, "{symbol} FPR writes");
+            assert_eq!(
+                uses.gpr_reads & !contract.gpr_reads,
+                0,
+                "{symbol} GPR reads"
+            );
+            assert_eq!(
+                uses.gpr_writes & !contract.gpr_writes,
+                0,
+                "{symbol} GPR writes"
+            );
+            assert_eq!(
+                uses.fpr_reads & !contract.fpr_reads,
+                0,
+                "{symbol} FPR reads"
+            );
+            assert_eq!(
+                uses.fpr_writes & !contract.fpr_writes,
+                0,
+                "{symbol} FPR writes"
+            );
         }
         assert!(checked.len() > 60);
     }
@@ -15209,10 +15501,19 @@ mod tests {
         };
         let address = 0x8000_4000;
         // lwz r3,0(r4); beq +8; addi r3,r3,1; stw r3,4(r4); blr
-        let leaf = words(&[0x8064_0000, 0x4182_0008, 0x3863_0001, 0x9064_0004, 0x4E80_0020]);
+        let leaf = words(&[
+            0x8064_0000,
+            0x4182_0008,
+            0x3863_0001,
+            0x9064_0004,
+            0x4E80_0020,
+        ]);
         assert!(is_checkpoint_free_leaf(address, &leaf));
         // mtlr r0 and mtctr r3 are register moves.
-        assert!(is_checkpoint_free_leaf(address, &words(&[0x7C08_03A6, 0x7C69_03A6, 0x4E80_0020])));
+        assert!(is_checkpoint_free_leaf(
+            address,
+            &words(&[0x7C08_03A6, 0x7C69_03A6, 0x4E80_0020])
+        ));
         // bl, bctrl, bctr, a backward branch, sc, mtmsr and mtdec are not.
         for body in [
             vec![0x4800_0009, 0x4E80_0020],
@@ -15223,7 +15524,10 @@ mod tests {
             vec![0x7C60_0124, 0x4E80_0020],
             vec![0x7C76_03A6, 0x4E80_0020],
         ] {
-            assert!(!is_checkpoint_free_leaf(address, &words(&body)), "{body:08X?}");
+            assert!(
+                !is_checkpoint_free_leaf(address, &words(&body)),
+                "{body:08X?}"
+            );
         }
         // A tail branch out of the function is a call.
         assert!(!is_checkpoint_free_leaf(address, &words(&[0x4800_0100])));
@@ -15249,10 +15553,17 @@ mod tests {
             ))
         );
         // A branch reached from elsewhere keeps the CR write.
-        assert!(fusible_compare_branches(address, &dead, &BTreeSet::from([0x8000_4004])).is_empty());
+        assert!(
+            fusible_compare_branches(address, &dead, &BTreeSet::from([0x8000_4004])).is_empty()
+        );
         // cmpwi r3,0; beq +12; li r3,1; bgt +8; blr; blr: the fall-through reads CR0[GT].
         let live = word_bytes(&[
-            0x2C03_0000, 0x4182_000C, 0x3860_0001, 0x4181_0008, 0x4E80_0020, 0x4E80_0020,
+            0x2C03_0000,
+            0x4182_000C,
+            0x3860_0001,
+            0x4181_0008,
+            0x4E80_0020,
+            0x4E80_0020,
         ]);
         assert!(fusible_compare_branches(address, &live, &BTreeSet::new()).is_empty());
         // cmplwi cr7,r5,16; bge cr7,+8; blr; blr: an unsigned compare in CR7.
@@ -15271,8 +15582,17 @@ mod tests {
     #[test]
     fn record_form_branch_tests_the_recorded_register() {
         // rlwinm. r0,r3,0,31,31; beq +8; li r3,1; blr; blr
-        let bytes = word_bytes(&[0x5460_07FF, 0x4182_000C, 0x3860_0001, 0x4E80_0020, 0x4E80_0020]);
-        assert_eq!(fusible_record_branches(0x8000_4000, &bytes, &BTreeSet::new()), BTreeSet::from([0x8000_4000]));
+        let bytes = word_bytes(&[
+            0x5460_07FF,
+            0x4182_000C,
+            0x3860_0001,
+            0x4E80_0020,
+            0x4E80_0020,
+        ]);
+        assert_eq!(
+            fusible_record_branches(0x8000_4000, &bytes, &BTreeSet::new()),
+            BTreeSet::from([0x8000_4000])
+        );
         let lowered = lower_words(0x8000_4000, &bytes).expect("lowers");
         assert!(lowered.contains("// CR0 record fused into the next branch"));
         assert!(!lowered.contains("update_cr0"));
@@ -15280,11 +15600,22 @@ mod tests {
         // mr. r31,r3; blt +8; blr; blr: the signed result is tested.
         let bytes = word_bytes(&[0x7C7F_1B79, 0x4180_0008, 0x4E80_0020, 0x4E80_0020]);
         let lowered = lower_words(0x8000_4000, &bytes).expect("lowers");
-        assert!(lowered.contains("if ((static_cast<std::int32_t>(context->gpr[31]) < 0)) goto label_8000400C;"));
+        assert!(lowered.contains(
+            "if ((static_cast<std::int32_t>(context->gpr[31]) < 0)) goto label_8000400C;"
+        ));
         // A later beq reads CR0 again, so the record form keeps its write.
-        let bytes = word_bytes(&[0x5460_07FF, 0x4182_000C, 0x3860_0001, 0x4182_0008, 0x4E80_0020, 0x4E80_0020]);
+        let bytes = word_bytes(&[
+            0x5460_07FF,
+            0x4182_000C,
+            0x3860_0001,
+            0x4182_0008,
+            0x4E80_0020,
+            0x4E80_0020,
+        ]);
         assert!(fusible_record_branches(0x8000_4000, &bytes, &BTreeSet::new()).is_empty());
-        assert!(lower_words(0x8000_4000, &bytes).expect("lowers").contains("galaxy::update_cr0(context, context->gpr[0]);"));
+        assert!(lower_words(0x8000_4000, &bytes)
+            .expect("lowers")
+            .contains("galaxy::update_cr0(context, context->gpr[0]);"));
     }
 
     #[test]
@@ -15307,7 +15638,12 @@ mod tests {
             "if ((static_cast<std::int32_t>(context->gpr[3]) == static_cast<std::int32_t>(0x00000000u))) goto label_8000400C;"
         ));
         // The second compare has no branch after it and still writes CR0.
-        assert_eq!(lowered.matches("galaxy::compare_signed(context, 0u").count(), 1);
+        assert_eq!(
+            lowered
+                .matches("galaxy::compare_signed(context, 0u")
+                .count(),
+            1
+        );
     }
 
     #[test]
@@ -15898,7 +16234,14 @@ mod tests {
             "if ((static_cast<std::int32_t>(context->gpr[3]) == static_cast<std::int32_t>(0x00000000u))) goto label_8000400C;"
         ));
         // A later bgt reads CR0, so the compare writes it and the branch reads it.
-        let words = [0x2C03_0000_u32, 0x4182_000C, 0x3860_0001, 0x4181_0008, 0x4E80_0020, 0x4E80_0020];
+        let words = [
+            0x2C03_0000_u32,
+            0x4182_000C,
+            0x3860_0001,
+            0x4181_0008,
+            0x4E80_0020,
+            0x4E80_0020,
+        ];
         let bytes: Vec<u8> = words.iter().flat_map(|word| word.to_be_bytes()).collect();
         let output = lower_words(0x8000_4000, &bytes).expect("compare and branch supported");
         assert!(output.contains("galaxy::compare_signed(context, 0u"));
@@ -15914,9 +16257,7 @@ mod tests {
         let xform = |rt: u32, ra: u32, rb: u32, xo: u32| {
             (31_u32 << 26) | (rt << 21) | (ra << 16) | (rb << 11) | (xo << 1)
         };
-        let dform = |op: u32, rt: u32, imm: u16| {
-            (op << 26) | (rt << 21) | u32::from(imm)
-        };
+        let dform = |op: u32, rt: u32, imm: u16| (op << 26) | (rt << 21) | u32::from(imm);
         for (word, required) in [
             (xform(3, 0, 4, 266), "context->gpr[3] = context->gpr[0] + context->gpr[4];"),
             (xform(3, 4, 0, 266), "context->gpr[3] = context->gpr[4] + context->gpr[0];"),
@@ -15947,10 +16288,21 @@ mod tests {
         // established lowering while repairing arithmetic value operands.
         let output = lower_instruction_fixture(
             0x8000_4000,
-            &[0x3800_0007, dform(14, 3, 9), dform(15, 4, 0x1234), 0x4e80_0020],
+            &[
+                0x3800_0007,
+                dform(14, 3, 9),
+                dform(15, 4, 0x1234),
+                0x4e80_0020,
+            ],
         );
-        assert!(output.contains("context->gpr[3] = 0x00000009u;"), "{output}");
-        assert!(output.contains("context->gpr[4] = 0x12340000u;"), "{output}");
+        assert!(
+            output.contains("context->gpr[3] = 0x00000009u;"),
+            "{output}"
+        );
+        assert!(
+            output.contains("context->gpr[4] = 0x12340000u;"),
+            "{output}"
+        );
     }
 
     #[test]
@@ -16191,7 +16543,12 @@ mod tests {
             3
         );
         assert_eq!(optimized.matches("ppc_f64_binary_to_f32(").count(), 4);
-        assert_eq!(optimized.matches("ppc_commit_scalar_single_ternary(").count(), 1);
+        assert_eq!(
+            optimized
+                .matches("ppc_commit_scalar_single_ternary(")
+                .count(),
+            1
+        );
         assert_eq!(optimized.matches("ppc_f64_binary(").count(), 1);
         assert_eq!(optimized.matches("ppc_commit_paired_result(").count(), 1);
         for pc in ["80004004", "80004008"] {
@@ -16208,15 +16565,22 @@ mod tests {
 
     #[test]
     fn scalar_single_fma_boundary_preserves_operands_record_and_retry_entries() {
-        for (index, operation) in ["MultiplyAdd", "MultiplySubtract",
-            "NegativeMultiplyAdd", "NegativeMultiplySubtract"].iter().enumerate() {
+        for (index, operation) in [
+            "MultiplyAdd",
+            "MultiplySubtract",
+            "NegativeMultiplyAdd",
+            "NegativeMultiplySubtract",
+        ]
+        .iter()
+        .enumerate()
+        {
             let xo = [29u32, 28u32, 31u32, 30u32][index];
-            let word = (59u32 << 26) | (1 << 21) | (1 << 16) | (3 << 11)
-                | (2 << 6) | (xo << 1) | 1;
+            let word = (59u32 << 26) | (1 << 21) | (1 << 16) | (3 << 11) | (2 << 6) | (xo << 1) | 1;
             let words = [0x6000_0000, word, 0x4E80_0020];
             let bytes: Vec<u8> = words.iter().flat_map(|word| word.to_be_bytes()).collect();
-            let output = lower_words_with_entries(0x8000_4000, &bytes,
-                &BTreeSet::from([0x8000_4004])).unwrap();
+            let output =
+                lower_words_with_entries(0x8000_4000, &bytes, &BTreeSet::from([0x8000_4004]))
+                    .unwrap();
             assert!(output.contains(&format!(
                 "ppc_commit_scalar_single_ternary(context, 1u, galaxy::PpcFloatTernaryOperation::{operation}, 1u, 2u, 3u, true, services, 0x80004004u)")));
             assert!(!output.contains("ensure_fpu_available"));
@@ -16226,32 +16590,58 @@ mod tests {
 
     #[test]
     fn indexed_paired_binary_keeps_retry_and_decoded_descriptor() {
-        let forms = [(21u32, Opcode::PsAdd, 0u32, false, true),
+        let forms = [
+            (21u32, Opcode::PsAdd, 0u32, false, true),
             (20, Opcode::PsSub, 1, false, true),
             (25, Opcode::PsMul, 2, false, true),
             (18, Opcode::PsDiv, 3, false, true),
             (12, Opcode::PsMuls0, 2, false, false),
-            (13, Opcode::PsMuls1, 2, true, true)];
+            (13, Opcode::PsMuls1, 2, true, true),
+        ];
         for (xo, opcode, operation, lane0, lane1) in forms {
             for rc in [false, true] {
                 for (target, left, right) in [(3u32, 1u32, 2u32), (1, 1, 2), (2, 1, 2)] {
                     let multiply = operation == 2;
-                    let word = (4u32 << 26) | (target << 21) | (left << 16)
+                    let word = (4u32 << 26)
+                        | (target << 21)
+                        | (left << 16)
                         | (if multiply { right << 6 } else { right << 11 })
-                        | (xo << 1) | u32::from(rc);
+                        | (xo << 1)
+                        | u32::from(rc);
                     assert_eq!(Ins::new(word, Extensions::gekko_broadway()).op, opcode);
-                    let bytes: Vec<u8> = [word, word, 0x4E80_0020].iter()
-                        .flat_map(|word| word.to_be_bytes()).collect();
+                    let bytes: Vec<u8> = [word, word, 0x4E80_0020]
+                        .iter()
+                        .flat_map(|word| word.to_be_bytes())
+                        .collect();
                     let entries = BTreeSet::from([0x8000_4004]);
-                    let indexed = lower_words_with_config(0x8000_4000, &bytes, &entries,
-                        &BTreeSet::new(), LoweringConfig { indexed_paired_binary: true,
-                            ..LoweringConfig::default() }).unwrap();
-                    let descriptor = target | (left << 5) | (right << 10) | (operation << 15)
-                        | (u32::from(lane0) << 17) | (u32::from(lane1) << 18)
+                    let indexed = lower_words_with_config(
+                        0x8000_4000,
+                        &bytes,
+                        &entries,
+                        &BTreeSet::new(),
+                        LoweringConfig {
+                            indexed_paired_binary: true,
+                            ..LoweringConfig::default()
+                        },
+                    )
+                    .unwrap();
+                    let descriptor = target
+                        | (left << 5)
+                        | (right << 10)
+                        | (operation << 15)
+                        | (u32::from(lane0) << 17)
+                        | (u32::from(lane1) << 18)
                         | (u32::from(rc) << 19);
-                    assert!(indexed.contains(&format!("context, 0x{descriptor:05X}u, services, 0x80004000u)")));
-                    assert!(indexed.contains(&format!("context, 0x{descriptor:05X}u, services, 0x80004004u)")));
-                    assert_eq!(indexed.matches("ppc_execute_indexed_paired_binary").count(), 2);
+                    assert!(indexed.contains(&format!(
+                        "context, 0x{descriptor:05X}u, services, 0x80004000u)"
+                    )));
+                    assert!(indexed.contains(&format!(
+                        "context, 0x{descriptor:05X}u, services, 0x80004004u)"
+                    )));
+                    assert_eq!(
+                        indexed.matches("ppc_execute_indexed_paired_binary").count(),
+                        2
+                    );
                     assert!(!indexed.contains("ppc_f32_binary("));
                     assert!(!indexed.contains("require_single_precision_bits"));
                     assert!(indexed.contains("case 0x80004004u: goto label_80004004;"));
@@ -16263,33 +16653,66 @@ mod tests {
 
     #[test]
     fn indexed_paired_ternary_keeps_retry_and_decoded_descriptor() {
-        let forms = [(29u32, Opcode::PsMadd, 0u32, false, true),
+        let forms = [
+            (29u32, Opcode::PsMadd, 0u32, false, true),
             (28, Opcode::PsMsub, 1, false, true),
             (31, Opcode::PsNmadd, 2, false, true),
             (30, Opcode::PsNmsub, 3, false, true),
             (14, Opcode::PsMadds0, 0, false, false),
-            (15, Opcode::PsMadds1, 0, true, true)];
+            (15, Opcode::PsMadds1, 0, true, true),
+        ];
         for (xo, opcode, operation, lane0, lane1) in forms {
             for rc in [false, true] {
-                for (target, a, c, b) in [(3u32, 1u32, 2u32, 4u32),
-                    (1, 1, 2, 4), (2, 1, 2, 4), (4, 1, 2, 4), (31, 31, 31, 31)] {
-                    let word = (4u32 << 26) | (target << 21) | (a << 16)
-                        | (b << 11) | (c << 6) | (xo << 1) | u32::from(rc);
+                for (target, a, c, b) in [
+                    (3u32, 1u32, 2u32, 4u32),
+                    (1, 1, 2, 4),
+                    (2, 1, 2, 4),
+                    (4, 1, 2, 4),
+                    (31, 31, 31, 31),
+                ] {
+                    let word = (4u32 << 26)
+                        | (target << 21)
+                        | (a << 16)
+                        | (b << 11)
+                        | (c << 6)
+                        | (xo << 1)
+                        | u32::from(rc);
                     assert_eq!(Ins::new(word, Extensions::gekko_broadway()).op, opcode);
-                    let bytes: Vec<u8> = [word, word, 0x4E80_0020].iter()
-                        .flat_map(|word| word.to_be_bytes()).collect();
+                    let bytes: Vec<u8> = [word, word, 0x4E80_0020]
+                        .iter()
+                        .flat_map(|word| word.to_be_bytes())
+                        .collect();
                     let entries = BTreeSet::from([0x8000_4004]);
-                    let indexed = lower_words_with_config(0x8000_4000, &bytes, &entries,
-                        &BTreeSet::new(), LoweringConfig { indexed_paired_ternary: true,
-                            ..LoweringConfig::default() }).unwrap();
-                    let descriptor = target | (a << 5) | (c << 10) | (b << 15)
-                        | (operation << 20) | (u32::from(lane0) << 22)
-                        | (u32::from(lane1) << 23) | (u32::from(rc) << 24);
+                    let indexed = lower_words_with_config(
+                        0x8000_4000,
+                        &bytes,
+                        &entries,
+                        &BTreeSet::new(),
+                        LoweringConfig {
+                            indexed_paired_ternary: true,
+                            ..LoweringConfig::default()
+                        },
+                    )
+                    .unwrap();
+                    let descriptor = target
+                        | (a << 5)
+                        | (c << 10)
+                        | (b << 15)
+                        | (operation << 20)
+                        | (u32::from(lane0) << 22)
+                        | (u32::from(lane1) << 23)
+                        | (u32::from(rc) << 24);
                     for pc in [0x8000_4000u32, 0x8000_4004] {
                         assert!(indexed.contains(&format!(
-                            "context, 0x{descriptor:07X}u, services, 0x{pc:08X}u)")));
+                            "context, 0x{descriptor:07X}u, services, 0x{pc:08X}u)"
+                        )));
                     }
-                    assert_eq!(indexed.matches("ppc_execute_indexed_paired_ternary").count(), 2);
+                    assert_eq!(
+                        indexed
+                            .matches("ppc_execute_indexed_paired_ternary")
+                            .count(),
+                        2
+                    );
                     assert!(!indexed.contains("ppc_f32_ternary("));
                     assert!(!indexed.contains("require_single_precision_bits"));
                     assert!(indexed.contains("case 0x80004004u: goto label_80004004;"));
@@ -16365,15 +16788,29 @@ mod tests {
         let mut words = Vec::new();
         for (index, (xo, operation, lane0, lane1)) in forms.iter().enumerate() {
             let target = [2_u32, 3, 4][index % 3];
-            let word = (4_u32 << 26) | (target << 21) | (2 << 16)
-                | (4 << 11) | (3 << 6) | (xo << 1) | (index as u32 & 1);
+            let word = (4_u32 << 26)
+                | (target << 21)
+                | (2 << 16)
+                | (4 << 11)
+                | (3 << 6)
+                | (xo << 1)
+                | (index as u32 & 1);
             words.push(word);
-            let bytes: Vec<u8> = [word, 0x4E80_0020].iter()
-                .flat_map(|word| word.to_be_bytes()).collect();
+            let bytes: Vec<u8> = [word, 0x4E80_0020]
+                .iter()
+                .flat_map(|word| word.to_be_bytes())
+                .collect();
             let fused = lower_words_with_config(
-                0x8000_4000, &bytes, &BTreeSet::new(), &BTreeSet::new(),
-                LoweringConfig { fused_paired_ternary: true, ..LoweringConfig::default() },
-            ).unwrap();
+                0x8000_4000,
+                &bytes,
+                &BTreeSet::new(),
+                &BTreeSet::new(),
+                LoweringConfig {
+                    fused_paired_ternary: true,
+                    ..LoweringConfig::default()
+                },
+            )
+            .unwrap();
             assert_eq!(fused.matches("require_single_precision_bits").count(), 6);
             assert!(fused.contains(&format!("context->{lane0}[3]")));
             assert!(fused.contains(&format!("context->{lane1}[3]")));
@@ -16388,20 +16825,38 @@ mod tests {
             let control = lower_words(0x8000_4000, &bytes).unwrap();
             assert!(!control.contains("ppc_commit_paired_ternary_result"));
             assert_eq!(control.matches("ppc_f32_ternary(").count(), 2);
-            let function = FunctionRange { address: 0x8000_4000, size: 8 };
+            let function = FunctionRange {
+                address: 0x8000_4000,
+                size: 8,
+            };
             for (body, needs_header) in [(fused, true), (control, false)] {
-                let files = emit_sharded_module(&[(function, body)], &[], 1, function.address).unwrap();
-                let header = &files.iter().find(|f| f.name == "functions.h").unwrap().contents;
-                assert_eq!(header.contains("#include \"galaxy/ppc_paired_float.h\""), needs_header);
+                let files =
+                    emit_sharded_module(&[(function, body)], &[], 1, function.address).unwrap();
+                let header = &files
+                    .iter()
+                    .find(|f| f.name == "functions.h")
+                    .unwrap()
+                    .contents;
+                assert_eq!(
+                    header.contains("#include \"galaxy/ppc_paired_float.h\""),
+                    needs_header
+                );
             }
         }
         words.push(0x4E80_0020);
         let bytes: Vec<u8> = words.iter().flat_map(|word| word.to_be_bytes()).collect();
         let entries = BTreeSet::from([0x8000_4004]);
         let fused = lower_words_with_config(
-            0x8000_4000, &bytes, &entries, &BTreeSet::new(),
-            LoweringConfig { fused_paired_ternary: true, ..LoweringConfig::default() },
-        ).unwrap();
+            0x8000_4000,
+            &bytes,
+            &entries,
+            &BTreeSet::new(),
+            LoweringConfig {
+                fused_paired_ternary: true,
+                ..LoweringConfig::default()
+            },
+        )
+        .unwrap();
         assert!(fused.contains("case 0x80004004u: goto label_80004004;"));
         assert!(!fused.contains("ensure_fpu_available"));
         assert_eq!(fused.matches("ppc_commit_paired_ternary_result").count(), 6);
@@ -16438,7 +16893,10 @@ mod tests {
         assert!(output.contains("ppc_f64_reciprocal_estimate"));
         assert!(output.contains("ppc_f64_reciprocal_sqrt_estimate"));
         assert!(output.contains("ppc_f32_reciprocal_sqrt_estimate"));
-        assert_eq!(output.matches("ppc_commit_paired_estimate_result").count(), 2);
+        assert_eq!(
+            output.matches("ppc_commit_paired_estimate_result").count(),
+            2
+        );
         assert!(output.contains("select_nonnegative_ps0"));
     }
 
@@ -16664,9 +17122,9 @@ mod tests {
         assert!(!cmake.contents.contains(
             "option(GALAXY_MODULE_ENABLE_LTCG \"Enable Release LTCG for the generated RMGE01 game module\" ON)"
         ));
-        assert!(cmake
-            .contents
-            .contains("if(GALAXY_MODULE_ENABLE_LTCG AND NOT CMAKE_CXX_COMPILER_ID STREQUAL \"Clang\")"));
+        assert!(cmake.contents.contains(
+            "if(GALAXY_MODULE_ENABLE_LTCG AND NOT CMAKE_CXX_COMPILER_ID STREQUAL \"Clang\")"
+        ));
         assert!(cmake
             .contents
             .contains("/clang:-ffp-contract=off -fwrapv -fno-strict-aliasing"));
@@ -19287,10 +19745,7 @@ mod residency_tests {
             guest_resident_integer: true,
             ..ModuleTranslationOptions::default()
         };
-        assert!(
-            apply_residency_to_body(FN, body, &BTreeSet::new(), &enabled)
-                .contains("gr3")
-        );
+        assert!(apply_residency_to_body(FN, body, &BTreeSet::new(), &enabled).contains("gr3"));
     }
 
     #[test]
@@ -19301,12 +19756,14 @@ mod residency_tests {
                 contents: "#pragma once
 
 #include \"galaxy/native_api.h\"
-".to_owned(),
+"
+                .to_owned(),
             },
             GeneratedSource {
                 name: "functions_0000.cpp".to_owned(),
                 contents: "#include \"functions.h\"
-".to_owned(),
+"
+                .to_owned(),
             },
             GeneratedSource {
                 name: "module.cpp".to_owned(),
@@ -19314,24 +19771,29 @@ mod residency_tests {
 extern \"C\" const galaxy::GameModuleManifestV1* galaxy_module_manifest() {
     return &kManifest;
 }
-".to_owned(),
+"
+                .to_owned(),
             },
             GeneratedSource {
                 name: "helpers.cpp".to_owned(),
                 contents: "#include \"galaxy/native_api.h\"
-".to_owned(),
+"
+                .to_owned(),
             },
         ];
         apply_fast_float_mode(&mut files);
-        assert!(files[0]
-            .contents
-            .starts_with("#pragma once
+        assert!(files[0].contents.starts_with(
+            "#pragma once
 #define GALAXY_FAST_FLOAT 1
 #define GALAXY_FASTMEM 1
 
-#include \"galaxy/native_api.h\""));
-        assert_eq!(files[1].contents, "#include \"functions.h\"
-");
+#include \"galaxy/native_api.h\""
+        ));
+        assert_eq!(
+            files[1].contents,
+            "#include \"functions.h\"
+"
+        );
         assert!(!files[2].contents.contains("GALAXY_FAST_FLOAT"));
         assert!(files[2].contents.ends_with(
             "extern \"C\" std::uint32_t galaxy_module_float_flags() {
@@ -19344,9 +19806,11 @@ extern \"C\" std::uint32_t galaxy_module_transfer_flags() {
 }
 "
         ));
-        assert!(files[3].contents.starts_with("#define GALAXY_FAST_FLOAT 1
+        assert!(files[3].contents.starts_with(
+            "#define GALAXY_FAST_FLOAT 1
 #define GALAXY_FASTMEM 1
-#include"));
+#include"
+        ));
         // Idempotent.
         let again = files.clone();
         apply_fast_float_mode(&mut files);

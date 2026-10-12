@@ -1100,8 +1100,7 @@ pub(crate) fn generate_home_button_sidecar(game: &Path, output: &Path) -> Result
         .with_context(|| format!("failed to create sidecar output {}", output.display()))?;
     // The sidecar's checkpoints need the same transfer tests as the game
     // module (flag-based interrupt return, generation 17).
-    let sidecar_cpp =
-        nebula_recomp_core::apply_transfer_returns(sidecar.cpp.clone());
+    let sidecar_cpp = nebula_recomp_core::apply_transfer_returns(sidecar.cpp.clone());
     write_generated_text_if_changed(&output.join("home_button_native.cpp"), &sidecar_cpp)
         .with_context(|| format!("failed to write native sidecar under {}", output.display()))?;
     write_generated_text_if_changed(&output.join("CMakeLists.txt"), &sidecar.cmake)
@@ -1392,31 +1391,80 @@ fn dsp_ucode_entry_label(entry: DspUcodeEntry) -> &'static str {
 mod tests {
     #[test]
     fn indexed_ternary_option_is_explicit_and_conflicts_with_fused() {
-        let cli = Cli::try_parse_from(["nebula-recomp", "translate-module", "dump",
-            "--output", "generated/module", "--experimental-indexed-paired-binary",
-            "--experimental-indexed-paired-ternary"]).unwrap();
-        assert!(matches!(cli.command, Command::TranslateModule {
-            experimental_indexed_paired_binary: true,
-            experimental_indexed_paired_ternary: true,
-            experimental_fused_paired_ternary: false, .. }));
-        assert!(Cli::try_parse_from(["nebula-recomp", "translate-module", "dump",
-            "--output", "generated/module", "--experimental-indexed-paired-ternary",
-            "--experimental-fused-paired-ternary"]).is_err());
-        let defaults = Cli::try_parse_from(["nebula-recomp", "translate-module", "dump",
-            "--output", "generated/module"]).unwrap();
-        assert!(matches!(defaults.command, Command::TranslateModule {
-            experimental_indexed_paired_ternary: false, .. }));
+        let cli = Cli::try_parse_from([
+            "nebula-recomp",
+            "translate-module",
+            "dump",
+            "--output",
+            "generated/module",
+            "--experimental-indexed-paired-binary",
+            "--experimental-indexed-paired-ternary",
+        ])
+        .unwrap();
+        assert!(matches!(
+            cli.command,
+            Command::TranslateModule {
+                experimental_indexed_paired_binary: true,
+                experimental_indexed_paired_ternary: true,
+                experimental_fused_paired_ternary: false,
+                ..
+            }
+        ));
+        assert!(Cli::try_parse_from([
+            "nebula-recomp",
+            "translate-module",
+            "dump",
+            "--output",
+            "generated/module",
+            "--experimental-indexed-paired-ternary",
+            "--experimental-fused-paired-ternary"
+        ])
+        .is_err());
+        let defaults = Cli::try_parse_from([
+            "nebula-recomp",
+            "translate-module",
+            "dump",
+            "--output",
+            "generated/module",
+        ])
+        .unwrap();
+        assert!(matches!(
+            defaults.command,
+            Command::TranslateModule {
+                experimental_indexed_paired_ternary: false,
+                ..
+            }
+        ));
     }
     #[test]
     fn indexed_paired_option_is_explicit_and_conflicts_with_fused() {
-        let cli = Cli::try_parse_from(["nebula-recomp", "translate-module", "dump",
-            "--output", "generated/module", "--experimental-indexed-paired-binary"]).unwrap();
-        assert!(matches!(cli.command, Command::TranslateModule {
-            experimental_indexed_paired_binary: true,
-            experimental_fused_paired_binary: false, .. }));
-        assert!(Cli::try_parse_from(["nebula-recomp", "translate-module", "dump",
-            "--output", "generated/module", "--experimental-indexed-paired-binary",
-            "--experimental-fused-paired-binary"]).is_err());
+        let cli = Cli::try_parse_from([
+            "nebula-recomp",
+            "translate-module",
+            "dump",
+            "--output",
+            "generated/module",
+            "--experimental-indexed-paired-binary",
+        ])
+        .unwrap();
+        assert!(matches!(
+            cli.command,
+            Command::TranslateModule {
+                experimental_indexed_paired_binary: true,
+                experimental_fused_paired_binary: false,
+                ..
+            }
+        ));
+        assert!(Cli::try_parse_from([
+            "nebula-recomp",
+            "translate-module",
+            "dump",
+            "--output",
+            "generated/module",
+            "--experimental-indexed-paired-binary",
+            "--experimental-fused-paired-binary"
+        ])
+        .is_err());
     }
     use super::{write_generated_text_create_new, write_generated_text_if_changed, Cli, Command};
     use clap::Parser;
@@ -1654,16 +1702,24 @@ mod tests {
     #[test]
     fn paired_ternary_lowering_is_an_independent_opt_in() {
         let cli = Cli::try_parse_from([
-            "nebula-recomp", "translate-module", "dump", "--output", "generated/module",
+            "nebula-recomp",
+            "translate-module",
+            "dump",
+            "--output",
+            "generated/module",
             "--experimental-fused-paired-ternary",
-        ]).unwrap();
-        assert!(matches!(cli.command, Command::TranslateModule {
-            experimental_fused_paired_ternary: true,
-            experimental_fused_paired_binary: false,
+        ])
+        .unwrap();
+        assert!(matches!(
+            cli.command,
+            Command::TranslateModule {
+                experimental_fused_paired_ternary: true,
+                experimental_fused_paired_binary: false,
                 experimental_indexed_paired_binary: false,
                 experimental_indexed_paired_ternary: false,
-            ..
-        }));
+                ..
+            }
+        ));
     }
 
     #[test]

@@ -387,7 +387,6 @@ fn compare_predicate(bit: Cr0Bit, left: &str, right: &str, signed: bool, negated
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -425,7 +424,10 @@ mod tests {
     #[test]
     fn record_form_fuses_and_drops_update_cr0() {
         let (out, stats) = fuse_cr0_branches(&emitted_record());
-        assert_eq!(stats.record_sites, 1, "expected one record fusion: {stats:?}");
+        assert_eq!(
+            stats.record_sites, 1,
+            "expected one record fusion: {stats:?}"
+        );
         assert_eq!(stats.compare_sites, 0);
         assert!(
             !out.contains("update_cr0"),
@@ -472,7 +474,10 @@ mod tests {
     #[test]
     fn compare_form_folds_both_operands() {
         let (out, stats) = fuse_cr0_branches(&emitted_compare());
-        assert_eq!(stats.compare_sites, 1, "expected one compare fusion: {stats:?}");
+        assert_eq!(
+            stats.compare_sites, 1,
+            "expected one compare fusion: {stats:?}"
+        );
         assert!(
             !out.contains("compare_unsigned("),
             "the compare line must be folded away:\n{out}"
@@ -482,7 +487,10 @@ mod tests {
             out.contains("!(context->gpr[3] == 0x00000001u)"),
             "expected the negated equality test:\n{out}"
         );
-        assert!(!out.contains("galaxy::cr_bit"), "no CR read may remain:\n{out}");
+        assert!(
+            !out.contains("galaxy::cr_bit"),
+            "no CR read may remain:\n{out}"
+        );
     }
 
     #[test]
@@ -546,7 +554,8 @@ mod tests {
     #[test]
     fn declines_a_nonzero_compare_field() {
         // Field 1 is CR1; the pass only handles CR0.
-        let body = replaced_compare("galaxy::compare_unsigned(context, 1u, context->gpr[3], 0x1u);");
+        let body =
+            replaced_compare("galaxy::compare_unsigned(context, 1u, context->gpr[3], 0x1u);");
         let (out, stats) = fuse_cr0_branches(&body);
         assert_eq!(stats.fused(), 0);
         assert_eq!(out, body);
@@ -555,9 +564,10 @@ mod tests {
     #[test]
     fn declines_a_mismatched_assignment_before_update_cr0() {
         // `update_cr0` names r5 but the previous line assigns r6: not a record pair.
-        let body = emitted_record()
-            .replace("context->gpr[5] = context->gpr[3] & 0x00008000u;",
-                     "context->gpr[6] = context->gpr[3] & 0x00008000u;");
+        let body = emitted_record().replace(
+            "context->gpr[5] = context->gpr[3] & 0x00008000u;",
+            "context->gpr[6] = context->gpr[3] & 0x00008000u;",
+        );
         let (out, stats) = fuse_cr0_branches(&body);
         assert_eq!(stats.fused(), 0);
         assert_eq!(out, body);
@@ -574,7 +584,8 @@ mod tests {
     #[test]
     fn lt_and_gt_bits_use_signed_tests() {
         for (index, needle) in [("0u", "< 0"), ("1u", "> 0")] {
-            let body = emitted_record().replace("cr_bit(context, 2u)", &format!("cr_bit(context, {index})"));
+            let body = emitted_record()
+                .replace("cr_bit(context, 2u)", &format!("cr_bit(context, {index})"));
             let (out, stats) = fuse_cr0_branches(&body);
             assert_eq!(stats.record_sites, 1, "index {index}: {stats:?}");
             assert!(

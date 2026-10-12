@@ -169,9 +169,7 @@ fn float_helper_index_positions(callee: &str) -> Option<&'static [usize]> {
     Some(match name {
         "fast::fctiwz_r" => &[3, 4],
         "fast::scalar_binary_r" | "fast::paired_binary_r" => &[3, 4, 5],
-        "fast::scalar_ternary_r" | "fast::paired_ternary_r" | "fast::paired_sum_r" => {
-            &[3, 4, 5, 6]
-        }
+        "fast::scalar_ternary_r" | "fast::paired_ternary_r" | "fast::paired_sum_r" => &[3, 4, 5, 6],
         "fast::scalar_frsp_r" => &[3, 4],
         "fast::load_fpr_single_r"
         | "fast::store_fpr_single_r"
@@ -386,7 +384,11 @@ fn rename_register_accesses(body: &str, floats: bool) -> Option<Renamed> {
         text.push_str(&body[cursor..at]);
         let rest = &body[after..];
         let mut handled = false;
-        for (prefix, base) in [("gpr[", 0usize), ("fpr_bits[", FPR_BASE), ("ps1_bits[", PS1_BASE)] {
+        for (prefix, base) in [
+            ("gpr[", 0usize),
+            ("fpr_bits[", FPR_BASE),
+            ("ps1_bits[", PS1_BASE),
+        ] {
             if base != 0 && !floats {
                 continue;
             }
@@ -456,7 +458,12 @@ fn rewrite_float_helpers(
         "paired_sum",
         "fctiwz",
     ];
-    const MEMORY: [&str; 4] = ["load_fpr_single", "store_fpr_single", "psq_load", "psq_store"];
+    const MEMORY: [&str; 4] = [
+        "load_fpr_single",
+        "store_fpr_single",
+        "psq_load",
+        "psq_store",
+    ];
     let mut out = text.to_owned();
     for name in ARITHMETIC {
         // Templated form: galaxy::fast::NAME<...>(context, ...)
@@ -464,7 +471,10 @@ fn rewrite_float_helpers(
         out = out.replace(&templated, &format!("galaxy::fast::{name}_r<"));
         // Plain form: galaxy::fast::NAME(context, ...)
         let plain = format!("galaxy::fast::{name}(context, ");
-        out = out.replace(&plain, &format!("galaxy::fast::{name}_r(context, fpr, ps1, "));
+        out = out.replace(
+            &plain,
+            &format!("galaxy::fast::{name}_r(context, fpr, ps1, "),
+        );
     }
     // Templated arithmetic: insert the arrays after `context, `.
     let mut rewritten = String::with_capacity(out.len() + 256);
@@ -625,7 +635,11 @@ fn lean_store_sequence(written: &[bool; SLOTS], contract: LeanCallContract) -> S
 
 /// Reloads after a lean body: the used locals it writes.
 fn lean_reload_sequence(used: &[bool; SLOTS], contract: LeanCallContract) -> String {
-    reload_sequence(&contract_slots(used, contract.gpr_writes, contract.fpr_writes))
+    reload_sequence(&contract_slots(
+        used,
+        contract.gpr_writes,
+        contract.fpr_writes,
+    ))
 }
 
 fn declarations(used: &[bool; SLOTS]) -> String {
@@ -754,7 +768,10 @@ pub fn apply_register_residency(body: &str, floats: bool) -> Option<String> {
     // `goto label_X;` at function scope, as a continuation stub ends.
     let stub_resume_label = |index: usize| -> Option<String> {
         let raw_line = raw_lines.get(index)?;
-        let name = raw_line.trim().strip_prefix("goto label_")?.strip_suffix(';')?;
+        let name = raw_line
+            .trim()
+            .strip_prefix("goto label_")?
+            .strip_suffix(';')?;
         (depth_before[index] == 0
             && name.len() == 8
             && name.bytes().all(|byte| byte.is_ascii_hexdigit()))
@@ -882,7 +899,8 @@ pub fn apply_register_residency(body: &str, floats: bool) -> Option<String> {
                         None
                     };
                     if let Some(resume) = resume {
-                        shared_sites.push((format!("{{{}, {}}}", arguments[1], arguments[2]), resume));
+                        shared_sites
+                            .push((format!("{{{}, {}}}", arguments[1], arguments[2]), resume));
                         let _ = write!(
                             rewritten,
                             "if (const std::uint64_t counted__ = galaxy::call_return_checkpoint_due(services); counted__ != 0u) [[unlikely]] {{ shared_counted__ = counted__; shared_site__ = {site}u; goto shared_call_return__; }}"
@@ -949,7 +967,10 @@ pub fn apply_register_residency(body: &str, floats: bool) -> Option<String> {
         output.push('\n');
     }
     for name in &entries {
-        let _ = writeln!(output, "resident_entry_{name}:\n    {reloads}\n    goto label_{name};");
+        let _ = writeln!(
+            output,
+            "resident_entry_{name}:\n    {reloads}\n    goto label_{name};"
+        );
     }
     if !shared_sites.is_empty() {
         let _ = writeln!(
@@ -1019,7 +1040,9 @@ mod tests {
         assert!(out.contains(
             "    if (const std::uint64_t counted__ = galaxy::call_return_checkpoint_due(services); counted__ != 0u) [[unlikely]] { shared_counted__ = counted__; shared_site__ = 0u; goto shared_call_return__; }\n    }\nshared_resume_0:;\n"
         ));
-        assert!(out.contains("    std::uint64_t shared_counted__ = 0u;\n    std::uint32_t shared_site__ = 0u;\n"));
+        assert!(out.contains(
+            "    std::uint64_t shared_counted__ = 0u;\n    std::uint32_t shared_site__ = 0u;\n"
+        ));
         assert!(out.contains(
             "shared_call_return__:\n    {\n    static constexpr std::uint32_t shared_call_return_sites__[][2] = {{0x8000100Cu, 0x80001010u}};\n    GALAXY_RETURN_IF_TRANSFER_PENDING(services);\n    context->gpr[3] = gr3; context->lr = glr; galaxy::call_return_checkpoint_counted(services, shared_call_return_sites__[shared_site__][0], shared_call_return_sites__[shared_site__][1], context, memory, shared_counted__);\n    gr3 = context->gpr[3]; gr31 = context->gpr[31]; glr = context->lr; GALAXY_RETURN_IF_TRANSFER_PENDING(services);\n    }\n    switch (shared_site__) {\n    case 0u: goto shared_resume_0;\n    default: { context->gpr[3] = gr3; context->lr = glr; return; }\n    }\n"
         ));
@@ -1141,7 +1164,9 @@ mod tests {
     fn spr_reads_other_than_lr_and_ctr_do_not_synchronize() {
         let body = "    {\n    context->gpr[10] = galaxy::read_spr(context, 268u, services, 0x80004000u);\n    }\n    return;\n";
         let out = apply_register_residency(body, false).expect("eligible");
-        assert!(out.contains("    gr10 = galaxy::read_spr(context, 268u, services, 0x80004000u);\n"));
+        assert!(
+            out.contains("    gr10 = galaxy::read_spr(context, 268u, services, 0x80004000u);\n")
+        );
     }
 
     #[test]

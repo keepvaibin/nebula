@@ -3806,7 +3806,9 @@ fn accumulator_operand_expression(operand: DspAccumulatorOperand) -> String {
         }
         DspAccumulatorOperand::One => "1".to_string(),
         DspAccumulatorOperand::MidUnit => "0x00010000ll".to_string(),
-        DspAccumulatorOperand::Product => "galaxy::dsp_inline::dsp_product_value(ctx.prod)".to_string(),
+        DspAccumulatorOperand::Product => {
+            "galaxy::dsp_inline::dsp_product_value(ctx.prod)".to_string()
+        }
         DspAccumulatorOperand::Ax(ax) => accumulator_ax_expression(ax),
         DspAccumulatorOperand::AxPartShifted(part) => accumulator_ax_part_shifted_expression(part),
         DspAccumulatorOperand::AxLowUnsigned(ax) => {
@@ -4096,8 +4098,12 @@ fn emit_product_operation(
 fn product_move_value_expression(mode: DspProductMoveMode) -> String {
     match mode {
         DspProductMoveMode::Raw => "galaxy::dsp_inline::dsp_product_value(ctx.prod)".to_string(),
-        DspProductMoveMode::Negated => "-galaxy::dsp_inline::dsp_product_value(ctx.prod)".to_string(),
-        DspProductMoveMode::HighMidClearLow => "galaxy::dsp_inline::dsp_round_product(ctx.prod)".to_string(),
+        DspProductMoveMode::Negated => {
+            "-galaxy::dsp_inline::dsp_product_value(ctx.prod)".to_string()
+        }
+        DspProductMoveMode::HighMidClearLow => {
+            "galaxy::dsp_inline::dsp_round_product(ctx.prod)".to_string()
+        }
     }
 }
 
@@ -9023,9 +9029,9 @@ mod tests {
         .unwrap();
 
         assert_eq!(generated.instruction_count, 3);
-        assert!(generated
-            .cpp
-            .contains("if (galaxy::dsp_inline::dsp_condition_holds(galaxy::DspCondition::Zero, ctx.sr))"));
+        assert!(generated.cpp.contains(
+            "if (galaxy::dsp_inline::dsp_condition_holds(galaxy::DspCondition::Zero, ctx.sr))"
+        ));
         assert!(generated.cpp.contains("    goto pc_0003;\n"));
         assert!(generated.cpp.contains("    goto pc_0002;\n"));
     }
@@ -9067,9 +9073,9 @@ mod tests {
         .unwrap();
 
         assert_eq!(generated.instruction_count, 3);
-        assert!(generated
-            .cpp
-            .contains("if (galaxy::dsp_inline::dsp_condition_holds(galaxy::DspCondition::Zero, ctx.sr))"));
+        assert!(generated.cpp.contains(
+            "if (galaxy::dsp_inline::dsp_condition_holds(galaxy::DspCondition::Zero, ctx.sr))"
+        ));
         assert!(generated
             .cpp
             .contains("        galaxy::dsp_stack_push(ctx, 0, 0x0002u);\n#if defined(GALAXY_DSP_RAW_INSTRUCTION_PROVENANCE)\n        galaxy::dsp_raw_instruction_boundary_commit(ctx, raw_instruction_boundary);\n#endif\n        goto pc_0003;\n"));
@@ -9265,9 +9271,9 @@ mod tests {
             lower_dsp_program_to_cpp(0x0000, &[0x02d5, 0x0021], "dsp_cond_return_test").unwrap();
 
         assert_eq!(generated.instruction_count, 2);
-        assert!(generated
-            .cpp
-            .contains("if (galaxy::dsp_inline::dsp_condition_holds(galaxy::DspCondition::Zero, ctx.sr))"));
+        assert!(generated.cpp.contains(
+            "if (galaxy::dsp_inline::dsp_condition_holds(galaxy::DspCondition::Zero, ctx.sr))"
+        ));
         assert!(generated
             .cpp
             .contains("const auto return_target_0000 = galaxy::dsp_stack_pop(ctx, 0);"));
@@ -9280,9 +9286,9 @@ mod tests {
             lower_dsp_program_to_cpp(0x0000, &[0x0275, 0x0000, 0x0021], "dsp_if_test").unwrap();
 
         assert_eq!(generated.instruction_count, 3);
-        assert!(generated
-            .cpp
-            .contains("if (galaxy::dsp_inline::dsp_condition_holds(galaxy::DspCondition::Zero, ctx.sr))"));
+        assert!(generated.cpp.contains(
+            "if (galaxy::dsp_inline::dsp_condition_holds(galaxy::DspCondition::Zero, ctx.sr))"
+        ));
         assert!(generated.cpp.contains("        goto pc_0001;\n"));
         assert!(generated.cpp.contains("    goto pc_0002;\n"));
     }
@@ -9450,12 +9456,12 @@ mod tests {
         .unwrap();
 
         assert_eq!(generated.instruction_count, 5);
-        assert!(generated
-            .cpp
-            .contains("ctx.ar[1] = galaxy::dsp_inline::dsp_decrement_address(ctx.ar[1], ctx.wr[1]);"));
-        assert!(generated
-            .cpp
-            .contains("ctx.ar[2] = galaxy::dsp_inline::dsp_increment_address(ctx.ar[2], ctx.wr[2]);"));
+        assert!(generated.cpp.contains(
+            "ctx.ar[1] = galaxy::dsp_inline::dsp_decrement_address(ctx.ar[1], ctx.wr[1]);"
+        ));
+        assert!(generated.cpp.contains(
+            "ctx.ar[2] = galaxy::dsp_inline::dsp_increment_address(ctx.ar[2], ctx.wr[2]);"
+        ));
         assert!(generated.cpp.contains(
             "ctx.ar[3] = galaxy::dsp_inline::dsp_decrease_address(ctx.ar[3], ctx.ix[3], ctx.wr[3]);"
         ));
@@ -9849,18 +9855,18 @@ mod tests {
         .unwrap();
 
         assert_eq!(generated.instruction_count, 3);
-        assert!(generated
-            .cpp
-            .contains("ctx.ar[3] = galaxy::dsp_inline::dsp_decrement_address(ctx.ar[3], ctx.wr[3]);"));
+        assert!(generated.cpp.contains(
+            "ctx.ar[3] = galaxy::dsp_inline::dsp_decrement_address(ctx.ar[3], ctx.wr[3]);"
+        ));
         assert!(generated.cpp.contains(
             "const auto logic_0001 = galaxy::dsp_inline::dsp_accumulator_mid_xor(ctx.ac[1], ctx.ax[1][1], ctx.sr);"
         ));
         assert!(generated
             .cpp
             .contains("ctx.ac[1] = logic_0001.accumulator;"));
-        assert!(generated
-            .cpp
-            .contains("ctx.ar[1] = galaxy::dsp_inline::dsp_increment_address(ctx.ar[1], ctx.wr[1]);"));
+        assert!(generated.cpp.contains(
+            "ctx.ar[1] = galaxy::dsp_inline::dsp_increment_address(ctx.ar[1], ctx.wr[1]);"
+        ));
         assert!(generated.cpp.contains("    goto pc_0002;\n"));
     }
 
@@ -10029,9 +10035,9 @@ mod tests {
         assert!(generated.cpp.contains(
             "galaxy::dsp_data_write_at(ctx, 0x0000u, ctx.ar[3], static_cast<std::uint16_t>(galaxy::dsp_inline::dsp_read_accumulator_mid(ctx.ac[1], ctx.sr)));"
         ));
-        assert!(generated
-            .cpp
-            .contains("ctx.ar[3] = galaxy::dsp_inline::dsp_increment_address(ctx.ar[3], ctx.wr[3]);"));
+        assert!(generated.cpp.contains(
+            "ctx.ar[3] = galaxy::dsp_inline::dsp_increment_address(ctx.ar[3], ctx.wr[3]);"
+        ));
         assert!(generated.cpp.contains(
             "ctx.ac[1] = galaxy::dsp_inline::dsp_write_accumulator_mid(ctx.ac[1], static_cast<std::uint16_t>(galaxy::dsp_data_read_at(ctx, 0x0001u, ctx.ar[3])), ctx.sr);"
         ));
@@ -10060,12 +10066,12 @@ mod tests {
         assert!(generated.cpp.contains(
             "ctx.ax[0][0] = static_cast<std::uint16_t>(galaxy::dsp_data_read_at(ctx, 0x0000u, ctx.ar[0]));"
         ));
-        assert!(generated
-            .cpp
-            .contains("ctx.ar[3] = galaxy::dsp_inline::dsp_increment_address(ctx.ar[3], ctx.wr[3]);"));
-        assert!(generated
-            .cpp
-            .contains("ctx.ar[0] = galaxy::dsp_inline::dsp_increment_address(ctx.ar[0], ctx.wr[0]);"));
+        assert!(generated.cpp.contains(
+            "ctx.ar[3] = galaxy::dsp_inline::dsp_increment_address(ctx.ar[3], ctx.wr[3]);"
+        ));
+        assert!(generated.cpp.contains(
+            "ctx.ar[0] = galaxy::dsp_inline::dsp_increment_address(ctx.ar[0], ctx.wr[0]);"
+        ));
         assert!(generated.cpp.contains(
             "galaxy::dsp_data_write_at(ctx, 0x0001u, ctx.ar[0], static_cast<std::uint16_t>(galaxy::dsp_inline::dsp_read_accumulator_mid(ctx.ac[0], ctx.sr)));"
         ));
@@ -10571,15 +10577,15 @@ mod tests {
         assert!(generated.cpp.contains(
             "ctx.ax[1][1] = static_cast<std::uint16_t>(galaxy::dsp_data_read_at(ctx, 0x0000u, ctx.ar[3]));"
         ));
-        assert!(generated
-            .cpp
-            .contains("ctx.ar[3] = galaxy::dsp_inline::dsp_decrement_address(ctx.ar[3], ctx.wr[3]);"));
+        assert!(generated.cpp.contains(
+            "ctx.ar[3] = galaxy::dsp_inline::dsp_decrement_address(ctx.ar[3], ctx.wr[3]);"
+        ));
         assert!(generated.cpp.contains(
             "ctx.prod.high = static_cast<std::uint16_t>(galaxy::dsp_data_read_at(ctx, 0x0001u, ctx.ar[1]));"
         ));
-        assert!(generated
-            .cpp
-            .contains("ctx.ar[1] = galaxy::dsp_inline::dsp_increment_address(ctx.ar[1], ctx.wr[1]);"));
+        assert!(generated.cpp.contains(
+            "ctx.ar[1] = galaxy::dsp_inline::dsp_increment_address(ctx.ar[1], ctx.wr[1]);"
+        ));
         assert!(generated.cpp.contains(
             "galaxy::dsp_data_write_at(ctx, 0x0002u, ctx.ar[3], static_cast<std::uint16_t>(ctx.ax[0][0]));"
         ));
@@ -10896,7 +10902,9 @@ mod tests {
         // Pure ALU: no context helper can observe the PC, so only provenance
         // builds store it; the retirement marker is unconditional.
         let alu = generated_instruction_block(&generated.cpp, 0x0000);
-        assert!(alu.contains("    // 0000: 8100\n    ctx.last_retired_pc.enter<0x0000u>();\n#if defined("));
+        assert!(alu.contains(
+            "    // 0000: 8100\n    ctx.last_retired_pc.enter<0x0000u>();\n#if defined("
+        ));
         assert!(alu.contains(&provenance_pc(0x0000)));
         assert_eq!(alu.matches("ctx.pc = ").count(), 1);
 
@@ -10913,9 +10921,13 @@ mod tests {
 
         // Any other context helper keeps the unconditional entry store.
         let push = generated_instruction_block(&generated.cpp, 0x0002);
-        assert!(push.contains("    // 0002: 008C\n    ctx.pc = 0x0002u;\n    ctx.last_retired_pc.enter<0x0002u>();\n"));
+        assert!(push.contains(
+            "    // 0002: 008C\n    ctx.pc = 0x0002u;\n    ctx.last_retired_pc.enter<0x0002u>();\n"
+        ));
         assert!(!push.contains(&provenance_pc(0x0002)));
-        assert!(push.contains("galaxy::dsp_stack_push(ctx, 0, static_cast<std::uint16_t>(0x1111u));"));
+        assert!(
+            push.contains("galaxy::dsp_stack_push(ctx, 0, static_cast<std::uint16_t>(0x1111u));")
+        );
 
         let halt = generated_instruction_block(&generated.cpp, 0x0004);
         assert!(halt.contains("    // 0004: 0021\n    ctx.pc = 0x0004u;\n"));
@@ -10923,12 +10935,9 @@ mod tests {
 
     #[test]
     fn raw_instruction_provenance_is_compiled_only_into_provenance_builds() {
-        let generated = lower_dsp_program_to_cpp(
-            0x0000,
-            &[0x8100, 0x0021],
-            "dsp_provenance_switch_test",
-        )
-        .unwrap();
+        let generated =
+            lower_dsp_program_to_cpp(0x0000, &[0x8100, 0x0021], "dsp_provenance_switch_test")
+                .unwrap();
         let entry = &generated.cpp[generated
             .cpp
             .find("extern \"C\" void dsp_provenance_switch_test(")
@@ -10944,14 +10953,22 @@ mod tests {
                 in_provenance = true;
             } else if line == "#endif" {
                 in_provenance = false;
-            } else if line.contains("raw_instruction_boundary") && !line.contains("_observer != nullptr") {
+            } else if line.contains("raw_instruction_boundary")
+                && !line.contains("_observer != nullptr")
+            {
                 assert!(in_provenance, "unguarded provenance line: {line}");
             }
         }
         assert_eq!(
-            entry.matches(&format!("#if defined({DSP_RAW_PROVENANCE_MACRO})")).count(),
-            entry.matches("galaxy::DspRawInstructionBoundaryScope").count()
-                + entry.matches("galaxy::dsp_raw_instruction_boundary_commit").count()
+            entry
+                .matches(&format!("#if defined({DSP_RAW_PROVENANCE_MACRO})"))
+                .count(),
+            entry
+                .matches("galaxy::DspRawInstructionBoundaryScope")
+                .count()
+                + entry
+                    .matches("galaxy::dsp_raw_instruction_boundary_commit")
+                    .count()
         );
     }
 
