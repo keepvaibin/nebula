@@ -1,5 +1,6 @@
 #include "galaxy/runtime_settings.h"
 #include "galaxy/atomic_file.h"
+#include "galaxy/input_bindings.h"
 
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
@@ -96,7 +97,8 @@ RuntimeInputMode parse_input_mode(
         [](unsigned char ch) {
             return static_cast<char>(std::tolower(ch));
         });
-    if (text == "controller" || text == "xinput" || text == "gamepad") {
+    if (text == "controller" || text == "xinput" || text == "gamepad" ||
+        text == "switch" || text == "switch_pro") {
         return RuntimeInputMode::Controller;
     }
     if (text == "keyboard" || text == "keyboard_mouse" ||
@@ -171,7 +173,7 @@ std::filesystem::path settings_path() {
            L"runtime_settings.ini";
 }
 
-void parse_settings_file(RuntimeSettings& settings) {
+void parse_settings_file(RuntimeSettings& settings, input::ControlsConfig& controls) {
     const std::filesystem::path path = settings_path();
     if (path.empty()) {
         return;
@@ -219,7 +221,9 @@ void parse_settings_file(RuntimeSettings& settings) {
         }
         const std::string key_text(key);
         const std::string value_text(trim(record.substr(equals + 1u)));
-        apply_kv(settings, key_text.c_str(), value_text.c_str());
+        if (!input::apply_controls_setting(controls, key_text, value_text)) {
+            apply_kv(settings, key_text.c_str(), value_text.c_str());
+        }
     }
 }
 
@@ -281,9 +285,11 @@ void set_runtime_settings(const RuntimeSettings& settings) {
 
 void load_runtime_settings_from_file() {
     RuntimeSettings settings{};
-    parse_settings_file(settings);
+    input::ControlsConfig controls = input::default_controls_config();
+    parse_settings_file(settings, controls);
     apply_env_overrides(settings);
     set_runtime_settings(settings);
+    input::set_controls_config(controls);
 }
 
 bool save_runtime_settings_to_file() {
@@ -304,7 +310,8 @@ bool save_runtime_settings_to_file() {
                  << "audio_sfx_gain=" << settings.audio.sfx << '\n'
                  << "audio_voice_gain=" << settings.audio.voice << '\n'
                  << "audio_ambience_gain=" << settings.audio.ambience << '\n'
-                 << "audio_cutscene_gain=" << settings.audio.cutscene << '\n';
+                 << "audio_cutscene_gain=" << settings.audio.cutscene << '\n'
+                 << input::format_controls_settings(input::get_controls_config());
         if (!contents) {
             return false;
         }
