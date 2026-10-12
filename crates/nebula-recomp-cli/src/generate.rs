@@ -355,6 +355,7 @@ pub fn resolve_game_data_root(input: &Path) -> Result<std::path::PathBuf> {
 }
 
 /// Small partition files the runtime reads directly, next to game.pak.
+#[cfg(target_os = "windows")]
 const CONTENT_FILES: &[&str] = &[
     "sys/boot.bin",
     "sys/bi2.bin",

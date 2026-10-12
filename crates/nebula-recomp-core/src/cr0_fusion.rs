@@ -134,10 +134,8 @@ fn parse_compare(line: &str) -> Option<(bool, String, String)> {
     let t = line.trim();
     let (signed, rest) = if let Some(r) = t.strip_prefix("galaxy::compare_signed(context,") {
         (true, r)
-    } else if let Some(r) = t.strip_prefix("galaxy::compare_unsigned(context,") {
-        (false, r)
     } else {
-        return None;
+        (false, t.strip_prefix("galaxy::compare_unsigned(context,")?)
     };
     let rest = rest.trim().strip_suffix(';')?;
     let (field, rest) = rest.trim().split_once(',')?;

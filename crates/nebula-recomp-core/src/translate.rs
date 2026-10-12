@@ -2051,6 +2051,7 @@ fn lower_resident_integer_leaf(
 /// calls, checkpoints and return continuations keep their native boundaries.
 /// Unknown, substituted or observed callees get a full fence. Other memory,
 /// FP, indirect calls and unclassified opcodes use the ordinary emitter.
+#[allow(clippy::too_many_arguments)]
 fn lower_resident_integer_direct_calls(
     address: u32,
     bytes: &[u8],
@@ -11309,6 +11310,8 @@ fn rotate_mask(begin: u32, end: u32) -> u32 {
 }
 
 #[cfg(test)]
+// Instruction words are spelled field by field, zero fields included.
+#[allow(clippy::identity_op)]
 mod tests {
     use super::*;
 
