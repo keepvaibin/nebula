@@ -43,6 +43,10 @@ void set_runtime_settings(const RuntimeSettings& settings);
 // throw before publishing any settings. Gains use the C numeric locale and
 // complete finite tokens; malformed values retain their prior/default gain.
 void load_runtime_settings_from_file();
+// Re-reads only the audio gains when the settings file's last-write time
+// changed (an external editor or NebulaSettings.exe while playing). Read or
+// parse failures keep the current gains. One caller thread.
+bool reload_runtime_audio_settings_if_changed() noexcept;
 // Invalid explicit paths and formatting/write/replace failures return false;
 // a bad override never redirects a save to the normal user settings file.
 [[nodiscard]] bool save_runtime_settings_to_file();

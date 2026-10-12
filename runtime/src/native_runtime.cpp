@@ -2402,6 +2402,8 @@ struct RuntimeState {
     // Cutscene volume applied to the movie player's attenuation table.
     std::array<std::uint16_t, 128> movie_volume_original{};
     float movie_volume_gain{1.0f};
+    // Audio frames until the settings file is checked for new gains.
+    std::uint32_t audio_settings_poll_frames{};
     bool movie_volume_original_valid{};
     bool movie_volume_disabled{};
     std::uint64_t jaudio_commands{};
@@ -23766,6 +23768,12 @@ void apply_movie_volume(RuntimeState& state, galaxy::host::GuestAddressSpace& sp
 // gain applies at the output. With GALAXY_AUDIO_BUS_TRACE each channel's
 // category is logged when a new sound changes it.
 void update_jaudio_categories(RuntimeState& state, galaxy::host::GuestAddressSpace& space) {
+    // One file-time query every 32 audio frames (0.56 s).
+    if (state.audio_settings_poll_frames == 0u) {
+        state.audio_settings_poll_frames = 32u;
+        (void)galaxy::reload_runtime_audio_settings_if_changed();
+    }
+    --state.audio_settings_poll_frames;
     const galaxy::RuntimeAudioSettings audio = galaxy::get_runtime_settings().audio;
     state.jaudio_mixer.set_bus_gains({1.0f, audio.music, audio.voice, audio.sfx, audio.ambience, audio.cutscene});
     apply_movie_volume(state, space, audio.cutscene);
