@@ -621,6 +621,12 @@ private:
     // Live internal-resolution change, applied between frames by begin_frame
     // when get_render_config().efb_scale differs from the live targets.
     void apply_pending_efb_scale();
+    // With internal_follow_window, re-derive efb_scale from the settled
+    // window size (see RenderConfig::internal_follow_window).
+    void follow_window_internal_resolution();
+    UINT follow_window_width_ = 0;
+    UINT follow_window_height_ = 0;
+    double follow_window_aspect_ = 0.0;
     // (Re)creates the EFB color/depth conversion SRVs in their fixed slots.
     void refresh_efb_conversion_source_views();
     bool create_root_signature();

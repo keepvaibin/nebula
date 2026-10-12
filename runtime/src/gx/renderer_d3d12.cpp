@@ -1633,7 +1633,32 @@ uint4 pack_depth(float depth_sample) {
         255u);
 }
 uint4 sample_efb(float2 sample_pos, float2 inv) {
-    float4 tex_sample = srctex.SampleLevel(s_lin, sample_pos * inv, 0);
+    // A destination texel covering more than 2x2 source texels (a native-size
+    // effect copy of a scaled EFB) averages the central half of its
+    // footprint. At 1x each EFB pixel is one sample at its centre; when the
+    // game minifies a texture 4:1 into the bloom workspace that sample is a
+    // bilinear 2x2 of each 4x4 block, and the bloom threshold that follows is
+    // tuned to that sparse coverage. The central half reproduces it (a full
+    // footprint average dims small glows below the threshold) while still
+    // averaging many scaled samples. Bilinear taps cover 2x2 texel groups.
+    const float2 step = src_xform.zw;
+    float4 tex_sample;
+    [branch] if (max(step.x, step.y) > 2.0) {
+        const float2 footprint = 0.5 * step;
+        const uint2 taps = uint2(clamp(ceil(footprint * 0.5), 1.0, 16.0));
+        const float2 origin = sample_pos - 0.5 * footprint;
+        const float2 pitch = footprint / float2(taps);
+        tex_sample = 0.0;
+        [loop] for (uint ty = 0u; ty < taps.y; ++ty) {
+            [loop] for (uint tx = 0u; tx < taps.x; ++tx) {
+                tex_sample += srctex.SampleLevel(
+                    s_lin, (origin + (float2(tx, ty) + 0.5) * pitch) * inv, 0);
+            }
+        }
+        tex_sample /= float(taps.x * taps.y);
+    } else {
+        tex_sample = srctex.SampleLevel(s_lin, sample_pos * inv, 0);
+    }
     if (modes.z != 0.0) {
         return pack_depth(tex_sample.r);
     }
@@ -2836,6 +2861,44 @@ void RendererD3D12::refresh_efb_conversion_source_views() {
     auto depth_gpu = conv_efb_source_table_->gpu;
     depth_gpu.ptr += stride;
     conv_efb_depth_srv_ = depth_gpu;
+}
+
+void RendererD3D12::follow_window_internal_resolution() {
+    // Dynamic aspect latches a new window shape at a later VI boundary than
+    // the swap-chain resize, so the content aspect is part of the key.
+    const auto aspect = galaxy::experimental_effective_host_aspect();
+    const double content_aspect =
+        aspect ? aspect->content_aspect : galaxy::kWiiContentAspect;
+    if (s_bb_width == follow_window_width_ && s_bb_height == follow_window_height_ &&
+        content_aspect == follow_window_aspect_) {
+        return;
+    }
+    // An edge drag resizes every frame; settle first, then re-create once.
+    if (s_move_size_active.load(std::memory_order_acquire)) {
+        return;
+    }
+    follow_window_width_ = s_bb_width;
+    follow_window_height_ = s_bb_height;
+    follow_window_aspect_ = content_aspect;
+    RenderConfig render = get_render_config();
+    if (!render.internal_follow_window) {
+        return;
+    }
+    const galaxy::ContentViewport content = galaxy::fit_content_viewport(
+        static_cast<int>(s_bb_width), static_cast<int>(s_bb_height), content_aspect);
+    if (content.width <= 0 || content.height <= 0) {
+        return;
+    }
+    // The launcher's Match Output rule: cover the picture on both axes.
+    const double needed = std::max(content.width / static_cast<double>(kEfbWidth),
+                                   content.height / 456.0);
+    const unsigned scale = std::clamp(
+        static_cast<unsigned>(std::ceil(needed - 1e-6)), 1u, kMaxEfbScale);
+    if (scale != render.efb_scale) {
+        render.efb_scale = scale;
+        set_render_config(render);
+        stage_next_start_efb_scale(scale);
+    }
 }
 
 void RendererD3D12::apply_pending_efb_scale() {
@@ -4277,6 +4340,7 @@ void RendererD3D12::begin_frame(bool present_swap_chain) {
     // its own full GPU-idle wait, so it belongs before any per-slot state
     // below is touched.
     apply_pending_resize();
+    follow_window_internal_resolution();
     apply_pending_efb_scale();
     frame_slot_ = static_cast<unsigned>(frame_index_ % kFramesInFlight);
     last_latency_wait_us_ = 0;
@@ -5500,11 +5564,28 @@ bool RendererD3D12::copy_efb_to_texture(
             "GALAXY_NATIVE_BLOOM_COMPARISON_FILE") == 0 && length > 1u
             ? std::string(value) : std::string{};
     }();
-    static bool comparison_enabled = native_bloom_workspace;
+    // Effect copies (destinations up to 320x228: the bloom pyramid, simple
+    // bloom, depth of field, Mario's 160x160 shadow capture) are built at the
+    // game's own resolution, box-filtered over the scaled EFB (kConvPs). Their
+    // low resolution is part of the effect: the blur kernels use fixed
+    // screen-relative tap offsets and rely on it to soften, so scaled copies
+    // turn the taps into separate offset images. Full-size captures stay
+    // scaled. GALAXY_NATIVE_EFFECT_COPIES=0 keeps only the three bloom
+    // workspace copies native (GALAXY_NATIVE_BLOOM_WORKSPACE).
+    static const bool native_effect_copies = [] {
+        char value[8]{};
+        std::size_t length = 0u;
+        return !(getenv_s(&length, value, sizeof(value),
+            "GALAXY_NATIVE_EFFECT_COPIES") == 0 && length == 2u && value[0] == '0');
+    }();
+    static bool comparison_enabled = native_bloom_workspace || native_effect_copies;
     static ULONGLONG comparison_last_poll = 0u;
-    const bool bloom_copy = (native_bloom_workspace || !bloom_comparison_file.empty()) &&
-        efb_scale_ > 1u &&
-        is_galaxy_bloom_workspace_copy(params, is_depth_copy);
+    const bool effect_copy = native_effect_copies
+        ? dw_unscaled <= 320u && dh_unscaled <= 228u
+        : is_galaxy_bloom_workspace_copy(params, is_depth_copy);
+    const bool bloom_copy =
+        (native_bloom_workspace || native_effect_copies || !bloom_comparison_file.empty()) &&
+        efb_scale_ > 1u && effect_copy;
     if (bloom_copy && !bloom_comparison_file.empty()) {
         const auto now = GetTickCount64();
         if (comparison_last_poll == 0u || now - comparison_last_poll >= 250u) {
@@ -7032,7 +7113,7 @@ void draw_native_settings_overlay(RendererD3D12& renderer) {
         footer_scale,
         s_native_settings_save_error.load(std::memory_order_acquire)
             ? "SAVE FAILED - RETRY ON NEXT CLOSE"
-            : "INTERNAL RES APPLIES AFTER RESTART",
+            : "CHANGES APPLY IMMEDIATELY",
         s_native_settings_save_error.load(std::memory_order_relaxed)
             ? error
             : muted);
@@ -7117,10 +7198,14 @@ bool RendererD3D12::present(
 
     const auto ultrawide =
         galaxy::experimental_effective_host_aspect();
+    // A frame copied before a live internal-resolution change is still a
+    // full-width copy at the scale it was made with.
+    const unsigned source_scale = source->width / kEfbWidth;
     if (ultrawide &&
-        (source->width != kEfbWidth * efb_scale_ ||
+        (source_scale == 0u ||
+         source->width != kEfbWidth * source_scale ||
          source->height == 0u ||
-         source->height > kEfbHeight * efb_scale_)) {
+         source->height > kEfbHeight * source_scale)) {
         throw std::runtime_error(
             "RMGE01 ultrawide aspect requires a full-width Wii XFB copy");
     }

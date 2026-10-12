@@ -172,6 +172,7 @@ static void apply_kv(RenderConfig& cfg, const char* key, const char* val) {
     else if (std::strcmp(key, "anisotropic_filtering") == 0) cfg.anisotropic_filtering = std::clamp(parse_uint(val, cfg.anisotropic_filtering), 1u, 16u);
     else if (std::strcmp(key, "enhanced_mipmaps") == 0) cfg.enhanced_mipmaps = parse_bool(val, cfg.enhanced_mipmaps);
     else if (std::strcmp(key, "post_process") == 0) cfg.post_process = parse_bool(val, cfg.post_process);
+    else if (std::strcmp(key, "internal_follow_window") == 0) cfg.internal_follow_window = parse_bool(val, cfg.internal_follow_window);
     else if (std::strcmp(key, "aa") == 0) {
         static constexpr const char* kNames[] = {"off", "smaa", "auto"};
         cfg.aa_mode = parse_choice(val, kNames, cfg.aa_mode);
@@ -239,6 +240,7 @@ static void apply_env_overrides(RenderConfig& cfg) {
     apply_env(cfg, "GALAXY_ANISOTROPIC_FILTERING", "anisotropic_filtering");
     apply_env(cfg, "GALAXY_ENHANCED_MIPMAPS", "enhanced_mipmaps");
     apply_env(cfg, "GALAXY_POST_PROCESS", "post_process");
+    apply_env(cfg, "GALAXY_INTERNAL_FOLLOW_WINDOW", "internal_follow_window");
     apply_env(cfg, "GALAXY_AA", "aa");
     apply_env(cfg, "GALAXY_SMAA_QUALITY", "smaa_quality");
     apply_env(cfg, "GALAXY_UPSCALER", "upscaler");

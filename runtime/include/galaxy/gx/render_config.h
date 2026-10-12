@@ -84,6 +84,12 @@ struct RenderConfig {
     // smaa_quality: 0 low .. 3 ultra. upscaler: 0 bilinear, 1 FidelityFX
     // FSR 1 when the game image is smaller than the window. sharpness: RCAS
     // strength 0-100, 0 skips the pass.
+    // Internal resolution follows the window: after a resize settles (not
+    // during an edge drag), efb_scale becomes the smallest scale that covers
+    // the window's game picture, as the launcher's "Match Output" does at
+    // start. The renderer re-creates its targets once, at a frame boundary.
+    bool     internal_follow_window = false;
+
     // false presents with the plain bilinear blit (A/B and fallback).
     bool     post_process        = true;
     unsigned aa_mode             = 2;
