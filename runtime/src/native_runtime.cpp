@@ -32803,6 +32803,15 @@ int wmain(int argc, wchar_t** argv) {
     // filesystem parsing on the realtime cadence.
     address_space.preload_native_input_replay_log();
     state.address_space = &address_space;
+    if (const auto memory_flags_fn = reinterpret_cast<std::uint32_t (*)()>(
+            GetProcAddress(module, "galaxy_module_memory_flags"));
+        memory_flags_fn != nullptr &&
+        (memory_flags_fn() & galaxy::kModuleMemoryFlagRequiresFlatView) != 0u &&
+        address_space.guest_memory()->flat_guest_base == nullptr) {
+        throw std::runtime_error(
+            "this game module needs the flat guest memory view (Windows 10 "
+            "version 1803 or later, one running copy); it could not be reserved");
+    }
     g_memory_notify_runtime_state = &state;
     // Configuration is read; from here every flag read is a few loads.
     g_env_flag_cache_enabled.store(true, std::memory_order_release);

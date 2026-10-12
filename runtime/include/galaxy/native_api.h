@@ -16038,6 +16038,11 @@ inline constexpr std::uint32_t kModuleTransferFlagFlagReturn = 1u;
 // runtime's cooperative scheduler can replace it.
 inline constexpr std::uint32_t kModuleTransferFlagHostSelectThread = 2u;
 
+// galaxy_module_memory_flags: the module's translated accesses assume the
+// flat 4 GiB guest view (a fastmem build, see native_fast_paths.h flat_base);
+// the runtime must not start it without that view.
+inline constexpr std::uint32_t kModuleMemoryFlagRequiresFlatView = 1u;
+
 static_assert(std::is_standard_layout_v<PpcContext>);
 static_assert(std::is_standard_layout_v<NativeServicesV1>);
 static_assert(std::is_standard_layout_v<GameModuleManifestV1>);
@@ -16061,6 +16066,13 @@ GALAXY_MODULE_EXPORT std::size_t galaxy_module_function_records(
 // model.
 GALAXY_MODULE_EXPORT std::uint32_t galaxy_module_float_flags();
 GALAXY_MODULE_EXPORT std::uint32_t galaxy_module_transfer_flags();
+// Optional: galaxy::kModuleMemoryFlag* bits.
+#if defined(GALAXY_BUILDING_GAME_MODULE) && GALAXY_FASTMEM_ACTIVE && \
+    !defined(GALAXY_FASTMEM_KEEP_NULL_FALLBACK)
+inline GALAXY_MODULE_EXPORT std::uint32_t galaxy_module_memory_flags() {
+    return galaxy::kModuleMemoryFlagRequiresFlatView;
+}
+#endif
 
 }
 

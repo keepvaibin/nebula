@@ -56,9 +56,19 @@ GALAXY_ALWAYS_INLINE bool flat_span(std::uint32_t address, std::uint32_t width) 
 }
 
 GALAXY_ALWAYS_INLINE std::byte* flat_base(const GuestMemoryV1* memory) noexcept {
+#if GALAXY_FASTMEM_ACTIVE && !defined(GALAXY_FASTMEM_KEEP_NULL_FALLBACK)
+    // A fastmem module needs the flat view: the runtime refuses to start one
+    // without it (kModuleTransferFlagRequiresFlatMemory). Telling the compiler
+    // the view exists removes the null-view fallback that it otherwise
+    // duplicated around every memory access.
+    std::byte* const base = memory->flat_guest_base;
+    __builtin_assume(base != nullptr);
+    return base;
+#else
     return memory != nullptr && memory->struct_size >= sizeof(GuestMemoryV1)
         ? memory->flat_guest_base
         : nullptr;
+#endif
 }
 
 GALAXY_ALWAYS_INLINE bool wgpipe_address(std::uint32_t address) noexcept {
@@ -176,6 +186,29 @@ GALAXY_ALWAYS_INLINE void store(
     checked_store_slow<T>(memory, address, value, services, guest_pc);
 }
 
+// Stores addressed from r1, the stack pointer. The stack is RAM, never the
+// write-gather pipe, so a fastmem module writes straight through the flat view
+// without the pipe test (any other non-RAM address would still fault into the
+// device path).
+template <typename T>
+GALAXY_ALWAYS_INLINE void store_stack(
+    std::byte* base,
+    GuestMemoryV1* memory,
+    std::uint32_t address,
+    T value,
+    const NativeServicesV1* services,
+    std::uint32_t guest_pc) {
+    static_assert(std::is_integral_v<T> && std::is_unsigned_v<T>);
+#if GALAXY_FASTMEM_ACTIVE && !defined(GALAXY_FASTMEM_KEEP_NULL_FALLBACK)
+    (void)memory;
+    (void)services;
+    (void)guest_pc;
+    guest_flat_store_bytes<T>(base, address, value);
+#else
+    store<T>(base, memory, address, value, services, guest_pc);
+#endif
+}
+
 // dcbf / dcbst: the 32-byte data cache line containing `address` reaches RAM.
 // Publishes that line to the renderer and CPU dirty trackers exactly as a
 // 32-byte guest write would; this is the only publication translated stores
@@ -229,7 +262,13 @@ GALAXY_ALWAYS_INLINE void load_fpr_single(
     const std::uint64_t widened =
         widen_f32_bits(load_u32(base, memory, address, services, guest_pc));
     context->fpr_bits[index] = widened;
-    if (paired_singles_enabled(context)) {
+    // lfs also fills ps1 under HID2[PSE]. The release (fast-float) module
+    // writes it unconditionally: SMG enables paired singles in
+    // __init_hardware and never disables them, and with PSE clear ps1 is
+    // unobservable.
+    if constexpr (kFastFloat) {
+        context->ps1_bits[index] = widened;
+    } else if (paired_singles_enabled(context)) {
         context->ps1_bits[index] = widened;
     }
 }
@@ -1186,7 +1225,9 @@ GALAXY_ALWAYS_INLINE void load_fpr_single_r(
     const std::uint64_t widened =
         widen_f32_bits(load_u32(base, memory, address, services, guest_pc));
     fpr[index] = widened;
-    if (paired_singles_enabled(context)) {
+    if constexpr (kFastFloat) {  // see load_fpr_single
+        ps1[index] = widened;
+    } else if (paired_singles_enabled(context)) {
         ps1[index] = widened;
     }
 }

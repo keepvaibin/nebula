@@ -2947,6 +2947,13 @@ impl DeviceScanState {
     }
 }
 
+/// The flat store helper for a D-form store from `base`: r1 (the stack
+/// pointer) always addresses RAM, so its stores skip the write-gather-pipe
+/// test (`fast::store_stack`).
+fn flat_store_helper(base: u32) -> &'static str {
+    if base == 1 { "store_stack" } else { "store" }
+}
+
 /// Integer loads and stores whose effective address is outside the RAM
 /// aliases of the flat guest view: device registers (0xCC00xxxx, 0xCD00xxxx),
 /// the locked cache (0xE000xxxx) and anything unmapped. Under fastmem such a
@@ -3830,9 +3837,10 @@ fn lower_words_with_config(
                         _ => unreachable!(),
                     };
                     if flat_ram_writes {
+                        let store = flat_store_helper(base);
                         writeln!(
                             output,
-                            "    galaxy::fast::store<{width}>(flat_guest_base, memory, {ea}, {value}, services, 0x{pc:08X}u);"
+                            "    galaxy::fast::{store}<{width}>(flat_guest_base, memory, {ea}, {value}, services, 0x{pc:08X}u);"
                         )
                     } else {
                         writeln!(
@@ -3868,8 +3876,9 @@ fn lower_words_with_config(
                     for reg in source..32 {
                         let offset = (reg - source) * 4;
                         if flat_ram_writes {
+                            let store = flat_store_helper(base);
                             writeln!(output,
-                                "    galaxy::fast::store<std::uint32_t>(flat_guest_base, memory, {ea} + 0x{offset:08X}u, context->gpr[{reg}], services, 0x{pc:08X}u);")
+                                "    galaxy::fast::{store}<std::uint32_t>(flat_guest_base, memory, {ea} + 0x{offset:08X}u, context->gpr[{reg}], services, 0x{pc:08X}u);")
                         } else {
                             writeln!(output,
                                 "    galaxy::guest_store_u32(memory, {ea} + 0x{offset:08X}u, context->gpr[{reg}], services, 0x{pc:08X}u);")
@@ -4184,9 +4193,10 @@ fn lower_words_with_config(
                     }
                     .map_err(|_| TranslationError::Formatting)?;
                 } else if flat_ram_writes {
+                    let store = flat_store_helper(base);
                     writeln!(
                         output,
-                        "    galaxy::fast::store<std::uint64_t>(flat_guest_base, memory, {ea}, context->fpr_bits[{source}], services, 0x{pc:08X}u);"
+                        "    galaxy::fast::{store}<std::uint64_t>(flat_guest_base, memory, {ea}, context->fpr_bits[{source}], services, 0x{pc:08X}u);"
                     )
                     .map_err(|_| TranslationError::Formatting)?;
                 } else {
@@ -11747,6 +11757,28 @@ mod tests {
         .unwrap();
         assert!(writes.contains("galaxy::fast::store<std::uint32_t>(flat_guest_base, memory,"));
         assert!(!writes.contains("galaxy::guest_store_u32(memory,"));
+    }
+
+    #[test]
+    fn stack_pointer_stores_skip_the_gather_pipe_test() {
+        // stwu r1,-0x10(r1); stw r0,0x14(r1); stw r0,0x8(r3); stfd f31,0x8(r1); blr
+        let words = [0x9421_FFF0u32, 0x9001_0014, 0x9003_0008, 0xDBE1_0008, 0x4E80_0020];
+        let bytes: Vec<u8> = words.iter().flat_map(|w| w.to_be_bytes()).collect();
+        let out = lower_words_with_config(
+            0x8000_4000,
+            &bytes,
+            &BTreeSet::new(),
+            &BTreeSet::new(),
+            LoweringConfig {
+                flat_ram_reads: true,
+                flat_ram_writes: true,
+                ..LoweringConfig::default()
+            },
+        )
+        .unwrap();
+        assert_eq!(out.matches("galaxy::fast::store_stack<std::uint32_t>(").count(), 2, "{out}");
+        assert_eq!(out.matches("galaxy::fast::store_stack<std::uint64_t>(").count(), 1);
+        assert_eq!(out.matches("galaxy::fast::store<std::uint32_t>(").count(), 1);
     }
 
     #[test]
