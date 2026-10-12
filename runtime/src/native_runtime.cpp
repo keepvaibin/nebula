@@ -2569,6 +2569,12 @@ struct RuntimeState {
     bool gx_sync_capture_active{};
     std::uint64_t draw_done_submit_attempts{};
     std::uint64_t draw_done_submit_deferred{};
+    // The GXDrawDone capture is still Captured: the render queue was full when
+    // the main thread went to sleep for it (submit_gx_at_draw_done_wait).
+    bool draw_done_submit_owed{};
+    std::uint64_t draw_done_submit_queue_deferrals{};
+    std::uint64_t draw_done_submit_owed_us{};
+    std::chrono::steady_clock::time_point draw_done_submit_owed_since{};
     std::uint64_t draw_done_submit_count{};
     std::uint64_t draw_done_submit_bytes{};
     bool gx_stream_active{};
@@ -17018,13 +17024,56 @@ void scan_pending_gx_pe_events(
 // off-VI submission is excluded while either of those owners is active.
 // This only retires backend receipts. PE levels are raised by the renderer's
 // real fence callback and remain acknowledged exclusively by translated code.
+// Submits the GXDrawDone capture that submit_gx_at_draw_done_wait left
+// Captured because the render queue was full. `wait`: block for queue space
+// (an ordering point, a later FIFO must not overtake it); otherwise submit
+// only if a slot is free. Returns true when nothing is owed afterwards.
+bool submit_owed_draw_done_capture(RuntimeState& state, bool wait) {
+    if (!state.draw_done_submit_owed) {
+        return true;
+    }
+    if (!wait && !galaxy::gx::render_queue_has_space()) {
+        return false;
+    }
+    const auto* capture = state.pending_draw_done_submissions.next_to_submit();
+    if (capture == nullptr || state.address_space == nullptr) {
+        throw RuntimeFailure("owed draw-done capture lost its submission owner");
+    }
+    const auto serial = capture->serial;
+    const auto bytes = capture->fifo_size;
+    join_native_thp_video_decode(state);
+    galaxy::timeline::record(galaxy::timeline::Event::SubmitSource, 2u);
+    const auto token = galaxy::gx::render_frame(
+        capture->fifo.data(), bytes, state.address_space->guest_memory(),
+        state.services, false, 0u);
+    std::vector<std::byte> released_fifo;
+    if (!state.pending_draw_done_submissions.mark_submitted(
+            serial, token, &released_fifo)) {
+        throw RuntimeFailure("owed draw-done submission returned invalid ownership");
+    }
+    state.address_space->recycle_gx_fifo(std::move(released_fifo));
+    state.draw_done_submit_owed = false;
+    state.draw_done_submit_owed_us += static_cast<std::uint64_t>(
+        std::chrono::duration_cast<std::chrono::microseconds>(
+            std::chrono::steady_clock::now() - state.draw_done_submit_owed_since).count());
+    ++state.draw_done_submit_count;
+    state.draw_done_submit_bytes += bytes;
+    return true;
+}
+
 bool poll_draw_done_submissions(RuntimeState& state) {
     while (const auto* entry = state.pending_draw_done_submissions.front()) {
         const auto serial = entry->serial;
         const auto token = entry->token;
         const auto source_vi_serial = entry->source_vi_serial;
         if (entry->phase == galaxy::gx::FifoSubmissionPhase::Captured) {
-            throw RuntimeFailure("draw-done capture escaped synchronous submission");
+            if (!state.draw_done_submit_owed) {
+                throw RuntimeFailure("draw-done capture escaped synchronous submission");
+            }
+            if (!submit_owed_draw_done_capture(state, false)) {
+                return false;
+            }
+            continue;
         }
         if (entry->phase == galaxy::gx::FifoSubmissionPhase::Submitted) {
             if (!galaxy::gx::wait_for_frame_pe_completion_for(token, 0u)) {
@@ -17114,6 +17163,8 @@ void submit_gx_at_draw_done_wait(
         ++state.draw_done_submit_deferred;
         return;
     }
+    // A spurious wake re-enters the sleep with the earlier capture still owed.
+    (void)submit_owed_draw_done_capture(state, true);
     if (state.address_space->gx_fifo_data().empty()) {
         return;
     }
@@ -17125,6 +17176,18 @@ void submit_gx_at_draw_done_wait(
     const auto* capture = state.pending_draw_done_submissions.next_to_submit();
     if (capture == nullptr || capture->serial != serial) {
         throw RuntimeFailure("draw-done FIFO capture lost submission order");
+    }
+    if (state.coop != nullptr && !galaxy::gx::render_queue_has_space()) {
+        // The renderer is behind. Blocking here (EE off, before OSSleepThread)
+        // would stop every guest thread, the game's audio thread included,
+        // for as long as the GPU needs. The main thread sleeps for this draw
+        // done anyway, and its PE finish cannot precede the submission, so the
+        // capture is submitted from the idle loop once a slot frees
+        // (coop_idle), or first by whichever submission comes next.
+        state.draw_done_submit_owed = true;
+        state.draw_done_submit_owed_since = std::chrono::steady_clock::now();
+        ++state.draw_done_submit_queue_deferrals;
+        return;
     }
     const auto bytes = capture->fifo_size;
     join_native_thp_video_decode(state);
@@ -17213,6 +17276,7 @@ bool render_pending_gx_fifo_for_sync(
         bool previous;
         ~RestoreSyncCapture() noexcept { active = previous; }
     } restore_sync_capture{state.gx_sync_capture_active, previous_sync_capture_active};
+    (void)submit_owed_draw_done_capture(state, true);
     if (state.address_space == nullptr) {
         galaxy::gx::wait_for_render_fifo_effects_idle();
         return false;
@@ -18843,6 +18907,12 @@ void idle_loop_wait_for_next_deadline(RuntimeState& state) {
     if (wait_duration > max_slice) {
         wait_duration = max_slice;
     }
+    // An owed draw-done capture is submitted by the next idle pass that finds
+    // a free render queue slot; poll for it at a fine grain.
+    constexpr auto kOwedSubmitPoll = std::chrono::microseconds(500);
+    if (state.draw_done_submit_owed && wait_duration > kOwedSubmitPoll) {
+        wait_duration = kOwedSubmitPoll;
+    }
     // Optional final stretch left to polling. VI edges arrive through the
     // broker's publication wake, not this timer, so no guard is needed: the
     // 100 us guard spun the guest idle loop (SelectThread) before every VI
@@ -19093,6 +19163,20 @@ bool advance_pending_vi_boundary(
     }
     const std::uint32_t exact_resume =
         resume_pc != 0u ? resume_pc : context->pc;
+    // The waits below service AI with EE masked, which only latches the level.
+    // When the waiting context accepts external interrupts the level is
+    // delivered here, as the PE drain below does; the callback readies the
+    // game's audio thread and the preemption test ends the wait so it mixes
+    // its next buffer while the GPU catches up. Returns whether it delivered.
+    const auto deliver_ai_level = [&] {
+        if (state.coop == nullptr ||
+            !state.address_space->ai_dma_interrupt_pending() ||
+            !(exact_idle_ee || guest_external_interrupts_enabled(context))) {
+            return false;
+        }
+        return dispatch_external_interrupt(
+            state, exact_resume, context, memory, exact_idle_ee);
+    };
 
     for (;;) {
         const auto phase = state.pending_vi_boundary.snapshot().phase;
@@ -19118,6 +19202,8 @@ bool advance_pending_vi_boundary(
             if (galaxy::gx::quit_requested()) {
                 throw RuntimeQuitRequested{};
             }
+            const bool ai_delivered = deliver_ai_level();
+            if (state.pending_transfer.active) return true;
             // Cooperative path: a delivery that readied a higher-priority
             // thread ends this wait so that thread runs, as the exception
             // path's transfer did. The blocked thread re-enters the wait
@@ -19125,6 +19211,10 @@ bool advance_pending_vi_boundary(
             if (!blocks_current ||
                 (state.coop_reschedule_pending && coop_preemption_due(state))) {
                 return true;
+            }
+            if (ai_delivered) {
+                // The handler's checkpoints may have advanced this boundary.
+                continue;
             }
             galaxy::timeline::record(galaxy::timeline::Event::PeWaitBegin);
             if (!wait_realtime_vi_duration_high_res(std::chrono::milliseconds(
@@ -19252,9 +19342,14 @@ bool advance_pending_vi_boundary(
                     if (galaxy::gx::quit_requested()) {
                         throw RuntimeQuitRequested{};
                     }
+                    const bool ai_delivered = deliver_ai_level();
+                    if (state.pending_transfer.active) return true;
                     if (!blocks_current ||
                         (state.coop_reschedule_pending && coop_preemption_due(state))) {
                         return true;
+                    }
+                    if (ai_delivered) {
+                        continue;
                     }
                     galaxy::timeline::record(galaxy::timeline::Event::PeWaitBegin);
                     if (!wait_realtime_vi_duration_high_res(
@@ -19656,6 +19751,10 @@ bool dispatch_vi_retrace(
     if (state.vi_retrace_count > 0u) {
         state.address_space->flush_wgpipe_gather_tail_for_frame();
         captured_fifo = state.address_space->take_gx_fifo();
+        if (!captured_fifo.empty()) {
+            // Token order: an owed draw-done capture is older than this one.
+            (void)submit_owed_draw_done_capture(state, true);
+        }
         rendered_retrace_frame = true;
         present_this_vi = should_present_vi_frame(state, use_realtime_vi);
         present_in_render_frame =
@@ -24428,6 +24527,7 @@ void call_guest_impl_body(
                             // CPU reads (or seals the snapshot) before returning.
                             // Keep its exact completion receipt, without waiting
                             // for GPU execution or dispatching guest interrupts.
+                            (void)submit_owed_draw_done_capture(state, true);
                             const auto serial=state.pending_draw_done_submissions.capture(
                                 state.address_space->take_gx_fifo(),std::chrono::steady_clock::now());
                             state.pe_scanned_fifo_bytes=0u;
@@ -30005,6 +30105,7 @@ void coop_idle_spin(RuntimeState& state) {
 
 void coop_idle(void* user, galaxy::PpcContext* context) {
     auto& state = *static_cast<RuntimeState*>(user);
+    (void)submit_owed_draw_done_capture(state, false);
     galaxy::coop::ThreadRegisters parked{};
     galaxy::coop::save_thread_registers(*context, parked);
     context->msr |= kMsrExternalInterruptEnable;
@@ -33038,6 +33139,9 @@ int wmain(int argc, wchar_t** argv) {
                           << (submit_gx_at_draw_done_wait_enabled() ? 1 : 0)
                           << " attempts=" << state.draw_done_submit_attempts
                           << " deferred=" << state.draw_done_submit_deferred
+                          << " queue-full-deferrals="
+                          << state.draw_done_submit_queue_deferrals
+                          << " owed-us=" << state.draw_done_submit_owed_us
                           << " submitted=" << state.draw_done_submit_count
                           << " bytes=" << state.draw_done_submit_bytes
                           << " consumed=" << state.draw_done_consumed_count
