@@ -536,10 +536,15 @@ void apply_native_settings_draft() {
     applied.draw_distance = next.draw_distance;
     const bool display_changed = display_settings_differ(live, applied);
     const unsigned changes = pending_settings_changes();
+    if (applied.internal_follow_window) {
+        // The draft's scale is the one the menu opened with; the live scale
+        // may have followed the window since.
+        applied.efb_scale = live.efb_scale;
+    }
     set_render_config(applied);
     if (!applied.internal_follow_window) {
         stage_next_start_efb_scale(applied.efb_scale);
-    } else if (!live.internal_follow_window) {
+    } else {
         s_follow_window_rearm.store(true, std::memory_order_release);
     }
     s_settings_draft = get_render_config();
@@ -3469,6 +3474,10 @@ void RendererD3D12::follow_window_internal_resolution() {
         s_follow_window_rearm.exchange(false, std::memory_order_acq_rel)) {
         follow_window_width_ = 0u;
     }
+    if (follow_window_retry_ms_ != 0u && GetTickCount64() >= follow_window_retry_ms_) {
+        follow_window_retry_ms_ = 0u;
+        follow_window_width_ = 0u;
+    }
     if (s_bb_width == follow_window_width_ && s_bb_height == follow_window_height_ &&
         content_aspect == follow_window_aspect_) {
         return;
@@ -3535,6 +3544,9 @@ void RendererD3D12::apply_pending_efb_scale() {
         set_render_config(render);
         stage_next_start_efb_scale(efb_scale_);
         s_efb_scale_rejected.store(wanted, std::memory_order_release);
+        if (render.internal_follow_window) {
+            follow_window_retry_ms_ = GetTickCount64() + 10'000u;
+        }
         return;
     }
     // Between frames with nothing recording; the GPU must be done with the

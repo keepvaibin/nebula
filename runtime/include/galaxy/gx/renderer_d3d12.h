@@ -677,6 +677,8 @@ private:
     UINT follow_window_width_ = 0;
     UINT follow_window_height_ = 0;
     double follow_window_aspect_ = 0.0;
+    // A scale refused for the memory budget is tried again at this tick.
+    std::uint64_t follow_window_retry_ms_ = 0;
     // (Re)creates the EFB color/depth conversion SRVs in their fixed slots.
     void refresh_efb_conversion_source_views();
     bool create_root_signature();

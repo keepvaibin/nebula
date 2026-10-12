@@ -242,6 +242,29 @@ int main() {
     passed &= expect(galaxy::gx::native_settings_overlay_snapshot().pending_changes == 0u,
                      "nothing is pending after apply");
 
+    // Match output: Apply keeps the scale the window follow chose after the
+    // menu opened.
+    render = galaxy::gx::get_render_config();
+    render.internal_follow_window = true;
+    render.efb_scale = 6u;
+    galaxy::gx::set_render_config(render);
+    passed &= expect(reopen(), "reopen on the graphics page");
+    render.efb_scale = 4u;
+    galaxy::gx::set_render_config(render);
+    passed &= expect(key(VK_RIGHT) &&
+                         galaxy::gx::native_settings_overlay_snapshot().pending_changes == 1u &&
+                         key(VK_RETURN),
+                     "an unrelated change applies");
+    passed &= expect(
+        galaxy::gx::get_render_config().internal_follow_window &&
+            galaxy::gx::get_render_config().efb_scale == 4u,
+        "apply keeps the followed internal resolution");
+    render = galaxy::gx::get_render_config();
+    render.internal_follow_window = false;
+    render.efb_scale = 2u;
+    galaxy::gx::set_render_config(render);
+    passed &= expect(reopen(), "back on the graphics page");
+
     galaxy::RuntimeSettings runtime{};
     runtime.input_mode = galaxy::RuntimeInputMode::KeyboardMouse;
     galaxy::set_runtime_settings(runtime);
