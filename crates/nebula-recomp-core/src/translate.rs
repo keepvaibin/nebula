@@ -3617,6 +3617,9 @@ fn lower_words_with_config(
         let typed_instruction_start = output.len();
         output.push_str("    {\n");
         final_instruction_is_terminal = false;
+        if rmge01_native_screen_width_call(address, function_end, pc, word) {
+            output.push_str("    galaxy::enter_experimental_rmge01_native_screen_width();\n");
+        }
 
         match instruction.op {
             Opcode::Addi => {
@@ -5968,6 +5971,9 @@ fn lower_words_with_config(
         // pair; guest operations run first and geometry hooks follow the
         // instruction block.
         let mut post_block_hooks = String::new();
+        if rmge01_native_screen_width_call(address, function_end, pc, word) {
+            post_block_hooks.push_str("    galaxy::exit_experimental_rmge01_native_screen_width();\n");
+        }
         let layout_vertical_fit = match (address, function_end, pc, word) {
             (0x803C_A6C4, 0x803C_A76C, 0x803C_A708, 0xEC21_1028) => Some((1, false)),
             (0x8036_6658, 0x8036_6758, 0x8036_6728, 0xFC00_0050) => Some((0, false)),
@@ -7031,6 +7037,20 @@ impl NativePureHelper {
 /// ABI-visible effects only.
 /// Eager FPU (ABI 25) means translated code never raises exception 7, so
 /// these need no exact-FPU restart and replace both the body and direct calls.
+/// The two calls in CollisionShadow::drawAndCaptureTex (0x80313AF4) that size
+/// Mario's shadow-softening circle in logical screen units: `bl TDDraw::setup`
+/// (2D camera from MR::getScreenWidth) and `bl TDDraw::fix2Dpos`. The circle
+/// lands in a fixed 160x160 EFB region, so these keep the game's 16:9 width
+/// under a widened aspect (without it the circle narrows at 32:9 and leaves
+/// the sides of the shadow dark).
+fn rmge01_native_screen_width_call(address: u32, function_end: u32, pc: u32, word: u32) -> bool {
+    matches!(
+        (address, function_end, pc, word),
+        (0x8031_3AF4, 0x8031_3E5C, 0x8031_3CFC, 0x480E_CC8D)
+            | (0x8031_3AF4, 0x8031_3E5C, 0x8031_3D80, 0x480E_EFB1)
+    )
+}
+
 fn lean_sdk_math_symbol(address: u32) -> Option<&'static str> {
     match address {
         0x804B_5EDC => Some("lean_psmtx_identity"),
@@ -10529,7 +10549,8 @@ fn emit_sharded_module_with_experiment(
                 || file.contents.contains("void fn_80366658(")
                 || file.contents.contains("void fn_80366758(")
                 || file.contents.contains("void fn_803626CC(")
-                || file.contents.contains("void fn_80097288("))
+                || file.contents.contains("void fn_80097288(")
+                || file.contents.contains("void fn_80313AF4("))
         {
             file.contents = file.contents.replacen(
                 "#include \"functions.h\"\n",
@@ -12160,6 +12181,35 @@ mod tests {
         words.pop();
         words[10] = 0x4E80_0020;
         assert!(!lower_instruction_fixture(0x803F_6B44, &words).contains(hook));
+    }
+
+    #[test]
+    fn rmge01_shadow_softening_calls_keep_the_native_screen_width() {
+        // CollisionShadow::drawAndCaptureTex: 0x368 bytes, bl TDDraw::setup at
+        // +0x208 and bl TDDraw::fix2Dpos at +0x28C, final blr.
+        let mut words = vec![0x6000_0000; 0x368 / 4];
+        words[0x208 / 4] = 0x480E_CC8D;
+        words[0x28C / 4] = 0x480E_EFB1;
+        *words.last_mut().unwrap() = 0x4E80_0020;
+        let enter = "galaxy::enter_experimental_rmge01_native_screen_width();";
+        let exit = "galaxy::exit_experimental_rmge01_native_screen_width();";
+        let output = lower_instruction_fixture(0x8031_3AF4, &words);
+        assert_eq!(output.matches(enter).count(), 2);
+        assert_eq!(output.matches(exit).count(), 2);
+        // Each bracket opens inside the call's block, before the call, and
+        // closes right after the block.
+        for callee in ["0x80400988u", "0x80402D30u"] {
+            let call = output.find(callee).expect("call is emitted");
+            let open = output[..call].rfind(enter).expect("enter precedes the call");
+            assert!(!output[open..call].contains(exit));
+            let close = output[call..].find(exit).expect("exit follows the call") + call;
+            assert!(!output[call..close].contains(enter));
+        }
+        // Another function at a different address or length gets no bracket.
+        assert!(!lower_instruction_fixture(0x8031_3AF0, &words).contains(enter));
+        words.pop();
+        *words.last_mut().unwrap() = 0x4E80_0020;
+        assert!(!lower_instruction_fixture(0x8031_3AF4, &words).contains(enter));
     }
 
     #[test]

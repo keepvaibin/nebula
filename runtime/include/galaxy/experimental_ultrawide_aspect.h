@@ -350,13 +350,30 @@ inline void apply_experimental_rmge01_native_four_three_aspect_read(
     }
 }
 
+// CollisionShadow::drawAndCaptureTex sizes Mario's shadow-softening circle in
+// logical screen units but draws it into a fixed 160x160 EFB region; the
+// translator brackets its two width-dependent calls with these so that
+// MR::getScreenWidth keeps the game's 16:9 width there. Guest code runs on one
+// host thread, and both brackets enclose plain 2D setup calls that cannot
+// switch threads; every entry also resets the flag. The flag lives in the
+// game module, next to the MR::getScreenWidth hook that reads it.
+inline unsigned g_rmge01_native_screen_width_scope = 0u;
+
+inline void enter_experimental_rmge01_native_screen_width() noexcept {
+    g_rmge01_native_screen_width_scope = 1u;
+}
+
+inline void exit_experimental_rmge01_native_screen_width() noexcept {
+    g_rmge01_native_screen_width_scope = 0u;
+}
+
 // This hook is included only by the static shard that owns MR::getScreenWidth.
 // The shared guest ABI header stays independent of experimental display code.
 template <typename PpcContextLike, typename ServicesLike>
 inline void apply_experimental_rmge01_ultrawide_screen_width(
     PpcContextLike* context, const ServicesLike* services) {
     const auto policy = experimental_effective_guest_aspect(services);
-    if (!policy) {
+    if (!policy || g_rmge01_native_screen_width_scope != 0u) {
         return;
     }
     if (policy->guest_screen_width == 608u &&
