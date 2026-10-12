@@ -703,6 +703,7 @@ add_library(galaxy_gx STATIC
     runtime/src/gx/post_process.cpp
     ${galaxy_post_headers}
     runtime/src/gx/temporal_upscaler.cpp
+    runtime/src/gx/transform_history.cpp
     runtime/src/gx/display_modes.cpp
     runtime/src/gx/fifo_parser.cpp
     runtime/src/gx/gx_backend.cpp
@@ -992,6 +993,10 @@ target_link_libraries(galaxy_vs_constants_tests PRIVATE galaxy_gx)
 add_executable(galaxy_render_config_tests runtime/src/gx/render_config_tests.cpp)
 target_link_libraries(galaxy_render_config_tests PRIVATE galaxy_gx)
 
+add_executable(galaxy_transform_history_tests runtime/src/gx/transform_history_tests.cpp
+    runtime/src/gx/transform_history.cpp)
+target_include_directories(galaxy_transform_history_tests PRIVATE runtime/include)
+
 add_executable(galaxy_frame_completion_tests
     runtime/src/gx/frame_completion_tests.cpp)
 target_link_libraries(galaxy_frame_completion_tests PRIVATE galaxy_gx)
@@ -1115,6 +1120,7 @@ if(MSVC)
         galaxy_fifo_parser_tests
         galaxy_vertex_loader_tests
         galaxy_render_config_tests
+        galaxy_transform_history_tests
         galaxy_frame_completion_tests
         galaxy_window_owner_tests
         galaxy_memory_snapshot_tests
@@ -1195,6 +1201,7 @@ galaxy_add_native_test(ppc_float_helpers galaxy_ppc_float_tests)
 galaxy_add_native_test(dsp_alu_helpers galaxy_dsp_alu_tests)
 galaxy_add_native_test(native_dsp_coprocessor galaxy_native_dsp_tests)
 galaxy_add_native_test(render_config_gates galaxy_render_config_tests)
+galaxy_add_native_test(transform_history_matching galaxy_transform_history_tests)
 galaxy_add_native_test(frame_pe_completion galaxy_frame_completion_tests)
 galaxy_add_native_test(native_window_owner galaxy_window_owner_tests)
 set_tests_properties(native_window_owner PROPERTIES TIMEOUT 20)

@@ -192,6 +192,21 @@ namespace Nebula
     # The runtime generates and persists its own cache on each user's PC.
     # Do not require untracked developer cache files in a git-archive build.
 
+    # Shader-cache seed (Nebula-generated DXBC + pipeline keys; docs/CONTENT_POLICY.md).
+    # InstallEngine.SeedShaderCache extracts 'shadercache-seed.<name>' on a fresh install.
+    # A seed whose header version differs from the runtime's constants is refused.
+    $cacheSource = Get-Content -LiteralPath (Join-Path $src 'runtime/src/gx/pipeline_cache.cpp') -Raw
+    $shaderCacheVersion = [uint32][regex]::Match($cacheSource, 'kShaderCacheVersion\s*=\s*(\d+)u').Groups[1].Value
+    foreach ($seedName in 'shaders.bin', 'psos.bin') {
+        $seedPath = Join-Path $src ('installer/shadercache-seed/RMGE01/' + $seedName)
+        if (-not (Test-Path -LiteralPath $seedPath)) { continue }
+        $seedBytes = [IO.File]::ReadAllBytes($seedPath)
+        $seedVersion = [BitConverter]::ToUInt32($seedBytes, 4)
+        $expected = if ($seedName -eq 'shaders.bin') { $shaderCacheVersion } else { 0x100 + $shaderCacheVersion }
+        if ($seedVersion -ne $expected) { throw "Shader-cache seed $seedName has version $seedVersion; the runtime expects $expected. Refresh the seed." }
+        $resources['shadercache-seed.' + $seedName] = $seedPath
+    }
+
     $resourceArgs = @($resources.GetEnumerator() | ForEach-Object { "/resource:$($_.Value),$($_.Key)" })
     # Older preview updaters inspect every prerelease but recognize only the
     # standard asset name. Keep beta assets separate even for those clients.

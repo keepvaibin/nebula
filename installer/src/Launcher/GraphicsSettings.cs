@@ -17,7 +17,8 @@ namespace Nebula.Launcher
         public static readonly string[] Aspects = { "Auto (match the window)", "4:3", "16:10", "16:9", "21:9", "32:9" };
         public static readonly string[] AntiAliasingModes = { "Off", "SMAA", "Auto (SMAA unless supersampled)", "FXAA" };
         public static readonly string[] AntiAliasingQualities = { "Low", "Medium", "High", "Ultra" };
-        public static readonly string[] Upscalers = { "Bilinear", "AMD FidelityFX FSR 1" };
+        public static readonly string[] Upscalers = { "Bilinear", "AMD FidelityFX FSR 1", "AMD FidelityFX FSR 3" };
+        public static readonly string[] TemporalQualities = { "Native AA", "Quality", "Balanced", "Performance", "Ultra performance" };
         public static readonly string[] TextureFilters = { "Trilinear", "2x anisotropic", "4x anisotropic", "8x anisotropic", "16x anisotropic" };
         public static readonly string[] LightingModes = { "Per pixel (enhanced)", "Per vertex (original)" };
         public static readonly string[] DrawDistances = { "Original", "2x", "4x", "8x" };
@@ -55,6 +56,7 @@ namespace Nebula.Launcher
         public bool VSync = false;
         public int FrameRate = 60;
         public int AntiAliasing = 2, Quality = 2, Upscaler = 1, Sharpness = 20, TextureFilter = 3, DrawDistance = 2;
+        public int TemporalQuality = 1;
         public bool GeneratedMipmaps = true, PerPixelLighting = true, HudOutputResolution = false;
 
         public static string ConfigPath { get { return Path.Combine(NebulaPaths.DataRoot, "config.ini"); } }
@@ -87,6 +89,7 @@ namespace Nebula.Launcher
             settings.AntiAliasing = Choice(values, "aa", AntiAliasingModes.Length, settings.AntiAliasing);
             settings.Quality = Choice(values, "smaa_quality", AntiAliasingQualities.Length, settings.Quality);
             settings.Upscaler = Choice(values, "upscaler", Upscalers.Length, settings.Upscaler);
+            settings.TemporalQuality = Choice(values, "temporal_quality", TemporalQualities.Length, settings.TemporalQuality);
             settings.Sharpness = Math.Min(Choice(values, "sharpness", 101, settings.Sharpness), 100);
             settings.DrawDistance = Choice(values, "draw_distance", DrawDistances.Length, settings.DrawDistance);
             int anisotropy = Choice(values, "anisotropic_filtering", 17, -1);
@@ -121,6 +124,7 @@ namespace Nebula.Launcher
             Set(lines, "aa", AntiAliasing);
             Set(lines, "smaa_quality", Quality);
             Set(lines, "upscaler", Upscaler);
+            Set(lines, "temporal_quality", TemporalQuality);
             Set(lines, "sharpness", Sharpness);
             Set(lines, "anisotropic_filtering", Anisotropy[Math.Max(0, Math.Min(TextureFilter, Anisotropy.Length - 1))]);
             Set(lines, "enhanced_mipmaps", GeneratedMipmaps ? 1 : 0);

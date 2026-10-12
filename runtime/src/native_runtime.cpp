@@ -24162,6 +24162,29 @@ void call_guest_impl_body(
         if (guest_address == 0x8033EE8Cu) {
             apply_draw_distance(state);
             apply_test_teleport(state, context, memory);
+            // MR::getCameraViewMtx (0x803C73CC): *(r13 - 0x3A78) -> +0x24 ->
+            // +0xAC -> +0x10 -> scene object 0x17 (CameraContext) -> view
+            // matrix at +0x0C. Motion vectors and interpolation use it for
+            // draws without a previous transform.
+            const auto& space = *state.address_space;
+            std::uint32_t object = 0u;
+            if (try_read_guest_u32(space, context->gpr[13] - 0x3A78u, object) &&
+                try_read_guest_u32(space, object + 0x24u, object) &&
+                try_read_guest_u32(space, object + 0xACu, object) &&
+                try_read_guest_u32(space, object + 0x10u, object) &&
+                try_read_guest_u32(space, object + 0x17u * 4u, object) && object != 0u) {
+                float view[12]{};
+                bool valid = true;
+                for (unsigned i = 0; i < 12u && valid; ++i) {
+                    std::uint32_t bits = 0u;
+                    valid = try_read_guest_u32(space, object + 0x0Cu + 4u * i, bits);
+                    view[i] = std::bit_cast<float>(bits);
+                    valid = valid && std::isfinite(view[i]);
+                }
+                if (valid) {
+                    galaxy::gx::attach_scene_view(view);
+                }
+            }
         }
         galaxy::gx::attach_fifo_marker(
             guest_address == 0x8033EE8Cu ? galaxy::gx::FifoMarker::SceneBegin

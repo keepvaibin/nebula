@@ -113,6 +113,16 @@ static_assert(sizeof(TevStagePacked) == 16);
 // lit triangle draw's vertex and pixel keys by the backend.
 inline constexpr std::uint8_t kVsKeyPerPixelLighting = 0x08u;
 inline constexpr std::uint8_t kPsKeyPerPixelLighting = 0x01u;
+// Motion vectors (temporal scenes): set together on the vertex and pixel
+// keys of an opaque triangle draw, whose pipeline carries the motion-vector
+// target as render target 1 (RenderStateKey blend_bits bit 29).
+inline constexpr std::uint8_t kVsKeyMotion = 0x10u;
+inline constexpr std::uint8_t kPsKeyMotion = 0x02u;
+inline constexpr std::uint32_t kRenderStateMotionTarget = 1u << 29u;
+// Reactive mask (temporal scenes): a blended triangle draw also writes its
+// alpha (max-blended, capped at 0.9) to an R8 render target 1.
+inline constexpr std::uint8_t kPsKeyReactive = 0x04u;
+inline constexpr std::uint32_t kRenderStateReactiveTarget = 1u << 30u;
 
 struct PixelShaderKey {
     std::uint8_t num_tev_stages;    // 1-16

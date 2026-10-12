@@ -83,6 +83,8 @@ static ComPtr<ID3D12RootSignature> s_conv_root_sig;
 static ComPtr<ID3D12RootSignature> s_clear_root_sig;
 // Cached backbuffer dimensions set during initialize.
 static UINT s_bb_width  = 1280;
+// Swap-chain presents per second (any source), for the FRAME RATE row.
+static std::atomic<double> s_measured_present_hz{0.0};
 static UINT s_bb_height =  720;
 
 // See set_native_settings_content_root in gx_d3d12.h. The setter itself is
@@ -481,6 +483,7 @@ unsigned pending_settings_changes() {
     changes += d.aa_mode != live.aa_mode;
     changes += d.smaa_quality != live.smaa_quality;
     changes += d.upscaler != live.upscaler;
+    changes += d.temporal_quality != live.temporal_quality;
     changes += d.sharpness != live.sharpness;
     changes += d.anisotropic_filtering != live.anisotropic_filtering;
     changes += d.enhanced_mipmaps != live.enhanced_mipmaps;
@@ -621,7 +624,7 @@ void reset_controls_draft() {
 unsigned native_settings_row_count(unsigned tab) {
     switch (tab % kNativeSettingsTabCount) {
     case 0: return 8u;
-    case 1: return 9u;
+    case 1: return 10u;
     case 2: return controls_row_count();
     case 3: return 6u;
     case 4: return 6u;
@@ -718,6 +721,7 @@ void apply_native_settings_draft() {
     applied.aa_mode = next.aa_mode;
     applied.smaa_quality = next.smaa_quality;
     applied.upscaler = next.upscaler;
+    applied.temporal_quality = next.temporal_quality;
     applied.sharpness = next.sharpness;
     applied.anisotropic_filtering = next.anisotropic_filtering;
     applied.enhanced_mipmaps = next.enhanced_mipmaps;
@@ -921,12 +925,17 @@ void adjust_native_setting_unlogged(int delta) {
         switch (row) {
         case 0: draft.aa_mode = step(std::min(draft.aa_mode, 3u), 4u); break;
         case 1: draft.smaa_quality = step(std::min(draft.smaa_quality, 3u), 4u); break;
-        case 2: draft.upscaler = step(std::min(draft.upscaler, 1u), 2u); break;
-        case 3:
+        case 2: {
+            const unsigned count = fsr3_available() ? 3u : 2u;
+            draft.upscaler = step(std::min(draft.upscaler, count - 1u), count);
+            break;
+        }
+        case 3: draft.temporal_quality = step(std::min(draft.temporal_quality, 4u), 5u); break;
+        case 4:
             draft.sharpness = static_cast<unsigned>(std::clamp(
                 static_cast<int>(std::min(draft.sharpness, 100u)) + delta * 10, 0, 100));
             break;
-        case 4: {
+        case 5: {
             std::size_t index = 0u;
             for (std::size_t i = 0; i < kAnisotropy.size(); ++i) {
                 if (kAnisotropy[i] <= draft.anisotropic_filtering) index = i;
@@ -935,10 +944,10 @@ void adjust_native_setting_unlogged(int delta) {
                 static_cast<unsigned>(index), static_cast<unsigned>(kAnisotropy.size()))];
             break;
         }
-        case 5: draft.enhanced_mipmaps = !draft.enhanced_mipmaps; break;
-        case 6: draft.per_pixel_lighting = !draft.per_pixel_lighting; break;
-        case 7: draft.hud_output_resolution = !draft.hud_output_resolution; break;
-        case 8: draft.draw_distance = step(std::min(draft.draw_distance, 3u), 4u); break;
+        case 6: draft.enhanced_mipmaps = !draft.enhanced_mipmaps; break;
+        case 7: draft.per_pixel_lighting = !draft.per_pixel_lighting; break;
+        case 8: draft.hud_output_resolution = !draft.hud_output_resolution; break;
+        case 9: draft.draw_distance = step(std::min(draft.draw_distance, 3u), 4u); break;
         default: return;
         }
         return;
@@ -3158,7 +3167,7 @@ static constexpr unsigned    kSrvPerFrame = 32768u;
 // their two views outside the rewound frame segments instead of copying a
 // descriptor into the frame ring for every EFB conversion. TextureCache's own
 // SRV indices are independent of this prefix.
-static constexpr unsigned    kPersistentSrvDescriptors = 4u;  // EFB and output EFB conversion sources
+static constexpr unsigned    kPersistentSrvDescriptors = 6u;  // EFB, output EFB and sub-frame EFB conversion sources
 
 void RendererD3D12::wait_for_gpu() {
     const std::uint64_t val = ++next_fence_value_;
@@ -3363,11 +3372,13 @@ void RendererD3D12::carry_over_efb_contents() {
     command_list_->RSSetScissorRects(1, &scissor);
     command_list_->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
     command_list_->OMSetRenderTargets(1, &efb_rtv_, FALSE, nullptr);
+    bound_rt_aux_ = 0u;
     command_list_->SetPipelineState(blit_pipeline_.Get());
     command_list_->SetGraphicsRootDescriptorTable(0, table.gpu);
     command_list_->DrawInstanced(3, 1, 0, 0);
     if (efb_carry_depth_pso_) {
         command_list_->OMSetRenderTargets(0, nullptr, FALSE, &efb_dsv_);
+        bound_rt_aux_ = 0u;
         command_list_->SetPipelineState(efb_carry_depth_pso_.Get());
         command_list_->SetGraphicsRootDescriptorTable(0, depth_gpu);
         command_list_->DrawInstanced(3, 1, 0, 0);
@@ -3628,7 +3639,7 @@ bool RendererD3D12::create_sampler_heap() {
 }
 
 void RendererD3D12::reset_sampler_frame() {
-    sampler_heap_ = sampler_heaps_[frame_slot_];
+    sampler_heap_ = sampler_heaps_[sampler_slot_];
 
     const RenderConfig cfg = get_render_config();
     const std::uint32_t config_key = sampler_config_key(cfg);
@@ -3636,11 +3647,11 @@ void RendererD3D12::reset_sampler_frame() {
     // a different slot's cache has no initialized descriptors in this heap.
     // Each heap warms independently, retaining its eight-descriptor tables
     // until its sampler configuration changes.
-    sampler_tables_[frame_slot_].reset(config_key);
+    sampler_tables_[sampler_slot_].reset(config_key);
 
     default_sampler_table_ = sampler_heap_->GetGPUDescriptorHandleForHeapStart();
-    if (default_sampler_valid_[frame_slot_] &&
-        default_sampler_config_keys_[frame_slot_] == config_key) {
+    if (default_sampler_valid_[sampler_slot_] &&
+        default_sampler_config_keys_[sampler_slot_] == config_key) {
         return;
     }
 
@@ -3672,8 +3683,8 @@ void RendererD3D12::reset_sampler_frame() {
     }
     // Slots 0..7 are never allocated dynamically. Their descriptors survive
     // this slot's fence/reset, and need rewriting only for changed settings.
-    default_sampler_config_keys_[frame_slot_] = config_key;
-    default_sampler_valid_[frame_slot_] = true;
+    default_sampler_config_keys_[sampler_slot_] = config_key;
+    default_sampler_valid_[sampler_slot_] = true;
 }
 
 // Packed sampler key layout (must match pack_sampler_key in gx_backend.cpp):
@@ -3685,7 +3696,7 @@ void RendererD3D12::reset_sampler_frame() {
 D3D12_GPU_DESCRIPTOR_HANDLE RendererD3D12::sampler_table_for(
     const std::uint32_t keys[8]) {
     const RenderConfig cfg = get_render_config();
-    const auto allocation = sampler_tables_[frame_slot_].get_or_allocate(make_sampler_table_key(keys, cfg));
+    const auto allocation = sampler_tables_[sampler_slot_].get_or_allocate(make_sampler_table_key(keys, cfg));
     const unsigned table_base = allocation.index;
     const UINT stride = device_->GetDescriptorHandleIncrementSize(
         D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER);
@@ -4637,7 +4648,7 @@ bool RendererD3D12::initialize(int window_width, int window_height, unsigned efb
         if (!index_ring_   .initialize(device_.Get(), "index",    ib_per_frame_bytes(),  kFramesInFlight)) return false;
         if (!constant_ring_.initialize(device_.Get(), "constant", cb_per_frame_bytes(),  kFramesInFlight)) return false;
         if (!matrix_ring_  .initialize(device_.Get(), "matrix",   mtx_per_frame_bytes(), kFramesInFlight)) return false;
-        if (!srv_ring_.initialize(device_.Get(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, kSrvPerFrame, kFramesInFlight, kPersistentSrvDescriptors)) return false;
+        if (!srv_ring_.initialize(device_.Get(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, kSrvPerFrame, kRingSegments, kPersistentSrvDescriptors)) return false;
 
         // Conversion sources occupy the descriptor ring's immutable prefix.
         if (!create_conversion_pipeline()) return false;
@@ -5578,7 +5589,47 @@ void RendererD3D12::begin_frame(bool present_swap_chain) {
     follow_window_internal_resolution();
     apply_pending_efb_scale();
     sync_post_process_settings();
+    {
+        const RingMode mode = temporal_mode() ? RingMode::Temporal
+            : interpolation_mode() ? RingMode::Interp : RingMode::Normal;
+        if (mode != ring_mode_) {
+            wait_for_gpu();
+            const unsigned segments = mode == RingMode::Interp ? kRingSegments : kFramesInFlight;
+            const unsigned matrix_segments = mode == RingMode::Normal ? kFramesInFlight : kRingSegments;
+            vertex_ring_.reset();
+            index_ring_.reset();
+            constant_ring_.reset();
+            matrix_ring_.reset();
+            // Interpolated sub-frames add one VS constant block per scene
+            // record each; the constant segment holds a whole game frame.
+            if (!vertex_ring_.initialize(device_.Get(), "vertex", vb_per_frame_bytes(), segments) ||
+                !index_ring_.initialize(device_.Get(), "index", ib_per_frame_bytes(), segments) ||
+                !constant_ring_.initialize(device_.Get(), "constant",
+                    cb_per_frame_bytes() * (mode == RingMode::Interp ? 4u : 1u), segments) ||
+                !matrix_ring_.initialize(device_.Get(), "matrix", mtx_per_frame_bytes(), matrix_segments)) {
+                throw std::runtime_error("ring resize failed");
+            }
+            matrix_segments_ = matrix_segments;
+            matrix_segment_ = 0u;
+            matrix_segment_fence_.fill(0u);
+            matrix_segment_used_ = false;
+            matrix_segment_started_ = false;
+            ring_segment_ = 0u;
+            ring_segment_fence_.fill(0u);
+            ring_advance_pending_ = true;
+            replay_valid_ = false;
+            replay_recording_ = false;
+            ring_mode_ = mode;
+        }
+    }
     frame_slot_ = static_cast<unsigned>(frame_index_ % kFramesInFlight);
+    if (ring_mode_ != RingMode::Interp) {
+        if (replay_valid_ && frame_slot_ == replay_source_slot_) {
+            // The recorded frame's ring segments are about to be rewound.
+            replay_valid_ = false;
+        }
+        replay_recording_ = false;
+    }
     last_latency_wait_us_ = 0;
     last_frame_slot_wait_us_ = 0;
     last_timestamp_read_us_ = 0;
@@ -5694,12 +5745,58 @@ void RendererD3D12::begin_frame(bool present_swap_chain) {
             frame_slot_ * 2u);
     }
 
+    if (ring_mode_ == RingMode::Interp) {
+        // One segment per game frame: the frames (chunks) of a game frame
+        // append to it, so its draws stay replayable until the segment
+        // comes round again.
+        if (ring_advance_pending_) {
+            ring_advance_pending_ = false;
+            ring_segment_ = (ring_segment_ + 1u) % kRingSegments;
+            if (replay_valid_ && ring_segment_ == replay_segment_) {
+                replay_valid_ = false;
+            }
+            if (run_valid_ && ring_segment_ == run_segment_) {
+                run_valid_ = false;
+            }
+            if (ring_segment_fence_[ring_segment_] != 0u) {
+                wait_for_fence_value(ring_segment_fence_[ring_segment_]);
+            }
+            vertex_ring_.begin_frame(ring_segment_);
+            index_ring_.begin_frame(ring_segment_);
+            constant_ring_.begin_frame(ring_segment_);
+            matrix_ring_.begin_frame(ring_segment_);
+            srv_ring_.begin_frame(ring_segment_);
+            sampler_slot_ = ring_segment_;
+            reset_sampler_frame();
+            // A frame that never reached its display copy is dropped.
+            begin_replay_record();
+        }
+    } else {
     vertex_ring_  .begin_frame(frame_slot_);
     index_ring_   .begin_frame(frame_slot_);
     constant_ring_.begin_frame(frame_slot_);
-    matrix_ring_  .begin_frame(frame_slot_);
+    if (matrix_segments_ == kFramesInFlight) {
+        matrix_ring_.begin_frame(frame_slot_);
+    } else {
+        // Temporal mode: a frame that wrote no palette keeps appending to the
+        // current segment, so the previous scene's palettes stay addressable
+        // across present, peek and utility frames.
+        if (matrix_segment_used_ || !matrix_segment_started_) {
+            matrix_segment_ = (matrix_segment_ + 1u) % matrix_segments_;
+            ++matrix_segment_serial_;
+            if (matrix_segment_fence_[matrix_segment_] != 0u) {
+                wait_for_fence_value(matrix_segment_fence_[matrix_segment_]);
+            }
+            matrix_ring_.begin_frame(matrix_segment_);
+            matrix_segment_started_ = true;
+        }
+        matrix_begin_cursor_ = matrix_ring_.cursor();
+    }
     srv_ring_     .begin_frame(frame_slot_);
+    sampler_slot_ = frame_slot_;
     reset_sampler_frame();
+    }
+    bound_rt_aux_ = 0u;
     retired_efb_copy_textures_[frame_slot_].clear();
 
     // Bind both heaps for the entire frame.
@@ -5895,16 +5992,301 @@ void RendererD3D12::pace_present_if_needed(
             : ((now.QuadPart - target > max_lag) ? now.QuadPart : target);
 }
 
+void RendererD3D12::present_to_swap_chain() {
+    const bool stall_watch = trace_stall_watch_enabled();
+    const RenderConfig cfg = get_render_config();
+    const UINT vsync = present_sync_interval(std::min(2u, cfg.vsync_interval), cfg.max_fps);
+    const UINT present_flags =
+        (vsync == 0 && tearing_supported_ && !exclusive_fullscreen_active_) ? DXGI_PRESENT_ALLOW_TEARING
+                                           : 0u;
+    const auto stall_watch_pace_start = stall_watch
+        ? std::chrono::steady_clock::now()
+        : std::chrono::steady_clock::time_point{};
+    pace_present_if_needed(cfg.vsync_interval, cfg.max_fps);
+    if (stall_watch) {
+        const double stall_watch_ms =
+            std::chrono::duration<double, std::milli>(
+                std::chrono::steady_clock::now() -
+                stall_watch_pace_start).count();
+        if (stall_watch_ms > 12.0) {
+            std::ostringstream message;
+            message << "[stall-watch] pace_present_if_needed took "
+                      << stall_watch_ms
+                      << "ms vsync=" << cfg.vsync_interval
+                      << " max-fps=" << cfg.max_fps << '\n';
+            std::cerr << message.str();
+        }
+    }
+    const bool collect_present_telemetry = trace_present_stats_enabled();
+    LARGE_INTEGER present_start{};
+    LARGE_INTEGER present_end{};
+    if (collect_present_telemetry) {
+        QueryPerformanceCounter(&present_start);
+    }
+    const auto stall_watch_present_start = stall_watch
+        ? std::chrono::steady_clock::now()
+        : std::chrono::steady_clock::time_point{};
+    static std::uint64_t timeline_present_ordinal = 0u;
+    const bool timeline_present = galaxy::timeline::enabled();
+    if (timeline_present) {
+        galaxy::timeline::record(galaxy::timeline::Event::PresentBegin,
+                             ++timeline_present_ordinal, vsync);
+    }
+    const HRESULT present_hr = swap_chain_->Present(vsync, present_flags);
+    if (timeline_present) {
+        galaxy::timeline::record(galaxy::timeline::Event::PresentEnd,
+                             timeline_present_ordinal);
+        // The OS's own record of which refresh showed which present.
+        DXGI_FRAME_STATISTICS statistics{};
+        // An occluded or not yet displayed swap chain reports a zero
+        // sync time; that is no timeline instant.
+        if (SUCCEEDED(swap_chain_->GetFrameStatistics(&statistics)) &&
+            statistics.SyncQPCTime.QuadPart != 0) {
+            galaxy::timeline::record_at(
+                galaxy::timeline::Event::DisplayStats,
+                static_cast<std::uint64_t>(statistics.SyncQPCTime.QuadPart),
+                (static_cast<std::uint64_t>(statistics.PresentCount) << 32u) |
+                    statistics.PresentRefreshCount,
+                statistics.SyncRefreshCount);
+        }
+        if (timeline_present_ordinal % 30u == 1u) {
+            using DwmTimingFn = HRESULT(WINAPI*)(HWND, DWM_TIMING_INFO*);
+            static const DwmTimingFn dwm_timing = [] {
+                const HMODULE dwm = LoadLibraryW(L"dwmapi.dll");
+                return dwm == nullptr ? nullptr
+                    : reinterpret_cast<DwmTimingFn>(
+                          GetProcAddress(dwm, "DwmGetCompositionTimingInfo"));
+            }();
+            DWM_TIMING_INFO timing{};
+            timing.cbSize = sizeof(timing);
+            if (dwm_timing != nullptr && SUCCEEDED(dwm_timing(nullptr, &timing)) &&
+                timing.qpcVBlank != 0u) {
+                galaxy::timeline::record_at(galaxy::timeline::Event::VBlank, timing.qpcVBlank,
+                                        timing.qpcRefreshPeriod);
+            }
+        }
+    }
+    if (stall_watch) {
+        const double stall_watch_ms =
+            std::chrono::duration<double, std::milli>(
+                std::chrono::steady_clock::now() -
+                stall_watch_present_start).count();
+        if (stall_watch_ms > 12.0) {
+            std::ostringstream message;
+            message << "[stall-watch] IDXGISwapChain::Present took "
+                      << stall_watch_ms << "ms vsync=" << vsync
+                      << " flags=" << present_flags << '\n';
+            std::cerr << message.str();
+        }
+    }
+    if (FAILED(present_hr)) {
+        dump_device_removal(device_.Get());
+        d3d_check(present_hr, "Present");
+    }
+    has_presented_swap_chain_ = true;
+    {
+        LARGE_INTEGER now{};
+        QueryPerformanceCounter(&now);
+        ++measured_present_count_;
+        if (measured_present_window_qpc_ == 0) {
+            measured_present_window_qpc_ = now.QuadPart;
+            measured_present_count_ = 0u;
+        } else if (qpc_frequency_.QuadPart > 0 &&
+                   now.QuadPart - measured_present_window_qpc_ >= qpc_frequency_.QuadPart) {
+            const double hz = static_cast<double>(measured_present_count_) *
+                static_cast<double>(qpc_frequency_.QuadPart) /
+                static_cast<double>(now.QuadPart - measured_present_window_qpc_);
+            measured_present_hz_.store(hz, std::memory_order_relaxed);
+            s_measured_present_hz.store(hz, std::memory_order_relaxed);
+            measured_present_window_qpc_ = now.QuadPart;
+            measured_present_count_ = 0u;
+        }
+    }
+    if (collect_present_telemetry) {
+        QueryPerformanceCounter(&present_end);
+        DXGI_FRAME_STATISTICS shown{};
+        if (SUCCEEDED(swap_chain_->GetFrameStatistics(&shown)) &&
+            shown.PresentCount != last_stats_present_count_) {
+            if (last_stats_present_count_ != 0u &&
+                shown.PresentCount == last_stats_present_count_ + 1u) {
+                const UINT refreshes =
+                    shown.PresentRefreshCount - last_stats_present_refresh_count_;
+                ++telemetry_shown_refreshes_[std::min<UINT>(refreshes, 4u)];
+            }
+            last_stats_present_count_ = shown.PresentCount;
+            last_stats_present_refresh_count_ = shown.PresentRefreshCount;
+        }
+        if (display_refresh_hz_ == 0.0) {
+            refresh_display_rate();
+        }
+    }
+
+    if (collect_present_telemetry && qpc_frequency_.QuadPart != 0) {
+        const double present_ms =
+            static_cast<double>(
+                present_end.QuadPart - present_start.QuadPart) *
+            1000.0 / static_cast<double>(qpc_frequency_.QuadPart);
+        telemetry_present_ms_ += present_ms;
+        telemetry_present_max_ms_ =
+            std::max(telemetry_present_max_ms_, present_ms);
+
+        if (telemetry_window_start_qpc_ == 0) {
+            telemetry_window_start_qpc_ = present_end.QuadPart;
+            telemetry_first_serial_start_ = xfb_present_stats().first_serial_presentations;
+            telemetry_xfb_copy_start_ = xfb_copy_count();
+        }
+        if (last_present_qpc_ != 0) {
+            const double interval_ms =
+                static_cast<double>(
+                    present_end.QuadPart - last_present_qpc_) *
+                1000.0 / static_cast<double>(qpc_frequency_.QuadPart);
+            telemetry_interval_ms_ += interval_ms;
+            ++telemetry_interval_count_;
+            telemetry_interval_max_ms_ =
+                std::max(telemetry_interval_max_ms_, interval_ms);
+        }
+        last_present_qpc_ = present_end.QuadPart;
+        ++telemetry_present_count_;
+
+        const double elapsed_seconds =
+            static_cast<double>(
+                present_end.QuadPart - telemetry_window_start_qpc_) /
+            static_cast<double>(qpc_frequency_.QuadPart);
+        if (elapsed_seconds >= 2.0) {
+            const auto progress = xfb_present_stats();
+            const auto produced_copies = xfb_copy_count();
+            const double present_fps =
+                static_cast<double>(telemetry_present_count_) /
+                elapsed_seconds;
+            const double adjacent_serial_transition_hz =
+                static_cast<double>(
+                    telemetry_adjacent_serial_transition_count_) /
+                elapsed_seconds;
+            const double interval_avg =
+                telemetry_interval_count_ != 0u
+                    ? telemetry_interval_ms_ /
+                          static_cast<double>(telemetry_interval_count_)
+                    : 0.0;
+            const double present_avg =
+                telemetry_present_ms_ /
+                static_cast<double>(telemetry_present_count_);
+            const double pace_wait_avg =
+                telemetry_pace_wait_ms_ /
+                static_cast<double>(telemetry_present_count_);
+            const double latency_avg =
+                telemetry_latency_wait_ms_ /
+                static_cast<double>(telemetry_present_count_);
+            const double gpu_avg =
+                telemetry_gpu_samples_ != 0
+                    ? telemetry_gpu_ms_ /
+                          static_cast<double>(telemetry_gpu_samples_)
+                    : 0.0;
+            const double same_serial_or_replay_hz =
+                std::max(
+                    0.0, present_fps - adjacent_serial_transition_hz);
+            const double same_serial_or_replay_percent =
+                present_fps > 0.0
+                    ? same_serial_or_replay_hz * 100.0 / present_fps
+                    : 0.0;
+
+            // cerr is unit-buffered. Assemble one record before touching
+            // the redirected stream so field formatting cannot turn a
+            // single report into dozens of synchronous redirected writes while
+            // the simulation waits for this render submission's token.
+            std::ostringstream message;
+            message
+                << "[present-stats] fps=" << present_fps
+                << " new-serial-hz="
+                << static_cast<double>(progress.first_serial_presentations - telemetry_first_serial_start_) / elapsed_seconds
+                << " xfb-production-hz="
+                << static_cast<double>(produced_copies - telemetry_xfb_copy_start_) / elapsed_seconds
+                << " first-serial-total=" << progress.first_serial_presentations
+                << " xfb-copy-total=" << produced_copies
+                << " steady-ns=" << std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now().time_since_epoch()).count()
+                << " adjacent-serial-transition-hz="
+                << adjacent_serial_transition_hz
+                << " same-serial-or-replay-hz="
+                << same_serial_or_replay_hz
+                << " same-serial-or-replay-pct="
+                << same_serial_or_replay_percent
+                << " frame-ms(avg/max)=" << interval_avg << "/"
+                << telemetry_interval_max_ms_
+                << " latency-wait-ms(avg/max)=" << latency_avg << "/"
+                << telemetry_latency_wait_max_ms_
+                << " pace-wait-ms(avg/max)=" << pace_wait_avg << "/"
+                << telemetry_pace_wait_max_ms_
+                << " smooth-present="
+                << (smooth_realtime_present_enabled() ? 1 : 0)
+                << " smooth-max-wait-us="
+                << smooth_realtime_present_max_wait_us()
+                << " present-ms(avg/max)=" << present_avg << "/"
+                << telemetry_present_max_ms_
+                << " vsync=" << vsync
+                << " present-flags=" << present_flags
+                << " tearing-enabled=" << (tearing_supported_ ? 1 : 0)
+                << " remote-session="
+                << (GetSystemMetrics(SM_REMOTESESSION) != 0 ? 1 : 0)
+                << " gpu-timing=" << (!gpu_timestamps_enabled() ? "disabled" :
+                    telemetry_gpu_samples_ == 0u ? "pending" : "measured")
+                << " gpu-ms(avg)=";
+            if (telemetry_gpu_samples_ != 0u) message << gpu_avg;
+            else message << "unavailable";
+            message
+                << " gpu-samples=" << telemetry_gpu_samples_
+                << " gpu-total-ms=" << telemetry_gpu_ms_
+                << " gpu-scope=completed-renderer-command-lists"
+                << " no-xfb-presents="
+                << telemetry_no_xfb_present_count_
+                << " backbuffer-clears="
+                << telemetry_backbuffer_clear_count_
+                << " post-frames-total=" << post_process_.status().frames
+                << " aa-wanted-frames-total=" << post_process_.status().aa_wanted_frames
+                << " smaa-frames-total=" << post_process_.status().smaa_frames
+                << " fxaa-frames-total=" << post_process_.status().fxaa_frames
+                << " aa-skipped-frames-total=" << post_process_.status().aa_skipped_frames
+                << " refresh-hz=" << display_refresh_hz_
+                << " shown-refreshes(0/1/2/3/4+)="
+                << telemetry_shown_refreshes_[0] << '/'
+                << telemetry_shown_refreshes_[1] << '/'
+                << telemetry_shown_refreshes_[2] << '/'
+                << telemetry_shown_refreshes_[3] << '/'
+                << telemetry_shown_refreshes_[4]
+                << '\n';
+            std::cerr << message.str();
+            telemetry_shown_refreshes_ = {};
+
+            telemetry_window_start_qpc_ = present_end.QuadPart;
+            telemetry_first_serial_start_ = progress.first_serial_presentations;
+            telemetry_xfb_copy_start_ = produced_copies;
+            telemetry_present_count_ = 0;
+            telemetry_interval_count_ = 0;
+            telemetry_adjacent_serial_transition_count_ = 0;
+            telemetry_interval_ms_ = 0.0;
+            telemetry_interval_max_ms_ = 0.0;
+            telemetry_present_ms_ = 0.0;
+            telemetry_present_max_ms_ = 0.0;
+            telemetry_pace_wait_ms_ = 0.0;
+            telemetry_pace_wait_max_ms_ = 0.0;
+            telemetry_latency_wait_ms_ = 0.0;
+            telemetry_latency_wait_max_ms_ = 0.0;
+            telemetry_gpu_ms_ = 0.0;
+            telemetry_gpu_samples_ = 0;
+            telemetry_no_xfb_present_count_ = 0;
+            telemetry_backbuffer_clear_count_ = 0;
+        }
+    }
+
+    if (!window_shown_ && window_ != nullptr &&
+        !hidden_window_mode_enabled()) {
+        window_shown_ = true;
+        ShowWindowAsync(window_, SW_SHOWNORMAL);
+    }
+}
+
 std::uint64_t RendererD3D12::end_frame(
     bool present_swap_chain,
     SubmissionCallback on_submitted,
     void* submission_context) {
-    // Diagnostic stall watch, gated on its own opt-in flag. Declared here because
-    // this function uses it in two places below; begin_frame() (line ~3682) and
-    // present_frame() (line ~5856) each declare their own from the same helper.
-    // Without this the translation unit does not compile: every `if (stall_watch)`
-    // below is an undeclared identifier.
-    const bool stall_watch = trace_stall_watch_enabled();
     if (timestamp_query_heap_ && timestamp_readback_) {
         command_list_->EndQuery(
             timestamp_query_heap_.Get(), D3D12_QUERY_TYPE_TIMESTAMP,
@@ -5928,6 +6310,12 @@ std::uint64_t RendererD3D12::end_frame(
     const std::uint64_t submitted_frame = frame_index_ + 1u;
     const std::uint64_t submitted_fence = ++next_fence_value_;
     fence_values_[frame_slot_] = submitted_fence;
+    if (ring_mode_ == RingMode::Interp) {
+        ring_segment_fence_[ring_segment_] = submitted_fence;
+    } else if (matrix_segments_ != kFramesInFlight) {
+        matrix_segment_used_ = matrix_ring_.cursor() != matrix_begin_cursor_;
+        matrix_segment_fence_[matrix_segment_] = submitted_fence;
+    }
     if (pointer_depth_in_frame_pending_) {
         pointer_depth_capture_fence_ = submitted_fence;
         pointer_depth_in_frame_pending_ = false;
@@ -5957,275 +6345,7 @@ std::uint64_t RendererD3D12::end_frame(
     }
 
     if (present_swap_chain) {
-        const RenderConfig cfg = get_render_config();
-        const UINT vsync = present_sync_interval(std::min(2u, cfg.vsync_interval), cfg.max_fps);
-        const UINT present_flags =
-            (vsync == 0 && tearing_supported_ && !exclusive_fullscreen_active_) ? DXGI_PRESENT_ALLOW_TEARING
-                                               : 0u;
-        const auto stall_watch_pace_start = stall_watch
-            ? std::chrono::steady_clock::now()
-            : std::chrono::steady_clock::time_point{};
-        pace_present_if_needed(cfg.vsync_interval, cfg.max_fps);
-        if (stall_watch) {
-            const double stall_watch_ms =
-                std::chrono::duration<double, std::milli>(
-                    std::chrono::steady_clock::now() -
-                    stall_watch_pace_start).count();
-            if (stall_watch_ms > 12.0) {
-                std::ostringstream message;
-                message << "[stall-watch] pace_present_if_needed took "
-                          << stall_watch_ms
-                          << "ms vsync=" << cfg.vsync_interval
-                          << " max-fps=" << cfg.max_fps << '\n';
-                std::cerr << message.str();
-            }
-        }
-        const bool collect_present_telemetry = trace_present_stats_enabled();
-        LARGE_INTEGER present_start{};
-        LARGE_INTEGER present_end{};
-        if (collect_present_telemetry) {
-            QueryPerformanceCounter(&present_start);
-        }
-        const auto stall_watch_present_start = stall_watch
-            ? std::chrono::steady_clock::now()
-            : std::chrono::steady_clock::time_point{};
-        static std::uint64_t timeline_present_ordinal = 0u;
-        const bool timeline_present = galaxy::timeline::enabled();
-        if (timeline_present) {
-            galaxy::timeline::record(galaxy::timeline::Event::PresentBegin,
-                                 ++timeline_present_ordinal, vsync);
-        }
-        const HRESULT present_hr = swap_chain_->Present(vsync, present_flags);
-        if (timeline_present) {
-            galaxy::timeline::record(galaxy::timeline::Event::PresentEnd,
-                                 timeline_present_ordinal);
-            // The OS's own record of which refresh showed which present.
-            DXGI_FRAME_STATISTICS statistics{};
-            // An occluded or not yet displayed swap chain reports a zero
-            // sync time; that is no timeline instant.
-            if (SUCCEEDED(swap_chain_->GetFrameStatistics(&statistics)) &&
-                statistics.SyncQPCTime.QuadPart != 0) {
-                galaxy::timeline::record_at(
-                    galaxy::timeline::Event::DisplayStats,
-                    static_cast<std::uint64_t>(statistics.SyncQPCTime.QuadPart),
-                    (static_cast<std::uint64_t>(statistics.PresentCount) << 32u) |
-                        statistics.PresentRefreshCount,
-                    statistics.SyncRefreshCount);
-            }
-            if (timeline_present_ordinal % 30u == 1u) {
-                using DwmTimingFn = HRESULT(WINAPI*)(HWND, DWM_TIMING_INFO*);
-                static const DwmTimingFn dwm_timing = [] {
-                    const HMODULE dwm = LoadLibraryW(L"dwmapi.dll");
-                    return dwm == nullptr ? nullptr
-                        : reinterpret_cast<DwmTimingFn>(
-                              GetProcAddress(dwm, "DwmGetCompositionTimingInfo"));
-                }();
-                DWM_TIMING_INFO timing{};
-                timing.cbSize = sizeof(timing);
-                if (dwm_timing != nullptr && SUCCEEDED(dwm_timing(nullptr, &timing)) &&
-                    timing.qpcVBlank != 0u) {
-                    galaxy::timeline::record_at(galaxy::timeline::Event::VBlank, timing.qpcVBlank,
-                                            timing.qpcRefreshPeriod);
-                }
-            }
-        }
-        if (stall_watch) {
-            const double stall_watch_ms =
-                std::chrono::duration<double, std::milli>(
-                    std::chrono::steady_clock::now() -
-                    stall_watch_present_start).count();
-            if (stall_watch_ms > 12.0) {
-                std::ostringstream message;
-                message << "[stall-watch] IDXGISwapChain::Present took "
-                          << stall_watch_ms << "ms vsync=" << vsync
-                          << " flags=" << present_flags << '\n';
-                std::cerr << message.str();
-            }
-        }
-        if (FAILED(present_hr)) {
-            dump_device_removal(device_.Get());
-            d3d_check(present_hr, "Present");
-        }
-        has_presented_swap_chain_ = true;
-        if (collect_present_telemetry) {
-            QueryPerformanceCounter(&present_end);
-            DXGI_FRAME_STATISTICS shown{};
-            if (SUCCEEDED(swap_chain_->GetFrameStatistics(&shown)) &&
-                shown.PresentCount != last_stats_present_count_) {
-                if (last_stats_present_count_ != 0u &&
-                    shown.PresentCount == last_stats_present_count_ + 1u) {
-                    const UINT refreshes =
-                        shown.PresentRefreshCount - last_stats_present_refresh_count_;
-                    ++telemetry_shown_refreshes_[std::min<UINT>(refreshes, 4u)];
-                }
-                last_stats_present_count_ = shown.PresentCount;
-                last_stats_present_refresh_count_ = shown.PresentRefreshCount;
-            }
-            if (display_refresh_hz_ == 0.0) {
-                refresh_display_rate();
-            }
-        }
-
-        if (collect_present_telemetry && qpc_frequency_.QuadPart != 0) {
-            const double present_ms =
-                static_cast<double>(
-                    present_end.QuadPart - present_start.QuadPart) *
-                1000.0 / static_cast<double>(qpc_frequency_.QuadPart);
-            telemetry_present_ms_ += present_ms;
-            telemetry_present_max_ms_ =
-                std::max(telemetry_present_max_ms_, present_ms);
-
-            if (telemetry_window_start_qpc_ == 0) {
-                telemetry_window_start_qpc_ = present_end.QuadPart;
-                telemetry_first_serial_start_ = xfb_present_stats().first_serial_presentations;
-                telemetry_xfb_copy_start_ = xfb_copy_count();
-            }
-            if (last_present_qpc_ != 0) {
-                const double interval_ms =
-                    static_cast<double>(
-                        present_end.QuadPart - last_present_qpc_) *
-                    1000.0 / static_cast<double>(qpc_frequency_.QuadPart);
-                telemetry_interval_ms_ += interval_ms;
-                ++telemetry_interval_count_;
-                telemetry_interval_max_ms_ =
-                    std::max(telemetry_interval_max_ms_, interval_ms);
-            }
-            last_present_qpc_ = present_end.QuadPart;
-            ++telemetry_present_count_;
-
-            const double elapsed_seconds =
-                static_cast<double>(
-                    present_end.QuadPart - telemetry_window_start_qpc_) /
-                static_cast<double>(qpc_frequency_.QuadPart);
-            if (elapsed_seconds >= 2.0) {
-                const auto progress = xfb_present_stats();
-                const auto produced_copies = xfb_copy_count();
-                const double present_fps =
-                    static_cast<double>(telemetry_present_count_) /
-                    elapsed_seconds;
-                const double adjacent_serial_transition_hz =
-                    static_cast<double>(
-                        telemetry_adjacent_serial_transition_count_) /
-                    elapsed_seconds;
-                const double interval_avg =
-                    telemetry_interval_count_ != 0u
-                        ? telemetry_interval_ms_ /
-                              static_cast<double>(telemetry_interval_count_)
-                        : 0.0;
-                const double present_avg =
-                    telemetry_present_ms_ /
-                    static_cast<double>(telemetry_present_count_);
-                const double pace_wait_avg =
-                    telemetry_pace_wait_ms_ /
-                    static_cast<double>(telemetry_present_count_);
-                const double latency_avg =
-                    telemetry_latency_wait_ms_ /
-                    static_cast<double>(telemetry_present_count_);
-                const double gpu_avg =
-                    telemetry_gpu_samples_ != 0
-                        ? telemetry_gpu_ms_ /
-                              static_cast<double>(telemetry_gpu_samples_)
-                        : 0.0;
-                const double same_serial_or_replay_hz =
-                    std::max(
-                        0.0, present_fps - adjacent_serial_transition_hz);
-                const double same_serial_or_replay_percent =
-                    present_fps > 0.0
-                        ? same_serial_or_replay_hz * 100.0 / present_fps
-                        : 0.0;
-
-                // cerr is unit-buffered. Assemble one record before touching
-                // the redirected stream so field formatting cannot turn a
-                // single report into dozens of synchronous redirected writes while
-                // the simulation waits for this render submission's token.
-                std::ostringstream message;
-                message
-                    << "[present-stats] fps=" << present_fps
-                    << " new-serial-hz="
-                    << static_cast<double>(progress.first_serial_presentations - telemetry_first_serial_start_) / elapsed_seconds
-                    << " xfb-production-hz="
-                    << static_cast<double>(produced_copies - telemetry_xfb_copy_start_) / elapsed_seconds
-                    << " first-serial-total=" << progress.first_serial_presentations
-                    << " xfb-copy-total=" << produced_copies
-                    << " steady-ns=" << std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now().time_since_epoch()).count()
-                    << " adjacent-serial-transition-hz="
-                    << adjacent_serial_transition_hz
-                    << " same-serial-or-replay-hz="
-                    << same_serial_or_replay_hz
-                    << " same-serial-or-replay-pct="
-                    << same_serial_or_replay_percent
-                    << " frame-ms(avg/max)=" << interval_avg << "/"
-                    << telemetry_interval_max_ms_
-                    << " latency-wait-ms(avg/max)=" << latency_avg << "/"
-                    << telemetry_latency_wait_max_ms_
-                    << " pace-wait-ms(avg/max)=" << pace_wait_avg << "/"
-                    << telemetry_pace_wait_max_ms_
-                    << " smooth-present="
-                    << (smooth_realtime_present_enabled() ? 1 : 0)
-                    << " smooth-max-wait-us="
-                    << smooth_realtime_present_max_wait_us()
-                    << " present-ms(avg/max)=" << present_avg << "/"
-                    << telemetry_present_max_ms_
-                    << " vsync=" << vsync
-                    << " present-flags=" << present_flags
-                    << " tearing-enabled=" << (tearing_supported_ ? 1 : 0)
-                    << " remote-session="
-                    << (GetSystemMetrics(SM_REMOTESESSION) != 0 ? 1 : 0)
-                    << " gpu-timing=" << (!gpu_timestamps_enabled() ? "disabled" :
-                        telemetry_gpu_samples_ == 0u ? "pending" : "measured")
-                    << " gpu-ms(avg)=";
-                if (telemetry_gpu_samples_ != 0u) message << gpu_avg;
-                else message << "unavailable";
-                message
-                    << " gpu-samples=" << telemetry_gpu_samples_
-                    << " gpu-total-ms=" << telemetry_gpu_ms_
-                    << " gpu-scope=completed-renderer-command-lists"
-                    << " no-xfb-presents="
-                    << telemetry_no_xfb_present_count_
-                    << " backbuffer-clears="
-                    << telemetry_backbuffer_clear_count_
-                    << " post-frames-total=" << post_process_.status().frames
-                    << " aa-wanted-frames-total=" << post_process_.status().aa_wanted_frames
-                    << " smaa-frames-total=" << post_process_.status().smaa_frames
-                    << " fxaa-frames-total=" << post_process_.status().fxaa_frames
-                    << " aa-skipped-frames-total=" << post_process_.status().aa_skipped_frames
-                    << " refresh-hz=" << display_refresh_hz_
-                    << " shown-refreshes(0/1/2/3/4+)="
-                    << telemetry_shown_refreshes_[0] << '/'
-                    << telemetry_shown_refreshes_[1] << '/'
-                    << telemetry_shown_refreshes_[2] << '/'
-                    << telemetry_shown_refreshes_[3] << '/'
-                    << telemetry_shown_refreshes_[4]
-                    << '\n';
-                std::cerr << message.str();
-                telemetry_shown_refreshes_ = {};
-
-                telemetry_window_start_qpc_ = present_end.QuadPart;
-                telemetry_first_serial_start_ = progress.first_serial_presentations;
-                telemetry_xfb_copy_start_ = produced_copies;
-                telemetry_present_count_ = 0;
-                telemetry_interval_count_ = 0;
-                telemetry_adjacent_serial_transition_count_ = 0;
-                telemetry_interval_ms_ = 0.0;
-                telemetry_interval_max_ms_ = 0.0;
-                telemetry_present_ms_ = 0.0;
-                telemetry_present_max_ms_ = 0.0;
-                telemetry_pace_wait_ms_ = 0.0;
-                telemetry_pace_wait_max_ms_ = 0.0;
-                telemetry_latency_wait_ms_ = 0.0;
-                telemetry_latency_wait_max_ms_ = 0.0;
-                telemetry_gpu_ms_ = 0.0;
-                telemetry_gpu_samples_ = 0;
-                telemetry_no_xfb_present_count_ = 0;
-                telemetry_backbuffer_clear_count_ = 0;
-            }
-        }
-
-        if (!window_shown_ && window_ != nullptr &&
-            !hidden_window_mode_enabled()) {
-            window_shown_ = true;
-            ShowWindowAsync(window_, SW_SHOWNORMAL);
-        }
+        present_to_swap_chain();
     }
 
     frame_index_ = submitted_frame;
@@ -6316,11 +6436,16 @@ bool RendererD3D12::ensure_motion_target() {
     if (motion_target_ && motion_target_scale_ == efb_scale_) {
         return true;
     }
+    if (motion_target_) {
+        // An internal-resolution change: frames in flight may still use them.
+        wait_for_gpu();
+    }
     motion_target_.Reset();
+    reactive_target_.Reset();
     motion_target_scale_ = 0u;
     if (!motion_rtv_heap_) {
         D3D12_DESCRIPTOR_HEAP_DESC dhd{};
-        dhd.NumDescriptors = 1;
+        dhd.NumDescriptors = 2;
         dhd.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
         d3d_check(device_->CreateDescriptorHeap(&dhd, IID_PPV_ARGS(&motion_rtv_heap_)),
                   "motion vector RTV heap");
@@ -6343,11 +6468,441 @@ bool RendererD3D12::ensure_motion_target() {
             &cv, IID_PPV_ARGS(&motion_target_)))) {
         return false;
     }
+    rd.Format = kReactiveMaskFormat;
+    cv.Format = kReactiveMaskFormat;
+    if (FAILED(device_->CreateCommittedResource(
+            &hp, D3D12_HEAP_FLAG_NONE, &rd, D3D12_RESOURCE_STATE_RENDER_TARGET,
+            &cv, IID_PPV_ARGS(&reactive_target_)))) {
+        motion_target_.Reset();
+        return false;
+    }
     motion_rtv_ = motion_rtv_heap_->GetCPUDescriptorHandleForHeapStart();
+    reactive_rtv_ = motion_rtv_;
+    reactive_rtv_.ptr += device_->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
     device_->CreateRenderTargetView(motion_target_.Get(), nullptr, motion_rtv_);
+    device_->CreateRenderTargetView(reactive_target_.Get(), nullptr, reactive_rtv_);
     const float zero[4]{};
     command_list_->ClearRenderTargetView(motion_rtv_, zero, 0u, nullptr);
+    command_list_->ClearRenderTargetView(reactive_rtv_, zero, 0u, nullptr);
     motion_target_scale_ = efb_scale_;
+    return true;
+}
+
+static constexpr char kMotionDebugPs[] =
+    "Texture2D<float2> mv:register(t0);"
+    "struct V{float4 p:SV_Position;float2 uv:TEXCOORD0;};"
+    "float4 main(V v):SV_Target{"
+    " float2 m=mv.Load(int3(int2(v.p.xy),0));"
+    " return float4(saturate(0.5+m.x/16.0),saturate(0.5+m.y/16.0),0.5,1.0);}";
+
+void RendererD3D12::record_motion_debug_view() {
+    if (!motion_target_) {
+        return;
+    }
+    if (!motion_debug_pipeline_) {
+        D3D12_DESCRIPTOR_RANGE range{};
+        range.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
+        range.NumDescriptors = 1;
+        D3D12_ROOT_PARAMETER param{};
+        param.ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+        param.DescriptorTable.NumDescriptorRanges = 1;
+        param.DescriptorTable.pDescriptorRanges = &range;
+        param.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+        D3D12_ROOT_SIGNATURE_DESC rsd{};
+        rsd.NumParameters = 1;
+        rsd.pParameters = &param;
+        ComPtr<ID3DBlob> blob, err;
+        d3d_check(D3D12SerializeRootSignature(&rsd, D3D_ROOT_SIGNATURE_VERSION_1, &blob, &err),
+                  "SerializeMotionDebugRS");
+        d3d_check(device_->CreateRootSignature(0, blob->GetBufferPointer(), blob->GetBufferSize(),
+                                               IID_PPV_ARGS(&motion_debug_root_)),
+                  "CreateMotionDebugRS");
+        const ComPtr<ID3DBlob> vs = compile_hlsl(kBlitVs, sizeof(kBlitVs) - 1, "vs_5_1", "main");
+        const ComPtr<ID3DBlob> ps =
+            compile_hlsl(kMotionDebugPs, sizeof(kMotionDebugPs) - 1, "ps_5_1", "main");
+        D3D12_GRAPHICS_PIPELINE_STATE_DESC pd{};
+        pd.pRootSignature = motion_debug_root_.Get();
+        pd.VS = {vs->GetBufferPointer(), vs->GetBufferSize()};
+        pd.PS = {ps->GetBufferPointer(), ps->GetBufferSize()};
+        pd.SampleMask = UINT_MAX;
+        pd.RasterizerState.FillMode = D3D12_FILL_MODE_SOLID;
+        pd.RasterizerState.CullMode = D3D12_CULL_MODE_NONE;
+        pd.RasterizerState.DepthClipEnable = TRUE;
+        pd.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+        pd.NumRenderTargets = 1;
+        pd.RTVFormats[0] = kEfbColorFormat;
+        pd.SampleDesc.Count = 1;
+        pd.BlendState.RenderTarget[0].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
+        d3d_check(device_->CreateGraphicsPipelineState(&pd, IID_PPV_ARGS(&motion_debug_pipeline_)),
+                  "CreateMotionDebugPSO");
+    }
+    D3D12_RESOURCE_BARRIER barrier{};
+    barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+    barrier.Transition.pResource = motion_target_.Get();
+    barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+    barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
+    barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+    command_list_->ResourceBarrier(1, &barrier);
+    const DescriptorRing::Table table = srv_ring_.allocate(1u);
+    D3D12_SHADER_RESOURCE_VIEW_DESC view{};
+    view.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+    view.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+    view.Texture2D.MipLevels = 1u;
+    view.Format = kMotionVectorFormat;
+    device_->CreateShaderResourceView(motion_target_.Get(), &view, table.cpu);
+    command_list_->SetGraphicsRootSignature(motion_debug_root_.Get());
+    command_list_->SetPipelineState(motion_debug_pipeline_.Get());
+    command_list_->SetGraphicsRootDescriptorTable(0, table.gpu);
+    command_list_->OMSetRenderTargets(1, &efb_rtv_, FALSE, nullptr);
+    bound_rt_aux_ = 0u;
+    const D3D12_VIEWPORT vp{0.0f, 0.0f, static_cast<float>(kEfbWidth * efb_scale_),
+                            static_cast<float>(kEfbHeight * efb_scale_), 0.0f, 1.0f};
+    const D3D12_RECT sci{0, 0, static_cast<LONG>(kEfbWidth * efb_scale_),
+                         static_cast<LONG>(kEfbHeight * efb_scale_)};
+    command_list_->RSSetViewports(1, &vp);
+    command_list_->RSSetScissorRects(1, &sci);
+    command_list_->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+    command_list_->DrawInstanced(3, 1, 0, 0);
+    std::swap(barrier.Transition.StateBefore, barrier.Transition.StateAfter);
+    command_list_->ResourceBarrier(1, &barrier);
+    command_list_->SetGraphicsRootSignature(root_signature_.Get());
+    invalidate_gx_bindings();
+    bind_efb(nullptr);
+}
+
+// ---------------------------------------------------------------------------
+// Interpolated redraw: replay log and sub-frames
+// ---------------------------------------------------------------------------
+
+bool RendererD3D12::interpolation_mode() const {
+    static const bool allowed = [] {
+        char value[8]{};
+        std::size_t length = 0u;
+        return getenv_s(&length, value, sizeof(value), "GALAXY_EXPERIMENTAL_INTERPOLATION") == 0 &&
+               length > 1u && value[0] != '0';
+    }();
+    if (!allowed || temporal_mode()) {
+        return false;
+    }
+    const RenderConfig cfg = get_render_config();
+    return interpolated_frames_per_game_frame(
+               present_frame_rate(cfg.max_fps, cfg.vsync_interval, display_refresh_hz_)) != 0u;
+}
+
+void RendererD3D12::publish_replay_log() {
+    std::swap(replay_ops_, play_ops_);
+    std::swap(replay_draws_, play_draws_);
+    std::swap(replay_viewports_, play_viewports_);
+    std::swap(replay_clears_, play_clears_);
+    std::swap(replay_copies_, play_copies_);
+    play_start_output_active_ = replay_start_output_active_;
+}
+
+bool RendererD3D12::start_replay_playback() {
+    if (!replay_valid_) {
+        return false;
+    }
+    std::swap(play_ops_, run_ops_);
+    std::swap(play_draws_, run_draws_);
+    std::swap(play_viewports_, run_viewports_);
+    std::swap(play_clears_, run_clears_);
+    std::swap(play_copies_, run_copies_);
+    run_start_output_active_ = play_start_output_active_;
+    run_segment_ = replay_segment_;
+    run_valid_ = true;
+    replay_valid_ = false;
+    return true;
+}
+
+void RendererD3D12::begin_replay_record() {
+    replay_scene_count_ = 0u;
+    replay_has_swaps_ = false;
+    replay_ops_.clear();
+    replay_draws_.clear();
+    replay_viewports_.clear();
+    replay_clears_.clear();
+    replay_copies_.clear();
+    if (ring_mode_ != RingMode::Interp) {
+        replay_valid_ = false;
+    }
+    replay_recording_ = true;
+    replay_start_output_active_ = output_efb_active_;
+    replay_source_slot_ = frame_slot_;
+}
+
+void RendererD3D12::end_replay_record(bool keep) {
+    replay_recording_ = false;
+    bool has_display_copy = false;
+    for (const ReplayCopy& copy : replay_copies_) {
+        has_display_copy = has_display_copy || copy.mode == 1u;
+    }
+    replay_valid_ = keep && has_display_copy;
+    if (replay_valid_) {
+        publish_replay_log();
+    }
+}
+
+bool RendererD3D12::ensure_subframe_resources(unsigned xfb_width, unsigned xfb_height) {
+    if (!subframe_allocators_[0]) {
+        for (auto& allocator : subframe_allocators_) {
+            if (FAILED(device_->CreateCommandAllocator(
+                    D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&allocator)))) {
+                return false;
+            }
+        }
+        D3D12_QUERY_HEAP_DESC qd{};
+        qd.Type = D3D12_QUERY_HEAP_TYPE_TIMESTAMP;
+        qd.Count = kSubframeAllocators * 2u;
+        if (timestamp_frequency_ != 0u) {
+            (void)device_->CreateQueryHeap(&qd, IID_PPV_ARGS(&subframe_query_heap_));
+        }
+        if (subframe_query_heap_) {
+            D3D12_HEAP_PROPERTIES hp{};
+            hp.Type = D3D12_HEAP_TYPE_READBACK;
+            D3D12_RESOURCE_DESC rd{};
+            rd.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+            rd.Width = kSubframeAllocators * 2u * sizeof(std::uint64_t);
+            rd.Height = 1;
+            rd.DepthOrArraySize = 1;
+            rd.MipLevels = 1;
+            rd.SampleDesc.Count = 1;
+            rd.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+            if (FAILED(device_->CreateCommittedResource(
+                    &hp, D3D12_HEAP_FLAG_NONE, &rd, D3D12_RESOURCE_STATE_COPY_DEST,
+                    nullptr, IID_PPV_ARGS(&subframe_readback_)))) {
+                subframe_query_heap_.Reset();
+            }
+        }
+    }
+    if (subframe_xfb_.texture && subframe_xfb_.width == xfb_width &&
+        subframe_xfb_.height == xfb_height) {
+        return true;
+    }
+    if (subframe_xfb_.texture) {
+        wait_for_gpu();
+    }
+    subframe_xfb_ = XfbTexture{};
+    D3D12_HEAP_PROPERTIES hp{};
+    hp.Type = D3D12_HEAP_TYPE_DEFAULT;
+    D3D12_RESOURCE_DESC rd{};
+    rd.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+    rd.Width = xfb_width;
+    rd.Height = xfb_height;
+    rd.DepthOrArraySize = 1;
+    rd.MipLevels = 1;
+    rd.Format = kEfbColorFormat;
+    rd.SampleDesc.Count = 1;
+    rd.Flags = D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
+    if (FAILED(device_->CreateCommittedResource(
+            &hp, D3D12_HEAP_FLAG_NONE, &rd, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
+            nullptr, IID_PPV_ARGS(&subframe_xfb_.texture)))) {
+        return false;
+    }
+    subframe_xfb_.width = static_cast<std::uint16_t>(xfb_width);
+    subframe_xfb_.height = static_cast<std::uint16_t>(xfb_height);
+    subframe_xfb_.presentable = true;
+    return true;
+}
+
+void RendererD3D12::execute_replay_copy(const ReplayCopy& copy) {
+    if (copy.identity) {
+        detail::record_efb_identity_copy(command_list_.Get(), efb_color_.Get(),
+                                         copy.dest, copy.box);
+        return;
+    }
+    if (copy.mode == 2u) {
+        record_conversion_blit(
+            alt_efb_.color.Get(), copy.width, copy.height, {}, copy.params,
+            false, false, true, 15u, copy.geometry[0], copy.geometry[1],
+            copy.geometry[2], copy.geometry[3], copy.geometry[4]);
+        return;
+    }
+    ID3D12Resource* const dest = copy.mode == 1u ? subframe_xfb_.texture.Get() : copy.dest;
+    D3D12_RESOURCE_BARRIER b{};
+    b.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+    b.Transition.pResource = dest;
+    b.Transition.StateBefore = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+    b.Transition.StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET;
+    b.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+    command_list_->ResourceBarrier(1, &b);
+    record_conversion_blit(
+        dest, copy.width, copy.height, allocate_conversion_rtv(dest), copy.params,
+        copy.depth, copy.intensity, copy.keep_alpha, copy.format,
+        copy.geometry[0], copy.geometry[1], copy.geometry[2], copy.geometry[3],
+        copy.geometry[4]);
+    std::swap(b.Transition.StateBefore, b.Transition.StateAfter);
+    command_list_->ResourceBarrier(1, &b);
+}
+
+bool RendererD3D12::present_replay_subframe(
+    std::span<const D3D12_GPU_VIRTUAL_ADDRESS> record_constants) {
+    if (ring_mode_ != RingMode::Interp && replay_valid_ && !run_valid_) {
+        (void)start_replay_playback();
+    }
+    if (!run_valid_ || !device_ || !swap_chain_) {
+        replay_failure_ = run_valid_ ? 2u : 1u;
+        return false;
+    }
+    const ReplayCopy* display = nullptr;
+    for (const ReplayCopy& copy : run_copies_) {
+        if (copy.mode == 1u) display = &copy;
+    }
+    if (display == nullptr) {
+        replay_failure_ = 3u;
+        return false;
+    }
+    if (!ensure_subframe_resources(display->width, display->height)) {
+        replay_failure_ = 4u;
+        return false;
+    }
+    if (has_presented_swap_chain_) {
+        wait_for_frame_latency_if_needed(trace_present_stats_enabled());
+    }
+    // The next game frame may be recording: playback must not log into it.
+    const bool recording = replay_recording_;
+    replay_recording_ = false;
+    struct RestoreRecording {
+        bool& flag;
+        bool value;
+        ~RestoreRecording() { flag = value; }
+    } restore_recording{replay_recording_, recording};
+    const unsigned index = subframe_next_;
+    subframe_next_ = (subframe_next_ + 1u) % kSubframeAllocators;
+    if (subframe_fences_[index] != 0u) {
+        wait_for_fence_value(subframe_fences_[index]);
+    }
+    if (subframe_timestamp_pending_[index] && subframe_readback_ && timestamp_frequency_ != 0u) {
+        const SIZE_T offset = static_cast<SIZE_T>(index) * 2u * sizeof(std::uint64_t);
+        const D3D12_RANGE range{offset, offset + 2u * sizeof(std::uint64_t)};
+        void* mapped = nullptr;
+        if (SUCCEEDED(subframe_readback_->Map(0, &range, &mapped))) {
+            const auto* ticks = reinterpret_cast<const std::uint64_t*>(
+                static_cast<const std::byte*>(mapped) + offset);
+            if (ticks[1] >= ticks[0]) {
+                subframe_gpu_ms_ += static_cast<double>(ticks[1] - ticks[0]) * 1000.0 /
+                                    static_cast<double>(timestamp_frequency_);
+                ++subframe_gpu_samples_;
+            }
+            const D3D12_RANGE none{0, 0};
+            subframe_readback_->Unmap(0, &none);
+        }
+        subframe_timestamp_pending_[index] = false;
+    }
+    d3d_check(subframe_allocators_[index]->Reset(), "sub-frame allocator Reset");
+    d3d_check(command_list_->Reset(subframe_allocators_[index].Get(), nullptr),
+              "sub-frame CommandList Reset");
+    if (subframe_query_heap_) {
+        command_list_->EndQuery(subframe_query_heap_.Get(), D3D12_QUERY_TYPE_TIMESTAMP,
+                                index * 2u);
+    }
+    const bool interp_rings = ring_mode_ == RingMode::Interp;
+    ID3D12DescriptorHeap* heaps[] = {
+        srv_ring_.heap(),
+        interp_rings ? sampler_heaps_[run_segment_].Get() : sampler_heap_.Get()};
+    command_list_->SetDescriptorHeaps(2, heaps);
+    command_list_->SetGraphicsRootSignature(root_signature_.Get());
+    invalidate_gx_bindings();
+    bound_rt_aux_ = 0u;
+
+    const bool output_before = output_efb_active_;
+    if (output_efb_active_ != run_start_output_active_) {
+        swap_efb_sets();
+    }
+    // The private EFB (at the live EFB's scale) stands in for the sub-frame.
+    if (!replay_efb_.color || replay_efb_.scale != efb_scale_) {
+        if (!create_efb_set(replay_efb_, replay_efb_rtv_heap_, replay_efb_dsv_heap_, efb_scale_)) {
+            command_list_->Close();
+            return false;
+        }
+    }
+    swap_efb_with(replay_efb_);
+    replay_playing_ = true;
+    bind_efb(nullptr);
+    const auto far_values = make_efb_clear_values(0u, 0u, 0x00FFFFFFu, 0u);
+    for (const ReplayOp& op : run_ops_) {
+        switch (op.kind) {
+        case ReplayKind::Draw: {
+            DrawCall call = run_draws_[op.index];
+            if (call.replay_record >= 0 &&
+                static_cast<std::size_t>(call.replay_record) < record_constants.size() &&
+                record_constants[static_cast<std::size_t>(call.replay_record)] != 0u) {
+                call.vs_constants = record_constants[static_cast<std::size_t>(call.replay_record)];
+            }
+            draw(call);
+            break;
+        }
+        case ReplayKind::BindEfb: {
+            const ReplayViewport& viewport = run_viewports_[op.index];
+            bind_efb(viewport.valid ? viewport.values : nullptr);
+            break;
+        }
+        case ReplayKind::Clear: {
+            const ReplayClear& c = run_clears_[op.index];
+            clear_efb(c.ar, c.gb, c.z24, c.color, c.alpha, c.depth, c.x, c.y, c.w, c.h, c.format);
+            break;
+        }
+        case ReplayKind::Copy:
+            execute_replay_copy(run_copies_[op.index]);
+            break;
+        case ReplayKind::SwapEfbSets:
+            swap_efb_sets();
+            break;
+        case ReplayKind::ClearDepth:
+            command_list_->ClearDepthStencilView(
+                efb_dsv_, D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL,
+                far_values.reversed_depth, 0u, 0u, nullptr);
+            break;
+        }
+    }
+    swap_efb_with(replay_efb_);
+    if (output_efb_active_ != output_before) {
+        swap_efb_sets();
+    }
+    replay_playing_ = false;
+    {
+        ID3D12DescriptorHeap* live[] = {srv_ring_.heap(), sampler_heap_.Get()};
+        command_list_->SetDescriptorHeaps(2, live);
+        command_list_->SetGraphicsRootSignature(root_signature_.Get());
+        invalidate_gx_bindings();
+    }
+    (void)present(&subframe_xfb_, subframe_capture_);
+    if (subframe_query_heap_) {
+        command_list_->EndQuery(subframe_query_heap_.Get(), D3D12_QUERY_TYPE_TIMESTAMP,
+                                index * 2u + 1u);
+        command_list_->ResolveQueryData(subframe_query_heap_.Get(), D3D12_QUERY_TYPE_TIMESTAMP,
+                                        index * 2u, 2u, subframe_readback_.Get(),
+                                        static_cast<UINT64>(index) * 2u * sizeof(std::uint64_t));
+        subframe_timestamp_pending_[index] = true;
+    }
+    d3d_check(command_list_->Close(), "sub-frame CommandList Close");
+    ID3D12CommandList* lists[] = {command_list_.Get()};
+    queue_->ExecuteCommandLists(1, lists);
+    const std::uint64_t fence = ++next_fence_value_;
+    d3d_check(queue_->Signal(fence_.Get(), fence), "sub-frame Signal");
+    subframe_fences_[index] = fence;
+    // The sub-frame read the recorded frame's segments and appended to the
+    // current ones: neither may be rewound before it completes.
+    fence_values_[replay_source_slot_] = std::max(fence_values_[replay_source_slot_], fence);
+    fence_values_[(replay_source_slot_ + 1u) % kFramesInFlight] =
+        std::max(fence_values_[(replay_source_slot_ + 1u) % kFramesInFlight], fence);
+    fence_values_[frame_slot_] = std::max(fence_values_[frame_slot_], fence);
+    if (interp_rings) {
+        ring_segment_fence_[run_segment_] = std::max(ring_segment_fence_[run_segment_], fence);
+        ring_segment_fence_[ring_segment_] = std::max(ring_segment_fence_[ring_segment_], fence);
+    } else if (matrix_segments_ != kFramesInFlight) {
+        matrix_segment_fence_[matrix_segment_] = std::max(matrix_segment_fence_[matrix_segment_], fence);
+    }
+    present_to_swap_chain();
+    return true;
+}
+
+bool RendererD3D12::begin_motion_scene() {
+    if (!scene_temporal_ || !ensure_motion_target()) {
+        return false;
+    }
+    const float zero[4]{};
+    command_list_->ClearRenderTargetView(motion_rtv_, zero, 0u, nullptr);
+    command_list_->ClearRenderTargetView(reactive_rtv_, zero, 0u, nullptr);
     return true;
 }
 
@@ -6414,6 +6969,7 @@ bool RendererD3D12::record_temporal_upscale(unsigned output_scale) {
     in.color = efb_color_.Get();
     in.depth = efb_depth_.Get();
     in.motion = motion_target_.Get();
+    in.reactive = reactive_target_.Get();
     in.output = alt_efb_.color.Get();
     in.render_width = kEfbWidth * efb_scale_;
     in.render_height = kEfbHeight * efb_scale_;
@@ -6545,7 +7101,102 @@ bool RendererD3D12::ensure_output_efb(unsigned scale) {
     return true;
 }
 
+bool RendererD3D12::create_efb_set(
+    EfbTargetSet& set, ComPtr<ID3D12DescriptorHeap>& rtv_heap,
+    ComPtr<ID3D12DescriptorHeap>& dsv_heap, unsigned scale) {
+    const UINT w = kEfbWidth * scale;
+    const UINT h = kEfbHeight * scale;
+    if (set.color) {
+        wait_for_gpu();
+    }
+    set.color.Reset();
+    set.depth.Reset();
+    set.scale = 0u;
+    if (!rtv_heap) {
+        D3D12_DESCRIPTOR_HEAP_DESC dhd{};
+        dhd.NumDescriptors = 1;
+        dhd.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
+        d3d_check(device_->CreateDescriptorHeap(&dhd, IID_PPV_ARGS(&rtv_heap)), "EFB set RTV heap");
+        dhd.Type = D3D12_DESCRIPTOR_HEAP_TYPE_DSV;
+        d3d_check(device_->CreateDescriptorHeap(&dhd, IID_PPV_ARGS(&dsv_heap)), "EFB set DSV heap");
+        set.rtv = rtv_heap->GetCPUDescriptorHandleForHeapStart();
+        set.dsv = dsv_heap->GetCPUDescriptorHandleForHeapStart();
+    }
+    D3D12_HEAP_PROPERTIES hp{};
+    hp.Type = D3D12_HEAP_TYPE_DEFAULT;
+    D3D12_RESOURCE_DESC rd{};
+    rd.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+    rd.Width = w;
+    rd.Height = h;
+    rd.DepthOrArraySize = 1;
+    rd.MipLevels = 1;
+    rd.Format = kEfbColorFormat;
+    rd.SampleDesc.Count = 1;
+    rd.Flags = D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
+    D3D12_CLEAR_VALUE cv{};
+    cv.Format = kEfbColorFormat;
+    cv.Color[3] = 1.0f;
+    if (FAILED(device_->CreateCommittedResource(
+            &hp, D3D12_HEAP_FLAG_NONE, &rd, D3D12_RESOURCE_STATE_RENDER_TARGET,
+            &cv, IID_PPV_ARGS(&set.color)))) {
+        return false;
+    }
+    rd.Format = kEfbDepthResourceFormat;
+    rd.Flags = D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
+    D3D12_CLEAR_VALUE dcv{};
+    dcv.Format = kEfbDepthFormat;
+    dcv.DepthStencil.Depth = 1.0f;
+    if (FAILED(device_->CreateCommittedResource(
+            &hp, D3D12_HEAP_FLAG_NONE, &rd, D3D12_RESOURCE_STATE_DEPTH_WRITE,
+            &dcv, IID_PPV_ARGS(&set.depth)))) {
+        set.color.Reset();
+        return false;
+    }
+    device_->CreateRenderTargetView(set.color.Get(), nullptr, set.rtv);
+    D3D12_DEPTH_STENCIL_VIEW_DESC dsv{};
+    dsv.Format = kEfbDepthFormat;
+    dsv.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2D;
+    device_->CreateDepthStencilView(set.depth.Get(), &dsv, set.dsv);
+    if (!set.conv_table) {
+        set.conv_table = srv_ring_.allocate_persistent(2u);
+    }
+    const UINT stride = device_->GetDescriptorHandleIncrementSize(
+        D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+    D3D12_SHADER_RESOURCE_VIEW_DESC view{};
+    view.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+    view.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+    view.Texture2D.MipLevels = 1u;
+    view.Format = kEfbColorFormat;
+    device_->CreateShaderResourceView(set.color.Get(), &view, set.conv_table->cpu);
+    auto depth_cpu = set.conv_table->cpu;
+    depth_cpu.ptr += stride;
+    view.Format = kEfbDepthSrvFormat;
+    device_->CreateShaderResourceView(set.depth.Get(), &view, depth_cpu);
+    set.conv_color_srv = set.conv_table->gpu;
+    set.conv_depth_srv = set.conv_table->gpu;
+    set.conv_depth_srv.ptr += stride;
+    set.scale = scale;
+    return true;
+}
+
+void RendererD3D12::swap_efb_with(EfbTargetSet& other) {
+    std::swap(efb_color_, other.color);
+    std::swap(efb_depth_, other.depth);
+    std::swap(efb_scale_, other.scale);
+    std::swap(efb_rtv_, other.rtv);
+    std::swap(efb_dsv_, other.dsv);
+    std::swap(conv_efb_source_table_, other.conv_table);
+    std::swap(conv_efb_color_srv_, other.conv_color_srv);
+    std::swap(conv_efb_depth_srv_, other.conv_depth_srv);
+    invalidate_gx_bindings();
+    bound_scissor_input_scale_ = 0u;
+}
+
 void RendererD3D12::swap_efb_sets() {
+    if (replay_recording_) [[unlikely]] {
+        replay_ops_.push_back({ReplayKind::SwapEfbSets, 0u});
+        replay_has_swaps_ = true;
+    }
     std::swap(efb_color_, alt_efb_.color);
     std::swap(efb_depth_, alt_efb_.depth);
     std::swap(efb_scale_, alt_efb_.scale);
@@ -6595,13 +7246,41 @@ bool RendererD3D12::begin_output_efb() {
     const unsigned h = kEfbHeight * scale;
     const EfbCopySamplingGeometry sampling =
         compute_xfb_sampling_geometry(params, w, h, efb_scale_);
-    record_conversion_blit(
-        alt_efb_.color.Get(), w, h, {}, params,
-        /*is_depth_copy=*/false, /*intensity=*/false, /*keep_alpha=*/true,
-        /*copy_format=*/15u,
-        sampling.src_x, sampling.src_y, sampling.step_x, sampling.step_y,
-        sampling.filter_row_offset);
-    swap_efb_sets();
+    if (replay_recording_) [[unlikely]] {
+        ReplayCopy copy{};
+        copy.width = w;
+        copy.height = h;
+        copy.params = params;
+        copy.keep_alpha = true;
+        copy.format = 15u;
+        copy.geometry[0] = sampling.src_x;
+        copy.geometry[1] = sampling.src_y;
+        copy.geometry[2] = sampling.step_x;
+        copy.geometry[3] = sampling.step_y;
+        copy.geometry[4] = sampling.filter_row_offset;
+        copy.mode = 2u;
+        replay_ops_.push_back({ReplayKind::Copy, static_cast<std::uint32_t>(replay_copies_.size())});
+        replay_copies_.push_back(copy);
+        const bool recording = replay_recording_;
+        replay_recording_ = false;  // the blit's own EFB rebinding is part of the copy
+        record_conversion_blit(
+            alt_efb_.color.Get(), w, h, {}, params,
+            /*is_depth_copy=*/false, /*intensity=*/false, /*keep_alpha=*/true,
+            /*copy_format=*/15u,
+            sampling.src_x, sampling.src_y, sampling.step_x, sampling.step_y,
+            sampling.filter_row_offset);
+        replay_recording_ = recording;
+        swap_efb_sets();
+        replay_ops_.push_back({ReplayKind::ClearDepth, 0u});
+    } else {
+        record_conversion_blit(
+            alt_efb_.color.Get(), w, h, {}, params,
+            /*is_depth_copy=*/false, /*intensity=*/false, /*keep_alpha=*/true,
+            /*copy_format=*/15u,
+            sampling.src_x, sampling.src_y, sampling.step_x, sampling.step_y,
+            sampling.filter_row_offset);
+        swap_efb_sets();
+    }
     const auto far_values = make_efb_clear_values(0u, 0u, 0x00FFFFFFu, 0u);
     command_list_->ClearDepthStencilView(
         efb_dsv_, D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL,
@@ -6620,7 +7299,15 @@ void RendererD3D12::end_output_efb() {
 // ---------------------------------------------------------------------------
 
 void RendererD3D12::bind_efb(const float xf_vp[6]) {
+    if (replay_recording_) [[unlikely]] {
+        ReplayViewport viewport{};
+        viewport.valid = xf_vp != nullptr;
+        if (xf_vp != nullptr) std::memcpy(viewport.values, xf_vp, sizeof(viewport.values));
+        replay_ops_.push_back({ReplayKind::BindEfb, static_cast<std::uint32_t>(replay_viewports_.size())});
+        replay_viewports_.push_back(viewport);
+    }
     command_list_->OMSetRenderTargets(1, &efb_rtv_, FALSE, &efb_dsv_);
+    bound_rt_aux_ = 0u;
 
     float vp_x = 0.0f, vp_y = 0.0f;
     float vp_w = static_cast<float>(kEfbWidth  * efb_scale_);
@@ -6659,6 +7346,11 @@ void RendererD3D12::clear_efb(
     bool color_enable, bool alpha_enable, bool depth_enable,
     unsigned rect_x, unsigned rect_y, unsigned rect_w, unsigned rect_h,
     std::uint8_t pixel_format) {
+    if (replay_recording_) [[unlikely]] {
+        replay_ops_.push_back({ReplayKind::Clear, static_cast<std::uint32_t>(replay_clears_.size())});
+        replay_clears_.push_back({clear_ar, clear_gb, clear_z24, color_enable, alpha_enable,
+                                  depth_enable, rect_x, rect_y, rect_w, rect_h, pixel_format});
+    }
     const D3D12_CPU_DESCRIPTOR_HANDLE rtv = efb_rtv_;
     const D3D12_CPU_DESCRIPTOR_HANDLE dsv = efb_dsv_;
 
@@ -6694,6 +7386,7 @@ void RendererD3D12::clear_efb(
             command_list_->ClearRenderTargetView(rtv, col, num_rects, rects);
         } else {
             command_list_->OMSetRenderTargets(1, &rtv, FALSE, nullptr);
+            bound_rt_aux_ = 0u;
             const D3D12_VIEWPORT vp{
                 0.0f, 0.0f,
                 static_cast<float>(efb_w), static_cast<float>(efb_h),
@@ -6729,6 +7422,10 @@ void RendererD3D12::clear_efb(
 // ---------------------------------------------------------------------------
 
 void RendererD3D12::draw(const DrawCall& call) {
+    if (replay_recording_) [[unlikely]] {
+        replay_ops_.push_back({ReplayKind::Draw, static_cast<std::uint32_t>(replay_draws_.size())});
+        replay_draws_.push_back(call);
+    }
     if (call.pipeline != bound_pipeline_) {
         command_list_->SetPipelineState(call.pipeline);
         bound_pipeline_ = call.pipeline;
@@ -6757,6 +7454,16 @@ void RendererD3D12::draw(const DrawCall& call) {
         call.matrix_palette != bound_matrix_palette_) {
         command_list_->SetGraphicsRootShaderResourceView(4, call.matrix_palette);
         bound_matrix_palette_ = call.matrix_palette;
+    }
+    if (call.aux_target != bound_rt_aux_) [[unlikely]] {
+        if (call.aux_target != 0u) {
+            const D3D12_CPU_DESCRIPTOR_HANDLE targets[2]{
+                efb_rtv_, call.aux_target == 1u ? motion_rtv_ : reactive_rtv_};
+            command_list_->OMSetRenderTargets(2, targets, FALSE, &efb_dsv_);
+        } else {
+            command_list_->OMSetRenderTargets(1, &efb_rtv_, FALSE, &efb_dsv_);
+        }
+        bound_rt_aux_ = call.aux_target;
     }
 
     // Per-draw GX scissor, scaled to the EFB and clamped.  GX titles rely on
@@ -6998,6 +7705,7 @@ void RendererD3D12::record_conversion_blit(
     }
 
     command_list_->OMSetRenderTargets(1, &rtv, FALSE, nullptr);
+    bound_rt_aux_ = 0u;
     const D3D12_VIEWPORT vp{
         0.0f, 0.0f,
         static_cast<float>(dest_w), static_cast<float>(dest_h),
@@ -7066,6 +7774,24 @@ void RendererD3D12::copy_efb_to_xfb(const EfbCopyParams& params, XfbTexture& des
     const EfbCopySamplingGeometry sampling =
         compute_xfb_sampling_geometry(
             params, dest.width, dest.height, efb_scale_);
+    const bool recording = replay_recording_;
+    if (recording) [[unlikely]] {
+        ReplayCopy copy{};
+        copy.width = dest.width;
+        copy.height = dest.height;
+        copy.params = params;
+        copy.keep_alpha = true;
+        copy.format = 15u;
+        copy.geometry[0] = sampling.src_x;
+        copy.geometry[1] = sampling.src_y;
+        copy.geometry[2] = sampling.step_x;
+        copy.geometry[3] = sampling.step_y;
+        copy.geometry[4] = sampling.filter_row_offset;
+        copy.mode = 1u;
+        replay_ops_.push_back({ReplayKind::Copy, static_cast<std::uint32_t>(replay_copies_.size())});
+        replay_copies_.push_back(copy);
+        replay_recording_ = false;
+    }
 
     // Display copies never convert to intensity (Dolphin passes false on the
     // XFB path); gamma + copy filter (deflicker) do apply.
@@ -7076,10 +7802,28 @@ void RendererD3D12::copy_efb_to_xfb(const EfbCopyParams& params, XfbTexture& des
         sampling.src_x, sampling.src_y,
         sampling.step_x, sampling.step_y,
         sampling.filter_row_offset);
+    replay_recording_ = recording;
 
     std::swap(b.Transition.StateBefore, b.Transition.StateAfter);
     command_list_->ResourceBarrier(1, &b);
 
+    if (ring_mode_ == RingMode::Interp) {
+        // The display copy closes the game frame: its log is complete and the
+        // next frame starts a new ring segment.
+        if (recording) {
+            replay_recording_ = false;
+            // One 3D scene and no output-EFB switch (that EFB is shared with
+            // the next frame's chunks).
+            replay_valid_ = replay_scene_count_ == 1u && !replay_has_swaps_;
+            if (replay_valid_) {
+                publish_replay_log();
+            }
+            replay_segment_ = ring_segment_;
+            replay_xfb_addr_ = dest.guest_addr;
+            ++replay_serial_;
+        }
+        ring_advance_pending_ = true;
+    }
 }
 
 bool RendererD3D12::copy_efb_to_texture(
@@ -7331,6 +8075,16 @@ bool RendererD3D12::copy_efb_to_texture(
     }
     if (const auto source_box = detail::efb_identity_copy_box(
             params, is_depth_copy, efb_scale_, w, h)) {
+        if (replay_recording_) [[unlikely]] {
+            ReplayCopy copy{};
+            copy.dest = dest.texture.Get();
+            copy.width = w;
+            copy.height = h;
+            copy.identity = true;
+            copy.box = *source_box;
+            replay_ops_.push_back({ReplayKind::Copy, static_cast<std::uint32_t>(replay_copies_.size())});
+            replay_copies_.push_back(copy);
+        }
         detail::record_efb_identity_copy(command_list_.Get(), efb_color_.Get(),
             dest.texture.Get(), *source_box);
         ++efb_identity_copies_;
@@ -7359,6 +8113,26 @@ bool RendererD3D12::copy_efb_to_texture(
     const bool keep_alpha =
         params.target_format == 2u || params.target_format == 3u;
 
+    const bool recording = replay_recording_;
+    if (recording) [[unlikely]] {
+        ReplayCopy copy{};
+        copy.dest = dest.texture.Get();
+        copy.width = w;
+        copy.height = h;
+        copy.params = params;
+        copy.depth = is_depth_copy;
+        copy.intensity = params.intensity;
+        copy.keep_alpha = keep_alpha;
+        copy.format = params.target_format;
+        copy.geometry[0] = sampling.src_x;
+        copy.geometry[1] = sampling.src_y;
+        copy.geometry[2] = sampling.step_x;
+        copy.geometry[3] = sampling.step_y;
+        copy.geometry[4] = sampling.filter_row_offset;
+        replay_ops_.push_back({ReplayKind::Copy, static_cast<std::uint32_t>(replay_copies_.size())});
+        replay_copies_.push_back(copy);
+        replay_recording_ = false;
+    }
     record_conversion_blit(
         dest.texture.Get(), w, h, dest.rtv, params,
         is_depth_copy, params.intensity, keep_alpha,
@@ -7366,6 +8140,7 @@ bool RendererD3D12::copy_efb_to_texture(
         sampling.src_x, sampling.src_y,
         sampling.step_x, sampling.step_y,
         sampling.filter_row_offset);
+    replay_recording_ = recording;
 
     std::swap(b.Transition.StateBefore, b.Transition.StateAfter);
     command_list_->ResourceBarrier(1, &b);
@@ -7552,6 +8327,7 @@ bool RendererD3D12::record_pointer_depth_capture_in_frame() {
 
     const D3D12_CPU_DESCRIPTOR_HANDLE rtv = allocate_conversion_rtv(target);
     command_list_->OMSetRenderTargets(1, &rtv, FALSE, nullptr);
+    bound_rt_aux_ = 0u;
     const D3D12_VIEWPORT viewport{
         0.0f, 0.0f, static_cast<float>(width), static_cast<float>(height), 0.0f, 1.0f};
     const D3D12_RECT scissor{0, 0, static_cast<LONG>(width), static_cast<LONG>(height)};
@@ -8471,8 +9247,12 @@ std::string native_settings_row_text(
         }
         case 6: {
             const auto rate = static_cast<unsigned>(std::lround(std::max(0.0f, render.max_fps)));
-            if (rate == 0u) return "FRAME RATE: UNLIMITED";
-            std::snprintf(text, sizeof(text), "FRAME RATE: %u", rate);
+            const double measured = s_measured_present_hz.load(std::memory_order_relaxed);
+            if (rate == 0u) {
+                std::snprintf(text, sizeof(text), "FRAME RATE: UNLIMITED  %.1f", measured);
+            } else {
+                std::snprintf(text, sizeof(text), "FRAME RATE: %u  %.1f", rate, measured);
+            }
             return text;
         }
         case 7:
@@ -8486,26 +9266,32 @@ std::string native_settings_row_text(
         switch (row) {
         case 0: return anti_aliasing_row_text(render.aa_mode, render.smaa_quality, get_post_process_status());
         case 1: return std::string("AA QUALITY: ") + kQuality[std::min(render.smaa_quality, 3u)];
-        case 2:
-            return std::string("UPSCALER: ") +
-                   (std::min(render.upscaler, 1u) == 1u ? "FSR 1" : "BILINEAR");
-        case 3:
+        case 2: {
+            static constexpr const char* kUpscalers[] = {"BILINEAR", "FSR 1", "FSR 3"};
+            return std::string("UPSCALER: ") + kUpscalers[std::min(render.upscaler, 2u)];
+        }
+        case 3: {
+            static constexpr const char* kTemporal[] = {
+                "NATIVE AA", "QUALITY", "BALANCED", "PERFORMANCE", "ULTRA PERFORMANCE"};
+            return std::string("FSR 3 QUALITY: ") + kTemporal[std::min(render.temporal_quality, 4u)];
+        }
+        case 4:
             std::snprintf(text, sizeof(text), "SHARPENING: %u%%", std::min(render.sharpness, 100u));
             return text;
-        case 4:
+        case 5:
             if (render.anisotropic_filtering <= 1u) return "TEXTURES: TRILINEAR";
             std::snprintf(text, sizeof(text), "TEXTURES: %uX ANISOTROPIC",
                           std::min(render.anisotropic_filtering, 16u));
             return text;
-        case 5:
-            return std::string("MIPMAPS: ") + (render.enhanced_mipmaps ? "GENERATED" : "ORIGINAL");
         case 6:
+            return std::string("MIPMAPS: ") + (render.enhanced_mipmaps ? "GENERATED" : "ORIGINAL");
+        case 7:
             return std::string("LIGHTING: ") +
                    (render.per_pixel_lighting ? "PER PIXEL" : "PER VERTEX");
-        case 7:
+        case 8:
             return std::string("2D LAYER: ") +
                    (render.hud_output_resolution ? "DISPLAY RES" : "INTERNAL RES");
-        case 8: {
+        case 9: {
             static constexpr const char* kDistances[] = {"ORIGINAL", "2X", "4X", "8X"};
             return std::string("DRAW DISTANCE: ") + kDistances[std::min(render.draw_distance, 3u)];
         }
@@ -9022,6 +9808,7 @@ bool RendererD3D12::present(
     command_list_->ResourceBarrier(1, &bar);
 
     command_list_->OMSetRenderTargets(1, &back_rtv, FALSE, nullptr);
+    bound_rt_aux_ = 0u;
     const auto content_aspect=galaxy::presentation_content_aspect(
         ultrawide ? ultrawide->content_aspect : galaxy::kWiiContentAspect,source->prerecorded_movie);
     galaxy::ContentViewport content_viewport = galaxy::fit_content_viewport(
@@ -9897,9 +10684,9 @@ NativeSettingsLayout compute_native_settings_layout(
     layout.row_step = compact
         ? 14
         : std::max(32, layout.text_scale * 9 + 8);
-    // Tall enough for the longest page (nine rows) above the footer.
+    // Tall enough for the longest page (ten rows) above the footer.
     const int footer_block = compact ? 62 : 82;
-    constexpr int kLongestPageRows = 9;
+    constexpr int kLongestPageRows = 10;
     const int needed_height = (layout.rows_y - layout.panel_y) +
         (kLongestPageRows - 1) * layout.row_step + layout.text_scale * 7 + 8 +
         footer_block;
@@ -9911,7 +10698,7 @@ NativeSettingsLayout compute_native_settings_layout(
     // A short window tightens the rows rather than dropping the menu.
     const int rows_room = layout.footer_y - 8 - layout.text_scale * 7 - layout.rows_y;
     if ((kLongestPageRows - 1) * layout.row_step > rows_room) {
-        layout.row_step = std::max(layout.text_scale * 7 + 4,
+        layout.row_step = std::max(layout.text_scale * 7 + 2,
                                    rows_room / (kLongestPageRows - 1));
     }
 

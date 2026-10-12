@@ -119,6 +119,16 @@ struct alignas(256) GxVsConstants {
     std::uint32_t uber_texgen[kMaxTexGens];
     std::uint32_t uber_post_texgen[kMaxTexGens];
     std::uint32_t uber_channel[4];
+    // Motion-vector pipelines only (temporal scenes), in what was tail
+    // padding: the previous projection (GX A..D; E, F, type), the previous
+    // position matrix or camera delta, the draw's jitter (NDC) and half
+    // viewport (pixels), and the mode (0: previous palette rows at
+    // motion_ctrl[1]; 1: motion_prev_pos applied to the current eye position
+    // for palette draws, to the vertex for inline draws).
+    float motion_prev_proj[2][4];
+    float motion_prev_pos[3][4];
+    float motion_params[4];
+    std::uint32_t motion_ctrl[4];
 };
 
 static_assert(offsetof(GxVsConstants, projection) == 0);
@@ -136,6 +146,8 @@ static_assert(offsetof(GxVsConstants, uber_vs_header) == 1072);
 static_assert(offsetof(GxVsConstants, uber_texgen) == 1088);
 static_assert(offsetof(GxVsConstants, uber_post_texgen) == 1120);
 static_assert(offsetof(GxVsConstants, uber_channel) == 1152);
+static_assert(offsetof(GxVsConstants, motion_prev_proj) == 1168);
+static_assert(offsetof(GxVsConstants, motion_ctrl) == 1264);
 static_assert(sizeof(GxVsConstants) == 1280);
 
 #if defined(_MSC_VER)

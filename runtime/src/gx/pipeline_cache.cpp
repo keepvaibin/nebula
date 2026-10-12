@@ -497,6 +497,26 @@ D3D12_GRAPHICS_PIPELINE_STATE_DESC make_gx_pso_desc_impl(
     }
     pd.NumRenderTargets      = 1;
     pd.RTVFormats[0]         = kEfbColorFormat;
+    if ((bb & kRenderStateMotionTarget) != 0u) {
+        // Opaque motion writer: render target 1 takes the motion vectors
+        // with render target 0's write mask (independent blend off).
+        pd.NumRenderTargets = 2;
+        pd.RTVFormats[1] = kMotionVectorFormat;
+    } else if ((bb & kRenderStateReactiveTarget) != 0u) {
+        // Blended draw: render target 1 keeps the largest reactive value.
+        pd.NumRenderTargets = 2;
+        pd.RTVFormats[1] = kReactiveMaskFormat;
+        pd.BlendState.IndependentBlendEnable = TRUE;
+        D3D12_RENDER_TARGET_BLEND_DESC& mask = pd.BlendState.RenderTarget[1];
+        mask.BlendEnable = TRUE;
+        mask.SrcBlend = D3D12_BLEND_ONE;
+        mask.DestBlend = D3D12_BLEND_ONE;
+        mask.BlendOp = D3D12_BLEND_OP_MAX;
+        mask.SrcBlendAlpha = D3D12_BLEND_ONE;
+        mask.DestBlendAlpha = D3D12_BLEND_ONE;
+        mask.BlendOpAlpha = D3D12_BLEND_OP_MAX;
+        mask.RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_RED;
+    }
     pd.DSVFormat             = kEfbDepthFormat;
     pd.SampleDesc.Count      = 1;
 
@@ -1454,7 +1474,7 @@ bool valid_pso_key(const PsoKey& key) {
     const auto& state = key.render_state;
     return state.primitive_topology >= 1u && state.primitive_topology <= 3u &&
         state.cull <= 3u && state.pixfmt <= 7u &&
-        (state.blend_bits & 0xe0000000u) == 0u && (state.zmode_bits & ~0x1fu) == 0u &&
+        (state.blend_bits & 0x80000000u) == 0u && (state.zmode_bits & ~0x1fu) == 0u &&
         std::all_of(std::begin(state.reserved), std::end(state.reserved),
             [](std::uint8_t value) { return value == 0u; });
 }
@@ -3125,7 +3145,10 @@ ID3D12PipelineState* PipelineCache::uber_pipeline(
         enqueue_uber_prewarm();
     }
     UberPsoKey key{};
-    key.render_state.blend_bits = render_state.blend_bits;
+    // Uber stand-ins stay single-target: a motion writer drawing with one
+    // leaves its pixels' motion at the cleared zero for those frames.
+    key.render_state.blend_bits =
+        render_state.blend_bits & ~(kRenderStateMotionTarget | kRenderStateReactiveTarget);
     key.render_state.zmode_bits = render_state.zmode_bits;
     key.render_state.cull = render_state.cull;
     key.render_state.pixfmt = render_state.pixfmt;
@@ -3173,7 +3196,8 @@ void PipelineCache::enqueue_uber_prewarm() {
     const auto add = [&](unsigned pass, std::uint32_t blend_bits, std::uint16_t zmode_bits,
                          std::uint8_t cull, std::uint8_t pixfmt, std::uint8_t topology) {
         UberPsoKey key{};
-        key.render_state.blend_bits = blend_bits;
+        key.render_state.blend_bits =
+            blend_bits & ~(kRenderStateMotionTarget | kRenderStateReactiveTarget);
         key.render_state.zmode_bits = zmode_bits;
         key.render_state.cull = cull;
         key.render_state.pixfmt = pixfmt;

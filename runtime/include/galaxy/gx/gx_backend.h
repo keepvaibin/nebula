@@ -47,6 +47,7 @@
 #include "galaxy/gx/resident_vertex_arena.h"
 #include "galaxy/gx/shader_keys.h"
 #include "galaxy/gx/texture_cache.h"
+#include "galaxy/gx/transform_history.h"
 #include "galaxy/gx/uber_constants.h"
 #include "galaxy/gx/vs_constants.h"
 #include "galaxy/gx/vertex_loader.h"
@@ -249,8 +250,21 @@ public:
     // when its parser reaches `fifo_offset` bytes into the submitted FIFO.
     void attach_fifo_marker(FifoMarker marker, std::size_t fifo_offset) noexcept {
         if (producer_fifo_marker_count_ < producer_fifo_markers_.size()) {
-            producer_fifo_markers_[producer_fifo_marker_count_++] = {fifo_offset, marker};
+            const std::uint8_t index = producer_fifo_marker_count_++;
+            producer_fifo_markers_[index] = {fifo_offset, marker};
+            producer_fifo_marker_views_[index] = producer_scene_view_;
+            if (producer_scene_view_valid_ && marker == FifoMarker::SceneBegin) {
+                producer_fifo_marker_view_mask_ |= static_cast<std::uint8_t>(1u << index);
+            } else {
+                producer_fifo_marker_view_mask_ &= static_cast<std::uint8_t>(~(1u << index));
+            }
         }
+        producer_scene_view_valid_ = false;
+    }
+    // Simulation thread: the game camera for the next SceneBegin marker.
+    void attach_scene_view(const float view[12]) noexcept {
+        for (unsigned i = 0; i < 12u; ++i) producer_scene_view_[i] = view[i];
+        producer_scene_view_valid_ = true;
     }
     void set_prerecorded_movie_content(bool movie) noexcept { producer_movie_content_=movie; }
     void set_safety_scene_surround(float intensity) noexcept { producer_safety_surround_=intensity; }
@@ -549,6 +563,10 @@ private:
         // Scene boundaries in this chunk's FIFO, in stream order.
         std::array<std::pair<std::size_t, FifoMarker>, 4> fifo_markers{};
         std::uint8_t fifo_marker_count = 0;
+        // Game camera (world to eye) per SceneBegin marker; bit i of the
+        // mask marks marker i's view valid.
+        std::array<std::array<float, 12>, 4> fifo_marker_views{};
+        std::uint8_t fifo_marker_view_mask = 0;
         std::uint64_t dependency_scan_ns = 0;
         std::uint64_t snapshot_ns = 0;
         std::uint64_t snapshot_bytes = 0;
@@ -617,11 +635,101 @@ private:
     std::size_t producer_pointer_depth_capture_offset_ = 0;
     std::array<std::pair<std::size_t, FifoMarker>, 4> producer_fifo_markers_{};
     std::uint8_t producer_fifo_marker_count_ = 0;
+    std::array<std::array<float, 12>, 4> producer_fifo_marker_views_{};
+    std::uint8_t producer_fifo_marker_view_mask_ = 0;
+    std::array<float, 12> producer_scene_view_{};
+    bool producer_scene_view_valid_ = false;
     // Render thread: inside GameScene::draw3D (between the scene markers).
     bool scene_phase_ = false;
     // Temporal upscaling for the current scene: perspective projections carry
     // this sub-pixel jitter (render pixels).
     bool temporal_scene_ = false;
+    // The temporal scene writes motion vectors (the motion target is live).
+    bool motion_scene_ = false;
+    // The live keys carry the motion bits (cleared once after a scene).
+    bool motion_bits_set_ = false;
+    // Render target 1 of the resolved pipeline (DrawCall::aux_target).
+    std::uint8_t current_pipeline_aux_ = 0;
+    // Root SRV for draws: the palette snapshot, or the matrix ring base in
+    // temporal scenes (palettes then addressed by mtx_palette_base).
+    D3D12_GPU_VIRTUAL_ADDRESS draw_matrix_palette_ = 0;
+    D3D12_GPU_VIRTUAL_ADDRESS temporal_vs_palette_va_ = 0;
+    TransformHistory transform_history_;
+    // The scene records transforms (temporal upscaling or interpolation).
+    bool history_scene_ = false;
+    // Interpolated redraw (present rate above 60, temporal upscaler off):
+    // this render chunk records a replay log and per-record VS constants.
+    bool interp_recording_ = false;
+    unsigned interp_frames_ = 0;          // interpolated frames per game frame
+    unsigned interp_scenes_in_chunk_ = 0;
+    std::int32_t current_replay_record_ = -1;
+    std::int32_t current_palette_shadow_ = -1;
+    // One history scene's interpolation inputs, kept for three scenes: the
+    // one recording, the one being interpolated (its log completed), and its
+    // predecessor (previous palettes and texture matrices).
+    struct InterpScene {
+        std::vector<GxVsConstants> constants;   // per record, as uploaded
+        std::vector<Affine34> from;             // previous transform (inline)
+        std::vector<Affine34> current;          // current inline transform
+        std::vector<std::int32_t> prev_index;   // matched record of the previous scene
+        std::vector<std::int32_t> palette;      // per record: shadow index or -1
+        std::vector<std::uint8_t> per_vertex;   // per-vertex palette draw
+        std::vector<std::uint32_t> palettes;    // kMatrixPaletteWords per shadow
+        std::size_t palette_count = 0;
+        Affine34 camera{};
+        bool valid = false;
+        void clear() noexcept {
+            constants.clear(); from.clear(); current.clear(); prev_index.clear();
+            palette.clear(); per_vertex.clear(); palette_count = 0; valid = false;
+        }
+    };
+    // Recording, ready (log completed), playing, and the playing scene's
+    // predecessor (previous palettes and texture matrices).
+    std::array<InterpScene, 4> interp_scenes_{};
+    unsigned interp_scene_ = 0;           // scene being recorded
+    unsigned interp_log_scene_ = 0;       // scene of the completed log
+    std::uint64_t interp_seen_serial_ = 0;
+    std::uint64_t interp_started_serial_ = 0;
+    void note_interp_log_completion();
+    struct InterpSequence {
+        bool active = false;
+        std::uint32_t xfb_addr = 0;
+        unsigned subframes = 0;
+        unsigned next = 0;
+        std::int64_t due_qpc = 0;
+        std::int64_t step_qpc = 0;
+        // Set inside a render chunk (no frame may be recorded there): the
+        // render loop presents the real frame before anything else.
+        bool flush_requested = false;
+        unsigned scene = 0;               // interp_scenes_ index being interpolated
+    };
+    // A ready frame's present arrived inside a render chunk: the render loop
+    // finishes the playing sequence, then starts this one.
+    bool interp_start_pending_ = false;
+    std::uint64_t interp_sequence_serial_ = 0;
+    // GALAXY_INTERP_SNAPSHOT_DIR/_FIRST/_LAST: sequences whose sub-frames and
+    // real frame are read back (seq_<n>_sub<i>.ppm, seq_<n>_real.ppm).
+    std::string interp_snapshot_path_;
+    [[nodiscard]] std::string interp_snapshot_path(const char* suffix) const;
+    void run_pending_interp_start();
+    InterpSequence interp_sequence_{};
+    // A recorded frame whose present arrives as a separate VI present.
+    bool interp_log_waiting_ = false;
+    std::uint32_t interp_log_xfb_ = 0;
+    void start_interp_sequence(std::uint32_t xfb_addr);
+    std::vector<D3D12_GPU_VIRTUAL_ADDRESS> interp_record_vas_;
+    std::uint64_t interp_presented_ = 0;
+    std::uint64_t interp_dropped_ = 0;
+    std::uint64_t interp_failed_ = 0;     // sub-frames that could not be recorded
+    double interp_cpu_ms_ = 0.0;
+    std::int64_t interp_stats_qpc_ = 0;
+    // Render thread: steps the interpolation sequence of the latest frame
+    // (one sub-frame or the real frame when due; `flush` presents the real
+    // frame now and drops the remaining sub-frames).
+    void advance_interp_sequence(bool flush);
+    bool render_interp_subframe(float t);
+    [[nodiscard]] std::int64_t interp_wait_ms() const;
+    std::uint64_t motion_trace_scenes_ = 0;
     bool scene_camera_captured_ = false;
     float scene_jitter_px_[2]{};
     std::uint64_t scene_markers_seen_ = 0;
@@ -823,8 +931,14 @@ private:
     void take_attached_pointer_depth_capture(FrameChunk& chunk, std::size_t fifo_size);
     void record_pointer_depth_capture_in_frame(FrameChunk& chunk);
     void take_attached_fifo_markers(FrameChunk& chunk, std::size_t fifo_size) noexcept;
-    void on_fifo_marker(FifoMarker marker);
-    void apply_scene_jitter(GxVsConstants& constants);
+    void on_fifo_marker(FifoMarker marker, const std::array<float, 12>* view = nullptr);
+    // Temporal scene: jitter, palette base, transform record and motion
+    // fields of a VS constant upload (`upload` is write-combined memory).
+    void write_scene_vs_constants(const GxVsConstants& cpu, GxVsConstants& upload);
+    // Writes the jittered projection of a perspective draw into `upload`;
+    // `jitter_ndc` receives the offset (zero for orthographic draws).
+    void apply_scene_jitter(const GxVsConstants& cpu, GxVsConstants& upload,
+                            float jitter_ndc[2]);
     void adopt_pointer_depth_fence_if_needed();
     // Asynchronous EFB depth field for simulation-thread GXPeekZ. Three slots:
     // the render owner fills the slot after the published one, then publishes

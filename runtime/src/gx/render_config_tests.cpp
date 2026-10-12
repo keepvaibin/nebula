@@ -94,9 +94,24 @@ int main() {
             passed = false;
         }
         using galaxy::gx::present_frame_rate;
-        if (present_frame_rate(30.0f, 1u, 144.0) != 30.0 || present_frame_rate(144.0f, 1u, 144.0) != 60.0 ||
-            present_frame_rate(60.0f, 1u, 50.0) != 50.0 || present_frame_rate(0.0f, 0u, 50.0) != 60.0) {
-            std::cerr << "present rate must follow the cap, the game rate and VSync\n";
+        if (present_frame_rate(30.0f, 1u, 144.0) != 30.0 || present_frame_rate(144.0f, 1u, 144.0) != 144.0 ||
+            present_frame_rate(240.0f, 1u, 144.0) != 144.0 || present_frame_rate(240.0f, 0u, 144.0) != 240.0 ||
+            present_frame_rate(60.0f, 1u, 50.0) != 50.0 || present_frame_rate(0.0f, 0u, 50.0) != 60.0 ||
+            present_frame_rate(0.0f, 1u, 240.0) != 240.0 || present_frame_rate(0.0f, 0u, 165.0) != 165.0 ||
+            present_frame_rate(0.0f, 0u, 0.0) != 60.0) {
+            std::cerr << "present rate must follow the cap, the display rate and VSync\n";
+            passed = false;
+        }
+        using galaxy::gx::interpolated_frames_per_game_frame;
+        if (interpolated_frames_per_game_frame(30.0) != 0u ||
+            interpolated_frames_per_game_frame(60.0) != 0u ||
+            interpolated_frames_per_game_frame(120.0) != 1u ||
+            interpolated_frames_per_game_frame(144.0) != 1u ||
+            interpolated_frames_per_game_frame(165.0) != 2u ||
+            interpolated_frames_per_game_frame(240.0) != 3u ||
+            interpolated_frames_per_game_frame(360.0) != 5u ||
+            interpolated_frames_per_game_frame(1000.0) != 7u) {
+            std::cerr << "interpolated frames must be round(rate / 60) - 1, 0..7\n";
             passed = false;
         }
     }

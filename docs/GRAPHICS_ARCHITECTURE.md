@@ -189,8 +189,8 @@ and where it comes from here:
 | Scene color at internal resolution | EFB color, `640x528 x efb_scale` |
 | Depth | EFB depth (D24S8, reversed) |
 | HUD-free image | Separated. The game module routes two call sites through the host: `GameScene::draw3D` from `GameScene::draw` (0x8033E820) and draw3D's closing `MR::clearZBuffer` (0x8033F024). At each, the simulation thread flushes the gather pipe and records the FIFO offset; the render thread splits its parse there (`FifoMarker::SceneBegin` / `SceneEnd`). At scene end the EFB still holds the final 3D image and its depth; the renderer resamples it into an output EFB at the window's integer scale, swaps the two EFB target sets, and draws the 2D layer (HUD, menus, 2D models) there. The display copy swaps back. `hud_output_resolution` (default off: below the window's scale the scene takes two resamples, to the integer output scale and then to the window, which is softer than one FSR 1 pass; skipped when the EFB already covers the window). |
-| Sub-pixel jitter | To add: Halton(2,3) clip-space offset on perspective draws only; reset on scene cuts (XFB serial gaps). |
-| Motion vectors | To add: previous transform per draw, matched by draw signature (display-list address, vertex array bases, position-matrix slot); camera-only reprojection from depth as fallback. |
+| Sub-pixel jitter | FSR 3 jitter sequence on perspective draws inside the 3D scene (`GxBackend::apply_scene_jitter`). |
+| Motion vectors | Transform history (`transform_history.{h,cpp}`): each VS constant upload in the scene is a record (signature: shader keys, position array base, vertex descriptor) matched to the previous scene's nearest record by eye-space translation after the camera delta (game camera read at the SceneBegin hook). Opaque triangle draws use motion pipelines (VS key 0x10, PS key 0x02, render-state bit 29) writing RG16F render pixels, current to previous; blended draws write the R8 reactive mask (bit 30). Unmatched draws use the camera delta. `GALAXY_MOTION_DEBUG=1` shows the field. |
 | Latency markers (Reflex, FG pacing) | `frame_timeline` already records simulate / submit / render / present boundaries; map them onto Streamline markers. |
 
 Capability detection exists (`RenderFeatureCaps`: DXR tier, Streamline,
@@ -199,6 +199,31 @@ stable vertex buffers per cached packet run, so static geometry can feed
 bottom-level acceleration structures built once per scene, with per-frame
 refits for skinned draws; first targets are RT shadows and AO composited
 before the HUD split point.
+
+### Frame rate above 60: interpolated redraw
+
+The game renders 60 frames per second. FRAME RATE sets the present rate:
+
+| FRAME RATE | VSYNC OFF | VSYNC ON |
+|---|---|---|
+| 30, 50 | newest frame on a QPC cadence (every other frame at 30) | same; sync interval refresh/rate when an integer 2..4 |
+| 60 | game frames | game frames, interval 1 (2..4 when refresh is a multiple) |
+| 120 .. 360, display rate | k = round(rate / 60) - 1 interpolated frames per game frame, interval 0 with tearing, QPC cadence | rate capped at refresh; interval refresh/rate when an integer 2..4, else 1 |
+| Unlimited | the display rate (at least 60) | the display rate |
+
+Interpolation (behind `GALAXY_EXPERIMENTAL_INTERPOLATION=1` while it is
+validated; off with the temporal upscaler): rings and the sampler heap keep one
+segment per game frame, the renderer logs the frame's EFB operations up to its
+display copy, and when the frame's present arrives the render thread presents
+k sub-frames at t = i / (k + 1), one present slot apart, then the frame itself
+(one game frame of latency). A sub-frame replays the log into a private EFB
+with every scene record's transform interpolated between the matched previous
+record (or the camera delta) and the frame's (translation and scale lerp,
+rotation slerp; per-vertex palettes rebuilt from CPU shadows; texture matrices
+lerped); projection, lights and the 2D layer are the frame's. The FRAME RATE
+row shows the measured presents per second; `GALAXY_TRACE_PRESENT_STATS=1`
+adds `[interp-stats]` (sub-frames per second, drops, CPU and GPU ms per
+sub-frame).
 
 ## Migration plan (the triangle never breaks)
 

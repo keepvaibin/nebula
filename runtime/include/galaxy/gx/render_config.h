@@ -13,6 +13,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cmath>
 #include <cstdint>
 #include <vector>
 
@@ -168,12 +169,22 @@ inline std::vector<unsigned> frame_rate_options(unsigned refresh_hz) {
 }
 
 // Frames per second the game picture is presented at. The game renders 60;
-// lower rates present the newest frame on their own cadence. VSync limits
-// the rate to the display's.
+// lower rates present the newest frame on their own cadence, higher rates
+// add interpolated frames between game frames. Unlimited (0) is the display
+// rate (at least 60). VSync limits the rate to the display's.
 inline double present_frame_rate(float max_fps, unsigned vsync_interval, double refresh_hz) {
-    double rate = max_fps > 0.0f ? std::min(60.0, static_cast<double>(max_fps)) : 60.0;
+    double rate = max_fps > 0.0f ? static_cast<double>(max_fps)
+                                 : (refresh_hz > 1.0 ? std::max(refresh_hz, 60.0) : 60.0);
     if (vsync_interval != 0u && refresh_hz > 1.0) rate = std::min(rate, refresh_hz);
     return rate;
+}
+
+// Interpolated frames presented per game frame at a present rate:
+// round(rate / 60) - 1, none at 60 and below, at most 7.
+inline unsigned interpolated_frames_per_game_frame(double rate) {
+    if (!(rate > 61.0)) return 0u;
+    const double frames = std::floor(rate / 60.0 + 0.5) - 1.0;
+    return static_cast<unsigned>(std::clamp(frames, 0.0, 7.0));
 }
 
 inline constexpr unsigned kDisplayWindowed = 0u;
