@@ -6304,7 +6304,10 @@ void GxBackend::attach_pointer_depth_capture(
 // A perspective draw in the temporal scene: the clip-space offset that moves
 // the image by the scene jitter in render pixels at this draw's viewport.
 // The first such draw also supplies the camera planes and field of view.
-void GxBackend::apply_scene_jitter(GxVsConstants& constants) {
+void GxBackend::apply_scene_jitter(const GxVsConstants& cpu, GxVsConstants& upload,
+                                   float jitter_ndc[2]) {
+    jitter_ndc[0] = 0.0f;
+    jitter_ndc[1] = 0.0f;
     if (state_.xf(static_cast<std::uint16_t>(xf::kProjectionBase + 6u)) != 0u) {
         return;
     }
@@ -6319,9 +6322,12 @@ void GxBackend::apply_scene_jitter(GxVsConstants& constants) {
     }
     const float jx = 2.0f * scene_jitter_px_[0] / width;
     const float jy = -2.0f * scene_jitter_px_[1] / height;
+    jitter_ndc[0] = jx;
+    jitter_ndc[1] = jy;
+    // Read the CPU image, write the upload (write-combined memory).
     for (unsigned column = 0; column < 4u; ++column) {
-        constants.projection[0][column] += jx * constants.projection[3][column];
-        constants.projection[1][column] += jy * constants.projection[3][column];
+        upload.projection[0][column] = cpu.projection[0][column] + jx * cpu.projection[3][column];
+        upload.projection[1][column] = cpu.projection[1][column] + jy * cpu.projection[3][column];
     }
     if (!scene_camera_captured_) {
         scene_camera_captured_ = true;
@@ -6339,32 +6345,159 @@ void GxBackend::apply_scene_jitter(GxVsConstants& constants) {
     }
 }
 
+// One VS constant upload inside a temporal scene. Palettes are addressed
+// from the matrix ring base (the draw's root SRV), so every upload carries
+// its snapshot's offset; the transform record and the motion fields follow.
+void GxBackend::write_scene_vs_constants(const GxVsConstants& cpu, GxVsConstants& upload) {
+    float jitter_ndc[2]{};
+    apply_scene_jitter(cpu, upload, jitter_ndc);
+    const D3D12_GPU_VIRTUAL_ADDRESS ring_base = renderer_.matrix_ring().gpu_base();
+    const std::uint32_t palette_offset = current_matrix_palette_ != 0u
+        ? static_cast<std::uint32_t>((current_matrix_palette_ - ring_base) / 16u)
+        : kNoPaletteOffset;
+    upload.mtx_palette_base = palette_offset != kNoPaletteOffset ? palette_offset : 0u;
+    temporal_vs_palette_va_ = current_matrix_palette_;
+
+    const auto xf_float = [this](unsigned offset) {
+        return std::bit_cast<float>(state_.xf(static_cast<std::uint16_t>(offset)));
+    };
+    TransformRecord record{};
+    record.signature = combine64(
+        combine64(mix64(current_vs_hash_ & ~0ull), current_ps_hash_),
+        (static_cast<std::uint64_t>(state_.cp(cp::kArrayBaseBase)) << 32u) ^
+            (static_cast<std::uint64_t>(state_.cp(cp::kVcdLo)) << 16u) ^
+            state_.cp(cp::kVcdHi));
+    record.palette = (vs_key_.flags & 0x01u) != 0u;
+    if (record.palette) {
+        // PNMTX0 (XF rows 0-2) stands for the per-vertex palette's object.
+        for (unsigned i = 0; i < 12u; ++i) record.position[i] = xf_float(i);
+        record.palette_offset = palette_offset;
+    } else {
+        std::memcpy(record.position.data(), cpu.inline_pos_matrix, sizeof(record.position));
+    }
+    record.translation[0] = record.position[3];
+    record.translation[1] = record.position[7];
+    record.translation[2] = record.position[11];
+    for (unsigned i = 0; i < 6u; ++i) {
+        record.projection[i] = xf_float(xf::kProjectionBase + i);
+    }
+    record.projection[6] =
+        state_.xf(static_cast<std::uint16_t>(xf::kProjectionBase + 6u)) != 0u ? 1.0f : 0.0f;
+    const TransformRecord* previous = transform_history_.add(record);
+    if (!motion_scene_) {
+        return;
+    }
+
+    // Previous transform: the matched record, else the camera delta.
+    const Affine34& camera = transform_history_.camera_delta();
+    std::uint32_t mode = 1u;
+    std::uint32_t previous_palette = 0u;
+    Affine34 prev_pos = camera;
+    if (record.palette) {
+        if (previous != nullptr && previous->palette_offset != kNoPaletteOffset &&
+            transform_history_.current_frame() - transform_history_.previous_frame() <=
+                renderer_.matrix_history_frames()) {
+            mode = 0u;
+            previous_palette = previous->palette_offset;
+        }
+    } else {
+        prev_pos = previous != nullptr ? previous->position
+                                       : affine_multiply(camera, record.position);
+    }
+    const std::array<float, 7>& proj =
+        previous != nullptr ? previous->projection : record.projection;
+    upload.motion_prev_proj[0][0] = proj[0];
+    upload.motion_prev_proj[0][1] = proj[1];
+    upload.motion_prev_proj[0][2] = proj[2];
+    upload.motion_prev_proj[0][3] = proj[3];
+    upload.motion_prev_proj[1][0] = proj[4];
+    upload.motion_prev_proj[1][1] = proj[5];
+    upload.motion_prev_proj[1][2] = proj[6];
+    upload.motion_prev_proj[1][3] = 0.0f;
+    std::memcpy(upload.motion_prev_pos, prev_pos.data(), sizeof(upload.motion_prev_pos));
+    upload.motion_params[0] = jitter_ndc[0];
+    upload.motion_params[1] = jitter_ndc[1];
+    upload.motion_params[2] = 0.5f * cpu.line_point_raster[0];
+    upload.motion_params[3] = -0.5f * cpu.line_point_raster[1];
+    upload.motion_ctrl[0] = mode;
+    upload.motion_ctrl[1] = previous_palette;
+    upload.motion_ctrl[2] = 0u;
+    upload.motion_ctrl[3] = 0u;
+}
+
 void GxBackend::take_attached_fifo_markers(FrameChunk& chunk, std::size_t fifo_size) noexcept {
     chunk.fifo_marker_count = 0;
+    chunk.fifo_marker_view_mask = 0;
     for (std::uint8_t i = 0; i < producer_fifo_marker_count_; ++i) {
         if (producer_fifo_markers_[i].first <= fifo_size &&
             chunk.fifo_marker_count < chunk.fifo_markers.size()) {
-            chunk.fifo_markers[chunk.fifo_marker_count++] = producer_fifo_markers_[i];
+            const std::uint8_t index = chunk.fifo_marker_count++;
+            chunk.fifo_markers[index] = producer_fifo_markers_[i];
+            if ((producer_fifo_marker_view_mask_ & (1u << i)) != 0u) {
+                chunk.fifo_marker_views[index] = producer_fifo_marker_views_[i];
+                chunk.fifo_marker_view_mask |= static_cast<std::uint8_t>(1u << index);
+            }
         }
     }
     producer_fifo_marker_count_ = 0;
+    producer_fifo_marker_view_mask_ = 0;
 }
 
-void GxBackend::on_fifo_marker(FifoMarker marker) {
+void GxBackend::on_fifo_marker(FifoMarker marker, const std::array<float, 12>* view) {
     flush_pending_draw_batch();
     ++scene_markers_seen_;
     scene_phase_ = marker == FifoMarker::SceneBegin;
     const bool was_temporal = temporal_scene_;
+    const bool was_motion = motion_scene_;
     if (marker == FifoMarker::SceneBegin) {
         temporal_scene_ = renderer_.scene_temporal_begin(
             scene_jitter_px_[0], scene_jitter_px_[1]);
+        motion_scene_ = temporal_scene_ && renderer_.begin_motion_scene();
         scene_camera_captured_ = false;
+        if (temporal_scene_) {
+            if (transform_history_.current().capacity() == 0u) {
+                transform_history_.reserve(8192u);
+            }
+            Affine34 camera{};
+            if (view != nullptr) {
+                for (unsigned i = 0; i < 12u; ++i) camera[i] = (*view)[i];
+            }
+            transform_history_.begin_scene(renderer_.frame_index(),
+                                           view != nullptr ? &camera : nullptr);
+        } else {
+            transform_history_.reset();
+        }
     } else {
+        if (temporal_scene_) {
+            transform_history_.end_scene();
+            const TransformHistoryStats stats = transform_history_.stats();
+            // A cut: most transforms have no previous counterpart.
+            if (stats.records >= 16u && stats.matched * 2u < stats.records) {
+                renderer_.reset_temporal_history();
+            }
+            static const bool trace_motion = read_env_u64("GALAXY_MOTION_TRACE", 0u) != 0u;
+            if (trace_motion && (motion_trace_scenes_++ % 120u) == 0u) {
+                std::cerr << "[motion] frame=" << renderer_.frame_index()
+                          << " records=" << stats.records
+                          << " matched=" << stats.matched
+                          << " previous=" << stats.previous_records
+                          << " prev-frame-gap="
+                          << (transform_history_.current_frame() -
+                              transform_history_.previous_frame())
+                          << " camera=" << (transform_history_.camera_known() ? 1 : 0)
+                          << " writers=" << (motion_scene_ ? 1 : 0) << '\n';
+            }
+        }
         temporal_scene_ = false;
+        motion_scene_ = false;
     }
     // Projections take (or drop) the scene jitter from the next draw on.
     if (was_temporal || temporal_scene_) {
         frame_bindings_dirty_ = true;
+    }
+    // Motion keys switch on or off: resolve the pipeline again.
+    if (was_motion != motion_scene_) {
+        current_pipeline_ = nullptr;
     }
     // Scene end: the 2D layer renders into the output-resolution EFB. A new
     // scene that begins before a display copy restores the render EFB.
@@ -8027,17 +8160,19 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
                 struct Split {
                     std::size_t offset;
                     int marker;  // -1: pointer depth field
+                    int view;    // marker index (its camera), -1 none
                 };
                 std::array<Split, 5> splits{};
                 std::size_t split_count = 0;
                 if (capture_in_frame) {
                     splits[split_count++] = {
-                        prefix + chunk.pointer_depth_capture_fifo_offset, -1};
+                        prefix + chunk.pointer_depth_capture_fifo_offset, -1, -1};
                 }
                 for (std::uint8_t i = 0; i < chunk.fifo_marker_count; ++i) {
                     splits[split_count++] = {
                         prefix + chunk.fifo_markers[i].first,
-                        static_cast<int>(chunk.fifo_markers[i].second)};
+                        static_cast<int>(chunk.fifo_markers[i].second),
+                        static_cast<int>(i)};
                 }
                 std::stable_sort(splits.begin(), splits.begin() + split_count,
                     [](const Split& a, const Split& b) { return a.offset < b.offset; });
@@ -8056,7 +8191,12 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
                     if (split.marker < 0) {
                         record_pointer_depth_capture_in_frame(chunk);
                     } else {
-                        on_fifo_marker(static_cast<FifoMarker>(split.marker));
+                        const auto index = static_cast<std::size_t>(split.view);
+                        on_fifo_marker(static_cast<FifoMarker>(split.marker),
+                            split.view >= 0 &&
+                                    (chunk.fifo_marker_view_mask & (1u << index)) != 0u
+                                ? &chunk.fifo_marker_views[index]
+                                : nullptr);
                     }
                 }
                 if (consumed < stream.size()) {
@@ -9692,9 +9832,35 @@ ID3D12PipelineState* GxBackend::flush_draw_state(
     const bool topology_dirty =
         render_state_key_.primitive_topology != topology_key;
     render_state_key_.primitive_topology = topology_key;
+    // Motion writers: opaque triangles with color writes in a temporal scene
+    // (blending, logic ops and dual-source alpha cannot share a second
+    // target). Keys only change while a motion scene is (or was) active.
+    bool motion_key_changed = false;
+    if (motion_scene_ || motion_bits_set_) [[unlikely]] {
+        const std::uint32_t bb = render_state_key_.blend_bits;
+        const bool writer = motion_scene_ &&
+            topology_key == static_cast<std::uint8_t>(D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE) &&
+            (bb & ((1u << 0) | (1u << 8) | (1u << 27))) == 0u && (bb & (1u << 25)) != 0u;
+        if (((vs_key_.flags & kVsKeyMotion) != 0u) != writer) {
+            vs_key_.flags ^= kVsKeyMotion;
+            current_vs_hash_ = vs_key_.hash();
+            motion_key_changed = true;
+        }
+        if (((ps_key_.reserved & kPsKeyMotion) != 0u) != writer) {
+            ps_key_.reserved ^= kPsKeyMotion;
+            current_ps_hash_ = ps_key_.hash();
+            motion_key_changed = true;
+        }
+        if (((bb & kRenderStateMotionTarget) != 0u) != writer) {
+            render_state_key_.blend_bits ^= kRenderStateMotionTarget;
+            motion_key_changed = true;
+        }
+        motion_bits_set_ = writer;
+    }
 
     if (current_pipeline_ == nullptr || current_pipeline_is_uber_ ||
-        tev_dirty || xf_dirty || vcd_dirty || rs_dirty || topology_dirty) {
+        tev_dirty || xf_dirty || vcd_dirty || rs_dirty || topology_dirty ||
+        motion_key_changed) {
         const PsoKey pso_key{
             current_vs_hash_,
             current_ps_hash_,
@@ -9809,6 +9975,9 @@ ID3D12PipelineState* GxBackend::flush_draw_state(
         throw std::runtime_error(
             "[GxBackend] failed to create required graphics pipeline");
     }
+    current_pipeline_motion_ =
+        (render_state_key_.blend_bits & kRenderStateMotionTarget) != 0u &&
+        !current_pipeline_is_uber_;
 
     // Snapshot the XF matrix palette ONLY when the matrices actually changed
     // (kDirtyXfMatrices).  Re-uploading the full palette on every TEV/render-
@@ -9879,10 +10048,14 @@ ID3D12PipelineState* GxBackend::flush_draw_state(
                 elapsed_us(matrix_start, std::chrono::steady_clock::now());
         }
     }
+    draw_matrix_palette_ = temporal_scene_
+        ? renderer_.matrix_ring().gpu_base()
+        : current_matrix_palette_;
 
     // Upload VS constants when scalar state or fixed inline matrices change.
     if (vs_c_dirty || xf_dirty || vcd_dirty || inline_matrices_stale_ ||
-        frame_bindings_dirty_ || dirty == ~0u) {
+        frame_bindings_dirty_ || dirty == ~0u ||
+        (temporal_scene_ && current_matrix_palette_ != temporal_vs_palette_va_)) {
         const auto constants_start = time_detail
             ? std::chrono::steady_clock::now()
             : std::chrono::steady_clock::time_point{};
@@ -9891,8 +10064,8 @@ ID3D12PipelineState* GxBackend::flush_draw_state(
         UploadRing::Allocation vs_alloc =
             renderer_.constant_ring().allocate(sizeof(GxVsConstants), 256u);
         std::memcpy(vs_alloc.cpu, &vs_c, sizeof(vs_c));
-        if (temporal_scene_ && scene_phase_) {
-            apply_scene_jitter(*reinterpret_cast<GxVsConstants*>(vs_alloc.cpu));
+        if (temporal_scene_) [[unlikely]] {
+            write_scene_vs_constants(vs_c, *reinterpret_cast<GxVsConstants*>(vs_alloc.cpu));
         }
         apply_uber_vs_key(vs_key_, *reinterpret_cast<GxVsConstants*>(vs_alloc.cpu));
         current_vs_constants_ = vs_alloc.gpu;
@@ -10320,7 +10493,8 @@ bool GxBackend::begin_cached_draw_run(
         (current_sampler_table_.ptr != 0)
             ? current_sampler_table_
             : renderer_.default_sampler_table();
-    cached_draw_run_state_call_.matrix_palette = current_matrix_palette_;
+    cached_draw_run_state_call_.matrix_palette = draw_matrix_palette_;
+    cached_draw_run_state_call_.motion_target  = current_pipeline_motion_;
     cached_draw_run_state_call_.topology       = topology;
     cached_draw_run_state_call_.scissor        = scissor_rect;
     for (unsigned i = 0; i < 6; ++i) {
@@ -11291,7 +11465,8 @@ void GxBackend::on_draw(
     state_call.sampler_table  = (current_sampler_table_.ptr != 0)
         ? current_sampler_table_
         : renderer_.default_sampler_table();
-    state_call.matrix_palette = current_matrix_palette_;
+    state_call.matrix_palette = draw_matrix_palette_;
+    state_call.motion_target  = current_pipeline_motion_;
     state_call.topology       = topology;
     state_call.scissor        = scissor_rect;
     for (unsigned i = 0; i < 6; ++i) {

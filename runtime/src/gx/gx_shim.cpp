@@ -72,6 +72,10 @@ void attach_fifo_marker(FifoMarker marker, std::size_t fifo_offset) noexcept {
     backend().attach_fifo_marker(marker, fifo_offset);
 }
 
+void attach_scene_view(const float view[12]) noexcept {
+    backend().attach_scene_view(view);
+}
+
 bool capture_pointer_depth(std::span<std::uint32_t> pixels) {
     return backend().capture_pointer_depth(pixels);
 }

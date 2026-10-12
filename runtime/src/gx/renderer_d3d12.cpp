@@ -3025,11 +3025,13 @@ void RendererD3D12::carry_over_efb_contents() {
     command_list_->RSSetScissorRects(1, &scissor);
     command_list_->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
     command_list_->OMSetRenderTargets(1, &efb_rtv_, FALSE, nullptr);
+    bound_rt_motion_ = false;
     command_list_->SetPipelineState(blit_pipeline_.Get());
     command_list_->SetGraphicsRootDescriptorTable(0, table.gpu);
     command_list_->DrawInstanced(3, 1, 0, 0);
     if (efb_carry_depth_pso_) {
         command_list_->OMSetRenderTargets(0, nullptr, FALSE, &efb_dsv_);
+        bound_rt_motion_ = false;
         command_list_->SetPipelineState(efb_carry_depth_pso_.Get());
         command_list_->SetGraphicsRootDescriptorTable(0, depth_gpu);
         command_list_->DrawInstanced(3, 1, 0, 0);
@@ -5232,6 +5234,17 @@ void RendererD3D12::begin_frame(bool present_swap_chain) {
     follow_window_internal_resolution();
     apply_pending_efb_scale();
     sync_post_process_settings();
+    {
+        const unsigned segments = temporal_mode() ? kFramesInFlight + 2u : kFramesInFlight;
+        if (segments != matrix_segments_) {
+            wait_for_gpu();
+            matrix_ring_.reset();
+            if (!matrix_ring_.initialize(device_.Get(), "matrix", mtx_per_frame_bytes(), segments)) {
+                throw std::runtime_error("matrix ring resize failed");
+            }
+            matrix_segments_ = segments;
+        }
+    }
     frame_slot_ = static_cast<unsigned>(frame_index_ % kFramesInFlight);
     last_latency_wait_us_ = 0;
     last_frame_slot_wait_us_ = 0;
@@ -5351,7 +5364,8 @@ void RendererD3D12::begin_frame(bool present_swap_chain) {
     vertex_ring_  .begin_frame(frame_slot_);
     index_ring_   .begin_frame(frame_slot_);
     constant_ring_.begin_frame(frame_slot_);
-    matrix_ring_  .begin_frame(frame_slot_);
+    matrix_ring_  .begin_frame(static_cast<unsigned>(frame_index_ % matrix_segments_));
+    bound_rt_motion_ = false;
     srv_ring_     .begin_frame(frame_slot_);
     reset_sampler_frame();
     retired_efb_copy_textures_[frame_slot_].clear();
@@ -6000,6 +6014,15 @@ bool RendererD3D12::ensure_motion_target() {
     return true;
 }
 
+bool RendererD3D12::begin_motion_scene() {
+    if (!scene_temporal_ || !ensure_motion_target()) {
+        return false;
+    }
+    const float zero[4]{};
+    command_list_->ClearRenderTargetView(motion_rtv_, zero, 0u, nullptr);
+    return true;
+}
+
 bool RendererD3D12::scene_temporal_begin(float& jitter_x, float& jitter_y) {
     jitter_x = 0.0f;
     jitter_y = 0.0f;
@@ -6270,6 +6293,7 @@ void RendererD3D12::end_output_efb() {
 
 void RendererD3D12::bind_efb(const float xf_vp[6]) {
     command_list_->OMSetRenderTargets(1, &efb_rtv_, FALSE, &efb_dsv_);
+    bound_rt_motion_ = false;
 
     float vp_x = 0.0f, vp_y = 0.0f;
     float vp_w = static_cast<float>(kEfbWidth  * efb_scale_);
@@ -6343,6 +6367,7 @@ void RendererD3D12::clear_efb(
             command_list_->ClearRenderTargetView(rtv, col, num_rects, rects);
         } else {
             command_list_->OMSetRenderTargets(1, &rtv, FALSE, nullptr);
+            bound_rt_motion_ = false;
             const D3D12_VIEWPORT vp{
                 0.0f, 0.0f,
                 static_cast<float>(efb_w), static_cast<float>(efb_h),
@@ -6406,6 +6431,16 @@ void RendererD3D12::draw(const DrawCall& call) {
         call.matrix_palette != bound_matrix_palette_) {
         command_list_->SetGraphicsRootShaderResourceView(4, call.matrix_palette);
         bound_matrix_palette_ = call.matrix_palette;
+    }
+    if (call.motion_target != bound_rt_motion_) [[unlikely]] {
+        if (call.motion_target) {
+            const D3D12_CPU_DESCRIPTOR_HANDLE targets[2]{efb_rtv_, motion_rtv_};
+            command_list_->OMSetRenderTargets(2, targets, FALSE, &efb_dsv_);
+        } else {
+            command_list_->OMSetRenderTargets(1, &efb_rtv_, FALSE, &efb_dsv_);
+            bound_rt_motion_ = false;
+        }
+        bound_rt_motion_ = call.motion_target;
     }
 
     // Per-draw GX scissor, scaled to the EFB and clamped.  GX titles rely on
@@ -6647,6 +6682,7 @@ void RendererD3D12::record_conversion_blit(
     }
 
     command_list_->OMSetRenderTargets(1, &rtv, FALSE, nullptr);
+    bound_rt_motion_ = false;
     const D3D12_VIEWPORT vp{
         0.0f, 0.0f,
         static_cast<float>(dest_w), static_cast<float>(dest_h),
@@ -7201,6 +7237,7 @@ bool RendererD3D12::record_pointer_depth_capture_in_frame() {
 
     const D3D12_CPU_DESCRIPTOR_HANDLE rtv = allocate_conversion_rtv(target);
     command_list_->OMSetRenderTargets(1, &rtv, FALSE, nullptr);
+    bound_rt_motion_ = false;
     const D3D12_VIEWPORT viewport{
         0.0f, 0.0f, static_cast<float>(width), static_cast<float>(height), 0.0f, 1.0f};
     const D3D12_RECT scissor{0, 0, static_cast<LONG>(width), static_cast<LONG>(height)};
@@ -8584,6 +8621,7 @@ bool RendererD3D12::present(
     command_list_->ResourceBarrier(1, &bar);
 
     command_list_->OMSetRenderTargets(1, &back_rtv, FALSE, nullptr);
+    bound_rt_motion_ = false;
     const auto content_aspect=galaxy::presentation_content_aspect(
         ultrawide ? ultrawide->content_aspect : galaxy::kWiiContentAspect,source->prerecorded_movie);
     galaxy::ContentViewport content_viewport = galaxy::fit_content_viewport(

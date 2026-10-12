@@ -38,6 +38,8 @@
 
 #include "galaxy/gx/uber_shaders.h"
 
+#include <d3d12shader.h>
+
 #pragma comment(lib, "d3dcompiler.lib")
 
 namespace {
@@ -508,6 +510,76 @@ int main() {
         check_not_contains(src, "uint tm = min((matrix_index",
                            "vs_fixed_texmatrices_skip_palette_lookup");
         run_vs(k, "vs_texgen_x8");
+    }
+
+    // ---- Motion-vector variants --------------------------------------------
+    {
+        const ShaderGenerator gen;
+        for (unsigned variant = 0; variant < 4u; ++variant) {
+            VertexShaderKey k{};
+            std::memset(&k, 0, sizeof(k));
+            k.num_chans = 1;
+            k.channel[0] = chan_ctrl(true, false, 0, false, 0, 0);
+            k.flags = kVsKeyMotion;
+            if ((variant & 1u) != 0u) k.flags |= 0x01u;          // palette
+            if ((variant & 2u) != 0u) {                           // lit + ppl
+                k.flags |= 0x02u | kVsKeyPerPixelLighting;
+                k.channel[0] = chan_ctrl(false, true, 0x01, false, 1, 1);
+            }
+            const std::string src = gen.generate_vs(k);
+            char label[64];
+            std::snprintf(label, sizeof(label), "vs_motion_variant%u", variant);
+            check_contains(src, "TEXCOORD13", label);
+            check_contains(src, (variant & 1u) != 0u ? "motion_ctrl.x == 0u"
+                                                     : "dot(motion_prev_pos[0], float4(pos_in",
+                           label);
+            Microsoft::WRL::ComPtr<ID3DBlob> code, errors;
+            const HRESULT hr = D3DCompile(src.data(), src.size(), label, nullptr, nullptr,
+                "main", "vs_5_1", D3DCOMPILE_ENABLE_STRICTNESS |
+                    D3DCOMPILE_PACK_MATRIX_ROW_MAJOR, 0, &code, &errors);
+            if (FAILED(hr)) {
+                ++g_failures;
+                std::printf("FAILED: %s\n%s\n", label,
+                    errors ? static_cast<const char*>(errors->GetBufferPointer()) : "");
+                continue;
+            }
+            // The motion fields must land where GxVsConstants puts them.
+            Microsoft::WRL::ComPtr<ID3D12ShaderReflection> reflection;
+            if (SUCCEEDED(D3DReflect(code->GetBufferPointer(), code->GetBufferSize(),
+                                     IID_PPV_ARGS(&reflection)))) {
+                ID3D12ShaderReflectionConstantBuffer* cb =
+                    reflection->GetConstantBufferByName("GxVsConstants");
+                D3D12_SHADER_VARIABLE_DESC proj{}, ctrl{};
+                if (FAILED(cb->GetVariableByName("motion_prev_proj")->GetDesc(&proj)) ||
+                    FAILED(cb->GetVariableByName("motion_ctrl")->GetDesc(&ctrl)) ||
+                    proj.StartOffset != offsetof(GxVsConstants, motion_prev_proj) ||
+                    ctrl.StartOffset != offsetof(GxVsConstants, motion_ctrl)) {
+                    ++g_failures;
+                    std::printf("FAILED: %s motion constant offsets %u %u\n", label,
+                                proj.StartOffset, ctrl.StartOffset);
+                } else {
+                    std::printf("ok: %s\n", label);
+                }
+            }
+        }
+        for (unsigned variant = 0; variant < 3u; ++variant) {
+            PixelShaderKey k{};
+            std::memset(&k, 0, sizeof(k));
+            k.num_tev_stages = 1;
+            k.num_texgens = 1;
+            k.num_chans = 1;
+            k.alpha_comp0 = 7;
+            k.alpha_comp1 = 7;
+            k.reserved = kPsKeyMotion;
+            if (variant == 1u) k.flags = 0x01 | 0x02 | (2u << 3) | (2u << 5);  // late z-texture
+            if (variant == 2u) k.reserved |= kPsKeyPerPixelLighting;
+            const std::string src = gen.generate_ps(k);
+            char label[64];
+            std::snprintf(label, sizeof(label), "ps_motion_variant%u", variant);
+            check_contains(src, "float2 motion : SV_Target1", label);
+            check_contains(src, "TEXCOORD13", label);
+            check_compiles(src, "ps_5_1", label);
+        }
     }
 
     // ---- Pixel shaders ------------------------------------------------------

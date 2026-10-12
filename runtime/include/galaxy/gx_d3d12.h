@@ -128,6 +128,9 @@ void attach_pointer_depth_capture(
 // Simulation thread: the next render_frame submission handles `marker` when
 // its parser reaches `fifo_offset` bytes into the submitted FIFO.
 void attach_fifo_marker(FifoMarker marker, std::size_t fifo_offset) noexcept;
+// Simulation thread, before attach_fifo_marker(SceneBegin): the game camera's
+// world-to-eye matrix (row-major 3x4) for that scene.
+void attach_scene_view(const float view[12]) noexcept;
 void set_pointer_response(PointerResponseStamp stamp) noexcept;
 // Simulation producer; copied into each owned FIFO chunk and selected XFB.
 void set_prerecorded_movie_content(bool movie) noexcept;

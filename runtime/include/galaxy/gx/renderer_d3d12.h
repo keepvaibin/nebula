@@ -367,6 +367,9 @@ struct DrawCall {
     // has_viewport=false (XF regs not yet written) falls back to full EFB.
     float xf_viewport[6]{};
     bool  has_viewport = false;
+    // The pipeline writes motion vectors: render target 1 is the motion
+    // target (temporal scenes only).
+    bool  motion_target = false;
 };
 
 class RendererD3D12 {
@@ -426,6 +429,17 @@ public:
     // scene: whether the temporal path runs for it and, if so, the scene's
     // sub-pixel jitter in render pixels (applied to perspective projections).
     [[nodiscard]] bool scene_temporal_begin(float& jitter_x, float& jitter_y);
+    // After a temporal scene_temporal_begin: clears the motion target for
+    // the scene. False when it could not be created (no motion writers).
+    [[nodiscard]] bool begin_motion_scene();
+    // The temporal history no longer matches the picture (scene cut).
+    void reset_temporal_history() noexcept { temporal_history_valid_ = false; }
+    // Frames back whose matrix-ring palettes are still alive while this
+    // frame executes (0 outside temporal mode).
+    [[nodiscard]] unsigned matrix_history_frames() const noexcept {
+        return matrix_segments_ - kFramesInFlight;
+    }
+    [[nodiscard]] std::uint64_t frame_index() const noexcept { return frame_index_; }
     // The scene camera's clip planes and vertical field of view (radians).
     void set_scene_camera(float near_plane, float far_plane, float fov_y) noexcept;
     // GX copy-clear: color from the latched AR/GB regs, depth from z24
@@ -785,6 +799,11 @@ private:
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> motion_rtv_heap_;
     D3D12_CPU_DESCRIPTOR_HANDLE motion_rtv_{};
     unsigned motion_target_scale_ = 0;
+    // The EFB and the motion target are bound as render targets 0 and 1.
+    bool bound_rt_motion_ = false;
+    // Matrix ring segments: kFramesInFlight, plus two in temporal mode so the
+    // previous render frame's palettes outlive the frame that reads them.
+    unsigned matrix_segments_ = kFramesInFlight;
 
     // Backbuffers + present blit.
     static constexpr unsigned kSwapChainBuffers = 3;

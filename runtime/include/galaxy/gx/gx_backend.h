@@ -47,6 +47,7 @@
 #include "galaxy/gx/resident_vertex_arena.h"
 #include "galaxy/gx/shader_keys.h"
 #include "galaxy/gx/texture_cache.h"
+#include "galaxy/gx/transform_history.h"
 #include "galaxy/gx/uber_constants.h"
 #include "galaxy/gx/vs_constants.h"
 #include "galaxy/gx/vertex_loader.h"
@@ -249,8 +250,21 @@ public:
     // when its parser reaches `fifo_offset` bytes into the submitted FIFO.
     void attach_fifo_marker(FifoMarker marker, std::size_t fifo_offset) noexcept {
         if (producer_fifo_marker_count_ < producer_fifo_markers_.size()) {
-            producer_fifo_markers_[producer_fifo_marker_count_++] = {fifo_offset, marker};
+            const std::uint8_t index = producer_fifo_marker_count_++;
+            producer_fifo_markers_[index] = {fifo_offset, marker};
+            producer_fifo_marker_views_[index] = producer_scene_view_;
+            if (producer_scene_view_valid_ && marker == FifoMarker::SceneBegin) {
+                producer_fifo_marker_view_mask_ |= static_cast<std::uint8_t>(1u << index);
+            } else {
+                producer_fifo_marker_view_mask_ &= static_cast<std::uint8_t>(~(1u << index));
+            }
         }
+        producer_scene_view_valid_ = false;
+    }
+    // Simulation thread: the game camera for the next SceneBegin marker.
+    void attach_scene_view(const float view[12]) noexcept {
+        for (unsigned i = 0; i < 12u; ++i) producer_scene_view_[i] = view[i];
+        producer_scene_view_valid_ = true;
     }
     void set_prerecorded_movie_content(bool movie) noexcept { producer_movie_content_=movie; }
     void set_safety_scene_surround(float intensity) noexcept { producer_safety_surround_=intensity; }
@@ -549,6 +563,10 @@ private:
         // Scene boundaries in this chunk's FIFO, in stream order.
         std::array<std::pair<std::size_t, FifoMarker>, 4> fifo_markers{};
         std::uint8_t fifo_marker_count = 0;
+        // Game camera (world to eye) per SceneBegin marker; bit i of the
+        // mask marks marker i's view valid.
+        std::array<std::array<float, 12>, 4> fifo_marker_views{};
+        std::uint8_t fifo_marker_view_mask = 0;
         std::uint64_t dependency_scan_ns = 0;
         std::uint64_t snapshot_ns = 0;
         std::uint64_t snapshot_bytes = 0;
@@ -617,11 +635,27 @@ private:
     std::size_t producer_pointer_depth_capture_offset_ = 0;
     std::array<std::pair<std::size_t, FifoMarker>, 4> producer_fifo_markers_{};
     std::uint8_t producer_fifo_marker_count_ = 0;
+    std::array<std::array<float, 12>, 4> producer_fifo_marker_views_{};
+    std::uint8_t producer_fifo_marker_view_mask_ = 0;
+    std::array<float, 12> producer_scene_view_{};
+    bool producer_scene_view_valid_ = false;
     // Render thread: inside GameScene::draw3D (between the scene markers).
     bool scene_phase_ = false;
     // Temporal upscaling for the current scene: perspective projections carry
     // this sub-pixel jitter (render pixels).
     bool temporal_scene_ = false;
+    // The temporal scene writes motion vectors (the motion target is live).
+    bool motion_scene_ = false;
+    // The live keys carry the motion bits (cleared once after a scene).
+    bool motion_bits_set_ = false;
+    // The resolved pipeline is a motion writer (not an uber stand-in).
+    bool current_pipeline_motion_ = false;
+    // Root SRV for draws: the palette snapshot, or the matrix ring base in
+    // temporal scenes (palettes then addressed by mtx_palette_base).
+    D3D12_GPU_VIRTUAL_ADDRESS draw_matrix_palette_ = 0;
+    D3D12_GPU_VIRTUAL_ADDRESS temporal_vs_palette_va_ = 0;
+    TransformHistory transform_history_;
+    std::uint64_t motion_trace_scenes_ = 0;
     bool scene_camera_captured_ = false;
     float scene_jitter_px_[2]{};
     std::uint64_t scene_markers_seen_ = 0;
@@ -823,8 +857,14 @@ private:
     void take_attached_pointer_depth_capture(FrameChunk& chunk, std::size_t fifo_size);
     void record_pointer_depth_capture_in_frame(FrameChunk& chunk);
     void take_attached_fifo_markers(FrameChunk& chunk, std::size_t fifo_size) noexcept;
-    void on_fifo_marker(FifoMarker marker);
-    void apply_scene_jitter(GxVsConstants& constants);
+    void on_fifo_marker(FifoMarker marker, const std::array<float, 12>* view = nullptr);
+    // Temporal scene: jitter, palette base, transform record and motion
+    // fields of a VS constant upload (`upload` is write-combined memory).
+    void write_scene_vs_constants(const GxVsConstants& cpu, GxVsConstants& upload);
+    // Writes the jittered projection of a perspective draw into `upload`;
+    // `jitter_ndc` receives the offset (zero for orthographic draws).
+    void apply_scene_jitter(const GxVsConstants& cpu, GxVsConstants& upload,
+                            float jitter_ndc[2]);
     void adopt_pointer_depth_fence_if_needed();
     // Asynchronous EFB depth field for simulation-thread GXPeekZ. Three slots:
     // the render owner fills the slot after the published one, then publishes
