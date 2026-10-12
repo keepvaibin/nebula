@@ -698,7 +698,6 @@ private:
         unsigned next = 0;
         std::int64_t frame_qpc = 0;       // the frame's arrival (its present)
         double lead = 0.0;                // t of a slot at the arrival: 60 / rate
-        bool vsync_paced = false;         // Present waits for the display
         // Set inside a render chunk (no frame may be recorded there): the
         // render loop presents the real frame before anything else.
         bool flush_requested = false;
@@ -743,11 +742,16 @@ private:
     double interp_build_ms_ = 0.0;        // record constants rebuilt per sub-frame
     std::uint64_t interp_sequences_ = 0;
     std::uint64_t interp_snapped_ = 0;    // records shown at their own transform
+    std::uint64_t interp_started_ = 0;
+    std::uint64_t interp_last_played_serial_ = 0;
+    std::uint64_t interp_logs_skipped_ = 0;     // completed logs replaced before playing
+    std::uint64_t interp_present_skipped_ = 0;  // VI presents while a sequence played
     // Game frames presented without sub-frames, by reason: overlay, no 3D
     // scene, several scenes, output-EFB switch, log already gone, unmatched.
     std::array<std::uint64_t, 6> interp_real_only_{};
     bool interp_presenting_real_ = false;
     void note_interp_real_present();
+    void interp_event(const char* what, std::uint64_t a, std::uint64_t b) const;
     void report_interp_stats();
     std::int64_t interp_stats_qpc_ = 0;
     // Render thread: steps the interpolation sequence of the latest frame

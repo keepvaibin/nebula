@@ -475,8 +475,10 @@ public:
     // when none is ready.
     bool start_replay_playback();
     [[nodiscard]] bool replay_playing() const noexcept { return run_valid_; }
-    // Interpolation mode: present rate above 60, temporal upscaler off,
-    // GALAXY_EXPERIMENTAL_INTERPOLATION=1. Rings then keep one segment per
+    // Replay serial (game frame) of the playing log.
+    [[nodiscard]] std::uint64_t playing_serial() const noexcept { return run_serial_; }
+    // Interpolation mode: present rate above 60, temporal upscaler off, not
+    // GALAXY_INTERPOLATION=0. Rings then keep one segment per
     // game frame (advanced at the first frame after a display copy) and the
     // log spans every render chunk of the game frame up to its display copy.
     [[nodiscard]] bool interpolation_mode() const;

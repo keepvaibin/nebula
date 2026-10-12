@@ -6732,12 +6732,38 @@ bool GxBackend::peek_efb(
 
 // A display copy completed a game frame's log: its scene (the one recording
 // when the copy landed) is the one to interpolate when its present arrives.
+// GALAXY_INTERP_EVENTS=first,last: one line per interpolation event while the
+// latest log serial is in [first, last].
+void GxBackend::interp_event(const char* what, std::uint64_t a, std::uint64_t b) const {
+    static const std::pair<std::uint64_t, std::uint64_t> range = [] {
+        char value[64]{};
+        std::size_t length = 0u;
+        std::pair<std::uint64_t, std::uint64_t> r{1u, 0u};
+        if (getenv_s(&length, value, sizeof(value), "GALAXY_INTERP_EVENTS") == 0 && length > 1u) {
+            unsigned long long first = 0, last = 0;
+            if (sscanf_s(value, "%llu,%llu", &first, &last) == 2) r = {first, last};
+        }
+        return r;
+    }();
+    const std::uint64_t serial = renderer_.replay_serial();
+    if (serial < range.first || serial > range.second) {
+        return;
+    }
+    LARGE_INTEGER now{};
+    QueryPerformanceCounter(&now);
+    std::ostringstream message;
+    message << "[interp-event] qpc=" << now.QuadPart << " log=" << serial << ' ' << what
+            << ' ' << a << ' ' << b << '\n';
+    std::cerr << message.str();
+}
+
 void GxBackend::note_interp_log_completion() {
     const std::uint64_t serial = renderer_.replay_serial();
     if (serial == interp_seen_serial_) {
         return;
     }
     interp_seen_serial_ = serial;
+    interp_event("log-closed", renderer_.replay_available() ? 1u : 0u, renderer_.replay_xfb_addr());
     if (!renderer_.replay_available()) {
         return;
     }
@@ -6777,6 +6803,15 @@ void GxBackend::start_interp_sequence(std::uint32_t xfb_addr) {
     const double rate = std::max(61.0, present_frame_rate(
         cfg.max_fps, cfg.vsync_interval, renderer_.display_refresh_hz()));
     ++interp_sequence_serial_;
+    ++interp_started_;
+    // Logs completed but never played (a newer one replaced them first).
+    const std::uint64_t played = renderer_.playing_serial();
+    if (interp_last_played_serial_ != 0u && played > interp_last_played_serial_ + 1u &&
+        played - interp_last_played_serial_ < 8u) {
+        interp_logs_skipped_ += played - interp_last_played_serial_ - 1u;
+    }
+    interp_last_played_serial_ = played;
+    interp_event("start", played, xfb_addr);
     interp_sequence_.active = true;
     interp_sequence_.flush_requested = false;
     interp_sequence_.classified = false;
@@ -6790,7 +6825,6 @@ void GxBackend::start_interp_sequence(std::uint32_t xfb_addr) {
     // frame itself. At rate 60(k+1) that is k sub-frames at i / (k + 1).
     interp_sequence_.frame_qpc = now.QuadPart;
     interp_sequence_.lead = 60.0 / rate;
-    interp_sequence_.vsync_paced = cfg.vsync_interval != 0u;
     interp_slot_period_qpc_ = static_cast<std::int64_t>(static_cast<double>(frequency) / rate);
     // Integer multiples of 60 lock the slot clock to the frame (k sub-frames
     // then the frame); other rates keep a free-running clock and let the
@@ -6811,6 +6845,7 @@ void GxBackend::supersede_interp_sequence() {
     }
     interp_sequence_.active = false;
     ++interp_superseded_;
+    interp_event("superseded", interp_last_played_serial_, interp_sequence_.next);
 }
 
 std::string GxBackend::interp_snapshot_path(const char* suffix) const {
@@ -6837,9 +6872,6 @@ std::int64_t GxBackend::interp_wait_ms() const {
         QueryPerformanceFrequency(&value);
         return static_cast<std::int64_t>(value.QuadPart);
     }();
-    if (interp_sequence_.vsync_paced) {
-        return 0;  // Present itself waits for the display
-    }
     const std::int64_t remaining = interp_slot_due_qpc_ - now.QuadPart;
     return remaining <= 0 ? 0 : std::max<std::int64_t>(1, remaining * 1000 / frequency);
 }
@@ -6855,11 +6887,12 @@ void GxBackend::advance_interp_sequence(bool flush) {
         LARGE_INTEGER now{};
         QueryPerformanceCounter(&now);
         InterpSequence& sequence = interp_sequence_;
-        if (!flush && !sequence.vsync_paced && now.QuadPart < interp_slot_due_qpc_) {
+        // Slots run on the QPC clock with VSync too: a Present that waits
+        // for the display would hold back the frame chunks behind it.
+        if (!flush && now.QuadPart < interp_slot_due_qpc_) {
             return;
         }
-        // The slot's own time (VSync: now, Present waits for the display).
-        const std::int64_t slot = sequence.vsync_paced ? now.QuadPart : interp_slot_due_qpc_;
+        const std::int64_t slot = interp_slot_due_qpc_;
         const double t = static_cast<double>(slot - sequence.frame_qpc) * 60.0 /
                              static_cast<double>(frequency) + sequence.lead;
         if (!flush) {
@@ -6874,14 +6907,18 @@ void GxBackend::advance_interp_sequence(bool flush) {
         if (!flush && t < 1.0 - 1e-3 && sequence.next < 7u && sequence.subframes != 0u &&
             renderer_.replay_playing()) {
             const auto start = std::chrono::steady_clock::now();
-            const std::string snapshot =
+            std::string snapshot =
                 interp_snapshot_path(("sub" + std::to_string(sequence.next + 1u)).c_str());
+            if (snapshot.empty()) {
+                snapshot = present_snapshot_path();  // sub-frames count as presents
+            }
             if (!snapshot.empty()) {
                 renderer_.set_debug_capture_paths({}, snapshot);
                 renderer_.set_subframe_capture(true);
                 renderer_.set_capture_waits(true);
             }
             const bool presented = render_interp_subframe(static_cast<float>(t));
+            interp_event("sub", interp_last_played_serial_, static_cast<std::uint64_t>(t * 1000.0));
             if (!snapshot.empty()) {
                 renderer_.set_subframe_capture(false);
                 renderer_.set_capture_waits(false);
@@ -6898,6 +6935,7 @@ void GxBackend::advance_interp_sequence(bool flush) {
             return;
         }
         sequence.active = false;
+        interp_event("real", interp_last_played_serial_, static_cast<std::uint64_t>(std::max(0.0, t) * 1000.0));
         interp_snapshot_path_ = interp_snapshot_path("real");
         renderer_.set_capture_waits(!interp_snapshot_path_.empty());
         interp_presenting_real_ = true;
@@ -6957,6 +6995,9 @@ void GxBackend::report_interp_stats() {
             << " dropped=" << interp_dropped_
             << " late-slots=" << interp_late_slots_
             << " superseded=" << interp_superseded_
+            << " started=" << interp_started_
+            << " logs-skipped=" << interp_logs_skipped_
+            << " presents-during-sequence=" << interp_present_skipped_
             << " snapped-records=" << interp_snapped_
             << " failed=" << interp_failed_
             << " replay-fail=" << renderer_.replay_failure()
@@ -6982,6 +7023,9 @@ void GxBackend::report_interp_stats() {
     interp_dropped_ = 0u;
     interp_late_slots_ = 0u;
     interp_superseded_ = 0u;
+    interp_started_ = 0u;
+    interp_logs_skipped_ = 0u;
+    interp_present_skipped_ = 0u;
     interp_snapped_ = 0u;
     interp_failed_ = 0u;
     interp_sequences_ = 0u;
@@ -7405,6 +7449,7 @@ void GxBackend::render_thread_main() {
                     active_pointer_depth.reset();
                 } else if (chunk.present_only) {
                     // An interpolation sequence presents the latest frame itself.
+                    interp_event("vi-present", chunk.displayed_xfb_addr, interp_log_waiting_ ? 1u : 0u);
                     if (interp_log_waiting_ && renderer_.replay_available()) {
                         supersede_interp_sequence();
                         interp_log_waiting_ = false;
@@ -7414,6 +7459,8 @@ void GxBackend::render_thread_main() {
                         present_cached_xfb_on_thread(
                             chunk.displayed_xfb_addr,
                             false);
+                    } else {
+                        ++interp_present_skipped_;
                     }
                 } else {
                     if (interp_sequence_.active && interp_sequence_.flush_requested) {
@@ -9066,8 +9113,14 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
         }
         // The ready frame's own present: its sub-frames come first, the real
         // frame after them (started by the render loop after this chunk).
+        if (present_swap_chain) {
+            interp_event("chunk-present", selected_xfb != nullptr ? selected_xfb->guest_addr : 0u,
+                         chunk.displayed_xfb_addr);
+        }
+        // As on the VI-present path, a present while a completed log waits
+        // starts that log's sequence: the VI may still name the previous
+        // XFB (the guest flips at the next retrace).
         if (interp_log_waiting_ && present_swap_chain && !capture_backbuffer &&
-            selected_xfb != nullptr && selected_xfb->guest_addr == interp_log_xfb_ &&
             renderer_.replay_available()) {
             interp_start_pending_ = true;
             present_swap_chain = false;

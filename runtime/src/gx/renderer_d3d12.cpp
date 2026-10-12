@@ -6598,11 +6598,13 @@ void RendererD3D12::record_motion_debug_view() {
 // ---------------------------------------------------------------------------
 
 bool RendererD3D12::interpolation_mode() const {
+    // GALAXY_INTERPOLATION=0 turns it off (diagnostics). The temporal
+    // upscaler's history cannot take sub-frames: FSR 3 presents at 60.
     static const bool allowed = [] {
         char value[8]{};
         std::size_t length = 0u;
-        return getenv_s(&length, value, sizeof(value), "GALAXY_EXPERIMENTAL_INTERPOLATION") == 0 &&
-               length > 1u && value[0] != '0';
+        return !(getenv_s(&length, value, sizeof(value), "GALAXY_INTERPOLATION") == 0 &&
+                 length > 1u && value[0] == '0');
     }();
     if (!allowed || temporal_mode()) {
         return false;
@@ -9434,10 +9436,14 @@ std::string native_settings_row_text(
         case 6: {
             const auto rate = static_cast<unsigned>(std::lround(std::max(0.0f, render.max_fps)));
             const double measured = s_measured_present_hz.load(std::memory_order_relaxed);
+            // Above 60 needs interpolation, which the temporal upscaler excludes.
+            const bool fsr3_caps = render.upscaler == 2u && fsr3_available() &&
+                (rate == 0u ? settings_refresh_hz(render) > 61u : rate > 61u);
+            const char* cap = fsr3_caps ? " (60: FSR 3)" : "";
             if (rate == 0u) {
-                std::snprintf(text, sizeof(text), "FRAME RATE: UNLIMITED  %.1f", measured);
+                std::snprintf(text, sizeof(text), "FRAME RATE: UNLIMITED%s  %.1f", cap, measured);
             } else {
-                std::snprintf(text, sizeof(text), "FRAME RATE: %u  %.1f", rate, measured);
+                std::snprintf(text, sizeof(text), "FRAME RATE: %u%s  %.1f", rate, cap, measured);
             }
             return text;
         }
