@@ -1,8 +1,11 @@
 // Remappable controls: binding model, ini round trip, evaluation, chord
-// mapping, Switch report decoding and the motion helpers.
+// mapping, Switch report decoding, the motion integrator, pointer ownership,
+// the stick pointer, the jump/back context rule and settings migration.
 
 #include "galaxy/input_bindings.h"
+#include "galaxy/native_input.h"
 #include "galaxy/native_settings_pad.h"
+#include "galaxy/pointer_control.h"
 #include "galaxy/switch_controller.h"
 
 #define WIN32_LEAN_AND_MEAN
@@ -10,9 +13,12 @@
 #include <Windows.h>
 #include <Xinput.h>
 
+#include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstdio>
 #include <cstring>
+#include <fstream>
 #include <iostream>
 #include <string>
 #include <vector>
@@ -104,7 +110,8 @@ void test_ini_round_trip() {
     config.table(ControlScheme::Xbox)[WiiTarget::A] = {};
     add_binding(config.table(ControlScheme::Xbox)[WiiTarget::A], {SourceKind::Button, pad::kNorthBit});
     add_binding(config.table(ControlScheme::Keyboard)[WiiTarget::NunchukShake], {SourceKind::Key, 'F'});
-    config.tune(ControlScheme::SwitchPro).gyro_pointer = true;
+    config.tune(ControlScheme::SwitchPro).gyro_pointer = false;
+    config.tune(ControlScheme::SwitchPro2).gyro_sensitivity = 1.7f;
     config.tune(ControlScheme::SwitchPro).shake_sensitivity = 5;
     config.tune(ControlScheme::SwitchPro2).motion_shake = MotionShake::Nunchuk;
     config.tune(ControlScheme::Xbox).pointer_speed = 3.7f;
@@ -126,7 +133,8 @@ void test_ini_round_trip() {
     expect(parsed == config, "controls survive the ini round trip exactly");
     expect(text.find("bind.keyboard.a=Space, Enter, MouseLeft\n") != std::string::npos,
            "keyboard A line is stable text");
-    expect(text.find("bind.xbox.b=B, RT\n") != std::string::npos, "xbox B line is stable text");
+    expect(text.find("bind.xbox.b=RT\n") != std::string::npos, "xbox B line is stable text");
+    expect(text.find("bind.xbox.jump_back=B\n") != std::string::npos, "xbox jump/back line is stable text");
     expect(text.find("bind.switch_pro.a=A\n") != std::string::npos, "switch A line is stable text");
     expect(!apply_controls_setting(parsed, "audio_master_gain", "1"), "foreign keys are not owned");
     ControlsConfig malformed = default_controls_config();
@@ -166,7 +174,7 @@ void test_evaluation() {
     sample.axes[static_cast<std::size_t>(PadAxis::RightTrigger)] = 96.0f / 255.0f;
     const float threshold = 96.0f / 255.0f;
     LogicalInput pad = evaluate_pad_bindings(config.table(ControlScheme::Xbox), sample, threshold);
-    expect(pad.held(WiiTarget::A) && pad.held(WiiTarget::Z), "XInput A and LB map to A and Z");
+    expect(pad.held(WiiTarget::A) && pad.held(WiiTarget::C), "XInput A and LB map to A and C");
     expect(pad.held(WiiTarget::B), "right trigger at the threshold presses B");
     expect(approx(pad.stick_x, -0.4f) && !pad.held(WiiTarget::StickLeft), "analog stick passes through");
     expect(approx(pad.pointer_y, 0.8f), "right stick drives the pointer");
@@ -320,8 +328,8 @@ void test_switch_pro_decoding() {
     const LogicalInput logic = evaluate_pad_bindings(
         default_binding_table(ControlScheme::SwitchPro), sample, 96.0f / 255.0f);
     expect(logic.held(WiiTarget::A) && logic.held(WiiTarget::B) && logic.held(WiiTarget::Plus) &&
-               logic.held(WiiTarget::Home) && logic.held(WiiTarget::DpadUp) && logic.held(WiiTarget::Z) && !logic.held(WiiTarget::Shake),
-           "Switch defaults: A->A, ZR->B, Plus, Home, D-pad, L->Z");
+               logic.held(WiiTarget::Home) && logic.held(WiiTarget::DpadUp) && logic.held(WiiTarget::C) && !logic.held(WiiTarget::Shake),
+           "Switch defaults: A->A, ZR->B, Plus, Home, D-pad, L->C");
 
     // Simple 0x3F report (Bluetooth default mode).
     std::vector<std::uint8_t> simple(12, 0);
@@ -424,55 +432,403 @@ void test_switch2_decoding() {
            "Pro 2 flash read address");
 }
 
+// Rotates `v` about unit axis `k` by `angle` radians (Rodrigues).
+std::array<float, 3> rotate(const std::array<float, 3>& v, const std::array<float, 3>& k, float angle) {
+    const float c = std::cos(angle), s = std::sin(angle);
+    const float d = k[0] * v[0] + k[1] * v[1] + k[2] * v[2];
+    const std::array<float, 3> x{k[1] * v[2] - k[2] * v[1], k[2] * v[0] - k[0] * v[2], k[0] * v[1] - k[1] * v[0]};
+    return {v[0] * c + x[0] * s + k[0] * d * (1 - c), v[1] * c + x[1] * s + k[1] * d * (1 - c),
+            v[2] * c + x[2] * s + k[2] * d * (1 - c)};
+}
+
 void test_motion() {
     using namespace switch_hid;
-    ShakeDetector detector{};
-    std::uint64_t t = 0;
-    int starts = 0;
-    // At rest: 1 g, no shake.
-    for (int i = 0; i < 50; ++i, t += 5000) starts += detector.feed({0.0f, 1.0f, 0.0f}, t, 3) ? 1 : 0;
-    expect(starts == 0, "resting controller never shakes");
-    // A 3 g swing for 40 ms.
-    bool started = false;
-    std::uint64_t start_time = 0;
-    for (int i = 0; i < 8; ++i, t += 5000) {
-        const float s = (i % 2 == 0) ? 3.0f : -1.5f;
-        if (detector.feed({s, 1.0f, 0.0f}, t, 3)) {
-            started = true;
-            start_time = t;
-        }
-    }
-    expect(started && detector.pressed(start_time + 1000) &&
-               !detector.pressed(start_time + ShakeDetector::kHoldUs),
-           "a swing starts one held shake");
-    // Continued shaking inside the cooldown does not retrigger.
-    int retriggers = 0;
-    for (int i = 0; i < 20; ++i, t += 5000) {
-        const float s = (i % 2 == 0) ? 3.0f : -1.5f;
-        if (detector.feed({s, 1.0f, 0.0f}, t, 3) && t < start_time + ShakeDetector::kCooldownUs) ++retriggers;
-    }
-    expect(retriggers == 0, "cooldown suppresses repeats");
-    // Sensitivity ordering.
-    expect(ShakeDetector::threshold_g(1) > ShakeDetector::threshold_g(3) &&
-               ShakeDetector::threshold_g(3) > ShakeDetector::threshold_g(5),
-           "higher sensitivity needs less acceleration");
-    ShakeDetector light{};
-    t = 0;
-    bool light_started = false;
-    bool strong_started = false;
-    ShakeDetector strong{};
-    for (int i = 0; i < 8; ++i, t += 5000) {
-        const std::array<float, 3> a{1.4f, 1.0f, 0.0f};  // ~0.72 g over rest
-        light_started |= light.feed(a, t, 5);
-        strong_started |= strong.feed(a, t, 1);
-    }
-    expect(light_started && !strong_started, "a gentle shake counts only at high sensitivity");
+    constexpr float kPi = 3.14159265f;
+    constexpr float kDeg = kPi / 180.0f;
+    MotionSettings settings{};
+    settings.picture_aspect = 16.0f / 9.0f;
 
-    ImuSample sample{};
-    sample.gyro = {0.35f, 0.35f, 0.0f};  // pitch up, yaw left
-    const GyroPointerDelta delta = gyro_pointer_delta(sample, 1.0f, 2.4f);
-    expect(approx(delta.x, -1.0f, 1e-3f) && approx(delta.y, 1.0f, 1e-3f),
-           "half a screen per 0.35 rad: yaw left moves left, pitch up moves up");
+    // At rest (held flat: gravity reaction along +Y) nothing shakes and the
+    // pointer does not move, even with a constant 1.5 deg/s gyro bias, once a
+    // rest window has measured it.
+    {
+        SwitchMotion motion{};
+        ImuSample rest{};
+        rest.accel = {0.0f, 1.0f, 0.0f};
+        rest.gyro = {1.5f * kDeg, -1.0f * kDeg, 0.7f * kDeg};
+        float x = 0.0f, y = 0.0f;
+        int starts = 0;
+        std::uint64_t t = 0;
+        for (int i = 0; i < 200 * 60; ++i, t += 5000) {  // 60 s
+            const auto out = motion.feed(rest, 0.005f, t, settings);
+            if (i >= 200) {  // after the first second
+                x += out.pointer_x;
+                y += out.pointer_y;
+            }
+            starts += out.shake_started ? 1 : 0;
+        }
+        expect(starts == 0, "resting controller never shakes");
+        expect(motion.rest_windows() > 100u, "rest windows refine the bias");
+        expect(std::fabs(x) < 0.01f && std::fabs(y) < 0.01f, "no drift over 60 s at rest with a biased gyro");
+    }
+
+    // Yaw: 40 degrees about the world vertical is one picture width (2
+    // units), left turn moves left; held flat and held upright alike.
+    for (const bool upright : {false, true}) {
+        SwitchMotion motion{};
+        // Flat: up is +Y. Upright (face toward the player): up is -Z.
+        const std::array<float, 3> up = upright ? std::array<float, 3>{0.0f, 0.0f, -1.0f}
+                                                : std::array<float, 3>{0.0f, 1.0f, 0.0f};
+        ImuSample s{};
+        s.accel = up;
+        std::uint64_t t = 0;
+        for (int i = 0; i < 40; ++i, t += 5000) (void)motion.feed(s, 0.005f, t, settings);
+        // Turn left at 80 deg/s for 0.5 s: 40 degrees about `up`.
+        float x = 0.0f, y = 0.0f;
+        std::array<float, 3> accel = up;
+        for (int i = 0; i < 100; ++i, t += 5000) {
+            s.gyro = {up[0] * 80.0f * kDeg, up[1] * 80.0f * kDeg, up[2] * 80.0f * kDeg};
+            s.accel = accel;  // turning about gravity leaves the accelerometer unchanged
+            const auto out = motion.feed(s, 0.005f, t, settings);
+            x += out.pointer_x;
+            y += out.pointer_y;
+        }
+        expect(approx(x, -2.0f, 0.03f) && std::fabs(y) < 0.03f,
+               upright ? "upright: 40 deg of yaw is one picture width to the left"
+                       : "flat: 40 deg of yaw is one picture width to the left");
+    }
+
+    // Pitch up about the right axis moves the pointer up; vertical gain keeps
+    // pixels per degree (aspect 16:9: 22.5 degrees cover the height).
+    {
+        SwitchMotion motion{};
+        ImuSample s{};
+        s.accel = {0.0f, 1.0f, 0.0f};
+        std::uint64_t t = 0;
+        for (int i = 0; i < 40; ++i, t += 5000) (void)motion.feed(s, 0.005f, t, settings);
+        float x = 0.0f, y = 0.0f;
+        std::array<float, 3> g{0.0f, 1.0f, 0.0f};
+        const float rate = 45.0f * kDeg;
+        for (int i = 0; i < 100; ++i, t += 5000) {
+            s.gyro = {rate, 0.0f, 0.0f};
+            g = rotate(g, {1.0f, 0.0f, 0.0f}, -rate * 0.005f);  // world vector turns against the body
+            s.accel = g;
+            const auto out = motion.feed(s, 0.005f, t, settings);
+            x += out.pointer_x;
+            y += out.pointer_y;
+        }
+        expect(approx(y, 2.0f, 0.05f) && std::fabs(x) < 0.03f, "22.5 deg of pitch up is one picture height up");
+    }
+
+    // Gyro off: no pointer output, gravity and bias still tracked.
+    {
+        SwitchMotion motion{};
+        MotionSettings off = settings;
+        off.gyro_pointer = false;
+        ImuSample s{};
+        s.accel = {0.0f, 1.0f, 0.0f};
+        s.gyro = {0.0f, 1.0f, 0.0f};
+        const auto out = motion.feed(s, 0.005f, 0, off);
+        expect(out.pointer_x == 0.0f && out.pointer_y == 0.0f, "gyro pointer off emits nothing");
+    }
+
+    // Shake: a sideways 1.2 g jolt (|a| only 1.56 g, 0.56 over rest) counts at
+    // the default sensitivity, a 0.4 g handling bump does not, and the
+    // cooldown suppresses repeats.
+    {
+        SwitchMotion motion{};
+        ImuSample s{};
+        s.accel = {0.0f, 1.0f, 0.0f};
+        std::uint64_t t = 0;
+        for (int i = 0; i < 100; ++i, t += 5000) (void)motion.feed(s, 0.005f, t, settings);
+        int bumps = 0;
+        for (int i = 0; i < 4; ++i, t += 5000) {
+            s.accel = {(i % 2 == 0) ? 0.4f : -0.4f, 1.0f, 0.0f};
+            bumps += motion.feed(s, 0.005f, t, settings).shake_started ? 1 : 0;
+        }
+        expect(bumps == 0, "a 0.4 g handling bump is not a shake");
+        bool started = false;
+        std::uint64_t start_time = 0;
+        int retriggers = 0;
+        for (int i = 0; i < 40; ++i, t += 5000) {
+            s.accel = {(i % 4 < 2) ? 1.2f : -1.2f, 1.0f, 0.0f};
+            if (motion.feed(s, 0.005f, t, settings).shake_started) {
+                if (!started) {
+                    started = true;
+                    start_time = t;
+                } else if (t < start_time + SwitchMotion::kShakeCooldownUs) {
+                    ++retriggers;
+                }
+            }
+        }
+        expect(started, "a sideways 1.2 g shake starts a shake (|a|-1g alone would read 0.56 g)");
+        expect(motion.shake_pressed(start_time + 1000) &&
+                   !motion.shake_pressed(start_time + SwitchMotion::kShakeHoldUs),
+               "a shake is held for the hold time");
+        expect(retriggers == 0, "cooldown suppresses repeats");
+    }
+    // A fast wrist flick (900 deg/s) with little linear acceleration counts;
+    // a 300 deg/s aiming turn does not.
+    {
+        SwitchMotion flick{};
+        SwitchMotion aim{};
+        ImuSample s{};
+        s.accel = {0.0f, 1.0f, 0.0f};
+        std::uint64_t t = 0;
+        for (int i = 0; i < 100; ++i, t += 5000) {
+            (void)flick.feed(s, 0.005f, t, settings);
+            (void)aim.feed(s, 0.005f, t, settings);
+        }
+        bool flicked = false, aimed = false;
+        std::array<float, 3> g1{0.0f, 1.0f, 0.0f}, g2 = g1;
+        for (int i = 0; i < 10; ++i, t += 5000) {
+            ImuSample a = s, b = s;
+            a.gyro = {900.0f * kDeg, 0.0f, 0.0f};
+            b.gyro = {300.0f * kDeg, 0.0f, 0.0f};
+            g1 = rotate(g1, {1.0f, 0.0f, 0.0f}, -900.0f * kDeg * 0.005f);
+            g2 = rotate(g2, {1.0f, 0.0f, 0.0f}, -300.0f * kDeg * 0.005f);
+            a.accel = g1;
+            b.accel = g2;
+            flicked |= flick.feed(a, 0.005f, t, settings).shake_started;
+            aimed |= aim.feed(b, 0.005f, t, settings).shake_started;
+        }
+        expect(flicked, "a 900 deg/s flick is a shake");
+        expect(!aimed, "a 300 deg/s turn (fast aiming, tilting) is not a shake");
+    }
+    expect(SwitchMotion::shake_accel_threshold_g(1) > SwitchMotion::shake_accel_threshold_g(3) &&
+               SwitchMotion::shake_accel_threshold_g(3) > SwitchMotion::shake_accel_threshold_g(5) &&
+               SwitchMotion::shake_gyro_threshold(1) > SwitchMotion::shake_gyro_threshold(5),
+           "higher sensitivity needs less motion");
+}
+
+void test_pointer_ownership() {
+    PointerOwner owner{};
+    std::uint64_t t = 1'000'000;
+    PointerActivity none{};
+    PointerActivity mouse{};
+    mouse.mouse = true;
+    PointerActivity stick{};
+    stick.stick = true;
+    PointerActivity both{};
+    both.mouse = true;
+    both.stick = true;
+    expect(owner.update(none, t) == PointerSource::None, "nothing moved: no owner");
+    expect(owner.update(mouse, t) == PointerSource::Mouse, "the mouse moves first and owns");
+    t += 10'000;
+    expect(owner.update(stick, t) == PointerSource::Mouse, "a stick nudge right after the mouse does not steal");
+    t += 100'000;
+    expect(owner.update(mouse, t) == PointerSource::Mouse, "a moving mouse keeps the pointer");
+    t += kPointerHandoffUs - 1u;
+    expect(owner.update(stick, t) == PointerSource::Mouse, "handoff waits the full hysteresis");
+    t += 1u;
+    expect(owner.update(stick, t) == PointerSource::Stick, "the stick takes over once the mouse rested");
+    t += 10'000;
+    expect(owner.update(both, t) == PointerSource::Stick,
+           "a mouse moved by a controller mapper while the stick moves does not steal");
+    t += 10'000;
+    expect(owner.update(none, t) == PointerSource::Stick, "a resting stick keeps the pointer");
+    t += kPointerHandoffUs;
+    expect(owner.update(both, t) == PointerSource::Stick, "both start together: the controller wins");
+    t += kPointerHandoffUs;
+    PointerActivity gyro{};
+    gyro.gyro = true;
+    expect(owner.update(gyro, t) == PointerSource::Gyro, "the gyro takes over after the handoff");
+    expect(std::string(pointer_source_name(PointerSource::Gyro)) == "gyro", "source names");
+}
+
+void test_stick_pointer() {
+    // Radial dead zone: inside is zero in every direction, outside rescales.
+    const float dz = 8689.0f / 32767.0f;
+    expect(apply_radial_deadzone(0.2f, 0.15f, dz).x == 0.0f, "inside the radial dead zone is zero");
+    const StickVector diag = apply_radial_deadzone(0.25f, 0.25f, dz);  // |v| = 0.354 > 0.265
+    expect(diag.x > 0.0f && approx(diag.x, diag.y), "a diagonal outside the radius keeps its direction");
+    const StickVector full = apply_radial_deadzone(1.0f, 0.0f, dz);
+    expect(approx(full.x, 1.0f) && full.y == 0.0f, "full deflection stays full");
+    const StickVector edge = apply_radial_deadzone(dz + 0.001f, 0.0f, dz);
+    expect(edge.x > 0.0f && edge.x < 0.01f, "output starts at zero past the dead zone");
+
+    // Response: slow near the centre, the configured speed at full deflection.
+    const StickVector v_full = stick_pointer_velocity({1.0f, 0.0f}, 2.4f);
+    const StickVector v_half = stick_pointer_velocity({0.5f, 0.0f}, 2.4f);
+    const StickVector v_small = stick_pointer_velocity({0.1f, 0.0f}, 2.4f);
+    expect(approx(v_full.x, 2.4f), "full deflection moves at the pointer speed");
+    expect(v_half.x < 0.3f * 2.4f && v_half.x > 0.15f * 2.4f, "half deflection is under a third of the speed");
+    expect(v_small.x < 0.04f * 2.4f, "a small deflection places the pointer finely");
+    expect(stick_pointer_velocity({0.0f, 0.0f}, 2.4f).x == 0.0f, "a resting stick does not move the pointer");
+
+    // Integration with the real report interval: the same stick held for
+    // 0.5 s moves the same distance at 66 Hz and 125 Hz reports, and the
+    // pointer stops at the picture edge.
+    for (const float hz : {66.7f, 125.0f}) {
+        float x = 0.0f;
+        const float dt = 1.0f / hz;
+        for (float t = 0.0f; t < 0.5f - 1e-4f; t += dt) {
+            x = std::clamp(x + v_full.x * dt, -kStickPointerLimit, kStickPointerLimit);
+        }
+        expect(approx(x, 1.0f, 0.04f), "0.5 s at full deflection crosses half the picture at any report rate");
+    }
+}
+
+void test_jump_back() {
+    JumpBackLatch latch{};
+    auto out = latch.update(true, PlayContext::Play);
+    expect(out.a && !out.b, "B jumps while Mario is under control");
+    out = latch.update(true, PlayContext::Menu);
+    expect(out.a && !out.b, "a held jump stays a jump when a menu opens");
+    out = latch.update(false, PlayContext::Menu);
+    expect(!out.a && !out.b, "release");
+    out = latch.update(true, PlayContext::Menu);
+    expect(!out.a && out.b, "B backs out of menus");
+    out = latch.update(true, PlayContext::Play);
+    expect(!out.a && out.b, "a held back press stays back when play resumes");
+    expect(play_context_from_star_pointer_mode(25) == PlayContext::Play, "game mode is play");
+    expect(play_context_from_star_pointer_mode(22) == PlayContext::Play, "star bit target is play");
+    for (const std::uint32_t menu : {0u, 2u, 4u, 5u, 6u, 7u, 8u, 9u, 12u, 16u, 17u, 24u, 99u}) {
+        expect(play_context_from_star_pointer_mode(menu) == PlayContext::Menu,
+               "HOME, pause, title, file select, scenario select, yes/no, picture book, demos, "
+               "sphere selector, base and unknown modes are menus");
+    }
+}
+
+void test_defaults_and_migration() {
+    const ControlsConfig config = default_controls_config();
+    const BindingTable& sw = config.table(ControlScheme::SwitchPro);
+    const BindingTable& xb = config.table(ControlScheme::Xbox);
+    const auto only = [](const TargetBindings& b, InputSource s) { return b[0] == s && b[1].empty(); };
+    const InputSource zr{SourceKind::AxisPositive, static_cast<std::uint8_t>(PadAxis::RightTrigger)};
+    const InputSource zl{SourceKind::AxisPositive, static_cast<std::uint8_t>(PadAxis::LeftTrigger)};
+    expect(only(sw[WiiTarget::A], {SourceKind::Button, pad::kEastBit}), "Switch: A is Wii A");
+    expect(only(sw[WiiTarget::JumpBack], {SourceKind::Button, pad::kSouthBit}), "Switch: B is jump/back");
+    expect(only(sw[WiiTarget::B], zr), "Switch: ZR shoots Star Bits (Wii B)");
+    expect(only(sw[WiiTarget::Z], zl), "Switch: ZL crouches (Wii Z)");
+    expect(sw[WiiTarget::C][0] == InputSource{SourceKind::Button, pad::kLeftShoulderBit}, "Switch: L resets the camera");
+    expect(only(sw[WiiTarget::PointerRecenter], {SourceKind::Button, pad::kRightShoulderBit}), "Switch: R recenters");
+    expect(sw[WiiTarget::Shake][2].empty(), "Switch: shake is X, Y (and motion), not R");
+    expect(sw[WiiTarget::DpadLeft][1] == InputSource{SourceKind::AxisNegative, static_cast<std::uint8_t>(PadAxis::RightX)},
+           "Switch: right stick left is D-pad left (camera)");
+    expect(config.tune(ControlScheme::SwitchPro).gyro_pointer && config.tune(ControlScheme::SwitchPro2).gyro_pointer,
+           "gyro pointer on by default for both Switch schemes");
+    expect(only(xb[WiiTarget::JumpBack], {SourceKind::Button, pad::kEastBit}), "Xbox: B is jump/back");
+    expect(only(xb[WiiTarget::B], zr) && only(xb[WiiTarget::Z], zl), "Xbox: RT Star Bits, LT crouch");
+    expect(xb[WiiTarget::C][0] == InputSource{SourceKind::Button, pad::kLeftShoulderBit}, "Xbox: LB resets the camera");
+    expect(xb[WiiTarget::Shake][2] == InputSource{SourceKind::Button, pad::kRightShoulderBit}, "Xbox: RB spins");
+    expect(only(xb[WiiTarget::PointerRecenter], {SourceKind::Button, pad::kRightStickBit}), "Xbox: RS recenters");
+    expect(!config.tune(ControlScheme::Xbox).gyro_pointer, "Xbox has no gyro");
+
+    // Right stick role: pointer with the gyro off, camera (D-pad) with it on.
+    PadSample s{};
+    s.connected = true;
+    s.scheme = ControlScheme::SwitchPro;
+    s.axes[static_cast<std::size_t>(PadAxis::RightX)] = -0.8f;
+    const LogicalInput gyro_off = evaluate_pad_bindings(sw, s, 0.4f, 0u, false);
+    const LogicalInput gyro_on = evaluate_pad_bindings(sw, s, 0.4f, 0u, true);
+    expect(approx(gyro_off.pointer_x, -0.8f) && !gyro_off.held(WiiTarget::DpadLeft),
+           "gyro off: the right stick is the pointer");
+    expect(gyro_on.pointer_x == 0.0f && gyro_on.held(WiiTarget::DpadLeft),
+           "gyro on: the right stick turns the camera");
+    // Stick-fed digital targets release with hysteresis.
+    s.axes[static_cast<std::size_t>(PadAxis::RightX)] = -0.4f;
+    expect(evaluate_pad_bindings(sw, s, 0.4f, gyro_on.pressed, true).held(WiiTarget::DpadLeft),
+           "a held stick direction stays pressed down to the release level");
+    expect(!evaluate_pad_bindings(sw, s, 0.4f, 0u, true).held(WiiTarget::DpadLeft),
+           "0.4 does not press from rest");
+    s.axes[static_cast<std::size_t>(PadAxis::RightX)] = -0.3f;
+    expect(!evaluate_pad_bindings(sw, s, 0.4f, gyro_on.pressed, true).held(WiiTarget::DpadLeft),
+           "below the release level the direction releases");
+
+    // Migration: a file holding Native28's defaults moves to the new ones,
+    // a binding the player changed stays.
+    ControlsConfig old{};
+    for (std::size_t i = 0; i < kControlSchemeCount; ++i) {
+        old.tables[i] = legacy_binding_table(static_cast<ControlScheme>(i));
+        old.tuning[i] = legacy_scheme_tuning(static_cast<ControlScheme>(i));
+    }
+    old.tables[static_cast<std::size_t>(ControlScheme::Xbox)][WiiTarget::B] = {};
+    add_binding(old.tables[static_cast<std::size_t>(ControlScheme::Xbox)][WiiTarget::B],
+                {SourceKind::Button, pad::kWestBit});
+    ControlsConfig migrated = old;
+    // Old files have no jump_back line: the loader starts from the defaults.
+    for (std::size_t i = 0; i < kControlSchemeCount; ++i) {
+        migrated.tables[i][WiiTarget::JumpBack] =
+            default_binding_table(static_cast<ControlScheme>(i))[WiiTarget::JumpBack];
+    }
+    const unsigned changed = migrate_legacy_controls(migrated);
+    expect(changed > 0u, "migration changes the old defaults");
+    expect(migrated.table(ControlScheme::SwitchPro) == default_binding_table(ControlScheme::SwitchPro),
+           "an untouched Switch table becomes the new defaults");
+    expect(migrated.tune(ControlScheme::SwitchPro).gyro_pointer, "gyro pointer turns on");
+    expect(migrated.table(ControlScheme::Xbox)[WiiTarget::B][0] == InputSource{SourceKind::Button, pad::kWestBit},
+           "a binding the player changed stays");
+    expect(migrated.table(ControlScheme::Xbox)[WiiTarget::Z] == default_binding_table(ControlScheme::Xbox)[WiiTarget::Z],
+           "other Xbox defaults move");
+    ControlsConfig again = migrated;
+    expect(migrate_legacy_controls(again) == 0u || again == migrated, "migration is idempotent on new defaults");
+}
+
+void test_kpad_dots_stable() {
+    // A still pointer produces identical IR dots report after report, and a
+    // sub-unit move never jumps more than one raw unit.
+    WiimoteInputSnapshot a{}, b{};
+    publish_wiimote_ir_dots(a, 0.31234f, -0.12f, true);
+    publish_wiimote_ir_dots(b, 0.31234f, -0.12f, true);
+    expect(a.ir[0].x == b.ir[0].x && a.ir[0].y == b.ir[0].y && a.ir[1].x == b.ir[1].x,
+           "a still pointer gives identical dots");
+    int previous = -1;
+    bool monotonic = true;
+    for (int i = 0; i <= 200; ++i) {
+        WiimoteInputSnapshot s{};
+        publish_wiimote_ir_dots(s, -0.5f + i * 0.005f, 0.0f, true);
+        const int x = s.ir[0].x;
+        if (previous >= 0 && (x > previous || previous - x > 2)) monotonic = false;
+        previous = x;
+    }
+    expect(monotonic, "a steady sweep moves the dots in single small steps");
+}
+
+int imu_replay(const char* path) {
+    // Feeds a recorded Pro Controller stream (pro_passive.py --raw: "<time>
+    // <report hex>") through the decoder and SwitchMotion; prints drift.
+    std::ifstream file(path);
+    if (!file) {
+        std::cerr << "cannot open " << path << '\n';
+        return 2;
+    }
+    switch_hid::SwitchMotion motion{};
+    switch_hid::ImuCal cal{};
+    switch_hid::MotionSettings settings{};
+    double t0 = -1.0;
+    float x = 0.0f, y = 0.0f, peak = 0.0f;
+    int reports = 0, shakes = 0;
+    std::string hex;
+    double time = 0.0;
+    while (file >> time >> hex) {
+        std::vector<std::uint8_t> bytes;
+        for (std::size_t i = 0; i + 1 < hex.size(); i += 2) {
+            bytes.push_back(static_cast<std::uint8_t>(std::stoul(hex.substr(i, 2), nullptr, 16)));
+        }
+        switch_hid::DecodedState decoded{};
+        if (!switch_hid::decode_pro_report(bytes, cal, decoded)) continue;
+        if (t0 < 0.0) t0 = time;
+        const auto us = static_cast<std::uint64_t>((time - t0) * 1e6);
+        for (std::size_t i = 0; i < decoded.imu_count; ++i) {
+            const auto out = motion.feed(decoded.imu[i], 0.005f, us, settings);
+            // Drift is counted after the first second (one rest window has
+            // measured the bias that the stored calibration would remove).
+            if (us < 1'000'000u) continue;
+            x += out.pointer_x;
+            y += out.pointer_y;
+            shakes += out.shake_started ? 1 : 0;
+            peak = std::max(peak, std::sqrt(x * x + y * y));
+        }
+        ++reports;
+    }
+    const auto& bias = motion.gyro_bias();
+    std::printf("reports=%d span=%.1fs rest-windows=%u bias-dps=(%.3f,%.3f,%.3f) drift-after-1s-units=(%.4f,%.4f) "
+                "peak-units=%.4f shakes=%d gravity=(%.3f,%.3f,%.3f)\n",
+                reports, time - t0, motion.rest_windows(), bias[0] * 57.2958f, bias[1] * 57.2958f,
+                bias[2] * 57.2958f, x, y, peak, shakes, motion.gravity()[0], motion.gravity()[1],
+                motion.gravity()[2]);
+    return 0;
 }
 
 }  // namespace
@@ -484,6 +840,9 @@ int main(int argc, char** argv) {
         std::cout << format_controls_settings(default_controls_config());
         return 0;
     }
+    if (argc > 2 && std::strcmp(argv[1], "--imu-replay") == 0) {
+        return imu_replay(argv[2]);
+    }
     test_names_round_trip();
     test_ini_round_trip();
     test_evaluation();
@@ -491,6 +850,11 @@ int main(int argc, char** argv) {
     test_switch_pro_decoding();
     test_switch2_decoding();
     test_motion();
+    test_pointer_ownership();
+    test_stick_pointer();
+    test_jump_back();
+    test_defaults_and_migration();
+    test_kpad_dots_stable();
     if (g_failures != 0) {
         std::cerr << g_failures << " controls test(s) failed\n";
         return 1;

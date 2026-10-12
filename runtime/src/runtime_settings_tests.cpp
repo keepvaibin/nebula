@@ -158,23 +158,37 @@ int main() {
     galaxy::load_runtime_settings_from_file();
     passed &= expect(
         galaxy::get_runtime_settings().input_mode ==
-            galaxy::RuntimeInputMode::KeyboardMouse,
-        "missing settings default to keyboard/mouse, not auto");
+            galaxy::RuntimeInputMode::Auto,
+        "missing settings default to auto");
 
-    write_text(settings_path, "input_mode=auto\n");
+    write_text(settings_path, "input_mode=auto\ncontrols_version=2\n");
+    galaxy::load_runtime_settings_from_file();
+    passed &= expect(
+        galaxy::get_runtime_settings().input_mode ==
+            galaxy::RuntimeInputMode::Auto,
+        "file input_mode=auto loads");
+
+    write_text(settings_path, "input_mode=keyboard_mouse\n");
+    galaxy::load_runtime_settings_from_file();
+    passed &= expect(
+        galaxy::get_runtime_settings().input_mode ==
+            galaxy::RuntimeInputMode::Auto,
+        "a version-1 file's keyboard_mouse migrates to auto");
+
+    write_text(settings_path, "input_mode=keyboard_mouse\ncontrols_version=2\n");
     galaxy::load_runtime_settings_from_file();
     passed &= expect(
         galaxy::get_runtime_settings().input_mode ==
             galaxy::RuntimeInputMode::KeyboardMouse,
-        "stale file input_mode=auto is ignored");
+        "a version-2 file keeps a chosen keyboard_mouse override");
 
     write_text(settings_path, "input_mode=controller\n");
     _putenv_s("GALAXY_INPUT_MODE", "auto");
     galaxy::load_runtime_settings_from_file();
     passed &= expect(
         galaxy::get_runtime_settings().input_mode ==
-            galaxy::RuntimeInputMode::Controller,
-        "env input_mode=auto does not override a concrete file mode");
+            galaxy::RuntimeInputMode::Auto,
+        "env input_mode=auto overrides the file mode");
 
     _putenv_s("GALAXY_INPUT_MODE", "keyboard_mouse");
     galaxy::load_runtime_settings_from_file();
@@ -214,12 +228,12 @@ int main() {
     galaxy::set_runtime_settings(settings);
     passed &= expect(
         galaxy::get_runtime_settings().input_mode ==
-            galaxy::RuntimeInputMode::KeyboardMouse,
-        "direct RuntimeSettings writes sanitize auto to keyboard/mouse");
+            galaxy::RuntimeInputMode::Auto,
+        "direct RuntimeSettings writes keep auto");
     passed &= expect(
         std::string(galaxy::runtime_input_mode_name(
-            galaxy::RuntimeInputMode::Auto)) == "keyboard_mouse",
-        "RuntimeInputMode::Auto is not user-serialized as auto");
+            galaxy::RuntimeInputMode::Auto)) == "auto",
+        "RuntimeInputMode::Auto serializes as auto");
 
     const galaxy::RuntimeInputModeState generation_origin =
         galaxy::get_runtime_input_mode_state();
@@ -294,11 +308,11 @@ int main() {
     const galaxy::RuntimeInputModeState after_sanitized_auto =
         galaxy::get_runtime_input_mode_state();
     passed &= expect(
-        after_sanitized_auto.mode == galaxy::RuntimeInputMode::KeyboardMouse &&
+        after_sanitized_auto.mode == galaxy::RuntimeInputMode::Auto &&
             after_sanitized_auto.generation == after_controller.generation + 1u &&
             galaxy::get_runtime_settings().input_mode ==
                 after_sanitized_auto.mode,
-        "sanitized auto transition advances exactly one coherent generation");
+        "auto transition advances exactly one coherent generation");
 
     _putenv_s("GALAXY_INPUT_MODE", "");
     write_text(settings_path, "sentinel=old\n");
@@ -322,7 +336,9 @@ int main() {
     }
     passed &= expect(
         galaxy::save_runtime_settings_to_file() &&
-            read_text(settings_path).find("input_mode=keyboard_mouse") !=
+            read_text(settings_path).find("input_mode=auto") !=
+                std::string::npos &&
+            read_text(settings_path).find("controls_version=2") !=
                 std::string::npos &&
             read_text(settings_path).find("audio_ambience_gain=") !=
                 std::string::npos,
@@ -444,9 +460,9 @@ int main() {
     galaxy::set_runtime_settings(invalid_mode);
     const auto sanitized_mode = galaxy::get_runtime_input_mode_state();
     passed &= expect(
-        sanitized_mode.mode == galaxy::RuntimeInputMode::KeyboardMouse &&
+        sanitized_mode.mode == galaxy::RuntimeInputMode::Auto &&
             sanitized_mode.generation == before_failed_load.generation + 1u,
-        "invalid direct input mode becomes one coherent keyboard/mouse transition");
+        "invalid direct input mode becomes one coherent auto transition");
     galaxy::set_runtime_settings(invalid_mode);
     passed &= expect(
         galaxy::get_runtime_input_mode_state().generation == sanitized_mode.generation,
@@ -504,7 +520,7 @@ int main() {
             if (file != INVALID_HANDLE_VALUE) CloseHandle(file);
             return ok;
         };
-        write_text(settings_path, "input_mode=keyboard_mouse\naudio_music_gain=0.5\n");
+        write_text(settings_path, "input_mode=keyboard_mouse\ncontrols_version=2\naudio_music_gain=0.5\n");
         passed &= expect(stamp(133'000'000'000'000'000ull), "fixture time set");
         galaxy::load_runtime_settings_from_file();
         passed &= expect(!galaxy::reload_runtime_audio_settings_if_changed(),

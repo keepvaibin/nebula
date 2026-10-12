@@ -246,6 +246,14 @@ void clear_native_window_key_presses() noexcept;
 // Window-thread key level (down on WM_KEYDOWN, up on WM_KEYUP); cleared with
 // the press latch.
 void publish_native_window_key_state(std::uint32_t key, bool down) noexcept;
+// Whether the window message for `key` / the latest mouse move or button came
+// from SendInput (a controller mapper such as Steam's desktop layout) instead
+// of a device. In auto input mode with a controller attached such input is
+// ignored so the controller is not read twice.
+void publish_native_window_input_origin(std::uint32_t key, bool injected) noexcept;
+void publish_native_pointer_input_origin(bool button, bool injected) noexcept;
+[[nodiscard]] bool native_window_key_injected(std::uint32_t key) noexcept;
+[[nodiscard]] bool native_pointer_input_injected(bool button) noexcept;
 
 // Binding capture for the overlay's CONTROLS page. While armed, controllers
 // of `scheme` are read in every input mode, never reach the overlay's pad

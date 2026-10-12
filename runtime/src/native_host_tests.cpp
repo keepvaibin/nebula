@@ -11048,8 +11048,9 @@ bool native_bt_wiimote_protocol_path_works(
 
         galaxy::RuntimeSettings controller_host_pointer_settings =
             keyboard_host_pointer_settings;
+        // Auto: the mouse stays a pointer source next to the controllers.
         controller_host_pointer_settings.input_mode =
-            galaxy::RuntimeInputMode::Controller;
+            galaxy::RuntimeInputMode::Auto;
         galaxy::set_runtime_settings(controller_host_pointer_settings);
         const galaxy::RuntimeInputModeState controller_input_state =
             galaxy::get_runtime_input_mode_state();
@@ -11108,13 +11109,11 @@ bool native_bt_wiimote_protocol_path_works(
 
         const std::string controller_host_pointer_trace_text =
             controller_host_pointer_trace.str();
+        // Without a controller attached auto reads as the keyboard/mouse
+        // source.
         passed &= expect(
-            controller_host_pointer_trace_text.find("source=keyboard_mouse") ==
+            controller_host_pointer_trace_text.find("source=keyboard_mouse") !=
                     std::string::npos &&
-                (controller_host_pointer_trace_text.find("source=controller") !=
-                     std::string::npos ||
-                 controller_host_pointer_trace_text.find(
-                     "source=controller_disconnected") != std::string::npos) &&
                 controller_host_pointer_trace_text.find("ptrsrc=mouse") !=
                     std::string::npos &&
                 controller_host_pointer_trace_text.find(
@@ -11122,7 +11121,7 @@ bool native_bt_wiimote_protocol_path_works(
                     std::string::npos &&
                 controller_host_pointer_trace_text.find("ir=1") !=
                     std::string::npos,
-            "native BT controller mode traces live mouse-backed IR without switching to keyboard/mouse source");
+            "native BT auto mode traces live mouse-backed IR under its own source");
         if (controller_host_pointer_trace_text.find("FAILED:") !=
             std::string::npos) {
             std::cerr << controller_host_pointer_trace_text;

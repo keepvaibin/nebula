@@ -184,7 +184,7 @@ namespace Nebula.Launcher
         private readonly ComboBox inputSource = new ComboBox(), editScheme = new ComboBox(), motion = new ComboBox();
         private readonly ListView bindingList = new ListView();
         private readonly NumericUpDown pointerSpeed = new NumericUpDown(), stickDeadzone = new NumericUpDown(),
-            pointerDeadzone = new NumericUpDown(), shakeSensitivity = new NumericUpDown();
+            pointerDeadzone = new NumericUpDown(), shakeSensitivity = new NumericUpDown(), gyroSensitivity = new NumericUpDown();
         private readonly CheckBox invertPointer = new CheckBox(), gyroPointer = new CheckBox();
         private readonly Label captureLabel = new Label();
         private int captureTarget = -1;
@@ -366,8 +366,8 @@ namespace Nebula.Launcher
             SmallLabel(page, "Input", 12, y + 3, 180);
             Combo(page, inputSource, 200, y);
             inputSource.Width = 300;
-            inputSource.Items.AddRange(new object[] { "Keyboard and mouse", "Controller (Xbox, Switch Pro, Pro Controller 2)" });
-            if (controls.InputMode == 2) { inputSource.Items.Add("Wii Remote"); inputSource.Enabled = false; }
+            inputSource.Items.AddRange(new object[] { "Auto (keyboard, mouse and controllers)", "Keyboard and mouse only", "Controller only" });
+            if (controls.InputMode == ControlsSettings.ModeRealWiimote) { inputSource.Items.Add("Wii Remote"); inputSource.Enabled = false; }
             y += 36;
             SmallLabel(page, "Edit controls for", 12, y + 3, 180);
             Combo(page, editScheme, 200, y);
@@ -429,10 +429,12 @@ namespace Nebula.Launcher
             page.Controls.Add(motion);
             y += 30;
             TuningRow(page, "Shake sensitivity", shakeSensitivity, x, ref y, 1m, 5m, 1m, 0);
-            gyroPointer.Text = "Gyro pointer";
+            gyroPointer.Text = "Gyro pointer (right stick: camera)";
             gyroPointer.Location = new Point(x, y);
             gyroPointer.Size = new Size(250, 24);
             page.Controls.Add(gyroPointer);
+            y += 28;
+            TuningRow(page, "Gyro sensitivity", gyroSensitivity, x, ref y, 0.2m, 5.0m, 0.1m, 1);
 
             pointerSpeed.ValueChanged += delegate { if (!loading) controls.Tuning[Scheme].PointerSpeed = (float)pointerSpeed.Value; };
             stickDeadzone.ValueChanged += delegate { if (!loading) controls.Tuning[Scheme].StickDeadzone = (float)stickDeadzone.Value / 100f; };
@@ -440,11 +442,12 @@ namespace Nebula.Launcher
             shakeSensitivity.ValueChanged += delegate { if (!loading) controls.Tuning[Scheme].ShakeSensitivity = (int)shakeSensitivity.Value; };
             invertPointer.CheckedChanged += delegate { if (!loading) controls.Tuning[Scheme].InvertPointerY = invertPointer.Checked; };
             gyroPointer.CheckedChanged += delegate { if (!loading) controls.Tuning[Scheme].GyroPointer = gyroPointer.Checked; };
+            gyroSensitivity.ValueChanged += delegate { if (!loading) controls.Tuning[Scheme].GyroSensitivity = (float)gyroSensitivity.Value; };
             motion.SelectedIndexChanged += delegate { if (!loading) controls.Tuning[Scheme].Motion = Math.Max(0, motion.SelectedIndex); };
             editScheme.SelectedIndexChanged += delegate { EndCapture(); LoadTuning(); RefreshBindings(); };
 
             inputSource.SelectedIndex = Math.Min(controls.InputMode, inputSource.Items.Count - 1);
-            editScheme.SelectedIndex = controls.InputMode == 1 ? ControlsSettings.Xbox : ControlsSettings.Keyboard;
+            editScheme.SelectedIndex = controls.InputMode == ControlsSettings.ModeController ? ControlsSettings.Xbox : ControlsSettings.Keyboard;
             captureTimer.Tick += delegate { PollCapture(); };
             FormClosed += delegate { EndCapture(); };
         }
@@ -485,8 +488,9 @@ namespace Nebula.Launcher
             motion.SelectedIndex = Math.Max(0, Math.Min(2, t.Motion));
             shakeSensitivity.Value = Clamp(shakeSensitivity, t.ShakeSensitivity);
             gyroPointer.Checked = t.GyroPointer;
+            gyroSensitivity.Value = Clamp(gyroSensitivity, t.GyroSensitivity);
             stickDeadzone.Enabled = pointerDeadzone.Enabled = pad;
-            motion.Enabled = shakeSensitivity.Enabled = gyroPointer.Enabled = imu;
+            motion.Enabled = shakeSensitivity.Enabled = gyroPointer.Enabled = gyroSensitivity.Enabled = imu;
             loading = false;
         }
 
@@ -827,7 +831,7 @@ namespace Nebula.Launcher
                 for (int i = 0; i < volumes.Length; i++) audio.Percent[i] = volumes[i].Value;
                 audio.Save();
                 EndCapture();
-                if (controls.InputMode != 2) controls.InputMode = Math.Max(0, inputSource.SelectedIndex);
+                if (controls.InputMode != ControlsSettings.ModeRealWiimote) controls.InputMode = Math.Max(0, inputSource.SelectedIndex);
                 controls.Save();
                 session.Recording = (RecordingMode)Math.Max(0, recording.SelectedIndex);
                 session.Save();

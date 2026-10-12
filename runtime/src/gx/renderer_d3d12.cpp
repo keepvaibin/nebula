@@ -204,7 +204,7 @@ std::atomic<bool> s_quit_requested{false};
 // s_capture_target (kWiiTargetCount: none). Guarded by s_native_settings_mutex.
 constexpr unsigned kControlsTab = 2u;
 galaxy::input::ControlsConfig s_controls_draft = galaxy::input::default_controls_config();
-RuntimeInputMode s_input_mode_draft = RuntimeInputMode::KeyboardMouse;
+RuntimeInputMode s_input_mode_draft = RuntimeInputMode::Auto;
 galaxy::input::ControlScheme s_controls_scheme = galaxy::input::ControlScheme::Keyboard;
 std::size_t s_capture_target = galaxy::input::kWiiTargetCount;
 std::uint64_t s_capture_deadline_ms = 0u;
@@ -505,6 +505,7 @@ enum class ControlsRow {
     MotionShake,
     ShakeSensitivity,
     GyroPointer,
+    GyroSensitivity,
     Reset,
 };
 
@@ -527,6 +528,7 @@ std::vector<ControlsRow> controls_tail_rows() {
         rows.push_back(ControlsRow::MotionShake);
         rows.push_back(ControlsRow::ShakeSensitivity);
         rows.push_back(ControlsRow::GyroPointer);
+        rows.push_back(ControlsRow::GyroSensitivity);
     }
     rows.push_back(ControlsRow::Reset);
     return rows;
@@ -544,8 +546,13 @@ ControlsRowInfo controls_row(unsigned row) {
     } else if (row == 1u) {
         info.kind = ControlsRow::Scheme;
     } else if (row - kControlsBindingRow0 < galaxy::input::kWiiTargetCount) {
+        // The jump/back row follows A and B.
+        using galaxy::input::WiiTarget;
+        const unsigned index = row - kControlsBindingRow0;
         info.kind = ControlsRow::Binding;
-        info.target = static_cast<galaxy::input::WiiTarget>(row - kControlsBindingRow0);
+        info.target = index == 2u ? WiiTarget::JumpBack
+            : index > 2u ? static_cast<WiiTarget>(index - 1u)
+            : static_cast<WiiTarget>(index);
     } else {
         const auto tail = controls_tail_rows();
         const std::size_t index = row - kControlsBindingRow0 - galaxy::input::kWiiTargetCount;
@@ -966,7 +973,15 @@ void adjust_native_setting_unlogged(int delta) {
         case ControlsRow::InputMode:
             // A physical Wii Remote is chosen in the launcher only.
             if (s_input_mode_draft == RuntimeInputMode::RealWiimote) return;
-            s_input_mode_draft = delta > 0 ? RuntimeInputMode::Controller : RuntimeInputMode::KeyboardMouse;
+            {
+                static constexpr RuntimeInputMode kModes[] = {
+                    RuntimeInputMode::Auto, RuntimeInputMode::KeyboardMouse, RuntimeInputMode::Controller};
+                unsigned index = 0u;
+                for (unsigned i = 0; i < 3u; ++i) {
+                    if (kModes[i] == s_input_mode_draft) index = i;
+                }
+                s_input_mode_draft = kModes[step(index, 3u)];
+            }
             return;
         case ControlsRow::Scheme:
             s_controls_scheme = static_cast<ControlScheme>(step(
@@ -998,6 +1013,9 @@ void adjust_native_setting_unlogged(int delta) {
             return;
         case ControlsRow::GyroPointer:
             tuning.gyro_pointer = !tuning.gyro_pointer;
+            return;
+        case ControlsRow::GyroSensitivity:
+            tuning.gyro_sensitivity = step_float(tuning.gyro_sensitivity, 0.1f, 0.2f, 5.0f);
             return;
         case ControlsRow::Reset:
             if (delta > 0) {
@@ -1917,6 +1935,12 @@ static void apply_requested_client_size(HWND hwnd, int width, int height) {
         SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED);
 }
 
+// The input message being handled came from SendInput, not a device.
+bool input_message_injected() noexcept {
+    INPUT_MESSAGE_SOURCE source{};
+    return GetCurrentInputMessageSource(&source) && source.originId == IMO_INJECTED;
+}
+
 LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     if (msg == kClientSizeMessage) {
         apply_requested_client_size(hwnd, static_cast<int>(wp), static_cast<int>(lp));
@@ -2011,6 +2035,7 @@ LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
                 galaxy::input::normalize_native_window_key(key, mapped_shift,
                     (static_cast<UINT>(lp) & (1u << 24u)) != 0u);
             if (!was_down) {
+                galaxy::host::publish_native_window_input_origin(normalized, input_message_injected());
                 galaxy::host::publish_native_window_key_press(normalized);
             }
             galaxy::host::publish_native_window_key_state(normalized, true);
@@ -2037,6 +2062,7 @@ LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         }
     }
     if (msg == WM_MOUSEMOVE) {
+        galaxy::host::publish_native_pointer_input_origin(false, input_message_injected());
         update_pointer_absolute(hwnd, lp);
         maybe_hide_os_cursor();
         return 0;
@@ -2057,12 +2083,14 @@ LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             ? VK_MBUTTON
             : (GET_XBUTTON_WPARAM(wp) == XBUTTON1 ? VK_XBUTTON1 : VK_XBUTTON2);
         if (!galaxy::host::native_keyboard_capture_active()) {
+            if (down) galaxy::host::publish_native_window_input_origin(vk, input_message_injected());
             if (down) galaxy::host::publish_native_window_key_press(vk);
             galaxy::host::publish_native_window_key_state(vk, down);
         }
         return (msg == WM_XBUTTONDOWN || msg == WM_XBUTTONUP) ? TRUE : 0;
     }
     if (msg == WM_LBUTTONDOWN || msg == WM_LBUTTONDBLCLK) {
+        galaxy::host::publish_native_pointer_input_origin(true, input_message_injected());
         update_pointer_button(hwnd, lp, true, true);
         if (capture_mouse_buttons_enabled()) {
             SetCapture(hwnd);
@@ -2081,6 +2109,7 @@ LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         return 0;
     }
     if (msg == WM_RBUTTONDOWN || msg == WM_RBUTTONDBLCLK) {
+        galaxy::host::publish_native_pointer_input_origin(true, input_message_injected());
         update_pointer_button(hwnd, lp, false, true);
         if (capture_mouse_buttons_enabled()) {
             SetCapture(hwnd);
@@ -9308,9 +9337,10 @@ std::string native_settings_row_text(
         switch (info.kind) {
         case ControlsRow::InputMode:
             switch (s_input_mode_draft) {
-            case RuntimeInputMode::Controller: return "INPUT: CONTROLLER";
+            case RuntimeInputMode::Controller: return "INPUT: CONTROLLER ONLY";
             case RuntimeInputMode::RealWiimote: return "INPUT: WII REMOTE";
-            default: return "INPUT: KEYBOARD+MOUSE";
+            case RuntimeInputMode::KeyboardMouse: return "INPUT: KEYBOARD+MOUSE ONLY";
+            default: return "INPUT: AUTO";
             }
         case ControlsRow::Scheme: {
             std::string line = std::string("EDIT: ") + galaxy::input::control_scheme_label(s_controls_scheme);
@@ -9354,7 +9384,12 @@ std::string native_settings_row_text(
             std::snprintf(text, sizeof(text), "SHAKE SENSITIVITY: %u", static_cast<unsigned>(tuning.shake_sensitivity));
             return text;
         case ControlsRow::GyroPointer:
-            return std::string("GYRO POINTER: ") + on_off(tuning.gyro_pointer);
+            return std::string("GYRO POINTER: ") + on_off(tuning.gyro_pointer) +
+                   (tuning.gyro_pointer ? "  (R STICK: CAMERA)" : "  (R STICK: POINTER)");
+        case ControlsRow::GyroSensitivity:
+            std::snprintf(text, sizeof(text), "GYRO SENSITIVITY: %.1f",
+                          static_cast<double>(tuning.gyro_sensitivity));
+            return text;
         case ControlsRow::Reset:
             return std::string("RESET ") + galaxy::input::control_scheme_label(s_controls_scheme) + " TO DEFAULTS";
         }

@@ -24290,7 +24290,11 @@ void call_guest_impl_body(
     // Capture at the exact producer boundary after GXGetProjectionv/Viewportv,
     // before GXSetDrawSync and before image effects/copies/clears.
     if (guest_address == 0x804B9EC8u && context->lr==0x80385ADCu && state.native_mouse_pointer_frame &&
-        state.address_space != nullptr && mouse_mode.mode == galaxy::RuntimeInputMode::KeyboardMouse &&
+        state.address_space != nullptr &&
+        (mouse_mode.mode == galaxy::RuntimeInputMode::KeyboardMouse ||
+         (mouse_mode.mode == galaxy::RuntimeInputMode::Auto &&
+          state.synthetic_pointer_last_read.sample.origin ==
+              galaxy::host::SyntheticKpadPointerOrigin::PhysicalMouse)) &&
         // A mouse may enter and press after this scene boundary. Keep this
         // owned field available even when the preceding sample was outside.
         !native_mouse_file_select_mode(state,*context)) {
@@ -24442,7 +24446,8 @@ void call_guest_impl_body(
         state.native_mouse_restore_controller=0u;
     }
     if (guest_address == 0x80385034u && state.address_space != nullptr &&
-        mouse_mode.mode == galaxy::RuntimeInputMode::KeyboardMouse) {
+        (mouse_mode.mode == galaxy::RuntimeInputMode::KeyboardMouse ||
+         mouse_mode.mode == galaxy::RuntimeInputMode::Auto)) {
         auto& mem=*state.address_space;
         const auto self=context->gpr[3];
         if (mapped_guest_range(&mem,self,0x74u) && mem.read_u32(self)==0u) {
@@ -24507,7 +24512,7 @@ void call_guest_impl_body(
             const auto store_aspect_word = galaxy::experimental_dynamic_aspect_requested() ?
                 state.services->experimental_aspect_word(state.services->user) : 0u;
             const bool store_owner_matches =
-                store_mode.mode == galaxy::RuntimeInputMode::KeyboardMouse &&
+                store_mode.mode == mouse_mode.mode &&
                 store_mode.generation == mouse_mode.generation &&
                 store_aspect_word == mouse_aspect_word;
             if (matches && frame->capture->error) std::rethrow_exception(frame->capture->error);
@@ -25217,6 +25222,7 @@ void call_guest_impl_body(
         const auto input_mode_state = galaxy::get_runtime_input_mode_state();
         const auto input_mode = input_mode_state.mode;
         const bool synthetic_source =
+            input_mode == galaxy::RuntimeInputMode::Auto ||
             input_mode == galaxy::RuntimeInputMode::KeyboardMouse ||
             input_mode == galaxy::RuntimeInputMode::Controller;
         const auto* snapshot = state.address_space->latest_native_hid_snapshot();
