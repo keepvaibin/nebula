@@ -696,13 +696,24 @@ private:
         std::uint32_t xfb_addr = 0;
         unsigned subframes = 0;
         unsigned next = 0;
-        std::int64_t due_qpc = 0;
-        std::int64_t step_qpc = 0;
+        std::int64_t frame_qpc = 0;       // the frame's arrival (its present)
+        double lead = 0.0;                // t of a slot at the arrival: 60 / rate
+        bool vsync_paced = false;         // Present waits for the display
         // Set inside a render chunk (no frame may be recorded there): the
         // render loop presents the real frame before anything else.
         bool flush_requested = false;
         unsigned scene = 0;               // interp_scenes_ index being interpolated
+        bool classified = false;          // interp_moving_ holds this scene's records
     };
+    // Records of the playing scene that moved (the rest keep their constants).
+    std::vector<std::uint32_t> interp_moving_;
+    // Per palette shadow: its interpolated palette in this sub-frame.
+    struct InterpPaletteUpload {
+        bool valid = false;
+        std::int32_t before = -1;         // previous scene's shadow it was blended from
+        std::uint32_t base = 0;           // mtx_palette_base
+    };
+    std::vector<InterpPaletteUpload> interp_palette_uploads_;
     // A ready frame's present arrived inside a render chunk: the render loop
     // finishes the playing sequence, then starts this one.
     bool interp_start_pending_ = false;
@@ -716,12 +727,28 @@ private:
     // A recorded frame whose present arrives as a separate VI present.
     bool interp_log_waiting_ = false;
     std::uint32_t interp_log_xfb_ = 0;
+    bool interp_stopping_ = false;        // render thread draining for a stop
+    // Present slot clock (VSync off): next slot and slot length.
+    std::int64_t interp_slot_due_qpc_ = 0;
+    std::int64_t interp_slot_period_qpc_ = 0;
+    std::uint64_t interp_late_slots_ = 0;   // slots a stall skipped
+    std::uint64_t interp_superseded_ = 0;   // frames replaced before their own slot
+    void supersede_interp_sequence();
     void start_interp_sequence(std::uint32_t xfb_addr);
     std::vector<D3D12_GPU_VIRTUAL_ADDRESS> interp_record_vas_;
     std::uint64_t interp_presented_ = 0;
     std::uint64_t interp_dropped_ = 0;
     std::uint64_t interp_failed_ = 0;     // sub-frames that could not be recorded
-    double interp_cpu_ms_ = 0.0;
+    double interp_cpu_ms_ = 0.0;          // wall time per sub-frame, waits included
+    double interp_build_ms_ = 0.0;        // record constants rebuilt per sub-frame
+    std::uint64_t interp_sequences_ = 0;
+    std::uint64_t interp_snapped_ = 0;    // records shown at their own transform
+    // Game frames presented without sub-frames, by reason: overlay, no 3D
+    // scene, several scenes, output-EFB switch, log already gone, unmatched.
+    std::array<std::uint64_t, 6> interp_real_only_{};
+    bool interp_presenting_real_ = false;
+    void note_interp_real_present();
+    void report_interp_stats();
     std::int64_t interp_stats_qpc_ = 0;
     // Render thread: steps the interpolation sequence of the latest frame
     // (one sub-frame or the real frame when due; `flush` presents the real

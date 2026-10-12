@@ -129,6 +129,39 @@ Decomposed decompose(const Affine34& m) noexcept {
 
 }  // namespace
 
+bool affine_motion_plausible(const Affine34& a, const Affine34& b) noexcept {
+    const float ta[3] = {a[3], a[7], a[11]};
+    const float tb[3] = {b[3], b[7], b[11]};
+    float moved = 0.0f, da = 0.0f, db = 0.0f;
+    for (unsigned i = 0; i < 3u; ++i) {
+        moved += (tb[i] - ta[i]) * (tb[i] - ta[i]);
+        da += ta[i] * ta[i];
+        db += tb[i] * tb[i];
+    }
+    const float reach = std::max(std::sqrt(da), std::sqrt(db)) / 3.0f + 30.0f;
+    if (!(moved <= reach * reach)) {
+        return false;
+    }
+    for (unsigned c = 0; c < 3u; ++c) {
+        const float sa = a[c] * a[c] + a[4u + c] * a[4u + c] + a[8u + c] * a[8u + c];
+        const float sb = b[c] * b[c] + b[4u + c] * b[4u + c] + b[8u + c] * b[8u + c];
+        // Squared column norms: a 2x scale change is a 4x ratio.
+        if (sa > 4.0f * sb + 1e-12f || sb > 4.0f * sa + 1e-12f) {
+            return false;
+        }
+    }
+    const Decomposed qa = decompose(a);
+    const Decomposed qb = decompose(b);
+    if (qa.valid && qb.valid) {
+        const float dot = std::fabs(qa.q[0] * qb.q[0] + qa.q[1] * qb.q[1] +
+                                    qa.q[2] * qb.q[2] + qa.q[3] * qb.q[3]);
+        if (dot < 0.70710678f) {  // cos(45 deg): a turn above 90 degrees
+            return false;
+        }
+    }
+    return true;
+}
+
 Affine34 affine_interpolate(const Affine34& a, const Affine34& b, float t) noexcept {
     Affine34 out{};
     const Decomposed da = decompose(a);

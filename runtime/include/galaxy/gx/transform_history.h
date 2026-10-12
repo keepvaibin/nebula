@@ -30,6 +30,12 @@ void affine_transform_point(const Affine34& m, const float p[3], float out[3]) n
 // lerp, rotation slerp (after removing per-axis scale). Matrices with shear,
 // mismatched handedness or no clean rotation lerp element-wise.
 [[nodiscard]] Affine34 affine_interpolate(const Affine34& a, const Affine34& b, float t) noexcept;
+// False when a -> b (eye space, one game frame) cannot be one object's
+// motion: the origin moves more than a third of its distance from the eye
+// (plus 30 units), an axis scales by more than 2x, or it turns more than
+// 90 degrees. Such pairs (a mismatched record, a reused palette slot, a
+// camera cut) are shown at b instead of interpolated.
+[[nodiscard]] bool affine_motion_plausible(const Affine34& a, const Affine34& b) noexcept;
 
 inline constexpr std::uint32_t kNoPaletteOffset = 0xFFFFFFFFu;
 

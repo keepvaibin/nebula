@@ -62,6 +62,12 @@ namespace Nebula.Launcher
                 string dataRoot = Environment.GetEnvironmentVariable("NEBULA_DATA_ROOT");
                 Check(!string.IsNullOrEmpty(dataRoot) && NebulaPaths.DataRoot == dataRoot, "NEBULA_DATA_ROOT replaces the user data root");
                 string outDir = args[0];
+                Check(string.Join(",", GraphicsSettings.FrameRates(220)) == "30,60,120,144,165,220,0",
+                      "frame rates at 220 Hz: " + string.Join(",", GraphicsSettings.FrameRates(220)));
+                Check(string.Join(",", GraphicsSettings.FrameRates(50)) == "30,50,0",
+                      "frame rates at 50 Hz: " + string.Join(",", GraphicsSettings.FrameRates(50)));
+                Check(string.Join(",", GraphicsSettings.FrameRates(240)) == "30,60,120,144,165,240,0",
+                      "frame rates at 240 Hz: " + string.Join(",", GraphicsSettings.FrameRates(240)));
                 Application.EnableVisualStyles();
 
                 var first = new LaunchSession();

@@ -485,11 +485,16 @@ public:
     [[nodiscard]] std::uint32_t replay_xfb_addr() const noexcept { return replay_xfb_addr_; }
     // A 3D scene began inside the log being recorded (one is replayable).
     void note_replay_scene() noexcept { ++replay_scene_count_; }
+    // Why the latest closed log is not replayable: 0 it is, 1 no 3D scene,
+    // 2 more than one, 3 output-EFB switch.
+    [[nodiscard]] unsigned replay_reject() const noexcept { return replay_reject_; }
     // Last reason a sub-frame was not recorded (diagnostics).
     [[nodiscard]] unsigned replay_failure() const noexcept { return replay_failure_; }
     void note_replay_failure(unsigned reason) noexcept { replay_failure_ = reason; }
     // The next sub-frame's backbuffer is read back to the debug capture path.
     void set_subframe_capture(bool capture) noexcept { subframe_capture_ = capture; }
+    // Captures wait for the previous readback instead of skipping (sequences).
+    void set_capture_waits(bool waits) noexcept { capture_waits_ = waits; }
     // False (nothing recorded) when the log is gone or has no display copy.
     // `record_constants[i]` replaces the VS constants of draws of record i.
     bool present_replay_subframe(std::span<const D3D12_GPU_VIRTUAL_ADDRESS> record_constants);
@@ -503,6 +508,18 @@ public:
         samples = subframe_gpu_samples_;
         subframe_gpu_ms_ = 0.0;
         subframe_gpu_samples_ = 0u;
+    }
+    // Render-thread milliseconds recording and submitting sub-frames (no
+    // fence, latency or present waits) since the last call.
+    void take_subframe_record_ms(double& total_ms, std::uint64_t& samples) noexcept {
+        total_ms = subframe_record_ms_;
+        samples = subframe_record_samples_;
+        subframe_record_ms_ = 0.0;
+        subframe_record_samples_ = 0u;
+    }
+    // Copy textures saved and restored around sub-frames since the last call.
+    [[nodiscard]] std::uint64_t take_subframe_guarded() noexcept {
+        return std::exchange(subframe_guarded_total_, 0u);
     }
     // The scene camera's clip planes and vertical field of view (radians).
     void set_scene_camera(float near_plane, float far_plane, float fov_y) noexcept;
@@ -923,8 +940,10 @@ private:
     bool replay_recording_ = false;
     bool replay_valid_ = false;
     bool replay_has_swaps_ = false;
+    unsigned replay_reject_ = 0;
     unsigned replay_failure_ = 0;
     bool subframe_capture_ = false;
+    bool capture_waits_ = false;
     unsigned replay_scene_count_ = 0;
     unsigned replay_segment_ = 0;
     std::uint64_t replay_serial_ = 0;
@@ -949,6 +968,31 @@ private:
     bool replay_start_output_active_ = false;
     unsigned replay_source_slot_ = 0;
     XfbTexture subframe_xfb_{};
+    // EFB-copy textures are shared with the live frames: a later game frame's
+    // chunks may already have rewritten a texture the sub-frame's log copies
+    // to. Such textures are saved to scratch before the sub-frame and restored
+    // after it. copy_writes_: the latest replay serial each copy texture was
+    // written under (Interp mode, real copies only).
+    struct CopyWrite {
+        ID3D12Resource* dest = nullptr;
+        std::uint64_t serial = 0;
+    };
+    std::vector<CopyWrite> copy_writes_;
+    void note_copy_write(ID3D12Resource* dest);
+    std::uint64_t play_serial_ = 0;       // replay serial of the ready log
+    std::uint64_t run_serial_ = 0;        // replay serial of the playing log
+    struct SubframeScratch {
+        Microsoft::WRL::ComPtr<ID3D12Resource> texture;
+        D3D12_RESOURCE_DESC desc{};
+        std::uint64_t used = 0;           // subframe_counter_ of its last use
+    };
+    std::vector<SubframeScratch> subframe_scratch_;
+    std::vector<std::pair<ID3D12Resource*, ID3D12Resource*>> subframe_guarded_;  // dest, scratch
+    std::vector<D3D12_RESOURCE_BARRIER> subframe_barriers_;
+    std::uint64_t subframe_counter_ = 0;
+    std::uint64_t subframe_guarded_total_ = 0;
+    ID3D12Resource* acquire_subframe_scratch(ID3D12Resource* dest);
+    void record_subframe_guard(bool save);
     static constexpr unsigned kSubframeAllocators = 4;
     std::array<Microsoft::WRL::ComPtr<ID3D12CommandAllocator>, kSubframeAllocators> subframe_allocators_;
     std::array<std::uint64_t, kSubframeAllocators> subframe_fences_{};
@@ -958,6 +1002,8 @@ private:
     Microsoft::WRL::ComPtr<ID3D12Resource> subframe_readback_;
     double subframe_gpu_ms_ = 0.0;
     std::uint64_t subframe_gpu_samples_ = 0;
+    double subframe_record_ms_ = 0.0;
+    std::uint64_t subframe_record_samples_ = 0;
     std::atomic<double> measured_present_hz_{0.0};
     std::int64_t measured_present_window_qpc_ = 0;
     std::uint32_t measured_present_count_ = 0;
@@ -1200,6 +1246,8 @@ private:
         std::vector<Microsoft::WRL::ComPtr<ID3D12Resource>>;
     std::array<RetiredResourceList, kFramesInFlight>
         retired_efb_copy_textures_;
+    // Interpolation: copy textures retired during a game-frame ring segment.
+    std::array<RetiredResourceList, kRingSegments> retired_segment_textures_;
 
     // Conversion blit pipeline (root sig lives in a module static next to
     // the present-blit one) + cached CPU-only descriptors for conversion
