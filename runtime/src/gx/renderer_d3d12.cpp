@@ -3515,6 +3515,24 @@ bool RendererD3D12::initialize(int window_width, int window_height, unsigned efb
             d3d_check(device_->CreateGraphicsPipelineState(&pd, IID_PPV_ARGS(&blit_pipeline_)), "CreateBlitPSO");
         }
 
+        // Presentation post-processing (SMAA, FSR 1, RCAS, box resample).
+        {
+            const RenderConfig cfg = get_render_config();
+            PostProcessSettings post{};
+            post.aa = static_cast<PostProcessSettings::Aa>(std::min(cfg.aa_mode, 2u));
+            post.smaa_quality = static_cast<std::uint8_t>(std::min(cfg.smaa_quality, 3u));
+            post.upscaler = static_cast<PostProcessSettings::Upscaler>(std::min(cfg.upscaler, 1u));
+            post.sharpness = static_cast<std::uint8_t>(std::min(cfg.sharpness, 100u));
+            if (!cfg.post_process) {
+                std::cerr << "[post-process] off; presenting with the plain blit\n";
+            } else if (!post_process_.initialize(device_.Get(), post)) {
+                std::cerr << "[post-process] unavailable; presenting with the plain blit\n";
+            } else {
+                std::cerr << "[post-process] aa=" << cfg.aa_mode << " smaa-quality=" << cfg.smaa_quality
+                          << " upscaler=" << cfg.upscaler << " sharpness=" << cfg.sharpness << '\n';
+            }
+        }
+
         // Sampler heap.
         if (!create_sampler_heap()) return false;
 
@@ -3633,6 +3651,7 @@ void RendererD3D12::shutdown() {
         exclusive_fullscreen_active_ = false;
     }
     s_blit_root_sig.Reset();
+    post_process_.shutdown();
     blit_pipeline_.Reset();
     s_conv_root_sig.Reset();
     conv_pipeline_.Reset();
@@ -7194,15 +7213,6 @@ bool RendererD3D12::present(
         ++telemetry_adjacent_serial_transition_count_;
     }
 
-    // Allocate a one-slot SRV in the frame's ring for the XFB texture.
-    const DescriptorRing::Table tbl = srv_ring_.allocate(1);
-    D3D12_SHADER_RESOURCE_VIEW_DESC sd{};
-    sd.Format                    = DXGI_FORMAT_R8G8B8A8_UNORM;
-    sd.ViewDimension             = D3D12_SRV_DIMENSION_TEXTURE2D;
-    sd.Shader4ComponentMapping   = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-    sd.Texture2D.MipLevels       = 1;
-    device_->CreateShaderResourceView(source->texture.Get(), &sd, tbl.cpu);
-
     const D3D12_VIEWPORT vp{
         static_cast<float>(content_viewport.left),
         static_cast<float>(content_viewport.top),
@@ -7222,13 +7232,29 @@ bool RendererD3D12::present(
     // present effects and matches normal GX draw recording.
     ID3D12DescriptorHeap* heaps[] = {srv_ring_.heap(), sampler_heap_.Get()};
     command_list_->SetDescriptorHeaps(2, heaps);
-    command_list_->SetGraphicsRootSignature(s_blit_root_sig.Get());
-    command_list_->SetPipelineState(blit_pipeline_.Get());
-    command_list_->SetGraphicsRootDescriptorTable(0, tbl.gpu);
-    command_list_->RSSetViewports(1, &vp);
-    command_list_->RSSetScissorRects(1, &sci);
-    command_list_->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-    command_list_->DrawInstanced(3, 1, 0, 0);
+    if (post_process_.ready()) {
+        const D3D12_RESOURCE_DESC source_desc = source->texture->GetDesc();
+        post_process_.record(
+            command_list_.Get(), srv_ring_, source->texture.Get(),
+            static_cast<unsigned>(source_desc.Width), source_desc.Height,
+            back_rtv, vp, frame_index_, kFramesInFlight);
+    } else {
+        // One-slot SRV in the frame's ring for the XFB texture.
+        const DescriptorRing::Table tbl = srv_ring_.allocate(1);
+        D3D12_SHADER_RESOURCE_VIEW_DESC sd{};
+        sd.Format                    = DXGI_FORMAT_R8G8B8A8_UNORM;
+        sd.ViewDimension             = D3D12_SRV_DIMENSION_TEXTURE2D;
+        sd.Shader4ComponentMapping   = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+        sd.Texture2D.MipLevels       = 1;
+        device_->CreateShaderResourceView(source->texture.Get(), &sd, tbl.cpu);
+        command_list_->SetGraphicsRootSignature(s_blit_root_sig.Get());
+        command_list_->SetPipelineState(blit_pipeline_.Get());
+        command_list_->SetGraphicsRootDescriptorTable(0, tbl.gpu);
+        command_list_->RSSetViewports(1, &vp);
+        command_list_->RSSetScissorRects(1, &sci);
+        command_list_->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+        command_list_->DrawInstanced(3, 1, 0, 0);
+    }
     invalidate_gx_bindings();
 
     // Native overlays are authored in full client/backbuffer pixels, not Wii

@@ -28,6 +28,7 @@
 
 #include "galaxy/gx/efb_copy.h"
 #include "galaxy/gx/immutable_upload.h"
+#include "galaxy/gx/post_process.h"
 #include "galaxy/gx/gx_bitfields.h"
 #include "galaxy/gx/render_config.h"
 #include "galaxy/gx/window_owner.h"
@@ -684,6 +685,9 @@ private:
     std::array<Microsoft::WRL::ComPtr<ID3D12Resource>,
         kSwapChainBuffers> backbuffers_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> blit_pipeline_;
+    // Presentation image quality; present() keeps the plain blit while it is
+    // not ready.
+    PostProcessor post_process_;
 
     // Native settings overlay: the game's own window-frame corner texture
     // (extracted read-only from files/LayoutData/FileSelect.arc -- see

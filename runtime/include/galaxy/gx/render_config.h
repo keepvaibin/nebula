@@ -78,6 +78,19 @@ struct RenderConfig {
     // decoded from guest memory unchanged.
     bool     enhanced_mipmaps    = false;
 
+    // Presentation image quality (post_process.h), applied to the presented
+    // frame on the render thread. aa_mode: 0 off, 1 SMAA, 2 auto (SMAA unless
+    // the game image already has 1.5x the window's pixels on both axes).
+    // smaa_quality: 0 low .. 3 ultra. upscaler: 0 bilinear, 1 FidelityFX
+    // FSR 1 when the game image is smaller than the window. sharpness: RCAS
+    // strength 0-100, 0 skips the pass.
+    // false presents with the plain bilinear blit (A/B and fallback).
+    bool     post_process        = true;
+    unsigned aa_mode             = 2;
+    unsigned smaa_quality        = 2;
+    unsigned upscaler            = 1;
+    unsigned sharpness           = 20;
+
     // Reserved for future DXR work. Clamped off until there is a real DXR
     // capability query, acceleration-structure path, ray PSO, and visible
     // native effect.

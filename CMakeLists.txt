@@ -607,6 +607,70 @@ file(CONFIGURE OUTPUT "${galaxy_uber_embed_cpp}"
     CONTENT "namespace galaxy::gx {\n${galaxy_uber_embed_body}}\n"
     @ONLY)
 
+# Presentation post-processing passes (runtime/src/gx/post_process.hlsl with
+# the vendored SMAA and FidelityFX FSR 1 sources) are compiled by fxc at build
+# time into bytecode headers, so the runtime never compiles them at startup.
+find_program(GALAXY_FXC fxc
+    HINTS "$ENV{WindowsSdkVerBinPath}x64" "$ENV{WindowsSdkBinPath}x64"
+    REQUIRED)
+set(galaxy_post_dir "${CMAKE_CURRENT_BINARY_DIR}/generated/post_shaders")
+file(MAKE_DIRECTORY "${galaxy_post_dir}")
+set(galaxy_post_hlsl "${CMAKE_CURRENT_SOURCE_DIR}/runtime/src/gx/post_process.hlsl")
+set(galaxy_smaa_hlsl "${CMAKE_CURRENT_SOURCE_DIR}/third_party/smaa/SMAA.hlsl")
+set(galaxy_ffx_a_h "${CMAKE_CURRENT_SOURCE_DIR}/third_party/fidelityfx-fsr1/ffx_a.h")
+set(galaxy_ffx_fsr1_h "${CMAKE_CURRENT_SOURCE_DIR}/third_party/fidelityfx-fsr1/ffx_fsr1.h")
+foreach(galaxy_post_input
+        "${galaxy_post_hlsl}" "${galaxy_smaa_hlsl}" "${galaxy_ffx_a_h}" "${galaxy_ffx_fsr1_h}")
+    set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${galaxy_post_input}")
+endforeach()
+file(READ "${galaxy_post_hlsl}" galaxy_post_src)
+file(READ "${galaxy_smaa_hlsl}" galaxy_smaa_src)
+file(READ "${galaxy_ffx_a_h}" galaxy_ffx_a_src)
+file(READ "${galaxy_ffx_fsr1_h}" galaxy_ffx_fsr1_src)
+set(galaxy_post_headers "")
+# One composed source and one bytecode header (g_<name>) per pass variant;
+# `preset` is an SMAA_PRESET_* macro or "-", `library` smaa, fsr or none.
+function(galaxy_post_shader name pass preset library stage entry)
+    set(text "#define ${pass} 1\n")
+    if(NOT preset STREQUAL "-")
+        string(APPEND text "#define ${preset} 1\n")
+    endif()
+    string(APPEND text "#define POST_SECTION 1\n${galaxy_post_src}\n")
+    if(library STREQUAL "smaa")
+        string(APPEND text "${galaxy_smaa_src}\n")
+    elseif(library STREQUAL "fsr")
+        string(APPEND text "${galaxy_ffx_a_src}\n#undef POST_SECTION\n#define POST_SECTION 2\n"
+            "${galaxy_post_src}\n${galaxy_ffx_fsr1_src}\n")
+    endif()
+    string(APPEND text "#undef POST_SECTION\n#define POST_SECTION 3\n${galaxy_post_src}\n")
+    set(source "${galaxy_post_dir}/${name}.hlsl")
+    file(WRITE "${source}.tmp" "${text}")
+    configure_file("${source}.tmp" "${source}" COPYONLY)
+    set(header "${galaxy_post_dir}/${name}.h")
+    add_custom_command(OUTPUT "${header}"
+        COMMAND "${GALAXY_FXC}" /nologo /T ${stage} /E ${entry} /O3 /Ges
+            /Vn g_${name} /Fh "${header}" "${source}"
+        DEPENDS "${source}"
+        VERBATIM)
+    set(galaxy_post_headers ${galaxy_post_headers} "${header}" PARENT_SCOPE)
+endfunction()
+galaxy_post_shader(post_fullscreen_vs PASS_RESAMPLE - none vs_5_0 VSMain)
+galaxy_post_shader(post_resample_ps PASS_RESAMPLE - none ps_5_0 PSMain)
+galaxy_post_shader(post_fsr_easu_ps PASS_FSR_EASU - fsr ps_5_0 PSMain)
+galaxy_post_shader(post_fsr_rcas_ps PASS_FSR_RCAS - fsr ps_5_0 PSMain)
+galaxy_post_shader(post_smaa_edges_vs PASS_SMAA_EDGES SMAA_PRESET_HIGH smaa vs_5_0 VSMain)
+galaxy_post_shader(post_smaa_blend_vs PASS_SMAA_BLEND SMAA_PRESET_HIGH smaa vs_5_0 VSMain)
+galaxy_post_shader(post_smaa_blend_ps PASS_SMAA_BLEND SMAA_PRESET_HIGH smaa ps_5_0 PSMain)
+foreach(galaxy_smaa_preset LOW MEDIUM HIGH ULTRA)
+    string(TOLOWER "${galaxy_smaa_preset}" galaxy_smaa_suffix)
+    galaxy_post_shader(post_smaa_edges_ps_${galaxy_smaa_suffix}
+        PASS_SMAA_EDGES SMAA_PRESET_${galaxy_smaa_preset} smaa ps_5_0 PSMain)
+    galaxy_post_shader(post_smaa_weights_vs_${galaxy_smaa_suffix}
+        PASS_SMAA_WEIGHTS SMAA_PRESET_${galaxy_smaa_preset} smaa vs_5_0 VSMain)
+    galaxy_post_shader(post_smaa_weights_ps_${galaxy_smaa_suffix}
+        PASS_SMAA_WEIGHTS SMAA_PRESET_${galaxy_smaa_preset} smaa ps_5_0 PSMain)
+endforeach()
+
 # galaxy_gx: static lib used by NebulaRuntime and the renderer tests.
 # The public API (gx_d3d12.h) is implemented by gx_shim.cpp over GxBackend.
 add_library(galaxy_gx STATIC
@@ -626,6 +690,8 @@ add_library(galaxy_gx STATIC
     runtime/src/gx/shader_gen.cpp
     runtime/src/gx/uber_shaders.cpp
     ${galaxy_uber_embed_cpp}
+    runtime/src/gx/post_process.cpp
+    ${galaxy_post_headers}
     runtime/src/gx/fifo_parser.cpp
     runtime/src/gx/gx_backend.cpp
     runtime/src/frame_telemetry.cpp
@@ -648,6 +714,11 @@ target_compile_definitions(
     galaxy_gx
     PRIVATE
         GALAXY_WITH_STREAMLINE_BRIDGE=$<BOOL:${GALAXY_WITH_STREAMLINE_BRIDGE}>
+)
+target_include_directories(galaxy_gx
+    PRIVATE
+        "${galaxy_post_dir}"
+        "${CMAKE_CURRENT_SOURCE_DIR}/third_party/smaa"
 )
 if(MSVC)
     target_compile_options(galaxy_gx PRIVATE /GS- /GR- /Oi /favor:INTEL64)

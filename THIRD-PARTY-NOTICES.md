@@ -189,6 +189,22 @@ constants needed to decrypt a user's own Wii disc partition. Nebula does not
 assert any position on the legal status of those constants beyond their
 publication by these upstream projects; see `docs/PROVENANCE.md`.
 
+## SMAA — MIT License
+
+Presentation anti-aliasing (`runtime/src/gx/post_process.*`) compiles the
+unmodified `SMAA.hlsl` and the precomputed `AreaTex.h` and `SearchTex.h`
+tables from <https://github.com/iryoku/smaa>, vendored in `third_party/smaa/`.
+Copyright (C) 2013 Jorge Jimenez, Jose I. Echevarria, Belen Masia, Fernando
+Navarro and Diego Gutierrez; MIT license in `third_party/smaa/LICENSE.txt`.
+
+## FidelityFX Super Resolution 1.0 — MIT License
+
+Presentation upscaling and sharpening compile the unmodified `ffx_a.h` and
+`ffx_fsr1.h` (EASU and RCAS) from
+<https://github.com/GPUOpen-Effects/FidelityFX-FSR>, vendored in
+`third_party/fidelityfx-fsr1/`. Copyright (c) 2021 Advanced Micro Devices,
+Inc.; MIT license in `third_party/fidelityfx-fsr1/LICENSE.txt`.
+
 ## Other Rust crates
 
 `nebula-recomp.exe` statically links about 80 crates (Cargo.lock), all under

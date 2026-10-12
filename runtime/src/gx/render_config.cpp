@@ -88,6 +88,18 @@ static bool parse_bool(const char* v, bool def) {
     return def;
 }
 
+// A choice given by index or by name (case-insensitive): names[i] selects i.
+template <std::size_t N>
+static unsigned parse_choice(const char* v, const char* const (&names)[N], unsigned def) {
+    if (v == nullptr || *v == '\0') return def;
+    const unsigned index = parse_uint(v, N);
+    if (index < N) return index;
+    for (std::size_t i = 0; i < N; ++i) {
+        if (_stricmp(v, names[i]) == 0) return static_cast<unsigned>(i);
+    }
+    return def;
+}
+
 static bool read_env_bool(const char* name, bool fallback) {
     char value[16]{};
     std::size_t length = 0;
@@ -159,6 +171,19 @@ static void apply_kv(RenderConfig& cfg, const char* key, const char* val) {
     else if (std::strcmp(key, "texture_lod_bias") == 0) cfg.texture_lod_bias = std::clamp(parse_uint(val, 0), 0u, 8u);
     else if (std::strcmp(key, "anisotropic_filtering") == 0) cfg.anisotropic_filtering = std::clamp(parse_uint(val, cfg.anisotropic_filtering), 1u, 16u);
     else if (std::strcmp(key, "enhanced_mipmaps") == 0) cfg.enhanced_mipmaps = parse_bool(val, cfg.enhanced_mipmaps);
+    else if (std::strcmp(key, "post_process") == 0) cfg.post_process = parse_bool(val, cfg.post_process);
+    else if (std::strcmp(key, "aa") == 0) {
+        static constexpr const char* kNames[] = {"off", "smaa", "auto"};
+        cfg.aa_mode = parse_choice(val, kNames, cfg.aa_mode);
+    } else if (std::strcmp(key, "smaa_quality") == 0) {
+        static constexpr const char* kNames[] = {"low", "medium", "high", "ultra"};
+        cfg.smaa_quality = parse_choice(val, kNames, cfg.smaa_quality);
+    } else if (std::strcmp(key, "upscaler") == 0) {
+        static constexpr const char* kNames[] = {"bilinear", "fsr"};
+        cfg.upscaler = parse_choice(val, kNames, cfg.upscaler);
+    } else if (std::strcmp(key, "sharpness") == 0) {
+        cfg.sharpness = std::min(parse_uint(val, cfg.sharpness), 100u);
+    }
     else if (std::strcmp(key, "ray_tracing_enabled") == 0) cfg.ray_tracing_enabled = parse_bool(val, false);
     else if (std::strcmp(key, "rt_shadow_quality") == 0) cfg.rt_shadow_quality = std::clamp(parse_uint(val, 0), 0u, 3u);
     else if (std::strcmp(key, "rt_ao_enabled")  == 0) cfg.rt_ao_enabled       = parse_bool(val, false);
@@ -213,6 +238,11 @@ static void apply_env_overrides(RenderConfig& cfg) {
     apply_env(cfg, "GALAXY_TEXTURE_LOD_BIAS", "texture_lod_bias");
     apply_env(cfg, "GALAXY_ANISOTROPIC_FILTERING", "anisotropic_filtering");
     apply_env(cfg, "GALAXY_ENHANCED_MIPMAPS", "enhanced_mipmaps");
+    apply_env(cfg, "GALAXY_POST_PROCESS", "post_process");
+    apply_env(cfg, "GALAXY_AA", "aa");
+    apply_env(cfg, "GALAXY_SMAA_QUALITY", "smaa_quality");
+    apply_env(cfg, "GALAXY_UPSCALER", "upscaler");
+    apply_env(cfg, "GALAXY_SHARPNESS", "sharpness");
     apply_env(cfg, "GALAXY_RAY_TRACING_ENABLED", "ray_tracing_enabled");
     apply_env(cfg, "GALAXY_RT_SHADOW_QUALITY", "rt_shadow_quality");
     apply_env(cfg, "GALAXY_RT_AO_ENABLED", "rt_ao_enabled");
@@ -234,6 +264,10 @@ static void clamp_unimplemented_features(RenderConfig& cfg) {
     }
     cfg.texture_lod_bias = std::min(cfg.texture_lod_bias, 8u);
     cfg.anisotropic_filtering = std::clamp(cfg.anisotropic_filtering, 1u, 16u);
+    cfg.aa_mode = std::min(cfg.aa_mode, 2u);
+    cfg.smaa_quality = std::min(cfg.smaa_quality, 3u);
+    cfg.upscaler = std::min(cfg.upscaler, 1u);
+    cfg.sharpness = std::min(cfg.sharpness, 100u);
     // Win32 client geometry is signed-int based even though DXGI dimensions
     // are UINT. Keep direct API callers inside the common representable range.
     constexpr unsigned kMaxWindowDimension =
@@ -505,6 +539,10 @@ bool save_render_config_to_file() {
              << std::clamp(cfg.anisotropic_filtering, 1u, 16u) << '\n'
              << "enhanced_mipmaps="
              << (cfg.enhanced_mipmaps ? 1u : 0u) << '\n'
+             << "aa=" << cfg.aa_mode << '\n'
+             << "smaa_quality=" << cfg.smaa_quality << '\n'
+             << "upscaler=" << cfg.upscaler << '\n'
+             << "sharpness=" << cfg.sharpness << '\n'
              << "window_width=" << cfg.window_width << '\n'
              << "window_height=" << cfg.window_height << '\n';
     if (!contents) {
