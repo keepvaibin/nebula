@@ -11,6 +11,7 @@
 #include <Windows.h>
 
 #include <intrin.h>
+#include <algorithm>
 #include <array>
 #include <atomic>
 #include <chrono>
@@ -617,6 +618,100 @@ bool host_pause_ai_catch_up_bounds() {
     passed &= expect(
         kHostPauseAiCatchUpPeriods + 1u < 8u,
         "cap plus one late period stays inside the masked catch-up bound");
+    return passed;
+}
+
+bool stale_ai_completion_policy() {
+    using galaxy::host::ai_dma_timing::StaleAiCompletion;
+    using galaxy::host::ai_dma_timing::stale_ai_completion_action;
+    using galaxy::host::ai_dma_timing::stale_ai_hold_release_ticks;
+    using galaxy::host::ai_dma_timing::kStaleAiHoldPeriods;
+    constexpr std::uint64_t kPeriod = 1'063'125u;
+    constexpr std::uint64_t kNow = 500'000'000u;
+    constexpr std::uint64_t kLimit = kPeriod * kStaleAiHoldPeriods;
+    bool passed = expect(
+        stale_ai_completion_action(true, true, false, 0u, kNow, kPeriod) ==
+                StaleAiCompletion::Latch &&
+            stale_ai_completion_action(true, true, true, kNow - 1u, kNow, kPeriod) ==
+                StaleAiCompletion::Latch,
+        "a buffer the game wrote, with its next frame mixed, is latched");
+    passed &= expect(
+        stale_ai_completion_action(false, true, false, 0u, kNow, kPeriod) ==
+            StaleAiCompletion::Hold,
+        "an unwritten shadow starts a hold instead of replaying the played buffer");
+    passed &= expect(
+        stale_ai_completion_action(true, false, false, 0u, kNow, kPeriod) ==
+                StaleAiCompletion::Hold &&
+            stale_ai_completion_action(true, false, true, kNow - kPeriod, kNow, kPeriod) ==
+                StaleAiCompletion::Hold,
+        "a written buffer waits while the DSP ring has no frame for the next callback");
+    passed &= expect(
+        stale_ai_completion_action(false, true, false, kNow - kPeriod, kNow, kPeriod) ==
+            StaleAiCompletion::Hold,
+        "a hold younger than its limit keeps waiting");
+    passed &= expect(
+        stale_ai_completion_action(false, true, false, kNow - kLimit, kNow, kPeriod) ==
+            StaleAiCompletion::LatchConcealed,
+        "an unwritten shadow at the hold limit latches as concealed output");
+    passed &= expect(
+        stale_ai_completion_action(true, false, false, kNow - kLimit, kNow, kPeriod) ==
+            StaleAiCompletion::Latch,
+        "a written buffer at the hold limit plays as written");
+    passed &= expect(
+        stale_ai_completion_action(false, true, true, 0u, kNow, kPeriod) ==
+            StaleAiCompletion::LatchConcealed,
+        "after a timeout later boundaries keep the grid without another hold");
+    passed &= expect(
+        stale_ai_completion_action(false, false, false, 0u, kNow, 0u) ==
+            StaleAiCompletion::Latch,
+        "a device without a period never holds");
+    passed &= expect(
+        stale_ai_hold_release_ticks(~std::uint64_t{0} - 5u, kPeriod) == ~std::uint64_t{0} &&
+            stale_ai_hold_release_ticks(100u, ~std::uint64_t{0}) == ~std::uint64_t{0},
+        "release tick saturates");
+    return passed;
+}
+
+bool ai_conceal_ramps() {
+    using galaxy::host::ai_dma_timing::apply_conceal_fade_in;
+    using galaxy::host::ai_dma_timing::kConcealRampFrames;
+    using galaxy::host::ai_dma_timing::load_be16;
+    using galaxy::host::ai_dma_timing::store_be16;
+    using galaxy::host::ai_dma_timing::write_conceal_fade_out;
+    constexpr std::size_t kFrames = 560u;
+    std::vector<std::byte> block(kFrames * 4u);
+    write_conceal_fade_out(block.data(), block.size(), 20000, -12000);
+    bool passed = expect(
+        load_be16(block.data()) <= 20000 && load_be16(block.data()) > 19000 &&
+            load_be16(block.data() + 2u) >= -12000 && load_be16(block.data() + 2u) < -11000,
+        "fade-out starts at the last output sample");
+    bool monotonic = true;
+    int max_step = 0;
+    for (std::size_t i = 1; i < kFrames; ++i) {
+        const int previous = load_be16(block.data() + (i - 1u) * 4u);
+        const int current = load_be16(block.data() + i * 4u);
+        monotonic &= current <= previous && current >= 0;
+        max_step = std::max(max_step, previous - current);
+    }
+    passed &= expect(monotonic && max_step <= 20000 / static_cast<int>(kConcealRampFrames) + 1,
+                     "fade-out falls in small steps");
+    bool silent_tail = true;
+    for (std::size_t i = kConcealRampFrames - 1u; i < kFrames; ++i) {
+        silent_tail &= load_be16(block.data() + i * 4u) == 0 &&
+                       load_be16(block.data() + i * 4u + 2u) == 0;
+    }
+    passed &= expect(silent_tail, "fade-out ends in exact silence within the ramp");
+    for (std::size_t i = 0; i < kFrames; ++i) {
+        store_be16(block.data() + i * 4u, 16000);
+        store_be16(block.data() + i * 4u + 2u, -16000);
+    }
+    apply_conceal_fade_in(block.data(), block.size());
+    passed &= expect(
+        load_be16(block.data()) == 0 && load_be16(block.data() + 2u) == 0 &&
+            load_be16(block.data() + kConcealRampFrames * 4u) == 16000 &&
+            load_be16(block.data() + kConcealRampFrames * 4u + 2u) == -16000 &&
+            load_be16(block.data() + (kConcealRampFrames / 2u) * 4u) == 8000,
+        "fade-in rises from silence and leaves the rest of the block untouched");
     return passed;
 }
 
@@ -2605,6 +2700,8 @@ int main() {
     passed &= run_test("host_suspension_ai_arm_identity_boundaries", host_suspension_ai_arm_identity_boundaries);
     passed &= run_test("native_input_ai_preemption_policy_boundaries", native_input_ai_preemption_policy_boundaries);
     passed &= run_test("host_pause_ai_catch_up_bounds", host_pause_ai_catch_up_bounds);
+    passed &= run_test("stale_ai_completion_policy", stale_ai_completion_policy);
+    passed &= run_test("ai_conceal_ramps", ai_conceal_ramps);
     passed &= run_test("stall_accounting_is_honest", stall_accounting_is_honest);
     passed &= run_test("vi_one_hour_never_skips", vi_one_hour_never_skips);
     passed &= run_test("ai_deadline_is_exact", ai_deadline_is_exact);

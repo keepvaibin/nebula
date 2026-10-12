@@ -5956,6 +5956,55 @@ void on_native_input_cadence_armed(
         next_unconsumed_sequence);
 }
 
+// JASDriver state (RMGE01 .sbss). updateDac (0x80494390) clears lastRspMadep
+// on entry, programs the previous buffer, reads the next DSP frame
+// (readDspBuffer 0x804945CC: slot read+1, a flat underrun fill when that is the
+// slot being written) and stores the new buffer in lastRspMadep on exit. The
+// next AI callback finds a frame when the previous updateDac has finished and
+// the ring holds one. True also before the driver has run once.
+bool jaudio_dsp_frame_ready(void* user) noexcept {
+    constexpr std::uint32_t kDspDacWriteBuffer = 0x806A2B9Cu;
+    constexpr std::uint32_t kDspDacReadBuffer = 0x806A2BA0u;
+    constexpr std::uint32_t kLastRspMadep = 0x806A2BACu;
+    constexpr std::uint32_t kDspDacBufferCount = 0x8069E028u;  // u8
+    const auto& state = *static_cast<const RuntimeState*>(user);
+    if (state.address_space == nullptr) {
+        return true;
+    }
+    const std::byte* count_byte =
+        state.address_space->pointer_or_null(kDspDacBufferCount, 1u);
+    const std::byte* driver =
+        state.address_space->pointer_or_null(kDspDacWriteBuffer, 0x14u);
+    if (count_byte == nullptr || driver == nullptr) {
+        return true;
+    }
+    const std::uint32_t count = std::to_integer<std::uint32_t>(*count_byte);
+    const std::uint32_t write = state.address_space->read_u32(kDspDacWriteBuffer);
+    const std::uint32_t read = state.address_space->read_u32(kDspDacReadBuffer);
+    if (count < 2u || count > 16u || write >= count || read >= count) {
+        return true;
+    }
+    static bool driver_seen = false;
+    const bool dac_prepared = state.address_space->read_u32(kLastRspMadep) != 0u;
+    driver_seen = driver_seen || dac_prepared;
+    const bool ready = !driver_seen ||
+        (dac_prepared && (read + 1u) % count != write);
+    static const bool trace = read_env_flag("GALAXY_TRACE_AI_SOURCE", false);
+    if (trace) {
+        static unsigned lines = 0u;
+        if (lines < 4000u) {
+            ++lines;
+            std::cerr << "[ai-source] read=" << read << " write=" << write
+                      << " count=" << count << " status="
+                      << state.address_space->read_u32(0x806A2BA4u)
+                      << " ready=" << (ready ? 1 : 0) << " now="
+                      << runtime_time_base_ticks(const_cast<RuntimeState&>(state))
+                      << '\n';
+        }
+    }
+    return ready;
+}
+
 galaxy::host::AiDmaMmioServiceDecision ai_dma_mmio_service_decision(
     void* user) noexcept {
     const auto& state = *static_cast<const RuntimeState*>(user);
@@ -18635,7 +18684,14 @@ void dump_ai_dma_deadline_audit(
                << state.address_space->ai_dma_next_completion_ticks()
                << " device-pending-since="
                << state.address_space->ai_dma_interrupt_pending_since_ticks()
-               << " duration=" << state.address_space->ai_dma_last_duration_ticks();
+               << " duration=" << state.address_space->ai_dma_last_duration_ticks()
+               << " ai-holds=" << state.address_space->ai_dma_holds()
+               << " ai-hold-timeouts=" << state.address_space->ai_dma_hold_timeouts()
+               << " ai-hold-max-us="
+               << state.address_space->ai_dma_hold_max_ticks() * 1'000'000u /
+                      galaxy::timing::kTimelineTicksPerSecond
+               << " ai-concealed-blocks="
+               << state.address_space->ai_dma_concealed_blocks();
     }
     if (state.deadline_broker != nullptr) {
         const galaxy::timing::DeadlinePublicationStats publication =
@@ -32638,6 +32694,7 @@ int wmain(int argc, wchar_t** argv) {
             state.address_space->set_ai_dma_deadline_callback(nullptr, nullptr);
             state.address_space->set_ai_dma_mmio_service_decision_provider(
                 nullptr, nullptr);
+            state.address_space->set_ai_dma_source_ready_probe(nullptr, nullptr);
             state.address_space->set_native_virtual_input_acl_delivery_callback(
                 nullptr, nullptr);
         }
@@ -33619,6 +33676,8 @@ int wmain(int argc, wchar_t** argv) {
             &on_ai_dma_deadline_changed, &state);
         address_space.set_ai_dma_mmio_service_decision_provider(
             &ai_dma_mmio_service_decision, &state);
+        address_space.set_ai_dma_source_ready_probe(
+            &jaudio_dsp_frame_ready, &state);
 
         run_guest_entry(state, entry_fn, &context, address_space.guest_memory());
     } catch (const BenchmarkComplete&) {
