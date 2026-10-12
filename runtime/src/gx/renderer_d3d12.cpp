@@ -102,7 +102,48 @@ static constexpr UINT kDisplayModeMessage = WM_USER + 0x42;
 static constexpr UINT kSettingsKeyMessage = WM_USER + 0x43;
 static std::atomic<std::uintptr_t> s_native_settings_window{0};
 static std::atomic<bool> s_borderless_active{false};
+static std::atomic<bool> s_exclusive_fullscreen_active{false};
 static RECT s_windowed_rect{};
+// The last internal resolution refused for the video-memory budget (0: none).
+static std::atomic<unsigned> s_efb_scale_rejected{0u};
+
+// The internal resolution that fills the display: the smallest scale whose
+// 640x456 game picture covers the monitor's current mode, or the swap chain
+// in exclusive fullscreen. Higher scales cost GPU time and memory without
+// adding pixels the display can show.
+static unsigned display_efb_scale_cap() {
+    UINT width = 0u;
+    UINT height = 0u;
+    if (s_exclusive_fullscreen_active.load(std::memory_order_acquire)) {
+        width = s_bb_width;
+        height = s_bb_height;
+    } else {
+        const HWND window = reinterpret_cast<HWND>(
+            s_native_settings_window.load(std::memory_order_acquire));
+        const HMONITOR monitor = window != nullptr
+            ? MonitorFromWindow(window, MONITOR_DEFAULTTONEAREST)
+            : MonitorFromPoint(POINT{0, 0}, MONITOR_DEFAULTTOPRIMARY);
+        MONITORINFOEXW info{};
+        info.cbSize = sizeof(info);
+        if (monitor != nullptr && GetMonitorInfoW(monitor, &info)) {
+            DEVMODEW mode{};
+            mode.dmSize = sizeof(mode);
+            if (EnumDisplaySettingsW(info.szDevice, ENUM_CURRENT_SETTINGS, &mode) &&
+                mode.dmPelsWidth != 0u && mode.dmPelsHeight != 0u) {
+                width = mode.dmPelsWidth;
+                height = mode.dmPelsHeight;
+            } else {
+                width = static_cast<UINT>(info.rcMonitor.right - info.rcMonitor.left);
+                height = static_cast<UINT>(info.rcMonitor.bottom - info.rcMonitor.top);
+            }
+        }
+    }
+    if (width == 0u || height == 0u) {
+        return kMaxEfbScale;
+    }
+    const double needed = std::max(width / static_cast<double>(kEfbWidth), height / 456.0);
+    return std::clamp(static_cast<unsigned>(std::ceil(needed - 1e-6)), 1u, kMaxEfbScale);
+}
 
 #ifndef GALAXY_WITH_STREAMLINE_BRIDGE
 #define GALAXY_WITH_STREAMLINE_BRIDGE 0
@@ -2451,6 +2492,11 @@ bool RendererD3D12::create_efb_targets(unsigned efb_scale) {
     // Aurora MIT lib/window.cpp and lib/gx/gx.cpp keep logical Wii size
     // separate from the physical target. Apply that rule to Galaxy's D3D12
     // resources without changing guest EFB/XFB addresses or dimensions.
+    //
+    // Both resources are created before anything is replaced: a failure
+    // (out of video memory) leaves the current targets untouched. On success
+    // the previous targets move to efb_carry_*, whose contents begin_frame
+    // copies into the new ones.
     const std::uint64_t width =
         static_cast<std::uint64_t>(kEfbWidth) * efb_scale;
     const std::uint64_t height =
@@ -2471,9 +2517,7 @@ bool RendererD3D12::create_efb_targets(unsigned efb_scale) {
     D3D12_HEAP_PROPERTIES hp{};
     hp.Type = D3D12_HEAP_TYPE_DEFAULT;
 
-    // Color RTV heap: kSwapChainBuffers backbuffers + 1 EFB slot.
-    // The heap was already created in initialize() for backbuffers; the EFB RTV
-    // sits in the extra slot at index kSwapChainBuffers.
+    ComPtr<ID3D12Resource> color;
     {
         D3D12_RESOURCE_DESC rd{};
         rd.Dimension          = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
@@ -2487,20 +2531,18 @@ bool RendererD3D12::create_efb_targets(unsigned efb_scale) {
         D3D12_CLEAR_VALUE cv{};
         cv.Format   = kEfbColorFormat;
         cv.Color[3] = 1.0f;
-        d3d_check(device_->CreateCommittedResource(
+        const HRESULT hr = device_->CreateCommittedResource(
             &hp, D3D12_HEAP_FLAG_NONE, &rd,
-            D3D12_RESOURCE_STATE_RENDER_TARGET, &cv,
-            IID_PPV_ARGS(&efb_color_)), "EFB color create");
+            D3D12_RESOURCE_STATE_RENDER_TARGET, &cv, IID_PPV_ARGS(&color));
+        if (FAILED(hr)) {
+            std::cerr << "[Renderer] EFB color " << w << 'x' << efb_h
+                      << " allocation failed hr=0x" << std::hex
+                      << static_cast<unsigned long>(hr) << std::dec << '\n';
+            return false;
+        }
     }
-
-    // DSV heap for EFB depth.
+    ComPtr<ID3D12Resource> depth;
     {
-        D3D12_DESCRIPTOR_HEAP_DESC dhd{};
-        dhd.NumDescriptors = 1;
-        dhd.Type           = D3D12_DESCRIPTOR_HEAP_TYPE_DSV;
-        d3d_check(device_->CreateDescriptorHeap(&dhd, IID_PPV_ARGS(&dsv_heap_)),
-                  "DSV heap");
-
         D3D12_RESOURCE_DESC drd{};
         drd.Dimension          = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
         drd.Width              = w;
@@ -2513,20 +2555,39 @@ bool RendererD3D12::create_efb_targets(unsigned efb_scale) {
         D3D12_CLEAR_VALUE dcv{};
         dcv.Format               = kEfbDepthFormat;
         dcv.DepthStencil.Depth   = 1.0f;
-        d3d_check(device_->CreateCommittedResource(
+        const HRESULT hr = device_->CreateCommittedResource(
             &hp, D3D12_HEAP_FLAG_NONE, &drd,
-            D3D12_RESOURCE_STATE_DEPTH_WRITE, &dcv,
-            IID_PPV_ARGS(&efb_depth_)), "EFB depth create");
-
-        D3D12_DEPTH_STENCIL_VIEW_DESC dsv{};
-        dsv.Format = kEfbDepthFormat;
-        dsv.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2D;
-        device_->CreateDepthStencilView(
-            efb_depth_.Get(), &dsv,
-            dsv_heap_->GetCPUDescriptorHandleForHeapStart());
+            D3D12_RESOURCE_STATE_DEPTH_WRITE, &dcv, IID_PPV_ARGS(&depth));
+        if (FAILED(hr)) {
+            std::cerr << "[Renderer] EFB depth " << w << 'x' << efb_h
+                      << " allocation failed hr=0x" << std::hex
+                      << static_cast<unsigned long>(hr) << std::dec << '\n';
+            return false;
+        }
+    }
+    if (!dsv_heap_) {
+        D3D12_DESCRIPTOR_HEAP_DESC dhd{};
+        dhd.NumDescriptors = 1;
+        dhd.Type           = D3D12_DESCRIPTOR_HEAP_TYPE_DSV;
+        if (FAILED(device_->CreateDescriptorHeap(&dhd, IID_PPV_ARGS(&dsv_heap_)))) {
+            return false;
+        }
     }
 
-    // Add EFB RTV at slot kSwapChainBuffers of the backbuffer RTV heap.
+    // Commit. Callers have drained the GPU, so the descriptor slots below can
+    // be rewritten (OMSetRenderTargets copied the old views when recorded).
+    efb_carry_color_ = std::move(efb_color_);
+    efb_carry_depth_ = std::move(efb_depth_);
+    efb_color_ = std::move(color);
+    efb_depth_ = std::move(depth);
+
+    D3D12_DEPTH_STENCIL_VIEW_DESC dsv{};
+    dsv.Format = kEfbDepthFormat;
+    dsv.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2D;
+    device_->CreateDepthStencilView(
+        efb_depth_.Get(), &dsv, dsv_heap_->GetCPUDescriptorHandleForHeapStart());
+
+    // EFB RTV at slot kSwapChainBuffers of the backbuffer RTV heap.
     {
         const UINT stride = device_->GetDescriptorHandleIncrementSize(
             D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
@@ -2538,6 +2599,107 @@ bool RendererD3D12::create_efb_targets(unsigned efb_scale) {
     }
     efb_dsv_ = dsv_heap_->GetCPUDescriptorHandleForHeapStart();
     return true;
+}
+
+// After an internal-resolution change: the new EFB starts with the previous
+// targets' contents, resampled. The game expects the EFB it left at the end
+// of the last frame (normally the display copy's clear, whose alpha its
+// shadow and glow passes read); zero-filled targets showed for one frame as
+// a dark picture with stray geometry.
+void RendererD3D12::carry_over_efb_contents() {
+    if (!efb_carry_color_ || !efb_carry_depth_) {
+        efb_carry_color_.Reset();
+        efb_carry_depth_.Reset();
+        return;
+    }
+    if (!efb_carry_depth_pso_) {
+        static constexpr char kDepthCarryPs[] =
+            "Texture2D<float> t:register(t0);"
+            "SamplerState s:register(s0);"
+            "struct V{float4 p:SV_Position;float2 uv:TEXCOORD0;};"
+            "float main(V v):SV_Depth{return t.SampleLevel(s,v.uv,0);}";
+        const ComPtr<ID3DBlob> vs = compile_hlsl(kBlitVs, sizeof(kBlitVs) - 1, "vs_5_1", "main");
+        const ComPtr<ID3DBlob> ps =
+            compile_hlsl(kDepthCarryPs, sizeof(kDepthCarryPs) - 1, "ps_5_1", "main");
+        D3D12_GRAPHICS_PIPELINE_STATE_DESC pd{};
+        pd.pRootSignature = s_blit_root_sig.Get();
+        pd.VS = {vs->GetBufferPointer(), vs->GetBufferSize()};
+        pd.PS = {ps->GetBufferPointer(), ps->GetBufferSize()};
+        pd.SampleMask = UINT_MAX;
+        pd.RasterizerState.FillMode = D3D12_FILL_MODE_SOLID;
+        pd.RasterizerState.CullMode = D3D12_CULL_MODE_NONE;
+        pd.RasterizerState.DepthClipEnable = FALSE;
+        pd.DepthStencilState.DepthEnable = TRUE;
+        pd.DepthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL;
+        pd.DepthStencilState.DepthFunc = D3D12_COMPARISON_FUNC_ALWAYS;
+        pd.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+        pd.NumRenderTargets = 0;
+        pd.DSVFormat = kEfbDepthFormat;
+        pd.SampleDesc.Count = 1;
+        if (FAILED(device_->CreateGraphicsPipelineState(
+                &pd, IID_PPV_ARGS(&efb_carry_depth_pso_)))) {
+            efb_carry_depth_pso_.Reset();
+        }
+    }
+
+    const DescriptorRing::Table table = srv_ring_.allocate(2);
+    const UINT stride = device_->GetDescriptorHandleIncrementSize(
+        D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+    D3D12_SHADER_RESOURCE_VIEW_DESC view{};
+    view.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+    view.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+    view.Texture2D.MipLevels = 1u;
+    view.Format = kEfbColorFormat;
+    device_->CreateShaderResourceView(efb_carry_color_.Get(), &view, table.cpu);
+    D3D12_CPU_DESCRIPTOR_HANDLE depth_cpu = table.cpu;
+    depth_cpu.ptr += stride;
+    D3D12_GPU_DESCRIPTOR_HANDLE depth_gpu = table.gpu;
+    depth_gpu.ptr += stride;
+    view.Format = kEfbDepthSrvFormat;
+    device_->CreateShaderResourceView(efb_carry_depth_.Get(), &view, depth_cpu);
+
+    D3D12_RESOURCE_BARRIER to_read[2]{};
+    for (auto& barrier : to_read) {
+        barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+        barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+        barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+    }
+    to_read[0].Transition.pResource = efb_carry_color_.Get();
+    to_read[0].Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
+    to_read[1].Transition.pResource = efb_carry_depth_.Get();
+    to_read[1].Transition.StateBefore = D3D12_RESOURCE_STATE_DEPTH_WRITE;
+    command_list_->ResourceBarrier(2u, to_read);
+
+    const D3D12_VIEWPORT viewport{
+        0.0f, 0.0f, static_cast<float>(kEfbWidth * efb_scale_),
+        static_cast<float>(kEfbHeight * efb_scale_), 0.0f, 1.0f};
+    const D3D12_RECT scissor{
+        0, 0, static_cast<LONG>(kEfbWidth * efb_scale_),
+        static_cast<LONG>(kEfbHeight * efb_scale_)};
+    command_list_->SetGraphicsRootSignature(s_blit_root_sig.Get());
+    command_list_->RSSetViewports(1, &viewport);
+    command_list_->RSSetScissorRects(1, &scissor);
+    command_list_->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+    command_list_->OMSetRenderTargets(1, &efb_rtv_, FALSE, nullptr);
+    command_list_->SetPipelineState(blit_pipeline_.Get());
+    command_list_->SetGraphicsRootDescriptorTable(0, table.gpu);
+    command_list_->DrawInstanced(3, 1, 0, 0);
+    if (efb_carry_depth_pso_) {
+        command_list_->OMSetRenderTargets(0, nullptr, FALSE, &efb_dsv_);
+        command_list_->SetPipelineState(efb_carry_depth_pso_.Get());
+        command_list_->SetGraphicsRootDescriptorTable(0, depth_gpu);
+        command_list_->DrawInstanced(3, 1, 0, 0);
+    } else {
+        const auto far_values = make_efb_clear_values(0u, 0u, 0x00FFFFFFu, 0u);
+        command_list_->ClearDepthStencilView(
+            efb_dsv_, D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL,
+            far_values.reversed_depth, 0u, 0u, nullptr);
+    }
+    // The old targets are read by this frame's command list.
+    retired_efb_copy_textures_[frame_slot_].push_back(std::move(efb_carry_color_));
+    retired_efb_copy_textures_[frame_slot_].push_back(std::move(efb_carry_depth_));
+    command_list_->SetGraphicsRootSignature(root_signature_.Get());
+    invalidate_gx_bindings();
 }
 
 HRESULT create_gx_root_signature(
@@ -3044,7 +3206,20 @@ void RendererD3D12::apply_pending_efb_scale() {
             wanted = temporal_render_scale(output_scale);
         }
     }
+    wanted = std::min(wanted, display_efb_scale_cap());
     if (wanted == efb_scale_ || !device_ || !efb_color_ || output_efb_active_) {
+        return;
+    }
+    if (wanted > efb_scale_ && !efb_scale_fits_memory(wanted)) {
+        // Keep the current targets; the setting returns to what is live.
+        std::cerr << "[Renderer] internal resolution " << wanted
+                  << "x exceeds the video-memory budget; staying at "
+                  << efb_scale_ << "x\n";
+        RenderConfig render = get_render_config();
+        render.efb_scale = efb_scale_;
+        set_render_config(render);
+        stage_next_start_efb_scale(efb_scale_);
+        s_efb_scale_rejected.store(wanted, std::memory_order_release);
         return;
     }
     // Between frames with nothing recording; the GPU must be done with the
@@ -3059,20 +3234,17 @@ void RendererD3D12::apply_pending_efb_scale() {
     readback_buf_.Reset();
     readback_pending_ = false;
     readback_fence_value_ = 0u;
-    efb_color_.Reset();
-    efb_depth_.Reset();
-    dsv_heap_.Reset();
     const unsigned previous = efb_scale_;
-    unsigned applied = wanted;
     if (!create_efb_targets(wanted)) {
-        applied = previous;
-        if (!create_efb_targets(previous)) {
-            throw std::runtime_error("EFB targets could not be re-created");
-        }
+        // The current targets are untouched; the setting returns to them.
         RenderConfig render = get_render_config();
         render.efb_scale = previous;
         set_render_config(render);
+        stage_next_start_efb_scale(previous);
+        s_efb_scale_rejected.store(wanted, std::memory_order_release);
+        return;
     }
+    const unsigned applied = wanted;
     efb_scale_ = applied;
     refresh_efb_conversion_source_views();
     invalidate_gx_bindings();
@@ -3080,6 +3252,28 @@ void RendererD3D12::apply_pending_efb_scale() {
     std::cout << "[Renderer] internal resolution " << previous << "x -> "
               << applied << "x (" << kEfbWidth * applied << "x"
               << kEfbHeight * applied << ")\n";
+}
+
+bool RendererD3D12::efb_scale_fits_memory(unsigned scale) const {
+    if (!adapter3_) {
+        return true;
+    }
+    DXGI_QUERY_VIDEO_MEMORY_INFO info{};
+    if (FAILED(adapter3_->QueryVideoMemoryInfo(
+            0u, DXGI_MEMORY_SEGMENT_GROUP_LOCAL, &info)) || info.Budget == 0u) {
+        return true;
+    }
+    // Scale-dependent residency: EFB color + depth (8 bytes per pixel) and,
+    // at most, the XFB pair plus one full-picture copy (12 bytes per pixel of
+    // the 640x456 picture). Everything else is independent of the scale.
+    const auto scaled_bytes = [](unsigned s) {
+        const double area = static_cast<double>(s) * s;
+        return area * (static_cast<double>(kEfbWidth) * kEfbHeight * 8.0 +
+                       static_cast<double>(kEfbWidth) * 456.0 * 12.0);
+    };
+    const double needed = scaled_bytes(scale) - scaled_bytes(efb_scale_);
+    return static_cast<double>(info.CurrentUsage) + needed <=
+           0.9 * static_cast<double>(info.Budget);
 }
 
 std::array<D3D12_GPU_DESCRIPTOR_HANDLE, 2>
@@ -3383,6 +3577,7 @@ bool RendererD3D12::initialize(int window_width, int window_height, unsigned efb
         // validity flag as well.
         g_selected_adapter_desc = adapter_desc;
         g_selected_adapter_valid = true;
+        (void)adapter.As(&adapter3_);
         {
             char narrow[128]{};
             WideCharToMultiByte(
@@ -3617,6 +3812,7 @@ bool RendererD3D12::initialize(int window_width, int window_height, unsigned efb
             const HRESULT fs_hr = swap_chain_->SetFullscreenState(TRUE, nullptr);
             if (SUCCEEDED(fs_hr)) {
                 exclusive_fullscreen_active_ = true;
+                s_exclusive_fullscreen_active.store(true, std::memory_order_release);
                 // Flip-model fullscreen transitions require ResizeBuffers,
                 // even when the client dimensions did not change.
                 d3d_check(swap_chain_->ResizeBuffers(kSwapChainBuffers,
@@ -3660,6 +3856,8 @@ bool RendererD3D12::initialize(int window_width, int window_height, unsigned efb
         if (!fence_event_) throw std::runtime_error("CreateEvent failed");
 
         // EFB render targets.
+        // A saved scale above what this display can show is clamped here.
+        efb_scale_ = std::min(efb_scale_, display_efb_scale_cap());
         if (!create_efb_targets(efb_scale_)) return false;
 
         // Root signatures.
@@ -3850,6 +4048,7 @@ void RendererD3D12::shutdown() {
     if (swap_chain_ && exclusive_fullscreen_active_) {
         swap_chain_->SetFullscreenState(FALSE, nullptr);
         exclusive_fullscreen_active_ = false;
+        s_exclusive_fullscreen_active.store(false, std::memory_order_release);
     }
     s_blit_root_sig.Reset();
     post_process_.shutdown();
@@ -4617,6 +4816,9 @@ void RendererD3D12::begin_frame(bool present_swap_chain) {
     command_list_->SetDescriptorHeaps(2, heaps);
     command_list_->SetGraphicsRootSignature(root_signature_.Get());
     invalidate_gx_bindings();
+    if (efb_carry_color_ || efb_carry_depth_) {
+        carry_over_efb_contents();
+    }
     if (collect_begin_timing) {
         last_begin_reset_us_ = elapsed_us(
             reset_start,
@@ -6165,18 +6367,26 @@ bool RendererD3D12::copy_efb_to_texture(
         }
         if (FAILED(create_hr)) {
             dump_device_removal(device_.Get());
+            if (device_->GetDeviceRemovedReason() != S_OK) {
+                std::ostringstream message;
+                message << "[efb-copy] device removed while allocating a "
+                        << w << 'x' << h << " copy destination";
+                throw std::runtime_error(message.str());
+            }
+            // Out of memory: skip this copy (its texture keeps its previous
+            // contents) rather than ending the game.
             efb_copy_dests_bytes_ -= std::min(
                 efb_copy_dests_bytes_, dest.bytes);
             dest.bytes = 0u;
             efb_copy_dests_.erase(dest_key);
-            std::ostringstream message;
-            message << "[efb-copy] dest texture allocation failed"
-                    << " hr=0x" << std::hex
-                    << static_cast<unsigned long>(create_hr)
-                    << " addr=0x" << std::hex << params.dest_addr
-                    << " key=0x" << dest_key
-                    << " size=" << std::dec << w << 'x' << h;
-            throw std::runtime_error(message.str());
+            static std::atomic<unsigned> reported{0u};
+            if (reported.fetch_add(1u, std::memory_order_relaxed) < 8u) {
+                std::cerr << "[efb-copy] dest texture allocation failed hr=0x"
+                          << std::hex << static_cast<unsigned long>(create_hr)
+                          << " addr=0x" << params.dest_addr << std::dec
+                          << " size=" << w << 'x' << h << "; copy skipped\n";
+            }
+            return false;
         }
         dest.width  = w;
         dest.height = h;

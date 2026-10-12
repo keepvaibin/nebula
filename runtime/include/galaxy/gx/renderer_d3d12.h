@@ -418,6 +418,9 @@ public:
     [[nodiscard]] bool begin_output_efb();
     void end_output_efb();
     [[nodiscard]] bool output_efb_active() const noexcept { return output_efb_active_; }
+    // Whether the targets for `scale` fit the adapter's video-memory budget
+    // next to everything already resident.
+    [[nodiscard]] bool efb_scale_fits_memory(unsigned scale) const;
 
     // Temporal upscaling (upscaler mode 2). At the start of the guest's 3D
     // scene: whether the temporal path runs for it and, if so, the scene's
@@ -643,6 +646,7 @@ private:
         unsigned height,
         unsigned row_pitch);
     bool create_efb_targets(unsigned efb_scale);
+    void carry_over_efb_contents();
     [[nodiscard]] unsigned output_efb_scale_for_window() const;
     [[nodiscard]] bool temporal_mode() const;
     [[nodiscard]] unsigned temporal_render_scale(unsigned output_scale) const;
@@ -698,6 +702,8 @@ private:
     WindowOwner window_owner_;
     HWND window_ = nullptr;
     Microsoft::WRL::ComPtr<ID3D12Device> device_;
+    // The selected adapter, for video-memory budget queries.
+    Microsoft::WRL::ComPtr<IDXGIAdapter3> adapter3_;
     Microsoft::WRL::ComPtr<ID3D12CommandQueue> queue_;
     Microsoft::WRL::ComPtr<IDXGISwapChain3> swap_chain_;
     Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> command_list_;
@@ -757,6 +763,11 @@ private:
     std::array<Microsoft::WRL::ComPtr<ID3D12Resource>,
         kSwapChainBuffers> backbuffers_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> blit_pipeline_;
+    // Targets replaced by an internal-resolution change, until begin_frame
+    // has copied their contents into the new ones.
+    Microsoft::WRL::ComPtr<ID3D12Resource> efb_carry_color_;
+    Microsoft::WRL::ComPtr<ID3D12Resource> efb_carry_depth_;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> efb_carry_depth_pso_;
     // Presentation image quality; present() keeps the plain blit while it is
     // not ready.
     PostProcessor post_process_;

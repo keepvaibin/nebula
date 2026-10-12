@@ -298,15 +298,19 @@ bool capture_pixel_frame_requested(std::uint64_t frame) {
 }
 
 // Test aid for runs without a display: every Nth swap-chain present is read
-// back and written to GALAXY_PRESENT_SNAPSHOT_DIR\present_<n>.ppm.
+// back and written to GALAXY_PRESENT_SNAPSHOT_DIR\present_<n>.ppm, limited to
+// presents GALAXY_PRESENT_SNAPSHOT_FIRST..GALAXY_PRESENT_SNAPSHOT_LAST.
 std::string present_snapshot_path() {
-    static const std::uint64_t every = [] {
+    const auto read_u64 = [](const char* name, std::uint64_t fallback) {
         char value[32]{};
         std::size_t length = 0;
-        return getenv_s(&length, value, sizeof(value),
-                        "GALAXY_PRESENT_SNAPSHOT_EVERY") == 0 && length > 1u
-            ? std::strtoull(value, nullptr, 10) : 0ull;
-    }();
+        return getenv_s(&length, value, sizeof(value), name) == 0 && length > 1u
+            ? std::strtoull(value, nullptr, 10) : fallback;
+    };
+    static const std::uint64_t every = read_u64("GALAXY_PRESENT_SNAPSHOT_EVERY", 0u);
+    static const std::uint64_t first = read_u64("GALAXY_PRESENT_SNAPSHOT_FIRST", 0u);
+    static const std::uint64_t last = read_u64(
+        "GALAXY_PRESENT_SNAPSHOT_LAST", std::numeric_limits<std::uint64_t>::max());
     static const std::string directory = [] {
         char value[MAX_PATH]{};
         std::size_t length = 0;
@@ -315,7 +319,8 @@ std::string present_snapshot_path() {
             ? std::string(value) : std::string{};
     }();
     static std::uint64_t presents = 0u;
-    if (every == 0u || directory.empty() || ++presents % every != 0u) {
+    if (every == 0u || directory.empty() || ++presents % every != 0u ||
+        presents < first || presents > last) {
         return {};
     }
     return directory + "\\present_" + std::to_string(presents) + ".ppm";
@@ -7667,11 +7672,6 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
             cadence_diagnostics_, cadence::TimingPhase::RenderBegin};
         {
             const RenderConfig render = get_render_config();
-            const unsigned wanted =
-                std::clamp(render.efb_scale, 1u, kMaxEfbScale);
-            if (wanted != efb_copies_.efb_scale()) {
-                efb_copies_.set_efb_scale(wanted);
-            }
             // A lighting-mode change re-keys every lit draw's pipeline.
             if (render.per_pixel_lighting != per_pixel_lighting_) {
                 per_pixel_lighting_ = render.per_pixel_lighting;
@@ -7680,6 +7680,13 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
             }
         }
         renderer_.begin_frame(chunk.present_swap_chain);
+        // begin_frame() applies a pending internal-resolution change; copies
+        // must use the scale the EFB actually has. Reading the setting
+        // separately raced a change made in between and sized one frame's
+        // copies for the other scale (a black frame).
+        if (renderer_.efb_scale() != efb_copies_.efb_scale()) {
+            efb_copies_.set_efb_scale(renderer_.efb_scale());
+        }
         // begin_frame() waited for this slot's previous frame: resident vertex
         // blocks released kFramesInFlight render frames ago are now unused.
         resident_vertices_.advance_frame();
