@@ -2067,16 +2067,23 @@ V main(uint id : SV_VertexID) {
         auto enhanced_image = image; enhanced_image.guest_addr = address + 1280u;
         enhanced_image.width = 64u; enhanced_image.height = 4u;
         TexMode enhanced_mode{};
+        enhanced_mode.wrap_s = TexWrap::Repeat;
+        enhanced_mode.wrap_t = TexWrap::Mirror;
         enhanced_mode.min_filter = TexMinFilter::Linear;
         enhanced_mode.mag_filter = TexMagFilter::Linear;
         const auto no_enhancement = cache.get(enhanced_image, enhanced_mode, TlutRef{}, &memory);
         mip_config.enhanced_mipmaps = true; set_render_config(mip_config);
         const auto enhancement = cache.get(enhanced_image, enhanced_mode, TlutRef{}, &memory);
+        TexMode decal_mode = enhanced_mode;
+        decal_mode.wrap_t = TexWrap::Clamp;
+        const auto decal = cache.get(enhanced_image, decal_mode, TlutRef{}, &memory);
         set_render_config(original_config);
         passed &= expect(no_enhancement.mip_levels == 1u && !no_enhancement.generated_mips &&
             enhancement.mip_levels == 7u && enhancement.generated_mips &&
             enhancement.resource != no_enhancement.resource && enhancement.guest_byte_size == 512u,
             "eligible native mip generation still reads live options and keeps its resource separate from the base texture");
+        passed &= expect(decal.mip_levels == 1u && !decal.generated_mips,
+            "a clamped texture keeps its single authored level");
 
         // Complete the actual recorded upload before retirement/shutdown. This
         // test owns its queue and waits for GPU completion, not just CPU submit.

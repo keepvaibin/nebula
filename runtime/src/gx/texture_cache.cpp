@@ -385,9 +385,14 @@ static inline void rgb5a3x8_to_rgba(__m128i v, RGBA8* row0, RGBA8* row1) noexcep
 [[nodiscard]] static bool should_generate_native_mips(
     const TexImage& image,
     const TexMode& mode) {
+    // Only tiling surfaces get a generated chain. A clamped texture is a
+    // decal placed by a texture matrix (eyes, emblems, sprites, HUD digits):
+    // its lower levels blend the small detail into the background -- Mario's
+    // pupils vanish when his face is a few pixels tall.
     if ((static_cast<unsigned>(mode.min_filter) & 0x3u) != 0u ||
         mode.min_filter != TexMinFilter::Linear ||
         mode.mag_filter != TexMagFilter::Linear ||
+        mode.wrap_s == TexWrap::Clamp || mode.wrap_t == TexWrap::Clamp ||
         (image.width < 64u && image.height < 64u) ||
         !generated_mips_color_format(image.format)) {
         return false;
