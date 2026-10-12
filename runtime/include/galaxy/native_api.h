@@ -12153,6 +12153,14 @@ inline void require_paired_single_mode(
     bool requires_quantized_load_store,
     const NativeServicesV1* services,
     std::uint32_t guest_pc) {
+#if defined(GALAXY_ASSUME_PAIRED_SINGLES) && GALAXY_ASSUME_PAIRED_SINGLES
+    // Translator --assume-paired-singles: HID2[PSE]/[LSQE] are set before any
+    // game code runs and never cleared (see galaxy::fast::kAssumePairedSingles).
+    static_cast<void>(context);
+    static_cast<void>(requires_quantized_load_store);
+    static_cast<void>(services);
+    static_cast<void>(guest_pc);
+#else
     constexpr std::uint32_t kHid2Lsqe = 0x80000000u;
     constexpr std::uint32_t kHid2Pse = 0x20000000u;
     const std::uint32_t required =
@@ -12163,6 +12171,7 @@ inline void require_paired_single_mode(
             guest_pc,
             "paired-single instruction executed while HID2 mode is disabled");
     }
+#endif
 }
 
 inline std::uint32_t psq_element_size(
