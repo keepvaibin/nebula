@@ -130,6 +130,31 @@ template <
     return NativeInputAiServiceResult::InputServiceAttempted;
 }
 
+// A verified host suspension removes its interval from guest time. The AI
+// device sits on that timeline, so the buffers those periods would have
+// produced are never made: the output queue loses that much depth for good
+// and the next hitch empties it (an audible gap plus a full re-prebuffer).
+// The removed interval is owed back by pulling the next AI completion earlier;
+// the ordinary late-service path then produces those buffers as a burst.
+// Capped so a long suspension (sleep/resume) adds at most this many buffers of
+// latency; cap plus one period of ordinary lateness stays under the masked
+// catch-up bound of 8 periods in service_ai_dma.
+inline constexpr std::uint64_t kHostPauseAiCatchUpPeriods = 6u;
+
+[[nodiscard]] constexpr std::uint64_t host_pause_ai_catch_up_ticks(
+    std::uint64_t owed_ticks,
+    std::uint64_t next_completion_ticks,
+    std::uint64_t duration_ticks) noexcept {
+    if (owed_ticks == 0u || next_completion_ticks <= 1u ||
+        duration_ticks == 0u ||
+        duration_ticks > ~std::uint64_t{0} / kHostPauseAiCatchUpPeriods) {
+        return 0u;
+    }
+    const std::uint64_t cap = duration_ticks * kHostPauseAiCatchUpPeriods;
+    const std::uint64_t shift = owed_ticks < cap ? owed_ticks : cap;
+    return shift < next_completion_ticks ? shift : next_completion_ticks - 1u;
+}
+
 // A host-suspension rebase may restore AI only when the device, RuntimeState,
 // and broker publication all describe the same still-owned arm. A publication
 // can be absent from the latch solely when the simulation thread has already

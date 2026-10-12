@@ -3131,6 +3131,8 @@ public:
                   << " empty-over-1ms=" << route_health.empty_over_1_ms
                   << " empty-over-5ms=" << route_health.empty_over_5_ms
                   << " max-empty-us=" << route_health.max_empty_us
+                  << " silent-us=" << total_silent_us_.load(std::memory_order_acquire)
+                  << " max-silent-us=" << max_silent_us_.load(std::memory_order_acquire)
                   << " max-submit-gap-us=" << route_health.max_submit_delta_us
                   << " voice-recreations=" << route_health.voice_recreation_events
                   << " endpoint-output-available=" << route_output_available
@@ -5428,6 +5430,19 @@ private:
             return false;
         }
         playback_lifecycle_.mark_started();
+        if (recovering_from_empty) {
+            // Heard silence: from the empty boundary to the restarted voice
+            // (max-empty-us stops at the first submit, before re-prebuffer).
+            const std::uint64_t empty_since =
+                last_empty_since_us_.load(std::memory_order_acquire);
+            const std::uint64_t now_us =
+                host_time_us(std::chrono::steady_clock::now());
+            const std::uint64_t silent_us =
+                now_us > empty_since ? now_us - empty_since : 0u;
+            total_silent_us_.fetch_add(silent_us, std::memory_order_acq_rel);
+            update_max_atomic(max_silent_us_, static_cast<std::uint32_t>(
+                std::min<std::uint64_t>(silent_us, 0xFFFF'FFFFu)));
+        }
         if (trace_audio_queue() &&
             (!prebuffer_start_logged_ ||
              (recovering_from_empty && empty_recovery_start_log_count_ < 8u))) {
@@ -5792,6 +5807,8 @@ private:
     std::atomic_uint64_t empty_over_5_ms_{0};
     std::atomic_uint64_t last_empty_since_us_{0};
     std::atomic<std::uint32_t> max_empty_us_{0};
+    std::atomic_uint64_t total_silent_us_{0};
+    std::atomic<std::uint32_t> max_silent_us_{0};
     std::atomic_uint64_t dropped_buffers_{0};
     std::uint64_t handled_voice_error_count_{};
     std::uint64_t handled_engine_critical_error_count_{};
@@ -14693,6 +14710,23 @@ void GuestAddressSpace::service_ai_dma(
         raise_ai_dma_interrupt(interrupt_ticks);
         notify_ai_dma_deadline_changed();
     }
+}
+
+std::uint64_t GuestAddressSpace::repay_ai_dma_host_pause(
+    std::uint64_t owed_ticks) {
+    if (!ai_dma_playing_) {
+        return 0u;
+    }
+    const std::uint64_t shift = ai_dma_timing::host_pause_ai_catch_up_ticks(
+        owed_ticks, ai_dma_next_completion_ticks_, ai_dma_last_duration_ticks_);
+    if (shift == 0u) {
+        return 0u;
+    }
+    ai_dma_next_completion_ticks_ -= shift;
+    ai_dma_active_start_ticks_ =
+        ai_dma_active_start_ticks_ > shift ? ai_dma_active_start_ticks_ - shift : 0u;
+    notify_ai_dma_deadline_changed();
+    return shift;
 }
 
 std::optional<AiDmaServiceMode>
