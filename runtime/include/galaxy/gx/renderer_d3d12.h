@@ -29,6 +29,7 @@
 #include "galaxy/gx/efb_copy.h"
 #include "galaxy/gx/immutable_upload.h"
 #include "galaxy/gx/post_process.h"
+#include "galaxy/gx/placed_texture_allocator.h"
 #include "galaxy/gx/gx_bitfields.h"
 #include "galaxy/gx/render_config.h"
 #include "galaxy/gx/window_owner.h"
@@ -371,6 +372,9 @@ public:
     // kEfbWidth x kEfbHeight x efb_scale, the shared GX root signature, the
     // present-blit pipeline, and all rings.
     bool initialize(int window_width, int window_height, unsigned efb_scale);
+    // Creates the EFB-peek and pointer-depth resources that used to be made
+    // on first use, which stalled the first frame showing the pointer.
+    void create_first_use_resources();
     void shutdown();                // full GPU drain, then release
     void drain_gpu();               // wait while keeping renderer resources alive
     void pump_messages();           // compatibility hook; owner pumps independently
@@ -697,6 +701,10 @@ private:
     // Presentation image quality; present() keeps the plain blit while it is
     // not ready.
     PostProcessor post_process_;
+    // EFB-copy destination textures (render targets) are placed in shared
+    // heaps rather than committed one by one (placed_texture_allocator.h).
+    PlacedTextureAllocator efb_copy_heap_{
+        D3D12_HEAP_FLAG_ALLOW_ONLY_RT_DS_TEXTURES, 128ull << 20};
 
     // Native settings overlay: the game's own window-frame corner texture
     // (extracted read-only from files/LayoutData/FileSelect.arc -- see

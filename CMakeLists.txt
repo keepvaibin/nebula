@@ -682,6 +682,7 @@ add_library(galaxy_gx STATIC
     runtime/src/gx/renderer_d3d12.cpp
     runtime/src/gx/window_owner.cpp
     runtime/src/gx/texture_cache.cpp
+    runtime/src/gx/placed_texture_allocator.cpp
     runtime/src/gx/vertex_loader.cpp
     runtime/src/gx/shader_keys.cpp
     runtime/src/gx/efb_copy.cpp

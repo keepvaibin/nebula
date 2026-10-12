@@ -1251,6 +1251,7 @@ std::uint32_t efb_copy_guest_byte_size(const EfbCopyParams& params) {
 
 bool TextureCache::initialize(ID3D12Device* device) {
     device_ = device;
+    texture_heap_.initialize(device);
     next_srv_index_ = 0u;
     free_srv_indices_.clear();
     retired_srv_indices_.reset();
@@ -1580,6 +1581,12 @@ void TextureCache::release_upload_arenas() {
 void TextureCache::shutdown() {
     finish_pending_decodes_noexcept();
     decode_pool_.reset();
+    {
+        const PlacedTextureAllocator::Stats heap = texture_heap_.stats();
+        std::cerr << "[texture-heap] heaps=" << heap.heaps << " heap-bytes=" << heap.heap_bytes
+                  << " used-bytes=" << heap.used_bytes << " placed=" << heap.placed
+                  << " committed-fallbacks=" << heap.committed_fallbacks << '\n';
+    }
     if (decoded_content_cache_enabled()) {
         std::cerr << "[gx-content-cache] lookups=" << content_lookups_
                   << " exact-hits=" << content_hits_
@@ -2440,8 +2447,9 @@ TextureHandle TextureCache::get(
     if (async_decode) {
         if (!decode_pool_) {
             const unsigned hardware = std::thread::hardware_concurrency();
-            // Leave the render, simulation and PSO threads their cores.
-            const unsigned workers = std::clamp(hardware / 4u, 1u, 4u);
+            // First-use decodes come in bursts at scene loads, while the
+            // render thread waits for them; idle workers cost nothing.
+            const unsigned workers = std::clamp(hardware / 2u, 2u, 8u);
             decode_pool_ = std::make_unique<TextureDecodePool>(workers, [] {
                 galaxy::host::name_current_thread(L"Nebula Texture Decode");
             });
@@ -2503,8 +2511,6 @@ TextureHandle TextureCache::get(
         bar.Transition.StateAfter  = D3D12_RESOURCE_STATE_COPY_DEST;
         upload_list_->ResourceBarrier(1, &bar);
     } else {
-        D3D12_HEAP_PROPERTIES hp{};
-        hp.Type = D3D12_HEAP_TYPE_DEFAULT;
         D3D12_RESOURCE_DESC rd{};
         rd.Dimension        = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
         rd.Width            = w;
@@ -2514,14 +2520,8 @@ TextureHandle TextureCache::get(
         rd.Format           = DXGI_FORMAT_R8G8B8A8_UNORM;
         rd.SampleDesc.Count = 1;
         rd.Layout           = D3D12_TEXTURE_LAYOUT_UNKNOWN;
-        allocation_bytes = device_->GetResourceAllocationInfo(0u, 1u, &rd).SizeInBytes;
-        if (allocation_bytes == 0u || allocation_bytes == UINT64_MAX) {
-            throw std::runtime_error("[TextureCache] invalid decoded allocation size");
-        }
-        d3d_check(device_->CreateCommittedResource(
-            &hp, D3D12_HEAP_FLAG_NONE, &rd,
-            D3D12_RESOURCE_STATE_COPY_DEST,
-            nullptr, IID_PPV_ARGS(&resource)),
+        d3d_check(texture_heap_.create(
+            rd, D3D12_RESOURCE_STATE_COPY_DEST, nullptr, resource, allocation_bytes),
             "create default texture");
     }
     const auto resource_end = trace_stalls

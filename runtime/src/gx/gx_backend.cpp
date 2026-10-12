@@ -3301,6 +3301,12 @@ bool GxBackend::initialize(int w, int h) {
         renderer_.shutdown();
         return false;
     }
+    // The resident decoded-vertex buffer (a 64 MB upload heap) took 10 ms to
+    // create at its first use in gameplay; create it with the renderer.
+    if (resident_decoded_vertices_enabled()) {
+        (void)ensure_resident_vertex_buffer();
+    }
+    renderer_.create_first_use_resources();
 
     // Determine shader-cache directory.
     std::filesystem::path cache_dir;
@@ -7807,10 +7813,15 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
         frame_services_ = services;
         // A sealed snapshot keeps every texture's guest bytes immutable until
         // this chunk is submitted, so first-use decodes may run on workers.
+        // Live-memory reads already sample guest RAM after the game moved on
+        // (as the GPU does); a worker decoding the same bytes before this
+        // chunk is submitted reads them within the same window.
         texture_cache_.set_async_decode_allowed(
             async_texture_decode_enabled() &&
-            chunk.memory_snapshot_active && chunk.memory_snapshot.sealed &&
-            memory == &chunk.memory_snapshot.memory);
+            ((chunk.memory_snapshot_active && chunk.memory_snapshot.sealed &&
+              memory == &chunk.memory_snapshot.memory) ||
+             (!chunk.memory_snapshot_active &&
+              get_gx_timing_config().render_live_memory_reads)));
 
         try {
             // An in-frame pointer depth field splits the run at the marked

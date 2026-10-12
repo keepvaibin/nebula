@@ -3648,6 +3648,8 @@ bool RendererD3D12::initialize(int window_width, int window_height, unsigned efb
             d3d_check(device_->CreateGraphicsPipelineState(&pd, IID_PPV_ARGS(&blit_pipeline_)), "CreateBlitPSO");
         }
 
+        efb_copy_heap_.initialize(device_.Get());
+
         // Presentation post-processing (SMAA, FSR 1, RCAS, box resample).
         {
             const RenderConfig cfg = get_render_config();
@@ -3781,6 +3783,13 @@ void RendererD3D12::shutdown() {
     }
     s_blit_root_sig.Reset();
     post_process_.shutdown();
+    {
+        const PlacedTextureAllocator::Stats heap = efb_copy_heap_.stats();
+        std::cerr << "[efb-copy-heap] heaps=" << heap.heaps << " heap-bytes=" << heap.heap_bytes
+                  << " used-bytes=" << heap.used_bytes << " placed=" << heap.placed
+                  << " committed-fallbacks=" << heap.committed_fallbacks << '\n';
+    }
+    efb_copy_heap_.shutdown();
     blit_pipeline_.Reset();
     s_conv_root_sig.Reset();
     conv_pipeline_.Reset();
@@ -5745,8 +5754,6 @@ bool RendererD3D12::copy_efb_to_texture(
         dest.bytes = 0u;
         dest.rtv = {};
         dest.rtv_valid = false;
-        D3D12_HEAP_PROPERTIES hp{};
-        hp.Type = D3D12_HEAP_TYPE_DEFAULT;
         D3D12_RESOURCE_DESC rd{};
         rd.Dimension        = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
         rd.Width            = w;
@@ -5757,10 +5764,23 @@ bool RendererD3D12::copy_efb_to_texture(
         rd.SampleDesc.Count = 1;
         rd.Layout           = D3D12_TEXTURE_LAYOUT_UNKNOWN;
         rd.Flags            = D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
-        const HRESULT create_hr = device_->CreateCommittedResource(
-                &hp, D3D12_HEAP_FLAG_NONE, &rd,
-                D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
-                nullptr, IID_PPV_ARGS(&dest.texture));
+        std::uint64_t allocation_bytes = 0u;
+        const HRESULT create_hr = efb_copy_heap_.create(
+            rd, D3D12_RESOURCE_STATE_RENDER_TARGET, nullptr, dest.texture,
+            allocation_bytes);
+        if (SUCCEEDED(create_hr)) {
+            // A placed render target starts with undefined contents and must
+            // be cleared, discarded or copied before any other use. The code
+            // below expects the shader-resource state.
+            command_list_->DiscardResource(dest.texture.Get(), nullptr);
+            D3D12_RESOURCE_BARRIER to_srv{};
+            to_srv.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+            to_srv.Transition.pResource = dest.texture.Get();
+            to_srv.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+            to_srv.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
+            to_srv.Transition.StateAfter = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+            command_list_->ResourceBarrier(1, &to_srv);
+        }
         if (FAILED(create_hr)) {
             dump_device_removal(device_.Get());
             efb_copy_dests_bytes_ -= std::min(
@@ -5780,8 +5800,7 @@ bool RendererD3D12::copy_efb_to_texture(
         dest.height = h;
         // Budget by the resource's own allocation size rather than a hand-computed
         // w*h*bpp, so the accounting follows the format if kEfbColorFormat changes.
-        dest.bytes = static_cast<std::uint64_t>(
-            device_->GetResourceAllocationInfo(0, 1, &rd).SizeInBytes);
+        dest.bytes = allocation_bytes;
         efb_copy_dests_bytes_ += dest.bytes;
     }
     // Trim against the updated allocation, not the destination's old extent.
@@ -5959,6 +5978,11 @@ bool RendererD3D12::ensure_peek_resources() {
 bool RendererD3D12::peek_efb(
     std::uint16_t x, std::uint16_t y, EfbPeekKind kind, std::uint32_t& value) {
     return read_efb_pixels(x, y, kind, value, {});
+}
+
+void RendererD3D12::create_first_use_resources() {
+    (void)ensure_peek_resources();
+    (void)ensure_pointer_depth_resources();
 }
 
 bool RendererD3D12::ensure_pointer_depth_resources() {

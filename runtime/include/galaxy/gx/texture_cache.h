@@ -30,6 +30,7 @@
 
 #include "galaxy/gx/gx_bitfields.h"
 #include "galaxy/gx/guest_range_envelope.h"
+#include "galaxy/gx/placed_texture_allocator.h"
 #include "galaxy/gx/shader_keys.h"  // fnv1a64
 #include "galaxy/gx/texture_decode_pool.h"
 #include "galaxy/native_api.h"
@@ -422,6 +423,9 @@ private:
     // preserving exact decode bytes and GPU upload semantics.
     std::vector<std::vector<RGBA8>> level_pixels_scratch_;
     std::unique_ptr<TextureDecodePool> decode_pool_;
+    // Decoded textures are placed in shared heaps (placed_texture_allocator.h).
+    PlacedTextureAllocator texture_heap_{
+        D3D12_HEAP_FLAG_ALLOW_ONLY_NON_RT_DS_TEXTURES, 64ull << 20};
     bool async_decode_allowed_ = false;
     bool async_decode_pending_ = false;
     std::uint64_t async_decode_jobs_ = 0;

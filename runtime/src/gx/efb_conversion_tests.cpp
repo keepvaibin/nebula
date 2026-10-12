@@ -1473,9 +1473,11 @@ V main(uint id : SV_VertexID) {
         check_hr(device_->CreateCommandList(0u, D3D12_COMMAND_LIST_TYPE_DIRECT,
             allocator.Get(), nullptr, IID_PPV_ARGS(&list)), "Create allocation budget list");
         cache.set_upload_list(list.Get());
+        // 256x256 CMPR: 32 KB of guest bytes, 256 KB decoded, so 18 of them
+        // exceed the 1 MB test budget whatever the placement alignment.
         constexpr std::uint32_t address = 0x10000000u;
-        constexpr std::uint32_t stride = 512u;
-        std::vector<std::byte> bytes(32768u);
+        constexpr std::uint32_t stride = 32768u;
+        std::vector<std::byte> bytes(18u * stride);
         for (unsigned i = 0u; i < 18u; ++i) bytes[i * stride] = static_cast<std::byte>(i);
         galaxy::GuestMemoryRegionV1 region{
             address, static_cast<std::uint32_t>(bytes.size()), bytes.data()};
@@ -1484,7 +1486,7 @@ V main(uint id : SV_VertexID) {
         memory.region_count = 1u;
         TexImage image{};
         image.guest_addr = address;
-        image.width = image.height = 32u;
+        image.width = image.height = 256u;
         image.format = TexFormat::CMPR;
         TexMode mode{};
         mode.min_filter = TexMinFilter::Near;
@@ -1511,7 +1513,7 @@ V main(uint id : SV_VertexID) {
             stats.evicted_bytes == stats.evicted_entries * allocation &&
             stats.entries == stats.lru_entries && cache.srv_index_retired(first.srv_index),
             "allocation budget evicts compressed entries before guest bytes reach the bound");
-        passed &= expect(first.resource->GetDesc().Width == 32u &&
+        passed &= expect(first.resource->GetDesc().Width == 256u &&
             first.srv_index != last.srv_index,
             "budget eviction keeps the old resource and descriptor alive for this frame");
         cache.invalidate_all();
