@@ -58,6 +58,9 @@ class TextureCache;
     std::string& diagnostics) noexcept;
 
 inline constexpr unsigned kFramesInFlight = 2;
+// Ring segments in temporal and interpolation modes (see RendererD3D12::
+// begin_frame): two more than the frames in flight.
+inline constexpr unsigned kRingSegments = kFramesInFlight + 2u;
 inline constexpr unsigned kSamplerHeapSlots = 2048;
 
 namespace detail {
@@ -468,6 +471,16 @@ public:
     void end_replay_record(bool keep);
     [[nodiscard]] bool replay_recording() const noexcept { return replay_recording_; }
     [[nodiscard]] bool replay_available() const noexcept { return replay_valid_; }
+    // Interpolation mode: present rate above 60, temporal upscaler off,
+    // GALAXY_EXPERIMENTAL_INTERPOLATION=1. Rings then keep one segment per
+    // game frame (advanced at the first frame after a display copy) and the
+    // log spans every render chunk of the game frame up to its display copy.
+    [[nodiscard]] bool interpolation_mode() const;
+    // Completed logs, counted; the guest XFB the latest one copied to.
+    [[nodiscard]] std::uint64_t replay_serial() const noexcept { return replay_serial_; }
+    [[nodiscard]] std::uint32_t replay_xfb_addr() const noexcept { return replay_xfb_addr_; }
+    // A 3D scene began inside the log being recorded (one is replayable).
+    void note_replay_scene() noexcept { ++replay_scene_count_; }
     // False (nothing recorded) when the log is gone or has no display copy.
     // `record_constants[i]` replaces the VS constants of draws of record i.
     bool present_replay_subframe(std::span<const D3D12_GPU_VIRTUAL_ADDRESS> record_constants);
@@ -881,6 +894,27 @@ private:
     std::vector<ReplayCopy> replay_copies_;
     bool replay_recording_ = false;
     bool replay_valid_ = false;
+    bool replay_has_swaps_ = false;
+    unsigned replay_scene_count_ = 0;
+    unsigned replay_segment_ = 0;
+    std::uint64_t replay_serial_ = 0;
+    std::uint32_t replay_xfb_addr_ = 0;
+    // Ring segmentation (begin_frame): Normal = frame slots; Temporal = the
+    // matrix ring advances after palette-writing frames; Interp = every ring
+    // and the sampler heap advance once per game frame.
+    enum class RingMode : std::uint8_t { Normal, Temporal, Interp };
+    RingMode ring_mode_ = RingMode::Normal;
+    unsigned ring_segment_ = 0;
+    std::array<std::uint64_t, kRingSegments> ring_segment_fence_{};
+    bool ring_advance_pending_ = true;
+    // Sub-frames render into their own EFB so a later frame's partial EFB
+    // (its chunks interleave with the sub-frames) stays intact.
+    EfbTargetSet replay_efb_;
+    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> replay_efb_rtv_heap_;
+    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> replay_efb_dsv_heap_;
+    bool create_efb_set(EfbTargetSet& set, Microsoft::WRL::ComPtr<ID3D12DescriptorHeap>& rtv_heap,
+                        Microsoft::WRL::ComPtr<ID3D12DescriptorHeap>& dsv_heap, unsigned scale);
+    void swap_efb_with(EfbTargetSet& other);
     bool replay_playing_ = false;
     bool replay_start_output_active_ = false;
     unsigned replay_source_slot_ = 0;
@@ -953,15 +987,18 @@ private:
 
     Microsoft::WRL::ComPtr<ID3D12RootSignature> root_signature_;
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> sampler_heap_;
-    std::array<Microsoft::WRL::ComPtr<ID3D12DescriptorHeap>, kFramesInFlight>
+    std::array<Microsoft::WRL::ComPtr<ID3D12DescriptorHeap>, kRingSegments>
         sampler_heaps_;
+    // Sampler heap in use: the frame slot, or the game-frame segment in
+    // interpolation mode.
+    unsigned sampler_slot_ = 0;
     D3D12_GPU_DESCRIPTOR_HANDLE default_sampler_table_{};
-    std::array<std::uint32_t, kFramesInFlight> default_sampler_config_keys_{};
-    std::array<bool, kFramesInFlight> default_sampler_valid_{};
+    std::array<std::uint32_t, kRingSegments> default_sampler_config_keys_{};
+    std::array<bool, kRingSegments> default_sampler_valid_{};
     // Each cache describes tables actually written in its physical heap.
     // Configuration invalidation happens only after that slot's fence; tables
     // retained in another heap cannot establish a hit for the active heap.
-    std::array<SamplerTableCache, kFramesInFlight> sampler_tables_;
+    std::array<SamplerTableCache, kRingSegments> sampler_tables_;
 
     UploadRing vertex_ring_;
     UploadRing index_ring_;

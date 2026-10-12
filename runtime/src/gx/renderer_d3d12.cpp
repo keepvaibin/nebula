@@ -2829,7 +2829,7 @@ static constexpr unsigned    kSrvPerFrame = 32768u;
 // their two views outside the rewound frame segments instead of copying a
 // descriptor into the frame ring for every EFB conversion. TextureCache's own
 // SRV indices are independent of this prefix.
-static constexpr unsigned    kPersistentSrvDescriptors = 4u;  // EFB and output EFB conversion sources
+static constexpr unsigned    kPersistentSrvDescriptors = 6u;  // EFB, output EFB and sub-frame EFB conversion sources
 
 void RendererD3D12::wait_for_gpu() {
     const std::uint64_t val = ++next_fence_value_;
@@ -3301,7 +3301,7 @@ bool RendererD3D12::create_sampler_heap() {
 }
 
 void RendererD3D12::reset_sampler_frame() {
-    sampler_heap_ = sampler_heaps_[frame_slot_];
+    sampler_heap_ = sampler_heaps_[sampler_slot_];
 
     const RenderConfig cfg = get_render_config();
     const std::uint32_t config_key = sampler_config_key(cfg);
@@ -3309,11 +3309,11 @@ void RendererD3D12::reset_sampler_frame() {
     // a different slot's cache has no initialized descriptors in this heap.
     // Each heap warms independently, retaining its eight-descriptor tables
     // until its sampler configuration changes.
-    sampler_tables_[frame_slot_].reset(config_key);
+    sampler_tables_[sampler_slot_].reset(config_key);
 
     default_sampler_table_ = sampler_heap_->GetGPUDescriptorHandleForHeapStart();
-    if (default_sampler_valid_[frame_slot_] &&
-        default_sampler_config_keys_[frame_slot_] == config_key) {
+    if (default_sampler_valid_[sampler_slot_] &&
+        default_sampler_config_keys_[sampler_slot_] == config_key) {
         return;
     }
 
@@ -3345,8 +3345,8 @@ void RendererD3D12::reset_sampler_frame() {
     }
     // Slots 0..7 are never allocated dynamically. Their descriptors survive
     // this slot's fence/reset, and need rewriting only for changed settings.
-    default_sampler_config_keys_[frame_slot_] = config_key;
-    default_sampler_valid_[frame_slot_] = true;
+    default_sampler_config_keys_[sampler_slot_] = config_key;
+    default_sampler_valid_[sampler_slot_] = true;
 }
 
 // Packed sampler key layout (must match pack_sampler_key in gx_backend.cpp):
@@ -3358,7 +3358,7 @@ void RendererD3D12::reset_sampler_frame() {
 D3D12_GPU_DESCRIPTOR_HANDLE RendererD3D12::sampler_table_for(
     const std::uint32_t keys[8]) {
     const RenderConfig cfg = get_render_config();
-    const auto allocation = sampler_tables_[frame_slot_].get_or_allocate(make_sampler_table_key(keys, cfg));
+    const auto allocation = sampler_tables_[sampler_slot_].get_or_allocate(make_sampler_table_key(keys, cfg));
     const unsigned table_base = allocation.index;
     const UINT stride = device_->GetDescriptorHandleIncrementSize(
         D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER);
@@ -4302,7 +4302,7 @@ bool RendererD3D12::initialize(int window_width, int window_height, unsigned efb
         if (!index_ring_   .initialize(device_.Get(), "index",    ib_per_frame_bytes(),  kFramesInFlight)) return false;
         if (!constant_ring_.initialize(device_.Get(), "constant", cb_per_frame_bytes(),  kFramesInFlight)) return false;
         if (!matrix_ring_  .initialize(device_.Get(), "matrix",   mtx_per_frame_bytes(), kFramesInFlight)) return false;
-        if (!srv_ring_.initialize(device_.Get(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, kSrvPerFrame, kFramesInFlight, kPersistentSrvDescriptors)) return false;
+        if (!srv_ring_.initialize(device_.Get(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, kSrvPerFrame, kRingSegments, kPersistentSrvDescriptors)) return false;
 
         // Conversion sources occupy the descriptor ring's immutable prefix.
         if (!create_conversion_pipeline()) return false;
@@ -5244,26 +5244,44 @@ void RendererD3D12::begin_frame(bool present_swap_chain) {
     apply_pending_efb_scale();
     sync_post_process_settings();
     {
-        const unsigned segments = temporal_mode() ? kFramesInFlight + 2u : kFramesInFlight;
-        if (segments != matrix_segments_) {
+        const RingMode mode = temporal_mode() ? RingMode::Temporal
+            : interpolation_mode() ? RingMode::Interp : RingMode::Normal;
+        if (mode != ring_mode_) {
             wait_for_gpu();
+            const unsigned segments = mode == RingMode::Interp ? kRingSegments : kFramesInFlight;
+            const unsigned matrix_segments = mode == RingMode::Normal ? kFramesInFlight : kRingSegments;
+            vertex_ring_.reset();
+            index_ring_.reset();
+            constant_ring_.reset();
             matrix_ring_.reset();
-            if (!matrix_ring_.initialize(device_.Get(), "matrix", mtx_per_frame_bytes(), segments)) {
-                throw std::runtime_error("matrix ring resize failed");
+            // Interpolated sub-frames add one VS constant block per scene
+            // record each; the constant segment holds a whole game frame.
+            if (!vertex_ring_.initialize(device_.Get(), "vertex", vb_per_frame_bytes(), segments) ||
+                !index_ring_.initialize(device_.Get(), "index", ib_per_frame_bytes(), segments) ||
+                !constant_ring_.initialize(device_.Get(), "constant",
+                    cb_per_frame_bytes() * (mode == RingMode::Interp ? 4u : 1u), segments) ||
+                !matrix_ring_.initialize(device_.Get(), "matrix", mtx_per_frame_bytes(), matrix_segments)) {
+                throw std::runtime_error("ring resize failed");
             }
-            matrix_segments_ = segments;
+            matrix_segments_ = matrix_segments;
             matrix_segment_ = 0u;
             matrix_segment_fence_.fill(0u);
             matrix_segment_used_ = false;
             matrix_segment_started_ = false;
+            ring_segment_ = 0u;
+            ring_segment_fence_.fill(0u);
+            ring_advance_pending_ = true;
+            replay_valid_ = false;
+            replay_recording_ = false;
+            ring_mode_ = mode;
         }
     }
     frame_slot_ = static_cast<unsigned>(frame_index_ % kFramesInFlight);
-    if (replay_valid_ && frame_slot_ == replay_source_slot_) {
-        // The recorded frame's ring segments are about to be rewound.
-        replay_valid_ = false;
-    }
-    if (replay_recording_) {
+    if (ring_mode_ != RingMode::Interp) {
+        if (replay_valid_ && frame_slot_ == replay_source_slot_) {
+            // The recorded frame's ring segments are about to be rewound.
+            replay_valid_ = false;
+        }
         replay_recording_ = false;
     }
     last_latency_wait_us_ = 0;
@@ -5381,6 +5399,30 @@ void RendererD3D12::begin_frame(bool present_swap_chain) {
             frame_slot_ * 2u);
     }
 
+    if (ring_mode_ == RingMode::Interp) {
+        // One segment per game frame: the frames (chunks) of a game frame
+        // append to it, so its draws stay replayable until the segment
+        // comes round again.
+        if (ring_advance_pending_) {
+            ring_advance_pending_ = false;
+            ring_segment_ = (ring_segment_ + 1u) % kRingSegments;
+            if (replay_valid_ && ring_segment_ == replay_segment_) {
+                replay_valid_ = false;
+            }
+            if (ring_segment_fence_[ring_segment_] != 0u) {
+                wait_for_fence_value(ring_segment_fence_[ring_segment_]);
+            }
+            vertex_ring_.begin_frame(ring_segment_);
+            index_ring_.begin_frame(ring_segment_);
+            constant_ring_.begin_frame(ring_segment_);
+            matrix_ring_.begin_frame(ring_segment_);
+            srv_ring_.begin_frame(ring_segment_);
+            sampler_slot_ = ring_segment_;
+            reset_sampler_frame();
+            // A frame that never reached its display copy is dropped.
+            begin_replay_record();
+        }
+    } else {
     vertex_ring_  .begin_frame(frame_slot_);
     index_ring_   .begin_frame(frame_slot_);
     constant_ring_.begin_frame(frame_slot_);
@@ -5401,9 +5443,11 @@ void RendererD3D12::begin_frame(bool present_swap_chain) {
         }
         matrix_begin_cursor_ = matrix_ring_.cursor();
     }
-    bound_rt_aux_ = 0u;
     srv_ring_     .begin_frame(frame_slot_);
+    sampler_slot_ = frame_slot_;
     reset_sampler_frame();
+    }
+    bound_rt_aux_ = 0u;
     retired_efb_copy_textures_[frame_slot_].clear();
 
     // Bind both heaps for the entire frame.
@@ -5912,7 +5956,9 @@ std::uint64_t RendererD3D12::end_frame(
     const std::uint64_t submitted_frame = frame_index_ + 1u;
     const std::uint64_t submitted_fence = ++next_fence_value_;
     fence_values_[frame_slot_] = submitted_fence;
-    if (matrix_segments_ != kFramesInFlight) {
+    if (ring_mode_ == RingMode::Interp) {
+        ring_segment_fence_[ring_segment_] = submitted_fence;
+    } else if (matrix_segments_ != kFramesInFlight) {
         matrix_segment_used_ = matrix_ring_.cursor() != matrix_begin_cursor_;
         matrix_segment_fence_[matrix_segment_] = submitted_fence;
     }
@@ -6174,7 +6220,24 @@ void RendererD3D12::record_motion_debug_view() {
 // Interpolated redraw: replay log and sub-frames
 // ---------------------------------------------------------------------------
 
+bool RendererD3D12::interpolation_mode() const {
+    static const bool allowed = [] {
+        char value[8]{};
+        std::size_t length = 0u;
+        return getenv_s(&length, value, sizeof(value), "GALAXY_EXPERIMENTAL_INTERPOLATION") == 0 &&
+               length > 1u && value[0] != '0';
+    }();
+    if (!allowed || temporal_mode()) {
+        return false;
+    }
+    const RenderConfig cfg = get_render_config();
+    return interpolated_frames_per_game_frame(
+               present_frame_rate(cfg.max_fps, cfg.vsync_interval, display_refresh_hz_)) != 0u;
+}
+
 void RendererD3D12::begin_replay_record() {
+    replay_scene_count_ = 0u;
+    replay_has_swaps_ = false;
     replay_ops_.clear();
     replay_draws_.clear();
     replay_viewports_.clear();
@@ -6331,7 +6394,10 @@ bool RendererD3D12::present_replay_subframe(
         command_list_->EndQuery(subframe_query_heap_.Get(), D3D12_QUERY_TYPE_TIMESTAMP,
                                 index * 2u);
     }
-    ID3D12DescriptorHeap* heaps[] = {srv_ring_.heap(), sampler_heap_.Get()};
+    const bool interp_rings = ring_mode_ == RingMode::Interp;
+    ID3D12DescriptorHeap* heaps[] = {
+        srv_ring_.heap(),
+        interp_rings ? sampler_heaps_[replay_segment_].Get() : sampler_heap_.Get()};
     command_list_->SetDescriptorHeaps(2, heaps);
     command_list_->SetGraphicsRootSignature(root_signature_.Get());
     invalidate_gx_bindings();
@@ -6341,6 +6407,14 @@ bool RendererD3D12::present_replay_subframe(
     if (output_efb_active_ != replay_start_output_active_) {
         swap_efb_sets();
     }
+    // The private EFB (at the live EFB's scale) stands in for the sub-frame.
+    if (!replay_efb_.color || replay_efb_.scale != efb_scale_) {
+        if (!create_efb_set(replay_efb_, replay_efb_rtv_heap_, replay_efb_dsv_heap_, efb_scale_)) {
+            command_list_->Close();
+            return false;
+        }
+    }
+    swap_efb_with(replay_efb_);
     replay_playing_ = true;
     bind_efb(nullptr);
     const auto far_values = make_efb_clear_values(0u, 0u, 0x00FFFFFFu, 0u);
@@ -6379,10 +6453,17 @@ bool RendererD3D12::present_replay_subframe(
             break;
         }
     }
+    swap_efb_with(replay_efb_);
     if (output_efb_active_ != output_before) {
         swap_efb_sets();
     }
     replay_playing_ = false;
+    {
+        ID3D12DescriptorHeap* live[] = {srv_ring_.heap(), sampler_heap_.Get()};
+        command_list_->SetDescriptorHeaps(2, live);
+        command_list_->SetGraphicsRootSignature(root_signature_.Get());
+        invalidate_gx_bindings();
+    }
     (void)present(&subframe_xfb_, false);
     if (subframe_query_heap_) {
         command_list_->EndQuery(subframe_query_heap_.Get(), D3D12_QUERY_TYPE_TIMESTAMP,
@@ -6402,7 +6483,10 @@ bool RendererD3D12::present_replay_subframe(
     // current ones: neither may be rewound before it completes.
     fence_values_[replay_source_slot_] = std::max(fence_values_[replay_source_slot_], fence);
     fence_values_[frame_slot_] = std::max(fence_values_[frame_slot_], fence);
-    if (matrix_segments_ != kFramesInFlight) {
+    if (interp_rings) {
+        ring_segment_fence_[replay_segment_] = std::max(ring_segment_fence_[replay_segment_], fence);
+        ring_segment_fence_[ring_segment_] = std::max(ring_segment_fence_[ring_segment_], fence);
+    } else if (matrix_segments_ != kFramesInFlight) {
         matrix_segment_fence_[matrix_segment_] = std::max(matrix_segment_fence_[matrix_segment_], fence);
     }
     present_to_swap_chain();
@@ -6614,9 +6698,101 @@ bool RendererD3D12::ensure_output_efb(unsigned scale) {
     return true;
 }
 
+bool RendererD3D12::create_efb_set(
+    EfbTargetSet& set, ComPtr<ID3D12DescriptorHeap>& rtv_heap,
+    ComPtr<ID3D12DescriptorHeap>& dsv_heap, unsigned scale) {
+    const UINT w = kEfbWidth * scale;
+    const UINT h = kEfbHeight * scale;
+    if (set.color) {
+        wait_for_gpu();
+    }
+    set.color.Reset();
+    set.depth.Reset();
+    set.scale = 0u;
+    if (!rtv_heap) {
+        D3D12_DESCRIPTOR_HEAP_DESC dhd{};
+        dhd.NumDescriptors = 1;
+        dhd.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
+        d3d_check(device_->CreateDescriptorHeap(&dhd, IID_PPV_ARGS(&rtv_heap)), "EFB set RTV heap");
+        dhd.Type = D3D12_DESCRIPTOR_HEAP_TYPE_DSV;
+        d3d_check(device_->CreateDescriptorHeap(&dhd, IID_PPV_ARGS(&dsv_heap)), "EFB set DSV heap");
+        set.rtv = rtv_heap->GetCPUDescriptorHandleForHeapStart();
+        set.dsv = dsv_heap->GetCPUDescriptorHandleForHeapStart();
+    }
+    D3D12_HEAP_PROPERTIES hp{};
+    hp.Type = D3D12_HEAP_TYPE_DEFAULT;
+    D3D12_RESOURCE_DESC rd{};
+    rd.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+    rd.Width = w;
+    rd.Height = h;
+    rd.DepthOrArraySize = 1;
+    rd.MipLevels = 1;
+    rd.Format = kEfbColorFormat;
+    rd.SampleDesc.Count = 1;
+    rd.Flags = D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
+    D3D12_CLEAR_VALUE cv{};
+    cv.Format = kEfbColorFormat;
+    cv.Color[3] = 1.0f;
+    if (FAILED(device_->CreateCommittedResource(
+            &hp, D3D12_HEAP_FLAG_NONE, &rd, D3D12_RESOURCE_STATE_RENDER_TARGET,
+            &cv, IID_PPV_ARGS(&set.color)))) {
+        return false;
+    }
+    rd.Format = kEfbDepthResourceFormat;
+    rd.Flags = D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
+    D3D12_CLEAR_VALUE dcv{};
+    dcv.Format = kEfbDepthFormat;
+    dcv.DepthStencil.Depth = 1.0f;
+    if (FAILED(device_->CreateCommittedResource(
+            &hp, D3D12_HEAP_FLAG_NONE, &rd, D3D12_RESOURCE_STATE_DEPTH_WRITE,
+            &dcv, IID_PPV_ARGS(&set.depth)))) {
+        set.color.Reset();
+        return false;
+    }
+    device_->CreateRenderTargetView(set.color.Get(), nullptr, set.rtv);
+    D3D12_DEPTH_STENCIL_VIEW_DESC dsv{};
+    dsv.Format = kEfbDepthFormat;
+    dsv.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2D;
+    device_->CreateDepthStencilView(set.depth.Get(), &dsv, set.dsv);
+    if (!set.conv_table) {
+        set.conv_table = srv_ring_.allocate_persistent(2u);
+    }
+    const UINT stride = device_->GetDescriptorHandleIncrementSize(
+        D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+    D3D12_SHADER_RESOURCE_VIEW_DESC view{};
+    view.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+    view.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+    view.Texture2D.MipLevels = 1u;
+    view.Format = kEfbColorFormat;
+    device_->CreateShaderResourceView(set.color.Get(), &view, set.conv_table->cpu);
+    auto depth_cpu = set.conv_table->cpu;
+    depth_cpu.ptr += stride;
+    view.Format = kEfbDepthSrvFormat;
+    device_->CreateShaderResourceView(set.depth.Get(), &view, depth_cpu);
+    set.conv_color_srv = set.conv_table->gpu;
+    set.conv_depth_srv = set.conv_table->gpu;
+    set.conv_depth_srv.ptr += stride;
+    set.scale = scale;
+    return true;
+}
+
+void RendererD3D12::swap_efb_with(EfbTargetSet& other) {
+    std::swap(efb_color_, other.color);
+    std::swap(efb_depth_, other.depth);
+    std::swap(efb_scale_, other.scale);
+    std::swap(efb_rtv_, other.rtv);
+    std::swap(efb_dsv_, other.dsv);
+    std::swap(conv_efb_source_table_, other.conv_table);
+    std::swap(conv_efb_color_srv_, other.conv_color_srv);
+    std::swap(conv_efb_depth_srv_, other.conv_depth_srv);
+    invalidate_gx_bindings();
+    bound_scissor_input_scale_ = 0u;
+}
+
 void RendererD3D12::swap_efb_sets() {
     if (replay_recording_) [[unlikely]] {
         replay_ops_.push_back({ReplayKind::SwapEfbSets, 0u});
+        replay_has_swaps_ = true;
     }
     std::swap(efb_color_, alt_efb_.color);
     std::swap(efb_depth_, alt_efb_.depth);
@@ -7228,6 +7404,20 @@ void RendererD3D12::copy_efb_to_xfb(const EfbCopyParams& params, XfbTexture& des
     std::swap(b.Transition.StateBefore, b.Transition.StateAfter);
     command_list_->ResourceBarrier(1, &b);
 
+    if (ring_mode_ == RingMode::Interp) {
+        // The display copy closes the game frame: its log is complete and the
+        // next frame starts a new ring segment.
+        if (recording) {
+            replay_recording_ = false;
+            // One 3D scene and no output-EFB switch (that EFB is shared with
+            // the next frame's chunks).
+            replay_valid_ = replay_scene_count_ == 1u && !replay_has_swaps_;
+            replay_segment_ = ring_segment_;
+            replay_xfb_addr_ = dest.guest_addr;
+            ++replay_serial_;
+        }
+        ring_advance_pending_ = true;
+    }
 }
 
 bool RendererD3D12::copy_efb_to_texture(

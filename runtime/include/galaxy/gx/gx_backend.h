@@ -664,15 +664,31 @@ private:
     unsigned interp_scenes_in_chunk_ = 0;
     std::int32_t current_replay_record_ = -1;
     std::int32_t current_palette_shadow_ = -1;
+    // One history scene's interpolation inputs, kept for three scenes: the
+    // one recording, the one being interpolated (its log completed), and its
+    // predecessor (previous palettes and texture matrices).
     struct InterpScene {
         std::vector<GxVsConstants> constants;   // per record, as uploaded
+        std::vector<Affine34> from;             // previous transform (inline)
+        std::vector<Affine34> current;          // current inline transform
+        std::vector<std::int32_t> prev_index;   // matched record of the previous scene
         std::vector<std::int32_t> palette;      // per record: shadow index or -1
+        std::vector<std::uint8_t> per_vertex;   // per-vertex palette draw
         std::vector<std::uint32_t> palettes;    // kMatrixPaletteWords per shadow
         std::size_t palette_count = 0;
+        Affine34 camera{};
+        bool valid = false;
+        void clear() noexcept {
+            constants.clear(); from.clear(); current.clear(); prev_index.clear();
+            palette.clear(); per_vertex.clear(); palette_count = 0; valid = false;
+        }
     };
-    InterpScene interp_cur_;
-    InterpScene interp_prev_;
-    bool interp_scene_ready_ = false;     // interp_cur_ matches the history's current scene
+    std::array<InterpScene, 3> interp_scenes_{};
+    unsigned interp_scene_ = 0;           // scene being recorded
+    unsigned interp_log_scene_ = 0;       // scene of the completed log
+    std::uint64_t interp_seen_serial_ = 0;
+    std::uint64_t interp_started_serial_ = 0;
+    void note_interp_log_completion();
     struct InterpSequence {
         bool active = false;
         std::uint32_t xfb_addr = 0;
