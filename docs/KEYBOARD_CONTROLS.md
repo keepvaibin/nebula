@@ -7,15 +7,16 @@ Controllers work at the same time; every Wii input can be rebound.
 ## Default maps
 
 Controllers follow Super Mario Galaxy on Nintendo Switch (3D All-Stars; the
-Switch 2 edition keeps the layout).
+Switch 2 edition keeps the layout), with Star Bits on the left shoulder only
+(Nintendo uses ZR) and both triggers as crouch.
 
 | Action (Wii input) | Keyboard and mouse | Xbox | Switch Pro / Pro Controller 2 |
 |---|---|---|---|
 | Jump, confirm (A) | `Space`, `Enter`, left mouse button | A | A |
 | Jump in play, back in menus | - | B | B |
-| Star Bits, back (B) | `Left Shift`, `Right Shift`, right mouse button | RT | ZR |
-| Crouch, ground pound (Z) | `Z`, `Left Ctrl`, `Right Ctrl` | LT | ZL |
-| Camera reset (C) | `C` | LB, left stick click | L, left stick click |
+| Star Bits, back (B) | `Left Shift`, `Right Shift`, right mouse button | LB | L |
+| Crouch, ground pound (Z) | `Z`, `Left Ctrl`, `Right Ctrl` | LT, RT | ZL, ZR |
+| Camera reset (C) | `C` | Left stick click | Left stick click |
 | Spin (Wii Remote shake) | `Q`, `E` | X, Y, RB | X, Y, shake the controller |
 | Move (Nunchuk stick) | `W` `A` `S` `D` | Left stick | Left stick |
 | Camera, first person (D-pad) | Arrow keys | D-pad | D-pad; right stick while the gyro points |
@@ -27,15 +28,33 @@ Switch 2 edition keeps the layout).
 | 1, 2 | `1`, `2` (and numpad) | - | - |
 | Shake (Nunchuk) | - | - | - |
 
-B is jump while Mario is under control and back in menus (file select, star
-select, pause, map, yes/no prompts): the runtime reads the game's pointer
-mode (`StarPointerOnOffController::mMode`) and decides when the button goes
-down; a held press keeps its meaning. ZR/RT always send Wii B. Switch
+B (controllers) never shoots Star Bits: it is Wii B (back) only while a
+screen with a Back action is open, Wii A (jump) otherwise. The runtime reads
+the game's pointer mode (`StarPointerOnOffController::mMode`): HOME menu,
+error window, pause menu and galaxy map, logo, title, file select, star
+select, yes/no prompts, picture book and the dome galaxy selector are menus;
+every other mode, and a mode it cannot read, is play. The choice is made when
+B goes down and kept until it is released. L/LB always send Wii B. Switch
 buttons are by label (Nintendo A is Wii A); Xbox buttons by position.
 Capture, GL, GR and C (Pro Controller 2) are unbound by default.
 
 Pointer recenter: press R (Switch), the right stick click (Xbox) or `R`
-(keyboard) to put the pointer in the middle of the picture.
+(keyboard) to put the pointer in the middle of the picture; it also brings a
+hidden pointer back, on any menu.
+
+Still pointer: a controller pointer that stays within
+`tune.<scheme>.pointer_hide_radius` (default 0.03, about 1.5% of the picture
+width) for `pointer_hide_seconds` (default 4; 0 never hides) disappears, as in
+the Switch ports, and comes back only with the recenter button; a stick
+pointer also comes back with a stick push. The mouse never hides this way.
+Sources for the Switch behaviour (player reports; no official timing exists):
+[ResetEra, Galaxy + Galaxy 2 (Switch 2) review thread](https://www.resetera.com/threads/super-mario-galaxy-super-mario-galaxy-2-review-thread.1312336/page-16)
+("if you're not actively using it for a bit it kind of just disappears on its
+own", "you have to recenter with R a lot"),
+[GameFAQs, 3D All-Stars: removing the pointer](https://gamefaqs.gamespot.com/boards/299724-super-mario-3d-all-stars/79019437)
+(press R to recenter, the pointer goes invisible when unused),
+[GameFAQs, 3D All-Stars: pointer issues](https://gamefaqs.gamespot.com/boards/299724-super-mario-3d-all-stars/79020720)
+(R returns a runaway pointer to the centre).
 
 Camera on the right stick: the game turns the camera one step per D-pad
 left/right press (`CameraLocalUtil::testCameraPadTriggerRoundLeft/Right`
@@ -93,10 +112,10 @@ Settings are stored in `runtime_settings.ini` next to `config.ini`:
 
 ```
 input_mode=auto
-controls_version=2
+controls_version=3
 bind.keyboard.a=Space, Enter, MouseLeft
 bind.xbox.jump_back=B
-bind.switch_pro.b=ZR
+bind.switch_pro.b=L
 tune.switch_pro.gyro_sensitivity=1
 ```
 
@@ -109,10 +128,11 @@ names: key names (`Space`, `LShift`, `W`, `Num1`, `F5`, `Equals`, `VK2E`),
 LT RT LS RS Menu View DpadUp...`; Switch `A B X Y L R ZL ZR LS RS Plus Minus
 Home Capture GL GR C DpadUp...`; sticks `LX+ LX- LY+ LY- RX+ RX- RY+ RY-`.
 
-Files without `controls_version=2` (Native28 and earlier) are migrated on
-load: bindings and the gyro switch that still hold the old defaults take the
-new defaults, `input_mode=keyboard_mouse` becomes `auto`; anything else the
-player changed stays.
+Files with an older `controls_version` are migrated on load: bindings that
+still hold the defaults of Native28 (no version) or Native29 (version 2) take
+the version-3 defaults; a Native28 file's gyro switch and
+`input_mode=keyboard_mouse` take `1` and `auto`; anything else the player
+changed stays.
 
 | Tuning (`tune.<scheme>.`) | Values | Default |
 |---|---|---|
@@ -123,6 +143,8 @@ player changed stays.
 | `shake_sensitivity` (Switch) | 1 (hard shake) - 5 (light) | 3 |
 | `gyro_pointer` (Switch) | 0/1 | 1 |
 | `gyro_sensitivity` (Switch) | 0.2-5.0 (1: a picture width per 40 degrees) | 1 |
+| `pointer_hide_seconds` (controllers) | 0-60 seconds still before the pointer hides; 0 never | 4 |
+| `pointer_hide_radius` (controllers) | 0-0.5 pointer units (2 = picture width) | 0.03 |
 
 `GALAXY_XINPUT_LEFT_DEADZONE`, `GALAXY_XINPUT_POINTER_DEADZONE`,
 `GALAXY_XINPUT_POINTER_SPEED`, `GALAXY_KEYBOARD_POINTER_SPEED` and
@@ -151,7 +173,13 @@ Switch protocol details follow SDL's zlib-licensed `SDL_hidapi_switch.c` /
 The gyro pointer's world-space axes follow JoyShockMapper's description of
 player/world space. Switch layout: Outsider Gaming "Super Mario Galaxy Switch
 controls", GamerGuides "Super Mario 3D All-Stars controls", MarioWiki "Super
-Mario Galaxy 2" (Switch controls).
+Mario Galaxy 2" (Switch controls); Star Bits moved from ZR to L by player
+choice.
+
+Star Bits and the drawn pointer use the same sample: for every host pointer
+source the runtime answers the game's pointer depth query
+(`StarPointerController::storeDataFromCallback`) from the scene depth it
+captures at `StarPointerPeekZ`'s scene token, not from the end-of-frame EFB.
 
 ## Native Settings Overlay
 
