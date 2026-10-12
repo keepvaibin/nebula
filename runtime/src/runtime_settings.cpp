@@ -176,17 +176,17 @@ std::filesystem::path settings_path() {
            L"runtime_settings.ini";
 }
 
-// Files written before controls version 2 carry Native28's defaults: those
-// bindings move to the current defaults and keyboard_mouse becomes auto (the
-// one-source modes are overrides now). Choices that differ from the old
-// defaults stay.
+// Files written by an older controls version carry that version's defaults:
+// those bindings move to the current defaults, and a version-1 file's
+// keyboard_mouse becomes auto (the one-source modes are overrides since
+// version 2). Choices that differ from the old defaults stay.
 void migrate_settings_file(RuntimeSettings& settings, input::ControlsConfig& controls,
                            unsigned version) {
     if (version >= input::kControlsVersion) {
         return;
     }
-    const unsigned changed = input::migrate_legacy_controls(controls);
-    const bool mode = settings.input_mode == RuntimeInputMode::KeyboardMouse;
+    const unsigned changed = input::migrate_legacy_controls(controls, version);
+    const bool mode = version < 2u && settings.input_mode == RuntimeInputMode::KeyboardMouse;
     if (mode) {
         settings.input_mode = RuntimeInputMode::Auto;
     }

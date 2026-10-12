@@ -54,6 +54,20 @@ inline constexpr float kStickPointerLimit = 1.0f;
 inline constexpr float kGyroPointerLimit = 1.35f;
 inline constexpr float kPointerVisibleLimit = 1.02f;
 
+// The Switch ports hide the gyro pointer once it has been still for a while
+// and bring it back with R (recenter). A controller-owned pointer that stays
+// within `radius` of where it settled for `hide_seconds` hides; recentering
+// shows it, and a stick push shows a stick pointer (a deliberate move).
+struct PointerRestHide {
+    bool hidden = false;
+    float anchor_x = 0.0f;
+    float anchor_y = 0.0f;
+    std::uint64_t since_us = 0;
+    // Returns whether the pointer is hidden after this report.
+    bool update(float x, float y, std::uint64_t now_us, bool controller_owned, bool reveal,
+                float hide_seconds, float radius) noexcept;
+};
+
 // ---- Context-dependent B -----------------------------------------------------
 // StarPointerOnOffController::mMode (RMGE01): the index of the highest-priority
 // pointer mode requested this frame. Order from updateMode's jump table
@@ -61,7 +75,9 @@ inline constexpr float kPointerVisibleLimit = 1.02f;
 // 4 title, 5 file select, 6 scenario select, 7 pause menu, 8 yes/no choice,
 // 9 picture book, 10-14 demos, 15 1P invalid / 2P valid, 16-17 sphere
 // selector, 18 launch star, 19 command stream, 20-21 blue star, 22 star bit
-// target, 23 big bubble, 24 base, 25 game.
+// target, 23 big bubble, 24 base, 25 game. Menus are the modes of screens
+// with a Back action (0-9, 16, 17); everything else, and an unreadable mode,
+// is play.
 inline constexpr std::uint32_t kStarPointerModeCount = 26;
 enum class PlayContext : std::uint8_t { Menu, Play };
 [[nodiscard]] PlayContext play_context_from_star_pointer_mode(std::uint32_t mode) noexcept;

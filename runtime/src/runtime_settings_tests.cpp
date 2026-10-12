@@ -338,7 +338,7 @@ int main() {
         galaxy::save_runtime_settings_to_file() &&
             read_text(settings_path).find("input_mode=auto") !=
                 std::string::npos &&
-            read_text(settings_path).find("controls_version=2") !=
+            read_text(settings_path).find("controls_version=3") !=
                 std::string::npos &&
             read_text(settings_path).find("audio_ambience_gain=") !=
                 std::string::npos,

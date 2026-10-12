@@ -502,6 +502,7 @@ enum class ControlsRow {
     InvertPointerY,
     StickDeadzone,
     PointerDeadzone,
+    PointerHide,
     MotionShake,
     ShakeSensitivity,
     GyroPointer,
@@ -523,6 +524,7 @@ std::vector<ControlsRow> controls_tail_rows() {
     if (scheme_is_gamepad(s_controls_scheme)) {
         rows.push_back(ControlsRow::StickDeadzone);
         rows.push_back(ControlsRow::PointerDeadzone);
+        rows.push_back(ControlsRow::PointerHide);
     }
     if (scheme_has_motion(s_controls_scheme)) {
         rows.push_back(ControlsRow::MotionShake);
@@ -1002,6 +1004,9 @@ void adjust_native_setting_unlogged(int delta) {
             return;
         case ControlsRow::PointerDeadzone:
             tuning.pointer_deadzone = step_float(tuning.pointer_deadzone, 0.02f, 0.0f, 0.5f);
+            return;
+        case ControlsRow::PointerHide:
+            tuning.pointer_hide_seconds = step_float(tuning.pointer_hide_seconds, 1.0f, 0.0f, 30.0f);
             return;
         case ControlsRow::MotionShake:
             tuning.motion_shake = static_cast<galaxy::input::MotionShake>(
@@ -9375,6 +9380,11 @@ std::string native_settings_row_text(
         case ControlsRow::PointerDeadzone:
             std::snprintf(text, sizeof(text), "POINTER STICK DEADZONE: %u%%",
                           static_cast<unsigned>(std::lround(tuning.pointer_deadzone * 100.0f)));
+            return text;
+        case ControlsRow::PointerHide:
+            if (tuning.pointer_hide_seconds <= 0.0f) return "HIDE STILL POINTER: NEVER";
+            std::snprintf(text, sizeof(text), "HIDE STILL POINTER: %.0f S",
+                          static_cast<double>(tuning.pointer_hide_seconds));
             return text;
         case ControlsRow::MotionShake: {
             static constexpr const char* kMotion[] = {"OFF", "WII REMOTE", "NUNCHUK"};

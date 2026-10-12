@@ -284,22 +284,16 @@ BindingTable legacy_binding_table(ControlScheme scheme) {
     return table;
 }
 
-// Super Mario Galaxy on Nintendo Switch (3D All-Stars; the Switch 2 edition
-// keeps it): A or B jump (B backs out of menus), ZR shoots Star Bits, ZL
-// crouches, L resets the camera, X/Y or a shake spin, R recenters the pointer,
-// the gyro points and the right stick turns the camera (the pointer when the
-// gyro is off). Xbox has the same shape with the right stick as the pointer.
-BindingTable default_binding_table(ControlScheme scheme) {
+// The defaults shipped in controls version 2 (Native29), for migration.
+BindingTable version2_binding_table(ControlScheme scheme) {
     BindingTable table = legacy_binding_table(scheme);
     if (scheme == ControlScheme::Keyboard) {
         return table;
     }
     using T = WiiTarget;
     const bool xbox = scheme == ControlScheme::Xbox;
-    const unsigned confirm = xbox ? pad::kSouthBit : pad::kEastBit;
-    const unsigned back = xbox ? pad::kEastBit : pad::kSouthBit;
-    set(table, T::A, {button(confirm)});
-    set(table, T::JumpBack, {button(back)});
+    set(table, T::A, {button(xbox ? pad::kSouthBit : pad::kEastBit)});
+    set(table, T::JumpBack, {button(xbox ? pad::kEastBit : pad::kSouthBit)});
     set(table, T::B, {axis_pos(PadAxis::RightTrigger)});
     set(table, T::Z, {axis_pos(PadAxis::LeftTrigger)});
     set(table, T::C, {button(pad::kLeftShoulderBit), button(pad::kLeftStickBit)});
@@ -318,6 +312,24 @@ BindingTable default_binding_table(ControlScheme scheme) {
     return table;
 }
 
+// The Super Mario Galaxy on Switch shape, with Star Bits on the left
+// shoulder only (the player's choice over Nintendo's ZR): A or B jump (B
+// backs out of menus), L/LB Star Bits, both triggers crouch, left-stick click
+// resets the camera, X/Y (Xbox also RB) or a shake spin, R / right-stick
+// click recenters, the gyro points and the right stick turns the camera (the
+// pointer when the gyro is off; Xbox: the pointer).
+BindingTable default_binding_table(ControlScheme scheme) {
+    BindingTable table = version2_binding_table(scheme);
+    if (scheme == ControlScheme::Keyboard) {
+        return table;
+    }
+    using T = WiiTarget;
+    set(table, T::B, {button(pad::kLeftShoulderBit)});
+    set(table, T::Z, {axis_pos(PadAxis::LeftTrigger), axis_pos(PadAxis::RightTrigger)});
+    set(table, T::C, {button(pad::kLeftStickBit)});
+    return table;
+}
+
 SchemeTuning legacy_scheme_tuning(ControlScheme scheme) {
     SchemeTuning tuning{};
     switch (scheme) {
@@ -329,6 +341,7 @@ SchemeTuning legacy_scheme_tuning(ControlScheme scheme) {
         tuning.stick_deadzone = 7849.0f / 32767.0f;
         tuning.pointer_deadzone = 8689.0f / 32767.0f;
         tuning.pointer_speed = 2.4f;
+        tuning.pointer_hide_seconds = 4.0f;
         break;
     case ControlScheme::SwitchPro:
     case ControlScheme::SwitchPro2:
@@ -337,6 +350,7 @@ SchemeTuning legacy_scheme_tuning(ControlScheme scheme) {
         tuning.pointer_speed = 2.4f;
         tuning.motion_shake = MotionShake::Remote;
         tuning.shake_sensitivity = 3;
+        tuning.pointer_hide_seconds = 4.0f;
         break;
     }
     return tuning;
@@ -350,23 +364,25 @@ SchemeTuning default_scheme_tuning(ControlScheme scheme) {
     return tuning;
 }
 
-unsigned migrate_legacy_controls(ControlsConfig& config) noexcept {
+unsigned migrate_legacy_controls(ControlsConfig& config, unsigned version) noexcept {
     unsigned changed = 0u;
     for (std::size_t s = 0; s < kControlSchemeCount; ++s) {
         const auto scheme = static_cast<ControlScheme>(s);
         const BindingTable legacy = legacy_binding_table(scheme);
+        const BindingTable version2 = version2_binding_table(scheme);
         const BindingTable current = default_binding_table(scheme);
         for (std::size_t t = 0; t < kWiiTargetCount; ++t) {
-            if (config.tables[s].targets[t] == legacy.targets[t] &&
-                legacy.targets[t] != current.targets[t]) {
-                config.tables[s].targets[t] = current.targets[t];
+            TargetBindings& bindings = config.tables[s].targets[t];
+            const bool old_default = bindings == legacy.targets[t] || bindings == version2.targets[t];
+            if (old_default && bindings != current.targets[t]) {
+                bindings = current.targets[t];
                 ++changed;
             }
         }
         const SchemeTuning legacy_tuning = legacy_scheme_tuning(scheme);
         const SchemeTuning current_tuning = default_scheme_tuning(scheme);
         SchemeTuning& tuning = config.tuning[s];
-        if (tuning.gyro_pointer == legacy_tuning.gyro_pointer &&
+        if (version < 2u && tuning.gyro_pointer == legacy_tuning.gyro_pointer &&
             legacy_tuning.gyro_pointer != current_tuning.gyro_pointer) {
             tuning.gyro_pointer = current_tuning.gyro_pointer;
             ++changed;
@@ -578,6 +594,10 @@ bool apply_controls_setting(ControlsConfig& config, std::string_view key_text, s
         tuning.gyro_pointer = flag;
     } else if (name == "gyro_sensitivity" && parse_float_c(value, number)) {
         tuning.gyro_sensitivity = number;
+    } else if (name == "pointer_hide_seconds" && parse_float_c(value, number)) {
+        tuning.pointer_hide_seconds = number;
+    } else if (name == "pointer_hide_radius" && parse_float_c(value, number)) {
+        tuning.pointer_hide_radius = number;
     } else if (name == "shake_sensitivity" && parse_float_c(value, number)) {
         tuning.shake_sensitivity = static_cast<std::uint8_t>(
             std::clamp(static_cast<int>(std::lround(number)), 1, int{kShakeSensitivitySteps}));
@@ -602,6 +622,8 @@ ControlsConfig sanitize_controls_config(ControlsConfig config) noexcept {
         tuning.pointer_deadzone = clamp_or(tuning.pointer_deadzone, 0.0f, 0.9f, defaults.pointer_deadzone);
         tuning.pointer_speed = clamp_or(tuning.pointer_speed, 0.1f, 10.0f, defaults.pointer_speed);
         tuning.gyro_sensitivity = clamp_or(tuning.gyro_sensitivity, 0.2f, 5.0f, defaults.gyro_sensitivity);
+        tuning.pointer_hide_seconds = clamp_or(tuning.pointer_hide_seconds, 0.0f, 60.0f, defaults.pointer_hide_seconds);
+        tuning.pointer_hide_radius = clamp_or(tuning.pointer_hide_radius, 0.0f, 0.5f, defaults.pointer_hide_radius);
         tuning.shake_sensitivity = static_cast<std::uint8_t>(
             std::clamp<int>(tuning.shake_sensitivity, 1, kShakeSensitivitySteps));
         if (static_cast<unsigned>(tuning.motion_shake) > 2u) tuning.motion_shake = MotionShake::Off;
@@ -627,6 +649,8 @@ std::string format_controls_settings(const ControlsConfig& config) {
         if (scheme_is_gamepad(scheme)) {
             text += "tune." + prefix + "stick_deadzone=" + format_float_c(tuning.stick_deadzone) + "\n";
             text += "tune." + prefix + "pointer_deadzone=" + format_float_c(tuning.pointer_deadzone) + "\n";
+            text += "tune." + prefix + "pointer_hide_seconds=" + format_float_c(tuning.pointer_hide_seconds) + "\n";
+            text += "tune." + prefix + "pointer_hide_radius=" + format_float_c(tuning.pointer_hide_radius) + "\n";
         }
         text += "tune." + prefix + "pointer_speed=" + format_float_c(tuning.pointer_speed) + "\n";
         text += "tune." + prefix + "invert_pointer_y=" + (tuning.invert_pointer_y ? "1" : "0") + "\n";

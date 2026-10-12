@@ -184,7 +184,8 @@ namespace Nebula.Launcher
         private readonly ComboBox inputSource = new ComboBox(), editScheme = new ComboBox(), motion = new ComboBox();
         private readonly ListView bindingList = new ListView();
         private readonly NumericUpDown pointerSpeed = new NumericUpDown(), stickDeadzone = new NumericUpDown(),
-            pointerDeadzone = new NumericUpDown(), shakeSensitivity = new NumericUpDown(), gyroSensitivity = new NumericUpDown();
+            pointerDeadzone = new NumericUpDown(), shakeSensitivity = new NumericUpDown(), gyroSensitivity = new NumericUpDown(),
+            pointerHide = new NumericUpDown();
         private readonly CheckBox invertPointer = new CheckBox(), gyroPointer = new CheckBox();
         private readonly Label captureLabel = new Label();
         private int captureTarget = -1;
@@ -390,16 +391,15 @@ namespace Nebula.Launcher
             page.Controls.Add(bindingList);
 
             int x = 466;
-            Button(page, "Add input…", x, y, 120).Click += delegate { StartCapture(); };
-            Button(page, "Clear", x + 128, y, 120).Click += delegate
+            Button(page, "Add…", x, y, 80).Click += delegate { StartCapture(); };
+            Button(page, "Clear", x + 84, y, 80).Click += delegate
             {
                 int target = SelectedTarget();
                 if (target < 0) return;
                 controls.Bindings[Scheme][target] = new InputSource[0];
                 RefreshBindings();
             };
-            y += 38;
-            Button(page, "Reset to defaults", x, y, 248).Click += delegate
+            Button(page, "Defaults", x + 168, y, 80).Click += delegate
             {
                 EndCapture();
                 controls.Bindings[Scheme] = ControlsSettings.DefaultTable(Scheme);
@@ -409,31 +409,32 @@ namespace Nebula.Launcher
             };
             y += 36;
             captureLabel.Location = new Point(x, y);
-            captureLabel.Size = new Size(250, 44);
+            captureLabel.Size = new Size(250, 30);
             page.Controls.Add(captureLabel);
-            y += 46;
+            y += 30;
 
             TuningRow(page, "Pointer speed", pointerSpeed, x, ref y, 0.2m, 6.0m, 0.2m, 1);
             TuningRow(page, "Stick deadzone %", stickDeadzone, x, ref y, 0m, 50m, 2m, 0);
             TuningRow(page, "Pointer stick deadzone %", pointerDeadzone, x, ref y, 0m, 50m, 2m, 0);
+            TuningRow(page, "Hide still pointer, s", pointerHide, x, ref y, 0m, 30m, 1m, 0);
             invertPointer.Text = "Invert pointer Y";
             invertPointer.Location = new Point(x, y);
             invertPointer.Size = new Size(250, 24);
             page.Controls.Add(invertPointer);
-            y += 28;
+            y += 26;
             SmallLabel(page, "Motion", x, y + 3, 88);
             motion.Location = new Point(x + 92, y);
             motion.Width = 158;
             motion.DropDownStyle = ComboBoxStyle.DropDownList;
             motion.Items.AddRange(ControlsSettings.MotionLabels);
             page.Controls.Add(motion);
-            y += 30;
+            y += 27;
             TuningRow(page, "Shake sensitivity", shakeSensitivity, x, ref y, 1m, 5m, 1m, 0);
             gyroPointer.Text = "Gyro pointer (right stick: camera)";
             gyroPointer.Location = new Point(x, y);
             gyroPointer.Size = new Size(250, 24);
             page.Controls.Add(gyroPointer);
-            y += 28;
+            y += 26;
             TuningRow(page, "Gyro sensitivity", gyroSensitivity, x, ref y, 0.2m, 5.0m, 0.1m, 1);
 
             pointerSpeed.ValueChanged += delegate { if (!loading) controls.Tuning[Scheme].PointerSpeed = (float)pointerSpeed.Value; };
@@ -443,6 +444,7 @@ namespace Nebula.Launcher
             invertPointer.CheckedChanged += delegate { if (!loading) controls.Tuning[Scheme].InvertPointerY = invertPointer.Checked; };
             gyroPointer.CheckedChanged += delegate { if (!loading) controls.Tuning[Scheme].GyroPointer = gyroPointer.Checked; };
             gyroSensitivity.ValueChanged += delegate { if (!loading) controls.Tuning[Scheme].GyroSensitivity = (float)gyroSensitivity.Value; };
+            pointerHide.ValueChanged += delegate { if (!loading) controls.Tuning[Scheme].PointerHideSeconds = (float)pointerHide.Value; };
             motion.SelectedIndexChanged += delegate { if (!loading) controls.Tuning[Scheme].Motion = Math.Max(0, motion.SelectedIndex); };
             editScheme.SelectedIndexChanged += delegate { EndCapture(); LoadTuning(); RefreshBindings(); };
 
@@ -468,7 +470,7 @@ namespace Nebula.Launcher
             box.Increment = step;
             box.DecimalPlaces = decimals;
             parent.Controls.Add(box);
-            y += 30;
+            y += 27;
         }
 
         private static decimal Clamp(NumericUpDown box, double value)
@@ -489,7 +491,8 @@ namespace Nebula.Launcher
             shakeSensitivity.Value = Clamp(shakeSensitivity, t.ShakeSensitivity);
             gyroPointer.Checked = t.GyroPointer;
             gyroSensitivity.Value = Clamp(gyroSensitivity, t.GyroSensitivity);
-            stickDeadzone.Enabled = pointerDeadzone.Enabled = pad;
+            pointerHide.Value = Clamp(pointerHide, t.PointerHideSeconds);
+            stickDeadzone.Enabled = pointerDeadzone.Enabled = pointerHide.Enabled = pad;
             motion.Enabled = shakeSensitivity.Enabled = gyroPointer.Enabled = gyroSensitivity.Enabled = imu;
             loading = false;
         }
