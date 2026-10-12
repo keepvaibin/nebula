@@ -58,7 +58,19 @@ void call_guest(void* user, std::uint32_t address, galaxy::PpcContext* context,
     std::abort();
 }
 
+std::uint32_t g_first_probe = 0u;
+
+// Guest data every call starts from (probes store into it): a vtable pointer
+// at 0x80100000 whose +8 word is the first probe (callee_leaf), and binary32
+// 1.5 values at 0x80100200.
+void reset_data() {
+    put32(0x80100000u, 0x80100100u);
+    put32(0x80100108u, g_first_probe);
+    for (std::uint32_t i = 1; i < 64; ++i) put32(0x80100000u + 0x200u + i * 4u, 0x3FC00000u);
+}
+
 void reset(galaxy::PpcContext& context, std::uint32_t r4) {
+    reset_data();
     context.gpr[1] = 0x80400000u;
     context.gpr[3] = 0x80100000u;
     context.gpr[4] = r4;
@@ -94,11 +106,7 @@ int main(int argc, char** argv) {
     std::vector<galaxy::NativeGameFunction> table((high - low) / 4u + 1u, nullptr);
     for (std::size_t i = 0; i < count; ++i) table[(records[i].address - low) / 4u] = records[i].function;
 
-    // Guest data: a vtable pointer at 0x80100000 whose +8 word is the first
-    // callee (the corpus places callee_leaf first).
-    put32(0x80100000u, 0x80100100u);
-    put32(0x80100108u, low);
-    for (std::uint32_t i = 1; i < 64; ++i) put32(0x80100000u + 0x200u + i * 4u, 0x3FC00000u);
+    g_first_probe = low;  // the corpus places callee_leaf first
 
     static std::atomic_uint32_t mask{0};
     static std::atomic_uint32_t suspended{0};
