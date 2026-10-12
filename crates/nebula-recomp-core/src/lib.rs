@@ -10,6 +10,7 @@ mod game;
 pub mod guest_abi_effect;
 pub mod guest_cfg_liveness;
 pub mod guest_ppc_effect;
+pub mod ppc_dataflow;
 mod residency;
 mod rso;
 mod sel;
