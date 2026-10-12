@@ -5113,13 +5113,20 @@ private:
         bool waited_for_queue_space = false;
         auto queue_wait_started = std::chrono::steady_clock::now();
         std::uint32_t queue_wait_elapsed_ms = 0;
+        // OnBufferEnd wakes the worker for freed space only while this is set;
+        // it is raised before each queue observation so no end can be missed.
+        const ScopeExit clear_space_wait([this]() noexcept {
+            queue_space_wait_.store(false, std::memory_order_release);
+        });
         for (;;) {
             if (worker_stop_.load(std::memory_order_acquire)) {
                 return false;
             }
             if (!process_callback_failures()) return false;
+            queue_space_wait_.store(true, std::memory_order_seq_cst);
             state.BuffersQueued = query_source_queue();
             if (state.BuffersQueued < queue_limit_) {
+                queue_space_wait_.store(false, std::memory_order_release);
                 break;
             }
             if (!waited_for_queue_space) {
@@ -5714,8 +5721,12 @@ private:
             : 0u;
         // Publish only after every plain evidence field above is complete. The
         // worker's acquire load makes this one exact per-buffer transaction.
+        // No wake: the worker accounts starts at its next submit or idle
+        // timeout; only failures, empty boundaries and freed queue space wake.
         buffer->started.store(true, std::memory_order_release);
-        signal_callback_event();
+        if (ratio_apply_invoked && !ratio_apply_succeeded) {
+            signal_callback_event();
+        }
     }
     void STDMETHODCALLTYPE OnLoopEnd(void*) noexcept override {}
     void STDMETHODCALLTYPE OnVoiceError(void*, HRESULT error) noexcept override {
@@ -5754,7 +5765,10 @@ private:
         // retains and later destroys the allocation.
         buffer->completed.store(true, std::memory_order_release);
         callback_ledger_.record_buffer_end(queue_evidence);
-        signal_callback_event();
+        if (queue_evidence != NativeAudioBufferEndQueueEvidence::SuccessorQueued ||
+            queue_space_wait_.load(std::memory_order_seq_cst)) {
+            signal_callback_event();
+        }
     }
 
     void signal_callback_event() noexcept {
@@ -5816,6 +5830,7 @@ private:
     std::atomic_uint64_t empty_over_5_ms_{0};
     std::atomic_uint64_t last_empty_since_us_{0};
     std::atomic<std::uint32_t> max_empty_us_{0};
+    std::atomic_bool queue_space_wait_{false};
     std::atomic_uint64_t total_silent_us_{0};
     std::atomic<std::uint32_t> max_silent_us_{0};
     std::atomic_uint64_t dropped_buffers_{0};
