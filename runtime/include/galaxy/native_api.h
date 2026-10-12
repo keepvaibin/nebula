@@ -521,6 +521,7 @@ enum class SiteHookKind : std::uint32_t {
     LayoutVerticalFit = 13,     // argument: lane | inverse << 8
     HomeGeometry = 14,          // argument: kind | lane << 8
     LodDistance = 15,           // f1 holds LodCtrl::calcDistanceToCamera's result
+    MultiSceneModel = 16,       // r31 MultiSceneActor, r3 its J3DModel
 };
 
 inline void site_hook(

@@ -3,6 +3,7 @@
 #include "galaxy/experimental_ultrawide_aspect.h"
 #include "galaxy/layout_aspect.h"
 #include "galaxy/layout_aspect_cinema.h"
+#include "galaxy/layout_aspect_fits.h"
 #include "galaxy/layout_aspect_home.h"
 
 #include <atomic>
@@ -14,6 +15,39 @@ namespace galaxy {
 namespace {
 
 std::atomic<float> g_lod_inverse_scale{1.0f};
+
+// The star-select sky (MultiSceneActor named by the DOL literal at 0x805C4411)
+// is one quad at z = -1000 in model space, sized for a 16:9 view. Wider views
+// scale it about its center so it still covers the screen.
+void fit_rmge01_scenario_sky(PpcContext* context, GuestMemoryV1* memory,
+                             const NativeServicesV1* services, std::uint32_t pc) {
+    if (guest_load_u32(memory, context->gpr[31] + 4u, services, pc) != 0x805C4411u) return;
+    const auto policy = experimental_effective_guest_aspect(services);
+    if (!policy || native_four_three(*policy)) return;
+    const float k = experimental_nw4r_canvas_width(*policy) / 608.0f;
+    if (!(k > 1.0f)) return;
+    const std::uint32_t model = context->gpr[3];
+    const auto f32 = [&](std::uint32_t address) {
+        return std::bit_cast<float>(guest_load_u32(memory, address, services, pc));
+    };
+    const auto store = [&](std::uint32_t address, float value) {
+        guest_store_u32(memory, address, std::bit_cast<std::uint32_t>(value), services, pc);
+    };
+    constexpr float kCenter[3] = {0.0f, 0.0f, -1000.0f};
+    float offset[3];
+    for (std::uint32_t i = 0; i < 3u; ++i) {
+        const float scale = f32(model + 0x18u + i * 4u);
+        offset[i] = scale * (1.0f - k) * kCenter[i];
+        store(model + 0x18u + i * 4u, scale * k);
+    }
+    // J3DModel base matrix (+0x24) is rotation and translation only.
+    for (std::uint32_t row = 0; row < 3u; ++row) {
+        const std::uint32_t base = model + 0x24u + row * 0x10u;
+        float shift = 0.0f;
+        for (std::uint32_t column = 0; column < 3u; ++column) shift += f32(base + column * 4u) * offset[column];
+        store(base + 0xCu, f32(base + 0xCu) + shift);
+    }
+}
 
 }  // namespace
 
@@ -31,7 +65,7 @@ void dispatch_site_hook(
     switch (static_cast<SiteHookKind>(kind)) {
     case SiteHookKind::CinemaAndHud:
         apply_rmge01_cinema_vertical(context, memory, services);
-        apply_rmge01_hud_anchors(context, memory, services);
+        apply_rmge01_layout_fits(context, memory, services);
         return;
     case SiteHookKind::LayoutBackings:
         apply_rmge01_layout_backings(context, memory, services);
@@ -74,6 +108,9 @@ void dispatch_site_hook(
     case SiteHookKind::HomeGeometry:
         apply_experimental_rmge01_home_geometry(
             context, services, argument & 0xFFu, (argument >> 8u) & 0xFFu);
+        return;
+    case SiteHookKind::MultiSceneModel:
+        fit_rmge01_scenario_sky(context, memory, services, guest_pc);
         return;
     case SiteHookKind::LodDistance: {
         const float inverse = g_lod_inverse_scale.load(std::memory_order_relaxed);

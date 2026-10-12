@@ -1,13 +1,19 @@
 #include "galaxy/layout_aspect_cinema.h"
+#include "galaxy/layout_aspect_fits.h"
 #include "galaxy/layout_aspect_home.h"
 #include <iostream>
 #include <map>
+#include <set>
 #include <vector>
 
 struct PaneFixture {
     std::map<std::uint32_t, std::string> names;
     std::map<std::uint32_t, std::vector<std::uint32_t>> tree;
     mutable std::map<std::uint32_t, float> values;
+    std::set<std::uint32_t> hidden;
+    bool visible(std::uint32_t pane) const { return !hidden.contains(pane); }
+    std::map<std::uint32_t, std::uint8_t> bytes;
+    std::uint8_t u8(std::uint32_t address) const { return bytes.at(address); }
     bool named(std::uint32_t pane, std::string_view name) const {
         return names.at(pane) == name;
     }
@@ -119,10 +125,58 @@ int main() {
         for (auto pane : {0x200u,0x300u,0x500u}) {
             fixture.values[pane+0x90u]=12.0f;fixture.values[pane+0xA0u]=17.0f;
         }
-        galaxy::anchor_rmge01_hud(fixture,0x100,extent);
+        const auto player_left = galaxy::rmge01_layout_fits("PlayerLeft");
+        check(player_left.size() == 1u && player_left[0].pane == "PlayerLeft" &&
+              player_left[0].fit == (galaxy::kFitLeft | galaxy::kFitBottom),
+              "PlayerLeft must anchor its counter branch to the lower left");
+        check(galaxy::rmge01_layout_fits("Player").empty() && galaxy::rmge01_layout_fits("PlayerLeftX").empty() &&
+              galaxy::rmge01_layout_fits("CometScreenFilter").size() == 5u,
+              "layout lookup must match whole names only");
+        check(galaxy::apply_rmge01_layout_fit(fixture,0x200,player_left[0],extent),
+              "an anchored branch must report its move");
         check(fixture.values.at(0x290)==12.0f-extent.horizontal_margin_delta &&
               fixture.values.at(0x390)==fixture.values.at(0x290) && fixture.values.at(0x590)==12.0f,
               "edge HUD branch and descendants must move together; centered variants must remain centered");
+        fixture.tree[0x200] = {0x300u, 0x600u};
+        fixture.names[0x600] = "Hidden";
+        fixture.hidden = {0x600u};
+        fixture.values[0x690u] = 3.0f;
+        galaxy::apply_rmge01_layout_fit(fixture,0x200,player_left[0],extent);
+        check(fixture.values.at(0x690u)==3.0f, "an invisible branch keeps its stale matrix untouched");
+        fixture.hidden.clear();
+        {
+            PaneFixture fill;
+            for (unsigned i = 0; i < 12u; ++i) fill.values[0x184u+i*4u]=static_cast<float>(i+1u);
+            const galaxy::LayoutFitRule rule{"GameOver","Color",galaxy::kFitWidth|galaxy::kFitHeight};
+            const galaxy::LayoutAspectExtent ultrawide{1216.0f,456.0f,304.0f,0.0f};
+            check(!galaxy::apply_rmge01_layout_fit(fill,0x100,rule,ultrawide),"a fill never moves references");
+            check(fill.values.at(0x184u)==2.0f && fill.values.at(0x190u)==8.0f &&
+                  fill.values.at(0x194u)==5.0f && fill.values.at(0x1A4u)==9.0f,
+                  "a fill scales its x row to the canvas and leaves y and z for a wide canvas");
+            const galaxy::LayoutFitRule art{"MapGalaxyBg","PicStar",galaxy::kFitCover};
+            const galaxy::LayoutAspectExtent narrow{608.0f,608.0f,0.0f,76.0f};
+            galaxy::apply_rmge01_layout_fit(fill,0x100,art,narrow);
+            check(std::abs(fill.values.at(0x184u)-2.0f*(608.0f/456.0f))<1e-5f &&
+                  std::abs(fill.values.at(0x194u)-5.0f*(608.0f/456.0f))<1e-5f,
+                  "artwork covers a taller canvas with one uniform scale");
+            PaneFixture frame;
+            frame.values[0x184u]=1.2f; frame.values[0x198u]=1.2f;
+            const galaxy::LayoutFitRule border{"PointerGuidance","WinPointFrame1",galaxy::kFitFrame,720.0f,378.0f};
+            galaxy::apply_rmge01_layout_fit(frame,0x100,border,ultrawide);
+            check(std::abs(frame.values.at(0x14Cu)-(720.0f+608.0f/1.2f))<1e-3f && frame.values.at(0x150u)==378.0f,
+                  "a screen frame grows by the extra canvas in its own units");
+            galaxy::apply_rmge01_layout_fit(frame,0x100,border,galaxy::LayoutAspectExtent{});
+            check(frame.values.at(0x14Cu)==720.0f, "a screen frame returns to its authored size at 16:9");
+            PaneFixture bar;
+            bar.bytes[0x1B6u] = 4u;
+            bar.values[0x150u] = 160.0f;
+            bar.values[0x194u] = 0.0f; bar.values[0x198u] = 1.0f; bar.values[0x19Cu] = 0.0f; bar.values[0x1A0u] = 157.0f;
+            const galaxy::LayoutFitRule band{"PauseMenu","PicStagebase",galaxy::kFitExtendUp};
+            galaxy::apply_rmge01_layout_fit(bar,0x100,band,narrow);
+            const float m11 = bar.values.at(0x198u), m13 = bar.values.at(0x1A0u);
+            check(std::abs((m13 - m11 * 80.0f) - 77.0f) < 1e-3f && std::abs((m13 + m11 * 80.0f) - (237.0f + 76.0f)) < 1e-3f,
+                  "a top bar keeps its inner edge and reaches the taller canvas top");
+        }
         for (unsigned i = 0; i < 12u; ++i) fixture.values[0x384u+i*4u]=static_cast<float>(i);
         fixture.values[0x390u]=12.0f-extent.horizontal_margin_delta;
         galaxy::copy_rmge01_pane_reference(fixture,0x300u,0x800u,1092.0f/608.0f);

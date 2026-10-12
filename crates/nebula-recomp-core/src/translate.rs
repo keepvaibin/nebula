@@ -3581,6 +3581,12 @@ fn lower_words_with_config(
         {
             output.push_str(&site_hook_call(pc, "LayoutBackings", 0));
         }
+        // MultiSceneActor::calcAnim has set its model's base matrix and scale;
+        // r3 still holds the J3DModel and r31 the actor.
+        if (address, function_end, pc, word) == (0x8034_103C, 0x8034_10C8, 0x8034_10AC, 0x807F_0034)
+        {
+            output.push_str(&site_hook_call(pc, "MultiSceneModel", 0));
+        }
         // Home RSO Pane::CalculateMtx entry. Runtime geometry checks tell its
         // main backing apart from pointers.
         if (address, function_end, pc, word) == (0x8100_00D8, 0x8101_B120, 0x8101_18F8, 0x9421_FF20)
@@ -12215,6 +12221,18 @@ mod tests {
         *words.last_mut().unwrap() = 0x4E80_0020;
         words[(0x803C_A6FC - 0x803C_A6C4) / 4] = 0xC062_19AC;
         assert!(!lower_instruction_fixture(0x803C_A6C4, &words).contains(hook));
+    }
+
+    #[test]
+    fn rmge01_multi_scene_model_hook_requires_exact_owner_and_instruction() {
+        let mut words = vec![0x6000_0000; 0x8C / 4];
+        words[(0x8034_10AC - 0x8034_103C) / 4] = 0x807F_0034;
+        *words.last_mut().unwrap() = 0x4E80_0020;
+        let hook = "galaxy::site_hook(services, context, memory, 0x803410ACu, galaxy::SiteHookKind::MultiSceneModel, 0u);";
+        assert_eq!(lower_instruction_fixture(0x8034_103C, &words).matches(hook).count(), 1);
+        assert!(!lower_instruction_fixture(0x8034_1038, &words).contains(hook));
+        words[(0x8034_10AC - 0x8034_103C) / 4] = 0x807F_0030;
+        assert!(!lower_instruction_fixture(0x8034_103C, &words).contains(hook));
     }
 
     #[test]

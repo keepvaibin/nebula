@@ -51,9 +51,25 @@ public:
     std::uint32_t u32(std::uint32_t address) const {
         return guest_load_u32(memory, address, services, pc);
     }
+    std::uint8_t u8(std::uint32_t address) const {
+        return guest_load_u8(memory, address, services, pc);
+    }
     float f32(std::uint32_t address) const { return std::bit_cast<float>(u32(address)); }
     void f32(std::uint32_t address, float value) const {
         guest_store_u32(memory, address, std::bit_cast<std::uint32_t>(value), services, pc);
+    }
+    bool visible(std::uint32_t pane) const {
+        return (guest_load_u8(memory, pane + 0xB7u, services, pc) & 1u) != 0u;
+    }
+    // Pane::CalculateMtx returns early for an invisible pane, leaving that
+    // branch's matrices from an earlier frame.
+    bool drawn(std::uint32_t pane, std::uint32_t root) const {
+        for (unsigned depth = 0; depth < 32u && pane != 0u; ++depth) {
+            if (!visible(pane)) return false;
+            if (pane == root) return true;
+            pane = u32(pane + 0x0Cu);
+        }
+        return false;
     }
     bool named(std::uint32_t pane, std::string_view wanted) const {
         if (wanted.size() > 16u) return false;
@@ -206,41 +222,16 @@ inline void translate_rmge01_hud_branch(const Access& access, std::uint32_t pane
                                        float x, float y, unsigned& budget, unsigned depth = 0u) {
     if (budget == 0u || depth > 16u) throw std::runtime_error("RMGE01 HUD branch exceeds bounded policy");
     --budget;
-    // mGlbMtx is rebuilt by CalculateMtx/follow-position controllers each frame.
+    // mGlbMtx is rebuilt by CalculateMtx/follow-position controllers each frame,
+    // except under an invisible pane, whose stale matrices must not accumulate.
     // Adjust the whole branch and refresh copied references. Do not change authored
     // local transforms consumed by animation/follow-position controllers.
+    if (!access.visible(pane)) return;
     access.f32(pane + 0x90u, access.f32(pane + 0x90u) + x);
     access.f32(pane + 0xA0u, access.f32(pane + 0xA0u) + y);
     access.children(pane, [&](std::uint32_t child) {
         translate_rmge01_hud_branch(access, child, x, y, budget, depth + 1u);
     });
-}
-
-template <typename Access>
-inline bool anchor_rmge01_hud(const Access& access, std::uint32_t root,
-                             const LayoutAspectExtent& extent) {
-    if (extent.horizontal_margin_delta == 0.0f && extent.vertical_margin_delta == 0.0f) return false;
-    bool changed = false;
-    access.children(root, [&](std::uint32_t pane) {
-        float x = 0.0f, y = 0.0f;
-        if (access.named(pane, "StarCounter")) {
-            x = -extent.horizontal_margin_delta; y = extent.vertical_margin_delta;
-        } else if (access.named(pane, "PlayerLeft")) {
-            x = -extent.horizontal_margin_delta; y = -extent.vertical_margin_delta;
-        } else if (access.named(pane, "CoinCounter") || access.named(pane, "StarPieceCounter")) {
-            x = extent.horizontal_margin_delta; y = -extent.vertical_margin_delta;
-        } else if (access.named(pane, "MoveMeter")) {
-            bool life = false;
-            access.children(pane, [&](std::uint32_t child) { life |= access.named(child, "HPMeter"); });
-            if (life) { x = extent.horizontal_margin_delta; y = extent.vertical_margin_delta; }
-        }
-        if (x != 0.0f || y != 0.0f) {
-            unsigned budget = 128u;
-            translate_rmge01_hud_branch(access, pane, x, y, budget);
-            changed = true;
-        }
-    });
-    return changed;
 }
 
 template <typename Access>
@@ -263,26 +254,15 @@ inline std::uint32_t find_rmge01_reference_pane(const Rmge01PaneAccess& access,
     return result;
 }
 
-inline void apply_rmge01_hud_anchors(PpcContext* context, GuestMemoryV1* memory,
-                                   const NativeServicesV1* services) {
-    if (!layout_aspect_repairs_enabled() || context->gpr[2] != 0x806AB280u) return;
-    const auto policy = experimental_effective_guest_aspect(services);
-    if (!policy || native_four_three(*policy)) return;
-    const Rmge01PaneAccess access{memory, services, 0x80367E64u};
-    const auto manager = context->gpr[31];
-    // Hidden layouts skipped CalculateMtx; never repeatedly offset stale data.
-    if (guest_load_u8(memory, manager + 0x60u, services, access.pc) != 0u) return;
-    const auto layout = access.u32(context->gpr[31] + 4u);
-    const auto root = access.u32(layout + 0x10u);
-    if (root == 0u || !access.named(root, "RootPane") ||
-        !anchor_rmge01_hud(access, root, layout_aspect_extent(*policy))) return;
-    // Follow-position controllers can recalculate branch matrices after the
-    // initial CalculateMtx. Apply offsets after all of them, then refresh the
-    // same registered references with their original screen-space conversion.
+// Follow-position controllers can recalculate branch matrices after the
+// initial CalculateMtx, and calcAnimWithoutLocationAdjust then copies the
+// registered references. After moving branches, copy them again with the same
+// screen-space conversion.
+inline void refresh_rmge01_pane_references(const Rmge01PaneAccess& access, std::uint32_t manager,
+                                           std::uint32_t root, float wide_factor) {
     const auto count = access.u32(manager + 0x68u);
     const auto table = access.u32(manager + 0x6Cu);
     if (count > 128u) throw std::runtime_error("RMGE01 HUD reference count exceeds bounded policy");
-    const float wide_factor = static_cast<float>(policy->guest_screen_width) / 608.0f;
     for (unsigned i = 0; i < count; ++i) {
         const auto slot = table + i * 0x18u;
         const auto reference = access.u32(slot + 0xCu);
@@ -295,16 +275,16 @@ inline void apply_rmge01_hud_anchors(PpcContext* context, GuestMemoryV1* memory,
             else {
                 std::array<char,17> name{};
                 for (unsigned c = 0; c < name.size(); ++c) {
-                    name[c] = static_cast<char>(guest_load_u8(memory, name_pointer + c, services, access.pc));
+                    name[c] = static_cast<char>(guest_load_u8(access.memory, name_pointer + c,
+                                                              access.services, access.pc));
                     if (name[c] == '\0') break;
                 }
-                if (name.back() != '\0') throw std::runtime_error("RMGE01 HUD reference pane name is invalid");
+                if (name.back() != '\0') continue;
                 unsigned budget = 256u;
                 pane = find_rmge01_reference_pane(access, root, name.data(), budget);
             }
         }
-        if (pane == 0u) throw std::runtime_error("RMGE01 HUD matrix reference has no source pane");
-        copy_rmge01_pane_reference(access, pane, reference, wide_factor);
+        if (pane != 0u) copy_rmge01_pane_reference(access, pane, reference, wide_factor);
     }
 }
 
