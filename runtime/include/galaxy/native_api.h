@@ -92,7 +92,8 @@ GALAXY_ALWAYS_INLINE void atomic_or_u64(
 // ABI 23 requires every renderer dirty-word producer to publish its summary.
 // ABI 22 modules used inline page-only stores: accepting them with a summary
 // drain would silently lose invalidations. Rebuild both game and Home sidecars.
-inline constexpr std::uint32_t kNativeAbiVersion = 26;
+// ABI 27 moves every display policy behind NativeServicesV1::site_hook.
+inline constexpr std::uint32_t kNativeAbiVersion = 27;
 // ABI 26: the host's live gather buffer holds kWgpipeGatherFastBytes (a whole
 // multiple of the 32-byte hardware burst); generated stores append in place
 // and cross into the host once per buffer instead of once per burst.
@@ -491,7 +492,49 @@ struct NativeServicesV1 {
     std::uint32_t direct_dispatch_base{};
     std::uint32_t direct_dispatch_count{};
     const std::atomic_uint32_t* direct_dispatch_suspended{};
+    // ABI 27: display and level-of-detail policy at fixed guest sites. The
+    // translator places these calls; what each SiteHookKind does is runtime
+    // code, so policy changes never require recompiling a module.
+    void (*site_hook)(
+        void* user,
+        std::uint32_t guest_pc,
+        std::uint32_t kind,
+        std::uint32_t argument,
+        PpcContext* context,
+        GuestMemoryV1* memory){};
 };
+
+// Stable numbering shared by the translator and the runtime (ABI 27).
+enum class SiteHookKind : std::uint32_t {
+    CinemaAndHud = 1,
+    LayoutBackings = 2,
+    HomeBackings = 3,
+    HomeVertical = 4,
+    NativeScreenWidthEnter = 5,
+    NativeScreenWidthExit = 6,
+    FourThreeAspectRead = 7,
+    LayoutConstant = 8,         // argument: lane | half << 8
+    Nw4rCanvasWidth = 9,
+    CameraAspect = 10,
+    UltrawideScreenWidth = 11,
+    EfbScreenWidth = 12,
+    LayoutVerticalFit = 13,     // argument: lane | inverse << 8
+    HomeGeometry = 14,          // argument: kind | lane << 8
+    LodDistance = 15,           // f1 holds LodCtrl::calcDistanceToCamera's result
+};
+
+inline void site_hook(
+    const NativeServicesV1* services,
+    PpcContext* context,
+    GuestMemoryV1* memory,
+    std::uint32_t guest_pc,
+    SiteHookKind kind,
+    std::uint32_t argument = 0u) {
+    if (services->site_hook != nullptr) {
+        services->site_hook(services->user, guest_pc, static_cast<std::uint32_t>(kind), argument,
+                            context, memory);
+    }
+}
 
 // ABI 24: one callable entry of the generated module, in ascending address
 // order. The module exports its complete table so the runtime can build the

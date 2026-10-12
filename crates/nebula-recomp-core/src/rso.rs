@@ -1239,19 +1239,9 @@ fn render_native_sidecar_cpp(
     )?;
     let mut source = String::new();
     source.push_str("#include \"galaxy/native_api.h\"\n#include \"galaxy/ppc_float.h\"\n");
-    // The aspect header depends on the ABI and float declarations above.
-    if body.contains("galaxy::apply_experimental_rmge01_home_geometry(") {
-        source.push_str("#include \"galaxy/experimental_ultrawide_aspect.h\"\n");
-    }
     source.push_str(
         "\n#include <array>\n#include <cstdio>\n#include <cstdint>\n#include <cstdlib>\n#include <cstring>\n\nnamespace {\n\n",
     );
-    if body.contains("galaxy::apply_rmge01_home_vertical(") {
-        source.insert_str(0, "#include \"galaxy/layout_aspect_home.h\"\n");
-    }
-    if body.contains("galaxy::apply_rmge01_home_backings(") {
-        source.insert_str(0, "#include \"galaxy/layout_aspect.h\"\n");
-    }
     writeln!(
         source,
         "constexpr std::uint32_t kSectionCount = {section_count}u;"
@@ -2847,13 +2837,13 @@ mod tests {
     }
 
     #[test]
-    fn home_backing_hook_uses_relocated_pc_and_own_header() {
+    fn home_hooks_use_relocated_pc() {
         let mut input = synthetic_rso();
         input[0x21] = 1;
         input[0x22] = 1;
         let image = parse_rso(&input).expect("synthetic RSO parses");
         let body = rewrite_dynamic_pc_literals(
-            "    galaxy::apply_rmge01_home_backings(context, memory, services, 0x80000108u);\n    galaxy::apply_rmge01_home_vertical(context, memory, services, 0x8000010Cu);\n",
+            "    galaxy::site_hook(services, context, memory, 0x80000108u, galaxy::SiteHookKind::HomeBackings, 0u);\n    galaxy::site_hook(services, context, memory, 0x8000010Cu, galaxy::SiteHookKind::HomeVertical, 0u);\n",
             0x8000_0100,
             0x10,
             &BTreeSet::new(),
@@ -2874,11 +2864,10 @@ mod tests {
             },
         )
         .expect("sidecar renders the maintained native hook");
-        assert!(source.contains("#include \"galaxy/layout_aspect.h\""));
-        assert!(source.contains("#include \"galaxy/layout_aspect_home.h\""));
+        assert!(!source.contains("galaxy/layout_aspect"));
         assert!(body.contains("rso_pc(0x0000000Cu)"));
-        assert!(!source.contains("services, 0x8000010Cu"));
-        assert!(!source.contains("services, 0x80000108u"));
+        assert!(!source.contains("memory, 0x8000010Cu"));
+        assert!(!source.contains("memory, 0x80000108u"));
     }
 
     #[test]

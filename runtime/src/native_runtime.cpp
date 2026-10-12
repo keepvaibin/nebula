@@ -4,6 +4,7 @@
 #include "galaxy/checkpoint_gate.h"
 #include "galaxy/decrementer_deadline.h"
 #include "galaxy/external_dispatch.h"
+#include "galaxy/site_hooks.h"
 #include "galaxy/coop_scheduler.h"
 #include "galaxy/native_call_admission.h"
 #include "galaxy/experimental_ultrawide_aspect.h"
@@ -23940,6 +23941,7 @@ void apply_draw_distance(RuntimeState& state) {
     DrawDistanceState& dd = state.draw_distance;
     static constexpr float kScales[] = {1.0f, 2.0f, 4.0f, 8.0f};
     const float scale = kScales[std::min(galaxy::gx::get_render_config().draw_distance, 3u)];
+    galaxy::set_site_hook_lod_distance_scale(scale);
     std::uint32_t objects = 0u;
     if (!try_read_guest_u32(space, 0x806A1228u, objects) ||
         !try_read_guest_u32(space, objects + 0x24u, objects) ||
@@ -33339,6 +33341,12 @@ int wmain(int argc, wchar_t** argv) {
     services.experimental_aspect_word = +[](void*) -> std::uint64_t {
         return galaxy::g_experimental_dynamic_aspect_word.load(
             std::memory_order_acquire);
+    };
+    services.site_hook = +[](void* user, std::uint32_t guest_pc, std::uint32_t kind,
+                             std::uint32_t argument, galaxy::PpcContext* context,
+                             galaxy::GuestMemoryV1* memory) {
+        galaxy::dispatch_site_hook(static_cast<RuntimeState*>(user)->services, guest_pc, kind,
+                                   argument, context, memory);
     };
     build_direct_dispatch_table(state, function_records_fn);
     if (!state.direct_dispatch_table.empty()) {

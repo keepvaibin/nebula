@@ -3569,11 +3569,7 @@ fn lower_words_with_config(
             && pc == 0x8036_7E64
             && word == 0xE3C1_0038
         {
-            writeln!(
-                output,
-                "    galaxy::apply_rmge01_cinema_vertical(context, memory, services);\n    galaxy::apply_rmge01_hud_anchors(context, memory, services);"
-            )
-            .map_err(|_| TranslationError::Formatting)?;
+            output.push_str(&site_hook_call(pc, "CinemaAndHud", 0));
         }
         // RMGE01's animation is complete here. Adjust only the identified
         // backing panes before their matrices and hit regions are calculated;
@@ -3583,31 +3579,19 @@ fn lower_words_with_config(
             && pc == 0x8036_7D78
             && word == 0x807F_0004
         {
-            writeln!(
-                output,
-                "    galaxy::apply_rmge01_layout_backings(context, memory, services);"
-            )
-            .map_err(|_| TranslationError::Formatting)?;
+            output.push_str(&site_hook_call(pc, "LayoutBackings", 0));
         }
         // Home RSO Pane::CalculateMtx entry. Runtime geometry checks tell its
         // main backing apart from pointers.
         if (address, function_end, pc, word) == (0x8100_00D8, 0x8101_B120, 0x8101_18F8, 0x9421_FF20)
         {
-            writeln!(
-                output,
-                "    galaxy::apply_rmge01_home_backings(context, memory, services, 0x810118F8u);"
-            )
-            .map_err(|_| TranslationError::Formatting)?;
+            output.push_str(&site_hook_call(pc, "HomeBackings", 0));
         }
         // The Home Pane global matrix is complete on every path to this join
         // and children are not calculated yet. The original lbz still runs.
         if (address, function_end, pc, word) == (0x8100_00D8, 0x8101_B120, 0x8101_1B1C, 0x881D_00CF)
         {
-            writeln!(
-                output,
-                "    galaxy::apply_rmge01_home_vertical(context, memory, services, 0x81011B1Cu);"
-            )
-            .map_err(|_| TranslationError::Formatting)?;
+            output.push_str(&site_hook_call(pc, "HomeVertical", 0));
         }
         let typed_pure_access = if typed_region_gpr_mask != 0
             && !has_reentry_label
@@ -3625,7 +3609,7 @@ fn lower_words_with_config(
         output.push_str("    {\n");
         final_instruction_is_terminal = false;
         if rmge01_native_screen_width_call(address, function_end, pc, word) {
-            output.push_str("    galaxy::enter_experimental_rmge01_native_screen_width();\n");
+            output.push_str(&site_hook_call(pc, "NativeScreenWidthEnter", 0));
         }
 
         match instruction.op {
@@ -3762,9 +3746,7 @@ fn lower_words_with_config(
                     && pc == 0x804D_074C
                     && word == 0x8861_0008
                 {
-                    output.push_str(
-                        "    galaxy::apply_experimental_rmge01_native_four_three_aspect_read(context, memory, services);\n",
-                    );
+                    output.push_str(&site_hook_call(pc, "FourThreeAspectRead", 0));
                 }
                 if update {
                     writeln!(output, "    context->gpr[{base}] = {ea};")
@@ -4118,9 +4100,8 @@ fn lower_words_with_config(
                         _ => None,
                     };
                     if let Some((lane, half)) = layout_constant {
-                        writeln!(output,
-                            "    galaxy::apply_experimental_rmge01_layout_constant(context, services, {lane}u, {half});"
-                        ).map_err(|_| TranslationError::Formatting)?;
+                        output.push_str(&site_hook_call(
+                            pc, "LayoutConstant", (lane as u32) | (u32::from(half) << 8)));
                     }
                     // As in Dusklight CC0, menu panes stay circular through a
                     // wider root canvas with inverse horizontal child scale.
@@ -4132,9 +4113,7 @@ fn lower_words_with_config(
                         && pc == 0x803C_A6FC
                         && word == 0xC062_19A8
                     {
-                        output.push_str(
-                            "    galaxy::apply_experimental_rmge01_nw4r_canvas_width(context, services);\n",
-                        );
+                        output.push_str(&site_hook_call(pc, "Nw4rCanvasWidth", 0));
                     }
                     // RMGE01 CameraContext::getAspect loads a fixed 16:9 float
                     // in its widescreen branch. The original lfs runs, then f1
@@ -4145,9 +4124,7 @@ fn lower_words_with_config(
                         && pc == 0x8009_72B0
                         && word == 0xC022_96E4
                     {
-                        output.push_str(
-                            "    galaxy::apply_experimental_rmge01_camera_aspect(context, services);\n",
-                        );
+                        output.push_str(&site_hook_call(pc, "CameraAspect", 0));
                     }
                 } else if flat_ram_reads {
                     writeln!(
@@ -5865,9 +5842,7 @@ fn lower_words_with_config(
                     && pc == 0x803F_6B70
                     && word == 0x4E80_0020
                 {
-                    output.push_str(
-                        "    galaxy::apply_experimental_rmge01_ultrawide_screen_width(context, services);\n",
-                    );
+                    output.push_str(&site_hook_call(pc, "UltrawideScreenWidth", 0));
                 }
                 let bo = (word >> 21) & 0x1F;
                 let bi = (word >> 16) & 0x1F;
@@ -5972,9 +5947,7 @@ fn lower_words_with_config(
         }
         if (address, function_end, pc, word) == (0x803F_6D84, 0x803F_6E30, 0x803F_6DB8, 0x3800_0340)
         {
-            output.push_str(
-                "    galaxy::apply_experimental_rmge01_efb_screen_width(context, services);\n",
-            );
+            output.push_str(&site_hook_call(pc, "EfbScreenWidth", 0));
         }
         // Fit the wide UI into narrower custom aspects without changing the
         // 3D camera. Projection height and both Y conversions form an inverse
@@ -5982,7 +5955,7 @@ fn lower_words_with_config(
         // instruction block.
         let mut post_block_hooks = String::new();
         if rmge01_native_screen_width_call(address, function_end, pc, word) {
-            post_block_hooks.push_str("    galaxy::exit_experimental_rmge01_native_screen_width();\n");
+            post_block_hooks.push_str(&site_hook_call(pc, "NativeScreenWidthExit", 0));
         }
         let layout_vertical_fit = match (address, function_end, pc, word) {
             (0x803C_A6C4, 0x803C_A76C, 0x803C_A708, 0xEC21_1028) => Some((1, false)),
@@ -5993,9 +5966,8 @@ fn lower_words_with_config(
             _ => None,
         };
         if let Some((lane, inverse)) = layout_vertical_fit {
-            writeln!(post_block_hooks,
-                "    galaxy::apply_experimental_rmge01_layout_vertical_fit(context, services, {lane}u, {inverse});"
-            ).map_err(|_| TranslationError::Formatting)?;
+            post_block_hooks.push_str(&site_hook_call(
+                pc, "LayoutVerticalFit", (lane as u32) | (u32::from(inverse) << 8)));
         }
         let home_geometry = match (address, function_end, pc, word) {
             (0x8036_26CC, 0x8036_284C, 0x8036_27F0, 0xEC63_2028) => Some((0, 3)),
@@ -6008,18 +5980,8 @@ fn lower_words_with_config(
         };
         if let Some((kind, lane)) = home_geometry {
             // Game kinds 0 and 1 have fixed lanes; Home RSO kinds name theirs.
-            if kind < 2 {
-                writeln!(
-                    post_block_hooks,
-                    "    galaxy::apply_experimental_rmge01_home_geometry(context, services, {kind}u);"
-                )
-            } else {
-                writeln!(
-                    post_block_hooks,
-                    "    galaxy::apply_experimental_rmge01_home_geometry(context, services, {kind}u, {lane}u);"
-                )
-            }
-            .map_err(|_| TranslationError::Formatting)?;
+            let argument = if kind < 2 { kind as u32 } else { (kind as u32) | ((lane as u32) << 8) };
+            post_block_hooks.push_str(&site_hook_call(pc, "HomeGeometry", argument));
         }
         // These hooks change the canonical context after the guest operation,
         // so local-lane lowering must reload that lane.
@@ -6778,6 +6740,12 @@ fn emit_direct_guest_call_with_exact_fpu(
                 "    galaxy::trace_function_async_gameplay_pointer_consumer(services, context, memory);\n",
             );
         }
+        // LodCtrl::update's camera distance (f1): the runtime scales it with
+        // the draw distance, moving the middle/low model switch (and the
+        // host-synced shadows that end there) outward.
+        if target == 0x8016_6C6C && pc == 0x8016_6B1C {
+            output.push_str(&site_hook_call(pc, "LodDistance", 0));
+        }
         Ok(())
     }
 
@@ -7053,6 +7021,15 @@ impl NativePureHelper {
 /// lands in a fixed 160x160 EFB region, so these keep the game's 16:9 width
 /// under a widened aspect (without it the circle narrows at 32:9 and leaves
 /// the sides of the shadow dark).
+/// One runtime-owned display/level-of-detail site (ABI 27). The module only
+/// marks the guest PC; galaxy::site_hook calls the runtime, which owns what
+/// each SiteHookKind does, so policy changes need no module rebuild.
+fn site_hook_call(pc: u32, kind: &str, argument: u32) -> String {
+    format!(
+        "    galaxy::site_hook(services, context, memory, 0x{pc:08X}u, galaxy::SiteHookKind::{kind}, {argument}u);\n"
+    )
+}
+
 fn rmge01_native_screen_width_call(address: u32, function_end: u32, pc: u32, word: u32) -> bool {
     matches!(
         (address, function_end, pc, word),
@@ -10544,39 +10521,6 @@ fn emit_sharded_module_with_experiment(
     if functions_in_shard != 0 {
         push_rendered_function_shard(&mut files, &mut shard_names, source);
     }
-    // Include the optional display policy only in its RMGE01 owner
-    // shards. Do this after packing so it cannot move any other function or
-    // invalidate byte-identical objects from the previous proven build.
-    for file in &mut files {
-        if file.name.starts_with("functions_")
-            && file.name.ends_with(".cpp")
-            && file.contents.contains("void fn_80367D28(")
-        {
-            file.contents = file.contents.replacen(
-                "#include \"functions.h\"\n",
-                "#include \"functions.h\"\n#include \"galaxy/layout_aspect_cinema.h\"\n",
-                1,
-            );
-        }
-        if file.name.starts_with("functions_")
-            && file.name.ends_with(".cpp")
-            && (file.contents.contains("void fn_803F6B44(")
-                || file.contents.contains("void fn_803F6D84(")
-                || file.contents.contains("void fn_803CA6C4(")
-                || file.contents.contains("void fn_804D0708(")
-                || file.contents.contains("void fn_80366658(")
-                || file.contents.contains("void fn_80366758(")
-                || file.contents.contains("void fn_803626CC(")
-                || file.contents.contains("void fn_80097288(")
-                || file.contents.contains("void fn_80313AF4("))
-        {
-            file.contents = file.contents.replacen(
-                "#include \"functions.h\"\n",
-                "#include \"functions.h\"\n#include \"galaxy/experimental_ultrawide_aspect.h\"\n",
-                1,
-            );
-        }
-    }
     if let Some(experiment) = experiments.psmtx {
         if !functions
             .iter()
@@ -12214,7 +12158,7 @@ mod tests {
         let mut words = vec![0x6000_0000; 12];
         words[11] = 0x4E80_0020;
         let output = lower_instruction_fixture(0x803F_6B44, &words);
-        let hook = "galaxy::apply_experimental_rmge01_ultrawide_screen_width(context, services);";
+        let hook = "galaxy::site_hook(services, context, memory, 0x803F6B70u, galaxy::SiteHookKind::UltrawideScreenWidth, 0u);";
         assert_eq!(output.matches(hook).count(), 1);
         assert!(output.contains(&format!("{hook}\n    return;")));
         assert!(!lower_instruction_fixture(0x803F_6B40, &words).contains(hook));
@@ -12231,8 +12175,8 @@ mod tests {
         words[0x208 / 4] = 0x480E_CC8D;
         words[0x28C / 4] = 0x480E_EFB1;
         *words.last_mut().unwrap() = 0x4E80_0020;
-        let enter = "galaxy::enter_experimental_rmge01_native_screen_width();";
-        let exit = "galaxy::exit_experimental_rmge01_native_screen_width();";
+        let enter = "galaxy::SiteHookKind::NativeScreenWidthEnter";
+        let exit = "galaxy::SiteHookKind::NativeScreenWidthExit";
         let output = lower_instruction_fixture(0x8031_3AF4, &words);
         assert_eq!(output.matches(enter).count(), 2);
         assert_eq!(output.matches(exit).count(), 2);
@@ -12257,7 +12201,7 @@ mod tests {
         let mut words = vec![0x6000_0000; 0xA8 / 4];
         words[(0x803C_A6FC - 0x803C_A6C4) / 4] = 0xC062_19A8;
         *words.last_mut().unwrap() = 0x4E80_0020;
-        let hook = "galaxy::apply_experimental_rmge01_nw4r_canvas_width(context, services);";
+        let hook = "galaxy::site_hook(services, context, memory, 0x803CA6FCu, galaxy::SiteHookKind::Nw4rCanvasWidth, 0u);";
         let output = lower_instruction_fixture(0x803C_A6C4, &words);
         assert_eq!(output.matches(hook).count(), 1);
         assert!(output.contains(&format!(
@@ -12279,14 +12223,11 @@ mod tests {
         words[(0x8036_7D78 - 0x8036_7D28) / 4] = 0x807F_0004;
         words[(0x8036_7E64 - 0x8036_7D28) / 4] = 0xE3C1_0038;
         *words.last_mut().unwrap() = 0x4E80_0020;
-        let backing = "galaxy::apply_rmge01_layout_backings(context, memory, services);";
-        let hud = "galaxy::apply_rmge01_hud_anchors(context, memory, services);";
-        let cinema = "galaxy::apply_rmge01_cinema_vertical(context, memory, services);";
+        let backing = "galaxy::site_hook(services, context, memory, 0x80367D78u, galaxy::SiteHookKind::LayoutBackings, 0u);";
+        let hud = "galaxy::site_hook(services, context, memory, 0x80367E64u, galaxy::SiteHookKind::CinemaAndHud, 0u);";
         let output = lower_instruction_fixture(0x8036_7D28, &words);
         assert_eq!(output.matches(backing).count(), 1);
         assert_eq!(output.matches(hud).count(), 1);
-        assert_eq!(output.matches(cinema).count(), 1);
-        assert!(output.find(cinema).unwrap() < output.find(hud).unwrap());
         assert!(output.find(backing).unwrap() < output.find(hud).unwrap());
         assert!(!lower_instruction_fixture(0x8036_7D24, &words).contains(backing));
         words[(0x8036_7D78 - 0x8036_7D28) / 4] = 0x807F_0008;
@@ -12295,7 +12236,7 @@ mod tests {
         *words.last_mut().unwrap() = 0x4E80_0020;
         let shortened = lower_instruction_fixture(0x8036_7D28, &words);
         assert!(
-            !shortened.contains(backing) && !shortened.contains(hud) && !shortened.contains(cinema)
+            !shortened.contains(backing) && !shortened.contains(hud)
         );
     }
 
@@ -12314,7 +12255,7 @@ mod tests {
                 words[offset / 4] = word;
             }
             *words.last_mut().unwrap() = 0x4E80_0020;
-            let hook = "galaxy::apply_experimental_rmge01_layout_constant(";
+            let hook = "galaxy::SiteHookKind::LayoutConstant";
             let output = lower_instruction_fixture(start, &words);
             assert_eq!(output.matches(hook).count(), loads.len());
             assert_eq!(
@@ -12357,7 +12298,7 @@ mod tests {
             let mut words = vec![0x6000_0000; length / 4];
             words[offset / 4] = word;
             *words.last_mut().unwrap() = 0x4E80_0020;
-            let hook = "galaxy::apply_experimental_rmge01_layout_vertical_fit(";
+            let hook = "galaxy::SiteHookKind::LayoutVerticalFit";
             let output = lower_instruction_fixture(start, &words);
             assert_eq!(output.matches(hook).count(), 1);
             assert!(output.find(original).unwrap() < output.find(hook).unwrap());
@@ -12372,7 +12313,7 @@ mod tests {
         let mut words = vec![0x6000_0000; 0xAC / 4];
         words[0x34 / 4] = 0x3800_0340;
         *words.last_mut().unwrap() = 0x4E80_0020;
-        let hook = "galaxy::apply_experimental_rmge01_efb_screen_width(";
+        let hook = "galaxy::SiteHookKind::EfbScreenWidth";
         let output = lower_instruction_fixture(0x803F_6D84, &words);
         assert_eq!(output.matches(hook).count(), 1);
         assert!(
@@ -12394,7 +12335,7 @@ mod tests {
         let mut words = vec![0x6000_0000; 0x1B048 / 4];
         words[offset / 4] = 0x9421_FF20;
         *words.last_mut().unwrap() = 0x4E80_0020;
-        let hook = "galaxy::apply_rmge01_home_backings(context, memory, services, 0x810118F8u);";
+        let hook = "galaxy::site_hook(services, context, memory, 0x810118F8u, galaxy::SiteHookKind::HomeBackings, 0u);";
         let output = lower_instruction_fixture(start, &words);
         assert_eq!(output.matches(hook).count(), 1);
         assert!(
@@ -12416,7 +12357,7 @@ mod tests {
         let mut words = vec![0x6000_0000; 0x1B048 / 4];
         words[offset / 4] = 0x881D_00CF;
         *words.last_mut().unwrap() = 0x4E80_0020;
-        let hook = "galaxy::apply_rmge01_home_vertical(context, memory, services, 0x81011B1Cu);";
+        let hook = "galaxy::site_hook(services, context, memory, 0x81011B1Cu, galaxy::SiteHookKind::HomeVertical, 0u);";
         let output = lower_instruction_fixture(start, &words);
         assert!(output.contains(hook));
         assert!(
@@ -12455,7 +12396,7 @@ mod tests {
                 words[offset / 4] = word;
             }
             *words.last_mut().unwrap() = 0x4E80_0020;
-            let hook = "galaxy::apply_experimental_rmge01_home_geometry(";
+            let hook = "galaxy::SiteHookKind::HomeGeometry";
             let output = lower_instruction_fixture(start, &words);
             assert_eq!(output.matches(hook).count(), sites.len());
             for prefix in output.split(hook).take(sites.len()) {
@@ -12477,7 +12418,7 @@ mod tests {
         let mut words = vec![0x6000_0000; (0x8009_731C - 0x8009_7288) / 4];
         words[(0x8009_72B0 - 0x8009_7288) / 4] = 0xC022_96E4;
         *words.last_mut().unwrap() = 0x4E80_0020;
-        let hook = "galaxy::apply_experimental_rmge01_camera_aspect(context, services);";
+        let hook = "galaxy::site_hook(services, context, memory, 0x800972B0u, galaxy::SiteHookKind::CameraAspect, 0u);";
         let output = lower_instruction_fixture(0x8009_7288, &words);
         assert_eq!(output.matches(hook).count(), 1);
         assert!(output.contains(&format!(
@@ -12502,7 +12443,7 @@ mod tests {
         let mut words = vec![0x6000_0000; 0x54 / 4];
         words[(0x804D_074C - 0x804D_0708) / 4] = 0x8861_0008;
         *words.last_mut().unwrap() = 0x4E80_0020;
-        let hook = "galaxy::apply_experimental_rmge01_native_four_three_aspect_read(context, memory, services);";
+        let hook = "galaxy::site_hook(services, context, memory, 0x804D074Cu, galaxy::SiteHookKind::FourThreeAspectRead, 0u);";
         let output = lower_instruction_fixture(0x804D_0708, &words);
         assert_eq!(output.matches(hook).count(), 1);
         assert!(output.contains(&format!(
@@ -16930,43 +16871,6 @@ mod tests {
             3,
             "the existing shard-size argument remains a hard function-count ceiling"
         );
-    }
-
-    #[test]
-    fn final_aspect_include_cannot_escape_shard_source_ceiling() {
-        for address in [0x803F_6B44, 0x803C_A6C4, 0x804D_0708, 0x8009_7288] {
-            let functions = [(
-                FunctionRange { address, size: 4 },
-                "    return;\n".to_owned(),
-            )];
-            let emit =
-                |limit| emit_sharded_module_with_source_budget(&functions, &[], 1, limit, address);
-            let files = emit(4096).expect("aspect owner emits with sufficient space");
-            let shard = files
-                .iter()
-                .find(|file| file.name == "functions_0000.cpp")
-                .unwrap();
-            assert!(shard
-                .contents
-                .contains("#include \"galaxy/experimental_ultrawide_aspect.h\""));
-            let full_bytes = shard.contents.len();
-            // The final file must pass exactly at the ceiling, but reject one
-            // byte less even though its pre-include function fits that budget.
-            let exact = emit(full_bytes).expect("exact final ceiling admits shard");
-            assert_eq!(
-                exact
-                    .iter()
-                    .find(|file| file.name == shard.name)
-                    .unwrap()
-                    .contents,
-                shard.contents
-            );
-            let error = emit(full_bytes - 1).expect_err("added include exceeds final ceiling");
-            assert!(matches!(error, TranslationError::ShardExceedsSourceBudget {
-                name, generated_bytes, limit_bytes,
-            } if name == "functions_0000.cpp" && generated_bytes == full_bytes
-                && limit_bytes == full_bytes - 1));
-        }
     }
 
     #[test]
