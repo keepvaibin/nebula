@@ -152,6 +152,15 @@ enum Command {
         /// empty: every checkpoint then takes the complete policy).
         #[arg(long)]
         checkpoint_globals: bool,
+        /// Fastmem module that assumes the flat view everywhere: stmw and dcbz
+        /// through the view, lean host bodies without the null-view fallback
+        /// (needs --fast-float and the flat RAM read and write options).
+        #[arg(long)]
+        flat_view_only: bool,
+        /// _savegpr stores right after `addi r11,r1,d` skip the gather-pipe
+        /// test (needs --experimental-flat-ram-writes).
+        #[arg(long)]
+        stack_r11_stores: bool,
         /// Retained compatibility spelling; exact PSMTX local lanes are enabled by default.
         #[arg(long, default_value_t = true)]
         exact_psmtx_local_lanes: bool,
@@ -482,6 +491,8 @@ fn main() -> Result<()> {
             experimental_inline_scalar_single_binary,
             hw_float_conversions,
             checkpoint_globals,
+            flat_view_only,
+            stack_r11_stores,
             exact_psmtx_local_lanes,
             no_exact_psmtx_local_lanes,
             exact_psvec_cross_local_lanes,
@@ -517,6 +528,8 @@ fn main() -> Result<()> {
                 inline_scalar_single_binary: experimental_inline_scalar_single_binary,
                 hw_float_conversions,
                 checkpoint_globals,
+                flat_view_only,
+                stack_r11_stores,
                 exact_psmtx_local_lanes: exact_psmtx_local_lanes && !no_exact_psmtx_local_lanes,
                 exact_psvec_cross_local_lanes,
                 exact_psvec_normalize_local_lanes,
@@ -1520,6 +1533,31 @@ mod tests {
             Command::TranslateModule {
                 checkpoint_globals: true,
                 hw_float_conversions: false,
+                ..
+            }
+        ));
+        assert!(matches!(
+            parse(&[]),
+            Command::TranslateModule {
+                flat_view_only: false,
+                stack_r11_stores: false,
+                ..
+            }
+        ));
+        assert!(matches!(
+            parse(&["--flat-view-only"]),
+            Command::TranslateModule {
+                flat_view_only: true,
+                stack_r11_stores: false,
+                checkpoint_globals: false,
+                ..
+            }
+        ));
+        assert!(matches!(
+            parse(&["--stack-r11-stores"]),
+            Command::TranslateModule {
+                stack_r11_stores: true,
+                flat_view_only: false,
                 ..
             }
         ));

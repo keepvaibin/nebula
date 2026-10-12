@@ -258,6 +258,18 @@ pub struct ModuleTranslationOptions {
     /// with `galaxy::refresh_module_checkpoint_gate`; an empty snapshot sends
     /// every checkpoint to the complete service-table policy.
     pub checkpoint_globals: bool,
+    /// A fastmem module that assumes the flat view everywhere: `stmw` with
+    /// rS <= 24 stores register by register through the view instead of the
+    /// checked multiple-store helper, `dcbz` zeroes its line through the view
+    /// (`fast::zero_line`), and `functions.h` defines `GALAXY_FLAT_VIEW_ONLY`
+    /// so the inlined lean host bodies drop their null-view check and region
+    /// fallback (`lean_guest_span`, `cstring::view`). Requires `fast_float`
+    /// (which makes the module fastmem) and both flat RAM directions.
+    pub flat_view_only: bool,
+    /// `bl _savegpr_N` right after `addi r11,r1,d` (CodeWarrior's prologue)
+    /// stores through `fast::store_stack`: r11 addresses the caller's own
+    /// frame, so the gather-pipe test goes. Requires `flat_ram_writes`.
+    pub stack_r11_stores: bool,
     pub exact_psmtx_local_lanes: bool,
     pub exact_psvec_cross_local_lanes: bool,
     pub exact_psvec_normalize_local_lanes: bool,
@@ -295,6 +307,8 @@ impl Default for ModuleTranslationOptions {
             guest_resident_float: false,
             hw_float_conversions: false,
             checkpoint_globals: false,
+            flat_view_only: false,
+            stack_r11_stores: false,
             exact_psmtx_local_lanes: true,
             exact_psvec_cross_local_lanes: false,
             exact_psvec_normalize_local_lanes: false,
@@ -472,6 +486,20 @@ pub fn validate_module_options(options: &ModuleTranslationOptions) -> Result<(),
         return Err(TranslationError::OptionRequires {
             option: "hw_float_conversions",
             requires: "flat_ram_reads and flat_ram_writes",
+        });
+    }
+    if options.flat_view_only
+        && !(options.fast_float && options.flat_ram_reads && options.flat_ram_writes)
+    {
+        return Err(TranslationError::OptionRequires {
+            option: "flat_view_only",
+            requires: "fast_float (a fastmem module), flat_ram_reads and flat_ram_writes",
+        });
+    }
+    if options.stack_r11_stores && !options.flat_ram_writes {
+        return Err(TranslationError::OptionRequires {
+            option: "stack_r11_stores",
+            requires: "flat_ram_writes",
         });
     }
     Ok(())
@@ -908,6 +936,9 @@ pub fn translate_module_with_options(
     }
     if options.checkpoint_globals {
         apply_checkpoint_globals(&mut source_files);
+    }
+    if options.flat_view_only {
+        apply_flat_view_only(&mut source_files);
     }
     if options.trace_end_frame_spans {
         insert_end_frame_span_markers(&mut source_files, shard_source_bytes)?;
@@ -2536,6 +2567,8 @@ fn lower_words_for_module_with_call_return_entries_and_exact_fpu_flat_reads(
             fused_paired_ternary: options.fused_paired_ternary,
             inline_scalar_single_binary: options.inline_scalar_single_binary,
             hw_float_conversions: options.hw_float_conversions,
+            flat_view_only: options.flat_view_only,
+            stack_r11_stores: options.stack_r11_stores,
             ..LoweringConfig::default()
         },
     )
@@ -2598,6 +2631,8 @@ fn lower_words_with_options(
             typed_region_gpr_mask: 0,
             device_pointer_globals: None,
             hw_float_conversions: false,
+            flat_view_only: false,
+            stack_r11_stores: false,
         },
     )
 }
@@ -2630,6 +2665,8 @@ struct LoweringConfig<'a> {
     typed_region_gpr_mask: u32,
     device_pointer_globals: Option<&'a BTreeMap<i32, u32>>,
     hw_float_conversions: bool,
+    flat_view_only: bool,
+    stack_r11_stores: bool,
 }
 
 // The typed-region pilot has a single DOL owner; its public body still
@@ -3449,6 +3486,8 @@ fn lower_words_with_config(
         typed_region_gpr_mask,
         device_pointer_globals,
         hw_float_conversions,
+        flat_view_only,
+        stack_r11_stores,
     } = config;
     // Suffix of the flat-view float load/store helpers: `_hw` converts binary32
     // lanes with the host's cvtss2sd/cvtsd2ss.
@@ -3961,7 +4000,9 @@ fn lower_words_with_config(
                     true,
                     immediate_override,
                 )?;
-                if source <= 24 {
+                // A flat-view-only module stores every stmw register by
+                // register through the view, like rS > 24 always does.
+                if source <= 24 && !(flat_view_only && flat_ram_writes) {
                     writeln!(output,
                         "    galaxy::guest_store_multiple_gprs<{source}u>(context, memory, {ea}, services, 0x{pc:08X}u);")
                         .map_err(|_| TranslationError::Formatting)?;
@@ -4415,10 +4456,17 @@ fn lower_words_with_config(
                 let base = gpr_ra(word);
                 let index = gpr_rb(word);
                 let ea = emit_indexed_effective_address(&mut output, pc, base, index)?;
-                writeln!(
-                    output,
-                    "    galaxy::guest_zero(memory, {ea} & 0xFFFFFFE0u, 32u, services, 0x{pc:08X}u);"
-                )
+                if flat_view_only && flat_ram_writes {
+                    writeln!(
+                        output,
+                        "    galaxy::fast::zero_line(flat_guest_base, memory, {ea}, services, 0x{pc:08X}u);"
+                    )
+                } else {
+                    writeln!(
+                        output,
+                        "    galaxy::guest_zero(memory, {ea} & 0xFFFFFFE0u, 32u, services, 0x{pc:08X}u);"
+                    )
+                }
                 .map_err(|_| TranslationError::Formatting)?;
             }
             Opcode::DcbzL => {
@@ -5751,6 +5799,15 @@ fn lower_words_with_config(
                     None
                 };
                 if let Some((first, save)) = gpr_save_restore {
+                    // r11 addresses the caller's frame when the only way here
+                    // is straight from `addi r11,r1,d` (CodeWarrior's prologue).
+                    let r11_on_stack = stack_r11_stores
+                        && save
+                        && !has_reentry_label
+                        && pc > address
+                        && r11_is_stack_frame_pointer(
+                            word_at(bytes, address, pc - 4),
+                        );
                     emit_gpr_save_restore(
                         &mut output,
                         first,
@@ -5758,6 +5815,7 @@ fn lower_words_with_config(
                         pc,
                         flat_ram_reads,
                         flat_ram_writes,
+                        r11_on_stack,
                     )?;
                 } else if target >= address && target < function_end {
                     if target <= pc {
@@ -6775,6 +6833,22 @@ fn validate_psvec_normalize_local_memory_contract(bytes: &[u8]) -> Result<(), Tr
     Ok(())
 }
 
+/// `addi r11,r1,d`: r11 then addresses the current stack frame, never the
+/// write-gather pipe.
+fn r11_is_stack_frame_pointer(word: u32) -> bool {
+    word >> 26 == 14 && gpr_rt(word) == 11 && gpr_ra(word) == 1
+}
+
+/// The big-endian instruction word at `pc` inside the function at `address`.
+fn word_at(bytes: &[u8], address: u32, pc: u32) -> u32 {
+    let offset = (pc - address) as usize;
+    u32::from_be_bytes(
+        bytes[offset..offset + 4]
+            .try_into()
+            .expect("four-byte PPC word"),
+    )
+}
+
 /// CodeWarrior's register save/restore helpers: `_savegpr_N` at
 /// 0x805174FC + 4(N-14) is `stw rN..r31, -0x80+4N(r11)` then `blr`;
 /// `_restgpr_N` at 0x80517548 + 4(N-14) is the matching `lwz` run. A linked
@@ -6795,6 +6869,7 @@ fn gpr_save_restore_entry(target: u32) -> Option<(u32, bool)> {
 /// store/load run (one statement per register, so the residency pass keeps the
 /// registers in host locals). The helpers contain no call, branch or
 /// interrupt boundary, so the call-return checkpoint is not needed.
+#[allow(clippy::too_many_arguments)]
 fn emit_gpr_save_restore(
     output: &mut String,
     first: u32,
@@ -6802,7 +6877,9 @@ fn emit_gpr_save_restore(
     pc: u32,
     flat_ram_reads: bool,
     flat_ram_writes: bool,
+    r11_on_stack: bool,
 ) -> Result<(), TranslationError> {
+    let store = if r11_on_stack { "store_stack" } else { "store" };
     for reg in first..32 {
         let ea = format!(
             "context->gpr[11] + 0x{:08X}u",
@@ -6812,7 +6889,7 @@ fn emit_gpr_save_restore(
             if flat_ram_writes {
                 writeln!(
                     output,
-                    "    galaxy::fast::store<std::uint32_t>(flat_guest_base, memory, {ea}, context->gpr[{reg}], services, 0x{pc:08X}u);"
+                    "    galaxy::fast::{store}<std::uint32_t>(flat_guest_base, memory, {ea}, context->gpr[{reg}], services, 0x{pc:08X}u);"
                 )
             } else {
                 writeln!(
@@ -8249,6 +8326,23 @@ fn apply_checkpoint_globals(source_files: &mut [GeneratedSource]) {
                  \x20   return &galaxy::g_module_checkpoint_gate;\n\
                  }\n",
             );
+        }
+    }
+}
+
+/// `--flat-view-only`: every unit that includes the runtime header directly
+/// (`functions.h` for the shards) defines `GALAXY_FLAT_VIEW_ONLY` first, so the
+/// inlined lean host bodies assume the flat view as the translated code does.
+fn apply_flat_view_only(source_files: &mut [GeneratedSource]) {
+    const DEFINE: &str = "#define GALAXY_FLAT_VIEW_ONLY 1\n";
+    const INCLUDE: &str = "#include \"galaxy/native_api.h\"";
+    const PRAGMA: &str = "#pragma once\n";
+    for file in source_files.iter_mut() {
+        if file.contents.contains(INCLUDE) && !file.contents.contains(DEFINE) {
+            file.contents = match file.contents.strip_prefix(PRAGMA) {
+                Some(rest) => format!("{PRAGMA}{DEFINE}{rest}"),
+                None => format!("{DEFINE}{}", file.contents),
+            };
         }
     }
 }
@@ -12083,6 +12177,212 @@ mod tests {
             2
         );
         assert!(!out.contains("_hw("), "{out}");
+    }
+
+    fn lower_with(words: &[u32], config: LoweringConfig<'_>) -> String {
+        let bytes: Vec<u8> = words.iter().flat_map(|word| word.to_be_bytes()).collect();
+        lower_words_with_config(
+            0x8000_4000,
+            &bytes,
+            &BTreeSet::new(),
+            &BTreeSet::new(),
+            config,
+        )
+        .unwrap()
+    }
+
+    fn flat_config(flat_view_only: bool, stack_r11_stores: bool) -> LoweringConfig<'static> {
+        LoweringConfig {
+            flat_ram_reads: true,
+            flat_ram_writes: true,
+            flat_view_only,
+            stack_r11_stores,
+            ..LoweringConfig::default()
+        }
+    }
+
+    /// stmw r22,8(r3); stmw r20,-0x30(r1); dcbz r3,r4; blr
+    const FLAT_VIEW_SEQUENCE: [u32; 4] = [
+        (47 << 26) | (22 << 21) | (3 << 16) | 0x0008,
+        (47 << 26) | (20 << 21) | (1 << 16) | 0xFFD0,
+        (31 << 26) | (3 << 16) | (4 << 11) | (1014 << 1),
+        0x4E80_0020,
+    ];
+
+    #[test]
+    fn flat_view_only_off_keeps_the_checked_multiple_store_and_dcbz() {
+        let out = lower_with(&FLAT_VIEW_SEQUENCE, flat_config(false, false));
+        assert!(out.contains("    galaxy::guest_store_multiple_gprs<22u>(context, memory, ea_80004000, services, 0x80004000u);\n"), "{out}");
+        assert!(out.contains("    galaxy::guest_store_multiple_gprs<20u>(context, memory, ea_80004004, services, 0x80004004u);\n"), "{out}");
+        assert!(out.contains("    galaxy::guest_zero(memory, ea_80004008 & 0xFFFFFFE0u, 32u, services, 0x80004008u);\n"), "{out}");
+        assert!(!out.contains("zero_line"));
+    }
+
+    #[test]
+    fn flat_view_only_stores_every_stmw_register_and_zeroes_through_the_view() {
+        let out = lower_with(&FLAT_VIEW_SEQUENCE, flat_config(true, false));
+        assert!(!out.contains("guest_store_multiple_gprs"), "{out}");
+        assert!(!out.contains("guest_zero"), "{out}");
+        // r22..r31 from r3: ordinary flat stores, in register order.
+        for reg in 22..32_u32 {
+            let line = format!(
+                "    galaxy::fast::store<std::uint32_t>(flat_guest_base, memory, ea_80004000 + 0x{:08X}u, context->gpr[{reg}], services, 0x80004000u);\n",
+                (reg - 22) * 4
+            );
+            assert!(out.contains(&line), "{line}{out}");
+        }
+        // r20..r31 from r1: stack stores.
+        for reg in 20..32_u32 {
+            let line = format!(
+                "    galaxy::fast::store_stack<std::uint32_t>(flat_guest_base, memory, ea_80004004 + 0x{:08X}u, context->gpr[{reg}], services, 0x80004004u);\n",
+                (reg - 20) * 4
+            );
+            assert!(out.contains(&line), "{line}{out}");
+        }
+        assert!(out.contains(
+            "    galaxy::fast::zero_line(flat_guest_base, memory, ea_80004008, services, 0x80004008u);\n"
+        ));
+        // Without the flat writes the flag has nothing to switch.
+        let checked = lower_with(
+            &FLAT_VIEW_SEQUENCE,
+            LoweringConfig {
+                flat_view_only: true,
+                ..LoweringConfig::default()
+            },
+        );
+        assert!(checked.contains("guest_store_multiple_gprs<22u>"));
+        assert!(checked.contains("galaxy::guest_zero(memory,"));
+    }
+
+    #[test]
+    fn flat_view_only_defines_the_header_switch() {
+        let mut files = vec![
+            GeneratedSource {
+                name: "functions.h".to_owned(),
+                contents: "#pragma once\n\n#include \"galaxy/native_api.h\"\n".to_owned(),
+            },
+            GeneratedSource {
+                name: "functions_0000.cpp".to_owned(),
+                contents: "#include \"functions.h\"\n".to_owned(),
+            },
+        ];
+        apply_flat_view_only(&mut files);
+        assert_eq!(
+            files[0].contents,
+            "#pragma once\n#define GALAXY_FLAT_VIEW_ONLY 1\n\n#include \"galaxy/native_api.h\"\n"
+        );
+        assert_eq!(files[1].contents, "#include \"functions.h\"\n");
+        let once = files.clone();
+        apply_flat_view_only(&mut files);
+        assert_eq!(files, once);
+    }
+
+    #[test]
+    fn flat_view_only_and_stack_r11_stores_require_their_memory_options() {
+        let release_like = ModuleTranslationOptions {
+            native_float: true,
+            fast_float: true,
+            flat_ram_reads: true,
+            flat_ram_writes: true,
+            ..ModuleTranslationOptions::default()
+        };
+        for (options, option) in [
+            (
+                ModuleTranslationOptions {
+                    flat_view_only: true,
+                    fast_float: false,
+                    ..release_like
+                },
+                "flat_view_only",
+            ),
+            (
+                ModuleTranslationOptions {
+                    flat_view_only: true,
+                    flat_ram_reads: false,
+                    ..release_like
+                },
+                "flat_view_only",
+            ),
+            (
+                ModuleTranslationOptions {
+                    stack_r11_stores: true,
+                    flat_ram_writes: false,
+                    ..release_like
+                },
+                "stack_r11_stores",
+            ),
+        ] {
+            match validate_module_options(&options) {
+                Err(TranslationError::OptionRequires { option: name, .. }) => {
+                    assert_eq!(name, option)
+                }
+                other => panic!("{option}: {other:?}"),
+            }
+        }
+        assert!(validate_module_options(&ModuleTranslationOptions {
+            flat_view_only: true,
+            stack_r11_stores: true,
+            ..release_like
+        })
+        .is_ok());
+    }
+
+    /// addi r11,r1,0x60; bl _savegpr_25; blr
+    const SAVEGPR_FROM_FRAME: [u32; 3] = [
+        (14 << 26) | (11 << 21) | (1 << 16) | 0x0060,
+        0x4851_3525,
+        0x4E80_0020,
+    ];
+
+    #[test]
+    fn stack_r11_stores_off_keeps_the_gather_pipe_test_in_savegpr() {
+        let out = lower_with(&SAVEGPR_FROM_FRAME, flat_config(false, false));
+        assert_eq!(out.matches("galaxy::fast::store<std::uint32_t>(flat_guest_base, memory, context->gpr[11] + ").count(), 7, "{out}");
+        assert!(!out.contains("store_stack"), "{out}");
+    }
+
+    #[test]
+    fn stack_r11_stores_store_savegpr_through_the_frame_without_the_pipe_test() {
+        let out = lower_with(&SAVEGPR_FROM_FRAME, flat_config(false, true));
+        for reg in 25..32_u32 {
+            let line = format!(
+                "    galaxy::fast::store_stack<std::uint32_t>(flat_guest_base, memory, context->gpr[11] + 0x{:08X}u, context->gpr[{reg}], services, 0x80004004u);\n",
+                0xFFFF_FF80u32.wrapping_add(reg * 4)
+            );
+            assert!(out.contains(&line), "{line}{out}");
+        }
+        assert!(!out.contains("galaxy::fast::store<"), "{out}");
+        // r11 from another register: unproved, the pipe test stays.
+        let mut other_base = SAVEGPR_FROM_FRAME;
+        other_base[0] = (14 << 26) | (11 << 21) | (3 << 16) | 0x0060; // addi r11,r3,0x60
+        let unproved = lower_with(&other_base, flat_config(false, true));
+        assert!(!unproved.contains("store_stack"), "{unproved}");
+        // The call is an interior entry: r11 may come from elsewhere.
+        let mut entries = BTreeSet::new();
+        entries.insert(0x8000_4004);
+        let bytes: Vec<u8> = SAVEGPR_FROM_FRAME
+            .iter()
+            .flat_map(|word| word.to_be_bytes())
+            .collect();
+        let entered = lower_words_with_config(
+            0x8000_4000,
+            &bytes,
+            &entries,
+            &BTreeSet::new(),
+            flat_config(false, true),
+        )
+        .unwrap();
+        assert!(!entered.contains("store_stack"), "{entered}");
+        // Restores are loads; they never had the pipe test.
+        let restore = lower_with(
+            &[
+                (14 << 26) | (11 << 21) | (1 << 16) | 0x0060,
+                0x4851_3575, // bl _restgpr_25
+                0x4E80_0020,
+            ],
+            flat_config(false, true),
+        );
+        assert!(!restore.contains("store"), "{restore}");
     }
 
     #[test]

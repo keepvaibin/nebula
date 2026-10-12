@@ -219,6 +219,29 @@ GALAXY_ALWAYS_INLINE void dcache_flush_line(
     guest_notify_write(memory, address & 0xFFFFFFE0u, 32u);
 }
 
+// dcbz (translator --flat-view-only): the 32-byte line containing `address`
+// becomes zero. A line inside a RAM alias is written through the flat view
+// with no publication, like every translated store (flush-based coherency);
+// anything else (the locked cache, devices, unmapped space) keeps the checked
+// guest_zero. The alias test is explicit even under fastmem, so a line outside
+// RAM never reaches the fault handler as a vector store.
+GALAXY_ALWAYS_INLINE void zero_line(
+    std::byte* base,
+    GuestMemoryV1* memory,
+    std::uint32_t address,
+    const NativeServicesV1* services,
+    std::uint32_t guest_pc) {
+    const std::uint32_t line = address & 0xFFFFFFE0u;
+    // Aligned lines never straddle an alias end (every alias size is a
+    // multiple of 32).
+    if (base != nullptr &&
+        (line & 0x0FFFFFFFu) < kFlatAliasBytes[line >> 28u]) GALAXY_LIKELY {
+        std::memset(base + line, 0, 32u);
+        return;
+    }
+    guest_zero(memory, line, 32u, services, guest_pc);
+}
+
 GALAXY_ALWAYS_INLINE std::uint8_t load_u8(
     const std::byte* base, GuestMemoryV1* memory, std::uint32_t address,
     const NativeServicesV1* services, std::uint32_t guest_pc) {

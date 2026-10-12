@@ -8710,6 +8710,26 @@ inline void psq_store(
 GALAXY_ALWAYS_INLINE std::uint64_t widen_f32_bits(std::uint32_t bits);
 inline std::uint32_t narrow_paired_single_ftz(std::uint64_t bits);
 
+// Flat-view-only module (translator --flat-view-only, GALAXY_FLAT_VIEW_ONLY in
+// the generated functions.h): a fastmem module that the runtime starts only
+// with the flat view (kModuleMemoryFlagRequiresFlatView). The host bodies it
+// inlines then assume the view as its translated code does (fast::flat_base),
+// so no inlined call site keeps a null-view check or a region-table fallback.
+#if GALAXY_FASTMEM_ACTIVE && defined(GALAXY_FLAT_VIEW_ONLY) && GALAXY_FLAT_VIEW_ONLY && \
+    !defined(GALAXY_FASTMEM_KEEP_NULL_FALLBACK)
+#define GALAXY_FLAT_VIEW_ONLY_ACTIVE 1
+#else
+#define GALAXY_FLAT_VIEW_ONLY_ACTIVE 0
+#endif
+
+#if GALAXY_FLAT_VIEW_ONLY_ACTIVE
+GALAXY_ALWAYS_INLINE std::byte* assumed_flat_view(const GuestMemoryV1* memory) noexcept {
+    std::byte* const base = memory->flat_guest_base;
+    __builtin_assume(base != nullptr);
+    return base;
+}
+#endif
+
 // Host bytes of a guest RAM span for the lean host bodies. A fastmem module
 // reaches RAM through the flat view, as its translated code does (an access
 // outside RAM faults there); other builds use the checked span lookup.
@@ -8719,6 +8739,12 @@ GALAXY_ALWAYS_INLINE std::byte* lean_guest_span(
     std::uint32_t size,
     const NativeServicesV1* services,
     std::uint32_t guest_pc) {
+#if GALAXY_FLAT_VIEW_ONLY_ACTIVE
+    (void)size;
+    (void)services;
+    (void)guest_pc;
+    return assumed_flat_view(memory) + address;
+#else
 #if GALAXY_FASTMEM_ACTIVE
     if (memory != nullptr && memory->struct_size >= sizeof(GuestMemoryV1) &&
         memory->flat_guest_base != nullptr) GALAXY_LIKELY {
@@ -8726,6 +8752,7 @@ GALAXY_ALWAYS_INLINE std::byte* lean_guest_span(
     }
 #endif
     return resolve_guest(memory, address, size, services, guest_pc);
+#endif
 }
 
 // Lean host bodies for the SDK paired-single matrix/vector library
@@ -10118,7 +10145,13 @@ GALAXY_ALWAYS_INLINE void lean_jgeom_inv_sqrt(PpcContext* context, GuestMemoryV1
 namespace cstring {
 
 GALAXY_ALWAYS_INLINE const std::byte* view(const GuestMemoryV1* memory) {
+#if GALAXY_FLAT_VIEW_ONLY_ACTIVE
+    // The same view the module's translated loads read (flat_guest_read_base
+    // aliases it).
+    return assumed_flat_view(memory);
+#else
     return memory != nullptr ? memory->flat_guest_read_base : nullptr;
+#endif
 }
 
 GALAXY_ALWAYS_INLINE std::uint32_t at(const std::byte* view, GuestMemoryV1* memory,
