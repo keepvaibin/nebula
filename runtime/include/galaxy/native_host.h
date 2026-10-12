@@ -898,6 +898,10 @@ public:
     void service_ai_dma(
         std::uint64_t now_ticks,
         AiDmaServiceMode mode);
+    // Pulls the next completion earlier by guest time a host-suspension rebase
+    // removed (ai_dma_timing::host_pause_ai_catch_up_ticks) and republishes
+    // the deadline. Returns the applied shift in timeline ticks.
+    std::uint64_t repay_ai_dma_host_pause(std::uint64_t owed_ticks);
     bool ai_dma_interrupt_status() const;
     bool ai_dma_interrupt_pending() const {
         return ai_dma_interrupt_status() && ai_dma_interrupt_masked_in();

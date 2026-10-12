@@ -382,7 +382,17 @@ void test_bus_categories() {
     subframe(mixer, guest, 0xC000u);
     const std::int16_t first = guest.gets16(kLeft + 80u * 2u);
     expect(first > 0x1F00 && first < 0x2000, "mute ramps from the previous gain", first);
-    expect(guest.gets16(kLeft + 159u * 2u) == 0, "mute reached within a subframe", guest.gets16(kLeft + 159u * 2u));
+    const std::int16_t quarter = guest.gets16(kLeft + 159u * 2u);
+    expect(quarter > 0x1700 && quarter < 0x1900, "mute is a quarter done after one subframe", quarter);
+    for (int k = 0; k < 3; ++k) {
+        subframe(mixer, guest, 0xC000u);
+    }
+    expect(guest.gets16(kLeft + 399u * 2u) == 0, "mute reached within the ramp", guest.gets16(kLeft + 399u * 2u));
+    int rising = 0;
+    for (std::uint32_t k = 81u; k < 400u; ++k) {
+        rising += guest.gets16(kLeft + k * 2u) > guest.gets16(kLeft + (k - 1u) * 2u) ? 1 : 0;
+    }
+    expect(rising == 0, "mute ramp is monotonic", rising);
 
     // A new sound on channel 0: a music stream (JASAramStream lists the
     // channel; its JAIStream holds a section-2 ID). Music is at unity.
@@ -392,9 +402,10 @@ void test_bus_categories() {
     guest.put16(record(0) + 0x008u, 1u);  // playStart
     mixer.set_bus_gains({1.0f, 1.0f, 0.0f, 1.0f, 1.0f, 1.0f});
     subframe(mixer, guest, 0xC000u);
-    expect(guest.gets16(kLeft + 160u * 2u) == 0x4000, "new sound at its own gain at once", guest.gets16(kLeft + 160u * 2u));
+    expect(guest.gets16(kLeft + 400u * 2u) == 0x4000, "new sound at its own gain at once", guest.gets16(kLeft + 400u * 2u));
     expect(mixer.channel_category(0u).owner.route == galaxy::audio::JAudioOwnerRoute::Stream, "stream owner");
-    expect(guest.gets16(kRight + 239u * 2u) == 0x4000, "unmuted music", guest.gets16(kRight + 239u * 2u));
+    const std::int16_t unmuting = guest.gets16(kRight + 479u * 2u);
+    expect(unmuting > 0x0E00 && unmuting < 0x1200, "unmuted music ramps up over the ramp", unmuting);
 }
 
 void test_stray_release() {

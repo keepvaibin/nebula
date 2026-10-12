@@ -594,6 +594,32 @@ bool host_suspension_ai_arm_identity_boundaries() {
     return passed;
 }
 
+bool host_pause_ai_catch_up_bounds() {
+    using galaxy::host::ai_dma_timing::host_pause_ai_catch_up_ticks;
+    using galaxy::host::ai_dma_timing::kHostPauseAiCatchUpPeriods;
+    constexpr std::uint64_t kPeriod = 1'063'125u;  // 560 frames at 32 kHz
+    bool passed = expect(
+        host_pause_ai_catch_up_ticks(3'579'188u, 10'000'000u, kPeriod) == 3'579'188u,
+        "a 59 ms removal is repaid in full");
+    passed &= expect(
+        host_pause_ai_catch_up_ticks(60'750'000u, 900'000'000u, kPeriod) ==
+            kPeriod * kHostPauseAiCatchUpPeriods,
+        "a one-second removal is capped to the catch-up periods");
+    passed &= expect(
+        host_pause_ai_catch_up_ticks(5'000'000u, 1'000u, kPeriod) == 999u,
+        "the completion never moves to or before tick zero");
+    passed &= expect(
+        host_pause_ai_catch_up_ticks(0u, 10'000'000u, kPeriod) == 0u &&
+            host_pause_ai_catch_up_ticks(100u, 0u, kPeriod) == 0u &&
+            host_pause_ai_catch_up_ticks(100u, 10'000'000u, 0u) == 0u &&
+            host_pause_ai_catch_up_ticks(100u, 10'000'000u, ~std::uint64_t{0}) == 0u,
+        "nothing owed, an idle device, or an invalid period repays nothing");
+    passed &= expect(
+        kHostPauseAiCatchUpPeriods + 1u < 8u,
+        "cap plus one late period stays inside the masked catch-up bound");
+    return passed;
+}
+
 bool native_input_ai_preemption_policy_boundaries() {
     using galaxy::host::ai_dma_timing::NativeInputAiServiceResult;
     using galaxy::host::ai_dma_timing::ScopedExactWordBitClear;
@@ -2578,6 +2604,7 @@ int main() {
     passed &= run_test("host_suspension_device_crossing_boundaries", host_suspension_device_crossing_boundaries);
     passed &= run_test("host_suspension_ai_arm_identity_boundaries", host_suspension_ai_arm_identity_boundaries);
     passed &= run_test("native_input_ai_preemption_policy_boundaries", native_input_ai_preemption_policy_boundaries);
+    passed &= run_test("host_pause_ai_catch_up_bounds", host_pause_ai_catch_up_bounds);
     passed &= run_test("stall_accounting_is_honest", stall_accounting_is_honest);
     passed &= run_test("vi_one_hour_never_skips", vi_one_hour_never_skips);
     passed &= run_test("ai_deadline_is_exact", ai_deadline_is_exact);

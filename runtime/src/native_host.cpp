@@ -3144,6 +3144,8 @@ public:
                   << " empty-over-1ms=" << route_health.empty_over_1_ms
                   << " empty-over-5ms=" << route_health.empty_over_5_ms
                   << " max-empty-us=" << route_health.max_empty_us
+                  << " silent-us=" << total_silent_us_.load(std::memory_order_acquire)
+                  << " max-silent-us=" << max_silent_us_.load(std::memory_order_acquire)
                   << " max-submit-gap-us=" << route_health.max_submit_delta_us
                   << " voice-recreations=" << route_health.voice_recreation_events
                   << " endpoint-output-available=" << route_output_available
@@ -3896,24 +3898,33 @@ private:
         if ((start == kUnity && target == kUnity) || frames == 0u) {
             return;
         }
+        const auto scale = [](std::byte* sample, std::int64_t gain) noexcept {
+            const auto bits = static_cast<std::uint16_t>(
+                std::to_integer<std::uint16_t>(sample[0]) |
+                (std::to_integer<std::uint16_t>(sample[1]) << 8u));
+            const std::int64_t scaled = std::clamp<std::int64_t>(
+                (static_cast<std::int64_t>(static_cast<std::int16_t>(bits)) * gain) >> 16u,
+                -32768, 32767);
+            const auto out = static_cast<std::uint16_t>(static_cast<std::int16_t>(scaled));
+            sample[0] = static_cast<std::byte>(out & 0xFFu);
+            sample[1] = static_cast<std::byte>(out >> 8u);
+        };
+        if (start == target) {
+            // Steady non-unity master: no per-frame ramp division.
+            const std::int64_t gain = target;
+            for (std::size_t offset = 0; offset < frames * 4u; offset += 2u) {
+                scale(pcm_le.data() + offset, gain);
+            }
+            return;
+        }
         const std::int64_t delta =
             static_cast<std::int64_t>(target) - static_cast<std::int64_t>(start);
         for (std::size_t frame = 0; frame < frames; ++frame) {
             const std::int64_t gain = static_cast<std::int64_t>(start) +
                 delta * static_cast<std::int64_t>(frame + 1u) /
                     static_cast<std::int64_t>(frames);
-            for (std::size_t lane = 0; lane < 2u; ++lane) {
-                std::byte* sample = pcm_le.data() + frame * 4u + lane * 2u;
-                const auto bits = static_cast<std::uint16_t>(
-                    std::to_integer<std::uint16_t>(sample[0]) |
-                    (std::to_integer<std::uint16_t>(sample[1]) << 8u));
-                const std::int64_t scaled = std::clamp<std::int64_t>(
-                    (static_cast<std::int64_t>(static_cast<std::int16_t>(bits)) * gain) >> 16u,
-                    -32768, 32767);
-                const auto out = static_cast<std::uint16_t>(static_cast<std::int16_t>(scaled));
-                sample[0] = static_cast<std::byte>(out & 0xFFu);
-                sample[1] = static_cast<std::byte>(out >> 8u);
-            }
+            scale(pcm_le.data() + frame * 4u, gain);
+            scale(pcm_le.data() + frame * 4u + 2u, gain);
         }
     }
     std::uint32_t output_master_q16_ = galaxy::audio::kNativeAudioUnityGainQ16;
@@ -5115,13 +5126,20 @@ private:
         bool waited_for_queue_space = false;
         auto queue_wait_started = std::chrono::steady_clock::now();
         std::uint32_t queue_wait_elapsed_ms = 0;
+        // OnBufferEnd wakes the worker for freed space only while this is set;
+        // it is raised before each queue observation so no end can be missed.
+        const ScopeExit clear_space_wait([this]() noexcept {
+            queue_space_wait_.store(false, std::memory_order_release);
+        });
         for (;;) {
             if (worker_stop_.load(std::memory_order_acquire)) {
                 return false;
             }
             if (!process_callback_failures()) return false;
+            queue_space_wait_.store(true, std::memory_order_seq_cst);
             state.BuffersQueued = query_source_queue();
             if (state.BuffersQueued < queue_limit_) {
+                queue_space_wait_.store(false, std::memory_order_release);
                 break;
             }
             if (!waited_for_queue_space) {
@@ -5441,6 +5459,19 @@ private:
             return false;
         }
         playback_lifecycle_.mark_started();
+        if (recovering_from_empty) {
+            // Heard silence: from the empty boundary to the restarted voice
+            // (max-empty-us stops at the first submit, before re-prebuffer).
+            const std::uint64_t empty_since =
+                last_empty_since_us_.load(std::memory_order_acquire);
+            const std::uint64_t now_us =
+                host_time_us(std::chrono::steady_clock::now());
+            const std::uint64_t silent_us =
+                now_us > empty_since ? now_us - empty_since : 0u;
+            total_silent_us_.fetch_add(silent_us, std::memory_order_acq_rel);
+            update_max_atomic(max_silent_us_, static_cast<std::uint32_t>(
+                std::min<std::uint64_t>(silent_us, 0xFFFF'FFFFu)));
+        }
         if (trace_audio_queue() &&
             (!prebuffer_start_logged_ ||
              (recovering_from_empty && empty_recovery_start_log_count_ < 8u))) {
@@ -5703,8 +5734,12 @@ private:
             : 0u;
         // Publish only after every plain evidence field above is complete. The
         // worker's acquire load makes this one exact per-buffer transaction.
+        // No wake: the worker accounts starts at its next submit or idle
+        // timeout; only failures, empty boundaries and freed queue space wake.
         buffer->started.store(true, std::memory_order_release);
-        signal_callback_event();
+        if (ratio_apply_invoked && !ratio_apply_succeeded) {
+            signal_callback_event();
+        }
     }
     void STDMETHODCALLTYPE OnLoopEnd(void*) noexcept override {}
     void STDMETHODCALLTYPE OnVoiceError(void*, HRESULT error) noexcept override {
@@ -5743,7 +5778,10 @@ private:
         // retains and later destroys the allocation.
         buffer->completed.store(true, std::memory_order_release);
         callback_ledger_.record_buffer_end(queue_evidence);
-        signal_callback_event();
+        if (queue_evidence != NativeAudioBufferEndQueueEvidence::SuccessorQueued ||
+            queue_space_wait_.load(std::memory_order_seq_cst)) {
+            signal_callback_event();
+        }
     }
 
     void signal_callback_event() noexcept {
@@ -5805,6 +5843,9 @@ private:
     std::atomic_uint64_t empty_over_5_ms_{0};
     std::atomic_uint64_t last_empty_since_us_{0};
     std::atomic<std::uint32_t> max_empty_us_{0};
+    std::atomic_bool queue_space_wait_{false};
+    std::atomic_uint64_t total_silent_us_{0};
+    std::atomic<std::uint32_t> max_silent_us_{0};
     std::atomic_uint64_t dropped_buffers_{0};
     std::uint64_t handled_voice_error_count_{};
     std::uint64_t handled_engine_critical_error_count_{};
@@ -15017,6 +15058,23 @@ void GuestAddressSpace::service_ai_dma(
         raise_ai_dma_interrupt(interrupt_ticks);
         notify_ai_dma_deadline_changed();
     }
+}
+
+std::uint64_t GuestAddressSpace::repay_ai_dma_host_pause(
+    std::uint64_t owed_ticks) {
+    if (!ai_dma_playing_) {
+        return 0u;
+    }
+    const std::uint64_t shift = ai_dma_timing::host_pause_ai_catch_up_ticks(
+        owed_ticks, ai_dma_next_completion_ticks_, ai_dma_last_duration_ticks_);
+    if (shift == 0u) {
+        return 0u;
+    }
+    ai_dma_next_completion_ticks_ -= shift;
+    ai_dma_active_start_ticks_ =
+        ai_dma_active_start_ticks_ > shift ? ai_dma_active_start_ticks_ - shift : 0u;
+    notify_ai_dma_deadline_changed();
+    return shift;
 }
 
 std::optional<AiDmaServiceMode>

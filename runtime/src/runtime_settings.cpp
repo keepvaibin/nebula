@@ -283,13 +283,54 @@ void set_runtime_settings(const RuntimeSettings& settings) {
     ReleaseSRWLockExclusive(&s_settings_lock);
 }
 
+namespace {
+
+// Last-write time of the settings file the audio keys were last read from.
+std::uint64_t s_audio_settings_write_time = 0u;
+
+std::uint64_t settings_file_write_time(const std::filesystem::path& path) noexcept {
+    WIN32_FILE_ATTRIBUTE_DATA data{};
+    if (path.empty() ||
+        !GetFileAttributesExW(path.c_str(), GetFileExInfoStandard, &data)) {
+        return 0u;
+    }
+    return (static_cast<std::uint64_t>(data.ftLastWriteTime.dwHighDateTime) << 32u) |
+        data.ftLastWriteTime.dwLowDateTime;
+}
+
+}  // namespace
+
 void load_runtime_settings_from_file() {
     RuntimeSettings settings{};
     input::ControlsConfig controls = input::default_controls_config();
+    const std::filesystem::path path = settings_path();
+    const std::uint64_t write_time = settings_file_write_time(path);
     parse_settings_file(settings, controls);
     apply_env_overrides(settings);
     set_runtime_settings(settings);
     input::set_controls_config(controls);
+    s_audio_settings_write_time = write_time;
+}
+
+bool reload_runtime_audio_settings_if_changed() noexcept {
+    try {
+        const std::uint64_t write_time = settings_file_write_time(settings_path());
+        if (write_time == 0u || write_time == s_audio_settings_write_time) {
+            return false;
+        }
+        RuntimeSettings parsed{};
+        input::ControlsConfig controls = input::default_controls_config();
+        parse_settings_file(parsed, controls);
+        apply_env_overrides(parsed);
+        RuntimeSettings settings = get_runtime_settings();
+        settings.audio = parsed.audio;
+        set_runtime_settings(settings);
+        input::set_controls_config(controls);
+        s_audio_settings_write_time = write_time;
+        return true;
+    } catch (...) {
+        return false;
+    }
 }
 
 bool save_runtime_settings_to_file() {

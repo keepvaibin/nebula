@@ -2402,6 +2402,8 @@ struct RuntimeState {
     // Cutscene volume applied to the movie player's attenuation table.
     std::array<std::uint16_t, 128> movie_volume_original{};
     float movie_volume_gain{1.0f};
+    // Audio frames until the settings file is checked for new gains.
+    std::uint32_t audio_settings_poll_frames{};
     bool movie_volume_original_valid{};
     bool movie_volume_disabled{};
     std::uint64_t jaudio_commands{};
@@ -2601,6 +2603,11 @@ struct RuntimeState {
     // ownership proof if that sample discovers a host suspension and restores
     // the still-armed device before normal AI servicing resumes.
     std::uint64_t ai_dma_deadline_recovery_taken_generation{};
+    // Guest time removed by host-suspension recoveries that the AI device has
+    // not yet been given back (repay_ai_dma_host_pause), and the audit totals.
+    std::uint64_t ai_dma_host_pause_owed_ticks{};
+    std::uint64_t ai_dma_host_pause_repaid_ticks{};
+    std::uint64_t ai_dma_host_pause_repayments{};
     std::uint64_t next_ai_dma_probe_checkpoint{};
     std::uint64_t ai_dma_late_events{};
     std::uint64_t ai_dma_late_over_buffer_events{};
@@ -17502,6 +17509,16 @@ bool dispatch_ai_dma_interrupts(
         recovery_observation_fresh && !host_pause_recovery_attempted
             ? recovery_observation_ticks
             : runtime_time_base_ticks(state);
+    if (state.ai_dma_host_pause_owed_ticks != 0u) {
+        // No broker generation is held here (consume has returned), so the
+        // republished earlier deadline is an ordinary re-arm.
+        const std::uint64_t repaid = state.address_space->repay_ai_dma_host_pause(
+            std::exchange(state.ai_dma_host_pause_owed_ticks, 0u));
+        if (repaid != 0u) {
+            state.ai_dma_host_pause_repaid_ticks += repaid;
+            ++state.ai_dma_host_pause_repayments;
+        }
+    }
     const std::uint64_t device_completion_ticks =
         state.address_space->ai_dma_next_completion_ticks();
     const bool service_is_due =
@@ -18430,6 +18447,16 @@ bool recover_from_verified_host_suspension(
         ++state.host_pause_active_vi_backlog_recoveries;
     }
     state.host_pause_recovered_ticks += paused_ticks;
+    if (state.address_space != nullptr &&
+        state.address_space->ai_dma_playing()) {
+        // Repaid at the next AI service (dispatch_ai_dma_interrupts), outside
+        // this transaction; the device clamps the amount.
+        const std::uint64_t removed = paused_ticks + preparation_ticks;
+        state.ai_dma_host_pause_owed_ticks =
+            removed > ~std::uint64_t{0} - state.ai_dma_host_pause_owed_ticks
+                ? ~std::uint64_t{0}
+                : state.ai_dma_host_pause_owed_ticks + removed;
+    }
     if (state.address_space != nullptr) {
         state.address_space->record_audio_host_pause(
             state.vi_retrace_count, static_cast<std::uint32_t>(proof),
@@ -23694,11 +23721,17 @@ std::byte* jaudio_guest_resolve(void* user, std::uint32_t address, std::uint32_t
 // The movie player (THPSimplePlayerWrapper::mixAudio) multiplies each
 // sample by VolumeTable[volume], 128 halfwords at 0x805C5D08 that nothing
 // else reads, rising from 0 to 32768. The cutscene volume rescales the table.
-void apply_movie_volume(RuntimeState& state, galaxy::host::GuestAddressSpace& space, float gain) {
+// Called once per audio frame; a change moves at most kMovieVolumeStep per
+// frame (full scale in 16 frames, 280 ms), since a one-shot table rewrite is a
+// gain step in the middle of the movie's audio.
+void apply_movie_volume(RuntimeState& state, galaxy::host::GuestAddressSpace& space, float target) {
     constexpr std::uint32_t kMovieVolumeTable = 0x805C5D08u;
-    if (state.movie_volume_disabled || gain == state.movie_volume_gain) {
+    constexpr float kMovieVolumeStep = 1.0f / 16.0f;
+    if (state.movie_volume_disabled || target == state.movie_volume_gain) {
         return;
     }
+    const float gain = std::clamp(target, state.movie_volume_gain - kMovieVolumeStep,
+                                  state.movie_volume_gain + kMovieVolumeStep);
     std::byte* table = space.pointer_or_null(kMovieVolumeTable, 256u);
     if (table == nullptr) {
         return;
@@ -23735,6 +23768,12 @@ void apply_movie_volume(RuntimeState& state, galaxy::host::GuestAddressSpace& sp
 // gain applies at the output. With GALAXY_AUDIO_BUS_TRACE each channel's
 // category is logged when a new sound changes it.
 void update_jaudio_categories(RuntimeState& state, galaxy::host::GuestAddressSpace& space) {
+    // One file-time query every 32 audio frames (0.56 s).
+    if (state.audio_settings_poll_frames == 0u) {
+        state.audio_settings_poll_frames = 32u;
+        (void)galaxy::reload_runtime_audio_settings_if_changed();
+    }
+    --state.audio_settings_poll_frames;
     const galaxy::RuntimeAudioSettings audio = galaxy::get_runtime_settings().audio;
     state.jaudio_mixer.set_bus_gains({1.0f, audio.music, audio.voice, audio.sfx, audio.ambience, audio.cutscene});
     apply_movie_volume(state, space, audio.cutscene);
@@ -32652,7 +32691,10 @@ int wmain(int argc, wchar_t** argv) {
                       << " last-vi-deadline="
                       << state.last_host_pause_recovery_vi_deadline_ticks
                       << " candidate-pending="
-                      << (state.host_pause_candidate_valid ? 1 : 0) << '\n';
+                      << (state.host_pause_candidate_valid ? 1 : 0)
+                      << " ai-repayments=" << state.ai_dma_host_pause_repayments
+                      << " ai-repaid-ticks=" << state.ai_dma_host_pause_repaid_ticks
+                      << '\n';
             dump_decrementer_deadline_audit(state, std::cerr, "shutdown");
             dump_nested_interrupt_audit(state, std::cerr, "shutdown");
             dump_native_thp_boundary_probe(state, std::cerr, "shutdown");

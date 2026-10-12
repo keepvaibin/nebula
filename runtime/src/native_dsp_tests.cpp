@@ -6493,7 +6493,7 @@ bool test_native_audio_bus_controls() {
     passed &= expect(
         ramped == 0 && state.ramps[3].remaining == 0u &&
             state.ramps[3].current_q16 == 0u,
-        "live bus changes ramp to the exact target in one DSP subframe");
+        "live bus changes ramp to the exact target over the bus ramp");
     passed &= expect(
         galaxy::audio::native_dsp_audio_bus_apply_sample(state, -32'768) == 0,
         "muted bus remains silent for negative full-scale samples");
