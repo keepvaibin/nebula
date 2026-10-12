@@ -35,7 +35,7 @@ inline void apply_rmge01_cinema_vertical(PpcContext* context, GuestMemoryV1* mem
                                        const NativeServicesV1* services) {
     if (!layout_aspect_repairs_enabled() || context->gpr[2] != 0x806AB280u) return;
     const auto policy = experimental_effective_guest_aspect(services);
-    if (!policy || policy->content_aspect == 4.0 / 3.0 ||
+    if (!policy || native_four_three(*policy) ||
         policy->content_aspect >= kWiiContentAspect) return;
     const Rmge01PaneAccess access{memory, services, 0x80367E64u};
     const auto manager = context->gpr[31];

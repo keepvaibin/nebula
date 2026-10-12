@@ -1548,6 +1548,19 @@ struct YieldRfiReturnProof {
     bool loading{}, completed{}, consumed{};
 };
 
+// The game's draw-distance cut-offs as the runtime last left them (sim
+// thread). See apply_draw_distance.
+struct DrawDistanceState {
+    std::uint32_t judge = 0u;
+    std::array<std::uint32_t, 7> judge_original{};
+    std::array<std::uint32_t, 7> judge_written{};
+    std::uint32_t scene_objects = 0u;
+    std::uint32_t shadows = 0u;
+    std::uint32_t shadow_original = 0u;
+    std::uint32_t shadow_written = 0u;
+    unsigned shadow_search_wait = 0u;
+};
+
 struct RuntimeState {
     struct LookupCacheEntry {
         std::uint32_t address{};
@@ -2314,6 +2327,7 @@ struct RuntimeState {
     std::uint32_t first_tick{};
     std::uint32_t last_tick{};
     galaxy::host::GuestAddressSpace* address_space{};
+    DrawDistanceState draw_distance{};
     galaxy::input::NativeInputCausalityTracker native_input_causality;
     galaxy::scheduler::FunctionAsyncFlightTracker function_async_flights;
     std::unordered_map<std::uint32_t, std::uint64_t>
@@ -19743,7 +19757,7 @@ bool finalize_vi_retrace(
     // renderer work before publishing a new generation so its XFB is never
     // fitted using the next frame's guest projection/IR geometry.
     if (galaxy::experimental_dynamic_aspect_requested()) {
-        const auto client = galaxy::gx::current_host_client_extent();
+        const auto client = galaxy::gx::aspect_latch_extent();
         if (client.width > 1 && client.height > 1 &&
             galaxy::experimental_dynamic_aspect_change_pending(
                 client.width, client.height)) {
@@ -19751,7 +19765,7 @@ bool finalize_vi_retrace(
             // The window may resize again while the render drain blocks.
             // Resample after the drain and publish that positive extent at
             // this VI boundary. A subsequent resize belongs to the next VI.
-            const auto settled = galaxy::gx::current_host_client_extent();
+            const auto settled = galaxy::gx::aspect_latch_extent();
             if (settled.width > 1 && settled.height > 1) {
                 galaxy::experimental_latch_dynamic_aspect(
                     settled.width, settled.height);
@@ -23879,6 +23893,119 @@ bool coop_call_intercept(
     }
 }
 
+// Draw distance. The game stops drawing an object -- with its particles and
+// light glows -- beyond the distance of the object's clipping level, and a
+// shadow beyond the shadow holder's distance. Wider pictures show those
+// cut-offs at their sides, so the runtime scales both once per frame:
+//  - MR::getClippingDirector (0x8015F4B8) is scene object 2; its
+//    ClippingJudge (+0x0C, vtable 0x805733C0) keeps the distances (cm) of
+//    clipping levels 1..7 at +0x370..+0x388 (ClippingJudge::__ct 0x8015FC2C
+//    fills them; movement 0x8015FCFC builds a viewing volume per level).
+//  - ShadowControllerHolder (vtable 0x80573C04) hands +0x28 to every
+//    shadow's updateFarClipping (updateController 0x8016BC44).
+// The game's own values are kept; a value the game rewrites becomes the new
+// original.
+void apply_draw_distance(RuntimeState& state) {
+    if (state.address_space == nullptr) {
+        return;
+    }
+    galaxy::host::GuestAddressSpace& space = *state.address_space;
+    DrawDistanceState& dd = state.draw_distance;
+    static constexpr float kScales[] = {1.0f, 2.0f, 4.0f, 8.0f};
+    const float scale = kScales[std::min(galaxy::gx::get_render_config().draw_distance, 3u)];
+    std::uint32_t objects = 0u;
+    if (!try_read_guest_u32(space, 0x806A1228u, objects) ||
+        !try_read_guest_u32(space, objects + 0x24u, objects) ||
+        !try_read_guest_u32(space, objects + 0xACu, objects) ||
+        !try_read_guest_u32(space, objects + 0x10u, objects)) {
+        return;
+    }
+    const auto write = [&space](std::uint32_t address, std::uint32_t value) {
+        if (space.pointer_or_null(address, sizeof(std::uint32_t)) != nullptr) {
+            space.write_u32(address, value);
+        }
+    };
+    const auto scaled = [scale](std::uint32_t original) {
+        const float value = std::bit_cast<float>(original);
+        return std::isfinite(value) && value > 0.0f
+            ? std::bit_cast<std::uint32_t>(value * scale) : original;
+    };
+
+    std::uint32_t director = 0u;
+    std::uint32_t judge = 0u;
+    std::uint32_t vtable = 0u;
+    if (try_read_guest_u32(space, objects + 2u * 4u, director) &&
+        try_read_guest_u32(space, director + 0x0Cu, judge) &&
+        try_read_guest_u32(space, judge, vtable) && vtable == 0x805733C0u) {
+        std::array<std::uint32_t, 7> now{};
+        bool readable = true;
+        for (std::uint32_t i = 0; i < now.size(); ++i) {
+            readable &= try_read_guest_u32(space, judge + 0x370u + i * 4u, now[i]);
+        }
+        if (readable) {
+            if (judge != dd.judge || now != dd.judge_written) {
+                dd.judge = judge;
+                dd.judge_original = now;
+                std::cerr << "[draw-distance] clipping levels (m):";
+                for (const std::uint32_t bits : now) {
+                    std::cerr << ' ' << std::bit_cast<float>(bits) / 100.0f;
+                }
+                std::cerr << " scale=" << scale << '\n';
+            }
+            for (std::uint32_t i = 0; i < now.size(); ++i) {
+                const std::uint32_t wanted = scaled(dd.judge_original[i]);
+                if (now[i] != wanted) {
+                    write(judge + 0x370u + i * 4u, wanted);
+                }
+                dd.judge_written[i] = wanted;
+            }
+        }
+    }
+
+    if (objects != dd.scene_objects) {
+        dd.scene_objects = objects;
+        dd.shadows = 0u;
+        dd.shadow_search_wait = 0u;
+    }
+    if (dd.shadows != 0u &&
+        (!try_read_guest_u32(space, dd.shadows, vtable) || vtable != 0x80573C04u)) {
+        dd.shadows = 0u;
+    }
+    if (dd.shadows == 0u) {
+        // Scene objects are created on demand: look again once a second.
+        if (dd.shadow_search_wait != 0u) {
+            --dd.shadow_search_wait;
+            return;
+        }
+        dd.shadow_search_wait = 60u;
+        for (std::uint32_t id = 0u; id < 0x80u; ++id) {
+            std::uint32_t object = 0u;
+            if (try_read_guest_u32(space, objects + id * 4u, object) && object != 0u &&
+                try_read_guest_u32(space, object, vtable) && vtable == 0x80573C04u) {
+                dd.shadows = object;
+                dd.shadow_written = 0u;
+                break;
+            }
+        }
+        if (dd.shadows == 0u) {
+            return;
+        }
+    }
+    std::uint32_t now = 0u;
+    if (try_read_guest_u32(space, dd.shadows + 0x28u, now)) {
+        if (now != dd.shadow_written) {
+            dd.shadow_original = now;
+            std::cerr << "[draw-distance] shadows (m): "
+                      << std::bit_cast<float>(now) / 100.0f << " scale=" << scale << '\n';
+        }
+        const std::uint32_t wanted = scaled(dd.shadow_original);
+        if (now != wanted) {
+            write(dd.shadows + 0x28u, wanted);
+        }
+        dd.shadow_written = wanted;
+    }
+}
+
 void call_guest_impl_body(
     void* user,
     std::uint32_t guest_address,
@@ -23912,6 +24039,9 @@ void call_guest_impl_body(
          (guest_address == 0x803CA76Cu && context->lr == 0x8033F028u)) &&
         state.address_space != nullptr) {
         state.address_space->flush_wgpipe_gather_tail_for_frame();
+        if (guest_address == 0x8033EE8Cu) {
+            apply_draw_distance(state);
+        }
         galaxy::gx::attach_fifo_marker(
             guest_address == 0x8033EE8Cu ? galaxy::gx::FifoMarker::SceneBegin
                                          : galaxy::gx::FifoMarker::SceneEnd,
@@ -31985,6 +32115,20 @@ static void print_runtime_usage() {
 int wmain(int argc, wchar_t** argv) {
     // MUST be the very first line — before any allocation or assertion.
     disable_runtime_dialogs();
+    // Every aspect setting, 4:3 included, runs through the live aspect path
+    // so it can change during play. Set before any module loads; explicit
+    // aspect variables (tests, older launchers) are kept.
+    {
+        const auto variable_set = [](const wchar_t* name) {
+            wchar_t value[16]{};
+            return GetEnvironmentVariableW(name, value, 16u) > 0u;
+        };
+        if (!variable_set(L"GALAXY_EXPERIMENTAL_DYNAMIC_ASPECT") &&
+            !variable_set(L"GALAXY_EXPERIMENTAL_NATIVE_4_3") &&
+            !variable_set(L"GALAXY_EXPERIMENTAL_ULTRAWIDE_ASPECT")) {
+            _wputenv_s(L"GALAXY_EXPERIMENTAL_DYNAMIC_ASPECT", L"1");
+        }
+    }
     // Wall-clock anchor for the one-line VI-cadence summary at normal exit.
     // `vi_retrace_count` is the guest's own 60 Hz timebase (kViRetracePeriodTicks
     // = kWiiTimeBaseHz / 60, native_runtime.cpp:340) advanced by the only
@@ -33217,7 +33361,7 @@ int wmain(int argc, wchar_t** argv) {
         if (galaxy::experimental_dynamic_aspect_requested()) {
             // Validate mutually exclusive fixed policies before guest execution.
             (void)galaxy::experimental_ultrawide_aspect_from_env();
-            const auto client = galaxy::gx::current_host_client_extent();
+            const auto client = galaxy::gx::aspect_latch_extent();
             if (client.width > 1 && client.height > 1) {
                 galaxy::experimental_latch_dynamic_aspect(
                     client.width, client.height);

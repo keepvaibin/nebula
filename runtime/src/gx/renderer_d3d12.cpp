@@ -1,4 +1,5 @@
 #include "galaxy/gx/renderer_d3d12.h"
+#include "galaxy/gx/display_modes.h"
 
 #include "galaxy/content_viewport.h"
 #include "galaxy/experimental_ultrawide_aspect.h"
@@ -100,6 +101,16 @@ static constexpr UINT kClientSizeMessage = WM_USER + 0x41;
 static constexpr UINT kDisplayModeMessage = WM_USER + 0x42;
 // An overlay key from the controller (wParam: virtual-key code).
 static constexpr UINT kSettingsKeyMessage = WM_USER + 0x43;
+// Render-thread display change (lParam: const WindowPlacement*), sent and
+// completed on the window thread.
+static constexpr UINT kPlaceWindowMessage = WM_USER + 0x44;
+struct WindowPlacement {
+    DWORD style = 0;
+    RECT rect{};
+    bool borderless = false;
+};
+RECT windowed_rect_on_monitor(const MonitorInfo& monitor, unsigned width,
+                              unsigned height);
 static std::atomic<std::uintptr_t> s_native_settings_window{0};
 static std::atomic<bool> s_borderless_active{false};
 static std::atomic<bool> s_exclusive_fullscreen_active{false};
@@ -171,6 +182,18 @@ std::atomic<bool> s_native_settings_dirty{false};
 std::atomic<bool> s_native_settings_save_error{false};
 std::atomic<unsigned> s_native_settings_tab{0};
 std::atomic<unsigned> s_native_settings_row{0};
+
+// Settings menu draft. Display and graphics rows edit s_settings_draft; Enter
+// (Y on a controller) applies it, Backspace (X) reverts it and closing the
+// menu discards it. Audio rows change the live mix. A display change
+// (monitor, mode, resolution, refresh rate) stays only when it is kept within
+// kDisplayConfirmMs. All guarded by s_native_settings_mutex.
+RenderConfig s_settings_draft{};
+std::vector<MonitorInfo> s_settings_monitors;
+std::uint64_t s_display_confirm_deadline_ms = 0u;
+RenderConfig s_display_confirm_previous{};
+std::uint64_t s_settings_applied_ms = 0u;
+constexpr std::uint64_t kDisplayConfirmMs = 15000u;
 std::atomic<bool> s_quit_requested{false};
 
 // Live window resize (arbitrary resolution/aspect ratio without a restart).
@@ -308,15 +331,234 @@ float step_gain(float current, int delta) {
     return std::clamp(snapped + static_cast<float>(delta) * 0.05f, 0.0f, 2.0f);
 }
 
+bool display_settings_differ(const RenderConfig& a, const RenderConfig& b) {
+    return a.display_mode != b.display_mode || a.monitor != b.monitor ||
+        a.fullscreen_width != b.fullscreen_width ||
+        a.fullscreen_height != b.fullscreen_height ||
+        a.fullscreen_refresh_hz != b.fullscreen_refresh_hz ||
+        (a.display_mode == kDisplayWindowed &&
+         (a.window_width != b.window_width || a.window_height != b.window_height));
+}
+
+const MonitorInfo* settings_monitor(const RenderConfig& render) {
+    return find_monitor(s_settings_monitors, widen_utf8(render.monitor.data()));
+}
+
+// The picture size the settings target: the fullscreen mode, the monitor
+// (borderless) or the window.
+std::pair<unsigned, unsigned> settings_output_size(const RenderConfig& render) {
+    const MonitorInfo* monitor = settings_monitor(render);
+    const unsigned desktop_w = monitor ? monitor->current.width : s_bb_width;
+    const unsigned desktop_h = monitor ? monitor->current.height : s_bb_height;
+    switch (render.display_mode) {
+    case kDisplayExclusive:
+        return render.fullscreen_width != 0u && render.fullscreen_height != 0u
+            ? std::pair{render.fullscreen_width, render.fullscreen_height}
+            : std::pair{desktop_w, desktop_h};
+    case kDisplayBorderless:
+        return {desktop_w, desktop_h};
+    default:
+        return {render.window_width, render.window_height};
+    }
+}
+
+// The largest internal resolution the selected display can show.
+unsigned settings_scale_cap(const RenderConfig& render) {
+    const MonitorInfo* monitor = settings_monitor(render);
+    unsigned width = monitor ? monitor->current.width : s_bb_width;
+    unsigned height = monitor ? monitor->current.height : s_bb_height;
+    if (render.display_mode == kDisplayExclusive && render.fullscreen_width != 0u) {
+        width = render.fullscreen_width;
+        height = render.fullscreen_height;
+    }
+    return efb_scale_covering(width, height, kMaxEfbScale);
+}
+
+// Window client sizes that fit the monitor's work area: its own resolutions
+// and common sizes, smallest first.
+std::vector<std::pair<unsigned, unsigned>> settings_window_sizes(const MonitorInfo* monitor) {
+    static constexpr std::pair<unsigned, unsigned> kCommon[] = {
+        {854u, 480u}, {1024u, 768u}, {1280u, 720u}, {1280u, 800u}, {1366u, 768u},
+        {1440u, 900u}, {1600u, 900u}, {1680u, 1050u}, {1920u, 1080u}, {1920u, 1200u},
+        {2560u, 1080u}, {2560u, 1440u}, {2560u, 1600u}, {3440u, 1440u}, {3840u, 1080u},
+        {3840u, 2160u}, {5120u, 1440u}, {5120u, 2160u}, {5120u, 2880u}, {7680u, 4320u}};
+    long max_w = 7680;
+    long max_h = 4320;
+    if (monitor != nullptr) {
+        RECT frame{0, 0, 0, 0};
+        const UINT dpi = std::max<UINT>(96u, GetDpiForSystem());
+        (void)AdjustWindowRectExForDpi(&frame, kWindowStyle, FALSE, WS_EX_APPWINDOW, dpi);
+        max_w = (monitor->work_area.right - monitor->work_area.left) - (frame.right - frame.left);
+        max_h = (monitor->work_area.bottom - monitor->work_area.top) - (frame.bottom - frame.top);
+    }
+    std::vector<std::pair<unsigned, unsigned>> sizes;
+    const auto add = [&](unsigned w, unsigned h) {
+        if (static_cast<long>(w) <= max_w && static_cast<long>(h) <= max_h &&
+            std::find(sizes.begin(), sizes.end(), std::pair{w, h}) == sizes.end()) {
+            sizes.emplace_back(w, h);
+        }
+    };
+    for (const auto& [w, h] : kCommon) add(w, h);
+    if (monitor != nullptr) {
+        for (const auto& [w, h] : monitor_resolutions(*monitor)) add(w, h);
+    }
+    if (sizes.empty()) sizes.emplace_back(854u, 480u);
+    std::sort(sizes.begin(), sizes.end(), [](const auto& a, const auto& b) {
+        return std::uint64_t{a.first} * a.second < std::uint64_t{b.first} * b.second;
+    });
+    return sizes;
+}
+
+// Keeps the draft inside what its display allows.
+void sanitize_settings_draft(RenderConfig& render) {
+    const MonitorInfo* monitor = settings_monitor(render);
+    if (render.display_mode == kDisplayWindowed) {
+        const auto sizes = settings_window_sizes(monitor);
+        const auto& largest = sizes.back();
+        render.window_width = std::min(render.window_width, largest.first);
+        render.window_height = std::min(render.window_height, largest.second);
+    }
+    render.efb_scale = std::clamp(render.efb_scale, 1u, settings_scale_cap(render));
+}
+
+unsigned pending_settings_changes() {
+    const RenderConfig live = get_render_config();
+    const RenderConfig& d = s_settings_draft;
+    unsigned changes = 0u;
+    changes += d.display_mode != live.display_mode;
+    changes += d.monitor != live.monitor;
+    changes += d.display_mode == kDisplayExclusive &&
+        (d.fullscreen_width != live.fullscreen_width ||
+         d.fullscreen_height != live.fullscreen_height);
+    changes += d.display_mode == kDisplayExclusive &&
+        d.fullscreen_refresh_hz != live.fullscreen_refresh_hz;
+    changes += d.display_mode == kDisplayWindowed &&
+        (d.window_width != live.window_width || d.window_height != live.window_height);
+    changes += d.aspect_mode != live.aspect_mode;
+    changes += d.internal_follow_window != live.internal_follow_window ||
+        (!d.internal_follow_window && d.efb_scale != live.efb_scale);
+    changes += d.vsync_interval != live.vsync_interval;
+    changes += d.aa_mode != live.aa_mode;
+    changes += d.smaa_quality != live.smaa_quality;
+    changes += d.upscaler != live.upscaler;
+    changes += d.sharpness != live.sharpness;
+    changes += d.anisotropic_filtering != live.anisotropic_filtering;
+    changes += d.enhanced_mipmaps != live.enhanced_mipmaps;
+    changes += d.per_pixel_lighting != live.per_pixel_lighting;
+    changes += d.hud_output_resolution != live.hud_output_resolution;
+    changes += d.draw_distance != live.draw_distance;
+    return changes;
+}
+
 unsigned native_settings_row_count(unsigned tab) {
     switch (tab % kNativeSettingsTabCount) {
-    case 0: return 5u;
-    case 1: return 7u;
+    case 0: return 7u;
+    case 1: return 9u;
     case 2: return 1u;
     case 3: return 6u;
     case 4: return 5u;
     default: return 0u;
     }
+}
+
+bool settings_display_confirming() {
+    return s_display_confirm_deadline_ms != 0u;
+}
+
+void keep_display_settings() {
+    s_display_confirm_deadline_ms = 0u;
+    std::cerr << "[settings] display kept\n";
+}
+
+// Returns the display to the settings it had before the last apply; the
+// other settings of that apply stay.
+void revert_display_settings() {
+    if (!settings_display_confirming()) {
+        return;
+    }
+    s_display_confirm_deadline_ms = 0u;
+    RenderConfig render = get_render_config();
+    const RenderConfig& previous = s_display_confirm_previous;
+    render.display_mode = previous.display_mode;
+    render.monitor = previous.monitor;
+    render.fullscreen_width = previous.fullscreen_width;
+    render.fullscreen_height = previous.fullscreen_height;
+    render.fullscreen_refresh_hz = previous.fullscreen_refresh_hz;
+    render.window_width = previous.window_width;
+    render.window_height = previous.window_height;
+    set_render_config(render);
+    s_settings_draft.display_mode = render.display_mode;
+    s_settings_draft.monitor = render.monitor;
+    s_settings_draft.fullscreen_width = render.fullscreen_width;
+    s_settings_draft.fullscreen_height = render.fullscreen_height;
+    s_settings_draft.fullscreen_refresh_hz = render.fullscreen_refresh_hz;
+    s_settings_draft.window_width = render.window_width;
+    s_settings_draft.window_height = render.window_height;
+    s_native_settings_dirty.store(true, std::memory_order_release);
+    flush_native_settings_if_dirty();
+    std::cerr << "[settings] display reverted\n";
+}
+
+void expire_display_confirmation() {
+    if (settings_display_confirming() && GetTickCount64() >= s_display_confirm_deadline_ms) {
+        revert_display_settings();
+    }
+}
+
+void apply_native_settings_draft() {
+    if (pending_settings_changes() == 0u) {
+        return;
+    }
+    RenderConfig next = s_settings_draft;
+    sanitize_settings_draft(next);
+    const RenderConfig live = get_render_config();
+    // Settings the menu does not edit keep their live values.
+    RenderConfig applied = live;
+    applied.display_mode = next.display_mode;
+    applied.monitor = next.monitor;
+    applied.fullscreen_width = next.fullscreen_width;
+    applied.fullscreen_height = next.fullscreen_height;
+    applied.fullscreen_refresh_hz = next.fullscreen_refresh_hz;
+    applied.window_width = next.window_width;
+    applied.window_height = next.window_height;
+    applied.aspect_mode = next.aspect_mode;
+    applied.internal_follow_window = next.internal_follow_window;
+    applied.efb_scale = next.efb_scale;
+    applied.vsync_interval = next.vsync_interval;
+    applied.aa_mode = next.aa_mode;
+    applied.smaa_quality = next.smaa_quality;
+    applied.upscaler = next.upscaler;
+    applied.sharpness = next.sharpness;
+    applied.anisotropic_filtering = next.anisotropic_filtering;
+    applied.enhanced_mipmaps = next.enhanced_mipmaps;
+    applied.per_pixel_lighting = next.per_pixel_lighting;
+    applied.hud_output_resolution = next.hud_output_resolution;
+    applied.draw_distance = next.draw_distance;
+    const bool display_changed = display_settings_differ(live, applied);
+    const unsigned changes = pending_settings_changes();
+    set_render_config(applied);
+    if (!applied.internal_follow_window) {
+        stage_next_start_efb_scale(applied.efb_scale);
+    } else if (!live.internal_follow_window) {
+        s_follow_window_rearm.store(true, std::memory_order_release);
+    }
+    s_settings_draft = get_render_config();
+    if (display_changed) {
+        if (!settings_display_confirming()) {
+            s_display_confirm_previous = live;
+        }
+        s_display_confirm_deadline_ms = GetTickCount64() + kDisplayConfirmMs;
+    }
+    s_settings_applied_ms = GetTickCount64();
+    s_native_settings_dirty.store(true, std::memory_order_release);
+    flush_native_settings_if_dirty();
+    std::cerr << "[settings] applied " << changes << " change"
+              << (changes == 1u ? "" : "s") << '\n';
+}
+
+void revert_native_settings_draft() {
+    s_settings_draft = get_render_config();
+    std::cerr << "[settings] reverted\n";
 }
 
 // Every overlay change is logged with its new row text.
@@ -329,7 +571,7 @@ void adjust_native_setting(int delta) {
         kNativeSettingsTabCount;
     const unsigned row = s_native_settings_row.load(std::memory_order_relaxed);
     const auto text = [tab, row] {
-        return native_settings_row_text(tab, row, get_render_config(),
+        return native_settings_row_text(tab, row, s_settings_draft,
                                         get_runtime_settings(),
                                         get_render_feature_caps());
     };
@@ -347,106 +589,151 @@ void adjust_native_setting_unlogged(int delta) {
         s_native_settings_tab.load(std::memory_order_relaxed) %
         kNativeSettingsTabCount;
     const unsigned row = s_native_settings_row.load(std::memory_order_relaxed);
-    if (delta == 0) {
+    if (delta == 0 || settings_display_confirming()) {
         return;
     }
+    RenderConfig& draft = s_settings_draft;
+    const auto step = [delta](unsigned value, unsigned count) {
+        return static_cast<unsigned>(std::clamp(
+            static_cast<int>(value) + delta, 0, static_cast<int>(count) - 1));
+    };
 
     if (tab == 0u) {
-        const HWND window = reinterpret_cast<HWND>(
-            s_native_settings_window.load(std::memory_order_acquire));
-        if (row == 0u) {
-            // Internal resolution changes live: the render thread re-creates
-            // the EFB targets at the next frame boundary.
-            RenderConfig render = get_render_config();
-            const unsigned current = std::clamp(render.efb_scale, 1u, kMaxEfbScale);
-            const unsigned next = static_cast<unsigned>(std::clamp(
-                static_cast<int>(current) + delta,
-                1,
-                static_cast<int>(kMaxEfbScale)));
-            if (next != current) {
-                render.efb_scale = next;
-                set_render_config(render);
-                stage_next_start_efb_scale(next);
-                s_native_settings_dirty.store(true, std::memory_order_release);
-            }
-        } else if (row == 1u) {
-            static constexpr std::array<std::pair<unsigned, unsigned>, 9> kOutputPresets{{
-                {854u, 480u}, {1280u, 720u}, {1600u, 900u}, {1920u, 1080u},
-                {2560u, 1440u}, {3440u, 1440u}, {3840u, 2160u}, {5120u, 2880u},
-                {7680u, 4320u}}};
-            const unsigned height = s_bb_height;
+        const MonitorInfo* monitor = settings_monitor(draft);
+        switch (row) {
+        case 0: {  // monitor
+            if (s_settings_monitors.size() < 2u) return;
             std::size_t index = 0u;
-            for (std::size_t i = 0; i < kOutputPresets.size(); ++i) {
-                if (kOutputPresets[i].second <= height) index = i;
+            for (std::size_t i = 0; i < s_settings_monitors.size(); ++i) {
+                if (&s_settings_monitors[i] == monitor) index = i;
             }
-            if (delta > 0 && index + 1u < kOutputPresets.size()) {
-                ++index;
-            } else if (delta < 0 && index > 0u) {
-                --index;
-            } else {
-                return;
-            }
-            const auto [width, wanted_height] = kOutputPresets[index];
-            if (window != nullptr) {
-                (void)PostMessageW(window, kClientSizeMessage,
-                                   static_cast<WPARAM>(width),
-                                   static_cast<LPARAM>(wanted_height));
-            }
-            RenderConfig render = get_render_config();
-            render.window_width = width;
-            render.window_height = wanted_height;
-            set_render_config(render);
-            s_native_settings_dirty.store(true, std::memory_order_release);
-        } else if (row == 2u) {
-            const bool borderless =
-                !s_borderless_active.load(std::memory_order_acquire);
-            if (window != nullptr) {
-                (void)PostMessageW(window, kDisplayModeMessage,
-                                   borderless ? 1u : 0u, 0);
-            }
-        } else if (row == 4u) {
-            RenderConfig render = get_render_config();
-            render.internal_follow_window = !render.internal_follow_window;
-            set_render_config(render);
-            if (render.internal_follow_window) {
-                s_follow_window_rearm.store(true, std::memory_order_release);
-            }
-            s_native_settings_dirty.store(true, std::memory_order_release);
+            const std::size_t next = step(static_cast<unsigned>(index),
+                                          static_cast<unsigned>(s_settings_monitors.size()));
+            if (next == index) return;
+            const std::string device = narrow_utf8(s_settings_monitors[next].device);
+            draft.monitor.fill('\0');
+            std::memcpy(draft.monitor.data(), device.data(),
+                        std::min(device.size(), draft.monitor.size() - 1u));
+            // A fullscreen mode belongs to its monitor; start from the new
+            // one's desktop mode.
+            draft.fullscreen_width = 0u;
+            draft.fullscreen_height = 0u;
+            draft.fullscreen_refresh_hz = 0u;
+            sanitize_settings_draft(draft);
+            return;
         }
-        return;
+        case 1:  // display mode
+            draft.display_mode = step(draft.display_mode, 3u);
+            sanitize_settings_draft(draft);
+            return;
+        case 2: {  // resolution
+            if (draft.display_mode == kDisplayBorderless) return;
+            if (draft.display_mode == kDisplayExclusive) {
+                if (monitor == nullptr) return;
+                const auto sizes = monitor_resolutions(*monitor);  // largest first
+                const unsigned w = draft.fullscreen_width != 0u ? draft.fullscreen_width
+                                                                : monitor->current.width;
+                const unsigned h = draft.fullscreen_height != 0u ? draft.fullscreen_height
+                                                                 : monitor->current.height;
+                std::size_t index = 0u;
+                for (std::size_t i = 0; i < sizes.size(); ++i) {
+                    if (sizes[i].first == w && sizes[i].second == h) index = i;
+                }
+                // Right moves to a larger mode.
+                const int moved = static_cast<int>(index) - delta;
+                if (moved < 0 || moved >= static_cast<int>(sizes.size())) return;
+                draft.fullscreen_width = sizes[static_cast<std::size_t>(moved)].first;
+                draft.fullscreen_height = sizes[static_cast<std::size_t>(moved)].second;
+                const auto rates = monitor_refresh_rates(
+                    *monitor, draft.fullscreen_width, draft.fullscreen_height);
+                draft.fullscreen_refresh_hz = rates.empty() ? 0u : rates.front();
+            } else {
+                const auto sizes = settings_window_sizes(monitor);  // smallest first
+                std::size_t index = 0u;
+                for (std::size_t i = 0; i < sizes.size(); ++i) {
+                    if (std::uint64_t{sizes[i].first} * sizes[i].second <=
+                        std::uint64_t{draft.window_width} * draft.window_height) {
+                        index = i;
+                    }
+                }
+                const int moved = static_cast<int>(index) + delta;
+                if (moved < 0 || moved >= static_cast<int>(sizes.size())) return;
+                draft.window_width = sizes[static_cast<std::size_t>(moved)].first;
+                draft.window_height = sizes[static_cast<std::size_t>(moved)].second;
+            }
+            sanitize_settings_draft(draft);
+            return;
+        }
+        case 3: {  // refresh rate (exclusive fullscreen)
+            if (draft.display_mode != kDisplayExclusive || monitor == nullptr) return;
+            const unsigned w = draft.fullscreen_width != 0u ? draft.fullscreen_width
+                                                            : monitor->current.width;
+            const unsigned h = draft.fullscreen_height != 0u ? draft.fullscreen_height
+                                                             : monitor->current.height;
+            const auto rates = monitor_refresh_rates(*monitor, w, h);  // highest first
+            if (rates.empty()) return;
+            const unsigned current = draft.fullscreen_refresh_hz != 0u
+                ? draft.fullscreen_refresh_hz : monitor->current.refresh_hz;
+            std::size_t index = 0u;
+            for (std::size_t i = 0; i < rates.size(); ++i) {
+                if (rates[i] == current) index = i;
+            }
+            const int moved = static_cast<int>(index) - delta;
+            if (moved < 0 || moved >= static_cast<int>(rates.size())) return;
+            draft.fullscreen_width = w;
+            draft.fullscreen_height = h;
+            draft.fullscreen_refresh_hz = rates[static_cast<std::size_t>(moved)];
+            return;
+        }
+        case 4:  // aspect ratio
+            draft.aspect_mode = step(draft.aspect_mode, kAspectModeCount);
+            return;
+        case 5: {  // internal resolution: 0 matches the output, then 1x..cap
+            const unsigned cap = settings_scale_cap(draft);
+            const unsigned current = draft.internal_follow_window ? 0u
+                : std::clamp(draft.efb_scale, 1u, cap);
+            const unsigned next = step(current, cap + 1u);
+            if (next == 0u) {
+                draft.internal_follow_window = true;
+            } else {
+                draft.internal_follow_window = false;
+                draft.efb_scale = next;
+            }
+            return;
+        }
+        case 6:
+            draft.vsync_interval = draft.vsync_interval == 0u ? 1u : 0u;
+            return;
+        default:
+            return;
+        }
     }
 
     if (tab == 1u) {
-        // Image quality: applied by the render thread at the next frame.
-        RenderConfig render = get_render_config();
-        const auto step = [delta](unsigned value, unsigned count) {
-            return static_cast<unsigned>(std::clamp(
-                static_cast<int>(value) + delta, 0, static_cast<int>(count) - 1));
-        };
         static constexpr std::array<unsigned, 5> kAnisotropy{1u, 2u, 4u, 8u, 16u};
         switch (row) {
-        case 0: render.aa_mode = step(std::min(render.aa_mode, 2u), 3u); break;
-        case 1: render.smaa_quality = step(std::min(render.smaa_quality, 3u), 4u); break;
-        case 2: render.upscaler = step(std::min(render.upscaler, 1u), 2u); break;
+        case 0: draft.aa_mode = step(std::min(draft.aa_mode, 2u), 3u); break;
+        case 1: draft.smaa_quality = step(std::min(draft.smaa_quality, 3u), 4u); break;
+        case 2: draft.upscaler = step(std::min(draft.upscaler, 1u), 2u); break;
         case 3:
-            render.sharpness = static_cast<unsigned>(std::clamp(
-                static_cast<int>(std::min(render.sharpness, 100u)) + delta * 10, 0, 100));
+            draft.sharpness = static_cast<unsigned>(std::clamp(
+                static_cast<int>(std::min(draft.sharpness, 100u)) + delta * 10, 0, 100));
             break;
         case 4: {
             std::size_t index = 0u;
             for (std::size_t i = 0; i < kAnisotropy.size(); ++i) {
-                if (kAnisotropy[i] <= render.anisotropic_filtering) index = i;
+                if (kAnisotropy[i] <= draft.anisotropic_filtering) index = i;
             }
-            render.anisotropic_filtering = kAnisotropy[step(
+            draft.anisotropic_filtering = kAnisotropy[step(
                 static_cast<unsigned>(index), static_cast<unsigned>(kAnisotropy.size()))];
             break;
         }
-        case 5: render.per_pixel_lighting = !render.per_pixel_lighting; break;
-        case 6: render.hud_output_resolution = !render.hud_output_resolution; break;
+        case 5: draft.enhanced_mipmaps = !draft.enhanced_mipmaps; break;
+        case 6: draft.per_pixel_lighting = !draft.per_pixel_lighting; break;
+        case 7: draft.hud_output_resolution = !draft.hud_output_resolution; break;
+        case 8: draft.draw_distance = step(std::min(draft.draw_distance, 3u), 4u); break;
         default: return;
         }
-        set_render_config(render);
-        s_native_settings_dirty.store(true, std::memory_order_release);
         return;
     }
 
@@ -458,48 +745,14 @@ void adjust_native_setting_unlogged(int delta) {
         return;
     }
     if (tab == 3u) {
-        bool changed = false;
-        switch (row) {
-        case 0: {
-            const float next = step_gain(settings.audio.master, delta);
-            changed = next != settings.audio.master;
-            settings.audio.master = next;
-            break;
-        }
-        case 1: {
-            const float next = step_gain(settings.audio.music, delta);
-            changed = next != settings.audio.music;
-            settings.audio.music = next;
-            break;
-        }
-        case 2: {
-            const float next = step_gain(settings.audio.sfx, delta);
-            changed = next != settings.audio.sfx;
-            settings.audio.sfx = next;
-            break;
-        }
-        case 3: {
-            const float next = step_gain(settings.audio.voice, delta);
-            changed = next != settings.audio.voice;
-            settings.audio.voice = next;
-            break;
-        }
-        case 4: {
-            const float next = step_gain(settings.audio.ambience, delta);
-            changed = next != settings.audio.ambience;
-            settings.audio.ambience = next;
-            break;
-        }
-        case 5: {
-            const float next = step_gain(settings.audio.cutscene, delta);
-            changed = next != settings.audio.cutscene;
-            settings.audio.cutscene = next;
-            break;
-        }
-        default:
-            break;
-        }
-        if (changed) {
+        // The mix changes live (no apply).
+        float* const gains[] = {&settings.audio.master, &settings.audio.music,
+                                &settings.audio.sfx, &settings.audio.voice,
+                                &settings.audio.ambience, &settings.audio.cutscene};
+        if (row >= std::size(gains)) return;
+        const float next = step_gain(*gains[row], delta);
+        if (next != *gains[row]) {
+            *gains[row] = next;
             set_runtime_settings(settings);
             s_native_settings_dirty.store(true, std::memory_order_release);
         }
@@ -538,7 +791,15 @@ void cycle_native_settings_tab(int delta) {
 
 void set_native_settings_visible(bool visible) {
     const std::lock_guard<std::recursive_mutex> lock(s_native_settings_mutex);
+    if (visible && !s_native_settings_visible.load(std::memory_order_relaxed)) {
+        // A fresh draft and monitor list each time the menu opens.
+        s_settings_monitors = enumerate_monitors();
+        s_settings_draft = get_render_config();
+    }
     if (!visible) {
+        // Closing discards an unapplied draft and an unconfirmed display.
+        revert_display_settings();
+        s_settings_draft = get_render_config();
         flush_native_settings_if_dirty();
     }
     if (s_native_settings_visible.exchange(visible, std::memory_order_relaxed) != visible) {
@@ -567,9 +828,29 @@ bool handle_native_settings_key(WPARAM key, bool was_down) {
     if (!s_native_settings_visible.load(std::memory_order_relaxed)) {
         return false;
     }
+    expire_display_confirmation();
     switch (key) {
     case VK_ESCAPE:
+        if (settings_display_confirming()) {
+            revert_display_settings();
+            return true;
+        }
         set_native_settings_visible(false);
+        return true;
+    case VK_RETURN:
+        if (was_down) {
+            return true;
+        }
+        if (settings_display_confirming()) {
+            keep_display_settings();
+        } else {
+            apply_native_settings_draft();
+        }
+        return true;
+    case VK_BACK:
+        if (!was_down && !settings_display_confirming()) {
+            revert_native_settings_draft();
+        }
         return true;
     case VK_TAB:
     case VK_NEXT:
@@ -1302,6 +1583,24 @@ LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         (void)native_settings_handle_window_key(wp, false);
         return 0;
     }
+    if (msg == kPlaceWindowMessage) {
+        const auto* placement = reinterpret_cast<const WindowPlacement*>(lp);
+        if (placement != nullptr) {
+            // Keep the window's visibility (hidden test windows stay hidden).
+            const LONG_PTR visible = GetWindowLongPtrW(hwnd, GWL_STYLE) & WS_VISIBLE;
+            (void)SetWindowLongPtrW(
+                hwnd, GWL_STYLE, static_cast<LONG_PTR>(placement->style) | visible);
+            (void)SetWindowPos(
+                hwnd, placement->borderless ? HWND_TOP : nullptr,
+                placement->rect.left, placement->rect.top,
+                placement->rect.right - placement->rect.left,
+                placement->rect.bottom - placement->rect.top,
+                SWP_FRAMECHANGED | SWP_NOACTIVATE |
+                    (placement->borderless ? 0u : SWP_NOZORDER));
+            s_borderless_active.store(placement->borderless, std::memory_order_release);
+        }
+        return 0;
+    }
     if (msg == WM_CREATE) {
         s_pointer_hwnd.store(reinterpret_cast<std::uintptr_t>(hwnd),
                              std::memory_order_release);
@@ -1312,6 +1611,22 @@ LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         galaxy::host::clear_native_window_key_presses();
         invalidate_pointer_focus_once();
         clear_pointer_buttons();
+    }
+    if (msg == WM_EXITSIZEMOVE &&
+        !s_borderless_active.load(std::memory_order_acquire) &&
+        !s_exclusive_fullscreen_active.load(std::memory_order_acquire)) {
+        // A window size the user dragged to becomes the windowed size.
+        RECT client{};
+        if (GetClientRect(hwnd, &client) && client.right > 0 && client.bottom > 0) {
+            RenderConfig render = get_render_config();
+            if (render.window_width != static_cast<unsigned>(client.right) ||
+                render.window_height != static_cast<unsigned>(client.bottom)) {
+                render.window_width = static_cast<unsigned>(client.right);
+                render.window_height = static_cast<unsigned>(client.bottom);
+                set_render_config(render);
+                s_native_settings_dirty.store(true, std::memory_order_release);
+            }
+        }
     }
     if (msg == WM_EXITMENULOOP || msg == WM_EXITSIZEMOVE) {
         (msg == WM_EXITMENULOOP ? s_system_menu_active : s_move_size_active)
@@ -3370,38 +3685,48 @@ bool RendererD3D12::initialize(int window_width, int window_height, unsigned efb
     window_shown_ = false;
     s_quit_requested.store(false, std::memory_order_release);
     const bool hidden_window = hidden_window_mode_enabled();
-    const bool fullscreen_window =
-        fullscreen_window_mode_enabled() && !hidden_window;
+    // The configured monitor and display mode. Exclusive fullscreen starts as
+    // borderless on that monitor; the first frame's display check switches
+    // the mode once the swap chain exists. Hidden test windows stay windowed.
+    const RenderConfig start_config = get_render_config();
+    const unsigned start_mode = hidden_window
+        ? kDisplayWindowed : std::min(start_config.display_mode, kDisplayExclusive);
+    const bool fullscreen_window = start_mode != kDisplayWindowed;
+    const std::vector<MonitorInfo> start_monitors = enumerate_monitors();
+    const MonitorInfo* start_monitor =
+        find_monitor(start_monitors, widen_utf8(start_config.monitor.data()));
     int actual_window_width = window_width;
     int actual_window_height = window_height;
     int window_x = CW_USEDEFAULT;
     int window_y = CW_USEDEFAULT;
     DWORD window_style = kWindowStyle;
 
-    if (fullscreen_window) {
-        POINT origin{0, 0};
-        HMONITOR monitor = MonitorFromPoint(origin, MONITOR_DEFAULTTOPRIMARY);
-        MONITORINFO monitor_info{};
-        monitor_info.cbSize = sizeof(monitor_info);
-        if (GetMonitorInfoW(monitor, &monitor_info)) {
-            window_x = monitor_info.rcMonitor.left;
-            window_y = monitor_info.rcMonitor.top;
-            const std::int64_t monitor_width =
-                static_cast<std::int64_t>(monitor_info.rcMonitor.right) -
-                monitor_info.rcMonitor.left;
-            const std::int64_t monitor_height =
-                static_cast<std::int64_t>(monitor_info.rcMonitor.bottom) -
-                monitor_info.rcMonitor.top;
-            if (monitor_width <= 0 || monitor_height <= 0 ||
-                monitor_width > std::numeric_limits<int>::max() ||
-                monitor_height > std::numeric_limits<int>::max()) {
-                std::cerr << "[Renderer] invalid monitor dimensions\n";
-                return false;
-            }
-            actual_window_width = static_cast<int>(monitor_width);
-            actual_window_height = static_cast<int>(monitor_height);
+    if (fullscreen_window && start_monitor != nullptr) {
+        const RECT& bounds = start_monitor->bounds;
+        window_x = bounds.left;
+        window_y = bounds.top;
+        actual_window_width = static_cast<int>(bounds.right - bounds.left);
+        actual_window_height = static_cast<int>(bounds.bottom - bounds.top);
+        if (actual_window_width <= 0 || actual_window_height <= 0) {
+            std::cerr << "[Renderer] invalid monitor dimensions\n";
+            return false;
         }
         window_style = WS_POPUP;
+    } else if (!hidden_window && start_monitor != nullptr && window_width > 0 &&
+               window_height > 0) {
+        // Windowed: limited to the monitor's work area and centered on it.
+        const RECT outer = windowed_rect_on_monitor(
+            *start_monitor, static_cast<unsigned>(window_width),
+            static_cast<unsigned>(window_height));
+        RECT frame{0, 0, 0, 0};
+        (void)AdjustWindowRectExForDpi(&frame, kWindowStyle, FALSE, WS_EX_APPWINDOW,
+                                       GetDpiForSystem());
+        window_x = outer.left;
+        window_y = outer.top;
+        actual_window_width = static_cast<int>(
+            (outer.right - outer.left) - (frame.right - frame.left));
+        actual_window_height = static_cast<int>(
+            (outer.bottom - outer.top) - (frame.bottom - frame.top));
     }
 
     if (actual_window_width <= 0 || actual_window_height <= 0) {
@@ -3778,7 +4103,10 @@ bool RendererD3D12::initialize(int window_width, int window_height, unsigned efb
         scd.SampleDesc.Count = 1;
         scd.Scaling      = DXGI_SCALING_STRETCH;
         scd.AlphaMode    = DXGI_ALPHA_MODE_IGNORE;
-        scd.Flags = DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT;
+        // ALLOW_MODE_SWITCH lets exclusive fullscreen switch the monitor to
+        // the selected resolution and refresh rate.
+        scd.Flags = DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT |
+                    DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH;
         if (allow_tearing_enabled()) {
             ComPtr<IDXGIFactory5> factory5;
             BOOL supported = FALSE;
@@ -3808,25 +4136,8 @@ bool RendererD3D12::initialize(int window_width, int window_height, unsigned efb
             }
         }
         factory->MakeWindowAssociation(window_, DXGI_MWA_NO_ALT_ENTER);
-        if (fullscreen_window && exclusive_fullscreen_enabled()) {
-            const HRESULT fs_hr = swap_chain_->SetFullscreenState(TRUE, nullptr);
-            if (SUCCEEDED(fs_hr)) {
-                exclusive_fullscreen_active_ = true;
-                s_exclusive_fullscreen_active.store(true, std::memory_order_release);
-                // Flip-model fullscreen transitions require ResizeBuffers,
-                // even when the client dimensions did not change.
-                d3d_check(swap_chain_->ResizeBuffers(kSwapChainBuffers,
-                    scd.Width, scd.Height, scd.Format, scd.Flags),
-                    "exclusive fullscreen ResizeBuffers");
-            } else {
-                std::cerr << "[Renderer] exclusive fullscreen unavailable hr=0x"
-                          << std::hex << std::uppercase
-                          << std::bit_cast<std::uint32_t>(
-                                 static_cast<std::int32_t>(fs_hr))
-                          << std::dec
-                          << "; continuing in borderless fullscreen\n";
-            }
-        }
+        // Exclusive fullscreen is entered by the first frame's display check
+        // (reconcile_display_state), once the swap chain's buffers exist.
 
         // RTV heap: kSwapChainBuffers backbuffers + 1 EFB slot.
         {
@@ -4181,12 +4492,14 @@ void RendererD3D12::drain_gpu() {
 void RendererD3D12::apply_pending_resize() {
     const auto extent = s_pending_resize_extent.exchange(0u, std::memory_order_acq_rel);
     if (extent == 0u) return;
-    if (!swap_chain_ || !rtv_heap_) {
+    resize_swap_chain(static_cast<UINT>(extent >> 32u), static_cast<UINT>(extent), false);
+}
+
+void RendererD3D12::resize_swap_chain(UINT new_width, UINT new_height, bool force) {
+    if (!swap_chain_ || !rtv_heap_ || new_width == 0u || new_height == 0u) {
         return;
     }
-    const UINT new_width = static_cast<UINT>(extent >> 32u);
-    const UINT new_height = static_cast<UINT>(extent);
-    if (new_width == s_bb_width && new_height == s_bb_height) {
+    if (!force && new_width == s_bb_width && new_height == s_bb_height) {
         return;
     }
 
@@ -4247,6 +4560,197 @@ void RendererD3D12::apply_pending_resize() {
         std::cerr << "[Renderer] resized backbuffer to " << new_width << "x"
                   << new_height << '\n';
     }
+}
+
+namespace {
+// The window's outer rect for a windowed client size on a monitor: limited to
+// the monitor's work area and centered in it.
+RECT windowed_rect_on_monitor(const MonitorInfo& monitor, unsigned width,
+                              unsigned height) {
+    RECT frame{0, 0, 0, 0};
+    const HMONITOR handle = MonitorFromPoint(
+        POINT{monitor.bounds.left + 1, monitor.bounds.top + 1}, MONITOR_DEFAULTTONEAREST);
+    UINT dpi_x = 96u;
+    UINT dpi_y = 96u;
+    using GetDpiForMonitorFn = HRESULT(WINAPI*)(HMONITOR, int, UINT*, UINT*);
+    static const auto get_dpi = reinterpret_cast<GetDpiForMonitorFn>(
+        GetProcAddress(LoadLibraryW(L"shcore.dll"), "GetDpiForMonitor"));
+    if (get_dpi == nullptr || FAILED(get_dpi(handle, 0, &dpi_x, &dpi_y))) {
+        dpi_x = GetDpiForSystem();
+    }
+    (void)AdjustWindowRectExForDpi(&frame, kWindowStyle, FALSE, WS_EX_APPWINDOW, dpi_x);
+    const long frame_w = frame.right - frame.left;
+    const long frame_h = frame.bottom - frame.top;
+    const long work_w = monitor.work_area.right - monitor.work_area.left;
+    const long work_h = monitor.work_area.bottom - monitor.work_area.top;
+    const long client_w = std::clamp<long>(static_cast<long>(width), 320, std::max(320L, work_w - frame_w));
+    const long client_h = std::clamp<long>(static_cast<long>(height), 240, std::max(240L, work_h - frame_h));
+    const long outer_w = client_w + frame_w;
+    const long outer_h = client_h + frame_h;
+    const long left = monitor.work_area.left + std::max(0L, (work_w - outer_w) / 2);
+    const long top = monitor.work_area.top + std::max(0L, (work_h - outer_h) / 2);
+    return RECT{left, top, left + outer_w, top + outer_h};
+}
+}  // namespace
+
+bool RendererD3D12::enter_exclusive_fullscreen(
+    const std::wstring& monitor_device, unsigned width, unsigned height,
+    unsigned refresh_hz) {
+    if (!swap_chain_ || !adapter3_) {
+        return false;
+    }
+    ComPtr<IDXGIOutput> output;
+    for (UINT index = 0u;; ++index) {
+        ComPtr<IDXGIOutput> candidate;
+        if (adapter3_->EnumOutputs(index, &candidate) == DXGI_ERROR_NOT_FOUND) {
+            break;
+        }
+        DXGI_OUTPUT_DESC desc{};
+        if (candidate && SUCCEEDED(candidate->GetDesc(&desc)) &&
+            _wcsicmp(desc.DeviceName, monitor_device.c_str()) == 0) {
+            output = candidate;
+            break;
+        }
+    }
+    if (!output) {
+        // The monitor is driven by another GPU (hybrid laptops): borderless
+        // fullscreen on it is the closest equivalent.
+        std::cerr << "[Renderer] exclusive fullscreen: monitor not on the rendering GPU;"
+                     " using borderless\n";
+        return false;
+    }
+    DXGI_MODE_DESC wanted{};
+    wanted.Width = width;
+    wanted.Height = height;
+    wanted.RefreshRate = {refresh_hz, refresh_hz != 0u ? 1u : 0u};
+    wanted.Format = kBackbufferFormat;
+    DXGI_MODE_DESC closest{};
+    if (width == 0u || height == 0u ||
+        FAILED(output->FindClosestMatchingMode(&wanted, &closest, device_.Get()))) {
+        DXGI_OUTPUT_DESC desc{};
+        (void)output->GetDesc(&desc);
+        closest = wanted;
+        closest.Width = static_cast<UINT>(desc.DesktopCoordinates.right - desc.DesktopCoordinates.left);
+        closest.Height = static_cast<UINT>(desc.DesktopCoordinates.bottom - desc.DesktopCoordinates.top);
+        closest.RefreshRate = {0u, 0u};
+    }
+    wait_for_gpu();
+    (void)swap_chain_->ResizeTarget(&closest);
+    const HRESULT hr = swap_chain_->SetFullscreenState(TRUE, output.Get());
+    if (FAILED(hr)) {
+        std::cerr << "[Renderer] exclusive fullscreen unavailable hr=0x" << std::hex
+                  << static_cast<unsigned long>(hr) << std::dec << "; using borderless\n";
+        return false;
+    }
+    exclusive_fullscreen_active_ = true;
+    s_exclusive_fullscreen_active.store(true, std::memory_order_release);
+    resize_swap_chain(closest.Width, closest.Height, true);
+    std::cout << "[Renderer] exclusive fullscreen " << closest.Width << 'x' << closest.Height
+              << " @ " << (closest.RefreshRate.Denominator != 0u
+                               ? closest.RefreshRate.Numerator / closest.RefreshRate.Denominator
+                               : 0u)
+              << " Hz\n";
+    return true;
+}
+
+void RendererD3D12::leave_exclusive_fullscreen() {
+    if (!swap_chain_ || !exclusive_fullscreen_active_) {
+        return;
+    }
+    wait_for_gpu();
+    (void)swap_chain_->SetFullscreenState(FALSE, nullptr);
+    exclusive_fullscreen_active_ = false;
+    s_exclusive_fullscreen_active.store(false, std::memory_order_release);
+}
+
+void RendererD3D12::reconcile_display_state() {
+    if (!swap_chain_ || window_ == nullptr || hidden_window_mode_enabled()) {
+        return;
+    }
+    const RenderConfig cfg = get_render_config();
+    const unsigned mode = std::min(cfg.display_mode, kDisplayExclusive);
+    AppliedDisplay& applied = applied_display_;
+    const bool same_display = applied.valid && applied.mode == mode &&
+        applied.monitor == cfg.monitor &&
+        (mode != kDisplayExclusive ||
+         (applied.fullscreen_width == cfg.fullscreen_width &&
+          applied.fullscreen_height == cfg.fullscreen_height &&
+          applied.fullscreen_refresh_hz == cfg.fullscreen_refresh_hz));
+    if (same_display) {
+        if (mode == kDisplayExclusive) {
+            // Alt+Tab leaves exclusive fullscreen; return once the game is
+            // in front again. Checked twice a second.
+            if (++display_checks_ % 30u == 0u) {
+                BOOL fullscreen = FALSE;
+                if (SUCCEEDED(swap_chain_->GetFullscreenState(&fullscreen, nullptr)) &&
+                    !fullscreen && GetForegroundWindow() == window_) {
+                    exclusive_fullscreen_active_ = false;
+                    s_exclusive_fullscreen_active.store(false, std::memory_order_release);
+                    applied.valid = false;
+                }
+            }
+            return;
+        }
+        if (mode != kDisplayWindowed ||
+            (applied.window_width == cfg.window_width &&
+             applied.window_height == cfg.window_height) ||
+            s_move_size_active.load(std::memory_order_acquire)) {
+            return;
+        }
+    }
+
+    const std::vector<MonitorInfo> monitors = enumerate_monitors();
+    const MonitorInfo* monitor = find_monitor(monitors, widen_utf8(cfg.monitor.data()));
+    if (monitor == nullptr) {
+        return;
+    }
+    if (exclusive_fullscreen_active_) {
+        leave_exclusive_fullscreen();
+    }
+    WindowPlacement placement{};
+    if (mode == kDisplayWindowed) {
+        placement.style = kWindowStyle;
+        placement.rect = windowed_rect_on_monitor(*monitor, cfg.window_width, cfg.window_height);
+        placement.borderless = false;
+    } else {
+        placement.style = WS_POPUP;
+        placement.rect = monitor->bounds;
+        placement.borderless = true;
+    }
+    DWORD_PTR result = 0u;
+    if (SendMessageTimeoutW(window_, kPlaceWindowMessage, 0u,
+                            reinterpret_cast<LPARAM>(&placement),
+                            SMTO_NORMAL, 2000u, &result) == 0) {
+        std::cerr << "[Renderer] display change: the window did not respond\n";
+        return;
+    }
+    bool exclusive = false;
+    if (mode == kDisplayExclusive) {
+        exclusive = enter_exclusive_fullscreen(monitor->device, cfg.fullscreen_width,
+                                               cfg.fullscreen_height, cfg.fullscreen_refresh_hz);
+    }
+    if (!exclusive) {
+        // The placed window's client size (WM_SIZE can lag behind the
+        // cross-thread placement).
+        RECT client{};
+        if (GetClientRect(window_, &client) && client.right > 0 && client.bottom > 0) {
+            resize_swap_chain(static_cast<UINT>(client.right),
+                              static_cast<UINT>(client.bottom), false);
+        }
+    }
+    applied.valid = true;
+    applied.mode = mode;
+    applied.monitor = cfg.monitor;
+    applied.fullscreen_width = cfg.fullscreen_width;
+    applied.fullscreen_height = cfg.fullscreen_height;
+    applied.fullscreen_refresh_hz = cfg.fullscreen_refresh_hz;
+    applied.window_width = cfg.window_width;
+    applied.window_height = cfg.window_height;
+    std::cout << "[Renderer] display " << (mode == kDisplayWindowed ? "windowed"
+                                           : mode == kDisplayBorderless ? "borderless"
+                                                                        : "fullscreen")
+              << ' ' << narrow_utf8(monitor->device) << ' ' << s_bb_width << 'x'
+              << s_bb_height << '\n';
 }
 
 void RendererD3D12::ensure_native_settings_corner_texture_loaded() {
@@ -4683,6 +5187,7 @@ void RendererD3D12::begin_frame(bool present_swap_chain) {
     // with no in-flight command-list recording on this renderer. Contains
     // its own full GPU-idle wait, so it belongs before any per-slot state
     // below is touched.
+    reconcile_display_state();
     apply_pending_resize();
     follow_window_internal_resolution();
     apply_pending_efb_scale();
@@ -7439,6 +7944,8 @@ std::array<std::uint8_t, 7> ui_glyph(char ch) {
     case '/': return {0x01u, 0x01u, 0x02u, 0x04u, 0x08u, 0x10u, 0x10u};
     case '%': return {0x19u, 0x19u, 0x02u, 0x04u, 0x08u, 0x13u, 0x13u};
     case '<': return {0x02u, 0x04u, 0x08u, 0x10u, 0x08u, 0x04u, 0x02u};
+    case '(': return {0x02u, 0x04u, 0x08u, 0x08u, 0x08u, 0x04u, 0x02u};
+    case ')': return {0x08u, 0x04u, 0x02u, 0x02u, 0x02u, 0x04u, 0x08u};
     case '>': return {0x08u, 0x04u, 0x02u, 0x01u, 0x02u, 0x04u, 0x08u};
     default: return {0x00u, 0x00u, 0x00u, 0x00u, 0x00u, 0x00u, 0x00u};
     }
@@ -7509,63 +8016,77 @@ const char* exposed_text(const RenderFeatureStatus& status) {
     return status.settings_exposed ? "READY" : "HIDDEN";
 }
 
+std::string upper_ascii(std::string text) {
+    for (char& ch : text) {
+        if (ch >= 'a' && ch <= 'z') ch = static_cast<char>(ch - 'a' + 'A');
+    }
+    return text;
+}
+
 std::string native_settings_row_text(
     unsigned tab, unsigned row,
     const RenderConfig& render, const RuntimeSettings& runtime,
     const RenderFeatureCaps& caps) {
-    char text[96]{};
+    char text[128]{};
     switch (tab % kNativeSettingsTabCount) {
-    case 0:
+    case 0: {
+        const MonitorInfo* monitor = settings_monitor(render);
         switch (row) {
         case 0: {
-            const unsigned scale = std::clamp(render.efb_scale, 1u, kMaxEfbScale);
-            std::snprintf(
-                text,
-                sizeof(text),
-                "INTERNAL RES: %uX (%ux%u)",
-                scale,
-                kEfbWidth * scale,
-                kEfbHeight * scale);
+            if (monitor == nullptr) return "MONITOR: PRIMARY";
+            std::size_t index = 0u;
+            for (std::size_t i = 0; i < s_settings_monitors.size(); ++i) {
+                if (&s_settings_monitors[i] == monitor) index = i;
+            }
+            std::string name = monitor->name.empty() ? std::string("DISPLAY") : monitor->name;
+            if (name.size() > 22u) name.resize(22u);
+            std::snprintf(text, sizeof(text), "MONITOR: %u %s %uX%u",
+                          static_cast<unsigned>(index + 1u), upper_ascii(name).c_str(),
+                          monitor->current.width, monitor->current.height);
             return text;
         }
-        case 1:
-            std::snprintf(
-                text,
-                sizeof(text),
-                "OUTPUT: %ux%u",
-                static_cast<unsigned>(s_bb_width),
-                static_cast<unsigned>(s_bb_height));
+        case 1: {
+            static constexpr const char* kModes[] = {"WINDOWED", "BORDERLESS", "FULLSCREEN"};
+            return std::string("MODE: ") + kModes[std::min(render.display_mode, 2u)];
+        }
+        case 2: {
+            const auto [w, h] = settings_output_size(render);
+            std::snprintf(text, sizeof(text), "RESOLUTION: %uX%u%s", w, h,
+                          render.display_mode == kDisplayBorderless ? " DESKTOP" : "");
             return text;
-        case 2:
-            return std::string("DISPLAY: ") +
-                   (s_borderless_active.load(std::memory_order_acquire)
-                        ? "BORDERLESS FULLSCREEN"
-                        : "WINDOWED");
+        }
         case 3:
-            if (render.max_fps <= 0.0f) {
-                return std::string("PRESENT: VSYNC ") +
-                       (render.vsync_interval == 0u ? "OFF" : "ON") +
-                       " CAP INF RO";
-            }
-            std::snprintf(
-                text,
-                sizeof(text),
-                "PRESENT: VSYNC %s CAP %.0f RO",
-                render.vsync_interval == 0u ? "OFF" : "ON",
-                static_cast<double>(render.max_fps));
+            if (render.display_mode != kDisplayExclusive) return "REFRESH RATE: DESKTOP";
+            std::snprintf(text, sizeof(text), "REFRESH RATE: %u HZ",
+                          render.fullscreen_refresh_hz != 0u ? render.fullscreen_refresh_hz
+                          : (monitor ? monitor->current.refresh_hz : 60u));
             return text;
-        case 4:
-            return std::string("RES FOLLOWS WINDOW: ") +
-                   (render.internal_follow_window ? "ON" : "OFF");
+        case 4: {
+            static constexpr const char* kAspects[] = {
+                "AUTO", "4:3", "16:10", "16:9", "21:9", "32:9"};
+            return std::string("ASPECT RATIO: ") +
+                   kAspects[std::min(render.aspect_mode, kAspectModeCount - 1u)];
+        }
+        case 5: {
+            if (render.internal_follow_window) return "INTERNAL RES: MATCH OUTPUT";
+            const unsigned scale = std::clamp(render.efb_scale, 1u, kMaxEfbScale);
+            std::snprintf(text, sizeof(text), "INTERNAL RES: %uX %uX%u%s", scale,
+                          kEfbWidth * scale, kEfbHeight * scale,
+                          scale >= settings_scale_cap(render) ? " MAX" : "");
+            return text;
+        }
+        case 6:
+            return std::string("VSYNC: ") + (render.vsync_interval == 0u ? "OFF" : "ON");
         default:
             return {};
         }
+    }
     case 1: {
         static constexpr const char* kAa[] = {"OFF", "SMAA", "AUTO"};
         static constexpr const char* kQuality[] = {"LOW", "MEDIUM", "HIGH", "ULTRA"};
         switch (row) {
         case 0: return std::string("ANTI-ALIASING: ") + kAa[std::min(render.aa_mode, 2u)];
-        case 1: return std::string("SMAA QUALITY: ") + kQuality[std::min(render.smaa_quality, 3u)];
+        case 1: return std::string("AA QUALITY: ") + kQuality[std::min(render.smaa_quality, 3u)];
         case 2:
             return std::string("UPSCALER: ") +
                    (std::min(render.upscaler, 1u) == 1u ? "FSR 1" : "BILINEAR");
@@ -7578,11 +8099,17 @@ std::string native_settings_row_text(
                           std::min(render.anisotropic_filtering, 16u));
             return text;
         case 5:
+            return std::string("MIPMAPS: ") + (render.enhanced_mipmaps ? "GENERATED" : "ORIGINAL");
+        case 6:
             return std::string("LIGHTING: ") +
                    (render.per_pixel_lighting ? "PER PIXEL" : "PER VERTEX");
-        case 6:
+        case 7:
             return std::string("2D LAYER: ") +
                    (render.hud_output_resolution ? "DISPLAY RES" : "INTERNAL RES");
+        case 8: {
+            static constexpr const char* kDistances[] = {"ORIGINAL", "2X", "4X", "8X"};
+            return std::string("DRAW DISTANCE: ") + kDistances[std::min(render.draw_distance, 3u)];
+        }
         default:
             return {};
         }
@@ -7774,7 +8301,7 @@ void draw_native_settings_overlay(RendererD3D12& renderer) {
         "NATIVE SETTINGS",
         text);
 
-    const char* tabs[] = {"VIDEO", "GRAPHICS", "INPUT", "AUDIO", "CAPS"};
+    const char* tabs[] = {"DISPLAY", "GRAPHICS", "INPUT", "AUDIO", "CAPS"};
     static_assert(std::size(tabs) == kNativeSettingsTabCount);
     int tab_x = panel_x + 28;
     // Five labels share the panel width; the longest is eight 6-unit glyphs
@@ -7792,7 +8319,9 @@ void draw_native_settings_overlay(RendererD3D12& renderer) {
         tab_x += tab_step;
     }
 
-    const RenderConfig row_render = get_render_config();
+    const std::lock_guard<std::recursive_mutex> settings_lock(s_native_settings_mutex);
+    expire_display_confirmation();
+    const RenderConfig row_render = s_settings_draft;
     const RuntimeSettings row_runtime = get_runtime_settings();
     const RenderFeatureCaps row_caps = get_render_feature_caps();
     const unsigned row_count = native_settings_row_count(tab);
@@ -7825,17 +8354,34 @@ void draw_native_settings_overlay(RendererD3D12& renderer) {
     const int footer_y = layout.footer_y;
     const int footer_scale = std::min(2, scale);
     const int footer_step = footer_scale == 1 ? 18 : 28;
-    ui_text(
-        renderer,
-        panel_x + 28,
-        footer_y,
-        footer_scale,
-        s_native_settings_save_error.load(std::memory_order_acquire)
-            ? "SAVE FAILED - RETRY ON NEXT CLOSE"
-            : "CHANGES APPLY IMMEDIATELY",
-        s_native_settings_save_error.load(std::memory_order_relaxed)
-            ? error
-            : muted);
+    std::string status;
+    std::array<float, 4> status_color = muted;
+    const std::uint64_t now_ms = GetTickCount64();
+    if (settings_display_confirming()) {
+        const std::uint64_t left_ms = s_display_confirm_deadline_ms > now_ms
+            ? s_display_confirm_deadline_ms - now_ms : 0u;
+        char line[96]{};
+        std::snprintf(line, sizeof(line),
+                      "KEEP DISPLAY? ENTER/Y KEEP  ESC/B UNDO  %u",
+                      static_cast<unsigned>((left_ms + 999u) / 1000u));
+        status = line;
+        status_color = accent;
+    } else if (s_native_settings_save_error.load(std::memory_order_acquire)) {
+        status = "SAVE FAILED - RETRY ON NEXT CLOSE";
+        status_color = error;
+    } else if (const unsigned pending = pending_settings_changes(); pending != 0u) {
+        char line[96]{};
+        std::snprintf(line, sizeof(line), "%u CHANGE%s  ENTER/Y APPLY  BACKSPACE/X UNDO",
+                      pending, pending == 1u ? "" : "S");
+        status = line;
+        status_color = accent;
+    } else if (s_settings_applied_ms != 0u && now_ms - s_settings_applied_ms < 2500u) {
+        status = "APPLIED";
+        status_color = accent;
+    } else {
+        status = tab == 3u ? "AUDIO CHANGES ARE LIVE" : "NO CHANGES";
+    }
+    ui_text(renderer, panel_x + 28, footer_y, footer_scale, status, status_color);
     ui_text(
         renderer,
         panel_x + 28,
@@ -7848,7 +8394,7 @@ void draw_native_settings_overlay(RendererD3D12& renderer) {
         panel_x + 28,
         footer_y + footer_step * 2,
         footer_scale,
-        "ARROWS/D-PAD MOVE+ADJUST  ESC/B CLOSE",
+        "ARROWS/D-PAD MOVE+CHANGE  ESC/B CLOSE",
         muted);
 }
 
@@ -8445,6 +8991,27 @@ HostClientExtent current_host_client_extent() noexcept {
     return {client.right - client.left, client.bottom - client.top};
 }
 
+HostClientExtent aspect_latch_extent() noexcept {
+    const unsigned mode = std::min(get_render_config().aspect_mode, kAspectModeCount - 1u);
+    if (mode != 0u) {
+        // Any extent with the chosen ratio; only the ratio is latched.
+        return {static_cast<int>(kAspectRatios[mode][0] * 120u),
+                static_cast<int>(kAspectRatios[mode][1] * 120u)};
+    }
+    const HostClientExtent client = current_host_client_extent();
+    if (client.width <= 1 || client.height <= 1) {
+        return client;
+    }
+    const double aspect = static_cast<double>(client.width) / client.height;
+    if (aspect < 4.0 / 3.0) {
+        return {480, 360};
+    }
+    if (aspect > 32.0 / 9.0) {
+        return {3840, 1080};
+    }
+    return client;
+}
+
 HostPointerState poll_host_pointer_state() noexcept {
     constexpr std::uint32_t kPointerDebugCachedEvent = 1u << 8u;
     constexpr std::uint32_t kPointerDebugCursorPollAttempted = 1u << 9u;
@@ -8792,6 +9359,11 @@ NativeSettingsOverlaySnapshot native_settings_overlay_snapshot() noexcept {
     snapshot.row = row;
     snapshot.tab_count = kNativeSettingsTabCount;
     snapshot.row_count = count;
+    {
+        const std::lock_guard<std::recursive_mutex> lock(s_native_settings_mutex);
+        snapshot.pending_changes = snapshot.visible ? pending_settings_changes() : 0u;
+        snapshot.confirming_display = settings_display_confirming();
+    }
     return snapshot;
 }
 
@@ -8825,14 +9397,14 @@ NativeSettingsLayout compute_native_settings_layout(
                ? 4
                : (backbuffer_width >= 1280u ? 3 : 2));
     layout.rows_y = compact
-        ? layout.panel_y + 50
+        ? layout.panel_y + 46
         : layout.panel_y + 110 + (layout.text_scale - 2) * 8;
     layout.row_step = compact
-        ? 16
+        ? 14
         : std::max(32, layout.text_scale * 9 + 8);
-    // Tall enough for the longest page (seven rows) above the footer.
+    // Tall enough for the longest page (nine rows) above the footer.
     const int footer_block = compact ? 62 : 82;
-    constexpr int kLongestPageRows = 7;
+    constexpr int kLongestPageRows = 9;
     const int needed_height = (layout.rows_y - layout.panel_y) +
         (kLongestPageRows - 1) * layout.row_step + layout.text_scale * 7 + 8 +
         footer_block;
@@ -8841,6 +9413,12 @@ NativeSettingsLayout compute_native_settings_layout(
         : std::max(layout.text_scale >= 4 ? 480 : 420, needed_height);
     layout.panel_height = std::min(desired_height, height - margin * 2);
     layout.footer_y = layout.panel_y + layout.panel_height - footer_block;
+    // A short window tightens the rows rather than dropping the menu.
+    const int rows_room = layout.footer_y - 8 - layout.text_scale * 7 - layout.rows_y;
+    if ((kLongestPageRows - 1) * layout.row_step > rows_room) {
+        layout.row_step = std::max(layout.text_scale * 7 + 4,
+                                   rows_room / (kLongestPageRows - 1));
+    }
 
     const unsigned row_count = native_settings_row_count(tab);
     const int final_row_bottom = row_count == 0u
@@ -8872,7 +9450,13 @@ void native_settings_post_key(std::uintptr_t virtual_key) noexcept {
     }
 }
 
+RenderConfig native_settings_draft_for_tests() {
+    const std::lock_guard<std::recursive_mutex> lock(s_native_settings_mutex);
+    return s_settings_draft;
+}
+
 void native_settings_reset_overlay_state_for_tests() noexcept {
+    s_display_confirm_deadline_ms = 0u;
     s_native_settings_visible.store(false, std::memory_order_relaxed);
     s_native_settings_dirty.store(false, std::memory_order_relaxed);
     s_native_settings_save_error.store(false, std::memory_order_relaxed);

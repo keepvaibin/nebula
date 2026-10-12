@@ -197,6 +197,24 @@ static void apply_kv(RenderConfig& cfg, const char* key, const char* val) {
     else if (std::strcmp(key, "rt_reflections") == 0) cfg.rt_reflections      = parse_bool(val, false);
     else if (std::strcmp(key, "window_width")   == 0) cfg.window_width        = parse_window_dimension(val, cfg.window_width);
     else if (std::strcmp(key, "window_height")  == 0) cfg.window_height       = parse_window_dimension(val, cfg.window_height);
+    else if (std::strcmp(key, "display_mode") == 0) {
+        static constexpr const char* kNames[] = {"windowed", "borderless", "fullscreen"};
+        cfg.display_mode = parse_choice(val, kNames, cfg.display_mode);
+    } else if (std::strcmp(key, "monitor") == 0) {
+        cfg.monitor.fill('\0');
+        const std::size_t length = std::min(std::strlen(val), cfg.monitor.size() - 1u);
+        std::memcpy(cfg.monitor.data(), val, length);
+    }
+    else if (std::strcmp(key, "fullscreen_width") == 0) cfg.fullscreen_width = std::min(parse_uint(val, 0u), 16384u);
+    else if (std::strcmp(key, "fullscreen_height") == 0) cfg.fullscreen_height = std::min(parse_uint(val, 0u), 16384u);
+    else if (std::strcmp(key, "fullscreen_refresh_hz") == 0) cfg.fullscreen_refresh_hz = std::min(parse_uint(val, 0u), 1000u);
+    else if (std::strcmp(key, "aspect") == 0) {
+        static constexpr const char* kNames[] = {"auto", "4:3", "16:10", "16:9", "21:9", "32:9"};
+        cfg.aspect_mode = parse_choice(val, kNames, cfg.aspect_mode);
+    } else if (std::strcmp(key, "draw_distance") == 0) {
+        static constexpr const char* kNames[] = {"original", "2x", "4x", "8x"};
+        cfg.draw_distance = parse_choice(val, kNames, cfg.draw_distance);
+    }
 }
 
 static void parse_ini(FILE* f, RenderConfig& cfg) {
@@ -260,6 +278,23 @@ static void apply_env_overrides(RenderConfig& cfg) {
     apply_env(cfg, "GALAXY_RT_REFLECTIONS", "rt_reflections");
     apply_env(cfg, "GALAXY_WINDOW_WIDTH", "window_width");
     apply_env(cfg, "GALAXY_WINDOW_HEIGHT", "window_height");
+    // Launch variables of earlier launchers and the test tools:
+    // GALAXY_FULLSCREEN selects borderless, with GALAXY_EXCLUSIVE_FULLSCREEN
+    // exclusive fullscreen.
+    {
+        char value[16]{};
+        std::size_t length = 0;
+        if (getenv_s(&length, value, sizeof(value), "GALAXY_FULLSCREEN") == 0 && length > 1u) {
+            cfg.display_mode = read_env_bool("GALAXY_FULLSCREEN", false)
+                ? (read_env_bool("GALAXY_EXCLUSIVE_FULLSCREEN", false) ? kDisplayExclusive
+                                                                      : kDisplayBorderless)
+                : kDisplayWindowed;
+        }
+    }
+    apply_env(cfg, "GALAXY_DISPLAY_MODE", "display_mode");
+    apply_env(cfg, "GALAXY_MONITOR", "monitor");
+    apply_env(cfg, "GALAXY_ASPECT", "aspect");
+    apply_env(cfg, "GALAXY_DRAW_DISTANCE", "draw_distance");
 }
 
 // Temporal upscaling stays opt-in until its motion vectors are validated;
@@ -292,6 +327,10 @@ static void clamp_unimplemented_features(RenderConfig& cfg) {
         static_cast<unsigned>(std::numeric_limits<int>::max());
     cfg.window_width = std::clamp(cfg.window_width, 1u, kMaxWindowDimension);
     cfg.window_height = std::clamp(cfg.window_height, 1u, kMaxWindowDimension);
+    cfg.display_mode = std::min(cfg.display_mode, kDisplayExclusive);
+    cfg.aspect_mode = std::min(cfg.aspect_mode, kAspectModeCount - 1u);
+    cfg.draw_distance = std::min(cfg.draw_distance, 3u);
+    cfg.monitor.back() = '\0';
     cfg.msaa_samples = 1;
     cfg.taa_enabled = false;
     cfg.ray_tracing_enabled = false;
@@ -569,7 +608,14 @@ bool save_render_config_to_file() {
              << "hud_output_resolution="
              << (cfg.hud_output_resolution ? 1u : 0u) << '\n'
              << "window_width=" << cfg.window_width << '\n'
-             << "window_height=" << cfg.window_height << '\n';
+             << "window_height=" << cfg.window_height << '\n'
+             << "display_mode=" << cfg.display_mode << '\n'
+             << "monitor=" << cfg.monitor.data() << '\n'
+             << "fullscreen_width=" << cfg.fullscreen_width << '\n'
+             << "fullscreen_height=" << cfg.fullscreen_height << '\n'
+             << "fullscreen_refresh_hz=" << cfg.fullscreen_refresh_hz << '\n'
+             << "aspect=" << cfg.aspect_mode << '\n'
+             << "draw_distance=" << cfg.draw_distance << '\n';
     if (!contents) {
         return false;
     }

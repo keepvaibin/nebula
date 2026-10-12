@@ -694,6 +694,7 @@ add_library(galaxy_gx STATIC
     runtime/src/gx/post_process.cpp
     ${galaxy_post_headers}
     runtime/src/gx/temporal_upscaler.cpp
+    runtime/src/gx/display_modes.cpp
     runtime/src/gx/fifo_parser.cpp
     runtime/src/gx/gx_backend.cpp
     runtime/src/frame_telemetry.cpp

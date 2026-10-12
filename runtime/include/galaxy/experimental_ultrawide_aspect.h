@@ -33,6 +33,15 @@ struct ExperimentalUltrawideAspect {
 [[nodiscard]] inline std::optional<ExperimentalUltrawideAspect>
 make_experimental_ultrawide_aspect(double content_aspect) noexcept;
 
+// The game's own 4:3 mode (GALAXY_EXPERIMENTAL_NATIVE_4_3) with its 608-unit
+// screen and authored 4:3 layouts. A 4:3 picture from the live aspect path
+// keeps the wide mode at 624 units and fits the wide UI like other narrow
+// aspects.
+[[nodiscard]] inline bool native_four_three(
+    const ExperimentalUltrawideAspect& policy) noexcept {
+    return policy.guest_screen_width == 608u;
+}
+
 // Host-owned at a completed VI boundary. Packed into one atomic publication so
 // camera, screen width, NW4R, presentation and IR can never observe half a
 // resize. The upper word is a generation; the low word stores positive client
@@ -104,7 +113,7 @@ make_experimental_ultrawide_aspect(double content_aspect) noexcept {
     constexpr double kMaximumAspect = 32.0 / 9.0;
     constexpr double kWideLogicalWidth = 832.0;
     if (!std::isfinite(content_aspect) ||
-        content_aspect <= 4.0 / 3.0 ||
+        content_aspect < 4.0 / 3.0 - 1e-9 ||
         content_aspect > kMaximumAspect) {
         return std::nullopt;
     }
@@ -262,8 +271,7 @@ experimental_effective_guest_aspect(const ServicesLike* services) {
 
 [[nodiscard]] inline float experimental_nw4r_canvas_width(
     const ExperimentalUltrawideAspect& policy) noexcept {
-    if (policy.guest_screen_width == 608u &&
-        policy.content_aspect == 4.0 / 3.0) {
+    if (native_four_three(policy)) {
         return 608.0f;
     }
     return static_cast<float>(
@@ -274,7 +282,7 @@ experimental_effective_guest_aspect(const ServicesLike* services) {
     const ExperimentalUltrawideAspect& policy) noexcept {
     // Native 4:3 has its own authored layout. Other narrower-than-wide
     // aspects fit the wide UI uniformly rather than cropping or squeezing it.
-    if (policy.content_aspect == 4.0 / 3.0) return 1.0f;
+    if (native_four_three(policy)) return 1.0f;
     return static_cast<float>(std::max(1.0, kWiiContentAspect / policy.content_aspect));
 }
 
@@ -293,7 +301,7 @@ inline void apply_experimental_rmge01_camera_aspect(
     // This instruction is a legal interior entry. A caller entering here
     // under the native 4:3 policy may bypass the preceding wide-mode branch;
     // preserve its original lfs result instead of treating that as a fault.
-    if (policy->content_aspect == 4.0 / 3.0) {
+    if (native_four_three(*policy)) {
         return;
     }
     if (context == nullptr) {
@@ -376,8 +384,7 @@ inline void apply_experimental_rmge01_ultrawide_screen_width(
     if (!policy || g_rmge01_native_screen_width_scope != 0u) {
         return;
     }
-    if (policy->guest_screen_width == 608u &&
-        policy->content_aspect == 4.0 / 3.0) {
+    if (native_four_three(*policy)) {
         if (context == nullptr || context->gpr[3] != 608u) {
             throw std::runtime_error(
                 "RMGE01 native 4:3 requires the game's 4:3 screen width");
@@ -426,8 +433,7 @@ inline void apply_experimental_rmge01_nw4r_canvas_width(
     // The load itself is a legal interior entry. Under the native 4:3 mode,
     // or a valid noncanonical SDA2 base/value, its original guest result is
     // authoritative just as it is for the camera-aspect load.
-    if (policy->guest_screen_width == 608u &&
-        policy->content_aspect == 4.0 / 3.0) {
+    if (native_four_three(*policy)) {
         return;
     }
     if (context == nullptr) {
@@ -464,7 +470,7 @@ template <typename PpcContextLike>
 inline void apply_experimental_rmge01_home_geometry(
     PpcContextLike* context, unsigned kind,
     const std::optional<ExperimentalUltrawideAspect>& policy, unsigned input_lane = 0u) {
-    if (!policy || policy->content_aspect == 4.0 / 3.0 ||
+    if (!policy || native_four_three(*policy) ||
         policy->content_aspect == kWiiContentAspect) return;
     if (context == nullptr || kind > 3u || input_lane >= 32u)
         throw std::runtime_error("RMGE01 Home geometry has no valid context");
@@ -497,7 +503,7 @@ template <typename PpcContextLike>
 inline void apply_experimental_rmge01_layout_constant(
     PpcContextLike* context, unsigned target, bool half_width,
     const std::optional<ExperimentalUltrawideAspect>& policy) {
-    if (!policy || policy->content_aspect == 4.0 / 3.0 ||
+    if (!policy || native_four_three(*policy) ||
         policy->content_aspect == kWiiContentAspect) {
         return;
     }
@@ -530,7 +536,7 @@ template <typename PpcContextLike>
 inline void apply_experimental_rmge01_layout_vertical_fit(
     PpcContextLike* context, unsigned target, bool inverse,
     const std::optional<ExperimentalUltrawideAspect>& policy) {
-    if (!policy || policy->content_aspect == 4.0 / 3.0 ||
+    if (!policy || native_four_three(*policy) ||
         policy->content_aspect >= kWiiContentAspect) return;
     if (context == nullptr || target >= 32u) {
         throw std::runtime_error("RMGE01 layout vertical fit has no valid context");

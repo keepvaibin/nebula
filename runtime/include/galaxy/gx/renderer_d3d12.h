@@ -637,6 +637,17 @@ private:
     // Only ever called from begin_frame(), i.e. between frames with no
     // in-flight command-list recording on this renderer.
     void apply_pending_resize();
+    // Resizes the swap-chain buffers; `force` also when the size is unchanged
+    // (required after a fullscreen transition with the flip model).
+    void resize_swap_chain(UINT width, UINT height, bool force);
+    // Brings the window and swap chain to the configured display (monitor,
+    // windowed/borderless/exclusive fullscreen, mode, window size) at a frame
+    // boundary.
+    void reconcile_display_state();
+    [[nodiscard]] bool enter_exclusive_fullscreen(
+        const std::wstring& monitor_device, unsigned width, unsigned height,
+        unsigned refresh_hz);
+    void leave_exclusive_fullscreen();
     void reap_debug_capture_writers(bool wait_for_all);
     void queue_debug_ppm_capture(
         const char* tag,
@@ -714,6 +725,19 @@ private:
     HANDLE fence_event_ = nullptr;
     HANDLE frame_latency_waitable_ = nullptr;
     bool exclusive_fullscreen_active_ = false;
+    // The display the window and swap chain were last brought to.
+    struct AppliedDisplay {
+        bool valid = false;
+        unsigned mode = 0;
+        std::array<char, 64> monitor{};
+        unsigned fullscreen_width = 0;
+        unsigned fullscreen_height = 0;
+        unsigned fullscreen_refresh_hz = 0;
+        unsigned window_width = 0;
+        unsigned window_height = 0;
+    };
+    AppliedDisplay applied_display_{};
+    std::uint64_t display_checks_ = 0;
     bool tearing_supported_ = false;
     Microsoft::WRL::ComPtr<ID3D12QueryHeap> timestamp_query_heap_;
     Microsoft::WRL::ComPtr<ID3D12Resource> timestamp_readback_;

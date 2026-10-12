@@ -872,12 +872,22 @@ bool maps_opt_in_ultrawide_logical_and_pointer_space() {
                 viewport.width == 1920 && viewport.height == 1200,
             "16:10 present and IR use the whole matching client");
     }
+    const auto live_four_three = galaxy::parse_experimental_ultrawide_aspect("4:3");
+    const auto live_four_three_policy = live_four_three
+        ? galaxy::make_experimental_ultrawide_aspect(*live_four_three)
+        : std::nullopt;
     passed &= expect(
         galaxy::parse_experimental_ultrawide_aspect("16:9").has_value() &&
-            !galaxy::parse_experimental_ultrawide_aspect("4:3") &&
+            live_four_three_policy &&
+            live_four_three_policy->guest_screen_width == 624u &&
+            !galaxy::native_four_three(*live_four_three_policy) &&
+            std::fabs(galaxy::experimental_nw4r_vertical_fit_scale(
+                          *live_four_three_policy) - 4.0f / 3.0f) < 0.0001f &&
+            !galaxy::parse_experimental_ultrawide_aspect("5:4") &&
             !galaxy::parse_experimental_ultrawide_aspect("21:0") &&
             !galaxy::parse_experimental_ultrawide_aspect("invalid"),
-        "native 4:3 uses its separate mode and malformed aspect fails closed");
+        "live 4:3 keeps the wide mode at 624 units and fits its UI; narrower "
+        "and malformed aspects fail closed");
     return passed;
 }
 
@@ -910,12 +920,20 @@ bool latches_one_dynamic_aspect_generation_for_guest_and_ir() {
             "frame-latched aspect gives IR the matching presentation edge");
     }
     galaxy::experimental_latch_dynamic_aspect(1600, 1200);
+    const auto four_three = galaxy::g_experimental_dynamic_aspect_word.load();
+    const auto four_three_policy = galaxy::experimental_aspect_from_dynamic_word(four_three);
+    passed &= expect(
+        four_three >> 32u == 2u && four_three_policy &&
+            four_three_policy->guest_screen_width == 624u &&
+            !galaxy::experimental_dynamic_aspect_change_pending(1600, 1200),
+        "a 4:3 window latches the live 4:3 picture in one generation");
+    galaxy::experimental_latch_dynamic_aspect(1000, 1000);
     const auto fallback = galaxy::g_experimental_dynamic_aspect_word.load();
     passed &= expect(
-        fallback >> 32u == 2u &&
+        fallback >> 32u == 3u &&
             !galaxy::experimental_aspect_from_dynamic_word(fallback) &&
-            !galaxy::experimental_dynamic_aspect_change_pending(1600, 1200),
-        "unsupported 4:3 resize falls back without stretching or mid-frame mutation");
+            !galaxy::experimental_dynamic_aspect_change_pending(1000, 1000),
+        "narrower than 4:3 falls back without stretching or mid-frame mutation");
     galaxy::g_experimental_dynamic_aspect_word.store(old);
     return passed;
 }

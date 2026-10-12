@@ -150,7 +150,7 @@ inline void apply_rmge01_layout_backings(PpcContext* context, GuestMemoryV1* mem
                                        const NativeServicesV1* services) {
     if (!layout_aspect_repairs_enabled() || context->gpr[2] != 0x806AB280u) return;
     const auto policy = experimental_effective_guest_aspect(services);
-    if (!policy || policy->content_aspect == 4.0 / 3.0) return;
+    if (!policy || native_four_three(*policy)) return;
     const Rmge01PaneAccess access{memory, services, 0x80367D78u};
     const auto layout = access.u32(context->gpr[31] + 4u);
     const auto root = access.u32(layout + 0x10u);
@@ -197,7 +197,7 @@ inline void apply_rmge01_home_backings(PpcContext* context, GuestMemoryV1* memor
     const auto root = context->gpr[3];
     if (root == 0u || !access.named(root,"RootPane")) return;
     const auto policy = experimental_effective_guest_aspect(services);
-    if (!policy || policy->content_aspect == 4.0/3.0) return;
+    if (!policy || native_four_three(*policy)) return;
     (void)extend_rmge01_home_backings(access, root, layout_aspect_extent(*policy));
 }
 
@@ -267,7 +267,7 @@ inline void apply_rmge01_hud_anchors(PpcContext* context, GuestMemoryV1* memory,
                                    const NativeServicesV1* services) {
     if (!layout_aspect_repairs_enabled() || context->gpr[2] != 0x806AB280u) return;
     const auto policy = experimental_effective_guest_aspect(services);
-    if (!policy || policy->content_aspect == 4.0 / 3.0) return;
+    if (!policy || native_four_three(*policy)) return;
     const Rmge01PaneAccess access{memory, services, 0x80367E64u};
     const auto manager = context->gpr[31];
     // Hidden layouts skipped CalculateMtx; never repeatedly offset stale data.

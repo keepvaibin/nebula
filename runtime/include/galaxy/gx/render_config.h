@@ -120,9 +120,38 @@ struct RenderConfig {
     bool     rt_reflections      = false;
 
     // Back-buffer dimensions (may differ from EFB; the present blit scales).
+    // In windowed mode this is the client size, limited to the monitor's
+    // work area.
     unsigned window_width        = 854;
     unsigned window_height       = 480;
+
+    // Display, reconciled by the render thread at a frame boundary.
+    // display_mode: 0 windowed, 1 borderless fullscreen, 2 exclusive
+    // fullscreen (the monitor switches to fullscreen_width x height at
+    // fullscreen_refresh_hz; zeros keep its desktop mode).
+    unsigned display_mode        = 0;
+    // GDI device name of the monitor (UTF-8, e.g. \\.\DISPLAY2); empty or
+    // unknown selects the primary monitor.
+    std::array<char, 64> monitor{};
+    unsigned fullscreen_width    = 0;
+    unsigned fullscreen_height   = 0;
+    unsigned fullscreen_refresh_hz = 0;
+    // Game picture aspect: 0 follows the window's shape, then 4:3, 16:10,
+    // 16:9, 21:9 and 32:9. Applied at the next video frame.
+    unsigned aspect_mode         = 0;
+    // Draw distance of objects (with their particles and light glows) and
+    // shadows: 0 the game's own, 1 twice, 2 four times, 3 eight times.
+    // Wider pictures show the game's cut-offs at their sides.
+    unsigned draw_distance       = 2;
 };
+
+inline constexpr unsigned kDisplayWindowed = 0u;
+inline constexpr unsigned kDisplayBorderless = 1u;
+inline constexpr unsigned kDisplayExclusive = 2u;
+inline constexpr unsigned kAspectModeCount = 6u;
+// Width:height of each aspect_mode (0 = follow the window).
+inline constexpr unsigned kAspectRatios[kAspectModeCount][2] = {
+    {0u, 0u}, {4u, 3u}, {16u, 10u}, {16u, 9u}, {21u, 9u}, {32u, 9u}};
 
 // Startup-only ordering contract shared by runtime diagnostics and the GX backend.
 // Keep these values in one resolved object: independent environment readers

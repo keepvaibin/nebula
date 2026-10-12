@@ -8,7 +8,8 @@ namespace galaxy::input {
 
 // Controller access to the native settings overlay. View+Menu (XInput
 // Back+Start) toggles it. While it is open the pad drives it -- D-pad or left
-// stick moves and changes, A changes, LB/RB switch pages, B or Menu closes --
+// stick moves and changes, A changes, Y applies, X reverts, LB/RB switch
+// pages, B or Menu closes --
 // and the game sees a neutral pad. Buttons held across a toggle or while the
 // overlay is open stay hidden from the game until released, so the chord never
 // reaches the pause menu and the closing press never reaches the game. Output
@@ -24,10 +25,14 @@ inline constexpr std::uint16_t kShoulderLeft = 0x0100u;
 inline constexpr std::uint16_t kShoulderRight = 0x0200u;
 inline constexpr std::uint16_t kA = 0x1000u;
 inline constexpr std::uint16_t kB = 0x2000u;
+inline constexpr std::uint16_t kX = 0x4000u;
+inline constexpr std::uint16_t kY = 0x8000u;
 inline constexpr std::uint16_t kDirections = kUp | kDown | kLeft | kRight;
 inline constexpr std::uint16_t kChord = kBack | kStart;
 
 inline constexpr std::uint8_t kKeyToggle = 0x70u;        // VK_F1
+inline constexpr std::uint8_t kKeyApply = 0x0Du;         // VK_RETURN
+inline constexpr std::uint8_t kKeyRevert = 0x08u;        // VK_BACK
 inline constexpr std::uint8_t kKeyClose = 0x1Bu;         // VK_ESCAPE
 inline constexpr std::uint8_t kKeyPreviousPage = 0x21u;  // VK_PRIOR
 inline constexpr std::uint8_t kKeyNextPage = 0x22u;      // VK_NEXT
@@ -104,6 +109,8 @@ struct NativeSettingsPadStep {
             if ((pressed & kShoulderLeft) != 0u) emit(kKeyPreviousPage);
             if ((pressed & kShoulderRight) != 0u) emit(kKeyNextPage);
             if ((pressed & kA) != 0u) emit(kKeyRight);
+            if ((pressed & kY) != 0u) emit(kKeyApply);
+            if ((pressed & kX) != 0u) emit(kKeyRevert);
             const auto direction = static_cast<std::uint16_t>(pressed & kDirections);
             if (direction != 0u) {
                 state.repeat = static_cast<std::uint16_t>(direction & (~direction + 1u));

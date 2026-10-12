@@ -97,12 +97,12 @@ int main() {
     passed &= expect(!snapshot.visible, "overlay starts hidden");
     passed &= expect(!snapshot.dirty, "overlay starts clean");
     passed &= expect(!snapshot.save_error, "overlay starts without a save error");
-    passed &= expect(snapshot.tab_count == 5u, "video/graphics/input/audio/caps tabs exist");
-    passed &= expect(snapshot.tab == 0u && snapshot.row == 0u, "video row zero is selected");
+    passed &= expect(snapshot.tab_count == 5u, "display/graphics/input/audio/caps tabs exist");
+    passed &= expect(snapshot.tab == 0u && snapshot.row == 0u, "display row zero is selected");
     passed &= expect(
-        snapshot.row_count == 5u,
-        "video tab exposes live scale, output size, display mode, the read-only present profile "
-        "and resolution-follows-window");
+        snapshot.row_count == 7u,
+        "display tab has monitor, mode, resolution, refresh rate, aspect ratio, "
+        "internal resolution and vsync");
 
     passed &= expect(key(VK_F1, true), "repeated F1 is consumed");
     passed &= expect(
@@ -117,40 +117,88 @@ int main() {
         galaxy::gx::native_settings_overlay_visible(),
         "held F1 cannot flap a visible overlay closed");
 
+    // Display page: rows edit a draft; Enter applies, Backspace undoes.
+    const auto reopen = [&] {
+        return key(VK_ESCAPE) && key(VK_F1) &&
+               galaxy::gx::native_settings_overlay_visible();
+    };
     galaxy::gx::RenderConfig render{};
-    render.efb_scale = 3u;
+    render.efb_scale = 2u;
+    render.internal_follow_window = false;
+    render.display_mode = galaxy::gx::kDisplayWindowed;
+    render.aspect_mode = 0u;
     render.vsync_interval = 0u;
-    render.max_fps = 60.0f;
     galaxy::gx::set_render_config(render);
     galaxy::gx::stage_next_start_efb_scale(render.efb_scale);
-    passed &= expect(key(VK_DOWN) && key(VK_DOWN) && key(VK_DOWN), "down selects the present profile row");
-    passed &= expect(key(VK_RIGHT), "read-only present row still consumes navigation");
+    passed &= expect(reopen(), "reopening takes a fresh draft");
+    for (int i = 0; i < 5; ++i) passed &= expect(key(VK_DOWN), "down moves to internal resolution");
+    passed &= expect(key(VK_LEFT), "left lowers the internal resolution in the draft");
     passed &= expect(
-        galaxy::gx::get_render_config().vsync_interval == 0u &&
-            galaxy::gx::get_render_config().max_fps == 60.0f &&
-            !galaxy::gx::native_settings_overlay_snapshot().dirty,
-        "fixed Release present profile cannot be mutated in-game");
-    passed &= expect(key(VK_UP) && key(VK_UP) && key(VK_UP), "up returns to the scale row");
-    passed &= expect(key(VK_RIGHT), "right adjusts the selected scale row");
+        galaxy::gx::native_settings_draft_for_tests().efb_scale == 1u &&
+            galaxy::gx::get_render_config().efb_scale == 2u &&
+            galaxy::gx::native_settings_overlay_snapshot().pending_changes == 1u,
+        "a change waits in the draft until applied");
+    passed &= expect(key(VK_RETURN), "Enter applies");
     passed &= expect(
-        galaxy::gx::get_render_config().efb_scale == 4u &&
-            galaxy::gx::get_next_start_efb_scale() == 4u &&
-            galaxy::gx::native_settings_overlay_snapshot().dirty,
-        "scale changes live to 4x and stages 4x for the next start");
-    passed &= expect(key(VK_RIGHT) && key(VK_RIGHT),
-                     "scale selector reaches the opt-in 6x setting");
+        galaxy::gx::get_render_config().efb_scale == 1u &&
+            galaxy::gx::get_next_start_efb_scale() == 1u &&
+            galaxy::gx::native_settings_overlay_snapshot().pending_changes == 0u &&
+            !galaxy::gx::native_settings_overlay_snapshot().confirming_display,
+        "Enter applies the scale live, stages it and needs no display confirmation");
+    passed &= expect(key(VK_LEFT), "left below 1x selects matching the output");
     passed &= expect(
-        galaxy::gx::get_render_config().efb_scale == 6u &&
-            galaxy::gx::get_next_start_efb_scale() == 6u,
-        "opt-in 6x is live and staged");
+        galaxy::gx::native_settings_draft_for_tests().internal_follow_window,
+        "the lowest internal resolution entry matches the output");
+    passed &= expect(key(VK_BACK), "Backspace undoes the draft");
+    passed &= expect(
+        !galaxy::gx::native_settings_draft_for_tests().internal_follow_window &&
+            galaxy::gx::native_settings_overlay_snapshot().pending_changes == 0u,
+        "undo returns the draft to the live settings");
 
-    passed &= expect(key(VK_DOWN) && key(VK_DOWN) && key(VK_DOWN) && key(VK_DOWN),
-                     "down selects the resolution-follows-window row");
-    const bool follow_before = galaxy::gx::get_render_config().internal_follow_window;
-    passed &= expect(key(VK_RIGHT), "follow-window row toggles");
+    passed &= expect(key(VK_UP), "up moves to the aspect ratio");
+    passed &= expect(key(VK_RIGHT) && key(VK_RETURN), "aspect ratio applies");
     passed &= expect(
-        galaxy::gx::get_render_config().internal_follow_window == !follow_before,
-        "resolution-follows-window changes live");
+        galaxy::gx::get_render_config().aspect_mode == 1u &&
+            !galaxy::gx::native_settings_overlay_snapshot().confirming_display,
+        "the aspect ratio changes during play without a display confirmation");
+
+    for (int i = 0; i < 3; ++i) passed &= expect(key(VK_UP), "up moves to the display mode");
+    passed &= expect(key(VK_RIGHT) && key(VK_RETURN), "borderless applies");
+    passed &= expect(
+        galaxy::gx::get_render_config().display_mode == galaxy::gx::kDisplayBorderless &&
+            galaxy::gx::native_settings_overlay_snapshot().confirming_display,
+        "a display change waits for confirmation");
+    passed &= expect(key(VK_RIGHT), "rows are locked while confirming");
+    passed &= expect(
+        galaxy::gx::native_settings_draft_for_tests().display_mode ==
+            galaxy::gx::kDisplayBorderless,
+        "confirmation blocks further edits");
+    passed &= expect(key(VK_ESCAPE), "Escape undoes the display change");
+    passed &= expect(
+        galaxy::gx::get_render_config().display_mode == galaxy::gx::kDisplayWindowed &&
+            !galaxy::gx::native_settings_overlay_snapshot().confirming_display &&
+            galaxy::gx::native_settings_overlay_visible(),
+        "the previous display returns and the menu stays open");
+    passed &= expect(key(VK_RIGHT) && key(VK_RETURN) && key(VK_RETURN),
+                     "borderless applies and Enter keeps it");
+    passed &= expect(
+        galaxy::gx::get_render_config().display_mode == galaxy::gx::kDisplayBorderless &&
+            !galaxy::gx::native_settings_overlay_snapshot().confirming_display,
+        "a kept display change stays");
+    passed &= expect(key(VK_LEFT) && key(VK_RETURN) && key(VK_RETURN),
+                     "windowed applies and is kept");
+    passed &= expect(
+        galaxy::gx::get_render_config().display_mode == galaxy::gx::kDisplayWindowed,
+        "windowed is restored");
+    for (int i = 0; i < 5; ++i) passed &= expect(key(VK_DOWN), "down moves to vsync");
+    passed &= expect(key(VK_RIGHT), "vsync toggles in the draft");
+    passed &= expect(
+        galaxy::gx::native_settings_draft_for_tests().vsync_interval == 1u &&
+            galaxy::gx::get_render_config().vsync_interval == 0u,
+        "vsync waits for apply");
+    passed &= expect(key(VK_BACK) &&
+                         galaxy::gx::native_settings_draft_for_tests().vsync_interval == 0u,
+                     "undo restores vsync");
 
     render = galaxy::gx::get_render_config();
     render.aa_mode = 2u;
@@ -158,33 +206,41 @@ int main() {
     render.upscaler = 1u;
     render.sharpness = 20u;
     render.anisotropic_filtering = 8u;
+    render.enhanced_mipmaps = true;
     render.per_pixel_lighting = true;
     render.hud_output_resolution = true;
     galaxy::gx::set_render_config(render);
+    passed &= expect(reopen(), "reopening takes the new live settings");
     passed &= expect(key(VK_TAB), "Tab enters the graphics page");
     snapshot = galaxy::gx::native_settings_overlay_snapshot();
-    passed &= expect(snapshot.tab == 1u && snapshot.row_count == 7u,
-                     "graphics page has AA, SMAA quality, upscaler, sharpening, textures, lighting and 2D layer");
+    passed &= expect(snapshot.tab == 1u && snapshot.row_count == 9u,
+                     "graphics page has AA, AA quality, upscaler, sharpening, textures, mipmaps, "
+                     "lighting, 2D layer and draw distance");
     passed &= expect(key(VK_LEFT), "left lowers the anti-aliasing mode");
-    passed &= expect(galaxy::gx::get_render_config().aa_mode == 1u, "AUTO steps down to SMAA");
-    passed &= expect(key(VK_DOWN) && key(VK_RIGHT), "SMAA quality row is adjustable");
-    passed &= expect(galaxy::gx::get_render_config().smaa_quality == 3u, "HIGH steps up to ULTRA");
+    passed &= expect(key(VK_DOWN) && key(VK_RIGHT), "AA quality row is adjustable");
     passed &= expect(key(VK_RIGHT), "quality stops at its last value");
-    passed &= expect(galaxy::gx::get_render_config().smaa_quality == 3u, "ULTRA is the highest quality");
     passed &= expect(key(VK_DOWN) && key(VK_LEFT), "upscaler row is adjustable");
-    passed &= expect(galaxy::gx::get_render_config().upscaler == 0u, "FSR 1 steps down to bilinear");
     passed &= expect(key(VK_DOWN) && key(VK_RIGHT), "sharpening row is adjustable");
-    passed &= expect(galaxy::gx::get_render_config().sharpness == 30u, "sharpening moves in steps of ten");
     passed &= expect(key(VK_DOWN) && key(VK_RIGHT), "texture filtering row is adjustable");
-    passed &= expect(galaxy::gx::get_render_config().anisotropic_filtering == 16u,
-                     "8x anisotropic steps up to 16x");
+    passed &= expect(key(VK_DOWN) && key(VK_RIGHT), "mipmap row toggles");
     passed &= expect(key(VK_DOWN) && key(VK_RIGHT), "lighting row toggles");
-    passed &= expect(!galaxy::gx::get_render_config().per_pixel_lighting, "lighting switches to per vertex");
     passed &= expect(key(VK_DOWN) && key(VK_RIGHT), "2D layer row toggles");
-    passed &= expect(!galaxy::gx::get_render_config().hud_output_resolution,
-                     "2D layer switches to the internal resolution");
-    passed &= expect(galaxy::gx::native_settings_overlay_snapshot().dirty,
-                     "graphics changes mark the settings for saving");
+    passed &= expect(
+        galaxy::gx::get_render_config().aa_mode == 2u &&
+            galaxy::gx::native_settings_overlay_snapshot().pending_changes == 8u,
+        "eight graphics changes wait in the draft");
+    passed &= expect(key(VK_RETURN), "Enter applies the graphics changes");
+    const galaxy::gx::RenderConfig applied = galaxy::gx::get_render_config();
+    passed &= expect(applied.aa_mode == 1u, "AUTO steps down to SMAA");
+    passed &= expect(applied.smaa_quality == 3u, "HIGH steps up to ULTRA and stops there");
+    passed &= expect(applied.upscaler == 0u, "FSR 1 steps down to bilinear");
+    passed &= expect(applied.sharpness == 30u, "sharpening moves in steps of ten");
+    passed &= expect(applied.anisotropic_filtering == 16u, "8x anisotropic steps up to 16x");
+    passed &= expect(!applied.enhanced_mipmaps, "mipmaps switch to the original ones");
+    passed &= expect(!applied.per_pixel_lighting, "lighting switches to per vertex");
+    passed &= expect(!applied.hud_output_resolution, "2D layer switches to the internal resolution");
+    passed &= expect(galaxy::gx::native_settings_overlay_snapshot().pending_changes == 0u,
+                     "nothing is pending after apply");
 
     galaxy::RuntimeSettings runtime{};
     runtime.input_mode = galaxy::RuntimeInputMode::KeyboardMouse;
@@ -261,19 +317,19 @@ int main() {
         galaxy::gx::compute_native_settings_layout(427u, 240u, 1u);
     passed &= expect(
         layout_inside(tiny_graphics, 427u, 240u) &&
-            tiny_graphics.rows_y + 6 * tiny_graphics.row_step +
+            tiny_graphics.rows_y + 8 * tiny_graphics.row_step +
                     tiny_graphics.text_scale * 7 + 8 <=
                 tiny_graphics.footer_y,
-        "427x240 fits the seven graphics rows above the compact footer");
+        "427x240 fits the nine graphics rows above the compact footer");
     for (const auto [w, h] : {std::pair{854u, 480u}, std::pair{1280u, 720u},
-                              std::pair{1920u, 1080u}, std::pair{2560u, 1440u},
-                              std::pair{3840u, 2160u}}) {
+                              std::pair{1280u, 480u}, std::pair{1920u, 1080u},
+                              std::pair{2560u, 1440u}, std::pair{3840u, 2160u}}) {
         const auto graphics = galaxy::gx::compute_native_settings_layout(w, h, 1u);
         passed &= expect(
             graphics.supported && layout_inside(graphics, w, h) &&
-                graphics.rows_y + 6 * graphics.row_step +
+                graphics.rows_y + 8 * graphics.row_step +
                         graphics.text_scale * 7 + 8 <= graphics.footer_y,
-            "every window size fits the seven graphics rows above the footer");
+            "every window size fits the nine graphics rows above the footer");
     }
     const auto tiny_caps =
         galaxy::gx::compute_native_settings_layout(427u, 240u, 4u);

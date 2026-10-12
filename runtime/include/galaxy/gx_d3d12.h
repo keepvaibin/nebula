@@ -1,6 +1,7 @@
 #pragma once
 
 #include "galaxy/gx/frame_completion.h"
+#include "galaxy/gx/render_config.h"
 #include "galaxy/gx/pointer_response.h"
 #include "galaxy/host_pointer_events.h"
 #include "galaxy/native_api.h"
@@ -42,6 +43,10 @@ struct HostClientExtent {
 
 // Read the actual native client area independently of mouse movement/focus.
 [[nodiscard]] HostClientExtent current_host_client_extent() noexcept;
+
+// The picture shape the aspect setting selects, latched each video frame:
+// the window's client extent limited to 4:3..32:9, or the chosen ratio.
+[[nodiscard]] HostClientExtent aspect_latch_extent() noexcept;
 
 // Guest scene boundaries the simulation thread marks in the GX stream:
 // GameScene::draw3D's entry and its closing MR::clearZBuffer call.
@@ -190,6 +195,9 @@ struct NativeSettingsOverlaySnapshot {
     unsigned row = 0;
     unsigned tab_count = 0;
     unsigned row_count = 0;
+    // Draft changes not yet applied, and a display change awaiting "keep".
+    unsigned pending_changes = 0;
+    bool confirming_display = false;
 };
 
 struct NativeSettingsLayout {
@@ -270,6 +278,8 @@ native_settings_overlay_snapshot() noexcept;
     std::uintptr_t virtual_key,
     bool was_down);
 void native_settings_reset_overlay_state_for_tests() noexcept;
+// The settings the menu would apply (its draft), for tests.
+[[nodiscard]] RenderConfig native_settings_draft_for_tests();
 // Delivers an overlay key to the window thread (controller navigation).
 void native_settings_post_key(std::uintptr_t virtual_key) noexcept;
 
