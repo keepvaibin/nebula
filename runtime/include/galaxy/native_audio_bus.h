@@ -197,7 +197,9 @@ struct NativeAudioBusGains {
 
 inline constexpr std::uint32_t kNativeAudioUnityGainQ16 = 1u << 16u;
 inline constexpr std::uint32_t kNativeAudioMaximumGainQ16 = 4u << 16u;
-inline constexpr std::uint32_t kNativeAudioBusRampSamples = 80u;
+// 10 ms (four DSP subframes): a mute or unmute of a loud low-frequency bus
+// over one 2.5 ms subframe is an audible click.
+inline constexpr std::uint32_t kNativeAudioBusRampSamples = 320u;
 
 [[nodiscard]] inline std::uint32_t native_audio_gain_to_q16(
     float gain) noexcept {

@@ -23719,11 +23719,17 @@ std::byte* jaudio_guest_resolve(void* user, std::uint32_t address, std::uint32_t
 // The movie player (THPSimplePlayerWrapper::mixAudio) multiplies each
 // sample by VolumeTable[volume], 128 halfwords at 0x805C5D08 that nothing
 // else reads, rising from 0 to 32768. The cutscene volume rescales the table.
-void apply_movie_volume(RuntimeState& state, galaxy::host::GuestAddressSpace& space, float gain) {
+// Called once per audio frame; a change moves at most kMovieVolumeStep per
+// frame (full scale in 16 frames, 280 ms), since a one-shot table rewrite is a
+// gain step in the middle of the movie's audio.
+void apply_movie_volume(RuntimeState& state, galaxy::host::GuestAddressSpace& space, float target) {
     constexpr std::uint32_t kMovieVolumeTable = 0x805C5D08u;
-    if (state.movie_volume_disabled || gain == state.movie_volume_gain) {
+    constexpr float kMovieVolumeStep = 1.0f / 16.0f;
+    if (state.movie_volume_disabled || target == state.movie_volume_gain) {
         return;
     }
+    const float gain = std::clamp(target, state.movie_volume_gain - kMovieVolumeStep,
+                                  state.movie_volume_gain + kMovieVolumeStep);
     std::byte* table = space.pointer_or_null(kMovieVolumeTable, 256u);
     if (table == nullptr) {
         return;

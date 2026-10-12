@@ -3885,24 +3885,33 @@ private:
         if ((start == kUnity && target == kUnity) || frames == 0u) {
             return;
         }
+        const auto scale = [](std::byte* sample, std::int64_t gain) noexcept {
+            const auto bits = static_cast<std::uint16_t>(
+                std::to_integer<std::uint16_t>(sample[0]) |
+                (std::to_integer<std::uint16_t>(sample[1]) << 8u));
+            const std::int64_t scaled = std::clamp<std::int64_t>(
+                (static_cast<std::int64_t>(static_cast<std::int16_t>(bits)) * gain) >> 16u,
+                -32768, 32767);
+            const auto out = static_cast<std::uint16_t>(static_cast<std::int16_t>(scaled));
+            sample[0] = static_cast<std::byte>(out & 0xFFu);
+            sample[1] = static_cast<std::byte>(out >> 8u);
+        };
+        if (start == target) {
+            // Steady non-unity master: no per-frame ramp division.
+            const std::int64_t gain = target;
+            for (std::size_t offset = 0; offset < frames * 4u; offset += 2u) {
+                scale(pcm_le.data() + offset, gain);
+            }
+            return;
+        }
         const std::int64_t delta =
             static_cast<std::int64_t>(target) - static_cast<std::int64_t>(start);
         for (std::size_t frame = 0; frame < frames; ++frame) {
             const std::int64_t gain = static_cast<std::int64_t>(start) +
                 delta * static_cast<std::int64_t>(frame + 1u) /
                     static_cast<std::int64_t>(frames);
-            for (std::size_t lane = 0; lane < 2u; ++lane) {
-                std::byte* sample = pcm_le.data() + frame * 4u + lane * 2u;
-                const auto bits = static_cast<std::uint16_t>(
-                    std::to_integer<std::uint16_t>(sample[0]) |
-                    (std::to_integer<std::uint16_t>(sample[1]) << 8u));
-                const std::int64_t scaled = std::clamp<std::int64_t>(
-                    (static_cast<std::int64_t>(static_cast<std::int16_t>(bits)) * gain) >> 16u,
-                    -32768, 32767);
-                const auto out = static_cast<std::uint16_t>(static_cast<std::int16_t>(scaled));
-                sample[0] = static_cast<std::byte>(out & 0xFFu);
-                sample[1] = static_cast<std::byte>(out >> 8u);
-            }
+            scale(pcm_le.data() + frame * 4u, gain);
+            scale(pcm_le.data() + frame * 4u + 2u, gain);
         }
     }
     std::uint32_t output_master_q16_ = galaxy::audio::kNativeAudioUnityGainQ16;
