@@ -23905,6 +23905,18 @@ void call_guest_impl_body(
     if (guest_address==0x80370398u &&
         (context->lr==0x8036FECCu || context->lr==0x8037027Cu))
         galaxy::gx::set_prerecorded_movie_content(false);
+    // GameScene::draw3D (from GameScene::draw) and its closing
+    // MR::clearZBuffer bracket the 3D scene. The renderer handles each
+    // marker at this exact point of the GX stream.
+    if (((guest_address == 0x8033EE8Cu && context->lr == 0x8033E824u) ||
+         (guest_address == 0x803CA76Cu && context->lr == 0x8033F028u)) &&
+        state.address_space != nullptr) {
+        state.address_space->flush_wgpipe_gather_tail_for_frame();
+        galaxy::gx::attach_fifo_marker(
+            guest_address == 0x8033EE8Cu ? galaxy::gx::FifoMarker::SceneBegin
+                                         : galaxy::gx::FifoMarker::SceneEnd,
+            state.address_space->gx_fifo_data().size());
+    }
     const auto mouse_boundary_object=context->gpr[3];
     guest_address = normalize_executable_address(state, guest_address);
     const bool trace_mouse_past = guest_address==0x80385034u &&

@@ -404,6 +404,17 @@ public:
 
     // Binds EFB RTV+DSV and applies the viewport from the XF viewport regs.
     void bind_efb(const float xf_viewport[6]);
+
+    // HUD split: from the end of the guest's 3D scene to the display copy the
+    // EFB is a second target at the window's integer scale, so the 2D layer
+    // renders at display resolution over the resampled scene. The two target
+    // sets share layout and resource states and are swapped as a whole, so
+    // every EFB path (draws, clears, copies, peeks) works unchanged on either.
+    // begin_output_efb returns false when the split is off or the EFB already
+    // covers the window.
+    [[nodiscard]] bool begin_output_efb();
+    void end_output_efb();
+    [[nodiscard]] bool output_efb_active() const noexcept { return output_efb_active_; }
     // GX copy-clear: color from the latched AR/GB regs, depth from z24
     // (converted z24 / 0xFFFFFF into the D24 target).  The clear is scoped to
     // the given rect in unscaled EFB pixels (w==0 -> full target), matching
@@ -622,6 +633,9 @@ private:
         unsigned height,
         unsigned row_pitch);
     bool create_efb_targets(unsigned efb_scale);
+    [[nodiscard]] unsigned output_efb_scale_for_window() const;
+    [[nodiscard]] bool ensure_output_efb(unsigned scale);
+    void swap_efb_sets();
     // Live internal-resolution change, applied between frames by begin_frame
     // when get_render_config().efb_scale differs from the live targets.
     void apply_pending_efb_scale();
@@ -692,6 +706,23 @@ private:
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> rtv_heap_;
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> dsv_heap_;
     unsigned efb_scale_ = 1;
+    D3D12_CPU_DESCRIPTOR_HANDLE efb_rtv_{};
+    D3D12_CPU_DESCRIPTOR_HANDLE efb_dsv_{};
+    // The inactive EFB target set (the output-resolution one between frames).
+    struct EfbTargetSet {
+        Microsoft::WRL::ComPtr<ID3D12Resource> color;
+        Microsoft::WRL::ComPtr<ID3D12Resource> depth;
+        unsigned scale = 0;
+        D3D12_CPU_DESCRIPTOR_HANDLE rtv{};
+        D3D12_CPU_DESCRIPTOR_HANDLE dsv{};
+        std::optional<DescriptorRing::Table> conv_table;
+        D3D12_GPU_DESCRIPTOR_HANDLE conv_color_srv{};
+        D3D12_GPU_DESCRIPTOR_HANDLE conv_depth_srv{};
+    };
+    EfbTargetSet alt_efb_;
+    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> alt_efb_rtv_heap_;
+    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> alt_efb_dsv_heap_;
+    bool output_efb_active_ = false;
 
     // Backbuffers + present blit.
     static constexpr unsigned kSwapChainBuffers = 3;

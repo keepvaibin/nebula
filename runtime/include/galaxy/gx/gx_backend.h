@@ -245,6 +245,13 @@ public:
     // boundary). The capture is owned by the render thread until it publishes.
     void attach_pointer_depth_capture(
         const std::shared_ptr<PointerDepthCapture>& capture, std::size_t fifo_offset);
+    // Simulation thread: the next render_frame submission handles `marker`
+    // when its parser reaches `fifo_offset` bytes into the submitted FIFO.
+    void attach_fifo_marker(FifoMarker marker, std::size_t fifo_offset) noexcept {
+        if (producer_fifo_marker_count_ < producer_fifo_markers_.size()) {
+            producer_fifo_markers_[producer_fifo_marker_count_++] = {fifo_offset, marker};
+        }
+    }
     void set_prerecorded_movie_content(bool movie) noexcept { producer_movie_content_=movie; }
     void set_safety_scene_surround(float intensity) noexcept { producer_safety_surround_=intensity; }
     void set_pointer_response(PointerResponseStamp stamp) noexcept {
@@ -539,6 +546,9 @@ private:
         // offset of the chunk's FIFO (the scene boundary).
         std::size_t pointer_depth_capture_fifo_offset = 0;
         bool pointer_depth_in_frame = false;
+        // Scene boundaries in this chunk's FIFO, in stream order.
+        std::array<std::pair<std::size_t, FifoMarker>, 4> fifo_markers{};
+        std::uint8_t fifo_marker_count = 0;
         std::uint64_t dependency_scan_ns = 0;
         std::uint64_t snapshot_ns = 0;
         std::uint64_t snapshot_bytes = 0;
@@ -605,6 +615,11 @@ private:
     PointerResponseStamp producer_pointer_response_{}, render_pointer_response_{}, last_response_{};
     std::shared_ptr<PointerDepthCapture> producer_pointer_depth_capture_;
     std::size_t producer_pointer_depth_capture_offset_ = 0;
+    std::array<std::pair<std::size_t, FifoMarker>, 4> producer_fifo_markers_{};
+    std::uint8_t producer_fifo_marker_count_ = 0;
+    // Render thread: inside GameScene::draw3D (between the scene markers).
+    bool scene_phase_ = false;
+    std::uint64_t scene_markers_seen_ = 0;
     bool producer_movie_content_{},render_movie_content_{};
     float producer_safety_surround_{},render_safety_surround_{};
     std::array<std::uint64_t,512> pointer_latency_bins_{};
@@ -791,6 +806,8 @@ private:
     } pending_pointer_depth_capture_;
     void take_attached_pointer_depth_capture(FrameChunk& chunk, std::size_t fifo_size);
     void record_pointer_depth_capture_in_frame(FrameChunk& chunk);
+    void take_attached_fifo_markers(FrameChunk& chunk, std::size_t fifo_size) noexcept;
+    void on_fifo_marker(FifoMarker marker);
     void adopt_pointer_depth_fence_if_needed();
     // Asynchronous EFB depth field for simulation-thread GXPeekZ. Three slots:
     // the render owner fills the slot after the published one, then publishes

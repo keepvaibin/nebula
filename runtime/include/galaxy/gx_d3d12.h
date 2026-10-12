@@ -43,6 +43,13 @@ struct HostClientExtent {
 // Read the actual native client area independently of mouse movement/focus.
 [[nodiscard]] HostClientExtent current_host_client_extent() noexcept;
 
+// Guest scene boundaries the simulation thread marks in the GX stream:
+// GameScene::draw3D's entry and its closing MR::clearZBuffer call.
+enum class FifoMarker : std::uint8_t {
+    SceneBegin,
+    SceneEnd,
+};
+
 enum class EfbPeekKind : std::uint8_t {
     Color,
     Depth,
@@ -113,6 +120,9 @@ void wait_for_frame_pe_completion(FramePeCompletionToken token);
 // `fifo_offset` bytes into the submitted FIFO; completion publishes as above.
 void attach_pointer_depth_capture(
     const std::shared_ptr<PointerDepthCapture>& capture, std::size_t fifo_offset);
+// Simulation thread: the next render_frame submission handles `marker` when
+// its parser reaches `fifo_offset` bytes into the submitted FIFO.
+void attach_fifo_marker(FifoMarker marker, std::size_t fifo_offset) noexcept;
 void set_pointer_response(PointerResponseStamp stamp) noexcept;
 // Simulation producer; copied into each owned FIFO chunk and selected XFB.
 void set_prerecorded_movie_content(bool movie) noexcept;

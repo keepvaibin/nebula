@@ -270,7 +270,7 @@ float step_gain(float current, int delta) {
 unsigned native_settings_row_count(unsigned tab) {
     switch (tab % kNativeSettingsTabCount) {
     case 0: return 5u;
-    case 1: return 6u;
+    case 1: return 7u;
     case 2: return 1u;
     case 3: return 6u;
     case 4: return 5u;
@@ -401,6 +401,7 @@ void adjust_native_setting_unlogged(int delta) {
             break;
         }
         case 5: render.per_pixel_lighting = !render.per_pixel_lighting; break;
+        case 6: render.hud_output_resolution = !render.hud_output_resolution; break;
         default: return;
         }
         set_render_config(render);
@@ -2434,7 +2435,7 @@ static constexpr unsigned    kSrvPerFrame = 32768u;
 // their two views outside the rewound frame segments instead of copying a
 // descriptor into the frame ring for every EFB conversion. TextureCache's own
 // SRV indices are independent of this prefix.
-static constexpr unsigned    kPersistentSrvDescriptors = 2u;
+static constexpr unsigned    kPersistentSrvDescriptors = 4u;  // EFB and output EFB conversion sources
 
 void RendererD3D12::wait_for_gpu() {
     const std::uint64_t val = ++next_fence_value_;
@@ -2533,7 +2534,9 @@ bool RendererD3D12::create_efb_targets(unsigned efb_scale) {
             rtv_heap_->GetCPUDescriptorHandleForHeapStart();
         h.ptr += static_cast<SIZE_T>(kSwapChainBuffers) * stride;
         device_->CreateRenderTargetView(efb_color_.Get(), nullptr, h);
+        efb_rtv_ = h;
     }
+    efb_dsv_ = dsv_heap_->GetCPUDescriptorHandleForHeapStart();
     return true;
 }
 
@@ -3036,7 +3039,7 @@ void RendererD3D12::sync_post_process_settings() {
 void RendererD3D12::apply_pending_efb_scale() {
     const unsigned wanted =
         std::clamp(get_render_config().efb_scale, 1u, kMaxEfbScale);
-    if (wanted == efb_scale_ || !device_ || !efb_color_) {
+    if (wanted == efb_scale_ || !device_ || !efb_color_ || output_efb_active_) {
         return;
     }
     // Between frames with nothing recording; the GPU must be done with the
@@ -5191,15 +5194,174 @@ void RendererD3D12::wait_for_fence_value(std::uint64_t fence_value) {
 }
 
 // ---------------------------------------------------------------------------
+// Output-resolution EFB (HUD split)
+// ---------------------------------------------------------------------------
+
+unsigned RendererD3D12::output_efb_scale_for_window() const {
+    const auto aspect = galaxy::experimental_effective_host_aspect();
+    const double content_aspect =
+        aspect ? aspect->content_aspect : galaxy::kWiiContentAspect;
+    const galaxy::ContentViewport content = galaxy::fit_content_viewport(
+        static_cast<int>(s_bb_width), static_cast<int>(s_bb_height), content_aspect);
+    if (content.width <= 0 || content.height <= 0) {
+        return 0u;
+    }
+    // The smallest integer scale whose 640x456 picture covers the window's
+    // content rectangle on both axes (the launcher's Match Output rule).
+    const double needed = std::max(content.width / static_cast<double>(kEfbWidth),
+                                   content.height / 456.0);
+    return std::clamp(static_cast<unsigned>(std::ceil(needed - 1e-6)), 1u, kMaxEfbScale);
+}
+
+bool RendererD3D12::ensure_output_efb(unsigned scale) {
+    if (alt_efb_.color && alt_efb_.scale == scale) {
+        return true;
+    }
+    const UINT w = kEfbWidth * scale;
+    const UINT h = kEfbHeight * scale;
+    if (w > D3D12_REQ_TEXTURE2D_U_OR_V_DIMENSION ||
+        h > D3D12_REQ_TEXTURE2D_U_OR_V_DIMENSION) {
+        return false;
+    }
+    if (alt_efb_.color) {
+        // A window resize: frames in flight may still read the old views.
+        wait_for_gpu();
+    }
+    alt_efb_.color.Reset();
+    alt_efb_.depth.Reset();
+    alt_efb_.scale = 0u;
+    if (!alt_efb_rtv_heap_) {
+        D3D12_DESCRIPTOR_HEAP_DESC dhd{};
+        dhd.NumDescriptors = 1;
+        dhd.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
+        d3d_check(device_->CreateDescriptorHeap(&dhd, IID_PPV_ARGS(&alt_efb_rtv_heap_)),
+                  "output EFB RTV heap");
+        dhd.Type = D3D12_DESCRIPTOR_HEAP_TYPE_DSV;
+        d3d_check(device_->CreateDescriptorHeap(&dhd, IID_PPV_ARGS(&alt_efb_dsv_heap_)),
+                  "output EFB DSV heap");
+        alt_efb_.rtv = alt_efb_rtv_heap_->GetCPUDescriptorHandleForHeapStart();
+        alt_efb_.dsv = alt_efb_dsv_heap_->GetCPUDescriptorHandleForHeapStart();
+    }
+    D3D12_HEAP_PROPERTIES hp{};
+    hp.Type = D3D12_HEAP_TYPE_DEFAULT;
+    D3D12_RESOURCE_DESC rd{};
+    rd.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+    rd.Width = w;
+    rd.Height = h;
+    rd.DepthOrArraySize = 1;
+    rd.MipLevels = 1;
+    rd.Format = kEfbColorFormat;
+    rd.SampleDesc.Count = 1;
+    rd.Flags = D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
+    D3D12_CLEAR_VALUE cv{};
+    cv.Format = kEfbColorFormat;
+    cv.Color[3] = 1.0f;
+    if (FAILED(device_->CreateCommittedResource(
+            &hp, D3D12_HEAP_FLAG_NONE, &rd, D3D12_RESOURCE_STATE_RENDER_TARGET,
+            &cv, IID_PPV_ARGS(&alt_efb_.color)))) {
+        return false;
+    }
+    rd.Format = kEfbDepthResourceFormat;
+    rd.Flags = D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
+    D3D12_CLEAR_VALUE dcv{};
+    dcv.Format = kEfbDepthFormat;
+    dcv.DepthStencil.Depth = 1.0f;
+    if (FAILED(device_->CreateCommittedResource(
+            &hp, D3D12_HEAP_FLAG_NONE, &rd, D3D12_RESOURCE_STATE_DEPTH_WRITE,
+            &dcv, IID_PPV_ARGS(&alt_efb_.depth)))) {
+        alt_efb_.color.Reset();
+        return false;
+    }
+    device_->CreateRenderTargetView(alt_efb_.color.Get(), nullptr, alt_efb_.rtv);
+    D3D12_DEPTH_STENCIL_VIEW_DESC dsv{};
+    dsv.Format = kEfbDepthFormat;
+    dsv.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2D;
+    device_->CreateDepthStencilView(alt_efb_.depth.Get(), &dsv, alt_efb_.dsv);
+    if (!alt_efb_.conv_table) {
+        alt_efb_.conv_table = srv_ring_.allocate_persistent(2u);
+    }
+    const UINT stride = device_->GetDescriptorHandleIncrementSize(
+        D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+    D3D12_SHADER_RESOURCE_VIEW_DESC view{};
+    view.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+    view.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+    view.Texture2D.MipLevels = 1u;
+    view.Format = kEfbColorFormat;
+    device_->CreateShaderResourceView(
+        alt_efb_.color.Get(), &view, alt_efb_.conv_table->cpu);
+    auto depth_cpu = alt_efb_.conv_table->cpu;
+    depth_cpu.ptr += stride;
+    view.Format = kEfbDepthSrvFormat;
+    device_->CreateShaderResourceView(alt_efb_.depth.Get(), &view, depth_cpu);
+    alt_efb_.conv_color_srv = alt_efb_.conv_table->gpu;
+    alt_efb_.conv_depth_srv = alt_efb_.conv_table->gpu;
+    alt_efb_.conv_depth_srv.ptr += stride;
+    alt_efb_.scale = scale;
+    std::cout << "[Renderer] output EFB " << scale << "x (" << w << "x" << h << ")\n";
+    return true;
+}
+
+void RendererD3D12::swap_efb_sets() {
+    std::swap(efb_color_, alt_efb_.color);
+    std::swap(efb_depth_, alt_efb_.depth);
+    std::swap(efb_scale_, alt_efb_.scale);
+    std::swap(efb_rtv_, alt_efb_.rtv);
+    std::swap(efb_dsv_, alt_efb_.dsv);
+    std::swap(conv_efb_source_table_, alt_efb_.conv_table);
+    std::swap(conv_efb_color_srv_, alt_efb_.conv_color_srv);
+    std::swap(conv_efb_depth_srv_, alt_efb_.conv_depth_srv);
+    output_efb_active_ = !output_efb_active_;
+    invalidate_gx_bindings();
+    bound_scissor_input_scale_ = 0u;
+    bind_efb(nullptr);
+}
+
+bool RendererD3D12::begin_output_efb() {
+    if (output_efb_active_ || !get_render_config().hud_output_resolution) {
+        return false;
+    }
+    const unsigned scale = output_efb_scale_for_window();
+    if (scale <= efb_scale_ || !ensure_output_efb(scale)) {
+        return false;
+    }
+    // The whole scene EFB, resampled into the output target with the display
+    // copy's identity settings (no filter, gamma 1.0, alpha kept).
+    EfbCopyParams params{};
+    params.src_width = static_cast<std::uint16_t>(kEfbWidth);
+    params.src_height = static_cast<std::uint16_t>(kEfbHeight);
+    params.y_scale_raw = 256u;
+    params.filter0_raw = (21u << 12u) | (22u << 18u);
+    params.filter1_raw = 21u;
+    const unsigned w = kEfbWidth * scale;
+    const unsigned h = kEfbHeight * scale;
+    const EfbCopySamplingGeometry sampling =
+        compute_xfb_sampling_geometry(params, w, h, efb_scale_);
+    record_conversion_blit(
+        alt_efb_.color.Get(), w, h, {}, params,
+        /*is_depth_copy=*/false, /*intensity=*/false, /*keep_alpha=*/true,
+        /*copy_format=*/15u,
+        sampling.src_x, sampling.src_y, sampling.step_x, sampling.step_y,
+        sampling.filter_row_offset);
+    swap_efb_sets();
+    const auto far_values = make_efb_clear_values(0u, 0u, 0x00FFFFFFu, 0u);
+    command_list_->ClearDepthStencilView(
+        efb_dsv_, D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL,
+        far_values.reversed_depth, 0u, 0u, nullptr);
+    return true;
+}
+
+void RendererD3D12::end_output_efb() {
+    if (output_efb_active_) {
+        swap_efb_sets();
+    }
+}
+
+// ---------------------------------------------------------------------------
 // EFB binding and clearing
 // ---------------------------------------------------------------------------
 
 void RendererD3D12::bind_efb(const float xf_vp[6]) {
-    const UINT stride = device_->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
-    D3D12_CPU_DESCRIPTOR_HANDLE rtv = rtv_heap_->GetCPUDescriptorHandleForHeapStart();
-    rtv.ptr += static_cast<SIZE_T>(kSwapChainBuffers) * stride;
-    D3D12_CPU_DESCRIPTOR_HANDLE dsv = dsv_heap_->GetCPUDescriptorHandleForHeapStart();
-    command_list_->OMSetRenderTargets(1, &rtv, FALSE, &dsv);
+    command_list_->OMSetRenderTargets(1, &efb_rtv_, FALSE, &efb_dsv_);
 
     float vp_x = 0.0f, vp_y = 0.0f;
     float vp_w = static_cast<float>(kEfbWidth  * efb_scale_);
@@ -5238,10 +5400,8 @@ void RendererD3D12::clear_efb(
     bool color_enable, bool alpha_enable, bool depth_enable,
     unsigned rect_x, unsigned rect_y, unsigned rect_w, unsigned rect_h,
     std::uint8_t pixel_format) {
-    const UINT stride = device_->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
-    D3D12_CPU_DESCRIPTOR_HANDLE rtv = rtv_heap_->GetCPUDescriptorHandleForHeapStart();
-    rtv.ptr += static_cast<SIZE_T>(kSwapChainBuffers) * stride;
-    D3D12_CPU_DESCRIPTOR_HANDLE dsv = dsv_heap_->GetCPUDescriptorHandleForHeapStart();
+    const D3D12_CPU_DESCRIPTOR_HANDLE rtv = efb_rtv_;
+    const D3D12_CPU_DESCRIPTOR_HANDLE dsv = efb_dsv_;
 
     // Scope the clear to the copy's src rect (scaled), per hardware.
     const LONG efb_w = static_cast<LONG>(kEfbWidth * efb_scale_);
@@ -7050,6 +7210,9 @@ std::string native_settings_row_text(
         case 5:
             return std::string("LIGHTING: ") +
                    (render.per_pixel_lighting ? "PER PIXEL" : "PER VERTEX");
+        case 6:
+            return std::string("2D LAYER: ") +
+                   (render.hud_output_resolution ? "DISPLAY RES" : "INTERNAL RES");
         default:
             return {};
         }
@@ -8291,18 +8454,23 @@ NativeSettingsLayout compute_native_settings_layout(
         : (backbuffer_width >= 2560u && backbuffer_height >= 1440u
                ? 4
                : (backbuffer_width >= 1280u ? 3 : 2));
-    const int desired_height = compact
-        ? 224
-        : (layout.text_scale >= 4 ? 480 : 420);
-    layout.panel_height = std::min(desired_height, height - margin * 2);
     layout.rows_y = compact
-        ? layout.panel_y + 54
+        ? layout.panel_y + 50
         : layout.panel_y + 110 + (layout.text_scale - 2) * 8;
     layout.row_step = compact
-        ? 18
+        ? 16
         : std::max(32, layout.text_scale * 9 + 8);
-    layout.footer_y =
-        layout.panel_y + layout.panel_height - (compact ? 62 : 82);
+    // Tall enough for the longest page (seven rows) above the footer.
+    const int footer_block = compact ? 62 : 82;
+    constexpr int kLongestPageRows = 7;
+    const int needed_height = (layout.rows_y - layout.panel_y) +
+        (kLongestPageRows - 1) * layout.row_step + layout.text_scale * 7 + 8 +
+        footer_block;
+    const int desired_height = compact
+        ? 224
+        : std::max(layout.text_scale >= 4 ? 480 : 420, needed_height);
+    layout.panel_height = std::min(desired_height, height - margin * 2);
+    layout.footer_y = layout.panel_y + layout.panel_height - footer_block;
 
     const unsigned row_count = native_settings_row_count(tab);
     const int final_row_bottom = row_count == 0u

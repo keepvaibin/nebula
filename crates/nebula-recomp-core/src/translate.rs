@@ -7350,8 +7350,16 @@ fn publishes_movie_boundary_target_pc(target: u32, pc: u32) -> bool {
         || (target == 0x8037_0398 && matches!(pc, 0x8036_FEC8 | 0x8037_0278))
 }
 
+// GameScene::draw3D's call from GameScene::draw and draw3D's closing
+// MR::clearZBuffer call bracket the 3D scene; the renderer marks both points
+// in the GX stream (jitter, motion vectors, upscaler input).
+fn marks_scene_boundary(target: u32, pc: u32) -> bool {
+    (target == 0x8033_EE8C && pc == 0x8033_E820) || (target == 0x803C_A76C && pc == 0x8033_F024)
+}
+
 fn requires_host_guest_call_at(target: u32, pc: u32) -> bool {
     requires_host_guest_call(target)
+        || marks_scene_boundary(target, pc)
         || (target == 0x804A_B20C && pc == 0x804A_B468)
         || (target == 0x804B_9EC8 && pc == 0x8038_5AD8)
         || (target == 0x803A_29B8 && pc == 0x8034_BF8C)
@@ -13933,6 +13941,8 @@ mod tests {
             (0x8036_FDD4, 0x8038_D1CC),
             (0x8036_FEC8, 0x8037_0398),
             (0x8037_0278, 0x8037_0398),
+            (0x8033_E820, 0x8033_EE8C),
+            (0x8033_F024, 0x803C_A76C),
         ] {
             let words = [0x4800_0001 | ((target - pc) & 0x03FF_FFFC), 0x4E80_0020];
             let bytes: Vec<u8> = words.iter().flat_map(|word| word.to_be_bytes()).collect();

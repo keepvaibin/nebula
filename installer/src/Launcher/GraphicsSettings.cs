@@ -21,7 +21,7 @@ namespace Nebula.Launcher
         private static readonly int[] Anisotropy = { 1, 2, 4, 8, 16 };
 
         public int AntiAliasing = 2, Quality = 2, Upscaler = 1, Sharpness = 20, TextureFilter = 3;
-        public bool GeneratedMipmaps = true, PerPixelLighting = true;
+        public bool GeneratedMipmaps = true, PerPixelLighting = true, HudOutputResolution = true;
 
         public static string ConfigPath { get { return Path.Combine(NebulaPaths.DataRoot, "config.ini"); } }
 
@@ -42,9 +42,10 @@ namespace Nebula.Launcher
                 settings.TextureFilter = 0;
                 for (int i = 0; i < Anisotropy.Length; i++) if (Anisotropy[i] <= anisotropy) settings.TextureFilter = i;
             }
-            string mipmaps, lighting;
+            string mipmaps, lighting, hud;
             if (values.TryGetValue("enhanced_mipmaps", out mipmaps)) settings.GeneratedMipmaps = mipmaps.Trim() != "0";
             if (values.TryGetValue("per_pixel_lighting", out lighting)) settings.PerPixelLighting = lighting.Trim() != "0";
+            if (values.TryGetValue("hud_output_resolution", out hud)) settings.HudOutputResolution = hud.Trim() != "0";
             return settings;
         }
 
@@ -60,6 +61,7 @@ namespace Nebula.Launcher
             Set(lines, "anisotropic_filtering", Anisotropy[Math.Max(0, Math.Min(TextureFilter, Anisotropy.Length - 1))]);
             Set(lines, "enhanced_mipmaps", GeneratedMipmaps ? 1 : 0);
             Set(lines, "per_pixel_lighting", PerPixelLighting ? 1 : 0);
+            Set(lines, "hud_output_resolution", HudOutputResolution ? 1 : 0);
             Set(lines, "internal_follow_window", followWindow ? 1 : 0);
             Directory.CreateDirectory(Path.GetDirectoryName(ConfigPath));
             string temp = ConfigPath + ".tmp";

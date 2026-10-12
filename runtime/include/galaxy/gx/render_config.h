@@ -94,6 +94,9 @@ struct RenderConfig {
     // the window's game picture, as the launcher's "Match Output" does at
     // start. The renderer re-creates its targets once, at a frame boundary.
     bool     internal_follow_window = false;
+    // The 2D layer (HUD, menus, text) renders at the window's resolution over
+    // the resampled 3D scene when the internal resolution is lower.
+    bool     hud_output_resolution = true;
 
     // false presents with the plain bilinear blit (A/B and fallback).
     bool     post_process        = true;

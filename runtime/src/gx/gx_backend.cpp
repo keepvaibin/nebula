@@ -3531,6 +3531,7 @@ void GxBackend::shutdown() {
     }
     emit_deferred_gx_stats();
     emit_deferred_xfb_causal_trace();
+    std::cerr << "[scene-markers] handled=" << scene_markers_seen_ << std::endl;
 
     std::string shutdown_failures;
     const auto append_shutdown_failure = [&shutdown_failures](
@@ -5528,6 +5529,7 @@ FramePeCompletionToken GxBackend::render_frame(
         FrameChunk chunk;
         chunk.pointer_response=producer_pointer_response_;
         take_attached_pointer_depth_capture(chunk, fifo_size);
+        take_attached_fifo_markers(chunk, fifo_size);
         chunk.prerecorded_movie=producer_movie_content_;
         chunk.safety_surround=producer_safety_surround_;
         chunk.services = services;
@@ -5632,6 +5634,7 @@ FramePeCompletionToken GxBackend::render_frame(
     FrameChunk chunk;
     chunk.pointer_response=producer_pointer_response_;
     take_attached_pointer_depth_capture(chunk, fifo_size);
+    take_attached_fifo_markers(chunk, fifo_size);
     chunk.prerecorded_movie=producer_movie_content_;
     chunk.safety_surround=producer_safety_surround_;
     chunk.services = services;
@@ -6240,6 +6243,36 @@ void GxBackend::attach_pointer_depth_capture(
     }
     producer_pointer_depth_capture_ = capture;
     producer_pointer_depth_capture_offset_ = fifo_offset;
+}
+
+void GxBackend::take_attached_fifo_markers(FrameChunk& chunk, std::size_t fifo_size) noexcept {
+    chunk.fifo_marker_count = 0;
+    for (std::uint8_t i = 0; i < producer_fifo_marker_count_; ++i) {
+        if (producer_fifo_markers_[i].first <= fifo_size &&
+            chunk.fifo_marker_count < chunk.fifo_markers.size()) {
+            chunk.fifo_markers[chunk.fifo_marker_count++] = producer_fifo_markers_[i];
+        }
+    }
+    producer_fifo_marker_count_ = 0;
+}
+
+void GxBackend::on_fifo_marker(FifoMarker marker) {
+    flush_pending_draw_batch();
+    ++scene_markers_seen_;
+    scene_phase_ = marker == FifoMarker::SceneBegin;
+    // Scene end: the 2D layer renders into the output-resolution EFB. A new
+    // scene that begins before a display copy restores the render EFB.
+    bool switched = false;
+    if (marker == FifoMarker::SceneEnd) {
+        switched = renderer_.begin_output_efb();
+    } else if (renderer_.output_efb_active()) {
+        renderer_.end_output_efb();
+        switched = true;
+    }
+    if (switched) {
+        efb_copies_.set_efb_scale(renderer_.efb_scale());
+        frame_bindings_dirty_ = true;
+    }
 }
 
 void GxBackend::take_attached_pointer_depth_capture(FrameChunk& chunk, std::size_t fifo_size) {
@@ -7835,19 +7868,48 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
             // offset: everything before it is drawn, the field is recorded
             // into this frame's command list, then the rest runs. A command
             // straddling the marker simply finishes in the second run.
+            // Scene markers split the run the same way, in stream order; a
+            // marker never lands inside a command (the producer flushes the
+            // gather pipe at the guest call boundary).
             const bool capture_in_frame =
                 chunk.pointer_depth_in_frame && chunk.pointer_depth_capture != nullptr;
             const auto run_stream = [&](std::span<const std::byte> stream,
-                                        std::size_t marker) -> std::size_t {
-                if (!capture_in_frame || marker > stream.size()) {
-                    return parser_.run_available(
-                        stream, memory, *this, state_,
-                        frame_memory_regions_disjoint_sorted_);
+                                        std::size_t prefix) -> std::size_t {
+                struct Split {
+                    std::size_t offset;
+                    int marker;  // -1: pointer depth field
+                };
+                std::array<Split, 5> splits{};
+                std::size_t split_count = 0;
+                if (capture_in_frame) {
+                    splits[split_count++] = {
+                        prefix + chunk.pointer_depth_capture_fifo_offset, -1};
                 }
-                std::size_t consumed = marker == 0u ? 0u : parser_.run_available(
-                    stream.first(marker), memory, *this, state_,
-                    frame_memory_regions_disjoint_sorted_);
-                record_pointer_depth_capture_in_frame(chunk);
+                for (std::uint8_t i = 0; i < chunk.fifo_marker_count; ++i) {
+                    splits[split_count++] = {
+                        prefix + chunk.fifo_markers[i].first,
+                        static_cast<int>(chunk.fifo_markers[i].second)};
+                }
+                std::stable_sort(splits.begin(), splits.begin() + split_count,
+                    [](const Split& a, const Split& b) { return a.offset < b.offset; });
+                std::size_t consumed = 0;
+                for (std::size_t i = 0; i < split_count; ++i) {
+                    const Split split = splits[i];
+                    if (split.offset > stream.size()) {
+                        continue;
+                    }
+                    if (split.offset > consumed) {
+                        consumed += parser_.run_available(
+                            stream.subspan(consumed, split.offset - consumed),
+                            memory, *this, state_,
+                            frame_memory_regions_disjoint_sorted_);
+                    }
+                    if (split.marker < 0) {
+                        record_pointer_depth_capture_in_frame(chunk);
+                    } else {
+                        on_fifo_marker(static_cast<FifoMarker>(split.marker));
+                    }
+                }
                 if (consumed < stream.size()) {
                     consumed += parser_.run_available(
                         stream.subspan(consumed), memory, *this, state_,
@@ -7857,8 +7919,7 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
             };
             if (pending_fifo_.empty()) {
                 const std::span<const std::byte> fifo(fifo_data, fifo_size);
-                const std::size_t consumed =
-                    run_stream(fifo, chunk.pointer_depth_capture_fifo_offset);
+                const std::size_t consumed = run_stream(fifo, 0u);
                 if (consumed < fifo.size()) {
                     pending_fifo_.assign(
                         fifo.begin() + static_cast<std::ptrdiff_t>(consumed),
@@ -7870,9 +7931,8 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
                     pending_fifo_.insert(
                         pending_fifo_.end(), fifo_data, fifo_data + fifo_size);
                 }
-                const std::size_t consumed = run_stream(
-                    pending_fifo_,
-                    pending_prefix + chunk.pointer_depth_capture_fifo_offset);
+                const std::size_t consumed =
+                    run_stream(pending_fifo_, pending_prefix);
                 if (consumed == pending_fifo_.size()) {
                     pending_fifo_.clear();
                 } else if (consumed > 0) {
@@ -11820,6 +11880,13 @@ void GxBackend::on_efb_copy(std::uint32_t exec_command) {
                 owned_efb_recorded = renderer_.debug_copy_efb_to_readback();
             }
             renderer_.copy_efb_to_xfb(params, *xfb);
+            // The display copy ends the 2D layer: later work and the next
+            // frame use the render-resolution EFB again.
+            if (renderer_.output_efb_active()) {
+                renderer_.end_output_efb();
+                efb_copies_.set_efb_scale(renderer_.efb_scale());
+                frame_bindings_dirty_ = true;
+            }
             static const bool trace_layout=read_env_u64("GALAXY_MONITOR_DISPLAY_LAYOUT",0u)!=0u;
             if (trace_layout) {
                 const std::array<unsigned,7> current{params.src_x,params.src_y,params.src_width,params.src_height,

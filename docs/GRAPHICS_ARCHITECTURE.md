@@ -183,7 +183,7 @@ and where it comes from here:
 |---|---|
 | Scene color at internal resolution | EFB color, `640x528 x efb_scale` |
 | Depth | EFB depth (D24S8, reversed) |
-| HUD-free image | Not separated today: the HUD is drawn into the same EFB before the XFB copy. Split point = first orthographic (XF projection type) draw after perspective draws in a frame; upscale the EFB there into an output-size target and draw the rest at output size. |
+| HUD-free image | Separated. The game module routes two call sites through the host: `GameScene::draw3D` from `GameScene::draw` (0x8033E820) and draw3D's closing `MR::clearZBuffer` (0x8033F024). At each, the simulation thread flushes the gather pipe and records the FIFO offset; the render thread splits its parse there (`FifoMarker::SceneBegin` / `SceneEnd`). At scene end the EFB still holds the final 3D image and its depth; the renderer resamples it into an output EFB at the window's integer scale, swaps the two EFB target sets, and draws the 2D layer (HUD, menus, 2D models) there. The display copy swaps back. `hud_output_resolution` (default on; skipped when the EFB already covers the window). |
 | Sub-pixel jitter | To add: Halton(2,3) clip-space offset on perspective draws only; reset on scene cuts (XFB serial gaps). |
 | Motion vectors | To add: previous transform per draw, matched by draw signature (display-list address, vertex array bases, position-matrix slot); camera-only reprojection from depth as fallback. |
 | Latency markers (Reflex, FG pacing) | `frame_timeline` already records simulate / submit / render / present boundaries; map them onto Streamline markers. |

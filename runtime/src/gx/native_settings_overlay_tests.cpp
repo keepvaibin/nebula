@@ -159,11 +159,12 @@ int main() {
     render.sharpness = 20u;
     render.anisotropic_filtering = 8u;
     render.per_pixel_lighting = true;
+    render.hud_output_resolution = true;
     galaxy::gx::set_render_config(render);
     passed &= expect(key(VK_TAB), "Tab enters the graphics page");
     snapshot = galaxy::gx::native_settings_overlay_snapshot();
-    passed &= expect(snapshot.tab == 1u && snapshot.row_count == 6u,
-                     "graphics page has AA, SMAA quality, upscaler, sharpening, textures and lighting");
+    passed &= expect(snapshot.tab == 1u && snapshot.row_count == 7u,
+                     "graphics page has AA, SMAA quality, upscaler, sharpening, textures, lighting and 2D layer");
     passed &= expect(key(VK_LEFT), "left lowers the anti-aliasing mode");
     passed &= expect(galaxy::gx::get_render_config().aa_mode == 1u, "AUTO steps down to SMAA");
     passed &= expect(key(VK_DOWN) && key(VK_RIGHT), "SMAA quality row is adjustable");
@@ -179,6 +180,9 @@ int main() {
                      "8x anisotropic steps up to 16x");
     passed &= expect(key(VK_DOWN) && key(VK_RIGHT), "lighting row toggles");
     passed &= expect(!galaxy::gx::get_render_config().per_pixel_lighting, "lighting switches to per vertex");
+    passed &= expect(key(VK_DOWN) && key(VK_RIGHT), "2D layer row toggles");
+    passed &= expect(!galaxy::gx::get_render_config().hud_output_resolution,
+                     "2D layer switches to the internal resolution");
     passed &= expect(galaxy::gx::native_settings_overlay_snapshot().dirty,
                      "graphics changes mark the settings for saving");
 
@@ -257,10 +261,20 @@ int main() {
         galaxy::gx::compute_native_settings_layout(427u, 240u, 1u);
     passed &= expect(
         layout_inside(tiny_graphics, 427u, 240u) &&
-            tiny_graphics.rows_y + 5 * tiny_graphics.row_step +
+            tiny_graphics.rows_y + 6 * tiny_graphics.row_step +
                     tiny_graphics.text_scale * 7 + 8 <=
                 tiny_graphics.footer_y,
-        "427x240 fits the six graphics rows above the compact footer");
+        "427x240 fits the seven graphics rows above the compact footer");
+    for (const auto [w, h] : {std::pair{854u, 480u}, std::pair{1280u, 720u},
+                              std::pair{1920u, 1080u}, std::pair{2560u, 1440u},
+                              std::pair{3840u, 2160u}}) {
+        const auto graphics = galaxy::gx::compute_native_settings_layout(w, h, 1u);
+        passed &= expect(
+            graphics.supported && layout_inside(graphics, w, h) &&
+                graphics.rows_y + 6 * graphics.row_step +
+                        graphics.text_scale * 7 + 8 <= graphics.footer_y,
+            "every window size fits the seven graphics rows above the footer");
+    }
     const auto tiny_caps =
         galaxy::gx::compute_native_settings_layout(427u, 240u, 4u);
     passed &= expect(

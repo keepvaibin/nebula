@@ -45,7 +45,7 @@ namespace Nebula.Launcher
         private readonly ComboBox recording = new ComboBox();
         private readonly ComboBox antiAliasing = new ComboBox(), aaQuality = new ComboBox(), upscaler = new ComboBox(), textureFilter = new ComboBox(), lighting = new ComboBox();
         private readonly NumericUpDown sharpness = new NumericUpDown();
-        private readonly CheckBox mipmaps = new CheckBox();
+        private readonly CheckBox mipmaps = new CheckBox(), hudOutput = new CheckBox();
         private readonly NumericUpDown[] volumes = new NumericUpDown[AudioSettings.Names.Length];
         private readonly Button play = new Button();
         private GraphicsSettings graphics = new GraphicsSettings();
@@ -120,7 +120,11 @@ namespace Nebula.Launcher
             mipmaps.Location = new Point(12, 254);
             mipmaps.Size = new Size(600, 28);
             image.Controls.Add(mipmaps);
-            AddLabel(image, "These also change during play (F1, or View+Menu on a controller), except mipmaps.", 12, 300, 700);
+            hudOutput.Text = "Draw the HUD and menus at display resolution";
+            hudOutput.Location = new Point(12, 286);
+            hudOutput.Size = new Size(600, 28);
+            image.Controls.Add(hudOutput);
+            AddLabel(image, "These also change during play (F1, or View+Menu on a controller), except mipmaps.", 12, 330, 700);
 
             for (int i = 0; i < volumes.Length; i++)
             {
@@ -209,6 +213,7 @@ namespace Nebula.Launcher
             textureFilter.SelectedIndex = graphics.TextureFilter;
             mipmaps.Checked = graphics.GeneratedMipmaps;
             lighting.SelectedIndex = graphics.PerPixelLighting ? 0 : 1;
+            hudOutput.Checked = graphics.HudOutputResolution;
             audio = AudioSettings.Load();
             for (int i = 0; i < volumes.Length; i++) volumes[i].Value = audio.Percent[i];
             output.SelectedIndex = 0;
@@ -324,6 +329,7 @@ namespace Nebula.Launcher
                 graphics.TextureFilter = textureFilter.SelectedIndex;
                 graphics.GeneratedMipmaps = mipmaps.Checked;
                 graphics.PerPixelLighting = lighting.SelectedIndex == 0;
+                graphics.HudOutputResolution = hudOutput.Checked;
                 graphics.Save(plan.FollowWindowResolution);
                 for (int i = 0; i < volumes.Length; i++) audio.Percent[i] = (int)volumes[i].Value;
                 audio.Save();

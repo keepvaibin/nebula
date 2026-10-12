@@ -68,6 +68,10 @@ void attach_pointer_depth_capture(
     backend().attach_pointer_depth_capture(capture, fifo_offset);
 }
 
+void attach_fifo_marker(FifoMarker marker, std::size_t fifo_offset) noexcept {
+    backend().attach_fifo_marker(marker, fifo_offset);
+}
+
 bool capture_pointer_depth(std::span<std::uint32_t> pixels) {
     return backend().capture_pointer_depth(pixels);
 }
