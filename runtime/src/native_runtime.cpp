@@ -32485,8 +32485,20 @@ int wmain(int argc, wchar_t** argv) {
 
     galaxy::RuntimeInstanceLease runtime_instance_lease;
     bool another_runtime_is_active = false;
+    // GALAXY_INSTANCE_LEASE names a private lease so automated sessions can
+    // run side by side; players keep the one shared lease.
+    std::wstring lease_identity = L"Nebula.RMGE01.NativeRuntime";
+    if (wchar_t lease_env[128]{};
+        GetEnvironmentVariableW(L"GALAXY_INSTANCE_LEASE", lease_env,
+                                static_cast<DWORD>(std::size(lease_env))) != 0u &&
+        lease_env[0] != L'\0') {
+        lease_identity = L"Nebula.RMGE01.NativeRuntime.";
+        for (const wchar_t* p = lease_env; *p != L'\0'; ++p) {
+            lease_identity += (*p == L'\\' || *p == L'/') ? L'_' : *p;
+        }
+    }
     if (!runtime_instance_lease.acquire(
-            L"Nebula.RMGE01.NativeRuntime",
+            lease_identity,
             another_runtime_is_active)) {
         if (another_runtime_is_active) {
             std::wcerr
