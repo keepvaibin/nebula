@@ -21,7 +21,7 @@ namespace Nebula.Launcher
         private static readonly int[] Anisotropy = { 1, 2, 4, 8, 16 };
 
         public int AntiAliasing = 2, Quality = 2, Upscaler = 1, Sharpness = 20, TextureFilter = 3;
-        public bool GeneratedMipmaps = true, PerPixelLighting = true, HudOutputResolution = true;
+        public bool GeneratedMipmaps = true, PerPixelLighting = true, HudOutputResolution = false;
 
         public static string ConfigPath { get { return Path.Combine(NebulaPaths.DataRoot, "config.ini"); } }
 
