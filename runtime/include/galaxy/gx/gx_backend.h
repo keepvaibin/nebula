@@ -648,8 +648,8 @@ private:
     bool motion_scene_ = false;
     // The live keys carry the motion bits (cleared once after a scene).
     bool motion_bits_set_ = false;
-    // The resolved pipeline is a motion writer (not an uber stand-in).
-    bool current_pipeline_motion_ = false;
+    // Render target 1 of the resolved pipeline (DrawCall::aux_target).
+    std::uint8_t current_pipeline_aux_ = 0;
     // Root SRV for draws: the palette snapshot, or the matrix ring base in
     // temporal scenes (palettes then addressed by mtx_palette_base).
     D3D12_GPU_VIRTUAL_ADDRESS draw_matrix_palette_ = 0;

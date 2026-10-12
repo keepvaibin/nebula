@@ -96,6 +96,11 @@ public:
                 in.motion, ffxGetResourceDescriptionDX12(in.motion),
                 L"Nebula motion vectors", FFX_RESOURCE_STATE_RENDER_TARGET);
         }
+        if (in.reactive != nullptr) {
+            d.reactive = ffxGetResourceDX12(
+                in.reactive, ffxGetResourceDescriptionDX12(in.reactive),
+                L"Nebula reactive mask", FFX_RESOURCE_STATE_RENDER_TARGET);
+        }
         d.output = ffxGetResourceDX12(
             in.output,
             ffxGetResourceDescriptionDX12(in.output, FFX_RESOURCE_USAGE_UAV),

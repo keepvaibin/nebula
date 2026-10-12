@@ -580,6 +580,22 @@ int main() {
             check_contains(src, "TEXCOORD13", label);
             check_compiles(src, "ps_5_1", label);
         }
+        for (unsigned variant = 0; variant < 2u; ++variant) {
+            PixelShaderKey k{};
+            std::memset(&k, 0, sizeof(k));
+            k.num_tev_stages = 1;
+            k.num_texgens = 1;
+            k.num_chans = 1;
+            k.alpha_comp0 = 7;
+            k.alpha_comp1 = 7;
+            k.reserved = kPsKeyReactive;
+            if (variant == 1u) k.flags = 0x01 | 0x02 | (2u << 3) | (2u << 5);
+            const std::string src = gen.generate_ps(k);
+            char label[64];
+            std::snprintf(label, sizeof(label), "ps_reactive_variant%u", variant);
+            check_contains(src, "float reactive : SV_Target1", label);
+            check_compiles(src, "ps_5_1", label);
+        }
     }
 
     // ---- Pixel shaders ------------------------------------------------------

@@ -119,6 +119,10 @@ inline constexpr std::uint8_t kPsKeyPerPixelLighting = 0x01u;
 inline constexpr std::uint8_t kVsKeyMotion = 0x10u;
 inline constexpr std::uint8_t kPsKeyMotion = 0x02u;
 inline constexpr std::uint32_t kRenderStateMotionTarget = 1u << 29u;
+// Reactive mask (temporal scenes): a blended triangle draw also writes its
+// alpha (max-blended, capped at 0.9) to an R8 render target 1.
+inline constexpr std::uint8_t kPsKeyReactive = 0x04u;
+inline constexpr std::uint32_t kRenderStateReactiveTarget = 1u << 30u;
 
 struct PixelShaderKey {
     std::uint8_t num_tev_stages;    // 1-16

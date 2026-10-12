@@ -6469,6 +6469,10 @@ void GxBackend::on_fifo_marker(FifoMarker marker, const std::array<float, 12>* v
         }
     } else {
         if (temporal_scene_) {
+            static const bool motion_debug = read_env_u64("GALAXY_MOTION_DEBUG", 0u) != 0u;
+            if (motion_debug && motion_scene_) {
+                renderer_.record_motion_debug_view();
+            }
             transform_history_.end_scene();
             const TransformHistoryStats stats = transform_history_.stats();
             // A cut: most transforms have no previous counterpart.
@@ -9835,27 +9839,36 @@ ID3D12PipelineState* GxBackend::flush_draw_state(
     // Motion writers: opaque triangles with color writes in a temporal scene
     // (blending, logic ops and dual-source alpha cannot share a second
     // target). Keys only change while a motion scene is (or was) active.
+    // Blended triangles (no dual-source alpha) write the reactive mask.
     bool motion_key_changed = false;
     if (motion_scene_ || motion_bits_set_) [[unlikely]] {
         const std::uint32_t bb = render_state_key_.blend_bits;
-        const bool writer = motion_scene_ &&
+        const bool candidate = motion_scene_ &&
             topology_key == static_cast<std::uint8_t>(D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE) &&
-            (bb & ((1u << 0) | (1u << 8) | (1u << 27))) == 0u && (bb & (1u << 25)) != 0u;
+            (bb & ((1u << 8) | (1u << 27))) == 0u && (bb & (1u << 25)) != 0u;
+        const bool writer = candidate && (bb & 1u) == 0u;
+        const bool reactive = candidate && (bb & 1u) != 0u;
         if (((vs_key_.flags & kVsKeyMotion) != 0u) != writer) {
             vs_key_.flags ^= kVsKeyMotion;
             current_vs_hash_ = vs_key_.hash();
             motion_key_changed = true;
         }
-        if (((ps_key_.reserved & kPsKeyMotion) != 0u) != writer) {
-            ps_key_.reserved ^= kPsKeyMotion;
+        const std::uint8_t ps_bits =
+            (writer ? kPsKeyMotion : 0u) | (reactive ? kPsKeyReactive : 0u);
+        if ((ps_key_.reserved & (kPsKeyMotion | kPsKeyReactive)) != ps_bits) {
+            ps_key_.reserved = static_cast<std::uint8_t>(
+                (ps_key_.reserved & ~(kPsKeyMotion | kPsKeyReactive)) | ps_bits);
             current_ps_hash_ = ps_key_.hash();
             motion_key_changed = true;
         }
-        if (((bb & kRenderStateMotionTarget) != 0u) != writer) {
-            render_state_key_.blend_bits ^= kRenderStateMotionTarget;
+        const std::uint32_t rs_bits = (writer ? kRenderStateMotionTarget : 0u) |
+                                      (reactive ? kRenderStateReactiveTarget : 0u);
+        if ((bb & (kRenderStateMotionTarget | kRenderStateReactiveTarget)) != rs_bits) {
+            render_state_key_.blend_bits =
+                (bb & ~(kRenderStateMotionTarget | kRenderStateReactiveTarget)) | rs_bits;
             motion_key_changed = true;
         }
-        motion_bits_set_ = writer;
+        motion_bits_set_ = writer || reactive;
     }
 
     if (current_pipeline_ == nullptr || current_pipeline_is_uber_ ||
@@ -9975,9 +9988,9 @@ ID3D12PipelineState* GxBackend::flush_draw_state(
         throw std::runtime_error(
             "[GxBackend] failed to create required graphics pipeline");
     }
-    current_pipeline_motion_ =
-        (render_state_key_.blend_bits & kRenderStateMotionTarget) != 0u &&
-        !current_pipeline_is_uber_;
+    current_pipeline_aux_ = current_pipeline_is_uber_ ? 0u
+        : (render_state_key_.blend_bits & kRenderStateMotionTarget) != 0u ? 1u
+        : (render_state_key_.blend_bits & kRenderStateReactiveTarget) != 0u ? 2u : 0u;
 
     // Snapshot the XF matrix palette ONLY when the matrices actually changed
     // (kDirtyXfMatrices).  Re-uploading the full palette on every TEV/render-
@@ -10494,7 +10507,7 @@ bool GxBackend::begin_cached_draw_run(
             ? current_sampler_table_
             : renderer_.default_sampler_table();
     cached_draw_run_state_call_.matrix_palette = draw_matrix_palette_;
-    cached_draw_run_state_call_.motion_target  = current_pipeline_motion_;
+    cached_draw_run_state_call_.aux_target     = current_pipeline_aux_;
     cached_draw_run_state_call_.topology       = topology;
     cached_draw_run_state_call_.scissor        = scissor_rect;
     for (unsigned i = 0; i < 6; ++i) {
@@ -11466,7 +11479,7 @@ void GxBackend::on_draw(
         ? current_sampler_table_
         : renderer_.default_sampler_table();
     state_call.matrix_palette = draw_matrix_palette_;
-    state_call.motion_target  = current_pipeline_motion_;
+    state_call.aux_target     = current_pipeline_aux_;
     state_call.topology       = topology;
     state_call.scissor        = scissor_rect;
     for (unsigned i = 0; i < 6; ++i) {

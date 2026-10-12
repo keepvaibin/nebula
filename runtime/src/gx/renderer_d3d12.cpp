@@ -3025,13 +3025,13 @@ void RendererD3D12::carry_over_efb_contents() {
     command_list_->RSSetScissorRects(1, &scissor);
     command_list_->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
     command_list_->OMSetRenderTargets(1, &efb_rtv_, FALSE, nullptr);
-    bound_rt_motion_ = false;
+    bound_rt_aux_ = 0u;
     command_list_->SetPipelineState(blit_pipeline_.Get());
     command_list_->SetGraphicsRootDescriptorTable(0, table.gpu);
     command_list_->DrawInstanced(3, 1, 0, 0);
     if (efb_carry_depth_pso_) {
         command_list_->OMSetRenderTargets(0, nullptr, FALSE, &efb_dsv_);
-        bound_rt_motion_ = false;
+        bound_rt_aux_ = 0u;
         command_list_->SetPipelineState(efb_carry_depth_pso_.Get());
         command_list_->SetGraphicsRootDescriptorTable(0, depth_gpu);
         command_list_->DrawInstanced(3, 1, 0, 0);
@@ -5365,7 +5365,7 @@ void RendererD3D12::begin_frame(bool present_swap_chain) {
     index_ring_   .begin_frame(frame_slot_);
     constant_ring_.begin_frame(frame_slot_);
     matrix_ring_  .begin_frame(static_cast<unsigned>(frame_index_ % matrix_segments_));
-    bound_rt_motion_ = false;
+    bound_rt_aux_ = 0u;
     srv_ring_     .begin_frame(frame_slot_);
     reset_sampler_frame();
     retired_efb_copy_textures_[frame_slot_].clear();
@@ -5979,11 +5979,16 @@ bool RendererD3D12::ensure_motion_target() {
     if (motion_target_ && motion_target_scale_ == efb_scale_) {
         return true;
     }
+    if (motion_target_) {
+        // An internal-resolution change: frames in flight may still use them.
+        wait_for_gpu();
+    }
     motion_target_.Reset();
+    reactive_target_.Reset();
     motion_target_scale_ = 0u;
     if (!motion_rtv_heap_) {
         D3D12_DESCRIPTOR_HEAP_DESC dhd{};
-        dhd.NumDescriptors = 1;
+        dhd.NumDescriptors = 2;
         dhd.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
         d3d_check(device_->CreateDescriptorHeap(&dhd, IID_PPV_ARGS(&motion_rtv_heap_)),
                   "motion vector RTV heap");
@@ -6006,12 +6011,106 @@ bool RendererD3D12::ensure_motion_target() {
             &cv, IID_PPV_ARGS(&motion_target_)))) {
         return false;
     }
+    rd.Format = kReactiveMaskFormat;
+    cv.Format = kReactiveMaskFormat;
+    if (FAILED(device_->CreateCommittedResource(
+            &hp, D3D12_HEAP_FLAG_NONE, &rd, D3D12_RESOURCE_STATE_RENDER_TARGET,
+            &cv, IID_PPV_ARGS(&reactive_target_)))) {
+        motion_target_.Reset();
+        return false;
+    }
     motion_rtv_ = motion_rtv_heap_->GetCPUDescriptorHandleForHeapStart();
+    reactive_rtv_ = motion_rtv_;
+    reactive_rtv_.ptr += device_->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
     device_->CreateRenderTargetView(motion_target_.Get(), nullptr, motion_rtv_);
+    device_->CreateRenderTargetView(reactive_target_.Get(), nullptr, reactive_rtv_);
     const float zero[4]{};
     command_list_->ClearRenderTargetView(motion_rtv_, zero, 0u, nullptr);
+    command_list_->ClearRenderTargetView(reactive_rtv_, zero, 0u, nullptr);
     motion_target_scale_ = efb_scale_;
     return true;
+}
+
+static constexpr char kMotionDebugPs[] =
+    "Texture2D<float2> mv:register(t0);"
+    "struct V{float4 p:SV_Position;float2 uv:TEXCOORD0;};"
+    "float4 main(V v):SV_Target{"
+    " float2 m=mv.Load(int3(int2(v.p.xy),0));"
+    " return float4(saturate(0.5+m.x/16.0),saturate(0.5+m.y/16.0),0.5,1.0);}";
+
+void RendererD3D12::record_motion_debug_view() {
+    if (!motion_target_) {
+        return;
+    }
+    if (!motion_debug_pipeline_) {
+        D3D12_DESCRIPTOR_RANGE range{};
+        range.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
+        range.NumDescriptors = 1;
+        D3D12_ROOT_PARAMETER param{};
+        param.ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+        param.DescriptorTable.NumDescriptorRanges = 1;
+        param.DescriptorTable.pDescriptorRanges = &range;
+        param.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+        D3D12_ROOT_SIGNATURE_DESC rsd{};
+        rsd.NumParameters = 1;
+        rsd.pParameters = &param;
+        ComPtr<ID3DBlob> blob, err;
+        d3d_check(D3D12SerializeRootSignature(&rsd, D3D_ROOT_SIGNATURE_VERSION_1, &blob, &err),
+                  "SerializeMotionDebugRS");
+        d3d_check(device_->CreateRootSignature(0, blob->GetBufferPointer(), blob->GetBufferSize(),
+                                               IID_PPV_ARGS(&motion_debug_root_)),
+                  "CreateMotionDebugRS");
+        const ComPtr<ID3DBlob> vs = compile_hlsl(kBlitVs, sizeof(kBlitVs) - 1, "vs_5_1", "main");
+        const ComPtr<ID3DBlob> ps =
+            compile_hlsl(kMotionDebugPs, sizeof(kMotionDebugPs) - 1, "ps_5_1", "main");
+        D3D12_GRAPHICS_PIPELINE_STATE_DESC pd{};
+        pd.pRootSignature = motion_debug_root_.Get();
+        pd.VS = {vs->GetBufferPointer(), vs->GetBufferSize()};
+        pd.PS = {ps->GetBufferPointer(), ps->GetBufferSize()};
+        pd.SampleMask = UINT_MAX;
+        pd.RasterizerState.FillMode = D3D12_FILL_MODE_SOLID;
+        pd.RasterizerState.CullMode = D3D12_CULL_MODE_NONE;
+        pd.RasterizerState.DepthClipEnable = TRUE;
+        pd.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+        pd.NumRenderTargets = 1;
+        pd.RTVFormats[0] = kEfbColorFormat;
+        pd.SampleDesc.Count = 1;
+        pd.BlendState.RenderTarget[0].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
+        d3d_check(device_->CreateGraphicsPipelineState(&pd, IID_PPV_ARGS(&motion_debug_pipeline_)),
+                  "CreateMotionDebugPSO");
+    }
+    D3D12_RESOURCE_BARRIER barrier{};
+    barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+    barrier.Transition.pResource = motion_target_.Get();
+    barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+    barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
+    barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+    command_list_->ResourceBarrier(1, &barrier);
+    const DescriptorRing::Table table = srv_ring_.allocate(1u);
+    D3D12_SHADER_RESOURCE_VIEW_DESC view{};
+    view.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+    view.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+    view.Texture2D.MipLevels = 1u;
+    view.Format = kMotionVectorFormat;
+    device_->CreateShaderResourceView(motion_target_.Get(), &view, table.cpu);
+    command_list_->SetGraphicsRootSignature(motion_debug_root_.Get());
+    command_list_->SetPipelineState(motion_debug_pipeline_.Get());
+    command_list_->SetGraphicsRootDescriptorTable(0, table.gpu);
+    command_list_->OMSetRenderTargets(1, &efb_rtv_, FALSE, nullptr);
+    bound_rt_aux_ = 0u;
+    const D3D12_VIEWPORT vp{0.0f, 0.0f, static_cast<float>(kEfbWidth * efb_scale_),
+                            static_cast<float>(kEfbHeight * efb_scale_), 0.0f, 1.0f};
+    const D3D12_RECT sci{0, 0, static_cast<LONG>(kEfbWidth * efb_scale_),
+                         static_cast<LONG>(kEfbHeight * efb_scale_)};
+    command_list_->RSSetViewports(1, &vp);
+    command_list_->RSSetScissorRects(1, &sci);
+    command_list_->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+    command_list_->DrawInstanced(3, 1, 0, 0);
+    std::swap(barrier.Transition.StateBefore, barrier.Transition.StateAfter);
+    command_list_->ResourceBarrier(1, &barrier);
+    command_list_->SetGraphicsRootSignature(root_signature_.Get());
+    invalidate_gx_bindings();
+    bind_efb(nullptr);
 }
 
 bool RendererD3D12::begin_motion_scene() {
@@ -6020,6 +6119,7 @@ bool RendererD3D12::begin_motion_scene() {
     }
     const float zero[4]{};
     command_list_->ClearRenderTargetView(motion_rtv_, zero, 0u, nullptr);
+    command_list_->ClearRenderTargetView(reactive_rtv_, zero, 0u, nullptr);
     return true;
 }
 
@@ -6086,6 +6186,7 @@ bool RendererD3D12::record_temporal_upscale(unsigned output_scale) {
     in.color = efb_color_.Get();
     in.depth = efb_depth_.Get();
     in.motion = motion_target_.Get();
+    in.reactive = reactive_target_.Get();
     in.output = alt_efb_.color.Get();
     in.render_width = kEfbWidth * efb_scale_;
     in.render_height = kEfbHeight * efb_scale_;
@@ -6293,7 +6394,7 @@ void RendererD3D12::end_output_efb() {
 
 void RendererD3D12::bind_efb(const float xf_vp[6]) {
     command_list_->OMSetRenderTargets(1, &efb_rtv_, FALSE, &efb_dsv_);
-    bound_rt_motion_ = false;
+    bound_rt_aux_ = 0u;
 
     float vp_x = 0.0f, vp_y = 0.0f;
     float vp_w = static_cast<float>(kEfbWidth  * efb_scale_);
@@ -6367,7 +6468,7 @@ void RendererD3D12::clear_efb(
             command_list_->ClearRenderTargetView(rtv, col, num_rects, rects);
         } else {
             command_list_->OMSetRenderTargets(1, &rtv, FALSE, nullptr);
-            bound_rt_motion_ = false;
+            bound_rt_aux_ = 0u;
             const D3D12_VIEWPORT vp{
                 0.0f, 0.0f,
                 static_cast<float>(efb_w), static_cast<float>(efb_h),
@@ -6432,15 +6533,15 @@ void RendererD3D12::draw(const DrawCall& call) {
         command_list_->SetGraphicsRootShaderResourceView(4, call.matrix_palette);
         bound_matrix_palette_ = call.matrix_palette;
     }
-    if (call.motion_target != bound_rt_motion_) [[unlikely]] {
-        if (call.motion_target) {
-            const D3D12_CPU_DESCRIPTOR_HANDLE targets[2]{efb_rtv_, motion_rtv_};
+    if (call.aux_target != bound_rt_aux_) [[unlikely]] {
+        if (call.aux_target != 0u) {
+            const D3D12_CPU_DESCRIPTOR_HANDLE targets[2]{
+                efb_rtv_, call.aux_target == 1u ? motion_rtv_ : reactive_rtv_};
             command_list_->OMSetRenderTargets(2, targets, FALSE, &efb_dsv_);
         } else {
             command_list_->OMSetRenderTargets(1, &efb_rtv_, FALSE, &efb_dsv_);
-            bound_rt_motion_ = false;
         }
-        bound_rt_motion_ = call.motion_target;
+        bound_rt_aux_ = call.aux_target;
     }
 
     // Per-draw GX scissor, scaled to the EFB and clamped.  GX titles rely on
@@ -6682,7 +6783,7 @@ void RendererD3D12::record_conversion_blit(
     }
 
     command_list_->OMSetRenderTargets(1, &rtv, FALSE, nullptr);
-    bound_rt_motion_ = false;
+    bound_rt_aux_ = 0u;
     const D3D12_VIEWPORT vp{
         0.0f, 0.0f,
         static_cast<float>(dest_w), static_cast<float>(dest_h),
@@ -7237,7 +7338,7 @@ bool RendererD3D12::record_pointer_depth_capture_in_frame() {
 
     const D3D12_CPU_DESCRIPTOR_HANDLE rtv = allocate_conversion_rtv(target);
     command_list_->OMSetRenderTargets(1, &rtv, FALSE, nullptr);
-    bound_rt_motion_ = false;
+    bound_rt_aux_ = 0u;
     const D3D12_VIEWPORT viewport{
         0.0f, 0.0f, static_cast<float>(width), static_cast<float>(height), 0.0f, 1.0f};
     const D3D12_RECT scissor{0, 0, static_cast<LONG>(width), static_cast<LONG>(height)};
@@ -8621,7 +8722,7 @@ bool RendererD3D12::present(
     command_list_->ResourceBarrier(1, &bar);
 
     command_list_->OMSetRenderTargets(1, &back_rtv, FALSE, nullptr);
-    bound_rt_motion_ = false;
+    bound_rt_aux_ = 0u;
     const auto content_aspect=galaxy::presentation_content_aspect(
         ultrawide ? ultrawide->content_aspect : galaxy::kWiiContentAspect,source->prerecorded_movie);
     galaxy::ContentViewport content_viewport = galaxy::fit_content_viewport(

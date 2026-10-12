@@ -1203,6 +1203,7 @@ std::string ShaderGenerator::generate_ps(const PixelShaderKey& key) const {
 
     const bool ppl = (key.reserved & kPsKeyPerPixelLighting) != 0u;
     const bool motion = (key.reserved & kPsKeyMotion) != 0u;
+    const bool reactive = !motion && (key.reserved & kPsKeyReactive) != 0u;
     s << kPsConstantsDef;
     if (motion) {
         s << insert_before_close(ppl ? kPsStructsPpl : kPsStructs, kMotionInterpolants, true);
@@ -1239,6 +1240,16 @@ std::string ShaderGenerator::generate_ps(const PixelShaderKey& key) const {
              "float2 motion : SV_Target1; };\n";
         if (early_depth) s << "[earlydepthstencil]\n";
         s << "PSOutM main(PSIn pin) {\n";
+    } else if (reactive && export_depth) {
+        s << "struct PSOutZ { float4 color : SV_Target0; "
+             "float reactive : SV_Target1; float depth : SV_Depth; };\n";
+        s << "PSOutZ main(PSIn pin) {\n";
+    } else if (reactive) {
+        // Blended draws without dual-source alpha (that would take target 1).
+        s << "struct PSOutR { float4 color : SV_Target0; "
+             "float reactive : SV_Target1; };\n";
+        if (early_depth) s << "[earlydepthstencil]\n";
+        s << "PSOutR main(PSIn pin) {\n";
     } else if (export_depth && dual_src) {
         s << "struct PSOutZ { float4 color : SV_Target0; "
              "float4 color1 : SV_Target1; float depth : SV_Depth; };\n";
@@ -1995,6 +2006,17 @@ std::string ShaderGenerator::generate_ps(const PixelShaderKey& key) const {
         s << "    mout.color = frag;\n";
         s << "    mout.motion = motion_px;\n";
         s << "    return mout;\n}\n";
+    } else if (reactive && export_depth) {
+        s << "    PSOutZ zout;\n";
+        s << "    zout.color = frag;\n";
+        s << "    zout.reactive = min(saturate(frag.a), 0.9);\n";
+        s << "    zout.depth = 1.0 - float(zcoord_i) / 16777216.0;\n";
+        s << "    return zout;\n}\n";
+    } else if (reactive) {
+        s << "    PSOutR rout;\n";
+        s << "    rout.color = frag;\n";
+        s << "    rout.reactive = min(saturate(frag.a), 0.9);\n";
+        s << "    return rout;\n}\n";
     } else if (export_depth) {
         s << "    PSOutZ zout;\n";
         s << "    zout.color = frag;\n";

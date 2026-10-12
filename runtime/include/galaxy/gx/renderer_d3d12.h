@@ -138,6 +138,8 @@ inline constexpr unsigned kEfbHeight = 528;
 inline constexpr DXGI_FORMAT kEfbColorFormat = DXGI_FORMAT_R8G8B8A8_UNORM;
 // Motion vectors for temporal upscaling: render pixels, current -> previous.
 inline constexpr DXGI_FORMAT kMotionVectorFormat = DXGI_FORMAT_R16G16_FLOAT;
+// Reactive mask for temporal upscaling: blended draws' alpha, max-blended.
+inline constexpr DXGI_FORMAT kReactiveMaskFormat = DXGI_FORMAT_R8_UNORM;
 inline constexpr DXGI_FORMAT kEfbDepthResourceFormat =
     DXGI_FORMAT_R24G8_TYPELESS;
 inline constexpr DXGI_FORMAT kEfbDepthFormat = DXGI_FORMAT_D24_UNORM_S8_UINT;
@@ -367,9 +369,9 @@ struct DrawCall {
     // has_viewport=false (XF regs not yet written) falls back to full EFB.
     float xf_viewport[6]{};
     bool  has_viewport = false;
-    // The pipeline writes motion vectors: render target 1 is the motion
-    // target (temporal scenes only).
-    bool  motion_target = false;
+    // Render target 1 in temporal scenes: 1 the motion target (opaque
+    // motion writers), 2 the reactive mask (blended draws), 0 none.
+    std::uint8_t aux_target = 0;
 };
 
 class RendererD3D12 {
@@ -432,6 +434,10 @@ public:
     // After a temporal scene_temporal_begin: clears the motion target for
     // the scene. False when it could not be created (no motion writers).
     [[nodiscard]] bool begin_motion_scene();
+    // GALAXY_MOTION_DEBUG: at the scene's end, replaces the EFB color with
+    // the motion field (grey = still; red/green = +x/+y towards the previous
+    // position, 8 pixels to full scale).
+    void record_motion_debug_view();
     // The temporal history no longer matches the picture (scene cut).
     void reset_temporal_history() noexcept { temporal_history_valid_ = false; }
     // Frames back whose matrix-ring palettes are still alive while this
@@ -799,8 +805,10 @@ private:
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> motion_rtv_heap_;
     D3D12_CPU_DESCRIPTOR_HANDLE motion_rtv_{};
     unsigned motion_target_scale_ = 0;
-    // The EFB and the motion target are bound as render targets 0 and 1.
-    bool bound_rt_motion_ = false;
+    // Render target 1 bound next to the EFB (DrawCall::aux_target values).
+    std::uint8_t bound_rt_aux_ = 0;
+    Microsoft::WRL::ComPtr<ID3D12Resource> reactive_target_;
+    D3D12_CPU_DESCRIPTOR_HANDLE reactive_rtv_{};
     // Matrix ring segments: kFramesInFlight, plus two in temporal mode so the
     // previous render frame's palettes outlive the frame that reads them.
     unsigned matrix_segments_ = kFramesInFlight;
@@ -1041,6 +1049,8 @@ private:
     D3D12_GPU_DESCRIPTOR_HANDLE conv_efb_color_srv_{};
     D3D12_GPU_DESCRIPTOR_HANDLE conv_efb_depth_srv_{};
     Microsoft::WRL::ComPtr<ID3D12PipelineState> clear_rgb_pipeline_;
+    Microsoft::WRL::ComPtr<ID3D12RootSignature> motion_debug_root_;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> motion_debug_pipeline_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> clear_alpha_pipeline_;
 
     // Synchronous GXPeekARGB/GXPeekZ bridge. Peeks execute on the render

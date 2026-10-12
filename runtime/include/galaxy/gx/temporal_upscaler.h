@@ -23,6 +23,7 @@ struct TemporalUpscaleInputs {
     ID3D12Resource* color = nullptr;   // RGBA8, gamma encoded, jittered
     ID3D12Resource* depth = nullptr;   // D24S8 typeless, reversed (near = 1)
     ID3D12Resource* motion = nullptr;  // RG16F, render pixels, current -> previous
+    ID3D12Resource* reactive = nullptr;  // R8, blended draws' alpha (optional)
     ID3D12Resource* output = nullptr;  // RGBA8 with unordered access
     unsigned render_width = 0;
     unsigned render_height = 0;
