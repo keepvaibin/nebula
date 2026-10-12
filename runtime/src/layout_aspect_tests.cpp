@@ -176,6 +176,15 @@ int main() {
             const float m11 = bar.values.at(0x198u), m13 = bar.values.at(0x1A0u);
             check(std::abs((m13 - m11 * 80.0f) - 77.0f) < 1e-3f && std::abs((m13 + m11 * 80.0f) - (237.0f + 76.0f)) < 1e-3f,
                   "a top bar keeps its inner edge and reaches the taller canvas top");
+            PaneFixture slide;
+            slide.values[0x12Cu] = 660.0f; slide.values[0x190u] = 660.0f; slide.values[0x1A0u] = 32.0f;
+            const galaxy::LayoutFitRule window{"MiiSelect","MiiWindow",galaxy::kFitSlide,660.0f};
+            check(galaxy::apply_rmge01_layout_fit(slide,0x100,window,ultrawide) &&
+                  slide.values.at(0x190u) == 660.0f + ultrawide.horizontal_margin_delta && slide.values.at(0x1A0u) == 32.0f,
+                  "a pane slid off the 16:9 canvas also leaves the wider canvas");
+            slide.values[0x12Cu] = 0.0f; slide.values[0x190u] = 0.0f;
+            check(!galaxy::apply_rmge01_layout_fit(slide,0x100,window,ultrawide) && slide.values.at(0x190u) == 0.0f,
+                  "a pane at rest keeps its position");
         }
         for (unsigned i = 0; i < 12u; ++i) fixture.values[0x384u+i*4u]=static_cast<float>(i);
         fixture.values[0x390u]=12.0f-extent.horizontal_margin_delta;

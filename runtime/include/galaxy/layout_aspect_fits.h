@@ -21,13 +21,14 @@ enum LayoutFit : std::uint16_t {
     kFitFrame = 1u << 7,   // grow a window so its border keeps its edge distance
     kFitExtendUp = 1u << 8,    // grow a bar upward to the canvas top
     kFitExtendDown = 1u << 9,  // grow a bar downward to the canvas bottom
+    kFitSlide = 1u << 10,      // slide proportionally further; width = 16:9 off-screen x
 };
 
 struct LayoutFitRule {
     std::string_view layout;  // LayoutManager name
     std::string_view pane;
     std::uint16_t fit;
-    float width = 0.0f;       // kFitFrame: authored window size
+    float width = 0.0f;       // kFitFrame: authored window size; kFitSlide: off-screen x
     float height = 0.0f;
 };
 
@@ -73,6 +74,12 @@ inline constexpr LayoutFitRule kRmge01LayoutFits[] = {
     {"MapTitle", "TextTitle", kFitLeft | kFitTop},
     {"MapTitle", "Guidance", kFitRight | kFitTop},
     {"MiiSelect", "BG", kFitWidth | kFitHeight},
+    {"MiiSelect", "MiiWindow", kFitSlide, 660.0f},
+    {"MiiSelect", "Text", kFitSlide, 660.0f},
+    {"MiiSelect", "MiiPosition", kFitSlide, 660.0f},
+    {"MiiSelect", "Arrow", kFitSlide, 660.0f},
+    {"MiiSelect", "MiiGroupA", kFitSlide, 608.0f},
+    {"MiiSelect", "MiiGroupB", kFitSlide, 608.0f},
     {"P2Manual", "BG", kFitWidth | kFitHeight},
     {"PauseMenu", "BG", kFitWidth | kFitHeight},
     {"PauseMenu", "PicStagebase", kFitWidth | kFitExtendUp},
@@ -185,8 +192,11 @@ inline bool apply_rmge01_layout_fit(const Access& access, std::uint32_t pane,
             access.f32(pane + 0x50u, rule.height + 2.0f * extent.vertical_margin_delta / sy);
         }
     }
-    const float x = (rule.fit & kFitLeft) ? -extent.horizontal_margin_delta
-                  : (rule.fit & kFitRight) ? extent.horizontal_margin_delta : 0.0f;
+    float x = (rule.fit & kFitLeft) ? -extent.horizontal_margin_delta
+            : (rule.fit & kFitRight) ? extent.horizontal_margin_delta : 0.0f;
+    // A pane the game slides off the 16:9 canvas (local x reaching rule.width)
+    // must also leave the wider canvas: scale its slide by the extra width.
+    if (rule.fit & kFitSlide) x += access.f32(pane + 0x2Cu) * extent.horizontal_margin_delta / rule.width;
     const float y = (rule.fit & kFitTop) ? extent.vertical_margin_delta
                   : (rule.fit & kFitBottom) ? -extent.vertical_margin_delta : 0.0f;
     if (x == 0.0f && y == 0.0f) return false;
