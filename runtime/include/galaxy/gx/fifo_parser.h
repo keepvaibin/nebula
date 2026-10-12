@@ -354,6 +354,10 @@ struct FifoParserProfile {
     std::uint64_t call_dl_cache_misses = 0;
     std::uint64_t call_dl_cache_stores = 0;
     std::uint64_t call_dl_cache_uncacheable = 0;
+    // First-sight lists: the parse that records them (nested commands
+    // included) and the cache store that prepares their replay.
+    std::uint64_t call_dl_miss_parse_us = 0;
+    std::uint64_t call_dl_store_us = 0;
     std::uint64_t call_dl_replay_command_count = 0;
     std::uint64_t call_dl_replay_command_us = 0;
     std::uint64_t call_dl_replay_prepared_run_count = 0;
@@ -678,6 +682,12 @@ private:
     std::uint64_t cache_bytes_ = 0;
     std::vector<CachedDisplayList> display_list_cache_ =
         std::vector<CachedDisplayList>(kDisplayListCacheCapacity);
+    // Slot choice for a new entry without scanning the cache: invalidated
+    // slots, then never-used ones (index >= next_unused), then the least
+    // recently used of a rotating sample.
+    std::vector<std::uint32_t> display_list_free_slots_{};
+    std::size_t display_list_next_unused_ = 0;
+    std::size_t display_list_victim_cursor_ = 0;
     std::unordered_map<
         DisplayListCacheKey,
         std::vector<std::size_t>,

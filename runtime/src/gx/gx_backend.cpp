@@ -8729,6 +8729,10 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
                   << frame_fifo_profile_.call_dl_cache_stores
                   << " fifo-call-dl-cache-uncacheable="
                   << frame_fifo_profile_.call_dl_cache_uncacheable
+                  << " fifo-call-dl-miss-parse-us="
+                  << frame_fifo_profile_.call_dl_miss_parse_us
+                  << " fifo-call-dl-store-us="
+                  << frame_fifo_profile_.call_dl_store_us
                   << " fifo-call-dl-replay-command-count="
                   << frame_fifo_profile_.call_dl_replay_command_count
                   << " fifo-call-dl-replay-command-us="

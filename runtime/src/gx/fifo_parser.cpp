@@ -914,6 +914,7 @@ void FifoParser::invalidate_display_list_cache_index(std::size_t index) {
 
     erase_display_list_cache_index_from_maps(index);
     display_list_cache_[index].valid = false;
+    display_list_free_slots_.push_back(static_cast<std::uint32_t>(index));
     if (last_display_list_cache_index_ == index) {
         last_display_list_cache_index_ = static_cast<std::size_t>(-1);
     }
@@ -1076,6 +1077,9 @@ void FifoParser::clear_display_list_cache() {
     }
     display_list_cache_map_.clear();
     display_list_cache_page_map_.clear();
+    display_list_free_slots_.clear();
+    display_list_next_unused_ = 0;
+    display_list_victim_cursor_ = 0;
     cache_bytes_ = 0u;
     last_display_list_cache_index_ = static_cast<std::size_t>(-1);
 }
@@ -1089,15 +1093,34 @@ void FifoParser::store_cached_display_list(
         return;
     }
 
+    // A scene's first frame stores hundreds of lists; an exact LRU scan of
+    // every slot per store made that quadratic.
     CachedDisplayList* target = nullptr;
-    for (auto& cached : display_list_cache_) {
-        if (!cached.valid) {
-            target = &cached;
-            break;
+    while (target == nullptr && !display_list_free_slots_.empty()) {
+        const std::size_t index = display_list_free_slots_.back();
+        display_list_free_slots_.pop_back();
+        if (index < display_list_cache_.size() && !display_list_cache_[index].valid) {
+            target = &display_list_cache_[index];
         }
-        if (target == nullptr || cached.last_used < target->last_used) {
-            target = &cached;
+    }
+    if (target == nullptr && display_list_next_unused_ < display_list_cache_.size()) {
+        target = &display_list_cache_[display_list_next_unused_++];
+    }
+    if (target == nullptr && !display_list_cache_.empty()) {
+        constexpr std::size_t kVictimSample = 32u;
+        const std::size_t slots = display_list_cache_.size();
+        for (std::size_t i = 0; i < kVictimSample && i < slots; ++i) {
+            CachedDisplayList& cached =
+                display_list_cache_[(display_list_victim_cursor_ + i) % slots];
+            if (!cached.valid) {
+                target = &cached;
+                break;
+            }
+            if (target == nullptr || cached.last_used < target->last_used) {
+                target = &cached;
+            }
         }
+        display_list_victim_cursor_ = (display_list_victim_cursor_ + kVictimSample) % slots;
     }
     if (target == nullptr) {
         return;
@@ -2222,17 +2245,33 @@ void FifoParser::run_window(
             DisplayListRecording* const child_recording = depth == 0
                 ? (dl_recording.cacheable ? &dl_recording : nullptr)
                 : recording;
+            const auto miss_parse_start = profile != nullptr && depth == 0
+                ? std::chrono::steady_clock::now()
+                : std::chrono::steady_clock::time_point{};
             run_window(
                 dl_cursor, memory, sink, state, depth + 1, child_recording);
+            if (profile != nullptr && depth == 0) {
+                profile->call_dl_miss_parse_us += static_cast<std::uint64_t>(
+                    std::chrono::duration_cast<std::chrono::microseconds>(
+                        std::chrono::steady_clock::now() - miss_parse_start).count());
+            }
             if (depth == 0) {
                 if (dl_recording.cacheable) {
                     if (profile != nullptr) {
                         ++profile->call_dl_cache_stores;
                     }
+                    const auto store_start = profile != nullptr
+                        ? std::chrono::steady_clock::now()
+                        : std::chrono::steady_clock::time_point{};
                     store_cached_display_list(
                         guest_addr,
                         byte_size,
                         std::move(dl_recording));
+                    if (profile != nullptr) {
+                        profile->call_dl_store_us += static_cast<std::uint64_t>(
+                            std::chrono::duration_cast<std::chrono::microseconds>(
+                                std::chrono::steady_clock::now() - store_start).count());
+                    }
                 } else if (profile != nullptr) {
                     ++profile->call_dl_cache_uncacheable;
                 }
