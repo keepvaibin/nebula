@@ -2831,6 +2831,26 @@ std::int16_t apply_dsp_lane_gain(std::int16_t sample, double gain) {
     return static_cast<std::int16_t>(clamped);
 }
 
+// Little-endian 16-bit stereo: the first ai_dma_timing::kConcealRampFrames
+// frames rise linearly from silence.
+void fade_in_pcm16_le_stereo(std::span<std::byte> pcm) noexcept {
+    const std::size_t frames = pcm.size() / 4u;
+    const std::size_t ramp =
+        std::min<std::size_t>(frames, ai_dma_timing::kConcealRampFrames);
+    constexpr auto kSteps =
+        static_cast<std::int32_t>(ai_dma_timing::kConcealRampFrames);
+    for (std::size_t i = 0; i < ramp * 2u; ++i) {
+        std::byte* sample = pcm.data() + i * 2u;
+        const auto value = static_cast<std::int16_t>(
+            std::to_integer<std::uint16_t>(sample[0]) |
+            (std::to_integer<std::uint16_t>(sample[1]) << 8));
+        const auto scaled = static_cast<std::uint16_t>(static_cast<std::int16_t>(
+            value * static_cast<std::int32_t>(i / 2u) / kSteps));
+        sample[0] = static_cast<std::byte>(scaled & 0xFFu);
+        sample[1] = static_cast<std::byte>(scaled >> 8);
+    }
+}
+
 class AudioWavDump {
 public:
     ~AudioWavDump() {
@@ -5252,6 +5272,11 @@ private:
         const std::uint32_t buffer_sample_rate = buffer->sample_rate;
         const std::uint64_t buffer_measurement_generation =
             buffer->measurement_generation;
+        if (resume_fade_pending_.exchange(false, std::memory_order_acq_rel)) {
+            // The voice ran dry and stopped on silence: the first buffer of the
+            // restart rises from silence over 4 ms instead of a step.
+            fade_in_pcm16_le_stereo(buffer->bytes);
+        }
         wav_dump_.append(
             std::span<const std::byte>(buffer->bytes.data(), buffer_size),
             buffer_sample_rate);
@@ -5594,6 +5619,7 @@ private:
         if (empty_active_.exchange(true, std::memory_order_acq_rel)) {
             return true;
         }
+        resume_fade_pending_.store(true, std::memory_order_release);
 
         last_empty_since_us_.store(
             observed_empty_us != 0u
@@ -5898,6 +5924,7 @@ private:
     std::uint32_t empty_recovery_start_log_count_{};
     bool source_start_failure_logged_{};
     std::atomic_bool empty_active_{false};
+    std::atomic_bool resume_fade_pending_{false};
     std::atomic_bool shutting_down_{false};
     std::atomic_bool strict_failure_{false};
     bool submit_failure_logged_{};
@@ -15219,9 +15246,54 @@ void GuestAddressSpace::service_ai_dma(
             now_ticks < ai_dma_next_completion_ticks_) {
             break;
         }
+        // Hold a boundary the game has not answered yet instead of replaying
+        // the shadow or starving its next callback (ai_dma_timing.h).
+        const bool source_ready = !ai_dma_shadow_fresh_ ||
+            ai_dma_source_ready_probe_ == nullptr ||
+            ai_dma_source_ready_probe_(ai_dma_source_ready_user_);
+        const ai_dma_timing::StaleAiCompletion action =
+            ai_dma_timing::stale_ai_completion_action(
+                ai_dma_shadow_fresh_, source_ready, ai_dma_feed_stalled_,
+                ai_dma_hold_since_ticks_, now_ticks,
+                ai_dma_last_duration_ticks_);
+        if (action == ai_dma_timing::StaleAiCompletion::Hold) {
+            const bool started = ai_dma_hold_since_ticks_ == 0u;
+            if (started) {
+                ai_dma_hold_since_ticks_ = now_ticks;
+                ++ai_dma_holds_;
+            }
+            // Waiting for the DSP ring: check again shortly. Waiting for
+            // AID_LEN: the write republishes the original (due) completion.
+            const std::uint64_t recheck = ai_dma_shadow_fresh_
+                ? now_ticks + std::max<std::uint64_t>(
+                      ai_dma_last_duration_ticks_ /
+                          ai_dma_timing::kAiSourceRecheckDivisor, 1u)
+                : 0u;
+            if (started || recheck != ai_dma_hold_recheck_ticks_) {
+                ai_dma_hold_recheck_ticks_ = recheck;
+                notify_ai_dma_deadline_changed();
+            }
+            break;
+        }
+        if (ai_dma_hold_since_ticks_ != 0u) {
+            ai_dma_hold_max_ticks_ = std::max(
+                ai_dma_hold_max_ticks_, now_ticks - ai_dma_hold_since_ticks_);
+            if (now_ticks >= ai_dma_timing::stale_ai_hold_release_ticks(
+                                 ai_dma_hold_since_ticks_,
+                                 ai_dma_last_duration_ticks_)) {
+                ++ai_dma_hold_timeouts_;
+            }
+            ai_dma_hold_since_ticks_ = 0u;
+            ai_dma_hold_recheck_ticks_ = 0u;
+        }
+        if (action == ai_dma_timing::StaleAiCompletion::LatchConcealed) {
+            ai_dma_feed_stalled_ = true;
+            ai_dma_latch_stale_ = true;
+        }
         const std::uint64_t completion_ticks = ai_dma_next_completion_ticks_;
         ai_dma_next_completion_ticks_ = 0;
         latch_ai_dma_transfer(completion_ticks);
+        ai_dma_latch_stale_ = false;
         raise_ai_dma_interrupt(completion_ticks);
         ++caught_up;
         if (stop_at_interrupt && ai_dma_interrupt_pending()) {
@@ -28400,6 +28472,10 @@ std::uint64_t GuestAddressSpace::ai_dma_duration_ticks(
 void GuestAddressSpace::write_ai_dma_len(std::uint16_t value) {
     ai_dma_shadow_address_ = ai_dma_raw_address();
     ai_dma_shadow_blocks_ = static_cast<std::uint16_t>(value & 0x7FFFu);
+    // AIInitDMA writes AID_LEN last: the shadow now names the game's next
+    // buffer, which releases a held completion (service_ai_dma).
+    ai_dma_shadow_fresh_ = true;
+    ai_dma_feed_stalled_ = false;
 
     const bool playing = (value & 0x8000u) != 0;
     if (!playing) {
@@ -28411,6 +28487,9 @@ void GuestAddressSpace::write_ai_dma_len(std::uint16_t value) {
         if (trace_ai_dma_timing() && ai_dma_playing_) {
             std::cout << "[ai] DMA stopped\n";
         }
+        ai_dma_hold_since_ticks_ = 0u;
+        ai_dma_hold_recheck_ticks_ = 0u;
+        ai_dma_latch_stale_ = false;
         ai_dma_playing_ = false;
         ai_dma_active_address_ = 0;
         ai_dma_active_blocks_ = 0;
@@ -28424,6 +28503,11 @@ void GuestAddressSpace::write_ai_dma_len(std::uint16_t value) {
     }
 
     if (ai_dma_playing_) {
+        if (ai_dma_hold_since_ticks_ != 0u) {
+            // The held completion is due again (its original grid tick).
+            ai_dma_hold_recheck_ticks_ = 0u;
+            notify_ai_dma_deadline_changed();
+        }
         return;
     }
 
@@ -28481,6 +28565,7 @@ bool GuestAddressSpace::latch_ai_dma_transfer(std::uint64_t now_ticks) {
 
     ai_dma_active_address_ = ai_dma_shadow_address_;
     ai_dma_active_blocks_ = ai_dma_shadow_blocks_;
+    ai_dma_shadow_fresh_ = false;
     ai_dma_active_sample_rate_ = ai_dma_sample_rate();
     ai_dma_active_start_ticks_ = now_ticks;
     ai_dma_last_duration_ticks_ = ai_dma_duration_ticks(
@@ -28566,7 +28651,39 @@ void GuestAddressSpace::submit_ai_dma_audio(
         throw std::runtime_error(message.str());
     }
 
-    const std::span<const std::byte> pcm_source(source, byte_count);
+    std::span<const std::byte> pcm_source(source, byte_count);
+    if (ai_dma_latch_stale_ || ai_dma_output_concealed_) {
+        // A block the game did not refill plays as a fade from the last output
+        // sample to silence; the next refilled block fades back in.
+        ai_dma_conceal_buffer_.resize(byte_count);
+        std::byte* const out = ai_dma_conceal_buffer_.data();
+        if (ai_dma_latch_stale_) {
+            ai_dma_timing::write_conceal_fade_out(
+                out, byte_count, ai_dma_last_left_, ai_dma_last_right_);
+            ++ai_dma_concealed_blocks_;
+            ai_dma_output_concealed_ = true;
+        } else {
+            std::memcpy(out, source, byte_count);
+            ai_dma_timing::apply_conceal_fade_in(out, byte_count);
+            ai_dma_output_concealed_ = false;
+        }
+        ai_dma_latch_stale_ = false;
+        pcm_source = std::span<const std::byte>(out, byte_count);
+    }
+    static const bool trace_source = read_env_flag("GALAXY_TRACE_AI_SOURCE");
+    if (trace_source && byte_count >= 8u) {
+        const bool flat = std::memcmp(pcm_source.data(), pcm_source.data() + 4u,
+                                      byte_count - 4u) == 0;
+        std::cerr << "[ai-latch] submit=" << ai_audio_submit_count_
+                  << " addr=0x" << std::hex << address << std::dec
+                  << " start=" << ai_dma_active_start_ticks_
+                  << " flat=" << (flat ? 1 : 0) << '\n';
+    }
+    if (byte_count >= 4u) {
+        const std::byte* const last = pcm_source.data() + (byte_count & ~3u) - 4u;
+        ai_dma_last_left_ = ai_dma_timing::load_be16(last);
+        ai_dma_last_right_ = ai_dma_timing::load_be16(last + 2u);
+    }
     const bool trace_pcm = read_env_flag("GALAXY_TRACE_AUDIO_PCM");
     const bool analyze_pcm = galaxy::audio::should_analyze_ai_pcm(
         ai_pcm_identity_tracking_enabled_, trace_pcm,
