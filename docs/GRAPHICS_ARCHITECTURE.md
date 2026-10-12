@@ -167,6 +167,34 @@ alpha-cutout bugs.
   machinery (`GXDrawDone` / `GXSetDrawSync` waiters). Possibly a boot-progress
   fix, not just graphics — see HANDOFF_TITLE_SCREEN.md's GameSystem pump stall.
 
+## Presentation chain and future upscalers, frame generation, ray tracing
+
+Present runs `PostProcessor` (`post_process.{h,cpp,hlsl}`) on the selected
+XFB: SMAA 1x at game resolution, then FSR 1 EASU or a footprint box resample
+to the window, then RCAS. Settings apply live (launcher config.ini, overlay
+GRAPHICS page). Effect copies up to 320x228 stay at native size
+(`copy_efb_to_texture`), so bloom, depth of field and shadow captures keep the
+game's own blur footprints at any internal scale.
+
+What a temporal upscaler (DLSS SR, FSR 2/3, XeSS) or frame generation needs,
+and where it comes from here:
+
+| Input | Status |
+|---|---|
+| Scene color at internal resolution | EFB color, `640x528 x efb_scale` |
+| Depth | EFB depth (D24S8, reversed) |
+| HUD-free image | Not separated today: the HUD is drawn into the same EFB before the XFB copy. Split point = first orthographic (XF projection type) draw after perspective draws in a frame; upscale the EFB there into an output-size target and draw the rest at output size. |
+| Sub-pixel jitter | To add: Halton(2,3) clip-space offset on perspective draws only; reset on scene cuts (XFB serial gaps). |
+| Motion vectors | To add: previous transform per draw, matched by draw signature (display-list address, vertex array bases, position-matrix slot); camera-only reprojection from depth as fallback. |
+| Latency markers (Reflex, FG pacing) | `frame_timeline` already records simulate / submit / render / present boundaries; map them onto Streamline markers. |
+
+Capability detection exists (`RenderFeatureCaps`: DXR tier, Streamline,
+Reflex, DLSS SR/FG; overlay CAPS page). DXR: the decoded-vertex cache gives
+stable vertex buffers per cached packet run, so static geometry can feed
+bottom-level acceleration structures built once per scene, with per-frame
+refits for skinned draws; first targets are RT shadows and AO composited
+before the HUD split point.
+
 ## Migration plan (the triangle never breaks)
 
 Each step ends with `/W4 /WX` clean and the current boot output still

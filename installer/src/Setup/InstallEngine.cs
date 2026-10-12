@@ -63,12 +63,12 @@ namespace Nebula.Setup
         };
 
         /// <summary>
-        /// The native ISA the embedded NebulaRuntime.exe and the embedded
-        /// galaxy_ppc_float / galaxy_softfloat / galaxy_dsp_alu libraries were
-        /// compiled for. build-release records CMake's own effective-target line,
-        /// so this is the value that reached the compiler and not merely the one
-        /// that was requested. Packages produced before that record existed were
-        /// always SSE2, which is the safe default here.
+        /// The native ISA of the NebulaRuntime.exe and galaxy_ppc_float /
+        /// galaxy_softfloat / galaxy_dsp_alu libraries this install uses.
+        /// build-release records CMake's own effective-target line, so the value
+        /// is what reached the compiler. A "SSE2+AVX2" package carries both
+        /// builds (AVX2 under "avx2/") and installs the AVX2 one when this CPU
+        /// exposes AVX2. Packages produced before the record existed were SSE2.
         /// </summary>
         public static string RuntimeNativeIsa
         {
@@ -79,11 +79,21 @@ namespace Nebula.Setup
                     string value = "SSE2";
                     try { value = Payload.ReadText("runtime-isa.txt").Trim().ToUpperInvariant(); }
                     catch (Exception) { /* Pre-record packages are SSE2. */ }
-                    runtimeNativeIsa = value == "AVX2" ? "AVX2" : "SSE2";
+                    dualRuntime = value == "SSE2+AVX2";
+                    runtimeNativeIsa = dualRuntime ? (HostSupportsAvx2() ? "AVX2" : "SSE2")
+                        : value == "AVX2" ? "AVX2" : "SSE2";
                 }
                 return runtimeNativeIsa;
             }
         }
+
+        /// <summary>Payload name of a runtime file for the selected ISA.</summary>
+        private static string RuntimePayload(string name)
+        {
+            return RuntimeNativeIsa == "AVX2" && dualRuntime ? "avx2/" + name : name;
+        }
+
+        private static bool dualRuntime;
 
         private static string runtimeNativeIsa;
 
@@ -298,7 +308,7 @@ namespace Nebula.Setup
                     current.CopyFiles(app, ModuleFiles);
                     foreach (var dll in current.RuntimeDllNames()) current.CopyFiles(app, dll);
                     string patchLibraries = Path.Combine(staging, "runtime-libs");
-                    foreach (var lib in RuntimeLibraries) Payload.Extract(lib, Path.Combine(patchLibraries, lib));
+                    foreach (var lib in RuntimeLibraries) Payload.Extract(RuntimePayload(lib), Path.Combine(patchLibraries, lib));
                     try
                     {
                     bool linked = RelinkCache.Update(current.Directory, app, patchLibraries, toolchain.Id,
@@ -453,7 +463,7 @@ namespace Nebula.Setup
             var env = toolchain.BuildEnvironment();
             int jobs = request.CompileJobs > 0 ? request.CompileJobs : DefaultCompileJobs();
             string libs = Path.Combine(staging, "runtime-libs");
-            foreach (var lib in RuntimeLibraries) Payload.Extract(lib, Path.Combine(libs, lib));
+            foreach (var lib in RuntimeLibraries) Payload.Extract(RuntimePayload(lib), Path.Combine(libs, lib));
             Func<string, string> cmakePath = delegate(string path) { return path.Replace('\\', '/'); };
 
             Stage(0.30, 0.64, "Compiling the game (" + jobs + " at a time)");
@@ -530,8 +540,10 @@ namespace Nebula.Setup
             }
             if (!File.Exists(Path.Combine(app, "vcruntime140.dll")) && current != null)
                 foreach (var dll in current.RuntimeDllNames()) current.CopyFiles(app, dll);
-            foreach (var name in new[] { "NebulaRuntime.exe", "Nebula.exe", "runtime-env.json", "LICENSE", "THIRD-PARTY-NOTICES.md", "README.md", "nebula-recomp.exe", "runtime-isa.txt" })
+            Payload.Extract(RuntimePayload("NebulaRuntime.exe"), Path.Combine(app, "NebulaRuntime.exe"));
+            foreach (var name in new[] { "Nebula.exe", "runtime-env.json", "LICENSE", "THIRD-PARTY-NOTICES.md", "README.md", "nebula-recomp.exe" })
                 Payload.Extract(name, Path.Combine(app, name));
+            File.WriteAllText(Path.Combine(app, "runtime-isa.txt"), RuntimeNativeIsa);
 
             var files = new Dictionary<string, object>();
             foreach (var path in Directory.GetFiles(app)) files[Path.GetFileName(path)] = FileUtil.Sha256File(path);

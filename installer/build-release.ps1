@@ -37,7 +37,11 @@ param(
     # refuses to install a package whose runtime needs instruction sets this PC
     # lacks, instead of installing a build that faults with an illegal
     # instruction later. Pass -NativeIsa SSE2 for a portable package.
-    [ValidateSet('AUTO', 'SSE2', 'AVX2')][string]$NativeIsa = 'SSE2'
+    #
+    # BOTH (the default) embeds an SSE2 and an AVX2 build; Setup installs the
+    # AVX2 one on CPUs that expose AVX2, so those keep full speed while older
+    # CPUs still install.
+    [ValidateSet('AUTO', 'SSE2', 'AVX2', 'BOTH')][string]$NativeIsa = 'BOTH'
 )
 $ErrorActionPreference = 'Stop'
 $installer = Split-Path -Parent $PSCommandPath
@@ -95,32 +99,39 @@ try {
     $recomp = Join-Path $env:CARGO_TARGET_DIR 'release\nebula-recomp.exe'
 
     # 3. Prebuilt runtime; the DSP is loaded from RMGE01_dsp.dll, which Setup compiles.
-    $rt = Join-Path $work 'runtime'
-    # Capture the configure log so the *effective* ISA that CMake selected can be
-    # recorded. AUTO resolves against the build host, so the requested value is
-    # not the shipped requirement.
-    $configureLog = & cmake @('-S', $src, '-B', $rt, '-G', 'Ninja', '-DCMAKE_BUILD_TYPE=Release', "-DGALAXY_NATIVE_ISA=$NativeIsa", '-DNEBULA_DSP_MODULE=ON', "-DNEBULA_SOURCE_REVISION=$resolved", "-DNEBULA_SOURCE_REVISION_KIND=$type", "-DNEBULA_SOURCE_GIT_TREE=$gitTree", "-DNEBULA_SOURCE_TREE_SHA256=$treeHash", '-DNEBULA_SOURCE_DIRTY=0') 2>&1
-    $configureLog | ForEach-Object { Write-Host $_ }
-    if ($LASTEXITCODE -ne 0) { throw "cmake configure failed with exit code $LASTEXITCODE" }
-    $effectiveIsa = $null
-    foreach ($line in $configureLog) {
-        if ("$line" -match 'Galaxy native CPU target:\s*([A-Za-z0-9]+)') { $effectiveIsa = $Matches[1].ToUpperInvariant() }
-    }
-    if ($effectiveIsa -ne 'SSE2' -and $effectiveIsa -ne 'AVX2') {
-        # Never guess: an unknown effective ISA would let Setup check the wrong
-        # requirement and hand the user a build that faults on first execution.
-        throw "Could not determine the effective GALAXY_NATIVE_ISA from the CMake configure output."
-    }
-    Write-Host "Prebuilt runtime CPU target: $effectiveIsa (requested $NativeIsa)"
-    $runtimeIsaPath = Join-Path $work 'runtime-isa.txt'
-    [IO.File]::WriteAllText($runtimeIsaPath, $effectiveIsa, (New-Object Text.UTF8Encoding $false))
-    Invoke-Checked cmake @('--build', $rt, '--target', 'NebulaRuntime', 'galaxy_ppc_float', 'galaxy_softfloat', 'galaxy_dsp_alu')
+    # BOTH builds it twice: SSE2 under the plain resource names, AVX2 under
+    # "avx2/". Each configure log is captured so the *effective* ISA CMake
+    # selected is recorded; AUTO resolves against the build host.
     $runtimeFiles = @{}
-    foreach ($name in 'NebulaRuntime.exe', 'galaxy_ppc_float.lib', 'galaxy_softfloat.lib', 'galaxy_dsp_alu.lib') {
-        $file = Get-ChildItem -LiteralPath $rt -Recurse -File -Filter $name | Select-Object -First 1
-        if (-not $file) { throw "The runtime build produced no $name" }
-        $runtimeFiles[$name] = $file.FullName
+    $isaBuilds = if ($NativeIsa -eq 'BOTH') { @('SSE2', 'AVX2') } else { @($NativeIsa) }
+    $effectiveIsas = @()
+    foreach ($isa in $isaBuilds) {
+        $rt = Join-Path $work ('runtime-' + $isa.ToLowerInvariant())
+        $configureLog = & cmake @('-S', $src, '-B', $rt, '-G', 'Ninja', '-DCMAKE_BUILD_TYPE=Release', "-DGALAXY_NATIVE_ISA=$isa", '-DNEBULA_DSP_MODULE=ON', "-DNEBULA_SOURCE_REVISION=$resolved", "-DNEBULA_SOURCE_REVISION_KIND=$type", "-DNEBULA_SOURCE_GIT_TREE=$gitTree", "-DNEBULA_SOURCE_TREE_SHA256=$treeHash", '-DNEBULA_SOURCE_DIRTY=0') 2>&1
+        $configureLog | ForEach-Object { Write-Host $_ }
+        if ($LASTEXITCODE -ne 0) { throw "cmake configure failed with exit code $LASTEXITCODE" }
+        $effectiveIsa = $null
+        foreach ($line in $configureLog) {
+            if ("$line" -match 'Galaxy native CPU target:\s*([A-Za-z0-9]+)') { $effectiveIsa = $Matches[1].ToUpperInvariant() }
+        }
+        if ($effectiveIsa -ne 'SSE2' -and $effectiveIsa -ne 'AVX2') {
+            # Never guess: an unknown effective ISA would let Setup check the wrong
+            # requirement and hand the user a build that faults on first execution.
+            throw "Could not determine the effective GALAXY_NATIVE_ISA from the CMake configure output."
+        }
+        if ($NativeIsa -eq 'BOTH' -and $effectiveIsa -ne $isa) { throw "The $isa runtime configured as $effectiveIsa." }
+        Write-Host "Prebuilt runtime CPU target: $effectiveIsa (requested $isa)"
+        $effectiveIsas += $effectiveIsa
+        Invoke-Checked cmake @('--build', $rt, '--target', 'NebulaRuntime', 'galaxy_ppc_float', 'galaxy_softfloat', 'galaxy_dsp_alu')
+        $prefix = if ($NativeIsa -eq 'BOTH' -and $isa -eq 'AVX2') { 'avx2/' } else { '' }
+        foreach ($name in 'NebulaRuntime.exe', 'galaxy_ppc_float.lib', 'galaxy_softfloat.lib', 'galaxy_dsp_alu.lib') {
+            $file = Get-ChildItem -LiteralPath $rt -Recurse -File -Filter $name | Select-Object -First 1
+            if (-not $file) { throw "The runtime build produced no $name" }
+            $runtimeFiles[$prefix + $name] = $file.FullName
+        }
     }
+    $runtimeIsaPath = Join-Path $work 'runtime-isa.txt'
+    [IO.File]::WriteAllText($runtimeIsaPath, ($effectiveIsas -join '+'), (New-Object Text.UTF8Encoding $false))
 
     # 4. Build information and C# executables.
     $publicKey = (Get-Content -LiteralPath (Join-Path $src 'installer\release-public-key.xml') -Raw).Trim()
@@ -200,7 +211,7 @@ namespace Nebula
         setupSha256 = $setupHash; nebulaRecompSha256 = (Get-FileHash -LiteralPath $recomp -Algorithm SHA256).Hash.ToLowerInvariant()
         launcherSha256 = (Get-FileHash -LiteralPath $launcher -Algorithm SHA256).Hash.ToLowerInvariant()
         sourceTreeSha256 = $treeHash; sourceZip = (Split-Path -Leaf $zip); builtUtc = [DateTime]::UtcNow.ToString('o')
-        runtimeNativeIsa = $effectiveIsa; requestedNativeIsa = $NativeIsa
+        runtimeNativeIsa = ($effectiveIsas -join '+'); requestedNativeIsa = $NativeIsa
         rustc = (& (Join-Path (Split-Path $cargo) 'rustc.exe') --version) 2>$null
     }
     [IO.File]::WriteAllText((Join-Path $OutputDirectory 'build-info.json'), ($info | ConvertTo-Json), (New-Object Text.UTF8Encoding $false))
