@@ -579,6 +579,22 @@ pub fn translate_module_with_options(
             exact_fpu_functions.insert(function.address);
         }
     }
+    // Translated leaves with no checkpoint of their own: linked calls to them
+    // need no call-return checkpoint. Host substitutions are not included.
+    let mut checkpoint_free_leaves = BTreeSet::new();
+    for function in &ranges {
+        let bytes = function_bytes(&loaded.dol.sections, &loaded.dol_bytes, *function).ok_or(
+            TranslationError::FunctionOutsideText {
+                address: function.address,
+            },
+        )?;
+        if native_function_body(function.address).is_none()
+            && native_pure_helper(function.address).is_none()
+            && is_checkpoint_free_leaf(function.address, bytes)
+        {
+            checkpoint_free_leaves.insert(function.address);
+        }
+    }
     let call_return_entries =
         call_return_continuations(&loaded.dol.sections, &loaded.dol_bytes, &ranges);
     let device_pointer_globals =
@@ -669,6 +685,7 @@ pub fn translate_module_with_options(
                     &callable_entries,
                     &exact_fpu_functions,
                     &resident_leaf_contracts,
+                    &checkpoint_free_leaves,
                 )? {
                     Some(resident) => resident,
                     None => apply_residency_to_body(
@@ -680,6 +697,7 @@ pub fn translate_module_with_options(
                             call_return_entries,
                             &callable_entries,
                             &exact_fpu_functions,
+                            &checkpoint_free_leaves,
                             &device_pointer_globals,
                             &options,
                         )?,
@@ -698,6 +716,7 @@ pub fn translate_module_with_options(
                     call_return_entries,
                     &callable_entries,
                     &exact_fpu_functions,
+                    &checkpoint_free_leaves,
                     &device_pointer_globals,
                     &options,
                 )?,
@@ -1243,6 +1262,326 @@ fn saved_context_continuations(
     continuations
 }
 
+/// A function whose translated body has no checkpoint, callback or transfer
+/// point: every branch is a forward branch inside the function or a return,
+/// and there is no call, indirect branch, system call, trap, rfi, mtmsr, or SPR
+/// write other than XER, LR, CTR and the GQRs. A linked call to it returns
+/// with no event observed or raised, so the call needs no call-return
+/// checkpoint.
+fn is_checkpoint_free_leaf(address: u32, bytes: &[u8]) -> bool {
+    let end = address.wrapping_add(bytes.len() as u32);
+    !bytes.is_empty()
+        && bytes.chunks_exact(4).enumerate().all(|(index, chunk)| {
+            let pc = address + index as u32 * 4;
+            let word = u32::from_be_bytes(chunk.try_into().expect("four-byte instruction"));
+            let link = word & 1 != 0;
+            match Ins::new(word, Extensions::gekko_broadway()).op {
+                Opcode::B => {
+                    let target = branch_target(pc, word);
+                    !link && target > pc && target < end
+                }
+                Opcode::Bc => {
+                    let target = conditional_branch_target(pc, word);
+                    !link && target > pc && target < end
+                }
+                Opcode::Bclr => !link,
+                Opcode::Mtspr => matches!(spr_number(word), 1 | 8 | 9 | 912..=919),
+                Opcode::Bcctr
+                | Opcode::Sc
+                | Opcode::Rfi
+                | Opcode::Tw
+                | Opcode::Twi
+                | Opcode::Mtmsr
+                | Opcode::Mtsr
+                | Opcode::Mtsrin
+                | Opcode::Illegal => false,
+                _ => true,
+            }
+        })
+}
+
+/// How one instruction treats CR field `field` for `cr_field_dead_from`.
+enum CrFieldStep {
+    /// Reads the field, or cannot be followed statically.
+    Live,
+    /// Writes the whole field before reading it.
+    Kill,
+    /// Leaves the function; the field is dead there iff `dead`.
+    Exit { dead: bool },
+    Next,
+    Jump(u32),
+    /// Falls through and may also branch to the target.
+    Fork(u32),
+    /// Falls through, and a taken exit leaves the field dead (a conditional
+    /// return or tail branch).
+    NextAfterDeadExit,
+}
+
+/// CR fields the PPC ABI leaves undefined after a call: CR0 and CR5-CR7. CR1
+/// carries the varargs float flag into the callee and CR2-CR4 are preserved.
+fn cr_field_dead_across_call(field: u32) -> bool {
+    matches!(field, 0 | 5 | 6 | 7)
+}
+
+/// CR fields undefined at a function return: everything but CR2-CR4.
+fn cr_field_dead_at_return(field: u32) -> bool {
+    !matches!(field, 2..=4)
+}
+
+fn cr_field_step(pc: u32, word: u32, field: u32, start: u32, end: u32) -> CrFieldStep {
+    let opcode = word >> 26;
+    let bit_in_field = |bit: u32| bit / 4 == field;
+    let crf_d = (word >> 23) & 7;
+    let link = word & 1 != 0;
+    match Ins::new(word, Extensions::gekko_broadway()).op {
+        Opcode::Cmpi | Opcode::Cmpli | Opcode::Cmp | Opcode::Cmpl => {
+            if crf_d == field { CrFieldStep::Kill } else { CrFieldStep::Next }
+        }
+        Opcode::Mcrxr => {
+            if crf_d == field { CrFieldStep::Kill } else { CrFieldStep::Next }
+        }
+        Opcode::Mtcrf => {
+            let fxm = (word >> 12) & 0xFF;
+            if fxm & (0x80 >> field) != 0 { CrFieldStep::Kill } else { CrFieldStep::Next }
+        }
+        Opcode::Mfcr => CrFieldStep::Live,
+        Opcode::Mcrf => {
+            if (word >> 18) & 7 == field {
+                CrFieldStep::Live
+            } else if crf_d == field {
+                CrFieldStep::Kill
+            } else {
+                CrFieldStep::Next
+            }
+        }
+        Opcode::Crand
+        | Opcode::Crandc
+        | Opcode::Creqv
+        | Opcode::Crnand
+        | Opcode::Crnor
+        | Opcode::Cror
+        | Opcode::Crorc
+        | Opcode::Crxor => {
+            if bit_in_field((word >> 16) & 0x1F) || bit_in_field((word >> 11) & 0x1F) {
+                CrFieldStep::Live
+            } else {
+                CrFieldStep::Next
+            }
+        }
+        // Integer record forms write CR0 from their result.
+        Opcode::Andi_ | Opcode::Andis_ | Opcode::Addic_ | Opcode::Stwcx_ => {
+            if field == 0 { CrFieldStep::Kill } else { CrFieldStep::Next }
+        }
+        Opcode::Add
+        | Opcode::Addc
+        | Opcode::Adde
+        | Opcode::Addme
+        | Opcode::Addze
+        | Opcode::Subf
+        | Opcode::Subfc
+        | Opcode::Subfe
+        | Opcode::Subfme
+        | Opcode::Subfze
+        | Opcode::Neg
+        | Opcode::Mullw
+        | Opcode::Mulhw
+        | Opcode::Mulhwu
+        | Opcode::Divw
+        | Opcode::Divwu
+        | Opcode::And
+        | Opcode::Andc
+        | Opcode::Or
+        | Opcode::Orc
+        | Opcode::Xor
+        | Opcode::Nand
+        | Opcode::Nor
+        | Opcode::Eqv
+        | Opcode::Slw
+        | Opcode::Srw
+        | Opcode::Sraw
+        | Opcode::Srawi
+        | Opcode::Cntlzw
+        | Opcode::Extsb
+        | Opcode::Extsh
+        | Opcode::Rlwinm
+        | Opcode::Rlwimi
+        | Opcode::Rlwnm => {
+            if field == 0 && link { CrFieldStep::Kill } else { CrFieldStep::Next }
+        }
+        Opcode::B => {
+            let target = branch_target(pc, word);
+            if link {
+                CrFieldStep::Exit { dead: cr_field_dead_across_call(field) }
+            } else if word & 2 == 0 && target >= start && target < end {
+                CrFieldStep::Jump(target)
+            } else {
+                CrFieldStep::Exit { dead: cr_field_dead_across_call(field) }
+            }
+        }
+        Opcode::Bc => {
+            let bo = (word >> 21) & 0x1F;
+            let bi = (word >> 16) & 0x1F;
+            if bo & 0x10 == 0 && bit_in_field(bi) {
+                return CrFieldStep::Live;
+            }
+            if link || word & 2 != 0 {
+                return CrFieldStep::Live;
+            }
+            let target = conditional_branch_target(pc, word);
+            let always = bo & 0x14 == 0x14;
+            match (target >= start && target < end, always) {
+                (true, true) => CrFieldStep::Jump(target),
+                (true, false) => CrFieldStep::Fork(target),
+                (false, true) => CrFieldStep::Exit { dead: cr_field_dead_across_call(field) },
+                (false, false) => {
+                    if cr_field_dead_across_call(field) {
+                        CrFieldStep::NextAfterDeadExit
+                    } else {
+                        CrFieldStep::Live
+                    }
+                }
+            }
+        }
+        Opcode::Bclr => {
+            let bo = (word >> 21) & 0x1F;
+            let bi = (word >> 16) & 0x1F;
+            if bo & 0x10 == 0 && bit_in_field(bi) {
+                return CrFieldStep::Live;
+            }
+            if link {
+                return CrFieldStep::Live;
+            }
+            if bo & 0x14 == 0x14 {
+                CrFieldStep::Exit { dead: cr_field_dead_at_return(field) }
+            } else if cr_field_dead_at_return(field) {
+                CrFieldStep::NextAfterDeadExit
+            } else {
+                CrFieldStep::Live
+            }
+        }
+        Opcode::Bcctr | Opcode::Sc | Opcode::Rfi | Opcode::Tw | Opcode::Twi | Opcode::Illegal => {
+            CrFieldStep::Live
+        }
+        _ if opcode == 19 => {
+            // Remaining XL forms: isync is the only other one the game uses.
+            if word == 0x4C00_012C { CrFieldStep::Next } else { CrFieldStep::Live }
+        }
+        _ => CrFieldStep::Next,
+    }
+}
+
+/// Whether CR field `field` is dead on entry to `from`: every path from there
+/// writes the whole field before it reads any of it, or leaves the function
+/// where the ABI leaves the field undefined. Any path the walk cannot follow
+/// (an indirect branch, a system call, more than 256 instructions) counts as
+/// a read.
+fn cr_field_dead_from(address: u32, bytes: &[u8], from: u32, field: u32) -> bool {
+    const BUDGET: usize = 256;
+    let end = address.wrapping_add(bytes.len() as u32);
+    let mut pending = vec![from];
+    let mut visited = BTreeSet::new();
+    while let Some(start) = pending.pop() {
+        let mut pc = start;
+        loop {
+            if !visited.insert(pc) {
+                break;
+            }
+            if visited.len() > BUDGET || pc < address || pc >= end {
+                return false;
+            }
+            let offset = (pc - address) as usize;
+            let word = u32::from_be_bytes(
+                bytes[offset..offset + 4].try_into().expect("four-byte instruction"),
+            );
+            match cr_field_step(pc, word, field, address, end) {
+                CrFieldStep::Live => return false,
+                CrFieldStep::Kill => break,
+                CrFieldStep::Exit { dead } => {
+                    if dead {
+                        break;
+                    }
+                    return false;
+                }
+                CrFieldStep::Next | CrFieldStep::NextAfterDeadExit => pc += 4,
+                CrFieldStep::Jump(target) => pc = target,
+                CrFieldStep::Fork(target) => {
+                    pending.push(target);
+                    pc += 4;
+                }
+            }
+        }
+    }
+    true
+}
+
+/// Integer compares whose CR field only feeds the conditional branch right
+/// after them: `bc` (no CTR, no link, relative) at pc + 4 tests one LT/GT/EQ
+/// bit of that field, nothing else enters the branch, and the field is dead
+/// on both of its successors. The branch then tests the operands directly and
+/// the compare writes no CR. Keyed by the branch's pc: (compare pc, the
+/// tested bit's predicate as a C++ expression).
+fn fusible_compare_branches(
+    address: u32,
+    bytes: &[u8],
+    branch_targets: &BTreeSet<u32>,
+) -> BTreeMap<u32, (u32, String)> {
+    let end = address.wrapping_add(bytes.len() as u32);
+    let words: Vec<u32> = bytes
+        .chunks_exact(4)
+        .map(|chunk| u32::from_be_bytes(chunk.try_into().expect("four-byte instruction")))
+        .collect();
+    let mut fused = BTreeMap::new();
+    for (index, pair) in words.windows(2).enumerate() {
+        let (compare, branch) = (pair[0], pair[1]);
+        let compare_pc = address + index as u32 * 4;
+        let branch_pc = compare_pc + 4;
+        let op = Ins::new(compare, Extensions::gekko_broadway()).op;
+        if !matches!(op, Opcode::Cmpi | Opcode::Cmpli | Opcode::Cmp | Opcode::Cmpl)
+            || compare & 0x0020_0000 != 0
+            || Ins::new(branch, Extensions::gekko_broadway()).op != Opcode::Bc
+            || branch & 3 != 0
+            || branch_targets.contains(&branch_pc)
+        {
+            continue;
+        }
+        let field = (compare >> 23) & 7;
+        let bo = (branch >> 21) & 0x1F;
+        let bi = (branch >> 16) & 0x1F;
+        if bo & 0x14 != 0x04 || bi / 4 != field || bi % 4 == 3 {
+            continue;
+        }
+        let target = conditional_branch_target(branch_pc, branch);
+        let taken_dead = if target >= address && target < end {
+            cr_field_dead_from(address, bytes, target, field)
+        } else {
+            cr_field_dead_across_call(field)
+        };
+        if !taken_dead || !cr_field_dead_from(address, bytes, branch_pc + 4, field) {
+            continue;
+        }
+        let ra = gpr_ra(compare);
+        let (left, right) = match op {
+            Opcode::Cmpi => (
+                format!("static_cast<std::int32_t>(context->gpr[{ra}])"),
+                format!("static_cast<std::int32_t>(0x{:08X}u)", signed_immediate(compare) as u32),
+            ),
+            Opcode::Cmp => (
+                format!("static_cast<std::int32_t>(context->gpr[{ra}])"),
+                format!("static_cast<std::int32_t>(context->gpr[{}])", gpr_rb(compare)),
+            ),
+            Opcode::Cmpli => (format!("context->gpr[{ra}]"), format!("0x{:08X}u", compare & 0xFFFF)),
+            _ => (format!("context->gpr[{ra}]"), format!("context->gpr[{}]", gpr_rb(compare))),
+        };
+        let relation = match bi % 4 {
+            0 => "<",
+            1 => ">",
+            _ => "==",
+        };
+        fused.insert(branch_pc, (compare_pc, format!("{left} {relation} {right}")));
+    }
+    fused
+}
+
 fn function_contains_rfi(bytes: &[u8]) -> bool {
     bytes.chunks_exact(4).any(|chunk| {
         let word = u32::from_be_bytes(chunk.try_into().expect("four-byte instruction"));
@@ -1635,6 +1974,7 @@ fn lower_resident_integer_direct_calls(
     callable_entries: &BTreeMap<u32, u32>,
     exact_fpu_functions: &BTreeSet<u32>,
     leaf_contracts: &BTreeMap<u32, GuestAbiContract>,
+    checkpoint_free_callees: &BTreeSet<u32>,
 ) -> Result<Option<String>, TranslationError> {
     if bytes.is_empty()
         || bytes.len() % 4 != 0
@@ -1872,7 +2212,13 @@ fn lower_resident_integer_direct_calls(
                     )?;
                 }
                 emit_resident_gpr_sync(&mut output, reload_gpr & local_gpr_mask, true)?;
-                if lean_contract.is_none() {
+                if call_return_checkpoint_needed(
+                    target,
+                    pc,
+                    Some(callable_entries),
+                    Some(exact_fpu_functions),
+                    Some(checkpoint_free_callees),
+                ) {
                     // The checkpoint can inspect or change the whole context, so
                     // linked calls do a full flush/reload even for a pure callee.
                     emit_resident_gpr_sync(&mut output, local_gpr_mask, false)?;
@@ -1973,11 +2319,13 @@ fn lower_words_for_module_with_call_return_entries_and_exact_fpu(
         call_return_entries,
         callable_entries,
         exact_fpu_functions,
+        &BTreeSet::new(),
         &BTreeMap::new(),
         &ModuleTranslationOptions::default(),
     )
 }
 
+#[allow(clippy::too_many_arguments)]
 fn lower_words_for_module_with_call_return_entries_and_exact_fpu_flat_reads(
     address: u32,
     bytes: &[u8],
@@ -1985,6 +2333,7 @@ fn lower_words_for_module_with_call_return_entries_and_exact_fpu_flat_reads(
     call_return_entries: &BTreeSet<u32>,
     callable_entries: &BTreeMap<u32, u32>,
     exact_fpu_functions: &BTreeSet<u32>,
+    checkpoint_free_callees: &BTreeSet<u32>,
     device_pointer_globals: &BTreeMap<i32, u32>,
     options: &ModuleTranslationOptions,
 ) -> Result<String, TranslationError> {
@@ -1996,6 +2345,7 @@ fn lower_words_for_module_with_call_return_entries_and_exact_fpu_flat_reads(
         LoweringConfig {
             callable_entries: Some(callable_entries),
             exact_fpu_functions: Some(exact_fpu_functions),
+            checkpoint_free_callees: Some(checkpoint_free_callees),
             device_pointer_globals: Some(device_pointer_globals),
             flat_ram_reads: options.flat_ram_reads,
             flat_ram_writes: options.flat_ram_writes,
@@ -2053,6 +2403,7 @@ fn lower_words_with_options(
         LoweringConfig {
             callable_entries,
             exact_fpu_functions,
+            checkpoint_free_callees: None,
             immediate_overrides,
             local_lane_profile: LocalLaneProfile::None,
             flat_ram_reads,
@@ -2083,6 +2434,7 @@ enum LocalLaneProfile {
 struct LoweringConfig<'a> {
     callable_entries: Option<&'a BTreeMap<u32, u32>>,
     exact_fpu_functions: Option<&'a BTreeSet<u32>>,
+    checkpoint_free_callees: Option<&'a BTreeSet<u32>>,
     immediate_overrides: Option<&'a BTreeMap<u32, PpcImmediateOverride>>,
     local_lane_profile: LocalLaneProfile,
     flat_ram_reads: bool,
@@ -2889,6 +3241,7 @@ fn lower_words_with_config(
     let LoweringConfig {
         callable_entries,
         exact_fpu_functions,
+        checkpoint_free_callees,
         immediate_overrides,
         local_lane_profile,
         flat_ram_reads,
@@ -2997,6 +3350,18 @@ fn lower_words_with_config(
     } else {
         BTreeMap::new()
     };
+    let fused_compare_branches = if local_lane_profile == LocalLaneProfile::None
+        && immediate_overrides.is_none()
+        && typed_region_gpr_mask == 0
+    {
+        fusible_compare_branches(address, bytes, &branch_targets)
+    } else {
+        BTreeMap::new()
+    };
+    let fused_compares = fused_compare_branches
+        .values()
+        .map(|(compare_pc, _)| *compare_pc)
+        .collect::<BTreeSet<_>>();
     if typed_region_gpr_mask != 0 && !wgpipe_store_runs.is_empty() {
         return Err(TranslationError::TypedRegionProof {
             address,
@@ -5085,6 +5450,13 @@ fn lower_words_with_config(
                     .map_err(|_| TranslationError::Formatting)?;
                 }
             }
+            Opcode::Cmpi | Opcode::Cmpli | Opcode::Cmp | Opcode::Cmpl
+                if fused_compares.contains(&pc) =>
+            {
+                // The next branch tests this compare's operands; the CR field
+                // is dead after it, so no CR write is needed.
+                output.push_str("    // compare fused into the next branch\n");
+            }
             Opcode::Cmpi | Opcode::Cmpli | Opcode::Cmp | Opcode::Cmpl => {
                 if word & 0x0020_0000 != 0 {
                     return Err(TranslationError::UnsupportedInstruction {
@@ -5203,9 +5575,13 @@ fn lower_words_with_config(
                         )?;
                     }
                     if link {
-                        if lean_body_call_contract(target, pc, callable_entries, exact_fpu_functions)
-                            .is_none()
-                        {
+                        if call_return_checkpoint_needed(
+                            target,
+                            pc,
+                            callable_entries,
+                            exact_fpu_functions,
+                            checkpoint_free_callees,
+                        ) {
                             emit_call_return_checkpoint(&mut output, pc)?;
                         }
                     } else {
@@ -5230,7 +5606,11 @@ fn lower_words_with_config(
                     let bo = (word >> 21) & 0x1F;
                     let bi = (word >> 16) & 0x1F;
                     let unconditional = branch_is_unconditional(bo);
-                    let condition = emit_branch_condition(&mut output, bo, bi)?;
+                    let condition = match fused_compare_branches.get(&pc) {
+                        Some((_, predicate)) if bo & 0x08 != 0 => format!("({predicate})"),
+                        Some((_, predicate)) => format!("!({predicate})"),
+                        None => emit_branch_condition(&mut output, bo, bi)?,
+                    };
                     if link {
                         writeln!(output, "    context->lr = 0x{:08X}u;", pc + 4)
                             .map_err(|_| TranslationError::Formatting)?;
@@ -5260,13 +5640,13 @@ fn lower_words_with_config(
                             }
                         }
                     } else if link {
-                        let checkpoint = lean_body_call_contract(
+                        let checkpoint = call_return_checkpoint_needed(
                             target,
                             pc,
                             callable_entries,
                             exact_fpu_functions,
-                        )
-                        .is_none();
+                            checkpoint_free_callees,
+                        );
                         if unconditional {
                             emit_direct_guest_call_with_exact_fpu(
                                 &mut output,
@@ -6702,6 +7082,25 @@ pub(crate) fn lean_call_contract(symbol: &str) -> Option<LeanCallContract> {
         fpr_reads: mask(fpr_reads),
         fpr_writes: mask(fpr_writes),
     })
+}
+
+/// Whether a linked direct call to `target` keeps its call-return checkpoint:
+/// lean host bodies and translated checkpoint-free leaves need none.
+fn call_return_checkpoint_needed(
+    target: u32,
+    pc: u32,
+    callable_entries: Option<&BTreeMap<u32, u32>>,
+    exact_fpu_functions: Option<&BTreeSet<u32>>,
+    checkpoint_free_callees: Option<&BTreeSet<u32>>,
+) -> bool {
+    if lean_body_call_contract(target, pc, callable_entries, exact_fpu_functions).is_some() {
+        return false;
+    }
+    let translated_leaf = checkpoint_free_callees.is_some_and(|leaves| leaves.contains(&target))
+        && callable_entries.is_some_and(|entries| entries.get(&target) == Some(&target))
+        && !requires_host_guest_call_at(target, pc)
+        && !is_wpad_read_copy(target, pc);
+    !translated_leaf
 }
 
 /// The five direct WPADRead calls to memcpy, whose call-return checkpoint
@@ -11351,6 +11750,7 @@ mod tests {
             &callable,
             &BTreeSet::new(),
             &contracts,
+            &BTreeSet::new(),
         )
         .expect("formatting succeeds")
         .expect("linked straight-line integer caller is eligible");
@@ -11425,6 +11825,7 @@ mod tests {
             &BTreeMap::new(),
             &BTreeSet::new(),
             &BTreeMap::new(),
+            &BTreeSet::new(),
         )
         .expect("formatting succeeds")
         .expect("checked stack memory is eligible");
@@ -11461,6 +11862,7 @@ mod tests {
             &BTreeMap::new(),
             &BTreeSet::new(),
             &BTreeMap::new(),
+            &BTreeSet::new(),
         )
         .expect("classified fallback")
         .is_none());
@@ -11477,6 +11879,7 @@ mod tests {
             &BTreeMap::new(),
             &BTreeSet::new(),
             &BTreeMap::new(),
+            &BTreeSet::new(),
         )
         .expect("unregistered public continuation falls back")
         .is_none());
@@ -14621,6 +15024,123 @@ mod tests {
     }
 
     #[test]
+    fn checkpoint_free_leaf_predicate() {
+        let words = |words: &[u32]| -> Vec<u8> {
+            words.iter().flat_map(|word| word.to_be_bytes()).collect()
+        };
+        let address = 0x8000_4000;
+        // lwz r3,0(r4); beq +8; addi r3,r3,1; stw r3,4(r4); blr
+        let leaf = words(&[0x8064_0000, 0x4182_0008, 0x3863_0001, 0x9064_0004, 0x4E80_0020]);
+        assert!(is_checkpoint_free_leaf(address, &leaf));
+        // mtlr r0 and mtctr r3 are register moves.
+        assert!(is_checkpoint_free_leaf(address, &words(&[0x7C08_03A6, 0x7C69_03A6, 0x4E80_0020])));
+        // bl, bctrl, bctr, a backward branch, sc, mtmsr and mtdec are not.
+        for body in [
+            vec![0x4800_0009, 0x4E80_0020],
+            vec![0x4E80_0421, 0x4E80_0020],
+            vec![0x4E80_0420],
+            vec![0x3863_0001, 0x4BFF_FFFC, 0x4E80_0020],
+            vec![0x4400_0002, 0x4E80_0020],
+            vec![0x7C60_0124, 0x4E80_0020],
+            vec![0x7C76_03A6, 0x4E80_0020],
+        ] {
+            assert!(!is_checkpoint_free_leaf(address, &words(&body)), "{body:08X?}");
+        }
+        // A tail branch out of the function is a call.
+        assert!(!is_checkpoint_free_leaf(address, &words(&[0x4800_0100])));
+    }
+
+    fn word_bytes(words: &[u32]) -> Vec<u8> {
+        words.iter().flat_map(|word| word.to_be_bytes()).collect()
+    }
+
+    #[test]
+    fn compare_branch_fuses_only_when_the_field_is_dead() {
+        let address = 0x8000_4000;
+        // cmpwi r3,0; beq +8; cmpwi r4,1; blr: the fall-through rewrites CR0 and
+        // the target returns.
+        let dead = word_bytes(&[0x2C03_0000, 0x4182_0008, 0x2C04_0001, 0x4E80_0020]);
+        let fused = fusible_compare_branches(address, &dead, &BTreeSet::new());
+        assert_eq!(
+            fused.get(&0x8000_4004),
+            Some(&(
+                0x8000_4000,
+                "static_cast<std::int32_t>(context->gpr[3]) == static_cast<std::int32_t>(0x00000000u)"
+                    .to_owned()
+            ))
+        );
+        // A branch reached from elsewhere keeps the CR write.
+        assert!(fusible_compare_branches(address, &dead, &BTreeSet::from([0x8000_4004])).is_empty());
+        // cmpwi r3,0; beq +12; li r3,1; bgt +8; blr; blr: the fall-through reads CR0[GT].
+        let live = word_bytes(&[
+            0x2C03_0000, 0x4182_000C, 0x3860_0001, 0x4181_0008, 0x4E80_0020, 0x4E80_0020,
+        ]);
+        assert!(fusible_compare_branches(address, &live, &BTreeSet::new()).is_empty());
+        // cmplwi cr7,r5,16; bge cr7,+8; blr; blr: an unsigned compare in CR7.
+        let unsigned = word_bytes(&[0x2B85_0010, 0x409C_0008, 0x4E80_0020, 0x4E80_0020]);
+        assert_eq!(
+            fusible_compare_branches(address, &unsigned, &BTreeSet::new())
+                .get(&0x8000_4004)
+                .map(|(_, predicate)| predicate.as_str()),
+            Some("context->gpr[5] < 0x00000010u")
+        );
+        // CR2 is preserved across returns, so a compare into it stays.
+        let callee_saved = word_bytes(&[0x2D03_0000, 0x418A_0008, 0x4E80_0020, 0x4E80_0020]);
+        assert!(fusible_compare_branches(address, &callee_saved, &BTreeSet::new()).is_empty());
+    }
+
+    #[test]
+    fn fused_compare_branch_lowers_to_one_condition() {
+        let bytes = word_bytes(&[0x2C03_0000, 0x4182_0008, 0x2C04_0001, 0x4E80_0020]);
+        let lowered = lower_words_for_module_with_call_return_entries_and_exact_fpu_flat_reads(
+            0x8000_4000,
+            &bytes,
+            &BTreeSet::new(),
+            &BTreeSet::new(),
+            &BTreeMap::new(),
+            &BTreeSet::new(),
+            &BTreeSet::new(),
+            &BTreeMap::new(),
+            &ModuleTranslationOptions::default(),
+        )
+        .expect("lowers");
+        assert!(lowered.contains("// compare fused into the next branch"));
+        assert!(lowered.contains(
+            "if ((static_cast<std::int32_t>(context->gpr[3]) == static_cast<std::int32_t>(0x00000000u))) goto label_8000400C;"
+        ));
+        // The second compare has no branch after it and still writes CR0.
+        assert_eq!(lowered.matches("galaxy::compare_signed(context, 0u").count(), 1);
+    }
+
+    #[test]
+    fn calls_to_checkpoint_free_leaves_have_no_call_return_checkpoint() {
+        let words = [0x4800_0009_u32, 0x4E80_0020]; // bl +8; blr
+        let bytes: Vec<u8> = words.iter().flat_map(|word| word.to_be_bytes()).collect();
+        let target = 0x8000_4008_u32;
+        let callable_entries = BTreeMap::from([(target, target)]);
+        let lowered = |leaves: &BTreeSet<u32>| {
+            lower_words_for_module_with_call_return_entries_and_exact_fpu_flat_reads(
+                target - 8,
+                &bytes,
+                &BTreeSet::new(),
+                &BTreeSet::new(),
+                &callable_entries,
+                &BTreeSet::new(),
+                leaves,
+                &BTreeMap::new(),
+                &ModuleTranslationOptions::default(),
+            )
+            .expect("call lowers")
+        };
+        let plain = lowered(&BTreeSet::new());
+        assert!(plain.contains("rmge01::fn_80004008(context, memory, services);"));
+        assert!(plain.contains("galaxy::call_return_checkpoint(services, 0x80004000u, 0x80004004u"));
+        let leaf = lowered(&BTreeSet::from([target]));
+        assert!(leaf.contains("rmge01::fn_80004008(context, memory, services);"));
+        assert!(!leaf.contains("call_return_checkpoint"));
+    }
+
+    #[test]
     fn lean_calls_have_no_call_return_checkpoint() {
         let words = [0x4800_0009_u32, 0x4E80_0020]; // bl +8; blr
         let bytes: Vec<u8> = words.iter().flat_map(|word| word.to_be_bytes()).collect();
@@ -15171,12 +15691,21 @@ mod tests {
 
     #[test]
     fn lowers_compare_and_conditional_branch() {
+        // CR0 is dead after the branch: the branch tests the operands.
         let words = [0x2C03_0000_u32, 0x4182_0008, 0x3860_0001, 0x4E80_0020];
+        let bytes: Vec<u8> = words.iter().flat_map(|word| word.to_be_bytes()).collect();
+        let output = lower_words(0x8000_4000, &bytes).expect("compare and branch supported");
+        assert!(!output.contains("galaxy::compare_signed"));
+        assert!(output.contains(
+            "if ((static_cast<std::int32_t>(context->gpr[3]) == static_cast<std::int32_t>(0x00000000u))) goto label_8000400C;"
+        ));
+        // A later bgt reads CR0, so the compare writes it and the branch reads it.
+        let words = [0x2C03_0000_u32, 0x4182_000C, 0x3860_0001, 0x4181_0008, 0x4E80_0020, 0x4E80_0020];
         let bytes: Vec<u8> = words.iter().flat_map(|word| word.to_be_bytes()).collect();
         let output = lower_words(0x8000_4000, &bytes).expect("compare and branch supported");
         assert!(output.contains("galaxy::compare_signed(context, 0u"));
         assert!(output.contains("galaxy::cr_bit(context, 2u)"));
-        assert!(output.contains("goto label_8000400C;"));
+        assert!(output.contains("goto label_80004010;"));
     }
 
     #[test]

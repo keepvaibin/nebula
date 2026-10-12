@@ -699,9 +699,48 @@ pub fn apply_register_residency(body: &str, floats: bool) -> Option<String> {
     };
     output.push_str(&text[..signature_end]);
     output.push_str(&declarations(&used));
+    let shared_declarations_at = output.len();
     let rest = &text[signature_end..];
 
-    for raw_line in rest.split_inclusive('\n') {
+    // A call-return checkpoint that ends a top-level instruction block, or a
+    // continuation stub's checkpoint followed by its `goto label_X;`, shares one
+    // cold block per function: the site stores its index and jumps there, and
+    // the shared block synchronizes, runs the policy and jumps to the site's
+    // resume point (a label after the block, or label_X). Every site's stores
+    // and reloads are the same sequence, so only one copy is emitted.
+    let raw_lines: Vec<&str> = rest.split_inclusive('\n').collect();
+    let mut depth_before = Vec::with_capacity(raw_lines.len() + 1);
+    let mut depth = 0i64;
+    for raw_line in &raw_lines {
+        depth_before.push(depth);
+        for byte in raw_line.bytes() {
+            match byte {
+                b'{' => depth += 1,
+                b'}' => depth -= 1,
+                _ => {}
+            }
+        }
+    }
+    depth_before.push(depth);
+    let closes_top_level_block = |index: usize| {
+        raw_lines
+            .get(index)
+            .is_some_and(|raw_line| raw_line.trim() == "}" && depth_before[index] == 1)
+    };
+    // `goto label_X;` at function scope, as a continuation stub ends.
+    let stub_resume_label = |index: usize| -> Option<String> {
+        let raw_line = raw_lines.get(index)?;
+        let name = raw_line.trim().strip_prefix("goto label_")?.strip_suffix(';')?;
+        (depth_before[index] == 0
+            && name.len() == 8
+            && name.bytes().all(|byte| byte.is_ascii_hexdigit()))
+        .then(|| format!("label_{name}"))
+    };
+    // (call and return pc pair, resume target) per shared site.
+    let mut shared_sites: Vec<(String, String)> = Vec::new();
+    let mut resume_label_after: Option<(usize, usize)> = None;
+
+    for (line_index, raw_line) in raw_lines.iter().copied().enumerate() {
         let (line, newline) = match raw_line.strip_suffix('\n') {
             Some(line) => (line, "\n"),
             None => (raw_line, ""),
@@ -800,10 +839,36 @@ pub fn apply_register_residency(body: &str, floats: bool) -> Option<String> {
                 // checkpoint's own synchronization is needed only when its
                 // policy runs, which is the cold branch.
                 Sync::CallReturn => {
-                    let _ = write!(
-                        rewritten,
-                        "if (const std::uint64_t counted__ = galaxy::call_return_checkpoint_due(services); counted__ != 0u) [[unlikely]] {{ GALAXY_RETURN_IF_TRANSFER_PENDING(services); {stores}galaxy::call_return_checkpoint_counted({args}, counted__); {reloads}GALAXY_RETURN_IF_TRANSFER_PENDING(services); }}"
-                    );
+                    let arguments = split_arguments(args);
+                    let site = shared_sites.len();
+                    let resume = if !before.trim().is_empty()
+                        || !after.trim().is_empty()
+                        || arguments.len() != 5
+                        || arguments[0] != "services"
+                        || arguments[3] != "context"
+                        || arguments[4] != "memory"
+                    {
+                        None
+                    } else if closes_top_level_block(line_index + 1) {
+                        resume_label_after = Some((line_index + 1, site));
+                        Some(format!("shared_resume_{site}"))
+                    } else if depth_before[line_index] == 0 {
+                        stub_resume_label(line_index + 1)
+                    } else {
+                        None
+                    };
+                    if let Some(resume) = resume {
+                        shared_sites.push((format!("{{{}, {}}}", arguments[1], arguments[2]), resume));
+                        let _ = write!(
+                            rewritten,
+                            "if (const std::uint64_t counted__ = galaxy::call_return_checkpoint_due(services); counted__ != 0u) [[unlikely]] {{ shared_counted__ = counted__; shared_site__ = {site}u; goto shared_call_return__; }}"
+                        );
+                    } else {
+                        let _ = write!(
+                            rewritten,
+                            "if (const std::uint64_t counted__ = galaxy::call_return_checkpoint_due(services); counted__ != 0u) [[unlikely]] {{ GALAXY_RETURN_IF_TRANSFER_PENDING(services); {stores}galaxy::call_return_checkpoint_counted({args}, counted__); {reloads}GALAXY_RETURN_IF_TRANSFER_PENDING(services); }}"
+                        );
+                    }
                 }
                 Sync::Full => {
                     let _ = write!(
@@ -845,6 +910,15 @@ pub fn apply_register_residency(body: &str, floats: bool) -> Option<String> {
         let line = store_before_returns(&line, &stores);
         output.push_str(&line);
         output.push_str(newline);
+        if let Some((after_line, site)) = resume_label_after {
+            if after_line == line_index {
+                if !output.ends_with('\n') {
+                    output.push('\n');
+                }
+                let _ = writeln!(output, "shared_resume_{site}:;");
+                resume_label_after = None;
+            }
+        }
     }
 
     if !output.ends_with('\n') {
@@ -852,6 +926,25 @@ pub fn apply_register_residency(body: &str, floats: bool) -> Option<String> {
     }
     for name in &entries {
         let _ = writeln!(output, "resident_entry_{name}:\n    {reloads}\n    goto label_{name};");
+    }
+    if !shared_sites.is_empty() {
+        let _ = writeln!(
+            output,
+            "shared_call_return__:\n    {{\n    static constexpr std::uint32_t shared_call_return_sites__[][2] = {{{}}};\n    GALAXY_RETURN_IF_TRANSFER_PENDING(services);\n    {stores}galaxy::call_return_checkpoint_counted(services, shared_call_return_sites__[shared_site__][0], shared_call_return_sites__[shared_site__][1], context, memory, shared_counted__);\n    {reloads}GALAXY_RETURN_IF_TRANSFER_PENDING(services);\n    }}\n    switch (shared_site__) {{",
+            shared_sites
+                .iter()
+                .map(|(pcs, _)| pcs.as_str())
+                .collect::<Vec<_>>()
+                .join(", ")
+        );
+        for (site, (_, resume)) in shared_sites.iter().enumerate() {
+            let _ = writeln!(output, "    case {site}u: goto {resume};");
+        }
+        let _ = writeln!(output, "    default: {{ {stores}return; }}\n    }}");
+        output.insert_str(
+            shared_declarations_at,
+            "    std::uint64_t shared_counted__ = 0u;\n    std::uint32_t shared_site__ = 0u;\n",
+        );
     }
     // A body with hundreds of synchronization points grows by one store/reload
     // sequence per call. Keep the very largest functions on the plain lowering
@@ -897,8 +990,14 @@ mod tests {
         assert!(out.contains(
             "    { context->gpr[3] = gr3; context->lr = glr; rmge01::fn_80002000(context, memory, services); gr3 = context->gpr[3]; gr31 = context->gpr[31]; glr = context->lr; }\n"
         ));
+        // The checkpoint ends a top-level block, so its cold half is the
+        // function's shared block: one copy of the stores and reloads.
         assert!(out.contains(
-            "    if (const std::uint64_t counted__ = galaxy::call_return_checkpoint_due(services); counted__ != 0u) [[unlikely]] { GALAXY_RETURN_IF_TRANSFER_PENDING(services); context->gpr[3] = gr3; context->lr = glr; galaxy::call_return_checkpoint_counted(services, 0x8000100Cu, 0x80001010u, context, memory, counted__); gr3 = context->gpr[3]; gr31 = context->gpr[31]; glr = context->lr; GALAXY_RETURN_IF_TRANSFER_PENDING(services); }\n"
+            "    if (const std::uint64_t counted__ = galaxy::call_return_checkpoint_due(services); counted__ != 0u) [[unlikely]] { shared_counted__ = counted__; shared_site__ = 0u; goto shared_call_return__; }\n    }\nshared_resume_0:;\n"
+        ));
+        assert!(out.contains("    std::uint64_t shared_counted__ = 0u;\n    std::uint32_t shared_site__ = 0u;\n"));
+        assert!(out.contains(
+            "shared_call_return__:\n    {\n    static constexpr std::uint32_t shared_call_return_sites__[][2] = {{0x8000100Cu, 0x80001010u}};\n    GALAXY_RETURN_IF_TRANSFER_PENDING(services);\n    context->gpr[3] = gr3; context->lr = glr; galaxy::call_return_checkpoint_counted(services, shared_call_return_sites__[shared_site__][0], shared_call_return_sites__[shared_site__][1], context, memory, shared_counted__);\n    gr3 = context->gpr[3]; gr31 = context->gpr[31]; glr = context->lr; GALAXY_RETURN_IF_TRANSFER_PENDING(services);\n    }\n    switch (shared_site__) {\n    case 0u: goto shared_resume_0;\n    default: { context->gpr[3] = gr3; context->lr = glr; return; }\n    }\n"
         ));
     }
 
@@ -954,8 +1053,13 @@ mod tests {
         let out = apply_register_residency(body, false).expect("eligible");
         assert!(out.contains("        case 0x80004008u: goto resident_entry_80004008;\n"));
         assert!(out.contains("        case 0x80004010u: goto call_return_80004010;\n"));
-        assert!(out.ends_with("resident_entry_80004008:\n    gr3 = context->gpr[3]; gr4 = context->gpr[4]; \n    goto label_80004008;\n"));
-        assert!(out.contains("    if (const std::uint64_t counted__ = galaxy::call_return_checkpoint_due(services); counted__ != 0u) [[unlikely]] { GALAXY_RETURN_IF_TRANSFER_PENDING(services); context->gpr[3] = gr3; context->gpr[4] = gr4; galaxy::call_return_checkpoint_counted(services, 0x8000400Cu, 0x80004010u, context, memory, counted__); gr3 = context->gpr[3]; gr4 = context->gpr[4]; GALAXY_RETURN_IF_TRANSFER_PENDING(services); }\n"));
+        assert!(out.contains("resident_entry_80004008:\n    gr3 = context->gpr[3]; gr4 = context->gpr[4]; \n    goto label_80004008;\n"));
+        // The continuation stub shares the function's cold block and resumes
+        // at its own goto target.
+        assert!(out.contains("call_return_80004010:\n    if (const std::uint64_t counted__ = galaxy::call_return_checkpoint_due(services); counted__ != 0u) [[unlikely]] { shared_counted__ = counted__; shared_site__ = 0u; goto shared_call_return__; }\n    goto label_80004008;\n"));
+        assert!(out.contains("    static constexpr std::uint32_t shared_call_return_sites__[][2] = {{0x8000400Cu, 0x80004010u}};\n"));
+        assert!(out.contains("    context->gpr[3] = gr3; context->gpr[4] = gr4; galaxy::call_return_checkpoint_counted(services, shared_call_return_sites__[shared_site__][0], shared_call_return_sites__[shared_site__][1], context, memory, shared_counted__);\n    gr3 = context->gpr[3]; gr4 = context->gpr[4]; GALAXY_RETURN_IF_TRANSFER_PENDING(services);\n"));
+        assert!(out.contains("    case 0u: goto label_80004008;\n"));
     }
 
     #[test]

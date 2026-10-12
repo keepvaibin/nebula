@@ -73,7 +73,7 @@ GALAXY_ALWAYS_INLINE bool wgpipe_address(std::uint32_t address) noexcept {
 template <std::size_t Width>
 GALAXY_ALWAYS_INLINE bool wgpipe_append(
     GuestMemoryV1* memory,
-    const std::byte* big_endian_bytes) noexcept {
+    const std::byte* big_endian_bytes) {
     std::byte* const gather = memory->wgpipe_gather_fast;
     std::uint32_t* const count = memory->wgpipe_gather_count_fast;
     if (gather == nullptr || count == nullptr || memory->wgpipe_flush == nullptr) {
@@ -123,6 +123,18 @@ GALAXY_ALWAYS_INLINE void checked_store(
     }
 }
 
+// The checked device/fault path of a store, out of line: one copy per width
+// instead of the region lookup and dirty-tracking code at every store site.
+template <typename T>
+GALAXY_NOINLINE void checked_store_slow(
+    GuestMemoryV1* memory,
+    std::uint32_t address,
+    T value,
+    const NativeServicesV1* services,
+    std::uint32_t guest_pc) {
+    checked_store<T>(memory, address, value, services, guest_pc);
+}
+
 // Flat store: RAM spans write through the shared guest view with no
 // publication (ABI 25, flush-based coherency). On the Wii a CPU store lands in
 // the data cache; the GP and DSP observe it only after dcbf/dcbst (DCFlushRange,
@@ -139,30 +151,29 @@ GALAXY_ALWAYS_INLINE void store(
     const NativeServicesV1* services,
     std::uint32_t guest_pc) {
     static_assert(std::is_integral_v<T> && std::is_unsigned_v<T>);
-    const T swapped = swap_to_big_endian<T>(value);
 #if GALAXY_FASTMEM_ACTIVE
-    if (base != nullptr) GALAXY_LIKELY {
-        // The write-gather pipe (0xCC008000 and its physical alias) is the
-        // one device every GX command stores to; one masked compare keeps it
-        // off the fault path. Everything else stores through the view.
-        if ((address & 0x3FFFF000u) != 0x0C008000u) GALAXY_LIKELY {
-            guest_flat_store_bytes<T>(base, address, value);
-            return;
-        }
+    // The write-gather pipe (0xCC008000 and its physical alias) is the one
+    // device every GX command stores to; one masked compare keeps it off the
+    // fault path. Everything else stores through the view.
+    if (base != nullptr && (address & 0x3FFFF000u) != 0x0C008000u) GALAXY_LIKELY {
+        guest_flat_store_bytes<T>(base, address, value);
+        return;
     }
 #else
     if (base != nullptr && flat_span(address, sizeof(T))) GALAXY_LIKELY {
+        const T swapped = swap_to_big_endian<T>(value);
         std::memcpy(base + address, &swapped, sizeof(T));
         return;
     }
 #endif
     if (wgpipe_address(address) && memory != nullptr) {
+        const T swapped = swap_to_big_endian<T>(value);
         if (wgpipe_append<sizeof(T)>(
                 memory, reinterpret_cast<const std::byte*>(&swapped))) {
             return;
         }
     }
-    checked_store<T>(memory, address, value, services, guest_pc);
+    checked_store_slow<T>(memory, address, value, services, guest_pc);
 }
 
 // dcbf / dcbst: the 32-byte data cache line containing `address` reaches RAM.
@@ -1572,6 +1583,21 @@ GALAXY_ALWAYS_INLINE void fctiwz_r(
 // Direct indirect-call dispatch
 // ---------------------------------------------------------------------------
 
+// The audited service boundary of an indirect call, out of line: the direct
+// entry below takes nearly every call, so one copy serves all call sites.
+GALAXY_NOINLINE inline void call_guest_indirect_boundary(
+    const NativeServicesV1* services,
+    std::uint32_t guest_address,
+    std::uint32_t* cached_address,
+    NativeGameFunction* cached_function,
+    PpcContext* context,
+    GuestMemoryV1* memory,
+    std::uint32_t caller_pc) {
+    call_guest_cached(
+        services, guest_address, cached_address, cached_function, context, memory,
+        caller_pc);
+}
+
 // A `bctrl`/`bclrl` whose target has a published direct entry calls the native
 // body in place. The runtime leaves the entry null for every function that
 // owns a host-side transaction, and withdraws the whole table while an
@@ -1598,7 +1624,7 @@ GALAXY_ALWAYS_INLINE void call_guest_indirect(
             }
         }
     }
-    call_guest_cached(
+    call_guest_indirect_boundary(
         services, guest_address, cached_address, cached_function, context, memory,
         caller_pc);
 }
