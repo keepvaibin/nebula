@@ -142,6 +142,11 @@ enum Command {
         /// In-header widened-single scalar add/subtract/multiply; off by default.
         #[arg(long)]
         experimental_inline_scalar_single_binary: bool,
+        /// lfs/stfs and binary32 psq lanes through cvtss2sd/cvtsd2ss instead of
+        /// the integer widen/narrow helpers (not bit-exact; needs the flat RAM
+        /// read and write options).
+        #[arg(long)]
+        hw_float_conversions: bool,
         /// Retained compatibility spelling; exact PSMTX local lanes are enabled by default.
         #[arg(long, default_value_t = true)]
         exact_psmtx_local_lanes: bool,
@@ -470,6 +475,7 @@ fn main() -> Result<()> {
             experimental_indexed_paired_ternary,
             experimental_fused_paired_ternary,
             experimental_inline_scalar_single_binary,
+            hw_float_conversions,
             exact_psmtx_local_lanes,
             no_exact_psmtx_local_lanes,
             exact_psvec_cross_local_lanes,
@@ -503,6 +509,7 @@ fn main() -> Result<()> {
                 indexed_paired_ternary: experimental_indexed_paired_ternary,
                 fused_paired_ternary: experimental_fused_paired_ternary,
                 inline_scalar_single_binary: experimental_inline_scalar_single_binary,
+                hw_float_conversions,
                 exact_psmtx_local_lanes: exact_psmtx_local_lanes && !no_exact_psmtx_local_lanes,
                 exact_psvec_cross_local_lanes,
                 exact_psvec_normalize_local_lanes,
@@ -1465,6 +1472,34 @@ mod tests {
             "--experimental-fused-paired-binary"
         ])
         .is_err());
+    }
+    #[test]
+    fn translator_cpu_flags_are_off_by_default_and_parse_alone() {
+        let parse = |extra: &[&str]| {
+            let mut arguments = vec![
+                "nebula-recomp",
+                "translate-module",
+                "dump",
+                "--output",
+                "generated/module",
+            ];
+            arguments.extend_from_slice(extra);
+            Cli::try_parse_from(arguments).unwrap().command
+        };
+        assert!(matches!(
+            parse(&[]),
+            Command::TranslateModule {
+                hw_float_conversions: false,
+                ..
+            }
+        ));
+        assert!(matches!(
+            parse(&["--hw-float-conversions"]),
+            Command::TranslateModule {
+                hw_float_conversions: true,
+                ..
+            }
+        ));
     }
     use super::{write_generated_text_create_new, write_generated_text_if_changed, Cli, Command};
     use clap::Parser;

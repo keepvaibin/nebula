@@ -25,6 +25,12 @@ pub enum TranslationError {
     /// `fast_float` without `native_float` has no helpers to switch.
     #[error("fast_float requires native_float")]
     FastFloatRequiresNativeFloat,
+    /// A module option whose lowering lives in another option's helpers.
+    #[error("module option {option} requires {requires}")]
+    OptionRequires {
+        option: &'static str,
+        requires: &'static str,
+    },
     #[error("no configured function begins at 0x{0:08X}")]
     FunctionNotFound(u32),
     #[error("function 0x{address:08X} is not fully contained in a DOL text section")]
@@ -237,6 +243,14 @@ pub struct ModuleTranslationOptions {
     /// on the RMGE01 module (87.9 vs 83.2 ns per benchmark call): the exact
     /// float fallbacks force spills around every helper call. Off by default.
     pub guest_resident_float: bool,
+    /// `lfs`/`stfs` and the binary32 lanes of `psq_l`/`psq_st` convert with
+    /// the host's `cvtss2sd`/`cvtsd2ss` (`fast::*_hw` helpers) instead of the
+    /// integer widen/narrow bit slices. Not bit-exact: signalling NaNs are
+    /// quieted, `stfs` of a value outside binary32 rounds instead of slicing,
+    /// and under the fast-float MXCSR subnormals read and write as zero.
+    /// Requires `flat_ram_reads` and `flat_ram_writes`: the conversions live
+    /// in the flat-view helpers, and the checked helpers keep the exact ones.
+    pub hw_float_conversions: bool,
     pub exact_psmtx_local_lanes: bool,
     pub exact_psvec_cross_local_lanes: bool,
     pub exact_psvec_normalize_local_lanes: bool,
@@ -272,6 +286,7 @@ impl Default for ModuleTranslationOptions {
             guest_resident_integer: false,
             fast_float: false,
             guest_resident_float: false,
+            hw_float_conversions: false,
             exact_psmtx_local_lanes: true,
             exact_psvec_cross_local_lanes: false,
             exact_psvec_normalize_local_lanes: false,
@@ -440,6 +455,20 @@ fn selected_psmtx_local_target(
     Ok(None)
 }
 
+/// Option combinations that have no lowering. Checked before the game is read.
+pub fn validate_module_options(options: &ModuleTranslationOptions) -> Result<(), TranslationError> {
+    if options.fast_float && !options.native_float {
+        return Err(TranslationError::FastFloatRequiresNativeFloat);
+    }
+    if options.hw_float_conversions && !(options.flat_ram_reads && options.flat_ram_writes) {
+        return Err(TranslationError::OptionRequires {
+            option: "hw_float_conversions",
+            requires: "flat_ram_reads and flat_ram_writes",
+        });
+    }
+    Ok(())
+}
+
 pub fn translate_module_with_options(
     input: &Path,
     count: usize,
@@ -447,6 +476,7 @@ pub fn translate_module_with_options(
     shard_source_kib: usize,
     options: ModuleTranslationOptions,
 ) -> Result<TranslationModule, TranslationError> {
+    validate_module_options(&options)?;
     if options.trace_scene_update_spans && count != 0 {
         return Err(TranslationError::SceneUpdateSpanTrace(
             "use --count 0".to_owned(),
@@ -866,9 +896,6 @@ pub fn translate_module_with_options(
         },
     )?;
     if options.fast_float {
-        if !options.native_float {
-            return Err(TranslationError::FastFloatRequiresNativeFloat);
-        }
         apply_fast_float_mode(&mut source_files);
     }
     if options.trace_end_frame_spans {
@@ -2497,6 +2524,7 @@ fn lower_words_for_module_with_call_return_entries_and_exact_fpu_flat_reads(
             indexed_paired_ternary: options.indexed_paired_ternary,
             fused_paired_ternary: options.fused_paired_ternary,
             inline_scalar_single_binary: options.inline_scalar_single_binary,
+            hw_float_conversions: options.hw_float_conversions,
             ..LoweringConfig::default()
         },
     )
@@ -2558,6 +2586,7 @@ fn lower_words_with_options(
             inline_scalar_single_binary: false,
             typed_region_gpr_mask: 0,
             device_pointer_globals: None,
+            hw_float_conversions: false,
         },
     )
 }
@@ -2589,6 +2618,7 @@ struct LoweringConfig<'a> {
     inline_scalar_single_binary: bool,
     typed_region_gpr_mask: u32,
     device_pointer_globals: Option<&'a BTreeMap<i32, u32>>,
+    hw_float_conversions: bool,
 }
 
 // The typed-region pilot has a single DOL owner; its public body still
@@ -3407,7 +3437,11 @@ fn lower_words_with_config(
         inline_scalar_single_binary,
         typed_region_gpr_mask,
         device_pointer_globals,
+        hw_float_conversions,
     } = config;
+    // Suffix of the flat-view float load/store helpers: `_hw` converts binary32
+    // lanes with the host's cvtss2sd/cvtsd2ss.
+    let float_conversion = if hw_float_conversions { "_hw" } else { "" };
     // The paired/scalar local-lane proofs own their exact arithmetic text;
     // native float only replaces the general lowering.
     let native_float = native_float && local_lane_profile == LocalLaneProfile::None;
@@ -4107,7 +4141,7 @@ fn lower_words_with_config(
                 if is_load && flat_ram_reads {
                     writeln!(
                         output,
-                        "    galaxy::fast::psq_load(flat_guest_read_base, context, {register}u, memory, {ea}, {gqr_index}u, {one_element}, {d_form}, services, 0x{pc:08X}u);"
+                        "    galaxy::fast::psq_load{float_conversion}(flat_guest_read_base, context, {register}u, memory, {ea}, {gqr_index}u, {one_element}, {d_form}, services, 0x{pc:08X}u);"
                     )
                     .map_err(|_| TranslationError::Formatting)?;
                 } else if is_load {
@@ -4119,7 +4153,7 @@ fn lower_words_with_config(
                 } else if flat_ram_writes {
                     writeln!(
                         output,
-                        "    galaxy::fast::psq_store(flat_guest_base, context, {register}u, memory, {ea}, {gqr_index}u, {one_element}, {d_form}, services, 0x{pc:08X}u);"
+                        "    galaxy::fast::psq_store{float_conversion}(flat_guest_base, context, {register}u, memory, {ea}, {gqr_index}u, {one_element}, {d_form}, services, 0x{pc:08X}u);"
                     )
                     .map_err(|_| TranslationError::Formatting)?;
                 } else {
@@ -4150,7 +4184,7 @@ fn lower_words_with_config(
                     if flat_ram_reads {
                         writeln!(
                             output,
-                            "    galaxy::fast::load_fpr_single(flat_guest_read_base, context, {target}u, memory, {ea}, services, 0x{pc:08X}u);"
+                            "    galaxy::fast::load_fpr_single{float_conversion}(flat_guest_read_base, context, {target}u, memory, {ea}, services, 0x{pc:08X}u);"
                         )
                     } else {
                         writeln!(
@@ -4231,7 +4265,7 @@ fn lower_words_with_config(
                     if flat_ram_writes {
                         writeln!(
                             output,
-                            "    galaxy::fast::store_fpr_single(flat_guest_base, context, {source}u, memory, {ea}, services, 0x{pc:08X}u);"
+                            "    galaxy::fast::store_fpr_single{float_conversion}(flat_guest_base, context, {source}u, memory, {ea}, services, 0x{pc:08X}u);"
                         )
                     } else {
                         writeln!(
@@ -4284,7 +4318,7 @@ fn lower_words_with_config(
                         if flat_ram_reads {
                             writeln!(
                                 output,
-                                "    galaxy::fast::load_fpr_single(flat_guest_read_base, context, {register}u, memory, {ea}, services, 0x{pc:08X}u);"
+                                "    galaxy::fast::load_fpr_single{float_conversion}(flat_guest_read_base, context, {register}u, memory, {ea}, services, 0x{pc:08X}u);"
                             )
                         } else {
                             writeln!(
@@ -4312,7 +4346,7 @@ fn lower_words_with_config(
                         if flat_ram_writes {
                             writeln!(
                                 output,
-                                "    galaxy::fast::store_fpr_single(flat_guest_base, context, {register}u, memory, {ea}, services, 0x{pc:08X}u);"
+                                "    galaxy::fast::store_fpr_single{float_conversion}(flat_guest_base, context, {register}u, memory, {ea}, services, 0x{pc:08X}u);"
                             )
                         } else {
                             writeln!(
@@ -11869,6 +11903,117 @@ mod tests {
             device_pcs(&joins, &[], &BTreeMap::new()),
             BTreeSet::from([0x8000_5024])
         );
+    }
+
+    /// lfs, stfs, lfsx, stfsx, psq_l, psq_st and blr: the float memory forms
+    /// `--hw-float-conversions` switches.
+    fn float_memory_sequence() -> Vec<u8> {
+        let words: [u32; 7] = [
+            (48 << 26) | (1 << 21) | (3 << 16) | 0x0008, // lfs f1,8(r3)
+            (52 << 26) | (1 << 21) | (3 << 16) | 0x000C, // stfs f1,12(r3)
+            (31 << 26) | (2 << 21) | (3 << 16) | (4 << 11) | (535 << 1), // lfsx f2,r3,r4
+            (31 << 26) | (2 << 21) | (3 << 16) | (4 << 11) | (663 << 1), // stfsx f2,r3,r4
+            (56 << 26) | (3 << 21) | (5 << 16),          // psq_l f3,0(r5),0,0
+            (60 << 26) | (3 << 21) | (5 << 16) | 0x0008, // psq_st f3,8(r5),0,0
+            0x4E80_0020,
+        ];
+        words.iter().flat_map(|word| word.to_be_bytes()).collect()
+    }
+
+    fn lower_float_memory_sequence(hw_float_conversions: bool) -> String {
+        lower_words_with_config(
+            0x8000_4000,
+            &float_memory_sequence(),
+            &BTreeSet::new(),
+            &BTreeSet::new(),
+            LoweringConfig {
+                flat_ram_reads: true,
+                flat_ram_writes: true,
+                native_float: true,
+                hw_float_conversions,
+                ..LoweringConfig::default()
+            },
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn hw_float_conversions_off_keeps_the_integer_conversion_helpers() {
+        let out = lower_float_memory_sequence(false);
+        for line in [
+            "    galaxy::fast::load_fpr_single(flat_guest_read_base, context, 1u, memory, context->gpr[3] + 0x00000008u, services, 0x80004000u);\n",
+            "    galaxy::fast::store_fpr_single(flat_guest_base, context, 1u, memory, context->gpr[3] + 0x0000000Cu, services, 0x80004004u);\n",
+            "    galaxy::fast::load_fpr_single(flat_guest_read_base, context, 2u, memory, context->gpr[3] + context->gpr[4], services, 0x80004008u);\n",
+            "    galaxy::fast::store_fpr_single(flat_guest_base, context, 2u, memory, context->gpr[3] + context->gpr[4], services, 0x8000400Cu);\n",
+            "    galaxy::fast::psq_load(flat_guest_read_base, context, 3u, memory, ea_80004010, 0u, false, true, services, 0x80004010u);\n",
+            "    galaxy::fast::psq_store(flat_guest_base, context, 3u, memory, ea_80004014, 0u, false, true, services, 0x80004014u);\n",
+        ] {
+            assert!(out.contains(line), "missing {line}in\n{out}");
+        }
+        assert!(!out.contains("_hw("), "{out}");
+    }
+
+    #[test]
+    fn hw_float_conversions_on_switches_every_binary32_memory_form() {
+        let out = lower_float_memory_sequence(true);
+        for line in [
+            "    galaxy::fast::load_fpr_single_hw(flat_guest_read_base, context, 1u, memory, context->gpr[3] + 0x00000008u, services, 0x80004000u);\n",
+            "    galaxy::fast::store_fpr_single_hw(flat_guest_base, context, 1u, memory, context->gpr[3] + 0x0000000Cu, services, 0x80004004u);\n",
+            "    galaxy::fast::load_fpr_single_hw(flat_guest_read_base, context, 2u, memory, context->gpr[3] + context->gpr[4], services, 0x80004008u);\n",
+            "    galaxy::fast::store_fpr_single_hw(flat_guest_base, context, 2u, memory, context->gpr[3] + context->gpr[4], services, 0x8000400Cu);\n",
+            "    galaxy::fast::psq_load_hw(flat_guest_read_base, context, 3u, memory, ea_80004010, 0u, false, true, services, 0x80004010u);\n",
+            "    galaxy::fast::psq_store_hw(flat_guest_base, context, 3u, memory, ea_80004014, 0u, false, true, services, 0x80004014u);\n",
+        ] {
+            assert!(out.contains(line), "missing {line}in\n{out}");
+        }
+        // The flag changes nothing but the helper names.
+        assert_eq!(out.replace("_hw(", "("), lower_float_memory_sequence(false));
+    }
+
+    #[test]
+    fn hw_float_conversions_leave_the_checked_helpers_alone() {
+        // Without the flat view every float access takes the checked helper,
+        // which has no hardware form.
+        let out = lower_words_with_config(
+            0x8000_4000,
+            &float_memory_sequence(),
+            &BTreeSet::new(),
+            &BTreeSet::new(),
+            LoweringConfig {
+                hw_float_conversions: true,
+                ..LoweringConfig::default()
+            },
+        )
+        .unwrap();
+        assert_eq!(
+            out.matches("    galaxy::load_fpr_single(context, ").count(),
+            2
+        );
+        assert_eq!(
+            out.matches("    galaxy::store_fpr_single(context, ")
+                .count(),
+            2
+        );
+        assert!(!out.contains("_hw("), "{out}");
+    }
+
+    #[test]
+    fn hw_float_conversions_require_both_flat_ram_directions() {
+        let mut options = ModuleTranslationOptions {
+            hw_float_conversions: true,
+            flat_ram_reads: true,
+            ..ModuleTranslationOptions::default()
+        };
+        assert!(matches!(
+            validate_module_options(&options),
+            Err(TranslationError::OptionRequires {
+                option: "hw_float_conversions",
+                ..
+            })
+        ));
+        options.flat_ram_writes = true;
+        assert!(validate_module_options(&options).is_ok());
+        assert!(validate_module_options(&ModuleTranslationOptions::default()).is_ok());
     }
 
     #[test]

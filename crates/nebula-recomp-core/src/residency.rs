@@ -27,7 +27,8 @@
 //! * an interior entry (dispatch `case`): jump to a stub that reloads first.
 //!
 //! The native float fast paths (`fast::scalar_*`, `fast::paired_*`,
-//! `fast::psq_*`, `fast::*_fpr_single`) are rewritten to their `_r` overloads,
+//! `fast::psq_*`, `fast::*_fpr_single`, and the `_hw` conversion forms of the
+//! loads and stores) are rewritten to their `_r` overloads,
 //! which operate on the local arrays and synchronize through `context` only on
 //! their exact fallback. Helpers that only touch CR, XER, FPSCR or HID2
 //! (`cr_bit`, `compare_*`, `write_fpscr_fields`, ...) are left in place. Any
@@ -111,6 +112,10 @@ fn callee_leaves_register_file_alone(callee: &str) -> bool {
             | "fast::store_fpr_single_r"
             | "fast::psq_load_r"
             | "fast::psq_store_r"
+            | "fast::load_fpr_single_hw_r"
+            | "fast::store_fpr_single_hw_r"
+            | "fast::psq_load_hw_r"
+            | "fast::psq_store_hw_r"
             | "fast::scalar_binary_r"
             | "fast::scalar_ternary_r"
             | "fast::scalar_frsp_r"
@@ -134,6 +139,10 @@ fn fpr_only_helper(callee: &str) -> bool {
             | "fast::store_fpr_single"
             | "fast::psq_load"
             | "fast::psq_store"
+            | "fast::load_fpr_single_hw"
+            | "fast::store_fpr_single_hw"
+            | "fast::psq_load_hw"
+            | "fast::psq_store_hw"
             | "fast::scalar_binary"
             | "fast::scalar_ternary"
             | "fast::scalar_frsp"
@@ -157,7 +166,10 @@ fn float_helper_target_position(callee: &str) -> Option<usize> {
         | "fast::paired_sum_r"
         | "fast::scalar_frsp_r"
         | "fast::fctiwz_r" => Some(3),
-        "fast::load_fpr_single_r" | "fast::psq_load_r" => Some(4),
+        "fast::load_fpr_single_r"
+        | "fast::psq_load_r"
+        | "fast::load_fpr_single_hw_r"
+        | "fast::psq_load_hw_r" => Some(4),
         _ => None,
     }
 }
@@ -174,7 +186,11 @@ fn float_helper_index_positions(callee: &str) -> Option<&'static [usize]> {
         "fast::load_fpr_single_r"
         | "fast::store_fpr_single_r"
         | "fast::psq_load_r"
-        | "fast::psq_store_r" => &[4],
+        | "fast::psq_store_r"
+        | "fast::load_fpr_single_hw_r"
+        | "fast::store_fpr_single_hw_r"
+        | "fast::psq_load_hw_r"
+        | "fast::psq_store_hw_r" => &[4],
         _ => return None,
     })
 }
@@ -458,11 +474,15 @@ fn rewrite_float_helpers(
         "paired_sum",
         "fctiwz",
     ];
-    const MEMORY: [&str; 4] = [
+    const MEMORY: [&str; 8] = [
         "load_fpr_single",
         "store_fpr_single",
         "psq_load",
         "psq_store",
+        "load_fpr_single_hw",
+        "store_fpr_single_hw",
+        "psq_load_hw",
+        "psq_store_hw",
     ];
     let mut out = text.to_owned();
     for name in ARITHMETIC {
@@ -1069,6 +1089,39 @@ mod tests {
         // Written float entries (helper targets and textual writes) are stored at
         // the exit; read-only entries and the read-only integer locals are not.
         assert!(out.contains("{ context->fpr_bits[1] = fpr[1]; context->fpr_bits[5] = fpr[5]; context->fpr_bits[7] = fpr[7]; context->ps1_bits[1] = ps1[1]; context->ps1_bits[5] = ps1[5]; return; }"));
+    }
+
+    const HW_FLOAT_MEMORY_BODY: &str = "    {\n    context->gpr[4] = context->gpr[4] + 0x00000010u;\n    }\n    {\n    galaxy::fast::load_fpr_single_hw(flat_guest_read_base, context, 5u, memory, context->gpr[4] + 0x00000008u, services, 0x80004004u);\n    }\n    {\n    galaxy::fast::store_fpr_single_hw(flat_guest_base, context, 5u, memory, context->gpr[3], services, 0x80004008u);\n    }\n    {\n    galaxy::fast::psq_load_hw(flat_guest_read_base, context, 6u, memory, context->gpr[3], 0u, false, true, services, 0x8000400Cu);\n    }\n    {\n    galaxy::fast::psq_store_hw(flat_guest_base, context, 6u, memory, context->gpr[4], 0u, false, true, services, 0x80004010u);\n    }\n    return;\n";
+
+    #[test]
+    fn hw_float_memory_helpers_are_not_integer_synchronization_points() {
+        let out = apply_register_residency(HW_FLOAT_MEMORY_BODY, false).expect("eligible");
+        for call in [
+            "galaxy::fast::load_fpr_single_hw(flat_guest_read_base, context, 5u, memory, gr4 + 0x00000008u, services, 0x80004004u);",
+            "galaxy::fast::store_fpr_single_hw(flat_guest_base, context, 5u, memory, gr3, services, 0x80004008u);",
+            "galaxy::fast::psq_load_hw(flat_guest_read_base, context, 6u, memory, gr3, 0u, false, true, services, 0x8000400Cu);",
+            "galaxy::fast::psq_store_hw(flat_guest_base, context, 6u, memory, gr4, 0u, false, true, services, 0x80004010u);",
+        ] {
+            assert!(out.contains(&format!("    {call}\n")), "{call}\n{out}");
+        }
+        // gr4 is written before the helpers and stored only at the exit.
+        assert_eq!(out.matches("context->gpr[4] = gr4;").count(), 1, "{out}");
+        assert!(!out.contains("gr4 = context->gpr[4]; "), "{out}");
+    }
+
+    #[test]
+    fn hw_float_memory_helpers_take_the_resident_arrays() {
+        let out = apply_register_residency(HW_FLOAT_MEMORY_BODY, true).expect("eligible");
+        for call in [
+            "galaxy::fast::load_fpr_single_hw_r(flat_guest_read_base, context, fpr, ps1, 5u, memory, gr4 + 0x00000008u, services, 0x80004004u);",
+            "galaxy::fast::store_fpr_single_hw_r(flat_guest_base, context, fpr, ps1, 5u, memory, gr3, services, 0x80004008u);",
+            "galaxy::fast::psq_load_hw_r(flat_guest_read_base, context, fpr, ps1, 6u, memory, gr3, 0u, false, true, services, 0x8000400Cu);",
+            "galaxy::fast::psq_store_hw_r(flat_guest_base, context, fpr, ps1, 6u, memory, gr4, 0u, false, true, services, 0x80004010u);",
+        ] {
+            assert!(out.contains(call), "{call}\n{out}");
+        }
+        // The loads' targets are written float entries, stored at the exit.
+        assert!(out.contains("context->fpr_bits[5] = fpr[5]; context->fpr_bits[6] = fpr[6]; context->ps1_bits[5] = ps1[5]; context->ps1_bits[6] = ps1[6]; return; }"), "{out}");
     }
 
     #[test]

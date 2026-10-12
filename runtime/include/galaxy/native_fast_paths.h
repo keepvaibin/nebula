@@ -255,6 +255,73 @@ GALAXY_ALWAYS_INLINE std::uint64_t load_u64(
     return guest_load_u64(memory, address, services, guest_pc);
 }
 
+// ---------------------------------------------------------------------------
+// Hardware float conversions (translator --hw-float-conversions)
+// ---------------------------------------------------------------------------
+
+// lfs, stfs and the binary32 lanes of psq_l/psq_st convert with the host's
+// cvtss2sd/cvtsd2ss instead of the integer bit slices above (widen_f32_bits,
+// native_stored_single_bits, narrow_paired_single_ftz). Not bit-exact, by
+// design: a signalling NaN is quieted on the way through, stfs of a binary64
+// value outside binary32 rounds to nearest (and overflows to infinity) where
+// the Gekko slices bits, and with the fast-float MXCSR (FTZ+DAZ on the
+// simulation thread) a binary32 subnormal loads and stores as a signed zero.
+// Every binary32 value the fast-float arithmetic produces is exact under both
+// conversions, so the ordinary load/compute/store round trip is unchanged.
+GALAXY_ALWAYS_INLINE std::uint64_t widen_f32_hw(std::uint32_t bits) noexcept {
+    return std::bit_cast<std::uint64_t>(
+        static_cast<double>(std::bit_cast<float>(bits)));
+}
+
+GALAXY_ALWAYS_INLINE std::uint32_t narrow_f64_hw(std::uint64_t bits) noexcept {
+    return std::bit_cast<std::uint32_t>(
+        static_cast<float>(std::bit_cast<double>(bits)));
+}
+
+// The binary32 lane conversions of the load/store helpers below: the integer
+// slices, or the hardware conversions when `Hw`.
+template <bool Hw>
+GALAXY_ALWAYS_INLINE std::uint64_t widen_single_lane(std::uint32_t bits) noexcept {
+    if constexpr (Hw) {
+        return widen_f32_hw(bits);
+    } else {
+        return widen_f32_bits(bits);
+    }
+}
+
+template <bool Hw>
+GALAXY_ALWAYS_INLINE std::uint32_t narrow_paired_lane(std::uint64_t bits) noexcept {
+    if constexpr (Hw) {
+        return narrow_f64_hw(bits);
+    } else {
+        return narrow_paired_single_ftz(bits);
+    }
+}
+
+GALAXY_ALWAYS_INLINE void load_fpr_single_hw(
+    const std::byte* base, PpcContext* context, std::uint32_t index,
+    GuestMemoryV1* memory, std::uint32_t address,
+    const NativeServicesV1* services, std::uint32_t guest_pc) {
+    const std::uint64_t widened =
+        widen_f32_hw(load_u32(base, memory, address, services, guest_pc));
+    context->fpr_bits[index] = widened;
+    // The ps1 fill rule of load_fpr_single: RMGE01 never clears HID2[PSE].
+    if constexpr (kFastFloat) {
+        context->ps1_bits[index] = widened;
+    } else if (paired_singles_enabled(context)) {
+        context->ps1_bits[index] = widened;
+    }
+}
+
+GALAXY_ALWAYS_INLINE void store_fpr_single_hw(
+    std::byte* base, const PpcContext* context, std::uint32_t index,
+    GuestMemoryV1* memory, std::uint32_t address,
+    const NativeServicesV1* services, std::uint32_t guest_pc) {
+    store<std::uint32_t>(
+        base, memory, address, narrow_f64_hw(context->fpr_bits[index]),
+        services, guest_pc);
+}
+
 GALAXY_ALWAYS_INLINE void load_fpr_single(
     const std::byte* base, PpcContext* context, std::uint32_t index,
     GuestMemoryV1* memory, std::uint32_t address,
@@ -285,7 +352,9 @@ GALAXY_ALWAYS_INLINE void store_fpr_single(
 
 // Quantized paired loads. Type 0 (binary32) is the overwhelmingly common
 // configuration; the integer types reuse the exact dequantization helpers.
-GALAXY_ALWAYS_INLINE void psq_load(
+// `Hw` selects the hardware binary32 conversion (psq_load_hw).
+template <bool Hw>
+GALAXY_ALWAYS_INLINE void psq_load_impl(
     const std::byte* base, PpcContext* context, std::uint32_t target,
     GuestMemoryV1* memory, std::uint32_t address, std::uint32_t gqr_index,
     bool one_element, bool d_form, const NativeServicesV1* services,
@@ -298,11 +367,11 @@ GALAXY_ALWAYS_INLINE void psq_load(
     if (base != nullptr && (context->hid2 & required) == required) GALAXY_LIKELY {
         if (type == 0u) GALAXY_LIKELY {
             if (flat_span(address, one_element ? 4u : 8u)) GALAXY_LIKELY {
-                context->fpr_bits[target] = widen_f32_bits(
+                context->fpr_bits[target] = widen_single_lane<Hw>(
                     guest_flat_load_bytes<std::uint32_t>(base, address));
                 context->ps1_bits[target] = one_element
                     ? 0x3FF0000000000000ull
-                    : widen_f32_bits(
+                    : widen_single_lane<Hw>(
                           guest_flat_load_bytes<std::uint32_t>(base, address + 4u));
                 return;
             }
@@ -347,7 +416,28 @@ GALAXY_ALWAYS_INLINE void psq_load(
         services, guest_pc);
 }
 
-GALAXY_ALWAYS_INLINE void psq_store(
+GALAXY_ALWAYS_INLINE void psq_load(
+    const std::byte* base, PpcContext* context, std::uint32_t target,
+    GuestMemoryV1* memory, std::uint32_t address, std::uint32_t gqr_index,
+    bool one_element, bool d_form, const NativeServicesV1* services,
+    std::uint32_t guest_pc) {
+    psq_load_impl<false>(
+        base, context, target, memory, address, gqr_index, one_element, d_form,
+        services, guest_pc);
+}
+
+GALAXY_ALWAYS_INLINE void psq_load_hw(
+    const std::byte* base, PpcContext* context, std::uint32_t target,
+    GuestMemoryV1* memory, std::uint32_t address, std::uint32_t gqr_index,
+    bool one_element, bool d_form, const NativeServicesV1* services,
+    std::uint32_t guest_pc) {
+    psq_load_impl<true>(
+        base, context, target, memory, address, gqr_index, one_element, d_form,
+        services, guest_pc);
+}
+
+template <bool Hw>
+GALAXY_ALWAYS_INLINE void psq_store_impl(
     std::byte* base, const PpcContext* context, std::uint32_t source,
     GuestMemoryV1* memory, std::uint32_t address, std::uint32_t gqr_index,
     bool one_element, bool d_form, const NativeServicesV1* services,
@@ -365,15 +455,15 @@ GALAXY_ALWAYS_INLINE void psq_store(
         if (one_element) {
             if (flat_span(address, 4u)) GALAXY_LIKELY {
                 const std::uint32_t first = byte_swap_u32(
-                    narrow_paired_single_ftz(context->fpr_bits[source]));
+                    narrow_paired_lane<Hw>(context->fpr_bits[source]));
                 guest_flat_store_raw<std::uint32_t>(base, address, first);
                 return;
             }
         } else if (flat_span(address, 8u)) GALAXY_LIKELY {
             const std::uint32_t first = byte_swap_u32(
-                narrow_paired_single_ftz(context->fpr_bits[source]));
+                narrow_paired_lane<Hw>(context->fpr_bits[source]));
             const std::uint32_t second = byte_swap_u32(
-                narrow_paired_single_ftz(context->ps1_bits[source]));
+                narrow_paired_lane<Hw>(context->ps1_bits[source]));
             guest_flat_store_raw<std::uint32_t>(base, address, first);
             guest_flat_store_raw<std::uint32_t>(base, address + 4u, second);
             return;
@@ -391,7 +481,7 @@ GALAXY_ALWAYS_INLINE void psq_store(
             switch (type) {
             case 0u:
                 store<std::uint32_t>(base, memory, lane_address,
-                    narrow_paired_single_ftz(bits), services, guest_pc);
+                    narrow_paired_lane<Hw>(bits), services, guest_pc);
                 return;
             case 4u:
                 store<std::uint8_t>(base, memory, lane_address,
@@ -424,6 +514,26 @@ GALAXY_ALWAYS_INLINE void psq_store(
     }
     galaxy::psq_store(
         context, source, memory, address, gqr_index, one_element, d_form,
+        services, guest_pc);
+}
+
+GALAXY_ALWAYS_INLINE void psq_store(
+    std::byte* base, const PpcContext* context, std::uint32_t source,
+    GuestMemoryV1* memory, std::uint32_t address, std::uint32_t gqr_index,
+    bool one_element, bool d_form, const NativeServicesV1* services,
+    std::uint32_t guest_pc) {
+    psq_store_impl<false>(
+        base, context, source, memory, address, gqr_index, one_element, d_form,
+        services, guest_pc);
+}
+
+GALAXY_ALWAYS_INLINE void psq_store_hw(
+    std::byte* base, const PpcContext* context, std::uint32_t source,
+    GuestMemoryV1* memory, std::uint32_t address, std::uint32_t gqr_index,
+    bool one_element, bool d_form, const NativeServicesV1* services,
+    std::uint32_t guest_pc) {
+    psq_store_impl<true>(
+        base, context, source, memory, address, gqr_index, one_element, d_form,
         services, guest_pc);
 }
 
@@ -1243,7 +1353,32 @@ GALAXY_ALWAYS_INLINE void store_fpr_single_r(
         services, guest_pc);
 }
 
-GALAXY_ALWAYS_INLINE void psq_load_r(
+GALAXY_ALWAYS_INLINE void load_fpr_single_hw_r(
+    const std::byte* base, PpcContext* context, std::uint64_t* fpr,
+    std::uint64_t* ps1, std::uint32_t index, GuestMemoryV1* memory,
+    std::uint32_t address, const NativeServicesV1* services, std::uint32_t guest_pc) {
+    const std::uint64_t widened =
+        widen_f32_hw(load_u32(base, memory, address, services, guest_pc));
+    fpr[index] = widened;
+    if constexpr (kFastFloat) {  // see load_fpr_single
+        ps1[index] = widened;
+    } else if (paired_singles_enabled(context)) {
+        ps1[index] = widened;
+    }
+}
+
+GALAXY_ALWAYS_INLINE void store_fpr_single_hw_r(
+    std::byte* base, const PpcContext* context, const std::uint64_t* fpr,
+    const std::uint64_t* ps1, std::uint32_t index, GuestMemoryV1* memory,
+    std::uint32_t address, const NativeServicesV1* services, std::uint32_t guest_pc) {
+    static_cast<void>(context);
+    static_cast<void>(ps1);
+    store<std::uint32_t>(
+        base, memory, address, narrow_f64_hw(fpr[index]), services, guest_pc);
+}
+
+template <bool Hw>
+GALAXY_ALWAYS_INLINE void psq_load_r_impl(
     const std::byte* base, PpcContext* context, std::uint64_t* fpr,
     std::uint64_t* ps1, std::uint32_t target, GuestMemoryV1* memory,
     std::uint32_t address, std::uint32_t gqr_index, bool one_element, bool d_form,
@@ -1256,11 +1391,11 @@ GALAXY_ALWAYS_INLINE void psq_load_r(
     if (base != nullptr && (context->hid2 & required) == required) GALAXY_LIKELY {
         if (type == 0u) GALAXY_LIKELY {
             if (flat_span(address, one_element ? 4u : 8u)) GALAXY_LIKELY {
-                fpr[target] = widen_f32_bits(
+                fpr[target] = widen_single_lane<Hw>(
                     guest_flat_load_bytes<std::uint32_t>(base, address));
                 ps1[target] = one_element
                     ? 0x3FF0000000000000ull
-                    : widen_f32_bits(
+                    : widen_single_lane<Hw>(
                           guest_flat_load_bytes<std::uint32_t>(base, address + 4u));
                 return;
             }
@@ -1307,7 +1442,28 @@ GALAXY_ALWAYS_INLINE void psq_load_r(
     resident_detail::sync_out(context, fpr, ps1, target);
 }
 
-GALAXY_ALWAYS_INLINE void psq_store_r(
+GALAXY_ALWAYS_INLINE void psq_load_r(
+    const std::byte* base, PpcContext* context, std::uint64_t* fpr,
+    std::uint64_t* ps1, std::uint32_t target, GuestMemoryV1* memory,
+    std::uint32_t address, std::uint32_t gqr_index, bool one_element, bool d_form,
+    const NativeServicesV1* services, std::uint32_t guest_pc) {
+    psq_load_r_impl<false>(
+        base, context, fpr, ps1, target, memory, address, gqr_index, one_element,
+        d_form, services, guest_pc);
+}
+
+GALAXY_ALWAYS_INLINE void psq_load_hw_r(
+    const std::byte* base, PpcContext* context, std::uint64_t* fpr,
+    std::uint64_t* ps1, std::uint32_t target, GuestMemoryV1* memory,
+    std::uint32_t address, std::uint32_t gqr_index, bool one_element, bool d_form,
+    const NativeServicesV1* services, std::uint32_t guest_pc) {
+    psq_load_r_impl<true>(
+        base, context, fpr, ps1, target, memory, address, gqr_index, one_element,
+        d_form, services, guest_pc);
+}
+
+template <bool Hw>
+GALAXY_ALWAYS_INLINE void psq_store_r_impl(
     std::byte* base, PpcContext* context, const std::uint64_t* fpr,
     const std::uint64_t* ps1, std::uint32_t source, GuestMemoryV1* memory,
     std::uint32_t address, std::uint32_t gqr_index, bool one_element, bool d_form,
@@ -1325,15 +1481,15 @@ GALAXY_ALWAYS_INLINE void psq_store_r(
         if (one_element) {
             if (flat_span(address, 4u)) GALAXY_LIKELY {
                 const std::uint32_t first = byte_swap_u32(
-                    narrow_paired_single_ftz(fpr[source]));
+                    narrow_paired_lane<Hw>(fpr[source]));
                 guest_flat_store_raw<std::uint32_t>(base, address, first);
                 return;
             }
         } else if (flat_span(address, 8u)) GALAXY_LIKELY {
             const std::uint32_t first = byte_swap_u32(
-                narrow_paired_single_ftz(fpr[source]));
+                narrow_paired_lane<Hw>(fpr[source]));
             const std::uint32_t second = byte_swap_u32(
-                narrow_paired_single_ftz(ps1[source]));
+                narrow_paired_lane<Hw>(ps1[source]));
             guest_flat_store_raw<std::uint32_t>(base, address, first);
             guest_flat_store_raw<std::uint32_t>(base, address + 4u, second);
             return;
@@ -1343,6 +1499,26 @@ GALAXY_ALWAYS_INLINE void psq_store_r(
     galaxy::psq_store(
         context, source, memory, address, gqr_index, one_element, d_form,
         services, guest_pc);
+}
+
+GALAXY_ALWAYS_INLINE void psq_store_r(
+    std::byte* base, PpcContext* context, const std::uint64_t* fpr,
+    const std::uint64_t* ps1, std::uint32_t source, GuestMemoryV1* memory,
+    std::uint32_t address, std::uint32_t gqr_index, bool one_element, bool d_form,
+    const NativeServicesV1* services, std::uint32_t guest_pc) {
+    psq_store_r_impl<false>(
+        base, context, fpr, ps1, source, memory, address, gqr_index, one_element,
+        d_form, services, guest_pc);
+}
+
+GALAXY_ALWAYS_INLINE void psq_store_hw_r(
+    std::byte* base, PpcContext* context, const std::uint64_t* fpr,
+    const std::uint64_t* ps1, std::uint32_t source, GuestMemoryV1* memory,
+    std::uint32_t address, std::uint32_t gqr_index, bool one_element, bool d_form,
+    const NativeServicesV1* services, std::uint32_t guest_pc) {
+    psq_store_r_impl<true>(
+        base, context, fpr, ps1, source, memory, address, gqr_index, one_element,
+        d_form, services, guest_pc);
 }
 
 template <PpcFloatBinaryOperation Operation, bool Single>

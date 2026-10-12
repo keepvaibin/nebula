@@ -80,7 +80,7 @@ pub use sel::{parse_sel, ResolvedSelSymbol, SelError, SelImage, SelSymbol};
 pub use translate::{
     lower_ppc_code_range, lower_ppc_code_range_with_entries_and_immediate_overrides,
     translate_module, translate_module_with_options, translate_module_with_source_budget,
-    translate_one, translation_coverage, GeneratedSource, ModuleTranslationOptions,
-    PpcImmediateKind, PpcImmediateOverride, TranslationCoverage, TranslationError,
-    TranslationModule, TranslationUnit, DEFAULT_MODULE_SHARD_SOURCE_KIB,
+    translate_one, translation_coverage, validate_module_options, GeneratedSource,
+    ModuleTranslationOptions, PpcImmediateKind, PpcImmediateOverride, TranslationCoverage,
+    TranslationError, TranslationModule, TranslationUnit, DEFAULT_MODULE_SHARD_SOURCE_KIB,
 };
