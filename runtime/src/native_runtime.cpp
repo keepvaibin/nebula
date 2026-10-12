@@ -1557,6 +1557,9 @@ struct DrawDistanceState {
     std::array<std::uint32_t, 7> judge_written{};
     std::uint32_t scene_objects = 0u;
     std::uint32_t shadows = 0u;
+    // Scene-object slot of `shadows`. A freed holder keeps its vtable word,
+    // so the slot, not the vtable, proves the holder is still live.
+    std::uint32_t shadow_slot = 0u;
     std::uint32_t shadow_original = 0u;
     std::uint32_t shadow_written = 0u;
     unsigned shadow_search_wait = 0u;
@@ -23996,9 +23999,13 @@ void apply_draw_distance(RuntimeState& state) {
         dd.shadows = 0u;
         dd.shadow_search_wait = 0u;
     }
-    if (dd.shadows != 0u &&
-        (!try_read_guest_u32(space, dd.shadows, vtable) || vtable != 0x80573C04u)) {
-        dd.shadows = 0u;
+    if (dd.shadows != 0u) {
+        std::uint32_t live = 0u;
+        if (!try_read_guest_u32(space, objects + dd.shadow_slot * 4u, live) || live != dd.shadows ||
+            !try_read_guest_u32(space, dd.shadows, vtable) || vtable != 0x80573C04u) {
+            dd.shadows = 0u;
+            dd.shadow_search_wait = 0u;
+        }
     }
     if (dd.shadows == 0u) {
         // Scene objects are created on demand: look again once a second.
@@ -24012,6 +24019,7 @@ void apply_draw_distance(RuntimeState& state) {
             if (try_read_guest_u32(space, objects + id * 4u, object) && object != 0u &&
                 try_read_guest_u32(space, object, vtable) && vtable == 0x80573C04u) {
                 dd.shadows = object;
+                dd.shadow_slot = id;
                 dd.shadow_written = 0u;
                 break;
             }
@@ -24032,6 +24040,50 @@ void apply_draw_distance(RuntimeState& state) {
             write(dd.shadows + 0x28u, wanted);
         }
         dd.shadow_written = wanted;
+    }
+}
+
+// Test hook: GALAXY_TEST_TELEPORT=x,y,z,frame places Mario with the game's
+// own MR::setPlayerPos once, at that GameScene draw, so a scripted run can
+// start anywhere in a stage.
+void apply_test_teleport(RuntimeState& state, galaxy::PpcContext* context, galaxy::GuestMemoryV1* memory) {
+    struct Teleport {
+        float x = 0.0f, y = 0.0f, z = 0.0f;
+        std::uint64_t frame = 0u;
+        bool armed = false;
+    };
+    static Teleport teleport = [] {
+        Teleport result{};
+        char value[96]{};
+        std::size_t length = 0;
+        if (getenv_s(&length, value, sizeof(value), "GALAXY_TEST_TELEPORT") == 0 && length > 1) {
+            unsigned long long frame = 0u;
+            result.armed = sscanf_s(value, "%f,%f,%f,%llu", &result.x, &result.y, &result.z, &frame) == 4;
+            result.frame = frame;
+        }
+        return result;
+    }();
+    static std::uint64_t scene_frames = 0u;
+    ++scene_frames;
+    // Held for 30 frames: Mario's own update re-derives his position until
+    // the game settles him there.
+    if (!teleport.armed || scene_frames < teleport.frame || scene_frames >= teleport.frame + 30u) {
+        return;
+    }
+    galaxy::coop::ThreadRegisters saved{};
+    galaxy::coop::save_thread_registers(*context, saved);
+    const std::uint32_t vector = (context->gpr[1] - 0x40u) & ~0xFu;
+    state.address_space->write_u32(vector, std::bit_cast<std::uint32_t>(teleport.x));
+    state.address_space->write_u32(vector + 4u, std::bit_cast<std::uint32_t>(teleport.y));
+    state.address_space->write_u32(vector + 8u, std::bit_cast<std::uint32_t>(teleport.z));
+    context->gpr[1] = vector - 0x80u;
+    context->gpr[3] = vector;
+    context->pc = 0x803F1F80u;
+    call_guest_impl(&state, 0x803F1F80u, nullptr, context, memory);
+    galaxy::coop::load_thread_registers(saved, *context);
+    if (scene_frames == teleport.frame) {
+        std::cerr << "[test-teleport] " << teleport.x << ',' << teleport.y << ',' << teleport.z
+                  << " at scene frame " << teleport.frame << '\n';
     }
 }
 
@@ -24070,6 +24122,7 @@ void call_guest_impl_body(
         state.address_space->flush_wgpipe_gather_tail_for_frame();
         if (guest_address == 0x8033EE8Cu) {
             apply_draw_distance(state);
+            apply_test_teleport(state, context, memory);
         }
         galaxy::gx::attach_fifo_marker(
             guest_address == 0x8033EE8Cu ? galaxy::gx::FifoMarker::SceneBegin
