@@ -162,9 +162,10 @@ struct Hub {
     std::atomic<bool> pro2_needs_winusb{false};
 };
 
+// Never destroyed: the worker may still be blocked when the process exits.
 Hub& hub() {
-    static Hub instance;
-    return instance;
+    static Hub* instance = new Hub;
+    return *instance;
 }
 
 DWORD CALLBACK on_device_change(HCMNOTIFICATION, PVOID context, CM_NOTIFY_ACTION action,
@@ -746,6 +747,14 @@ ControllerHidStatus controller_hid_status() noexcept {
     status.switch_pro2 = h.pro2_count.load(std::memory_order_acquire);
     status.pro2_needs_winusb = h.pro2_needs_winusb.load(std::memory_order_acquire);
     return status;
+}
+
+bool switch_controller_present_now() noexcept {
+    try {
+        return !enumerate_switch_hid().empty();
+    } catch (...) {
+        return false;
+    }
 }
 
 }  // namespace galaxy::host

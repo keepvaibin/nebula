@@ -49,5 +49,7 @@ struct ControllerHidStatus {
     bool pro2_needs_winusb = false;
 };
 [[nodiscard]] ControllerHidStatus controller_hid_status() noexcept;
+// Synchronous enumeration (settings UI only): any Switch Pro / Pro 2 present.
+[[nodiscard]] bool switch_controller_present_now() noexcept;
 
 }  // namespace galaxy::host

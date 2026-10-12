@@ -4,6 +4,8 @@
 #include "galaxy/ai_dma_timing.h"
 #include "galaxy/native_audio_anomaly.h"
 #include "galaxy/native_audio_queue.h"
+#include "galaxy/controller_hid.h"
+#include "galaxy/input_bindings.h"
 #include "galaxy/native_input.h"
 #include "galaxy/native_settings_pad.h"
 #include "galaxy/diagnostic_stick_lease.h"
@@ -1275,6 +1277,17 @@ float xinput_pointer_speed() {
 float keyboard_pointer_speed() {
     return read_env_float_setting(
         "GALAXY_KEYBOARD_POINTER_SPEED", 1.6f, 0.0f, 10.0f);
+}
+
+// The environment overrides take precedence over the CONTROLS settings.
+float xinput_pointer_speed_or(float configured) {
+    return read_env_float_setting(
+        "GALAXY_XINPUT_POINTER_SPEED", configured, 0.0f, 10.0f);
+}
+
+float keyboard_pointer_speed_or(float configured) {
+    return read_env_float_setting(
+        "GALAXY_KEYBOARD_POINTER_SPEED", configured, 0.0f, 10.0f);
 }
 
 // Read an environment variable as a filesystem path.  Returns an empty string
@@ -5931,6 +5944,53 @@ static std::atomic<NativeSettingsKeySink> g_native_settings_key_sink{nullptr};
 static galaxy::input::NativeWindowKeyPressLatch g_window_key_presses;
 static galaxy::input::NativeWindowKeyHeldState g_window_keys_held;
 
+// Controller binding capture (overlay CONTROLS page). State: 0 idle, else
+// 1 + scheme while armed. The result is (1 << 16) | kind << 8 | code.
+static std::atomic<std::uint32_t> g_binding_capture_armed{0u};
+static std::atomic<std::uint32_t> g_binding_capture_result{0u};
+static std::atomic<bool> g_xinput_seen_connected{false};
+
+void arm_controller_binding_capture(input::ControlScheme scheme) noexcept {
+    g_binding_capture_result.store(0u, std::memory_order_release);
+    g_binding_capture_armed.store(1u + static_cast<std::uint32_t>(scheme), std::memory_order_release);
+    if (scheme == input::ControlScheme::SwitchPro || scheme == input::ControlScheme::SwitchPro2) {
+        ensure_controller_hid_started();
+    }
+}
+
+void cancel_controller_binding_capture() noexcept {
+    g_binding_capture_armed.store(0u, std::memory_order_release);
+}
+
+std::optional<input::InputSource> take_controller_binding_capture() noexcept {
+    const std::uint32_t result = g_binding_capture_result.exchange(0u, std::memory_order_acq_rel);
+    if ((result & 0x10000u) == 0u) {
+        return std::nullopt;
+    }
+    return input::InputSource{static_cast<input::SourceKind>((result >> 8u) & 0xffu),
+                              static_cast<std::uint8_t>(result & 0xffu)};
+}
+
+bool controller_present_now() noexcept {
+    for (DWORD slot = 0; slot < XUSER_MAX_COUNT; ++slot) {
+        XINPUT_STATE state{};
+        if (XInputGetState(slot, &state) == ERROR_SUCCESS) {
+            return true;
+        }
+    }
+    return switch_controller_present_now();
+}
+
+ConnectedControllers connected_controllers() noexcept {
+    const ControllerHidStatus hid = controller_hid_status();
+    ConnectedControllers status{};
+    status.xbox = g_xinput_seen_connected.load(std::memory_order_acquire);
+    status.switch_pro = hid.switch_pro;
+    status.switch_pro2 = hid.switch_pro2;
+    status.pro2_needs_winusb = hid.pro2_needs_winusb;
+    return status;
+}
+
 void publish_native_window_key_state(std::uint32_t key, bool down) noexcept {
     g_window_keys_held.set(key, down);
 }
@@ -6475,11 +6535,11 @@ bool route_native_settings_pad(std::uint16_t& buttons, float stick_x, float stic
     return step.game_neutral;
 }
 
-NativeHidControllerState poll_native_hid_controller() {
+NativeHidControllerState poll_native_hid_controller(
+    std::int16_t left_deadzone = xinput_left_deadzone(),
+    std::int16_t pointer_deadzone = xinput_pointer_deadzone()) {
     NativeHidControllerState first_connected{};
     bool have_first_connected = false;
-    const std::int16_t left_deadzone = xinput_left_deadzone();
-    const std::int16_t pointer_deadzone = xinput_pointer_deadzone();
     // XInputGetState on a slot with no controller enumerates devices and
     // costs hundreds of microseconds (p50 274 us, p90 913 us per 10 ms report
     // in a keyboard-and-mouse session). A failed slot is retried every two
@@ -6519,6 +6579,209 @@ NativeHidControllerState poll_native_hid_controller() {
         }
     }
     return have_first_connected ? first_connected : NativeHidControllerState{};
+}
+
+
+// The remappable controls as the input consumer sees them: a cached copy
+// refreshed when the published generation changes (one atomic load per
+// report), plus the keyboard keys the active keyboard table reads.
+struct LiveControls {
+    galaxy::input::ControlsConfig config = galaxy::input::default_controls_config();
+    galaxy::input::KeyList keyboard_keys{};
+    std::uint64_t generation = 0;
+};
+
+const LiveControls& live_controls() {
+    static LiveControls s_live{};
+    const std::uint64_t generation = galaxy::input::controls_config_generation();
+    if (generation != s_live.generation) {
+        s_live.config = galaxy::input::get_controls_config();
+        s_live.keyboard_keys = galaxy::input::referenced_keys(
+            s_live.config.table(galaxy::input::ControlScheme::Keyboard));
+        s_live.generation = generation;
+    }
+    return s_live;
+}
+
+std::int16_t deadzone_counts(float fraction) {
+    return static_cast<std::int16_t>(std::clamp(
+        std::lround(static_cast<double>(fraction) * 32767.0), 0l, 32767l));
+}
+
+// One controller this report: unified pad sample plus its motion output.
+struct LivePad {
+    galaxy::input::PadSample sample{};
+    bool shake_remote = false;
+    bool shake_nunchuk = false;
+    float gyro_x = 0.0f;
+    float gyro_y = 0.0f;
+};
+
+galaxy::input::PadSample pad_sample_from_xinput(const NativeHidControllerState& controller) {
+    galaxy::input::PadSample sample{};
+    sample.connected = controller.connected;
+    sample.scheme = galaxy::input::ControlScheme::Xbox;
+    sample.buttons = controller.buttons;
+    sample.axes[0] = controller.left_x;
+    sample.axes[1] = controller.left_y;
+    sample.axes[2] = controller.right_x;
+    sample.axes[3] = controller.right_y;
+    sample.axes[4] = static_cast<float>(controller.left_trigger) / 255.0f;
+    sample.axes[5] = static_cast<float>(controller.right_trigger) / 255.0f;
+    return sample;
+}
+
+std::size_t collect_switch_pads(const galaxy::input::ControlsConfig& config,
+                                std::array<LivePad, kMaxSwitchPads>& out) {
+    std::array<SwitchPadState, kMaxSwitchPads> pads{};
+    const std::size_t count = read_switch_pads(pads, true);
+    const std::uint64_t now_us = controller_hid_now_us();
+    for (std::size_t i = 0; i < count; ++i) {
+        const galaxy::input::SchemeTuning& tuning = config.tune(pads[i].scheme);
+        LivePad& live = out[i];
+        live = {};
+        live.sample = galaxy::input::switch_hid::pad_sample_from(
+            pads[i].decoded, pads[i].scheme, pads[i].left, pads[i].right,
+            tuning.stick_deadzone, tuning.pointer_deadzone);
+        const bool shaking = pads[i].shake_until_us != 0u && now_us < pads[i].shake_until_us;
+        live.shake_remote = shaking && tuning.motion_shake == galaxy::input::MotionShake::Remote;
+        live.shake_nunchuk = shaking && tuning.motion_shake == galaxy::input::MotionShake::Nunchuk;
+        live.gyro_x = pads[i].gyro_x;
+        live.gyro_y = tuning.invert_pointer_y ? -pads[i].gyro_y : pads[i].gyro_y;
+    }
+    return count;
+}
+
+bool pad_has_input(const galaxy::input::PadSample& sample) {
+    if (!sample.connected) {
+        return false;
+    }
+    if (sample.buttons != 0u) {
+        return true;
+    }
+    for (std::size_t i = 0; i < 4u; ++i) {
+        if (std::fabs(sample.axes[i]) > 0.001f) {
+            return true;
+        }
+    }
+    return sample.axes[4] > 30.0f / 255.0f || sample.axes[5] > 30.0f / 255.0f;
+}
+
+// Runs the overlay chord and navigation over every connected pad at once and
+// applies its hidden/neutral decision back to each pad.
+bool route_native_settings_pads(std::span<LivePad> pads) {
+    static std::uint16_t s_capture_hold = 0u;
+    std::uint16_t word = 0u;
+    float stick_x = 0.0f;
+    float stick_y = 0.0f;
+    for (const LivePad& pad : pads) {
+        if (!pad.sample.connected) {
+            continue;
+        }
+        word = static_cast<std::uint16_t>(
+            word | galaxy::input::settings_pad_buttons(pad.sample.scheme, pad.sample.buttons));
+        if (std::fabs(pad.sample.axes[0]) > std::fabs(stick_x)) stick_x = pad.sample.axes[0];
+        if (std::fabs(pad.sample.axes[1]) > std::fabs(stick_y)) stick_y = pad.sample.axes[1];
+    }
+    // A capture's press stays away from the overlay's navigation until it is
+    // released, and while capturing the pad reaches neither overlay nor game.
+    if (g_binding_capture_armed.load(std::memory_order_acquire) != 0u) {
+        s_capture_hold = word;
+        for (LivePad& pad : pads) {
+            pad.sample.buttons = 0u;
+            pad.sample.axes = {};
+        }
+        return true;
+    }
+    s_capture_hold = static_cast<std::uint16_t>(s_capture_hold & word);
+    word = static_cast<std::uint16_t>(word & ~s_capture_hold);
+    const bool hold_neutral = s_capture_hold != 0u;
+    const bool any_connected = std::any_of(pads.begin(), pads.end(),
+        [](const LivePad& pad) { return pad.sample.connected; });
+    if (!any_connected) {
+        return false;
+    }
+    std::uint16_t game_word = word;
+    const bool neutral = route_native_settings_pad(game_word, stick_x, stick_y) || hold_neutral;
+    for (LivePad& pad : pads) {
+        if (!pad.sample.connected) {
+            continue;
+        }
+        const std::uint16_t own =
+            galaxy::input::settings_pad_buttons(pad.sample.scheme, pad.sample.buttons);
+        pad.sample.buttons = galaxy::input::unified_from_settings_pad(
+            pad.sample.scheme, static_cast<std::uint16_t>(own & game_word),
+            neutral ? 0u : pad.sample.buttons);
+        if (neutral) {
+            pad.sample.axes = {};
+            pad.shake_remote = pad.shake_nunchuk = false;
+            pad.gyro_x = pad.gyro_y = 0.0f;
+        }
+    }
+    return neutral;
+}
+
+void service_binding_capture(std::span<const LivePad> pads) {
+    static galaxy::input::PadSample s_baseline{};
+    static std::uint32_t s_baseline_for = 0u;
+    const std::uint32_t armed = g_binding_capture_armed.load(std::memory_order_acquire);
+    if (armed == 0u) {
+        s_baseline_for = 0u;
+        return;
+    }
+    const auto scheme = static_cast<galaxy::input::ControlScheme>(armed - 1u);
+    const LivePad* match = nullptr;
+    for (const LivePad& pad : pads) {
+        if (pad.sample.connected && pad.sample.scheme == scheme) {
+            match = &pad;
+            break;
+        }
+    }
+    if (match == nullptr) {
+        return;
+    }
+    if (s_baseline_for != armed) {
+        s_baseline = match->sample;
+        s_baseline_for = armed;
+        return;
+    }
+    const auto source = galaxy::input::detect_pad_capture(s_baseline, match->sample);
+    s_baseline = match->sample;
+    if (!source) {
+        return;
+    }
+    std::uint32_t expected = armed;
+    if (!g_binding_capture_armed.compare_exchange_strong(expected, 0u, std::memory_order_acq_rel)) {
+        return;
+    }
+    g_binding_capture_result.store(
+        0x10000u | (static_cast<std::uint32_t>(source->kind) << 8u) | source->code,
+        std::memory_order_release);
+    s_baseline_for = 0u;
+    const NativeSettingsKeySink sink = g_native_settings_key_sink.load(std::memory_order_acquire);
+    if (sink != nullptr) {
+        sink(kBindingCaptureKey);
+    }
+}
+
+bool advance_nunchuk_shake_accel(
+    galaxy::input::WiimoteInputSnapshot& snapshot,
+    bool pressed,
+    bool& previous_pressed,
+    std::uint8_t& remaining_frames) {
+    if (pressed && !previous_pressed) {
+        remaining_frames = 12;
+    }
+    previous_pressed = pressed;
+    if (remaining_frames == 0) {
+        return false;
+    }
+    const bool phase = (remaining_frames & 1u) != 0u;
+    snapshot.nunchuk.accel.x = phase ? 0x02f0u : 0x0110u;
+    snapshot.nunchuk.accel.y = 0x0200u;
+    snapshot.nunchuk.accel.z = phase ? 0x0130u : 0x02d0u;
+    --remaining_frames;
+    return true;
 }
 
 std::uint16_t wiimote_trace_button_bits(
@@ -8167,49 +8430,74 @@ galaxy::input::WiimoteInputSnapshot build_native_hid_input_snapshot(
         clear_native_window_key_presses();
     }
     input_poll_diagnostic_stage(NativeInputPollStage::Keys);
-    static constexpr std::array<int, 32> kFunctionalVirtualKeys{
-        VK_SPACE, VK_RETURN, VK_LSHIFT, VK_RSHIFT,
-        VK_LEFT, VK_RIGHT, VK_DOWN, VK_UP,
-        VK_OEM_PLUS, 'P', VK_OEM_MINUS, 'M',
-        '1', VK_NUMPAD1, '2', VK_NUMPAD2,
-        'H', 'C', 'Z', VK_LCONTROL, VK_RCONTROL,
-        'Q', 'E', 'D', 'A', 'W', 'S',
-        'L', 'J', 'I', 'K', 'R',
-    };
-    const std::array<bool, kFunctionalVirtualKeys.size()> functional_key_levels =
-        galaxy::input::collect_native_key_levels(
-            window_focused && !native_keyboard_captured,
-            kFunctionalVirtualKeys,
-            [](int vk) {
-                const bool pressed = g_window_key_presses.consume(
-                    static_cast<std::uint32_t>(vk));
-                return pressed ||
-                    g_window_keys_held.held(static_cast<std::uint32_t>(vk));
-            });
-    const auto key = [&](int vk) {
-        return galaxy::input::native_key_level(
-            kFunctionalVirtualKeys, functional_key_levels, vk);
-    };
+    const LiveControls& controls = live_controls();
+    const galaxy::input::BindingTable& keyboard_table =
+        controls.config.table(galaxy::input::ControlScheme::Keyboard);
+    galaxy::input::KeyboardMouseLevels keyboard_levels{};
+    if (window_focused && !native_keyboard_captured) {
+        for (std::size_t index = 0; index < controls.keyboard_keys.count; ++index) {
+            const std::uint8_t vk = controls.keyboard_keys.keys[index];
+            const bool pressed = g_window_key_presses.consume(vk);
+            keyboard_levels.set_key(vk, pressed || g_window_keys_held.held(vk));
+        }
+        // Middle and side mouse buttons arrive as window key levels.
+        const auto mouse_key = [](std::uint32_t vk) {
+            return g_window_key_presses.consume(vk) || g_window_keys_held.held(vk);
+        };
+        if (mouse_key(VK_MBUTTON)) keyboard_levels.mouse |= 1u << 2u;
+        if (mouse_key(VK_XBUTTON1)) keyboard_levels.mouse |= 1u << 3u;
+        if (mouse_key(VK_XBUTTON2)) keyboard_levels.mouse |= 1u << 4u;
+    }
 
     const galaxy::RuntimeInputMode input_mode = input_mode_state.mode;
     input_poll_diagnostic_stage(NativeInputPollStage::Controller);
-    const bool poll_controller =
+    const galaxy::input::ControlScheme capture_scheme =
+        static_cast<galaxy::input::ControlScheme>(
+            std::max<std::uint32_t>(g_binding_capture_armed.load(std::memory_order_acquire), 1u) - 1u);
+    const bool capturing = g_binding_capture_armed.load(std::memory_order_acquire) != 0u;
+    const bool controller_mode_polls =
         (input_mode == galaxy::RuntimeInputMode::Controller ||
          input_mode == galaxy::RuntimeInputMode::Auto) &&
-        !xinput_polling_disabled() &&
         (!xinput_requires_focus() || window_focused);
+    const bool poll_controller =
+        (controller_mode_polls || (capturing && capture_scheme == galaxy::input::ControlScheme::Xbox)) &&
+        !xinput_polling_disabled();
+    const galaxy::input::SchemeTuning& xbox_tuning =
+        controls.config.tune(galaxy::input::ControlScheme::Xbox);
     NativeHidControllerState controller =
-        poll_controller ? poll_native_hid_controller()
-                        : NativeHidControllerState{};
-    if (controller.connected &&
-        route_native_settings_pad(
-            controller.buttons, controller.left_x, controller.left_y)) {
-        controller.left_trigger = 0u;
-        controller.right_trigger = 0u;
-        controller.left_x = controller.left_y = 0.0f;
-        controller.right_x = controller.right_y = 0.0f;
+        poll_controller
+            ? poll_native_hid_controller(
+                  static_cast<std::int16_t>(read_env_int_setting(
+                      "GALAXY_XINPUT_LEFT_DEADZONE", deadzone_counts(xbox_tuning.stick_deadzone), 0, 32767)),
+                  static_cast<std::int16_t>(read_env_int_setting(
+                      "GALAXY_XINPUT_POINTER_DEADZONE", deadzone_counts(xbox_tuning.pointer_deadzone), 0, 32767)))
+            : NativeHidControllerState{};
+    if (poll_controller) {
+        g_xinput_seen_connected.store(controller.connected, std::memory_order_release);
     }
-    const bool controller_active = native_hid_controller_has_input(controller);
+    std::array<LivePad, 1u + kMaxSwitchPads> pads{};
+    std::size_t pad_count = 0;
+    pads[pad_count++].sample = pad_sample_from_xinput(controller);
+    if (controller_mode_polls || (capturing && galaxy::input::scheme_has_motion(capture_scheme))) {
+        ensure_controller_hid_started();
+        std::array<LivePad, kMaxSwitchPads> switch_pads{};
+        const std::size_t switch_count = collect_switch_pads(controls.config, switch_pads);
+        for (std::size_t i = 0; i < switch_count; ++i) {
+            pads[pad_count++] = switch_pads[i];
+        }
+    }
+    const std::span<LivePad> live_pads(pads.data(), pad_count);
+    service_binding_capture(live_pads);
+    (void)route_native_settings_pads(live_pads);
+    if (!controller_mode_polls) {
+        for (LivePad& pad : live_pads) {
+            pad = {};
+        }
+    }
+    const bool controller_active = std::any_of(live_pads.begin(), live_pads.end(),
+        [](const LivePad& pad) { return pad_has_input(pad.sample); });
+    controller.connected = std::any_of(live_pads.begin(), live_pads.end(),
+        [](const LivePad& pad) { return pad.sample.connected; });
     const bool force_controller =
         input_mode == galaxy::RuntimeInputMode::Controller;
     const bool use_controller = force_controller ||
@@ -8222,62 +8510,62 @@ galaxy::input::WiimoteInputSnapshot build_native_hid_input_snapshot(
         input_source =
             controller.connected ? "controller" : "controller_disconnected";
     }
-    const std::uint8_t trigger_threshold = xinput_trigger_threshold();
-    const auto pad = [&](WORD mask) {
-        return controller.connected && (controller.buttons & mask) != 0u;
+    const float trigger_threshold =
+        static_cast<float>(xinput_trigger_threshold()) / 255.0f;
+
+    // Each scheme's bindings turn its physical inputs into Wii targets.
+    galaxy::input::LogicalInput logic{};
+    bool motion_shake_remote = false;
+    bool motion_shake_nunchuk = false;
+    float gyro_x = 0.0f;
+    float gyro_y = 0.0f;
+    float pad_pointer_x = 0.0f;
+    float pad_pointer_y = 0.0f;
+    if (use_controller) {
+        for (const LivePad& pad : live_pads) {
+            if (!pad.sample.connected) {
+                continue;
+            }
+            const galaxy::input::SchemeTuning& tuning = controls.config.tune(pad.sample.scheme);
+            galaxy::input::LogicalInput pad_logic = galaxy::input::evaluate_pad_bindings(
+                controls.config.table(pad.sample.scheme), pad.sample, trigger_threshold);
+            // Pointer speed is per scheme; scale before merging pads.
+            const float speed = pad.sample.scheme == galaxy::input::ControlScheme::Xbox
+                ? xinput_pointer_speed_or(tuning.pointer_speed) : tuning.pointer_speed;
+            pad_logic.pointer_x *= speed;
+            pad_logic.pointer_y *= tuning.invert_pointer_y ? -speed : speed;
+            logic = galaxy::input::merge_logical_input(logic, pad_logic);
+            motion_shake_remote = motion_shake_remote || pad.shake_remote;
+            motion_shake_nunchuk = motion_shake_nunchuk || pad.shake_nunchuk;
+            gyro_x += pad.gyro_x;
+            gyro_y += pad.gyro_y;
+        }
+        pad_pointer_x = logic.pointer_x;
+        pad_pointer_y = logic.pointer_y;
+    } else {
+        logic = galaxy::input::evaluate_keyboard_bindings(keyboard_table, keyboard_levels);
+        if (controls.config.tune(galaxy::input::ControlScheme::Keyboard).invert_pointer_y) {
+            logic.pointer_y = -logic.pointer_y;
+        }
+    }
+    const auto held = [&logic](galaxy::input::WiiTarget target) {
+        return logic.held(target);
     };
+    using galaxy::input::WiiTarget;
+    snapshot.buttons.left = held(WiiTarget::DpadLeft) || script.buttons.left;
+    snapshot.buttons.right = held(WiiTarget::DpadRight) || script.buttons.right;
+    snapshot.buttons.down = held(WiiTarget::DpadDown) || script.buttons.down;
+    snapshot.buttons.up = held(WiiTarget::DpadUp) || script.buttons.up;
+    snapshot.buttons.plus = held(WiiTarget::Plus) || script.buttons.plus;
+    snapshot.buttons.minus = held(WiiTarget::Minus) || script.buttons.minus;
+    snapshot.buttons.one = held(WiiTarget::One) || script.buttons.one;
+    snapshot.buttons.two = held(WiiTarget::Two) || script.buttons.two;
+    snapshot.buttons.home = held(WiiTarget::Home) || script.buttons.home;
+    snapshot.buttons.a = held(WiiTarget::A) || script.buttons.a;
+    snapshot.buttons.b = held(WiiTarget::B) || script.buttons.b;
 
-    const bool key_a = key(VK_SPACE) || key(VK_RETURN);
-    const bool key_b = key(VK_LSHIFT) || key(VK_RSHIFT);
-    const bool key_left = key(VK_LEFT);
-    const bool key_right = key(VK_RIGHT);
-    const bool key_down = key(VK_DOWN);
-    const bool key_up = key(VK_UP);
-    const bool key_plus = key(VK_OEM_PLUS) || key('P');
-    const bool key_minus = key(VK_OEM_MINUS) || key('M');
-    const bool key_one = key('1') || key(VK_NUMPAD1);
-    const bool key_two = key('2') || key(VK_NUMPAD2);
-    const bool key_home = key('H');
-    const bool key_c = key('C');
-    const bool key_z = key('Z') || key(VK_LCONTROL) || key(VK_RCONTROL);
-    const bool key_shake = key('Q') || key('E');
-
-    snapshot.buttons.left = use_controller ? pad(XINPUT_GAMEPAD_DPAD_LEFT) : key_left;
-    snapshot.buttons.right = use_controller ? pad(XINPUT_GAMEPAD_DPAD_RIGHT) : key_right;
-    snapshot.buttons.down = use_controller ? pad(XINPUT_GAMEPAD_DPAD_DOWN) : key_down;
-    snapshot.buttons.up = use_controller ? pad(XINPUT_GAMEPAD_DPAD_UP) : key_up;
-    snapshot.buttons.plus = use_controller ? pad(XINPUT_GAMEPAD_START) : key_plus;
-    snapshot.buttons.minus = use_controller ? pad(XINPUT_GAMEPAD_BACK) : key_minus;
-    snapshot.buttons.one = use_controller ? false : key_one;
-    snapshot.buttons.two = use_controller ? false : key_two;
-    snapshot.buttons.home = use_controller ? false : key_home;
-    snapshot.buttons.a = use_controller ? pad(XINPUT_GAMEPAD_A) : key_a;
-    snapshot.buttons.b =
-        use_controller
-            ? (pad(XINPUT_GAMEPAD_B) ||
-               controller.right_trigger >= trigger_threshold)
-            : key_b;
-    snapshot.buttons.left = snapshot.buttons.left || script.buttons.left;
-    snapshot.buttons.right = snapshot.buttons.right || script.buttons.right;
-    snapshot.buttons.down = snapshot.buttons.down || script.buttons.down;
-    snapshot.buttons.up = snapshot.buttons.up || script.buttons.up;
-    snapshot.buttons.plus = snapshot.buttons.plus || script.buttons.plus;
-    snapshot.buttons.minus = snapshot.buttons.minus || script.buttons.minus;
-    snapshot.buttons.one = snapshot.buttons.one || script.buttons.one;
-    snapshot.buttons.two = snapshot.buttons.two || script.buttons.two;
-    snapshot.buttons.home = snapshot.buttons.home || script.buttons.home;
-    snapshot.buttons.a = snapshot.buttons.a || script.buttons.a;
-    snapshot.buttons.b = snapshot.buttons.b || script.buttons.b;
-
-    const auto key_axis = [&](int positive, int negative) {
-        float value = 0.0f;
-        if (key(positive)) value += 1.0f;
-        if (key(negative)) value -= 1.0f;
-        return value;
-    };
-
-    float stick_x = use_controller ? controller.left_x : key_axis('D', 'A');
-    float stick_y = use_controller ? controller.left_y : key_axis('W', 'S');
+    float stick_x = logic.stick_x;
+    float stick_y = logic.stick_y;
     if (script.has_stick) {
         stick_x = script.stick_x;
         stick_y = script.stick_y;
@@ -8286,15 +8574,8 @@ galaxy::input::WiimoteInputSnapshot build_native_hid_input_snapshot(
         galaxy::input::native_stick_axis_byte(stick_x, 0x15, 0x7b, 0xe0);
     snapshot.nunchuk.stick_y =
         galaxy::input::native_stick_axis_byte(stick_y, 0x1d, 0x81, 0xe6);
-    snapshot.nunchuk.c =
-        use_controller ? pad(XINPUT_GAMEPAD_LEFT_THUMB) : key_c;
-    snapshot.nunchuk.z =
-        use_controller
-            ? (pad(XINPUT_GAMEPAD_LEFT_SHOULDER) ||
-               controller.left_trigger >= trigger_threshold)
-            : key_z;
-    snapshot.nunchuk.c = snapshot.nunchuk.c || script.nunchuk_c;
-    snapshot.nunchuk.z = snapshot.nunchuk.z || script.nunchuk_z;
+    snapshot.nunchuk.c = held(WiiTarget::C) || script.nunchuk_c;
+    snapshot.nunchuk.z = held(WiiTarget::Z) || script.nunchuk_z;
 
     if (host_pointer_metadata != nullptr) {
         host_pointer_metadata->non_mouse_buttons =
@@ -8414,14 +8695,44 @@ galaxy::input::WiimoteInputSnapshot build_native_hid_input_snapshot(
                         host_pointer.inside_client,
                         projected_host_pointer.visible,
                         game_window_under_cursor)) {
-                    snapshot.buttons.a =
-                        snapshot.buttons.a || host_pointer.left_button;
-                    snapshot.buttons.b =
-                        snapshot.buttons.b || host_pointer.right_button;
+                    const std::uint32_t mouse_targets = galaxy::input::mouse_bound_targets(
+                        keyboard_table,
+                        static_cast<std::uint8_t>((host_pointer.left_button ? 1u : 0u) |
+                                                  (host_pointer.right_button ? 2u : 0u)));
+                    galaxy::input::WiimoteInputSnapshot mouse_only{};
+                    const auto mouse = [mouse_targets](WiiTarget target) {
+                        return (mouse_targets & galaxy::input::wii_target_bit(target)) != 0u;
+                    };
+                    mouse_only.buttons.a = mouse(WiiTarget::A);
+                    mouse_only.buttons.b = mouse(WiiTarget::B);
+                    mouse_only.buttons.one = mouse(WiiTarget::One);
+                    mouse_only.buttons.two = mouse(WiiTarget::Two);
+                    mouse_only.buttons.plus = mouse(WiiTarget::Plus);
+                    mouse_only.buttons.minus = mouse(WiiTarget::Minus);
+                    mouse_only.buttons.home = mouse(WiiTarget::Home);
+                    mouse_only.buttons.up = mouse(WiiTarget::DpadUp);
+                    mouse_only.buttons.down = mouse(WiiTarget::DpadDown);
+                    mouse_only.buttons.left = mouse(WiiTarget::DpadLeft);
+                    mouse_only.buttons.right = mouse(WiiTarget::DpadRight);
+                    mouse_only.nunchuk.c = mouse(WiiTarget::C);
+                    mouse_only.nunchuk.z = mouse(WiiTarget::Z);
+                    snapshot.buttons.a = snapshot.buttons.a || mouse_only.buttons.a;
+                    snapshot.buttons.b = snapshot.buttons.b || mouse_only.buttons.b;
+                    snapshot.buttons.one = snapshot.buttons.one || mouse_only.buttons.one;
+                    snapshot.buttons.two = snapshot.buttons.two || mouse_only.buttons.two;
+                    snapshot.buttons.plus = snapshot.buttons.plus || mouse_only.buttons.plus;
+                    snapshot.buttons.minus = snapshot.buttons.minus || mouse_only.buttons.minus;
+                    snapshot.buttons.home = snapshot.buttons.home || mouse_only.buttons.home;
+                    snapshot.buttons.up = snapshot.buttons.up || mouse_only.buttons.up;
+                    snapshot.buttons.down = snapshot.buttons.down || mouse_only.buttons.down;
+                    snapshot.buttons.left = snapshot.buttons.left || mouse_only.buttons.left;
+                    snapshot.buttons.right = snapshot.buttons.right || mouse_only.buttons.right;
+                    snapshot.nunchuk.c = snapshot.nunchuk.c || mouse_only.nunchuk.c;
+                    snapshot.nunchuk.z = snapshot.nunchuk.z || mouse_only.nunchuk.z;
+                    logic.pressed |= mouse_targets;
                     if (host_pointer_metadata != nullptr) {
                         host_pointer_metadata->owned_mouse_buttons =
-                            (host_pointer.left_button ? 0x0800u : 0u) |
-                            (host_pointer.right_button ? 0x0400u : 0u);
+                            galaxy::input::synthetic_kpad_button_mask(mouse_only);
                     }
                 }
             }
@@ -8544,21 +8855,23 @@ galaxy::input::WiimoteInputSnapshot build_native_hid_input_snapshot(
     input_poll_diagnostic_stage(NativeInputPollStage::PointerRemainder);
     const galaxy::input::NativePointerAxes pointer_axes =
         galaxy::input::merge_native_pointer_axes(
-            use_controller ? 0.0f : key_axis('L', 'J'),
-            use_controller ? 0.0f : key_axis('I', 'K'),
-            controller.right_x,
-            controller.right_y,
+            use_controller ? 0.0f : logic.pointer_x,
+            use_controller ? 0.0f : logic.pointer_y,
+            pad_pointer_x,
+            pad_pointer_y,
             controller.connected,
             use_controller);
     const bool pointer_axis_allowed =
         use_controller ? controller.connected
                        : true;
     if (pointer_axis_allowed) {
+        // Controller pointer axes already carry their scheme's speed.
         const float pointer_speed =
             pointer_axes.source ==
                     galaxy::input::NativePointerAxisSource::Controller
-                ? xinput_pointer_speed()
-                : keyboard_pointer_speed();
+                ? 1.0f
+                : keyboard_pointer_speed_or(
+                      controls.config.tune(galaxy::input::ControlScheme::Keyboard).pointer_speed);
         s_pointer_x = std::clamp(
             s_pointer_x + pointer_axes.x * pointer_speed * dt,
             -1.0f,
@@ -8588,10 +8901,17 @@ galaxy::input::WiimoteInputSnapshot build_native_hid_input_snapshot(
         pointer_active =
             pointer_active || pointer_axes.moving || hold_pointer_visible;
     }
+    if (use_controller && controller.connected &&
+        (std::fabs(gyro_x) > 0.0f || std::fabs(gyro_y) > 0.0f)) {
+        s_pointer_x = std::clamp(s_pointer_x + gyro_x, -1.0f, 1.0f);
+        s_pointer_y = std::clamp(s_pointer_y - gyro_y, -1.0f, 1.0f);
+        pointer_active = true;
+        pointer_source = "controller";
+    }
+    const bool recenter_held = held(WiiTarget::PointerRecenter);
     const bool controller_recenter =
-        use_controller && controller.connected &&
-        pad(XINPUT_GAMEPAD_RIGHT_THUMB);
-    if ((!use_controller && key('R')) || controller_recenter) {
+        use_controller && controller.connected && recenter_held;
+    if ((!use_controller && recenter_held) || controller_recenter) {
         s_pointer_x = 0.0f;
         s_pointer_y = 0.0f;
         pointer_active = true;
@@ -8627,20 +8947,22 @@ galaxy::input::WiimoteInputSnapshot build_native_hid_input_snapshot(
         host_pointer_metadata->refresh_mouse_allowed =
             input_mode == galaxy::RuntimeInputMode::KeyboardMouse &&
             allow_absolute_pointer && !script.has_pointer &&
-            !pointer_axes.moving && !key('R') &&
+            !pointer_axes.moving && !recenter_held &&
             (host_pointer_metadata->pointer_origin == SyntheticKpadPointerOrigin::PhysicalMouse ||
              host_pointer_metadata->pointer_origin == SyntheticKpadPointerOrigin::None);
     }
 
     const bool shake_pressed =
-        script.shake || (use_controller
-            ? (pad(XINPUT_GAMEPAD_X) || pad(XINPUT_GAMEPAD_Y) ||
-               pad(XINPUT_GAMEPAD_RIGHT_SHOULDER))
-            : key_shake);
+        script.shake || held(WiiTarget::Shake) || motion_shake_remote;
     static bool s_previous_shake = false;
     static std::uint8_t s_shake_frames = 0;
     const bool shake_active = galaxy::input::advance_wiimote_shake_accel(
         snapshot, shake_pressed, s_previous_shake, s_shake_frames);
+    static bool s_previous_nunchuk_shake = false;
+    static std::uint8_t s_nunchuk_shake_frames = 0;
+    (void)advance_nunchuk_shake_accel(
+        snapshot, held(WiiTarget::NunchukShake) || motion_shake_nunchuk,
+        s_previous_nunchuk_shake, s_nunchuk_shake_frames);
 
     const std::uint16_t buttons = wiimote_trace_button_bits(snapshot.buttons);
     const bool trace_interesting =

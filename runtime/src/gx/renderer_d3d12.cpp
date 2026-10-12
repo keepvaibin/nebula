@@ -196,6 +196,23 @@ std::uint64_t s_settings_applied_ms = 0u;
 constexpr std::uint64_t kDisplayConfirmMs = 15000u;
 std::atomic<bool> s_quit_requested{false};
 
+// CONTROLS page (tab 2): a draft of the bindings/tuning and of the input
+// source, applied together with the other pages. The edited scheme only
+// selects which table the rows show. A binding row waiting for an input is
+// s_capture_target (kWiiTargetCount: none). Guarded by s_native_settings_mutex.
+constexpr unsigned kControlsTab = 2u;
+galaxy::input::ControlsConfig s_controls_draft = galaxy::input::default_controls_config();
+RuntimeInputMode s_input_mode_draft = RuntimeInputMode::KeyboardMouse;
+galaxy::input::ControlScheme s_controls_scheme = galaxy::input::ControlScheme::Keyboard;
+std::size_t s_capture_target = galaxy::input::kWiiTargetCount;
+std::uint64_t s_capture_deadline_ms = 0u;
+constexpr std::uint64_t kCaptureTimeoutMs = 6000u;
+std::string s_controls_message;
+std::uint64_t s_controls_message_until_ms = 0u;
+unsigned s_settings_first_row = 0u;
+// The window thread's left/right-resolved code for the key being handled.
+std::uint32_t s_handled_key_normalized = 0u;
+
 // Live window resize (arbitrary resolution/aspect ratio without a restart).
 // wnd_proc only records the latest client size here; the actual swap-chain
 // resize happens on the render thread at the top of begin_frame(), the one
@@ -208,6 +225,15 @@ std::atomic<bool> s_quit_requested{false};
 std::atomic<std::uint64_t> s_pending_resize_extent{0};
 
 constexpr unsigned kNativeSettingsTabCount = 5;
+// Rows the panel shows at once; longer pages scroll.
+constexpr unsigned kNativeSettingsVisibleRows = 9u;
+
+unsigned native_settings_first_row(unsigned first, unsigned selected, unsigned count) {
+    if (count <= kNativeSettingsVisibleRows) return 0u;
+    if (selected < first) first = selected;
+    if (selected >= first + kNativeSettingsVisibleRows) first = selected + 1u - kNativeSettingsVisibleRows;
+    return std::min(first, count - kNativeSettingsVisibleRows);
+}
 // Set by the overlay when "resolution follows window" is switched on, so the
 // render thread re-derives the scale for the current window right away.
 std::atomic<bool> s_follow_window_rearm{false};
@@ -432,6 +458,8 @@ void sanitize_settings_draft(RenderConfig& render) {
     render.efb_scale = std::clamp(render.efb_scale, 1u, settings_scale_cap(render));
 }
 
+unsigned controls_changes();
+
 unsigned pending_settings_changes() {
     const RenderConfig live = get_render_config();
     const RenderConfig& d = s_settings_draft;
@@ -459,14 +487,142 @@ unsigned pending_settings_changes() {
     changes += d.per_pixel_lighting != live.per_pixel_lighting;
     changes += d.hud_output_resolution != live.hud_output_resolution;
     changes += d.draw_distance != live.draw_distance;
+    changes += controls_changes();
     return changes;
+}
+
+enum class ControlsRow {
+    InputMode,
+    Scheme,
+    Binding,
+    PointerSpeed,
+    InvertPointerY,
+    StickDeadzone,
+    PointerDeadzone,
+    MotionShake,
+    ShakeSensitivity,
+    GyroPointer,
+    Reset,
+};
+
+struct ControlsRowInfo {
+    ControlsRow kind = ControlsRow::Reset;
+    galaxy::input::WiiTarget target = galaxy::input::WiiTarget::A;
+};
+
+constexpr unsigned kControlsBindingRow0 = 2u;
+
+std::vector<ControlsRow> controls_tail_rows() {
+    using galaxy::input::scheme_has_motion;
+    using galaxy::input::scheme_is_gamepad;
+    std::vector<ControlsRow> rows{ControlsRow::PointerSpeed, ControlsRow::InvertPointerY};
+    if (scheme_is_gamepad(s_controls_scheme)) {
+        rows.push_back(ControlsRow::StickDeadzone);
+        rows.push_back(ControlsRow::PointerDeadzone);
+    }
+    if (scheme_has_motion(s_controls_scheme)) {
+        rows.push_back(ControlsRow::MotionShake);
+        rows.push_back(ControlsRow::ShakeSensitivity);
+        rows.push_back(ControlsRow::GyroPointer);
+    }
+    rows.push_back(ControlsRow::Reset);
+    return rows;
+}
+
+unsigned controls_row_count() {
+    return kControlsBindingRow0 + static_cast<unsigned>(galaxy::input::kWiiTargetCount) +
+           static_cast<unsigned>(controls_tail_rows().size());
+}
+
+ControlsRowInfo controls_row(unsigned row) {
+    ControlsRowInfo info{};
+    if (row == 0u) {
+        info.kind = ControlsRow::InputMode;
+    } else if (row == 1u) {
+        info.kind = ControlsRow::Scheme;
+    } else if (row - kControlsBindingRow0 < galaxy::input::kWiiTargetCount) {
+        info.kind = ControlsRow::Binding;
+        info.target = static_cast<galaxy::input::WiiTarget>(row - kControlsBindingRow0);
+    } else {
+        const auto tail = controls_tail_rows();
+        const std::size_t index = row - kControlsBindingRow0 - galaxy::input::kWiiTargetCount;
+        info.kind = index < tail.size() ? tail[index] : ControlsRow::Reset;
+    }
+    return info;
+}
+
+unsigned controls_changes() {
+    const galaxy::input::ControlsConfig live = galaxy::input::get_controls_config();
+    unsigned changes = 0u;
+    for (std::size_t i = 0; i < galaxy::input::kControlSchemeCount; ++i) {
+        for (std::size_t t = 0; t < galaxy::input::kWiiTargetCount; ++t) {
+            changes += s_controls_draft.tables[i].targets[t] != live.tables[i].targets[t];
+        }
+        changes += !(s_controls_draft.tuning[i] == live.tuning[i]);
+    }
+    changes += s_input_mode_draft != get_runtime_settings().input_mode;
+    return changes;
+}
+
+void show_controls_message(const char* message) {
+    s_controls_message = message;
+    s_controls_message_until_ms = GetTickCount64() + 2500u;
+}
+
+bool controls_capturing() {
+    return s_capture_target < galaxy::input::kWiiTargetCount;
+}
+
+void end_controls_capture() {
+    if (controls_capturing()) {
+        s_capture_target = galaxy::input::kWiiTargetCount;
+        galaxy::host::cancel_controller_binding_capture();
+    }
+}
+
+void start_controls_capture(galaxy::input::WiiTarget target) {
+    s_capture_target = static_cast<std::size_t>(target);
+    s_capture_deadline_ms = GetTickCount64() + kCaptureTimeoutMs;
+    if (galaxy::input::scheme_is_gamepad(s_controls_scheme)) {
+        galaxy::host::arm_controller_binding_capture(s_controls_scheme);
+    }
+}
+
+void finish_controls_capture(galaxy::input::InputSource source) {
+    if (!controls_capturing()) {
+        return;
+    }
+    const auto target = static_cast<galaxy::input::WiiTarget>(s_capture_target);
+    end_controls_capture();
+    if (!galaxy::input::binding_source_allowed(s_controls_scheme, target, source)) {
+        show_controls_message("THAT INPUT CANNOT DRIVE THIS ROW");
+        return;
+    }
+    galaxy::input::add_binding(s_controls_draft.table(s_controls_scheme)[target], source);
+    std::cerr << "[settings] bind " << galaxy::input::control_scheme_id(s_controls_scheme) << '.'
+              << galaxy::input::wii_target_id(target) << " = "
+              << galaxy::input::format_target_bindings(
+                     s_controls_scheme, s_controls_draft.table(s_controls_scheme)[target])
+              << '\n';
+}
+
+void expire_controls_capture() {
+    if (controls_capturing() && GetTickCount64() >= s_capture_deadline_ms) {
+        end_controls_capture();
+    }
+}
+
+void reset_controls_draft() {
+    end_controls_capture();
+    s_controls_draft = galaxy::input::get_controls_config();
+    s_input_mode_draft = get_runtime_settings().input_mode;
 }
 
 unsigned native_settings_row_count(unsigned tab) {
     switch (tab % kNativeSettingsTabCount) {
     case 0: return 8u;
     case 1: return 9u;
-    case 2: return 1u;
+    case 2: return controls_row_count();
     case 3: return 6u;
     case 4: return 5u;
     default: return 0u;
@@ -517,10 +673,31 @@ void expire_display_confirmation() {
     }
 }
 
+// Applies the CONTROLS draft. Controller input is selected only while a
+// controller is attached.
+void apply_controls_draft() {
+    const galaxy::input::ControlsConfig live = galaxy::input::get_controls_config();
+    if (!(s_controls_draft == live)) {
+        galaxy::input::set_controls_config(s_controls_draft);
+        s_controls_draft = galaxy::input::get_controls_config();
+    }
+    RuntimeSettings runtime = get_runtime_settings();
+    if (s_input_mode_draft != runtime.input_mode) {
+        if (s_input_mode_draft == RuntimeInputMode::Controller && !galaxy::host::controller_present_now()) {
+            show_controls_message("NO CONTROLLER CONNECTED");
+            s_input_mode_draft = runtime.input_mode;
+        } else {
+            runtime.input_mode = s_input_mode_draft;
+            set_runtime_settings(runtime);
+        }
+    }
+}
+
 void apply_native_settings_draft() {
     if (pending_settings_changes() == 0u) {
         return;
     }
+    apply_controls_draft();
     RenderConfig next = s_settings_draft;
     sanitize_settings_draft(next);
     const RenderConfig live = get_render_config();
@@ -576,6 +753,7 @@ void apply_native_settings_draft() {
 
 void revert_native_settings_draft() {
     s_settings_draft = get_render_config();
+    reset_controls_draft();
     std::cerr << "[settings] reverted\n";
 }
 
@@ -767,10 +945,60 @@ void adjust_native_setting_unlogged(int delta) {
     }
 
     RuntimeSettings settings = get_runtime_settings();
-    if (tab == 2u) {
-        // Input-source changes require device capability/preflight ownership.
-        // Keep the live source visible, but never switch to absent hardware
-        // from an in-game key press.
+    if (tab == kControlsTab) {
+        using galaxy::input::ControlScheme;
+        galaxy::input::SchemeTuning& tuning = s_controls_draft.tune(s_controls_scheme);
+        const ControlsRowInfo info = controls_row(row);
+        const auto step_float = [delta](float value, float increment, float lo, float hi) {
+            const float snapped = std::round(value / increment) * increment;
+            return std::clamp(snapped + static_cast<float>(delta) * increment, lo, hi);
+        };
+        switch (info.kind) {
+        case ControlsRow::InputMode:
+            // A physical Wii Remote is chosen in the launcher only.
+            if (s_input_mode_draft == RuntimeInputMode::RealWiimote) return;
+            s_input_mode_draft = delta > 0 ? RuntimeInputMode::Controller : RuntimeInputMode::KeyboardMouse;
+            return;
+        case ControlsRow::Scheme:
+            s_controls_scheme = static_cast<ControlScheme>(step(
+                static_cast<unsigned>(s_controls_scheme),
+                static_cast<unsigned>(galaxy::input::kControlSchemeCount)));
+            return;
+        case ControlsRow::Binding:
+            if (delta > 0) start_controls_capture(info.target);
+            return;
+        case ControlsRow::PointerSpeed:
+            tuning.pointer_speed = step_float(tuning.pointer_speed, 0.2f, 0.2f, 6.0f);
+            return;
+        case ControlsRow::InvertPointerY:
+            tuning.invert_pointer_y = !tuning.invert_pointer_y;
+            return;
+        case ControlsRow::StickDeadzone:
+            tuning.stick_deadzone = step_float(tuning.stick_deadzone, 0.02f, 0.0f, 0.5f);
+            return;
+        case ControlsRow::PointerDeadzone:
+            tuning.pointer_deadzone = step_float(tuning.pointer_deadzone, 0.02f, 0.0f, 0.5f);
+            return;
+        case ControlsRow::MotionShake:
+            tuning.motion_shake = static_cast<galaxy::input::MotionShake>(
+                step(static_cast<unsigned>(tuning.motion_shake), 3u));
+            return;
+        case ControlsRow::ShakeSensitivity:
+            tuning.shake_sensitivity = static_cast<std::uint8_t>(
+                step(tuning.shake_sensitivity - 1u, galaxy::input::kShakeSensitivitySteps) + 1u);
+            return;
+        case ControlsRow::GyroPointer:
+            tuning.gyro_pointer = !tuning.gyro_pointer;
+            return;
+        case ControlsRow::Reset:
+            if (delta > 0) {
+                s_controls_draft.table(s_controls_scheme) =
+                    galaxy::input::default_binding_table(s_controls_scheme);
+                s_controls_draft.tune(s_controls_scheme) =
+                    galaxy::input::default_scheme_tuning(s_controls_scheme);
+            }
+            return;
+        }
         return;
     }
     if (tab == 3u) {
@@ -789,6 +1017,7 @@ void adjust_native_setting_unlogged(int delta) {
 }
 
 void move_native_setting_row(int delta) {
+    end_controls_capture();
     const unsigned tab =
         s_native_settings_tab.load(std::memory_order_relaxed) %
         kNativeSettingsTabCount;
@@ -806,6 +1035,8 @@ void move_native_setting_row(int delta) {
 }
 
 void cycle_native_settings_tab(int delta) {
+    end_controls_capture();
+    s_settings_first_row = 0u;
     int tab = static_cast<int>(
         s_native_settings_tab.load(std::memory_order_relaxed) %
         kNativeSettingsTabCount);
@@ -824,11 +1055,13 @@ void set_native_settings_visible(bool visible) {
         // A fresh draft and monitor list each time the menu opens.
         s_settings_monitors = enumerate_monitors();
         s_settings_draft = get_render_config();
+        reset_controls_draft();
     }
     if (!visible) {
         // Closing discards an unapplied draft and an unconfirmed display.
         revert_display_settings();
         s_settings_draft = get_render_config();
+        reset_controls_draft();
         flush_native_settings_if_dirty();
     }
     if (s_native_settings_visible.exchange(visible, std::memory_order_relaxed) != visible) {
@@ -836,10 +1069,86 @@ void set_native_settings_visible(bool visible) {
     }
 }
 
-bool handle_native_settings_key(WPARAM key, bool was_down) {
+// Binds a mouse button while a keyboard-scheme row waits for an input.
+bool native_settings_capture_mouse_button(galaxy::input::MouseButton button) {
+    const std::lock_guard<std::recursive_mutex> lock(s_native_settings_mutex);
+    if (!s_native_settings_visible.load(std::memory_order_relaxed) || !controls_capturing() ||
+        s_controls_scheme != galaxy::input::ControlScheme::Keyboard) {
+        return false;
+    }
+    finish_controls_capture({galaxy::input::SourceKind::Mouse, static_cast<std::uint8_t>(button)});
+    return true;
+}
+
+// Keys on the CONTROLS page that differ from the other pages: Enter/A on a
+// binding row waits for an input, Backspace/X clears it, Space/Y applies.
+// Returns true when the key was handled here.
+bool handle_controls_key(WPARAM key, bool was_down, bool from_pad) {
+    if (key == galaxy::host::kBindingCaptureKey) {
+        if (const auto source = galaxy::host::take_controller_binding_capture()) {
+            finish_controls_capture(*source);
+        }
+        return true;
+    }
+    expire_controls_capture();
+    if (controls_capturing()) {
+        if (key == VK_ESCAPE && !from_pad) {
+            end_controls_capture();
+        } else if (s_controls_scheme == galaxy::input::ControlScheme::Keyboard && !from_pad && !was_down) {
+            const std::uint32_t vk = s_handled_key_normalized != 0u ? s_handled_key_normalized
+                                                                    : static_cast<std::uint32_t>(key);
+            finish_controls_capture({galaxy::input::SourceKind::Key, static_cast<std::uint8_t>(vk & 0xffu)});
+        }
+        return true;
+    }
+    const unsigned tab = s_native_settings_tab.load(std::memory_order_relaxed) % kNativeSettingsTabCount;
+    if (tab != kControlsTab) {
+        return false;
+    }
+    const ControlsRowInfo info = controls_row(s_native_settings_row.load(std::memory_order_relaxed));
+    switch (key) {
+    case VK_SPACE:
+        if (!was_down) apply_native_settings_draft();
+        return true;
+    case VK_RETURN:
+        if (was_down) return true;
+        if (from_pad || settings_display_confirming()) return false;  // Y applies
+        if (info.kind == ControlsRow::Binding) {
+            start_controls_capture(info.target);
+            return true;
+        }
+        if (info.kind == ControlsRow::Reset) {
+            adjust_native_setting(1);
+            return true;
+        }
+        return false;
+    case VK_BACK:
+        if (info.kind == ControlsRow::Binding) {
+            if (!was_down) {
+                s_controls_draft.table(s_controls_scheme)[info.target] = {};
+                std::cerr << "[settings] clear " << galaxy::input::control_scheme_id(s_controls_scheme) << '.'
+                          << galaxy::input::wii_target_id(info.target) << '\n';
+            }
+            return true;
+        }
+        return false;
+    default:
+        return false;
+    }
+}
+
+bool handle_native_settings_key(WPARAM key, bool was_down, bool from_pad = false) {
     const std::lock_guard<std::recursive_mutex> lock(s_native_settings_mutex);
     if (!native_settings_ui_enabled()) {
         return false;
+    }
+    if (key == galaxy::host::kBindingCaptureKey && !s_native_settings_visible.load(std::memory_order_relaxed)) {
+        (void)galaxy::host::take_controller_binding_capture();
+        return true;
+    }
+    if (key != VK_F1 && s_native_settings_visible.load(std::memory_order_relaxed) &&
+        handle_controls_key(key, was_down, from_pad)) {
+        return true;
     }
     if (key == VK_F1) {
         if (was_down) {
@@ -1609,7 +1918,7 @@ LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         return 0;
     }
     if (msg == kSettingsKeyMessage) {
-        (void)native_settings_handle_window_key(wp, false);
+        (void)handle_native_settings_key(wp, false, true);
         return 0;
     }
     if (msg == kPlaceWindowMessage) {
@@ -1672,6 +1981,14 @@ LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         const bool was_down =
             (static_cast<std::uintptr_t>(lp) & (std::uintptr_t{1} << 30u)) !=
             0u;
+        {
+            const UINT raw = static_cast<UINT>(wp);
+            const UINT shift = raw == VK_SHIFT
+                ? MapVirtualKeyA((static_cast<UINT>(lp) >> 16u) & 0xffu, MAPVK_VSC_TO_VK_EX) : 0u;
+            const std::lock_guard<std::recursive_mutex> lock(s_native_settings_mutex);
+            s_handled_key_normalized = galaxy::input::normalize_native_window_key(
+                raw, shift, (static_cast<UINT>(lp) & (1u << 24u)) != 0u);
+        }
         if (native_settings_handle_window_key(wp, was_down)) {
             return 0;
         }
@@ -1714,6 +2031,27 @@ LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         update_pointer_absolute(hwnd, lp);
         maybe_hide_os_cursor();
         return 0;
+    }
+    if ((msg == WM_LBUTTONDOWN && native_settings_capture_mouse_button(galaxy::input::MouseButton::Left)) ||
+        (msg == WM_RBUTTONDOWN && native_settings_capture_mouse_button(galaxy::input::MouseButton::Right)) ||
+        (msg == WM_MBUTTONDOWN && native_settings_capture_mouse_button(galaxy::input::MouseButton::Middle)) ||
+        (msg == WM_XBUTTONDOWN &&
+         native_settings_capture_mouse_button(GET_XBUTTON_WPARAM(wp) == XBUTTON1
+                                                  ? galaxy::input::MouseButton::X1
+                                                  : galaxy::input::MouseButton::X2))) {
+        return msg == WM_XBUTTONDOWN ? TRUE : 0;
+    }
+    if (msg == WM_MBUTTONDOWN || msg == WM_MBUTTONUP || msg == WM_XBUTTONDOWN || msg == WM_XBUTTONUP) {
+        // Middle and side buttons are bindable like keys (VK_MBUTTON, VK_XBUTTON*).
+        const bool down = msg == WM_MBUTTONDOWN || msg == WM_XBUTTONDOWN;
+        const std::uint32_t vk = (msg == WM_MBUTTONDOWN || msg == WM_MBUTTONUP)
+            ? VK_MBUTTON
+            : (GET_XBUTTON_WPARAM(wp) == XBUTTON1 ? VK_XBUTTON1 : VK_XBUTTON2);
+        if (!galaxy::host::native_keyboard_capture_active()) {
+            if (down) galaxy::host::publish_native_window_key_press(vk);
+            galaxy::host::publish_native_window_key_state(vk, down);
+        }
+        return (msg == WM_XBUTTONDOWN || msg == WM_XBUTTONUP) ? TRUE : 0;
     }
     if (msg == WM_LBUTTONDOWN || msg == WM_LBUTTONDBLCLK) {
         update_pointer_button(hwnd, lp, true, true);
@@ -7983,6 +8321,8 @@ std::array<std::uint8_t, 7> ui_glyph(char ch) {
     case '-': return {0x00u, 0x00u, 0x00u, 0x1Eu, 0x00u, 0x00u, 0x00u};
     case '+': return {0x00u, 0x04u, 0x04u, 0x1Fu, 0x04u, 0x04u, 0x00u};
     case '/': return {0x01u, 0x01u, 0x02u, 0x04u, 0x08u, 0x10u, 0x10u};
+    case ',': return {0x00u, 0x00u, 0x00u, 0x00u, 0x0Cu, 0x04u, 0x08u};
+    case '=': return {0x00u, 0x00u, 0x1Fu, 0x00u, 0x1Fu, 0x00u, 0x00u};
     case '%': return {0x19u, 0x19u, 0x02u, 0x04u, 0x08u, 0x13u, 0x13u};
     case '<': return {0x02u, 0x04u, 0x08u, 0x10u, 0x08u, 0x04u, 0x02u};
     case '(': return {0x02u, 0x04u, 0x08u, 0x08u, 0x08u, 0x04u, 0x02u};
@@ -8161,9 +8501,67 @@ std::string native_settings_row_text(
             return {};
         }
     }
-    case 2:
-        return std::string("ACTIVE SOURCE (LAUNCHER): ") +
-               runtime_input_mode_name(runtime.input_mode);
+    case 2: {
+        (void)runtime;
+        using galaxy::input::ControlScheme;
+        const ControlsRowInfo info = controls_row(row);
+        const galaxy::input::SchemeTuning& tuning = s_controls_draft.tune(s_controls_scheme);
+        const auto on_off = [](bool value) { return value ? "ON" : "OFF"; };
+        switch (info.kind) {
+        case ControlsRow::InputMode:
+            switch (s_input_mode_draft) {
+            case RuntimeInputMode::Controller: return "INPUT: CONTROLLER";
+            case RuntimeInputMode::RealWiimote: return "INPUT: WII REMOTE";
+            default: return "INPUT: KEYBOARD+MOUSE";
+            }
+        case ControlsRow::Scheme: {
+            std::string line = std::string("EDIT: ") + galaxy::input::control_scheme_label(s_controls_scheme);
+            const galaxy::host::ConnectedControllers connected = galaxy::host::connected_controllers();
+            if (s_controls_scheme == ControlScheme::Xbox && connected.xbox) line += "  CONNECTED";
+            if (s_controls_scheme == ControlScheme::SwitchPro && connected.switch_pro != 0u) line += "  CONNECTED";
+            if (s_controls_scheme == ControlScheme::SwitchPro2) {
+                if (connected.pro2_needs_winusb) line += "  NEEDS WINUSB";
+                else if (connected.switch_pro2 != 0u) line += "  CONNECTED";
+            }
+            return line;
+        }
+        case ControlsRow::Binding: {
+            std::string line = std::string(galaxy::input::wii_target_label(info.target)) + ": ";
+            if (controls_capturing() && s_capture_target == static_cast<std::size_t>(info.target)) {
+                return line + "PRESS AN INPUT";
+            }
+            std::string bound = upper_ascii(galaxy::input::format_target_bindings(
+                s_controls_scheme, s_controls_draft.table(s_controls_scheme)[info.target]));
+            if (bound.size() > 34u) bound = bound.substr(0, 32u) + "..";
+            return line + bound;
+        }
+        case ControlsRow::PointerSpeed:
+            std::snprintf(text, sizeof(text), "POINTER SPEED: %.1f", static_cast<double>(tuning.pointer_speed));
+            return text;
+        case ControlsRow::InvertPointerY:
+            return std::string("INVERT POINTER Y: ") + on_off(tuning.invert_pointer_y);
+        case ControlsRow::StickDeadzone:
+            std::snprintf(text, sizeof(text), "STICK DEADZONE: %u%%",
+                          static_cast<unsigned>(std::lround(tuning.stick_deadzone * 100.0f)));
+            return text;
+        case ControlsRow::PointerDeadzone:
+            std::snprintf(text, sizeof(text), "POINTER STICK DEADZONE: %u%%",
+                          static_cast<unsigned>(std::lround(tuning.pointer_deadzone * 100.0f)));
+            return text;
+        case ControlsRow::MotionShake: {
+            static constexpr const char* kMotion[] = {"OFF", "WII REMOTE", "NUNCHUK"};
+            return std::string("MOTION SHAKE: ") + kMotion[static_cast<unsigned>(tuning.motion_shake) % 3u];
+        }
+        case ControlsRow::ShakeSensitivity:
+            std::snprintf(text, sizeof(text), "SHAKE SENSITIVITY: %u", static_cast<unsigned>(tuning.shake_sensitivity));
+            return text;
+        case ControlsRow::GyroPointer:
+            return std::string("GYRO POINTER: ") + on_off(tuning.gyro_pointer);
+        case ControlsRow::Reset:
+            return std::string("RESET ") + galaxy::input::control_scheme_label(s_controls_scheme) + " TO DEFAULTS";
+        }
+        return {};
+    }
     case 3:
         switch (row) {
         case 0: return std::string("MASTER: ") + percent_text(runtime.audio.master);
@@ -8348,7 +8746,7 @@ void draw_native_settings_overlay(RendererD3D12& renderer) {
         "SETTINGS",
         text);
 
-    const char* tabs[] = {"DISPLAY", "GRAPHICS", "INPUT", "AUDIO", "CAPS"};
+    const char* tabs[] = {"DISPLAY", "GRAPHICS", "CONTROLS", "AUDIO", "CAPS"};
     static_assert(std::size(tabs) == kNativeSettingsTabCount);
     int tab_x = panel_x + 28;
     // Five labels share the panel width; the longest is eight 6-unit glyphs
@@ -8368,6 +8766,7 @@ void draw_native_settings_overlay(RendererD3D12& renderer) {
 
     const std::lock_guard<std::recursive_mutex> settings_lock(s_native_settings_mutex);
     expire_display_confirmation();
+    expire_controls_capture();
     const RenderConfig row_render = s_settings_draft;
     const RuntimeSettings row_runtime = get_runtime_settings();
     const RenderFeatureCaps row_caps = get_render_feature_caps();
@@ -8375,9 +8774,22 @@ void draw_native_settings_overlay(RendererD3D12& renderer) {
     const unsigned selected_row =
         std::min(s_native_settings_row.load(std::memory_order_relaxed),
                  row_count == 0u ? 0u : row_count - 1u);
-    for (unsigned row = 0; row < row_count; ++row) {
+    // Pages longer than the panel scroll to keep the selection visible.
+    const unsigned visible_rows = std::min(row_count, kNativeSettingsVisibleRows);
+    s_settings_first_row = native_settings_first_row(s_settings_first_row, selected_row, row_count);
+    if (row_count > visible_rows) {
+        const int track_x = panel_x + panel_w - 18;
+        const int track_y = layout.rows_y - 6;
+        const int track_h = static_cast<int>(visible_rows - 1u) * layout.row_step + scale * 7 + 12;
+        ui_rect(renderer, track_x, track_y, 4, track_h, selected);
+        const int thumb_h = std::max(8, track_h * static_cast<int>(visible_rows) / static_cast<int>(row_count));
+        const int thumb_y = track_y + (track_h - thumb_h) * static_cast<int>(s_settings_first_row) /
+                                          static_cast<int>(row_count - visible_rows);
+        ui_rect(renderer, track_x, thumb_y, 4, thumb_h, accent);
+    }
+    for (unsigned row = s_settings_first_row; row < s_settings_first_row + visible_rows; ++row) {
         const int y =
-            layout.rows_y + static_cast<int>(row) * layout.row_step;
+            layout.rows_y + static_cast<int>(row - s_settings_first_row) * layout.row_step;
         if (row == selected_row) {
             const int selection_height = std::max(14, scale * 7 + 4);
             ui_rect(
@@ -8404,7 +8816,16 @@ void draw_native_settings_overlay(RendererD3D12& renderer) {
     std::string status;
     std::array<float, 4> status_color = muted;
     const std::uint64_t now_ms = GetTickCount64();
-    if (settings_display_confirming()) {
+    const bool controls_page = tab == kControlsTab;
+    if (controls_capturing()) {
+        status = s_controls_scheme == galaxy::input::ControlScheme::Keyboard
+            ? "PRESS A KEY OR MOUSE BUTTON  ESC CANCEL"
+            : "PRESS A BUTTON, STICK OR TRIGGER  ESC CANCEL";
+        status_color = accent;
+    } else if (s_controls_message_until_ms > now_ms) {
+        status = s_controls_message;
+        status_color = error;
+    } else if (settings_display_confirming()) {
         const std::uint64_t left_ms = s_display_confirm_deadline_ms > now_ms
             ? s_display_confirm_deadline_ms - now_ms : 0u;
         char line[96]{};
@@ -8418,7 +8839,9 @@ void draw_native_settings_overlay(RendererD3D12& renderer) {
         status_color = error;
     } else if (const unsigned pending = pending_settings_changes(); pending != 0u) {
         char line[96]{};
-        std::snprintf(line, sizeof(line), "%u CHANGE%s  ENTER/Y APPLY  BACKSPACE/X UNDO",
+        std::snprintf(line, sizeof(line),
+                      controls_page ? "%u CHANGE%s  SPACE/Y APPLY  ESC/B DISCARD"
+                                    : "%u CHANGE%s  ENTER/Y APPLY  BACKSPACE/X UNDO",
                       pending, pending == 1u ? "" : "S");
         status = line;
         status_color = accent;
@@ -8434,14 +8857,15 @@ void draw_native_settings_overlay(RendererD3D12& renderer) {
         panel_x + 28,
         footer_y + footer_step,
         footer_scale,
-        "F1 OR VIEW+MENU TOGGLE  TAB/LB/RB PAGE",
+        "F1, VIEW+MENU OR MINUS+PLUS TOGGLE  TAB/LB/RB PAGE",
         muted);
     ui_text(
         renderer,
         panel_x + 28,
         footer_y + footer_step * 2,
         footer_scale,
-        "ARROWS/D-PAD MOVE+CHANGE  ESC/B CLOSE",
+        controls_page ? "ENTER/A ADD INPUT  BACKSPACE/X CLEAR  ESC/B CLOSE"
+                      : "ARROWS/D-PAD MOVE+CHANGE  ESC/B CLOSE",
         muted);
 }
 
@@ -8465,7 +8889,7 @@ void draw_native_settings_hint(RendererD3D12& renderer) {
     if (s_bb_width < 427u || s_bb_height < 240u) {
         return;
     }
-    static constexpr const char* kHint = "F1 OR VIEW+MENU: SETTINGS";
+    static constexpr const char* kHint = "F1, VIEW+MENU OR MINUS+PLUS: SETTINGS";
     const int scale = s_bb_height >= 1440u ? 3 : (s_bb_height >= 720u ? 2 : 1);
     int text_w = -scale;
     for (const char* ch = kHint; *ch != '\0'; ++ch) {
@@ -9467,7 +9891,8 @@ NativeSettingsLayout compute_native_settings_layout(
                                    rows_room / (kLongestPageRows - 1));
     }
 
-    const unsigned row_count = native_settings_row_count(tab);
+    const unsigned row_count =
+        std::min(native_settings_row_count(tab), kNativeSettingsVisibleRows);
     const int final_row_bottom = row_count == 0u
         ? layout.rows_y
         : layout.rows_y +
@@ -9504,6 +9929,10 @@ RenderConfig native_settings_draft_for_tests() {
 
 void native_settings_reset_overlay_state_for_tests() noexcept {
     s_display_confirm_deadline_ms = 0u;
+    s_capture_target = galaxy::input::kWiiTargetCount;
+    s_controls_scheme = galaxy::input::ControlScheme::Keyboard;
+    s_settings_first_row = 0u;
+    s_controls_message_until_ms = 0u;
     s_native_settings_visible.store(false, std::memory_order_relaxed);
     s_native_settings_dirty.store(false, std::memory_order_relaxed);
     s_native_settings_save_error.store(false, std::memory_order_relaxed);
