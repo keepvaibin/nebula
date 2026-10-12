@@ -24,10 +24,15 @@ namespace Nebula
         }
 
         /// <summary>User data root: %LOCALAPPDATA%\Nebula. The runtime keeps its
-        /// shader cache and config.ini here as well.</summary>
+        /// shader cache and config.ini here as well. NEBULA_DATA_ROOT replaces it
+        /// for automated tests, which must never touch the user's files.</summary>
         public static string DataRoot
         {
-            get { return Path.Combine(LocalAppData, ProductName); }
+            get
+            {
+                string overridden = Environment.GetEnvironmentVariable("NEBULA_DATA_ROOT");
+                return string.IsNullOrEmpty(overridden) ? Path.Combine(LocalAppData, ProductName) : overridden;
+            }
         }
 
         public static string Saves { get { return Path.Combine(DataRoot, "saves"); } }

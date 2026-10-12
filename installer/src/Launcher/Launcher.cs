@@ -24,13 +24,7 @@ namespace Nebula.Launcher
             try
             {
                 var session = new LaunchSession();
-#if NEBULA_SETTINGS_APP
-                bool showSettings = true;
-#else
-                bool showSettings = args.Any(a => string.Equals(a, "--settings", StringComparison.OrdinalIgnoreCase)) ||
-                    !session.SetupComplete;
-#endif
-                if (!showSettings)
+                if (!OpensSettings(args, session))
                 {
                     string error = session.TryLaunch();
                     if (error == null) return 0;
@@ -44,6 +38,16 @@ namespace Nebula.Launcher
                 MessageBox.Show(error.Message, "Nebula", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 return 1;
             }
+        }
+
+        internal static bool OpensSettings(string[] args, LaunchSession session)
+        {
+#if NEBULA_SETTINGS_APP
+            return true;
+#else
+            return args.Any(a => string.Equals(a, "--settings", StringComparison.OrdinalIgnoreCase)) ||
+                !session.SetupComplete;
+#endif
         }
     }
 
