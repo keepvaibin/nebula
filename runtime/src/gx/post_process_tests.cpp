@@ -99,28 +99,37 @@ void texts() {
     using galaxy::gx::anti_aliasing_row_text;
     using galaxy::gx::post_process_caps_text;
     expect_text(anti_aliasing_row_text(1, 3, live(Aa::kSmaa, 3, AaRun::kSmaa)), "ANTI-ALIASING: SMAA ULTRA");
-    expect_text(anti_aliasing_row_text(2, 0, live(Aa::kAuto, 0, AaRun::kSmaa)), "ANTI-ALIASING: AUTO - SMAA LOW");
+    expect_text(anti_aliasing_row_text(2, 0, live(Aa::kAuto, 0, AaRun::kSmaa)), "ANTI-ALIASING: AUTO (SMAA LOW)");
     PostProcessStatus ss = live(Aa::kAuto, 2, AaRun::kNone, false);
     ss.last_supersampled = true;
-    expect_text(anti_aliasing_row_text(2, 2, ss), "ANTI-ALIASING: AUTO - OFF, SUPERSAMPLED");
+    expect_text(anti_aliasing_row_text(2, 2, ss), "ANTI-ALIASING: AUTO (SUPERSAMPLED)");
     expect_text(anti_aliasing_row_text(0, 2, live(Aa::kOff, 2, AaRun::kNone, false)), "ANTI-ALIASING: OFF");
     expect_text(anti_aliasing_row_text(3, 2, live(Aa::kFxaa, 2, AaRun::kFxaa)), "ANTI-ALIASING: FXAA");
     PostProcessStatus fallback = live(Aa::kSmaa, 2, AaRun::kFxaa);
     fallback.smaa_ok = false;
     std::snprintf(fallback.smaa_reason.data(), fallback.smaa_reason.size(), "SELF-TEST");
-    expect_text(anti_aliasing_row_text(1, 2, fallback), "ANTI-ALIASING: SMAA - NOT RUNNING: SELF-TEST, FXAA ON");
+    expect_text(anti_aliasing_row_text(1, 2, fallback), "ANTI-ALIASING: FXAA (SMAA: SELF-TEST)");
     PostProcessStatus none = live(Aa::kSmaa, 2, AaRun::kNone);
     std::snprintf(none.skip_reason.data(), none.skip_reason.size(), "NO MEMORY");
-    expect_text(anti_aliasing_row_text(1, 2, none), "ANTI-ALIASING: SMAA - NOT RUNNING: NO MEMORY");
+    expect_text(anti_aliasing_row_text(1, 2, none), "ANTI-ALIASING: NOT RUNNING (NO MEMORY)");
     // An unapplied overlay change shows the choice alone.
     expect_text(anti_aliasing_row_text(3, 2, live(Aa::kSmaa, 2, AaRun::kSmaa)), "ANTI-ALIASING: FXAA");
     expect_text(anti_aliasing_row_text(1, 0, live(Aa::kSmaa, 2, AaRun::kSmaa)), "ANTI-ALIASING: SMAA");
     PostProcessStatus off{};
     std::snprintf(off.skip_reason.data(), off.skip_reason.size(), "INIT FAILED");
-    expect_text(anti_aliasing_row_text(1, 2, off), "ANTI-ALIASING: SMAA - NOT RUNNING: INIT FAILED");
+    expect_text(anti_aliasing_row_text(1, 2, off), "ANTI-ALIASING: NOT RUNNING (INIT FAILED)");
     expect_text(post_process_caps_text(off), "POST-PROCESS: OFF (INIT FAILED)");
-    expect_text(post_process_caps_text(live(Aa::kSmaa, 2, AaRun::kSmaa)), "POST-PROCESS: SMAA PASS  FXAA PASS");
-    expect_text(post_process_caps_text(fallback), "POST-PROCESS: SMAA FAIL (SELF-TEST)  FXAA PASS");
+    expect_text(post_process_caps_text(live(Aa::kSmaa, 2, AaRun::kSmaa)), "POST-PROCESS: SMAA PASS, FXAA PASS");
+    expect_text(post_process_caps_text(fallback), "POST-PROCESS: SMAA FAIL, FXAA PASS");
+    PostProcessStatus auto_fxaa = fallback;
+    auto_fxaa.live_aa = static_cast<std::uint8_t>(Aa::kAuto);
+    expect_text(anti_aliasing_row_text(2, 2, auto_fxaa), "ANTI-ALIASING: AUTO (FXAA)");
+    // Every row fits the overlay panel at text scale 4 (39 characters).
+    PostProcessStatus worst = fallback;
+    std::snprintf(worst.smaa_reason.data(), worst.smaa_reason.size(), "DEVICE LOST");
+    expect(anti_aliasing_row_text(1, 2, worst).size() <= 39u, "fallback row fits the panel");
+    std::snprintf(off.skip_reason.data(), off.skip_reason.size(), "FAILED");
+    expect(anti_aliasing_row_text(2, 2, off).size() <= 39u, "not-running row fits the panel");
 }
 
 void self_test_on_warp() {

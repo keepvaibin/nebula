@@ -43,6 +43,9 @@ Start **Nebula** from the Start Menu, pick display settings and press **Play**.
 
 - Keyboard and mouse or an XInput controller. See [docs/KEYBOARD_CONTROLS.md](docs/KEYBOARD_CONTROLS.md).
 - Aspect ratios from 4:3 to 32:9; internal resolution up to 16x.
+- Anti-aliasing: Auto (default; SMAA unless the internal resolution already
+  supersamples the display), SMAA, FXAA (cheapest), Off. Low-end GPUs: 1x-2x
+  internal, SMAA or FXAA, FSR 1 to the display.
 - Saves are in `%LOCALAPPDATA%\Nebula\saves`.
 
 Updates, repair, restore and uninstall are in **Nebula Setup** and the launcher.

@@ -4278,7 +4278,7 @@ bool RendererD3D12::initialize(int window_width, int window_height, unsigned efb
             off.live_quality = post.smaa_quality;
             if (!cfg.post_process) {
                 std::cerr << "[post-process] off; presenting with the plain blit\n";
-                std::snprintf(off.skip_reason.data(), off.skip_reason.size(), "OFF IN CONFIG");
+                std::snprintf(off.skip_reason.data(), off.skip_reason.size(), "CONFIG OFF");
                 set_post_process_status(off);
             } else if (!post_process_.initialize(device_.Get(), queue_.Get(), post)) {
                 std::cerr << "[post-process] unavailable; presenting with the plain blit\n";

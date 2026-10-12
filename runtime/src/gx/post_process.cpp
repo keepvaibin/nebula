@@ -615,7 +615,7 @@ void PostProcessor::self_test(ID3D12CommandQueue* queue) {
                                           IID_PPV_ARGS(&list))) ||
         FAILED(device_->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&fence))) ||
         !ring.initialize(device_, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 16u, 1u)) {
-        fail(AaRun::kNone, "SELF-TEST SETUP");
+        fail(AaRun::kNone, "TEST SETUP");
         return;
     }
     ring.begin_frame(0);
@@ -666,7 +666,7 @@ void PostProcessor::self_test(ID3D12CommandQueue* queue) {
         FAILED(device_->CreateCommittedResource(&up, D3D12_HEAP_FLAG_NONE, &bd, D3D12_RESOURCE_STATE_GENERIC_READ,
                                                 nullptr, IID_PPV_ARGS(&upload))) ||
         FAILED(upload->Map(0, &none, reinterpret_cast<void**>(&mapped)))) {
-        fail(AaRun::kNone, "SELF-TEST SETUP");
+        fail(AaRun::kNone, "TEST SETUP");
         return;
     }
     std::memcpy(mapped, pattern.data(), pattern.size());
@@ -674,7 +674,7 @@ void PostProcessor::self_test(ID3D12CommandQueue* queue) {
     bd.Width = 2u * sizeof(pattern);
     if (FAILED(device_->CreateCommittedResource(&rb, D3D12_HEAP_FLAG_NONE, &bd, D3D12_RESOURCE_STATE_COPY_DEST,
                                                 nullptr, IID_PPV_ARGS(&readback)))) {
-        fail(AaRun::kNone, "SELF-TEST SETUP");
+        fail(AaRun::kNone, "TEST SETUP");
         return;
     }
     D3D12_TEXTURE_COPY_LOCATION from{};
@@ -718,7 +718,7 @@ void PostProcessor::self_test(ID3D12CommandQueue* queue) {
         recorded[i] = true;
     }
     if (FAILED(list->Close())) {
-        fail(AaRun::kNone, "SELF-TEST SETUP");
+        fail(AaRun::kNone, "TEST SETUP");
         return;
     }
     ID3D12CommandList* lists[] = {list.Get()};
@@ -739,13 +739,13 @@ void PostProcessor::self_test(ID3D12CommandQueue* queue) {
         retired_.push_back({std::move(antialiased_.resource), UINT64_MAX});
         retired_.push_back({std::move(stencil_.resource), UINT64_MAX});
         edges_ = weights_ = antialiased_ = stencil_ = {};
-        fail(AaRun::kNone, done ? "DEVICE REMOVED" : "GPU TIMEOUT");
+        fail(AaRun::kNone, done ? "DEVICE LOST" : "GPU TIMEOUT");
         return;
     }
     const D3D12_RANGE all{0, static_cast<SIZE_T>(2u * sizeof(pattern))};
     unsigned char* out = nullptr;
     if (FAILED(readback->Map(0, &all, reinterpret_cast<void**>(&out)))) {
-        fail(AaRun::kNone, "SELF-TEST SETUP");
+        fail(AaRun::kNone, "TEST SETUP");
         return;
     }
     for (unsigned i = 0; i < 2u; ++i) {
@@ -814,7 +814,7 @@ void PostProcessor::record(ID3D12GraphicsCommandList* list,
         ++status_.aa_wanted_frames;
         if (ran == AaRun::kNone) {
             ++status_.aa_skipped_frames;
-            set_reason(status_.skip_reason, plan.smaa || plan.fxaa ? "NO MEMORY" : "SMAA+FXAA FAILED");
+            set_reason(status_.skip_reason, plan.smaa || plan.fxaa ? "NO MEMORY" : "FAILED");
         }
     }
 
@@ -909,47 +909,47 @@ void set_post_process_status(const PostProcessStatus& status) {
     g_status = status;
 }
 
+// Rows stay within 39 characters: the overlay's 1040 px panel at text scale 4.
 std::string anti_aliasing_row_text(unsigned draft_aa, unsigned draft_quality,
                                    const PostProcessStatus& status) {
     static constexpr const char* kAa[] = {"OFF", "SMAA", "AUTO", "FXAA"};
     static constexpr const char* kQuality[] = {"LOW", "MEDIUM", "HIGH", "ULTRA"};
     const unsigned aa = std::min(draft_aa, 3u);
-    std::string text = std::string("ANTI-ALIASING: ") + kAa[aa];
-    if (aa == 0u) return text;
-    if (!status.initialized) {
-        return text + " - NOT RUNNING: " +
-               (status.skip_reason[0] != '\0' ? status.skip_reason.data() : "POST-PROCESS OFF");
-    }
+    const std::string label = "ANTI-ALIASING: ";
+    const std::string name = label + kAa[aa];
+    if (aa == 0u) return name;
+    const auto reason = [](const std::array<char, 40>& r) {
+        return std::string(r[0] != '\0' ? r.data() : "UNKNOWN");
+    };
+    if (!status.initialized) return label + "NOT RUNNING (" + reason(status.skip_reason) + ")";
     // An unapplied choice, or nothing presented yet: the name alone.
     const bool uses_quality = aa == 1u || aa == 2u;
     if (aa != status.live_aa || (uses_quality && std::min(draft_quality, 3u) != status.live_quality) ||
         status.frames == 0u) {
-        return text;
+        return name;
     }
     const std::string smaa = std::string("SMAA ") + kQuality[std::min(draft_quality, 3u)];
     switch (status.last_run) {
     case AaRun::kSmaa:
-        return aa == 2u ? text + " - " + smaa : "ANTI-ALIASING: " + smaa;
+        return aa == 2u ? name + " (" + smaa + ")" : label + smaa;
     case AaRun::kFxaa:
-        if (aa == 3u) return text;
-        return text + " - NOT RUNNING: " + status.smaa_reason.data() + ", FXAA ON";
+        if (aa == 3u) return name;
+        if (aa == 2u) return name + " (FXAA)";
+        return label + "FXAA (SMAA: " + reason(status.smaa_reason) + ")";
     case AaRun::kNone:
         break;
     }
-    if (aa == 2u && !status.last_wanted) return text + " - OFF, SUPERSAMPLED";
-    return text + " - NOT RUNNING: " + status.skip_reason.data();
+    if (aa == 2u && !status.last_wanted) return name + " (SUPERSAMPLED)";
+    return label + "NOT RUNNING (" + reason(status.skip_reason) + ")";
 }
 
 std::string post_process_caps_text(const PostProcessStatus& status) {
     if (!status.initialized) {
-        return std::string("POST-PROCESS: OFF") +
-               (status.skip_reason[0] != '\0' ? std::string(" (") + status.skip_reason.data() + ")" : "");
+        return std::string("POST-PROCESS: OFF (") +
+               (status.skip_reason[0] != '\0' ? status.skip_reason.data() : "UNKNOWN") + ")";
     }
-    const auto result = [](bool ok, const char* reason) {
-        return ok ? std::string("PASS") : std::string("FAIL (") + reason + ")";
-    };
-    return "POST-PROCESS: SMAA " + result(status.smaa_ok, status.smaa_reason.data()) +
-           "  FXAA " + result(status.fxaa_ok, status.fxaa_reason.data());
+    return std::string("POST-PROCESS: SMAA ") + (status.smaa_ok ? "PASS" : "FAIL") +
+           ", FXAA " + (status.fxaa_ok ? "PASS" : "FAIL");
 }
 
 }  // namespace galaxy::gx
