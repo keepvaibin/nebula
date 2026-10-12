@@ -14,6 +14,7 @@ enum class NativeAudioBus : std::uint8_t {
     Voice,
     Sfx,
     Ambience,
+    Cutscene,
 };
 
 enum class NativeAudioBusClassification : std::uint8_t {
@@ -53,11 +54,13 @@ native_audio_bus_from_sound_id(std::uint32_t sound_id) noexcept {
     case 0x06u:  // ATMOSPHERE
         return {NativeAudioBus::Ambience,
                 NativeAudioBusClassification::OwnerSoundId};
+    case 0x07u:  // DEMO (in-engine cutscenes)
+        return {NativeAudioBus::Cutscene,
+                NativeAudioBusClassification::OwnerSoundId};
     case 0x00u:  // SYSTEM
     case 0x02u:  // PLAYER_MOTION
     case 0x04u:  // BOSS_MOTION
     case 0x05u:  // OBJECT
-    case 0x07u:  // DEMO
     case 0x09u:  // ENEMY_MOTION
     case 0x0bu:  // SUPPORTER_MOTION
     case 0x0cu:  // REMIX_SEQ
@@ -89,12 +92,16 @@ native_audio_bus_from_channel_format(
     return {};
 }
 
+// Per-bus gains. `master` multiplies each bus here; the runtime publishes 1
+// because it applies the master gain once, at the final output, so that it
+// also covers audio mixed outside these channels (the movie player).
 struct NativeAudioBusGains {
     float master{1.0f};
     float music{1.0f};
     float voice{1.0f};
     float sfx{1.0f};
     float ambience{1.0f};
+    float cutscene{1.0f};
 };
 
 inline constexpr std::uint32_t kNativeAudioUnityGainQ16 = 1u << 16u;
@@ -138,11 +145,12 @@ public:
     void publish(
         const NativeAudioBusGains& gains,
         const std::array<NativeAudioBus, kChannelCount>& buses) noexcept {
-        const std::array<std::uint32_t, 4u> gains_q16{
+        const std::array<std::uint32_t, 5u> gains_q16{
             combined_gain_q16(gains.master, gains.music),
             combined_gain_q16(gains.master, gains.voice),
             combined_gain_q16(gains.master, gains.sfx),
             combined_gain_q16(gains.master, gains.ambience),
+            combined_gain_q16(gains.master, gains.cutscene),
         };
         for (std::size_t channel = 0u; channel < buses.size(); ++channel) {
             const NativeAudioBus bus = buses[channel];
@@ -191,6 +199,7 @@ struct NativeAudioBusRamp {
     std::uint32_t current_q16{kNativeAudioUnityGainQ16};
     std::uint32_t target_q16{kNativeAudioUnityGainQ16};
     std::uint32_t remaining{};
+    NativeAudioBus bus{NativeAudioBus::Sfx};
     bool initialized{};
 };
 
@@ -206,13 +215,18 @@ inline void native_dsp_audio_bus_clear_selection(
     state.active_channel_valid = false;
 }
 
+// A gain change on the channel's bus ramps; a channel's first sound, or a new
+// owner on another bus, starts at its own gain so that nothing of a muted bus
+// leaks through a ramp from the previous owner's gain.
 inline void native_audio_bus_set_ramp_target(
     NativeAudioBusRamp& ramp,
-    std::uint32_t gain_q16) noexcept {
-    if (!ramp.initialized) {
+    std::uint32_t gain_q16,
+    NativeAudioBus bus) noexcept {
+    if (!ramp.initialized || ramp.bus != bus) {
         ramp.current_q16 = gain_q16;
         ramp.initialized = true;
         ramp.remaining = 0u;
+        ramp.bus = bus;
     } else if (ramp.target_q16 != gain_q16) {
         ramp.remaining = kNativeAudioBusRampSamples;
     }
@@ -231,7 +245,7 @@ inline void native_dsp_audio_bus_begin_channel(
     NativeAudioBusRamp& ramp = state.ramps[channel];
     const NativeAudioBusChannelSnapshot snapshot =
         controls->snapshot_channel(channel);
-    native_audio_bus_set_ramp_target(ramp, snapshot.gain_q16);
+    native_audio_bus_set_ramp_target(ramp, snapshot.gain_q16, snapshot.bus);
     state.active_channel = channel;
     state.active_channel_valid = true;
 }

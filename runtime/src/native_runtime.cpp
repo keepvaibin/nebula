@@ -2381,6 +2381,11 @@ struct RuntimeState {
     // host and no DSP task boots (SDK_REPLACEMENT_PLAN.md section 4).
     bool jaudio_host_mixer{};
     galaxy::host::JAudioHostMixer jaudio_mixer;
+    // Cutscene volume applied to the movie player's attenuation table.
+    std::array<std::uint16_t, 128> movie_volume_original{};
+    float movie_volume_gain{1.0f};
+    bool movie_volume_original_valid{};
+    bool movie_volume_disabled{};
     std::uint64_t jaudio_commands{};
     std::uint64_t jaudio_dsp_messages{};
     std::uint64_t exception_transfer_count{};
@@ -23668,6 +23673,47 @@ std::byte* jaudio_guest_resolve(void* user, std::uint32_t address, std::uint32_t
     return static_cast<galaxy::host::GuestAddressSpace*>(user)->pointer_or_null(address, size);
 }
 
+// The movie player (THPSimplePlayerWrapper::mixAudio) multiplies each
+// sample by VolumeTable[volume], 128 halfwords at 0x805C5D08 that nothing
+// else reads, rising from 0 to 32768. The cutscene volume rescales the table.
+void apply_movie_volume(RuntimeState& state, galaxy::host::GuestAddressSpace& space) {
+    constexpr std::uint32_t kMovieVolumeTable = 0x805C5D08u;
+    const float gain = galaxy::get_runtime_settings().audio.cutscene;
+    if (state.movie_volume_disabled || gain == state.movie_volume_gain) {
+        return;
+    }
+    std::byte* table = space.pointer_or_null(kMovieVolumeTable, 256u);
+    if (table == nullptr) {
+        return;
+    }
+    const auto read16 = [table](std::size_t i) {
+        return static_cast<std::uint16_t>(
+            (std::to_integer<std::uint16_t>(table[i * 2u]) << 8u) |
+            std::to_integer<std::uint16_t>(table[i * 2u + 1u]));
+    };
+    if (!state.movie_volume_original_valid) {
+        for (std::size_t i = 0; i < state.movie_volume_original.size(); ++i) {
+            state.movie_volume_original[i] = read16(i);
+        }
+        const auto& original = state.movie_volume_original;
+        if (original[0] != 0u || original[1] != 2u || original[64] != 8321u ||
+            original[127] != 32768u) {
+            state.movie_volume_disabled = true;
+            std::cerr << "[audio] movie volume table not found; cutscene volume "
+                         "applies to in-engine cutscenes only\n";
+            return;
+        }
+        state.movie_volume_original_valid = true;
+    }
+    for (std::size_t i = 0; i < state.movie_volume_original.size(); ++i) {
+        const auto scaled = static_cast<std::uint16_t>(std::clamp<long>(
+            std::lround(state.movie_volume_original[i] * gain), 0l, 65535l));
+        table[i * 2u] = static_cast<std::byte>(scaled >> 8u);
+        table[i * 2u + 1u] = static_cast<std::byte>(scaled & 0xFFu);
+    }
+    state.movie_volume_gain = gain;
+}
+
 // DspBoot (0x804961E0) and DSPSendCommands2 (0x804962C0) as host calls.
 // No DSP task boots: DspRunningStatus is set as DspHandShake would set it,
 // command callbacks (DsetupTable and DsetVARAM wait on them) run at once,
@@ -23726,6 +23772,7 @@ void run_jaudio_host_command(
     case 0x81u:
         if (count >= 5u) {
             state.jaudio_mixer.setup(command, word(1u), word(2u), word(3u), word(4u), guest);
+            state.jaudio_mixer.set_bus_controls(space.audio_bus_controls());
         } else {
             state.jaudio_mixer.note_ignored_command();
         }
@@ -23734,6 +23781,10 @@ void run_jaudio_host_command(
         state.jaudio_mixer.set_varam(count >= 2u ? word(1u) : 0u);
         break;
     case 0x82u:
+        // Volume categories: each channel's bus from its JAudio owner, and
+        // the movie table, once per audio frame.
+        space.refresh_dsp_audio_bus_controls(state.jaudio_mixer.channel_table());
+        apply_movie_volume(state, space);
         state.jaudio_mixer.sync_frame(
             command, count >= 2u ? word(1u) : 0u, count >= 3u ? word(2u) : 0u,
             count >= 4u ? word(3u) : 0u, count >= 5u ? word(4u) : 0u, guest);
@@ -30403,6 +30454,14 @@ static bool runtime_native_keyboard_captured() noexcept {
     return galaxy::gx::native_window_input_captured();
 }
 
+static bool runtime_native_settings_visible() noexcept {
+    return galaxy::gx::native_settings_overlay_visible();
+}
+
+static void runtime_native_settings_key(std::uintptr_t virtual_key) noexcept {
+    galaxy::gx::native_settings_post_key(virtual_key);
+}
+
 void call_guest(
     void* user,
     std::uint32_t guest_address,
@@ -32262,6 +32321,7 @@ int wmain(int argc, wchar_t** argv) {
         galaxy::host::install_host_pointer_provider(nullptr);
         galaxy::host::install_host_pointer_transition_provider(nullptr);
         galaxy::host::install_native_keyboard_capture_provider(nullptr);
+        galaxy::host::install_native_settings_pad_hooks(nullptr, nullptr);
         if (state.address_space != nullptr) {
             state.address_space->set_ai_dma_deadline_callback(nullptr, nullptr);
             state.address_space->set_ai_dma_mmio_service_decision_provider(
@@ -33156,6 +33216,8 @@ int wmain(int argc, wchar_t** argv) {
             &runtime_host_pointer_transition);
         galaxy::host::install_native_keyboard_capture_provider(
             &runtime_native_keyboard_captured);
+        galaxy::host::install_native_settings_pad_hooks(
+            &runtime_native_settings_visible, &runtime_native_settings_key);
         galaxy::gx::install_guest_dirty_tracker(address_space.guest_memory());
         address_space.set_efb_peek_callback(&gx_efb_peek, &state);
 

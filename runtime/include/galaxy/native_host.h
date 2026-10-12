@@ -191,6 +191,8 @@ using HostPointerTransitionProvider = HostPointerTransitionPoll (*)(
     std::uint64_t after_sequence) noexcept;
 using HostPointerClock = std::uint64_t (*)() noexcept;
 using NativeKeyboardCaptureProvider = bool (*)() noexcept;
+using NativeSettingsVisibleProvider = bool (*)() noexcept;
+using NativeSettingsKeySink = void (*)(std::uintptr_t virtual_key) noexcept;
 
 // Recorded when a virtual Wii Remote input report crosses the IOS
 // /dev/usb/oh1 bulk-in boundary. Host milliseconds and Wii ticks have
@@ -232,6 +234,12 @@ void install_host_pointer_clock(HostPointerClock clock) noexcept;
 void install_native_keyboard_capture_provider(
     NativeKeyboardCaptureProvider provider) noexcept;
 [[nodiscard]] bool native_keyboard_capture_active() noexcept;
+// Controller access to the settings overlay (galaxy/native_settings_pad.h):
+// the overlay's visibility and a sink that delivers its keys to the window
+// thread. Null disables the controller chord.
+void install_native_settings_pad_hooks(
+    NativeSettingsVisibleProvider visible,
+    NativeSettingsKeySink sink) noexcept;
 void publish_native_window_key_press(std::uint32_t key) noexcept;
 void clear_native_window_key_presses() noexcept;
 // Window-thread key level (down on WM_KEYDOWN, up on WM_KEYUP); cleared with
@@ -1399,7 +1407,15 @@ private:
     // Forward one CPU->DSP mail word into the coprocessor, waiting (bounded) for
     // the previous word to be consumed — the hardware to-DSP handshake.
     void dsp_native_forward_mail(std::uint32_t mail);
-    void refresh_dsp_audio_bus_controls();
+public:
+    // Classifies the 64 DSP channels by their JAudio owner (or sample
+    // format) and publishes each one's bus gain. `channel_table` overrides
+    // the native DSP's table (the host mixer passes its own).
+    void refresh_dsp_audio_bus_controls(std::uint32_t channel_table = 0u);
+    [[nodiscard]] const galaxy::audio::NativeAudioBusControls* audio_bus_controls() const noexcept {
+        return &dsp_audio_bus_controls_;
+    }
+private:
     [[nodiscard]] std::uint64_t dsp_native_now_ticks() const;
     [[nodiscard]] std::uint64_t dsp_native_sync_completion_interval_ticks() const;
     [[nodiscard]] bool dsp_native_should_hold_sync_completion(

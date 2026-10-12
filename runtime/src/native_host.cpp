@@ -5,6 +5,7 @@
 #include "galaxy/native_audio_anomaly.h"
 #include "galaxy/native_audio_queue.h"
 #include "galaxy/native_input.h"
+#include "galaxy/native_settings_pad.h"
 #include "galaxy/diagnostic_stick_lease.h"
 #include "galaxy/experimental_ultrawide_aspect.h"
 #include "galaxy/gx_d3d12.h"
@@ -2582,13 +2583,12 @@ double read_env_gain(
 }
 
 double dsp_music_gain() {
-    const galaxy::RuntimeSettings settings = galaxy::get_runtime_settings();
-    return static_cast<double>(
-        settings.audio.master * settings.audio.music);
+    return static_cast<double>(galaxy::get_runtime_settings().audio.music);
 }
 
+// The master gain is applied at the output stage.
 double dsp_effects_voice_gain() {
-    return static_cast<double>(galaxy::get_runtime_settings().audio.master);
+    return 1.0;
 }
 
 double dsp_sfx_gain() {
@@ -3203,6 +3203,7 @@ public:
                 log_drop("invalid Wii AI PCM channel conversion");
                 return false;
             }
+            apply_output_master_gain(pcm_le);
             if (!wav_dump_.append(
                 std::span<const std::byte>(pcm_le.data(), pcm_le.size()),
                 sample_rate)) {
@@ -3362,8 +3363,12 @@ public:
             // physical endpoint is absent. This remains unheard output.
             if (get_env_path(L"GALAXY_AUDIO_WAV_DUMP").has_value()) {
                 std::vector<std::byte> pcm_le(source.size());
-                if (!native_audio_convert_wii_ai_pcm16(source, pcm_le) ||
-                    !wav_dump_.append(pcm_le, sample_rate)) {
+                if (!native_audio_convert_wii_ai_pcm16(source, pcm_le)) {
+                    log_drop("offline audio WAV diagnostic failed");
+                    return false;
+                }
+                apply_output_master_gain(pcm_le);
+                if (!wav_dump_.append(pcm_le, sample_rate)) {
                     log_drop("offline audio WAV diagnostic failed");
                     return false;
                 }
@@ -3382,6 +3387,7 @@ public:
             log_drop("invalid Wii AI PCM channel conversion");
             return false;
         }
+        apply_output_master_gain(buffer->bytes);
 
         if (!enqueue_pending_buffer(std::move(buffer))) {
             return false;
@@ -3861,6 +3867,45 @@ public:
 #endif
 
 private:
+    // The master volume, applied once to the final output so it also covers
+    // audio mixed outside the DSP channels (the movie player). A change ramps
+    // across one buffer from the previous value. One submitting thread.
+    void apply_output_master_gain(std::vector<std::byte>& pcm_le) noexcept {
+        constexpr std::uint32_t kUnity = galaxy::audio::kNativeAudioUnityGainQ16;
+        const std::uint32_t target = galaxy::audio::native_audio_gain_to_q16(
+            galaxy::get_runtime_settings().audio.master);
+        // The first buffer starts at the configured gain; later changes ramp.
+        const std::uint32_t start =
+            output_master_started_ ? output_master_q16_ : target;
+        output_master_started_ = true;
+        output_master_q16_ = target;
+        const std::size_t frames = pcm_le.size() / 4u;
+        if ((start == kUnity && target == kUnity) || frames == 0u) {
+            return;
+        }
+        const std::int64_t delta =
+            static_cast<std::int64_t>(target) - static_cast<std::int64_t>(start);
+        for (std::size_t frame = 0; frame < frames; ++frame) {
+            const std::int64_t gain = static_cast<std::int64_t>(start) +
+                delta * static_cast<std::int64_t>(frame + 1u) /
+                    static_cast<std::int64_t>(frames);
+            for (std::size_t lane = 0; lane < 2u; ++lane) {
+                std::byte* sample = pcm_le.data() + frame * 4u + lane * 2u;
+                const auto bits = static_cast<std::uint16_t>(
+                    std::to_integer<std::uint16_t>(sample[0]) |
+                    (std::to_integer<std::uint16_t>(sample[1]) << 8u));
+                const std::int64_t scaled = std::clamp<std::int64_t>(
+                    (static_cast<std::int64_t>(static_cast<std::int16_t>(bits)) * gain) >> 16u,
+                    -32768, 32767);
+                const auto out = static_cast<std::uint16_t>(static_cast<std::int16_t>(scaled));
+                sample[0] = static_cast<std::byte>(out & 0xFFu);
+                sample[1] = static_cast<std::byte>(out >> 8u);
+            }
+        }
+    }
+    std::uint32_t output_master_q16_ = galaxy::audio::kNativeAudioUnityGainQ16;
+    bool output_master_started_ = false;
+
     struct SubmittedBuffer {
         std::atomic_bool started{false};
         std::atomic_bool completed{false};
@@ -5881,6 +5926,8 @@ static std::atomic<HostPointerTransitionProvider>
 static std::atomic<HostPointerClock> g_host_pointer_clock{nullptr};
 static std::atomic<NativeKeyboardCaptureProvider>
     g_native_keyboard_capture_provider{nullptr};
+static std::atomic<NativeSettingsVisibleProvider> g_native_settings_visible{nullptr};
+static std::atomic<NativeSettingsKeySink> g_native_settings_key_sink{nullptr};
 static galaxy::input::NativeWindowKeyPressLatch g_window_key_presses;
 static galaxy::input::NativeWindowKeyHeldState g_window_keys_held;
 
@@ -5939,6 +5986,13 @@ bool native_keyboard_capture_active() noexcept {
     const NativeKeyboardCaptureProvider provider =
         g_native_keyboard_capture_provider.load(std::memory_order_acquire);
     return provider != nullptr && provider();
+}
+
+void install_native_settings_pad_hooks(
+    NativeSettingsVisibleProvider visible,
+    NativeSettingsKeySink sink) noexcept {
+    g_native_settings_visible.store(visible, std::memory_order_release);
+    g_native_settings_key_sink.store(sink, std::memory_order_release);
 }
 
 namespace {
@@ -6397,6 +6451,28 @@ bool native_hid_controller_has_input(
            std::fabs(controller.left_y) > 0.001f ||
            std::fabs(controller.right_x) > 0.001f ||
            std::fabs(controller.right_y) > 0.001f;
+}
+
+// Runs the settings-overlay controller chord and navigation on one pad
+// sample (live or replayed). `buttons` becomes what the game sees; true means
+// sticks and triggers must read neutral as well.
+bool route_native_settings_pad(std::uint16_t& buttons, float stick_x, float stick_y) {
+    const NativeSettingsVisibleProvider visible =
+        g_native_settings_visible.load(std::memory_order_acquire);
+    const NativeSettingsKeySink sink =
+        g_native_settings_key_sink.load(std::memory_order_acquire);
+    if (visible == nullptr || sink == nullptr) {
+        return false;
+    }
+    static galaxy::input::NativeSettingsPadState s_state{};
+    const galaxy::input::NativeSettingsPadStep step =
+        galaxy::input::native_settings_pad_step(
+            s_state, buttons, stick_x, stick_y, visible(), GetTickCount64());
+    for (std::size_t i = 0; i < step.key_count; ++i) {
+        sink(step.keys[i]);
+    }
+    buttons = step.game_buttons;
+    return step.game_neutral;
 }
 
 NativeHidControllerState poll_native_hid_controller() {
@@ -8038,10 +8114,23 @@ galaxy::input::WiimoteInputSnapshot build_native_hid_input_snapshot(
         float replay_pointer_x = 0.0f;
         float replay_pointer_y = 0.0f;
         bool replay_pointer_active = false;
+        // Replayed pads reach the settings overlay the way live pads do.
+        NativeInputReplaySample routed = *replay;
+        if (routed.xinput_connected &&
+            route_native_settings_pad(
+                routed.xinput_buttons,
+                galaxy::input::normalize_xinput_axis(
+                    routed.thumb_lx, xinput_left_deadzone()),
+                galaxy::input::normalize_xinput_axis(
+                    routed.thumb_ly, xinput_left_deadzone()))) {
+            routed.left_trigger = routed.right_trigger = 0u;
+            routed.thumb_lx = routed.thumb_ly = 0;
+            routed.thumb_rx = routed.thumb_ry = 0;
+        }
         const auto replay_snapshot = build_replayed_hid_input_snapshot(
             report_mode,
             current_vi,
-            *replay,
+            routed,
             script,
             input_mode_state.mode,
             ir_input_enabled,
@@ -8109,9 +8198,17 @@ galaxy::input::WiimoteInputSnapshot build_native_hid_input_snapshot(
          input_mode == galaxy::RuntimeInputMode::Auto) &&
         !xinput_polling_disabled() &&
         (!xinput_requires_focus() || window_focused);
-    const NativeHidControllerState controller =
+    NativeHidControllerState controller =
         poll_controller ? poll_native_hid_controller()
                         : NativeHidControllerState{};
+    if (controller.connected &&
+        route_native_settings_pad(
+            controller.buttons, controller.left_x, controller.left_y)) {
+        controller.left_trigger = 0u;
+        controller.right_trigger = 0u;
+        controller.left_x = controller.left_y = 0.0f;
+        controller.right_x = controller.right_y = 0.0f;
+    }
     const bool controller_active = native_hid_controller_has_input(controller);
     const bool force_controller =
         input_mode == galaxy::RuntimeInputMode::Controller;
@@ -16305,133 +16402,138 @@ bool GuestAddressSpace::dsp_native_write_aram_u16(
     return accepted;
 }
 
-void GuestAddressSpace::refresh_dsp_audio_bus_controls() {
-    constexpr std::uint32_t kControlPoolPointer = 0x806A2BD0u;
-    constexpr std::uint32_t kControlSize = 0x1cu;
+void GuestAddressSpace::refresh_dsp_audio_bus_controls(std::uint32_t channel_table) {
+    // Each DSP channel's owner, through JAudio2's structures (field offsets
+    // from the Petari layouts, docs/PROVENANCE.md), every link checked:
+    //   JASDSPChannel::sDspChannels: 64 x 0x1C; +0x14 callback data. A
+    //     JASChannel's DSP channel has the JASChannel as callback data, and
+    //     the JASChannel points back at it (+0x08 mDspCh).
+    //   JASChannel +0x10 callback data: its track's TChannelMgr (+0x4C mTrack;
+    //     the track lists the manager at +0x170..+0x17C or embeds it at
+    //     +0x180), or its JASAramStream (+0x90 mChannels[6] lists the
+    //     channel).
+    //   JASTrack +0x12C mParent up to the output track, embedded in a JAISe
+    //     at +0xC8 (a JAISe begins with its JSULink, whose +0 points at it) or
+    //     in a JAISeq at +0xA8. JAISound::mSoundID is JAISe +0x28, JAISeq
+    //     +0x18, JAIStream +0x18 (its JASAramStream at +0xA8).
+    // An unresolved owner falls back to the channel's sample format.
+    constexpr std::uint32_t kDspChannelsPointer = 0x806A2BD0u;
+    constexpr std::uint32_t kDspChannelSize = 0x1cu;
     constexpr std::uint32_t kChannelSize = 0x180u;
     std::array<galaxy::audio::NativeAudioBus,
                galaxy::audio::NativeAudioBusControls::kChannelCount>
         buses{};
     buses.fill(galaxy::audio::NativeAudioBus::Sfx);
 
-    const auto read_guest_u32 =
-        [this](std::uint32_t address) -> std::optional<std::uint32_t> {
+    const auto read_u32 = [this](std::uint32_t address) -> std::uint32_t {
+        if (address < 0x80000000u) {
+            return 0u;
+        }
         const std::byte* value = pointer_or_null(address, sizeof(std::uint32_t));
-        return value != nullptr
-            ? std::optional<std::uint32_t>(read_be32_at(value))
-            : std::nullopt;
+        return value != nullptr ? read_be32_at(value) : 0u;
     };
-    const auto known_bus_from_sound_id = [](std::uint32_t sound_id)
-        -> std::optional<galaxy::audio::NativeAudioBus> {
-        const galaxy::audio::NativeAudioBusDecision decision =
-            galaxy::audio::native_audio_bus_from_sound_id(sound_id);
-        return decision.classification ==
-                galaxy::audio::NativeAudioBusClassification::OwnerSoundId
-            ? std::optional<galaxy::audio::NativeAudioBus>(decision.bus)
-            : std::nullopt;
+    enum class Route : std::uint8_t { Format, Se, Seq, Stream };
+    struct Owner {
+        Route route{Route::Format};
+        std::uint32_t sound_id{};
     };
-    const auto follow_root_track = [&read_guest_u32](std::uint32_t track) {
-        for (std::uint32_t depth = 0u; depth < 16u; ++depth) {
-            const std::optional<std::uint32_t> parent =
-                read_guest_u32(track + 0x12cu);
-            if (!parent.has_value() || parent.value() == 0u ||
-                parent.value() == track) {
-                break;
-            }
-            track = parent.value();
+    const auto resolve = [&read_u32](std::uint32_t dsp_channel) -> Owner {
+        const std::uint32_t channel = read_u32(dsp_channel + 0x14u);
+        if (channel == 0u || read_u32(channel + 0x08u) != dsp_channel) {
+            return {};
         }
-        return track;
-    };
-    const auto classify_jas_channel =
-        [&read_guest_u32, &known_bus_from_sound_id, &follow_root_track](
-            std::uint32_t jas_channel)
-            -> std::optional<galaxy::audio::NativeAudioBus> {
-        if (jas_channel == 0u) {
-            return std::nullopt;
+        const std::uint32_t data = read_u32(channel + 0x10u);
+        if (data == 0u) {
+            return {};
         }
-        const std::optional<std::uint32_t> callback_data =
-            read_guest_u32(jas_channel + 0x10u);
-        if (!callback_data.has_value() || callback_data.value() == 0u) {
-            return std::nullopt;
+        const std::uint32_t track = read_u32(data + 0x4cu);
+        bool track_owned = track != 0u && track + 0x180u == data;
+        for (std::uint32_t k = 0u; !track_owned && track != 0u && k < 4u; ++k) {
+            track_owned = read_u32(track + 0x170u + k * 4u) == data;
         }
-        const std::optional<std::uint32_t> manager_track =
-            read_guest_u32(callback_data.value() + 0x4cu);
-        if (manager_track.has_value() && manager_track.value() != 0u) {
-            const std::uint32_t root = follow_root_track(manager_track.value());
-            const std::optional<std::uint32_t> sequence_id = root >= 0x90u
-                ? read_guest_u32(root - 0x90u)
-                : std::nullopt;
-            if (sequence_id.has_value()) {
-                const auto sequence_bus =
-                    known_bus_from_sound_id(sequence_id.value());
-                if (sequence_bus == galaxy::audio::NativeAudioBus::Music) {
-                    return sequence_bus;
+        if (track_owned) {
+            std::uint32_t root = track;
+            for (std::uint32_t depth = 0u; depth < 16u; ++depth) {
+                const std::uint32_t parent = read_u32(root + 0x12cu);
+                if (parent == 0u || parent == root) {
+                    break;
                 }
+                root = parent;
             }
-            const std::optional<std::uint32_t> effect_id = root >= 0xa0u
-                ? read_guest_u32(root - 0xa0u)
-                : std::nullopt;
-            if (effect_id.has_value()) {
-                const auto effect_bus =
-                    known_bus_from_sound_id(effect_id.value());
-                if (effect_bus.has_value()) {
-                    return effect_bus;
-                }
+            const std::uint32_t se = root - 0xc8u;
+            if (read_u32(se) == se) {
+                return {Route::Se, read_u32(se + 0x28u)};
             }
-            return sequence_id.has_value()
-                ? known_bus_from_sound_id(sequence_id.value())
-                : std::nullopt;
+            return {Route::Seq, read_u32(root - 0xa8u + 0x18u)};
         }
-        return callback_data.value() >= 0x90u
-            ? known_bus_from_sound_id(
-                  read_guest_u32(callback_data.value() - 0x90u).value_or(
-                      0xffffffffu))
-            : std::nullopt;
+        for (std::uint32_t k = 0u; k < 6u; ++k) {
+            if (read_u32(data + 0x90u + k * 4u) == channel) {
+                return {Route::Stream, read_u32(data - 0xa8u + 0x18u)};
+            }
+        }
+        return {};
     };
 
-    const std::uint32_t control_pool =
-        read_guest_u32(kControlPoolPointer).value_or(0u);
-    const std::byte* controls = control_pool != 0u
+    static const bool trace = read_env_flag("GALAXY_AUDIO_BUS_TRACE");
+    static std::array<std::uint64_t,
+                      galaxy::audio::NativeAudioBusControls::kChannelCount>
+        traced{};
+
+    const std::uint32_t dsp_channels = read_u32(kDspChannelsPointer);
+    const std::uint32_t table =
+        channel_table != 0u ? channel_table : dsp_channel_table_addr_;
+    const std::byte* records = table != 0u
         ? pointer_or_null(
-              control_pool,
-              static_cast<std::uint32_t>(buses.size()) * kControlSize)
-        : nullptr;
-    const std::byte* channels = dsp_channel_table_addr_ != 0u
-        ? pointer_or_null(
-              dsp_channel_table_addr_,
+              table,
               static_cast<std::uint32_t>(buses.size()) * kChannelSize)
         : nullptr;
-    for (std::size_t channel = 0u; channel < buses.size(); ++channel) {
-        std::optional<galaxy::audio::NativeAudioBus> owner_bus;
-        if (controls != nullptr) {
-            const std::byte* control = controls + channel * kControlSize;
-            const std::uint32_t jas_dsp_channel = read_be32_at(control, 0x14u);
-            if (jas_dsp_channel != 0u) {
-                const std::uint32_t jas_channel =
-                    read_guest_u32(jas_dsp_channel + 0x14u).value_or(0u);
-                owner_bus = classify_jas_channel(jas_channel);
-            }
+    for (std::size_t index = 0u; index < buses.size(); ++index) {
+        const Owner owner = dsp_channels != 0u
+            ? resolve(dsp_channels + static_cast<std::uint32_t>(index) * kDspChannelSize)
+            : Owner{};
+        galaxy::audio::NativeAudioBusDecision decision{};
+        if (owner.route != Route::Format) {
+            decision = galaxy::audio::native_audio_bus_from_sound_id(owner.sound_id);
         }
-        if (owner_bus.has_value()) {
-            buses[channel] = owner_bus.value();
-            continue;
-        }
-        if (channels != nullptr) {
-            const std::byte* record = channels + channel * kChannelSize;
-            buses[channel] = galaxy::audio::native_audio_bus_from_channel_format(
+        if (decision.classification !=
+                galaxy::audio::NativeAudioBusClassification::OwnerSoundId &&
+            records != nullptr) {
+            const std::byte* record = records + index * kChannelSize;
+            decision = galaxy::audio::native_audio_bus_from_channel_format(
                 read_be16_at(record, 0x64u),
-                read_be16_at(record, 0x100u)).bus;
+                read_be16_at(record, 0x100u));
+        }
+        buses[index] = decision.bus;
+        if (trace) {
+            const std::uint64_t key =
+                (static_cast<std::uint64_t>(owner.route) << 40u) |
+                (static_cast<std::uint64_t>(decision.bus) << 32u) |
+                owner.sound_id;
+            if (key != traced[index]) {
+                traced[index] = key;
+                static constexpr const char* kRoutes[] = {"format", "se", "seq", "stream"};
+                static constexpr const char* kBuses[] = {
+                    "music", "voice", "sfx", "ambience", "cutscene"};
+                std::ostringstream line;
+                line << "[audio-bus] ch=" << index
+                     << " route=" << kRoutes[static_cast<unsigned>(owner.route)]
+                     << " id=0x" << std::hex << owner.sound_id << std::dec
+                     << " bus=" << kBuses[static_cast<unsigned>(decision.bus)] << '\n';
+                std::cerr << line.str();
+            }
         }
     }
 
     const galaxy::RuntimeAudioSettings settings =
         galaxy::get_runtime_settings().audio;
+    // Master is applied once at the output (submit_pcm16_be_stereo).
     dsp_audio_bus_controls_.publish(
-        {settings.master,
+        {1.0f,
          settings.music,
          settings.voice,
          settings.sfx,
-         settings.ambience},
+         settings.ambience,
+         settings.cutscene},
         buses);
 }
 

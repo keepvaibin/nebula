@@ -11300,6 +11300,24 @@ void GxBackend::on_draw(
             tex0.guest_addr, tex0.width, tex0.height,
             static_cast<unsigned>(tex0.format),
             ord0.tex_enable ? 1 : 0);
+        {
+            const auto xf_float = [this](std::uint16_t address) {
+                return std::bit_cast<float>(state_.xf(address));
+            };
+            const ScissorRect scissor = state_.scissor();
+            std::fprintf(stderr,
+                "[capdraw]   proj=%c vp=%.1f,%.1f,%.1f,%.1f,%.0f,%.0f "
+                "sc=%d,%d,%d,%d pnmtx=%u\n",
+                state_.xf(static_cast<std::uint16_t>(xf::kProjectionBase + 6u)) == 0u ? 'P' : 'O',
+                static_cast<double>(xf_float(xf::kViewportBase)),
+                static_cast<double>(xf_float(static_cast<std::uint16_t>(xf::kViewportBase + 1u))),
+                static_cast<double>(xf_float(static_cast<std::uint16_t>(xf::kViewportBase + 3u))),
+                static_cast<double>(xf_float(static_cast<std::uint16_t>(xf::kViewportBase + 4u))),
+                static_cast<double>(xf_float(static_cast<std::uint16_t>(xf::kViewportBase + 2u))),
+                static_cast<double>(xf_float(static_cast<std::uint16_t>(xf::kViewportBase + 5u))),
+                scissor.x0, scissor.y0, scissor.x1, scissor.y1,
+                static_cast<unsigned>(state_.cp(cp::kMatrixIndexA) & 0x3Fu));
+        }
         const auto regs = state_.tev_register_colors();
         std::fprintf(stderr,
             "[capdraw]   tev0 cenv=0x%06X aenv=0x%06X ord=0x%03X "

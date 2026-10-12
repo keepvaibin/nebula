@@ -53,6 +53,7 @@ RuntimeSettings sanitize_settings(RuntimeSettings settings) {
     settings.audio.sfx = sanitize_gain(settings.audio.sfx);
     settings.audio.voice = sanitize_gain(settings.audio.voice);
     settings.audio.ambience = sanitize_gain(settings.audio.ambience);
+    settings.audio.cutscene = sanitize_gain(settings.audio.cutscene);
     return settings;
 }
 
@@ -131,6 +132,8 @@ void apply_kv(RuntimeSettings& settings, const char* key, const char* value) {
         settings.audio.voice = parse_gain(value, settings.audio.voice);
     } else if (std::strcmp(key, "audio_ambience_gain") == 0) {
         settings.audio.ambience = parse_gain(value, settings.audio.ambience);
+    } else if (std::strcmp(key, "audio_cutscene_gain") == 0) {
+        settings.audio.cutscene = parse_gain(value, settings.audio.cutscene);
     }
 }
 
@@ -237,6 +240,8 @@ void apply_env_overrides(RuntimeSettings& settings) {
     apply_env(settings, "GALAXY_AUDIO_VOICE_GAIN", "audio_voice_gain");
     apply_env(
         settings, "GALAXY_AUDIO_AMBIENCE_GAIN", "audio_ambience_gain");
+    apply_env(
+        settings, "GALAXY_AUDIO_CUTSCENE_GAIN", "audio_cutscene_gain");
 }
 
 }  // namespace
@@ -298,7 +303,8 @@ bool save_runtime_settings_to_file() {
                  << "audio_music_gain=" << settings.audio.music << '\n'
                  << "audio_sfx_gain=" << settings.audio.sfx << '\n'
                  << "audio_voice_gain=" << settings.audio.voice << '\n'
-                 << "audio_ambience_gain=" << settings.audio.ambience << '\n';
+                 << "audio_ambience_gain=" << settings.audio.ambience << '\n'
+                 << "audio_cutscene_gain=" << settings.audio.cutscene << '\n';
         if (!contents) {
             return false;
         }

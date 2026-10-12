@@ -212,8 +212,8 @@ int main() {
         "audio page increases music gain");
     snapshot = galaxy::gx::native_settings_overlay_snapshot();
     passed &= expect(
-        snapshot.row_count == 5u,
-        "audio page exposes master, music, SFX, voice, and ambience rows");
+        snapshot.row_count == 6u,
+        "audio page exposes master, music, SFX, voice, ambience, and cutscene rows");
     passed &= expect(
         key(VK_DOWN) && key(VK_DOWN) && key(VK_DOWN) && key(VK_LEFT),
         "ambience row is independently adjustable");
@@ -225,6 +225,11 @@ int main() {
         galaxy::get_runtime_settings().audio.sfx,
         0.65f,
         "audio page leaves SFX unchanged while adjusting ambience");
+    passed &= expect(key(VK_DOWN) && key(VK_LEFT), "cutscene row is adjustable");
+    passed &= expect_near(
+        galaxy::get_runtime_settings().audio.cutscene,
+        0.95f,
+        "audio page decreases cutscene gain");
 
     passed &= expect(key(VK_TAB), "Tab enters the capability page");
     snapshot = galaxy::gx::native_settings_overlay_snapshot();
@@ -233,6 +238,12 @@ int main() {
     passed &= expect(
         galaxy::gx::native_settings_overlay_snapshot().tab == 0u,
         "Tab wraps back to video");
+    passed &= expect(
+        key(VK_PRIOR) && galaxy::gx::native_settings_overlay_snapshot().tab == 4u,
+        "Page Up (controller LB) selects the previous page, wrapping");
+    passed &= expect(
+        key(VK_NEXT) && galaxy::gx::native_settings_overlay_snapshot().tab == 0u,
+        "Page Down (controller RB) selects the next page");
 
     const auto tiny = galaxy::gx::compute_native_settings_layout(427u, 240u, 0u);
     passed &= expect(

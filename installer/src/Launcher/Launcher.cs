@@ -46,8 +46,10 @@ namespace Nebula.Launcher
         private readonly ComboBox antiAliasing = new ComboBox(), aaQuality = new ComboBox(), upscaler = new ComboBox(), textureFilter = new ComboBox(), lighting = new ComboBox();
         private readonly NumericUpDown sharpness = new NumericUpDown();
         private readonly CheckBox mipmaps = new CheckBox();
+        private readonly NumericUpDown[] volumes = new NumericUpDown[AudioSettings.Names.Length];
         private readonly Button play = new Button();
         private GraphicsSettings graphics = new GraphicsSettings();
+        private AudioSettings audio = new AudioSettings();
         private DisplayPlan plan;
         private bool borderless;
 
@@ -70,8 +72,9 @@ namespace Nebula.Launcher
             var tabs = new TabControl { Location = new Point(12, 12), Size = new Size(736, 420) };
             var display = new TabPage("Display");
             var image = new TabPage("Graphics");
+            var sound = new TabPage("Audio");
             var diagnostics = new TabPage("Diagnostics");
-            tabs.TabPages.AddRange(new[] { display, image, diagnostics });
+            tabs.TabPages.AddRange(new[] { display, image, sound, diagnostics });
             Controls.Add(tabs);
 
             AddLabel(display, "Output / window", 12, 16, 300);
@@ -117,7 +120,15 @@ namespace Nebula.Launcher
             mipmaps.Location = new Point(12, 254);
             mipmaps.Size = new Size(600, 28);
             image.Controls.Add(mipmaps);
-            AddLabel(image, "These also change during play (F1, Graphics page), except mipmaps.", 12, 300, 700);
+            AddLabel(image, "These also change during play (F1, or View+Menu on a controller), except mipmaps.", 12, 300, 700);
+
+            for (int i = 0; i < volumes.Length; i++)
+            {
+                AddLabel(sound, AudioSettings.Names[i] + " volume (%)", 12, 16 + i * 40, 300);
+                volumes[i] = new NumericUpDown { Increment = 5 };
+                Number(sound, volumes[i], 320, 13 + i * 40, 0, 200, 100);
+            }
+            AddLabel(sound, "Cutscenes covers in-engine cutscene sounds and the movies. These also change during play.", 12, 16 + volumes.Length * 40, 700);
 
             AddLabel(diagnostics, "Recording", 12, 16, 300);
             recording.Items.AddRange(new[] { "No recording", "Lightweight recording", "Detailed recording" });
@@ -198,6 +209,8 @@ namespace Nebula.Launcher
             textureFilter.SelectedIndex = graphics.TextureFilter;
             mipmaps.Checked = graphics.GeneratedMipmaps;
             lighting.SelectedIndex = graphics.PerPixelLighting ? 0 : 1;
+            audio = AudioSettings.Load();
+            for (int i = 0; i < volumes.Length; i++) volumes[i].Value = audio.Percent[i];
             output.SelectedIndex = 0;
             aspect.Text = DisplaySettings.MatchDisplayAspect;
             internalTarget.SelectedIndex = 0;
@@ -312,6 +325,8 @@ namespace Nebula.Launcher
                 graphics.GeneratedMipmaps = mipmaps.Checked;
                 graphics.PerPixelLighting = lighting.SelectedIndex == 0;
                 graphics.Save(plan.FollowWindowResolution);
+                for (int i = 0; i < volumes.Length; i++) audio.Percent[i] = (int)volumes[i].Value;
+                audio.Save();
                 Directory.CreateDirectory(NebulaPaths.Saves);
                 var mode = (RecordingMode)recording.SelectedIndex;
                 var start = LaunchOptions.Create(app, content, FileUtil.FinalPath(NebulaPaths.Saves), plan, borderless, mode);

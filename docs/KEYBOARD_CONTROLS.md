@@ -89,26 +89,28 @@ Controller tuning hooks:
 
 ## Native Settings Overlay
 
-While the native game window owns focus, `F1` globally opens or closes the
-renderer-owned settings overlay. This is an explicit host UI policy; it is not
-conditioned on a guessed guest save-select address. Keyboard autorepeat is
-ignored for `F1`, so holding the key cannot flap the overlay.
+`F1`, or View+Menu (Back+Start) on a controller, opens or closes the settings
+overlay; a one-line hint names both for the first seconds of a session, and
+the file-select screen shows a PC SETTINGS button. Autorepeat never toggles it.
+While it is open the game sees no keyboard or controller input, and buttons
+held when it closes stay hidden from the game until released (the chord never
+reaches the pause menu).
 
-| Key | Settings action |
-|---|---|
-| `F1` | Open or close settings |
-| `Tab` | Next page |
-| Up / Down | Select row |
-| Left / Right | Adjust an editable row |
-| `Esc` | Close and persist settings |
+| Keyboard | Controller | Settings action |
+|---|---|---|
+| `F1` | View+Menu | Open or close |
+| `Tab` / Page Down, Page Up | RB, LB | Next, previous page |
+| Up / Down | D-pad or left stick up/down | Select row |
+| Left / Right | D-pad or left stick left/right, `A` | Change the selected row |
+| `Esc` | `B` or Menu | Close and save |
 
-Internal resolution supports 1x through 4x and is staged for the next process
-start because EFB/depth/XFB resources cannot be resized safely in place. The
-active input source and fixed VI-locked 60 Hz Release presentation profile are
-display-only. Settings files are written through flushed sibling temporaries
-and atomically replaced; a failed save remains dirty and is retried on a later
-close or shutdown. Overlay geometry has separate compact 427x240, 854x480, and
-large/4K layouts so the advertised low-resolution window remains usable.
+Pages: VIDEO (internal resolution, window size, display mode, resolution
+follows window), GRAPHICS (anti-aliasing, SMAA quality, upscaler, sharpening,
+texture filtering, lighting), INPUT (read-only), AUDIO (master, music, SFX,
+voice, ambience, cutscene), CAPS (read-only). Every change applies
+immediately, including internal resolution. Settings files are written
+through flushed sibling temporaries and atomically replaced; a failed save
+stays dirty and is retried on the next close or at shutdown.
 
 ## Headless Diagnostics
 

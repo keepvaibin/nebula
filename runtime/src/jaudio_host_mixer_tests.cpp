@@ -1,5 +1,6 @@
 #include "galaxy/jaudio_host_mixer.h"
 
+#include <array>
 #include <cstdio>
 #include <cstdlib>
 #include <vector>
@@ -330,6 +331,44 @@ void test_square_oscillator() {
     expect(guest.get16(r + 0x060u) == ((80u * 0x800u) & 0xFFFFu), "oscillator phase saved", guest.get16(r + 0x060u));
 }
 
+// Volume categories: each channel takes its bus gain after its filters; a
+// change ramps over one subframe and leaves other channels unchanged.
+void test_bus_controls() {
+    using galaxy::audio::NativeAudioBus;
+    Guest guest;
+    JAudioHostMixer mixer;
+    start(mixer, guest);
+    galaxy::audio::NativeAudioBusControls controls;
+    std::array<NativeAudioBus, galaxy::audio::NativeAudioBusControls::kChannelCount> buses{};
+    buses.fill(NativeAudioBus::Sfx);
+    buses[0] = NativeAudioBus::Music;
+    controls.publish({1.0f, 0.5f, 1.0f, 1.0f, 1.0f, 1.0f}, buses);
+    mixer.set_bus_controls(&controls);
+    pcm16_channel(guest, 0, 0x4000, 4096);
+    pcm16_channel(guest, 1, 0x4000, 4096);
+    guest.put16(record(0) + 0x010u, 0x0D00u);  // music channel -> L
+    guest.put16(record(0) + 0x012u, 0x4000u);
+    guest.put16(record(0) + 0x014u, 0x4000u);
+    guest.put16(record(1) + 0x010u, 0x0D60u);  // SFX channel -> R
+    guest.put16(record(1) + 0x012u, 0x4000u);
+    guest.put16(record(1) + 0x014u, 0x4000u);
+    frame(mixer, guest);
+    subframe(mixer, guest, 0xC000u);
+    // The first three samples come from the reset resampler history.
+    expect(guest.gets16(kLeft + 3u * 2u) == 0x2000, "bus gain applies without a fade-in", guest.gets16(kLeft + 3u * 2u));
+    expect(guest.gets16(kLeft + 79u * 2u) == 0x2000, "music at half", guest.gets16(kLeft + 79u * 2u));
+    expect(guest.gets16(kRight + 79u * 2u) == 0x4000, "SFX at unity", guest.gets16(kRight + 79u * 2u));
+    controls.publish({1.0f, 0.0f, 1.0f, 1.0f, 1.0f, 1.0f}, buses);
+    subframe(mixer, guest, 0xC000u);
+    const std::int16_t first = guest.gets16(kLeft + 80u * 2u);
+    expect(first > 0x1F00 && first < 0x2000, "mute ramps from the previous gain", first);
+    expect(guest.gets16(kLeft + 159u * 2u) == 0, "mute reached within a subframe", guest.gets16(kLeft + 159u * 2u));
+    expect(guest.gets16(kRight + 159u * 2u) == 0x4000, "other buses unchanged", guest.gets16(kRight + 159u * 2u));
+    mixer.set_bus_controls(nullptr);
+    subframe(mixer, guest, 0xC000u);
+    expect(guest.gets16(kLeft + 239u * 2u) == 0x4000, "no controls: unity", guest.gets16(kLeft + 239u * 2u));
+}
+
 void test_stray_release() {
     Guest guest;
     JAudioHostMixer mixer;
@@ -355,6 +394,7 @@ int main() {
     test_fir_delay();
     test_iir_average();
     test_square_oscillator();
+    test_bus_controls();
     test_stray_release();
     if (g_failures != 0) {
         std::fprintf(stderr, "%d failure(s)\n", g_failures);

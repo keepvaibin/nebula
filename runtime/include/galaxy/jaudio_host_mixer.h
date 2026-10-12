@@ -4,6 +4,8 @@
 #include <cstddef>
 #include <cstdint>
 
+#include "galaxy/native_audio_bus.h"
+
 namespace galaxy::host {
 
 // Host implementation of RMGE01's JAudio DSP command interface.
@@ -78,6 +80,13 @@ public:
     // the caller then posts the game's AUDIOMSG_DSP.
     bool release_halt(std::uint32_t message, const JAudioGuestMemory& memory);
     void note_ignored_command() noexcept { ++stats_.ignored_commands; }
+    // Per-channel bus gains (music, voice, SFX, ambience, cutscene) published
+    // by the runtime once per audio frame; each channel ramps to its gain
+    // after its filters, before its bus sends. Null leaves every gain at 1.
+    void set_bus_controls(const galaxy::audio::NativeAudioBusControls* controls) noexcept {
+        bus_controls_ = controls;
+    }
+    [[nodiscard]] std::uint32_t channel_table() const noexcept { return channel_table_; }
 
     [[nodiscard]] bool configured() const noexcept { return channel_table_ != 0u; }
     [[nodiscard]] std::uint32_t varam() const noexcept { return varam_; }
@@ -101,7 +110,8 @@ private:
     };
 
     void mix_subframe(const JAudioGuestMemory& memory);
-    void render_channel(std::byte* record, const JAudioGuestMemory& memory);
+    void render_channel(std::byte* record, std::uint32_t index,
+                        const JAudioGuestMemory& memory);
     std::uint32_t render_source(std::byte* record, std::int16_t* out,
                                 const JAudioGuestMemory& memory);
     void resample(std::byte* record, std::int16_t* history_and_source,
@@ -159,6 +169,8 @@ private:
     std::uint32_t subframes_{};
     std::uint32_t next_subframe_{};
     bool frame_active_{};
+    const galaxy::audio::NativeAudioBusControls* bus_controls_{};
+    galaxy::audio::NativeDspAudioBusState bus_state_{};
     JAudioHostMixerStats stats_{};
 };
 

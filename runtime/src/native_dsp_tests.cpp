@@ -6427,6 +6427,13 @@ bool test_native_audio_bus_controls() {
         0x00010000u);
     const auto ambience = galaxy::audio::native_audio_bus_from_sound_id(
         0x00060000u);
+    const auto cutscene = galaxy::audio::native_audio_bus_from_sound_id(
+        0x00070000u);
+    passed &= expect(
+        cutscene.bus == NativeAudioBus::Cutscene &&
+            cutscene.classification ==
+                NativeAudioBusClassification::OwnerSoundId,
+        "native audio DEMO sound IDs join the cutscene bus");
     const auto unknown = galaxy::audio::native_audio_bus_from_sound_id(
         0x7f7f0000u);
     passed &= expect(
@@ -6454,14 +6461,17 @@ bool test_native_audio_bus_controls() {
     buses[3] = NativeAudioBus::Music;
     buses[4] = NativeAudioBus::Voice;
     buses[5] = NativeAudioBus::Ambience;
-    controls.publish({0.5f, 0.5f, 0.75f, 1.0f, 0.25f}, buses);
+    buses[6] = NativeAudioBus::Cutscene;
+    controls.publish({0.5f, 0.5f, 0.75f, 1.0f, 0.25f, 0.5f}, buses);
     passed &= expect(
         controls.snapshot_channel(3).gain_q16 ==
                 galaxy::audio::kNativeAudioUnityGainQ16 / 4u &&
             controls.snapshot_channel(4).gain_q16 == 24'576u &&
             controls.snapshot_channel(2).gain_q16 ==
                 galaxy::audio::kNativeAudioUnityGainQ16 / 2u &&
-            controls.snapshot_channel(5).gain_q16 == 8'192u,
+            controls.snapshot_channel(5).gain_q16 == 8'192u &&
+            controls.snapshot_channel(6).gain_q16 ==
+                galaxy::audio::kNativeAudioUnityGainQ16 / 4u,
         "native audio controls publish coherent master-times-bus gains");
 
     galaxy::audio::NativeDspAudioBusState state{};
@@ -6487,6 +6497,30 @@ bool test_native_audio_bus_controls() {
     passed &= expect(
         galaxy::audio::native_dsp_audio_bus_apply_sample(state, -32'768) == 0,
         "muted bus remains silent for negative full-scale samples");
+
+    {
+        // A channel taken over by a voice while voices are muted: the new
+        // owner starts at its own gain instead of ramping from the music gain.
+        galaxy::audio::NativeDspAudioBusState fresh{};
+        std::array<NativeAudioBus,
+                   galaxy::audio::NativeAudioBusControls::kChannelCount>
+            owners{};
+        owners.fill(NativeAudioBus::Sfx);
+        owners[7] = NativeAudioBus::Music;
+        galaxy::audio::NativeAudioBusControls muted_voice;
+        muted_voice.publish({1.0f, 1.0f, 0.0f, 1.0f, 1.0f}, owners);
+        galaxy::audio::native_dsp_audio_bus_begin_channel(fresh, 7u, &muted_voice);
+        const std::int16_t music_sample =
+            galaxy::audio::native_dsp_audio_bus_apply_sample(fresh, 16'000);
+        owners[7] = NativeAudioBus::Voice;
+        muted_voice.publish({1.0f, 1.0f, 0.0f, 1.0f, 1.0f}, owners);
+        galaxy::audio::native_dsp_audio_bus_begin_channel(fresh, 7u, &muted_voice);
+        passed &= expect(
+            music_sample == 16'000 &&
+                galaxy::audio::native_dsp_audio_bus_apply_sample(fresh, 16'000) == 0 &&
+                fresh.ramps[7].remaining == 0u,
+            "a channel's new owner on another bus starts at that bus's gain");
+    }
 
     controls.publish({1.0f, 1.0f, 1.0f, 0.5f, 0.25f}, buses);
     galaxy::audio::native_dsp_audio_bus_begin_channel(state, 2u, &controls);

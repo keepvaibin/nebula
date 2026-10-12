@@ -17,6 +17,9 @@ struct RuntimeAudioSettings {
     float sfx = 1.0f;
     float voice = 1.0f;
     float ambience = 1.0f;
+    // In-engine cutscene sounds (the game's DEMO sound category) and the
+    // pre-rendered movies' audio.
+    float cutscene = 1.0f;
 };
 
 struct RuntimeSettings {

@@ -48,6 +48,11 @@ using Microsoft::WRL::ComPtr;
 
 namespace galaxy::gx {
 
+std::string native_settings_row_text(
+    unsigned tab, unsigned row,
+    const RenderConfig& render, const RuntimeSettings& runtime,
+    const RenderFeatureCaps& caps);
+
 bool detail::ConversionRtvSlot::bind(
     ID3D12Device* device, ID3D12Resource* resource,
     D3D12_CPU_DESCRIPTOR_HANDLE descriptor) {
@@ -93,6 +98,8 @@ static constexpr DWORD kWindowStyle =
 // (wParam, lParam) and a display mode (wParam != 0 selects borderless).
 static constexpr UINT kClientSizeMessage = WM_USER + 0x41;
 static constexpr UINT kDisplayModeMessage = WM_USER + 0x42;
+// An overlay key from the controller (wParam: virtual-key code).
+static constexpr UINT kSettingsKeyMessage = WM_USER + 0x43;
 static std::atomic<std::uintptr_t> s_native_settings_window{0};
 static std::atomic<bool> s_borderless_active{false};
 static RECT s_windowed_rect{};
@@ -265,13 +272,35 @@ unsigned native_settings_row_count(unsigned tab) {
     case 0: return 5u;
     case 1: return 6u;
     case 2: return 1u;
-    case 3: return 5u;
+    case 3: return 6u;
     case 4: return 5u;
     default: return 0u;
     }
 }
 
+// Every overlay change is logged with its new row text.
+void adjust_native_setting_unlogged(int delta);
+
 void adjust_native_setting(int delta) {
+    const std::lock_guard<std::recursive_mutex> lock(s_native_settings_mutex);
+    const unsigned tab =
+        s_native_settings_tab.load(std::memory_order_relaxed) %
+        kNativeSettingsTabCount;
+    const unsigned row = s_native_settings_row.load(std::memory_order_relaxed);
+    const auto text = [tab, row] {
+        return native_settings_row_text(tab, row, get_render_config(),
+                                        get_runtime_settings(),
+                                        get_render_feature_caps());
+    };
+    const std::string before = text();
+    adjust_native_setting_unlogged(delta);
+    const std::string after = text();
+    if (after != before) {
+        std::cerr << "[settings] " << after << '\n';
+    }
+}
+
+void adjust_native_setting_unlogged(int delta) {
     const std::lock_guard<std::recursive_mutex> lock(s_native_settings_mutex);
     const unsigned tab =
         s_native_settings_tab.load(std::memory_order_relaxed) %
@@ -419,6 +448,12 @@ void adjust_native_setting(int delta) {
             settings.audio.ambience = next;
             break;
         }
+        case 5: {
+            const float next = step_gain(settings.audio.cutscene, delta);
+            changed = next != settings.audio.cutscene;
+            settings.audio.cutscene = next;
+            break;
+        }
         default:
             break;
         }
@@ -464,7 +499,9 @@ void set_native_settings_visible(bool visible) {
     if (!visible) {
         flush_native_settings_if_dirty();
     }
-    s_native_settings_visible.store(visible, std::memory_order_relaxed);
+    if (s_native_settings_visible.exchange(visible, std::memory_order_relaxed) != visible) {
+        std::cerr << (visible ? "[settings] overlay open" : "[settings] overlay closed") << std::endl;
+    }
 }
 
 bool handle_native_settings_key(WPARAM key, bool was_down) {
@@ -493,7 +530,11 @@ bool handle_native_settings_key(WPARAM key, bool was_down) {
         set_native_settings_visible(false);
         return true;
     case VK_TAB:
+    case VK_NEXT:
         cycle_native_settings_tab(1);
+        return true;
+    case VK_PRIOR:
+        cycle_native_settings_tab(-1);
         return true;
     case VK_UP:
         move_native_setting_row(-1);
@@ -1213,6 +1254,10 @@ LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     }
     if (msg == kDisplayModeMessage) {
         apply_requested_display_mode(hwnd, wp != 0u);
+        return 0;
+    }
+    if (msg == kSettingsKeyMessage) {
+        (void)native_settings_handle_window_key(wp, false);
         return 0;
     }
     if (msg == WM_CREATE) {
@@ -6860,6 +6905,7 @@ std::array<std::uint8_t, 7> ui_glyph(char ch) {
     case ':': return {0x00u, 0x04u, 0x04u, 0x00u, 0x04u, 0x04u, 0x00u};
     case '.': return {0x00u, 0x00u, 0x00u, 0x00u, 0x00u, 0x0Cu, 0x0Cu};
     case '-': return {0x00u, 0x00u, 0x00u, 0x1Eu, 0x00u, 0x00u, 0x00u};
+    case '+': return {0x00u, 0x04u, 0x04u, 0x1Fu, 0x04u, 0x04u, 0x00u};
     case '/': return {0x01u, 0x01u, 0x02u, 0x04u, 0x08u, 0x10u, 0x10u};
     case '%': return {0x19u, 0x19u, 0x02u, 0x04u, 0x08u, 0x13u, 0x13u};
     case '<': return {0x02u, 0x04u, 0x08u, 0x10u, 0x08u, 0x04u, 0x02u};
@@ -7018,6 +7064,7 @@ std::string native_settings_row_text(
         case 2: return std::string("SFX: ") + percent_text(runtime.audio.sfx);
         case 3: return std::string("VOICE: ") + percent_text(runtime.audio.voice);
         case 4: return std::string("AMBIENCE: ") + percent_text(runtime.audio.ambience);
+        case 5: return std::string("CUTSCENE: ") + percent_text(runtime.audio.cutscene);
         default: return {};
         }
     case 4:
@@ -7261,15 +7308,50 @@ void draw_native_settings_overlay(RendererD3D12& renderer) {
         panel_x + 28,
         footer_y + footer_step,
         footer_scale,
-        "F1 TOGGLE  TAB PAGE",
+        "F1 OR VIEW+MENU TOGGLE  TAB/LB/RB PAGE",
         muted);
     ui_text(
         renderer,
         panel_x + 28,
         footer_y + footer_step * 2,
         footer_scale,
-        "ARROWS MOVE/ADJUST  ESC CLOSE",
+        "ARROWS/D-PAD MOVE+ADJUST  ESC/B CLOSE",
         muted);
+}
+
+// For the first seconds of a session, until the overlay is first opened, a
+// one-line hint names the keys that open it.
+void draw_native_settings_hint(RendererD3D12& renderer) {
+    static std::uint64_t s_hint_until_ms = 0u;
+    static bool s_hint_done = false;
+    if (s_hint_done || !native_settings_ui_enabled()) {
+        return;
+    }
+    const std::uint64_t now = GetTickCount64();
+    if (s_hint_until_ms == 0u) {
+        s_hint_until_ms = now + 8000u;
+    }
+    if (now >= s_hint_until_ms ||
+        s_native_settings_visible.load(std::memory_order_relaxed)) {
+        s_hint_done = true;
+        return;
+    }
+    if (s_bb_width < 427u || s_bb_height < 240u) {
+        return;
+    }
+    static constexpr const char* kHint = "F1 OR VIEW+MENU: SETTINGS";
+    const int scale = s_bb_height >= 1440u ? 3 : (s_bb_height >= 720u ? 2 : 1);
+    int text_w = -scale;
+    for (const char* ch = kHint; *ch != '\0'; ++ch) {
+        text_w += (*ch == ' ' ? 4 : 6) * scale;
+    }
+    const int pad = 4 * scale;
+    const int x = 8 * scale;
+    const int y = static_cast<int>(s_bb_height) - 8 * scale - 7 * scale - pad * 2;
+    ui_rect(renderer, x, y, text_w + pad * 2, 7 * scale + pad * 2,
+            {0.02f, 0.025f, 0.035f, 1.0f});
+    ui_text(renderer, x + pad, y + pad, scale, kHint,
+            {0.88f, 0.94f, 0.96f, 1.0f});
 }
 
 bool RendererD3D12::present(
@@ -7505,6 +7587,7 @@ bool RendererD3D12::present(
             : std::chrono::steady_clock::time_point{};
         draw_and_handle_file_select_settings_button(*this);
         draw_native_settings_overlay(*this);
+        draw_native_settings_hint(*this);
         if (stall_watch_overlay) {
             const double stall_watch_ms =
                 std::chrono::duration<double, std::milli>(
@@ -8240,6 +8323,15 @@ bool native_settings_handle_window_key(
     return handle_native_settings_key(
         static_cast<WPARAM>(virtual_key),
         was_down);
+}
+
+void native_settings_post_key(std::uintptr_t virtual_key) noexcept {
+    const HWND window = reinterpret_cast<HWND>(
+        s_native_settings_window.load(std::memory_order_acquire));
+    if (window != nullptr) {
+        (void)PostMessageW(window, kSettingsKeyMessage,
+                           static_cast<WPARAM>(virtual_key), 0);
+    }
 }
 
 void native_settings_reset_overlay_state_for_tests() noexcept {

@@ -260,6 +260,8 @@ native_settings_overlay_snapshot() noexcept;
     std::uintptr_t virtual_key,
     bool was_down);
 void native_settings_reset_overlay_state_for_tests() noexcept;
+// Delivers an overlay key to the window thread (controller navigation).
+void native_settings_post_key(std::uintptr_t virtual_key) noexcept;
 
 // Number of EFB display copies submitted to XFB textures by the active backend.
 [[nodiscard]] std::uint64_t xfb_copy_count() noexcept;

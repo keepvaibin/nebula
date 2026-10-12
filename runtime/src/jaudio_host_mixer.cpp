@@ -249,7 +249,7 @@ void JAudioHostMixer::mix_subframe(const JAudioGuestMemory& memory) {
             if (((map << (channel & 15u)) & 0x8000u) == 0u) {
                 continue;
             }
-            render_channel(channels + channel * kRecordBytes, memory);
+            render_channel(channels + channel * kRecordBytes, channel, memory);
         }
     }
 
@@ -270,7 +270,7 @@ void JAudioHostMixer::mix_subframe(const JAudioGuestMemory& memory) {
     }
 }
 
-void JAudioHostMixer::render_channel(std::byte* record,
+void JAudioHostMixer::render_channel(std::byte* record, std::uint32_t index,
                                      const JAudioGuestMemory& memory) {
     if (be16(record, 0x000u) == 0u || be16(record, 0x002u) != 0u) {
         return;
@@ -285,6 +285,13 @@ void JAudioHostMixer::render_channel(std::byte* record,
     }
     apply_fir(record, out);
     apply_iir(record, out);
+    if (bus_controls_ != nullptr) {
+        galaxy::audio::native_dsp_audio_bus_begin_channel(
+            bus_state_, static_cast<std::uint16_t>(index), bus_controls_);
+        for (std::uint32_t k = 0; k < kSamples; ++k) {
+            out[k] = galaxy::audio::native_dsp_audio_bus_apply_sample(bus_state_, out[k]);
+        }
+    }
     if (be16(record, 0x058u) != 0u) {
         mix_auto(record, out);
     } else {
