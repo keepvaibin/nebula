@@ -8327,6 +8327,80 @@ fn apply_checkpoint_globals(source_files: &mut [GeneratedSource]) {
     }
 }
 
+// ---------------------------------------------------------------------------
+// Code-generation probes (crate::asm_probe)
+// ---------------------------------------------------------------------------
+
+/// One synthetic probe function through the module's per-function pipeline:
+/// lowering with the module options, residency and transfer returns.
+pub(crate) fn lower_probe_function(
+    address: u32,
+    bytes: &[u8],
+    callable_entries: &BTreeMap<u32, u32>,
+    exact_fpu_functions: &BTreeSet<u32>,
+    checkpoint_free_leaves: &BTreeSet<u32>,
+    options: &ModuleTranslationOptions,
+) -> Result<String, TranslationError> {
+    let entries = BTreeSet::new();
+    let body = lower_words_for_module_with_call_return_entries_and_exact_fpu_flat_reads(
+        address,
+        bytes,
+        &entries,
+        &BTreeSet::new(),
+        callable_entries,
+        exact_fpu_functions,
+        checkpoint_free_leaves,
+        &BTreeMap::new(),
+        options,
+    )?;
+    Ok(apply_transfer_returns(apply_residency_to_body(
+        address, body, &entries, options,
+    )))
+}
+
+/// The module's exact-FPU classification for a probe function.
+pub(crate) fn probe_function_needs_fpu(address: u32, bytes: &[u8]) -> bool {
+    (function_requires_fpu(bytes) || native_substitution_uses_fpu(address))
+        && lean_sdk_math_symbol(address).is_none()
+}
+
+/// The module's checkpoint-free-leaf classification for a probe function.
+pub(crate) fn probe_is_checkpoint_free_leaf(address: u32, bytes: &[u8]) -> bool {
+    native_function_body(address).is_none()
+        && native_pure_helper(address).is_none()
+        && is_checkpoint_free_leaf(address, bytes)
+}
+
+/// The sharded module emitter over probe functions, one per shard, no aliases.
+pub(crate) fn render_probe_module(
+    functions: &[(FunctionRange, String)],
+    exact_fpu_functions: &BTreeSet<u32>,
+) -> Result<Vec<GeneratedSource>, TranslationError> {
+    let entry = functions
+        .first()
+        .map(|(function, _)| function.address)
+        .ok_or(TranslationError::NoTranslatableFunctions)?;
+    // One function per shard, so no probe is inlined into another: in the
+    // game module most calls cross shards.
+    emit_sharded_module_with_experiment(
+        functions,
+        &[],
+        1,
+        usize::MAX / 2,
+        entry,
+        exact_fpu_functions,
+        LocalPairedExperiments::default(),
+    )
+}
+
+/// The module-wide option passes, as `translate_module_with_options` runs them.
+pub(crate) fn module_option_passes(
+    source_files: &mut [GeneratedSource],
+    options: &ModuleTranslationOptions,
+) {
+    apply_module_options(source_files, options);
+}
+
 /// The module-wide passes over the generated sources, in their fixed order.
 /// Each is a no-op unless its option is on.
 fn apply_module_options(source_files: &mut [GeneratedSource], options: &ModuleTranslationOptions) {

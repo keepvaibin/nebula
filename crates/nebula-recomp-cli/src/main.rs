@@ -217,6 +217,19 @@ enum Command {
         #[arg(long)]
         profile_top_self_closure_edges: bool,
     },
+    /// Lower the built-in synthetic PowerPC probe corpus (one small function
+    /// per hot instruction class) through the module pipeline, for x86
+    /// instruction counting (tools/perf/asm_probe.py). No game data is read.
+    AsmProbe {
+        /// New or existing directory for the probe module sources.
+        #[arg(long)]
+        output: PathBuf,
+        /// Comma-separated module options by translate-module flag name
+        /// without dashes (e.g. `release,hw-float-conversions`); `release` is
+        /// the installer's option set.
+        #[arg(long, default_value = "")]
+        options: String,
+    },
     /// Report the current hard-fail translator coverage over all functions.
     Coverage {
         input: PathBuf,
@@ -562,6 +575,26 @@ fn main() -> Result<()> {
                 options,
             )?;
             println!("Output: {}", output.display());
+        }
+        Command::AsmProbe { output, options } => {
+            let options = probe_options(&options)?;
+            let module = nebula_recomp_core::asm_probe::translate_probe_module(&options)
+                .context("failed to lower the probe corpus")?;
+            fs::create_dir_all(&output)
+                .with_context(|| format!("failed to create {}", output.display()))?;
+            for source in &module.sources {
+                let path = output.join(&source.name);
+                write_generated_text_if_changed(&path, &source.contents)
+                    .with_context(|| format!("failed to write {}", path.display()))?;
+            }
+            let manifest = output.join("probes.csv");
+            write_generated_text_if_changed(&manifest, &module.manifest_csv())
+                .with_context(|| format!("failed to write {}", manifest.display()))?;
+            println!(
+                "Probe module: {} functions in {}",
+                module.probes.len(),
+                output.display()
+            );
         }
         Command::Coverage { input, json } => {
             let coverage = translation_coverage(&input)
@@ -1074,6 +1107,39 @@ fn main() -> Result<()> {
 }
 
 /// Generate the sharded native game module sources for one option set.
+/// Module options by translate-module flag name (without dashes, and without
+/// the `experimental-` prefix), applied in order on top of the defaults.
+fn probe_options(list: &str) -> Result<ModuleTranslationOptions> {
+    let mut options = ModuleTranslationOptions::default();
+    for name in list
+        .split(',')
+        .map(str::trim)
+        .filter(|name| !name.is_empty())
+    {
+        let name = name.strip_prefix("experimental-").unwrap_or(name);
+        match name {
+            "release" => options = generate::release_module_options(),
+            "guest-resident-leaf" => options.guest_resident_leaf = true,
+            "guest-resident-integer" => options.guest_resident_integer = true,
+            "guest-resident-float" => options.guest_resident_float = true,
+            "fast-float" => options.fast_float = true,
+            "flat-ram-reads" => options.flat_ram_reads = true,
+            "flat-ram-writes" => options.flat_ram_writes = true,
+            "native-float" => options.native_float = true,
+            "direct-indirect-calls" => options.direct_indirect_calls = true,
+            "inline-scalar-single-binary" => options.inline_scalar_single_binary = true,
+            "no-exact-psmtx-local-lanes" => options.exact_psmtx_local_lanes = false,
+            "hw-float-conversions" => options.hw_float_conversions = true,
+            "checkpoint-globals" => options.checkpoint_globals = true,
+            "flat-view-only" => options.flat_view_only = true,
+            "stack-r11-stores" => options.stack_r11_stores = true,
+            "assume-paired-singles" => options.assume_paired_singles = true,
+            other => bail!("unknown module option {other}"),
+        }
+    }
+    Ok(options)
+}
+
 pub(crate) fn generate_module_sources(
     input: &Path,
     output: &Path,

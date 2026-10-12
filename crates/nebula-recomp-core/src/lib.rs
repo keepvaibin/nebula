@@ -1,3 +1,4 @@
+pub mod asm_probe;
 mod boot_image;
 mod dol;
 mod dsp;
