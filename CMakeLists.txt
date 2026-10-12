@@ -892,6 +892,10 @@ add_executable(galaxy_native_flat_view_only_tests runtime/src/native_flat_view_o
 target_compile_definitions(galaxy_native_flat_view_only_tests PRIVATE
     GALAXY_FAST_FLOAT=1 GALAXY_FASTMEM=1 GALAXY_FLAT_VIEW_ONLY=1)
 target_link_libraries(galaxy_native_flat_view_only_tests PRIVATE galaxy_runtime_abi galaxy_ppc_float)
+add_executable(galaxy_native_assume_paired_singles_tests runtime/src/native_assume_paired_singles_tests.cpp)
+target_compile_definitions(galaxy_native_assume_paired_singles_tests PRIVATE
+    GALAXY_FAST_FLOAT=1 GALAXY_ASSUME_PAIRED_SINGLES=1)
+target_link_libraries(galaxy_native_assume_paired_singles_tests PRIVATE galaxy_runtime_abi galaxy_ppc_float)
 add_executable(galaxy_native_ios_clock_tests runtime/src/native_ios_clock_tests.cpp)
 target_link_libraries(galaxy_native_ios_clock_tests PRIVATE galaxy_runtime_abi)
 
@@ -1113,6 +1117,7 @@ if(MSVC)
         galaxy_native_hw_float_conversion_tests
         galaxy_native_module_checkpoint_gate_tests
         galaxy_native_flat_view_only_tests
+        galaxy_native_assume_paired_singles_tests
         galaxy_native_ios_clock_tests
         galaxy_native_multiple_gpr_tests
         galaxy_native_checkpoint_policy_tests
@@ -1162,6 +1167,7 @@ galaxy_add_native_test(native_fast_float galaxy_native_fast_float_tests)
 galaxy_add_native_test(native_hw_float_conversion galaxy_native_hw_float_conversion_tests)
 galaxy_add_native_test(native_module_checkpoint_gate galaxy_native_module_checkpoint_gate_tests)
 galaxy_add_native_test(native_flat_view_only galaxy_native_flat_view_only_tests)
+galaxy_add_native_test(native_assume_paired_singles galaxy_native_assume_paired_singles_tests)
 galaxy_add_native_test(native_ios_clock_policy galaxy_native_ios_clock_tests)
 galaxy_add_native_test(native_multiple_gpr_policy galaxy_native_multiple_gpr_tests)
 galaxy_add_native_test(native_checkpoint_policy galaxy_native_checkpoint_policy_tests)

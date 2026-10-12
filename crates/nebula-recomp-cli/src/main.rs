@@ -161,6 +161,10 @@ enum Command {
         /// test (needs --experimental-flat-ram-writes).
         #[arg(long)]
         stack_r11_stores: bool,
+        /// HID2[PSE]/[LSQE] taken as always set: no HID2 test in the psq and
+        /// paired fast paths, ps1 written for every single-precision result.
+        #[arg(long)]
+        assume_paired_singles: bool,
         /// Retained compatibility spelling; exact PSMTX local lanes are enabled by default.
         #[arg(long, default_value_t = true)]
         exact_psmtx_local_lanes: bool,
@@ -493,6 +497,7 @@ fn main() -> Result<()> {
             checkpoint_globals,
             flat_view_only,
             stack_r11_stores,
+            assume_paired_singles,
             exact_psmtx_local_lanes,
             no_exact_psmtx_local_lanes,
             exact_psvec_cross_local_lanes,
@@ -530,6 +535,7 @@ fn main() -> Result<()> {
                 checkpoint_globals,
                 flat_view_only,
                 stack_r11_stores,
+                assume_paired_singles,
                 exact_psmtx_local_lanes: exact_psmtx_local_lanes && !no_exact_psmtx_local_lanes,
                 exact_psvec_cross_local_lanes,
                 exact_psvec_normalize_local_lanes,
@@ -1558,6 +1564,21 @@ mod tests {
             Command::TranslateModule {
                 stack_r11_stores: true,
                 flat_view_only: false,
+                ..
+            }
+        ));
+        assert!(matches!(
+            parse(&[]),
+            Command::TranslateModule {
+                assume_paired_singles: false,
+                ..
+            }
+        ));
+        assert!(matches!(
+            parse(&["--assume-paired-singles"]),
+            Command::TranslateModule {
+                assume_paired_singles: true,
+                stack_r11_stores: false,
                 ..
             }
         ));

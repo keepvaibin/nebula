@@ -270,6 +270,12 @@ pub struct ModuleTranslationOptions {
     /// stores through `fast::store_stack`: r11 addresses the caller's own
     /// frame, so the gather-pipe test goes. Requires `flat_ram_writes`.
     pub stack_r11_stores: bool,
+    /// HID2[PSE] and HID2[LSQE] are taken as always set (RMGE01 sets them in
+    /// `__init_hardware` and never clears them; a paired or quantized
+    /// instruction with either clear is illegal on the hardware): `functions.h`
+    /// defines `GALAXY_ASSUME_PAIRED_SINGLES`, which removes the HID2 test from
+    /// every psq and paired fast path and writes ps1 for every single result.
+    pub assume_paired_singles: bool,
     pub exact_psmtx_local_lanes: bool,
     pub exact_psvec_cross_local_lanes: bool,
     pub exact_psvec_normalize_local_lanes: bool,
@@ -309,6 +315,7 @@ impl Default for ModuleTranslationOptions {
             checkpoint_globals: false,
             flat_view_only: false,
             stack_r11_stores: false,
+            assume_paired_singles: false,
             exact_psmtx_local_lanes: true,
             exact_psvec_cross_local_lanes: false,
             exact_psvec_normalize_local_lanes: false,
@@ -931,15 +938,7 @@ pub fn translate_module_with_options(
             typed_region_80165478: typed_region_80165478.as_deref(),
         },
     )?;
-    if options.fast_float {
-        apply_fast_float_mode(&mut source_files);
-    }
-    if options.checkpoint_globals {
-        apply_checkpoint_globals(&mut source_files);
-    }
-    if options.flat_view_only {
-        apply_flat_view_only(&mut source_files);
-    }
+    apply_module_options(&mut source_files, &options);
     if options.trace_end_frame_spans {
         insert_end_frame_span_markers(&mut source_files, shard_source_bytes)?;
     }
@@ -8328,18 +8327,36 @@ fn apply_checkpoint_globals(source_files: &mut [GeneratedSource]) {
     }
 }
 
-/// `--flat-view-only`: every unit that includes the runtime header directly
-/// (`functions.h` for the shards) defines `GALAXY_FLAT_VIEW_ONLY` first, so the
-/// inlined lean host bodies assume the flat view as the translated code does.
-fn apply_flat_view_only(source_files: &mut [GeneratedSource]) {
-    const DEFINE: &str = "#define GALAXY_FLAT_VIEW_ONLY 1\n";
+/// The module-wide passes over the generated sources, in their fixed order.
+/// Each is a no-op unless its option is on.
+fn apply_module_options(source_files: &mut [GeneratedSource], options: &ModuleTranslationOptions) {
+    if options.fast_float {
+        apply_fast_float_mode(source_files);
+    }
+    if options.checkpoint_globals {
+        apply_checkpoint_globals(source_files);
+    }
+    if options.flat_view_only {
+        define_before_runtime_header(source_files, "GALAXY_FLAT_VIEW_ONLY");
+    }
+    if options.assume_paired_singles {
+        define_before_runtime_header(source_files, "GALAXY_ASSUME_PAIRED_SINGLES");
+    }
+}
+
+/// `#define {macro} 1` in every unit that includes the runtime header
+/// directly (`functions.h` for the shards), ahead of the include, for the
+/// module-wide header switches: `GALAXY_FLAT_VIEW_ONLY` (`--flat-view-only`)
+/// and `GALAXY_ASSUME_PAIRED_SINGLES` (`--assume-paired-singles`).
+fn define_before_runtime_header(source_files: &mut [GeneratedSource], macro_name: &str) {
+    let define = format!("#define {macro_name} 1\n");
     const INCLUDE: &str = "#include \"galaxy/native_api.h\"";
     const PRAGMA: &str = "#pragma once\n";
     for file in source_files.iter_mut() {
-        if file.contents.contains(INCLUDE) && !file.contents.contains(DEFINE) {
+        if file.contents.contains(INCLUDE) && !file.contents.contains(&define) {
             file.contents = match file.contents.strip_prefix(PRAGMA) {
-                Some(rest) => format!("{PRAGMA}{DEFINE}{rest}"),
-                None => format!("{DEFINE}{}", file.contents),
+                Some(rest) => format!("{PRAGMA}{define}{rest}"),
+                None => format!("{define}{}", file.contents),
             };
         }
     }
@@ -12264,15 +12281,119 @@ mod tests {
                 contents: "#include \"functions.h\"\n".to_owned(),
             },
         ];
-        apply_flat_view_only(&mut files);
+        define_before_runtime_header(&mut files, "GALAXY_FLAT_VIEW_ONLY");
         assert_eq!(
             files[0].contents,
             "#pragma once\n#define GALAXY_FLAT_VIEW_ONLY 1\n\n#include \"galaxy/native_api.h\"\n"
         );
         assert_eq!(files[1].contents, "#include \"functions.h\"\n");
         let once = files.clone();
-        apply_flat_view_only(&mut files);
+        define_before_runtime_header(&mut files, "GALAXY_FLAT_VIEW_ONLY");
         assert_eq!(files, once);
+        // The paired-singles switch stacks with it.
+        define_before_runtime_header(&mut files, "GALAXY_ASSUME_PAIRED_SINGLES");
+        assert_eq!(
+            files[0].contents,
+            "#pragma once\n#define GALAXY_ASSUME_PAIRED_SINGLES 1\n#define GALAXY_FLAT_VIEW_ONLY 1\n\n#include \"galaxy/native_api.h\"\n"
+        );
+    }
+
+    #[test]
+    fn module_options_switch_only_their_own_module_text() {
+        let sources = || {
+            vec![
+                GeneratedSource {
+                    name: "functions.h".to_owned(),
+                    contents: "#pragma once\n\n#include \"galaxy/native_api.h\"\n".to_owned(),
+                },
+                GeneratedSource {
+                    name: "functions_0000.cpp".to_owned(),
+                    contents: "#include \"functions.h\"\n    GALAXY_CALL_RETURN_CHECKPOINT(services, 0x80004004u, 0x80004008u, context, memory);\n".to_owned(),
+                },
+                GeneratedSource {
+                    name: "module.cpp".to_owned(),
+                    contents: "#include \"functions.h\"\nextern \"C\" const galaxy::GameModuleManifestV1* galaxy_module_manifest() {\n    return &kManifest;\n}\n".to_owned(),
+                },
+            ]
+        };
+        let base = ModuleTranslationOptions::default();
+        let mut untouched = sources();
+        apply_module_options(&mut untouched, &base);
+        assert_eq!(
+            untouched,
+            sources(),
+            "every module switch is off by default"
+        );
+        // Lowering-only options leave the module text alone.
+        for options in [
+            ModuleTranslationOptions {
+                hw_float_conversions: true,
+                ..base
+            },
+            ModuleTranslationOptions {
+                stack_r11_stores: true,
+                ..base
+            },
+        ] {
+            let mut files = sources();
+            apply_module_options(&mut files, &options);
+            assert_eq!(files, sources());
+        }
+        let switched = |options: ModuleTranslationOptions| {
+            let mut files = sources();
+            apply_module_options(&mut files, &options);
+            files
+        };
+        let flat = switched(ModuleTranslationOptions {
+            flat_view_only: true,
+            ..base
+        });
+        assert!(flat[0]
+            .contents
+            .contains("#define GALAXY_FLAT_VIEW_ONLY 1\n"));
+        assert!(!flat[0].contents.contains("GALAXY_ASSUME_PAIRED_SINGLES"));
+        assert_eq!(flat[1..], sources()[1..]);
+        let paired = switched(ModuleTranslationOptions {
+            assume_paired_singles: true,
+            ..base
+        });
+        assert!(paired[0]
+            .contents
+            .contains("#define GALAXY_ASSUME_PAIRED_SINGLES 1\n"));
+        assert!(!paired[0].contents.contains("GALAXY_FLAT_VIEW_ONLY"));
+        assert_eq!(paired[1..], sources()[1..]);
+        let gate = switched(ModuleTranslationOptions {
+            checkpoint_globals: true,
+            ..base
+        });
+        assert!(gate[0]
+            .contents
+            .contains("#define GALAXY_MODULE_CHECKPOINT_GLOBALS 1\n"));
+        assert!(gate[1]
+            .contents
+            .contains("GALAXY_CALL_RETURN_CHECKPOINT_G(services,"));
+        assert!(gate[2]
+            .contents
+            .contains("galaxy_module_checkpoint_gate() {"));
+        let all = switched(ModuleTranslationOptions {
+            native_float: true,
+            fast_float: true,
+            checkpoint_globals: true,
+            flat_view_only: true,
+            assume_paired_singles: true,
+            ..base
+        });
+        for define in [
+            "GALAXY_FAST_FLOAT",
+            "GALAXY_MODULE_CHECKPOINT_GLOBALS",
+            "GALAXY_FLAT_VIEW_ONLY",
+            "GALAXY_ASSUME_PAIRED_SINGLES",
+        ] {
+            assert!(
+                all[0].contents.contains(&format!("#define {define} 1\n")),
+                "{define}"
+            );
+        }
     }
 
     #[test]

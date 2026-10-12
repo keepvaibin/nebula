@@ -31,6 +31,41 @@ namespace fast {
 
 inline constexpr bool kFastFloat = GALAXY_FAST_FLOAT != 0;
 
+// Paired singles always on (translator --assume-paired-singles): RMGE01 sets
+// HID2[PSE] and HID2[LSQE] in __init_hardware, before any game code, and never
+// clears them. A paired or quantized instruction with either bit clear is an
+// illegal-instruction exception on the hardware, so a running game only ever
+// executes them with the bits set; the module then drops the HID2 admission
+// test from every psq_l/psq_st and paired fast path, and writes ps1 for every
+// single-precision result (the lfs rule of the fast-float module). The
+// default keeps every test.
+#ifndef GALAXY_ASSUME_PAIRED_SINGLES
+#define GALAXY_ASSUME_PAIRED_SINGLES 0
+#endif
+inline constexpr bool kAssumePairedSingles = GALAXY_ASSUME_PAIRED_SINGLES != 0;
+
+// HID2 holds every bit of `required` (PSE, plus LSQE for the d-form psq).
+GALAXY_ALWAYS_INLINE bool hid2_admits(
+    const PpcContext* context, std::uint32_t required) noexcept {
+    if constexpr (kAssumePairedSingles) {
+        (void)context;
+        (void)required;
+        return true;
+    } else {
+        return (context->hid2 & required) == required;
+    }
+}
+
+// A single-precision result (lfs, the single arithmetic forms) also fills ps1.
+GALAXY_ALWAYS_INLINE bool duplicates_single(const PpcContext* context) noexcept {
+    if constexpr (kAssumePairedSingles) {
+        (void)context;
+        return true;
+    } else {
+        return paired_singles_enabled(context);
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Flat RAM access
 // ---------------------------------------------------------------------------
@@ -331,7 +366,7 @@ GALAXY_ALWAYS_INLINE void load_fpr_single_hw(
     // The ps1 fill rule of load_fpr_single: RMGE01 never clears HID2[PSE].
     if constexpr (kFastFloat) {
         context->ps1_bits[index] = widened;
-    } else if (paired_singles_enabled(context)) {
+    } else if (duplicates_single(context)) {
         context->ps1_bits[index] = widened;
     }
 }
@@ -358,7 +393,7 @@ GALAXY_ALWAYS_INLINE void load_fpr_single(
     // unobservable.
     if constexpr (kFastFloat) {
         context->ps1_bits[index] = widened;
-    } else if (paired_singles_enabled(context)) {
+    } else if (duplicates_single(context)) {
         context->ps1_bits[index] = widened;
     }
 }
@@ -387,7 +422,7 @@ GALAXY_ALWAYS_INLINE void psq_load_impl(
     constexpr std::uint32_t kHid2Lsqe = 0x80000000u;
     constexpr std::uint32_t kHid2Pse = 0x20000000u;
     const std::uint32_t required = kHid2Pse | (d_form ? kHid2Lsqe : 0u);
-    if (base != nullptr && (context->hid2 & required) == required) GALAXY_LIKELY {
+    if (base != nullptr && hid2_admits(context, required)) GALAXY_LIKELY {
         if (type == 0u) GALAXY_LIKELY {
             if (flat_span(address, one_element ? 4u : 8u)) GALAXY_LIKELY {
                 context->fpr_bits[target] = widen_single_lane<Hw>(
@@ -474,7 +509,7 @@ GALAXY_ALWAYS_INLINE void psq_store_impl(
     // hottest device store there is); the exact helper appends it in place.
     if (base != nullptr && type == 0u &&
         (!GALAXY_FASTMEM_ACTIVE || (address & 0x3FFFF000u) != 0x0C008000u) &&
-        (context->hid2 & required) == required) GALAXY_LIKELY {
+        hid2_admits(context, required)) GALAXY_LIKELY {
         if (one_element) {
             if (flat_span(address, 4u)) GALAXY_LIKELY {
                 const std::uint32_t first = byte_swap_u32(
@@ -497,7 +532,7 @@ GALAXY_ALWAYS_INLINE void psq_store_impl(
     // translated store (flat RAM without per-store publication, in-place
     // gather-pipe append, checked device path otherwise). Same quantization
     // helpers as the exact path.
-    if (base != nullptr && (context->hid2 & required) == required &&
+    if (base != nullptr && hid2_admits(context, required) &&
         (type == 0u || (type >= 4u && type <= 7u))) GALAXY_LIKELY {
         const std::int32_t scale = psq_store_scale(gqr);
         const auto store_lane = [&](std::uint32_t lane_address, std::uint64_t bits) {
@@ -607,7 +642,7 @@ GALAXY_ALWAYS_INLINE void commit_single(
     bool duplicate, bool record) {
     const std::uint64_t widened = widen_f32_bits(f32_bits);
     context->fpr_bits[target] = widened;
-    if (duplicate && paired_singles_enabled(context)) {
+    if (duplicate && duplicates_single(context)) {
         context->ps1_bits[target] = widened;
     }
     if (record) {
@@ -771,7 +806,7 @@ GALAXY_ALWAYS_INLINE void write_single(
     const PpcContext* context, std::uint64_t* fpr, std::uint64_t* ps1,
     std::uint32_t target, std::uint64_t bits, bool duplicate) noexcept {
     fpr[target] = bits;
-    if (duplicate && paired_singles_enabled(context)) {
+    if (duplicate && duplicates_single(context)) {
         ps1[target] = bits;
     }
 }
@@ -945,7 +980,7 @@ enum class PairedLane : std::uint8_t {
 
 GALAXY_ALWAYS_INLINE bool paired_mode(const PpcContext* context) noexcept {
     constexpr std::uint32_t kHid2Pse = 0x20000000u;
-    return (context->hid2 & kHid2Pse) != 0u;
+    return hid2_admits(context, kHid2Pse);
 }
 
 GALAXY_ALWAYS_INLINE void commit_paired(
@@ -1331,7 +1366,7 @@ GALAXY_ALWAYS_INLINE void commit_single_r(
     std::uint32_t target, std::uint32_t f32_bits, bool duplicate, bool record) {
     const std::uint64_t widened = widen_f32_bits(f32_bits);
     fpr[target] = widened;
-    if (duplicate && paired_singles_enabled(context)) {
+    if (duplicate && duplicates_single(context)) {
         ps1[target] = widened;
     }
     if (record) {
@@ -1360,7 +1395,7 @@ GALAXY_ALWAYS_INLINE void load_fpr_single_r(
     fpr[index] = widened;
     if constexpr (kFastFloat) {  // see load_fpr_single
         ps1[index] = widened;
-    } else if (paired_singles_enabled(context)) {
+    } else if (duplicates_single(context)) {
         ps1[index] = widened;
     }
 }
@@ -1385,7 +1420,7 @@ GALAXY_ALWAYS_INLINE void load_fpr_single_hw_r(
     fpr[index] = widened;
     if constexpr (kFastFloat) {  // see load_fpr_single
         ps1[index] = widened;
-    } else if (paired_singles_enabled(context)) {
+    } else if (duplicates_single(context)) {
         ps1[index] = widened;
     }
 }
@@ -1411,7 +1446,7 @@ GALAXY_ALWAYS_INLINE void psq_load_r_impl(
     constexpr std::uint32_t kHid2Lsqe = 0x80000000u;
     constexpr std::uint32_t kHid2Pse = 0x20000000u;
     const std::uint32_t required = kHid2Pse | (d_form ? kHid2Lsqe : 0u);
-    if (base != nullptr && (context->hid2 & required) == required) GALAXY_LIKELY {
+    if (base != nullptr && hid2_admits(context, required)) GALAXY_LIKELY {
         if (type == 0u) GALAXY_LIKELY {
             if (flat_span(address, one_element ? 4u : 8u)) GALAXY_LIKELY {
                 fpr[target] = widen_single_lane<Hw>(
@@ -1500,7 +1535,7 @@ GALAXY_ALWAYS_INLINE void psq_store_r_impl(
     // hottest device store there is); the exact helper appends it in place.
     if (base != nullptr && type == 0u &&
         (!GALAXY_FASTMEM_ACTIVE || (address & 0x3FFFF000u) != 0x0C008000u) &&
-        (context->hid2 & required) == required) GALAXY_LIKELY {
+        hid2_admits(context, required)) GALAXY_LIKELY {
         if (one_element) {
             if (flat_span(address, 4u)) GALAXY_LIKELY {
                 const std::uint32_t first = byte_swap_u32(
