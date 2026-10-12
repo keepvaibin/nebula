@@ -182,8 +182,12 @@ static void apply_kv(RenderConfig& cfg, const char* key, const char* val) {
         static constexpr const char* kNames[] = {"low", "medium", "high", "ultra"};
         cfg.smaa_quality = parse_choice(val, kNames, cfg.smaa_quality);
     } else if (std::strcmp(key, "upscaler") == 0) {
-        static constexpr const char* kNames[] = {"bilinear", "fsr"};
+        static constexpr const char* kNames[] = {"bilinear", "fsr", "fsr3"};
         cfg.upscaler = parse_choice(val, kNames, cfg.upscaler);
+    } else if (std::strcmp(key, "temporal_quality") == 0) {
+        static constexpr const char* kNames[] = {
+            "native", "quality", "balanced", "performance", "ultra_performance"};
+        cfg.temporal_quality = parse_choice(val, kNames, cfg.temporal_quality);
     } else if (std::strcmp(key, "sharpness") == 0) {
         cfg.sharpness = std::min(parse_uint(val, cfg.sharpness), 100u);
     }
@@ -248,6 +252,7 @@ static void apply_env_overrides(RenderConfig& cfg) {
     apply_env(cfg, "GALAXY_AA", "aa");
     apply_env(cfg, "GALAXY_SMAA_QUALITY", "smaa_quality");
     apply_env(cfg, "GALAXY_UPSCALER", "upscaler");
+    apply_env(cfg, "GALAXY_TEMPORAL_QUALITY", "temporal_quality");
     apply_env(cfg, "GALAXY_SHARPNESS", "sharpness");
     apply_env(cfg, "GALAXY_RAY_TRACING_ENABLED", "ray_tracing_enabled");
     apply_env(cfg, "GALAXY_RT_SHADOW_QUALITY", "rt_shadow_quality");
@@ -255,6 +260,12 @@ static void apply_env_overrides(RenderConfig& cfg) {
     apply_env(cfg, "GALAXY_RT_REFLECTIONS", "rt_reflections");
     apply_env(cfg, "GALAXY_WINDOW_WIDTH", "window_width");
     apply_env(cfg, "GALAXY_WINDOW_HEIGHT", "window_height");
+}
+
+// Temporal upscaling stays opt-in until its motion vectors are validated;
+// a saved upscaler=2 must not switch it on by itself.
+static bool experimental_temporal_upscaler_allowed() {
+    return read_env_bool("GALAXY_EXPERIMENTAL_TEMPORAL_UPSCALER", false);
 }
 
 static void clamp_unimplemented_features(RenderConfig& cfg) {
@@ -272,7 +283,8 @@ static void clamp_unimplemented_features(RenderConfig& cfg) {
     cfg.anisotropic_filtering = std::clamp(cfg.anisotropic_filtering, 1u, 16u);
     cfg.aa_mode = std::min(cfg.aa_mode, 2u);
     cfg.smaa_quality = std::min(cfg.smaa_quality, 3u);
-    cfg.upscaler = std::min(cfg.upscaler, 1u);
+    cfg.upscaler = std::min(cfg.upscaler, experimental_temporal_upscaler_allowed() ? 2u : 1u);
+    cfg.temporal_quality = std::min(cfg.temporal_quality, 4u);
     cfg.sharpness = std::min(cfg.sharpness, 100u);
     // Win32 client geometry is signed-int based even though DXGI dimensions
     // are UINT. Keep direct API callers inside the common representable range.
@@ -550,6 +562,7 @@ bool save_render_config_to_file() {
              << "aa=" << cfg.aa_mode << '\n'
              << "smaa_quality=" << cfg.smaa_quality << '\n'
              << "upscaler=" << cfg.upscaler << '\n'
+             << "temporal_quality=" << cfg.temporal_quality << '\n'
              << "sharpness=" << cfg.sharpness << '\n'
              << "internal_follow_window="
              << (cfg.internal_follow_window ? 1u : 0u) << '\n'

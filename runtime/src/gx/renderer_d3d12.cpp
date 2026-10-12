@@ -3037,8 +3037,13 @@ void RendererD3D12::sync_post_process_settings() {
 }
 
 void RendererD3D12::apply_pending_efb_scale() {
-    const unsigned wanted =
-        std::clamp(get_render_config().efb_scale, 1u, kMaxEfbScale);
+    unsigned wanted = std::clamp(get_render_config().efb_scale, 1u, kMaxEfbScale);
+    if (temporal_mode()) {
+        const unsigned output_scale = output_efb_scale_for_window();
+        if (output_scale != 0u) {
+            wanted = temporal_render_scale(output_scale);
+        }
+    }
     if (wanted == efb_scale_ || !device_ || !efb_color_ || output_efb_active_) {
         return;
     }
@@ -5194,6 +5199,145 @@ void RendererD3D12::wait_for_fence_value(std::uint64_t fence_value) {
 }
 
 // ---------------------------------------------------------------------------
+// Temporal upscaling (upscaler mode 2)
+// ---------------------------------------------------------------------------
+
+bool RendererD3D12::temporal_mode() const {
+    return get_render_config().upscaler == 2u && fsr3_available();
+}
+
+unsigned RendererD3D12::temporal_render_scale(unsigned output_scale) const {
+    static constexpr float kRatio[] = {1.0f, 1.5f, 1.7f, 2.0f, 3.0f};
+    const unsigned quality = std::min(get_render_config().temporal_quality, 4u);
+    const long scale = std::lround(static_cast<float>(output_scale) / kRatio[quality]);
+    return std::clamp(static_cast<unsigned>(std::max(scale, 1l)), 1u, std::max(output_scale, 1u));
+}
+
+bool RendererD3D12::ensure_motion_target() {
+    if (motion_target_ && motion_target_scale_ == efb_scale_) {
+        return true;
+    }
+    motion_target_.Reset();
+    motion_target_scale_ = 0u;
+    if (!motion_rtv_heap_) {
+        D3D12_DESCRIPTOR_HEAP_DESC dhd{};
+        dhd.NumDescriptors = 1;
+        dhd.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
+        d3d_check(device_->CreateDescriptorHeap(&dhd, IID_PPV_ARGS(&motion_rtv_heap_)),
+                  "motion vector RTV heap");
+    }
+    D3D12_HEAP_PROPERTIES hp{};
+    hp.Type = D3D12_HEAP_TYPE_DEFAULT;
+    D3D12_RESOURCE_DESC rd{};
+    rd.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+    rd.Width = kEfbWidth * efb_scale_;
+    rd.Height = kEfbHeight * efb_scale_;
+    rd.DepthOrArraySize = 1;
+    rd.MipLevels = 1;
+    rd.Format = kMotionVectorFormat;
+    rd.SampleDesc.Count = 1;
+    rd.Flags = D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
+    D3D12_CLEAR_VALUE cv{};
+    cv.Format = kMotionVectorFormat;
+    if (FAILED(device_->CreateCommittedResource(
+            &hp, D3D12_HEAP_FLAG_NONE, &rd, D3D12_RESOURCE_STATE_RENDER_TARGET,
+            &cv, IID_PPV_ARGS(&motion_target_)))) {
+        return false;
+    }
+    motion_rtv_ = motion_rtv_heap_->GetCPUDescriptorHandleForHeapStart();
+    device_->CreateRenderTargetView(motion_target_.Get(), nullptr, motion_rtv_);
+    const float zero[4]{};
+    command_list_->ClearRenderTargetView(motion_rtv_, zero, 0u, nullptr);
+    motion_target_scale_ = efb_scale_;
+    return true;
+}
+
+bool RendererD3D12::scene_temporal_begin(float& jitter_x, float& jitter_y) {
+    jitter_x = 0.0f;
+    jitter_y = 0.0f;
+    scene_temporal_ = false;
+    if (!temporal_mode() || output_efb_active_) {
+        temporal_.reset();
+        temporal_history_valid_ = false;
+        return false;
+    }
+    const unsigned output_scale = output_efb_scale_for_window();
+    if (output_scale == 0u || efb_scale_ > output_scale) {
+        temporal_history_valid_ = false;
+        return false;
+    }
+    const unsigned rw = kEfbWidth * efb_scale_;
+    const unsigned rh = kEfbHeight * efb_scale_;
+    const unsigned ow = kEfbWidth * output_scale;
+    const unsigned oh = kEfbHeight * output_scale;
+    if (!temporal_ || rw != temporal_render_w_ || rh != temporal_render_h_ ||
+        ow != temporal_output_w_ || oh != temporal_output_h_) {
+        if (temporal_) {
+            // The old context's resources may still be in use by frames in flight.
+            wait_for_gpu();
+        }
+        temporal_ = create_fsr3_upscaler(device_.Get(), rw, rh, ow, oh);
+        temporal_history_valid_ = false;
+        if (!temporal_) {
+            temporal_render_w_ = temporal_render_h_ = 0u;
+            temporal_output_w_ = temporal_output_h_ = 0u;
+            return false;
+        }
+        temporal_render_w_ = rw;
+        temporal_render_h_ = rh;
+        temporal_output_w_ = ow;
+        temporal_output_h_ = oh;
+        std::cout << "[Renderer] " << temporal_->name() << " " << rw << "x" << rh
+                  << " -> " << ow << "x" << oh << "\n";
+    }
+    const unsigned phases = std::max(temporal_->jitter_phase_count(rw, ow), 1u);
+    temporal_->jitter_offset(static_cast<unsigned>(temporal_frame_ % phases), phases,
+                             jitter_x, jitter_y);
+    ++temporal_frame_;
+    scene_jitter_[0] = jitter_x;
+    scene_jitter_[1] = jitter_y;
+    scene_temporal_ = true;
+    return true;
+}
+
+void RendererD3D12::set_scene_camera(float near_plane, float far_plane, float fov_y) noexcept {
+    scene_camera_[0] = near_plane;
+    scene_camera_[1] = far_plane;
+    scene_camera_[2] = fov_y;
+}
+
+bool RendererD3D12::record_temporal_upscale(unsigned output_scale) {
+    if (!scene_temporal_ || !temporal_ || !ensure_motion_target()) {
+        return false;
+    }
+    TemporalUpscaleInputs in{};
+    in.list = command_list_.Get();
+    in.color = efb_color_.Get();
+    in.depth = efb_depth_.Get();
+    in.motion = motion_target_.Get();
+    in.output = alt_efb_.color.Get();
+    in.render_width = kEfbWidth * efb_scale_;
+    in.render_height = kEfbHeight * efb_scale_;
+    in.output_width = kEfbWidth * output_scale;
+    in.output_height = kEfbHeight * output_scale;
+    in.jitter_x = scene_jitter_[0];
+    in.jitter_y = scene_jitter_[1];
+    in.camera_near = scene_camera_[0];
+    in.camera_far = scene_camera_[1];
+    in.fov_y = scene_camera_[2];
+    in.frame_ms = 1000.0f / 60.0f;
+    in.reset = !temporal_history_valid_;
+    const bool recorded = temporal_->evaluate(in);
+    // The upscaler binds its own heaps, root signature and pipelines.
+    ID3D12DescriptorHeap* heaps[] = {srv_ring_.heap(), sampler_heap_.Get()};
+    command_list_->SetDescriptorHeaps(2, heaps);
+    command_list_->SetGraphicsRootSignature(root_signature_.Get());
+    invalidate_gx_bindings();
+    temporal_history_valid_ = recorded;
+    return recorded;
+}
+
+// ---------------------------------------------------------------------------
 // Output-resolution EFB (HUD split)
 // ---------------------------------------------------------------------------
 
@@ -5252,7 +5396,8 @@ bool RendererD3D12::ensure_output_efb(unsigned scale) {
     rd.MipLevels = 1;
     rd.Format = kEfbColorFormat;
     rd.SampleDesc.Count = 1;
-    rd.Flags = D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
+    rd.Flags = D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET |
+               D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
     D3D12_CLEAR_VALUE cv{};
     cv.Format = kEfbColorFormat;
     cv.Color[3] = 1.0f;
@@ -5317,12 +5462,27 @@ void RendererD3D12::swap_efb_sets() {
 }
 
 bool RendererD3D12::begin_output_efb() {
-    if (output_efb_active_ || !get_render_config().hud_output_resolution) {
+    const bool temporal = scene_temporal_;
+    scene_temporal_ = false;
+    if (output_efb_active_ || (!temporal && !get_render_config().hud_output_resolution)) {
         return false;
     }
     const unsigned scale = output_efb_scale_for_window();
-    if (scale <= efb_scale_ || !ensure_output_efb(scale)) {
+    if (scale == 0u || scale < efb_scale_ || (scale == efb_scale_ && !temporal) ||
+        !ensure_output_efb(scale)) {
+        temporal_history_valid_ = false;
         return false;
+    }
+    scene_temporal_ = temporal;
+    const bool upscaled = temporal && record_temporal_upscale(scale);
+    scene_temporal_ = false;
+    if (upscaled) {
+        swap_efb_sets();
+        const auto far_values = make_efb_clear_values(0u, 0u, 0x00FFFFFFu, 0u);
+        command_list_->ClearDepthStencilView(
+            efb_dsv_, D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL,
+            far_values.reversed_depth, 0u, 0u, nullptr);
+        return true;
     }
     // The whole scene EFB, resampled into the output target with the display
     // copy's identity settings (no filter, gamma 1.0, alpha kept).

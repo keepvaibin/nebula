@@ -619,6 +619,11 @@ private:
     std::uint8_t producer_fifo_marker_count_ = 0;
     // Render thread: inside GameScene::draw3D (between the scene markers).
     bool scene_phase_ = false;
+    // Temporal upscaling for the current scene: perspective projections carry
+    // this sub-pixel jitter (render pixels).
+    bool temporal_scene_ = false;
+    bool scene_camera_captured_ = false;
+    float scene_jitter_px_[2]{};
     std::uint64_t scene_markers_seen_ = 0;
     bool producer_movie_content_{},render_movie_content_{};
     float producer_safety_surround_{},render_safety_surround_{};
@@ -808,6 +813,7 @@ private:
     void record_pointer_depth_capture_in_frame(FrameChunk& chunk);
     void take_attached_fifo_markers(FrameChunk& chunk, std::size_t fifo_size) noexcept;
     void on_fifo_marker(FifoMarker marker);
+    void apply_scene_jitter(GxVsConstants& constants);
     void adopt_pointer_depth_fence_if_needed();
     // Asynchronous EFB depth field for simulation-thread GXPeekZ. Three slots:
     // the render owner fills the slot after the published one, then publishes

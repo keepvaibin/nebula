@@ -27,6 +27,7 @@
 #include <wrl/client.h>
 
 #include "galaxy/gx/efb_copy.h"
+#include "galaxy/gx/temporal_upscaler.h"
 #include "galaxy/gx/immutable_upload.h"
 #include "galaxy/gx/post_process.h"
 #include "galaxy/gx/placed_texture_allocator.h"
@@ -135,6 +136,8 @@ private:
 inline constexpr unsigned kEfbWidth = 640;
 inline constexpr unsigned kEfbHeight = 528;
 inline constexpr DXGI_FORMAT kEfbColorFormat = DXGI_FORMAT_R8G8B8A8_UNORM;
+// Motion vectors for temporal upscaling: render pixels, current -> previous.
+inline constexpr DXGI_FORMAT kMotionVectorFormat = DXGI_FORMAT_R16G16_FLOAT;
 inline constexpr DXGI_FORMAT kEfbDepthResourceFormat =
     DXGI_FORMAT_R24G8_TYPELESS;
 inline constexpr DXGI_FORMAT kEfbDepthFormat = DXGI_FORMAT_D24_UNORM_S8_UINT;
@@ -415,6 +418,13 @@ public:
     [[nodiscard]] bool begin_output_efb();
     void end_output_efb();
     [[nodiscard]] bool output_efb_active() const noexcept { return output_efb_active_; }
+
+    // Temporal upscaling (upscaler mode 2). At the start of the guest's 3D
+    // scene: whether the temporal path runs for it and, if so, the scene's
+    // sub-pixel jitter in render pixels (applied to perspective projections).
+    [[nodiscard]] bool scene_temporal_begin(float& jitter_x, float& jitter_y);
+    // The scene camera's clip planes and vertical field of view (radians).
+    void set_scene_camera(float near_plane, float far_plane, float fov_y) noexcept;
     // GX copy-clear: color from the latched AR/GB regs, depth from z24
     // (converted z24 / 0xFFFFFF into the D24 target).  The clear is scoped to
     // the given rect in unscaled EFB pixels (w==0 -> full target), matching
@@ -634,6 +644,10 @@ private:
         unsigned row_pitch);
     bool create_efb_targets(unsigned efb_scale);
     [[nodiscard]] unsigned output_efb_scale_for_window() const;
+    [[nodiscard]] bool temporal_mode() const;
+    [[nodiscard]] unsigned temporal_render_scale(unsigned output_scale) const;
+    [[nodiscard]] bool ensure_motion_target();
+    [[nodiscard]] bool record_temporal_upscale(unsigned output_scale);
     [[nodiscard]] bool ensure_output_efb(unsigned scale);
     void swap_efb_sets();
     // Live internal-resolution change, applied between frames by begin_frame
@@ -723,6 +737,20 @@ private:
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> alt_efb_rtv_heap_;
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> alt_efb_dsv_heap_;
     bool output_efb_active_ = false;
+    std::unique_ptr<TemporalUpscaler> temporal_;
+    unsigned temporal_render_w_ = 0;
+    unsigned temporal_render_h_ = 0;
+    unsigned temporal_output_w_ = 0;
+    unsigned temporal_output_h_ = 0;
+    std::uint64_t temporal_frame_ = 0;
+    bool temporal_history_valid_ = false;
+    bool scene_temporal_ = false;
+    float scene_jitter_[2]{};
+    float scene_camera_[3]{1.0f, 100000.0f, 1.0f};
+    Microsoft::WRL::ComPtr<ID3D12Resource> motion_target_;
+    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> motion_rtv_heap_;
+    D3D12_CPU_DESCRIPTOR_HANDLE motion_rtv_{};
+    unsigned motion_target_scale_ = 0;
 
     // Backbuffers + present blit.
     static constexpr unsigned kSwapChainBuffers = 3;

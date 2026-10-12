@@ -6245,6 +6245,44 @@ void GxBackend::attach_pointer_depth_capture(
     producer_pointer_depth_capture_offset_ = fifo_offset;
 }
 
+// A perspective draw in the temporal scene: the clip-space offset that moves
+// the image by the scene jitter in render pixels at this draw's viewport.
+// The first such draw also supplies the camera planes and field of view.
+void GxBackend::apply_scene_jitter(GxVsConstants& constants) {
+    if (state_.xf(static_cast<std::uint16_t>(xf::kProjectionBase + 6u)) != 0u) {
+        return;
+    }
+    const auto xf_float = [this](unsigned offset) {
+        return std::bit_cast<float>(state_.xf(static_cast<std::uint16_t>(offset)));
+    };
+    const float scale = static_cast<float>(renderer_.efb_scale());
+    const float width = 2.0f * std::fabs(xf_float(xf::kViewportBase)) * scale;
+    const float height = 2.0f * std::fabs(xf_float(xf::kViewportBase + 1u)) * scale;
+    if (!(width > 0.0f) || !(height > 0.0f)) {
+        return;
+    }
+    const float jx = 2.0f * scene_jitter_px_[0] / width;
+    const float jy = -2.0f * scene_jitter_px_[1] / height;
+    for (unsigned column = 0; column < 4u; ++column) {
+        constants.projection[0][column] += jx * constants.projection[3][column];
+        constants.projection[1][column] += jy * constants.projection[3][column];
+    }
+    if (!scene_camera_captured_) {
+        scene_camera_captured_ = true;
+        // GX perspective: clip z = E z + F, w = -z; NDC z -1 at near, 0 at far.
+        const float c = xf_float(xf::kProjectionBase + 2u);
+        const float e = xf_float(xf::kProjectionBase + 4u);
+        const float f = xf_float(xf::kProjectionBase + 5u);
+        const float near_plane = f / (e - 1.0f);
+        const float far_plane = f / e;
+        const float fov_y = c != 0.0f ? 2.0f * std::atan(1.0f / std::fabs(c)) : 1.0f;
+        if (std::isfinite(near_plane) && std::isfinite(far_plane) &&
+            near_plane > 0.0f && far_plane > near_plane) {
+            renderer_.set_scene_camera(near_plane, far_plane, fov_y);
+        }
+    }
+}
+
 void GxBackend::take_attached_fifo_markers(FrameChunk& chunk, std::size_t fifo_size) noexcept {
     chunk.fifo_marker_count = 0;
     for (std::uint8_t i = 0; i < producer_fifo_marker_count_; ++i) {
@@ -6260,6 +6298,18 @@ void GxBackend::on_fifo_marker(FifoMarker marker) {
     flush_pending_draw_batch();
     ++scene_markers_seen_;
     scene_phase_ = marker == FifoMarker::SceneBegin;
+    const bool was_temporal = temporal_scene_;
+    if (marker == FifoMarker::SceneBegin) {
+        temporal_scene_ = renderer_.scene_temporal_begin(
+            scene_jitter_px_[0], scene_jitter_px_[1]);
+        scene_camera_captured_ = false;
+    } else {
+        temporal_scene_ = false;
+    }
+    // Projections take (or drop) the scene jitter from the next draw on.
+    if (was_temporal || temporal_scene_) {
+        frame_bindings_dirty_ = true;
+    }
     // Scene end: the 2D layer renders into the output-resolution EFB. A new
     // scene that begins before a display copy restores the render EFB.
     bool switched = false;
@@ -9735,6 +9785,9 @@ ID3D12PipelineState* GxBackend::flush_draw_state(
         UploadRing::Allocation vs_alloc =
             renderer_.constant_ring().allocate(sizeof(GxVsConstants), 256u);
         std::memcpy(vs_alloc.cpu, &vs_c, sizeof(vs_c));
+        if (temporal_scene_ && scene_phase_) {
+            apply_scene_jitter(*reinterpret_cast<GxVsConstants*>(vs_alloc.cpu));
+        }
         apply_uber_vs_key(vs_key_, *reinterpret_cast<GxVsConstants*>(vs_alloc.cpu));
         current_vs_constants_ = vs_alloc.gpu;
         inline_matrices_stale_ = false;

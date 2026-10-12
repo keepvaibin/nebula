@@ -693,11 +693,23 @@ add_library(galaxy_gx STATIC
     ${galaxy_uber_embed_cpp}
     runtime/src/gx/post_process.cpp
     ${galaxy_post_headers}
+    runtime/src/gx/temporal_upscaler.cpp
     runtime/src/gx/fifo_parser.cpp
     runtime/src/gx/gx_backend.cpp
     runtime/src/frame_telemetry.cpp
     runtime/src/gx/game_asset_extract.cpp
 )
+# AMD FidelityFX FSR 3.1 (MIT): the FidelityFX SDK 1.1.4 `sdk` directory
+# after its own build (bin/ffx_sdk holds the static libraries with the
+# compiled shaders). Empty builds the runtime without FSR 3.
+set(GALAXY_FIDELITYFX_SDK "" CACHE PATH "FidelityFX SDK 1.1.4 sdk directory with built bin/ffx_sdk")
+if(GALAXY_FIDELITYFX_SDK)
+    target_include_directories(galaxy_gx PRIVATE "${GALAXY_FIDELITYFX_SDK}/include")
+    target_link_libraries(galaxy_gx PRIVATE
+        "${GALAXY_FIDELITYFX_SDK}/bin/ffx_sdk/ffx_fsr3upscaler_x64.lib"
+        "${GALAXY_FIDELITYFX_SDK}/bin/ffx_sdk/ffx_backend_dx12_x64.lib")
+    target_compile_definitions(galaxy_gx PRIVATE GALAXY_WITH_FSR3=1)
+endif()
 target_link_libraries(galaxy_gx
     PUBLIC
         # Renderer window events use the real native input bridge.
