@@ -1,5 +1,6 @@
 #include "galaxy/gx_d3d12.h"
 #include "galaxy/gx/render_config.h"
+#include "galaxy/input_bindings.h"
 #include "galaxy/runtime_settings.h"
 
 #define WIN32_LEAN_AND_MEAN
@@ -97,7 +98,7 @@ int main() {
     passed &= expect(!snapshot.visible, "overlay starts hidden");
     passed &= expect(!snapshot.dirty, "overlay starts clean");
     passed &= expect(!snapshot.save_error, "overlay starts without a save error");
-    passed &= expect(snapshot.tab_count == 5u, "display/graphics/input/audio/caps tabs exist");
+    passed &= expect(snapshot.tab_count == 5u, "display/graphics/controls/audio/caps tabs exist");
     passed &= expect(snapshot.tab == 0u && snapshot.row == 0u, "display row zero is selected");
     passed &= expect(
         snapshot.row_count == 8u,
@@ -276,14 +277,60 @@ int main() {
     galaxy::RuntimeSettings runtime{};
     runtime.input_mode = galaxy::RuntimeInputMode::KeyboardMouse;
     galaxy::set_runtime_settings(runtime);
-    passed &= expect(key(VK_TAB), "Tab enters the input page");
+    using galaxy::input::ControlScheme;
+    using galaxy::input::WiiTarget;
+    galaxy::input::set_controls_config(galaxy::input::default_controls_config());
+    passed &= expect(key(VK_TAB), "Tab enters the controls page");
     snapshot = galaxy::gx::native_settings_overlay_snapshot();
-    passed &= expect(snapshot.tab == 2u && snapshot.row_count == 1u, "input page is read-only");
-    passed &= expect(key(VK_RIGHT), "input-page adjustment is consumed");
+    passed &= expect(
+        snapshot.tab == 2u && snapshot.row_count == 29u,
+        "keyboard controls: source, scheme, 24 bindings, pointer speed, invert, reset");
+    passed &= expect(key(VK_RIGHT) && galaxy::gx::native_settings_overlay_snapshot().pending_changes == 1u,
+                     "the input source changes in the draft");
+    passed &= expect(key(VK_BACK) && galaxy::gx::native_settings_overlay_snapshot().pending_changes == 0u,
+                     "Backspace on a setting row undoes the draft");
     passed &= expect(
         galaxy::get_runtime_settings().input_mode ==
             galaxy::RuntimeInputMode::KeyboardMouse,
-        "in-game UI cannot select an absent controller or physical Wii Remote");
+        "the source only changes on apply");
+    // Bind F to Wii A: select the row, Enter waits, the next key binds.
+    passed &= expect(key(VK_DOWN) && key(VK_DOWN), "down reaches the A binding row");
+    passed &= expect(key(VK_RETURN) && key('F'), "Enter waits for a key, F binds");
+    passed &= expect(galaxy::gx::native_settings_overlay_snapshot().pending_changes == 1u,
+                     "a captured key is a draft change");
+    passed &= expect(key(VK_SPACE), "Space applies on the controls page");
+    {
+        const auto& a = galaxy::input::get_controls_config().table(ControlScheme::Keyboard)[WiiTarget::A];
+        passed &= expect(galaxy::input::format_target_bindings(ControlScheme::Keyboard, a) ==
+                             "Space, Enter, MouseLeft, F",
+                         "applied binding appends to the existing inputs");
+    }
+    passed &= expect(key(VK_RETURN) && key(VK_ESCAPE) && galaxy::gx::native_settings_overlay_visible() &&
+                         galaxy::gx::native_settings_overlay_snapshot().pending_changes == 0u,
+                     "Escape cancels a capture without closing the overlay");
+    passed &= expect(key(VK_BACK) && key(VK_SPACE), "Backspace clears the row, Space applies");
+    passed &= expect(
+        galaxy::input::get_controls_config().table(ControlScheme::Keyboard)[WiiTarget::A][0].empty(),
+        "a cleared row has no inputs");
+    // Up from the first binding row wraps to RESET TO DEFAULTS at the end.
+    passed &= expect(key(VK_UP) && key(VK_UP) && key(VK_UP), "up wraps to the reset row");
+    snapshot = galaxy::gx::native_settings_overlay_snapshot();
+    passed &= expect(snapshot.row == 28u, "the last row is selected");
+    passed &= expect(key(VK_RETURN) && key(VK_SPACE), "Enter on reset restores defaults; Space applies");
+    passed &= expect(galaxy::input::get_controls_config() == galaxy::input::default_controls_config(),
+                     "defaults restored");
+    // The scheme row switches the table shown.
+    passed &= expect(key(VK_DOWN) && key(VK_DOWN) && key(VK_RIGHT), "scheme row selects Xbox");
+    snapshot = galaxy::gx::native_settings_overlay_snapshot();
+    passed &= expect(snapshot.row_count == 31u, "Xbox adds stick and pointer deadzones");
+    passed &= expect(key(VK_RIGHT) && galaxy::gx::native_settings_overlay_snapshot().row_count == 34u,
+                     "Switch Pro adds motion, sensitivity and gyro rows");
+    passed &= expect(galaxy::gx::native_settings_overlay_snapshot().pending_changes == 0u,
+                     "choosing the scheme to edit is not a change");
+    const auto controls_layout = galaxy::gx::compute_native_settings_layout(1280u, 720u, 2u);
+    passed &= expect(layout_inside(controls_layout, 1280u, 720u), "the long controls page scrolls inside the panel");
+    const auto tiny_controls = galaxy::gx::compute_native_settings_layout(427u, 240u, 2u);
+    passed &= expect(layout_inside(tiny_controls, 427u, 240u), "the controls page fits the compact layout");
 
     passed &= expect(key(VK_TAB), "Tab enters the audio page");
     runtime = galaxy::get_runtime_settings();

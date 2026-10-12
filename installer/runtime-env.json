@@ -132,10 +132,6 @@
     "value": "1"
   },
   {
-    "name": "GALAXY_INPUT_MODE",
-    "value": "keyboard_mouse"
-  },
-  {
     "name": "GALAXY_LAYOUT_ASPECT_REPAIRS",
     "value": "1"
   },

@@ -7,6 +7,7 @@
 #include "galaxy/native_api.h"
 #include "galaxy/native_audio_dusk_dsp.h"
 #include "galaxy/native_dsp.h"
+#include "galaxy/input_bindings.h"
 #include "galaxy/native_input.h"
 #include "galaxy/synthetic_kpad_buttons.h"
 
@@ -245,6 +246,28 @@ void clear_native_window_key_presses() noexcept;
 // Window-thread key level (down on WM_KEYDOWN, up on WM_KEYUP); cleared with
 // the press latch.
 void publish_native_window_key_state(std::uint32_t key, bool down) noexcept;
+
+// Binding capture for the overlay's CONTROLS page. While armed, controllers
+// of `scheme` are read in every input mode, never reach the overlay's pad
+// navigation, and the first new press (button, stick direction past 0.6,
+// trigger past 0.5) is stored; the overlay is told through its key sink
+// with kBindingCaptureKey and collects it with take_controller_binding_capture.
+inline constexpr std::uintptr_t kBindingCaptureKey = 0xE8u;
+void arm_controller_binding_capture(input::ControlScheme scheme) noexcept;
+void cancel_controller_binding_capture() noexcept;
+[[nodiscard]] std::optional<input::InputSource> take_controller_binding_capture() noexcept;
+
+struct ConnectedControllers {
+    bool xbox = false;
+    unsigned switch_pro = 0;
+    unsigned switch_pro2 = 0;
+    bool pro2_needs_winusb = false;
+};
+// Controllers seen by the most recent input reports (and the HID worker).
+[[nodiscard]] ConnectedControllers connected_controllers() noexcept;
+// Synchronous check (settings UI only): an XInput pad or a Switch Pro /
+// Pro Controller 2 is attached now.
+[[nodiscard]] bool controller_present_now() noexcept;
 
 struct AudioSinkStats {
     std::uint64_t initialization_attempts{};

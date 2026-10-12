@@ -342,7 +342,9 @@ target_link_libraries(
     galaxy_runtime_instance_tests
     PRIVATE galaxy_runtime_instance)
 
-add_library(galaxy_runtime_settings STATIC runtime/src/runtime_settings.cpp)
+add_library(galaxy_runtime_settings STATIC
+    runtime/src/runtime_settings.cpp
+    runtime/src/input_bindings.cpp)
 target_link_libraries(
     galaxy_runtime_settings
     PUBLIC galaxy_runtime_abi galaxy_atomic_file)
@@ -470,7 +472,9 @@ target_link_libraries(
     PRIVATE
         galaxy_host_pointer_events)
 
-add_library(galaxy_native_input STATIC runtime/src/native_input.cpp)
+add_library(galaxy_native_input STATIC
+    runtime/src/native_input.cpp
+    runtime/src/switch_controller.cpp)
 target_link_libraries(galaxy_native_input PUBLIC galaxy_runtime_abi)
 if(MSVC)
     target_compile_options(galaxy_native_input PRIVATE /GS- /GR- /Oi /favor:INTEL64)
@@ -530,6 +534,7 @@ target_link_libraries(galaxy_jaudio_mixer_tests PRIVATE galaxy_jaudio_mixer)
 
 add_library(galaxy_native_host STATIC
     runtime/src/native_host.cpp
+    runtime/src/controller_hid.cpp
     runtime/src/flat_guest_memory.cpp)
 target_link_libraries(
     galaxy_native_host
@@ -545,6 +550,7 @@ target_link_libraries(
         hid
         ole32
         setupapi
+        cfgmgr32
         xinput9_1_0
         xaudio2
 )
@@ -557,6 +563,7 @@ endif()
 # product runtime cannot re-enable that mixer with an environment variable.
 add_library(galaxy_native_host_test_support STATIC
     runtime/src/native_host.cpp
+    runtime/src/controller_hid.cpp
     runtime/src/flat_guest_memory.cpp)
 target_link_libraries(
     galaxy_native_host_test_support
@@ -572,6 +579,7 @@ target_link_libraries(
         hid
         ole32
         setupapi
+        cfgmgr32
         xinput9_1_0
         xaudio2
 )
@@ -1035,6 +1043,8 @@ target_link_libraries(galaxy_native_settings_overlay_tests PRIVATE galaxy_gx)
 add_executable(galaxy_post_process_tests
     runtime/src/gx/post_process_tests.cpp)
 target_link_libraries(galaxy_post_process_tests PRIVATE galaxy_gx)
+add_executable(galaxy_controls_tests runtime/src/controls_tests.cpp)
+target_link_libraries(galaxy_controls_tests PRIVATE galaxy_runtime_settings galaxy_native_input)
 
 if(MSVC)
     foreach(
@@ -1117,6 +1127,7 @@ if(MSVC)
         galaxy_pipeline_cache_persistence_tests
         galaxy_native_settings_overlay_tests
         galaxy_post_process_tests
+        galaxy_controls_tests
     )
         target_compile_options(${target} PRIVATE /W4 /WX /permissive- /EHsc)
     endforeach()
@@ -1203,6 +1214,7 @@ galaxy_add_native_test(
     native_settings_overlay
     galaxy_native_settings_overlay_tests)
 galaxy_add_native_test(post_process galaxy_post_process_tests)
+galaxy_add_native_test(controls_bindings_switch_hid galaxy_controls_tests)
 galaxy_add_native_test(shader_gen_compiles galaxy_shader_gen_tests)
 galaxy_add_native_test(fifo_parser_streaming galaxy_fifo_parser_tests)
 galaxy_add_native_test(vertex_loader_defaults galaxy_vertex_loader_tests)
