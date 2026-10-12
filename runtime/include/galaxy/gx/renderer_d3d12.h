@@ -481,6 +481,9 @@ public:
     [[nodiscard]] std::uint32_t replay_xfb_addr() const noexcept { return replay_xfb_addr_; }
     // A 3D scene began inside the log being recorded (one is replayable).
     void note_replay_scene() noexcept { ++replay_scene_count_; }
+    // Last reason a sub-frame was not recorded (diagnostics).
+    [[nodiscard]] unsigned replay_failure() const noexcept { return replay_failure_; }
+    void note_replay_failure(unsigned reason) noexcept { replay_failure_ = reason; }
     // False (nothing recorded) when the log is gone or has no display copy.
     // `record_constants[i]` replaces the VS constants of draws of record i.
     bool present_replay_subframe(std::span<const D3D12_GPU_VIRTUAL_ADDRESS> record_constants);
@@ -887,14 +890,24 @@ private:
     void present_to_swap_chain();
     void execute_replay_copy(const ReplayCopy& copy);
     bool ensure_subframe_resources(unsigned xfb_width, unsigned xfb_height);
+    // The log being recorded; a completed log moves to play_* (swapped), so
+    // the next game frame records while the previous one is interpolated.
     std::vector<ReplayOp> replay_ops_;
     std::vector<DrawCall> replay_draws_;
     std::vector<ReplayViewport> replay_viewports_;
     std::vector<ReplayClear> replay_clears_;
     std::vector<ReplayCopy> replay_copies_;
+    std::vector<ReplayOp> play_ops_;
+    std::vector<DrawCall> play_draws_;
+    std::vector<ReplayViewport> play_viewports_;
+    std::vector<ReplayClear> play_clears_;
+    std::vector<ReplayCopy> play_copies_;
+    bool play_start_output_active_ = false;
+    void publish_replay_log();
     bool replay_recording_ = false;
     bool replay_valid_ = false;
     bool replay_has_swaps_ = false;
+    unsigned replay_failure_ = 0;
     unsigned replay_scene_count_ = 0;
     unsigned replay_segment_ = 0;
     std::uint64_t replay_serial_ = 0;

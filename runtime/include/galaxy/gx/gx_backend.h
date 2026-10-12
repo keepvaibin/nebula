@@ -696,6 +696,9 @@ private:
         unsigned next = 0;
         std::int64_t due_qpc = 0;
         std::int64_t step_qpc = 0;
+        // Set inside a render chunk (no frame may be recorded there): the
+        // render loop presents the real frame before anything else.
+        bool flush_requested = false;
     };
     InterpSequence interp_sequence_{};
     // A recorded frame whose present arrives as a separate VI present.
@@ -705,6 +708,7 @@ private:
     std::vector<D3D12_GPU_VIRTUAL_ADDRESS> interp_record_vas_;
     std::uint64_t interp_presented_ = 0;
     std::uint64_t interp_dropped_ = 0;
+    std::uint64_t interp_failed_ = 0;     // sub-frames that could not be recorded
     double interp_cpu_ms_ = 0.0;
     std::int64_t interp_stats_qpc_ = 0;
     // Render thread: steps the interpolation sequence of the latest frame

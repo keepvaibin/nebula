@@ -6479,7 +6479,11 @@ void GxBackend::on_fifo_marker(FifoMarker marker, const std::array<float, 12>* v
             interp_scene_ = (interp_scene_ + 1u) % 3u;
             if (interp_scene_ == interp_log_scene_) {
                 // Two scenes since the log: its inputs are about to be reused.
-                if (interp_sequence_.active) advance_interp_sequence(true);
+                if (interp_sequence_.active) {
+                    interp_dropped_ += interp_sequence_.subframes - interp_sequence_.next;
+                    interp_sequence_.subframes = interp_sequence_.next;
+                    interp_sequence_.flush_requested = true;
+                }
                 interp_log_waiting_ = false;
             }
             interp_scenes_[interp_scene_].clear();
@@ -6735,8 +6739,9 @@ void GxBackend::note_interp_log_completion() {
         return;
     }
     if (interp_sequence_.active) {
-        // The previous frame's sequence ends before this frame's begins.
-        advance_interp_sequence(true);
+        // The previous frame's sequence ends before this frame's begins
+        // (called inside a render chunk: the render loop flushes it).
+        interp_sequence_.flush_requested = true;
     }
     interp_log_scene_ = interp_scene_;
     interp_log_waiting_ = interp_scenes_[interp_log_scene_].valid &&
@@ -6753,6 +6758,7 @@ void GxBackend::start_interp_sequence(std::uint32_t xfb_addr) {
     LARGE_INTEGER now{};
     QueryPerformanceCounter(&now);
     interp_sequence_.active = true;
+    interp_sequence_.flush_requested = false;
     interp_sequence_.xfb_addr = xfb_addr;
     interp_sequence_.subframes = interp_frames_;
     interp_sequence_.next = 0u;
@@ -6776,6 +6782,7 @@ std::int64_t GxBackend::interp_wait_ms() const {
 }
 
 void GxBackend::advance_interp_sequence(bool flush) {
+    flush = flush || interp_sequence_.flush_requested;
     while (interp_sequence_.active) {
         LARGE_INTEGER now{};
         QueryPerformanceCounter(&now);
@@ -6793,7 +6800,7 @@ void GxBackend::advance_interp_sequence(bool flush) {
             if (presented) {
                 ++interp_presented_;
             } else {
-                ++interp_dropped_;
+                ++interp_failed_;
             }
             ++sequence.next;
             sequence.due_qpc += sequence.step_qpc;
@@ -6823,6 +6830,8 @@ void GxBackend::advance_interp_sequence(bool flush) {
                 std::cerr << "[interp-stats] subframes-per-frame=" << sequence.subframes
                           << " presented-hz=" << static_cast<double>(interp_presented_) / seconds
                           << " dropped=" << interp_dropped_
+                          << " failed=" << interp_failed_
+                          << " replay-fail=" << renderer_.replay_failure()
                           << " cpu-ms-per-subframe="
                           << (interp_presented_ != 0u ? interp_cpu_ms_ / static_cast<double>(interp_presented_) : 0.0)
                           << " gpu-ms-per-subframe="
@@ -6830,6 +6839,7 @@ void GxBackend::advance_interp_sequence(bool flush) {
                           << " measured-presents-hz=" << renderer_.measured_present_hz() << '\n';
                 interp_presented_ = 0u;
                 interp_dropped_ = 0u;
+                interp_failed_ = 0u;
                 interp_cpu_ms_ = 0.0;
                 interp_stats_qpc_ = now.QuadPart;
             }
@@ -6846,6 +6856,7 @@ bool GxBackend::render_interp_subframe(float t) {
     const InterpScene& scene = interp_scenes_[interp_log_scene_];
     const InterpScene& before_scene = interp_scenes_[(interp_log_scene_ + 2u) % 3u];
     if (!scene.valid) {
+        renderer_.note_replay_failure(9u);
         return false;
     }
     const std::size_t count = scene.constants.size();
@@ -7199,6 +7210,9 @@ void GxBackend::render_thread_main() {
                             false);
                     }
                 } else {
+                    if (interp_sequence_.active && interp_sequence_.flush_requested) {
+                        advance_interp_sequence(true);
+                    }
                     prepare_worker_memory_snapshot(chunk);
                     if (const RenderStallInjection& stall = render_stall_injection(); stall.ms != 0u) {
                         static std::uint32_t chunks = 0u;
@@ -8838,6 +8852,11 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
                       << " waiting=" << (interp_log_waiting_ ? 1 : 0)
                       << " sequence=" << (interp_sequence_.active ? 1 : 0)
                       << " present=" << (present_swap_chain ? 1 : 0) << '\n';
+        }
+        // A newer frame presents now: the pending frame is superseded.
+        if (interp_sequence_.active && interp_sequence_.flush_requested && present_swap_chain) {
+            interp_dropped_ += interp_sequence_.subframes - interp_sequence_.next;
+            interp_sequence_.active = false;
         }
         // The frame's own present: the sub-frames come first, the real frame
         // after them.

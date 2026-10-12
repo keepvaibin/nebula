@@ -6235,6 +6235,15 @@ bool RendererD3D12::interpolation_mode() const {
                present_frame_rate(cfg.max_fps, cfg.vsync_interval, display_refresh_hz_)) != 0u;
 }
 
+void RendererD3D12::publish_replay_log() {
+    std::swap(replay_ops_, play_ops_);
+    std::swap(replay_draws_, play_draws_);
+    std::swap(replay_viewports_, play_viewports_);
+    std::swap(replay_clears_, play_clears_);
+    std::swap(replay_copies_, play_copies_);
+    play_start_output_active_ = replay_start_output_active_;
+}
+
 void RendererD3D12::begin_replay_record() {
     replay_scene_count_ = 0u;
     replay_has_swaps_ = false;
@@ -6243,7 +6252,9 @@ void RendererD3D12::begin_replay_record() {
     replay_viewports_.clear();
     replay_clears_.clear();
     replay_copies_.clear();
-    replay_valid_ = false;
+    if (ring_mode_ != RingMode::Interp) {
+        replay_valid_ = false;
+    }
     replay_recording_ = true;
     replay_start_output_active_ = output_efb_active_;
     replay_source_slot_ = frame_slot_;
@@ -6256,6 +6267,9 @@ void RendererD3D12::end_replay_record(bool keep) {
         has_display_copy = has_display_copy || copy.mode == 1u;
     }
     replay_valid_ = keep && has_display_copy;
+    if (replay_valid_) {
+        publish_replay_log();
+    }
 }
 
 bool RendererD3D12::ensure_subframe_resources(unsigned xfb_width, unsigned xfb_height) {
@@ -6352,19 +6366,33 @@ void RendererD3D12::execute_replay_copy(const ReplayCopy& copy) {
 
 bool RendererD3D12::present_replay_subframe(
     std::span<const D3D12_GPU_VIRTUAL_ADDRESS> record_constants) {
-    if (!replay_valid_ || replay_recording_ || !device_ || !swap_chain_) {
+    if (!replay_valid_ || !device_ || !swap_chain_) {
+        replay_failure_ = replay_valid_ ? 2u : 1u;
         return false;
     }
     const ReplayCopy* display = nullptr;
-    for (const ReplayCopy& copy : replay_copies_) {
+    for (const ReplayCopy& copy : play_copies_) {
         if (copy.mode == 1u) display = &copy;
     }
-    if (display == nullptr || !ensure_subframe_resources(display->width, display->height)) {
+    if (display == nullptr) {
+        replay_failure_ = 3u;
+        return false;
+    }
+    if (!ensure_subframe_resources(display->width, display->height)) {
+        replay_failure_ = 4u;
         return false;
     }
     if (has_presented_swap_chain_) {
         wait_for_frame_latency_if_needed(trace_present_stats_enabled());
     }
+    // The next game frame may be recording: playback must not log into it.
+    const bool recording = replay_recording_;
+    replay_recording_ = false;
+    struct RestoreRecording {
+        bool& flag;
+        bool value;
+        ~RestoreRecording() { flag = value; }
+    } restore_recording{replay_recording_, recording};
     const unsigned index = subframe_next_;
     subframe_next_ = (subframe_next_ + 1u) % kSubframeAllocators;
     if (subframe_fences_[index] != 0u) {
@@ -6404,7 +6432,7 @@ bool RendererD3D12::present_replay_subframe(
     bound_rt_aux_ = 0u;
 
     const bool output_before = output_efb_active_;
-    if (output_efb_active_ != replay_start_output_active_) {
+    if (output_efb_active_ != play_start_output_active_) {
         swap_efb_sets();
     }
     // The private EFB (at the live EFB's scale) stands in for the sub-frame.
@@ -6418,10 +6446,10 @@ bool RendererD3D12::present_replay_subframe(
     replay_playing_ = true;
     bind_efb(nullptr);
     const auto far_values = make_efb_clear_values(0u, 0u, 0x00FFFFFFu, 0u);
-    for (const ReplayOp& op : replay_ops_) {
+    for (const ReplayOp& op : play_ops_) {
         switch (op.kind) {
         case ReplayKind::Draw: {
-            DrawCall call = replay_draws_[op.index];
+            DrawCall call = play_draws_[op.index];
             if (call.replay_record >= 0 &&
                 static_cast<std::size_t>(call.replay_record) < record_constants.size() &&
                 record_constants[static_cast<std::size_t>(call.replay_record)] != 0u) {
@@ -6431,17 +6459,17 @@ bool RendererD3D12::present_replay_subframe(
             break;
         }
         case ReplayKind::BindEfb: {
-            const ReplayViewport& viewport = replay_viewports_[op.index];
+            const ReplayViewport& viewport = play_viewports_[op.index];
             bind_efb(viewport.valid ? viewport.values : nullptr);
             break;
         }
         case ReplayKind::Clear: {
-            const ReplayClear& c = replay_clears_[op.index];
+            const ReplayClear& c = play_clears_[op.index];
             clear_efb(c.ar, c.gb, c.z24, c.color, c.alpha, c.depth, c.x, c.y, c.w, c.h, c.format);
             break;
         }
         case ReplayKind::Copy:
-            execute_replay_copy(replay_copies_[op.index]);
+            execute_replay_copy(play_copies_[op.index]);
             break;
         case ReplayKind::SwapEfbSets:
             swap_efb_sets();
@@ -7412,6 +7440,9 @@ void RendererD3D12::copy_efb_to_xfb(const EfbCopyParams& params, XfbTexture& des
             // One 3D scene and no output-EFB switch (that EFB is shared with
             // the next frame's chunks).
             replay_valid_ = replay_scene_count_ == 1u && !replay_has_swaps_;
+            if (replay_valid_) {
+                publish_replay_log();
+            }
             replay_segment_ = ring_segment_;
             replay_xfb_addr_ = dest.guest_addr;
             ++replay_serial_;
