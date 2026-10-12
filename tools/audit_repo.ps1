@@ -51,6 +51,11 @@ foreach ($RelativePath in $TrackedFiles) {
     }
 
     $File = Get-Item -LiteralPath $FullPath
+    # The shader-cache seed is Nebula-generated DXBC (docs/CONTENT_POLICY.md).
+    if ($RelativePath -like 'installer/shadercache-seed/*') {
+        if ($File.Length -gt 16MB) { $Failures.Add("Shader-cache seed larger than 16 MiB: $($File.FullName)") }
+        continue
+    }
     if ($File.Extension.ToLowerInvariant() -in $ForbiddenExtensions -and
         $RelativePath -notin $AllowedBinaries) {
         $Failures.Add("Forbidden game-content extension: $($File.FullName)")

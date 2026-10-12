@@ -29,5 +29,10 @@ are never tracked, attached to releases, or downloaded by the updater.
 `NebulaRuntime.exe` and its libraries ship prebuilt in Setup because they are
 built only from this repository's source.
 
-The only binary data files in the repository are the Dolphin project's
+`installer/shadercache-seed/RMGE01/{shaders,psos}.bin` are an exception: DXBC
+compiled from Nebula's own generated HLSL plus pipeline keys (hashes of GX
+register state), produced by the runtime and embedded by Setup to warm a first
+launch. They contain no game data; `tools/audit_repo.ps1` caps them at 16 MiB.
+
+The only other binary data files in the repository are the Dolphin project's
 clean-room DSP ROM replacements in `third_party/dolphin-free-dsp-rom/`.
