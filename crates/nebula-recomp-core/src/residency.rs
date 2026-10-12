@@ -674,13 +674,22 @@ fn lean_reload_sequence(used: &[bool; SLOTS], contract: LeanCallContract) -> Str
     ))
 }
 
-fn declarations(used: &[bool; SLOTS]) -> String {
+/// The local declarations, loaded from the context. Under the EABI contract a
+/// written volatile local may never be read again (no return stores it), so
+/// those declarations are `[[maybe_unused]]` (MSVC C4189, clang
+/// -Wunused-but-set-variable).
+fn declarations(used: &[bool; SLOTS], maybe_unused: bool) -> String {
     let mut out = String::new();
+    let attribute = if maybe_unused {
+        "[[maybe_unused]] "
+    } else {
+        ""
+    };
     for (slot, flag) in used.iter().enumerate() {
         if *flag && !is_float_slot(slot) {
             let _ = writeln!(
                 out,
-                "    std::uint32_t {} = {};",
+                "    {attribute}std::uint32_t {} = {};",
                 local_name(slot),
                 field_name(slot)
             );
@@ -843,7 +852,7 @@ pub fn apply_register_residency_with_abi(
         0
     };
     output.push_str(&text[..signature_end]);
-    output.push_str(&declarations(&used));
+    output.push_str(&declarations(&used, abi.is_some()));
     let shared_declarations_at = output.len();
     let rest = &text[signature_end..];
 

@@ -920,7 +920,9 @@ mod tests {
         // and returns: a leaf without calls keeps its body.
         let leaf = PROBE_BASE;
         assert_eq!(
-            probe_body(&abi, leaf).replace("GALAXY_GUEST_RETURN;", "return;"),
+            probe_body(&abi, leaf)
+                .replace("GALAXY_GUEST_RETURN;", "return;")
+                .replace("[[maybe_unused]] std::uint32_t gr", "std::uint32_t gr"),
             probe_body(&full, leaf)
         );
     }
