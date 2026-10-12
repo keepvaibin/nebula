@@ -43,7 +43,7 @@ namespace Nebula.Launcher
         private readonly NumericUpDown customWidth = new NumericUpDown(), customHeight = new NumericUpDown();
         private readonly Label outputInfo = new Label(), info = new Label();
         private readonly ComboBox recording = new ComboBox();
-        private readonly ComboBox antiAliasing = new ComboBox(), aaQuality = new ComboBox(), upscaler = new ComboBox(), textureFilter = new ComboBox();
+        private readonly ComboBox antiAliasing = new ComboBox(), aaQuality = new ComboBox(), upscaler = new ComboBox(), textureFilter = new ComboBox(), lighting = new ComboBox();
         private readonly NumericUpDown sharpness = new NumericUpDown();
         private readonly CheckBox mipmaps = new CheckBox();
         private readonly Button play = new Button();
@@ -110,11 +110,14 @@ namespace Nebula.Launcher
             AddLabel(image, "Texture filtering", 12, 176, 300);
             textureFilter.Items.AddRange(GraphicsSettings.TextureFilters);
             Combo(image, textureFilter, 320, 173, true);
+            AddLabel(image, "Lighting", 12, 216, 300);
+            lighting.Items.AddRange(GraphicsSettings.LightingModes);
+            Combo(image, lighting, 320, 213, true);
             mipmaps.Text = "Generate mipmaps for textures that have none";
-            mipmaps.Location = new Point(12, 214);
+            mipmaps.Location = new Point(12, 254);
             mipmaps.Size = new Size(600, 28);
             image.Controls.Add(mipmaps);
-            AddLabel(image, "These also change during play: F1, Graphics page.", 12, 262, 700);
+            AddLabel(image, "These also change during play (F1, Graphics page), except mipmaps.", 12, 300, 700);
 
             AddLabel(diagnostics, "Recording", 12, 16, 300);
             recording.Items.AddRange(new[] { "No recording", "Lightweight recording", "Detailed recording" });
@@ -194,6 +197,7 @@ namespace Nebula.Launcher
             sharpness.Value = graphics.Sharpness;
             textureFilter.SelectedIndex = graphics.TextureFilter;
             mipmaps.Checked = graphics.GeneratedMipmaps;
+            lighting.SelectedIndex = graphics.PerPixelLighting ? 0 : 1;
             output.SelectedIndex = 0;
             aspect.Text = DisplaySettings.MatchDisplayAspect;
             internalTarget.SelectedIndex = 0;
@@ -306,6 +310,7 @@ namespace Nebula.Launcher
                 graphics.Sharpness = (int)sharpness.Value;
                 graphics.TextureFilter = textureFilter.SelectedIndex;
                 graphics.GeneratedMipmaps = mipmaps.Checked;
+                graphics.PerPixelLighting = lighting.SelectedIndex == 0;
                 graphics.Save(plan.FollowWindowResolution);
                 Directory.CreateDirectory(NebulaPaths.Saves);
                 var mode = (RecordingMode)recording.SelectedIndex;

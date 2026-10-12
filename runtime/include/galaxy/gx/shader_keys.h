@@ -109,6 +109,11 @@ struct TevStagePacked {
 };
 static_assert(sizeof(TevStagePacked) == 16);
 
+// Per-pixel lighting (RenderConfig::per_pixel_lighting): set together on a
+// lit triangle draw's vertex and pixel keys by the backend.
+inline constexpr std::uint8_t kVsKeyPerPixelLighting = 0x08u;
+inline constexpr std::uint8_t kPsKeyPerPixelLighting = 0x01u;
+
 struct PixelShaderKey {
     std::uint8_t num_tev_stages;    // 1-16
     std::uint8_t num_texgens;
@@ -128,7 +133,7 @@ struct PixelShaderKey {
     // Legacy 0..15 keys retain their original shader source. New dither keys
     // use 0xff and read reciprocal scale from the per-draw PS constants.
     std::uint8_t efb_scale_minus_one;
-    std::uint8_t reserved;
+    std::uint8_t reserved;          // bit0 per-pixel lighting
     std::uint32_t ind_cmd[4][4];    // BP 0x10-0x1F, grouped as uint4s
     std::uint32_t ind_ref;          // BP 0x27
     std::uint32_t ind_scale[2];     // BP 0x25-0x26
@@ -150,7 +155,8 @@ struct VertexShaderKey {
     std::uint8_t num_texgens;
     std::uint8_t num_chans;
     std::uint8_t flags;             // bit0 per-vertex posmtx, bit1 lighting,
-                                    // bit2 dual-tex (post-matrix) enable
+                                    // bit2 dual-tex (post-matrix) enable,
+                                    // bit3 per-pixel lighting outputs
     std::uint8_t texmtx_idx_mask;   // VCD_LO bits 1-8: per-vertex texture
                                     // matrix index present for texgen n
                                     // (masked to active texgens — affects VS

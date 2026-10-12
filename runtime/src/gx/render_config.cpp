@@ -171,6 +171,7 @@ static void apply_kv(RenderConfig& cfg, const char* key, const char* val) {
     else if (std::strcmp(key, "texture_lod_bias") == 0) cfg.texture_lod_bias = std::clamp(parse_uint(val, 0), 0u, 8u);
     else if (std::strcmp(key, "anisotropic_filtering") == 0) cfg.anisotropic_filtering = std::clamp(parse_uint(val, cfg.anisotropic_filtering), 1u, 16u);
     else if (std::strcmp(key, "enhanced_mipmaps") == 0) cfg.enhanced_mipmaps = parse_bool(val, cfg.enhanced_mipmaps);
+    else if (std::strcmp(key, "per_pixel_lighting") == 0) cfg.per_pixel_lighting = parse_bool(val, cfg.per_pixel_lighting);
     else if (std::strcmp(key, "post_process") == 0) cfg.post_process = parse_bool(val, cfg.post_process);
     else if (std::strcmp(key, "internal_follow_window") == 0) cfg.internal_follow_window = parse_bool(val, cfg.internal_follow_window);
     else if (std::strcmp(key, "aa") == 0) {
@@ -239,6 +240,7 @@ static void apply_env_overrides(RenderConfig& cfg) {
     apply_env(cfg, "GALAXY_TEXTURE_LOD_BIAS", "texture_lod_bias");
     apply_env(cfg, "GALAXY_ANISOTROPIC_FILTERING", "anisotropic_filtering");
     apply_env(cfg, "GALAXY_ENHANCED_MIPMAPS", "enhanced_mipmaps");
+    apply_env(cfg, "GALAXY_PER_PIXEL_LIGHTING", "per_pixel_lighting");
     apply_env(cfg, "GALAXY_POST_PROCESS", "post_process");
     apply_env(cfg, "GALAXY_INTERNAL_FOLLOW_WINDOW", "internal_follow_window");
     apply_env(cfg, "GALAXY_AA", "aa");
@@ -541,6 +543,8 @@ bool save_render_config_to_file() {
              << std::clamp(cfg.anisotropic_filtering, 1u, 16u) << '\n'
              << "enhanced_mipmaps="
              << (cfg.enhanced_mipmaps ? 1u : 0u) << '\n'
+             << "per_pixel_lighting="
+             << (cfg.per_pixel_lighting ? 1u : 0u) << '\n'
              << "aa=" << cfg.aa_mode << '\n'
              << "smaa_quality=" << cfg.smaa_quality << '\n'
              << "upscaler=" << cfg.upscaler << '\n'

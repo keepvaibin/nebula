@@ -158,12 +158,12 @@ int main() {
     render.upscaler = 1u;
     render.sharpness = 20u;
     render.anisotropic_filtering = 8u;
-    render.enhanced_mipmaps = true;
+    render.per_pixel_lighting = true;
     galaxy::gx::set_render_config(render);
     passed &= expect(key(VK_TAB), "Tab enters the graphics page");
     snapshot = galaxy::gx::native_settings_overlay_snapshot();
     passed &= expect(snapshot.tab == 1u && snapshot.row_count == 6u,
-                     "graphics page has AA, SMAA quality, upscaler, sharpening, textures and mipmaps");
+                     "graphics page has AA, SMAA quality, upscaler, sharpening, textures and lighting");
     passed &= expect(key(VK_LEFT), "left lowers the anti-aliasing mode");
     passed &= expect(galaxy::gx::get_render_config().aa_mode == 1u, "AUTO steps down to SMAA");
     passed &= expect(key(VK_DOWN) && key(VK_RIGHT), "SMAA quality row is adjustable");
@@ -177,8 +177,8 @@ int main() {
     passed &= expect(key(VK_DOWN) && key(VK_RIGHT), "texture filtering row is adjustable");
     passed &= expect(galaxy::gx::get_render_config().anisotropic_filtering == 16u,
                      "8x anisotropic steps up to 16x");
-    passed &= expect(key(VK_DOWN) && key(VK_RIGHT), "mipmap row toggles");
-    passed &= expect(!galaxy::gx::get_render_config().enhanced_mipmaps, "generated mipmaps switch off");
+    passed &= expect(key(VK_DOWN) && key(VK_RIGHT), "lighting row toggles");
+    passed &= expect(!galaxy::gx::get_render_config().per_pixel_lighting, "lighting switches to per vertex");
     passed &= expect(galaxy::gx::native_settings_overlay_snapshot().dirty,
                      "graphics changes mark the settings for saving");
 

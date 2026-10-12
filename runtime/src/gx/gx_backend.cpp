@@ -7583,10 +7583,17 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
         const cadence::ScopedPhaseTimer render_begin_timer{
             cadence_diagnostics_, cadence::TimingPhase::RenderBegin};
         {
+            const RenderConfig render = get_render_config();
             const unsigned wanted =
-                std::clamp(get_render_config().efb_scale, 1u, kMaxEfbScale);
+                std::clamp(render.efb_scale, 1u, kMaxEfbScale);
             if (wanted != efb_copies_.efb_scale()) {
                 efb_copies_.set_efb_scale(wanted);
+            }
+            // A lighting-mode change re-keys every lit draw's pipeline.
+            if (render.per_pixel_lighting != per_pixel_lighting_) {
+                per_pixel_lighting_ = render.per_pixel_lighting;
+                shader_key_hashes_valid_ = false;
+                current_pipeline_ = nullptr;
             }
         }
         renderer_.begin_frame(chunk.present_swap_chain);
@@ -9446,6 +9453,20 @@ ID3D12PipelineState* GxBackend::flush_draw_state(
         if (!shader_key_hashes_valid_ || !(next == vs_key_)) {
             vs_key_ = next;
             current_vs_hash_ = vs_key_.hash();
+        }
+    }
+    // Per-pixel lighting needs the extra position/normal interpolants, which
+    // the line and point geometry shaders do not carry.
+    {
+        const bool ppl = per_pixel_lighting_ && (vs_key_.flags & 0x02u) != 0u &&
+            topology_key == static_cast<std::uint8_t>(D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE);
+        if (((vs_key_.flags & kVsKeyPerPixelLighting) != 0u) != ppl) {
+            vs_key_.flags ^= kVsKeyPerPixelLighting;
+            current_vs_hash_ = vs_key_.hash();
+        }
+        if (((ps_key_.reserved & kPsKeyPerPixelLighting) != 0u) != ppl) {
+            ps_key_.reserved ^= kPsKeyPerPixelLighting;
+            current_ps_hash_ = ps_key_.hash();
         }
     }
     shader_key_hashes_valid_ = true;

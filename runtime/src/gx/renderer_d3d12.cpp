@@ -371,7 +371,7 @@ void adjust_native_setting(int delta) {
                 static_cast<unsigned>(index), static_cast<unsigned>(kAnisotropy.size()))];
             break;
         }
-        case 5: render.enhanced_mipmaps = !render.enhanced_mipmaps; break;
+        case 5: render.per_pixel_lighting = !render.per_pixel_lighting; break;
         default: return;
         }
         set_render_config(render);
@@ -2545,7 +2545,9 @@ HRESULT create_gx_root_signature(
     params[4].ParameterType             = D3D12_ROOT_PARAMETER_TYPE_SRV;
     params[4].Descriptor.ShaderRegister = 0;
     params[4].Descriptor.RegisterSpace  = 1;
-    params[4].ShaderVisibility          = D3D12_SHADER_VISIBILITY_VERTEX;
+    // The matrix palette also holds the XF lights, which per-pixel lighting
+    // reads in the pixel shader.
+    params[4].ShaderVisibility          = D3D12_SHADER_VISIBILITY_ALL;
 
     D3D12_ROOT_SIGNATURE_DESC rsd{};
     rsd.NumParameters = 5;
@@ -7000,7 +7002,8 @@ std::string native_settings_row_text(
                           std::min(render.anisotropic_filtering, 16u));
             return text;
         case 5:
-            return std::string("GENERATED MIPMAPS: ") + (render.enhanced_mipmaps ? "ON" : "OFF");
+            return std::string("LIGHTING: ") +
+                   (render.per_pixel_lighting ? "PER PIXEL" : "PER VERTEX");
         default:
             return {};
         }

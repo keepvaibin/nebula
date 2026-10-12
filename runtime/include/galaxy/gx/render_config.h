@@ -78,6 +78,11 @@ struct RenderConfig {
     // decoded from guest memory unchanged.
     bool     enhanced_mipmaps    = true;
 
+    // Enhancement: lit GX color channels are evaluated per pixel instead of
+    // per vertex (same XF light formulas on the interpolated eye-space
+    // position and normal). Applies to specialized triangle pipelines.
+    bool     per_pixel_lighting  = true;
+
     // Presentation image quality (post_process.h), applied to the presented
     // frame on the render thread. aa_mode: 0 off, 1 SMAA, 2 auto (SMAA unless
     // the game image already has 1.5x the window's pixels on both axes).

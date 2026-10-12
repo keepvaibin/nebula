@@ -1054,6 +1054,8 @@ private:
     std::uint64_t current_vs_hash_{};
     std::uint64_t current_ps_hash_{};
     bool shader_key_hashes_valid_ = false;
+    // RenderConfig::per_pixel_lighting, sampled at each frame start.
+    bool per_pixel_lighting_ = true;
     PsoKey current_pso_key_{};
     bool current_pso_key_valid_ = false;
     ID3D12PipelineState* current_pipeline_ = nullptr;

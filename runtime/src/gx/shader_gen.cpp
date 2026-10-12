@@ -372,6 +372,31 @@ struct VSOut {
 };
 )HLSL";
 
+// Per-pixel lighting variant: eye-space position and normal plus the raw
+// vertex colors (material/ambient sources) follow the texcoords.
+static constexpr const char* kVsStructsPpl = R"HLSL(
+struct VSIn {
+    float3   pos      : POSITION;
+    float3   nrm      : NORMAL;
+    float3   tangent  : TANGENT;
+    float3   binormal : BINORMAL;
+    uint     color0   : COLOR0;
+    uint     color1   : COLOR1;
+    float2   uv[8]    : TEXCOORD;
+    uint4    mtx_idx  : BLENDINDICES;
+};
+struct VSOut {
+    float4   pos       : SV_Position;
+    float4   col0      : COLOR0;
+    float4   col1      : COLOR1;
+    float3   uv[8]     : TEXCOORD;
+    float3   ppl_pos   : TEXCOORD8;
+    float3   ppl_nrm   : TEXCOORD9;
+    float4   ppl_vcol0 : TEXCOORD10;
+    float4   ppl_vcol1 : TEXCOORD11;
+};
+)HLSL";
+
 // ===========================================================================
 // PS struct declarations
 // ===========================================================================
@@ -382,6 +407,149 @@ struct PSIn {
     float4   col1     : COLOR1;
     float3   uv[8]    : TEXCOORD;
 };
+)HLSL";
+
+static constexpr const char* kPsStructsPpl = R"HLSL(
+struct PSIn {
+    float4   pos       : SV_Position;
+    float4   col0      : COLOR0;
+    float4   col1      : COLOR1;
+    float3   uv[8]     : TEXCOORD;
+    float3   ppl_pos   : TEXCOORD8;
+    float3   ppl_nrm   : TEXCOORD9;
+    float4   ppl_vcol0 : TEXCOORD10;
+    float4   ppl_vcol1 : TEXCOORD11;
+};
+)HLSL";
+
+// Per-pixel lighting: the lit parts of the two GX color channels, evaluated
+// with the vertex stage's light formulas (emit_light) on the interpolated
+// eye-space position and renormalized normal. The channel control words,
+// material/ambient registers and XF lights come from the vertex constants
+// (root CBV b0, visible to every stage) and the matrix palette (t0, space1).
+static constexpr const char* kPplLighting = R"HLSL(
+cbuffer GxPplConstants : register(b0) {
+    float4 ppl_chan_ambient[2]  : packoffset(c8);
+    float4 ppl_chan_material[2] : packoffset(c10);
+    uint   ppl_num_chans        : packoffset(c12.y);
+    uint   ppl_mtx_palette_base : packoffset(c12.w);
+    uint4  ppl_channel          : packoffset(c72);
+};
+StructuredBuffer<float4> mtx_palette : register(t0, space1);
+
+void ppl_add_light(uint n, uint ctrl, bool alpha_part, float3 wpos, float3 nrm,
+                   inout int3 lacc_i, inout int lacc_a_i) {
+    const uint e = 0x180u + 4u * n;
+    uint  lcw  = asuint(mtx_palette[ppl_mtx_palette_base + e].w);
+    float4 le1 = mtx_palette[ppl_mtx_palette_base + e + 1u];
+    float4 le2 = mtx_palette[ppl_mtx_palette_base + e + 2u];
+    float4 le3 = mtx_palette[ppl_mtx_palette_base + e + 3u];
+    float3 lpos  = float3(le2.z, le2.w, le3.x);
+    float3 ldvec = float3(le3.y, le3.z, le3.w);
+    float3 cosA  = le1.xyz;
+    float3 distA = float3(le1.w, le2.x, le2.y);
+    const uint atten_func = (ctrl >> 9u) & 3u;
+    const uint diffuse_func = (ctrl >> 7u) & 3u;
+    float3 ldir;
+    float attn;
+    if (atten_func == 1u) {
+        float3 ldelta = lpos - wpos;
+        float ldd = dot(ldelta, ldelta);
+        ldir = (ldd > 0.0) ? ldelta * rsqrt(ldd) : nrm;
+        attn = (dot(nrm, ldir) >= 0.0) ? max(0.0, dot(nrm, ldvec)) : 0.0;
+        float3 distAttn = distA;
+        if (diffuse_func != 0u) {
+            float dad = dot(distA, distA);
+            distAttn = (dad > 0.0) ? distA * rsqrt(dad) : distA;
+        }
+        float denom = dot(distAttn, float3(1.0, attn, attn*attn));
+        attn = (denom != 0.0)
+             ? max(0.0, dot(cosA, float3(1.0, attn, attn*attn))) / denom
+             : 0.0;
+    } else if (atten_func == 3u) {
+        float3 ldelta = lpos - wpos;
+        float dist2 = dot(ldelta, ldelta);
+        float dist  = sqrt(dist2);
+        ldir = (dist > 0.0) ? ldelta / dist : nrm;
+        attn = max(0.0, dot(ldir, ldvec));
+        float denom = dot(distA, float3(1.0, dist, dist2));
+        attn = (denom != 0.0)
+             ? max(0.0, cosA.x + cosA.y*attn + cosA.z*attn*attn) / denom
+             : 0.0;
+    } else {
+        float3 ldelta = lpos - wpos;
+        float ldd = dot(ldelta, ldelta);
+        ldir = (ldd > 0.0) ? ldelta * rsqrt(ldd) : nrm;
+        attn = 1.0;
+    }
+    if (alpha_part) {
+        float lcol = float(lcw & 255u);
+        if (diffuse_func == 1u) {
+            lacc_a_i += int(round(attn * dot(ldir, nrm) * lcol));
+        } else if (diffuse_func == 2u) {
+            lacc_a_i += int(round(attn * max(0.0, dot(ldir, nrm)) * lcol));
+        } else {
+            lacc_a_i += int(round(attn * lcol));
+        }
+    } else {
+        float3 lcol = float3(
+            float((lcw >> 24) & 255u),
+            float((lcw >> 16) & 255u),
+            float((lcw >>  8) & 255u));
+        if (diffuse_func == 1u) {
+            lacc_i += int3(round(attn * dot(ldir, nrm) * lcol));
+        } else if (diffuse_func == 2u) {
+            lacc_i += int3(round(attn * max(0.0, dot(ldir, nrm)) * lcol));
+        } else {
+            lacc_i += int3(round(attn * lcol));
+        }
+    }
+}
+
+void ppl_apply(inout float4 col0, inout float4 col1, float3 wpos, float3 nrm_in,
+               float4 vtx_col0, float4 vtx_col1) {
+    const float3 nrm = dot(nrm_in, nrm_in) > 0.0 ? normalize(nrm_in) : nrm_in;
+    [unroll] for (uint ch = 0u; ch < 2u; ++ch) {
+        if (ch >= ppl_num_chans) {
+            continue;
+        }
+        const float4 vtx = ch == 0u ? vtx_col0 : vtx_col1;
+        const uint cc = ppl_channel[ch];
+        const uint ca = ppl_channel[2u + ch];
+        float4 result = ch == 0u ? col0 : col1;
+        if (((cc >> 1u) & 1u) != 0u) {
+            int3 mat_c_i = int3(round(((cc & 1u) != 0u ? vtx : ppl_chan_material[ch]).rgb * 255.0));
+            int3 lacc_i = int3(round((((cc >> 6u) & 1u) != 0u ? vtx : ppl_chan_ambient[ch]).rgb * 255.0));
+            int unused_a = 0;
+            const uint mask = ((cc >> 2u) & 0xFu) | (((cc >> 11u) & 0xFu) << 4u);
+            [loop] for (uint n = 0u; n < 8u; ++n) {
+                if (((mask >> n) & 1u) != 0u) {
+                    ppl_add_light(n, cc, false, wpos, nrm, lacc_i, unused_a);
+                }
+            }
+            lacc_i = clamp(lacc_i, int3(0,0,0), int3(255,255,255));
+            result.rgb = float3((mat_c_i * (lacc_i + (lacc_i >> 7))) >> 8) / 255.0;
+        }
+        if (((ca >> 1u) & 1u) != 0u) {
+            int mat_a_i = int(round(((ca & 1u) != 0u ? vtx.a : ppl_chan_material[ch].a) * 255.0));
+            int lacc_a_i = int(round((((ca >> 6u) & 1u) != 0u ? vtx.a : ppl_chan_ambient[ch].a) * 255.0));
+            int3 unused_c = int3(0,0,0);
+            const uint mask = ((ca >> 2u) & 0xFu) | (((ca >> 11u) & 0xFu) << 4u);
+            [loop] for (uint n = 0u; n < 8u; ++n) {
+                if (((mask >> n) & 1u) != 0u) {
+                    ppl_add_light(n, ca, true, wpos, nrm, unused_c, lacc_a_i);
+                }
+            }
+            lacc_a_i = clamp(lacc_a_i, 0, 255);
+            result.a = float((mat_a_i * (lacc_a_i + (lacc_a_i >> 7))) >> 8) / 255.0;
+        }
+        if (ch == 0u) {
+            col0 = result;
+        } else {
+            col1 = result;
+        }
+    }
+}
 )HLSL";
 
 // D3D12 exposes only fixed one-pixel line/point rasterization. These geometry
@@ -625,8 +793,9 @@ std::string ShaderGenerator::generate_vs(const VertexShaderKey& key) const {
     s << "// Specialized VS: " << key_desc << "\n";
     s << "// Generated by Nebula ShaderGenerator\n\n";
 
+    const bool ppl = (key.flags & kVsKeyPerPixelLighting) != 0u;
     s << kVsConstantsDef;
-    s << kVsStructs;
+    s << (ppl ? kVsStructsPpl : kVsStructs);
 
     const bool dual_tex = (key.flags & 0x04u) != 0u;
 
@@ -790,6 +959,13 @@ float xfw(uint w) {
         s << "    }\n";
     }
     s << "\n";
+
+    if (ppl) {
+        s << "    o.ppl_pos = wpos.xyz;\n";
+        s << "    o.ppl_nrm = nrm;\n";
+        s << "    o.ppl_vcol0 = vtx_col0;\n";
+        s << "    o.ppl_vcol1 = vtx_col1;\n\n";
+    }
 
     // ---- Texgens ----------------------------------------------------------
     // Full pipeline per Dolphin VertexShaderGen: input-row selection (RAW
@@ -965,8 +1141,12 @@ std::string ShaderGenerator::generate_ps(const PixelShaderKey& key) const {
     s << "// Specialized PS: " << key_desc << "\n";
     s << "// Generated by Nebula ShaderGenerator\n\n";
 
+    const bool ppl = (key.reserved & kPsKeyPerPixelLighting) != 0u;
     s << kPsConstantsDef;
-    s << kPsStructs;
+    s << (ppl ? kPsStructsPpl : kPsStructs);
+    if (ppl) {
+        s << kPplLighting;
+    }
 
     // ---- main() ----
     // Z-texturing (flags bit1): the fragment depth is replaced by (or offset
@@ -1010,6 +1190,10 @@ std::string ShaderGenerator::generate_ps(const PixelShaderKey& key) const {
     s << "    tev_c_i[1] = int4(round(tev_regs[2] * 255.0));\n";
     s << "    tev_c_i[2] = int4(round(tev_regs[3] * 255.0));\n";
     // Per-stage working variables, declared once (stages assign them).
+    if (ppl) {
+        s << "    ppl_apply(pin.col0, pin.col1, pin.ppl_pos, pin.ppl_nrm,"
+             " pin.ppl_vcol0, pin.ppl_vcol1);\n";
+    }
     s << "    int4 tex_color_i = int4(0,0,0,0);\n";
     s << "    int4 last_raw_tex_i = int4(0,0,0,0);\n";
     s << "    int4 ras_color_i = int4(0,0,0,0);\n";

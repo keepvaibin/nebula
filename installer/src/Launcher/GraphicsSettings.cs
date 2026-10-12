@@ -17,10 +17,11 @@ namespace Nebula.Launcher
         public static readonly string[] AntiAliasingQualities = { "Low", "Medium", "High", "Ultra" };
         public static readonly string[] Upscalers = { "Bilinear", "AMD FidelityFX FSR 1" };
         public static readonly string[] TextureFilters = { "Trilinear", "2x anisotropic", "4x anisotropic", "8x anisotropic", "16x anisotropic" };
+        public static readonly string[] LightingModes = { "Per pixel (enhanced)", "Per vertex (original)" };
         private static readonly int[] Anisotropy = { 1, 2, 4, 8, 16 };
 
         public int AntiAliasing = 2, Quality = 2, Upscaler = 1, Sharpness = 20, TextureFilter = 3;
-        public bool GeneratedMipmaps = true;
+        public bool GeneratedMipmaps = true, PerPixelLighting = true;
 
         public static string ConfigPath { get { return Path.Combine(NebulaPaths.DataRoot, "config.ini"); } }
 
@@ -41,8 +42,9 @@ namespace Nebula.Launcher
                 settings.TextureFilter = 0;
                 for (int i = 0; i < Anisotropy.Length; i++) if (Anisotropy[i] <= anisotropy) settings.TextureFilter = i;
             }
-            string mipmaps;
+            string mipmaps, lighting;
             if (values.TryGetValue("enhanced_mipmaps", out mipmaps)) settings.GeneratedMipmaps = mipmaps.Trim() != "0";
+            if (values.TryGetValue("per_pixel_lighting", out lighting)) settings.PerPixelLighting = lighting.Trim() != "0";
             return settings;
         }
 
@@ -57,6 +59,7 @@ namespace Nebula.Launcher
             Set(lines, "sharpness", Sharpness);
             Set(lines, "anisotropic_filtering", Anisotropy[Math.Max(0, Math.Min(TextureFilter, Anisotropy.Length - 1))]);
             Set(lines, "enhanced_mipmaps", GeneratedMipmaps ? 1 : 0);
+            Set(lines, "per_pixel_lighting", PerPixelLighting ? 1 : 0);
             Set(lines, "internal_follow_window", followWindow ? 1 : 0);
             Directory.CreateDirectory(Path.GetDirectoryName(ConfigPath));
             string temp = ConfigPath + ".tmp";
