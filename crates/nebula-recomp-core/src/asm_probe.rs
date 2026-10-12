@@ -48,7 +48,7 @@ pub struct ProbeSpec {
 /// sets before every call; `ProbeSpec::executed` assumes it.
 pub const DRIVER_STATE: &str = "r1=0x80400000 r3=0x80100000 r4=16 r5..r12=1..8 \
 f1=1.5 f2=2.5 f3..f8=3.5 cr=0 xer=0 hid2=PSE|LSQE gqr0=0; guest RAM at 0x80100000 holds \
-0x80100100 (a vtable pointer) and the vtable word at +8 is callee_leaf";
+0x80100100 (a vtable pointer), 1.5f at +0x20..+0xFC, and the vtable word at +8 is callee_leaf";
 
 /// The lowered probe module and its index.
 #[derive(Clone, Debug)]
@@ -237,6 +237,22 @@ fn fctiwz(frt: u32, frb: u32) -> u32 {
 fn fcmpu(crf: u32, fra: u32, frb: u32) -> u32 {
     (63 << 26) | (crf << 23) | (fra << 16) | (frb << 11)
 }
+fn fcmpo(crf: u32, fra: u32, frb: u32) -> u32 {
+    (63 << 26) | (crf << 23) | (fra << 16) | (frb << 11) | (32 << 1)
+}
+fn fsel(frt: u32, fra: u32, frc: u32, frb: u32) -> u32 {
+    a_form(63, frt, fra, frb, frc, 23)
+}
+fn frsqrte(frt: u32, frb: u32) -> u32 {
+    a_form(63, frt, 0, frb, 0, 26)
+}
+fn fres(frt: u32, frb: u32) -> u32 {
+    a_form(59, frt, 0, frb, 0, 24)
+}
+/// `psq_l` loading one element (W=1): ps1 becomes 1.0.
+fn psq_l1(ft: u32, d: i32, ra: u32) -> u32 {
+    psq_l(ft, d, ra) | 0x8000
+}
 fn ps_mul(frt: u32, fra: u32, frc: u32) -> u32 {
     a_form(4, frt, fra, 0, frc, 25)
 }
@@ -278,6 +294,9 @@ fn blt(instructions: i32) -> u32 {
 }
 fn bge(instructions: i32) -> u32 {
     bc(4, 0, instructions)
+}
+fn bgt_cr1(instructions: i32) -> u32 {
+    bc(12, 5, instructions)
 }
 fn bdnz(instructions: i32) -> u32 {
     bc(16, 0, instructions)
@@ -416,6 +435,48 @@ const CORPUS: &[(&str, &str, Body)] = &[
             fctiwz(3, 1),
             stfd(3, 0, 4),
             lwz(3, 4, 4),
+            BLR,
+        ]
+    }),
+    ("float_loop", "float loop", |_, _| {
+        // Scale four floats in guest RAM by a loop-invariant factor.
+        vec![
+            lfs(1, 0x40, 3),
+            li(5, 4),
+            mtctr(5),
+            addi(6, 3, 0x20),
+            lfs(0, 0, 6),
+            fmuls(0, 0, 1),
+            stfs(0, 0, 6),
+            addi(6, 6, 4),
+            bdnz(-4),
+            BLR,
+        ]
+    }),
+    ("paired_mtx", "paired matrix", |_, _| {
+        // PSMTXMultVec's first row: (m00 m01 m02 m03) . (x y z 1).
+        vec![
+            psq_l(0, 0x80, 3),
+            psq_l(2, 0x40, 3),
+            psq_l1(1, 0x88, 3),
+            ps_mul(4, 2, 0),
+            psq_l(3, 0x48, 3),
+            ps_madd(5, 3, 1, 4),
+            ps_sum0(6, 5, 5, 5),
+            stfs(6, 0, 4),
+            BLR,
+        ]
+    }),
+    ("float_select", "float select/estimate", |_, _| {
+        vec![
+            fsel(3, 1, 2, 4),
+            frsqrte(5, 2),
+            fres(6, 2),
+            fcmpo(1, 5, 6),
+            bgt_cr1(2),
+            fmr(5, 6),
+            stfs(5, 0, 4),
+            stfs(3, 4, 4),
             BLR,
         ]
     }),
@@ -580,13 +641,16 @@ const CORPUS: &[(&str, &str, Body)] = &[
 /// compare_branch: r3 != 0 skips nothing at beq, b skips one, r3 > 16 takes
 /// bge (7); record_forms: r3 & 1 == 0 takes beq, r3 & 16 == 0 falls through
 /// bne (6); float_compare: f1 < f2 takes blt (6); loop_sum: 16 iterations of
-/// lwz/add/addi/bdnz plus four (68).
+/// lwz/add/addi/bdnz plus four (68); float_loop: four iterations of five plus
+/// five (25); float_select: frsqrte(2.5) > fres(2.5) takes bgt (8).
 fn executed_instructions(name: &str, words: usize) -> u32 {
     match name {
         "compare_branch" => 7,
         "record_forms" => 6,
         "float_compare" => 6,
         "loop_sum" => 68,
+        "float_loop" => 25,
+        "float_select" => 8,
         _ => words as u32,
     }
 }
@@ -820,8 +884,15 @@ mod tests {
 
     #[test]
     fn abi_sync_narrows_the_direct_and_virtual_call_sequences() {
-        let call_direct = PROBE_BASE + 15 * PROBE_SLOT;
-        let call_virtual = PROBE_BASE + 17 * PROBE_SLOT;
+        let address = |name: &str| {
+            probe_corpus()
+                .iter()
+                .find(|probe| probe.name == name)
+                .map(|probe| probe.address)
+                .unwrap()
+        };
+        let call_direct = address("call_direct");
+        let call_virtual = address("call_virtual");
         let full = translate_probe_module(&release_with(|_| {})).unwrap();
         let body = probe_body(&full, call_direct);
         assert!(body.contains("{ context->gpr[0] = gr0; context->gpr[1] = gr1; context->gpr[3] = gr3; context->gpr[31] = gr31; context->lr = glr; rmge01::fn_80701000(context, memory, services); gr0 = context->gpr[0]; gr1 = context->gpr[1]; gr3 = context->gpr[3]; gr31 = context->gpr[31]; glr = context->lr; }"), "{body}");
@@ -839,7 +910,10 @@ mod tests {
         let body = probe_body(&abi, call_virtual);
         assert!(body.contains("{ context->gpr[1] = gr1; context->gpr[3] = gr3; context->gpr[31] = gr31; context->lr = glr; galaxy::fast::call_guest_indirect("), "{body}");
         assert!(
-            body.contains("0x80711020u); gr3 = context->gpr[3]; }"),
+            body.contains(&format!(
+                "0x{:08X}u); gr3 = context->gpr[3]; }}",
+                call_virtual + 0x20
+            )),
             "{body}"
         );
         // The other probes are unchanged by the flags except for their calls

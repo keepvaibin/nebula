@@ -67,6 +67,8 @@ void reset_data() {
     put32(0x80100000u, 0x80100100u);
     put32(0x80100108u, g_first_probe);
     for (std::uint32_t i = 1; i < 64; ++i) put32(0x80100000u + 0x200u + i * 4u, 0x3FC00000u);
+    // Float operands of the float_loop and paired_mtx probes (r3 + 0x20..0xFC).
+    for (std::uint32_t i = 8; i < 64; ++i) put32(0x80100000u + i * 4u, 0x3FC00000u);
 }
 
 void reset(galaxy::PpcContext& context, std::uint32_t r4) {
