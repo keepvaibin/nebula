@@ -5257,6 +5257,13 @@ void RendererD3D12::begin_frame(bool present_swap_chain) {
         }
     }
     frame_slot_ = static_cast<unsigned>(frame_index_ % kFramesInFlight);
+    if (replay_valid_ && frame_slot_ == replay_source_slot_) {
+        // The recorded frame's ring segments are about to be rewound.
+        replay_valid_ = false;
+    }
+    if (replay_recording_) {
+        replay_recording_ = false;
+    }
     last_latency_wait_us_ = 0;
     last_frame_slot_wait_us_ = 0;
     last_timestamp_read_us_ = 0;
@@ -5590,16 +5597,296 @@ void RendererD3D12::pace_present_if_needed(
             : ((now.QuadPart - target > max_lag) ? now.QuadPart : target);
 }
 
+void RendererD3D12::present_to_swap_chain() {
+    const bool stall_watch = trace_stall_watch_enabled();
+    const RenderConfig cfg = get_render_config();
+    const UINT vsync = present_sync_interval(std::min(2u, cfg.vsync_interval), cfg.max_fps);
+    const UINT present_flags =
+        (vsync == 0 && tearing_supported_ && !exclusive_fullscreen_active_) ? DXGI_PRESENT_ALLOW_TEARING
+                                           : 0u;
+    const auto stall_watch_pace_start = stall_watch
+        ? std::chrono::steady_clock::now()
+        : std::chrono::steady_clock::time_point{};
+    pace_present_if_needed(cfg.vsync_interval, cfg.max_fps);
+    if (stall_watch) {
+        const double stall_watch_ms =
+            std::chrono::duration<double, std::milli>(
+                std::chrono::steady_clock::now() -
+                stall_watch_pace_start).count();
+        if (stall_watch_ms > 12.0) {
+            std::ostringstream message;
+            message << "[stall-watch] pace_present_if_needed took "
+                      << stall_watch_ms
+                      << "ms vsync=" << cfg.vsync_interval
+                      << " max-fps=" << cfg.max_fps << '\n';
+            std::cerr << message.str();
+        }
+    }
+    const bool collect_present_telemetry = trace_present_stats_enabled();
+    LARGE_INTEGER present_start{};
+    LARGE_INTEGER present_end{};
+    if (collect_present_telemetry) {
+        QueryPerformanceCounter(&present_start);
+    }
+    const auto stall_watch_present_start = stall_watch
+        ? std::chrono::steady_clock::now()
+        : std::chrono::steady_clock::time_point{};
+    static std::uint64_t timeline_present_ordinal = 0u;
+    const bool timeline_present = galaxy::timeline::enabled();
+    if (timeline_present) {
+        galaxy::timeline::record(galaxy::timeline::Event::PresentBegin,
+                             ++timeline_present_ordinal, vsync);
+    }
+    const HRESULT present_hr = swap_chain_->Present(vsync, present_flags);
+    if (timeline_present) {
+        galaxy::timeline::record(galaxy::timeline::Event::PresentEnd,
+                             timeline_present_ordinal);
+        // The OS's own record of which refresh showed which present.
+        DXGI_FRAME_STATISTICS statistics{};
+        // An occluded or not yet displayed swap chain reports a zero
+        // sync time; that is no timeline instant.
+        if (SUCCEEDED(swap_chain_->GetFrameStatistics(&statistics)) &&
+            statistics.SyncQPCTime.QuadPart != 0) {
+            galaxy::timeline::record_at(
+                galaxy::timeline::Event::DisplayStats,
+                static_cast<std::uint64_t>(statistics.SyncQPCTime.QuadPart),
+                (static_cast<std::uint64_t>(statistics.PresentCount) << 32u) |
+                    statistics.PresentRefreshCount,
+                statistics.SyncRefreshCount);
+        }
+        if (timeline_present_ordinal % 30u == 1u) {
+            using DwmTimingFn = HRESULT(WINAPI*)(HWND, DWM_TIMING_INFO*);
+            static const DwmTimingFn dwm_timing = [] {
+                const HMODULE dwm = LoadLibraryW(L"dwmapi.dll");
+                return dwm == nullptr ? nullptr
+                    : reinterpret_cast<DwmTimingFn>(
+                          GetProcAddress(dwm, "DwmGetCompositionTimingInfo"));
+            }();
+            DWM_TIMING_INFO timing{};
+            timing.cbSize = sizeof(timing);
+            if (dwm_timing != nullptr && SUCCEEDED(dwm_timing(nullptr, &timing)) &&
+                timing.qpcVBlank != 0u) {
+                galaxy::timeline::record_at(galaxy::timeline::Event::VBlank, timing.qpcVBlank,
+                                        timing.qpcRefreshPeriod);
+            }
+        }
+    }
+    if (stall_watch) {
+        const double stall_watch_ms =
+            std::chrono::duration<double, std::milli>(
+                std::chrono::steady_clock::now() -
+                stall_watch_present_start).count();
+        if (stall_watch_ms > 12.0) {
+            std::ostringstream message;
+            message << "[stall-watch] IDXGISwapChain::Present took "
+                      << stall_watch_ms << "ms vsync=" << vsync
+                      << " flags=" << present_flags << '\n';
+            std::cerr << message.str();
+        }
+    }
+    if (FAILED(present_hr)) {
+        dump_device_removal(device_.Get());
+        d3d_check(present_hr, "Present");
+    }
+    has_presented_swap_chain_ = true;
+    {
+        LARGE_INTEGER now{};
+        QueryPerformanceCounter(&now);
+        ++measured_present_count_;
+        if (measured_present_window_qpc_ == 0) {
+            measured_present_window_qpc_ = now.QuadPart;
+            measured_present_count_ = 0u;
+        } else if (qpc_frequency_.QuadPart > 0 &&
+                   now.QuadPart - measured_present_window_qpc_ >= qpc_frequency_.QuadPart) {
+            measured_present_hz_.store(
+                static_cast<double>(measured_present_count_) *
+                    static_cast<double>(qpc_frequency_.QuadPart) /
+                    static_cast<double>(now.QuadPart - measured_present_window_qpc_),
+                std::memory_order_relaxed);
+            measured_present_window_qpc_ = now.QuadPart;
+            measured_present_count_ = 0u;
+        }
+    }
+    if (collect_present_telemetry) {
+        QueryPerformanceCounter(&present_end);
+        DXGI_FRAME_STATISTICS shown{};
+        if (SUCCEEDED(swap_chain_->GetFrameStatistics(&shown)) &&
+            shown.PresentCount != last_stats_present_count_) {
+            if (last_stats_present_count_ != 0u &&
+                shown.PresentCount == last_stats_present_count_ + 1u) {
+                const UINT refreshes =
+                    shown.PresentRefreshCount - last_stats_present_refresh_count_;
+                ++telemetry_shown_refreshes_[std::min<UINT>(refreshes, 4u)];
+            }
+            last_stats_present_count_ = shown.PresentCount;
+            last_stats_present_refresh_count_ = shown.PresentRefreshCount;
+        }
+        if (display_refresh_hz_ == 0.0) {
+            refresh_display_rate();
+        }
+    }
+
+    if (collect_present_telemetry && qpc_frequency_.QuadPart != 0) {
+        const double present_ms =
+            static_cast<double>(
+                present_end.QuadPart - present_start.QuadPart) *
+            1000.0 / static_cast<double>(qpc_frequency_.QuadPart);
+        telemetry_present_ms_ += present_ms;
+        telemetry_present_max_ms_ =
+            std::max(telemetry_present_max_ms_, present_ms);
+
+        if (telemetry_window_start_qpc_ == 0) {
+            telemetry_window_start_qpc_ = present_end.QuadPart;
+            telemetry_first_serial_start_ = xfb_present_stats().first_serial_presentations;
+            telemetry_xfb_copy_start_ = xfb_copy_count();
+        }
+        if (last_present_qpc_ != 0) {
+            const double interval_ms =
+                static_cast<double>(
+                    present_end.QuadPart - last_present_qpc_) *
+                1000.0 / static_cast<double>(qpc_frequency_.QuadPart);
+            telemetry_interval_ms_ += interval_ms;
+            ++telemetry_interval_count_;
+            telemetry_interval_max_ms_ =
+                std::max(telemetry_interval_max_ms_, interval_ms);
+        }
+        last_present_qpc_ = present_end.QuadPart;
+        ++telemetry_present_count_;
+
+        const double elapsed_seconds =
+            static_cast<double>(
+                present_end.QuadPart - telemetry_window_start_qpc_) /
+            static_cast<double>(qpc_frequency_.QuadPart);
+        if (elapsed_seconds >= 2.0) {
+            const auto progress = xfb_present_stats();
+            const auto produced_copies = xfb_copy_count();
+            const double present_fps =
+                static_cast<double>(telemetry_present_count_) /
+                elapsed_seconds;
+            const double adjacent_serial_transition_hz =
+                static_cast<double>(
+                    telemetry_adjacent_serial_transition_count_) /
+                elapsed_seconds;
+            const double interval_avg =
+                telemetry_interval_count_ != 0u
+                    ? telemetry_interval_ms_ /
+                          static_cast<double>(telemetry_interval_count_)
+                    : 0.0;
+            const double present_avg =
+                telemetry_present_ms_ /
+                static_cast<double>(telemetry_present_count_);
+            const double pace_wait_avg =
+                telemetry_pace_wait_ms_ /
+                static_cast<double>(telemetry_present_count_);
+            const double latency_avg =
+                telemetry_latency_wait_ms_ /
+                static_cast<double>(telemetry_present_count_);
+            const double gpu_avg =
+                telemetry_gpu_samples_ != 0
+                    ? telemetry_gpu_ms_ /
+                          static_cast<double>(telemetry_gpu_samples_)
+                    : 0.0;
+            const double same_serial_or_replay_hz =
+                std::max(
+                    0.0, present_fps - adjacent_serial_transition_hz);
+            const double same_serial_or_replay_percent =
+                present_fps > 0.0
+                    ? same_serial_or_replay_hz * 100.0 / present_fps
+                    : 0.0;
+
+            // cerr is unit-buffered. Assemble one record before touching
+            // the redirected stream so field formatting cannot turn a
+            // single report into dozens of synchronous redirected writes while
+            // the simulation waits for this render submission's token.
+            std::ostringstream message;
+            message
+                << "[present-stats] fps=" << present_fps
+                << " new-serial-hz="
+                << static_cast<double>(progress.first_serial_presentations - telemetry_first_serial_start_) / elapsed_seconds
+                << " xfb-production-hz="
+                << static_cast<double>(produced_copies - telemetry_xfb_copy_start_) / elapsed_seconds
+                << " first-serial-total=" << progress.first_serial_presentations
+                << " xfb-copy-total=" << produced_copies
+                << " steady-ns=" << std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now().time_since_epoch()).count()
+                << " adjacent-serial-transition-hz="
+                << adjacent_serial_transition_hz
+                << " same-serial-or-replay-hz="
+                << same_serial_or_replay_hz
+                << " same-serial-or-replay-pct="
+                << same_serial_or_replay_percent
+                << " frame-ms(avg/max)=" << interval_avg << "/"
+                << telemetry_interval_max_ms_
+                << " latency-wait-ms(avg/max)=" << latency_avg << "/"
+                << telemetry_latency_wait_max_ms_
+                << " pace-wait-ms(avg/max)=" << pace_wait_avg << "/"
+                << telemetry_pace_wait_max_ms_
+                << " smooth-present="
+                << (smooth_realtime_present_enabled() ? 1 : 0)
+                << " smooth-max-wait-us="
+                << smooth_realtime_present_max_wait_us()
+                << " present-ms(avg/max)=" << present_avg << "/"
+                << telemetry_present_max_ms_
+                << " vsync=" << vsync
+                << " present-flags=" << present_flags
+                << " tearing-enabled=" << (tearing_supported_ ? 1 : 0)
+                << " remote-session="
+                << (GetSystemMetrics(SM_REMOTESESSION) != 0 ? 1 : 0)
+                << " gpu-timing=" << (!gpu_timestamps_enabled() ? "disabled" :
+                    telemetry_gpu_samples_ == 0u ? "pending" : "measured")
+                << " gpu-ms(avg)=";
+            if (telemetry_gpu_samples_ != 0u) message << gpu_avg;
+            else message << "unavailable";
+            message
+                << " gpu-samples=" << telemetry_gpu_samples_
+                << " gpu-total-ms=" << telemetry_gpu_ms_
+                << " gpu-scope=completed-renderer-command-lists"
+                << " no-xfb-presents="
+                << telemetry_no_xfb_present_count_
+                << " backbuffer-clears="
+                << telemetry_backbuffer_clear_count_
+                << " refresh-hz=" << display_refresh_hz_
+                << " shown-refreshes(0/1/2/3/4+)="
+                << telemetry_shown_refreshes_[0] << '/'
+                << telemetry_shown_refreshes_[1] << '/'
+                << telemetry_shown_refreshes_[2] << '/'
+                << telemetry_shown_refreshes_[3] << '/'
+                << telemetry_shown_refreshes_[4]
+                << '\n';
+            std::cerr << message.str();
+            telemetry_shown_refreshes_ = {};
+
+            telemetry_window_start_qpc_ = present_end.QuadPart;
+            telemetry_first_serial_start_ = progress.first_serial_presentations;
+            telemetry_xfb_copy_start_ = produced_copies;
+            telemetry_present_count_ = 0;
+            telemetry_interval_count_ = 0;
+            telemetry_adjacent_serial_transition_count_ = 0;
+            telemetry_interval_ms_ = 0.0;
+            telemetry_interval_max_ms_ = 0.0;
+            telemetry_present_ms_ = 0.0;
+            telemetry_present_max_ms_ = 0.0;
+            telemetry_pace_wait_ms_ = 0.0;
+            telemetry_pace_wait_max_ms_ = 0.0;
+            telemetry_latency_wait_ms_ = 0.0;
+            telemetry_latency_wait_max_ms_ = 0.0;
+            telemetry_gpu_ms_ = 0.0;
+            telemetry_gpu_samples_ = 0;
+            telemetry_no_xfb_present_count_ = 0;
+            telemetry_backbuffer_clear_count_ = 0;
+        }
+    }
+
+    if (!window_shown_ && window_ != nullptr &&
+        !hidden_window_mode_enabled()) {
+        window_shown_ = true;
+        ShowWindowAsync(window_, SW_SHOWNORMAL);
+    }
+}
+
 std::uint64_t RendererD3D12::end_frame(
     bool present_swap_chain,
     SubmissionCallback on_submitted,
     void* submission_context) {
-    // Diagnostic stall watch, gated on its own opt-in flag. Declared here because
-    // this function uses it in two places below; begin_frame() (line ~3682) and
-    // present_frame() (line ~5856) each declare their own from the same helper.
-    // Without this the translation unit does not compile: every `if (stall_watch)`
-    // below is an undeclared identifier.
-    const bool stall_watch = trace_stall_watch_enabled();
     if (timestamp_query_heap_ && timestamp_readback_) {
         command_list_->EndQuery(
             timestamp_query_heap_.Get(), D3D12_QUERY_TYPE_TIMESTAMP,
@@ -5656,270 +5943,7 @@ std::uint64_t RendererD3D12::end_frame(
     }
 
     if (present_swap_chain) {
-        const RenderConfig cfg = get_render_config();
-        const UINT vsync = present_sync_interval(std::min(2u, cfg.vsync_interval), cfg.max_fps);
-        const UINT present_flags =
-            (vsync == 0 && tearing_supported_ && !exclusive_fullscreen_active_) ? DXGI_PRESENT_ALLOW_TEARING
-                                               : 0u;
-        const auto stall_watch_pace_start = stall_watch
-            ? std::chrono::steady_clock::now()
-            : std::chrono::steady_clock::time_point{};
-        pace_present_if_needed(cfg.vsync_interval, cfg.max_fps);
-        if (stall_watch) {
-            const double stall_watch_ms =
-                std::chrono::duration<double, std::milli>(
-                    std::chrono::steady_clock::now() -
-                    stall_watch_pace_start).count();
-            if (stall_watch_ms > 12.0) {
-                std::ostringstream message;
-                message << "[stall-watch] pace_present_if_needed took "
-                          << stall_watch_ms
-                          << "ms vsync=" << cfg.vsync_interval
-                          << " max-fps=" << cfg.max_fps << '\n';
-                std::cerr << message.str();
-            }
-        }
-        const bool collect_present_telemetry = trace_present_stats_enabled();
-        LARGE_INTEGER present_start{};
-        LARGE_INTEGER present_end{};
-        if (collect_present_telemetry) {
-            QueryPerformanceCounter(&present_start);
-        }
-        const auto stall_watch_present_start = stall_watch
-            ? std::chrono::steady_clock::now()
-            : std::chrono::steady_clock::time_point{};
-        static std::uint64_t timeline_present_ordinal = 0u;
-        const bool timeline_present = galaxy::timeline::enabled();
-        if (timeline_present) {
-            galaxy::timeline::record(galaxy::timeline::Event::PresentBegin,
-                                 ++timeline_present_ordinal, vsync);
-        }
-        const HRESULT present_hr = swap_chain_->Present(vsync, present_flags);
-        if (timeline_present) {
-            galaxy::timeline::record(galaxy::timeline::Event::PresentEnd,
-                                 timeline_present_ordinal);
-            // The OS's own record of which refresh showed which present.
-            DXGI_FRAME_STATISTICS statistics{};
-            // An occluded or not yet displayed swap chain reports a zero
-            // sync time; that is no timeline instant.
-            if (SUCCEEDED(swap_chain_->GetFrameStatistics(&statistics)) &&
-                statistics.SyncQPCTime.QuadPart != 0) {
-                galaxy::timeline::record_at(
-                    galaxy::timeline::Event::DisplayStats,
-                    static_cast<std::uint64_t>(statistics.SyncQPCTime.QuadPart),
-                    (static_cast<std::uint64_t>(statistics.PresentCount) << 32u) |
-                        statistics.PresentRefreshCount,
-                    statistics.SyncRefreshCount);
-            }
-            if (timeline_present_ordinal % 30u == 1u) {
-                using DwmTimingFn = HRESULT(WINAPI*)(HWND, DWM_TIMING_INFO*);
-                static const DwmTimingFn dwm_timing = [] {
-                    const HMODULE dwm = LoadLibraryW(L"dwmapi.dll");
-                    return dwm == nullptr ? nullptr
-                        : reinterpret_cast<DwmTimingFn>(
-                              GetProcAddress(dwm, "DwmGetCompositionTimingInfo"));
-                }();
-                DWM_TIMING_INFO timing{};
-                timing.cbSize = sizeof(timing);
-                if (dwm_timing != nullptr && SUCCEEDED(dwm_timing(nullptr, &timing)) &&
-                    timing.qpcVBlank != 0u) {
-                    galaxy::timeline::record_at(galaxy::timeline::Event::VBlank, timing.qpcVBlank,
-                                            timing.qpcRefreshPeriod);
-                }
-            }
-        }
-        if (stall_watch) {
-            const double stall_watch_ms =
-                std::chrono::duration<double, std::milli>(
-                    std::chrono::steady_clock::now() -
-                    stall_watch_present_start).count();
-            if (stall_watch_ms > 12.0) {
-                std::ostringstream message;
-                message << "[stall-watch] IDXGISwapChain::Present took "
-                          << stall_watch_ms << "ms vsync=" << vsync
-                          << " flags=" << present_flags << '\n';
-                std::cerr << message.str();
-            }
-        }
-        if (FAILED(present_hr)) {
-            dump_device_removal(device_.Get());
-            d3d_check(present_hr, "Present");
-        }
-        has_presented_swap_chain_ = true;
-        if (collect_present_telemetry) {
-            QueryPerformanceCounter(&present_end);
-            DXGI_FRAME_STATISTICS shown{};
-            if (SUCCEEDED(swap_chain_->GetFrameStatistics(&shown)) &&
-                shown.PresentCount != last_stats_present_count_) {
-                if (last_stats_present_count_ != 0u &&
-                    shown.PresentCount == last_stats_present_count_ + 1u) {
-                    const UINT refreshes =
-                        shown.PresentRefreshCount - last_stats_present_refresh_count_;
-                    ++telemetry_shown_refreshes_[std::min<UINT>(refreshes, 4u)];
-                }
-                last_stats_present_count_ = shown.PresentCount;
-                last_stats_present_refresh_count_ = shown.PresentRefreshCount;
-            }
-            if (display_refresh_hz_ == 0.0) {
-                refresh_display_rate();
-            }
-        }
-
-        if (collect_present_telemetry && qpc_frequency_.QuadPart != 0) {
-            const double present_ms =
-                static_cast<double>(
-                    present_end.QuadPart - present_start.QuadPart) *
-                1000.0 / static_cast<double>(qpc_frequency_.QuadPart);
-            telemetry_present_ms_ += present_ms;
-            telemetry_present_max_ms_ =
-                std::max(telemetry_present_max_ms_, present_ms);
-
-            if (telemetry_window_start_qpc_ == 0) {
-                telemetry_window_start_qpc_ = present_end.QuadPart;
-                telemetry_first_serial_start_ = xfb_present_stats().first_serial_presentations;
-                telemetry_xfb_copy_start_ = xfb_copy_count();
-            }
-            if (last_present_qpc_ != 0) {
-                const double interval_ms =
-                    static_cast<double>(
-                        present_end.QuadPart - last_present_qpc_) *
-                    1000.0 / static_cast<double>(qpc_frequency_.QuadPart);
-                telemetry_interval_ms_ += interval_ms;
-                ++telemetry_interval_count_;
-                telemetry_interval_max_ms_ =
-                    std::max(telemetry_interval_max_ms_, interval_ms);
-            }
-            last_present_qpc_ = present_end.QuadPart;
-            ++telemetry_present_count_;
-
-            const double elapsed_seconds =
-                static_cast<double>(
-                    present_end.QuadPart - telemetry_window_start_qpc_) /
-                static_cast<double>(qpc_frequency_.QuadPart);
-            if (elapsed_seconds >= 2.0) {
-                const auto progress = xfb_present_stats();
-                const auto produced_copies = xfb_copy_count();
-                const double present_fps =
-                    static_cast<double>(telemetry_present_count_) /
-                    elapsed_seconds;
-                const double adjacent_serial_transition_hz =
-                    static_cast<double>(
-                        telemetry_adjacent_serial_transition_count_) /
-                    elapsed_seconds;
-                const double interval_avg =
-                    telemetry_interval_count_ != 0u
-                        ? telemetry_interval_ms_ /
-                              static_cast<double>(telemetry_interval_count_)
-                        : 0.0;
-                const double present_avg =
-                    telemetry_present_ms_ /
-                    static_cast<double>(telemetry_present_count_);
-                const double pace_wait_avg =
-                    telemetry_pace_wait_ms_ /
-                    static_cast<double>(telemetry_present_count_);
-                const double latency_avg =
-                    telemetry_latency_wait_ms_ /
-                    static_cast<double>(telemetry_present_count_);
-                const double gpu_avg =
-                    telemetry_gpu_samples_ != 0
-                        ? telemetry_gpu_ms_ /
-                              static_cast<double>(telemetry_gpu_samples_)
-                        : 0.0;
-                const double same_serial_or_replay_hz =
-                    std::max(
-                        0.0, present_fps - adjacent_serial_transition_hz);
-                const double same_serial_or_replay_percent =
-                    present_fps > 0.0
-                        ? same_serial_or_replay_hz * 100.0 / present_fps
-                        : 0.0;
-
-                // cerr is unit-buffered. Assemble one record before touching
-                // the redirected stream so field formatting cannot turn a
-                // single report into dozens of synchronous redirected writes while
-                // the simulation waits for this render submission's token.
-                std::ostringstream message;
-                message
-                    << "[present-stats] fps=" << present_fps
-                    << " new-serial-hz="
-                    << static_cast<double>(progress.first_serial_presentations - telemetry_first_serial_start_) / elapsed_seconds
-                    << " xfb-production-hz="
-                    << static_cast<double>(produced_copies - telemetry_xfb_copy_start_) / elapsed_seconds
-                    << " first-serial-total=" << progress.first_serial_presentations
-                    << " xfb-copy-total=" << produced_copies
-                    << " steady-ns=" << std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now().time_since_epoch()).count()
-                    << " adjacent-serial-transition-hz="
-                    << adjacent_serial_transition_hz
-                    << " same-serial-or-replay-hz="
-                    << same_serial_or_replay_hz
-                    << " same-serial-or-replay-pct="
-                    << same_serial_or_replay_percent
-                    << " frame-ms(avg/max)=" << interval_avg << "/"
-                    << telemetry_interval_max_ms_
-                    << " latency-wait-ms(avg/max)=" << latency_avg << "/"
-                    << telemetry_latency_wait_max_ms_
-                    << " pace-wait-ms(avg/max)=" << pace_wait_avg << "/"
-                    << telemetry_pace_wait_max_ms_
-                    << " smooth-present="
-                    << (smooth_realtime_present_enabled() ? 1 : 0)
-                    << " smooth-max-wait-us="
-                    << smooth_realtime_present_max_wait_us()
-                    << " present-ms(avg/max)=" << present_avg << "/"
-                    << telemetry_present_max_ms_
-                    << " vsync=" << vsync
-                    << " present-flags=" << present_flags
-                    << " tearing-enabled=" << (tearing_supported_ ? 1 : 0)
-                    << " remote-session="
-                    << (GetSystemMetrics(SM_REMOTESESSION) != 0 ? 1 : 0)
-                    << " gpu-timing=" << (!gpu_timestamps_enabled() ? "disabled" :
-                        telemetry_gpu_samples_ == 0u ? "pending" : "measured")
-                    << " gpu-ms(avg)=";
-                if (telemetry_gpu_samples_ != 0u) message << gpu_avg;
-                else message << "unavailable";
-                message
-                    << " gpu-samples=" << telemetry_gpu_samples_
-                    << " gpu-total-ms=" << telemetry_gpu_ms_
-                    << " gpu-scope=completed-renderer-command-lists"
-                    << " no-xfb-presents="
-                    << telemetry_no_xfb_present_count_
-                    << " backbuffer-clears="
-                    << telemetry_backbuffer_clear_count_
-                    << " refresh-hz=" << display_refresh_hz_
-                    << " shown-refreshes(0/1/2/3/4+)="
-                    << telemetry_shown_refreshes_[0] << '/'
-                    << telemetry_shown_refreshes_[1] << '/'
-                    << telemetry_shown_refreshes_[2] << '/'
-                    << telemetry_shown_refreshes_[3] << '/'
-                    << telemetry_shown_refreshes_[4]
-                    << '\n';
-                std::cerr << message.str();
-                telemetry_shown_refreshes_ = {};
-
-                telemetry_window_start_qpc_ = present_end.QuadPart;
-                telemetry_first_serial_start_ = progress.first_serial_presentations;
-                telemetry_xfb_copy_start_ = produced_copies;
-                telemetry_present_count_ = 0;
-                telemetry_interval_count_ = 0;
-                telemetry_adjacent_serial_transition_count_ = 0;
-                telemetry_interval_ms_ = 0.0;
-                telemetry_interval_max_ms_ = 0.0;
-                telemetry_present_ms_ = 0.0;
-                telemetry_present_max_ms_ = 0.0;
-                telemetry_pace_wait_ms_ = 0.0;
-                telemetry_pace_wait_max_ms_ = 0.0;
-                telemetry_latency_wait_ms_ = 0.0;
-                telemetry_latency_wait_max_ms_ = 0.0;
-                telemetry_gpu_ms_ = 0.0;
-                telemetry_gpu_samples_ = 0;
-                telemetry_no_xfb_present_count_ = 0;
-                telemetry_backbuffer_clear_count_ = 0;
-            }
-        }
-
-        if (!window_shown_ && window_ != nullptr &&
-            !hidden_window_mode_enabled()) {
-            window_shown_ = true;
-            ShowWindowAsync(window_, SW_SHOWNORMAL);
-        }
+        present_to_swap_chain();
     }
 
     frame_index_ = submitted_frame;
@@ -6144,6 +6168,245 @@ void RendererD3D12::record_motion_debug_view() {
     bind_efb(nullptr);
 }
 
+// ---------------------------------------------------------------------------
+// Interpolated redraw: replay log and sub-frames
+// ---------------------------------------------------------------------------
+
+void RendererD3D12::begin_replay_record() {
+    replay_ops_.clear();
+    replay_draws_.clear();
+    replay_viewports_.clear();
+    replay_clears_.clear();
+    replay_copies_.clear();
+    replay_valid_ = false;
+    replay_recording_ = true;
+    replay_start_output_active_ = output_efb_active_;
+    replay_source_slot_ = frame_slot_;
+}
+
+void RendererD3D12::end_replay_record(bool keep) {
+    replay_recording_ = false;
+    bool has_display_copy = false;
+    for (const ReplayCopy& copy : replay_copies_) {
+        has_display_copy = has_display_copy || copy.mode == 1u;
+    }
+    replay_valid_ = keep && has_display_copy;
+}
+
+bool RendererD3D12::ensure_subframe_resources(unsigned xfb_width, unsigned xfb_height) {
+    if (!subframe_allocators_[0]) {
+        for (auto& allocator : subframe_allocators_) {
+            if (FAILED(device_->CreateCommandAllocator(
+                    D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&allocator)))) {
+                return false;
+            }
+        }
+        D3D12_QUERY_HEAP_DESC qd{};
+        qd.Type = D3D12_QUERY_HEAP_TYPE_TIMESTAMP;
+        qd.Count = kSubframeAllocators * 2u;
+        if (timestamp_frequency_ != 0u) {
+            (void)device_->CreateQueryHeap(&qd, IID_PPV_ARGS(&subframe_query_heap_));
+        }
+        if (subframe_query_heap_) {
+            D3D12_HEAP_PROPERTIES hp{};
+            hp.Type = D3D12_HEAP_TYPE_READBACK;
+            D3D12_RESOURCE_DESC rd{};
+            rd.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+            rd.Width = kSubframeAllocators * 2u * sizeof(std::uint64_t);
+            rd.Height = 1;
+            rd.DepthOrArraySize = 1;
+            rd.MipLevels = 1;
+            rd.SampleDesc.Count = 1;
+            rd.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+            if (FAILED(device_->CreateCommittedResource(
+                    &hp, D3D12_HEAP_FLAG_NONE, &rd, D3D12_RESOURCE_STATE_COPY_DEST,
+                    nullptr, IID_PPV_ARGS(&subframe_readback_)))) {
+                subframe_query_heap_.Reset();
+            }
+        }
+    }
+    if (subframe_xfb_.texture && subframe_xfb_.width == xfb_width &&
+        subframe_xfb_.height == xfb_height) {
+        return true;
+    }
+    if (subframe_xfb_.texture) {
+        wait_for_gpu();
+    }
+    subframe_xfb_ = XfbTexture{};
+    D3D12_HEAP_PROPERTIES hp{};
+    hp.Type = D3D12_HEAP_TYPE_DEFAULT;
+    D3D12_RESOURCE_DESC rd{};
+    rd.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+    rd.Width = xfb_width;
+    rd.Height = xfb_height;
+    rd.DepthOrArraySize = 1;
+    rd.MipLevels = 1;
+    rd.Format = kEfbColorFormat;
+    rd.SampleDesc.Count = 1;
+    rd.Flags = D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
+    if (FAILED(device_->CreateCommittedResource(
+            &hp, D3D12_HEAP_FLAG_NONE, &rd, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,
+            nullptr, IID_PPV_ARGS(&subframe_xfb_.texture)))) {
+        return false;
+    }
+    subframe_xfb_.width = static_cast<std::uint16_t>(xfb_width);
+    subframe_xfb_.height = static_cast<std::uint16_t>(xfb_height);
+    subframe_xfb_.presentable = true;
+    return true;
+}
+
+void RendererD3D12::execute_replay_copy(const ReplayCopy& copy) {
+    if (copy.identity) {
+        detail::record_efb_identity_copy(command_list_.Get(), efb_color_.Get(),
+                                         copy.dest, copy.box);
+        return;
+    }
+    if (copy.mode == 2u) {
+        record_conversion_blit(
+            alt_efb_.color.Get(), copy.width, copy.height, {}, copy.params,
+            false, false, true, 15u, copy.geometry[0], copy.geometry[1],
+            copy.geometry[2], copy.geometry[3], copy.geometry[4]);
+        return;
+    }
+    ID3D12Resource* const dest = copy.mode == 1u ? subframe_xfb_.texture.Get() : copy.dest;
+    D3D12_RESOURCE_BARRIER b{};
+    b.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+    b.Transition.pResource = dest;
+    b.Transition.StateBefore = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+    b.Transition.StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET;
+    b.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+    command_list_->ResourceBarrier(1, &b);
+    record_conversion_blit(
+        dest, copy.width, copy.height, allocate_conversion_rtv(dest), copy.params,
+        copy.depth, copy.intensity, copy.keep_alpha, copy.format,
+        copy.geometry[0], copy.geometry[1], copy.geometry[2], copy.geometry[3],
+        copy.geometry[4]);
+    std::swap(b.Transition.StateBefore, b.Transition.StateAfter);
+    command_list_->ResourceBarrier(1, &b);
+}
+
+bool RendererD3D12::present_replay_subframe(
+    std::span<const D3D12_GPU_VIRTUAL_ADDRESS> record_constants) {
+    if (!replay_valid_ || replay_recording_ || !device_ || !swap_chain_) {
+        return false;
+    }
+    const ReplayCopy* display = nullptr;
+    for (const ReplayCopy& copy : replay_copies_) {
+        if (copy.mode == 1u) display = &copy;
+    }
+    if (display == nullptr || !ensure_subframe_resources(display->width, display->height)) {
+        return false;
+    }
+    if (has_presented_swap_chain_) {
+        wait_for_frame_latency_if_needed(trace_present_stats_enabled());
+    }
+    const unsigned index = subframe_next_;
+    subframe_next_ = (subframe_next_ + 1u) % kSubframeAllocators;
+    if (subframe_fences_[index] != 0u) {
+        wait_for_fence_value(subframe_fences_[index]);
+    }
+    if (subframe_timestamp_pending_[index] && subframe_readback_ && timestamp_frequency_ != 0u) {
+        const SIZE_T offset = static_cast<SIZE_T>(index) * 2u * sizeof(std::uint64_t);
+        const D3D12_RANGE range{offset, offset + 2u * sizeof(std::uint64_t)};
+        void* mapped = nullptr;
+        if (SUCCEEDED(subframe_readback_->Map(0, &range, &mapped))) {
+            const auto* ticks = reinterpret_cast<const std::uint64_t*>(
+                static_cast<const std::byte*>(mapped) + offset);
+            if (ticks[1] >= ticks[0]) {
+                subframe_gpu_ms_ += static_cast<double>(ticks[1] - ticks[0]) * 1000.0 /
+                                    static_cast<double>(timestamp_frequency_);
+                ++subframe_gpu_samples_;
+            }
+            const D3D12_RANGE none{0, 0};
+            subframe_readback_->Unmap(0, &none);
+        }
+        subframe_timestamp_pending_[index] = false;
+    }
+    d3d_check(subframe_allocators_[index]->Reset(), "sub-frame allocator Reset");
+    d3d_check(command_list_->Reset(subframe_allocators_[index].Get(), nullptr),
+              "sub-frame CommandList Reset");
+    if (subframe_query_heap_) {
+        command_list_->EndQuery(subframe_query_heap_.Get(), D3D12_QUERY_TYPE_TIMESTAMP,
+                                index * 2u);
+    }
+    ID3D12DescriptorHeap* heaps[] = {srv_ring_.heap(), sampler_heap_.Get()};
+    command_list_->SetDescriptorHeaps(2, heaps);
+    command_list_->SetGraphicsRootSignature(root_signature_.Get());
+    invalidate_gx_bindings();
+    bound_rt_aux_ = 0u;
+
+    const bool output_before = output_efb_active_;
+    if (output_efb_active_ != replay_start_output_active_) {
+        swap_efb_sets();
+    }
+    replay_playing_ = true;
+    bind_efb(nullptr);
+    const auto far_values = make_efb_clear_values(0u, 0u, 0x00FFFFFFu, 0u);
+    for (const ReplayOp& op : replay_ops_) {
+        switch (op.kind) {
+        case ReplayKind::Draw: {
+            DrawCall call = replay_draws_[op.index];
+            if (call.replay_record >= 0 &&
+                static_cast<std::size_t>(call.replay_record) < record_constants.size() &&
+                record_constants[static_cast<std::size_t>(call.replay_record)] != 0u) {
+                call.vs_constants = record_constants[static_cast<std::size_t>(call.replay_record)];
+            }
+            draw(call);
+            break;
+        }
+        case ReplayKind::BindEfb: {
+            const ReplayViewport& viewport = replay_viewports_[op.index];
+            bind_efb(viewport.valid ? viewport.values : nullptr);
+            break;
+        }
+        case ReplayKind::Clear: {
+            const ReplayClear& c = replay_clears_[op.index];
+            clear_efb(c.ar, c.gb, c.z24, c.color, c.alpha, c.depth, c.x, c.y, c.w, c.h, c.format);
+            break;
+        }
+        case ReplayKind::Copy:
+            execute_replay_copy(replay_copies_[op.index]);
+            break;
+        case ReplayKind::SwapEfbSets:
+            swap_efb_sets();
+            break;
+        case ReplayKind::ClearDepth:
+            command_list_->ClearDepthStencilView(
+                efb_dsv_, D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL,
+                far_values.reversed_depth, 0u, 0u, nullptr);
+            break;
+        }
+    }
+    if (output_efb_active_ != output_before) {
+        swap_efb_sets();
+    }
+    replay_playing_ = false;
+    (void)present(&subframe_xfb_, false);
+    if (subframe_query_heap_) {
+        command_list_->EndQuery(subframe_query_heap_.Get(), D3D12_QUERY_TYPE_TIMESTAMP,
+                                index * 2u + 1u);
+        command_list_->ResolveQueryData(subframe_query_heap_.Get(), D3D12_QUERY_TYPE_TIMESTAMP,
+                                        index * 2u, 2u, subframe_readback_.Get(),
+                                        static_cast<UINT64>(index) * 2u * sizeof(std::uint64_t));
+        subframe_timestamp_pending_[index] = true;
+    }
+    d3d_check(command_list_->Close(), "sub-frame CommandList Close");
+    ID3D12CommandList* lists[] = {command_list_.Get()};
+    queue_->ExecuteCommandLists(1, lists);
+    const std::uint64_t fence = ++next_fence_value_;
+    d3d_check(queue_->Signal(fence_.Get(), fence), "sub-frame Signal");
+    subframe_fences_[index] = fence;
+    // The sub-frame read the recorded frame's segments and appended to the
+    // current ones: neither may be rewound before it completes.
+    fence_values_[replay_source_slot_] = std::max(fence_values_[replay_source_slot_], fence);
+    fence_values_[frame_slot_] = std::max(fence_values_[frame_slot_], fence);
+    if (matrix_segments_ != kFramesInFlight) {
+        matrix_segment_fence_[matrix_segment_] = std::max(matrix_segment_fence_[matrix_segment_], fence);
+    }
+    present_to_swap_chain();
+    return true;
+}
+
 bool RendererD3D12::begin_motion_scene() {
     if (!scene_temporal_ || !ensure_motion_target()) {
         return false;
@@ -6350,6 +6613,9 @@ bool RendererD3D12::ensure_output_efb(unsigned scale) {
 }
 
 void RendererD3D12::swap_efb_sets() {
+    if (replay_recording_) [[unlikely]] {
+        replay_ops_.push_back({ReplayKind::SwapEfbSets, 0u});
+    }
     std::swap(efb_color_, alt_efb_.color);
     std::swap(efb_depth_, alt_efb_.depth);
     std::swap(efb_scale_, alt_efb_.scale);
@@ -6399,13 +6665,41 @@ bool RendererD3D12::begin_output_efb() {
     const unsigned h = kEfbHeight * scale;
     const EfbCopySamplingGeometry sampling =
         compute_xfb_sampling_geometry(params, w, h, efb_scale_);
-    record_conversion_blit(
-        alt_efb_.color.Get(), w, h, {}, params,
-        /*is_depth_copy=*/false, /*intensity=*/false, /*keep_alpha=*/true,
-        /*copy_format=*/15u,
-        sampling.src_x, sampling.src_y, sampling.step_x, sampling.step_y,
-        sampling.filter_row_offset);
-    swap_efb_sets();
+    if (replay_recording_) [[unlikely]] {
+        ReplayCopy copy{};
+        copy.width = w;
+        copy.height = h;
+        copy.params = params;
+        copy.keep_alpha = true;
+        copy.format = 15u;
+        copy.geometry[0] = sampling.src_x;
+        copy.geometry[1] = sampling.src_y;
+        copy.geometry[2] = sampling.step_x;
+        copy.geometry[3] = sampling.step_y;
+        copy.geometry[4] = sampling.filter_row_offset;
+        copy.mode = 2u;
+        replay_ops_.push_back({ReplayKind::Copy, static_cast<std::uint32_t>(replay_copies_.size())});
+        replay_copies_.push_back(copy);
+        const bool recording = replay_recording_;
+        replay_recording_ = false;  // the blit's own EFB rebinding is part of the copy
+        record_conversion_blit(
+            alt_efb_.color.Get(), w, h, {}, params,
+            /*is_depth_copy=*/false, /*intensity=*/false, /*keep_alpha=*/true,
+            /*copy_format=*/15u,
+            sampling.src_x, sampling.src_y, sampling.step_x, sampling.step_y,
+            sampling.filter_row_offset);
+        replay_recording_ = recording;
+        swap_efb_sets();
+        replay_ops_.push_back({ReplayKind::ClearDepth, 0u});
+    } else {
+        record_conversion_blit(
+            alt_efb_.color.Get(), w, h, {}, params,
+            /*is_depth_copy=*/false, /*intensity=*/false, /*keep_alpha=*/true,
+            /*copy_format=*/15u,
+            sampling.src_x, sampling.src_y, sampling.step_x, sampling.step_y,
+            sampling.filter_row_offset);
+        swap_efb_sets();
+    }
     const auto far_values = make_efb_clear_values(0u, 0u, 0x00FFFFFFu, 0u);
     command_list_->ClearDepthStencilView(
         efb_dsv_, D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL,
@@ -6424,6 +6718,13 @@ void RendererD3D12::end_output_efb() {
 // ---------------------------------------------------------------------------
 
 void RendererD3D12::bind_efb(const float xf_vp[6]) {
+    if (replay_recording_) [[unlikely]] {
+        ReplayViewport viewport{};
+        viewport.valid = xf_vp != nullptr;
+        if (xf_vp != nullptr) std::memcpy(viewport.values, xf_vp, sizeof(viewport.values));
+        replay_ops_.push_back({ReplayKind::BindEfb, static_cast<std::uint32_t>(replay_viewports_.size())});
+        replay_viewports_.push_back(viewport);
+    }
     command_list_->OMSetRenderTargets(1, &efb_rtv_, FALSE, &efb_dsv_);
     bound_rt_aux_ = 0u;
 
@@ -6464,6 +6765,11 @@ void RendererD3D12::clear_efb(
     bool color_enable, bool alpha_enable, bool depth_enable,
     unsigned rect_x, unsigned rect_y, unsigned rect_w, unsigned rect_h,
     std::uint8_t pixel_format) {
+    if (replay_recording_) [[unlikely]] {
+        replay_ops_.push_back({ReplayKind::Clear, static_cast<std::uint32_t>(replay_clears_.size())});
+        replay_clears_.push_back({clear_ar, clear_gb, clear_z24, color_enable, alpha_enable,
+                                  depth_enable, rect_x, rect_y, rect_w, rect_h, pixel_format});
+    }
     const D3D12_CPU_DESCRIPTOR_HANDLE rtv = efb_rtv_;
     const D3D12_CPU_DESCRIPTOR_HANDLE dsv = efb_dsv_;
 
@@ -6535,6 +6841,10 @@ void RendererD3D12::clear_efb(
 // ---------------------------------------------------------------------------
 
 void RendererD3D12::draw(const DrawCall& call) {
+    if (replay_recording_) [[unlikely]] {
+        replay_ops_.push_back({ReplayKind::Draw, static_cast<std::uint32_t>(replay_draws_.size())});
+        replay_draws_.push_back(call);
+    }
     if (call.pipeline != bound_pipeline_) {
         command_list_->SetPipelineState(call.pipeline);
         bound_pipeline_ = call.pipeline;
@@ -6883,6 +7193,24 @@ void RendererD3D12::copy_efb_to_xfb(const EfbCopyParams& params, XfbTexture& des
     const EfbCopySamplingGeometry sampling =
         compute_xfb_sampling_geometry(
             params, dest.width, dest.height, efb_scale_);
+    const bool recording = replay_recording_;
+    if (recording) [[unlikely]] {
+        ReplayCopy copy{};
+        copy.width = dest.width;
+        copy.height = dest.height;
+        copy.params = params;
+        copy.keep_alpha = true;
+        copy.format = 15u;
+        copy.geometry[0] = sampling.src_x;
+        copy.geometry[1] = sampling.src_y;
+        copy.geometry[2] = sampling.step_x;
+        copy.geometry[3] = sampling.step_y;
+        copy.geometry[4] = sampling.filter_row_offset;
+        copy.mode = 1u;
+        replay_ops_.push_back({ReplayKind::Copy, static_cast<std::uint32_t>(replay_copies_.size())});
+        replay_copies_.push_back(copy);
+        replay_recording_ = false;
+    }
 
     // Display copies never convert to intensity (Dolphin passes false on the
     // XFB path); gamma + copy filter (deflicker) do apply.
@@ -6893,6 +7221,7 @@ void RendererD3D12::copy_efb_to_xfb(const EfbCopyParams& params, XfbTexture& des
         sampling.src_x, sampling.src_y,
         sampling.step_x, sampling.step_y,
         sampling.filter_row_offset);
+    replay_recording_ = recording;
 
     std::swap(b.Transition.StateBefore, b.Transition.StateAfter);
     command_list_->ResourceBarrier(1, &b);
@@ -7148,6 +7477,16 @@ bool RendererD3D12::copy_efb_to_texture(
     }
     if (const auto source_box = detail::efb_identity_copy_box(
             params, is_depth_copy, efb_scale_, w, h)) {
+        if (replay_recording_) [[unlikely]] {
+            ReplayCopy copy{};
+            copy.dest = dest.texture.Get();
+            copy.width = w;
+            copy.height = h;
+            copy.identity = true;
+            copy.box = *source_box;
+            replay_ops_.push_back({ReplayKind::Copy, static_cast<std::uint32_t>(replay_copies_.size())});
+            replay_copies_.push_back(copy);
+        }
         detail::record_efb_identity_copy(command_list_.Get(), efb_color_.Get(),
             dest.texture.Get(), *source_box);
         ++efb_identity_copies_;
@@ -7176,6 +7515,26 @@ bool RendererD3D12::copy_efb_to_texture(
     const bool keep_alpha =
         params.target_format == 2u || params.target_format == 3u;
 
+    const bool recording = replay_recording_;
+    if (recording) [[unlikely]] {
+        ReplayCopy copy{};
+        copy.dest = dest.texture.Get();
+        copy.width = w;
+        copy.height = h;
+        copy.params = params;
+        copy.depth = is_depth_copy;
+        copy.intensity = params.intensity;
+        copy.keep_alpha = keep_alpha;
+        copy.format = params.target_format;
+        copy.geometry[0] = sampling.src_x;
+        copy.geometry[1] = sampling.src_y;
+        copy.geometry[2] = sampling.step_x;
+        copy.geometry[3] = sampling.step_y;
+        copy.geometry[4] = sampling.filter_row_offset;
+        replay_ops_.push_back({ReplayKind::Copy, static_cast<std::uint32_t>(replay_copies_.size())});
+        replay_copies_.push_back(copy);
+        replay_recording_ = false;
+    }
     record_conversion_blit(
         dest.texture.Get(), w, h, dest.rtv, params,
         is_depth_copy, params.intensity, keep_alpha,
@@ -7183,6 +7542,7 @@ bool RendererD3D12::copy_efb_to_texture(
         sampling.src_x, sampling.src_y,
         sampling.step_x, sampling.step_y,
         sampling.filter_row_offset);
+    replay_recording_ = recording;
 
     std::swap(b.Transition.StateBefore, b.Transition.StateAfter);
     command_list_->ResourceBarrier(1, &b);
