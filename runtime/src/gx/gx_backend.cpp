@@ -8149,7 +8149,11 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
             const RenderConfig cfg = get_render_config();
             const double rate = present_frame_rate(
                 cfg.max_fps, cfg.vsync_interval, renderer_.display_refresh_hz());
-            interp_frames_ = (cfg.upscaler == 2u && fsr3_available())
+            // Experimental until game frames that span several render chunks
+            // replay (status-temporal.md, T2 resume plan).
+            static const bool interpolation_allowed =
+                read_env_u64("GALAXY_EXPERIMENTAL_INTERPOLATION", 0u) != 0u;
+            interp_frames_ = (!interpolation_allowed || (cfg.upscaler == 2u && fsr3_available()))
                 ? 0u : interpolated_frames_per_game_frame(rate);
             interp_recording_ = interp_frames_ != 0u;
             interp_scenes_in_chunk_ = 0u;
@@ -8809,6 +8813,20 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
             interp_cur_.constants.size() == transform_history_.current().size() &&
             !native_settings_overlay_visible();
         renderer_.end_replay_record(keep);
+        static const bool trace_interp = read_env_u64("GALAXY_INTERP_TRACE", 0u) != 0u;
+        static std::uint64_t traced = 0u;
+        if (trace_interp && (traced++ % 240u) == 0u) {
+            std::cerr << "[interp-chunk] frames=" << interp_frames_
+                      << " scenes=" << interp_scenes_in_chunk_
+                      << " ready=" << (interp_scene_ready_ ? 1 : 0)
+                      << " records=" << transform_history_.current().size()
+                      << " constants=" << interp_cur_.constants.size()
+                      << " latest=" << (latest != nullptr ? 1 : 0)
+                      << " keep=" << (keep ? 1 : 0)
+                      << " log=" << (renderer_.replay_available() ? 1 : 0)
+                      << " present=" << (present_swap_chain ? 1 : 0)
+                      << " selected-latest=" << (selected_xfb == latest ? 1 : 0) << '\n';
+        }
         if (keep && renderer_.replay_available()) {
             if (present_swap_chain && selected_xfb == latest) {
                 start_interp_sequence(selected_xfb->guest_addr);
