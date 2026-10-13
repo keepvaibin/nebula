@@ -43,6 +43,7 @@ Start **Nebula** from the Start Menu, pick display settings and press **Play**.
 
 - Keyboard and mouse, an Xbox (XInput) controller, a Switch Pro Controller or a Switch 2 Pro Controller (USB); all remappable. See [docs/KEYBOARD_CONTROLS.md](docs/KEYBOARD_CONTROLS.md).
 - Aspect ratios from 4:3 to 32:9; internal resolution up to 16x.
+- Frame rate: 30, 60, the display's rates up to its refresh, or Unlimited. Above 60, frames between game frames are interpolated (not with FSR 3).
 - Anti-aliasing: Auto (default; SMAA unless the internal resolution already
   supersamples the display), SMAA, FXAA (cheapest), Off. Low-end GPUs: 1x-2x
   internal, SMAA or FXAA, FSR 1 to the display.
