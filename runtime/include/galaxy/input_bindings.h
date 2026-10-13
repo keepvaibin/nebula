@@ -175,11 +175,15 @@ struct SchemeTuning {
     std::uint8_t shake_sensitivity = 3;  // 1 (strong shake) .. 5 (light)
     bool gyro_pointer = false;
     float gyro_sensitivity = 1.0f;  // 1: a picture width per 40 degrees of turn
-    // A controller pointer that rests within pointer_hide_radius (pointer
-    // units) for pointer_hide_seconds disappears until the recenter button
-    // (or, for the stick, a push); 0 seconds never hides.
+    // A controller pointer that stays within pointer_hide_radius (pointer
+    // units) of where it settled for pointer_hide_seconds disappears until it
+    // leaves that radius, the recenter button is pressed or (stick) pushed;
+    // 0 seconds never hides (pointer_control.h PointerRestHide).
     float pointer_hide_seconds = 0.0f;
-    float pointer_hide_radius = 0.03f;
+    float pointer_hide_radius = 0.12f;
+    // Controllers: vibration strength in percent, one of 0 (off), 25, 50, 75,
+    // 100 (rumble.h kStrengthSteps).
+    std::uint8_t rumble = 100;
     friend bool operator==(const SchemeTuning&, const SchemeTuning&) = default;
 };
 
@@ -209,17 +213,21 @@ struct ControlsConfig {
 }
 
 [[nodiscard]] BindingTable default_binding_table(ControlScheme scheme);
-// The defaults shipped before controls version 2 (Native28) and in version 2
-// (Native29), for migration.
+// The defaults shipped before controls version 2 (Native28), in version 2
+// (Native29) and in version 3 (Native29b), for migration.
 [[nodiscard]] BindingTable legacy_binding_table(ControlScheme scheme);
 [[nodiscard]] BindingTable version2_binding_table(ControlScheme scheme);
+[[nodiscard]] BindingTable version3_binding_table(ControlScheme scheme);
 [[nodiscard]] SchemeTuning legacy_scheme_tuning(ControlScheme scheme);
 // runtime_settings.ini `controls_version`; files without it are version 1.
-inline constexpr unsigned kControlsVersion = 3;
+inline constexpr unsigned kControlsVersion = 4;
+// Version 3 still-pointer defaults (pads), replaced in version 4.
+inline constexpr float kVersion3PointerHideSeconds = 4.0f;
+inline constexpr float kVersion3PointerHideRadius = 0.03f;
 // For a file of `version`: every binding list that still equals an earlier
-// version's default takes the current default, and the gyro switch of a
-// version-1 file its new default; values the player changed stay. Returns the
-// number of entries changed.
+// version's default takes the current default, the gyro switch of a version-1
+// file and the still-pointer timing of a version-3 file their new defaults;
+// values the player changed stay. Returns the number of entries changed.
 unsigned migrate_legacy_controls(ControlsConfig& config, unsigned version) noexcept;
 [[nodiscard]] SchemeTuning default_scheme_tuning(ControlScheme scheme);
 [[nodiscard]] ControlsConfig default_controls_config();

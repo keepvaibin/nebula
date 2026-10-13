@@ -8105,17 +8105,22 @@ void GxBackend::present_cached_xfb_on_thread(
 
 void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
     // GALAXY_DIAG_RENDER_BURN_US: busy CPU time per render chunk (diagnostic,
-    // emulates a slower render thread).
+    // emulates a slower render thread), starting GALAXY_DIAG_RENDER_BURN_AFTER_MS
+    // after the first render chunk (default 0).
     {
-        static const std::uint64_t burn_us = [] {
+        const auto read_u64 = [](const char* name) {
             char value[24]{};
             std::size_t length = 0;
-            if (getenv_s(&length, value, sizeof(value), "GALAXY_DIAG_RENDER_BURN_US") != 0 || length <= 1u) {
+            if (getenv_s(&length, value, sizeof(value), name) != 0 || length <= 1u) {
                 return std::uint64_t{0};
             }
             return static_cast<std::uint64_t>(std::strtoull(value, nullptr, 10));
-        }();
-        if (burn_us != 0u) {
+        };
+        static const std::uint64_t burn_us = read_u64("GALAXY_DIAG_RENDER_BURN_US");
+        static const std::uint64_t burn_after_ms = read_u64("GALAXY_DIAG_RENDER_BURN_AFTER_MS");
+        static const auto first_chunk = std::chrono::steady_clock::now();
+        if (burn_us != 0u &&
+            std::chrono::steady_clock::now() - first_chunk >= std::chrono::milliseconds(burn_after_ms)) {
             const auto until = std::chrono::steady_clock::now() + std::chrono::microseconds(burn_us);
             while (std::chrono::steady_clock::now() < until) {
                 _mm_pause();

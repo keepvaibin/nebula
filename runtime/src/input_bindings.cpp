@@ -1,4 +1,5 @@
 #include "galaxy/input_bindings.h"
+#include "galaxy/rumble.h"
 
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
@@ -222,6 +223,7 @@ std::string format_float_c(float value) {
 }
 
 constexpr const char* kMotionNames[] = {"off", "remote", "nunchuk"};
+static_assert(SchemeTuning{}.rumble == rumble::kDefaultStrength);
 
 }  // namespace
 
@@ -312,13 +314,8 @@ BindingTable version2_binding_table(ControlScheme scheme) {
     return table;
 }
 
-// The Super Mario Galaxy on Switch shape, with Star Bits on the left
-// shoulder only (the player's choice over Nintendo's ZR): A or B jump (B
-// backs out of menus), L/LB Star Bits, both triggers crouch, left-stick click
-// resets the camera, X/Y (Xbox also RB) or a shake spin, R / right-stick
-// click recenters, the gyro points and the right stick turns the camera (the
-// pointer when the gyro is off; Xbox: the pointer).
-BindingTable default_binding_table(ControlScheme scheme) {
+// The defaults shipped in controls version 3 (Native29b), for migration.
+BindingTable version3_binding_table(ControlScheme scheme) {
     BindingTable table = version2_binding_table(scheme);
     if (scheme == ControlScheme::Keyboard) {
         return table;
@@ -327,6 +324,29 @@ BindingTable default_binding_table(ControlScheme scheme) {
     set(table, T::B, {button(pad::kLeftShoulderBit)});
     set(table, T::Z, {axis_pos(PadAxis::LeftTrigger), axis_pos(PadAxis::RightTrigger)});
     set(table, T::C, {button(pad::kLeftStickBit)});
+    return table;
+}
+
+// The Super Mario Galaxy on Switch shape with the player's choices: A or B
+// jump (B backs out of menus), L/LB Star Bits, ZL/LT crouch, X/Y/ZR (Xbox
+// X/Y/RB/RT) or a shake spin, left-stick click resets the camera, R /
+// right-stick click recenters (held: pinned at the centre), the gyro points
+// and the right stick turns the camera (the pointer when the gyro is off;
+// Xbox: the pointer).
+BindingTable default_binding_table(ControlScheme scheme) {
+    BindingTable table = version3_binding_table(scheme);
+    if (scheme == ControlScheme::Keyboard) {
+        return table;
+    }
+    using T = WiiTarget;
+    set(table, T::Z, {axis_pos(PadAxis::LeftTrigger)});
+    if (scheme == ControlScheme::Xbox) {
+        set(table, T::Shake, {button(pad::kWestBit), button(pad::kNorthBit),
+                              button(pad::kRightShoulderBit), axis_pos(PadAxis::RightTrigger)});
+    } else {
+        set(table, T::Shake, {button(pad::kWestBit), button(pad::kNorthBit),
+                              axis_pos(PadAxis::RightTrigger)});
+    }
     return table;
 }
 
@@ -361,6 +381,11 @@ SchemeTuning default_scheme_tuning(ControlScheme scheme) {
     if (scheme_has_motion(scheme)) {
         tuning.gyro_pointer = true;
     }
+    if (scheme_is_gamepad(scheme)) {
+        // Still-pointer hiding (pointer_control.h kDefaultPointerHide*).
+        tuning.pointer_hide_seconds = 2.0f;
+        tuning.pointer_hide_radius = 0.12f;
+    }
     return tuning;
 }
 
@@ -370,10 +395,12 @@ unsigned migrate_legacy_controls(ControlsConfig& config, unsigned version) noexc
         const auto scheme = static_cast<ControlScheme>(s);
         const BindingTable legacy = legacy_binding_table(scheme);
         const BindingTable version2 = version2_binding_table(scheme);
+        const BindingTable version3 = version3_binding_table(scheme);
         const BindingTable current = default_binding_table(scheme);
         for (std::size_t t = 0; t < kWiiTargetCount; ++t) {
             TargetBindings& bindings = config.tables[s].targets[t];
-            const bool old_default = bindings == legacy.targets[t] || bindings == version2.targets[t];
+            const bool old_default = bindings == legacy.targets[t] || bindings == version2.targets[t] ||
+                                     bindings == version3.targets[t];
             if (old_default && bindings != current.targets[t]) {
                 bindings = current.targets[t];
                 ++changed;
@@ -386,6 +413,16 @@ unsigned migrate_legacy_controls(ControlsConfig& config, unsigned version) noexc
             legacy_tuning.gyro_pointer != current_tuning.gyro_pointer) {
             tuning.gyro_pointer = current_tuning.gyro_pointer;
             ++changed;
+        }
+        if (version < 4u && scheme_is_gamepad(scheme)) {
+            if (tuning.pointer_hide_seconds == kVersion3PointerHideSeconds) {
+                tuning.pointer_hide_seconds = current_tuning.pointer_hide_seconds;
+                ++changed;
+            }
+            if (tuning.pointer_hide_radius == kVersion3PointerHideRadius) {
+                tuning.pointer_hide_radius = current_tuning.pointer_hide_radius;
+                ++changed;
+            }
         }
     }
     return changed;
@@ -606,6 +643,8 @@ bool apply_controls_setting(ControlsConfig& config, std::string_view key_text, s
         for (std::size_t i = 0; i < std::size(kMotionNames); ++i) {
             if (iequals(text, kMotionNames[i])) tuning.motion_shake = static_cast<MotionShake>(i);
         }
+    } else if (name == "rumble" && parse_float_c(value, number)) {
+        tuning.rumble = rumble::snap_strength(number);
     }
     config = sanitize_controls_config(config);
     return true;
@@ -626,6 +665,7 @@ ControlsConfig sanitize_controls_config(ControlsConfig config) noexcept {
         tuning.pointer_hide_radius = clamp_or(tuning.pointer_hide_radius, 0.0f, 0.5f, defaults.pointer_hide_radius);
         tuning.shake_sensitivity = static_cast<std::uint8_t>(
             std::clamp<int>(tuning.shake_sensitivity, 1, kShakeSensitivitySteps));
+        tuning.rumble = rumble::snap_strength(static_cast<float>(tuning.rumble));
         if (static_cast<unsigned>(tuning.motion_shake) > 2u) tuning.motion_shake = MotionShake::Off;
         if (!scheme_has_motion(static_cast<ControlScheme>(s))) {
             tuning.motion_shake = MotionShake::Off;
@@ -651,6 +691,7 @@ std::string format_controls_settings(const ControlsConfig& config) {
             text += "tune." + prefix + "pointer_deadzone=" + format_float_c(tuning.pointer_deadzone) + "\n";
             text += "tune." + prefix + "pointer_hide_seconds=" + format_float_c(tuning.pointer_hide_seconds) + "\n";
             text += "tune." + prefix + "pointer_hide_radius=" + format_float_c(tuning.pointer_hide_radius) + "\n";
+            text += "tune." + prefix + "rumble=" + std::to_string(tuning.rumble) + "\n";
         }
         text += "tune." + prefix + "pointer_speed=" + format_float_c(tuning.pointer_speed) + "\n";
         text += "tune." + prefix + "invert_pointer_y=" + (tuning.invert_pointer_y ? "1" : "0") + "\n";

@@ -1,4 +1,5 @@
 #include "galaxy/runtime_settings.h"
+#include "galaxy/input_bindings.h"
 
 #include <Windows.h>
 
@@ -338,7 +339,7 @@ int main() {
         galaxy::save_runtime_settings_to_file() &&
             read_text(settings_path).find("input_mode=auto") !=
                 std::string::npos &&
-            read_text(settings_path).find("controls_version=3") !=
+            read_text(settings_path).find("controls_version=" + std::to_string(galaxy::input::kControlsVersion)) !=
                 std::string::npos &&
             read_text(settings_path).find("audio_ambience_gain=") !=
                 std::string::npos,

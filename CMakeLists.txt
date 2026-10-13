@@ -475,7 +475,9 @@ target_link_libraries(
 add_library(galaxy_native_input STATIC
     runtime/src/native_input.cpp
     runtime/src/pointer_control.cpp
-    runtime/src/switch_controller.cpp)
+    runtime/src/rumble.cpp
+    runtime/src/switch_controller.cpp
+    runtime/src/tilt.cpp)
 target_link_libraries(galaxy_native_input PUBLIC galaxy_runtime_abi)
 if(MSVC)
     target_compile_options(galaxy_native_input PRIVATE /GS- /GR- /Oi /favor:INTEL64)

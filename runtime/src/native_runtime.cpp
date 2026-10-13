@@ -20,6 +20,7 @@
 #include "galaxy/ppc_float.h"
 #include "galaxy/psmtx_guard_trace.h"
 #include "galaxy/native_host.h"
+#include "galaxy/controller_hid.h"
 #include "galaxy/jaudio_host_mixer.h"
 #include "galaxy/flat_guest_memory.h"
 #include "galaxy/dsp_timing_runtime.h"
@@ -2781,6 +2782,15 @@ struct RuntimeState {
     std::uint8_t native_mouse_restore_inside{};
     bool native_mouse_callback_depth{};
     std::uint64_t native_mouse_store_serial{}, native_mouse_queries{}, native_mouse_fallbacks{};
+    // Stores answered without this scene's field: newest completed field, last depth.
+    std::uint64_t native_mouse_field_fallbacks{}, native_mouse_last_depth_fallbacks{};
+    std::optional<std::uint32_t> native_mouse_last_depth;
+    // Test hooks: GALAXY_TEST_POINTER_DEPTH_MISS_FROM_VI=<vi> treats this
+    // scene's field as unmatched at every store from that VI on (0: never);
+    // GALAXY_POINTER_DEPTH_FALLBACK=0 leaves such a store unanswered (the
+    // behaviour before the fallback).
+    std::uint64_t test_pointer_depth_miss_from_vi = read_env_u64("GALAXY_TEST_POINTER_DEPTH_MISS_FROM_VI", 0u);
+    bool pointer_depth_fallback = read_env_flag("GALAXY_POINTER_DEPTH_FALLBACK", true);
     std::uint64_t native_mouse_capture_ns{}, native_mouse_capture_max_ns{};
     std::uint64_t native_mouse_worker_ns{}, native_mouse_worker_max_ns{}, native_mouse_capture_busy{};
     std::uint64_t native_mouse_field_waits{},native_mouse_field_wait_ns{},native_mouse_field_wait_max_ns{};
@@ -2805,6 +2815,13 @@ struct RuntimeState {
     // fix for the other.
     std::uint64_t efb_peek_sync_ns{}, efb_peek_readback_ns{};
     unsigned native_mouse_trace_rows{}, native_mouse_callback_trace_rows{};
+    // GALAXY_TRACE_NATIVE_MOUSE_POINTER_ROWS: rows of the pointer-depth trace.
+    unsigned native_mouse_trace_row_limit = static_cast<unsigned>(std::clamp<std::uint64_t>(
+        read_env_u64("GALAXY_TRACE_NATIVE_MOUSE_POINTER_ROWS", 400u), 1u, 1000000u));
+    unsigned native_mouse_world_trace_rows{};
+    // GALAXY_TRACE_NATIVE_MOUSE_POINTER_FROM_VI: first VI of the world-point trace.
+    std::uint64_t native_mouse_world_trace_from_vi =
+        read_env_u64("GALAXY_TRACE_NATIVE_MOUSE_POINTER_FROM_VI", 0u);
     std::uint64_t native_mouse_callback_entries{};
     std::array<std::uint32_t,2> native_mouse_trace_xy{};
     bool native_mouse_trace_xy_valid{};
@@ -24361,9 +24378,9 @@ void call_guest_impl_body(
     const auto mouse_boundary_object=context->gpr[3];
     guest_address = normalize_executable_address(state, guest_address);
     const bool trace_mouse_past = guest_address==0x80385034u &&
-        state.trace_native_mouse_pointer && state.native_mouse_trace_rows<64u &&
+        state.trace_native_mouse_pointer && state.native_mouse_trace_rows<state.native_mouse_trace_row_limit &&
         state.synthetic_pointer_last_read.sample.active &&
-        state.synthetic_pointer_last_read.sample.origin==galaxy::host::SyntheticKpadPointerOrigin::PhysicalMouse &&
+        native_pointer_depth_origin(state.synthetic_pointer_last_read.sample.origin) &&
         (!state.native_mouse_trace_xy_valid || state.native_mouse_trace_xy !=
             std::array<std::uint32_t,2>{std::bit_cast<std::uint32_t>(state.synthetic_pointer_last_read.sample.x),
                                        std::bit_cast<std::uint32_t>(state.synthetic_pointer_last_read.sample.y)});
@@ -24717,13 +24734,55 @@ void call_guest_impl_body(
                 screen_height=galaxy::guest_load_u16(memory,rmode+6u,state.services,context->pc);
                 framebuffer_width=galaxy::guest_load_u16(memory,rmode+4u,state.services,context->pc);
             }
+            // The drawn pointer is visible up to kPointerVisibleLimit (1.02);
+            // its query uses the nearest picture point.
+            const float query_x=std::clamp(selected.x,-1.0f,1.0f), query_y=std::clamp(selected.y,-1.0f,1.0f);
+            if (state.test_pointer_depth_miss_from_vi != 0u &&
+                state.vi_retrace_count >= state.test_pointer_depth_miss_from_vi) matches=false;
             auto query=matches && selected.active ? galaxy::input::mouse_pointer_query(
-                selected.x,selected.y,screen_width,screen_height,framebuffer_width) : std::nullopt;
+                query_x,query_y,screen_width,screen_height,framebuffer_width) : std::nullopt;
             if (screen_only) {
                 const auto position=galaxy::input::mouse_pointer_position(selected.x,selected.y,screen_width,screen_height);
                 if (position) query=galaxy::input::MousePointerQuery{position->x,position->y,0u,0u};
             }
+            // StarPointerPeekZ's own GXPeekZ callback does not deliver here
+            // (+0x21 is clear at every store), so a store left unanswered
+            // keeps the world point of an older position and Star Bits fly
+            // there. Every active pointer is answered: with this scene's
+            // field when its identity matches (above), otherwise at the
+            // current position with the newest completed field's depth or,
+            // without one, the last answered depth.
+            std::optional<std::uint32_t> fallback_depth;
+            if (!query && !screen_only && state.pointer_depth_fallback && store_owner_matches &&
+                state.native_mouse_pointer_frame &&
+                state.synthetic_kpad_fresh_mouse_pointer && selected.active &&
+                native_pointer_depth_origin(selected.origin) &&
+                selected.mode_generation==mouse_mode.generation &&
+                mapped_guest_range(&mem,context->gpr[4],28u) && mapped_guest_range(&mem,context->gpr[5],24u)) {
+                if (!frame || screen_width==0u || screen_height==0u || framebuffer_width==0u) {
+                    const auto aspect=galaxy::experimental_effective_guest_aspect(state.services);
+                    screen_width=aspect ? aspect->guest_screen_width : 832u;
+                    const auto video=mem.read_u32(context->gpr[13]-0x2450u);
+                    const auto rmode=mem.read_u32(video+4u);
+                    screen_height=galaxy::guest_load_u16(memory,rmode+6u,state.services,context->pc);
+                    framebuffer_width=galaxy::guest_load_u16(memory,rmode+4u,state.services,context->pc);
+                }
+                if (const auto position=galaxy::input::mouse_pointer_query(
+                        query_x,query_y,screen_width,screen_height,framebuffer_width)) {
+                    if (depth_complete && depth_success) {
+                        fallback_depth=depth_field->depth_at(position->efb_y*640u+position->efb_x);
+                        ++state.native_mouse_field_fallbacks;
+                    } else if (state.native_mouse_last_depth) {
+                        fallback_depth=*state.native_mouse_last_depth;
+                        ++state.native_mouse_last_depth_fallbacks;
+                    }
+                    if (fallback_depth) query=position;
+                }
+            }
             const auto previous_x=mem.read_u32(self+0x18u), previous_y=mem.read_u32(self+0x1cu);
+            // The game's own depth result (StarPointerPeekZ::drawSyncCallback
+            // sets +0x21) before any repair; trace only.
+            const auto game_depth_valid=trace_mouse_past ? read_guest_u8(mem,self+0x21u) : 0u;
             if (query) {
                 if(state.native_mouse_restore_controller) throw RuntimeFailure("overlapping native mouse position transaction");
                 state.native_mouse_restore_controller=self;
@@ -24737,7 +24796,10 @@ void call_guest_impl_body(
                     // a new query or run inverse projection on that pairing.
                     galaxy::guest_store_u8(memory,self+0x21u,0u,state.services,context->pc);
                 } else {
-                    galaxy::guest_store_u32(memory,self+0x24u,depth_field->depth_at(query->efb_y*640u+query->efb_x),state.services,context->pc);
+                    const std::uint32_t depth=fallback_depth ? *fallback_depth
+                        : depth_field->depth_at(query->efb_y*640u+query->efb_x);
+                    if (!fallback_depth) state.native_mouse_last_depth=depth;
+                    galaxy::guest_store_u32(memory,self+0x24u,depth,state.services,context->pc);
                     galaxy::guest_store_u8(memory,self+0x21u,1u,state.services,context->pc);
                 }
                 ++state.native_mouse_queries;
@@ -24776,9 +24838,39 @@ void call_guest_impl_body(
                    <<" depth-controller="<<hexadecimal(frame?frame->controller:0u)
                    <<" sample=("<<selected.x<<','<<selected.y<<") old-pos=("<<std::bit_cast<float>(previous_x)<<','<<std::bit_cast<float>(previous_y)
                    <<") new-pos=("<<(query?query->screen_x:std::bit_cast<float>(previous_x))<<','<<(query?query->screen_y:std::bit_cast<float>(previous_y))
-                   <<") query=("<<(query?query->efb_x:0u)<<','<<(query?query->efb_y:0u)<<") copy-serial="<<galaxy::gx::xfb_copy_count()<<'\n';
+                   <<") query=("<<(query?query->efb_x:0u)<<','<<(query?query->efb_y:0u)<<") copy-serial="<<galaxy::gx::xfb_copy_count()
+                   <<" game-depth-valid="<<static_cast<unsigned>(game_depth_valid)
+                   <<" answer="<<(!query ? "none" : screen_only ? "screen" : !fallback_depth ? "exact"
+                                  : depth_complete && depth_success ? "field" : "last")<<'\n';
                 std::cerr<<row.str();
             }
+        }
+    }
+    // The world point the store produced (StarPointerController+0x64, from
+    // invProject of the stored screen position and depth): trace only.
+    if (guest_address == 0x803852BCu && state.trace_native_mouse_pointer && state.address_space &&
+        state.vi_retrace_count >= state.native_mouse_world_trace_from_vi &&
+        state.native_mouse_world_trace_rows < state.native_mouse_trace_row_limit &&
+        state.synthetic_pointer_last_read.sample.active &&
+        mapped_guest_range(state.address_space,context->gpr[3],0x74u) &&
+        state.address_space->read_u32(context->gpr[3])==0u) {
+        auto& mem=*state.address_space;
+        const auto self=context->gpr[3];
+        const auto f32=[&](std::uint32_t offset){ return std::bit_cast<float>(mem.read_u32(self+offset)); };
+        // One row per change of the world point or the sample.
+        static std::array<std::uint32_t,5> s_last_world{};
+        const std::array<std::uint32_t,5> world_key{mem.read_u32(self+0x64u),mem.read_u32(self+0x68u),
+            mem.read_u32(self+0x6cu),std::bit_cast<std::uint32_t>(state.synthetic_pointer_last_read.sample.x),
+            std::bit_cast<std::uint32_t>(state.synthetic_pointer_last_read.sample.y)};
+        if (world_key != s_last_world) {
+        s_last_world = world_key;
+        ++state.native_mouse_world_trace_rows;
+        std::ostringstream row;
+        row<<"[pointer-world] vi="<<state.vi_retrace_count<<" sample=("<<state.synthetic_pointer_last_read.sample.x<<','
+           <<state.synthetic_pointer_last_read.sample.y<<") screen=("<<f32(0x18u)<<','<<f32(0x1cu)<<") inside="
+           <<static_cast<unsigned>(read_guest_u8(mem,self+0x20u))<<" depth-valid="<<static_cast<unsigned>(read_guest_u8(mem,self+0x21u))
+           <<" world=("<<f32(0x64u)<<','<<f32(0x68u)<<','<<f32(0x6cu)<<") past-depth="<<mem.read_u32(self+0x10u)<<'\n';
+        std::cerr<<row.str();
         }
     }
     }
@@ -31823,6 +31915,8 @@ static void prepare_crash_dump_directory() {
 // philosophy exists to surface, not hide.
 static LONG WINAPI galaxy_unhandled_exception_filter(
     EXCEPTION_POINTERS* exception_info) {
+    // A crash never leaves a controller vibrating (bounded writes).
+    galaxy::host::stop_all_rumble();
     const std::wstring dir = g_crash_dump_dir[0] != L'\0'
         ? std::wstring(g_crash_dump_dir) : std::wstring(L".");
     wchar_t path[MAX_PATH]{};
@@ -32908,7 +33002,9 @@ int wmain(int argc, wchar_t** argv) {
                 <<" capture-total-us="<<state.native_mouse_capture_ns/1000.0<<" capture-max-us="<<state.native_mouse_capture_max_ns/1000.0
                 <<" query-total-us="<<state.native_mouse_query_ns/1000.0<<" query-max-us="<<state.native_mouse_query_max_ns/1000.0
                 <<" selected-to-store-total-us="<<state.native_mouse_selected_to_store_ns/1000.0
-                <<" selected-to-store-max-us="<<state.native_mouse_selected_to_store_max_ns/1000.0<<" async-depth-answers="<<state.native_mouse_async_depth_answers<<" async-depth-missing="<<state.native_mouse_async_depth_missing<<'\n';
+                <<" selected-to-store-max-us="<<state.native_mouse_selected_to_store_max_ns/1000.0<<" async-depth-answers="<<state.native_mouse_async_depth_answers<<" async-depth-missing="<<state.native_mouse_async_depth_missing
+                <<" field-fallbacks="<<state.native_mouse_field_fallbacks
+                <<" last-depth-fallbacks="<<state.native_mouse_last_depth_fallbacks<<'\n';
             // EFB peeks block the simulation thread on the render thread twice
             // per call (pending-FIFO drain, then a frame-queue round-trip). The
             // three numbers below are the only ones that say whether that

@@ -9,6 +9,7 @@
 #include "galaxy/native_input.h"
 #include "galaxy/native_settings_pad.h"
 #include "galaxy/pointer_control.h"
+#include "galaxy/tilt.h"
 #include "galaxy/diagnostic_stick_lease.h"
 #include "galaxy/experimental_ultrawide_aspect.h"
 #include "galaxy/gx_d3d12.h"
@@ -6744,7 +6745,24 @@ struct LivePad {
     bool imu_live = false;
     float gyro_x = 0.0f;
     float gyro_y = 0.0f;
+    // Controller up (gravity reaction, SDL frame) when the IMU knows it.
+    bool gravity_valid = false;
+    galaxy::input::tilt::Vec3 gravity{0.0f, 1.0f, 0.0f};
+    // XInput user index or Switch worker slot (with the scheme: identity).
+    std::uint8_t device_slot = 0xFF;
 };
+
+// Vibration (controller_hid.h): the controller in use, its strength setting
+// and the window focus, set by the live input path each report and read when
+// the game's motor state is published. Emulation thread only; the replay
+// path leaves it empty (no controller vibrates).
+struct RumbleHost {
+    RumbleTarget target{};
+    std::uint8_t strength = 0;
+    bool focused = false;
+};
+RumbleHost g_rumble_host{};
+void publish_rumble_state(const GuestAddressSpace& space, bool motor_on) noexcept;
 
 // `right_deadzone` is radial (pointer_control.h); the right stick must arrive
 // without a per-axis dead zone.
@@ -6787,6 +6805,9 @@ std::size_t collect_switch_pads(const galaxy::input::ControlsConfig& config,
         live.shake_nunchuk = shaking && tuning.motion_shake == galaxy::input::MotionShake::Nunchuk;
         live.gyro_x = pads[i].gyro_x;
         live.gyro_y = pads[i].gyro_y;
+        live.gravity_valid = pads[i].gravity_valid && pads[i].imu_live;
+        live.gravity = pads[i].gravity;
+        live.device_slot = pads[i].slot;
     }
     return count;
 }
@@ -8218,6 +8239,36 @@ NativeInputScriptOverlay build_native_input_script_overlay(
     return overlay;
 }
 
+// In a tilt section (tilt.h) the virtual remote's accelerometer reports the
+// controller's tilt or the stick's; elsewhere it keeps its rest reading. A
+// shake pulse applied afterwards still overrides it.
+// GALAXY_TRACE_TILT=1 logs section changes and the reading twice a second.
+void apply_tilt_accel(galaxy::input::WiimoteInputSnapshot& snapshot,
+                      galaxy::input::tilt::Tilt& state,
+                      galaxy::input::tilt::Section section,
+                      const galaxy::input::tilt::Vec3* controller_up,
+                      float stick_x,
+                      float stick_y,
+                      bool recenter,
+                      std::uint64_t current_vi) {
+    const galaxy::input::tilt::Section previous = state.section;
+    const galaxy::input::tilt::Tilt::Output tilt =
+        state.update(section, controller_up, stick_x, stick_y, recenter);
+    static const bool trace = read_env_flag("GALAXY_TRACE_TILT");
+    if (trace && (previous != state.section || (tilt.active && current_vi % 30u == 0u))) {
+        std::cerr << "[tilt] vi=" << current_vi << " section=" << galaxy::input::tilt::section_name(state.section)
+                  << " source=" << (tilt.from_stick ? "stick" : "motion") << " game=(" << tilt.game[0] << ','
+                  << tilt.game[1] << ',' << tilt.game[2] << ")\n";
+    }
+    if (!tilt.active) {
+        return;
+    }
+    const galaxy::input::tilt::Counts counts = galaxy::input::tilt::accel_counts(tilt.game);
+    snapshot.accel.x = counts.x;
+    snapshot.accel.y = counts.y;
+    snapshot.accel.z = counts.z;
+}
+
 galaxy::input::WiimoteInputSnapshot build_replayed_hid_input_snapshot(
     std::uint8_t report_mode,
     std::uint64_t current_vi,
@@ -8227,7 +8278,8 @@ galaxy::input::WiimoteInputSnapshot build_replayed_hid_input_snapshot(
     bool ir_input_enabled,
     float& final_pointer_x,
     float& final_pointer_y,
-    bool& final_pointer_active) {
+    bool& final_pointer_active,
+    galaxy::input::tilt::Section tilt_section) {
     galaxy::input::WiimoteInputSnapshot snapshot{};
     const bool replay_controller_active = replay_xinput_has_input(replay);
     const bool force_controller =
@@ -8309,7 +8361,7 @@ galaxy::input::WiimoteInputSnapshot build_replayed_hid_input_snapshot(
     static std::uint64_t s_replay_pointer_vi = 0u;
     static int s_replay_mouse_x = -1;
     static int s_replay_mouse_y = -1;
-    static bool s_replay_recenter_previous = false;
+    static galaxy::input::RecenterHold s_replay_recenter{};
     // Each replay log starts from a fresh pointer.
     static const void* s_replay_log_identity = nullptr;
     if (const void* log = active_native_input_replay_log(); log != s_replay_log_identity) {
@@ -8318,7 +8370,7 @@ galaxy::input::WiimoteInputSnapshot build_replayed_hid_input_snapshot(
         s_replay_owner = {};
         s_replay_pointer_vi = 0u;
         s_replay_mouse_x = s_replay_mouse_y = -1;
-        s_replay_recenter_previous = false;
+        s_replay_recenter = {};
     }
     const float dt = s_replay_pointer_vi == 0u || current_vi <= s_replay_pointer_vi
         ? 0.0f
@@ -8367,15 +8419,15 @@ galaxy::input::WiimoteInputSnapshot build_replayed_hid_input_snapshot(
     const bool controller_recenter =
         pad_allowed && replay_pad_held(replay, XINPUT_GAMEPAD_RIGHT_THUMB);
     const bool recenter_held = (keys_allowed && key(23)) || controller_recenter;
-    if (recenter_held && !s_replay_recenter_previous) {
+    const galaxy::input::RecenterHold::Output recenter = s_replay_recenter.update(recenter_held);
+    if (recenter.pressed) {
         s_replay_owner.owner = controller_recenter ? galaxy::input::PointerSource::Stick
                                                    : galaxy::input::PointerSource::Keys;
-        s_replay_owner.last_active_us = now_us;
-        s_replay_pointer_x = 0.0f;
-        s_replay_pointer_y = 0.0f;
     }
-    s_replay_recenter_previous = recenter_held;
-    switch (s_replay_owner.update(activity, now_us)) {
+    if (recenter.pinned) {
+        s_replay_owner.last_active_us = now_us;
+    }
+    switch (recenter.pinned ? s_replay_owner.owner : s_replay_owner.update(activity, now_us)) {
     case galaxy::input::PointerSource::Mouse:
         if (mouse_visible) {
             s_replay_pointer_x = replay_pointer.x;
@@ -8406,6 +8458,13 @@ galaxy::input::WiimoteInputSnapshot build_replayed_hid_input_snapshot(
         }
         break;
     }
+    if (recenter.pinned) {
+        // Held recenter: the pointer stays at the centre (pointer_control.h).
+        s_replay_pointer_x = 0.0f;
+        s_replay_pointer_y = 0.0f;
+        pointer_active = true;
+        pointer_source = controller_recenter ? "controller" : "replay";
+    }
     if (script.has_pointer) {
         s_replay_pointer_x = script.pointer_x;
         s_replay_pointer_y = script.pointer_y;
@@ -8418,6 +8477,11 @@ galaxy::input::WiimoteInputSnapshot build_replayed_hid_input_snapshot(
     final_pointer_x = s_replay_pointer_x;
     final_pointer_y = s_replay_pointer_y;
     final_pointer_active = pointer_active;
+
+    // Tilt sections steer with the replayed stick (tilt.h).
+    static galaxy::input::tilt::Tilt s_replay_tilt{};
+    apply_tilt_accel(snapshot, s_replay_tilt, tilt_section, nullptr, stick_x, stick_y,
+                     recenter.pressed, current_vi);
 
     const bool shake_pressed =
         script.shake ||
@@ -8522,7 +8586,8 @@ galaxy::input::WiimoteInputSnapshot build_native_hid_input_snapshot(
     std::optional<std::uint64_t> first_mario_control_vi,
     bool ir_input_enabled = true,
     NativeHidHostPointerMetadata* host_pointer_metadata = nullptr,
-    galaxy::input::PlayContext play_context = galaxy::input::PlayContext::Play) {
+    galaxy::input::PlayContext play_context = galaxy::input::PlayContext::Play,
+    galaxy::input::tilt::Section tilt_section = galaxy::input::tilt::Section::None) {
     if (host_pointer_metadata != nullptr) {
         *host_pointer_metadata = {};
         host_pointer_metadata->input_mode_generation =
@@ -8569,7 +8634,8 @@ galaxy::input::WiimoteInputSnapshot build_native_hid_input_snapshot(
             ir_input_enabled,
             replay_pointer_x,
             replay_pointer_y,
-            replay_pointer_active);
+            replay_pointer_active,
+            tilt_section);
         if (host_pointer_metadata != nullptr) {
             host_pointer_metadata->replay_source = true;
             host_pointer_metadata->pointer_origin = SyntheticKpadPointerOrigin::Replay;
@@ -8658,6 +8724,8 @@ galaxy::input::WiimoteInputSnapshot build_native_hid_input_snapshot(
     std::array<LivePad, XUSER_MAX_COUNT + kMaxSwitchPads> pads{};
     std::size_t pad_count = 0;
     for (std::size_t i = 0; i < std::max<std::size_t>(xinput_count, 1u); ++i) {
+        pads[pad_count].device_slot =
+            i < xinput_count ? static_cast<std::uint8_t>(xinput_pads[i].slot) : std::uint8_t{0xFF};
         pads[pad_count++].sample = pad_sample_from_xinput(
             i < xinput_count ? xinput_pads[i] : NativeHidControllerState{},
             xinput_pointer_deadzone_fraction);
@@ -8725,9 +8793,37 @@ galaxy::input::WiimoteInputSnapshot build_native_hid_input_snapshot(
     bool pad_gyro_pointing = false;
     // Rest-hide tuning of the pad that points (gyro first, then the stick).
     float pointer_hide_seconds = 0.0f;
-    float pointer_hide_radius = 0.03f;
+    float pointer_hide_radius = galaxy::input::kDefaultPointerHideRadius;
     static std::array<std::uint32_t, XUSER_MAX_COUNT + kMaxSwitchPads> s_pad_previous_pressed{};
+    // The controller in use: the last one with any input (buttons, sticks,
+    // triggers, a gyro turn, a shake); a key or mouse button bound to a Wii
+    // input hands it to the keyboard. In the tilt sections (tilt.h) its tilt
+    // steers when it has motion sensors (Pro Controller 1/2), the stick
+    // otherwise (Xbox, keyboard). Vibration goes to it.
+    constexpr std::uint32_t kDrivingNone = 0xFFFFFFFFu;
+    constexpr std::uint32_t kDrivingKeyboard = 0xFFFFFFFEu;
+    static std::uint32_t s_driving_pad = kDrivingNone;  // (scheme << 8) | device slot
+    const auto pad_key = [](const LivePad& pad) {
+        return (static_cast<std::uint32_t>(pad.sample.scheme) << 8u) | pad.device_slot;
+    };
+    galaxy::input::tilt::Vec3 tilt_up_value{0.0f, 1.0f, 0.0f};
+    const galaxy::input::tilt::Vec3* tilt_up = nullptr;
     if (use_pads) {
+        const LivePad* driving = nullptr;
+        const LivePad* first_connected = nullptr;
+        for (const LivePad& pad : live_pads) {
+            if (!pad.sample.connected) continue;
+            if (first_connected == nullptr) first_connected = &pad;
+            const bool moved = pad_has_input(pad.sample) || pad.shake_remote || pad.shake_nunchuk ||
+                               std::fabs(pad.gyro_x) + std::fabs(pad.gyro_y) > 0.003f;
+            if (moved) s_driving_pad = pad_key(pad);
+            if (pad_key(pad) == s_driving_pad) driving = &pad;
+        }
+        if (driving == nullptr && s_driving_pad != kDrivingKeyboard) driving = first_connected;
+        if (driving != nullptr && driving->gravity_valid) {
+            tilt_up_value = driving->gravity;
+            tilt_up = &tilt_up_value;
+        }
         for (std::size_t index = 0; index < live_pads.size(); ++index) {
             const LivePad& pad = live_pads[index];
             if (!pad.sample.connected) {
@@ -8770,6 +8866,25 @@ galaxy::input::WiimoteInputSnapshot build_native_hid_input_snapshot(
         keyboard_logic = galaxy::input::evaluate_keyboard_bindings(keyboard_table, keyboard_levels);
         if (controls.config.tune(galaxy::input::ControlScheme::Keyboard).invert_pointer_y) {
             keyboard_logic.pointer_y = -keyboard_logic.pointer_y;
+        }
+        if (keyboard_logic.pressed != 0u || keyboard_logic.stick_x != 0.0f || keyboard_logic.stick_y != 0.0f) {
+            s_driving_pad = kDrivingKeyboard;
+        }
+    }
+    // Vibration: target and strength, published with the game's motor bit.
+    g_rumble_host = {};
+    g_rumble_host.focused = window_focused;
+    if (use_pads && s_driving_pad != kDrivingNone && s_driving_pad != kDrivingKeyboard) {
+        const auto scheme = static_cast<galaxy::input::ControlScheme>((s_driving_pad >> 8u) & 0xFFu);
+        const auto slot = static_cast<std::uint8_t>(s_driving_pad & 0xFFu);
+        if (scheme == galaxy::input::ControlScheme::Xbox && slot < XUSER_MAX_COUNT) {
+            g_rumble_host.target = {RumbleTarget::Kind::XInput, slot};
+        } else if ((scheme == galaxy::input::ControlScheme::SwitchPro ||
+                    scheme == galaxy::input::ControlScheme::SwitchPro2) && slot < kMaxSwitchPads) {
+            g_rumble_host.target = {RumbleTarget::Kind::Switch, slot};
+        }
+        if (static_cast<std::size_t>(scheme) < galaxy::input::kControlSchemeCount) {
+            g_rumble_host.strength = controls.config.tune(scheme).rumble;
         }
     }
     logic = galaxy::input::merge_logical_input(pad_logic_all, keyboard_logic);
@@ -9115,22 +9230,25 @@ galaxy::input::WiimoteInputSnapshot build_native_hid_input_snapshot(
     activity.stick = stick_velocity.x != 0.0f || stick_velocity.y != 0.0f;
     activity.gyro = pad_gyro_pointing && dt > 0.0f &&
                     gyro_motion > kGyroActiveUnitsPerSecond * dt;
+    // Recenter (pointer_control.h RecenterHold): the press gives the pointer to
+    // the recentering device at the picture centre; while the button is held
+    // the pointer stays there and that device keeps it.
     const bool recenter_held = held(WiiTarget::PointerRecenter);
-    static bool s_recenter_previous = false;
-    const bool recenter_pressed = recenter_held && !s_recenter_previous;
-    s_recenter_previous = recenter_held;
-    if (recenter_pressed) {
-        // The recentering device takes the pointer at the picture centre.
+    static galaxy::input::RecenterHold s_recenter{};
+    const galaxy::input::RecenterHold::Output recenter = s_recenter.update(recenter_held);
+    if (recenter.pressed) {
         const bool pad_recenter = pad_logic_all.held(WiiTarget::PointerRecenter);
         s_pointer_owner.owner = pad_recenter
             ? (pad_gyro_pointing ? galaxy::input::PointerSource::Gyro
                                  : galaxy::input::PointerSource::Stick)
             : galaxy::input::PointerSource::Keys;
-        s_pointer_owner.last_active_us = now_us;
-        s_pointer_x = 0.0f;
-        s_pointer_y = 0.0f;
     }
-    const galaxy::input::PointerSource owner = s_pointer_owner.update(activity, now_us);
+    if (recenter.pinned) {
+        s_pointer_owner.last_active_us = now_us;
+    }
+    const galaxy::input::PointerSource owner = recenter.pinned
+        ? s_pointer_owner.owner
+        : s_pointer_owner.update(activity, now_us);
     switch (owner) {
     case galaxy::input::PointerSource::Mouse:
         if (mouse_visible) {
@@ -9170,6 +9288,13 @@ galaxy::input::WiimoteInputSnapshot build_native_hid_input_snapshot(
     case galaxy::input::PointerSource::None:
         break;
     }
+    if (recenter.pinned) {
+        // Gyro and stick motion while the button is held is discarded.
+        s_pointer_x = 0.0f;
+        s_pointer_y = 0.0f;
+        pointer_active = true;
+        pointer_source = owner == galaxy::input::PointerSource::Keys ? "keyboard_mouse" : "controller";
+    }
     // A connected controller keeps the pointer on screen until the mouse
     // owns it.
     if (!pointer_active && use_pads && owner != galaxy::input::PointerSource::Mouse &&
@@ -9177,15 +9302,16 @@ galaxy::input::WiimoteInputSnapshot build_native_hid_input_snapshot(
         pointer_active = true;
         pointer_source = "controller";
     }
-    // Rest hide (Switch ports): a still controller pointer disappears until
-    // recentered; a stick push also brings a stick pointer back.
+    // Still-pointer hiding (pointer_control.h PointerRestHide): recentering
+    // and a stick push show it again, as does a move out of the radius.
     static galaxy::input::PointerRestHide s_rest_hide{};
     const bool controller_owned = owner == galaxy::input::PointerSource::Stick ||
                                   owner == galaxy::input::PointerSource::Gyro ||
                                   (owner == galaxy::input::PointerSource::None && use_pads);
     const bool rest_hidden = s_rest_hide.update(
         s_pointer_x, s_pointer_y, now_us, controller_owned,
-        recenter_pressed || (owner == galaxy::input::PointerSource::Stick && activity.stick),
+        recenter.pinned || recenter.released ||
+            (owner == galaxy::input::PointerSource::Stick && activity.stick),
         pointer_hide_seconds, pointer_hide_radius);
     if (rest_hidden) {
         pointer_active = false;
@@ -9227,6 +9353,9 @@ galaxy::input::WiimoteInputSnapshot build_native_hid_input_snapshot(
     const galaxy::input::StickVector pointer_axes{
         owner == galaxy::input::PointerSource::Keys ? keyboard_pointer_x : pad_pointer_x,
         owner == galaxy::input::PointerSource::Keys ? keyboard_pointer_y : pad_pointer_y};
+
+    static galaxy::input::tilt::Tilt s_tilt{};
+    apply_tilt_accel(snapshot, s_tilt, tilt_section, tilt_up, stick_x, stick_y, recenter.pressed, current_vi);
 
     const bool shake_pressed =
         script.shake || held(WiiTarget::Shake) || motion_shake_remote;
@@ -11359,6 +11488,9 @@ bool GuestAddressSpace::prepare_for_process_exit() {
         if (first_failure) std::rethrow_exception(first_failure);
         return false;
     }
+    // Every controller motor off first: ExitProcess ends the controller
+    // worker without its own shutdown.
+    attempt("rumble-stop", [] { stop_all_rumble(); });
     // The simulation thread owns DSP MRAM service.  Quiesce that worker before
     // joining any independent host worker or formatting a terminal causal
     // report, otherwise a pending DSP span can time out while teardown is busy
@@ -31384,7 +31516,23 @@ bool GuestAddressSpace::handle_bluetooth_acl_out(
                 // the silicon read-error path.
                 return address == 0x0000u || address == 0x176Cu;
             };
-        bt_wiimote_rumble_ = (common & 0x01u) != 0;
+        const bool motor_on = (common & 0x01u) != 0;
+        if (motor_on != bt_wiimote_rumble_) {
+            // GALAXY_RUMBLE_TRACE=1: the game's motor transitions (WPADControlMotor
+            // reaches the remote in the next output report). Trace only; nothing
+            // is sent to any device.
+            static const bool trace_rumble = read_env_flag("GALAXY_RUMBLE_TRACE");
+            static std::uint64_t s_rumble_trace_rows = 0u;
+            if (trace_rumble && s_rumble_trace_rows < 4000u) {
+                ++s_rumble_trace_rows;
+                const std::uint64_t ticks = tick_source_ != nullptr ? tick_source_(tick_source_user_) : 0u;
+                std::cerr << "[rumble] vi=" << ticks / kViRetracePeriodTicks << " motor="
+                          << (motor_on ? "on" : "off") << " report=0x" << std::hex
+                          << static_cast<unsigned>(report_id) << std::dec << '\n';
+            }
+            publish_rumble_state(*this, motor_on);
+        }
+        bt_wiimote_rumble_ = motor_on;
         const bool ack_requested = (common & 0x02u) != 0;
         bool ack_after_handler = false;
         switch (report_id) {
@@ -31793,6 +31941,60 @@ std::optional<std::uint32_t> read_star_pointer_mode(const GuestAddressSpace& spa
     return mode;
 }
 
+// Tilt sections: Mario bound ("rush") to a Star Ball or a ray. Chain of
+// MarioAccess::isInRush (RMGE01 8030266C): GameSystem [r13 - 0x3A78] -> +0x24
+// GameSystemSceneController -> +0xAC -> +0x10 SceneObjHolder -> object 0x14
+// MarioHolder -> +0x0C MarioActor; MarioActor +0x934 is the in-rush flag
+// (settingRush 802BD598 sets it, endRush 802BDBBC clears it) and +0x924 the
+// bound sensor, whose +0x24 is its actor; the actor's vtable names the
+// section (Tamakoro 0x805BC798, SurfRay 0x805BBFEC). Plain aligned loads of
+// MEM1/MEM2 words the game owns; anything unreadable is no section.
+galaxy::input::tilt::Section read_tilt_section(const GuestAddressSpace& space) noexcept {
+    const auto load = [&space](std::uint32_t address) -> std::optional<std::uint32_t> {
+        const bool mem1 = address >= 0x80000000u && address <= 0x817FFFFCu;
+        const bool mem2 = address >= 0x90000000u && address <= 0x93FFFFFCu;
+        if ((!mem1 && !mem2) || (address & 3u) != 0u) return std::nullopt;
+        const std::byte* bytes = space.pointer_or_null(address, 4u);
+        if (bytes == nullptr) return std::nullopt;
+        return static_cast<std::uint32_t>(bytes[0]) << 24 | static_cast<std::uint32_t>(bytes[1]) << 16 |
+               static_cast<std::uint32_t>(bytes[2]) << 8 | static_cast<std::uint32_t>(bytes[3]);
+    };
+    constexpr std::uint32_t kGameSystemHolder = 0x806A4CA0u - 0x3A78u;
+    std::optional<std::uint32_t> object = load(kGameSystemHolder);
+    for (const std::uint32_t offset : {0x24u, 0xACu, 0x10u, 0x14u * 4u, 0x0Cu}) {
+        if (!object || *object == 0u) return galaxy::input::tilt::Section::None;
+        object = load(*object + offset);
+    }
+    if (!object || *object == 0u) return galaxy::input::tilt::Section::None;
+    const std::uint32_t mario = *object;
+    const std::optional<std::uint32_t> rush_word = load(mario + 0x934u);
+    if (!rush_word || (*rush_word >> 24) == 0u) return galaxy::input::tilt::Section::None;
+    std::optional<std::uint32_t> actor = load(mario + 0x924u);
+    if (!actor || *actor == 0u) return galaxy::input::tilt::Section::None;
+    actor = load(*actor + 0x24u);
+    if (!actor || *actor == 0u) return galaxy::input::tilt::Section::None;
+    const std::optional<std::uint32_t> vtable = load(*actor);
+    if (vtable == 0x805BC798u) return galaxy::input::tilt::Section::StarBall;
+    if (vtable == 0x805BBFECu) return galaxy::input::tilt::Section::Ray;
+    return galaxy::input::tilt::Section::None;
+}
+
+// The game's motor bit with the controller in use (g_rumble_host). Paused:
+// the HOME button menu or a pause menu (StarPointerOnOffController modes 0,
+// 2 and 7) or the Nebula settings overlay is open.
+void publish_rumble_state(const GuestAddressSpace& space, bool motor_on) noexcept {
+    RumbleRequest request{};
+    request.motor_on = motor_on;
+    request.target = g_rumble_host.target;
+    request.strength = g_rumble_host.strength;
+    request.focused = g_rumble_host.focused;
+    const std::optional<std::uint32_t> mode = read_star_pointer_mode(space);
+    const bool menu = mode.has_value() && (*mode == 0u || *mode == 2u || *mode == 7u);
+    const NativeSettingsVisibleProvider overlay = g_native_settings_visible.load(std::memory_order_acquire);
+    request.paused = menu || (overlay != nullptr && overlay());
+    publish_rumble_request(request);
+}
+
 galaxy::input::PlayContext read_play_context(const GuestAddressSpace& space,
                                              std::uint64_t current_vi) noexcept {
     const std::optional<std::uint32_t> mode = read_star_pointer_mode(space);
@@ -31969,12 +32171,16 @@ void GuestAddressSpace::service_virtual_wiimote_input_device(
             first_mario_control_vi,
             ir_input_enabled,
             &host_pointer_metadata,
-            read_play_context(*this, current_vi));
+            read_play_context(*this, current_vi),
+            read_tilt_section(*this));
     set_latest_native_hid_snapshot(
         snapshot,
         host_pointer_metadata.pointer_x,
         host_pointer_metadata.pointer_y,
         host_pointer_metadata.pointer_active);
+    // Every input report renews the game's motor state (the controller
+    // worker stops a motor whose state is older than rumble::kStallUs).
+    publish_rumble_state(*this, bt_wiimote_rumble_);
     static const bool fresh_kpad_mouse_pointer =
         read_env_flag("GALAXY_SYNTHETIC_KPAD_FRESH_MOUSE_POINTER");
     if (fresh_kpad_mouse_pointer) {
