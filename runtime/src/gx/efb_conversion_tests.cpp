@@ -81,6 +81,30 @@ bool expect_pixel(Pixel actual, Pixel expected, const char* message) {
     return false;
 }
 
+// GXSetScissorBoxOffset: SMG's depth-of-field blur draws at the top of the
+// screen with offset (0, -464) and copies EFB rows 464..527. The register
+// holds (offset + 342) / 2 in 10 bits, so -464 reads back as 1584.
+bool test_scissor_offset() {
+    using galaxy::gx::decode_scissor_offset;
+    using galaxy::gx::efb_scissor;
+    using galaxy::gx::ScissorRect;
+    const ScissorRect screen{0, 0, 639, 455};
+    bool passed = true;
+    const auto none = efb_scissor(screen, decode_scissor_offset(0u), 640, 528);
+    passed &= expect(none.offset.x == 0 && none.offset.y == 0 && none.rect.y0 == 0 && none.rect.y1 == 455,
+                     "unwritten scissor offset: EFB = screen");
+    const std::uint32_t init = (171u << 10) | 171u;
+    const auto gx_init = efb_scissor(screen, decode_scissor_offset(init), 640, 528);
+    passed &= expect(gx_init.offset.x == 0 && gx_init.offset.y == 0, "GXInit scissor offset is zero");
+    const std::uint32_t field_y = static_cast<std::uint32_t>((-464 + 342) >> 1) & 0x3FFu;
+    const std::uint32_t dof = (field_y << 10) | 171u;
+    passed &= expect(decode_scissor_offset(dof).y == 1584, "offset -464 is stored as 1584");
+    const auto blur = efb_scissor(screen, decode_scissor_offset(dof), 640, 528);
+    passed &= expect(blur.offset.x == 0 && blur.offset.y == -464 && blur.rect.y0 == 464 && blur.rect.x0 == 0,
+                     "the blur strip lands at EFB rows 464 and below");
+    return passed;
+}
+
 bool test_intensity_tile_decode() {
     using galaxy::gx::RGBA8;
     using galaxy::gx::TexFormat;
@@ -3248,6 +3272,7 @@ int main(int argc, char** argv) {
         }
     }
     bool passed = test_cpu_oracle();
+    passed &= test_scissor_offset();
     passed &= test_direct_color_tile_decode();
     passed &= test_intensity_tile_decode();
     passed &= test_rgba8_tile_decode();

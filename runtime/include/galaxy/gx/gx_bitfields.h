@@ -555,7 +555,7 @@ struct TlutRef {
 }
 
 struct ScissorRect {
-    std::int32_t x0, y0, x1, y1;    // inclusive, EFB pixel space
+    std::int32_t x0, y0, x1, y1;    // inclusive, screen pixel space
 };
 
 // Scissor register coordinates carry a +342 hardware offset.
@@ -568,6 +568,61 @@ struct ScissorRect {
         static_cast<std::int32_t>(bits(top_left, 0, 12)) - kOffset,
         static_cast<std::int32_t>(bits(bottom_right, 12, 12)) - kOffset,
         static_cast<std::int32_t>(bits(bottom_right, 0, 12)) - kOffset,
+    };
+}
+
+// BP 0x59 (GXSetScissorBoxOffset): two 10-bit fields holding
+// (offset + 342) / 2. EFB position = screen position - offset. A register
+// that was never written reads as offset 0 (the GXInit value).
+struct ScissorOffset {
+    std::int32_t x = 0;
+    std::int32_t y = 0;
+};
+[[nodiscard]] constexpr ScissorOffset decode_scissor_offset(std::uint32_t reg) {
+    if ((reg & 0xFFFFFu) == 0u) return {};
+    return ScissorOffset{
+        static_cast<std::int32_t>(bits(reg, 0, 10)) * 2 - 342,
+        static_cast<std::int32_t>(bits(reg, 10, 10)) * 2 - 342,
+    };
+}
+
+// The scissor box in EFB pixels and the offset that maps screen to EFB.
+// EFB addresses wrap every 1024 pixels, so a negative offset is stored as a
+// large positive one: SMG's depth-of-field blur draws at the top of the
+// screen with offset y = -464 and copies EFB rows 464..527, below the lines
+// the display copy reads. Of the wrapped offsets the one that puts the most
+// of the scissor box inside the EFB is used.
+struct EfbScissor {
+    ScissorRect rect;  // inclusive, EFB pixel space; may extend past the EFB
+    ScissorOffset offset;
+};
+[[nodiscard]] constexpr std::int32_t wrapped_scissor_offset(
+    std::int32_t lo, std::int32_t hi, std::int32_t offset, std::int32_t size) {
+    constexpr std::int32_t kOrder[] = {0, -1, 1, -2, 2};
+    std::int32_t best = offset;
+    std::int32_t best_cover = -1;
+    for (const std::int32_t k : kOrder) {
+        const std::int32_t candidate = offset + k * 1024;
+        const std::int32_t first = lo - candidate < 0 ? 0 : lo - candidate;
+        const std::int32_t last = hi - candidate > size - 1 ? size - 1 : hi - candidate;
+        const std::int32_t cover = last >= first ? last - first + 1 : 0;
+        if (cover > best_cover) {
+            best_cover = cover;
+            best = candidate;
+        }
+    }
+    return best;
+}
+[[nodiscard]] constexpr EfbScissor efb_scissor(
+    ScissorRect screen, ScissorOffset offset,
+    std::int32_t efb_width, std::int32_t efb_height) {
+    const ScissorOffset off{
+        wrapped_scissor_offset(screen.x0, screen.x1, offset.x, efb_width),
+        wrapped_scissor_offset(screen.y0, screen.y1, offset.y, efb_height),
+    };
+    return EfbScissor{
+        ScissorRect{screen.x0 - off.x, screen.y0 - off.y, screen.x1 - off.x, screen.y1 - off.y},
+        off,
     };
 }
 

@@ -10861,7 +10861,8 @@ bool GxBackend::begin_cached_draw_run(
     D3D12_PRIMITIVE_TOPOLOGY_TYPE topology_type{};
     gx_topology_for_primitive(primitive, topology, topology_type);
 
-    const ScissorRect sc = state_.scissor();
+    const EfbScissor efb_sc = state_.efb_scissor();
+    const ScissorRect sc = efb_sc.rect;
     // The legacy rejection counter also covers fully culled polygons.
     // Lines and points remain visible under GX_CULL_ALL.
     cached_draw_run_scissor_reject_ =
@@ -10919,6 +10920,9 @@ bool GxBackend::begin_cached_draw_run(
         cached_draw_run_state_call_.xf_viewport[i] = std::bit_cast<float>(
             state_.xf(static_cast<std::uint16_t>(xf::kViewportBase + i)));
     }
+    // Viewport origin in EFB pixels: screen position minus the scissor offset.
+    cached_draw_run_state_call_.xf_viewport[3] -= static_cast<float>(efb_sc.offset.x);
+    cached_draw_run_state_call_.xf_viewport[4] -= static_cast<float>(efb_sc.offset.y);
     cached_draw_run_state_call_.has_viewport =
         cached_draw_run_state_call_.xf_viewport[0] > 0.0f &&
         cached_draw_run_state_call_.xf_viewport[1] < 0.0f;
@@ -11813,7 +11817,8 @@ void GxBackend::on_draw(
     D3D12_PRIMITIVE_TOPOLOGY_TYPE topology_type{};
     gx_topology_for_primitive(primitive, topology, topology_type);
 
-    const ScissorRect sc = state_.scissor();
+    const EfbScissor efb_sc = state_.efb_scissor();
+    const ScissorRect sc = efb_sc.rect;
     const bool scissor_reject =
         sc.x1 < sc.x0 || sc.y1 < sc.y0 ||
         sc.x1 < 0 || sc.y1 < 0 ||
@@ -11892,6 +11897,9 @@ void GxBackend::on_draw(
         state_call.xf_viewport[i] = std::bit_cast<float>(
             state_.xf(static_cast<std::uint16_t>(xf::kViewportBase + i)));
     }
+    // Viewport origin in EFB pixels: screen position minus the scissor offset.
+    state_call.xf_viewport[3] -= static_cast<float>(efb_sc.offset.x);
+    state_call.xf_viewport[4] -= static_cast<float>(efb_sc.offset.y);
     state_call.has_viewport =
         state_call.xf_viewport[0] > 0.0f &&
         state_call.xf_viewport[1] < 0.0f;
@@ -12118,9 +12126,10 @@ void GxBackend::on_draw(
                 return std::bit_cast<float>(state_.xf(address));
             };
             const ScissorRect scissor = state_.scissor();
+            const EfbScissor efb_scissor = state_.efb_scissor();
             std::fprintf(stderr,
                 "[capdraw]   proj=%c vp=%.1f,%.1f,%.1f,%.1f,%.0f,%.0f "
-                "sc=%d,%d,%d,%d pnmtx=%u\n",
+                "sc=%d,%d,%d,%d off=%d,%d pnmtx=%u\n",
                 state_.xf(static_cast<std::uint16_t>(xf::kProjectionBase + 6u)) == 0u ? 'P' : 'O',
                 static_cast<double>(xf_float(xf::kViewportBase)),
                 static_cast<double>(xf_float(static_cast<std::uint16_t>(xf::kViewportBase + 1u))),
@@ -12129,6 +12138,7 @@ void GxBackend::on_draw(
                 static_cast<double>(xf_float(static_cast<std::uint16_t>(xf::kViewportBase + 2u))),
                 static_cast<double>(xf_float(static_cast<std::uint16_t>(xf::kViewportBase + 5u))),
                 scissor.x0, scissor.y0, scissor.x1, scissor.y1,
+                efb_scissor.offset.x, efb_scissor.offset.y,
                 static_cast<unsigned>(state_.cp(cp::kMatrixIndexA) & 0x3Fu));
         }
         const auto regs = state_.tev_register_colors();

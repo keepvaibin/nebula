@@ -161,6 +161,11 @@ public:
         return decode_scissor(
             bp_[bp::kScissorTopLeft], bp_[bp::kScissorBottomRight]);
     }
+    // The scissor box in EFB pixels (640 x 528) with the scissor offset applied.
+    [[nodiscard]] EfbScissor efb_scissor() const {
+        return galaxy::gx::efb_scissor(
+            scissor(), decode_scissor_offset(bp_[bp::kScissorOffset]), 640, 528);
+    }
     [[nodiscard]] AlphaCompare alpha_compare() const {
         return decode_alpha_compare(bp_[bp::kAlphaCompare]);
     }
