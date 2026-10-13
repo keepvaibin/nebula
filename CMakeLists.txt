@@ -467,9 +467,12 @@ target_link_libraries(
         galaxy_host_pointer_events)
 
 add_library(galaxy_native_input STATIC
+    runtime/src/controller_roster.cpp
     runtime/src/native_input.cpp
+    runtime/src/playstation_controller.cpp
     runtime/src/pointer_control.cpp
     runtime/src/rumble.cpp
+    runtime/src/steam_controller.cpp
     runtime/src/switch_controller.cpp
     runtime/src/tilt.cpp
     runtime/src/wiimote_speaker.cpp)
@@ -1373,6 +1376,8 @@ add_executable(galaxy_post_process_tests
 target_link_libraries(galaxy_post_process_tests PRIVATE galaxy_gx)
 add_executable(galaxy_controls_tests runtime/src/controls_tests.cpp)
 target_link_libraries(galaxy_controls_tests PRIVATE galaxy_runtime_settings galaxy_native_input)
+add_executable(galaxy_pad_controller_tests runtime/src/pad_controller_tests.cpp)
+target_link_libraries(galaxy_pad_controller_tests PRIVATE galaxy_runtime_settings galaxy_native_input)
 
 if(MSVC)
     foreach(
@@ -1479,6 +1484,7 @@ if(MSVC)
         galaxy_native_settings_overlay_tests
         galaxy_post_process_tests
         galaxy_controls_tests
+        galaxy_pad_controller_tests
     )
         target_compile_options(${target} PRIVATE /W4 /WX /permissive- /EHsc)
     endforeach()
@@ -1585,6 +1591,7 @@ galaxy_add_native_test(
     galaxy_native_settings_overlay_tests)
 galaxy_add_native_test(post_process galaxy_post_process_tests)
 galaxy_add_native_test(controls_bindings_switch_hid galaxy_controls_tests)
+galaxy_add_native_test(pad_controller_reports galaxy_pad_controller_tests)
 galaxy_add_native_test(shader_gen_compiles galaxy_shader_gen_tests)
 galaxy_add_native_test(fifo_parser_streaming galaxy_fifo_parser_tests)
 galaxy_add_native_test(vertex_loader_defaults galaxy_vertex_loader_tests)
