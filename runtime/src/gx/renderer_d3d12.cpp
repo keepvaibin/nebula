@@ -7647,8 +7647,10 @@ bool RendererD3D12::present_replay_subframe(
     replay_playing_ = true;
     bind_efb(nullptr);
     const auto far_values = make_efb_clear_values(0u, 0u, 0x00FFFFFFu, 0u);
-    const bool blend = vertex_t >= 0.0f && run_blend_vertices_.size() == run_draws_.size() &&
-                       !blend_validate_failed_;
+    // The log before's vertices are gone once its segment came round (a
+    // later game frame records there while this sequence still plays).
+    const bool blend = vertex_t >= 0.0f && prev_run_valid_ &&
+                       run_blend_vertices_.size() == run_draws_.size() && !blend_validate_failed_;
     vertex_blend_t_ = blend ? vertex_t : 1.0f;
     std::uint64_t blended = 0u;
     for (const ReplayOp& op : run_ops_) {
