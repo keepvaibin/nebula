@@ -9,6 +9,7 @@
 #include "galaxy/native_input.h"
 #include "galaxy/native_settings_pad.h"
 #include "galaxy/pointer_control.h"
+#include "galaxy/rumble.h"
 #include "galaxy/tilt.h"
 #include "galaxy/diagnostic_stick_lease.h"
 #include "galaxy/experimental_ultrawide_aspect.h"
@@ -8884,7 +8885,8 @@ galaxy::input::WiimoteInputSnapshot build_native_hid_input_snapshot(
             g_rumble_host.target = {RumbleTarget::Kind::Switch, slot};
         }
         if (static_cast<std::size_t>(scheme) < galaxy::input::kControlSchemeCount) {
-            g_rumble_host.strength = controls.config.tune(scheme).rumble;
+            const galaxy::input::SchemeTuning& tuning = controls.config.tune(scheme);
+            g_rumble_host.strength = tuning.vibration ? tuning.rumble : std::uint8_t{0};
         }
     }
     logic = galaxy::input::merge_logical_input(pad_logic_all, keyboard_logic);
@@ -9302,8 +9304,9 @@ galaxy::input::WiimoteInputSnapshot build_native_hid_input_snapshot(
         pointer_active = true;
         pointer_source = "controller";
     }
-    // Still-pointer hiding (pointer_control.h PointerRestHide): recentering
-    // and a stick push show it again, as does a move out of the radius.
+    // Still-pointer hiding (pointer_control.h PointerRestHide): a hidden gyro
+    // pointer comes back only with recenter; a stick pointer also with a push
+    // or a move out of the radius.
     static galaxy::input::PointerRestHide s_rest_hide{};
     const bool controller_owned = owner == galaxy::input::PointerSource::Stick ||
                                   owner == galaxy::input::PointerSource::Gyro ||
@@ -9312,6 +9315,7 @@ galaxy::input::WiimoteInputSnapshot build_native_hid_input_snapshot(
         s_pointer_x, s_pointer_y, now_us, controller_owned,
         recenter.pinned || recenter.released ||
             (owner == galaxy::input::PointerSource::Stick && activity.stick),
+        owner == galaxy::input::PointerSource::Gyro,
         pointer_hide_seconds, pointer_hide_radius);
     if (rest_hidden) {
         pointer_active = false;
@@ -31979,12 +31983,16 @@ galaxy::input::tilt::Section read_tilt_section(const GuestAddressSpace& space) n
     return galaxy::input::tilt::Section::None;
 }
 
-// The game's motor bit with the controller in use (g_rumble_host). Paused:
-// the HOME button menu or a pause menu (StarPointerOnOffController modes 0,
-// 2 and 7) or the Nebula settings overlay is open.
+// The game's motor bit, through the motor model, with the controller in use
+// (g_rumble_host). Paused: the HOME button menu or a pause menu
+// (StarPointerOnOffController modes 0, 2 and 7) or the Nebula settings
+// overlay is open.
 void publish_rumble_state(const GuestAddressSpace& space, bool motor_on) noexcept {
+    static galaxy::input::rumble::MotorEnvelope s_motor{};
     RumbleRequest request{};
     request.motor_on = motor_on;
+    request.level = galaxy::input::rumble::quantize_level(
+        s_motor.update(motor_on, galaxy::host::controller_hid_now_us()));
     request.target = g_rumble_host.target;
     request.strength = g_rumble_host.strength;
     request.focused = g_rumble_host.focused;

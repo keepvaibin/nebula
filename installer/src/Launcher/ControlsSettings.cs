@@ -29,7 +29,8 @@ namespace Nebula.Launcher
         public float PointerHideSeconds, PointerHideRadius = 0.12f;
         public int Motion; // 0 off, 1 Wii Remote, 2 Nunchuk
         public int ShakeSensitivity = 3;
-        public int Rumble = 100; // vibration percent: 0, 25, 50, 75, 100
+        public bool Vibration = true;
+        public int Rumble = 50; // vibration strength percent, 10..100 in steps of 10
         public SchemeTuning Clone() { return (SchemeTuning)MemberwiseClone(); }
     }
 
@@ -43,9 +44,12 @@ namespace Nebula.Launcher
         public const int SchemeCount = 4, TargetCount = 25, Slots = 4;
         public const int JumpBack = 24;
         // runtime_settings.ini controls_version (input_bindings.h kControlsVersion).
-        public const int ControlsVersion = 4;
+        public const int ControlsVersion = 5;
         // Version 3 still-pointer defaults (pads), replaced in version 4.
         public const float Version3PointerHideSeconds = 4.0f, Version3PointerHideRadius = 0.03f;
+        // Version 4 still-pointer time and vibration strength, replaced in version 5.
+        public const float Version4PointerHideSeconds = 2.0f;
+        public const int Version4Rumble = 100;
         public const int ModeAuto = 0, ModeKeyboardMouse = 1, ModeController = 2, ModeRealWiimote = 3;
         public const int Keyboard = 0, Xbox = 1, SwitchPro = 2, SwitchPro2 = 3;
         public static readonly string[] SchemeIds = { "keyboard", "xbox", "switch_pro", "switch_pro2" };
@@ -61,11 +65,11 @@ namespace Nebula.Launcher
             "Pointer recenter", "A in play, B in menus" };
         public static readonly string[] MotionNames = { "off", "remote", "nunchuk" };
         public static readonly string[] MotionLabels = { "Off", "Wii Remote shake", "Nunchuk shake" };
-        // tune.<scheme>.rumble steps (rumble.h kStrengthSteps).
-        public static readonly int[] RumbleSteps = { 0, 25, 50, 75, 100 };
-        public static readonly string[] RumbleLabels = { "Off", "25%", "50%", "75%", "100%" };
+        // tune.<scheme>.rumble steps (rumble.h).
+        public static readonly int[] RumbleSteps = { 10, 20, 30, 40, 50, 60, 70, 80, 90, 100 };
+        public static readonly string[] RumbleLabels = { "10%", "20%", "30%", "40%", "50%", "60%", "70%", "80%", "90%", "100%" };
 
-        /// <summary>The nearest step, ties down (rumble.h snap_strength).</summary>
+        /// <summary>The nearest step within 10..100, ties down (rumble.h snap_strength).</summary>
         public static int SnapRumble(float percent)
         {
             int best = RumbleSteps[0];
@@ -246,7 +250,7 @@ namespace Nebula.Launcher
             if (HasMotion(scheme)) t.GyroPointer = true;
             if (scheme != Keyboard)
             {
-                t.PointerHideSeconds = 2.0f;
+                t.PointerHideSeconds = 4.0f;
                 t.PointerHideRadius = 0.12f;
             }
             return t;
@@ -275,10 +279,14 @@ namespace Nebula.Launcher
                     if (old && !SameBindings(Bindings[s][t], current[t])) Bindings[s][t] = current[t];
                 }
                 if (version < 2 && Tuning[s].GyroPointer == LegacyTuning(s).GyroPointer) Tuning[s].GyroPointer = DefaultTuning(s).GyroPointer;
-                if (version < 4 && s != Keyboard)
+                if (version < ControlsVersion && s != Keyboard)
                 {
-                    if (Tuning[s].PointerHideSeconds == Version3PointerHideSeconds) Tuning[s].PointerHideSeconds = DefaultTuning(s).PointerHideSeconds;
-                    if (Tuning[s].PointerHideRadius == Version3PointerHideRadius) Tuning[s].PointerHideRadius = DefaultTuning(s).PointerHideRadius;
+                    var defaults = DefaultTuning(s);
+                    bool oldSeconds = (version < 4 && Tuning[s].PointerHideSeconds == Version3PointerHideSeconds) ||
+                                      Tuning[s].PointerHideSeconds == Version4PointerHideSeconds;
+                    if (oldSeconds) Tuning[s].PointerHideSeconds = defaults.PointerHideSeconds;
+                    if (version < 4 && Tuning[s].PointerHideRadius == Version3PointerHideRadius) Tuning[s].PointerHideRadius = defaults.PointerHideRadius;
+                    if (Tuning[s].Rumble == Version4Rumble) Tuning[s].Rumble = defaults.Rumble;
                 }
             }
             if (version < 2 && InputMode == ModeKeyboardMouse) InputMode = ModeAuto;
@@ -454,7 +462,15 @@ namespace Nebula.Launcher
                 case "pointer_hide_radius": if (parsed) t.PointerHideRadius = Math.Max(0f, Math.Min(0.5f, f)); break;
                 case "shake_sensitivity": if (parsed) t.ShakeSensitivity = Math.Max(1, Math.Min(5, (int)Math.Round(f))); break;
                 case "motion": { int m = Array.IndexOf(MotionNames, value.ToLowerInvariant()); if (m >= 0) t.Motion = m; break; }
-                case "rumble": if (parsed) t.Rumble = SnapRumble(f); break;
+                case "vibration":
+                    {
+                        string v = value.Trim().ToLowerInvariant();
+                        if (v == "1" || v == "true" || v == "on") t.Vibration = true;
+                        else if (v == "0" || v == "false" || v == "off") t.Vibration = false;
+                        break;
+                    }
+                // 0 was "off" before controls version 5.
+                case "rumble": if (parsed) { if (f <= 0f) t.Vibration = false; else t.Rumble = SnapRumble(f); } break;
             }
         }
 
@@ -479,6 +495,7 @@ namespace Nebula.Launcher
                     lines.Add(new KeyValuePair<string, string>("tune." + p + "pointer_deadzone", F(tuning.PointerDeadzone)));
                     lines.Add(new KeyValuePair<string, string>("tune." + p + "pointer_hide_seconds", F(tuning.PointerHideSeconds)));
                     lines.Add(new KeyValuePair<string, string>("tune." + p + "pointer_hide_radius", F(tuning.PointerHideRadius)));
+                    lines.Add(new KeyValuePair<string, string>("tune." + p + "vibration", tuning.Vibration ? "1" : "0"));
                     lines.Add(new KeyValuePair<string, string>("tune." + p + "rumble", SnapRumble(tuning.Rumble).ToString(CultureInfo.InvariantCulture)));
                 }
                 lines.Add(new KeyValuePair<string, string>("tune." + p + "pointer_speed", F(tuning.PointerSpeed)));

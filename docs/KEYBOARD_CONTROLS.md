@@ -47,11 +47,11 @@ the middle, so the controller's direction at release is the new centre.
 Still pointer: a controller pointer that stays within
 `tune.<scheme>.pointer_hide_radius` (default 0.12, 6% of the picture width,
 2.4 degrees of turn) of where it settled for `pointer_hide_seconds` (default
-2; 0 never hides) disappears, as in the Switch ports. Hand tremor and small
+4; 0 never hides) disappears, as in the Switch ports. Hand tremor and small
 jerks inside the radius do not restart the timer; the position is smoothed
-over 0.1 s, so a single-report spike does not count. Moving out of the radius,
-the recenter button or (stick pointer) a stick push brings it back. The mouse
-never hides this way.
+over 0.1 s, so a single-report spike does not count. A hidden gyro pointer
+comes back only with the recenter button, at the centre. A hidden stick
+pointer also comes back with a stick push. The mouse never hides this way.
 Sources for the Switch behaviour (player reports; no official timing exists):
 [ResetEra, Galaxy + Galaxy 2 (Switch 2) review thread](https://www.resetera.com/threads/super-mario-galaxy-super-mario-galaxy-2-review-thread.1312336/page-16)
 ("if you're not actively using it for a bit it kind of just disappears on its
@@ -99,14 +99,17 @@ motion) is ignored. `keyboard_mouse` and `controller` keep only that source.
   remote's accelerometer stays at rest, and the pointer never rotates with
   the controller.
 - Vibration: when the game runs the Wii Remote's motor (a Star Bit shot,
-  a hit, an earthquake), the controller in use vibrates for exactly as long:
-  Xbox controllers through XInput, Pro Controllers with HD rumble, Pro
-  Controller 2 (USB) with its rumble report. A key or mouse button bound to a
-  Wii input hands vibration to the keyboard (none). The motor stops at once
-  when the game window loses focus, a pause, HOME or settings menu opens, the
-  game stalls for 100 ms, the controller disconnects, or Nebula exits or
-  crashes. `tune.<controller>.rumble` sets the strength (`0` off, `25`, `50`,
-  `75`, `100`). A real Wii Remote receives the game's own motor commands.
+  a hit, an earthquake), the controller in use vibrates: Xbox controllers on
+  the light motor, Pro Controllers with HD rumble, Pro Controller 2 (USB) with
+  its rumble report. The output follows a model of the Wii Remote's motor,
+  which spins up over about 30 ms and down over about 60 ms, so the game's
+  short pulses feel like one soft buzz. A key or mouse button bound to a Wii
+  input hands vibration to the keyboard (none). The motor stops at once when
+  the game window loses focus, a pause, HOME or settings menu opens, the game
+  stalls for 100 ms, the controller disconnects, or Nebula exits or crashes.
+  `tune.<controller>.vibration` turns it on or off and
+  `tune.<controller>.rumble` sets the strength (10-100 %). A real Wii Remote
+  receives the game's own motor commands.
 
 ## Remapping
 
@@ -152,10 +155,11 @@ Home Capture GL GR C DpadUp...`; sticks `LX+ LX- LY+ LY- RX+ RX- RY+ RY-`.
 
 Files with an older `controls_version` are migrated on load: bindings that
 still hold the defaults of Native28 (no version), Native29 (version 2) or
-Native29b (version 3) take the version-4 defaults; a Native28 file's gyro
+Native29b (version 3) take the current defaults; a Native28 file's gyro
 switch and `input_mode=keyboard_mouse` take `1` and `auto`; a version-3
-still-pointer time of 4 s and radius of 0.03 take 2 s and 0.12; anything else
-the player changed stays.
+still-pointer radius of 0.03 takes 0.12; a version-4 still-pointer time of
+2 s and vibration strength of 100 take 4 s and 50 (`rumble=0` turns vibration
+off); anything else the player changed stays.
 
 | Tuning (`tune.<scheme>.`) | Values | Default |
 |---|---|---|
@@ -166,9 +170,10 @@ the player changed stays.
 | `shake_sensitivity` (Switch) | 1 (hard shake) - 5 (light) | 3 |
 | `gyro_pointer` (Switch) | 0/1 | 1 |
 | `gyro_sensitivity` (Switch) | 0.2-5.0 (1: a picture width per 40 degrees) | 1 |
-| `pointer_hide_seconds` (controllers) | 0-60 seconds within the radius before the pointer hides; 0 never | 2 |
+| `pointer_hide_seconds` (controllers) | 0-60 seconds within the radius before the pointer hides; 0 never | 4 |
 | `pointer_hide_radius` (controllers) | 0-0.5 pointer units (2 = picture width) | 0.12 |
-| `rumble` (controllers) | 0, 25, 50, 75, 100 percent vibration strength; 0 off | 100 |
+| `vibration` (controllers) | 0/1 | 1 |
+| `rumble` (controllers) | 10-100 percent vibration strength, steps of 10 | 50 |
 
 `GALAXY_XINPUT_LEFT_DEADZONE`, `GALAXY_XINPUT_POINTER_DEADZONE`,
 `GALAXY_XINPUT_POINTER_SPEED`, `GALAXY_KEYBOARD_POINTER_SPEED` and

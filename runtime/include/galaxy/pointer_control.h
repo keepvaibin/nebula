@@ -55,24 +55,22 @@ inline constexpr float kGyroPointerLimit = 1.35f;
 inline constexpr float kPointerVisibleLimit = 1.02f;
 
 // The Switch ports hide the gyro pointer when it is not being used and bring
-// it back with R (recenter). The controller-owned pointer, low-passed over
-// kPointerHideFilterSeconds so a one-report spike does not count, is compared
-// with an anchor: while it stays within `radius` of the anchor a timer runs,
-// and after `hide_seconds` the pointer hides. Hand tremor and small jerks
-// inside the radius never restart the timer. Leaving the radius re-anchors,
-// restarts the timer and shows a hidden pointer; `reveal` (recenter, a stick
-// push) does the same at the current position. A mouse-owned pointer never
-// hides.
+// it back only with R (recenter). The controller-owned pointer, low-passed
+// over kPointerHideFilterSeconds so a one-report spike does not count, is
+// compared with an anchor: while it stays within `radius` of the anchor a
+// timer runs, and after `hide_seconds` the pointer hides. Hand tremor and
+// small jerks inside the radius never restart the timer; leaving the radius
+// re-anchors and restarts it. A hidden gyro pointer (`latch`) stays hidden
+// until `reveal` (recenter). A hidden stick pointer also shows again when it
+// leaves the radius or the stick is pushed. A mouse-owned pointer never hides.
 //
 // Default radius 0.12 units (6 % of the picture width, 2.4 degrees of turn at
 // gyro sensitivity 1): a resting Pro Controller drifts under 0.004 units in
-// 65 s (status-pointer.md), hand tremor is about +-0.5 degrees (+-0.025 units)
-// and a grip adjustment about 2 degrees (0.1 units). A deliberate pan leaves
-// the radius before the timer ends unless it is slower than radius/seconds
-// (0.06 units/s, 1.2 degrees per second).
+// 65 s, hand tremor is about +-0.5 degrees (+-0.025 units) and a grip
+// adjustment about 2 degrees (0.1 units).
 inline constexpr float kPointerHideFilterSeconds = 0.1f;
 inline constexpr float kDefaultPointerHideRadius = 0.12f;
-inline constexpr float kDefaultPointerHideSeconds = 2.0f;
+inline constexpr float kDefaultPointerHideSeconds = 4.0f;
 
 struct PointerRestHide {
     bool hidden = false;
@@ -84,7 +82,7 @@ struct PointerRestHide {
     std::uint64_t since_us = 0;
     std::uint64_t last_us = 0;
     // Returns whether the pointer is hidden after this report.
-    bool update(float x, float y, std::uint64_t now_us, bool controller_owned, bool reveal,
+    bool update(float x, float y, std::uint64_t now_us, bool controller_owned, bool reveal, bool latch,
                 float hide_seconds, float radius) noexcept;
 };
 

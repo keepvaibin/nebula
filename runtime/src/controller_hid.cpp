@@ -153,6 +153,7 @@ struct Device {
     std::uint8_t packet = 0;
     // Vibration last sent to this controller.
     bool rumble_on = false;
+    std::uint8_t rumble_level = 0;
     std::uint8_t rumble_strength = 0;
     std::uint8_t rumble_sequence = 0;
     std::uint64_t rumble_sent_us = 0;
@@ -493,8 +494,8 @@ bool write_rumble_off(HANDLE handle, HANDLE event, std::uint16_t output_length, 
     std::array<std::uint8_t, 128> report{};
     const std::size_t length = std::min<std::size_t>(output_length, report.size());
     const std::size_t built = pro2
-        ? input::rumble::build_switch2_rumble_report(0, false, 0, std::span(report.data(), length))
-        : input::rumble::build_switch_pro_rumble_report(0, input::rumble::switch_pro_motor_rumble(false, 0),
+        ? input::rumble::build_switch2_rumble_report(0, 0, 0, std::span(report.data(), length))
+        : input::rumble::build_switch_pro_rumble_report(0, input::rumble::switch_pro_motor_rumble(0, 0),
                                                         std::span(report.data(), length));
     return built != 0 && write_report(handle, event, report.data(), static_cast<DWORD>(length), 30);
 }
@@ -552,12 +553,12 @@ const char* rumble_target_kind_name(RumbleTarget::Kind kind) noexcept {
 // every change of the gated motor state (nothing is sent to any device).
 void trace_rumble_output(const RumbleRequest& request, std::uint64_t now) noexcept {
     static bool s_logged = false;
-    static bool s_run = false;
+    static std::uint8_t s_level = 0;
     static RumbleTarget s_target{};
     static std::uint8_t s_strength = 0;
     static unsigned s_rows = 0;
     input::rumble::GateInputs gate{};
-    gate.game_motor_on = request.motor_on;
+    gate.game_motor_on = request.level != 0u;
     gate.now_us = now;
     gate.published_us = now;
     gate.focused = request.focused;
@@ -565,30 +566,32 @@ void trace_rumble_output(const RumbleRequest& request, std::uint64_t now) noexce
     gate.strength = request.strength;
     const bool has_target = request.target.kind != RumbleTarget::Kind::None;
     const bool run = has_target && input::rumble::motor_should_run(gate);
-    if (s_logged && run == s_run && request.target == s_target && request.strength == s_strength) return;
+    const std::uint8_t level = run ? request.level : 0u;
+    if (s_logged && level == s_level && request.target == s_target && request.strength == s_strength) return;
     if (s_rows >= 4000u) return;
     ++s_rows;
     s_logged = true;
-    s_run = run;
+    s_level = level;
     s_target = request.target;
     s_strength = request.strength;
-    const char* reason = run ? "" : !request.motor_on ? " game-off" : !has_target ? " no-controller"
-                                  : request.strength == 0u ? " strength-off" : !request.focused ? " unfocused"
+    const char* reason = run ? "" : request.level == 0u ? " game-off" : !has_target ? " no-controller"
+                                  : request.strength == 0u ? " vibration-off" : !request.focused ? " unfocused"
                                   : request.paused ? " paused" : " gate";
     char line[256]{};
-    int used = std::snprintf(line, sizeof(line), "[rumble-out] us=%llu target=%s:%u motor=%s%s strength=%u",
+    int used = std::snprintf(line, sizeof(line), "[rumble-out] us=%llu target=%s:%u motor=%s%s bit=%u level=%u strength=%u",
                              static_cast<unsigned long long>(now), rumble_target_kind_name(request.target.kind),
                              static_cast<unsigned>(request.target.slot), run ? "on" : "off", reason,
+                             request.motor_on ? 1u : 0u, static_cast<unsigned>(level),
                              static_cast<unsigned>(request.strength));
     if (used > 0 && static_cast<std::size_t>(used) < sizeof(line)) {
         if (request.target.kind == RumbleTarget::Kind::XInput) {
-            const input::rumble::XInputMotors speeds = input::rumble::xinput_motor_speeds(run, request.strength);
+            const input::rumble::XInputMotors speeds = input::rumble::xinput_motor_speeds(level, request.strength);
             used += std::snprintf(line + used, sizeof(line) - static_cast<std::size_t>(used), " xinput=%u/%u",
                                   static_cast<unsigned>(speeds.left), static_cast<unsigned>(speeds.right));
         } else if (request.target.kind == RumbleTarget::Kind::Switch) {
-            const std::array<std::uint8_t, 8> pro = input::rumble::switch_pro_motor_rumble(run, request.strength);
+            const std::array<std::uint8_t, 8> pro = input::rumble::switch_pro_motor_rumble(level, request.strength);
             std::array<std::uint8_t, input::rumble::kSwitch2RumbleReportBytes> pro2{};
-            (void)input::rumble::build_switch2_rumble_report(0, run, request.strength, pro2);
+            (void)input::rumble::build_switch2_rumble_report(0, level, request.strength, pro2);
             used += std::snprintf(line + used, sizeof(line) - static_cast<std::size_t>(used),
                                   " pro=%02x%02x%02x%02x.%02x%02x%02x%02x pro2=%02x%02x%02x%02x%02x", pro[0],
                                   pro[1], pro[2], pro[3], pro[4], pro[5], pro[6], pro[7], pro2[2], pro2[3], pro2[4],
@@ -873,7 +876,7 @@ private:
         ReleaseSRWLockShared(&h.rumble_lock);
         const std::uint64_t now = steady_us();
         input::rumble::GateInputs gate{};
-        gate.game_motor_on = request.motor_on;
+        gate.game_motor_on = request.level != 0u;
         gate.now_us = now;
         gate.published_us = published;
         gate.focused = request.focused;
@@ -881,20 +884,25 @@ private:
         gate.strength = request.strength;
         const bool run = !rumble_output_disabled() && !h.rumble_shutdown.load(std::memory_order_acquire) &&
                          input::rumble::motor_should_run(gate);
+        const std::uint8_t level = run ? request.level : 0u;
         // XInput motors hold their speed: one call per change. A call that
         // fails (no controller in that slot) is not repeated until the
         // wanted state changes, since XInput calls on empty slots are slow.
-        const bool xinput = run && request.target.kind == RumbleTarget::Kind::XInput &&
+        const bool xinput = level != 0u && request.target.kind == RumbleTarget::Kind::XInput &&
                             request.target.slot < XUSER_MAX_COUNT;
         const std::uint8_t want_mask = xinput ? static_cast<std::uint8_t>(1u << request.target.slot) : 0u;
+        const std::uint8_t want_level = xinput ? level : 0u;
         const std::uint8_t want_strength = xinput ? request.strength : 0u;
-        if (want_mask != xinput_want_mask_ || want_strength != xinput_want_strength_) {
+        if (want_mask != xinput_want_mask_ || want_level != xinput_want_level_ ||
+            want_strength != xinput_want_strength_) {
             xinput_want_mask_ = want_mask;
+            xinput_want_level_ = want_level;
             xinput_want_strength_ = want_strength;
             for (DWORD slot = 0; slot < XUSER_MAX_COUNT; ++slot) {
                 const std::uint8_t bit = static_cast<std::uint8_t>(1u << slot);
                 if ((want_mask & bit) != 0u) {
-                    const input::rumble::XInputMotors speeds = input::rumble::xinput_motor_speeds(true, want_strength);
+                    const input::rumble::XInputMotors speeds =
+                        input::rumble::xinput_motor_speeds(want_level, want_strength);
                     XINPUT_VIBRATION vibration{};
                     vibration.wLeftMotorSpeed = speeds.left;
                     vibration.wRightMotorSpeed = speeds.right;
@@ -915,9 +923,9 @@ private:
         }
         DWORD timer_ms = xinput_on_ != 0u ? 25u : 0u;
         for (auto& device : devices_) {
-            const bool want = run && request.target.kind == RumbleTarget::Kind::Switch &&
-                              request.target.slot == device->slot;
-            if (service_switch_rumble(*device, want, request.strength, now)) {
+            const bool target = request.target.kind == RumbleTarget::Kind::Switch &&
+                                request.target.slot == device->slot;
+            if (service_switch_rumble(*device, target ? level : std::uint8_t{0}, request.strength, now)) {
                 const DWORD period = device->scheme == ControlScheme::SwitchPro2 ? 10u : 25u;
                 timer_ms = timer_ms == 0u ? period : std::min(timer_ms, period);
             }
@@ -927,11 +935,13 @@ private:
 
     // One Switch controller; true while its motor runs or a change waits for
     // the write gap (the worker keeps its timer).
-    bool service_switch_rumble(Device& device, bool want, std::uint8_t strength, std::uint64_t now) {
+    bool service_switch_rumble(Device& device, std::uint8_t level, std::uint8_t strength, std::uint64_t now) {
         const bool pro2 = device.scheme == ControlScheme::SwitchPro2;
-        if (device.failed || (pro2 && device.bluetooth)) want = false;
+        if (device.failed || (pro2 && device.bluetooth)) level = 0u;
+        const bool want = level != 0u;
         if (!want && !device.rumble_on) return false;
-        const bool changed = want != device.rumble_on || (want && strength != device.rumble_strength);
+        const bool changed = want != device.rumble_on ||
+                             (want && (level != device.rumble_level || strength != device.rumble_strength));
         const std::uint64_t since = now - device.rumble_sent_us;
         if (!changed && since < (pro2 ? kSwitch2RumbleRefreshUs : kSwitchRumbleRefreshUs)) return true;
         if (!pro2 && device.rumble_sent_us != 0u && since < kSwitchRumbleGapUs) return true;
@@ -940,9 +950,9 @@ private:
         const std::size_t length = std::min<std::size_t>(device.output_length, report.size());
         const std::span<std::uint8_t> out(report.data(), length);
         const std::size_t built =
-            pro2 ? input::rumble::build_switch2_rumble_report(device.rumble_sequence++, want, strength, out)
+            pro2 ? input::rumble::build_switch2_rumble_report(device.rumble_sequence++, level, strength, out)
                  : input::rumble::build_switch_pro_rumble_report(
-                       device.packet++, input::rumble::switch_pro_motor_rumble(want, strength), out);
+                       device.packet++, input::rumble::switch_pro_motor_rumble(level, strength), out);
         if (built == 0u) {
             device.rumble_on = false;
             return false;
@@ -956,6 +966,7 @@ private:
         (void)write_report(device.handle.get(), device.write_event.get(), report.data(), static_cast<DWORD>(length), 30);
         device.rumble_sent_us = now;
         device.rumble_on = want;
+        device.rumble_level = level;
         device.rumble_strength = strength;
         if (!want && device.slot < kMaxSwitchPads) {
             h.switch_rumble_handles[device.slot].store(nullptr, std::memory_order_release);
@@ -973,6 +984,7 @@ private:
         }
         xinput_on_ = 0u;
         xinput_want_mask_ = 0u;
+        xinput_want_level_ = 0u;
         xinput_want_strength_ = 0u;
     }
 
@@ -986,6 +998,7 @@ private:
     DWORD rumble_timer_ms_ = 0;
     std::uint8_t xinput_on_ = 0;        // XInput motors this worker turned on
     std::uint8_t xinput_want_mask_ = 0;
+    std::uint8_t xinput_want_level_ = 0;
     std::uint8_t xinput_want_strength_ = 0;
 };
 
@@ -1078,17 +1091,16 @@ void publish_rumble_request(const RumbleRequest& published) noexcept {
     RumbleRequest request = published;
     const RumbleTarget test_target = test_rumble_target();
     if (test_target.kind != RumbleTarget::Kind::None) {
-        // The strength setting of that controller type (a replayed session
+        // The vibration setting of that controller type (a replayed session
         // has no controller in use to take it from).
         static std::uint64_t s_generation = 0;
         static std::uint8_t s_strength = input::rumble::kDefaultStrength;
         const std::uint64_t generation = input::controls_config_generation();
         if (generation != s_generation) {
             s_generation = generation;
-            s_strength = input::get_controls_config()
-                             .tune(test_target.kind == RumbleTarget::Kind::XInput ? ControlScheme::Xbox
-                                                                                  : ControlScheme::SwitchPro)
-                             .rumble;
+            const input::SchemeTuning& tuning = input::get_controls_config().tune(
+                test_target.kind == RumbleTarget::Kind::XInput ? ControlScheme::Xbox : ControlScheme::SwitchPro);
+            s_strength = tuning.vibration ? tuning.rumble : 0u;
         }
         request.target = test_target;
         request.strength = s_strength;
@@ -1102,7 +1114,7 @@ void publish_rumble_request(const RumbleRequest& published) noexcept {
     h.rumble_published_us = now;
     ReleaseSRWLockExclusive(&h.rumble_lock);
     if (rumble_trace_enabled()) trace_rumble_output(request, now);
-    const bool changed = previous.motor_on != request.motor_on || previous.strength != request.strength ||
+    const bool changed = previous.level != request.level || previous.strength != request.strength ||
                          !(previous.target == request.target) || previous.focused != request.focused ||
                          previous.paused != request.paused;
     if (changed && h.started.load(std::memory_order_acquire) && h.rumble_event) SetEvent(h.rumble_event.get());

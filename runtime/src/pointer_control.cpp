@@ -72,7 +72,7 @@ StickVector stick_pointer_velocity(StickVector stick, float speed) noexcept {
 }
 
 bool PointerRestHide::update(float x, float y, std::uint64_t now_us, bool controller_owned,
-                             bool reveal, float hide_seconds, float radius) noexcept {
+                             bool reveal, bool latch, float hide_seconds, float radius) noexcept {
     if (!std::isfinite(x) || !std::isfinite(y)) {
         return hidden;
     }
@@ -85,6 +85,10 @@ bool PointerRestHide::update(float x, float y, std::uint64_t now_us, bool contro
         anchored = active;
         hidden = false;
         return false;
+    }
+    if (hidden && latch) {
+        last_us = now_us;
+        return true;
     }
     const float dt = static_cast<float>(now_us - last_us) * 1e-6f;
     last_us = now_us;

@@ -383,7 +383,7 @@ SchemeTuning default_scheme_tuning(ControlScheme scheme) {
     }
     if (scheme_is_gamepad(scheme)) {
         // Still-pointer hiding (pointer_control.h kDefaultPointerHide*).
-        tuning.pointer_hide_seconds = 2.0f;
+        tuning.pointer_hide_seconds = 4.0f;
         tuning.pointer_hide_radius = 0.12f;
     }
     return tuning;
@@ -414,13 +414,20 @@ unsigned migrate_legacy_controls(ControlsConfig& config, unsigned version) noexc
             tuning.gyro_pointer = current_tuning.gyro_pointer;
             ++changed;
         }
-        if (version < 4u && scheme_is_gamepad(scheme)) {
-            if (tuning.pointer_hide_seconds == kVersion3PointerHideSeconds) {
+        if (version < kControlsVersion && scheme_is_gamepad(scheme)) {
+            const bool old_seconds =
+                (version < 4u && tuning.pointer_hide_seconds == kVersion3PointerHideSeconds) ||
+                tuning.pointer_hide_seconds == kVersion4PointerHideSeconds;
+            if (old_seconds && tuning.pointer_hide_seconds != current_tuning.pointer_hide_seconds) {
                 tuning.pointer_hide_seconds = current_tuning.pointer_hide_seconds;
                 ++changed;
             }
-            if (tuning.pointer_hide_radius == kVersion3PointerHideRadius) {
+            if (version < 4u && tuning.pointer_hide_radius == kVersion3PointerHideRadius) {
                 tuning.pointer_hide_radius = current_tuning.pointer_hide_radius;
+                ++changed;
+            }
+            if (tuning.rumble == kVersion4Rumble && tuning.rumble != current_tuning.rumble) {
+                tuning.rumble = current_tuning.rumble;
                 ++changed;
             }
         }
@@ -643,8 +650,15 @@ bool apply_controls_setting(ControlsConfig& config, std::string_view key_text, s
         for (std::size_t i = 0; i < std::size(kMotionNames); ++i) {
             if (iequals(text, kMotionNames[i])) tuning.motion_shake = static_cast<MotionShake>(i);
         }
+    } else if (name == "vibration" && parse_bool(value, flag)) {
+        tuning.vibration = flag;
     } else if (name == "rumble" && parse_float_c(value, number)) {
-        tuning.rumble = rumble::snap_strength(number);
+        // 0 was "off" before controls version 5.
+        if (number <= 0.0f) {
+            tuning.vibration = false;
+        } else {
+            tuning.rumble = rumble::snap_strength(number);
+        }
     }
     config = sanitize_controls_config(config);
     return true;
@@ -691,6 +705,7 @@ std::string format_controls_settings(const ControlsConfig& config) {
             text += "tune." + prefix + "pointer_deadzone=" + format_float_c(tuning.pointer_deadzone) + "\n";
             text += "tune." + prefix + "pointer_hide_seconds=" + format_float_c(tuning.pointer_hide_seconds) + "\n";
             text += "tune." + prefix + "pointer_hide_radius=" + format_float_c(tuning.pointer_hide_radius) + "\n";
+            text += "tune." + prefix + "vibration=" + (tuning.vibration ? "1" : "0") + "\n";
             text += "tune." + prefix + "rumble=" + std::to_string(tuning.rumble) + "\n";
         }
         text += "tune." + prefix + "pointer_speed=" + format_float_c(tuning.pointer_speed) + "\n";

@@ -57,8 +57,9 @@ struct RumbleTarget {
     friend bool operator==(RumbleTarget, RumbleTarget) = default;
 };
 struct RumbleRequest {
-    bool motor_on = false;  // the game's motor bit
-    std::uint8_t strength = 0;
+    bool motor_on = false;   // the game's motor bit
+    std::uint8_t level = 0;  // motor level, 0..rumble::kLevelSteps (rumble::MotorEnvelope)
+    std::uint8_t strength = 0;  // percent; 0 = vibration off
     RumbleTarget target{};
     bool focused = false;
     bool paused = false;

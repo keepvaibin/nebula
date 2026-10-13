@@ -21,7 +21,39 @@ int encoded_amplitude(float amplitude) noexcept {
     return 0;
 }
 
+float strength_fraction(std::uint8_t strength) noexcept {
+    const float s = std::clamp<float>(strength, kMinStrength, kMaxStrength);
+    return (s - kMinStrength) / static_cast<float>(kMaxStrength - kMinStrength);
+}
+
+float level_fraction(std::uint8_t level) noexcept {
+    return static_cast<float>(std::min(level, kLevelSteps)) / static_cast<float>(kLevelSteps);
+}
+
 }  // namespace
+
+float MotorEnvelope::update(bool on, std::uint64_t now_us) noexcept {
+    const float dt = last_us == 0u || now_us < last_us
+        ? 0.0f
+        : std::min(static_cast<float>(now_us - last_us) * 1e-6f, 1.0f);
+    last_us = now_us;
+    const float target = on ? 1.0f : 0.0f;
+    const float seconds = on ? kMotorRiseSeconds : kMotorFallSeconds;
+    level += (target - level) * (1.0f - std::exp(-dt / seconds));
+    if (!on && level < kMotorStopLevel) level = 0.0f;
+    return level;
+}
+
+std::uint8_t quantize_level(float level) noexcept {
+    if (!std::isfinite(level) || level <= 0.0f) return 0;
+    return static_cast<std::uint8_t>(std::clamp<long>(std::lround(level * kLevelSteps), 1, kLevelSteps));
+}
+
+float switch_low_amplitude(std::uint8_t level, std::uint8_t strength) noexcept {
+    if (level == 0u || strength == 0u) return 0.0f;
+    return level_fraction(level) *
+           (kSwitchLowAmplitudeMin + (kSwitchLowAmplitudeMax - kSwitchLowAmplitudeMin) * strength_fraction(strength));
+}
 
 std::array<std::uint8_t, 4> encode_switch_hd_rumble(float high_hz, float high_amplitude, float low_hz,
                                                     float low_amplitude) noexcept {
@@ -36,12 +68,11 @@ std::array<std::uint8_t, 4> encode_switch_hd_rumble(float high_hz, float high_am
             static_cast<std::uint8_t>(low_amp & 0xFF)};
 }
 
-std::array<std::uint8_t, 8> switch_pro_motor_rumble(bool on, std::uint8_t strength) noexcept {
+std::array<std::uint8_t, 8> switch_pro_motor_rumble(std::uint8_t level, std::uint8_t strength) noexcept {
     std::array<std::uint8_t, 8> out{};
-    const float scale = on ? std::min<float>(strength, 100.0f) / 100.0f : 0.0f;
-    const std::array<std::uint8_t, 4> side = scale > 0.0f
-        ? encode_switch_hd_rumble(kSwitchMotorHighHz, kSwitchMotorHighAmplitude * scale, kSwitchMotorLowHz,
-                                  kSwitchMotorLowAmplitude * scale)
+    const float low = switch_low_amplitude(level, strength);
+    const std::array<std::uint8_t, 4> side = low > 0.0f
+        ? encode_switch_hd_rumble(kSwitchMotorHighHz, low * kSwitchHighShare, kSwitchMotorLowHz, low)
         : kSwitchNeutralRumble;
     std::copy(side.begin(), side.end(), out.begin());
     std::copy(side.begin(), side.end(), out.begin() + 4);
@@ -67,13 +98,13 @@ std::array<std::uint8_t, 5> encode_switch2_hd_rumble(std::uint16_t high_frequenc
             static_cast<std::uint8_t>(low_amplitude >> 8)};
 }
 
-std::size_t build_switch2_rumble_report(std::uint8_t sequence, bool on, std::uint8_t strength,
+std::size_t build_switch2_rumble_report(std::uint8_t sequence, std::uint8_t level, std::uint8_t strength,
                                         std::span<std::uint8_t> out) noexcept {
     if (out.size() < kSwitch2RumbleReportBytes) return 0;
     std::fill(out.begin(), out.end(), std::uint8_t{0});
-    const float scale = on ? std::min<float>(strength, 100.0f) / 100.0f : 0.0f;
-    const auto low = static_cast<std::uint16_t>(std::lround(kSwitch2MaxAmplitude * kSwitchMotorLowAmplitude * scale));
-    const auto high = static_cast<std::uint16_t>(std::lround(kSwitch2MaxAmplitude * kSwitchMotorHighAmplitude * scale));
+    const float low_fraction = switch_low_amplitude(level, strength);
+    const auto low = static_cast<std::uint16_t>(std::lround(kSwitch2MaxAmplitude * low_fraction));
+    const auto high = static_cast<std::uint16_t>(std::lround(kSwitch2MaxAmplitude * low_fraction * kSwitchHighShare));
     out[0] = kSwitch2RumbleReport;
     out[1] = static_cast<std::uint8_t>(0x50u | (sequence & 0x0Fu));
     const auto motor = encode_switch2_hd_rumble(kSwitch2HighFrequency, high, kSwitch2LowFrequency, low);
@@ -82,11 +113,10 @@ std::size_t build_switch2_rumble_report(std::uint8_t sequence, bool on, std::uin
     return kSwitch2RumbleReportBytes;
 }
 
-XInputMotors xinput_motor_speeds(bool on, std::uint8_t strength) noexcept {
-    if (!on) return {};
-    const float scale = std::min<float>(strength, 100.0f) / 100.0f;
-    return {static_cast<std::uint16_t>(std::lround(32767.0f * scale)),
-            static_cast<std::uint16_t>(std::lround(65535.0f * scale))};
+XInputMotors xinput_motor_speeds(std::uint8_t level, std::uint8_t strength) noexcept {
+    if (level == 0u || strength == 0u) return {};
+    const float speed = level_fraction(level) * (kXInputSpeedMin + (1.0f - kXInputSpeedMin) * strength_fraction(strength));
+    return {0u, static_cast<std::uint16_t>(std::lround(65535.0f * std::clamp(speed, 0.0f, 1.0f)))};
 }
 
 bool motor_should_run(const GateInputs& in) noexcept {

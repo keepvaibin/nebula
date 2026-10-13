@@ -119,8 +119,8 @@ void test_ini_round_trip() {
     config.tune(ControlScheme::SwitchPro2).motion_shake = MotionShake::Nunchuk;
     config.tune(ControlScheme::Xbox).pointer_speed = 3.7f;
     config.tune(ControlScheme::Keyboard).invert_pointer_y = true;
-    config.tune(ControlScheme::Xbox).rumble = 0;
-    config.tune(ControlScheme::SwitchPro).rumble = 75;
+    config.tune(ControlScheme::Xbox).vibration = false;
+    config.tune(ControlScheme::SwitchPro).rumble = 70;
     const std::string text = format_controls_settings(config);
     ControlsConfig parsed = default_controls_config();
     std::size_t lines = 0;
@@ -141,18 +141,23 @@ void test_ini_round_trip() {
     expect(text.find("bind.xbox.b=LB\n") != std::string::npos, "xbox B line is stable text");
     expect(text.find("bind.xbox.jump_back=B\n") != std::string::npos, "xbox jump/back line is stable text");
     expect(text.find("bind.switch_pro.a=A\n") != std::string::npos, "switch A line is stable text");
-    expect(text.find("tune.xbox.rumble=0\n") != std::string::npos &&
-               text.find("tune.switch_pro.rumble=75\n") != std::string::npos &&
-               text.find("tune.switch_pro2.rumble=100\n") != std::string::npos &&
-               text.find("tune.keyboard.rumble") == std::string::npos,
-           "vibration strength lines (controllers only, default 100)");
+    expect(text.find("tune.xbox.vibration=0\n") != std::string::npos &&
+               text.find("tune.switch_pro.rumble=70\n") != std::string::npos &&
+               text.find("tune.switch_pro2.vibration=1\n") != std::string::npos &&
+               text.find("tune.switch_pro2.rumble=50\n") != std::string::npos &&
+               text.find("tune.keyboard.rumble") == std::string::npos &&
+               text.find("tune.keyboard.vibration") == std::string::npos,
+           "vibration lines (controllers only, default on at 50%)");
     ControlsConfig snapped = default_controls_config();
-    expect(apply_controls_setting(snapped, "tune.switch_pro2.rumble", "60") &&
-               snapped.tune(ControlScheme::SwitchPro2).rumble == 50u,
-           "vibration strength snaps to the nearest 25%");
+    expect(apply_controls_setting(snapped, "tune.switch_pro2.rumble", "65") &&
+               snapped.tune(ControlScheme::SwitchPro2).rumble == 60u,
+           "vibration strength snaps to the nearest 10%, ties down");
     expect(apply_controls_setting(snapped, "tune.xbox.rumble", "loud") &&
-               snapped.tune(ControlScheme::Xbox).rumble == 100u,
+               snapped.tune(ControlScheme::Xbox).rumble == 50u,
            "malformed vibration strength keeps the previous value");
+    expect(apply_controls_setting(snapped, "tune.xbox.rumble", "0") &&
+               !snapped.tune(ControlScheme::Xbox).vibration && snapped.tune(ControlScheme::Xbox).rumble == 50u,
+           "a version-4 strength of 0 turns vibration off");
     expect(!apply_controls_setting(parsed, "audio_master_gain", "1"), "foreign keys are not owned");
     ControlsConfig malformed = default_controls_config();
     expect(apply_controls_setting(malformed, "tune.xbox.pointer_speed", "fast"), "malformed tune is owned");
@@ -695,7 +700,7 @@ double hide_time(Path&& at, double seconds, double report_s = 0.015) {
     const float s = kDefaultPointerHideSeconds;
     for (double t = 0.0; t <= seconds; t += report_s) {
         const auto p = at(t);
-        if (hide.update(p[0], p[1], static_cast<std::uint64_t>(t * 1e6) + 1'000'000u, true, false, s, r)) {
+        if (hide.update(p[0], p[1], static_cast<std::uint64_t>(t * 1e6) + 1'000'000u, true, false, false, s, r)) {
             return t;
         }
     }
@@ -704,60 +709,75 @@ double hide_time(Path&& at, double seconds, double report_s = 0.015) {
 
 void test_rest_hide() {
     using P = std::array<float, 2>;
-    // A perfectly still pointer hides after the default 2 s.
-    const double still = hide_time([](double) { return P{0.3f, -0.2f}; }, 5.0);
-    expect(still >= 1.99 && still <= 2.03, "a still pointer hides after 2 s");
+    // A perfectly still pointer hides after the default 4 s.
+    const double still = hide_time([](double) { return P{0.3f, -0.2f}; }, 6.0);
+    expect(still >= 3.99 && still <= 4.03, "a still pointer hides after 4 s");
     // Tremor (+-0.025 units at 9 Hz) plus small jerks (0.08 units for 60 ms,
     // alternating sides, every 0.5 s) never restart the timer.
     const double shaky = hide_time([](double t) {
         const double tremor = 0.025 * std::sin(2.0 * 3.14159265 * 9.0 * t);
-        const double phase = std::fmod(t, 0.5);
-        const double jerk = phase < 0.06 ? (std::fmod(t, 1.0) < 0.5 ? 0.08 : -0.08) : 0.0;
+        const double phase = std::fmod(t + 0.2, 0.5);
+        const double jerk = phase < 0.06 ? (std::fmod(t + 0.2, 1.0) < 0.5 ? 0.08 : -0.08) : 0.0;
         return P{static_cast<float>(0.3 + tremor + jerk), static_cast<float>(-0.2 + 0.5 * tremor)};
-    }, 5.0);
-    expect(shaky >= 1.99 && shaky <= 2.05, "tremor and small jerks inside the radius hide at 2 s");
+    }, 6.0);
+    expect(shaky >= 3.99 && shaky <= 4.05, "tremor and small jerks inside the radius hide at 4 s");
     // A single-report spike far outside the radius is filtered out.
     const double spike = hide_time([](double t) {
         return P{t > 1.0 && t < 1.015 ? 0.8f : 0.3f, -0.2f};
-    }, 5.0);
-    expect(spike >= 1.99 && spike <= 2.03, "a one-report spike does not restart the timer");
+    }, 6.0);
+    expect(spike >= 3.99 && spike <= 4.03, "a one-report spike does not restart the timer");
     // A slow deliberate pan (0.15 units/s, 3 degrees per second at sensitivity
-    // 1) never hides while it lasts; it hides 2 s after it stops.
+    // 1) never hides while it lasts; it hides 4 s after it stops.
     const double pan = hide_time([](double t) {
         return P{static_cast<float>(-0.9 + 0.15 * std::min(t, 10.0)), 0.0f};
     }, 9.9);
     expect(pan < 0.0, "a slow pan never hides");
     const double after_pan = hide_time([](double t) {
         return P{static_cast<float>(-0.9 + 0.15 * std::min(t, 10.0)), 0.0f};
-    }, 14.0);
+    }, 16.0);
     // The timer runs from the last re-anchor, at most radius/speed (0.8 s)
     // before the pan stopped.
-    expect(after_pan > 11.1 && after_pan < 12.1, "the pointer hides within 2 s after the pan stops");
+    expect(after_pan > 13.1 && after_pan < 14.1, "the pointer hides within 4 s after the pan stops");
 
-    // Hidden: tremor keeps it hidden, leaving the radius shows it, recenter
-    // shows it.
+    // Stick pointer (not latched): tremor keeps it hidden, leaving the radius
+    // shows it, recenter shows it.
     PointerRestHide hide{};
     std::uint64_t t = 1'000'000;
-    for (int i = 0; i < 210; ++i, t += 10'000) (void)hide.update(0.2f, 0.1f, t, true, false, 2.0f, 0.12f);
-    expect(hide.hidden, "hidden after 2.1 s");
+    for (int i = 0; i < 410; ++i, t += 10'000) (void)hide.update(0.2f, 0.1f, t, true, false, false, 4.0f, 0.12f);
+    expect(hide.hidden, "hidden after 4.1 s");
     bool shown = false;
     for (int i = 0; i < 50; ++i, t += 10'000) {
-        shown |= !hide.update(0.2f + ((i & 1) ? 0.04f : -0.04f), 0.1f, t, true, false, 2.0f, 0.12f);
+        shown |= !hide.update(0.2f + ((i & 1) ? 0.04f : -0.04f), 0.1f, t, true, false, false, 4.0f, 0.12f);
     }
     expect(!shown, "tremor inside the radius keeps a hidden pointer hidden");
-    for (int i = 0; i < 30; ++i, t += 10'000) (void)hide.update(0.5f, 0.1f, t, true, false, 2.0f, 0.12f);
-    expect(!hide.hidden, "moving out of the radius shows the pointer");
-    for (int i = 0; i < 210; ++i, t += 10'000) (void)hide.update(0.5f, 0.1f, t, true, false, 2.0f, 0.12f);
-    expect(hide.hidden, "the moved pointer hides again 2 s after it settles");
-    expect(!hide.update(0.0f, 0.0f, t, true, true, 2.0f, 0.12f), "recenter shows it");
+    for (int i = 0; i < 30; ++i, t += 10'000) (void)hide.update(0.5f, 0.1f, t, true, false, false, 4.0f, 0.12f);
+    expect(!hide.hidden, "a stick pointer moved out of the radius shows again");
+    for (int i = 0; i < 410; ++i, t += 10'000) (void)hide.update(0.5f, 0.1f, t, true, false, false, 4.0f, 0.12f);
+    expect(hide.hidden, "the moved pointer hides again 4 s after it settles");
+    expect(!hide.update(0.0f, 0.0f, t, true, true, false, 4.0f, 0.12f), "recenter shows it");
+
+    // Gyro pointer (latched): once hidden, only recenter brings it back.
+    PointerRestHide gyro{};
+    t = 1'000'000;
+    for (int i = 0; i < 410; ++i, t += 10'000) (void)gyro.update(0.2f, 0.1f, t, true, false, true, 4.0f, 0.12f);
+    expect(gyro.hidden, "gyro pointer hidden after 4.1 s");
+    bool gyro_shown = false;
+    for (int i = 0; i < 200; ++i, t += 10'000) {
+        gyro_shown |= !gyro.update(0.2f + 0.01f * static_cast<float>(i), -0.3f, t, true, false, true, 4.0f, 0.12f);
+    }
+    expect(!gyro_shown, "a hidden gyro pointer stays hidden while the controller turns");
+    expect(!gyro.update(0.0f, 0.0f, t, true, true, true, 4.0f, 0.12f), "recenter shows the gyro pointer");
+    t += 10'000;
+    expect(!gyro.update(0.05f, 0.0f, t, true, false, true, 4.0f, 0.12f) && !gyro.hidden,
+           "after recenter the gyro pointer moves and the timer starts again");
 
     PointerRestHide mouse{};
     bool ever = false;
-    for (int i = 0; i < 1000; ++i) ever |= mouse.update(0.0f, 0.0f, i * 10'000ull, false, false, 2.0f, 0.12f);
+    for (int i = 0; i < 1000; ++i) ever |= mouse.update(0.0f, 0.0f, i * 10'000ull, false, false, false, 4.0f, 0.12f);
     expect(!ever, "a mouse-owned pointer never rest-hides");
     PointerRestHide never{};
     ever = false;
-    for (int i = 0; i < 1000; ++i) ever |= never.update(0.0f, 0.0f, i * 10'000ull, true, false, 0.0f, 0.12f);
+    for (int i = 0; i < 1000; ++i) ever |= never.update(0.0f, 0.0f, i * 10'000ull, true, false, true, 0.0f, 0.12f);
     expect(!ever, "0 seconds never hides");
 }
 
@@ -789,7 +809,7 @@ double gyro_hide_time(double seconds, double pan_dps, double pan_until_s) {
             x += out.pointer_x;
             y -= out.pointer_y;
         }
-        if (hide.update(x, y, t_us, true, false, kDefaultPointerHideSeconds, kDefaultPointerHideRadius) &&
+        if (hide.update(x, y, t_us, true, false, true, kDefaultPointerHideSeconds, kDefaultPointerHideRadius) &&
             hidden_at < 0.0) {
             hidden_at = (t_us - 1'000'000) * 1e-6;
         }
@@ -800,9 +820,11 @@ double gyro_hide_time(double seconds, double pan_dps, double pan_until_s) {
 
 void test_rest_hide_gyro() {
     const double held = gyro_hide_time(6.0, 0.0, 0.0);
-    expect(held >= 1.95 && held <= 2.3, "hand-held gyro (tremor + small jerks) hides at about 2 s");
+    expect(held >= 3.95 && held <= 4.3, "hand-held gyro (tremor + small jerks) hides at about 4 s");
     expect(gyro_hide_time(8.0, 3.0, 8.0) < 0.0, "a slow 3 deg/s pan never hides while it lasts");
 }
+
+std::uint8_t rb_default_strength() { return galaxy::input::rumble::kDefaultStrength; }
 
 void test_rumble_encoding() {
     namespace rb = galaxy::input::rumble;
@@ -821,20 +843,23 @@ void test_rumble_encoding() {
     // Frequencies: 160 Hz high band is 0x0080, 320 Hz low band is 0x60.
     expect(rb::encode_switch_hd_rumble(160.0f, 0.0f, 320.0f, 0.0f) == B4{0x80, 0x00, 0x60, 0x40},
            "160 Hz high band, 320 Hz low band");
-    const auto off = rb::switch_pro_motor_rumble(false, 100);
+    const auto off = rb::switch_pro_motor_rumble(0, 100);
     expect(std::equal(off.begin(), off.begin() + 4, rb::kSwitchNeutralRumble.begin()) &&
                std::equal(off.begin() + 4, off.end(), rb::kSwitchNeutralRumble.begin()),
-           "motor off: neutral on both actuators");
-    const auto on = rb::switch_pro_motor_rumble(true, 100);
-    const auto expected = rb::encode_switch_hd_rumble(rb::kSwitchMotorHighHz, rb::kSwitchMotorHighAmplitude,
-                                                      rb::kSwitchMotorLowHz, rb::kSwitchMotorLowAmplitude);
+           "motor stopped: neutral on both actuators");
+    const auto on = rb::switch_pro_motor_rumble(rb::kLevelSteps, 100);
+    const auto expected = rb::encode_switch_hd_rumble(rb::kSwitchMotorHighHz,
+                                                      rb::kSwitchLowAmplitudeMax * rb::kSwitchHighShare,
+                                                      rb::kSwitchMotorLowHz, rb::kSwitchLowAmplitudeMax);
     expect(std::equal(expected.begin(), expected.end(), on.begin()) &&
                std::equal(expected.begin(), expected.end(), on.begin() + 4) && on[1] != 0x01u,
-           "motor on: 160/320 Hz with amplitude on both actuators");
-    const auto quarter = rb::switch_pro_motor_rumble(true, 25);
-    expect(quarter[1] != 0x01u && quarter[1] < on[1] && quarter[3] < on[3], "25% is weaker and not silent");
-    const auto none = rb::switch_pro_motor_rumble(true, 0);
-    expect(std::equal(none.begin(), none.begin() + 4, rb::kSwitchNeutralRumble.begin()), "0% is silent");
+           "full level at 100%: 160 Hz at 0.70 with 320 Hz at 0.35 of it, both actuators");
+    const auto weakest = rb::switch_pro_motor_rumble(rb::kLevelSteps, rb::kMinStrength);
+    expect(weakest[3] != 0x40u && weakest[3] < on[3], "10% is weaker and not silent (low band)");
+    const auto half_level = rb::switch_pro_motor_rumble(rb::kLevelSteps / 2u, 100);
+    expect(half_level[3] < on[3], "a lower motor level is weaker");
+    const auto none = rb::switch_pro_motor_rumble(rb::kLevelSteps, 0);
+    expect(std::equal(none.begin(), none.begin() + 4, rb::kSwitchNeutralRumble.begin()), "vibration off is silent");
     std::array<std::uint8_t, 64> report{};
     report.fill(0xAA);
     expect(rb::build_switch_pro_rumble_report(0x13, on, report) == 10u && report[0] == 0x10u && report[1] == 0x03u &&
@@ -842,23 +867,55 @@ void test_rumble_encoding() {
            "report 0x10: id, packet nibble, 8 rumble bytes, zero padding");
     // Pro Controller 2 (SDL_hidapi_switch2.c layout).
     std::array<std::uint8_t, 64> pro2{};
-    expect(rb::build_switch2_rumble_report(0x12, false, 100, pro2) == 64u && pro2[0] == 0x02u && pro2[1] == 0x52u &&
+    expect(rb::build_switch2_rumble_report(0x12, 0, 100, pro2) == 64u && pro2[0] == 0x02u && pro2[1] == 0x52u &&
                pro2[2] == 0x87u && pro2[3] == 0x01u && pro2[4] == 0x20u && pro2[5] == 0x11u && pro2[6] == 0x00u &&
                std::equal(pro2.begin() + 1, pro2.begin() + 7, pro2.begin() + 0x11) && pro2[7] == 0u,
            "Pro Controller 2 report: 0x02, 0x5n, frequencies with zero amplitude, copy at 0x11");
-    (void)rb::build_switch2_rumble_report(0, true, 100, pro2);
-    const auto motor2 = rb::encode_switch2_hd_rumble(rb::kSwitch2HighFrequency, 17400, rb::kSwitch2LowFrequency, 23200);
-    expect(std::equal(motor2.begin(), motor2.end(), pro2.begin() + 2), "Pro Controller 2 amplitudes 0.6/0.8 of 29000");
-    // Xbox: the light motor full, the heavy one half.
-    const auto x_off = rb::xinput_motor_speeds(false, 100);
-    const auto x_full = rb::xinput_motor_speeds(true, 100);
-    const auto x_half = rb::xinput_motor_speeds(true, 50);
+    (void)rb::build_switch2_rumble_report(0, rb::kLevelSteps, 100, pro2);
+    const auto motor2 = rb::encode_switch2_hd_rumble(rb::kSwitch2HighFrequency, 7105, rb::kSwitch2LowFrequency, 20300);
+    expect(std::equal(motor2.begin(), motor2.end(), pro2.begin() + 2),
+           "Pro Controller 2 amplitudes 0.70 and 0.245 of 29000 at full level");
+    // Xbox: the light motor only.
+    const auto x_off = rb::xinput_motor_speeds(0, 100);
+    const auto x_full = rb::xinput_motor_speeds(rb::kLevelSteps, 100);
+    const auto x_half = rb::xinput_motor_speeds(rb::kLevelSteps / 2u, 100);
+    const auto x_min = rb::xinput_motor_speeds(rb::kLevelSteps, rb::kMinStrength);
     expect(x_off.left == 0u && x_off.right == 0u, "xbox off");
-    expect(x_full.left == 32767u && x_full.right == 65535u, "xbox full: right motor full, left half");
-    expect(x_half.left == 16384u && x_half.right == 32768u, "xbox 50%");
-    expect(rb::snap_strength(30.0f) == 25u && rb::snap_strength(63.0f) == 75u && rb::snap_strength(110.0f) == 100u &&
-               rb::snap_strength(-5.0f) == 0u,
-           "strength snaps to 0/25/50/75/100");
+    expect(x_full.left == 0u && x_full.right == 65535u, "xbox full: light motor full, heavy motor off");
+    expect(x_half.left == 0u && x_half.right == 32768u, "xbox half level");
+    expect(x_min.right == 9830u, "xbox 10%: light motor at 15%");
+    expect(rb::snap_strength(30.0f) == 30u && rb::snap_strength(63.0f) == 60u && rb::snap_strength(65.0f) == 60u &&
+               rb::snap_strength(66.0f) == 70u && rb::snap_strength(110.0f) == 100u &&
+               rb::snap_strength(-5.0f) == 10u && rb::snap_strength(std::nanf("")) == rb::kDefaultStrength,
+           "strength snaps to 10..100 in steps of 10");
+    // Motor model: rises over ~30 ms, falls over ~60 ms.
+    rb::MotorEnvelope motor{};
+    expect(motor.update(true, 1'000'000) == 0.0f, "no time has passed: still stopped");
+    const float risen = motor.update(true, 1'030'000);
+    expect(risen > 0.62f && risen < 0.64f, "one rise time: 63%");
+    const float fallen = motor.update(false, 1'090'000);
+    expect(fallen > 0.22f && fallen < 0.24f, "one fall time: 37% of that");
+    for (std::uint64_t t = 1'100'000; t < 1'400'000; t += 10'000) (void)motor.update(false, t);
+    expect(motor.level == 0.0f, "the motor stops below 5%");
+    expect(rb::quantize_level(0.0f) == 0u && rb::quantize_level(0.001f) == 1u &&
+               rb::quantize_level(1.0f) == rb::kLevelSteps && rb::quantize_level(0.5f) == rb::kLevelSteps / 2u,
+           "levels quantize to 0..32, any motion to at least 1");
+    // A Star Bit shot: four 30 ms pulses 30 ms apart, sampled every 10 ms,
+    // feel like one buzz: the motor never stops between pulses and never
+    // reaches full speed.
+    rb::MotorEnvelope shot{};
+    float low = 1.0f, high = 0.0f;
+    std::uint64_t now = 2'000'000;
+    (void)shot.update(false, now);
+    for (int pulse = 0; pulse < 4; ++pulse) {
+        for (int i = 0; i < 6; ++i) {
+            now += 10'000;
+            const float level = shot.update(i < 3, now);
+            if (pulse > 0 || i >= 3) low = std::min(low, level);
+            high = std::max(high, level);
+        }
+    }
+    expect(low > 0.2f && high < 0.9f, "a Star Bit shot is one continuous, soft buzz");
 }
 
 void test_rumble_gate() {
@@ -1083,10 +1140,10 @@ void test_defaults_and_migration() {
         const LogicalInput lt = evaluate_pad_bindings(xb, pad_sample, 0.12f);
         expect(lt.held(WiiTarget::Z) && !lt.held(WiiTarget::Shake), "Xbox: LT crouches");
     }
-    expect(config.tune(ControlScheme::SwitchPro).pointer_hide_seconds == 2.0f &&
+    expect(config.tune(ControlScheme::SwitchPro).pointer_hide_seconds == 4.0f &&
                config.tune(ControlScheme::SwitchPro).pointer_hide_radius == kDefaultPointerHideRadius &&
                config.tune(ControlScheme::Xbox).pointer_hide_seconds == kDefaultPointerHideSeconds,
-           "still pointer hides after 2 s within 0.12 units by default");
+           "still pointer hides after 4 s within 0.12 units by default");
     expect(only(xb[WiiTarget::PointerRecenter], {SourceKind::Button, pad::kRightStickBit}), "Xbox: RS recenters");
     expect(!config.tune(ControlScheme::Xbox).gyro_pointer, "Xbox has no gyro");
 
@@ -1164,12 +1221,35 @@ void test_defaults_and_migration() {
                "version-3 Switch spin gains ZR");
         expect(v3.table(ControlScheme::SwitchPro)[WiiTarget::Z][0] == InputSource{SourceKind::Button, pad::kRightShoulderBit},
                "a changed version-3 crouch binding stays");
-        expect(v3.tune(ControlScheme::SwitchPro).pointer_hide_seconds == 2.0f &&
+        expect(v3.tune(ControlScheme::SwitchPro).pointer_hide_seconds == kDefaultPointerHideSeconds &&
                    v3.tune(ControlScheme::SwitchPro).pointer_hide_radius == kDefaultPointerHideRadius,
-               "version-3 still-pointer timing moves to 2 s / 0.12");
+               "version-3 still-pointer timing moves to 4 s / 0.12");
         expect(v3.tune(ControlScheme::Xbox).pointer_hide_seconds == 7.0f &&
                    v3.tune(ControlScheme::Xbox).pointer_hide_radius == kDefaultPointerHideRadius,
                "a changed hide time stays");
+    }
+    // A version-4 (Native30 preview) file: 2 s still pointer and 100%
+    // vibration move to 4 s and 50%, values the player changed stay.
+    {
+        ControlsConfig v4 = default_controls_config();
+        for (std::size_t i = 0; i < kControlSchemeCount; ++i) {
+            if (!scheme_is_gamepad(static_cast<ControlScheme>(i))) continue;
+            v4.tuning[i].pointer_hide_seconds = kVersion4PointerHideSeconds;
+            v4.tuning[i].rumble = kVersion4Rumble;
+        }
+        v4.tune(ControlScheme::Xbox).rumble = 30;
+        v4.tune(ControlScheme::SwitchPro2).pointer_hide_seconds = 9.0f;
+        expect(migrate_legacy_controls(v4, 4u) > 0u, "version-4 defaults migrate");
+        expect(v4.tune(ControlScheme::SwitchPro).pointer_hide_seconds == kDefaultPointerHideSeconds &&
+                   v4.tune(ControlScheme::SwitchPro).rumble == rb_default_strength(),
+               "version-4 still pointer and vibration move to 4 s and 50%");
+        expect(v4.tune(ControlScheme::Xbox).rumble == 30u && v4.tune(ControlScheme::SwitchPro2).pointer_hide_seconds == 9.0f,
+               "changed version-4 values stay");
+        expect(v4 == [&] {
+            ControlsConfig again = v4;
+            (void)migrate_legacy_controls(again, kControlsVersion);
+            return again;
+        }(), "a current file does not migrate");
     }
     // A version-2 (Native29) file: its defaults move, the gyro switch the
     // player turned off stays off.
@@ -1254,7 +1334,7 @@ int imu_replay(const char* path) {
             shakes += out.shake_started ? 1 : 0;
             peak = std::max(peak, std::sqrt(x * x + y * y));
         }
-        if (hide.update(live_x, live_y, us + 1'000'000u, true, false, kDefaultPointerHideSeconds,
+        if (hide.update(live_x, live_y, us + 1'000'000u, true, false, true, kDefaultPointerHideSeconds,
                         kDefaultPointerHideRadius)) {
             if (hidden_at < 0.0) hidden_at = static_cast<double>(us) * 1e-6;
         } else {

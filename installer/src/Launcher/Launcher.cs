@@ -187,7 +187,7 @@ namespace Nebula.Launcher
         private readonly NumericUpDown pointerSpeed = new NumericUpDown(), stickDeadzone = new NumericUpDown(),
             pointerDeadzone = new NumericUpDown(), shakeSensitivity = new NumericUpDown(), gyroSensitivity = new NumericUpDown(),
             pointerHide = new NumericUpDown();
-        private readonly CheckBox invertPointer = new CheckBox(), gyroPointer = new CheckBox();
+        private readonly CheckBox invertPointer = new CheckBox(), gyroPointer = new CheckBox(), vibrationOn = new CheckBox();
         private readonly Label captureLabel = new Label();
         private int captureTarget = -1;
         private DateTime captureDeadline;
@@ -375,9 +375,12 @@ namespace Nebula.Launcher
             Combo(page, editScheme, 200, y);
             editScheme.Width = 300;
             editScheme.Items.AddRange(ControlsSettings.SchemeLabels);
-            SmallLabel(page, "Vibration", 516, y + 3, 76);
-            Combo(page, vibration, 596, y);
-            vibration.Width = 120;
+            vibrationOn.Text = "Vibration";
+            vibrationOn.Location = new Point(516, y + 1);
+            vibrationOn.Size = new Size(96, 24);
+            page.Controls.Add(vibrationOn);
+            Combo(page, vibration, 616, y);
+            vibration.Width = 100;
             vibration.Items.AddRange(ControlsSettings.RumbleLabels);
             y += 40;
 
@@ -452,6 +455,7 @@ namespace Nebula.Launcher
             pointerHide.ValueChanged += delegate { if (!loading) controls.Tuning[Scheme].PointerHideSeconds = (float)pointerHide.Value; };
             motion.SelectedIndexChanged += delegate { if (!loading) controls.Tuning[Scheme].Motion = Math.Max(0, motion.SelectedIndex); };
             vibration.SelectedIndexChanged += delegate { if (!loading) controls.Tuning[Scheme].Rumble = ControlsSettings.RumbleSteps[Math.Max(0, vibration.SelectedIndex)]; };
+            vibrationOn.CheckedChanged += delegate { if (!loading) controls.Tuning[Scheme].Vibration = vibrationOn.Checked; vibration.Enabled = vibrationOn.Enabled && vibrationOn.Checked; };
             editScheme.SelectedIndexChanged += delegate { EndCapture(); LoadTuning(); RefreshBindings(); };
 
             inputSource.SelectedIndex = Math.Min(controls.InputMode, inputSource.Items.Count - 1);
@@ -499,7 +503,9 @@ namespace Nebula.Launcher
             gyroSensitivity.Value = Clamp(gyroSensitivity, t.GyroSensitivity);
             pointerHide.Value = Clamp(pointerHide, t.PointerHideSeconds);
             vibration.SelectedIndex = Math.Max(0, Array.IndexOf(ControlsSettings.RumbleSteps, ControlsSettings.SnapRumble(t.Rumble)));
-            stickDeadzone.Enabled = pointerDeadzone.Enabled = pointerHide.Enabled = vibration.Enabled = pad;
+            vibrationOn.Checked = t.Vibration;
+            stickDeadzone.Enabled = pointerDeadzone.Enabled = pointerHide.Enabled = vibrationOn.Enabled = pad;
+            vibration.Enabled = pad && t.Vibration;
             motion.Enabled = shakeSensitivity.Enabled = gyroPointer.Enabled = gyroSensitivity.Enabled = imu;
             loading = false;
         }

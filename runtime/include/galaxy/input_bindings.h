@@ -176,14 +176,15 @@ struct SchemeTuning {
     bool gyro_pointer = false;
     float gyro_sensitivity = 1.0f;  // 1: a picture width per 40 degrees of turn
     // A controller pointer that stays within pointer_hide_radius (pointer
-    // units) of where it settled for pointer_hide_seconds disappears until it
-    // leaves that radius, the recenter button is pressed or (stick) pushed;
+    // units) of where it settled for pointer_hide_seconds disappears; a gyro
+    // pointer comes back with recenter, a stick pointer also when moved;
     // 0 seconds never hides (pointer_control.h PointerRestHide).
     float pointer_hide_seconds = 0.0f;
     float pointer_hide_radius = 0.12f;
-    // Controllers: vibration strength in percent, one of 0 (off), 25, 50, 75,
-    // 100 (rumble.h kStrengthSteps).
-    std::uint8_t rumble = 100;
+    // Controllers: vibration on/off and strength in percent, 10..100 in steps
+    // of 10 (rumble.h).
+    bool vibration = true;
+    std::uint8_t rumble = 50;
     friend bool operator==(const SchemeTuning&, const SchemeTuning&) = default;
 };
 
@@ -220,14 +221,18 @@ struct ControlsConfig {
 [[nodiscard]] BindingTable version3_binding_table(ControlScheme scheme);
 [[nodiscard]] SchemeTuning legacy_scheme_tuning(ControlScheme scheme);
 // runtime_settings.ini `controls_version`; files without it are version 1.
-inline constexpr unsigned kControlsVersion = 4;
+inline constexpr unsigned kControlsVersion = 5;
 // Version 3 still-pointer defaults (pads), replaced in version 4.
 inline constexpr float kVersion3PointerHideSeconds = 4.0f;
 inline constexpr float kVersion3PointerHideRadius = 0.03f;
+// Version 4 still-pointer time and vibration strength, replaced in version 5.
+inline constexpr float kVersion4PointerHideSeconds = 2.0f;
+inline constexpr std::uint8_t kVersion4Rumble = 100;
 // For a file of `version`: every binding list that still equals an earlier
 // version's default takes the current default, the gyro switch of a version-1
-// file and the still-pointer timing of a version-3 file their new defaults;
-// values the player changed stay. Returns the number of entries changed.
+// file, the still-pointer timing of a version-3 or 4 file and the vibration
+// strength of a version-4 file their new defaults; values the player changed
+// stay. Returns the number of entries changed.
 unsigned migrate_legacy_controls(ControlsConfig& config, unsigned version) noexcept;
 [[nodiscard]] SchemeTuning default_scheme_tuning(ControlScheme scheme);
 [[nodiscard]] ControlsConfig default_controls_config();

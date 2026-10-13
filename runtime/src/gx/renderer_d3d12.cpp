@@ -504,6 +504,7 @@ enum class ControlsRow {
     PointerDeadzone,
     PointerHide,
     Vibration,
+    VibrationStrength,
     MotionShake,
     ShakeSensitivity,
     GyroPointer,
@@ -527,6 +528,7 @@ std::vector<ControlsRow> controls_tail_rows() {
         rows.push_back(ControlsRow::PointerDeadzone);
         rows.push_back(ControlsRow::PointerHide);
         rows.push_back(ControlsRow::Vibration);
+        rows.push_back(ControlsRow::VibrationStrength);
     }
     if (scheme_has_motion(s_controls_scheme)) {
         rows.push_back(ControlsRow::MotionShake);
@@ -1010,10 +1012,13 @@ void adjust_native_setting_unlogged(int delta) {
         case ControlsRow::PointerHide:
             tuning.pointer_hide_seconds = step_float(tuning.pointer_hide_seconds, 1.0f, 0.0f, 30.0f);
             return;
-        case ControlsRow::Vibration: {
-            // 0, 25, 50, 75, 100 percent (rumble.h kStrengthSteps).
-            const unsigned index = std::min(4u, (static_cast<unsigned>(tuning.rumble) + 12u) / 25u);
-            tuning.rumble = static_cast<std::uint8_t>(step(index, 5u) * 25u);
+        case ControlsRow::Vibration:
+            tuning.vibration = !tuning.vibration;
+            return;
+        case ControlsRow::VibrationStrength: {
+            // 10..100 percent in steps of 10 (rumble.h).
+            const unsigned index = std::min(9u, (std::max<unsigned>(tuning.rumble, 10u) - 5u) / 10u);
+            tuning.rumble = static_cast<std::uint8_t>(10u + step(index, 10u) * 10u);
             return;
         }
         case ControlsRow::MotionShake:
@@ -9395,8 +9400,9 @@ std::string native_settings_row_text(
                           static_cast<double>(tuning.pointer_hide_seconds));
             return text;
         case ControlsRow::Vibration:
-            if (tuning.rumble == 0u) return "VIBRATION: OFF";
-            std::snprintf(text, sizeof(text), "VIBRATION: %u%%", static_cast<unsigned>(tuning.rumble));
+            return std::string("VIBRATION: ") + on_off(tuning.vibration);
+        case ControlsRow::VibrationStrength:
+            std::snprintf(text, sizeof(text), "VIBRATION STRENGTH: %u%%", static_cast<unsigned>(tuning.rumble));
             return text;
         case ControlsRow::MotionShake: {
             static constexpr const char* kMotion[] = {"OFF", "WII REMOTE", "NUNCHUK"};
