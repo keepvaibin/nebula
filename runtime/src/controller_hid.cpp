@@ -1078,7 +1078,20 @@ void publish_rumble_request(const RumbleRequest& published) noexcept {
     RumbleRequest request = published;
     const RumbleTarget test_target = test_rumble_target();
     if (test_target.kind != RumbleTarget::Kind::None) {
+        // The strength setting of that controller type (a replayed session
+        // has no controller in use to take it from).
+        static std::uint64_t s_generation = 0;
+        static std::uint8_t s_strength = input::rumble::kDefaultStrength;
+        const std::uint64_t generation = input::controls_config_generation();
+        if (generation != s_generation) {
+            s_generation = generation;
+            s_strength = input::get_controls_config()
+                             .tune(test_target.kind == RumbleTarget::Kind::XInput ? ControlScheme::Xbox
+                                                                                  : ControlScheme::SwitchPro)
+                             .rumble;
+        }
         request.target = test_target;
+        request.strength = s_strength;
         request.focused = true;
     }
     Hub& h = hub();
