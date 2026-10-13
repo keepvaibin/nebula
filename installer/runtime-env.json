@@ -265,7 +265,7 @@
   },
   {
     "name": "GALAXY_SKIP_DUPLICATE_XFB_PRESENTS",
-    "value": "0"
+    "value": "1"
   },
   {
     "name": "GALAXY_SKIP_LAUNCHER",

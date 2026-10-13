@@ -1959,6 +1959,29 @@ bool input_message_injected() noexcept {
     return GetCurrentInputMessageSource(&source) && source.originId == IMO_INJECTED;
 }
 
+// While the game window is in front the display stays on and the PC stays
+// awake: Windows does not count controller input as activity. Window thread
+// only.
+void hold_display_on(bool hold) noexcept {
+    static const HANDLE request = [] {
+        REASON_CONTEXT reason{};
+        reason.Version = POWER_REQUEST_CONTEXT_VERSION;
+        reason.Flags = POWER_REQUEST_CONTEXT_SIMPLE_STRING;
+        reason.Reason.SimpleReasonString = const_cast<LPWSTR>(L"Nebula is running");
+        return PowerCreateRequest(&reason);
+    }();
+    static bool held = false;
+    if (request == INVALID_HANDLE_VALUE || hold == held || (hold && hidden_window_mode_enabled())) return;
+    if (hold) {
+        (void)PowerSetRequest(request, PowerRequestDisplayRequired);
+        (void)PowerSetRequest(request, PowerRequestSystemRequired);
+    } else {
+        (void)PowerClearRequest(request, PowerRequestDisplayRequired);
+        (void)PowerClearRequest(request, PowerRequestSystemRequired);
+    }
+    held = hold;
+}
+
 LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     if (msg == kClientSizeMessage) {
         apply_requested_client_size(hwnd, static_cast<int>(wp), static_cast<int>(lp));
@@ -2225,6 +2248,7 @@ LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     }
     if (msg == WM_ACTIVATEAPP) {
         s_pointer_focused.store(wp != 0, std::memory_order_relaxed);
+        hold_display_on(wp != 0);
         if (wp != 0) {
             s_pointer_focus_valid.store(true, std::memory_order_release);
             seed_pointer_from_client(hwnd, false);
@@ -2246,6 +2270,7 @@ LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     if (msg == WM_DESTROY) {
         flush_native_settings_if_dirty();
         s_quit_requested.store(true, std::memory_order_release);
+        hold_display_on(false);
         invalidate_pointer_focus_once();
         clear_pointer_buttons();
         s_pointer_hwnd.store(0u, std::memory_order_release);

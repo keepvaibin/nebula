@@ -1057,6 +1057,9 @@ std::uint64_t exact_cached_dependency_vertex_budget() {
     return budget;
 }
 
+// A video frame the game did not redraw is not presented again, so the swap
+// chain's present rate (what frame-rate overlays count) is the game's frame
+// rate. GALAXY_SKIP_DUPLICATE_XFB_PRESENTS=0 presents every video frame.
 bool skip_duplicate_xfb_presents_enabled() {
     static const bool enabled = [] {
         char value[8]{};
@@ -1067,7 +1070,7 @@ bool skip_duplicate_xfb_presents_enabled() {
                 sizeof(value),
                 "GALAXY_SKIP_DUPLICATE_XFB_PRESENTS") != 0 ||
             length <= 1u) {
-            return false;
+            return true;
         }
         return value[0] != '0';
     }();
