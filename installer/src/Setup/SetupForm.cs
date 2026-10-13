@@ -318,7 +318,7 @@ namespace Nebula.Setup
                 Cursor = Cursors.Default;
                 if (release == null) { MessageBox.Show(this, "Nebula " + BuildInfo.Version + " is the newest release.", "Nebula Update"); return; }
                 string notes = release.Notes.Length > 1200 ? release.Notes.Substring(0, 1200) + "…" : release.Notes;
-                if (MessageBox.Show(this, "Nebula " + release.Version + (release.Prerelease ? " (development preview)" : "") + " is available. You have " +
+                if (MessageBox.Show(this, "Nebula " + release.Version + (release.Prerelease ? " (prerelease)" : "") + " is available. You have " +
                     BuildInfo.Version + ".\r\n\r\n" + notes + "\r\n\r\nDownload and install it? Your current version stays available until the new one is ready.",
                     "Nebula Update", MessageBoxButtons.YesNo, MessageBoxIcon.Information) != DialogResult.Yes) return;
                 Cursor = Cursors.WaitCursor;

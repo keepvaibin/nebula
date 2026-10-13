@@ -133,7 +133,7 @@ namespace Nebula.Setup
             using (var key = Registry.CurrentUser.CreateSubKey(@"Software\Nebula")) key.SetValue("InstallRoot", layout.Root);
             using (var key = Registry.CurrentUser.CreateSubKey(UninstallKey))
             {
-                key.SetValue("DisplayName", "Nebula (development preview)");
+                key.SetValue("DisplayName", "Nebula");
                 key.SetValue("DisplayVersion", version);
                 key.SetValue("Publisher", "keepvaibin");
                 key.SetValue("InstallLocation", layout.Root);
