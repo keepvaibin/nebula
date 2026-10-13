@@ -135,7 +135,7 @@ namespace Nebula.Setup
             {
                 key.SetValue("DisplayName", "Nebula (development preview)");
                 key.SetValue("DisplayVersion", version);
-                key.SetValue("Publisher", "Nebula contributors");
+                key.SetValue("Publisher", "keepvaibin");
                 key.SetValue("InstallLocation", layout.Root);
                 key.SetValue("DisplayIcon", Path.Combine(app, "Nebula.exe"));
                 key.SetValue("UninstallString", "\"" + layout.SetupCopy + "\" --uninstall");

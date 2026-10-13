@@ -4,6 +4,8 @@ using System.IO;
 using System.Threading;
 using System.Windows.Forms;
 
+[assembly: System.Reflection.AssemblyTitle("Nebula Setup")]
+
 namespace Nebula.Setup
 {
     internal static class Program

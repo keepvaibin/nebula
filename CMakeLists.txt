@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.24)
-project(NebulaRuntime VERSION 0.1.0 LANGUAGES C CXX)
+project(NebulaRuntime VERSION 1.0.0 LANGUAGES C CXX)
 
 if(NOT WIN32)
     message(FATAL_ERROR "The first runtime milestone targets Windows x64 only.")
@@ -786,9 +786,33 @@ add_custom_target(nebula_runtime_identity
     BYPRODUCTS "${CMAKE_CURRENT_BINARY_DIR}/nebula_build_identity.h"
     VERBATIM)
 add_dependencies(NebulaRuntime nebula_runtime_identity)
-# Executable and game-window icon (resource 1).
+# Executable and game-window icon (resource 1) and file details.
 set(NEBULA_ICON "${CMAKE_CURRENT_SOURCE_DIR}/installer/assets/nebula.ico")
-file(CONFIGURE OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/nebula_runtime.rc" CONTENT "1 ICON \"@NEBULA_ICON@\"\n" @ONLY)
+file(CONFIGURE OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/nebula_runtime.rc" CONTENT [=[
+1 ICON "@NEBULA_ICON@"
+1 VERSIONINFO
+FILEVERSION @PROJECT_VERSION_MAJOR@,@PROJECT_VERSION_MINOR@,@PROJECT_VERSION_PATCH@,0
+PRODUCTVERSION @PROJECT_VERSION_MAJOR@,@PROJECT_VERSION_MINOR@,@PROJECT_VERSION_PATCH@,0
+BEGIN
+  BLOCK "StringFileInfo"
+  BEGIN
+    BLOCK "040904b0"
+    BEGIN
+      VALUE "CompanyName", "keepvaibin"
+      VALUE "FileDescription", "Nebula"
+      VALUE "FileVersion", "@PROJECT_VERSION@"
+      VALUE "LegalCopyright", "Copyright 2026 keepvaibin"
+      VALUE "OriginalFilename", "NebulaRuntime.exe"
+      VALUE "ProductName", "Nebula"
+      VALUE "ProductVersion", "@PROJECT_VERSION@"
+    END
+  END
+  BLOCK "VarFileInfo"
+  BEGIN
+    VALUE "Translation", 0x409, 1200
+  END
+END
+]=] @ONLY)
 target_sources(NebulaRuntime PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/nebula_runtime.rc")
 set_source_files_properties("${CMAKE_CURRENT_BINARY_DIR}/nebula_runtime.rc" PROPERTIES OBJECT_DEPENDS "${NEBULA_ICON}")
 target_include_directories(NebulaRuntime PRIVATE "${CMAKE_CURRENT_BINARY_DIR}")

@@ -8,6 +8,12 @@ using System.Runtime.InteropServices;
 using System.Threading;
 using System.Windows.Forms;
 
+#if NEBULA_SETTINGS_APP
+[assembly: System.Reflection.AssemblyTitle("Nebula settings")]
+#else
+[assembly: System.Reflection.AssemblyTitle("Nebula")]
+#endif
+
 namespace Nebula.Launcher
 {
     internal static class Program
