@@ -301,7 +301,7 @@ static void clamp_unimplemented_features(RenderConfig& cfg) {
     cfg.vsync_interval = std::clamp(cfg.vsync_interval, 0u, 2u);
     cfg.swap_chain_frame_latency =
         std::clamp(cfg.swap_chain_frame_latency, 1u, 2u);
-    if (!std::isfinite(cfg.max_fps) || cfg.max_fps < kMinFrameRate || cfg.max_fps > kMaxFrameRate) {
+    if (!std::isfinite(cfg.max_fps) || (cfg.max_fps != 0.0f && cfg.max_fps < kMinFrameRate) || cfg.max_fps > kMaxFrameRate) {
         cfg.max_fps = RenderConfig{}.max_fps;
     }
     cfg.texture_lod_bias = std::min(cfg.texture_lod_bias, 8u);

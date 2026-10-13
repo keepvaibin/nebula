@@ -394,7 +394,22 @@ bool display_settings_differ(const RenderConfig& a, const RenderConfig& b) {
 const MonitorInfo* settings_monitor(const RenderConfig& render);
 
 // The refresh rate the picture will be shown at with these settings.
+// GALAXY_DISPLAY_REFRESH_HZ: the refresh rate the menu and the pacing assume
+// (hidden test runs; a remote desktop session reports its virtual display's).
+unsigned refresh_override_hz() {
+    static const unsigned hz = [] {
+        char value[16]{};
+        std::size_t length = 0u;
+        return getenv_s(&length, value, sizeof(value), "GALAXY_DISPLAY_REFRESH_HZ") == 0 && length > 1u
+            ? static_cast<unsigned>(std::strtoul(value, nullptr, 10)) : 0u;
+    }();
+    return hz;
+}
+
 unsigned settings_refresh_hz(const RenderConfig& render) {
+    if (const unsigned hz = refresh_override_hz(); hz != 0u) {
+        return hz;
+    }
     const MonitorInfo* monitor = settings_monitor(render);
     if (render.display_mode == kDisplayExclusive && render.fullscreen_refresh_hz != 0u) {
         return render.fullscreen_refresh_hz;
@@ -6285,6 +6300,13 @@ void RendererD3D12::wait_for_frame_latency_if_needed(
 }
 
 void RendererD3D12::refresh_display_rate() {
+    if (const unsigned hz = refresh_override_hz(); hz != 0u) {
+        if (display_refresh_hz_ != hz) {
+            std::cerr << "[display] refresh-hz=" << hz << " (GALAXY_DISPLAY_REFRESH_HZ)\n";
+        }
+        display_refresh_hz_ = hz;
+        return;
+    }
     if (swap_chain_ == nullptr) {
         return;
     }
