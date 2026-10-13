@@ -6529,9 +6529,12 @@ void GxBackend::on_fifo_marker(FifoMarker marker, const std::array<float, 12>* v
             note_interp_log_completion();
             renderer_.note_replay_scene();
             interp_scene_ = (interp_scene_ + 1u) % 4u;
+            if (interp_shown_scene_ == static_cast<std::int32_t>(interp_scene_)) {
+                interp_shown_scene_ = -1;  // its inputs are about to be reused
+            }
             if (interp_sequence_.active &&
                 (interp_scene_ == interp_sequence_.scene ||
-                 interp_scene_ == (interp_sequence_.scene + 3u) % 4u)) {
+                 interp_scene_ == interp_sequence_.before)) {
                 // The playing scene's inputs are about to be reused.
                 interp_dropped_ += interp_sequence_.subframes - interp_sequence_.next;
                 interp_sequence_.subframes = interp_sequence_.next;
@@ -6831,6 +6834,7 @@ void GxBackend::note_interp_log_completion() {
         return;
     }
     interp_log_scene_ = interp_scene_;
+    interp_scenes_[interp_log_scene_].serial = serial;
     interp_log_waiting_ = interp_scenes_[interp_log_scene_].valid &&
         !native_settings_overlay_visible();
     interp_log_xfb_ = renderer_.replay_xfb_addr();
@@ -6863,7 +6867,7 @@ void GxBackend::start_interp_sequence(std::uint32_t xfb_addr) {
         return;
     }
     const RenderConfig cfg = get_render_config();
-    const double rate = std::max(61.0, present_frame_rate(
+    double rate = std::max(61.0, present_frame_rate(
         cfg.max_fps, cfg.vsync_interval, renderer_.display_refresh_hz()));
     ++interp_sequence_serial_;
     ++interp_started_;
@@ -6875,12 +6879,17 @@ void GxBackend::start_interp_sequence(std::uint32_t xfb_addr) {
     }
     interp_last_played_serial_ = played;
     interp_event("start", played, xfb_addr);
+    static const std::uint64_t trace_level = read_env_u64("GALAXY_INTERP_TRACE", 0u);
+    if (trace_level >= 2u) {
+        std::cerr << "[interp-start] seq=" << interp_sequence_serial_ << " log=" << played << '\n';
+    }
     interp_sequence_.active = true;
     interp_sequence_.flush_requested = false;
     interp_sequence_.classified = false;
     interp_sequence_.scene = interp_log_scene_;
+    select_interp_before();
     interp_sequence_.xfb_addr = xfb_addr;
-    interp_sequence_.subframes = interp_stopping_ ? 0u : interp_frames_;
+    interp_sequence_.subframes = interp_gpu_governor(rate);
     interp_sequence_.next = 0u;
     // Present slots run on one clock at the present rate. A slot shows the
     // game at t = (slot - arrival) * 60 + lead between the previous frame (0)
@@ -6926,6 +6935,103 @@ void GxBackend::start_interp_sequence(std::uint32_t xfb_addr) {
         interp_slot_due_qpc_ = locked && arrival <= now.QuadPart + interp_slot_period_qpc_
             ? arrival : now.QuadPart;
     }
+}
+
+// B18: the scene before the starting one was never on screen (its log was
+// replaced before a present started it, or its sequence ended before showing
+// anything). The sub-frames then start from the scene shown last, records
+// matched through the skipped scenes, instead of from a frame never shown.
+// Vertex blending needs consecutive logs (prepare_vertex_blend) and stays off
+// for such a sequence.
+void GxBackend::select_interp_before() {
+    const unsigned scene = interp_sequence_.scene;
+    interp_sequence_.before = (scene + 3u) % 4u;
+    interp_sequence_.chained = false;
+    if (interp_shown_scene_ < 0 ||
+        static_cast<unsigned>(interp_shown_scene_) == interp_sequence_.before ||
+        static_cast<unsigned>(interp_shown_scene_) == scene) {
+        return;
+    }
+    // GALAXY_INTERP_CHAIN=0: start from the scene before regardless (A/B).
+    static const bool chain = read_env_u64("GALAXY_INTERP_CHAIN", 1u) != 0u;
+    const unsigned shown = static_cast<unsigned>(interp_shown_scene_);
+    const unsigned depth = (scene + 4u - shown) % 4u;  // 2 or 3 scenes back
+    const InterpScene& target = interp_scenes_[scene];
+    bool consecutive = chain && target.valid && target.serial != 0u;
+    for (unsigned step = 1u; consecutive && step <= depth; ++step) {
+        const InterpScene& older = interp_scenes_[(scene + 4u - step) % 4u];
+        consecutive = older.valid && older.serial + step == target.serial;
+    }
+    static const bool trace = read_env_u64("GALAXY_INTERP_TRACE", 0u) != 0u;
+    if (trace) {
+        std::cerr << "[interp-chain] seq=" << interp_sequence_serial_ << " depth=" << depth
+                  << " chained=" << (consecutive ? 1 : 0) << '\n';
+    }
+    if (!consecutive) {
+        ++interp_unchained_skips_;
+        return;
+    }
+    interp_chain_prev_ = target.prev_index;
+    for (unsigned step = 1u; step < depth; ++step) {
+        const std::vector<std::int32_t>& through = interp_scenes_[(scene + 4u - step) % 4u].prev_index;
+        for (std::int32_t& m : interp_chain_prev_) {
+            m = m >= 0 && static_cast<std::size_t>(m) < through.size()
+                ? through[static_cast<std::size_t>(m)] : -1;
+        }
+    }
+    interp_sequence_.before = shown;
+    interp_sequence_.chained = true;
+    ++interp_chained_sequences_;
+}
+
+// B22: as many sub-frames per game frame as the GPU fits. A sub-frame
+// replays the whole frame, so a game frame costs about (k + 1) sub-frame
+// times (measured with GPU timestamps). k drops at once when over budget and
+// rises one step after 10 s under it; with none left, one is tried again
+// every 20 s. A capped sequence runs the slot clock at 60 * (k + 1).
+// GALAXY_INTERP_GPU_BUDGET_MS: GPU time per game frame (default 15 of 16.7);
+// GALAXY_INTERP_GPU_GOVERNOR=0 turns it off.
+unsigned GxBackend::interp_gpu_governor(double& rate) {
+    const unsigned configured = interp_stopping_ ? 0u : interp_frames_;
+    static const bool enabled = read_env_u64("GALAXY_INTERP_GPU_GOVERNOR", 1u) != 0u;
+    static const double budget_ms = [] {
+        char value[32]{};
+        std::size_t length = 0u;
+        const double ms = getenv_s(&length, value, sizeof(value), "GALAXY_INTERP_GPU_BUDGET_MS") == 0 &&
+                                  length > 1u
+            ? std::strtod(value, nullptr) : 0.0;
+        return ms > 0.0 ? ms : 15.0;
+    }();
+    if (!enabled || configured == 0u) {
+        return configured;
+    }
+    const std::uint64_t serial = interp_sequence_serial_;
+    if (serial - interp_gpu_checked_ >= 30u) {
+        interp_gpu_checked_ = serial;
+        const double sub_ms = renderer_.subframe_gpu_ema_ms();
+        if (sub_ms > 0.0) {
+            const double fit = std::floor(budget_ms / sub_ms) - 1.0;
+            const unsigned fits = fit < 1.0 ? 0u : static_cast<unsigned>(std::min(fit, 7.0));
+            if (fits < interp_gpu_cap_) {
+                interp_gpu_cap_ = fits;
+                interp_gpu_cap_serial_ = serial;
+            } else if (fits > interp_gpu_cap_ && serial - interp_gpu_cap_serial_ >= 600u) {
+                ++interp_gpu_cap_;
+                interp_gpu_cap_serial_ = serial;
+            }
+        }
+        if (interp_gpu_cap_ == 0u && serial - interp_gpu_cap_serial_ >= 1200u) {
+            interp_gpu_cap_ = 1u;  // measure one sub-frame again
+            interp_gpu_cap_serial_ = serial;
+            renderer_.reset_subframe_gpu_ema();
+        }
+    }
+    if (interp_gpu_cap_ >= configured) {
+        return configured;
+    }
+    ++interp_gpu_capped_;
+    rate = 60.0 * static_cast<double>(interp_gpu_cap_ + 1u);
+    return interp_gpu_cap_;
 }
 
 // The next frame's sequence replaces this one before its real frame (at
@@ -7053,6 +7159,13 @@ void GxBackend::advance_interp_sequence(bool flush) {
                 return getenv_s(&length, value, sizeof(value), "GALAXY_INTERP_FORCE_T") == 0 && length > 1u
                     ? std::clamp(std::strtod(value, nullptr), 0.0, 1.0) : -1.0;
             }();
+            // GALAXY_INTERP_COPY_AB=1: sequences alternate redirected and guarded copies; =3 adds
+            // a third with neither (A/B in one run, diagnostics).
+            static const std::uint64_t copy_ab = read_env_u64("GALAXY_INTERP_COPY_AB", 0u);
+            if (copy_ab != 0u) {
+                const std::uint64_t phase = interp_sequence_serial_ % (copy_ab == 3u ? 3u : 2u);
+                renderer_.set_subframe_copy_redirect(phase == 0u ? 1 : phase == 1u ? 0 : 2);
+            }
             const bool presented = render_interp_subframe(static_cast<float>(force_t >= 0.0 ? force_t : t));
             interp_event("sub", interp_last_played_serial_, static_cast<std::uint64_t>(t * 1000.0));
             if (!snapshot.empty()) {
@@ -7064,6 +7177,7 @@ void GxBackend::advance_interp_sequence(bool flush) {
                 std::chrono::steady_clock::now() - start).count();
             if (presented) {
                 ++interp_presented_;
+                interp_shown_scene_ = static_cast<std::int32_t>(sequence.scene);
             } else {
                 ++interp_failed_;
             }
@@ -7079,6 +7193,7 @@ void GxBackend::advance_interp_sequence(bool flush) {
         interp_presenting_real_ = true;
         present_cached_xfb_on_thread(sequence.xfb_addr, false, true);
         interp_presenting_real_ = false;
+        interp_shown_scene_ = static_cast<std::int32_t>(sequence.scene);
         renderer_.set_capture_waits(false);
         interp_snapshot_path_.clear();
         ++interp_sequences_;
@@ -7089,6 +7204,7 @@ void GxBackend::advance_interp_sequence(bool flush) {
 
 // A game frame presented while interpolating, without sub-frames: why.
 void GxBackend::note_interp_real_present() {
+    interp_shown_scene_ = -1;                  // a frame no sequence knows
     unsigned reason = 5u;                      // log ready, present not matched
     if (native_settings_overlay_visible()) {
         reason = 0u;
@@ -7126,6 +7242,13 @@ void GxBackend::report_interp_stats() {
     const double presented = static_cast<double>(interp_presented_);
     std::uint64_t real_only = 0u;
     for (const std::uint64_t count : interp_real_only_) real_only += count;
+    const RendererD3D12::CopyRedirectStats redirect = renderer_.take_copy_redirect_stats();
+    std::array<double, 3> path_ms{};
+    std::array<std::uint64_t, 3> path_samples{};
+    renderer_.take_subframe_path_gpu_ms(path_ms, path_samples);
+    const auto per_sample = [](double ms, std::uint64_t samples) {
+        return samples != 0u ? ms / static_cast<double>(samples) : 0.0;
+    };
     std::ostringstream message;
     message << "[interp-stats] subframes-per-frame=" << interp_frames_
             << " sequences=" << interp_sequences_
@@ -7135,6 +7258,8 @@ void GxBackend::report_interp_stats() {
             << " superseded=" << interp_superseded_
             << " started=" << interp_started_
             << " logs-skipped=" << interp_logs_skipped_
+            << " chained-sequences=" << interp_chained_sequences_
+            << " unchained-skips=" << interp_unchained_skips_
             << " presents-during-sequence=" << interp_present_skipped_
             << " snapped-records=" << interp_snapped_
             << " failed=" << interp_failed_
@@ -7171,6 +7296,18 @@ void GxBackend::report_interp_stats() {
             << (interp_presented_ != 0u
                     ? static_cast<double>(renderer_.take_vertex_blend_draws()) / presented : 0.0)
             << " guarded-copies=" << renderer_.take_subframe_guarded()
+            << " redirected-copies=" << redirect.redirected
+            << " patched-tables=" << redirect.patched_tables
+            << " copy-snapshots=" << redirect.snapshots
+            << " redirect-fallbacks=" << redirect.fallback_logs
+            << " gpu-subframe-cap=" << interp_gpu_cap_
+            << " capped-sequences=" << std::exchange(interp_gpu_capped_, 0u)
+            << " subframe-gpu-ema-ms=" << renderer_.subframe_gpu_ema_ms()
+            << " gpu-ms-guard-path=" << per_sample(path_ms[0], path_samples[0])
+            << " gpu-ms-redirect-path=" << per_sample(path_ms[1], path_samples[1])
+            << " gpu-ms-unguarded-path=" << per_sample(path_ms[2], path_samples[2])
+            << " path-samples(guard/redirect/unguarded)=" << path_samples[0] << '/' << path_samples[1]
+            << '/' << path_samples[2]
             << " held-textures=" << texture_cache_.take_held_texture_count()
             << " held-vertex-blocks=" << interp_held_vertex_blocks_
             << " ring-peak-kb(v/i/c/m)="
@@ -7186,6 +7323,8 @@ void GxBackend::report_interp_stats() {
     interp_superseded_ = 0u;
     interp_started_ = 0u;
     interp_logs_skipped_ = 0u;
+    interp_chained_sequences_ = 0u;
+    interp_unchained_skips_ = 0u;
     interp_present_skipped_ = 0u;
     interp_snapped_ = 0u;
     interp_failed_ = 0u;
@@ -7212,7 +7351,10 @@ void GxBackend::report_interp_stats() {
 // lights and projection; then the latest frame's operations replayed.
 bool GxBackend::render_interp_subframe(float t) {
     const InterpScene& scene = interp_scenes_[interp_sequence_.scene];
-    const InterpScene& before_scene = interp_scenes_[(interp_sequence_.scene + 3u) % 4u];
+    const InterpScene& before_scene = interp_scenes_[interp_sequence_.before];
+    // Matched records of the scene before (through skipped scenes: B18).
+    const std::vector<std::int32_t>& prev_index =
+        interp_sequence_.chained ? interp_chain_prev_ : scene.prev_index;
     if (!scene.valid) {
         renderer_.note_replay_failure(9u);
         return false;
@@ -7252,7 +7394,7 @@ bool GxBackend::render_interp_subframe(float t) {
             out << "[interp-records] seq=" << interp_sequence_serial_ << " count=" << count
                 << " history-previous=" << current.size() << '\n';
             for (std::size_t r = 0; r < count; ++r) {
-                const std::int32_t m = scene.prev_index[r];
+                const std::int32_t m = prev_index[r];
                 const GxVsConstants& now = scene.constants[r];
                 out << "  r=" << r << " m=" << m << " pv=" << int(scene.per_vertex[r])
                     << " pal=" << scene.palette[r]
@@ -7285,7 +7427,7 @@ bool GxBackend::render_interp_subframe(float t) {
         const bool camera_moves = interp_camera_.known && !interp_camera_.cut &&
             std::memcmp(interp_camera_.a.data(), interp_camera_.b.data(), sizeof(Affine34)) != 0;
         for (std::size_t r = 0; r < count; ++r) {
-            const std::int32_t m = scene.prev_index[r];
+            const std::int32_t m = prev_index[r];
             const bool prev_data = before_valid && m >= 0 &&
                 static_cast<std::size_t>(m) < before_scene.constants.size();
             const GxVsConstants& now = scene.constants[r];
@@ -7378,10 +7520,10 @@ bool GxBackend::render_interp_subframe(float t) {
         if (trace_camera) {
             std::size_t matched = 0u, inline_records = 0u, inline_unmatched = 0u, snapped = 0u;
             for (std::size_t r = 0; r < count; ++r) {
-                matched += scene.prev_index[r] >= 0 ? 1u : 0u;
+                matched += prev_index[r] >= 0 ? 1u : 0u;
                 if (scene.per_vertex[r] == 0u) {
                     ++inline_records;
-                    inline_unmatched += scene.prev_index[r] < 0 ? 1u : 0u;
+                    inline_unmatched += prev_index[r] < 0 ? 1u : 0u;
                 }
             }
             for (const InterpRecordMotion& moving : interp_moving_) {
@@ -7402,8 +7544,11 @@ bool GxBackend::render_interp_subframe(float t) {
                  << " palettes=" << scene.palette_count << '/' << before_scene.palette_count << '\n';
             std::cerr << line.str();
         }
-        renderer_.prepare_vertex_blend(before_valid ? std::span<const std::int32_t>(scene.prev_index)
-                                                    : std::span<const std::int32_t>{});
+        // Vertex blending pairs draws with the log run before: not for a
+        // sequence chained past a skipped scene (B18).
+        renderer_.prepare_vertex_blend(before_valid && !interp_sequence_.chained
+                                           ? std::span<const std::int32_t>(prev_index)
+                                           : std::span<const std::int32_t>{});
         // Pixel-constant records pair through the paired draws.
         interp_ps_moving_.clear();
         interp_ps_vas_.assign(scene.ps_constants.size(), 0u);
@@ -8869,6 +9014,9 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
             // The renderer keeps the log per game frame (interpolation_mode).
             interp_recording_ = renderer_.interpolation_mode();
             interp_frames_ = interp_recording_ ? interpolated_frames_per_game_frame(rate) : 0u;
+            if (!interp_recording_) {
+                interp_shown_scene_ = -1;
+            }
             // GALAXY_DRAW_IDENTITY=0 never asks the game for draw identities,
             // =1 always does (tests at 60).
             static const std::uint64_t identity_env = read_env_u64("GALAXY_DRAW_IDENTITY", 2u);
@@ -11215,6 +11363,23 @@ ID3D12PipelineState* GxBackend::flush_draw_state(
                     dev->CopyDescriptors(1, &tbl.cpu, &destination_size,
                         num_maps, sources, nullptr,
                         D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+                    // Interpolation logs keep tables that name EFB-copy
+                    // textures: sub-frames repoint those slots.
+                    if (renderer_.replay_recording()) [[unlikely]] {
+                        static_assert(kMaxTextureMaps == RendererD3D12::kReplayTableSlots);
+                        ID3D12Resource* copies[kMaxTextureMaps]{};
+                        bool names_copy = false;
+                        for (unsigned m = 0; m < num_maps; ++m) {
+                            if (texture_handles[m].resource != nullptr &&
+                                texture_handles[m].from_efb_copy) {
+                                copies[m] = texture_handles[m].resource;
+                                names_copy = true;
+                            }
+                        }
+                        if (names_copy) {
+                            renderer_.note_replay_texture_table(tbl.gpu, sources, copies);
+                        }
+                    }
                     current_texture_table_ = tbl.gpu;
                     frame_texture_tables_.emplace(table_key, tbl.gpu);
                 }

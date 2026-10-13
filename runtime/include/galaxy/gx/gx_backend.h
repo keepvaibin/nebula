@@ -703,9 +703,10 @@ private:
         Affine34 view{};
         bool view_known = false;
         bool valid = false;
+        std::uint64_t serial = 0;               // replay serial of its log (0: none)
         void clear() noexcept {
             constants.clear(); from.clear(); current.clear(); prev_index.clear();
-            palette.clear(); per_vertex.clear(); palette_count = 0; valid = false;
+            palette.clear(); per_vertex.clear(); palette_count = 0; valid = false; serial = 0;
             ps_constants.clear();
         }
     };
@@ -729,7 +730,19 @@ private:
         bool flush_requested = false;
         unsigned scene = 0;               // interp_scenes_ index being interpolated
         bool classified = false;          // interp_moving_ holds this scene's records
+        // The scene interpolated from: the one before, or the one shown last
+        // when the one before was never shown (its log replaced unplayed);
+        // `chained`: records then match through the skipped scene
+        // (interp_chain_prev_).
+        unsigned before = 0;
+        bool chained = false;
     };
+    // The interp_scenes_ index of the last frame on screen (a sub-frame or the
+    // real frame of a sequence), -1 when unknown (a frame presented alone).
+    std::int32_t interp_shown_scene_ = -1;
+    std::vector<std::int32_t> interp_chain_prev_;
+    std::uint64_t interp_chained_sequences_ = 0;  // started from the scene shown last
+    std::uint64_t interp_unchained_skips_ = 0;    // a never-shown scene before, not chained
     // The playing scene, classified once per sequence (render_interp_subframe):
     // the game camera between the scene before and it, every record whose
     // constants change in a sub-frame, and every palette snapshot pair.
@@ -791,6 +804,13 @@ private:
     std::uint64_t interp_superseded_ = 0;   // frames replaced before their own slot
     void supersede_interp_sequence();
     void start_interp_sequence(std::uint32_t xfb_addr);
+    void select_interp_before();
+    // B22: sub-frames per game frame within the GPU budget (interp_gpu_governor).
+    unsigned interp_gpu_governor(double& rate);
+    unsigned interp_gpu_cap_ = 7u;
+    std::uint64_t interp_gpu_cap_serial_ = 0;
+    std::uint64_t interp_gpu_checked_ = 0;
+    std::uint64_t interp_gpu_capped_ = 0;   // sequences with fewer sub-frames
     std::vector<D3D12_GPU_VIRTUAL_ADDRESS> interp_record_vas_;
     // Pixel-constant records of the playing scene whose colours change
     // (record, matched record of the scene before), and their sub-frame uploads.

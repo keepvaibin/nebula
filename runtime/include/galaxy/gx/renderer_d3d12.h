@@ -544,6 +544,14 @@ public:
         return measured_present_hz_.load(std::memory_order_relaxed);
     }
     // GPU milliseconds of completed sub-frames since the last call.
+    void take_subframe_path_gpu_ms(std::array<double, 3>& total_ms,
+                                   std::array<std::uint64_t, 3>& samples) noexcept {
+        total_ms = std::exchange(subframe_path_gpu_ms_, {});
+        samples = std::exchange(subframe_path_gpu_samples_, {});
+    }
+    // Smoothed GPU time of one sub-frame (0 until measured), for the budget.
+    [[nodiscard]] double subframe_gpu_ema_ms() const noexcept { return subframe_gpu_ema_ms_; }
+    void reset_subframe_gpu_ema() noexcept { subframe_gpu_ema_ms_ = 0.0; }
     void take_subframe_gpu_ms(double& total_ms, std::uint64_t& samples) noexcept {
         total_ms = subframe_gpu_ms_;
         samples = subframe_gpu_samples_;
@@ -562,6 +570,29 @@ public:
     [[nodiscard]] std::uint64_t take_subframe_guarded() noexcept {
         return std::exchange(subframe_guarded_total_, 0u);
     }
+    // A texture table the backend just filled while a log records, naming
+    // EFB-copy textures (`copies[m]`, null for other slots). The log keeps CPU
+    // copies of its kReplayTableSlots descriptors (`sources`, valid now) so
+    // sub-frames can point the copy slots elsewhere.
+    static constexpr unsigned kReplayTableSlots = 8u;
+    void note_replay_texture_table(D3D12_GPU_DESCRIPTOR_HANDLE table,
+                                   const D3D12_CPU_DESCRIPTOR_HANDLE* sources,
+                                   ID3D12Resource* const* copies);
+    // Sub-frame copy redirection since the last call: copies written to
+    // redirect targets, tables patched, read-before-write snapshots taken by
+    // real frames, logs that fell back to the guard (a table was not kept).
+    struct CopyRedirectStats {
+        std::uint64_t redirected = 0;
+        std::uint64_t patched_tables = 0;
+        std::uint64_t snapshots = 0;
+        std::uint64_t fallback_logs = 0;
+    };
+    [[nodiscard]] CopyRedirectStats take_copy_redirect_stats() noexcept {
+        return std::exchange(copy_redirect_stats_, CopyRedirectStats{});
+    }
+    // Diagnostics (A/B in one run): 1 redirect, 0 guard, 2 neither for the
+    // next sub-frames; -1 follows GALAXY_INTERP_COPY_REDIRECT.
+    void set_subframe_copy_redirect(int mode) noexcept { subframe_copy_redirect_ = mode; }
     [[nodiscard]] std::uint64_t take_log_gap_ops() noexcept {
         return std::exchange(log_gap_ops_, 0u);
     }
@@ -952,7 +983,8 @@ private:
         std::uint32_t index = 0;
     };
     void present_to_swap_chain();
-    void execute_replay_copy(const ReplayCopy& copy);
+    // `target`: write a texture copy (mode 0) there instead of copy.dest.
+    void execute_replay_copy(const ReplayCopy& copy, ID3D12Resource* target = nullptr);
     bool ensure_subframe_resources(unsigned xfb_width, unsigned xfb_height);
     // The log being recorded; a completed log moves to play_* (swapped), so
     // the next game frame records while the previous one is interpolated.
@@ -1080,6 +1112,75 @@ private:
     std::uint64_t subframe_guarded_total_ = 0;
     ID3D12Resource* acquire_subframe_scratch(ID3D12Resource* dest);
     void record_subframe_guard(bool save);
+    // Sub-frame copy redirection (GALAXY_INTERP_COPY_REDIRECT, default on;
+    // 0 falls back to the save/restore guard above). Real frames own the
+    // copy textures. A sub-frame's texture copies land in redirect targets,
+    // and its draws that sample a redirected texture get a table patched in
+    // the current descriptor segment. A copy texture a log samples before
+    // writing it (an earlier frame's capture: feedback blur, camera cover) is
+    // snapshotted by the recording frame, because later real frames rewrite
+    // it while the log's sub-frames still run.
+    struct ReplayTextureTable {
+        std::uint64_t gpu = 0;                      // DrawCall::texture_table
+        std::uint32_t store = 0;                    // first CPU copy in the log's store
+        bool snapshots_checked = false;             // recording: sources handled
+        std::array<ID3D12Resource*, kReplayTableSlots> copies{};  // EFB-copy texture per slot
+    };
+    struct ReplayTextures {
+        std::vector<ReplayTextureTable> tables;
+        std::unordered_map<std::uint64_t, std::uint32_t> by_gpu;
+        // Read-before-write sources and their snapshot (copy_pool_ index).
+        std::vector<std::pair<ID3D12Resource*, std::uint32_t>> snapshots;
+        // Copy destinations the log wrote so far (recording).
+        std::vector<ID3D12Resource*> written;
+        Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> store;  // CPU-only
+        D3D12_CPU_DESCRIPTOR_HANDLE store_base{};
+        std::uint32_t store_used = 0;
+        // A table or snapshot could not be kept: sub-frames use the guard.
+        bool incomplete = false;
+        void clear() noexcept {
+            tables.clear();
+            by_gpu.clear();
+            snapshots.clear();
+            written.clear();
+            store_used = 0u;
+            incomplete = false;
+        }
+    };
+    static constexpr std::uint32_t kReplayStoreDescriptors = 16384u;
+    ReplayTextures replay_textures_;
+    ReplayTextures play_textures_;
+    ReplayTextures run_textures_;
+    // Redirect targets (one per destination per sub-frame) and snapshots.
+    struct CopyTexture {
+        Microsoft::WRL::ComPtr<ID3D12Resource> texture;
+        D3D12_RESOURCE_DESC desc{};
+        std::uint32_t srv = 0;                      // slot in copy_srv_heap_
+        std::uint64_t used = 0;                     // target: subframe_counter_ of last use
+        unsigned segment = ~0u;                     // snapshot: owning log's segment (~0u free)
+        bool snapshot = false;
+    };
+    static constexpr std::uint32_t kCopySrvCapacity = 256u;
+    std::vector<CopyTexture> copy_pool_;
+    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> copy_srv_heap_;  // CPU-only
+    D3D12_CPU_DESCRIPTOR_HANDLE copy_srv_base_{};
+    std::uint32_t copy_srv_used_ = 0;
+    UINT srv_increment_ = 0;
+    // The playing sub-frame: copy texture -> copy_pool_ index standing in for it,
+    // and tables patched under the current redirections (epoch-tagged).
+    std::unordered_map<ID3D12Resource*, std::uint32_t> redirect_;
+    std::unordered_map<std::uint64_t, std::pair<std::uint64_t, std::uint64_t>> patched_tables_;
+    std::uint64_t redirect_epoch_ = 0;
+    CopyRedirectStats copy_redirect_stats_{};
+    int subframe_copy_redirect_ = -1;
+    [[nodiscard]] static bool copy_redirect_enabled();
+    bool ensure_replay_store(ReplayTextures& log);
+    // -1 when no texture can be made. `snapshot`: owned by the recording log.
+    std::int32_t acquire_copy_texture(ID3D12Resource* like, bool snapshot);
+    [[nodiscard]] D3D12_CPU_DESCRIPTOR_HANDLE copy_texture_srv(std::uint32_t index) const;
+    void take_replay_snapshots(std::uint64_t table);
+    D3D12_GPU_DESCRIPTOR_HANDLE patch_replay_table(D3D12_GPU_DESCRIPTOR_HANDLE table);
+    void release_copy_snapshots(unsigned segment);
     static constexpr unsigned kSubframeAllocators = 4;
     std::array<Microsoft::WRL::ComPtr<ID3D12CommandAllocator>, kSubframeAllocators> subframe_allocators_;
     std::array<std::uint64_t, kSubframeAllocators> subframe_fences_{};
@@ -1089,6 +1190,11 @@ private:
     Microsoft::WRL::ComPtr<ID3D12Resource> subframe_readback_;
     double subframe_gpu_ms_ = 0.0;
     std::uint64_t subframe_gpu_samples_ = 0;
+    double subframe_gpu_ema_ms_ = 0.0;
+    // The same by copy path (0: guard, 1: redirected, 2: neither), for A/B runs.
+    std::array<std::uint8_t, kSubframeAllocators> subframe_timestamp_redirect_{};
+    std::array<double, 3> subframe_path_gpu_ms_{};
+    std::array<std::uint64_t, 3> subframe_path_gpu_samples_{};
     double subframe_record_ms_ = 0.0;
     std::uint64_t subframe_record_samples_ = 0;
     std::atomic<double> measured_present_hz_{0.0};
