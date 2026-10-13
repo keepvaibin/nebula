@@ -48,10 +48,14 @@ struct HostClientExtent {
 [[nodiscard]] HostClientExtent aspect_latch_extent() noexcept;
 
 // Guest scene boundaries the simulation thread marks in the GX stream:
-// GameScene::draw3D's entry and its closing MR::clearZBuffer call.
+// GameScene::draw3D's entry and its closing MR::clearZBuffer call; the 2D
+// layer, GameScene::draw2D's entry and epilogue (layouts, camera cover,
+// pause, 2D models, wipes).
 enum class FifoMarker : std::uint8_t {
     SceneBegin,
     SceneEnd,
+    Scene2DBegin,
+    Scene2DEnd,
 };
 
 enum class EfbPeekKind : std::uint8_t {

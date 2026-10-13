@@ -6533,6 +6533,9 @@ void GxBackend::on_motion_marker(std::uint8_t kind, std::uint16_t aux, std::uint
     switch (kind) {
     case motion::kMarkerCategory: {
         ++motion_category_markers_;
+        if (scene_2d_open_) {
+            ++scene_2d_categories_;
+        }
         if (!history_scene_) {
             return;
         }
@@ -6591,8 +6594,51 @@ void GxBackend::on_motion_marker(std::uint8_t kind, std::uint16_t aux, std::uint
     case motion::kMarkerLight:
         ++motion_light_markers_;
         return;
+    case motion::kMarkerLayoutPane:
+    case motion::kMarkerLayoutActor:
+    case motion::kMarkerStarPointer: {
+        const std::size_t index = static_cast<std::size_t>(kind - motion::kMarkerLayoutPane);
+        if (scene_2d_open_) {
+            ++scene_2d_layout_markers_[index];
+            ++layout_markers_in_2d_[index];
+        } else {
+            ++layout_markers_outside_2d_[index];
+        }
+        return;
+    }
     default:
         return;
+    }
+}
+
+// GameScene::draw2D's entry and epilogue (FifoMarker::Scene2DBegin/End): the
+// 2D layer's FIFO span in the chunk. Recording only.
+void GxBackend::on_scene_2d_marker(bool begin, std::size_t chunk_offset) {
+    if (begin) {
+        scene_2d_open_ = true;
+        ++scene_2d_serial_;
+        ++window_2d_scenes_;
+        scene_2d_begin_offset_ = static_cast<std::int64_t>(chunk_offset);
+        scene_2d_end_offset_ = -1;
+        scene_2d_layout_markers_ = {};
+        scene_2d_categories_ = 0u;
+        return;
+    }
+    scene_2d_open_ = false;
+    scene_2d_end_offset_ = static_cast<std::int64_t>(chunk_offset);
+    if (motion_trace_signals() && (scene_2d_serial_ <= 30u || scene_2d_serial_ % 600u == 0u)) [[unlikely]] {
+        std::fprintf(stderr,
+                     "[gx-2d] scene=%llu begin=%lld end=%lld panes=%u layout-actors=%u star-pointer=%u "
+                     "categories=%u total-in-2d(pane/actor/star)=%llu/%llu/%llu outside-2d=%llu/%llu/%llu\n",
+                     static_cast<unsigned long long>(scene_2d_serial_),
+                     static_cast<long long>(scene_2d_begin_offset_), static_cast<long long>(scene_2d_end_offset_),
+                     scene_2d_layout_markers_[0], scene_2d_layout_markers_[1], scene_2d_layout_markers_[2],
+                     scene_2d_categories_, static_cast<unsigned long long>(layout_markers_in_2d_[0]),
+                     static_cast<unsigned long long>(layout_markers_in_2d_[1]),
+                     static_cast<unsigned long long>(layout_markers_in_2d_[2]),
+                     static_cast<unsigned long long>(layout_markers_outside_2d_[0]),
+                     static_cast<unsigned long long>(layout_markers_outside_2d_[1]),
+                     static_cast<unsigned long long>(layout_markers_outside_2d_[2]));
     }
 }
 
@@ -7319,6 +7365,10 @@ void GxBackend::report_interp_stats() {
             << " signal-markers(category/image-effect/scene/pass/light/stripe-marks)=" << motion_category_markers_
             << '/' << motion_image_effect_markers_ << '/' << motion_scene_markers_ << '/' << motion_mirror_markers_
             << '/' << motion_light_markers_ << '/' << motion_stripe_marks_
+            << " layout-markers(2d-scenes/pane/actor/star-pointer)=" << window_2d_scenes_ << '/'
+            << identity_markers_by_kind_[motion::kMarkerLayoutPane] << '/'
+            << identity_markers_by_kind_[motion::kMarkerLayoutActor] << '/'
+            << identity_markers_by_kind_[motion::kMarkerStarPointer]
             << " build-ms-per-subframe="
             << (interp_presented_ != 0u ? interp_build_ms_ / presented : 0.0)
             << " record-ms-per-subframe="
@@ -7373,6 +7423,7 @@ void GxBackend::report_interp_stats() {
     motion_scene_markers_ = 0u;
     motion_mirror_markers_ = 0u;
     motion_light_markers_ = 0u;
+    window_2d_scenes_ = 0u;
     motion_stripe_marks_ = 0u;
     interp_stats_qpc_ = now.QuadPart;
 }
@@ -9292,7 +9343,7 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
                     int marker;  // -1: pointer depth field
                     int view;    // marker index (its camera), -1 none
                 };
-                std::array<Split, 5> splits{};
+                std::array<Split, 1u + kFifoMarkersPerChunk> splits{};
                 std::size_t split_count = 0;
                 if (capture_in_frame) {
                     splits[split_count++] = {
@@ -9322,6 +9373,10 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
                     }
                     if (split.marker < 0) {
                         record_pointer_depth_capture_in_frame(chunk);
+                    } else if (split.marker == static_cast<int>(FifoMarker::Scene2DBegin) ||
+                               split.marker == static_cast<int>(FifoMarker::Scene2DEnd)) {
+                        on_scene_2d_marker(split.marker == static_cast<int>(FifoMarker::Scene2DBegin),
+                                           split.offset - prefix);
                     } else {
                         const auto index = static_cast<std::size_t>(split.view);
                         on_fifo_marker(static_cast<FifoMarker>(split.marker),

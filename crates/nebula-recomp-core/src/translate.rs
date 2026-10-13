@@ -7988,6 +7988,11 @@ fn draw_identity_site(address: u32, function_end: u32, pc: u32, word: u32) -> Op
 ///   0) and before its MR::clearZBuffer (argument 1).
 /// - LightLoad: LightFunction::loadActorLightInfo (r3 ActorLightInfo),
 ///   loadLightInfoCoin, loadPointLightInfo, loadAllLightWhite, MR::loadLightPlayer.
+/// - Layout2D (the 2D layer): GameScene::draw2D entry (0) and epilogue after
+///   its WipeLayout category (1); nw4r::lyt::Pane::Draw after its visibility
+///   test (2, r3 pane); LayoutActor::draw after MR::isExecuteDrawLayout (3,
+///   r31); StarPointerLayout::draw on its drawn path (4, r31);
+///   StarPointerDirector::draw entry (5, r3). None is inside a GXBegin.
 fn motion_signal_site(address: u32, function_end: u32, pc: u32, word: u32) -> Option<(&'static str, u32)> {
     match (address, function_end, pc, word) {
         (0x800B_4024, 0x800B_4178, 0x800B_4024, 0x9421_FF80) => Some(("MotionCamera", 0)),
@@ -8019,6 +8024,12 @@ fn motion_signal_site(address: u32, function_end: u32, pc: u32, word: u32) -> Op
         (0x803A_41FC, 0x803A_45E8, 0x803A_4360, 0x933F_01E8) => Some(("DrawStripeParticle", 25)),
         (0x803A_45E8, 0x803A_4CE0, 0x803A_478C, 0x92FC_01E8) => Some(("DrawStripeParticle", 1 << 8 | 23)),
         (0x803A_45E8, 0x803A_4CE0, 0x803A_4A10, 0x93BC_01E8) => Some(("DrawStripeParticle", 2 << 8 | 29)),
+        (0x8033_F040, 0x8033_F0F8, 0x8033_F040, 0x9421_FFF0) => Some(("Layout2D", 0)),
+        (0x8033_F040, 0x8033_F0F8, 0x8033_F0E0, 0x8001_0014) => Some(("Layout2D", 1)),
+        (0x8000_C53C, 0x8000_C5C0, 0x8000_C568, 0x8183_0000) => Some(("Layout2D", 2)),
+        (0x8036_61A4, 0x8036_61E0, 0x8036_61C4, 0x807F_000C) => Some(("Layout2D", 3)),
+        (0x8038_82F8, 0x8038_839C, 0x8038_8364, 0x7FE3_FB78) => Some(("Layout2D", 4)),
+        (0x8038_5758, 0x8038_57E4, 0x8038_5758, 0x9421_FFE0) => Some(("Layout2D", 5)),
         (0x8033_EDF8, 0x8033_EE8C, 0x8033_EE10, 0x4808_89E5) => Some(("MirrorPass", 0)),
         (0x8033_EDF8, 0x8033_EE8C, 0x8033_EE50, 0x4808_B91D) => Some(("MirrorPass", 1)),
         (0x8018_881C, 0x8018_88D0, 0x8018_881C, 0x9421_FFD0) => Some(("LightLoad", 0)),

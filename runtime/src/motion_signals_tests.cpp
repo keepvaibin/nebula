@@ -2,6 +2,7 @@
 #include "galaxy/motion_signals.h"
 
 #include <cstdio>
+#include <iterator>
 #include <set>
 
 using namespace galaxy::motion;
@@ -62,6 +63,19 @@ void test_category() {
     check(category_phase(kNoCategory) == 0xFFu, "no phase");
 }
 
+void test_marker_kinds() {
+    const std::uint8_t kinds[] = {kMarkerShapePacket, kMarkerNameObj,    kMarkerEmitter,      kMarkerParticle,
+                                  kMarkerCategory,    kMarkerScene,      kMarkerPass,         kMarkerLight,
+                                  kMarkerLayoutPane,  kMarkerLayoutActor, kMarkerStarPointer};
+    const std::set<std::uint8_t> seen(std::begin(kinds), std::end(kinds));
+    check(seen.size() == std::size(kinds), "marker kinds are distinct");
+    check(*seen.begin() == 1u && *seen.rbegin() + 1u == kMarkerKinds, "marker kinds fill 1..kMarkerKinds-1");
+    check((kLayoutIn2D & kStarPointerDirector) == 0u, "layout aux bits are distinct");
+    check(static_cast<std::uint32_t>(Layout2DSite::SceneEnd) == 1u &&
+              static_cast<std::uint32_t>(Layout2DSite::StarPointerDirector) == 5u,
+          "Layout2D sites keep the translator's arguments");
+}
+
 void test_particle_age() {
     check(particle_age_continues(5u, 6u), "one step");
     check(particle_age_continues(5u, 5u), "paused");
@@ -77,6 +91,7 @@ int main() {
     test_epochs_spread();
     test_category();
     test_particle_age();
+    test_marker_kinds();
     if (failures != 0) {
         std::printf("%d failure(s)\n", failures);
         return 1;

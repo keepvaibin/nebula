@@ -19,7 +19,13 @@
 //
 // Host markers (op 0xF0, kind byte): 1-4 draw identity (fifo_parser.h); 5 draw
 // category or scene phase; 6 scene signals (first marker of a 3D scene); 7
-// pass; 8 light load.
+// pass; 8 light load; 9-11 the 2D layer's identity (layout pane, layout
+// actor, star pointer).
+//
+// 2D layer: GameScene::draw2D's entry and epilogue are FIFO markers like the
+// 3D scene's (gx::FifoMarker::Scene2DBegin / Scene2DEnd). Layout markers sit
+// at the start of a pane's, layout actor's or star pointer's draw: a function
+// entry or the path after its visibility test, never inside a GXBegin.
 //
 // No Windows/D3D12 includes (unit-tested offline).
 
@@ -61,6 +67,16 @@ enum class LightSite : std::uint32_t {
     Player = 4,
 };
 
+// SiteHookKind::Layout2D arguments.
+enum class Layout2DSite : std::uint32_t {
+    SceneBegin = 0,           // GameScene::draw2D entry
+    SceneEnd = 1,             // GameScene::draw2D epilogue (after the WipeLayout category)
+    Pane = 2,                 // nw4r::lyt::Pane::Draw, visible path (r3 the pane)
+    LayoutActor = 3,          // LayoutActor::draw after MR::isExecuteDrawLayout (r31 the actor)
+    StarPointerLayout = 4,    // StarPointerLayout::draw, drawn path (r31)
+    StarPointerDirector = 5,  // StarPointerDirector::draw entry (r3)
+};
+
 // Host marker kinds.
 inline constexpr std::uint8_t kMarkerShapePacket = 1u;
 inline constexpr std::uint8_t kMarkerNameObj = 2u;
@@ -70,7 +86,14 @@ inline constexpr std::uint8_t kMarkerCategory = 5u;   // aux source, a type or p
 inline constexpr std::uint8_t kMarkerScene = 6u;      // aux flags, a camera epoch, b object events
 inline constexpr std::uint8_t kMarkerPass = 7u;       // aux PassMarker
 inline constexpr std::uint8_t kMarkerLight = 8u;      // aux LightSite, a light info
-inline constexpr std::uint8_t kMarkerKinds = 9u;
+inline constexpr std::uint8_t kMarkerLayoutPane = 9u;    // aux kLayoutIn2D, a pane, b its parent (0 root)
+inline constexpr std::uint8_t kMarkerLayoutActor = 10u;  // aux kLayoutIn2D, a LayoutActor, b its vtable
+inline constexpr std::uint8_t kMarkerStarPointer = 11u;  // aux kLayoutIn2D | kStarPointerDirector; a, b vtable (layout)
+inline constexpr std::uint8_t kMarkerKinds = 12u;
+
+// Kinds 9-11 aux bits.
+inline constexpr std::uint16_t kLayoutIn2D = 1u;           // drawn inside GameScene::draw2D
+inline constexpr std::uint16_t kStarPointerDirector = 2u;  // kind 11: StarPointerDirector::draw (else StarPointerLayout)
 
 // Kind 6 flags.
 inline constexpr std::uint16_t kSceneCameraCut = 1u;  // the view jumped since the previous scene
@@ -126,6 +149,8 @@ inline constexpr std::uint32_t kActorModelManager = 0x48u;            // LiveAct
 inline constexpr std::uint32_t kActorDeadFlag = 0x68u;                // LiveActorFlag::mIsDead (MR::isDead)
 inline constexpr std::uint32_t kModelManagerModel = 0x1Cu;            // ModelManager -> J3DModel
 inline constexpr std::uint32_t kShapePacketModel = 0x38u;             // J3DShapePacket -> J3DModel
+inline constexpr std::uint32_t kPaneParent = 0x0Cu;                   // nw4r::lyt::Pane::mpParent
+inline constexpr std::uint32_t kPaneName = 0xB8u;                     // nw4r::lyt::Pane::mName (16 + NUL)
 
 // Epochs of guest objects. Open addressing, no deletion: a full table is
 // cleared and a salt added to every epoch, so all identities change once.

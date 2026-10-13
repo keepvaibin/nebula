@@ -226,6 +226,8 @@ public:
     // tail at the scene boundary). The render thread owns the capture until it publishes.
     void attach_pointer_depth_capture(
         const std::shared_ptr<PointerDepthCapture>& capture, std::size_t fifo_offset);
+    // Scene boundaries one render chunk carries (3D and 2D, two frames).
+    static constexpr std::size_t kFifoMarkersPerChunk = 8u;
     // Simulation thread: the next render_frame submission handles `marker`
     // when its parser reaches `fifo_offset` bytes into the submitted FIFO.
     void attach_fifo_marker(FifoMarker marker, std::size_t fifo_offset) noexcept {
@@ -250,6 +252,13 @@ public:
     // before the marker. The split point for an upscaler or HUD-less colour.
     [[nodiscard]] std::int64_t scene_image_effect_record() const noexcept { return scene_image_effect_record_; }
     [[nodiscard]] std::int64_t scene_image_effect_offset() const noexcept { return scene_image_effect_offset_; }
+    // Render thread: the 2D layer (GameScene::draw2D, FifoMarker::Scene2DBegin
+    // and Scene2DEnd) in the chunk's FIFO: byte offsets of its entry and of its
+    // epilogue (-1 until the marker), and whether the parser is inside it.
+    // Layout identity markers (kinds 9-11, galaxy/motion_signals.h) follow.
+    [[nodiscard]] std::int64_t scene_2d_begin_offset() const noexcept { return scene_2d_begin_offset_; }
+    [[nodiscard]] std::int64_t scene_2d_end_offset() const noexcept { return scene_2d_end_offset_; }
+    [[nodiscard]] bool scene_2d_open() const noexcept { return scene_2d_open_; }
     // Simulation thread: the game camera for the next SceneBegin marker.
     void attach_scene_view(const float view[12]) noexcept {
         for (unsigned i = 0; i < 12u; ++i) producer_scene_view_[i] = view[i];
@@ -564,12 +573,13 @@ private:
         // offset of the chunk's FIFO (the scene boundary).
         std::size_t pointer_depth_capture_fifo_offset = 0;
         bool pointer_depth_in_frame = false;
-        // Scene boundaries in this chunk's FIFO, in stream order.
-        std::array<std::pair<std::size_t, FifoMarker>, 4> fifo_markers{};
+        // Scene boundaries in this chunk's FIFO, in stream order (3D and 2D
+        // scenes of up to two frames).
+        std::array<std::pair<std::size_t, FifoMarker>, kFifoMarkersPerChunk> fifo_markers{};
         std::uint8_t fifo_marker_count = 0;
         // Game camera (world to eye) per SceneBegin marker; bit i of the
         // mask marks marker i's view valid.
-        std::array<std::array<float, 12>, 4> fifo_marker_views{};
+        std::array<std::array<float, 12>, kFifoMarkersPerChunk> fifo_marker_views{};
         std::uint8_t fifo_marker_view_mask = 0;
         // JPA stripe particles in this chunk's FIFO (attach_stripe_particle).
         std::vector<StripeParticleMark> stripe_particles;
@@ -638,9 +648,9 @@ private:
     PointerResponseStamp producer_pointer_response_{}, render_pointer_response_{}, last_response_{};
     std::shared_ptr<PointerDepthCapture> producer_pointer_depth_capture_;
     std::size_t producer_pointer_depth_capture_offset_ = 0;
-    std::array<std::pair<std::size_t, FifoMarker>, 4> producer_fifo_markers_{};
+    std::array<std::pair<std::size_t, FifoMarker>, kFifoMarkersPerChunk> producer_fifo_markers_{};
     std::uint8_t producer_fifo_marker_count_ = 0;
-    std::array<std::array<float, 12>, 4> producer_fifo_marker_views_{};
+    std::array<std::array<float, 12>, kFifoMarkersPerChunk> producer_fifo_marker_views_{};
     std::uint8_t producer_fifo_marker_view_mask_ = 0;
     std::array<float, 12> producer_scene_view_{};
     bool producer_scene_view_valid_ = false;
@@ -681,7 +691,7 @@ private:
     [[nodiscard]] std::uint32_t note_identity_occurrence(std::uint64_t key);
     [[nodiscard]] std::uint64_t record_identity() noexcept;
     void begin_identity_scene();
-    std::array<std::uint64_t, 9> identity_markers_by_kind_{};
+    std::array<std::uint64_t, 12> identity_markers_by_kind_{};  // motion::kMarkerKinds
     std::uint64_t identity_records_ = 0;
     std::uint64_t identity_matched_ = 0;
     std::uint64_t identity_rejected_ = 0;
@@ -712,6 +722,19 @@ private:
     std::uint64_t motion_light_markers_ = 0;
     std::uint64_t motion_mirror_markers_ = 0;
     std::uint64_t motion_stripe_marks_ = 0;
+    // The 2D layer (FifoMarker::Scene2DBegin/End) and the layout markers
+    // (kinds 9-11: pane, layout actor, star pointer) parsed inside and
+    // outside it; counts since the start (per scene for the open one).
+    void on_scene_2d_marker(bool begin, std::size_t chunk_offset);
+    bool scene_2d_open_ = false;
+    std::int64_t scene_2d_begin_offset_ = -1;
+    std::int64_t scene_2d_end_offset_ = -1;
+    std::uint64_t scene_2d_serial_ = 0;
+    std::array<std::uint32_t, 3> scene_2d_layout_markers_{};
+    std::uint32_t scene_2d_categories_ = 0;
+    std::array<std::uint64_t, 3> layout_markers_in_2d_{};
+    std::array<std::uint64_t, 3> layout_markers_outside_2d_{};
+    std::uint64_t window_2d_scenes_ = 0;
     std::uint64_t identity_signature_rejected_ = 0;
     std::uint64_t identity_continuity_rejected_ = 0;
     // Matched particle keys by age step: <0, 0, 1, 2, >2.

@@ -518,6 +518,8 @@ enum class SiteHookKind : std::uint32_t {
     DrawStripeParticle = 24,    // argument: node register | strip << 8; r31 or r28 work
     MirrorPass = 25,            // argument: 0 begins, 1 its geometry ends
     LightLoad = 26,             // argument: MotionLightSite; r3 the light info
+    // 2D layer (generation 20): GameScene::draw2D bounds and layout identity.
+    Layout2D = 27,              // argument: galaxy::motion::Layout2DSite
 };
 
 inline void site_hook(
