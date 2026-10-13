@@ -63,9 +63,14 @@ namespace Nebula.Setup
             }
             catch (Exception error)
             {
-                Directory.CreateDirectory(NebulaPaths.SetupLogs);
-                File.AppendAllText(Path.Combine(NebulaPaths.SetupLogs, "unattended-errors.log"),
-                    DateTime.UtcNow.ToString("o") + " " + error + Environment.NewLine);
+                try
+                {
+                    Directory.CreateDirectory(NebulaPaths.SetupLogs);
+                    File.AppendAllText(Path.Combine(NebulaPaths.SetupLogs, "unattended-errors.log"),
+                        DateTime.UtcNow.ToString("o") + " " + error + Environment.NewLine);
+                }
+                catch (IOException) { }
+                catch (UnauthorizedAccessException) { }
                 return 1;
             }
         }
