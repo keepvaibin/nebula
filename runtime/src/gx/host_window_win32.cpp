@@ -762,6 +762,7 @@ std::vector<ControlsRow> controls_tail_rows() {
 void refresh_controls_devices(bool force);
 
 unsigned controls_row_count() {
+    const std::lock_guard<std::recursive_mutex> lock(s_native_settings_mutex);
     refresh_controls_devices(false);
     return kControlsBindingRow0 + static_cast<unsigned>(galaxy::input::kWiiTargetCount) +
            static_cast<unsigned>(controls_tail_rows().size());
@@ -1923,6 +1924,25 @@ std::string ui_fit_text(std::string text, int scale, int max_width) {
     return text.empty() ? std::string() : text + "...";
 }
 
+// The footer hints name Xbox buttons; a PlayStation controller in use gets its own.
+std::string pad_hints(std::string text) {
+    const auto device = galaxy::host::last_input_device();
+    if (!device || device->scheme != galaxy::input::ControlScheme::PlayStation) {
+        return text;
+    }
+    static constexpr std::array<std::array<const char*, 2>, 6> kNames{{
+        {"VIEW+MENU OR MINUS+PLUS", "SHARE+OPTIONS"}, {"LB/RB", "L1/R1"}, {"/A ", "/CROSS "},
+        {"/B ", "/CIRCLE "}, {"/X ", "/SQUARE "}, {"/Y ", "/TRIANGLE "}}};
+    for (const auto& name : kNames) {
+        const std::size_t from_size = std::strlen(name[0]);
+        const std::size_t to_size = std::strlen(name[1]);
+        for (std::size_t at = text.find(name[0]); at != std::string::npos; at = text.find(name[0], at + to_size)) {
+            text.replace(at, from_size, name[1]);
+        }
+    }
+    return text;
+}
+
 std::string percent_text(float value) {
     char text[32]{};
     std::snprintf(
@@ -3052,8 +3072,11 @@ std::string native_settings_row_text(
         case ControlsRow::Device: {
             const galaxy::input::DeviceEntry& entry = s_controls_devices.entries[
                 galaxy::input::resolve_device(s_controls_devices, s_controls_device)];
+            // Bluetooth is abbreviated: the row has no room for the longest names.
             std::string line = upper_ascii(entry.label.data());
-            if (line.size() > 44u) line = line.substr(0, 42u) + "..";
+            const std::size_t bluetooth = line.find("(BLUETOOTH)");
+            if (bluetooth != std::string::npos) line.replace(bluetooth, 11u, "(BT)");
+            if (line.size() > 40u) line = line.substr(0, 38u) + "..";
             return "EDIT: " + line + (entry.active ? "  ACTIVE" : "");
         }
         case ControlsRow::Binding: {
@@ -4239,7 +4262,7 @@ void draw_native_settings_overlay(UiCanvas& renderer) {
         std::snprintf(line, sizeof(line),
                       "KEEP DISPLAY? ENTER/Y KEEP  ESC/B UNDO  %u",
                       static_cast<unsigned>((left_ms + 999u) / 1000u));
-        status = line;
+        status = pad_hints(line);
         status_color = accent;
     } else if (s_native_settings_save_error.load(std::memory_order_acquire)) {
         status = "SAVE FAILED - RETRY ON NEXT CLOSE";
@@ -4250,7 +4273,7 @@ void draw_native_settings_overlay(UiCanvas& renderer) {
                       controls_page ? "%u CHANGE%s  SPACE/Y APPLY  ESC/B DISCARD"
                                     : "%u CHANGE%s  ENTER/Y APPLY  BACKSPACE/X UNDO",
                       pending, pending == 1u ? "" : "S");
-        status = line;
+        status = pad_hints(line);
         status_color = accent;
     } else if (s_settings_applied_ms != 0u && now_ms - s_settings_applied_ms < 2500u) {
         status = "APPLIED";
@@ -4276,15 +4299,15 @@ void draw_native_settings_overlay(UiCanvas& renderer) {
         panel_x + 28,
         footer_y + footer_step,
         footer_scale,
-        "F1, VIEW+MENU OR MINUS+PLUS TOGGLE  TAB/LB/RB PAGE",
+        pad_hints("F1, VIEW+MENU OR MINUS+PLUS TOGGLE  TAB/LB/RB PAGE"),
         muted);
     ui_text(
         renderer,
         panel_x + 28,
         footer_y + footer_step * 2,
         footer_scale,
-        controls_page ? "ENTER/A ADD INPUT  BACKSPACE/X CLEAR  ESC/B CLOSE"
-                      : "ARROWS/D-PAD MOVE+CHANGE  ESC/B CLOSE",
+        pad_hints(controls_page ? "ENTER/A ADD INPUT  BACKSPACE/X CLEAR  ESC/B CLOSE"
+                                : "ARROWS/D-PAD MOVE+CHANGE  ESC/B CLOSE"),
         muted);
 }
 

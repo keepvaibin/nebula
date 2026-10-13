@@ -401,7 +401,7 @@ int main() {
                      "the Xbox controller is named");
     passed &= expect(key(VK_RIGHT) && galaxy::gx::native_settings_overlay_snapshot().row_count == 39u,
                      "Switch Pro adds motion, sensitivity, gyro and gyro sensitivity rows");
-    passed &= expect(galaxy::gx::native_settings_row_text_for_tests(1u) == "EDIT: SWITCH PRO CONTROLLER (BLUETOOTH)",
+    passed &= expect(galaxy::gx::native_settings_row_text_for_tests(1u) == "EDIT: SWITCH PRO CONTROLLER (BT)",
                      "the Switch Pro Controller is named with its link");
     passed &= expect(key(VK_RIGHT) && galaxy::gx::native_settings_overlay_snapshot().row_count == 39u,
                      "the DualSense has motion rows too");

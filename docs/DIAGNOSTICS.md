@@ -34,7 +34,7 @@ Times are in video frames (60 per second) from the start of the session.
 | Variable | Effect |
 |---|---|
 | `GALAXY_RUMBLE_TRACE=1` | Log the game's motor changes (`[rumble]`) and what the controller in use would receive (`[rumble-out]`); nothing is sent to a controller |
-| `GALAXY_TEST_RUMBLE_TARGET` | `xinput:N` or `switch:N`: the controller `[rumble-out]` reports for, in trace sessions |
+| `GALAXY_TEST_RUMBLE_TARGET` | `xinput:N`, `switch:N`, `playstation:N` or `steam:N`: the controller `[rumble-out]` reports for, in trace sessions |
 | `GALAXY_TRACE_TILT=1` | Log tilt sections and the accelerometer values sent (`[tilt]`) |
 | `GALAXY_TRACE_NATIVE_MOUSE_POINTER=1` | Log pointer depth answers (`[mouse-pointer-frame]`) and world points (`[pointer-world]`) |
 

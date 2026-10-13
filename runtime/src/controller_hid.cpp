@@ -180,6 +180,10 @@ struct Device {
     // Steady-clock microsecond of the light bar write (0: none pending).
     std::uint64_t ps_led_due_us = 0;
     bool ps_led_released = false;
+    // Bluetooth: the short report is still arriving; the calibration feature
+    // report that switches it to full reports is asked for again, a few times.
+    unsigned ps_mode_attempts = 0;
+    std::uint64_t ps_mode_next_us = 0;
     // Steam Controller.
     sv::SensorClock steam_clock{};
     std::uint64_t steam_settings_due_us = 0;
@@ -810,7 +814,9 @@ bool send_playstation_effects(Device& device, const ps::Effects& effects) {
     return write_output(device, report.data(), built);
 }
 
-void init_playstation(Device& device) {
+// Reads the calibration (and a DualSense's firmware version); over Bluetooth
+// this is also what switches the controller from short to full input reports.
+void read_playstation_features(Device& device) {
     std::array<std::uint8_t, 64> feature{};
     const auto read = [&](std::uint8_t id) -> DWORD {
         feature.fill(0);
@@ -833,8 +839,13 @@ void init_playstation(Device& device) {
         const std::uint16_t version = firmware != 0 ? ps::dualsense_firmware(std::span<const std::uint8_t>(feature.data(), firmware)) : 0;
         device.ps_full_range_rumble = ps::dualsense_full_range_rumble(device.ps_model, version);
     }
-    std::cerr << "[controller] " << device.model_name << " (" << (bluetooth ? "bluetooth" : "usb")
-              << ") calibration " << (device.ps_cal.hardware ? "read" : "default") << '\n';
+}
+
+void init_playstation(Device& device) {
+    read_playstation_features(device);
+    std::cerr << "[controller] " << device.model_name << " ("
+              << (device.ps_transport == ps::Transport::Bluetooth ? "bluetooth" : "usb") << ") calibration "
+              << (device.ps_cal.hardware ? "read" : "default") << '\n';
 }
 
 // The light bar, once the first full report has arrived.
@@ -875,6 +886,7 @@ class Worker {
 public:
     void run(HANDLE stop, HANDLE rescan, HANDLE rumble) {
         rescan_devices();
+        service_device_timers();
         for (;;) {
             std::array<HANDLE, 3 + kMaxHidPads> waits{};
             std::array<Device*, 3 + kMaxHidPads> owners{};
@@ -1189,9 +1201,14 @@ private:
                               ? static_cast<float>(now - device.last_report_us) * 1e-6f : 0.0f;
         dt_report = std::clamp(dt_report, 0.0f, 0.05f);
         device.last_report_us = now;
-        if (device.scheme == ControlScheme::PlayStation &&
-            (device.ps_transport == ps::Transport::Usb || report[0] != ps::kReportState)) {
-            schedule_light_bar(device, now);
+        if (device.scheme == ControlScheme::PlayStation) {
+            if (device.ps_transport == ps::Transport::Usb || report[0] != ps::kReportState) {
+                schedule_light_bar(device, now);
+            } else if (device.ps_mode_attempts < kPlayStationModeAttempts && now >= device.ps_mode_next_us) {
+                ++device.ps_mode_attempts;
+                device.ps_mode_next_us = now + 1'000'000;
+                read_playstation_features(device);
+            }
         }
         float gyro_x = 0.0f, gyro_y = 0.0f;
         bool shake_started = false;
@@ -1483,6 +1500,7 @@ private:
     static constexpr std::uint64_t kPlayStationRumbleGapUs = 16'000;
     static constexpr std::uint64_t kPlayStationRumbleRefreshUs = 250'000;
     static constexpr std::uint64_t kSteamRumbleGapUs = 10'000;
+    static constexpr unsigned kPlayStationModeAttempts = 5;
 
     std::vector<std::unique_ptr<Device>> devices_;
     std::vector<std::wstring> refused_;
