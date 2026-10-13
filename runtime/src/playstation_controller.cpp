@@ -282,14 +282,19 @@ std::size_t build_output_report(Model model, Transport transport, const Effects&
         }
         if (e.apply_rumble) {
             effects[0] |= 0x02;  // classic rumble in place of audio haptics
-            if (e.full_range_rumble) {
+            // Stopping addresses both rumble mechanisms so neither keeps running.
+            const bool stop = e.rumble_left == 0u && e.rumble_right == 0u;
+            if (e.full_range_rumble || stop) {
                 effects[38] |= 0x04;
                 effects[2] = e.rumble_right;
                 effects[3] = e.rumble_left;
-            } else {
+            }
+            if (!e.full_range_rumble || stop) {
                 effects[0] |= 0x01;
-                effects[2] = static_cast<std::uint8_t>(e.rumble_right >> 1);
-                effects[3] = static_cast<std::uint8_t>(e.rumble_left >> 1);
+                if (!e.full_range_rumble) {
+                    effects[2] = static_cast<std::uint8_t>(e.rumble_right >> 1);
+                    effects[3] = static_cast<std::uint8_t>(e.rumble_left >> 1);
+                }
             }
         }
         if (e.release_led) effects[1] |= 0x08;

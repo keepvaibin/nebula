@@ -17,15 +17,22 @@ const char* link_name(ControllerLink link) noexcept {
     }
 }
 
-void write_label(DeviceEntry& entry, const char* model, unsigned ordinal, const char* link) noexcept {
-    int used = std::snprintf(entry.label.data(), entry.label.size(), "%s", model);
-    if (ordinal != 0u && used > 0 && static_cast<std::size_t>(used) < entry.label.size()) {
-        used += std::snprintf(entry.label.data() + used, entry.label.size() - static_cast<std::size_t>(used),
-                              " %u", ordinal);
-    }
-    if (link != nullptr && used > 0 && static_cast<std::size_t>(used) < entry.label.size()) {
-        std::snprintf(entry.label.data() + used, entry.label.size() - static_cast<std::size_t>(used), " (%s)", link);
-    }
+// Appends formatted text while the label has room.
+template <typename... Args>
+void append(DeviceEntry& entry, int& used, const char* format, Args... args) noexcept {
+    if (used < 0 || static_cast<std::size_t>(used) >= entry.label.size()) return;
+    const int added = std::snprintf(entry.label.data() + used, entry.label.size() - static_cast<std::size_t>(used),
+                                    format, args...);
+    used = added < 0 ? added : used + added;
+}
+
+void write_label(DeviceEntry& entry, const char* model, unsigned ordinal, const char* link,
+                 const char* note) noexcept {
+    int used = 0;
+    append(entry, used, "%s", model);
+    if (ordinal != 0u) append(entry, used, " %u", ordinal);
+    if (link != nullptr) append(entry, used, " (%s)", link);
+    if (note != nullptr) append(entry, used, " - %s", note);
 }
 
 }  // namespace
@@ -35,7 +42,7 @@ void build_device_list(std::span<const ControllerInfo> connected, std::optional<
     out = DeviceList{};
     DeviceEntry& keyboard = out.entries[out.count++];
     keyboard.key = DeviceKey{ControlScheme::Keyboard, kKeyboardSlot};
-    write_label(keyboard, "Keyboard and mouse", 0u, nullptr);
+    write_label(keyboard, "Keyboard and mouse", 0u, nullptr, nullptr);
     keyboard.active = active && *active == keyboard.key;
 
     std::array<const ControllerInfo*, kMaxControllers * 2> sorted{};
@@ -61,7 +68,7 @@ void build_device_list(std::span<const ControllerInfo> connected, std::optional<
         }
         DeviceEntry& entry = out.entries[out.count++];
         entry.key = DeviceKey{info.scheme, info.slot};
-        write_label(entry, info.model, same_model > 1u ? ordinal : 0u, link_name(info.link));
+        write_label(entry, info.model, same_model > 1u ? ordinal : 0u, link_name(info.link), info.note);
         entry.active = active && *active == entry.key;
     }
 }

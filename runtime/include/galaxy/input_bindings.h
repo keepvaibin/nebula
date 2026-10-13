@@ -222,6 +222,11 @@ struct ControlsConfig {
     return s == ControlScheme::SwitchPro || s == ControlScheme::SwitchPro2 ||
            s == ControlScheme::PlayStation || s == ControlScheme::Steam;
 }
+// Switch, PlayStation and Steam controllers are read from their HID reports
+// (controller_hid.h); Xbox controllers through XInput.
+[[nodiscard]] constexpr bool scheme_uses_hid(ControlScheme s) noexcept {
+    return s != ControlScheme::Keyboard && s != ControlScheme::Xbox;
+}
 // The unified button bits a scheme's controllers have; the others never bind.
 // Xbox has no readable Guide/Share (XInput), the Pro Controller has no grips.
 [[nodiscard]] constexpr std::uint32_t scheme_button_mask(ControlScheme s) noexcept {

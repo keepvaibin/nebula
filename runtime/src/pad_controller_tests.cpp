@@ -404,7 +404,7 @@ void test_output_reports() {
     e = {};
     e.apply_rumble = true;
     (void)ps::build_output_report(ps::Model::DualSense, ps::Transport::Usb, e, out);
-    expect(out[1] == 0x02 && out[3] == 0 && out[4] == 0 && out[39] == 0x04, "stopping is an explicit zero rumble");
+    expect(out[1] == 0x03 && out[3] == 0 && out[4] == 0 && out[39] == 0x04, "stopping is an explicit zero rumble");
 
     e = {};
     e.release_led = true;
@@ -647,13 +647,18 @@ void test_device_list() {
     expect(label_of(list, 1) == "DualShock 4 (USB)" && label_of(list, 2) == "DualSense Edge (USB)",
            "models of one family keep their names");
 
-    std::array<ControllerInfo, 12> many{};
+    std::array<ControllerInfo, 16> many{};
     for (std::size_t i = 0; i < many.size(); ++i) {
         many[i] = controller(ControlScheme::SwitchPro, static_cast<std::uint8_t>(i), ControllerLink::Usb, "Switch Pro Controller");
     }
     build_device_list(many, std::nullopt, list);
     expect(list.count == kMaxControllers + 1, "a long list is cut at its capacity");
-    expect(label_of(list, kMaxControllers) == "Switch Pro Controller 8 (USB)", "numbering stays within the list");
+    expect(label_of(list, kMaxControllers) == "Switch Pro Controller 12 (USB)", "numbering stays within the list");
+
+    ControllerInfo undriven = controller(ControlScheme::SwitchPro2, 0, ControllerLink::Usb, "Switch 2 Pro Controller");
+    undriven.note = "needs WinUSB";
+    build_device_list(std::span<const ControllerInfo>(&undriven, 1), std::nullopt, list);
+    expect(label_of(list, 1) == "Switch 2 Pro Controller (USB) - needs WinUSB", "a note follows the name");
 }
 
 }  // namespace

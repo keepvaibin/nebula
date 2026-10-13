@@ -292,13 +292,20 @@ std::vector<MonitorInfo> cached_monitors() {
 }
 
 // CONTROLS page (tab 2): a draft of the bindings/tuning and of the input
-// source, applied together with the other pages. The edited scheme only
-// selects which table the rows show. A binding row waiting for an input is
-// s_capture_target (kWiiTargetCount: none). Guarded by s_native_settings_mutex.
+// source, applied together with the other pages. The edited device (keyboard
+// and mouse or an attached controller) selects the scheme whose table the rows
+// show. A binding row waiting for an input is s_capture_target
+// (kWiiTargetCount: none). Guarded by s_native_settings_mutex.
 constexpr unsigned kControlsTab = 2u;
 galaxy::input::ControlsConfig s_controls_draft = galaxy::input::default_controls_config();
 RuntimeInputMode s_input_mode_draft = RuntimeInputMode::Auto;
 galaxy::input::ControlScheme s_controls_scheme = galaxy::input::ControlScheme::Keyboard;
+galaxy::input::DeviceKey s_controls_device{};
+galaxy::input::DeviceList s_controls_devices{};
+std::uint64_t s_controls_devices_ms = 0u;
+// Tests stand in for the attached controllers.
+std::optional<std::vector<galaxy::input::ControllerInfo>> s_test_controllers;
+std::optional<galaxy::input::DeviceKey> s_test_active_device;
 std::size_t s_capture_target = galaxy::input::kWiiTargetCount;
 std::uint64_t s_capture_deadline_ms = 0u;
 constexpr std::uint64_t kCaptureTimeoutMs = 6000u;
@@ -708,7 +715,7 @@ unsigned pending_settings_changes() {
 
 enum class ControlsRow {
     InputMode,
-    Scheme,
+    Device,
     Binding,
     PointerSpeed,
     InvertPointerY,
@@ -752,7 +759,10 @@ std::vector<ControlsRow> controls_tail_rows() {
     return rows;
 }
 
+void refresh_controls_devices(bool force);
+
 unsigned controls_row_count() {
+    refresh_controls_devices(false);
     return kControlsBindingRow0 + static_cast<unsigned>(galaxy::input::kWiiTargetCount) +
            static_cast<unsigned>(controls_tail_rows().size());
 }
@@ -762,7 +772,7 @@ ControlsRowInfo controls_row(unsigned row) {
     if (row == 0u) {
         info.kind = ControlsRow::InputMode;
     } else if (row == 1u) {
-        info.kind = ControlsRow::Scheme;
+        info.kind = ControlsRow::Device;
     } else if (row - kControlsBindingRow0 < galaxy::input::kWiiTargetCount) {
         // The jump/back row follows A and B.
         using galaxy::input::WiiTarget;
@@ -812,7 +822,7 @@ void start_controls_capture(galaxy::input::WiiTarget target) {
     s_capture_target = static_cast<std::size_t>(target);
     s_capture_deadline_ms = GetTickCount64() + kCaptureTimeoutMs;
     if (galaxy::input::scheme_is_gamepad(s_controls_scheme)) {
-        galaxy::host::arm_controller_binding_capture(s_controls_scheme);
+        galaxy::host::arm_controller_binding_capture(s_controls_scheme, s_controls_device.slot);
     }
 }
 
@@ -837,6 +847,39 @@ void finish_controls_capture(galaxy::input::InputSource source) {
 void expire_controls_capture() {
     if (controls_capturing() && GetTickCount64() >= s_capture_deadline_ms) {
         end_controls_capture();
+    }
+}
+
+constexpr std::uint64_t kControlsDevicesRefreshMs = 500u;
+
+// Rebuilds the device list from what is attached and keeps the edited device
+// through hot plug (a controller of the same family takes over, else the
+// keyboard and mouse).
+void refresh_controls_devices(bool force) {
+    const std::uint64_t now = GetTickCount64();
+    if (!force && s_controls_devices.count != 0u && now - s_controls_devices_ms < kControlsDevicesRefreshMs) {
+        return;
+    }
+    s_controls_devices_ms = now;
+    std::array<galaxy::input::ControllerInfo, galaxy::input::kMaxControllers> connected{};
+    std::size_t count = 0;
+    std::optional<galaxy::input::DeviceKey> active;
+    if (s_test_controllers) {
+        count = std::min(s_test_controllers->size(), connected.size());
+        std::copy_n(s_test_controllers->begin(), count, connected.begin());
+        active = s_test_active_device;
+    } else {
+        count = galaxy::host::connected_controllers(connected);
+        active = galaxy::host::last_input_device();
+    }
+    galaxy::input::build_device_list(std::span<const galaxy::input::ControllerInfo>(connected.data(), count),
+                                     active, s_controls_devices);
+    const galaxy::input::DeviceKey edited =
+        s_controls_devices.entries[galaxy::input::resolve_device(s_controls_devices, s_controls_device)].key;
+    if (!(edited == s_controls_device)) {
+        end_controls_capture();
+        s_controls_device = edited;
+        s_controls_scheme = edited.scheme;
     }
 }
 
@@ -1075,11 +1118,15 @@ void adjust_native_setting_unlogged(int delta) {
                 s_input_mode_draft = kModes[step(index, 3u)];
             }
             return;
-        case ControlsRow::Scheme:
-            s_controls_scheme = static_cast<ControlScheme>(step(
-                static_cast<unsigned>(s_controls_scheme),
-                static_cast<unsigned>(galaxy::input::kControlSchemeCount)));
+        case ControlsRow::Device: {
+            refresh_controls_devices(true);
+            const unsigned current = static_cast<unsigned>(
+                galaxy::input::resolve_device(s_controls_devices, s_controls_device));
+            const unsigned next = step(current, static_cast<unsigned>(s_controls_devices.count));
+            s_controls_device = s_controls_devices.entries[next].key;
+            s_controls_scheme = s_controls_device.scheme;
             return;
+        }
         case ControlsRow::Binding:
             if (delta > 0) start_controls_capture(info.target);
             return;
@@ -1205,10 +1252,11 @@ void cycle_native_settings_tab(int delta) {
 void set_native_settings_visible(bool visible) {
     const std::lock_guard<std::recursive_mutex> lock(s_native_settings_mutex);
     if (visible && !s_native_settings_visible.load(std::memory_order_relaxed)) {
-        // A fresh draft and monitor list each time the menu opens.
+        // A fresh draft, monitor list and controller list each time the menu opens.
         s_settings_monitors = cached_monitors();
         s_settings_draft = get_render_config();
         reset_controls_draft();
+        refresh_controls_devices(true);
         settle_native_settings_row();
     }
     if (!visible) {
@@ -1302,6 +1350,9 @@ bool handle_native_settings_key(WPARAM key, bool was_down, bool from_pad = false
     const std::lock_guard<std::recursive_mutex> lock(s_native_settings_mutex);
     if (!native_settings_ui_enabled()) {
         return false;
+    }
+    if (!from_pad) {
+        galaxy::host::note_keyboard_input();
     }
     if (key == galaxy::host::kBindingCaptureKey && !s_native_settings_visible.load(std::memory_order_relaxed)) {
         (void)galaxy::host::take_controller_binding_capture();
@@ -2998,16 +3049,12 @@ std::string native_settings_row_text(
             case RuntimeInputMode::KeyboardMouse: return "INPUT: KEYBOARD+MOUSE ONLY";
             default: return "INPUT: AUTO";
             }
-        case ControlsRow::Scheme: {
-            std::string line = std::string("EDIT: ") + galaxy::input::control_scheme_label(s_controls_scheme);
-            const galaxy::host::ConnectedControllers connected = galaxy::host::connected_controllers();
-            if (s_controls_scheme == ControlScheme::Xbox && connected.xbox) line += "  CONNECTED";
-            if (s_controls_scheme == ControlScheme::SwitchPro && connected.switch_pro != 0u) line += "  CONNECTED";
-            if (s_controls_scheme == ControlScheme::SwitchPro2) {
-                if (connected.pro2_needs_winusb) line += "  NEEDS WINUSB";
-                else if (connected.switch_pro2 != 0u) line += "  CONNECTED";
-            }
-            return line;
+        case ControlsRow::Device: {
+            const galaxy::input::DeviceEntry& entry = s_controls_devices.entries[
+                galaxy::input::resolve_device(s_controls_devices, s_controls_device)];
+            std::string line = upper_ascii(entry.label.data());
+            if (line.size() > 44u) line = line.substr(0, 42u) + "..";
+            return "EDIT: " + line + (entry.active ? "  ACTIVE" : "");
         }
         case ControlsRow::Binding: {
             std::string line = std::string(galaxy::input::wii_target_label(info.target)) + ": ";
@@ -4085,6 +4132,9 @@ void draw_native_settings_overlay(UiCanvas& renderer) {
     const std::lock_guard<std::recursive_mutex> settings_lock(s_native_settings_mutex);
     expire_display_confirmation();
     expire_controls_capture();
+    if (tab == kControlsTab) {
+        refresh_controls_devices(false);
+    }
     const RenderConfig row_render = s_settings_draft;
     const RuntimeSettings row_runtime = get_runtime_settings();
     const RenderFeatureCaps row_caps = get_render_feature_caps();
@@ -4826,10 +4876,28 @@ RenderConfig native_settings_draft_for_tests() {
     return s_settings_draft;
 }
 
+void native_settings_set_controllers_for_tests(std::span<const galaxy::input::ControllerInfo> controllers,
+                                                std::optional<galaxy::input::DeviceKey> active) {
+    const std::lock_guard<std::recursive_mutex> lock(s_native_settings_mutex);
+    s_test_controllers = std::vector<galaxy::input::ControllerInfo>(controllers.begin(), controllers.end());
+    s_test_active_device = active;
+    refresh_controls_devices(true);
+}
+
+std::string native_settings_row_text_for_tests(unsigned row) {
+    const std::lock_guard<std::recursive_mutex> lock(s_native_settings_mutex);
+    return native_settings_row_text(s_native_settings_tab.load(std::memory_order_relaxed) % kNativeSettingsTabCount,
+                                   row, s_settings_draft, get_runtime_settings(), get_render_feature_caps());
+}
+
 void native_settings_reset_overlay_state_for_tests() noexcept {
     s_display_confirm_deadline_ms = 0u;
     s_capture_target = galaxy::input::kWiiTargetCount;
     s_controls_scheme = galaxy::input::ControlScheme::Keyboard;
+    s_controls_device = {};
+    s_controls_devices = {};
+    s_test_controllers.reset();
+    s_test_active_device.reset();
     s_settings_first_row = 0u;
     s_controls_message_until_ms = 0u;
     s_native_settings_visible.store(false, std::memory_order_relaxed);

@@ -8,6 +8,7 @@
 #define NOMINMAX
 #include <Windows.h>
 
+#include <array>
 #include <cmath>
 #include <cstdlib>
 #include <filesystem>
@@ -330,13 +331,33 @@ int main() {
     runtime.input_mode = galaxy::RuntimeInputMode::Auto;
     galaxy::set_runtime_settings(runtime);
     using galaxy::input::ControlScheme;
+    using galaxy::input::ControllerInfo;
+    using galaxy::input::ControllerLink;
+    using galaxy::input::DeviceKey;
     using galaxy::input::WiiTarget;
     galaxy::input::set_controls_config(galaxy::input::default_controls_config());
+    const auto attached = [](ControlScheme scheme, std::uint8_t slot, ControllerLink link, const char* model) {
+        ControllerInfo info;
+        info.scheme = scheme;
+        info.slot = slot;
+        info.link = link;
+        info.model = model;
+        return info;
+    };
+    const std::array<ControllerInfo, 4> controllers{
+        attached(ControlScheme::Xbox, 0, ControllerLink::Unknown, "Xbox controller"),
+        attached(ControlScheme::SwitchPro, 0, ControllerLink::Bluetooth, "Switch Pro Controller"),
+        attached(ControlScheme::PlayStation, 0, ControllerLink::Usb, "DualSense"),
+        attached(ControlScheme::Steam, 1, ControllerLink::Wireless, "Steam Controller"),
+    };
+    galaxy::gx::native_settings_set_controllers_for_tests(controllers, DeviceKey{ControlScheme::PlayStation, 0});
     passed &= expect(key(VK_TAB), "Tab enters the controls page");
     snapshot = galaxy::gx::native_settings_overlay_snapshot();
     passed &= expect(
         snapshot.tab == 2u && snapshot.row_count == 30u,
-        "keyboard controls: source, scheme, 25 bindings, pointer speed, invert, reset");
+        "keyboard controls: source, device, 25 bindings, pointer speed, invert, reset");
+    passed &= expect(galaxy::gx::native_settings_row_text_for_tests(1u) == "EDIT: KEYBOARD AND MOUSE",
+                     "the device row starts on the keyboard and mouse");
     passed &= expect(key(VK_RIGHT) && galaxy::gx::native_settings_overlay_snapshot().pending_changes == 1u,
                      "the input source changes in the draft");
     passed &= expect(key(VK_BACK) && galaxy::gx::native_settings_overlay_snapshot().pending_changes == 0u,
@@ -371,15 +392,40 @@ int main() {
     passed &= expect(key(VK_RETURN) && key(VK_SPACE), "Enter on reset restores defaults; Space applies");
     passed &= expect(galaxy::input::get_controls_config() == galaxy::input::default_controls_config(),
                      "defaults restored");
-    // The scheme row switches the table shown.
-    passed &= expect(key(VK_DOWN) && key(VK_DOWN) && key(VK_RIGHT), "scheme row selects Xbox");
+    // The device row lists the attached controllers and switches the table shown.
+    passed &= expect(key(VK_DOWN) && key(VK_DOWN) && key(VK_RIGHT), "device row selects the Xbox controller");
     snapshot = galaxy::gx::native_settings_overlay_snapshot();
     passed &= expect(snapshot.row_count == 35u,
                      "Xbox adds stick and pointer deadzones, pointer hide, vibration and its strength");
+    passed &= expect(galaxy::gx::native_settings_row_text_for_tests(1u) == "EDIT: XBOX CONTROLLER",
+                     "the Xbox controller is named");
     passed &= expect(key(VK_RIGHT) && galaxy::gx::native_settings_overlay_snapshot().row_count == 39u,
                      "Switch Pro adds motion, sensitivity, gyro and gyro sensitivity rows");
+    passed &= expect(galaxy::gx::native_settings_row_text_for_tests(1u) == "EDIT: SWITCH PRO CONTROLLER (BLUETOOTH)",
+                     "the Switch Pro Controller is named with its link");
+    passed &= expect(key(VK_RIGHT) && galaxy::gx::native_settings_overlay_snapshot().row_count == 39u,
+                     "the DualSense has motion rows too");
+    passed &= expect(galaxy::gx::native_settings_row_text_for_tests(1u) == "EDIT: DUALSENSE (USB)  ACTIVE",
+                     "the active controller is marked");
+    passed &= expect(galaxy::gx::native_settings_row_text_for_tests(2u) == "A: CROSS",
+                     "PlayStation bindings use its button names");
+    passed &= expect(key(VK_RIGHT) && galaxy::gx::native_settings_row_text_for_tests(1u) ==
+                                          "EDIT: STEAM CONTROLLER (WIRELESS)",
+                     "the Steam Controller is last");
+    passed &= expect(key(VK_RIGHT) && galaxy::gx::native_settings_row_text_for_tests(1u) ==
+                                          "EDIT: STEAM CONTROLLER (WIRELESS)",
+                     "the list ends there");
     passed &= expect(galaxy::gx::native_settings_overlay_snapshot().pending_changes == 0u,
-                     "choosing the scheme to edit is not a change");
+                     "choosing the device to edit is not a change");
+    // Hot plug: the controller being edited goes away and the keyboard takes over.
+    galaxy::gx::native_settings_set_controllers_for_tests(
+        std::span<const ControllerInfo>(controllers.data(), 2u), std::nullopt);
+    passed &= expect(galaxy::gx::native_settings_row_text_for_tests(1u) == "EDIT: KEYBOARD AND MOUSE" &&
+                         galaxy::gx::native_settings_overlay_snapshot().row_count == 30u,
+                     "an unplugged controller is no longer offered");
+    galaxy::gx::native_settings_set_controllers_for_tests(controllers, std::nullopt);
+    passed &= expect(key(VK_RIGHT) && galaxy::gx::native_settings_row_text_for_tests(1u) == "EDIT: XBOX CONTROLLER",
+                     "a plugged controller appears in the list");
     const auto controls_layout = galaxy::gx::compute_native_settings_layout(1280u, 720u, 2u);
     passed &= expect(layout_inside(controls_layout, 1280u, 720u), "the long controls page scrolls inside the panel");
     const auto tiny_controls = galaxy::gx::compute_native_settings_layout(427u, 240u, 2u);

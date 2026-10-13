@@ -3,6 +3,7 @@
 #include "galaxy/ai_dma_timing.h"
 #include "galaxy/ai_pcm_identity.h"
 #include "galaxy/flat_guest_memory.h"
+#include "galaxy/controller_roster.h"
 #include "galaxy/frame_cadence_diagnostics.h"
 #include "galaxy/host_pointer_events.h"
 #include "galaxy/native_api.h"
@@ -257,26 +258,26 @@ void publish_native_pointer_input_origin(bool button, bool injected) noexcept;
 [[nodiscard]] bool native_window_key_injected(std::uint32_t key) noexcept;
 [[nodiscard]] bool native_pointer_input_injected(bool button) noexcept;
 
-// Binding capture for the overlay's CONTROLS page. While armed, controllers
-// of `scheme` are read in every input mode, never reach the overlay's pad
-// navigation, and the first new press (button, stick direction past 0.6,
-// trigger past 0.5) is stored; the overlay is told through its key sink
-// with kBindingCaptureKey and collects it with take_controller_binding_capture.
+// Binding capture for the overlay's CONTROLS page. While armed, the controller
+// of `scheme` (and `slot`, 0xff: any of the family) is read in every input
+// mode, never reaches the overlay's pad navigation, and the first new press
+// (button, stick direction past 0.6, trigger past 0.5) is stored; the overlay
+// is told through its key sink with kBindingCaptureKey and collects it with
+// take_controller_binding_capture.
 inline constexpr std::uintptr_t kBindingCaptureKey = 0xE8u;
-void arm_controller_binding_capture(input::ControlScheme scheme) noexcept;
+void arm_controller_binding_capture(input::ControlScheme scheme, std::uint8_t slot = input::kKeyboardSlot) noexcept;
 void cancel_controller_binding_capture() noexcept;
 [[nodiscard]] std::optional<input::InputSource> take_controller_binding_capture() noexcept;
 
-struct ConnectedControllers {
-    bool xbox = false;
-    unsigned switch_pro = 0;
-    unsigned switch_pro2 = 0;
-    bool pro2_needs_winusb = false;
-};
-// Controllers seen by the most recent input reports (and the HID worker).
-[[nodiscard]] ConnectedControllers connected_controllers() noexcept;
-// Synchronous check (settings UI only): an XInput pad or a Switch Pro /
-// Pro Controller 2 is attached now.
+// The controllers attached now by model name: XInput pads and HID controllers
+// (Switch, PlayStation, Steam). The input reports keep it current while
+// controllers are polled; otherwise XInput is probed at most once a second.
+std::size_t connected_controllers(std::span<input::ControllerInfo> out) noexcept;
+// The device that last gave input, a controller or the keyboard and mouse.
+[[nodiscard]] std::optional<input::DeviceKey> last_input_device() noexcept;
+// A person typed or clicked (overlay keys included).
+void note_keyboard_input() noexcept;
+// Synchronous check (settings UI only): a controller is attached now.
 [[nodiscard]] bool controller_present_now() noexcept;
 
 struct AudioSinkStats {

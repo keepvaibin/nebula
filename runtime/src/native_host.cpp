@@ -5966,12 +5966,25 @@ static std::atomic<bool> g_pointer_button_injected{false};
 // 1 + scheme while armed. The result is (1 << 16) | kind << 8 | code.
 static std::atomic<std::uint32_t> g_binding_capture_armed{0u};
 static std::atomic<std::uint32_t> g_binding_capture_result{0u};
-static std::atomic<bool> g_xinput_seen_connected{false};
+// XInput pads (bit per user index) seen by the input path, and when it last looked.
+static std::atomic<std::uint32_t> g_xinput_mask{0u};
+static std::atomic<std::uint64_t> g_xinput_looked_ms{0u};
+// The device that last gave input, for the CONTROLS page: (scheme << 8) | slot.
+constexpr std::uint32_t kLastInputNone = 0xFFFFFFFFu;
+constexpr std::uint32_t kLastInputKeyboard = 0xFFFFFFFEu;
+static std::atomic<std::uint32_t> g_last_input{kLastInputNone};
 
-void arm_controller_binding_capture(input::ControlScheme scheme) noexcept {
+// An armed capture holds the scheme as 1 + scheme in its low byte and the
+// device slot above it.
+constexpr input::ControlScheme capture_scheme_of(std::uint32_t armed) noexcept {
+    return static_cast<input::ControlScheme>((std::max<std::uint32_t>(armed & 0xffu, 1u)) - 1u);
+}
+
+void arm_controller_binding_capture(input::ControlScheme scheme, std::uint8_t slot) noexcept {
     g_binding_capture_result.store(0u, std::memory_order_release);
-    g_binding_capture_armed.store(1u + static_cast<std::uint32_t>(scheme), std::memory_order_release);
-    if (scheme == input::ControlScheme::SwitchPro || scheme == input::ControlScheme::SwitchPro2) {
+    g_binding_capture_armed.store((static_cast<std::uint32_t>(slot) << 8u) | (1u + static_cast<std::uint32_t>(scheme)),
+                                  std::memory_order_release);
+    if (input::scheme_uses_hid(scheme)) {
         ensure_controller_hid_started();
     }
 }
@@ -5996,17 +6009,43 @@ bool controller_present_now() noexcept {
             return true;
         }
     }
-    return switch_controller_present_now();
+    return hid_controller_present_now();
 }
 
-ConnectedControllers connected_controllers() noexcept {
-    const ControllerHidStatus hid = controller_hid_status();
-    ConnectedControllers status{};
-    status.xbox = g_xinput_seen_connected.load(std::memory_order_acquire);
-    status.switch_pro = hid.switch_pro;
-    status.switch_pro2 = hid.switch_pro2;
-    status.pro2_needs_winusb = hid.pro2_needs_winusb;
-    return status;
+std::size_t connected_controllers(std::span<input::ControllerInfo> out) noexcept {
+    std::uint32_t xinput = g_xinput_mask.load(std::memory_order_acquire);
+    const std::uint64_t now = GetTickCount64();
+    if (now - g_xinput_looked_ms.load(std::memory_order_relaxed) > 1000u) {
+        xinput = 0u;
+        for (DWORD slot = 0; slot < XUSER_MAX_COUNT; ++slot) {
+            XINPUT_STATE state{};
+            if (XInputGetState(slot, &state) == ERROR_SUCCESS) xinput |= 1u << slot;
+        }
+        g_xinput_mask.store(xinput, std::memory_order_release);
+        g_xinput_looked_ms.store(now, std::memory_order_relaxed);
+    }
+    std::size_t count = 0;
+    for (DWORD slot = 0; slot < XUSER_MAX_COUNT && count < out.size(); ++slot) {
+        if ((xinput & (1u << slot)) == 0u) continue;
+        input::ControllerInfo& info = out[count++];
+        info = {};
+        info.scheme = input::ControlScheme::Xbox;
+        info.slot = static_cast<std::uint8_t>(slot);
+        info.model = "Xbox controller";
+    }
+    return count + hid_controllers(out.subspan(count));
+}
+
+std::optional<input::DeviceKey> last_input_device() noexcept {
+    const std::uint32_t key = g_last_input.load(std::memory_order_relaxed);
+    if (key == kLastInputNone) return std::nullopt;
+    if (key == kLastInputKeyboard) return input::DeviceKey{input::ControlScheme::Keyboard, input::kKeyboardSlot};
+    return input::DeviceKey{static_cast<input::ControlScheme>((key >> 8u) & 0xffu),
+                            static_cast<std::uint8_t>(key & 0xffu)};
+}
+
+void note_keyboard_input() noexcept {
+    g_last_input.store(kLastInputKeyboard, std::memory_order_relaxed);
 }
 
 void publish_native_window_key_state(std::uint32_t key, bool down) noexcept {
@@ -6017,11 +6056,13 @@ void publish_native_window_input_origin(std::uint32_t key, bool injected) noexce
     if (key < g_window_key_injected.size()) {
         g_window_key_injected[key].store(injected, std::memory_order_relaxed);
     }
+    if (!injected) note_keyboard_input();
 }
 
 void publish_native_pointer_input_origin(bool button, bool injected) noexcept {
     (button ? g_pointer_button_injected : g_pointer_move_injected)
         .store(injected, std::memory_order_relaxed);
+    if (button && !injected) note_keyboard_input();
 }
 
 bool native_window_key_injected(std::uint32_t key) noexcept {
@@ -6672,10 +6713,10 @@ galaxy::input::PadSample pad_sample_from_xinput(const NativeHidControllerState& 
     return sample;
 }
 
-std::size_t collect_switch_pads(const galaxy::input::ControlsConfig& config,
-                                std::array<LivePad, kMaxSwitchPads>& out) {
-    std::array<SwitchPadState, kMaxSwitchPads> pads{};
-    const std::size_t count = read_switch_pads(pads, true);
+std::size_t collect_hid_pads(const galaxy::input::ControlsConfig& config,
+                              std::array<LivePad, kMaxHidPads>& out) {
+    std::array<HidPadState, kMaxHidPads> pads{};
+    const std::size_t count = read_hid_pads(pads, true);
     const std::uint64_t now_us = controller_hid_now_us();
     for (std::size_t i = 0; i < count; ++i) {
         const galaxy::input::SchemeTuning& tuning = config.tune(pads[i].scheme);
@@ -6779,10 +6820,12 @@ bool service_binding_capture(std::span<const LivePad> pads) {
         s_baseline_for = 0u;
         return false;
     }
-    const auto scheme = static_cast<galaxy::input::ControlScheme>(armed - 1u);
+    const auto scheme = capture_scheme_of(armed);
+    const auto slot = static_cast<std::uint8_t>(armed >> 8u);
     const LivePad* match = nullptr;
     for (const LivePad& pad : pads) {
-        if (pad.sample.connected && pad.sample.scheme == scheme) {
+        if (pad.sample.connected && pad.sample.scheme == scheme &&
+            (slot == galaxy::input::kKeyboardSlot || pad.device_slot == slot)) {
             match = &pad;
             break;
         }
@@ -8571,10 +8614,9 @@ galaxy::input::WiimoteInputSnapshot build_native_hid_input_snapshot(
     const bool use_keyboard = input_mode == galaxy::RuntimeInputMode::Auto ||
                               input_mode == galaxy::RuntimeInputMode::KeyboardMouse;
     input_poll_diagnostic_stage(NativeInputPollStage::Controller);
-    const galaxy::input::ControlScheme capture_scheme =
-        static_cast<galaxy::input::ControlScheme>(
-            std::max<std::uint32_t>(g_binding_capture_armed.load(std::memory_order_acquire), 1u) - 1u);
-    const bool capturing = g_binding_capture_armed.load(std::memory_order_acquire) != 0u;
+    const std::uint32_t capture_armed = g_binding_capture_armed.load(std::memory_order_acquire);
+    const galaxy::input::ControlScheme capture_scheme = capture_scheme_of(capture_armed);
+    const bool capturing = capture_armed != 0u;
     const bool controller_mode_polls =
         (input_mode == galaxy::RuntimeInputMode::Controller ||
          input_mode == galaxy::RuntimeInputMode::Auto) &&
@@ -8594,14 +8636,17 @@ galaxy::input::WiimoteInputSnapshot build_native_hid_input_snapshot(
               xinput_pads)
         : 0u;
     if (poll_controller) {
-        g_xinput_seen_connected.store(xinput_count != 0u, std::memory_order_release);
+        std::uint32_t xinput_mask = 0u;
+        for (std::size_t i = 0; i < xinput_count; ++i) xinput_mask |= 1u << xinput_pads[i].slot;
+        g_xinput_mask.store(xinput_mask, std::memory_order_release);
+        g_xinput_looked_ms.store(GetTickCount64(), std::memory_order_relaxed);
     }
     NativeHidControllerState controller = xinput_count != 0u ? xinput_pads[0] : NativeHidControllerState{};
     const float xinput_pointer_deadzone_fraction =
         static_cast<float>(read_env_int_setting(
             "GALAXY_XINPUT_POINTER_DEADZONE", deadzone_counts(xbox_tuning.pointer_deadzone), 0, 32767)) /
         32767.0f;
-    std::array<LivePad, XUSER_MAX_COUNT + kMaxSwitchPads> pads{};
+    std::array<LivePad, XUSER_MAX_COUNT + kMaxHidPads> pads{};
     std::size_t pad_count = 0;
     for (std::size_t i = 0; i < std::max<std::size_t>(xinput_count, 1u); ++i) {
         pads[pad_count].device_slot =
@@ -8610,15 +8655,24 @@ galaxy::input::WiimoteInputSnapshot build_native_hid_input_snapshot(
             i < xinput_count ? xinput_pads[i] : NativeHidControllerState{},
             xinput_pointer_deadzone_fraction);
     }
-    if (controller_mode_polls || (capturing && galaxy::input::scheme_has_motion(capture_scheme))) {
+    if (controller_mode_polls || (capturing && galaxy::input::scheme_uses_hid(capture_scheme))) {
         ensure_controller_hid_started();
-        std::array<LivePad, kMaxSwitchPads> switch_pads{};
-        const std::size_t switch_count = collect_switch_pads(controls.config, switch_pads);
-        for (std::size_t i = 0; i < switch_count; ++i) {
-            pads[pad_count++] = switch_pads[i];
+        std::array<LivePad, kMaxHidPads> hid_pads{};
+        const std::size_t hid_count = collect_hid_pads(controls.config, hid_pads);
+        for (std::size_t i = 0; i < hid_count; ++i) {
+            pads[pad_count++] = hid_pads[i];
         }
     }
     const std::span<LivePad> live_pads(pads.data(), pad_count);
+    // Before the overlay takes the pads: the controller the player is using, for the CONTROLS page.
+    for (const LivePad& pad : live_pads) {
+        if (!pad.sample.connected) continue;
+        if (pad_has_input(pad.sample) || pad.shake_remote || pad.shake_nunchuk ||
+            std::fabs(pad.gyro_x) + std::fabs(pad.gyro_y) > 0.003f) {
+            g_last_input.store((static_cast<std::uint32_t>(pad.sample.scheme) << 8u) | pad.device_slot,
+                               std::memory_order_relaxed);
+        }
+    }
     const bool capture_finished = service_binding_capture(live_pads);
     (void)route_native_settings_pads(live_pads, capture_finished);
     if (!controller_mode_polls) {
@@ -8672,7 +8726,7 @@ galaxy::input::WiimoteInputSnapshot build_native_hid_input_snapshot(
     // Rest-hide tuning of the pad that points (gyro first, then the stick).
     float pointer_hide_seconds = 0.0f;
     float pointer_hide_radius = galaxy::input::kDefaultPointerHideRadius;
-    static std::array<std::uint32_t, XUSER_MAX_COUNT + kMaxSwitchPads> s_pad_previous_pressed{};
+    static std::array<std::uint32_t, XUSER_MAX_COUNT + kMaxHidPads> s_pad_previous_pressed{};
     // The controller in use: the last one with any input (buttons, sticks, triggers, a gyro turn, a
     // shake). A key or mouse button bound to a Wii input hands control to the keyboard. In the tilt
     // sections (tilt.h) its tilt steers when it has motion sensors (Pro Controller 1/2); otherwise the
@@ -8756,9 +8810,8 @@ galaxy::input::WiimoteInputSnapshot build_native_hid_input_snapshot(
         const auto slot = static_cast<std::uint8_t>(s_driving_pad & 0xFFu);
         if (scheme == galaxy::input::ControlScheme::Xbox && slot < XUSER_MAX_COUNT) {
             g_rumble_host.target = {RumbleTarget::Kind::XInput, slot};
-        } else if ((scheme == galaxy::input::ControlScheme::SwitchPro ||
-                    scheme == galaxy::input::ControlScheme::SwitchPro2) && slot < kMaxSwitchPads) {
-            g_rumble_host.target = {RumbleTarget::Kind::Switch, slot};
+        } else if (galaxy::input::scheme_uses_hid(scheme) && slot < kMaxHidPads) {
+            g_rumble_host.target = {RumbleTarget::Kind::Hid, slot, scheme};
         }
         if (static_cast<std::size_t>(scheme) < galaxy::input::kControlSchemeCount) {
             const galaxy::input::SchemeTuning& tuning = controls.config.tune(scheme);

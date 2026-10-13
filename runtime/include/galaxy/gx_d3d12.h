@@ -3,12 +3,14 @@
 #include "galaxy/gx/frame_completion.h"
 #include "galaxy/gx/render_config.h"
 #include "galaxy/gx/pointer_response.h"
+#include "galaxy/controller_roster.h"
 #include "galaxy/host_pointer_events.h"
 #include "galaxy/native_api.h"
 
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <span>
 
@@ -380,6 +382,12 @@ native_settings_overlay_snapshot() noexcept;
 void native_settings_reset_overlay_state_for_tests() noexcept;
 // Waits until the settings files the overlay queued are written (saves run on a worker).
 void native_settings_wait_saved_for_tests();
+// The controllers the CONTROLS page lists in place of the attached ones, and
+// the device marked active.
+void native_settings_set_controllers_for_tests(std::span<const input::ControllerInfo> controllers,
+                                               std::optional<input::DeviceKey> active);
+// The text of a row of the open page as drawn.
+[[nodiscard]] std::string native_settings_row_text_for_tests(unsigned row);
 // The settings the menu would apply (its draft), for tests.
 [[nodiscard]] RenderConfig native_settings_draft_for_tests();
 // Delivers an overlay key to the window thread (controller navigation).

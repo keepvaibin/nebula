@@ -1,6 +1,8 @@
 #include "galaxy/controller_hid.h"
 #include "galaxy/content_viewport.h"
+#include "galaxy/playstation_controller.h"
 #include "galaxy/rumble.h"
+#include "galaxy/steam_controller.h"
 
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
@@ -26,6 +28,7 @@
 #include <iostream>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <thread>
@@ -39,7 +42,10 @@ namespace galaxy::host {
 namespace {
 
 namespace sw = input::switch_hid;
+namespace ps = input::playstation;
+namespace sv = input::steam;
 using input::ControlScheme;
+using input::ControllerLink;
 
 std::uint64_t steady_us() noexcept {
     return static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::microseconds>(
@@ -131,7 +137,14 @@ struct WinUsbPipes {
 struct Device {
     std::wstring path;
     ControlScheme scheme = ControlScheme::SwitchPro;
+    const char* model_name = "";
+    ControllerLink link = ControllerLink::Unknown;
     bool bluetooth = false;
+    // Visible to the input consumer. A Steam Controller puck interface stays
+    // hidden until a controller connects to it.
+    bool published = false;
+    bool puck = false;
+    bool needs_driver = false;
     UniqueHandle handle;
     UniqueHandle read_event;
     OVERLAPPED read_ov{};
@@ -158,10 +171,23 @@ struct Device {
     std::size_t slot = 0;
     // Output packet number after initialisation (0x10 rumble reports).
     std::uint8_t packet = 0;
+    // PlayStation.
+    ps::Model ps_model = ps::Model::DualShock4;
+    ps::Transport ps_transport = ps::Transport::Usb;
+    ps::ImuCal ps_cal{};
+    ps::SensorClock ps_clock{};
+    bool ps_full_range_rumble = true;
+    // Steady-clock microsecond of the light bar write (0: none pending).
+    std::uint64_t ps_led_due_us = 0;
+    bool ps_led_released = false;
+    // Steam Controller.
+    sv::SensorClock steam_clock{};
+    std::uint64_t steam_settings_due_us = 0;
     // Vibration last sent to this controller.
     bool rumble_on = false;
     std::uint8_t rumble_level = 0;
     std::uint8_t rumble_strength = 0;
+    std::uint16_t rumble_value = 0;  // PlayStation and Steam motor speed
     std::uint8_t rumble_sequence = 0;
     std::uint64_t rumble_sent_us = 0;
     UniqueHandle write_event;
@@ -169,7 +195,20 @@ struct Device {
 
 struct Published {
     bool connected = false;
-    SwitchPadState state{};
+    HidPadState state{};
+    input::ControllerInfo info{};
+};
+
+// What a crashing process sends to stop a controller's motor.
+enum class OffKind : std::uint8_t {
+    None,
+    SwitchPro,
+    SwitchPro2,
+    DualShock4Usb,
+    DualShock4Bluetooth,
+    DualSenseUsb,
+    DualSenseBluetooth,
+    Steam,
 };
 
 struct Hub {
@@ -179,11 +218,8 @@ struct Hub {
     UniqueHandle rescan_event;
     HCMNOTIFICATION notification = nullptr;
     SRWLOCK lock = SRWLOCK_INIT;
-    std::array<Published, kMaxSwitchPads> pads{};
+    std::array<Published, kMaxHidPads> pads{};
     std::atomic<bool> started{false};
-    std::atomic<unsigned> pro_count{0};
-    std::atomic<unsigned> pro2_count{0};
-    std::atomic<bool> pro2_needs_winusb{false};
     // Vibration: the game state from the emulation thread, and what runs on
     // the devices (read without locks by stop_all_rumble).
     SRWLOCK rumble_lock = SRWLOCK_INIT;
@@ -193,12 +229,12 @@ struct Hub {
     // Set by stop_all_rumble (exit, crash): no motor starts again.
     std::atomic<bool> rumble_shutdown{false};
     std::atomic<std::uint8_t> xinput_rumbling{0};  // bit per XInput user index
-    // A Switch controller's handle while its motor may run; cleared under
+    // A HID controller's handle while its motor may run; cleared under
     // rumble_device_lock (exclusive) before the handle closes.
     SRWLOCK rumble_device_lock = SRWLOCK_INIT;
-    std::array<std::atomic<HANDLE>, kMaxSwitchPads> switch_rumble_handles{};
-    std::array<std::atomic<std::uint16_t>, kMaxSwitchPads> switch_rumble_lengths{};
-    std::array<std::atomic<bool>, kMaxSwitchPads> switch_rumble_pro2{};
+    std::array<std::atomic<HANDLE>, kMaxHidPads> hid_rumble_handles{};
+    std::array<std::atomic<std::uint16_t>, kMaxHidPads> hid_rumble_lengths{};
+    std::array<std::atomic<std::uint8_t>, kMaxHidPads> hid_rumble_off{};
 };
 
 // Never destroyed: the worker may still be blocked when the process exits.
@@ -216,12 +252,61 @@ DWORD CALLBACK on_device_change(HCMNOTIFICATION, PVOID context, CM_NOTIFY_ACTION
     return ERROR_SUCCESS;
 }
 
-struct HidCandidate {
-    std::wstring path;
-    USHORT product = 0;
+// A supported HID controller by vendor and product id.
+struct ProductInfo {
+    ControlScheme scheme = ControlScheme::SwitchPro;
+    const char* name = "";
+    ps::Model ps_model = ps::Model::DualShock4;
 };
 
-std::vector<HidCandidate> enumerate_switch_hid() {
+std::optional<ProductInfo> find_product(USHORT vendor, USHORT product) noexcept {
+    if (vendor == sw::kNintendoVendorId) {
+        if (product == sw::kProControllerProductId) return ProductInfo{ControlScheme::SwitchPro, "Switch Pro Controller", {}};
+        if (product == sw::kPro2ControllerProductId) {
+            return ProductInfo{ControlScheme::SwitchPro2, "Switch 2 Pro Controller", {}};
+        }
+        return std::nullopt;
+    }
+    if (const auto model = ps::model_for_product(vendor, product)) {
+        return ProductInfo{ControlScheme::PlayStation, ps::model_name(*model), *model};
+    }
+    if (vendor == sv::kValveVendorId && (sv::is_controller_product(product) || sv::is_puck_product(product))) {
+        return ProductInfo{ControlScheme::Steam, "Steam Controller", {}};
+    }
+    return std::nullopt;
+}
+
+struct HidCandidate {
+    std::wstring path;
+    USHORT vendor = 0;
+    USHORT product = 0;
+    ProductInfo info{};
+};
+
+// USB interface number from "&mi_NN" in a device path (-1: not a composite device).
+int interface_number(const std::wstring& path) {
+    std::wstring lower = path;
+    std::transform(lower.begin(), lower.end(), lower.begin(), ::towlower);
+    const std::size_t at = lower.find(L"&mi_");
+    if (at == std::wstring::npos || at + 6u > lower.size()) return -1;
+    return static_cast<int>(std::wcstol(lower.substr(at + 4u, 2u).c_str(), nullptr, 16));
+}
+
+bool bluetooth_path(const std::wstring& path) {
+    // HID over classic Bluetooth, and HID over GATT.
+    return contains_ci(path, L"{00001124-0000-1000-8000-00805f9b34fb}") ||
+           contains_ci(path, L"{00001812-0000-1000-8000-00805f9b34fb}");
+}
+
+ControllerLink link_of(const HidCandidate& candidate) {
+    if (candidate.info.scheme == ControlScheme::Steam) {
+        if (sv::is_puck_product(candidate.product)) return ControllerLink::Wireless;
+        return candidate.product == sv::kControllerBleProductId ? ControllerLink::Bluetooth : ControllerLink::Usb;
+    }
+    return bluetooth_path(candidate.path) ? ControllerLink::Bluetooth : ControllerLink::Usb;
+}
+
+std::vector<HidCandidate> enumerate_hid_pads() {
     std::vector<HidCandidate> found;
     GUID hid_guid{};
     HidD_GetHidGuid(&hid_guid);
@@ -238,18 +323,22 @@ std::vector<HidCandidate> enumerate_switch_hid() {
         detail->cbSize = sizeof(SP_DEVICE_INTERFACE_DETAIL_DATA_W);
         if (!SetupDiGetDeviceInterfaceDetailW(set, &iface, detail, needed, nullptr, nullptr)) continue;
         const std::wstring path = detail->DevicePath;
-        if (!contains_ci(path, L"057e")) continue;  // cheap filter before opening
+        // Cheap filter by vendor id before opening anything.
+        if (!contains_ci(path, L"057e") && !contains_ci(path, L"054c") && !contains_ci(path, L"28de")) continue;
         UniqueHandle probe(CreateFileW(path.c_str(), 0, FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr,
                                        OPEN_EXISTING, 0, nullptr));
         if (probe.get() == INVALID_HANDLE_VALUE) continue;
         HIDD_ATTRIBUTES attributes{};
         attributes.Size = sizeof(attributes);
-        if (!HidD_GetAttributes(probe.get(), &attributes) || attributes.VendorID != sw::kNintendoVendorId) continue;
-        if (attributes.ProductID != sw::kProControllerProductId &&
-            attributes.ProductID != sw::kPro2ControllerProductId) {
-            continue;
+        if (!HidD_GetAttributes(probe.get(), &attributes)) continue;
+        const auto product = find_product(attributes.VendorID, attributes.ProductID);
+        if (!product) continue;
+        if (sv::is_puck_product(attributes.ProductID)) {
+            // Interfaces 2..5 carry controllers; the others are not game pads.
+            const int mi = interface_number(path);
+            if (mi < static_cast<int>(sv::kPuckFirstInterface) || mi > static_cast<int>(sv::kPuckLastInterface)) continue;
         }
-        found.push_back({path, attributes.ProductID});
+        found.push_back({path, attributes.VendorID, attributes.ProductID, *product});
     }
     SetupDiDestroyDeviceInfoList(set);
     return found;
@@ -333,7 +422,7 @@ bool flash_read_switch2(WinUsbPipes& pipes, std::uint32_t address, std::array<st
 void init_switch2(Device& device) {
     device.winusb = open_switch2_vendor_interface();
     if (!device.winusb) {
-        hub().pro2_needs_winusb.store(true, std::memory_order_release);
+        device.needs_driver = true;
         std::cerr << "[controller] pro controller 2 (usb): interface 1 has no WinUSB driver; "
                      "input needs the vendor init command (docs/KEYBOARD_CONTROLS.md)\n";
         return;
@@ -496,15 +585,79 @@ bool write_report(HANDLE handle, HANDLE event, const std::uint8_t* data, DWORD s
     return GetOverlappedResult(handle, &ov, &done, FALSE) != FALSE;
 }
 
-// The motor-off report for a Switch controller.
-bool write_rumble_off(HANDLE handle, HANDLE event, std::uint16_t output_length, bool pro2) noexcept {
-    std::array<std::uint8_t, 128> report{};
+// A feature report read on an overlapped handle (IOCTL_HID_GET_FEATURE, as
+// HidD_GetFeature cannot wait on one): buffer[0] is the report id. Returns the
+// bytes received including the id, 0 on failure or timeout.
+DWORD get_feature_report(HANDLE handle, HANDLE event, std::uint8_t* buffer, DWORD size, DWORD timeout_ms) noexcept {
+    constexpr DWORD kIoctlHidGetFeature = 0x000b0192;
+    if (handle == nullptr || handle == INVALID_HANDLE_VALUE || event == nullptr) return 0;
+    OVERLAPPED ov{};
+    ov.hEvent = event;
+    ResetEvent(event);
+    DWORD done = 0;
+    if (!DeviceIoControl(handle, kIoctlHidGetFeature, buffer, size, buffer, size, nullptr, &ov)) {
+        if (GetLastError() != ERROR_IO_PENDING) return 0;
+        if (WaitForSingleObject(event, timeout_ms) != WAIT_OBJECT_0) {
+            CancelIoEx(handle, &ov);
+            GetOverlappedResult(handle, &ov, &done, TRUE);
+            return 0;
+        }
+    }
+    return GetOverlappedResult(handle, &ov, &done, FALSE) != FALSE ? done : 0;
+}
+
+constexpr std::size_t kLargestOutputReport = 600;
+
+// The motor-off report for a HID controller.
+bool write_rumble_off(HANDLE handle, HANDLE event, std::uint16_t output_length, OffKind kind) noexcept {
+    std::array<std::uint8_t, kLargestOutputReport> report{};
     const std::size_t length = std::min<std::size_t>(output_length, report.size());
-    const std::size_t built = pro2
-        ? input::rumble::build_switch2_rumble_report(0, 0, 0, std::span(report.data(), length))
-        : input::rumble::build_switch_pro_rumble_report(0, input::rumble::switch_pro_motor_rumble(0, 0),
-                                                        std::span(report.data(), length));
+    const std::span<std::uint8_t> out(report.data(), length);
+    std::size_t built = 0;
+    ps::Effects stop;
+    stop.apply_rumble = true;
+    switch (kind) {
+    case OffKind::SwitchPro:
+        built = input::rumble::build_switch_pro_rumble_report(0, input::rumble::switch_pro_motor_rumble(0, 0), out);
+        break;
+    case OffKind::SwitchPro2:
+        built = input::rumble::build_switch2_rumble_report(0, 0, 0, out);
+        break;
+    case OffKind::DualShock4Usb:
+        built = ps::build_output_report(ps::Model::DualShock4, ps::Transport::Usb, stop, out);
+        break;
+    case OffKind::DualShock4Bluetooth:
+        built = ps::build_output_report(ps::Model::DualShock4, ps::Transport::Bluetooth, stop, out);
+        break;
+    case OffKind::DualSenseUsb:
+        built = ps::build_output_report(ps::Model::DualSense, ps::Transport::Usb, stop, out);
+        break;
+    case OffKind::DualSenseBluetooth:
+        built = ps::build_output_report(ps::Model::DualSense, ps::Transport::Bluetooth, stop, out);
+        break;
+    case OffKind::Steam:
+        built = sv::build_rumble_report(0, 0, out);
+        break;
+    case OffKind::None:
+        break;
+    }
     return built != 0 && write_report(handle, event, report.data(), static_cast<DWORD>(length), 30);
+}
+
+OffKind off_kind_of(const Device& device) noexcept {
+    switch (device.scheme) {
+    case ControlScheme::SwitchPro: return OffKind::SwitchPro;
+    case ControlScheme::SwitchPro2: return OffKind::SwitchPro2;
+    case ControlScheme::Steam: return OffKind::Steam;
+    case ControlScheme::PlayStation: {
+        const bool bluetooth = device.ps_transport == ps::Transport::Bluetooth;
+        if (device.ps_model == ps::Model::DualShock4) {
+            return bluetooth ? OffKind::DualShock4Bluetooth : OffKind::DualShock4Usb;
+        }
+        return bluetooth ? OffKind::DualSenseBluetooth : OffKind::DualSenseUsb;
+    }
+    default: return OffKind::None;
+    }
 }
 
 // Set unless the value is empty, 0, false, off or no.
@@ -525,9 +678,10 @@ bool rumble_trace_enabled() noexcept {
     return enabled;
 }
 
-// GALAXY_TEST_RUMBLE_TARGET=xinput:N or switch:N, honoured only while
-// output is disabled: the controller a trace session reports as vibrating,
-// with the window counted as focused (a hidden window never is).
+// GALAXY_TEST_RUMBLE_TARGET=xinput:N, switch:N, playstation:N or steam:N,
+// honoured only while output is disabled: the controller a trace session
+// reports as vibrating, with the window counted as focused (a hidden window
+// never is).
 RumbleTarget test_rumble_target() noexcept {
     static const RumbleTarget target = [] {
         RumbleTarget parsed{};
@@ -540,20 +694,42 @@ RumbleTarget test_rumble_target() noexcept {
         const char digit = text[colon + 1u];
         if (digit < '0' || digit > '3') return parsed;
         const std::string_view kind = text.substr(0, colon);
-        if (kind == "xinput") parsed.kind = RumbleTarget::Kind::XInput;
-        else if (kind == "switch") parsed.kind = RumbleTarget::Kind::Switch;
+        if (kind == "xinput") {
+            parsed.kind = RumbleTarget::Kind::XInput;
+            parsed.scheme = ControlScheme::Xbox;
+        } else if (kind == "switch") {
+            parsed.kind = RumbleTarget::Kind::Hid;
+            parsed.scheme = ControlScheme::SwitchPro;
+        } else if (kind == "playstation") {
+            parsed.kind = RumbleTarget::Kind::Hid;
+            parsed.scheme = ControlScheme::PlayStation;
+        } else if (kind == "steam") {
+            parsed.kind = RumbleTarget::Kind::Hid;
+            parsed.scheme = ControlScheme::Steam;
+        }
         parsed.slot = static_cast<std::uint8_t>(digit - '0');
         return parsed;
     }();
     return target;
 }
 
-const char* rumble_target_kind_name(RumbleTarget::Kind kind) noexcept {
-    switch (kind) {
+const char* rumble_target_kind_name(const RumbleTarget& target) noexcept {
+    switch (target.kind) {
     case RumbleTarget::Kind::XInput: return "xinput";
-    case RumbleTarget::Kind::Switch: return "switch";
+    case RumbleTarget::Kind::Hid:
+        switch (target.scheme) {
+        case ControlScheme::PlayStation: return "playstation";
+        case ControlScheme::Steam: return "steam";
+        default: return "switch";
+        }
     default: return "none";
     }
+}
+
+// The 0..255 speed of the light motor that PlayStation controllers are driven
+// with, as the Xbox light motor is.
+std::uint8_t playstation_motor(std::uint8_t level, std::uint8_t strength) noexcept {
+    return static_cast<std::uint8_t>(input::rumble::xinput_motor_speeds(level, strength).right >> 8);
 }
 
 // GALAXY_RUMBLE_TRACE: what the controller in use would receive, logged at
@@ -586,7 +762,7 @@ void trace_rumble_output(const RumbleRequest& request, std::uint64_t now) noexce
                                   : request.paused ? " paused" : " gate";
     char line[256]{};
     int used = std::snprintf(line, sizeof(line), "[rumble-out] us=%llu target=%s:%u motor=%s%s bit=%u level=%u strength=%u",
-                             static_cast<unsigned long long>(now), rumble_target_kind_name(request.target.kind),
+                             static_cast<unsigned long long>(now), rumble_target_kind_name(request.target),
                              static_cast<unsigned>(request.target.slot), run ? "on" : "off", reason,
                              request.motor_on ? 1u : 0u, static_cast<unsigned>(level),
                              static_cast<unsigned>(request.strength));
@@ -595,7 +771,14 @@ void trace_rumble_output(const RumbleRequest& request, std::uint64_t now) noexce
             const input::rumble::XInputMotors speeds = input::rumble::xinput_motor_speeds(level, request.strength);
             used += std::snprintf(line + used, sizeof(line) - static_cast<std::size_t>(used), " xinput=%u/%u",
                                   static_cast<unsigned>(speeds.left), static_cast<unsigned>(speeds.right));
-        } else if (request.target.kind == RumbleTarget::Kind::Switch) {
+        } else if (request.target.kind == RumbleTarget::Kind::Hid && request.target.scheme == ControlScheme::PlayStation) {
+            used += std::snprintf(line + used, sizeof(line) - static_cast<std::size_t>(used), " playstation=%u/%u",
+                                  0u, static_cast<unsigned>(playstation_motor(level, request.strength)));
+        } else if (request.target.kind == RumbleTarget::Kind::Hid && request.target.scheme == ControlScheme::Steam) {
+            const input::rumble::XInputMotors speeds = input::rumble::xinput_motor_speeds(level, request.strength);
+            used += std::snprintf(line + used, sizeof(line) - static_cast<std::size_t>(used), " steam=%u/%u",
+                                  static_cast<unsigned>(speeds.left), static_cast<unsigned>(speeds.right));
+        } else if (request.target.kind == RumbleTarget::Kind::Hid) {
             const std::array<std::uint8_t, 8> pro = input::rumble::switch_pro_motor_rumble(level, request.strength);
             std::array<std::uint8_t, input::rumble::kSwitch2RumbleReportBytes> pro2{};
             (void)input::rumble::build_switch2_rumble_report(0, level, request.strength, pro2);
@@ -608,21 +791,93 @@ void trace_rumble_output(const RumbleRequest& request, std::uint64_t now) noexce
     std::cerr << line << '\n';
 }
 
-// Switch output pacing: SDL's hidapi drivers space Pro Controller writes at
-// least ~30 ms apart (faster writes can drop a Bluetooth link) and repeat a
-// held rumble so it does not fade; the Pro Controller 2 takes a fresh motor
-// packet every 12 ms.
-constexpr std::uint64_t kSwitchRumbleGapUs = 30'000;
-constexpr std::uint64_t kSwitchRumbleRefreshUs = 40'000;
-constexpr std::uint64_t kSwitch2RumbleRefreshUs = 12'000;
+// A neutral light bar colour, set once.
+constexpr std::array<std::uint8_t, 3> kLightBarColor{0x20, 0x20, 0x20};
+// A DualSense ignores its light bar until the pairing animation is over.
+constexpr std::uint64_t kDualSenseBluetoothLightDelayUs = 4'000'000;
+
+// An output report goes out at the handle's full report length; `report` is
+// zero-filled past the `built` meaningful bytes.
+bool write_output(Device& device, const std::uint8_t* report, std::size_t built) {
+    const std::size_t length = device.output_length;
+    if (built == 0 || built > length || length > kLargestOutputReport) return false;
+    return write_report(device.handle.get(), device.write_event.get(), report, static_cast<DWORD>(length), 30);
+}
+
+bool send_playstation_effects(Device& device, const ps::Effects& effects) {
+    std::array<std::uint8_t, kLargestOutputReport> report{};
+    const std::size_t built = ps::build_output_report(device.ps_model, device.ps_transport, effects, report);
+    return write_output(device, report.data(), built);
+}
+
+void init_playstation(Device& device) {
+    std::array<std::uint8_t, 64> feature{};
+    const auto read = [&](std::uint8_t id) -> DWORD {
+        feature.fill(0);
+        feature[0] = id;
+        return get_feature_report(device.handle.get(), device.write_event.get(), feature.data(),
+                                  static_cast<DWORD>(feature.size()), 200);
+    };
+    const bool bluetooth = device.ps_transport == ps::Transport::Bluetooth;
+    if (device.ps_model == ps::Model::DualShock4) {
+        // Over Bluetooth the second report also switches the controller from
+        // short to full input reports.
+        if (bluetooth) (void)read(ps::kFeatureDualShock4CalibrationUsb);
+        const DWORD size = read(bluetooth ? ps::kFeatureDualShock4CalibrationBluetooth
+                                          : ps::kFeatureDualShock4CalibrationUsb);
+        if (size != 0) device.ps_cal = ps::parse_calibration(std::span<const std::uint8_t>(feature.data(), size), bluetooth);
+    } else {
+        const DWORD size = read(ps::kFeatureDualSenseCalibration);
+        if (size != 0) device.ps_cal = ps::parse_calibration(std::span<const std::uint8_t>(feature.data(), size), false);
+        const DWORD firmware = read(ps::kFeatureDualSenseFirmware);
+        const std::uint16_t version = firmware != 0 ? ps::dualsense_firmware(std::span<const std::uint8_t>(feature.data(), firmware)) : 0;
+        device.ps_full_range_rumble = ps::dualsense_full_range_rumble(device.ps_model, version);
+    }
+    std::cerr << "[controller] " << device.model_name << " (" << (bluetooth ? "bluetooth" : "usb")
+              << ") calibration " << (device.ps_cal.hardware ? "read" : "default") << '\n';
+}
+
+// The light bar, once the first full report has arrived.
+void schedule_light_bar(Device& device, std::uint64_t now) {
+    if (device.ps_led_due_us != 0u || device.ps_led_released) return;
+    const bool slow = device.ps_model != ps::Model::DualShock4 && device.ps_transport == ps::Transport::Bluetooth;
+    device.ps_led_due_us = now + (slow ? kDualSenseBluetoothLightDelayUs : 0u) + 1u;
+}
+
+void send_light_bar(Device& device) {
+    device.ps_led_due_us = 0;
+    device.ps_led_released = true;
+    if (rumble_output_disabled()) return;
+    ps::Effects effects;
+    if (device.ps_model != ps::Model::DualShock4) {
+        effects.release_led = true;
+        (void)send_playstation_effects(device, effects);
+        effects = {};
+    }
+    effects.led = kLightBarColor;
+    effects.apply_led = true;
+    effects.full_range_rumble = device.ps_full_range_rumble;
+    (void)send_playstation_effects(device, effects);
+}
+
+// The settings the Steam Controller needs from the host: keyboard/mouse
+// emulation off, sensors on. It falls back to the emulation unless they are
+// repeated.
+void send_steam_settings(Device& device, std::uint64_t now) {
+    device.steam_settings_due_us = now + static_cast<std::uint64_t>(sv::kSettingsRefreshMs) * 1000u;
+    if (rumble_output_disabled()) return;
+    std::array<std::uint8_t, sv::kFeatureReportBytes> report{};
+    if (sv::build_settings_report(report) == 0) return;
+    (void)HidD_SetFeature(device.handle.get(), report.data(), static_cast<ULONG>(report.size()));
+}
 
 class Worker {
 public:
     void run(HANDLE stop, HANDLE rescan, HANDLE rumble) {
         rescan_devices();
         for (;;) {
-            std::array<HANDLE, 3 + kMaxSwitchPads> waits{};
-            std::array<Device*, 3 + kMaxSwitchPads> owners{};
+            std::array<HANDLE, 3 + kMaxHidPads> waits{};
+            std::array<Device*, 3 + kMaxHidPads> owners{};
             DWORD count = 0;
             waits[count++] = stop;
             waits[count++] = rescan;
@@ -633,10 +888,10 @@ public:
                     waits[count++] = device->read_event.get();
                 }
             }
-            // A timer only while a motor runs: it refreshes the motor and
-            // stops it when the game's state goes stale.
-            const DWORD result = WaitForMultipleObjects(count, waits.data(), FALSE,
-                                                        rumble_timer_ms_ != 0u ? rumble_timer_ms_ : INFINITE);
+            // A timer only while a motor runs or device work is due: it
+            // refreshes the motor, stops it when the game's state goes stale
+            // and sends deferred writes.
+            const DWORD result = WaitForMultipleObjects(count, waits.data(), FALSE, wait_timeout_ms());
             if (result == WAIT_OBJECT_0) break;
             if (result == WAIT_OBJECT_0 + 1) {
                 rescan_devices();
@@ -647,6 +902,7 @@ public:
                 break;  // WAIT_FAILED: leave rather than spin
             }
             service_rumble();
+            service_device_timers();
         }
         stop_xinput_rumble();
         for (auto& device : devices_) close_device(*device);
@@ -663,7 +919,7 @@ private:
     }
 
     void rescan_devices() {
-        const auto candidates = enumerate_switch_hid();
+        const auto candidates = enumerate_hid_pads();
         // Drop devices that disappeared.
         for (auto it = devices_.begin(); it != devices_.end();) {
             const bool present = std::any_of(candidates.begin(), candidates.end(),
@@ -676,39 +932,51 @@ private:
             }
         }
         for (const HidCandidate& candidate : candidates) {
-            if (devices_.size() >= kMaxSwitchPads) break;
+            if (devices_.size() >= kMaxHidPads) break;
             const bool known = std::any_of(devices_.begin(), devices_.end(),
                                            [&](const auto& d) { return d->path == candidate.path; });
             if (!known) open_device(candidate);
         }
-        unsigned pro = 0, pro2 = 0;
-        for (const auto& device : devices_) {
-            (device->scheme == ControlScheme::SwitchPro2 ? pro2 : pro)++;
-        }
-        hub().pro_count.store(pro, std::memory_order_release);
-        hub().pro2_count.store(pro2, std::memory_order_release);
+        // A path that no longer enumerates can be reported again if it returns.
+        refused_.erase(std::remove_if(refused_.begin(), refused_.end(),
+                                      [&](const std::wstring& path) {
+                                          return std::none_of(candidates.begin(), candidates.end(),
+                                                              [&](const HidCandidate& c) { return c.path == path; });
+                                      }),
+                       refused_.end());
     }
 
     std::size_t free_slot() const {
-        for (std::size_t slot = 0; slot < kMaxSwitchPads; ++slot) {
+        for (std::size_t slot = 0; slot < kMaxHidPads; ++slot) {
             const bool used = std::any_of(devices_.begin(), devices_.end(),
                                           [slot](const auto& d) { return d->slot == slot; });
             if (!used) return slot;
         }
-        return kMaxSwitchPads;
+        return kMaxHidPads;
     }
 
     void open_device(const HidCandidate& candidate) {
         auto device = std::make_unique<Device>();
         device->path = candidate.path;
-        device->scheme = candidate.product == sw::kPro2ControllerProductId ? ControlScheme::SwitchPro2
-                                                                            : ControlScheme::SwitchPro;
+        device->scheme = candidate.info.scheme;
+        device->model_name = candidate.info.name;
+        device->ps_model = candidate.info.ps_model;
+        device->link = link_of(candidate);
+        device->puck = sv::is_puck_product(candidate.product);
         device->slot = free_slot();
-        if (device->slot >= kMaxSwitchPads) return;
+        if (device->slot >= kMaxHidPads) return;
         device->handle.reset(CreateFileW(candidate.path.c_str(), GENERIC_READ | GENERIC_WRITE,
                                          FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_EXISTING,
                                          FILE_FLAG_OVERLAPPED, nullptr));
-        if (device->handle.get() == INVALID_HANDLE_VALUE) return;
+        if (device->handle.get() == INVALID_HANDLE_VALUE) {
+            const DWORD error = GetLastError();
+            if (std::find(refused_.begin(), refused_.end(), candidate.path) == refused_.end()) {
+                refused_.push_back(candidate.path);
+                std::cerr << "[controller] " << device->model_name << ": cannot open the device (error " << error
+                          << ")\n";
+            }
+            return;
+        }
         PHIDP_PREPARSED_DATA preparsed = nullptr;
         HIDP_CAPS caps{};
         if (HidD_GetPreparsedData(device->handle.get(), &preparsed)) {
@@ -717,59 +985,104 @@ private:
         }
         device->buffer.resize(std::max<USHORT>(caps.InputReportByteLength, 64));
         device->output_length = std::max<USHORT>(caps.OutputReportByteLength, 2);
-        device->bluetooth = contains_ci(candidate.path, L"{00001124-0000-1000-8000-00805f9b34fb}");
+        device->bluetooth = device->link == ControllerLink::Bluetooth;
         device->read_event.reset(CreateEventW(nullptr, TRUE, FALSE, nullptr));
-        if (device->scheme == ControlScheme::SwitchPro) {
+        device->write_event.reset(CreateEventW(nullptr, TRUE, FALSE, nullptr));
+        switch (device->scheme) {
+        case ControlScheme::SwitchPro:
             init_switch_pro(*device);
-        } else if (device->bluetooth) {
-            std::cerr << "[controller] pro controller 2 over bluetooth is not a HID device on Windows; "
-                         "connect it by USB\n";
-        } else {
-            init_switch2(*device);
+            break;
+        case ControlScheme::SwitchPro2:
+            if (device->bluetooth) {
+                std::cerr << "[controller] pro controller 2 over bluetooth is not a HID device on Windows; "
+                             "connect it by USB\n";
+            } else {
+                init_switch2(*device);
+            }
+            break;
+        case ControlScheme::PlayStation:
+            device->ps_transport = device->bluetooth ? ps::Transport::Bluetooth : ps::Transport::Usb;
+            init_playstation(*device);
+            break;
+        default:
+            break;
         }
-        {
-            AcquireSRWLockExclusive(&hub().lock);
-            Published& published = hub().pads[device->slot];
-            published = {};
-            published.connected = true;
-            published.state.connected = true;
-            published.state.scheme = device->scheme;
-            published.state.left = device->left;
-            published.state.right = device->right;
-            published.state.slot = static_cast<std::uint8_t>(device->slot);
-            ReleaseSRWLockExclusive(&hub().lock);
-        }
-        std::cerr << "[controller] connected " << input::control_scheme_id(device->scheme)
-                  << (device->bluetooth ? " bluetooth" : " usb") << '\n';
         Device& ref = *device;
         devices_.push_back(std::move(device));
+        if (!ref.puck) publish_device(ref);
         issue_read(ref);
     }
 
-    void close_device(Device& device) {
-        if (device.slot < kMaxSwitchPads) {
+    void publish_device(Device& device) {
+        const std::uint64_t now = steady_us();
+        device.published = true;
+        device.last_report_us = 0;
+        device.steam_clock = {};
+        {
+            AcquireSRWLockExclusive(&hub().lock);
+            Published& published = hub().pads[device.slot];
+            published = {};
+            published.connected = true;
+            published.state.connected = true;
+            published.state.scheme = device.scheme;
+            published.state.left = device.left;
+            published.state.right = device.right;
+            published.state.slot = static_cast<std::uint8_t>(device.slot);
+            published.info.scheme = device.scheme;
+            published.info.slot = static_cast<std::uint8_t>(device.slot);
+            published.info.link = device.link;
+            published.info.model = device.model_name;
+            published.info.note = device.needs_driver ? "needs WinUSB" : nullptr;
+            ReleaseSRWLockExclusive(&hub().lock);
+        }
+        if (device.scheme == ControlScheme::Steam) device.steam_settings_due_us = now;
+        std::cerr << "[controller] connected " << input::control_scheme_id(device.scheme) << ' ' << device.model_name
+                  << (device.bluetooth ? " bluetooth" : device.puck ? " wireless" : " usb") << '\n';
+    }
+
+    void unpublish_device(Device& device) {
+        if (!device.published) return;
+        device.published = false;
+        stop_device_rumble(device);
+        AcquireSRWLockExclusive(&hub().lock);
+        hub().pads[device.slot] = {};
+        ReleaseSRWLockExclusive(&hub().lock);
+        std::cerr << "[controller] disconnected " << input::control_scheme_id(device.scheme) << ' '
+                  << device.model_name << '\n';
+    }
+
+    // Motor off on a device that goes away; its crash-stop entry retires first.
+    void stop_device_rumble(Device& device) {
+        if (device.slot < kMaxHidPads) {
             AcquireSRWLockExclusive(&hub().rumble_device_lock);
-            hub().switch_rumble_handles[device.slot].store(nullptr);
+            hub().hid_rumble_handles[device.slot].store(nullptr);
             ReleaseSRWLockExclusive(&hub().rumble_device_lock);
         }
         if (device.rumble_on) {
             if (!device.write_event) device.write_event.reset(CreateEventW(nullptr, TRUE, FALSE, nullptr));
             (void)write_rumble_off(device.handle.get(), device.write_event.get(), device.output_length,
-                                   device.scheme == ControlScheme::SwitchPro2);
+                                   off_kind_of(device));
             device.rumble_on = false;
         }
+    }
+
+    void close_device(Device& device) {
+        stop_device_rumble(device);
         if (device.read_pending && !device.resume) {
             CancelIoEx(device.handle.get(), &device.read_ov);
             DWORD done = 0;
             GetOverlappedResult(device.handle.get(), &device.read_ov, &done, TRUE);
             device.read_pending = false;
         }
-        if (device.slot < kMaxSwitchPads) {
+        if (device.slot < kMaxHidPads) {
             AcquireSRWLockExclusive(&hub().lock);
             hub().pads[device.slot] = {};
             ReleaseSRWLockExclusive(&hub().lock);
         }
-        std::cerr << "[controller] disconnected " << input::control_scheme_id(device.scheme) << '\n';
+        if (device.published) {
+            std::cerr << "[controller] disconnected " << input::control_scheme_id(device.scheme) << ' '
+                      << device.model_name << '\n';
+        }
     }
 
     void issue_read(Device& device) {
@@ -839,13 +1152,36 @@ private:
         device.motion_peak_rate = 0.0f;
     }
 
+    bool decode(Device& device, std::span<const std::uint8_t> report, sw::DecodedState& decoded) {
+        switch (device.scheme) {
+        case ControlScheme::SwitchPro2:
+            return sw::decode_switch2_report(report, device.switch2_imu, decoded);
+        case ControlScheme::PlayStation:
+            return ps::decode_report(device.ps_model, device.ps_transport, report, device.ps_cal, device.ps_clock,
+                                     decoded);
+        case ControlScheme::Steam:
+            switch (sv::decode_wireless_event(report)) {
+            case sv::WirelessEvent::Connected:
+                if (!device.published) publish_device(device);
+                return false;
+            case sv::WirelessEvent::Disconnected:
+                unpublish_device(device);
+                return false;
+            case sv::WirelessEvent::None:
+                break;
+            }
+            if (!sv::decode_report(report, device.steam_clock, decoded)) return false;
+            if (!device.published) publish_device(device);  // a puck controller that connected before we looked
+            return true;
+        default:
+            return sw::decode_pro_report(report, device.imu, decoded);
+        }
+    }
+
     void handle_report(Device& device, DWORD size) {
         const std::span<const std::uint8_t> report(device.buffer.data(), size);
         sw::DecodedState decoded{};
-        const bool ok = device.scheme == ControlScheme::SwitchPro2
-                            ? sw::decode_switch2_report(report, device.switch2_imu, decoded)
-                            : sw::decode_pro_report(report, device.imu, decoded);
-        if (!ok) return;
+        if (!decode(device, report, decoded)) return;
         refresh_config();
         const input::SchemeTuning& tuning = config_.tune(device.scheme);
         const std::uint64_t now = steady_us();
@@ -853,6 +1189,10 @@ private:
                               ? static_cast<float>(now - device.last_report_us) * 1e-6f : 0.0f;
         dt_report = std::clamp(dt_report, 0.0f, 0.05f);
         device.last_report_us = now;
+        if (device.scheme == ControlScheme::PlayStation &&
+            (device.ps_transport == ps::Transport::Usb || report[0] != ps::kReportState)) {
+            schedule_light_bar(device, now);
+        }
         float gyro_x = 0.0f, gyro_y = 0.0f;
         bool shake_started = false;
         sw::MotionSettings motion{};
@@ -862,9 +1202,11 @@ private:
         motion.gyro_sensitivity = tuning.gyro_sensitivity;
         motion.picture_aspect = static_cast<float>(galaxy::kWiiContentAspect);
         for (std::size_t i = 0; i < decoded.imu_count; ++i) {
-            // Switch Pro: three samples 5 ms apart; Pro 2: one per report.
-            const float dt = device.scheme == ControlScheme::SwitchPro ? 0.005f : dt_report;
-            const std::uint64_t t = now - static_cast<std::uint64_t>((decoded.imu_count - 1u - i) * 5000u);
+            // Switch Pro: three samples 5 ms apart; the others one per report,
+            // timed by the controller's clock where it has one.
+            const bool pro = device.scheme == ControlScheme::SwitchPro;
+            const float dt = pro ? 0.005f : decoded.imu_dt > 0.0f ? decoded.imu_dt : dt_report;
+            const std::uint64_t t = pro ? now - static_cast<std::uint64_t>((decoded.imu_count - 1u - i) * 5000u) : now;
             const sw::SwitchMotion::Output out = device.motion.feed(decoded.imu[i], dt, t, motion);
             shake_started |= out.shake_started;
             const sw::ImuSample& s = decoded.imu[i];
@@ -885,7 +1227,7 @@ private:
         AcquireSRWLockExclusive(&hub().lock);
         Published& published = hub().pads[device.slot];
         published.connected = true;
-        SwitchPadState& state = published.state;
+        HidPadState& state = published.state;
         state.connected = true;
         state.scheme = device.scheme;
         state.decoded = decoded;
@@ -960,14 +1302,30 @@ private:
         }
         DWORD timer_ms = xinput_on_ != 0u ? 25u : 0u;
         for (auto& device : devices_) {
-            const bool target = request.target.kind == RumbleTarget::Kind::Switch &&
+            const bool target = request.target.kind == RumbleTarget::Kind::Hid &&
                                 request.target.slot == device->slot;
-            if (service_switch_rumble(*device, target ? level : std::uint8_t{0}, request.strength, now)) {
+            if (service_hid_rumble(*device, target ? level : std::uint8_t{0}, request.strength, now)) {
                 const DWORD period = device->scheme == ControlScheme::SwitchPro2 ? 10u : 25u;
                 timer_ms = timer_ms == 0u ? period : std::min(timer_ms, period);
             }
         }
         rumble_timer_ms_ = timer_ms;
+    }
+
+    bool service_hid_rumble(Device& device, std::uint8_t level, std::uint8_t strength, std::uint64_t now) {
+        switch (device.scheme) {
+        case ControlScheme::PlayStation: return service_playstation_rumble(device, level, strength, now);
+        case ControlScheme::Steam: return service_steam_rumble(device, level, strength, now);
+        default: return service_switch_rumble(device, level, strength, now);
+        }
+    }
+
+    // Registers the handle for the crash-time stop while a motor may run.
+    void arm_crash_stop(Device& device, std::size_t length, OffKind kind) {
+        Hub& h = hub();
+        h.hid_rumble_lengths[device.slot].store(static_cast<std::uint16_t>(length), std::memory_order_release);
+        h.hid_rumble_off[device.slot].store(static_cast<std::uint8_t>(kind), std::memory_order_release);
+        h.hid_rumble_handles[device.slot].store(device.handle.get(), std::memory_order_release);
     }
 
     // One Switch controller; true while its motor runs or a change waits for
@@ -994,21 +1352,105 @@ private:
             device.rumble_on = false;
             return false;
         }
-        Hub& h = hub();
-        if (want && device.slot < kMaxSwitchPads) {
-            h.switch_rumble_lengths[device.slot].store(static_cast<std::uint16_t>(length), std::memory_order_release);
-            h.switch_rumble_pro2[device.slot].store(pro2, std::memory_order_release);
-            h.switch_rumble_handles[device.slot].store(device.handle.get(), std::memory_order_release);
-        }
+        if (want) arm_crash_stop(device, length, off_kind_of(device));
         (void)write_report(device.handle.get(), device.write_event.get(), report.data(), static_cast<DWORD>(length), 30);
         device.rumble_sent_us = now;
         device.rumble_on = want;
         device.rumble_level = level;
         device.rumble_strength = strength;
-        if (!want && device.slot < kMaxSwitchPads) {
-            h.switch_rumble_handles[device.slot].store(nullptr, std::memory_order_release);
+        if (!want && device.slot < kMaxHidPads) {
+            hub().hid_rumble_handles[device.slot].store(nullptr, std::memory_order_release);
         }
         return want;
+    }
+
+    // PlayStation controllers keep a motor running until told otherwise; a held
+    // rumble is repeated now and then, and changes are spaced for Bluetooth.
+    bool service_playstation_rumble(Device& device, std::uint8_t level, std::uint8_t strength, std::uint64_t now) {
+        if (device.failed) level = 0u;
+        const std::uint8_t motor = playstation_motor(level, strength);
+        const bool want = motor != 0u;
+        if (!want && !device.rumble_on) return false;
+        const bool changed = want != device.rumble_on || (want && motor != device.rumble_value);
+        const std::uint64_t since = now - device.rumble_sent_us;
+        if (!changed && since < kPlayStationRumbleRefreshUs) return true;
+        if (device.rumble_sent_us != 0u && since < kPlayStationRumbleGapUs) return true;
+        ps::Effects effects;
+        effects.rumble_right = motor;
+        effects.apply_rumble = true;
+        effects.full_range_rumble = device.ps_full_range_rumble;
+        std::array<std::uint8_t, kLargestOutputReport> report{};
+        const std::size_t built = ps::build_output_report(device.ps_model, device.ps_transport, effects, report);
+        if (built == 0u || built > device.output_length || device.output_length > report.size()) {
+            device.rumble_on = false;
+            return false;
+        }
+        if (want) arm_crash_stop(device, device.output_length, off_kind_of(device));
+        (void)write_output(device, report.data(), built);
+        device.rumble_sent_us = now;
+        device.rumble_on = want;
+        device.rumble_value = motor;
+        if (!want) hub().hid_rumble_handles[device.slot].store(nullptr, std::memory_order_release);
+        return want;
+    }
+
+    // The Steam Controller stops its motors about 50 ms after the last report,
+    // so a held rumble is repeated at sv::kRumbleRepeatMs.
+    bool service_steam_rumble(Device& device, std::uint8_t level, std::uint8_t strength, std::uint64_t now) {
+        if (device.failed || !device.published) level = 0u;
+        const std::uint16_t speed = input::rumble::xinput_motor_speeds(level, strength).right;
+        const bool want = speed != 0u;
+        if (!want && !device.rumble_on) return false;
+        const bool changed = want != device.rumble_on || (want && speed != device.rumble_value);
+        const std::uint64_t since = now - device.rumble_sent_us;
+        const std::uint64_t repeat = static_cast<std::uint64_t>(sv::kRumbleRepeatMs) * 1000u;
+        if (!changed && since < repeat) return true;
+        if (device.rumble_sent_us != 0u && since < kSteamRumbleGapUs) return true;
+        std::array<std::uint8_t, kLargestOutputReport> report{};
+        const std::size_t built = sv::build_rumble_report(0, speed, report);
+        if (built == 0u || built > device.output_length || device.output_length > report.size()) {
+            device.rumble_on = false;
+            return false;
+        }
+        if (want) arm_crash_stop(device, device.output_length, OffKind::Steam);
+        (void)write_output(device, report.data(), built);
+        device.rumble_sent_us = now;
+        device.rumble_on = want;
+        device.rumble_value = speed;
+        if (!want) hub().hid_rumble_handles[device.slot].store(nullptr, std::memory_order_release);
+        return want;
+    }
+
+    // Deferred device writes: the PlayStation light bar and the Steam
+    // Controller's settings refresh.
+    void service_device_timers() {
+        const std::uint64_t now = steady_us();
+        std::uint64_t soonest = 0;
+        const auto consider = [&soonest](std::uint64_t due) {
+            if (soonest == 0u || due < soonest) soonest = due;
+        };
+        for (auto& device : devices_) {
+            if (device->failed) continue;
+            if (device->ps_led_due_us != 0u) {
+                if (now >= device->ps_led_due_us) send_light_bar(*device);
+                else consider(device->ps_led_due_us);
+            }
+            if (device->scheme == ControlScheme::Steam && device->published && device->steam_settings_due_us != 0u) {
+                if (now >= device->steam_settings_due_us) send_steam_settings(*device, now);
+                consider(device->steam_settings_due_us);
+            }
+        }
+        timer_due_us_ = soonest;
+    }
+
+    DWORD wait_timeout_ms() const {
+        DWORD timeout = rumble_timer_ms_;
+        if (timer_due_us_ != 0u) {
+            const std::uint64_t now = steady_us();
+            const DWORD until = timer_due_us_ > now ? static_cast<DWORD>((timer_due_us_ - now + 999u) / 1000u) : 1u;
+            timeout = timeout == 0u ? until : std::min(timeout, until);
+        }
+        return timeout != 0u ? timeout : INFINITE;
     }
 
     void stop_xinput_rumble() {
@@ -1029,10 +1471,25 @@ public:
     HANDLE rescan_handle_ = nullptr;
 
 private:
+    // Switch output pacing: SDL's hidapi drivers space Pro Controller writes at
+    // least ~30 ms apart (faster writes can drop a Bluetooth link) and repeat a
+    // held rumble so it does not fade; the Pro Controller 2 takes a fresh motor
+    // packet every 12 ms.
+    static constexpr std::uint64_t kSwitchRumbleGapUs = 30'000;
+    static constexpr std::uint64_t kSwitchRumbleRefreshUs = 40'000;
+    static constexpr std::uint64_t kSwitch2RumbleRefreshUs = 12'000;
+    // PlayStation: Bluetooth reports take one write per 4 ms interval at most;
+    // the motor value persists, so the repeat only guards against a lost write.
+    static constexpr std::uint64_t kPlayStationRumbleGapUs = 16'000;
+    static constexpr std::uint64_t kPlayStationRumbleRefreshUs = 250'000;
+    static constexpr std::uint64_t kSteamRumbleGapUs = 10'000;
+
     std::vector<std::unique_ptr<Device>> devices_;
+    std::vector<std::wstring> refused_;
     input::ControlsConfig config_ = input::default_controls_config();
     std::uint64_t config_generation_ = 0;
     DWORD rumble_timer_ms_ = 0;
+    std::uint64_t timer_due_us_ = 0;
     std::uint8_t xinput_on_ = 0;        // XInput motors this worker turned on
     std::uint8_t xinput_want_mask_ = 0;
     std::uint8_t xinput_want_level_ = 0;
@@ -1097,7 +1554,7 @@ void stop_controller_hid() noexcept {
     h.started.store(false, std::memory_order_release);
 }
 
-std::size_t read_switch_pads(std::span<SwitchPadState> out, bool consume_gyro) noexcept {
+std::size_t read_hid_pads(std::span<HidPadState> out, bool consume_gyro) noexcept {
     Hub& h = hub();
     if (!h.started.load(std::memory_order_acquire)) return 0;
     std::size_t count = 0;
@@ -1135,8 +1592,7 @@ void publish_rumble_request(const RumbleRequest& published) noexcept {
         const std::uint64_t generation = input::controls_config_generation();
         if (generation != s_generation) {
             s_generation = generation;
-            const input::SchemeTuning& tuning = input::get_controls_config().tune(
-                test_target.kind == RumbleTarget::Kind::XInput ? ControlScheme::Xbox : ControlScheme::SwitchPro);
+            const input::SchemeTuning& tuning = input::get_controls_config().tune(test_target.scheme);
             s_strength = tuning.vibration ? tuning.rumble : 0u;
         }
         request.target = test_target;
@@ -1167,34 +1623,52 @@ void stop_all_rumble() noexcept {
         (void)XInputSetState(slot, &off);
     }
     HANDLE event = nullptr;
-    for (std::size_t slot = 0; slot < kMaxSwitchPads; ++slot) {
-        if (h.switch_rumble_handles[slot].load(std::memory_order_acquire) == nullptr) continue;
+    for (std::size_t slot = 0; slot < kMaxHidPads; ++slot) {
+        if (h.hid_rumble_handles[slot].load(std::memory_order_acquire) == nullptr) continue;
         // Never blocks: the worker holds the lock only to retire a handle,
         // and a crash may have stopped it there.
         if (!TryAcquireSRWLockShared(&h.rumble_device_lock)) continue;
-        const HANDLE handle = h.switch_rumble_handles[slot].load(std::memory_order_acquire);
+        const HANDLE handle = h.hid_rumble_handles[slot].load(std::memory_order_acquire);
         if (handle != nullptr) {
             if (event == nullptr) event = CreateEventW(nullptr, TRUE, FALSE, nullptr);
-            (void)write_rumble_off(handle, event, h.switch_rumble_lengths[slot].load(std::memory_order_acquire),
-                                   h.switch_rumble_pro2[slot].load(std::memory_order_acquire));
+            (void)write_rumble_off(handle, event, h.hid_rumble_lengths[slot].load(std::memory_order_acquire),
+                                   static_cast<OffKind>(h.hid_rumble_off[slot].load(std::memory_order_acquire)));
         }
         ReleaseSRWLockShared(&h.rumble_device_lock);
     }
     if (event != nullptr) CloseHandle(event);
 }
 
-ControllerHidStatus controller_hid_status() noexcept {
+std::size_t hid_controllers(std::span<input::ControllerInfo> out) noexcept {
+    std::size_t count = 0;
     Hub& h = hub();
-    ControllerHidStatus status{};
-    status.switch_pro = h.pro_count.load(std::memory_order_acquire);
-    status.switch_pro2 = h.pro2_count.load(std::memory_order_acquire);
-    status.pro2_needs_winusb = h.pro2_needs_winusb.load(std::memory_order_acquire);
-    return status;
+    if (h.started.load(std::memory_order_acquire)) {
+        AcquireSRWLockShared(&h.lock);
+        for (const Published& published : h.pads) {
+            if (published.connected && count < out.size()) out[count++] = published.info;
+        }
+        ReleaseSRWLockShared(&h.lock);
+        return count;
+    }
+    try {
+        for (const HidCandidate& candidate : enumerate_hid_pads()) {
+            if (count >= out.size()) break;
+            input::ControllerInfo& info = out[count];
+            info = {};
+            info.scheme = candidate.info.scheme;
+            info.slot = static_cast<std::uint8_t>(count);
+            info.link = link_of(candidate);
+            info.model = candidate.info.name;
+            ++count;
+        }
+    } catch (...) {
+    }
+    return count;
 }
 
-bool switch_controller_present_now() noexcept {
+bool hid_controller_present_now() noexcept {
     try {
-        return !enumerate_switch_hid().empty();
+        return !enumerate_hid_pads().empty();
     } catch (...) {
         return false;
     }

@@ -22,10 +22,11 @@ struct ControllerInfo {
     std::uint8_t slot = 0;  // XInput user index or HID worker slot
     ControllerLink link = ControllerLink::Unknown;
     const char* model = "";  // static storage
+    const char* note = nullptr;  // static storage; shown after the name
 };
 
 inline constexpr std::uint8_t kKeyboardSlot = 0xff;
-inline constexpr std::size_t kMaxControllers = 8;
+inline constexpr std::size_t kMaxControllers = 12;
 
 struct DeviceKey {
     ControlScheme scheme = ControlScheme::Keyboard;
@@ -46,8 +47,8 @@ struct DeviceList {
 
 // Keyboard and mouse first, then the controllers by scheme and slot (more than
 // kMaxControllers are dropped). Controllers of one model are numbered; wired,
-// Bluetooth and wireless links are named. `active` marks the entry with that
-// key.
+// Bluetooth and wireless links are named, then the note. `active` marks the
+// entry with that key.
 void build_device_list(std::span<const ControllerInfo> connected, std::optional<DeviceKey> active,
                        DeviceList& out) noexcept;
 
