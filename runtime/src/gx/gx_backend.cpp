@@ -6876,6 +6876,10 @@ void GxBackend::start_interp_sequence(std::uint32_t xfb_addr) {
     }
     interp_last_played_serial_ = played;
     interp_event("start", played, xfb_addr);
+    static const std::uint64_t trace_level = read_env_u64("GALAXY_INTERP_TRACE", 0u);
+    if (trace_level >= 2u) {
+        std::cerr << "[interp-start] seq=" << interp_sequence_serial_ << " log=" << played << '\n';
+    }
     interp_sequence_.active = true;
     interp_sequence_.flush_requested = false;
     interp_sequence_.classified = false;
@@ -6954,6 +6958,11 @@ void GxBackend::select_interp_before() {
     for (unsigned step = 1u; consecutive && step <= depth; ++step) {
         const InterpScene& older = interp_scenes_[(scene + 4u - step) % 4u];
         consecutive = older.valid && older.serial + step == target.serial;
+    }
+    static const bool trace = read_env_u64("GALAXY_INTERP_TRACE", 0u) != 0u;
+    if (trace) {
+        std::cerr << "[interp-chain] seq=" << interp_sequence_serial_ << " depth=" << depth
+                  << " chained=" << (consecutive ? 1 : 0) << '\n';
     }
     if (!consecutive) {
         ++interp_unchained_skips_;

@@ -7419,6 +7419,37 @@ void RendererD3D12::take_replay_snapshots(std::uint64_t table) {
         command_list_->ResourceBarrier(2u, barriers);
         log.snapshots.emplace_back(source, static_cast<std::uint32_t>(index));
         ++copy_redirect_stats_.snapshots;
+        // GALAXY_INTERP_TRACE: which copy texture is read before its write
+        // (the copy that wrote it in an earlier log, when still known).
+        // =2: every one.
+        static const int trace = [] {
+            char value[8]{};
+            std::size_t length = 0u;
+            return getenv_s(&length, value, sizeof(value), "GALAXY_INTERP_TRACE") == 0 &&
+                   length > 1u ? value[0] - '0' : 0;
+        }();
+        static std::uint64_t traced = 0u;
+        if (trace > 0 && (trace >= 2 || traced++ % 120u == 0u)) {
+            const ReplayCopy* writer = nullptr;
+            for (const auto* copies : {&play_copies_, &run_copies_}) {
+                for (const ReplayCopy& logged : *copies) {
+                    if (logged.dest == source) writer = &logged;
+                }
+            }
+            const D3D12_RESOURCE_DESC desc = source->GetDesc();
+            std::ostringstream message;
+            message << "[interp-snapshot] log=" << replay_serial_ << " texture=" << desc.Width << 'x'
+                    << desc.Height << ":fmt" << static_cast<unsigned>(desc.Format);
+            if (writer != nullptr) {
+                message << " copy dest=0x" << std::hex << writer->params.dest_addr << std::dec
+                        << " src=" << writer->params.src_x << ',' << writer->params.src_y << ' '
+                        << writer->params.src_width << 'x' << writer->params.src_height
+                        << " format=" << static_cast<unsigned>(writer->format)
+                        << " half=" << writer->params.half_scale << " depth=" << writer->depth;
+            }
+            message << '\n';
+            std::cerr << message.str();
+        }
     }
 }
 
