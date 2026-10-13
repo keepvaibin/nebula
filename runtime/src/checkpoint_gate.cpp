@@ -328,6 +328,9 @@ void GateController::publish_full_unchecked() noexcept {
     *pointers_.checkpoint_next_slow = nullptr;
     inline_published_ = false;
     ++telemetry_.transitions_to_full;
+    if (publish_observer_ != nullptr) {
+        publish_observer_(publish_observer_user_);
+    }
 }
 
 void GateController::publish_inline_unchecked() noexcept {
@@ -337,6 +340,9 @@ void GateController::publish_inline_unchecked() noexcept {
     *pointers_.checkpoint_counter = checkpoint_counter_;
     inline_published_ = true;
     ++telemetry_.transitions_to_inline;
+    if (publish_observer_ != nullptr) {
+        publish_observer_(publish_observer_user_);
+    }
 }
 
 }  // namespace galaxy::checkpoint

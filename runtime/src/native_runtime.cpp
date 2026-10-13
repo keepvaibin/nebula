@@ -2264,6 +2264,20 @@ struct RuntimeState {
     std::uint64_t last_inline_checkpoint_sample_vi{~std::uint64_t{0}};
     bool inline_checkpoint_gate_requested{};
     galaxy::checkpoint::GateController checkpoint_gate{};
+    // A --checkpoint-globals module's snapshot of the inline checkpoint
+    // decision (null for other modules). It is derived from *services and
+    // refreshed whenever one of its inputs changes: every checkpoint_gate
+    // publication (the publish observer), the adaptive call-return flag
+    // toggle, and teardown (galaxy/native_api.h, "Module checkpoint gate").
+    galaxy::ModuleCheckpointGateV1* module_checkpoint_gate{};
+    std::uint64_t module_checkpoint_gate_refreshes{};
+
+    void refresh_module_checkpoint_gate() noexcept {
+        if (module_checkpoint_gate != nullptr) {
+            galaxy::refresh_module_checkpoint_gate(module_checkpoint_gate, services);
+            ++module_checkpoint_gate_refreshes;
+        }
+    }
     std::uint64_t max_checkpoints{};
     bool trace_calls{};
     bool trace_ticks{};
@@ -14065,6 +14079,7 @@ void log_route_marker_call(
         if (state.services != nullptr) {
             state.services->runtime_flags &=
                 ~galaxy::kNativeServiceFlagRelativeMarioInputAnchor;
+            state.refresh_module_checkpoint_gate();
         }
         // The runtime normally republishes this gate at each retrace. Offset
         // zero begins at the anchor boundary itself, so make the generated
@@ -29231,12 +29246,16 @@ void branch_checkpoint(
             (state.address_space != nullptr &&
              (state.address_space->ai_dma_playing() ||
               state.address_space->ai_dma_interrupt_pending()));
+        const std::uint32_t previous_flags = state.services->runtime_flags;
         if (adaptive_call_return_checkpoints) {
             state.services->runtime_flags |=
                 galaxy::kNativeServiceFlagAdaptiveCallReturnCheckpoints;
         } else {
             state.services->runtime_flags &=
                 ~galaxy::kNativeServiceFlagAdaptiveCallReturnCheckpoints;
+        }
+        if (state.services->runtime_flags != previous_flags) {
+            state.refresh_module_checkpoint_gate();
         }
     }
     state.record_vi_service_checkpoint(guest_pc, event_was_pending);
@@ -32815,6 +32834,12 @@ int wmain(int argc, wchar_t** argv) {
                 nullptr, nullptr);
         }
         state.executing_context = nullptr;
+        // The module's checkpoint snapshot points into the service table.
+        state.checkpoint_gate.set_publish_observer(nullptr, nullptr);
+        if (state.module_checkpoint_gate != nullptr) {
+            galaxy::refresh_module_checkpoint_gate(state.module_checkpoint_gate, nullptr);
+            state.module_checkpoint_gate = nullptr;
+        }
         if (state.checkpoint_gate.bound()) {
             state.checkpoint_gate.unbind();
             state.services = nullptr;
@@ -33068,6 +33093,8 @@ int wmain(int argc, wchar_t** argv) {
                     <<" transitions-to-full="<<gate_telemetry.transitions_to_full
                     <<" transitions-to-inline="<<gate_telemetry.transitions_to_inline
                     <<" note=full-scope-entries sizes the per-escalation diagnostic cost; inline entries never enter the branch callback\n";
+                std::cerr<<"[checkpoint-module-gate] refreshes="
+                    <<state.module_checkpoint_gate_refreshes<<'\n';
             }
             state.dump_native_input_anomalies(std::cerr);
             if (state.address_space != nullptr) {
@@ -33674,6 +33701,28 @@ int wmain(int argc, wchar_t** argv) {
         cleanup_module();
         return 6;
     }
+    // Optional export of a --checkpoint-globals module. Without it (or with
+    // an unknown layout) the module has no snapshot to maintain; a snapshot
+    // left empty only sends every checkpoint through the service table.
+    if (const auto checkpoint_gate_fn =
+            reinterpret_cast<galaxy::ModuleCheckpointGateV1* (*)()>(
+                GetProcAddress(module, "galaxy_module_checkpoint_gate"))) {
+        galaxy::ModuleCheckpointGateV1* const gate = checkpoint_gate_fn();
+        if (gate != nullptr && gate->version == 1u &&
+            gate->struct_size >= sizeof(galaxy::ModuleCheckpointGateV1)) {
+            state.module_checkpoint_gate = gate;
+            state.checkpoint_gate.set_publish_observer(
+                +[](void* user) noexcept {
+                    static_cast<RuntimeState*>(user)->refresh_module_checkpoint_gate();
+                },
+                &state);
+            state.refresh_module_checkpoint_gate();
+        } else {
+            std::cerr << "[checkpoint] module gate export has an unknown layout; ignored\n";
+        }
+    }
+    std::cerr << "[checkpoint] module-gate="
+              << (state.module_checkpoint_gate != nullptr ? 1 : 0) << '\n';
 
     galaxy::PpcContext context{};
     try {
