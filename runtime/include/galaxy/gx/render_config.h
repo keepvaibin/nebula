@@ -110,6 +110,7 @@ struct RenderConfig {
     bool     post_process        = true;
     unsigned aa_mode             = 0;
     unsigned smaa_quality        = 2;
+    // 3: NVIDIA DLSS (temporal like 2; needs the user's Streamline install).
     unsigned upscaler            = 0;
     unsigned temporal_quality    = 1;
     unsigned sharpness           = 0;

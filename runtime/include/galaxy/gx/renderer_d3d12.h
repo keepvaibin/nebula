@@ -906,6 +906,8 @@ private:
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> alt_efb_dsv_heap_;
     bool output_efb_active_ = false;
     std::unique_ptr<TemporalUpscaler> temporal_;
+    unsigned temporal_kind_ = 0;       // upscaler setting it was made for (2 FSR 3, 3 DLSS)
+    unsigned temporal_quality_ = 0;
     unsigned temporal_render_w_ = 0;
     unsigned temporal_render_h_ = 0;
     unsigned temporal_output_w_ = 0;

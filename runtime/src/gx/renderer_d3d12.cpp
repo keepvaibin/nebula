@@ -6,6 +6,7 @@
 #include "galaxy/gx_d3d12.h"
 #include "galaxy/gx/game_asset_extract.h"
 #include "galaxy/gx/render_config.h"
+#include "galaxy/gx/streamline_bridge.h"
 #include "galaxy/gx/texture_cache.h"
 #include "galaxy/runtime_settings.h"
 #include "galaxy/scope_exit.h"
@@ -157,12 +158,19 @@ static unsigned display_efb_scale_cap() {
     return std::clamp(static_cast<unsigned>(std::ceil(needed - 1e-6)), 1u, kMaxEfbScale);
 }
 
-#ifndef GALAXY_WITH_STREAMLINE_BRIDGE
-#define GALAXY_WITH_STREAMLINE_BRIDGE 0
+#if defined(GALAXY_WITH_STREAMLINE)
+constexpr bool kStreamlineBuilt = true;
+#else
+constexpr bool kStreamlineBuilt = false;
 #endif
-#if GALAXY_WITH_STREAMLINE_BRIDGE != 0 && !defined(GALAXY_STREAMLINE_BRIDGE_READY)
-#error "GALAXY_WITH_STREAMLINE_BRIDGE requires the real Streamline bridge to define GALAXY_STREAMLINE_BRIDGE_READY"
-#endif
+
+// The upscaler choices this runtime and machine offer, in menu order.
+std::vector<unsigned> available_upscalers() {
+    std::vector<unsigned> choices{0u, 1u};
+    if (fsr3_available()) choices.push_back(2u);
+    if (galaxy::gx::streamline::dlss_supported()) choices.push_back(3u);
+    return choices;
+}
 
 std::atomic<bool> s_pointer_focused{false};
 galaxy::host::HostPointerSnapshotCache s_pointer_snapshot;
@@ -982,8 +990,12 @@ void adjust_native_setting_unlogged(int delta) {
         case 0: draft.aa_mode = step(std::min(draft.aa_mode, 3u), 4u); break;
         case 1: draft.smaa_quality = step(std::min(draft.smaa_quality, 3u), 4u); break;
         case 2: {
-            const unsigned count = fsr3_available() ? 3u : 2u;
-            draft.upscaler = step(std::min(draft.upscaler, count - 1u), count);
+            const std::vector<unsigned> choices = available_upscalers();
+            std::size_t index = 0u;
+            for (std::size_t i = 0; i < choices.size(); ++i) {
+                if (choices[i] == draft.upscaler) index = i;
+            }
+            draft.upscaler = choices[step(static_cast<unsigned>(index), static_cast<unsigned>(choices.size()))];
             break;
         }
         case 3: draft.temporal_quality = step(std::min(draft.temporal_quality, 4u), 5u); break;
@@ -4310,6 +4322,18 @@ bool RendererD3D12::initialize(int window_width, int window_height, unsigned efb
                 dred->SetPageFaultEnablement(D3D12_DRED_ENABLEMENT_FORCED_ON);
             }
         }
+        // DLSS: Streamline must be running before the swap chain exists. It
+        // starts whenever the user installed it (GALAXY_STREAMLINE=0 skips
+        // it), so DLSS can be chosen in the settings without a restart.
+        {
+            char value[8]{};
+            std::size_t length = 0u;
+            const bool skip = getenv_s(&length, value, sizeof(value), "GALAXY_STREAMLINE") == 0 &&
+                              length > 1u && value[0] == '0';
+            if (!skip) {
+                (void)streamline::startup(streamline::default_directory());
+            }
+        }
         UINT flags = 0;
         if (d3d_debug_level >= 1) {
             flags |= DXGI_CREATE_FACTORY_DEBUG;
@@ -4483,7 +4507,9 @@ bool RendererD3D12::initialize(int window_width, int window_height, unsigned efb
         caps.dxr_device5_supported = dxr_device5_supported;
         caps.dxr_raytracing_tier =
             raytracing_tier_code(options5.RaytracingTier);
-        caps.streamline_bridge_built = GALAXY_WITH_STREAMLINE_BRIDGE != 0;
+        const bool dlss_ready = streamline::active() &&
+                                streamline::attach_device(device_.Get(), adapter_desc.AdapterLuid);
+        caps.streamline_bridge_built = kStreamlineBuilt;
         caps.msaa = make_render_feature_status(
             false,
             false,
@@ -4506,12 +4532,12 @@ bool RendererD3D12::initialize(int window_width, int window_height, unsigned efb
                 : "D3D12 raytracing tier is unsupported");
         caps.streamline = make_render_feature_status(
             caps.streamline_bridge_built,
+            streamline::active(),
+            streamline::active(),
             false,
-            false,
-            false,
-            caps.streamline_bridge_built
-                ? "NVIDIA Streamline runtime support is not initialized"
-                : "NVIDIA Streamline bridge is not built into this runtime");
+            !caps.streamline_bridge_built ? "NVIDIA Streamline bridge is not built into this runtime"
+            : streamline::active()        ? "NVIDIA Streamline is running"
+                                          : "NVIDIA Streamline is not installed or not signed");
         caps.reflex = make_render_feature_status(
             false,
             false,
@@ -4519,11 +4545,11 @@ bool RendererD3D12::initialize(int window_width, int window_height, unsigned efb
             false,
             "Streamline Reflex integration is not built");
         caps.dlss_super_resolution = make_render_feature_status(
-            false,
-            false,
-            false,
-            false,
-            "DLSS SDK plus depth and motion vectors are required");
+            caps.streamline_bridge_built,
+            dlss_ready,
+            dlss_ready,
+            dlss_ready,
+            dlss_ready ? "DLSS super resolution is available" : "DLSS needs Streamline and an NVIDIA RTX GPU");
         caps.dlss_frame_generation = make_render_feature_status(
             false,
             false,
@@ -4533,7 +4559,9 @@ bool RendererD3D12::initialize(int window_width, int window_height, unsigned efb
         set_render_feature_caps(caps);
 
         D3D12_COMMAND_QUEUE_DESC qd{}; qd.Type = D3D12_COMMAND_LIST_TYPE_DIRECT;
-        d3d_check(device_->CreateCommandQueue(&qd, IID_PPV_ARGS(&queue_)), "CreateCommandQueue");
+        // Streamline tracks queues through its device proxy.
+        d3d_check(streamline::queue_device(device_.Get())->CreateCommandQueue(&qd, IID_PPV_ARGS(&queue_)),
+                  "CreateCommandQueue");
         d3d_check(
             queue_->GetTimestampFrequency(&timestamp_frequency_),
             "GetTimestampFrequency");
@@ -4597,7 +4625,10 @@ bool RendererD3D12::initialize(int window_width, int window_height, unsigned efb
             }
         }
         ComPtr<IDXGISwapChain1> sc1;
-        d3d_check(factory->CreateSwapChainForHwnd(queue_.Get(), window_, &scd, nullptr, nullptr, &sc1), "CreateSwapChain");
+        // Through Streamline's factory when it runs: its presents go through it.
+        d3d_check(streamline::swap_chain_factory(factory.Get())
+                      ->CreateSwapChainForHwnd(queue_.Get(), window_, &scd, nullptr, nullptr, &sc1),
+                  "CreateSwapChain");
         d3d_check(sc1.As(&swap_chain_), "SwapChain As");
         {
             ComPtr<IDXGISwapChain2> swap_chain2;
@@ -4820,6 +4851,11 @@ void RendererD3D12::shutdown() {
     });
     retain_shutdown_failure("diagnostic writer drain", [&] {
         reap_debug_capture_writers(true);
+    });
+    // Streamline shuts down before the swap chain and device it wraps go.
+    retain_shutdown_failure("Streamline", [&] {
+        temporal_.reset();
+        streamline::shutdown();
     });
     if (fence_event_) { CloseHandle(fence_event_); fence_event_ = nullptr; }
     ui_texture_pipeline_.Reset();
@@ -6523,7 +6559,8 @@ void RendererD3D12::wait_for_fence_value(std::uint64_t fence_value) {
 // ---------------------------------------------------------------------------
 
 bool RendererD3D12::temporal_mode() const {
-    return get_render_config().upscaler == 2u && fsr3_available();
+    const unsigned upscaler = get_render_config().upscaler;
+    return (upscaler == 2u && fsr3_available()) || (upscaler == 3u && streamline::dlss_supported());
 }
 
 unsigned RendererD3D12::temporal_render_scale(unsigned output_scale) const {
@@ -7540,13 +7577,21 @@ bool RendererD3D12::scene_temporal_begin(float& jitter_x, float& jitter_y) {
     const unsigned rh = kEfbHeight * efb_scale_;
     const unsigned ow = kEfbWidth * output_scale;
     const unsigned oh = kEfbHeight * output_scale;
+    const RenderConfig cfg = get_render_config();
+    const unsigned kind = cfg.upscaler;
+    const unsigned quality = std::min(cfg.temporal_quality, 4u);
     if (!temporal_ || rw != temporal_render_w_ || rh != temporal_render_h_ ||
-        ow != temporal_output_w_ || oh != temporal_output_h_) {
+        ow != temporal_output_w_ || oh != temporal_output_h_ || kind != temporal_kind_ ||
+        (kind == 3u && quality != temporal_quality_)) {
         if (temporal_) {
             // The old context's resources may still be in use by frames in flight.
             wait_for_gpu();
+            temporal_.reset();
         }
-        temporal_ = create_fsr3_upscaler(device_.Get(), rw, rh, ow, oh);
+        temporal_ = kind == 3u ? create_dlss_upscaler(rw, rh, ow, oh, quality)
+                               : create_fsr3_upscaler(device_.Get(), rw, rh, ow, oh);
+        temporal_kind_ = kind;
+        temporal_quality_ = quality;
         temporal_history_valid_ = false;
         if (!temporal_) {
             temporal_render_w_ = temporal_render_h_ = 0u;
@@ -9898,14 +9943,19 @@ std::string native_settings_row_text(
         case 0: return anti_aliasing_row_text(render.aa_mode, render.smaa_quality, get_post_process_status());
         case 1: return std::string("AA QUALITY: ") + kQuality[std::min(render.smaa_quality, 3u)];
         case 2: {
-            static constexpr const char* kUpscalers[] = {"BILINEAR", "FSR 1", "FSR 3"};
-            return std::string("UPSCALER: ") +
-                   kUpscalers[std::min(render.upscaler, fsr3_available() ? 2u : 1u)];
+            static constexpr const char* kUpscalers[] = {"BILINEAR", "FSR 1", "FSR 3", "DLSS"};
+            const std::vector<unsigned> choices = available_upscalers();
+            const bool offered = std::find(choices.begin(), choices.end(), render.upscaler) != choices.end();
+            return std::string("UPSCALER: ") + kUpscalers[offered ? std::min(render.upscaler, 3u) : 1u];
         }
         case 3: {
             static constexpr const char* kTemporal[] = {
                 "NATIVE AA", "QUALITY", "BALANCED", "PERFORMANCE", "ULTRA PERFORMANCE"};
-            return std::string("FSR 3 QUALITY: ") + kTemporal[std::min(render.temporal_quality, 4u)];
+            static constexpr const char* kDlss[] = {
+                "DLAA", "QUALITY", "BALANCED", "PERFORMANCE", "ULTRA PERFORMANCE"};
+            return render.upscaler == 3u
+                       ? std::string("DLSS: ") + kDlss[std::min(render.temporal_quality, 4u)]
+                       : std::string("FSR 3 QUALITY: ") + kTemporal[std::min(render.temporal_quality, 4u)];
         }
         case 4:
             std::snprintf(text, sizeof(text), "SHARPENING: %u%%", std::min(render.sharpness, 100u));

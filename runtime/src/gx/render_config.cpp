@@ -182,7 +182,7 @@ static void apply_kv(RenderConfig& cfg, const char* key, const char* val) {
         static constexpr const char* kNames[] = {"low", "medium", "high", "ultra"};
         cfg.smaa_quality = parse_choice(val, kNames, cfg.smaa_quality);
     } else if (std::strcmp(key, "upscaler") == 0) {
-        static constexpr const char* kNames[] = {"bilinear", "fsr", "fsr3"};
+        static constexpr const char* kNames[] = {"bilinear", "fsr", "fsr3", "dlss"};
         cfg.upscaler = parse_choice(val, kNames, cfg.upscaler);
     } else if (std::strcmp(key, "temporal_quality") == 0) {
         static constexpr const char* kNames[] = {
@@ -308,7 +308,7 @@ static void clamp_unimplemented_features(RenderConfig& cfg) {
     cfg.anisotropic_filtering = std::clamp(cfg.anisotropic_filtering, 1u, 16u);
     cfg.aa_mode = std::min(cfg.aa_mode, 3u);
     cfg.smaa_quality = std::min(cfg.smaa_quality, 3u);
-    cfg.upscaler = std::min(cfg.upscaler, 2u);
+    cfg.upscaler = std::min(cfg.upscaler, 3u);
     cfg.temporal_quality = std::min(cfg.temporal_quality, 4u);
     cfg.sharpness = std::min(cfg.sharpness, 100u);
     // Win32 client geometry is signed-int based even though DXGI dimensions
