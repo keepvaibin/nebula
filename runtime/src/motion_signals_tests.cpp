@@ -3,6 +3,7 @@
 
 #include <cstdio>
 #include <iterator>
+#include <limits>
 #include <set>
 
 using namespace galaxy::motion;
@@ -63,6 +64,16 @@ void test_category() {
     check(category_phase(kNoCategory) == 0xFFu, "no phase");
 }
 
+void test_player_jump() {
+    const float here[3] = {100.0f, 50.0f, -20.0f};
+    const float step[3] = {130.0f, 50.0f, -20.0f};
+    const float far[3] = {2634.0f, 385.0f, 1322.0f};
+    const float nan[3] = {std::numeric_limits<float>::quiet_NaN(), 0.0f, 0.0f};
+    check(!player_jump_is_new_life(here, step), "carrying the player is no new life");
+    check(player_jump_is_new_life(here, far), "a teleport is a new life");
+    check(!player_jump_is_new_life(here, nan), "an unreadable target is no new life");
+}
+
 void test_marker_kinds() {
     const std::uint8_t kinds[] = {kMarkerShapePacket, kMarkerNameObj,    kMarkerEmitter,      kMarkerParticle,
                                   kMarkerCategory,    kMarkerScene,      kMarkerPass,         kMarkerLight,
@@ -92,6 +103,7 @@ int main() {
     test_category();
     test_particle_age();
     test_marker_kinds();
+    test_player_jump();
     if (failures != 0) {
         std::printf("%d failure(s)\n", failures);
         return 1;

@@ -145,6 +145,7 @@ inline constexpr std::uint32_t kNoCategory = encode_category(0xFFu, 0u, 0u);
 inline constexpr std::uint32_t kInterpolatorAntiOscillation = 0x08u;  // CameraViewInterpolator
 inline constexpr std::uint32_t kInterpolatorForceChange = 0x09u;
 inline constexpr std::uint32_t kInterpolatorOff = 0x0Au;
+inline constexpr std::uint32_t kActorPosition = 0x0Cu;                // LiveActor::mPosition
 inline constexpr std::uint32_t kActorModelManager = 0x48u;            // LiveActor
 inline constexpr std::uint32_t kActorDeadFlag = 0x68u;                // LiveActorFlag::mIsDead (MR::isDead)
 inline constexpr std::uint32_t kModelManagerModel = 0x1Cu;            // ModelManager -> J3DModel
@@ -225,6 +226,19 @@ private:
 // restarts at age 0, so a key match whose age went down or jumped is a new life.
 [[nodiscard]] constexpr bool particle_age_continues(std::uint32_t age_before, std::uint32_t age_now) noexcept {
     return age_now >= age_before && age_now - age_before <= 1u;
+}
+
+// MarioAccess::setTrans / setBaseMtx also carry the player every frame (demos,
+// carriers, the dome's galaxy map): only a jump of more than this many units
+// from the player's position is a new life. Walking moves ~15 units a frame.
+inline constexpr float kPlayerTeleportDistance = 500.0f;
+
+[[nodiscard]] constexpr bool player_jump_is_new_life(const float now[3], const float target[3]) noexcept {
+    const float dx = target[0] - now[0];
+    const float dy = target[1] - now[1];
+    const float dz = target[2] - now[2];
+    // Comparisons are false for NaN: an unreadable position is no new life.
+    return dx * dx + dy * dy + dz * dz > kPlayerTeleportDistance * kPlayerTeleportDistance;
 }
 
 }  // namespace galaxy::motion

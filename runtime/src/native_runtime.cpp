@@ -2303,11 +2303,14 @@ struct RuntimeState {
     std::uint64_t motion_stripe_entries{};
     std::uint64_t motion_mirror_passes{};
     std::uint64_t motion_dead_repeats{};      // makeActorDead on a dead actor (no bump)
+    std::uint64_t motion_player_moves{};      // player placed without a jump (no bump)
     // The 2D layer (SiteHookKind::Layout2D): GameScene::draw2D bounds and
     // layout identity markers. Index 0 pane, 1 layout actor, 2 star pointer.
     bool layout_2d_open{};                    // inside GameScene::draw2D
     bool layout_2d_markers{};                 // ... and the renderer reads identity markers
     bool layout_2d_since_scene{};             // draw2D ran since the last 3D SceneBegin
+    bool layout_after_2d{};                   // draw2D ended, no 3D SceneBegin since
+    std::array<std::uint64_t, 3> layout_drawn_after_2d{};  // outside draw2D, after it in the frame
     std::uint64_t layout_2d_scenes{};         // draw2D entries
     std::uint64_t layout_3d_without_2d{};     // 3D scenes with no draw2D before the next one
     std::array<std::uint32_t, 3> layout_frame_drawn{};    // this draw2D
@@ -10049,7 +10052,9 @@ void note_motion_camera(RuntimeState& state, std::uint32_t site, const galaxy::P
 }
 
 // A reset position or a new life: the object's epoch, and its model's.
-void note_motion_object(RuntimeState& state, std::uint32_t site, std::uint32_t object) {
+// `source` is r31 at the player sites: the target position (setTrans) or
+// base matrix (setBaseMtx).
+void note_motion_object(RuntimeState& state, std::uint32_t site, std::uint32_t object, std::uint32_t source) {
     using galaxy::motion::ObjectSite;
     if (object == 0u || state.address_space == nullptr || site >= static_cast<std::uint32_t>(ObjectSite::Count)) {
         return;
@@ -10061,6 +10066,29 @@ void note_motion_object(RuntimeState& state, std::uint32_t site, std::uint32_t o
         read_guest_u8_or_zero(space, object + galaxy::motion::kActorDeadFlag) != 0u) {
         ++state.motion_dead_repeats;
         return;
+    }
+    if (site == static_cast<std::uint32_t>(ObjectSite::PlayerTrans) ||
+        site == static_cast<std::uint32_t>(ObjectSite::PlayerBaseMtx)) {
+        const bool matrix = site == static_cast<std::uint32_t>(ObjectSite::PlayerBaseMtx);
+        float now[3]{};
+        float target[3]{};
+        for (std::uint32_t i = 0; i < 3u; ++i) {
+            now[i] = std::bit_cast<float>(
+                read_guest_u32_or_zero(space, object + galaxy::motion::kActorPosition + 4u * i));
+            target[i] = std::bit_cast<float>(
+                read_guest_u32_or_zero(space, source + (matrix ? 0x0Cu + 0x10u * i : 4u * i)));
+        }
+        if (!galaxy::motion::player_jump_is_new_life(now, target)) {
+            ++state.motion_player_moves;
+            return;
+        }
+        if (motion_trace_enabled()) {
+            const float dx = target[0] - now[0], dy = target[1] - now[1], dz = target[2] - now[2];
+            std::fprintf(stderr, "[motion-signal] player-jump vi=%llu scene=%llu site=%s distance=%.1f\n",
+                         static_cast<unsigned long long>(state.vi_retrace_count),
+                         static_cast<unsigned long long>(state.motion_scene_serial),
+                         matrix ? "player-base-mtx" : "player-trans", std::sqrt(dx * dx + dy * dy + dz * dz));
+        }
     }
     const std::uint16_t epoch = state.motion_epochs.bump(object);
     std::uint32_t model = 0u;
@@ -10114,8 +10142,8 @@ void emit_scene_signal_marker(RuntimeState& state) {
         const auto& counts = state.motion_object_counts;
         std::fprintf(stderr,
                      "[motion-signal] summary scene=%llu camera-cuts=%llu epoch=%u objects reset=%llu/%llu/%llu "
-                     "appeared=%llu dead=%llu dead-repeats=%llu player=%llu/%llu emitters=%llu table=%zu resets=%u "
-                     "categories=%llu lights=%llu stripes=%llu mirrors=%llu\n",
+                     "appeared=%llu dead=%llu dead-repeats=%llu player=%llu/%llu player-moves=%llu emitters=%llu "
+                     "table=%zu resets=%u categories=%llu lights=%llu stripes=%llu mirrors=%llu\n",
                      static_cast<unsigned long long>(state.motion_scene_serial),
                      static_cast<unsigned long long>(state.motion_camera_cuts), state.motion_camera_epoch,
                      static_cast<unsigned long long>(counts[0]), static_cast<unsigned long long>(counts[1]),
@@ -10123,7 +10151,9 @@ void emit_scene_signal_marker(RuntimeState& state) {
                      static_cast<unsigned long long>(counts[4]),
                      static_cast<unsigned long long>(state.motion_dead_repeats),
                      static_cast<unsigned long long>(counts[5]),
-                     static_cast<unsigned long long>(counts[6]), static_cast<unsigned long long>(counts[7]),
+                     static_cast<unsigned long long>(counts[6]),
+                     static_cast<unsigned long long>(state.motion_player_moves),
+                     static_cast<unsigned long long>(counts[7]),
                      state.motion_epochs.size(), state.motion_epochs.resets(),
                      static_cast<unsigned long long>(state.motion_category_markers),
                      static_cast<unsigned long long>(state.motion_light_markers),
@@ -10156,7 +10186,9 @@ void note_stripe_particle(RuntimeState& state, std::uint32_t argument, const gal
 // entry or after its visibility test, so never inside a GXBegin.
 // GALAXY_MOTION_TRACE_SIGNALS=1 traces the markers of the first two and
 // every 600th 2D scene, pane counts per frame (the first 30, then every 60th),
-// markers outside draw2D (the first 300) and a summary every 600 frames.
+// markers outside draw2D (the first 100, each layout actor or star pointer
+// object the first time, the first 100 panes once a 3D scene ran) and a
+// summary every 600 frames.
 void trace_layout_marker(const RuntimeState& state, const char* where, std::uint8_t kind, std::uint16_t aux,
                          std::uint32_t a, std::uint32_t b) {
     char name[17]{};
@@ -10172,12 +10204,14 @@ void trace_layout_marker(const RuntimeState& state, const char* where, std::uint
     }
     static constexpr const char* kKinds[] = {"pane", "layout-actor", "star-pointer"};
     std::fprintf(stderr,
-                 "[layout-signal] %s frame=%llu scene3d=%llu vi=%llu n=%u kind=%s aux=%u a=%08X b=%08X name=%s\n",
+                 "[layout-signal] %s frame=%llu scene3d=%llu vi=%llu n=%u after-2d=%d kind=%s aux=%u a=%08X b=%08X "
+                 "name=%s\n",
                  where, static_cast<unsigned long long>(state.layout_2d_scenes),
                  static_cast<unsigned long long>(state.motion_scene_serial),
                  static_cast<unsigned long long>(state.vi_retrace_count),
                  state.layout_frame_markers[0] + state.layout_frame_markers[1] + state.layout_frame_markers[2],
-                 kKinds[kind - galaxy::motion::kMarkerLayoutPane], static_cast<unsigned>(aux), a, b, name);
+                 state.layout_after_2d ? 1 : 0, kKinds[kind - galaxy::motion::kMarkerLayoutPane],
+                 static_cast<unsigned>(aux), a, b, name);
 }
 
 void note_layout_frame_end(RuntimeState& state, std::size_t position) {
@@ -10204,8 +10238,8 @@ void note_layout_frame_end(RuntimeState& state, std::size_t position) {
         std::fprintf(stderr,
                      "[layout-signal] summary frames=%llu scenes3d=%llu 3d-without-2d=%llu "
                      "panes-per-frame(min/avg/max)=%u/%.1f/%u in-2d-appended(pane/actor/star)=%llu/%llu/%llu "
-                     "drawn-outside-2d=%llu/%llu/%llu drawn-in-3d=%llu/%llu/%llu outside-appended=%llu "
-                     "dropped=%llu\n",
+                     "drawn-outside-2d=%llu/%llu/%llu drawn-after-2d=%llu/%llu/%llu drawn-in-3d=%llu/%llu/%llu "
+                     "outside-appended=%llu dropped=%llu\n",
                      static_cast<unsigned long long>(frame),
                      static_cast<unsigned long long>(state.motion_scene_serial),
                      static_cast<unsigned long long>(state.layout_3d_without_2d),
@@ -10221,6 +10255,9 @@ void note_layout_frame_end(RuntimeState& state, std::size_t position) {
                      static_cast<unsigned long long>(state.layout_drawn_outside_2d[0]),
                      static_cast<unsigned long long>(state.layout_drawn_outside_2d[1]),
                      static_cast<unsigned long long>(state.layout_drawn_outside_2d[2]),
+                     static_cast<unsigned long long>(state.layout_drawn_after_2d[0]),
+                     static_cast<unsigned long long>(state.layout_drawn_after_2d[1]),
+                     static_cast<unsigned long long>(state.layout_drawn_after_2d[2]),
                      static_cast<unsigned long long>(state.layout_drawn_in_3d[0]),
                      static_cast<unsigned long long>(state.layout_drawn_in_3d[1]),
                      static_cast<unsigned long long>(state.layout_drawn_in_3d[2]),
@@ -10264,6 +10301,7 @@ void handle_layout_signal(RuntimeState& state, std::uint32_t argument, const gal
         } else {
             state.layout_2d_open = false;
             state.layout_2d_markers = false;
+            state.layout_after_2d = true;
             note_layout_frame_end(state, position);
         }
         return;
@@ -10301,6 +10339,9 @@ void handle_layout_signal(RuntimeState& state, std::uint32_t argument, const gal
         ++state.layout_frame_drawn[index];
     } else {
         ++state.layout_drawn_outside_2d[index];
+        if (state.layout_after_2d) {
+            ++state.layout_drawn_after_2d[index];
+        }
     }
     if (state.draw_identity_scene) {
         ++state.layout_drawn_in_3d[index];
@@ -10322,8 +10363,22 @@ void handle_layout_signal(RuntimeState& state, std::uint32_t argument, const gal
         }
     } else {
         ++state.layout_markers_outside_2d;
-        if (motion_trace_enabled() && state.layout_markers_outside_2d <= 300u) {
-            trace_layout_marker(state, "outside-2d", kind, aux, a, b);
+        if (motion_trace_enabled()) {
+            static std::vector<std::uint32_t> objects_seen;
+            static std::uint32_t panes_after_scene = 0u;
+            bool fresh = false;
+            if (kind != galaxy::motion::kMarkerLayoutPane) {
+                fresh = objects_seen.size() < 400u &&
+                        std::find(objects_seen.begin(), objects_seen.end(), a) == objects_seen.end();
+                if (fresh) {
+                    objects_seen.push_back(a);
+                }
+            } else if (state.motion_scene_serial != 0u) {
+                fresh = panes_after_scene++ < 100u;
+            }
+            if (state.layout_markers_outside_2d <= 100u || fresh) {
+                trace_layout_marker(state, "outside-2d", kind, aux, a, b);
+            }
         }
     }
 }
@@ -10338,7 +10393,7 @@ void handle_motion_signal(RuntimeState& state, std::uint32_t kind, std::uint32_t
         note_motion_camera(state, argument, context);
         return;
     case galaxy::SiteHookKind::MotionObject:
-        note_motion_object(state, argument, context.gpr[3]);
+        note_motion_object(state, argument, context.gpr[3], context.gpr[31]);
         return;
     case galaxy::SiteHookKind::DrawCategory:
         emit_motion_category(state, argument, context);
@@ -24662,6 +24717,7 @@ void call_guest_impl_body(
                 ++state.layout_3d_without_2d;
             }
             state.layout_2d_since_scene = false;
+            state.layout_after_2d = false;
         }
     }
     const auto mouse_boundary_object=context->gpr[3];
