@@ -3,6 +3,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstring>
 
 namespace galaxy::gx {
 
@@ -65,37 +66,118 @@ void affine_transform_point(const Affine34& m, const float p[3], float out[3]) n
 namespace {
 
 struct Decomposed {
-    float q[4];      // rotation quaternion x, y, z, w
-    float scale[3];  // per-axis (column) scale; scale[0] < 0 for mirrored
+    float q[4];        // rotation quaternion x, y, z, w
+    float stretch[9];  // S, row-major
+    bool mirrored;     // det < 0: S carries the reflection
     bool valid;
 };
 
+// The quaternion of a proper rotation matrix (r[row][col]).
+bool rotation_to_quaternion(const float (&r)[3][3], float (&q)[4]) noexcept;
+
+// Polar decomposition A = R S by the scaled Newton iteration
+// R <- (g R + R^-T / g) / 2, g = |det R|^(-1/3) (Higham); in double. A
+// rotation with per-axis scale (orthogonal columns) takes the direct path.
 Decomposed decompose(const Affine34& m) noexcept {
     Decomposed d{};
-    float col[3][3];
-    for (unsigned c = 0; c < 3u; ++c) {
-        for (unsigned r = 0; r < 3u; ++r) col[c][r] = m[r * 4u + c];
-    }
-    for (unsigned c = 0; c < 3u; ++c) {
-        d.scale[c] = std::sqrt(col[c][0] * col[c][0] + col[c][1] * col[c][1] +
-                               col[c][2] * col[c][2]);
-        if (!(d.scale[c] > 1e-12f)) return d;
-    }
-    const float det = m[0] * (m[5] * m[10] - m[6] * m[9]) -
-                      m[1] * (m[4] * m[10] - m[6] * m[8]) +
-                      m[2] * (m[4] * m[9] - m[5] * m[8]);
-    if (det < 0.0f) d.scale[0] = -d.scale[0];
-    float r[3][3];  // r[row][col]
-    for (unsigned c = 0; c < 3u; ++c) {
-        for (unsigned row = 0; row < 3u; ++row) r[row][c] = col[c][row] / d.scale[c];
-    }
-    // Orthonormal within a small tolerance, else no clean rotation.
-    for (unsigned a = 0; a < 3u; ++a) {
-        for (unsigned b = a + 1u; b < 3u; ++b) {
-            const float dot = r[0][a] * r[0][b] + r[1][a] * r[1][b] + r[2][a] * r[2][b];
-            if (std::fabs(dot) > 2e-3f) return d;
+    {
+        float col[3][3];
+        float scale[3];
+        bool orthogonal = true;
+        for (unsigned c = 0; c < 3u; ++c) {
+            for (unsigned r = 0; r < 3u; ++r) col[c][r] = m[r * 4u + c];
+            scale[c] = std::sqrt(col[c][0] * col[c][0] + col[c][1] * col[c][1] + col[c][2] * col[c][2]);
+            orthogonal = orthogonal && scale[c] > 1e-12f && std::isfinite(scale[c]);
+        }
+        for (unsigned a = 0; a < 3u && orthogonal; ++a) {
+            for (unsigned b = a + 1u; b < 3u; ++b) {
+                const float dot = (col[a][0] * col[b][0] + col[a][1] * col[b][1] + col[a][2] * col[b][2]) /
+                                  (scale[a] * scale[b]);
+                orthogonal = orthogonal && std::fabs(dot) <= 2e-3f;
+            }
+        }
+        if (orthogonal) {
+            const float det = m[0] * (m[5] * m[10] - m[6] * m[9]) - m[1] * (m[4] * m[10] - m[6] * m[8]) +
+                              m[2] * (m[4] * m[9] - m[5] * m[8]);
+            d.mirrored = det < 0.0f;
+            const float s0 = d.mirrored ? -scale[0] : scale[0];
+            float r[3][3];
+            for (unsigned row = 0; row < 3u; ++row) {
+                r[row][0] = col[0][row] / s0;
+                r[row][1] = col[1][row] / scale[1];
+                r[row][2] = col[2][row] / scale[2];
+            }
+            for (float& v : d.stretch) v = 0.0f;
+            d.stretch[0] = s0;
+            d.stretch[4] = scale[1];
+            d.stretch[8] = scale[2];
+            d.valid = rotation_to_quaternion(r, d.q);
+            return d;
         }
     }
+    double a[3][3];
+    for (unsigned r = 0; r < 3u; ++r) {
+        for (unsigned c = 0; c < 3u; ++c) a[r][c] = m[r * 4u + c];
+    }
+    double x[3][3];
+    std::memcpy(x, a, sizeof(x));
+    bool converged = false;
+    for (unsigned iteration = 0; iteration < 32u && !converged; ++iteration) {
+        const double cof[3][3] = {
+            {x[1][1] * x[2][2] - x[1][2] * x[2][1], x[1][2] * x[2][0] - x[1][0] * x[2][2],
+             x[1][0] * x[2][1] - x[1][1] * x[2][0]},
+            {x[0][2] * x[2][1] - x[0][1] * x[2][2], x[0][0] * x[2][2] - x[0][2] * x[2][0],
+             x[0][1] * x[2][0] - x[0][0] * x[2][1]},
+            {x[0][1] * x[1][2] - x[0][2] * x[1][1], x[0][2] * x[1][0] - x[0][0] * x[1][2],
+             x[0][0] * x[1][1] - x[0][1] * x[1][0]}};
+        const double det = x[0][0] * cof[0][0] + x[0][1] * cof[0][1] + x[0][2] * cof[0][2];
+        if (!(std::fabs(det) > 1e-24) || !std::isfinite(det)) {
+            return d;
+        }
+        // (X^-1)^T = cofactor / det.
+        const double g = std::cbrt(1.0 / std::fabs(det));
+        double change = 0.0;
+        for (unsigned r = 0; r < 3u; ++r) {
+            for (unsigned c = 0; c < 3u; ++c) {
+                const double next = 0.5 * (g * x[r][c] + cof[r][c] / (det * g));
+                change = std::max(change, std::fabs(next - x[r][c]));
+                x[r][c] = next;
+            }
+        }
+        converged = change < 1e-10;
+    }
+    if (!converged) {
+        return d;
+    }
+    // S = R^T A.
+    double stretch[3][3];
+    for (unsigned r = 0; r < 3u; ++r) {
+        for (unsigned c = 0; c < 3u; ++c) {
+            stretch[r][c] = x[0][r] * a[0][c] + x[1][r] * a[1][c] + x[2][r] * a[2][c];
+        }
+    }
+    const double det_r = x[0][0] * (x[1][1] * x[2][2] - x[1][2] * x[2][1]) -
+                         x[0][1] * (x[1][0] * x[2][2] - x[1][2] * x[2][0]) +
+                         x[0][2] * (x[1][0] * x[2][1] - x[1][1] * x[2][0]);
+    d.mirrored = det_r < 0.0;
+    if (d.mirrored) {
+        // R = R' D, D = diag(-1, 1, 1): A = R' (D S).
+        for (unsigned r = 0; r < 3u; ++r) x[r][0] = -x[r][0];
+        for (unsigned c = 0; c < 3u; ++c) stretch[0][c] = -stretch[0][c];
+    }
+    for (unsigned r = 0; r < 3u; ++r) {
+        for (unsigned c = 0; c < 3u; ++c) d.stretch[r * 3u + c] = static_cast<float>(stretch[r][c]);
+    }
+    float r[3][3];  // r[row][col]
+    for (unsigned row = 0; row < 3u; ++row) {
+        for (unsigned c = 0; c < 3u; ++c) r[row][c] = static_cast<float>(x[row][c]);
+    }
+    d.valid = rotation_to_quaternion(r, d.q);
+    return d;
+}
+
+bool rotation_to_quaternion(const float (&r)[3][3], float (&q)[4]) noexcept {
+    Decomposed d{};
     const float trace = r[0][0] + r[1][1] + r[2][2];
     if (trace > 0.0f) {
         const float s = 0.5f / std::sqrt(trace + 1.0f);
@@ -122,9 +204,8 @@ Decomposed decompose(const Affine34& m) noexcept {
         d.q[1] = (r[1][2] + r[2][1]) / s;
         d.q[2] = 0.25f * s;
     }
-    d.valid = std::isfinite(d.q[0]) && std::isfinite(d.q[1]) &&
-              std::isfinite(d.q[2]) && std::isfinite(d.q[3]);
-    return d;
+    for (unsigned i = 0; i < 4u; ++i) q[i] = d.q[i];
+    return std::isfinite(q[0]) && std::isfinite(q[1]) && std::isfinite(q[2]) && std::isfinite(q[3]);
 }
 
 }  // namespace
@@ -143,7 +224,7 @@ void affine_motion(const Affine34& a, const Affine34& b, AffineMotion& out) noex
     }
     float dot = da.q[0] * db.q[0] + da.q[1] * db.q[1] + da.q[2] * db.q[2] + da.q[3] * db.q[3];
     out.cos_turn = std::fabs(dot);
-    if ((da.scale[0] < 0.0f) != (db.scale[0] < 0.0f)) {
+    if (da.mirrored != db.mirrored) {
         return;
     }
     const float sign = dot < 0.0f ? -1.0f : 1.0f;
@@ -152,9 +233,9 @@ void affine_motion(const Affine34& a, const Affine34& b, AffineMotion& out) noex
         out.qa[i] = da.q[i];
         out.qb[i] = db.q[i] * sign;
     }
-    for (unsigned c = 0; c < 3u; ++c) {
-        out.scale_a[c] = da.scale[c];
-        out.scale_b[c] = db.scale[c];
+    for (unsigned i = 0; i < 9u; ++i) {
+        out.stretch_a[i] = da.stretch[i];
+        out.stretch_b[i] = db.stretch[i];
     }
     if (dot < 0.9995f) {
         out.theta = std::acos(std::min(dot, 1.0f));
@@ -189,9 +270,12 @@ Affine34 affine_motion_at(const AffineMotion& m, float t) noexcept {
         {1.0f - 2.0f * (y * y + z * z), 2.0f * (x * y - z * w), 2.0f * (x * z + y * w)},
         {2.0f * (x * y + z * w), 1.0f - 2.0f * (x * x + z * z), 2.0f * (y * z - x * w)},
         {2.0f * (x * z - y * w), 2.0f * (y * z + x * w), 1.0f - 2.0f * (x * x + y * y)}};
-    for (unsigned c = 0; c < 3u; ++c) {
-        const float s = m.scale_a[c] + (m.scale_b[c] - m.scale_a[c]) * t;
-        for (unsigned r = 0; r < 3u; ++r) out[r * 4u + c] = rot[r][c] * s;
+    float s[9];
+    for (unsigned i = 0; i < 9u; ++i) s[i] = m.stretch_a[i] + (m.stretch_b[i] - m.stretch_a[i]) * t;
+    for (unsigned r = 0; r < 3u; ++r) {
+        for (unsigned c = 0; c < 3u; ++c) {
+            out[r * 4u + c] = rot[r][0] * s[c] + rot[r][1] * s[3u + c] + rot[r][2] * s[6u + c];
+        }
     }
     for (unsigned r = 0; r < 3u; ++r) {
         out[r * 4u + 3u] = a[r * 4u + 3u] + (b[r * 4u + 3u] - a[r * 4u + 3u]) * t;

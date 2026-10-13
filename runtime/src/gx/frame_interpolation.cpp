@@ -362,6 +362,44 @@ float tex_word_at(float a, float b, bool translation, float t) noexcept {
     return a + (b - a) * t;
 }
 
+void tex_matrix_at(const float* a, const float* b, bool spatial, float t, float* out) noexcept {
+    bool finite = true;
+    for (unsigned i = 0; i < 12u; ++i) finite = finite && std::isfinite(a[i]) && std::isfinite(b[i]);
+    if (t >= 1.0f || !finite) {
+        std::memcpy(out, b, 12u * sizeof(float));
+        return;
+    }
+    if (t <= 0.0f) {
+        std::memcpy(out, a, 12u * sizeof(float));
+        return;
+    }
+    float from[12];
+    std::memcpy(from, a, sizeof(from));
+    if (!spatial) {
+        for (unsigned i = 0; i < 12u; ++i) {
+            if (a[i] == b[i]) continue;
+            if ((i & 3u) == 3u) {
+                const float d = b[i] - from[i];
+                if (std::fabs(d) > 0.5f) from[i] += std::round(d);
+                if (std::fabs(b[i] - from[i]) > kTexStepLimit) {
+                    std::memcpy(out, b, 12u * sizeof(float));
+                    return;
+                }
+            } else if (std::fabs(b[i] - a[i]) > 1.0f) {
+                std::memcpy(out, b, 12u * sizeof(float));
+                return;
+            }
+        }
+    }
+    for (unsigned i = 0; i < 12u; ++i) out[i] = from[i] + (b[i] - from[i]) * t;
+}
+
+bool texgen_spatial(std::uint32_t texgen) noexcept {
+    const std::uint32_t type = (texgen >> 4u) & 7u;
+    const std::uint32_t source = (texgen >> 7u) & 0x1Fu;
+    return type == 0u && (source == 0u || source == 1u || source == 3u || source == 4u);
+}
+
 bool ps_colours_move(const GxPsConstants& a, const GxPsConstants& b) noexcept {
     if (std::memcmp(a.stage_config, b.stage_config, sizeof(a.stage_config)) != 0 ||
         std::memcmp(a.uber_ps_header, b.uber_ps_header, sizeof(a.uber_ps_header)) != 0 ||
@@ -513,11 +551,13 @@ void light_at(const std::uint32_t* a, const std::uint32_t* b, const CameraMotion
 }
 
 void palette_motion(const std::uint32_t* a, const std::uint32_t* b, const CameraMotion& camera,
-                    bool orthographic, PaletteMotion& out) noexcept {
+                    bool orthographic, PaletteMotion& out, std::uint16_t position_mask,
+                    std::uint16_t normal_mask) noexcept {
     out = PaletteMotion{};
     out.split = camera.known && !camera.cut && !orthographic;
     const bool camera_moves = camera.known && !camera.cut && !equal_words(camera.a, camera.b);
     for (unsigned k = 0; k < 10u; ++k) {
+        if ((position_mask & (1u << k)) == 0u) continue;
         const std::uint32_t* wb = b + k * 12u;
         const bool differs = a != nullptr && std::memcmp(a + k * 12u, wb, 12u * 4u) != 0;
         if (!differs && !(camera_moves && !orthographic)) continue;
@@ -535,6 +575,7 @@ void palette_motion(const std::uint32_t* a, const std::uint32_t* b, const Camera
         out.any_changed = true;
     }
     for (unsigned k = 0; k < 10u; ++k) {
+        if ((normal_mask & (1u << k)) == 0u) continue;
         const std::uint32_t* wb = b + kXfNormalBase + k * 9u;
         const bool differs =
             a != nullptr && std::memcmp(a + kXfNormalBase + k * 9u, wb, 9u * 4u) != 0;
@@ -592,19 +633,29 @@ void palette_at(const PaletteMotion& m, const std::uint32_t* a, const std::uint3
         }
         return;
     }
-    if (m.tex_changed) {
-        for (unsigned w = 120u; w < 256u; ++w) {
-            if (a[w] != b[w]) {
-                out[w] = float_word(tex_word_at(word_float(a[w]), word_float(b[w]), (w & 3u) == 3u, t));
+    // Texture matrices TEXMTX0-9 (rows 30-59) and post matrices 0-19 by
+    // block. The texgen source of an indexed matrix is not known here: a
+    // block whose rotation or scale changes is taken as spatial.
+    const auto blocks = [&](unsigned first, unsigned count) {
+        for (unsigned k = 0; k < count; ++k) {
+            const unsigned base = first + 12u * k;
+            if (std::memcmp(a + base, b + base, 12u * 4u) == 0) continue;
+            float fa[12], fb[12], fo[12];
+            bool spatial = false;
+            for (unsigned i = 0; i < 12u; ++i) {
+                fa[i] = word_float(a[base + i]);
+                fb[i] = word_float(b[base + i]);
+                spatial = spatial || ((i & 3u) != 3u && fa[i] != fb[i]);
             }
+            tex_matrix_at(fa, fb, spatial, t, fo);
+            for (unsigned i = 0; i < 12u; ++i) out[base + i] = float_word(fo[i]);
         }
+    };
+    if (m.tex_changed) {
+        blocks(120u, 10u);
     }
     if (m.post_changed) {
-        for (unsigned w = kXfPostBase; w < kXfLightBase; ++w) {
-            if (a[w] != b[w]) {
-                out[w] = float_word(tex_word_at(word_float(a[w]), word_float(b[w]), (w & 3u) == 3u, t));
-            }
-        }
+        blocks(kXfPostBase, 20u);
     }
     for (unsigned light = 0; light < 8u; ++light) {
         if ((m.light_changed & (1u << light)) != 0u) {

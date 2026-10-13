@@ -36,17 +36,21 @@ void affine_transform_point(const Affine34& m, const float p[3], float out[3]) n
 [[nodiscard]] Affine34 affine_interpolate(const Affine34& a, const Affine34& b, float t) noexcept;
 // affine_interpolate split in two: the pair's decomposition once, then any
 // number of t (a sequence of sub-frames evaluates each pair several times).
+// Each 3x3 part is polar-decomposed, M = R S (R a rotation, S the stretch:
+// scale and shear, and the reflection of a mirrored matrix): R slerps, S and
+// the translation lerp. Rigid, scaled and blended (envelope) matrices thus
+// interpolate alike.
 struct AffineMotion {
     Affine34 a{};
     Affine34 b{};
     float qa[4]{};          // rotation of a (x, y, z, w)
     float qb[4]{};          // rotation of b, on qa's hemisphere
-    float scale_a[3]{};
-    float scale_b[3]{};
+    float stretch_a[9]{};   // S of a, row-major 3x3
+    float stretch_b[9]{};
     float theta = 0.0f;     // slerp angle; 0 lerps the quaternions
     float inv_sin_theta = 0.0f;
     float cos_turn = 1.0f;  // |qa . qb| when both decompose, else 1
-    bool rigid = false;     // false: element-wise lerp of a and b
+    bool rigid = false;     // both decomposed; false: element-wise lerp of a and b
 };
 void affine_motion(const Affine34& a, const Affine34& b, AffineMotion& out) noexcept;
 [[nodiscard]] Affine34 affine_motion_at(const AffineMotion& m, float t) noexcept;

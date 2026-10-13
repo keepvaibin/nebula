@@ -32,6 +32,11 @@ TransformRecord make(std::uint64_t sig, float x, float y, float z) {
     return r;
 }
 
+Affine34 rotation_x(float radians) {
+    const float c = std::cos(radians), s = std::sin(radians);
+    return {1.0f, 0.0f, 0.0f, 0.0f, 0.0f, c, -s, 0.0f, 0.0f, s, c, 0.0f};
+}
+
 Affine34 rotation_y(float radians, float tx, float ty, float tz) {
     const float c = std::cos(radians), s = std::sin(radians);
     return {c, 0.0f, s, tx,
@@ -87,11 +92,28 @@ void test_interpolate() {
     const float sy = std::sqrt(sm[1] * sm[1] + sm[5] * sm[5] + sm[9] * sm[9]);
     check(near(sx, 3.0f, 1e-3f) && near(sy, 1.0f, 1e-3f), "per-axis scale lerps");
     check(near(std::atan2(sm[2], sm[10]), 0.4f, 1e-3f), "rotation slerps under scale");
-    // Shear: element-wise.
+    // Shear: rotation and stretch of the polar decomposition, ends exact.
     Affine34 shear = affine_identity();
     shear[1] = 0.5f;
     const Affine34 lm = affine_interpolate(affine_identity(), shear, 0.5f);
-    check(near(lm[1], 0.25f) && near(lm[0], 1.0f), "shear lerps element-wise");
+    check(lm[1] > 0.2f && lm[1] < 0.3f && std::fabs(lm[0] - 1.0f) < 0.05f, "shear interpolates");
+    const Affine34 shear_end = affine_interpolate(affine_identity(), shear, 1.0f);
+    bool shear_ends = true;
+    for (unsigned i = 0; i < 12u; ++i) shear_ends = shear_ends && near(shear_end[i], shear[i], 1e-4f);
+    check(shear_ends, "shear interpolation ends at its input");
+    // An envelope blend of two joints (a sum of rotations, not orthogonal)
+    // turning keeps its size: no shrink at mid-rotation.
+    Affine34 blend_a{}, blend_b{};
+    for (unsigned i = 0; i < 12u; ++i) {
+        blend_a[i] = 0.5f * rotation_y(0.0f, 0.0f, 0.0f, 0.0f)[i] + 0.5f * rotation_x(0.6f)[i];
+        blend_b[i] = 0.5f * rotation_y(1.0f, 0.0f, 0.0f, 0.0f)[i] + 0.5f * rotation_x(0.6f)[i];
+    }
+    const Affine34 blend_mid = affine_interpolate(blend_a, blend_b, 0.5f);
+    const auto column_length = [](const Affine34& m, unsigned c) {
+        return std::sqrt(m[c] * m[c] + m[4u + c] * m[4u + c] + m[8u + c] * m[8u + c]);
+    };
+    const float size_a = column_length(blend_a, 0u), size_b = column_length(blend_b, 0u);
+    check(column_length(blend_mid, 0u) > std::min(size_a, size_b) - 1e-3f, "a blended joint matrix does not shrink");
     // 180 degree flip stays a rotation (no collapse through the origin).
     const Affine34 flip = rotation_y(3.1415926f, 0.0f, 0.0f, 0.0f);
     const Affine34 half = affine_interpolate(affine_identity(), flip, 0.5f);

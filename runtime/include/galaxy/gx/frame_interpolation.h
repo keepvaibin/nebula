@@ -92,6 +92,15 @@ void normal_motion(const Affine34* a, const Affine34& b, const CameraMotion& cam
 // atlas cell) and shows b. t = 0 is a and t = 1 is b exactly.
 inline constexpr float kTexStepLimit = 0.25f;
 [[nodiscard]] float tex_word_at(float a, float b, bool translation, float t) noexcept;
+// One texture matrix (3 rows of 4) at t, decided as a whole. `spatial`
+// (generated from position, normal or binormals: projection, environment
+// and shadow maps): every element lerps. Otherwise (fed by texture
+// coordinates) translations unwrap by whole repeats and the matrix lerps,
+// unless any element steps (an atlas cell, a scale jump): then it shows b.
+void tex_matrix_at(const float* a, const float* b, bool spatial, float t, float* out) noexcept;
+// A regular texgen (XF 0x1040 + i word) whose source row is the position,
+// normal or a binormal.
+[[nodiscard]] bool texgen_spatial(std::uint32_t texgen) noexcept;
 
 inline constexpr unsigned kXfPaletteWords = 0x680u;
 inline constexpr unsigned kXfNormalBase = 0x400u;
@@ -111,8 +120,12 @@ struct PaletteMotion {
     bool split = false;              // lights interpolate in world space
     std::uint32_t snapped = 0;
 };
+// Only the PNMTX slots in `position_mask` and the normal matrices in
+// `normal_mask` (bit k: slot k) are decomposed: the slots its draws can read.
+inline constexpr std::uint16_t kAllPaletteSlots = 0x3FFu;
 void palette_motion(const std::uint32_t* a, const std::uint32_t* b, const CameraMotion& camera,
-                    bool orthographic, PaletteMotion& out) noexcept;
+                    bool orthographic, PaletteMotion& out, std::uint16_t position_mask = kAllPaletteSlots,
+                    std::uint16_t normal_mask = kAllPaletteSlots) noexcept;
 // Writes the palette at t: b's words with every changed part interpolated.
 void palette_at(const PaletteMotion& m, const std::uint32_t* a, const std::uint32_t* b,
                 const CameraMotion& camera, const Affine34& camera_t, float t,

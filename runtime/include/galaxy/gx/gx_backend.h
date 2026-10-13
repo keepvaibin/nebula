@@ -746,10 +746,14 @@ private:
         bool projection_moves = false;
     };
     std::vector<InterpRecordMotion> interp_moving_;
+    std::vector<InterpRecordMotion> interp_pending_;  // classification scratch
     struct InterpPaletteMotion {
         std::int32_t shadow = -1;         // palette shadow of the playing scene
         std::int32_t before = -1;         // of the scene before, or -1
         std::int32_t next = -1;           // next entry of the same shadow
+        std::uint16_t position_mask = 0;  // PNMTX slots its records read
+        std::uint16_t normal_mask = 0;    // normal matrices its records read
+        bool orthographic = false;
         PaletteMotion motion{};
         std::uint32_t base = 0;           // this sub-frame's upload (mtx_palette_base)
         std::uint64_t uploaded = 0;       // interp_subframe_serial_ of `base`

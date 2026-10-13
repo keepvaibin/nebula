@@ -7234,6 +7234,7 @@ bool GxBackend::render_interp_subframe(float t) {
         interp_sequence_.classified = true;
         interp_record_vas_.assign(count, 0u);
         interp_moving_.clear();
+        interp_pending_.clear();
         interp_palette_motions_.clear();
         interp_palette_first_.assign(scene.palette_count, -1);
         static const CameraCutLimits cut_limits{};
@@ -7333,16 +7334,41 @@ bool GxBackend::render_interp_subframe(float t) {
                     entry.shadow = shadow;
                     entry.before = pair_before;
                     entry.next = interp_palette_first_[static_cast<std::size_t>(shadow)];
+                    entry.orthographic = orthographic;
                     interp_palette_first_[static_cast<std::size_t>(shadow)] = index;
-                    const std::uint32_t* now_words =
-                        scene.palettes.data() + static_cast<std::size_t>(shadow) * kWords;
-                    palette_motion(before_words, now_words, interp_camera_, orthographic, entry.motion);
-                    interp_snapped_ += entry.motion.snapped;
-                    ++interp_palette_decompositions_;
                 }
-                if (interp_palette_motions_[static_cast<std::size_t>(index)].motion.any_changed) {
-                    motion.palette = index;
+                // The slots this record reads: every one for per-vertex
+                // matrices; for an inline draw, the normal matrix of its
+                // matrix index when it is lit (lights and texture rows are
+                // taken whole).
+                InterpPaletteMotion& entry = interp_palette_motions_[static_cast<std::size_t>(index)];
+                if (scene.per_vertex[r] != 0u) {
+                    entry.position_mask = kAllPaletteSlots;
+                    entry.normal_mask = kAllPaletteSlots;
+                } else if ((now.flags & 0x02u) != 0u) {
+                    const std::uint32_t slot = (now.matrix_index_a & 0x3Fu) / 3u;
+                    if (slot < 10u) entry.normal_mask |= static_cast<std::uint16_t>(1u << slot);
                 }
+                motion.palette = index;
+            }
+            if (motion.position_moves || motion.tex_moves || motion.projection_moves ||
+                motion.colour_moves || motion.palette >= 0) {
+                interp_pending_.push_back(motion);
+            }
+        }
+        // Each palette pair once, with the slots its records read.
+        for (InterpPaletteMotion& entry : interp_palette_motions_) {
+            const std::uint32_t* now_words =
+                scene.palettes.data() + static_cast<std::size_t>(entry.shadow) * kWords;
+            palette_motion(before_palette(entry.before), now_words, interp_camera_, entry.orthographic,
+                           entry.motion, entry.position_mask, entry.normal_mask);
+            interp_snapped_ += entry.motion.snapped;
+            ++interp_palette_decompositions_;
+        }
+        for (InterpRecordMotion& motion : interp_pending_) {
+            if (motion.palette >= 0 &&
+                !interp_palette_motions_[static_cast<std::size_t>(motion.palette)].motion.any_changed) {
+                motion.palette = -1;
             }
             if (motion.position_moves || motion.tex_moves || motion.projection_moves ||
                 motion.colour_moves || motion.palette >= 0) {
@@ -7422,15 +7448,15 @@ bool GxBackend::render_interp_subframe(float t) {
             std::memcpy(built.inline_pos_matrix, at.data(), sizeof(built.inline_pos_matrix));
         }
         if (moving.tex_moves && before != nullptr && (parts & 2u) != 0u) {
-            const auto lerp_rows = [t](const float* a, const float* b, float* out, std::size_t words) {
-                for (std::size_t i = 0; i < words; ++i) {
-                    out[i] = tex_word_at(a[i], b[i], (i & 3u) == 3u, t);
-                }
-            };
-            lerp_rows(&before->inline_tex_matrices[0][0][0], &recorded.inline_tex_matrices[0][0][0],
-                      &built.inline_tex_matrices[0][0][0], kMaxTexGens * 12u);
-            lerp_rows(&before->inline_post_matrices[0][0][0], &recorded.inline_post_matrices[0][0][0],
-                      &built.inline_post_matrices[0][0][0], kMaxTexGens * 12u);
+            // Per texgen: projection and environment maps lerp whole; texture
+            // coordinate matrices scroll (wrap-aware) or step.
+            for (unsigned i = 0; i < kMaxTexGens; ++i) {
+                const bool spatial = texgen_spatial(recorded.texgen_config[i][0]);
+                tex_matrix_at(&before->inline_tex_matrices[i][0][0], &recorded.inline_tex_matrices[i][0][0],
+                              spatial, t, &built.inline_tex_matrices[i][0][0]);
+                tex_matrix_at(&before->inline_post_matrices[i][0][0], &recorded.inline_post_matrices[i][0][0],
+                              spatial, t, &built.inline_post_matrices[i][0][0]);
+            }
         }
         if (moving.colour_moves && before != nullptr && (parts & 0x20u) != 0u) {
             channel_colours_at(*before, recorded, t, built);

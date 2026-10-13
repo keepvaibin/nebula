@@ -138,6 +138,27 @@ void test_moving_object_and_teleport() {
     check(near(mid[0] / column, spun[0] / 2.0f, 1e-3f), "a flipped sprite shows b's rotation");
 }
 
+void test_tex_matrices() {
+    // A projection map moving with its object: every element lerps.
+    const float pa[12]{0.5f, 0.0f, 0.0f, 3.0f, 0.0f, 0.5f, 0.0f, -2.0f, 0.0f, 0.0f, 1.0f, 0.0f};
+    const float pb[12]{0.45f, 0.1f, 0.0f, 4.5f, -0.1f, 0.45f, 0.0f, -0.4f, 0.0f, 0.0f, 1.0f, 0.0f};
+    float out[12];
+    tex_matrix_at(pa, pb, true, 0.5f, out);
+    check(near(out[3], 3.75f) && near(out[7], -1.2f) && near(out[1], 0.05f), "a spatial matrix lerps whole");
+    // The same pair as a texture-coordinate matrix: the translation steps, so all of it shows b.
+    tex_matrix_at(pa, pb, false, 0.5f, out);
+    check(out[3] == pb[3] && out[1] == pb[1], "a stepping coordinate matrix shows b whole");
+    // A scrolling coordinate matrix wraps.
+    const float sa[12]{1.0f, 0.0f, 0.0f, 0.95f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f};
+    const float sb[12]{1.0f, 0.0f, 0.0f, 0.05f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f};
+    tex_matrix_at(sa, sb, false, 0.5f, out);
+    check(near(out[3], 0.0f, 1e-4f) || near(out[3], 1.0f, 1e-4f), "a scroll wraps forward");
+    // Texgen sources.
+    check(texgen_spatial(0u << 7u) && texgen_spatial(1u << 7u) && !texgen_spatial(5u << 7u) &&
+              !texgen_spatial((1u << 4u) | (0u << 7u)),
+          "position and normal texgens are spatial; texture coordinates and emboss are not");
+}
+
 void test_tex_words() {
     check(tex_word_at(150.25f, 151.25f, true, 0.0f) == 150.25f, "t=0 is a exactly (integer scroll)");
     check(tex_word_at(0.0f, 0.4f, true, 1.0f) == 0.4f, "t=1 is b exactly");
@@ -237,6 +258,7 @@ void test_colours() {
 
 int main() {
     test_colours();
+    test_tex_matrices();
     test_camera_endpoints_and_arc();
     test_camera_cut();
     test_static_object_under_moving_camera();
