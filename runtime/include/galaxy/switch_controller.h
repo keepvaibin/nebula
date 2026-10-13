@@ -86,8 +86,15 @@ struct DecodedState {
     bool simple = false;             // 0x3F report: 16-bit sticks, Y grows down
     bool left_trigger = false;
     bool right_trigger = false;
+    // PlayStation and Steam decoders: `axes` (PadAxis order, sticks up positive,
+    // triggers 0..1, no dead zone) replace stick_raw and the trigger flags.
+    bool normalized = false;
+    std::array<float, kPadAxisCount> axes{};
     std::size_t imu_count = 0;
     std::array<ImuSample, 3> imu{};
+    // Seconds from the previous IMU sample to imu[0] by the controller's own
+    // clock (0: unknown, the host clock applies). One sample per report.
+    float imu_dt = 0.0f;
 };
 
 // Switch Pro Controller input report (byte 0 = report id). Full state (0x30)

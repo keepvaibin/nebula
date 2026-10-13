@@ -1,8 +1,10 @@
 #pragma once
 
 // Remappable controls: one model for every scheme (keyboard+mouse, Xbox via
-// XInput, Switch Pro Controller, Switch 2 Pro Controller). Each Wii input
-// (target) holds up to kBindingSlots physical inputs (sources). Persisted in
+// XInput, Switch Pro Controller, Switch 2 Pro Controller, PlayStation
+// controllers, Steam Controller). A scheme is a controller family: DualShock 4,
+// DualSense and DualSense Edge share `playstation`. Each Wii input (target)
+// holds up to kBindingSlots physical inputs (sources). Persisted in
 // runtime_settings.ini as one `bind.<scheme>.<target>=<source>, ...` line per
 // target and `tune.<scheme>.<name>=<value>` lines for stick/motion tuning.
 
@@ -20,8 +22,10 @@ enum class ControlScheme : std::uint8_t {
     Xbox = 1,
     SwitchPro = 2,
     SwitchPro2 = 3,
+    PlayStation = 4,
+    Steam = 5,
 };
-inline constexpr std::size_t kControlSchemeCount = 4;
+inline constexpr std::size_t kControlSchemeCount = 6;
 
 enum class WiiTarget : std::uint8_t {
     A,
@@ -101,8 +105,9 @@ struct BindingTable {
 
 // Unified gamepad state. Bits 0..15 are the XInput wButtons layout, so an
 // XINPUT_GAMEPAD word is a valid button mask; the two reserved XInput bits
-// carry Home/Capture and bits 16..18 the Pro Controller 2 extras. Face
-// buttons are positional: South is Xbox A and Nintendo B.
+// carry Home/Capture and bits 16..22 the extra buttons of the Pro Controller 2,
+// the DualSense family and the Steam Controller. Face buttons are positional:
+// South is Xbox A, Nintendo B and PlayStation Cross.
 namespace pad {
 inline constexpr unsigned kDpadUpBit = 0;
 inline constexpr unsigned kDpadDownBit = 1;
@@ -114,16 +119,20 @@ inline constexpr unsigned kLeftStickBit = 6;
 inline constexpr unsigned kRightStickBit = 7;
 inline constexpr unsigned kLeftShoulderBit = 8;   // LB / L
 inline constexpr unsigned kRightShoulderBit = 9;  // RB / R
-inline constexpr unsigned kHomeBit = 10;
-inline constexpr unsigned kCaptureBit = 11;
+inline constexpr unsigned kHomeBit = 10;     // Guide, Home, PS button, Steam button
+inline constexpr unsigned kCaptureBit = 11;  // Capture, touchpad click, quick access button
 inline constexpr unsigned kSouthBit = 12;
 inline constexpr unsigned kEastBit = 13;
 inline constexpr unsigned kWestBit = 14;
 inline constexpr unsigned kNorthBit = 15;
-inline constexpr unsigned kGripLeftBit = 16;   // Pro Controller 2 GL
-inline constexpr unsigned kGripRightBit = 17;  // Pro Controller 2 GR
-inline constexpr unsigned kChatBit = 18;       // Pro Controller 2 C
-inline constexpr unsigned kButtonBitCount = 19;
+inline constexpr unsigned kGripLeftBit = 16;   // Pro Controller 2 GL, Edge left paddle, Steam L4
+inline constexpr unsigned kGripRightBit = 17;  // Pro Controller 2 GR, Edge right paddle, Steam R4
+inline constexpr unsigned kChatBit = 18;       // Pro Controller 2 C, DualSense mute
+inline constexpr unsigned kGripLeft2Bit = 19;   // Steam L5
+inline constexpr unsigned kGripRight2Bit = 20;  // Steam R5
+inline constexpr unsigned kLeftPadBit = 21;     // Steam left trackpad click
+inline constexpr unsigned kRightPadBit = 22;    // Steam right trackpad click
+inline constexpr unsigned kButtonBitCount = 23;
 [[nodiscard]] constexpr std::uint32_t bit(unsigned index) noexcept {
     return 1u << index;
 }
@@ -210,7 +219,27 @@ struct ControlsConfig {
     return s != ControlScheme::Keyboard;
 }
 [[nodiscard]] constexpr bool scheme_has_motion(ControlScheme s) noexcept {
-    return s == ControlScheme::SwitchPro || s == ControlScheme::SwitchPro2;
+    return s == ControlScheme::SwitchPro || s == ControlScheme::SwitchPro2 ||
+           s == ControlScheme::PlayStation || s == ControlScheme::Steam;
+}
+// The unified button bits a scheme's controllers have; the others never bind.
+// Xbox has no readable Guide/Share (XInput), the Pro Controller has no grips.
+[[nodiscard]] constexpr std::uint32_t scheme_button_mask(ControlScheme s) noexcept {
+    constexpr std::uint32_t kBase = (1u << pad::kHomeBit) - 1u;
+    constexpr std::uint32_t kHomeCapture = pad::bit(pad::kHomeBit) | pad::bit(pad::kCaptureBit);
+    constexpr std::uint32_t kFace = 0xf000u;
+    constexpr std::uint32_t kGrips = pad::bit(pad::kGripLeftBit) | pad::bit(pad::kGripRightBit);
+    switch (s) {
+    case ControlScheme::Keyboard: return 0u;
+    case ControlScheme::Xbox: return kBase | kFace;
+    case ControlScheme::SwitchPro: return kBase | kHomeCapture | kFace;
+    case ControlScheme::SwitchPro2: return kBase | kHomeCapture | kFace | kGrips | pad::bit(pad::kChatBit);
+    case ControlScheme::PlayStation: return kBase | kHomeCapture | kFace | kGrips | pad::bit(pad::kChatBit);
+    case ControlScheme::Steam:
+        return kBase | kHomeCapture | kFace | kGrips | pad::bit(pad::kGripLeft2Bit) |
+               pad::bit(pad::kGripRight2Bit) | pad::bit(pad::kLeftPadBit) | pad::bit(pad::kRightPadBit);
+    }
+    return 0u;
 }
 
 [[nodiscard]] BindingTable default_binding_table(ControlScheme scheme);

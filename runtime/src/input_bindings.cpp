@@ -47,9 +47,9 @@ constexpr std::array<const char*, kWiiTargetCount> kTargetLabels{
 };
 
 constexpr std::array<const char*, kControlSchemeCount> kSchemeIds{
-    "keyboard", "xbox", "switch_pro", "switch_pro2"};
+    "keyboard", "xbox", "switch_pro", "switch_pro2", "playstation", "steam"};
 constexpr std::array<const char*, kControlSchemeCount> kSchemeLabels{
-    "KEYBOARD", "XBOX", "SWITCH PRO", "PRO CONTROLLER 2"};
+    "KEYBOARD", "XBOX", "SWITCH PRO", "SWITCH 2 PRO", "PLAYSTATION", "STEAM"};
 
 struct NamedKey {
     std::uint8_t vk;
@@ -80,10 +80,20 @@ constexpr std::array<const char*, kMouseButtonCount> kMouseNames{
 
 constexpr std::array<const char*, pad::kButtonBitCount> kXboxButtonNames{
     "DpadUp", "DpadDown", "DpadLeft", "DpadRight", "Menu", "View", "LS", "RS",
-    "LB", "RB", "Guide", "Share", "A", "B", "X", "Y", "GL", "GR", "C"};
+    "LB", "RB", "Guide", "Share", "A", "B", "X", "Y", "GL", "GR", "C",
+    "GL2", "GR2", "LPad", "RPad"};
 constexpr std::array<const char*, pad::kButtonBitCount> kSwitchButtonNames{
     "DpadUp", "DpadDown", "DpadLeft", "DpadRight", "Plus", "Minus", "LS", "RS",
-    "L", "R", "Home", "Capture", "B", "A", "Y", "X", "GL", "GR", "C"};
+    "L", "R", "Home", "Capture", "B", "A", "Y", "X", "GL", "GR", "C",
+    "GL2", "GR2", "LPad", "RPad"};
+constexpr std::array<const char*, pad::kButtonBitCount> kPlayStationButtonNames{
+    "DpadUp", "DpadDown", "DpadLeft", "DpadRight", "Options", "Share", "L3", "R3",
+    "L1", "R1", "PS", "Touchpad", "Cross", "Circle", "Square", "Triangle",
+    "LeftPaddle", "RightPaddle", "Mute", "GL2", "GR2", "LPad", "RPad"};
+constexpr std::array<const char*, pad::kButtonBitCount> kSteamButtonNames{
+    "DpadUp", "DpadDown", "DpadLeft", "DpadRight", "Menu", "View", "LS", "RS",
+    "LB", "RB", "Steam", "QAM", "A", "B", "X", "Y", "L4", "R4", "C",
+    "L5", "R5", "LPad", "RPad"};
 
 constexpr std::array<const char*, 4> kStickAxisNames{"LX", "LY", "RX", "RY"};
 
@@ -106,13 +116,22 @@ std::string_view trim(std::string_view text) noexcept {
 }
 
 const std::array<const char*, pad::kButtonBitCount>& button_names(ControlScheme scheme) noexcept {
-    return scheme == ControlScheme::Xbox ? kXboxButtonNames : kSwitchButtonNames;
+    switch (scheme) {
+    case ControlScheme::PlayStation: return kPlayStationButtonNames;
+    case ControlScheme::Steam: return kSteamButtonNames;
+    case ControlScheme::Xbox: return kXboxButtonNames;
+    default: return kSwitchButtonNames;
+    }
 }
 
 const char* trigger_name(ControlScheme scheme, PadAxis axis) noexcept {
     const bool left = axis == PadAxis::LeftTrigger;
-    if (scheme == ControlScheme::Xbox) return left ? "LT" : "RT";
-    return left ? "ZL" : "ZR";
+    switch (scheme) {
+    case ControlScheme::Xbox:
+    case ControlScheme::Steam: return left ? "LT" : "RT";
+    case ControlScheme::PlayStation: return left ? "L2" : "R2";
+    default: return left ? "ZL" : "ZR";
+    }
 }
 
 std::string format_key(std::uint8_t vk) {
@@ -225,9 +244,44 @@ std::string format_float_c(float value) {
 constexpr const char* kMotionNames[] = {"off", "remote", "nunchuk"};
 static_assert(SchemeTuning{}.rumble == rumble::kDefaultStrength);
 
+bool is_gyro_pad_scheme(ControlScheme scheme) noexcept {
+    return scheme == ControlScheme::PlayStation || scheme == ControlScheme::Steam;
+}
+
+// PlayStation and Steam controllers: the Switch gyro layout with the Xbox face
+// positions (South confirms and jumps, East backs out of menus).
+BindingTable gyro_pad_binding_table() {
+    BindingTable table{};
+    using T = WiiTarget;
+    set(table, T::A, {button(pad::kSouthBit)});
+    set(table, T::JumpBack, {button(pad::kEastBit)});
+    set(table, T::B, {button(pad::kLeftShoulderBit)});
+    set(table, T::Plus, {button(pad::kStartBit)});
+    set(table, T::Minus, {button(pad::kBackBit)});
+    set(table, T::Home, {button(pad::kHomeBit)});
+    set(table, T::DpadUp, {button(pad::kDpadUpBit), axis_pos(PadAxis::RightY)});
+    set(table, T::DpadDown, {button(pad::kDpadDownBit), axis_neg(PadAxis::RightY)});
+    set(table, T::DpadLeft, {button(pad::kDpadLeftBit), axis_neg(PadAxis::RightX)});
+    set(table, T::DpadRight, {button(pad::kDpadRightBit), axis_pos(PadAxis::RightX)});
+    set(table, T::StickUp, {axis_pos(PadAxis::LeftY)});
+    set(table, T::StickDown, {axis_neg(PadAxis::LeftY)});
+    set(table, T::StickLeft, {axis_neg(PadAxis::LeftX)});
+    set(table, T::StickRight, {axis_pos(PadAxis::LeftX)});
+    set(table, T::C, {button(pad::kLeftStickBit)});
+    set(table, T::Z, {axis_pos(PadAxis::LeftTrigger)});
+    set(table, T::Shake, {button(pad::kWestBit), button(pad::kNorthBit), axis_pos(PadAxis::RightTrigger)});
+    set(table, T::PointerUp, {axis_pos(PadAxis::RightY)});
+    set(table, T::PointerDown, {axis_neg(PadAxis::RightY)});
+    set(table, T::PointerLeft, {axis_neg(PadAxis::RightX)});
+    set(table, T::PointerRight, {axis_pos(PadAxis::RightX)});
+    set(table, T::PointerRecenter, {button(pad::kRightShoulderBit)});
+    return table;
+}
+
 }  // namespace
 
 BindingTable legacy_binding_table(ControlScheme scheme) {
+    if (is_gyro_pad_scheme(scheme)) return gyro_pad_binding_table();
     BindingTable table{};
     using T = WiiTarget;
     if (scheme == ControlScheme::Keyboard) {
@@ -289,7 +343,7 @@ BindingTable legacy_binding_table(ControlScheme scheme) {
 // Default bindings of controls version 2, kept for migration.
 BindingTable version2_binding_table(ControlScheme scheme) {
     BindingTable table = legacy_binding_table(scheme);
-    if (scheme == ControlScheme::Keyboard) {
+    if (scheme == ControlScheme::Keyboard || is_gyro_pad_scheme(scheme)) {
         return table;
     }
     using T = WiiTarget;
@@ -317,7 +371,7 @@ BindingTable version2_binding_table(ControlScheme scheme) {
 // Default bindings of controls version 3, kept for migration.
 BindingTable version3_binding_table(ControlScheme scheme) {
     BindingTable table = version2_binding_table(scheme);
-    if (scheme == ControlScheme::Keyboard) {
+    if (scheme == ControlScheme::Keyboard || is_gyro_pad_scheme(scheme)) {
         return table;
     }
     using T = WiiTarget;
@@ -335,7 +389,7 @@ BindingTable version3_binding_table(ControlScheme scheme) {
 // Xbox: the pointer).
 BindingTable default_binding_table(ControlScheme scheme) {
     BindingTable table = version3_binding_table(scheme);
-    if (scheme == ControlScheme::Keyboard) {
+    if (scheme == ControlScheme::Keyboard || is_gyro_pad_scheme(scheme)) {
         return table;
     }
     using T = WiiTarget;
@@ -365,6 +419,8 @@ SchemeTuning legacy_scheme_tuning(ControlScheme scheme) {
         break;
     case ControlScheme::SwitchPro:
     case ControlScheme::SwitchPro2:
+    case ControlScheme::PlayStation:
+    case ControlScheme::Steam:
         tuning.stick_deadzone = 0.12f;
         tuning.pointer_deadzone = 0.12f;
         tuning.pointer_speed = 2.4f;
@@ -509,6 +565,7 @@ std::optional<InputSource> parse_input_source(ControlScheme scheme, std::string_
     for (unsigned i = 0; i < names.size(); ++i) {
         if (iequals(text, names[i])) return button(i);
     }
+    if (scheme == ControlScheme::PlayStation && iequals(text, "Create")) return button(pad::kBackBit);
     for (PadAxis axis : {PadAxis::LeftTrigger, PadAxis::RightTrigger}) {
         if (iequals(text, trigger_name(scheme, axis))) return axis_pos(axis);
     }
@@ -569,14 +626,8 @@ bool binding_source_allowed(ControlScheme scheme, WiiTarget target, InputSource 
         return scheme == ControlScheme::Keyboard && source.code < kMouseButtonCount &&
                !wii_target_is_analog(target);
     case SourceKind::Button:
-        if (scheme == ControlScheme::Keyboard || source.code >= pad::kButtonBitCount) return false;
-        if (scheme == ControlScheme::Xbox &&
-            (source.code == pad::kHomeBit || source.code == pad::kCaptureBit ||
-             source.code >= pad::kGripLeftBit)) {
-            return false;
-        }
-        if (scheme == ControlScheme::SwitchPro && source.code >= pad::kGripLeftBit) return false;
-        return true;
+        return source.code < pad::kButtonBitCount &&
+               (scheme_button_mask(scheme) & pad::bit(source.code)) != 0u;
     case SourceKind::AxisPositive:
         return scheme != ControlScheme::Keyboard && source.code < kPadAxisCount;
     case SourceKind::AxisNegative:

@@ -69,7 +69,8 @@ void test_names_round_trip() {
         expect(parsed.has_value() && *parsed == source, "virtual key name round trip");
     }
     // Pad names per scheme.
-    for (ControlScheme scheme : {ControlScheme::Xbox, ControlScheme::SwitchPro, ControlScheme::SwitchPro2}) {
+    for (ControlScheme scheme : {ControlScheme::Xbox, ControlScheme::SwitchPro, ControlScheme::SwitchPro2,
+                                 ControlScheme::PlayStation, ControlScheme::Steam}) {
         for (unsigned bit = 0; bit < pad::kButtonBitCount; ++bit) {
             const InputSource source{SourceKind::Button, static_cast<std::uint8_t>(bit)};
             const auto parsed = parse_input_source(scheme, format_input_source(scheme, source));
@@ -1294,6 +1295,162 @@ void test_defaults_and_migration() {
            "a changed version-2 binding stays");
 }
 
+std::string bindings_text(ControlScheme scheme, WiiTarget target) {
+    return format_target_bindings(scheme, default_binding_table(scheme)[target]);
+}
+
+// PlayStation (DualShock 4, DualSense, DualSense Edge) and Steam Controller schemes.
+void test_playstation_and_steam_schemes() {
+    expect(kControlSchemeCount == 6, "six schemes");
+    expect(std::string(control_scheme_id(ControlScheme::PlayStation)) == "playstation" &&
+               std::string(control_scheme_id(ControlScheme::Steam)) == "steam",
+           "scheme ids");
+    expect(parse_control_scheme("playstation") == ControlScheme::PlayStation &&
+               parse_control_scheme("steam") == ControlScheme::Steam,
+           "scheme ids parse");
+    expect(scheme_is_gamepad(ControlScheme::PlayStation) && scheme_is_gamepad(ControlScheme::Steam) &&
+               scheme_has_motion(ControlScheme::PlayStation) && scheme_has_motion(ControlScheme::Steam) &&
+               !scheme_has_motion(ControlScheme::Xbox),
+           "family traits");
+
+    expect(bindings_text(ControlScheme::PlayStation, WiiTarget::A) == "Cross" &&
+               bindings_text(ControlScheme::PlayStation, WiiTarget::JumpBack) == "Circle" &&
+               bindings_text(ControlScheme::PlayStation, WiiTarget::B) == "L1" &&
+               bindings_text(ControlScheme::PlayStation, WiiTarget::Z) == "L2" &&
+               bindings_text(ControlScheme::PlayStation, WiiTarget::C) == "L3" &&
+               bindings_text(ControlScheme::PlayStation, WiiTarget::Shake) == "Square, Triangle, R2" &&
+               bindings_text(ControlScheme::PlayStation, WiiTarget::PointerRecenter) == "R1" &&
+               bindings_text(ControlScheme::PlayStation, WiiTarget::Plus) == "Options" &&
+               bindings_text(ControlScheme::PlayStation, WiiTarget::Minus) == "Share" &&
+               bindings_text(ControlScheme::PlayStation, WiiTarget::Home) == "PS" &&
+               bindings_text(ControlScheme::PlayStation, WiiTarget::DpadUp) == "DpadUp, RY+",
+           "PlayStation defaults");
+    expect(bindings_text(ControlScheme::Steam, WiiTarget::A) == "A" &&
+               bindings_text(ControlScheme::Steam, WiiTarget::JumpBack) == "B" &&
+               bindings_text(ControlScheme::Steam, WiiTarget::B) == "LB" &&
+               bindings_text(ControlScheme::Steam, WiiTarget::Z) == "LT" &&
+               bindings_text(ControlScheme::Steam, WiiTarget::Shake) == "X, Y, RT" &&
+               bindings_text(ControlScheme::Steam, WiiTarget::PointerRecenter) == "RB" &&
+               bindings_text(ControlScheme::Steam, WiiTarget::Home) == "Steam",
+           "Steam defaults");
+    for (ControlScheme scheme : {ControlScheme::PlayStation, ControlScheme::Steam}) {
+        expect(legacy_binding_table(scheme) == default_binding_table(scheme) &&
+                   version2_binding_table(scheme) == default_binding_table(scheme) &&
+                   version3_binding_table(scheme) == default_binding_table(scheme),
+               "new schemes have no older defaults to migrate");
+        const SchemeTuning tuning = default_scheme_tuning(scheme);
+        expect(tuning.gyro_pointer && tuning.motion_shake == MotionShake::Remote && tuning.vibration &&
+                   tuning.pointer_hide_seconds == kDefaultPointerHideSeconds,
+               "new schemes start with the gyro pointer, shake and vibration on");
+        expect(sanitize_controls_config(default_controls_config()).tune(scheme).gyro_pointer,
+               "sanitising keeps the gyro of a motion scheme");
+    }
+
+    expect(parse_input_source(ControlScheme::PlayStation, "create") == InputSource{SourceKind::Button, pad::kBackBit},
+           "Create is the Share button");
+    expect(parse_input_source(ControlScheme::PlayStation, "R2") == InputSource{SourceKind::AxisPositive, 5} &&
+               !parse_input_source(ControlScheme::PlayStation, "ZR").has_value(),
+           "PlayStation trigger names");
+    expect(parse_input_source(ControlScheme::Steam, "L5") == InputSource{SourceKind::Button, pad::kGripLeft2Bit} &&
+               parse_input_source(ControlScheme::Steam, "RPad") == InputSource{SourceKind::Button, pad::kRightPadBit},
+           "Steam button names");
+
+    // Which buttons exist on which controller.
+    const auto allowed = [](ControlScheme scheme, unsigned bit_index) {
+        return binding_source_allowed(scheme, WiiTarget::A,
+                                      {SourceKind::Button, static_cast<std::uint8_t>(bit_index)});
+    };
+    expect(allowed(ControlScheme::PlayStation, pad::kCaptureBit) && allowed(ControlScheme::PlayStation, pad::kChatBit) &&
+               allowed(ControlScheme::PlayStation, pad::kGripLeftBit) &&
+               !allowed(ControlScheme::PlayStation, pad::kLeftPadBit) &&
+               !allowed(ControlScheme::PlayStation, pad::kGripLeft2Bit),
+           "PlayStation buttons");
+    expect(allowed(ControlScheme::Steam, pad::kLeftPadBit) && allowed(ControlScheme::Steam, pad::kGripRight2Bit) &&
+               allowed(ControlScheme::Steam, pad::kGripLeftBit) && !allowed(ControlScheme::Steam, pad::kChatBit),
+           "Steam buttons");
+    expect(!allowed(ControlScheme::Xbox, pad::kLeftPadBit) && !allowed(ControlScheme::SwitchPro2, pad::kLeftPadBit) &&
+               allowed(ControlScheme::SwitchPro2, pad::kChatBit) && !allowed(ControlScheme::SwitchPro, pad::kGripLeftBit) &&
+               !allowed(ControlScheme::Xbox, pad::kHomeBit) && allowed(ControlScheme::SwitchPro, pad::kHomeBit) &&
+               !allowed(ControlScheme::Keyboard, pad::kSouthBit) && !allowed(ControlScheme::Steam, pad::kButtonBitCount),
+           "the other schemes keep their button sets");
+    for (std::size_t s = 0; s < kControlSchemeCount; ++s) {
+        const auto scheme = static_cast<ControlScheme>(s);
+        for (unsigned index = 0; index < pad::kButtonBitCount; ++index) {
+            const InputSource source{SourceKind::Button, static_cast<std::uint8_t>(index)};
+            if (!binding_source_allowed(scheme, WiiTarget::A, source)) continue;
+            expect(parse_input_source(scheme, format_input_source(scheme, source)) == source,
+                   "every allowed button has a distinct name");
+        }
+    }
+
+    // Round trip, and a file from before the two schemes existed.
+    const auto apply_all = [](ControlsConfig& target, const std::string& text) {
+        std::size_t start = 0;
+        while (start < text.size()) {
+            const std::size_t end = text.find('\n', start);
+            const std::string line = text.substr(start, end - start);
+            start = end + 1u;
+            const std::size_t eq = line.find('=');
+            (void)apply_controls_setting(target, line.substr(0, eq), line.substr(eq + 1u));
+        }
+    };
+    ControlsConfig config = default_controls_config();
+    config.table(ControlScheme::PlayStation)[WiiTarget::A] = {};
+    add_binding(config.table(ControlScheme::PlayStation)[WiiTarget::A], {SourceKind::Button, pad::kCaptureBit});
+    config.table(ControlScheme::Steam)[WiiTarget::Z] = {};
+    add_binding(config.table(ControlScheme::Steam)[WiiTarget::Z], {SourceKind::Button, pad::kLeftPadBit});
+    config.tune(ControlScheme::PlayStation).rumble = 80;
+    config.tune(ControlScheme::Steam).gyro_sensitivity = 2.0f;
+    const std::string text = format_controls_settings(config);
+    expect(text.find("bind.playstation.a=Touchpad\n") != std::string::npos &&
+               text.find("bind.steam.z=LPad\n") != std::string::npos &&
+               text.find("tune.playstation.rumble=80\n") != std::string::npos &&
+               text.find("tune.steam.gyro_sensitivity=2\n") != std::string::npos,
+           "PlayStation and Steam lines are stable text");
+    ControlsConfig parsed = default_controls_config();
+    apply_all(parsed, text);
+    expect(parsed == config, "the new schemes survive the ini round trip");
+
+    ControlsConfig old_file = default_controls_config();
+    apply_all(old_file, "bind.xbox.a=B\nbind.switch_pro.b=Y\ntune.switch_pro2.rumble=30\n");
+    expect(old_file.table(ControlScheme::Xbox)[WiiTarget::A][0] == InputSource{SourceKind::Button, pad::kEastBit} &&
+               old_file.tune(ControlScheme::SwitchPro2).rumble == 30u,
+           "lines of the older schemes apply");
+    expect(old_file.table(ControlScheme::PlayStation) == default_binding_table(ControlScheme::PlayStation) &&
+               old_file.table(ControlScheme::Steam) == default_binding_table(ControlScheme::Steam) &&
+               old_file.tune(ControlScheme::PlayStation) == default_scheme_tuning(ControlScheme::PlayStation),
+           "a file without the new schemes leaves them at their defaults");
+    const ControlsConfig before_migration = old_file;
+    (void)migrate_legacy_controls(old_file, 1u);
+    expect(old_file.table(ControlScheme::PlayStation) == before_migration.table(ControlScheme::PlayStation) &&
+               old_file.table(ControlScheme::Steam) == before_migration.table(ControlScheme::Steam),
+           "migration leaves the new schemes alone");
+    ControlsConfig unknown = default_controls_config();
+    apply_all(unknown, "bind.nes.a=A\ntune.nes.rumble=20\n");
+    expect(unknown == default_controls_config(), "unknown scheme ids are skipped");
+
+    // The overlay chord and capture work on the new bits.
+    expect(settings_pad_buttons(ControlScheme::PlayStation, pad::bit(pad::kSouthBit)) == XINPUT_GAMEPAD_A &&
+               settings_pad_buttons(ControlScheme::Steam, pad::bit(pad::kSouthBit)) == XINPUT_GAMEPAD_A,
+           "Cross and A confirm: no face swap off Nintendo controllers");
+    PadSample before{};
+    before.connected = true;
+    PadSample now = before;
+    now.buttons = pad::bit(pad::kRightPadBit);
+    const auto captured = detect_pad_capture(before, now);
+    expect(captured && *captured == InputSource{SourceKind::Button, pad::kRightPadBit},
+           "the trackpad click can be captured");
+
+    PadSample sample{};
+    sample.connected = true;
+    sample.scheme = ControlScheme::PlayStation;
+    sample.buttons = pad::bit(pad::kSouthBit) | pad::bit(pad::kLeftShoulderBit);
+    const LogicalInput logic =
+        evaluate_pad_bindings(default_binding_table(ControlScheme::PlayStation), sample, 0.4f);
+    expect(logic.held(WiiTarget::A) && logic.held(WiiTarget::B) && !logic.held(WiiTarget::JumpBack),
+           "Cross is Wii A and L1 is Wii B");
+}
+
 void test_kpad_dots_stable() {
     // A still pointer produces identical IR dots report after report, and a
     // sub-unit move never jumps more than one raw unit.
@@ -1405,6 +1562,7 @@ int main(int argc, char** argv) {
     test_rumble_gate();
     test_tilt();
     test_defaults_and_migration();
+    test_playstation_and_steam_schemes();
     test_kpad_dots_stable();
     if (g_failures != 0) {
         std::cerr << g_failures << " controls test(s) failed\n";
