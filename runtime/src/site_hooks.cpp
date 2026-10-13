@@ -49,6 +49,42 @@ void fit_rmge01_scenario_sky(PpcContext* context, GuestMemoryV1* memory,
     }
 }
 
+bool rmge01_guest_object(std::uint32_t address) noexcept {
+    return ((address >= 0x80000000u && address < 0x81800000u) ||
+            (address >= 0x90000000u && address < 0x94000000u)) &&
+           (address & 3u) == 0u;
+}
+
+// ScenarioSelectScene builds the perspective of its own CameraContext once, at
+// boot, with the aspect in force then; a later aspect never reaches it, and the
+// star select drew 16:9 into every other aspect. Each frame its stars and sky
+// animate, the projection's x scale is set from its y scale and the current
+// aspect. GameSystem (0x806A1228) +0x24 scene controller, +0xBC
+// ScenarioSelectScene, +0x30 CameraContext, projection (row-major 4x4) at +0x6C.
+void fit_rmge01_scenario_camera(GuestMemoryV1* memory, const NativeServicesV1* services,
+                                std::uint32_t pc) {
+    const auto policy = experimental_effective_guest_aspect(services);
+    if (policy && native_four_three(*policy)) return;
+    const double aspect = policy ? policy->content_aspect : kWiiContentAspect;
+    if (!(aspect > 0.0)) return;
+    std::uint32_t object = guest_load_u32(memory, 0x806A1228u, services, pc);
+    for (const std::uint32_t offset : {0x24u, 0xBCu, 0x30u}) {
+        if (!rmge01_guest_object(object)) return;
+        object = guest_load_u32(memory, object + offset, services, pc);
+    }
+    if (!rmge01_guest_object(object)) return;
+    const std::uint32_t projection = object + 0x6Cu;
+    const auto f32 = [&](std::uint32_t address) {
+        return std::bit_cast<float>(guest_load_u32(memory, address, services, pc));
+    };
+    const float y_scale = f32(projection + 0x14u);
+    if (!(y_scale > 0.0f) || f32(projection + 0x38u) != -1.0f) return;
+    const float x_scale = static_cast<float>(y_scale / aspect);
+    if (f32(projection) != x_scale) {
+        guest_store_u32(memory, projection, std::bit_cast<std::uint32_t>(x_scale), services, pc);
+    }
+}
+
 }  // namespace
 
 void set_site_hook_lod_distance_scale(float scale) noexcept {
@@ -111,6 +147,7 @@ void dispatch_site_hook(
         return;
     case SiteHookKind::MultiSceneModel:
         fit_rmge01_scenario_sky(context, memory, services, guest_pc);
+        fit_rmge01_scenario_camera(memory, services, guest_pc);
         return;
     case SiteHookKind::LodDistance: {
         const float inverse = g_lod_inverse_scale.load(std::memory_order_relaxed);
