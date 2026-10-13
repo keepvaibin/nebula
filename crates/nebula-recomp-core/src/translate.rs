@@ -16851,7 +16851,9 @@ mod tests {
 
     #[test]
     fn lean_call_contracts_cover_the_bodies() {
-        const HEADER: &str = include_str!("../../../runtime/include/galaxy/native_api.h");
+        // A Windows checkout with core.autocrlf has CRLF in the working tree.
+        let header =
+            include_str!("../../../runtime/include/galaxy/native_api.h").replace("\r\n", "\n");
         let dynamic: &[(&str, &[u32])] = &[("lean_psmtx_scale_apply", &[1, 2, 3])];
         let mut checked = BTreeSet::new();
         for (_, symbol) in lean_addresses() {
@@ -16861,7 +16863,7 @@ mod tests {
             if !checked.insert(symbol) {
                 continue;
             }
-            let uses = lean_body_register_uses(HEADER, symbol, dynamic);
+            let uses = lean_body_register_uses(&header, symbol, dynamic);
             assert_eq!(
                 uses.gpr_reads & !contract.gpr_reads,
                 0,
