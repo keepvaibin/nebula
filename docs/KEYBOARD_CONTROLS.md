@@ -52,15 +52,6 @@ jerks inside the radius do not restart the timer; the position is smoothed
 over 0.1 s, so a single-report spike does not count. A hidden gyro pointer
 comes back only with the recenter button, at the centre. A hidden stick
 pointer also comes back with a stick push. The mouse never hides this way.
-Sources for the Switch behaviour (player reports; no official timing exists):
-[ResetEra, Galaxy + Galaxy 2 (Switch 2) review thread](https://www.resetera.com/threads/super-mario-galaxy-super-mario-galaxy-2-review-thread.1312336/page-16)
-("if you're not actively using it for a bit it kind of just disappears on its
-own", "you have to recenter with R a lot"),
-[GameFAQs, 3D All-Stars: removing the pointer](https://gamefaqs.gamespot.com/boards/299724-super-mario-3d-all-stars/79019437)
-(press R to recenter, the pointer goes invisible when unused),
-[GameFAQs, 3D All-Stars: pointer issues](https://gamefaqs.gamespot.com/boards/299724-super-mario-3d-all-stars/79020720)
-(R returns a runaway pointer to the centre).
-
 Camera on the right stick: the game turns the camera one step per D-pad
 left/right press (`CameraLocalUtil::testCameraPadTriggerRoundLeft/Right`
 test the press edge), so one push of the stick is one step, as one press of
@@ -137,7 +128,7 @@ Settings are stored in `runtime_settings.ini` next to `config.ini`:
 
 ```
 input_mode=auto
-controls_version=4
+controls_version=5
 bind.keyboard.a=Space, Enter, MouseLeft
 bind.xbox.jump_back=B
 bind.switch_pro.b=L
@@ -153,13 +144,9 @@ names: key names (`Space`, `LShift`, `W`, `Num1`, `F5`, `Equals`, `VK2E`),
 LT RT LS RS Menu View DpadUp...`; Switch `A B X Y L R ZL ZR LS RS Plus Minus
 Home Capture GL GR C DpadUp...`; sticks `LX+ LX- LY+ LY- RX+ RX- RY+ RY-`.
 
-Files with an older `controls_version` are migrated on load: bindings that
-still hold the defaults of Native28 (no version), Native29 (version 2) or
-Native29b (version 3) take the current defaults; a Native28 file's gyro
-switch and `input_mode=keyboard_mouse` take `1` and `auto`; a version-3
-still-pointer radius of 0.03 takes 0.12; a version-4 still-pointer time of
-2 s and vibration strength of 100 take 4 s and 50 (`rumble=0` turns vibration
-off); anything else the player changed stays.
+Files with an older `controls_version` are migrated on load: bindings and tuning values that
+still hold an earlier version's defaults take the current defaults, a `rumble=0` from version 4
+turns vibration off, and values the player changed stay.
 
 | Tuning (`tune.<scheme>.`) | Values | Default |
 |---|---|---|
@@ -197,25 +184,11 @@ off); anything else the player changed stays.
   keys and mouse motion that layout generates while a controller is
   attached; the overrides do not.
 
-Switch protocol details follow SDL's zlib-licensed `SDL_hidapi_switch.c` /
-`SDL_hidapi_switch2.c` and dekuNukem's Nintendo_Switch_Reverse_Engineering.
-The gyro pointer's world-space axes follow JoyShockMapper's description of
-player/world space. Switch layout: Outsider Gaming "Super Mario Galaxy Switch
-controls", GamerGuides "Super Mario 3D All-Stars controls", MarioWiki "Super
-Mario Galaxy 2" (Switch controls); Star Bits moved from ZR to L by player
-choice.
+Switch protocol details follow SDL's zlib-licensed `SDL_hidapi_switch.c` and
+`SDL_hidapi_switch2.c` and dekuNukem's Nintendo_Switch_Reverse_Engineering notes. The gyro
+pointer's axes follow JoyShockMapper's description of player and world space.
 
-Star Bits and the drawn pointer use the same sample: for every host pointer
-source the runtime answers the game's pointer depth query
-(`StarPointerController::storeDataFromCallback`) from the scene depth it
-captures at `StarPointerPeekZ`'s scene token, not from the end-of-frame EFB.
-Every store of an active pointer is answered at the current position: when
-this scene's field cannot be used, the newest completed field (or the last
-answered depth) gives the depth. The game aims Star Bits at the stored world
-point when it is within 3000 units of Mario, so a store left unanswered would
-send them to an older pointer position.
-
-## Native Settings Overlay
+## Settings overlay
 
 `F1`, View+Menu (Xbox) or Minus+Plus (Switch) opens or closes the settings
 overlay; a one-line hint names them for the first seconds of a session, and
@@ -239,63 +212,5 @@ closes. Pages: DISPLAY, GRAPHICS, CONTROLS, AUDIO (changes apply live), CAPS
 and atomically replaced; a failed save stays dirty and is retried on the next
 close or at shutdown.
 
-## Headless Diagnostics
-
-Automated runtime probes can script input by VI retrace:
-
-| Env var | Format |
-|---|---|
-| `GALAXY_INPUT_AUTOPRESS_SCRIPT` | `start:duration:buttons;...`, e.g. `5400:120:A+B` |
-| `GALAXY_INPUT_AUTOPRESS_SCRIPT_STOP_AT_MARIO_CONTROL` | `1` to stop the long-form button script at the first translated Mario-control boundary; successful diagnostic runs emit one `[input-script-stop]` record and hard-fail if that source contributes A/B afterward |
-| `GALAXY_INPUT_AUTOPRESS_SCRIPT_STOP_FALLBACK_VI` | Absolute HID-timeline VI used only before a live Mario-control marker is published; the live marker is authoritative afterward |
-| `GALAXY_INPUT_STICK_SCRIPT` | `start:duration:x:y;...`, with stick axes clamped to `-1..1` |
-| `GALAXY_INPUT_STICK_SCRIPT_RELATIVE_MARIO_CONTROL` | `1` to treat stick script times as relative to first Mario-control VI |
-| `GALAXY_INPUT_STICK_SCRIPT_RELATIVE_FALLBACK_VI` | Absolute VI fallback anchor for relative stick scripts when the Mario-control marker is absent |
-| `GALAXY_INPUT_SHAKE_SCRIPT` | `start:duration;...`, stages report-level Wii Remote shake acceleration |
-| `GALAXY_INPUT_POINTER_X`, `GALAXY_INPUT_POINTER_Y` | Pointer coordinates clamped to `-1..1`, active for the whole run |
-| `GALAXY_INPUT_POINTER2_X`..`GALAXY_INPUT_POINTER6_Y` plus matching `*_VI` | Pointer waypoints that become active at the given VI |
-| `GALAXY_INPUT_POINTER_SWEEP_VI`, `GALAXY_INPUT_POINTER_SWEEP_DURATION` | Horizontal pointer sweep over a VI window |
-| `GALAXY_INPUT_REPLAY_LOG` | Path to a `tools/measure_inputs.ps1` TSV; replayed as virtual host input before HID report formatting |
-| `GALAXY_RUMBLE_TRACE` | `1` logs the game's Wii Remote motor transitions (`[rumble]`) and what the controller in use would receive (`[rumble-out]`); no controller vibrates in such a session or with `GALAXY_HIDE_WINDOW` |
-| `GALAXY_TEST_RUMBLE_TARGET` | `xinput:N` or `switch:N`: the controller `[rumble-out]` reports for, with the window counted as focused (trace sessions only) |
-| `GALAXY_TRACE_TILT` | `1` logs tilt sections and the accelerometer reading sent (`[tilt]`) |
-| `GALAXY_TRACE_NATIVE_MOUSE_POINTER` | `1` logs pointer depth stores (`[mouse-pointer-frame]`) and world points (`[pointer-world]`); `_ROWS`, `_FROM_VI` limit them |
-
-These hooks are for deterministic native-runtime diagnostics and do not affect
-normal interactive input unless the environment variables are set. Treat them as
-proof inputs only when `[input-trace]` shows the expected nonzero report-level
-button, stick, pointer, or shake samples on the native Bluetooth/HID boundary.
-
-`tools/run_release_diagnostics.ps1 -TraceInput -InputMode controller` records
-`[input-trace]` lines with `source=`, `ptrsrc=`, controller slot, stick values,
-pointer coordinates, `shake=`, and the native input boundary (`boundary=bt-hid`
-for the virtual Wii Remote path or `boundary=bt-hid-real` for real-device
-pass-through).
-The diagnostics analyzer treats traced input as proven only when those native
-boundary tokens are present and well-formed.
-The diagnostics runner always launches the visible Release runtime and clears
-`GALAXY_HIDE_WINDOW`.
-
-## Audio Diagnostics
-
-The native DSP mixer exposes persisted gain controls used by the native
-settings UI and release launcher:
-
-| Env var | Lane |
-|---|---|
-| `GALAXY_AUDIO_MUSIC_GAIN` | JAudio sequence/stream music |
-| `GALAXY_AUDIO_EFFECTS_GAIN` | shared non-music effects bus |
-| `GALAXY_AUDIO_SFX_GAIN` | sound-effect owner categories |
-| `GALAXY_AUDIO_VOICE_GAIN` | voice owner categories |
-| `GALAXY_AUDIO_AMBIENCE_GAIN` | atmosphere/ambience owner categories |
-
-Each value is a scalar from `0.0` to `4.0`; unset means `1.0`.
-
-Audio stem tracing can be narrowed for live voice/SFX probes:
-
-| Env var | Format |
-|---|---|
-| `GALAXY_TRACE_AUDIO_STEMS` | set to `1` to log JAudio owner lanes |
-| `GALAXY_TRACE_AUDIO_STEMS_START_SYNC` | first DSP sync frame to trace |
-| `GALAXY_TRACE_AUDIO_STEMS_END_SYNC` | last DSP sync frame to trace |
-| `GALAXY_TRACE_AUDIO_STEMS_LANE` | comma-separated `music`, `sfx`, `voice`, `ambience`, `unknown`, or `all` |
+Diagnostic environment variables for input and audio are listed in
+[DIAGNOSTICS.md](DIAGNOSTICS.md).

@@ -1,252 +1,154 @@
-# Graphics Architecture — the `galaxy::gx` Native GX Backend
+# Graphics architecture
 
-Status: **Live backend**. The `galaxy_gx` static library is the active
-NebulaRuntime and GxSandbox render implementation; headers under
-`runtime/include/galaxy/gx/` are compile-enforced via
-`runtime/src/gx/gx_headers_compile.cpp`.
+The GX backend (`galaxy::gx`, the `galaxy_gx` static library) turns the GX command stream that
+the game writes into Direct3D 12 work. It implements what Super Mario Galaxy uses, not the whole
+GX hardware, and is not derived from Dolphin's video backend. Headers are in
+`runtime/include/galaxy/gx/`, sources in `runtime/src/gx/`.
 
-This is the design record for the structured, low-overhead native backend that
-consumes the captured GX FIFO stream. It replaced the old monolithic
-first-boot renderer and is a lean custom consumer of the RMGE01 command stream
-— **not** a general Wii video backend and not a Dolphin port.
+## Design decisions
 
-## Decisions
-
-| Decision | Choice | Rationale |
+| Decision | Choice | Reason |
 |---|---|---|
-| API / shading language | D3D12 + HLSL (FXC, `vs_5_1`/`ps_5_1`) | Already in use and linked; SM 5.1 gives the dynamic texture indexing the uber pixel shader needs; D3D12 provides the DXR path for future ray tracing. Vulkan would discard the working backend. |
-| Code location | Headers `runtime/include/galaxy/gx/`, sources `runtime/src/gx/`, `galaxy_gx` static lib | Both `NebulaRuntime` and `GxSandbox` link one library; the old renderer duplication is gone. `GraphicsSandbox/` stays as the offline `.gxdump` replay harness. |
-| Public ABI | `galaxy/gx_d3d12.h` frozen; reimplemented as a thin shim over `GxBackend` | Zero churn at the `native_runtime.cpp` call site. |
-| Render-target model | All GX draws → offscreen **EFB** (RGBA8 + `D24_UNORM_S8_UINT`, 640×528 × scale). `GXCopyDisp` → **XFB texture**; present = stretch-blit the VI-selected XFB, preserving the previous valid selection if the guest is between handoff states | The only model in which EFB-copy-to-texture (SMG: shadows, refraction, fades) works; the present blit is the post-processing / RT injection point; the EFB scale factor is the resolution/quality knob. |
-| Depth format | `DXGI_FORMAT_D24_UNORM_S8_UINT` | Review amendment: exact Wii 24-bit Z parity; copy-clear `z24` maps losslessly; prevents Z-fighting regressions. |
-| Shader stutter | Hybrid: build-time-compiled **uber-shader** fallback + **async specialized PSOs** + disk cache | See "Shader strategy". |
-| Texture invalidation | **Explicit only — no content hashing** | Review amendment: hashing bottlenecks low-end CPUs. The hardware contract is explicit invalidation; `GXInvalidateTexAll()`'s BP write pattern drives `TextureCache::invalidate_all()`, and EFB-copy registration overwrites aliased entries. |
-| Endianness | Checked scalar big-endian reads for opcodes/registers; **bulk SSSE3 `pshufb` byte-swap kernels** for vertex arrays | Review amendment: vertex payloads are the hot path; `FifoCursor::take()` hands out raw windows for `swap16_block`/`swap32_block`. |
-| Hard-fail | Unknown opcode / CP/XF/BP state write / truncated payload / unresolvable guest pointer → `GxFatalError` + `.gxdump` artifact | Repo rule. State writes fail before mutation; only explicitly classified hardware no-op command bytes are accepted. |
+| API and shaders | Direct3D 12, HLSL shader model 5.1 (FXC) | Dynamic texture indexing for the uber pixel shader; a path to DXR |
+| Render targets | All draws go to an offscreen EFB (RGBA8 and D24S8, 640x528 times the internal scale). `GXCopyDisp` copies into an XFB texture; presentation scales the XFB the video interface selected | EFB-to-texture copies, which the game relies on, need a real EFB |
+| Depth format | `D24_UNORM_S8_UINT`, reversed | Matches the Wii's 24-bit Z; copy-clear values map exactly |
+| Shader compilation | Specialized pipelines compiled on worker threads, an uber shader while they compile, and a disk cache | No compile stalls on the render thread; no uber-shader cost in steady state |
+| Texture invalidation | Explicit only (`GXInvalidateTexAll`, EFB copies to the same address) | Hashing texture contents costs too much on low-end CPUs |
+| Byte order | Checked big-endian reads for commands; SSSE3 byte-swap kernels for vertex arrays | Vertex data is the hot path |
+| Unknown input | Unknown opcodes, register writes, truncated payloads and unresolvable guest pointers raise `GxFatalError` and write a `.gxdump` | Unsupported behaviour must not be skipped silently |
 
-## FIFO format (parser contract)
+## FIFO format
 
-Opcode-dispatched byte stream, big-endian payloads:
+The parser reads an opcode-dispatched, big-endian byte stream:
 
 | Opcode | Command | Payload |
 |---|---|---|
-| `0x00` | NOP | — |
-| `0x08` | LOAD_CP_REG | u8 reg + u32 (VCD/VAT/array bases) |
-| `0x10` | LOAD_XF_REG | u16 count−1, u16 base, count × u32 (matrices, texgen, channels, projection) |
-| `0x20/28/30/38` | LOAD_INDX A–D | u16 index, u16 len:addr — indexed XF matrix load from guest arrays (**required for SMG skinning**) |
-| `0x40` | CALL_DL | u32 guest addr, u32 size — nested display list, depth ≤ 4 |
-| `0x48` | INVAL_VTX_CACHE | — |
-| `0x61` | LOAD_BP_REG | u32: reg(31:24) \| value(23:0) |
-| `0x80–0xBF` | DRAW | bits 7:3 primitive class, 2:0 vtx fmt; u16 count + vertex stream per VCD/VAT |
+| `0x00` | NOP | none |
+| `0x08` | LOAD_CP_REG | u8 register, u32 value (vertex descriptors, attribute formats, array bases) |
+| `0x10` | LOAD_XF_REG | u16 count-1, u16 base, count u32 values (matrices, texgen, channels, projection) |
+| `0x20`, `0x28`, `0x30`, `0x38` | LOAD_INDX A-D | u16 index, u16 length and address: indexed matrix load from guest arrays (skinning) |
+| `0x40` | CALL_DL | u32 guest address, u32 size: nested display list, depth up to 4 |
+| `0x48` | INVAL_VTX_CACHE | none |
+| `0x61` | LOAD_BP_REG | u32: register in bits 31-24, value in bits 23-0 |
+| `0x80`-`0xBF` | DRAW | primitive in bits 7-3, vertex format in bits 2-0; u16 count and the vertex data |
 
-The BP register map that matters for SMG is encoded as named constants in
-`gx_bitfields.h` (`namespace bp`); the TEV stage assembly from color-env /
-alpha-env / TREF / KSEL registers lives in `assemble_tev_stage`.
+BP register numbers are named in `gx_bitfields.h` (`namespace bp`).
 
-## Module decomposition
+## Components
 
 ```
-FIFO bytes ──► FifoParser ──(FifoSink callbacks)──► GxBackend
-                                │ reg loads              │ draws / EFB copies
-                                ▼                        ▼
-                             GxState ◄── reads ── VertexLoader → VB/IB rings
-                          (CP/XF/BP + dirty bits)        │
-                                │ keys                   ▼
-                                ▼                  RendererD3D12 ──► EFB RT
-                          PipelineCache ◄── ShaderGenerator         │ CopyDisp
-                          (uber now, specialized async)             ▼
-                          TextureCache (GX fmt decode, TLUT,   XFB registry ──► present blit
-                                        EFB-copy aliases)      (EfbCopyManager)
+FIFO bytes --> FifoParser --(FifoSink callbacks)--> GxBackend
+                   | register loads                   | draws, EFB copies
+                   v                                  v
+                GxState <---- reads ---- VertexLoader --> vertex and index rings
+            (CP/XF/BP + dirty bits)                   |
+                   | keys                             v
+                   v                            RendererD3D12 --> EFB
+             PipelineCache <-- ShaderGenerator         | display copy
+             TextureCache (decode, TLUTs,              v
+                           EFB-copy aliases)     XFB registry --> post-processing --> present
 ```
-
-Header inventory (`runtime/include/galaxy/gx/`):
 
 | Header | Responsibility |
 |---|---|
-| `gx_bitfields.h` | constexpr CP/XF/BP register decode; zero OS includes |
-| `gx_state.h` | `GxState` register files + decoded views + dirty bits |
-| `fifo_parser.h` | `FifoParser`, `FifoSink`, `FifoCursor`, `GxFatalError`, SIMD swap kernels |
-| `vertex_loader.h` | `VertexLoader`: any VCD/VAT → canonical 64-byte `GxVertexOut`, indexed triangle lists |
-| `shader_keys.h` | Canonicalized `PixelShaderKey`/`VertexShaderKey`/`RenderStateKey`/`PsoKey`, FNV-1a |
-| `uber_constants.h` | `GxVsConstants`/`GxPsConstants` GPU-shared layouts (static_asserted) |
-| `shader_gen.h` | `ShaderGenerator`: keys → specialized HLSL |
-| `pipeline_cache.h` | `PipelineCache` + lock-free `PsoCompletionQueue` |
-| `texture_cache.h` | GX format decode, TLUTs, EFB-copy aliases, explicit invalidation |
-| `efb_copy.h` | `EfbCopyManager` XFB registry / `latest()` presentation source |
-| `renderer_d3d12.h` | Device, swap chain, EFB targets, `UploadRing`/`DescriptorRing`, `DrawCall` submission |
-| `gx_backend.h` | `GxBackend` orchestrator implementing `FifoSink` and the frozen public API |
+| `gx_bitfields.h` | Register decoding for CP, XF and BP |
+| `gx_state.h` | Register files, decoded views and dirty bits |
+| `fifo_parser.h` | `FifoParser`, `FifoSink`, `GxFatalError`, byte-swap kernels |
+| `vertex_loader.h` | Any vertex descriptor and format to the canonical vertex, indexed triangle lists |
+| `shader_keys.h` | Canonical shader, render-state and pipeline keys |
+| `uber_constants.h` | Constant buffer layouts shared by the shaders |
+| `shader_gen.h` | HLSL generation from keys |
+| `pipeline_cache.h` | Pipeline cache and the completion queue for worker compiles |
+| `texture_cache.h` | Texture format decoding, palettes, EFB copy aliases, invalidation |
+| `efb_copy.h` | XFB registry and copy geometry |
+| `renderer_d3d12.h` | Device, swap chain, EFB targets, upload rings, draw submission |
+| `gx_backend.h` | `GxBackend`, which implements `FifoSink` |
 
-`gx_bitfields.h`, `gx_state.h`, `fifo_parser.h`, `vertex_loader.h`,
-`shader_keys.h`, `uber_constants.h`, `shader_gen.h` include **zero
-Windows/D3D12 headers** — they replay `.gxdump` captures in plain ctest
-binaries, which is how the working geometry never regresses during the
-migration.
+The register, parser, vertex and shader headers include no Windows or Direct3D headers, so their
+tests run as plain programs and replay `.gxdump` captures.
 
-### Per-frame data flow
+### Per frame
 
 ```
-render_frame(fifo, size, memory, services)
-  ├─ renderer.begin_frame()             // advance frame ring; wait ONLY on
-  │                                     // fence of frame N - kFramesInFlight;
-  │                                     // drain PSO completion queue (sole
-  │                                     // publication point, render thread)
-  ├─ parser.run(fifo, memory, *this, state)
-  │    ├─ 0x08/0x10/0x61 → state.load_cp/load_xf/load_bp  (dirty bits)
-  │    ├─ 0x20-0x38      → resolve guest array → state.load_xf_indexed
-  │    ├─ draw           → on_draw(): flush_draw_state() if dirty
-  │    │                   (keys → PipelineCache::get, constants → CB ring,
-  │    │                    XF palette snapshot → matrix ring, textures →
-  │    │                    TextureCache::get → SRV table), then
-  │    │                   VertexLoader::load → renderer.draw(DrawCall)
-  │    ├─ BP 0x52        → on_efb_copy(): XFB copy / texture copy / copy-clear
-  │    └─ BP 0x45/47/48  → on_pe_finish()/on_pe_token() → PE interrupt hooks
-  ├─ renderer.present(game-selected XFB)     // preserves the previous valid
-  │                                          // VI selection during handoffs
-  └─ renderer.end_frame()               // submit + signal, never waits
+render_frame(fifo, memory, services)
+  renderer.begin_frame()        wait for the fence of frame N - frames in flight;
+                                publish finished pipelines (render thread only)
+  parser.run(fifo)
+    register loads              GxState and dirty bits
+    LOAD_INDX                   resolve the guest array, load the matrix
+    draw                        flush state if dirty (pipeline, constants, matrices,
+                                textures), load vertices, record the draw
+    BP 0x52                     EFB copy: display copy, texture copy or copy-clear
+    BP 0x45/0x47/0x48           PE finish and token interrupts
+  renderer.present(selected XFB)
+  renderer.end_frame()          submit and signal; never waits
 ```
 
-## Shader strategy (stutter prevention)
+## Shaders and the pipeline cache
 
-**Hybrid — specialized PSOs are the steady state; the uber pipeline is the
-synchronous fallback used only while a specialization is in flight; everything
-persists to disk.**
+Specialized pipelines are the steady state. When a draw needs a pipeline that is not compiled
+yet, it uses the uber pipeline, which interprets the TEV configuration from constants, while a
+worker compiles the specialized one. Both use the same constant layouts and root signature, so
+switching is a pipeline swap. Workers push finished pipelines to a lock-free queue; the render
+thread publishes them in `begin_frame()`, before any recording.
 
-- *Specialized-only* stutters: first-seen TEV configs arrive in bursts at
-  scene load; FXC + driver PSO build stalls tens of ms each on low-end CPUs.
-- *Uber-only* costs 2–4× fragment time on exactly the iGPUs we target (a
-  16-iteration dynamic TEV loop with per-iteration constant fetches and
-  dynamically indexed samples), and SMG is fill-heavy.
-- The hybrid costs one mechanism (promotion). Both shader families share the
-  constant layouts (`uber_constants.h`) and the single GX root signature, so
-  promotion is a pipeline-pointer swap with no binding changes.
+Keys zero every field that does not affect code for the enabled stages before hashing. The
+render state (blend, depth mode, culling, pixel format) is part of the pipeline key but not the
+shader key, so one compiled shader pair serves all render-state variants.
 
-Thread-safety contract (review amendment): compile workers never touch the
-published map. They push completed PSOs onto the lock-free MPSC
-`PsoCompletionQueue`; `drain_completions()` publishes them on the **render
-thread only**, inside `begin_frame()`, before any command-list recording.
+The disk cache is in `%LOCALAPPDATA%\Nebula\shadercache\RMGE01\`:
 
-Key canonicalization: every field that does not affect codegen for the
-*enabled* stage count is zeroed before hashing (`shader_keys.h`), keeping the
-cache hit rate high. `RenderStateKey` (blend/zmode/cull/pixfmt) keys the PSO
-but not the HLSL — one compiled shader pair serves all its render-state
-variants.
+- `shaders.bin`: compiled shader pairs with checksums, so later runs skip FXC;
+- `psos.bin`: pipeline keys, prewarmed on worker threads at start;
+- `pipelines.bin`: the driver's pipeline library, discarded when the adapter or driver changes.
 
-Disk cache, `%LOCALAPPDATA%\Nebula\shadercache\RMGE01\`:
-
-- `shaders.bin` — append-only `{magic, version, key, vs/ps DXBC, fnv}`
-  records; second run builds PSOs from cached DXBC on the workers during
-  boot, no FXC.
-- `pipelines.bin` — `ID3D12PipelineLibrary1` blob keyed by `PsoKey` hash;
-  invalidated when the stored adapter LUID / driver version mismatch.
-- Optional `precompile.list` — keys harvested from play traces, warmed at
-  initialize (the precompilation leg).
-
-TEV fidelity: stage math in float, each stage result quantized to the 8-bit
-lattice (`floor(x*255+0.5)/255`) before compare ops and alpha test, making
-comparisons against `ref/255` exact — cheap, and avoids classic banding and
-alpha-cutout bugs.
+TEV arithmetic runs in float, and each stage result is rounded to the 8-bit lattice before
+comparisons and the alpha test, so comparisons against `ref/255` behave as on hardware.
 
 ## EFB copies and presentation
 
-- **EFB**: RTV `RGBA8` + DSV `D24_UNORM_S8_UINT`, `640×528 × efb_scale`.
-  GX copy-clear converts the latched `z24` via `z24 / 0xFFFFFF`. SMG's usual
-  `RGBA6_Z24` pixel format renders at 8-bit; tracked via `PeControl`.
-- **GXCopyDisp** (`copy_to_xfb`): `EfbCopyManager` keeps
-  `guest_xfb_addr → XfbTexture`; the copy records an EFB→XFB blit honoring
-  y-scale. No YUV conversion, no guest-memory write-back — a guest CPU read
-  of the XFB range is a native_host tripwire.
-- **Present**: the XFB address selected by the guest VI/XFB manager; if that
-  manager is briefly between valid states, the backend preserves the previous
-  valid VI-selected XFB instead of substituting the newest copied buffer.
-- **GXCopyTex**: blit the EFB region into a `TextureCache` entry registered
-  at the destination guest address; later `TX_SETIMAGE3` pointing there binds
-  the GPU copy directly. Mandatory beyond the title screen (drop shadows,
-  water, transitions).
-- **PE token/finish** (BP `0x45/0x47/0x48`): routed through
-  `FifoSink::on_pe_finish/on_pe_token` into the runtime's PE interrupt
-  machinery (`GXDrawDone` / `GXSetDrawSync` waiters). Possibly a boot-progress
-  fix, not just graphics — see HANDOFF_TITLE_SCREEN.md's GameSystem pump stall.
+- **Display copies** (`GXCopyDisp`): the XFB registry maps each guest XFB address to a texture;
+  the copy applies the vertical scale. Nothing is written back to guest memory.
+- **Presentation**: the XFB the game's video interface selected. While the selection is between
+  valid states, the previous valid XFB stays on screen. Frames the game did not redraw are not
+  presented again.
+- **Texture copies** (`GXCopyTex`): the EFB region goes into a texture registered at the
+  destination address; a later texture load from that address binds it directly. Shadows,
+  water, depth of field and screen transitions use these.
+- **Scissor offset** (BP `0x59`, `GXSetScissorBoxOffset`): draw viewports and scissor boxes are
+  moved by the offset, with the 1024-pixel wrap of the register. The depth-of-field blur uses it
+  to draw into EFB rows 464-527, below the area the display copy reads.
+- **PE tokens and finish** (BP `0x45`, `0x47`, `0x48`): passed to the runtime's PE interrupt
+  handling (`GXDrawDone`, `GXSetDrawSync` waiters).
 
-## Presentation chain and future upscalers, frame generation, ray tracing
+## Post-processing
 
-Present runs `PostProcessor` (`post_process.{h,cpp,hlsl}`) on the selected
-XFB: SMAA 1x or FXAA at game resolution, then FSR 1 EASU or a footprint box
-resample to the window, then RCAS. Settings apply live (launcher config.ini,
-overlay GRAPHICS page). At start-up the SMAA lookup textures are uploaded and
-both AA passes run on a synthetic stair-stepped edge; a pass that fails is
-replaced (SMAA by FXAA) and the overlay's ANTI-ALIASING row and CAPS page say
-so. `[present-stats]` (GALAXY_TRACE_PRESENT_STATS=1) carries session totals:
-post-frames, aa-wanted-frames, smaa-frames, fxaa-frames and aa-skipped-frames
-(AA wanted, no pass ran). Effect copies up to 320x228 stay at native size
-(`copy_efb_to_texture`), so bloom, depth of field and shadow captures keep the
-game's own blur footprints at any internal scale.
+`PostProcessor` (`post_process.{h,cpp,hlsl}`) runs on the selected XFB: SMAA or FXAA at the game's
+resolution, then FSR 1 EASU or a box resample to the window, then RCAS sharpening. At start the
+SMAA lookup textures are uploaded and both anti-aliasing passes run on a test edge; a pass that
+fails is replaced (SMAA by FXAA).
 
-What a temporal upscaler (DLSS SR, FSR 2/3, XeSS) or frame generation needs,
-and where it comes from here:
+Effect copies up to 320x228 (bloom, depth of field, Mario's shadow) are made at the game's own
+resolution, so their blur kernels keep their footprint at any internal scale.
 
-| Input | Status |
-|---|---|
-| Scene color at internal resolution | EFB color, `640x528 x efb_scale` |
-| Depth | EFB depth (D24S8, reversed) |
-| HUD-free image | Separated. The game module routes two call sites through the host: `GameScene::draw3D` from `GameScene::draw` (0x8033E820) and draw3D's closing `MR::clearZBuffer` (0x8033F024). At each, the simulation thread flushes the gather pipe and records the FIFO offset; the render thread splits its parse there (`FifoMarker::SceneBegin` / `SceneEnd`). At scene end the EFB still holds the final 3D image and its depth; the renderer resamples it into an output EFB at the window's integer scale, swaps the two EFB target sets, and draws the 2D layer (HUD, menus, 2D models) there. The display copy swaps back. `hud_output_resolution` (default off: below the window's scale the scene takes two resamples, to the integer output scale and then to the window, which is softer than one FSR 1 pass; skipped when the EFB already covers the window). |
-| Sub-pixel jitter | FSR 3 jitter sequence on perspective draws inside the 3D scene (`GxBackend::apply_scene_jitter`). |
-| Motion vectors | Transform history (`transform_history.{h,cpp}`): each VS constant upload in the scene is a record (signature: shader keys, position array base, vertex descriptor) matched to the previous scene's nearest record by eye-space translation after the camera delta (game camera read at the SceneBegin hook). Opaque triangle draws use motion pipelines (VS key 0x10, PS key 0x02, render-state bit 29) writing RG16F render pixels, current to previous; blended draws write the R8 reactive mask (bit 30). Unmatched draws use the camera delta. `GALAXY_MOTION_DEBUG=1` shows the field. |
-| Latency markers (Reflex, FG pacing) | `frame_timeline` already records simulate / submit / render / present boundaries; map them onto Streamline markers. |
+## HUD separation and temporal inputs
 
-Capability detection exists (`RenderFeatureCaps`: DXR tier, Streamline,
-Reflex, DLSS SR/FG; overlay CAPS page). DXR: the decoded-vertex cache gives
-stable vertex buffers per cached packet run, so static geometry can feed
-bottom-level acceleration structures built once per scene, with per-frame
-refits for skinned draws; first targets are RT shadows and AO composited
-before the HUD split point.
+The game module routes two call sites through the host: `GameScene::draw3D` from
+`GameScene::draw` (`0x8033E820`) and the closing `MR::clearZBuffer` of `draw3D` (`0x8033F024`).
+The render thread splits its parse at those points (`FifoMarker::SceneBegin`, `SceneEnd`). With
+`hud_output_resolution`, the finished 3D image is resampled into an output EFB at the window's
+integer scale and the 2D layer (HUD, menus) is drawn there.
 
-### Frame rate
+The optional FSR 3 path (built with the AMD FidelityFX SDK) uses the same split: sub-pixel jitter
+on perspective draws inside the 3D scene (`GxBackend::apply_scene_jitter`), the EFB depth, and
+motion vectors from `transform_history.{h,cpp}`, which matches each scene draw to the previous
+frame's draw with the same shader keys and vertex source and writes per-pixel motion.
 
-The game renders 60 frames per second. FRAME RATE offers 30 (the newest frame
-every other display frame, on a QPC cadence) and 60 (every game frame); with
-VSYNC the sync interval is refresh/rate when that is an integer 2..4.
+## Frame rate
 
-Interpolated frames above 60 (`GALAXY_EXPERIMENTAL_INTERPOLATION=1`) are not
-offered in this release: rings and the sampler heap keep one segment per game
-frame, the renderer logs the frame's EFB operations up to its display copy,
-and the render thread presents k sub-frames at t = i / (k + 1) before the
-frame itself, each replaying the log with every scene record's transform
-interpolated between the matched previous record and the frame's.
+The game renders 60 frames per second. FRAME RATE offers 30 (the newest frame every other display
+frame) and 60. With VSYNC, the sync interval is the refresh rate divided by the frame rate when
+that is an integer from 2 to 4.
 
-## Migration plan (the triangle never breaks)
-
-Each step ends with `/W4 /WX` clean and the current boot output still
-rendering; one step = one commit.
-
-| Step | Work |
-|---|---|
-| M0 | De-duplicate: move the monolith into `runtime/src/gx/`, create the `galaxy_gx` static lib, point `NebulaRuntime` + `GxSandbox` at it, delete the `GraphicsSandbox/` copy. |
-| M1 | Extract `RendererD3D12` mechanically (keep the per-frame GPU wait for now). |
-| M2 | Extract `GxState` + `FifoParser`; **switch to hard-fail + `.gxdump`**; implement LOAD_INDX; fix FIFO capture to be command-aligned if torn packets surface; wire `FifoSink` PE callbacks (runtime may ignore them initially). |
-| M3 | EFB depth buffer + blend/zmode/cull from BP via `RenderStateKey` (small static PSO table). First visible correctness jump. |
-| M4 | `TextureCache` + TexImage decode; fixed PS becomes tex0 × vertex color. Title-screen imagery appears. |
-| M5 | `VertexLoader` rewrite: canonical vertex, per-vertex PNMTXIDX, indexed output, XF palette as structured buffer. Fixes skinning. |
-| M6 | `ShaderGenerator` + uber pipelines + `PipelineCache` (uber-only first). TEV correct. |
-| M7 | EFB/XFB model: draws retarget the EFB, copy-exec, present = XFB blit; remove the purple clear and the runtime replay hack. |
-| M8 | Frame pipelining (drop the per-frame GPU wait), disk cache, async specialization workers. |
-
-## Risks / open questions
-
-1. **Torn FIFO packets**: the legacy parser's tolerate-and-skip behavior
-   suggests the WGPIPE/CP-drain capture may split commands; M2's hard-fail
-   will surface this immediately. Fix = command-aligned capture (carry parser
-   residue across drains) in `native_host.cpp`.
-2. **PE interrupt wiring** crosses the gx/native_host boundary; may require a
-   `kNativeAbiVersion` bump if `native_api.h` grows a hook.
-3. **Texture staleness** under explicit-only invalidation: a guest mutating
-   texture memory without `GXInvalidateTexAll`/EFB-copy shows stale texels.
-   Accepted trade-off (review amendment); `debug_invalidate_every_frame`
-   exists for A/B verification.
-4. **Indirect texturing** (`gen_mode().num_ind_stages > 0`) and **XF channel
-   lighting**: key bits reserved now; fatal-log on first use until
-   implemented (water/heat effects are in-game, not title-screen).
-5. **EFB CPU access** (`GXPeekZ` for star-pointer picking): GPU readback with
-   sync pain if SMG uses it; native_host tripwire first, design deferred.
-6. **RenderStateKey permutation count**: theory large, SMG practice ~10–20;
-   uber PSOs per render state are built from prebuilt DXBC (~1 ms driver
-   cost). Measure; pre-create the common table at init if it stutters.
+Interpolated frames above 60 exist behind `GALAXY_EXPERIMENTAL_INTERPOLATION=1` and are not
+offered in the settings.

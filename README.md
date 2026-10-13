@@ -1,71 +1,110 @@
 # Nebula
 
-A native Windows port of **Super Mario Galaxy**, using your own copy of the game.
-The engine, renderer, audio host and launcher ship prebuilt. Setup compiles the
-game-derived modules on first installation; compatible updates preserve that work.
+Nebula runs **Super Mario Galaxy** natively on Windows. It translates the game's PowerPC
+machine code into C++ ahead of time, compiles that code on your PC from your own copy of the
+game, and runs it on a native runtime with a Direct3D 12 renderer and Windows audio and input.
+Nebula contains no Nintendo code or assets; you need your own copy of the game.
 
-[Download the beta](https://github.com/keepvaibin/nebula/releases/tag/v0.1.1-beta.4)
-· [Controls](docs/KEYBOARD_CONTROLS.md)
-· [Beta 4 changes and evidence](docs/RELEASE_BETA4.md)
-· [Build guide](docs/BUILDING.md)
+[Download](https://github.com/keepvaibin/nebula/releases/latest) ·
+[Controls](docs/KEYBOARD_CONTROLS.md) ·
+[Building from source](docs/BUILDING.md) ·
+[Architecture](docs/ARCHITECTURE.md)
 
-Development preview. Not affiliated with Nintendo.
+Not affiliated with or endorsed by Nintendo.
+
+## Project status
+
+Nebula is a work in progress. The game is playable from the start, but some areas run below
+60 FPS on weaker hardware, some lighting and bloom effects differ from the original, and bugs
+remain. See [Known issues](#known-issues).
+
+## AI-generated project
+
+Nebula was built with AI coding agents (Anthropic's Claude). The recompiler, runtime,
+installer, tests and documentation were written by AI agents and directed, reviewed and tested
+by the project's author. The game's own logic, including Mario's physics, is not AI-written:
+it is the original game code, translated instruction by instruction by the recompiler.
+
+## How it works
+
+1. **Recompiler** (`crates/`, Rust). Reads the game disc or extracted files, checks that it
+   is the supported release (RMGE01, revision 0) and emits C++ for every function in the game
+   executable, the HOME Menu module and the audio DSP program.
+2. **Runtime** (`runtime/`, C++). Loads the compiled game module and provides what the Wii
+   hardware provided: memory, a GX command processor drawn with Direct3D 12, the audio
+   interface and DSP, Wii Remote input from keyboard, mouse and controllers, disc and NAND
+   storage, and video timing.
+3. **Installer and launcher** (`installer/`, C#). `Nebula-Setup.exe` downloads a pinned
+   compiler toolchain, compiles the game modules from your copy of the game and installs the
+   prebuilt runtime. `Nebula.exe` starts the game; `NebulaSettings.exe` changes settings.
+
+## Features
+
+- Keyboard and mouse, Xbox controllers, the Switch Pro Controller and the Switch 2 Pro
+  Controller (USB), remappable. Switch controllers point with the gyro (R recenters) and tilt
+  for the Star Ball and ray surfing.
+  Vibration follows the game's Wii Remote motor.
+- Aspect ratios from 4:3 to 32:9 and internal resolution up to 16x.
+- Anti-aliasing (SMAA, FXAA), AMD FidelityFX FSR 1 upscaling, anisotropic filtering and
+  optional per-pixel lighting.
+- In-game settings menu (F1, View + Menu on Xbox, Minus + Plus on Switch).
+- Saves stored in `%LOCALAPPDATA%\Nebula\saves`.
 
 ## Requirements
 
-- Super Mario Galaxy, USA (RMGE01), revision 0: ISO, RVZ or extracted folder
-- Windows 10/11 64-bit with a DirectX 12 GPU
-- 8 GB RAM, 16 GB free disk space during setup (about 5.5 GB after)
-- Internet for the first install
+- Super Mario Galaxy, USA (RMGE01), revision 0, as an ISO, RVZ or extracted folder
+- Windows 10 (version 1803 or newer) or Windows 11, 64-bit
+- A GPU with Direct3D 12 support
+- 8 GB of RAM; 16 GB of free disk space during installation, about 5.5 GB afterwards
+- An internet connection for the first installation
 
 ## Install
 
-1. Download **Nebula-Beta-Setup.exe** from [Releases](https://github.com/keepvaibin/nebula/releases).
-2. On a fresh installation, choose your game and click **Install**. On an existing installation, click **Update**.
-3. Launch **Nebula**, choose your display settings, and press **Play**.
+1. Download `Nebula-Setup.exe` from the [latest release](https://github.com/keepvaibin/nebula/releases/latest).
+   The file is not code-signed, so Windows SmartScreen shows "Unknown publisher"; choose
+   **More info**, then **Run anyway**.
+2. Select your game and choose **Install**. Setup downloads the toolchain and compiles the game
+   modules; this takes a few minutes on a fast PC and longer on slower ones.
+3. Start **Nebula** from the Start menu.
 
-The release has a detached signature checked by Nebula's updater. It is not
-Authenticode signed, so Windows SmartScreen may still warn on first run.
-
-Updates install the bundled public runtime. Compatible game DLLs stay unchanged
-unless updated public libraries need linking; new installations retain compiled
-objects for that step, without recompiling game source. Older installations that
-discarded those objects may need a one-time rebuild from their retained game input
-as a last resort. The updater also rebuilds if the module ABI is incompatible or
-the retained objects cannot be used safely. The old install stays available until
-the new version passes validation.
-Setup also offers **Uninstall** and **Restore the previous version**. Saves and
-settings are preserved by default.
-
-## Playing
-
-Start **Nebula** from the Start Menu, pick display settings and press **Play**.
-
-- Keyboard and mouse, Xbox (XInput) controllers, Switch Pro Controllers and Switch 2 Pro Controllers (USB), all at once and remappable; Switch controllers point with the gyro (R recenters, hold R to keep it centred) and tilt for the Star Ball and ray surfing; other controllers steer those with the left stick. Controllers vibrate with the game's Wii Remote motor. See [docs/KEYBOARD_CONTROLS.md](docs/KEYBOARD_CONTROLS.md).
-- Aspect ratios from 4:3 to 32:9; internal resolution up to 16x.
-- Anti-aliasing: Auto (default; SMAA unless the internal resolution already
-  supersamples the display), SMAA, FXAA (cheapest), Off. Low-end GPUs: 1x-2x
-  internal, SMAA or FXAA, FSR 1 to the display.
-- Saves are in `%LOCALAPPDATA%\Nebula\saves`.
-
-Updates, repair, restore and uninstall are in **Nebula Setup** and the launcher.
+Setup also updates, repairs, restores the previous version and uninstalls. Updates are signed;
+Setup checks the signature against the public key built into it before installing.
 
 ## Building from source
 
-See [docs/BUILDING.md](docs/BUILDING.md).
+[docs/BUILDING.md](docs/BUILDING.md) covers the tools, building the recompiler, runtime and game
+modules by hand, running the tests and building the installer.
+
+## Testing
+
+- Recompiler: more than 450 tests (`cargo test --workspace`).
+- Runtime: 64 test programs (`ctest`) covering floating-point operations (checked against
+  Berkeley SoftFloat), GX command parsing and texture decoding, input mapping, the audio queue
+  and DSP, and settings files.
+- `tools/dev/verify_thp_native.cpp` compares the native movie decoder with the game's own
+  decoder frame by frame.
+- Gameplay is checked by playing back recorded input in a hidden window and by manual
+  playtesting.
+
+There is no automated whole-game comparison against the original hardware or an emulator yet.
+Floating-point results are close to, but not bit-exact with, the Wii.
 
 ## Known issues
 
 - Heavy background CPU load can stop the game with an audio error.
-- Some areas (for example Gateway/Luma) drop below 60 FPS.
-- Plaza lighting and some bloom differences remain.
+- Some areas, for example the Gateway Galaxy, drop below 60 FPS on weaker CPUs.
+- Some lighting and bloom effects in the Comet Observatory differ from the original.
 
-## Licenses and credits
+Report problems on the [issue tracker](https://github.com/keepvaibin/nebula/issues).
 
-GPL-3.0-only (see [LICENSE](LICENSE)). Nebula uses work from Dusklight,
-Aurora, WiiCompiled, Berkeley SoftFloat, Dolphin's free DSP ROM, `nod` and
-Petari's symbol work. See [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) and
-[docs/PROVENANCE.md](docs/PROVENANCE.md). "Super Mario Galaxy" and "Wii" are
-Nintendo trademarks.
+## License
 
-Developed with the help of AI tools.
+Nebula is licensed under the GNU General Public License v3.0 only ([LICENSE](LICENSE)).
+Third-party code and its licenses are listed in [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md)
+and [docs/PROVENANCE.md](docs/PROVENANCE.md).
+
+Nebula builds on work from Aurora, Dusklight, WiiCompiled, the Petari decompilation project,
+Berkeley SoftFloat, the Dolphin project's free DSP ROM, SMAA, AMD FidelityFX and the `nod` disc
+library.
+
+"Super Mario Galaxy", "Wii" and "Nintendo" are trademarks of Nintendo.
