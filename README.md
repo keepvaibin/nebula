@@ -80,8 +80,8 @@ modules by hand, running the tests and building the installer.
 
 ## Testing
 
-- Recompiler: more than 450 tests (`cargo test --workspace`).
-- Runtime: 64 test programs (`ctest`) covering floating-point operations (checked against
+- Recompiler: more than 500 tests (`cargo test --workspace`).
+- Runtime: 70 test programs (`ctest`) covering floating-point operations (checked against
   Berkeley SoftFloat), GX command parsing and texture decoding, input mapping, the audio queue
   and DSP, and settings files.
 - `tools/dev/verify_thp_native.cpp` compares the native movie decoder with the game's own
@@ -94,7 +94,7 @@ Floating-point results are close to, but not bit-exact with, the Wii.
 
 ## Known issues
 
-- Heavy background CPU load can stop the game with an audio error.
+- Heavy background CPU load can make the audio skip.
 - Some areas, for example the Gateway Galaxy, drop below 60 FPS on weaker CPUs.
 - Some lighting and bloom effects in the Comet Observatory differ from the original.
 
