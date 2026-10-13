@@ -46,6 +46,10 @@ inline constexpr std::uint8_t kInvalidateVertexCache = 0x48;
 inline constexpr std::uint8_t kLoadBpReg = 0x61;
 inline constexpr std::uint8_t kDrawFirst = 0x80;
 inline constexpr std::uint8_t kDrawLast = 0xBF;
+// Host draw-identity marker, top level only (the runtime inserts it; the game
+// never writes this opcode): u8 kind, u16 aux, u32 a, u32 b.
+inline constexpr std::uint8_t kHostMarker = 0xF0;
+inline constexpr std::size_t kHostMarkerBytes = 12u;
 }  // namespace op
 
 inline constexpr int kMaxDisplayListDepth = 4;
@@ -204,6 +208,17 @@ struct CachedDrawPacketRun {
 // ---------------------------------------------------------------------------
 struct FifoSink {
     virtual ~FifoSink() = default;
+
+    // Host draw-identity marker (op::kHostMarker): the game object whose
+    // commands follow. Kinds: 1 J3D shape packet, 2 NameObj draw, 3 JPA
+    // emitter pass, 4 JPA particle.
+    virtual void on_host_marker(std::uint8_t kind, std::uint16_t aux, std::uint32_t a,
+                                std::uint32_t b) {
+        (void)kind;
+        (void)aux;
+        (void)a;
+        (void)b;
+    }
 
     // Byte count of the in-band vertex payload for a draw. The parser uses
     // this to verify that the complete command is present before invoking

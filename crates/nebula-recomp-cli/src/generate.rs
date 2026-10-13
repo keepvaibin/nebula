@@ -36,7 +36,9 @@ use std::{fs, path::Path};
 //     return synchronization, the module checkpoint gate, per-site indirect
 //     call caches and the profile-ordered function layout; regenerate every
 //     module.
-pub const GENERATION_VERSION: u32 = 18;
+// 19: draw identity site hooks (J3D shape packets, NameObj draws, JPA emitters
+//     and particles) for frame interpolation and motion vectors.
+pub const GENERATION_VERSION: u32 = 19;
 
 /// Shard size and per-shard source budget of the qualified module build.
 pub const MODULE_SHARD_SIZE: usize = 64;

@@ -6296,6 +6296,7 @@ void GxBackend::write_scene_vs_constants(const GxVsConstants& cpu, GxVsConstants
         (static_cast<std::uint64_t>(state_.cp(cp::kArrayBaseBase)) << 32u) ^
             (static_cast<std::uint64_t>(state_.cp(cp::kVcdLo)) << 16u) ^
             state_.cp(cp::kVcdHi));
+    record.identity = record_identity();
     record.palette = (vs_key_.flags & 0x01u) != 0u;
     if (record.palette) {
         // PNMTX0 (XF rows 0-2) stands for the per-vertex palette's object.
@@ -6320,6 +6321,9 @@ void GxBackend::write_scene_vs_constants(const GxVsConstants& cpu, GxVsConstants
         InterpScene& scene = interp_scenes_[interp_scene_];
         scene.constants.push_back(cpu);
         scene.constants.back().mtx_palette_base = upload.mtx_palette_base;
+        // Uber pipelines read the key from the constants: a sub-frame's copy
+        // needs it as the frame's upload has it.
+        apply_uber_vs_key(vs_key_, scene.constants.back());
         const std::int32_t m = transform_history_.current_matches().back();
         scene.from.push_back(previous != nullptr
             ? previous->position
@@ -6368,6 +6372,83 @@ void GxBackend::write_scene_vs_constants(const GxVsConstants& cpu, GxVsConstants
     upload.motion_ctrl[1] = previous_palette;
     upload.motion_ctrl[2] = 0u;
     upload.motion_ctrl[3] = 0u;
+}
+
+std::uint32_t GxBackend::note_identity_occurrence(std::uint64_t key) {
+    if (identity_occurrences_.size() < 2u * (identity_occurrences_used_ + 1u)) {
+        // Grow and rehash this scene's entries; older scenes' entries drop out.
+        std::vector<IdentityOccurrence> old;
+        old.swap(identity_occurrences_);
+        identity_occurrences_.assign(std::max<std::size_t>(old.size() * 2u, 8192u),
+                                     IdentityOccurrence{});
+        identity_occurrences_used_ = 0u;
+        const std::size_t mask = identity_occurrences_.size() - 1u;
+        for (const IdentityOccurrence& entry : old) {
+            if (entry.scene != identity_scene_index_ || entry.count == 0u) continue;
+            std::size_t slot = static_cast<std::size_t>(entry.key ^ (entry.key >> 29u)) & mask;
+            while (identity_occurrences_[slot].scene == identity_scene_index_ &&
+                   identity_occurrences_[slot].count != 0u) {
+                slot = (slot + 1u) & mask;
+            }
+            identity_occurrences_[slot] = entry;
+            ++identity_occurrences_used_;
+        }
+    }
+    const std::size_t mask = identity_occurrences_.size() - 1u;
+    std::size_t slot = static_cast<std::size_t>(key ^ (key >> 29u)) & mask;
+    for (;;) {
+        IdentityOccurrence& entry = identity_occurrences_[slot];
+        if (entry.scene != identity_scene_index_ || entry.count == 0u) {
+            entry = {key, identity_scene_index_, 1u};
+            ++identity_occurrences_used_;
+            return 0u;
+        }
+        if (entry.key == key) {
+            return entry.count++;
+        }
+        slot = (slot + 1u) & mask;
+    }
+}
+
+void GxBackend::begin_identity_scene() {
+    identity_scene_ = identity_scene_markers_ != 0u;
+    identity_scene_markers_ = 0u;
+    ++identity_scene_index_;
+    identity_occurrences_used_ = 0u;
+    identity_marker_ = mix64(0x5343454E45ull);
+    identity_matrix_base_ = state_.matrix_write_count();
+}
+
+std::uint64_t GxBackend::record_identity() const noexcept {
+    if (!identity_scene_) {
+        return 0u;
+    }
+    const std::uint64_t key = combine64(
+        identity_marker_, static_cast<std::uint32_t>(state_.matrix_write_count() - identity_matrix_base_));
+    return key != 0u ? key : 1u;
+}
+
+void GxBackend::on_host_marker(std::uint8_t kind, std::uint16_t aux, std::uint32_t a,
+                               std::uint32_t b) {
+    if (kind < identity_markers_by_kind_.size()) {
+        ++identity_markers_by_kind_[kind];
+    }
+    if (!history_scene_) {
+        return;
+    }
+    ++identity_scene_markers_;
+    std::uint64_t tag = b;
+    if (kind == 4u) {
+        // Particles come from a pool: the birth scene (scene index - age) and
+        // the lifetime tell a reused slot from the particle it held before.
+        const std::uint64_t age = b >> 16u;
+        tag = ((identity_scene_index_ - age) & 0xFFFFFFFFull) |
+              (static_cast<std::uint64_t>(b & 0xFFFFu) << 32u);
+    }
+    std::uint64_t key = combine64(combine64(kind | (static_cast<std::uint64_t>(aux) << 8u), a), tag);
+    key = combine64(key, note_identity_occurrence(key));
+    identity_marker_ = key;
+    identity_matrix_base_ = state_.matrix_write_count();
 }
 
 void GxBackend::take_attached_fifo_markers(FrameChunk& chunk, std::size_t fifo_size) noexcept {
@@ -6434,8 +6515,12 @@ void GxBackend::on_fifo_marker(FifoMarker marker, const std::array<float, 12>* v
             }
             transform_history_.begin_scene(renderer_.matrix_segment_serial(),
                                            view != nullptr ? &camera : nullptr);
+            begin_identity_scene();
             if (interp_recording_) {
-                interp_scenes_[interp_scene_].camera = transform_history_.camera_delta();
+                InterpScene& scene = interp_scenes_[interp_scene_];
+                scene.camera = transform_history_.camera_delta();
+                scene.view = camera;
+                scene.view_known = view != nullptr;
             }
         } else {
             transform_history_.reset();
@@ -6448,6 +6533,10 @@ void GxBackend::on_fifo_marker(FifoMarker marker, const std::array<float, 12>* v
             }
             transform_history_.end_scene();
             const TransformHistoryStats stats = transform_history_.stats();
+            identity_records_ += stats.identified;
+            identity_matched_ += stats.identity_matched;
+            identity_rejected_ += stats.identity_rejected;
+            identity_scene_records_ += stats.records;
             // A cut: most transforms have no previous counterpart.
             if (temporal_scene_ && stats.records >= 16u && stats.matched * 2u < stats.records) {
                 renderer_.reset_temporal_history();
@@ -6993,6 +7082,7 @@ void GxBackend::report_interp_stats() {
             << " snapped-records=" << interp_snapped_
             << " failed=" << interp_failed_
             << " replay-fail=" << renderer_.replay_failure()
+            << " log-gap-ops=" << renderer_.take_log_gap_ops()
             << " real-only=" << real_only
             << " (overlay=" << interp_real_only_[0]
             << " no-scene=" << interp_real_only_[1]
@@ -7002,6 +7092,12 @@ void GxBackend::report_interp_stats() {
             << " moving-per-subframe="
             << (interp_presented_ != 0u ? static_cast<double>(interp_moving_records_) / presented : 0.0)
             << " palette-decompositions=" << interp_palette_decompositions_
+            << " camera-cuts=" << interp_camera_cuts_
+            << " identity(records/matched/rejected/scene-records)=" << identity_records_ << '/'
+            << identity_matched_ << '/' << identity_rejected_ << '/' << identity_scene_records_
+            << " markers(shape/obj/emitter/particle)=" << identity_markers_by_kind_[1] << '/'
+            << identity_markers_by_kind_[2] << '/' << identity_markers_by_kind_[3] << '/'
+            << identity_markers_by_kind_[4]
             << " build-ms-per-subframe="
             << (interp_presented_ != 0u ? interp_build_ms_ / presented : 0.0)
             << " record-ms-per-subframe="
@@ -7036,13 +7132,20 @@ void GxBackend::report_interp_stats() {
     interp_held_vertex_blocks_ = 0u;
     interp_moving_records_ = 0u;
     interp_palette_decompositions_ = 0u;
+    interp_camera_cuts_ = 0u;
+    identity_records_ = 0u;
+    identity_matched_ = 0u;
+    identity_rejected_ = 0u;
+    identity_scene_records_ = 0u;
+    identity_markers_by_kind_ = {};
     interp_stats_qpc_ = now.QuadPart;
 }
 
 // One interpolated frame at t (0 = previous game frame, 1 = the latest):
-// every scene record's VS constants (and per-vertex palette) rebuilt with
-// its transform between the matched previous record (or the camera delta)
-// and the latest, then the latest frame's operations replayed with them.
+// the camera at t, and every scene record whose constants change rebuilt
+// from its matched previous record (frame_interpolation.h): position and
+// normal matrices in world space under the camera at t, texture matrices,
+// lights and projection; then the latest frame's operations replayed.
 bool GxBackend::render_interp_subframe(float t) {
     const InterpScene& scene = interp_scenes_[interp_sequence_.scene];
     const InterpScene& before_scene = interp_scenes_[(interp_sequence_.scene + 3u) % 4u];
@@ -7052,154 +7155,151 @@ bool GxBackend::render_interp_subframe(float t) {
     }
     const auto build_start = std::chrono::steady_clock::now();
     const std::size_t count = scene.constants.size();
-    const Affine34& camera = scene.camera;
     const D3D12_GPU_VIRTUAL_ADDRESS ring_base = renderer_.matrix_ring().gpu_base();
     constexpr std::size_t kWords = kMatrixPaletteWords;
+    static_assert(kMatrixPaletteWords == kXfPaletteWords);
+    const bool before_valid = before_scene.valid;
+    const auto before_palette = [&](std::int32_t shadow) -> const std::uint32_t* {
+        return before_valid && shadow >= 0 && static_cast<std::size_t>(shadow) < before_scene.palette_count
+            ? before_scene.palettes.data() + static_cast<std::size_t>(shadow) * kWords
+            : nullptr;
+    };
     if (!interp_sequence_.classified) {
-        // Once per sequence: records that did not move keep the constants
-        // the frame recorded (a zero address leaves the draw's own); moving
-        // inline records keep their decomposed motion for every sub-frame.
+        // Once per sequence: the camera between the two scenes, then every
+        // record whose constants differ at some t, with its decomposed motion.
         interp_sequence_.classified = true;
         interp_record_vas_.assign(count, 0u);
         interp_moving_.clear();
-        interp_motion_count_ = 0u;
-        for (InterpPaletteMotion& motion : interp_palette_motions_) motion.ready = false;
-        if (interp_palette_motions_.size() < scene.palette_count) {
-            interp_palette_motions_.resize(scene.palette_count);
+        interp_palette_motions_.clear();
+        interp_palette_first_.assign(scene.palette_count, -1);
+        static const CameraCutLimits cut_limits{};
+        camera_motion(before_valid && before_scene.view_known ? &before_scene.view : nullptr,
+                      scene.view_known ? &scene.view : nullptr, interp_camera_move_, cut_limits,
+                      interp_camera_);
+        interp_camera_move_ = interp_camera_.known ? interp_camera_.moved : 0.0f;
+        if (interp_camera_.cut) {
+            ++interp_camera_cuts_;
         }
-        const bool camera_still = camera == affine_identity();
+        const bool camera_moves = interp_camera_.known && !interp_camera_.cut &&
+            std::memcmp(interp_camera_.a.data(), interp_camera_.b.data(), sizeof(Affine34)) != 0;
         for (std::size_t r = 0; r < count; ++r) {
             const std::int32_t m = scene.prev_index[r];
-            const bool prev_data = before_scene.valid && m >= 0 &&
+            const bool prev_data = before_valid && m >= 0 &&
                 static_cast<std::size_t>(m) < before_scene.constants.size();
-            std::uint32_t motion = 0u;
+            const GxVsConstants& now = scene.constants[r];
+            const GxVsConstants* before = prev_data ? &before_scene.constants[static_cast<std::size_t>(m)] : nullptr;
+            const bool orthographic = now.projection[3][3] != 0.0f;
+            InterpRecordMotion motion{};
+            motion.record = static_cast<std::uint32_t>(r);
+            motion.prev = prev_data ? m : -1;
             if (scene.per_vertex[r] == 0u) {
-                const bool same_tex = !prev_data ||
-                    std::memcmp(before_scene.constants[static_cast<std::size_t>(m)].inline_tex_matrices,
-                                scene.constants[r].inline_tex_matrices,
-                                sizeof(scene.constants[r].inline_tex_matrices)) == 0;
-                if (same_tex && scene.from[r] == scene.current[r]) {
-                    continue;
+                Affine34 b{};
+                std::memcpy(b.data(), now.inline_pos_matrix, sizeof(Affine34));
+                Affine34 a{};
+                if (before != nullptr) {
+                    std::memcpy(a.data(), before->inline_pos_matrix, sizeof(Affine34));
                 }
-                if (interp_motions_.size() <= interp_motion_count_) {
-                    interp_motions_.resize(interp_motion_count_ + 64u);
-                }
-                AffineMotion& pair = interp_motions_[interp_motion_count_];
-                affine_motion(scene.from[r], scene.current[r], pair);
-                if (!affine_motion_plausible(pair)) {
-                    ++interp_snapped_;
-                    continue;
-                }
-                motion = interp_motion_count_++;
-            } else if (const std::int32_t shadow = scene.palette[r];
-                       shadow >= 0 && static_cast<std::size_t>(shadow) < scene.palette_count) {
-                const std::uint32_t* now_words =
-                    scene.palettes.data() + static_cast<std::size_t>(shadow) * kWords;
-                const std::int32_t before =
-                    prev_data ? before_scene.palette[static_cast<std::size_t>(m)] : -1;
-                if (before >= 0 && static_cast<std::size_t>(before) < before_scene.palette_count) {
-                    if (std::memcmp(before_scene.palettes.data() + static_cast<std::size_t>(before) * kWords,
-                                    now_words, 256u * sizeof(std::uint32_t)) == 0) {
-                        continue;
-                    }
-                } else if (camera_still) {
-                    continue;
-                }
-            } else {
-                continue;
+                eye_motion(before != nullptr ? &a : nullptr, b, interp_camera_, orthographic, motion.position);
+                motion.position_moves =
+                    !motion.position.still || (motion.position.split && camera_moves);
+                interp_snapped_ += motion.position.snapped ? 1u : 0u;
             }
-            interp_moving_.push_back({static_cast<std::uint32_t>(r), motion});
+            if (before != nullptr && !(interp_camera_.known && interp_camera_.cut)) {
+                motion.tex_moves =
+                    std::memcmp(before->inline_tex_matrices, now.inline_tex_matrices,
+                                sizeof(now.inline_tex_matrices)) != 0 ||
+                    std::memcmp(before->inline_post_matrices, now.inline_post_matrices,
+                                sizeof(now.inline_post_matrices)) != 0;
+                motion.projection_moves =
+                    before->projection[3][3] == now.projection[3][3] &&
+                    std::memcmp(before->projection, now.projection, sizeof(now.projection)) != 0;
+            }
+            const std::int32_t shadow = scene.palette[r];
+            if (shadow >= 0 && static_cast<std::size_t>(shadow) < scene.palette_count) {
+                const std::int32_t before_shadow =
+                    prev_data ? before_scene.palette[static_cast<std::size_t>(m)] : -1;
+                const std::uint32_t* before_words = before_palette(before_shadow);
+                const std::int32_t pair_before = before_words != nullptr ? before_shadow : -1;
+                std::int32_t index = interp_palette_first_[static_cast<std::size_t>(shadow)];
+                while (index >= 0 &&
+                       interp_palette_motions_[static_cast<std::size_t>(index)].before != pair_before) {
+                    index = interp_palette_motions_[static_cast<std::size_t>(index)].next;
+                }
+                if (index < 0) {
+                    index = static_cast<std::int32_t>(interp_palette_motions_.size());
+                    InterpPaletteMotion& entry = interp_palette_motions_.emplace_back();
+                    entry.shadow = shadow;
+                    entry.before = pair_before;
+                    entry.next = interp_palette_first_[static_cast<std::size_t>(shadow)];
+                    interp_palette_first_[static_cast<std::size_t>(shadow)] = index;
+                    const std::uint32_t* now_words =
+                        scene.palettes.data() + static_cast<std::size_t>(shadow) * kWords;
+                    palette_motion(before_words, now_words, interp_camera_, orthographic, entry.motion);
+                    interp_snapped_ += entry.motion.snapped;
+                    ++interp_palette_decompositions_;
+                }
+                if (interp_palette_motions_[static_cast<std::size_t>(index)].motion.any_changed) {
+                    motion.palette = index;
+                }
+            }
+            if (motion.position_moves || motion.tex_moves || motion.projection_moves ||
+                motion.palette >= 0) {
+                interp_moving_.push_back(motion);
+            }
         }
     }
-    // Draws of one skinned model share a palette: interpolate it once.
-    interp_palette_uploads_.assign(scene.palette_count, InterpPaletteUpload{});
+    ++interp_subframe_serial_;
+    const Affine34 camera_t = camera_at(interp_camera_, t);
     interp_moving_records_ += interp_moving_.size();
-    for (const InterpMoving& moving : interp_moving_) {
-        const std::uint32_t r = moving.record;
-        const std::int32_t m = scene.prev_index[r];
-        const bool prev_data = before_scene.valid && m >= 0 &&
-            static_cast<std::size_t>(m) < before_scene.constants.size();
-        const GxVsConstants& recorded = scene.constants[r];
-        // The upload is write-combined: written once, never read back.
+    alignas(16) std::uint32_t palette_words[kMatrixPaletteWords];
+    for (const InterpRecordMotion& moving : interp_moving_) {
+        const GxVsConstants& recorded = scene.constants[moving.record];
+        const GxVsConstants* before = moving.prev >= 0
+            ? &before_scene.constants[static_cast<std::size_t>(moving.prev)] : nullptr;
+        // Built in cached memory, then copied once: the upload is write-combined.
+        GxVsConstants built = recorded;
+        if (moving.position_moves) {
+            const Affine34 at = eye_at(moving.position, interp_camera_, camera_t, t);
+            std::memcpy(built.inline_pos_matrix, at.data(), sizeof(built.inline_pos_matrix));
+        }
+        if (moving.tex_moves && before != nullptr) {
+            const auto lerp_rows = [t](const float* a, const float* b, float* out, std::size_t words) {
+                for (std::size_t i = 0; i < words; ++i) {
+                    out[i] = tex_word_at(a[i], b[i], (i & 3u) == 3u, t);
+                }
+            };
+            lerp_rows(&before->inline_tex_matrices[0][0][0], &recorded.inline_tex_matrices[0][0][0],
+                      &built.inline_tex_matrices[0][0][0], kMaxTexGens * 12u);
+            lerp_rows(&before->inline_post_matrices[0][0][0], &recorded.inline_post_matrices[0][0][0],
+                      &built.inline_post_matrices[0][0][0], kMaxTexGens * 12u);
+        }
+        if (moving.projection_moves && before != nullptr) {
+            const float* a = &before->projection[0][0];
+            const float* b = &recorded.projection[0][0];
+            float* out = &built.projection[0][0];
+            for (unsigned i = 0; i < 16u; ++i) {
+                out[i] = std::isfinite(a[i]) && std::isfinite(b[i]) ? a[i] + (b[i] - a[i]) * t : b[i];
+            }
+        }
+        if (moving.palette >= 0) {
+            InterpPaletteMotion& entry = interp_palette_motions_[static_cast<std::size_t>(moving.palette)];
+            if (entry.uploaded != interp_subframe_serial_) {
+                const std::uint32_t* now_words =
+                    scene.palettes.data() + static_cast<std::size_t>(entry.shadow) * kWords;
+                palette_at(entry.motion, before_palette(entry.before), now_words, interp_camera_, camera_t,
+                           t, palette_words);
+                const UploadRing::Allocation alloc =
+                    renderer_.matrix_ring().allocate(kWords * sizeof(std::uint32_t), 256u);
+                std::memcpy(alloc.cpu, palette_words, kWords * sizeof(std::uint32_t));
+                entry.base = static_cast<std::uint32_t>((alloc.gpu - ring_base) / 16u);
+                entry.uploaded = interp_subframe_serial_;
+            }
+            built.mtx_palette_base = entry.base;
+        }
         const UploadRing::Allocation upload =
             renderer_.constant_ring().allocate(sizeof(GxVsConstants), 256u);
-        auto* constants = reinterpret_cast<GxVsConstants*>(upload.cpu);
-        std::memcpy(constants, &recorded, sizeof(GxVsConstants));
-        interp_record_vas_[r] = upload.gpu;
-        if (scene.per_vertex[r] == 0u) {
-            const Affine34 at = affine_motion_at(interp_motions_[moving.motion], t);
-            std::memcpy(constants->inline_pos_matrix, at.data(), sizeof(constants->inline_pos_matrix));
-            if (prev_data) {
-                const GxVsConstants& before = before_scene.constants[static_cast<std::size_t>(m)];
-                const float* now = &recorded.inline_tex_matrices[0][0][0];
-                const float* old = &before.inline_tex_matrices[0][0][0];
-                float lerped[kMaxTexGens * 12u];
-                for (std::size_t i = 0; i < kMaxTexGens * 12u; ++i) {
-                    lerped[i] = old[i] + (now[i] - old[i]) * t;
-                }
-                std::memcpy(&constants->inline_tex_matrices[0][0][0], lerped, sizeof(lerped));
-            }
-            continue;
-        }
-        const std::int32_t shadow = scene.palette[r];
-        const std::uint32_t* now_words =
-            scene.palettes.data() + static_cast<std::size_t>(shadow) * kWords;
-        const std::uint32_t* before_words = nullptr;
-        std::int32_t before = -1;
-        if (prev_data) {
-            before = before_scene.palette[static_cast<std::size_t>(m)];
-            if (before >= 0 && static_cast<std::size_t>(before) < before_scene.palette_count) {
-                before_words = before_scene.palettes.data() +
-                               static_cast<std::size_t>(before) * kWords;
-            } else {
-                before = -1;
-            }
-        }
-        InterpPaletteUpload& cached = interp_palette_uploads_[static_cast<std::size_t>(shadow)];
-        if (!cached.valid || cached.before != before) {
-            // PNMTX0-9 (XF rows 0-29) rigid, decomposed once per sequence;
-            // texture matrices (rows 30-63) element-wise.
-            InterpPaletteMotion& motion = interp_palette_motions_[static_cast<std::size_t>(shadow)];
-            if (!motion.ready || motion.before != before) {
-                for (unsigned matrix = 0; matrix < 10u; ++matrix) {
-                    Affine34 now_m{};
-                    std::memcpy(now_m.data(), now_words + matrix * 12u, sizeof(now_m));
-                    Affine34 from{};
-                    if (before_words != nullptr) {
-                        std::memcpy(from.data(), before_words + matrix * 12u, sizeof(from));
-                    } else {
-                        from = affine_multiply(camera, now_m);
-                    }
-                    affine_motion(from, now_m, motion.matrices[matrix]);
-                    if (!affine_motion_plausible(motion.matrices[matrix])) {
-                        affine_motion(now_m, now_m, motion.matrices[matrix]);
-                    }
-                }
-                motion.ready = true;
-                motion.before = before;
-                ++interp_palette_decompositions_;
-            }
-            static_assert(kMatrixPaletteWords > 256u);
-            const UploadRing::Allocation alloc =
-                renderer_.matrix_ring().allocate(kWords * sizeof(std::uint32_t), 256u);
-            auto* words = reinterpret_cast<std::uint32_t*>(alloc.cpu);  // write-combined, write only
-            for (unsigned matrix = 0; matrix < 10u; ++matrix) {
-                const Affine34 at = affine_motion_at(motion.matrices[matrix], t);
-                std::memcpy(words + matrix * 12u, at.data(), sizeof(at));
-            }
-            if (before_words != nullptr) {
-                for (std::size_t w = 120u; w < 256u; ++w) {
-                    const float a = std::bit_cast<float>(before_words[w]);
-                    const float b = std::bit_cast<float>(now_words[w]);
-                    words[w] = std::bit_cast<std::uint32_t>(a + (b - a) * t);
-                }
-            } else {
-                std::memcpy(words + 120u, now_words + 120u, (256u - 120u) * sizeof(std::uint32_t));
-            }
-            std::memcpy(words + 256u, now_words + 256u, (kWords - 256u) * sizeof(std::uint32_t));
-            cached = {true, before, static_cast<std::uint32_t>((alloc.gpu - ring_base) / 16u)};
-        }
-        constants->mtx_palette_base = cached.base;
+        std::memcpy(upload.cpu, &built, sizeof(GxVsConstants));
+        interp_record_vas_[moving.record] = upload.gpu;
     }
     interp_build_ms_ += std::chrono::duration<double, std::milli>(
         std::chrono::steady_clock::now() - build_start).count();
@@ -8494,6 +8594,15 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
             // The renderer keeps the log per game frame (interpolation_mode).
             interp_recording_ = renderer_.interpolation_mode();
             interp_frames_ = interp_recording_ ? interpolated_frames_per_game_frame(rate) : 0u;
+            // GALAXY_DRAW_IDENTITY=0 never asks the game for draw identities,
+            // =1 always does (tests at 60).
+            static const std::uint64_t identity_env = read_env_u64("GALAXY_DRAW_IDENTITY", 2u);
+            const bool wanted = identity_env == 2u
+                ? (interp_recording_ || renderer_.temporal_mode())
+                : identity_env != 0u;
+            if (draw_identity_wanted_.load(std::memory_order_relaxed) != wanted) {
+                draw_identity_wanted_.store(wanted, std::memory_order_relaxed);
+            }
             interp_scenes_in_chunk_ = 0u;
         }
         // begin_frame() applies a pending internal-resolution change, so copies must use the scale the

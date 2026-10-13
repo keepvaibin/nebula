@@ -506,6 +506,11 @@ enum class SiteHookKind : std::uint32_t {
     HomeGeometry = 14,          // argument: kind | lane << 8
     LodDistance = 15,           // f1 holds LodCtrl::calcDistanceToCamera's result
     MultiSceneModel = 16,       // r31 MultiSceneActor, r3 its J3DModel
+    // Draw identity (generation 19): the object whose GX commands follow.
+    DrawShapePacket = 17,       // r3 J3DShapePacket (prepareDraw entry)
+    DrawNameObj = 18,           // r4 NameObj (const category-list delegator)
+    DrawEmitter = 19,           // r3 JPAResource, r4 JPAEmitterWorkData; argument 1 = child pass
+    DrawParticle = 20,          // argument: node register | 0x100 for the child pass; r31 work
 };
 
 inline void site_hook(

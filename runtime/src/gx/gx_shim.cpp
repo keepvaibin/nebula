@@ -76,6 +76,10 @@ void attach_scene_view(const float view[12]) noexcept {
     backend().attach_scene_view(view);
 }
 
+bool draw_identity_wanted() noexcept {
+    return backend().draw_identity_wanted();
+}
+
 bool capture_pointer_depth(std::span<std::uint32_t> pixels) {
     return backend().capture_pointer_depth(pixels);
 }

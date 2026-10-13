@@ -439,6 +439,8 @@ public:
     // Temporal upscaling (upscaler mode 2). At the start of the guest's 3D
     // scene: whether the temporal path runs for it and, if so, the scene's
     // sub-pixel jitter in render pixels (applied to perspective projections).
+    // The temporal upscaler (FSR 3) is selected and available.
+    [[nodiscard]] bool temporal_mode() const;
     [[nodiscard]] bool scene_temporal_begin(float& jitter_x, float& jitter_y);
     // After a temporal scene_temporal_begin: clears the motion target for
     // the scene. False when it could not be created (no motion writers).
@@ -529,6 +531,9 @@ public:
     // Copy textures saved and restored around sub-frames since the last call.
     [[nodiscard]] std::uint64_t take_subframe_guarded() noexcept {
         return std::exchange(subframe_guarded_total_, 0u);
+    }
+    [[nodiscard]] std::uint64_t take_log_gap_ops() noexcept {
+        return std::exchange(log_gap_ops_, 0u);
     }
     // The scene camera's clip planes and vertical field of view (radians).
     void set_scene_camera(float near_plane, float far_plane, float fov_y) noexcept;
@@ -757,7 +762,6 @@ private:
     bool create_efb_targets(unsigned efb_scale);
     void carry_over_efb_contents();
     [[nodiscard]] unsigned output_efb_scale_for_window() const;
-    [[nodiscard]] bool temporal_mode() const;
     [[nodiscard]] unsigned temporal_render_scale(unsigned output_scale) const;
     [[nodiscard]] bool ensure_motion_target();
     [[nodiscard]] bool record_temporal_upscale(unsigned output_scale);
@@ -921,6 +925,13 @@ private:
     std::vector<ReplayViewport> replay_viewports_;
     std::vector<ReplayClear> replay_clears_;
     std::vector<ReplayCopy> replay_copies_;
+    // The display copy's clear runs after the copy closed the log; the next
+    // log starts with it so sub-frames begin from the same EFB as the frame.
+    ReplayClear log_start_clear_{};
+    bool log_start_clear_valid_ = false;
+    // Draws and texture copies between a log's display copy and the next log
+    // (missing from both logs; expected 0).
+    std::uint64_t log_gap_ops_ = 0;
     std::vector<ReplayOp> play_ops_;
     std::vector<DrawCall> play_draws_;
     std::vector<ReplayViewport> play_viewports_;

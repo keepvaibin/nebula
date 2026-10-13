@@ -6701,6 +6701,11 @@ void RendererD3D12::begin_replay_record() {
     replay_viewports_.clear();
     replay_clears_.clear();
     replay_copies_.clear();
+    if (log_start_clear_valid_) {
+        log_start_clear_valid_ = false;
+        replay_ops_.push_back({ReplayKind::Clear, 0u});
+        replay_clears_.push_back(log_start_clear_);
+    }
     if (ring_mode_ != RingMode::Interp) {
         replay_valid_ = false;
     }
@@ -7613,6 +7618,10 @@ void RendererD3D12::clear_efb(
         replay_ops_.push_back({ReplayKind::Clear, static_cast<std::uint32_t>(replay_clears_.size())});
         replay_clears_.push_back({clear_ar, clear_gb, clear_z24, color_enable, alpha_enable,
                                   depth_enable, rect_x, rect_y, rect_w, rect_h, pixel_format});
+    } else if (ring_mode_ == RingMode::Interp && ring_advance_pending_ && !replay_playing_) [[unlikely]] {
+        log_start_clear_ = {clear_ar, clear_gb, clear_z24, color_enable, alpha_enable,
+                            depth_enable, rect_x, rect_y, rect_w, rect_h, pixel_format};
+        log_start_clear_valid_ = true;
     }
     const D3D12_CPU_DESCRIPTOR_HANDLE rtv = efb_rtv_;
     const D3D12_CPU_DESCRIPTOR_HANDLE dsv = efb_dsv_;
@@ -7688,6 +7697,8 @@ void RendererD3D12::draw(const DrawCall& call) {
     if (replay_recording_) [[unlikely]] {
         replay_ops_.push_back({ReplayKind::Draw, static_cast<std::uint32_t>(replay_draws_.size())});
         replay_draws_.push_back(call);
+    } else if (ring_mode_ == RingMode::Interp && ring_advance_pending_ && !replay_playing_) [[unlikely]] {
+        ++log_gap_ops_;
     }
     if (call.pipeline != bound_pipeline_) {
         command_list_->SetPipelineState(call.pipeline);

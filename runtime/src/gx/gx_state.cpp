@@ -491,6 +491,7 @@ void GxState::apply_validated_xf(
     // so the only dirty effect is the matrix palette bit. Writes stay sequential because
     // values may alias this bank.
     if (base < xf::kStatusRegsBase) {
+        ++matrix_writes_;
         bool changed = false;
         for (std::uint16_t i = 0; i < count; ++i) {
             const std::uint16_t addr = static_cast<std::uint16_t>(base + i);

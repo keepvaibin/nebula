@@ -125,6 +125,9 @@ void attach_fifo_marker(FifoMarker marker, std::size_t fifo_offset) noexcept;
 // Simulation thread, before attach_fifo_marker(SceneBegin): the game camera's
 // world-to-eye matrix (row-major 3x4) for that scene.
 void attach_scene_view(const float view[12]) noexcept;
+// Simulation thread, at each SceneBegin: whether the renderer reads
+// draw-identity markers (frame interpolation or motion vectors are on).
+[[nodiscard]] bool draw_identity_wanted() noexcept;
 void set_pointer_response(PointerResponseStamp stamp) noexcept;
 // Simulation producer; copied into each owned FIFO chunk and selected XFB.
 void set_prerecorded_movie_content(bool movie) noexcept;

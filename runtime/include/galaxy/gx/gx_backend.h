@@ -41,6 +41,7 @@
 #include "galaxy/gx/resident_vertex_arena.h"
 #include "galaxy/gx/shader_keys.h"
 #include "galaxy/gx/texture_cache.h"
+#include "galaxy/gx/frame_interpolation.h"
 #include "galaxy/gx/transform_history.h"
 #include "galaxy/gx/uber_constants.h"
 #include "galaxy/gx/vs_constants.h"
@@ -240,6 +241,9 @@ public:
         }
         producer_scene_view_valid_ = false;
     }
+    [[nodiscard]] bool draw_identity_wanted() const noexcept {
+        return draw_identity_wanted_.load(std::memory_order_relaxed);
+    }
     // Simulation thread: the game camera for the next SceneBegin marker.
     void attach_scene_view(const float view[12]) noexcept {
         for (unsigned i = 0; i < 12u; ++i) producer_scene_view_[i] = view[i];
@@ -386,6 +390,8 @@ private:
     void on_invalidate_textures() override;
     void on_invalidate_vertex_cache() override;
     void on_tlut_load() override;
+    void on_host_marker(std::uint8_t kind, std::uint16_t aux, std::uint32_t a,
+                        std::uint32_t b) override;
 
     // --- Per-draw state flush ------------------------------------------------
 
@@ -615,6 +621,34 @@ private:
     bool producer_scene_view_valid_ = false;
     // Render thread: inside GameScene::draw3D (between the scene markers).
     bool scene_phase_ = false;
+    // Render thread -> simulation thread: emit draw-identity markers.
+    std::atomic<bool> draw_identity_wanted_{false};
+    // Draw identity (on_host_marker): the key of the marker in force in the
+    // open scene and the matrix-write count at it. A transform record's
+    // identity is that key with the matrix writes since. Repeated markers of
+    // one scene get distinct keys through their occurrence counts. A scene
+    // uses identities when the scene before it had markers (a module without
+    // them keeps signature matching).
+    std::uint64_t identity_marker_ = 0;
+    std::uint32_t identity_matrix_base_ = 0;
+    std::uint64_t identity_scene_index_ = 0;
+    std::uint64_t identity_scene_markers_ = 0;
+    bool identity_scene_ = false;
+    struct IdentityOccurrence {
+        std::uint64_t key = 0;
+        std::uint64_t scene = 0;
+        std::uint32_t count = 0;
+    };
+    std::vector<IdentityOccurrence> identity_occurrences_;
+    std::uint32_t identity_occurrences_used_ = 0;
+    [[nodiscard]] std::uint32_t note_identity_occurrence(std::uint64_t key);
+    [[nodiscard]] std::uint64_t record_identity() const noexcept;
+    void begin_identity_scene();
+    std::array<std::uint64_t, 5> identity_markers_by_kind_{};
+    std::uint64_t identity_records_ = 0;
+    std::uint64_t identity_matched_ = 0;
+    std::uint64_t identity_rejected_ = 0;
+    std::uint64_t identity_scene_records_ = 0;
     // Temporal upscaling for the current scene: perspective projections carry
     // this sub-pixel jitter (render pixels).
     bool temporal_scene_ = false;
@@ -651,6 +685,9 @@ private:
         std::vector<std::uint32_t> palettes;    // kMatrixPaletteWords per shadow
         std::size_t palette_count = 0;
         Affine34 camera{};
+        // The game camera (world to eye) of the scene.
+        Affine34 view{};
+        bool view_known = false;
         bool valid = false;
         void clear() noexcept {
             constants.clear(); from.clear(); current.clear(); prev_index.clear();
@@ -678,32 +715,35 @@ private:
         unsigned scene = 0;               // interp_scenes_ index being interpolated
         bool classified = false;          // interp_moving_ holds this scene's records
     };
-    // Records of the playing scene that moved (the rest keep their constants),
-    // with their decomposed motion (inline records; interp_motions_ index).
-    struct InterpMoving {
+    // The playing scene, classified once per sequence (render_interp_subframe):
+    // the game camera between the scene before and it, every record whose
+    // constants change in a sub-frame, and every palette snapshot pair.
+    CameraMotion interp_camera_{};
+    float interp_camera_move_ = 0.0f;     // eye movement into the scene before (cut test)
+    struct InterpRecordMotion {
         std::uint32_t record = 0;
-        std::uint32_t motion = 0;
+        std::int32_t prev = -1;           // matched record of the scene before
+        std::int32_t palette = -1;        // interp_palette_motions_ index
+        EyeMotion position{};             // inline position matrix
+        bool position_moves = false;
+        bool tex_moves = false;           // inline texture or post matrices
+        bool projection_moves = false;
     };
-    std::vector<InterpMoving> interp_moving_;
-    std::vector<AffineMotion> interp_motions_;
-    std::uint32_t interp_motion_count_ = 0;
-    // Per palette shadow of the playing scene: PNMTX0-9 decomposed once per
-    // sequence (against `before`, the previous scene's shadow, or -1).
+    std::vector<InterpRecordMotion> interp_moving_;
     struct InterpPaletteMotion {
-        bool ready = false;
-        std::int32_t before = -1;
-        std::array<AffineMotion, 10> matrices{};
+        std::int32_t shadow = -1;         // palette shadow of the playing scene
+        std::int32_t before = -1;         // of the scene before, or -1
+        std::int32_t next = -1;           // next entry of the same shadow
+        PaletteMotion motion{};
+        std::uint32_t base = 0;           // this sub-frame's upload (mtx_palette_base)
+        std::uint64_t uploaded = 0;       // interp_subframe_serial_ of `base`
     };
     std::vector<InterpPaletteMotion> interp_palette_motions_;
+    std::vector<std::int32_t> interp_palette_first_;  // per shadow: first entry
+    std::uint64_t interp_subframe_serial_ = 0;
     std::uint64_t interp_moving_records_ = 0;        // summed per sub-frame
     std::uint64_t interp_palette_decompositions_ = 0;
-    // Per palette shadow: its interpolated palette in this sub-frame.
-    struct InterpPaletteUpload {
-        bool valid = false;
-        std::int32_t before = -1;         // previous scene's shadow it was blended from
-        std::uint32_t base = 0;           // mtx_palette_base
-    };
-    std::vector<InterpPaletteUpload> interp_palette_uploads_;
+    std::uint64_t interp_camera_cuts_ = 0;
     // A ready frame's present arrived inside a render chunk: the render loop
     // finishes the playing sequence, then starts this one.
     bool interp_start_pending_ = false;

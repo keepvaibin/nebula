@@ -6,10 +6,14 @@
 // scene's records so every draw knows its previous-frame transform. Motion
 // vectors and the interpolated redraw read the matches.
 //
-// Identity is a render signature (vertex/pixel shader keys, position array
-// base, vertex descriptor) plus the nearest previous record by eye-space
-// translation, each previous record claimed once. No allocation in steady
-// state; no Windows/D3D12 includes (unit-tested offline).
+// Identity comes from the game: draw-identity markers name the object that
+// draws (J3D shape packet, NameObj, JPA emitter or particle) and a record's
+// identity is that marker with the number of matrix loads since it. Records
+// with an identity match the previous record of the same identity exactly.
+// Without markers (a module older than generation 19) the match is a render
+// signature (vertex/pixel shader keys, position array base, vertex
+// descriptor) plus the nearest previous record by eye-space translation.
+// No allocation in steady state; no Windows/D3D12 includes (unit-tested).
 
 #include <array>
 #include <cstddef>
@@ -58,6 +62,8 @@ inline constexpr std::uint32_t kNoPaletteOffset = 0xFFFFFFFFu;
 
 struct TransformRecord {
     std::uint64_t signature = 0;
+    // Draw identity (0: none, signature matching).
+    std::uint64_t identity = 0;
     // Matching fingerprint: eye-space origin of the draw's object (inline
     // position matrix translation, or PNMTX0's for per-vertex palettes).
     float translation[3]{};
@@ -74,6 +80,9 @@ struct TransformHistoryStats {
     std::uint32_t records = 0;
     std::uint32_t matched = 0;
     std::uint32_t previous_records = 0;
+    std::uint32_t identified = 0;        // records with an identity
+    std::uint32_t identity_matched = 0;  // matched by identity
+    std::uint32_t identity_rejected = 0; // same identity, other draw form
 };
 
 class TransformHistory {
@@ -111,6 +120,16 @@ public:
 
 private:
     void build_previous_index();
+    void build_identity_index();
+    [[nodiscard]] std::int32_t find_identity(std::uint64_t identity) const noexcept;
+    // Previous records by identity (first record of each), open-addressed.
+    std::vector<std::uint64_t> identity_keys_;
+    std::vector<std::int32_t> identity_values_;
+    std::size_t identity_mask_ = 0;
+    bool previous_identified_ = false;
+    std::uint32_t identified_ = 0;
+    std::uint32_t identity_matched_ = 0;
+    std::uint32_t identity_rejected_ = 0;
 
     std::vector<TransformRecord> current_;
     std::vector<TransformRecord> previous_;

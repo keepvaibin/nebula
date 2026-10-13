@@ -4286,6 +4286,9 @@ fn lower_words_with_config(
         {
             output.push_str(&site_hook_call(pc, "HomeVertical", 0));
         }
+        if let Some((kind, argument)) = draw_identity_site(address, function_end, pc, word) {
+            output.push_str(&site_hook_call(pc, kind, argument));
+        }
         let typed_pure_access = if typed_region_gpr_mask != 0
             && !has_reentry_label
             && function_async_marker.is_none()
@@ -7938,6 +7941,25 @@ fn site_hook_call(pc: u32, kind: &str, argument: u32) -> String {
     format!(
         "    galaxy::site_hook(services, context, memory, 0x{pc:08X}u, galaxy::SiteHookKind::{kind}, {argument}u);\n"
     )
+}
+
+/// The object that is about to draw, for frame interpolation and motion vectors: each J3D shape
+/// packet (J3DShapePacket::prepareDraw, r3), each NameObj draw of a category list (the const
+/// NameObjRealDelegator call, r4), each JPA emitter pass (JPAResource::drawP / drawC, work in r4)
+/// and each particle of those passes (the `work->mpCurNode = node` store; the argument names the
+/// node register, plus 0x100 in drawC).
+fn draw_identity_site(address: u32, function_end: u32, pc: u32, word: u32) -> Option<(&'static str, u32)> {
+    match (address, function_end, pc, word) {
+        (0x8042_32D4, 0x8042_33F0, 0x8042_32D4, 0x9421_FFF0) => Some(("DrawShapePacket", 0)),
+        (0x8026_1B40, 0x8026_1B70, 0x8026_1B40, 0x9421_FFF0) => Some(("DrawNameObj", 0)),
+        (0x8044_2E74, 0x8044_319C, 0x8044_2E74, 0x9421_FFD0) => Some(("DrawEmitter", 0)),
+        (0x8044_319C, 0x8044_3484, 0x8044_319C, 0x9421_FFE0) => Some(("DrawEmitter", 1)),
+        (0x8044_2E74, 0x8044_319C, 0x8044_30A0, 0x939F_01E8) => Some(("DrawParticle", 28)),
+        (0x8044_2E74, 0x8044_319C, 0x8044_3104, 0x937F_01E8) => Some(("DrawParticle", 27)),
+        (0x8044_319C, 0x8044_3484, 0x8044_3388, 0x939F_01E8) => Some(("DrawParticle", 0x100 | 28)),
+        (0x8044_319C, 0x8044_3484, 0x8044_33EC, 0x937F_01E8) => Some(("DrawParticle", 0x100 | 27)),
+        _ => None,
+    }
 }
 
 fn rmge01_native_screen_width_call(address: u32, function_end: u32, pc: u32, word: u32) -> bool {

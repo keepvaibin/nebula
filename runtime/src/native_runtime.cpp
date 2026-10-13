@@ -2283,6 +2283,11 @@ struct RuntimeState {
     std::uint32_t first_tick{};
     std::uint32_t last_tick{};
     galaxy::host::GuestAddressSpace* address_space{};
+    // Draw-identity markers are emitted inside this 3D scene (set at its
+    // SceneBegin when the renderer wants them).
+    bool draw_identity_scene{};
+    std::uint64_t draw_identity_markers{};
+    std::uint64_t draw_identity_dropped{};
     DrawDistanceState draw_distance{};
     galaxy::input::NativeInputCausalityTracker native_input_causality;
     galaxy::scheduler::FunctionAsyncFlightTracker function_async_flights;
@@ -9869,12 +9874,70 @@ bool try_read_guest_u32(
     return true;
 }
 
+// SiteHookKind::DrawShapePacket..DrawParticle: one op::kHostMarker in the GX
+// stream naming the object whose commands follow. Marker kinds: 1 J3D shape
+// packet (packet, its J3DShape), 2 NameObj draw (object, vtable), 3 JPA
+// emitter pass (emitter, JPAResource; aux 1 = child pass), 4 JPA particle
+// (particle, age << 16 | lifetime; aux 1 = child pass).
+void emit_draw_identity_marker(RuntimeState& state, std::uint32_t kind, std::uint32_t argument,
+                               const galaxy::PpcContext& context);
+
 std::uint32_t read_guest_u32_or_zero(
     const galaxy::host::GuestAddressSpace& address_space,
     std::uint32_t address) {
     std::uint32_t value = 0;
     static_cast<void>(try_read_guest_u32(address_space, address, value));
     return value;
+}
+
+void emit_draw_identity_marker(RuntimeState& state, std::uint32_t kind, std::uint32_t argument,
+                               const galaxy::PpcContext& context) {
+    if (state.address_space == nullptr) {
+        return;
+    }
+    const auto& space = *state.address_space;
+    std::uint8_t marker_kind = 0u;
+    std::uint16_t aux = 0u;
+    std::uint32_t a = 0u;
+    std::uint32_t b = 0u;
+    switch (static_cast<galaxy::SiteHookKind>(kind)) {
+    case galaxy::SiteHookKind::DrawShapePacket:
+        marker_kind = 1u;
+        a = context.gpr[3];
+        b = read_guest_u32_or_zero(space, a + 0x28u);  // J3DShapePacket::mpShape
+        break;
+    case galaxy::SiteHookKind::DrawNameObj:
+        marker_kind = 2u;
+        a = context.gpr[4];
+        b = read_guest_u32_or_zero(space, a);          // vtable
+        break;
+    case galaxy::SiteHookKind::DrawEmitter:
+        marker_kind = 3u;
+        a = read_guest_u32_or_zero(space, context.gpr[4]);  // JPAEmitterWorkData::mpEmtr
+        b = context.gpr[3];
+        aux = static_cast<std::uint16_t>(argument & 1u);
+        break;
+    case galaxy::SiteHookKind::DrawParticle:
+        marker_kind = 4u;
+        a = context.gpr[argument & 0x1Fu] + 8u;         // JPANode -> JPABaseParticle
+        b = read_guest_u32_or_zero(space, a + 0x80u);  // mAge << 16 | mLifeTime
+        aux = static_cast<std::uint16_t>((argument >> 8u) & 1u);
+        break;
+    default:
+        return;
+    }
+    const std::array<std::byte, 12> marker{
+        std::byte{0xF0}, std::byte{marker_kind},
+        std::byte(aux >> 8u), std::byte(aux & 0xFFu),
+        std::byte(a >> 24u), std::byte((a >> 16u) & 0xFFu),
+        std::byte((a >> 8u) & 0xFFu), std::byte(a & 0xFFu),
+        std::byte(b >> 24u), std::byte((b >> 16u) & 0xFFu),
+        std::byte((b >> 8u) & 0xFFu), std::byte(b & 0xFFu)};
+    if (state.address_space->append_gx_host_marker(marker)) {
+        ++state.draw_identity_markers;
+    } else {
+        ++state.draw_identity_dropped;
+    }
 }
 
 std::uint8_t read_guest_u8_or_zero(
@@ -24161,6 +24224,8 @@ void call_guest_impl_body(
             guest_address == 0x8033EE8Cu ? galaxy::gx::FifoMarker::SceneBegin
                                          : galaxy::gx::FifoMarker::SceneEnd,
             state.address_space->gx_fifo_data().size());
+        state.draw_identity_scene =
+            guest_address == 0x8033EE8Cu && galaxy::gx::draw_identity_wanted();
     }
     const auto mouse_boundary_object=context->gpr[3];
     guest_address = normalize_executable_address(state, guest_address);
@@ -33390,8 +33455,15 @@ int wmain(int argc, wchar_t** argv) {
     services.site_hook = +[](void* user, std::uint32_t guest_pc, std::uint32_t kind,
                              std::uint32_t argument, galaxy::PpcContext* context,
                              galaxy::GuestMemoryV1* memory) {
-        galaxy::dispatch_site_hook(static_cast<RuntimeState*>(user)->services, guest_pc, kind,
-                                   argument, context, memory);
+        auto& runtime = *static_cast<RuntimeState*>(user);
+        if (kind >= static_cast<std::uint32_t>(galaxy::SiteHookKind::DrawShapePacket) &&
+            kind <= static_cast<std::uint32_t>(galaxy::SiteHookKind::DrawParticle)) {
+            if (runtime.draw_identity_scene) {
+                emit_draw_identity_marker(runtime, kind, argument, *context);
+            }
+            return;
+        }
+        galaxy::dispatch_site_hook(runtime.services, guest_pc, kind, argument, context, memory);
     };
     build_direct_dispatch_table(state, function_records_fn);
     if (!state.direct_dispatch_table.empty()) {

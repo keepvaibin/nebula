@@ -241,6 +241,12 @@ public:
     }
     void mark_all_dirty() { dirty_ = ~0u; }
 
+    // LOAD_XF_REG / LOAD_INDX commands that wrote matrix or light memory
+    // (below 0x1000), changed or not. The same object loads the same sequence
+    // every frame, so a count since its draw-identity marker names each of its
+    // transform states.
+    [[nodiscard]] std::uint32_t matrix_write_count() const noexcept { return matrix_writes_; }
+
 private:
     friend class GxBackendMemorySnapshotTestAccess;
     void invalidate_dependency_shape() noexcept {
@@ -266,6 +272,7 @@ private:
     // guest has written since the last consumer snapshot. See
     // xf_palette_dirty() for what the consumer does with them.
     std::uint64_t xf_palette_dirty_ = 0u;
+    std::uint32_t matrix_writes_ = 0u;
     mutable std::uint64_t dependency_shape_hash_ = 0u;
     mutable DependencyShapeWords dependency_shape_words_{};
     mutable bool dependency_shape_hash_valid_ = false;

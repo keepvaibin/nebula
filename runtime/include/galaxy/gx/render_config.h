@@ -25,7 +25,7 @@ namespace galaxy::gx {
 // D3D12 16384-texel limit. Higher scales are opt-in; the default remains 1x.
 inline constexpr unsigned kMaxEfbScale = 16u;
 inline constexpr float kMinFrameRate = 1.0f;
-inline constexpr float kMaxFrameRate = 60.0f;
+inline constexpr float kMaxFrameRate = 1000.0f;
 
 struct RenderConfig {
     // EFB resolution multiplier (1-kMaxEfbScale).  efb_scale=2 -> 1280x1056 and acts as

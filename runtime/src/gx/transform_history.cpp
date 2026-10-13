@@ -246,6 +246,48 @@ void TransformHistory::reserve(std::size_t records) {
     std::size_t table = 64u;
     while (table < records * 2u) table <<= 1u;
     table_.reserve(table);
+    identity_keys_.reserve(table);
+    identity_values_.reserve(table);
+}
+
+void TransformHistory::build_identity_index() {
+    previous_identified_ = false;
+    std::size_t identified = 0u;
+    for (const TransformRecord& record : previous_) {
+        identified += record.identity != 0u ? 1u : 0u;
+    }
+    if (identified == 0u) {
+        return;
+    }
+    std::size_t size = 64u;
+    while (size < identified * 2u) size <<= 1u;
+    identity_keys_.assign(size, 0u);
+    identity_values_.assign(size, -1);
+    identity_mask_ = size - 1u;
+    for (std::size_t n = 0; n < previous_.size(); ++n) {
+        const std::uint64_t key = previous_[n].identity;
+        if (key == 0u) continue;
+        std::size_t slot = static_cast<std::size_t>(key ^ (key >> 31u)) & identity_mask_;
+        while (identity_keys_[slot] != 0u && identity_keys_[slot] != key) {
+            slot = (slot + 1u) & identity_mask_;
+        }
+        if (identity_keys_[slot] == 0u) {
+            identity_keys_[slot] = key;
+            identity_values_[slot] = static_cast<std::int32_t>(n);
+        }
+    }
+    previous_identified_ = true;
+}
+
+std::int32_t TransformHistory::find_identity(std::uint64_t key) const noexcept {
+    std::size_t slot = static_cast<std::size_t>(key ^ (key >> 31u)) & identity_mask_;
+    while (identity_keys_[slot] != 0u) {
+        if (identity_keys_[slot] == key) {
+            return identity_values_[slot];
+        }
+        slot = (slot + 1u) & identity_mask_;
+    }
+    return -1;
 }
 
 void TransformHistory::reset() noexcept {
@@ -260,6 +302,10 @@ void TransformHistory::reset() noexcept {
     camera_known_ = false;
     camera_delta_ = affine_identity();
     matched_ = 0;
+    identified_ = 0;
+    identity_matched_ = 0;
+    identity_rejected_ = 0;
+    previous_identified_ = false;
 }
 
 void TransformHistory::end_scene() noexcept {
@@ -278,6 +324,7 @@ void TransformHistory::begin_scene(std::uint64_t frame, const Affine34* view) {
         previous_view_known_ = current_view_known_;
         previous_valid_ = true;
         build_previous_index();
+        build_identity_index();
     }
     current_.clear();
     current_match_.clear();
@@ -295,6 +342,9 @@ void TransformHistory::begin_scene(std::uint64_t frame, const Affine34* view) {
         }
     }
     matched_ = 0;
+    identified_ = 0;
+    identity_matched_ = 0;
+    identity_rejected_ = 0;
     scene_open_ = true;
 }
 
@@ -341,6 +391,25 @@ const TransformRecord* TransformHistory::add(const TransformRecord& record) {
     if (!scene_open_) return nullptr;
     current_.push_back(record);
     std::int32_t best = -1;
+    if (record.identity != 0u) {
+        // The game named this object: the previous record of the same
+        // identity is its previous transform, or there is none.
+        ++identified_;
+        if (previous_valid_ && previous_identified_) {
+            const std::int32_t found = find_identity(record.identity);
+            if (found >= 0) {
+                if (previous_[static_cast<std::size_t>(found)].palette == record.palette) {
+                    best = found;
+                    ++matched_;
+                    ++identity_matched_;
+                } else {
+                    ++identity_rejected_;
+                }
+            }
+        }
+        current_match_.push_back(best);
+        return best >= 0 ? &previous_[static_cast<std::size_t>(best)] : nullptr;
+    }
     if (previous_valid_ && !previous_.empty()) {
         float predicted[3]{record.translation[0], record.translation[1],
                            record.translation[2]};
@@ -397,6 +466,9 @@ TransformHistoryStats TransformHistory::stats() const noexcept {
     s.records = static_cast<std::uint32_t>(current_.size());
     s.matched = matched_;
     s.previous_records = previous_valid_ ? static_cast<std::uint32_t>(previous_.size()) : 0u;
+    s.identified = identified_;
+    s.identity_matched = identity_matched_;
+    s.identity_rejected = identity_rejected_;
     return s;
 }
 
