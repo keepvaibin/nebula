@@ -32,7 +32,11 @@ use std::{fs, path::Path};
 //     function-record export (native ABI 24); regenerate every module.
 // 13: eager FPU (no MSR[FP] guards or exception-7 retry entries; native ABI
 //     25); regenerate every module.
-pub const GENERATION_VERSION: u32 = 17;
+// 18: hardware float conversions, flat-view-only memory paths, EABI call and
+//     return synchronization, the module checkpoint gate, per-site indirect
+//     call caches and the profile-ordered function layout; regenerate every
+//     module.
+pub const GENERATION_VERSION: u32 = 18;
 
 /// Shard size and per-shard source budget of the qualified module build.
 pub const MODULE_SHARD_SIZE: usize = 64;
@@ -71,6 +75,27 @@ pub fn release_module_options() -> ModuleTranslationOptions {
         // reloads afterwards, interior entries reload through stubs, and every
         // return stores. Unknown helpers are full synchronization points.
         guest_resident_integer: true,
+        // Lean memory paths: hardware binary32 conversions for lfs/stfs/psq,
+        // no fallback for a missing flat view, stack stores through r11 without
+        // the gather-pipe test, and HID2 paired-single mode taken as set (the
+        // game sets it once at boot).
+        hw_float_conversions: true,
+        flat_view_only: true,
+        stack_r11_stores: true,
+        assume_paired_singles: true,
+        // Calls and returns synchronize only the registers the PowerPC EABI lets
+        // the other side observe. Functions the analysis cannot vouch for keep
+        // full synchronization (abi_contract.json lists them).
+        abi_call_sync: true,
+        abi_exit_sync: true,
+        // Checkpoint tests read a module-owned gate snapshot, indirect calls
+        // cache their last direct entry per call site, and reciprocal estimates,
+        // selects and compares skip FPSCR updates.
+        checkpoint_globals: true,
+        bctrl_site_cache: true,
+        fast_float_forms: true,
+        // The functions the game runs most, placed first and together.
+        function_order: Some(nebula_recomp_core::RMGE01_HOT_FUNCTIONS),
         ..ModuleTranslationOptions::default()
     }
 }
@@ -265,6 +290,16 @@ pub fn generate_all(game: &Path, output: &Path) -> Result<()> {
             "fusedPairedTernary": module_options.fused_paired_ternary,
             "exactPsmtxLocalLanes": module_options.exact_psmtx_local_lanes,
             "guestResidentInteger": module_options.guest_resident_integer,
+            "hwFloatConversions": module_options.hw_float_conversions,
+            "flatViewOnly": module_options.flat_view_only,
+            "stackR11Stores": module_options.stack_r11_stores,
+            "assumePairedSingles": module_options.assume_paired_singles,
+            "abiCallSync": module_options.abi_call_sync,
+            "abiExitSync": module_options.abi_exit_sync,
+            "checkpointGlobals": module_options.checkpoint_globals,
+            "bctrlSiteCache": module_options.bctrl_site_cache,
+            "fastFloatForms": module_options.fast_float_forms,
+            "functionOrder": module_options.function_order.map_or(0, <[u32]>::len),
         },
         "dspRoms": {
             "irom": sha256_hex(DSP_IROM),
