@@ -1534,20 +1534,11 @@ if(MSVC)
     # AUTO keeps old x64 hosts on SSE2 and selects AVX2/FMA only when safe.
     # /fp:precise remains mandatory; never add /fp:fast.
     if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
-        # clang-cl keeps MSVC's semantics here: no FMA contraction, wrapping
-        # signed arithmetic and no type-based alias analysis. The whole RSO is
-        # one function with a resume label per instruction, which is why the
-        # shipped choice below is the unoptimized build (seconds).
-        # /Od is a build-time trade-off, not a correctness requirement: clang is
-        # correct at every level here. What makes /Od attractive is that no
-        # optimizer finishes this one enormous function in reasonable time.
-        # /Od also spills every variable to the stack, which is a very large
-        # constant-factor loss in a component the runtime enters and resumes at
-        # per-instruction checkpoints. GALAXY_HOME_BUTTON_OPT=ON trades install
-        # minutes for /O1 (register allocation and basic cleanup, none of the
-        # expensive passes that blow up on a single huge function). It is opt-in
-        # because it lengthens Setup, and because the speed-up has not been
-        # measured yet -- enable it, record the Home menu, and compare.
+        # clang-cl with MSVC's semantics: no FMA contraction, wrapping signed
+        # arithmetic and no type-based alias analysis. The RSO is one function
+        # with a resume label per instruction, which no optimizer finishes in
+        # reasonable time, so it builds at /Od. GALAXY_HOME_BUTTON_OPT=ON builds
+        # it at /O1 instead, for a longer Setup.
         option(GALAXY_HOME_BUTTON_OPT "Optimize the Home Button RSO with /O1 instead of /Od" OFF)
         if(GALAXY_HOME_BUTTON_OPT)
             target_compile_options(RMGE01_home_button PRIVATE /EHsc /GS- /GR- -w -ffp-contract=off -fwrapv -fno-strict-aliasing /O1)

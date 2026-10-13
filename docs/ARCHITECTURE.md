@@ -32,6 +32,13 @@ DSP program from the user's game and emits:
 Unknown instructions, branch targets, relocations and memory ranges are errors. The recompiler
 never skips, stubs or approximates code it does not understand.
 
+Generated functions keep guest registers in host locals between calls. A call or return
+synchronizes only the registers the PowerPC EABI lets the other side observe; functions that do
+not follow the ABI keep full synchronization and are listed in `abi_contract.json`. Guest RAM is
+accessed through one flat mapping, single-precision values convert with host instructions, and
+the module is linked with the functions the game runs most placed first
+(`crates/nebula-recomp-core/src/hot_functions.rs`).
+
 ## Runtime
 
 `NebulaRuntime.exe` loads the compiled game module and supplies the hardware the game expects:

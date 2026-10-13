@@ -124,15 +124,9 @@ set_target_properties(RMGE01_dsp PROPERTIES PREFIX "")
 if(MSVC)
     target_compile_options(RMGE01_dsp PRIVATE /EHsc /GS- /GR-)
     if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
-        # The generated function is the DSP thread's hot loop, so it is built
-        # at /O2 (clang-cl keeps the minimum of all -O flags, so a lower level
-        # here would also cancel the Release default). The ALU helpers it calls
-        # are header-inline (galaxy::dsp_inline in dsp_context.h) and the raw
-        # instruction provenance observer is compiled out of product builds, so
-        # the TU no longer pays one EH-cleanup scope per DSP instruction.
-        # clang-cl 22.1.6, 32-thread reference machine, one TU, /O2:
-        #   out-of-line ALU + per-instruction scopes: 295 s
-        #   current generator:                        21-28 s
+        # The generated function is the DSP thread's hot loop, built at /O2.
+        # clang-cl uses the lowest -O level it is given, so a lower one here
+        # would also cancel the Release default.
         target_compile_options(RMGE01_dsp PRIVATE -w -fwrapv -fno-strict-aliasing /O2)
     endif()
     foreach(symbol IN ITEMS

@@ -12040,31 +12040,15 @@ fn emit_sharded_module_with_definition_rewrite(
          \x20       # Forward contraction policy through the MSVC-style driver; keep wrapping\n\
          \x20       # signed arithmetic and no type-based alias analysis.\n\
          \x20       target_compile_options(RMGE01_game PRIVATE /EHsc /GS- /GR- -w /clang:-ffp-contract=off -fwrapv -fno-strict-aliasing)\n\
-         \x20       # The block above selects and REPORTS `galaxy_native_isa_effective`, and the\n\
-         \x20       # module compatibility key includes GALAXY_NATIVE_ISA -- but /arch:AVX2 below\n\
-         \x20       # is an MSVC cl.exe spelling, and Setup drives this graph with clang-cl where\n\
-         \x20       # CMAKE_CXX_COMPILER_ID is \"Clang\". Without the flag in this branch an AVX2\n\
-         \x20       # host is told \"Galaxy module CPU target: AVX2\" while every generated\n\
-         \x20       # translation unit is compiled for the SSE2 baseline: two hosts sharing one\n\
-         \x20       # module key can ship different machine code, and the translated code loses\n\
-         \x20       # VEX encoding (three-operand, non-destructive), the wider register file and\n\
-         \x20       # vector integer compares. clang-cl accepts the GCC-style -mavx2 (verified\n\
-         \x20       # against the pinned toolchain: a probe compiles to vpsrlvd/vpand on ymm with\n\
-         \x20       # it and to none without). The FMA flag is deliberately omitted -- FMA changes\n\
-         \x20       # results and /clang:-ffp-contract=off forbids contraction, so the target\n\
-         \x20       # must not advertise the feature. AVX-512 flags are deliberately omitted too --\n\
-         \x20       # the host probe above is the\n\
-         \x20       # the AVX2+OSXSAVE test, which says nothing about AVX-512 availability.\n\
+         \x20       # clang-cl spelling of the AVX2 target (/arch:AVX2 below is for cl.exe).\n\
+         \x20       # AVX-512 is not used: the host probe only tests AVX2 and OSXSAVE.\n\
          \x20       if(galaxy_native_isa_effective STREQUAL \"AVX2\")\n\
          \x20           target_compile_options(RMGE01_game PRIVATE -mavx2)\n\
-         \x20           # The native float fast paths call std::fma/std::fmaf explicitly for\n\
-         \x20           # every fused guest instruction. Advertising FMA3 lets those calls\n\
-         \x20           # become single vfmadd instructions; /clang:-ffp-contract=off above\n\
-         \x20           # still forbids the compiler from fusing any separate multiply and add,\n\
-         \x20           # so no non-fused guest result changes. The AVX2+OSXSAVE host probe\n\
-         \x20           # covers every x86-64 CPU that has AVX2 (all of them also have FMA3).\n\
+         \x20           # FMA3 turns the explicit std::fma calls of fused guest instructions\n\
+         \x20           # into single instructions. -ffp-contract=off still keeps separate\n\
+         \x20           # multiplies and adds unfused. Every AVX2 CPU also has FMA3.\n\
          \x20           target_compile_options(RMGE01_game PRIVATE -mfma)\n\
-         \x20           # Fastmem loads and stores are movbe (every AVX2 CPU has MOVBE).\n\
+         \x20           # Fastmem loads and stores use movbe (every AVX2 CPU has it).\n\
          \x20           target_compile_options(RMGE01_game PRIVATE -mmovbe)\n\
          \x20       endif()\n\
          \x20   else()\n\
