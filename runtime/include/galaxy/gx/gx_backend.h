@@ -727,6 +727,9 @@ private:
     bool interp_log_waiting_ = false;
     std::uint32_t interp_log_xfb_ = 0;
     bool interp_stopping_ = false;        // render thread draining for a stop
+    // RendererD3D12::replay_hold_segment() seen at the last render chunk.
+    unsigned resident_hold_segment_ = ~0u;
+    std::uint64_t interp_held_vertex_blocks_ = 0;   // released while interpolating
     // Present slot clock (VSync off): next slot and slot length.
     std::int64_t interp_slot_due_qpc_ = 0;
     std::int64_t interp_slot_period_qpc_ = 0;
@@ -747,7 +750,7 @@ private:
     std::uint64_t interp_logs_skipped_ = 0;     // completed logs replaced before playing
     std::uint64_t interp_present_skipped_ = 0;  // VI presents while a sequence played
     // Game frames presented without sub-frames, by reason: overlay, no 3D
-    // scene, several scenes, output-EFB switch, log already gone, unmatched.
+    // scene, several scenes, (unused), log already gone, unmatched.
     std::array<std::uint64_t, 6> interp_real_only_{};
     bool interp_presenting_real_ = false;
     void note_interp_real_present();

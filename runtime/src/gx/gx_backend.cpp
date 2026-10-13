@@ -5335,6 +5335,9 @@ void GxBackend::release_decoded_entry_residency(
     if (entry.resident_epoch != 0u &&
         entry.resident_epoch == resident_vertices_.epoch()) {
         resident_vertices_.release(entry.resident_offset, entry.resident_units);
+        if (resident_hold_segment_ != ~0u) [[unlikely]] {
+            ++interp_held_vertex_blocks_;
+        }
     }
     entry.resident_epoch = 0u;
     entry.resident_offset = 0u;
@@ -7005,7 +7008,6 @@ void GxBackend::report_interp_stats() {
             << " (overlay=" << interp_real_only_[0]
             << " no-scene=" << interp_real_only_[1]
             << " multi-scene=" << interp_real_only_[2]
-            << " efb-switch=" << interp_real_only_[3]
             << " log-gone=" << interp_real_only_[4]
             << " unmatched=" << interp_real_only_[5] << ")"
             << " build-ms-per-subframe="
@@ -7017,6 +7019,8 @@ void GxBackend::report_interp_stats() {
             << " gpu-ms-per-subframe="
             << (gpu_samples != 0u ? gpu_ms / static_cast<double>(gpu_samples) : 0.0)
             << " guarded-copies=" << renderer_.take_subframe_guarded()
+            << " held-textures=" << texture_cache_.take_held_texture_count()
+            << " held-vertex-blocks=" << interp_held_vertex_blocks_
             << " measured-presents-hz=" << renderer_.measured_present_hz() << '\n';
     std::cerr << message.str();
     interp_presented_ = 0u;
@@ -7032,6 +7036,7 @@ void GxBackend::report_interp_stats() {
     interp_real_only_ = {};
     interp_cpu_ms_ = 0.0;
     interp_build_ms_ = 0.0;
+    interp_held_vertex_blocks_ = 0u;
     interp_stats_qpc_ = now.QuadPart;
 }
 
@@ -8465,7 +8470,26 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
         }
         // begin_frame() waited for this slot's previous frame: resident vertex
         // blocks released kFramesInFlight render frames ago are now unused.
-        resident_vertices_.advance_frame();
+        // Interpolation replays a game frame's draws until its ring segment
+        // comes round again (after its fence): resident blocks and texture
+        // resources then retire per game frame, over the segment count.
+        {
+            static_assert(kRingSegments <= TextureCache::kMaxHoldSegments);
+            const unsigned hold = renderer_.replay_hold_segment();
+            if (hold != resident_hold_segment_) [[unlikely]] {
+                // Interpolation started or stopped, or a game frame began.
+                resident_hold_segment_ = hold;
+                resident_vertices_.set_frames_in_flight(
+                    hold == ~0u ? kFramesInFlight : kRingSegments);
+                if (hold != ~0u) {
+                    resident_vertices_.advance_frame();
+                }
+                texture_cache_.set_retirement_hold_segment(hold);
+            }
+            if (hold == ~0u) [[likely]] {
+                resident_vertices_.advance_frame();
+            }
+        }
         efb_copies_.begin_frame(renderer_.frame_slot(), kFramesInFlight);
         texture_cache_.begin_frame(renderer_.frame_slot(), kFramesInFlight);
         const auto retirement_revision = texture_cache_.retirement_revision();

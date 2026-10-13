@@ -482,13 +482,19 @@ public:
     // game frame (advanced at the first frame after a display copy) and the
     // log spans every render chunk of the game frame up to its display copy.
     [[nodiscard]] bool interpolation_mode() const;
+    // The game-frame ring segment in interpolation mode (resources a log
+    // names must outlive it: it comes round again only after its fence),
+    // ~0u otherwise.
+    [[nodiscard]] unsigned replay_hold_segment() const noexcept {
+        return ring_mode_ == RingMode::Interp ? ring_segment_ : ~0u;
+    }
     // Completed logs, counted; the guest XFB the latest one copied to.
     [[nodiscard]] std::uint64_t replay_serial() const noexcept { return replay_serial_; }
     [[nodiscard]] std::uint32_t replay_xfb_addr() const noexcept { return replay_xfb_addr_; }
     // A 3D scene began inside the log being recorded (one is replayable).
     void note_replay_scene() noexcept { ++replay_scene_count_; }
     // Why the latest closed log is not replayable: 0 it is, 1 no 3D scene,
-    // 2 more than one, 3 output-EFB switch.
+    // 2 more than one.
     [[nodiscard]] unsigned replay_reject() const noexcept { return replay_reject_; }
     // Last reason a sub-frame was not recorded (diagnostics).
     [[nodiscard]] unsigned replay_failure() const noexcept { return replay_failure_; }
@@ -941,7 +947,6 @@ private:
     unsigned run_segment_ = 0;
     bool replay_recording_ = false;
     bool replay_valid_ = false;
-    bool replay_has_swaps_ = false;
     unsigned replay_reject_ = 0;
     unsigned replay_failure_ = 0;
     bool subframe_capture_ = false;
@@ -963,8 +968,16 @@ private:
     EfbTargetSet replay_efb_;
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> replay_efb_rtv_heap_;
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> replay_efb_dsv_heap_;
+    // The output-resolution EFB of a sub-frame whose log switches to it.
+    EfbTargetSet replay_output_efb_;
+    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> replay_output_efb_rtv_heap_;
+    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> replay_output_efb_dsv_heap_;
+    // persistent_views: the conversion-source views live in the descriptor
+    // ring's persistent prefix (else the caller writes them per use).
     bool create_efb_set(EfbTargetSet& set, Microsoft::WRL::ComPtr<ID3D12DescriptorHeap>& rtv_heap,
-                        Microsoft::WRL::ComPtr<ID3D12DescriptorHeap>& dsv_heap, unsigned scale);
+                        Microsoft::WRL::ComPtr<ID3D12DescriptorHeap>& dsv_heap, unsigned scale,
+                        bool persistent_views = true);
+    void write_efb_set_views(EfbTargetSet& set, const DescriptorRing::Table& table);
     void swap_efb_with(EfbTargetSet& other);
     bool replay_playing_ = false;
     bool replay_start_output_active_ = false;

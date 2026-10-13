@@ -6676,7 +6676,6 @@ bool RendererD3D12::start_replay_playback() {
 
 void RendererD3D12::begin_replay_record() {
     replay_scene_count_ = 0u;
-    replay_has_swaps_ = false;
     replay_ops_.clear();
     replay_draws_.clear();
     replay_viewports_.clear();
@@ -6894,11 +6893,15 @@ bool RendererD3D12::present_replay_subframe(
         return false;
     }
     const ReplayCopy* display = nullptr;
+    unsigned output_scale = 0u;  // the log switches to the output EFB at this scale
     for (const ReplayCopy& copy : run_copies_) {
         if (copy.mode == 1u) display = &copy;
+        if (copy.mode == 2u) output_scale = copy.width / kEfbWidth;
     }
-    if (display == nullptr) {
-        replay_failure_ = 3u;
+    if (display == nullptr || run_start_output_active_) {
+        // Logs begin at the ring advance after a display copy, on the render
+        // EFB; the private sets below assume it.
+        replay_failure_ = display == nullptr ? 3u : 6u;
         return false;
     }
     if (!ensure_subframe_resources(display->width, display->height)) {
@@ -6996,20 +6999,37 @@ bool RendererD3D12::present_replay_subframe(
         message << '\n';
         std::cerr << message.str();
     }
+    // Private EFB sets stand in for the live ones, so a later frame's partial
+    // EFBs (its chunks interleave with the sub-frames) stay intact: one at the
+    // render EFB's scale and, for a log that switches to the output EFB (HUD
+    // at output resolution), one at that scale.
+    const unsigned render_scale = output_efb_active_ ? alt_efb_.scale : efb_scale_;
+    if (((!replay_efb_.color || replay_efb_.scale != render_scale) &&
+         !create_efb_set(replay_efb_, replay_efb_rtv_heap_, replay_efb_dsv_heap_, render_scale)) ||
+        (output_scale != 0u &&
+         (!replay_output_efb_.color || replay_output_efb_.scale != output_scale) &&
+         !create_efb_set(replay_output_efb_, replay_output_efb_rtv_heap_,
+                         replay_output_efb_dsv_heap_, output_scale, false))) {
+        command_list_->Close();
+        replay_failure_ = 5u;
+        return false;
+    }
+    if (output_scale != 0u) {
+        // Its conversion-source views live in this game frame's descriptor
+        // segment (the persistent prefix is sized for the live sets).
+        write_efb_set_views(replay_output_efb_, srv_ring_.allocate(2u));
+    }
     record_subframe_guard(true);
 
+    // The live sets at rest (render EFB current), then the private ones in.
     const bool output_before = output_efb_active_;
-    if (output_efb_active_ != run_start_output_active_) {
+    if (output_before) {
         swap_efb_sets();
     }
-    // The private EFB (at the live EFB's scale) stands in for the sub-frame.
-    if (!replay_efb_.color || replay_efb_.scale != efb_scale_) {
-        if (!create_efb_set(replay_efb_, replay_efb_rtv_heap_, replay_efb_dsv_heap_, efb_scale_)) {
-            command_list_->Close();
-            return false;
-        }
-    }
     swap_efb_with(replay_efb_);
+    if (output_scale != 0u) {
+        std::swap(alt_efb_, replay_output_efb_);
+    }
     replay_playing_ = true;
     bind_efb(nullptr);
     const auto far_values = make_efb_clear_values(0u, 0u, 0x00FFFFFFu, 0u);
@@ -7048,8 +7068,15 @@ bool RendererD3D12::present_replay_subframe(
             break;
         }
     }
+    // The log ends after its display copy, on the output EFB when it switched.
+    if (output_efb_active_) {
+        swap_efb_sets();
+    }
+    if (output_scale != 0u) {
+        std::swap(alt_efb_, replay_output_efb_);
+    }
     swap_efb_with(replay_efb_);
-    if (output_efb_active_ != output_before) {
+    if (output_before) {
         swap_efb_sets();
     }
     replay_playing_ = false;
@@ -7310,9 +7337,28 @@ bool RendererD3D12::ensure_output_efb(unsigned scale) {
     return true;
 }
 
+void RendererD3D12::write_efb_set_views(EfbTargetSet& set, const DescriptorRing::Table& table) {
+    const UINT stride = device_->GetDescriptorHandleIncrementSize(
+        D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+    D3D12_SHADER_RESOURCE_VIEW_DESC view{};
+    view.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+    view.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+    view.Texture2D.MipLevels = 1u;
+    view.Format = kEfbColorFormat;
+    device_->CreateShaderResourceView(set.color.Get(), &view, table.cpu);
+    auto depth_cpu = table.cpu;
+    depth_cpu.ptr += stride;
+    view.Format = kEfbDepthSrvFormat;
+    device_->CreateShaderResourceView(set.depth.Get(), &view, depth_cpu);
+    set.conv_table = table;
+    set.conv_color_srv = table.gpu;
+    set.conv_depth_srv = table.gpu;
+    set.conv_depth_srv.ptr += stride;
+}
+
 bool RendererD3D12::create_efb_set(
     EfbTargetSet& set, ComPtr<ID3D12DescriptorHeap>& rtv_heap,
-    ComPtr<ID3D12DescriptorHeap>& dsv_heap, unsigned scale) {
+    ComPtr<ID3D12DescriptorHeap>& dsv_heap, unsigned scale, bool persistent_views) {
     const UINT w = kEfbWidth * scale;
     const UINT h = kEfbHeight * scale;
     if (set.color) {
@@ -7366,24 +7412,13 @@ bool RendererD3D12::create_efb_set(
     dsv.Format = kEfbDepthFormat;
     dsv.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2D;
     device_->CreateDepthStencilView(set.depth.Get(), &dsv, set.dsv);
-    if (!set.conv_table) {
-        set.conv_table = srv_ring_.allocate_persistent(2u);
+    if (persistent_views) {
+        write_efb_set_views(set, set.conv_table ? *set.conv_table
+                                                : srv_ring_.allocate_persistent(2u));
+    } else {
+        // The caller writes views into the frame's descriptor segment per use.
+        set.conv_table.reset();
     }
-    const UINT stride = device_->GetDescriptorHandleIncrementSize(
-        D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-    D3D12_SHADER_RESOURCE_VIEW_DESC view{};
-    view.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
-    view.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-    view.Texture2D.MipLevels = 1u;
-    view.Format = kEfbColorFormat;
-    device_->CreateShaderResourceView(set.color.Get(), &view, set.conv_table->cpu);
-    auto depth_cpu = set.conv_table->cpu;
-    depth_cpu.ptr += stride;
-    view.Format = kEfbDepthSrvFormat;
-    device_->CreateShaderResourceView(set.depth.Get(), &view, depth_cpu);
-    set.conv_color_srv = set.conv_table->gpu;
-    set.conv_depth_srv = set.conv_table->gpu;
-    set.conv_depth_srv.ptr += stride;
     set.scale = scale;
     return true;
 }
@@ -7404,7 +7439,6 @@ void RendererD3D12::swap_efb_with(EfbTargetSet& other) {
 void RendererD3D12::swap_efb_sets() {
     if (replay_recording_) [[unlikely]] {
         replay_ops_.push_back({ReplayKind::SwapEfbSets, 0u});
-        replay_has_swaps_ = true;
     }
     std::swap(efb_color_, alt_efb_.color);
     std::swap(efb_depth_, alt_efb_.depth);
@@ -8021,12 +8055,11 @@ void RendererD3D12::copy_efb_to_xfb(const EfbCopyParams& params, XfbTexture& des
         // next frame starts a new ring segment.
         if (recording) {
             replay_recording_ = false;
-            // One 3D scene and no output-EFB switch (that EFB is shared with
-            // the next frame's chunks).
-            replay_valid_ = replay_scene_count_ == 1u && !replay_has_swaps_;
+            // One 3D scene. An output-EFB switch (HUD at output resolution)
+            // replays into the sub-frame's private output EFB.
+            replay_valid_ = replay_scene_count_ == 1u;
             replay_reject_ = replay_scene_count_ == 0u ? 1u
                 : replay_scene_count_ > 1u             ? 2u
-                : replay_has_swaps_                    ? 3u
                                                        : 0u;
             if (replay_valid_) {
                 publish_replay_log();
