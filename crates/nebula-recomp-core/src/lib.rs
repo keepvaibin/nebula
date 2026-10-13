@@ -10,6 +10,7 @@ mod game;
 pub mod guest_abi_effect;
 pub mod guest_cfg_liveness;
 pub mod guest_ppc_effect;
+mod hot_functions;
 pub mod ppc_dataflow;
 mod residency;
 mod rso;
@@ -72,6 +73,7 @@ pub use game::{
     analyze_input, ExecutableAudit, FunctionAudit, GameAnalysis, GameInputKind, InputAssets,
     RMGE01_DOL_SHA1, RMGE01_GAME_ID,
 };
+pub use hot_functions::RMGE01_HOT_FUNCTIONS;
 pub use rso::{
     parse_rso, RsoCodeLoweringMetadata, RsoError, RsoExport, RsoImage, RsoImport, RsoImportBinding,
     RsoLinkError, RsoLinkLayout, RsoNativeSidecarError, RsoNativeSidecarSource, RsoRelocation,

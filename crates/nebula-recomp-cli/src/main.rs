@@ -187,6 +187,11 @@ enum Command {
         /// (needs --experimental-direct-indirect-calls).
         #[arg(long)]
         bctrl_site_cache: bool,
+        /// Link order for the module's functions: a text file of guest
+        /// addresses in hexadecimal, most-run first, one per line (`#` starts a
+        /// comment). `release` uses the built-in RMGE01 order.
+        #[arg(long)]
+        function_order: Option<PathBuf>,
         /// Compatibility spelling; exact PSMTX local lanes are on by default.
         #[arg(long, default_value_t = true)]
         exact_psmtx_local_lanes: bool,
@@ -538,6 +543,7 @@ fn main() -> Result<()> {
             single_float_arithmetic,
             fast_float_forms,
             bctrl_site_cache,
+            function_order,
             exact_psmtx_local_lanes,
             no_exact_psmtx_local_lanes,
             exact_psvec_cross_local_lanes,
@@ -581,6 +587,10 @@ fn main() -> Result<()> {
                 single_float_arithmetic,
                 fast_float_forms,
                 bctrl_site_cache,
+                function_order: function_order
+                    .as_deref()
+                    .map(read_function_order)
+                    .transpose()?,
                 exact_psmtx_local_lanes: exact_psmtx_local_lanes && !no_exact_psmtx_local_lanes,
                 exact_psvec_cross_local_lanes,
                 exact_psvec_normalize_local_lanes,
@@ -1395,6 +1405,34 @@ fn require_clean_function_audit(analysis: &GameAnalysis) -> Result<()> {
         );
     }
     Ok(())
+}
+
+/// Reads a `--function-order` file: hexadecimal guest addresses, one per line,
+/// `#` to the end of a line is a comment. The list lives for the whole run.
+fn read_function_order(path: &Path) -> Result<&'static [u32]> {
+    let text = fs::read_to_string(path)
+        .with_context(|| format!("failed to read function order {}", path.display()))?;
+    let mut order = Vec::new();
+    for (index, line) in text.lines().enumerate() {
+        let entry = line.split('#').next().unwrap_or_default().trim();
+        if entry.is_empty() {
+            continue;
+        }
+        let digits = entry
+            .strip_prefix("0x")
+            .or_else(|| entry.strip_prefix("0X"))
+            .unwrap_or(entry)
+            .replace('_', "");
+        let address = u32::from_str_radix(&digits, 16).with_context(|| {
+            format!(
+                "{}:{}: not a hexadecimal address",
+                path.display(),
+                index + 1
+            )
+        })?;
+        order.push(address);
+    }
+    Ok(Box::leak(order.into_boxed_slice()))
 }
 
 fn print_human(analysis: &GameAnalysis) {

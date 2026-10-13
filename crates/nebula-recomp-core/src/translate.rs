@@ -302,6 +302,11 @@ pub struct ModuleTranslationOptions {
     /// access. The event and suspension gates are still tested on every
     /// call. Requires `direct_indirect_calls`.
     pub bctrl_site_cache: bool,
+    /// Guest addresses of translated functions, most-run first. The module's
+    /// linker places them at the start of the code section, in this order
+    /// (`function_order.txt`, `/ORDER`); functions the list does not name
+    /// follow in the default order.
+    pub function_order: Option<&'static [u32]>,
     pub exact_psmtx_local_lanes: bool,
     pub exact_psvec_cross_local_lanes: bool,
     pub exact_psvec_normalize_local_lanes: bool,
@@ -347,6 +352,7 @@ impl Default for ModuleTranslationOptions {
             single_float_arithmetic: false,
             fast_float_forms: false,
             bctrl_site_cache: false,
+            function_order: None,
             exact_psmtx_local_lanes: true,
             exact_psvec_cross_local_lanes: false,
             exact_psvec_normalize_local_lanes: false,
@@ -1047,6 +1053,9 @@ pub fn translate_module_with_options(
             name: ABI_CONTRACT_FILE.to_owned(),
             contents: module_abi.manifest_json(),
         });
+    }
+    if let Some(order) = options.function_order {
+        add_function_order(&mut source_files, order);
     }
     Ok(TranslationModule {
         total_functions: functions.len() as u64,
@@ -9070,6 +9079,63 @@ fn apply_module_options(source_files: &mut [GeneratedSource], options: &ModuleTr
     }
 }
 
+/// Linker order file written next to the module sources.
+const FUNCTION_ORDER_FILE: &str = "function_order.txt";
+
+/// Writes `function_order.txt`, the module's functions in `order` by their
+/// MSVC-ABI names, and links the module with `/ORDER` so the functions the
+/// game runs most share pages and cache lines. Addresses the module does not
+/// define are skipped.
+fn add_function_order(source_files: &mut Vec<GeneratedSource>, order: &[u32]) {
+    let defined: BTreeSet<u32> = source_files
+        .iter()
+        .find(|file| file.name == "functions.h")
+        .map(|header| {
+            header
+                .contents
+                .lines()
+                .filter_map(|line| {
+                    let rest = line.strip_prefix("void fn_")?;
+                    if rest.as_bytes().get(8) != Some(&b'(') {
+                        return None;
+                    }
+                    u32::from_str_radix(rest.get(..8)?, 16).ok()
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    let mut listed = BTreeSet::new();
+    let mut contents = String::new();
+    for &address in order {
+        if defined.contains(&address) && listed.insert(address) {
+            // void rmge01::fn_X(galaxy::PpcContext* __restrict, galaxy::GuestMemoryV1*,
+            //                   const galaxy::NativeServicesV1*)
+            contents.push_str(&format!(
+                "?fn_{address:08X}@rmge01@@YAXPEIAUPpcContext@galaxy@@PEAUGuestMemoryV1@3@PEBUNativeServicesV1@3@@Z\n"
+            ));
+        }
+    }
+    let Some(cmake) = source_files
+        .iter_mut()
+        .find(|file| file.name == "CMakeLists.txt")
+    else {
+        return;
+    };
+    if contents.is_empty() {
+        return;
+    }
+    cmake.contents.push_str(
+        "if(MSVC)\n\
+         \x20   # Most-run functions first, in the order of function_order.txt.\n\
+         \x20   target_link_options(RMGE01_game PRIVATE \"/ORDER:@${CMAKE_CURRENT_SOURCE_DIR}/function_order.txt\")\n\
+         endif()\n",
+    );
+    source_files.push(GeneratedSource {
+        name: FUNCTION_ORDER_FILE.to_owned(),
+        contents,
+    });
+}
+
 /// `#define {macro} 1` in every unit that includes the runtime header
 /// directly (`functions.h` for the shards), ahead of the include, for the
 /// module-wide header switches: `GALAXY_FLAT_VIEW_ONLY` (`--flat-view-only`)
@@ -12449,6 +12515,69 @@ fn rotate_mask(begin: u32, end: u32) -> u32 {
         from_begin & through_end
     } else {
         from_begin | through_end
+    }
+}
+
+#[cfg(test)]
+mod function_order_tests {
+    use super::*;
+
+    fn sources() -> Vec<GeneratedSource> {
+        vec![
+            GeneratedSource {
+                name: "functions.h".to_owned(),
+                contents: "#pragma once\n\nnamespace rmge01 {\n\n\
+                    void fn_80001000(galaxy::PpcContext* __restrict context, galaxy::GuestMemoryV1* memory, const galaxy::NativeServicesV1* services);\n\
+                    void fn_80002000(galaxy::PpcContext* __restrict context, galaxy::GuestMemoryV1* memory, const galaxy::NativeServicesV1* services);\n\
+                    void fn_80003000_exact(galaxy::PpcContext* __restrict context, galaxy::GuestMemoryV1* memory, const galaxy::NativeServicesV1* services);\n\n\
+                    }  // namespace rmge01\n"
+                    .to_owned(),
+            },
+            GeneratedSource {
+                name: "CMakeLists.txt".to_owned(),
+                contents: "add_library(RMGE01_game SHARED module.cpp)\n".to_owned(),
+            },
+        ]
+    }
+
+    #[test]
+    fn order_file_lists_defined_functions_in_rank_order() {
+        let mut files = sources();
+        add_function_order(
+            &mut files,
+            &[0x8000_2000, 0x8000_3000, 0x8000_1000, 0x8000_2000],
+        );
+        let order = files
+            .iter()
+            .find(|file| file.name == FUNCTION_ORDER_FILE)
+            .expect("order file");
+        assert_eq!(
+            order.contents,
+            "?fn_80002000@rmge01@@YAXPEIAUPpcContext@galaxy@@PEAUGuestMemoryV1@3@PEBUNativeServicesV1@3@@Z\n\
+             ?fn_80001000@rmge01@@YAXPEIAUPpcContext@galaxy@@PEAUGuestMemoryV1@3@PEBUNativeServicesV1@3@@Z\n"
+        );
+        let cmake = &files[1].contents;
+        assert!(cmake.contains(
+            "target_link_options(RMGE01_game PRIVATE \"/ORDER:@${CMAKE_CURRENT_SOURCE_DIR}/function_order.txt\")"
+        ));
+    }
+
+    #[test]
+    fn no_listed_function_leaves_the_module_unchanged() {
+        let mut files = sources();
+        let before = files
+            .iter()
+            .map(|file| file.contents.clone())
+            .collect::<Vec<_>>();
+        add_function_order(&mut files, &[0x8000_3000, 0x8000_4000]);
+        assert_eq!(files.len(), 2);
+        assert_eq!(
+            files
+                .iter()
+                .map(|file| file.contents.clone())
+                .collect::<Vec<_>>(),
+            before
+        );
     }
 }
 
@@ -21265,8 +21394,8 @@ mod tests {
         }
 
         for address in [
-            0x8017_92D4,  // Not a FileSelectItem label.
-            0x8017_93CC,  // Not a FileSelectItem label.
+            0x8017_92D4, // Not a FileSelectItem label.
+            0x8017_93CC, // Not a FileSelectItem label.
             0x8017_BDD4, // FileSelector::calcBasePos, not onSelect
             0x8017_BFC4, // interior calcBasePos address, not onSelect
             0x803B_62E8, // SaveDataBannerCreator setup, not game-data load
