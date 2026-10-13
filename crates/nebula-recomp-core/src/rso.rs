@@ -950,11 +950,11 @@ fn rewrite_dynamic_pc_literals(
         // The lowerer may place function-scope declarations (checkpoint
         // budget, flat base) before the dispatch; every goto target lies after
         // them. Keep that preamble verbatim and require nothing else there.
-        let dispatch_start = body.find(&expected_start).ok_or(
-            RsoNativeSidecarError::MissingInteriorDispatch {
-                section: code_section,
-            },
-        )?;
+        let dispatch_start =
+            body.find(&expected_start)
+                .ok_or(RsoNativeSidecarError::MissingInteriorDispatch {
+                    section: code_section,
+                })?;
         let preamble = &body[..dispatch_start];
         if !preamble
             .lines()

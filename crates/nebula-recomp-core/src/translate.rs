@@ -5,7 +5,8 @@ use crate::{
         GuestInstructionEffect, GuestRegisterSet, GuestResidencyBoundarySync,
     },
     guest_ppc_effect::{guest_integer_gpr_access, GuestGprAccess},
-    residency::LeanCallContract,
+    ppc_dataflow::{AbiFunctionInput, ModuleAbi, Regs},
+    residency::{AbiResidency, LeanCallContract},
     rmge01_function_map, DolSection, DolSectionKind, FunctionRange, RMGE01_DOL_SHA1,
 };
 use powerpc::{Argument, Extensions, Ins, Opcode};
@@ -25,6 +26,12 @@ pub enum TranslationError {
     /// `fast_float` without `native_float` has no helpers to switch.
     #[error("fast_float requires native_float")]
     FastFloatRequiresNativeFloat,
+    /// A module option whose lowering lives in another option's helpers.
+    #[error("module option {option} requires {requires}")]
+    OptionRequires {
+        option: &'static str,
+        requires: &'static str,
+    },
     #[error("no configured function begins at 0x{0:08X}")]
     FunctionNotFound(u32),
     #[error("function 0x{address:08X} is not fully contained in a DOL text section")]
@@ -130,7 +137,7 @@ pub struct TranslationUnit {
     pub cpp: String,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GeneratedSource {
     pub name: String,
     pub contents: String,
@@ -227,6 +234,74 @@ pub struct ModuleTranslationOptions {
     /// Also keeps the FPR/PS1 file in host locals (requires `guest_resident_integer`). Off by default: the exact
     /// float fallbacks force spills around every helper call.
     pub guest_resident_float: bool,
+    /// `lfs`/`stfs` and the binary32 lanes of `psq_l`/`psq_st` convert with
+    /// the host's `cvtss2sd`/`cvtsd2ss` (`fast::*_hw` helpers) instead of the
+    /// integer widen/narrow bit slices. Not bit-exact: signalling NaNs are
+    /// quieted, `stfs` of a value outside binary32 rounds instead of slicing,
+    /// and under the fast-float MXCSR subnormals read and write as zero.
+    /// Requires `flat_ram_reads` and `flat_ram_writes`: the conversions live
+    /// in the flat-view helpers, and the checked helpers keep the exact ones.
+    pub hw_float_conversions: bool,
+    /// Checkpoint tests read a module-global snapshot of the inline gate
+    /// (`galaxy::g_module_checkpoint_gate`, defined in `module.cpp` and
+    /// exported as `galaxy_module_checkpoint_gate`) instead of re-reading the
+    /// service table after every call. The runtime keeps the snapshot current
+    /// with `galaxy::refresh_module_checkpoint_gate`; an empty snapshot sends
+    /// every checkpoint to the complete service-table policy.
+    pub checkpoint_globals: bool,
+    /// A fastmem module that assumes the flat view everywhere: `stmw` with
+    /// rS <= 24 stores register by register through the view instead of the
+    /// checked multiple-store helper, `dcbz` zeroes its line through the view
+    /// (`fast::zero_line`), and `functions.h` defines `GALAXY_FLAT_VIEW_ONLY`
+    /// so the inlined lean host bodies drop their null-view check and region
+    /// fallback (`lean_guest_span`, `cstring::view`). Requires `fast_float`
+    /// (which makes the module fastmem) and both flat RAM directions.
+    pub flat_view_only: bool,
+    /// `bl _savegpr_N` right after `addi r11,r1,d` (CodeWarrior's prologue)
+    /// stores through `fast::store_stack`: r11 addresses the caller's own
+    /// frame, so the gather-pipe test goes. Requires `flat_ram_writes`.
+    pub stack_r11_stores: bool,
+    /// HID2[PSE] and HID2[LSQE] are taken as always set (RMGE01 sets them in
+    /// `__init_hardware` and never clears them; a paired or quantized
+    /// instruction with either clear is illegal on the hardware): `functions.h`
+    /// defines `GALAXY_ASSUME_PAIRED_SINGLES`, which removes the HID2 test from
+    /// every psq and paired fast path and writes ps1 for every single result.
+    pub assume_paired_singles: bool,
+    /// Calls to translated functions and indirect calls synchronize the
+    /// resident registers under the PowerPC EABI contract
+    /// (`crate::ppc_dataflow::ModuleAbi`): before the call only the written
+    /// locals a callee may read (arguments, r1/r2/r13, non-volatile
+    /// registers, LR and the callee's recorded extras) are stored; after it
+    /// only the results and the registers the callee may clobber are
+    /// reloaded. Functions the analysis cannot vouch for (host
+    /// substitutions, unmodelled forms, local `bl` subroutines) keep full
+    /// synchronization at their calls and when called, and the list is
+    /// written to `abi_contract.json`. Requires `guest_resident_integer`.
+    pub abi_call_sync: bool,
+    /// A `blr` of a function the ABI analysis vouches for stores only the
+    /// registers a caller may observe (r3/r4, f1/f2, the non-volatile
+    /// registers, LR and the module's non-ABI extras) instead of every
+    /// written local. Requires `guest_resident_integer`.
+    pub abi_exit_sync: bool,
+    /// Fast-float module whose single-precision and paired-single arithmetic
+    /// rounds its operands to binary32 and computes in binary32
+    /// (`functions.h` defines `GALAXY_SINGLE_FLOAT_ARITHMETIC`), instead of
+    /// computing in binary64 with the 25-bit multiplier rounding and
+    /// narrowing. A chain of single operations then stays in binary32
+    /// registers. Requires `fast_float`.
+    pub single_float_arithmetic: bool,
+    /// `fres`, `frsqrte`, `ps_res`, `ps_rsqrte`, `fsel`, `ps_sel`, `fcmpu`,
+    /// `fcmpo` and `ps_cmp*` lower to the `galaxy::fast` forms: correctly
+    /// rounded reciprocals instead of the exact estimate tables, no FPSCR
+    /// update, no commit helper, CR field only for the compares. Requires
+    /// `fast_float`.
+    pub fast_float_forms: bool,
+    /// Every direct-dispatch `bctrl`/`bclrl`/`bctr` site caches the last
+    /// published direct entry it called (`fast::call_guest_indirect_site`): a
+    /// repeat target skips the service-table loads and the 10 MB table
+    /// access. The event and suspension gates are still tested on every
+    /// call. Requires `direct_indirect_calls`.
+    pub bctrl_site_cache: bool,
     pub exact_psmtx_local_lanes: bool,
     pub exact_psvec_cross_local_lanes: bool,
     pub exact_psvec_normalize_local_lanes: bool,
@@ -262,6 +337,16 @@ impl Default for ModuleTranslationOptions {
             guest_resident_integer: false,
             fast_float: false,
             guest_resident_float: false,
+            hw_float_conversions: false,
+            checkpoint_globals: false,
+            flat_view_only: false,
+            stack_r11_stores: false,
+            assume_paired_singles: false,
+            abi_call_sync: false,
+            abi_exit_sync: false,
+            single_float_arithmetic: false,
+            fast_float_forms: false,
+            bctrl_site_cache: false,
             exact_psmtx_local_lanes: true,
             exact_psvec_cross_local_lanes: false,
             exact_psvec_normalize_local_lanes: false,
@@ -430,6 +515,64 @@ fn selected_psmtx_local_target(
     Ok(None)
 }
 
+/// Option combinations that have no lowering. Checked before the game is read.
+pub fn validate_module_options(options: &ModuleTranslationOptions) -> Result<(), TranslationError> {
+    if options.fast_float && !options.native_float {
+        return Err(TranslationError::FastFloatRequiresNativeFloat);
+    }
+    if options.hw_float_conversions && !(options.flat_ram_reads && options.flat_ram_writes) {
+        return Err(TranslationError::OptionRequires {
+            option: "hw_float_conversions",
+            requires: "flat_ram_reads and flat_ram_writes",
+        });
+    }
+    if options.flat_view_only
+        && !(options.fast_float && options.flat_ram_reads && options.flat_ram_writes)
+    {
+        return Err(TranslationError::OptionRequires {
+            option: "flat_view_only",
+            requires: "fast_float (a fastmem module), flat_ram_reads and flat_ram_writes",
+        });
+    }
+    if options.stack_r11_stores && !options.flat_ram_writes {
+        return Err(TranslationError::OptionRequires {
+            option: "stack_r11_stores",
+            requires: "flat_ram_writes",
+        });
+    }
+    if options.abi_call_sync && !options.guest_resident_integer {
+        return Err(TranslationError::OptionRequires {
+            option: "abi_call_sync",
+            requires: "guest_resident_integer",
+        });
+    }
+    if options.abi_exit_sync && !options.guest_resident_integer {
+        return Err(TranslationError::OptionRequires {
+            option: "abi_exit_sync",
+            requires: "guest_resident_integer",
+        });
+    }
+    if options.single_float_arithmetic && !options.fast_float {
+        return Err(TranslationError::OptionRequires {
+            option: "single_float_arithmetic",
+            requires: "fast_float",
+        });
+    }
+    if options.fast_float_forms && !options.fast_float {
+        return Err(TranslationError::OptionRequires {
+            option: "fast_float_forms",
+            requires: "fast_float",
+        });
+    }
+    if options.bctrl_site_cache && !options.direct_indirect_calls {
+        return Err(TranslationError::OptionRequires {
+            option: "bctrl_site_cache",
+            requires: "direct_indirect_calls",
+        });
+    }
+    Ok(())
+}
+
 pub fn translate_module_with_options(
     input: &Path,
     count: usize,
@@ -437,6 +580,7 @@ pub fn translate_module_with_options(
     shard_source_kib: usize,
     options: ModuleTranslationOptions,
 ) -> Result<TranslationModule, TranslationError> {
+    validate_module_options(&options)?;
     if options.trace_scene_update_spans && count != 0 {
         return Err(TranslationError::SceneUpdateSpanTrace(
             "use --count 0".to_owned(),
@@ -616,6 +760,9 @@ pub fn translate_module_with_options(
         .chain(aliases.iter().copied())
         .collect::<BTreeMap<_, _>>();
     let empty_entries = BTreeSet::new();
+    let module_abi = (options.abi_call_sync || options.abi_exit_sync)
+        .then(|| module_abi_facts(&loaded.dol.sections, &loaded.dol_bytes, &ranges))
+        .transpose()?;
     // As in WiiCompiled, caller residency narrows a call boundary only for a callee with a fully known contract:
     // the integer leaves decoded below. Substitutions, FP bodies and leaves with interior entries stay full fences.
     let mut resident_leaf_contracts = BTreeMap::new();
@@ -646,6 +793,10 @@ pub fn translate_module_with_options(
         }
     }
     for (function, body) in &mut translated {
+        let abi = module_abi
+            .as_ref()
+            .map(|module_abi| function_abi_residency(module_abi, function.address, &options));
+        let abi = abi.as_ref();
         let entries = entries_by_function
             .get(&function.address)
             .unwrap_or(&empty_entries);
@@ -690,6 +841,7 @@ pub fn translate_module_with_options(
                         )?,
                         entries,
                         &options,
+                        abi,
                     ),
                 },
             }
@@ -709,6 +861,7 @@ pub fn translate_module_with_options(
                 )?,
                 entries,
                 &options,
+                abi,
             )
         };
         *body = apply_transfer_returns(std::mem::take(body));
@@ -757,17 +910,18 @@ pub fn translate_module_with_options(
                     })?;
                 let memory_plan = validate_psmtx_local_memory_contract(bytes)?;
                 let body = lower_words_with_config(
-                        function.address,
-                        bytes,
-                        &BTreeSet::new(),
-                        &BTreeSet::new(),
-                        LoweringConfig {
-                            local_lane_profile: LocalLaneProfile::PsmtxConcat,
-                            // Applies only inside the guarded matrix leaf. The global fused-paired option is unchanged.
-                            fused_paired_binary: true,
-                            ..LoweringConfig::default()
-                        },
-                    )?;
+                    function.address,
+                    bytes,
+                    &BTreeSet::new(),
+                    &BTreeSet::new(),
+                    LoweringConfig {
+                        local_lane_profile: LocalLaneProfile::PsmtxConcat,
+                        // Applies only inside the guarded matrix leaf. The global
+                        // fused-paired option is unchanged.
+                        fused_paired_binary: true,
+                        ..LoweringConfig::default()
+                    },
+                )?;
                 Some(PsmtxLocalExperiment {
                     body: lower_psmtx_proven_memory(body, bytes, &memory_plan)?,
                     trace_guard: options.trace_psmtx_guard,
@@ -837,7 +991,11 @@ pub fn translate_module_with_options(
         None
     };
     let callable_entries = translated.len() as u64 + aliases.len() as u64;
-    let mut source_files = emit_sharded_module_with_experiment(
+    // The checkpoint-globals spellings are longer; the packer must see them.
+    let definition_rewrite = options
+        .checkpoint_globals
+        .then_some(rewrite_checkpoint_globals as fn(&str) -> String);
+    let mut source_files = emit_sharded_module_with_definition_rewrite(
         &translated,
         &aliases,
         shard_size,
@@ -850,13 +1008,9 @@ pub fn translate_module_with_options(
             psvec_normalize: psvec_normalize_experiment.as_ref(),
             typed_region_80165478: typed_region_80165478.as_deref(),
         },
+        definition_rewrite,
     )?;
-    if options.fast_float {
-        if !options.native_float {
-            return Err(TranslationError::FastFloatRequiresNativeFloat);
-        }
-        apply_fast_float_mode(&mut source_files);
-    }
+    apply_module_options(&mut source_files, &options);
     if options.trace_end_frame_spans {
         insert_end_frame_span_markers(&mut source_files, shard_source_bytes)?;
     }
@@ -888,6 +1042,12 @@ pub fn translate_module_with_options(
         insert_top_self_closure_edge_profile(&mut source_files, shard_source_bytes)?;
     }
     validate_function_shard_source_budget(&source_files, shard_source_bytes)?;
+    if let Some(module_abi) = &module_abi {
+        source_files.push(GeneratedSource {
+            name: ABI_CONTRACT_FILE.to_owned(),
+            contents: module_abi.manifest_json(),
+        });
+    }
     Ok(TranslationModule {
         total_functions: functions.len() as u64,
         translated_functions: translated.len() as u64,
@@ -1099,7 +1259,6 @@ fn opcode_requires_fpu(opcode: Opcode) -> bool {
     )
 }
 
-
 fn function_requires_fpu(bytes: &[u8]) -> bool {
     bytes.chunks_exact(4).any(|chunk| {
         let word = u32::from_be_bytes(chunk.try_into().expect("four-byte instruction"));
@@ -1292,7 +1451,9 @@ enum CrFieldStep {
     /// Writes the whole field before reading it.
     Kill,
     /// Leaves the function; the field is dead there iff `dead`.
-    Exit { dead: bool },
+    Exit {
+        dead: bool,
+    },
     Next,
     Jump(u32),
     /// Falls through and may also branch to the target.
@@ -1320,14 +1481,26 @@ fn cr_field_step(pc: u32, word: u32, field: u32, start: u32, end: u32) -> CrFiel
     let link = word & 1 != 0;
     match Ins::new(word, Extensions::gekko_broadway()).op {
         Opcode::Cmpi | Opcode::Cmpli | Opcode::Cmp | Opcode::Cmpl => {
-            if crf_d == field { CrFieldStep::Kill } else { CrFieldStep::Next }
+            if crf_d == field {
+                CrFieldStep::Kill
+            } else {
+                CrFieldStep::Next
+            }
         }
         Opcode::Mcrxr => {
-            if crf_d == field { CrFieldStep::Kill } else { CrFieldStep::Next }
+            if crf_d == field {
+                CrFieldStep::Kill
+            } else {
+                CrFieldStep::Next
+            }
         }
         Opcode::Mtcrf => {
             let fxm = (word >> 12) & 0xFF;
-            if fxm & (0x80 >> field) != 0 { CrFieldStep::Kill } else { CrFieldStep::Next }
+            if fxm & (0x80 >> field) != 0 {
+                CrFieldStep::Kill
+            } else {
+                CrFieldStep::Next
+            }
         }
         Opcode::Mfcr => CrFieldStep::Live,
         Opcode::Mcrf => {
@@ -1355,7 +1528,11 @@ fn cr_field_step(pc: u32, word: u32, field: u32, start: u32, end: u32) -> CrFiel
         }
         // Integer record forms write CR0 from their result.
         Opcode::Andi_ | Opcode::Andis_ | Opcode::Addic_ | Opcode::Stwcx_ => {
-            if field == 0 { CrFieldStep::Kill } else { CrFieldStep::Next }
+            if field == 0 {
+                CrFieldStep::Kill
+            } else {
+                CrFieldStep::Next
+            }
         }
         Opcode::Add
         | Opcode::Addc
@@ -1391,16 +1568,24 @@ fn cr_field_step(pc: u32, word: u32, field: u32, start: u32, end: u32) -> CrFiel
         | Opcode::Rlwinm
         | Opcode::Rlwimi
         | Opcode::Rlwnm => {
-            if field == 0 && link { CrFieldStep::Kill } else { CrFieldStep::Next }
+            if field == 0 && link {
+                CrFieldStep::Kill
+            } else {
+                CrFieldStep::Next
+            }
         }
         Opcode::B => {
             let target = branch_target(pc, word);
             if link {
-                CrFieldStep::Exit { dead: cr_field_dead_across_call(field) }
+                CrFieldStep::Exit {
+                    dead: cr_field_dead_across_call(field),
+                }
             } else if word & 2 == 0 && target >= start && target < end {
                 CrFieldStep::Jump(target)
             } else {
-                CrFieldStep::Exit { dead: cr_field_dead_across_call(field) }
+                CrFieldStep::Exit {
+                    dead: cr_field_dead_across_call(field),
+                }
             }
         }
         Opcode::Bc => {
@@ -1417,7 +1602,9 @@ fn cr_field_step(pc: u32, word: u32, field: u32, start: u32, end: u32) -> CrFiel
             match (target >= start && target < end, always) {
                 (true, true) => CrFieldStep::Jump(target),
                 (true, false) => CrFieldStep::Fork(target),
-                (false, true) => CrFieldStep::Exit { dead: cr_field_dead_across_call(field) },
+                (false, true) => CrFieldStep::Exit {
+                    dead: cr_field_dead_across_call(field),
+                },
                 (false, false) => {
                     if cr_field_dead_across_call(field) {
                         CrFieldStep::NextAfterDeadExit
@@ -1437,7 +1624,9 @@ fn cr_field_step(pc: u32, word: u32, field: u32, start: u32, end: u32) -> CrFiel
                 return CrFieldStep::Live;
             }
             if bo & 0x14 == 0x14 {
-                CrFieldStep::Exit { dead: cr_field_dead_at_return(field) }
+                CrFieldStep::Exit {
+                    dead: cr_field_dead_at_return(field),
+                }
             } else if cr_field_dead_at_return(field) {
                 CrFieldStep::NextAfterDeadExit
             } else {
@@ -1449,7 +1638,11 @@ fn cr_field_step(pc: u32, word: u32, field: u32, start: u32, end: u32) -> CrFiel
         }
         _ if opcode == 19 => {
             // Remaining XL forms: isync is the only other one the game uses.
-            if word == 0x4C00_012C { CrFieldStep::Next } else { CrFieldStep::Live }
+            if word == 0x4C00_012C {
+                CrFieldStep::Next
+            } else {
+                CrFieldStep::Live
+            }
         }
         _ => CrFieldStep::Next,
     }
@@ -1476,7 +1669,9 @@ fn cr_field_dead_from(address: u32, bytes: &[u8], from: u32, field: u32) -> bool
             }
             let offset = (pc - address) as usize;
             let word = u32::from_be_bytes(
-                bytes[offset..offset + 4].try_into().expect("four-byte instruction"),
+                bytes[offset..offset + 4]
+                    .try_into()
+                    .expect("four-byte instruction"),
             );
             match cr_field_step(pc, word, field, address, end) {
                 CrFieldStep::Live => return false,
@@ -1521,8 +1716,10 @@ fn fusible_compare_branches(
         let compare_pc = address + index as u32 * 4;
         let branch_pc = compare_pc + 4;
         let op = Ins::new(compare, Extensions::gekko_broadway()).op;
-        if !matches!(op, Opcode::Cmpi | Opcode::Cmpli | Opcode::Cmp | Opcode::Cmpl)
-            || compare & 0x0020_0000 != 0
+        if !matches!(
+            op,
+            Opcode::Cmpi | Opcode::Cmpli | Opcode::Cmp | Opcode::Cmpl
+        ) || compare & 0x0020_0000 != 0
             || Ins::new(branch, Extensions::gekko_broadway()).op != Opcode::Bc
             || branch & 3 != 0
             || branch_targets.contains(&branch_pc)
@@ -1548,21 +1745,36 @@ fn fusible_compare_branches(
         let (left, right) = match op {
             Opcode::Cmpi => (
                 format!("static_cast<std::int32_t>(context->gpr[{ra}])"),
-                format!("static_cast<std::int32_t>(0x{:08X}u)", signed_immediate(compare) as u32),
+                format!(
+                    "static_cast<std::int32_t>(0x{:08X}u)",
+                    signed_immediate(compare) as u32
+                ),
             ),
             Opcode::Cmp => (
                 format!("static_cast<std::int32_t>(context->gpr[{ra}])"),
-                format!("static_cast<std::int32_t>(context->gpr[{}])", gpr_rb(compare)),
+                format!(
+                    "static_cast<std::int32_t>(context->gpr[{}])",
+                    gpr_rb(compare)
+                ),
             ),
-            Opcode::Cmpli => (format!("context->gpr[{ra}]"), format!("0x{:08X}u", compare & 0xFFFF)),
-            _ => (format!("context->gpr[{ra}]"), format!("context->gpr[{}]", gpr_rb(compare))),
+            Opcode::Cmpli => (
+                format!("context->gpr[{ra}]"),
+                format!("0x{:08X}u", compare & 0xFFFF),
+            ),
+            _ => (
+                format!("context->gpr[{ra}]"),
+                format!("context->gpr[{}]", gpr_rb(compare)),
+            ),
         };
         let relation = match bi % 4 {
             0 => "<",
             1 => ">",
             _ => "==",
         };
-        fused.insert(branch_pc, (compare_pc, format!("{left} {relation} {right}")));
+        fused.insert(
+            branch_pc,
+            (compare_pc, format!("{left} {relation} {right}")),
+        );
     }
     fused
 }
@@ -2031,6 +2243,7 @@ fn lower_resident_integer_leaf(
 /// calls, checkpoints and return continuations keep their native boundaries.
 /// Unknown, substituted or observed callees get a full fence. Other memory,
 /// FP, indirect calls and unclassified opcodes use the ordinary emitter.
+#[allow(clippy::too_many_arguments)]
 fn lower_resident_integer_direct_calls(
     address: u32,
     bytes: &[u8],
@@ -2255,7 +2468,10 @@ fn lower_resident_integer_direct_calls(
                     Some(exact_fpu_functions),
                 );
                 let (flush_gpr, reload_gpr) = if let Some(contract) = lean_contract {
-                    (contract.gpr_reads | contract.gpr_writes, contract.gpr_writes)
+                    (
+                        contract.gpr_reads | contract.gpr_writes,
+                        contract.gpr_writes,
+                    )
                 } else {
                     let sync = verified_owner.map_or_else(GuestResidencyBoundarySync::full, |_| {
                         GuestResidencyBoundarySync::from_optional_callee_contract(
@@ -2421,6 +2637,13 @@ fn lower_words_for_module_with_call_return_entries_and_exact_fpu_flat_reads(
             indexed_paired_ternary: options.indexed_paired_ternary,
             fused_paired_ternary: options.fused_paired_ternary,
             inline_scalar_single_binary: options.inline_scalar_single_binary,
+            hw_float_conversions: options.hw_float_conversions,
+            flat_view_only: options.flat_view_only,
+            stack_r11_stores: options.stack_r11_stores,
+            abi_call_markers: options.abi_call_sync,
+            guest_return_macro: options.abi_exit_sync,
+            fast_float_forms: options.fast_float_forms,
+            bctrl_site_cache: options.bctrl_site_cache,
             ..LoweringConfig::default()
         },
     )
@@ -2482,6 +2705,13 @@ fn lower_words_with_options(
             inline_scalar_single_binary: false,
             typed_region_gpr_mask: 0,
             device_pointer_globals: None,
+            hw_float_conversions: false,
+            flat_view_only: false,
+            stack_r11_stores: false,
+            abi_call_markers: false,
+            guest_return_macro: false,
+            fast_float_forms: false,
+            bctrl_site_cache: false,
         },
     )
 }
@@ -2513,6 +2743,18 @@ struct LoweringConfig<'a> {
     inline_scalar_single_binary: bool,
     typed_region_gpr_mask: u32,
     device_pointer_globals: Option<&'a BTreeMap<i32, u32>>,
+    hw_float_conversions: bool,
+    flat_view_only: bool,
+    stack_r11_stores: bool,
+    /// Mark linked calls with `GALAXY_ABI_CALL(0x<pc>u);` (--abi-call-sync).
+    abi_call_markers: bool,
+    /// Lower `blr` to `GALAXY_GUEST_RETURN;` (--abi-exit-sync).
+    guest_return_macro: bool,
+    /// The `galaxy::fast` estimate, select and compare forms
+    /// (--fast-float-forms).
+    fast_float_forms: bool,
+    /// Per-site direct entry cache at indirect calls (--bctrl-site-cache).
+    bctrl_site_cache: bool,
 }
 
 // The typed-region pilot has a single DOL owner; its public body still
@@ -2931,7 +3173,11 @@ impl DeviceScanState {
 /// pointer) always addresses RAM, so its stores skip the write-gather-pipe
 /// test (`fast::store_stack`).
 fn flat_store_helper(base: u32) -> &'static str {
-    if base == 1 { "store_stack" } else { "store" }
+    if base == 1 {
+        "store_stack"
+    } else {
+        "store"
+    }
 }
 
 /// Integer loads and stores whose effective address is outside the RAM aliases of the flat guest view:
@@ -3032,8 +3278,8 @@ fn discover_static_device_access_pcs(
             next.constants = state.constants;
         }
         if !overridden && opcode == Opcode::Lwz && gpr_ra(word) == 13 {
-            if let Some(value) = device_pointer_globals
-                .and_then(|globals| globals.get(&signed_immediate(word)))
+            if let Some(value) =
+                device_pointer_globals.and_then(|globals| globals.get(&signed_immediate(word)))
             {
                 next.constants[gpr_rt(word) as usize] = Some(*value);
             }
@@ -3283,15 +3529,467 @@ fn apply_residency_to_body(
     body: String,
     entries: &BTreeSet<u32>,
     options: &ModuleTranslationOptions,
+    abi: Option<&AbiResidency>,
 ) -> String {
     let _ = entries;
     if !options.guest_resident_integer || !residency_address_selected(address) {
         return body;
     }
-    match crate::residency::apply_register_residency(&body, options.guest_resident_float) {
+    match crate::residency::apply_register_residency_with_abi(
+        &body,
+        options.guest_resident_float,
+        abi,
+    ) {
         Some(resident) => resident,
         None => body,
     }
+}
+
+/// The module manifest of the EABI analysis (`--abi-call-sync`,
+/// `--abi-exit-sync`): the opt-out list and every non-ABI fact.
+pub const ABI_CONTRACT_FILE: &str = "abi_contract.json";
+
+/// EABI facts of every translated function (see `crate::ppc_dataflow`).
+fn module_abi_facts(
+    sections: &[DolSection],
+    dol_bytes: &[u8],
+    ranges: &[FunctionRange],
+) -> Result<ModuleAbi, TranslationError> {
+    let mut words_by_function = Vec::with_capacity(ranges.len());
+    for function in ranges {
+        let bytes = function_bytes(sections, dol_bytes, *function).ok_or(
+            TranslationError::FunctionOutsideText {
+                address: function.address,
+            },
+        )?;
+        words_by_function.push(
+            bytes
+                .chunks_exact(4)
+                .map(|chunk| u32::from_be_bytes(chunk.try_into().expect("four-byte instruction")))
+                .collect::<Vec<_>>(),
+        );
+    }
+    let jump_targets = discover_jump_targets(sections, dol_bytes, ranges, &words_by_function);
+    let inputs = ranges
+        .iter()
+        .zip(&words_by_function)
+        .map(|(function, words)| AbiFunctionInput {
+            start: function.address,
+            words,
+            native: abi_native_function(function.address),
+            jump_targets: jump_targets
+                .get(&function.address)
+                .unwrap_or(&crate::ppc_dataflow::NO_JUMP_TARGETS),
+        })
+        .collect::<Vec<_>>();
+    let address_taken = discover_address_taken_functions(sections, dol_bytes, ranges);
+    Ok(ModuleAbi::analyze(
+        &inputs,
+        &address_taken,
+        &abi_inline_call,
+    ))
+}
+
+/// The register effects of a call to one of CodeWarrior's register save and
+/// restore helpers, which the analysis treats as part of the caller's own
+/// prologue or epilogue: `bl _savegpr_N` reads r11 and rN..r31 (it stores
+/// them below r11), `bl _restgpr_N` reads r11 and writes rN..r31 (the
+/// translator lowers both in place); `bl _savefpr_N` / `bl _restfpr_N` do the
+/// same for fN..f31 (they stay calls in the generated code, where an
+/// unmarked call keeps full synchronization).
+pub(crate) fn abi_inline_call(target: u32) -> Option<(Regs, Regs)> {
+    let frame = Regs::gpr(11);
+    if let Some((first, save)) = gpr_save_restore_entry(target) {
+        let run = Regs {
+            gpr: u32::MAX << first,
+            ..Regs::default()
+        };
+        return Some(if save {
+            (frame.union(run), Regs::default())
+        } else {
+            (frame, run)
+        });
+    }
+    let (first, save) = fpr_save_restore_entry(target)?;
+    let run = Regs {
+        fpr: u32::MAX << first,
+        ..Regs::default()
+    };
+    Some(if save {
+        (frame.union(run), Regs::default())
+    } else {
+        (frame, run)
+    })
+}
+
+/// `_savefpr_N` (`stfd fN..f31` below r11) and `_restfpr_N` (`lfd`) entry
+/// points of RMGE01's `__save_fpr` / `__restore_fpr`: (first register, save).
+fn fpr_save_restore_entry(target: u32) -> Option<(u32, bool)> {
+    match target {
+        0x8051_7464..=0x8051_74A8 if (target - 0x8051_7464) % 4 == 0 => {
+            Some((14 + (target - 0x8051_7464) / 4, true))
+        }
+        0x8051_74B0..=0x8051_74F4 if (target - 0x8051_74B0) % 4 == 0 => {
+            Some((14 + (target - 0x8051_74B0) / 4, false))
+        }
+        _ => None,
+    }
+}
+
+/// The in-function targets of every function's computed jumps, from the
+/// image's data: each data word that points inside a function past its start
+/// is a possible target (`JumpTargets::any`; over-approximate, an unrelated
+/// word only adds a target). A `bctr` whose table address the function
+/// builds with `lis`/`addi` (or `ori`) and indexes with `lwzx` (CodeWarrior's
+/// switch) gets the case labels of that table alone: the run of consecutive
+/// data words from the table address that point inside the function.
+fn discover_jump_targets(
+    sections: &[DolSection],
+    dol_bytes: &[u8],
+    functions: &[FunctionRange],
+    words_by_function: &[Vec<u32>],
+) -> BTreeMap<u32, crate::ppc_dataflow::JumpTargets> {
+    let mut sorted: Vec<FunctionRange> = functions.to_vec();
+    sorted.sort_unstable_by_key(|function| function.address);
+    // Data address -> (owning function, word) for every interior pointer.
+    let mut pointers: BTreeMap<u32, (u32, u32)> = BTreeMap::new();
+    for section in sections {
+        if section.kind == DolSectionKind::Text {
+            continue;
+        }
+        let Some(bytes) = dol_bytes.get(section.file_range()) else {
+            continue;
+        };
+        for (index, chunk) in bytes.chunks_exact(4).enumerate() {
+            let word = u32::from_be_bytes(chunk.try_into().expect("four-byte word"));
+            if word % 4 != 0 {
+                continue;
+            }
+            let owner = sorted.partition_point(|function| function.address <= word);
+            let Some(function) = owner.checked_sub(1).map(|index| sorted[index]) else {
+                continue;
+            };
+            if word > function.address && word < function.address + function.size {
+                pointers.insert(section.address + index as u32 * 4, (function.address, word));
+            }
+        }
+    }
+    let mut targets: BTreeMap<u32, crate::ppc_dataflow::JumpTargets> = BTreeMap::new();
+    for (owner, word) in pointers.values() {
+        targets.entry(*owner).or_default().any.push(*word);
+    }
+    for jump_targets in targets.values_mut() {
+        jump_targets.any.sort_unstable();
+        jump_targets.any.dedup();
+    }
+    let table_run = |table: u32, owner: u32| -> Vec<u32> {
+        let mut run = Vec::new();
+        let mut address = table;
+        while let Some((function, word)) = pointers.get(&address) {
+            if *function != owner {
+                break;
+            }
+            run.push(*word);
+            address = address.wrapping_add(4);
+        }
+        run
+    };
+    for (function, words) in functions.iter().zip(words_by_function) {
+        let has_computed_jump = words.iter().enumerate().any(|(index, word)| {
+            crate::ppc_dataflow::effect(function.address + index as u32 * 4, *word)
+                .is_some_and(|effect| effect.flow == crate::ppc_dataflow::Flow::IndirectJump)
+        });
+        if !has_computed_jump {
+            continue;
+        }
+        let jump_targets = targets.entry(function.address).or_default();
+        let mut labels: BTreeSet<u32> = words
+            .iter()
+            .enumerate()
+            .filter_map(|(index, word)| {
+                let pc = function.address + index as u32 * 4;
+                match crate::ppc_dataflow::effect(pc, *word)?.flow {
+                    crate::ppc_dataflow::Flow::Branch(target)
+                    | crate::ppc_dataflow::Flow::CondBranch(target) => Some(target),
+                    _ => None,
+                }
+            })
+            .chain(jump_targets.any.iter().copied())
+            .collect();
+        // Addresses the code builds inside the function are computed-jump
+        // targets too, and labels for the tracking: rescan until stable.
+        loop {
+            let scan = scan_computed_jumps(*function, words, &labels, &table_run);
+            if scan.built.iter().all(|address| labels.contains(address)) {
+                jump_targets.by_site = scan.by_site;
+                jump_targets.loaded = scan.loaded;
+                jump_targets.any.extend(scan.built);
+                jump_targets.any.sort_unstable();
+                jump_targets.any.dedup();
+                break;
+            }
+            labels.extend(scan.built);
+        }
+    }
+    targets
+}
+
+/// What one pass of `scan_computed_jumps` found.
+struct ComputedJumpScan {
+    by_site: BTreeMap<u32, Vec<u32>>,
+    loaded: BTreeSet<u32>,
+    built: Vec<u32>,
+}
+
+/// Straight-line tracking over one function, reset at every label and call:
+/// constants (lis/addi/ori), switch index bounds (`cmplwi rX,N` then `bgt`,
+/// kept through `slwi rY,rX,2`), table entries (`lwzx` from a constant base),
+/// pointers loaded from memory, and what reaches CTR before each `bctr`.
+fn scan_computed_jumps(
+    function: FunctionRange,
+    words: &[u32],
+    labels: &BTreeSet<u32>,
+    table_run: &dyn Fn(u32, u32) -> Vec<u32>,
+) -> ComputedJumpScan {
+    let interior = |address: u32| {
+        address % 4 == 0 && address > function.address && address < function.address + function.size
+    };
+    let mut scan = ComputedJumpScan {
+        by_site: BTreeMap::new(),
+        loaded: BTreeSet::new(),
+        built: Vec::new(),
+    };
+    let mut constant: [Option<u32>; 32] = [None; 32];
+    let mut bound: [Option<u32>; 32] = [None; 32];
+    // (table address, entries when bounded)
+    let mut table_entry: [Option<(u32, Option<u32>)>; 32] = [None; 32];
+    let mut loaded = [false; 32];
+    let mut ctr_table: Option<(u32, Option<u32>)> = None;
+    let mut ctr_loaded = false;
+    let mut compare: Option<(u32, usize, u32)> = None;
+    for (index, word) in words.iter().enumerate() {
+        let pc = function.address + index as u32 * 4;
+        if labels.contains(&pc) {
+            constant = [None; 32];
+            bound = [None; 32];
+            table_entry = [None; 32];
+            loaded = [false; 32];
+            ctr_table = None;
+            ctr_loaded = false;
+            compare = None;
+        }
+        let rd = gpr_rt(*word) as usize;
+        let ra = gpr_ra(*word) as usize;
+        let rb = ((*word >> 11) & 31) as usize;
+        let immediate = *word & 0xFFFF;
+        let primary = *word >> 26;
+        let extended = (*word >> 1) & 0x3FF;
+        let pending_compare = compare.take();
+        let mut known = None;
+        let mut entry = None;
+        match primary {
+            // cmplwi crfD, rA, N (the range check of a switch)
+            10 if (*word >> 21) & 1 == 0 => {
+                compare = Some(((*word >> 23) & 7, ra, immediate));
+            }
+            // bgt crfD, default: the index is at most N on the fall-through.
+            16 if (*word >> 21) & 30 == 12 => {
+                if let Some((field, register, limit)) = pending_compare {
+                    if (*word >> 16) & 31 == field * 4 + 1 {
+                        bound[register] = Some(limit);
+                    }
+                }
+            }
+            // lis rD, hi / addis rD, rA, hi
+            15 => {
+                known = if ra == 0 {
+                    Some(immediate << 16)
+                } else {
+                    constant[ra].map(|base| base.wrapping_add(immediate << 16))
+                };
+            }
+            // addi rD, rA, lo
+            14 if ra != 0 => {
+                known = constant[ra]
+                    .map(|base| base.wrapping_add(immediate as u16 as i16 as i32 as u32));
+            }
+            // ori rA, rS, lo: the destination is rA.
+            24 => {
+                let value = constant[rd].map(|base| base | immediate);
+                if let Some(address) = value.filter(|address| interior(*address)) {
+                    scan.built.push(address);
+                }
+                constant[ra] = value;
+                bound[ra] = None;
+                table_entry[ra] = None;
+                loaded[ra] = false;
+                continue;
+            }
+            // slwi rA, rS, 2 (rlwinm rA, rS, 2, 0, 29): a scaled index.
+            21 if *word & 0xFFFE == (2 << 11) | (29 << 1) => {
+                let value = bound[rd];
+                bound[ra] = value;
+                constant[ra] = None;
+                table_entry[ra] = None;
+                loaded[ra] = false;
+                continue;
+            }
+            // lwzx rD, rA, rB: an entry of a table at a known address.
+            31 if extended == 23 => {
+                entry = match (constant[ra], constant[rb]) {
+                    (Some(table), _) => Some((table, bound[rb].map(|limit| limit + 1))),
+                    (None, Some(table)) => Some((table, bound[ra].map(|limit| limit + 1))),
+                    (None, None) => None,
+                };
+            }
+            // mtctr rS
+            31 if extended == 467 && ((*word >> 11) & 0x3FF) == (9 << 5) => {
+                ctr_table = table_entry[rd];
+                ctr_loaded = loaded[rd];
+                continue;
+            }
+            _ => {}
+        }
+        let Some(effect) = crate::ppc_dataflow::effect(pc, *word) else {
+            constant = [None; 32];
+            bound = [None; 32];
+            table_entry = [None; 32];
+            loaded = [false; 32];
+            ctr_table = None;
+            ctr_loaded = false;
+            continue;
+        };
+        if effect.flow == crate::ppc_dataflow::Flow::IndirectJump {
+            if let Some((table, entries)) = ctr_table {
+                let mut run = table_run(table, function.address);
+                if let Some(entries) = entries {
+                    run.truncate(entries as usize);
+                }
+                if !run.is_empty() {
+                    scan.by_site.insert(pc, run);
+                }
+            }
+            if ctr_loaded {
+                scan.loaded.insert(pc);
+            }
+        }
+        if effect.writes.ctr {
+            ctr_table = None;
+            ctr_loaded = false;
+        }
+        for register in 0..32 {
+            if effect.writes.gpr & (1 << register) != 0 {
+                constant[register] = None;
+                bound[register] = None;
+                table_entry[register] = None;
+                loaded[register] = false;
+            }
+        }
+        if matches!(
+            effect.flow,
+            crate::ppc_dataflow::Flow::Call(_) | crate::ppc_dataflow::Flow::IndirectCall
+        ) {
+            constant = [None; 32];
+            bound = [None; 32];
+            table_entry = [None; 32];
+            loaded = [false; 32];
+            ctr_table = None;
+            ctr_loaded = false;
+        }
+        if let Some(value) = known {
+            if interior(value) {
+                scan.built.push(value);
+            }
+            constant[rd] = Some(value);
+        }
+        if let Some(table) = entry {
+            table_entry[rd] = Some(table);
+        }
+        // lwz / lwzu / lwzx / lwzux: a word loaded from memory.
+        if primary == 32 || primary == 33 || (primary == 31 && (extended == 23 || extended == 55)) {
+            loaded[rd] = true;
+        }
+    }
+    scan.built.sort_unstable();
+    scan.built.dedup();
+    scan
+}
+
+/// A function whose generated body is not its guest code: a host
+/// substitution or a pure helper the caller invokes directly.
+fn abi_native_function(address: u32) -> bool {
+    native_function_body(address).is_some() || native_pure_helper(address).is_some()
+}
+
+/// The residency plan of one function under the module's EABI facts.
+fn function_abi_residency(
+    module_abi: &ModuleAbi,
+    address: u32,
+    options: &ModuleTranslationOptions,
+) -> AbiResidency {
+    AbiResidency {
+        call_sites: if options.abi_call_sync {
+            module_abi.call_sites(address)
+        } else {
+            BTreeMap::new()
+        },
+        exit: if options.abi_exit_sync {
+            module_abi.exit_stores(address)
+        } else {
+            None
+        },
+    }
+}
+
+/// Possible indirect-call targets: functions whose start address appears as
+/// a word in the image's data (vtables, callback and jump tables, data
+/// pointers) or is built in code by `lis` followed by `addi`/`ori` on the
+/// same register. Over-approximate: a spurious match only keeps a function in
+/// the set. Instruction words are not data: every `lwz` encodes a value in
+/// 0x80000000..0x83FFFFFF and would match some function start.
+fn discover_address_taken_functions(
+    sections: &[DolSection],
+    dol_bytes: &[u8],
+    functions: &[FunctionRange],
+) -> BTreeSet<u32> {
+    let starts: BTreeSet<u32> = functions.iter().map(|function| function.address).collect();
+    let mut taken = BTreeSet::new();
+    for section in sections {
+        let Some(bytes) = dol_bytes.get(section.file_range()) else {
+            continue;
+        };
+        let mut high: [Option<u32>; 32] = [None; 32];
+        for chunk in bytes.chunks_exact(4) {
+            let word = u32::from_be_bytes(chunk.try_into().expect("four-byte word"));
+            if section.kind != DolSectionKind::Text {
+                if starts.contains(&word) {
+                    taken.insert(word);
+                }
+                continue;
+            }
+            let rd = gpr_rt(word) as usize;
+            let ra = gpr_ra(word) as usize;
+            let immediate = word & 0xFFFF;
+            let value = match word >> 26 {
+                // lis rD, hi
+                15 if ra == 0 => {
+                    high[rd] = Some(immediate << 16);
+                    continue;
+                }
+                // addi rD, rA, lo
+                14 if ra != 0 => {
+                    high[ra].map(|base| base.wrapping_add(immediate as u16 as i16 as i32 as u32))
+                }
+                // ori rA, rS, lo
+                24 => high[rd].map(|base| base | immediate),
+                _ => None,
+            };
+            if let Some(value) = value.filter(|value| starts.contains(value)) {
+                taken.insert(value);
+            }
+        }
+    }
+    taken
 }
 
 fn lower_words_with_config(
@@ -3318,7 +4016,17 @@ fn lower_words_with_config(
         inline_scalar_single_binary,
         typed_region_gpr_mask,
         device_pointer_globals,
+        hw_float_conversions,
+        flat_view_only,
+        stack_r11_stores,
+        abi_call_markers,
+        guest_return_macro,
+        fast_float_forms,
+        bctrl_site_cache,
     } = config;
+    // Suffix of the flat-view float load/store helpers: `_hw` converts binary32
+    // lanes with the host's cvtss2sd/cvtsd2ss.
+    let float_conversion = if hw_float_conversions { "_hw" } else { "" };
     // The paired/scalar local-lane proofs own their exact arithmetic text;
     // native float only replaces the general lowering.
     let native_float = native_float && local_lane_profile == LocalLaneProfile::None;
@@ -3445,19 +4153,18 @@ fn lower_words_with_config(
         .values()
         .flat_map(|run| run.stores.iter().skip(1).map(|store| store.pc))
         .collect::<BTreeSet<_>>();
-    let static_device_pcs = if (flat_ram_reads || flat_ram_writes)
-        && local_lane_profile == LocalLaneProfile::None
-    {
-        discover_static_device_access_pcs(
-            address,
-            bytes,
-            entries,
-            immediate_overrides,
-            device_pointer_globals,
-        )
-    } else {
-        BTreeSet::new()
-    };
+    let static_device_pcs =
+        if (flat_ram_reads || flat_ram_writes) && local_lane_profile == LocalLaneProfile::None {
+            discover_static_device_access_pcs(
+                address,
+                bytes,
+                entries,
+                immediate_overrides,
+                device_pointer_globals,
+            )
+        } else {
+            BTreeSet::new()
+        };
     let mut final_instruction_is_terminal = false;
     for (index, chunk) in bytes.chunks_exact(4).enumerate() {
         let pc = address + index as u32 * 4;
@@ -3747,7 +4454,10 @@ fn lower_words_with_config(
                     for reg in target..32 {
                         let offset = (reg - target) * 4;
                         let load = integer_guest_load_expression(
-                            4, &format!("{ea} + 0x{offset:08X}u"), pc, flat_ram_reads,
+                            4,
+                            &format!("{ea} + 0x{offset:08X}u"),
+                            pc,
+                            flat_ram_reads,
                         );
                         writeln!(output, "    context->gpr[{reg}] = {load};")
                             .map_err(|_| TranslationError::Formatting)?;
@@ -3825,7 +4535,9 @@ fn lower_words_with_config(
                     true,
                     immediate_override,
                 )?;
-                if source <= 24 {
+                // A flat-view-only module stores every stmw register by
+                // register through the view, like rS > 24 always does.
+                if source <= 24 && !(flat_view_only && flat_ram_writes) {
                     writeln!(output,
                         "    galaxy::guest_store_multiple_gprs<{source}u>(context, memory, {ea}, services, 0x{pc:08X}u);")
                         .map_err(|_| TranslationError::Formatting)?;
@@ -4016,7 +4728,7 @@ fn lower_words_with_config(
                 if is_load && flat_ram_reads {
                     writeln!(
                         output,
-                        "    galaxy::fast::psq_load(flat_guest_read_base, context, {register}u, memory, {ea}, {gqr_index}u, {one_element}, {d_form}, services, 0x{pc:08X}u);"
+                        "    galaxy::fast::psq_load{float_conversion}(flat_guest_read_base, context, {register}u, memory, {ea}, {gqr_index}u, {one_element}, {d_form}, services, 0x{pc:08X}u);"
                     )
                     .map_err(|_| TranslationError::Formatting)?;
                 } else if is_load {
@@ -4028,7 +4740,7 @@ fn lower_words_with_config(
                 } else if flat_ram_writes {
                     writeln!(
                         output,
-                        "    galaxy::fast::psq_store(flat_guest_base, context, {register}u, memory, {ea}, {gqr_index}u, {one_element}, {d_form}, services, 0x{pc:08X}u);"
+                        "    galaxy::fast::psq_store{float_conversion}(flat_guest_base, context, {register}u, memory, {ea}, {gqr_index}u, {one_element}, {d_form}, services, 0x{pc:08X}u);"
                     )
                     .map_err(|_| TranslationError::Formatting)?;
                 } else {
@@ -4059,7 +4771,7 @@ fn lower_words_with_config(
                     if flat_ram_reads {
                         writeln!(
                             output,
-                            "    galaxy::fast::load_fpr_single(flat_guest_read_base, context, {target}u, memory, {ea}, services, 0x{pc:08X}u);"
+                            "    galaxy::fast::load_fpr_single{float_conversion}(flat_guest_read_base, context, {target}u, memory, {ea}, services, 0x{pc:08X}u);"
                         )
                     } else {
                         writeln!(
@@ -4078,7 +4790,10 @@ fn lower_words_with_config(
                     };
                     if let Some((lane, half)) = layout_constant {
                         output.push_str(&site_hook_call(
-                            pc, "LayoutConstant", (lane as u32) | (u32::from(half) << 8)));
+                            pc,
+                            "LayoutConstant",
+                            (lane as u32) | (u32::from(half) << 8),
+                        ));
                     }
                     // As in Dusklight CC0, menu panes stay circular through a
                     // wider root canvas with inverse horizontal child scale.
@@ -4137,7 +4852,7 @@ fn lower_words_with_config(
                     if flat_ram_writes {
                         writeln!(
                             output,
-                            "    galaxy::fast::store_fpr_single(flat_guest_base, context, {source}u, memory, {ea}, services, 0x{pc:08X}u);"
+                            "    galaxy::fast::store_fpr_single{float_conversion}(flat_guest_base, context, {source}u, memory, {ea}, services, 0x{pc:08X}u);"
                         )
                     } else {
                         writeln!(
@@ -4190,7 +4905,7 @@ fn lower_words_with_config(
                         if flat_ram_reads {
                             writeln!(
                                 output,
-                                "    galaxy::fast::load_fpr_single(flat_guest_read_base, context, {register}u, memory, {ea}, services, 0x{pc:08X}u);"
+                                "    galaxy::fast::load_fpr_single{float_conversion}(flat_guest_read_base, context, {register}u, memory, {ea}, services, 0x{pc:08X}u);"
                             )
                         } else {
                             writeln!(
@@ -4218,7 +4933,7 @@ fn lower_words_with_config(
                         if flat_ram_writes {
                             writeln!(
                                 output,
-                                "    galaxy::fast::store_fpr_single(flat_guest_base, context, {register}u, memory, {ea}, services, 0x{pc:08X}u);"
+                                "    galaxy::fast::store_fpr_single{float_conversion}(flat_guest_base, context, {register}u, memory, {ea}, services, 0x{pc:08X}u);"
                             )
                         } else {
                             writeln!(
@@ -4276,10 +4991,17 @@ fn lower_words_with_config(
                 let base = gpr_ra(word);
                 let index = gpr_rb(word);
                 let ea = emit_indexed_effective_address(&mut output, pc, base, index)?;
-                writeln!(
-                    output,
-                    "    galaxy::guest_zero(memory, {ea} & 0xFFFFFFE0u, 32u, services, 0x{pc:08X}u);"
-                )
+                if flat_view_only && flat_ram_writes {
+                    writeln!(
+                        output,
+                        "    galaxy::fast::zero_line(flat_guest_base, memory, {ea}, services, 0x{pc:08X}u);"
+                    )
+                } else {
+                    writeln!(
+                        output,
+                        "    galaxy::guest_zero(memory, {ea} & 0xFFFFFFE0u, 32u, services, 0x{pc:08X}u);"
+                    )
+                }
                 .map_err(|_| TranslationError::Formatting)?;
             }
             Opcode::DcbzL => {
@@ -4467,9 +5189,40 @@ fn lower_words_with_config(
                 let selector = gpr_ra(word);
                 let negative = gpr_rb(word);
                 let nonnegative = fpr_c(word);
+                if fast_float_forms {
+                    writeln!(
+                        output,
+                        "    context->fpr_bits[{target}] = galaxy::fast::select_nonnegative(context->fpr_bits[{selector}]) ? context->fpr_bits[{nonnegative}] : context->fpr_bits[{negative}];"
+                    )
+                } else {
+                    writeln!(
+                        output,
+                        "    const std::uint64_t selector = context->fpr_bits[{selector}];\n    const bool select_nonnegative = !galaxy::f64_is_nan(selector) && ((selector & 0x8000000000000000ull) == 0 || (selector & 0x7FFFFFFFFFFFFFFFull) == 0);\n    context->fpr_bits[{target}] = select_nonnegative ? context->fpr_bits[{nonnegative}] : context->fpr_bits[{negative}];"
+                    )
+                }
+                .map_err(|_| TranslationError::Formatting)?;
+                if record_bit(word) {
+                    output.push_str("    galaxy::update_cr1_from_fpscr(context);\n");
+                }
+            }
+            Opcode::Fres if fast_float_forms => {
+                let target = gpr_rt(word);
+                let source = gpr_rb(word);
                 writeln!(
                     output,
-                    "    const std::uint64_t selector = context->fpr_bits[{selector}];\n    const bool select_nonnegative = !galaxy::f64_is_nan(selector) && ((selector & 0x8000000000000000ull) == 0 || (selector & 0x7FFFFFFFFFFFFFFFull) == 0);\n    context->fpr_bits[{target}] = select_nonnegative ? context->fpr_bits[{nonnegative}] : context->fpr_bits[{negative}];"
+                    "    {{ const std::uint64_t estimate = galaxy::fast::reciprocal_single_bits(context->fpr_bits[{source}]); context->fpr_bits[{target}] = estimate; if (galaxy::fast::duplicates_single(context)) context->ps1_bits[{target}] = estimate; }}"
+                )
+                .map_err(|_| TranslationError::Formatting)?;
+                if record_bit(word) {
+                    output.push_str("    galaxy::update_cr1_from_fpscr(context);\n");
+                }
+            }
+            Opcode::Frsqrte if fast_float_forms => {
+                let target = gpr_rt(word);
+                let source = gpr_rb(word);
+                writeln!(
+                    output,
+                    "    context->fpr_bits[{target}] = galaxy::fast::reciprocal_sqrt_bits(context->fpr_bits[{source}]);"
                 )
                 .map_err(|_| TranslationError::Formatting)?;
                 if record_bit(word) {
@@ -4632,7 +5385,9 @@ fn lower_words_with_config(
                         Opcode::PsDiv => 3,
                         _ => unreachable!(),
                     };
-                    let descriptor = target | (left << 5) | (right << 10)
+                    let descriptor = target
+                        | (left << 5)
+                        | (right << 10)
                         | (operation_index << 15)
                         | (u32::from(right_lane0 == "ps1_bits") << 17)
                         | (u32::from(right_lane1 == "ps1_bits") << 18)
@@ -4641,7 +5396,7 @@ fn lower_words_with_config(
                         "    galaxy::ppc_execute_indexed_paired_binary(context, 0x{descriptor:05X}u, services, 0x{pc:08X}u);")
                         .map_err(|_| TranslationError::Formatting)?;
                 } else {
-                writeln!(
+                    writeln!(
                     output,
                     "    galaxy::require_paired_single_mode(context, false, services, 0x{pc:08X}u);\n    const std::uint32_t left_ps0 = galaxy::require_single_precision_bits(context->fpr_bits[{left}], services, 0x{pc:08X}u);\n    const std::uint32_t left_ps1 = galaxy::require_single_precision_bits(context->ps1_bits[{left}], services, 0x{pc:08X}u);\n    const std::uint32_t right_ps0 = galaxy::require_single_precision_bits(context->{right_lane0}[{right}], services, 0x{pc:08X}u);\n    const std::uint32_t right_ps1 = galaxy::require_single_precision_bits(context->{right_lane1}[{right}], services, 0x{pc:08X}u);\n{arithmetic}"
                 )
@@ -4706,8 +5461,11 @@ fn lower_words_with_config(
                         Opcode::PsNmsub => 3,
                         _ => unreachable!(),
                     };
-                    let descriptor = target | (multiplicand << 5) | (multiplier << 10)
-                        | (addend << 15) | (operation_index << 20)
+                    let descriptor = target
+                        | (multiplicand << 5)
+                        | (multiplier << 10)
+                        | (addend << 15)
+                        | (operation_index << 20)
                         | (u32::from(multiplier_lane0 == "ps1_bits") << 22)
                         | (u32::from(multiplier_lane1 == "ps1_bits") << 23)
                         | (u32::from(record_bit(word)) << 24);
@@ -4715,7 +5473,7 @@ fn lower_words_with_config(
                         "    galaxy::ppc_execute_indexed_paired_ternary(context, 0x{descriptor:07X}u, services, 0x{pc:08X}u);")
                         .map_err(|_| TranslationError::Formatting)?;
                 } else {
-                writeln!(
+                    writeln!(
                     output,
                     "    galaxy::require_paired_single_mode(context, false, services, 0x{pc:08X}u);\n    const std::uint32_t multiplicand_ps0 = galaxy::require_single_precision_bits(context->fpr_bits[{multiplicand}], services, 0x{pc:08X}u);\n    const std::uint32_t multiplicand_ps1 = galaxy::require_single_precision_bits(context->ps1_bits[{multiplicand}], services, 0x{pc:08X}u);\n    const std::uint32_t multiplier_ps0 = galaxy::require_single_precision_bits(context->{multiplier_lane0}[{multiplier}], services, 0x{pc:08X}u);\n    const std::uint32_t multiplier_ps1 = galaxy::require_single_precision_bits(context->{multiplier_lane1}[{multiplier}], services, 0x{pc:08X}u);\n    const std::uint32_t addend_ps0 = galaxy::require_single_precision_bits(context->fpr_bits[{addend}], services, 0x{pc:08X}u);\n    const std::uint32_t addend_ps1 = galaxy::require_single_precision_bits(context->ps1_bits[{addend}], services, 0x{pc:08X}u);\n{arithmetic}"
                 )
@@ -4736,21 +5494,21 @@ fn lower_words_with_config(
                     )
                     .map_err(|_| TranslationError::Formatting)?;
                 } else {
-                let lane0 = if status_from_lane1 {
-                    format!(
+                    let lane0 = if status_from_lane1 {
+                        format!(
                         "galaxy::ppc_f32_passthrough(galaxy::require_single_precision_bits(context->fpr_bits[{copy}], services, 0x{pc:08X}u))"
                     )
-                } else {
-                    "galaxy::ppc_f32_binary(galaxy::PpcFloatBinaryOperation::Add, left_ps0, right_ps1, context->fpscr)".to_owned()
-                };
-                let lane1 = if status_from_lane1 {
-                    "galaxy::ppc_f32_binary(galaxy::PpcFloatBinaryOperation::Add, left_ps0, right_ps1, context->fpscr)".to_owned()
-                } else {
-                    format!(
+                    } else {
+                        "galaxy::ppc_f32_binary(galaxy::PpcFloatBinaryOperation::Add, left_ps0, right_ps1, context->fpscr)".to_owned()
+                    };
+                    let lane1 = if status_from_lane1 {
+                        "galaxy::ppc_f32_binary(galaxy::PpcFloatBinaryOperation::Add, left_ps0, right_ps1, context->fpscr)".to_owned()
+                    } else {
+                        format!(
                         "galaxy::ppc_f32_passthrough(galaxy::require_single_precision_bits(context->ps1_bits[{copy}], services, 0x{pc:08X}u))"
                     )
-                };
-                writeln!(
+                    };
+                    writeln!(
                     output,
                     "    galaxy::require_paired_single_mode(context, false, services, 0x{pc:08X}u);\n    const std::uint32_t left_ps0 = galaxy::require_single_precision_bits(context->fpr_bits[{left}], services, 0x{pc:08X}u);\n    const std::uint32_t right_ps1 = galaxy::require_single_precision_bits(context->ps1_bits[{right}], services, 0x{pc:08X}u);\n    const galaxy::PpcFloatResult result_ps0 = {lane0};\n    const galaxy::PpcFloatResult result_ps1 = {lane1};\n    galaxy::ppc_commit_paired_result(context, {target}u, result_ps0, result_ps1, {status_from_lane1}, {}, services, 0x{pc:08X}u);",
                     record_bit(word)
@@ -4768,11 +5526,35 @@ fn lower_words_with_config(
                     "fpr_bits"
                 };
                 let ordered = matches!(instruction.op, Opcode::PsCmpo0 | Opcode::PsCmpo1);
+                if fast_float_forms {
+                    writeln!(
+                        output,
+                        "    galaxy::require_paired_single_mode(context, false, services, 0x{pc:08X}u);\n    galaxy::fast::compare_f64_cr(context, {field}u, context->{lane}[{left}], context->{lane}[{right}]);"
+                    )
+                } else {
+                    writeln!(
+                        output,
+                        "    galaxy::require_paired_single_mode(context, false, services, 0x{pc:08X}u);\n    galaxy::compare_f64(context, {field}u, context->{lane}[{left}], context->{lane}[{right}], {ordered});"
+                    )
+                }
+                .map_err(|_| TranslationError::Formatting)?;
+            }
+            Opcode::PsRes | Opcode::PsRsqrte if fast_float_forms => {
+                let target = gpr_rt(word);
+                let source = gpr_rb(word);
+                let estimate = if instruction.op == Opcode::PsRes {
+                    "reciprocal_single_bits"
+                } else {
+                    "reciprocal_sqrt_single_bits"
+                };
                 writeln!(
                     output,
-                    "    galaxy::require_paired_single_mode(context, false, services, 0x{pc:08X}u);\n    galaxy::compare_f64(context, {field}u, context->{lane}[{left}], context->{lane}[{right}], {ordered});"
+                    "    galaxy::require_paired_single_mode(context, false, services, 0x{pc:08X}u);\n    {{ const std::uint64_t estimate_ps0 = galaxy::fast::{estimate}(context->fpr_bits[{source}]); const std::uint64_t estimate_ps1 = galaxy::fast::{estimate}(context->ps1_bits[{source}]); context->fpr_bits[{target}] = estimate_ps0; context->ps1_bits[{target}] = estimate_ps1; }}"
                 )
                 .map_err(|_| TranslationError::Formatting)?;
+                if record_bit(word) {
+                    output.push_str("    galaxy::update_cr1_from_fpscr(context);\n");
+                }
             }
             Opcode::PsRes | Opcode::PsRsqrte => {
                 let target = gpr_rt(word);
@@ -4788,6 +5570,20 @@ fn lower_words_with_config(
                     record_bit(word)
                 )
                 .map_err(|_| TranslationError::Formatting)?;
+            }
+            Opcode::PsSel if fast_float_forms => {
+                let target = gpr_rt(word);
+                let selector = gpr_ra(word);
+                let negative = gpr_rb(word);
+                let nonnegative = fpr_c(word);
+                writeln!(
+                    output,
+                    "    galaxy::require_paired_single_mode(context, false, services, 0x{pc:08X}u);\n    {{ const std::uint64_t selected_ps0 = galaxy::fast::select_nonnegative(context->fpr_bits[{selector}]) ? context->fpr_bits[{nonnegative}] : context->fpr_bits[{negative}]; const std::uint64_t selected_ps1 = galaxy::fast::select_nonnegative(context->ps1_bits[{selector}]) ? context->ps1_bits[{nonnegative}] : context->ps1_bits[{negative}]; context->fpr_bits[{target}] = selected_ps0; context->ps1_bits[{target}] = selected_ps1; }}"
+                )
+                .map_err(|_| TranslationError::Formatting)?;
+                if record_bit(word) {
+                    output.push_str("    galaxy::update_cr1_from_fpscr(context);\n");
+                }
             }
             Opcode::PsSel => {
                 let target = gpr_rt(word);
@@ -5549,10 +6345,17 @@ fn lower_words_with_config(
                 let left = gpr_ra(word);
                 let right = gpr_rb(word);
                 let ordered = instruction.op == Opcode::Fcmpo;
-                writeln!(
-                    output,
-                    "    galaxy::compare_f64(context, {field}u, context->fpr_bits[{left}], context->fpr_bits[{right}], {ordered});"
-                )
+                if fast_float_forms {
+                    writeln!(
+                        output,
+                        "    galaxy::fast::compare_f64_cr(context, {field}u, context->fpr_bits[{left}], context->fpr_bits[{right}]);"
+                    )
+                } else {
+                    writeln!(
+                        output,
+                        "    galaxy::compare_f64(context, {field}u, context->fpr_bits[{left}], context->fpr_bits[{right}], {ordered});"
+                    )
+                }
                 .map_err(|_| TranslationError::Formatting)?;
             }
             Opcode::Sc => {
@@ -5587,9 +6390,28 @@ fn lower_words_with_config(
                     writeln!(output, "    context->lr = 0x{:08X}u;", pc + 4)
                         .map_err(|_| TranslationError::Formatting)?;
                 }
-                let gpr_save_restore = if link { gpr_save_restore_entry(target) } else { None };
+                let gpr_save_restore = if link {
+                    gpr_save_restore_entry(target)
+                } else {
+                    None
+                };
                 if let Some((first, save)) = gpr_save_restore {
-                    emit_gpr_save_restore(&mut output, first, save, pc, flat_ram_reads, flat_ram_writes)?;
+                    // r11 addresses the caller's frame when the only way here
+                    // is straight from `addi r11,r1,d` (CodeWarrior's prologue).
+                    let r11_on_stack = stack_r11_stores
+                        && save
+                        && !has_reentry_label
+                        && pc > address
+                        && r11_is_stack_frame_pointer(word_at(bytes, address, pc - 4));
+                    emit_gpr_save_restore(
+                        &mut output,
+                        first,
+                        save,
+                        pc,
+                        flat_ram_reads,
+                        flat_ram_writes,
+                        r11_on_stack,
+                    )?;
                 } else if target >= address && target < function_end {
                     if target <= pc {
                         writeln!(
@@ -5614,6 +6436,9 @@ fn lower_words_with_config(
                             .expect("audited native tail call target was checked");
                         emit_resolved_generated_direct_call(&mut output, target, owner, pc)?;
                     } else {
+                        if link {
+                            emit_abi_call_marker(&mut output, abi_call_markers, pc)?;
+                        }
                         emit_direct_guest_call_with_exact_fpu(
                             &mut output,
                             target,
@@ -5658,11 +6483,17 @@ fn lower_words_with_config(
                         .get(&pc)
                         .map(|(_, predicate)| predicate.clone())
                         .or_else(|| {
-                            fused_record_registers.get(&pc).map(|register| match bi % 4 {
-                                0 => format!("static_cast<std::int32_t>(context->gpr[{register}]) < 0"),
-                                1 => format!("static_cast<std::int32_t>(context->gpr[{register}]) > 0"),
-                                _ => format!("context->gpr[{register}] == 0u"),
-                            })
+                            fused_record_registers
+                                .get(&pc)
+                                .map(|register| match bi % 4 {
+                                    0 => format!(
+                                        "static_cast<std::int32_t>(context->gpr[{register}]) < 0"
+                                    ),
+                                    1 => format!(
+                                        "static_cast<std::int32_t>(context->gpr[{register}]) > 0"
+                                    ),
+                                    _ => format!("context->gpr[{register}] == 0u"),
+                                })
                         });
                     let condition = match fused_predicate {
                         Some(predicate) if bo & 0x08 != 0 => format!("({predicate})"),
@@ -5706,6 +6537,7 @@ fn lower_words_with_config(
                             checkpoint_free_callees,
                         );
                         if unconditional {
+                            emit_abi_call_marker(&mut output, abi_call_markers, pc)?;
                             emit_direct_guest_call_with_exact_fpu(
                                 &mut output,
                                 target,
@@ -5719,6 +6551,7 @@ fn lower_words_with_config(
                         } else {
                             writeln!(output, "    if ({condition}) {{")
                                 .map_err(|_| TranslationError::Formatting)?;
+                            emit_abi_call_marker(&mut output, abi_call_markers, pc)?;
                             emit_direct_guest_call_with_exact_fpu(
                                 &mut output,
                                 target,
@@ -5774,23 +6607,49 @@ fn lower_words_with_config(
                     writeln!(output, "    context->lr = 0x{:08X}u;", pc + 4)
                         .map_err(|_| TranslationError::Formatting)?;
                     if unconditional {
-                        emit_indirect_guest_call(&mut output, "branch_target", pc, direct_indirect_calls)?;
+                        emit_abi_call_marker(&mut output, abi_call_markers, pc)?;
+                        emit_indirect_guest_call(
+                            &mut output,
+                            "branch_target",
+                            pc,
+                            direct_indirect_calls,
+                            bctrl_site_cache,
+                        )?;
                         emit_call_return_checkpoint(&mut output, pc)?;
                     } else {
                         writeln!(output, "    if ({condition}) {{")
                             .map_err(|_| TranslationError::Formatting)?;
-                        emit_indirect_guest_call(&mut output, "branch_target", pc, direct_indirect_calls)?;
+                        emit_abi_call_marker(&mut output, abi_call_markers, pc)?;
+                        emit_indirect_guest_call(
+                            &mut output,
+                            "branch_target",
+                            pc,
+                            direct_indirect_calls,
+                            bctrl_site_cache,
+                        )?;
                         emit_call_return_checkpoint(&mut output, pc)?;
                         output.push_str("    }\n");
                     }
                 } else if unconditional {
-                    emit_indirect_guest_call(&mut output, "branch_target", pc, direct_indirect_calls)?;
+                    emit_indirect_guest_call(
+                        &mut output,
+                        "branch_target",
+                        pc,
+                        direct_indirect_calls,
+                        bctrl_site_cache,
+                    )?;
                     output.push_str("    return;\n");
                     final_instruction_is_terminal = true;
                 } else {
                     writeln!(output, "    if ({condition}) {{")
                         .map_err(|_| TranslationError::Formatting)?;
-                    emit_indirect_guest_call(&mut output, "branch_target", pc, direct_indirect_calls)?;
+                    emit_indirect_guest_call(
+                        &mut output,
+                        "branch_target",
+                        pc,
+                        direct_indirect_calls,
+                        bctrl_site_cache,
+                    )?;
                     output.push_str("        return;\n    }\n");
                 }
             }
@@ -5819,18 +6678,36 @@ fn lower_words_with_config(
                     writeln!(output, "    context->lr = 0x{:08X}u;", pc + 4)
                         .map_err(|_| TranslationError::Formatting)?;
                     if unconditional {
-                        emit_indirect_guest_call(&mut output, "branch_target", pc, direct_indirect_calls)?;
+                        emit_abi_call_marker(&mut output, abi_call_markers, pc)?;
+                        emit_indirect_guest_call(
+                            &mut output,
+                            "branch_target",
+                            pc,
+                            direct_indirect_calls,
+                            bctrl_site_cache,
+                        )?;
                         emit_call_return_checkpoint(&mut output, pc)?;
                     } else {
                         writeln!(output, "    if ({condition}) {{")
                             .map_err(|_| TranslationError::Formatting)?;
-                        emit_indirect_guest_call(&mut output, "branch_target", pc, direct_indirect_calls)?;
+                        emit_abi_call_marker(&mut output, abi_call_markers, pc)?;
+                        emit_indirect_guest_call(
+                            &mut output,
+                            "branch_target",
+                            pc,
+                            direct_indirect_calls,
+                            bctrl_site_cache,
+                        )?;
                         emit_call_return_checkpoint(&mut output, pc)?;
                         output.push_str("    }\n");
                     }
                 } else if unconditional {
                     if internal_return_targets.is_empty() {
-                        output.push_str("    return;\n");
+                        output.push_str(if guest_return_macro {
+                            "    GALAXY_GUEST_RETURN;\n"
+                        } else {
+                            "    return;\n"
+                        });
                     } else if share_lr_continuation_dispatch {
                         output.push_str("    goto lr_continuation_dispatch;\n");
                     } else {
@@ -5847,7 +6724,12 @@ fn lower_words_with_config(
                     final_instruction_is_terminal = true;
                 } else {
                     if internal_return_targets.is_empty() {
-                        writeln!(output, "    if ({condition}) return;")
+                        let statement = if guest_return_macro {
+                            "GALAXY_GUEST_RETURN;"
+                        } else {
+                            "return;"
+                        };
+                        writeln!(output, "    if ({condition}) {statement}")
                             .map_err(|_| TranslationError::Formatting)?;
                     } else if share_lr_continuation_dispatch {
                         writeln!(
@@ -5930,7 +6812,10 @@ fn lower_words_with_config(
         };
         if let Some((lane, inverse)) = layout_vertical_fit {
             post_block_hooks.push_str(&site_hook_call(
-                pc, "LayoutVerticalFit", (lane as u32) | (u32::from(inverse) << 8)));
+                pc,
+                "LayoutVerticalFit",
+                (lane as u32) | (u32::from(inverse) << 8),
+            ));
         }
         let home_geometry = match (address, function_end, pc, word) {
             (0x8036_26CC, 0x8036_284C, 0x8036_27F0, 0xEC63_2028) => Some((0, 3)),
@@ -5943,7 +6828,11 @@ fn lower_words_with_config(
         };
         if let Some((kind, lane)) = home_geometry {
             // Game kinds 0 and 1 have fixed lanes; Home RSO kinds name theirs.
-            let argument = if kind < 2 { kind as u32 } else { (kind as u32) | ((lane as u32) << 8) };
+            let argument = if kind < 2 {
+                kind as u32
+            } else {
+                (kind as u32) | ((lane as u32) << 8)
+            };
             post_block_hooks.push_str(&site_hook_call(pc, "HomeGeometry", argument));
         }
         // These hooks change the canonical context after the guest operation,
@@ -6252,7 +7141,9 @@ fn cache_local_paired_instruction(
 // Checks symbolically that every memory access lies inside the initial RAM
 // spans checked by the emitted guard. Roots identify initial registers; root
 // zero is an absolute address.
-fn validate_psmtx_local_memory_contract(bytes: &[u8]) -> Result<BTreeMap<u32, (u32, i64)>, TranslationError> {
+fn validate_psmtx_local_memory_contract(
+    bytes: &[u8],
+) -> Result<BTreeMap<u32, (u32, i64)>, TranslationError> {
     let address = 0x804B_5F3C;
     let mut registers: [Option<(u32, i64)>; 32] = [None; 32];
     for register in [1, 3, 4, 5] {
@@ -6341,7 +7232,6 @@ fn validate_psmtx_local_memory_contract(bytes: &[u8]) -> Result<BTreeMap<u32, (u
     Ok(accesses)
 }
 
-
 // The symbolic verifier supplies each pointer offset; never infer non-aliasing
 // from the API arguments. The canonical context and original instruction order
 // remain live throughout this leaf. Entry guards exclude callbacks, traces and
@@ -6351,9 +7241,17 @@ fn lower_psmtx_proven_memory(
     bytes: &[u8],
     accesses: &BTreeMap<u32, (u32, i64)>,
 ) -> Result<String, TranslationError> {
-    fn replace_once(body: &mut String, pc: u32, old: &str, new: &str) -> Result<(), TranslationError> {
+    fn replace_once(
+        body: &mut String,
+        pc: u32,
+        old: &str,
+        new: &str,
+    ) -> Result<(), TranslationError> {
         if body.matches(old).count() != 1 {
-            return Err(local_paired_proof_error(pc, "proved matrix memory emission changed"));
+            return Err(local_paired_proof_error(
+                pc,
+                "proved matrix memory emission changed",
+            ));
         }
         *body = body.replacen(old, new, 1);
         Ok(())
@@ -6366,14 +7264,21 @@ fn lower_psmtx_proven_memory(
         let op = Ins::new(word, Extensions::gekko_broadway()).op;
         for guard in [
             format!("    galaxy::ensure_fpu_available(services, 0x{pc:08X}u, context, memory);\n"),
-            format!("    galaxy::require_paired_single_mode(context, false, services, 0x{pc:08X}u);\n"),
+            format!(
+                "    galaxy::require_paired_single_mode(context, false, services, 0x{pc:08X}u);\n"
+            ),
         ] {
             if body.matches(&guard).count() > 1 {
-                return Err(local_paired_proof_error(pc, "duplicate matrix guard emission"));
+                return Err(local_paired_proof_error(
+                    pc,
+                    "duplicate matrix guard emission",
+                ));
             }
             body = body.replace(&guard, "");
         }
-        let Some(&(root, start)) = accesses.get(&pc) else { continue; };
+        let Some(&(root, start)) = accesses.get(&pc) else {
+            continue;
+        };
         let (pointer, offset) = match root {
             1 => ("frame", start + 64),
             3 => ("input0", start),
@@ -6547,6 +7452,22 @@ fn validate_psvec_normalize_local_memory_contract(bytes: &[u8]) -> Result<(), Tr
     Ok(())
 }
 
+/// `addi r11,r1,d`: r11 then addresses the current stack frame, never the
+/// write-gather pipe.
+fn r11_is_stack_frame_pointer(word: u32) -> bool {
+    word >> 26 == 14 && gpr_rt(word) == 11 && gpr_ra(word) == 1
+}
+
+/// The big-endian instruction word at `pc` inside the function at `address`.
+fn word_at(bytes: &[u8], address: u32, pc: u32) -> u32 {
+    let offset = (pc - address) as usize;
+    u32::from_be_bytes(
+        bytes[offset..offset + 4]
+            .try_into()
+            .expect("four-byte PPC word"),
+    )
+}
+
 /// CodeWarrior's register save/restore helpers: `_savegpr_N` at
 /// 0x805174FC + 4(N-14) is `stw rN..r31, -0x80+4N(r11)` then `blr`;
 /// `_restgpr_N` at 0x80517548 + 4(N-14) is the matching `lwz` run. A linked
@@ -6567,6 +7488,7 @@ fn gpr_save_restore_entry(target: u32) -> Option<(u32, bool)> {
 /// store/load run (one statement per register, so the residency pass keeps the
 /// registers in host locals). The helpers contain no call, branch or
 /// interrupt boundary, so the call-return checkpoint is not needed.
+#[allow(clippy::too_many_arguments)]
 fn emit_gpr_save_restore(
     output: &mut String,
     first: u32,
@@ -6574,14 +7496,19 @@ fn emit_gpr_save_restore(
     pc: u32,
     flat_ram_reads: bool,
     flat_ram_writes: bool,
+    r11_on_stack: bool,
 ) -> Result<(), TranslationError> {
+    let store = if r11_on_stack { "store_stack" } else { "store" };
     for reg in first..32 {
-        let ea = format!("context->gpr[11] + 0x{:08X}u", 0xFFFF_FF80u32.wrapping_add(reg * 4));
+        let ea = format!(
+            "context->gpr[11] + 0x{:08X}u",
+            0xFFFF_FF80u32.wrapping_add(reg * 4)
+        );
         if save {
             if flat_ram_writes {
                 writeln!(
                     output,
-                    "    galaxy::fast::store<std::uint32_t>(flat_guest_base, memory, {ea}, context->gpr[{reg}], services, 0x{pc:08X}u);"
+                    "    galaxy::fast::{store}<std::uint32_t>(flat_guest_base, memory, {ea}, context->gpr[{reg}], services, 0x{pc:08X}u);"
                 )
             } else {
                 writeln!(
@@ -6597,6 +7524,21 @@ fn emit_gpr_save_restore(
             )
         }
         .map_err(|_| TranslationError::Formatting)?;
+    }
+    Ok(())
+}
+
+/// `--abi-call-sync`: announces a linked call to the residency pass, which
+/// synchronizes it under the EABI contract when the module analysis vouches
+/// for the call (`crate::residency::AbiResidency`). A no-op macro otherwise.
+fn emit_abi_call_marker(
+    output: &mut String,
+    enabled: bool,
+    call_pc: u32,
+) -> Result<(), TranslationError> {
+    if enabled {
+        writeln!(output, "    GALAXY_ABI_CALL(0x{call_pc:08X}u);")
+            .map_err(|_| TranslationError::Formatting)?;
     }
     Ok(())
 }
@@ -6760,9 +7702,7 @@ fn emit_direct_guest_call_with_exact_fpu(
                 // original load/RFI restored this same SelectThread frame.
                 // It must execute the original OSSaveContext return checkpoint
                 // and epilogue, not the abandoned OSLoadContext fallthrough.
-                output.push_str(
-                    "    if (context->pc == 0x804AB30Cu) goto call_return_804AB30C;\n",
-                );
+                output.push_str("    if (context->pc == 0x804AB30Cu) goto call_return_804AB30C;\n");
             }
             emit_post_call_hook(output, target, pc)
         } else {
@@ -7121,19 +8061,39 @@ pub(crate) fn lean_call_contract(symbol: &str) -> Option<LeanCallContract> {
     let (gpr_reads, gpr_writes, fpr_reads, fpr_writes): (&[u32], &[u32], &[u32], &[u32]) =
         match symbol {
             "lean_psmtx_identity" => (&[3], &[], &[], &[]),
-            "lean_psmtx_copy" | "lean_psmtx44_copy" | "lean_psmtx_quat"
-            | "lean_psvec_normalize" | "lean_j3d_mtx33_copy" | "lean_j3d_mtx33_copy_from34"
-            | "lean_j3d_translate_rotate_mtx_info" | "lean_j3d_scale_nrm_mtx"
-            | "lean_j3d_scale_nrm_mtx33" | "lean_tvec3_copy" | "lean_jmath_ps_copy12"
-            | "lean_jmath_ps_copy16" | "lean_tvec3_add_assign" | "lean_tvec3_sub_assign"
+            "lean_psmtx_copy"
+            | "lean_psmtx44_copy"
+            | "lean_psmtx_quat"
+            | "lean_psvec_normalize"
+            | "lean_j3d_mtx33_copy"
+            | "lean_j3d_mtx33_copy_from34"
+            | "lean_j3d_translate_rotate_mtx_info"
+            | "lean_j3d_scale_nrm_mtx"
+            | "lean_j3d_scale_nrm_mtx33"
+            | "lean_tvec3_copy"
+            | "lean_jmath_ps_copy12"
+            | "lean_jmath_ps_copy16"
+            | "lean_tvec3_add_assign"
+            | "lean_tvec3_sub_assign"
             | "lean_tvec3_negate" => (&[3, 4], &[], &[], &[]),
-            "lean_psmtx_concat" | "lean_psmtx_mult_vec" | "lean_psmtx_mult_vec_sr"
-            | "lean_psvec_add" | "lean_psvec_subtract" | "lean_psvec_cross"
-            | "lean_psquat_multiply" | "lean_j3d_texture_mtx" | "lean_j3d_texture_mtx_old"
-            | "lean_j3d_mtx_proj_concat" | "lean_gx_load_tex_mtx_imm" | "lean_tvec3_sub3"
-            | "lean_tvec3_plus" | "lean_tvec3_minus" => (&[3, 4, 5], &[], &[], &[]),
-            "lean_psmtx_mult_vec_array_sr" | "lean_j3d_psmtx_array_concat"
-            | "lean_c_mtx_look_at" | "lean_tvec3_from_ints" => (&[3, 4, 5, 6], &[], &[], &[]),
+            "lean_psmtx_concat"
+            | "lean_psmtx_mult_vec"
+            | "lean_psmtx_mult_vec_sr"
+            | "lean_psvec_add"
+            | "lean_psvec_subtract"
+            | "lean_psvec_cross"
+            | "lean_psquat_multiply"
+            | "lean_j3d_texture_mtx"
+            | "lean_j3d_texture_mtx_old"
+            | "lean_j3d_mtx_proj_concat"
+            | "lean_gx_load_tex_mtx_imm"
+            | "lean_tvec3_sub3"
+            | "lean_tvec3_plus"
+            | "lean_tvec3_minus" => (&[3, 4, 5], &[], &[], &[]),
+            "lean_psmtx_mult_vec_array_sr"
+            | "lean_j3d_psmtx_array_concat"
+            | "lean_c_mtx_look_at"
+            | "lean_tvec3_from_ints" => (&[3, 4, 5, 6], &[], &[], &[]),
             "lean_psmtx_inverse" | "lean_psmtx_inv_xpose" | "lean_j3d_calc_inverse_transpose" => {
                 (&[3, 4], &[3], &[], &[])
             }
@@ -7143,15 +8103,22 @@ pub(crate) fn lean_call_contract(symbol: &str) -> Option<LeanCallContract> {
             "lean_psmtx_trans_apply" | "lean_psmtx_scale_apply" | "lean_jma_mtx_apply_scale" => {
                 (&[3, 4], &[], &[1, 2, 3], &[])
             }
-            "lean_psvec_scale" | "lean_psmtx_rot_axis_rad" | "lean_tvec3_times"
+            "lean_psvec_scale"
+            | "lean_psmtx_rot_axis_rad"
+            | "lean_tvec3_times"
             | "lean_tvec3_scale_from" => (&[3, 4], &[], &[1], &[]),
             "lean_tvec3_scale_assign" | "lean_tvec3_splat" => (&[3], &[], &[1], &[]),
             "lean_tvec3_set3" => (&[3], &[], &[1, 2, 3], &[]),
             "lean_tvec3_zero" => (&[3], &[], &[], &[]),
             "lean_psvec_mag" | "lean_tvec3_squared" => (&[3], &[], &[], &[1]),
-            "lean_psvec_dot" | "lean_psvec_distance" | "lean_psquat_dot" | "lean_tvec3_dot"
+            "lean_psvec_dot"
+            | "lean_psvec_distance"
+            | "lean_psquat_dot"
+            | "lean_tvec3_dot"
             | "lean_tvec3_squared_distance" => (&[3, 4], &[], &[], &[1]),
-            "lean_jma_vec_scale_add" | "lean_jma_vec_lerp" | "lean_jma_quat_lerp"
+            "lean_jma_vec_scale_add"
+            | "lean_jma_vec_lerp"
+            | "lean_jma_quat_lerp"
             | "lean_c_quat_slerp" => (&[3, 4, 5], &[], &[1], &[]),
             "lean_j3d_translate_rotate_mtx" => (&[3, 4, 5, 6], &[], &[1, 2, 3], &[]),
             "lean_j3d_keyframe_f32" | "lean_j3d_keyframe_s16" => (&[3, 4], &[], &[1], &[1]),
@@ -7159,7 +8126,10 @@ pub(crate) fn lean_call_contract(symbol: &str) -> Option<LeanCallContract> {
             "lean_jgeom_sqrt" | "lean_jgeom_inv_sqrt" => (&[], &[], &[1], &[1]),
             "lean_gx_load_light_obj_imm" => (&[2, 3, 4], &[], &[], &[]),
             "lean_strlen" => (&[3], &[3], &[], &[]),
-            "lean_strcmp" | "lean_strstr" | "lean_strcasecmp" | "lean_mr_is_equal_string"
+            "lean_strcmp"
+            | "lean_strstr"
+            | "lean_strcasecmp"
+            | "lean_mr_is_equal_string"
             | "lean_lyt_equals_res_name" => (&[3, 4], &[3], &[], &[]),
             "lean_strncmp" => (&[3, 4, 5], &[3], &[], &[]),
             "lean_gd_write_u32" => (&[3, 13], &[], &[], &[]),
@@ -7410,6 +8380,7 @@ fn emit_indirect_guest_call(
     target_expression: &str,
     pc: u32,
     direct: bool,
+    site_cache: bool,
 ) -> Result<(), TranslationError> {
     if !direct || indirect_call_site_requires_host(pc) {
         return emit_cached_guest_call(output, target_expression, pc);
@@ -7424,6 +8395,15 @@ fn emit_indirect_guest_call(
         "    static galaxy::NativeGameFunction cached_function_{pc:08X} = nullptr;"
     )
     .map_err(|_| TranslationError::Formatting)?;
+    if site_cache {
+        // --bctrl-site-cache: the last published direct entry this site called.
+        writeln!(
+            output,
+            "    static std::uint32_t site_target_{pc:08X} = galaxy::fast::kNoIndirectSite;\n    static galaxy::NativeGameFunction site_function_{pc:08X} = nullptr;\n    galaxy::fast::call_guest_indirect_site(services, {target_expression}, &cached_target_{pc:08X}, &cached_function_{pc:08X}, &site_target_{pc:08X}, &site_function_{pc:08X}, context, memory, 0x{pc:08X}u);"
+        )
+        .map_err(|_| TranslationError::Formatting)?;
+        return Ok(());
+    }
     writeln!(
         output,
         "    galaxy::fast::call_guest_indirect(services, {target_expression}, &cached_target_{pc:08X}, &cached_function_{pc:08X}, context, memory, 0x{pc:08X}u);"
@@ -7953,6 +8933,201 @@ fn apply_fast_float_mode(source_files: &mut [GeneratedSource]) {
             );
         }
     }
+}
+
+/// `--checkpoint-globals`: every checkpoint test of the generated sources
+/// reads the module's gate snapshot (`*_g` helpers and `_G` macros in
+/// `galaxy/native_api.h`). Every unit that includes the runtime header
+/// directly (`functions.h` for the shards) enables the helpers first, and
+/// `module.cpp` defines the snapshot and exports it.
+/// The rewrite is textual over the final sources, so it covers every lowering
+/// path (resident and non-resident bodies, shared cold blocks, continuation
+/// stubs, the local-lane translation units) the same way.
+fn apply_checkpoint_globals(source_files: &mut [GeneratedSource]) {
+    const DEFINE: &str = "#define GALAXY_MODULE_CHECKPOINT_GLOBALS 1\n";
+    const INCLUDE: &str = "#include \"galaxy/native_api.h\"";
+    const PRAGMA: &str = "#pragma once\n";
+    for file in source_files.iter_mut() {
+        // Like the fast-float define: every unit that includes the runtime
+        // header directly (the shards include it through functions.h).
+        if file.contents.contains(INCLUDE) && !file.contents.contains(DEFINE) {
+            file.contents = match file.contents.strip_prefix(PRAGMA) {
+                Some(rest) => format!("{PRAGMA}{DEFINE}{rest}"),
+                None => format!("{DEFINE}{}", file.contents),
+            };
+        }
+        file.contents = rewrite_checkpoint_globals(&file.contents);
+        if file.contents.contains("galaxy_module_manifest() {")
+            && !file.contents.contains("galaxy_module_checkpoint_gate()")
+        {
+            file.contents.push_str(
+                "\ngalaxy::ModuleCheckpointGateV1 galaxy::g_module_checkpoint_gate{};\n\n\
+                 extern \"C\" galaxy::ModuleCheckpointGateV1* galaxy_module_checkpoint_gate() {\n\
+                 \x20   return &galaxy::g_module_checkpoint_gate;\n\
+                 }\n",
+            );
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Code-generation probes (crate::asm_probe)
+// ---------------------------------------------------------------------------
+
+/// One synthetic probe function through the module's per-function pipeline:
+/// lowering with the module options, residency and transfer returns.
+pub(crate) fn lower_probe_function(
+    address: u32,
+    bytes: &[u8],
+    callable_entries: &BTreeMap<u32, u32>,
+    exact_fpu_functions: &BTreeSet<u32>,
+    checkpoint_free_leaves: &BTreeSet<u32>,
+    options: &ModuleTranslationOptions,
+    module_abi: Option<&ModuleAbi>,
+) -> Result<String, TranslationError> {
+    let entries = BTreeSet::new();
+    let abi = module_abi.map(|module_abi| function_abi_residency(module_abi, address, options));
+    let body = lower_words_for_module_with_call_return_entries_and_exact_fpu_flat_reads(
+        address,
+        bytes,
+        &entries,
+        &BTreeSet::new(),
+        callable_entries,
+        exact_fpu_functions,
+        checkpoint_free_leaves,
+        &BTreeMap::new(),
+        options,
+    )?;
+    Ok(apply_transfer_returns(apply_residency_to_body(
+        address,
+        body,
+        &entries,
+        options,
+        abi.as_ref(),
+    )))
+}
+
+/// The module's exact-FPU classification for a probe function.
+pub(crate) fn probe_function_needs_fpu(address: u32, bytes: &[u8]) -> bool {
+    (function_requires_fpu(bytes) || native_substitution_uses_fpu(address))
+        && lean_sdk_math_symbol(address).is_none()
+}
+
+/// The module's checkpoint-free-leaf classification for a probe function.
+pub(crate) fn probe_is_checkpoint_free_leaf(address: u32, bytes: &[u8]) -> bool {
+    native_function_body(address).is_none()
+        && native_pure_helper(address).is_none()
+        && is_checkpoint_free_leaf(address, bytes)
+}
+
+/// The sharded module emitter over probe functions, one per shard, no aliases.
+pub(crate) fn render_probe_module(
+    functions: &[(FunctionRange, String)],
+    exact_fpu_functions: &BTreeSet<u32>,
+) -> Result<Vec<GeneratedSource>, TranslationError> {
+    let entry = functions
+        .first()
+        .map(|(function, _)| function.address)
+        .ok_or(TranslationError::NoTranslatableFunctions)?;
+    // One function per shard, so no probe is inlined into another: in the
+    // game module most calls cross shards.
+    emit_sharded_module_with_experiment(
+        functions,
+        &[],
+        1,
+        usize::MAX / 2,
+        entry,
+        exact_fpu_functions,
+        LocalPairedExperiments::default(),
+    )
+}
+
+/// The module-wide option passes, as `translate_module_with_options` runs them.
+pub(crate) fn module_option_passes(
+    source_files: &mut [GeneratedSource],
+    options: &ModuleTranslationOptions,
+) {
+    apply_module_options(source_files, options);
+}
+
+/// The module-wide passes over the generated sources, in their fixed order.
+/// Each is a no-op unless its option is on.
+fn apply_module_options(source_files: &mut [GeneratedSource], options: &ModuleTranslationOptions) {
+    if options.fast_float {
+        apply_fast_float_mode(source_files);
+    }
+    if options.checkpoint_globals {
+        apply_checkpoint_globals(source_files);
+    }
+    if options.flat_view_only {
+        define_before_runtime_header(source_files, "GALAXY_FLAT_VIEW_ONLY");
+    }
+    if options.assume_paired_singles {
+        define_before_runtime_header(source_files, "GALAXY_ASSUME_PAIRED_SINGLES");
+    }
+    if options.single_float_arithmetic {
+        define_before_runtime_header(source_files, "GALAXY_SINGLE_FLOAT_ARITHMETIC");
+    }
+}
+
+/// `#define {macro} 1` in every unit that includes the runtime header
+/// directly (`functions.h` for the shards), ahead of the include, for the
+/// module-wide header switches: `GALAXY_FLAT_VIEW_ONLY` (`--flat-view-only`)
+/// and `GALAXY_ASSUME_PAIRED_SINGLES` (`--assume-paired-singles`).
+fn define_before_runtime_header(source_files: &mut [GeneratedSource], macro_name: &str) {
+    let define = format!("#define {macro_name} 1\n");
+    const INCLUDE: &str = "#include \"galaxy/native_api.h\"";
+    const PRAGMA: &str = "#pragma once\n";
+    for file in source_files.iter_mut() {
+        if file.contents.contains(INCLUDE) && !file.contents.contains(&define) {
+            file.contents = match file.contents.strip_prefix(PRAGMA) {
+                Some(rest) => format!("{PRAGMA}{define}{rest}"),
+                None => format!("{define}{}", file.contents),
+            };
+        }
+    }
+}
+
+/// The checkpoint call sites of one generated source, switched to the module
+/// gate snapshot. Every replaced spelling is a complete call or macro name.
+fn rewrite_checkpoint_globals(source: &str) -> String {
+    const REWRITES: [(&str, &str); 7] = [
+        (
+            "galaxy::call_return_checkpoint_due(services)",
+            "galaxy::call_return_checkpoint_due_g(services)",
+        ),
+        (
+            "galaxy::branch_checkpoint_due_budgeted(services)",
+            "galaxy::branch_checkpoint_due_budgeted_g(services)",
+        ),
+        (
+            "galaxy::branch_checkpoint_due(services)",
+            "galaxy::branch_checkpoint_due_g(services)",
+        ),
+        (
+            "GALAXY_CALL_RETURN_CHECKPOINT(services,",
+            "GALAXY_CALL_RETURN_CHECKPOINT_G(services,",
+        ),
+        (
+            "GALAXY_BRANCH_CHECKPOINT_TAKEN_BUDGETED(services,",
+            "GALAXY_BRANCH_CHECKPOINT_TAKEN_BUDGETED_G(services,",
+        ),
+        (
+            "GALAXY_BRANCH_CHECKPOINT_TAKEN(services,",
+            "GALAXY_BRANCH_CHECKPOINT_TAKEN_G(services,",
+        ),
+        (
+            "GALAXY_RETURN_IF_TRANSFER_PENDING(services)",
+            "GALAXY_RETURN_IF_TRANSFER_PENDING_G(services)",
+        ),
+    ];
+    let mut out = source.to_owned();
+    for (from, to) in REWRITES {
+        if out.contains(from) {
+            out = out.replace(from, to);
+        }
+    }
+    out
 }
 
 fn insert_end_frame_span_markers(
@@ -10362,6 +11537,32 @@ fn emit_sharded_module_with_experiment(
     exact_fpu_functions: &BTreeSet<u32>,
     experiments: LocalPairedExperiments<'_>,
 ) -> Result<Vec<GeneratedSource>, TranslationError> {
+    emit_sharded_module_with_definition_rewrite(
+        functions,
+        aliases,
+        shard_size,
+        shard_source_bytes,
+        guest_entry_point,
+        exact_fpu_functions,
+        experiments,
+        None,
+    )
+}
+
+/// `definition_rewrite` is a module option's textual pass over each rendered
+/// function definition (`--checkpoint-globals`), applied before packing so
+/// the shard budget measures the final text.
+#[allow(clippy::too_many_arguments)]
+fn emit_sharded_module_with_definition_rewrite(
+    functions: &[(FunctionRange, String)],
+    aliases: &[(u32, u32)],
+    shard_size: usize,
+    shard_source_bytes: usize,
+    guest_entry_point: u32,
+    exact_fpu_functions: &BTreeSet<u32>,
+    experiments: LocalPairedExperiments<'_>,
+    definition_rewrite: Option<fn(&str) -> String>,
+) -> Result<Vec<GeneratedSource>, TranslationError> {
     if shard_size == 0 {
         return Err(TranslationError::InvalidShardSize);
     }
@@ -10386,8 +11587,10 @@ fn emit_sharded_module_with_experiment(
         .iter()
         .map(|(_, owner)| *owner)
         .collect::<BTreeSet<_>>();
-    let paired_ternary_include = if functions.iter().any(|(_, body)|
-        body.contains("galaxy::ppc_commit_paired_ternary_result(")) {
+    let paired_ternary_include = if functions
+        .iter()
+        .any(|(_, body)| body.contains("galaxy::ppc_commit_paired_ternary_result("))
+    {
         "#include \"galaxy/ppc_paired_float.h\"\n"
     } else {
         ""
@@ -10421,6 +11624,10 @@ fn emit_sharded_module_with_experiment(
             &owners_with_interior_entries,
             exact_fpu_functions,
         )?;
+        let rendered = match definition_rewrite {
+            Some(rewrite) => rewrite(&rendered),
+            None => rendered,
+        };
         let generated_bytes = fixed_shard_bytes.checked_add(rendered.len()).ok_or(
             TranslationError::FunctionExceedsShardSourceBudget {
                 address: function.address,
@@ -11246,6 +12453,8 @@ fn rotate_mask(begin: u32, end: u32) -> u32 {
 }
 
 #[cfg(test)]
+// Instruction words are spelled field by field, zero fields included.
+#[allow(clippy::identity_op)]
 mod tests {
     use super::*;
 
@@ -11363,20 +12572,30 @@ mod tests {
     // Optional compilation seam: public synthetic words, no retail game code.
     #[test]
     fn multi_register_public_cpp_fixture() {
-        let mut cpp = String::from("#include \"galaxy/native_api.h\"\nnamespace public_synthetic {\n");
+        let mut cpp =
+            String::from("#include \"galaxy/native_api.h\"\nnamespace public_synthetic {\n");
         for first in 0u32..32 {
             let pc = 0x8000_4000 + first * 12;
-            let words = [(46u32 << 26) | (first << 21) | (1 << 16) | 8,
-                         (47u32 << 26) | (first << 21) | (1 << 16) | 0xFFF8,
-                         0x4E80_0020];
-            let bytes = words.iter().flat_map(|word| word.to_be_bytes()).collect::<Vec<_>>();
+            let words = [
+                (46u32 << 26) | (first << 21) | (1 << 16) | 8,
+                (47u32 << 26) | (first << 21) | (1 << 16) | 0xFFF8,
+                0x4E80_0020,
+            ];
+            let bytes = words
+                .iter()
+                .flat_map(|word| word.to_be_bytes())
+                .collect::<Vec<_>>();
             let body = lower_words(pc, &bytes).unwrap();
             assert!(body.contains("return;"));
             writeln!(cpp, "void case_{first}(galaxy::PpcContext* context, galaxy::GuestMemoryV1* memory, const galaxy::NativeServicesV1* services) {{\n{body}}}").unwrap();
         }
         cpp.push_str("}\n");
         if let Some(path) = std::env::var_os("GALAXY_MULTI_GPR_CPP_FIXTURE") {
-            let mut file = std::fs::OpenOptions::new().write(true).create_new(true).open(path).unwrap();
+            let mut file = std::fs::OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .open(path)
+                .unwrap();
             std::io::Write::write_all(&mut file, cpp.as_bytes()).unwrap();
         }
     }
@@ -11384,10 +12603,15 @@ mod tests {
     #[test]
     fn multi_register_default_lowering_uses_checked_span_helpers() {
         for first in 0u32..32 {
-            let words = [(46u32 << 26) | (first << 21) | (1 << 16) | 8,
-                         (47u32 << 26) | (first << 21) | (1 << 16) | 0xFFF8,
-                         0x4E80_0020];
-            let bytes = words.iter().flat_map(|word| word.to_be_bytes()).collect::<Vec<_>>();
+            let words = [
+                (46u32 << 26) | (first << 21) | (1 << 16) | 8,
+                (47u32 << 26) | (first << 21) | (1 << 16) | 0xFFF8,
+                0x4E80_0020,
+            ];
+            let bytes = words
+                .iter()
+                .flat_map(|word| word.to_be_bytes())
+                .collect::<Vec<_>>();
             let body = lower_words(0x8000_4000, &bytes).unwrap();
             assert_eq!(body.contains("guest_load_multiple_gprs"), first <= 16);
             assert_eq!(body.contains("guest_store_multiple_gprs"), first <= 24);
@@ -11397,13 +12621,15 @@ mod tests {
             assert!(!body.contains("context->gpr[reg]"));
             if first > 16 {
                 assert_eq!(
-                    body.matches("galaxy::guest_load_u32(memory, ea_80004000 + 0x").count(),
+                    body.matches("galaxy::guest_load_u32(memory, ea_80004000 + 0x")
+                        .count(),
                     (32 - first) as usize
                 );
             }
             if first > 24 {
                 assert_eq!(
-                    body.matches("galaxy::guest_store_u32(memory, ea_80004004 + 0x").count(),
+                    body.matches("galaxy::guest_store_u32(memory, ea_80004004 + 0x")
+                        .count(),
                     (32 - first) as usize
                 );
             }
@@ -11487,15 +12713,15 @@ mod tests {
     #[test]
     fn statically_known_device_addresses_bypass_the_flat_view() {
         let words: [u32; 10] = [
-            (15 << 26) | (3 << 21) | 0xCC00,                 // lis r3,0xCC00
-            (40 << 26) | (0 << 21) | (3 << 16) | 0x5000,     // lhz r0,0x5000(r3)  DSP mailbox
-            (15 << 26) | (4 << 21) | 0xCD00,                 // lis r4,0xCD00
-            (32 << 26) | (5 << 21) | (4 << 16) | 0x0004,     // lwz r5,4(r4)       IPC
-            (36 << 26) | (5 << 21) | (3 << 16) | 0x3000,     // stw r5,0x3000(r3)  PI
-            (15 << 26) | (6 << 21) | 0x8000,                 // lis r6,0x8000
-            (32 << 26) | (7 << 21) | (6 << 16) | 0x00E4,     // lwz r7,0xE4(r6)    RAM
-            (15 << 26) | (8 << 21) | 0xCC01,                 // lis r8,0xCC01
-            (36 << 26) | (9 << 21) | (8 << 16) | 0x8000,     // stw r9,-0x8000(r8) WGPIPE
+            (15 << 26) | (3 << 21) | 0xCC00,             // lis r3,0xCC00
+            (40 << 26) | (0 << 21) | (3 << 16) | 0x5000, // lhz r0,0x5000(r3)  DSP mailbox
+            (15 << 26) | (4 << 21) | 0xCD00,             // lis r4,0xCD00
+            (32 << 26) | (5 << 21) | (4 << 16) | 0x0004, // lwz r5,4(r4)       IPC
+            (36 << 26) | (5 << 21) | (3 << 16) | 0x3000, // stw r5,0x3000(r3)  PI
+            (15 << 26) | (6 << 21) | 0x8000,             // lis r6,0x8000
+            (32 << 26) | (7 << 21) | (6 << 16) | 0x00E4, // lwz r7,0xE4(r6)    RAM
+            (15 << 26) | (8 << 21) | 0xCC01,             // lis r8,0xCC01
+            (36 << 26) | (9 << 21) | (8 << 16) | 0x8000, // stw r9,-0x8000(r8) WGPIPE
             0x4E80_0020,
         ];
         let bytes = words
@@ -11533,11 +12759,7 @@ mod tests {
         assert_eq!(flat.matches("galaxy::fast::store<").count(), 1);
     }
 
-    fn device_pcs(
-        words: &[u32],
-        entries: &[u32],
-        globals: &BTreeMap<i32, u32>,
-    ) -> BTreeSet<u32> {
+    fn device_pcs(words: &[u32], entries: &[u32], globals: &BTreeMap<i32, u32>) -> BTreeSet<u32> {
         let bytes = words
             .iter()
             .flat_map(|word| word.to_be_bytes())
@@ -11555,13 +12777,16 @@ mod tests {
     fn device_constants_survive_loop_joins_and_indexed_register_files() {
         // IPC control poll: the base is set before the loop head.
         let poll = [
-            (15 << 26) | (3 << 21) | 0xCD00,             // lis r3,0xCD00
-            (32 << 26) | (3 << 16) | 0x0004,             // lwz r0,4(r3)
-            (28 << 26) | (0 << 16) | 0x0004,             // andi. r0,r0,4
+            (15 << 26) | (3 << 21) | 0xCD00,              // lis r3,0xCD00
+            (32 << 26) | (3 << 16) | 0x0004,              // lwz r0,4(r3)
+            (28 << 26) | (0 << 16) | 0x0004,              // andi. r0,r0,4
             (16 << 26) | (12 << 21) | (2 << 16) | 0xFFF8, // beq 0x80005004
             0x4E80_0020,
         ];
-        assert_eq!(device_pcs(&poll, &[], &BTreeMap::new()), BTreeSet::from([0x8000_5004]));
+        assert_eq!(
+            device_pcs(&poll, &[], &BTreeMap::new()),
+            BTreeSet::from([0x8000_5004])
+        );
         // IPCWriteReg: __IPCRegs[index] = value.
         let indexed = [
             (21 << 26) | (3 << 21) | (2 << 11) | (29 << 1), // rlwinm r0,r3,2,0,29
@@ -11593,7 +12818,10 @@ mod tests {
             (44 << 26) | (5 << 21) | (4 << 16) | 0x0002,  // sth r5,2(r4)
             0x4E80_0020,
         ];
-        assert_eq!(device_pcs(&global, &[], &globals), BTreeSet::from([0x8000_5004]));
+        assert_eq!(
+            device_pcs(&global, &[], &globals),
+            BTreeSet::from([0x8000_5004])
+        );
         assert!(device_pcs(&global, &[], &BTreeMap::new()).is_empty());
         let joins = [
             (11 << 26) | (3 << 16),                       // cmpwi r3,0
@@ -11608,7 +12836,821 @@ mod tests {
             (40 << 26) | (5 << 16) | 0x2002,              // lhz r0,0x2002(r5): VI on both
             0x4E80_0020,
         ];
-        assert_eq!(device_pcs(&joins, &[], &BTreeMap::new()), BTreeSet::from([0x8000_5024]));
+        assert_eq!(
+            device_pcs(&joins, &[], &BTreeMap::new()),
+            BTreeSet::from([0x8000_5024])
+        );
+    }
+
+    /// lfs, stfs, lfsx, stfsx, psq_l, psq_st and blr: the float memory forms
+    /// `--hw-float-conversions` switches.
+    fn float_memory_sequence() -> Vec<u8> {
+        let words: [u32; 7] = [
+            (48 << 26) | (1 << 21) | (3 << 16) | 0x0008, // lfs f1,8(r3)
+            (52 << 26) | (1 << 21) | (3 << 16) | 0x000C, // stfs f1,12(r3)
+            (31 << 26) | (2 << 21) | (3 << 16) | (4 << 11) | (535 << 1), // lfsx f2,r3,r4
+            (31 << 26) | (2 << 21) | (3 << 16) | (4 << 11) | (663 << 1), // stfsx f2,r3,r4
+            (56 << 26) | (3 << 21) | (5 << 16),          // psq_l f3,0(r5),0,0
+            (60 << 26) | (3 << 21) | (5 << 16) | 0x0008, // psq_st f3,8(r5),0,0
+            0x4E80_0020,
+        ];
+        words.iter().flat_map(|word| word.to_be_bytes()).collect()
+    }
+
+    fn lower_float_memory_sequence(hw_float_conversions: bool) -> String {
+        lower_words_with_config(
+            0x8000_4000,
+            &float_memory_sequence(),
+            &BTreeSet::new(),
+            &BTreeSet::new(),
+            LoweringConfig {
+                flat_ram_reads: true,
+                flat_ram_writes: true,
+                native_float: true,
+                hw_float_conversions,
+                ..LoweringConfig::default()
+            },
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn hw_float_conversions_off_keeps_the_integer_conversion_helpers() {
+        let out = lower_float_memory_sequence(false);
+        for line in [
+            "    galaxy::fast::load_fpr_single(flat_guest_read_base, context, 1u, memory, context->gpr[3] + 0x00000008u, services, 0x80004000u);\n",
+            "    galaxy::fast::store_fpr_single(flat_guest_base, context, 1u, memory, context->gpr[3] + 0x0000000Cu, services, 0x80004004u);\n",
+            "    galaxy::fast::load_fpr_single(flat_guest_read_base, context, 2u, memory, context->gpr[3] + context->gpr[4], services, 0x80004008u);\n",
+            "    galaxy::fast::store_fpr_single(flat_guest_base, context, 2u, memory, context->gpr[3] + context->gpr[4], services, 0x8000400Cu);\n",
+            "    galaxy::fast::psq_load(flat_guest_read_base, context, 3u, memory, ea_80004010, 0u, false, true, services, 0x80004010u);\n",
+            "    galaxy::fast::psq_store(flat_guest_base, context, 3u, memory, ea_80004014, 0u, false, true, services, 0x80004014u);\n",
+        ] {
+            assert!(out.contains(line), "missing {line}in\n{out}");
+        }
+        assert!(!out.contains("_hw("), "{out}");
+    }
+
+    #[test]
+    fn hw_float_conversions_on_switches_every_binary32_memory_form() {
+        let out = lower_float_memory_sequence(true);
+        for line in [
+            "    galaxy::fast::load_fpr_single_hw(flat_guest_read_base, context, 1u, memory, context->gpr[3] + 0x00000008u, services, 0x80004000u);\n",
+            "    galaxy::fast::store_fpr_single_hw(flat_guest_base, context, 1u, memory, context->gpr[3] + 0x0000000Cu, services, 0x80004004u);\n",
+            "    galaxy::fast::load_fpr_single_hw(flat_guest_read_base, context, 2u, memory, context->gpr[3] + context->gpr[4], services, 0x80004008u);\n",
+            "    galaxy::fast::store_fpr_single_hw(flat_guest_base, context, 2u, memory, context->gpr[3] + context->gpr[4], services, 0x8000400Cu);\n",
+            "    galaxy::fast::psq_load_hw(flat_guest_read_base, context, 3u, memory, ea_80004010, 0u, false, true, services, 0x80004010u);\n",
+            "    galaxy::fast::psq_store_hw(flat_guest_base, context, 3u, memory, ea_80004014, 0u, false, true, services, 0x80004014u);\n",
+        ] {
+            assert!(out.contains(line), "missing {line}in\n{out}");
+        }
+        // The flag changes nothing but the helper names.
+        assert_eq!(out.replace("_hw(", "("), lower_float_memory_sequence(false));
+    }
+
+    #[test]
+    fn hw_float_conversions_leave_the_checked_helpers_alone() {
+        // Without the flat view every float access takes the checked helper,
+        // which has no hardware form.
+        let out = lower_words_with_config(
+            0x8000_4000,
+            &float_memory_sequence(),
+            &BTreeSet::new(),
+            &BTreeSet::new(),
+            LoweringConfig {
+                hw_float_conversions: true,
+                ..LoweringConfig::default()
+            },
+        )
+        .unwrap();
+        assert_eq!(
+            out.matches("    galaxy::load_fpr_single(context, ").count(),
+            2
+        );
+        assert_eq!(
+            out.matches("    galaxy::store_fpr_single(context, ")
+                .count(),
+            2
+        );
+        assert!(!out.contains("_hw("), "{out}");
+    }
+
+    fn lower_with(words: &[u32], config: LoweringConfig<'_>) -> String {
+        let bytes: Vec<u8> = words.iter().flat_map(|word| word.to_be_bytes()).collect();
+        lower_words_with_config(
+            0x8000_4000,
+            &bytes,
+            &BTreeSet::new(),
+            &BTreeSet::new(),
+            config,
+        )
+        .unwrap()
+    }
+
+    fn flat_config(flat_view_only: bool, stack_r11_stores: bool) -> LoweringConfig<'static> {
+        LoweringConfig {
+            flat_ram_reads: true,
+            flat_ram_writes: true,
+            flat_view_only,
+            stack_r11_stores,
+            ..LoweringConfig::default()
+        }
+    }
+
+    /// fsel f3,f1,f2,f4; frsqrte f5,f2; fres f6,f2; fcmpo cr1,f5,f6;
+    /// ps_res f7,f2; ps_rsqrte f8,f2; ps_sel f9,f1,f2,f4; ps_cmpu0 cr2,f1,f2;
+    /// blr
+    const FLOAT_FORMS_SEQUENCE: [u32; 9] = [
+        (63 << 26) | (3 << 21) | (1 << 16) | (4 << 11) | (2 << 6) | (23 << 1),
+        (63 << 26) | (5 << 21) | (2 << 11) | (26 << 1),
+        (59 << 26) | (6 << 21) | (2 << 11) | (24 << 1),
+        (63 << 26) | (1 << 23) | (5 << 16) | (6 << 11) | (32 << 1),
+        (4 << 26) | (7 << 21) | (2 << 11) | (24 << 1),
+        (4 << 26) | (8 << 21) | (2 << 11) | (26 << 1),
+        (4 << 26) | (9 << 21) | (1 << 16) | (4 << 11) | (2 << 6) | (23 << 1),
+        (4 << 26) | (2 << 23) | (1 << 16) | (2 << 11),
+        0x4E80_0020,
+    ];
+
+    #[test]
+    fn fast_float_forms_off_keeps_the_exact_estimates_and_compares() {
+        let out = lower_with(
+            &FLOAT_FORMS_SEQUENCE,
+            LoweringConfig {
+                native_float: true,
+                ..flat_config(false, false)
+            },
+        );
+        assert!(
+            out.contains(
+                "galaxy::ppc_f64_reciprocal_sqrt_estimate(context->fpr_bits[2], context->fpscr);"
+            ),
+            "{out}"
+        );
+        assert!(
+            out.contains("galaxy::ppc_f64_reciprocal_estimate(source, context->fpscr);"),
+            "{out}"
+        );
+        assert!(out.contains("    galaxy::compare_f64(context, 1u, context->fpr_bits[5], context->fpr_bits[6], true);\n"), "{out}");
+        assert!(out.contains("galaxy::compare_f64(context, 2u, context->fpr_bits[1], context->fpr_bits[2], false);"), "{out}");
+        assert!(out.contains("galaxy::f64_is_nan(selector)"), "{out}");
+        assert!(
+            out.contains("galaxy::ppc_commit_paired_estimate_result("),
+            "{out}"
+        );
+        for form in [
+            "fast::select_nonnegative",
+            "fast::reciprocal_",
+            "fast::compare_f64_cr",
+            "fast::duplicates_single",
+        ] {
+            assert!(!out.contains(form), "{form}{out}");
+        }
+    }
+
+    #[test]
+    fn fast_float_forms_write_the_register_file_without_fpscr_or_commits() {
+        let out = lower_with(
+            &FLOAT_FORMS_SEQUENCE,
+            LoweringConfig {
+                native_float: true,
+                fast_float_forms: true,
+                ..flat_config(false, false)
+            },
+        );
+        for line in [
+            "    context->fpr_bits[3] = galaxy::fast::select_nonnegative(context->fpr_bits[1]) ? context->fpr_bits[2] : context->fpr_bits[4];\n",
+            "    context->fpr_bits[5] = galaxy::fast::reciprocal_sqrt_bits(context->fpr_bits[2]);\n",
+            "    { const std::uint64_t estimate = galaxy::fast::reciprocal_single_bits(context->fpr_bits[2]); context->fpr_bits[6] = estimate; if (galaxy::fast::duplicates_single(context)) context->ps1_bits[6] = estimate; }\n",
+            "    galaxy::fast::compare_f64_cr(context, 1u, context->fpr_bits[5], context->fpr_bits[6]);\n",
+            "    { const std::uint64_t estimate_ps0 = galaxy::fast::reciprocal_single_bits(context->fpr_bits[2]); const std::uint64_t estimate_ps1 = galaxy::fast::reciprocal_single_bits(context->ps1_bits[2]); context->fpr_bits[7] = estimate_ps0; context->ps1_bits[7] = estimate_ps1; }\n",
+            "    { const std::uint64_t estimate_ps0 = galaxy::fast::reciprocal_sqrt_single_bits(context->fpr_bits[2]); const std::uint64_t estimate_ps1 = galaxy::fast::reciprocal_sqrt_single_bits(context->ps1_bits[2]); context->fpr_bits[8] = estimate_ps0; context->ps1_bits[8] = estimate_ps1; }\n",
+            "    { const std::uint64_t selected_ps0 = galaxy::fast::select_nonnegative(context->fpr_bits[1]) ? context->fpr_bits[2] : context->fpr_bits[4]; const std::uint64_t selected_ps1 = galaxy::fast::select_nonnegative(context->ps1_bits[1]) ? context->ps1_bits[2] : context->ps1_bits[4]; context->fpr_bits[9] = selected_ps0; context->ps1_bits[9] = selected_ps1; }\n",
+            "    galaxy::fast::compare_f64_cr(context, 2u, context->fpr_bits[1], context->fpr_bits[2]);\n",
+        ] {
+            assert!(out.contains(line), "{line}{out}");
+        }
+        assert!(!out.contains("fpscr"), "{out}");
+        assert!(!out.contains("commit"), "{out}");
+        // Every float operand stays in host locals under float residency: the
+        // forms are no synchronization point.
+        let resident = crate::residency::apply_register_residency_with_abi(&out, true, None)
+            .expect("eligible");
+        assert!(
+            !resident.contains("context->fpr_bits[5] = fpr[5]; galaxy::fast::compare_f64_cr"),
+            "{resident}"
+        );
+        assert!(
+            resident.contains("galaxy::fast::compare_f64_cr(context, 1u, fpr[5], fpr[6]);"),
+            "{resident}"
+        );
+        assert!(
+            resident.contains("if (galaxy::fast::duplicates_single(context)) ps1[6] = estimate;"),
+            "{resident}"
+        );
+    }
+
+    #[test]
+    fn bctrl_site_cache_follows_its_flag() {
+        let config = |bctrl_site_cache| LoweringConfig {
+            direct_indirect_calls: true,
+            bctrl_site_cache,
+            ..flat_config(false, false)
+        };
+        // bctrl; blr
+        let words = [0x4E80_0421, 0x4E80_0020];
+        let off = lower_with(&words, config(false));
+        assert!(off.contains("    galaxy::fast::call_guest_indirect(services, branch_target, &cached_target_80004000, &cached_function_80004000, context, memory, 0x80004000u);\n"), "{off}");
+        assert!(!off.contains("site_"), "{off}");
+        let on = lower_with(&words, config(true));
+        assert!(on.contains("    static std::uint32_t site_target_80004000 = galaxy::fast::kNoIndirectSite;\n    static galaxy::NativeGameFunction site_function_80004000 = nullptr;\n    galaxy::fast::call_guest_indirect_site(services, branch_target, &cached_target_80004000, &cached_function_80004000, &site_target_80004000, &site_function_80004000, context, memory, 0x80004000u);\n"), "{on}");
+        assert!(!on.contains("galaxy::fast::call_guest_indirect("), "{on}");
+        assert!(matches!(
+            validate_module_options(&ModuleTranslationOptions {
+                bctrl_site_cache: true,
+                ..ModuleTranslationOptions::default()
+            }),
+            Err(TranslationError::OptionRequires {
+                requires: "direct_indirect_calls",
+                ..
+            })
+        ));
+    }
+
+    #[test]
+    fn float_options_need_fast_float() {
+        for options in [
+            ModuleTranslationOptions {
+                single_float_arithmetic: true,
+                ..ModuleTranslationOptions::default()
+            },
+            ModuleTranslationOptions {
+                fast_float_forms: true,
+                ..ModuleTranslationOptions::default()
+            },
+        ] {
+            assert!(matches!(
+                validate_module_options(&options),
+                Err(TranslationError::OptionRequires {
+                    requires: "fast_float",
+                    ..
+                })
+            ));
+            assert!(validate_module_options(&ModuleTranslationOptions {
+                native_float: true,
+                fast_float: true,
+                ..options
+            })
+            .is_ok());
+        }
+    }
+
+    /// bl 0x80005000; bctrl; beqlr; blr
+    const ABI_SEQUENCE: [u32; 4] = [
+        (18 << 26) | 0x1000 | 1,
+        0x4E80_0421,
+        0x4D82_0020,
+        0x4E80_0020,
+    ];
+
+    #[test]
+    fn abi_markers_follow_their_flags_and_change_nothing_else() {
+        let entries = BTreeMap::from([(0x8000_5000, 0x8000_5000)]);
+        let config = |abi_call_markers, guest_return_macro| LoweringConfig {
+            callable_entries: Some(&entries),
+            direct_indirect_calls: true,
+            abi_call_markers,
+            guest_return_macro,
+            ..flat_config(false, false)
+        };
+        let off = lower_with(&ABI_SEQUENCE, config(false, false));
+        assert!(!off.contains("GALAXY_ABI_CALL"), "{off}");
+        assert!(!off.contains("GALAXY_GUEST_RETURN"), "{off}");
+        let on = lower_with(&ABI_SEQUENCE, config(true, true));
+        assert!(on.contains("    context->lr = 0x80004004u;\n    GALAXY_ABI_CALL(0x80004000u);\n    context->pc = 0x80005000u;\n    rmge01::fn_80005000(context, memory, services);\n"), "{on}");
+        assert!(
+            on.contains("    context->lr = 0x80004008u;\n    GALAXY_ABI_CALL(0x80004004u);\n"),
+            "{on}"
+        );
+        assert!(on.contains(") GALAXY_GUEST_RETURN;\n"), "{on}");
+        assert!(on.contains("\n    GALAXY_GUEST_RETURN;\n"), "{on}");
+        let unmarked = on
+            .replace("    GALAXY_ABI_CALL(0x80004000u);\n", "")
+            .replace("    GALAXY_ABI_CALL(0x80004004u);\n", "")
+            .replace("GALAXY_GUEST_RETURN;", "return;");
+        assert_eq!(unmarked, off);
+        // Each flag alone.
+        let calls = lower_with(&ABI_SEQUENCE, config(true, false));
+        assert!(calls.contains("GALAXY_ABI_CALL") && !calls.contains("GALAXY_GUEST_RETURN"));
+        let exits = lower_with(&ABI_SEQUENCE, config(false, true));
+        assert!(!exits.contains("GALAXY_ABI_CALL") && exits.contains("GALAXY_GUEST_RETURN"));
+    }
+
+    #[test]
+    fn abi_sync_options_need_register_residency() {
+        for options in [
+            ModuleTranslationOptions {
+                abi_call_sync: true,
+                ..ModuleTranslationOptions::default()
+            },
+            ModuleTranslationOptions {
+                abi_exit_sync: true,
+                ..ModuleTranslationOptions::default()
+            },
+        ] {
+            assert!(matches!(
+                validate_module_options(&options),
+                Err(TranslationError::OptionRequires {
+                    requires: "guest_resident_integer",
+                    ..
+                })
+            ));
+            assert!(validate_module_options(&ModuleTranslationOptions {
+                guest_resident_integer: true,
+                ..options
+            })
+            .is_ok());
+        }
+    }
+
+    #[test]
+    fn address_taken_functions_come_from_data_words_and_lis_pairs() {
+        let functions = [
+            FunctionRange {
+                address: 0x8000_4000,
+                size: 8,
+            },
+            FunctionRange {
+                address: 0x8000_5000,
+                size: 8,
+            },
+            FunctionRange {
+                address: 0x8000_6000,
+                size: 8,
+            },
+        ];
+        // text: lis r12,0x8000; addi r12,r12,0x5000; blr; lwz r0,0x4000(r0)
+        // (an instruction word equal to 0x80004000, not a pointer);
+        // data: 0x80006000
+        let text: Vec<u8> = [0x3D80_8000u32, 0x398C_5000, 0x4E80_0020, 0x8000_4000]
+            .iter()
+            .flat_map(|word| word.to_be_bytes())
+            .collect();
+        let data = 0x8000_6000u32.to_be_bytes();
+        let mut image = text.clone();
+        image.extend_from_slice(&data);
+        let sections = [
+            DolSection {
+                name: "text0".to_owned(),
+                kind: DolSectionKind::Text,
+                index: 0,
+                file_offset: 0,
+                address: 0x8000_3000,
+                size: text.len() as u32,
+            },
+            DolSection {
+                name: "data0".to_owned(),
+                kind: DolSectionKind::Data,
+                index: 1,
+                file_offset: text.len() as u32,
+                address: 0x8040_0000,
+                size: 4,
+            },
+        ];
+        assert_eq!(
+            discover_address_taken_functions(&sections, &image, &functions),
+            BTreeSet::from([0x8000_5000, 0x8000_6000])
+        );
+    }
+
+    #[test]
+    fn fpr_save_and_restore_helpers_are_part_of_the_caller() {
+        let frame = Regs::gpr(11);
+        let all = Regs {
+            fpr: u32::MAX << 14,
+            ..Regs::default()
+        };
+        // _savefpr_14 reads r11 and f14..f31; _restfpr_14 writes f14..f31.
+        assert_eq!(
+            abi_inline_call(0x8051_7464),
+            Some((frame.union(all), Regs::default()))
+        );
+        assert_eq!(abi_inline_call(0x8051_74B0), Some((frame, all)));
+        // _savefpr_31 / _restfpr_31: f31 alone.
+        assert_eq!(
+            abi_inline_call(0x8051_74A8),
+            Some((frame.union(Regs::fpr(31)), Regs::default()))
+        );
+        assert_eq!(abi_inline_call(0x8051_74F4), Some((frame, Regs::fpr(31))));
+        // The blr after each run is not an entry.
+        assert_eq!(abi_inline_call(0x8051_74AC), None);
+        assert_eq!(abi_inline_call(0x8051_74F8), None);
+    }
+
+    #[test]
+    fn a_switch_bctr_gets_the_case_labels_of_its_own_bounded_table() {
+        const F: u32 = 0x8000_4000;
+        const G: u32 = 0x8000_4040;
+        let functions = [
+            FunctionRange {
+                address: F,
+                size: 0x40,
+            },
+            FunctionRange {
+                address: G,
+                size: 0x10,
+            },
+        ];
+        let f_words = vec![
+            0x2803_0001, // cmplwi r3,1
+            0x4181_002C, // bgt F+0x30 (default)
+            0x3C80_8040, // lis r4,0x8040
+            0x5460_103A, // slwi r0,r3,2
+            0x3884_0000, // addi r4,r4,0
+            0x7C84_002E, // lwzx r4,r4,r0
+            0x7C89_03A6, // mtctr r4
+            0x4E80_0420, // bctr
+            0x3860_0000, // F+0x20 case 0: li r3,0
+            0x4E80_0020,
+            0x3860_0001, // F+0x28 case 1: li r3,1
+            0x4E80_0020,
+            0x3860_0002, // F+0x30 default (and a case of another table)
+            0x4E80_0020,
+            0x4E80_0020,
+            0x4E80_0020,
+        ];
+        let g_words = vec![
+            0x8183_0000, // lwz r12,0(r3)
+            0x818C_0034, // lwz r12,0x34(r12)
+            0x7D89_03A6, // mtctr r12
+            0x4E80_0420, // bctr: a virtual call in tail position
+        ];
+        let mut image: Vec<u8> = f_words
+            .iter()
+            .chain(&g_words)
+            .flat_map(|word: &u32| word.to_be_bytes())
+            .collect();
+        let text_len = image.len() as u32;
+        // F's table (two cases) followed by a word of another table of F.
+        for word in [F + 0x20, F + 0x28, F + 0x30] {
+            image.extend_from_slice(&word.to_be_bytes());
+        }
+        let sections = [
+            DolSection {
+                name: "text0".to_owned(),
+                kind: DolSectionKind::Text,
+                index: 0,
+                file_offset: 0,
+                address: F,
+                size: text_len,
+            },
+            DolSection {
+                name: "data0".to_owned(),
+                kind: DolSectionKind::Data,
+                index: 1,
+                file_offset: text_len,
+                address: 0x8040_0000,
+                size: 12,
+            },
+        ];
+        let targets = discover_jump_targets(&sections, &image, &functions, &[f_words, g_words]);
+        let f = &targets[&F];
+        assert_eq!(f.any, vec![F + 0x20, F + 0x28, F + 0x30]);
+        assert_eq!(
+            f.by_site,
+            BTreeMap::from([(F + 0x1C, vec![F + 0x20, F + 0x28])])
+        );
+        let g = &targets[&G];
+        assert!(g.by_site.is_empty() && g.any.is_empty());
+        assert_eq!(g.loaded, BTreeSet::from([G + 0xC]));
+    }
+
+    /// stmw r22,8(r3); stmw r20,-0x30(r1); dcbz r3,r4; blr
+    const FLAT_VIEW_SEQUENCE: [u32; 4] = [
+        (47 << 26) | (22 << 21) | (3 << 16) | 0x0008,
+        (47 << 26) | (20 << 21) | (1 << 16) | 0xFFD0,
+        (31 << 26) | (3 << 16) | (4 << 11) | (1014 << 1),
+        0x4E80_0020,
+    ];
+
+    #[test]
+    fn flat_view_only_off_keeps_the_checked_multiple_store_and_dcbz() {
+        let out = lower_with(&FLAT_VIEW_SEQUENCE, flat_config(false, false));
+        assert!(out.contains("    galaxy::guest_store_multiple_gprs<22u>(context, memory, ea_80004000, services, 0x80004000u);\n"), "{out}");
+        assert!(out.contains("    galaxy::guest_store_multiple_gprs<20u>(context, memory, ea_80004004, services, 0x80004004u);\n"), "{out}");
+        assert!(out.contains("    galaxy::guest_zero(memory, ea_80004008 & 0xFFFFFFE0u, 32u, services, 0x80004008u);\n"), "{out}");
+        assert!(!out.contains("zero_line"));
+    }
+
+    #[test]
+    fn flat_view_only_stores_every_stmw_register_and_zeroes_through_the_view() {
+        let out = lower_with(&FLAT_VIEW_SEQUENCE, flat_config(true, false));
+        assert!(!out.contains("guest_store_multiple_gprs"), "{out}");
+        assert!(!out.contains("guest_zero"), "{out}");
+        // r22..r31 from r3: ordinary flat stores, in register order.
+        for reg in 22..32_u32 {
+            let line = format!(
+                "    galaxy::fast::store<std::uint32_t>(flat_guest_base, memory, ea_80004000 + 0x{:08X}u, context->gpr[{reg}], services, 0x80004000u);\n",
+                (reg - 22) * 4
+            );
+            assert!(out.contains(&line), "{line}{out}");
+        }
+        // r20..r31 from r1: stack stores.
+        for reg in 20..32_u32 {
+            let line = format!(
+                "    galaxy::fast::store_stack<std::uint32_t>(flat_guest_base, memory, ea_80004004 + 0x{:08X}u, context->gpr[{reg}], services, 0x80004004u);\n",
+                (reg - 20) * 4
+            );
+            assert!(out.contains(&line), "{line}{out}");
+        }
+        assert!(out.contains(
+            "    galaxy::fast::zero_line(flat_guest_base, memory, ea_80004008, services, 0x80004008u);\n"
+        ));
+        // Without the flat writes the flag has nothing to switch.
+        let checked = lower_with(
+            &FLAT_VIEW_SEQUENCE,
+            LoweringConfig {
+                flat_view_only: true,
+                ..LoweringConfig::default()
+            },
+        );
+        assert!(checked.contains("guest_store_multiple_gprs<22u>"));
+        assert!(checked.contains("galaxy::guest_zero(memory,"));
+    }
+
+    #[test]
+    fn flat_view_only_defines_the_header_switch() {
+        let mut files = vec![
+            GeneratedSource {
+                name: "functions.h".to_owned(),
+                contents: "#pragma once\n\n#include \"galaxy/native_api.h\"\n".to_owned(),
+            },
+            GeneratedSource {
+                name: "functions_0000.cpp".to_owned(),
+                contents: "#include \"functions.h\"\n".to_owned(),
+            },
+        ];
+        define_before_runtime_header(&mut files, "GALAXY_FLAT_VIEW_ONLY");
+        assert_eq!(
+            files[0].contents,
+            "#pragma once\n#define GALAXY_FLAT_VIEW_ONLY 1\n\n#include \"galaxy/native_api.h\"\n"
+        );
+        assert_eq!(files[1].contents, "#include \"functions.h\"\n");
+        let once = files.clone();
+        define_before_runtime_header(&mut files, "GALAXY_FLAT_VIEW_ONLY");
+        assert_eq!(files, once);
+        // The paired-singles switch stacks with it.
+        define_before_runtime_header(&mut files, "GALAXY_ASSUME_PAIRED_SINGLES");
+        assert_eq!(
+            files[0].contents,
+            "#pragma once\n#define GALAXY_ASSUME_PAIRED_SINGLES 1\n#define GALAXY_FLAT_VIEW_ONLY 1\n\n#include \"galaxy/native_api.h\"\n"
+        );
+    }
+
+    #[test]
+    fn module_options_switch_only_their_own_module_text() {
+        let sources = || {
+            vec![
+                GeneratedSource {
+                    name: "functions.h".to_owned(),
+                    contents: "#pragma once\n\n#include \"galaxy/native_api.h\"\n".to_owned(),
+                },
+                GeneratedSource {
+                    name: "functions_0000.cpp".to_owned(),
+                    contents: "#include \"functions.h\"\n    GALAXY_CALL_RETURN_CHECKPOINT(services, 0x80004004u, 0x80004008u, context, memory);\n".to_owned(),
+                },
+                GeneratedSource {
+                    name: "module.cpp".to_owned(),
+                    contents: "#include \"functions.h\"\nextern \"C\" const galaxy::GameModuleManifestV1* galaxy_module_manifest() {\n    return &kManifest;\n}\n".to_owned(),
+                },
+            ]
+        };
+        let base = ModuleTranslationOptions::default();
+        let mut untouched = sources();
+        apply_module_options(&mut untouched, &base);
+        assert_eq!(
+            untouched,
+            sources(),
+            "every module switch is off by default"
+        );
+        // Lowering-only options leave the module text alone.
+        for options in [
+            ModuleTranslationOptions {
+                hw_float_conversions: true,
+                ..base
+            },
+            ModuleTranslationOptions {
+                stack_r11_stores: true,
+                ..base
+            },
+            ModuleTranslationOptions {
+                abi_call_sync: true,
+                abi_exit_sync: true,
+                fast_float_forms: true,
+                ..base
+            },
+        ] {
+            let mut files = sources();
+            apply_module_options(&mut files, &options);
+            assert_eq!(files, sources());
+        }
+        let switched = |options: ModuleTranslationOptions| {
+            let mut files = sources();
+            apply_module_options(&mut files, &options);
+            files
+        };
+        let flat = switched(ModuleTranslationOptions {
+            flat_view_only: true,
+            ..base
+        });
+        assert!(flat[0]
+            .contents
+            .contains("#define GALAXY_FLAT_VIEW_ONLY 1\n"));
+        assert!(!flat[0].contents.contains("GALAXY_ASSUME_PAIRED_SINGLES"));
+        assert_eq!(flat[1..], sources()[1..]);
+        let paired = switched(ModuleTranslationOptions {
+            assume_paired_singles: true,
+            ..base
+        });
+        assert!(paired[0]
+            .contents
+            .contains("#define GALAXY_ASSUME_PAIRED_SINGLES 1\n"));
+        assert!(!paired[0].contents.contains("GALAXY_FLAT_VIEW_ONLY"));
+        assert_eq!(paired[1..], sources()[1..]);
+        let single = switched(ModuleTranslationOptions {
+            single_float_arithmetic: true,
+            ..base
+        });
+        assert!(single[0]
+            .contents
+            .contains("#define GALAXY_SINGLE_FLOAT_ARITHMETIC 1\n"));
+        assert!(!single[0].contents.contains("GALAXY_ASSUME_PAIRED_SINGLES"));
+        assert_eq!(single[1..], sources()[1..]);
+        let gate = switched(ModuleTranslationOptions {
+            checkpoint_globals: true,
+            ..base
+        });
+        assert!(gate[0]
+            .contents
+            .contains("#define GALAXY_MODULE_CHECKPOINT_GLOBALS 1\n"));
+        assert!(gate[1]
+            .contents
+            .contains("GALAXY_CALL_RETURN_CHECKPOINT_G(services,"));
+        assert!(gate[2]
+            .contents
+            .contains("galaxy_module_checkpoint_gate() {"));
+        let all = switched(ModuleTranslationOptions {
+            native_float: true,
+            fast_float: true,
+            checkpoint_globals: true,
+            flat_view_only: true,
+            assume_paired_singles: true,
+            ..base
+        });
+        for define in [
+            "GALAXY_FAST_FLOAT",
+            "GALAXY_MODULE_CHECKPOINT_GLOBALS",
+            "GALAXY_FLAT_VIEW_ONLY",
+            "GALAXY_ASSUME_PAIRED_SINGLES",
+        ] {
+            assert!(
+                all[0].contents.contains(&format!("#define {define} 1\n")),
+                "{define}"
+            );
+        }
+    }
+
+    #[test]
+    fn flat_view_only_and_stack_r11_stores_require_their_memory_options() {
+        let release_like = ModuleTranslationOptions {
+            native_float: true,
+            fast_float: true,
+            flat_ram_reads: true,
+            flat_ram_writes: true,
+            ..ModuleTranslationOptions::default()
+        };
+        for (options, option) in [
+            (
+                ModuleTranslationOptions {
+                    flat_view_only: true,
+                    fast_float: false,
+                    ..release_like
+                },
+                "flat_view_only",
+            ),
+            (
+                ModuleTranslationOptions {
+                    flat_view_only: true,
+                    flat_ram_reads: false,
+                    ..release_like
+                },
+                "flat_view_only",
+            ),
+            (
+                ModuleTranslationOptions {
+                    stack_r11_stores: true,
+                    flat_ram_writes: false,
+                    ..release_like
+                },
+                "stack_r11_stores",
+            ),
+        ] {
+            match validate_module_options(&options) {
+                Err(TranslationError::OptionRequires { option: name, .. }) => {
+                    assert_eq!(name, option)
+                }
+                other => panic!("{option}: {other:?}"),
+            }
+        }
+        assert!(validate_module_options(&ModuleTranslationOptions {
+            flat_view_only: true,
+            stack_r11_stores: true,
+            ..release_like
+        })
+        .is_ok());
+    }
+
+    /// addi r11,r1,0x60; bl _savegpr_25; blr
+    const SAVEGPR_FROM_FRAME: [u32; 3] = [
+        (14 << 26) | (11 << 21) | (1 << 16) | 0x0060,
+        0x4851_3525,
+        0x4E80_0020,
+    ];
+
+    #[test]
+    fn stack_r11_stores_off_keeps_the_gather_pipe_test_in_savegpr() {
+        let out = lower_with(&SAVEGPR_FROM_FRAME, flat_config(false, false));
+        assert_eq!(
+            out.matches(
+                "galaxy::fast::store<std::uint32_t>(flat_guest_base, memory, context->gpr[11] + "
+            )
+            .count(),
+            7,
+            "{out}"
+        );
+        assert!(!out.contains("store_stack"), "{out}");
+    }
+
+    #[test]
+    fn stack_r11_stores_store_savegpr_through_the_frame_without_the_pipe_test() {
+        let out = lower_with(&SAVEGPR_FROM_FRAME, flat_config(false, true));
+        for reg in 25..32_u32 {
+            let line = format!(
+                "    galaxy::fast::store_stack<std::uint32_t>(flat_guest_base, memory, context->gpr[11] + 0x{:08X}u, context->gpr[{reg}], services, 0x80004004u);\n",
+                0xFFFF_FF80u32.wrapping_add(reg * 4)
+            );
+            assert!(out.contains(&line), "{line}{out}");
+        }
+        assert!(!out.contains("galaxy::fast::store<"), "{out}");
+        // r11 from another register: unproved, the pipe test stays.
+        let mut other_base = SAVEGPR_FROM_FRAME;
+        other_base[0] = (14 << 26) | (11 << 21) | (3 << 16) | 0x0060; // addi r11,r3,0x60
+        let unproved = lower_with(&other_base, flat_config(false, true));
+        assert!(!unproved.contains("store_stack"), "{unproved}");
+        // The call is an interior entry: r11 may come from elsewhere.
+        let mut entries = BTreeSet::new();
+        entries.insert(0x8000_4004);
+        let bytes: Vec<u8> = SAVEGPR_FROM_FRAME
+            .iter()
+            .flat_map(|word| word.to_be_bytes())
+            .collect();
+        let entered = lower_words_with_config(
+            0x8000_4000,
+            &bytes,
+            &entries,
+            &BTreeSet::new(),
+            flat_config(false, true),
+        )
+        .unwrap();
+        assert!(!entered.contains("store_stack"), "{entered}");
+        // Restores are loads; they never had the pipe test.
+        let restore = lower_with(
+            &[
+                (14 << 26) | (11 << 21) | (1 << 16) | 0x0060,
+                0x4851_3575, // bl _restgpr_25
+                0x4E80_0020,
+            ],
+            flat_config(false, true),
+        );
+        assert!(!restore.contains("store"), "{restore}");
+    }
+
+    #[test]
+    fn hw_float_conversions_require_both_flat_ram_directions() {
+        let mut options = ModuleTranslationOptions {
+            hw_float_conversions: true,
+            flat_ram_reads: true,
+            ..ModuleTranslationOptions::default()
+        };
+        assert!(matches!(
+            validate_module_options(&options),
+            Err(TranslationError::OptionRequires {
+                option: "hw_float_conversions",
+                ..
+            })
+        ));
+        options.flat_ram_writes = true;
+        assert!(validate_module_options(&options).is_ok());
+        assert!(validate_module_options(&ModuleTranslationOptions::default()).is_ok());
     }
 
     #[test]
@@ -11636,7 +13678,8 @@ mod tests {
         .unwrap();
         assert_eq!(flat.matches("guest_load_flat_or_checked_").count(), 1);
         // Flat reads also serve lfs; stores stay checked until flat_ram_writes.
-        assert!(flat.contains("galaxy::fast::load_fpr_single(flat_guest_read_base, context, 1u, memory,"));
+        assert!(flat
+            .contains("galaxy::fast::load_fpr_single(flat_guest_read_base, context, 1u, memory,"));
         assert!(flat.contains("galaxy::guest_store_u32(memory,"));
         let writes = lower_words_with_config(
             0x8000_4000,
@@ -11657,7 +13700,13 @@ mod tests {
     #[test]
     fn stack_pointer_stores_skip_the_gather_pipe_test() {
         // stwu r1,-0x10(r1); stw r0,0x14(r1); stw r0,0x8(r3); stfd f31,0x8(r1); blr
-        let words = [0x9421_FFF0u32, 0x9001_0014, 0x9003_0008, 0xDBE1_0008, 0x4E80_0020];
+        let words = [
+            0x9421_FFF0u32,
+            0x9001_0014,
+            0x9003_0008,
+            0xDBE1_0008,
+            0x4E80_0020,
+        ];
         let bytes: Vec<u8> = words.iter().flat_map(|w| w.to_be_bytes()).collect();
         let out = lower_words_with_config(
             0x8000_4000,
@@ -11671,9 +13720,21 @@ mod tests {
             },
         )
         .unwrap();
-        assert_eq!(out.matches("galaxy::fast::store_stack<std::uint32_t>(").count(), 2, "{out}");
-        assert_eq!(out.matches("galaxy::fast::store_stack<std::uint64_t>(").count(), 1);
-        assert_eq!(out.matches("galaxy::fast::store<std::uint32_t>(").count(), 1);
+        assert_eq!(
+            out.matches("galaxy::fast::store_stack<std::uint32_t>(")
+                .count(),
+            2,
+            "{out}"
+        );
+        assert_eq!(
+            out.matches("galaxy::fast::store_stack<std::uint64_t>(")
+                .count(),
+            1
+        );
+        assert_eq!(
+            out.matches("galaxy::fast::store<std::uint32_t>(").count(),
+            1
+        );
     }
 
     #[test]
@@ -11974,23 +14035,16 @@ mod tests {
         // The emitted rotate amount and mask must therefore stay exactly `SH` and `rotate_mask(MB, ME)`.
         //
         // SH is bits 11-15, MB bits 6-10, ME bits 1-5.
-        let rlwinm = |sh: u32, mb: u32, me: u32| {
-            (21_u32 << 26) | (sh << 11) | (mb << 6) | (me << 1)
-        };
+        let rlwinm =
+            |sh: u32, mb: u32, me: u32| (21_u32 << 26) | (sh << 11) | (mb << 6) | (me << 1);
         // slwi r0,r0,2  -> SH=2, MB=0, ME=29, MASK=0xFFFFFFFC
-        let rotated = lower_instruction_fixture(
-            0x8000_4000,
-            &[rlwinm(2, 0, 29), 0x4E80_0020],
-        );
+        let rotated = lower_instruction_fixture(0x8000_4000, &[rlwinm(2, 0, 29), 0x4E80_0020]);
         assert!(
             rotated.contains("std::rotl(context->gpr[0], 2) & 0xFFFFFFFCu;"),
             "{rotated}"
         );
         // clrrwi r3,r4,31 -> SH=0, MB=0, ME=0, MASK=0x80000000
-        let zero_shift = lower_instruction_fixture(
-            0x8000_4000,
-            &[rlwinm(0, 0, 0), 0x4E80_0020],
-        );
+        let zero_shift = lower_instruction_fixture(0x8000_4000, &[rlwinm(0, 0, 0), 0x4E80_0020]);
         assert!(
             zero_shift.contains("context->gpr[0] = (context->gpr[0] & 0x80000000u);"),
             "{zero_shift}"
@@ -12076,17 +14130,14 @@ mod tests {
         let output = lower_instruction_fixture(0x8049_44D0, &words);
         assert!(output.contains("    goto label_80494580;"));
         assert!(output.contains("label_80494580:"));
-        // The emitter does not materialise an untested CTR or CR operand, so the guard is a bare CR test. Assert the
-        // condition and target instead of a literal `(true) &&` wrapper. BO[1] selects the tested polarity, so the
-        // two encodings must still differ.
-        assert!(
-            !output.contains("if (!galaxy::cr_bit(context, 2u)) goto label_80494580;")
-        );
+        // The emitter does not materialise an untested CTR or CR operand, so the guard is a bare
+        // CR test. Assert the condition and target instead of a literal `(true) &&` wrapper.
+        // BO[1] selects the tested polarity, so the two encodings must still differ.
+        assert!(!output.contains("if (!galaxy::cr_bit(context, 2u)) goto label_80494580;"));
 
         words[0x5C / 4] = 0x4082_0054;
         let unmatched_opcode = lower_instruction_fixture(0x8049_44D0, &words);
-        assert!(unmatched_opcode
-            .contains("if (!galaxy::cr_bit(context, 2u)) goto label_80494580;"));
+        assert!(unmatched_opcode.contains("if (!galaxy::cr_bit(context, 2u)) goto label_80494580;"));
     }
 
     #[test]
@@ -12120,7 +14171,9 @@ mod tests {
         // closes right after the block.
         for callee in ["0x80400988u", "0x80402D30u"] {
             let call = output.find(callee).expect("call is emitted");
-            let open = output[..call].rfind(enter).expect("enter precedes the call");
+            let open = output[..call]
+                .rfind(enter)
+                .expect("enter precedes the call");
             assert!(!output[open..call].contains(exit));
             let close = output[call..].find(exit).expect("exit follows the call") + call;
             assert!(!output[call..close].contains(enter));
@@ -12159,7 +14212,12 @@ mod tests {
         words[(0x8034_10AC - 0x8034_103C) / 4] = 0x807F_0034;
         *words.last_mut().unwrap() = 0x4E80_0020;
         let hook = "galaxy::site_hook(services, context, memory, 0x803410ACu, galaxy::SiteHookKind::MultiSceneModel, 0u);";
-        assert_eq!(lower_instruction_fixture(0x8034_103C, &words).matches(hook).count(), 1);
+        assert_eq!(
+            lower_instruction_fixture(0x8034_103C, &words)
+                .matches(hook)
+                .count(),
+            1
+        );
         assert!(!lower_instruction_fixture(0x8034_1038, &words).contains(hook));
         words[(0x8034_10AC - 0x8034_103C) / 4] = 0x807F_0030;
         assert!(!lower_instruction_fixture(0x8034_103C, &words).contains(hook));
@@ -12183,9 +14241,7 @@ mod tests {
         words.pop();
         *words.last_mut().unwrap() = 0x4E80_0020;
         let shortened = lower_instruction_fixture(0x8036_7D28, &words);
-        assert!(
-            !shortened.contains(backing) && !shortened.contains(hud)
-        );
+        assert!(!shortened.contains(backing) && !shortened.contains(hud));
     }
 
     #[test]
@@ -12578,14 +14634,22 @@ mod tests {
         assert!(!lowered.contains("require_paired_single_mode"));
         assert!(!lowered.contains("ensure_fpu_available"));
         assert!(lowered.contains("guest_notify_write_pair_admitted"));
-        assert!(lowered.find("load_pair(1u, input0 + 0u)").unwrap()
-            < lowered.find("load_pair(2u, input1 + 8u)").unwrap());
-        assert!(lowered.find("ppc_commit_paired_ternary_result").unwrap()
-            < lowered.find("store_pair(4u, output + 0u").unwrap());
-        assert_eq!(ordinary.matches("ppc_commit_paired_ternary_result").count(),
-            lowered.matches("ppc_commit_paired_ternary_result").count());
-        assert_eq!(ordinary.matches("context->gpr[1] =").count(),
-            lowered.matches("context->gpr[1] =").count());
+        assert!(
+            lowered.find("load_pair(1u, input0 + 0u)").unwrap()
+                < lowered.find("load_pair(2u, input1 + 8u)").unwrap()
+        );
+        assert!(
+            lowered.find("ppc_commit_paired_ternary_result").unwrap()
+                < lowered.find("store_pair(4u, output + 0u").unwrap()
+        );
+        assert_eq!(
+            ordinary.matches("ppc_commit_paired_ternary_result").count(),
+            lowered.matches("ppc_commit_paired_ternary_result").count()
+        );
+        assert_eq!(
+            ordinary.matches("context->gpr[1] =").count(),
+            lowered.matches("context->gpr[1] =").count()
+        );
 
         // The plan is an instruction-derived root proof, not an assumption
         // that an API register still equals its entry value at every access.
@@ -12655,10 +14719,17 @@ mod tests {
             "galaxy::psq_store",
         ] {
             assert_eq!(
-                ordinary.matches(needle).count() + if matches!(needle,
-                    "galaxy::ppc_f32_ternary" | "galaxy::ppc_commit_scalar_result") {
-                    ordinary.matches("galaxy::ppc_commit_scalar_single_ternary").count()
-                } else { 0 },
+                ordinary.matches(needle).count()
+                    + if matches!(
+                        needle,
+                        "galaxy::ppc_f32_ternary" | "galaxy::ppc_commit_scalar_result"
+                    ) {
+                        ordinary
+                            .matches("galaxy::ppc_commit_scalar_single_ternary")
+                            .count()
+                    } else {
+                        0
+                    },
                 cached.matches(needle).count(),
                 "architectural operation count changed for {needle}"
             );
@@ -12692,14 +14763,28 @@ mod tests {
             for target in 0..32 {
                 for left in 0..32 {
                     for right in 0..32 {
-                        let word = (4 << 26) | (target << 21) | (left << 16)
-                            | (right << 11) | (xo << 1);
+                        let word =
+                            (4 << 26) | (target << 21) | (left << 16) | (right << 11) | (xo << 1);
                         let mut facts = [[true; 32]; 2];
                         let mut output = String::new();
-                        cache_local_paired_instruction(&mut output, 0, &mut facts,
-                            LocalLaneProfile::PsvecCross, 0x804B6B40, word, op).unwrap();
-                        let capture0 = format!("const std::uint32_t cached_merge_ps0 = lane{}[{left}];", lanes[0]);
-                        let capture1 = format!("const std::uint32_t cached_merge_ps1 = lane{}[{right}];", lanes[1]);
+                        cache_local_paired_instruction(
+                            &mut output,
+                            0,
+                            &mut facts,
+                            LocalLaneProfile::PsvecCross,
+                            0x804B6B40,
+                            word,
+                            op,
+                        )
+                        .unwrap();
+                        let capture0 = format!(
+                            "const std::uint32_t cached_merge_ps0 = lane{}[{left}];",
+                            lanes[0]
+                        );
+                        let capture1 = format!(
+                            "const std::uint32_t cached_merge_ps1 = lane{}[{right}];",
+                            lanes[1]
+                        );
                         let write0 = format!("lane0[{target}] = cached_merge_ps0;");
                         let write1 = format!("lane1[{target}] = cached_merge_ps1;");
                         assert!(output.find(&capture0).unwrap() < output.find(&write0).unwrap());
@@ -12722,12 +14807,24 @@ mod tests {
                     facts[0][source] = known[0];
                     facts[1][source] = known[1];
                     let mut output = String::new();
-                    cache_local_paired_instruction(&mut output, 0, &mut facts,
-                        LocalLaneProfile::PsvecCross, 0x804B6B40, word as u32, Opcode::PsNeg).unwrap();
+                    cache_local_paired_instruction(
+                        &mut output,
+                        0,
+                        &mut facts,
+                        LocalLaneProfile::PsvecCross,
+                        0x804B6B40,
+                        word as u32,
+                        Opcode::PsNeg,
+                    )
+                    .unwrap();
                     for lane in 0..2 {
                         assert_eq!(facts[lane][target], known[lane]);
-                        assert_eq!(output.contains(&format!(
-                            "lane{lane}[{target}] = lane{lane}[{source}] ^ 0x80000000u;")), known[lane]);
+                        assert_eq!(
+                            output.contains(&format!(
+                                "lane{lane}[{target}] = lane{lane}[{source}] ^ 0x80000000u;"
+                            )),
+                            known[lane]
+                        );
                     }
                 }
             }
@@ -12743,11 +14840,17 @@ mod tests {
             0x4E800020,
         ];
         let bytes: Vec<u8> = words.iter().flat_map(|word| word.to_be_bytes()).collect();
-        let cached = lower_words_with_config(0x804B6B3C, &bytes,
-            &BTreeSet::new(), &BTreeSet::new(), LoweringConfig {
+        let cached = lower_words_with_config(
+            0x804B6B3C,
+            &bytes,
+            &BTreeSet::new(),
+            &BTreeSet::new(),
+            LoweringConfig {
                 local_lane_profile: LocalLaneProfile::PsvecCross,
                 ..LoweringConfig::default()
-            }).unwrap();
+            },
+        )
+        .unwrap();
         assert!(cached.contains("const std::uint32_t cached_merge_ps1 = lane0[2];"));
         assert!(cached.contains("lane0[2] = lane0[2] ^ 0x80000000u;"));
         assert!(cached.contains("lane1[2] = lane1[2] ^ 0x80000000u;"));
@@ -13506,8 +15609,16 @@ mod tests {
         ] {
             let mut out = String::new();
             emit_direct_guest_call(&mut out, target, pc, Some(&entries)).unwrap();
-            assert_eq!(out.contains("galaxy::call_guest_resolved"), routed, "{pc:08X}");
-            assert_eq!(out.contains("if (context->pc == 0x804AB30Cu) goto call_return_804AB30C;"), redirected, "{pc:08X}");
+            assert_eq!(
+                out.contains("galaxy::call_guest_resolved"),
+                routed,
+                "{pc:08X}"
+            );
+            assert_eq!(
+                out.contains("if (context->pc == 0x804AB30Cu) goto call_return_804AB30C;"),
+                redirected,
+                "{pc:08X}"
+            );
         }
     }
 
@@ -13947,9 +16058,9 @@ mod tests {
             &callable_entries,
         )
         .expect("native pure helper direct call is supported");
-        assert!(helper.contains(
-            "galaxy::lean_psvec_cross(context, memory, services, 0x804B6CB8u);"
-        ));
+        assert!(
+            helper.contains("galaxy::lean_psvec_cross(context, memory, services, 0x804B6CB8u);")
+        );
         assert!(!helper.contains("galaxy::call_guest_resolved"));
 
         let noop_words = [0x4800_0009_u32, 0x4E80_0020]; // bl 0x803A33AC
@@ -14024,9 +16135,8 @@ mod tests {
             &callable_entries,
         )
         .expect("native PS vector normalize direct call is supported");
-        assert!(normalize.contains(
-            "galaxy::lean_psvec_normalize(context, memory, services, 0x804B6BCCu);"
-        ));
+        assert!(normalize
+            .contains("galaxy::lean_psvec_normalize(context, memory, services, 0x804B6BCCu);"));
         assert!(!normalize.contains("galaxy::call_guest_resolved"));
 
         let normalize_wrapper_words = [0x4800_0009_u32, 0x4E80_0020]; // bl 0x803E4D24
@@ -14273,8 +16383,10 @@ mod tests {
         )
         .expect("savegpr interior entry lowers inline");
         // _savegpr_29: stw r29..r31, -12/-8/-4(r11), no call or return boundary.
-        assert!(savegpr.contains("context->gpr[11] + 0xFFFFFFF4u, context->gpr[29], services, 0x80517530u);"));
-        assert!(savegpr.contains("context->gpr[11] + 0xFFFFFFFCu, context->gpr[31], services, 0x80517530u);"));
+        assert!(savegpr
+            .contains("context->gpr[11] + 0xFFFFFFF4u, context->gpr[29], services, 0x80517530u);"));
+        assert!(savegpr
+            .contains("context->gpr[11] + 0xFFFFFFFCu, context->gpr[31], services, 0x80517530u);"));
         assert!(!savegpr.contains("context->gpr[28]"));
         assert!(savegpr.contains("context->lr = 0x80517534u;"));
         assert!(!savegpr.contains("native_savegpr"));
@@ -14976,7 +17088,10 @@ mod tests {
         ] {
             assert!(!native_substitution_uses_fpu(address));
             let symbol = lean_sdk_math_symbol(address).expect("lean SDK math routine");
-            assert_eq!(native_pure_helper(address), Some(NativePureHelper::integer(symbol)));
+            assert_eq!(
+                native_pure_helper(address),
+                Some(NativePureHelper::integer(symbol))
+            );
             assert!(native_function_body(address).is_some_and(|body| body.contains(symbol)));
         }
 
@@ -15001,7 +17116,10 @@ mod tests {
                 assert_eq!(lean_call_contract(symbol), None);
                 continue;
             }
-            assert!(lean_call_contract(symbol).is_some(), "{symbol} has no contract");
+            assert!(
+                lean_call_contract(symbol).is_some(),
+                "{symbol} has no contract"
+            );
             let entries = BTreeMap::from([(address, address)]);
             let mut output = String::new();
             assert!(
@@ -15076,7 +17194,11 @@ mod tests {
                 // Not a resident register.
             } else if before.ends_with("fpr_f32(") {
                 match literal(after.trim_start_matches(", ")) {
-                    Some(index) if after[2..].trim_start_matches(char::is_numeric).starts_with("u)") => {
+                    Some(index)
+                        if after[2..]
+                            .trim_start_matches(char::is_numeric)
+                            .starts_with("u)") =>
+                    {
                         uses.fpr_reads |= 1 << index;
                     }
                     _ => {
@@ -15093,7 +17215,9 @@ mod tests {
                 uses.fpr_writes |= 1 << 1;
             } else if before.ends_with("set_f32(") {
                 uses.fpr_writes |= 1 << literal(after.trim_start_matches(", ")).expect("literal");
-            } else if let Some(name_start) = before.rfind(|c: char| !(c.is_ascii_alphanumeric() || c == '_' || c == '(')) {
+            } else if let Some(name_start) =
+                before.rfind(|c: char| !(c.is_ascii_alphanumeric() || c == '_' || c == '('))
+            {
                 let callee = before[name_start + 1..].trim_end_matches('(');
                 let nested = lean_call_contract(callee)
                     .unwrap_or_else(|| panic!("{symbol}: context passed to {callee}"));
@@ -15108,7 +17232,9 @@ mod tests {
 
     #[test]
     fn lean_call_contracts_cover_the_bodies() {
-        const HEADER: &str = include_str!("../../../runtime/include/galaxy/native_api.h");
+        // A Windows checkout with core.autocrlf has CRLF in the working tree.
+        let header =
+            include_str!("../../../runtime/include/galaxy/native_api.h").replace("\r\n", "\n");
         let dynamic: &[(&str, &[u32])] = &[("lean_psmtx_scale_apply", &[1, 2, 3])];
         let mut checked = BTreeSet::new();
         for (_, symbol) in lean_addresses() {
@@ -15118,11 +17244,27 @@ mod tests {
             if !checked.insert(symbol) {
                 continue;
             }
-            let uses = lean_body_register_uses(HEADER, symbol, dynamic);
-            assert_eq!(uses.gpr_reads & !contract.gpr_reads, 0, "{symbol} GPR reads");
-            assert_eq!(uses.gpr_writes & !contract.gpr_writes, 0, "{symbol} GPR writes");
-            assert_eq!(uses.fpr_reads & !contract.fpr_reads, 0, "{symbol} FPR reads");
-            assert_eq!(uses.fpr_writes & !contract.fpr_writes, 0, "{symbol} FPR writes");
+            let uses = lean_body_register_uses(&header, symbol, dynamic);
+            assert_eq!(
+                uses.gpr_reads & !contract.gpr_reads,
+                0,
+                "{symbol} GPR reads"
+            );
+            assert_eq!(
+                uses.gpr_writes & !contract.gpr_writes,
+                0,
+                "{symbol} GPR writes"
+            );
+            assert_eq!(
+                uses.fpr_reads & !contract.fpr_reads,
+                0,
+                "{symbol} FPR reads"
+            );
+            assert_eq!(
+                uses.fpr_writes & !contract.fpr_writes,
+                0,
+                "{symbol} FPR writes"
+            );
         }
         assert!(checked.len() > 60);
     }
@@ -15134,10 +17276,19 @@ mod tests {
         };
         let address = 0x8000_4000;
         // lwz r3,0(r4); beq +8; addi r3,r3,1; stw r3,4(r4); blr
-        let leaf = words(&[0x8064_0000, 0x4182_0008, 0x3863_0001, 0x9064_0004, 0x4E80_0020]);
+        let leaf = words(&[
+            0x8064_0000,
+            0x4182_0008,
+            0x3863_0001,
+            0x9064_0004,
+            0x4E80_0020,
+        ]);
         assert!(is_checkpoint_free_leaf(address, &leaf));
         // mtlr r0 and mtctr r3 are register moves.
-        assert!(is_checkpoint_free_leaf(address, &words(&[0x7C08_03A6, 0x7C69_03A6, 0x4E80_0020])));
+        assert!(is_checkpoint_free_leaf(
+            address,
+            &words(&[0x7C08_03A6, 0x7C69_03A6, 0x4E80_0020])
+        ));
         // bl, bctrl, bctr, a backward branch, sc, mtmsr and mtdec are not.
         for body in [
             vec![0x4800_0009, 0x4E80_0020],
@@ -15148,7 +17299,10 @@ mod tests {
             vec![0x7C60_0124, 0x4E80_0020],
             vec![0x7C76_03A6, 0x4E80_0020],
         ] {
-            assert!(!is_checkpoint_free_leaf(address, &words(&body)), "{body:08X?}");
+            assert!(
+                !is_checkpoint_free_leaf(address, &words(&body)),
+                "{body:08X?}"
+            );
         }
         // A tail branch out of the function is a call.
         assert!(!is_checkpoint_free_leaf(address, &words(&[0x4800_0100])));
@@ -15174,10 +17328,17 @@ mod tests {
             ))
         );
         // A branch reached from elsewhere keeps the CR write.
-        assert!(fusible_compare_branches(address, &dead, &BTreeSet::from([0x8000_4004])).is_empty());
+        assert!(
+            fusible_compare_branches(address, &dead, &BTreeSet::from([0x8000_4004])).is_empty()
+        );
         // cmpwi r3,0; beq +12; li r3,1; bgt +8; blr; blr: the fall-through reads CR0[GT].
         let live = word_bytes(&[
-            0x2C03_0000, 0x4182_000C, 0x3860_0001, 0x4181_0008, 0x4E80_0020, 0x4E80_0020,
+            0x2C03_0000,
+            0x4182_000C,
+            0x3860_0001,
+            0x4181_0008,
+            0x4E80_0020,
+            0x4E80_0020,
         ]);
         assert!(fusible_compare_branches(address, &live, &BTreeSet::new()).is_empty());
         // cmplwi cr7,r5,16; bge cr7,+8; blr; blr: an unsigned compare in CR7.
@@ -15196,8 +17357,17 @@ mod tests {
     #[test]
     fn record_form_branch_tests_the_recorded_register() {
         // rlwinm. r0,r3,0,31,31; beq +8; li r3,1; blr; blr
-        let bytes = word_bytes(&[0x5460_07FF, 0x4182_000C, 0x3860_0001, 0x4E80_0020, 0x4E80_0020]);
-        assert_eq!(fusible_record_branches(0x8000_4000, &bytes, &BTreeSet::new()), BTreeSet::from([0x8000_4000]));
+        let bytes = word_bytes(&[
+            0x5460_07FF,
+            0x4182_000C,
+            0x3860_0001,
+            0x4E80_0020,
+            0x4E80_0020,
+        ]);
+        assert_eq!(
+            fusible_record_branches(0x8000_4000, &bytes, &BTreeSet::new()),
+            BTreeSet::from([0x8000_4000])
+        );
         let lowered = lower_words(0x8000_4000, &bytes).expect("lowers");
         assert!(lowered.contains("// CR0 record fused into the next branch"));
         assert!(!lowered.contains("update_cr0"));
@@ -15205,11 +17375,22 @@ mod tests {
         // mr. r31,r3; blt +8; blr; blr: the signed result is tested.
         let bytes = word_bytes(&[0x7C7F_1B79, 0x4180_0008, 0x4E80_0020, 0x4E80_0020]);
         let lowered = lower_words(0x8000_4000, &bytes).expect("lowers");
-        assert!(lowered.contains("if ((static_cast<std::int32_t>(context->gpr[31]) < 0)) goto label_8000400C;"));
+        assert!(lowered.contains(
+            "if ((static_cast<std::int32_t>(context->gpr[31]) < 0)) goto label_8000400C;"
+        ));
         // A later beq reads CR0 again, so the record form keeps its write.
-        let bytes = word_bytes(&[0x5460_07FF, 0x4182_000C, 0x3860_0001, 0x4182_0008, 0x4E80_0020, 0x4E80_0020]);
+        let bytes = word_bytes(&[
+            0x5460_07FF,
+            0x4182_000C,
+            0x3860_0001,
+            0x4182_0008,
+            0x4E80_0020,
+            0x4E80_0020,
+        ]);
         assert!(fusible_record_branches(0x8000_4000, &bytes, &BTreeSet::new()).is_empty());
-        assert!(lower_words(0x8000_4000, &bytes).expect("lowers").contains("galaxy::update_cr0(context, context->gpr[0]);"));
+        assert!(lower_words(0x8000_4000, &bytes)
+            .expect("lowers")
+            .contains("galaxy::update_cr0(context, context->gpr[0]);"));
     }
 
     #[test]
@@ -15232,7 +17413,12 @@ mod tests {
             "if ((static_cast<std::int32_t>(context->gpr[3]) == static_cast<std::int32_t>(0x00000000u))) goto label_8000400C;"
         ));
         // The second compare has no branch after it and still writes CR0.
-        assert_eq!(lowered.matches("galaxy::compare_signed(context, 0u").count(), 1);
+        assert_eq!(
+            lowered
+                .matches("galaxy::compare_signed(context, 0u")
+                .count(),
+            1
+        );
     }
 
     #[test]
@@ -15822,7 +18008,14 @@ mod tests {
             "if ((static_cast<std::int32_t>(context->gpr[3]) == static_cast<std::int32_t>(0x00000000u))) goto label_8000400C;"
         ));
         // A later bgt reads CR0, so the compare writes it and the branch reads it.
-        let words = [0x2C03_0000_u32, 0x4182_000C, 0x3860_0001, 0x4181_0008, 0x4E80_0020, 0x4E80_0020];
+        let words = [
+            0x2C03_0000_u32,
+            0x4182_000C,
+            0x3860_0001,
+            0x4181_0008,
+            0x4E80_0020,
+            0x4E80_0020,
+        ];
         let bytes: Vec<u8> = words.iter().flat_map(|word| word.to_be_bytes()).collect();
         let output = lower_words(0x8000_4000, &bytes).expect("compare and branch supported");
         assert!(output.contains("galaxy::compare_signed(context, 0u"));
@@ -15838,9 +18031,7 @@ mod tests {
         let xform = |rt: u32, ra: u32, rb: u32, xo: u32| {
             (31_u32 << 26) | (rt << 21) | (ra << 16) | (rb << 11) | (xo << 1)
         };
-        let dform = |op: u32, rt: u32, imm: u16| {
-            (op << 26) | (rt << 21) | u32::from(imm)
-        };
+        let dform = |op: u32, rt: u32, imm: u16| (op << 26) | (rt << 21) | u32::from(imm);
         for (word, required) in [
             (xform(3, 0, 4, 266), "context->gpr[3] = context->gpr[0] + context->gpr[4];"),
             (xform(3, 4, 0, 266), "context->gpr[3] = context->gpr[4] + context->gpr[0];"),
@@ -15871,10 +18062,21 @@ mod tests {
         // established lowering while repairing arithmetic value operands.
         let output = lower_instruction_fixture(
             0x8000_4000,
-            &[0x3800_0007, dform(14, 3, 9), dform(15, 4, 0x1234), 0x4e80_0020],
+            &[
+                0x3800_0007,
+                dform(14, 3, 9),
+                dform(15, 4, 0x1234),
+                0x4e80_0020,
+            ],
         );
-        assert!(output.contains("context->gpr[3] = 0x00000009u;"), "{output}");
-        assert!(output.contains("context->gpr[4] = 0x12340000u;"), "{output}");
+        assert!(
+            output.contains("context->gpr[3] = 0x00000009u;"),
+            "{output}"
+        );
+        assert!(
+            output.contains("context->gpr[4] = 0x12340000u;"),
+            "{output}"
+        );
     }
 
     #[test]
@@ -16109,7 +18311,12 @@ mod tests {
             3
         );
         assert_eq!(optimized.matches("ppc_f64_binary_to_f32(").count(), 4);
-        assert_eq!(optimized.matches("ppc_commit_scalar_single_ternary(").count(), 1);
+        assert_eq!(
+            optimized
+                .matches("ppc_commit_scalar_single_ternary(")
+                .count(),
+            1
+        );
         assert_eq!(optimized.matches("ppc_f64_binary(").count(), 1);
         assert_eq!(optimized.matches("ppc_commit_paired_result(").count(), 1);
         for pc in ["80004004", "80004008"] {
@@ -16126,15 +18333,22 @@ mod tests {
 
     #[test]
     fn scalar_single_fma_boundary_preserves_operands_record_and_retry_entries() {
-        for (index, operation) in ["MultiplyAdd", "MultiplySubtract",
-            "NegativeMultiplyAdd", "NegativeMultiplySubtract"].iter().enumerate() {
+        for (index, operation) in [
+            "MultiplyAdd",
+            "MultiplySubtract",
+            "NegativeMultiplyAdd",
+            "NegativeMultiplySubtract",
+        ]
+        .iter()
+        .enumerate()
+        {
             let xo = [29u32, 28u32, 31u32, 30u32][index];
-            let word = (59u32 << 26) | (1 << 21) | (1 << 16) | (3 << 11)
-                | (2 << 6) | (xo << 1) | 1;
+            let word = (59u32 << 26) | (1 << 21) | (1 << 16) | (3 << 11) | (2 << 6) | (xo << 1) | 1;
             let words = [0x6000_0000, word, 0x4E80_0020];
             let bytes: Vec<u8> = words.iter().flat_map(|word| word.to_be_bytes()).collect();
-            let output = lower_words_with_entries(0x8000_4000, &bytes,
-                &BTreeSet::from([0x8000_4004])).unwrap();
+            let output =
+                lower_words_with_entries(0x8000_4000, &bytes, &BTreeSet::from([0x8000_4004]))
+                    .unwrap();
             assert!(output.contains(&format!(
                 "ppc_commit_scalar_single_ternary(context, 1u, galaxy::PpcFloatTernaryOperation::{operation}, 1u, 2u, 3u, true, services, 0x80004004u)")));
             assert!(!output.contains("ensure_fpu_available"));
@@ -16144,32 +18358,58 @@ mod tests {
 
     #[test]
     fn indexed_paired_binary_keeps_retry_and_decoded_descriptor() {
-        let forms = [(21u32, Opcode::PsAdd, 0u32, false, true),
+        let forms = [
+            (21u32, Opcode::PsAdd, 0u32, false, true),
             (20, Opcode::PsSub, 1, false, true),
             (25, Opcode::PsMul, 2, false, true),
             (18, Opcode::PsDiv, 3, false, true),
             (12, Opcode::PsMuls0, 2, false, false),
-            (13, Opcode::PsMuls1, 2, true, true)];
+            (13, Opcode::PsMuls1, 2, true, true),
+        ];
         for (xo, opcode, operation, lane0, lane1) in forms {
             for rc in [false, true] {
                 for (target, left, right) in [(3u32, 1u32, 2u32), (1, 1, 2), (2, 1, 2)] {
                     let multiply = operation == 2;
-                    let word = (4u32 << 26) | (target << 21) | (left << 16)
+                    let word = (4u32 << 26)
+                        | (target << 21)
+                        | (left << 16)
                         | (if multiply { right << 6 } else { right << 11 })
-                        | (xo << 1) | u32::from(rc);
+                        | (xo << 1)
+                        | u32::from(rc);
                     assert_eq!(Ins::new(word, Extensions::gekko_broadway()).op, opcode);
-                    let bytes: Vec<u8> = [word, word, 0x4E80_0020].iter()
-                        .flat_map(|word| word.to_be_bytes()).collect();
+                    let bytes: Vec<u8> = [word, word, 0x4E80_0020]
+                        .iter()
+                        .flat_map(|word| word.to_be_bytes())
+                        .collect();
                     let entries = BTreeSet::from([0x8000_4004]);
-                    let indexed = lower_words_with_config(0x8000_4000, &bytes, &entries,
-                        &BTreeSet::new(), LoweringConfig { indexed_paired_binary: true,
-                            ..LoweringConfig::default() }).unwrap();
-                    let descriptor = target | (left << 5) | (right << 10) | (operation << 15)
-                        | (u32::from(lane0) << 17) | (u32::from(lane1) << 18)
+                    let indexed = lower_words_with_config(
+                        0x8000_4000,
+                        &bytes,
+                        &entries,
+                        &BTreeSet::new(),
+                        LoweringConfig {
+                            indexed_paired_binary: true,
+                            ..LoweringConfig::default()
+                        },
+                    )
+                    .unwrap();
+                    let descriptor = target
+                        | (left << 5)
+                        | (right << 10)
+                        | (operation << 15)
+                        | (u32::from(lane0) << 17)
+                        | (u32::from(lane1) << 18)
                         | (u32::from(rc) << 19);
-                    assert!(indexed.contains(&format!("context, 0x{descriptor:05X}u, services, 0x80004000u)")));
-                    assert!(indexed.contains(&format!("context, 0x{descriptor:05X}u, services, 0x80004004u)")));
-                    assert_eq!(indexed.matches("ppc_execute_indexed_paired_binary").count(), 2);
+                    assert!(indexed.contains(&format!(
+                        "context, 0x{descriptor:05X}u, services, 0x80004000u)"
+                    )));
+                    assert!(indexed.contains(&format!(
+                        "context, 0x{descriptor:05X}u, services, 0x80004004u)"
+                    )));
+                    assert_eq!(
+                        indexed.matches("ppc_execute_indexed_paired_binary").count(),
+                        2
+                    );
                     assert!(!indexed.contains("ppc_f32_binary("));
                     assert!(!indexed.contains("require_single_precision_bits"));
                     assert!(indexed.contains("case 0x80004004u: goto label_80004004;"));
@@ -16181,33 +18421,66 @@ mod tests {
 
     #[test]
     fn indexed_paired_ternary_keeps_retry_and_decoded_descriptor() {
-        let forms = [(29u32, Opcode::PsMadd, 0u32, false, true),
+        let forms = [
+            (29u32, Opcode::PsMadd, 0u32, false, true),
             (28, Opcode::PsMsub, 1, false, true),
             (31, Opcode::PsNmadd, 2, false, true),
             (30, Opcode::PsNmsub, 3, false, true),
             (14, Opcode::PsMadds0, 0, false, false),
-            (15, Opcode::PsMadds1, 0, true, true)];
+            (15, Opcode::PsMadds1, 0, true, true),
+        ];
         for (xo, opcode, operation, lane0, lane1) in forms {
             for rc in [false, true] {
-                for (target, a, c, b) in [(3u32, 1u32, 2u32, 4u32),
-                    (1, 1, 2, 4), (2, 1, 2, 4), (4, 1, 2, 4), (31, 31, 31, 31)] {
-                    let word = (4u32 << 26) | (target << 21) | (a << 16)
-                        | (b << 11) | (c << 6) | (xo << 1) | u32::from(rc);
+                for (target, a, c, b) in [
+                    (3u32, 1u32, 2u32, 4u32),
+                    (1, 1, 2, 4),
+                    (2, 1, 2, 4),
+                    (4, 1, 2, 4),
+                    (31, 31, 31, 31),
+                ] {
+                    let word = (4u32 << 26)
+                        | (target << 21)
+                        | (a << 16)
+                        | (b << 11)
+                        | (c << 6)
+                        | (xo << 1)
+                        | u32::from(rc);
                     assert_eq!(Ins::new(word, Extensions::gekko_broadway()).op, opcode);
-                    let bytes: Vec<u8> = [word, word, 0x4E80_0020].iter()
-                        .flat_map(|word| word.to_be_bytes()).collect();
+                    let bytes: Vec<u8> = [word, word, 0x4E80_0020]
+                        .iter()
+                        .flat_map(|word| word.to_be_bytes())
+                        .collect();
                     let entries = BTreeSet::from([0x8000_4004]);
-                    let indexed = lower_words_with_config(0x8000_4000, &bytes, &entries,
-                        &BTreeSet::new(), LoweringConfig { indexed_paired_ternary: true,
-                            ..LoweringConfig::default() }).unwrap();
-                    let descriptor = target | (a << 5) | (c << 10) | (b << 15)
-                        | (operation << 20) | (u32::from(lane0) << 22)
-                        | (u32::from(lane1) << 23) | (u32::from(rc) << 24);
+                    let indexed = lower_words_with_config(
+                        0x8000_4000,
+                        &bytes,
+                        &entries,
+                        &BTreeSet::new(),
+                        LoweringConfig {
+                            indexed_paired_ternary: true,
+                            ..LoweringConfig::default()
+                        },
+                    )
+                    .unwrap();
+                    let descriptor = target
+                        | (a << 5)
+                        | (c << 10)
+                        | (b << 15)
+                        | (operation << 20)
+                        | (u32::from(lane0) << 22)
+                        | (u32::from(lane1) << 23)
+                        | (u32::from(rc) << 24);
                     for pc in [0x8000_4000u32, 0x8000_4004] {
                         assert!(indexed.contains(&format!(
-                            "context, 0x{descriptor:07X}u, services, 0x{pc:08X}u)")));
+                            "context, 0x{descriptor:07X}u, services, 0x{pc:08X}u)"
+                        )));
                     }
-                    assert_eq!(indexed.matches("ppc_execute_indexed_paired_ternary").count(), 2);
+                    assert_eq!(
+                        indexed
+                            .matches("ppc_execute_indexed_paired_ternary")
+                            .count(),
+                        2
+                    );
                     assert!(!indexed.contains("ppc_f32_ternary("));
                     assert!(!indexed.contains("require_single_precision_bits"));
                     assert!(indexed.contains("case 0x80004004u: goto label_80004004;"));
@@ -16283,15 +18556,29 @@ mod tests {
         let mut words = Vec::new();
         for (index, (xo, operation, lane0, lane1)) in forms.iter().enumerate() {
             let target = [2_u32, 3, 4][index % 3];
-            let word = (4_u32 << 26) | (target << 21) | (2 << 16)
-                | (4 << 11) | (3 << 6) | (xo << 1) | (index as u32 & 1);
+            let word = (4_u32 << 26)
+                | (target << 21)
+                | (2 << 16)
+                | (4 << 11)
+                | (3 << 6)
+                | (xo << 1)
+                | (index as u32 & 1);
             words.push(word);
-            let bytes: Vec<u8> = [word, 0x4E80_0020].iter()
-                .flat_map(|word| word.to_be_bytes()).collect();
+            let bytes: Vec<u8> = [word, 0x4E80_0020]
+                .iter()
+                .flat_map(|word| word.to_be_bytes())
+                .collect();
             let fused = lower_words_with_config(
-                0x8000_4000, &bytes, &BTreeSet::new(), &BTreeSet::new(),
-                LoweringConfig { fused_paired_ternary: true, ..LoweringConfig::default() },
-            ).unwrap();
+                0x8000_4000,
+                &bytes,
+                &BTreeSet::new(),
+                &BTreeSet::new(),
+                LoweringConfig {
+                    fused_paired_ternary: true,
+                    ..LoweringConfig::default()
+                },
+            )
+            .unwrap();
             assert_eq!(fused.matches("require_single_precision_bits").count(), 6);
             assert!(fused.contains(&format!("context->{lane0}[3]")));
             assert!(fused.contains(&format!("context->{lane1}[3]")));
@@ -16306,20 +18593,38 @@ mod tests {
             let control = lower_words(0x8000_4000, &bytes).unwrap();
             assert!(!control.contains("ppc_commit_paired_ternary_result"));
             assert_eq!(control.matches("ppc_f32_ternary(").count(), 2);
-            let function = FunctionRange { address: 0x8000_4000, size: 8 };
+            let function = FunctionRange {
+                address: 0x8000_4000,
+                size: 8,
+            };
             for (body, needs_header) in [(fused, true), (control, false)] {
-                let files = emit_sharded_module(&[(function, body)], &[], 1, function.address).unwrap();
-                let header = &files.iter().find(|f| f.name == "functions.h").unwrap().contents;
-                assert_eq!(header.contains("#include \"galaxy/ppc_paired_float.h\""), needs_header);
+                let files =
+                    emit_sharded_module(&[(function, body)], &[], 1, function.address).unwrap();
+                let header = &files
+                    .iter()
+                    .find(|f| f.name == "functions.h")
+                    .unwrap()
+                    .contents;
+                assert_eq!(
+                    header.contains("#include \"galaxy/ppc_paired_float.h\""),
+                    needs_header
+                );
             }
         }
         words.push(0x4E80_0020);
         let bytes: Vec<u8> = words.iter().flat_map(|word| word.to_be_bytes()).collect();
         let entries = BTreeSet::from([0x8000_4004]);
         let fused = lower_words_with_config(
-            0x8000_4000, &bytes, &entries, &BTreeSet::new(),
-            LoweringConfig { fused_paired_ternary: true, ..LoweringConfig::default() },
-        ).unwrap();
+            0x8000_4000,
+            &bytes,
+            &entries,
+            &BTreeSet::new(),
+            LoweringConfig {
+                fused_paired_ternary: true,
+                ..LoweringConfig::default()
+            },
+        )
+        .unwrap();
         assert!(fused.contains("case 0x80004004u: goto label_80004004;"));
         assert!(!fused.contains("ensure_fpu_available"));
         assert_eq!(fused.matches("ppc_commit_paired_ternary_result").count(), 6);
@@ -16356,7 +18661,10 @@ mod tests {
         assert!(output.contains("ppc_f64_reciprocal_estimate"));
         assert!(output.contains("ppc_f64_reciprocal_sqrt_estimate"));
         assert!(output.contains("ppc_f32_reciprocal_sqrt_estimate"));
-        assert_eq!(output.matches("ppc_commit_paired_estimate_result").count(), 2);
+        assert_eq!(
+            output.matches("ppc_commit_paired_estimate_result").count(),
+            2
+        );
         assert!(output.contains("select_nonnegative_ps0"));
     }
 
@@ -16582,9 +18890,9 @@ mod tests {
         assert!(!cmake.contents.contains(
             "option(GALAXY_MODULE_ENABLE_LTCG \"Enable Release LTCG for the generated RMGE01 game module\" ON)"
         ));
-        assert!(cmake
-            .contents
-            .contains("if(GALAXY_MODULE_ENABLE_LTCG AND NOT CMAKE_CXX_COMPILER_ID STREQUAL \"Clang\")"));
+        assert!(cmake.contents.contains(
+            "if(GALAXY_MODULE_ENABLE_LTCG AND NOT CMAKE_CXX_COMPILER_ID STREQUAL \"Clang\")"
+        ));
         assert!(cmake
             .contents
             .contains("/clang:-ffp-contract=off -fwrapv -fno-strict-aliasing"));
@@ -19186,7 +21494,7 @@ mod residency_tests {
         let options = ModuleTranslationOptions::default();
         assert!(!options.guest_resident_integer, "residency is opt-in");
         assert_eq!(
-            apply_residency_to_body(FN, body.clone(), &BTreeSet::new(), &options),
+            apply_residency_to_body(FN, body.clone(), &BTreeSet::new(), &options, None),
             body
         );
         let enabled = ModuleTranslationOptions {
@@ -19194,8 +21502,7 @@ mod residency_tests {
             ..ModuleTranslationOptions::default()
         };
         assert!(
-            apply_residency_to_body(FN, body, &BTreeSet::new(), &enabled)
-                .contains("gr3")
+            apply_residency_to_body(FN, body, &BTreeSet::new(), &enabled, None).contains("gr3")
         );
     }
 
@@ -19207,12 +21514,14 @@ mod residency_tests {
                 contents: "#pragma once
 
 #include \"galaxy/native_api.h\"
-".to_owned(),
+"
+                .to_owned(),
             },
             GeneratedSource {
                 name: "functions_0000.cpp".to_owned(),
                 contents: "#include \"functions.h\"
-".to_owned(),
+"
+                .to_owned(),
             },
             GeneratedSource {
                 name: "module.cpp".to_owned(),
@@ -19220,24 +21529,29 @@ mod residency_tests {
 extern \"C\" const galaxy::GameModuleManifestV1* galaxy_module_manifest() {
     return &kManifest;
 }
-".to_owned(),
+"
+                .to_owned(),
             },
             GeneratedSource {
                 name: "helpers.cpp".to_owned(),
                 contents: "#include \"galaxy/native_api.h\"
-".to_owned(),
+"
+                .to_owned(),
             },
         ];
         apply_fast_float_mode(&mut files);
-        assert!(files[0]
-            .contents
-            .starts_with("#pragma once
+        assert!(files[0].contents.starts_with(
+            "#pragma once
 #define GALAXY_FAST_FLOAT 1
 #define GALAXY_FASTMEM 1
 
-#include \"galaxy/native_api.h\""));
-        assert_eq!(files[1].contents, "#include \"functions.h\"
-");
+#include \"galaxy/native_api.h\""
+        ));
+        assert_eq!(
+            files[1].contents,
+            "#include \"functions.h\"
+"
+        );
         assert!(!files[2].contents.contains("GALAXY_FAST_FLOAT"));
         assert!(files[2].contents.ends_with(
             "extern \"C\" std::uint32_t galaxy_module_float_flags() {
@@ -19250,13 +21564,251 @@ extern \"C\" std::uint32_t galaxy_module_transfer_flags() {
 }
 "
         ));
-        assert!(files[3].contents.starts_with("#define GALAXY_FAST_FLOAT 1
+        assert!(files[3].contents.starts_with(
+            "#define GALAXY_FAST_FLOAT 1
 #define GALAXY_FASTMEM 1
-#include"));
+#include"
+        ));
         // Idempotent.
         let again = files.clone();
         apply_fast_float_mode(&mut files);
         assert_eq!(files[0].contents, again[0].contents);
         assert_eq!(files[2].contents, again[2].contents);
+    }
+
+    /// addi r3,r3,-1; bl 0x80004014; cmpwi r3,0; bne 0x80004000; blr: one
+    /// call-return checkpoint and one budgeted backward-branch checkpoint.
+    /// Returns the non-resident and the resident lowering, after the
+    /// transfer-return pass, as the module pipeline produces them.
+    fn loop_with_call() -> (String, String) {
+        let words: [u32; 5] = [
+            (14 << 26) | (3 << 21) | (3 << 16) | 0xFFFF,
+            0x4800_0011,
+            (11 << 26) | (3 << 16),
+            (16 << 26) | (4 << 21) | (2 << 16) | 0xFFF4,
+            0x4E80_0020,
+        ];
+        let bytes: Vec<u8> = words.iter().flat_map(|word| word.to_be_bytes()).collect();
+        let callable = BTreeMap::from([(0x8000_4014_u32, 0x8000_4014_u32)]);
+        let body = lower_words_for_module_with_call_return_entries_and_exact_fpu_flat_reads(
+            FN,
+            &bytes,
+            &BTreeSet::new(),
+            &BTreeSet::new(),
+            &callable,
+            &BTreeSet::new(),
+            &BTreeSet::new(),
+            &BTreeMap::new(),
+            &ModuleTranslationOptions::default(),
+        )
+        .unwrap();
+        let resident_options = ModuleTranslationOptions {
+            guest_resident_integer: true,
+            ..ModuleTranslationOptions::default()
+        };
+        let resident =
+            apply_residency_to_body(FN, body.clone(), &BTreeSet::new(), &resident_options, None);
+        (
+            apply_transfer_returns(body),
+            apply_transfer_returns(resident),
+        )
+    }
+
+    const SERVICE_TABLE_CHECKPOINTS: [&str; 7] = [
+        "galaxy::call_return_checkpoint_due(services)",
+        "galaxy::branch_checkpoint_due_budgeted(services)",
+        "galaxy::branch_checkpoint_due(services)",
+        "GALAXY_CALL_RETURN_CHECKPOINT(services,",
+        "GALAXY_BRANCH_CHECKPOINT_TAKEN_BUDGETED(services,",
+        "GALAXY_BRANCH_CHECKPOINT_TAKEN(services,",
+        "GALAXY_RETURN_IF_TRANSFER_PENDING(services)",
+    ];
+
+    #[test]
+    fn checkpoint_globals_off_keeps_the_service_table_checkpoints() {
+        let (plain, resident) = loop_with_call();
+        assert!(plain.contains(
+            "    GALAXY_CALL_RETURN_CHECKPOINT(services, 0x80004004u, 0x80004008u, context, memory);\n"
+        ));
+        assert!(plain.contains("GALAXY_BRANCH_CHECKPOINT_TAKEN_BUDGETED(services, 0x8000400Cu, 0x80004000u, context, memory);"));
+        assert!(resident.contains("    if (const std::uint64_t counted__ = galaxy::call_return_checkpoint_due(services); counted__ != 0u) [[unlikely]] { shared_counted__ = counted__; shared_site__ = 0u; goto shared_call_return__; }\n"));
+        assert!(resident.contains("galaxy::branch_checkpoint_due_budgeted(services); counted__ != 0u) [[unlikely]] { GALAXY_RETURN_IF_TRANSFER_PENDING(services);"));
+        for text in [&plain, &resident] {
+            assert!(!text.contains("_g(services)"), "{text}");
+            assert!(!text.contains("_G(services"), "{text}");
+        }
+    }
+
+    #[test]
+    fn checkpoint_globals_read_the_module_snapshot_at_every_checkpoint() {
+        let (plain, resident) = loop_with_call();
+        let plain_g = rewrite_checkpoint_globals(&plain);
+        let resident_g = rewrite_checkpoint_globals(&resident);
+        assert!(plain_g.contains(
+            "    GALAXY_CALL_RETURN_CHECKPOINT_G(services, 0x80004004u, 0x80004008u, context, memory);\n"
+        ));
+        assert!(plain_g.contains("GALAXY_BRANCH_CHECKPOINT_TAKEN_BUDGETED_G(services, 0x8000400Cu, 0x80004000u, context, memory);"));
+        assert!(resident_g.contains("    if (const std::uint64_t counted__ = galaxy::call_return_checkpoint_due_g(services); counted__ != 0u) [[unlikely]] { shared_counted__ = counted__; shared_site__ = 0u; goto shared_call_return__; }\n"));
+        assert!(resident_g.contains("galaxy::branch_checkpoint_due_budgeted_g(services); counted__ != 0u) [[unlikely]] { GALAXY_RETURN_IF_TRANSFER_PENDING_G(services);"));
+        assert!(resident_g.contains("shared_call_return__:\n    {\n    static constexpr std::uint32_t shared_call_return_sites__[][2] = {{0x80004004u, 0x80004008u}};\n    GALAXY_RETURN_IF_TRANSFER_PENDING_G(services);\n"));
+        for (before, after) in [(&plain, &plain_g), (&resident, &resident_g)] {
+            for spelling in SERVICE_TABLE_CHECKPOINTS {
+                assert!(!after.contains(spelling), "{spelling} left in\n{after}");
+            }
+            // Only the checkpoint spellings change; everything else, the policy
+            // calls in the cold blocks included, is untouched.
+            let restored = after
+                .replace("_due_g(services)", "_due(services)")
+                .replace("_due_budgeted_g(services)", "_due_budgeted(services)")
+                .replace("_G(services", "(services");
+            assert_eq!(&restored, before);
+        }
+        // Idempotent.
+        assert_eq!(rewrite_checkpoint_globals(&resident_g), resident_g);
+    }
+
+    #[test]
+    fn checkpoint_globals_define_the_macro_and_export_the_gate() {
+        let files = || {
+            vec![
+                GeneratedSource {
+                    name: "functions.h".to_owned(),
+                    contents: "#pragma once\n\n#include \"galaxy/native_api.h\"\n".to_owned(),
+                },
+                GeneratedSource {
+                    name: "functions_0000.cpp".to_owned(),
+                    contents: "#include \"functions.h\"\n    GALAXY_CALL_RETURN_CHECKPOINT(services, 0x80004004u, 0x80004008u, context, memory);\n".to_owned(),
+                },
+                GeneratedSource {
+                    name: "module.cpp".to_owned(),
+                    contents: "#include \"functions.h\"\nextern \"C\" const galaxy::GameModuleManifestV1* galaxy_module_manifest() {\n    return &kManifest;\n}\n".to_owned(),
+                },
+            ]
+        };
+        let mut generated = files();
+        apply_checkpoint_globals(&mut generated);
+        assert_eq!(
+            generated[0].contents,
+            "#pragma once\n#define GALAXY_MODULE_CHECKPOINT_GLOBALS 1\n\n#include \"galaxy/native_api.h\"\n"
+        );
+        assert_eq!(
+            generated[1].contents,
+            "#include \"functions.h\"\n    GALAXY_CALL_RETURN_CHECKPOINT_G(services, 0x80004004u, 0x80004008u, context, memory);\n"
+        );
+        assert!(generated[2].contents.ends_with(
+            "\ngalaxy::ModuleCheckpointGateV1 galaxy::g_module_checkpoint_gate{};\n\n\
+             extern \"C\" galaxy::ModuleCheckpointGateV1* galaxy_module_checkpoint_gate() {\n\
+             \x20   return &galaxy::g_module_checkpoint_gate;\n\
+             }\n"
+        ));
+        assert!(!generated[2].contents.contains("#define"));
+        // Idempotent, and independent of the fast-float pass order.
+        let once = generated.clone();
+        apply_checkpoint_globals(&mut generated);
+        assert_eq!(generated, once);
+        let mut fast_first = files();
+        apply_fast_float_mode(&mut fast_first);
+        apply_checkpoint_globals(&mut fast_first);
+        let mut globals_first = files();
+        apply_checkpoint_globals(&mut globals_first);
+        apply_fast_float_mode(&mut globals_first);
+        for file in fast_first.iter().chain(&globals_first) {
+            if file.name == "functions.h" {
+                assert!(file
+                    .contents
+                    .contains("#define GALAXY_MODULE_CHECKPOINT_GLOBALS 1\n"));
+                assert!(file.contents.contains("#define GALAXY_FAST_FLOAT 1\n"));
+            }
+        }
+        assert_eq!(fast_first[1], globals_first[1]);
+        for module in [&fast_first[2], &globals_first[2]] {
+            assert!(module.contents.contains("galaxy_module_float_flags() {"));
+            assert!(module
+                .contents
+                .contains("galaxy_module_checkpoint_gate() {"));
+        }
+    }
+
+    #[test]
+    fn checkpoint_globals_pack_shards_by_the_rewritten_text() {
+        let site = "    GALAXY_CALL_RETURN_CHECKPOINT(services, 0x80004004u, 0x80004008u, context, memory);\n";
+        let functions = [
+            (
+                FunctionRange {
+                    address: 0x8000_4000,
+                    size: 8,
+                },
+                site.repeat(40),
+            ),
+            (
+                FunctionRange {
+                    address: 0x8000_4100,
+                    size: 8,
+                },
+                site.repeat(40),
+            ),
+        ];
+        let exact = BTreeSet::new();
+        let shard_sizes = |files: &[GeneratedSource]| {
+            files
+                .iter()
+                .filter(|file| file.name.starts_with("functions_") && file.name.ends_with(".cpp"))
+                .map(|file| file.contents.len())
+                .collect::<Vec<_>>()
+        };
+        let roomy = emit_sharded_module_with_exact_fpu_and_source_budget(
+            &functions,
+            &[],
+            64,
+            1 << 20,
+            0x8000_4000,
+            &exact,
+        )
+        .unwrap();
+        let one_shard = shard_sizes(&roomy);
+        assert_eq!(one_shard.len(), 1);
+        // The 80 renamed sites add two bytes each: half of that fits.
+        let budget = one_shard[0] + 80;
+        // Packing the plain text and renaming afterwards overflows the shard.
+        let mut renamed_after = emit_sharded_module_with_exact_fpu_and_source_budget(
+            &functions,
+            &[],
+            64,
+            budget,
+            0x8000_4000,
+            &exact,
+        )
+        .unwrap();
+        assert_eq!(shard_sizes(&renamed_after).len(), 1);
+        apply_checkpoint_globals(&mut renamed_after);
+        assert!(matches!(
+            validate_function_shard_source_budget(&renamed_after, budget),
+            Err(TranslationError::ShardExceedsSourceBudget { .. })
+        ));
+        // Packing the renamed text splits the shard; the module pass then
+        // leaves the shards alone and every one fits.
+        let mut packed = emit_sharded_module_with_definition_rewrite(
+            &functions,
+            &[],
+            64,
+            budget,
+            0x8000_4000,
+            &exact,
+            LocalPairedExperiments::default(),
+            Some(rewrite_checkpoint_globals),
+        )
+        .unwrap();
+        assert_eq!(shard_sizes(&packed).len(), 2);
+        let before = packed.clone();
+        apply_checkpoint_globals(&mut packed);
+        validate_function_shard_source_budget(&packed, budget).unwrap();
+        for (after, before) in packed.iter().zip(&before) {
+            if after.name.starts_with("functions_") && after.name.ends_with(".cpp") {
+                assert_eq!(after, before);
+                assert!(!after
+                    .contents
+                    .contains("GALAXY_CALL_RETURN_CHECKPOINT(services,"));
+            }
+        }
     }
 }

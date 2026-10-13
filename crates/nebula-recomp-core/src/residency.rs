@@ -27,7 +27,8 @@
 //! * an interior entry (dispatch `case`): jump to a stub that reloads first.
 //!
 //! The native float fast paths (`fast::scalar_*`, `fast::paired_*`,
-//! `fast::psq_*`, `fast::*_fpr_single`) are rewritten to their `_r` overloads,
+//! `fast::psq_*`, `fast::*_fpr_single`, and the `_hw` conversion forms of the
+//! loads and stores) are rewritten to their `_r` overloads,
 //! which operate on the local arrays and synchronize through `context` only on
 //! their exact fallback. Helpers that only touch CR, XER, FPSCR or HID2
 //! (`cr_bit`, `compare_*`, `write_fpscr_fields`, ...) are left in place. Any
@@ -38,8 +39,20 @@
 //! body) for shapes it does not handle: a runtime-indexed register access, a
 //! synchronizing call used as an expression, two synchronizing calls on one
 //! line, or a float helper with a non-literal register argument.
+//!
+//! Under the EABI contract (translator `--abi-call-sync`, `--abi-exit-sync`;
+//! see `crate::ppc_dataflow::ModuleAbi`) the translator marks a call to a
+//! translated function, or an indirect call, with `GALAXY_ABI_CALL(0x<pc>u);`
+//! and a `blr` with `GALAXY_GUEST_RETURN;` (both no-ops in a body this pass
+//! leaves alone). A marked call stores only the written locals the callee may
+//! read (arguments, stack and small-data bases, non-volatile registers, LR,
+//! plus the callee's recorded extras) and reloads only the results and the
+//! registers the callee may clobber; a marked return stores only what a caller
+//! may observe. A marker whose next synchronizing call is not a translated or
+//! indirect guest call is dropped, so that call keeps the full sequence.
 
-use std::collections::BTreeSet;
+use crate::ppc_dataflow::{CallSync, Regs};
+use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Write as _;
 
 const LR: usize = 32;
@@ -111,6 +124,10 @@ fn callee_leaves_register_file_alone(callee: &str) -> bool {
             | "fast::store_fpr_single_r"
             | "fast::psq_load_r"
             | "fast::psq_store_r"
+            | "fast::load_fpr_single_hw_r"
+            | "fast::store_fpr_single_hw_r"
+            | "fast::psq_load_hw_r"
+            | "fast::psq_store_hw_r"
             | "fast::scalar_binary_r"
             | "fast::scalar_ternary_r"
             | "fast::scalar_frsp_r"
@@ -118,6 +135,9 @@ fn callee_leaves_register_file_alone(callee: &str) -> bool {
             | "fast::paired_ternary_r"
             | "fast::paired_sum_r"
             | "fast::fctiwz_r"
+            // --fast-float-forms: CR field only; HID2 only.
+            | "fast::compare_f64_cr"
+            | "fast::duplicates_single"
     )
 }
 
@@ -134,6 +154,10 @@ fn fpr_only_helper(callee: &str) -> bool {
             | "fast::store_fpr_single"
             | "fast::psq_load"
             | "fast::psq_store"
+            | "fast::load_fpr_single_hw"
+            | "fast::store_fpr_single_hw"
+            | "fast::psq_load_hw"
+            | "fast::psq_store_hw"
             | "fast::scalar_binary"
             | "fast::scalar_ternary"
             | "fast::scalar_frsp"
@@ -157,7 +181,10 @@ fn float_helper_target_position(callee: &str) -> Option<usize> {
         | "fast::paired_sum_r"
         | "fast::scalar_frsp_r"
         | "fast::fctiwz_r" => Some(3),
-        "fast::load_fpr_single_r" | "fast::psq_load_r" => Some(4),
+        "fast::load_fpr_single_r"
+        | "fast::psq_load_r"
+        | "fast::load_fpr_single_hw_r"
+        | "fast::psq_load_hw_r" => Some(4),
         _ => None,
     }
 }
@@ -169,14 +196,16 @@ fn float_helper_index_positions(callee: &str) -> Option<&'static [usize]> {
     Some(match name {
         "fast::fctiwz_r" => &[3, 4],
         "fast::scalar_binary_r" | "fast::paired_binary_r" => &[3, 4, 5],
-        "fast::scalar_ternary_r" | "fast::paired_ternary_r" | "fast::paired_sum_r" => {
-            &[3, 4, 5, 6]
-        }
+        "fast::scalar_ternary_r" | "fast::paired_ternary_r" | "fast::paired_sum_r" => &[3, 4, 5, 6],
         "fast::scalar_frsp_r" => &[3, 4],
         "fast::load_fpr_single_r"
         | "fast::store_fpr_single_r"
         | "fast::psq_load_r"
-        | "fast::psq_store_r" => &[4],
+        | "fast::psq_store_r"
+        | "fast::load_fpr_single_hw_r"
+        | "fast::store_fpr_single_hw_r"
+        | "fast::psq_load_hw_r"
+        | "fast::psq_store_hw_r" => &[4],
         _ => return None,
     })
 }
@@ -386,7 +415,11 @@ fn rename_register_accesses(body: &str, floats: bool) -> Option<Renamed> {
         text.push_str(&body[cursor..at]);
         let rest = &body[after..];
         let mut handled = false;
-        for (prefix, base) in [("gpr[", 0usize), ("fpr_bits[", FPR_BASE), ("ps1_bits[", PS1_BASE)] {
+        for (prefix, base) in [
+            ("gpr[", 0usize),
+            ("fpr_bits[", FPR_BASE),
+            ("ps1_bits[", PS1_BASE),
+        ] {
             if base != 0 && !floats {
                 continue;
             }
@@ -456,7 +489,16 @@ fn rewrite_float_helpers(
         "paired_sum",
         "fctiwz",
     ];
-    const MEMORY: [&str; 4] = ["load_fpr_single", "store_fpr_single", "psq_load", "psq_store"];
+    const MEMORY: [&str; 8] = [
+        "load_fpr_single",
+        "store_fpr_single",
+        "psq_load",
+        "psq_store",
+        "load_fpr_single_hw",
+        "store_fpr_single_hw",
+        "psq_load_hw",
+        "psq_store_hw",
+    ];
     let mut out = text.to_owned();
     for name in ARITHMETIC {
         // Templated form: galaxy::fast::NAME<...>(context, ...)
@@ -464,7 +506,10 @@ fn rewrite_float_helpers(
         out = out.replace(&templated, &format!("galaxy::fast::{name}_r<"));
         // Plain form: galaxy::fast::NAME(context, ...)
         let plain = format!("galaxy::fast::{name}(context, ");
-        out = out.replace(&plain, &format!("galaxy::fast::{name}_r(context, fpr, ps1, "));
+        out = out.replace(
+            &plain,
+            &format!("galaxy::fast::{name}_r(context, fpr, ps1, "),
+        );
     }
     // Templated arithmetic: insert the arrays after `context, `.
     let mut rewritten = String::with_capacity(out.len() + 256);
@@ -625,16 +670,29 @@ fn lean_store_sequence(written: &[bool; SLOTS], contract: LeanCallContract) -> S
 
 /// Reloads after a lean body: the used locals it writes.
 fn lean_reload_sequence(used: &[bool; SLOTS], contract: LeanCallContract) -> String {
-    reload_sequence(&contract_slots(used, contract.gpr_writes, contract.fpr_writes))
+    reload_sequence(&contract_slots(
+        used,
+        contract.gpr_writes,
+        contract.fpr_writes,
+    ))
 }
 
-fn declarations(used: &[bool; SLOTS]) -> String {
+/// The local declarations, loaded from the context. Under the EABI contract a
+/// written volatile local may never be read again (no return stores it), so
+/// those declarations are `[[maybe_unused]]` (MSVC C4189, clang
+/// -Wunused-but-set-variable).
+fn declarations(used: &[bool; SLOTS], maybe_unused: bool) -> String {
     let mut out = String::new();
+    let attribute = if maybe_unused {
+        "[[maybe_unused]] "
+    } else {
+        ""
+    };
     for (slot, flag) in used.iter().enumerate() {
         if *flag && !is_float_slot(slot) {
             let _ = writeln!(
                 out,
-                "    std::uint32_t {} = {};",
+                "    {attribute}std::uint32_t {} = {};",
                 local_name(slot),
                 field_name(slot)
             );
@@ -649,6 +707,64 @@ fn declarations(used: &[bool; SLOTS]) -> String {
         }
     }
     out
+}
+
+/// EABI synchronization of one function (see the module documentation).
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct AbiResidency {
+    /// Call sites marked `GALAXY_ABI_CALL(0x<pc>u);` that use the contract,
+    /// by call pc. A marked site missing here keeps full synchronization.
+    pub call_sites: BTreeMap<u32, CallSync>,
+    /// Registers stored at `GALAXY_GUEST_RETURN;`, or `None` for every
+    /// written local.
+    pub exit: Option<Regs>,
+}
+
+/// The local slots of a register set (an FPR covers both lanes).
+fn register_slots(registers: Regs) -> [bool; SLOTS] {
+    let mut slots = [false; SLOTS];
+    for index in 0..32 {
+        slots[index] = registers.gpr & (1u32 << index) != 0;
+        slots[fpr_slot(index)] = registers.fpr & (1u32 << index) != 0;
+        slots[ps1_slot(index)] = registers.fpr & (1u32 << index) != 0;
+    }
+    slots[LR] = registers.lr;
+    slots[CTR] = registers.ctr;
+    slots
+}
+
+fn masked(flags: &[bool; SLOTS], registers: Regs) -> [bool; SLOTS] {
+    let mask = register_slots(registers);
+    let mut out = [false; SLOTS];
+    for slot in 0..SLOTS {
+        out[slot] = flags[slot] && mask[slot];
+    }
+    out
+}
+
+/// `GALAXY_ABI_CALL(0x8000400Cu);` -> 0x8000400C.
+fn abi_call_marker(trimmed: &str) -> Option<u32> {
+    let hex = trimmed
+        .strip_prefix("GALAXY_ABI_CALL(0x")?
+        .strip_suffix("u);")?;
+    u32::from_str_radix(hex, 16).ok()
+}
+
+/// A guest call the EABI contract may cover: a translated function or the
+/// indirect-call fast path.
+fn abi_callee(callee: &str) -> bool {
+    callee.starts_with("rmge01::fn_")
+        || callee == "galaxy::fast::call_guest_indirect"
+        || callee == "galaxy::fast::call_guest_indirect_site"
+}
+
+/// Replaces every `GALAXY_GUEST_RETURN;` with a stored-back return.
+fn store_before_guest_returns(line: &str, stores: &str) -> String {
+    const GUEST_RETURN: &str = "GALAXY_GUEST_RETURN;";
+    if !line.contains(GUEST_RETURN) {
+        return line.to_owned();
+    }
+    line.replace(GUEST_RETURN, &format!("{{ {stores}return; }}"))
 }
 
 /// Replaces every statement-position `return;` with a stored-back return.
@@ -677,7 +793,18 @@ fn store_before_returns(line: &str, stores: &str) -> String {
 
 /// Applies the residency transform to one lowered body. See the module
 /// documentation for the contract.
+#[cfg(test)]
 pub fn apply_register_residency(body: &str, floats: bool) -> Option<String> {
+    apply_register_residency_with_abi(body, floats, None)
+}
+
+/// `apply_register_residency` with the EABI synchronization of marked calls
+/// and returns (`None`: every marker keeps full synchronization).
+pub fn apply_register_residency_with_abi(
+    body: &str,
+    floats: bool,
+    abi: Option<&AbiResidency>,
+) -> Option<String> {
     let Renamed { text, mut used } = rename_register_accesses(body, floats)?;
     let mut helper_written = [false; SLOTS];
     let text = if floats {
@@ -710,6 +837,14 @@ pub fn apply_register_residency(body: &str, floats: bool) -> Option<String> {
     }
     let stores = store_sequence(&written);
     let reloads = reload_sequence(&used);
+    let exit_stores = match abi.and_then(|abi| abi.exit) {
+        Some(exit) => store_sequence(&masked(&written, exit)),
+        None => stores.clone(),
+    };
+    // The contract of the call announced by the last marker, until the next
+    // synchronizing call or label consumes or drops it.
+    let mut pending_abi: Option<CallSync> = None;
+    let mut pending_depth = 0i64;
 
     let mut output = String::with_capacity(text.len() + text.len() / 8);
     let mut entries: BTreeSet<String> = BTreeSet::new();
@@ -722,7 +857,7 @@ pub fn apply_register_residency(body: &str, floats: bool) -> Option<String> {
         0
     };
     output.push_str(&text[..signature_end]);
-    output.push_str(&declarations(&used));
+    output.push_str(&declarations(&used, abi.is_some()));
     let shared_declarations_at = output.len();
     let rest = &text[signature_end..];
 
@@ -754,7 +889,10 @@ pub fn apply_register_residency(body: &str, floats: bool) -> Option<String> {
     // `goto label_X;` at function scope, as a continuation stub ends.
     let stub_resume_label = |index: usize| -> Option<String> {
         let raw_line = raw_lines.get(index)?;
-        let name = raw_line.trim().strip_prefix("goto label_")?.strip_suffix(';')?;
+        let name = raw_line
+            .trim()
+            .strip_prefix("goto label_")?
+            .strip_suffix(';')?;
         (depth_before[index] == 0
             && name.len() == 8
             && name.bytes().all(|byte| byte.is_ascii_hexdigit()))
@@ -805,6 +943,19 @@ pub fn apply_register_residency(body: &str, floats: bool) -> Option<String> {
             continue;
         }
 
+        // EABI call markers: remembered for the next synchronizing call in
+        // the same block, dropped at a label or when the block closes.
+        if let Some(pc) = abi_call_marker(trimmed) {
+            pending_abi = abi.and_then(|abi| abi.call_sites.get(&pc).copied());
+            pending_depth = depth_before[line_index];
+            continue;
+        }
+        if depth_before[line_index] < pending_depth
+            || (!line.starts_with(' ') && line.trim_end().ends_with(':'))
+        {
+            pending_abi = None;
+        }
+
         // Context-receiving calls.
         let tokens = bare_context_tokens(line);
         let mut calls: Vec<ContextCall> = Vec::new();
@@ -842,6 +993,7 @@ pub fn apply_register_residency(body: &str, floats: bool) -> Option<String> {
             return None;
         }
         let line = if let Some(call) = syncing.pop() {
+            let abi_sync = pending_abi.take().filter(|_| abi_callee(&call.callee));
             let before = &line[..call.callee_start];
             let args = &line[call.args_start..call.args_end];
             let after = &line[call.args_end + 2..]; // past `);`
@@ -882,7 +1034,8 @@ pub fn apply_register_residency(body: &str, floats: bool) -> Option<String> {
                         None
                     };
                     if let Some(resume) = resume {
-                        shared_sites.push((format!("{{{}, {}}}", arguments[1], arguments[2]), resume));
+                        shared_sites
+                            .push((format!("{{{}, {}}}", arguments[1], arguments[2]), resume));
                         let _ = write!(
                             rewritten,
                             "if (const std::uint64_t counted__ = galaxy::call_return_checkpoint_due(services); counted__ != 0u) [[unlikely]] {{ shared_counted__ = counted__; shared_site__ = {site}u; goto shared_call_return__; }}"
@@ -894,13 +1047,24 @@ pub fn apply_register_residency(body: &str, floats: bool) -> Option<String> {
                         );
                     }
                 }
-                Sync::Full => {
-                    let _ = write!(
-                        rewritten,
-                        "{{ {stores}{}({args}); {reloads}}}",
-                        call.callee_text
-                    );
-                }
+                Sync::Full => match abi_sync {
+                    Some(sync) => {
+                        let _ = write!(
+                            rewritten,
+                            "{{ {}{}({args}); {}}}",
+                            store_sequence(&masked(&written, sync.store)),
+                            call.callee_text,
+                            reload_sequence(&masked(&used, sync.reload))
+                        );
+                    }
+                    None => {
+                        let _ = write!(
+                            rewritten,
+                            "{{ {stores}{}({args}); {reloads}}}",
+                            call.callee_text
+                        );
+                    }
+                },
                 Sync::Lean(contract) => {
                     let _ = write!(
                         rewritten,
@@ -932,6 +1096,7 @@ pub fn apply_register_residency(body: &str, floats: bool) -> Option<String> {
         };
 
         let line = store_before_returns(&line, &stores);
+        let line = store_before_guest_returns(&line, &exit_stores);
         output.push_str(&line);
         output.push_str(newline);
         if let Some((after_line, site)) = resume_label_after {
@@ -949,7 +1114,10 @@ pub fn apply_register_residency(body: &str, floats: bool) -> Option<String> {
         output.push('\n');
     }
     for name in &entries {
-        let _ = writeln!(output, "resident_entry_{name}:\n    {reloads}\n    goto label_{name};");
+        let _ = writeln!(
+            output,
+            "resident_entry_{name}:\n    {reloads}\n    goto label_{name};"
+        );
     }
     if !shared_sites.is_empty() {
         let _ = writeln!(
@@ -1019,7 +1187,9 @@ mod tests {
         assert!(out.contains(
             "    if (const std::uint64_t counted__ = galaxy::call_return_checkpoint_due(services); counted__ != 0u) [[unlikely]] { shared_counted__ = counted__; shared_site__ = 0u; goto shared_call_return__; }\n    }\nshared_resume_0:;\n"
         ));
-        assert!(out.contains("    std::uint64_t shared_counted__ = 0u;\n    std::uint32_t shared_site__ = 0u;\n"));
+        assert!(out.contains(
+            "    std::uint64_t shared_counted__ = 0u;\n    std::uint32_t shared_site__ = 0u;\n"
+        ));
         assert!(out.contains(
             "shared_call_return__:\n    {\n    static constexpr std::uint32_t shared_call_return_sites__[][2] = {{0x8000100Cu, 0x80001010u}};\n    GALAXY_RETURN_IF_TRANSFER_PENDING(services);\n    context->gpr[3] = gr3; context->lr = glr; galaxy::call_return_checkpoint_counted(services, shared_call_return_sites__[shared_site__][0], shared_call_return_sites__[shared_site__][1], context, memory, shared_counted__);\n    gr3 = context->gpr[3]; gr31 = context->gpr[31]; glr = context->lr; GALAXY_RETURN_IF_TRANSFER_PENDING(services);\n    }\n    switch (shared_site__) {\n    case 0u: goto shared_resume_0;\n    default: { context->gpr[3] = gr3; context->lr = glr; return; }\n    }\n"
         ));
@@ -1046,6 +1216,39 @@ mod tests {
         // Written float entries (helper targets and textual writes) are stored at
         // the exit; read-only entries and the read-only integer locals are not.
         assert!(out.contains("{ context->fpr_bits[1] = fpr[1]; context->fpr_bits[5] = fpr[5]; context->fpr_bits[7] = fpr[7]; context->ps1_bits[1] = ps1[1]; context->ps1_bits[5] = ps1[5]; return; }"));
+    }
+
+    const HW_FLOAT_MEMORY_BODY: &str = "    {\n    context->gpr[4] = context->gpr[4] + 0x00000010u;\n    }\n    {\n    galaxy::fast::load_fpr_single_hw(flat_guest_read_base, context, 5u, memory, context->gpr[4] + 0x00000008u, services, 0x80004004u);\n    }\n    {\n    galaxy::fast::store_fpr_single_hw(flat_guest_base, context, 5u, memory, context->gpr[3], services, 0x80004008u);\n    }\n    {\n    galaxy::fast::psq_load_hw(flat_guest_read_base, context, 6u, memory, context->gpr[3], 0u, false, true, services, 0x8000400Cu);\n    }\n    {\n    galaxy::fast::psq_store_hw(flat_guest_base, context, 6u, memory, context->gpr[4], 0u, false, true, services, 0x80004010u);\n    }\n    return;\n";
+
+    #[test]
+    fn hw_float_memory_helpers_are_not_integer_synchronization_points() {
+        let out = apply_register_residency(HW_FLOAT_MEMORY_BODY, false).expect("eligible");
+        for call in [
+            "galaxy::fast::load_fpr_single_hw(flat_guest_read_base, context, 5u, memory, gr4 + 0x00000008u, services, 0x80004004u);",
+            "galaxy::fast::store_fpr_single_hw(flat_guest_base, context, 5u, memory, gr3, services, 0x80004008u);",
+            "galaxy::fast::psq_load_hw(flat_guest_read_base, context, 6u, memory, gr3, 0u, false, true, services, 0x8000400Cu);",
+            "galaxy::fast::psq_store_hw(flat_guest_base, context, 6u, memory, gr4, 0u, false, true, services, 0x80004010u);",
+        ] {
+            assert!(out.contains(&format!("    {call}\n")), "{call}\n{out}");
+        }
+        // gr4 is written before the helpers and stored only at the exit.
+        assert_eq!(out.matches("context->gpr[4] = gr4;").count(), 1, "{out}");
+        assert!(!out.contains("gr4 = context->gpr[4]; "), "{out}");
+    }
+
+    #[test]
+    fn hw_float_memory_helpers_take_the_resident_arrays() {
+        let out = apply_register_residency(HW_FLOAT_MEMORY_BODY, true).expect("eligible");
+        for call in [
+            "galaxy::fast::load_fpr_single_hw_r(flat_guest_read_base, context, fpr, ps1, 5u, memory, gr4 + 0x00000008u, services, 0x80004004u);",
+            "galaxy::fast::store_fpr_single_hw_r(flat_guest_base, context, fpr, ps1, 5u, memory, gr3, services, 0x80004008u);",
+            "galaxy::fast::psq_load_hw_r(flat_guest_read_base, context, fpr, ps1, 6u, memory, gr3, 0u, false, true, services, 0x8000400Cu);",
+            "galaxy::fast::psq_store_hw_r(flat_guest_base, context, fpr, ps1, 6u, memory, gr4, 0u, false, true, services, 0x80004010u);",
+        ] {
+            assert!(out.contains(call), "{call}\n{out}");
+        }
+        // The loads' targets are written float entries, stored at the exit.
+        assert!(out.contains("context->fpr_bits[5] = fpr[5]; context->fpr_bits[6] = fpr[6]; context->ps1_bits[5] = ps1[5]; context->ps1_bits[6] = ps1[6]; return; }"), "{out}");
     }
 
     #[test]
@@ -1141,7 +1344,9 @@ mod tests {
     fn spr_reads_other_than_lr_and_ctr_do_not_synchronize() {
         let body = "    {\n    context->gpr[10] = galaxy::read_spr(context, 268u, services, 0x80004000u);\n    }\n    return;\n";
         let out = apply_register_residency(body, false).expect("eligible");
-        assert!(out.contains("    gr10 = galaxy::read_spr(context, 268u, services, 0x80004000u);\n"));
+        assert!(
+            out.contains("    gr10 = galaxy::read_spr(context, 268u, services, 0x80004000u);\n")
+        );
     }
 
     #[test]
@@ -1161,5 +1366,86 @@ mod tests {
         let out = apply_register_residency(body, false).expect("eligible");
         assert!(out.contains("if (const std::uint64_t counted__ = galaxy::branch_checkpoint_due_budgeted(services); counted__ != 0u) [[unlikely]] { GALAXY_RETURN_IF_TRANSFER_PENDING(services); context->gpr[3] = gr3; galaxy::branch_checkpoint_taken_counted(services, 0x80004004u, 0x80004000u, context, memory, counted__); gr3 = context->gpr[3]; GALAXY_RETURN_IF_TRANSFER_PENDING(services); }"));
         assert!(out.contains("if (--checkpoint_budget__ == 0u) [[unlikely]] { checkpoint_budget__ = galaxy::kBranchCheckpointBudget; if (const std::uint64_t counted__"));
+    }
+
+    const ABI_BODY: &str = "    {\n    context->gpr[0] = context->lr;\n    context->gpr[3] = context->gpr[31];\n    context->gpr[12] = 0x00000001u;\n    }\n    {\n    context->lr = 0x80001010u;\n    GALAXY_ABI_CALL(0x8000100Cu);\n    context->pc = 0x80002000u;\n    rmge01::fn_80002000(context, memory, services);\n    }\n    {\n    context->lr = 0x80001018u;\n    GALAXY_ABI_CALL(0x80001014u);\n    galaxy::call_guest_resolved(services, 0x80003000u, &rmge01::fn_80003000, context, memory, 0x80001014u);\n    }\n    if (context->gpr[3] == 0u) GALAXY_GUEST_RETURN;\n    return;\n";
+
+    fn abi_plan() -> AbiResidency {
+        let sync = CallSync {
+            store: crate::ppc_dataflow::abi_call_store(),
+            reload: crate::ppc_dataflow::abi_results(),
+        };
+        AbiResidency {
+            call_sites: BTreeMap::from([(0x8000_100C, sync), (0x8000_1014, sync)]),
+            exit: Some(crate::ppc_dataflow::abi_exit_store()),
+        }
+    }
+
+    #[test]
+    fn abi_marked_call_synchronizes_the_contract_registers_only() {
+        let plan = abi_plan();
+        let out =
+            apply_register_residency_with_abi(ABI_BODY, false, Some(&plan)).expect("eligible");
+        // r0 and r12 are volatile non-arguments: not stored; r31 is only read:
+        // already in the context; only the result r3 is reloaded.
+        assert!(out.contains(
+            "    { context->gpr[3] = gr3; context->lr = glr; rmge01::fn_80002000(context, memory, services); gr3 = context->gpr[3]; }\n"
+        ), "{out}");
+        assert!(!out.contains("GALAXY_ABI_CALL"), "{out}");
+        // The marker before a runtime-routed call is dropped: full sync.
+        assert!(out.contains(
+            "    { context->gpr[0] = gr0; context->gpr[3] = gr3; context->gpr[12] = gr12; context->lr = glr; galaxy::call_guest_resolved(services, 0x80003000u, &rmge01::fn_80003000, context, memory, 0x80001014u); gr0 = context->gpr[0]; gr3 = context->gpr[3]; gr12 = context->gpr[12]; gr31 = context->gpr[31]; glr = context->lr; }\n"
+        ), "{out}");
+        // A guest return stores what a caller may observe; a plain return
+        // stores every written local.
+        assert!(
+            out.contains(
+                "    if (gr3 == 0u) { context->gpr[3] = gr3; context->lr = glr; return; }\n"
+            ),
+            "{out}"
+        );
+        assert!(out.contains("    { context->gpr[0] = gr0; context->gpr[3] = gr3; context->gpr[12] = gr12; context->lr = glr; return; }\n"), "{out}");
+    }
+
+    #[test]
+    fn abi_markers_without_a_plan_keep_full_synchronization() {
+        for plan in [None, Some(AbiResidency::default())] {
+            let out = apply_register_residency_with_abi(ABI_BODY, false, plan.as_ref())
+                .expect("eligible");
+            assert!(out.contains(
+                "    { context->gpr[0] = gr0; context->gpr[3] = gr3; context->gpr[12] = gr12; context->lr = glr; rmge01::fn_80002000(context, memory, services); gr0 = context->gpr[0]; gr3 = context->gpr[3]; gr12 = context->gpr[12]; gr31 = context->gpr[31]; glr = context->lr; }\n"
+            ), "{out}");
+            assert!(out.contains("    if (gr3 == 0u) { context->gpr[0] = gr0; context->gpr[3] = gr3; context->gpr[12] = gr12; context->lr = glr; return; }\n"), "{out}");
+        }
+    }
+
+    #[test]
+    fn abi_marker_does_not_leak_past_its_block() {
+        let body = "    {\n    context->gpr[3] = context->gpr[4];\n    GALAXY_ABI_CALL(0x8000100Cu);\n    }\n    {\n    rmge01::fn_80002000(context, memory, services);\n    }\n    return;\n";
+        let plan = abi_plan();
+        let out = apply_register_residency_with_abi(body, false, Some(&plan)).expect("eligible");
+        assert!(out.contains("    { context->gpr[3] = gr3; rmge01::fn_80002000(context, memory, services); gr3 = context->gpr[3]; gr4 = context->gpr[4]; }\n"), "{out}");
+    }
+
+    #[test]
+    fn abi_call_covers_both_lanes_of_float_arguments_and_results() {
+        let body = "    {\n    context->fpr_bits[1] = context->fpr_bits[31];\n    context->fpr_bits[9] = context->fpr_bits[31];\n    context->lr = 0x80001010u;\n    GALAXY_ABI_CALL(0x8000100Cu);\n    context->pc = 0x80002000u;\n    rmge01::fn_80002000(context, memory, services);\n    }\n    {\n    context->fpr_bits[30] = context->fpr_bits[1];\n    }\n    return;\n";
+        let plan = abi_plan();
+        let out = apply_register_residency_with_abi(body, true, Some(&plan)).expect("eligible");
+        // f9 is volatile: neither stored nor reloaded; f1 goes out and comes
+        // back (the body never names its ps1 lane, so that stays in context).
+        assert!(out.contains("    { context->lr = glr; context->fpr_bits[1] = fpr[1]; context->fpr_bits[30] = fpr[30]; rmge01::fn_80002000(context, memory, services); fpr[1] = context->fpr_bits[1]; }\n"), "{out}");
+    }
+
+    #[test]
+    fn abi_marker_covers_the_site_cached_indirect_call() {
+        let body = "    {\n    context->gpr[0] = context->lr;\n    context->lr = 0x80001010u;\n    GALAXY_ABI_CALL(0x8000100Cu);\n    galaxy::fast::call_guest_indirect_site(services, branch_target, &cached_target_8000100C, &cached_function_8000100C, &site_target_8000100C, &site_function_8000100C, context, memory, 0x8000100Cu);\n    }\n    return;\n";
+        let plan = abi_plan();
+        let out = apply_register_residency_with_abi(body, false, Some(&plan)).expect("eligible");
+        assert!(
+            out.contains("{ context->lr = glr; galaxy::fast::call_guest_indirect_site("),
+            "{out}"
+        );
+        assert!(out.contains("0x8000100Cu); }\n"), "{out}");
     }
 }

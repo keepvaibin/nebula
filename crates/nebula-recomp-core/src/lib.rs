@@ -1,3 +1,4 @@
+pub mod asm_probe;
 mod boot_image;
 mod dol;
 mod dsp;
@@ -9,6 +10,7 @@ mod game;
 pub mod guest_abi_effect;
 pub mod guest_cfg_liveness;
 pub mod guest_ppc_effect;
+pub mod ppc_dataflow;
 mod residency;
 mod rso;
 mod sel;
@@ -79,7 +81,8 @@ pub use sel::{parse_sel, ResolvedSelSymbol, SelError, SelImage, SelSymbol};
 pub use translate::{
     lower_ppc_code_range, lower_ppc_code_range_with_entries_and_immediate_overrides,
     translate_module, translate_module_with_options, translate_module_with_source_budget,
-    translate_one, translation_coverage, GeneratedSource, ModuleTranslationOptions,
-    PpcImmediateKind, PpcImmediateOverride, TranslationCoverage, TranslationError,
-    TranslationModule, TranslationUnit, DEFAULT_MODULE_SHARD_SOURCE_KIB,
+    translate_one, translation_coverage, validate_module_options, GeneratedSource,
+    ModuleTranslationOptions, PpcImmediateKind, PpcImmediateOverride, TranslationCoverage,
+    TranslationError, TranslationModule, TranslationUnit, ABI_CONTRACT_FILE,
+    DEFAULT_MODULE_SHARD_SOURCE_KIB,
 };

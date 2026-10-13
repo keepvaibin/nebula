@@ -169,6 +169,17 @@ public:
     };
     void exchange_chain(ChainDepths& parked, ChainDepths resumed) noexcept;
 
+    // Called after every write of the two pointer slots (bind, unbind,
+    // activate, scope entry and exit, exchange_chain), once both hold their
+    // new values. A --checkpoint-globals module's gate snapshot is refreshed
+    // here. The observer runs inside the publication: it must not throw or
+    // call back into the controller. nullptr removes it.
+    using PublishObserver = void (*)(void* user) noexcept;
+    void set_publish_observer(PublishObserver observer, void* user) noexcept {
+        publish_observer_ = observer;
+        publish_observer_user_ = user;
+    }
+
     [[nodiscard]] RequestedMode requested_mode() const noexcept {
         return requested_mode_;
     }
@@ -208,6 +219,8 @@ private:
     std::uint64_t full_scope_depth_{};
     std::uint64_t inline_scope_depth_{};
     Telemetry telemetry_{};
+    PublishObserver publish_observer_{};
+    void* publish_observer_user_{};
     bool bound_{};
     bool activated_{};
     bool inline_published_{};

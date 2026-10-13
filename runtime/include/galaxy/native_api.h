@@ -6529,6 +6529,14 @@ GALAXY_ALWAYS_INLINE bool transfer_pending(
 #define GALAXY_RETURN_IF_TRANSFER_PENDING(services) \
     do { if (galaxy::transfer_pending(services)) [[unlikely]] return; } while (false)
 
+// EABI register synchronization (translator --abi-call-sync / --abi-exit-sync).
+// The translator announces a linked guest call with GALAXY_ABI_CALL(call pc)
+// and lowers a blr to GALAXY_GUEST_RETURN; its register-residency pass replaces
+// both with the contract's store and reload sequences. In a body the pass
+// leaves on the context they are a no-op and a plain return.
+#define GALAXY_ABI_CALL(call_pc) static_cast<void>(0)
+#define GALAXY_GUEST_RETURN return
+
 inline void native_yaz0_decode_or_fallback_803989BC(
     PpcContext* context,
     GuestMemoryV1* memory,
@@ -8646,6 +8654,26 @@ inline void psq_store(
 GALAXY_ALWAYS_INLINE std::uint64_t widen_f32_bits(std::uint32_t bits);
 inline std::uint32_t narrow_paired_single_ftz(std::uint64_t bits);
 
+// Flat-view-only module (translator --flat-view-only, GALAXY_FLAT_VIEW_ONLY in
+// the generated functions.h): a fastmem module that the runtime starts only
+// with the flat view (kModuleMemoryFlagRequiresFlatView). The host bodies it
+// inlines then assume the view as its translated code does (fast::flat_base),
+// so no inlined call site keeps a null-view check or a region-table fallback.
+#if GALAXY_FASTMEM_ACTIVE && defined(GALAXY_FLAT_VIEW_ONLY) && GALAXY_FLAT_VIEW_ONLY && \
+    !defined(GALAXY_FASTMEM_KEEP_NULL_FALLBACK)
+#define GALAXY_FLAT_VIEW_ONLY_ACTIVE 1
+#else
+#define GALAXY_FLAT_VIEW_ONLY_ACTIVE 0
+#endif
+
+#if GALAXY_FLAT_VIEW_ONLY_ACTIVE
+GALAXY_ALWAYS_INLINE std::byte* assumed_flat_view(const GuestMemoryV1* memory) noexcept {
+    std::byte* const base = memory->flat_guest_base;
+    __builtin_assume(base != nullptr);
+    return base;
+}
+#endif
+
 // Host bytes of a guest RAM span for the lean host bodies. A fastmem module
 // reaches RAM through the flat view, as its translated code does (an access
 // outside RAM faults there); other builds use the checked span lookup.
@@ -8655,6 +8683,12 @@ GALAXY_ALWAYS_INLINE std::byte* lean_guest_span(
     std::uint32_t size,
     const NativeServicesV1* services,
     std::uint32_t guest_pc) {
+#if GALAXY_FLAT_VIEW_ONLY_ACTIVE
+    (void)size;
+    (void)services;
+    (void)guest_pc;
+    return assumed_flat_view(memory) + address;
+#else
 #if GALAXY_FASTMEM_ACTIVE
     if (memory != nullptr && memory->struct_size >= sizeof(GuestMemoryV1) &&
         memory->flat_guest_base != nullptr) GALAXY_LIKELY {
@@ -8662,6 +8696,7 @@ GALAXY_ALWAYS_INLINE std::byte* lean_guest_span(
     }
 #endif
     return resolve_guest(memory, address, size, services, guest_pc);
+#endif
 }
 
 // Lean host bodies for the SDK paired-single matrix/vector library
@@ -10054,7 +10089,13 @@ GALAXY_ALWAYS_INLINE void lean_jgeom_inv_sqrt(PpcContext* context, GuestMemoryV1
 namespace cstring {
 
 GALAXY_ALWAYS_INLINE const std::byte* view(const GuestMemoryV1* memory) {
+#if GALAXY_FLAT_VIEW_ONLY_ACTIVE
+    // The same view the module's translated loads read (flat_guest_read_base
+    // aliases it).
+    return assumed_flat_view(memory);
+#else
     return memory != nullptr ? memory->flat_guest_read_base : nullptr;
+#endif
 }
 
 GALAXY_ALWAYS_INLINE std::uint32_t at(const std::byte* view, GuestMemoryV1* memory,
@@ -12042,6 +12083,14 @@ inline void require_paired_single_mode(
     bool requires_quantized_load_store,
     const NativeServicesV1* services,
     std::uint32_t guest_pc) {
+#if defined(GALAXY_ASSUME_PAIRED_SINGLES) && GALAXY_ASSUME_PAIRED_SINGLES
+    // Translator --assume-paired-singles: HID2[PSE]/[LSQE] are set before any
+    // game code runs and never cleared (see galaxy::fast::kAssumePairedSingles).
+    static_cast<void>(context);
+    static_cast<void>(requires_quantized_load_store);
+    static_cast<void>(services);
+    static_cast<void>(guest_pc);
+#else
     constexpr std::uint32_t kHid2Lsqe = 0x80000000u;
     constexpr std::uint32_t kHid2Pse = 0x20000000u;
     const std::uint32_t required =
@@ -12052,6 +12101,7 @@ inline void require_paired_single_mode(
             guest_pc,
             "paired-single instruction executed while HID2 mode is disabled");
     }
+#endif
 }
 
 inline std::uint32_t psq_element_size(
@@ -14921,6 +14971,193 @@ GALAXY_NOINLINE inline void call_return_checkpoint_counted(
         if (galaxy::transfer_pending(services)) [[unlikely]] return; \
     } while (false)
 
+// ---------------------------------------------------------------------------
+// Module checkpoint gate (translator --checkpoint-globals)
+// ---------------------------------------------------------------------------
+//
+// The inline checkpoint tests above re-read the service table after every
+// call: the service pointers, `runtime_flags` for the trace and adaptive
+// bits, both gate pointers, then the counter, watermark and event mask
+// behind them (about nine loads and eight branches per call return). A module
+// generated with --checkpoint-globals reads a module-global snapshot of the
+// same decision instead: three pointer words and one flag, each RIP-relative.
+// The snapshot is derived from the service table by
+// refresh_module_checkpoint_gate, and the runtime must call that helper:
+//
+//   1. once after galaxy_module_init succeeds and the checkpoint gate is
+//      bound, with the address from the optional galaxy_module_checkpoint_gate
+//      export (a module without the export needs nothing);
+//   2. after every change to services->checkpoint_counter or
+//      checkpoint_next_slow (each checkpoint::GateController publication:
+//      bind, unbind, activate, full/inline scope entry and exit,
+//      exchange_chain), before translated code runs again;
+//   3. after every change to services->runtime_flags (the adaptive
+//      call-return bit the checkpoint callback toggles, the trace bits set at
+//      boot), to branch_checkpoint or to pending_event_mask;
+//   4. with nullptr before the service table or the module goes away.
+//
+// All of these happen on the simulation thread, the only thread that runs
+// translated code, so plain stores suffice. A zero snapshot (the module's
+// initial state, and what an older runtime leaves in place) makes every test
+// report kBranchCheckpointNotCounted, so each checkpoint takes the complete
+// service-table policy: correct and only slower. The snapshot never changes
+// what a checkpoint decides, only where the inputs are read from.
+struct ModuleCheckpointGateV1 {
+    std::uint32_t struct_size{sizeof(ModuleCheckpointGateV1)};
+    std::uint32_t version{1u};
+    // services->checkpoint_counter while the inline gate is published, the
+    // service table is complete (branch_checkpoint, pending_event_mask) and
+    // kNativeServiceFlagTraceWpadReadCopies is clear; null otherwise.
+    std::uint64_t* branch_counter{};
+    // branch_counter while kNativeServiceFlagAdaptiveCallReturnCheckpoints is
+    // set; null otherwise.
+    std::uint64_t* call_return_counter{};
+    // services->checkpoint_next_slow whenever branch_counter is non-null.
+    const std::uint64_t* next_slow{};
+    // services->pending_event_mask (fixed for the table's lifetime).
+    const std::atomic_uint32_t* pending_event_mask{};
+    // 1 when a call return completes on an empty event mask alone: the table
+    // is complete, tracing is off and adaptive call returns are off.
+    std::uint32_t call_return_quiet{};
+    std::uint32_t reserved{};
+};
+
+// The snapshot for `services` (nullptr: the zero snapshot). The decisions are
+// exactly those of branch_checkpoint_due and call_return_checkpoint_due.
+inline void refresh_module_checkpoint_gate(
+    ModuleCheckpointGateV1* gate,
+    const NativeServicesV1* services) noexcept {
+    if (gate == nullptr) {
+        return;
+    }
+    ModuleCheckpointGateV1 next{};
+    if (services != nullptr) {
+        next.pending_event_mask = services->pending_event_mask;
+        const bool complete = services->branch_checkpoint != nullptr &&
+            services->pending_event_mask != nullptr;
+        const bool trace =
+            (services->runtime_flags & kNativeServiceFlagTraceWpadReadCopies) != 0u;
+        const bool adaptive = (services->runtime_flags &
+            kNativeServiceFlagAdaptiveCallReturnCheckpoints) != 0u;
+        const bool published = services->checkpoint_counter != nullptr &&
+            services->checkpoint_next_slow != nullptr;
+        if (complete && !trace) {
+            if (published) {
+                next.branch_counter = services->checkpoint_counter;
+                next.next_slow = services->checkpoint_next_slow;
+                if (adaptive) {
+                    next.call_return_counter = services->checkpoint_counter;
+                }
+            }
+            next.call_return_quiet = adaptive ? 0u : 1u;
+        }
+    }
+    *gate = next;
+}
+
+#if defined(GALAXY_MODULE_CHECKPOINT_GLOBALS) && GALAXY_MODULE_CHECKPOINT_GLOBALS
+// Defined once in the generated module.cpp; every shard reads it RIP-relative.
+extern ModuleCheckpointGateV1 g_module_checkpoint_gate;
+
+namespace module_gate_detail {
+
+// Advances `counter` by `step` and reports the counted value when the
+// watermark is reached or an event is pending (0: nothing to do).
+GALAXY_ALWAYS_INLINE std::uint64_t count(
+    std::uint64_t* counter,
+    std::uint64_t step) noexcept {
+    const std::uint64_t checkpoint = (*counter += step);
+    if (checkpoint < *g_module_checkpoint_gate.next_slow &&
+        atomic_load_u32(g_module_checkpoint_gate.pending_event_mask) == 0u) [[likely]] {
+        return 0u;
+    }
+    return checkpoint;
+}
+
+}  // namespace module_gate_detail
+
+// branch_checkpoint_due from the module snapshot.
+GALAXY_ALWAYS_INLINE std::uint64_t branch_checkpoint_due_g(
+    const NativeServicesV1* /*services*/) {
+    std::uint64_t* const counter = g_module_checkpoint_gate.branch_counter;
+    if (counter != nullptr) [[likely]] {
+        return module_gate_detail::count(counter, 1u);
+    }
+    return kBranchCheckpointNotCounted;
+}
+
+// branch_checkpoint_due_budgeted from the module snapshot.
+GALAXY_ALWAYS_INLINE std::uint64_t branch_checkpoint_due_budgeted_g(
+    const NativeServicesV1* /*services*/) {
+    std::uint64_t* const counter = g_module_checkpoint_gate.branch_counter;
+    if (counter != nullptr) [[likely]] {
+        return module_gate_detail::count(counter, kBranchCheckpointBudget);
+    }
+    return kBranchCheckpointNotCounted;
+}
+
+// call_return_checkpoint_due from the module snapshot.
+GALAXY_ALWAYS_INLINE std::uint64_t call_return_checkpoint_due_g(
+    const NativeServicesV1* /*services*/) {
+    std::uint64_t* const counter = g_module_checkpoint_gate.call_return_counter;
+    if (counter != nullptr) [[likely]] {
+        return module_gate_detail::count(counter, 1u);
+    }
+    if (g_module_checkpoint_gate.call_return_quiet != 0u &&
+        atomic_load_u32(g_module_checkpoint_gate.pending_event_mask) == 0u) [[likely]] {
+        return 0u;
+    }
+    return kBranchCheckpointNotCounted;
+}
+
+// transfer_pending from the module snapshot; the service table while the
+// snapshot is empty.
+GALAXY_ALWAYS_INLINE bool transfer_pending_g(const NativeServicesV1* services) noexcept {
+    const std::atomic_uint32_t* const mask = g_module_checkpoint_gate.pending_event_mask;
+    if (mask == nullptr) [[unlikely]] {
+        return transfer_pending(services);
+    }
+    return (atomic_load_u32(mask) & kPendingEventTransferBit) != 0u;
+}
+
+#define GALAXY_RETURN_IF_TRANSFER_PENDING_G(services) \
+    do { if (galaxy::transfer_pending_g(services)) [[unlikely]] return; } while (false)
+
+// The checkpoint macros above, deciding from the module snapshot. A fast-path
+// pass leaves the event mask empty, so the transfer test moves into the cold
+// block with the policy call.
+#define GALAXY_CALL_RETURN_CHECKPOINT_G(services, call_pc, return_pc, context, memory) \
+    do { \
+        if (const std::uint64_t counted__ = galaxy::call_return_checkpoint_due_g(services); \
+            counted__ != 0u) [[unlikely]] { \
+            if (galaxy::transfer_pending_g(services)) [[unlikely]] return; \
+            galaxy::call_return_checkpoint_counted( \
+                services, call_pc, return_pc, context, memory, counted__); \
+            if (galaxy::transfer_pending_g(services)) [[unlikely]] return; \
+        } \
+    } while (false)
+
+#define GALAXY_BRANCH_CHECKPOINT_TAKEN_BUDGETED_G(services, guest_pc, resume_pc, context, memory) \
+    do { \
+        if (const std::uint64_t counted__ = galaxy::branch_checkpoint_due_budgeted_g(services); \
+            counted__ != 0u) [[unlikely]] { \
+            galaxy::branch_checkpoint_taken_counted( \
+                services, guest_pc, resume_pc, context, memory, counted__); \
+            if (galaxy::transfer_pending_g(services)) [[unlikely]] return; \
+        } \
+    } while (false)
+
+#define GALAXY_BRANCH_CHECKPOINT_TAKEN_G(services, guest_pc, resume_pc, context, memory) \
+    do { \
+        if (const std::uint64_t counted__ = galaxy::branch_checkpoint_due_g(services); \
+            counted__ != 0u) [[unlikely]] { \
+            galaxy::branch_checkpoint_taken_counted( \
+                services, guest_pc, resume_pc, context, memory, counted__); \
+            if (galaxy::transfer_pending_g(services)) [[unlikely]] return; \
+        } \
+    } while (false)
+#endif
+
 GALAXY_ALWAYS_INLINE void native_input_trace_copy_pre_checkpoint(
     const NativeServicesV1* services,
     std::uint32_t call_pc,
@@ -16008,6 +16245,10 @@ GALAXY_MODULE_EXPORT std::size_t galaxy_module_function_records(
 // model.
 GALAXY_MODULE_EXPORT std::uint32_t galaxy_module_float_flags();
 GALAXY_MODULE_EXPORT std::uint32_t galaxy_module_transfer_flags();
+// Optional (translator --checkpoint-globals): the module's checkpoint gate
+// snapshot, which the runtime keeps current with
+// galaxy::refresh_module_checkpoint_gate. Absent: nothing to maintain.
+GALAXY_MODULE_EXPORT galaxy::ModuleCheckpointGateV1* galaxy_module_checkpoint_gate();
 // Optional: galaxy::kModuleMemoryFlag* bits.
 #if defined(GALAXY_BUILDING_GAME_MODULE) && GALAXY_FASTMEM_ACTIVE && \
     !defined(GALAXY_FASTMEM_KEEP_NULL_FALLBACK)
