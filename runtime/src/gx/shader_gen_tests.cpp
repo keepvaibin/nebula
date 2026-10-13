@@ -1,15 +1,10 @@
-// shader_gen_tests.cpp — offline validation that every ShaderGenerator
-// codegen path emits HLSL that FXC accepts.
+// shader_gen_tests.cpp: offline check that every ShaderGenerator codegen path emits HLSL
+// that FXC accepts.
 //
-// The generator runs at boot and compiles synchronously on first PSO miss;
-// a codegen syntax slip would otherwise surface as invisible geometry deep
-// into a boot.  This test walks a key matrix covering: texgen types/sources
-// (regular ST/STQ, per-vertex and default matrix indices, dual-tex post
-// matrices, color0/1, emboss), per-channel lighting (every attenuation and
-// diffuse function, color + alpha controls, multi-light masks), TEV compare
-// modes (all four widths, GT and EQ, color and alpha), swap tables, every
-// fog type, z-texturing, and alpha-test permutations — and feeds each
-// generated shader through D3DCompile.
+// The generator compiles synchronously on the first PSO miss, so a codegen syntax error
+// would otherwise show up as missing geometry during play. The key matrix covers texgen
+// types and sources, per-channel lighting, TEV compare modes, swap tables, every fog type,
+// z-texturing and alpha-test permutations. Each generated shader is passed to D3DCompile.
 //
 // Exit code = number of failures (0 = pass).
 
@@ -231,8 +226,7 @@ void check_independent_pair_compilation() {
         std::printf("FAILED: shader_pair_bytecode: %s\n", error.what());
     }
 
-    // Prove exceptional cleanup, rather than assuming source references survive
-    // a pixel-side failure while the independent compiler is still executing.
+    // Exceptional cleanup must hold when a pixel-side failure happens while the compiler is running.
     std::promise<void> vertex_started;
     auto started = vertex_started.get_future();
     std::atomic<bool> vertex_completed{false};
@@ -287,8 +281,8 @@ int main() {
     using namespace galaxy::gx;
 
     {   // Aurora GX pipeline normalization: RGB8/RGB565 have no EFB alpha.
-        // Destination-alpha factors must share a PSO key with ONE/ZERO;
-        // RGBA6 retains the original factors and remains a distinct key.
+        // Destination-alpha factors share a PSO key with ONE/ZERO. RGBA6 keeps the original
+        // factors and is a distinct key.
         GxState state;
         const auto write_bp = [&state](std::uint8_t reg, std::uint32_t value) {
             state.load_bp((static_cast<std::uint32_t>(reg) << 24u) | value);
@@ -621,8 +615,8 @@ int main() {
     }
 
     {   // The final TEV stage reaches the PE even when it writes REG0-2.
-        // Crystal/highlight materials can end on a non-PREV destination; the
-        // shader must copy that final destination before alpha/fog/output.
+        // Crystal and highlight materials can end on a non-PREV destination. The shader must copy
+        // that final destination before alpha, fog and output.
         PixelShaderKey k{};
         std::memset(&k, 0, sizeof(k));
         k.num_tev_stages = 1;
@@ -687,8 +681,8 @@ int main() {
     }
 
     {   // Indirect texcoord scale is a 4-bit GX shift. Values above 8 are
-        // legal and must not be clamped, or subtle effect maps become wildly
-        // over-amplified.
+        // Indirect texcoord scale is a 4-bit GX shift. Values above 8 are legal and must not be
+        // clamped, or subtle effect maps become over-amplified.
         PixelShaderKey k{};
         std::memset(&k, 0, sizeof(k));
         k.num_tev_stages = 1;
@@ -711,9 +705,9 @@ int main() {
         check_compiles(src, "ps_5_1", "ps_indirect_scale_15_compiles");
     }
 
-    {   // libogc maps GX_ALPHA_BUMP, GX_ALPHA_BUMPN, and GX_COLORZERO to BP
-        // raster channels 5, 6, and 7. Lock that mapping so translucent
-        // indirect materials do not regress to zero or the wrong bump mode.
+    {  // libogc maps the bump alpha modes to BP raster channels 5-7.
+        // The test locks that mapping, so translucent indirect materials do not regress to zero
+        // or the wrong bump mode.
         PixelShaderKey k{};
         std::memset(&k, 0, sizeof(k));
         k.num_tev_stages = 3;
@@ -744,9 +738,8 @@ int main() {
     }
 
     {   // GX still applies an active indirect coordinate op even when that
-        // TEV stage has its regular texture lookup disabled. This keeps wrap
-        // and add-prev state faithful instead of treating disabled texture as
-        // disabled indirect.
+        // GX applies an active indirect coordinate op even when the stage's regular texture lookup
+        // is disabled. Wrap and add-prev state must stay faithful, not be treated as a disabled indirect.
         PixelShaderKey k{};
         std::memset(&k, 0, sizeof(k));
         k.num_tev_stages = 1;

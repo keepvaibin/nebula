@@ -139,16 +139,12 @@ inline constexpr NativeHidTimingProfile
         kNativeHidReportPeriodTicks - 1u,
         false};
 
-// Project-owned native keyboard/mouse/XInput endpoint contract. This does not
-// claim that a physical Wii Remote has a crystal-locked 100 Hz oscillator.
-// Instead, the PC adapter itself is defined to sample once every 607,500
-// Broadway timeline ticks and to service each deadline before the next one.
-// It emits byte-exact raw HID/ACL reports into the translated WUD/WPAD/KPAD
-// stack. Explicit keyboard/mouse/controller mode also has an authorized
-// synthetic KPAD adapter; that separate route is not hardware-cadence proof.
-// Because the raw endpoint and its clock
-// are implemented and specified here, strict proof can qualify this contract
-// without misrepresenting the separately completion-driven physical-HID path.
+// Native keyboard, mouse and XInput endpoint contract. It does not claim that a physical Wii Remote has a
+// crystal-locked 100 Hz oscillator. The PC adapter is defined to sample once every 607,500 Broadway timeline
+// ticks and to service each deadline before the next one. It emits byte-exact raw HID/ACL reports into the
+// translated WUD/WPAD/KPAD stack. The explicit keyboard/mouse/controller mode also has an authorized
+// synthetic KPAD adapter. That route is not hardware-cadence proof. Strict proof can qualify this endpoint's
+// clock without confusing it with the completion-driven physical HID path.
 inline constexpr NativeHidTimingProfile kNativeVirtualHidTimingProfile{
     "native-virtual-contract-v1-100hz",
     kProvisionalVirtualHidReportRateHz,

@@ -15,25 +15,20 @@ namespace galaxy::timing {
 inline constexpr std::uint64_t kTimelineTicksPerSecond = 60'750'000ull;
 inline constexpr std::uint64_t kViPeriodTicks =
     kTimelineTicksPerSecond / 60ull;
-// Lowered from 1.5 VI periods: a stall just over one VI period (the smallest
-// possible backlog=1 miss) with near-zero CPU time used is still genuine
-// evidence of an OS scheduling gap, not simulation load, and is exactly the
-// case the fatal cadence check has no other tolerance for. This only widens
-// which intervals are considered as a recovery *candidate* -- the separate
-// candidate_proof_matches identity re-verification and the atomic
-// rebase_and_restore_after_host_suspension transaction in
-// recover_from_verified_host_suspension are unchanged and still required
-// before anything is actually restored.
+// Lowered from 1.5 VI periods. A stall just over one VI period (the smallest backlog=1 miss) with little CPU
+// time used is still an indication of an OS scheduling gap, not simulation load. The fatal cadence check has no
+// other tolerance for it. This only widens which intervals count as recovery candidates. candidate_proof_matches
+// and the atomic rebase_and_restore_after_host_suspension transaction in recover_from_verified_host_suspension
+// still check and restore before anything changes.
 inline constexpr std::uint64_t kHostSuspensionCandidateMinimumTicks =
     kViPeriodTicks;
 inline constexpr std::uint64_t
     kHostSuspensionCandidateMaximumCpuTime100ns = 10'000u;
 
-// Classifies only the wall-time/CPU evidence for a possible host scheduling
-// suspension. Recovery still requires unchanged deadline identity, a fresh
-// observation, and an atomic timeline/deadline restore. The ordinary path
-// also requires an exact VI backlog with inactive delivery scopes; the sole
-// active-scope exception is separately proven by the durable VI/AI policy.
+// Classifies only the wall-time and CPU data for a possible host scheduling suspension. Recovery still requires
+// unchanged deadline identity, a fresh observation and an atomic timeline and deadline restore. The ordinary path
+// also requires an exact VI backlog with inactive delivery scopes. The only active-scope exception is checked
+// separately by the VI/AI policy.
 [[nodiscard]] constexpr bool is_host_suspension_candidate_interval(
     std::uint64_t elapsed_ticks,
     std::uint64_t elapsed_cpu_time_100ns) noexcept {
@@ -42,10 +37,9 @@ inline constexpr std::uint64_t
             kHostSuspensionCandidateMaximumCpuTime100ns;
 }
 
-// Proves that the interval classified above began before one exact device
-// deadline and ended at least a full device period after it. Subtractions are
-// performed only after ordering is established, so every uint64 boundary
-// fails closed without overflow.
+// Proves the classified interval began before one exact device deadline and ended at least one full
+// device period after it. Subtraction happens only after ordering is established, so every uint64
+// boundary fails closed without overflow.
 [[nodiscard]] constexpr bool host_suspension_crossed_device_deadline_by_period(
     std::uint64_t last_guest_ticks,
     std::uint64_t observed_ticks,
@@ -70,14 +64,11 @@ struct CounterSource {
 // resources and remains valid for the process lifetime.
 CounterSource query_performance_counter_source();
 
-// Returns a raw time-stamp-counter source (rdtsc divided by 8, so the
-// frequency stays inside the supported range) when the processor reports an
-// invariant TSC, calibrated against QueryPerformanceCounter over
-// `calibration_ms`. A timeline read is then one rdtsc instead of a
-// QueryPerformanceCounter call: the simulation thread reads the time base
-// more than a hundred thousand times per second (guest OSGetTick/OSGetTime,
-// checkpoints, device deadlines) and the QPC call was 2 percent of its
-// running samples. Empty when the TSC is not invariant or calibration fails.
+// Returns a raw time-stamp-counter source (rdtsc divided by 8, to stay in the supported frequency range)
+// when the processor reports an invariant TSC. It is calibrated against QueryPerformanceCounter over
+// `calibration_ms`. A timeline read then costs one rdtsc instead of a QueryPerformanceCounter call,
+// because the simulation thread reads the time base over 100,000 times per second (OSGetTick/OSGetTime,
+// checkpoints, device deadlines). Empty when the TSC is not invariant or calibration fails.
 std::optional<CounterSource> invariant_tsc_counter_source(unsigned calibration_ms);
 
 // Converts a counter delta into the Wii's 60.75 MHz time-base domain without
@@ -95,12 +86,11 @@ public:
         CounterSource source,
         std::uint64_t initial_ticks = 0);
 
-    // Samples the host-derived timeline. Broker publication and recovery
-    // preparation may inspect an uncommitted host suspension interval. Before
-    // exposing a returned value to a guest or device owner, the simulation
-    // thread must commit_guest_observation after any safe recovery decision.
-    // Optional diagnostic output is the exact raw counter read made by this
-    // call, before monotonic clamping; it performs no additional clock read.
+    // Samples the host-derived timeline. Broker publication and recovery preparation may inspect an
+    // uncommitted host suspension interval. Before a returned value reaches a guest or device owner, the
+    // simulation thread must call commit_guest_observation, after any safe recovery decision. Optional
+    // diagnostic output is the exact raw counter read by this call, before monotonic clamping. It makes no
+    // extra clock read.
     [[nodiscard]] std::uint64_t now_ticks(
         std::uint64_t* sampled_counter = nullptr) noexcept;
     // Commits a guest/device-visible observation. Equal observations are
@@ -116,12 +106,10 @@ public:
     [[nodiscard]] bool can_rebase_after_host_suspension(
         std::uint64_t last_guest_ticks,
         std::uint64_t observed_host_ticks) const noexcept;
-    // Rebases the host-counter mapping after a verified host suspension.  The
-    // caller must serialize this operation against DeadlineBroker publication
-    // and supply the last guest-visible tick plus the immediately observed
-    // host-derived tick.  This intentionally preserves the guest's monotonic
-    // clock while excluding an interval in which the simulation thread made
-    // no progress; it is not a cadence re-phase or an event coalescer.
+    // Rebases the host-counter mapping after a host suspension that passed its checks. The caller serializes this
+    // against DeadlineBroker publication and supplies the last guest-visible tick plus the host-derived tick just
+    // observed. The guest clock stays monotonic and excludes the interval in which the simulation thread made no
+    // progress. This is not a cadence re-phase or an event coalescer.
     [[nodiscard]] bool rebase_after_host_suspension(
         std::uint64_t last_guest_ticks,
         std::uint64_t observed_host_ticks) noexcept;
@@ -196,12 +184,10 @@ struct ReplaceableDeadlineRestore {
     std::uint64_t generation{};
 };
 
-// Lower/upper bounds around the exact latch-publication call.  The worker
-// samples the shared Wii timeline immediately before and after publication so
-// a cadence failure can distinguish a broker that woke late from a consumer
-// that failed to reach a generated safepoint.  A pre-publication lateness at
-// least one period is conclusive broker-side evidence; a post-publication
-// lateness below one period is conclusive consumer-side evidence.
+// Bounds around the exact latch-publication call. The worker samples the shared Wii timeline just before and
+// after publication, so a cadence failure can tell a late broker from a consumer that missed a generated
+// safepoint. Lateness before publication of at least one period identifies a broker-side delay. Lateness after
+// publication below one period identifies a consumer-side delay.
 struct DeadlinePublicationStats {
     std::uint64_t publications{};
     std::uint64_t last_sequence{};
@@ -268,11 +254,10 @@ public:
         EventKind kind,
         std::uint64_t deadline_ticks,
         std::uint64_t generation);
-    // Reinstates the one currently owned replaceable generation after a
-    // verified host-suspension timeline rebase. Unlike replace_once(), this
-    // intentionally requires equality with the already-owned generation: the
-    // device did not advance while the simulation was suspended, so assigning
-    // it a new generation would manufacture a device transition.
+    // Reinstates the one currently owned replaceable generation after a host-suspension timeline rebase. Unlike
+    // replace_once(), this intentionally requires equality with the already-owned generation: the device did not
+    // advance while the simulation was suspended, so assigning it a new generation would manufacture a device
+    // transition.
     void restore_replaceable_after_host_suspension(
         EventKind kind,
         std::uint64_t deadline_ticks,
@@ -368,10 +353,9 @@ public:
     void wake_idle_waiters(std::uint32_t source = 100u) noexcept;
     void set_transfer_pending() noexcept;
     void clear_transfer_pending() noexcept;
-    // Optional auto-reset event that wake_idle_waiters also signals. The
-    // simulation thread's idle wait blocks on it together with a
-    // high-resolution waitable timer, because WaitOnAddress timeouts are
-    // quantized to the system clock interrupt (16 to 33 ms observed).
+    // Optional auto-reset event that wake_idle_waiters also signals. The simulation thread's idle wait
+    // blocks on it together with a high-resolution waitable timer, because WaitOnAddress timeouts are
+    // quantized to the system clock interrupt (about 16 to 33 ms).
     void set_idle_wake_event(void* event) noexcept {
         idle_wake_event_.store(event, std::memory_order_release);
     }
@@ -426,9 +410,8 @@ public:
         std::uint64_t period_ticks,
         std::uint64_t due_count) noexcept;
 
-    // Linearizes only when the pending count is exactly one. Concurrent
-    // publishers cannot turn a previously observed singleton into a hidden
-    // backlog: the compare/exchange reports Backlog and consumes nothing.
+    // Linearizes only when the pending count is exactly one. Concurrent publishers cannot turn an observed singleton
+    // into a hidden backlog: the compare/exchange reports Backlog and consumes nothing.
     [[nodiscard]] ExactTakeResult take_one_if_only(EventKind kind) noexcept;
 
     // Consumes only the expected generation. An older publication is removed
@@ -535,11 +518,9 @@ struct PeriodicDeadlineObservation {
 struct PeriodicDeadlineAuditStats {
     std::uint64_t scheduled_edges{};
     std::uint64_t delivered_edges{};
-    // delivered_edges counts exact schedule identities acknowledged by the
-    // consumer. A level-triggered device may acknowledge several elapsed
-    // identities through one guest-visible interrupt; these counters keep
-    // that hardware coalescing explicit instead of disguising it as perfect
-    // one-interrupt-per-edge delivery.
+    // delivered_edges counts exact schedule identities acknowledged by the consumer. A level-triggered
+    // device may acknowledge several elapsed identities through one guest-visible interrupt. These
+    // counters keep that hardware coalescing explicit, rather than presenting it as one interrupt per edge.
     std::uint64_t delivered_interrupts{};
     std::uint64_t coalesced_level_edges{};
     std::uint64_t level_coalescing_events{};
@@ -579,17 +560,13 @@ public:
         EventKind kind,
         std::uint64_t now_ticks);
 
-    // Level-triggered hardware retains an asserted level, not an unbounded
-    // queue of interrupt entries. This variant preserves the strict schedule
-    // and validates a backlog's complete sequence/deadline identity, but when
-    // several already-due levels accumulated it acknowledges their latest
-    // identity through one guest-visible interrupt. Singleton delivery keeps
-    // the strict method's transaction. It never coalesces an early,
-    // anonymous, incomplete, noncontiguous, or arithmetically invalid batch.
-    // An incomplete due batch returns no event without consuming anything;
-    // even a prior Ready inspection can defer if another period elapses.
-    // The strict method above remains available for edge-triggered consumers
-    // and acceptance tests that require one delivery per edge.
+    // Level-triggered hardware retains an asserted level, not an unbounded queue of interrupt entries. This
+    // variant keeps the strict schedule and checks a backlog's complete sequence and deadline identity. When
+    // several due levels have accumulated, it acknowledges the latest identity with one guest-visible
+    // interrupt. A singleton uses the strict method's transaction. It never coalesces an early, anonymous,
+    // incomplete, noncontiguous or arithmetically invalid batch. An incomplete due batch returns no event
+    // and consumes nothing. Even a prior Ready inspection can be deferred if another period elapses. The
+    // strict method remains for edge-triggered consumers and acceptance tests that need one delivery per edge.
     std::optional<DeadlineEvent> consume_one_or_coalesce_level_or_throw(
         PendingEventLatch& latch,
         EventKind kind,
@@ -642,9 +619,8 @@ public:
         EventKind kind,
         std::uint64_t deadline_ticks,
         std::uint64_t generation);
-    // Restores an already-owned replaceable device deadline after a verified
-    // host suspension. The generation must equal the broker's current owner;
-    // this is not a general replacement API.
+    // Restores an already-owned replaceable device deadline after a host suspension. The generation must equal the
+    // broker's current owner; this is not a general replacement API.
     void restore_replaceable_after_host_suspension(
         EventKind kind,
         std::uint64_t deadline_ticks,
@@ -658,18 +634,15 @@ public:
     }
     [[nodiscard]] DeadlinePublicationStats publication_stats(
         EventKind kind) const;
-    // Serializes a verified host-suspension clock rebase against the worker's
-    // timeline reads.  Callers must re-arm any device schedules whose already
-    // published edges were invalidated by the rebase before guest execution
-    // resumes.
+    // Serializes a host-suspension clock rebase against the worker's timeline reads. Callers re-arm any device
+    // schedule whose published edges the rebase invalidated before guest execution resumes.
     [[nodiscard]] bool rebase_timeline_after_host_suspension(
         std::uint64_t last_guest_ticks,
         std::uint64_t observed_host_ticks);
-    // Atomically restores all deadline owners and rebases the timeline after
-    // a verified host suspension. The caller prepares the immutable recovery
-    // description without entering guest code; this operation then excludes
-    // that native-only preparation time from the guest clock and prevents the
-    // worker from publishing a stale edge between the rebase and re-arm.
+    // Atomically restores all deadline owners and rebases the timeline after a host suspension. The caller prepares
+    // the immutable recovery description without entering guest code. This operation then excludes that native-only
+    // preparation time from the guest clock, and stops the worker from publishing a stale edge between the rebase
+    // and re-arm.
     [[nodiscard]] bool rebase_and_restore_after_host_suspension(
         std::uint64_t last_guest_ticks,
         std::uint64_t observed_host_ticks,

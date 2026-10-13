@@ -364,8 +364,8 @@ bool decode_switch2_report(std::span<const std::uint8_t> r, Switch2ImuState& imu
                                     (static_cast<std::uint32_t>(r[0x2d]) << 16) |
                                     (static_cast<std::uint32_t>(r[0x2e]) << 24);
     if (timestamp != 0u && !imu.ready) {
-        // Timestamps are microseconds on most units; where they are not, the
-        // gyro full scale differs (SDL_hidapi_switch2.c, 2025-11).
+        // Timestamps are microseconds on most units; where they are not, the gyro full
+        // scale differs (per SDL_hidapi_switch2.c).
         ++imu.sample_count;
         if (imu.sample_count >= 5 && imu.first_timestamp == 0u) {
             imu.first_timestamp = timestamp;

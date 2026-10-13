@@ -577,7 +577,7 @@ public:
         try { state.load_cp(0xFFu, 3u); }
         catch (const GxFatalError&) { rejected = true; }
         if (!rejected || state.dependency_shape_revision() != before_fault) return false;
-        // Saturation cannot wrap back into a previously accepted format mask.
+        // Saturation cannot wrap back into an accepted format mask.
         state.dependency_shape_revision_ = UINT64_MAX;
         state.load_cp(cp::kArrayBaseBase, 0x2000u);
         if (state.dependency_shape_revision() != 0u || memo.contains(0u, 7u)) return false;
@@ -1499,8 +1499,8 @@ public:
             return false;
         }
 
-        // Reuse the same pooled storage for a later frame. The earlier source
-        // pointer was cleared when sealing, yet the new capture must refresh
+        // Reuse the same pooled storage for a later frame. The source pointer
+        // was cleared when sealing, yet the new capture must refresh
         // every byte and remain detached from subsequent live mutations.
         live_bytes[0] = std::byte{0xA7u};
         backend->capture_memory_snapshot(
@@ -1550,10 +1550,9 @@ public:
         GxBackend::DecodedPacketRunCacheEntry::GuestDependencySnapshots
             snapshots;
         std::size_t captured_bytes = 0u;
-        // Generation 0 is the "never validated" sentinel, so a fresh snapshot
-        // set is always compared at least once. Every check below drives the
-        // current generation explicitly, which is exactly the "the cache holds a
-        // key whose snapshots were recorded before this guest write batch" case.
+        // Generation 0 is the "never validated" sentinel, so a fresh snapshot set is always compared
+        // at least once. The checks below drive the current generation explicitly, covering a key
+        // whose snapshots were recorded before this guest write batch.
         constexpr std::uint64_t kUnvalidatedGeneration = 0u;
         constexpr std::uint64_t kCurrentGeneration = 7u;
         constexpr std::uint64_t kOtherGeneration = 9u;
@@ -1590,12 +1589,10 @@ public:
                 matched_generation)) {
             return false;
         }
-        // Once an entry is recorded as validated for the generation that
-        // matched, the same generation must short-circuit to "still valid"
-        // without consulting guest memory. That is the property the per-frame
-        // replay path relies on: the write below is deliberately NOT reflected
-        // in a new generation, exactly as a write that lands after the frame's
-        // snapshot can never reach this replay.
+        // Once an entry is recorded as validated for the generation that matched, the same generation
+        // must short-circuit to "still valid" without consulting guest memory. The per-frame replay path
+        // relies on that. The write below is not reflected in a new generation, so it cannot reach this
+        // replay, just as a write after the frame's snapshot cannot.
         live[17] = std::byte{0x5A};
         if (!GxBackend::decoded_packet_run_dependencies_match(
                 &memory, matched_generation, kCurrentGeneration, snapshots,

@@ -4,13 +4,13 @@
 // rings, draw submission, and presentation.
 //
 // Frame pipelining: kFramesInFlight frames are recorded ahead of the GPU;
-// begin_frame() waits only on the fence of frame N - kFramesInFlight.  A full
-// CPU/GPU sync happens exclusively in shutdown() and on resize.
+// begin_frame() waits only on the fence of frame N - kFramesInFlight. A full
+// CPU/GPU sync happens only in shutdown() and on resize.
 //
 // All GX draws target the offscreen EFB (color RGBA8 + depth
-// D24_UNORM_S8_UINT — 24-bit Z parity with the Wii is a binding review
-// amendment).  present() aspect-fits an XFB into the swap-chain backbuffer;
-// that blit is the future post-processing / ray-tracing injection point.
+// D24_UNORM_S8_UINT, which keeps 24-bit Z parity with the Wii). present()
+// aspect-fits an XFB into the swap-chain backbuffer; that blit is where
+// post-processing and ray tracing would be injected.
 //
 // begin_frame() is also the sole PSO-publication point: it drains the
 // PipelineCache completion queue before any command-list recording starts.
@@ -220,9 +220,8 @@ public:
         unsigned frames_in_flight);
     void begin_frame(unsigned frame_slot);
 
-    // Bump-allocates within the current frame segment.  Exhaustion is a
-    // GxFatalError (sized for worst observed frame x margin, never silently
-    // dropped geometry).
+    // Bump-allocates within the current frame segment. Exhaustion is a GxFatalError:
+    // geometry is never dropped silently.
     // Alignment must be a nonzero power of two. Rejected requests do not
     // consume bytes or advance the segment's content generation.
     Allocation allocate(std::size_t size, std::size_t alignment);
@@ -232,33 +231,24 @@ public:
         ImmutableUploadToken& token);
     [[nodiscard]] std::uint64_t reused_bytes() const { return reused_bytes_; }
     [[nodiscard]] std::uint64_t copied_bytes() const { return copied_bytes_; }
-    // Number of upload_immutable() calls this frame. `reused_bytes()` and
-    // `copied_bytes()` are only meaningful *relative to this count*: both are
-    // zero for a frame in which the immutable path was never entered, which is
-    // indistinguishable on the timing line from a frame in which it was entered
-    // and classified every byte as a copy. Retained recordings showed
-    // `decoded-vtx-cache-hits=235` with both byte counters at 0 on the same frame,
-    // and the call count is the one field that separates "the reuse path is not
-    // reached" from "the counters are not observed". The increment is one add on
-    // a path that already does a memcpy or a map lookup, so it is not worth
-    // gating behind a trace flag of its own.
+    // Number of upload_immutable() calls this frame. reused_bytes() and copied_bytes()
+    // are only meaningful relative to this count: both are zero for a frame in which
+    // the immutable path was never entered, which looks the same on the timing line as
+    // a frame in which it was entered and classified every byte as a copy. The call
+    // count is the field that separates "the reuse path is not reached" from "the
+    // counters are not observed". The increment costs one add on a path that already
+    // does a memcpy or a map lookup.
     [[nodiscard]] std::uint64_t immutable_upload_calls() const {
         return immutable_upload_calls_;
     }
 
-    // Peak bytes used within a single frame segment, and the segment size. These
-    // decide whether the ring's configured size is real resident memory or just
-    // reserved address space. The rings are D3D12_HEAP_TYPE_UPLOAD
-    // CreateCommittedResource buffers that are mapped for the life of the
-    // process, so the *reservation* is bytes_per_frame * frames_in_flight --
-    // 240 MiB by default. But a mapped upload heap only has physical pages
-    // committed for the parts that were actually written, so the physical cost
-    // tracks the working set (peak cursor) rather than the reservation. Without
-    // this number, `bytes_per_frame * frames_in_flight` is an upper bound that
-    // reads like a measurement, and on the low-end target that difference decides
-    // whether trimming the defaults is worth anything. Exhaustion is fatal and
-    // loud, so the floor for any reduction is `peak_bytes_per_frame()`, not a
-    // guess.
+    // Peak bytes used within a single frame segment, and the segment size. These show
+    // whether the ring's configured size is resident memory or only reserved address
+    // space. The rings are D3D12_HEAP_TYPE_UPLOAD committed buffers mapped for the life
+    // of the process, so the reservation is bytes_per_frame * frames_in_flight (240 MiB
+    // by default). Physical pages are committed only for the parts that were written,
+    // so the physical cost tracks the peak cursor rather than the reservation. Exhaustion
+    // is fatal, so the floor for any reduction is peak_bytes_per_frame().
     [[nodiscard]] std::size_t peak_bytes_per_frame() const {
         return peak_bytes_per_frame_;
     }
@@ -388,8 +378,8 @@ public:
     // kEfbWidth x kEfbHeight x efb_scale, the shared GX root signature, the
     // present-blit pipeline, and all rings.
     bool initialize(int window_width, int window_height, unsigned efb_scale);
-    // Creates the EFB-peek and pointer-depth resources that used to be made
-    // on first use, which stalled the first frame showing the pointer.
+    // Creates the EFB-peek and pointer-depth resources up front. Creating them on first
+    // use stalled the first frame that showed the pointer.
     void create_first_use_resources();
     void shutdown();                // full GPU drain, then release
     void drain_gpu();               // wait while keeping renderer resources alive
@@ -446,7 +436,7 @@ public:
     // the motion field (grey = still; red/green = +x/+y towards the previous
     // position, 8 pixels to full scale).
     void record_motion_debug_view();
-    // The temporal history no longer matches the picture (scene cut).
+    // The temporal history does not match the picture (scene cut).
     void reset_temporal_history() noexcept { temporal_history_valid_ = false; }
     // Matrix-ring segment advances back whose palettes are still alive while
     // this frame executes (0 outside temporal mode). In temporal mode the
@@ -526,11 +516,11 @@ public:
 
     void draw(const DrawCall& call);
 
-    // EFB copy paths (record into the current command list).  Both run the
+    // EFB copy paths (record into the current command list). Both run the
     // conversion blit (intensity / gamma / 3-tap vertical copy filter /
     // half-scale box / XFB y-scale stretch / depth-source packing) instead
-    // of a raw CopyTextureRegion — Dolphin TextureConverterShaderGen
-    // semantics.  `is_depth_copy` = PE pixel format is Z24 at copy time
+    // of a raw CopyTextureRegion, following Dolphin TextureConverterShaderGen
+    // semantics. `is_depth_copy` is true when the PE pixel format is Z24 at copy time
     // (Dolphin BPStructs BPMEM_TRIGGER_EFB_COPY).
     void copy_efb_to_xfb(const EfbCopyParams& params, XfbTexture& dest);
     [[nodiscard]] bool copy_efb_to_texture(
@@ -546,7 +536,7 @@ public:
     // diagnostic buffers never suppress the required blit/presentation.
     bool present(const XfbTexture* source, bool capture_backbuffer = false);
 
-    // Bring-up diagnostics: record an EFB→readback copy into the current
+    // Bring-up diagnostics: record an EFB-to-readback copy into the current
     // command list (call while recording). Readback and PPM encoding are
     // polled asynchronously after end_frame(); normal rendering never drains
     // the GPU for an opt-in capture.
@@ -623,21 +613,16 @@ public:
     [[nodiscard]] DescriptorRing& srv_ring() { return srv_ring_; }
     [[nodiscard]] unsigned frame_slot() const { return frame_slot_; }
     // Live bytes held by the EFB-copy destination cache, in SCALED bytes (each
-    // destination is allocated at the internal EFB extent, so its `bytes` grows
-    // with efb_scale^2 while the 192 MiB budget stays fixed). Maintained but
-    // previously unreported, which left the one resolution-scaled GPU pool that
-    // is not a render target invisible to every recording: this runtime has three
-    // such pools (this one, the decoded texture map, and the fixed render
-    // targets) and only the fixed ones were observable. Report it against its
-    // budget so a run can say whether it is saturating rather than leaving the
-    // largest resolution-dependent allocation unmeasured.
+    // destination is allocated at the internal EFB extent, so its `bytes` grows with
+    // efb_scale^2 while the 192 MiB budget stays fixed). Reported against its budget so
+    // a run can show whether the pool is saturating. It is a resolution-scaled GPU pool
+    // that is not a render target.
     [[nodiscard]] std::uint64_t efb_copy_dest_bytes() const {
         return efb_copy_dests_bytes_;
     }
-    // The copy-destination byte budget this session is running with (192 MiB
-    // default, GALAXY_EFB_COPY_DEST_BUDGET_MB overridable). Reported next to the
-    // live bytes so a recording states whether the pool is saturating rather than
-    // requiring the reader to know the default.
+    // The copy-destination byte budget this session is running with (192 MiB default,
+    // GALAXY_EFB_COPY_DEST_BUDGET_MB overridable). Reported next to the live bytes so a
+    // recording states whether the pool is saturating.
     [[nodiscard]] static std::uint64_t efb_copy_dest_budget_bytes();
     [[nodiscard]] std::uint64_t last_latency_wait_us() const {
         return last_latency_wait_us_;
@@ -680,15 +665,12 @@ public:
         float u0, float v0, float u1, float v1,
         const std::array<float, 4>& tint);
 
-    // Lazily creates the solid-fill quad root signature/PSO. Unlike the
-    // corner texture, this never depends on game assets, so it always
-    // succeeds once the device exists. Draw-call based: this deliberately
-    // avoids ID3D12GraphicsCommandList::ClearRenderTargetView with a
-    // non-null pRects, which reproducibly faults inside nvwgf2umx.dll
-    // (STATUS_STACK_BUFFER_OVERRUN, confirmed via Application-log Event
-    // 1000) on at least one real driver build when used for the native
-    // settings overlay's panel/text rects. Full-target clears (pRects ==
-    // nullptr) are unaffected and still used elsewhere.
+    // Lazily creates the solid-fill quad root signature/PSO. Unlike the corner texture,
+    // this never depends on game assets, so it always succeeds once the device exists.
+    // Draw-call based on purpose: ClearRenderTargetView with a non-null pRects faulted
+    // inside nvwgf2umx.dll (STATUS_STACK_BUFFER_OVERRUN) on one driver build for the
+    // overlay's panel and text rects. Full-target clears (pRects == nullptr) are
+    // unaffected and still used elsewhere.
     void ensure_native_settings_solid_pipeline_loaded();
     // Draws one flat-colored quad (screen pixel coordinates) via a real
     // draw call rather than a rect-limited clear. No-op (and does not
@@ -993,14 +975,13 @@ private:
     PlacedTextureAllocator efb_copy_heap_{
         D3D12_HEAP_FLAG_ALLOW_ONLY_RT_DS_TEXTURES, 128ull << 20};
 
-    // Native settings overlay: the game's own window-frame corner texture
-    // (extracted read-only from files/LayoutData/FileSelect.arc -- see
-    // galaxy/gx/game_asset_extract.h), drawn at all four panel corners so
-    // the overlay visually reads as part of Super Mario Galaxy's own UI
-    // instead of a flat placeholder rectangle. Loaded lazily and once, the
-    // first time the overlay is shown; every part of this stays optional --
-    // if the asset can't be read/decoded (e.g. a different game dump), the
-    // overlay silently keeps its existing solid-color corners.
+    // Native settings overlay: the game's own window-frame corner texture (extracted
+    // read-only from files/LayoutData/FileSelect.arc; see galaxy/gx/game_asset_extract.h),
+    // drawn at all four panel corners so the overlay reads as part of Super Mario
+    // Galaxy's own UI instead of a flat placeholder rectangle. Loaded lazily and once,
+    // the first time the overlay is shown. Every part of this is optional: if the asset
+    // cannot be read or decoded (for example, a different game dump), the overlay keeps
+    // its solid-color corners.
     Microsoft::WRL::ComPtr<ID3D12RootSignature> ui_texture_root_sig_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> ui_texture_pipeline_;
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> ui_texture_srv_heap_;
@@ -1142,11 +1123,10 @@ private:
     UINT last_stats_present_refresh_count_ = 0;
     std::array<std::uint64_t, 5> telemetry_shown_refreshes_{};
 
-    // EFB->texture copy destinations, keyed by (guest dest address, copy
-    // format, depth-source) — SMG reuses one address with different copy
-    // formats, and each format needs its own converted texture.  The
-    // resource is reused across copies and recreated only on size change;
-    // the TextureCache alias is refreshed per copy (cheap when unchanged).
+    // EFB->texture copy destinations, keyed by (guest dest address, copy format,
+    // depth-source). SMG reuses one address with different copy formats, and each format
+    // needs its own converted texture. The resource is reused across copies and recreated
+    // only on size change; the TextureCache alias is refreshed per copy (cheap when unchanged).
     struct EfbCopyDest {
         Microsoft::WRL::ComPtr<ID3D12Resource> texture;
         UINT width = 0;
@@ -1160,33 +1140,28 @@ private:
         // Resident bytes of `texture`, for the byte budget below.
         std::uint64_t bytes = 0;
     };
-    // BOUNDED. This map holds one committed D3D12 texture per destination key.
+    // Bounded. This map holds one committed D3D12 texture per destination key.
     // Each is that copy's SCALED destination extent at kEfbColorFormat (RGBA8),
     // so the size varies with both the copy's logical extent and the internal
     // scale. At the full 640x456 EFB extent: 1.11 MB at 1x, 17.81 MB at 4x,
-    // 40.08 MB at 6x. (An earlier note here said "~5 MiB at 4x and ~11 MiB at
-    // 6x", which understates a full-extent entry by ~3.5x — enough to mislead
-    // anyone choosing the default budget downward.) The map used to be unbounded
-    // — only a failed allocation (and full shutdown) ever removed an entry — so
-    // every distinct (addr, format, depth, bloom) the game had ever copied to
-    // stayed resident for the life of the process.
+    // 40.08 MB at 6x.
     //
     // Budgeted in BYTES, not entries: the per-entry cost varies with the scale
     // AND with the copy extent, so an entry count cannot bound residency. The
     // accounting charges the driver's own `GetResourceAllocationInfo` size rather
     // than a computed w*h*bpp, so it follows the resource if the format changes.
-    // The default is deliberately well above any plausible per-scene working set
-    // (SMG double-buffers a handful of XFBs across a couple of formats plus one
-    // bloom workspace), so this should not thrash a legitimate set; it stops
-    // unbounded accumulation across scene transitions. Override with
-    // GALAXY_EFB_COPY_DEST_BUDGET_MB; 0 disables the bound.
+    // The default is well above the expected per-scene working set (a handful of
+    // XFBs across a couple of formats plus one bloom workspace), so a legitimate
+    // set should not thrash. Override with GALAXY_EFB_COPY_DEST_BUDGET_MB; 0 disables the bound.
     //
-    // Note for the low-end target: the adapter there reports `vram-mb=128`, but on
-    // Intel integrated graphics that value is a FICTITIOUS compatibility constant
-    // emitted for applications that assume a discrete GPU — those parts have no
-    // separate memory bank, so a DEFAULT-heap texture is system memory either way.
-    // The reason to bound this map is that it was unbounded, not that it
-    // oversubscribes a 128 MB pool; there is no such pool.
+    // Without a bound, only a failed allocation or full shutdown removed an entry, so
+    // every distinct (addr, format, depth, bloom) the game copied to stayed resident for
+    // the life of the process.
+    //
+    // The adapter's reported vram-mb value on integrated graphics is a compatibility
+    // constant, not a separate memory pool: a default-heap texture is system memory
+    // either way. The bound exists because the map was unbounded, not because it
+    // oversubscribes a reported 128 MB pool; there is no such pool.
     std::unordered_map<std::uint64_t, EfbCopyDest> efb_copy_dests_;
     std::uint64_t efb_copy_dests_tick_ = 0;
     std::uint64_t efb_copy_dests_bytes_ = 0;

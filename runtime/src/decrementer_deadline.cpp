@@ -121,7 +121,7 @@ DecrementerDeadlineArm DecrementerDeadlineTracker::on_deadline(
 
     // Rearm from the immutable prior edge so late observations cannot move
     // the hardware phase. Calculate before latching to preserve a fail-closed
-    // state if the process timeline can no longer represent another edge.
+    // state if the process timeline cannot represent another edge.
     const DecrementerDeadlineArm next_arm{
         checked_next_wrap_deadline(arm_.deadline_ticks, now_ticks),
         checked_next_generation(arm_.generation)};

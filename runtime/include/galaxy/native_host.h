@@ -1472,7 +1472,7 @@ private:
     // its task start/resume vectors for explicit native HALT resumes.
     void dsp_native_capture_task_vectors(std::uint16_t start_vector);
     // Forward one CPU->DSP mail word into the coprocessor, waiting (bounded) for
-    // the previous word to be consumed — the hardware to-DSP handshake.
+    // the previous word to be consumed, as the hardware to-DSP handshake does.
     void dsp_native_forward_mail(std::uint32_t mail);
 public:
     // Classifies the 64 DSP channels by their JAudio owner (or sample
@@ -1872,29 +1872,24 @@ private:
     bool cpu_fifo_wrap_{false};
     std::array<std::byte, kWgpipeGatherFastBytes> wgpipe_gather_{};
     std::uint32_t wgpipe_gather_count_{0};
-    // Cumulative bytes copied out of the emulated CP FIFO ring. Replaces a
-    // function-local `static` whose only reader asked whether this was the first
-    // advance, so the whole thing costs one member load instead of a
-    // thread-safe-initialisation guard per advance.
+    // Cumulative bytes copied out of the emulated CP FIFO ring. A member is used
+    // rather than a function-local `static`, so each advance costs one member load
+    // and no thread-safe-initialization guard.
     std::uint64_t cp_ring_bytes_total_{0};
     static constexpr std::size_t kWgpipePeTraceCapacity = 512u;
     static constexpr std::size_t kWgpipeOwnershipTraceCapacity = 8192u;
     bool wgpipe_pe_scan_hint_enabled_{};
     bool wgpipe_pe_ownership_trace_enabled_{};
-    // `GALAXY_PROFILE_WGPIPE` and `GALAXY_DIRECT_WGPIPE_PE_EVENTS` are
-    // launch-time switches, but every guest GX command word and every vertex
-    // byte reaches write_wgpipe_bytes(). Evaluating them through a
-    // function-local `static` costs a thread-safe-initialisation guard
-    // (one acquire load + test + branch) and, for the flag reader itself, a
-    // getenv_s CRT call on *every* write. Resolve both once here and let the
-    // hot path read a plain bool member.
+    // `GALAXY_PROFILE_WGPIPE` and `GALAXY_DIRECT_WGPIPE_PE_EVENTS` are launch-time
+    // switches. write_wgpipe_bytes() runs for every guest GX command word and vertex
+    // byte, so both are resolved once here and the hot path reads plain bool members.
+    // A function-local static would add a thread-safe-initialization guard per call,
+    // and the flag reader would make a getenv_s call on every write.
     bool wgpipe_profile_enabled_{};
     bool direct_wgpipe_pe_events_{};
-    // `GALAXY_TRACE_GX_FIFO_APPEND_PATTERN`. `trace_gx_fifo_append` is called
-    // once per WGPIPE write and once per CP-ring advance, and its gate used to be
-    // a function-local `static` that ran `read_env_flag` — so every one of those
-    // calls paid a thread-safe-initialisation guard, and the gate itself was an
-    // out-of-line call. Resolved once here.
+    // `GALAXY_TRACE_GX_FIFO_APPEND_PATTERN`. trace_gx_fifo_append is called once per
+    // WGPIPE write and once per CP-ring advance, so its gate is resolved once here
+    // rather than per call.
     bool trace_gx_fifo_append_enabled_{};
     std::array<std::uint8_t, 5> wgpipe_pe_ownership_recent_bytes_{};
     std::uint32_t wgpipe_pe_ownership_recent_count_{};
@@ -1905,7 +1900,7 @@ private:
     std::size_t wgpipe_ownership_trace_next_{};
     std::uint64_t wgpipe_pe_trace_overwritten_{};
     std::uint64_t wgpipe_ownership_trace_overwritten_{};
-    // Disc ID returned by DVDLowReadDiskID — the first 0x20 bytes of boot.bin.
+    // Disc ID returned by DVDLowReadDiskID: the first 0x20 bytes of boot.bin.
     std::array<std::byte, 0x20> disc_id_{};
     std::vector<std::byte> disc_ticket_;
     std::vector<std::byte> disc_tmd_;
@@ -1945,25 +1940,18 @@ private:
     std::uint64_t ai_dma_next_interrupt_ticks_{};
     std::uint64_t ai_dma_interrupt_pending_since_ticks_{};
     std::uint64_t ai_dma_last_duration_ticks_{};
-    // STRUCTURALLY INERT — both fields are zero-initialised and NOTHING WRITES
-    // THEM. Verified: `++`/`+=` on either name appears 0 times across
-    // `runtime/src/*.cpp`, `runtime/src/gx/*.cpp` and the headers; no `=`
-    // assignment either; no `resync` logic exists anywhere in `runtime/`; and
-    // the names are unchanged since the initial public snapshot commit.
+    // Both fields are zero-initialized and nothing writes them: no `++`, `+=` or
+    // assignment to either name appears in runtime/src, runtime/src/gx or the headers,
+    // and no resync logic exists in runtime/. The getters therefore always return 0,
+    // and the benchmark report prints that 0 as `ai-dma-resync-events=` and
+    // `ai-dma-resync-missed-buffers=`. Read those as "not measured", not "no problem".
+    // The report prints `ai-dma-missed-buffer-estimate` beside them, and that field is
+    // live, so the inert pair can look like a second, agreeing signal.
     //
-    // So the getters below can only ever return 0, and the benchmark report
-    // prints that 0 as `ai-dma-resync-events=` / `ai-dma-resync-missed-buffers=`.
-    // READ IT AS "NOT MEASURED", NOT AS "NO PROBLEM". Note the report prints
-    // `ai-dma-missed-buffer-estimate` immediately beside them, and THAT one is
-    // live — which makes the inert pair easy to mistake for a second, agreeing
-    // signal.
+    // native_host_tests.cpp asserts both are `== 0`. Those assertions are tautological
+    // and would pass in a build that resynced on every buffer.
     //
-    // Consequence for tests: `native_host_tests.cpp` asserts both are `== 0`
-    // under messages about catch-up not resyncing. Those assertions are
-    // TAUTOLOGIES and would pass in a build that resynced on every buffer.
-    //
-    // Deliberately NOT wired up: nothing in the tree defines what a resync event
-    // is, so incrementing them would mean inventing the semantic. Either define
+    // Not wired up: nothing in the tree defines what a resync event is. Either define
     // the condition and count it, or delete the pair and its assertions.
     std::uint64_t ai_dma_resync_events_{};
     std::uint64_t ai_dma_resync_missed_buffers_{};

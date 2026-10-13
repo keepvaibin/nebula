@@ -7,7 +7,7 @@
 namespace galaxy::scheduler {
 
 // Passive diagnostic state for RMGE01's translated FunctionAsyncExecutor worker.
-// None of this state is consulted by guest scheduling or game-visible memory.
+// Guest scheduling and game-visible memory never read it.
 enum class FunctionAsyncEvent : std::uint32_t {
     WorkerDequeued,
     ExecuteBegin,
@@ -93,9 +93,9 @@ struct FunctionAsyncSummary {
     }
 };
 
-// Two translated workers exist in RMGE01. A larger fixed table makes address
-// reuse explicit while remaining allocation-free and deterministic under
-// diagnostics. Reaped entries are immediately reusable with a new sequence.
+// RMGE01 has two translated workers. A larger fixed table makes address reuse explicit
+// and stays allocation-free and deterministic under diagnostics. Reaped entries are
+// reusable at once, with a new sequence.
 class FunctionAsyncFlightTracker final {
 public:
     static constexpr std::size_t kCapacity = 64u;

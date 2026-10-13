@@ -1,7 +1,7 @@
-// efb_copy.cpp â€” EfbCopyManager: XFB texture registry for display copies.
+// efb_copy.cpp: EfbCopyManager, the XFB texture registry for display copies.
 //
-// Threading: all methods are render-thread only.  The registry_ map and
-// device_ ComPtr are never shared with other threads.
+// Threading: all methods are render-thread only. The registry_ map and device_ ComPtr
+// are never shared with other threads.
 
 #include "galaxy/gx/efb_copy.h"
 #include "galaxy/gx/render_config.h"
@@ -75,14 +75,11 @@ XfbPresentSelection select_xfb_for_present(
     if (requested != nullptr) {
         if (latest != nullptr && requested->frame_stamp < latest->frame_stamp) {
             selection.requested_stale = true;
-            // A valid explicit VI-selected XFB may legitimately trail the
-            // newest GX copy in a double/triple-buffered game. Once the guest
-            // names an XFB, the native renderer must honor that selection
-            // instead of falling forward to latest(); latest() is only for
-            // unknown/pre-VI requests. Note that a buffer the guest is still
-            // naming receives fresh copies every frame, so its stamp advances
-            // with the frame and it does not age out; age only accumulates for
-            // a buffer that has genuinely stopped being written.
+            // A valid explicit VI-selected XFB may trail the newest GX copy in double or triple
+            // buffering. Once the guest names an XFB, render that selection rather than latest();
+            // latest() is only for unknown or pre-VI requests. A buffer the guest keeps naming gets
+            // a fresh copy every frame, so its stamp advances and it never ages out. Age accumulates
+            // only for a buffer that has stopped being written.
             selection.stale_preserved = true;
         }
         selection.selected = requested;
@@ -93,19 +90,14 @@ XfbPresentSelection select_xfb_for_present(
     if (last_valid_selected != nullptr) {
         selection.selected = last_valid_selected;
         selection.missing_preserved = true;
-        // A buffer that is not in the registry cannot receive a copy, so age is
-        // the only signal that the miss is sustained rather than the 1-3 frame
-        // flip jitter this preserve exists for. Past the bound, fall forward to
-        // latest() instead of re-presenting one frozen frame forever -- that is
-        // exactly the multi-frame freeze GALAXY_XFB_MAX_PRESERVE_AGE documents
-        // itself as breaking.
+        // A buffer that is not in the registry cannot receive a copy, so age separates a sustained
+        // miss from the 1-3 frame flip jitter this preserve exists for. Past the bound, fall forward
+        // to latest() instead of re-presenting one frozen frame.
         //
-        // The clock-free `frame_stamp` difference is used rather than the
-        // presentation counter so this cannot drift when presents are skipped.
-        // Only the `missing` case is age-bounded: `stale_preserved` above is
-        // deliberately left unbounded, because a named-but-trailing buffer is
-        // normal double buffering and expiring it is what produces the visible
-        // per-flip black/flash regression.
+        // The clock-free `frame_stamp` difference is used rather than the presentation counter, so
+        // skipped presents cannot change it. Only the `missing` case is age-bounded. `stale_preserved`
+        // above is unbounded: a named but trailing buffer is normal double buffering, and expiring it
+        // causes a black flash on every flip.
         if (max_preserved_age != 0u &&
             current_frame_stamp > last_valid_selected->frame_stamp &&
             current_frame_stamp - last_valid_selected->frame_stamp >
@@ -144,9 +136,7 @@ constexpr std::size_t kMaxIdleXfbTextures = 8u;
 
 }  // namespace
 
-// ---------------------------------------------------------------------------
 // initialize / shutdown
-// ---------------------------------------------------------------------------
 
 bool EfbCopyManager::initialize(ID3D12Device* device, unsigned efb_scale) {
     device_ = device;
@@ -155,8 +145,7 @@ bool EfbCopyManager::initialize(ID3D12Device* device, unsigned efb_scale) {
 }
 
 void EfbCopyManager::shutdown() {
-    // Release all D3D12 resources; std::unordered_map destruction releases
-    // the ComPtrs automatically, but we clear explicitly for clarity.
+    // The map destructor releases the ComPtrs; they are cleared explicitly here as well.
     registry_.clear();
     retired_textures_.clear();
     idle_textures_.clear();
@@ -204,8 +193,8 @@ void EfbCopyManager::recycle_retired_textures(unsigned frame_slot) {
     for (auto& texture : retired) {
         if (texture.texture) {
             if (idle_textures_.size() >= kMaxIdleXfbTextures) {
-                // An idle resource is already fence-safe to release. Admit
-                // current sizes instead of keeping eight cold sizes forever.
+                // An idle resource is already fence-safe to release. Release it so cold sizes do not
+                // accumulate.
                 idle_textures_.erase(idle_textures_.begin());
             }
             idle_textures_.push_back(std::move(texture));
@@ -227,9 +216,7 @@ Microsoft::WRL::ComPtr<ID3D12Resource> EfbCopyManager::acquire_idle_texture(
     return {};
 }
 
-// ---------------------------------------------------------------------------
 // acquire_xfb
-// ---------------------------------------------------------------------------
 
 // GX BP 0x4E is the nine-bit inverse vertical step consumed by the RVL SDK's
 // __GXGetNumXfbLines calculation. PE_COPY_EXECUTE bit 10 controls whether that
@@ -352,10 +339,9 @@ EfbCopySamplingGeometry compute_xfb_sampling_geometry(
     return geometry;
 }
 
-// `compute_scaled_efb_rect` and `compute_scaled_gx_viewport` are defined inline
-// in `include/galaxy/gx/efb_copy.h`. Both are called from `RendererD3D12::draw`,
-// once per draw, and could not be inlined into that translation unit from here.
-// Their bodies and results are unchanged; only their linkage moved.
+// compute_scaled_efb_rect and compute_scaled_gx_viewport are defined inline in
+// include/galaxy/gx/efb_copy.h and called once per draw from RendererD3D12::draw. They are
+// not inlined into that translation unit.
 
 EfbPeekSamplingGeometry compute_efb_peek_sampling_geometry(
     std::uint16_t x,
@@ -411,7 +397,7 @@ XfbTexture* EfbCopyManager::acquire_xfb(
             static_cast<void>(frame_index);
             return &entry;
         }
-        // Wrong size â€” drop the old texture and recreate below.
+        // Size changed: drop the old texture and recreate it below.
         if (entry.texture) {
             retire_texture(entry);
         }
@@ -457,8 +443,8 @@ XfbTexture* EfbCopyManager::acquire_xfb(
     // ALLOW_RENDER_TARGET so copy_efb_to_xfb can blit into it.
     desc.Flags              = D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
 
-    // Initial state: PIXEL_SHADER_RESOURCE â€” we read it in the present blit
-    // before the first EFB copy transitions it to RENDER_TARGET.
+    // Initial state is PIXEL_SHADER_RESOURCE: the present blit reads it before the first EFB
+    // copy transitions it to RENDER_TARGET.
     const D3D12_RESOURCE_STATES initial_state =
         D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
 
@@ -502,9 +488,7 @@ void EfbCopyManager::mark_xfb_copied(
     has_latest_ = true;
 }
 
-// ---------------------------------------------------------------------------
 // latest
-// ---------------------------------------------------------------------------
 
 const XfbTexture* EfbCopyManager::latest() const {
     if (!has_latest_) {

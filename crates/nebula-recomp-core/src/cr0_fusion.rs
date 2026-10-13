@@ -1,67 +1,26 @@
-// Agent 20 -- CR0 record/compare â†’ branch fusion.
+// CR0 record/compare to branch fusion.
 //
-// WHAT IT FIXES
+// `cr_bit(context, k)` reads CR0 bit k. Each recording integer instruction (`andi.`,
+// `add.`) and each `cmpwi`/`cmplwi` emits a CR field build and a read-modify-write of
+// `context->cr`. When the next meaningful line is a CR0 branch, this pass removes that
+// round trip. The C++ compiler does not remove it itself, because opaque helper calls
+// keep `context->cr` in memory.
 //
-// `cr_bit(context, k)` reads CR0 bit k. For every recording integer instruction
-// (`andi.`, `add.`, ...) and every `cmpwi`/`cmplwi`, the translator emits a CR
-// field construction and a read-modify-write of `context->cr`:
-//
-//     context->gpr[5] = context->gpr[3] & 0x00008000u;   // andi. r5,r3,0x8000
-//     galaxy::update_cr0(context, context->gpr[5]);       //   record bit
-//     ...
-//     if ((true) && (galaxy::cr_bit(context, 2u))) goto label_80004180;
-//
-// That CR round-trip is the work this pass removes. Measured on real emitted text
-// over all 701 shards (AgentWork/agent-20/08-cr0-fusion-14290-sites.md):
-// 14 290 such sites -- 9 930 compare-form, 4 360 record-form. And measured on
-// machine code (AgentWork/agent-20/bench/probe_cr_fusion_safe.cpp, pinned
-// clang-cl 23.1.2 at production flags):
-//
-//     record form   46 -> 34 slots   (-12)
-//     compare form  49 -> 33 slots   (-16)
-//
-// clang cannot do this itself: opaque helper calls throughout real bodies keep
-// `context->cr` in memory, so the field construction plus `mov [rcx+652]` plus
-// `shrd` survive every optimisation level.
-//
-// THE CORRECTNESS TRAP THIS PASS WAS WRITTEN TO AVOID
-//
-// The record line **overwrites** `context->gpr[D]` with the recorded value, and
-// the emitted branch tests `context->gpr[D]` -- not the pre-record expression.
-// An earlier version of this pass fused `andi.` by re-testing the mask operand
-// (`(context->gpr[3] & 0x8000u) == 0u`); that is **wrong**, because the guest
-// GPR holds the masked value, so the two are only equal when the mask is
-// idempotent. It happened to agree on the probe input and would have been a
-// silent misexecution in the module. This version therefore never re-derives the
-// operand: it reads the value the translator actually stored.
-//
-// SAFETY MODEL
+// The record line overwrites `context->gpr[D]`, and the branch must test `context->gpr[D]`,
+// not the pre-record expression. Re-deriving the operand is wrong for a non-idempotent mask,
+// so the pass reads the value the translator stored.
 //
 // A fusion requires, on the emitted text:
+//   1. a record pair (`context->gpr[D] = EXPR;` then `galaxy::update_cr0(context,
+//      context->gpr[D]);`) or a `galaxy::compare_(un)signed(context, 0u, A, B);` line;
+//   2. the next meaningful line is a CR0 branch on `cr_bit(context, k)` with `k/4 == 0`
+//      and `k <= 2` (bit 3 is SO = XER[SO], which is not rebuilt here);
+//   3. no label, interior entry or other CR writer in between, enforced by the adjacency
+//      in rule 2;
+//   4. no CTR term in the branch condition, since fusing would need the CTR decrement.
 //
-//   1. a record pair -- `context->gpr[D] = EXPR;` immediately followed by
-//      `galaxy::update_cr0(context, context->gpr[D]);` -- or a
-//      `galaxy::compare_(un)signed(context, 0u, A, B);` line;
-//   2. the next meaningful line to be a CR0 branch testing `cr_bit(context, k)`
-//      with `k/4 == 0` (CR0 only) and `k <= 2` (bit 3 is SO = XER[SO], not
-//      reconstructed here);
-//   3. no label, no interior entry and no other CR writer in between, which the
-//      adjacency requirement in rule 2 enforces;
-//   4. no CTR term in the branch condition -- fusing would have to recreate the
-//      CTR decrement, which this pass does not do.
-//
-// The rewrite keeps the guest's GPR store -- it is architecturally required -- and
-// replaces only the CR construction:
-//
-//     record:   context->gpr[D] = EXPR;
-//               const std::uint32_t cr0_fused_D = context->gpr[D];
-//               if ((true) && (cr0_fused_D == 0u)) goto L;      // update_cr0 gone
-//
-//     compare:  if ((true) && (A > B)) goto L;                 // compare_* gone
-//
-// The compare form is the stronger case: `compare_*` writes no GPR at all, so
-// the entire line disappears and both operands are re-read from `context->gpr[]`,
-// which the branch already had to load.
+// The rewrite keeps the guest GPR store, which the guest needs, and removes only the CR
+// construction. The compare form removes the whole line, because `compare_*` writes no GPR.
 
 /// Which CR0 bit a branch tests.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -95,8 +54,8 @@ pub struct Cr0FusionStats {
     pub declined_ctr_condition: usize,
     pub declined_label_or_entry: usize,
     pub declined_impure_operand: usize,
-    /// Up to a handful of representative declined lines, for the census tool.
-    /// Bounded so a 40 000-function sweep cannot grow it without limit.
+    /// A few representative declined lines, for the census tool.
+    /// Bounded so a large sweep cannot grow it without limit.
     pub decline_samples: Vec<String>,
 }
 
@@ -127,9 +86,8 @@ fn parse_gpr_assign(line: &str) -> Option<u32> {
 
 /// `galaxy::compare_signed(context, 0u, A, B);` -> (signed, A, B)
 ///
-/// Angle brackets are deliberately NOT counted when splitting: `std::int32_t`
-/// contains a `<` with no matching `>`, which silently defeated agent 7's splitter
-/// (their round 39).
+/// Angle brackets are not counted when splitting: a type such as `std::int32_t`
+/// contains a `<` with no matching `>`.
 fn parse_compare(line: &str) -> Option<(bool, String, String)> {
     let t = line.trim();
     let (signed, rest) = if let Some(r) = t.strip_prefix("galaxy::compare_signed(context,") {
@@ -221,19 +179,13 @@ fn rewrite_branch_condition(line: &str, replacement: &str) -> Option<String> {
     ))
 }
 
-/// Fuse every CR0 record/compare + adjacent branch pair in one lowered body.
+/// Fuse every CR0 record/compare with its adjacent branch in one lowered body.
 ///
-/// The scan is **branch-first**, and that ordering is load-bearing. An earlier
-/// revision scanned forward looking for a record and then for the branch that
-/// consumed it; when the record was found the branch was still ahead of the
-/// cursor, and by the time the branch arrived the record was *behind* it, so the
-/// pass could not blank the `update_cr0` line it had already emitted. The visible
-/// symptom was `record_sites = 130` against `declined_label_or_entry = 78347` on
-/// 60 real shards. Looking backward from the branch removes the ordering problem
-/// entirely: everything a fusion needs to rewrite is at or before the cursor.
+/// The scan is branch-first: looking back from the branch keeps every line to rewrite
+/// at or before the cursor.
 ///
-/// Returns the rewritten body and counters. Any site the pass is not certain
-/// about is left exactly as it was.
+/// Returns the rewritten body and counters. Any site the pass is not certain about is
+/// left unchanged.
 pub fn fuse_cr0_branches(body: &str) -> (String, Cr0FusionStats) {
     let mut stats = Cr0FusionStats::default();
     let trailing_newline = body.ends_with('\n');
@@ -300,9 +252,8 @@ pub fn fuse_cr0_branches(body: &str) -> (String, Cr0FusionStats) {
             if assigned != dst {
                 continue;
             }
-            // Name the value the translator actually recorded. The emitted branch
-            // tests `context->gpr[D]`, NOT the pre-record operand -- re-deriving the
-            // operand would be wrong for any non-idempotent mask.
+            // Name the value the translator recorded. The branch tests `context->gpr[D]`, not the
+            // pre-record operand, which is wrong for any non-idempotent mask.
             let name = format!("cr0_fused_{dst}");
             let predicate = record_predicate(bit, &name, negated);
             let Some(rewritten) = rewrite_branch_condition(&lines[i], &predicate) else {
@@ -315,9 +266,9 @@ pub fn fuse_cr0_branches(body: &str) -> (String, Cr0FusionStats) {
             continue;
         }
 
-        // A `{` / `}` or a label is what we expect to see when the CR0 read is not
-        // fed by a fusible record (an interior branch target, a value carried
-        // across a call, a record whose GPR was named differently).
+        // A `{` / `}` or a label is expected when the CR0 read is not fed by a fusible record:
+        // an interior branch target, a value carried across a call, or a record whose GPR is
+        // named differently.
         if stats.decline_samples.len() < 8 {
             stats.decline_samples.push(format!(
                 "no adjacent record before: {}",
@@ -394,8 +345,7 @@ fn compare_predicate(bit: Cr0Bit, left: &str, right: &str, signed: bool, negated
 mod tests {
     use super::*;
 
-    /// The emitted record form, verbatim from
-    /// `D:/NebulaWork/gen3/game/functions_0000.cpp:360-366`.
+    /// The emitted record form.
     fn emitted_record() -> String {
         [
             "    {",
@@ -410,7 +360,7 @@ mod tests {
         .join("\n")
     }
 
-    /// The emitted compare form, from `functions_0000.cpp:370-376`.
+    /// The emitted compare form.
     fn emitted_compare() -> String {
         [
             "    {",
@@ -438,9 +388,8 @@ mod tests {
             out.contains("context->gpr[5] = context->gpr[3] & 0x00008000u;"),
             "the record store must survive:\n{out}"
         );
-        // The branch must test the *recorded* value, which this pass now names in
-        // a temporary. The check is on the semantics, not the spelling: the tested
-        // operand is whatever `context->gpr[D]` held after the record store.
+        // The branch tests the recorded value, named in a temporary. The check is on the
+        // semantics: the tested operand is whatever `context->gpr[D]` held after the record store.
         assert!(
             out.contains("const std::uint32_t cr0_fused_5 = context->gpr[5];"),
             "the recorded value must be named:\n{out}"
@@ -455,12 +404,9 @@ mod tests {
         );
     }
 
-    /// The trap an earlier revision of this pass fell into, pinned as a test.
-    ///
-    /// For `andi. r5,r3,0x8000` the guest GPR holds the MASKED value, so the
-    /// emitted branch tests `gpr[5]`, not `gpr[3] & 0x8000`. Re-deriving the
-    /// operand would be wrong whenever the mask is not idempotent -- and it agreed
-    /// on the probe input, which is exactly why it survived review once.
+    /// For `andi. r5,r3,0x8000` the guest GPR holds the masked value, so the branch tests
+    /// `gpr[5]`, not `gpr[3] & 0x8000`. Re-deriving the operand is wrong whenever the mask
+    /// is not idempotent, and a probe input whose mask is idempotent would not show it.
     #[test]
     fn must_not_retest_the_pre_record_operand() {
         let (out, _) = fuse_cr0_branches(&emitted_record());
@@ -509,10 +455,9 @@ mod tests {
 
     #[test]
     fn declines_a_label_between_record_and_branch() {
-        // A label between the record and the CR0 read means the read is not
-        // necessarily fed by that record: the branch may be an interior entry
-        // reached with CR0 set elsewhere. The pass is branch-first, so it declines
-        // by failing to find an adjacent record rather than by a window scan.
+        // A label between the record and the CR0 read means the read may not come from that
+        // record: the branch can be an interior entry reached with CR0 set elsewhere. Without
+        // an adjacent record the pass declines.
         let body = emitted_record().replace(
             "    if ((true) && (galaxy::cr_bit(context, 2u)))",
             "label_80004180:\n    if ((true) && (galaxy::cr_bit(context, 2u)))",

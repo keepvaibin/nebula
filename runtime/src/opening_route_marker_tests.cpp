@@ -254,8 +254,8 @@ bool completed_opening_prologue_guard() {
         "completed exact registered prologue with true-branch caller qualifies");
     passed &= expect(memory.bytes == before && memory.reads == 24u,
         "completed prologue guard uses 24 bounded plain reads without writes");
-    // All eight earlier retail states reject even if their director is dead:
-    // initially dead Wait must not be confused with a completed prologue.
+    // The eight retail states before this one reject even if their director is dead:
+    // an initially dead Wait must not be confused with a completed prologue.
     for (std::uint32_t nerve = 0x8069F0D0u;
          nerve != kPrologueGameStartNerve; nerve += 4u) {
         memory = completed_prologue_memory();

@@ -71,20 +71,14 @@ private:
     std::atomic<ULONG> references_{1u};
 };
 
-// No D3D device: this fixture stops at a deliberately blocked lease/open, then
-// fails serialization on the retry. It exercises the real flush_disk gate.
+// No D3D device: the fixture stops at a deliberately blocked lease/open, then fails serialization on
+// the retry. It exercises the real flush_disk gate.
 //
-// The base must be ID3D12PipelineLibrary1, not ID3D12PipelineLibrary: the member
-// this attaches to is `ComPtr<ID3D12PipelineLibrary1> pipeline_library_`
-// (pipeline_cache.h) and production obtains it via
-// `device1->CreatePipelineLibrary(..., IID_PPV_ARGS(&pipeline_library_))`, i.e.
-// through the PipelineLibrary1 IID. ID3D12PipelineLibrary1 adds exactly one vtable
-// slot over the base — `LoadPipeline(LPCWSTR, const D3D12_PIPELINE_STATE_STREAM_DESC*,
-// REFIID, void**)` — so handing a `RetryPipelineLibrary*` to that ComPtr is a base-to-
-// derived pointer conversion the compiler rejects, however many other overrides are
-// present. Matching the base and implementing only the new slot is the whole fix;
-// every other override below already belongs to the correct ancestor
-// (ID3D12PipelineLibrary, ID3D12DeviceChild, ID3D12Object, IUnknown).
+// The base must be ID3D12PipelineLibrary1, the interface of the member ComPtr<ID3D12PipelineLibrary1>
+// in pipeline_cache.h. Production gets it through IID_PPV_ARGS with the PipelineLibrary1 IID.
+// ID3D12PipelineLibrary1 adds one vtable slot, LoadPipeline, over the base, so a RetryPipelineLibrary*
+// cannot convert to it. The fixture implements only that new slot. The other overrides belong to the
+// correct ancestors (ID3D12PipelineLibrary, ID3D12DeviceChild, ID3D12Object, IUnknown).
 class RetryPipelineLibrary final : public ID3D12PipelineLibrary1 {
 public:
     unsigned serialize_attempts = 0u;
@@ -351,8 +345,8 @@ struct PipelineCachePersistenceTestAccess {
             std::cout << "[completion-retirement-fixture] stage=" << stage
                       << " exception=" << exception_kind << " existing=" << existing_published
                       << " retired=" << retired << " published=" << published << '\n';
-            // Avoid waiting30s on the known broken preimage. Once retired,
-            // exercise the real get retry through cached stages and mock driver.
+            // Avoid the 30 s wait on the known broken preimage. Once retired, exercise the real get retry through
+            // cached stages and the mock driver.
             ID3D12PipelineState* retry = retired ? cache.get(record, {}, {}) : nullptr;
             const bool retained_existing = !existing_published || retry == existing.Get();
             passed = threw && queue_empty && retired && retry != nullptr && retained_existing &&
@@ -365,13 +359,11 @@ struct PipelineCachePersistenceTestAccess {
         PipelineCache cache;
         set_directory(cache, dir);
         auto* library = new RetryPipelineLibrary;
-        // `Attach` takes exactly `InterfaceType*`, and MSVC's ComPtr declares it
-        // non-template, so a `RetryPipelineLibrary*` is not accepted by template
-        // deduction even though the upcast is implicit. Name the base conversion.
-        // The static_assert keeps the fixture honest if the member's interface type
-        // in pipeline_cache.h ever moves: the base must stay the same type, or the
-        // vtable slot count stops matching what production obtains through
-        // IID_PPV_ARGS.
+        // Attach takes exactly InterfaceType*, and MSVC's ComPtr declares it non-template, so a
+        // RetryPipelineLibrary* is not accepted by template deduction even though the upcast is implicit.
+        // The static_assert keeps the fixture matched if the member's interface type in pipeline_cache.h
+        // moves: the base must stay the same type, or the vtable slot count stops matching what
+        // IID_PPV_ARGS returns.
         static_assert(std::is_base_of_v<
                           ID3D12PipelineLibrary1, RetryPipelineLibrary>,
                       "fixture must derive from the member's exact interface type");
@@ -551,8 +543,8 @@ struct PipelineCachePersistenceTestAccess {
         }
         return false;
     }
-    // The hot path no longer takes job_mutex_ on every request; prove the
-    // atomic gate still exposes a failed worker to the render thread.
+    // The hot path reads an atomic gate instead of taking job_mutex_ on every request. This checks that the gate
+    // still exposes a failed worker to the render thread.
     static bool worker_failure_gate_visible() {
         PipelineCache cache;
         if (cache.worker_failed_.load(std::memory_order_acquire)) return false;
@@ -699,8 +691,8 @@ bool loader_publication_retry(const std::filesystem::path& root, unsigned stage,
         "publication failure retains completed residents without corrupting disk or swallowing unexpected errors");
     if (!shader) passed &= expect(Access::coherent_pso_residents(live),
         "failed warm-list publication rolls back only the current PSO set insertion");
-    // An exclusive open fails if any loader input handle remains open, even
-    // when that handle allowed other readers/writers.
+    // An exclusive open fails if any loader input handle is still open, even one that allowed other
+    // readers and writers.
     HANDLE exclusive = CreateFileW(path.c_str(), GENERIC_READ | GENERIC_WRITE,
         0u, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
     passed &= expect(exclusive != INVALID_HANDLE_VALUE,
@@ -737,7 +729,7 @@ bool shader_pair_publication_retry(const std::filesystem::path& root, unsigned e
     live.flush_disk();
     const auto path = cache_file(root, true);
     const Bytes original = read_bytes(path);
-    Access::seed(live, true, 2u); // earlier pending work must survive
+    Access::seed(live, true, 2u);  // pending work must survive
     Access::seed_stages(live, 3u); // exercise actual producer without GPU/FXC
     galaxy::gx::set_pipeline_cache_persistence_test_load_fault(7u, 0u, exception_kind);
     bool propagated = false;
@@ -830,8 +822,7 @@ bool tail_repair(const std::filesystem::path& root, bool shader, bool add_new, b
     if (after_load) append_bytes(path, tail);
     if (add_new) {
         Access::seed(live, shader, 3u);
-        // A failed first repair must leave the original prefix and tail untouched
-        // and keep the pending entry.
+        // A failed first repair leaves the original prefix and tail untouched and keeps the pending entry.
         const Bytes damaged = read_bytes(path);
         galaxy::gx::set_pipeline_cache_persistence_test_fault(original.size() + 12u, false);
         live.flush_disk();
@@ -865,8 +856,8 @@ bool tail_repair(const std::filesystem::path& root, bool shader, bool add_new, b
     return passed;
 }
 
-// A file lease serializes flushes, but a live cache may have loaded before
-// another writer repaired the tail and added records. Keep that newer prefix.
+// A file lease serializes flushes. A live cache may have loaded before another writer repaired the
+// tail and added records, so the newer prefix is kept.
 bool stale_repair_preserves_other_writer(const std::filesystem::path& root, bool shader) {
     const auto dir = root / "shared";
     PipelineCache seed;
@@ -1024,8 +1015,8 @@ bool damaged_shader_recovery(const std::filesystem::path& root, bool wrong_stage
     const auto path = cache_file(root, true);
     if (!wrong_stage) {
         Bytes damaged = read_bytes(path);
-        // Past the 8-byte file header and 40-byte record header: corrupt a DXBC
-        // payload byte with all lengths and framing intact.
+        // Corrupt a DXBC payload byte past the 8-byte file header and 40-byte record header, with all lengths
+        // and framing intact.
         damaged.at(48u) ^= 1u;
         std::ofstream file(path, std::ios::binary | std::ios::trunc);
         file.write(reinterpret_cast<const char*>(damaged.data()), static_cast<std::streamsize>(damaged.size()));
@@ -1129,8 +1120,8 @@ bool asynchronous_persistence(const std::filesystem::path& dir, bool fail_write,
     passed &= expect(Access::disk_active(cache), "poll leaves held writer outstanding");
     passed &= expect(Access::pending(cache, true) == 1u && Access::pending(cache, false) == 1u,
         "submission does not retire unsaved records");
-    // New shader/PSO publication is independent of the held snapshot. The
-    // worker may only access its immutable blobs and copied identities.
+    // New shader and PSO publication is independent of the held snapshot. The worker touches only its
+    // immutable blobs and copied identities.
     for (bool shader : {true, false}) Access::seed(cache, shader, 2u);
     SetEvent(gate.release);
     Access::finish_disk(cache);
@@ -1164,8 +1155,8 @@ bool asynchronous_persistence(const std::filesystem::path& dir, bool fail_write,
     const auto poll_us = std::chrono::duration<double, std::micro>(polled-poll_begin).count();
     std::cout << "[async-cache-fixture] fail=" << fail_write << " shutdown=" << shutdown_with_work
               << " request-us=" << request_us << " held-writer-poll-us=" << poll_us << '\n';
-    // Five-second gate timeout makes a mistakenly synchronous call measurable
-    // rather than hanging the suite. Allow ample scheduling noise in this check.
+    // The five-second gate timeout makes a mistakenly synchronous call measurable instead of hanging the
+    // suite. The check allows for scheduling noise.
     passed &= expect(request_us < 1000000.0 && poll_us < 1000000.0,
         "normal submission/poll does not wait for held file writes");
     return passed;

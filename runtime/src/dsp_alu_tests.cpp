@@ -39,10 +39,9 @@ bool expect_condition(
     return expect(galaxy::dsp_condition_holds(condition, status) == expected, message);
 }
 
-// RMGE01's final two-channel conversion routine at DSP PC 0x0DB1 runs in
-// SET40/SET15/M0 mode: unsigned master gain times signed mixer sample, followed
-// by ASRNRX with +4 and a saturating AC0.M store.  Keep the scalar expression
-// independent from the ALU helpers so this is a useful differential oracle.
+// RMGE01's two-channel conversion routine at DSP PC 0x0DB1 runs in SET40/SET15/M0 mode: unsigned master
+// gain times signed mixer sample, followed by ASRNRX with +4 and a saturating AC0.M store. The scalar
+// expression stays independent of the ALU helpers, so it works as a differential oracle.
 std::uint16_t reference_rmge01_output_sample(
     std::uint16_t master_gain,
     std::uint16_t mixer_sample) {
@@ -991,11 +990,9 @@ int main() {
     passed &= expect(galaxy::dsp_data_read(mutable_context, 0x1803) == 0x4567,
                      "DSP data helper reads mirrored coefficient ROM after it is loaded");
 
-    // DSP addresses outside DRAM (0x0xxx), coefficient ROM (0x1xxx) and IFX
-    // (0xFxxx) are unmapped: reads return 0 and writes are dropped, with no
-    // fault (as in Dolphin's ReadDMEM/WriteDMEM). JAudio2 reaches this in
-    // normal play when a BGM channel's "not applicable" distance sentinel
-    // becomes a predictor address like 0x7fff.
+    // DSP addresses outside DRAM (0x0xxx), coefficient ROM (0x1xxx) and IFX (0xFxxx) are unmapped. Reads return
+    // 0 and writes are dropped, with no fault, as in Dolphin's ReadDMEM/WriteDMEM. JAudio2 reaches this in normal
+    // play when a BGM channel's "not applicable" distance sentinel becomes a predictor address like 0x7fff.
     passed &= expect(galaxy::dsp_data_read(mutable_context, 0x7fffu) == 0u,
                      "DSP data helper returns zero for an address outside DRAM/COEF/IFX");
     const auto dram_before_unmapped_write = mutable_context.dram[0x0123];
@@ -1471,8 +1468,8 @@ int main() {
             bridge_probe.last_exception == galaxy::DspAcceleratorException::SampleReadEnd,
         "DSP guest-memory bridge forwards accelerator exceptions to the host callback");
 
-    // Generated DSP code calls the header-inline ALU directly; the exported
-    // functions must stay the same semantics, not a second implementation.
+    // Generated DSP code calls the header-inline ALU directly, so the exported functions must keep the same
+    // semantics, not a second implementation.
     {
         bool same = true;
         std::uint64_t state = 0x9E3779B97F4A7C15ull;

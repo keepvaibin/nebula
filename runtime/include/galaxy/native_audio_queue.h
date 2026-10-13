@@ -14,9 +14,9 @@
 
 namespace galaxy::host {
 
-// One control owner. Backend fields belong exclusively to the job until the
-// owner reaps completion. active() deliberately stays true after the job ends
-// so readers cannot race its final writes before join establishes ownership.
+// One control owner. Backend fields belong exclusively to the job until the owner reaps completion.
+// active() stays true after the job ends, so readers cannot race its final writes before join establishes
+// ownership.
 class NativeAudioRecoveryTask {
 public:
     NativeAudioRecoveryTask() = default;
@@ -346,12 +346,10 @@ private:
     NativeAudioPlaybackState state_{NativeAudioPlaybackState::Stopped};
 };
 
-// XAudio invokes OnBufferEnd after the last byte of the completed buffer and
-// before the first byte of its successor.  A GetState observation made in that
-// callback therefore distinguishes a continuously queued stream from a real
-// empty boundary without relying on a later worker-thread snapshot.  Keep an
-// explicit Unobserved value so an unwired callback cannot be mistaken for
-// proof that a successor was present.
+// XAudio invokes OnBufferEnd after the last byte of the completed buffer and before the first byte of its
+// successor. A GetState observation made in that callback therefore distinguishes a continuously queued stream
+// from a real empty boundary, without relying on a later worker-thread snapshot. An explicit Unobserved value
+// keeps an unwired callback from being mistaken for proof that a successor was present.
 enum class NativeAudioBufferEndQueueEvidence : std::uint8_t {
     Unobserved,
     SuccessorQueued,
@@ -364,10 +362,9 @@ enum class NativeAudioEmptyBoundaryDisposition : std::uint8_t {
     FatalCounterDiscontinuity,
 };
 
-// Worker-owned cursor over callback-published empty boundaries. The one-voice
-// design never drains for a rate change, so every observed empty boundary is a
-// real underrun. Coalescing more than one previously unseen boundary is an
-// invariant failure rather than evidence that may be silently discarded.
+// Worker-owned cursor over callback-published empty boundaries. The one-voice design never drains for a rate
+// change, so every observed empty boundary is a real underrun. Coalescing more than one previously unseen
+// boundary is an invariant failure, not something to discard silently.
 class NativeAudioEmptyBoundaryTracker final {
 public:
     // Only after DestroyVoice has quiesced callbacks. Flush may produce
@@ -407,9 +404,8 @@ struct NativeAudioRateLedgerSnapshot {
     std::uint64_t sample_rate_change_events{};
 };
 
-// Generation-local accounting for buffers that reached the native output
-// boundary.  Separate frame totals are required because one aggregate average
-// cannot prove elapsed audio duration across a 32/48 kHz mixed-rate window.
+// Generation-local accounting for buffers that reached the native output boundary. Separate frame totals are
+// required: one aggregate average cannot prove elapsed audio duration across a 32/48 kHz mixed-rate window.
 class NativeAudioRateLedger final {
 public:
     [[nodiscard]] bool record_submission(
@@ -577,13 +573,11 @@ struct NativeAudioStartedWindowSnapshot {
     std::uint64_t buffer_start_callback_core_work_over_2_ms{};
 };
 
-// The audio worker consumes callback evidence only after acquiring the
-// SubmittedBuffer::started release store. This ledger makes each started PCM
-// buffer, its exact active 1.0/1.5 ratio, and its callback core-work duration
-// one proof transaction. The first generation-local buffer may establish a new
-// voice ratio or inherit the state established before the measurement window.
-// Every later buffer must apply exactly at a 32/48 kHz transition and inherit
-// everywhere else.
+// The audio worker consumes callback evidence only after acquiring the SubmittedBuffer::started release store.
+// This ledger makes each started PCM buffer, its exact active 1.0/1.5 ratio and its callback core-work duration
+// one proof transaction. The first generation-local buffer may establish a new voice ratio or inherit the state
+// from before the measurement window. Every later buffer must apply exactly at a 32/48 kHz transition and
+// inherit everywhere else.
 class NativeAudioStartedWindowLedger final {
 public:
     [[nodiscard]] bool record_start(
@@ -724,9 +718,9 @@ private:
     std::uint32_t last_sample_rate_{};
 };
 
-// The first fatal audio reason publishes once.  Registration is synchronized
-// with publication, and a notifier installed after publication is immediately
-// replayed so an early asynchronous failure cannot wait for another guest DMA.
+// The first fatal audio reason publishes once. Registration is synchronized with publication; a notifier
+// installed after publication is replayed immediately, so an early asynchronous failure cannot wait for
+// another guest DMA.
 class NativeAudioFailureNotifier final {
 public:
     using Callback = void (*)(void* user) noexcept;
@@ -811,9 +805,9 @@ private:
         sample_rate;
 }
 
-// XAudio invokes voice callbacks on its own engine thread.  Keep that thread
-// out of queue ownership: callbacks publish facts only, while the audio worker
-// remains the sole authority for IXAudio2SourceVoice state and queue depth.
+// XAudio invokes voice callbacks on its own engine thread. That thread stays out of queue ownership: callbacks
+// publish facts only, while the audio worker remains the sole authority for IXAudio2SourceVoice state and
+// queue depth.
 struct NativeAudioFrequencyRatioLedgerSnapshot {
     std::uint64_t apply_calls{};
     std::uint64_t change_actions{};

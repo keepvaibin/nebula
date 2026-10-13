@@ -1,24 +1,20 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #pragma once
 
-// Native fast paths consumed by the generated RMGE01 module.
+// Native fast paths used by the generated RMGE01 module.
 //
-// Every helper here has the same observable guest result as the checked helper
-// it shadows. Each one proves its own admission in a handful of integer tests
-// and falls back to the complete checked/exact helper for everything it cannot
-// prove: device addresses, unmapped spans, non-finite or subnormal operands,
-// results that sit on a binary32 rounding midpoint, non-default rounding modes,
-// and every FPSCR status consumer. The only deliberate difference is that the
-// native arithmetic paths do not maintain the FPSCR status bits (FPRF, FI, FR
-// and the sticky exception bits) on their fast path; those remain exact on the
-// fallback path and at every instruction that consumes them.
+// Each helper has the same observable guest result as the checked helper it shadows. It
+// proves admission with a few integer tests and otherwise falls back to the exact helper:
+// device addresses, unmapped spans, non-finite or subnormal operands, binary32 rounding
+// midpoints, non-default rounding modes, and any instruction that consumes FPSCR.
+// The native arithmetic paths do not maintain the FPSCR status bits (FPRF, FI, FR, sticky
+// exceptions) on the fast path. Those bits stay exact on the fallback path and wherever
+// they are read.
 //
-// Fast float (GALAXY_FAST_FLOAT=1, the release module): the float helpers run
-// native IEEE arithmetic without the exact fallback. See the "Fast float"
-// section below for what that does and does not reproduce.
+// Fast float (GALAXY_FAST_FLOAT=1, the release module) runs native IEEE arithmetic with no
+// exact fallback. See "Fast float" below.
 //
-// This header is included at the end of galaxy/native_api.h after every guest
-// helper it relies on has been declared.
+// Included at the end of galaxy/native_api.h, after every guest helper it uses is declared.
 
 #include <cmath>
 
@@ -35,9 +31,9 @@ inline constexpr bool kFastFloat = GALAXY_FAST_FLOAT != 0;
 // Flat RAM access
 // ---------------------------------------------------------------------------
 
-// Byte size of the RAM alias selected by the top address nibble. Zero for every
-// non-RAM nibble, so an unmapped or device address can never pass the span
-// test. MEM1 aliases: 0x0, 0x8, 0xC. MEM2 aliases: 0x1, 0x9, 0xD.
+// Byte size of the RAM alias selected by the top address nibble. Zero for every non-RAM
+// nibble, so an unmapped or device address never passes the span test. MEM1 aliases: 0x0,
+// 0x8, 0xC. MEM2 aliases: 0x1, 0x9, 0xD.
 inline constexpr std::uint32_t kFlatAliasBytes[16] = {
     0x01800000u, 0x04000000u, 0u, 0u, 0u, 0u, 0u, 0u,
     0x01800000u, 0x04000000u, 0u, 0u, 0x01800000u, 0x04000000u, 0u, 0u,
@@ -57,10 +53,9 @@ GALAXY_ALWAYS_INLINE bool flat_span(std::uint32_t address, std::uint32_t width) 
 
 GALAXY_ALWAYS_INLINE std::byte* flat_base(const GuestMemoryV1* memory) noexcept {
 #if GALAXY_FASTMEM_ACTIVE && !defined(GALAXY_FASTMEM_KEEP_NULL_FALLBACK)
-    // A fastmem module needs the flat view: the runtime refuses to start one
-    // without it (kModuleTransferFlagRequiresFlatMemory). Telling the compiler
-    // the view exists removes the null-view fallback that it otherwise
-    // duplicated around every memory access.
+    // A fastmem module needs the flat view. The runtime refuses to start one without it
+    // (kModuleTransferFlagRequiresFlatMemory). Declaring the view removes the null-view fallback
+    // the compiler would otherwise emit around every memory access.
     std::byte* const base = memory->flat_guest_base;
     __builtin_assume(base != nullptr);
     return base;
@@ -76,10 +71,9 @@ GALAXY_ALWAYS_INLINE bool wgpipe_address(std::uint32_t address) noexcept {
            (address & 0xFFFFF000u) == 0x0C008000u;
 }
 
-// Appends one guest store's big-endian bytes to the host's 32-byte gather
-// buffer without a device-dispatch call. The host publishes the buffer only
-// when no FIFO diagnostic is active; a burst boundary is flushed through the
-// host callback exactly as the device path does.
+// Appends one guest store's big-endian bytes to the host's 32-byte gather buffer without a
+// device-dispatch call. The host publishes the buffer only when no FIFO diagnostic is
+// active. Burst boundaries flush through the host callback, as on the device path.
 template <std::size_t Width>
 GALAXY_ALWAYS_INLINE bool wgpipe_append(
     GuestMemoryV1* memory,
@@ -145,13 +139,12 @@ GALAXY_NOINLINE void checked_store_slow(
     checked_store<T>(memory, address, value, services, guest_pc);
 }
 
-// Flat store: RAM spans write through the shared guest view with no
-// publication (ABI 25, flush-based coherency). On the Wii a CPU store lands in
-// the data cache; the GP and DSP observe it only after dcbf/dcbst (DCFlushRange,
-// DCStoreRange), DMA, or the write-gather pipe. The translator therefore
-// publishes dirty lines from the cache instructions (dcache_flush_line below)
-// and the host publishes its own DMA/device writes. Gather-pipe stores append
-// in place. Everything else keeps the checked device/fault path.
+// Flat store. RAM spans write through the shared guest view with no publication (ABI 25,
+// flush-based coherency). On Wii a CPU store lands in the data cache, and the GP and DSP see
+// it only after dcbf/dcbst (DCFlushRange, DCStoreRange), DMA, or the write-gather pipe. The
+// translator publishes dirty lines from the cache instructions (dcache_flush_line below), and
+// the host publishes its own DMA and device writes. Gather-pipe stores append in place.
+// Everything else uses the checked device/fault path.
 template <typename T>
 GALAXY_ALWAYS_INLINE void store(
     std::byte* base,
@@ -186,10 +179,9 @@ GALAXY_ALWAYS_INLINE void store(
     checked_store_slow<T>(memory, address, value, services, guest_pc);
 }
 
-// Stores addressed from r1, the stack pointer. The stack is RAM, never the
-// write-gather pipe, so a fastmem module writes straight through the flat view
-// without the pipe test (any other non-RAM address would still fault into the
-// device path).
+// Stores addressed from r1, the stack pointer. The stack is RAM and never the write-gather
+// pipe, so a fastmem module writes through the flat view without the pipe test. Any other
+// non-RAM address still faults into the device path.
 template <typename T>
 GALAXY_ALWAYS_INLINE void store_stack(
     std::byte* base,
@@ -262,10 +254,9 @@ GALAXY_ALWAYS_INLINE void load_fpr_single(
     const std::uint64_t widened =
         widen_f32_bits(load_u32(base, memory, address, services, guest_pc));
     context->fpr_bits[index] = widened;
-    // lfs also fills ps1 under HID2[PSE]. The release (fast-float) module
-    // writes it unconditionally: SMG enables paired singles in
-    // __init_hardware and never disables them, and with PSE clear ps1 is
-    // unobservable.
+    // lfs also fills ps1 under HID2[PSE]. The release (fast-float) module writes it
+    // unconditionally. SMG enables paired singles in __init_hardware and never disables them,
+    // and with PSE clear ps1 is unobservable.
     if constexpr (kFastFloat) {
         context->ps1_bits[index] = widened;
     } else if (paired_singles_enabled(context)) {
@@ -379,11 +370,9 @@ GALAXY_ALWAYS_INLINE void psq_store(
             return;
         }
     }
-    // Quantized stores (u8/u16/s8/s16 with the GQR scale) and binary32 stores
-    // to the write-gather pipe: lane by lane through store<T>, like any other
-    // translated store (flat RAM without per-store publication, in-place
-    // gather-pipe append, checked device path otherwise). Same quantization
-    // helpers as the exact path.
+    // Quantized stores (u8/u16/s8/s16 with the GQR scale) and binary32 stores to the write-gather
+    // pipe go lane by lane through store<T>, like other translated stores. They use the same
+    // quantization helpers as the exact path.
     if (base != nullptr && (context->hid2 & required) == required &&
         (type == 0u || (type >= 4u && type <= 7u))) GALAXY_LIKELY {
         const std::int32_t scale = psq_store_scale(gqr);
@@ -431,9 +420,9 @@ GALAXY_ALWAYS_INLINE void psq_store(
 // Native floating point
 // ---------------------------------------------------------------------------
 
-// Finite and either zero or normal: the operand class for which native IEEE
-// binary64 arithmetic under nearest-even rounding reproduces the Gekko result
-// bit for bit (NI-mode input flushing cannot change an ordinary operand).
+// Finite and zero or normal. For these operands, native IEEE binary64 arithmetic with
+// nearest-even rounding matches Gekko bit for bit (NI-mode input flushing cannot change an
+// ordinary operand).
 GALAXY_ALWAYS_INLINE bool f64_ordinary(std::uint64_t bits) noexcept {
     const std::uint32_t exponent = static_cast<std::uint32_t>(bits >> 52u) & 0x7FFu;
     return (exponent - 1u) < 0x7FEu || (bits & 0x7FFFFFFFFFFFFFFFull) == 0u;
@@ -444,15 +433,15 @@ GALAXY_ALWAYS_INLINE bool f32_ordinary(std::uint32_t bits) noexcept {
     return (exponent - 1u) < 0xFEu || (bits & 0x7FFFFFFFu) == 0u;
 }
 
-// A binary64 value exactly halfway between two adjacent binary32 values. Only
-// there can rounding the double result to single disagree with rounding the
-// exact result to single, so these take the exact path.
+// A binary64 value exactly halfway between two adjacent binary32 values. Only there can
+// rounding the double result to single differ from rounding the exact result, so these take
+// the exact path.
 GALAXY_ALWAYS_INLINE bool f64_is_single_midpoint(std::uint64_t bits) noexcept {
     return (bits & 0x1FFFFFFFull) == 0x10000000ull;
 }
 
-// Gekko rounds the multiplier of every single-precision multiply to 25
-// significant bits (round half up at fraction bit 27) before multiplying.
+// Gekko rounds the multiplier of every single-precision multiply to 25 significant bits
+// (round half up at fraction bit 27) before multiplying.
 GALAXY_ALWAYS_INLINE std::uint64_t round_multiplier_25(std::uint64_t bits) noexcept {
     return (bits + 0x0000000008000000ull) & 0xFFFFFFFFF0000000ull;
 }
@@ -482,9 +471,8 @@ GALAXY_ALWAYS_INLINE void commit_single(
     }
 }
 
-// Rounds an ordinary binary64 result to binary32 when that rounding is
-// provably the same as rounding the exact value. Returns false on a midpoint,
-// overflow or a subnormal single.
+// Rounds an ordinary binary64 result to binary32 when that matches rounding the exact value.
+// Returns false on a midpoint, overflow or subnormal single.
 GALAXY_ALWAYS_INLINE bool narrow_result(double value, std::uint32_t& f32_bits) noexcept {
     const std::uint64_t bits = std::bit_cast<std::uint64_t>(value);
     if (!f64_ordinary(bits) || f64_is_single_midpoint(bits)) {
@@ -601,24 +589,22 @@ GALAXY_NOINLINE inline void scalar_frsp_exact(
 // Fast float
 // ---------------------------------------------------------------------------
 //
-// GALAXY_FAST_FLOAT=1 selects native IEEE arithmetic for every Gekko float
-// instruction the helpers below cover, with no exact fallback:
-//   - binary64 operations run as written; the single-precision forms compute
-//     in binary64 and round once to binary32 (held widened, as the register
-//     file always is);
-//   - fmuls/fmadds/ps_mul*/ps_madd* round the multiplier to 25 significant
-//     bits first, as the hardware does;
-//   - the fmadd family is a fused multiply-add; paired singles compute both
-//     lanes in one binary64 vector;
+// GALAXY_FAST_FLOAT=1 selects native IEEE arithmetic for every Gekko float instruction these
+// helpers cover, with no exact fallback:
+//   - binary64 operations run as written. Single-precision forms compute in binary64 and
+//     round once to binary32, held widened as the register file always is.
+//   - fmuls, fmadds, ps_mul* and ps_madd* round the multiplier to 25 significant bits first,
+//     as the hardware does.
+//   - The fmadd family is a fused multiply-add. Paired singles compute both lanes in one
+//     binary64 vector.
 //   - fctiwz saturates like the hardware and reports no exception.
-// Not reproduced: FPSCR status bits (FPRF, FI, FR, sticky exceptions), NaN
-// payload and sign propagation, non-nearest rounding modes, and binary32
-// double-rounding corners. Denormals follow the host MXCSR; the runtime sets
-// flush-to-zero and denormals-are-zero on the simulation thread for this mode
-// (the Gekko's non-IEEE mode). This is the accuracy class of Dolphin's JIT and
-// WiiCompiled, not the bit-exact model of the exact paths, and it exists
-// because the exact fallback calls kept the host compiler from holding guest
-// floats in registers.
+// Not reproduced: FPSCR status bits (FPRF, FI, FR, sticky exceptions), NaN payload and sign
+// propagation, non-nearest rounding modes, and binary32 double-rounding corners. Denormals
+// follow the host MXCSR. The runtime sets flush-to-zero and denormals-are-zero on the
+// simulation thread in this mode, matching Gekko's non-IEEE mode. The accuracy class is that
+// of Dolphin's JIT and WiiCompiled, not the bit-exact model of the exact paths. The mode
+// exists because the exact fallback calls stop the host compiler from keeping guest floats
+// in registers.
 namespace fast_float_detail {
 
 GALAXY_ALWAYS_INLINE double as_f64(std::uint64_t bits) noexcept {
@@ -695,9 +681,9 @@ GALAXY_ALWAYS_INLINE void scalar_frsp_fast(
     }
 }
 
-// fctiwz: truncating binary64 to int32. cvttsd2si yields INT32_MIN for NaN
-// and for both overflow directions; the hardware saturates positive overflow
-// to INT32_MAX. The high word matches the exact helper.
+// fctiwz: truncates binary64 to int32. cvttsd2si yields INT32_MIN for NaN and for both
+// overflow directions. The hardware saturates positive overflow to INT32_MAX. The high word
+// matches the exact helper.
 GALAXY_ALWAYS_INLINE std::uint64_t fctiwz_bits(std::uint64_t source) noexcept {
     const double value = as_f64(source);
     std::int32_t integer = _mm_cvttsd_si32(_mm_set_sd(value));
@@ -1158,15 +1144,13 @@ GALAXY_ALWAYS_INLINE void paired_sum(
 // Register-resident floating point
 // ---------------------------------------------------------------------------
 //
-// Bodies produced with register residency keep the guest FPR and PS1 files in
-// two function-local arrays (fpr[32], ps1[32]) and hand them to these `_r`
-// overloads instead of reading `context->fpr_bits`/`ps1_bits`. The fast paths
-// touch only the arrays; FPSCR, HID2, GQR and CR stay in `context`. The exact
-// fallbacks are the unchanged index-based helpers: before one runs, every
-// register it may read (and the target, so an untouched PS1 half survives) is
-// copied into `context`, and afterwards the target is copied back. The arrays
-// never escape to an out-of-line call, so the host compiler can keep them in
-// registers.
+// Bodies produced with register residency keep the guest FPR and PS1 files in function-local
+// arrays (fpr[32], ps1[32]) and pass them to these `_r` overloads instead of
+// `context->fpr_bits`/`ps1_bits`. Fast paths touch only the arrays. FPSCR, HID2, GQR and CR
+// stay in `context`. The exact fallbacks are the unchanged index-based helpers: before one
+// runs, every register it may read, and the target (so an untouched PS1 half survives), is
+// copied into `context`; afterwards the target is copied back. The arrays never escape to an
+// out-of-line call, so the compiler can keep them in registers.
 
 namespace resident_detail {
 
@@ -1639,11 +1623,10 @@ GALAXY_NOINLINE inline void call_guest_indirect_boundary(
         caller_pc);
 }
 
-// A `bctrl`/`bclrl` whose target has a published direct entry calls the native
-// body in place. The runtime leaves the entry null for every function that
-// owns a host-side transaction, and withdraws the whole table while an
-// external interrupt dispatch is live or a device event is pending, so those
-// calls keep the audited service boundary.
+// A `bctrl`/`bclrl` whose target has a published direct entry calls the native body in place.
+// The runtime leaves the entry null for functions that own a host-side transaction, and
+// withdraws the whole table while an external interrupt dispatch is live or a device event is
+// pending. Those calls keep the audited service boundary.
 GALAXY_ALWAYS_INLINE void call_guest_indirect(
     const NativeServicesV1* services,
     std::uint32_t guest_address,

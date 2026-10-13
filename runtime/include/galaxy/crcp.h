@@ -13,9 +13,9 @@ inline constexpr std::uint32_t call_return_checkpoint_profile_key(
     return 0xF0000000u | (return_pc & 0x0FFFFFFFu);
 }
 
-// The shared profile report is capped to its highest-cycle records. Add a reversible rank-only bias to each pseudo-edge sample so a
-// short checkpoint cannot disappear behind hundreds of real child edges.
-// Consumers recover exact measured cycles as total - calls * this value.
+// The shared profile report keeps only the highest-cycle records. Each pseudo-edge
+// sample gets a reversible rank-only bias, so a short checkpoint is not hidden behind
+// real child edges. Consumers recover exact cycles as total - calls * bias.
 inline constexpr std::uint64_t kCallReturnCheckpointProfileRankBias = 1ull << 48;
 
 inline void crcp(

@@ -1,7 +1,7 @@
 #pragma once
 
 // Raw CP/XF/BP register bitfield decode for the GX command stream.
-// Header-only constexpr, no Windows/D3D12 includes — unit-testable offline
+// Header-only constexpr, no Windows/D3D12 includes. Unit-testable offline
 // against captured .gxdump streams.
 //
 // Bit layouts follow the Wii GX hardware registers as programmed by the
@@ -109,9 +109,9 @@ inline constexpr std::uint8_t kTevKSelBase = 0xF6;      // 0xF6-0xFD, 2 stages/r
 // ---------------------------------------------------------------------------
 namespace cp {
 // 0x00/0x10/0x20: real-hardware CP registers of unknown purpose (Dolphin's
-// own CPMemory.h names them UNKNOWN_00/UNKNOWN_10/UNKNOWN_20). Confirmed
-// inert for vertex/geometry state in Dolphin's LoadCPReg reference
-// implementation — stored but never consulted by any downstream state.
+// own CPMemory.h names them UNKNOWN_00/UNKNOWN_10/UNKNOWN_20). Inert for
+// vertex/geometry state in Dolphin's LoadCPReg reference: stored, never
+// consulted by any downstream state.
 inline constexpr std::uint8_t kUnknown00 = 0x00;
 inline constexpr std::uint8_t kUnknown10 = 0x10;
 inline constexpr std::uint8_t kUnknown20 = 0x20;
@@ -143,14 +143,13 @@ inline constexpr std::uint16_t kStatusRegsBase = 0x1000;
 inline constexpr std::uint16_t kNumChannels = 0x1009;
 inline constexpr std::uint16_t kDualTexTrans = 0x1012;  // bit 0 = dual-tex
                                                         // (post-matrix) enable
-// 0x1013-0x1017: XFMEM_UNKNOWN_GROUP_1, genuinely unknown/undocumented on
-// real hardware (Dolphin's own XFRegWritten default case: analytics/log
-// only, no xfmem state mutation). 0x1018-0x1019: XFMEM_SETMATRIXINDA/B, the
-// XF-side latch of the current position/texture matrix index. This backend
-// already sources every matrix-index consumer (vertex_loader.cpp,
-// shader_gen.cpp, gx_backend.cpp) exclusively from the CP-side
-// kMatrixIndexA/kMatrixIndexB copy the real SDK keeps synchronized, so the
-// XF latch is write-only/unread here — inert, not stubbed.
+                                                        // 0x1013-0x1017: XFMEM_UNKNOWN_GROUP_1, genuinely unknown/undocumented on real
+                                                        // hardware (Dolphin's own XFRegWritten default case: analytics/log only, no xfmem
+                                                        // state mutation). 0x1018-0x1019: XFMEM_SETMATRIXINDA/B, the XF-side latch of the
+                                                        // current position/texture matrix index. This backend sources every matrix-index
+                                                        // consumer (vertex_loader.cpp, shader_gen.cpp, gx_backend.cpp) from the CP-side
+                                                        // kMatrixIndexA/kMatrixIndexB copy that the real SDK keeps synchronized. The XF
+                                                        // latch is therefore never read here; it is ignored, not stubbed.
 inline constexpr std::uint16_t kUnknownGroup1Base = 0x1013;  // 0x1013-0x1019
 inline constexpr std::uint16_t kAmbientColorBase = 0x100A;  // 0x100A-0x100B
 inline constexpr std::uint16_t kMaterialColorBase = 0x100C; // 0x100C-0x100D
@@ -466,9 +465,9 @@ struct FogParams {
 };
 
 // GX fog A (BP 0xEE) and C (BP 0xF1 bits 0-19) are 20-bit packed floats:
-// mantissa bits 0-10, exponent bits 11-18, sign bit 19.  Reassembled into an
-// IEEE-754 single as (sign<<31)|(exp<<23)|(mant<<12) — Dolphin BPMemory.h
-// FogParam0::FloatValue / FogParam3::GetC.
+// mantissa bits 0-10, exponent bits 11-18, sign bit 19. Reassembled into an
+// IEEE-754 single as (sign<<31)|(exp<<23)|(mant<<12). See Dolphin BPMemory.h,
+// FogParam0::FloatValue and FogParam3::GetC.
 [[nodiscard]] constexpr std::uint32_t fog_param_float_bits(
     std::uint32_t raw20) {
     const std::uint32_t mant = bits(raw20, 0, 11);

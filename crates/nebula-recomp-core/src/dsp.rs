@@ -796,10 +796,8 @@ pub enum DspInstruction {
 
 /// Canonical encoded memory-operand slot for one decoded DSP instruction.
 ///
-/// Slots describe architectural operands, not the order or number of C++
-/// helper calls used by lowering. In particular, a dual parallel load retains
-/// two slots even when both addresses are equal and lowering coalesces the host
-/// read.
+/// Slots describe architectural operands, not the order or number of C++ helper calls used by lowering.
+/// A dual parallel load keeps two slots even when both addresses are equal and lowering coalesces the read.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum DspDecodedMemorySlot {
     Standalone,
@@ -839,9 +837,8 @@ pub struct DspDecodedMemoryOperand {
 
 /// Returns every encoded architectural memory operand in canonical slot order.
 ///
-/// This is the single exhaustive decoder authority shared by generated raw
-/// instruction provenance and install-time timing-plan construction. Fetch is
-/// implicit instruction identity and is deliberately not represented here.
+/// The single exhaustive decoder authority, shared by generated raw instruction provenance and
+/// install-time timing-plan construction. Fetch is implicit instruction identity and is not represented here.
 pub fn decoded_memory_operands(instruction: DspInstruction) -> Vec<DspDecodedMemoryOperand> {
     use DspDecodedMemoryAddressSource::{AddressRegister, DirectPage, Static};
     use DspDecodedMemoryDirection::{Read, Write};
@@ -1252,10 +1249,8 @@ fn dsp_raw_input_aggregate_sha256(
     raw_iram_words: &[u16],
     static_memory: DspStaticMemoryImages<'_>,
 ) -> String {
-    // An absent optional image is represented truthfully and deterministically
-    // as a zero-byte component whose digest is SHA-256(empty). The three roles
-    // and their order never change, so absence cannot alias the reviewed full
-    // RMGE01 IRAM/IROM/COEF aggregate.
+    // An absent optional image is a zero-byte component with the digest SHA-256(empty). The three roles and
+    // their order are fixed, so absence cannot alias the full RMGE01 IRAM/IROM/COEF aggregate.
     let components = [
         dsp_raw_input_component_identity("iram", Some(raw_iram_words)),
         dsp_raw_input_component_identity("irom", static_memory.irom_words),
@@ -1275,11 +1270,9 @@ struct DspProgramLayout {
     // BLOOP/BLOOPI this can be the immediate word of a multi-word instruction,
     // not necessarily the instruction's opcode address.
     loop_end_word_addresses: BTreeSet<u16>,
-    /// When true the program was recovered by following control flow over a real
-    /// ucode image that interleaves data with code, so a branch/loop target that
-    /// is not a decoded instruction is lowered as a runtime hard-fail trap rather
-    /// than aborting the whole installation. The strict linear path keeps the
-    /// original hard-fail behavior.
+    /// When true, the program was recovered by following control flow over a ucode image that interleaves data
+    /// with code. A branch or loop target that is not a decoded instruction then lowers to a runtime hard-fail
+    /// trap instead of aborting the installation. The strict linear path keeps the install-time hard failure.
     tolerant: bool,
 }
 
@@ -1324,9 +1317,8 @@ impl DspProgramLayout {
                             "block loop end outside lowered DSP program",
                         );
                     }
-                    // In tolerant mode an unresolved end means this is speculative
-                    // gap-recovered code (or data) that only decoded as a block
-                    // loop; the emitter lowers it as a runtime hard-fail trap.
+                    // In tolerant mode an unresolved end means speculative, gap-recovered code (or data) that only decoded as
+                    // a block loop. The emitter lowers it to a runtime hard-fail trap.
                 }
                 _ => {}
             }
@@ -1450,13 +1442,11 @@ pub fn lower_dsp_program_to_cpp_at_entry(
     )
 }
 
-/// Lower a real DSP ucode image by following control flow from its entry and
-/// interrupt vectors instead of decoding the whole image linearly.  Real ucode
-/// interleaves data/coefficient pools with code, so a linear sweep mis-aligns
-/// instruction boundaries (e.g. a block-loop end lands mid-instruction).  This
-/// reachability walk decodes only the words the DSP actually executes, starting
-/// from `entry_points`, which keeps every branch/loop boundary aligned.  Data
-/// the control flow never reaches is correctly left undecoded.
+/// Lowers a real DSP ucode image by following control flow from its entry and interrupt vectors, instead of
+/// decoding the whole image linearly. Real ucode interleaves data and coefficient pools with code, so a
+/// linear sweep misaligns instruction boundaries (a block-loop end can land mid-instruction). This walk
+/// decodes only the words the DSP executes, starting from `entry_points`. Data that control flow never
+/// reaches stays undecoded.
 pub fn lower_dsp_program_from_entry_vectors(
     start_address: u16,
     words: &[u16],
@@ -1491,10 +1481,9 @@ pub fn lower_dsp_program_from_entry_vectors_with_static_memory(
     )
 }
 
-/// Lower a DSP program with optional ROM images while deriving every generated
-/// identity and provenance value from the unspliced raw IRAM words. The
-/// executable image may contain a sparse IROM splice used only for CFG recovery;
-/// it is never treated as the raw IRAM identity.
+/// Lowers a DSP program with optional ROM images, deriving every generated identity and provenance value
+/// from the unspliced raw IRAM words. The executable image may contain a sparse IROM splice used only for
+/// CFG recovery. It is never the raw IRAM identity.
 pub fn lower_dsp_program_from_entry_vectors_with_static_memory_and_raw_provenance(
     start_address: u16,
     executable_words: &[u16],
@@ -1626,10 +1615,9 @@ fn emit_program_identity_definitions(
     cpp.push_str(raw_input_aggregate_sha256);
     cpp.push_str("\";}\n\n");
 
-    // These are literal generator identities, deliberately not values read
-    // from a runtime header.  Old generated C++ has no symbols and fails to
-    // link; a source/runtime mismatch that still exports them fails the host's
-    // explicit version/capability check before the DSP worker starts.
+    // Literal generator identities, not values read from a runtime header. Generated C++ from an earlier
+    // generator lacks these symbols and fails to link. A source/runtime mismatch that still exports them fails
+    // the host's version and capability check before the DSP worker starts.
     cpp.push_str("extern \"C\" std::uint32_t ");
     cpp.push_str(function_name);
     cpp.push_str("_generated_probe_contract_version() {\n");
@@ -1712,9 +1700,9 @@ fn lower_decoded_instructions(
     cpp.push_str(function_name);
     cpp.push_str("(galaxy::DspContext& ctx) {\n");
     cpp.push_str("    (void)ctx;\n");
-    // Raw instruction provenance is a test/capture instrument that the product
-    // never installs. It is compiled only into provenance builds; a product
-    // build handed an observer hard-fails instead of silently not observing.
+    // Raw instruction provenance is a test and capture instrument that the product never installs. It is
+    // compiled only into provenance builds. A product build handed an observer hard-fails rather than silently
+    // not observing.
     cpp.push_str(&format!("#if !defined({DSP_RAW_PROVENANCE_MACRO})\n"));
     cpp.push_str("    if (ctx.raw_instruction_boundary_observer != nullptr) {\n");
     cpp.push_str(&format!(
@@ -1807,12 +1795,10 @@ fn bind_data_access_pc(body: &str, address: u16) -> String {
     )
 }
 
-/// Conservative test for whether a lowered instruction body can observe the
-/// architectural PC: it reads or writes `ctx.pc`, leaves the function, or hands
-/// the context to any helper other than the PC-carrying data accessors. Only
-/// bodies that cannot observe it skip the entry `ctx.pc` store; lines compiled
-/// only into provenance builds are excluded because those builds always store
-/// the PC before the observer scope.
+/// Conservative test for whether a lowered instruction body can observe the architectural PC. It reads or
+/// writes `ctx.pc`, leaves the function, or passes the context to any helper other than the PC-carrying
+/// data accessors. Only bodies that cannot observe the PC skip the entry `ctx.pc` store. Lines compiled only
+/// into provenance builds are excluded, because those builds always store the PC before the observer scope.
 fn lowered_body_observes_pc(body: &str) -> bool {
     let mut in_provenance_block = false;
     for line in body.lines() {
@@ -1964,11 +1950,10 @@ fn emit_raw_instruction_boundary_scope(
     cpp.push_str("#endif\n");
 }
 
-/// Decode every instruction reachable from `entry_points` by following static
-/// control flow (fallthrough, immediate jumps/calls, loop bodies).  Computed
-/// register jumps/calls cannot be followed statically; their targets are reached
-/// through the compiled-label dispatch at runtime and must be decoded via some
-/// other static edge.  Returns the reachable instructions sorted by address.
+/// Decodes every instruction reachable from `entry_points` by static control flow (fallthrough, immediate
+/// jumps and calls, loop bodies). Computed register jumps and calls cannot be followed statically. Their
+/// targets are reached through the compiled-label dispatch at runtime and must be decoded via another
+/// static edge. Returns the reachable instructions sorted by address.
 fn decode_dsp_reachable(
     start_address: u16,
     words: &[u16],
@@ -2010,15 +1995,12 @@ fn decode_dsp_reachable(
     Ok(decoded.into_values().collect())
 }
 
-/// Recover code that is only reachable through computed (register) jumps — the
-/// jump-table handlers a static CFG walk cannot follow.  Every gap between two
-/// strictly-reachable instructions begins at an aligned instruction boundary
-/// (the fallthrough of the instruction before the gap), so each gap start is a
-/// sound place to resume decoding.  This walk is tolerant: words that do not
-/// decode, or that would overlap already-covered code, are treated as data and
-/// skipped rather than hard-failing, since they are never proven to execute.
-/// (A runtime computed jump into an undecoded address still hard-fails through
-/// the compiled-label dispatch.)
+/// Recovers code reachable only through computed (register) jumps, such as jump-table handlers that a
+/// static CFG walk cannot follow. Each gap between two strictly reachable instructions starts at an aligned
+/// instruction boundary (the fallthrough of the instruction before the gap), so it is a sound place to
+/// resume decoding. This walk is tolerant: words that do not decode, or would overlap covered code, are
+/// treated as data and skipped, since they are never shown to execute. A runtime computed jump into an
+/// undecoded address still hard-fails through the compiled-label dispatch.
 fn recover_dsp_gaps(start_address: u16, words: &[u16], decoded: &mut Vec<DecodedDspInstruction>) {
     let mut map: BTreeMap<u16, DecodedDspInstruction> =
         decoded.iter().map(|inst| (inst.address, *inst)).collect();
@@ -4514,10 +4496,9 @@ fn emit_dynamic_dram_store(
 ) -> Result<(), DspLoweringError> {
     let source_expression = register_read_expression(source);
     let address_index = address_register_index(address);
-    // Exact RMGE01 external-interrupt selection publication.  Emit the probe
-    // at this statically known instruction instead of branching in the common
-    // dsp_dram_write path used by millions of mixer stores.  The runtime only
-    // installs the recorder after validating the generated ucode SHA-1.
+    // Exact RMGE01 external-interrupt selection publication. The probe is emitted at this statically known
+    // instruction, rather than branching in the common dsp_dram_write path used by millions of mixer stores.
+    // The runtime installs the recorder only after validating the generated ucode SHA-1.
     if is_rmge01_selection_publication_hook(decoded) {
         cpp.push_str(&format!(
             "    const auto selection_0715_address = ctx.ar[{address_index}];\n"
@@ -5196,10 +5177,9 @@ fn unsupported_lowering<T>(
     })
 }
 
-/// A control-flow edge that leaves the lowered program. On the strict linear
-/// path this is a hard installation error. On the tolerant CFG path it means the
-/// edge was reconstructed over a region we treated as data, so it is lowered as
-/// a runtime hard-fail trap instead of failing the whole module.
+/// A control-flow edge that leaves the lowered program. On the strict linear path this is a hard
+/// installation error. On the tolerant CFG path, the edge was reconstructed over a region treated as data,
+/// so it lowers to a runtime hard-fail trap instead of failing the whole module.
 fn bail_or_trap(
     cpp: &mut String,
     layout: &DspProgramLayout,
@@ -5232,12 +5212,10 @@ fn emit_dsp_goto(cpp: &mut String, address: u16) {
     emit_dsp_goto_indented(cpp, address, 4);
 }
 
-/// Emit a hard-fail trap label for every static `goto` target that was not
-/// decoded into a real instruction label. This happens when speculative
-/// gap-recovered code branches into a region we treated as data. The branch can
-/// only be reached if our code/data split was wrong, so it aborts rather than
-/// silently falling through — and it lets the generated unit compile instead of
-/// leaving a dangling label reference.
+/// Emits a hard-fail trap label for every static `goto` target that was not decoded into a real instruction
+/// label. This happens when speculative gap-recovered code branches into a region treated as data. Such a
+/// branch is reached only if the code/data split was wrong. It aborts rather than falling through, and the
+/// generated unit still compiles.
 fn emit_dsp_trap_labels(cpp: &mut String, defined: &BTreeSet<u16>) {
     const NEEDLE: &str = "goto pc_";
     let mut referenced: BTreeSet<u16> = BTreeSet::new();
@@ -5274,11 +5252,10 @@ fn emit_dsp_call_stack_push(cpp: &mut String, return_address: u16, indent_spaces
     ));
 }
 
-/// Computed (register) branch: store the runtime target in `ctx.pc` and jump to
-/// the single shared `pc_dispatch` block, which maps the target to a label. This
-/// replaces emitting a full label switch at every computed branch — for a real
-/// ucode with hundreds of register jumps that is the difference between a
-/// multi-million-line module and a few thousand lines, with no behavior change.
+/// Computed (register) branch: stores the runtime target in `ctx.pc` and jumps to the single shared
+/// `pc_dispatch` block, which maps the target to a label. This avoids a full label switch at every computed
+/// branch. For real ucode with hundreds of register jumps, that is the difference between a multi-million-line
+/// module and a few thousand lines, with no behaviour change.
 fn emit_dynamic_dsp_goto(cpp: &mut String, target_expression: &str, indent_spaces: usize) {
     if target_expression != "ctx.pc" {
         emit_indent(cpp, indent_spaces);
@@ -9104,10 +9081,9 @@ mod tests {
 
     #[test]
     fn cfg_lowering_recovers_code_only_reachable_past_an_unconditional_jump() {
-        // 0x0000: JMP 0x0004 (jumps over 0x0002/0x0003), 0x0004: HALT.
-        // 0x0002: HALT and 0x0003: NOP are never reached from the entry, so a
-        // pure control-flow walk misses them; gap recovery must still decode them
-        // (they stand in for jump-table handlers reached only by computed jumps).
+        // 0x0000: JMP 0x0004 (jumps over 0x0002/0x0003), 0x0004: HALT. 0x0002 (HALT) and 0x0003 (NOP) are never
+        // reached from the entry. A pure control-flow walk misses them, so gap recovery must still decode them.
+        // They stand in for jump-table handlers reached only by computed jumps.
         let words = [0x029f, 0x0004, 0x0021, 0x0000, 0x0021];
         let generated =
             lower_dsp_program_from_entry_vectors(0x0000, &words, &[0x0000], "dsp_cfg_gap_test")

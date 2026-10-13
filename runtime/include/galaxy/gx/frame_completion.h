@@ -8,12 +8,11 @@
 namespace galaxy::gx {
 
 inline constexpr std::uint32_t kFramePeCompletionTimeoutMs = 30'000u;
-// Runtime waits are cooperative: one short native wait is followed by an
-// AI/input deadline service pass. First-use pipelines on a valid scene can
-// take several seconds to prepare; the simulation owner must allow the same
-// completion budget as the backend instead of killing a still-progressing
-// frame after two seconds. Slices remain short, and a wedged renderer still
-// fails at the absolute backend deadline without replacing the owned result.
+// Runtime waits are cooperative: one short native wait, then an AI/input deadline service
+// pass. First-use pipeline builds on a valid scene can take several seconds, so the simulation
+// owner allows the same completion budget as the backend rather than aborting a frame that is
+// still progressing. Slices stay short. A wedged renderer still fails at the absolute backend
+// deadline without replacing the owned result.
 inline constexpr std::uint32_t kFramePeCooperativeWaitSliceMs = 1u;
 inline constexpr std::uint32_t kFramePeCooperativeWaitTimeoutMs =
     kFramePeCompletionTimeoutMs;
@@ -23,22 +22,20 @@ struct FramePeCooperativeWaitStep {
     bool timed_out = false;
 };
 
-// Pure policy helper used by the runtime cooperative wait loop. Tests inject
-// elapsed time directly, keeping boundary/overflow behavior deterministic.
+// Pure policy helper for the cooperative wait loop. Tests inject elapsed time directly, which
+// keeps boundary and overflow behaviour deterministic.
 [[nodiscard]] FramePeCooperativeWaitStep frame_pe_cooperative_wait_step(
     std::uint64_t elapsed_ms,
     std::uint32_t timeout_ms = kFramePeCooperativeWaitTimeoutMs,
     std::uint32_t slice_ms = kFramePeCooperativeWaitSliceMs);
 
-// One cooperative PE-wait service slice. The native DSP MRAM rendezvous must
-// run first because its worker is synchronously blocked until the CPU-owned
-// guest-memory span is committed. AI then advances without a guest context:
-// the PE wait already owns an undelivered VI edge, so entering a nested guest
-// interrupt handler here could abandon that frame's completion token.
+// One cooperative PE-wait service slice. The native DSP MRAM rendezvous runs first: its worker
+// is blocked until the CPU-owned guest-memory span is committed. AI then advances without a
+// guest context. The PE wait already owns an undelivered VI edge, and a nested guest interrupt
+// handler here could abandon that frame's completion token.
 //
-// This is header-only so the production ordering can be exercised with the
-// real DSP transaction boundary in a deterministic unit test without exposing
-// RuntimeState or making the runtime executable test-only aware.
+// Header-only, so the production ordering can be tested with the real DSP transaction boundary
+// without exposing RuntimeState.
 template <
     typename ServiceNativeDspWake,
     typename ThrowIfNativeAudioFailed,
@@ -61,20 +58,17 @@ void service_frame_pe_realtime_device_slice(
     throw_if_native_audio_failed();
 }
 
-// Monotonic identity for one non-empty GX FIFO capture. The token is owned by
-// the simulation thread. A preclassified event-free receipt is ready without
-// a render wait; a PE-bearing token is published by the render thread only
-// after that capture's exact native fence and callbacks complete.
+// Monotonic identity for one non-empty GX FIFO capture, owned by the simulation thread. An
+// event-free receipt, preclassified, is ready without a render wait. A PE-bearing token is
+// published by the render thread after that capture's native fence and callbacks complete.
 struct FramePeCompletionToken {
-    // `epoch` changes on every successful contract reset. `value` is only
-    // monotonic within that epoch; both fields are required identity so a
-    // token retained across renderer shutdown/reinitialize can never alias a
-    // newly issued frame.
+    // `epoch` changes on every successful contract reset. `value` is monotonic only within an epoch.
+    // Both are needed for identity, so a token kept across renderer shutdown and reinitialize never
+    // aliases a new frame.
     std::uint64_t epoch = 0;
     std::uint64_t value = 0;
-    // Classification comes from the exact FIFO preclassifier. It is
-    // diagnostic identity only; completion order and readiness remain owned
-    // by FramePeCompletionContract.
+    // Classification comes from the exact FIFO preclassifier. It is diagnostic only; completion order
+    // and readiness stay with FramePeCompletionContract.
     cadence::FrameTokenKind kind = cadence::FrameTokenKind::None;
 
     [[nodiscard]] explicit operator bool() const noexcept {
@@ -100,21 +94,17 @@ struct FramePeCompletionStats {
     std::uint64_t fence_pending = 0;
 };
 
-// Thread-agnostic state machine for frame-specific PE completion. Callers own
-// synchronization; keeping the contract independent of Win32/D3D12 makes all
-// fence order and token conservation cases deterministically testable.
+// Thread-agnostic state machine for frame-specific PE completion. Callers own synchronization. It does not
+// depend on Win32 or D3D12, so fence order and token conservation are testable.
 //
-// Resolution is FIFO-exact. A frame proven event-free by the independent FIFO
-// preclassifier may be issued already ready because it has no guest-visible PE
-// boundary to wait for; a frame carrying PE callbacks binds to one strictly
-// newer native GPU fence. Completion may only advance from the front, and
-// waits must be consumed exactly once in issuance order.
+// Resolution is FIFO-exact. A frame shown to be event-free by the FIFO preclassifier is issued ready, since it
+// has no guest-visible PE boundary. A frame with PE callbacks binds to one strictly newer native GPU fence.
+// Completion advances only from the front, and each wait is consumed once, in issuance order.
 class FramePeCompletionContract {
 public:
     [[nodiscard]] FramePeCompletionToken issue();
-    // Issues a valid receipt for a FIFO capture that an exact parser proved
-    // contains no PE FINISH/TOKEN event. The receipt is immediately ready
-    // unless an older PE-bearing token still blocks the ordered frontier.
+    // Issues a receipt for a FIFO capture that an exact parser proved has no PE FINISH or TOKEN event.
+    // The receipt is ready at once unless an older PE-bearing token still blocks the frontier.
     [[nodiscard]] FramePeCompletionToken issue_event_free();
     void resolve_on_submission(FramePeCompletionToken token);
     void resolve_to_fence(
@@ -128,9 +118,8 @@ public:
     void consume_wait(FramePeCompletionToken token);
 
     [[nodiscard]] FramePeCompletionStats stats() const noexcept;
-    // Proves both internal conservation and a fully consumed frontier. This is
-    // the shutdown/reinitialize gate: pending or merely-unconsumed tokens are
-    // errors, never state that reset is allowed to erase.
+    // Proves internal conservation and a fully consumed frontier. This is the shutdown and reinitialize
+    // gate: pending or unconsumed tokens are errors, never state a reset may erase.
     void audit_drained() const;
     void reset();
 

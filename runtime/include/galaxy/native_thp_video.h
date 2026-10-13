@@ -7,9 +7,9 @@
 #include <vector>
 
 namespace galaxy::thp {
-// Owned by the simulation thread. A lease detaches scratch from the pool, so a
-// nested translated fallback/compare cannot overwrite an outer decode's planes.
-// Padding is reset just as it was with newly allocated zero-initialized vectors.
+// Owned by the simulation thread. A lease detaches scratch from the pool, so a nested
+// translated fallback or compare cannot overwrite an outer decode's planes. Padding is
+// reset as with newly allocated zero-initialized vectors.
 class VideoScratch final {
 public:
     static constexpr std::size_t kMaxRetainedPlaneBytes = 1024u * 1024u;

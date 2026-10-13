@@ -13,7 +13,7 @@ namespace galaxy::dsp_timing_replay {
 
 // Offline, test-owned replay only. This header is not installed in DspContext,
 // generated code, or the native DSP worker. It consumes an already committed
-// raw boundary record and supplies only evidence that the raw schema cannot
+// raw boundary record and supplies only the data that the raw schema cannot
 // currently carry. Trap, unwind, abort, and reset boundaries do not produce a
 // committed raw input and therefore cannot be synthesized here; reset starts a
 // new ledger and replay session.
@@ -38,8 +38,8 @@ struct DspTimingReplaySupplement {
     std::optional<dsp_timing_runtime::DspTimingInstructionIdentity>
         expected_predecessor{};
     dsp_timing_runtime::DspTimingPostOutcome post_outcome{};
-    // Raw provenance truthfully reports accelerator state as unavailable, so a
-    // test must explicitly provide one representable pre-instruction state.
+    // Raw provenance reports accelerator state as unavailable, so a test must provide
+    // one representable pre-instruction state explicitly.
     DspTimingReplayAcceleratorEvidence accelerator{
         DspTimingReplayAcceleratorEvidence::Unavailable};
     DspTimingReplayAcceptedInterrupt accepted_interrupt{
@@ -328,9 +328,9 @@ public:
         mapped_pre_state.address_registers = raw.pre_state.address_registers;
         mapped_pre_state.index_registers = raw.pre_state.index_registers;
         mapped_pre_state.wrap_registers = raw.pre_state.wrap_registers;
-        // Raw wrapping stack tops/cursors have no schema-v2 timing-key field.
-        // They were structurally validated above; only the separately tracked
-        // exact logical depths can be mapped into the retirement key.
+        // Raw wrapping stack tops and cursors have no schema-v2 timing-key field and are
+        // validated structurally above. Only the separately tracked exact logical depths
+        // map into the retirement key.
         for (std::size_t index = 0u;
              index < raw.pre_state.logical_stack_depths.size();
              ++index) {

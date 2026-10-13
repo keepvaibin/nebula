@@ -27,9 +27,8 @@ struct HostPointerState {
     int client_width = 0;
     int client_height = 0;
     std::uint64_t absolute_sequence = 0;
-    // GetTickCount64 milliseconds of the coherent absolute-position
-    // publication identified by absolute_sequence. This is a host clock, not
-    // the Wii time-base used by HID report deadlines.
+    // GetTickCount64 milliseconds of the coherent absolute-position publication identified by
+    // absolute_sequence. This is a host clock, not the Wii time base used by HID report deadlines.
     std::uint64_t absolute_acquired_ms = 0;
     std::uint32_t debug_flags = 0;
     std::uint32_t debug_error = 0;
@@ -44,8 +43,8 @@ struct HostClientExtent {
 // Read the actual native client area independently of mouse movement/focus.
 [[nodiscard]] HostClientExtent current_host_client_extent() noexcept;
 
-// The picture shape the aspect setting selects, latched each video frame:
-// the window's client extent limited to 4:3..32:9, or the chosen ratio.
+// The picture shape selected by the aspect setting, latched each video frame: the window's client
+// extent limited to 4:3..32:9, or the chosen ratio.
 [[nodiscard]] HostClientExtent aspect_latch_extent() noexcept;
 
 // Guest scene boundaries the simulation thread marks in the GX stream:
@@ -60,25 +59,20 @@ enum class EfbPeekKind : std::uint8_t {
     Depth,
 };
 
-// Create the Win32 window and initialize D3D12 device, swap chain, command
-// queue, root signature, PSO, and upload buffers.  Returns false on failure.
+// Creates the Win32 window and the D3D12 device, swap chain, command queue, root signature, PSO and
+// upload buffers. Returns false on failure.
 bool initialize(int width, int height);
 
-// Records the game dump's content root (GamePaths::content_root) so the
-// native settings overlay can read read-only UI assets (see
-// galaxy/gx/game_asset_extract.h) straight from the user's own game files
-// to style itself with the game's own art. Call once, before the overlay
-// is ever shown; purely cosmetic -- unset or wrong just means the overlay
-// keeps its solid-color fallback.
+// Records the game dump's content root (GamePaths::content_root). The native settings overlay reads
+// read-only UI assets from it (see galaxy/gx/game_asset_extract.h), so it can use the game's own art.
+// Call once, before the overlay is first shown. If unset or wrong, the overlay keeps its solid-color fallback.
 void set_native_settings_content_root(const std::string& utf8_path);
 
-// Parse accumulated GX FIFO command bytes, issue D3D12 draw calls, and
-// optionally present. An empty capture submits no GX work and may only request
-// a cached-XFB present. memory/services resolve display-list guest addresses
-// and indexed vertex-array reads. A non-empty capture returns one monotonic
-// completion token; an empty capture returns an invalid token. An exact FIFO
-// preclassification makes event-free receipts immediately ready, while
-// PE-bearing tokens retain exact fence/callback completion semantics.
+// Parses accumulated GX FIFO bytes, issues D3D12 draw calls, and optionally presents. An empty capture
+// submits no GX work and may only request a cached-XFB present. memory and services resolve display-list
+// guest addresses and indexed vertex-array reads. A non-empty capture returns one monotonic completion
+// token; an empty capture returns an invalid token. An exact FIFO preclassification makes event-free
+// receipts immediately ready, while PE-bearing tokens keep exact fence and callback completion semantics.
 [[nodiscard]] FramePeCompletionToken render_frame(
     const std::byte* fifo_data,
     std::size_t fifo_size,
@@ -142,11 +136,10 @@ void set_safety_scene_surround(float intensity) noexcept;
     EfbPeekKind kind,
     std::uint32_t& value);
 
-// Answers a depth or color peek from the most recently completed asynchronous
-// EFB field of that kind without any FIFO drain or GPU round trip. Returns
-// false (and records the request so the render thread starts producing
-// fields) when no field of that kind has been published yet; the caller then
-// takes the exact synchronous path.
+// Answers a depth or color peek from the most recently completed asynchronous EFB field of that kind,
+// with no FIFO drain or GPU round trip. Returns false when no field of that kind is published yet. The
+// request is recorded so the render thread starts producing fields, and the caller takes the exact
+// synchronous path.
 [[nodiscard]] bool peek_efb_published(
     std::uint16_t x,
     std::uint16_t y,
@@ -187,9 +180,8 @@ void pump_messages();
 [[nodiscard]] host::HostPointerTransitionPoll poll_host_pointer_transition(
     std::uint64_t after_sequence) noexcept;
 
-// Cold native settings overlay, drawn after XFB blit and before Present. F1 is
-// deliberately global while the native window owns focus; all mutations enter
-// through the renderer window thread's key-message path.
+// Cold native settings overlay, drawn after the XFB blit and before Present. F1 is global while the native
+// window has focus. All changes enter through the renderer window thread's key-message path.
 struct NativeSettingsOverlaySnapshot {
     bool visible = false;
     bool dirty = false;
@@ -218,11 +210,9 @@ struct NativeSettingsLayout {
 struct XfbPresentStats {
     std::uint64_t requests = 0;
     std::uint64_t presented = 0;
-    // Game-timed present requests only: auxiliary frame-rate-decoupling
-    // re-presents are deliberately excluded. This is serial identity, not
-    // pixel/content identity. A monotonically newer XfbTexture::copy_serial is
-    // counted once on its first game-timed presentation; replaying an older
-    // A/B pair cannot make this counter advance.
+    // Counts game-timed present requests only. Auxiliary frame-rate-decoupling re-presents are excluded. This
+    // is serial identity, not pixel or content identity: a newer XfbTexture::copy_serial is counted once, at its
+    // first game-timed presentation. Replaying an older A/B pair cannot advance the counter.
     std::uint64_t first_serial_presentations = 0;
     std::uint64_t misses = 0;
     std::uint64_t stale_fallbacks = 0;
@@ -288,15 +278,14 @@ void native_settings_post_key(std::uintptr_t virtual_key) noexcept;
 
 // Number of EFB display copies submitted to XFB textures by the active backend.
 [[nodiscard]] std::uint64_t xfb_copy_count() noexcept;
-// Opt-in causal-trace only. This identifies the last completed renderer frame
-// while GALAXY_TRACE_XFB_CAUSAL is enabled, so a bounded simulation-side XFB
-// state trace can select the same frame window without guessing an offset.
+// Opt-in causal trace only. Identifies the last completed renderer frame while GALAXY_TRACE_XFB_CAUSAL is
+// enabled, so a bounded simulation-side XFB trace can select the same frame window without guessing an offset.
 [[nodiscard]] std::uint64_t xfb_causal_trace_frame_index() noexcept;
 [[nodiscard]] XfbPresentStats xfb_present_stats() noexcept;
 [[nodiscard]] XfbMeasurementCadenceStats
 xfb_measurement_cadence_stats() noexcept;
-// The caller must first wait_for_render_idle(); this defines an uncontaminated
-// measurement boundary and makes the render-thread cadence reset race-free.
+// The caller must first call wait_for_render_idle(). This defines an uncontaminated measurement boundary and
+// makes the render-thread cadence reset race-free.
 void reset_xfb_measurement_window_stats() noexcept;
 
 // Release all D3D12 resources and destroy the window.

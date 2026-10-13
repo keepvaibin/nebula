@@ -69,7 +69,7 @@ namespace Nebula.Setup
             if (!File.Exists(manifestPath)) return false;
             var manifest = Json.Load(manifestPath);
             if (Json.Str(manifest, "schema") != "nebula.relink.v1" || Json.Str(manifest, "toolchain") != toolchain)
-                throw new InvalidDataException("The retained objects require their original linker toolchain. No game source was recompiled.");
+                throw new InvalidDataException("The compiled game objects need the toolchain they were built with.");
             foreach (var target in Targets)
             {
                 string name = "RMGE01_" + target + ".dll";
@@ -77,7 +77,7 @@ namespace Nebula.Setup
                     throw new InvalidDataException("Retained objects do not belong to the installed " + name);
                 foreach (Dictionary<string, object> entry in Json.List(Json.Obj(manifest, "objects"), target))
                     if (FileUtil.Sha256File(CheckedPath(oldCache, Json.Str(entry, "path"))) != Json.Str(entry, "sha256"))
-                        throw new InvalidDataException("A retained compiled object changed. Nothing was rebuilt.");
+                        throw new InvalidDataException("A compiled game object was modified.");
             }
             string cache = Path.Combine(app, "relink-cache");
             FileUtil.CopyTreeWithStreams(oldCache, cache, null);
@@ -99,14 +99,14 @@ namespace Nebula.Setup
                     if (target == "dsp")
                         foreach (string export in new[] {"entry", "entry_expected_iram_start_address", "entry_expected_iram_byte_len", "entry_expected_iram_sha1", "entry_generated_probe_contract_version", "entry_generated_probe_capabilities"})
                             args.Add("/EXPORT:galaxy_rmge01_dsp_" + export);
-                    if (link(args) != 0) throw new InvalidOperationException("Relinking " + target + " failed. The installed version was kept.");
+                    if (link(args) != 0) throw new InvalidOperationException("Relinking " + target + " failed.");
                     File.Delete(rsp);
                     File.Delete(Path.Combine(app, target + "-relink.lib"));
                     File.Delete(Path.Combine(app, target + "-relink.exp"));
                 }
-                log("Relinked preserved compiled game objects against the new public libraries; no game source compiled.");
+                log("Relinked the game modules against the new runtime libraries.");
             }
-            else log("Public libraries unchanged; compiled game DLLs retained byte-for-byte.");
+            else log("Runtime libraries unchanged; the game modules were kept.");
             RecordOutputs(manifest, app, libraries);
             Json.Save(Path.Combine(cache, "manifest.json"), manifest);
             return true;

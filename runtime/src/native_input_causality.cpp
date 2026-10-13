@@ -301,10 +301,8 @@ NativeInputCausalityTracker::begin_report_decoder(
                         decoder_address, decoder_bytes, pending.identity);
                 });
             if (retired != retired_deliveries_.end()) {
-                // A verified byte-for-byte revisit of the displaced generation
-                // is not a new transport delivery. Retain it as no proof;
-                // accepting anything other than an exact retired identity
-                // remains a hard protocol failure below.
+                // A byte-for-byte revisit of the displaced generation is not a new transport delivery.
+                // Retain it as no proof. Any other exact retired identity remains a hard protocol failure below.
                 if (observation.wii_ticks <
                     retired->identity.delivery_wii_ticks) {
                     set_protocol_failure_locked(
@@ -827,24 +825,22 @@ NativeInputCausalityTracker::finish_classified_kpad_read(
     result.output_range_available = caller_output_available;
     result.read_completion_wii_ticks = completion_wii_ticks;
     if (kpad_read_frames_.empty()) {
-        // JUTException uses its own max=1 KPADRead wrapper.  It can return a
-        // queued sample through KPADRead's early path before the common
-        // OSDisableInterrupts snapshot is reached.  This diagnostic-only
-        // route is never eligible to establish a WPadHolder pointer identity,
-        // so classify it without converting a legitimate exception poll into
-        // a global protocol failure.
+        // JUTException uses its own max=1 KPADRead wrapper. It can return a queued sample through
+        // KPADRead's early path, before the common OSDisableInterrupts snapshot. This diagnostic-only
+        // route can never establish a WPadHolder pointer identity, so it is classified without
+        // treating a legitimate exception poll as a global protocol failure.
         if (call_pc == 0x803AA570u) {
             result.reason =
                 NativeInputCausalityReason::KpadReadExceptionRouteClassified;
             return result;
         }
         // A native interrupt can resume a translated caller at its generated
-        // call-return label. That label deliberately replays the same
-        // call_return_checkpoint before continuing the caller, so the one
-        // protected KPADRead result appears at the host twice without a second
-        // OSDisableInterrupts snapshot. Accept only the exact just-completed
-        // WPadHolder output identity as this idempotent checkpoint replay; do
-        // not create, replace, or erase any gameplay proof from the replay.
+        // call-return label. That label replays the same call_return_checkpoint
+        // before continuing the caller, so the one protected KPADRead result appears
+        // at the host twice without a second OSDisableInterrupts snapshot. Accept only
+        // the exact just-completed WPadHolder output identity as this idempotent
+        // checkpoint replay; do not create, replace, or erase any gameplay proof from
+        // the replay.
         if (protocol_failure_ == NativeInputCausalityReason::None &&
             call_pc == 0x803AB2B0u && returned_samples != 0u &&
             caller_output_available) {

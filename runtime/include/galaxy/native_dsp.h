@@ -26,14 +26,12 @@ inline constexpr std::uint32_t kNativeDspMmioControl = 0x500a;
 inline constexpr std::uint16_t kNativeDspControlReset = 0x0001;
 inline constexpr std::uint16_t kNativeDspControlHalt = 0x0004;
 
-// One-slot rendezvous between the free-running native DSP execution thread and
-// the CPU/simulation thread that exclusively owns live guest MRAM. The DSP
-// publishes one fixed-capacity request, emits one safepoint wake, and blocks
-// until the CPU commits the complete span or a bounded failure occurs. There
-// is deliberately no request queue and no worker-side GuestMemory alias. The
-// owner must call shutdown() and join its submitting worker before destroying
-// this boundary, and must retain it until any active service_one() call has
-// returned. GuestAddressSpace services and destroys it on the same CPU owner.
+// One-slot rendezvous between the free-running native DSP thread and the CPU/simulation thread
+// that owns live guest MRAM. The DSP publishes one fixed-capacity request, emits one safepoint
+// wake, and blocks until the CPU commits the whole span or a bounded failure occurs. There is
+// no request queue and no worker-side GuestMemory alias. The owner calls shutdown() and joins
+// its submitting worker before destroying this boundary, and keeps it alive until any active
+// service_one() call has returned. GuestAddressSpace services and destroys it on the same CPU owner.
 class DspMramTransactionBoundary {
 public:
     static constexpr std::uint32_t kMaximumSpanBytes = 0x4000u;
@@ -88,9 +86,8 @@ public:
     DspMramTransactionBoundary& operator=(
         const DspMramTransactionBoundary&) = delete;
 
-    // Configuration is legal only with no request in flight. reset() binds
-    // service ownership to its caller and clears a prior shutdown/failure;
-    // cumulative telemetry intentionally survives service restarts.
+    // Configuration is legal only with no request in flight. reset() binds service ownership to its
+    // caller and clears any earlier shutdown or failure. Cumulative telemetry survives service restarts.
     [[nodiscard]] bool configure_wake(
         WakeCallback callback,
         void* user) noexcept;
@@ -106,23 +103,19 @@ public:
         const std::uint8_t* source,
         std::uint32_t size) noexcept;
 
-    // Must run on the thread that called reset(). A successful write service
-    // callback owns both the whole-span commit and its one dirty notification.
-    // Callbacks run while the one-slot latch is held, so they must be bounded,
-    // nonblocking, and must not re-enter this boundary. The product callbacks
-    // are exactly span validation + memcpy (+ one nonblocking dirty
-    // publication whose runtime callback only marks GX atomics/readiness
-    // telemetry and does not poll the DSP service).
-    // The timeout bounds wake/scheduling starvation; it cannot preempt an
-    // arbitrary test callback that violates this fixed-service contract.
+    // Runs on the thread that called reset(). A successful write service callback owns both the
+    // whole-span commit and its one dirty notification. Callbacks run while the one-slot latch is held,
+    // so they must be bounded, nonblocking, and must not re-enter this boundary. The product callbacks
+    // are span validation plus memcpy, plus one nonblocking dirty publication that only marks GX
+    // atomics and readiness telemetry and does not poll the DSP service. The timeout bounds wake and
+    // scheduling starvation; it cannot preempt a test callback that breaks this contract.
     [[nodiscard]] ServiceResult service_one(
         void* user,
         ReadService read,
         WriteService write) noexcept {
-        // The ordinary pump has nothing to service. Keep this existing atomic
-        // admission at the caller so it does not set up three callback arguments
-        // and cross an out-of-line boundary just to return None. A concurrent
-        // submit still publishes its wake; the locked path rechecks Pending.
+        // The ordinary pump has nothing to service. The atomic admission check stays at the caller, so it
+        // does not set up three callback arguments and cross an out-of-line boundary just to return None.
+        // A concurrent submit still publishes its wake; the locked path rechecks Pending.
         if (state_.load(std::memory_order_relaxed) != State::Pending) {
             return ServiceResult::None;
         }
@@ -164,12 +157,9 @@ private:
     std::thread::id service_thread_{};
     std::chrono::milliseconds timeout_{kDefaultTimeout};
     Direction direction_{Direction::ReadFromMram};
-    // Atomic so service_one() can reject the overwhelmingly common "nothing is
-    // pending" call with a relaxed load instead of taking mutex_. Only
-    // State::Pending has side effects, so a relaxed load that misses a
-    // concurrent submit merely defers service to the next pump -- the designed
-    // behaviour for a wake arriving between pumps. Every other comparison of
-    // this member still runs under mutex_.
+    // Atomic, so service_one() rejects the common "nothing pending" call with a relaxed load instead of
+    // taking mutex_. Only State::Pending has side effects, so a relaxed load that misses a concurrent
+    // submit only defers service to the next pump. Every other comparison of this member runs under mutex_.
     std::atomic<State> state_{State::Idle};
     std::uint32_t address_{};
     std::uint32_t size_{};
@@ -177,28 +167,22 @@ private:
     Snapshot telemetry_{};
 };
 
-// Ownership boundary for the DSP sample accelerator's 14 MiB ARAM window.
-// The CPU never receives a pointer to mirror_, and the DSP worker never
-// receives a GuestMemory pointer. Instead, the CPU copies one generation-bound
-// seed/page packet into this boundary before publishing the corresponding
-// hardware mailbox. The DSP worker must consume that mail only through
-// worker_apply_before_mail_consume(), which installs the packet exactly once
-// and then invokes the callback that performs the real CMBL consume.
+// Ownership boundary for the DSP sample accelerator's 14 MiB ARAM window. The CPU never receives a
+// pointer to mirror_, and the DSP worker never receives a GuestMemory pointer. The CPU copies one
+// generation-bound seed or page packet into this boundary before publishing the matching hardware
+// mailbox. The DSP worker consumes that mail only through worker_apply_before_mail_consume(), which
+// installs the packet once and then runs the callback that performs the real CMBL consume.
 //
-// The Wii CPU->DSP mailbox itself has one hardware slot, so this boundary also
-// has exactly one preallocated inbound slot. Keeping that slot occupied until
-// the consume callback succeeds prevents the next generation from overwriting
-// data while the prior hardware mail is still busy. Queue-full, generation,
-// thread-ownership, and callback failures are sticky hard failures until a
-// quiescent reset. No method allocates after construction.
+// The Wii CPU-to-DSP mailbox has one hardware slot, so this boundary has one preallocated inbound
+// slot. The slot stays occupied until the consume callback succeeds, so the next generation cannot
+// overwrite data while the prior mail is still busy. Queue-full, generation, thread-ownership and
+// callback failures are sticky until a quiescent reset. No method allocates after construction.
 //
-// DSP writes remain worker-owned. They are collected as exact per-page dirty
-// ranges and exposed only by worker_flush_outbound() as coalesced whole-span
-// callbacks. A product callback must copy each span into a CPU-thread
-// transaction boundary; it must never dereference GuestMemory on the worker.
-// Integration must flush successfully before publishing a DSP completion mail
-// or DIRQ. Those mailbox/IRQ hooks are deliberately outside this reusable
-// class; bypassing either ordering API is a fatal integration error.
+// DSP writes stay worker-owned. They are collected as exact per-page dirty ranges and delivered only
+// by worker_flush_outbound() as coalesced whole-span callbacks. A product callback copies each span
+// into a CPU-thread transaction; it never dereferences GuestMemory on the worker. Integration flushes
+// successfully before publishing a DSP completion mail or DIRQ. Those mailbox and IRQ hooks are
+// outside this class; bypassing either ordering API is a fatal integration error.
 class DspAramMirrorBoundary {
 public:
     static constexpr std::uint32_t kMirrorSizeBytes = 14u * 1024u * 1024u;
@@ -206,9 +190,8 @@ public:
     static constexpr std::uint32_t kDirtyPageCount =
         kMirrorSizeBytes / kDirtyPageBytes;
     static constexpr std::uint32_t kInboundQueueCapacity = 1u;
-    // Enforced by implementation and tests: valid worker mirror reads/writes
-    // never acquire mutex_. CPU packet staging and snapshotting therefore
-    // cannot contend with the accelerator sample hot path.
+    // Enforced by the implementation and tests: valid worker mirror reads and writes never acquire
+    // mutex_. CPU packet staging and snapshots therefore cannot contend with the accelerator sample path.
     static constexpr bool kWorkerHotPathUsesBoundaryMutex = false;
 
     struct DirtyPageUpdate {
@@ -280,12 +263,9 @@ public:
         bool shutdown{};
     };
 
-    // Runs while this boundary's mutex is held so the hardware CMBL consume
-    // and inbound-slot retirement are one indivisible publication boundary.
-    // The callback must therefore be non-reentrant: it may perform the real
-    // lock-free mailbox consume (and valid lock-free worker reads), but must
-    // not call boundary staging, mutation, snapshot, flush, failure, or
-    // shutdown operations.
+    // Runs with this boundary's mutex held, so the CMBL consume and inbound-slot retirement form one
+    // publication. The callback must not re-enter: it may perform the lock-free mailbox consume and
+    // lock-free worker reads, but not staging, mutation, snapshot, flush, failure or shutdown.
     using MailConsumeCallback =
         bool (*)(void* user, std::uint64_t generation) noexcept;
     using OutboundSpanCallback = bool (*)(
@@ -301,24 +281,22 @@ public:
     DspAramMirrorBoundary(const DspAramMirrorBoundary&) = delete;
     DspAramMirrorBoundary& operator=(const DspAramMirrorBoundary&) = delete;
 
-    // reset() binds CPU ownership to its caller. A bound worker must first be
-    // cancelled/shut down, joined or otherwise quiesced, and detached. Reset
-    // zeros the mirror and discards all prior generations and dirty state.
+    // reset() binds CPU ownership to its caller. A bound worker must first be cancelled or shut down,
+    // joined or otherwise quiesced, and detached. Reset zeros the mirror and discards all prior
+    // generations and dirty state.
     [[nodiscard]] bool reset() noexcept;
     void cancel() noexcept;
     void shutdown() noexcept;
 
-    // Must be called by the actual DSP execution thread before any worker API.
-    // worker_detach() is legal after cancel/failure/shutdown so teardown can
-    // always release the identity. An active detach with queued input or
+    // Called by the DSP execution thread before any worker API. worker_detach() is legal after cancel,
+    // failure or shutdown, so teardown can always release the identity. Detaching with queued input or
     // unflushed output is a sticky hard failure.
     [[nodiscard]] bool worker_bind() noexcept;
     [[nodiscard]] bool worker_detach() noexcept;
 
-    // CPU-owner operations. The full seed is required once per reset. Dirty
-    // pages must be strictly increasing and unique; an empty page list is a
-    // valid no-change packet for a mail generation. The packet must be staged
-    // before the matching mailbox low-half release publication.
+    // CPU-owner operations. The full seed is required once per reset. Dirty pages must be strictly
+    // increasing and unique. An empty page list is a valid no-change packet for a mail generation. The
+    // packet is staged before the matching mailbox low-half release.
     [[nodiscard]] bool cpu_stage_seed(
         std::uint64_t generation,
         std::span<const std::uint8_t> bytes) noexcept;
@@ -326,11 +304,9 @@ public:
         std::uint64_t generation,
         std::span<const DirtyPageUpdate> pages) noexcept;
 
-    // Worker operation that proves ordering rather than merely documenting it:
-    // the matching packet is installed once, then consume() performs the real
-    // CMBL read. The inbound slot is released only after consume() succeeds.
-    // consume() executes under the boundary mutex and must obey the
-    // non-reentrant MailConsumeCallback contract above.
+    // Worker side. The matching packet is installed once, then consume() performs the real CMBL read.
+    // The inbound slot is released only after consume() succeeds. consume() runs under the boundary
+    // mutex and obeys the non-reentrant MailConsumeCallback contract above.
     [[nodiscard]] bool worker_apply_before_mail_consume(
         std::uint64_t generation,
         MailConsumeCallback consume,
@@ -347,20 +323,17 @@ public:
         std::uint32_t address,
         const std::uint8_t* source,
         std::uint32_t size) noexcept;
-    // Validates both bytes first, commits them under one worker-owned critical
-    // section, and records one logical word write. Accelerator ACDRAW must use
-    // this API rather than two byte calls.
+    // Validates both bytes first, commits them in one worker-owned critical section, and records one
+    // logical word write. Accelerator ACDRAW must use this API, not two byte calls.
     [[nodiscard]] bool worker_write_u16_be(
         std::uint32_t address,
         std::uint16_t value) noexcept;
 
-    // generation identifies the DSP completion-mail/IRQ publication that the
-    // caller will perform only after this returns true. Every callback is one
-    // complete, contiguous transaction. A rejection is terminal, because a
-    // prefix may already have reached the CPU and cannot safely be replayed.
-    // source is borrowed only for the synchronous callback duration: the
-    // callback must copy it into its own preallocated CPU transaction and may
-    // neither retain the pointer nor hand it to another thread.
+    // generation identifies the DSP completion-mail or IRQ publication, which the caller performs only
+    // after this returns true. Each callback is one complete, contiguous transaction. A rejection is
+    // terminal, because a prefix may already have reached the CPU and cannot be replayed safely. source
+    // is borrowed only for the synchronous callback: the callback copies it into its own preallocated CPU
+    // transaction and neither retains the pointer nor hands it to another thread.
     [[nodiscard]] bool worker_flush_outbound(
         std::uint64_t generation,
         OutboundSpanCallback commit,
@@ -446,23 +419,19 @@ public:
         InterruptCallback interrupt,
         AcceleratorExceptionCallback accelerator_exception);
 
-    // Install a fully host-owned hardware environment, replacing the default
-    // guest-memory bridge. Used by the native runtime to route the DSP DMA bus
-    // (MRAM) and the sample-accelerator bus (ARAM) through its own address
-    // translation and to deliver interrupts to the audio path. host_abort is
-    // preserved.
+    // Installs a fully host-owned hardware environment in place of the default guest-memory bridge. The
+    // native runtime uses it to route the DSP DMA bus (MRAM) and the sample-accelerator bus (ARAM) through
+    // its own address translation, and to deliver interrupts to the audio path. host_abort is preserved.
     void install_host_services(void* user, const DspHardwareServices& services);
 
-    // Direct context access is a stopped/single-threaded setup-and-test API.
-    // It hard-fails while a NativeDspWorker owns the context; live product
-    // diagnostics use latest_diagnostic_snapshot() and control decisions use
-    // NativeDspWorker state instead.
+    // Direct context access is a stopped, single-threaded setup and test API. It hard-fails while a
+    // NativeDspWorker owns the context. Live diagnostics use latest_diagnostic_snapshot(), and control
+    // decisions use NativeDspWorker state.
     DspContext& context() noexcept;
     const DspContext& context() const noexcept;
 
-    // Enables bounded worker-published snapshots at DMBL, DIRQ, and worker
-    // return boundaries. Must be configured before start(); the disabled path
-    // installs no publisher pointer and therefore performs no copy or lock.
+    // Enables bounded worker-published snapshots at DMBL, DIRQ and worker return boundaries. Configure
+    // before start(). When disabled, no publisher pointer is installed, so there is no copy or lock.
     void set_diagnostic_capture_enabled(bool enabled);
     [[nodiscard]] std::optional<DspDiagnosticSnapshot>
     latest_diagnostic_snapshot() const;
@@ -475,10 +444,9 @@ public:
     }
     [[nodiscard]] DspAudioCausalSnapshot audio_causal_snapshot() const;
 
-    // Enables a standalone, coprocessor-owned exact RMGE01 selected-channel
-    // diagnostic. Configure before start(); snapshot only after worker stop.
-    // Product code instead attaches its process-lifetime recorder below so a
-    // DSPCR reset cannot discard prior evidence.
+    // Enables a standalone, coprocessor-owned exact RMGE01 selected-channel diagnostic. Configure before
+    // start(); snapshot only after worker stop. Product code attaches its process-lifetime recorder below
+    // instead, so a DSPCR reset cannot discard earlier evidence.
     void set_channel_selection_dma_probe_enabled(bool enabled);
     void attach_channel_selection_dma_probe(
         DspChannelSelectionDmaProbeRecorder* recorder);
@@ -499,10 +467,9 @@ public:
 
     void cpu_write_to_dsp_mailbox_high(std::uint16_t value);
     void cpu_write_to_dsp_mailbox_low(std::uint16_t value);
-    // Product mail publication reserves its generation before staging the
-    // matching ARAM packet, then releases the busy low half only after staging
-    // succeeds. The ordinary low-write API is the single-threaded convenience
-    // wrapper around this exact two-step contract.
+    // Product mail publication reserves its generation before staging the matching ARAM packet, then
+    // releases the busy low half only after staging succeeds. The ordinary low-write API is the
+    // single-threaded wrapper around this two-step contract.
     [[nodiscard]] std::uint64_t reserve_cpu_mail_generation();
     void publish_cpu_mailbox_low(
         std::uint16_t value,
@@ -520,10 +487,9 @@ public:
     [[nodiscard]] bool cpu_mail_consumed() const {
         return (cpu_peek_to_dsp_mailbox_high() & 0x8000u) == 0u;
     }
-    // Monotonic identity of the most recent CPU->DSP mailbox publication.
-    // The worker uses this to make conditional HALT resumes idempotent: two
-    // wake attempts for one still-busy hardware mail are one event, while a
-    // later mail (after the DSP consumed the first) is a distinct event.
+    // Monotonic identity of the latest CPU-to-DSP mailbox publication. The worker uses it to make
+    // conditional HALT resumes idempotent: two wake attempts for one busy hardware mail are one event,
+    // while a later mail is a new event.
     [[nodiscard]] std::uint64_t cpu_mail_generation() const noexcept {
         return cpu_mail_generation_.load(std::memory_order_acquire);
     }
@@ -544,10 +510,9 @@ public:
     // Run a compiled entry that returns (single-shot; e.g. unit-test probes).
     void run_native_entry(EntryPoint entry);
 
-    // Run the compiled ucode until it returns. A return can be cooperative
-    // abort from a mailbox poll, an accepted external interrupt, or a lowered
-    // DSP HALT that left ctx.pc on the HALT instruction. Returns true only when
-    // the return was caused by an accepted external interrupt.
+    // Runs the compiled ucode until it returns. A return can be a cooperative abort from a mailbox poll,
+    // an accepted external interrupt, or a lowered DSP HALT that leaves ctx.pc on the HALT instruction.
+    // Returns true only when an accepted external interrupt caused the return.
     [[nodiscard]] bool run_free_running(EntryPoint entry);
     void request_abort();
     void clear_abort();
@@ -561,9 +526,8 @@ public:
     void request_external_interrupt(std::uint16_t vector);
     [[nodiscard]] bool enter_pending_external_interrupt();
 
-    // Wake a free-running compiled entry parked in its host-assisted CMBH
-    // idle wait. CPU-mail publication, abort, and external interrupt already
-    // call this; NativeDspWorker::signal_work() uses it for an explicit poke.
+    // Wakes a free-running compiled entry parked in its host-assisted CMBH idle wait. CPU-mail publication,
+    // abort and external interrupts already call this. NativeDspWorker::signal_work() uses it for an explicit poke.
     void notify_mailbox_poll();
 
 private:
@@ -589,9 +553,8 @@ private:
     std::atomic<std::uint64_t> cpu_mail_generation_{};
     DspHostWakeState host_wake_state_{};
     DspNativeTelemetryState telemetry_state_{};
-    // Allocated only when the explicit causal diagnostic is enabled so the
-    // normal coprocessor object (and every test fixture) does not carry the
-    // fixed recorder payload.
+    // Allocated only when the explicit causal diagnostic is enabled, so the normal coprocessor object and
+    // test fixtures do not carry the fixed recorder payload.
     std::unique_ptr<DspAudioCausalRecorder> audio_causal_recorder_{};
     std::unique_ptr<DspChannelSelectionDmaProbeRecorder>
         owned_channel_selection_dma_probe_{};
@@ -629,11 +592,10 @@ public:
     void stop();
     void signal_work();
     void signal_resume(std::uint16_t resume_pc);
-    // Resume a published HALT, or retain the request across the narrow
-    // generated-entry-return -> HALT-state-publication interval. A request
-    // made while Executing is accepted only for a still-busy CPU mailbox and
-    // is discarded if that same mailbox generation is consumed before HALT.
-    // Duplicate calls for one mailbox generation are idempotent.
+    // Resumes a published HALT, or keeps the request across the narrow interval between generated-entry
+    // return and HALT-state publication. A request made while Executing is accepted only for a still-busy
+    // CPU mailbox, and is discarded if that mailbox generation is consumed before HALT. Duplicate calls for
+    // one generation are idempotent.
     [[nodiscard]] bool signal_resume_if_waiting(std::uint16_t resume_pc);
     void signal_external_interrupt(std::uint16_t vector);
     // Scheduler-owned state, safe for behavior/control decisions. Diagnostic

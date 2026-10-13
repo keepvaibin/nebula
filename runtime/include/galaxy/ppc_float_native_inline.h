@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #pragma once
 
-// Private implementation shared by the outlined float library and opt-in
-// generated scalar lowering. The math, status and commit bodies were moved
-// from ppc_float.cpp without changing their predicates or operation order.
+// Private implementation shared by the outlined float library and opt-in generated scalar
+// lowering. The math, status and commit code uses the same predicates and operation order
+// as ppc_float.cpp.
 #include "galaxy/native_api.h"
 
 namespace galaxy {
@@ -144,15 +144,11 @@ GALAXY_ALWAYS_INLINE bool native_f32_binary_core(
     if constexpr (Operation == PpcFloatBinaryOperation::Add ||
                   Operation == PpcFloatBinaryOperation::Subtract) {
         if (!f32_add_sub_exact_in_double(left, right)) {
-            // Both operands are nonzero normal binary32 values, separated by
-            // more than 28 exponent steps. The smaller magnitude is strictly
-            // below half an ULP on either side of the larger value, including
-            // a binade boundary. Nearest-even therefore keeps the larger
-            // value. The sum is inexact; opposite effective signs round its
-            // magnitude up, and matching signs round it down. Derive those
-            // status bits directly instead of losing the small operand in
-            // binary64 or evaluating the software operation twice to recover
-            // FI/FR.
+            // Both operands are nonzero normal binary32 values more than 28 exponent steps apart. The
+            // smaller magnitude is strictly below half an ULP of the larger value, including at a binade
+            // boundary, so nearest-even keeps the larger value. The sum is inexact: opposite effective
+            // signs round its magnitude up, and matching signs round it down. FI and FR are derived
+            // directly, not by losing the small operand in binary64 or evaluating the software path twice.
             const std::uint32_t adjusted_right = right ^
                 (Operation == PpcFloatBinaryOperation::Subtract
                      ? 0x80000000u : 0u);
@@ -194,9 +190,9 @@ GALAXY_ALWAYS_INLINE bool native_f32_binary_fast(
     std::uint32_t right,
     std::uint32_t fpscr,
     PpcFloatResult& result) {
-    // NI inputs have already been flushed by the caller. Normal/zero output
-    // needs no NI adjustment; nonzero subnormal results retain the software
-    // path below. NI therefore does not exclude this exact native path.
+    // NI inputs have already been flushed by the caller. Normal and zero outputs need no NI
+    // adjustment; nonzero subnormal results keep the software path below. NI does not exclude
+    // this native path.
     if ((fpscr & 0x3u) != 0 || operation == PpcFloatBinaryOperation::Divide ||
         !native_f32_binary_inputs(left, right)) {
         return false;
@@ -246,7 +242,7 @@ GALAXY_ALWAYS_INLINE void apply_result_status(PpcContext* context, const PpcFloa
     }
     fpscr |= result.exception_bits;
     fpscr = (fpscr & ~kVx) | ((fpscr & kInvalidDetailMask) != 0 ? kVx : 0u);
-    // All five summary exceptions now align with their enable bits after
+    // All five summary exceptions align with their enable bits after
     // this shift. Recompute both summaries even if the incoming FPSCR was
     // inconsistent, and publish the complete status with one context store.
     const bool enabled =
@@ -289,9 +285,9 @@ GALAXY_ALWAYS_INLINE void commit_scalar_result(
 // bits make target/source aliases safe. Enabled exceptions use the same
 // status publication and fault-before-register-write contract as the library.
 template <PpcFloatBinaryOperation Operation>
-// Private code-size/throughput comparison. Share the exact fast path across
-// translated call sites; arithmetic, failed-guard and commit semantics stay
-// identical. Keep the established inlined build until matched validation.
+// Private code-size and throughput comparison. Shares the exact fast path across translated
+// call sites; the arithmetic, guard and commit semantics are unchanged. The inlined form is
+// kept until it is validated.
 #if defined(GALAXY_OUTLINE_SCALAR_FP_FAST_PATH) && GALAXY_OUTLINE_SCALAR_FP_FAST_PATH
 GALAXY_NOINLINE inline
 #else
@@ -317,10 +313,9 @@ bool try_commit_widened_scalar_binary(
         return false;
     }
     PpcFloatResult result{};
-    // Classify before any NI result flush. A native subnormal that the old
-    // path would flush to signed zero must still choose that complete path.
-    // The narrowing above already proved both operands finite normal-or-zero
-    // under nearest-even rounding, so the core skips those repeated checks.
+    // Classify before any NI result flush. A native subnormal that the software path flushes to
+    // signed zero must still take that complete path. The narrowing above already proved both
+    // operands finite normal-or-zero under nearest-even rounding, so the core skips those checks.
     if (!float_native_detail::native_f32_binary_core<Operation>(
             left_f32, right_f32, result)) {
         return false;

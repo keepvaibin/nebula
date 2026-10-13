@@ -83,7 +83,7 @@ namespace Nebula.Launcher
                 string savedContent = Json.Str(settings, "content");
                 if (savedContent != null && File.Exists(Path.Combine(savedContent, "game.pak"))) Content = savedContent;
                 SetupComplete = Json.Long(settings, "settingsVersion") >= 3;
-                // A recording is for the next launch only (settings version 4).
+                // A recording applies to the next launch only (settings version 4).
                 long recording = Json.Long(settings, "recording");
                 if (Json.Long(settings, "settingsVersion") >= 4 && recording >= 0 && recording <= 2)
                     Recording = (RecordingMode)recording;
@@ -128,9 +128,8 @@ namespace Nebula.Launcher
             catch (Exception error) { return error.Message; }
         }
 
-        // The runtime owns a named mutex while it runs (runtime_instance.cpp);
-        // automated sessions use private lease names (GALAXY_INSTANCE_LEASE), so
-        // only the player's lease counts, not every NebulaRuntime.exe process.
+        // The runtime holds a named mutex while it runs (runtime_instance.cpp). Automated sessions use private
+        // lease names (GALAXY_INSTANCE_LEASE), so only the player's lease counts, not every NebulaRuntime.exe process.
         private static bool RuntimeLeaseHeld()
         {
             Mutex lease;
@@ -145,8 +144,8 @@ namespace Nebula.Launcher
             }
         }
 
-        // A game that stopped responding can keep the lease after its window
-        // is gone. Offers to end this install's runtime and waits for the lease.
+        // A game that stopped responding can keep the lease after its window is gone. Offers to end this
+        // install's runtime, then waits for the lease.
         private bool EndRunningGame()
         {
             string exe = Path.Combine(App, "NebulaRuntime.exe");
@@ -366,7 +365,7 @@ namespace Nebula.Launcher
             recording.Items.AddRange(new[] { "No recording", "Lightweight recording", "Detailed recording" });
             Combo(advanced, recording, 320, y);
             y += 44;
-            Button(advanced, "Import a GalaxyRecomp save…", 12, y, 250).Click += delegate { ImportSave(); };
+            Button(advanced, "Import saves…", 12, y, 250).Click += delegate { ImportSave(); };
             Button(advanced, "Open save folder", 270, y, 170).Click += delegate
             {
                 Directory.CreateDirectory(NebulaPaths.Saves);
@@ -629,8 +628,8 @@ namespace Nebula.Launcher
 
         [DllImport("user32.dll")] private static extern uint MapVirtualKeyW(uint code, uint mapType);
 
-        // Window messages while a binding waits for an input: keys and mouse
-        // buttons bind (keyboard scheme) and Esc cancels; nothing else reacts.
+        // Window messages while a binding waits for input. Keys and mouse buttons bind (keyboard scheme);
+        // Esc cancels. Nothing else reacts.
         private sealed class CaptureFilter : IMessageFilter
         {
             private readonly SettingsForm form;
@@ -797,8 +796,8 @@ namespace Nebula.Launcher
             frameRate.SelectedIndex = selected;
         }
 
-        // Internal resolution: matching the output, or 1x up to the scale that
-        // fills the selected display (the runtime applies the same limit).
+        // Internal resolution: matches the output, or 1x up to the scale that fills the selected display
+        // (the runtime applies the same limit).
         private void RefreshScaleChoices()
         {
             var screen = SelectedMonitor;
@@ -867,7 +866,7 @@ namespace Nebula.Launcher
                 MessageBox.Show(this, error, "Nebula", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 return;
             }
-            // A recording keeps this process alive (its capture thread) until the game exits.
+            // A recording keeps this process alive, through its capture thread, until the game exits.
             Close();
         }
 
@@ -884,7 +883,7 @@ namespace Nebula.Launcher
 
         private void ImportSave()
         {
-            using (var dialog = new FolderBrowserDialog { Description = "Choose the GalaxyRecomp save-data folder" })
+            using (var dialog = new FolderBrowserDialog { Description = "Choose a saves folder from an earlier installation" })
             {
                 if (dialog.ShowDialog(this) != DialogResult.OK) return;
                 try
@@ -944,8 +943,8 @@ namespace Nebula.Launcher
         }
 
         /// <summary>
-        /// Stream the runtime's output on a foreground worker thread. The launcher
-        /// window closes while its recording worker stays alive until game exit.
+        /// Streams the runtime's output on a foreground worker thread. The launcher window can close while its
+        /// recording worker stays alive until game exit.
         /// </summary>
         public static void Capture(Process process, string session, bool sampling)
         {
@@ -964,23 +963,12 @@ namespace Nebula.Launcher
                 {
                     samples = new StreamWriter(Path.Combine(session, "process.csv"));
                     samples.WriteLine("elapsedSeconds,cpuSeconds,workingSetBytes");
-                    // Per-thread CPU, alongside the process-wide row. `process.csv`
-                    // cannot say which thread is spending the time, and that is the
-                    // open question: the process runs at a flat ~1.3 cores of 32
-                    // while producing 44 frames/s instead of 60, so the CPU seconds
-                    // are going somewhere the frame rate does not reflect.
+                    // Per-thread CPU, alongside the process-wide row. process.csv cannot say which thread spends the time, and
+                    // the process-wide total does not show whether CPU rises when the frame rate falls. CPU rate per second is
+                    // the comparable signal. CPU per produced frame mostly reflects the frame rate (it grows as 1/frame_rate for
+                    // any slow pipeline), and it cannot tell executing from waiting.
                     //
-                    // Do NOT read the regime gap here as "1.41x CPU per produced
-                    // frame". That figure is ~96 % a rate effect -- the denominator
-                    // (frame rate) moves 35 % while the numerator (CPU rate) moves
-                    // 3.6 % -- and it cannot distinguish executing from waiting,
-                    // since any slow pipeline raises CPU-per-frame as
-                    // 1/frame_rate. The honest signal is the CPU RATE. See
-                    // AgentWork/agent-23/25-cpu-per-frame-is-a-rate-effect.md.
-                    //
-                    // The column set matches tools/perf_session.ps1 so
-                    // session_report.ps1's existing threads.csv parser reads it
-                    // unchanged.
+                    // The column set matches tools/perf_session.ps1, so session_report.ps1's threads.csv parser reads it unchanged.
                     threads = new StreamWriter(Path.Combine(session, "threads.csv"));
                     threads.WriteLine("elapsedSeconds,threadId,cpu100ns,threadState,waitReason,priorityLevel,name");
                 }
@@ -994,11 +982,9 @@ namespace Nebula.Launcher
                         samples.WriteLine(string.Format(System.Globalization.CultureInfo.InvariantCulture, "{0:F3},{1:F6},{2}",
                             elapsed, process.TotalProcessorTime.TotalSeconds, process.WorkingSet64));
                         samples.Flush();
-                        // A thread can exit between enumerating the collection and
-                        // reading its properties, so one bad thread must not lose
-                        // the whole sample. Threads that have never run report a
-                        // zero TotalProcessorTime, which is a real value here and
-                        // not an error.
+                        // A thread can exit between enumerating the collection and reading its properties, so one bad thread must
+                        // not lose the whole sample. A thread that has never run reports a zero TotalProcessorTime. That is a real
+                        // value, not an error.
                         foreach (System.Diagnostics.ProcessThread t in process.Threads)
                         {
                             try
@@ -1060,7 +1046,7 @@ namespace Nebula.Launcher
             {
                 string nested = Path.Combine(sourceRoot, "save-data");
                 if (File.Exists(Path.Combine(nested, GameSave))) sourceRoot = FileUtil.FinalPath(nested);
-                else throw new InvalidOperationException("This folder is not a GalaxyRecomp save folder (" + GameSave + " was not found).");
+                else throw new InvalidOperationException("This folder does not contain Super Mario Galaxy saves (" + GameSave + " was not found).");
             }
             if (Process.GetProcessesByName("NebulaRuntime").Length > 0)
                 throw new InvalidOperationException("Close the game before importing a save.");

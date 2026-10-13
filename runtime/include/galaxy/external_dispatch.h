@@ -30,12 +30,10 @@ struct ExternalHandlerCallEvidence {
     std::uint32_t handler_table_target{};
 };
 
-// A host-timeline recovery may preserve an in-flight VI transaction only when
-// the translated external dispatcher still explains the boundary's wait.
-// Before the dispatcher's mask scan reaches its indirect call there is no
-// selected source; after selection, only IRQ24 is compatible
-// with an explicitly owned VI boundary. This predicate never selects a source
-// or completes an interrupt.
+// A host-timeline recovery may keep an in-flight VI transaction only when the translated external
+// dispatcher still explains the boundary's wait. Before the dispatcher's mask scan reaches its
+// indirect call, no source is selected. After selection, only IRQ24 fits an explicitly owned VI
+// boundary. This predicate never selects a source or completes an interrupt.
 [[nodiscard]] constexpr bool external_dispatch_preserves_vi_boundary_wait(
     const ExternalDispatchRecord& record,
     std::uint64_t owner_serial,
@@ -56,12 +54,10 @@ struct ExternalHandlerCallEvidence {
     constexpr std::uint32_t kViInterrupt = 24u;
     const bool selected_vi = record.selected_interrupt == kViInterrupt &&
         record.selected_handler != 0u;
-    // owner_serial==0 is the exact PeDrain-entry case: the boundary existed but
-    // had not reached AwaitViRfi when this dispatcher began. A nested
-    // checkpoint advanced it to AwaitViRfi while the dispatcher was still
-    // scanning, so source selection must still be absent. A dispatch that
-    // began after AwaitViRfi instead records the boundary serial and may be
-    // either scanning or executing/completing IRQ24.
+    // owner_serial==0 is the PeDrain-entry case: the boundary existed but had not reached AwaitViRfi
+    // when this dispatcher began. A nested checkpoint advanced it to AwaitViRfi while the dispatcher
+    // was still scanning, so source selection must still be absent. A dispatch that began after
+    // AwaitViRfi records the boundary serial and may be scanning, or executing or completing IRQ24.
     return owner_serial == 0u ? scanning_before_selection
                               : scanning_before_selection || selected_vi;
 }

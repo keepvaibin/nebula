@@ -6,14 +6,14 @@
 // an unresolvable guest pointer throws GxFatalError after dumping the
 // surrounding FIFO window to a .gxdump file replayable in GxSandbox. Unknown
 // CP/XF/BP state writes are fatal before state mutation. Hardware-observed
-// no-op command bytes remain accepted only where explicitly classified.
+// no-op command bytes are accepted only where explicitly classified.
 //
-// Endianness: all FIFO payloads are big-endian.  FifoCursor provides checked
+// Endianness: all FIFO payloads are big-endian. FifoCursor provides checked
 // scalar reads for opcodes and register payloads (a few bytes each) and a
 // raw take() window so bulk consumers (VertexLoader) can run the SIMD
 // byte-swap kernels below over whole vertex arrays instead of per-byte reads.
 //
-// No Windows/D3D12 includes — unit-testable offline.
+// No Windows/D3D12 includes; unit-testable offline.
 
 #include "galaxy/gx/gx_bitfields.h"
 #include "galaxy/gx/gx_state.h"
@@ -307,7 +307,7 @@ struct FifoSink {
     // Combine with GxState::efb_copy(exec_command) for the full snapshot.
     virtual void on_efb_copy(std::uint32_t exec_command) = 0;
 
-    // BP 0x45 / 0x47 / 0x48 — GXDrawDone and draw-sync tokens.  These must be
+    // BP 0x45 / 0x47 / 0x48: GXDrawDone and draw-sync tokens. These must be
     // routed back into the runtime's PE interrupt machinery.
     virtual void on_pe_finish() = 0;
     virtual void on_pe_token(std::uint16_t token, bool interrupt) = 0;
@@ -321,7 +321,7 @@ struct FifoSink {
     // now.  Default no-op so offline replay sinks need not care.
     virtual void on_tlut_load() {}
 
-    // Opcode 0x48 (vertex cache invalidate) — informational.
+    // Opcode 0x48 (vertex cache invalidate): informational.
     virtual void on_invalidate_vertex_cache() = 0;
 };
 
@@ -452,10 +452,10 @@ public:
 
     // frozen_regions promises the region pointer, count and descriptors stay
     // immutable throughout this invocation, including sink/recorder callbacks.
-    // Each invocation still
-    // verifies sorted, disjoint, mapped extents before using indexed lookup.
-    // Generic inputs retain first-containing-region resolution and fast-region
-    // precedence. Nested calls and exceptions restore the enclosing capability.
+    // Each invocation still verifies sorted, disjoint, mapped extents before using
+    // indexed lookup. Generic inputs retain first-containing-region resolution and
+    // fast-region precedence. Nested calls and exceptions restore the enclosing
+    // capability.
 
     // Directory for .gxdump failure artifacts (default: current directory).
     void set_dump_dir(std::string dump_dir);
@@ -666,9 +666,8 @@ private:
     std::uint64_t display_list_cache_tick_ = 0;
     std::uint64_t display_list_cache_token_ = 0;
     std::size_t last_display_list_cache_index_ = static_cast<std::size_t>(-1);
-    // SMG gameplay commonly touches hundreds of small display lists per frame.
-    // A 64-entry cache thrashed in the first playable scene, forcing the CPU to
-    // re-parse roughly half of the nested list stream every frame.
+    // Gameplay touches hundreds of small display lists per frame, so a small cache
+    // forces most nested lists to be re-parsed every frame.
     // Keep the fixed-capacity cache off the parser object's stack; each entry
     // owns several replay vectors, and diagnostics/tests construct parsers as
     // local variables.

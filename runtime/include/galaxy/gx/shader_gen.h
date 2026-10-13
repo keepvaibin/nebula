@@ -1,13 +1,12 @@
 #pragma once
 
-// Generates specialized HLSL (vs_5_1 / ps_5_1) from canonicalized shader keys.
-// TEV stages, texgens and the alpha test are unrolled into straight-line code,
-// but the shaders use the same constant buffer layouts (uber_constants.h) and
-// root signature as the uber pipelines, so promotion needs no rebinding.
-// TEV precision: stage math runs in float, and each stage result is quantized
-// to the 8-bit lattice (floor(x * 255 + 0.5) / 255) before compare ops and the
-// alpha test, so comparisons against ref/255 are exact.
-// No Windows/D3D12 dependencies.
+// Generates specialized HLSL (vs_5_1 / ps_5_1) from canonicalized shader keys. TEV stages, texgens
+// and the alpha test are unrolled into straight-line code. The shaders use the uber pipelines'
+// constant buffer layouts (uber_constants.h) and root signature, so promotion needs no rebinding.
+// TEV math runs in float. Each stage result is quantized to the 8-bit lattice
+// (floor(x * 255 + 0.5) / 255) before compare ops and the alpha test, so comparisons against
+// ref/255 are exact.
+// No Windows or D3D12 dependencies.
 
 #include "galaxy/gx/shader_keys.h"
 

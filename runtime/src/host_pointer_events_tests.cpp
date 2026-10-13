@@ -338,8 +338,8 @@ bool host_pointer_poll_cache_rejects_invalid_clock_and_caps_duration() {
 }
 
 bool rejected_poll_is_reconsidered_after_authority_timeout() {
-    // A was previously accepted and is also the coordinate in the fresh WM
-    // snapshot. B arrives through GetCursorPos before that message ages out.
+    // A is already accepted and is also the coordinate in the fresh WM snapshot. B arrives through
+    // GetCursorPos before that message ages out.
     AcceptedCursorPollBaseline baseline{true, 100, 100};
     constexpr std::int32_t kCandidateX = 420;
     constexpr std::int32_t kCandidateY = 260;

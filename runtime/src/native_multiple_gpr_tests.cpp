@@ -182,7 +182,7 @@ template <std::uint32_t First> void cases() {
             if (mode == 9u) address = 0xCC008000u;
             if (mode == 10u) address = 0xFFFFFFFCu;
             if (mode == 18u || mode == 19u || mode == 20u) address = base;
-            // Metadata overwrite fixture is deliberately controlled for r28..31.
+            // The metadata overwrite fixture controls r28..31.
             if (mode == 20u && First != 28u) continue;
             if (mode != 20u) run<First>(mode, address, false);
             // Mode 5 mutates state from the per-word notify observer, which a

@@ -1,15 +1,12 @@
 #pragma once
 
 // Sub-allocates GPU textures from large D3D12 heaps instead of creating one
-// committed resource per texture. Measured on the texture-miss path
-// (bench/placed_bench.cpp, 400 scene-load-sized textures): committed
-// creation 215-265 us each on an RTX 5090 and a Radeon iGPU, placed creation
-// 5-9 us; the 185H's Arc driver took 24-36 ms for some committed creations.
+// committed resource per texture, which is much slower on some drivers.
 //
 // A placed resource returns its range when the resource object is destroyed:
 // the allocator attaches a small COM object as private data, and D3D12
-// releases it with the resource. Callers therefore keep their existing rule
-// of releasing a texture only after the GPU has finished with it.
+// releases it with the resource. Callers keep the rule of releasing a texture
+// only after the GPU has finished with it.
 
 #ifndef NOMINMAX
 #define NOMINMAX

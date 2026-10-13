@@ -1,4 +1,4 @@
-// vertex_loader.cpp — VertexLoader implementation.
+// vertex_loader.cpp: VertexLoader implementation.
 //
 // Converts one GX draw packet (any VCD/VAT combination, direct or indexed
 // attributes) into the canonical GxVertexOut stream plus an index list for
@@ -7,9 +7,9 @@
 // Design invariants:
 //  - Attribute streams are bounded once, then converted through local endian
 //    loads; each component reads exactly its encoded byte width.
-//  - Color attributes are NEVER passed through the swap kernels (see below).
+//  - Color attributes never pass through the swap kernels (see below).
 //  - Unknown/unsupported configurations throw GxFatalError (hard-fail).
-//  - Indexed attributes resolve through GuestMemoryV1; unmapped → GxFatalError.
+//  - Indexed attributes resolve through GuestMemoryV1; unmapped memory throws GxFatalError.
 
 #include "galaxy/gx/vertex_loader.h"
 #include "galaxy/gx/vertex_dequant.h"
@@ -77,12 +77,10 @@ struct RecordedIndexedArrayRange {
 // Upper bound on one recorded dependency span. `record_read` accumulates the
 // bytes an indexed attribute actually touched so the decoded-vertex cache can
 // snapshot them and later detect a guest write with a memcmp. Collapsing every
-// read of one attribute into a single [min,max) span made that span the whole
-// indexed array whenever a run's indices were scattered — measured at ~1 ms per
-// decoded-cache miss and 22 MB of cache growth in a single frame on the low-end
-// target. Splitting the accumulation at this granularity keeps the snapshot
-// proportional to the bytes actually read (plus bounded read-gap padding)
-// instead of proportional to the array's extent.
+// read of one attribute into a single [min,max) span would make that span the
+// whole indexed array whenever a run's indices are scattered. Splitting the
+// accumulation at this granularity keeps the snapshot proportional to the bytes
+// actually read (plus bounded read-gap padding) instead of the array's extent.
 constexpr std::uint32_t kRecordedRangeChunkBytes = 64u * 1024u;
 
 // A read within this distance of either edge of the current chunk is absorbed
@@ -488,8 +486,8 @@ static void decode_normal_components(
 // The output is (R<<24)|(G<<16)|(B<<8)|A so that byte 0 = R in little-endian
 // memory, matching DXGI_FORMAT_R8G8B8A8_UNORM.
 //
-// CRITICAL: do NOT swap-byte these bytes — the bytes are already in the
-// right per-channel order in the FIFO stream.
+// Do not byte-swap these bytes: they are already in the right per-channel order
+// in the FIFO stream.
 [[nodiscard]] static std::uint32_t decode_color(
     const std::byte* src,
     ColorComponentFormat fmt)
@@ -705,8 +703,8 @@ struct PreparedVertexInputs {
     std::uint8_t default_position_matrix = 0u;
     // Bit `ti` set when texture coordinate channel `ti` is present in the
     // vertex stream (Direct/Index8/Index16). The decode loops use it to skip
-    // the channels that can only write two zeros and consume no bytes; SMG
-    // leaves six or seven of the eight channels empty on ordinary draws.
+    // the channels that can only write two zeros and consume no bytes. Ordinary
+    // draws often leave most of the eight channels empty.
     std::uint8_t active_texcoord_mask = 0u;
 };
 
@@ -777,8 +775,8 @@ void decode_vertex_stream(
     for (std::uint32_t vi = 0; vi < vtx_count; ++vi) {
         // Decode into cached memory and write the finished vertex with one
         // sequential copy. `verts` is normally upload-heap memory, which is
-        // write-combined on a discrete GPU: the scattered field stores (the
-        // zeroing of absent texture coordinates above all) each stalled there.
+        // write-combined on a discrete GPU, and scattered field stores there each
+        // stall. The zeroing of absent texture coordinates is one such case.
         GxVertexOut out;
         const std::byte* vsrc =
             raw_ptr + static_cast<std::size_t>(vi) * src_stride;
@@ -960,20 +958,17 @@ void decode_vertex_stream(
             float* uv = out.uv[ti];
             const unsigned attr_idx = 4u + ti;
 
-            // A channel absent from the stream must still deliver (0, 0) to the
-            // shader, which is what GX hardware and Dolphin supply for an absent
-            // attribute. `out` is raw upload-ring memory, NOT a value-initialized
-            // object: GxVertexOut has no default member initializers and
-            // UploadRing::allocate only bumps a cursor, so whatever the previous
-            // frame left at this offset is still there. Skipping the store would
-            // hand that stale pair to the vertex shader.
+            // A channel absent from the stream must still deliver (0, 0) to the shader, which is
+            // what GX hardware and Dolphin supply for an absent attribute. `out` is raw upload-ring
+            // memory, not a value-initialized object: GxVertexOut has no default member
+            // initializers and UploadRing::allocate only bumps a cursor, so whatever the previous
+            // frame left at this offset is still there. Skipping the store would hand that stale
+            // pair to the vertex shader.
             //
-            // The cached packet-run path already zeroes the identical fields
-            // (decoded.vertices.resize() value-initializes the whole 144-byte
-            // vertex, then the decode fills only the present channels), so
-            // restoring these stores also makes the two decode paths agree again.
-            // This is eight bytes per absent channel per vertex, not per
-            // component, and the D3D12 input layout binds all eight TEXCOORDs
+            // The cached packet-run path zeroes the same fields (decoded.vertices.resize()
+            // value-initializes the whole 144-byte vertex, then the decode fills only the present
+            // channels), so both decode paths agree. This is eight bytes per absent channel per
+            // vertex, not per component, and the D3D12 input layout binds all eight TEXCOORDs
             // unconditionally whether or not the VS samples them.
             if ((inputs.active_texcoord_mask & (1u << ti)) == 0u) {
                 out.uv[ti][0] = 0.0f;
@@ -1173,7 +1168,7 @@ std::size_t VertexLoader::source_vertex_size(const VertexDescriptor& desc)
     std::size_t sz = 0;
 
     // Matrix index bytes (always 1 byte each when present, regardless of
-    // the attribute type — these are always Direct in the FIFO).
+    // the attribute type; these are always Direct in the FIFO).
     if (desc.has_pn_matrix_index) {
         sz += 1;
     }
@@ -1227,7 +1222,7 @@ std::size_t VertexLoader::source_vertex_size(const VertexDescriptor& desc)
 }
 
 // ---------------------------------------------------------------------------
-// VertexLoader::load — main entry point
+// VertexLoader::load: main entry point
 // ---------------------------------------------------------------------------
 
 LoadedPrimitive VertexLoader::load(
@@ -1327,14 +1322,14 @@ LoadedPrimitive VertexLoader::load_with_layout(
     switch (primitive) {
     case PrimitiveClass::Quads:
     case PrimitiveClass::Quads2:
-        // Each group of 4 verts → 2 triangles = 6 indices.
+        // Each group of 4 verts gives 2 triangles, or 6 indices.
         max_indices = (static_cast<std::uint32_t>(vtx_count) / 4) * 6;
         break;
     case PrimitiveClass::Triangles:
         max_indices = (static_cast<std::uint32_t>(vtx_count) / 3u) * 3u;
         break;
     case PrimitiveClass::TriangleStrip:
-        // N verts → max N-2 triangles.
+        // N verts give at most N-2 triangles.
         max_indices = vtx_count >= 3
             ? (static_cast<std::uint32_t>(vtx_count) - 2) * 3
             : 0;
@@ -1362,7 +1357,7 @@ LoadedPrimitive VertexLoader::load_with_layout(
     }
 
     if (max_indices == 0) {
-        // Degenerate primitive — no index data needed.
+        // Degenerate primitive: no index data needed.
         LoadedPrimitive prim{};
         prim.base_vertex   = base_vertex;
         prim.vertex_byte_offset = vb.offset;

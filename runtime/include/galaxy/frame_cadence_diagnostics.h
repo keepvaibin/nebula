@@ -373,7 +373,6 @@ private:
 
 using MonotonicReadFn = std::uint64_t (*)(void*) noexcept;
 
-// A null/disabled session returns zero without calling the clock reader.
 [[nodiscard]] std::uint64_t sample_now_ns_if_enabled(
     const Session* session,
     MonotonicReadFn reader,

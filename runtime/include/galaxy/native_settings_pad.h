@@ -6,14 +6,12 @@
 
 namespace galaxy::input {
 
-// Controller access to the native settings overlay. View+Menu (XInput
-// Back+Start) toggles it. While it is open the pad drives it -- D-pad or left
-// stick moves and changes, A changes, Y applies, X reverts, LB/RB switch
-// pages, B or Menu closes --
-// and the game sees a neutral pad. Buttons held across a toggle or while the
-// overlay is open stay hidden from the game until released, so the chord never
-// reaches the pause menu and the closing press never reaches the game. Output
-// keys are the overlay's keyboard keys (Win32 virtual-key codes).
+// Controller access to the native settings overlay. View+Menu (XInput Back+Start) toggles it.
+// While it is open, the pad drives it: the D-pad or left stick moves and changes, A changes,
+// Y applies, X reverts, LB/RB switch pages, and B or Menu closes it. The game sees a neutral pad.
+// Buttons held across a toggle, or while the overlay is open, stay hidden from the game until
+// released, so the chord never reaches the pause menu and the closing press never reaches the
+// game. Output keys are the overlay's keyboard keys (Win32 virtual-key codes).
 namespace settings_pad {
 inline constexpr std::uint16_t kUp = 0x0001u;
 inline constexpr std::uint16_t kDown = 0x0002u;

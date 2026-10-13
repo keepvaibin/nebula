@@ -124,8 +124,8 @@ bool test_intensity_tile_decode() {
         std::vector<std::uint8_t> source(byte_count + prefix, 0xEDu);
         for (std::uint32_t i = 0; i < byte_count; ++i) {
             if (format == TexFormat::IA8) {
-                // 256x256 covers all 65,536 (A,I) pairs, not just matching
-                // or correlated channels. Smaller cases retain tile variation.
+                // 256x256 covers all 65,536 (A,I) pairs, not only matching or correlated channels.
+                // Smaller cases keep tile variation.
                 const auto word = i / 2u;
                 source[prefix + i] = static_cast<std::uint8_t>(
                     (i & 1u) == 0u ? word >> 8u : word);
@@ -143,8 +143,8 @@ bool test_intensity_tile_decode() {
         }
         for (std::uint32_t y = 0; y < height; ++y) {
             for (std::uint32_t x = 0; x < width; ++x) {
-                // Independent global-pixel address oracle includes padding
-                // in every tile; it does not traverse the decoder's row loops.
+                // Independent global-pixel address oracle that includes padding in every tile. It does
+                // not traverse the decoder's row loops.
                 const auto tile = (y / tile_height) * blocks_x + x / tile_width;
                 const auto pixel = (y % tile_height) * tile_width + x % tile_width;
                 const auto offset = prefix + tile * 32u;
@@ -256,8 +256,8 @@ bool test_generated_mip_uniform_alpha() {
             source, width, height, actual, dest_width, dest_height);
         if (!expect(actual.size() == dest_width * dest_height,
                     "generated mip retains exact output extent")) return false;
-        // Original scalar premultiplied-alpha rule, including thin/empty
-        // footprints and integer rounding; no uniform-alpha special case.
+        // Scalar premultiplied-alpha rule, including thin and empty footprints and integer
+        // rounding. No uniform-alpha special case.
         for (std::uint32_t y = 0u; y < dest_height; ++y) {
             for (std::uint32_t x = 0u; x < dest_width; ++x) {
                 std::array<std::uint32_t, 4> sums{};
@@ -288,8 +288,8 @@ bool test_generated_mip_uniform_alpha() {
         return true;
     };
     std::vector<RGBA8> block(4u);
-    // Every representable uniform alpha and RGB sum, including each rounding
-    // boundary; zero-alpha inputs keep zero RGB rather than hidden colors.
+    // Every representable uniform alpha and RGB sum, including each rounding boundary.
+    // Zero-alpha inputs keep zero RGB.
     for (std::uint32_t alpha = 0u; alpha < 256u; ++alpha) {
         for (std::uint32_t sum = 0u; sum <= 1020u; ++sum) {
             auto remaining = sum;
@@ -410,8 +410,8 @@ bool test_direct_color_tile_decode() {
     const auto same = [](RGBA8 a, RGBA8 b) {
         return a.r == b.r && a.g == b.g && a.b == b.b && a.a == b.a;
     };
-    // Independent arithmetic expansion of GX channel fields, including both
-    // RGB5A3 encodings. No production lookup/conversion helper is used here.
+    // Independent arithmetic expansion of GX channel fields, including both RGB5A3 encodings.
+    // No production lookup or conversion helper is used.
     const auto color = [](std::uint16_t word, TexFormat format) -> RGBA8 {
         const auto e5 = [](unsigned n) { return static_cast<std::uint8_t>(8u * n + n / 4u); };
         if (format == TexFormat::RGB565) {
@@ -542,8 +542,8 @@ bool test_small_index_tile_decode() {
                         source[i] = static_cast<std::uint8_t>((i - 3u) * 37u + 13u);
                     }
                     if (wide_index) {
-                        // The exact 256x256 case visits every raw 16-bit index,
-                        // including all four values of the two unused top bits.
+                        // The 256x256 case visits every raw 16-bit index, including all four values of the two
+                        // unused top bits.
                         for (std::size_t i = 3u; i < source.size(); i += 2u) {
                             const auto word = static_cast<std::uint16_t>((i - 3u) / 2u);
                             source[i] = static_cast<std::uint8_t>(word / 256u);
@@ -552,8 +552,8 @@ bool test_small_index_tile_decode() {
                     }
                     std::vector<std::uint8_t> bank(prefix + entries * 2u, 0xE7u);
                     std::vector<RGBA8> output(width * height + 2u, guard);
-                    // Reuse the same input/output pointers with changed colors;
-                    // no table may survive into the next call or palette format.
+                    // Reuses the same input and output pointers with changed colors. No table may survive
+                    // into the next call or palette format.
                     for (unsigned round = 0u; round < 2u; ++round) {
                         std::vector<std::uint16_t> words(entries);
                         for (unsigned i = 0u; i < entries; ++i) {
@@ -615,10 +615,9 @@ galaxy::gx::EfbCopyParams make_filter_params(
     return params;
 }
 
-// Independent integer oracle derived from the GX copy pipeline's documented
-// byte-domain behavior. Source rows are quantized before the 1/64 filter;
-// sums shift instead of rounding, >=128 coefficient sums wrap to nine bits,
-// and alpha is the unfiltered center sample.
+// Integer oracle based on the GX copy pipeline's byte-domain behavior. Source rows are
+// quantized before the 1/64 filter. Sums shift instead of round, coefficient sums >= 128
+// wrap to nine bits, and alpha is the unfiltered center sample.
 Pixel oracle_convert(
     Pixel previous,
     Pixel current,
@@ -1365,11 +1364,9 @@ V main(uint id : SV_VertexID) {
         desc.SampleDesc.Count = 1u;
         desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
         ComPtr<ID3D12Resource> a, b;
-        // A plain array rather than a braced-init-list: the elements of an
-        // `initializer_list` deduce to `ComPtr<ID3D12Resource>* const`, which
-        // `auto*` cannot bind (the original error here) and which `auto&&` binds
-        // as a const `ComPtrRef` proxy that has no `operator->`. An array keeps
-        // the element type a plain non-const `ComPtr*`, so the body is unchanged.
+        // A plain array, not a braced initializer list. An initializer_list deduces to
+        // `ComPtr<ID3D12Resource>* const`, which `auto*` cannot bind, and `auto&&` binds it as a
+        // const proxy with no operator->. A plain array keeps the element type a non-const `ComPtr*`.
         std::array<ComPtr<ID3D12Resource>*, 2> targets{&a, &b};
         for (auto* target : targets) {
             check_hr(device_->CreateCommittedResource(&properties, D3D12_HEAP_FLAG_NONE,
@@ -1414,8 +1411,8 @@ V main(uint id : SV_VertexID) {
         manager.mark_xfb_copied(*original, 1u);
         auto* original_resource = original->texture.Get();
         const auto original_serial = original->copy_serial;
-        // Initial allocation needs no retirement list. Resizing before the
-        // first begin_frame deliberately exercises its ownership failure path.
+        // Initial allocation needs no retirement list. Resizing before the first begin_frame
+        // deliberately exercises the ownership failure path.
         params.src_width = 16u;
         bool rejected = false;
         try { (void)manager.acquire_xfb(params, 2u); }
@@ -1460,8 +1457,8 @@ V main(uint id : SV_VertexID) {
         manager.begin_frame(1u, kFramesInFlight);
         params.src_width = 40u;
         const auto* before_fence = manager.acquire_xfb(params, 12u);
-        // Witness ComPtrs keep identities distinct even in the broken version:
-        // releasing a resource cannot let a new allocation reuse its address.
+        // Witness ComPtrs keep resource identities distinct, so a released resource's address
+        // cannot be reused by a new allocation.
         bool passed = expect(before_fence->texture.Get() != wanted.Get(),
             "another frame slot cannot recycle the recently retired XFB");
         manager.begin_frame(0u, kFramesInFlight);
@@ -1476,8 +1473,8 @@ V main(uint id : SV_VertexID) {
         params.src_width = 41u;
         passed &= expect(manager.acquire_xfb(params, 15u)->texture.Get() == other.Get(),
             "second size is reusable only after its own retirement slot is reclaimed");
-        // No command lists are submitted; production begin_frame calls are
-        // preceded by the corresponding renderer fence waits.
+        // No command lists are submitted. Production begin_frame calls are preceded by the
+        // matching renderer fence waits.
         manager.shutdown();
         return passed;
     }
@@ -1657,10 +1654,9 @@ V main(uint id : SV_VertexID) {
         return passed;
     }
 
-    // Async first-use decode must upload exactly the bytes the synchronous
-    // decode uploads, in the same frame, for every format family (full SIMD
-    // tiles and clipped edges), even when the TLUT bank is reloaded after the
-    // lookup and before the workers are joined.
+    // Async first-use decode must upload the same bytes as the synchronous decode, in the same
+    // frame, for every format family (full SIMD tiles and clipped edges). This holds even when
+    // the TLUT bank is reloaded after the lookup and before the workers are joined.
     bool test_async_texture_decode_matches_sync() {
         using namespace galaxy::gx;
         constexpr std::uint32_t address = 0x10000000u;
@@ -1724,8 +1720,8 @@ V main(uint id : SV_VertexID) {
                 handles.push_back(cache.get(image, mode, TlutRef{0u, test.tlut}, &memory));
                 offset += 0x400u;
             }
-            // Reload the slot with different bytes before the join: queued
-            // jobs must decode with the palette captured at lookup time.
+            // Reloads the slot with different bytes before the join. Queued jobs must decode with the
+            // palette captured at lookup time.
             (void)cache.load_tlut((address + 0x9000u) >> 5u, 16u << 10u, &memory);
             cache.set_async_decode_allowed(false);
             cache.finish_pending_decodes();
@@ -1974,8 +1970,8 @@ V main(uint id : SV_VertexID) {
     bool test_texture_cache_ranges() {
         using namespace galaxy::gx;
         bool passed = true;
-        // Full Wii TMEM is embedded in the cache; Windows' default test stack
-        // cannot hold its 1MiB bank plus the caller/harness frames.
+        // Full Wii TMEM is embedded in the cache. Windows' default test stack cannot hold its 1 MiB
+        // bank plus the caller and harness frames.
         auto cache_owner = std::make_unique<TextureCache>();
         TextureCache& cache = *cache_owner;
         if (!cache.initialize(device_.Get())) throw std::runtime_error("initialize WARP texture cache");
@@ -2109,8 +2105,8 @@ V main(uint id : SV_VertexID) {
         passed &= expect(decal.mip_levels == 1u && !decal.generated_mips,
             "a clamped texture keeps its single authored level");
 
-        // Complete the actual recorded upload before retirement/shutdown. This
-        // test owns its queue and waits for GPU completion, not just CPU submit.
+        // Completes the recorded upload before retirement and shutdown. This test owns its queue and
+        // waits for GPU completion, not just CPU submit.
         check_hr(list->Close(), "Close texture cache uploads");
         ID3D12CommandList* lists[]{list.Get()};
         queue_->ExecuteCommandLists(1u, lists);
@@ -2396,8 +2392,8 @@ PSIn main(uint id : SV_VertexID) {
                 native_depth ? source.Get() : companion_source.Get(), source_ring);
             source_gpu = views[native_depth ? 1u : 0u];
             srv_heap = source_ring.heap();
-            // Poison every frame descriptor and reuse both segments. Only the
-            // persistent source view can produce the expected non-null pixels.
+            // Poisons every frame descriptor and reuses both segments. Only the persistent source view
+            // can produce the expected non-null pixels.
             const UINT stride = device_->GetDescriptorHandleIncrementSize(
                 D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
             for (unsigned frame = 0u; frame < 6u; ++frame) {
@@ -2683,8 +2679,8 @@ bool test_uniform_dither_readbacks() {
                     (input.shader.stages[0].color_env & ~15u) | 8u; // D = texture.
                 input.shader.stages[0].alpha_env =
                     (input.shader.stages[0].alpha_env & ~(7u << 4u)) | (4u << 4u);
-                // The base depth fixture deliberately does not rely on TEV's
-                // texture swap. This color oracle requires explicit RGBA.
+                // The base depth fixture does not rely on TEV's texture swap. This color oracle requires
+                // explicit RGBA.
                 input.shader.stages[0].ksel =
                     (input.shader.stages[0].ksel & ((1u << 18u) - 1u)) | (0xe4u << 18u);
                 input.state.pixfmt = 1u;
@@ -2756,8 +2752,8 @@ bool test_gx_pixel_readbacks() {
                 "early alpha failure writes geometric depth while late failure preserves depth");
         }
 
-        // All formats use bytes from the unmodified, last enabled texture.
-        // The raw source has unequal channels so swizzle/format mistakes differ.
+        // All formats use bytes from the unmodified, last enabled texture. The raw source has unequal
+        // channels, so swizzle and format mistakes show up.
         constexpr std::uint32_t depths[]{120u, 30738u, 0x123456u};
         for (unsigned format = 0u; format < 3u; ++format) {
             for (bool disabled_tail : {false, true}) {
@@ -2796,8 +2792,8 @@ bool test_gx_pixel_readbacks() {
         input.constants.fog_params[5] = 1.0f; // Green fog.
         input.constants.fog_params[7] = 1.0f; // Orthographic.
         const auto fog = harness.run_gx(input);
-        // Each 255*128 contribution truncates separately in the integer
-        // final sum's >>8: both red and green are 127, not float-rounded 128.
+        // Each 255*128 contribution truncates separately in the integer final sum's >>8, so red and
+        // green are 127, not a float-rounded 128.
         passed &= expect_pixel(fog.color, {127u, 127u, 0u, 130u},
             "early Z-texture modifies integer fog color before physical output quantization");
         passed &= expect(std::abs(fog.depth - 0.75f) < 2.0f / 16777216.0f,
@@ -3123,10 +3119,9 @@ bool test_warp_against_oracle() {
                 depth_label);
         }
 
-        // GXPeekZ reads one native EFB pixel. At scaled internal resolutions
-        // that maps to one deterministic physical texel, never a bilinear
-        // blend. Four logical blocks exercise both edges and exact z24
-        // endpoints while keeping non-selected subpixels adversarial.
+        // GXPeekZ reads one native EFB pixel. At scaled internal resolutions that maps to one
+        // deterministic physical texel, never a bilinear blend. Four logical blocks exercise both
+        // edges and exact z24 endpoints, with non-selected subpixels kept adversarial.
         constexpr std::array<std::uint32_t, 4> kPeekDepths{
             0x000000u,
             0x123456u,
@@ -3186,9 +3181,8 @@ bool test_warp_against_oracle() {
                     "whole pointer depth field preserves exact GXPeekZ pixel and z24");
             }
 
-            // Color peeks intentionally retain their complete NxN box
-            // reduction. The center and corner deltas cancel only when every
-            // physical subpixel participates in the reduction.
+            // Color peeks keep their full NxN box reduction. The center and corner deltas cancel only when
+            // every physical subpixel takes part in the reduction.
             constexpr Pixel kColorMean{64u, 96u, 128u, 160u};
             std::vector<Pixel> color_block(
                 static_cast<std::size_t>(scale) * scale,
@@ -3254,8 +3248,8 @@ int main(int argc, char** argv) {
     }
     if (argc == 2 && (std::strcmp(argv[1], "--oversized-content-cache") == 0 ||
                      std::strcmp(argv[1], "--decoded-allocation-budget") == 0)) {
-        // Cache settings are memoized on first access: use a fresh process and
-        // configure the CRT environment before any harness/cache construction.
+        // Cache settings are memoized on first access. Use a fresh process and configure the CRT
+        // environment before any harness or cache is constructed.
         if (_putenv_s("GALAXY_GX_CONTENT_TEXTURE_CACHE", "1") != 0 ||
             _putenv_s("GALAXY_GX_DECODED_TEXTURE_BUDGET_MB", "1") != 0) {
             std::fprintf(stderr, "FAILED: configure oversized content cache regression\n");

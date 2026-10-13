@@ -54,20 +54,18 @@ inline constexpr float kStickPointerLimit = 1.0f;
 inline constexpr float kGyroPointerLimit = 1.35f;
 inline constexpr float kPointerVisibleLimit = 1.02f;
 
-// The Switch ports hide the gyro pointer when it is not being used and bring
-// it back only with R (recenter). The controller-owned pointer, low-passed
-// over kPointerHideFilterSeconds so a one-report spike does not count, is
-// compared with an anchor: while it stays within `radius` of the anchor a
-// timer runs, and after `hide_seconds` the pointer hides. Hand tremor and
-// small jerks inside the radius never restart the timer; leaving the radius
-// re-anchors and restarts it. A hidden gyro pointer (`latch`) stays hidden
-// until `reveal` (recenter). A hidden stick pointer also shows again when it
-// leaves the radius or the stick is pushed. A mouse-owned pointer never hides.
+// The Switch ports hide the gyro pointer when it is not being used and bring it back
+// only with R (recenter). The controller-owned pointer, low-passed over
+// kPointerHideFilterSeconds so a one-report spike does not count, is compared with an
+// anchor: while it stays within `radius` of the anchor a timer runs, and after
+// `hide_seconds` the pointer hides. Hand tremor and small jerks inside the radius never
+// restart the timer; leaving the radius re-anchors and restarts it. A hidden gyro
+// pointer (`latch`) stays hidden until `reveal` (recenter). A hidden stick pointer also
+// shows again when it leaves the radius or the stick is pushed. A mouse-owned pointer
+// never hides.
 //
-// Default radius 0.12 units (6 % of the picture width, 2.4 degrees of turn at
-// gyro sensitivity 1): a resting Pro Controller drifts under 0.004 units in
-// 65 s, hand tremor is about +-0.5 degrees (+-0.025 units) and a grip
-// adjustment about 2 degrees (0.1 units).
+// The default radius of 0.12 units (6 % of the picture width, 2.4 degrees of turn at
+// gyro sensitivity 1) is larger than hand tremor (about 0.025 units).
 inline constexpr float kPointerHideFilterSeconds = 0.1f;
 inline constexpr float kDefaultPointerHideRadius = 0.12f;
 inline constexpr float kDefaultPointerHideSeconds = 4.0f;

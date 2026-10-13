@@ -477,12 +477,10 @@ bool test_xf_matrix_span_updates() {
                 }
             }
         }
-        // The element type is `std::uint16_t`, so each literal must be spelled as
-        // one: an unsuffixed `0x0040u` is `unsigned int`, which MSVC reports as
-        // C4244 (possible loss of data) inside a braced initializer list. The
-        // project builds with `/WX`, so that warning is a build error. Same repair
-        // as the `{0x0000u, 0x0040u, 0x0400u, 0x0500u, 0x0600u, 0x1009u}` list
-        // lower in this file.
+        // The element type is `std::uint16_t`, so each literal must be spelled as one. An
+        // unsuffixed `0x0040u` is `unsigned int`, which MSVC reports as C4244 inside a braced
+        // initializer list; the project builds with `/WX`. The list lower in this file uses the
+        // same spelling.
         for (const std::uint16_t bank :
              {static_cast<std::uint16_t>(0x0040u),
               static_cast<std::uint16_t>(0x0420u),
@@ -508,16 +506,14 @@ bool test_xf_matrix_span_updates() {
     return true;
 }
 
-// `GxState::xf_palette_dirty()` exists so the renderer can decide whether the
-// frame's existing GPU snapshot of the XF matrix palette can be reused instead
-// of allocating a fresh one. The renderer half is untestable without a D3D12
-// device, but the producer contract is exactly testable here, and it is the half
-// that can silently go wrong: a chunk the guest wrote but never armed would let
-// the renderer reuse a snapshot that is missing that write.
+// `GxState::xf_palette_dirty()` lets the renderer reuse the frame's existing GPU snapshot
+// of the XF matrix palette instead of allocating a new one. The renderer half needs a
+// D3D12 device and is not tested here. This test covers the producer contract, where a
+// missed write would show up: a chunk the guest wrote but never armed would let the
+// renderer reuse a snapshot that is missing that write.
 bool test_xf_palette_chunk_tracking() {
-    // A using-declaration cannot name a namespace (`xf` is one), so this must be
-    // qualified at each use. The rest of this file already spells
-    // `galaxy::gx::xf::...` out; this line and the one below were the exceptions.
+    // A using-declaration cannot name a namespace (`xf` is one), so names are qualified at
+    // each use.
     GxState state;
     // A consumer that has uploaded nothing starts with an all-clear mask and
     // compensates with "not yet valid", so the first upload is always full.
@@ -552,10 +548,9 @@ bool test_xf_palette_chunk_tracking() {
     if (!expect(state.xf_palette_dirty() == 0u,
                 "clearing the whole palette span leaves no armed chunk")) return false;
 
-    // `load_xf_indexed` is the path SMG actually uses for object/skin matrices
-    // (LOAD_INDX A-D), so it has to arm the same bits as the direct write, and a
-    // re-issued write of identical data must leave the mask at rest — the
-    // renderer would otherwise re-upload a span that did not move.
+    // `load_xf_indexed` is the path SMG uses for object/skin matrices (LOAD_INDX A-D), so it
+    // has to arm the same bits as the direct write. A re-issued write of identical data must
+    // leave the mask at rest; the renderer would otherwise re-upload a span that did not move.
     const std::array<std::uint32_t, 12> skin_matrix{
         21u, 22u, 23u, 24u, 25u, 26u, 27u, 28u, 29u, 30u, 31u, 32u};
     state.load_xf_indexed(0x0080u, skin_matrix.data(), 12u);
@@ -732,10 +727,9 @@ void test_dependency_hash_cache() {
 }
 
 namespace {
-// Golden observation stream produced by the pre-table public GxState source
-// SHA256 5b6086e311213272bf404ff47744de03581bc27e69a1fb96f2931b22ce484ed6.
-// 46422 writes cover every BP address/bit, masks, shared TEV banks, copies and
-// faults. Exact binary streams were also compared before retaining this digest.
+// Golden observation stream, produced by the GxState source with SHA256
+// 5b6086e311213272bf404ff47744de03581bc27e69a1fb96f2931b22ce484ed6. It covers 46422
+// writes across every BP address/bit, masks, shared TEV banks, copies and faults.
 std::uint64_t bp_write_observation_digest() {
     GxState state;
     std::uint64_t digest=1469598103934665603ull;

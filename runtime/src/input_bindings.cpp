@@ -286,7 +286,7 @@ BindingTable legacy_binding_table(ControlScheme scheme) {
     return table;
 }
 
-// The defaults shipped in controls version 2 (Native29), for migration.
+// Default bindings of controls version 2, kept for migration.
 BindingTable version2_binding_table(ControlScheme scheme) {
     BindingTable table = legacy_binding_table(scheme);
     if (scheme == ControlScheme::Keyboard) {
@@ -314,7 +314,7 @@ BindingTable version2_binding_table(ControlScheme scheme) {
     return table;
 }
 
-// The defaults shipped in controls version 3 (Native29b), for migration.
+// Default bindings of controls version 3, kept for migration.
 BindingTable version3_binding_table(ControlScheme scheme) {
     BindingTable table = version2_binding_table(scheme);
     if (scheme == ControlScheme::Keyboard) {

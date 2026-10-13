@@ -15,9 +15,8 @@ mod sel;
 mod translate;
 pub use translate::apply_transfer_returns;
 
-// CR0 record/compare -> branch fusion. Additive and unit-tested; not yet called
-// from the lowering loop. See the module header for the safety model and for the
-// operand trap an earlier revision of it fell into.
+// CR0 record/compare -> branch fusion. Not yet called from the lowering loop.
+// The module header describes the safety model and the operand rules.
 pub mod cr0_fusion;
 pub use cr0_fusion::{fuse_cr0_branches, Cr0FusionStats};
 

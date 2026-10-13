@@ -104,8 +104,8 @@ enum Command {
         /// body; reachable by default only through `release_module_options`.
         #[arg(long)]
         experimental_guest_resident_integer: bool,
-        /// FPR/PS1 residency on top of the integer pass; measured slower on
-        /// RMGE01 (exact float fallbacks force spills), so off everywhere.
+        /// FPR/PS1 residency on top of the integer pass. Off everywhere: exact float fallbacks
+        /// force spills on RMGE01.
         #[arg(long)]
         experimental_guest_resident_float: bool,
         /// Fast float: native IEEE arithmetic with no exact fallback (the
@@ -130,10 +130,10 @@ enum Command {
         /// Fused paired arithmetic/commit helper; exact guards and slow fallback.
         #[arg(long)]
         experimental_fused_paired_binary: bool,
-        /// Indexed paired boundary; moving-route/new-shard validation pending.
+        /// Indexed paired boundary; not yet validated across routes.
         #[arg(long, conflicts_with = "experimental_fused_paired_binary")]
         experimental_indexed_paired_binary: bool,
-        /// Compact paired ternary boundary; broader route validation pending.
+        /// Compact paired ternary boundary; not yet validated across routes.
         #[arg(long, conflicts_with = "experimental_fused_paired_ternary")]
         experimental_indexed_paired_ternary: bool,
         /// Paired ternary calculation/commit helper; off until gameplay validation.
@@ -142,7 +142,7 @@ enum Command {
         /// In-header widened-single scalar add/subtract/multiply; off by default.
         #[arg(long)]
         experimental_inline_scalar_single_binary: bool,
-        /// Retained compatibility spelling; exact PSMTX local lanes are enabled by default.
+        /// Compatibility spelling; exact PSMTX local lanes are on by default.
         #[arg(long, default_value_t = true)]
         exact_psmtx_local_lanes: bool,
         /// Disable exact PSMTX local lanes for differential regression controls.
@@ -163,31 +163,31 @@ enum Command {
         /// Count admission during the runtime main-frame trace window; flush on next call.
         #[arg(long)]
         trace_psmtx_guard: bool,
-        /// Add eight buffered end-frame continuation markers (development only; requires --count 0).
+        /// Add eight buffered end-frame continuation markers. Development only; requires --count 0.
         #[arg(long)]
         trace_end_frame_spans: bool,
-        /// Trace eight GameScene update calls and their exact returns (requires --count 0).
+        /// Trace eight GameScene update calls and their returns. Requires --count 0.
         #[arg(long)]
         trace_scene_update_spans: bool,
-        /// Profile the ten static child calls in particle direction drawing (requires --count 0).
+        /// Profile the static child calls in particle direction drawing. Requires --count 0.
         #[arg(long)]
         profile_particle_direction_edges: bool,
-        /// Profile all 77 static child calls in NW4R material setup (requires --count 0).
+        /// Profile the static child calls in NW4R material setup. Requires --count 0.
         #[arg(long)]
         profile_nw4r_material_setup_edges: bool,
-        /// Profile 17 static child calls in the two hot NW4R Pane DrawSelf implementations.
+        /// Profile the static child calls in the NW4R Pane DrawSelf implementations.
         #[arg(long)]
         profile_nw4r_pane_draw_self_edges: bool,
-        /// Profile six static calls in the two dominant Pane DrawSelf children.
+        /// Profile the static calls in the two Pane DrawSelf children.
         #[arg(long)]
         profile_nw4r_pane_hot_child_edges: bool,
-        /// Profile 66 static calls below CalcStringRect and the hot text formatter.
+        /// Profile the static calls below CalcStringRect and the text formatter.
         #[arg(long)]
         profile_nw4r_text_format_edges: bool,
-        /// Profile 16 static calls in the dominant NW4R text-layout children.
+        /// Profile the static child calls in the NW4R text-layout children.
         #[arg(long)]
         profile_nw4r_text_layout_edges: bool,
-        /// Profile ten static calls and the matrix body in hot JPA draw 0x803A3B6C.
+        /// Profile the static child calls and matrix body of JPA draw 0x803A3B6C.
         #[arg(long)]
         profile_jpa_hot_draw_edges: bool,
         /// Profile direct calls below the top unresolved UI/input self-time entries.
@@ -1291,7 +1291,7 @@ fn print_human(analysis: &GameAnalysis) {
     );
 }
 
-// ── Build-pak (Windows only) ──────────────────────────────────────────────────
+// Build-pak (Windows only)
 
 fn print_dsp_audit(path: &Path, audit: &nebula_recomp_core::DspProgramAudit) {
     println!("DSP ucode: {}", path.display());

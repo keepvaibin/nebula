@@ -1,9 +1,7 @@
-// gx_backend.cpp — GxBackend: top-level orchestrator for the live GX pipeline.
+// gx_backend.cpp: GxBackend, the top-level orchestrator for the live GX pipeline.
 //
-// The frozen galaxy::gx public API in gx_d3d12.h is implemented by gx_shim.cpp
-// as a thin wrapper around this backend. The old monolithic/legacy D3D12
-// sources have been removed from the build and source tree so audits land on
-// the active render path.
+// gx_shim.cpp implements the frozen galaxy::gx public API in gx_d3d12.h as a thin wrapper
+// around this backend.
 
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
@@ -83,9 +81,7 @@ std::uint32_t pack_sampler_key(
         | (max_lod << 24);
 }
 
-// ---------------------------------------------------------------------------
-// Helpers: build GxVsConstants from current GxState + render ring.
-// ---------------------------------------------------------------------------
+// Helpers: build GxVsConstants from current GxState and the render ring.
 
 namespace {
 
@@ -178,11 +174,11 @@ const std::string& capture_request_file() {
     return path;
 }
 
-// Render-worker-owned extension of the existing capture. Disabled runs never
-// touch a file. Each decimal request selects one substantial FIFO chunk, not a
-// whole game frame. Empty VI/presentation submissions and the 32-byte control
-// chunks observed in the Gateway route must not consume it.
-// Poll files at most 10 times/second; a pending request expires after 10 seconds.
+// Render-worker capture of substantial FIFO chunks. Disabled runs never touch a file. Each
+// decimal request selects one substantial FIFO chunk, not a whole game frame. Empty VI and
+// presentation submissions, and the 32-byte control chunks on the Gateway route, do not
+// consume a request. Files are polled at most 10 times per second; a pending request expires
+// after 10 seconds.
 std::uint64_t live_capture_frame = 0u;
 
 void poll_live_capture_request(std::uint64_t frame, std::size_t fifo_size) {
@@ -278,9 +274,9 @@ bool capture_owned_xfb_enabled() {
     return enabled;
 }
 
-// One source/destination pair from the same real XFB copy, within the existing
-// eight-chunk request bound. The old substantial-chunk snapshot can belong to
-// a newer EFB than the selected display XFB; never call those a matched pair.
+// One source/destination pair from the same real XFB copy, within the existing eight-chunk
+// request bound. The substantial-chunk snapshot can belong to a newer EFB than the selected
+// display XFB; never call those a matched pair.
 bool capture_owned_xfb_requested(std::uint64_t frame) {
     static std::uint64_t captured_request_frame = 0u; // Render-worker owned.
     if (!capture_owned_xfb_enabled() || live_capture_frame == 0u ||
@@ -522,18 +518,17 @@ bool trace_xfb_causal_frame(std::uint64_t frame) {
     }
     static const std::uint64_t start_frame =
         read_env_u64("GALAXY_TRACE_XFB_CAUSAL_START_FRAME", 1u);
-    // The trace is deliberately bounded even when the caller forgets to set
-    // a limit. It is a causal diagnostic, not a shipping telemetry stream.
+    // The trace is bounded even when the caller sets no limit. It is a causal diagnostic, not a
+    // shipping telemetry stream.
     static const std::uint64_t max_frames = std::min<std::uint64_t>(
         read_env_u64("GALAXY_TRACE_XFB_CAUSAL_MAX_FRAMES", 600u),
         10'000u);
     return frame >= start_frame && frame - start_frame < max_frames;
 }
 
-// Unlike the older streaming causal trace above, this mode collects a small,
-// fixed record set on the render thread and formats it only after that thread
-// has stopped. It remains usable while AI DMA is active: redirected stderr
-// writes from a render callback are not real-time-safe evidence.
+// Unlike the streaming causal trace above, this mode collects a small, fixed record set on the
+// render thread and formats it only after that thread has stopped. It remains usable while AI
+// DMA is active: stderr writes from a render callback are not real-time safe.
 bool trace_xfb_causal_deferred_enabled() {
     static const bool enabled = [] {
         char value[16]{};
@@ -675,16 +670,13 @@ std::uint64_t trace_gx_microprofile_interval() {
 }
 
 std::uint64_t max_xfb_preserve_age() {
-    // When the VI-selected XFB is transiently non-presentable (it has just
-    // been re-acquired as the next copy target during a double/triple-buffer
-    // flip), select_xfb_for_present holds the last good frame instead of
-    // jumping to a different buffer. The "missing_expired" fall-forward to
-    // latest() must only fire for a *sustained* miss (a buffer that genuinely
-    // never receives a copy), never for the 1-3 frame jitter of a normal flip
-    // or the async render pipeline — otherwise every flip strobes a different
-    // buffer for one frame, which is the visible black/flash regression.
-    // 30 presents (~0.5s) comfortably clears pipeline jitter while still
-    // breaking a true multi-frame freeze.
+    // select_xfb_for_present holds the last good frame when the VI-selected XFB is transiently not
+    // presentable, which happens while that buffer is re-acquired as the next copy target during a
+    // double or triple buffer flip. The fall-forward to latest() on "missing_expired" applies only
+    // to a sustained miss, a buffer that never receives a copy. It must not fire on the 1-3 frame
+    // jitter of a normal flip or of the async render pipeline, or every flip would show a different
+    // buffer for one frame. 30 presents (about 0.5 s) clears pipeline jitter and still breaks a true
+    // multi-frame freeze.
     static const std::uint64_t age =
         std::clamp<std::uint64_t>(
             read_env_u64("GALAXY_XFB_MAX_PRESERVE_AGE", 30u),
@@ -693,13 +685,11 @@ std::uint64_t max_xfb_preserve_age() {
     return age;
 }
 
-// Bounded per-draw instrumentation sampling. The per-draw clocks live on the
-// render thread's critical path, so "always on" is not acceptable and "only
-// under an intrusive flag" means a routine recording cannot attribute time at
-// all. GALAXY_GX_FRAME_TIMING_SAMPLE=N turns the per-draw instrumentation on for
-// one frame in every N, so a single recording contains fully-attributed sample
-// frames alongside frames running at true production speed. N <= 1 means no
-// sampling (the default), which preserves the pre-existing behaviour exactly.
+// Per-draw instrumentation sampling. The per-draw clocks sit on the render thread's critical
+// path, so they cannot be always on. Gating them behind an intrusive flag would leave a routine
+// recording unable to attribute time. GALAXY_GX_FRAME_TIMING_SAMPLE=N enables per-draw
+// instrumentation for one frame in every N, so one recording holds attributed sample frames and
+// frames at production speed. N <= 1 disables sampling (the default).
 bool frame_gx_timing_sample_enabled(std::uint64_t frame_index) {
     static const std::uint64_t period = read_env_u64(
         "GALAXY_GX_FRAME_TIMING_SAMPLE", 0u);
@@ -710,13 +700,10 @@ bool frame_gx_timing_sample_enabled(std::uint64_t frame_index) {
     return (frame_index + 1u) % period == 0u;
 }
 
-// NOTE: there is deliberately no accessor for the sampling *period*. An earlier
-// revision added one so the deferred stats ring could derive a store stride from
-// the period, on the mistaken premise that `frame_time_sample_` is true on every
-// frame. It is true once per period; `frame_time_detail_` is the one that is true
-// every frame. The stride therefore composed with the period rather than bounding
-// it, and at the recommended `-Sample 300` it suppressed the samples entirely.
-// The ring bounds its own occupancy by reservoir sampling instead.
+// There is no accessor for the sampling period. `frame_time_sample_` is true once per period,
+// not on every frame, so a store stride derived from the period would suppress the samples.
+// `frame_time_detail_` is the flag that is true every frame. The ring bounds its occupancy by
+// reservoir sampling.
 
 // GALAXY_PE_PRECLASSIFY=0 skips the simulation thread's second FIFO parse;
 // every capture then takes the render thread's resolution path.
@@ -750,27 +737,21 @@ bool display_list_dirty_invalidate_enabled() {
     return enabled;
 }
 
-// The decoded-packet-run vertex cache reuses CPU-decoded vertices across
-// identical display-list replays. It is a CPU-side optimization, but not a
-// micro one: a busy SMG frame replays tens of thousands of draws out of cached
-// display lists, and with the cache off every one of those packet runs
-// re-decodes its source vertices and re-copies them into the frame ring. That
-// re-decode is on the measured critical path (the render thread is the only
-// thread near saturation while presentation still misses its retrace), so the
-// cache is ON by default and the opt-out is retained for bisecting geometry
-// regressions: set GALAXY_GX_DECODED_VERTEX_CACHE=0 to restore the old path.
+// The decoded-packet-run vertex cache reuses CPU-decoded vertices across identical display-list
+// replays. A busy SMG frame replays tens of thousands of draws from cached display lists. With
+// the cache off, every packet run re-decodes its source vertices and copies them into the frame
+// ring. That re-decode is on the render thread's critical path, so the cache is on by default.
+// Set GALAXY_GX_DECODED_VERTEX_CACHE=0 to restore the uncached path when bisecting geometry
+// regressions.
 //
-// Correctness does not rest on the cache being cold. A hit is only taken when
-// the whole decode input is identical:
-//   - the key carries the display-list token + packet-run index (so the source
-//     bytes and packet boundaries are the recorded ones), the VCD/VAT words and
-//     the indexed array base/stride registers;
-//   - guest-write notifications invalidate every overlapping entry before the
-//     frame's first replay, and the retained snapshot bytes are compared against
-//     live guest memory once per generation as a backstop against a coalesced or
-//     missed notification.
-// A miss, a stale reject, or an entry that could not capture a complete
-// dependency snapshot all fall through to the uncached decode path below.
+// A hit is taken only when the whole decode input is identical:
+//   - the key holds the display-list token and packet-run index (so the source bytes and packet
+//     boundaries match), the VCD/VAT words and the indexed array base and stride registers;
+//   - guest-write notifications invalidate every overlapping entry before the frame's first
+//     replay. The retained snapshot bytes are compared against live guest memory once per
+//     generation, as a backstop against a coalesced or missed notification.
+// A miss, a stale reject, or an entry that could not capture a complete dependency snapshot falls
+// through to the uncached decode path below.
 bool decoded_vertex_cache_enabled() {
     static const bool enabled = [] {
         char value[16]{};
@@ -788,18 +769,16 @@ bool decoded_vertex_cache_enabled() {
     return enabled;
 }
 
-// A decoded-packet-run cache entry whose guest input did not change describes
-// the same vertices on consecutive frames. With this enabled the entry's
-// ImmutableUploadToken lets UploadRing::upload_immutable() keep the bytes it
-// already copied into the per-frame segment instead of re-copying them, which
-// removes one full vertex-buffer memcpy per replayed packet run per frame.
+// A cache entry whose guest input did not change describes the same vertices on consecutive
+// frames. When enabled, the entry's ImmutableUploadToken lets UploadRing::upload_immutable() keep
+// the bytes it already copied into the per-frame segment, so each replayed packet run skips one
+// full vertex-buffer copy per frame.
 //
-// Reuse is only taken when the ring can prove the bytes are intact: allocations
-// are monotonic inside a frame segment, the token records the segment generation
-// of its own upload, and reuse requires that generation to be exactly one behind
-// the current one. Any intervening allocation in that slot changes the
-// generation and the call falls back to a plain memcpy. The only failure mode is
-// therefore a copy that was not needed, never a reused overwritten buffer.
+// Reuse is taken only when the ring can prove the bytes are intact. Allocations are monotonic
+// within a frame segment. The token records the segment generation of its own upload, and reuse
+// requires that generation to be exactly one behind the current one. Any intervening allocation
+// in that slot changes the generation, and the call falls back to a plain copy. The failure mode
+// is therefore an extra copy, never a reused overwritten buffer.
 bool immutable_vertex_upload_reuse_enabled() {
     static const bool enabled = [] {
         char value[16]{};
@@ -2306,38 +2285,27 @@ ThreadCounterSample thread_cpu_time_100ns() noexcept {
     return {kernel_ticks.QuadPart + user_ticks.QuadPart, true};
 }
 
-// Always-on flush cost, sampled so the meter cannot become the measured path.
+// Always-on flush timing, sampled one call in kFlushTimingSampleStride so the meter does not
+// become the measured path.
 //
-// Every existing `*_us` field inside `flush_draw_state` is gated on
-// `frame_microprofile_enabled_ || trace_gx_stalls_enabled()`, i.e. it is only
-// produced by switching on thousands of extra `steady_clock` reads per frame on
-// the very path being measured. The retained recording proves the consequence:
-// frame 12802 reports `flush-pso-us` = 130710 of a 135091 us frame with zero
-// logged PSO misses, and frame 6796 reports 405443 us over 284 batches. Both are
-// upper bounds with the profiler's own overhead included, so neither can size
-// the real work or rank the next fix.
+// The `*_us` fields inside `flush_draw_state` are gated on
+// `frame_microprofile_enabled_ || trace_gx_stalls_enabled()`, so they exist only when extra
+// steady_clock reads run on every frame. Their values are upper bounds that include the
+// profiler's own overhead, so they cannot size the real work.
+// One steady_clock pair per draw costs render-thread time on a large frame, so the clock is read
+// for only one call in kFlushTimingSampleStride.
 //
-// One `steady_clock` pair per draw would itself be ~74 us of render-thread time
-// on a 37k-draw frame: small, but not free, and the point of this meter is to be
-// trustworthy when it says a block is cheap. So the clock is read for only one
-// call in `kFlushTimingSampleStride`.
+// Report fields:
+//   - `flush-mean-us` = frame_flush_total_us_ / frame_flush_timed_samples_ is the per-call cost,
+//     the mean over the sampled calls. Compare builds with this field.
+//   - `flush-total-us` is the sum over the sampled calls only, roughly 1/64 of the frame's flush
+//     work. It is not scaled up, because that assumes the sample is representative. It is a
+//     diagnostic for the sampler (see the note at its print site).
+//   - `flush-timed-samples` is the denominator and the sampler's health signal. If it is 0, no
+//     call was timed and the other two fields are not meaningful.
 //
-// What the report fields mean, stated exactly, because two of the three are easy
-// to misread:
-//   - `flush-mean-us` = frame_flush_total_us_ / frame_flush_timed_samples_ is the
-//     honest per-call cost: the mean over the sampled calls, and the number to
-//     compare across builds. It is the only one of the three to quote.
-//   - `flush-total-us` is the SUM OVER THE SAMPLED CALLS, i.e. roughly 1/64 of the
-//     frame's real flush work. It is deliberately NOT scaled up: scaling a sampled
-//     sum by the call count assumes the sample is representative, and the whole
-//     point of this meter is to be checkable rather than assumed. Read
-//     `flush-mean-us` and `flush-timed-samples` instead; treat `flush-total-us` as
-//     a diagnostic for the sampler itself (see the note at its print site).
-//   - `flush-timed-samples` is the denominator and also the sampler's health
-//     signal: if it is 0, no call was timed and the other two are not evidence.
-//
-// The sampling counter `frame_flush_timed_calls_` is monotonic across the session
-// and must stay that way -- see the note where the per-frame counters are reset.
+// `frame_flush_timed_calls_` is monotonic across the session; see the note where the per-frame
+// counters are reset.
 constexpr std::uint64_t kFlushTimingSampleStride = 64u;
 
 struct ScopedFlushTiming {
@@ -2350,12 +2318,10 @@ struct ScopedFlushTiming {
         std::uint64_t& call_count,
         std::uint64_t& sampled_total_us,
         std::uint64_t& sampled_count) noexcept {
-        // Every Nth call of the session. `call_count` is monotonic, so the
-        // residue walks all 64 values and the samples spread across call
-        // positions regardless of how many flushes a frame makes. Do NOT tie
-        // this to a per-frame counter: with ~36-39 flushes per frame a stride of
-        // 64 then matches only call 0, and the meter silently reports the first
-        // flush of every frame.
+        // Every Nth call of the session. `call_count` is monotonic, so the residue walks all 64 values
+        // and the samples spread across call positions regardless of how many flushes a frame makes. Do
+        // not tie this to a per-frame counter: with a stride of 64 and fewer flushes per frame than that,
+        // only call 0 of each frame would be sampled.
         if ((call_count % kFlushTimingSampleStride) == 0u) {
             start = std::chrono::steady_clock::now();
             this->sampled_total_us = &sampled_total_us;
@@ -2691,20 +2657,19 @@ void trace_thp_draw_state(
     vertex_ring.resource()->Unmap(0, &no_read);
 }
 
-// Converts the raw XF projection registers to a column-major 4×4 matrix
-// stored row-major (HLSL row_major float4x4 == stored row-by-row).
+// Converts the raw XF projection registers to a column-major 4x4 matrix stored row-major (HLSL
+// row_major float4x4 == stored row-by-row).
 // GX perspective (type=0): maps to a left-hand clip space with z in [0,1].
 // GX orthographic (type=1): same re-mapping.
-// ---------------------------------------------------------------------------
+//
 // Build GxPsConstants from current GxState.
-// ---------------------------------------------------------------------------
 void fill_ps_constants(const GxState& state, GxPsConstants& out) {
     std::memset(&out, 0, sizeof(out));
 
     const GenMode gm = state.gen_mode();
 
-    // TEV stage_config words.  TevStagePacked is 4 × u32, laid out identically
-    // to uber_constants GxPsConstants::stage_config[stage][0..3].
+    // TEV stage_config words. TevStagePacked is 4 x u32, laid out identically to uber_constants
+    // GxPsConstants::stage_config[stage][0..3].
     for (unsigned s = 0; s < gm.num_tev_stages && s < kMaxTevStages; ++s) {
         // color_env: BP 0xC0 + 2*stage
         out.stage_config[s][0] =
@@ -2742,7 +2707,7 @@ void fill_ps_constants(const GxState& state, GxPsConstants& out) {
         }
     }
 
-    // Konst K0-K3 — same packing convention from tev_konst_colors().
+    // Konst K0-K3: same packing convention as tev_konst_colors().
     {
         const auto krgba = state.tev_konst_colors();
         for (unsigned k = 0; k < 4; ++k) {
@@ -2773,11 +2738,10 @@ void fill_ps_constants(const GxState& state, GxPsConstants& out) {
             : 0.0f;
     }
 
-    // Fog.  A (BP 0xEE) and C (BP 0xF1 bits 0-19) are 20-bit packed floats —
-    // unpacked here on the CPU (Dolphin PixelShaderManager SetFogParamChanged
-    // stores GetA()/GetC() the same way).  B magnitude (u24) and B shift (u5)
-    // stay integral; both are exactly representable in float, and the PS
-    // recovers them with uint() casts.
+    // Fog A (BP 0xEE) and C (BP 0xF1 bits 0-19) are 20-bit packed floats, unpacked here on the
+    // CPU the same way Dolphin's PixelShaderManager SetFogParamChanged stores GetA()/GetC().
+    // B magnitude (u24) and B shift (u5) stay integral: both are exactly representable in float,
+    // and the PS recovers them with uint() casts.
     {
         const FogParams fp = state.fog();
         out.fog_params[0] =
@@ -2791,7 +2755,7 @@ void fill_ps_constants(const GxState& state, GxPsConstants& out) {
         out.fog_params[4] = ((fp.color_rgb >> 16) & 0xFFu) / 255.0f;
         out.fog_params[5] = ((fp.color_rgb >>  8) & 0xFFu) / 255.0f;
         out.fog_params[6] = ((fp.color_rgb      ) & 0xFFu) / 255.0f;
-        // Projection flag (1.0 = orthographic — FogProjection enum).
+        // Projection flag (1.0 = orthographic; FogProjection enum).
         out.fog_params[7] = fp.projection ? 1.0f : 0.0f;
     }
 
@@ -2894,9 +2858,9 @@ void gx_topology_for_primitive(
 // One contiguous snapshot 0x0000-0x067F keeps the upload a single memcpy and
 // lets the VS fetch matrices AND lights from the same structured buffer.
 inline constexpr std::size_t kMatrixPaletteWords = 0x0680u;  // 0x0000-0x067F
-// The palette upload now copies only the chunks `GxState` reports as written, so
-// this bound and GxState's must describe the same word range; otherwise the
-// upload would silently skip words inside the palette or copy past its end.
+// The palette upload copies only the chunks `GxState` reports as written, so this bound and
+// GxState's must describe the same word range. Otherwise the upload would silently skip words
+// inside the palette or copy past its end.
 static_assert(
     kMatrixPaletteWords == galaxy::gx::GxState::kMatrixPaletteWords,
     "backend palette bound must match the tracked GxState palette range");
@@ -3250,9 +3214,7 @@ void GxBackend::reset_fifo_session_state() {
     }
 }
 
-// ---------------------------------------------------------------------------
 // GxBackend lifecycle
-// ---------------------------------------------------------------------------
 
 GxBackend::~GxBackend() noexcept {
     if (!initialized_) {
@@ -3297,10 +3259,9 @@ bool GxBackend::initialize(int w, int h) {
 
     cadence_diagnostics_ = cadence::global_session_if_enabled();
 
-    // Reset is deliberately before native resource acquisition. It audits the
-    // previous session and advances the token epoch, so a failed prior session
-    // cannot be hidden by renderer reinitialization and an old token can never
-    // alias this one.
+    // Reset runs before native resource acquisition. It audits the previous session and advances
+    // the token epoch, so a failed prior session cannot be hidden by renderer reinitialization, and
+    // an old token can never alias this one.
     frame_pe_completions_.reset();
     reset_fifo_session_state();
     deferred_gx_stats_count_ = 0;
@@ -3338,8 +3299,8 @@ bool GxBackend::initialize(int w, int h) {
         renderer_.shutdown();
         return false;
     }
-    // The resident decoded-vertex buffer (a 64 MB upload heap) took 10 ms to
-    // create at its first use in gameplay; create it with the renderer.
+    // The resident decoded-vertex buffer (a 64 MB upload heap) is created with the renderer rather
+    // than at first use in gameplay, where its creation is slow.
     if (resident_decoded_vertices_enabled()) {
         (void)ensure_resident_vertex_buffer();
     }
@@ -3408,8 +3369,8 @@ bool GxBackend::initialize(int w, int h) {
 }
 
 void GxBackend::emit_deferred_gx_stats() {
-    // shutdown() calls this only after joining the render thread.  Do all
-    // potentially blocking stderr work here, never from render_frame_on_thread.
+    // shutdown() calls this only after joining the render thread. Do all potentially blocking
+    // stderr work here, never from render_frame_on_thread.
     for (std::size_t index = 0; index < deferred_gx_stats_count_; ++index) {
         const DeferredGxStatsSample& sample = deferred_gx_stats_[index];
         const XfbPresentStats& present_stats = sample.present;
@@ -3482,13 +3443,10 @@ void GxBackend::emit_deferred_gx_stats() {
                   << " palette-uploads=" << sample.palette_uploads
                   << " inline-matrix-uploads="
                   << sample.inline_matrix_uploads
-                  // Clock-free per-frame attribution. `flush-calls` is the
-                  // denominator for `flush-pso-us`: read us/call as
-                  // flush-pso-us/flush-calls and draws/call as draws/flush-calls.
-                  // Both are valid on an untraced sampled frame, unlike every
-                  // *_us field on this line, because `[gx-frame-timing]` only
-                  // prints over-threshold frames and thus answers no per-frame
-                  // question.
+                  // Clock-free per-frame attribution. `flush-calls` is the denominator for `flush-pso-us`: us per
+                  // call is flush-pso-us / flush-calls, and draws per call is draws / flush-calls. Both are valid
+                  // on an untraced sampled frame, unlike the *_us fields on this line. `[gx-frame-timing]` prints
+                  // only over-threshold frames, so it cannot answer a per-frame question.
                   << " draws=" << sample.draws
                   << " draw-batches=" << sample.draw_batches
                   << " flush-calls=" << sample.flush_calls
@@ -3503,12 +3461,10 @@ void GxBackend::emit_deferred_gx_stats() {
                   << " draw-record-ns=" << sample.draw_record_ns << '\n';
     }
     if (deferred_gx_stats_dropped_ != 0u) {
-        // The ring is now filled by reservoir sampling, so the retained rows are a
-        // uniform draw over the WHOLE session rather than a prefix of it. State
-        // the retention ratio and the first-overflow frame so a reader can tell
-        // "spread over the run" from "stopped early"; the wording must not imply
-        // the rows cover only the opening, which was true of the previous
-        // first-N policy and is no longer true here.
+        // The ring is filled by reservoir sampling, so the retained rows are a uniform draw over the
+        // whole session, not a prefix of it. State the retention ratio and the first-overflow frame so a
+        // reader can tell "spread over the run" from "stopped early". The wording must not imply that
+        // the rows cover only the opening.
         std::cerr << "[gx-stats] deferred-samples-seen="
                   << deferred_gx_stats_seen_
                   << " retained=" << deferred_gx_stats_count_
@@ -3741,7 +3697,7 @@ GxBackend::MemorySnapshotStorage* GxBackend::snapshot_storage_for(
 
     MemorySnapshotStorage* target = nullptr;
     if (snapshot.storage_used_count < small_capture_limit) {
-        // Tiny captures avoid table setup; never scan historical unused slots.
+        // Tiny captures avoid table setup; unused slots are never scanned.
         for (std::size_t index = 0u; index < snapshot.storage_used_count; ++index) {
             auto& storage = snapshot.storage[index];
             if (storage.source == source && storage.size == size) {
@@ -3818,17 +3774,15 @@ void GxBackend::prune_immutable_range_cache(std::size_t incoming_bytes) {
                 "[GxBackend] immutable range ownership cache exhausted by in-flight frames");
         }
         immutable_range_cache_bytes_ -= victim->bytes->size();
-        // Swap-and-pop instead of erase(victim). This loop can drop many entries
-        // in one pass, and erase from the middle of a std::vector shifts every
-        // later element, so dropping k of n entries costs O(k*n) moves -- roughly
-        // 4M at the 2048-entry cap. Swap-and-pop is O(1) per eviction.
+        // Swap-and-pop instead of erase(victim). This loop can drop many entries in one pass, and erase
+        // from the middle of a std::vector shifts every later element, so dropping k of n entries costs
+        // O(k*n) moves. Swap-and-pop is O(1) per eviction.
         //
-        // This does not change WHICH entry is evicted: the victim is still chosen
-        // by the scan above, and nothing addresses this cache by position.
-        // acquire_immutable_range matches on guest_base/size/source_identity,
-        // invalidate_immutable_range_cache walks every entry, and clear() empties
-        // it. last_used comes from a monotonic tick, so the tie-break is total
-        // and the LRU order does not depend on physical layout.
+        // The victim is still chosen by the scan above, so the eviction order is unchanged. Nothing
+        // addresses this cache by position: acquire_immutable_range matches on guest_base/size/
+        // source_identity, invalidate_immutable_range_cache walks every entry, and clear() empties it.
+        // last_used comes from a monotonic tick, so the tie-break is total and the LRU order does not
+        // depend on physical layout.
         *victim = std::move(immutable_range_cache_.back());
         immutable_range_cache_.pop_back();
     }
@@ -4306,11 +4260,9 @@ void GxBackend::collect_memory_dependency_ranges(
     dependency_parser_.set_memory_read_recorder(nullptr);
 
     normalize_guest_memory_ranges(shape_ranges);
-    // CALL_DL bytes are both dependency shape and render input. Keeping them
-    // only in the parser-cache signature made compact snapshots accidentally
-    // depend on that cache retaining a private copy. Own every recursively
-    // visited display-list range so cache invalidation and delayed parsing are
-    // correct independently.
+    // CALL_DL bytes are both the dependency shape and the render input. Owning every recursively
+    // visited display-list range keeps compact snapshots independent of the parser cache, so cache
+    // invalidation and delayed parsing are correct on their own.
     out.insert(out.end(), shape_ranges.begin(), shape_ranges.end());
     normalize_guest_memory_ranges(out);
 
@@ -4495,9 +4447,8 @@ XfbMonotonicCadenceStats GxBackend::snapshot_monotonic_cadence(
     std::uint64_t p95_interval_ns = 0;
     if (accumulator.retained_interval_samples != 0u &&
         !accumulator.interval_samples_overflowed) {
-        // The caller quiesces the render thread before taking this snapshot.
-        // Copy into fixed storage so repeated snapshots do not mutate the
-        // retained evidence and cannot allocate after the measured window.
+        // The caller quiesces the render thread before taking this snapshot. The copy goes into fixed
+        // storage, so repeated snapshots neither change the retained data nor allocate.
         std::array<
             std::uint64_t,
             MonotonicCadenceAccumulator::kMaxRetainedIntervals>
@@ -4598,32 +4549,24 @@ void GxBackend::report_frame_tail_window() noexcept {
                <<(a.monitor_intervals?a.monitor_total_ns/a.monitor_intervals/1000u:0u)
                <<' '<<name<<"-p95-upper-us="<<percentile(95u)<<' '<<name<<"-p99-upper-us="<<percentile(99u)
                <<' '<<name<<"-max-us="<<a.monitor_max_ns/1000u;
-            // A percentile staircase, so the SHAPE of the interval distribution is
-            // visible instead of summarised.
+            // Percentile staircase, so the shape of the interval distribution is visible rather than
+            // summarized.
             //
-            // Why percentiles rather than the full 1 ms histogram: the bins are
-            // already accumulated for `percentile()` above, but printing every
-            // non-zero bin costs roughly 200 characters per cadence per window
-            // (~72 KB over a 179-window session) and produces 700-character rows,
-            // and the spike windows (`max/mean` up to 43x) would spread the bins so
-            // wide that the bulk becomes a few counts among many. Percentiles are
-            // immune to that: each reported rank is a value inside the bulk.
+            // Percentiles are used instead of the full 1 ms histogram. Printing every non-zero bin makes
+            // rows too wide, and spike windows would spread the bins so far that the bulk becomes a few
+            // counts among many. Each reported percentile is a value inside the bulk.
             //
-            // How to read it. A bulk set by a continuous process spreads smoothly,
-            // so the ladder steps evenly. A bulk quantised to display retraces
-            // plateaus instead, because most intervals land in the same one or two
-            // 16.67 ms-wide bands, so several adjacent ranks report the same bin.
-            // The interesting quantity is therefore how evenly the ladder steps,
-            // not the absolute values.
+            // A bulk set by a continuous process spreads smoothly, so the ladder steps evenly. A bulk
+            // quantized to display retraces plateaus instead, because most intervals land in one or two
+            // 16.67 ms bands and several adjacent ranks report the same bin. What matters is how evenly the
+            // ladder steps, not the absolute values.
             //
-            // Read it only alongside `-intervals=`, which is already on this row: at
-            // a 1 ms bin width several cut points can resolve to the same bin purely
-            // because the window holds few intervals, which would otherwise look
-            // like a plateau. A window with tens of intervals is needed before a
-            // plateau is evidence of anything.
+            // Read it alongside `-intervals=`. At a 1 ms bin width, several cut points can resolve to the
+            // same bin simply because the window holds few intervals, which would look like a plateau. A
+            // plateau is evidence only in a window with tens of intervals.
             //
-            // Same GALAXY_MONITOR_FRAME_TAILS gate as the rest of this row, and no
-            // new per-frame work: the bins are counted once per interval as before.
+            // Gated by GALAXY_MONITOR_FRAME_TAILS like the rest of this row. It adds no per-frame work: the
+            // bins are counted once per interval.
             row<<' '<<name<<"-pct-upper-us="
                <<percentile(5u)<<'/'<<percentile(10u)<<'/'<<percentile(25u)<<'/'
                <<percentile(50u)<<'/'<<percentile(75u)<<'/'<<percentile(90u);
@@ -5240,15 +5183,12 @@ bool GxBackend::decoded_packet_run_dependencies_match(
     bool regions_disjoint_sorted)
     noexcept {
     new_generation = current_generation;
-    // Fast path: this entry was already compared against live guest memory
-    // after the most recent guest-write batch was applied. Guest writes reach
-    // the render thread only through render_frame()'s drained ranges, which are
-    // applied (and bump the generation) before the frame's first replay, and
-    // the render thread observes a frozen snapshot of guest memory for the rest
-    // of that frame. A display list that replays the same key thousands of
-    // times per frame therefore pays the snapshot compare once instead of
-    // thousands of times, without weakening the check: any write that could
-    // change these bytes bumps the generation and forces the full compare.
+    // Fast path: this entry was already compared against live guest memory after the latest
+    // guest-write batch. Guest writes reach the render thread only through render_frame()'s drained
+    // ranges, which are applied (bumping the generation) before the frame's first replay. The render
+    // thread sees a frozen snapshot of guest memory for the rest of the frame, so a key replayed
+    // thousands of times per frame pays the snapshot compare once. Any write that could change these
+    // bytes bumps the generation and forces the full compare.
     if (entry_generation != 0u && entry_generation == current_generation &&
         !snapshots.empty()) {
         return true;
@@ -5416,12 +5356,11 @@ void GxBackend::prune_decoded_packet_run_cache() {
 
 std::size_t GxBackend::invalidate_dirty_decoded_packet_run_ranges(
     const std::vector<GuestWriteRange>& ranges) noexcept {
-    // Every batch of guest-write notifications must invalidate the per-entry
-    // snapshot validation, including an empty batch: the generation assert below
-    // is "no write has been observed since this entry was compared", and only
-    // this function is in a position to observe writes. Bumping unconditionally
-    // keeps that assert true without depending on which caller passed a range
-    // list, and the increment is one add on a path that runs once per frame.
+    // Every batch of guest-write notifications must invalidate the per-entry snapshot validation,
+    // including an empty batch. The generation assert below means "no write has been observed since
+    // this entry was compared", and only this function can observe writes. Bumping unconditionally
+    // keeps that true without depending on which caller passed a range list. The increment is one
+    // add per frame.
     ++decoded_packet_run_generation_;
     if (decoded_packet_run_generation_ == 0u) {
         // Wrapped. An older, unused entry can still hold generation 1;
@@ -5437,14 +5376,11 @@ std::size_t GxBackend::invalidate_dirty_decoded_packet_run_ranges(
     }
 
     if (lazy_vertex_invalidation_enabled()) {
-        // Admission requires a complete immutable snapshot of every indirect
-        // vertex-array read. A new generation forces the first actual reuse to
-        // compare those bytes against this chunk's frozen memory; a mismatch
-        // takes the original decode/upload path with a fresh upload token.
-        // Scanning and evicting cold entries here is therefore redundant.
-        // Keep the generation bump (including wrap reset) even for empty
-        // batches: a notification is never permission to skip byte validation.
-        // Existing byte-budget pruning still bounds retained cold entries.
+        // Admission requires a complete immutable snapshot of every indirect vertex-array read. A new
+        // generation forces the first real reuse to compare those bytes against this chunk's frozen
+        // memory. A mismatch takes the original decode and upload path with a fresh upload token. Keep
+        // the generation bump, including the wrap reset, even for empty batches: a notification never
+        // permits skipping byte validation. Byte-budget pruning still bounds retained cold entries.
         return 0;
     }
 
@@ -5503,9 +5439,7 @@ std::size_t GxBackend::invalidate_dirty_decoded_packet_run_ranges(
     return invalidated;
 }
 
-// ---------------------------------------------------------------------------
 // Per-frame rendering
-// ---------------------------------------------------------------------------
 
 void GxBackend::scan_pe_events_on_sim_thread(
     const std::byte* fifo_data,
@@ -5550,8 +5484,8 @@ void GxBackend::scan_pe_events_on_sim_thread(
     }
 }
 
-// Producer (sim thread): snapshot the frame and hand it to the render
-// thread.  Blocks only when the consumer is a full frame behind.
+// Producer (sim thread): snapshot the frame and hand it to the render thread. Blocks only when
+// the consumer is a full frame behind.
 FramePeCompletionToken GxBackend::render_frame(
     const std::byte* fifo_data,
     std::size_t fifo_size,
@@ -5653,20 +5587,14 @@ FramePeCompletionToken GxBackend::render_frame(
         return {};
     }
     galaxy::timeline::record(galaxy::timeline::Event::SubmitBegin, fifo_size);
-    // This start sample must be taken on exactly the frames that will consume
-    // it, which is `producer_time_detail` below -- NOT the narrower
-    // `trace_gx_stats || trace_gx_stalls` it used to test. The wait is measured
-    // under `producer_time_detail`, and that condition includes
-    // `frame_gx_timing_sample_enabled`, so a sampled frame used to enter the
-    // measurement with a default-constructed `time_point` and compute
-    // `steady_clock::now() - time_point{}`: an epoch-sized duration written into
-    // `chunk.producer_wait_ns`, printed as `producer-wait-us`, and large enough
-    // to satisfy the stall print condition on its own. The field is the one
-    // number that quantifies the simulation thread's hard coupling to the
-    // renderer (`queue_space_cv_.wait`, `GALAXY_RENDER_QUEUE_DEPTH`), so a
-    // recording that reports it as ~1.7e18 ns is worse than one that omits it.
-    // Gating both sides on the same predicate costs one clock read per sampled
-    // or traced frame and nothing at all on an ordinary one.
+    // The start sample must be taken on exactly the frames that consume it: `producer_time_detail`,
+    // not the narrower `trace_gx_stats || trace_gx_stalls`. The wait is measured under
+    // `producer_time_detail`, which includes `frame_gx_timing_sample_enabled`. Reading the start only
+    // on the narrower condition left sampled frames with a default-constructed time_point, so
+    // steady_clock::now() - time_point{} produced an epoch-sized duration in producer_wait_ns. The
+    // field measures the simulation thread's coupling to the renderer (queue_space_cv_.wait,
+    // GALAXY_RENDER_QUEUE_DEPTH). Gating both sides on the same predicate costs one clock read per
+    // sampled or traced frame and nothing on an ordinary frame.
     const auto wait_start = producer_time_detail
         ? std::chrono::steady_clock::now()
         : std::chrono::steady_clock::time_point{};
@@ -5809,8 +5737,8 @@ FramePeCompletionToken GxBackend::render_frame(
         invalidate_immutable_range_cache(chunk.dirty_ranges);
     }
     invalidate_dirty_display_list_ranges(event_parser_, drained_dirty_ranges);
-    // invalidate_dependency_range_cache above already invalidates the CPU-
-    // owned dependency parser. Worker mode does so in its ordered prepass.
+    // invalidate_dependency_range_cache above invalidates the CPU-owned dependency parser. Worker
+    // mode does so in its ordered prepass.
     if (timing.pe_events_gpu_fence) {
         if (display_list_dirty_invalidate_enabled() && !worker_snapshot) {
             for (const GuestWriteRange& range : chunk.dirty_ranges) {
@@ -5887,11 +5815,9 @@ FramePeCompletionToken GxBackend::render_frame(
         chunk.immutable_range_ownership = immutable_range_ownership;
     }
     if (timing.pe_events_gpu_fence && !worker_snapshot && pe_preclassify_enabled()) {
-        // Classify the immutable FIFO copy and the exact memory view the
-        // render parser will consume. In snapshot mode, classifying live guest
-        // memory before capture allowed a concurrent native DMA write to make
-        // CALL_DL/LOAD_INDX command boundaries disagree after an event-free
-        // receipt had already been issued.
+        // Classify the immutable FIFO copy and the exact memory view the render parser will consume. In
+        // snapshot mode, classifying live guest memory before capture let a concurrent native DMA write
+        // make CALL_DL/LOAD_INDX command boundaries disagree after an event-free receipt was issued.
         const auto classification_start =
             (producer_time_detail || trace_gx_microprofile)
                 ? std::chrono::steady_clock::now()
@@ -6073,29 +5999,24 @@ void GxBackend::wait_for_render_cpu_reads_idle() {
     }
 
     const GxTimingConfig& timing = get_gx_timing_config();
-    // When the renderer consumes the producer's sealed snapshot it does not read
-    // live guest RAM at all: render_frame() points the chunk at its own copy
-    // before publishing it, and the render thread's only memory source is
-    // `chunk.memory_snapshot_active ? &chunk.memory_snapshot.memory : chunk.memory`
-    // (see render_frame_on_thread). Every dependency range the request touches is
-    // part of that sealed copy, so a producer write to live RAM cannot be observed
-    // by a queued chunk.
+    // When the renderer consumes the producer's sealed snapshot it does not read live guest RAM.
+    // render_frame() points the chunk at its own copy before publishing it, and the render thread
+    // reads only `chunk.memory_snapshot_active ? &chunk.memory_snapshot.memory : chunk.memory` (see
+    // render_frame_on_thread). Every dependency range the request touches is in that sealed copy, so
+    // a producer write to live RAM cannot reach a queued chunk.
     //
-    // Draining the whole queue in that case is therefore not a barrier, it is pure
-    // serialisation: it forces the producer to wait for the render thread to finish
-    // this frame before it may begin the next, so the two threads can never overlap
-    // and the simulated frame rate becomes producer + renderer rather than
-    // max(producer, renderer). The 3-deep queue exists precisely to decouple them.
+    // Draining the whole queue in that case is not a barrier. It only serializes: the producer waits
+    // for the renderer to finish this frame before starting the next, so the frame rate becomes
+    // producer + renderer rather than max(producer, renderer). The 3-deep queue exists to decouple
+    // them.
     //
-    // The bounded queue-depth wait below is the same predicate render_frame() uses
-    // before its push, so the drain guarantee is replaced by "the renderer is never
-    // more than render_queue_depth frames behind", which is what the decoupling
-    // design intends. render_cpu_reads_in_flight_ is still decremented by
-    // mark_frame_cpu_reads_done() on every completion, so shutdown conservation and
-    // wait_for_render_fifo_effects_idle() are unaffected.
+    // The bounded queue-depth wait below uses the same predicate as render_frame()'s push, so the
+    // renderer is never more than render_queue_depth frames behind. render_cpu_reads_in_flight_ is
+    // still decremented by mark_frame_cpu_reads_done() on every completion, so shutdown conservation
+    // and wait_for_render_fifo_effects_idle() are unaffected.
     //
-    // Live-memory mode is deliberately unchanged: there `chunk.memory` is live
-    // guest RAM and the full drain is a real correctness requirement.
+    // Live-memory mode is unchanged: there `chunk.memory` is live guest RAM, and the full drain is a
+    // real correctness requirement.
     const std::size_t queue_depth_limit = timing.render_queue_depth;
     const bool renderer_owns_its_memory =
         timing.render_memory_snapshot || timing.render_live_memory_reads;
@@ -7595,15 +7516,12 @@ void GxBackend::prepare_worker_memory_snapshot(FrameChunk& chunk) {
             std::lock_guard<std::mutex> parser_lock(parser_cache_mutex_);
             invalidate_dirty_display_list_ranges(parser_, chunk.dirty_ranges);
         }
-        // The decoded-packet-run vertex cache is keyed on the display-list
-        // token, and the display lists were just invalidated above, so every
-        // entry reachable from them is already unreachable. Invalidating the
-        // decoded cache here as well is what makes the per-generation snapshot
-        // assert hold in this mode: this is the only other place a batch of
-        // guest writes is observed, and without the generation bump an entry
-        // captured against the previous snapshot could be marked valid for the
-        // new one and skip its byte compare. Cheap (the range list is already
-        // built) and it keeps both invalidation paths symmetric.
+        // The decoded-packet-run vertex cache is keyed on the display-list token. The display lists were
+        // invalidated above, so entries reachable from them are already unreachable. Invalidating the
+        // decoded cache here too keeps the per-generation snapshot assert valid in this mode. Without the
+        // generation bump, an entry captured against the previous snapshot could be marked valid for the
+        // new one and skip its byte compare. The range list is already built, so this is cheap, and both
+        // invalidation paths stay symmetric.
         (void)invalidate_dirty_decoded_packet_run_ranges(chunk.dirty_ranges);
         collect_memory_dependency_ranges(
             chunk.fifo.data(), chunk.fifo.size(), chunk.memory,
@@ -7742,11 +7660,9 @@ void GxBackend::queue_frame_fifo_effects_fence(
         return;
     }
     if (chunk.pe_events.empty()) {
-        // No guest-visible PE signal exists for this capture. This function is
-        // called after close, ordered queue submission, and queue signal all
-        // succeeded, before optional presentation. Resolve at that exact
-        // submission boundary; later work is
-        // queue-ordered and no GPU-idle wait is warranted.
+        // No guest-visible PE signal exists for this capture. This runs after close, ordered queue
+        // submission and queue signal succeed, and before optional presentation. Resolve at that
+        // submission boundary. Later work is queue-ordered, so no GPU-idle wait is needed.
         mark_frame_fifo_effects_done(chunk);
         return;
     }
@@ -8142,32 +8058,26 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
         ((frame_index_ + 1u) % trace_gx_microprofile_interval() == 0u);
     const bool frame_profile_enabled =
         frame_microprofile_enabled_ || trace_gx_stalls;
-    // One decision per frame for the per-draw clock reads. Every draw-path site
-    // reads frame_time_detail_ instead of re-evaluating
-    // `frame_microprofile_enabled_ || trace_gx_stalls_enabled()`, which is what
-    // the previous state did thousands of times per frame and which left the
-    // per-draw half of the "sampling is always on" policy unimplemented.
+    // One decision per frame for the per-draw clock reads. Draw-path sites read frame_time_detail_
+    // instead of re-evaluating `frame_microprofile_enabled_ || trace_gx_stalls_enabled()` for every
+    // draw.
     //
-    // Default behaviour is unchanged: fully on under an intrusive run, fully off
-    // otherwise. Requesting a sample interval additionally enables it for one
-    // frame in N, so a routine recording contains some fully-attributed frames
-    // while the rest run at true production speed.
+    // Default behavior: fully on under an intrusive run, fully off otherwise. A requested sample
+    // interval also enables it for one frame in N, so a routine recording contains some fully
+    // attributed frames while the rest run at production speed.
     frame_time_sample_ = frame_gx_timing_sample_enabled(frame_index_);
     frame_time_detail_ =
         frame_microprofile_enabled_ || trace_gx_stalls || frame_time_sample_;
-    // CPU-cycle witness for the `flush-pso` window, deliberately INDEPENDENT of
-    // `frame_time_detail_`. See the note at its accumulation site: enabling the
-    // wall-clock per-draw instrumentation to get cycle data would contaminate the
-    // wall clock the cycles are meant to interpret. Off unless asked for, so a
-    // default run still pays nothing. `GALAXY_GX_PSO_CYCLES=1` turns it on; being
-    // in detailed mode also turns it on, because a run already paying for
-    // trace_gx_stalls may as well carry the witness.
+    // CPU-cycle witness for the `flush-pso` window. It is independent of `frame_time_detail_`:
+    // enabling wall-clock per-draw instrumentation to get cycle data would distort the wall clock the
+    // cycles are meant to interpret. Off unless requested. `GALAXY_GX_PSO_CYCLES=1` turns it on, and
+    // so does detailed mode, since a run already paying for trace_gx_stalls may as well carry the
+    // witness.
     pso_cycles_enabled = pso_cycles_requested() || trace_gx_stalls;
-    // Routine monitoring must not need the instrumentation it is meant to
-    // measure. Per-frame phase timing is ~14 steady_clock reads; the per-draw
-    // instrumentation is thousands of them. Sampling is therefore always on,
-    // while the line that prints it stays bounded by the deferred stats ring
-    // (or the explicit stats flag).
+    // Routine monitoring must not need the instrumentation it measures. Per-frame phase timing is
+    // about 14 steady_clock reads; per-draw instrumentation is thousands. Sampling is therefore
+    // always on, while the line that prints it stays bounded by the deferred stats ring or the
+    // explicit stats flag.
     constexpr bool frame_timing_enabled = true;
     // Kernel queries are intrusive diagnostics, not routine frame monitoring.
     // Use the existing explicit cycle/stall opt-in for both counters.
@@ -8196,17 +8106,12 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
     frame_flush_pso_cycles_valid_ = pso_cycles_enabled;
     frame_flush_total_us_ = 0;
     frame_flush_timed_samples_ = 0;
-    // frame_flush_timed_calls_ is deliberately NOT reset here. It is the
-    // sampling counter for `ScopedFlushTiming`, whose stride is 64, and a frame
-    // makes only ~36-39 flush calls (measured `draw-batches` p50: 36 on the Arc,
-    // 284 on the 5090). Resetting it per frame left `call % 64 == 0` true ONLY
-    // for call 0, so every frame timed exactly one flush -- always the first --
-    // and `flush-mean-us` reported the mean of the first flush of each frame,
-    // which has no reason to represent a typical batch. Left monotonic, the
-    // counter walks every residue mod 64 across the session and the samples
-    // spread uniformly over call positions regardless of frame size.
-    // This is the same class of error agent-5 found in its own F-32/F-42: a
-    // stride composed with a per-frame reset silently samples one fixed slot.
+    // frame_flush_timed_calls_ is not reset here. It is the sampling counter for `ScopedFlushTiming`,
+    // whose stride is 64, and a frame makes fewer flush calls than that. Resetting it per frame would
+    // leave `call % 64 == 0` true only for call 0: every frame would time exactly one flush, always
+    // the first, and `flush-mean-us` would describe the first flush of each frame rather than a
+    // typical batch. Kept monotonic, the counter walks every residue mod 64 across the session, so
+    // samples spread over call positions regardless of frame size.
     frame_pso_memo_hits_ = 0;
     frame_pso_get_calls_ = 0;
     frame_pso_get_us_ = 0;
@@ -8280,10 +8185,9 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
             interp_frames_ = interp_recording_ ? interpolated_frames_per_game_frame(rate) : 0u;
             interp_scenes_in_chunk_ = 0u;
         }
-        // begin_frame() applies a pending internal-resolution change; copies
-        // must use the scale the EFB actually has. Reading the setting
-        // separately raced a change made in between and sized one frame's
-        // copies for the other scale (a black frame).
+        // begin_frame() applies a pending internal-resolution change, so copies must use the scale the
+        // EFB actually has. Reading the setting separately could race a change made in between and size
+        // one frame's copies for the other scale.
         if (renderer_.efb_scale() != efb_copies_.efb_scale()) {
             efb_copies_.set_efb_scale(renderer_.efb_scale());
         }
@@ -8405,21 +8309,19 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
     current_matrix_palette_ = 0;
     matrix_palette_stale_ = true;
     inline_matrices_stale_ = true;
-    // The matrix ring segment for this frame slot is reused from the previous
-    // round trip, so a palette chunk uploaded then is no longer at a known
-    // offset. Re-arm every chunk; the first palette upload of the frame writes
-    // the full bank again, exactly as before this optimisation.
+    // The matrix ring segment for this frame slot is reused from the previous round trip, so a
+    // palette chunk uploaded then is not at a known offset. Re-arm every chunk; the first palette
+    // upload of the frame writes the full bank again.
     xf_palette_valid_ = 0u;
 
-    // Bind EFB with default (null) viewport — the XF viewport registers
+    // Bind EFB with default (null) viewport. The XF viewport registers
     // will provide the actual values once processed from the FIFO.
     renderer_.bind_efb(nullptr);
 
-    // GX semantics: the EFB persists across frames and is cleared ONLY by
-    // an EFB copy with the clear bit set (handled in on_efb_copy with the
-    // latched copy-clear registers).  Clearing unconditionally every frame
-    // with stale latched colors caused the boot105-107 purple/blue/white
-    // frame flicker.  One initial clear (depth = FAR) seeds the targets.
+    // GX semantics: the EFB persists across frames and is cleared only by an EFB copy with the clear
+    // bit set (handled in on_efb_copy with the latched copy-clear registers). Clearing every frame
+    // with stale latched colors caused purple, blue and white frame flicker. One initial clear
+    // (depth = FAR) seeds the targets.
     if (!efb_seeded_) {
         efb_seeded_ = true;
         renderer_.clear_efb(0u, 0u, 0x00FFFFFFu, true, true, true);
@@ -8443,9 +8345,9 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
     capture_all_textures_ = capture_this_frame && capture_all_textures_enabled();
     capture_draw_idx_ = 0;
     capture_readback_recorded_ = false;
-    // This is a process environment value, like the other 36 capture/trace
-    // selectors in this file. Without `static` it re-entered the CRT
-    // environment lock on every frame for a value that cannot change.
+    // This is a process environment value, like the other capture and trace selectors in this file.
+    // Without `static` it re-entered the CRT environment lock on every frame for a value that cannot
+    // change.
     static const unsigned capture_readback_draw_selection = [] {
         char value[32]{};
         std::size_t length = 0;
@@ -8769,12 +8671,10 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
         capture_readback_recorded_ = renderer_.debug_copy_efb_to_readback();
     }
 
-    // Present every VI after the first valid XFB. SMG has legitimate retraces
-    // that only update EFB/texture side effects or queue no FIFO at all; if
-    // those retraces skip the swap chain, flip-model presentation cadence
-    // collapses and the player sees black/jittery gaps even though the game
-    // is still advancing. Before the first XFB exists, keep the window hidden
-    // unless a diagnostic capture explicitly asks for a backbuffer.
+    // Present every VI after the first valid XFB. Some VI retraces only update EFB/texture side
+    // effects or queue no FIFO at all. If those retraces skip the swap chain, flip-model cadence
+    // collapses and the frame shows gaps even though the game keeps advancing. Before the first XFB
+    // exists, keep the window hidden unless a diagnostic capture asks for a backbuffer.
     if (chunk.present_swap_chain) {
         ++stat_xfb_present_requests_;
     }
@@ -9086,7 +8986,7 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
     // monotonic within a session, so the subtraction cannot underflow
     // (PipelineCache::shutdown() is the only resetter and it ends the session).
     // Published on the `[gx-frame-timing]` line so a tail frame can be tied to a
-    // compile count directly instead of inferred from `flush-pso-us / ~22 ms`.
+    // compile count directly instead of inferred from `flush-pso-us` alone.
     {
         const PipelineCache::CompileStats now = pipeline_cache_.compile_stats();
         const PipelineCache::CompileStats& was = frame_compile_stats_baseline_;
@@ -9174,47 +9074,33 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
         }
     }
 
-    // frame_time_sample_ is included so a bounded sample actually reports what it
-    // measured. Without it the sampled frame accumulates every per-draw field and
-    // then prints nothing, because frame_profile_enabled covers only the two
-    // intrusive flags. Nothing changes unless GALAXY_GX_FRAME_TIMING_SAMPLE >= 2.
+    // frame_time_sample_ is included so a bounded sample reports what it measured. Without it the
+    // sampled frame accumulates every per-draw field and prints nothing, because frame_profile_enabled
+    // covers only the two intrusive flags. Nothing changes unless GALAXY_GX_FRAME_TIMING_SAMPLE >= 2.
     //
-    // Field trustworthiness on a *sampled* frame (as opposed to an intrusive one):
-    //   - Always valid: total-us, parse-us, submit-us, begin-*-us (per-frame reads
-    //     are unconditional), plus every clock-free counter -- flush-calls,
-    //     pso-resolutions, pso-route-early, pso-route-memo, pso-route-get.
-    //   - Valid because frame_time_detail_ is true on this frame: flush-us,
-    //     flush-pso-us, pso-get-us, pso-get-max-us, flush-*-us, vertex-load-us,
-    //     draw-record-us, cached-vertex-*-us.
-    //   - Valid on a sampled frame too: producer-wait-us, snapshot-us and
-    //     dependency-scan-us. Each one's start clock AND its measurement are
-    //     gated on `producer_time_detail`, and that predicate includes
-    //     `frame_gx_timing_sample_enabled`, so a sample frame carries real
-    //     values. (producer-wait-us previously did not: its start clock was gated
-    //     on the narrower `trace_gx_stats || trace_gx_stalls`, so a sampled frame
-    //     measured the wait against a default-constructed time_point. Both sides
-    //     now use `producer_time_detail`.) On an ordinary routine frame these
-    //     three are still gated off and read 0.
-    //   - Read exactly 0 on a sampled frame, by design and NOT as a measurement:
-    //     the fifo-* `*-us` fields. Per-command FIFO timing has its own gate,
-    //     GALAXY_TRACE_GX_MICROPROFILE (fifo_parser.cpp:152), because tens of
-    //     thousands of commands per frame would charge the clocks to the parser
-    //     they measure. The fifo-* count fields stay unconditional and valid, so
-    //     a 0 in `fifo-command-us` here means "not timed", never "free".
+    // Field trustworthiness on a sampled frame:
+    //   - Always valid: total-us, parse-us, submit-us, begin-*-us (per-frame reads are
+    //     unconditional), and the clock-free counters: flush-calls, pso-resolutions,
+    //     pso-route-early, pso-route-memo, pso-route-get.
+    //   - Valid because frame_time_detail_ is true on this frame: flush-us, flush-pso-us,
+    //     pso-get-us, pso-get-max-us, flush-*-us, vertex-load-us, draw-record-us, cached-vertex-*-us.
+    //   - Valid on a sampled frame: producer-wait-us, snapshot-us and dependency-scan-us. Their
+    //     start clock and measurement are both gated on `producer_time_detail`, which includes
+    //     `frame_gx_timing_sample_enabled`. On an ordinary frame these three are gated off and read 0.
+    //   - Exactly 0 on a sampled frame, by design and not as a measurement: the fifo-* `*-us` fields.
+    //     Per-command FIFO timing has its own gate, GALAXY_TRACE_GX_MICROPROFILE, because per-command
+    //     clock reads would charge the parser they measure. The fifo-* count fields stay valid, so a
+    //     0 in `fifo-command-us` here means "not timed", not "free".
     if (frame_profile_enabled || frame_time_sample_) {
         const std::uint64_t total_us = elapsed_us(render_start, render_end);
-        // Wall-clock distance since the previously *emitted* frame line. `total-us`
-        // covers only the span this function owns (render_start -> render_end), so
-        // alone it cannot distinguish "the render thread is busy 22 ms inside a
-        // 155 ms frame" from "busy 22 ms inside a 22 ms frame". That distinction is
-        // the whole open question on the low-end machine: every wait field on this
-        // line reads 0 there -- including `begin-slot-wait-us` -- while
-        // `[gx-queue-wait]` records the simulation thread blocked up to 403 ms
-        // against a queue limit of 3. Those two cannot both describe a render
-        // thread that is merely backlogged, so its real period has to be measured
-        // rather than inferred from whichever phases this line happens to time.
-        // Emitted-frame only, so on a sampled run it averages the sample interval
-        // (~1500 frames), not a single frame.
+        // Wall-clock distance since the previously emitted frame line. `total-us` covers only the span
+        // this function owns (render_start to render_end), so alone it cannot tell a render thread busy
+        // for 22 ms inside a 155 ms frame from one busy for 22 ms inside a 22 ms frame. On the low-end
+        // machine every wait field on this line reads 0, while `[gx-queue-wait]` records the simulation
+        // thread blocked for long intervals against a small queue limit. Those cannot both describe a
+        // merely backlogged render thread, so its real period must be measured rather than inferred.
+        // Emitted frames only: on a sampled run the value averages over the sample interval, not a
+        // single frame.
         std::uint64_t frame_interval_us = 0u;
         if (last_frame_timing_emit_valid_) {
             frame_interval_us = elapsed_us(last_frame_timing_emit_, render_start);
@@ -9224,33 +9110,24 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
         const std::uint64_t parse_us = elapsed_us(parse_start, parse_end);
         const std::uint64_t submit_us = elapsed_us(parse_end, gpu_submit_end);
         const std::uint64_t producer_wait_us = chunk.producer_wait_ns / 1000u;
-        // Sampling is always on now, so the printing side has to stay bounded
-        // or every over-threshold frame would add a line to a routine
-        // recording. Explicit stats/stall runs and microprofile windows keep
-        // the original behaviour; routine runs get the same sample through the
-        // deferred stats ring instead.
+        // Sampling is always on, so the printing side stays bounded. Otherwise every over-threshold
+        // frame would add a line to a routine recording. Explicit stats and stall runs, and microprofile
+        // windows, print as before. Routine runs get the same sample through the deferred stats ring.
         if (trace_gx_stats || frame_microprofile_enabled_ ||
             frame_time_sample_ ||
             total_us >= trace_gx_stall_threshold_us() ||
             producer_wait_us >= trace_gx_stall_threshold_us()) {
             std::ostringstream timing_message;
             timing_message << "[gx-frame-timing] frame=" << frame_index_
-                  // Why this frame printed, so the population is never a
-                  // mystery. This line has two independent reasons to exist and
-                  // they select different frames:
-                  //   selected=1 - total_us or producer-wait crossed
-                  //                GALAXY_TRACE_GX_STALL_US, i.e. a stall. These
-                  //                are the only frames a default run prints, so
-                  //                any statistic taken over them describes the
-                  //                worst frames and not the session.
-                  //   sample=1   - a fixed-stride sample chosen by
-                  //                GALAXY_GX_FRAME_TIMING_SAMPLE. Periodic work
-                  //                may alias this stride; retain stall rows too.
-                  // A frame can be both; filter on selected=0 to recover the
-                  // unbiased set, and never mix the two when averaging.
-                  // Reported before any other field because every later field
-                  // is only interpretable once the reader knows which
-                  // population it came from.
+                  // Why this frame printed. The line has two independent reasons, and they select different frames:
+                  //   selected=1 - total_us or producer-wait crossed GALAXY_TRACE_GX_STALL_US, a stall. These are
+                  //                the only frames a default run prints, so statistics over them describe the worst
+                  //                frames, not the session.
+                  //   sample=1   - a fixed-stride sample chosen by GALAXY_GX_FRAME_TIMING_SAMPLE. Periodic work may
+                  //                alias this stride, so stall rows are kept too.
+                  // A frame can be both. Filter on selected=0 for the unbiased set, and never mix the two when
+                  // averaging. This field comes first, because every later field is interpretable only once the
+                  // reader knows which population the row came from.
                   << " selected="
                   << ((total_us >= trace_gx_stall_threshold_us() ||
                        producer_wait_us >= trace_gx_stall_threshold_us())
@@ -9332,15 +9209,11 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
                   << " flush-pso-cycles-valid=" << (frame_flush_pso_cycles_valid_ ? 1 : 0)
                   << " pso-memo-hits=" << frame_pso_memo_hits_
                   << " pso-get-calls=" << frame_pso_get_calls_
-                  // NOTE: no "early out" field here. frame_draws_issued_ counts
-                  // only draws that entered on_draw or the generic
-                  // on_cached_draw_run_draw loop, while the packet/simple paths
-                  // account for their draws through pending_draw_batch_.draw_count
-                  // and never touch it. Subtracting these counters from it, which
-                  // an earlier revision of this line did, therefore reported a
-                  // meaningless number and must not be reintroduced. The
-                  // flush-level split lives in agent 5's pso-route-early/memo/get,
-                  // which is counted per flush_draw_state call and is correct.
+                  // No "early out" field here. frame_draws_issued_ counts only draws that entered on_draw or the
+                  // generic on_cached_draw_run_draw loop. The packet and simple paths count their draws through
+                  // pending_draw_batch_.draw_count and never touch frame_draws_issued_, so subtracting these
+                  // counters from it gives a meaningless number. The flush-level split is pso-route-early,
+                  // pso-route-memo and pso-route-get, which are counted per flush_draw_state call.
                   << " pso-get-us=" << frame_pso_get_us_
                   << " pso-get-max-us=" << frame_pso_get_max_us_
                   // Clock-free attribution. flush-calls is the denominator for
@@ -9360,7 +9233,7 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
                   // `flush-total-us` / `flush-mean-us` come from the sampler:
                   // ScopedFlushTiming wraps the *call site* and times 1 call in
                   // every kFlushTimingSampleStride, so they DO include early-out
-                  // calls and are the honest per-call cost to compare across
+                  // calls and are the per-call cost to compare across
                   // builds with the same sampling policy. The body sum and
                   // sampled whole-call estimate overlap; do not add them or
                   // infer a unique cause from their difference.
@@ -9419,12 +9292,8 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
                   << " cached-vertex-upload-us=" << frame_cached_vertex_upload_us_
                   << " immutable-vertex-reused-bytes=" << renderer_.vertex_ring().reused_bytes()
                   << " immutable-vertex-copied-bytes=" << renderer_.vertex_ring().copied_bytes()
-                  // Entered-count for the immutable path. Read the two byte
-                  // counters above only relative to this: both are 0 both when
-                  // the path was never entered and when every byte was a copy.
-                  // Retained recordings showed this pair at 0 with
-                  // decoded-vtx-cache-hits=235 on the same frame, which is the
-                  // ambiguity this field resolves.
+                  // Entered-count for the immutable path. Read the two byte counters above only relative to this:
+                  // both are 0 both when the path was never entered and when every byte was a copy.
                   << " immutable-vertex-uploads=" << renderer_.vertex_ring().immutable_upload_calls()
                   << " draw-record-us=" << frame_draw_record_us_
                   << " efb-copy-us=" << frame_efb_copy_us_
@@ -9443,11 +9312,8 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
                          sizeof(GxVertexOut)
                   << " decoded-vtx-cache-bytes="
                   << decoded_packet_run_cache_bytes_
-                  // Decoded GPU texture residency against its bound. On the
-                  // sampled frame line rather than shutdown-only, because
-                  // neither target recording contained the shutdown-only
-                  // [gx-content-cache] line at all, which is exactly why this
-                  // map's unbounded growth went unobserved for so long.
+                  // Decoded GPU texture residency against its bound. Reported on the sampled frame line rather than
+                  // only at shutdown, so it is visible during a run.
                   << " decoded-tex-resident-bytes="
                   << texture_cache_.decoded_map_stats().resident_bytes
                   << " decoded-tex-budget-bytes="
@@ -9458,14 +9324,9 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
                   << texture_cache_.decoded_map_stats().evicted_bytes
                   << " decoded-tex-entries="
                   << texture_cache_.decoded_map_stats().entries
-                  // The EFB-copy destination cache: the one resolution-scaled GPU
-                  // pool that was neither a render target nor reported. Its bytes
-                  // are SCALED bytes (each destination is allocated at the
-                  // internal EFB extent), so this grows with efb_scale^2 while the
-                  // budget stays fixed -- which is exactly the quantity that had
-                  // to be guessed at when attributing the working set. Paired with
-                  // the field before it, a single run now covers both budgeted
-                  // GPU pools instead of only the texture map.
+                  // EFB-copy destination cache, a resolution-scaled GPU pool. Its bytes are SCALED: each destination
+                  // is allocated at the internal EFB extent, so the size grows with efb_scale^2 while the budget
+                  // stays fixed. Reported next to the field before it, so one run covers both budgeted GPU pools.
                   << " efb-copy-dest-bytes="
                   << renderer_.efb_copy_dest_bytes()
                   << " efb-copy-dest-budget-bytes="
@@ -9593,23 +9454,13 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
         }
     }
 
-    // Two independent arms, deliberately not intersected:
-    //
-    //   * `trace_gx_stats` keeps its original once-per-600-frames cadence, so an
-    //     existing stats recording is unchanged.
-    //   * `frame_time_sample_` records EVERY sampled frame. It was previously
-    //     `&& frame_index_ % 600 == 0`, which made
-    //     `GALAXY_GX_FRAME_TIMING_SAMPLE=30` emit at most ~14 rows in a 143 s
-    //     session -- rarer than the once-per-600 arm it was meant to complement,
-    //     and so sparse that it built no distribution at all. That defeated the
-    //     point of sampling, which is to get representative frames rather than
-    //     only over-threshold ones.
-    //
-    // Output stays bounded either way: the sample period is whatever the operator
-    // chose (period <= 1 disables sampling entirely), the ring holds
-    // kDeferredGxStatsCapacity rows and reports drops, and nothing here prints
-    // per frame -- the rows are written once at shutdown by
-    // emit_deferred_gx_stats().
+    // Two independent arms, not intersected:
+    //   * `trace_gx_stats` keeps its once-per-600-frames cadence.
+    //   * `frame_time_sample_` records every sampled frame. Gating it on the 600-frame cadence too
+    //     would make a short sample period emit too few rows to build a distribution.
+    // Output stays bounded: the sample period is set by the operator (period <= 1 disables sampling),
+    // the ring holds kDeferredGxStatsCapacity rows and reports drops, and nothing prints per frame.
+    // The rows are written once at shutdown by emit_deferred_gx_stats().
     if ((trace_gx_stats && frame_index_ % 600 == 0) || frame_time_sample_) {
         const std::uint64_t render_ns =
             stat_render_ns_.exchange(0, std::memory_order_relaxed);
@@ -9725,53 +9576,34 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
         sample.vertex_load_ns = frame_vertex_load_us_ * 1000u;
         sample.cached_vertex_upload_ns = frame_cached_vertex_upload_us_ * 1000u;
         sample.draw_record_ns = frame_draw_record_us_ * 1000u;
-        // Store whenever this frame was chosen as a sample frame, and let the ring
-        // decide how to fit it.
+        // Store whenever this frame was chosen as a sample frame, and let the ring decide how to fit it.
         //
-        // `frame_time_sample_` is true once per `GALAXY_GX_FRAME_TIMING_SAMPLE`
-        // period -- NOT on every frame. (It is `frame_time_detail_` that is true on
-        // every frame, so the per-draw clocks do not alias; the two were easy to
-        // conflate and an earlier revision of this block did exactly that, adding a
-        // period-derived stride on top of the period. That composed with the period
-        // instead of replacing it: at the recommended `-Sample 300` it stored once
-        // per 11 400 frames, i.e. zero rows for a 143 s session.) The period already
-        // bounds the row rate, so no additional stride belongs here.
+        // `frame_time_sample_` is true once per GALAXY_GX_FRAME_TIMING_SAMPLE period, not on every frame.
+        // It is `frame_time_detail_` that is true on every frame, so the per-draw clocks do not alias.
+        // Do not add a period-derived stride here: it would compose with the period instead of replacing
+        // it. The period already bounds the row rate.
         //
-        // What the period does NOT bound is the ring: capacity is
-        // kDeferredGxStatsCapacity (128) rows, so any period under ~120 overflows
-        // within a long session -- period 2 stores 4290 rows of which 4162 are
-        // dropped, period 30 stores 286 and drops 158. The old policy kept the FIRST
-        // 128 and discarded the tail, i.e. it described the cold-start window and
-        // silently omitted the steady state this report exists to explain. The
-        // reservoir path below is the fix; it makes the retained rows a uniform draw
-        // over the whole session at any period.
+        // The period does not bound the ring. Capacity is kDeferredGxStatsCapacity (128) rows, so a short
+        // period overflows within a long session. The reservoir path below keeps the retained rows a
+        // uniform draw over the whole session at any period.
         if (frame_time_sample_) {
             ++deferred_gx_stats_seen_;
             if (deferred_gx_stats_count_ < deferred_gx_stats_.size()) {
                 deferred_gx_stats_[deferred_gx_stats_count_++] = sample;
             } else {
-                // Reservoir sampling: replace a uniformly chosen existing row
-                // instead of discarding this one.
+                // Reservoir sampling: replace a uniformly chosen existing row instead of discarding this one.
                 //
-                // Keeping the FIRST capacity rows is actively harmful here. The
-                // slow windows in a real session arrive after a scene change, so a
-                // front-loaded ring describes the opening and nothing else. With
-                // capacity 128 and a 143 s run the ring filled at ~81 s on the
-                // documented period of 300, and at ~32 s on period 120, discarding
-                // precisely the stretch the report exists to explain.
+                // Keeping the first capacity rows would describe only the opening of a session, because slow
+                // windows arrive after scene changes and a front-loaded ring never sees them.
                 //
-                // Algorithm R over a fixed-size array: for the N-th sample (N
-                // 1-based), keep it with probability capacity/N by choosing a
-                // uniform index in [0, N); if that index is inside the ring, it
-                // overwrites a row, otherwise the sample is dropped. Each retained
-                // row is then a uniform draw from the whole session, so the report
-                // stays representative no matter how long the run is, at zero extra
-                // memory and two integer ops per stored sample.
+                // Algorithm R over a fixed-size array: for the N-th sample (N 1-based), keep it with probability
+                // capacity/N by choosing a uniform index in [0, N). If that index is inside the ring, it
+                // overwrites that row; otherwise the sample is dropped. Each retained row is then a uniform draw
+                // from the whole session, at fixed memory and two integer ops per stored sample.
                 //
-                // The generator is a plain xorshift64* held per-backend: this runs
-                // on the render thread, so no shared state and no libc rand (which
-                // would lock). Determinism is desirable anyway -- the same session
-                // shape yields the same rows.
+                // The generator is a plain xorshift64*, held per backend: this runs on the render thread, so
+                // there is no shared state and no libc rand (which would lock). Determinism is also useful: the
+                // same session shape yields the same rows.
                 std::uint64_t rng = deferred_gx_stats_rng_;
                 rng ^= rng >> 12;
                 rng ^= rng << 25;
@@ -9815,15 +9647,11 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
     ReportPipelineCoverage();
 }
 
-// Routine, clock-free cache-coverage report. The per-miss `[gx-pso-miss]` line
-// is gated on `GALAXY_TRACE_GX_STALL_US` (20 ms in the recorded runs), so a
-// session that built hundreds of pipelines below that threshold logged almost
-// nothing while `flush-pso-us` showed a 130-405 ms long tail. This prints only
-// when the on-disk coverage actually moved, so it costs one comparison per
-// frame and a handful of lines per session, and it is the number that
-// falsifies a coverage fix: if `shader-records-on-disk` keeps tracking
-// `shader-records`, the cache has reached full coverage and the remaining
-// misses are genuinely new configurations.
+// Routine, clock-free cache-coverage report. The per-miss `[gx-pso-miss]` line is gated on
+// GALAXY_TRACE_GX_STALL_US, so a session that built many pipelines below that threshold logged
+// almost nothing. This prints only when the on-disk coverage changes, so it costs one comparison
+// per frame. If `shader-records-on-disk` keeps tracking `shader-records`, the cache has reached
+// full coverage and the remaining misses are new configurations.
 void GxBackend::ReportPipelineCoverage() {
     const PipelineCache::CompileStats stats = pipeline_cache_.compile_stats();
     if (stats.shader_records_on_disk == last_reported_shader_records_ &&
@@ -9843,10 +9671,8 @@ void GxBackend::ReportPipelineCoverage() {
               << " blobs-from-cache=" << stats.blobs_from_cache << '\n';
 }
 
-// ---------------------------------------------------------------------------
 // flush_draw_state: build shader/render keys, upload constants, return PSO.
 // Returns nullptr when no pipeline is ready (draw is skipped).
-// ---------------------------------------------------------------------------
 
 GxBackend::TextureBindingKey GxBackend::capture_texture_binding_key(
     std::uint8_t map_mask) const {
@@ -9906,12 +9732,10 @@ GxBackend::TextureHandleKey GxBackend::texture_handle_key(
         static_cast<std::uint8_t>(palettized ? tlut.format : TlutFormat{}),
         static_cast<std::uint16_t>(palettized ? tlut.tmem_offset : 0u),
         static_cast<std::uint8_t>(std::min<unsigned>(levels, 255u)),
-        // `TextureHandleKey::generated_mips` is std::uint8_t, and every sibling
-        // field above is explicitly cast for that reason. This one was a bare
-        // `1u : 0u` ternary, which MSVC rejects as a narrowing conversion in an
-        // initializer list (C2397) and the runtime target compiles at /W4 /WX.
-        // The value is 0 or 1 either way, so the cast changes nothing but the
-        // diagnostic.
+        // `TextureHandleKey::generated_mips` is std::uint8_t, and every sibling field above is explicitly
+        // cast. This one was a bare `1u : 0u` ternary, which MSVC rejects as a narrowing conversion in an
+        // initializer list (C2397). The runtime target builds at /W4 /WX. The value is 0 or 1 either way,
+        // so the cast changes only the diagnostic.
         static_cast<std::uint8_t>(generated_mips ? 1u : 0u),
     };
 }
@@ -9946,15 +9770,9 @@ void GxBackend::clear_frame_texture_binding_table_cache() {
 
 void GxBackend::clear_texture_binding_table_cache() {
     clear_frame_texture_binding_table_cache();
-    // `persistent_texture_binding_tables_` was cleared here, erased by
-    // prune/erase_matching_tables, and NEVER inserted into or read: all three of
-    // its uses in this file were clear/erase/prune. It could not have held
-    // anything, so it was removed rather than maintained. That architecture is
-    // not viable anyway -- `frame_texture_binding_tables_` owns CPU descriptors
-    // valid only for the current frame, which is why its own comment says the
-    // frame-local cache is the only one that may own those tables. The
-    // cross-frame amortization that survives is `texture_handle_cache_`, which is
-    // read at the handle lookup below and is correctly persistent.
+    // The cross-frame cache is texture_handle_cache_, which the handle lookup below reads. Frame-local
+    // tables in frame_texture_binding_tables_ own CPU descriptors valid only for the current frame, so
+    // they cannot persist across frames.
     dirty_texture_aliases_.clear();
 }
 
@@ -10107,20 +9925,19 @@ void GxBackend::prune_dirty_texture_binding_tables() {
 
 ID3D12PipelineState* GxBackend::flush_draw_state(
     D3D12_PRIMITIVE_TOPOLOGY_TYPE primitive_topology_type) {
-    // Per-frame decision, hoisted out of the per-draw path (see F-13).
+    // Per-frame decision, hoisted out of the per-draw path.
     const bool time_detail = frame_time_detail_;
-    // Always-on, clock-free. This is the denominator for every *_us field below:
-    // without it a 131430 us flush-us total cannot be attributed to "3 slow
-    // flushes" or "36000 quite cheap ones", and those two readings imply
-    // completely different next fixes. One increment on a per-frame member.
+    // Always-on, clock-free. This is the denominator for every *_us field below. Without it, a
+    // flush-us total cannot be attributed to a few slow flushes or many cheap ones, and those two
+    // readings call for different fixes. One increment on a per-frame member.
     ++frame_flush_calls_;
     const auto topology_key =
         static_cast<std::uint8_t>(primitive_topology_type);
     // Consume once, propagating upload invalidation before considering reuse.
     const std::uint32_t dirty = state_.consume_dirty();
-    // Matrix words do not affect the shader/render keys, but they invalidate
-    // both upload snapshots. Propagate this BEFORE considering reuse: a prior
-    // draw may have cleared the flags before LOAD_XF/LOAD_INDX changed the bank.
+    // Matrix words do not affect the shader/render keys, but they invalidate both upload snapshots.
+    // Propagate this before considering reuse: a prior draw may have cleared the flags before
+    // LOAD_XF/LOAD_INDX changed the bank.
     const bool mtx_dirty = (dirty & GxState::kDirtyXfMatrices) != 0;
     if (mtx_dirty) {
         matrix_palette_stale_ = true;
@@ -10162,11 +9979,10 @@ ID3D12PipelineState* GxBackend::flush_draw_state(
     const bool tev_c_dirty = (dirty & GxState::kDirtyTevConstants) != 0;
     const bool vs_c_dirty = (dirty & GxState::kDirtyVsConstants) != 0;
 
-    // `sampled_texture_map_mask` walks every TEV stage (a tev_order decode plus
-    // an IND_CMD read per stage) and is otherwise paid on every dirty flush —
-    // including the per-object LOAD_INDX matrix uploads, which set
-    // kDirtyXfMatrices and nothing that can move the mask. Recompute it only
-    // when a flush carries kDirtyTev, or when the state reset dropped the memo.
+    // sampled_texture_map_mask walks every TEV stage (a tev_order decode plus an IND_CMD read per
+    // stage). Per-object LOAD_INDX matrix uploads set kDirtyXfMatrices and nothing that can move the
+    // mask, so recompute it only when a flush carries kDirtyTev, or when the state reset dropped the
+    // memo.
     if (!current_texture_map_mask_valid_ || tev_dirty) {
         current_texture_map_mask_ = sampled_texture_map_mask(state_);
         current_texture_map_mask_valid_ = true;
@@ -10389,20 +10205,16 @@ ID3D12PipelineState* GxBackend::flush_draw_state(
         : (render_state_key_.blend_bits & kRenderStateMotionTarget) != 0u ? 1u
         : (render_state_key_.blend_bits & kRenderStateReactiveTarget) != 0u ? 2u : 0u;
 
-    // Snapshot the XF matrix palette ONLY when the matrices actually changed
-    // (kDirtyXfMatrices).  Re-uploading the full palette on every TEV/render-
-    // state change exhausted the per-frame matrix ring the moment
-    // the scene started rendering hundreds of draws ("UploadRing 'matrix'
-    // exhausted" → crash).  Draws whose matrices are unchanged reuse the last
-    // snapshot's GPU VA, which stays valid until begin_frame() rewinds the
-    // ring at the next frame.  The in-shader palette base is 0 (the root SRV
-    // is bound at the snapshot's own VA).
+    // Snapshot the XF matrix palette only when the matrices changed (kDirtyXfMatrices). Re-uploading
+    // the full palette on every TEV or render-state change exhausts the per-frame matrix ring, which
+    // fails with "UploadRing 'matrix' exhausted". Draws whose matrices are unchanged reuse the last
+    // snapshot's GPU VA, which stays valid until begin_frame() rewinds the ring at the next frame.
+    // The in-shader palette base is 0 because the root SRV is bound at the snapshot's own VA.
     //
-    // The snapshot is kMatrixPaletteWords * 4 = 6656 bytes (XF 0x0000-0x067F)
-    // and it stays a whole-palette copy: a fresh ring allocation has no
-    // inherited contents, so its head and tail must be written even when a
-    // single 4-row matrix moved. `xf_palette_valid_` buys back the *allocation*
-    // on draws where nothing moved; it does not shrink the copy.
+    // The snapshot is kMatrixPaletteWords * 4 = 6656 bytes (XF 0x0000-0x067F) and stays a whole-palette
+    // copy: a fresh ring allocation has no inherited contents, so its head and tail must be written
+    // even when a single 4-row matrix moved. `xf_palette_valid_` saves the allocation on draws where
+    // nothing moved; it does not shrink the copy.
     const unsigned active_texgen_mask =
         vs_key_.num_texgens >= 8u
             ? 0xFFu
@@ -10426,12 +10238,10 @@ ID3D12PipelineState* GxBackend::flush_draw_state(
         const std::size_t palette_bytes =
             kMatrixPaletteWords * sizeof(std::uint32_t);
         UploadRing::Allocation mtx_alloc{};
-        // Dirty chunks determine whether the existing allocation is reusable.
-        // If it is not, the NEW immutable allocation needs the complete XF
-        // palette. Its unwritten head/tail have no inherited valid contents,
-        // and patching a prior allocation could change already recorded draws.
-        // The former head/middle/tail copies covered this same complete image;
-        // a single copy removes their extra calls and offset arithmetic.
+        // Dirty chunks decide whether the existing allocation is reusable. If not, the new immutable
+        // allocation needs the complete XF palette: its unwritten head and tail have no inherited valid
+        // contents, and patching a prior allocation could change already recorded draws. One complete
+        // copy replaces the former head, middle and tail copies.
         const std::uint64_t palette_todo =
             (state_.xf_palette_dirty() | ~xf_palette_valid_) &
             xf_palette_chunk_mask;
@@ -10518,36 +10328,29 @@ ID3D12PipelineState* GxBackend::flush_draw_state(
         }
     }
 
-    // Refresh texture descriptor table when any texture register changed.
+    // Refresh the texture descriptor table when any texture register changed.
     //
-    // `tex_dirty` is already the complete set of inputs this block consumes:
-    //   - `frame_bindings_dirty_` / `texture_bindings_dirty_` are its own two
-    //     terms, and
-    //   - `texture_binding_changed` is true whenever the captured
-    //     `TextureBindingKey` differs from the remembered one. Because a capture
-    //     is now taken only when one of those two flags is set or `kDirtyTex`
-    //     moved, and `current_texture_binding_key_valid_` is false while the
-    //     flags that force a capture are set, "the key changed" can only be
-    //     observed under `tex_dirty`. So `tex_dirty == false` implies the capture
-    //     this flush would take is byte-identical to the one already applied,
-    //     and the probe below can only return `current_texture_table_` /
-    //     `current_sampler_table_` unchanged.
+    // `tex_dirty` is the complete set of inputs this block consumes:
+    //   - `frame_bindings_dirty_` and `texture_bindings_dirty_` are its own two terms, and
+    //   - `texture_binding_changed` is true whenever the captured `TextureBindingKey` differs from
+    //     the remembered one. A capture is taken only when one of those two flags is set or
+    //     `kDirtyTex` moved, and `current_texture_binding_key_valid_` is false while those flags are
+    //     set. So "the key changed" can only be observed under `tex_dirty`. With `tex_dirty == false`,
+    //     the capture this flush would take is byte-identical to the applied one, and the probe below
+    //     can only return `current_texture_table_` and `current_sampler_table_` unchanged.
     //
-    // `dirty_texture_aliases_` is the one piece of state that outlives a single
-    // flush: `prune_dirty_texture_binding_tables()` is what clears it, and the
-    // tables it prunes are keyed by the *previous* flush's binding key. It is
-    // therefore still consulted when it is non-empty, even though `tex_dirty`
-    // is false — otherwise an EFB-alias copy followed by matrix-only flushes
-    // would accumulate entries for the rest of the frame.
+    // `dirty_texture_aliases_` is the one piece of state that outlives a single flush.
+    // `prune_dirty_texture_binding_tables()` clears it, and the tables it prunes are keyed by the
+    // previous flush's binding key. It is still consulted when non-empty, even with `tex_dirty` false.
+    // Otherwise an EFB-alias copy followed by matrix-only flushes would accumulate entries for the rest
+    // of the frame.
     //
-    // This guard is the steady state during gameplay, not an edge case: SMG
-    // re-uploads XF matrices per object via LOAD_INDX, so after the frame's
-    // first draw essentially every flush carries `kDirtyXfMatrices` alone. The
-    // previous condition then paid a ~161-byte key hash plus an
-    // `unordered_map<TextureBindingKey, ...>` probe per draw to re-derive a
-    // result that could not have moved. `dirty == ~0u` is unreachable here: a
-    // full-dirty flush always leaves `dirty_needs_body` true and the early-out
-    // above requires all three binding flags to be false.
+    // This guard is the steady state during gameplay, not an edge case. SMG re-uploads XF matrices per
+    // object via LOAD_INDX, so after the frame's first draw nearly every flush carries
+    // `kDirtyXfMatrices` alone. Without this guard, each draw would pay a binding-key hash and a map
+    // probe to re-derive a result that cannot have moved. `dirty == ~0u` is unreachable here: a
+    // full-dirty flush always leaves `dirty_needs_body` true, and the early-out above requires all
+    // three binding flags to be false.
     if (tex_dirty || !dirty_texture_aliases_.empty()) {
         const auto texture_start = time_detail
             ? std::chrono::steady_clock::now()
@@ -10788,7 +10591,7 @@ void GxBackend::flush_pending_draw_batch() {
         return;
     }
 
-    // Per-frame decision, hoisted out of the per-draw path (see F-13).
+    // Per-frame decision, hoisted out of the per-draw path.
     const bool time_detail = frame_time_detail_;
     const auto draw_record_start = time_detail
         ? std::chrono::steady_clock::now()
@@ -10802,9 +10605,7 @@ void GxBackend::flush_pending_draw_batch() {
     pending_draw_batch_ = {};
 }
 
-// ---------------------------------------------------------------------------
 // FifoSink callbacks
-// ---------------------------------------------------------------------------
 
 const GxBackend::VertexLayoutCacheEntry& GxBackend::cached_vertex_layout(
     std::uint8_t vtxfmt) const {
@@ -11267,7 +11068,7 @@ bool GxBackend::on_cached_packet_draw_run(
         cached_draw_run_batch_compatible_known_ = false;
     }
 
-    // Per-frame decision, hoisted out of the per-draw path (see F-13).
+    // Per-frame decision, hoisted out of the per-draw path.
     const bool time_detail = frame_time_detail_;
     const auto vertex_start = time_detail
         ? std::chrono::steady_clock::now()
@@ -11319,7 +11120,7 @@ bool GxBackend::on_cached_packet_draw_run(
                 ++frame_decoded_vertex_cache_stale_rejects_;
             }
             if (dependencies_match) {
-                // Record the generation this entry is now proven valid for, so
+                // Record the generation this entry is now valid for, so
                 // every later replay of the same key in this frame skips the
                 // snapshot compare. 0 is the "never validated" sentinel and is
                 // never a live generation (see the invalidation path).
@@ -11466,10 +11267,8 @@ bool GxBackend::on_cached_packet_draw_run(
             entry.total_indices = decoded.total_indices;
             entry.last_used = ++decoded_packet_run_cache_tick_;
             entry.byte_size = decoded_vertex_bytes + dependency_snapshot_bytes;
-            // The snapshots were just captured from live guest memory, so this
-            // entry is already proven valid for the current generation: the
-            // first replay of it this frame must not re-compare what was just
-            // copied.
+            // The snapshots were just captured from live guest memory, so this entry is valid for the current
+            // generation. The first replay this frame must not re-compare the bytes just copied.
             entry.validated_generation = decoded_packet_run_generation_;
             entry.vertices = std::move(decoded.vertices);
             // Eager invalidation tests overlap against the merged snapshot
@@ -11689,7 +11488,7 @@ void GxBackend::on_cached_draw_run_draw(
         cached_draw_run_batch_compatible_known_ = false;
     }
 
-    // Per-frame decision, hoisted out of the per-draw path (see F-13).
+    // Per-frame decision, hoisted out of the per-draw path.
     const bool time_detail = frame_time_detail_;
     const auto vertex_start = time_detail
         ? std::chrono::steady_clock::now()
@@ -11814,7 +11613,7 @@ void GxBackend::on_draw(
     }
 
     const unsigned draw_index = capture_draw_idx_;
-    // Per-frame decision, hoisted out of the per-draw path (see F-13).
+    // Per-frame decision, hoisted out of the per-draw path.
     const bool time_detail = frame_time_detail_;
     D3D12_PRIMITIVE_TOPOLOGY topology{};
     D3D12_PRIMITIVE_TOPOLOGY_TYPE topology_type{};
@@ -11856,9 +11655,8 @@ void GxBackend::on_draw(
     }
     if (pso == nullptr) {
         flush_pending_draw_batch();
-        // No pipeline ready; vertex_loader still needs to consume the packet
-        // so the cursor advances correctly.  We skip drawing but must not
-        // leave the cursor in the middle of the stream.
+        // No pipeline ready: the draw is skipped, but its vertex data is still
+        // consumed so the cursor stays at a command boundary.
         ++stat_draws_no_pso_;
         ++frame_draws_no_pso_;
         const auto vertex_start = time_detail
@@ -12741,13 +12539,11 @@ void GxBackend::on_efb_copy(std::uint32_t exec_command) {
         }
     }
 
-    // GX clear-on-copy: the copy command's clear bit wipes the COPY'S SRC
-    // RECT with the latched copy-clear registers after the copy, honoring
-    // the PE write masks (Dolphin BPStructs BPMEM_TRIGGER_EFB_COPY:
-    // ClearScreen(srcRect) with colorEnable = blendmode.colorupdate,
-    // alphaEnable = blendmode.alphaupdate, zEnable = zmode.updateenable).
-    // A full-target clear here wiped EFB content later copies in the same
-    // frame still needed (SMG performs ~3 copies/frame).
+    // GX clear-on-copy: the copy command's clear bit wipes the copy's source rect with the latched
+    // copy-clear registers, honoring the PE write masks (Dolphin BPStructs BPMEM_TRIGGER_EFB_COPY:
+    // ClearScreen(srcRect) with colorEnable = blendmode.colorupdate, alphaEnable =
+    // blendmode.alphaupdate, zEnable = zmode.updateenable). A full-target clear here wiped EFB content
+    // that later copies in the same frame still needed.
     if (params.clear) {
         const BlendMode bm = state_.blend_mode();
         const ZMode zm = state_.z_mode();
@@ -12800,9 +12596,8 @@ void GxBackend::on_pe_finish() {
             "GX PE_FINISH requires a native gx_pe_finish service");
     }
     frame_services_->gx_pe_finish(frame_services_->user);
-    // Keep the required callback authoritative. The optional trace is capped
-    // so bring-up can observe the signal without
-    // flooding stderr (these fire every GXDrawDone — thousands per boot).
+    // The required callback stays authoritative. The optional trace is capped so it can observe the
+    // signal without flooding stderr, since these callbacks fire on every GXDrawDone.
     static int s_pe_done_logs = 0;
     if (frame_services_ != nullptr && frame_services_->log != nullptr &&
         s_pe_done_logs < 4) {
@@ -12874,9 +12669,9 @@ void GxBackend::on_tlut_load() {
         return;
     }
     flush_pending_draw_batch();
-    // BP 0x64 (source) was latched by GxState; BP 0x65 (dest) triggered this.
-    // Without this transfer every palettized (C4/C8/C14X2) texture decodes
-    // against a zeroed TLUT bank — black/garbage UI and fonts.
+    // BP 0x64 (source) is latched by GxState; BP 0x65 (dest) triggers this. Without this transfer,
+    // every palettized (C4/C8/C14X2) texture decodes against a zeroed TLUT bank, which shows as black
+    // or garbage UI and fonts.
     if (frame_memory_ == nullptr) {
         return;
     }

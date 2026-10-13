@@ -14,9 +14,8 @@ namespace Nebula.Setup
 
     internal static class InstallIntent
     {
-        // A downloaded release is itself the updater. Do not require the old
-        // setup to discover that same release again, or force a repair rebuild
-        // when its existing, hash-verified game modules remain compatible.
+        // A downloaded release is its own updater. The setup does not need to rediscover the same release,
+        // or force a repair rebuild, when the existing hash-verified game modules remain compatible.
         internal static InstallMode ForPackage(string installedVersion, string packageVersion)
         {
             if (installedVersion == null) return InstallMode.Install;
@@ -63,12 +62,11 @@ namespace Nebula.Setup
         };
 
         /// <summary>
-        /// The native ISA of the NebulaRuntime.exe and galaxy_ppc_float /
-        /// galaxy_softfloat / galaxy_dsp_alu libraries this install uses.
-        /// build-release records CMake's own effective-target line, so the value
-        /// is what reached the compiler. A "SSE2+AVX2" package carries both
-        /// builds (AVX2 under "avx2/") and installs the AVX2 one when this CPU
-        /// exposes AVX2. Packages produced before the record existed were SSE2.
+        /// The native ISA of NebulaRuntime.exe and of the galaxy_ppc_float, galaxy_softfloat and
+        /// galaxy_dsp_alu libraries this install uses. build-release records CMake's effective-target
+        /// line, so the value is what reached the compiler. A "SSE2+AVX2" package carries both builds
+        /// (AVX2 under "avx2/") and installs the AVX2 one when this CPU exposes AVX2. Packages made
+        /// before the record existed are SSE2.
         /// </summary>
         public static string RuntimeNativeIsa
         {
@@ -198,12 +196,10 @@ namespace Nebula.Setup
             var problems = new List<string>();
             if (!Environment.Is64BitOperatingSystem) problems.Add("Nebula needs 64-bit Windows 10 or 11.");
             if (Environment.OSVersion.Version.Major < 10) problems.Add("Nebula needs Windows 10 or 11.");
-            // The prebuilt runtime and the prebuilt float/DSP libraries that every
-            // module links against are compiled for exactly one ISA. A package
-            // built for AVX2 must not be installed on a host that cannot execute
-            // it: the symptom would be an illegal-instruction fault inside the
-            // game at an arbitrary later moment, not a diagnosable setup error.
-            // Refusing here is the only place that failure can be attributed.
+            // The prebuilt runtime and the prebuilt float and DSP libraries are each compiled for exactly one
+            // ISA. A package built for AVX2 must not be installed on a host that cannot run it. Otherwise the
+            // failure is an illegal-instruction fault inside the game at an arbitrary later time, not a setup
+            // error. This check is the only place where that failure can be attributed.
             if (RuntimeNativeIsa == "AVX2" && !HostSupportsAvx2())
                 problems.Add("This package's runtime was built for AVX2, which this CPU does not expose. Use a package built with -NativeIsa SSE2, or install on a CPU with AVX2.");
             ulong memory = NativeMethods.TotalPhysicalMemory();
@@ -318,7 +314,7 @@ namespace Nebula.Setup
                         }, Log);
                     if (!linked)
                     {
-                        ModuleUpdateNotice = "Host updated. Existing game helpers retained: this older installation has no compiled-object cache.";
+                        ModuleUpdateNotice = "Nebula was updated. The game modules from the previous version were kept.";
                         Log(ModuleUpdateNotice);
                     }
                     ModuleCompatibility.Validate(app, Json.Parse(Payload.ReadText("module-compatibility.json")));
@@ -371,10 +367,10 @@ namespace Nebula.Setup
         {
             cancel.ThrowIfCancellationRequested();
             if (!RetainedInputsValid() || !ContentValid())
-                throw new InvalidOperationException("Relinking is unavailable and the retained game input is missing. Run Setup again and select your game to rebuild; the current install is unchanged.");
+                throw new InvalidOperationException("The game modules must be rebuilt for this update. Run Setup again and select your game.");
             preservingModules = false;
             ModuleUpdateNotice = null;
-            Stage(0.20, 0.70, "Rebuilding game modules (last-resort update)");
+            Stage(0.20, 0.70, "Rebuilding the game modules");
             string expected = Path.GetFullPath(Path.Combine(staging, "app"));
             if (!string.Equals(Path.GetFullPath(app), expected, StringComparison.OrdinalIgnoreCase))
                 throw new InvalidOperationException("Invalid update staging path.");
@@ -486,22 +482,18 @@ namespace Nebula.Setup
         }
 
         /// <summary>
-        /// Seeds the DXBC/PSO caches so a user's first launch is warmed instead of
-        /// paying the full cold-start compile.
+        /// Seeds the DXBC and PSO caches, so a user's first launch is warmed instead of paying the full
+        /// cold-start compile.
         ///
-        /// Only these two files are seeded, and the runtime's own loaders are why.
-        /// `load_disk_cache` validates magic + version and then checksums and
-        /// reflects every record, with NO adapter check anywhere — so `shaders.bin`
-        /// is portable across GPUs. `load_pso_key_cache` is likewise adapter-free.
-        /// `pipelines.bin` is deliberately NOT seeded: `load_pipeline_library`
-        /// compares the adapter LUID and discards the file on any mismatch, so a
-        /// foreign copy would only ever be rejected.
+        /// Only these two files are seeded. The runtime's loaders explain why: load_disk_cache checks magic
+        /// and version, then checksums and reflects every record, with no adapter check, so shaders.bin is
+        /// portable across GPUs. load_pso_key_cache is likewise adapter-free. pipelines.bin is not seeded:
+        /// load_pipeline_library compares the adapter LUID and discards the file on any mismatch, so a foreign
+        /// copy would always be rejected.
         ///
-        /// Every failure mode here degrades to today's behaviour rather than to a
-        /// wedge: a version mismatch sets the runtime's repair flag and the file is
-        /// ignored, so the user pays the same cold start they pay without the seed.
-        /// The `File.Exists` guard means a cache this machine already built is
-        /// never replaced.
+        /// Every failure degrades to the current behaviour rather than a wedge. A version mismatch sets the
+        /// runtime's repair flag and the file is ignored, so the user pays the same cold start as without the
+        /// seed. The File.Exists guard means a cache this machine already built is never replaced.
         /// </summary>
         private void SeedShaderCache()
         {
@@ -518,9 +510,8 @@ namespace Nebula.Setup
                         Log("Shader-cache seed: kept the existing " + name + ".");
                         continue;
                     }
-                    // Absent from the payload only if the release deliberately
-                    // omitted it (see build-release.ps1's version guard for
-                    // psos.bin). That is not an error.
+                    // Absent from the payload only when the release omits it on purpose (see build-release.ps1's version
+                    // guard for psos.bin). That is not an error.
                     Payload.Extract("shadercache-seed." + name, destination);
                     Log("Shader-cache seed: wrote " + name + ".");
                 }
@@ -557,12 +548,9 @@ namespace Nebula.Setup
                 { "moduleSourceCommit", preservingModules ? current.ModuleSourceCommit : source.Commit },
                 { "toolchain", toolchain.Id },
                 { "contentFormatVersion", ContentFormatVersion },
-                // The CPU target of the prebuilt runtime and of the prebuilt
-                // float/DSP libraries, and (separately) of the modules compiled
-                // on this host. Two installs that share a version label but
-                // differ here do not run the same machine code, so a recorded
-                // session must be able to prove which pair it measured instead
-                // of inferring it from file hashes alone.
+                // The CPU target of the prebuilt runtime and the prebuilt float and DSP libraries, and separately of the
+                // modules compiled on this host. Installs that share a version label but differ here do not run the same
+                // machine code, so a recorded session must show which pair it measured instead of inferring it from file hashes.
                 { "runtimeIsa", RuntimeNativeIsa },
                 { "moduleIsa", preservingModules ? current.ModuleIsa : NativeIsa },
                 { "installedUtc", DateTime.UtcNow.ToString("o") },

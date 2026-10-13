@@ -194,7 +194,7 @@ pub struct ModuleTranslationOptions {
     /// entries, operand validation, FPSCR and precise FP faults are unaffected.
     pub fused_paired_binary: bool,
     /// Four-register indexed paired boundary with library-local result packing.
-    /// Kept opt-in while moving-route and newly sharded cohorts are qualified.
+    /// Opt-in while its cohorts are still being qualified.
     pub indexed_paired_binary: bool,
     /// Compact paired ternary boundary; opt-in pending broader qualification.
     pub indexed_paired_ternary: bool,
@@ -206,36 +206,26 @@ pub struct ModuleTranslationOptions {
     pub inline_scalar_single_binary: bool,
     /// Straight-line integer GPR residency across a whole function body.
     ///
-    /// Every other field here is a local lowering decision; this one is a
-    /// function-wide property. The translated body names `context->gpr[N]` for
-    /// *every* guest register operand, so the host compiler cannot keep the
-    /// guest register file in registers: each operand is an independent 4-byte
-    /// access into `PpcContext`, and an opaque call in between (every
-    /// call-return checkpoint, every guest load or store) forces every later
-    /// read to be re-issued. The generated module therefore performs roughly
-    /// one `PpcContext` access per guest instruction.
+    /// This is a function-wide property, unlike the other options. The translated body names `context->gpr[N]`
+    /// for every guest register operand, so the host compiler cannot keep the guest register file in registers.
+    /// Each operand is a separate 4-byte access into `PpcContext`, and every opaque call (call-return checkpoint,
+    /// guest load or store) forces later reads to be reissued. The generated module therefore does roughly one
+    /// `PpcContext` access per guest instruction.
     ///
-    /// With this option the body instead keeps every directly-indexed GPR in a
-    /// function-local variable, so the host compiler's own register allocator
-    /// owns the guest register file across the straight-line body. Only the
-    /// function exit writes the locals back. See
-    /// `crate::residency::apply_register_residency` for the rule, and why
-    /// interior entries and runtime-indexed GPR access are excluded.
+    /// With this option, every directly indexed GPR lives in a function-local variable, so the host register
+    /// allocator owns the guest register file across the straight-line body. Only function exit writes the locals
+    /// back. See `crate::residency::apply_register_residency` for the rule, and for why interior entries and
+    /// runtime-indexed GPR access are excluded.
     pub guest_resident_integer: bool,
-    /// Fast float: the module is compiled with `GALAXY_FAST_FLOAT=1`, so the
-    /// native float helpers run plain IEEE arithmetic (fused multiply-add,
-    /// one rounding to binary32 for the single forms, 25-bit multiplier
-    /// rounding, saturating fctiwz) with no exact fallback and no FPSCR
-    /// status. Dolphin/WiiCompiled accuracy instead of bit-exact Gekko
-    /// results; the exact fallback calls were what kept guest floats out of
-    /// host registers. The module exports `galaxy_module_float_flags` so the
-    /// runtime can select flush-to-zero on the simulation thread. Requires
-    /// `native_float`.
+    /// Fast float: the module is compiled with `GALAXY_FAST_FLOAT=1`. The native float helpers run plain IEEE
+    /// arithmetic (fused multiply-add, one rounding to binary32 for single forms, 25-bit multiplier rounding,
+    /// saturating fctiwz), with no exact fallback and no FPSCR status. This follows Dolphin/WiiCompiled accuracy,
+    /// not bit-exact Gekko results. The exact fallback calls were what kept guest floats in memory instead of
+    /// host registers. The module exports `galaxy_module_float_flags`, so the runtime can select flush-to-zero on
+    /// the simulation thread. Requires `native_float`.
     pub fast_float: bool,
-    /// Also keep the FPR/PS1 file in host locals (requires
-    /// `guest_resident_integer`). Measured slower than integer-only residency
-    /// on the RMGE01 module (87.9 vs 83.2 ns per benchmark call): the exact
-    /// float fallbacks force spills around every helper call. Off by default.
+    /// Also keeps the FPR/PS1 file in host locals (requires `guest_resident_integer`). Off by default: the exact
+    /// float fallbacks force spills around every helper call.
     pub guest_resident_float: bool,
     pub exact_psmtx_local_lanes: bool,
     pub exact_psvec_cross_local_lanes: bool,
@@ -563,9 +553,8 @@ pub fn translate_module_with_options(
         .iter()
         .map(|(function, _)| *function)
         .collect::<Vec<_>>();
-    // Functions that execute FP instructions stay on the generic native float
-    // lowering; hand-written substitutions for them use exact out-of-line
-    // helpers and measured slower (module benchmark, SDK matrix library).
+    // Functions that execute FP instructions stay on the generic native float lowering. Hand-written substitutions
+    // for them use exact out-of-line helpers, which are slower (module benchmark, SDK matrix library).
     let mut exact_fpu_functions = BTreeSet::new();
     for function in &ranges {
         let bytes = function_bytes(&loaded.dol.sections, &loaded.dol_bytes, *function).ok_or(
@@ -627,10 +616,8 @@ pub fn translate_module_with_options(
         .chain(aliases.iter().copied())
         .collect::<BTreeMap<_, _>>();
     let empty_entries = BTreeSet::new();
-    // As in WiiCompiled, caller residency narrows a call boundary only for a
-    // callee with a fully known contract: the proven integer leaves decoded
-    // below. Substitutions, FP bodies and leaves with interior entries stay
-    // full fences.
+    // As in WiiCompiled, caller residency narrows a call boundary only for a callee with a fully known contract:
+    // the integer leaves decoded below. Substitutions, FP bodies and leaves with interior entries stay full fences.
     let mut resident_leaf_contracts = BTreeMap::new();
     if options.guest_resident_leaf {
         for (function, _) in &translated {
@@ -776,8 +763,7 @@ pub fn translate_module_with_options(
                         &BTreeSet::new(),
                         LoweringConfig {
                             local_lane_profile: LocalLaneProfile::PsmtxConcat,
-                            // Qualified only inside the guarded matrix leaf;
-                            // the global fused-paired option remains unchanged.
+                            // Applies only inside the guarded matrix leaf. The global fused-paired option is unchanged.
                             fused_paired_binary: true,
                             ..LoweringConfig::default()
                         },
@@ -1020,10 +1006,9 @@ fn mapped_function_containing(functions: &[FunctionRange], address: u32) -> Opti
     (address < end).then_some(function)
 }
 
-// Floating-point and paired-single opcodes. Under eager FPU no MSR[FP] guard
-// is emitted for them; the predicate only keeps functions that execute FP
-// instructions on the generic native float lowering instead of a hand-written
-// substitution (those use the out-of-line exact helpers and measured slower).
+// Floating-point and paired-single opcodes. Under eager FPU no MSR[FP] guard is emitted for them. The
+// predicate only keeps functions that execute FP instructions on the generic native float lowering instead
+// of a hand-written substitution, which would use the slower out-of-line exact helpers.
 fn opcode_requires_fpu(opcode: Opcode) -> bool {
     matches!(
         opcode,
@@ -1755,11 +1740,9 @@ fn rfi_unwind_continuations(
         })
         .collect::<BTreeSet<_>>();
     let mut continuations = BTreeSet::new();
-    // Indirect linked calls (bctrl/blrl: virtual dispatch, callbacks) can
-    // reach any address-taken function, including the OSLockMutex/
-    // OSSleepThread ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ OSLoadContext chain, which the static taint cannot
-    // follow. Functions containing one are tainted and their indirect return
-    // sites become continuations.
+    // Indirect linked calls (bctrl/blrl: virtual dispatch, callbacks) can reach any address-taken function,
+    // including the OSLockMutex/OSSleepThread OSLoadContext chain, which static taint cannot follow.
+    // Functions containing one are tainted, and their indirect return sites become continuations.
     for source in functions {
         let Some(bytes) = function_bytes(sections, dol_bytes, *source) else {
             continue;
@@ -1961,15 +1944,12 @@ fn lower_resident_integer_leaf(
 ) -> Option<String> {
     let (words, contract) =
         analyze_resident_integer_leaf(address, bytes, entries, call_return_entries)?;
-    // analyze_resident_integer_leaf already rejects any word it cannot classify and
-    // pushes exactly one entry per instruction, in order, so the opcode match below
-    // must accept every word it just accepted. Assert that instead of relying on
-    // it: falling out of the match at `_ => return None` abandons a half-written
-    // body, and the caller reads None as "not eligible" and re-lowers the function
-    // with the ordinary emitter. The shipped code would still be correct, but this
-    // tier would silently lose coverage -- and coverage is the point of the
-    // optimisation. An edit that adds an opcode to one match and not the other has
-    // to fail loudly in tests rather than quietly shrink the fast path.
+    // analyze_resident_integer_leaf already rejects any word it cannot classify and pushes one entry per
+    // accepted instruction, in order. The opcode match below must therefore accept every word it accepted.
+    // This asserts that instead of relying on it. Falling out of the match at `_ => return None` leaves a
+    // half-written body; the caller reads None as "not eligible" and re-lowers with the ordinary emitter.
+    // The output would still be correct, but this tier would silently lose coverage. An edit that adds an
+    // opcode to one match and not the other must fail in tests.
     debug_assert_eq!(
         words.len(),
         bytes.len() / 4,
@@ -2954,24 +2934,17 @@ fn flat_store_helper(base: u32) -> &'static str {
     if base == 1 { "store_stack" } else { "store" }
 }
 
-/// Integer loads and stores whose effective address is outside the RAM
-/// aliases of the flat guest view: device registers (0xCC00xxxx, 0xCD00xxxx),
-/// the locked cache (0xE000xxxx) and anything unmapped. Under fastmem such a
-/// site takes a host page fault on every execution (2.2 million in a ten-minute
-/// gameplay session before this analysis: IPC control polls, VI retrace
-/// reads, GX FIFO save and token handlers); these sites lower to the checked
-/// helper, which reaches the device directly and also admits RAM, so a
-/// misclassified site is slower, never wrong. The write-gather pipe keeps its
-/// flat form: `fast::store` tests for it inline and appends to the gather
-/// buffer.
+/// Integer loads and stores whose effective address is outside the RAM aliases of the flat guest view:
+/// device registers (0xCC00xxxx, 0xCD00xxxx), the locked cache (0xE000xxxx) and anything unmapped. Under
+/// fastmem such a site takes a host page fault on every execution. These sites lower to the checked helper,
+/// which reaches the device directly and also admits RAM. A misclassified site is slower, never wrong. The
+/// write-gather pipe keeps its flat form: `fast::store` tests for it inline and appends to the gather buffer.
 ///
-/// GPR constants (lis/addi/ori chains, `mr`, and loads of the SDA device
-/// pointer globals) are propagated over the function's control-flow graph and
-/// met at joins; a call clobbers the volatile GPRs. Interior entries that no
-/// direct branch or call return explains (jump-table and other address-taken
-/// labels) start unknown. An indexed access with a device-register constant on
-/// one side and an unknown index on the other (`__IPCRegs[index]`) is a
-/// device access.
+/// GPR constants (lis/addi/ori chains, `mr`, and loads of the SDA device pointer globals) are propagated over
+/// the function's control-flow graph and met at joins. A call clobbers the volatile GPRs. Interior entries that
+/// no direct branch or call return explains (jump-table and other address-taken labels) start unknown. An
+/// indexed access with a device-register constant on one side and an unknown index on the other
+/// (`__IPCRegs[index]`) is a device access.
 fn discover_static_device_access_pcs(
     address: u32,
     bytes: &[u8],
@@ -3243,13 +3216,11 @@ fn integer_guest_load_expression(width: u32, ea: &str, pc: u32, flat_ram_reads: 
     }
 }
 
-/// Flag-based interrupt return (generation 17): every checkpoint whose cold
-/// path the residency pass did not already rewrite becomes the macro form
-/// whose cold block tests `kPendingEventTransferBit` and returns, and every
-/// architectural interrupt checkpoint (mtmsr) and system call is followed by
-/// the same test. A resident body's cold blocks carry the test from the
-/// residency templates; its remaining `galaxy::call_return_checkpoint(`
-/// occurrences are none, so this pass only touches non-resident text.
+/// Flag-based interrupt return: every checkpoint whose cold path the residency pass did not already rewrite
+/// becomes the macro form, whose cold block tests `kPendingEventTransferBit` and returns. Every architectural
+/// interrupt checkpoint (mtmsr) and system call is followed by the same test. A resident body's cold blocks
+/// carry the test from the residency templates. Its remaining `galaxy::call_return_checkpoint(` occurrences
+/// are none, so this pass only touches non-resident text.
 pub fn apply_transfer_returns(body: String) -> String {
     let mut out = body
         .replace(
@@ -5258,14 +5229,10 @@ fn lower_words_with_config(
                     |access| access.second_source.expect("or second source"),
                 );
                 let expression = match instruction.op {
-                    // `or rA,rS,rS` IS the PowerPC register-to-register move.
-                    // Emitting `gpr[a] | gpr[a]` costs a redundant read of the
-                    // same 4-byte context slot plus a real OR on every `mr` in
-                    // the stream (253 occurrences in one 15k-line shard of the
-                    // installed module). `x | x` is exactly `x` for unsigned
-                    // operands with no trap representation, so a plain copy is
-                    // the same architectural result. The record_bit CR0 update
-                    // below still consumes gpr[target] unchanged.
+                    // `or rA,rS,rS` is the PowerPC register move. Emitting `gpr[a] | gpr[a]` costs a redundant read of the
+                    // same 4-byte context slot plus an OR on every `mr` in the stream. `x | x` equals `x` for unsigned
+                    // operands, so a plain copy gives the same result. The record_bit CR0 update below still reads
+                    // gpr[target] unchanged.
                     Opcode::Or if source == rhs => format!("context->gpr[{source}]"),
                     Opcode::Or => format!("context->gpr[{source}] | context->gpr[{rhs}]"),
                     Opcode::Orc => format!("context->gpr[{source}] | ~context->gpr[{rhs}]"),
@@ -5453,20 +5420,12 @@ fn lower_words_with_config(
                 let mask_begin = (word >> 6) & 0x1F;
                 let mask_end = (word >> 1) & 0x1F;
                 let mask = rotate_mask(mask_begin, mask_end);
-                // Only the shift == 0 form is folded: `rotl(v, 0) & mask` is
-                // exactly `v & mask`, so the rotate disappears and
-                // `clrlwi`/`clrrwi`-style masks become a single `and`
-                // (7,115 sites module-wide).
+                // Only the shift == 0 form is folded: `rotl(v, 0) & mask` equals `v & mask`, so the rotate disappears
+                // and `clrlwi`/`clrrwi`-style masks become a single `and`.
                 //
-                // The rotate itself is NOT removable for shift != 0. A
-                // pre-rotated-mask rewrite was tried here and is WRONG for
-                // shift != 0: rotating `v` by any amount other than `shift`
-                // moves `v`'s bits relative to a mask whose position is fixed
-                // by MB/ME, so only `rotl(v, shift) & mask` reproduces the ISA.
-                // Verified exhaustively over all 32x32x32 (SH, MB, ME) triples
-                // and 12 operand patterns: the pre-rotated form mismatched
-                // 319,448 of 393,216 encodings, while this form matched all of
-                // them. Do not "optimize" the rotate amount again.
+                // The rotate is not removable for shift != 0. Rotating `v` by any amount other than `shift` moves its
+                // bits relative to a mask whose position MB/ME fixes, so only `rotl(v, shift) & mask` matches the ISA.
+                // A pre-rotated-mask form differs from the ISA on most encodings. Do not change the rotate amount.
                 if shift == 0 {
                     writeln!(
                         output,
@@ -5495,9 +5454,7 @@ fn lower_words_with_config(
                 let mask_begin = (word >> 6) & 0x1F;
                 let mask_end = (word >> 1) & 0x1F;
                 let mask = rotate_mask(mask_begin, mask_end);
-                // Same shift == 0 fold as `Rlwinm`, and the same warning: the
-                // rotate amount must stay exactly `shift`. See the comment on
-                // the `Rlwinm` arm for the exhaustive equivalence result.
+                // Same shift == 0 fold as `Rlwinm`. The rotate amount must stay exactly `shift`; see the `Rlwinm` arm.
                 if shift == 0 {
                     writeln!(
                         output,
@@ -7016,20 +6973,18 @@ impl NativePureHelper {
     }
 }
 
-/// RVL SDK paired-single math, J3D and JMath matrix/vector/keyframe routines
-/// with lean host bodies (`galaxy::lean_*` in native_api.h): fast float,
-/// ABI-visible effects only.
-/// Eager FPU (ABI 25) means translated code never raises exception 7, so
-/// these need no exact-FPU restart and replace both the body and direct calls.
-/// The two calls in CollisionShadow::drawAndCaptureTex (0x80313AF4) that size
-/// Mario's shadow-softening circle in logical screen units: `bl TDDraw::setup`
-/// (2D camera from MR::getScreenWidth) and `bl TDDraw::fix2Dpos`. The circle
-/// lands in a fixed 160x160 EFB region, so these keep the game's 16:9 width
-/// under a widened aspect (without it the circle narrows at 32:9 and leaves
-/// the sides of the shadow dark).
-/// One runtime-owned display/level-of-detail site (ABI 27). The module only
-/// marks the guest PC; galaxy::site_hook calls the runtime, which owns what
-/// each SiteHookKind does, so policy changes need no module rebuild.
+/// RVL SDK paired-single math, and J3D and JMath matrix, vector and keyframe routines with lean host
+/// bodies (`galaxy::lean_*` in native_api.h). They use fast float and affect only ABI-visible state.
+/// Eager FPU (ABI 25) means translated code never raises exception 7, so these need no exact-FPU restart.
+/// They replace both the body and direct calls.
+/// The two calls in CollisionShadow::drawAndCaptureTex (0x80313AF4) that size Mario's shadow-softening
+/// circle in logical screen units are `bl TDDraw::setup` (2D camera from MR::getScreenWidth) and
+/// `bl TDDraw::fix2Dpos`. The circle lands in a fixed 160x160 EFB region, so these keep the game's 16:9
+/// width under a widened aspect. Without that, the circle narrows at 32:9 and leaves the sides of the
+/// shadow dark.
+/// One runtime-owned display/level-of-detail site (ABI 27). The module only marks the guest PC.
+/// galaxy::site_hook calls the runtime, which decides what each SiteHookKind does, so policy changes need
+/// no module rebuild.
 fn site_hook_call(pc: u32, kind: &str, argument: u32) -> String {
     format!(
         "    galaxy::site_hook(services, context, memory, 0x{pc:08X}u, galaxy::SiteHookKind::{kind}, {argument}u);\n"
@@ -7148,12 +7103,10 @@ fn lean_sdk_math_symbol(address: u32) -> Option<&'static str> {
     }
 }
 
-/// Resident registers each lean host body reads from or writes to `context`.
-/// A call site of a body listed here synchronizes only those registers and has
-/// no call-return checkpoint: the body is a leaf with no checkpoint, callback
-/// or transfer. A body that is not listed stays a full synchronization point
-/// with the usual checkpoint. `lean_call_contracts_cover_the_bodies` checks the
-/// entries against the bodies in native_api.h.
+/// Resident registers each lean host body reads or writes in `context`. A call site of a listed body
+/// synchronizes only those registers and has no call-return checkpoint, since the body is a leaf with no
+/// checkpoint, callback or transfer. An unlisted body is a full synchronization point with the usual
+/// checkpoint. `lean_call_contracts_cover_the_bodies` checks these entries against the bodies in native_api.h.
 pub(crate) fn lean_call_contract(symbol: &str) -> Option<LeanCallContract> {
     const fn mask(registers: &[u32]) -> u32 {
         let mut bits = 0u32;
@@ -8604,10 +8557,9 @@ fn insert_nw4r_pane_hot_child_edge_profile(
     Ok(())
 }
 
-// CalcStringRect and the formatter reached by TextWriterBase::Print account
-// for nearly all measured time below the two hot Pane DrawSelf children. Keep
-// this closure diagnostic-only: every selected PPC call remains statically
-// translated and retains its ordinary return checkpoint and interior resume.
+// CalcStringRect and the formatter reached through TextWriterBase::Print are the main cost below the two
+// hot Pane DrawSelf children. This closure is diagnostic only: every selected PPC call stays statically
+// translated, with its ordinary return checkpoint and interior resume.
 const NW4R_TEXT_FORMAT_DIRECT_CALLS: [(u32, u32); 66] = [
     (0x8000_A428, 0x8000_AF00),
     (0x8000_A434, 0x8000_887C),
@@ -8766,9 +8718,8 @@ fn insert_nw4r_text_format_edge_profile(
     Ok(())
 }
 
-// The dominant children of the text-format closure are still substantial
-// translated routines. Profile their complete statically resolved call sets so
-// measurements distinguish nested work from their own instruction bodies.
+// The dominant children of the text-format closure are substantial translated routines. Profile their full
+// statically resolved call sets, so nested work is separated from their own instruction bodies.
 const NW4R_TEXT_LAYOUT_DIRECT_CALLS: [(u32, u32); 16] = [
     (0x8000_95F8, 0x8000_9628),
     (0x8000_9780, 0x804B_BD80),
@@ -8881,13 +8832,11 @@ fn insert_nw4r_text_layout_edge_profile(
     Ok(())
 }
 
-// The 0x803A3B6C JPA draw child ranks highly in the runtime's dynamic-call
-// self profile, but that profiler cannot subtract statically resolved native
-// calls. Instrument its complete static closure before treating its local body
-// as an optimization target. Also time the exact normal-entry matrix assembly
-// between the third normalization and the projection callback. This region has
-// no guest calls, while its interior FPU-retry entries deliberately start with
-// the local profiler inactive and therefore cannot inherit a stale timestamp.
+// The 0x803A3B6C JPA draw child ranks highly in the runtime's dynamic-call self profile, but that profiler
+// cannot subtract statically resolved native calls. Instrument its complete static closure before treating
+// its local body as an optimization target. Also time the exact normal-entry matrix assembly between the
+// third normalization and the projection callback. This region has no guest calls. Its interior FPU-retry
+// entries start with the local profiler inactive, so they cannot inherit a stale timestamp.
 const JPA_HOT_DRAW_DIRECT_CALLS: [(u32, u32); 10] = [
     (0x803A_3BC0, 0x803E_595C),
     (0x803A_3BD0, 0x803E_4D24),
@@ -9027,17 +8976,14 @@ fn insert_jpa_hot_draw_edge_profile(
     Ok(())
 }
 
-// The bounded call-self profile cannot subtract direct generated calls. These
-// are the complete statically resolved child sets of its three largest
-// otherwise-unexplained entries: NW4R FindPaneByName, the Bluetooth USB bulk
-// callback, and the HID-host event handler. Their indirect calls already pass
-// through call_guest_cached and are visible to the aggregate edge profiler.
-// This diagnostic preserves every static callee, return checkpoint, and
-// interior resume while measuring the missing direct edges.
-// The September 30 eight-VI gameplay edge probe also identified these four
-// descendant owners. Observe their complete static child sets before treating
-// their inclusive times as self time. The existing window gate keeps the
-// diagnostic inactive during startup; every return/resume checkpoint is kept.
+// The bounded call-self profile cannot subtract direct generated calls. These are the complete statically
+// resolved child sets of its three largest unexplained entries: NW4R FindPaneByName, the Bluetooth USB bulk
+// callback and the HID-host event handler. Their indirect calls already pass through call_guest_cached and
+// are visible to the aggregate edge profiler. This diagnostic keeps every static callee, return checkpoint
+// and interior resume while measuring the missing direct edges. A gameplay edge probe also identified these
+// four descendant owners. Their complete static child sets are observed before their inclusive times are read
+// as self time. The window gate keeps the diagnostic inactive during startup; every return and resume
+// checkpoint is kept.
 const TOP_SELF_CLOSURE_DIRECT_CALLS: [(u32, u32); 75] = [
     (0x8000_C10C, 0x8001_5394),
     (0x804E_BD88, 0x804E_A03C),
@@ -9257,10 +9203,9 @@ fn main_frame_stage_marker(function_address: u32, pc: u32) -> Option<&'static st
         (0x8033_EE8C, 0x8033_F000) => Some("__galaxy_main_frame_stage:draw3d-after-803C7360-2"),
         (0x8033_EE8C, 0x8033_F014) => Some("__galaxy_main_frame_stage:draw3d-after-803D8A44"),
         (0x8033_EE8C, 0x8033_F028) => Some("__galaxy_main_frame_stage:draw3d-after-803CA76C"),
-        // 8034424C fans out to the eight fixed 80344954 categories.  The
-        // continuations are deliberately traced here, rather than instrumenting
-        // a broad function entry, so the bounded main-frame trace attributes a
-        // category's complete native body to its exact static call site.
+        // 8034424C fans out to the eight fixed 80344954 categories. The continuations are traced here, rather than
+        // by instrumenting a broad function entry, so the bounded main-frame trace attributes each category's
+        // complete native body to its exact static call site.
         (0x8034_424C, 0x8034_4260) => Some("__galaxy_main_frame_stage:draw3d-80344954-category-1D"),
         (0x8034_424C, 0x8034_4268) => Some("__galaxy_main_frame_stage:draw3d-80344954-category-19"),
         (0x8034_424C, 0x8034_4270) => Some("__galaxy_main_frame_stage:draw3d-80344954-category-1A"),
@@ -10006,9 +9951,8 @@ fn render_psvec_normalize_local_experiment(experiment: &PsvecNormalizeLocalExper
     source
 }
 
-// These are hand-written proof predicates over the existing native ABI, not
-// a matrix implementation. The arithmetic body is emitted from the user's
-// verified dump by the ordinary instruction lowerer.
+// These are hand-written proof predicates over the existing native ABI, not a matrix implementation. The
+// arithmetic body is emitted from the user's dump by the ordinary instruction lowerer.
 const PSMTX_PROVEN_MEMORY_SOURCE: &str = r#"
     // Entry proof covers every access in this straight-line leaf. There are
     // no guest calls, checkpoints, mapping changes or observable write callbacks.
@@ -10110,8 +10054,8 @@ std::uint32_t psmtx_local_guard(const galaxy::PpcContext* context,
 }
 "#;
 
-// This is a proof predicate over the native ABI. Arithmetic remains ordinary
-// translator output derived from the verified game executable.
+// This is a proof predicate over the native ABI. Arithmetic remains ordinary translator output derived from
+// the game executable.
 const PSVEC_CROSS_LOCAL_GUARD_SOURCE: &str = r#"
 bool psvec_cross_plain_ram_span(galaxy::GuestMemoryV1* memory,
     std::uint32_t address, std::uint32_t size) {
@@ -11041,21 +10985,14 @@ fn emit_branch_condition(
     //   BO[2] (0x04) = do not decrement/test CTR
     //   BO[3] (0x02) = test CTR == 0 after decrementing (rather than != 0)
     //
-    // The previous form always built `(ctr_condition) && (cr_condition)` and
-    // substituted the literal `true` for the operand the encoding leaves
-    // untested. That is 79,297 sites emitting `(true) && (...)` and 1,129
-    // emitting `(...) && (true)` module-wide. The compiler folds the literal
-    // away, so this is chiefly an emitter/text-size fix, but it also removes
-    // the last place an untested operand is still materialised.
+    // The CTR and CR tests are emitted only when the encoding tests them. An untested operand is omitted,
+    // not replaced with a literal true.
     //
-    // CTR is decremented and tested in one expression so the counter-controlled
-    // loop-back edge carries a single read-modify-write of `context->ctr`
-    // instead of a separate store followed by a reload (1,129 such loops
-    // module-wide). Pre-decrement yields exactly the architectural value the
-    // instruction tests, and the post-instruction CTR is identical on both the
-    // taken and the fall-through path. All three call sites (`Bc`, `Bcctr`,
-    // `Bclr`) interpolate the result into an `if (...)`, and `Bcctr` rejects
-    // BO[2] == 0 outright, so the decrement is always evaluated exactly once.
+    // CTR is decremented and tested in one expression, so a counter-controlled loop-back edge does one
+    // read-modify-write of `context->ctr`. The pre-decrement value is the value the instruction tests, and the
+    // post-instruction CTR is the same on the taken and fall-through paths. All three call sites (`Bc`, `Bcctr`,
+    // `Bclr`) put the result in an `if (...)`. `Bcctr` rejects BO[2] == 0, so the decrement is always evaluated
+    // exactly once.
     let ctr_condition = if bo & 0x4 != 0 {
         None
     } else {
@@ -12031,13 +11968,10 @@ mod tests {
 
     #[test]
     fn rlwinm_rotate_amount_matches_the_encoding() {
-        // Guards the rewrite that was tried and reverted: a pre-rotated-mask
-        // form (`rotl(v, 32-SH) & (MASK <<< (32-SH))`) is NOT equivalent to
-        // `rotl(v, SH) & MASK` for SH != 0, because rotating `v` by anything
-        // other than SH moves its bits relative to a mask whose position MB/ME
-        // fixes. An exhaustive check over all 32x32x32 (SH, MB, ME) triples
-        // mismatched 319,448 of 393,216 encodings, so the emitted rotate amount
-        // and mask must stay exactly `SH` and `rotate_mask(MB, ME)`.
+        // The pre-rotated-mask form (`rotl(v, 32-SH) & (MASK <<< (32-SH))`) is not equivalent to `rotl(v, SH) & MASK`
+        // for SH != 0. Rotating `v` by anything other than SH moves its bits relative to a mask whose position MB/ME
+        // fixes. An exhaustive check over all 32x32x32 (SH, MB, ME) triples mismatched 319,448 of 393,216 encodings.
+        // The emitted rotate amount and mask must therefore stay exactly `SH` and `rotate_mask(MB, ME)`.
         //
         // SH is bits 11-15, MB bits 6-10, ME bits 1-5.
         let rlwinm = |sh: u32, mb: u32, me: u32| {
@@ -12069,9 +12003,8 @@ mod tests {
 
     #[test]
     fn shared_integer_operands_preserve_legacy_default_cpp_text() {
-        // These are exact words from the verified 0x803A3B6C RMGE01 stream.
-        // The expected lines are the pre-refactor emitter spellings, including
-        // RA=0 literal semantics, unsigned hex formatting, and register order.
+        // These are exact words from the 0x803A3B6C RMGE01 stream. The expected lines are the emitter spellings,
+        // including RA=0 literal semantics, unsigned hex formatting and register order.
         let words = [
             0x3961_0060, // addi r11,r1,0x60
             0x3fe0_805c, // addis r31,r0,0x805c
@@ -12086,9 +12019,8 @@ mod tests {
             // `or r29,r3,r3` is the move encoding: it must lower to a copy, not
             // to a self-or that re-reads the same 4 MB-context slot twice.
             "    context->gpr[29] = context->gpr[3];",
-            // `rlwinm r0,r0,2,0,29` (slwi r0,r0,2): shift != 0, so the rotate
-            // stays exactly `shift` and only the mask is applied. The mask is
-            // the original MB..ME run (0xFFFFFFFC), not a pre-rotated one.
+            // `rlwinm r0,r0,2,0,29` (slwi r0,r0,2): shift != 0, so the rotate stays exactly `shift` and only the mask is
+            // applied. The mask is the MB..ME run (0xFFFFFFFC).
             "    context->gpr[0] = std::rotl(context->gpr[0], 2) & 0xFFFFFFFCu;",
         ] {
             assert_eq!(output.matches(old_line).count(), 1, "{old_line}");
@@ -12144,11 +12076,9 @@ mod tests {
         let output = lower_instruction_fixture(0x8049_44D0, &words);
         assert!(output.contains("    goto label_80494580;"));
         assert!(output.contains("label_80494580:"));
-        // The emitter no longer materialises the untested CTR/CR operand, so the
-        // guard is a bare CR test. Assert the condition and target rather than
-        // the removed `(true) &&` wrapper (79,297 sites emitted it module-wide;
-        // the compiler folded it away, but the text is gone now). BO[1] selects
-        // the tested polarity, so the two encodings must still differ.
+        // The emitter does not materialise an untested CTR or CR operand, so the guard is a bare CR test. Assert the
+        // condition and target instead of a literal `(true) &&` wrapper. BO[1] selects the tested polarity, so the
+        // two encodings must still differ.
         assert!(
             !output.contains("if (!galaxy::cr_bit(context, 2u)) goto label_80494580;")
         );
@@ -13967,8 +13897,7 @@ mod tests {
                 "galaxy::native_indexed_word_load_80344A54(context, memory, services, 0x80344A54u);",
                 "indexed-word-load native helper direct call is supported",
             ),
-            // WPad input helper direct-call cases removed: those addresses now
-            // recompile to their real game functions (no host shim).
+            // These addresses recompile to the real game functions. There is no host shim for WPad input here.
         ] {
             let helper_words = [0x4800_0009_u32, 0x4E80_0020];
             let helper_bytes: Vec<u8> = helper_words
@@ -14812,8 +14741,7 @@ mod tests {
                 },
                 "galaxy::native_indexed_word_load_80344A54(context, memory, services, 0x80344A54u);",
             ),
-            // WPad input body-replacement cases removed (reverted to real game
-            // functions; truly-native input belongs at the raw-report boundary).
+            // WPad input runs the real game functions. Native input enters at the raw-report boundary.
             (
                 FunctionRange {
                     address: 0x803E_595C,
@@ -15867,8 +15795,7 @@ mod tests {
             .expect("internal linked call with an alternate continuation path is supported");
 
         assert!(output.contains("case 0x80004008u: goto label_80004008;"));
-        // The untested CTR/CR operand is no longer materialised, so the guard is
-        // a bare CR test rather than `(true) && (...)`.
+        // An untested CTR or CR operand is not emitted, so the guard is a bare CR test.
         assert!(
             output.contains("if (galaxy::cr_bit(context, 2u)) goto label_80004008;"),
             "{output}"
@@ -15962,18 +15889,12 @@ mod tests {
         assert!(output.contains("context->gpr[4] = context->gpr[3] & 0x000000FFu;"));
         assert!(output.contains("galaxy::set_xer_ca(context, result > 0xFFFFFFFFull);"));
         assert!(output.contains("galaxy::arithmetic_shift_right(source, 1u);"));
-        // `rlwimi r7,r6,SH=8,MB=0,ME=7` is `rotl(rA, 8) & 0xFF000000` per the ISA:
-        // the field mask is rotate_mask(0, 7) == 0x000000FF and the ISA rotates the
-        // source by SH=8 before applying it. The rotate amount really is SH, and
-        // the cleared half of the insert really is 0x00FFFFFF.
+        // `rlwimi r7,r6,SH=8,MB=0,ME=7` is `rotl(rA, 8) & 0xFF000000` per the ISA: the field mask is
+        // rotate_mask(0, 7) == 0x000000FF, and the ISA rotates the source by SH=8 before applying it. The rotate
+        // amount is SH, and the cleared half of the insert is 0x00FFFFFF.
         //
-        // An earlier revision of this assertion expected the *pre-rotated-mask*
-        // form `rotl(gpr[6], 24) & 0x00FF0000u`. That is an equivalent-looking
-        // rewrite which is wrong for shift != 0; the proof is recorded on the
-        // Rlwinm/Rlwimi emitter (exhaustively checked over all 32x32x32 SH/MB/ME
-        // triples, where the pre-rotated form mismatched 319,448 of 393,216
-        // encodings and this form matched all of them). Do not restore it, and do
-        // not "optimize" the rotate amount back to `32 - SH`.
+        // Do not replace the rotate with a pre-rotated mask or with `32 - SH`. That rewrite is wrong for SH != 0.
+        // The Rlwinm/Rlwimi emitters are checked exhaustively over all 32x32x32 SH/MB/ME triples.
         assert!(
             output.contains("std::rotl(context->gpr[6], 8) & 0xFF000000u"),
             "{output}"
@@ -17014,16 +16935,12 @@ mod tests {
             .contents
             .contains("if(galaxy_native_isa_effective STREQUAL \"AVX2\")"));
         assert!(!cmake.contents.contains("/Oi /arch:AVX2 /favor:INTEL64"));
-        // The clang-cl branch must act on the ISA this template selects and
-        // reports. Setup compiles the module with clang-cl, where
-        // CMAKE_CXX_COMPILER_ID is "Clang" and /arch:AVX2 is not a spelling the
-        // compiler honours, so -mavx2 has to be present here and /arch:AVX2 has
-        // to stay confined to the non-Clang branch. This assertion exists
-        // because the flag was silently absent once already: the template chose
-        // and announced AVX2 while emitting SSE2 machine code. -mfma is paired
-        // with -mavx2 so explicit std::fma calls in the native float fast paths
-        // become hardware instructions; contraction stays off. Never
-        // -mavx512* (the host probe is the AVX2+OSXSAVE test).
+        // The clang-cl branch must act on the ISA this template selects and reports. The module is compiled with
+        // clang-cl, where CMAKE_CXX_COMPILER_ID is "Clang" and /arch:AVX2 is not honoured. -mavx2 must therefore be
+        // present here, and /arch:AVX2 stays in the non-Clang branch. Without -mavx2 the template would announce AVX2
+        // while emitting SSE2 code. -mfma pairs with -mavx2 so explicit std::fma calls in the native float fast
+        // paths become hardware instructions. Contraction stays off. Never use -mavx512* (the host probe is the
+        // AVX2+OSXSAVE test).
         assert!(cmake
             .contents
             .contains("target_compile_options(RMGE01_game PRIVATE -mavx2)"));
@@ -18164,10 +18081,9 @@ mod tests {
             words[((pc - start) / 4) as usize] =
                 0x4800_0001 | (target.wrapping_sub(pc) & 0x03FF_FFFC);
         }
-        // Preserve the two anchors unique to the measured real region: its
-        // first FPU instruction and the indirect projection callback which
-        // ends the region. Other fixture instructions intentionally remain
-        // NOPs so this test covers structure rather than game behavior.
+        // Preserve the two anchors unique to the real region: its first FPU instruction and the indirect projection
+        // callback which ends the region. Other fixture instructions remain NOPs, so this test covers structure
+        // rather than game behavior.
         words[((JPA_HOT_DRAW_BODY_REGION_START - start) / 4) as usize] = 0xC07D_0144;
         words[((JPA_HOT_DRAW_BODY_REGION_END - start) / 4) as usize] = 0x4E80_0421;
         let bytes = words
@@ -19017,10 +18933,8 @@ mod tests {
 
     #[test]
     fn file_select_trace_hooks_keep_the_verified_selector_callbacks_exact() {
-        // These are the RMGE01 FileSelector/FileSelectItem entries consumed by
-        // the strict native route.  In particular, onPoint/onSelect receive the
-        // item in r4; the old control-loop labels must never become selection
-        // evidence again.
+        // These are the RMGE01 FileSelector/FileSelectItem entries consumed by the strict native route. In particular,
+        // onPoint/onSelect receive the item in r4. Control-loop labels must never be used as selection input.
         for address in [
             0x8017_85EC, // FileSelectItem::onPointing
             0x8017_866C, // FileSelectItem::offPointing
@@ -19043,8 +18957,8 @@ mod tests {
         }
 
         for address in [
-            0x8017_92D4, // historical, incorrect FileSelectItem label
-            0x8017_93CC, // historical, incorrect FileSelectItem label
+            0x8017_92D4,  // Not a FileSelectItem label.
+            0x8017_93CC,  // Not a FileSelectItem label.
             0x8017_BDD4, // FileSelector::calcBasePos, not onSelect
             0x8017_BFC4, // interior calcBasePos address, not onSelect
             0x803B_62E8, // SaveDataBannerCreator setup, not game-data load
@@ -19204,13 +19118,11 @@ mod tests {
         assert!(!combined.contains("native_mii_select_"));
     }
 
-    // Task A: divw/divwu must call the deterministic helper (not panic or UB).
-    // The generated C++ helper returns the hardware-correct Broadway result
-    // instead of calling guest_execution_fault, so both the code generator
-    // and the helper are tested end-to-end.
+    // divw/divwu must call the deterministic helper. The generated C++ helper returns the Broadway result
+    // instead of calling guest_execution_fault, so the code generator and the helper are tested end to end.
     #[test]
     fn lowers_divw_to_helper_call() {
-        // divw r5, r3, r4  ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ encoding 0x7CA3_23D6
+        // divw r5, r3, r4 (encoding 0x7CA3_23D6)
         let word: u32 = 0x7CA3_23D6;
         // Append blr so the function has a valid terminator.
         let full: Vec<u8> = word
@@ -19242,7 +19154,7 @@ mod tests {
 
     #[test]
     fn lowers_divwu_to_helper_call() {
-        // divwu r5, r3, r4 ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ encoding 0x7CA3_2396
+        // divwu r5, r3, r4 (encoding 0x7CA3_2396)
         let word: u32 = 0x7CA3_2396;
         let full: Vec<u8> = word
             .to_be_bytes()
@@ -19258,11 +19170,8 @@ mod tests {
     }
 }
 
-// Straight-line integer GPR residency.
-//
-// Its own module so the block stays independent of the file's other test
-// organization: these tests call private items and build bodies in the exact
-// shape the emitter produces.
+// Straight-line integer GPR residency tests. They live in their own module because they call private
+// items and build bodies in the shape the emitter produces.
 #[cfg(test)]
 mod residency_tests {
     use super::*;

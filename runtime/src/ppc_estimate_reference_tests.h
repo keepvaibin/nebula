@@ -2,11 +2,10 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 #pragma once
 
-// Independent, pinned Dolphin reference used ONLY by public arithmetic tests.
-// Keep this double-valued reference separate from the runtime's bit implementation.
+// Pinned Dolphin reference, used only by the public arithmetic tests. It is kept
+// separate from the runtime's bit implementation.
 // FloatUtils.cpp, FloatUtilsTest.cpp and TestValues.h at
-// e6f3ae17627e4344da95b13424af5baf4c892b08; vectors are upstream expectations,
-// not new measurements from a Wii or a claim of whole-game conformance.
+// e6f3ae17627e4344da95b13424af5baf4c892b08. The vectors are upstream expectations.
 #include <array>
 #include <bit>
 #include <cmath>

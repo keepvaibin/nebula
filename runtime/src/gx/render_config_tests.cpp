@@ -271,10 +271,8 @@ int main() {
         ScopedEnv snapshot("GALAXY_RENDER_MEMORY_SNAPSHOT", "1");
         const galaxy::gx::GxTimingConfig resolved =
             galaxy::gx::resolve_gx_timing_config_from_environment();
-        // The ceiling is now 8 rather than 3 so the queue-depth experiment is
-        // reachable without a rebuild; the default remains 3. This still proves
-        // the clamp is applied - 99 must never be accepted verbatim - which is
-        // the property this case exists to pin.
+        // The ceiling is 8, so the queue-depth experiment is reachable without a rebuild. The default is 3.
+        // The case proves the clamp is applied: 99 must never be accepted as written.
         passed &= expect(
             resolved.render_queue_depth == 8 &&
                 !resolved.render_memory_snapshot,

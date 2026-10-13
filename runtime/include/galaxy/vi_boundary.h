@@ -24,12 +24,11 @@ enum class BoundaryPhase : std::uint8_t {
     Finalize,
 };
 
-// This is checkpoint transaction order, not interrupt-source priority.  Wii
-// devices latch their own levels and Broadway enters one external exception;
-// RMGE01's translated dispatcher then reads the combined PI/device state and
-// selects the registered OS interrupt.  A consumed VI edge is different from
-// an ordinary device probe: its PendingBoundary is durable state that must be
-// resumed before any later checkpoint phase can transfer to guest code again.
+// This is checkpoint transaction order, not interrupt-source priority. Wii devices latch their own levels and
+// Broadway enters one external exception; RMGE01's translated dispatcher then reads the combined PI/device
+// state and selects the registered OS interrupt. A consumed VI edge differs from an ordinary device probe: its
+// PendingBoundary is durable state that must be resumed before any later checkpoint phase can transfer to
+// guest code again.
 enum class CheckpointLeadService : std::uint8_t {
     None,
     Audio,
@@ -102,17 +101,13 @@ active_boundary_has_exclusive_pre_delivery_token(
         !external_dispatch_active && external_dispatch_vi_owner_serial == 0u;
 }
 
-// A host suspension can expire one new VI deadline while the immediately
-// preceding edge is still durably owned either by its renderer token or by its
-// translated IRQ24 transaction. In that case the consumer correctly reports
-// Ready rather than Backlog. TokenPending is safe only with one live,
-// unconsumed token; the caller additionally proves that no external dispatcher
-// owns the pre-delivery phase. This predicate proves that the active
-// transaction owns exactly the preceding VI edge and that the last
-// guest-visible time sample lies strictly before the ready successor. It does
-// not prove a host suspension by itself; callers must separately require the
-// wall/CPU interval, freshness, and device-deadline evidence before rebasing
-// the shared timeline.
+// A host suspension can expire one new VI deadline while the immediately preceding edge is still durably owned,
+// either by its renderer token or by its translated IRQ24 transaction. The consumer then correctly reports Ready
+// rather than Backlog. TokenPending is safe only with one live, unconsumed token, and the caller additionally
+// proves that no external dispatcher owns the pre-delivery phase. This predicate shows that the active
+// transaction owns exactly the preceding VI edge and that the last guest-visible time sample lies strictly before
+// the ready successor. It does not prove a host suspension by itself: callers must separately require the
+// wall/CPU interval, freshness and device-deadline evidence before rebasing the shared timeline.
 [[nodiscard]] constexpr bool active_boundary_owns_ready_vi_successor(
     const BoundarySnapshot& boundary,
     const timing::PeriodicDeadlineObservation& observation,
@@ -149,32 +144,23 @@ active_boundary_has_exclusive_pre_delivery_token(
             observation.expected_deadline_ticks;
 }
 
-// Used by the default-on active-boundary host-suspension recovery. The call
-// site can disable that recovery with GALAXY_ACTIVE_BOUNDARY_RECOVERY=0 for a
-// controlled A/B diagnostic.
+// Used by the default-on active-boundary host-suspension recovery. The call site can disable that recovery with
+// GALAXY_ACTIVE_BOUNDARY_RECOVERY=0 for a controlled A/B diagnostic.
 //
-// active_boundary_owns_ready_vi_successor above proves recovery is safe only
-// when the consumer reports exactly one edge, freshly Ready, with zero
-// backlog. That leaves a real gap: a host suspension long enough to make the
-// *next* edge itself appear Backlog (not merely Ready-but-unconsumed) while a
-// VI transaction is genuinely still durably owned can never recover, because
-// no proof condition covers it, regardless of what independent evidence a
-// caller could supply. That ownership may be either AwaitViRfi or the earlier
-// TokenPending phase with one live, unconsumed renderer token. This predicate
-// closes exactly that gap using the SAME structural ownership checks as the
-// Ready case, but permits the observation to be Backlog provided:
-//   - it still names the boundary's edge's *direct* successor (sequence and
-//     deadline both advance by exactly one period past the owned edge --
-//     never more), so recovery never claims more than the one new edge that
-//     the boundary's own state proves must be next, and
-//   - the boundary's ownership/identity checks are unchanged from the Ready
-//     case (same phase, same durable-transaction fields, same ordering of
-//     last_guest_ticks against both the owned edge and the successor).
-// This predicate alone is NOT sufficient evidence of a host suspension --
-// exactly like active_boundary_owns_ready_vi_successor, callers must
-// separately prove the interval via is_host_suspension_candidate_interval
-// (the same wall-time-vs-CPU-time evidence already required for every other
-// recovery path) before treating this as recoverable.
+// active_boundary_owns_ready_vi_successor allows recovery only when the consumer reports exactly one edge, freshly
+// Ready, with zero backlog. A host suspension long enough to make the next edge itself appear Backlog (not merely
+// Ready but unconsumed), while a VI transaction is still durably owned, has no recovery path under that predicate.
+// Ownership there is either AwaitViRfi or the earlier TokenPending phase with one live, unconsumed renderer token.
+// This predicate covers that case with the same structural ownership checks as the Ready case, and accepts a
+// Backlog observation provided:
+//   - it still names the owned edge's direct successor (sequence and deadline both advance by exactly one period,
+//     never more), so recovery claims no more than the one new edge the boundary's state proves must be next, and
+//   - the ownership and identity checks match the Ready case (same phase, same durable-transaction fields, same
+//     ordering of last_guest_ticks against both the owned edge and the successor).
+// This predicate alone is not sufficient evidence of a host suspension. As with
+// active_boundary_owns_ready_vi_successor, callers must separately prove the interval via
+// is_host_suspension_candidate_interval (the same wall-time-vs-CPU-time evidence required for every other recovery
+// path) before treating this as recoverable.
 [[nodiscard]] constexpr bool active_boundary_owns_successor_during_backlog(
     const BoundarySnapshot& boundary,
     const timing::PeriodicDeadlineObservation& observation,
@@ -207,9 +193,8 @@ active_boundary_has_exclusive_pre_delivery_token(
             observation.expected_deadline_ticks;
 }
 
-// Durable ownership for one consumed VI deadline. The state deliberately
-// contains no host stack references: translated exception entry ends in RFI
-// and unwinds every native caller before the guest scheduler target resumes.
+// Durable ownership for one consumed VI deadline. The state holds no host stack references: translated exception
+// entry ends in RFI and unwinds every native caller before the guest scheduler target resumes.
 class PendingBoundary {
 public:
     [[nodiscard]] bool capture(BoundaryCapture&& capture) {

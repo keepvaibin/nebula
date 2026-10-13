@@ -22,19 +22,17 @@
 #define GALAXY_DSP_ALWAYS_INLINE inline
 #endif
 
-// Header-inline DSP ALU. These are the only definitions of the DSP ALU
-// semantics: the exported galaxy::dsp_* functions in dsp_alu.cpp forward here,
-// and generated DSP code calls this namespace directly so every helper folds
-// into the lowered ucode instead of costing an out-of-line call (the generated
-// module and galaxy_dsp_alu are separate binaries, so nothing else can inline
-// across that boundary). Calls inside this namespace are qualified so that
+// Header-inline DSP ALU semantics. The exported galaxy::dsp_* functions in dsp_alu.cpp
+// forward here. Generated DSP code calls this namespace directly so the helpers fold
+// into the lowered ucode. The generated module and galaxy_dsp_alu are separate binaries,
+// so nothing else can inline across that boundary. Calls here are qualified so that
 // argument-dependent lookup never selects the exported overloads.
 namespace galaxy::dsp_inline {
 
 namespace detail {
 
 GALAXY_DSP_ALWAYS_INLINE bool top_two_bits_equal(std::uint64_t packed) {
-    // TB describes the top two bits of the accumulator's middle word.
+    // TB is the top two bits of the accumulator's middle word.
     const std::uint64_t top = (packed >> 30u) & 0x3u;
     return top == 0x0u || top == 0x3u;
 }
@@ -388,8 +386,8 @@ GALAXY_DSP_ALWAYS_INLINE std::int64_t dsp_accumulator_from_ax_pair(
 }
 
 GALAXY_DSP_ALWAYS_INLINE std::int64_t dsp_accumulator_from_signed_mid(std::uint16_t value) {
-    // Multiplication preserves the architectural two's-complement value without
-    // relying on the undefined C++ operation of left-shifting a negative integer.
+    // Multiplication keeps the two's-complement value without left-shifting a negative
+    // integer, which is undefined in C++.
     return static_cast<std::int64_t>(static_cast<std::int16_t>(value)) * 0x1'0000ll;
 }
 
@@ -539,8 +537,8 @@ GALAXY_DSP_ALWAYS_INLINE DspProductParts dsp_store_product_value(std::int64_t va
 }
 
 GALAXY_DSP_ALWAYS_INLINE std::int64_t dsp_product_value(const DspProductParts& parts) {
-    // The product high byte is signed.  Use multiplication instead of a signed
-    // left shift so negative audio products have fully defined C++ semantics.
+    // The product high byte is signed. Multiply instead of left-shifting, which is undefined
+    // for negative values.
     const std::int64_t high =
         detail::sign_extend_product_high(parts.high) * 0x1'0000'0000ll;
     const std::int64_t mid =
@@ -618,8 +616,8 @@ GALAXY_DSP_ALWAYS_INLINE std::int64_t dsp_multiply_terms(
     }
 
     if ((status & kDspSrMultiplyModifier) == 0) {
-        // A negative signed left shift is undefined in C++.  The 16x16 product
-        // is far inside int64_t range, so multiplication expresses M2 exactly.
+        // Left-shifting a negative value is undefined in C++. The 16x16 product fits in int64_t,
+        // so the multiplication expresses M2 exactly.
         product *= 2ll;
     }
     return product;
@@ -728,62 +726,40 @@ GALAXY_DSP_ALWAYS_INLINE std::uint16_t dsp_decrease_address(
 
 namespace galaxy {
 
-// GALAXY_TRACE_DSP_HOST / GALAXY_TRACE_DSP_IFX diagnostics are printed to the
-// shared std::cout/std::cerr streams from both the cooperative guest (main)
-// thread (native_host.cpp's dsp_native_pump()) and the free-running native
-// DSP worker thread (native_dsp.cpp's NativeDspWorker::thread_main(), plus
-// the dsp_native_request_interrupt_cb() callback it invokes). Neither
-// std::ostream nor its shared format-flag state (std::ios_base::fmtflags,
-// set by std::hex/std::dec manipulators) is synchronized across threads, so
-// concurrent trace prints from those two threads interleave and corrupt each
-// other's hex/dec formatting mid-line (observed as decimal trace counters
-// rendering as hex digits, and lines missing their terminating '\n' with a
-// second thread's text spliced in). This mutex is a diagnostics-only
-// correctness fix for that data race; it does not gate any guest-visible
-// mailbox/interrupt state.
+// GALAXY_TRACE_DSP_HOST and GALAXY_TRACE_DSP_IFX output goes to the shared std::cout and
+// std::cerr from the guest thread (dsp_native_pump) and the native DSP worker. std::ostream
+// and its format flags are not thread-safe, so this mutex serializes the writes. It does
+// not guard any guest-visible mailbox or interrupt state.
 inline std::mutex g_dsp_trace_mutex;
 
 
 
-// Thrown out of a free-running DSP entry when the host requests it to stop.
-// The real ucode never returns on its own (its idle state is a tight
-// mailbox-poll loop), so a cooperative abort is the only clean way to break
-// the worker thread out of execution at shutdown. It is only ever thrown when
-// DspContext::host_abort is wired and set, so single-threaded callers never
-// see it.
+// Thrown from a free-running DSP entry when the host requests a stop. The ucode never
+// returns by itself (its idle state is a mailbox poll loop), so this is the only way to
+// leave the worker at shutdown. It is thrown only when DspContext::host_abort is set.
 struct DspExecutionAborted {};
 
-// Thrown after a pending CPU->DSP external interrupt has been accepted. The
-// helper that throws it has already pushed PC/SR and changed ctx.pc to the
-// vector; the worker catches this to re-enter the compiled ucode at that vector.
+// Thrown after a pending CPU->DSP external interrupt is accepted. The thrower has already
+// pushed PC and SR and set ctx.pc to the vector. The worker catches it and re-enters the
+// ucode at that vector.
 struct DspExternalInterruptRequested {};
 
-// Host-owned event used only to park a free-running native DSP while a known
-// hardware-mailbox polling loop is genuinely idle. This covers the exact
-// RMGE01 CMBH empty-mail and DMBH back-pressure back-edges classified below.
-// The generation makes either wait immune to a notification arriving between
-// the mailbox recheck and atomic::wait().
-// DspContext keeps a pointer so reset() remains value-copyable.
+// Host event that parks a free-running DSP while a known mailbox poll loop is idle (the
+// RMGE01 CMBH empty-mail and DMBH back-pressure back-edges). The generation makes the wait
+// safe against a notification that arrives between the recheck and atomic::wait().
+// DspContext holds a pointer so reset() stays value-copyable.
 struct DspHostWakeState {
     std::atomic<std::uint64_t> generation{};
     std::atomic<std::uint64_t> idle_wait_count{};
 };
 
-// Cumulative, native-AOT-only evidence counters. These are deliberately
-// separate from the retired HLE mixer statistics: a native DSP run must be
-// able to prove that generated instructions and the real IFX/DMA boundaries
-// advanced without crediting a code path that was not executing.
-//
-// retired_instructions counts generated instruction-entry markers. The
-// lowering emits one marker immediately before every instruction's semantics,
-// so a hard trap can over-count by at most the one instruction that trapped.
-// It is diagnostic liveness evidence, not a DSP cycle model and must never be
-// used to pace the coprocessor.
+// Cumulative counters for native liveness. They are kept apart from the retired HLE mixer
+// statistics. retired_instructions counts generated instruction-entry markers, emitted before
+// each instruction's semantics, so a trap over-counts by at most the trapping instruction.
+// These are diagnostic evidence only, not a cycle model, and must not pace the coprocessor.
 struct DspNativeTelemetryState {
-    // Even when quiescent; odd only while the DSP worker publishes the six
-    // correlated instruction/back-edge counters below. Readers retry if they
-    // overlap that short publication so a snapshot always names one prefix of
-    // generated execution rather than a mixture of two prefixes.
+    // Even when quiescent. Odd only while the worker publishes the six correlated counters below.
+    // Readers retry on overlap, so a snapshot is one consistent prefix of execution.
     std::atomic<std::uint64_t> worker_publication_sequence{};
     std::atomic<std::uint64_t> retired_instructions{};
     std::atomic<std::uint64_t> zero_queue_idle_backedges{};
@@ -808,15 +784,15 @@ struct DspNativeTelemetryState {
 
 struct DspNativeTelemetrySnapshot {
     std::uint64_t retired_instructions{};
-    // Exact taken-edge counts for the two statically certified RMGE01 idle
-    // SCCs. They are evidence counters, not DSP clocks or pacing inputs.
+    // Exact taken-edge counts for the two certified RMGE01 idle SCCs. Diagnostic only, not used
+    // for pacing.
     std::uint64_t zero_queue_idle_backedges{};
     std::uint64_t command_wait_idle_backedges{};
-    // Counts the 0x0824 -> 0x07FA alternate entry, which reaches the next
-    // 0x0820 edge through five markers instead of the steady-state eight.
+    // Counts the 0x0824 -> 0x07FA alternate entry, which reaches the next 0x0820 edge in five
+    // markers instead of eight.
     std::uint64_t zero_queue_short_reentries{};
-    // Unlike the raw edge counters above, these require every marker in the
-    // statically audited SCC, in order, immediately before the taken edge.
+    // Counts only edges where every marker of the audited SCC appeared, in order, immediately
+    // before the taken edge.
     std::uint64_t zero_queue_complete_sequences{};
     std::uint64_t command_wait_complete_sequences{};
     std::uint64_t zero_queue_idle_waits{};
@@ -832,29 +808,22 @@ struct DspNativeTelemetrySnapshot {
     std::uint64_t dma_out_transfers{};
     std::uint64_t dma_out_bytes{};
     std::uint64_t dma_out_nonzero_bytes{};
-    // Host scheduling evidence only: number of event waits entered at an
-    // exactly classified mailbox back-edge. This is not a DSP cycle count.
+    // Number of event waits entered at a classified mailbox back-edge. Scheduling evidence, not
+    // a DSP cycle count.
     std::uint64_t host_idle_waits{};
-    // Only the six worker instruction/idle counters share a publication. When
-    // false, individual counters remain acquired observations, but a caller
-    // must not infer their correlated interval or instruction liveness.
+    // The six worker counters share one publication. When false, each counter is individually
+    // valid, but their interval and liveness cannot be inferred together.
     bool worker_counters_coherent = true;
 };
 
-// Opt-in, worker-owned broad evidence for the native JAudio DSP pipeline.
-// The generated DSP thread is the only writer while it is running, and the
-// owner copies a snapshot only after the worker has stopped.  This recorder is
-// intentionally perturbative: when enabled it observes high-frequency mixer
-// writes, DMA traffic, and accelerator reads.  It must not be used as strict
-// cadence or performance proof.
+// Opt-in broad trace for the native JAudio DSP pipeline. Only the DSP worker writes it. The
+// owner copies it after the worker stops. It is perturbative (it observes frequent mixer,
+// DMA and accelerator accesses) and must not be used as cadence or performance proof.
 //
-// DMA classification is deliberately exact and RMGE01-specific.  These are
-// the transfer shapes used by the verified JAudio ucode: one 0x180-byte voice
-// record enters D[0x0800], software-decoded sample windows enter D[0x0B00] or
-// D[0x0B60], and the six SEND_TABLE mix buses leave byte addresses 0x1A00,
-// 0x1AC0, 0x1B80, 0x1C40, 0x1D00, and 0x1DC0 as planar 0xA0-byte blocks.
-// Unknown shapes remain generic DMA evidence; they never receive credit for a
-// later causal stage.
+// DMA shapes are classified exactly for RMGE01: one 0x180-byte voice record into D[0x0800];
+// sample windows into D[0x0B00] or D[0x0B60]; and six planar 0xA0-byte SEND_TABLE mix buses
+// from byte addresses 0x1A00, 0x1AC0, 0x1B80, 0x1C40, 0x1D00 and 0x1DC0. Unknown shapes stay
+// generic DMA and get no credit for a later stage.
 enum class DspAudioCausalEventKind : std::uint8_t {
     DmaIn,
     DmaOut,
@@ -914,12 +883,10 @@ struct DspAudioCausalRecorder {
     std::uint64_t channel_mixer_nonzero_record_transfers{};
     std::uint64_t channel_mixer_nonzero_tuples{};
     std::uint64_t channel_mixer_nonzero_gain_tuples{};
-    // The RMGE01 ucode's external-interrupt handler writes the four 16-bit
-    // channel-selection bitmap words to D[0x04FC..0x04FF] at PC 0x0715.
-    // The render loop tests those exact words before it can issue the
-    // D[0x0800], 0x180-byte channel-record DMA.  Capturing the writes here
-    // distinguishes an explicitly idle guest publication from a lost/broken
-    // channel-record handoff without inspecting or synthesizing guest state.
+    // The RMGE01 external-interrupt handler writes the four 16-bit channel-select words to
+    // D[0x04FC..0x04FF] at PC 0x0715. The render loop tests them before the 0x180-byte
+    // channel-record DMA from D[0x0800]. Recording the writes tells an explicitly idle publication
+    // apart from a lost channel-record handoff.
     std::uint64_t channel_selection_writes{};
     std::uint64_t channel_selection_nonzero_writes{};
     std::uint64_t channel_selection_nonzero_bits{};
@@ -962,9 +929,8 @@ struct DspAudioCausalRecorder {
 };
 
 struct DspAudioCausalSnapshot {
-    // Chronological retained suffix.  Once capacity is reached the oldest
-    // record is overwritten, while aggregate counters and exact last-stage
-    // records below remain lossless.
+    // Chronological record suffix. When full, the oldest record is overwritten. Aggregate counters
+    // and the last record per stage stay exact.
     std::array<DspAudioCausalEvent, kDspAudioCausalRecordCapacity> records{};
     std::size_t record_count{};
     std::uint64_t total_events{};
@@ -1026,11 +992,9 @@ struct DspAudioCausalSnapshot {
     std::uint16_t quiescent_mixer_level{};
 };
 
-// Generated DSP diagnostics are an explicit source/runtime contract.  The
-// generator emits literal version/capability exports; the native host requires
-// both hooks before it starts RMGE01 ucode.  A stale generated translation then
-// fails at link time (missing exports) or boot time (version/mask mismatch)
-// instead of producing a false "no publication" diagnostic.
+// Generated DSP diagnostics are a source/runtime contract. The generator emits literal version
+// and capability exports, and the host requires both before it starts RMGE01 ucode. A stale
+// translation fails at link time (missing exports) or boot time (version or mask mismatch).
 inline constexpr std::uint32_t kDspGeneratedProbeContractVersion = 1u;
 inline constexpr std::uint32_t
     kDspGeneratedProbeCapabilitySelectionPublication = 1u << 0u;
@@ -1048,23 +1012,17 @@ inline constexpr std::uint32_t kDspGeneratedProbeRequiredCapabilities =
                kDspGeneratedProbeRequiredCapabilities;
 }
 
-// A separate, rare-event diagnostic for one exact RMGE01 handoff.  The
-// selection side is called only from statically lowered PC 0x0715.  A second
-// static hook at the selected-channel render call (PC 0x02EF -> 0x00CC)
-// captures the channel index, the exact selection word/bit that admitted it,
-// and the channel-record MRAM address calculated in D[0x034C:0x034D].  Only a
-// subsequent successful PC 0x05EF host-to-D[0x0800], length 0x180 DMA with the
-// same address can receive selected-channel causal credit.  An arbitrary DMA
-// with the same shape is lifetime traffic, never proof of this handoff.
+// Rare-event probe for one RMGE01 channel handoff. The selection side is a static hook at
+// PC 0x0715. A second hook at the selected render call (PC 0x02EF -> 0x00CC) records the channel
+// index, the selection word and bit that admitted it, and the channel-record MRAM address in
+// D[0x034C:0x034D]. Only a later successful host-to-D[0x0800] DMA of length 0x180 with that same
+// address is credited to the selection. A DMA of the same shape without the selection is ordinary
+// traffic.
 //
-// Four selection words constitute a publication only when the handler writes
-// D[0x04FC], D[0x04FD], D[0x04FE], and D[0x04FF] consecutively in that exact
-// order.  The first later execution of that exact handler store (including an
-// out-of-range address) closes the causal window immediately; no DMA can be
-// credited until another full ordered publication completes.  Both hooks and
-// DMA observation execute on the one
-// generated DSP worker.  No live snapshot is permitted; the host copies state
-// only after join and carries the lifetime counters across DSPCR resets.
+// The four selection words form a publication only when D[0x04FC] through D[0x04FF] are written
+// consecutively in that order. Any later execution of the handler store, including an out-of-range
+// address, closes the window at once. Both hooks and the DMA observation run on the DSP worker. The
+// host copies state only after join, and lifetime counters survive DSPCR resets.
 struct DspChannelSelectionDmaProbeRecorder {
     std::uint32_t generated_probe_contract_version{};
     std::uint32_t generated_probe_capabilities{};
@@ -1244,9 +1202,8 @@ enum class DspAudioCausalChannelSelectionState : std::uint8_t {
 [[nodiscard]] inline constexpr DspAudioCausalChannelSelectionState
 dsp_audio_causal_channel_selection_state(
     const DspAudioCausalSnapshot& snapshot) noexcept {
-    // This is a lifetime aggregate retained for the broad diagnostic report;
-    // it does not prove that a channel DMA followed a particular selection
-    // publication.  Use DspChannelSelectionDmaProbeSnapshot for ordering.
+    // Lifetime total for the broad report. It does not show that a channel DMA followed a particular
+    // selection publication. Use DspChannelSelectionDmaProbeSnapshot for ordering.
     if (snapshot.channel_selection_writes == 0u) {
         return DspAudioCausalChannelSelectionState::Unpublished;
     }
@@ -1334,9 +1291,9 @@ inline void dsp_channel_selection_dma_probe_clear_pending_branch(
     recorder.pending_branch_selection_word = 0u;
 }
 
-// Start a new worker session without erasing lifetime evidence.  This is used
-// both by a coprocessor reset and when a quiescent snapshot is restored after a
-// DSPCR teardown.  Current/partial state cannot cross the hardware reset.
+// Starts a new worker session without clearing lifetime evidence. Used for coprocessor reset and
+// when a quiescent snapshot is restored after a DSPCR teardown. Current or partial state cannot
+// cross a hardware reset.
 inline void dsp_channel_selection_dma_probe_begin_session(
     DspChannelSelectionDmaProbeRecorder& recorder) {
     if (recorder.current_publication_valid &&
@@ -1368,9 +1325,8 @@ inline void dsp_channel_selection_dma_probe_begin_session(
     recorder.current_publication_blocked_by_selection_write = false;
 }
 
-// DSPCR reset is an ordered lifetime event.  It closes every current causal
-// window but deliberately retains totals, generations, and prior matches so a
-// later process-exit report cannot lose evidence from the previous DSP task.
+// A DSPCR reset closes all current causal windows. Totals, generations and earlier matches are
+// kept, so a later exit report keeps evidence from earlier DSP tasks.
 inline void dsp_channel_selection_dma_probe_record_reset_boundary(
     DspChannelSelectionDmaProbeRecorder& recorder) {
     dsp_audio_causal_add(recorder.worker_sequence);
@@ -1403,9 +1359,8 @@ inline void dsp_channel_selection_dma_probe_record_reset_boundary(
     recorder.current_publication_blocked_by_selection_write = false;
 }
 
-// Emitted only for the exact RMGE01 `srr @$AR0,$AC0.M` at DSP PC 0x0715.
-// Keeping this out of dsp_dram_write avoids a branch on every ordinary mixer
-// store while the diagnostic is disabled or enabled.
+// Emitted only for the RMGE01 `srr @$AR0,$AC0.M` at DSP PC 0x0715. It is kept out of dsp_dram_write
+// so ordinary mixer stores do not branch on the probe.
 inline void dsp_channel_selection_dma_probe_record_selection_write(
     DspChannelSelectionDmaProbeRecorder* recorder,
     std::uint16_t address,
@@ -1416,10 +1371,9 @@ inline void dsp_channel_selection_dma_probe_record_selection_write(
 
     dsp_audio_causal_add(recorder->worker_sequence);
     dsp_audio_causal_add(recorder->handler_writes);
-    // Every execution of the exact handler store is an intervening selection
-    // attempt, even if a corrupted AR0 points outside the four-word bitmap.
-    // Fail closed before classifying the address so neither a current
-    // publication nor a pending branch identity can survive that attempt.
+    // Every execution of the handler store counts as a selection attempt, even if a corrupted AR0 points
+    // outside the bitmap. It fails closed before the address is classified, so no pending publication or
+    // branch identity survives it.
     if (recorder->current_publication_valid) {
         dsp_audio_causal_add(recorder->intervening_selection_writes);
         recorder->current_publication_blocked_by_selection_write = true;
@@ -1443,8 +1397,8 @@ inline void dsp_channel_selection_dma_probe_record_selection_write(
     if (index != recorder->partial_word_count) {
         dsp_audio_causal_add(recorder->invalid_order_writes);
         dsp_channel_selection_dma_probe_reset_partial(*recorder);
-        // A new 0x04FC write starts a fresh candidate immediately; every other
-        // out-of-order word remains incomplete until the next 0x04FC.
+        // A new 0x04FC write starts a fresh candidate. Any other out-of-order word stays incomplete until
+        // the next 0x04FC.
         if (index != 0u) {
             return;
         }
@@ -1488,8 +1442,8 @@ inline void dsp_channel_selection_dma_probe_record_selection_write(
     dsp_channel_selection_dma_probe_reset_partial(*recorder);
 }
 
-// Emitted only for RMGE01 PC 0x02EF after the mask branch admitted one
-// channel, and before its direct call to the 0x00CC channel-record DMA helper.
+// Emitted only at RMGE01 PC 0x02EF, after the mask branch admits one channel and before the direct
+// call to the 0x00CC channel-record DMA helper.
 inline void dsp_channel_selection_dma_probe_record_selected_channel_branch(
     DspChannelSelectionDmaProbeRecorder* recorder,
     std::uint16_t channel,
@@ -1548,10 +1502,9 @@ inline void dsp_channel_selection_dma_probe_record_selected_channel_branch(
     recorder->pending_branch_selection_word = observed_selection_word;
 }
 
-// A DSBL write is a one-shot DMA attempt.  Hardware-disabled (AMDM) and
-// zero-length attempts do not transfer bytes, but DSBL is still consumed by the
-// IFX path.  Consequently a branch identity cannot remain pending for a later
-// unrelated transfer after either skip condition.
+// A DSBL write is a one-shot DMA attempt. Hardware-disabled (AMDM) and zero-length attempts move no
+// bytes, but DSBL is still consumed. A pending branch identity therefore cannot match a later
+// transfer after either skip.
 inline void dsp_channel_selection_dma_probe_record_skipped_dma_attempt(
     DspChannelSelectionDmaProbeRecorder* recorder) {
     if (recorder == nullptr ||
@@ -1581,9 +1534,8 @@ inline void dsp_channel_selection_dma_probe_record_dma(
         !instruction_memory && !to_host && dsp_byte_address == 0x0800u &&
         length == 0x0180u;
     if (!exact_channel_record_shape) {
-        // Once the exact render-branch hook has opened its one-DMA window, any
-        // other completed DMA proves that the expected direct call was not the
-        // next DMA.  Consume the identity instead of letting it match later.
+        // Once the render-branch hook has opened its one-DMA window, any other completed DMA means the expected
+        // direct call was not the next DMA. The identity is consumed so it cannot match later.
         if (recorder->pending_selected_channel_branch_valid) {
             dsp_audio_causal_add(recorder->worker_sequence);
             dsp_audio_causal_add(
@@ -2148,8 +2100,7 @@ inline DspNativeTelemetrySnapshot dsp_native_telemetry_snapshot(
     std::uint64_t zero_queue_complete_sequences = 0u;
     std::uint64_t command_wait_complete_sequences = 0u;
     bool coherent = false;
-    // This is optional evidence. A preempted publisher must never trap the
-    // simulation/diagnostic owner in an unbounded reader spin.
+    // Optional evidence. A preempted publisher must not trap the diagnostic owner in an unbounded reader spin.
     for (unsigned attempt = 0; attempt < 16u; ++attempt) {
         const auto sequence_before =
             state.worker_publication_sequence.load(std::memory_order_acquire);
@@ -2221,22 +2172,17 @@ inline void dsp_rmge01_idle_sequence_observe_marker(
 inline void dsp_rmge01_idle_sequence_leave(
     DspRmge01IdleSequenceTracker* tracker) noexcept;
 
-// This wrapper preserves the generated source ABI (`ctx.last_retired_pc =
-// ...`) while making each existing marker contribute to native liveness
-// telemetry. The pending accumulator belongs to the one DSP execution thread;
-// it is published atomically only at observable hardware boundaries, avoiding
-// an atomic operation for every generated instruction.
+// Keeps the generated source ABI (`ctx.last_retired_pc = ...`) while each existing marker feeds native
+// liveness telemetry. The pending accumulator belongs to the DSP thread and is published atomically only
+// at observable hardware boundaries, so no atomic operation runs per instruction.
 struct DspInstructionEntryMarker {
     std::uint16_t pc{};
     std::uint64_t* pending_entries{};
     DspRmge01IdleSequenceTracker* idle_sequence_tracker{};
-    // Entries recorded by enter<>() that are not yet folded into
-    // *pending_entries. Counting into a field of the DSP context instead of
-    // through the external pointer keeps the per-instruction store at a known
-    // context offset, so the compiler can keep the other DSP registers in host
-    // registers across a straight-line run and merge consecutive increments.
-    // dsp_native_telemetry_publish_pending_worker_counts() folds it before any
-    // reader observes the count.
+    // Entries recorded by enter<>() that are not yet folded into *pending_entries. Keeping the count in a
+    // DspContext field gives it a fixed offset, so the compiler can keep DSP registers in host registers
+    // across straight-line code. dsp_native_telemetry_publish_pending_worker_counts() folds it before readers
+    // look at the count.
     std::uint64_t unpublished_entries{};
 
     DspInstructionEntryMarker& operator=(std::uint16_t value) noexcept {
@@ -2253,10 +2199,8 @@ struct DspInstructionEntryMarker {
         return *this;
     }
 
-    // Generated-code instruction entry. Equivalent to `*this = Pc` for every
-    // observer: the entry count is identical once published, and for a PC that
-    // is in neither RMGE01 idle sequence the sequence observation can only
-    // reset the tracker, which is all this does.
+    // Generated-code instruction entry. Observers see the same count as `*this = Pc`. The sequence tracker
+    // resets only for a PC outside both RMGE01 idle sequences, which is all this does.
     template <std::uint16_t Pc>
     GALAXY_DSP_ALWAYS_INLINE void enter() noexcept {
         if constexpr (dsp_rmge01_idle_sequence_contains(Pc)) {
@@ -2280,10 +2224,8 @@ struct DspInstructionEntryMarker {
 struct DspHardTrap {
     std::uint16_t pc{};
     const char* reason{};
-    // Address of the last instruction that actually retired before the trap.
-    // For a computed-branch trap this is the source instruction whose
-    // register/table computation produced the out-of-range target — pc alone
-    // only reports the bad destination, not what jumped there.
+    // Address of the last instruction that retired before a trap. For a computed-branch trap this is the
+    // source instruction that produced the out-of-range target. pc alone shows only the bad destination.
     std::uint16_t last_retired_pc{};
 };
 
@@ -2331,12 +2273,10 @@ inline constexpr std::uint32_t kDspMailboxBusy = 0x80000000u;
 inline constexpr std::uint16_t kDspSrExtIntEnable = 0x0800u;
 inline constexpr std::uint16_t kDspNoPendingExternalInterrupt = 0xffffu;
 
-// A diagnostic sample is a bounded copy of the worker-owned state needed by
-// native-host traces. It deliberately does not expose DspContext: CPU-side
-// diagnostics must never inspect the live register file or DRAM while lowered
-// DSP code is executing. The selected ranges cover the boot/interrupt probes,
-// the JAudio command/work areas, and the release-slot trace without copying all
-// 8 KiB of DSP DRAM at each observable boundary.
+// A diagnostic sample is a bounded copy of worker-owned state for native-host traces. It never exposes
+// DspContext, so CPU-side diagnostics do not read live registers or DRAM while lowered DSP code runs.
+// The ranges cover the boot and interrupt probes, the JAudio command and work areas, and the release-slot
+// trace, not all of DSP DRAM.
 inline constexpr std::uint16_t kDspDiagnosticLowDramStart = 0x0000u;
 inline constexpr std::size_t kDspDiagnosticLowDramWords = 0x0060u;
 inline constexpr std::uint16_t kDspDiagnosticCommandRingStart = 0x0280u;
@@ -2391,8 +2331,7 @@ struct DspDiagnosticSnapshot {
     std::uint16_t sr{};
     std::array<std::uint16_t, kDspStackRegisterCount> st{};
     bool halted{};
-    // These shared words are captured through atomic_ref, never through a
-    // plain DspContext copy.
+    // These shared words are captured through atomic_ref, never through a plain DspContext copy.
     std::uint32_t dsp_mailbox{};
     std::uint32_t cpu_mailbox{};
     std::array<std::uint16_t, kDspDiagnosticLowDramWords> low_dram{};
@@ -2429,11 +2368,10 @@ struct DspDiagnosticSnapshot {
     }
 };
 
-// Owned by NativeDspCoprocessor. The worker is the only publisher during an
-// active session; CPU readers copy latest while holding this mutex, then drop
-// it before formatting or scanning host memory. A pointer is installed in
-// DspContext only when diagnostics are enabled, leaving the normal product
-// path with one null check and no copy/lock at hardware boundaries.
+// Owned by NativeDspCoprocessor. The worker is the only publisher during a session. CPU readers copy
+// `latest` under this mutex and release it before formatting or scanning host memory. The pointer is
+// installed in DspContext only when diagnostics are enabled, so the normal path has one null check and
+// no lock.
 struct DspDiagnosticState {
     mutable std::mutex mutex{};
     DspDiagnosticSnapshot latest{};
@@ -2444,23 +2382,19 @@ struct DspDiagnosticState {
     bool valid{};
 };
 
-// Generated RMGE01 ucode has five CMBH reads. Four are explicit empty-mailbox
-// back-edge loops; PC 0x06F5 is a non-blocking test whose empty result branches
-// to task-dispatch housekeeping at 0x07EA. It also has two DMBH reads in
-// explicit busy-mailbox back-edge loops. Keep this classification fail-closed:
-// every unknown PC retains immediate register-read semantics.
+// RMGE01 ucode has five CMBH reads. Four are empty-mailbox back-edge loops. PC 0x06F5 is a non-blocking
+// test whose empty result branches to dispatch housekeeping at 0x07EA. Two DMBH reads are busy-mailbox
+// back-edge loops. Unknown PCs keep immediate register-read semantics.
 enum class DspRmge01MailboxPollKind : std::uint8_t {
     None,
     CmbhEmptyBackEdge,
     DmbhBusyBackEdge,
 };
 
-// These two direct back-edges close statically audited RMGE01 SCCs whose
-// bodies perform no IFX writes, DMA, mailbox operations, or DRAM writes.  The
-// first reloads D[0x0351]/D[0x0352]; the second reloads D[0x0354]/D[0x034E].
-// Only the DSP interrupt handler can change those worker-owned words while
-// the generated DSP thread is executing. Keep the pair classifier exact and
-// fail closed: neighboring or dynamically computed edges are ordinary work.
+// The two direct back-edges close certified RMGE01 SCCs with no IFX writes, DMA, mailbox operations or
+// DRAM writes. The first reloads D[0x0351]/D[0x0352], the second D[0x0354]/D[0x034E]. Only the DSP
+// interrupt handler changes those words while the DSP runs. The classifier matches these exact edges.
+// Neighbouring or computed edges are ordinary work.
 enum class DspRmge01IdleBackEdgeKind : std::uint8_t {
     None,
     ZeroQueue,
@@ -2527,9 +2461,8 @@ inline void dsp_rmge01_idle_sequence_reset(
     return false;
 }
 
-// Entering a PC outside both idle sequences resets the tracker. The tracker is
-// written only when it differs from the reset state, so the common path is a
-// load, not a store through an external pointer.
+// Entering a PC outside both idle sequences resets the tracker. It is written only when it differs from
+// the reset state, so the common path is a load.
 inline void dsp_rmge01_idle_sequence_leave(
     DspRmge01IdleSequenceTracker* tracker) noexcept {
     if (tracker != nullptr &&
@@ -2664,11 +2597,9 @@ dsp_classify_rmge01_mailbox_poll_pc(std::uint16_t pc) noexcept {
 struct DspContext;
 class DspRawInstructionBoundaryObserver;
 
-// Optional, test-owned logical stack evidence. Hardware stack cursors wrap at
-// five bits and are not depths. This sidecar may be attached only at a known
-// fresh-reset boundary; ordinary product contexts leave the pointer null.
-// Losing representability is sticky evidence failure only and must never alter
-// hardware push/pop behavior.
+// Optional, test-owned logical stack evidence. Hardware stack cursors wrap at five bits and are not
+// depths, so this sidecar is attached only at a known fresh reset. Product contexts leave the pointer
+// null. Losing representability marks the evidence as failed but never changes push or pop behaviour.
 enum class DspLogicalStackDepthAvailability : std::uint8_t {
     Unavailable,
     Exact,
@@ -2692,13 +2623,10 @@ enum class DspAcceleratorException : std::uint8_t {
 
 struct DspHardwareServices {
     void (*request_interrupt)(void* user) {};
-    // Internal native-runtime ordering hooks. These are deliberately not part
-    // of NativeServicesV1: generated DSP code reaches them only through IFX
-    // hardware operations. A busy CMBL consume hook must perform the actual
-    // mailbox low read while any generation-bound host packet remains latched,
-    // and must report that the busy mail was really consumed. Publication
-    // hooks run before DMBL/DIRQ become guest-visible; returning false is a DSP
-    // hard trap, never a best-effort fallback.
+    // Internal ordering hooks, not part of NativeServicesV1. Generated DSP code reaches them only through IFX
+    // operations. A busy CMBL consume hook must do the actual mailbox low read while a generation-bound host
+    // packet is latched, and must report that the busy mail was consumed. Publication hooks run before
+    // DMBL/DIRQ become guest-visible. Returning false is a DSP hard trap, not a fallback.
     bool (*consume_cpu_mailbox_low)(
         void* user,
         std::uint64_t generation,
@@ -2708,12 +2636,10 @@ struct DspHardwareServices {
     bool (*before_dsp_mailbox_low)(void* user) {};
     bool (*before_dsp_interrupt)(void* user) {};
     bool (*before_clean_halt_return)(void* user) {};
-    // DSP DMA bus (DSMAH/DSMAL): targets main memory (MRAM).
-    // validate_external_span is called once before a DMA starts so a rejected
-    // transfer cannot partially update either side before the failing byte is
-    // discovered. Byte callbacks still report failure independently: the host
-    // mapping may become unavailable after validation, and that must remain a
-    // DSP hard trap rather than fabricated zero data or a dropped write.
+    // DSP DMA bus (DSMAH/DSMAL) to main memory (MRAM). validate_external_span runs once before a transfer, so a
+    // rejected transfer cannot partly update either side. Byte callbacks still report failure on their own,
+    // because the host mapping can disappear after validation. That is a DSP hard trap, never zero data or a
+    // dropped write.
     bool (*validate_external_span)(
         void* user,
         std::uint32_t address,
@@ -2726,13 +2652,10 @@ struct DspHardwareServices {
         void* user,
         std::uint32_t address,
         std::uint8_t value) {};
-    // Production DMA uses one whole-span transaction. The DSP execution
-    // thread supplies or receives a private, hardware-bounded buffer and the
-    // host acknowledges only after the CPU/simulation thread has committed
-    // the complete span. Byte callbacks above remain an explicit
-    // single-threaded/test bridge. Product hosts install only these span
-    // callbacks, leaving the byte callbacks null, so generated DSP code cannot
-    // alias live MRAM through a second path.
+    // Production DMA is one whole-span transaction. The DSP thread supplies or receives a private,
+    // hardware-bounded buffer, and the host acknowledges only after the CPU thread commits the full span. Byte
+    // callbacks are the single-threaded test bridge. Product hosts install only span callbacks, so generated
+    // code cannot reach live MRAM through a second path.
     bool (*external_read_span)(
         void* user,
         std::uint32_t address,
@@ -2743,11 +2666,9 @@ struct DspHardwareServices {
         std::uint32_t address,
         const std::uint8_t* source,
         std::uint32_t size) {};
-    // Sample-accelerator bus (ACSAH/ACCAH/...): targets ARAM. On real hardware
-    // this is a physically distinct bus from DSP DMA; their address spaces
-    // overlap numerically, so the host must be able to route them separately.
-    // Default-wired to the same backing as the DMA bus so single-bus callers
-    // (and the bit-exact tests) behave exactly as before.
+    // Sample-accelerator bus (ACSAH/ACCAH) to ARAM. It is physically separate from the DSP DMA bus. The address
+    // spaces overlap numerically, so the host can route the two separately. It defaults to the DMA backing, so
+    // single-bus callers behave the same.
     bool (*validate_aram_span)(
         void* user,
         std::uint32_t address,
@@ -2760,9 +2681,8 @@ struct DspHardwareServices {
         void* user,
         std::uint32_t address,
         std::uint8_t value) {};
-    // PCM16 and raw-word accelerator operations are one architectural word,
-    // including a page-crossing word. Product hosts install these callbacks so
-    // the operation cannot be split into two independently visible byte calls.
+    // PCM16 and raw-word accelerator operations are one architectural word, including a word that crosses a
+    // page. Product hosts install these callbacks so one operation cannot split into two visible byte calls.
     bool (*aram_read_u16)(
         void* user,
         std::uint32_t address,
@@ -2796,56 +2716,45 @@ struct DspContext {
     void* hardware_user{};
     std::uint32_t dsp_mailbox{};
     std::uint32_t cpu_mailbox{};
-    // Set by the host when a free-running entry must stop. Owned elsewhere (the
-    // coprocessor), so this is a plain copyable pointer that survives the
-    // value-copy in reset(); the mailbox-poll path checks it and throws
-    // DspExecutionAborted. Null for ordinary single-threaded execution.
+    // Set by the host when a free-running entry must stop. The coprocessor owns it, so it is a plain pointer
+    // that survives the copy in reset(). The mailbox poll path checks it and throws DspExecutionAborted. Null in
+    // single-threaded execution.
     std::atomic<bool>* host_abort{};
-    // Monotonic identity published by the CPU before releasing the low half of
-    // a busy CPU->DSP mailbox. The CMBL ordering hook consumes the exact packet
-    // bound to this generation.
+    // Monotonic identity the CPU publishes before releasing the low half of a busy CPU->DSP mailbox. The
+    // CMBL hook consumes the packet bound to this generation.
     std::atomic<std::uint64_t>* host_cpu_mail_generation{};
-    // Host-owned pending external interrupt vector. The CPU asserts this via
-    // DSPCR PIINT; compiled ucode accepts it at IFX/mailbox boundaries and then
-    // re-enters through the native vector with RTI stack state preserved.
+    // Host-owned pending external interrupt vector. The CPU sets it through DSPCR PIINT. Compiled ucode accepts
+    // it at IFX or mailbox boundaries and re-enters the native vector with RTI stack state preserved.
     std::atomic<std::uint16_t>* host_external_interrupt{};
     DspHostWakeState* host_wake{};
     DspNativeTelemetryState* host_telemetry{};
-    // Installed only for GALAXY_TRACE_AUDIO_CAUSAL. The native DSP worker is
-    // the sole writer and the host snapshots it only after joining that
-    // worker, so hot-path evidence collection needs no synchronization.
+    // Installed only with GALAXY_TRACE_AUDIO_CAUSAL. The DSP worker is the only writer, and the host copies it
+    // after joining the worker, so it needs no synchronization.
     DspAudioCausalRecorder* audio_causal_recorder{};
-    // Installed only for GALAXY_TRACE_DSP_SELECTION_DMA_CAUSAL. Selection
-    // writes call this from one statically lowered RMGE01 instruction; DMA
-    // completion performs one null/exact-shape check. Worker-owned and copied
-    // only after join.
+    // Installed only with GALAXY_TRACE_DSP_SELECTION_DMA_CAUSAL. Selection writes call it from one static RMGE01
+    // instruction. DMA completion does one null and shape check. Worker-owned, copied after join.
     DspChannelSelectionDmaProbeRecorder* channel_selection_dma_probe{};
-    // Optional process-owned bus controls. Exact selected-channel DMA proof
-    // chooses the worker-local ramp; accelerator sample reads never lock or
-    // touch atomics after that one record boundary snapshot.
+    // Optional bus controls owned by the process. The exact selected-channel DMA proof picks the worker-local
+    // ramp. Accelerator sample reads take no lock and no atomic after the record-boundary snapshot.
     const audio::NativeAudioBusControls* audio_bus_controls{};
     audio::NativeDspAudioBusState audio_bus_state{};
-    // Worker-owned, non-atomic accumulators. Observable boundaries publish
-    // them into host_telemetry so the hot direct edges do not perform an
-    // atomic operation on every iteration.
+    // Worker-owned, non-atomic counters. Observable boundaries publish them to host_telemetry, so hot direct
+    // edges avoid an atomic operation per iteration.
     DspPendingIdleBackEdgeCounters* pending_idle_backedges{};
     DspDiagnosticState* host_diagnostics{};
-    // Optional non-owning test observer. Product construction/reset leaves this
-    // null, and no native worker or host API installs it.
+    // Optional non-owning test observer. Product construction and reset leave it null, and no native API
+    // installs it.
     DspRawInstructionBoundaryObserver* raw_instruction_boundary_observer{};
-    // Optional non-owning test sidecar, enabled only from a known fresh reset.
-    // The null product path pays one pointer load and one predictable
-    // not-taken branch only when a hardware stack push/pop actually occurs.
+    // Optional non-owning test sidecar, enabled only from a known fresh reset. The null path costs one pointer
+    // load, and a not-taken branch only when a hardware push or pop occurs.
     DspLogicalStackDepthTracker* logical_stack_depth_tracker{};
     bool halted{};
     bool irom_loaded{};
     bool coef_loaded{};
     bool accelerator_reads_stopped{};
-    // Address of the currently-executing instruction's own block, refreshed at
-    // the start of every lowered instruction. Diagnostics-only: lets a
-    // computed-branch hard trap report which instruction computed the bad
-    // target, since by the time the trap fires ctx.pc already holds the
-    // (invalid) destination rather than the source.
+    // Address of the currently executing instruction's block, set at the start of each lowered instruction.
+    // Diagnostics only. It lets a computed-branch trap name the instruction that computed the bad target,
+    // since ctx.pc already holds that destination when the trap fires.
     DspInstructionEntryMarker last_retired_pc{};
 };
 
@@ -2898,8 +2807,8 @@ inline void dsp_native_telemetry_publish_pending_worker_counts(
     DspContext& context) {
     auto* const pending_entries = context.last_retired_pc.pending_entries;
     auto* const pending_backedges = context.pending_idle_backedges;
-    // Fold generated-code entries (DspInstructionEntryMarker::enter) into the
-    // pending accumulator first so every reader observes the exact count.
+    // Folds generated-code entries (DspInstructionEntryMarker::enter) into the pending accumulator first, so
+    // readers see the exact count.
     auto& unpublished_entries = context.last_retired_pc.unpublished_entries;
     if (unpublished_entries != 0u) {
         if (pending_entries != nullptr) {
@@ -2998,8 +2907,8 @@ inline std::uint16_t dsp_iram_read(const DspContext& context, std::uint16_t addr
         return context.iram[static_cast<std::size_t>(address & 0x0fffu)];
     }
     if ((address & 0xf000u) != 0x8000u) {
-        // Instruction-memory data reads decode only IRAM and IROM regions.
-        // Unmapped regions do not alias the IROM's low address bits.
+        // Instruction-memory data reads decode only IRAM and IROM. Unmapped regions do not alias the low address
+        // bits of IROM.
         return 0u;
     }
     if (!context.irom_loaded) {
@@ -3044,13 +2953,10 @@ inline const std::uint32_t& dsp_cpu_mailbox(const DspContext& context) {
     return context.cpu_mailbox;
 }
 
-// The two mailbox words are the only DspContext state touched from both the
-// CPU thread and a free-running DSP worker thread, so every access goes
-// through std::atomic_ref. The busy bit (kDspMailboxBusy) is the hardware
-// "mail present" handshake: a low-half write sets it with release semantics so
-// the high half it published becomes visible, and the consuming low-half read
-// clears it. Reads use acquire so the spinning DSP observes the CPU's writes.
-// Value semantics are byte-for-byte identical to the previous scalar version.
+// The two mailbox words are the only DspContext state touched by both the CPU thread and the free-running
+// DSP worker, so every access goes through std::atomic_ref. The busy bit (kDspMailboxBusy) is the "mail
+// present" handshake. A low-half write sets it with release semantics, so the published high half is
+// visible. The consuming low-half read clears it. Reads use acquire, so the spinning DSP sees CPU writes.
 inline std::uint16_t dsp_mailbox_read_high(const std::uint32_t& mailbox) {
     std::atomic_ref<std::uint32_t> ref(const_cast<std::uint32_t&>(mailbox));
     return static_cast<std::uint16_t>(ref.load(std::memory_order_acquire) >> 16u);
@@ -3221,18 +3127,16 @@ inline void dsp_mailbox_write_low_and_publish_diagnostic(
         (void)dsp_mailbox_write_low(dsp_dsp_mailbox(context), value);
         return;
     }
-    // Hold the publication mutex across the architectural release. A CPU that
-    // observes the new busy mailbox and then asks for latest cannot overtake
-    // construction of the matching coherent snapshot.
+    // Hold the publication mutex across the architectural release. A CPU that sees the new busy mailbox and then
+    // asks for `latest` cannot overtake construction of the matching snapshot.
     const std::lock_guard lock(context.host_diagnostics->mutex);
     const std::uint32_t published_mailbox =
         dsp_mailbox_write_low(dsp_dsp_mailbox(context), value);
     dsp_publish_diagnostic_snapshot_locked(
         context, DspDiagnosticBoundary::DspMailboxLow);
-    // The CPU can consume the atomic mailbox immediately after the release,
-    // including while the bounded DRAM copy above is still in progress. Keep
-    // the exact word released by this DMBL generation as its provenance rather
-    // than replacing it with a later, already-consumed atomic observation.
+    // The CPU can consume the atomic mailbox right after the release, even while the DRAM copy below is still
+    // running. The provenance is the word this DMBL generation released, not a later observation that has
+    // already been consumed.
     context.host_diagnostics->latest.dsp_mailbox = published_mailbox;
 }
 
@@ -3278,10 +3182,9 @@ inline bool dsp_trace_mem_summary_enabled() {
     return enabled;
 }
 
-// Per-DMA nonzero-byte trace. Kept on its own flag: it fires on every nonzero
-// transfer (thousands/sec once FX_BUF is live) and floods the console, which
-// stalls the runtime enough to skew boot/audio timing. The cheaper rate-limited
-// probes below stay on GALAXY_TRACE_DSP_MEM_SUMMARY.
+// Per-DMA nonzero-byte trace, on its own flag. It fires on every nonzero transfer (thousands per second once
+// FX_BUF is live) and would flood the console. The rate-limited probes below stay on
+// GALAXY_TRACE_DSP_MEM_SUMMARY.
 inline bool dsp_trace_dma_bytes_enabled() {
     static const bool enabled = [] {
 #ifdef _MSC_VER
@@ -3307,19 +3210,10 @@ inline bool dsp_trace_ifx_sample(
     std::atomic<std::uint64_t>& counter,
     std::uint64_t first_count,
     std::uint64_t period) {
-    // Every caller uses the result only to decide whether to call
-    // dsp_trace_ifx_mail(), which itself returns immediately unless
-    // GALAXY_TRACE_DSP_IFX is set — but the callers reach this helper on
-    // *every* DMBH/CMBH/DMBL/CMBL register read, before that check. The
-    // fetch_add below is a locked read-modify-write (lock xadd), so with
-    // tracing off the DSP thread was paying 20-40 cycles and a contended
-    // cache line per mailbox read to feed counters whose values are never
-    // observed. dsp_trace_ifx_enabled() is a static-singleton env read
-    // (evaluated once, then a constant), so this early-out is free.
-    //
-    // Observed behaviour with tracing ON is bit-identical: the counters, the
-    // sampling decisions and the log lines are all unchanged. With tracing
-    // OFF the counters no longer advance, and nothing reads them on that path.
+    // Callers use the result only to decide whether to call dsp_trace_ifx_mail(), which returns at once unless
+    // GALAXY_TRACE_DSP_IFX is set. Callers reach this helper on every DMBH, CMBH, DMBL and CMBL read, so the
+    // counter update is skipped when tracing is off. dsp_trace_ifx_enabled() is a one-time static read, so the
+    // early return costs nothing. With tracing on, counters, sampling and log output are unchanged.
     if (!dsp_trace_ifx_enabled()) {
         return false;
     }
@@ -3424,11 +3318,9 @@ inline void dsp_trace_task_mail_context(const DspContext& context) {
         static_cast<unsigned>(mail));
 }
 
-// Begins a new exact logical-depth epoch. This is deliberately named as a
-// trusted-reset-owner API: no snapshot of wrapping hardware cursors can prove a
-// reset (32 untracked pushes alias the zero cursor). The trusted caller must
-// invoke it immediately after constructing/resetting DspContext. Raw zero
-// cursors are only a defense-in-depth guard and are never used to infer depth.
+// Starts a new exact logical-depth epoch. It is a trusted-reset API: wrapping hardware cursors cannot prove
+// a reset (32 untracked pushes alias the zero cursor). The caller must invoke it right after constructing or
+// resetting DspContext. Raw zero cursors are only a defense-in-depth check and are never used to infer depth.
 [[nodiscard]] inline bool
 dsp_logical_stack_depth_begin_trusted_reset_owner_epoch(
     DspContext& context,
@@ -3571,9 +3463,8 @@ inline bool dsp_enter_external_interrupt(DspContext& context, std::uint16_t vect
     if ((context.sr & kDspSrExtIntEnable) == 0u) {
         return false;
     }
-    // HALT leaves the visible DSP PC on the HALT instruction. Exception entry
-    // stacks that visible PC exactly; the interrupt handler decides whether to
-    // return, jump elsewhere, or remain halted.
+    // HALT leaves the visible PC on the HALT instruction. Exception entry stacks that PC. The interrupt handler
+    // decides whether to return, jump or stay halted.
     dsp_stack_push(context, 0, context.pc);
     dsp_stack_push(context, 1, context.sr);
     context.sr = static_cast<std::uint16_t>(context.sr & ~kDspSrExtIntEnable);
@@ -3594,11 +3485,9 @@ inline void dsp_accept_pending_external_interrupt(DspContext& context) {
         (context.sr & kDspSrExtIntEnable) == 0u) {
         return;
     }
-    // Generated loops reach this checkpoint on every iteration. Observe the
-    // pending vector with a plain acquire load first so the common no-PIINT
-    // case costs no locked read-modify-write; a vector published after this
-    // load is accepted at the next checkpoint, exactly as one published just
-    // after the exchange below would be.
+    // Generated loops reach this checkpoint on every iteration. A plain acquire load checks for a pending vector
+    // first, so the common no-PIINT case avoids a locked read-modify-write. A vector published after the load is
+    // taken at the next checkpoint.
     if (context.host_external_interrupt->load(std::memory_order_acquire) ==
         kDspNoPendingExternalInterrupt) {
         return;
@@ -3656,10 +3545,8 @@ inline void dsp_accept_pending_external_interrupt(DspContext& context) {
     return false;
 }
 
-// Event-park only the two exact RMGE01 direct edges whose complete SCCs are
-// statically certified above. The generated branch has already selected and
-// retired the taken edge, so ctx.pc names the architectural resume target.
-// A failed fixed-point certificate preserves ordinary generated execution.
+// Parks only the two RMGE01 direct edges whose SCCs are certified above. The generated branch has already
+// retired the taken edge, so ctx.pc is the resume target. A failed certificate keeps ordinary execution.
 inline void dsp_native_handle_static_backedge(
     DspContext& context,
     std::uint16_t source,
@@ -3696,9 +3583,8 @@ inline void dsp_native_handle_static_backedge(
             }
             ++*counter;
         }
-        // Every generated static-edge hook consumes the marker provenance.
-        // A duplicate hook cannot re-credit an old traversal, and the 0824
-        // short re-entry cannot seed a suffix of the eight-marker sequence.
+        // Each static-edge hook consumes the marker provenance. A duplicate hook cannot credit an old traversal, and
+        // the 0x0824 short re-entry cannot seed a suffix of the eight-marker sequence.
         dsp_rmge01_idle_sequence_reset(sequence_tracker);
     }
     if (kind == DspRmge01IdleBackEdgeKind::None ||
@@ -3710,9 +3596,8 @@ inline void dsp_native_handle_static_backedge(
     }
 
     for (;;) {
-        // Snapshot first, then recheck every progress source. If abort or
-        // PIINT is published after these checks, its release generation bump
-        // makes atomic::wait return immediately instead of losing the wake.
+        // Take the snapshot first, then recheck every progress source. An abort or PIINT published after the checks
+        // bumps the release generation, so atomic::wait returns at once and the wake is not lost.
         const auto generation =
             context.host_wake->generation.load(std::memory_order_acquire);
         dsp_throw_if_host_abort_requested(context);
@@ -3819,9 +3704,8 @@ inline void dsp_external_read_span(
         return;
     }
 
-    // Explicit single-threaded/test fallback. The caller commits this private
-    // buffer to DSP-local memory only after every byte callback succeeds, so a
-    // failed fallback read still cannot partially modify IRAM/DRAM.
+    // Single-threaded/test fallback. The caller commits this private buffer to DSP-local memory only after every
+    // byte callback succeeds, so a failed read cannot partly modify IRAM or DRAM.
     for (std::uint32_t offset = 0; offset < size; ++offset) {
         destination[offset] = dsp_external_read_byte(context, address + offset);
     }
@@ -3851,9 +3735,8 @@ inline void dsp_external_write_span(
         return;
     }
 
-    // Explicit single-threaded/test fallback. Production hosts install the
-    // span callback above because byte writes cannot provide an atomic MRAM
-    // commit if a mapping disappears midway through a transfer.
+    // Single-threaded/test fallback. Production hosts install the span callback above, because byte writes cannot
+    // commit atomically to MRAM if a mapping disappears mid-transfer.
     for (std::uint32_t offset = 0; offset < size; ++offset) {
         dsp_external_write_byte(context, address + offset, source[offset]);
     }
@@ -3911,10 +3794,8 @@ inline void dsp_run_dma(DspContext& context) {
         context.ifx[kDspIfxDsmal];
     const auto dsp_byte_address =
         static_cast<std::uint32_t>(context.ifx[kDspIfxDspa]) * 2u;
-    // DIAGNOSTIC EXPERIMENT (gated): the per-frame voice-param DMA (DSP word
-    // 0x3A8) reads channel_table_base + 0x6000, which lands in a zero gap; the
-    // live control records sit ~0x80 higher. Bias only that transfer to test
-    // whether the silence is a voice-list address offset. Hex byte count.
+    // Diagnostic experiment, gated. Biases the per-frame voice-parameter DMA (DSP word 0x3A8) by +0x80 from
+    // channel_table_base + 0x6000, to test whether the silence is an address offset. Hex byte count.
     if ((control & 0x0001u) == 0u && dsp_byte_address == 0x0750u) {
         static const long bias = [] {
 #ifdef _MSC_VER
@@ -3994,19 +3875,10 @@ inline void dsp_run_dma(DspContext& context) {
                 : "DSP DMA span exceeds DRAM");
     }
     dsp_external_validate_span(context, host_address, length);
-    // Deliberately NOT value-initialised. `transfer` below is exactly
-    // [0, length) of this buffer, and both arms of the transfer write every one
-    // of those bytes before anything reads them:
-    //   to_host  -- the first loop writes transfer[0, length) from DSP memory,
-    //               then dsp_external_write_span reads it;
-    //   !to_host -- dsp_external_read_span writes transfer[0, length), then the
-    //               second loop reads it.
-    // The counting loop that follows also only reads [0, length). So the `{}`
-    // that used to be here zeroed 0x4000 bytes that were then immediately
-    // overwritten: measured DSP DMA traffic is ~14 k transfers/s with a mean
-    // payload of only 166-206 B, i.e. ~229 MB/s of dead stores, and because
-    // DspContext is ~30 KB the 16 KiB memset also evicts roughly half of L1D on
-    // every transfer.
+    // The buffer is deliberately not value-initialised. `transfer` is exactly [0, length), and both arms write
+    // every byte of it before any read: the to_host loop fills it before dsp_external_write_span reads it, and
+    // dsp_external_read_span fills it before the second loop reads it. The counting loop reads only [0, length).
+    // A memset here would be dead work on every transfer.
     std::array<std::uint8_t, 0x4000u> transfer_bytes;
     std::span<std::uint8_t> transfer{
         transfer_bytes.data(), static_cast<std::size_t>(length)};
@@ -4053,9 +3925,8 @@ inline void dsp_run_dma(DspContext& context) {
             context.audio_bus_controls);
     } else if (!instruction_memory && !to_host &&
                dsp_byte_address == 0x0800u && length == 0x0180u) {
-        // Transfer shape alone is not selected-channel identity. Clear an old
-        // selection rather than applying its category (or a guessed fallback)
-        // to a shape-identical DMA that lacks the exact render-branch proof.
+        // Transfer shape alone does not identify the selected channel. Clear an old selection rather than apply its
+        // category to a shape-identical DMA that lacks the exact render-branch proof.
         audio::native_dsp_audio_bus_clear_selection(context.audio_bus_state);
     }
     dsp_audio_causal_record_dma(
@@ -4089,10 +3960,8 @@ inline void dsp_run_dma(DspContext& context) {
                 transfer_nonzero);
         }
     }
-    // Diagnostic-only: at render start the ucode DMAs FX_BUF (CH_BUF+0x6000 =
-    // 0x807B64E0). Dump the channel table CH_BUF (0x807B04E0, 64 x 0x180) the
-    // guest produced, so we can see whether the active music voices (source at
-    // +0x118, ARAM offset) are present for the ucode under native mode.
+    // Diagnostic only. At render start the ucode DMAs FX_BUF (CH_BUF+0x6000). Dumps the channel table CH_BUF
+    // (64 x 0x180) so the active music voices can be checked under native mode.
     if (dsp_trace_mem_summary_enabled() && !instruction_memory && !to_host &&
         host_address == 0x807B64E0u) {
         static std::atomic<int> s_chdump{0};
@@ -4109,9 +3978,8 @@ inline void dsp_run_dma(DspContext& context) {
                     (static_cast<std::uint16_t>(bytes[0]) << 8u) |
                     bytes[1]);
             };
-            // Resolve CH_BUF/control-pool from the guest globals rather than
-            // assuming a fixed base: if JAudio never initialized under native,
-            // these read 0 and the "active=0" result would be a false negative.
+            // Resolves CH_BUF and the control pool from the guest globals, not a fixed base. If JAudio never initialised,
+            // both read 0, and an "active=0" result would be a false negative.
             std::array<std::uint8_t, 12u> globals{};
             dsp_external_read_span(context, 0x806A2BD0u, globals);
             const std::uint32_t ctrl_pool_ptr =
@@ -4164,16 +4032,9 @@ inline void dsp_run_dma(DspContext& context) {
                                     read_be32_from(record + 0x11Cu)),
                                 static_cast<unsigned>(
                                     read_be16_from(record + 0x064u)));
-                            // DIAGNOSTIC EXPERIMENT (gated): word 0x428 in the
-                            // per-frame voice-param DMA (host=CH_BUF, dsp=0x0800,
-                            // len=0x180 -- the whole-record copy, distinct from
-                            // the FX_BUF+0x6000 transfer this block is nested
-                            // under) maps to TChannel offset +0x50, an unnamed
-                            // field even in the public SMG decompilation
-                            // (Petari JASDspInterface.hpp: "u16 _50;"). The DSP
-                            // ucode at pc 0x0DD4-0x0DEC sign-extends and
-                            // logically shifts this field into an address --
-                            // dump raw bytes 0x40-0x60 to see its actual value.
+                            // Diagnostic experiment, gated. Word 0x428 of the per-frame voice-parameter DMA (host=CH_BUF, dsp=0x0800,
+                            // len=0x180) maps to TChannel offset +0x50, an unnamed field (Petari JASDspInterface.hpp lists it as u16 _50).
+                            // The ucode at PC 0x0DD4-0x0DEC sign-extends and shifts it into an address. Dumps raw bytes 0x40-0x60.
                             std::fprintf(stderr, "ch%u[0x40..0x60)=",
                                 static_cast<unsigned>(channel));
                             for (std::uint32_t off = 0x40u; off < 0x60u;
@@ -4190,10 +4051,9 @@ inline void dsp_run_dma(DspContext& context) {
             std::fprintf(stderr, "| active=%u\n", static_cast<unsigned>(active));
         }
     }
-    // Diagnostic-only: when a per-voice sample DMA-in from a MEM1 buffer comes
-    // back all-zero, the wave data likely lives in the MEM2 VARAM/ARAM backing
-    // (DsetVARAM base 0x90000800). Probe candidate base transforms to learn the
-    // exact address the ucode SHOULD have read so the fix is unambiguous.
+    // Diagnostic only. When a per-voice sample DMA-in from a MEM1 buffer returns all zeros, the data may live in
+    // the MEM2 VARAM/ARAM backing (DsetVARAM base 0x90000800). Probes candidate base transforms to find the
+    // address the ucode should have read.
     if (dsp_trace_mem_summary_enabled() && !instruction_memory && !to_host &&
         transfer_nonzero == 0u && host_address >= 0x80800000u &&
         host_address < 0x81800000u) {
@@ -4227,10 +4087,8 @@ inline void dsp_run_dma(DspContext& context) {
                 static_cast<unsigned>(alt_c), static_cast<unsigned>(count_nz(alt_c)));
         }
     }
-    // Diagnostic-only: when a command/parameter DMA-in from the JAudio control
-    // region comes back all-zero, scan a wider guest window once to learn
-    // whether the real command data lives at a nearby (mis-pointed) address or
-    // is simply never written by the guest.
+    // Diagnostic only. When a command or parameter DMA-in from the JAudio control region returns all zeros, it
+    // scans a wider guest window once to see whether the data sits at a nearby address or is never written.
     if (dsp_trace_mem_summary_enabled() && !instruction_memory && !to_host &&
         transfer_nonzero == 0u && host_address >= 0x807B0000u &&
         host_address < 0x807C0000u) {
@@ -4280,8 +4138,8 @@ inline void dsp_run_dma(DspContext& context) {
             }
         }
     }
-    // Diagnostic-only: split "input samples arrived zero" from "mix zeroed them"
-    // by reporting nonzero byte counts per DMA direction. Sampled to stay cheap.
+    // Diagnostic only. Separates "input samples arrived zero" from "mix zeroed them" by counting nonzero bytes per
+    // DMA direction. Sampled to stay cheap.
     if (dsp_trace_dma_bytes_enabled() && !instruction_memory) {
         static std::atomic<std::uint64_t> s_in_count{0};
         static std::atomic<std::uint64_t> s_out_count{0};
@@ -4382,8 +4240,8 @@ inline void dsp_accelerator_validate_span(
 }
 
 inline std::uint8_t dsp_accelerator_read_byte(DspContext& context, std::uint32_t address) {
-    // Prefer a dedicated ARAM router; fall back to the DMA/external bus when the
-    // host has not installed one (single-bus callers and the bit-exact tests).
+    // Uses a dedicated ARAM router when the host installs one. Otherwise it falls back to the DMA bus, which covers
+    // single-bus callers and the bit-exact tests.
     const auto reader = context.hardware.aram_read_byte != nullptr
                             ? context.hardware.aram_read_byte
                             : context.hardware.external_read_byte;
@@ -4575,9 +4433,8 @@ inline std::uint16_t dsp_accelerator_read_sample(DspContext& context) {
             nibble -= 16;
         }
         const auto scale = static_cast<std::int32_t>(1u << (context.ifx[kDspIfxPredScale] & 0x000fu));
-        // Preserve the signed-32 predictor model with defined modular
-        // accumulation. Each signed-16 product fits int32, but their sum need
-        // not. This does not assert a measured hardware intermediate width.
+        // Keeps the signed-32 predictor model with defined modular accumulation. Each signed-16 product fits in int32,
+        // but their sum may not. This does not assume a hardware intermediate width.
         const std::uint32_t prediction_bits = 0x400u +
             static_cast<std::uint32_t>(coefficient_1 * yn1) +
             static_cast<std::uint32_t>(coefficient_2 * yn2);
@@ -4620,9 +4477,8 @@ inline std::uint16_t dsp_accelerator_read_sample(DspContext& context) {
 
         const auto gain = static_cast<std::int32_t>(dsp_ifx_s16(context, kDspIfxGain));
         const auto raw = static_cast<std::int32_t>(raw_sample);
-        // The observable result is the low sixteen bits. Widening only the
-        // sum after the existing per-product shifts preserves those bits and
-        // avoids signed overflow without changing shift or wrap ordering.
+        // Only the low sixteen bits are observable. Widening the sum after the per-product shifts keeps those bits and
+        // avoids signed overflow, with shift and wrap order unchanged.
         const std::int64_t decoded =
             std::int64_t{(gain * raw) >> gain_shift} +
             ((coefficient_1 * yn1) >> gain_shift) +
@@ -4717,14 +4573,10 @@ inline std::uint16_t dsp_ifx_read(DspContext& context, std::uint16_t address) {
                 const auto value =
                     dsp_mailbox_read_high(dsp_dsp_mailbox(context));
 
-                // The generated RMGE01 ucode has two back-edge loops that read
-                // DMBH until the CPU consumes the previous DSP->CPU mail. At
-                // native x64 speed those architectural polling loops otherwise
-                // retire without bound, steal a host core, and can starve both
-                // the audio consumer and the guest CPU that must perform the
-                // consume. Only park the classified polling sites; every other
-                // DMBH read retains immediate register-read semantics, and
-                // contexts without a host event remain wholly synchronous.
+                // The RMGE01 ucode has two back-edge loops that read DMBH until the CPU consumes the previous DSP->CPU mail. At
+                // native speed these polls would run unbounded, occupy a host core, and can starve the audio consumer and the
+                // CPU that must do the consume. Only the classified polling sites park. Other DMBH reads keep immediate
+                // register-read semantics, and contexts without a host event stay fully synchronous.
                 if (!dsp_is_rmge01_dmbh_poll_pc(context.pc) ||
                     (value & 0x8000u) == 0u ||
                     context.host_wake == nullptr) {
@@ -4732,12 +4584,9 @@ inline std::uint16_t dsp_ifx_read(DspContext& context, std::uint16_t address) {
                     return value;
                 }
 
-                // Snapshot first, then recheck every wake source and the
-                // mailbox. If the CPU consumes the mail between this recheck
-                // and wait(), its release increment changes generation and
-                // atomic::wait returns immediately instead of losing the
-                // notification. A wake for an unrelated event loops until the
-                // mailbox is actually free (or abort/PIINT throws).
+                // Snapshot first, then recheck every wake source and the mailbox. A CPU consume between the recheck and wait()
+                // bumps the generation, so atomic::wait returns at once. A wake for an unrelated event loops until the mailbox
+                // is free or abort/PIINT throws.
                 const auto generation = context.host_wake->generation.load(
                     std::memory_order_acquire);
                 dsp_throw_if_host_abort_requested(context);
@@ -4786,14 +4635,10 @@ inline std::uint16_t dsp_ifx_read(DspContext& context, std::uint16_t address) {
             };
 
             for (;;) {
-                // A free-running compiled RMGE01 task reaches CMBH while
-                // waiting for the next CPU mail. Retiring any of the four
-                // proven polling loops at native x64 speed is not DSP timing:
-                // it burns a host core and contends on the mailbox cache line
-                // without advancing any hardware-visible state. Other CMBH
-                // reads retain immediate register-read semantics so the
-                // generated control flow, including PC 0x06F5's empty-mail
-                // branch, owns the result.
+                // A free-running RMGE01 task reaches CMBH while waiting for the next CPU mail. Parking the four proven polls at
+                // native speed is not DSP timing. It would burn a host core and contend on the mailbox cache line without
+                // changing any hardware-visible state. Other CMBH reads keep immediate register-read semantics, so generated
+                // control flow, including PC 0x06F5's empty-mail branch, decides the result.
                 dsp_throw_if_host_abort_requested(context);
                 dsp_accept_pending_external_interrupt(context);
                 const auto value =
@@ -4805,11 +4650,9 @@ inline std::uint16_t dsp_ifx_read(DspContext& context, std::uint16_t address) {
                     return value;
                 }
 
-                // Snapshot first, then immediately recheck abort, PIINT, and
-                // the mailbox. CPU-mail publication increments generation
-                // after its release mailbox write. If publication races after
-                // this recheck but before wait(), atomic::wait observes the
-                // changed generation and returns without losing the wake.
+                // Snapshot first, then recheck abort, PIINT and the mailbox. CPU-mail publication bumps the generation after its
+                // release write. A publication that races the recheck but precedes wait() changes the generation, so
+                // atomic::wait returns without losing the wake.
                 const auto generation = context.host_wake->generation.load(
                     std::memory_order_acquire);
                 dsp_throw_if_host_abort_requested(context);
@@ -5011,16 +4854,10 @@ inline void dsp_ifx_write(DspContext& context, std::uint16_t address, std::uint1
     }
 }
 
-// Address ranges not decoded into DRAM/COEF/IFX below are wired to nothing on
-// real silicon: this fixed-function DSP has no MMU or access-fault mechanism,
-// so hardware simply reads back an undefined value (0) and ignores writes.
-// Dolphin's DSP LLE core -- which runs real DSP microcode bit-exactly -- does
-// the same (ReadDMEM/WriteDMEM log an error and return 0 / drop the write;
-// they never fault). Confirmed reachable during ordinary gameplay: a real,
-// legitimate JAudio2 call site feeds a non-positional/BGM channel's distance
-// term with a deliberate "not applicable" sentinel, which this ucode's
-// predictor-index computation turns into an address like 0x7FFF -- outside
-// DRAM/COEF/IFX, but not a corrupted/unsupported program on real hardware.
+// Addresses not decoded into DRAM, COEF or IFX are wired to nothing on real silicon. This fixed-function DSP has
+// no MMU or fault path, so reads return 0 and writes are dropped. Dolphin's DSP LLE core does the same. This is
+// reachable in normal play: a valid JAudio2 call passes a "not applicable" sentinel as the distance term of a
+// non-positional channel, and the predictor index turns it into an address such as 0x7FFF.
 inline void dsp_trace_unmapped_data_access(
     const DspContext& context, std::uint16_t address, const char* verb) {
     if (!dsp_trace_mem_summary_enabled()) {
@@ -5071,15 +4908,11 @@ inline void dsp_data_write(DspContext& context, std::uint16_t address, std::uint
     }
 }
 
-// Generated-code data access with a lazily materialized architectural PC.
-// Lowered instructions whose only context-observing operations are these data
-// accesses do not store ctx.pc on entry. A DRAM access never observes ctx.pc
-// (with no audio causal recorder installed), so it completes inline; every
-// other region (coefficient ROM, IFX, unmapped, or a recorded DRAM write)
-// first publishes the instruction's own address to ctx.pc and then takes the
-// exact dsp_data_read/dsp_data_write path, so traps, IFX polling
-// classification, interrupt stacking and diagnostics observe the same PC as
-// before.
+// Generated data access with a lazily materialised architectural PC. Lowered instructions whose only
+// context-observing operations are data accesses do not store ctx.pc on entry. A DRAM access never observes
+// ctx.pc (without an audio causal recorder), so it completes inline. Any other region (coefficient ROM, IFX,
+// unmapped, or a recorded DRAM write) first stores the instruction's address in ctx.pc, then takes the
+// dsp_data_read/dsp_data_write path, so traps, IFX polling, interrupt stacking and diagnostics see the same PC.
 GALAXY_DSP_ALWAYS_INLINE std::uint16_t dsp_data_read_at(
     DspContext& context,
     std::uint16_t pc,

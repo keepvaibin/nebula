@@ -8,13 +8,11 @@
 
 namespace galaxy::host::ai_dma_timing {
 
-// The model treats the start AID edge and register-latch ordering separately
-// from this delay value. No physical-Wii timing capture or authoritative
-// hardware evidence currently establishes an exact delay. The same numeric
-// value appears in emulator source as a provisional CPU-cycle workaround; this
-// runtime instead measures it in 60.75 MHz time-base ticks, so the number is
-// not unit-equivalent and must never be called hardware-exact. Preserve current
-// behavior until a hardware capture supplies a replacement.
+// The model treats the start AID edge and register-latch ordering separately from this delay
+// value. No physical-Wii capture establishes an exact delay. Emulator source uses the same
+// number as a provisional CPU-cycle workaround. This runtime measures it in 60.75 MHz time-base
+// ticks, so the value is not unit-equivalent and is not hardware-exact. Keep the current
+// behaviour until a hardware capture supplies a replacement.
 inline constexpr std::uint64_t kInitialInterruptDelayTimelineTicks = 200u;
 inline constexpr bool kInitialInterruptDelayHardwareValidated = false;
 inline constexpr char kInitialInterruptDelayAuditStatus[] =
@@ -52,11 +50,10 @@ private:
     std::uint32_t saved_{};
 };
 
-// A translated dynamic-call boundary has no caller PC in the host ABI, so it
-// cannot safely enter a guest interrupt handler there. It may still probe the
-// native AI device with EE temporarily masked. That work must precede virtual
-// HID collection: a host input poll can cross the AI deadline, and servicing a
-// second queued input edge first can turn two individually bounded host delays
+// A translated dynamic-call boundary has no caller PC in the host ABI, so it cannot safely enter
+// a guest interrupt handler there. It may still probe the native AI device with EE temporarily
+// masked. That probe must precede virtual HID collection: a host input poll can cross the AI
+// deadline, and servicing a second queued input edge first can turn two bounded host delays
 // into a full-buffer audio overrun.
 [[nodiscard]] constexpr bool ai_probe_precedes_native_input(
     bool ai_device_active,
@@ -131,15 +128,13 @@ template <
     return NativeInputAiServiceResult::InputServiceAttempted;
 }
 
-// A verified host suspension removes its interval from guest time. The AI
-// device sits on that timeline, so the buffers those periods would have
-// produced are never made: the output queue loses that much depth for good
-// and the next hitch empties it (an audible gap plus a full re-prebuffer).
-// The removed interval is owed back by pulling the next AI completion earlier;
-// the ordinary late-service path then produces those buffers as a burst.
-// Capped so a long suspension (sleep/resume) adds at most this many buffers of
-// latency; cap plus one period of ordinary lateness stays under the masked
-// catch-up bound of 8 periods in service_ai_dma.
+// A verified host suspension removes its interval from guest time. The AI device runs on that
+// timeline, so the buffers those periods would have produced are never made. The output queue
+// loses that depth, and the next hitch empties it (an audible gap and a full re-prebuffer).
+// The removed interval is repaid by pulling the next AI completion earlier, and the ordinary
+// late-service path produces those buffers as a burst. The repayment is capped, so a long
+// suspension adds at most this many buffers of latency. The cap plus one period of ordinary
+// lateness stays under the masked catch-up bound of 8 periods in service_ai_dma.
 inline constexpr std::uint64_t kHostPauseAiCatchUpPeriods = 6u;
 
 [[nodiscard]] constexpr std::uint64_t host_pause_ai_catch_up_ticks(
@@ -156,27 +151,22 @@ inline constexpr std::uint64_t kHostPauseAiCatchUpPeriods = 6u;
     return shift < next_completion_ticks ? shift : next_completion_ticks - 1u;
 }
 
-// JASDriver::updateDac (0x80494390) runs on the game's audio thread once per
-// AI callback: AIInitDMA of the buffer it mixed last (AID_LEN is the last
-// register written), then readDspBuffer of the next frame from the DSP output
-// ring into the following buffer. A completion that falls due before that
-// thread ran for the previous callback finds the shadow still naming the
-// buffer just played, and the hardware would play it again: one 17.5 ms block
-// repeated. A callback that runs before the DSP ring holds a frame makes the
-// game fill the buffer with its last sample (readDspBuffer underrun 0x804945CC:
-// a flat block and two steps). Both happen whenever completions are late (a
-// host stall; every guest thread runs on the simulation thread, so late
-// completions arrive back to back while the ring holds only the frames mixed
-// ahead). Such a completion is held until the game wrote AID_LEN and the ring
-// holds a frame, on the device's original period grid, so the late periods are
-// produced once each at the pace the game mixes them and the output queue
-// regains its depth. Without a write for kStaleAiHoldPeriods (the game stopped
-// feeding the DMA) the boundary is latched as the hardware would, but played as
-// a fade to silence instead of a repeat. The limit outlasts host stalls in
-// which no guest thread can run (a frame boundary waiting for the GPU inside an
-// interrupt handler measured 50-78 ms); a shorter one turned each such stall
-// into inserted silence while the output queue still had audio. It equals the
-// masked catch-up bound of service_ai_dma, beyond which periods are dropped.
+// JASDriver::updateDac (0x80494390) runs on the game's audio thread once per AI callback. It
+// issues AIInitDMA for the buffer it mixed last (AID_LEN is the last register written), then
+// reads the next frame from the DSP output ring into the following buffer.
+// A completion that falls due before that thread runs finds the shadow still naming the buffer
+// just played, and the hardware would replay it: one 17.5 ms block repeats. A callback that runs
+// before the DSP ring holds a frame makes the game fill the buffer with its last sample
+// (readDspBuffer underrun 0x804945CC: a flat block and two steps). Both happen when completions
+// are late, because every guest thread runs on the simulation thread, so late completions arrive
+// back to back while the ring holds only the frames mixed ahead.
+// Such a completion is held until the game writes AID_LEN and the ring holds a frame. It stays on
+// the device's original period grid, so the late periods are produced once each at the game's
+// mixing pace and the output queue regains depth. Without a write for kStaleAiHoldPeriods, the
+// boundary is latched as the hardware would, but played as a fade to silence instead of a repeat.
+// That limit outlasts host stalls in which no guest thread runs (a frame boundary waiting for the
+// GPU inside an interrupt handler can take 50-78 ms). It equals the masked catch-up bound of
+// service_ai_dma, beyond which periods are dropped.
 inline constexpr std::uint64_t kStaleAiHoldPeriods = 8u;
 // A hold that waits for the DSP ring re-checks it this often (in periods).
 inline constexpr std::uint64_t kAiSourceRecheckDivisor = 8u;

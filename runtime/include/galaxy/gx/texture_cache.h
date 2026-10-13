@@ -1,23 +1,21 @@
 #pragma once
 
-// TextureCache: decodes GX texture formats from guest memory into GPU
-// textures and serves the descriptor used by the per-draw texture table.
+// TextureCache: decodes GX texture formats from guest memory into GPU textures and serves the
+// descriptor used by the per-draw texture table.
 //
-// Address-cache invalidation is explicit. An opt-in bounded content cache may
-// retain identical decoded static resources after those entries are dropped:
+// Address-cache invalidation is explicit. An opt-in bounded content cache may retain identical decoded
+// static resources after those entries are dropped:
 //   1. the parser reports the BP pattern emitted by GXInvalidateTexAll()
 //      (FifoSink::on_invalidate_textures -> invalidate_all()), or
 //   2. an EFB copy registers over an overlapping guest address range
 //      (register_efb_copy overwrites conflicting aliases), or
-//   3. the runtime reports a guest-memory write overlapping a cached texture
-//      range (invalidate_guest_range).
-// A guest write must invalidate both decoded RAM address entries and GPU-side
-// EFB-copy aliases, because later CPU-decoded buffers can reuse the same guest
-// addresses.
+//   3. the runtime reports a guest-memory write overlapping a cached texture range
+//      (invalidate_guest_range).
+// A guest write must invalidate both decoded RAM address entries and GPU-side EFB-copy aliases, because
+// later CPU-decoded buffers can reuse the same guest addresses.
 //
-// EFB-copy aliases: once register_efb_copy() claims a matching guest address,
-// size, and format, get() returns the GPU-side copy directly
-// — the stale guest bytes are never re-decoded.
+// EFB-copy aliases: once register_efb_copy() claims a matching guest address, size and format, get()
+// returns the GPU-side copy directly. The stale guest bytes are never re-decoded.
 
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
@@ -166,8 +164,8 @@ public:
         const EfbCopyParams& params,
         Microsoft::WRL::ComPtr<ID3D12Resource> texture);
 
-    // GXInvalidateTexAll(): drop every decoded entry.  EFB-copy aliases
-    // survive — their content lives on the GPU, not in guest memory.
+    // GXInvalidateTexAll(): drop every decoded entry. EFB-copy aliases survive, because their
+    // content lives on the GPU, not in guest memory.
     void invalidate_all();
 
     std::size_t invalidate_guest_range(
@@ -398,10 +396,9 @@ private:
     std::unordered_map<EfbAliasKey, Entry, EfbAliasKeyHasher> efb_aliases_;
     detail::ConservativeGuestRangeEnvelope alias_guest_envelope_;
     std::vector<std::vector<Entry>> retired_entries_;
-    // Recycled decoded-texture resources. CreateCommittedResource for a
-    // first-use texture measured 24 to 36 ms on the 185H's Arc driver (one
-    // texture-flush stall of 43 ms); a GPU-idle retired texture of the same
-    // size and mip count is reused instead. RGBA8 2D, no flags, PSR state.
+    // Recycled decoded-texture resources. Creating a committed resource on first use can stall the texture
+    // flush, so a GPU-idle retired texture of the same size and mip count is reused instead. RGBA8 2D, no
+    // flags, PSR state.
     struct PooledTexture {
         Microsoft::WRL::ComPtr<ID3D12Resource> texture;
         std::uint32_t width = 0;

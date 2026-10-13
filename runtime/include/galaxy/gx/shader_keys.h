@@ -2,16 +2,14 @@
 
 // Canonicalized, hashable shader and pipeline keys.
 //
-// Canonicalization rule: every field that does not affect code generation for
-// the *enabled* stage count is forced to zero before hashing — disabled TEV
-// stages, unused texgens, and don't-care blend fields must not fragment the
-// cache.  GxBackend builds keys via the build_* helpers; raw construction is
-// reserved for tests.
+// Canonicalization: every field that does not affect code generation for the enabled stage count is
+// forced to zero before hashing. Disabled TEV stages, unused texgens and don't-care blend fields must not
+// fragment the cache. GxBackend builds keys with the build_* helpers. Raw construction is for tests only.
 //
-// All key types are padding-free (asserted) so byte-wise FNV-1a hashing and
-// defaulted equality are well-defined.
+// All key types are padding-free (asserted), so byte-wise FNV-1a hashing and defaulted equality are
+// well-defined.
 //
-// No Windows/D3D12 includes — unit-testable offline.
+// No Windows or D3D12 includes, so the keys are unit-testable offline.
 
 #include "galaxy/gx/gx_bitfields.h"
 
@@ -22,26 +20,13 @@
 
 namespace galaxy::gx {
 
-// Every key type below is padding-free (asserted), so a byte comparison is a
-// total, well-defined equality and is exactly the relation the defaulted
-// member-wise `operator==` computed. It is also cheaper on its own terms: a
-// defaulted comparison on a struct with many members compiles to one
-// compare-and-branch per member with a data-dependent early exit -- roughly a
-// hundred dependent branches for the 280-byte PixelShaderKey -- whereas memcmp
-// lowers to a single `repe cmpsb`. These operators sit on the per-dirty-flush
-// path in GxBackend::flush_draw_state (build_*_key() result vs the stored key)
-// and inside PipelineCache::published_.find (PsoKey).
+// Every key type below is padding-free (asserted), so a byte comparison is a total equality and matches
+// the member-wise `operator==`. A byte compare is also cheaper than a defaulted member-wise comparison,
+// which branches per member. These operators run on the per-dirty-flush path in
+// GxBackend::flush_draw_state and inside PipelineCache::published_.find (PsoKey).
 //
-// Note this is an instruction-count argument, not a frame-level one. An earlier
-// version of this comment called these comparisons "the measured dominant cost of
-// a busy frame"; that came from `[gx-frame-timing]`'s `*_us` fields, which
-// gx_backend.cpp:2109-2126 documents as upper bounds carrying the profiler's own
-// overhead, and the claim was withdrawn. The comparison is strictly cheaper than
-// what it replaced; how much it moves a frame is unmeasured.
-//
-// Only `operator==` changes here. `hash()` is deliberately untouched: it feeds
-// the on-disk shader/PSO caches, so altering it would invalidate persisted state
-// for no gain.
+// This is an instruction-count argument, not a frame-time claim. hash() is deliberately unchanged: it
+// feeds the on-disk shader and PSO caches, so changing it would invalidate persisted state.
 [[nodiscard]] inline bool key_bytes_equal(
     const void* left,
     const void* right,
@@ -63,13 +48,11 @@ class GxState;
     return hash;
 }
 
-// 64x64 -> 64 multiply mix (SplitMix64's finalizer stage). Used only for the
-// composite PsoKey hash below: a PsoKey is three already-mixed 64-bit values,
-// so a byte-serial FNV walk over its 32 bytes costs ~32 dependent
-// multiply-xors purely to re-mix entropy that is already there. Folding the
-// three words costs a handful of independent multiplies instead. This is an
-// in-memory lookup hash only — it never enters a cache file, a pipeline-library
-// entry name or an ABI — so changing it cannot invalidate persisted state.
+// 64x64 -> 64 multiply mix (SplitMix64's finalizer stage). Used only for the composite PsoKey hash below.
+// A PsoKey is three already-mixed 64-bit values, so a byte-serial FNV walk over its 32 bytes would redo
+// mixing that is already present. Folding the three words costs a few independent multiplies. This is an
+// in-memory lookup hash only. It never enters a cache file, a pipeline-library entry name or an ABI, so
+// changing it cannot invalidate persisted state.
 [[nodiscard]] constexpr std::uint64_t mix64(std::uint64_t value) noexcept {
     value ^= value >> 30;
     value *= 0xBF58476D1CE4E5B9ull;
@@ -92,16 +75,10 @@ struct TevStagePacked {
     std::uint32_t alpha_env;        // BP 0xC1+2n value (24 bits used)
     std::uint32_t order;            // decoded TevOrder half, repacked low 12
     std::uint32_t ksel;             // kcsel(4:0) | kasel(9:5) |
-                                    // resolved ras swap swizzle r/g/b/a
-                                    // (11:10,13:12,15:14,17:16) | resolved
-                                    // tex swap swizzle (19:18..25:24).  The
-                                    // swizzles come from the KSEL swap TABLES
-                                    // selected by this stage's ras_swap /
-                                    // tex_swap — baking the resolved channels
-                                    // keys the shader correctly without
-                                    // adding the table registers themselves
-                                    // (Dolphin PixelShaderGen uid does the
-                                    // same).
+                                    // resolved ras swap swizzle r/g/b/a (bits 11:10, 13:12, 15:14, 17:16) and resolved tex swap
+                                    // swizzle (bits 19:18 to 25:24). The swizzles come from the KSEL swap TABLES selected by this
+                                    // stage's ras_swap and tex_swap. Baking the resolved channels keys the shader correctly without
+                                    // the table registers themselves (Dolphin PixelShaderGen uid does the same).
 
     [[nodiscard]] bool operator==(const TevStagePacked& other) const noexcept {
         return key_bytes_equal(this, &other, sizeof(*this));
@@ -133,15 +110,13 @@ struct PixelShaderKey {
     std::uint8_t alpha_comp1;
     std::uint8_t alpha_logic;       // AlphaTestLogic
     std::uint8_t flags;             // bit0 late_ztest, bit1 z_texture,
-                                    // bit2 dst_alpha (GXSetDstAlpha on RGBA6
-                                    // EFB with alpha_update), bits3-4 ztex op,
-                                    // bits5-6 ztex format, bit7 dual-source
-                                    // TEV source alpha → PS exports TEV alpha
-                                    // on SV_Target1 for SRC1 blend factors
+                                    // bit2 dst_alpha (GXSetDstAlpha on RGBA6 EFB with alpha_update), bits3-4 ztex op,
+                                    // bits5-6 ztex format, bit7 dual-source: TEV source alpha is exported on SV_Target1
+                                    // for SRC1 blend factors
     std::uint8_t output_flags;      // bits0-2 EFB format, bit3 RGBA6 dither
     std::uint8_t num_ind_stages;    // 0-4
-    // Legacy 0..15 keys retain their original shader source. New dither keys
-    // use 0xff and read reciprocal scale from the per-draw PS constants.
+    // Keys 0..15 keep their original shader source. New dither keys use 0xff and read the
+    // reciprocal scale from the per-draw PS constants.
     std::uint8_t efb_scale_minus_one;
     std::uint8_t reserved;          // bit0 per-pixel lighting
     std::uint32_t ind_cmd[4][4];    // BP 0x10-0x1F, grouped as uint4s
@@ -168,9 +143,8 @@ struct VertexShaderKey {
                                     // bit2 dual-tex (post-matrix) enable,
                                     // bit3 per-pixel lighting outputs
     std::uint8_t texmtx_idx_mask;   // VCD_LO bits 1-8: per-vertex texture
-                                    // matrix index present for texgen n
-                                    // (masked to active texgens — affects VS
-                                    // codegen: per-vertex idx vs MatrixIndexA/B)
+                                    // matrix index present for texgen n (masked to active texgens; affects VS codegen: per-vertex
+                                    // index vs MatrixIndexA/B)
     std::uint32_t texgen[8];        // raw XF 0x1040+n (zeroed past num_texgens)
     std::uint32_t post_texgen[8];   // raw XF 0x1050+n (dual-tex transforms)
     std::uint32_t channel[4];       // raw XF 0x100E+n: color0, color1,
@@ -186,9 +160,8 @@ struct VertexShaderKey {
 static_assert(sizeof(VertexShaderKey) == 4 + 8 * 4 + 8 * 4 + 4 * 4);
 static_assert(std::has_unique_object_representations_v<VertexShaderKey>);
 
-// Fixed-function PSO state — affects pipeline creation only, never HLSL
-// codegen.  Kept apart from the shader keys so one compiled shader pair is
-// shared across blend/depth variants.
+// Fixed-function PSO state. It affects pipeline creation only, never HLSL codegen. Kept apart
+// from the shader keys so one compiled shader pair is shared across blend and depth variants.
 struct RenderStateKey {
     std::uint32_t blend_bits;       // bit27 dual-source alpha, bit28 constant
                                     // EFB alpha overwrite; PE_CMODE0/1 fields
@@ -199,23 +172,18 @@ struct RenderStateKey {
     std::uint8_t primitive_topology; // D3D12_PRIMITIVE_TOPOLOGY_TYPE value
     std::uint8_t reserved[7];
 
-    // Field-wise, deliberately NOT the byte-wise `key_bytes_equal` form.
+    // Field-wise, not the byte-wise `key_bytes_equal` form.
     //
-    // The decisive reason is the hash, not the padding. `PsoKey::hash()` — which
-    // is what `published_`, `in_flight_` and the frame PSO memo actually bucket on
-    // — mixes `blend_bits`, `zmode_bits` and the packed cull/pixfmt/topology word,
-    // and deliberately **excludes** `reserved`. Equality must partition the same
-    // way its hash does, so folding `reserved` into `operator==` would break the
-    // unordered-container contract: two keys with identical meaningful fields would
-    // hash equal and compare unequal, making an entry unreachable and turning a
-    // guaranteed hit into a miss plus a redundant descriptor rebuild.
+    // The reason is the hash. `PsoKey::hash()`, which is what `published_`, `in_flight_` and the frame PSO
+    // memo bucket on, mixes `blend_bits`, `zmode_bits` and the packed cull/pixfmt/topology word. It
+    // deliberately excludes `reserved`. Equality must partition the same way the hash does. If `reserved`
+    // took part in `operator==`, two keys with identical meaningful fields could hash equal yet compare
+    // unequal, which makes an entry unreachable.
     //
-    // That defect is currently masked rather than absent: `valid_pso_key()`
-    // (`pipeline_cache.cpp`) is the only source of disk-loaded keys and rejects any
-    // nonzero `reserved` byte, and every in-memory construction path starts from a
-    // value-initialised object. So the bytes are zero in practice. Relying on a
-    // validation rule to keep a comparison correct is the fragile part, and it is
-    // not worth ~15 bytes of SIMD width to keep that coupling.
+    // Today `valid_pso_key()` (`pipeline_cache.cpp`) is the only source of disk-loaded keys and rejects any
+    // nonzero `reserved` byte, and every in-memory path starts from a value-initialised object. So the bytes
+    // are zero in practice. Relying on that validation to keep the comparison correct is fragile, and about
+    // 15 bytes of SIMD width is not worth the coupling.
     [[nodiscard]] bool operator==(const RenderStateKey& other) const noexcept {
         return blend_bits == other.blend_bits &&
             zmode_bits == other.zmode_bits &&
@@ -232,22 +200,18 @@ struct PsoKey {
     std::uint64_t ps_hash;
     RenderStateKey render_state;
 
-    // Compares the same fields `hash()` mixes, and nothing else. A whole-struct
-    // byte compare would also fold in `render_state.reserved`, which `hash()`
-    // excludes — an equality must not be finer than its hash, or the entry becomes
-    // unreachable in `published_`/`in_flight_`/the frame memo.
+    // Compares the fields that `hash()` mixes, and nothing else. A whole-struct byte compare would also include
+    // `render_state.reserved`, which `hash()` excludes. Equality must not be finer than the hash, or the entry
+    // becomes unreachable in `published_`, `in_flight_` and the frame memo.
     [[nodiscard]] bool operator==(const PsoKey& other) const noexcept {
         return vs_hash == other.vs_hash &&
             ps_hash == other.ps_hash &&
             render_state == other.render_state;
     }
-    // Field-wise fold instead of a byte walk over sizeof(*this). `reserved` is
-    // always zero on every construction path — including disk-loaded persisted
-    // keys, which valid_pso_key() rejects unless every reserved byte is zero —
-    // so this partitions exactly the same equivalence classes as the defaulted
-    // operator== while replacing ~32 dependent multiply-xors with a handful of
-    // independent ones. Callers that need the value more than once per request
-    // should hold a MemoizedPsoKey instead of re-deriving it.
+    // Field-wise fold instead of a byte walk over sizeof(*this). `reserved` is zero on every construction path,
+    // including disk-loaded keys (valid_pso_key() rejects any nonzero reserved byte). This partitions the same
+    // equivalence classes as the defaulted operator==, with a few independent multiplies instead of ~32
+    // dependent ones. Callers that need the value more than once per request should hold a MemoizedPsoKey.
     [[nodiscard]] std::uint64_t hash() const {
         std::uint64_t hash = mix64(vs_hash);
         hash = combine64(hash, ps_hash);
@@ -310,8 +274,8 @@ struct MemoizedPsoKeyHasher {
     }
 };
 
-// Key builders — the only sanctioned construction path outside tests.  Each
-// applies the canonicalization rule against the current register state.
+// Key builders: the only construction path outside tests. Each applies the canonicalization rule against
+// the current register state.
 [[nodiscard]] PixelShaderKey build_pixel_shader_key(
     const GxState& state,
     unsigned efb_scale);

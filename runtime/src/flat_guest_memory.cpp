@@ -1,13 +1,12 @@
 #include "galaxy/flat_guest_memory.h"
 
 // GPLv3 source adaptation from WiiCompiled's
-// runtime/src/guest_flat_memory.cpp::{EnsureReservation, MapGuestView,
-// Initialize, HostPointer} at commit
+// runtime/src/guest_flat_memory.cpp::{EnsureReservation, MapGuestView, Initialize, HostPointer} at commit
 // 83463764b8acda394e058b0c689a10b8561fc380:
 // https://github.com/patchzyy/Wiicompiled/blob/83463764b8acda394e058b0c689a10b8561fc380/runtime/src/guest_flat_memory.cpp
-// Galaxy-specific changes: fixed RMGE01 MEM1/MEM2 extents, no Mario Kart MMIO
-// assumptions, no executable/deferred-read hooks yet, and strict unmapped
-// failure. No handler commits a previously unmapped guest page.
+// Galaxy-specific changes: fixed RMGE01 MEM1/MEM2 extents, no Mario Kart MMIO assumptions, no
+// executable or deferred-read hooks yet, and strict unmapped failure. No handler commits an unmapped
+// guest page.
 
 #ifndef NOMINMAX
 #define NOMINMAX
@@ -171,8 +170,8 @@ void initialize() {
     }
     g_guest_base = static_cast<std::byte*>(reservation);
 
-    // Both alias groups map the *same* section pages. Host consumers use the
-    // ordinary section view, so memory is not copied at a frame boundary.
+    // Both alias groups map the same section pages. Host consumers use the ordinary section view, so memory
+    // is not copied at a frame boundary.
     g_mem1 = create_section(kMem1Size);
     g_mem2 = create_section(kMem2Size);
     map_guest_alias(map_view_of_file3, g_mem1, 0x00000000u, kMem1Size);
@@ -255,18 +254,14 @@ void count_fault_page(std::uint32_t guest_address) noexcept {
     }
 }
 
-// x86-64 memory-operand emulation for fastmem faults. The generated module
-// accesses guest memory through plain loads and stores the compiler is free
-// to fold into arithmetic, merge, forward or vectorize, so a fault may land on
-// any instruction with one memory operand that clang emits for those
-// templates: mov/movbe/movzx/movsx/movsxd in both directions, immediate
-// stores, add/or/and/sub/xor/cmp/test with the memory operand as source or
-// destination, and the SSE/AVX moves (movss/movsd/movups/movaps/movdqu/
-// movdqa/movd/movq, pinsr/pextr) in legacy and VEX-128 encodings. A device
-// access wider than the device accepts is completed as ascending 4-byte
-// pieces (then 2, then 1). Anything else is reported and left to the default
-// path. A census of nine compiled shards (800k instructions) found exactly
-// these forms with two-register addressing.
+// x86-64 memory-operand emulation for fastmem faults. Generated code accesses guest memory through plain
+// loads and stores that the compiler may fold into arithmetic, merge, forward or vectorize. A fault can land
+// on any instruction with one memory operand that clang emits for those templates: mov/movbe/movzx/movsx/movsxd
+// in both directions, immediate stores, add/or/and/sub/xor/cmp/test with the memory operand as source or
+// destination, and the SSE/AVX moves (movss/movsd/movups/movaps/movdqu/movdqa/movd/movq, pinsr/pextr) in legacy
+// and VEX-128 encodings. A device access wider than the device accepts is completed as ascending 4-byte pieces
+// (then 2, then 1). Anything else is reported and left to the default path. A census of compiled shards found
+// exactly these forms with two-register addressing.
 enum class AluOp : std::uint8_t { None, Add, Or, And, Sub, Xor, Cmp, Test };
 
 struct DecodedAccess {
@@ -728,9 +723,8 @@ void note_unhandled(std::uint32_t guest_address, const std::uint8_t* code, const
         code[0], code[1], code[2], code[3], code[4], code[5], code[6], code[7], code[8], code[9]);
 }
 
-// Completes one access through the device path. A width the device does not
-// accept (a merged 8-byte store of two registers, a 16-byte vector move) is
-// completed as ascending pieces, which is the order the guest's separate
+// Completes one access through the device path. A width the device does not accept (a merged 8-byte store of
+// two registers, a 16-byte vector move) is completed as ascending pieces, the order the guest's separate
 // accesses had.
 bool fault_transfer(std::uint32_t guest_address, std::uint32_t size, bool write, std::byte* image) noexcept {
     const bool accepted = write
@@ -967,8 +961,8 @@ bool OwnerLease::acquire() {
     }
     try {
         initialize();
-        // Views persist across sequential owners; fresh guests start with
-        // the same zero-filled RAM image as the vector-backed path.
+        // Views persist across sequential owners; fresh guests start with the same zero-filled RAM image as the
+        // vector-backed path.
         std::memset(mem1_host_view(), 0, kMem1Size);
         std::memset(mem2_host_view(), 0, kMem2Size);
     } catch (...) {

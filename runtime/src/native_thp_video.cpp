@@ -347,11 +347,10 @@ s32 parse_headers(std::span<const u8> file, DecodeContext& context) noexcept {
   }
 }
 
-// Bit reader with a 64-bit cache. Bytes past the end read as zero and mark
-// the reader invalid once more bits than the stream holds have been consumed,
-// which is the observable behavior of the byte-at-a-time reader it replaces
-// (that one consumed the available bits before reporting EOF). The scalar
-// reader cost 4 to 6 ms per 640x368 frame on the simulation thread.
+// Bit reader with a 64-bit cache. Bytes past the end read as zero; the reader is
+// marked invalid once more bits than the stream holds have been consumed. The
+// byte-at-a-time reader this replaces consumed the available bits before reporting
+// EOF, and this matches that behavior.
 class BitReader {
 public:
   BitReader(std::span<const u8> data, size_t byteOffset) noexcept

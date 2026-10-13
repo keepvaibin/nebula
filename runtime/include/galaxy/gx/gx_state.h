@@ -1,10 +1,10 @@
 #pragma once
 
 // GxState: the full emulated GX register file (CP / XF / BP) plus decoded
-// views and dirty tracking.  Mutated only by FifoParser register loads;
+// views and dirty tracking. Mutated only by FifoParser register loads;
 // read by GxBackend to build shader keys, render state, and constants.
 //
-// No Windows/D3D12 includes — unit-testable offline.
+// No Windows/D3D12 includes, so it is unit-testable offline.
 
 #include "galaxy/gx/gx_bitfields.h"
 
@@ -62,7 +62,7 @@ public:
     [[nodiscard]] std::uint32_t bp(std::uint8_t reg) const {
         return bp_[reg];
     }
-    // Raw XF memory base (0x2000 words) — used for bulk palette snapshots
+    // Raw XF memory base (0x2000 words): used for bulk palette snapshots
     // (memcpy instead of a per-word loop on the per-draw hot path).
     [[nodiscard]] const std::uint32_t* xf_raw() const {
         return xf_.data();
@@ -71,25 +71,21 @@ public:
     // --- XF matrix-palette write tracking -----------------------------------
     //
     // Tracks which parts of the XF matrix palette the guest has written since
-    // the renderer last took a snapshot of it. `GxBackend::flush_draw_state`
-    // consumes this as a single question — *did anything in the palette move?* —
-    // and the answer decides whether the frame's existing GPU ring allocation
-    // for the palette can be reused or a fresh one is needed.
+    // the renderer last took a snapshot of it. GxBackend::flush_draw_state asks
+    // one question: did anything in the palette change? The answer decides whether
+    // the frame's existing GPU ring allocation for the palette can be reused.
     //
-    // Be precise about what this buys, because an earlier version of this
-    // comment claimed more: the snapshot itself is always the **whole** 6656
-    // bytes (`xf_raw()[0 .. kMatrixPaletteWords)`). A fresh ring allocation has
-    // no inherited contents, so its head and tail have to be written even when
-    // only one 4-row matrix changed. The saving is the *allocation*, not the
-    // copy: SMG re-loads matrices per object via LOAD_INDX, but a draw whose
-    // matrices did not move can keep the previous snapshot's GPU address and
-    // skip both the allocation and the memcpy.
+    // The snapshot is always the whole 6656 bytes (xf_raw()[0 .. kMatrixPaletteWords)).
+    // A fresh ring allocation has no inherited contents, so its head and tail must be
+    // written even when one 4-row matrix changed. The saving is the allocation, not the
+    // copy: the game reloads matrices per object via LOAD_INDX, and a draw whose matrices
+    // did not move keeps the previous snapshot's GPU address and skips both the allocation
+    // and the memcpy.
     //
-    // Granularity is 32 words: 128 bytes, which is a whole number of the 16-byte
-    // float4s the shader indexes (`mtx_palette[base + (w >> 2)]`), so a chunk
-    // boundary can never split an element the shader reads. That property is
-    // what keeps this safe to extend to a span-limited copy later if one is ever
-    // justified; nothing in the tree copies a partial span today.
+    // Granularity is 32 words (128 bytes), a whole number of the 16-byte float4s the shader
+    // indexes (mtx_palette[base + (w >> 2)]). A chunk boundary therefore never splits an
+    // element the shader reads. This keeps a span-limited copy safe to add later. No code
+    // copies a partial span today.
     static constexpr std::uint32_t kMatrixPaletteWords = 0x0680u;  // XF 0x0000-0x067F
     static constexpr std::uint32_t kMatrixPaletteChunkWords = 32u;
     static constexpr std::uint32_t kMatrixPaletteChunkCount =

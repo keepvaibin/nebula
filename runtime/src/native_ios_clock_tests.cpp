@@ -24,8 +24,8 @@ int main() {
         [](NativeIosClockSample&) noexcept {});
     if (wall_calls != 5u || unavailable.before_ns != 140u || unavailable.after_ns != 150u ||
         unavailable.cpu_valid || unavailable.cycles_valid) return 3;
-    // Exact ordinary endpoints still retain the 5 ms wall anomaly without
-    // fabricated counter validity. Detailed brackets retain their old bounds.
+    // Exact ordinary endpoints keep the 5 ms wall anomaly without a counter validity.
+    // Detailed brackets keep their bounds.
     NativeIosAnomalyLedger ledger;
     NativeIosAnomalyRecord record{};
     record.entry.before_ns = record.entry.after_ns = 1u;

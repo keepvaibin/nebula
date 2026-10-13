@@ -23,23 +23,16 @@ inline void fill_vs_projection(const GxState& state, float out[4][4]) {
     const float F = std::bit_cast<float>(state.xf(static_cast<std::uint16_t>(xf::kProjectionBase + 5u)));
     const std::uint32_t type = state.xf(static_cast<std::uint16_t>(xf::kProjectionBase + 6u));
 
-    // GX NDC z range is [-1 (near), 0 (far)].  We map it to D3D [0, 1]
-    // exactly the way Dolphin does (VertexShaderGen.cpp): NEGATE the GX
-    // clip z → ndc_d3d = -ndc_gx ∈ [0 (far), 1 (near)] — a REVERSED-Z
-    // buffer.  Two reasons this is the only robust scheme:
-    //   1. The GX far plane lands at ndc 0, AWAY from the clip boundary.
-    //      (The boot-134 z_gx+1 mapping put far at exactly ndc 1.0, where
-    //      float error clipped SMG's far-plane depth-clear quad and the
-    //      skybox — [vtx-clip] showed ndc 1.00033..1.00078.)
-    //   2. It composes with the XF viewport zRange/farZ depth range and
-    //      the FLIPPED depth compare funcs (see pipeline_cache) to give
-    //      hardware-exact pass/fail behavior.
-    // Dolphin's (1 - 1e-7) epsilon keeps exactly-on-far geometry inside
-    // the clip volume (their "Sonic" hack; we keep DepthClipEnable=TRUE).
+    // GX NDC z is [-1 (near), 0 (far)]. It maps to D3D [0, 1] by negating the GX clip z,
+    // so ndc_d3d = -ndc_gx is in [0 (far), 1 (near)]: a reversed-Z buffer, as in Dolphin's
+    // VertexShaderGen.cpp. The GX far plane lands at ndc 0, away from the clip boundary.
+    // Mapping far to 1.0 let float error clip SMG's far-plane depth-clear quad and the skybox.
+    // This composes with the XF viewport depth range and the flipped depth compare functions
+    // (see pipeline_cache). Dolphin's (1 - 1e-7) factor keeps far-plane geometry inside the
+    // clip volume; DepthClipEnable stays TRUE.
     constexpr float kFarEps = 1.0f - 1e-7f;
     if (type == 0) {
-        // Perspective.  GX: clip z = z*E + F, clip w = -z.
-        // z_d3d_clip = -(z*E + F) * (1-1e-7).
+        // Perspective: GX clip z = z*E + F, clip w = -z. D3D clip z = -(z*E + F) * (1 - 1e-7).
         out[0][0] = A;
         out[0][2] = B;    // column 2 of row 0 (pre-divide shear)
         out[1][1] = C;
@@ -48,7 +41,7 @@ inline void fill_vs_projection(const GxState& state, float out[4][4]) {
         out[2][3] = -F * kFarEps;
         out[3][2] = -1.0f;
     } else {
-        // Orthographic.  GX: clip z = z*E + F, clip w = 1.  Same negation.
+        // Orthographic: GX clip z = z*E + F, clip w = 1. Same negation.
         out[0][0] = A;
         out[0][3] = B;
         out[1][1] = C;
@@ -97,9 +90,8 @@ inline void refresh_vs_inline_matrices(const GxState& state, GxVsConstants& out)
 
 }
 
-// Fill GxVsConstants for the current GxState.
-// `palette_snapshot_index` is the index of this frame's XF matrix upload
-// within the matrix ring (written separately by GxBackend).
+// Fills GxVsConstants for the current GxState. `palette_snapshot_index` is the index of
+// this frame's XF matrix upload in the matrix ring (written by GxBackend).
 inline void fill_vs_constants(
     const GxState& state,
     std::uint32_t palette_snapshot_index,
@@ -113,7 +105,7 @@ inline void fill_vs_constants(
     out.num_texgens = gm.num_texgens;
     out.num_chans   = gm.num_color_chans;
 
-    // Per-vertex position matrix index flag: if VCD_LO bit 0 is set.
+    // Per-vertex position matrix index flag: VCD_LO bit 0.
     const std::uint32_t vcd_lo = state.cp(cp::kVcdLo);
     const bool per_vertex_posmtx = (vcd_lo & 1u) != 0;
 
@@ -137,7 +129,7 @@ inline void fill_vs_constants(
             static_cast<std::uint16_t>(xf::kPostTexGenBase + i));
     }
 
-    // Ambient and material colors (RGBA8 packed → 0..1 float[4]).
+    // Ambient and material colors, RGBA8 packed, converted to 0..1 float[4].
     for (unsigned i = 0; i < kMaxColorChannels; ++i) {
         // XF 0x100A / 0x100B = ambient color0 / color1 (RGBA8 packed).
         const std::uint32_t amb_raw = state.xf(
@@ -157,9 +149,9 @@ inline void fill_vs_constants(
 
     out.mtx_palette_base = palette_snapshot_index;
 
-    // Default matrix indices (CP MatrixIndexA/B) — resolved per texgen in the
-    // VS when the vertex stream carries no per-vertex index (Dolphin resolves
-    // the same registers into I_TEXMATRICES on the CPU instead).
+    // Default matrix indices (CP MatrixIndexA/B). The VS resolves them per texgen when the
+    // vertex stream has no per-vertex index. Dolphin resolves the same registers on the CPU
+    // into I_TEXMATRICES.
     out.matrix_index_a = state.cp(cp::kMatrixIndexA);
     out.matrix_index_b = state.cp(cp::kMatrixIndexB);
 
@@ -199,9 +191,8 @@ struct VsConstantsCpuCache {
 
     const GxVsConstants& update(const GxState& state, std::uint32_t dirty,
         unsigned current_scale, bool frame_bindings_dirty) {
-        // Exact matrix-only admission keeps all invariant CP/XF/BP-derived
-        // fields from the last complete image. Other dirty combinations and
-        // frame/scale changes take the unchanged full preparation.
+        // Matrix-only admission keeps the CP/XF/BP-derived fields from the last complete image.
+        // Other dirty combinations and frame or scale changes take the full preparation path.
         if (valid && !frame_bindings_dirty && efb_scale == current_scale &&
             dirty == GxState::kDirtyXfMatrices) {
             refresh_vs_inline_matrices(state, constants);

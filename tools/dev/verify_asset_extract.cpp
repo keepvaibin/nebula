@@ -1,8 +1,6 @@
-// Standalone, throwaway verification tool (not part of the CMake build):
-// loads a real FileSelect.arc from the user's own game dump and dumps
-// decoded texture stats + a PPM, to empirically cross-check
-// game_asset_extract.cpp against the independently-validated Python
-// reference implementation before wiring it into the renderer.
+// Standalone verification tool, not part of the CMake build. It loads a FileSelect.arc
+// from a local game dump, prints decoded texture stats and writes a PPM. Use it to
+// compare game_asset_extract.cpp with the Python reference implementation.
 #include "galaxy/gx/game_asset_extract.h"
 
 #include <cstdio>

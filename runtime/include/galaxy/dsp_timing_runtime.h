@@ -11,12 +11,11 @@
 
 namespace galaxy::dsp_timing_runtime {
 
-// These types define the runtime side of an exact timing-key retirement
-// transaction. They are deliberately not installed in DspContext or called by
-// generated code yet: doing so is only correct once every lowering path can
-// supply every field represented here and commit immediately before its
-// control transfer. In particular, none of these types is a production-timing
-// capability bit or a worker-pacing mechanism.
+// These types define the runtime side of an exact timing-key retirement transaction.
+// They are not installed in DspContext or called by generated code yet. Installing them
+// requires that every lowering path supplies every field and commits immediately before
+// its control transfer. None of these types is a production-timing capability bit or a
+// worker-pacing mechanism.
 
 enum class DspTimingBundleKind : std::uint8_t {
     Standalone,
@@ -87,11 +86,11 @@ inline constexpr std::uint8_t kDspTimingAllMemoryBits =
 inline constexpr std::uint32_t kDspTimingRuntimePlanContractVersion = 2u;
 inline constexpr std::size_t kDspTimingResolverIdentityBytes = 20u;
 
-// This is install-time validated metadata, not a runtime decoder result. The
-// Rust resolver derives it from the decoded instruction and binds it into the
-// authenticated plan identity. Runtime validation below checks internal
-// consistency only; exact opcode authorization still requires lookup of that
-// resolver identity in the authenticated timing contract.
+// Install-time validated metadata, not a runtime decoder result. The Rust resolver
+// derives it from the decoded instruction and binds it into the authenticated plan
+// identity. Runtime validation checks internal consistency only; exact opcode
+// authorization requires lookup of that resolver identity in the authenticated timing
+// contract.
 enum class DspTimingInstructionSemantic : std::uint8_t {
     Ordinary,
     ConditionalAlways,
@@ -119,11 +118,10 @@ struct DspTimingInstallPlanBinding {
         DspTimingHardwareLoopSite::NotLoopEnd};
 };
 
-// Exact entry obtained from the independently authenticated generated timing
-// table. The 20-byte value is a deterministic SHA-1 table identity, never an
-// artifact-integrity primitive or authentication mechanism. The future staged
-// producer/signer and generated-source hash remain the security authority;
-// this entry only makes the runtime comparison full-width and non-optional.
+// Exact entry from the independently authenticated generated timing table. The 20-byte
+// value is a deterministic SHA-1 table identity, not an integrity or authentication
+// mechanism. The staged producer/signer and generated-source hash are the security
+// authority; this entry makes the runtime comparison full-width and non-optional.
 struct DspTimingAuthorizedPlanEntry {
     std::uint32_t contract_version{};
     std::array<std::uint8_t, kDspTimingResolverIdentityBytes>
@@ -133,12 +131,11 @@ struct DspTimingAuthorizedPlanEntry {
 struct DspTimingInstructionPlan {
     DspTimingInstructionIdentity identity{};
     DspTimingInstallPlanBinding binding{};
-    // The install-time Rust resolver derives every encoded architectural
-    // memory-operand slot from the decoded instruction and binds this mask into
-    // its authenticated identity. A commit succeeds only after every derived
-    // slot has supplied one exact address and direction. Slots are operands,
-    // not host-helper call counts; dynamically coalesced dual loads still have
-    // primary and secondary encoded slots.
+    // The install-time Rust resolver derives every encoded memory-operand slot from the
+    // decoded instruction and binds this mask into the authenticated identity. A commit
+    // succeeds only after every derived slot supplies one exact address and direction.
+    // Slots are operands, not helper call counts; dynamically coalesced dual loads still
+    // have primary and secondary slots.
     std::uint8_t expected_memory_slots{};
     // Canonical slot-indexed decoder authority. Presence must exactly equal
     // expected_memory_slots; every record must match its authorized space and
@@ -159,15 +156,13 @@ struct DspTimingPreState {
     std::array<std::uint16_t, 4> address_registers{};
     std::array<std::int16_t, 4> index_registers{};
     std::array<std::uint16_t, 4> wrap_registers{};
-    // These are logical depths required by timing-contract schema v2, not the
-    // wrapping hardware-stack pointers currently stored in DspContext. Zero is
-    // therefore exact empty/nonempty evidence, but the reviewed upper bound of
-    // a logical depth is unresolved; this foundation deliberately does not
-    // guess that it is 31 or 32. Stack 0 carries both call return addresses
-    // and the hardware-loop body target; a hardware-loop edge requires exact
-    // nonzero logical depths for stacks 0, 2, and 3. Until exact logical-depth tracking exists,
-    // generated code cannot construct this pre-state and production timing
-    // remains unavailable. Indices are call, data, loop-address, loop-counter.
+    // Logical depths required by timing-contract schema v2, not the wrapping hardware-stack
+    // pointers stored in DspContext. Zero is exact empty/nonempty evidence. The upper bound
+    // of a logical depth is not known yet, so none is assumed here. Stack 0 holds both call
+    // return addresses and the hardware-loop body target; a hardware-loop edge requires exact
+    // nonzero logical depths for stacks 0, 2 and 3. Until exact logical-depth tracking exists,
+    // generated code cannot construct this pre-state and production timing stays unavailable.
+    // Indices are call, data, loop-address, loop-counter.
     std::array<std::uint8_t, 4> stack_depths{};
     bool external_interrupt_pending{};
     bool accelerator_interrupt_pending{};
@@ -652,10 +647,9 @@ public:
     DspTimingRetirementLedger& operator=(
         DspTimingRetirementLedger&&) = delete;
 
-    // This is a fresh-ledger reset only. A nonzero retirement count and prior
-    // identity are provenance-bearing checkpoint data, not structural state;
-    // no restore API is exposed until a provider authenticates the count and
-    // the full previously decoded plan/table identity.
+    // Fresh-ledger reset only. A nonzero retirement count and prior identity are checkpoint
+    // data, not structural state. No restore API is exposed until a provider authenticates
+    // the count and the full previously decoded plan/table identity.
     [[nodiscard]] bool reset() noexcept {
         if (active_.has_value()) {
             sticky_fail(
@@ -1035,10 +1029,10 @@ private:
     int uncaught_exceptions_at_begin_{};
 };
 
-// Pure checked arithmetic for converting an already-resolved positive DSP
-// cycle grant into the RuntimeTimeline tick domain. This neither reads the host
-// clock nor publishes a deadline, and is intentionally not connected to the
-// native DSP worker. The caller must authenticate the clock and timing rule.
+// Pure checked arithmetic that converts a resolved positive DSP cycle grant into
+// RuntimeTimeline ticks. It does not read the host clock or publish a deadline, and it is
+// not connected to the native DSP worker. The caller must authenticate the clock and
+// timing rule.
 enum class DspCycleGrantFailure : std::uint8_t {
     None,
     InvalidClock,
@@ -1113,10 +1107,10 @@ struct DspTimingScaleResult {
     bool quotient_overflow{};
 };
 
-// Portable 128/64 restoring division. MSVC has no standard `__int128`; this
-// fixed 128-step path supports internal checkpoint arithmetic checks and the
-// rare overflowing-QPC-product fallback on clang-cl. It is never checkpoint
-// authentication or part of the per-instruction grant path.
+// Portable 128/64 restoring division. MSVC has no standard __int128. This fixed 128-step
+// path serves internal checkpoint arithmetic checks and the overflowing-QPC-product
+// fallback on clang-cl. It is not checkpoint authentication and not on the per-instruction
+// grant path.
 [[nodiscard]] constexpr DspTimingScaleResult divide_u128_by_u64(
     DspTimingUnsigned128 dividend,
     std::uint64_t divisor) noexcept {
@@ -1164,10 +1158,10 @@ struct DspTimingScaleResult {
         dsp_clock_hz);
 }
 
-// Internal/test-only arithmetic validation. Expected clock and anchor are
-// immutable inputs from a hypothetical trusted provider. Passing this check
-// proves only quotient/remainder consistency; even a forged history can be
-// recomputed consistently. No accumulator restore API consumes this result.
+// Internal/test-only arithmetic validation. Expected clock and anchor are immutable inputs
+// from a trusted provider. Passing shows only quotient/remainder consistency; a forged
+// history recomputed consistently also passes. No accumulator restore API consumes this
+// result.
 [[nodiscard]] constexpr DspCycleCheckpointArithmeticFailure
 validate_cycle_checkpoint_arithmetic(
     const DspCycleGrantState& state,
@@ -1204,9 +1198,9 @@ validate_cycle_checkpoint_arithmetic(
     return DspCycleCheckpointArithmeticFailure::None;
 }
 
-// Pure transition used by the accumulator after it already owns a fresh,
-// valid state. Tests call it directly at u64 boundaries that cannot be reached
-// by iterating. It neither installs checkpoint state nor grants authority.
+// Pure transition used by the accumulator once it owns a fresh, valid state. Tests call it
+// directly at u64 boundaries that iteration cannot reach. It does not install checkpoint
+// state or grant authority.
 [[nodiscard]] constexpr std::optional<DspCycleGrant>
 advance_owned_cycle_state(
     const DspCycleGrantState& state,
@@ -1279,9 +1273,8 @@ public:
         (void)reset_fresh(dsp_clock_hz, timeline_anchor_ticks);
     }
 
-    // Starts a new zero-history timeline. This is deliberately not checkpoint
-    // restore: total cycles and remainder are always cleared, and changing the
-    // clock or anchor discards the prior history.
+    // Starts a new zero-history timeline. This is not checkpoint restore: total cycles and the
+    // remainder are cleared, and changing the clock or anchor discards prior history.
     [[nodiscard]] bool reset_fresh(
         std::uint64_t dsp_clock_hz,
         std::uint64_t timeline_anchor_ticks) noexcept {

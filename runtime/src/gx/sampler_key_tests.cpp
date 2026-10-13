@@ -202,8 +202,8 @@ int main() {
     passed &= expect(heap_caches[0].get_or_allocate(table_b).created,
         "teardown clears retained heap identity even for unchanged settings");
 
-    // Production reset(config) keeps descriptors, but historical tables must
-    // not consume capacity needed by a legal new frame's working set.
+    // Production reset(config) keeps descriptors, but retained tables must not consume capacity needed by a legal
+    // new frame's working set.
     galaxy::gx::SamplerTableCache lifetime_cache;
     bool lifetime_fit = true;
     for (unsigned frame = 0u; frame < 8u; ++frame) {

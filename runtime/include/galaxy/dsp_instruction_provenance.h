@@ -11,9 +11,8 @@
 
 namespace galaxy {
 
-// Inert, test-owned evidence for the exact generated instruction block that
-// entered. This is deterministic install-time metadata, not runtime decoding,
-// artifact authentication, a timing-profile lookup, or a production capability.
+// Test-owned record of the generated instruction block that entered. This is install-time metadata, not
+// runtime decoding, artifact authentication, a timing-profile lookup or a production capability.
 enum class DspGeneratedInstructionBundleKind : std::uint8_t {
     Standalone,
     Parallel,
@@ -22,8 +21,7 @@ enum class DspGeneratedInstructionBundleKind : std::uint8_t {
 struct DspGeneratedInstructionIdentity {
     std::uint16_t fetch_address{};
     std::uint16_t opcode_word{};
-    // Exact optional second fetched word. No immediate/address semantic is
-    // inferred from its presence or value.
+    // The optional second fetched word. No immediate or address meaning is inferred from it.
     std::uint16_t second_word{};
     bool has_second_word{};
     DspGeneratedInstructionBundleKind bundle{
@@ -68,9 +66,8 @@ struct DspGeneratedMemoryOperandPlan {
     bool operator==(const DspGeneratedMemoryOperandPlan&) const = default;
 };
 
-// Fixed-width generated metadata. Only the first operand_count entries are
-// present; the remainder must be exact value-initialized descriptors. This is
-// install-time decoder output, never runtime opcode decoding.
+// Fixed-width generated metadata. Only the first operand_count entries are meaningful; the
+// rest must be value-initialized descriptors. Install-time decoder output only.
 struct DspGeneratedMemoryOperandPlanSet {
     std::array<DspGeneratedMemoryOperandPlan, 3> operands{};
     std::uint8_t operand_count{};
@@ -87,9 +84,8 @@ struct DspRawResolvedMemoryOperand {
     bool operator==(const DspRawResolvedMemoryOperand&) const = default;
 };
 
-// A wrapping hardware cursor is not a logical stack depth. The observer keeps
-// the exact top register and exact five-bit cursor separately and never infers
-// how many pushes are logically live.
+// A wrapping hardware cursor is not a logical stack depth. The observer tracks the exact top
+// register and the five-bit cursor separately and never infers the live push count.
 struct DspRawStackCursorState {
     std::uint16_t top{};
     std::uint8_t cursor{};
@@ -123,10 +119,8 @@ struct DspRawExternalVectorState {
     bool operator==(const DspRawExternalVectorState&) const = default;
 };
 
-// DspContext has no reviewed accelerator pending/exception latch. Existing IFX
-// registers and accelerator_reads_stopped are partial operational state, not
-// equivalent evidence, so the raw observer can truthfully report only
-// Unavailable.
+// DspContext has no reviewed accelerator pending or exception latch. IFX registers and accelerator_reads_stopped
+// are partial state, not an equivalent record, so the raw observer can only report Unavailable.
 enum class DspRawAcceleratorState : std::uint8_t {
     Unavailable,
 };
@@ -457,8 +451,8 @@ resolve_generated_memory_operand_plan(
 
 }  // namespace dsp_instruction_provenance_detail
 
-// Single-execution-thread, test-owned recorder backed by caller-owned bounded
-// storage. Product DspContext instances leave their observer pointer null.
+// Single-thread, test-owned recorder over caller-owned bounded storage. Product DspContext
+// instances leave their observer pointer null.
 class DspRawInstructionBoundaryObserver {
 public:
     explicit DspRawInstructionBoundaryObserver(
@@ -474,9 +468,8 @@ public:
     DspRawInstructionBoundaryObserver& operator=(
         DspRawInstructionBoundaryObserver&&) = delete;
 
-    // Structural recorder entry used by isolated ledger unit tests. Generated
-    // execution always enters through begin_tracked(), which additionally
-    // binds and later rechecks the DspContext plus logical-depth epoch. Neither
+    // Structural recorder entry for isolated ledger unit tests. Generated execution enters through
+    // begin_tracked(), which also binds and rechecks the DspContext and logical-depth epoch. Neither
     // path is a production timing capability.
     [[nodiscard]] DspRawInstructionBoundaryToken begin(
         const DspGeneratedInstructionIdentity& identity,
@@ -804,8 +797,8 @@ public:
         const DspGeneratedInstructionIdentity& identity,
         const DspGeneratedMemoryOperandPlanSet& memory_plan) noexcept
         : observer_(observer) {
-        // Product mode is the null branch: do not query exception state and do
-        // not touch any raw DSP/host state unless a test observer is installed.
+        // Product mode is the null branch: it does not query exception state or touch DSP or host state
+        // unless a test observer is installed.
         if (observer_ != nullptr) {
             context_ = &context;
             uncaught_exceptions_at_begin_ = std::uncaught_exceptions();

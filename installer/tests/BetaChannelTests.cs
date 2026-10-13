@@ -56,8 +56,8 @@ namespace Nebula.Setup
             Expect("0.1.1-beta.1", "0.1.1-beta.2", stable, beta, preview);
             Expect("0.1.1-beta.2", null, stable, beta, preview);
             Expect("0.2.0", null, beta, preview, stable);
-            // Channel filtering still works if a beta is accidentally aliased to
-            // the ordinary name. Publishing such an alias would affect OLD clients.
+            // Channel filtering still works if a beta is accidentally aliased to the ordinary name.
+            // Publishing such an alias would affect old clients.
             Expect("0.1.0-preview.2", null, Release("0.9.0-beta.1", false, "Nebula-Setup.exe", true));
             Expect("0.1.1-beta.1", null, Release("0.1.1-beta.3", false, "Nebula-Setup.exe", true));
             Expect("0.1.1-beta.1", null, Release("0.1.1-beta.3", true, "Nebula-Beta-Setup.exe", true));

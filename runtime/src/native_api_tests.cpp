@@ -2007,7 +2007,7 @@ int main() {
                 galaxy::kCallReturnCheckpointProfileRankBias,
         "closure checkpoint profiling reports an exact non-guest pseudo edge only inside the VI window");
 
-    // Bit zero was the retired fast-cache flag.  Even a populated cache must
+    // Bit zero is reserved, not a fast-cache flag. Even a populated cache must
     // reach the service callback: that is the sole owner of deadline servicing
     // and the exception-intercept decision.
     CachedCallProbe retired_fast_cache_probe{};

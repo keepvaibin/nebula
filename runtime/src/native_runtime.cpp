@@ -201,11 +201,9 @@ std::uint64_t current_thread_cpu_time_100ns() noexcept {
     return kernel_ticks.QuadPart + user_ticks.QuadPart;
 }
 
-// Unlike GetThreadTimes, this counter is fine-grained enough to distinguish
-// short callback work from a long period in which the simulation thread did
-// not execute. It is diagnostic evidence only: cycle counts are intentionally
-// not converted into a duration because Windows does not promise a fixed
-// frequency for this API across every supported processor.
+// Unlike GetThreadTimes, this counter is fine-grained enough to tell short callback work from a
+// long period without simulation-thread execution. Cycle counts are not converted to a duration,
+// because Windows does not promise a fixed frequency for this counter on every processor.
 std::uint64_t current_thread_cycle_count() noexcept {
     g_census_cycle_calls.fetch_add(1u, std::memory_order_relaxed);
     ULONG64 cycles{};
@@ -224,8 +222,7 @@ class RuntimeQuitRequested final {};
 // sites only; scheduler targets are never executed recursively from this list.
 std::vector<std::uint32_t> g_live_ctx_stack;
 
-// Retired nested-resume diagnostic. It intentionally remains empty while old
-// trace formatting is removed separately from the flat scheduler correction.
+// Retired nested-resume diagnostic. Always empty.
 std::vector<std::uint32_t> g_active_nested_ctx_stack;
 
 thread_local std::uint64_t g_branch_checkpoint_callback_depth = 0u;
@@ -278,8 +275,7 @@ std::uint32_t innermost_live_parent_context(std::uint32_t current_context) {
 }
 
 constexpr std::uint32_t kGuestOsContextBytes = 0x1C4u;
-// RMGE01 bring-up scaffolding: probe rosters identify these fixed
-// OSThread/OSContext addresses during the current boot milestone.
+// RMGE01 bring-up probe: fixed OSThread/OSContext addresses.
 constexpr std::uint32_t kRmge01MainThreadContext = 0x80650878u;
 constexpr std::uint32_t kRmge01JasAudioThreadContext = 0x807ACCA0u;
 constexpr std::uint32_t kRmge01SchedulerIdleContext = 0x80650C90u;
@@ -400,14 +396,12 @@ galaxy::scheduler::PendingContextTransfer g_pending_os_load_context;
 galaxy::scheduler::PendingGuestSetCurrentContexts
     g_pending_os_set_current_contexts;
 
-// ── Native hardware timeline ─────────────────────────────────────────────
-// RuntimeTimeline converts the monotonic host counter into the Wii 60.75 MHz
-// domain. VI uses immutable periodic deadlines in that one domain. Checkpoint
-// counts below remain bounded probe heuristics for non-VI devices only; they
-// never create or re-phase a VI edge. The VI consumer may coalesce an exact,
-// contiguous backlog of already-due level-triggered edges after validating
-// their periodic identities; that is audited separately from interrupt
-// delivery.
+// --- Native hardware timeline ---
+// RuntimeTimeline converts the monotonic host counter into the Wii 60.75 MHz time base. VI uses
+// immutable periodic deadlines in that domain. Checkpoint counts are bounded probe heuristics for
+// non-VI devices only and never create or re-phase a VI edge. The VI consumer may coalesce an exact,
+// contiguous backlog of already-due level-triggered edges after validating their periodic identities.
+// Coalescing is separate from interrupt delivery.
 constexpr std::uint64_t kWiiTimeBaseHz        = 60'750'000ull;
 constexpr std::uint64_t kDefaultTicksPerCheckpoint = 50ull;
 constexpr std::uint64_t kViRetracePeriodTicks = kWiiTimeBaseHz / 60ull;  // 60 Hz
@@ -641,13 +635,9 @@ std::string hexadecimal(std::uint32_t value);
 struct RuntimeState;
 void join_native_thp_video_decode(RuntimeState& state);
 
-// ─── THP video decode-ahead ──────────────────────────────────────────────────
-// THPSimplePlayerWrapper::videoDecode hands the frame's JPEG payload to one
-// worker and returns at once; the decoded planes land in guest RAM when the
-// simulation thread joins the job, which it does before every GX frame
-// submission (the planes are only ever read by the renderer) and before the
-// next decode. The decode overlaps the game's own frame work instead of
-// stalling it. GALAXY_NATIVE_THP_ASYNC_DECODE=0 restores the inline decode.
+// THPSimplePlayerWrapper::videoDecode hands the frame's JPEG payload to one worker and returns. The
+// decoded planes are written to guest RAM when the simulation thread joins the job, before every GX
+// frame submission and before the next decode. GALAXY_NATIVE_THP_ASYNC_DECODE=0 decodes inline.
 class NativeThpAsyncDecoder {
 public:
     struct Job {
@@ -761,19 +751,17 @@ bool native_thp_async_decode_enabled() {
     return cached_env_gate(cached, "GALAXY_NATIVE_THP_ASYNC_DECODE", true);
 }
 
-// ─── Simulation-thread sampling profiler (GALAXY_SIM_PROFILE=1) ──────────────
-// A below-normal thread suspends the simulation thread every
-// GALAXY_SIM_PROFILE_INTERVAL_US microseconds (default 1000), reads its
-// register context and classifies the sample:
+// --- Simulation-thread sampling profiler (GALAXY_SIM_PROFILE=1) ---
+// A below-normal thread suspends the simulation thread every GALAXY_SIM_PROFILE_INTERVAL_US
+// microseconds (default 1000), reads its register context and classifies the sample:
 //   - running or blocked (QueryThreadCycleTime advanced since the last sample);
-//   - by instruction pointer: a translated guest function (module function
-//     records sorted by native entry), the runtime image (16-byte buckets), or
-//     another module (CRT, ntdll, kernel32: memcpy, waits, exception unwinds);
-//   - by the first guest frame on the stack, so host and foreign time is also
-//     charged to the guest function that called into the runtime;
+//   - by instruction pointer: a translated guest function (module function records sorted by native
+//     entry), the runtime image (16-byte buckets), or another module (CRT, ntdll, kernel32);
+//   - by the first guest frame on the stack, so host and foreign time is charged to the guest
+//     function that called into the runtime;
 //   - blocked samples by the innermost runtime frame (the wait site).
-// Printed at shutdown as [sim-profile*] lines; runtime and system addresses
-// resolve through dbghelp when NebulaRuntime.pdb sits beside the executable.
+// Printed at shutdown as [sim-profile*] lines; runtime and system addresses resolve through dbghelp
+// when NebulaRuntime.pdb sits beside the executable.
 class SimulationProfiler {
 public:
     ~SimulationProfiler() {
@@ -1099,10 +1087,9 @@ private:
         if (timer != nullptr) CloseHandle(timer);
     }
 
-    // The target is suspended during the walk, so nothing here may take a
-    // lock it could hold (RtlLookupFunctionEntry takes the loader lock; a
-    // walk through it deadlocked a boot). The unwind tables of every loaded
-    // image are read from the images themselves and cached while the target
+    // The target is suspended during the walk, so nothing here may take a lock it could hold
+    // (RtlLookupFunctionEntry takes the loader lock, and a walk through it deadlocked). The unwind
+    // tables of every loaded image are read from the images themselves and cached while the target
     // runs; RtlVirtualUnwind itself only reads memory.
     struct ImageTables {
         std::uintptr_t base{};
@@ -1155,12 +1142,10 @@ private:
         }
         return nullptr;
     }
-    // RtlVirtualUnwind reads the stack slots its unwind codes name. A frame
-    // caught mid-prologue or with no valid unwind state yields a garbage RSP,
-    // and unwinding the next frame from it faulted inside ntdll (crash dump
-    // of 2026-10-11: SimulationProfiler::run -> RtlVirtualUnwind ->
-    // RtlpUnwindPrologue reading address 9), taking the game down. Each step
-    // is guarded and every unwound RSP must rise strictly below the stack base.
+    // RtlVirtualUnwind reads the stack slots its unwind codes name. A frame caught mid-prologue or with
+    // no valid unwind state yields a garbage RSP, and unwinding from it faulted inside ntdll
+    // (RtlpUnwindPrologue reading address 9). Each step is guarded and every unwound RSP must rise
+    // strictly below the stack base.
     static bool guarded_virtual_unwind(std::uintptr_t image_base,
                                        const RUNTIME_FUNCTION* function,
                                        CONTEXT* ctx) noexcept {
@@ -1326,7 +1311,7 @@ void require_context_transfer_cleanup() {
 
 bool take_pending_flat_transfer(RuntimeState& state, std::uint32_t& transfer_address);
 
-// ── Cooperative fiber scheduler ─────────────────────────────────────────
+// --- Cooperative fiber scheduler ---
 std::string format_context_stack(const std::vector<std::uint32_t>& stack) {
     std::ostringstream output;
     output << '[';
@@ -1459,8 +1444,8 @@ enum FrameActivityCounter : std::size_t {
     kFrameActivityCount,
 };
 
-// Diagnostic-only fixed owner/outcome counters, single simulation writer.
-// Raw RDTSC only: no rank bias, table truncation, allocations or hot output.
+// Diagnostic-only fixed owner/outcome counters, single simulation writer. Raw RDTSC only: no rank
+// bias, table truncation, allocations or hot output.
 struct RuntimeBoundarySelfCounters {
     struct Cell { std::uint64_t calls{}, ticks{}; };
     struct Outcome {
@@ -1665,10 +1650,8 @@ struct RuntimeState {
         bool vi_depth{};
         bool ipc_depth{};
     };
-    // Input-report service runs at a fixed hardware cadence. Keep its timing
-    // evidence entirely in memory so a delayed service can be attributed after
-    // a fail-closed cadence violation without perturbing the successful path
-    // with per-report logging.
+    // Input-report service runs at a fixed hardware cadence. Its timing is kept in memory and reported
+    // after a fail-closed cadence violation, so the success path does no per-report logging.
     struct NativeInputServiceRecord {
         std::uint64_t sequence{};
         std::uint64_t checkpoint{};
@@ -1708,11 +1691,9 @@ struct RuntimeState {
         bool broker_available{};
         bool broker_last_matches{};
     };
-    // AI DMA is expected to be serviced on a short hardware cadence. Keep a
-    // bounded in-memory trail around its publication and service boundary so
-    // a strict deadline failure can identify whether time was lost before
-    // consuming the broker edge or inside device service, without streaming
-    // trace output into the real-time path.
+    // AI DMA is serviced on a short hardware cadence. A bounded in-memory trail around its publication
+    // and service boundary tells a strict deadline failure whether time was lost before consuming the
+    // broker edge or inside device service.
     struct AiDmaServiceRecord {
         std::uint64_t sequence{};
         std::uint64_t checkpoint{};
@@ -1736,11 +1717,9 @@ struct RuntimeState {
         bool dispatching{};
         bool inline_gate_published{};
     };
-    // A durable VI boundary may wait on an asynchronous GPU completion while
-    // the simulation thread remains responsible for DSP, AI, and input
-    // service. Keep a small in-memory trail of that fixed service sequence so
-    // a hard audio deadline failure can distinguish a stalled GPU wait from a
-    // slow device substep without writing a hot-path trace.
+    // A durable VI boundary may wait on an asynchronous GPU completion while the simulation thread stays
+    // responsible for DSP, AI and input service. A small in-memory trail of that fixed sequence tells a
+    // hard audio deadline failure a stalled GPU wait from a slow device substep.
     struct FramePeRealtimeDeviceRecord {
         std::uint64_t sequence{};
         std::uint64_t checkpoint{};
@@ -1752,10 +1731,9 @@ struct RuntimeState {
         const char* stage{};
         bool vi_boundary_active{};
     };
-    // The scheduler idle loop at 0x804AB360 is a hot, checkpointed
-    // continuation. Retain only its full host-callback boundaries so a
-    // cadence failure can distinguish a stale inline threshold from a
-    // callback that deferred an already-published hardware edge.
+    // The scheduler idle loop at 0x804AB360 is a hot, checkpointed continuation. Only its full
+    // host-callback boundaries are retained, so a cadence failure can tell a stale inline threshold from
+    // a callback that deferred an already-published hardware edge.
     struct InlineCheckpointRecord {
         std::uint64_t sequence{};
         std::uint64_t checkpoint{};
@@ -1774,10 +1752,8 @@ struct RuntimeState {
         bool dispatching_external{};
         bool dispatching_vi{};
     };
-    // A VI edge may remain intentionally pending across guest scheduler
-    // transfers. Retain only completed-boundary timing in memory so a later
-    // exact-cadence failure can attribute a coalesced edge without adding a
-    // streaming trace to the render or interrupt paths.
+    // A VI edge may stay pending across guest scheduler transfers. Completed-boundary timing is kept in
+    // memory so an exact-cadence failure can attribute a coalesced edge.
     struct ViBoundaryCompletionRecord {
         std::uint64_t sequence{};
         std::uint64_t serial{};
@@ -1797,10 +1773,8 @@ struct RuntimeState {
         bool present_in_render_frame{};
         bool finalize_completed{};
     };
-    // Sample only state changes while a VI edge is pending or a durable VI
-    // boundary is active. This distinguishes a delayed native callback from a
-    // callback that ran but declined to consume the edge, without streaming
-    // every generated branch checkpoint.
+    // Samples state changes only while a VI edge is pending or a durable VI boundary is active. This
+    // tells a delayed native callback from one that ran but did not consume the edge.
     struct ViServiceCheckpointRecord {
         std::uint64_t sequence{};
         std::uint64_t checkpoint{};
@@ -1817,12 +1791,9 @@ struct RuntimeState {
         bool vi_edge_active{};
         bool external_dispatch_active{};
     };
-    // A completed IRQ24 boundary is followed by the flat dispatcher’s
-    // post-RFI arbitration and continuation handoff. Keep those few state
-    // transitions in memory while a just-completed VI is outstanding so a
-    // later cadence failure can distinguish the host arbitration path from a
-    // guest continuation that stopped reaching safepoints. Collection is
-    // opt-in: bounded retention still incurs clock and stack reads per record.
+    // After a completed IRQ24 boundary, the flat dispatcher runs post-RFI arbitration and the
+    // continuation handoff. These transitions are kept in memory while a completed VI is outstanding.
+    // Collection is opt-in; bounded retention still reads the clock and stack for each record.
     struct ViPostRfiHandoffRecord {
         std::uint64_t sequence{};
         std::uint64_t serial{};
@@ -1844,17 +1815,13 @@ struct RuntimeState {
         bool dispatching_external{};
         bool dispatching_decrementer{};
     };
-    // XFB state is sampled at a caller-selected, bounded VI window.  Keep the
-    // samples in memory and emit them after the measurement has ended: console
-    // output from the simulation thread can delay AI DMA enough to invalidate
-    // precisely the cadence the trace is intended to inspect.
+    // XFB state is sampled in a caller-selected, bounded VI window and emitted after the measurement.
+    // Console output from the simulation thread can delay AI DMA enough to invalidate the cadence under
+    // inspection.
     struct XfbStateRecord {
         std::uint64_t vi{};
-        // This renderer-owned monotonically increasing serial is sampled with
-        // the guest JUT state.  It distinguishes a guest that has not issued
-        // a display-copy command from a copy that was issued but has not yet
-        // rotated JUT's visible buffers, without adding streaming I/O to the
-        // realtime path.
+        // Renderer-owned, monotonically increasing serial, sampled with the guest JUT state. It separates a
+        // guest that has not issued a display copy from a copy not yet rotated into JUT's visible buffers.
         std::uint64_t copy_serial{};
         std::uint64_t causal_render_frame{};
         const char* phase{};
@@ -1877,11 +1844,9 @@ struct RuntimeState {
         std::uint32_t render_interval{};
         std::uint32_t render_counter{};
         std::uint8_t do_render{};
-        // Frame pacing is owned by translated JUTVideo: its post-retrace
-        // callback queues the current VI counter and MainLoop::waitForRetrace
-        // consumes that tick before admitting another game frame.  Sample the
-        // producer, queue, and consumer target beside XFB state so a cadence
-        // failure can be attributed without a streaming OS-message trace.
+        // Frame pacing is owned by translated JUTVideo: its post-retrace callback queues the current VI
+        // counter, and MainLoop::waitForRetrace consumes that tick before admitting another frame. The
+        // producer, queue and consumer target are sampled beside XFB state.
         std::uint32_t vi_retrace_counter{};
         std::uint32_t main_loop_wait_target{};
         std::uint8_t main_loop_wait_initialized{};
@@ -1894,27 +1859,20 @@ struct RuntimeState {
         std::uint32_t jut_queue_used{};
         std::uint32_t jut_queue_next_message{};
     };
-    // Main-frame tracing is restricted to a fixed outer-frame set plus ten
-    // direct frameLoop-subcall boundaries.  In particular, it never captures
-    // the high-frequency OS message helpers that used to turn this diagnostic
-    // into a scheduler perturbation.
+    // Main-frame tracing covers a fixed set of outer frames and ten direct frameLoop subcalls. It never
+    // captures the high-frequency OS message helpers, which would perturb the scheduler.
     struct MainFrameCallRecord {
         std::uint64_t vi{};
         std::uint64_t input_timeline_vi{};
-        // Captured only while the explicitly enabled, bounded main-frame
-        // diagnostic is active.  This lets its deferred dump distinguish a
-        // guest phase that actually consumed a retrace interval from a
-        // callback merely observed on a later VI.
+        // Captured only while the bounded main-frame diagnostic is active. It separates a guest phase that
+        // consumed a retrace interval from a callback observed on a later VI.
         std::uint64_t host_time_ns{};
-        // This bounded sample distinguishes a long native guest phase from
-        // host descheduling.  It is the current simulation thread's accrued
-        // CPU time, expressed in Windows 100-nanosecond units.
+        // The simulation thread's accrued CPU time, in Windows 100-nanosecond units. It separates a long
+        // native guest phase from host descheduling.
         std::uint64_t thread_cpu_time_100ns{};
-        // CPU-time accounting is intentionally paired with the raw thread
-        // cycle counter.  The latter is not converted into time (Windows does
-        // not promise a fixed cycle frequency), but consecutive samples make
-        // a long traced phase attributable to native execution or a blocked
-        // simulation thread without adding work inside the generated code.
+        // CPU time is paired with the raw thread cycle counter. The cycle count is not converted to time,
+        // because Windows does not promise a fixed cycle frequency. Consecutive samples attribute a long
+        // traced phase to native execution or to a blocked simulation thread.
         std::uint64_t thread_cycle_count{};
         galaxy::cadence::DspPollTimingSnapshot dsp_poll_timing{};
         std::uint32_t pc{};
@@ -1956,11 +1914,9 @@ struct RuntimeState {
         std::uint64_t nerve_owner_logical_cycles{};
         std::uint32_t nerve_owner_caller_r1{};
     };
-    // JUTVideo's tick queue is a one-element guest message queue.  Retain the
-    // exact translated send/receive/jam entries in memory, then dump them only
-    // once the benchmark has completed.  This lets the cadence audit observe
-    // whether main consumed the producer's VI tick without making console I/O
-    // part of the real-time guest path.
+    // JUTVideo's tick queue is a one-element guest message queue. The translated send, receive and jam
+    // entries are kept in memory and dumped after the benchmark completes, so console I/O stays off the
+    // guest path.
     struct JutVideoMqRecord {
         std::uint64_t vi{};
         std::uint64_t host_time_ns{};
@@ -1974,19 +1930,14 @@ struct RuntimeState {
         std::uint32_t used_count{};
         std::uint32_t next_message{};
     };
-    // The three indirect calls inside frameLoopBody@8039D3D4 are the only
-    // dynamic boundaries between its entry marker and the next outer render
-    // phase.  Retain their target and elapsed time in the same bounded,
-    // deferred trace as the surrounding static markers.  This is diagnostic
-    // observation only: it neither changes the cached-call fast path nor
-    // routes a direct native call through the runtime.
+    // The three indirect calls inside frameLoopBody@8039D3D4 are the only dynamic boundaries between its
+    // entry marker and the next outer render phase. Their target and elapsed time go into the same
+    // deferred trace as the static markers. Observation only: the cached-call fast path is unchanged.
     using MainFrameDynamicCallRecord =
         galaxy::diagnostics::MainFrameDynamicCallRecord;
-    // Route markers identify progress through gameplay during an explicitly
-    // requested diagnostic route.  They are retained in memory and emitted
-    // only after translated execution has stopped: console I/O from a call or
-    // checkpoint boundary can otherwise make the diagnostic itself miss an
-    // AI-DMA deadline.
+    // Route markers mark progress through gameplay during an explicitly requested diagnostic route. They
+    // are kept in memory and emitted after translated execution stops, because console I/O at a call or
+    // checkpoint can make the diagnostic miss an AI-DMA deadline.
     enum class RouteMarkerKind : std::uint8_t {
         MovieActive,
         Collision,
@@ -2038,9 +1989,8 @@ struct RuntimeState {
         bool collision_origin_valid{};
         bool collision_direction_valid{};
     };
-    // This is intentionally a fixed, failure-only diagnostic ring rather than
-    // a streaming trace: Home Button RSO checkpoints can occur on hot guest
-    // paths, and writing to stderr from them invalidates cadence evidence.
+    // A fixed, failure-only ring rather than a streaming trace. Home Button RSO checkpoints can occur on
+    // hot guest paths, and stderr writes there would distort the cadence evidence.
     struct HomeButtonRsoCheckpointRecord {
         std::uint64_t sequence{};
         std::uint64_t checkpoint{};
@@ -2058,9 +2008,8 @@ struct RuntimeState {
         std::uint32_t r30{};
         std::uint32_t r31{};
     };
-    // Scheduler transitions are recorded only when OSCurrentContext changes.
-    // This is a bounded in-memory audit so the diagnosis does not alter the
-    // timing of the interrupt and thread-switch paths it observes.
+    // Scheduler transitions are recorded only when OSCurrentContext changes. The in-memory audit does not
+    // alter the timing of the interrupt and thread-switch paths it observes.
     struct SchedulerTransitionRecord {
         std::uint64_t sequence{};
         std::uint64_t checkpoint{};
@@ -2072,11 +2021,9 @@ struct RuntimeState {
         std::uint32_t lr{};
         std::uint32_t r1{};
     };
-    // This is deliberately a read-only provenance record, not a save state or
-    // a claim that two benchmark windows are state-equivalent. Equal records
-    // are necessary but not sufficient before comparing two timing results.
-    // Capturing it in memory at the left edge and emitting it only after the
-    // window completes keeps the diagnostic out of the real-time path.
+    // A read-only provenance record, not a save state. Equal records are necessary but not sufficient
+    // before comparing two timing results. Captured in memory at the window's left edge and emitted after
+    // the window completes.
     struct BenchmarkGuestStateSnapshot {
         bool available{};
         std::uint64_t vi{};
@@ -2216,29 +2163,21 @@ struct RuntimeState {
     std::uint64_t call_count{};
     std::uint64_t max_calls{};
     std::uint64_t checkpoint_count{};
-    // Diagnostic-only: counts invocations of the heavy C++ branch_checkpoint
-    // callback specifically (as opposed to checkpoint_count, which also
-    // includes cheap generated-code inline increments that never reach this
-    // function). Used to measure whether the adaptive escalation throttle is
-    // actually keeping this rare, or whether it is being defeated and this
-    // heavy path is running on nearly every checkpoint.
+    // Counts calls to the heavy branch_checkpoint callback. checkpoint_count also includes cheap inline
+    // increments from generated code that never reach this function. Used to check that the adaptive
+    // escalation throttle keeps this call rare.
     std::uint64_t full_checkpoint_invocations{};
-    // Diagnostic-only: counts how many of those invocations happened while
-    // services->checkpoint_counter was null (meaning the header-level
-    // throttle in branch_checkpoint_taken/call_return_checkpoint could not
-    // have engaged at all for that call, regardless of any throttle logic
-    // written there).
+    // Counts how many of those calls ran while services->checkpoint_counter was null. The header-level
+    // throttle in branch_checkpoint_taken and call_return_checkpoint cannot engage for such a call.
     std::uint64_t full_checkpoint_null_counter_pointer{};
-    // Diagnostic-only hotspot histogram: guest_pc -> hit count, sampled from
-    // the heavy branch_checkpoint path, to find which guest code is actually
-    // consuming real checkpoints without advancing the frame (xfb copies).
+    // Hotspot histogram: guest_pc -> hit count, sampled from the heavy branch_checkpoint path. Shows which
+    // guest code consumes checkpoints without advancing the frame (XFB copies).
     std::unordered_map<std::uint32_t, std::uint64_t> checkpoint_pc_histogram{};
     // Diagnostic-only: guest_pc -> cumulative real nanoseconds spent between
     // reaching that checkpoint and reaching the next one anywhere.
     std::unordered_map<std::uint32_t, std::uint64_t> checkpoint_pc_time_ns{};
-    // Diagnostic-only callback self-time for the two benchmark-proven hot
-    // PCs plus every other full checkpoint. Fixed-size counters keep this
-    // profiler allocation-free inside the scheduler callback.
+    // Callback self-time for the two hot PCs and every other full checkpoint. Fixed-size counters keep
+    // the profiler allocation-free inside the scheduler callback.
     RuntimeBoundarySelfCounters runtime_boundary_self_counters{};
     std::array<std::uint64_t, 3> checkpoint_callback_profile_calls{};
     std::array<std::uint64_t, 3> checkpoint_callback_profile_time_ns{};
@@ -2254,11 +2193,9 @@ struct RuntimeState {
     galaxy::cadence::ViRecord active_cadence_record{};
     bool active_cadence_record_valid{};
     bool cadence_report_dumped{};
-    // Per-frame CPU split: time the recompiled guest main loop ran between the
-    // end of the previous retrace's host/render work and the start of this
-    // frame's render. host_delta_ms - guest_exec_us isolates the host/render
-    // overhead, so we can tell whether guest_exec (the recompiled code) is the
-    // heavy-scene bottleneck. Logged as guest_exec_us in the vi flight record.
+    // Per-frame CPU split: time the recompiled guest main loop ran between the end of the previous
+    // retrace's host/render work and the start of this frame's render. host_delta_ms - guest_exec_us is
+    // the host/render overhead. Logged as guest_exec_us in the vi flight record.
     std::uint64_t last_guest_exec_us{};
     std::chrono::steady_clock::time_point last_host_work_end{};
     std::uint64_t next_inline_checkpoint_slow{1};
@@ -2358,10 +2295,8 @@ struct RuntimeState {
     std::unique_ptr<galaxy::timing::RuntimeTimeline> timeline{};
     galaxy::timing::PendingEventLatch deadline_events{};
     std::unique_ptr<galaxy::timing::DeadlineBroker> deadline_broker{};
-    // The simulation thread records a candidate only when a large wall-clock
-    // interval passed with essentially no thread CPU time.  It is retained
-    // until the next VI boundary can prove whether the interval was a real
-    // host suspension or merely harmless timing noise.
+    // Recorded only when a large wall-clock interval passes with almost no thread CPU time. Kept until the
+    // next VI boundary shows whether it was a real host suspension or timing noise.
     std::uint64_t last_timebase_ticks{};
     std::uint64_t last_timebase_qpc{};
     std::uint64_t host_pause_candidate_qpc_begin{};
@@ -2377,7 +2312,7 @@ struct RuntimeState {
     std::uint64_t host_pause_recoveries{};
     std::uint64_t cached_cpu_time_100ns{};
     std::uint64_t cached_cpu_time_qpc{};
-    // Flag-based interrupt return (F20-lite): the RFI service records the
+    // Flag-based interrupt return: the RFI service records the
     // transfer here and returns; every host frame returns until the flat
     // dispatcher consumes it. Replaces the GuestTransfer throw when the
     // module advertises kModuleTransferFlagFlagReturn.
@@ -2396,8 +2331,7 @@ struct RuntimeState {
     std::uint32_t flag_transfer_kinds{7u};
     std::uint32_t module_transfer_flags{};
     std::uint64_t flag_transfer_count{};
-    // GALAXY_JAUDIO_HOST_MIXER: DspBoot and DSPSendCommands2 run on the
-    // host and no DSP task boots (SDK_REPLACEMENT_PLAN.md section 4).
+    // GALAXY_JAUDIO_HOST_MIXER: DspBoot and DSPSendCommands2 run on the host, and no DSP task boots.
     bool jaudio_host_mixer{};
     galaxy::host::JAudioHostMixer jaudio_mixer;
     // Cutscene volume applied to the movie player's attenuation table.
@@ -2524,13 +2458,10 @@ struct RuntimeState {
     std::uint64_t pending_vi_boundary_advance_calls{};
     std::uint64_t pending_vi_token_blocking_polls{};
     std::uint64_t pending_vi_token_nonblocking_polls{};
-    // Wall time the guest spent in the TokenPending phase while its context was the
-    // one the boundary blocks, i.e. actually waiting on draw/PE completion. Counts
-    // alone cannot distinguish "the guest waits 60 times for a microsecond" from
-    // "the guest waits 60 times for 16 ms", and that difference decides whether the
-    // render cadence is set by guest work or by waiting for the renderer. This is
-    // the measurement `MEASUREMENT-CAVEATS.md` says the current recordings lack for
-    // within-frame attribution.
+    // Wall time the guest spent in the TokenPending phase while its context was the one the boundary
+    // blocks, i.e. waiting on draw/PE completion. Counts alone cannot separate many short waits from a few
+    // long ones, and that difference decides whether the render cadence is set by guest work or by the
+    // renderer.
     std::uint64_t pending_vi_token_blocking_ns{};
     std::uint64_t pending_vi_token_completion_ns{};
     std::uint64_t pending_vi_token_blocking_completions{};
@@ -2570,8 +2501,8 @@ struct RuntimeState {
     bool gx_sync_capture_active{};
     std::uint64_t draw_done_submit_attempts{};
     std::uint64_t draw_done_submit_deferred{};
-    // The GXDrawDone capture is still Captured: the render queue was full when
-    // the main thread went to sleep for it (submit_gx_at_draw_done_wait).
+    // A GXDrawDone capture stays Captured until the render queue has room. The main thread sleeps for it
+    // in the meantime (submit_gx_at_draw_done_wait).
     bool draw_done_submit_owed{};
     std::uint64_t draw_done_submit_queue_deferrals{};
     std::uint64_t draw_done_submit_owed_us{};
@@ -2638,18 +2569,15 @@ struct RuntimeState {
     std::uint64_t decrementer_deadline_publications{};
     std::uint64_t decrementer_deadline_fallbacks{};
     std::uint64_t decrementer_write_due_races{};
-    // A replaceable DEC publication may be taken immediately before the
-    // time-base sample discovers a verified host suspension.  Recovery restores
-    // the immutable arm and clears that publication transactionally; count the
-    // locally taken pre-rebase edge so the normal exact-arm path can settle or
-    // await the restored edge instead of applying it against rebased time.
+    // A replaceable DEC publication may be taken just before the time-base sample finds a verified host
+    // suspension. Recovery restores the immutable arm and clears that publication. The locally taken
+    // pre-rebase edge is counted so the exact-arm path can settle or await the restored edge, rather than
+    // apply it against rebased time.
     std::uint64_t decrementer_deadline_rebase_discards{};
     std::uint64_t decrementer_deadline_late_events{};
-    // Sum of lateness over every settled edge, so the audit can report a mean
-    // and not only a count. A count of "late" events says nothing on its own:
-    // sub-microsecond scheduling jitter and a missed 428 ms deadline both
-    // increment it. The maximum beside it is a single outlier; the mean is what
-    // says whether the typical edge is on time.
+    // Sum of lateness over every settled edge, so the audit can report a mean as well as a count. A count
+    // of late edges alone cannot separate sub-microsecond jitter from a missed deadline; the mean shows
+    // whether the typical edge is on time.
     std::uint64_t decrementer_deadline_total_lateness_ticks{};
     std::uint64_t decrementer_deadline_settled_events{};
     std::uint64_t decrementer_deadline_max_lateness_ticks{};
@@ -2666,9 +2594,8 @@ struct RuntimeState {
     std::uint32_t last_valid_displaying_xfb_manager{};
     std::uint64_t last_valid_displaying_xfb_vi{};
     std::uint64_t stale_displaying_xfb_preserves{};
-    // Two samples are captured per VI.  1,536 records retain a complete
-    // 600-VI certification window with room for setup/teardown while keeping
-    // this diagnostic state comfortably below the process stack reserve.
+    // Two samples are captured per VI. 1,536 records hold a complete 600-VI certification window, with
+    // room for setup and teardown, and stay below the process stack reserve.
     static constexpr std::size_t kXfbStateRecordCapacity = 1'536u;
     std::array<XfbStateRecord, kXfbStateRecordCapacity> xfb_state_records{};
     std::size_t xfb_state_record_count{};
@@ -2719,12 +2646,10 @@ struct RuntimeState {
     std::uint64_t scene_nerve_child_serial{};
     std::uint64_t scene_nerve_child_marker_failures{};
     galaxy::diagnostics::PsmtxGuardTrace psmtx_guard_trace;
-    // Dynamic draw-dispatch tracing records both the entry and return for
-    // every indirect callback.  The launcher restricts that explicit probe to
-    // eight VIs, and 4,096 records preserve the complete observed window at
-    // the highest validated callback rate instead of silently retaining only
-    // its tail.  These records are deferred and are never written from the
-    // simulation thread's realtime path.
+    // Dynamic draw-dispatch tracing records entry and return for every indirect callback. The launcher
+    // limits this explicit probe to eight VIs; 4,096 records keep the full observed window at the highest
+    // validated callback rate. Records are deferred and are never written from the simulation thread's
+    // realtime path.
     static constexpr std::size_t kMainFrameDynamicCallRecordCapacity = 4'096u;
     std::array<MainFrameDynamicCallRecord, kMainFrameDynamicCallRecordCapacity>
         main_frame_dynamic_call_records{};
@@ -2766,12 +2691,10 @@ struct RuntimeState {
     bool native_mouse_acquisition_age_known{};
     bool native_mouse_pointer_frame = read_env_flag("GALAXY_NATIVE_MOUSE_POINTER_FRAME", false);
     bool native_mouse_cooperative_depth_wait = read_env_flag("GALAXY_NATIVE_MOUSE_COOPERATIVE_DEPTH_WAIT", false);
-    // The pointer query answers from the previous scene's owned depth field
-    // (double-buffered) instead of waiting for this scene's capture to come
-    // back from the GPU. In the 9950X3D A/B that wait ran 12,229 times in
-    // five minutes, 11.7 s in total and 82 ms at worst. The pointer's screen
-    // position is still the current sample; only its depth is one scene old.
-    // GALAXY_NATIVE_MOUSE_ASYNC_DEPTH=0 restores the same-scene wait.
+    // The pointer query answers from the previous scene's owned depth field (double-buffered) instead of
+    // waiting for this scene's capture to return from the GPU. The pointer's screen position is still the
+    // current sample; only its depth is one scene old. GALAXY_NATIVE_MOUSE_ASYNC_DEPTH=0 restores the
+    // same-scene wait.
     bool native_mouse_async_depth = read_env_flag("GALAXY_NATIVE_MOUSE_ASYNC_DEPTH", true);
     std::uint64_t native_mouse_async_depth_answers{};
     std::uint64_t native_mouse_async_depth_missing{};
@@ -2785,10 +2708,9 @@ struct RuntimeState {
     // Stores answered without this scene's field: newest completed field, last depth.
     std::uint64_t native_mouse_field_fallbacks{}, native_mouse_last_depth_fallbacks{};
     std::optional<std::uint32_t> native_mouse_last_depth;
-    // Test hooks: GALAXY_TEST_POINTER_DEPTH_MISS_FROM_VI=<vi> treats this
-    // scene's field as unmatched at every store from that VI on (0: never);
-    // GALAXY_POINTER_DEPTH_FALLBACK=0 leaves such a store unanswered (the
-    // behaviour before the fallback).
+    // Test hooks: GALAXY_TEST_POINTER_DEPTH_MISS_FROM_VI=<vi> treats this scene's field as unmatched at
+    // every store from that VI on (0: never). GALAXY_POINTER_DEPTH_FALLBACK=0 leaves such a store
+    // unanswered.
     std::uint64_t test_pointer_depth_miss_from_vi = read_env_u64("GALAXY_TEST_POINTER_DEPTH_MISS_FROM_VI", 0u);
     bool pointer_depth_fallback = read_env_flag("GALAXY_POINTER_DEPTH_FALLBACK", true);
     std::uint64_t native_mouse_capture_ns{}, native_mouse_capture_max_ns{};
@@ -2798,16 +2720,10 @@ struct RuntimeState {
     std::uint64_t native_mouse_submission_serial{}, native_mouse_submitted{}, native_mouse_consumed{};
     std::uint64_t native_mouse_select_ns{}, native_mouse_query_ns{}, native_mouse_query_max_ns{};
     std::uint64_t native_mouse_selected_to_store_ns{}, native_mouse_selected_to_store_max_ns{};
-    // EFB peeks. Each one is the simulation thread synchronising with the render
-    // thread twice: render_pending_gx_fifo_for_sync() drains the pending FIFO and
-    // gx::peek_efb() then round-trips through the frame queue and blocks on a
-    // condition variable until the render thread services the request. That is a
-    // hard producer/consumer dependency on the exact path the objective asks
-    // about ("if waits dominate, identify the dependency"), and nothing counted
-    // it: both existing phase timers are inert unless frame-cadence diagnostics
-    // are on, so no recording can say whether peeks are negligible or the
-    // dominant stall. Counted unconditionally because the two clock reads are
-    // bounded well below the round-trip they bracket.
+    // EFB peeks. Each one makes the simulation thread wait for the render thread twice:
+    // render_pending_gx_fifo_for_sync() drains the pending FIFO, then gx::peek_efb() round-trips through
+    // the frame queue and blocks until the render thread services the request. Counted unconditionally;
+    // the two clock reads are far shorter than the round-trip they bracket.
     std::uint64_t efb_peek_count{}, efb_peek_ns{}, efb_peek_max_ns{}, efb_peek_failures{};
     // Split, because the two halves are different dependencies: the first waits
     // for the render thread to consume already-submitted GX work, the second
@@ -4076,13 +3992,10 @@ struct RuntimeState {
     }
 };
 
-// A terminal runtime failure must stop the generated DSP worker before any
-// retained trace is formatted.  The worker may be blocked in the one-slot MRAM
-// rendezvous owned by the simulation thread; leaving it live while printing a
-// large crash report can manufacture a secondary timeout that obscures the
-// actual failure.  Keep a compact, lock-safe snapshot from immediately before
-// cancellation so the terminal report still distinguishes a pre-existing DSP
-// fault/timeout from the cooperative process-exit cancellation.
+// A terminal runtime failure stops the generated DSP worker before any retained trace is formatted.
+// The worker may be blocked in the one-slot MRAM rendezvous owned by the simulation thread; leaving it
+// live during a large crash report can cause a secondary timeout. The snapshot taken just before
+// cancellation separates a DSP fault or timeout that already existed from cancellation at exit.
 struct FailureWorkerQuiescenceEvidence {
     galaxy::host::DspDebugSnapshot dsp{};
     galaxy::DspNativeTelemetrySnapshot telemetry{};
@@ -4332,12 +4245,10 @@ void run_timed_checkpoint_phase(
     std::forward<Callback>(callback)();
 }
 
-// Host-pump work runs infrequently enough that its total duration has always
-// been retained by the failure-only checkpoint timing ring.  When diagnosing a
-// late hardware boundary, this opt-in splitter identifies the exact native
-// service that consumed the interval without streaming from a real-time path.
-// It only observes existing host work; it never changes guest scheduling,
-// device ordering, or translated control flow.
+// Host-pump work is infrequent, and its total duration is kept by the failure-only checkpoint timing
+// ring. This opt-in splitter names the native service that used the interval when a hardware boundary
+// is late. It only observes host work and never changes guest scheduling, device ordering or
+// translated control flow.
 bool trace_host_pump_subphases_enabled() {
     static std::atomic<std::int8_t> cached{-1};
     return cached_env_gate(cached, "GALAXY_TRACE_HOST_PUMP_SUBPHASES", false);
@@ -5110,10 +5021,8 @@ bool trace_checkpoint_callback_time_enabled() {
 }
 
 bool branch_checkpoint_live_context_trace_enabled() {
-    // g_live_ctx_stack is no longer a scheduler input. Its remaining readers
-    // only decorate these four opt-in traces, so normal execution does not
-    // need to walk the active-thread list and resolve stack ownership at every
-    // full branch checkpoint.
+    // g_live_ctx_stack is not a scheduler input. Its remaining readers only decorate four opt-in traces,
+    // so normal execution does not walk the active-thread list at each full branch checkpoint.
     static const bool enabled =
         read_env_flag("GALAXY_TRACE_AUDIO_THREAD_LOOP", false) ||
         read_env_flag("GALAXY_TRACE_FILELOADER_FLOW", false) ||
@@ -5127,12 +5036,9 @@ bool trace_thread_roster_enabled() {
     return cached_env_gate(cached, "GALAXY_TRACE_THREAD_ROSTER", false);
 }
 
-// Enabled by default after end-to-end validation against an actual Windows
-// host suspension during a live RMGE01 VI transaction. Recovery remains
-// fail-closed: the wall-time/CPU-time pause proof, exact pending-boundary
-// ownership, unchanged input phase, and successor identity must all agree.
-// The opt-out exists for controlled A/B diagnostics; it never enables a less
-// strict recovery path.
+// Enabled by default. Recovery is fail-closed: the wall-time/CPU-time pause proof, exact
+// pending-boundary ownership, unchanged input phase and successor identity must all agree. The opt-out
+// is for controlled A/B diagnostics and never selects a less strict recovery path.
 bool active_boundary_recovery_enabled() {
     static std::atomic<std::int8_t> cached{-1};
     return cached_env_gate(cached, "GALAXY_ACTIVE_BOUNDARY_RECOVERY", true);
@@ -5304,13 +5210,11 @@ bool realtime_vi_near_due_wait_enabled() {
     return cached_env_gate(cached, "GALAXY_REALTIME_VI_NEAR_DUE_WAIT", true);
 }
 
-// When the guest is spinning EE-masked inside __DSPHandler waiting on a DSP
-// mail (the task-done handshake path), the checkpoint pump normally returns
-// before the VI poll, freezing VI and deadlocking render. This gate lets that
-// masked wait keep VI advancing so the real DSP task-done interrupt can be
-// delivered (GALAXY_DSP_NATIVE_SUPPRESS_TASK_DONE=0) without starving the
-// picture. This diagnostic path may poll an already-pending real edge with an
-// explicit masked-delivery override; it never waits for or fabricates one.
+// When the guest spins EE-masked inside __DSPHandler waiting on a DSP mail (the task-done handshake),
+// the checkpoint pump returns before the VI poll, which freezes VI and deadlocks render. With
+// GALAXY_DSP_NATIVE_SUPPRESS_TASK_DONE=0, this masked wait keeps VI advancing so the real task-done
+// interrupt is delivered without starving the picture. The diagnostic path may poll an already-pending
+// real edge with an explicit masked-delivery override; it never waits for or fabricates one.
 bool masked_dsp_wait_vi_pump_enabled() {
     static std::atomic<std::int8_t> cached{-1};
     return cached_env_gate(cached, "GALAXY_DSP_NATIVE_MASKED_VI_PUMP", false);
@@ -5434,30 +5338,18 @@ std::uint64_t ticks_per_checkpoint() {
     return ticks;
 }
 
-// Diagnostic CPU-time sampling cache, disabled by default.
-// runtime_time_base_ticks samples GetThreadTimes on every invocation when this
-// flag is off. Callers include guest TB/DEC services, input/device handling and
-// architectural checkpoints; it is not restricted to the quiet checkpoint path.
-// The sample contributes to host-suspension detection. A cached baseline can
-// include CPU work before the current interval and suppress a real suspension
-// candidate, so monotonicity alone does not justify enabling this experiment.
-// No production syscall count or exclusive self-time is established here.
+// CPU-time sampling cache for host-suspension detection. Disabled by default.
+// Without the cache, runtime_time_base_ticks calls GetThreadTimes on every invocation, from TB/DEC
+// services, input and device handling, and checkpoints. A cached baseline can hide CPU work done
+// inside the current interval, so a stale value can suppress a real suspension candidate.
 bool throttle_cpu_time_sampling_enabled() {
     static std::atomic<std::int8_t> cached{-1};
     return cached_env_gate(cached, "GALAXY_THROTTLE_CPU_TIME_SAMPLING", false);
 }
 
-// Diagnostic A/B control for repeated GetThreadTimes calls. Caching changes
-// the CPU-time evidence used by host-suspension detection; a monotonic cached
-// value alone does not prove that recovery decisions remain equivalent.
-// This stays opt-in. Checkpoint timings include surrounding work and cannot
-// establish the syscall's self-time or justify enabling this control.
-//
-// For the record, so nobody re-derives it: one GetThreadTimes(GetCurrentThread())
-// measured 144.56 ns/call on the current host against 7.04 ns for a raw rdtsc
-// (AgentWork/agent-20/bench/gt_bench.rs, rustc -O, 2e6 iterations). That is a
-// real kernel transition and worth avoiding *if* a profile ever puts it on a
-// hot path. On the recorded configuration it does not.
+// Opt-in A/B control for repeated GetThreadTimes calls. Caching changes the CPU-time evidence used by
+// host-suspension detection, so monotonicity alone does not show that recovery decisions stay the same.
+// A GetThreadTimes call is a kernel transition; a raw rdtsc is far cheaper.
 std::uint64_t throttled_thread_cpu_time_100ns() noexcept {
     thread_local std::uint64_t s_cached_value = 0;
     thread_local std::chrono::steady_clock::time_point s_cached_at{};
@@ -5496,12 +5388,10 @@ std::uint64_t runtime_time_base_ticks(RuntimeState& state) {
     if (state.timeline->saturated()) {
         throw RuntimeFailure("runtime timeline counter overflowed");
     }
-    // GetThreadTimes is a kernel transition on every time-base read (3 percent
-    // of all simulation-thread samples in a profiled session). The suspension
-    // candidate test needs the thread's CPU time only at millisecond
-    // granularity: a sample is reused while the sampled QPC is less than one
-    // millisecond past it, which can only over-report elapsed CPU time by that
-    // much and therefore never manufactures a candidate.
+    // GetThreadTimes is a kernel transition, and the time-base read calls it. The suspension test needs
+    // CPU time only at millisecond granularity, so a sample is reused while the sampled QPC is less than
+    // one millisecond old. That over-reports elapsed CPU time by at most one millisecond and never creates
+    // a candidate.
     const std::uint64_t qpc_per_millisecond =
         std::max<std::uint64_t>(state.timeline->counter_frequency() / 1000u, 1u);
     std::uint64_t cpu_time_100ns = state.cached_cpu_time_100ns;
@@ -5536,15 +5426,11 @@ std::uint64_t runtime_time_base_ticks(RuntimeState& state) {
             state.host_pause_candidate_cpu_begin_100ns =
                 state.last_timebase_cpu_time_100ns;
             state.host_pause_candidate_cpu_end_100ns = cpu_time_100ns;
-            // A normal VI wait ends at the next retrace. An interval reaching
-            // the one-retrace threshold is only a candidate; recovery still
-            // needs the separate deadline/backlog/ownership proof. If a timed
-            // VI wait is descheduled, retain the no-CPU candidate now and recover
-            // only after the wait scope has unwound. Suppressing candidate
-            // capture while vi_deadline_wait_active loses exactly that
-            // host-suspension proof and turns a verified scheduling
-            // interruption into a false cadence failure at the next external
-            // checkpoint.
+            // A normal VI wait ends at the next retrace. An interval reaching the one-retrace threshold is only a
+            // candidate; recovery still needs the separate deadline, backlog and ownership proof. If a timed VI
+            // wait is descheduled, the no-CPU candidate is kept and recovered only after the wait scope has
+            // unwound. Suppressing candidate capture while vi_deadline_wait_active would drop that proof and turn
+            // a verified scheduling interruption into a false cadence failure at the next external checkpoint.
             state.host_pause_candidate_valid = true;
         }
     }
@@ -5553,15 +5439,12 @@ std::uint64_t runtime_time_base_ticks(RuntimeState& state) {
     // An unavailable CPU sample invalidates its paired wall-time baseline.
     // Retaining an older CPU endpoint would compare unequal intervals later.
     state.last_timebase_cpu_time_100ns = cpu_time_100ns;
-    // Generated DEC/TB operations sample this service before they mutate a
-    // PpcContext timer field. Recover at this first post-suspension boundary:
-    // exposing the raw value would stamp the context with discarded host time
-    // and make the later correct timeline rebase look like a backwards device
-    // transition. The ordinary proof remains an inactive VI backlog. An
-    // AwaitViRfi transaction can anchor its exact successor under a backlog,
-    // or while freshly Ready if an AI buffer deadline was also crossed.
-    // recover_from_verified_host_suspension revalidates the external owner,
-    // input phase and device identities before it mutates the broker.
+    // Generated DEC/TB operations sample this service before they mutate a PpcContext timer field.
+    // Recovery runs at this first post-suspension boundary; exposing the raw value would stamp the context
+    // with discarded host time. The ordinary proof is an inactive VI backlog. An AwaitViRfi transaction can
+    // anchor its exact successor under a backlog, or while freshly Ready if an AI buffer deadline was also
+    // crossed. recover_from_verified_host_suspension revalidates the external owner, input phase and device
+    // identities before it mutates the broker.
     if (!state.servicing_native_input && !state.host_pause_recovery_active &&
         state.host_pause_candidate_valid &&
         state.vi_deadline_consumer != nullptr) {
@@ -5655,23 +5538,16 @@ void service_due_native_input_reports(RuntimeState& state) {
     // it: recovering from inside poll_native_bt_reconnect would otherwise
     // make an already-captured pre-rebase batch appear to be from the future.
     (void)runtime_time_base_ticks(state);
-    // A candidate that reaches here unconsumed is not itself a correctness
-    // violation: it is evidence of a possible host stall that this call's
-    // own recovery attempt (inside runtime_time_base_ticks) declined to act
-    // on, e.g. because the strict identity/ownership preconditions for an
-    // atomic rebase weren't met from this call site. The actual safety
-    // property -- never restoring the wrong timeline -- is enforced entirely
-    // inside recover_from_verified_host_suspension's identity re-verification,
-    // which is untouched here. Treat unconsumed evidence as stale and drop
-    // it; runtime_time_base_ticks already returned the correct current tick
-    // reading regardless of whether a rebase happened.
+    // A candidate that reaches here unconsumed is not a correctness violation. It is evidence of a possible
+    // host stall that this call's own recovery attempt (inside runtime_time_base_ticks) did not act on, for
+    // example because the identity and ownership preconditions for an atomic rebase were not met at this
+    // call site. The safety property, never restoring the wrong timeline, is enforced inside
+    // recover_from_verified_host_suspension's identity re-verification. Unconsumed evidence is stale and is
+    // dropped; runtime_time_base_ticks already returns the correct current tick.
     //
-    // Diagnostic only (GALAXY_TRACE_HOST_PAUSE_CANDIDATE_DISCARD, off by
-    // default, no behavior change): investigating whether this discard is
-    // what starves the VI consumer's own later recovery attempt of evidence
-    // it never got a chance to evaluate, turning a recoverable host-pause
-    // interval into a fatal "exact 60 Hz VI cadence failed" backlog. See the
-    // matching investigation note at the VI wait failure site.
+    // Diagnostic only (GALAXY_TRACE_HOST_PAUSE_CANDIDATE_DISCARD, off by default, no behaviour change):
+    // records whether this discard starves the VI consumer's later recovery attempt of evidence. See the
+    // VI wait failure site.
     if (state.host_pause_candidate_valid &&
         read_env_flag("GALAXY_TRACE_HOST_PAUSE_CANDIDATE_DISCARD", false)) {
         std::cout << "[host-pause-candidate-discard] site=input-report-service"
@@ -5875,8 +5751,8 @@ void on_ai_dma_deadline_changed(
             generation);
     }
 
-    // Checkpoint estimates are only a fallback audit now. Publication of the
-    // generation-bearing AudioDma bit is the cadence authority.
+    // Checkpoint estimates are a fallback audit only. Publication of the generation-bearing AudioDma bit is
+    // the cadence authority.
     state.next_ai_dma_probe_checkpoint = state.checkpoint_count + 1u;
 }
 
@@ -6399,12 +6275,9 @@ bool trace_main_frame_enabled() {
 }
 
 bool frame_activity_recording_enabled() {
-    // TraceMainFrame has its own narrow call-boundary filter and VI window.
-    // Treating it as global frame-activity recording disables the adaptive
-    // inline checkpoint gate and fast cached guest calls for the entire boot,
-    // which turns a bounded diagnostic into a self-induced cadence failure
-    // before its requested window is reached.  Only the explicit activity
-    // recorder needs those broad accounting hooks.
+    // TraceMainFrame has its own call-boundary filter and VI window. Treating it as global frame-activity
+    // recording would disable the adaptive inline checkpoint gate and the fast cached guest calls for the
+    // whole run. Only the explicit activity recorder needs those broad accounting hooks.
     static std::atomic<std::int8_t> cached{-1};
     return cached_env_gate(cached, "GALAXY_RECORD_FRAME_ACTIVITY", false);
 }
@@ -6511,12 +6384,9 @@ bool trace_scene_nerve_owner_active(const RuntimeState& state) {
         trace_main_frame_vi_window(state);
 }
 
-// The NameObj draw dispatcher can invoke a virtual callback once for every
-// item in a scene.  It is useful for a dedicated draw-dispatch investigation,
-// but it is far too high-fanout for the bounded outer-frame cadence trace.
-// Keep that optional evidence behind a separate flag so merely asking for
-// TraceMainFrame cannot silently turn into tens of thousands of per-frame
-// timing samples.
+// The NameObj draw dispatcher can invoke a virtual callback once per scene item. Its fan-out is too high
+// for the bounded outer-frame cadence trace, so it has a separate flag. Asking for TraceMainFrame alone
+// does not produce tens of thousands of per-frame timing samples.
 bool trace_main_frame_draw_dispatch_enabled() {
     static std::atomic<std::int8_t> cached{-1};
     return cached_env_gate(cached, "GALAXY_TRACE_MAIN_FRAME_DRAW_DISPATCH", false);
@@ -7171,10 +7041,8 @@ const char* main_frame_call_label(std::uint32_t address) {
     case 0x80385758u: return "frameLoopBody@80385758";
     case 0x8039B9B8u: return "frameLoopBody@8039B9B8";
     case 0x8039A288u: return "frameLoopBody@8039A288";
-    // These synthetic trace addresses are emitted only by the temporary,
-    // statically generated GameScene::execute probe below.  They partition
-    // one already-observed long virtual call without changing its native
-    // dispatch or guest state.
+    // Synthetic trace addresses, emitted only by the generated GameScene::execute probe. They split one
+    // observed long virtual call without changing native dispatch or guest state.
     case 0xF033E7F8u: return "GameScene::execute after 803CA428";
     case 0xF0187E2Cu: return "GameScene::execute after 80187E2C";
     case 0xF033F120u: return "GameScene::execute after 8033F120";
@@ -7200,9 +7068,8 @@ const char* main_frame_call_label(std::uint32_t address) {
     case 0xF133F000u: return "GameScene::draw3D after 803C7360(2)";
     case 0xF133F014u: return "GameScene::draw3D after 803D8A44";
     case 0xF133F028u: return "GameScene::draw3D after 803CA76C";
-    // This final synthetic range resolves the observed costly 80344954
-    // dispatch batch by its eight fixed category arguments.  The entries
-    // are generated trace markers only and never enter guest dispatch.
+    // Synthetic range for the 80344954 dispatch batch, keyed by its eight fixed category arguments.
+    // Trace-only; never enters guest dispatch.
     case 0xF3344260u: return "GameScene::draw3D 80344954 category 1D";
     case 0xF3344268u: return "GameScene::draw3D 80344954 category 19";
     case 0xF3344270u: return "GameScene::draw3D 80344954 category 1A";
@@ -7224,8 +7091,8 @@ const char* main_frame_call_label(std::uint32_t address) {
     case 0xF633EFC8u: return "GameScene::draw3D after 80344894(4C)";
     case 0xF633EFD0u: return "GameScene::draw3D after 80344894(2F)";
     case 0xF633EFD8u: return "GameScene::draw3D after 80344894(2D)";
-    // Category 47 is the measured expensive dispatcher. These three records
-    // separate its one pre-loop virtual call from its per-item virtual loop.
+    // Category 47 is the expensive dispatcher. These three records separate its pre-loop virtual call from
+    // its per-item virtual loop.
     case 0xF73617FCu: return "Draw category 47 pre-loop virtual call begin";
     case 0xF7361800u: return "Draw category 47 pre-loop virtual call end";
     case 0xF736183Cu: return "Draw category 47 item loop end";
@@ -7339,11 +7206,9 @@ bool is_particle_direction_profile_caller(std::uint32_t caller_pc) {
     }
 }
 
-// The general direct-edge line is intentionally capped to its 128 most
-// expensive edges. That ranking is useful for discovery but can omit cheap
-// stages needed to close the arithmetic for one selected hot routine. Emit a
-// second, shutdown-only view of every observed direction-pipeline edge. The
-// realtime recording path and NativeServices ABI remain unchanged.
+// The general direct-edge line is capped to its 128 most expensive edges. That ranking can omit cheap
+// stages, so a second, shutdown-only view lists every observed direction-pipeline edge. The realtime
+// recording path and NativeServices ABI are unchanged.
 void dump_particle_direction_edge_profile() {
     struct Snapshot {
         std::uint64_t key;
@@ -7397,11 +7262,10 @@ void dump_particle_direction_edge_profile() {
     std::fprintf(stderr, "\n");
 }
 
-// NW4R Material::SetupGX is a large translated routine whose many small,
-// statically resolved GX setters normally fall below the general profile's
-// 128-edge output limit. Keep selection exact to the call instructions inside
-// RMGE01 0x800130F0..0x80013F8F and emit one buffered shutdown record so this
-// diagnostic cannot recreate the old per-field stderr write-through stalls.
+// NW4R Material::SetupGX is a large translated routine whose many small, statically resolved GX setters
+// normally fall below the general profile's 128-edge output limit. Selection is exact to the call
+// instructions inside RMGE01 0x800130F0..0x80013F8F. One buffered shutdown record is emitted, so the
+// diagnostic does not cause per-field stderr writes.
 constexpr bool is_nw4r_material_setup_profile_caller(
     std::uint32_t caller_pc) {
     return caller_pc >= 0x80013110u && caller_pc <= 0x80013F7Cu;
@@ -7801,12 +7665,10 @@ bool independent_vi_pe_capture_allowed(
     bool rendered_retrace, bool present_in_render) {
     if (!independent_vi_pe_completion_enabled()) return false;
     const auto& timing = galaxy::gx::get_gx_timing_config();
-    // Live reads (GALAXY_RENDER_LIVE_MEMORY=1): the render thread reads guest
-    // RAM directly while the simulation runs ahead, the hardware's own GP model
-    // and Dolphin's dual-core model. The game's GXDrawDone discipline and its
-    // triple-buffered frame data are what keep that correct; the per-frame
-    // snapshot (dependency scan plus 3 to 6 MB copied on the simulation
-    // thread each frame) is what it replaces.
+    // Live reads (GALAXY_RENDER_LIVE_MEMORY=1): the render thread reads guest RAM directly while the
+    // simulation runs ahead, as the hardware GP model and Dolphin's dual-core model do. The game's
+    // GXDrawDone discipline and triple-buffered frame data keep this correct. It replaces the per-frame
+    // snapshot, which scanned dependencies and copied 3 to 6 MB on the simulation thread.
     if (!galaxy::gx::independent_vi_pe_policy_valid(
             timing.pe_events_gpu_fence,
             read_env_flag("GALAXY_ASYNC_RENDER_THREAD", true),
@@ -7825,7 +7687,7 @@ bool independent_vi_pe_capture_allowed(
         state.address_space == nullptr) return false;
     const auto& space = *state.address_space;
     constexpr std::uint32_t kJutXfbManagerPtr = 0x806A2868u;
-    // JUT pending byte: verified 804193F0/804194CC/80419500.
+    // JUT pending byte: 804193F0, 804194CC, 80419500.
     constexpr std::uint32_t kDrawDoneFlag = 0x806A285Cu;
     // SDK completion byte: cleared at 804BA088/804B9FF0 and set to 1
     // only by the translated PE finish handler at 804BA380.
@@ -10311,8 +10173,8 @@ void log_function_async_proof_summary(RuntimeState& state) {
            << " completed=" << summary.completed_flights
            << " active=" << summary.active_flights
            << " failures=" << summary.protocol_failures
-           // This machine-readable field is retained for proof compatibility.
-           // It is an invariant now: no synchronous FunctionAsync path exists.
+           // Machine-readable field kept for compatibility. It is an invariant: no synchronous FunctionAsync path
+           // exists.
            << " sync-hle=0"
            << " migration-ready=" << (migration_ready ? 1 : 0)
            << '\n';
@@ -10630,11 +10492,10 @@ bool is_native_ir_report_decoder_address(std::uint32_t guest_address) {
 }
 
 bool is_translated_wpad_report_decoder_address(std::uint32_t guest_address) {
-    // Exact non-invalid entries from RMGE01's report-id dispatch table at
-    // 0x805EC4E8, indexed by report_id - 0x20. Generated-code audit confirms
-    // every entry except the 0x3D no-op writes the alternating WPAD status
-    // slot and flips control+0x8C8 once. Invalidating on the 0x3D no-op is
-    // conservative and prevents it from preserving an identity by accident.
+    // Valid entries of RMGE01's report-id dispatch table at 0x805EC4E8, indexed by report_id - 0x20. Every
+    // entry except the 0x3D no-op writes the alternating WPAD status slot and flips control+0x8C8 once.
+    // Invalidating on the 0x3D no-op is conservative: it stops that report from keeping an identity by
+    // accident.
     switch (guest_address) {
     case 0x804DE4F0u:  // 0x20
     case 0x804DE910u:  // 0x21
@@ -11034,13 +10895,10 @@ void dump_native_input_stack_state(
         dump_wpad_slot("slot0", wpad0 + kWpadSlot0);
         dump_wpad_slot("slot1", wpad0 + kWpadSlot1);
     }
-    // The translated WPAD extension decoder at 0x804E3124 decodes each
-    // extension-data octet as `(wire ^ xor_key[i]) + add_key[i]`, using these
-    // two eight-byte tables in the channel control block.  Emit them only on
-    // the sampling callback: this gives a bounded, primary-evidence record of
-    // the active retail key material without adding any I/O to the hot input
-    // producer path.  It is diagnostic-only and is gated by the existing
-    // native-input-stack trace.
+    // The translated WPAD extension decoder at 0x804E3124 decodes each extension-data octet as
+    // (wire ^ xor_key[i]) + add_key[i], using two eight-byte tables in the channel control block. The tables
+    // are emitted only from the sampling callback, not from the input producer path. Diagnostic only; gated
+    // by the native input-stack trace.
     if (guest_address == 0x80451198u && has(wpad0 + 0x934u, 8u)) {
         output << " ext-add=";
         for (std::uint32_t i = 0; i < 8u; ++i) {
@@ -12255,18 +12113,16 @@ void resume_home_button_rso_native(
 }
 
 const char* audio_start_call_label(std::uint32_t address) {
-    // Keep the call_guest trace on the same verified RMGE01 table as generated
-    // function-entry tracing. A second hand-maintained table here previously
-    // mixed in RMGK01 addresses and produced false audio evidence. This is a
-    // positive call-boundary probe only: generated direct calls bypass it, so
-    // complete absence evidence must come from generated function-entry hooks.
+    // Keep the call_guest trace on the same verified RMGE01 table as generated function-entry tracing. A
+    // second hand-maintained table can drift and must not hold addresses from other builds. This is a
+    // positive call-boundary probe only: generated direct calls bypass it, so absence needs the generated
+    // function-entry hooks.
     if (const char* label = galaxy::trace_audio_function_entry_label(address)) {
         return label;
     }
 
-    // Upstream RMGE01 audio bring-up/request gates verified directly from the
-    // generated US DOL bodies.  These are runtime-diagnostic labels only: they
-    // do not replace, intercept, or alter any translated implementation.
+    // RMGE01 audio bring-up and request gates, taken from the generated US DOL bodies. Runtime-diagnostic
+    // labels only: they do not replace, intercept or alter any translated implementation.
     switch (address) {
     case 0x80025FC0u: return "AudMain allocator";
     case 0x80026158u: return "AudMain resource/bootstrap";
@@ -12308,9 +12164,9 @@ void log_audio_start_call(
             "GALAXY_TRACE_AUDIO_STARTS_END_VI")) {
         return;
     }
-    // Preserve every rare transition while sampling the continuously-called
-    // manager/update functions. A single global quota used to be exhausted by
-    // early update traffic before the title-screen request path could run.
+    // Every rare transition is kept while the frequently called manager and update functions are sampled.
+    // A single global quota would be used up by early update traffic before the title-screen request path
+    // runs.
     static std::mutex s_counts_mutex;
     static std::unordered_map<std::uint32_t, std::uint32_t> s_counts;
     std::uint32_t count = 0u;
@@ -12417,8 +12273,8 @@ bool capture_main_frame_scene_spine(
     std::uint32_t next = 0u;
     std::uint32_t step = 0u;
     record.scene_snapshot_failure = 4u; // Selected GameScene identity.
-    // RMGE01 vtable805BD054 has update at+14 and draw at+18. Confirmed
-    // against ctor8033E450 and update dispatch8039D2FC/8039D304.
+    // RMGE01 vtable 805BD054: update at +14, draw at +18. Matches ctor 8033E450 and update dispatch
+    // 8039D2FC/8039D304.
     if (scene == 0u ||
         !try_read_guest_u32(address_space, scene, vtable) || vtable == 0u ||
         !try_read_guest_u32(address_space, vtable + 0x14u, update) ||
@@ -12706,9 +12562,8 @@ void scene_nerve_owner_resume(
         ++state.scene_nerve_owner_mismatch;
         return;
     }
-    // Verified alias entry precedes its original call_return_checkpoint.
-    // This is whole logical elapsed time, including other guest work, waits,
-    // interrupts and resumed fragments. It is never exclusive callback time.
+    // Alias entry precedes its original call_return_checkpoint. This is whole logical elapsed time, including
+    // other guest work, waits, interrupts and resumed fragments. It is never exclusive callback time.
     scene_nerve_owner_append(state, 4u, scene_nerve_owner_stamp());
     ++state.scene_nerve_owner_resumed;
     pending = {};
@@ -13469,9 +13324,8 @@ bool capture_generated_main_frame_trace(
     if (capture_scene_nerve_child_marker(*static_cast<RuntimeState*>(user), message)) {
         return true;
     }
-    // The generated leaf intentionally flushes on the first call AFTER its
-    // window closes. Consume before window/ordinary Trace filtering, then
-    // print only from the existing terminal main-frame dump.
+    // The generated leaf flushes on the first call after its window closes. Consume before window/ordinary
+    // Trace filtering, then print only from the existing terminal main-frame dump.
     if (static_cast<RuntimeState*>(user)->psmtx_guard_trace.capture(message)) {
         return true;
     }
@@ -13883,10 +13737,9 @@ bool is_route_marker_mario_address(std::uint32_t address) {
     }
 }
 
-// Historical route-selector/schema name retained for capture compatibility.
-// The six PCs below are RMGE01 actor-update observations, not control entries:
-// 0D0C updateBindRatio; 0E18 isInPunchTimerRange; 0FE4 doRush and their interiors.
-// Functional input publication additionally requires the exact opening scene.
+// Route-selector schema name, kept for capture compatibility. The six PCs below are RMGE01 actor-update
+// observations, not control entries: 0D0C updateBindRatio; 0E18 isInPunchTimerRange; 0FE4 doRush and
+// their interiors. Functional input publication additionally requires the exact opening scene.
 bool is_route_marker_mario_control_address(std::uint32_t address) {
     switch (address) {
         case 0x802B0D0Cu: // MarioActor::updateBindRatio entry
@@ -14049,14 +13902,12 @@ void log_route_marker_call(
                 std::memcpy(destination.data(), plain, destination.size());
                 return true;
             }, context.gpr[3], context.gpr[1]);
-    // The exact enabled updateBehavior caller additionally requires the
-    // selected opening scene's completed registered prologue and Mario owner.
-    // Earlier title, file selection and story calls leave startup buttons
-    // armed. This functional input boundary still is not human control proof.
-    // Publish the qualifying call boundary before the optional trace gate so
-    // it can anchor the virtual device even when route logging is off.
-    // Once that single boundary has published every consumer, remove only the
-    // narrow generated-call flag. Broad route tracing remains independent.
+    // The updateBehavior caller also requires the selected opening scene's completed registered prologue and
+    // Mario owner. Earlier title, file selection and story calls leave the startup buttons armed. This input
+    // boundary is not proof of human control. The qualifying call boundary is published before the optional
+    // trace gate, so it anchors the virtual device even when route logging is off. After that boundary has
+    // published every consumer, only the narrow generated-call flag is removed. Broad route tracing is
+    // independent.
     if (first_mario_control_call) {
         state.route_marker_first_mario_control_vi = state.vi_retrace_count;
         if (native_input_mario_control_marker_enabled()) {
@@ -14503,12 +14354,10 @@ void dump_guest_thread_roster(
             << " queue=" << hexadecimal(queue_ptr)
             << " srr0=" << hexadecimal(srr0)
             << " lr=" << hexadecimal(thread_lr);
-        // Diagnostic: if this thread is parked on an OSMessageQueue receive
-        // wait-queue (queue_ptr == &mq->queueReceive == mq + 0x08), dump the
-        // queue's message accounting so we can tell a lost-wakeup (used>0 while
-        // parked) from a never-posted producer (used==0). Offsets are the
-        // libogc OSMessageQueue layout: msgCount +0x14, firstIndex +0x18,
-        // usedCount +0x1C relative to the queue base.
+        // Diagnostic: if this thread is parked on an OSMessageQueue receive wait-queue (queue_ptr ==
+        // &mq->queueReceive == mq + 0x08), dump the queue's message accounting. This separates a lost wakeup
+        // (used > 0 while parked) from a producer that never posted (used == 0). Offsets are the libogc
+        // OSMessageQueue layout: msgCount +0x14, firstIndex +0x18, usedCount +0x1C relative to the queue base.
         if (valid_thread(queue_ptr) && queue_ptr >= 0x80000008u) {
             const std::uint32_t mq = queue_ptr - 0x08u;
             const std::uint32_t msg_count = address_space.read_u32(mq + 0x14u);
@@ -15106,9 +14955,8 @@ void log_xfb_state(RuntimeState& state, const char* phase) {
 
     const auto& address_space = *state.address_space;
     constexpr std::uint32_t kJutVideoDrawDoneFlag = 0x806A2EF8u;
-    // RMGE01's SDA base is 0x806A4CA0.  These are the exact globals used by
-    // MainLoop::waitForRetrace (0x803A0778) and VIGetRetraceCount
-    // (0x804B38F0), verified against the generated AOT body and retail DOL.
+    // RMGE01's SDA base is 0x806A4CA0. These are the globals used by MainLoop::waitForRetrace (0x803A0778)
+    // and VIGetRetraceCount (0x804B38F0), checked against the generated body and the retail DOL.
     constexpr std::uint32_t kViRetraceCounter = 0x806A2E84u;
     constexpr std::uint32_t kMainLoopWaitTarget = 0x806A2508u;
     constexpr std::uint32_t kMainLoopWaitInitialized = 0x806A250Cu;
@@ -15264,28 +15112,24 @@ void dump_xfb_state_trace(
     }
 }
 
-// This is deliberately an end-of-benchmark snapshot, not a live trace.  The
-// JUTVideo callback and queue fields distinguish a guest that is legitimately
-// idle from one whose retrace producer was never installed, without adding
-// I/O or scheduler work to any realtime checkpoint.
+// An end-of-benchmark snapshot, not a live trace. The JUTVideo callback and queue fields separate a guest
+// that is legitimately idle from one whose retrace producer was never installed. It adds no I/O or
+// scheduler work to any realtime checkpoint.
 bool benchmark_guest_state_enabled() {
     static std::atomic<std::int8_t> cached{-1};
     return cached_env_gate(cached, "GALAXY_BENCHMARK_GUEST_STATE", false);
 }
 
-// The Bluetooth/WPAD dump is intentionally benchmark-end-only.  The full
-// controller state is useful when the game stops producing frames, but walking
-// its guest queues while they are live would perturb the exact VI cadence that
-// this runtime is required to preserve.
+// The Bluetooth/WPAD dump runs only at benchmark end. Walking its guest queues while they are live would
+// perturb the VI cadence.
 bool benchmark_bluetooth_state_enabled() {
     static std::atomic<std::int8_t> cached{-1};
     return cached_env_gate(cached, "GALAXY_BENCHMARK_BLUETOOTH_STATE", false);
 }
 
-// This deliberately reports only after the benchmark interval. The counters
-// are maintained by the native BT/HID producer and its IOS delivery boundary;
-// they prove transport activity without making any claim about which game UI
-// subsequently consumed an input.
+// Reported only after the benchmark interval. The counters are maintained by the native BT/HID producer
+// and its IOS delivery boundary. They show transport activity and say nothing about which game UI
+// consumed an input.
 bool benchmark_virtual_input_state_enabled() {
     static std::atomic<std::int8_t> cached{-1};
     return cached_env_gate(cached, "GALAXY_BENCHMARK_INPUT_STATE", false);
@@ -15863,9 +15707,8 @@ bool external_cached_call_preserves_generic_body(
         state.max_calls != 0u || runtime_boundary_self_probe_active(state)) {
         return true;
     }
-    // These unconditional diagnostics/metadata were reached by the previous
-    // broad external-dispatch gate even without an opt-in trace. Keep them,
-    // including the functional opening-route marker's one-shot publication.
+    // These unconditional diagnostics and metadata run even without an opt-in trace. The functional
+    // opening-route marker's one-shot publication is included.
     if (is_route_marker_mario_control_address(guest_address)) {
         return true;
     }
@@ -16089,13 +15932,10 @@ bool needs_call_guest_intercept(
         return true;
     }
     if (diagnostic_intercepts) {
-        // The main-frame diagnostic has an explicit VI window.  Forcing its
-        // selected calls through the host boundary outside that window defeats
-        // the cached native-call path throughout boot, even though
-        // log_main_frame_call() deliberately emits nothing there.  Besides
-        // creating misleadingly perturbative traces, that can make an audio DMA
-        // deadline expire before the requested observation range.  Use the same
-        // window predicate for interception and emission.
+        // The main-frame diagnostic has an explicit VI window. Forcing its selected calls through the host
+        // boundary outside that window defeats the cached native-call path for the whole boot, although
+        // log_main_frame_call() emits nothing there. It can also make an audio DMA deadline expire before the
+        // requested range. Interception and emission use the same window predicate.
         if (trace_main_frame_vi_window(state) &&
             is_main_frame_core_call(guest_address)) {
             return true;
@@ -16253,13 +16093,11 @@ void save_exception_context(
     galaxy::GuestMemoryV1* memory,
     const galaxy::NativeServicesV1* services);
 
-// Enter one of RMGE01's real, statically translated exception wrappers at the
-// architectural vector boundary. The copied low-memory vector itself is not a
-// DOL function and therefore has no generated lookup entry; its observable
-// work is reproduced by save_exception_context plus the exact checks below.
-// Unlike the transitional direct-leaf path above, a translated wrapper must
-// finish through OSLoadContext/RFI and GuestTransfer. A normal return would
-// mean that guest exception/scheduler policy was silently bypassed.
+// Enter one of RMGE01's statically translated exception wrappers at the architectural vector boundary.
+// The copied low-memory vector itself is not a DOL function and has no generated lookup entry; its
+// observable work is reproduced by save_exception_context plus the checks below. Unlike the direct-leaf
+// path above, a translated wrapper must finish through OSLoadContext/RFI and GuestTransfer. A normal
+// return would mean that guest exception/scheduler policy was silently bypassed.
 void run_translated_exception_wrapper(
     RuntimeState& state,
     galaxy::PpcContext* context,
@@ -16364,15 +16202,13 @@ void run_translated_exception_wrapper(
         " pc=" + hexadecimal(context->pc));
 }
 
-// ── Cooperative scheduler (GALAXY_COOP=1) ───────────────────────────────────
-// Guest threads run on fibers (coop_scheduler.h). Interrupt-level guest work is
-// an ordinary call on the current fiber: the selected external handler, or the
-// due alarm's handler, runs with the scheduler disabled and MSR[EE] clear on a
-// frame below the interrupted r1, and the interrupted register file is
-// restored afterwards. The SDK's end-of-interrupt reschedule is left pending
-// until the checkpoint callback that delivered the interrupt has returned,
-// where no runtime scope is live. No OSContext is saved and no exception
-// wrapper, OSLoadContext or RFI runs.
+// --- Cooperative scheduler (GALAXY_COOP=1) ---
+// Guest threads run on fibers (coop_scheduler.h). Interrupt-level guest work is an ordinary call on the
+// current fiber: the selected external handler, or the due alarm's handler, runs with the scheduler
+// disabled and MSR[EE] clear on a frame below the interrupted r1, and the interrupted register file is
+// restored afterwards. The SDK's end-of-interrupt reschedule is left pending until the checkpoint callback
+// that delivered the interrupt has returned, where no runtime scope is live. No OSContext is saved and no
+// exception wrapper, OSLoadContext or RFI runs.
 namespace coop_rt {
 inline constexpr std::uint32_t kInterruptHandlerTablePointer = 0x806A2D08u;
 inline constexpr std::uint32_t kInterruptPrioTable = 0x805DC258u;
@@ -16877,10 +16713,9 @@ bool dispatch_external_interrupt(
         return false;
     }
 
-    // The current flat native call stack cannot preserve an unfinished outer
-    // selected-handler scope across an asynchronous nested RFI. Never hide an
-    // architecturally eligible source behind the active-record guard: fail at
-    // the exact acceptance boundary and require every proof run to report zero.
+    // The current flat native call stack cannot preserve an unfinished outer selected-handler scope across an
+    // asynchronous nested RFI. An architecturally eligible source is never hidden behind the active-record
+    // guard: the run fails at the exact acceptance boundary, and every run must report zero.
     if (state.external_dispatch.active()) {
         ++state.eligible_nested_external_suppressed;
         const auto& outer = state.external_dispatch.record();
@@ -16999,10 +16834,9 @@ void dispatch_ipc_interrupt(
 void scan_pending_gx_pe_events(
     RuntimeState& state,
     galaxy::GuestMemoryV1* memory) {
-    // Boundary-aware PE finish/token detection. The older direct WGPIPE byte
-    // scanner is still available for diagnostics, but Release should parse
-    // FIFO command boundaries so draw/display-list payload bytes cannot spoof
-    // BP 0x45/0x48 and disturb JUTVideo's XFB cadence.
+    // Release builds parse FIFO command boundaries for PE finish/token detection, so draw or display-list
+    // payload bytes cannot spoof BP 0x45/0x48 and disturb JUTVideo's XFB cadence. The direct WGPIPE byte
+    // scanner remains for diagnostics.
     if (!sim_thread_pe_scan_enabled()) {
         return;
     }
@@ -17725,10 +17559,9 @@ bool dispatch_ai_dma_interrupts(
             "GALAXY_DIAGNOSTIC_AI_LATE_CHECKPOINT_SNAPSHOT", false);
         if (snapshot_enabled && !state.ai_dma_late_checkpoint_snapshot_dumped) {
             state.ai_dma_late_checkpoint_snapshot_dumped = true;
-            // Preserve the existing fixed rings at the first missed boundary,
-            // before later service overwrites them. This opt-in diagnostic is
-            // excluded from FPS acceptance. Reuse the already captured device
-            // observation below; output never changes its time or deadline.
+            // Preserve the fixed rings at the first missed boundary, before later service overwrites them. This
+            // opt-in diagnostic does not change the time or deadline of any event. It reuses the device observation
+            // captured below.
             std::cerr << "[ai-late-checkpoint-snapshot] begin=1 now="
                       << now_ticks << " completion=" << device_completion_ticks
                       << " duration=" << duration_ticks << '\n';
@@ -18170,11 +18003,9 @@ void dump_pending_vi_boundary_audit(
                galaxy::vi::BoundaryPhase::Finalize)]
         << " token-blocking-polls="
         << state.pending_vi_token_blocking_polls
-        // Nanoseconds, and the fields sum to the blocked share of the session. Pair
-        // with the session wall time from process.csv: if
-        // (token-blocking-ns + token-completion-ns) is a large fraction of wall time,
-        // the guest's render cadence is set by waiting for the render thread rather
-        // than by guest execution.
+        // Nanoseconds. The fields sum to the blocked share of the session. If (token-blocking-ns +
+        // token-completion-ns) is a large fraction of wall time, the guest's render cadence is set by waiting
+        // for the render thread rather than by guest execution.
         << " token-blocking-ns="
         << state.pending_vi_token_blocking_ns
         << " token-completion-ns="
@@ -18267,13 +18098,10 @@ bool recover_from_verified_host_suspension(
     const bool active_vi_ai_proof_requested =
         proof == HostSuspensionRecoveryProof::
             AiOverrunWithOwnedActiveViSuccessor;
-    // The general-purpose active-boundary safety checks below
-    // (exact_external_vi_ownership,
-    // input_phase_not_advanced) are evidence-source-agnostic: they prove
-    // nothing else could have advanced the owned transaction, regardless of
-    // whether the specific successor evidence comes from an AI DMA crossing
-    // or from active_boundary_owns_successor_during_backlog. Both proof
-    // kinds require them.
+    // The active-boundary safety checks below (exact_external_vi_ownership, input_phase_not_advanced) do not
+    // depend on where the successor evidence comes from. They show that nothing else could have advanced the
+    // owned transaction, whether the successor comes from an AI DMA crossing or from
+    // active_boundary_owns_successor_during_backlog. Both proof kinds require them.
     const bool active_boundary_backlog_proof_requested =
         proof == HostSuspensionRecoveryProof::
             BacklogWithOwnedActiveViSuccessor;
@@ -18343,12 +18171,10 @@ bool recover_from_verified_host_suspension(
             active_boundary,
             observation,
             state.host_pause_candidate_last_guest_ticks);
-    // Deliberately does NOT require an AI DMA crossing: its evidence is the
-    // same wall-time-vs-
-    // CPU-time interval already required by host_pause_candidate_valid
-    // (is_host_suspension_candidate_interval), combined with the boundary's
-    // own structural proof that only its exact direct successor edge is
-    // being recognized (active_boundary_owns_successor_during_backlog).
+    // Does not require an AI DMA crossing. Its evidence is the wall-time versus CPU-time interval already
+    // required by host_pause_candidate_valid (is_host_suspension_candidate_interval), combined with the
+    // boundary's structural check that only its exact direct successor edge is being recognized
+    // (active_boundary_owns_successor_during_backlog).
     const bool active_owned_backlog_successor_proof =
         active_boundary_backlog_proof_requested &&
         observed_ticks == state.host_pause_candidate_observed_ticks &&
@@ -18695,20 +18521,11 @@ void dump_exact_vi_deadline_audit(
                << " broker-last-sequence=" << publication.last_sequence
                << " broker-last-deadline-ticks="
                << publication.last_deadline_ticks
-               // Guest-active window and the two rates that follow from it, printed so
-               // that nobody has to choose a denominator again.
-               //
-               // Why this exists: three defensible denominators for the same numerator
-               // gave three answers a whole Hz apart on the Arc recording - 371.86 s of
-               // process.csv wall (includes pre-guest startup) gave 58.88 Hz, the
-               // present-stats span of 365.40 s (omits the window the first sample
-               // closes) gave 59.92 Hz, and the guest's own timeline gives 59.59 Hz.
-               // Agent 15 published 58.88, agent 14 "corrected" it to 59.92, and both
-               // were estimates; the timeline anchor settles it at 59.59 Hz delivered
-               // against a 59.99 Hz schedule (145 coalesced edges = 0.66%).
-               //
-               // The host sampling cadence is not the guest's clock. Both endpoints are
-               // already in scope here, so emitting them costs nothing.
+               // Guest-active window and the two rates derived from it, so the denominator is not chosen again per
+               // report. Three denominators for the same numerator disagree by about a Hz: process wall time includes
+               // pre-guest startup, the present-stats span omits the window the first sample closes, and the guest's own
+               // timeline is the reference. The host sampling cadence is not the guest's clock. Both endpoints are
+               // already in scope, so emitting them costs nothing.
                << " guest-active-ms="
                << ((publication.last_deadline_ticks > state.vi_first_deadline_ticks
                         ? (publication.last_deadline_ticks - state.vi_first_deadline_ticks)
@@ -18816,12 +18633,9 @@ void dump_decrementer_deadline_audit(
            << " broker-publications="
             << state.decrementer_deadline_publications
             << " exact-fallbacks=" << state.decrementer_deadline_fallbacks
-            // A "fallback" is the CPU thread settling the edge from its
-            // immutable arm after the absolute deadline, which is a normal race
-            // against the broker worker and is documented as intended -- not a
-            // failure. The share therefore describes the guest's checkpoint
-            // density; the lateness magnitude below is what says whether any
-            // edge was actually missed.
+            // A fallback is the CPU thread settling the edge from its immutable arm after the absolute deadline. This
+            // race against the broker worker is normal. The share describes the guest's checkpoint density; the
+            // lateness magnitude below shows whether any edge was missed.
             << " settled-events=" << state.decrementer_deadline_settled_events
             << " mean-lateness-ticks="
             << (state.decrementer_deadline_settled_events == 0u
@@ -18851,26 +18665,18 @@ void dump_nested_interrupt_audit(
 
 bool trace_realtime_vi_wait(const RuntimeState& state);
 
-// The guest scheduler's idle loop (SelectThread with an empty run queue) is
-// translated code and would otherwise spin a whole host core until the next
-// VI, AI or decrementer deadline. On real hardware that spin costs nothing; on
-// a two-core laptop it starves the render thread. When nothing is pending and
-// the retrace is not yet due, wait on the same high-resolution timer the
-// VIWaitForRetrace path uses, capped by the AI DMA deadline and by a short
-// slice so input and decrementer deadlines published by other threads are
-// observed promptly. This changes no guest-visible state: the idle loop
-// resumes at the same checkpoint and re-evaluates its run queue exactly as
-// before.
-// The wait is event-driven: the thread blocks on an auto-reset event that
-// every publication (VI, AI, DEC, input, DSP, IOS) signals through
-// PendingEventLatch::wake_idle_waiters, and which the render thread signals
-// for PE finish/token levels through the address space's idle wake callback,
-// together with a high-resolution waitable timer armed for the next VI or AI
-// DMA deadline. The first version used WaitOnAddress with a millisecond
-// timeout; its timeouts are quantized to the system clock interrupt, and the
-// laptop session of 2026-10-10 showed 117 idle-loop checkpoint gaps of 16.9
-// to 33 ms (one and two clock ticks) that turned into 50 ms frame intervals
-// and late AI DMA. GALAXY_IDLE_LOOP_SLEEP=0 restores the spinning idle loop.
+// The guest scheduler's idle loop (SelectThread with an empty run queue) is translated code and would
+// otherwise spin a host core until the next VI, AI or decrementer deadline. When nothing is pending and the
+// retrace is not yet due, this waits on the same high-resolution timer the VIWaitForRetrace path uses,
+// capped by the AI DMA deadline and by a short slice, so input and decrementer deadlines published by other
+// threads are seen promptly. No guest-visible state changes: the idle loop resumes at the same checkpoint
+// and re-evaluates its run queue.
+// The wait is event-driven: the thread blocks on an auto-reset event that every publication (VI, AI, DEC,
+// input, DSP, IOS) signals through PendingEventLatch::wake_idle_waiters, and that the render thread signals
+// for PE finish/token levels through the address space's idle wake callback. A high-resolution waitable
+// timer is armed for the next VI or AI DMA deadline. A WaitOnAddress wait with a millisecond timeout is not
+// used: its timeouts are quantized to the system clock interrupt, which delays frames and AI DMA.
+// GALAXY_IDLE_LOOP_SLEEP=0 restores the spinning idle loop.
 bool idle_loop_sleep_enabled() {
     static std::atomic<std::int8_t> cached{-1};
     return cached_env_gate(cached, "GALAXY_IDLE_LOOP_SLEEP", true);
@@ -18930,12 +18736,9 @@ void idle_loop_wait_for_next_deadline(RuntimeState& state) {
     if (state.draw_done_submit_owed && wait_duration > kOwedSubmitPoll) {
         wait_duration = kOwedSubmitPoll;
     }
-    // Optional final stretch left to polling. VI edges arrive through the
-    // broker's publication wake, not this timer, so no guard is needed: the
-    // 100 us guard spun the guest idle loop (SelectThread) before every VI
-    // edge, 5 % of the simulation thread's guest time; removing it measured
-    // 18.6 -> 17.3 % of a core (gameplay route, 3 rounds) with VI delivery
-    // lateness p99 0.52 -> 0.57 ms. The timer still covers AI deadlines.
+    // Final stretch before a deadline is left to polling. VI edges arrive through the broker's publication
+    // wake, not this timer, so no guard is needed; a 100 us guard would spin the idle loop before every VI
+    // edge. The timer still covers AI deadlines.
     static const auto kDeadlineGuard = std::chrono::microseconds(std::clamp<std::uint64_t>(
         read_env_u64("GALAXY_IDLE_LOOP_GUARD_US", 0u), 0u, 2000u));
     if (wait_duration <= kDeadlineGuard) {
@@ -19548,22 +19351,16 @@ bool dispatch_vi_retrace(
         }
         return false;
     }
-    // External interrupt: hardware masks the VI retrace while MSR[EE]=0.
-    // Dispatching inside a guest critical section LOSES WAKEUPS: boot 77
-    // caught postRetraceProc's OSSendMessage to the frame-pace mq
-    // (0x809AE098) firing between main's OSReceiveMessage empty-check and
-    // its enqueue+sleep — the message then sat at used=1 forever while main
-    // parked on the wait queue (state=4), deadlocking the whole boot
-    // sequence.  Defer (without consuming the retrace period) until the
-    // guest restores EE; the retrace then fires on the next checkpoint.
-    // The force path (VIWaitForRetrace sleep simulation in
-    // on_guest_sleep_thread) is exempt: that waiter is already enqueued on
-    // the retrace queue, so the handler's wake cannot be lost.
-    // idle_ee_override: the host's spurious-wakeup pump path simulates the
-    // OS idle loop, which on hardware runs with EE=1 — and that path SKIPS
-    // the guest enqueue (the sleeper re-checks its queue after the pump), so
-    // dispatching there cannot lose a wake even though the interrupted
-    // context's MSR still shows the critical section's EE=0.
+    // External interrupt: hardware masks the VI retrace while MSR[EE]=0. Dispatching inside a guest critical
+    // section loses wakeups: postRetraceProc's OSSendMessage to the frame-pace queue (0x809AE098) can fire
+    // between main's OSReceiveMessage empty-check and its enqueue+sleep. The message then stays at used=1 while
+    // main parks on the wait queue, and the boot deadlocks. Defer, without consuming the retrace period, until
+    // the guest restores EE; the retrace then fires on the next checkpoint.
+    // The force path (VIWaitForRetrace sleep simulation in on_guest_sleep_thread) is exempt: that waiter is
+    // already on the retrace queue, so the handler's wake cannot be lost.
+    // idle_ee_override: the host's spurious-wakeup pump simulates the OS idle loop, which runs with EE=1 on
+    // hardware. That path skips the guest enqueue (the sleeper re-checks its queue after the pump), so
+    // dispatching there cannot lose a wake even though the interrupted MSR still shows EE=0.
     if (!force && !idle_ee_override && (context->msr & 0x00008000u) == 0) {
         return false;
     }
@@ -19954,11 +19751,10 @@ bool finalize_vi_retrace(
         xfb_copies_after_present,
         galaxy::gx::xfb_present_stats());
 
-    // Dusklight's updateRenderSize/setTvSize propagates one accepted render
-    // aspect through game camera and UI. In Galaxy this default-off policy is
-    // latched only after the prior VI's presentation completes. Drain queued
-    // renderer work before publishing a new generation so its XFB is never
-    // fitted using the next frame's guest projection/IR geometry.
+    // The render-aspect policy (default off) propagates one accepted aspect through the game camera and UI.
+    // In Galaxy it is latched only after the prior VI's presentation completes. Queued renderer work is drained
+    // before a new generation is published, so its XFB is never fitted with the next frame's guest
+    // projection/IR geometry.
     if (galaxy::experimental_dynamic_aspect_requested()) {
         const auto client = galaxy::gx::aspect_latch_extent();
         if (client.width > 1 && client.height > 1 &&
@@ -19987,15 +19783,10 @@ bool finalize_vi_retrace(
     if (state.benchmark_vi_end != 0u) {
         if (!state.benchmark_vi_started &&
             state.vi_retrace_count >= state.benchmark_vi_start) {
-            // Announce the left edge. `vi_retrace_count` is otherwise never
-            // reported anywhere -- `GALAXY_TRACE_RUNTIME_SCAFFOLDING` is the only
-            // thing that prints it, and it prints at most one line in sixty --
-            // so without this line there is no way to learn which retrace the
-            // window actually opened on, and therefore no way to choose START
-            // for a later run except by guessing. START is a lower bound and the
-            // arming also waits for render idle, so the count here can exceed
-            // the requested START; this line is what makes that visible.
-            // Cheap, once per run, and only when a window was requested.
+            // Reports the left edge of the measurement window. Without this line the retrace the window opened on is
+            // not known, so a later run's START cannot be chosen from it. START is a lower bound, and arming also waits
+            // for render idle, so the count here can exceed the requested START. Printed once per run, and only when a
+            // window was requested.
             std::cout << "[benchmark] vi-window armed at retrace="
                       << state.vi_retrace_count << " requested-start="
                       << state.benchmark_vi_start << " requested-end="
@@ -20541,18 +20332,13 @@ bool finalize_vi_retrace(
                           state.benchmark_start_ai_dma_resync_missed_buffers)
                     : 0u;
 
-            // The benchmark terminal is a host-only observation boundary: no
-            // translated guest code will run after this point.  Snapshot every
-            // device statistic first, then verify and quiesce the free-running
-            // DSP before emitting potentially unbounded diagnostics.  A DSP
-            // MRAM request is deliberately synchronous and must be serviced by
-            // this simulation thread; leaving the worker alive while stdout
-            // output, trace formatting, or a slow redirected sink occupies the
-            // thread can manufacture a two-second rendezvous timeout after a
-            // valid measurement has already ended.  Checking for a prior hard
-            // failure before shutdown preserves the fail-closed contract; once
-            // terminal shutdown starts, cancellation is the expected lifetime
-            // transition rather than a recovered guest-DSP failure.
+            // The benchmark terminal is a host-only observation boundary: no translated guest code runs after this
+            // point. Device statistics are snapshotted first. The free-running DSP is then checked and quiesced before
+            // any potentially unbounded diagnostic output. A DSP MRAM request is synchronous and must be serviced by
+            // this simulation thread. Leaving the worker alive during stdout output or trace formatting can cause a
+            // two-second rendezvous timeout after the measurement has ended. A prior hard failure is still checked
+            // before shutdown; once terminal shutdown starts, cancellation is the expected end of the worker, not a
+            // guest DSP failure.
             if (state.address_space != nullptr) {
                 state.address_space->throw_if_native_dsp_failed();
                 (void)state.address_space->prepare_for_process_exit();
@@ -21655,12 +21441,10 @@ bool finalize_vi_retrace(
             // scheduler perturbation.
             dump_main_frame_trace(state, std::cout);
             dump_route_marker_trace(state, std::cout);
-            // The frame-phase markers isolate a long interval between two
-            // translated calls, but an architectural call-return checkpoint
-            // can also own that interval.  Its existing bounded slow-phase
-            // ring is normally failure-only; make it available with this
-            // explicitly opt-in deferred trace so attribution remains
-            // evidence-based without adding work to the real-time path.
+            // The frame-phase markers isolate a long interval between two translated calls, but an architectural
+            // call-return checkpoint can also own that interval. Its bounded slow-phase ring is normally failure-only;
+            // this explicitly opt-in deferred trace makes it available, so the interval can be attributed without
+            // adding work to the real-time path.
             if (trace_main_frame_enabled()) {
                 state.dump_checkpoint_timing(std::cout);
             }
@@ -21851,13 +21635,11 @@ bool finalize_vi_retrace(
     return true;
 }
 
-// Context-poison detector: a register file saved into (or loaded from) an
-// OSContext must carry an r1 inside the owning thread's own stack.  A save
-// that violates this is the exact corruption behind the FileLoaderThread
-// "RFI resume trampoline missing translated continuation" crash family
-// (loader ctx observed holding the audio thread's r1=0x807ACxxx).  Only
-// contexts that are OSThread bases on the active queue are checked —
-// stack-allocated exception OSContexts have no stack-bound fields.
+// Context-poison detector: a register file saved into or loaded from an OSContext must carry an r1 inside
+// the owning thread's own stack. A save that violates this is the corruption behind the FileLoaderThread
+// "RFI resume trampoline missing translated continuation" failure family (a loader context holding the
+// audio thread's r1). Only contexts that are OSThread bases on the active queue are checked; stack-allocated
+// exception OSContexts have no stack-bound fields.
 bool guest_thread_stack_bounds(
     galaxy::GuestMemoryV1* memory,
     const galaxy::NativeServicesV1* services,
@@ -21898,11 +21680,9 @@ bool guest_thread_stack_bounds(
     return galaxy::resolve_guest_fast(memory, stack_end, stack_bytes) != nullptr;
 }
 
-// Returns the active-queue thread whose recorded stack range contains r1,
-// or 0 if none.  Poison signature: r1 owned by a DIFFERENT thread than the
-// context being saved/loaded.  (The main thread legitimately runs on the
-// 0x816FFxxx arena stack outside its recorded range — owner-based matching
-// ignores that instead of false-positive flooding.)
+// Returns the active-queue thread whose recorded stack range contains r1, or 0 if none. Poison signature: r1
+// owned by a different thread than the context being saved or loaded. The main thread runs on the
+// 0x816FFxxx arena stack, outside its recorded range; owner-based matching ignores that.
 template <bool CollectRoster>
 std::uint32_t guest_r1_owner_thread_impl(
     galaxy::GuestMemoryV1* memory,
@@ -22543,19 +22323,15 @@ bool guest_context_r1_cross_thread(
     return owner_thread != 0u && owner_thread != guest_context;
 }
 
-// Eager FPU (native ABI 25). Translated code no longer tests MSR[FP] before a
-// floating-point instruction, so the runtime must keep the live FPR/PS/FPSCR
-// file equal to the FPU image of the context about to execute. This performs
-// exactly what RMGE01's exception-7 handler (0x804A3C9C) does at the first FP
-// instruction of a non-owner context: publish the new owner in __OSFPUContext,
-// save the previous owner's registers with the translated 0x804A3604 body
-// (which sets OS_CONTEXT_STATE_FPSAVED and honours HID2[PSE]), load the new
-// owner's image with the translated 0x804A34E0 body (which skips contexts whose
-// image was never saved), and set MSR[FP] in both the live MSR and the
-// context's SRR1 image. It runs at every point where the executing context
-// can change: OSSetCurrentContext, the OSLoadContext boundary, exception entry
-// and RFI. Only the moment differs from hardware; the resulting register file,
-// context images and __OSFPUContext are identical to the lazy sequence.
+// Eager FPU (native ABI 25). Translated code no longer tests MSR[FP] before a floating-point instruction, so
+// the runtime keeps the live FPR/PS/FPSCR file equal to the FPU image of the context about to execute. This
+// does what RMGE01's exception-7 handler (0x804A3C9C) does at the first FP instruction of a non-owner
+// context: publish the new owner in __OSFPUContext, save the previous owner's registers with the translated
+// 0x804A3604 body (which sets OS_CONTEXT_STATE_FPSAVED and honours HID2[PSE]), load the new owner's image
+// with the translated 0x804A34E0 body (which skips contexts whose image was never saved), and set MSR[FP] in
+// the live MSR and the context's SRR1 image. It runs wherever the executing context can change:
+// OSSetCurrentContext, the OSLoadContext boundary, exception entry and RFI. Only the timing differs from
+// hardware; the register file, context images and __OSFPUContext match the lazy sequence.
 void eager_fpu_context_switch(
     RuntimeState& state,
     galaxy::PpcContext* context,
@@ -22877,9 +22653,8 @@ bool arbitrate_external_before_decrementer(
             /*force=*/force_due_vi_publication,
             /*idle_ee_override=*/false,
             resume_address);
-        // A flag-based RFI out of the VI handler already loaded the resumed
-        // context; this instruction boundary no longer exists, so DEC must
-        // not be accepted on it (GuestTransfer used to skip the rest).
+        // A flag-based RFI out of the VI handler has already loaded the resumed context. This instruction boundary
+        // no longer exists, so DEC must not be accepted on it. A GuestTransfer skips the rest of the pass.
         if (state.pending_transfer.active) return true;
     }
     if (dispatch_external_interrupt(
@@ -22927,11 +22702,10 @@ void dispatch_decrementer(
         return;
     }
 
-    // At this point DEC is pending, EE is enabled, and all higher-priority
-    // external sources have been arbitrated. The existing flat-transfer model
-    // cannot yet preserve a live outer exception/selected-handler scope across
-    // this nested asynchronous RFI, so reject before consuming the request or
-    // saving any architectural state. Clean target proofs must keep this zero.
+    // At this point DEC is pending, EE is enabled, and all higher-priority external sources have been
+    // arbitrated. The flat-transfer model cannot yet preserve a live outer exception or selected-handler scope
+    // across this nested asynchronous RFI, so reject before consuming the request or saving any architectural
+    // state. The count must stay zero.
     if (state.dispatching_external_interrupt ||
         state.dispatching_decrementer ||
         state.dispatching_fpu_unavailable ||
@@ -23048,11 +22822,9 @@ void dispatch_decrementer(
         interrupted_context,
         memory,
         state.services);
-    // NOTE: the former SRR0-skip hack for 0x804A8A0C / 0x80415610 is gone.
-    // 0x804A8A0C is the loop branch inside OSReceiveMessage; skipping it with
-    // usedCount==0 made the queue indices go negative and handed the caller a
-    // garbage message.  Wait resolution is now done legally by the OS
-    // Synchronization & Event Pump subsystem (see on_guest_sleep_thread).
+    // 0x804A8A0C is the loop branch inside OSReceiveMessage. Skipping it with usedCount==0 made the queue
+    // indices go negative and handed the caller a garbage message. Wait resolution is done by the OS
+    // Synchronization and Event Pump subsystem (see on_guest_sleep_thread).
     ++state.decrementer_count;
     if (trace_decrementer() && state.decrementer_count <= 8u) {
         const std::uint64_t now_ticks = runtime_time_base_ticks(state);
@@ -24384,24 +24156,17 @@ void call_guest_impl_body(
         (!state.native_mouse_trace_xy_valid || state.native_mouse_trace_xy !=
             std::array<std::uint32_t,2>{std::bit_cast<std::uint32_t>(state.synthetic_pointer_last_read.sample.x),
                                        std::bit_cast<std::uint32_t>(state.synthetic_pointer_last_read.sample.y)});
-    // Publish the call target as the architectural PC BEFORE any interceptor
-    // runs. Several interceptors below (OSSleepThread's event pump, the THP
-    // decode fast path, ...) dispatch guest interrupt handlers, and every
-    // dispatcher snapshots the interrupted thread with
-    // save_exception_context(*context, context->pc, ...). Generated code only
-    // assigns context->pc for DIRECT calls; call_guest/call_guest_resolved
-    // sites leave it holding the PREVIOUS call target. If a dispatch inside
-    // an interceptor then switched threads, the interrupted OSContext froze
-    // srr0 at that stale pc while the GPRs were current — the later resume
-    // re-entered old code with new registers (observed: __ios_Ipc2 about to
-    // OSSleepThread(req+0x2C) resumed at IPCWriteReg 0x804D1F10 with
-    // r3=0x933E00AC → wild store at 0x19F802B0; also stack-LR RFI trampoline
-    // failures from the same mixed-state resume family).
-    // Replace ONLY the mouse FileSelect trySelect hover gate with its existing
-    // exact pane-hit function. The translated caller frame, real LR and all
-    // continuations survive interrupts; no speculative guest call/context copy.
-    // A current owned mouse press must hit the current pane, including when a
-    // previously hovered different pane still has its Pointing nerve.
+    // Publish the call target as the architectural PC before any interceptor runs. Several interceptors
+    // (OSSleepThread's event pump, the THP decode fast path, ...) can dispatch guest interrupt handlers, and
+    // every dispatcher snapshots the interrupted thread with save_exception_context(*context, context->pc, ...).
+    // Generated code assigns context->pc only for direct calls; call_guest and call_guest_resolved sites leave
+    // it holding the previous call target. If a dispatch inside an interceptor switched threads, the
+    // interrupted OSContext would keep that stale srr0 while its GPRs were current, and the resume would
+    // re-enter old code with new registers.
+    // Replace only the mouse FileSelect trySelect hover gate with its exact pane-hit function. The translated
+    // caller frame, real LR and all continuations survive interrupts; no speculative guest call or context copy.
+    // A current owned mouse press must hit the current pane, including when a previously hovered different pane
+    // still has its Pointing nerve.
     if(guest_address==0x803A29B8u && context->lr==0x8034BF90u &&
        state.native_mouse_pointer_frame && state.synthetic_kpad_fresh_mouse_pointer &&
        state.synthetic_pointer_last_read.selection==galaxy::host::SyntheticKpadPointerSelection::RetainedMousePress &&
@@ -24523,11 +24288,8 @@ void call_guest_impl_body(
                             // Keep this scene's matrices; the query reads `ready`.
                             ++state.native_mouse_capture_busy;
                         } else if (state.native_mouse_async_depth) {
-                            // In-frame capture: this frame's own submission records
-                            // the field when the render thread reaches the FIFO
-                            // offset of this boundary. No mid-frame FIFO split, no
-                            // utility chunk, no wait (the split cost 2.4 ms per
-                            // frame of simulation time on the 185H laptop).
+                            // In-frame capture: this frame's own submission records the field when the render thread reaches the FIFO
+                            // offset of this boundary. No mid-frame FIFO split, no utility chunk, no wait.
                             const auto started = std::chrono::steady_clock::now();
                             state.address_space->flush_wgpipe_gather_tail_for_frame();
                             galaxy::gx::attach_pointer_depth_capture(
@@ -24891,11 +24653,9 @@ void call_guest_impl_body(
     log_model_resource_probe(state, guest_address, *context);
     log_model_name_table_lookup_probe(state, guest_address, *context);
     log_audio_thread_call_entry(state, guest_address, *context, memory);
-    // MEM2 message-queue traffic tracer (GALAXY_TRACE_MEM2_MQ): the pre-title
-    // boot stall is the main thread blocked in OSReceiveMessage on a MEM2
-    // completion queue (e.g. 0x913FB6E4 for /ObjectData/*.arc loads) that is
-    // never posted. Surface every send/jam/receive touching a MEM2 queue so
-    // the missing producer can be identified.
+    // MEM2 message-queue tracer (GALAXY_TRACE_MEM2_MQ). Surfaces every send, jam and receive on a MEM2 queue,
+    // so a completion queue that is never posted (for example 0x913FB6E4 for /ObjectData/*.arc loads) can be
+    // matched to its missing producer.
     {
         static const bool trace_mem2_mq =
             read_env_flag("GALAXY_TRACE_MEM2_MQ", false);
@@ -24944,12 +24704,10 @@ void call_guest_impl_body(
         if (execute_yield_select_retaining_same_context(state, body, context, memory, enabled)) return;
         goto execute_translated;
     }
-    // PROBE(strap-src): one-shot fingerprints of the WiiRemoteStrapReplace.arc
-    // staging buffer (DI read dst 0x808DE1A0, Yaz0 stream) and the suspected
-    // 0x9A820-byte decompress destination at 0x811F0000 (holds the four
-    // strap-screen textures the renderer paints white).  Distinguishes
-    // "decomp never ran" (dest all 0xFF) from "decomp ran, BTI image copy
-    // failed" (dest holds RARC data).  REMOVE with Blocker C.
+    // One-shot fingerprints of the WiiRemoteStrapReplace.arc staging buffer (DI read dst 0x808DE1A0, Yaz0
+    // stream) and of the 0x9A820-byte decompress destination at 0x811F0000, which holds the four strap-screen
+    // textures the renderer paints white. A decompression that never ran leaves the destination all 0xFF; one
+    // that ran with a failed BTI image copy leaves RARC data there.
     {
         static bool s_strap_dumped = false;
         if (trace_runtime_scaffolding() && !s_strap_dumped &&
@@ -25070,7 +24828,7 @@ void call_guest_impl_body(
             " target=" + hexadecimal(token.target_context) +
             " pc=" + hexadecimal(context->pc));
     }
-    // Any JUT-layer call made from inside the VI retrace dispatch — the
+    // Any JUT-layer call made from inside the VI retrace dispatch - the
     // registered pre/post callbacks live at 0x80419554/0x80419308.
     if (state.dispatching_vi_retrace && (guest_address >> 16) == 0x8041u) {
         static int s_vi_jut_log = 0;
@@ -25094,12 +24852,11 @@ void call_guest_impl_body(
                 << " lr=" << hexadecimal(context->lr) << '\n';
         }
     }
-    // Message-queue traffic tracer (capped per queue): OSSendMessage
-    // (0x804A88E4) and OSReceiveMessage (0x804A89AC).  Diagnoses lost/eaten
-    // messages — e.g. the async-executor done-post main waits on forever.
-    // OSSetCurrentContext (0x804A3734): validate the exact generated caller
-    // role without rewriting r3. Temporary callback contexts use nested LIFO
-    // tokens; g_last_saved_ctx remains trace-only metadata for the outgoing D4.
+    // Message-queue tracer, capped per queue: OSSendMessage (0x804A88E4) and OSReceiveMessage (0x804A89AC).
+    // Finds lost or consumed messages, such as an async executor's done post that the main thread waits for.
+    // OSSetCurrentContext (0x804A3734): validates the exact generated caller role without rewriting r3.
+    // Temporary callback contexts use nested LIFO tokens; g_last_saved_ctx is trace-only metadata for the
+    // outgoing context.
     if (guest_address == 0x804A3734u) {
         prepared_set_current_context =
             prepare_guest_set_current_context(state, memory, *context);
@@ -25160,8 +24917,8 @@ void call_guest_impl_body(
             }
         }
     }
-    // JKR do_alloc tracer: heap object + size for the first 48 allocations —
-    // identifies which heap's free list owns the contested node 0x806C2200.
+    // JKR do_alloc tracer: heap object and size for the first 48 allocations. Identifies which heap's free list
+    // owns node 0x806C2200.
     if (guest_address == 0x80409F48u) {
         static int s_alloc_trace = 0;
         if (trace_runtime_scaffolding() && ++s_alloc_trace <= 48) {
@@ -25199,9 +24956,8 @@ void call_guest_impl_body(
             }
         }
     }
-    // JKR free-path tracer: log frees whose payload lies in the svc1 object
-    // neighborhood (0x806C2100..0x806C2400) — one of them releases the live
-    // service singleton block and wrecks the root heap free list.
+    // JKR free-path tracer: logs frees whose payload lies near the svc1 object (0x806C2100..0x806C2400). One of
+    // those frees released the live service singleton block and corrupted the root heap free list.
     if ((guest_address == 0x8040CA60u || guest_address == 0x8040ACE0u ||
          guest_address == 0x8040ABF4u) &&
         context->gpr[3] >= 0x806C2100u && context->gpr[3] < 0x806C2400u) {
@@ -25215,8 +24971,8 @@ void call_guest_impl_body(
             std::cout << '\n';
         }
     }
-    // OSCreateThread (0x804AB488) tracer: find the thread whose stack
-    // overlaps svc1's region (stackTop 0x806C2220 / base 0x806BE220).
+    // OSCreateThread (0x804AB488) tracer: finds the thread whose stack overlaps the svc1 region (stackTop
+    // 0x806C2220, base 0x806BE220).
     if (guest_address == 0x804AB488u) {
         static int s_ct = 0;
         if (trace_runtime_scaffolding() && ++s_ct <= 16) {
@@ -25342,12 +25098,10 @@ void call_guest_impl_body(
             std::cout << '\n';
         }
     }
-    // Broad WPAD/KPAD compatibility HLE is removed: regenerated modules
-    // execute the translated SDK input stack and real Wii Remotes enter at
-    // the Bluetooth HID boundary. A single, explicitly audited KPADRead fast
-    // path below is retained only for synthetic host devices that have no IR
-    // camera; it replaces their final decoded sample to minimize pointer
-    // latency and never engages for RuntimeInputMode::RealWiimote.
+    // Broad WPAD/KPAD compatibility HLE is not used. Regenerated modules run the translated SDK input stack, and
+    // real Wii Remotes enter at the Bluetooth HID boundary. One audited KPADRead fast path below is kept only for
+    // synthetic host devices without an IR camera. It replaces their final decoded sample to minimize pointer
+    // latency, and it never engages for RuntimeInputMode::RealWiimote.
     if (guest_address == 0x804ABFBCu) {
         // Validate identity and queue state without repairing either. Every
         // valid call proceeds into the exact translated OSSleepThread below;
@@ -25425,9 +25179,9 @@ void call_guest_impl_body(
         std::cerr << " [lr=0x" << std::hex << context->lr
                   << " vi=" << std::dec << state.vi_retrace_count << "]\n";
     }
-    // Intercept OSReport (0x804A3E94) to log crash diagnostics to host stdout.
-    // gpr[3] = format string (guest ptr), gpr[4] = first arg (often a string ptr).
-    // We print both so panic messages are human-readable in the boot log.
+    // Intercepts OSReport (0x804A3E94) to write crash diagnostics to host stdout. gpr[3] = format string (guest
+    // pointer), gpr[4] = first argument (often a string pointer). Both are printed so panic messages are readable
+    // in the log.
     if (guest_address == 0x804A3E94u && state.address_space != nullptr) {
         const std::uint32_t fmt_ptr = context->gpr[3];
         const std::uint32_t arg_ptr = context->gpr[4];
@@ -25460,18 +25214,13 @@ void call_guest_impl_body(
         context->gpr[3] = 0u;
         return;
     }
-    // Intercept KPADRead (0x804506D8): s32 KPADRead(s32 chan, KPADStatus[], u32 count).
-    // Keyboard/mouse and XInput have no real accelerometer or IR camera to be
-    // faithful to; reconstructing a pointer position from synthesized sensor
-    // bytes only adds latency and indirection for something with no hardware
-    // to match. When native input mode is keyboard/mouse or controller, inject
-    // the already-computed pointer position directly (matching the exact
-    // normalized [-1,1] convention Game/System/WPadPointer.cpp's
-    // getPointingPosBasedOnScreen expects from status->pos, confirmed against
-    // the decompilation) instead of letting the translated KPAD/WPAD stack
-    // re-derive it from fake IR dots. A real Wii Remote over Bluetooth is
-    // unaffected: this only engages when the runtime's own input mode says the
-    // pointer source is synthetic in the first place.
+    // Intercepts KPADRead (0x804506D8): s32 KPADRead(s32 chan, KPADStatus[], u32 count).
+    // Keyboard/mouse and XInput have no accelerometer or IR camera to emulate, so rebuilding a pointer from
+    // synthesized sensor bytes only adds latency. In keyboard/mouse or controller mode the computed pointer
+    // position is injected directly, in the normalized [-1,1] convention that Game/System/WPadPointer.cpp
+    // getPointingPosBasedOnScreen reads from status->pos. The translated KPAD/WPAD stack does not re-derive it
+    // from fake IR dots. A real Wii Remote over Bluetooth is unaffected: this applies only when the runtime's
+    // input mode marks the pointer source as synthetic.
     if (guest_address == 0x804506D8u && state.address_space != nullptr) {
         const std::uint32_t chan = context->gpr[3];
         const std::uint32_t status_ptr = context->gpr[4];
@@ -25614,8 +25363,7 @@ void call_guest_impl_body(
             return;
         }
     }
-    // Intercept PPCHalt (0x804A096C). This remains a hard failure.
-    // PPCHalt must never be masked just to push the boot further.
+    // Intercepts PPCHalt (0x804A096C). It is a hard failure and is never masked.
     if (guest_address == 0x804A096Cu) {
         std::string detail;
         if (state.address_space != nullptr &&
@@ -25634,16 +25382,8 @@ void call_guest_impl_body(
         throw RuntimeFailure("PPCHalt reached at lr=" + hexadecimal(context->lr) +
                              detail);
     }
-    // NOTE: the old OSGetCurrentThread (0x804AAEA0) fake-thread interceptor and
-    // the fn_804AB488 (OSCreateThread) active-list zeroing are GONE: since the
-    // BSS fix, __OSThreadInit runs for real ([0x800000E4] holds the live main
-    // thread, contexts switch through SelectThread), and the old scaffolding
-    // actively corrupted the thread system — its one-shot wipe of
-    // 0x800000C0-0xFF zeroed the current-context pointer 0x800000D4, killing
-    // every interrupt dispatcher's handler/context gate mid-boot.
-    // Intercept OSPanic (0x804A3F24): gpr3=filename, gpr4=line, gpr5=message
-    // format. This remains a hard failure; panic must never be masked just to
-    // push the boot further.
+    // Intercepts OSPanic (0x804A3F24): gpr3=filename, gpr4=line, gpr5=message format. It is a hard failure and is
+    // never masked.
     if (guest_address == 0x804A3F24u && state.address_space != nullptr) {
         const std::uint32_t fname_ptr = context->gpr[3];
         const std::uint32_t line_num  = context->gpr[4];
@@ -25717,15 +25457,11 @@ void call_guest_impl_body(
             }
         }
     }
-    // SCCheckStatus must run as translated SDK code. It finalizes the async NAND
-    // reload by parsing /shared2/sys/SYSCONF and building the item-ID table used
-    // by WUD's BT.DINF/BT.CDIF lookups.
-    // fn_803CE128 (0x803CE128): virtual dispatch on a GX display-list object.
-    // Previously the vtable pointer was "RMGE" garbage (0x524D4745 — disc header
-    // bytes).  Do not soft-fail here: silently returning masks the
-    // resource/thread corruption that produced the bad object and can leave
-    // later scene objects half-initialized. If the vtable is valid, fall
-    // through and let the real translated function run normally.
+    // SCCheckStatus must run as translated SDK code. It finalizes the async NAND reload by parsing
+    // /shared2/sys/SYSCONF and building the item-ID table used by WUD's BT.DINF/BT.CDIF lookups.
+    // fn_803CE128 (0x803CE128): virtual dispatch on a GX display-list object. Do not soft-fail here: silently
+    // returning hides the resource/thread corruption that produced the bad object and can leave later scene
+    // objects half-initialized. If the vtable is valid, fall through and let the real translated function run.
     if (guest_address == 0x803CE128u) {
         const std::uint32_t obj_ptr = context->gpr[3];
         std::uint32_t vtable_ptr = 0u;
@@ -25746,10 +25482,10 @@ void call_guest_impl_body(
                 " vtable=" + hexadecimal(vtable_ptr) +
                 " lr=" + hexadecimal(context->lr));
         }
-        // vtable is valid — fall through to real translated fn_803CE128.
+        // vtable is valid - fall through to real translated fn_803CE128.
     }
     // fn_8041071C (0x8041071C): RARC/archive mount.
-    //   Call #1 (r4 != 0): data already in a heap buffer → translated function works fine.
+    //   Call #1 (r4 != 0): data already in a heap buffer -> translated function works fine.
     //   Call #2 (r4 == 0): function tries to load data from disc; at offset +0x88 it
     //   dereferences a pointer field that contains 0x30310000 (game-ID bytes "01" at
     //   disc offset 4, which end up in an uninitialized object field through the DVD-DMA
@@ -25785,9 +25521,8 @@ void call_guest_impl_body(
             }
             std::cout << '\n';
         }
-        // Dump first 64 bytes of the object so we can trace the bad pointer.
-        // For r4=0 disc-backed mounts, also dump +0x80–0x8F where the crash
-        // field lives (offset +0x88 was previously 0x30310004 = disc header).
+        // Dump the first 64 bytes of the object to trace the bad pointer. For r4=0 disc-backed mounts, also dump
+        // +0x80..+0x8F, where the bad field lives.
         if (log_rarc && state.address_space != nullptr) {
             const auto& address_space = *state.address_space;
             const auto word_mapped = [&](std::uint32_t address) {
@@ -26021,11 +25756,9 @@ void call_guest_impl_body(
             }
         }
         if (r4_buf == 0u) {
-            // r4=0 disc-backed mount.  Check the object's pointer fields for
-            // disc-header garbage (0x30310000, 0x524D4745 "RMGE", etc.).
-            // Clean zeroes are fine — the function will issue a DVD read to
-            // populate them.  Only reject pointers that look like unmapped
-            // disc-header residue (non-zero but outside MEM1).
+            // r4=0 disc-backed mount. Check the object's pointer fields for disc-header garbage (0x30310000,
+            // 0x524D4745 "RMGE", etc.). Zero is fine: the function issues a DVD read to populate it. Only reject
+            // pointers that look like unmapped disc-header residue (nonzero, outside MEM1).
             bool object_safe = true;
             std::uint32_t bad_offset = 0u;
             std::uint32_t bad_value = 0u;
@@ -26034,7 +25767,7 @@ void call_guest_impl_body(
                     const auto v = static_cast<std::uint64_t>(
                         state.address_space->read_u32(r3_obj + off));
                     // 0 = not yet loaded (safe).  Disc-header garbage like
-                    // 0x30310004 = unmapped → reject.
+                    // 0x30310004 = unmapped -> reject.
                     if (v != 0u && (v < 0x80000000u || v >= 0x82000000u)) {
                         object_safe = false;
                         bad_offset = off;
@@ -26057,7 +25790,7 @@ void call_guest_impl_body(
                     " bad_value=" + hexadecimal(bad_value) +
                     " lr=" + hexadecimal(context->lr));
             }
-            // Object pointers are either valid or zero — let the real function
+            // Object pointers are either valid or zero - let the real function
             // run.  It may issue DVD reads to populate zero fields.
             static bool s_r4zero_attempted = false;
             if (trace_runtime_scaffolding() && !s_r4zero_attempted) {
@@ -26065,30 +25798,12 @@ void call_guest_impl_body(
                 std::cout << "[io] fn_8041071C r4=0 → running real function"
                              " (fields clean, may trigger DVD reads)\n";
             }
-            // Fall through — let the real translated function run.
+            // Fall through - let the real translated function run.
         }
-        // r4 != 0: pre-loaded buffer — fall through and run the real translated function.
+        // r4 != 0: pre-loaded buffer - fall through and run the real translated function.
     }
-    // (Deleted: the fn_8051C3DC formatter intercept.  That function is the shared
-    // MSL __pformatter used by snprintf as well as OSReport — intercepting it
-    // made every FileLoader/FileRipper path snprintf into an EMPTY string,
-    // so DVDConvertPathToEntrynum resolved "" and every DVDOpen failed.
-    // The old "uninitialized r17 dispatch table" crash dates from the era
-    // when the FileLoader singleton was force-overwritten; re-diagnose if
-    // it reappears.)
-    // (Deleted: the "SISetSamplingRate" intercept of 0x804BF2CC. That address is
-    // DVDOpen — dvdfs.c, directly after DVDFastOpen 0x804BF264; sizes match
-    // the SDK layout. Returning r3=0 there made every DVDOpen fail
-    // (FileRipper.cpp:119 panic) and downstream DVDReads ran with
-    // uninitialized DVDFileInfo lengths.)
-    // (Deleted: the fn_803949F0 "dummy GXFifoObj" pre-population +
-    // pre_wire_cp_fifo(0x81700000) hack.  fn_803949F0 is actually
-    // ArchiveHolder::findEntry — not GX code.  The real CP FIFO is
-    // allocated by the guest's initGX and wired by real CP_BASE/CP_END
-    // writes.)
-    // Diagnostics: fn_8039B9E0 = GameSystemObjHolder::initDvd (runs
-    // SingletonHolder<FileLoader>::init); [r13-0x2818] = FileLoader::sInstance.
-    // fn_803981A0 = FileLoader::getArchive ([this+0x28] = mArchiveHolder).
+    // Diagnostics: fn_8039B9E0 = GameSystemObjHolder::initDvd (runs SingletonHolder<FileLoader>::init);
+    // [r13-0x2818] = FileLoader::sInstance. fn_803981A0 = FileLoader::getArchive ([this+0x28] = mArchiveHolder).
     if (guest_address == 0x8039B9E0u && state.address_space != nullptr) {
         const std::uint32_t sda_addr = context->gpr[13] + 0xFFFFD7E8u;
         std::uint32_t cur_val = 0xDEADBEEFu;
@@ -26472,24 +26187,17 @@ void call_guest_impl_body(
             ") out-of-range function pointer, lr=" + hexadecimal(lr) +
             "\n" + state.null_call_trace(*context));
     }
-    // fn_804ECA00 is WUD/Wii Bluetooth startup, not a native host-service
-    // entry point. Let the statically translated guest function run; the
-    // hardware boundary is the IOS /dev/usb/oh1 Bluetooth device handled by
+    // fn_804ECA00 is WUD/Wii Bluetooth startup, not a native host-service entry point. Let the translated guest
+    // function run; the hardware boundary is the IOS /dev/usb/oh1 Bluetooth device, handled by
     // GuestAddressSpace::handle_bluetooth_ioctlv.
-    // fn_80419554 is JUTVideo::postRetraceProc — NOT a HID/BT poll.
-    // It is the registered VI post-retrace callback that calls
-    // OSSendMessage(sManager+0x38, VIGetRetraceCount(), NOBLOCK) into
-    // the frame-pacing message queue (mq 0x809AE098).  This is the
-    // sole producer of the tick that MAIN (ctx 0x80650878) waits on
-    // in its 0x803A0850 receive loop.  The old "HID intercept" below was
-    // a misidentification (MASTER_STATE_V6 §6) — removing it lets
-    // the real translated function run, so OSSendMessage fires and
-    // MAIN can wake up.  Tracked by the [vi-cb] and [mq] tracers.
-    // FunctionAsyncExecutor executes through the translated RMGE01 worker and
-    // translated completion helpers. Its calls fall through to generated AOT
-    // code; the native runtime supplies no replacement implementation.
-    // MR::requestChangeScene(const char* name) (0x803F81AC, r3 = name):
-    // the one-arg wrapper exeInitializeLogoScene calls.  Trace it.
+    // fn_80419554 is JUTVideo::postRetraceProc, not a HID or Bluetooth poll. It is the registered VI post-retrace
+    // callback that calls OSSendMessage(sManager+0x38, VIGetRetraceCount(), NOBLOCK) into the frame-pacing queue
+    // (mq 0x809AE098). It is the sole producer of the tick that the main thread waits on in its 0x803A0850
+    // receive loop. Tracked by the [vi-cb] and [mq] tracers.
+    // FunctionAsyncExecutor runs through the translated RMGE01 worker and translated completion helpers. Its
+    // calls fall through to generated AOT code; the native runtime supplies no replacement.
+    // MR::requestChangeScene(const char* name) (0x803F81AC, r3 = name): the one-argument wrapper that
+    // exeInitializeLogoScene calls. Traced.
     if (guest_address == 0x803F81ACu && state.address_space != nullptr &&
         trace_scene_changes()) {
         char name[48]{};
@@ -26508,11 +26216,8 @@ void call_guest_impl_body(
                   << "\") lr=" << hexadecimal(context->lr) << '\n';
         // Fall through to the real translated function.
     }
-    // MR::requestChangeScene (0x8038BC80): trace every scene transition the
-    // game requests (r4 = scene-name string).  The boot-142 stall analysis
-    // needs to know which scene is active and which transition never fires
-    // (title-screen arcs are never requested; the game idles in a faded
-    // pre-title scene).
+    // MR::requestChangeScene (0x8038BC80): traces every scene transition the game requests (r4 = scene-name
+    // string). Shows which scene is active and which transition never fires.
     if (guest_address == 0x8038BC80u && state.address_space != nullptr &&
         trace_scene_changes()) {
         char name[48]{};
@@ -26532,19 +26237,12 @@ void call_guest_impl_body(
                   << " lr=" << hexadecimal(context->lr) << '\n';
         // Fall through to the real translated function.
     }
-    // fn_804077BC first calls fn_80408038 to refresh this+0x0C, then branches
-    // on the refresh result before consuming the child. Let that translated
-    // producer run once; the prior cached child is not an entry precondition.
-    // fn_804B38F0 is VIGetRetraceCount — verified from the retail DOL:
-    //   0x804B38F0: lwz r3,-0x1E1C(r13)   (retrace counter 0x806A2E84)
-    //   0x804B38F4: blr
-    // It was previously mis-identified as a "BT per-frame poll" and intercepted,
-    // which left r3 unchanged and deadlocked the XFB-init spin at
-    // 0x8041840C–0x80418414 ("while (VIGetRetraceCount() == r31)", ×3 — the
-    // standard wait-3-retraces tail of VIConfigure/VIFlush).  The crash that
-    // motivated that intercept was r13 corruption from fn_8052B490, fixed since.
-    // It MUST run natively so the counter incremented by the VI retrace
-    // handler (0x804B1628) is observed.  No intercept here.
+    // fn_804077BC first calls fn_80408038 to refresh this+0x0C, then branches on the refresh result before
+    // consuming the child. Let that translated producer run; the prior cached child is not an entry precondition.
+    // fn_804B38F0 is VIGetRetraceCount (retail DOL: lwz r3,-0x1E1C(r13) on the retrace counter at 0x806A2E84,
+    // then blr). It must run natively so the counter incremented by the VI retrace handler (0x804B1628) is
+    // observed. An intercept here would leave r3 unchanged and deadlock the three-retrace wait in VIConfigure
+    // and VIFlush.
     // Diagnostic: trace fn_80418440 callers.
     if (guest_address == 0x80418440u && trace_runtime_scaffolding()) {
         static unsigned s_calls = 0;
@@ -26557,13 +26255,10 @@ void call_guest_impl_body(
                       << " r4=0x" << context->gpr[4] << std::dec << '\n';
         }
     }
-    // fn_804B2730 is VIWaitForRetrace — verified from the retail DOL:
-    //   r30 = retraceCount (r13-0x1E1C = 0x806A2E84)
-    //   do { OSSleepThread(r13-0x1E40 = 0x806A2E60) } while (count == r30)
-    // This runs as translated guest code. Its OSSleepThread call reaches the
-    // classified VI queue below, which waits for one audited hardware edge.
-    // fn_804A8A0C (0x804A8A0C): Current hottest backward-branch site.
-    // Log diagnostic once to identify what loop the game is stuck in.
+    // fn_804B2730 is VIWaitForRetrace (retail DOL): r30 = retraceCount (r13-0x1E1C = 0x806A2E84);
+    // do { OSSleepThread(r13-0x1E40 = 0x806A2E60) } while (count == r30). It runs as translated guest code. Its
+    // OSSleepThread call reaches the classified VI queue below, which waits for one audited hardware edge.
+    // fn_804A8A0C (0x804A8A0C): the hottest backward-branch site. Logged once to identify the loop.
     if (guest_address == 0x804A8A0Cu) {
         static bool s_hotspot_logged = false;
         if (trace_runtime_scaffolding() && !s_hotspot_logged) {
@@ -26600,9 +26295,8 @@ void call_guest_impl_body(
             }
             return;
         }
-        // Validate the translated prologue's frame, not a legacy IOS end.
-        // IOS33 can allocate stacks above93400000. The32-byte frame plus
-        // saved LR at incoming r1+4 must all belong to mapped cached RAM.
+        // Validate the translated prologue's frame, not a legacy IOS end. IOS33 can allocate stacks above 0x93400000.
+        // The 32-byte frame plus saved LR at incoming r1+4 must all belong to mapped cached RAM.
         if (context->gpr[1] < 0x80000020u ||
             !mapped_guest_range(*state.address_space,
                                 context->gpr[1] - 0x20u, 0x28u)) {
@@ -27477,15 +27171,12 @@ bool inline_branch_checkpoint_gate_enabled(const RuntimeState& state) {
         frame_activity_recording_enabled()) {
         return false;
     }
-    // Dynamic marked calls are emitted by call_guest_impl before it selects
-    // the translated callee. Selected statically resolved function entries
-    // are routed through call_guest_direct_resolved by the install-time
-    // translator. Those explicit entry boundaries do not require every
-    // unrelated taken branch to enter branch_checkpoint. Internal-PC markers
-    // remain supplemental evidence only: adaptive checkpoint gating does not
-    // promise that every such PC is observed. Keeping the adaptive inline gate
-    // live avoids millions of redundant full callbacks in the scheduler-idle
-    // loop during a strict route proof.
+    // Dynamic marked calls are emitted by call_guest_impl before it selects the translated callee. Selected
+    // statically resolved function entries are routed through call_guest_direct_resolved by the install-time
+    // translator. Those explicit entry boundaries do not require every unrelated taken branch to enter
+    // branch_checkpoint. Internal-PC markers are supplemental; adaptive checkpoint gating does not guarantee
+    // that every such PC is seen. Keeping the adaptive inline gate live avoids redundant full callbacks in the
+    // scheduler-idle loop.
     static const bool trace_fileloader_stack =
         read_env_flag("GALAXY_TRACE_FILELOADER_STACK", false);
     static const bool trace_dsp_wait =
@@ -27789,9 +27480,8 @@ void dump_native_gameplay_pointer_status(
            << " fn=WPadPointerStatus0"
            << " call-pc=" << hexadecimal(sample.call_pc)
            << " status=" << hexadecimal(sample.returned_status_pointer);
-    // Add synthetic-origin evidence only to this existing bounded trace
-    // seam. It is not a translated ACL/WPAD/ring proof and cannot make the
-    // deliberately ambiguous causal sample below exact.
+    // Synthetic-origin records are added only to this bounded trace seam. This is not a translated
+    // ACL/WPAD/ring check, and it cannot make the causal sample below exact.
     static std::uint64_t s_synthetic_pointer_rows = 0u;
     static std::uint64_t s_synthetic_pointer_last_sequence = 0u;
     static unsigned s_synthetic_pointer_last_selection = ~0u;
@@ -28804,15 +28494,11 @@ void branch_checkpoint_body(
         galaxy::vi::select_checkpoint_lead_service(
             vi_service_due, ai_primary_service_due());
 
-    // This ordering establishes or resumes the durable VI transaction before
-    // a later phase may enter the one translated external vector and unwind
-    // this native checkpoint. It does not assign device priority: all exposed
-    // PI/device levels remain latched, and RMGE01's translated dispatcher reads
-    // their combined state and selects the registered OS interrupt itself.
-    // The failed save-file-2 run recorded two consecutive ai-primary transfers
-    // at vi=6192 and then rejected a 1,040,528-tick VI backlog. An already-
-    // consumed PendingBoundary must also lead even though its deadline
-    // publication was consumed before the transfer.
+    // This ordering establishes or resumes the durable VI transaction before a later phase may enter the one
+    // translated external vector and unwind this native checkpoint. It does not assign device priority: all
+    // exposed PI/device levels remain latched, and RMGE01's translated dispatcher reads their combined state and
+    // selects the registered OS interrupt itself. An already-consumed PendingBoundary must also lead, even though
+    // its deadline publication was consumed before the transfer.
     if (checkpoint_lead == galaxy::vi::CheckpointLeadService::Video) {
         run_timed_checkpoint_phase(
             state, guest_pc, "vi", [&] {
@@ -28879,26 +28565,18 @@ void branch_checkpoint_body(
             });
         if (state.pending_transfer.active) return;
     }
-    // The IPC reply interrupt (27) is an EXTERNAL interrupt: hardware masks it
-    // while MSR[EE]=0.  The IPC client (__ios_Ipc2, 0x804D2490; __ipcReg*,
-    // 0x804D1F00) submits every request inside an OSDisableInterrupts/
-    // OSRestoreInterrupts critical section (EE=0), queues it into the PPC
-    // ring, and kicks the ARM by writing the send register.  The host
-    // completes the request synchronously during that store and latches Y2.
-    // If branch_checkpoint dispatched the guest IPCInterruptHandler while the
-    // submit critical section still holds EE=0, the reply handler would run
-    // reentrantly (boot 66 caught it at pc 0x804D1F10 AND 0x804D3AD0, both
-    // EE=0) and free/recycle the very request buffer __ios_Ipc2 is still
-    // submitting — making the async DVDLowRead path's IOS_IoctlAsync return
-    // the request pointer (0x933E00E0) as a bogus nonzero error ("@@@
-    // (DVDLowRead) IOS_IoctlAsync returned error"), so wave-data .aw loads
-    // never streamed.  Honour EE: the reply stays latched (Y2) and is
-    // delivered on the next checkpoint after the guest restores EE.  Sync
-    // requests are unaffected — their OSSleepThread on the request event (MEM2
-    // 0x933E0000 range) still dispatches IPC on demand via the WAIT-1 path in
-    // on_guest_sleep_thread, which does not pass through this gate. DI and PE
-    // apply the same architectural EE gate inside their dispatchers, including
-    // event-pump callers, and leave pending state latched while masked.
+    // The IPC reply interrupt (27) is an EXTERNAL interrupt: hardware masks it while MSR[EE]=0. The IPC client
+    // (__ios_Ipc2, 0x804D2490; __ipcReg*, 0x804D1F00) submits every request inside an
+    // OSDisableInterrupts/OSRestoreInterrupts critical section (EE=0), queues it into the PPC ring, and kicks the
+    // ARM by writing the send register. The host completes the request synchronously during that store and
+    // latches Y2. If branch_checkpoint dispatched the guest IPCInterruptHandler while the submit critical section
+    // still held EE=0, the reply handler would run reentrantly at pc 0x804D1F10 and 0x804D3AD0 (both EE=0) and
+    // free the request buffer that __ios_Ipc2 is still submitting. So EE is honoured: the reply stays latched (Y2)
+    // and is delivered at the next checkpoint after the guest restores EE. Sync requests are unaffected: their
+    // OSSleepThread on the request event (MEM2 0x933E0000 range) still dispatches IPC on demand via the WAIT-1
+    // path in on_guest_sleep_thread, which does not pass through this gate. DI and PE apply the same
+    // architectural EE gate inside their dispatchers, including event-pump callers, and leave pending state
+    // latched while masked.
     if (ipc_interrupt_pending_for_dispatch(state, context)) {
         run_timed_checkpoint_phase(
             state, guest_pc, "ipc", [&] {
@@ -28907,8 +28585,8 @@ void branch_checkpoint_body(
         if (state.pending_transfer.active) return;
     }
 
-    // r26 flip monitor: catch the exact PC where FileLoaderThread's r26 transitions
-    // to a disc word-offset value (0x3F84xxxx) — reveals translator/restore bug.
+    // r26 transition monitor: logs the exact PC where FileLoaderThread's r26 takes a disc word-offset value
+    // (0x3F84xxxx).
     if (trace_fileloader_stack) {
         static std::uint32_t s_last_r26 = 0u;
         if (context->gpr[1] >= 0x80900C40u && context->gpr[1] <= 0x80908C40u &&
@@ -28928,23 +28606,17 @@ void branch_checkpoint_body(
         }
     }
 
-    // NOTE: the former "Loop 3" pokes at 0x8051777C (blind writes to IPC
-    // registers and r3..r8-relative offsets) and the "loop2" writes at
-    // 0x80418414 (which scribbled 1s over the DATA object at 0x805D38F0 and
-    // over the CODE of fn_8039A9F4!) are gone.  The retry loop at
-    // 0x80418400–0x80418420 disassembles to:
+    // The retry loop at 0x80418400..0x80418420 is the standard wait-3-retraces tail of the XFB/VIConfigure init
+    // in fn_80418368 (the bl target is 0x804B38F0, VIGetRetraceCount):
     //     for (r30 = 0; r30 < 3; ++r30) {
-    //         r31 = VIGetRetraceCount();            // bl 0x804B38F0
+    //         r31 = VIGetRetraceCount();
     //         while (VIGetRetraceCount() == r31) ;  // wait for next retrace
     //     }
-    // i.e. the standard wait-3-retraces tail of the XFB/VIConfigure init in
-    // fn_80418368 (the bl target was misread as 0x805D38F0; it is 0x804B38F0).
     //
-    // DSP replies are awaited in BUSY-POLL loops (e.g. AX init spins on the
-    // flag its DSP-resume callback sets at 0x80496310) — no sleep, so the
-    // sleep-branch pump never runs. The native DSP worker raises its own
-    // cross-thread flag first, so pump it into the Broadway-visible mailbox
-    // before testing the guest interrupt bit.
+    // DSP replies are awaited in busy-poll loops (for example, AX init spins on the flag its DSP-resume callback
+    // sets at 0x80496310), with no sleep, so the sleep-branch pump never runs. The native DSP worker raises its
+    // own cross-thread flag first, so pump it into the Broadway-visible mailbox before testing the guest
+    // interrupt bit.
     run_timed_checkpoint_phase(
         state, guest_pc, "dsp-interface", [&] {
             dispatch_dsp_interface_interrupts(
@@ -29010,14 +28682,8 @@ void branch_checkpoint_body(
         if (state.pending_transfer.active) return;
     }
 
-    // (Deleted: the "GX state-pump" force-write of 0x80900BA4 into
-    // 0x806A2488.  That address is SingletonHolder<FileLoader>::sInstance —
-    // pre-filling it made FileLoader::init() skip construction, so the
-    // FileLoaderThread never existed and no DVD read was ever requested.
-    // The old zero-after-GX-init observation was the pre-fix BSS re-zero.)
-    // Yield the host CPU in the OS idle spin so real time advances and
-    // VI retraces keep firing.  Without this the idle spin at 0x804BADE4
-    // consumes the entire checkpoint budget before another retrace fires.
+    // Yield the host CPU in the OS idle spin so real time advances and VI retraces keep firing. Without this, the
+    // idle spin at 0x804BADE4 consumes the whole checkpoint budget before another retrace fires.
     if (state.checkpoint_count >= state.next_host_pump_checkpoint) {
         run_timed_checkpoint_phase(
             state, guest_pc, "host-pump", [&] {
@@ -29116,12 +28782,9 @@ void branch_checkpoint(
         ++state.checkpoint_pc_histogram[guest_pc];
     }
     if (trace_checkpoint_time_enabled()) {
-        // Real wall-clock time profile, not a hit count: attribute the
-        // elapsed time since the *previous* checkpoint call to whichever
-        // guest_pc is running *now*, on the theory that if guest_pc A took a
-        // long real time to reach the next checkpoint at B, the time was
-        // spent executing A's own body (translated instructions, host calls
-        // it made, anything) between the two checkpoints.
+        // Wall-clock time profile, not a hit count. The time since the previous checkpoint is attributed to the
+        // guest_pc running now: if guest_pc A takes a long real time to reach the next checkpoint at B, the time was
+        // spent in A's own body (translated instructions, host calls it made) between the two checkpoints.
         static auto s_last_checkpoint_time =
             std::chrono::steady_clock::now();
         static std::uint32_t s_last_checkpoint_pc = 0u;
@@ -29428,12 +29091,11 @@ std::uint32_t find_enclosing_function_start(
     return address;
 }
 
-// ── OS Synchronization & Event Pump ──────────────────────────────────────
-// Replaces the old run_ios_event_pump.  All facts below were re-verified by
-// disassembling the retail RMGE01 main.dol (not taken from prior notes):
+// OS Synchronization and Event Pump. Replaces the former run_ios_event_pump. The facts below come from
+// disassembly of the retail RMGE01 main.dol:
 //
 //   0x804ABFBC  OSSleepThread(OSThreadQueue*)
-//   0x804A89AC  OSReceiveMessage — its wait loop:
+//   0x804A89AC  OSReceiveMessage, its wait loop:
 //                 0x804A89FC addi r3,r31,8        (queue = mq + 8)
 //                 0x804A8A00 bl   OSSleepThread
 //                 0x804A8A04 lwz  r0,0x1C(r31)    (mq->usedCount)
@@ -29441,7 +29103,7 @@ std::uint32_t find_enclosing_function_start(
 //                 0x804A8A0C beq  0x804A89E4      (re-check loop)
 //   0x804A88E4  OSSendMessage (sleeps on mq + 0 when the queue is full)
 //   0x804A8A88  OSJamMessage  (sleeps on mq + 0 when the queue is full)
-//   0x804B2730  VIWaitForRetrace — sleeps on 0x806A2E60 (r13-0x1E40) until
+//   0x804B2730  VIWaitForRetrace: sleeps on 0x806A2E60 (r13-0x1E40) until
 //               the retrace counter 0x806A2E84 (r13-0x1E1C) changes
 //   0x804B38F0  VIGetRetraceCount = lwz r3,-0x1E1C(r13); blr
 //
@@ -29449,11 +29111,10 @@ std::uint32_t find_enclosing_function_start(
 //   +0x00 queueSend, +0x08 queueReceive, +0x10 msgArray,
 //   +0x14 msgCount,  +0x18 firstIndex,   +0x1C usedCount
 //
-// Design rule: wait conditions are resolved by RUNNING THE REAL PRODUCER
-// (DI interrupt handler, IOS completion callbacks, decrementer alarms, VI
-// retrace handler — all translated guest code) so OS structures are mutated
-// by the game's own logic.  Direct guest-memory writes are used only where
-// they replicate a legal SDK state transition, never to corrupt pointers.
+// Design rule: wait conditions are resolved by running the real producer (DI interrupt handler, IOS
+// completion callbacks, decrementer alarms, VI retrace handler; all translated guest code), so OS
+// structures are mutated by the game's own logic. Direct guest-memory writes are used only where they
+// replicate a legal SDK state transition, never to corrupt pointers.
 
 constexpr std::uint32_t kOSReceiveMessageStart = 0x804A89ACu;
 constexpr std::uint32_t kOSReceiveMessageEnd   = 0x804A8A88u;  // exclusive
@@ -29484,10 +29145,8 @@ std::uint32_t wake_osreceive_sleepers_with_queued_messages(
     std::uint32_t guest_pc,
     const char* reason) {
     if (state.pending_transfer.active) return 0u;
-    // This is a bring-up-era lost-wakeup repair that manually mutates the
-    // guest scheduler queues. Keep it available for A/B diagnostics, but do
-    // not run it in normal native mode: real producers must wake
-    // OSReceiveMessage waiters through the guest OS path.
+    // Lost-wakeup repair that edits the guest scheduler queues directly. Kept for A/B diagnostics only. Normal
+    // native mode does not run it: real producers must wake OSReceiveMessage waiters through the guest OS path.
     if (!synthetic_osreceive_wake_enabled()) {
         return 0u;
     }
@@ -29756,7 +29415,7 @@ void pump_os_events_except_vi(
     if (state.pending_transfer.active) return;
     if (state.address_space == nullptr) return;
     service_native_ios_completion_wake(state);
-    // IOS IPC reply/ack → OS interrupt 27 → IPCInterruptHandler.  This is
+    // IOS IPC reply/ack -> OS interrupt 27 -> IPCInterruptHandler.  This is
     // how every IOS completion (including all /dev/di DVD ioctls) reaches
     // the game's callbacks and sync waiters.  IPC is an external interrupt:
     // do not run the translated handler while the guest has EE masked inside
@@ -29769,14 +29428,14 @@ void pump_os_events_except_vi(
     if (idle_ee_override || guest_external_interrupts_enabled(context)) {
         dispatch_ipc_interrupt(state, context, memory);
     }
-    // PE FINISH/TOKEN (ints 19/18) — raised when the WGPIPE stream carries a
+    // PE FINISH/TOKEN (ints 19/18) - raised when the WGPIPE stream carries a
     // GXSetDrawDone/GXSetDrawSync token; wakes GXWaitDrawDone.
     dispatch_pe_interrupts(state, context, memory);
     // DSP interface external interrupts: ARAM DMA completion is OS interrupt 6
     // and native DSP mail/DIRQ is OS interrupt 7. Both remain latched while EE
     // is masked and are delivered through the guest's installed handlers.
     dispatch_dsp_interface_interrupts(state, context, memory);
-    // AI DMA complete (int 5) — JASAudioThread's AUDIOMSG_DMA producer;
+    // AI DMA complete (int 5) - JASAudioThread's AUDIOMSG_DMA producer;
     // paced by the active PCM buffer's duration.
     dispatch_ai_dma_interrupts(state, context, memory);
     if (state.deadline_events.pending(
@@ -30348,10 +30007,8 @@ void run_guest_flat(
                 initial_entry = false;
                 start();
                 if (take_pending_flat_transfer(state, transfer_address)) {
-                    // Flag-based RFI out of the boot thread: the entry
-                    // function returned because the resumed context is
-                    // elsewhere, exactly where the GuestTransfer catch
-                    // used to land.
+                    // Flag-based RFI out of the boot thread: the entry function returned because the resumed context is
+                    // elsewhere, exactly where a GuestTransfer catch lands.
                     arbitrate_after_rfi = true;
                     continue;
                 }
@@ -30534,7 +30191,7 @@ void run_guest_entry(
     run_guest_flat(state, [&] { entry(context, memory); }, context, memory);
 }
 
-// ─── wmain ───────────────────────────────────────────────────────────────────
+// wmain
 
 static void log_to_stderr(
     void* user,
@@ -30672,8 +30329,8 @@ static void on_fatal(void* user, std::uint32_t pc, const char* message) {
     }
     // Throw RuntimeFailure so the wmain handler catches it, prints full
     // diagnostics (recent calls + hottest branches), and exits cleanly.
-    // Must NOT return — returning from a fatal memory error causes the
-    // guest to run with garbage data until it eventually calls abort().
+    // Never returns: continuing after a fatal memory error would run the
+    // guest on invalid data.
     throw RuntimeFailure(
         std::string("[fatal] guest error at ") + hexadecimal(pc) + ": " +
         (message ? message : "(null)"));
@@ -30704,12 +30361,9 @@ static bool gx_efb_peek(
     if (state == nullptr || memory == nullptr || value == nullptr) {
         return false;
     }
-    // Depth and color peeks are answered from the render thread's
-    // asynchronous EFB fields once one of that kind exists: no FIFO drain, no
-    // GPU round trip, one frame of staleness. Only the first peek of each kind
-    // in a session takes the exact synchronous path below. (Measured A/B on
-    // the 9950X3D: 32,851 synchronous color peeks in five minutes blocked the
-    // simulation thread 7.3 s in total, up to 8.1 ms at once.)
+    // Depth and color peeks are answered from the render thread's asynchronous EFB fields once one of that kind
+    // exists: no FIFO drain, no GPU round trip, one frame of staleness. Only the first peek of each kind in a
+    // session takes the exact synchronous path below.
     if (galaxy::gx::peek_efb_published(
             x, y,
             depth ? galaxy::gx::EfbPeekKind::Depth
@@ -31901,18 +31555,11 @@ static void prepare_crash_dump_directory() {
                  g_crash_dump_full ? 1 : 0);
 }
 
-// ── Silent-crash harness (runs before any other CRT init via wmain) ──────
-// Disables ALL modal dialogs — assertion, abort, error, and WerFault.
-// SEM_NOGPFAULTERRORBOX below (needed so an unhandled exception during an
-// automated/diagnostic launch never blocks on a stuck dialog) also
-// suppresses the OS's own WER crash-dump generation for this process in
-// many configurations. Install our own top-level filter first so a real
-// unhandled exception (access violation, stack overflow, ...) still leaves
-// a minidump on disk instead of the process simply vanishing with no
-// diagnostic trail -- this is the difference between "silent, untraceable
-// exit" and "exact instruction/register state at the fault" for exactly
-// the kind of rare, hard-to-reproduce crash the hard-fail-never-stub
-// philosophy exists to surface, not hide.
+// Silent-crash harness, run before any other CRT init via wmain. It disables all modal dialogs: assertion,
+// abort, error and WerFault. SEM_NOGPFAULTERRORBOX (see below) keeps an unhandled exception during an
+// automated launch from blocking on a dialog, but in many configurations it also suppresses WER crash-dump
+// generation. Our own top-level filter is installed first, so a real unhandled exception (access violation,
+// stack overflow, ...) still leaves a minidump instead of the process vanishing without a trace.
 static LONG WINAPI galaxy_unhandled_exception_filter(
     EXCEPTION_POINTERS* exception_info) {
     // A crash never leaves a controller vibrating (bounded writes).
@@ -32058,15 +31705,11 @@ static void disable_runtime_dialogs() {
     prepare_crash_dump_directory();
     SetUnhandledExceptionFilter(galaxy_unhandled_exception_filter);
     std::set_terminate(galaxy_terminate_handler);
-    // Suppress Windows critical-error and GPFault dialogs -- diagnostic
-    // escape hatch: GALAXY_ALLOW_WER=1 leaves SEM_NOGPFAULTERRORBOX unset so
-    // Windows' own WER can catch a crash class that bypasses both handlers
-    // installed above (observed once: neither the SEH filter nor
-    // std::terminate fired for a real repro, which usually means a
-    // fail-fast/heap-corruption-style termination that routes through the
-    // OS hard-error mechanism SEM_NOGPFAULTERRORBOX itself suppresses).
-    // Never set by default: this would let a real crash pop a blocking
-    // dialog during an unattended/automated run.
+    // Suppresses the Windows critical-error and GPFault dialogs. GALAXY_ALLOW_WER=1 leaves
+    // SEM_NOGPFAULTERRORBOX unset, so WER can catch a crash class that bypasses both handlers above. Such a
+    // crash is typically a fail-fast or heap-corruption termination that routes through the OS hard-error
+    // mechanism SEM_NOGPFAULTERRORBOX suppresses. Never set by default: a real crash would show a blocking
+    // dialog during an unattended run.
     DWORD error_mode = SEM_FAILCRITICALERRORS | SEM_NOOPENFILEERRORBOX;
     if (!read_env_flag("GALAXY_ALLOW_WER", false)) {
         error_mode |= SEM_NOGPFAULTERRORBOX;
@@ -32099,19 +31742,15 @@ static char const* thread_priority_name(int value) {
     }
 }
 
-// Base priority is a function of the process class AND the thread level, so
-// logging the two together is the only way to see what a thread's effective
-// priority actually is. Reading only the thread level is misleading whenever the
-// process class is not NORMAL: a thread left at THREAD_PRIORITY_NORMAL under
-// ABOVE_NORMAL_PRIORITY_CLASS has base 10, which is one level below this
-// function's own ABOVE_NORMAL thread (base 11) and level with a thread that a
-// NORMAL-class process would call ABOVE_NORMAL (base 9).
+// Base priority depends on both the process class and the thread level. Logging the two together is the only
+// way to see a thread's effective priority. The level alone is misleading when the process class is not
+// NORMAL: a thread left at THREAD_PRIORITY_NORMAL under ABOVE_NORMAL_PRIORITY_CLASS has base 10, one level
+// below this function's own ABOVE_NORMAL thread (base 11).
 //
-// Reported rather than asserted, because there is no single correct gradient: the
-// simulation, render, DSP and deadline-broker threads are all deliberately
-// ABOVE_NORMAL, and the only threads this must not outrank are the ones lowered
-// on purpose (PSO prewarm workers, frame telemetry). Those set their own level
-// and are therefore relative to this class, not absolute.
+// Reported rather than asserted, because there is no single correct gradient. The simulation, render, DSP and
+// deadline-broker threads are deliberately ABOVE_NORMAL; the threads this must not outrank are the ones
+// lowered on purpose (PSO prewarm workers, frame telemetry). Those set their own level and are therefore
+// relative to this class.
 static void report_effective_priorities() {
     const DWORD process_class = GetPriorityClass(GetCurrentProcess());
     SetLastError(ERROR_SUCCESS);
@@ -32139,15 +31778,13 @@ static void configure_runtime_scheduling() {
         report_effective_priorities();
         return;
     }
-    // Keep direct Release launches on the same scheduling path as diagnostics.
-    // ABOVE_NORMAL avoids aggressive system-wide priority while reducing
-    // occasional multimedia scheduling spikes in realtime VI playback.
+    // Keeps direct Release launches on the same scheduling path as diagnostics. ABOVE_NORMAL avoids aggressive
+    // system-wide priority while reducing occasional multimedia scheduling spikes in realtime VI playback.
     //
-    // NOTE: this raises the CLASS, which renumbers every thread in the process,
-    // not just this one. A thread nobody touches runs at THREAD_PRIORITY_NORMAL,
-    // so it moves from base 8 to base 10. Anything that must stay below the
-    // critical paths has to set its own level explicitly (the PSO prewarm workers
-    // and frame telemetry do; the snapshot copy workers do not).
+    // The class is raised, which renumbers every thread in the process, not just this one. A thread nobody touches
+    // runs at THREAD_PRIORITY_NORMAL, so it moves from base 8 to base 10. Anything that must stay below the
+    // critical paths sets its own level (the PSO prewarm workers and frame telemetry do; the snapshot copy workers
+    // do not).
     if (SetPriorityClass(GetCurrentProcess(), ABOVE_NORMAL_PRIORITY_CLASS) == FALSE) {
         std::fprintf(
             stderr,
@@ -32162,8 +31799,7 @@ static void configure_runtime_scheduling() {
             "[thread-priority] SetThreadPriority failed error=%lu\n",
             static_cast<unsigned long>(GetLastError()));
     }
-    // Opt-in: a recorded Core Ultra 9 185H session showed the boot-time set
-    // was 3 to 6 logical CPUs (parked cores were excluded), which confined
+    // Opt-in. Parked cores are excluded from the boot-time affinity set. On the recorded hardware that confined
     // the simulation and render threads to a fraction of the chip.
     if (read_env_flag("GALAXY_PIN_PERFORMANCE_CORES", false)) {
         const unsigned cores = galaxy::host::pin_current_thread_to_performance_cores();
@@ -32523,7 +32159,7 @@ static void print_runtime_usage() {
 }
 
 int wmain(int argc, wchar_t** argv) {
-    // MUST be the very first line — before any allocation or assertion.
+    // First statement: before any allocation or assertion.
     disable_runtime_dialogs();
     // Every aspect setting, 4:3 included, runs through the live aspect path
     // so it can change during play. Set before any module loads; explicit
@@ -32539,19 +32175,14 @@ int wmain(int argc, wchar_t** argv) {
             _wputenv_s(L"GALAXY_EXPERIMENTAL_DYNAMIC_ASPECT", L"1");
         }
     }
-    // Wall-clock anchor for the one-line VI-cadence summary at normal exit.
-    // `vi_retrace_count` is the guest's own 60 Hz timebase (kViRetracePeriodTicks
-    // = kWiiTimeBaseHz / 60, native_runtime.cpp:340) advanced by the only
-    // increment site at :17820. Dividing the final count by elapsed seconds
-    // therefore reports whether the guest's timebase is being honoured, at zero
+    // Wall-clock anchor for the one-line VI-cadence summary printed at normal exit. vi_retrace_count is the
+    // guest's own 60 Hz timebase (kViRetracePeriodTicks = kWiiTimeBaseHz / 60), advanced by its only increment
+    // site. Dividing the final count by elapsed seconds reports whether the guest's timebase is honoured, at zero
     // per-frame cost:
-    //   ~60/s  the simulation is keeping up with its own clock
-    //   < 60/s the simulation itself is being throttled
-    //   > 60/s the grid is being crossed faster than the guest's clock, which is
-    //          a correctness question rather than a performance one
-    // Until now the value was printed only from ~100 event- and trace-gated
-    // sites, so it was never readable at a fixed cadence and this comparison
-    // could not be made from a recording.
+    //   ~60/s  the simulation keeps up with its own clock
+    //   < 60/s the simulation itself is throttled
+    //   > 60/s the grid is crossed faster than the guest's clock, a correctness question rather than a
+    //          performance one
     const auto session_start = std::chrono::steady_clock::now();
     // Process-local awareness must precede every HWND and input/render thread.
     // Output sizes, GetClientRect and mouse coordinates now use physical pixels.
@@ -32586,10 +32217,8 @@ int wmain(int argc, wchar_t** argv) {
         (void)std::setvbuf(stdout, nullptr, _IONBF, 0);
     }
 
-    // This experiment was retired after a real strict-native-audio run proved
-    // that it bypassed the runtime scheduling boundary and missed an AI DMA
-    // deadline. Reject it before deciding whether to spawn the launcher: a
-    // stale manual environment must not turn this hard failure into a
+    // This experiment bypassed the runtime scheduling boundary and missed AI DMA deadlines. It is rejected before
+    // deciding whether to spawn the launcher, so a stale manual environment cannot turn this hard failure into a
     // successful launcher handoff.
     if (read_env_flag("GALAXY_FAST_CACHED_GUEST_CALLS", false)) {
         std::cout
@@ -32604,8 +32233,8 @@ int wmain(int argc, wchar_t** argv) {
         return 0;
     }
 
-    // ── Argument parsing ────────────────────────────────────────────────────
-    // Usage: NebulaRuntime [game-pak-dir] [native-module.dll]
+    // Argument parsing
+    //    Usage: NebulaRuntime [game-pak-dir] [native-module.dll]
     //        [--max-calls N] [--max-checkpoints N]
     //        [--benchmark-vi-window START END]
     //        [--trace-calls] [--trace-loops] [--profile-loops]
@@ -32629,33 +32258,22 @@ int wmain(int argc, wchar_t** argv) {
         read_env_flag("GALAXY_DIAGNOSTIC_FRAME_CADENCE", false));
     state.cadence_diagnostics =
         galaxy::cadence::global_session_if_enabled();
-    // Arm the bounded measurement window from the environment as well as from
-    // `--benchmark-vi-window`. Both launch paths -- tools/perf_session.ps1 and
-    // installer/src/Launcher -- build a command line of exactly two positional
-    // arguments and configure everything else through GALAXY_* environment
-    // variables, so a flag-only option is unreachable from either one. This
-    // window is the only place the runtime reports `vi-rate-hz` (simulation
-    // speed) and the frame-ms mean/p95/p99/max tail, and it also makes the
-    // measured window a fixed VI-retrace range, which is what makes two
-    // recordings comparable across machines and runs.
+    // Arms the bounded measurement window from the environment as well as from --benchmark-vi-window. The
+    // launchers (tools/perf_session.ps1 and installer/src/Launcher) pass exactly two positional arguments and set
+    // everything else through GALAXY_* environment variables, so a flag-only option is unreachable from them. This
+    // window is the only place the runtime reports vi-rate-hz and the frame-ms mean, p95, p99 and max tail. It also
+    // fixes the measured window to a VI-retrace range, so two recordings are comparable across machines and runs.
     //
-    // Applied before argument parsing so the explicit flag below still wins,
-    // END must exceed START, otherwise the state is
-    // left disarmed exactly as a malformed flag would leave it. START is a
-    // lower bound, not an exact first tick -- the window opens at the first
-    // synchronized retrace whose count exceeds it -- so START=0 begins at the
-    // first synchronized retrace of the run.
+    // Applied before argument parsing, so the explicit flag below still wins. END must exceed START; otherwise the
+    // state is left disarmed, as a malformed flag would leave it. START is a lower bound, not an exact first tick:
+    // the window opens at the first synchronized retrace whose count exceeds it, so START=0 begins at the first
+    // synchronized retrace of the run.
     //
-    // One further guard, because this is the one way an environment-supplied
-    // window can destroy a run instead of measuring it. The window arms at the
-    // first retrace past START AND after `wait_for_render_idle()`, so on a slow
-    // machine the count can already have passed a too-small END by the time it
-    // arms -- and the arming path throws
-    // "VI benchmark reached its end before a synchronized measurement window
-    // could start", failing the whole run. An environment typo would then look
-    // like a crash rather than a bad setting. Enforce a floor on the measured
-    // span to reduce this risk, and say so loudly when the floor
-    // had to be used, because a window this short is reported, not trusted.
+    // One further guard. The window arms at the first retrace past START and after wait_for_render_idle(), so on a
+    // slow machine the count can already have passed a too-small END by the time it arms. The arming path then
+    // throws "VI benchmark reached its end before a synchronized measurement window could start", failing the
+    // whole run, and an environment typo would look like a crash. The measured span therefore has a floor. When
+    // the floor is used, a warning is printed, because a window this short is reported, not trusted.
     constexpr std::uint64_t kMinBenchmarkWindowRetraces = 60u;
     {
         std::uint64_t window_start =
@@ -32823,7 +32441,7 @@ int wmain(int argc, wchar_t** argv) {
                    << L'\n';
     }
 
-    // ── Load DLL ────────────────────────────────────────────────────────────
+    // -- Load DLL ------------------------------------------------------------
     // LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR requires an absolute path (error 87
     // otherwise). Pair it with SYSTEM32 so a clean process can resolve the
     // module's signed Microsoft runtime dependencies without restoring the
@@ -33005,11 +32623,9 @@ int wmain(int argc, wchar_t** argv) {
                 <<" selected-to-store-max-us="<<state.native_mouse_selected_to_store_max_ns/1000.0<<" async-depth-answers="<<state.native_mouse_async_depth_answers<<" async-depth-missing="<<state.native_mouse_async_depth_missing
                 <<" field-fallbacks="<<state.native_mouse_field_fallbacks
                 <<" last-depth-fallbacks="<<state.native_mouse_last_depth_fallbacks<<'\n';
-            // EFB peeks block the simulation thread on the render thread twice
-            // per call (pending-FIFO drain, then a frame-queue round-trip). The
-            // three numbers below are the only ones that say whether that
-            // dependency is negligible or dominant, because both existing peek
-            // phase timers require frame-cadence diagnostics to be enabled.
+            // EFB peeks block the simulation thread on the render thread twice per call (pending-FIFO drain, then a
+            // frame-queue round-trip). The numbers below show whether that dependency is negligible or dominant. The
+            // existing peek phase timers run only when frame-cadence diagnostics are enabled.
             std::cerr<<"[idle-loop-sleep] waits="<<state.idle_loop_sleeps
                 <<" wakes="<<state.idle_loop_sleep_wakes
                 <<" timeouts="<<state.idle_loop_sleep_timeouts
@@ -33144,15 +32760,11 @@ int wmain(int argc, wchar_t** argv) {
                              static_cast<double>(state.checkpoint_phase_entries)
                        : 0.0)
                 <<" scope=inclusive-wall-phase-invocations; nested spans may overlap; disabled means unmeasured\n";
-            // The checkpoint gate's own counters are maintained on the hot path with
-            // overflow-checked increments (checkpoint_gate.cpp:167-189) but were never
-            // printed anywhere outside the unit tests, so no recording could say how
-            // often each path runs. They are the multiplier A14-39 lacked and A14-40
-            // had to withdraw its estimate for: `full-scope-entries` is how often the
-            // expensive non-quiet path (validate_published_state + checked increments)
-            // runs, and `inline-scope-entries` is the cheap path that handles a
-            // checkpoint in generated code without entering the branch callback at all.
-            // Printing them costs nothing -- the values already exist.
+            // The checkpoint gate's counters are maintained on the hot path with overflow-checked increments
+            // (checkpoint_gate.cpp:167-189) but were not printed outside the unit tests. full-scope-entries counts the
+            // expensive non-quiet path (validate_published_state plus checked increments). inline-scope-entries counts the
+            // cheap path that handles a checkpoint in generated code without entering the branch callback. Printing them
+            // costs nothing, since the values already exist.
             {
                 const auto& gate_telemetry = state.checkpoint_gate.telemetry();
                 std::cerr<<"[checkpoint-gate-telemetry] activations="
@@ -33189,30 +32801,11 @@ int wmain(int argc, wchar_t** argv) {
             }
             dump_frame_pe_wait_audit(state, std::cerr, "shutdown");
             dump_pending_vi_boundary_audit(state, std::cerr, "shutdown");
-            // Emit the checkpoint-timing block on the CLEAN exit path.
-            //
-            // Before this call, dump_checkpoint_timing was reachable only from a crash
-            // handler or from flag-gated paths: native_runtime.cpp:15940 (late-checkpoint
-            // path), :19561 (if (trace_main_frame_enabled())), and :30108/:30155 both
-            // inside wmain's terminal-diagnostics try block, whose catch prints "Terminal
-            // diagnostics failed". Nothing reached it on a normal run, so EVERY counter it
-            // prints was absent from every normal recording - not just one of them.
-            //
-            // Four independent reports converged on this, which is why the fix is one call
-            // rather than four: agent-6 (C0060) found [ai-dma-latch-contention] and
-            // [vi-deadline-latch-contention] computed at :3023-3033 with no guard around
-            // them yet absent from both retained logs; agent-12 reported seven more missing
-            // counters from the same body; agent-14 hit the same wall twice independently
-            // (a phase timer whose result is discarded below 1 ms, and the checkpoint
-            // gate's Telemetry, maintained with overflow-checked increments on the hottest
-            // path and read only by unit tests).
-            //
-            // All of these values are already computed, so this costs a few hundred bytes
-            // of stderr at shutdown and nothing at run time. Placement is deliberate: the
-            // two calls above emit [frame-pe-wait] and [pending-vi-boundary-audit], and
-            // both are present in BOTH retained recordings, which proves this lambda runs
-            // on a clean exit - so this call inherits a demonstrated-reachable site rather
-            // than a hoped-for one.
+            // Emits the checkpoint-timing block on the clean exit path. Before this call, dump_checkpoint_timing was
+            // reachable only from a crash handler or from flag-gated paths, so a normal run printed none of its counters.
+            // The call sits beside the [frame-pe-wait] and [pending-vi-boundary-audit] output, which both appear on a clean
+            // exit, so this site is reached on every normal run. The values are already computed: this costs a few hundred
+            // bytes of stderr at shutdown and nothing at run time.
             state.dump_checkpoint_timing(std::cerr);
         });
         if (state.deadline_broker != nullptr) {
@@ -33443,7 +33036,7 @@ int wmain(int argc, wchar_t** argv) {
         }
     }
 
-    // ── Guest address space (memory + IOS device simulation) ────────────────
+    // Guest address space (memory and IOS device simulation)
     galaxy::host::GuestAddressSpace address_space(
         galaxy::input::kNativeVirtualHidTimingProfile,
         sim_thread_pe_scan_enabled());
@@ -33485,8 +33078,8 @@ int wmain(int argc, wchar_t** argv) {
         galaxy::host::flat_guest_memory::install_fault_handler(callbacks);
     }
     address_space.guest_memory()->notify_write = &notify_guest_memory_write;
-    // AISCNT must tick off the deterministic checkpoint clock, not the host
-    // wall clock — otherwise renderer/compile cost changes the boot schedule.
+    // AISCNT must tick off the deterministic checkpoint clock, not the host wall clock. Otherwise renderer and
+    // compile cost change the boot schedule.
     address_space.set_tick_source(&host_time_base_ticks, &state);
     // PE finish/token levels from the render thread wake the idle-loop wait.
     address_space.set_idle_wake_callback(&wake_idle_simulation_thread, &state);
@@ -33694,7 +33287,7 @@ int wmain(int argc, wchar_t** argv) {
         std::cout << "[boot] Pre-initialized SDK globals (TV=NTSC)\n";
     }
 
-    // ── NativeServicesV1 ─────────────────────────────────────────────────────
+    // NativeServicesV1
     galaxy::NativeServicesV1 services{};
     services.user               = &state;
     services.log                = &log_to_stderr;
@@ -33773,7 +33366,7 @@ int wmain(int argc, wchar_t** argv) {
 
     galaxy::PpcContext context{};
     try {
-        // ── D3D12 window ─────────────────────────────────────────────────────────
+        // D3D12 window
         try {
             galaxy::load_runtime_settings_from_file();
             galaxy::gx::load_render_config_from_file();
@@ -33832,7 +33425,7 @@ int wmain(int argc, wchar_t** argv) {
         // Restrict only this simulation thread; leave the process mask alone.
         simulation_cache_affinity.apply();
 
-        // ── Initial PPC CPU context ──────────────────────────────────────────────
+        // -- Initial PPC CPU context ----------------------------------------------
         // r1  = stack pointer (top of MEM1, 32-byte aligned)
         // r2  = RTOC / SDA2 base (from DOL symbol table)
         // r13 = SDA base (from DOL symbol table)
@@ -34397,10 +33990,8 @@ int wmain(int argc, wchar_t** argv) {
     dump_scene_nerve_owner(state, std::cerr);
     state.dump_lookup_cache_summary(std::cerr);
 
-    // One line, always emitted, reporting the guest's own 60 Hz timebase rate.
-    // This is the only place `vi_retrace_count` is printed unconditionally;
-    // every other site is event- or trace-gated, which made the guest's cadence
-    // unmeasurable from a recording. See the note at the `session_start` anchor.
+    // One line, always emitted, reporting the guest's own 60 Hz timebase rate. This is the only unconditional
+    // print of vi_retrace_count; the other sites are event- or trace-gated.
     {
         const std::uint64_t session_us =
             static_cast<std::uint64_t>(

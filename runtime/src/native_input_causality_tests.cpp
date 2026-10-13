@@ -121,9 +121,8 @@ int main() {
     }
 
     {
-        // A real guest memmove may clobber r3-r5 before its generated
-        // call-return checkpoint. The proof must retain only the exact
-        // pre-call operands and evaluate byte equality at completion.
+        // A real guest memmove can clobber r3-r5 before its generated call-return checkpoint. The proof keeps
+        // only the exact pre-call operands and compares bytes at completion.
         galaxy::input::NativeInputCausalityTracker tracker;
         const auto delivery = make_delivery(6u, 2u, 0x0FF4u, 0x09u);
         tracker.observe_acl_delivery(delivery);
@@ -151,9 +150,8 @@ int main() {
     }
 
     {
-        // Three delivered identities share one nominal VI deadline. The gap
-        // from sample 100 to 103 models FIFO replacement before delivery;
-        // only reports that actually cross IOS appear in this queue.
+        // Three delivered identities share one nominal VI deadline. The gap from sample 100 to 103 models FIFO
+        // replacement before delivery. Only reports that cross IOS appear in this queue.
         galaxy::input::NativeInputCausalityTracker tracker;
         const auto first = make_delivery(7u, 100u, 0x1000u, 0x10u);
         const auto second = make_delivery(7u, 101u, 0x1004u, 0x20u);
@@ -198,8 +196,8 @@ int main() {
     }
 
     {
-        // Byte-identical reports remain distinct identities. FIFO decode order
-        // maps the first and second copies to separate alternating WPAD slots.
+        // Byte-identical reports remain distinct identities. FIFO decode order maps the first and second copies
+        // to separate alternating WPAD slots.
         galaxy::input::NativeInputCausalityTracker tracker;
         const auto first = make_delivery(9u, 1u, 0x2000u, 0x44u);
         auto duplicate = first;
@@ -250,9 +248,8 @@ int main() {
     }
 
     {
-        // A new cadence epoch may reset its sequence while an old-epoch report
-        // is still waiting to be decoded. The boundary purges the stale report,
-        // then the first new-epoch delivery starts a fresh exact route.
+        // A new cadence epoch may reset its sequence while an old-epoch report is still waiting to be decoded.
+        // The boundary purges the stale report, and the first new-epoch delivery starts a fresh exact route.
         galaxy::input::NativeInputCausalityTracker tracker;
         const auto old_epoch = make_delivery(12u, 800u, 0x3000u, 0x51u);
         const auto reset_epoch = make_delivery(13u, 0u, 0x3004u, 0x61u);
@@ -294,10 +291,9 @@ int main() {
     }
 
     {
-        // RMGE01 may re-enter a report decoder to revisit the status already
-        // stored in guest WPAD memory after the matching bulk-in report was
-        // consumed. With no new ACL delivery there is no identity to prove,
-        // but this must not poison the next independently exact report.
+        // RMGE01 may re-enter a report decoder to re-read status already stored in guest WPAD memory after the
+        // bulk-in report was consumed. With no new ACL delivery there is no identity to prove. This must not
+        // poison the next exact report.
         galaxy::input::NativeInputCausalityTracker tracker;
         const auto delivery = make_delivery(21u, 1u, 0x4100u, 0x71u);
         tracker.observe_acl_delivery(delivery);
@@ -411,9 +407,8 @@ int main() {
             decoder_observation(delivery));
         tracker.finish_report_decoder(decode, 0x810006A0u, true);
 
-        // Models any later entry in the complete 0x20..0x3F report dispatch
-        // table. Entry invalidation occurs before that decoder can reuse the
-        // alternating slots, even if its bytes happen to match the old status.
+        // Models a later entry in the 0x20..0x3F report dispatch table. Entry invalidation happens before that
+        // decoder can reuse the alternating slots, even when its bytes match the old status.
         tracker.invalidate_wpad_control_slots(0x81000600u);
         const auto kpad = tracker.begin_kpad_sample(0u);
         tracker.observe_wpad_read_copy(
@@ -432,11 +427,9 @@ int main() {
     }
 
     {
-        // RMGE01 configures its WPAD report state before the first native
-        // virtual ACL report can be delivered.  That startup decoder has no
-        // transport identity, so it must be untracked rather than poisoning
-        // the later, fully observed native stream.  Once the first delivery
-        // arrives, the same tracker must resume exact attribution.
+        // RMGE01 configures WPAD report state before the first native virtual ACL report. That startup decoder has
+        // no transport identity, so it is left untracked and does not poison the later native stream. The tracker
+        // resumes exact attribution at the first delivery.
         galaxy::input::NativeInputCausalityTracker tracker;
         const auto bootstrap = make_delivery(69u, 1u, 0x8FFCu, 0xCFu);
         const auto bootstrap_decode = tracker.begin_report_decoder(
@@ -573,9 +566,8 @@ int main() {
     }
 
     {
-        // Recursive call_guest dispatch is host-stack nested. The explicit
-        // frame vectors must therefore attribute an inner callback first and
-        // then resume the outer frame without cross-contamination.
+        // Recursive call_guest dispatch nests on the host stack. The frame vectors must attribute an inner callback
+        // first, then resume the outer frame without cross-contamination.
         galaxy::input::NativeInputCausalityTracker tracker;
         const auto outer_delivery = make_delivery(80u, 1u, 0xA000u, 0xE0u);
         const auto inner_delivery = make_delivery(80u, 2u, 0xA004u, 0xE1u);
@@ -616,11 +608,9 @@ int main() {
     }
 
     {
-        // KPADiSamplingCallback stores bufIdx as the just-written slot plus
-        // one. After writing slot 119 it intentionally exposes 120 until the
-        // next callback wraps the producer cursor to zero. KPADRead's
-        // `bufIdx - copy_ct` arithmetic therefore maps cursor 120, count 1
-        // back to the final physical ring slot.
+        // KPADiSamplingCallback stores bufIdx as the just-written slot plus one. After writing slot 119 it exposes
+        // 120 until the next callback wraps the producer cursor to zero. KPADRead's `bufIdx - copy_ct` then maps
+        // cursor 120, count 1 to the final physical ring slot.
         galaxy::input::NativeInputCausalityTracker tracker;
         const auto delivery = make_delivery(89u, 1u, 0xAFF0u, 0x30u);
         tracker.observe_acl_delivery(delivery);
@@ -710,10 +700,9 @@ int main() {
             0x81231008u,
             true,
             observation.wii_ticks + 90u);
-        // An interrupt may resume the generated caller through its interior
-        // call-return label, which deliberately invokes the same checkpoint
-        // again without rerunning KPADRead. The duplicate return must not
-        // destroy the exact output identity from the protected invocation.
+        // An interrupt may resume the generated caller at its interior call-return label, which runs the checkpoint
+        // again without rerunning KPADRead. The duplicate return must keep the exact output identity from the
+        // protected invocation.
         const auto duplicate = tracker.finish_classified_kpad_read(
             0x803AB2B0u,
             1u,
@@ -789,10 +778,9 @@ int main() {
                                         KpadReadExceptionRouteClassified,
             "the max=1 JUTException reader is classified and cannot satisfy normal gameplay pointer proof");
 
-        // The exception wrapper can take KPADRead's early-return path before
-        // the shared OSDisableInterrupts snapshot.  Its nonzero result must
-        // remain a diagnostic-only exception classification rather than
-        // globally poisoning the independent WPadHolder pointer route.
+        // The exception wrapper can take KPADRead's early-return path before the shared OSDisableInterrupts snapshot.
+        // Its nonzero result is a diagnostic-only exception classification. It must not poison the independent
+        // WPadHolder pointer route.
         const auto early_exception = tracker.finish_classified_kpad_read(
             0x803AA570u,
             1u,
@@ -812,9 +800,8 @@ int main() {
                     galaxy::input::NativeInputCausalityReason::None,
             "an early nonzero JUTException read remains classified without corrupting WPadHolder causality");
 
-        // WPadHolder calls KPADRead for all four channels. Empty channels skip
-        // the protected block and return zero; those returns are legitimate
-        // non-proof records and must not poison channel zero's exact route.
+        // WPadHolder calls KPADRead for all four channels. Empty channels skip the protected block and return zero.
+        // Those returns are non-proof records and must not poison channel zero's exact route.
         for (std::uint32_t channel = 1u; channel < 4u; ++channel) {
             const auto empty = tracker.finish_classified_kpad_read(
                 0x803AB2B0u,
@@ -898,9 +885,8 @@ int main() {
     }
 
     {
-        // A trace checkpoint can coincide with a real pending event. If a
-        // nested sampling callback overwrites the chosen ring slot before the
-        // outer KPADRead returns, the captured identity must be rejected.
+        // A trace checkpoint can coincide with a real pending event. If a nested sampling callback overwrites the
+        // chosen ring slot before the outer KPADRead returns, the captured identity is rejected.
         galaxy::input::NativeInputCausalityTracker tracker;
         const auto first = make_delivery(92u, 1u, 0xB200u, 0x51u);
         const auto second = make_delivery(92u, 2u, 0xB204u, 0x61u);

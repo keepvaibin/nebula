@@ -7,15 +7,12 @@ param(
     [switch]$Detailed,
     [switch]$Gpu,
     # Opt-in, intrusive per-draw attribution on one frame in every N.
-    # The runtime accumulates the renderer breakdown
-    # (flush-us, flush-pso-us, pso-get-us/max/calls, vertex-load-us,
-    # draw-record-us, and the producer-side snapshot/dependency clocks) only when
-    # offline sampling is on, and the sampled frame also *reports* those fields.
-    # Before this switch existed the harness could not produce that profile at
-    # all: -Detailed enables the per-draw clocks but the report is additionally
-    # gated on the frame being a stall, so it printed at most a handful of
-    # tail-biased frames. 0 disables. No sample period has established overhead
-    # on the acceptance scene; use unsampled runs for the baseline.
+    # The runtime accumulates the renderer breakdown (flush-us, flush-pso-us,
+    # pso-get-us/max/calls, vertex-load-us, draw-record-us, and the producer-side
+    # snapshot/dependency clocks) only when offline sampling is on, and the sampled
+    # frame also reports those fields. -Detailed enables the per-draw clocks; the
+    # report also requires the frame to be a stall. 0 disables. The overhead of a
+    # sample period is not established; use unsampled runs for the baseline.
     [ValidateRange(0, 100000)][int]$Sample = 0,
     # Copy the session's warmed shader cache back over cache-seed after a clean
     # exit. Off by default because it changes the artifact a later run starts
@@ -24,13 +21,11 @@ param(
 )
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'copy_preserved_tree.ps1')
-# $Root\$Build is either the install folder itself (what build-release produces
-# and what perf-20261007\control actually is) or a parent that contains one
-# (Setup's versions\<version>\Nebula layout). Resolve the folder that really
-# holds NebulaRuntime.exe instead of assuming a fixed depth: the previous
-# unconditional Join-Path produced a path that did not exist, so the harness
-# failed before it could record anything, which is worse than a bad number
-# because it silently yields no number at all.
+# $Root\$Build is either the install folder itself (what build-release produces)
+# or a parent that contains one (Setup's versions\<version>\Nebula layout). Resolve
+# the folder that really holds NebulaRuntime.exe instead of assuming a fixed depth.
+# An unconditional Join-Path produces a path that does not exist, and the harness
+# then records nothing.
 $buildRoot = Join-Path $Root $Build
 if (-not (Test-Path -LiteralPath $buildRoot)) { throw "Build folder not found: $buildRoot" }
 $app = $buildRoot
@@ -54,14 +49,13 @@ New-Item -ItemType Directory (Join-Path $session 'local\Nebula') -Force | Out-Nu
 # psos.bin, pipelines.bin), so a shallow copy would drop the caches the seed
 # exists to provide and silently turn a warmed run into a first-use run.
 Copy-Item -LiteralPath (Join-Path $Root 'cache-seed') -Destination (Join-Path $session 'local\Nebula\shadercache') -Recurse -Force
-# Record the cache condition the run actually started from. The objective
-# requires first-use compilation to be separated from warmed gameplay, and the
-# only way a later reader can honour that is if the recording says which it was:
-# an empty or stale cache-seed makes a run pay FXC and driver PSO builds that a
-# warmed run does not, and the two must never be compared. The runtime's own
-# "[PipelineCache] loaded N DXBC pairs / M PSO keys" line reports what it
-# accepted; this reports what was offered, so a seed that is present but whose
-# keys no longer match still shows up as warm here and cold there.
+# Record the cache condition the run started from. First-use compilation must be
+# separated from warmed gameplay, and the recording must say which one it was: an
+# empty or stale cache-seed makes a run pay FXC and driver PSO builds that a warmed
+# run does not, and the two must never be compared. The runtime's
+# "[PipelineCache] loaded N DXBC pairs / M PSO keys" line reports what it accepted;
+# this reports what was offered, so a seed that is present but whose keys no longer
+# match still shows as warm here and cold there.
 $cacheSeedState = [ordered]@{ present = $false; files = 0; bytes = 0; newestUtc = $null }
 $cacheSeedPath = Join-Path $session 'local\Nebula\shadercache'
 if (Test-Path -LiteralPath $cacheSeedPath) {
@@ -101,7 +95,7 @@ if ($Monitor -or $Detailed) {
 }
 if ($Detailed) { $envs['GALAXY_TRACE_GX_STALLS'] = '1'; $envs['GALAXY_TRACE_GX_STALL_US'] = '20000' }
 # Per-draw timing is intrusive and opt-in independently of monitoring.
-# Periods below2 disable it. Assign the disabled value explicitly so an omitted
+# Periods below 2 disable it. Assign the disabled value explicitly so an omitted
 # -Sample cannot inherit a detailed sampling period from runtime-env.json.
 # Different sampled/unsampled workloads do not measure instrumentation overhead;
 # that requires matched scenes/settings with timing disabled and enabled.
@@ -113,12 +107,10 @@ if (-not $cacheSeedState.present) {
     Write-Warning "cache-seed is missing or empty: this run starts cold and will pay first-use FXC and driver PSO builds that a warmed run does not. Do not compare it against a warmed run."
 }
 # Host CPU identity and clock, captured once before launch so it costs the run
-# nothing. Without these a cross-machine comparison of CPU cost per unit of guest
-# progress cannot separate "this CPU is slower per clock" from "this build does
-# more work per unit" -- which is exactly the ambiguity that made a 6.85x
-# guest-progress gap look like blocking when a 2.3x clock difference plus IPC and
-# cache effects could account for it on its own. L3 size and memory speed are the
-# other two terms in per-instruction cost, and both matter for a 51 MB module.
+# nothing. Without them a cross-machine comparison of CPU cost per unit of guest
+# progress cannot separate CPU clock from the work each build does per unit. L3
+# size and memory speed are the other two terms in per-instruction cost, and both
+# matter for a 51 MB module.
 $info.hostCpu = [ordered]@{
     name=$null; cores=$null; logical=$null; maxClockMhz=$null
     currentClockMhz=$null; l3CacheKb=$null; memorySpeedMhz=$null; capturedUtc=$null
@@ -182,18 +174,14 @@ $stdout = $p.StandardOutput.ReadToEndAsync(); $stderr = $p.StandardError.ReadToE
 
 # Per-thread CPU and wait reason, sampled once a second for the life of the run.
 #
-# The delivered recordings contain no per-thread evidence at all: the launcher's
-# process.csv is process-wide, so "the simulation thread is at 100 %" and "the
-# simulation thread is blocked on the render queue while the DSP thread burns a
-# core" are indistinguishable in them. That is the one discrimination the
-# objective asks for ("active simulation work, renderer CPU work, GPU execution,
-# or a dependency between them") and nothing in the tree produces it.
+# The launcher's process.csv is process-wide, so it cannot tell a busy simulation
+# thread from one blocked on the render queue while the DSP thread uses a core.
+# Per-thread samples make that distinction.
 #
-# System.Diagnostics.ProcessThread gives TotalProcessorTime and WaitReason with
-# no P/Invoke and no extra thread; the existing 1 s WaitForExit poll is a free
-# sampling tick. Every access is guarded: a monitoring failure must never change
-# or abort the measured run, so a failed sample is skipped and the CSV simply has
-# fewer rows.
+# System.Diagnostics.ProcessThread gives TotalProcessorTime and WaitReason with no
+# P/Invoke and no extra thread; the existing 1 s WaitForExit poll is a free sampling
+# tick. Every access is guarded: a monitoring failure must never change or abort the
+# measured run, so a failed sample is skipped and the CSV simply has fewer rows.
 $threadRows = New-Object Collections.Generic.List[string]
 $threadRows.Add('elapsedSeconds,threadId,cpu100ns,threadState,waitReason,priorityLevel')
 $threadSampleStart = [DateTime]::UtcNow
@@ -203,9 +191,8 @@ function Get-ThreadSampleRows {
     $rows = New-Object Collections.Generic.List[string]
     foreach ($t in $Process.Threads) {
         try {
-            # TimeSpan.Ticks is already 100-nanosecond units, which is the unit
-            # the column name claims; no scaling. Verified on this host:
-            # TotalProcessorTime 00:00:00.0781250 reports Ticks = 7812500.
+            # TimeSpan.Ticks is already 100-nanosecond units, which is the unit the column name
+            # claims; no scaling is needed.
             $cpu = $t.TotalProcessorTime.Ticks
             $rows.Add(('{0:N3},{1},{2},{3},{4},{5}' -f $Elapsed, $t.Id, $cpu, $t.ThreadState, $t.WaitReason, $t.PriorityLevel))
         } catch {
@@ -217,19 +204,14 @@ function Get-ThreadSampleRows {
 
 # Host CPU clock, sampled once a second on the same tick as the thread rows.
 #
-# This closes the largest remaining uncertainty in the whole performance analysis.
-# CPU-seconds per completed guest checkpoint is clock-free (A14-19): the Arc spends
-# 272.2 ns against the 5090's 34.8 ns, a ratio of 7.82x. Converting that to *cycles*
-# per checkpoint requires the clock, and the 2.27x figure used to derive the
-# remaining "3.44x of IPC/cache/work" was an ASSUMPTION (5.0 vs 2.2 GHz), never
-# measured. A laptop under sustained CPU+iGPU load can sit far below its rated
-# clock, and the iGPU shares the package power budget, so the assumption could be
-# wrong by a large factor in exactly the direction that matters: if the Arc sustains
-# ~1.5 GHz, clock alone explains nearly the whole residual and the deficit is a power
-# limit rather than a code defect.
+# CPU-seconds per guest checkpoint is clock-free. Converting it to cycles needs the
+# actual clock: a laptop under sustained CPU+iGPU load can sit far below its rated
+# clock, and the iGPU shares the package power budget. Without a sampled clock, a
+# per-checkpoint gap could come from clock, power limits or code, and cannot be
+# attributed to one of them.
 #
 # Win32_Processor.CurrentClockSpeed is the firmware's live reading. It is cheap but
-# not free, so it is sampled at the same 1 Hz cadence as the threads -- coarse enough
+# not free, so it is sampled at the same 1 Hz cadence as the threads: coarse enough
 # to add nothing measurable to a multi-minute run, fine enough to see a sustained
 # state rather than a boost spike. Wrapped in try/catch because CIM can be denied.
 $clockRows = New-Object Collections.Generic.List[string]
@@ -263,12 +245,11 @@ if ($threadRows.Count -gt 1) {
 if ($clockRows.Count -gt 1) {
     [IO.File]::WriteAllLines((Join-Path $session 'clock.csv'), $clockRows)
 }
-# The runtime prints its own build identity as the very first stderr line:
-# source commit/revision kind, dirty state, runtime-inputs digest, compiler,
-# config, flags, the effective `isa=`, dsp-module and recipe. Retaining it here
-# is what makes a recording self-describing - the delivered bundles had lost it,
-# so their only identity was a hash table, which detects a difference without
-# explaining it. Parsed from the captured text, never from a live console.
+# The runtime prints its build identity as its first stderr line: source commit and
+# revision kind, dirty state, runtime-inputs digest, compiler, config, flags, the
+# effective `isa=`, dsp-module and recipe. Retaining it makes a recording
+# self-describing; a hash table detects a difference without explaining it. Parsed
+# from the captured text, never from a live console.
 $runtimeBuild = $null
 $buildMatch = [regex]::Match($stderrText, '(?m)^\[runtime-build\]\s*(.+?)\s*$')
 if ($buildMatch.Success) { $runtimeBuild = $buildMatch.Groups[1].Value }
@@ -284,20 +265,16 @@ $exitInfo | ConvertTo-Json | Set-Content (Join-Path $session 'exit.json')
 
 # Refresh cache-seed from the cache this run warmed.
 #
-# Why this exists: the run is handed a copy of cache-seed (line 41) and points
-# LOCALAPPDATA at it (line 69), but nothing ever copied the warmed cache back.
-# So every run started from the same frozen seed and threw away whatever it had
-# just compiled -- which means a shader configuration the seed does not cover is
-# recompiled by FXC from source in EVERY measured session. In the delivered
-# recording that is 17 configurations at 6.7-21.5 ms of FXC plus 2.3-15.2 ms of
-# driver PSO build each, synchronously on the render thread: it is exactly the
-# "fixed hitch points that never change" symptom, and the harness reproduces it
-# by construction. It is invisible in `loaded N DXBC pairs` because the runtime
-# faithfully reports the state of the seed it was given.
+# The run is handed a copy of cache-seed and LOCALAPPDATA points at it, but nothing
+# copies the warmed cache back. Every run therefore started from the same seed and
+# discarded what it compiled, so a shader configuration the seed does not cover is
+# recompiled by FXC in every measured session, synchronously on the render thread.
+# The runtime's "loaded N DXBC pairs" line reports the seed it was given, so it does
+# not show this.
 #
 # Off unless -RefreshSeed is passed, because it mutates the baseline a later run
-# compares against. Refresh once, deliberately, when the goal is "measure warmed
-# gameplay"; leave it off when the goal is "A/B the same conditions twice".
+# compares against. Refresh deliberately when measuring warmed gameplay; leave it off
+# for A/B comparisons under the same conditions.
 if ($RefreshSeed) {
     $exitInfo.seedRefresh = [ordered]@{ attempted = $true; copied = $false; reason = '' }
     try {

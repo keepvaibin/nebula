@@ -1,11 +1,10 @@
-// gx_state.cpp — GxState register file and decoded views.
+// gx_state.cpp: GxState register file and decoded views.
 //
-// Mutators are called exclusively by FifoParser; consumers are GxBackend
-// methods that build shader keys, pipeline state, and constant buffers.
+// Mutators are called only by FifoParser. Consumers are GxBackend methods that build
+// shader keys, pipeline state and constant buffers.
 //
-// Unknown CP/XF/BP state writes are fatal. A self-delimiting command is still
-// an unsupported state transition; accepting it would continue with stale or
-// incomplete rendering state.
+// Unknown CP/XF/BP state writes are fatal. Accepting a self-delimiting command would
+// continue with stale or incomplete rendering state.
 
 #include "galaxy/gx/gx_state.h"
 
@@ -109,10 +108,9 @@ namespace {
         return true;
     }
 
-    // XFMEM_ERROR..XFMEM_VTXSPECS (0x1000-0x1008): real-hardware status/
-    // diagnostic registers with no rendering-state effect (see
-    // xf::kStatusRegsBase). Classified as inert, not stubbed: stored below
-    // but deliberately left out of every dirty_ bit below.
+    // XFMEM_ERROR..XFMEM_VTXSPECS (0x1000-0x1008) are real-hardware status and diagnostic
+    // registers with no rendering-state effect (see xf::kStatusRegsBase). They are stored,
+    // but no dirty_ bit is set for them.
     if (in_u16_range(
             address, xf::kStatusRegsBase, xf::kNumChannels)) {
         return true;
@@ -134,14 +132,13 @@ void validate_xf_write(
     std::uint16_t base,
     const std::uint32_t* values,
     std::uint16_t count) {
-    // Validate the complete transaction before touching xf_ or dirty_.  This
-    // also rejects the old 0x1FFF address wraparound behavior.
+    // Validate the whole transaction before touching xf_ or dirty_. This also rejects
+    // the 0x1FFF address wraparound.
     const std::uint32_t end = static_cast<std::uint32_t>(base) + count;
     static_assert(xf::kPostMatricesBase + 0x0100u == xf::kLightsBase);
-    // The post-matrix and light banks are adjacent and equally classified.
-    // Most matrix uploads can validate their entire span without revisiting
-    // the same range checks for every word. Keep the scalar error path for
-    // mixed/invalid spans so it still identifies the first offending word.
+    // The post-matrix and light banks are adjacent and classified alike, so most matrix
+    // uploads validate their whole span at once. Mixed or invalid spans take the scalar
+    // path, which reports the first offending word.
     if (end <= 0x0100u ||
         (base >= xf::kNormalMatricesBase &&
          end <= xf::kNormalMatricesBase + 0x0060u) ||
@@ -179,10 +176,9 @@ void validate_xf_write(
         reg == bp::kBpMask;
 }
 
-// Keep this predicate paired with dependency_shape_hash(). These are its
-// complete BP inputs, not the larger set affecting visual state. Uniform,
-// blend, scissor and copy writes must still execute, but cannot change the
-// cached hash of guest-memory dependency shape.
+// Keep this predicate in step with dependency_shape_hash(). These are its complete BP
+// inputs. Uniform, blend, scissor and copy writes still execute, but they cannot change
+// the cached guest-memory dependency-shape hash.
 [[nodiscard]] constexpr bool affects_dependency_shape(
     std::uint8_t reg, std::uint32_t changed) noexcept {
     // The sampled-map mask observes combiner input selectors and z-texture
@@ -215,10 +211,9 @@ void validate_xf_write(
     std::uint32_t flags = 0u;
     // --------------- Dirty bit classification --------------------------------
 
-    // Display-copy filter/sample-pattern registers (0x01-0x04) are latched
-    // copy state. The current renderer's non-AA XFB path consumes BP 0x53/0x54
-    // filter weights; keep these named and stored so they are not treated as
-    // unknown hardware writes.
+    // Display-copy filter and sample-pattern registers (0x01-0x04) are latched copy state.
+    // The non-AA XFB path reads the BP 0x53/0x54 filter weights. They are named and stored
+    // so they are not treated as unknown writes.
     if (reg >= bp::kDisplayCopyFilterBase &&
         reg < bp::kDisplayCopyFilterBase + 4u) {
         return flags;
@@ -249,8 +244,7 @@ void validate_xf_write(
         flags |= GxState::kDirtyTev;
         return flags;
     }
-    // BP 0x00 gen_mode — but this is listed separately below.
-    // Indirect texture stage commands  0x10-0x1F
+    // Indirect texture stage commands 0x10-0x1F
     if (reg >= bp::kIndCmdBase && reg < bp::kIndCmdBase + 0x10u) {
         flags |= GxState::kDirtyTev;
         return flags;
@@ -263,9 +257,8 @@ void validate_xf_write(
         flags |= GxState::kDirtyTev;
         return flags;
     }
-    // Texture-coordinate S/T sizes feed tex_dims[].zw and VS constants.
-    // Neither shader key contains these sizes. Preserve constant uploads
-    // without rebuilding a shader key or looking up the same pipeline.
+    // Texture-coordinate S/T sizes feed tex_dims[].zw and VS constants. Neither shader key
+    // includes them, so their uploads do not rebuild a shader key or look up a pipeline.
     if (reg >= bp::kTexCoordSizeBase &&
         reg < bp::kTexCoordSizeBase + bp::kTexCoordSizeCount) {
         flags |= GxState::kDirtyTevConstants | GxState::kDirtyVsConstants;
@@ -287,16 +280,15 @@ void validate_xf_write(
 
     // Blend / PE
     case bp::kBlendMode:   // 0x41
-        // Every effective blend/mask change still updates the fixed-function
-        // pipeline. PS code consumes only enable/subtract/dither/alpha-update
-        // and whether either factor reads the TEV source alpha (factor4/5).
-        // PS uniforms read constant destination alpha from BP0x42, not here.
+        // Every effective blend or mask change still updates the fixed-function pipeline. The
+        // PS reads only enable, subtract, dither, alpha-update, and whether either factor reads
+        // TEV source alpha (factor4/5). Constant destination alpha comes from BP 0x42 as a uniform.
         flags |= GxState::kDirtyRenderState;
         break;
     case bp::kConstAlpha:  // 0x42
         flags |= GxState::kDirtyTevConstants;
-        // The enable flag affects shader outputs and blend routing; the
-        // replacement value is a uniform even while replacement is enabled.
+        // The enable flag affects shader outputs and blend routing. The replacement value is a
+        // uniform, even while replacement is enabled.
         break;
     case bp::kPeControl:   // 0x43
         flags |= GxState::kDirtyRenderState | GxState::kDirtyTev;
@@ -317,8 +309,7 @@ void validate_xf_write(
     case bp::kPeTokenInt:  // 0x48
         break;
 
-    // Alpha compare  0x49 (= kCopySrcTopLeft, but that constant is 0x49 only
-    // in the copy block — let's use the actual address kAlphaCompare = 0xF3)
+    // Alpha compare at 0xF3. It is not 0x49, which belongs to the EFB copy block below.
     case bp::kAlphaCompare:  // 0xF3
         flags |= GxState::kDirtyTevConstants;
         break;
@@ -357,8 +348,8 @@ void validate_xf_write(
     case bp::kBusClock1:
         break;
 
-    // Texture units  maps 0-3: 0x80-0x9F, maps 4-7: 0xA0-0xBF (with
-    // kTexHighBankOffset = 0x20 offset).  Covers mode0, mode1, image0-3, tlut.
+    // Texture units: maps 0-3 at 0x80-0x9F, maps 4-7 at 0xA0-0xBF (kTexHighBankOffset
+    // is 0x20). Covers mode0, mode1, image0-3 and tlut.
     case 0x80u: case 0x81u: case 0x82u: case 0x83u:  // TexMode0 maps 0-3
     case 0x84u: case 0x85u: case 0x86u: case 0x87u:  // TexMode1 maps 0-3
     case 0x88u: case 0x89u: case 0x8Au: case 0x8Bu:  // TexImage0 maps 0-3
@@ -379,8 +370,8 @@ void validate_xf_write(
         flags |= GxState::kDirtyTex;
         break;
 
-    // TEV register colors  0xE0-0xE7 (blending-register RA/BG pairs; konst
-    // writes never reach here — bit 23 routed them to konst_ra_bg_ above).
+    // TEV register colors 0xE0-0xE7 (RA/BG pairs for the blending registers). Konst writes
+    // never reach here: bit 23 routes them to konst_ra_bg_ above.
     case 0xE0u: case 0xE1u: case 0xE2u: case 0xE3u:
     case 0xE4u: case 0xE5u: case 0xE6u: case 0xE7u:
         flags |= GxState::kDirtyTevConstants;
@@ -414,8 +405,8 @@ void validate_xf_write(
         flags |= GxState::kDirtyTev;
         break;
 
-    // Explicitly classified raw/no-dirty registers reach this case. Unknown
-    // addresses were rejected before the write mask or register file changed.
+    // Registers classified as raw or no-dirty reach this case. Unknown addresses are
+    // rejected before the write mask or register file changes.
     default:
         break;
     }
@@ -496,9 +487,9 @@ void GxState::apply_validated_xf(
     std::uint16_t base,
     const std::uint32_t* values,
     std::uint16_t count) {
-    // Complete validation guarantees every accepted low-bank address is
-    // matrix/light memory. Its only dirty effect is the matrix palette bit.
-    // Preserve sequential reads/stores: values may alias this register bank.
+    // Complete validation guarantees each accepted low-bank address is matrix/light memory,
+    // so the only dirty effect is the matrix palette bit. Writes stay sequential because
+    // values may alias this bank.
     if (base < xf::kStatusRegsBase) {
         bool changed = false;
         for (std::uint16_t i = 0; i < count; ++i) {
@@ -510,14 +501,11 @@ void GxState::apply_validated_xf(
         }
         if (changed) {
             dirty_ |= kDirtyXfMatrices;
-            // Record which palette chunks moved. The renderer consumes this as
-            // one question — "did anything in the palette move?" — and uses the
-            // answer to decide whether the frame's existing palette ring
-            // allocation can be reused. The snapshot it takes is always the
-            // whole 6656 bytes; see `xf_palette_dirty()` for why. `changed` is
-            // already the "did any word differ" test, so the extra cost is one
-            // 64-bit compare on the writes that turn out to change nothing (a
-            // re-issued LOAD_INDX, which is common).
+            // Records which palette chunks changed. The renderer uses one answer, whether anything
+            // in the palette changed, to decide whether the frame's palette ring allocation can be
+            // reused. The snapshot is always the full 6656 bytes; see xf_palette_dirty(). `changed`
+            // is the any-word-differs test, so a write that changes nothing (a re-issued LOAD_INDX)
+            // costs one 64-bit compare.
             const std::uint32_t first = base / kMatrixPaletteChunkWords;
             const std::uint32_t last =
                 static_cast<std::uint32_t>(base + count - 1u) /
@@ -560,9 +548,9 @@ void GxState::apply_validated_xf(
         if (addr >= xf::kProjectionBase && addr < xf::kProjectionBase + 7u) {
             dirty_ |= kDirtyVsConstants;
         }
-        // XF viewport width/height drive native line/point expansion. The
-        // renderer consumes all six words dynamically, while b0 must refresh
-        // when the first two change so raster widths remain exact.
+        // XF viewport width and height drive native line and point expansion. The renderer reads
+        // all six words dynamically, but b0 must refresh when the first two change so raster
+        // widths stay exact.
         if (addr >= xf::kViewportBase && addr < xf::kViewportBase + 2u) {
             dirty_ |= kDirtyVsConstants;
         }
@@ -582,11 +570,11 @@ void GxState::load_xf_indexed(
     std::uint16_t xf_addr,
     const std::uint32_t* values,
     std::uint16_t count) {
-    // This mutator does not receive the A-D selector; kLoadIndxA identifies
-    // the LOAD_INDX opcode family in fatal metadata.
+    // This mutator does not receive the A-D selector. kLoadIndxA identifies the LOAD_INDX
+    // opcode family in fatal metadata.
     validate_xf_write(op::kLoadIndxA, xf_addr, values, count);
-    // Already validated with the indexed opcode's exact failure metadata.
-    // Reuse application without a second complete classification pass.
+    // Already validated with the indexed opcode's failure metadata. Reuses the application
+    // without a second classification pass.
     apply_validated_xf(xf_addr, values, count);
 }
 
@@ -597,25 +585,22 @@ void GxState::load_bp(std::uint32_t command) {
     const auto reg = static_cast<std::uint8_t>(command >> 24);
     const std::uint32_t val = command & 0x00FFFFFFu;
 
-    // Reject before applying/resetting the one-shot mask or mutating any
-    // register bank. Continuing with stale state is never a valid fallback.
+    // Rejects before the one-shot mask is applied or reset, and before any register bank
+    // changes. Continuing with stale state is never a valid fallback.
     if (!is_classified_bp_register(reg)) {
         throw_unknown_bp_write(reg, val, command);
     }
 
-    // 0xFE — one-shot write mask register (arms but does not write to bp_[]).
+    // 0xFE is the one-shot write mask register. It arms the mask but does not write bp_[].
     if (reg == bp::kBpMask) {
         bp_mask_ = val;
         return;
     }
 
-    // Apply the current write mask.
-    // TEV color registers 0xE0-0xE7: data bit 23 routes the write to the
-    // KONSTANT bank INSTEAD of the blending register (hardware semantics;
-    // Dolphin BPStructs does the same).  Previously konst writes ALSO landed
-    // in bp_[], so every J3D TevKColor write clobbered C0/C1/A0 — the
-    // blended 3D materials (out = lerp(C1, C0, TEXC), a = A0*TEXA) then
-    // produced transparent garbage.
+    // Applies the current write mask. TEV color registers 0xE0-0xE7: data bit 23 routes the
+    // write to the konstant bank instead of the blending register, as Dolphin's BPStructs
+    // does. A konst write must not also land in bp_[], or it overwrites C0/C1/A0 of blended
+    // materials.
     if (reg >= 0xE0u && reg <= 0xE7u) {
         const std::size_t index = reg - 0xE0u;
         const std::uint32_t next =
@@ -640,15 +625,15 @@ void GxState::load_bp(std::uint32_t command) {
         return;
     }
     bp_[reg] = next;
-    // Delay table access until the value changed. Repeated unchanged writes
-    // retain the original register-only validation and no-change fast path.
+    // Table access is deferred until the value changes. Repeated unchanged writes keep the
+    // register-only validation and the no-change fast path.
     const auto metadata = kBpWriteMetadata[reg];
     if (((previous ^ next) & metadata.dependency_mask) != 0u) {
         invalidate_dependency_shape();
     }
 
-    // Register-only classification is already compiled into the descriptor.
-    // These four writes additionally inspect exactly which value bits changed.
+    // Register-only classification is already compiled into the descriptor. These four writes
+    // also check which value bits changed.
     dirty_ |= metadata.flags;
     switch (reg) {
     case bp::kBlendMode: {
@@ -714,10 +699,9 @@ TevStageConfig GxState::tev_stage(unsigned stage) const {
 // TEV register / konst color banks (BP 0xE0-0xE7, RA/BG pairs).
 // ---------------------------------------------------------------------------
 namespace {
-// Assembles one RA/BG register pair into R(8)|G(8)|B(8)|A(8).
-// BP TEV color fields are 11-bit (S10 for the blending registers, plain
-// 8-bit for konst): RA = red[10:0], alpha[22:12]; BG = blue[10:0],
-// green[22:12].  Clamp to the displayable 0-255 range.
+// Assembles one RA/BG register pair into R(8)|G(8)|B(8)|A(8). BP TEV color fields are
+// 11-bit (S10 for the blending registers, plain 8-bit for konst): RA = red[10:0],
+// alpha[22:12]; BG = blue[10:0], green[22:12]. Clamps to the displayable 0-255 range.
 std::int32_t sign_extend_11(std::uint32_t v) {
     const std::int32_t raw = static_cast<std::int32_t>(v & 0x7FFu);
     return (raw & 0x400) != 0 ? raw - 0x800 : raw;
@@ -762,11 +746,9 @@ GxState::tev_register_values() const {
 }
 
 std::array<std::uint32_t, 4> GxState::tev_register_colors() const {
-    // The blending registers live in pairs: 0xE0/0xE1 = PREV-RA/BG,
-    // 0xE2/0xE3 = REG0-RA/BG, etc.  Assemble each pair into a packed RGBA
-    // word (red comes from RA[10:0] — returning the raw RA word made every
-    // consumer read R from the always-zero top byte: the boot100 "no red
-    // anywhere" screen).
+    // The blending registers come in pairs: 0xE0/0xE1 = PREV RA/BG, 0xE2/0xE3 = REG0 RA/BG,
+    // and so on. Each pair packs into one RGBA word. Red comes from RA[10:0]; the raw RA word
+    // cannot be used because its top byte is always zero.
     return {
         pack_tev_rgba(bp_[bp::kTevRegisterBase + 0u],
                       bp_[bp::kTevRegisterBase + 1u]),
@@ -780,8 +762,8 @@ std::array<std::uint32_t, 4> GxState::tev_register_colors() const {
 }
 
 std::array<std::uint32_t, 4> GxState::tev_konst_colors() const {
-    // konst_ra_bg_ mirrors the eight RA/BG words that were written with
-    // bit 23 set; assemble pairs exactly like the blending registers.
+    // konst_ra_bg_ holds the eight RA/BG words written with bit 23 set. Pairs assemble the
+    // same way as the blending registers.
     return {
         pack_tev_rgba(konst_ra_bg_[0], konst_ra_bg_[1]),
         pack_tev_rgba(konst_ra_bg_[2], konst_ra_bg_[3]),
@@ -835,8 +817,8 @@ Projection GxState::projection() const {
     Projection p{};
     for (unsigned i = 0; i < 6u; ++i) {
         const std::uint32_t raw = xf_[xf::kProjectionBase + i];
-        // Raw XF words store IEEE 754 single-precision floats in the same
-        // bit pattern — std::bit_cast gives us the host float with no UB.
+        // Raw XF words hold IEEE 754 single-precision floats. std::bit_cast gives the host float
+        // without undefined behavior.
         p.coeffs[i] = std::bit_cast<float>(raw);
     }
     // Word 6: 0 = perspective, 1 = orthographic.
@@ -862,9 +844,9 @@ std::uint64_t GxState::dependency_shape_hash() const noexcept {
 
     std::uint64_t hash = 1469598103934665603ull;
 
-    // Dependency capture only needs the shape of guest-memory reads. Camera,
-    // lighting, and matrix values change constantly but do not alter which
-    // vertex arrays, display lists, TLUTs, or texture ranges are snapshotted.
+    // Dependency capture needs only the shape of guest-memory reads. Camera, lighting and
+    // matrix values change often but do not alter which vertex arrays, display lists, TLUTs
+    // or texture ranges are snapshotted.
     hash = fnv1a_mix_u32(hash, state.cp(cp::kVcdLo));
     hash = fnv1a_mix_u32(hash, state.cp(cp::kVcdHi));
     for (std::uint8_t fmt = 0; fmt < 8u; ++fmt) {
@@ -888,11 +870,10 @@ std::uint64_t GxState::dependency_shape_hash() const noexcept {
     }
 
     hash = fnv1a_mix_u32(hash, state.bp(bp::kGenMode));
-    // A whole-FIFO hit also restores final parser state. Two states with the
-    // same current live-map mask can respond differently to a later masked
-    // selector write, so retain the actual selector bits (including inactive
-    // stages) and both z-operation bits. Pack each color/alpha selector pair
-    // into one word; arithmetic, swaps and z format still cannot affect ranges.
+    // A whole-FIFO hit also restores final parser state. Two states with the same live-map
+    // mask can respond differently to a later masked selector write, so the selector bits
+    // (including inactive stages) and both z-operation bits are kept. Each color/alpha selector
+    // pair packs into one word. Arithmetic, swaps and z format cannot affect texture ranges.
     for (unsigned stage = 0; stage < kMaxTevStages; ++stage) {
         const auto color = state.bp(static_cast<std::uint8_t>(
             bp::kTevColorEnvBase + 2u * stage)) & 0xFFFFu;

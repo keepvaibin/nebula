@@ -214,8 +214,7 @@ struct ControlsConfig {
 }
 
 [[nodiscard]] BindingTable default_binding_table(ControlScheme scheme);
-// The defaults shipped before controls version 2 (Native28), in version 2
-// (Native29) and in version 3 (Native29b), for migration.
+// The defaults of controls versions 1, 2 and 3, kept for migration.
 [[nodiscard]] BindingTable legacy_binding_table(ControlScheme scheme);
 [[nodiscard]] BindingTable version2_binding_table(ControlScheme scheme);
 [[nodiscard]] BindingTable version3_binding_table(ControlScheme scheme);
@@ -228,7 +227,7 @@ inline constexpr float kVersion3PointerHideRadius = 0.03f;
 // Version 4 still-pointer time and vibration strength, replaced in version 5.
 inline constexpr float kVersion4PointerHideSeconds = 2.0f;
 inline constexpr std::uint8_t kVersion4Rumble = 100;
-// For a file of `version`: every binding list that still equals an earlier
+// For a file of `version`: every binding list that still equals an older
 // version's default takes the current default, the gyro switch of a version-1
 // file, the still-pointer timing of a version-3 or 4 file and the vibration
 // strength of a version-4 file their new defaults; values the player changed

@@ -3691,14 +3691,12 @@ struct IdleSequenceHarness {
     galaxy::DspNativeTelemetryState telemetry{};
 };
 
-// A faithful stand-in for the real ucode's idle/command loop: it never returns
-// on its own. It polls the CPU mailbox high half for the mail-present bit
-// exactly as the lowered RMGE01 ucode does (jdsp: `LRS @CMBH; ANDCF #0x8000`),
-// consumes the command, echoes it back through the DSP mailbox, and raises
-// DIRQ. The host breaks it out via request_abort(), which makes the CMBH read
-// throw DspExecutionAborted. This exercises the whole free-running path:
-// dedicated thread, cross-thread mailbox visibility, interrupt routing, and
-// cooperative shutdown — the mechanics the real ucode depends on.
+// A stand-in for the real ucode's idle and command loop. It never returns on its own. It polls the CPU
+// mailbox high half for the mail-present bit, as the lowered RMGE01 ucode does (jdsp:
+// `LRS @CMBH; ANDCF #0x8000`). It consumes the command, echoes it back through the DSP mailbox, and raises
+// DIRQ. The host breaks it out with request_abort(), which makes the CMBH read throw DspExecutionAborted.
+// This covers the free-running path: a dedicated thread, cross-thread mailbox visibility, interrupt
+// routing and cooperative shutdown.
 void free_running_echo_ucode(galaxy::DspContext& context) {
     for (;;) {
         context.pc = 0x07CCu;
@@ -3931,9 +3929,8 @@ void consumed_before_halt_ucode(galaxy::DspContext& context) {
 }
 
 void park_on_empty_cpu_mailbox(galaxy::DspContext& context) {
-    // Enter the already-proven CMBH event path immediately after the DMBH
-    // scenario completes. This keeps the free-running entry alive until the
-    // test explicitly aborts it, without burning a host core.
+    // Enter the CMBH event path immediately after the DMBH scenario completes. This keeps the free-running
+    // entry alive until the test aborts it, without burning a host core.
     context.pc = galaxy::kRmge01DspCmbhTaskPollPc;
     for (;;) {
         context.last_retired_pc = galaxy::kRmge01DspCmbhTaskPollPc;
@@ -4223,8 +4220,8 @@ void coherent_diagnostic_snapshot_ucode(galaxy::DspContext& context) {
         std::this_thread::yield();
     }
 
-    // Deliberately expose a long mixed live-context interval. CPU diagnostics
-    // must continue to return the previously published all-0x111x sample.
+    // Holds a long mixed live-context interval. CPU diagnostics must keep returning the last published
+    // all-0x111x sample.
     context.pc = 0x2221u;
     std::this_thread::yield();
     context.sr = 0x2222u;
@@ -6887,9 +6884,8 @@ int main() {
         "native DSP unmapped data-bus ranges read zero and ignore writes "
         "without corrupting decoded DRAM or coefficient memory");
 
-    // Native AOT evidence must come from generated instruction markers and
-    // real IFX/DMA events, never the retired HLE mixer counters. Exercise each
-    // source in isolation so every cumulative field has a precise contract.
+    // Native AOT evidence must come from generated instruction markers and real IFX/DMA events, not from the
+    // HLE mixer counters. Exercise each source in isolation so every cumulative field has a precise contract.
     {
         std::array<std::byte, 32> telemetry_bytes{};
         telemetry_bytes[4] = std::byte{0x11};
@@ -7291,9 +7287,8 @@ int main() {
             "native DSP mailbox poll classification applies only after an "
             "actual register-indirect IFX route");
 
-        // Fail-closed behavior must also hold at the real DMBH IFX address.
-        // PC 0x07AC is immediately adjacent to the proven 0x07AD poll but is a
-        // return instruction, so a busy mailbox read there must return now.
+        // Fail-closed behavior must also hold at the real DMBH IFX address. PC 0x07AC is adjacent to the 0x07AD
+        // poll but is a return instruction, so a busy mailbox read there returns at once.
         routed_context->cr = 0x00FFu;
         routed_context->pc = 0x07ACu;
         galaxy::dsp_data_write(*routed_context, 0xFFFCu, 0x3456u);
@@ -8178,8 +8173,7 @@ int main() {
             "hard-trap");
     }
 
-    // The two register-indirect CMBH back-edges omitted from the original
-    // classifier must park without busy-retiring and wake on one exact CPU mail.
+    // The two register-indirect CMBH back-edges must park without busy-retiring and wake on one exact CPU mail.
     {
         bool classified_cmbh_wakes_exactly = true;
         constexpr std::array<std::uint16_t, 2> kRegisterIndirectCmbhPollPcs{
@@ -8313,8 +8307,7 @@ int main() {
             "lost-wake windows at all four classified PCs");
     }
 
-    // PC 0x07AD is the register-indirect DMBH busy back-edge omitted from the
-    // original classifier. It must park until the CPU's consuming low read and
+    // PC 0x07AD is a register-indirect DMBH busy back-edge. It must park until the CPU's consuming low read,
     // then continue exactly once.
     {
         g_classified_dmbh_completed.store(0u, std::memory_order_release);
@@ -8795,10 +8788,9 @@ int main() {
             "stopping a HALTed native DSP worker executes no extra entry");
     }
 
-    // Resume-before-wait adversarial proof. This forces the exact old loss
-    // window rather than relying on scheduler luck: ctx.halted is set, the
-    // generated entry is paused before return, and the CPU publishes one mail
-    // plus duplicate resume attempts while WorkerState is still Executing.
+    // Resume-before-wait race. The window is forced rather than left to scheduler timing: ctx.halted is set,
+    // the generated entry is paused before return, and the CPU publishes one mail plus duplicate resume attempts
+    // while WorkerState is still Executing.
     {
         g_resume_before_wait_stage.store(0u, std::memory_order_release);
         Probe race_probe{};

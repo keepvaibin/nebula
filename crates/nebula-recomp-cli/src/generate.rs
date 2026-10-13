@@ -21,16 +21,10 @@ use std::{fs, path::Path};
 /// Bump whenever generated source for the same game changes, so installers
 /// know that previously compiled modules can no longer be reused.
 ///
-/// 3: straight-line integer GPR residency was enabled for the release module.
-///    It has since been measured net-negative and turned **off** again
-///    (`AgentWork/agent-23/06-residency-measured-negative.md`), so the release
-///    module is byte-identical to a pre-3 build for every body that was
-///    eligible. The version is deliberately **not** reverted: existing v3
-///    modules are valid, and moving the number would invalidate compiled
-///    artefacts and caches for no functional reason.
-// 4: proved PSMTX RAM/lane reuse; existing modules remain ABI-compatible but
-// installers must regenerate to receive the corrected lowering.
-// 5: clang-cl contraction policy is forwarded instead of silently ignored.
+/// 3: straight-line integer GPR residency. The release module leaves it off,
+///    so v3 modules remain valid and the number is not reverted.
+// 4: PSMTX RAM/lane reuse corrected; ABI-compatible, regenerate for the fix.
+// 5: clang-cl contraction policy is forwarded instead of ignored.
 // 9: paired estimates use the corrected table/status boundary; regenerate modules.
 // 10: call-return policy and paired lane-fact corrections; regenerate modules.
 // 11: checked multi-register RAM helpers; regenerate affected modules.
@@ -62,16 +56,14 @@ pub fn release_module_options() -> ModuleTranslationOptions {
         flat_ram_reads: true,
         flat_ram_writes: true,
         native_float: true,
-        // Fast float (GALAXY_FAST_FLOAT=1): no exact fallback, no FPSCR
-        // status, flush-to-zero on the simulation thread. The user approved
-        // Dolphin/WiiCompiled float accuracy for performance on 2026-10-10.
+        // Fast float (GALAXY_FAST_FLOAT=1): no exact fallback, no FPSCR status,
+        // flush-to-zero on the simulation thread. This trades exact float results for speed,
+        // at Dolphin/WiiCompiled-class accuracy.
         fast_float: true,
         direct_indirect_calls: true,
-        // The exact PSMTX local-lane experiment emits out-of-line exact paired
-        // helpers for every lane operation. Measured on the SDK matrix library
-        // with the controlled module benchmark: PSMTXConcat 434 ns per call
-        // under the experiment versus the native generic lowering elsewhere in
-        // the same range at 8 to 60 ns. Let the generic native lowering own it.
+        // The exact PSMTX local-lane path emits out-of-line exact helpers for every lane
+        // operation, which is too slow for the SDK matrix library. The generic native
+        // lowering handles PSMTX instead.
         exact_psmtx_local_lanes: false,
         // Register residency (crate::residency): GPRs, LR and CTR live in host
         // locals between synchronization points; every context-receiving call
@@ -223,32 +215,23 @@ pub fn generate_all(game: &Path, output: &Path) -> Result<()> {
     #[cfg(target_os = "windows")]
     crate::build_boot_image::run(game, &output.join("RMGE01_boot_image.bin"))?;
 
-    // Report the options that were actually used, not a second copy of them.
-    // The literals here previously disagreed with `release_module_options()` the
-    // moment that function's residency flag was turned off, so the manifest
-    // claimed `guestResidentInteger: true` for a module generated with it false.
-    // Nothing reads this file today, which is exactly why the drift was invisible;
-    // deriving it means the next flip cannot repeat it.
+    // Report the options that were actually used, not a second copy of them. Literals
+    // here would drift from `release_module_options()` whenever its residency flag changes,
+    // so the manifest could claim a setting the module was not built with.
     let module_options = release_module_options();
 
     // Persist the translator's own coverage numbers.
     //
-    // `interior_entry_points` in particular is otherwise unobtainable: the CLI
-    // computes it for `nebula-recomp coverage` (main.rs) and prints it to a
-    // console nobody captures, but it is the only number that separates "a
-    // function the guest can call" from "a lookup key that aliases another
-    // function's body". Two independent audits tried to recover it by scanning
-    // guest text for branch targets and produced contradictory answers
-    // (AgentWork/agent-17/16-kfunctions-is-not-a-function-list.md), because it
-    // needs the translator's own `discover_external_interior_targets`, which
-    // already exists here. Writing it costs one earlier pass over inputs that
-    // step 1 has already validated.
+    // `interior_entry_points` is otherwise unavailable. The CLI computes it for
+    // `nebula-recomp coverage` (main.rs) and prints it to the console, so nothing records it.
+    // It separates "a function the guest can call" from "a lookup key that aliases another
+    // function's body". Scanning guest text for branch targets gives unreliable answers, so the
+    // value comes from the translator's `discover_external_interior_targets`. Writing it costs one
+    // extra pass over inputs that step 1 has already validated.
     //
-    // This does not bump GENERATION_VERSION. That constant invalidates compiled
-    // modules and caches, and this changes only the manifest's contents - the
-    // generated source is untouched - so moving it would invalidate every
-    // existing artefact for nothing. generation.json is not part of the module
-    // key hash either.
+    // This does not bump GENERATION_VERSION. That constant invalidates compiled modules and caches,
+    // and this change only alters the manifest's contents. The generated source is untouched.
+    // generation.json is not part of the module key hash either.
     let coverage = translation_coverage(game).with_context(|| {
         format!(
             "failed to compute translator coverage for {}",

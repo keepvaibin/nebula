@@ -1,14 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #pragma once
 
-// Frame pipeline timeline (GALAXY_FRAME_TIMELINE=1). Any thread appends a
-// 32-byte record with one relaxed atomic increment and one
-// QueryPerformanceCounter read; nothing is formatted while the game runs.
-// At exit the records are written to GALAXY_FRAME_TIMELINE_PATH (default
-// %LOCALAPPDATA%\Nebula\timeline-<pid>.bin) and analysed offline by
-// tools/perf/timeline_digest.py. Every timestamp is in the QPC domain,
-// including GPU timestamps (converted through GetClockCalibration) and the
-// display's vblank times (DXGI frame statistics, DWM timing).
+// Frame pipeline timeline, enabled by GALAXY_FRAME_TIMELINE=1. Any thread appends a 32-byte
+// record with one relaxed atomic increment and one QueryPerformanceCounter read. Nothing is
+// formatted during the run. At exit the records go to GALAXY_FRAME_TIMELINE_PATH (default
+// %LOCALAPPDATA%\Nebula\timeline-<pid>.bin), analysed offline by tools/perf/timeline_digest.py.
+// All timestamps are QPC ticks, including GPU timestamps (via GetClockCalibration) and vblank
+// times (DXGI frame statistics, DWM timing).
 
 #if defined(_WIN32)
 #ifndef WIN32_LEAN_AND_MEAN

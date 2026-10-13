@@ -35,13 +35,12 @@ namespace galaxy::gx {
             order.texmap >= kMaxTextureMaps) {
             continue;
         }
-        // Match PS-key canonicalization: when z-textures and indirect stages
-        // are absent, a sample contributes only through a TEXC/TEXA combiner
-        // input. Binding/snapshotting leftover enabled maps otherwise still
-        // decodes unused images even though their shader samples are dead.
-        // Keep every configured direct map for either exceptional path:
-        // z-textures use the last raw sample; indirect coordinates carry state
-        // between stages independently of their color/alpha inputs.
+        // Match PS-key canonicalization. With no z-textures and no indirect stages, a sample
+        // contributes only through a TEXC/TEXA combiner input, so other enabled maps are not
+        // bound or snapshotted; binding them would decode images whose samples are dead.
+        // Keep every configured direct map for the z-texture and indirect paths: z-textures
+        // use the last raw sample, and indirect coordinates carry state between stages
+        // independently of their color/alpha inputs.
         bool needed = z_texture || indirect_stages != 0u;
         if (!needed) {
             const std::uint32_t color = state.bp(static_cast<std::uint8_t>(

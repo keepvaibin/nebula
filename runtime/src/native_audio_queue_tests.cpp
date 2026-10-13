@@ -31,10 +31,9 @@ void record_failure_notification(void* user) noexcept {
     }
 }
 
-// Model the two legal orderings at a source-buffer boundary.  The callback
-// observes the queue at the exact end boundary, so a replacement submitted
-// before completion is continuous playback while a replacement submitted
-// afterward cannot erase the empty-boundary evidence.
+// Models the two legal orderings at a source-buffer boundary. The callback observes the queue at
+// the exact end boundary. A replacement submitted before completion keeps playback continuous. A
+// replacement submitted afterward cannot erase the empty-boundary record.
 class InterleavingVoice final {
 public:
     explicit InterleavingVoice(
@@ -164,9 +163,8 @@ int main() {
     }
 
     {
-        // First active transplant kernel: check Dusklight's one-subframe
-        // interpolation and the channel state that a guest adapter must write
-        // back after rendering a 32-kHz PCM16 voice.
+        // Checks Dusklight's one-subframe interpolation, and the channel state a guest adapter must write
+        // back after rendering a 32 kHz PCM16 voice.
         std::array<std::uint8_t, 200> pcm_be{};
         for (std::size_t i = 0; i < 100; ++i) {
             pcm_be[i * 2] = 0x40;
@@ -201,9 +199,8 @@ int main() {
     }
 
     {
-        // Dusklight routes source-zero channels through RenderOscChannel;
-        // their 16-bit phase persists across DSP subframes and resets only
-        // when the guest's channel reset flag is set.
+        // Dusklight routes source-zero channels through RenderOscChannel. Their 16-bit phase persists
+        // across DSP subframes and resets only when the guest's channel reset flag is set.
         galaxy::host::NativeDuskDspChannel channel{};
         channel.active = true;
         channel.reset = true;
@@ -406,8 +403,8 @@ int main() {
     }
 
     {
-        // Dusklight's CC0 AFC decoder must agree with the RMGE01 predictor
-        // and history order before it can be considered for live audio.
+        // Dusklight's CC0 AFC decoder must match the RMGE01 predictor and history order before it can be
+        // considered for live audio.
         std::array<std::uint8_t, 18> adpcm{};
         adpcm[0] = 0x10;  // Predictor 0, scale 2.
         adpcm[9] = 0x01;  // Predictor 1, scale 1, uses previous sample.
@@ -531,9 +528,8 @@ int main() {
         using galaxy::audio::NativeAudioBus;
         using galaxy::audio::NativeAudioBusControls;
 
-        // Category gain is a DSP-sample transformation. It must remain
-        // completely outside the XAudio queue, playback, rate, and callback
-        // timing state machines that establish underrun evidence.
+        // Category gain is a DSP-sample transformation. It must stay outside the XAudio queue, playback,
+        // rate and callback timing state machines that record underruns.
         galaxy::host::NativeAudioCallbackLedger callbacks;
         callbacks.record_buffer_end(
             galaxy::host::NativeAudioBufferEndQueueEvidence::SuccessorQueued);
@@ -1262,9 +1258,9 @@ int main() {
         playback.started() && start_actions == 2u && stop_actions == 1u &&
             accepted_buffers == completed_buffers + queued_buffers,
         "recovery restarts once and preserves every accepted PCM buffer");
-    // Two buffers queued before a measurement reset may both reach XAudio
-    // afterward. Neither their mutual delta nor the old->new transition is a
-    // cadence sample for the new generation; only two new-window buffers are.
+    // Two buffers queued before a measurement reset may reach XAudio afterward. Neither their mutual
+    // delta nor the old-to-new transition is a cadence sample for the new generation. Only the two
+    // new-window buffers are.
     constexpr std::uint64_t kOldGeneration = 6u;
     constexpr std::uint64_t kWindowGeneration = 7u;
     passed &= expect(

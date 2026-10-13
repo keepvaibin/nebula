@@ -442,8 +442,8 @@ void backend_pe_token(void* user, std::uint16_t, bool) {
 }
 
 bool backend_reinitialize_resets_all_fifo_parser_mirrors() {
-    // Keep this lifecycle regression noninteractive. The timing configuration
-    // is startup-only and has not been resolved by the pure tests above.
+    // Noninteractive lifecycle test. The timing configuration is startup-only and is
+    // not covered by the pure tests above.
     if (_putenv_s("GALAXY_HIDE_WINDOW", "1") != 0 ||
         _putenv_s("GALAXY_ASYNC_RENDER_THREAD", "1") != 0 ||
         _putenv_s("GALAXY_PE_EVENTS_GPU_FENCE", "1") != 0 ||
@@ -457,8 +457,8 @@ bool backend_reinitialize_resets_all_fifo_parser_mirrors() {
     services.gx_pe_finish = &backend_pe_finish;
     services.gx_pe_token = &backend_pe_token;
 
-    // GxBackend deliberately owns large fixed-capacity caches; keep it off the
-    // test process's small default stack, matching the product singleton.
+    // GxBackend owns large fixed-capacity caches, so it is kept off the small default
+    // test stack, matching the product singleton.
     auto backend = std::make_unique<GxBackend>();
     bool initialized = false;
     const auto shutdown = [&]() {
@@ -483,10 +483,9 @@ bool backend_reinitialize_resets_all_fifo_parser_mirrors() {
             return false;
         }
 
-        // Session one changes VCD_LO so format zero has a two-byte vertex,
-        // then ends halfway through an interrupting PE_TOKEN BP write. Both
-        // the main parser and preclassifier must retain that tail only until
-        // this session is shut down.
+        // Session one sets VCD_LO so format zero has a two-byte vertex, then ends partway
+        // through an interrupting PE_TOKEN BP write. The main parser and preclassifier keep
+        // that partial tail only until this session shuts down.
         const std::array<std::byte, 9> state_and_partial_token{
             std::byte{0x08}, std::byte{galaxy::gx::cp::kVcdLo},
             std::byte{0x00}, std::byte{0x00}, std::byte{0x02},
@@ -522,11 +521,9 @@ bool backend_reinitialize_resets_all_fifo_parser_mirrors() {
             return false;
         }
 
-        // With a fresh parser, the two leading NOPs remain NOPs, the default
-        // zero-stride draw has no payload, and the following BP write is one
-        // FINISH. If either the old three-byte tail or VCD_LO survives, the
-        // renderer instead sees TOKEN, no event, or different boundaries and
-        // the classifier/render identity check hard-fails.
+        // A fresh parser must see two NOPs, a zero-stride draw with no payload, then one FINISH.
+        // A surviving three-byte tail or VCD_LO would instead produce TOKEN, no event or other
+        // boundaries, and the classifier/render identity check fails.
         const std::array<std::byte, 11> fresh_session_fifo{
             std::byte{0x00}, std::byte{0x00},
             std::byte{0x90}, std::byte{0x00}, std::byte{0x03},

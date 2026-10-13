@@ -1,15 +1,12 @@
 #pragma once
 
-// Read-only extraction of the game's own UI assets (Yaz0-compressed RARC
-// archives containing BRLYT layouts + TPL textures) so the native settings
-// overlay can be styled using Super Mario Galaxy's own art instead of solid
-// placeholder rectangles. This never executes or hooks any guest code --
-// it only parses static asset files already present in the user's own game
-// dump, exactly the class of asset access build-pak/DVDLowRead already do
-// elsewhere in this runtime. Formats implemented: Yaz0 (Nintendo LZ),
-// Nintendo RARC (archive directory), and the TPL texel formats actually
-// used by the layout archives this runtime reads (I4, IA4, RGB5A3) --
-// intentionally not a full GX texture format decoder.
+// Read-only extraction of the game's UI assets (Yaz0-compressed RARC archives with BRLYT layouts and
+// TPL textures). The native settings overlay uses them so it can be styled with the game's own art
+// instead of solid placeholder rectangles. This never executes or hooks guest code. It only parses
+// static asset files already present in the user's own game dump, the same class of access that
+// build-pak and DVDLowRead already perform. Implemented formats: Yaz0 (Nintendo LZ), Nintendo RARC
+// (archive directory), and the TPL texel formats used by this runtime's layout archives (I4, IA4,
+// RGB5A3). This is not a full GX texture decoder.
 
 #include <cstddef>
 #include <cstdint>
@@ -52,24 +49,18 @@ struct DecodedTexture {
     std::vector<std::uint8_t> rgba8;  // width*height*4 bytes
 };
 
-// Decodes the first image in a TPL texture container. Supports the GX
-// texel formats 0 (I4), 2 (IA4), and 5 (RGB5A3) -- the formats actually
-// used by the layout archives this runtime reads today. Returns
-// std::nullopt for any other format or a malformed container, rather than
-// guessing at an unverified decode (hard-fail-never-stub for asset data).
-// Complete tiled storage is required even when dimensions cut a tile short.
-// Allocation failure also returns std::nullopt.
+// Decodes the first image in a TPL texture container. Supports the GX texel formats 0 (I4), 2 (IA4) and
+// 5 (RGB5A3), the formats used by the layout archives this runtime reads. Returns std::nullopt for any
+// other format or a malformed container, rather than guessing at an unverified decode. Complete tiled
+// storage is required even when the dimensions cut a tile short. Allocation failure also returns std::nullopt.
 [[nodiscard]] std::optional<DecodedTexture> decode_tpl(
     std::span<const std::byte> data) noexcept;
 
-// Convenience: read `<content_root>/<relative_arc_path>` from disk, Yaz0
-// decompress if needed, and decode one named texture entry from the parsed
-// RARC. Returns std::nullopt on any failure (missing file, format not
-// supported, entry not found) -- callers must treat a missing/unsupported
-// asset as "fall back to the existing solid-color rendering", never as a
-// fatal error, since this path only affects cosmetic overlay styling.
-// Raw archives and Yaz0 output are each limited to 64 MiB; oversized files
-// and allocation/I/O exceptions use the same missing-asset fallback.
+// Reads `<content_root>/<relative_arc_path>` from disk, Yaz0-decompresses it if needed, and decodes one
+// named texture from the parsed RARC. Returns std::nullopt on any failure (missing file, unsupported
+// format, entry not found). Callers treat a missing or unsupported asset as the solid-color fallback,
+// not a fatal error, since this only affects overlay styling. Raw archives and Yaz0 output are each
+// limited to 64 MiB. Oversized files and allocation or I/O exceptions take the same fallback.
 [[nodiscard]] std::optional<DecodedTexture> load_game_texture(
     const std::string& content_root_utf8,
     std::string_view arc_relative_path,

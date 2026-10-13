@@ -279,10 +279,9 @@ DspMramTransactionBoundary::service_pending(
     void* user,
     ReadService read,
     WriteService write) noexcept {
-    // The inline negative check may race a submit, cancellation or reset. The
-    // mutex remains authoritative for the payload, service thread and terminal
-    // state. A request published just after a negative check retains its wake
-    // and is serviced by a later pump, as before.
+    // The inline negative check may race a submit, cancellation or reset. The mutex remains
+    // authoritative for the payload, service thread and terminal state. A request published
+    // just after a negative check keeps its wake and is serviced by a later pump.
     std::unique_lock lock(mutex_);
     if (state_.load(std::memory_order_relaxed) != State::Pending) {
         return ServiceResult::None;
@@ -853,14 +852,12 @@ bool DspAramMirrorBoundary::worker_apply_before_mail_consume(
     storage_->inbound.applied = true;
     mail_callback_active_ = true;
 
-    // The callback is the actual hardware CMBL consume. Keep the boundary
-    // mutex held through that one atomic mailbox read and the immediately
-    // following inbound-slot retirement. The busy bit becomes CPU-visible as
-    // cleared inside the callback; unlocking before clear_inbound_locked()
-    // allowed the CPU to observe an empty hardware mailbox and race the next
-    // generation into a still-occupied mirror slot. Valid worker_read_* probes
-    // are deliberately lock-free, so the callback can still verify the fully
-    // installed mirror without re-entering this mutex.
+    // The callback is the hardware CMBL consume. Keep the boundary mutex held through that
+    // atomic mailbox read and the following inbound-slot retirement. The busy bit reads as
+    // cleared inside the callback, so unlocking before clear_inbound_locked() would let the CPU
+    // see an empty mailbox and race the next generation into a still-occupied mirror slot.
+    // Valid worker_read_* probes are lock-free, so the callback can verify the installed mirror
+    // without re-entering this mutex.
     const bool consumed = consume(user, generation);
     mail_callback_active_ = false;
     increment(telemetry_.mail_consume_callbacks);
@@ -1399,10 +1396,9 @@ void NativeDspCoprocessor::reset() {
         dsp_channel_selection_dma_probe_begin_session(
             *owned_channel_selection_dma_probe_);
     } else if (channel_selection_dma_probe_ != nullptr) {
-        // An externally owned recorder carries process-lifetime totals, but a
-        // coprocessor reset is still a hard causal boundary.  Close the old
-        // publication/branch window and begin a distinct worker session so a
-        // post-reset DMA can never inherit pre-reset identity.
+        // An externally owned recorder carries process-lifetime totals, but a coprocessor reset is
+        // still a hard causal boundary. Close the old publication/branch window and begin a
+        // distinct worker session, so a post-reset DMA can never inherit pre-reset identity.
         dsp_channel_selection_dma_probe_record_reset_boundary(
             *channel_selection_dma_probe_);
         dsp_channel_selection_dma_probe_begin_session(
@@ -1703,9 +1699,8 @@ bool NativeDspCoprocessor::run_free_running(EntryPoint entry) {
         dsp_native_telemetry_publish_pending_worker_counts(context_);
         return false;
     } catch (const DspExecutionAborted&) {
-        // Cooperative shutdown: the host set host_abort and the mailbox poll
-        // unwound out of the ucode. Nothing to clean up — the goto blocks hold
-        // no resources.
+        // Cooperative shutdown: the host set host_abort and the mailbox poll unwound out of the
+        // ucode. Nothing to clean up; the goto blocks hold no resources.
         dsp_native_telemetry_publish_pending_worker_counts(context_);
         return false;
     } catch (const DspExternalInterruptRequested&) {
@@ -1876,8 +1871,8 @@ bool NativeDspWorker::signal_resume_if_waiting(std::uint16_t resume_pc) {
 
         if (cpu_mail_pending && cpu_mail_generation != 0u &&
             resolved_cpu_mail_generation_ == cpu_mail_generation) {
-            // Duplicate wake for the same hardware mailbox publication. The
-            // first request was either applied or proven already consumed.
+            // Duplicate wake for the same hardware mailbox publication. The first request was either
+            // applied or already consumed.
             return true;
         }
 
@@ -2220,14 +2215,11 @@ void NativeDspWorker::thread_main() {
                         "DSP clean HALT pre-return ordering was rejected");
                 }
             } catch (const DspHardTrap& trap) {
-                // During shutdown, a synchronous MRAM callback can be
-                // released by the host cancellation path only by returning a
-                // failed span to generated DSP code.  That deliberately
-                // unwinds the worker through DspHardTrap, but it is not a
-                // guest-visible DSP fault and must not poison the worker's
-                // failure state or diagnostics.  A real span failure reaches
-                // this point with neither shutdown signal set and remains a
-                // hard failure below.
+                // During shutdown, a synchronous MRAM callback can be released by the host cancellation
+                // path by returning a failed span to generated DSP code. That unwinds the worker through
+                // DspHardTrap. It is not a guest-visible DSP fault and does not poison the worker's failure
+                // state or diagnostics. A real span failure reaches this point with neither shutdown signal
+                // set and remains a hard failure below.
                 bool shutdown_unwind = false;
                 {
                     std::lock_guard lock(mutex_);
@@ -2295,17 +2287,8 @@ void NativeDspWorker::thread_main() {
                               << ctx.dram[0x03FDu] << " dram3fe=0x"
                               << ctx.dram[0x03FEu] << " dram3ff=0x"
                               << ctx.dram[0x03FFu]
-                              // DIAGNOSTIC EXPERIMENT (gated by the trap
-                              // itself firing, no separate flag needed): word
-                              // 0x428 is what pc 0x0DEB/0x0DEC's clamped
-                              // address-register read consumed to produce
-                              // ar[0]=0x7fff. Dump 0x420-0x430 at the exact
-                              // trap instant -- periodic host-side channel-
-                              // table samples are close in time but not
-                              // exact, and the observed 0x50 offset value
-                              // (0x7F00) does not reproduce the overflow by
-                              // itself, so the DSP-side value at the precise
-                              // instant needs to be seen directly.
+                              // Dumps DSP words 0x420-0x430 at the trap instant. Word 0x428 is the value the clamped
+                              // address-register read at PC 0x0DEB/0x0DEC consumed to produce ar[0]=0x7fff.
                               << " dram420=0x" << ctx.dram[0x0420u]
                               << " dram421=0x" << ctx.dram[0x0421u]
                               << " dram422=0x" << ctx.dram[0x0422u]

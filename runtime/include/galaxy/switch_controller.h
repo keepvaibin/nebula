@@ -122,9 +122,9 @@ struct SubcommandReply {
                                                      std::uint8_t subcommand,
                                                      std::uint32_t spi_address = 0) noexcept;
 
-// ---- Switch 2 Pro Controller (USB) ----------------------------------------
-// The HID interface only streams input reports after the controller receives
-// the init sequence on its vendor bulk interface (interface 1).
+// Switch 2 Pro Controller (USB)
+// The HID interface only streams input reports after the controller receives the init
+// sequence on its vendor bulk interface (interface 1).
 inline constexpr std::uint8_t kSwitch2InputReport = 0x05;
 inline constexpr std::size_t kSwitch2ReportBytes = 64;
 
@@ -153,7 +153,7 @@ struct Switch2ImuState {
 [[nodiscard]] bool decode_switch2_report(std::span<const std::uint8_t> report, Switch2ImuState& imu,
                                          DecodedState& out) noexcept;
 
-// ---- Motion ----------------------------------------------------------------
+// Motion
 
 // One controller's motion state, fed one IMU sample at a time (Pro: three
 // samples 5 ms apart per report; Pro Controller 2: one per report).

@@ -89,18 +89,17 @@ GALAXY_ALWAYS_INLINE void atomic_or_u64(
 #endif
 }
 
-// ABI 23 requires every renderer dirty-word producer to publish its summary.
-// ABI 22 modules used inline page-only stores: accepting them with a summary
-// drain would silently lose invalidations. Rebuild both game and Home sidecars.
-// ABI 27 moves every display policy behind NativeServicesV1::site_hook.
+// ABI 23 requires every renderer dirty-word producer to publish its summary. ABI 22 modules used
+// page-only stores, which a summary drain would silently miss. Game and Home sidecars must both be
+// rebuilt. ABI 27 moves every display policy behind NativeServicesV1::site_hook.
 inline constexpr std::uint32_t kNativeAbiVersion = 27;
 // ABI 26: the host's live gather buffer holds kWgpipeGatherFastBytes (a whole
 // multiple of the 32-byte hardware burst); generated stores append in place
 // and cross into the host once per buffer instead of once per burst.
 inline constexpr std::uint32_t kWgpipeGatherFastBytes = 4096u;
-// Dynamic RSO sidecars have their own narrow ABI. They are generated at
-// installation from a validated disc module and contain only native C++; this
-// version is deliberately independent of the RMGE01 game-module manifest.
+// Dynamic RSO sidecars have their own narrow ABI. They are generated at install time from a
+// validated disc module and contain only native C++. This version is independent of the RMGE01
+// game-module manifest.
 inline constexpr std::uint32_t kNativeRsoModuleAbiVersion = 2;
 
 // PowerPC MSR[FP]. Generated code checks this before every statically decoded
@@ -109,40 +108,34 @@ inline constexpr std::uint32_t kNativeRsoModuleAbiVersion = 2;
 inline constexpr std::uint32_t kMsrFloatingPointAvailable = 0x00002000u;
 inline constexpr std::uint32_t kMsrExternalInterruptEnable = 0x00008000u;
 
-// Trace-only proof flag. When enabled, generated call-return checkpoints expose
-// the five exact WPADRead status copies, KPADRead's interrupt-protected queue
-// snapshot, both classified KPADRead returns, and WPadPointer's gameplay
-// status[0] selection. The runtime treats trace-only callbacks as passive
-// observations when no hardware event was already due.
+// Trace-only flag. When enabled, generated call-return checkpoints expose the five WPADRead status
+// copies, the interrupt-protected KPADRead queue snapshot, both classified KPADRead returns, and
+// the status[0] selection in WPadPointer. Trace-only callbacks are passive observations when no
+// hardware event is already due.
 inline constexpr std::uint32_t kNativeServiceFlagTraceWpadReadCopies =
     1u << 1u;
-// During a persistent VI transaction, static direct-call returns become
-// adaptive scheduler safepoints.  A callback is still entered only when the
-// existing shared threshold or a real device event requires it, so this never
-// creates a runtime PPC execution path and does not turn every return into a
+// During a persistent VI transaction, static direct-call returns become adaptive scheduler
+// safepoints. A callback is entered only when the shared threshold or a real device event
+// requires it. This creates no runtime PPC execution path and does not turn every return into a
 // host transition.
 inline constexpr std::uint32_t kNativeServiceFlagAdaptiveCallReturnCheckpoints =
     1u << 2u;
-// A finite set of statically selected generated direct calls may cross the
-// existing resolved-call service so the host can record passive route markers.
-// The runtime publishes this once before module initialization; generated code
-// must never consult process environment state on its hot call path.
+// A finite set of statically selected generated direct calls may cross the resolved-call service,
+// so the host can record passive route markers. The runtime publishes this once before module
+// initialization. Generated code never reads process environment state on its hot call path.
 inline constexpr std::uint32_t kNativeServiceFlagTraceRouteMarkers =
     1u << 3u;
-// Marker-timed native-input scripts use the same finite direct-call
-// observation path to publish the first Mario-control VI. This covers both a
-// relative stick anchor and termination of the long-form button script. The
-// historical flag name is retained as an ABI source identifier; the bit is
-// independent of route logging so functional input timing remains reachable
-// when the optional route trace is disabled.
+// Marker-timed native-input scripts use the same finite direct-call observation path to publish
+// the first Mario-control VI. This covers a relative stick anchor and the end of the long-form
+// button script. The flag name is kept as an ABI source identifier. The bit is independent of
+// route logging, so input timing stays available when the route trace is off.
 inline constexpr std::uint32_t
     kNativeServiceFlagRelativeMarioInputAnchor = 1u << 4u;
 
-// A trace-only pre-call marker must never be a guest-executable address.  The
-// five WPADRead copies invoke the translated memmove helper, whose volatile
-// argument registers are not an architectural post-call observation.  The
-// marker lets the runtime preserve the real pre-call operands and verify their
-// bytes at the ordinary post-call checkpoint without altering guest state.
+// A trace-only pre-call marker must never be a guest-executable address. The five WPADRead copies
+// call the translated memmove helper, whose volatile argument registers are not an architectural
+// post-call observation. The marker lets the runtime keep the real pre-call operands and verify
+// their bytes at the post-call checkpoint without changing guest state.
 inline constexpr std::uint32_t kNativeInputTraceCopyPreCheckpointXor =
     0x40000000u;
 
@@ -326,22 +319,19 @@ struct GuestMemoryV1 {
         void* user,
         std::uint32_t address,
         std::uint32_t size){};
-    // Renderer invalidation map. The simulation thread alone drains/clears
-    // this map when it captures a FIFO chunk; workers only add dirty bits.
-    // Memory visibility is established by the frame/device handoff, not by
-    // these relaxed invalidation bits. Keep that ownership when optimizing
-    // repeated notifications from translated stores on the simulation thread.
+    // Renderer invalidation map. Only the simulation thread drains or clears it, when it captures a
+    // FIFO chunk. Workers only add dirty bits. Memory visibility comes from the frame/device handoff,
+    // not from these relaxed invalidation bits. Keep that ownership when optimizing repeated
+    // notifications from translated stores on the simulation thread.
     std::atomic_uint64_t* dirty_page_words{};
     std::uint32_t dirty_tracked_base{};
     std::uint32_t dirty_tracked_size{};
     std::uint32_t dirty_page_shift{};
     std::uint32_t dirty_page_word_count{};
-    // Independent CPU-owner dirty tracker for native device-coherency
-    // transactions. Translated guest code and the CPU/simulation thread are
-    // the only writers and the CPU thread is the only consumer, so these
-    // words intentionally avoid an atomic RMW on every guest store. A DSP,
-    // renderer, or other worker must never inspect or clear them directly;
-    // workers receive immutable staged copies at their hardware boundary.
+    // Independent CPU-owner dirty tracker for native device-coherency transactions. Translated guest
+    // code on the CPU/simulation thread is the only writer, and the CPU thread is the only consumer.
+    // These words avoid an atomic RMW on every guest store. DSP, renderer and other workers never
+    // inspect or clear them. They receive immutable staged copies at their hardware boundary.
     std::uint64_t* cpu_dirty_page_words{};
     std::uint32_t cpu_dirty_tracked_base{};
     std::uint32_t cpu_dirty_tracked_size{};
@@ -351,12 +341,10 @@ struct GuestMemoryV1 {
     // MEM1/MEM2 guest views. Only read helpers may use it; stores must retain
     // the checked device and dirty-publication path.
     const std::byte* flat_guest_read_base{};
-    // Summary bitmap for `dirty_page_words`, one bit per 64-bit page word.
-    // Non-null only for the renderer tracker; `dirty_page_words` itself is the
-    // authoritative page bitmap. Every ABI-23 producer also publishes summary
-    // bits; older modules are rejected by the game/Home ABI gates. Appending
-    // preserves prior field offsets, but does not make page-only publication
-    // compatible with a summary-only drain.
+    // Summary bitmap for `dirty_page_words`, one bit per 64-bit page word. Non-null only for the
+    // renderer tracker. `dirty_page_words` is the authoritative page bitmap. Every ABI-23 producer
+    // also publishes summary bits. Older modules are rejected by the game/Home ABI gates. Appending
+    // keeps prior field offsets, but page-only publication is not compatible with a summary-only drain.
     std::atomic_uint64_t* dirty_word_summary{};
     std::uint32_t dirty_word_summary_count{};
     std::uint32_t dirty_word_summary_pad{};
@@ -438,12 +426,11 @@ struct NativeServicesV1 {
     // a trace is disabled or outside its requested window. The pointer is
     // owned by the native runtime for the full lifetime of this service table.
     const std::atomic_bool* main_frame_trace_active{};
-    // Bounded direct-edge profiling is collected by the runtime executable,
-    // not in header-local state inside a generated DLL.  A profile record is
-    // an observation only: the caller/callee PCs and elapsed host cycles are
-    // reported after the native callee has completed, with no guest-state
-    // mutation or alternate dispatch path.  Generated code reaches this
-    // callback only while its explicit main-frame VI window is active.
+    // Bounded direct-edge profiling runs in the runtime executable, not in header-local state inside a
+    // generated DLL. A profile record is an observation only. The caller and callee PCs and elapsed
+    // host cycles are reported after the native callee completes, with no guest-state mutation or
+    // alternate dispatch path. Generated code calls this only while its explicit main-frame VI window
+    // is active.
     void (*record_direct_edge_profile)(
         void* user,
         std::uint32_t caller_pc,
@@ -454,11 +441,10 @@ struct NativeServicesV1 {
         void* user,
         std::uint16_t token,
         bool interrupt){};
-    // Exception 7 is synchronous and restartable: the runtime must save the
-    // current OSContext at guest_pc, enter RMGE01's translated handler, and
-    // execute its exact RFI. Once that RFI restores the same PC with MSR[FP]
-    // enabled, the callback returns to the still-live AOT instruction guard;
-    // any other return/transfer is a hard failure.
+    // Exception 7 is synchronous and restartable. The runtime saves the current OSContext at guest_pc,
+    // enters RMGE01's translated handler, and runs its RFI. When that RFI restores the same PC with
+    // MSR[FP] enabled, the callback returns to the live AOT instruction guard. Any other return or
+    // transfer is a hard failure.
     void (*fpu_unavailable)(
         void* user,
         std::uint32_t guest_pc,
@@ -476,25 +462,23 @@ struct NativeServicesV1 {
         std::uint32_t previous_value,
         PpcContext* context,
         GuestMemoryV1* memory){};
-    // Host process owns the VI-latched aspect snapshot. Generated AOT shards
-    // live in another DLL and must not use their own header-local atomics.
-    // Upper 32 bits: generation; lower 16+16: positive client width/height,
-    // or zero for default fitted 16:9 on an unsupported shape.
+    // The host process owns the VI-latched aspect snapshot. Generated AOT shards live in another DLL
+    // and must not use their own header-local atomics. Upper 32 bits: generation. Lower 16+16:
+    // positive client width and height, or zero for the default fitted 16:9 on an unsupported shape.
     std::uint64_t (*experimental_aspect_word)(void* user){};
-    // ABI 24: direct dispatch for generated indirect calls. Entry i covers
-    // guest address `direct_dispatch_base + 4 * i`; a null entry (or a null
-    // table) routes the call through `call_guest_cached`. The runtime leaves
-    // entries null for every target that owns a host transaction and raises
-    // `direct_dispatch_suspended` while an external interrupt dispatch is
-    // live; generated code also defers to the service while any device event
-    // is pending so the audited scheduling boundary is preserved.
+    // ABI 24: direct dispatch for generated indirect calls. Entry i covers guest address
+    // `direct_dispatch_base + 4 * i`. A null entry, or a null table, routes the call through
+    // `call_guest_cached`. The runtime leaves entries null for every target that owns a host
+    // transaction, and raises `direct_dispatch_suspended` while an external interrupt dispatch is
+    // live. Generated code also defers to the service while any device event is pending, which keeps
+    // the audited scheduling boundary.
     const NativeGameFunction* direct_dispatch{};
     std::uint32_t direct_dispatch_base{};
     std::uint32_t direct_dispatch_count{};
     const std::atomic_uint32_t* direct_dispatch_suspended{};
-    // ABI 27: display and level-of-detail policy at fixed guest sites. The
-    // translator places these calls; what each SiteHookKind does is runtime
-    // code, so policy changes never require recompiling a module.
+    // ABI 27: display and level-of-detail policy at fixed guest sites. The translator places these
+    // calls. What each SiteHookKind does is runtime code, so policy changes do not require
+    // recompiling a module.
     void (*site_hook)(
         void* user,
         std::uint32_t guest_pc,
@@ -537,22 +521,20 @@ inline void site_hook(
     }
 }
 
-// ABI 24: one callable entry of the generated module, in ascending address
-// order. The module exports its complete table so the runtime can build the
-// direct dispatch table without probing every address.
+// ABI 24: one callable entry of the generated module, in ascending address order. The module
+// exports its full table, so the runtime can build the direct dispatch table without probing
+// every address.
 struct FunctionRecordV1 {
     std::uint32_t address{};
     NativeGameFunction function{};
 };
 
-// Guest-execution trace instrumentation is a developer bring-up aid. In a
-// shipping build it must compile out entirely: the trace_*_enabled() gates sit
-// on the hottest paths (every guest load/store) and, even when their env var
-// is unset, a Meyers-singleton guard check is re-evaluated on every call. With
-// GALAXY_GUEST_TRACE==0 (the default) the hot gates fold to a compile-time
-// false so the compiler deletes the branch and the trace call outright — a pure
-// per-memory-op win, behavior-identical to normal play (where tracing is off).
-// Define GALAXY_GUEST_TRACE=1 at build time to restore runtime env tracing.
+// Guest-execution trace instrumentation is a developer aid, and a shipping build must compile it
+// out. The trace_*_enabled() gates sit on the hottest paths (every guest load and store). Even
+// with the env var unset, a Meyers-singleton guard is re-checked on every call. With
+// GALAXY_GUEST_TRACE==0 (the default), the hot gates fold to a compile-time false, so the compiler
+// deletes the branch and the trace call. Define GALAXY_GUEST_TRACE=1 at build time to restore
+// runtime env tracing.
 #ifndef GALAXY_GUEST_TRACE
 #define GALAXY_GUEST_TRACE 0
 #endif
@@ -993,9 +975,9 @@ inline const char* trace_audio_function_entry_label(std::uint32_t address) {
     case 0x803F9DECu: return "MR::startSystemSE(name)";
     case 0x804878BCu: return "audio-interleave";
     case 0x804945CCu: return "audio-ring-output";
-    // These are the RMGE01 entries proven from the generated US DOL bodies.
-    // The corresponding RMGK01 JAudio cluster is +0x2244 and must not be used
-    // here: those addresses name unrelated functions in RMGE01.
+    // These are the RMGE01 entries, taken from the generated US DOL bodies. The matching RMGK01 JAudio
+    // cluster is at +0x2244. Do not use that offset here: in RMGE01 those addresses name unrelated
+    // functions.
     case 0x80492A08u: return "JASChannel::play";
     case 0x80492A78u: return "JASChannel::playForce";
     case 0x80495038u: return "JASDSPChannel::start";
@@ -1055,10 +1037,9 @@ inline void trace_audio_function_entry_slow(
         return;
     }
 
-    // The ring/interleave functions and the per-channel maintenance sweep run
-    // continuously.  Sample them before the shared quota so they cannot hide
-    // the comparatively rare sound-start and async-init entries that this
-    // trace exists to diagnose.
+    // The ring/interleave functions and the per-channel maintenance sweep run continuously. They are
+    // sampled before the shared quota, so they cannot hide the rarer sound-start and async-init
+    // entries this trace is meant to diagnose.
     if (function_address == 0x804878BCu ||
         function_address == 0x804945CCu ||
         function_address == 0x80495354u ||
@@ -1081,12 +1062,11 @@ inline void trace_audio_function_entry_slow(
     trace_audio_read_u32_fast(memory, 0x806A2BD0u, control_pool);
     trace_audio_read_u32_fast(memory, 0x806A2BD8u, tchannel_table);
 
-    // Capture the fields that distinguish a requested JASChannel, its
-    // JASDSPChannel wrapper, and the underlying TChannel. Reads are passive and
-    // best-effort; '?' explicitly marks a non-mapped r3 rather than presenting
-    // a fabricated zero. For TChannel, word 0 contains active/finished/pitch
-    // and +0x118 is the sample-source pointer. For JASDSPChannel, +0x08 is the
-    // flags word and +0x18 is its TChannel pointer.
+    // Captures the fields that distinguish a requested JASChannel, its JASDSPChannel wrapper and the
+    // underlying TChannel. Reads are passive and best-effort. '?' marks an unmapped r3 instead of a
+    // made-up zero. For TChannel, word 0 holds active, finished and pitch, and +0x118 is the
+    // sample-source pointer. For JASDSPChannel, +0x08 is the flags word and +0x18 is its TChannel
+    // pointer.
     std::uint32_t object_word0 = 0;
     std::uint32_t object_word8 = 0;
     std::uint32_t object_word18 = 0;
@@ -1168,12 +1148,11 @@ GALAXY_ALWAYS_INLINE void trace_audio_function_entry(
         services, context, memory, function_address);
 }
 
-// The generated main-loop trace deliberately uses the existing log callback
-// as a compact, ABI-neutral transport.  The native host recognizes only the
-// fixed outer-frame and frame-loop-subcall markers below and retains them in
-// an in-memory ring; no per-frame console I/O is performed while the
-// measurement is active.  This is a diagnostic hook in statically generated
-// C++, not a runtime instruction decoder or dispatch fallback.
+// The generated main-loop trace uses the existing log callback as a compact, ABI-neutral
+// transport. The native host recognizes only the fixed outer-frame and frame-loop subcall markers
+// below and keeps them in an in-memory ring. No per-frame console I/O happens while measuring.
+// This is a diagnostic hook in generated C++, not a runtime instruction decoder or dispatch
+// fallback.
 inline bool trace_main_frame_function_entries_enabled() {
     static const bool enabled = [] {
         char value[16]{};
@@ -1188,12 +1167,10 @@ inline bool trace_main_frame_function_entries_enabled() {
     return enabled;
 }
 
-// The generated module is permitted to emit the fixed main-frame markers only
-// while the native runtime has opened its explicitly requested VI window.
-// Checking the runtime-owned atomic before calling the log transport keeps
-// diagnostic code from perturbing real-time guest execution outside that
-// window. This is diagnostic gating only; it does not alter guest state, call
-// routing, checkpoints, or native service availability.
+// The generated module emits the fixed main-frame markers only while the runtime has an explicitly
+// requested VI window open. Checking the runtime-owned atomic before the log transport keeps
+// diagnostics from perturbing guest execution outside that window. This gating does not alter
+// guest state, call routing, checkpoints or native service availability.
 GALAXY_ALWAYS_INLINE bool main_frame_trace_window_active(
     const NativeServicesV1* services) {
     return services != nullptr && services->main_frame_trace_active != nullptr &&
@@ -1231,10 +1208,9 @@ GALAXY_ALWAYS_INLINE void trace_main_frame_function_entry(
     services->log(services->user, LogLevelV1::Trace, marker);
 }
 
-// A main-frame stage is an explicitly selected translated continuation, not a
-// guest PC or a dispatch target. It is used only by bounded diagnostics to
-// partition an already-observed direct native call without changing guest
-// state, call routing, or checkpoint behaviour.
+// A main-frame stage is an explicitly selected translated continuation, not a guest PC or a
+// dispatch target. Bounded diagnostics use it to partition an already-observed direct native call
+// without changing guest state, call routing or checkpoint behaviour.
 GALAXY_ALWAYS_INLINE void trace_main_frame_stage(
     const NativeServicesV1* services,
     const char* marker) {
@@ -1246,13 +1222,12 @@ GALAXY_ALWAYS_INLINE void trace_main_frame_stage(
     services->log(services->user, LogLevelV1::Trace, marker);
 }
 
-// JUTVideo's post-retrace callback uses the OS message helpers below to
-// produce main's frame-tick queue.  Those helpers also serve unrelated guest
-// queues, so the generated trace must prove r3 is JUTVideo's exact queue
-// before it emits a marker.  The callback's own statically verified producer
-// entry is also recorded, but it never inspects or changes the queue.  The
-// marker is only an ABI-neutral transport to the runtime's bounded recorder;
-// it is neither an OS-message substitute nor a runtime PPC dispatcher.
+// JUTVideo's post-retrace callback uses the OS message helpers below to produce main's frame-tick
+// queue. Those helpers also serve unrelated guest queues, so the generated trace checks that r3 is
+// JUTVideo's exact queue before it emits a marker. The callback's statically verified producer
+// entry is also recorded, but the trace never inspects or changes the queue. The marker is only an
+// ABI-neutral transport to the runtime's bounded recorder. It is neither an OS-message substitute
+// nor a runtime PPC dispatcher.
 inline bool trace_jutvideo_mq_function_entries_enabled() {
     static const bool enabled = [] {
         char value[16]{};
@@ -1267,9 +1242,9 @@ inline bool trace_jutvideo_mq_function_entries_enabled() {
     return enabled;
 }
 
-// The generic guest-load implementation appears later in this ABI header.
-// Declare it here so the optional JUTVideo queue filter can validate r3
-// against the live manager before emitting any diagnostic marker.
+// The generic guest-load implementation appears later in this ABI header. It is declared here so
+// the optional JUTVideo queue filter can check r3 against the live manager before it emits a
+// diagnostic marker.
 GALAXY_ALWAYS_INLINE std::uint32_t guest_load_u32(
     GuestMemoryV1* memory,
     std::uint32_t address,
@@ -1290,9 +1265,8 @@ GALAXY_ALWAYS_INLINE void trace_jutvideo_mq_function_entry(
     constexpr std::uint32_t kJutVideoManagerPtr = 0x806A2850u;
     constexpr std::uint32_t kJutVideoMessageQueueOffset = 0x38u;
     constexpr std::uint32_t kFallbackJutVideoMessageQueue = 0x809AE098u;
-    // This is the statically recovered post-retrace producer callback.  Its
-    // r3 is its callback argument rather than an OSMessageQueue, so capture
-    // its incoming LR before applying the queue-only filter used below.
+    // The statically recovered post-retrace producer callback. Its r3 is the callback argument, not an
+    // OSMessageQueue, so its incoming LR is captured before the queue-only filter below is applied.
     constexpr std::uint32_t kJutVideoProducerCallback = 0x80419554u;
     if (function_address == kJutVideoProducerCallback) {
         char marker[64]{};
@@ -1321,10 +1295,9 @@ GALAXY_ALWAYS_INLINE void trace_jutvideo_mq_function_entry(
         }
     }
 
-    // The bounded runtime recorder needs the generated caller's return
-    // address to distinguish the JUTVideo producer from consumers that use
-    // the same OS queue helpers.  This remains trace-only and is emitted only
-    // after the exact r3 queue identity check above has succeeded.
+    // The bounded runtime recorder needs the generated caller's return address to tell the JUTVideo
+    // producer apart from consumers that use the same OS queue helpers. This stays trace-only and is
+    // emitted only after the exact r3 queue identity check above has succeeded.
     switch (function_address) {
     case 0x804A88E4u:
     case 0x804A89ACu:
@@ -4846,28 +4819,19 @@ inline void trace_audio_control_zero(
     std::abort();
 }
 
-// Admission for one fixed-width scalar guest access. `out` is written only when
-// the span is admitted, so a caller's fast path can branch straight to its own
-// store/load: the pointer it receives is already proven in range, and the
-// caller never re-tests it.
+// Admission for one fixed-width scalar guest access. `out` is written only when the span is
+// admitted, so a caller's fast path can branch straight to its own store or load. The pointer it
+// receives is already proven in range.
 //
-// This is shared by generated scalar loads/stores and native span helpers.
-// A static opcode or call-site census does not establish invocation frequency
-// or exclusive frame cost; those require a matched runtime measurement.
+// Shared by generated scalar loads and stores and by native span helpers.
 //
-// The accepted set is exactly
-// `host_base != nullptr && offset + size <= region.size` with `offset =
-// address & 0x0FFFFFFFu`, evaluated in 64 bits so the sum cannot wrap.
+// The accepted set is exactly `host_base != nullptr && offset + size <= region.size`, with
+// `offset = address & 0x0FFFFFFFu`, evaluated in 64 bits so the sum cannot wrap.
 //
-// Two rewrites of this test were tried and BOTH ARE WRONG; do not retry them:
-//   * `size > region.size - offset` silently ACCEPTS spans with
-//     `offset > region.size`, because the unsigned subtraction wraps to a value
-//     `>= 0x8000_0000` while `size` is at most 64. Verified over 702
-//     (offset, region.size, size) triples: 420 mismatches, every one of them a
-//     false accept, i.e. an out-of-bounds host access.
-//   * dropping `size <= region.size` as "implied by the offset test" has the
-//     same failure mode through the same wrap.
-// The predicate is a guard, not a hot arithmetic path: it must stay exact.
+// Do not rewrite the test as `size > region.size - offset`, or drop `size <= region.size` as
+// implied by the offset test. When offset > region.size, the unsigned subtraction wraps, so such
+// spans would be admitted and the host access would go out of bounds. The predicate is a guard,
+// not a hot arithmetic path: it must stay exact.
 GALAXY_ALWAYS_INLINE bool guest_region_admit(
     GuestMemoryV1* memory,
     std::uint32_t address,
@@ -4904,10 +4868,10 @@ inline std::byte* resolve_guest(
     std::uint32_t size,
     const NativeServicesV1* services,
     std::uint32_t guest_pc) {
-    // Native bulk/matrix/particle helpers use the same checked RAM capability
-    // as scalar guest accesses. This is a span lookup, not a device access;
-    // unmapped/partial spans retain the complete region search and fault path.
-    // Empty spans keep the list's original one-past-region precedence.
+    // Native bulk, matrix and particle helpers use the same checked RAM capability as scalar guest
+    // accesses. This is a span lookup, not a device access. Unmapped or partial spans keep the
+    // complete region search and fault path. Empty spans keep the list's original one-past-region
+    // precedence.
     if (size != 0u) {
         if (std::byte* direct = resolve_guest_fast(memory, address, size)) return direct;
     }
@@ -5069,14 +5033,12 @@ GALAXY_ALWAYS_INLINE bool guest_flat_ram_span(
 }
 
 #if GALAXY_FASTMEM_ACTIVE
-// Every guest access is a plain load or store through the view. The compiler
-// is free to fold a load into arithmetic, merge adjacent stores, vectorize or
-// forward a stored value to a later load: the fault handler
-// (flat_guest_memory.cpp) decodes every integer and vector memory form clang
-// emits for these templates and completes a device access of any width, so
-// nothing here constrains code generation. GALAXY_FASTMEM_VOLATILE=1 restores
-// the one-instruction-per-access forms (measured 2x slower per call on the
-// module benchmark, 60.9 against 31.4 ns) for bisecting a fault-decoder gap.
+// Every guest access is a plain load or store through the view. The compiler may fold a load into
+// arithmetic, merge adjacent stores, vectorize, or forward a stored value to a later load. The
+// fault handler (flat_guest_memory.cpp) decodes every integer and vector memory form clang emits
+// for these templates and completes a device access of any width, so nothing here constrains code
+// generation. GALAXY_FASTMEM_VOLATILE=1 restores one instruction per access, for bisecting a
+// fault-decoder gap. Those forms are slower per call.
 #if !defined(GALAXY_FASTMEM_VOLATILE)
 #define GALAXY_FASTMEM_VOLATILE 0
 #endif
@@ -5295,15 +5257,12 @@ GALAXY_NOINLINE inline void guest_mark_dirty_page_words(
     }
 }
 
-// Two-level publication for the renderer tracker. Besides the page bit in
-// `words`, set a summary bit that covers the whole 64-bit page word, so the
-// consumer can skip empty groups of words instead of reading all 131,072 of
-// them. The bit is published unconditionally: it is only ever cleared by the
-// frame drain, and only in the same word-group iteration in which that word's
-// bits were exchanged, so a set bit always implies that some producer has
-// published into the group since the last drain. The summary bitmap is reached
-// through the tracker pointer itself. Legacy page-only producers are not
-// compatible with summary skipping: ABI 23 rejects older game/Home modules.
+// Two-level publication for the renderer tracker. Besides the page bit in `words`, set the summary
+// bit that covers the whole 64-bit page word, so the consumer can skip empty word groups. The bit
+// is set unconditionally. The frame drain clears it only in the same word-group iteration that
+// exchanges that word's bits, so a set bit always means a producer has published into the group
+// since the last drain. The summary bitmap is reached through the tracker pointer. Page-only
+// producers are not compatible with summary skipping: ABI 23 rejects older game/Home modules.
 GALAXY_ALWAYS_INLINE void guest_publish_dirty_word_summary(
     std::atomic_uint64_t* summary, std::uint32_t word_index) {
     if (summary == nullptr) {
@@ -5410,11 +5369,10 @@ GALAXY_ALWAYS_INLINE bool guest_mark_dirty_page_fast(
     }
     return true;
 }
-// Kept out of line on purpose: its remaining in-line work is the complete
-// alias/window/tracker/page validation, and force-inlining it put ~90
-// instruction slots and a stack-frame adjustment between every guest store and
-// that store's exit. Callers reach it only after their own cheap reject, so the
-// shared body is the only thing a scalar store carries.
+// Kept out of line on purpose. Its remaining in-line work is the full alias, window, tracker and
+// page validation. Inlining it would place that whole validation between every guest store and
+// its exit. Callers reach it only after their own cheap reject, so the shared body is the only
+// thing a scalar store carries.
 inline bool guest_mark_cpu_dirty_page_fast(
     GuestMemoryV1* memory,
     std::uint32_t address,
@@ -5602,20 +5560,14 @@ GALAXY_ALWAYS_INLINE void guest_notify_write(
             if (memory->cpu_dirty_page_words == nullptr) [[likely]] {
                 return;
             }
-            // Cheap window reject first. The CPU tracker normally covers the
-            // pinned MEM2 audio backing, so almost every MEM1/stack/object store
-            // is outside it — and `guest_cpu_tracker_single_page` below would walk
-            // its complete admission kernel only to be
-            // discarded, after which `guest_mark_cpu_dirty_page_fast` would
-            // re-derive this identical predicate as its own first six
-            // instructions. This is the same test, on the same two fields, so it
-            // admits and rejects exactly the same set; the only stores that now
-            // enter the kernel are the ones whose result is used.
+            // Cheap window reject first. The CPU tracker normally covers the pinned MEM2 audio backing, so
+            // almost every MEM1, stack or object store lies outside it. Rejecting here avoids walking the full
+            // admission in guest_cpu_tracker_single_page, and then re-deriving the same predicate in
+            // guest_mark_cpu_dirty_page_fast. The test uses the same two fields and admits and rejects the
+            // same set.
             //
-            // The one case this must not swallow is a span that starts below the
-            // tracked base and reaches into it: that overlaps the tracker and
-            // still owns work, so it falls through to the complete policy rather
-            // than returning here.
+            // The one span this must not reject is one that starts below the tracked base and reaches into
+            // it. It overlaps the tracker and still needs work, so it falls through to the complete policy.
             const std::uint32_t cpu_physical = address & 0x1FFFFFFFu;
             if (cpu_physical < memory->cpu_dirty_tracked_base ||
                 cpu_physical - memory->cpu_dirty_tracked_base >=
@@ -5728,28 +5680,17 @@ GALAXY_ALWAYS_INLINE bool guest_is_wgpipe_address(std::uint32_t address) {
            (address & 0x00FFF000u) == 0x00008000u;
 }
 
-// The WGPIPE ownership trace is a guest-execution trace, exactly like
-// trace_fileloader_stack_enabled / trace_audio_pointer_store_enabled /
-// trace_audio_control_writes_enabled / trace_resource_status_writes_enabled
-// above, so it carries the same compile-time fold. Without it this was the one
-// gate in `guest_wgpipe_batch_requires_scalar_path()` that could NOT fold: the
-// other three already compile to a literal `false` under the default
-// GALAXY_GUEST_TRACE==0, leaving this one Meyers-singleton load as the entire
-// surviving body of a predicate the translator emits at every proven WGPIPE
-// batch (117 sites in the current generated corpus).
+// The WGPIPE ownership trace is a guest-execution trace, like trace_fileloader_stack_enabled,
+// trace_audio_pointer_store_enabled, trace_audio_control_writes_enabled and
+// trace_resource_status_writes_enabled above, so it gets the same compile-time fold. Without it,
+// this was the one gate in guest_wgpipe_batch_requires_scalar_path() that could not fold. Its
+// Meyers-singleton load was the whole remaining body of a predicate that the translator emits at
+// every proven WGPIPE batch.
 //
-// The comment at the top of this trace block states the invariant this restores:
-// "In a shipping build it must compile out entirely: the trace_*_enabled() gates
-// sit on the hottest paths ... With GALAXY_GUEST_TRACE==0 (the default) the hot
-// gates fold to a compile-time false so the compiler deletes the branch and the
-// trace call outright." This one did not.
-//
-// Behaviour is unchanged in both configurations. With tracing compiled in
-// (GALAXY_GUEST_TRACE=1) the env lookup and its meaning are byte-identical. With
-// it compiled out, the ownership trace was already unreachable through this
-// predicate - the runtime switch that actually drives the trace is
-// `GuestAddressSpace::wgpipe_pe_ownership_trace_enabled_`, set from the same env
-// var on the host side and untouched here.
+// Behaviour is unchanged in both configurations. With GALAXY_GUEST_TRACE=1 the env lookup is
+// identical. With tracing compiled out, the ownership trace was already unreachable through this
+// predicate. The runtime switch that drives it is GuestAddressSpace::wgpipe_pe_ownership_trace_enabled_,
+// set from the same env var on the host side and not touched here.
 inline bool trace_wgpipe_pe_ownership_enabled() {
 #if GALAXY_GUEST_TRACE
     static const bool enabled = [] {
@@ -6107,9 +6048,8 @@ inline void native_store_guest_f32_fast(
 }
 
 inline void full_memory_fence();
-// The attribute must match the definitions below, or a caller reached through
-// this forward declaration (e.g. `native_audio_interleave_i16_804878BC` at
-// ~6228) would not be force-inlined.
+// The attribute must match the definitions below. Otherwise a caller reached through this forward
+// declaration (e.g. `native_audio_interleave_i16_804878BC`) would not be force-inlined.
 GALAXY_ALWAYS_INLINE void compare_unsigned(
     PpcContext* context,
     std::uint32_t field_index,
@@ -6559,11 +6499,10 @@ GALAXY_ALWAYS_INLINE void call_return_checkpoint(
     PpcContext* context,
     GuestMemoryV1* memory);
 
-// Statically emitted only before the five RMGE01 WPADRead memmove calls.  This
-// is a diagnostic observation, not a scheduler boundary: in a normal build it
-// folds to a single disabled trace-flag check, and in a proof run it invokes
-// the existing callback with a non-guest sentinel that the runtime consumes
-// before any guest-visible service work.
+// Statically emitted only before the five RMGE01 WPADRead memmove calls. This is a diagnostic
+// observation, not a scheduler boundary. In a normal build it folds to a single disabled
+// trace-flag check. In a trace run it invokes the existing callback with a non-guest sentinel that
+// the runtime consumes before any guest-visible service work.
 GALAXY_ALWAYS_INLINE void native_input_trace_copy_pre_checkpoint(
     const NativeServicesV1* services,
     std::uint32_t call_pc,
@@ -6572,15 +6511,12 @@ GALAXY_ALWAYS_INLINE void native_input_trace_copy_pre_checkpoint(
 
 GALAXY_ALWAYS_INLINE void update_cr0(PpcContext* context, std::uint32_t value);
 
-// Flag-based interrupt return (generation 17). When the runtime completes an
-// RFI that resumes elsewhere it sets this bit in the pending-event mask and
-// returns through every host frame instead of throwing GuestTransfer. The
-// bit makes every checkpoint fast path escalate to its cold block, and the
-// cold blocks below return from the translated function without touching
-// the context (the RFI already loaded the resumed context), so the native
-// stack unwinds by plain returns to the runtime's flat dispatcher. The
-// C++ unwinder cost about ten percent of the simulation thread's running
-// samples on the title screen.
+// Flag-based interrupt return (generation 17). When the runtime completes an RFI that resumes
+// elsewhere, it sets this bit in the pending-event mask and returns through every host frame
+// instead of throwing GuestTransfer. The bit makes every checkpoint fast path escalate to its cold
+// block. The cold blocks below return from the translated function without touching the context
+// (the RFI already loaded the resumed context), so the native stack unwinds by plain returns to the
+// runtime's flat dispatcher.
 inline constexpr std::uint32_t kPendingEventTransferBit = 1u << 7u;
 
 GALAXY_ALWAYS_INLINE bool transfer_pending(
@@ -7595,8 +7531,8 @@ inline void native_vec_copy_12(
     GuestMemoryV1* memory,
     const NativeServicesV1* services,
     std::uint32_t guest_pc) {
-    // These two DOL routines copy a vec3 through different volatile FPRs.
-    // A raw memmove lost their FPR/PS1 effects, quantization and fault order.
+    // These two DOL routines copy a vec3 through different volatile FPRs. A raw memmove would drop
+    // their FPR/PS1 effects, quantization and fault order.
     if (guest_pc == 0x80018B8Cu) {
         ensure_fpu_available(services, 0x80018B8Cu, context, memory);
         psq_load(context, 1u, memory, context->gpr[4], 0u, false, true, services, 0x80018B8Cu);
@@ -9610,7 +9546,7 @@ inline void lean_psmtx_mult_vec_array_sr(PpcContext* context, GuestMemoryV1* mem
     }
 }
 
-// ---- Section B: pure composites (direct calls to verified-pure leaves) ----
+// ---- Section B: pure composites (direct calls to pure leaves) ----
 
 // f32 J3DGetKeyFrameInterpolation<s16>(f32 frame, J3DAnmKeyTableBase* table, s16* data)
 // As the f32 form with 2-byte elements: the bounds checks and the search read
@@ -11631,19 +11567,15 @@ inline void native_strstr(
     }
 }
 
-// Translates PowerPC cache-management instructions (dcbi/dcbf/dcbst and
-// friends) whose real purpose is CPU<->GPU memory visibility on GameCube's
-// non-coherent architecture. On this runtime the only cross-thread party is
-// the render thread, which already synchronizes at coarser frame/FIFO
-// boundaries -- this fence's job is only to make the current thread's writes
-// visible to a thread that later acquires, which is exactly what
-// acq_rel provides. seq_cst additionally guarantees a single total order
-// across *every* seq_cst operation in the whole program, a guarantee nothing
-// here depends on. On x86 acquire/release ordering is free (already implied
-// by the hardware's strong memory model); seq_cst is not -- it lowers to a
-// real serializing instruction (mfence-class). Guest code calls this once
-// per 32-byte cache line in tight range loops (measured: hundreds of
-// thousands of times per second), so the difference is not academic.
+// Translates PowerPC cache-management instructions (dcbi/dcbf/dcbst and friends). Their purpose is
+// CPU-to-GPU memory visibility on GameCube's non-coherent architecture. On this runtime the only
+// cross-thread party is the render thread, which already synchronizes at coarser frame and FIFO
+// boundaries. This fence only makes the current thread's writes visible to a thread that later
+// acquires, which acq_rel provides. seq_cst would add one total order across every seq_cst
+// operation, which nothing here depends on. On x86, acquire/release ordering is free (implied by
+// the hardware's strong memory model), but seq_cst lowers to a serializing instruction
+// (mfence-class). Guest code calls this once per 32-byte cache line in tight range loops, so the
+// cost matters.
 inline void full_memory_fence() {
     std::atomic_thread_fence(std::memory_order_acq_rel);
 }
@@ -11765,17 +11697,16 @@ GALAXY_NOINLINE inline std::uint32_t require_single_precision_bits_slow(
     return narrowed;
 }
 
-// Keep the proven normal/zero path at the caller; share conversion and faults.
+// Keep the normal/zero path at the caller; share conversion and faults.
 GALAXY_ALWAYS_INLINE std::uint32_t require_single_precision_bits(
     std::uint64_t bits,
     const NativeServicesV1* services,
     std::uint32_t guest_pc) {
     const std::uint64_t magnitude = bits & 0x7FFFFFFFFFFFFFFFull;
     const std::uint32_t sign = static_cast<std::uint32_t>(bits >> 32u) & 0x80000000u;
-    // A widened normal binary32 has exponent 897..1150 and its low 29
-    // fraction bits clear. This proves the round trip directly with integers,
-    // without rounding or changing the host FP environment. Exceptional and
-    // non-single encodings retain the original conversion/fault checks below.
+    // A widened normal binary32 has exponent 897..1150 and its low 29 fraction bits clear. The round
+    // trip is checked directly with integers, without rounding or changing the host FP environment.
+    // Exceptional and non-single encodings retain the original conversion/fault checks below.
     if (magnitude >= 0x3810000000000000ull &&
         magnitude < 0x47F0000000000000ull &&
         (magnitude & 0x1FFFFFFFull) == 0u) {
@@ -12025,9 +11956,8 @@ inline void native_mtx_scale_803A387C(
     const NativeServicesV1* services,
     std::uint32_t guest_pc) {
     static_cast<void>(guest_pc);
-    // Preserve the DOL's interleaved register effects and stores. In particular,
-    // the final multiply may trap after the first store: publishing only after
-    // the whole helper returned lost that completed write to both consumers.
+    // Preserve the DOL's interleaved register effects and stores. The final multiply may trap after the
+    // first store, so publication must happen per store, not only after the whole helper returns.
     const auto load_single = [&](std::uint32_t index, std::uint32_t offset, std::uint32_t pc) {
         ensure_fpu_available(services, pc, context, memory);
         load_fpr_single(context, index, memory, context->gpr[3] + offset, services, pc);
@@ -12365,11 +12295,10 @@ inline void psq_store(
             const std::uint32_t first = byte_swap_u32(
                 narrow_paired_single_ftz(context->fpr_bits[source]));
             std::memcpy(direct, &first, sizeof(first));
-            // Runtime RAM has a callback even when the dirty tracker fully
-            // owns a write and suppresses that callback. In that case both
-            // lanes can use the existing same-page publication path. Prove
-            // complete coverage; a partial tracker or an observable callback
-            // must retain lane-zero notification before evaluating lane one.
+            // Runtime RAM has a callback even when the dirty tracker fully owns a write and suppresses that
+            // callback. In that case both lanes can use the existing same-page publication path. This requires
+            // complete coverage. A partial tracker or an observable callback must retain lane-zero notification
+            // before lane one is evaluated.
             bool pair_observer_suppressed = false;
             std::uint32_t shared_page = 0u;
             if (!one_element && memory->notify_write != nullptr &&
@@ -12452,10 +12381,10 @@ inline std::uint32_t arithmetic_shift_right(std::uint32_t value, std::uint32_t s
 // disabled, which is the case for virtually all compiled game code):
 //
 //   divide by zero:    result = (dividend < 0) ? 0xFFFFFFFF : 0x00000000
-//   INT_MIN / -1:      result = 0xFFFFFFFF  (INT_MIN sign bit is 1 → -1)
+//   INT_MIN / -1:      result = 0xFFFFFFFF  (INT_MIN sign bit is 1 -> -1)
 //   XER.OV is NOT set when OE=0; host UB is avoided by checking first.
 //
-// Source: Dolphin Interpreter_Integer.cpp, IBM PowerPC Book I §4.3.1.
+// Source: Dolphin Interpreter_Integer.cpp, IBM PowerPC Book I section 4.3.1.
 inline std::uint32_t divide_signed_word(
     std::uint32_t dividend_bits,
     std::uint32_t divisor_bits,
@@ -12487,29 +12416,22 @@ inline std::uint32_t divide_unsigned_word(
     return divisor == 0u ? 0x00000000u : quotient;
 }
 
-// Force-inlined like `compare_signed` below: emitted at ~4,752 sites, so a
-// non-inlined call here lands on the simulation thread for every record-form
-// integer instruction.
+// Force-inlined like `compare_signed` below. A non-inlined call here would run for every
+// record-form integer instruction on the simulation thread.
 GALAXY_ALWAYS_INLINE void update_cr0(PpcContext* context, std::uint32_t value) {
-    // One read-modify-write of `context->cr` instead of the previous
-    // write-then-second-RMW (`set_cr_field` inlined on top of the explicit
-    // update). Every recorded integer instruction (`andi.`, `add.`, `mr.`,
-    // `cmpwi`, the `stwu` chain, ...) runs this, so the second load/store of
-    // `cr` was pure repetition on the simulation thread's critical path.
+    // One read-modify-write of `context->cr`. Every recorded integer instruction (`andi.`, `add.`,
+    // `mr.`, `cmpwi`, the `stwu` chain, ...) runs this path, so a second load and store of `cr` would
+    // repeat work on the simulation thread's critical path.
     //
     // The field is selected with two masks and no data-dependent branch:
     //   nonzero  = -(value != 0)          -> all ones exactly when value != 0
     //   negative = -(value >= 0x80000000) -> all ones exactly when LT
     //   field = (negative & 8) | (nonzero & ~negative & 4) | (~nonzero & 2)
-    // i.e. LT=8 when the sign bit is set, GT=4 when it is clear and the value is
-    // non-zero, EQ=2 when the value is zero. That is exactly the
-    // (`value < 0 ? 8 : value > 0 ? 4 : 2`) mapping the ternary produced.
+    // i.e. LT=8 when the sign bit is set, GT=4 when it is clear and the value is non-zero, EQ=2 when
+    // the value is zero. This is the (`value < 0 ? 8 : value > 0 ? 4 : 2`) mapping.
     //
-    // Verified against that ternary over 4,013 values (4,000 pseudo-random plus
-    // the sign/zero/adjacent boundaries). An earlier attempt here used
-    // `(value & 0x80000000u) >> 27` for LT and omitted the EQ term entirely; it
-    // returned 0 for value == 0 and 20 for negative values, so do not
-    // "simplify" this back to a single sign mask.
+    // Check any change against that ternary over the sign, zero and adjacent boundary values. A single
+    // sign mask is not enough: it returns 0 for value == 0 and 20 for negative values.
     const std::uint32_t nonzero = static_cast<std::uint32_t>(
         -(static_cast<std::int32_t>(value != 0u)));
     const std::uint32_t negative = static_cast<std::uint32_t>(
@@ -12522,10 +12444,9 @@ GALAXY_ALWAYS_INLINE void update_cr0(PpcContext* context, std::uint32_t value) {
     context->cr = (context->cr & 0x0FFFFFFFu) | (field << 28);
 }
 
-// Force-inlined like `compare_signed`/`compare_unsigned` below: `cr_bit` is
-// emitted at ~83,709 sites, `update_cr0` at ~4,752 and `set_cr_bit` at ~2,206
-// module-wide, so a plain `inline` that a non-Release configuration declines to
-// inline puts a real call on the simulation thread's critical path for every
+// Force-inlined like `compare_signed`/`compare_unsigned` below. `cr_bit`, `update_cr0` and
+// `set_cr_bit` are emitted at very many sites. A plain `inline` that a non-Release configuration
+// declines to inline would put a real call on the simulation thread's critical path for every
 // record-form integer instruction and every conditional branch.
 GALAXY_ALWAYS_INLINE void set_cr_field(
     PpcContext* context,
@@ -12715,18 +12636,15 @@ GALAXY_ALWAYS_INLINE void compare_f64(
     compare_f64_slow(context, field_index, left, right, ordered);
 }
 
-// Integer comparison. `cmpi`/`cmpli` are ~4% of all guest instructions
-// (opcode census) and the generated code immediately feeds the result to
-// `cr_bit` in the following branch, so this is one of the hottest helpers in
-// the program. The old form wrote the CR field inside `set_cr_field` and then
-// read `context->cr` back through `cr_bit` in the branch, i.e. two dependent
-// round trips through the 4 MB PpcContext for one guest instruction.
+// Integer comparison. `cmpi`/`cmpli` feed the result straight to `cr_bit` in the following branch,
+// so this is one of the hottest helpers. Writing the CR field and then reading `context->cr` back
+// would be two dependent round trips through the 4 MB PpcContext per guest instruction, so the
+// field is built in one step.
 //
-// The field is selected branchlessly: `-(left < right)` and `-(left > right)`
-// are all-ones masks, and the PowerPC CR field is exactly LT=8, GT=4, EQ=2, so
-// `(lt & 8) | (~lt & gt & 4) | (~lt & ~gt & 2)` is the same value as the
-// three-way ternary chain without a data-dependent branch. EQ is forced when
-// neither LT nor GT holds, which matches the ternary exactly.
+// The field is selected branchlessly: `-(left < right)` and `-(left > right)` are all-ones masks,
+// and the PowerPC CR field is exactly LT=8, GT=4, EQ=2, so `(lt & 8) | (~lt & gt & 4) | (~lt & ~gt
+// & 2)` is the same value as the three-way ternary chain without a data-dependent branch. EQ is
+// forced when neither LT nor GT holds, which matches the ternary exactly.
 GALAXY_ALWAYS_INLINE void compare_signed(
     PpcContext* context,
     std::uint32_t field_index,
@@ -13605,11 +13523,10 @@ inline void record_direct_edge_profile_local(
     }
 }
 
-// This diagnostic callback intentionally has no local fallback.  A generated
-// module and the runtime must agree on the ABI so that records land in the
-// runtime-owned table which is later dumped.  Silently retaining records in a
-// DLL-local table produced the misleading `edges=0` reports that prompted this
-// service; missing support is an installation/runtime contract failure.
+// This diagnostic callback has no local fallback. A generated module and the runtime must agree on
+// the ABI, so records land in the runtime-owned table that is later dumped. Retaining records in a
+// DLL-local table would leave that dump empty. Missing support is an installation or runtime
+// contract failure.
 inline void report_direct_edge_profile(
     const NativeServicesV1* services,
     std::uint32_t caller_pc,
@@ -13992,19 +13909,15 @@ GALAXY_NOINLINE inline void call_guest_cached_diagnostic(
             services->log(services->user, LogLevelV1::Warning, message);
         }
     }
-    // Every generated cached call must cross the runtime-owned service
-    // boundary.  That boundary is where native input, DMA, and asynchronous
-    // exception work are serviced and where a cached target is rejected while
-    // an intercept is required.  A former direct-call shortcut skipped that
-    // work after a cache hit; it could miss more than one hardware AI DMA
-    // deadline.  Keep the cache as a lookup cache only, never as permission to
-    // bypass the scheduling boundary.
-    // The translator lowers every resolved PPC call through this cacheable
-    // boundary, including calls whose target is statically known at install
-    // time.  Profile those generated call edges here instead of only in the
-    // unused direct-resolved helper: the caller PC is still exact and the
-    // runtime-owned sink receives the fully normalized target after dispatch.
-    // This remains behind the main-frame window so it cannot become an
+    // Every generated cached call must cross the runtime-owned service boundary. That boundary services
+    // native input, DMA and asynchronous exception work, and it rejects a cached target while an
+    // intercept is required. Skipping it after a cache hit could miss hardware AI DMA deadlines. Keep
+    // the cache as a lookup cache only, never as permission to bypass the scheduling boundary.
+    //
+    // The translator lowers every resolved PPC call through this cacheable boundary, including calls
+    // whose target is known at install time. Profile those edges here, not only in the unused
+    // direct-resolved helper. The caller PC is still exact, and the runtime-owned sink receives the
+    // normalized target after dispatch. This stays behind the main-frame window, so it cannot become an
     // always-on atomic timing cost.
     if (!profile_generated_direct_edges_active(services)) {
         trace_resource_helper_call(
@@ -14076,8 +13989,8 @@ GALAXY_NOINLINE inline void call_guest_cached_diagnostic(
 }
 
 GALAXY_ALWAYS_INLINE bool cached_call_trace_enabled() {
-    // These two selectors were already process-constant environment statics.
-    // Cache only trace policy; the runtime profiling window must remain live.
+    // These two selectors are process-constant environment statics. Cache only the trace policy. The
+    // runtime profiling window must stay live.
     static const bool enabled = trace_save_sequence_function_entries_enabled() ||
         trace_scenario_opening_state_enabled();
     return enabled;
@@ -14625,27 +14538,22 @@ inline void native_jpa_draw_particle_803A3B6C(
     context->gpr[1] = context->gpr[1] + 0x60u;
 }
 
-// Tight, bounded, hardware-instruction-style loops (cache range management --
-// DCInvalidateRange/DCFlushRange/DCStoreRange -- and similar counted
-// dcbi/dcbf/dcbst back-edge loops) checkpoint on every single iteration even
-// though each iteration is one trivial hardware instruction on real silicon.
-// Measured: a single such loop can dominate 90%+ of all full-callback
-// escalations even though the existing checkpoint_next_slow watermark is
-// already throttling overall. That watermark is a global cadence, so it gets
-// pushed past "due" again quickly by other unrelated checkpoint traffic
-// in between a tight loop's own iterations; it cannot, by itself, recognize
-// "this exact backward branch is repeating." This adds that recognition as a
-// second, independent, purely additive throttle: while the same guest_pc
-// checkpoints back-to-back many times in a row, only escalate to the full
-// callback every kRepeatPcSlowInterval-th hit instead of every hit. It never
-// suppresses a checkpoint when a real event is pending, and it decays
-// immediately once guest_pc changes (leaving the loop), so ordinary
-// non-looping control flow is completely unaffected.
-// C++17 inline variables: guaranteed one instance program-wide (unlike a
-// function-local static in a header-defined __forceinline function on MSVC
-// without an explicit `inline` linkage specifier, which is not guaranteed to
-// be deduplicated across translation units). Used for both the repeat-PC
-// throttle and the diagnostic breakdown of why escalation happened.
+// Tight, bounded, hardware-style loops (cache range management such as DCInvalidateRange,
+// DCFlushRange and DCStoreRange, and similar counted dcbi/dcbf/dcbst back-edge loops) checkpoint on
+// every iteration, though each iteration is one trivial instruction on real hardware. A single such
+// loop can account for most full-callback escalations. The checkpoint_next_slow watermark is a
+// global cadence, and unrelated checkpoint traffic pushes it past due again between a loop's own
+// iterations, so it cannot recognize a repeating backward branch by itself.
+//
+// This adds that recognition as a second, purely additive throttle. While the same guest_pc
+// checkpoints back-to-back many times, only every kRepeatPcSlowInterval-th hit escalates to the full
+// callback. It never suppresses a checkpoint when a real event is pending. It resets as soon as
+// guest_pc changes (leaving the loop), so ordinary non-looping control flow is unaffected.
+//
+// C++17 inline variables: one instance program-wide. A function-local static in a header-defined
+// __forceinline function on MSVC lacks an explicit `inline` linkage specifier, so it is not
+// guaranteed to be deduplicated across translation units. Used for both the repeat-PC throttle and
+// the breakdown of escalation causes.
 inline std::uint32_t g_checkpoint_repeat_pc = 0u;
 inline std::uint32_t g_checkpoint_repeat_streak = 0u;
 inline std::uint64_t g_checkpoint_escalate_event_pending = 0u;
@@ -14681,15 +14589,12 @@ GALAXY_NOINLINE inline void branch_checkpoint_taken_slow(
         bool skip = checkpoint < *services->checkpoint_next_slow &&
             !event_pending && !trace_native_input_checkpoint;
         if (!skip && !event_pending && !trace_native_input_checkpoint) {
-            // This site would otherwise escalate purely from watermark
-            // expiry (no real event, no trace). Check the repeat-PC streak
-            // before paying the full callback cost.
+            // This site would otherwise escalate purely from watermark expiry (no real event, no trace). Check
+            // the repeat-PC streak before paying the full callback cost.
             //
-            // This is now the only place the streak is maintained, so it is a
-            // real count: the fast path in branch_checkpoint_taken no longer
-            // zeroes it. The decay is `guest_pc != repeat_pc`, i.e. it resets
-            // exactly when escalation moves to different code, which is the
-            // documented intent.
+            // This is the only place the streak is maintained, so it is a real count. The fast path in
+            // branch_checkpoint_taken does not reset it. The decay is `guest_pc != repeat_pc`, so the streak
+            // resets exactly when escalation moves to different code.
             ++g_checkpoint_escalate_watermark;
             if (guest_pc == g_checkpoint_repeat_pc) {
                 ++g_checkpoint_repeat_streak;
@@ -14739,23 +14644,17 @@ GALAXY_ALWAYS_INLINE void branch_checkpoint_taken(
         const std::uint64_t checkpoint = ++(*services->checkpoint_counter);
         if (checkpoint < *services->checkpoint_next_slow &&
             atomic_load_u32(services->pending_event_mask) == 0u) [[likely]] {
-            // Non-escalating path: no guest_pc was consumed and no escalation
-            // decision was made, so the repeat-PC streak has nothing to record.
+            // Non-escalating path: no guest_pc was consumed and no escalation decision was made, so the
+            // repeat-PC streak has nothing to record.
             //
-            // It used to be cleared here, which made the streak always exactly
-            // zero when branch_checkpoint_taken_slow read it. The throttle below
-            // requires `streak > 1`, so it could never fire: every watermark
-            // escalation paid the full host callback, and
-            // g_checkpoint_escalate_watermark_throttled stayed 0. Clearing it
-            // here is also what the decay was *meant* to be -- but the decay
-            // belongs where the state is read, because the slow function can be
-            // reached without passing through this fast path at all (the whole
-            // `[[likely]]` guard can be false, and call_return_checkpoint's
-            // general path reaches branch_checkpoint_taken directly).
+            // The streak is not cleared here. The throttle requires `streak > 1` when read in
+            // branch_checkpoint_taken_slow, so clearing it on this path would keep the streak at zero and the
+            // throttle would never fire. Decay belongs where the state is read. The slow function can be
+            // reached without passing through this fast path: the `[[likely]]` guard can be false, and
+            // call_return_checkpoint's general path calls branch_checkpoint_taken directly.
             //
-            // Leaving it untouched keeps two global stores off the hottest path
-            // in the process: this is force-inlined at every translated backward
-            // branch and every translated call return.
+            // Leaving the streak untouched keeps two global stores off the hottest path in the process. This
+            // function is force-inlined at every translated backward branch and every translated call return.
             return;
         }
         branch_checkpoint_taken_slow(
@@ -14856,10 +14755,9 @@ GALAXY_ALWAYS_INLINE void branch_checkpoint_taken_budgeted(
     branch_checkpoint_taken_counted(services, guest_pc, resume_pc, context, memory, counted);
 }
 
-// mtmsr is an architectural interrupt-recognition boundary.  This statically
-// emitted checkpoint deliberately bypasses the adaptive branch gate so a DEC
-// request latched while MSR[EE] was clear is taken before the next translated
-// instruction.  It is not a polling hook and performs no runtime decoding.
+// mtmsr is an architectural interrupt-recognition boundary. This statically emitted checkpoint
+// bypasses the adaptive branch gate, so a DEC request latched while MSR[EE] was clear is taken
+// before the next translated instruction. It is not a polling hook and does no runtime decoding.
 GALAXY_ALWAYS_INLINE void architectural_interrupt_checkpoint(
     const NativeServicesV1* services,
     std::uint32_t guest_pc,

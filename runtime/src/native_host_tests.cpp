@@ -8083,10 +8083,8 @@ bool native_bt_wiimote_protocol_path_works(
         strict_command_sequence_only
             ? galaxy::input::kQualifiedTestHidTimingProfile
             : galaxy::input::kProvisionalVirtualHidTimingProfile);
-    // A production report reads the active WPAD channel's dynamic extension
-    // key tables. Install captured non-default tables in this host-only
-    // protocol fixture so it exercises that exact integration instead of a
-    // retired process-global cipher assumption.
+    // A production report reads the active WPAD channel's dynamic extension key tables. This host-only
+    // protocol fixture installs captured non-default tables, so it exercises that integration.
     constexpr std::uint32_t kRmge01WpadControlBlockTable = 0x80660170u;
     constexpr std::uint32_t kRmge01WpadControlBlock = 0x806611A0u;
     constexpr std::array<std::byte, 16> rmge01_nunchuk_key_tables{
@@ -8815,8 +8813,8 @@ bool native_bt_wiimote_protocol_path_works(
             submit_acl_out_with_completion(packet, message);
         };
 
-    // Deadline behavior is covered independently above. Keep this broad wire
-    // protocol fixture on its historical zero-based HID script epoch.
+    // Deadline behavior is covered independently above. This wire protocol fixture keeps the
+    // zero-based HID script epoch.
     galaxy::host::NativeBluetoothTestAccess::
         start_l2cap_control_request_for_protocol_fixture(memory);
     const auto* control_conn_req =
@@ -8997,13 +8995,10 @@ bool native_bt_wiimote_protocol_path_works(
         expected_ir_calibration,
         "native BT EEPROM calibration bytes are stable");
 
-    // The real RVL-CNT-01 only exposes EEPROM addresses below 0x1700; a read at
-    // or past the end of the readable region answers with a read error
-    // (size/error byte 0xF8), not zero-filled data. RMGE01's WPAD probes
-    // EEPROM 0x1770 right
-    // after the HID interrupt channel opens and disconnects (reason 0x13) unless
-    // it sees that silicon error. (Captured ground truth:
-    // docs/WIIMOTE_HARDWARE_CAPTURE.md.)
+    // The real RVL-CNT-01 exposes EEPROM addresses only below 0x1700. A read at or past the end of the
+    // readable region gets a read error (size/error byte 0xF8), not zero-filled data. RMGE01's WPAD
+    // probes EEPROM 0x1770 after the HID interrupt channel opens, and disconnects (reason 0x13) unless
+    // it sees that error. Ground truth: docs/WIIMOTE_HARDWARE_CAPTURE.md.
     const std::array<std::byte, 8> eeprom_firmware_probe_read{
         std::byte{0xA2}, std::byte{0x17}, std::byte{0x00}, std::byte{0x00},
         std::byte{0x17}, std::byte{0x70}, std::byte{0x00}, std::byte{0x01}};
@@ -9185,8 +9180,7 @@ bool native_bt_wiimote_protocol_path_works(
         "native BT first deliverable epoch produces and delivers one exact sample with zero startup replacement or gap");
     acknowledge_ios_reply(guest_memory);
 
-    // 0x176C is also past the readable region: a single error reply, not the
-    // multi-chunk success read the old (pre-hardware) model assumed.
+    // 0x176C is also past the readable region, so it gets a single error reply, not a multi-chunk read.
     const std::array<std::byte, 8> eeprom_176c_read{
         std::byte{0xA2}, std::byte{0x17}, std::byte{0x00}, std::byte{0x00},
         std::byte{0x17}, std::byte{0x6C}, std::byte{0x00}, std::byte{0x2A}};
@@ -9205,9 +9199,7 @@ bool native_bt_wiimote_protocol_path_works(
             eeprom_176c_acl[14] == 0x6C,
         "native BT RMGE01 0x176C read returns silicon read error (0xF8)");
 
-    // A read well past the EEPROM (0x4000) also returns the silicon read error
-    // rather than crashing the host -- matching how hardware answers any read
-    // beyond the readable region.
+    // A read well past the EEPROM (0x4000) also returns the read error rather than crashing the host.
     const std::array<std::byte, 8> eeprom_out_of_range_read{
         std::byte{0xA2}, std::byte{0x17}, std::byte{0x00}, std::byte{0x00},
         std::byte{0x40}, std::byte{0x00}, std::byte{0x00}, std::byte{0x01}};
@@ -11684,12 +11676,10 @@ bool native_bt_wiimote_protocol_path_works(
         "native BT reconnect epoch preserves globally increasing delivery IDs");
     acknowledge_ios_reply(guest_memory);
 
-    // Regression oracle for the old direct KPAD pointer's update semantics,
-    // without restoring that HLE path: move the renderer-owned mouse every
-    // millisecond, sample only on the profiled 100 Hz HID clock, and consume at
-    // 60 Hz. Each delivered ACL report must identify the newest host sequence
-    // sampled at its immutable deadline, never the newer state visible when
-    // the guest happens to post its read.
+    // Checks pointer update timing without a direct KPAD pointer. The renderer-owned mouse moves every
+    // millisecond, sampling happens only on the 100 Hz HID clock, and the guest consumes at 60 Hz. Each
+    // delivered ACL report must identify the newest host sequence sampled at its immutable deadline, not
+    // the newer state visible when the guest posts its read.
     galaxy::input::NativeInputCausalityTracker acl_decoder_admission;
     NativeVirtualInputDeliveryCapture delivery_capture{};
     delivery_capture.address_space = &memory;
@@ -11865,16 +11855,11 @@ bool native_bt_wiimote_protocol_path_works(
                 delivered_identity.host_pointer_sampled &&
                 delivered_identity.report_id == 0x37u &&
                 delivered_identity.payload_size == 23u) {
-                // This is the last deterministic boundary available without
-                // booting RMGE01's translated IOS callback, L2CAP dispatcher,
-                // and guest scheduler. The next normal step enters report
-                // decoder 0x804E0ED0 with boot-created WPAD control state at
-                // 0x80660170 and a live OS context/thread. Directly invoking
-                // that generated function with seeded globals would bypass
-                // the contract under test, so prove exact decoder admission
-                // from the real guest-visible ACL bytes and explicitly verify
-                // that no downstream WPAD identity can be fabricated without
-                // an observed translated commit.
+                // Last deterministic boundary before RMGE01's translated IOS callback, L2CAP dispatcher and guest
+                // scheduler. The next step enters report decoder 0x804E0ED0 with WPAD control state at 0x80660170.
+                // Calling that generated function directly would bypass the contract under test. This test proves
+                // decoder admission from the guest-visible ACL bytes, and checks that no WPAD identity is created
+                // without an observed translated commit.
                 galaxy::input::NativeInputDecoderObservation observation{};
                 observation.wii_ticks =
                     delivered_identity.delivery_wii_ticks;
@@ -14886,9 +14871,8 @@ int main(int argc, char** argv) {
             memory.read_u32(kBoundaryArBackingBaseGlobal);
         const std::uint32_t saved_ar_size =
             memory.read_u32(kBoundaryArSizeGlobal);
-        // The native bus has the RMGE01 hardware-sized 14 MiB address space;
-        // this deliberately-small allocator report proves routing does not
-        // reuse the retired mixer's max(size, dummy-size) heuristic.
+        // The native bus has the RMGE01 14 MiB address space. This small allocator fixture checks that
+        // routing does not apply a max(size, dummy-size) rule.
         memory.write_u32(kBoundaryArSizeGlobal, 0x20u);
         passed &= expect(
             galaxy::host::NativeDspBoundaryTestAccess::reset_aram_boundary(
@@ -18599,25 +18583,10 @@ int main(int argc, char** argv) {
     passed &= expect(
         memory.ai_audio_submit_count() == 3,
         "the already-serviced interruptible AI boundary is not submitted again");
-    // Two assertions were REMOVED here (agent 6, fix 43):
-    //   ai_dma_resync_events() == 0, "late AI DMA catch-up does not skip ahead by resyncing"
-    //   ai_dma_resync_missed_buffers() == 0, "… records no skipped buffer periods"
-    //
-    // Both were TAUTOLOGIES. Their counters are zero-initialised and nothing in
-    // the runtime ever writes them (verified: 0 `++`/`+=`, 0 `=` assignments, no
-    // `resync` logic anywhere), so the getters can only return 0 and the
-    // assertions could never fail — including in a build that resynced on every
-    // buffer. Asserting that a constant equals zero is not a check.
-    //
-    // The invariant they were reaching for IS covered, by the real assertions
-    // immediately above and below: `ai_audio_submit_count() == 3` pins "submits
-    // one boundary and waits", and the masked-catch-up case is covered at
-    // "masked catch-up republishes the completion and following exact deadlines".
-    // The inert pair added no coverage.
-    //
-    // If a resync path is ever implemented, restore these assertions ONLY once
-    // the counters are actually incremented — at that point they become
-    // meaningful and this note is obsolete. See finding 39 and fix 42.
+    // The stale-counter checks are not asserted here. The resync counters are not written by the runtime,
+    // so asserting their zero value would not test anything. The invariant is covered by the
+    // ai_audio_submit_count() == 3 check above, which pins "submits one boundary and waits", and by the
+    // masked catch-up case below.
     passed &= expect(
         memory.ai_dma_next_completion_ticks() > second_ai_completion,
         "on-time masked AI service arms exactly the next real hardware boundary");
@@ -18912,10 +18881,9 @@ int main(int argc, char** argv) {
         memory.read_u32(0x0D000180) == 0x13579BDF,
         "Hollywood canonical and second register mirrors share storage");
 
-    // RMGE01 uses IOS /dev/di. The inaccurate direct Broadway DI scaffold is
-    // fail-closed for every access shape that touches [0x6000,0x6028), and a
-    // rejected write cannot mutate even the bytes outside the block that a
-    // cross-boundary access also spans.
+    // RMGE01 uses IOS /dev/di. The direct Broadway DI path is fail-closed for every access that touches
+    // [0x6000,0x6028). A rejected write cannot modify bytes outside the block, even when a cross-boundary
+    // access spans them.
     for (const std::uint32_t alias :
          std::array{0x0C000000u, 0xCC000000u}) {
         constexpr std::uint32_t kBefore = 0x11223344u;
@@ -19319,7 +19287,7 @@ int main(int argc, char** argv) {
     }
     std::filesystem::remove_all(mod_test_root, mod_test_ec);
 
-    // ── DVD /dev/di backend tests ─────────────────────────────────────────
+    // DVD /dev/di backend tests.
     // Open /dev/di and verify that DVDLowReadDiskID returns the stored header.
     constexpr std::array<std::byte, 7> di_path_bytes{
         std::byte{'/'}, std::byte{'d'}, std::byte{'e'}, std::byte{'v'},

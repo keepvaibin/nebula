@@ -23,9 +23,7 @@
 
 #include "galaxy/gx/gx_bitfields.h"
 // kMaxEfbScale lives in render_config.h and std::clamp lives in <algorithm>.
-// This header uses both, so it must include both itself: it previously compiled
-// only because a transitive include supplied them, and that broke the moment the
-// include order above it changed. Direct includes here, not elsewhere.
+// This header uses both, so it includes both directly.
 #include "galaxy/gx/render_config.h"
 
 #include <algorithm>
@@ -50,10 +48,8 @@ struct XfbTexture {
     // Scene-owned surround travels with this copy, never with a later producer.
     float safety_surround{};
     std::uint64_t copy_serial = 0;  // monotonically published copy order
-    // Render-thread-only measurement state. Because a resident texture has
-    // exactly one current globally unique copy_serial, this is sufficient to
-    // count the first presentation of every copy exactly without an unbounded
-    // global serial set.
+    // Render-thread-only state. A resident texture has one current copy_serial, so this
+    // counts the first presentation of each copy without an unbounded set of serials.
     mutable std::uint64_t last_accounted_present_serial =
         ~std::uint64_t{0};
     D3D12_CPU_DESCRIPTOR_HANDLE rtv{};
@@ -61,10 +57,9 @@ struct XfbTexture {
     bool rtv_valid = false;
 };
 
-// Bounded, exact accounting for monotonically assigned EFB -> XFB copy
-// serials. Exact identity comes from the resident texture's accounted serial;
-// the global high-water below is diagnostic-only (order/gap reporting). No
-// pixel or content identity is inferred here.
+// Bounded accounting of monotonically assigned EFB -> XFB copy serials. Exact identity
+// comes from the resident texture's accounted serial; the global high-water below is
+// for diagnostics only. No pixel or content identity is inferred here.
 struct XfbSerialAccountingState {
     bool has_presented = false;
     std::uint64_t highest_presented_serial = 0;
@@ -124,9 +119,9 @@ struct ScaledEfbCopyExtent {
     std::uint16_t logical_height,
     unsigned efb_scale) noexcept;
 
-// Default-off Galaxy bloom experiment. The observed late color workspaces
-// are distinguished from earlier mask/depth passes by their copy rectangle,
-// format, stride and flags, not only by dimensions. Guest memory is unchanged.
+// Default-off bloom path. Late color workspaces are distinguished from earlier
+// mask/depth passes by copy rectangle, format, stride and flags, not only by
+// dimensions. Guest memory is unchanged.
 [[nodiscard]] bool is_galaxy_bloom_workspace_copy(
     const EfbCopyParams& params,
     bool is_depth_copy) noexcept;
@@ -164,12 +159,8 @@ struct ScaledEfbRect {
     }
 };
 
-// Both helpers below are called from `RendererD3D12::draw`, i.e. once per draw
-// (tens of thousands of times per frame on a replayed display list). They lived
-// in `efb_copy.cpp`, so that translation unit could not inline them back into
-// the callers and every draw paid two real calls for twenty-odd instructions of
-// clamps and multiplies. Defining them here changes no arithmetic and no result
-// type; it only lets the compiler decide per call site.
+// Both helpers below run once per draw and are defined inline so the compiler can
+// inline them into the caller. Arithmetic and result types are unchanged.
 [[nodiscard]] inline ScaledEfbRect compute_scaled_efb_rect(
     std::int32_t logical_left,
     std::int32_t logical_top,
@@ -258,10 +249,9 @@ struct EfbPeekSamplingGeometry {
     float src_y = 0.0f;
     float step = 1.0f;
     float center_y = 0.5f;
-    // A depth peek reads the single physical texel nearest the center of the
-    // scaled logical pixel.  At even scales the center lies on a texel
-    // boundary, so point-sampling semantics select the positive X/Y texel:
-    // physical = logical * scale + floor(scale / 2).
+    // A depth peek reads the single physical texel nearest the center of the scaled
+    // logical pixel. At even scales the center lies on a texel boundary, so point-sampling
+    // semantics select the positive X/Y texel: physical = logical * scale + floor(scale / 2).
     std::uint32_t depth_texel_x = 0;
     std::uint32_t depth_texel_y = 0;
     unsigned color_reduction_samples = 1;

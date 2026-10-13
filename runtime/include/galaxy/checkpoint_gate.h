@@ -46,9 +46,9 @@ enum class RequestedMode : std::uint8_t {
     return true;
 }
 
-// A generic view of the two NativeServicesV1 checkpoint pointer fields.  The
-// controller deliberately does not own either the slots or their pointees.
-// They must outlive the binding and every scope made from it.
+// A generic view of the two NativeServicesV1 checkpoint pointer fields. The
+// controller does not own either the slots or their pointees. They must outlive
+// the binding and every scope made from it.
 struct PointerView {
     std::uint64_t** checkpoint_counter{};
     const std::uint64_t** checkpoint_next_slow{};

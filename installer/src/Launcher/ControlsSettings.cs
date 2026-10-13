@@ -121,7 +121,7 @@ namespace Nebula.Launcher
         private static InputSource Pos(int a) { return new InputSource(SourceKind.AxisPositive, a); }
         private static InputSource Neg(int a) { return new InputSource(SourceKind.AxisNegative, a); }
 
-        /// <summary>The defaults shipped before controls version 2 (Native28), for migration.</summary>
+        /// <summary>The defaults used before controls version 2, kept for migration.</summary>
         public static InputSource[][] LegacyTable(int scheme)
         {
             var t = new InputSource[TargetCount][];
@@ -166,7 +166,7 @@ namespace Nebula.Launcher
             return t;
         }
 
-        /// <summary>The defaults shipped in controls version 2 (Native29), for migration.</summary>
+        /// <summary>The defaults of controls version 2, kept for migration.</summary>
         public static InputSource[][] Version2Table(int scheme)
         {
             var t = LegacyTable(scheme);
@@ -194,7 +194,7 @@ namespace Nebula.Launcher
             return t;
         }
 
-        /// <summary>The defaults shipped in controls version 3 (Native29b), for migration.</summary>
+        /// <summary>The defaults of controls version 3, kept for migration.</summary>
         public static InputSource[][] Version3Table(int scheme)
         {
             var t = Version2Table(scheme);

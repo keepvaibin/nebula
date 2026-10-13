@@ -1,20 +1,17 @@
-// shader_gen.cpp — ShaderGenerator: PixelShaderKey and VertexShaderKey ->
-// HLSL source strings.
+// shader_gen.cpp: ShaderGenerator. Turns PixelShaderKey and VertexShaderKey into HLSL source strings.
 //
-// Generated shaders share the same constant buffer layout (uber_constants.h)
-// and root signature as the uber pipelines so promoting a draw from the uber
-// pipeline to a specialized PSO is a pure pipeline-pointer swap.
+// Generated shaders use the same constant buffer layout (uber_constants.h) and root signature as the
+// uber pipelines. Promoting a draw from the uber pipeline to a specialized PSO is a pipeline pointer swap.
 //
-// TEV fidelity rule: regular and compare-mode stages operate on the 8-bit
-// integer lattice.  Fog and alpha testing round from the same lattice before
-// applying their fixed-function behavior.
+// TEV fidelity: regular and compare-mode stages operate on the 8-bit integer lattice. Fog and alpha
+// testing round from the same lattice before applying their fixed-function behaviour.
 //
-// Semantic references (clean-room, behavior only — no Dolphin code copied):
-//   texgen/post-matrix/q==0:  Dolphin VertexShaderGen.cpp
-//   lighting:                 Dolphin LightingShaderGen.cpp, XFMemory.h
-//   TEV compare/swap/fog:     Dolphin PixelShaderGen.cpp, BPMemory.h
+// Behaviour references (clean-room, behaviour only):
+//   texgen, post-matrix, q==0:  Dolphin VertexShaderGen.cpp
+//   lighting:                   Dolphin LightingShaderGen.cpp, XFMemory.h
+//   TEV compare, swap, fog:     Dolphin PixelShaderGen.cpp, BPMemory.h
 //
-// For M6 the TEV loop is emitted as fully unrolled, straight-line HLSL.
+// The TEV loop is emitted as fully unrolled, straight-line HLSL.
 
 #include "galaxy/gx/shader_gen.h"
 
@@ -135,7 +132,7 @@ static std::string swap_suffix(std::uint32_t codes) {
     const unsigned c2 = (codes >> 4) & 3u;
     const unsigned c3 = (codes >> 6) & 3u;
     if (c0 == 0u && c1 == 1u && c2 == 2u && c3 == 3u) {
-        return std::string();  // identity — skip the swizzle entirely
+        return std::string();  // identity: no swizzle
     }
     char buf[6] = {'.', kCh[c0], kCh[c1], kCh[c2], kCh[c3]};
     return std::string(buf, 5);
@@ -362,8 +359,8 @@ static constexpr const char* kVsMotionConstantMembers = R"HLSL(    float4   moti
     uint4    motion_ctrl;
 )HLSL";
 
-// Interpolants of the motion variant (after every other member): unjittered
-// current and previous clip x, y, w; z carries the pixel scale.
+// Interpolants of the motion variant, after every other member: unjittered current and previous clip
+// x, y, w. z carries the pixel scale.
 static constexpr const char* kMotionInterpolants =
     "    float4   mv_cur    : TEXCOORD12;\n"
     "    float4   mv_prev   : TEXCOORD13;\n";
@@ -375,11 +372,8 @@ static std::string insert_before_close(const char* text, const char* members, bo
     return out;
 }
 
-// ===========================================================================
-// VS struct declarations (fixed 144-byte GxVertexOut input layout)
-// ===========================================================================
-// Interpolators carry float3 texcoords (S, T, Q) — projection texgens divide
-// by Q in the PS (Dolphin: texture_coord is vec3, divide at sample time).
+// VS struct declarations (fixed 144-byte GxVertexOut input layout).
+// Interpolators carry float3 texcoords (S, T, Q). Projective texgens divide by Q in the PS.
 static constexpr const char* kVsStructs = R"HLSL(
 struct VSIn {
     float3   pos      : POSITION;
@@ -686,14 +680,12 @@ void main(point VSOut input_vertices[1], inout TriangleStream<VSOut> output) {
 // ===========================================================================
 
 // Emits one light's contribution to the channel accumulator.
-//   - `n`         light index 0-7 (XF light objects at palette element
-//                 0x180 + 4n: elem+0.w = RGBA8 color (raw bits), elem+1 =
-//                 {a0,a1,a2,k0}, elem+2 = {k1,k2,pos.x,pos.y},
-//                 elem+3 = {pos.z,dir.x,dir.y,dir.z} — XFMemory.h Light).
-//   - `ctrl`      the channel control (attn / diffuse functions).
-//   - `alpha`     accumulate the light's alpha into `lacc_a` instead of its
-//                 rgb into `lacc`.
-// Attenuation/diffuse forms follow Dolphin LightingShaderGen.cpp exactly.
+//   - `n`      light index 0-7. XF light objects sit at palette element 0x180 + 4n:
+//              elem+0.w = RGBA8 colour (raw bits), elem+1 = {a0,a1,a2,k0},
+//              elem+2 = {k1,k2,pos.x,pos.y}, elem+3 = {pos.z,dir.x,dir.y,dir.z} (XFMemory.h Light).
+//   - `ctrl`   the channel control (attenuation and diffuse functions).
+//   - `alpha`  accumulate the light's alpha into `lacc_a` instead of its rgb into `lacc`.
+// Attenuation and diffuse forms follow Dolphin LightingShaderGen.cpp.
 static void emit_light(
     std::ostringstream& s,
     unsigned n,
@@ -764,8 +756,8 @@ static void emit_light(
              "                 : 0.0;\n";
         break;
     default:  // 0 = None, 2 = Dir
-        // The old form normalized FIRST and tested length() after — by then
-        // a zero vector is already NaN and the fallback never fired.
+        // Test the length before normalizing. After normalize(), a zero vector is already NaN and the
+        // fallback never fires.
         s << "            float3 ldelta = lpos - wpos.xyz;\n";
         s << "            float ldd = dot(ldelta, ldelta);\n";
         s << "            float3 ldir = (ldd > 0.0)"
@@ -863,14 +855,11 @@ float xfw(uint w) {
     // ---- main() ----
     s << "VSOut main(VSIn v) {\n";
 
-    // Unpack position/normal matrix index from the BLENDINDICES semantic.
-    // The GX PNMATIDX value IS the XF row index (PNMTX0=0, PNMTX1=3, ...);
-    // a matrix occupies rows n..n+2.  The loader resolves the non-per-vertex
-    // default from CP MatrixIndexA, so v.mtx_idx is always authoritative.
-    // Clamp to the 64-row pos-matrix region so a garbage index can never
-    // read past the palette snapshot (the matrix palette is a root SRV —
-    // out-of-bounds reads are NOT clamped by hardware and can page-fault
-    // the GPU).
+    // Unpack the position/normal matrix index from the BLENDINDICES semantic. The GX PNMATIDX value is the
+    // XF row index (PNMTX0=0, PNMTX1=3, ...); a matrix occupies rows n..n+2. The loader resolves the
+    // non-per-vertex default from CP MatrixIndexA, so v.mtx_idx is always authoritative. Clamp to the 64-row
+    // position-matrix region so a bad index cannot read past the palette snapshot. The matrix palette is a
+    // root SRV, and hardware does not clamp out-of-bounds reads, which can page-fault the GPU.
     s << "    uint pn_row = min(v.mtx_idx.x & 0x3Fu, 61u);\n";
     s << "    float3 pos_in = v.pos;\n";
     if ((key.flags & 0x01u) != 0u) {
@@ -931,11 +920,9 @@ float xfw(uint w) {
     s << "        float((v.color1       ) & 0xFFu) / 255.0);\n\n";
 
     if (lighting_used) {
-        // Lighting-space normal: transform by the normal (inverse-transpose)
-        // matrix — 3-float rows at XF words 0x400 + 3*(posidx & 31)
-        // (Dolphin VertexShaderGen I_NORMALMATRICES[posidx & 31]).  The
-        // transformed normal is renormalized like Dolphin; the zero guard
-        // keeps draws without a normal attribute NaN-free.
+        // Lighting-space normal: transform by the normal (inverse-transpose) matrix, 3-float rows at XF words
+        // 0x400 + 3*(posidx & 31) (Dolphin VertexShaderGen I_NORMALMATRICES[posidx & 31]). The result is
+        // renormalized as in Dolphin. The zero guard keeps draws without a normal attribute NaN-free.
         s << "    uint nrm_base = 0x400u + 3u * (pn_row & 31u);\n";
         s << "    float3 nrm_t = float3(\n";
         s << "        dot(float3(xfw(nrm_base+0u), xfw(nrm_base+1u),"
@@ -948,11 +935,10 @@ float xfw(uint w) {
              " ? normalize(nrm_t) : nrm_t;\n\n";
     }
 
-    // GX color channels: the rasterized color comes from the channel
-    // controls.  matsource selects material register vs vertex color; when
-    // lighting is enabled the per-light sum replaces the old ambient
-    // approximation (Dolphin LightingShaderGen).  Results are quantized to
-    // the 8-bit lattice — GX accumulates channels in 8-bit registers.
+    // GX colour channels: the rasterized colour comes from the channel controls. matsource selects the
+    // material register or vertex colour. With lighting enabled, the per-light sum replaces the ambient-only
+    // approximation (Dolphin LightingShaderGen). Results are quantized to the 8-bit lattice, since GX
+    // accumulates channels in 8-bit registers.
     for (unsigned ch = 0; ch < 2; ++ch) {
         const char* vtx = (ch == 0) ? "vtx_col0" : "vtx_col1";
         const char* out = (ch == 0) ? "o.col0" : "o.col1";
@@ -1224,13 +1210,12 @@ std::string ShaderGenerator::generate_ps(const PixelShaderKey& key) const {
     const bool export_depth = ztex_on && !early_depth;
     const unsigned ztex_op = (key.flags >> 3) & 0x3u;
     const unsigned ztex_fmt = (key.flags >> 5) & 0x3u;
-    // Dual-source dst-alpha (flags bit7): SV_Target0 carries the constant
-    // alpha written to the EFB, SV_Target1 carries the TEV alpha the blender
-    // reads back as SRC1_ALPHA (Dolphin PixelShaderGen ocol0/ocol1).  Both
-    // targets feed blend slot 0 — no second render target is bound.
+    // Dual-source dst-alpha (flags bit 7): SV_Target0 carries the constant alpha written to the EFB.
+    // SV_Target1 carries the TEV alpha that the blender reads back as SRC1_ALPHA (Dolphin PixelShaderGen
+    // ocol0/ocol1). Both targets feed blend slot 0, so no second render target is bound.
     const bool dual_src = (key.flags & 0x80u) != 0u;
-    // Motion writers are opaque (never dual-source): render target 1 takes
-    // the pixel's motion, current -> previous, in render pixels.
+    // Motion writers are opaque and never dual-source. Render target 1 takes the pixel's motion, current
+    // to previous, in render pixels.
     if (motion && export_depth) {
         s << "struct PSOutZ { float4 color : SV_Target0; "
              "float2 motion : SV_Target1; float depth : SV_Depth; };\n";
@@ -1417,9 +1402,8 @@ std::string ShaderGenerator::generate_ps(const PixelShaderKey& key) const {
                 kAlphaShift[ind_fmt]);
         }
 
-        // Apply the TEV indirect coordinate op before any texture lookup.
-        // Disabled texture stages can still update this state when a later
-        // add-prev stage can observe it.
+        // Apply the TEV indirect coordinate op before any texture lookup. Disabled texture stages still update
+        // this state when a later add-prev stage can observe it.
         if (indirect_coord_needed) {
             static constexpr unsigned kFmtShift[4] = {0u, 3u, 4u, 5u};
             const int bias_add = ind_fmt == 0u ? -128 : 1;
@@ -1820,9 +1804,8 @@ std::string ShaderGenerator::generate_ps(const PixelShaderKey& key) const {
         }
     }
 
-    // The PE consumes the final TEV result on the 8-bit lattice.  Unclamped
-    // TEV stages can hold wider signed intermediates, but alpha compare,
-    // fog/color output, and the alpha==1 blend quirk see the low 8 bits.
+    // The PE consumes the final TEV result on the 8-bit lattice. Unclamped TEV stages can hold wider signed
+    // intermediates, but alpha compare, fog/colour output and the alpha==1 blend quirk see only the low 8 bits.
     s << "\n    int4 frag_i = tev_prev_i & int4(255,255,255,255);\n";
     s << "    float4 frag = float4(frag_i) / 255.0;\n\n";
 
@@ -1831,9 +1814,8 @@ std::string ShaderGenerator::generate_ps(const PixelShaderKey& key) const {
     const auto comp1 = static_cast<CompareFunc>(key.alpha_comp1);
     const auto logic = static_cast<AlphaTestLogic>(key.alpha_logic);
 
-    // Dolphin evaluates alpha test on the final 8-bit TEV integer (`prev.a`),
-    // not on normalized floats.  Keeping refs/sample on that lattice avoids
-    // tiny threshold mistakes on cutout-heavy file-select materials.
+    // Dolphin evaluates the alpha test on the final 8-bit TEV integer (`prev.a`), not on normalized floats.
+    // Keeping refs and samples on that lattice avoids threshold errors on cutout-heavy materials.
     const AlphaTestStaticResult alpha_static =
         alpha_test_static_result(comp0, comp1, logic);
 
@@ -1921,12 +1903,10 @@ std::string ShaderGenerator::generate_ps(const PixelShaderKey& key) const {
     // Fog (type is baked, params are uniforms).
     //   fog_params[0] = (A_float, b_magnitude, b_shift, C_float)
     //   fog_params[1] = (color.r, color.g, color.b, 1.0 = orthographic)
-    // Depth source is the rasterized z, NOT the TEV output (the old code
-    // sampled frag.z — the output color's blue channel).  Our depth buffer
-    // is REVERSED (depth = 1 - z24/2^24, see fill_projection), so the GX
-    // 24-bit z is (1 - SV_Position.z) * 2^24 — same form as Dolphin's
-    // reversed-depth path in PixelShaderGen (zCoord/fog block) with the
-    // equations from PixelShaderManager::SetFogParamChanged.
+    // The depth source is the rasterized z, not the TEV output. The depth buffer is reversed
+    // (depth = 1 - z24/2^24, see fill_projection), so the GX 24-bit z is (1 - SV_Position.z) * 2^24. This
+    // matches the reversed-depth path in Dolphin PixelShaderGen (zCoord/fog block), using the equations from
+    // PixelShaderManager::SetFogParamChanged.
     const auto fog_type = static_cast<FogType>(key.fog_type);
     if (fog_type != FogType::Off) {
         s << "    // Fog\n";
@@ -2037,9 +2017,7 @@ std::string ShaderGenerator::generate_ps(const PixelShaderKey& key) const {
     return s.str();
 }
 
-// ===========================================================================
-// describe — stable human-readable key description
-// ===========================================================================
+// describe: stable, human-readable key description
 
 std::string ShaderGenerator::describe(const PixelShaderKey& key) {
     char buf[256];

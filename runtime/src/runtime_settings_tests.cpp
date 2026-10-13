@@ -501,8 +501,7 @@ int main() {
         override_rejected = true;
     }
     passed &= expect(override_rejected, "unsupported override length fails explicitly");
-    // Only save when the override was rejected; otherwise save could write the
-    // user's real settings file.
+    // Saves only when the override was rejected. Otherwise the save could write the user's real settings file.
     if (override_rejected) {
         passed &= expect(!galaxy::save_runtime_settings_to_file(),
             "invalid override save fails without selecting a fallback destination");

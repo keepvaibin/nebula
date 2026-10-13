@@ -16,15 +16,13 @@
 
 namespace galaxy {
 
-// Opt-in RMGE01 aspect experiments. The game's native widescreen mode uses
-// 832 logical horizontal units over a fixed 640-unit guest EFB (whose native
-// pixel scale is selected separately). Keep that anamorphic relationship while
-// changing the game-owned logical width.
-// Dusklight CC0 m_Do_graphic.cpp::updateRenderSize/setTvSize derives its camera
-// and HUD space from one logical aspect; RMGE01's corresponding source-owned
-// boundary is MR::getScreenWidth at 0x803F6B44, with a second guarded hook
-// for CameraContext::getAspect. A separate opt-in selects the game's 4:3
-// path. Neither experiment claims arbitrary aspect or game validation.
+// Opt-in RMGE01 aspect experiments. The game's native widescreen mode uses 832 logical horizontal
+// units over a fixed 640-unit guest EFB, whose native pixel scale is selected separately. The
+// anamorphic relationship is kept while the game-owned logical width changes.
+// The Dusklight (CC0) m_Do_graphic.cpp::updateRenderSize/setTvSize derives camera and HUD space from
+// one logical aspect. RMGE01's corresponding source-owned boundary is MR::getScreenWidth at
+// 0x803F6B44, with a second guarded hook for CameraContext::getAspect. A separate opt-in selects the
+// game's 4:3 path. Neither experiment claims arbitrary aspect support or game validation.
 struct ExperimentalUltrawideAspect {
     double content_aspect = kWiiContentAspect;
     unsigned guest_screen_width = 832;
@@ -33,19 +31,18 @@ struct ExperimentalUltrawideAspect {
 [[nodiscard]] inline std::optional<ExperimentalUltrawideAspect>
 make_experimental_ultrawide_aspect(double content_aspect) noexcept;
 
-// The game's own 4:3 mode (GALAXY_EXPERIMENTAL_NATIVE_4_3) with its 608-unit
-// screen and authored 4:3 layouts. A 4:3 picture from the live aspect path
-// keeps the wide mode at 624 units and fits the wide UI like other narrow
-// aspects.
+// The game's own 4:3 mode (GALAXY_EXPERIMENTAL_NATIVE_4_3), with its 608-unit screen and authored 4:3
+// layouts. A 4:3 picture from the live aspect path keeps the wide mode at 624 units and fits the wide
+// UI, as other narrow aspects do.
 [[nodiscard]] inline bool native_four_three(
     const ExperimentalUltrawideAspect& policy) noexcept {
     return policy.guest_screen_width == 608u;
 }
 
-// Host-owned at a completed VI boundary. Packed into one atomic publication so
-// camera, screen width, NW4R, presentation and IR can never observe half a
-// resize. The upper word is a generation; the low word stores positive client
-// pixels, or zero for an unsupported shape (which safely uses native 16:9).
+// Host-owned, set at a completed VI boundary. Packed into one atomic publication so camera, screen
+// width, NW4R, presentation and IR can never see a half-finished resize. The upper word is a generation.
+// The low word holds positive client pixels, or zero for an unsupported shape, which falls back to
+// native 16:9.
 inline std::atomic<std::uint64_t> g_experimental_dynamic_aspect_word{0u};
 
 [[nodiscard]] inline bool experimental_dynamic_aspect_requested() {
@@ -78,9 +75,9 @@ inline std::atomic<std::uint64_t> g_experimental_dynamic_aspect_word{0u};
         return 0u;
     }
     const double aspect = static_cast<double>(width) / height;
-    // The first native slice only supports RMGE01's selected widescreen path.
-    // At 4:3 and unsupported extremes retain the game's default fitted 16:9
-    // presentation rather than stretching or mutating guest camera state.
+    // The first native slice supports only RMGE01's selected widescreen path. At 4:3 and unsupported
+    // extremes the game's default fitted 16:9 presentation is kept, without stretching or changing guest
+    // camera state.
     if (!make_experimental_ultrawide_aspect(aspect)) {
         return 0u;
     }
@@ -129,8 +126,7 @@ make_experimental_ultrawide_aspect(double content_aspect) noexcept {
 
 [[nodiscard]] inline std::optional<double>
 parse_experimental_ultrawide_aspect(std::string_view text) {
-    // Decimal and ratio forms permit exact settings such as 21:9 without
-    // depending on the current window's resize timing.
+    // Decimal and ratio forms allow exact settings such as 21:9, regardless of the window's resize timing.
     if (text.empty() || text.size() > 32u) {
         return std::nullopt;
     }
@@ -280,17 +276,16 @@ experimental_effective_guest_aspect(const ServicesLike* services) {
 
 [[nodiscard]] inline float experimental_nw4r_vertical_fit_scale(
     const ExperimentalUltrawideAspect& policy) noexcept {
-    // Native 4:3 has its own authored layout. Other narrower-than-wide
-    // aspects fit the wide UI uniformly rather than cropping or squeezing it.
+    // Native 4:3 has its own authored layout. Other narrower-than-wide aspects fit the wide UI uniformly,
+    // without cropping or squeezing it.
     if (native_four_three(policy)) return 1.0f;
     return static_cast<float>(std::max(1.0, kWiiContentAspect / policy.content_aspect));
 }
 
-// RMGE01 CameraContext::getAspect takes a fixed 16:9 lfs branch at
-// 0x800972B0 when the guest widescreen mode is selected. Its SDA2 word at
-// r2-0x691C is 0x3FE38E39. The original guest lfs, memory fault and FPU
-// availability check still run; change only its canonical loaded f1 for an
-// opt-in content aspect so the camera projection matches present/UI/IR policy.
+// RMGE01 CameraContext::getAspect takes a fixed 16:9 lfs branch at 0x800972B0 in widescreen mode. Its
+// SDA2 word at r2-0x691C is 0x3FE38E39. The original guest lfs, memory fault and FPU checks still run.
+// Only the canonical loaded f1 changes, for an opt-in content aspect, so the camera projection matches
+// present, UI and IR policy.
 template <typename PpcContextLike>
 inline void apply_experimental_rmge01_camera_aspect(
     PpcContextLike* context,
@@ -298,18 +293,16 @@ inline void apply_experimental_rmge01_camera_aspect(
     if (!policy) {
         return;
     }
-    // This instruction is a legal interior entry. A caller entering here
-    // under the native 4:3 policy may bypass the preceding wide-mode branch;
-    // preserve its original lfs result instead of treating that as a fault.
+    // This instruction is a legal interior entry. A caller entering here under the native 4:3 policy may
+    // skip the preceding wide-mode branch, so its original lfs result is kept rather than treated as a fault.
     if (native_four_three(*policy)) {
         return;
     }
     if (context == nullptr) {
         throw std::runtime_error("RMGE01 camera aspect has no guest context");
     }
-    // A legal interior call can supply a different valid SDA2 base. In that
-    // case the guest lfs value is authoritative; change only the canonical
-    // selected-DOL constant, and leave every other loaded value intact.
+    // A legal interior call can supply a different valid SDA2 base. The guest lfs value is authoritative
+    // then: only the canonical selected-DOL constant changes, and every other loaded value stays intact.
     if (context->gpr[2] != 0x806AB280u ||
         std::bit_cast<double>(context->fpr_bits[1]) !=
             static_cast<double>(std::bit_cast<float>(0x3FE38E39u))) {
@@ -333,9 +326,8 @@ inline void apply_experimental_rmge01_camera_aspect(
         context, experimental_effective_guest_aspect(services));
 }
 
-// The complete translated SCGetAspectRatio body has already run its config
-// read and final lbz at 0x804D074C. Change both its normalized stack byte
-// and r3 return to select RMGE01's own 4:3 render mode and camera path.
+// The translated SCGetAspectRatio body has already run its config read and final lbz at 0x804D074C.
+// Its normalized stack byte and r3 return both change, to select RMGE01's own 4:3 render mode and camera path.
 template <typename PpcContextLike, typename GuestMemoryLike,
           typename ServicesLike>
 inline void apply_experimental_rmge01_native_four_three_aspect_read(
@@ -358,13 +350,11 @@ inline void apply_experimental_rmge01_native_four_three_aspect_read(
     }
 }
 
-// CollisionShadow::drawAndCaptureTex sizes Mario's shadow-softening circle in
-// logical screen units but draws it into a fixed 160x160 EFB region; the
-// translator brackets its two width-dependent calls with these so that
-// MR::getScreenWidth keeps the game's 16:9 width there. Guest code runs on one
-// host thread, and both brackets enclose plain 2D setup calls that cannot
-// switch threads; every entry also resets the flag. The flag lives in the
-// game module, next to the MR::getScreenWidth hook that reads it.
+// CollisionShadow::drawAndCaptureTex sizes Mario's shadow-softening circle in logical screen units but
+// draws it into a fixed 160x160 EFB region. The translator brackets its two width-dependent calls with
+// these, so MR::getScreenWidth keeps the game's 16:9 width there. Guest code runs on one host thread, and
+// both brackets enclose plain 2D setup calls that cannot switch threads. Every entry also resets the flag.
+// The flag lives in the game module, next to the MR::getScreenWidth hook that reads it.
 inline unsigned g_rmge01_native_screen_width_scope = 0u;
 
 inline void enter_experimental_rmge01_native_screen_width() noexcept {
@@ -398,9 +388,8 @@ inline void apply_experimental_rmge01_ultrawide_screen_width(
     context->gpr[3] = policy->guest_screen_width;
 }
 
-// MR::screenToEfb uses its own 832 constant instead of getScreenWidth.
-// Replace only the exact wide-path integer after the original li. This keeps
-// the original floating conversion, GX dimensions and depth query intact.
+// MR::screenToEfb uses its own 832 constant instead of getScreenWidth. Only the exact wide-path integer is
+// replaced, after the original li. The original floating conversion, GX dimensions and depth query stay intact.
 template <typename PpcContextLike>
 inline void apply_experimental_rmge01_efb_screen_width(
     PpcContextLike* context,
@@ -418,11 +407,10 @@ inline void apply_experimental_rmge01_efb_screen_width(
         context, experimental_effective_guest_aspect(services));
 }
 
-// RMGE01 MR::setupDrawForNW4RLayout loads its fixed 608-unit canvas into f3
-// at 0x803CA6FC. LayoutManager::draw calls this before nw4r::lyt::Layout::Draw.
-// The widened XFB presentation would otherwise stretch every NW4R pane. The
-// original guest lfs still executes, including memory/FPU checks; this changes
-// only its loaded value to the equivalent wider single-precision constant.
+// RMGE01 MR::setupDrawForNW4RLayout loads its fixed 608-unit canvas into f3 at 0x803CA6FC.
+// LayoutManager::draw calls this before nw4r::lyt::Layout::Draw. Without a change, the widened XFB
+// presentation would stretch every NW4R pane. The original guest lfs still runs, including memory and FPU
+// checks. Only its loaded value changes, to the equivalent wider single-precision constant.
 template <typename PpcContextLike>
 inline void apply_experimental_rmge01_nw4r_canvas_width(
     PpcContextLike* context,
@@ -461,11 +449,9 @@ inline void apply_experimental_rmge01_nw4r_canvas_width(
         context, experimental_effective_guest_aspect(services));
 }
 
-// The inverse screen/layout conversions must use the same canvas as the
-// Home uses a separate 608-unit NW4HBM layout, adjusted by 832/608 in wide
-// mode. Its original projection uses MR::getScreenWidth, not the game UI
-// canvas. Fit the complete authored menu and transform the copied KPAD
-// coordinates by the same extents; never mutate the original KPAD status.
+// The Home menu uses a separate 608-unit NW4HBM layout, adjusted by 832/608 in wide mode. Its original
+// projection uses MR::getScreenWidth, not the game UI canvas. The complete authored menu is fitted, and
+// the copied KPAD coordinates are transformed by the same extents. The original KPAD status is never changed.
 template <typename PpcContextLike>
 inline void apply_experimental_rmge01_home_geometry(
     PpcContextLike* context, unsigned kind,
@@ -496,9 +482,9 @@ inline void apply_experimental_rmge01_home_geometry(
         context, kind, experimental_effective_guest_aspect(services), input_lane);
 }
 
-// The inverse screen/layout conversions must use the same canvas as the
-// NW4R projection. Keep the original lfs and its faults/FPU effects; only
-// replace exact canonical constants at the statically admitted load sites.
+// The inverse screen and layout conversions must use the same canvas as the NW4R projection. The original
+// lfs and its faults and FPU effects stay. Only exact canonical constants change, at the statically
+// admitted load sites.
 template <typename PpcContextLike>
 inline void apply_experimental_rmge01_layout_constant(
     PpcContextLike* context, unsigned target, bool half_width,

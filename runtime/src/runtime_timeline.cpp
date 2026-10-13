@@ -140,10 +140,9 @@ std::chrono::nanoseconds timeline_wait_duration(
 }
 
 void configure_deadline_worker_scheduling() {
-    // The simulation thread runs at ABOVE_NORMAL and, when available, in the
-    // Games MMCSS class. A default-priority broker can otherwise be starved by
-    // the very thread whose hardware deadlines it must publish, especially on
-    // older CPUs with few available cores.
+    // The simulation thread runs at ABOVE_NORMAL and, when available, in the Games MMCSS class.
+    // A default-priority broker can otherwise be starved by the thread whose hardware deadlines
+    // it publishes, especially on older CPUs with few cores.
     if (SetThreadPriority(
             GetCurrentThread(), THREAD_PRIORITY_ABOVE_NORMAL) == FALSE) {
         const DWORD error = GetLastError();
@@ -167,13 +166,10 @@ void configure_deadline_worker_scheduling() {
     }
 }
 
-// The deadline broker is the producer for the runtime's VI, audio, and input
-// deadlines. It does no guest work itself, but it is nevertheless a
-// time-sensitive part of the same Games workload as the simulation thread.
-// Register the worker independently: MMCSS registration is per-thread, not
-// per-process. The existing ABOVE_NORMAL priority remains the safe fallback
-// when AVRT/MMCSS is unavailable or has been explicitly disabled for the
-// runtime.
+// The deadline broker produces the runtime's VI, audio and input deadlines. It runs no guest
+// work, but it is part of the same Games workload as the simulation thread. MMCSS registration
+// is per thread, so the worker registers itself. ABOVE_NORMAL is the fallback when AVRT/MMCSS
+// is unavailable or disabled for the runtime.
 class ScopedMmcssDeadlineWorker {
 public:
     ScopedMmcssDeadlineWorker() {
@@ -255,12 +251,11 @@ private:
     RevertFn revert_{};
 };
 
-// condition_variable::wait_for is permitted to share Windows' ordinary timer
-// coalescing. The deadline broker is the source of VI/input/audio hardware
-// edges, so an ordinary 15 ms-or-larger wake delay can turn one late callback
-// into multiple unrepresentable periodic edges. Keep schedule changes on an
-// auto-reset event and use a high-resolution waitable timer only for the
-// immutable next deadline. Neither handle executes guest code.
+// condition_variable::wait_for may share Windows' ordinary timer coalescing. The broker is the
+// source of VI, input and audio hardware edges, and a wake delay of 15 ms or more can turn one
+// late callback into several periodic edges. Schedule changes use an auto-reset event. A
+// high-resolution waitable timer covers only the immutable next deadline. Neither handle runs
+// guest code.
 class ScopedDeadlineWaitTimer {
 public:
     ScopedDeadlineWaitTimer() {
@@ -490,10 +485,9 @@ std::uint64_t RuntimeTimeline::now_ticks(std::uint64_t* sampled_counter) noexcep
     if (sampled_counter != nullptr) {
         *sampled_counter = observed;
     }
-    // The returned ticks are clamped monotonic across threads below, so a
-    // counter that reads behind another thread's yields that thread's later
-    // result either way; a second shared CAS on the raw counter only cost a
-    // locked instruction per read (about 177,000 reads per second).
+    // The returned ticks are clamped monotonic across threads below, so a counter that reads behind
+    // another thread's yields that thread's later result. A second shared CAS on the raw counter
+    // would add a locked instruction to every read.
     const std::uint64_t monotonic_counter = observed;
 
     const std::uint64_t delta =
@@ -589,9 +583,9 @@ bool RuntimeTimeline::rebase_after_host_suspension(
         return false;
     }
 
-    // DeadlineBroker holds its worker mutex while calling this function.  The
-    // runtime invokes it only from the simulation thread, so no timeline read
-    // can publish a stale high-water mark after this reset.
+    // DeadlineBroker holds its worker mutex while calling this function. The runtime calls it only
+    // from the simulation thread, so no timeline read can publish a stale high-water mark after
+    // this reset.
     discarded_host_ticks_.store(*new_discarded, std::memory_order_release);
     last_ticks_.store(last_guest_ticks, std::memory_order_release);
     return true;
@@ -857,9 +851,9 @@ std::size_t PendingEventLatch::index(EventKind kind) noexcept {
     return value < kEventKindCount ? value : kEventKindCount;
 }
 
-// Any publication may unblock the simulation thread's idle-loop wait; the
-// event is signaled only while that thread has announced it is waiting (see
-// set_idle_waiting), after the mask bit has landed.
+// Any publication may unblock the simulation thread's idle-loop wait. The event is signaled
+// only while that thread has announced it is waiting (see set_idle_waiting), after the mask
+// bit is set.
 void PendingEventLatch::set_transfer_pending() noexcept {
     mask_.fetch_or(event_bit(EventKind::Transfer), std::memory_order_release);
 }
@@ -1006,18 +1000,14 @@ void PendingEventLatch::lock_slot(std::size_t slot) noexcept {
         if (spins != std::numeric_limits<std::uint64_t>::max()) {
             ++spins;
         }
-        // Every holder of this slot lock does only a handful of atomic
-        // operations before releasing it (see the lock_slot/unlock_slot pairs
-        // above), so contention is short by construction and the wait should be
-        // a true local spin. `std::this_thread::yield()` is the wrong primitive
-        // for that: it hands the remainder of the time slice to another runnable
-        // thread and costs a ring transition, which on a loaded CPU is far more
-        // than the critical section it is waiting for. That matters here because
-        // these slots back the VI, input, audio and DSP deadline edges.
+        // Each holder of this slot lock performs only a few atomic operations before releasing it (see
+        // the lock_slot/unlock_slot pairs above), so contention is short and the wait is a local spin.
+        // std::this_thread::yield() would hand the time slice to another runnable thread and cost a
+        // ring transition, which on a loaded CPU far exceeds the critical section. These slots back the
+        // VI, input, audio and DSP deadline edges.
         //
-        // A bounded pause-spin covers the ordinary short hold without ever
-        // entering the scheduler; only a genuinely long hold falls through to
-        // yield, which keeps the pathological case from burning a core.
+        // A bounded pause-spin covers the ordinary short hold without entering the scheduler. Only a
+        // long hold falls through to yield, which keeps the pathological case from burning a core.
         constexpr std::uint64_t kPauseSpins = 1024u;
         if (spins <= kPauseSpins) {
 #if defined(_M_X64) || defined(_M_IX86)
@@ -1951,9 +1941,9 @@ bool DeadlineBroker::rebase_and_restore_after_host_suspension(
 void DeadlineBroker::worker_loop() noexcept {
     galaxy::host::name_current_thread(L"Nebula Deadline Broker");
     try {
-        // Do this on the worker itself before it reads the timeline or
-        // publishes any deadline.  Any scheduling failure is caught below and
-        // follows the same RuntimeFailure path as all other broker failures.
+        // Do this on the worker itself before it reads the timeline or publishes any deadline. Any
+        // scheduling failure is caught below and follows the same RuntimeFailure path as all other
+        // broker failures.
         configure_deadline_worker_scheduling();
         const ScopedMmcssDeadlineWorker mmcss_worker;
         const ScopedDeadlineWaitTimer deadline_wait_timer;

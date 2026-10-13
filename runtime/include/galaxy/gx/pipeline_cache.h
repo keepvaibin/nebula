@@ -2,30 +2,28 @@
 
 // PipelineCache: GX shader/PSO cache with synchronous first-use compilation.
 //
-// Threading contract (binding, per architecture review):
-//   - get() and drain_completions() are RENDER-THREAD-ONLY.  The published
+// Threading contract:
+//   - get() and drain_completions() are RENDER-THREAD-ONLY. The published
 //     lookup map is never touched by any other thread.
 //   - Worker threads compile specialized shaders and build PSOs, then push
 //     the finished pipeline onto the lock-free MPSC PsoCompletionQueue.
 //     They never mutate the published map.
 //   - GxBackend calls drain_completions() from RendererD3D12::begin_frame(),
-//     before any command-list recording — the sole publication point, so a
+//     before any command-list recording. That is the sole publication point, so a
 //     PSO pointer can never change while a list is recording.
 //
 // Lookup policy: if the specialized PSO for the key is published, return it;
-// otherwise compile it immediately. Returning a missing/uber pipeline before
-// M8 has real ubershaders causes visible missing geometry, so first-use hitches
-// are preferred over black/flickering frames. Disk DXBC caching keeps repeat
-// runs out of FXC; optional prewarm/pipeline-library paths can reduce driver
-// PSO hitches when explicitly enabled.
+// otherwise compile it immediately. Returning a missing or uber pipeline causes
+// visible missing geometry, so a first-use hitch is preferred over black or flickering
+// frames. The disk DXBC cache keeps repeat runs out of FXC. Optional prewarm and
+// pipeline-library paths can reduce driver PSO hitches when explicitly enabled.
 //
 // Disk cache, %LOCALAPPDATA%\Nebula\shadercache\RMGE01\:
 //   - shaders.bin   {magic, version, vs/ps hash, vs/ps DXBC} records;
-//                   loaded at initialize; valid previously saved stages avoid
-//                   FXC. New configurations and rejected/unsaved stages may
-//                   still require compilation on subsequent runs.
-//   - psos.bin      successful PsoKey records, used by optional
-//                   startup prewarm.
+//                   loaded at initialize. Valid saved stages avoid FXC. New
+//                   configurations and rejected or unsaved stages may still need
+//                   compilation on later runs.
+//   - psos.bin      successful PsoKey records, used by optional startup prewarm.
 //   - pipelines.bin optional ID3D12PipelineLibrary1 blob, invalidated when the
 //                   stored adapter LUID or shader-cache version doesn't match,
 //                   or the driver rejects its serialized data.
@@ -62,7 +60,7 @@
 namespace galaxy::gx {
 
 // Shared production PSO descriptor builder. Point/line topology selects the
-// matching mandatory geometry shader; triangles deliberately select none.
+// matching mandatory geometry shader; triangles select none.
 // Exposed so focused WARP tests validate the exact production assembly path.
 [[nodiscard]] D3D12_GRAPHICS_PIPELINE_STATE_DESC make_gx_pso_desc(
     ID3D12RootSignature* root_signature,
@@ -158,25 +156,19 @@ public:
     // result and should resolve the key again on a later draw.
     [[nodiscard]] bool last_get_used_uber() const noexcept { return last_get_used_uber_; }
 
-    // Routine, clock-free compile accounting. Every first-use pipeline this
-    // process had to build is counted here, including the ones far below
-    // `GALAXY_TRACE_GX_STALL_US` that the per-miss log line cannot show: the
-    // render thread's `flush-pso-us` long tail is the sum of these, and a run
-    // that reports few logged misses can still have built hundreds. Cache
-    // coverage is the whole question for this path, so these are the numbers
-    // that falsify a coverage change without enabling intrusive diagnostics.
+    // Clock-free compile accounting. Every first-use pipeline built in this process is counted,
+    // including those below GALAXY_TRACE_GX_STALL_US, which the per-miss log line does not show.
+    // The render thread's flush-pso-us tail is the sum of these counts. Cache coverage is the
+    // question for this path, so these counters show coverage changes without intrusive diagnostics.
     struct CompileStats {
         std::uint64_t pso_compiles = 0;      // create_or_load_pso builds
         std::uint64_t pso_library_loads = 0; // served by the driver library
         std::uint64_t shader_pair_compiles = 0; // FXC-generated pairs
         std::uint64_t blobs_from_cache = 0;  // pairs whose DXBC came off disk
-        // Cumulative microseconds of FXC shader compilation this session. The
-        // counts above say how many pairs were generated; this says what they
-        // cost. Without it the only time figures are the per-request `blob-us=`
-        // fields on `[gx-pso-miss]` lines, which print only when a SINGLE
-        // request crosses the stall threshold -- so a frame that compiles four
-        // shaders at 9 ms each reports nothing, and the logged count is a floor
-        // rather than the count.
+        // Cumulative microseconds of FXC compilation this session. The counts above say how many
+        // pairs were generated; this says what they cost. The per-request blob-us= field on
+        // [gx-pso-miss] lines prints only when one request crosses the stall threshold, so a frame
+        // that compiles four shaders at 9 ms each reports nothing. The logged count is a floor.
         std::uint64_t blob_compile_us = 0;
         std::size_t shader_records = 0;      // in-memory (vs,ps) pairs
         std::size_t shader_records_on_disk = 0;
@@ -207,19 +199,16 @@ private:
     // Render-thread-only published map.
     std::unordered_map<MemoizedPsoKey, Microsoft::WRL::ComPtr<ID3D12PipelineState>,
         MemoizedPsoKeyHasher> published_;
-    // One-entry memo of the last successful resolution, sitting in front of the
-    // unordered_map probe. A busy frame resolves the same handful of PsoKeys
-    // tens of thousands of times in runs (one material alternating with a few
-    // others), and `flush_draw_state`'s own key comparison only catches a repeat
-    // of the immediately preceding key. This catches the alternation.
+    // One-entry memo of the last successful resolution, in front of the unordered_map probe.
+    // A busy frame alternates between a handful of PsoKeys (one material and a few others), and
+    // flush_draw_state's own key comparison catches only a repeat of the immediately preceding
+    // key. The memo catches the alternation.
     //
-    // Safe because `published_` is never erased from for the life of a session
-    // (only cleared in shutdown()), so an entry that resolved once stays
-    // resolved to the same pipeline. `last_hit_owner_` keeps that pipeline alive
-    // and the `key`/`pipeline` pair is only ever written together, so the memo
-    // can never name a destroyed PSO. Any path that can observe a new
-    // completion (drain_completions, reached from get() or begin_frame) clears
-    // the memo, so it cannot mask a key that became resolvable later.
+    // Safe because published_ is never erased from during a session (only cleared in shutdown()),
+    // so an entry that resolved once stays resolved to the same pipeline. last_hit_owner_ keeps
+    // that pipeline alive, and key/pipeline are only written together, so the memo cannot name a
+    // destroyed PSO. Any path that can observe a new completion (drain_completions, reached from
+    // get() or begin_frame) clears the memo, so it cannot mask a key that became resolvable later.
     MemoizedPsoKey last_hit_key_{};
     ID3D12PipelineState* last_hit_pipeline_ = nullptr;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> last_hit_owner_;
@@ -313,12 +302,9 @@ private:
     std::filesystem::path cache_dir_;
     ShaderGenerator generator_;
 
-    // Render-thread-only counters, exactly like `published_` and the
-    // `last_hit_*` memo above: `get()` and `wait_for_in_flight_pso()` are the
-    // only writers and both run only on the render thread, so a locked
-    // read-modify-write per resolution would buy nothing. At tens of thousands
-    // of resolutions per frame that was tens of thousands of `lock` operations
-    // on the render thread's hottest path.
+    // Render-thread-only counters, like published_ and the last_hit_* memo above. get() and
+    // wait_for_in_flight_pso() are the only writers, and both run only on the render thread, so a
+    // locked read-modify-write per resolution would buy nothing and would add locks to the hottest path.
     std::uint64_t specialized_hits_ = 0;
     std::uint64_t uber_fallbacks_ = 0;
     // Fast first-use compiles (FXC without optimization, published at once)
@@ -334,7 +320,7 @@ private:
         const Microsoft::WRL::ComPtr<ID3DBlob>& ps);
 
     // Compiled DXBC pair shared by every render-state variant of one
-    // (vs_hash, ps_hash) — a new blend/z mode never re-runs FXC, only the
+    // (vs_hash, ps_hash): a new blend/z mode never re-runs FXC, only the
     // driver PSO build. Full component-pair equality resolves bucket collisions.
     struct ShaderPair {
         Microsoft::WRL::ComPtr<ID3DBlob> vs;
@@ -364,12 +350,10 @@ private:
     std::unordered_set<PsoKey, PsoKeyHasher> persisted_pso_keys_;
     std::vector<PsoKey> warm_pso_keys_;
     std::vector<PsoKey> unsaved_pso_keys_;
-    // Records the on-disk cache is currently known to contain. The file is an
-    // append-only running total, so a session only ever grew it by the few
-    // configurations it happened to meet: a cache that is never rewritten stays
-    // near first-run size while gameplay keeps meeting configurations that were
-    // never persisted, and every later launch re-runs FXC for them. These counts
-    // let flush_disk() grow both files to full coverage in bounded batches.
+    // Records the on-disk cache is known to contain. The file is append-only, so without rewrites
+    // it would stay near its first-run size while later sessions keep meeting configurations that
+    // were never persisted, and each launch would re-run FXC for them. These counts let flush_disk()
+    // grow both files to full coverage in bounded batches.
     std::size_t cached_shader_records_ = 0;
     std::size_t cached_pso_records_ = 0;
     // A bounded cache can retain less than the resident set. Once a successful

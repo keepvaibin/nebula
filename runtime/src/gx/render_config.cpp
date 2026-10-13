@@ -413,34 +413,20 @@ RenderConfig get_render_config() {
 
 GxTimingConfig resolve_gx_timing_config_from_environment() {
     GxTimingConfig config{};
-    // Upper bound is a *test-enabling* ceiling, not a policy. The default stays
-    // in GxTimingConfig (3 = the triple-buffered profile); an operator may now
-    // select up to 8 so the decoupling experiment is reachable by an
-    // environment value instead of a rebuild.
+    // The upper bound is a test-enabling ceiling, not a policy. The default stays in GxTimingConfig
+    // (3, the triple-buffered profile). An operator can select up to 8 through an environment value
+    // instead of a rebuild.
     //
-    // Why the ceiling moved. The render chunk queue is the simulation thread's
-    // only hard coupling to the renderer: render_frame() blocks in
-    // queue_space_cv_.wait until fewer than render_queue_depth non-present
-    // chunks are outstanding. Both retained recordings were captured with the
-    // ceiling at 3, so "does the simulation's tail come from the renderer
-    // falling behind, or from the guest's own work?" could not be tested at
-    // all: 3 was the only depth either machine could ever run.
-    //   - current-PC recording: 0 [gx-queue-wait] lines. No producer stall
-    //     exceeded the 20 ms reporting threshold, so raising depth can only
-    //     change timing, not remove a measured stall.
-    //   - Arc recording: [gx-queue-wait] wait-us=146250, 230407 and 403307, all
-    //     reporting queue-depth=4 against queue-limit=3. There the simulation
-    //     demonstrably parks behind the renderer, and depth is the knob.
-    // The retained snapshots are compact (the current-PC recording reports
-    // snapshot-bytes ~1.2 MB for 38 ranges), and MemorySnapshot objects are
-    // recycled through memory_snapshot_pool_, so each additional depth step
-    // costs one retained snapshot, not one copy of guest memory. 8 therefore
-    // stays bounded on a low-end machine; it is not an unbounded knob.
+    // The render chunk queue is the simulation thread's only hard coupling to the renderer.
+    // render_frame() blocks in queue_space_cv_.wait until fewer than render_queue_depth non-present
+    // chunks are outstanding. With the ceiling at 3, the renderer's share of simulation stalls
+    // could not be tested, because the ceiling allowed only depth 3.
     //
-    // This does not change any default and does not skip work: it only makes an
-    // existing, already-accepted contract (queue_depth=4 is handled and logged,
-    // never rejected) selectable. Revert the ceiling to 3 if a deeper queue is
-    // ever shown to raise end-to-end input latency or to grow the working set.
+    // Depth 4 is handled and logged, never rejected. Raising the depth changes timing only. Each
+    // depth step retains one MemorySnapshot, not a copy of guest memory, because snapshots are
+    // recycled through memory_snapshot_pool_. 8 stays bounded on a low-end machine.
+    // Revert the ceiling to 3 if a deeper queue raises end-to-end input latency or grows the
+    // working set.
     config.render_queue_depth = read_env_uint_clamped(
         "GALAXY_RENDER_QUEUE_DEPTH",
         config.render_queue_depth,

@@ -71,20 +71,19 @@ struct FifoSubmissionEntry {
     std::vector<std::byte> fifo{};
 };
 
-// Simulation-thread-owned FIFO captures, independent of VI/presentation state.
-// The owner must outlive translated guest transfers. No method invokes backend
-// work, device service, guest code, or PE callbacks.
+// Captures FIFO bytes owned by the simulation thread, independent of VI and presentation
+// state. The owner must outlive translated guest transfers. No method runs backend work,
+// device service, guest code or PE callbacks.
 //
-// Submission contract: the backend must copy the captured bytes and finish its
-// source-memory read barrier/snapshot before returning a valid token. Record
-// that token immediately, before any service that can unwind guest execution.
-// An exception after a backend may have enqueued work is fatal, not permission
-// to retry Captured bytes: this class cannot infer an unreturned backend token.
+// Submission: the backend copies the bytes and finishes its source-memory read barrier
+// before it returns a valid token. Record the token immediately, before any service that
+// can unwind guest execution. An exception after the backend may have enqueued work is
+// fatal, not a retry. This class cannot infer an unreturned backend token.
 //
-// Completion contract: poll/consume the exact front token through the backend,
-// then mark_consumed immediately before any later service. Backend token order
-// includes VI captures: callers must arbitrate the global issuance order, not
-// consume a later VI token ahead of an older off-VI token (or vice versa).
+// Completion: poll and consume the exact front token through the backend, then call
+// mark_consumed before any later service. Token order includes VI captures, so callers
+// arbitrate the global issuance order and never consume a later VI token ahead of an
+// older off-VI token, or the reverse.
 class PendingFifoSubmissions {
 public:
     PendingFifoSubmissions() = default;

@@ -68,7 +68,7 @@ namespace Nebula.Setup
             choose.Dock = DockStyle.Fill;
             var title = AddLabel(choose, "Nebula", 20, 14, 700, 34);
             title.Font = new Font("Segoe UI Semibold", 17f);
-            AddLabel(choose, "Unofficial native PC port of Super Mario Galaxy (USA, RMGE01). Development preview.", 20, 50, 720, 40);
+            AddLabel(choose, "Unofficial native PC port of Super Mario Galaxy (USA, RMGE01).", 20, 50, 720, 40);
 
             int y = 98;
             if (installed != null)
@@ -155,9 +155,8 @@ namespace Nebula.Setup
             summary.Location = new Point(20, y);
             summary.Size = new Size(720, 170);
             summary.Text =
-                "The Nebula engine and launcher are included, ready to run. Only your game is compiled on this PC when needed. " +
-                "Compatible game modules are reused during updates. If needed, Setup downloads a C++ compiler (" + FileUtil.FormatBytes(toolchain.DownloadBytes) + ").\r\n\r\n" +
-                "Needs: Windows 10/11 64-bit, 8 GB RAM, " + FileUtil.FormatBytes(InstallEngine.RequiredFreeBytes) + " free disk space, a DirectX 12 GPU.";
+                "Setup compiles the game from your copy and downloads a C++ compiler (" + FileUtil.FormatBytes(toolchain.DownloadBytes) + ") when needed.\r\n\r\n" +
+                "Requires Windows 10 or 11 (64-bit), 8 GB of RAM, " + FileUtil.FormatBytes(InstallEngine.RequiredFreeBytes) + " of free disk space and a DirectX 12 GPU.";
             choose.Controls.Add(summary);
 
             start.Text = installed == null ? "Install" :
@@ -298,7 +297,7 @@ namespace Nebula.Setup
             cancelButton.Click += delegate { Close(); };
             if (failure == null)
             {
-                step.Text = engine.ModuleUpdateNotice ?? ("Nebula " + BuildInfo.Version + " is installed and ready.");
+                step.Text = engine.ModuleUpdateNotice ?? ("Nebula " + BuildInfo.Version + " is installed.");
                 overall.Value = overall.Maximum;
                 launch.Visible = true;
                 return;

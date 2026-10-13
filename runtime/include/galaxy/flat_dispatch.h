@@ -9,9 +9,8 @@
 
 namespace galaxy::scheduler {
 
-// The translated OSLoadContext call site owns this token. The RFI boundary may
-// inspect it, but only the call site consumes it while unwinding. This keeps
-// normal and exceptional exits on the same exactly-once path.
+// The translated OSLoadContext call site owns this token. The RFI boundary may inspect it, but only
+// the call site consumes it while unwinding, so normal and exceptional exits follow one exactly-once path.
 struct ContextTransferToken {
     std::uint32_t target_context{};
     std::uint32_t call_pc{};
@@ -43,8 +42,8 @@ public:
         return true;
     }
 
-    // Sticky failure: a control-transfer catch must reject continuation before
-    // guest work resumes. Failed cleanup never erases a different pending token.
+    // Sticky failure: a control-transfer catch rejects continuation before guest work resumes. Failed
+    // cleanup never erases a different pending token.
     [[nodiscard]] const ContextTransferToken* cleanup_failure() const noexcept {
         return cleanup_failure_.has_value() ? &*cleanup_failure_ : nullptr;
     }
@@ -64,9 +63,9 @@ private:
     std::optional<ContextTransferToken> cleanup_failure_;
 };
 
-// Construct only after begin(token) succeeds. This owns exactly the translated
-// OSLoadContext call boundary: RFI can inspect its token until stack unwinding
-// reaches this scope. No catch/rethrow or exception from a destructor is needed.
+// Construct only after begin(token) succeeds. The scope covers exactly the translated OSLoadContext
+// call boundary: RFI can inspect the token until stack unwinding reaches this scope. No catch,
+// rethrow or destructor exception is needed.
 class ScopedContextTransfer final {
 public:
     ScopedContextTransfer(PendingContextTransfer& pending,
@@ -90,11 +89,10 @@ private:
     bool active_{true};
 };
 
-// The statically recompiled instruction stream owns all exception-prologue and
-// OSLoadContext register traffic. The host boundary implements only the two
-// architectural effects of Broadway RFI: merge the saved SRR1 subset into MSR,
-// clear MSR[13], and resume at SRR0. No OSContext memory is consulted here
-// because most RMGE01 RFI sites are not OSLoadContext.
+// The recompiled instruction stream does all exception-prologue and OSLoadContext register traffic.
+// The host boundary implements only the two architectural effects of Broadway RFI: merge the saved
+// SRR1 subset into MSR, clear MSR[13], and resume at SRR0. OSContext memory is not read here, because
+// most RMGE01 RFI sites are not OSLoadContext.
 [[nodiscard]] inline std::uint32_t apply_rfi(
     galaxy::PpcContext& context) noexcept {
     constexpr std::uint32_t kRestoredMsrMask = 0x87C0FFFFu;
@@ -108,13 +106,11 @@ private:
     return resume_pc;
 }
 
-// Broadway may place a physical MEM1/MEM2 effective address in SRR0 while the
-// install-time module exposes the same instruction through its cached virtual
-// alias. Address translation belongs at the static-module binding boundary,
-// not in apply_rfi: the architectural RFI above must preserve SRR0 exactly.
-// Prefer an exact translated address when one exists, otherwise accept the
-// cached alias only when that exact alias was emitted by the recompiler. An
-// unknown address is returned unchanged so the caller can hard-fail it.
+// Broadway may put a physical MEM1/MEM2 address in SRR0, while the install-time module exposes the
+// same instruction through its cached virtual alias. Address translation belongs at the static-module
+// binding boundary, not in apply_rfi, which must preserve SRR0 exactly. Use an exact translated address
+// when one exists. Otherwise accept the cached alias only if the recompiler emitted that exact alias.
+// Unknown addresses are returned unchanged so the caller can hard-fail.
 template <typename HasExactContinuation>
 [[nodiscard]] std::uint32_t resolve_static_executable_address(
     std::uint32_t address,
@@ -140,10 +136,10 @@ template <typename HasExactContinuation>
     return address;
 }
 
-// OSThread records stackEnd as the low inclusive address and stackBase as the
-// high exclusive address. Wii titles may allocate stacks in cached MEM1 or
-// cached MEM2. Keep the two aliases distinct and reject physical, uncached,
-// cross-region, empty, and overflowed spans before consulting host mappings.
+// OSThread stores stackEnd as the low inclusive address and stackBase as the high exclusive address.
+// Wii titles may allocate stacks in cached MEM1 or cached MEM2, so the two aliases stay distinct.
+// Physical, uncached, cross-region, empty and overflowing spans are rejected before host mappings are
+// consulted.
 [[nodiscard]] constexpr bool is_cached_guest_ram_stack_span(
     std::uint32_t stack_base,
     std::uint32_t stack_end,
@@ -180,10 +176,9 @@ enum class FlatContinuationStopReason : std::uint8_t {
     StackTopSentinel,
 };
 
-// OSSleepThread is itself statically translated. The host may reject an
-// invalid queue pointer, but every valid queue must enter that translated
-// routine so the guest owns enqueueing, SelectThread, the idle context, and
-// the eventual wakeup. There is deliberately no host-wakeup disposition.
+// OSSleepThread is itself statically translated. The host may reject an invalid queue pointer, but
+// every valid queue enters that translated routine, so the guest owns enqueueing, SelectThread, the
+// idle context and the eventual wakeup. There is no host wakeup path.
 enum class GuestSleepQueueDisposition : std::uint8_t {
     RunTranslatedScheduler,
     RejectNullQueue,
@@ -191,11 +186,10 @@ enum class GuestSleepQueueDisposition : std::uint8_t {
     RejectUnmappedQueue,
 };
 
-// Evidence collected without mutating guest state at the exact translated
-// OSSleepThread boundary. OSSetCurrentContext writes D4 and its physical C0
-// alias together. SelectThread installs the running OSThread in E4 before it
-// installs that thread's OSContext in D4. An exception context may live inside
-// the same thread's stack, so context_owner_thread records that exact case.
+// State gathered without mutating guest state at the translated OSSleepThread boundary. OSSetCurrentContext
+// writes D4 and its physical C0 alias together. SelectThread installs the running OSThread in E4 before it
+// installs that thread's OSContext in D4. An exception context may live inside the same thread's stack, so
+// context_owner_thread records that case.
 struct GuestSleepIdentityEvidence {
     std::uint32_t current_context{};
     std::uint32_t physical_context{};
@@ -221,15 +215,12 @@ enum class GuestSleepIdentityDisposition : std::uint8_t {
     RejectStackOwnerMismatch,
 };
 
-// Evidence at an architectural exception boundary. The exception vector saves
-// into D4, while C0 is OSSetCurrentContext's physical alias. A normal running
-// thread therefore requires D4 (or a stack-local OSContext containing D4), E4,
-// and the executing r1 to name one active OSThread. SelectThread installs
-// IdleContext in D4/C0 and null in E4 before enabling interrupts. An exception
-// taken in that window may then install one or more of RMGE01's exact
-// stack-local callback contexts while E4 remains null. That second case is
-// accepted only with the complete, role-validated OSSetCurrentContext lineage
-// rooted at IdleContext and matching nonzero context/r1 owners.
+// State at an architectural exception boundary. The exception vector saves into D4, while C0 is the physical
+// alias written by OSSetCurrentContext. A running thread requires D4 (or a stack-local OSContext containing D4),
+// E4 and the executing r1 to name one active OSThread. SelectThread installs IdleContext in D4/C0 and null in E4
+// before interrupts are enabled. An exception taken in that window may install one or more of RMGE01's
+// stack-local callback contexts while E4 stays null. That case is accepted only with the complete,
+// role-validated OSSetCurrentContext lineage rooted at IdleContext and matching nonzero context/r1 owners.
 struct GuestExceptionIdentityEvidence {
     std::uint32_t requested_context{};
     std::uint32_t current_context{};
@@ -325,12 +316,10 @@ classify_guest_exception_identity(
     return GuestExceptionIdentityDisposition::ValidThread;
 }
 
-// RMGE01 has one translated call site for OSSaveContext: SelectThread at
-// 0x804AB308. It first proves D4 == E4, then passes E4 unchanged in r3 after
-// checking OS_CONTEXT_STATE_EXC is clear. The thread may already be ready,
-// waiting, or terminating, so its scheduling state is intentionally not part
-// of this contract. r1 may be on an OSSwitchFiber stack, whose exact backchain
-// is resolved before this evidence is classified.
+// RMGE01 has one translated OSSaveContext call site: SelectThread at 0x804AB308. It first checks D4 == E4, then
+// passes E4 unchanged in r3 after checking that OS_CONTEXT_STATE_EXC is clear. The thread may be ready, waiting
+// or terminating, so its scheduling state is not part of this contract. r1 may be on an OSSwitchFiber stack; its
+// backchain is resolved before this state is classified.
 struct GuestSaveContextIdentityEvidence {
     std::uint32_t requested_context{};
     std::uint32_t current_context{};
@@ -398,11 +387,10 @@ classify_guest_save_context_identity(
     return GuestSaveContextIdentityDisposition::Valid;
 }
 
-// RMGE01 has exactly thirty direct OSSetCurrentContext call boundaries. The
-// return LR uniquely describes the architectural role of every call: thirteen
-// stack-local callback-context installs and their exact restores, plus four
-// SDK scheduler/fatal/bootstrap transitions. Unknown callers hard-fail instead
-// of inferring a replacement context from the native frame owner.
+// RMGE01 has exactly thirty direct OSSetCurrentContext call sites. The return LR identifies each call's
+// role: thirteen stack-local callback-context installs with their exact restores, and four SDK scheduler,
+// fatal and bootstrap transitions. Unknown callers hard-fail rather than inferring a context from the
+// native frame owner.
 enum class GuestSetCurrentContextRoleKind : std::uint8_t {
     TemporaryInstall,
     TemporaryRestore,
@@ -608,12 +596,10 @@ public:
         return true;
     }
 
-    // Prove that every live temporary OSSetCurrentContext transition belongs
-    // to one uninterrupted LIFO chain from current_context back to
-    // root_context. Tokens are normally created only after the call boundary
-    // has passed classify_guest_set_current_context, but revalidate the exact
-    // install/restore role pair here so exception identity never trusts stale,
-    // malformed, or fabricated bookkeeping.
+    // Proves that every live temporary OSSetCurrentContext transition belongs to one uninterrupted LIFO
+    // chain from current_context back to root_context. Tokens are normally created only after the call
+    // boundary has passed classify_guest_set_current_context, but the exact install/restore role pair is
+    // revalidated here, so exception identity never trusts stale, malformed or fabricated bookkeeping.
     [[nodiscard]] constexpr bool has_exact_lineage(
         std::uint32_t current_context,
         std::uint32_t root_context) const noexcept {
@@ -808,9 +794,8 @@ classify_guest_set_current_context(
     return GuestSetCurrentContextDisposition::RejectUnknownRole;
 }
 
-// Invocation-local roster evidence. Publish only after a complete ordered scan
-// of ordinary RAM, and discard before any callback or guest reentry. This is
-// deliberately not a cache across scheduling boundaries or guest writes.
+// Invocation-local roster data. Published only after a complete ordered scan of ordinary RAM, and discarded
+// before any callback or guest reentry. It is not a cache across scheduling boundaries or guest writes.
 class GuestStackOwnerMemo final {
 public:
     void append(std::uint32_t thread, std::uint32_t base,
@@ -840,10 +825,9 @@ private:
     bool complete_{};
 };
 
-// OSSwitchFiber/OSSwitchFiberEx preserve the displaced r1 in the backchain at
-// the root of the alternate stack. Resolve that exact ABI chain iteratively so
-// a sleep reached from a translated fiber can still prove which OSThread owns
-// it. Unknown, malformed, cyclic, and over-depth chains fail closed with 0.
+// OSSwitchFiber and OSSwitchFiberEx store the displaced r1 in the backchain at the root of the alternate
+// stack. That ABI chain is resolved iteratively, so a sleep reached from a translated fiber can still
+// identify its owning OSThread. Unknown, malformed, cyclic and over-depth chains fail closed with 0.
 template <typename DirectOwner, typename ReadPreviousR1>
 [[nodiscard]] constexpr std::uint32_t resolve_guest_stack_owner(
     std::uint32_t r1,
@@ -932,10 +916,9 @@ struct FlatContinuationStop {
     std::uint64_t completed_hops{};
 };
 
-// Runs one flat guest timeline. Each translated continuation must be found by
-// its exact alias. A continuation's normal native return means guest `blr`, so
-// the next hop comes only from the LR it produced. Architectural transfers
-// thrown by invoke() deliberately propagate to the top-level owner.
+// Runs one flat guest timeline. Each translated continuation must be found by its exact alias. A
+// continuation's normal native return means guest blr, so the next hop comes only from the LR it
+// produced. Architectural transfers thrown by invoke() propagate to the top-level owner.
 template <typename Normalize, typename LookupExact, typename Invoke,
           typename IsStackTopSentinel>
 [[nodiscard]] FlatContinuationStop run_flat_continuation_chain(

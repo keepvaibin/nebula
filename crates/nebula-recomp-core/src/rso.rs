@@ -1,9 +1,8 @@
 //! Install-time parser for Wii RSO shared objects.
 //!
-//! This module deliberately parses only the on-disc, big-endian container. It
-//! never executes, decodes at runtime, or embeds RSO bytes in the product. A
-//! future static RSO lowering stage must consume this validated metadata and
-//! emit native source from the user's dump during installation.
+//! Parses only the on-disc, big-endian container. It never executes or decodes RSO bytes at runtime,
+//! and never embeds them in the product. A future static RSO lowering stage must consume this validated
+//! metadata and emit native source from the user's dump during installation.
 
 use crate::{
     sel::ResolvedSelSymbol,
@@ -138,9 +137,8 @@ pub enum RsoError {
     BssSizeMismatch { declared: u32, observed: u32 },
 }
 
-/// Errors while resolving a structurally-valid RSO import table through a
-/// structurally-valid SEL table.  Link failure is installation failure: the
-/// runtime must never invent an address or replace a missing module routine.
+/// Errors while resolving a structurally valid RSO import table through a valid SEL table. Link failure
+/// is an installation failure: the runtime never invents an address or replaces a missing module routine.
 #[derive(Debug, Error, PartialEq, Eq)]
 pub enum RsoLinkError {
     #[error("RSO import '{name}' has no matching SEL linker symbol")]
@@ -158,19 +156,17 @@ pub struct RsoLinkLayout {
     pub section_addresses: Vec<u32>,
 }
 
-/// The installer-only information needed to lower one RSO code section into
-/// native source.  It has no on-disc payload: runtime code receives the
-/// generated source only, never relocation records or PPC instruction bytes.
+/// Installer-only information needed to lower one RSO code section to native source. It has no on-disc
+/// payload. Runtime code receives only the generated source, never relocation records or PPC instruction bytes.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RsoCodeLoweringMetadata {
     pub entries: BTreeSet<u32>,
     pub immediate_overrides: BTreeMap<u32, PpcImmediateOverride>,
 }
 
-/// Installer-produced source for a native dynamic-RSO sidecar.  Both strings
-/// are written only beneath the caller's generated output directory; neither
-/// retains the source RSO payload in the repository or asks the runtime to
-/// decode PPC instructions.
+/// Installer-produced source for a native dynamic-RSO sidecar. Both strings are written only under the
+/// caller's generated output directory. Neither keeps the source RSO payload in the repository, and the
+/// runtime never decodes PPC instructions.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RsoNativeSidecarSource {
     pub cpp: String,
@@ -182,9 +178,8 @@ pub struct RsoNativeSidecarSource {
     pub symbolic_immediate_count: usize,
 }
 
-/// A hard failure while emitting a statically recompiled dynamic-RSO sidecar.
-/// A missing dispatch entry, unsupported relocation, or unsupported PPC form
-/// is an installation failure.  It must never turn into a runtime fallback.
+/// Hard failure while emitting a statically recompiled dynamic-RSO sidecar. A missing dispatch entry,
+/// unsupported relocation or unsupported PPC form fails installation. It never becomes a runtime fallback.
 #[derive(Debug, Error)]
 pub enum RsoNativeSidecarError {
     #[error(transparent)]
@@ -227,9 +222,8 @@ pub enum RsoNativeSidecarError {
     Formatting,
 }
 
-/// Hard failures while applying already-validated RSO relocation records.
-/// Static recompilation must not guess a target, truncate a displacement, or
-/// manufacture a linker trampoline.
+/// Hard failures while applying validated RSO relocation records. Static recompilation must not guess a
+/// target, truncate a displacement or create a linker trampoline.
 #[derive(Debug, Error, PartialEq, Eq)]
 pub enum RsoRelocationError {
     #[error("RSO relocation input is {actual} bytes, but the parsed container requires at least {required} bytes")]
@@ -353,14 +347,13 @@ pub struct RsoExport {
 pub struct RsoImport {
     pub name: String,
     pub symbol_offset: u32,
-    /// Byte offset of this import's first relocation inside the external
-    /// relocation table. The next import's offset (or table end) bounds the
-    /// range, so the table is validated without executing any RSO code.
+    /// Byte offset of this import's first relocation in the external relocation table. The next import's
+    /// offset (or the table end) bounds the range, so the table is validated without executing RSO code.
     pub relocation_offset: u32,
 }
 
-/// An installer-time, fully resolved RSO import.  This is metadata only; it
-/// contains no RSO payload and never authorizes runtime symbol lookup.
+/// An installer-time, fully resolved RSO import. This is metadata only: it has no RSO payload and never
+/// authorizes runtime symbol lookup.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub struct RsoImportBinding {
     pub import_index: u32,
@@ -392,9 +385,8 @@ impl RsoImage {
         self.sections.get(usize::try_from(index).ok()?)
     }
 
-    /// Resolves every import exactly once through the installer-provided SEL
-    /// metadata.  Missing or duplicate names are hard failures because either
-    /// condition would make a relocation non-deterministic.
+    /// Resolves every import exactly once through the installer-provided SEL metadata. Missing or duplicate
+    /// names are hard failures, since either would make a relocation non-deterministic.
     pub fn bind_imports(
         &self,
         symbols: &[ResolvedSelSymbol],
@@ -431,9 +423,8 @@ impl RsoImage {
             .collect()
     }
 
-    /// Applies the RSO relocation records to an installer-owned copy of the
-    /// input bytes using explicit section addresses and exact SEL bindings.
-    /// The result is transient installation data; this method neither emits
+    /// Applies RSO relocation records to an installer-owned copy of the input bytes, using explicit section
+    /// addresses and exact SEL bindings. The result is transient installation data. This method neither emits
     /// nor executes guest instructions at runtime.
     pub fn apply_relocations(
         &self,
@@ -522,9 +513,8 @@ impl RsoImage {
         Ok(linked)
     }
 
-    /// Produces the precise symbolic immediate expressions and address-taken
-    /// entries needed to lower one file-backed RSO code section. All metadata
-    /// is derived during installation; a runtime native function receives no
+    /// Produces the symbolic immediate expressions and address-taken entries needed to lower one file-backed
+    /// RSO code section. All metadata is derived at installation. A runtime native function receives no
     /// relocation records or PPC bytes.
     pub fn code_section_lowering_metadata(
         &self,
@@ -739,10 +729,9 @@ impl RsoImage {
         })
     }
 
-    /// Lowers one validated RSO text section into a separately compiled native
-    /// sidecar.  Relocation records and PPC bytes exist only in this
-    /// installer-time method.  The emitted sidecar receives the loader's
-    /// section addresses, then executes only the already generated C++ body.
+    /// Lowers one validated RSO text section into a separately compiled native sidecar. Relocation records and
+    /// PPC bytes exist only in this installer-time method. The emitted sidecar receives the loader's section
+    /// addresses and then runs only the generated C++ body.
     pub fn generate_native_sidecar(
         &self,
         input: &[u8],
@@ -785,12 +774,10 @@ impl RsoImage {
                 section: code_section,
             },
         )?;
-        // The PPC lowerer distinguishes a statically linked RSO-local branch
-        // from a native DOL call by its resolved target address. A synthetic
-        // installer layout must therefore never cover a DOL import: doing so
-        // would turn an external REL24 into a local `goto`. Refuse such a
-        // layout before emitting any source instead of guessing a trampoline
-        // or accepting semantically different code.
+        // The PPC lowerer distinguishes an RSO-local branch from a native DOL call by its resolved target address.
+        // A synthetic installer layout must therefore never cover a DOL import, which would turn an external REL24
+        // into a local goto. Refuse such a layout before emitting any source, rather than guess a trampoline or
+        // accept different code.
         for binding in bindings {
             if binding.guest_address >= canonical_address && binding.guest_address < canonical_end {
                 return Err(RsoNativeSidecarError::ExternalBindingOverlapsCodeRange {

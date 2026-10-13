@@ -40,8 +40,8 @@ inline LayoutAspectExtent layout_aspect_extent(const ExperimentalUltrawideAspect
     return {width, height, (width - 608.0f) * 0.5f, (height - 456.0f) * 0.5f};
 }
 
-// Documented NW4R ABI offsets are verified against RMGE01's Pane constructor
-// and LayoutManager's root load. No resource file or authored animation changes.
+// Documented NW4R ABI offsets match RMGE01's Pane constructor and
+// LayoutManager's root load. No resource file or authored animation changes.
 class Rmge01PaneAccess {
 public:
     GuestMemoryV1* memory;
@@ -105,7 +105,7 @@ inline float safety_surround_intensity(std::uint8_t backing_alpha, float black_f
 
 inline float rmge01_safety_surround(PpcContext* context, GuestMemoryV1* memory,
                                    const NativeServicesV1* services) {
-    // US LogoScene omits ISBN: constructor/initLayout verified strap+14/fader+18.
+    // The US LogoScene omits the ISBN pane. Its strap and fader offsets are +14 and +18.
     // LayoutActor's live/hidden flags and PicBG's calculated alpha own coverage.
     const Rmge01PaneAccess access{memory, services, 0x803404B0u};
     const auto strap = access.u32(context->gpr[3] + 0x14u);
@@ -207,8 +207,8 @@ inline bool extend_rmge01_home_backings(const Access& access, std::uint32_t root
 inline void apply_rmge01_home_backings(PpcContext* context, GuestMemoryV1* memory,
                                      const NativeServicesV1* services, std::uint32_t pc) {
     if (!layout_aspect_repairs_enabled() || context->gpr[2] != 0x806AB280u) return;
-    // NW4HBM's own Pane constructor/CalculateMtx verified: dimensions/list match
-    // the game NW4R ABI, but name is B4 and alpha/flags are CD..CF, not B4..B7.
+    // NW4HBM's Pane constructor and CalculateMtx match the game's NW4R ABI for dimensions and
+    // the list. The name is at B4, but alpha and flags are at CD..CF, not B4..B7.
     const Rmge01PaneAccess access{memory, services, pc, 0xB4u};
     const auto root = context->gpr[3];
     if (root == 0u || !access.named(root,"RootPane")) return;

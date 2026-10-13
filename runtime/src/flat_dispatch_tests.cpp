@@ -108,15 +108,9 @@ bool rfi_uses_only_srr_pair() {
 
 // The emitted continuations this fixture treats as statically translated.
 //
-// At namespace scope on purpose. It used to be a local `constexpr std::array`
-// inside `physical_rfi_aliases_bind_only_to_exact_static_continuations`, read by
-// the capture-less lambda `has_exact`. A lambda with no capture-default can only
-// name such a variable if it is not odr-used, which is an ODR subtlety MSVC
-// accepts and the pinned clang-cl (the compiler that actually builds this tree)
-// rejects with "variable 'translated' cannot be implicitly captured in a lambda
-// with no capture-default specified". A variable at namespace scope is reachable
-// from a capture-less lambda under every compiler, so hoisting it removes the
-// ambiguity without changing what the fixture tests.
+// Namespace scope so the capture-less lambda `has_exact` can name it under every
+// compiler. A capture-less lambda cannot odr-use a block-scope constexpr local, and
+// the pinned clang-cl rejects that with "cannot be implicitly captured".
 constexpr std::array kTranslatedContinuations{
     0x004A8CD4u,
     0x804A8CD4u,

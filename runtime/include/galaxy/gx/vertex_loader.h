@@ -7,9 +7,9 @@
 // Quads / strips / fans are converted to indexed triangle lists with shared
 // vertices (not duplicated), cutting upload bandwidth on low-end hardware.
 // Fixed-stride attribute blocks are consumed via FifoCursor::take() and the
-// bulk SIMD byte-swap kernels — never per-byte scalar reads.
+// bulk SIMD byte-swap kernels, not per-byte scalar reads.
 //
-// No Windows/D3D12 includes — unit-testable offline.  UploadRing is the
+// No Windows/D3D12 includes, so it is unit-testable offline. UploadRing is the
 // renderer's linear per-frame allocator, forward-declared here.
 
 #include "galaxy/gx/fifo_parser.h"
@@ -120,7 +120,7 @@ public:
         std::uint32_t index_batch_base_vertex = 0,
         bool rebase_indices_to_batch_base = false);
 
-    // Byte size of one source vertex for the given descriptor — used to
+    // Byte size of one source vertex for the given descriptor, used to
     // take() the whole packet in a single window before conversion.
     LoadedPrimitive load_cached_packet_run_with_layout(
         std::span<const std::byte> bytes,

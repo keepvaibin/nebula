@@ -73,15 +73,12 @@ if(MSVC)
     endif()
     message(STATUS "Galaxy native CPU target: ${galaxy_native_isa_effective} (requested ${GALAXY_NATIVE_ISA})")
     if(galaxy_native_isa_effective STREQUAL "AVX2")
-        # /arch:AVX2 also makes FMA3 available to the code generator. Under
-        # /fp:precise that is only safe because Visual Studio 2022 changed the
-        # /fp:precise default to fp_contract(off) (documented in
-        # learn.microsoft.com/cpp/build/reference/fp-specify-floating-point-behavior).
-        # Before VS2022, /fp:precise defaulted to fp_contract(on), so an FMA3-
-        # capable target would let the compiler fuse a*b+c and round once.
-        # galaxy_ppc_float's TwoSum/TwoProduct error terms and every guest
-        # single-precision result are only exact because that cannot happen, so
-        # refuse the combination rather than emit a guest-visible FP difference.
+        # /arch:AVX2 also makes FMA3 available to the code generator. That is safe under
+        # /fp:precise only because Visual Studio 2022 defaults /fp:precise to fp_contract(off).
+        # Before VS2022 the default was fp_contract(on), so an FMA3 target would let the compiler
+        # fuse a*b+c and round once. galaxy_ppc_float's TwoSum/TwoProduct error terms and every
+        # guest single-precision result require that no fusion happens, so the combination is
+        # rejected rather than producing a guest-visible FP difference.
         if(NOT CMAKE_CXX_COMPILER_ID STREQUAL "Clang" AND MSVC_VERSION LESS 1930)
             message(FATAL_ERROR
                 "GALAXY_NATIVE_ISA=AVX2 with ${CMAKE_CXX_COMPILER_ID} "
@@ -89,17 +86,13 @@ if(MSVC)
                 "/fp:precise and change guest FP results. Use a Visual Studio "
                 "2022 (MSVC 19.30+) toolset, clang-cl, or GALAXY_NATIVE_ISA=SSE2.")
         endif()
-        # /arch:AVX2 is an MSVC cl.exe spelling. Setup and build-release both
-        # drive this project with clang-cl (installer/toolchain.json pins it and
-        # InstallEngine passes -DCMAKE_CXX_COMPILER=<clang-cl>), where
-        # CMAKE_CXX_COMPILER_ID is "Clang" but MSVC is still true -- so the
-        # message above reported AVX2 while every translation unit was compiled
-        # for the SSE2 baseline and the runtime lost VEX encoding, the wider
-        # register file and vector integer compares. clang-cl accepts the
-        # GCC-style -mavx2. Deliberately NOT -mfma: guest float results must stay
-        # bit-identical to the SoftFloat reference and /fp:precise is mandatory.
-        # (clang's own -ffp-contract default is on, so withholding the FMA
-        # feature is what keeps contraction impossible on that path.)
+        # /arch:AVX2 is an MSVC cl.exe spelling. Setup and build-release drive this project with
+        # clang-cl (installer/toolchain.json pins it, and CMAKE_CXX_COMPILER_ID is "Clang" while
+        # MSVC is still true). The flag above would then report AVX2 while every translation unit
+        # is compiled for the SSE2 baseline. clang-cl accepts the GCC-style -mavx2. -mfma is not
+        # used: guest float results must stay bit-identical to the SoftFloat reference, and
+        # /fp:precise is required. clang's -ffp-contract default is on, so withholding the FMA
+        # feature keeps contraction impossible on that path.
         if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
             add_compile_options($<$<COMPILE_LANGUAGE:C,CXX>:-mavx2>)
         else()
@@ -856,10 +849,10 @@ if(MSVC)
     endforeach()
 endif()
 if(MSVC)
-    # Generated DSP probe/entry functions are referenced through the native
-    # host, but the production link proof also requires archive retention to
-    # be explicit in the final executable graph.  WHOLE_ARCHIVE prevents a
-    # future reference-shape change from silently orphaning generated ucode.
+    # Generated DSP probe/entry functions are referenced through the native host, but the
+    # production link needs archive retention to be explicit in the final executable graph.
+    # WHOLE_ARCHIVE prevents a future reference-shape change from silently orphaning
+    # generated ucode.
     set_property(
         TARGET NebulaRuntime
         PROPERTY LINK_LIBRARY_OVERRIDE_galaxy_native_dsp WHOLE_ARCHIVE)
@@ -928,10 +921,9 @@ target_link_libraries(galaxy_native_zero_tests PRIVATE galaxy_runtime_abi)
 add_executable(galaxy_native_yaz0_span_tests runtime/src/native_yaz0_span_tests.cpp)
 target_link_libraries(galaxy_native_yaz0_span_tests PRIVATE galaxy_runtime_abi)
 if(MSVC)
-    # This exhaustive helper test keeps many independent PpcContext fixtures
-    # alive in one function; optimized MSVC currently reserves about 1.3 MiB
-    # for that frame. Give the test a measured fixed reserve instead of
-    # depending on the PE default 1 MiB stack (which fails before main runs).
+    # This exhaustive helper test keeps many independent PpcContext fixtures alive in one
+    # function; optimized MSVC reserves about 1.3 MiB for that frame. Give the test a fixed
+    # reserve instead of depending on the PE default 1 MiB stack, which fails before main runs.
     target_link_options(galaxy_native_api_tests PRIVATE /STACK:4194304,65536)
 endif()
 
@@ -1001,9 +993,9 @@ target_link_libraries(
         galaxy_native_dsp
         galaxy_runtime_timeline)
 
-# Offline FXC validation of every ShaderGenerator codegen path (texgen,
-# lighting, TEV compare, swap tables, fog, ztex) â€” catches HLSL slips in the
-# gate instead of as invisible geometry mid-boot.
+# Offline FXC validation of every ShaderGenerator codegen path (texgen, lighting, TEV
+# compare, swap tables, fog, ztex). Catches HLSL errors at build time instead of as
+# invisible geometry mid-boot.
 add_executable(galaxy_shader_gen_tests runtime/src/gx/shader_gen_tests.cpp)
 target_link_libraries(galaxy_shader_gen_tests PRIVATE galaxy_gx)
 

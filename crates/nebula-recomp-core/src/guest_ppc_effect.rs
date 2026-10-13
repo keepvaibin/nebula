@@ -4,9 +4,9 @@
 //! WiiCompiled GPLv3 `GuestAbiContractAnalyzer.cs::{Reads,Writes}` and
 //! `GuestHelperEffectCatalog.cs::Analyze`, commit
 //! 83463764b8acda394e058b0c689a10b8561fc380
-//! (https://github.com/patchzyy/Wiicompiled). PPC bit decoding and Gekko PS1,
-//! FPSCR, and checked-memory effects are verified against Galaxy's existing
-//! `translate.rs` and native API, not copied from WiiCompiled's different IR.
+//! (https://github.com/patchzyy/Wiicompiled). PPC bit decoding and the Gekko PS1,
+//! FPSCR and checked-memory effects follow Galaxy's existing `translate.rs` and
+//! native API, not WiiCompiled's different IR.
 //! This catalog is inert: it does not select an emitter or waive a checkpoint.
 
 use crate::guest_abi_effect::{
@@ -70,9 +70,8 @@ fn fc(word: u32) -> u32 {
 
 /// One decoded integer instruction's operand mapping. `None` for the first
 /// source means the RA=0 literal-zero encoding of addi/addis, not guest r0.
-/// Keeping this mapping shared by the effect recorder and C++ emitter avoids
-/// silently treating source and destination fields differently during future
-/// register residency work. It deliberately has no register-cache policy.
+/// The effect recorder and the C++ emitter share this mapping, so source and
+/// destination fields are read the same way. It has no register-cache policy.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) struct GuestGprAccess {
     pub destination: u32,
@@ -97,9 +96,9 @@ impl GuestGprAccess {
     }
 }
 
-/// A coherent, pure integer subset present 37 times in the verified JPA draw
-/// stream. Every other opcode returns `None`; callers must keep its existing
-/// lowering or reject it, rather than infer field roles from opcode bits.
+/// A pure integer subset of the opcodes used by the JPA draw stream. Every other
+/// opcode returns `None`; callers must keep its existing lowering or reject it,
+/// rather than infer field roles from opcode bits.
 pub(crate) fn guest_integer_gpr_access(opcode: Opcode, word: u32) -> Option<GuestGprAccess> {
     match opcode {
         Opcode::Addi | Opcode::Addis => Some(GuestGprAccess {
@@ -192,7 +191,7 @@ fn unsupported(pc: u32, word: u32, opcode: Opcode) -> GuestPpcEffectError {
 
 /// Decode one instruction, rejecting every form outside the audited hot
 /// function vocabulary. Even a known mnemonic is rejected when its modifiers
-/// require effects this catalog has not proven.
+/// require effects this catalog has not established.
 pub fn decode_guest_ppc_effect(
     pc: u32,
     word: u32,
@@ -468,7 +467,7 @@ pub fn decode_guest_ppc_effect(
         // The checked helper or checkpoint can transfer control before an
         // ordinary destination write commits. Keep the write in the possible
         // set, but never use it to kill liveness on an exception path. Until
-        // memory alias publication, callbacks, and fault retry are proved for
+        // memory alias publication, callbacks and fault retry are shown safe for
         // a state-free emitter, every such site also requires full context.
         effect.definite_writes = GuestRegisterSet::default();
         effect.boundary |= crate::guest_abi_effect::GuestBoundaryFlags::REQUIRES_COMPLETE_CONTEXT;
@@ -483,7 +482,7 @@ pub fn decode_guest_ppc_effect(
 
 /// A native substitution stays an unknown full-context call unless an audited
 /// per-target contract is supplied. This must only be used for a call site that
-/// already has a verified native replacement; it does not infer one by address.
+/// already has an audited native replacement; it does not infer one by address.
 pub fn apply_verified_native_call_effect(
     site: &mut GuestCfgSite,
     helper: GuestHelperEffect,
@@ -670,7 +669,7 @@ pub fn analyze_guest_ppc_region(
     }
     let strongly_connected_components = guest_direct_call_components(&edges);
     // Begin at the safest upper bound. A pure callee can narrow its own
-    // contract; callers see only the preceding *frozen* round, so recursion
+    // contract; callers see only the preceding frozen round, so recursion
     // never invents a selectively safe base case.
     let mut contracts = decoded
         .iter()
@@ -1035,7 +1034,7 @@ mod tests {
 
     #[test]
     fn scalar_fp_record_uses_cr1_and_hid2_not_integer_cr0_or_xer() {
-        // Rc variant of the verified 0x803A3C30 fmuls word 0xEC230072.
+        // Rc variant of the 0x803A3C30 fmuls word 0xEC230072.
         let site =
             decode_guest_ppc_effect(0x803a_3c30, 0xec23_0073, 0x803a_3c30, 0x803a_3c34).unwrap();
         assert_eq!(site.effect.possible_writes.cr, 1 << 1);

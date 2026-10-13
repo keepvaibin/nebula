@@ -1168,8 +1168,8 @@ void test_defaults_and_migration() {
     expect(!evaluate_pad_bindings(sw, s, 0.4f, gyro_on.pressed, true).held(WiiTarget::DpadLeft),
            "below the release level the direction releases");
 
-    // Migration: a file holding Native28's defaults moves to the new ones,
-    // a binding the player changed stays.
+    // Migration: a file holding the earlier defaults moves to the new ones. A binding the player
+    // changed stays.
     ControlsConfig old{};
     for (std::size_t i = 0; i < kControlSchemeCount; ++i) {
         old.tables[i] = legacy_binding_table(static_cast<ControlScheme>(i));
@@ -1196,8 +1196,8 @@ void test_defaults_and_migration() {
     ControlsConfig again = migrated;
     expect(migrate_legacy_controls(again, kControlsVersion) == 0u && again == migrated,
            "migration is idempotent on new defaults");
-    // A version-3 (Native29b) file: ZL+ZR crouch and the 4 s / 0.03 still
-    // pointer move to the version-4 defaults, values the player changed stay.
+    // A version-3 file: ZL+ZR crouch and the 4 s / 0.03 still pointer move to the version-4 defaults.
+    // Values the player changed stay.
     {
         ControlsConfig v3{};
         for (std::size_t i = 0; i < kControlSchemeCount; ++i) {
@@ -1228,8 +1228,8 @@ void test_defaults_and_migration() {
                    v3.tune(ControlScheme::Xbox).pointer_hide_radius == kDefaultPointerHideRadius,
                "a changed hide time stays");
     }
-    // A version-4 (Native30 preview) file: 2 s still pointer and 100%
-    // vibration move to 4 s and 50%, values the player changed stay.
+    // A version-4 file: a 2 s still pointer and 100% vibration move to 4 s and 50%. Values the player
+    // changed stay.
     {
         ControlsConfig v4 = default_controls_config();
         for (std::size_t i = 0; i < kControlSchemeCount; ++i) {
@@ -1251,8 +1251,7 @@ void test_defaults_and_migration() {
             return again;
         }(), "a current file does not migrate");
     }
-    // A version-2 (Native29) file: its defaults move, the gyro switch the
-    // player turned off stays off.
+    // A version-2 file: its defaults move. The gyro switch the player turned off stays off.
     ControlsConfig v2{};
     for (std::size_t i = 0; i < kControlSchemeCount; ++i) {
         v2.tables[i] = version2_binding_table(static_cast<ControlScheme>(i));

@@ -82,12 +82,11 @@ bool current_name_matches(Reader& read, std::uint32_t controller,
 
 } // namespace opening_route_marker_detail
 
-// This is an opening-route input-script anchor, not proof of human controls or
-// unlocked Mario actions. FileSelect is itself a GameScene with a Mario actor.
-// The controller's effective next/current nerve selects its active scene exactly
-// as RMGE01 getCurrentSceneForExecute@8039DBE4; non-normal uses Intermission and
-// cannot qualify. Current inline scene/stage names are at +00/+20. The requested
-// next scene/stage at +4C/+6C must never satisfy this predicate.
+// This is an opening-route input-script anchor. It does not prove human controls or unlocked Mario
+// actions. FileSelect is itself a GameScene with a Mario actor. The controller's effective next/current
+// nerve selects the active scene as RMGE01 getCurrentSceneForExecute@8039DBE4 does. Non-normal scenes,
+// which use Intermission, cannot qualify. Current inline scene and stage names are at +00/+20. The
+// requested next scene and stage at +4C/+6C never satisfy this predicate.
 template <typename Reader>
 [[nodiscard]] bool opening_route_marker_scene_eligible(
     Reader&& reader, std::uint32_t* selected_scene = nullptr) {
@@ -123,12 +122,10 @@ template <typename Reader>
     return true;
 }
 
-// Exact updateBindRatio call from updateBehavior@802B0BA8. The sole emitted
-// retail caller lies on controlMain's true isEnableMoveMario branch. That
-// predicate only whitelists Mario nerves; the post-prologue snapshot below is
-// independently required, together with updateBehavior's saved caller return.
-// Checkpoints/interior PCs are broad route evidence,
-// not candidates for this functional one-shot input anchor.
+// Exact updateBindRatio call from updateBehavior@802B0BA8. The only emitted retail caller is on
+// controlMain's true isEnableMoveMario branch, which allows only Mario nerves. The post-prologue snapshot
+// below is required independently, together with updateBehavior's saved caller return. Checkpoints and
+// interior PCs are broad route evidence, not candidates for this one-shot input anchor.
 [[nodiscard]] inline constexpr bool opening_route_marker_boundary_eligible(
     bool call_boundary, std::uint32_t guest_address, std::uint32_t context_pc,
     std::uint32_t link_register) {
@@ -136,13 +133,11 @@ template <typename Reader>
            context_pc == 0x802B0D0Cu && link_register == 0x802B0BACu;
 }
 
-// Opening-prologue completion only: this is deliberately not a catch-all
-// player-control predicate for arbitrary saves or stages. The registered
-// director starts dead in Wait, so dead alone cannot qualify. Its GameStart
-// step 15 ends the arrival demo, initializes Mario, then kills the director.
-// Spine::update increments the completed step to 16; dead actors no longer
-// update it. Exact current GameStart / next-null / step16 / dead1 rejects the
-// story, letter, arrival and unfinished terminal step without guest writes.
+// Opening-prologue completion only. This is not a general player-control predicate for arbitrary saves or
+// stages. The registered director starts dead in Wait, so dead alone cannot qualify. Its GameStart step 15
+// ends the arrival demo, initializes Mario, then kills the director. Spine::update increments the completed
+// step to 16; dead actors do not update it. Exact current GameStart, next null, step 16 and dead 1 rejects
+// the story, letter, arrival and unfinished terminal step without guest writes.
 template <typename Reader>
 [[nodiscard]] bool opening_route_marker_after_prologue_eligible(
     Reader&& reader, std::uint32_t mario_actor, std::uint32_t stack_pointer) {

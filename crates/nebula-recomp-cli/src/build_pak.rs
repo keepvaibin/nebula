@@ -428,9 +428,8 @@ fn validate_destination(output: &Path, source_paths: &HashSet<String>) -> Result
 fn preflight(input: &Path, output: &Path) -> Result<PakPlan> {
     let data_root = resolve_data_root(input)?;
 
-    // This is the same exact game-ID and main.dol SHA-1 gate used by verify,
-    // translation, and module generation. Packaging never accepts a merely
-    // FST-shaped or lookalike dump.
+    // Same game-ID and main.dol SHA-1 gate as verify, translation and module generation.
+    // Packaging rejects FST-shaped lookalike dumps.
     analyze_input(&data_root).with_context(|| {
         format!(
             "exact RMGE01 validation failed before packaging {}",
@@ -601,8 +600,8 @@ fn preflight(input: &Path, output: &Path) -> Result<PakPlan> {
             partition_size,
         )?;
     }
-    // Even if the current fst.bin is smaller, its boot-header maximum is a
-    // reserved fixed-system region which game files must not overlap.
+    // The boot-header fst.bin maximum reserves a fixed-system region that game files must
+    // not overlap, even when the current fst.bin is smaller.
     if fst_max_size > fst_declared_size {
         add_extent(
             &mut extents,
@@ -623,8 +622,8 @@ fn preflight(input: &Path, output: &Path) -> Result<PakPlan> {
     }
     let logical_size = validate_extents(extents)?;
 
-    // Destination inspection is the final read-only preflight. No output
-    // directory or temporary file has been created yet.
+    // Destination inspection is the last read-only preflight. No output directory or
+    // temporary file exists at this point.
     validate_destination(output, &source_paths)?;
 
     Ok(PakPlan {

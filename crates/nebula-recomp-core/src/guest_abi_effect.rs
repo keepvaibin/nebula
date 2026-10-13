@@ -371,9 +371,9 @@ impl GuestHelperEffect {
     }
 }
 
-/// Caller-verified semantic family. WiiCompiled's helper-name allowlist is
-/// deliberately not installed as a Galaxy allowlist: identically named native
-/// functions need not have identical side effects in the two runtimes.
+/// Caller-verified semantic family. WiiCompiled's helper-name allowlist is not
+/// installed as a Galaxy allowlist: identically named native functions need not
+/// have identical side effects in the two runtimes.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum VerifiedHelperClass {
     Pure,

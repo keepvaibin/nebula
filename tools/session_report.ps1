@@ -1,19 +1,12 @@
 <#
 .SYNOPSIS
-Turns one recorded Nebula session into the objective's compact results row.
+Summarizes one recorded Nebula session.
 
 .DESCRIPTION
-Every agent so far has re-derived the same statistics by hand from the same
-300 KB of runtime logs, and has repeatedly had to correct another agent's
-arithmetic (a mean taken from the last few [new-frame-tails] windows instead of
-all of them; flush-us compared against flush-total-us; command counts quoted as
-host draw counts). This script is the single extractor for that evidence so a
-recording becomes comparable without re-deriving it.
-
-It reads only files a session already contains and never invents a number: a
-metric that is absent is reported as unavailable, and a metric the runtime
-explicitly says is unmeasured (gpu-samples=0) is reported as unmeasured rather
-than as zero.
+Reads the logs of a recorded session and prints frame rate, frame-time tails,
+pipeline compile and GPU figures as one results row. A metric that is missing
+from the logs is reported as unavailable, and a metric the runtime reports as
+not measured (gpu-samples=0) is reported as such rather than as zero.
 
 .PARAMETER Session
 A session folder. Both packed layouts are accepted: a delivered diagnostics
@@ -30,13 +23,10 @@ Optional path to also write the full result object as JSON.
 param(
     [Parameter(Mandatory = $true)][string]$Session,
     [string]$Json = '',
-    # Emit the objective's required results table instead of the narrative report.
-    # One row per operating mode (scene), because the objective requires matched
-    # scenes and a session average describes none of them when the session is
-    # bimodal -- which both retained recordings are.
+    # Emits the required results table instead of the narrative report, one row per
+    # operating mode. A session average describes no scene when the session is bimodal.
     [switch]$ResultsTable,
-    # Free text for the table's "retained change" column: only the caller knows
-    # which build the session ran and what the diff was.
+    # Free text for the table's "retained change" column, supplied by the caller.
     [string]$RetainedChange = ''
 )
 $ErrorActionPreference = 'Stop'
@@ -87,18 +77,11 @@ function Round-OrNull {
     return [Math]::Round([double]$Value, $Digits)
 }
 
-# Per-frame ratio of two fields that must be paired WITHIN a line.
-#
-# Taking a median of numerators and a median of denominators and dividing them is
-# not the median ratio, and here the two differ by design: `flush-pso-us` is only
-# populated on a fully-detailed frame while `flush-calls` is unconditional, so the
-# numerator and denominator populations are not the same frames. Pair, then
-# reduce. Lines missing either field, or with a zero denominator, are skipped and
-# counted so a partial pairing cannot look complete.
-# Ratio of a numerator to (denominator - excluded), paired within a line. Used
-# for `flush-us / (flush-calls - pso-route-early)`: early-out calls are counted
-# in flush-calls but never reach the timed body, so including them understates the
-# body-path cost.
+# Per-frame ratio of two fields paired within a line. A median of numerators divided by a
+# median of denominators is not the median ratio, because the fields are populated on
+# different frames. Lines missing either field, or with a zero denominator, are skipped and counted.
+# Ratio of a numerator to (denominator - excluded), paired within a line. Early-out calls count
+# in flush-calls but never reach the timed body.
 function Get-PairedRatio3 {
     param([string[]]$Lines, [string]$Numerator, [string]$Denominator, [string]$Exclude)
     $ratios = New-Object Collections.Generic.List[double]
@@ -142,9 +125,8 @@ $stderrLines = $stderrText -split "`r?`n"
 $result = [ordered]@{}
 $result.session = $sessionPath
 
-# ---- build identity ------------------------------------------------------
-# [runtime-build] is printed first by the runtime. It was absent from both
-# delivered bundles, which is why identity had to be reconstructed from hashes.
+# [runtime-build] is printed first by the runtime. It was absent from some delivered bundles,
+# so identity is sometimes reconstructed from hashes.
 $buildMatch = [regex]::Match($stderrText, '(?m)^\[runtime-build\]\s*(.+?)\s*$')
 $result.runtimeBuild = if ($buildMatch.Success) { $buildMatch.Groups[1].Value } else { 'unavailable' }
 $result.runtimeBuildPresent = $buildMatch.Success
@@ -154,10 +136,9 @@ if ($exitText) { try { $identity = $exitText | ConvertFrom-Json } catch { } }
 $install = $null
 $sessionObj = $null
 if ($sessionText) { try { $sessionObj = $sessionText | ConvertFrom-Json; $install = $sessionObj.install } catch { } }
-# Two session.json shapes exist. A delivered diagnostics bundle embeds the whole
-# install.json under `install`; a perf_session.ps1 session is a flat record with
-# `build`, `cacheSeed`, `environment` and `files` at the root. Read each field
-# from wherever it actually lives rather than from one assumed shape.
+# Two session.json shapes exist: a diagnostics bundle embeds install.json under `install`, and a
+# perf_session.ps1 session has `build`, `cacheSeed`, `environment` and `files` at the root.
+# Each field is read from wherever it lives.
 $rootFiles = if ($sessionObj -and $sessionObj.PSObject.Properties['files']) { $sessionObj.files } else { $null }
 $installFiles = if ($install -and $install.files) { $install.files } else { $rootFiles }
 
@@ -193,13 +174,9 @@ if ($sessionText) {
 $cacheLines = @($stderrLines | Where-Object { $_ -match '^\[PipelineCache\]' })
 $result.pipelineCache = if ($cacheLines.Count) { ($cacheLines -join ' | ') } else { 'unavailable' }
 
-# Classify the cache, because the objective requires first-use compilation to be
-# kept separate from warmed gameplay and a row is only comparable against a run
-# with the same cache condition. "Loaded 0 keys" has two very different causes
-# that need different fixes: nothing was offered (cold seed), or keys were
-# offered and none matched (the generator or PSO key changed). The seed record
-# written by perf_session.ps1 separates them; without it the verdict is unknown
-# rather than assumed.
+# Cache classification. A row is comparable only against a run with the same cache condition.
+# "Loaded 0 keys" means either nothing was offered (cold seed) or offered keys did not match.
+# The seed record written by perf_session.ps1 tells them apart; without it the verdict is unknown.
 # [PipelineCache] lines are prose, not key=value, so Get-Number cannot read them:
 #   "[PipelineCache] loaded 34 DXBC pairs from shader cache"
 #   "[PipelineCache] loaded 43 PSO keys from cache"
@@ -254,13 +231,9 @@ $result.newFrameHz = [ordered]@{
 }
 $result.xfbProductionHzMedian = Round-OrNull (Get-Percentile $xfbHz 0.5)
 
-# ---- operating modes, not just a median ---------------------------------
-# A single median has repeatedly misled this project: the 5090 session reports a
-# 56.1 Hz median, but it is 60.0 Hz for 42 s and then 41-48 Hz for the remaining
-# 50 s, so the median sits between two modes and describes neither. Two agents
-# have had to retract conclusions drawn from such a median. Segment the session
-# into contiguous runs of stable rate and report the runs, so a reader sees the
-# shape before the average and cannot mistake a bimodal session for a steady one.
+# Operating modes, not just a median. A single median can sit between two modes and describe
+# neither. Segment the session into runs of stable rate and report the runs, so a bimodal
+# session is not mistaken for a steady one.
 $windowSeries = New-Object Collections.Generic.List[object]
 $tStart = $null
 for ($i = 0; $i -lt $presentLines.Count; $i++) {
@@ -278,11 +251,9 @@ for ($i = 0; $i -lt $presentLines.Count; $i++) {
     })
 }
 
-# A run continues while each window stays within MODE_TOLERANCE of the run's mean
-# so far; otherwise it closes and a new run starts. Runs shorter than
-# MODE_MIN_WINDOWS are folded into the neighbouring run by the caller's reading of
-# the table rather than silently merged, because a short excursion is itself
-# informative (a stall) and should not be averaged away.
+# A run continues while each window stays within MODE_TOLERANCE of the run's mean so far;
+# otherwise a new run starts. Runs shorter than MODE_MIN_WINDOWS are not merged silently,
+# because a short excursion such as a stall is informative.
 $modeToleranceHz = 3.0
 $modeMinWindows = 3
 $modes = New-Object Collections.Generic.List[object]
@@ -313,12 +284,9 @@ for ($i = 1; $i -le $windowSeries.Count; $i++) {
     $runStart = $i
 }
 $sortedModes = @($modes | Sort-Object windows -Descending)
-# Compare the longest run against the longest run that differs from it by more
-# than MODE_SEPARATION. Taking simply the two longest is wrong: on the 5090 the
-# two longest runs are 19 windows at 60.01 Hz and 6 windows at 60.0 Hz, so a
-# two-longest test reports "not bimodal" for a session that is 60 Hz for 42 s and
-# 43 Hz for the next 50 s. The question is whether a materially different
-# operating level exists and is sustained, not whether the top two differ.
+# Compares the longest run with the longest run that differs from it by more than
+# MODE_SEPARATION. Taking the two longest runs is wrong: they can both sit at the same rate.
+# The question is whether a materially different level exists and is sustained.
 $modeSeparation = 0.15
 $primary = if ($sortedModes.Count -ge 1) { $sortedModes[0] } else { $null }
 $contrast = $null
@@ -333,9 +301,8 @@ if ($null -ne $primary -and $primary.meanHz -gt 0) {
 $bimodal = $null -ne $contrast
 $result.operatingModes = [ordered]@{
     detection        = "contiguous +/-$modeToleranceHz Hz runs, >= $modeMinWindows windows"
-    # .ToArray(), not @(): PowerShell's @() passes an existing List[object]
-    # through unchanged, and OrderedDictionary rejects a List as a value with
-    # "Argument types do not match".
+    # .ToArray(), not @(): @() passes an existing List[object] through unchanged, and
+    # OrderedDictionary rejects a List as a value.
     runs             = $modes.ToArray()
     distinctRuns     = $modes.Count
     bimodal          = $bimodal
@@ -350,28 +317,19 @@ $result.operatingModes = [ordered]@{
 }
 if ($bimodal) { $result.newFrameHz.warning = $result.operatingModes.note }
 
-# ---- frame-time tails: every [new-frame-tails] window -------------------
-# Deliberately across ALL windows. Taking the mean of the last few produced the
-# 171 ms figure that agent 8 had to retract; the median across all 179 is 72 ms.
+# Uses all windows. A mean of the last few windows misstates the tail.
 $tailLines = @($stderrLines | Where-Object { $_ -match '^\[new-frame-tails\]' })
 $prodMean = @(Get-AllNumbers -Lines $tailLines -Name 'production-mean-us')
 $prodP95 = @(Get-AllNumbers -Lines $tailLines -Name 'production-p95-upper-us')
 $prodP99 = @(Get-AllNumbers -Lines $tailLines -Name 'production-p99-upper-us')
 $prodMax = @(Get-AllNumbers -Lines $tailLines -Name 'production-max-us')
 $intervals = @(Get-AllNumbers -Lines $tailLines -Name 'production-intervals')
-# Is the slowdown quantized to whole 60 Hz fields, or continuous? The two mean
-# opposite things -- integer slips are a scheduling problem, a smear is more work
-# per frame -- and `production-max-us` is the field that decides it, because it is
-# EXACT (`monitor_max_ns`), unlike the `-upper-us` fields.
+# Is the slowdown quantized to whole 60 Hz fields, or continuous? Integer slips are a scheduling
+# problem; a smear is more work per frame. `production-max-us` decides it because it is exact
+# (`monitor_max_ns`), unlike the `-upper-us` fields, which are upper edges of 1 ms histogram bins.
 #
-# A23-19 read `p95-upper-us=18000` as a p95 and concluded the regime was
-# vblank-quantized. It is the upper edge of a 1 ms histogram bin, so 18,000 means
-# "in [17,18) ms". This check would have falsified that immediately: the observed
-# maxima do not cluster on whole field counts, and their fractional parts are
-# near-uniform.
-# The timeline is 60.75 MHz and one field is timelineHz/60 ticks. Derive the field
-# period from the recorded timeline rather than writing 16,666.67, so a build with
-# a different timeline cannot silently make this check meaningless.
+# The timeline is 60.75 MHz and one field is timelineHz/60 ticks. The field period is derived from
+# the recorded timeline, so a different timeline rate cannot silently make this check meaningless.
 # `timeline-hz=` is published by [input-hid-cadence-audit] on the shutdown line.
 $timelineHz = Get-Number $stderrText 'timeline-hz'
 if ($null -eq $timelineHz -or $timelineHz -le 0) { $timelineHz = 60750000.0 }
@@ -417,33 +375,17 @@ $result.gxQueueWait = [ordered]@{
     maxUs   = if ($queueWait.Count) { Round-OrNull (($queueWait | Measure-Object -Maximum).Maximum) 0 } else { 'none-observed' }
 }
 
-# ---- render-thread frame timing, split by WHY each frame printed ----------
-# [gx-frame-timing] has two independent reasons to print: a frame crossed the
-# stall threshold (selected=1), or it is the 1-in-N frame chosen by
-# GALAXY_GX_FRAME_TIMING_SAMPLE (sample=1). A default run prints ONLY selected
-# frames, so every statistic over them describes the worst frames and not the
-# session. Averaging the two populations together is meaningless; this section
-# keeps them apart and says which one the recording actually contains.
-# The render path's own account of itself, split by population. `frame-ms` is
-# the renderer's per-frame work; if it sits at one field (16.67 ms) in a window
-# whose new-serial-hz is far below 60, the renderer is NOT the limiter and
-# replay-pct says how much of the time it was re-showing an old frame. Those two
-# together are what located the bottleneck on the guest side, so they belong in
-# the report rather than in a side script.
+# [gx-frame-timing] prints for two reasons: a frame crossed the stall threshold (selected=1), or it
+# is the 1-in-N frame chosen by GALAXY_GX_FRAME_TIMING_SAMPLE (sample=1). A default run prints only
+# selected frames, so statistics over them describe the worst frames. The two populations are kept apart.
+# The render path's own timing. `frame-ms` is the renderer's per-frame work. If it sits at one field
+# (16.67 ms) while new-serial-hz is far below 60, the renderer is not the limiter, and replay-pct gives
+# the share of time spent re-showing an old frame.
 $presentLines   = @($stderrLines | Where-Object { $_ -match '^\[present-stats\]' })
-# Split on the VALUE, not on the digits: a pattern like `6[0-9]` classifies
-# 59.26 as slow and produced "11 fast / 60 slow" where the real split is 39/32.
-#
-# The threshold is this SESSION'S OWN MEDIAN `new-serial-hz`, not a fixed 55 Hz.
-# A fixed 55 Hz was calibrated on the reference machine, where it splits the
-# session roughly in half (39 fast / 32 slow). On the Arc it left 8 of 182
-# windows "fast" -- 4.4 % -- and those 8 are the STARTUP windows, whose mean
-# interval is exactly one display field because the scene is nearly empty
-# (`[gx-frame-timing]` shows 2 draws per frame there). Every gameplay window
-# fell into "slow", so `frameMsFast`/`replayPctFast` described startup and the
-# "fast vs slow" contrast was really trivial-scene vs gameplay. The median keeps
-# the split meaningful on any machine by putting half the session on each side.
-# Same rule as the per-thread regime split below; keep the two in step.
+# Splits on the VALUE, not the digits: a pattern like `6[0-9]` misclassifies 59.26 as slow.
+# The threshold is this session's own median `new-serial-hz`, not a fixed 55 Hz. A fixed threshold
+# calibrated on another machine put almost every gameplay window in 'slow' on the Arc, while the
+# median puts half the session on each side. Same rule as the per-thread regime split below.
 $presentHz = @($presentLines | ForEach-Object { Get-Number $_ 'new-serial-hz' } | Where-Object { $null -ne $_ } | Sort-Object)
 $presentThresholdHz = if ($presentHz.Count -ge 2) {
     $presentHz[[int][Math]::Floor($presentHz.Count / 2)]
@@ -460,39 +402,28 @@ $unselectedLines  = @($frameTimingLines | Where-Object { $_ -match 'selected=0' 
 $markerPresent    = ($sampledLines.Count + $selectedLines.Count + $unselectedLines.Count) -gt 0
 $renderTotalSampled = @(Get-AllNumbers -Lines $sampledLines -Name 'total-us')
 $renderTotalUnsel   = @(Get-AllNumbers -Lines $unselectedLines -Name 'total-us')
-# The attribution the objective has been missing. `flush-pso-us` is ~97 % of the
-# worst frame in both delivered recordings, but "per call" needs `flush-calls`,
-# and how much of the block is resolution versus everything else needs
-# `pso-resolutions`. Both were absent from every build shipped so far, so this
-# reports unavailable rather than guessing when they are missing.
+# Attribution. `flush-pso-us` dominates the worst frame, but a per-call figure needs `flush-calls`,
+# and the resolution share needs `pso-resolutions`. Reports unavailable when these are missing.
 $flushPsoPerCall = Get-PairedRatio -Lines $frameTimingLines -Numerator 'flush-pso-us' -Denominator 'flush-calls'
 $flushPsoPerCallSampled = Get-PairedRatio -Lines $sampledLines -Numerator 'flush-pso-us' -Denominator 'flush-calls'
 $resolutionsPerFlush = Get-PairedRatio -Lines $frameTimingLines -Numerator 'pso-resolutions' -Denominator 'flush-calls'
 # draws per flush call: how many guest draws one acquisition actually covers.
 # This is the number that says whether batching is already doing its job.
 $drawsPerFlush = Get-PairedRatio -Lines $frameTimingLines -Numerator 'draws' -Denominator 'flush-calls'
-# The honest per-call cost, and the only one valid on an UNINSTRUMENTED frame.
-# `flush-mean-us` comes from ScopedFlushTiming, which wraps the flush_draw_state
-# call site and times one call in kFlushTimingSampleStride (64). It is
-# constructed unconditionally and its clock pair is taken under the sampler, not
-# under `time_detail`, unlike every `*_us` field inside flush_draw_state -- which
-# needs the per-draw instrumentation and is inflated on the frames that carry it.
-# It also includes early-out calls, which `flush-us` does not.
+# Per-call cost, valid on an uninstrumented frame. `flush-mean-us` comes from ScopedFlushTiming, which
+# times one call in kFlushTimingSampleStride (64). The `*_us` fields inside flush_draw_state need
+# per-draw instrumentation and are inflated on frames that carry it. Includes early-out calls.
 $flushMeanAll     = @(Get-AllNumbers -Lines $frameTimingLines -Name 'flush-mean-us')
 $flushMeanSampled = @(Get-AllNumbers -Lines $sampledLines  -Name 'flush-mean-us')
-# Body-path mean, spelled out because dividing flush-us by flush-calls is wrong:
-# early-out calls are in the denominator but contribute nothing to the numerator.
+# Body-path mean. Early-out calls are in the denominator but add nothing to the numerator.
 $bodyPathPerCall = Get-PairedRatio3 -Lines $frameTimingLines `
     -Numerator 'flush-us' -Denominator 'flush-calls' -Exclude 'pso-route-early'
-# producer-wait-us is the simulation thread parked in queue_space_cv_.wait against
-# GALAXY_RENDER_QUEUE_DEPTH -- its only hard coupling to the renderer. Reported
-# over the sampled frames, which are the unbiased ones; on a pre-marker or
-# pre-fix build it was either absent or an epoch-sized garbage value, so it is
-# only trusted when the population marker exists. See AgentWork/agent-14/11-*.md.
+# producer-wait-us is the simulation thread's wait on queue_space_cv_ against GALAXY_RENDER_QUEUE_DEPTH,
+# its only hard coupling to the renderer. Trusted only when the population marker exists; earlier builds
+# reported it as absent or as epoch-sized values.
 $producerWaitSampled = @(Get-AllNumbers -Lines $sampledLines -Name 'producer-wait-us')
 $producerWaitAll     = @(Get-AllNumbers -Lines $frameTimingLines -Name 'producer-wait-us')
-# A pre-fix build measured this against the clock epoch, so any value above a
-# second is not a wait but an artefact. Detect it rather than reporting it.
+# Values above one second measure the clock epoch, not a wait. They are detected and not reported.
 $producerWaitGarbage = @($producerWaitAll | Where-Object { $_ -gt 1000000 }).Count -gt 0
 $result.presentSplit = [ordered]@{
     windows      = $presentLines.Count
@@ -524,16 +455,15 @@ $result.renderFrameTiming = [ordered]@{
     totalUsMedianSampled = Round-OrNull (Get-Percentile $renderTotalSampled 0.5) 0
     parseUsMedianAll     = Round-OrNull (Get-Percentile $renderParseAll 0.5) 0
     flushPsoUsMedianAll  = Round-OrNull (Get-Percentile $renderPsoAll 0.5) 0
-    # Per-call attribution, paired within each frame. `unavailable` when the build
-    # predates the flush-calls counter, which is the honest answer rather than a
-    # number derived from the wrong denominator.
+    # Per-call attribution, paired within each frame. Reports `unavailable` when the build predates the
+    # flush-calls counter.
     flushPsoUsPerCallMedian = if ($flushPsoPerCall.ratios.Count) { Round-OrNull (Get-Percentile $flushPsoPerCall.ratios 0.5) 1 } else { 'unavailable' }
     flushPsoUsPerCallP95    = if ($flushPsoPerCall.ratios.Count) { Round-OrNull (Get-Percentile $flushPsoPerCall.ratios 0.95) 1 } else { 'unavailable' }
     flushPsoUsPerCallMax    = if ($flushPsoPerCall.ratios.Count) { Round-OrNull (($flushPsoPerCall.ratios | Measure-Object -Maximum).Maximum) 1 } else { 'unavailable' }
     flushPsoUsPerCallSampledMedian = if ($flushPsoPerCallSampled.ratios.Count) { Round-OrNull (Get-Percentile $flushPsoPerCallSampled.ratios 0.5) 1 } else { 'unavailable' }
     flushPsoUsPerCallSkipped = $flushPsoPerCall.skipped
-    # Sampled per-call flush cost. Valid on a routine frame, so this is the number
-    # to compare across builds; `flushPsoUsPerCallMedian` above is body-path only.
+    # Sampled per-call flush cost, valid on a routine frame. Compare this across builds;
+    # `flushPsoUsPerCallMedian` above is body-path only.
     flushMeanUsMedianAll     = if ($flushMeanAll.Count)     { Round-OrNull (Get-Percentile $flushMeanAll 0.5) 1 }     else { 'unavailable' }
     flushMeanUsMedianSampled = if ($flushMeanSampled.Count) { Round-OrNull (Get-Percentile $flushMeanSampled 0.5) 1 } else { 'unavailable' }
     flushMeanUsP95Sampled    = if ($flushMeanSampled.Count) { Round-OrNull (Get-Percentile $flushMeanSampled 0.95) 1 } else { 'unavailable' }
@@ -572,10 +502,9 @@ $result.decrementerDeadlineAudit = if ($decLine.Count) { [ordered]@{
     dispatches    = Get-Number $decLine[-1] 'dispatches'
 } } else { 'unavailable' }
 
-# Native THP decode. The objective notes neither delivered recording exercised
-# it, so record it explicitly rather than assuming movie playback was covered.
-# (Array concatenation is built up rather than written as `pipeline + @(..)`:
-# PowerShell parses a bare `+` after a pipeline as a command name.)
+# Native THP decode, recorded explicitly because a session may not exercise movie playback.
+# (Array concatenation is built up rather than written as `pipeline + @(..)`: PowerShell parses a
+# bare `+` after a pipeline as a command name.)
 $thpLine = @($stderrLines | Where-Object { $_ -match '^\[thp-boundary-summary\]' })
 if ($stdoutText) {
     $thpLine += @(($stdoutText -split "`r?`n") | Where-Object { $_ -match '^\[thp-boundary-summary\]' })
@@ -623,41 +552,23 @@ if ($threadsText) {
                 coresAverage = if ($_.lastElapsed -gt 0) { [Math]::Round($cpuSeconds / $_.lastElapsed, 3) } else { 0 }
             }
         } | Sort-Object cpuSeconds -Descending
-        # Session-wide totals answer "who used the most CPU"; they do NOT answer
-        # "whose CPU rises when the frame rate falls", and a thread can be the
-        # largest consumer overall while being flat across regimes. Split each
-        # thread by the frame-rate population of the window it was sampled in, so
-        # the thread that actually tracks the slowdown is visible.
+        # Session totals show the largest CPU consumer overall, not whose CPU rises when the frame rate falls.
+        # A thread can be the largest consumer and flat across regimes. Each thread is split by the frame-rate
+        # population of the window it was sampled in.
         #
-        # Window k of [present-stats] covers roughly [2k, 2k+2) seconds, which is
-        # the same clock threads.csv timestamps with elapsedSeconds.
+        # Window k of [present-stats] covers roughly [2k, 2k+2) seconds, the same clock threads.csv uses for
+        # elapsedSeconds.
         $hzBySecond = @{}
         for ($i = 0; $i -lt $presentLines.Count; $i++) {
             $h = Get-Number $presentLines[$i] 'new-serial-hz'
             if ($null -ne $h) { $hzBySecond[$i] = $h }
         }
-        # The split threshold is the session's OWN MEDIAN frame rate, computed once
-        # above as $presentThresholdHz, not a fixed 55 Hz.
+        # The split threshold is the session's own median frame rate, $presentThresholdHz, not a fixed 55 Hz.
+        # A fixed threshold put only the startup windows (nearly empty scene, one field per frame) in 'fast'
+        # on the Arc, so the regime delta would contrast startup against gameplay. The median separates the
+        # session's faster and slower halves. On the reference machine it lands near 57 Hz.
         #
-        # A fixed 55 Hz was built and tested against the reference machine, where
-        # 54.9 % of windows clear it and the split is meaningful. On the Arc it
-        # classifies 8 of 182 windows as fast -- 4.4 % -- and those 8 are the
-        # STARTUP windows whose mean interval is exactly one display field because
-        # the scene is nearly empty (`[gx-frame-timing]` shows 2 draws per frame
-        # there). Every gameplay window falls in 'slow'.
-        #
-        # The consequence is not a missing number but a confident WRONG one: the
-        # per-thread regime delta would contrast trivial-scene startup against
-        # gameplay and label whichever thread is busy at startup as "the one to
-        # fix", which is a scene difference, not a regime difference.
-        #
-        # The median keeps the split meaningful on any machine: it puts half the
-        # session on each side by construction, so on the Arc it separates the
-        # session's faster half of gameplay from its slower half, which is the
-        # comparison the section is actually for. On the reference machine it
-        # lands at ~57 Hz and reproduces the original behaviour.
-        #
-        # Shared with the present-stats split above so the two can never disagree.
+        # Shared with the present-stats split above so the two cannot disagree.
         $regimeThresholdHz = $presentThresholdHz
         $threadCpuByPop = @{}
         $threadPrev = @{}
@@ -665,13 +576,9 @@ if ($threadsText) {
             $id = $row.threadId
             $sec = [int][Math]::Floor([double]$row.elapsedSeconds)
             $cpu = [double]$row.cpu100ns
-            # The row at elapsed `e` accounts for the interval [e-1, e], because
-            # the sampler writes it at the end of each 1 s poll. Classify by the
-            # window containing that interval's midpoint: elapsed 1 and 2 both
-            # belong to window 0. Using `floor(e/2)` instead put the second sample
-            # of every window in the next one, so half of each thread's in-window
-            # CPU was attributed to the wrong population -- a synthetic case with a
-            # known answer read 0.118 where it should have read 0.2.
+            # The row at elapsed `e` covers the interval [e-1, e], since the sampler writes it at the end of each
+            # 1 s poll. Classify by the window containing the interval's midpoint: elapsed 1 and 2 both belong to
+            # window 0. Using floor(e/2) misassigns the second sample of each window.
             $win = if ($sec -ge 1) { [int][Math]::Floor(($sec - 1) / 2) } else { 0 }
             $pop = if ($hzBySecond.ContainsKey($win)) {
                 if ($hzBySecond[$win] -ge $regimeThresholdHz) { 'fast' } else { 'slow' }
@@ -683,11 +590,9 @@ if ($threadsText) {
                         $threadCpuByPop[$id] = @{ fast = 0.0; slow = 0.0; fastSec = 0.0; slowSec = 0.0 }
                     }
                     $threadCpuByPop[$id][$pop] += $d
-                    # Accumulate the elapsed time this delta actually covers. The
-                    # first sample of each population is dropped above (its delta
-                    # spans the regime boundary), so dividing by a window COUNT
-                    # charges that population for time it never measured and
-                    # understates cores by roughly one sample per regime.
+                    # Accumulates the elapsed time each delta covers. The first sample of each population is dropped
+                    # because its delta spans the regime boundary. Dividing by a sample count would charge each population
+                    # for time it did not measure.
                     if ($pop -eq 'fast') { $threadCpuByPop[$id].fastSec++ } else { $threadCpuByPop[$id].slowSec++ }
                 }
             }
@@ -699,8 +604,8 @@ if ($threadsText) {
                 threadId = [int]$_
                 fastCpuSeconds = [Math]::Round($e.fast / 1e7, 3)
                 slowCpuSeconds = [Math]::Round($e.slow / 1e7, 3)
-                # CPU per second of wall time within each population, which is the
-                # comparable figure: the two populations have different durations.
+                # CPU per second of wall time within each population. Populations differ in duration, so this is the
+                # comparable figure.
                 fastCores = if ($e.fastSec -gt 0) { [Math]::Round(($e.fast / 1e7) / $e.fastSec, 3) } else { 0 }
                 slowCores = if ($e.slowSec -gt 0) { [Math]::Round(($e.slow / 1e7) / $e.slowSec, 3) } else { 0 }
             }
@@ -708,10 +613,8 @@ if ($threadsText) {
         $result.perThreadCpu = [ordered]@{
             sampled = $true
             windowSeconds = Round-OrNull ([double]($rows[-1].elapsedSeconds)) 1
-            # Reported so the split is visible rather than implied: it is this
-            # session's own median frame rate, not a fixed constant. See the note
-            # at the threshold computation for why a fixed 55 Hz gave the Arc a
-            # 4.4 % 'fast' population made entirely of trivial-scene startup.
+            # Reported so the split is visible: this is the session's own median frame rate, not a constant.
+            # See the note at the threshold computation.
             regimeThresholdHz = [Math]::Round($regimeThresholdHz, 2)
             topThreads = @($summary | Select-Object -First 6)
             # Sorted by how much each thread's CPU per wall second RISES in the slow
@@ -734,19 +637,11 @@ if ($processText) {
     }
 }
 
-# ---- guest progress rate ------------------------------------------------
-# checkpoint_count is incremented by the generated guest code itself at every
-# checkpoint (native_runtime.cpp:1384 declares it, :25782 increments it, and
-# :29203 publishes &services.checkpoint_counter to the module), so its rate is how
-# fast the guest actually advanced -- independent of any host-side timing model
-# and therefore independent of every claim about cycles per guest instruction.
-# That makes it the right measure for "is this machine slow, or is it blocked?":
-# a machine that advances the guest slowly *while using no more CPU* is not
-# CPU-throughput-bound, whatever the per-instruction cost is.
-# Absolute rate only. Do NOT divide by a `vi=` field: it is slot-relative in
-# [input-anomaly] and the [vi-deadline-failure-probe] line is absent from some
-# builds, so a per-VI ratio is not comparable (the two retained recordings differ
-# by 20x on that ratio while agreeing on this one).
+# Guest progress rate, from checkpoint_count, which the generated guest code increments at every
+# checkpoint. Its rate is how fast the guest advanced, independent of host timing models. A machine
+# that advances slowly while using no more CPU is blocked, not CPU-bound.
+# Absolute rate only: do not divide by a `vi=` field, which is slot-relative in [input-anomaly] and
+# absent from some builds.
 $maxCheckpoint = 0L
 foreach ($line in $stderrLines) {
     foreach ($m in [regex]::Matches($line, '(?<![-\w])checkpoint=(\d+)')) {
@@ -761,12 +656,9 @@ $result.guestProgress = if ($maxCheckpoint -gt 0 -and $elapsed -gt 0) {
         perSecond        = [Math]::Round($maxCheckpoint / $elapsed, 0)
         overSeconds      = [Math]::Round($elapsed, 1)
         cpuSeconds       = if ($null -ne $cpuSeconds) { [Math]::Round($cpuSeconds, 1) } else { 'unavailable' }
-        # CPU-seconds consumed per completed guest checkpoint. This is the
-        # clock-free discriminator between "expensive" and "blocked": CPU seconds
-        # are CPU seconds, and a thread that is waiting consumes none, so blocking
-        # drives this number DOWN, not up. Cross-machine comparison is therefore
-        # legitimate in a way that a frame-rate or cycles-per-instruction ratio is
-        # not, because it needs no assumption about either machine's clock.
+        # CPU seconds per completed guest checkpoint. A clock-free measure that separates expensive from blocked:
+        # a waiting thread uses no CPU, so blocking lowers this number. Cross-machine comparison needs no
+        # assumption about clock speed.
         nsCpuPerCheckpoint = if ($null -ne $cpuSeconds) {
                                  [Math]::Round($cpuSeconds * 1e9 / $maxCheckpoint, 1)
                              } else { 'unavailable' }
@@ -774,11 +666,9 @@ $result.guestProgress = if ($maxCheckpoint -gt 0 -and $elapsed -gt 0) {
     }
 } else { 'unavailable (no checkpoint= field or no process.csv)' }
 
-# ---- sim-thread blocking inside EFB peeks ------------------------------
-# Each peek drains the pending GX FIFO and then round-trips through the frame
-# queue, blocking the simulation thread on the render thread twice. Reported
-# split, because the two halves are different dependencies and a fix for one is
-# not a fix for the other. Absent on any build before this instrumentation.
+# Each EFB peek drains the pending GX FIFO and round-trips through the frame queue, blocking the
+# simulation thread on the render thread twice. The two halves are reported separately because they are
+# different dependencies. Absent on builds before this instrumentation.
 $peekLine = @($stderrLines | Where-Object { $_ -match '^\[gx-efb-peek-summary\]' })
 $result.efbPeek = if ($peekLine.Count) {
     $p = $peekLine[-1]
@@ -793,15 +683,11 @@ $result.efbPeek = if ($peekLine.Count) {
     }
 } else { 'unavailable (pre-instrumentation build)' }
 
-# ---- VI boundary state machine -----------------------------------------
-# The guest reaches a pending VI boundary and the host advances it until IRQ24 is
-# delivered. `advances` far exceeding `boundaries` means the boundary needed many
-# re-entries, and `await-dispatch-noop` counts the re-entries that returned
-# "progress" while delivering nothing -- when an external dispatch is already
-# active the callee cannot deliver, by construction. Together with the punctual
-# `[vi-deadline-audit]` (scheduled == delivered), this distinguishes "the guest
-# never received its interrupt" from "the guest received it and still could not
-# finish a frame".
+# The guest reaches a pending VI boundary and the host advances until IRQ24 is delivered. `advances` far
+# above `boundaries` means many re-entries. `await-dispatch-noop` counts re-entries that reported progress
+# while delivering nothing, which happens by construction while an external dispatch is active. With the
+# [vi-deadline-audit] line (scheduled == delivered), this separates "the guest never got its interrupt"
+# from "the guest got it and still could not finish a frame".
 $viBoundaryLine = @($stderrLines | Where-Object { $_ -match '^\[pending-vi-boundary-audit\]' })
 $viDeadlineLine = @($stderrLines | Where-Object { $_ -match '^\[vi-deadline-audit\]' })
 if ($viBoundaryLine.Count) {
@@ -843,14 +729,10 @@ if ($viBoundaryLine.Count) {
     $result.viBoundaryDelivered = 'unavailable'
 }
 
-# ---- stall budget -------------------------------------------------------
-# Every quantity the runtime reports as lateness, split into the two categories
-# that must never be mixed. ADDITIVE fields are totals of blocked time and may be
-# summed to bound how much of the session any stall fix could recover. NON-additive
-# fields are maxima or accumulated per-event latencies that OVERLAP each other;
-# summing them produces a larger, meaningless number that has already misled this
-# project once. `selected-to-store-total-us` is the trap: it accumulates a latency
-# per pointer store, so 16.7 s on the Arc is not 16.7 s of blocked time.
+# Lateness fields in two categories that must not be mixed. ADDITIVE fields are totals of blocked time and
+# may be summed to bound what a stall fix could recover. NON-additive fields are maxima or per-event
+# latencies that overlap, so summing them gives a meaningless total. `selected-to-store-total-us`
+# accumulates a latency per pointer store, so it is not blocked time.
 $TICKS_PER_SECOND = 60750000.0
 function Sum-StallField([string]$Tag, [string]$Field, [double]$Divisor) {
     $ls = @($stderrLines | Where-Object { $_ -match ('^\[' + $Tag + '\]') })
@@ -894,13 +776,9 @@ $result.stallBudget = [ordered]@{
     note               = 'additiveTotalSeconds bounds what ALL reported stall fixes could recover; nonAdditiveNotSummed are maxima or overlapping per-event latencies and must never be added in'
 }
 
-# ---- sampled host clock (clock.csv from perf_session -Monitor) -----------
-# Converts the clock-free nsCpuPerCheckpoint into CYCLES per checkpoint, which is
-# what separates "this CPU is slower per clock" from "this build does more work per
-# unit". A14-19's 3.44x residual rested on an ASSUMED 2.2 GHz for the Arc; a laptop
-# under sustained CPU + iGPU load can sit far below its rated clock, and the iGPU
-# shares the package power budget. Median over the run, so a boost spike cannot
-# masquerade as the sustained state.
+# Converts the clock-free nsCpuPerCheckpoint into CYCLES per checkpoint, separating "slower per clock" from
+# "more work per unit". The clock is a median over the run, so a boost spike cannot pass as the sustained
+# state. The clock is measured, not assumed: a laptop under sustained load can run well below its rated clock.
 $clockCsv = Join-Path $sessionPath 'clock.csv'
 $result.hostClock = 'unavailable (no clock.csv; start the run with tools/perf_session.ps1)'
 if (Test-Path -LiteralPath $clockCsv) {
@@ -917,9 +795,8 @@ if (Test-Path -LiteralPath $clockCsv) {
                 maxMhz        = [Math]::Round(($vals | Measure-Object -Maximum).Maximum, 0)
                 medianLoadPct = if ($loads.Count) { [Math]::Round(($loads | Measure-Object -Average).Average, 0) } else { 'unavailable' }
             }
-            # Coerce rather than type-test: the value's runtime type depends on how
-            # Round-OrNull produced it, and a strict `-is [double]` guard silently
-            # skipped this computation on the first attempt.
+            # Coerces rather than type-tests: the runtime type depends on how Round-OrNull produced the value, and a
+            # strict `-is [double]` guard would skip this computation.
             try {
                 $nsPerCk = [double]$result.guestProgress.nsCpuPerCheckpoint
                 if ($nsPerCk -gt 0 -and $result.hostClock.medianMhz -gt 0) {
@@ -959,16 +836,9 @@ $row = [ordered]@{
 }
 $result.compactRow = $row
 
-# ---- the objective's required results table ----------------------------
-# Emitted on request, one row per operating mode rather than one row per session.
-# The objective requires "one compact results table (build, hardware, scene,
-# rendering dimensions, cache condition, new-frame rate, frame-time tails, CPU/GPU
-# costs, correctness, retained change)" and separately requires matched scenes; a
-# single averaged row cannot satisfy both, and A14-16 showed both retained
-# recordings are multi-modal, so a session row would describe no scene it contains.
-# Columns are emitted in the objective's stated order. A cell that cannot be
-# derived is written as 'unavailable' rather than guessed, and 'scene' is the
-# operating-mode time span because that is the only scene identity the logs carry.
+# Emitted on request, one row per operating mode rather than per session, because one averaged row describes
+# no scene in a multi-modal recording. Columns follow the objective's order. A cell that cannot be derived
+# is written as 'unavailable'. 'scene' is the operating-mode time span, the only scene identity the logs carry.
 if ($ResultsTable) {
     $hcName = if ($sessionObj -and $sessionObj.PSObject.Properties['hostCpu'] -and $sessionObj.hostCpu) {
         $h = $sessionObj.hostCpu
@@ -993,10 +863,8 @@ if ($ResultsTable) {
         $result.productionP95UpperUsMedian, $result.productionP99WorstUs, $result.productionMaxWorstUs)
     $cpuGpuCell = ('session: cores={0} wsPeakMb={1} guestCkPerSec={2} nsCpuPerCk={3} gpu={4} gpuMsMax={5} psoMisses={6}' -f `
         $row.cores, $row.wsPeakMb, $row.guestCkPerSec, $row.nsCpuPerCk, $row.gpuState, $result.gpu.totalMsMax, $row.psoMisses)
-    # Correctness: only what the recording can actually witness. Distinct
-    # new-frame and presentation counters are checked to be present rather than
-    # assumed, because the objective forbids counting a repeated presentation as
-    # a new frame and that is exactly what their absence would allow.
+    # Correctness: only what the recording can witness. The presence of the new-frame and presentation counters
+    # is checked, so a repeated presentation cannot be counted as a new frame.
     $viPunctual = if ($result.viBoundaryDelivered -is [System.Collections.IDictionary]) {
         $result.viBoundaryDelivered.punctual } else { 'unavailable' }
     $distinctCounters = if ($result.newFrameHz.median -ne $null -and $result.xfbProductionHzMedian -ne $null) {
@@ -1050,9 +918,7 @@ foreach ($r in @($om.runs | Sort-Object windows -Descending | Select-Object -Fir
     Write-Output ("               t={0,6}..{1,-6}s  {2,6} Hz  over {3,3} windows" -f $r.fromSeconds, $r.toSeconds, $r.meanHz, $r.windows)
 }
 if ($om.note) { Write-Output ("               WARNING: {0}" -f $om.note) }
-# The `-upper-us` fields are bucket edges, so label them as such rather than as
-# percentiles: a reader who takes them for point values ends up dividing a rounded
-# number by a field period and "discovering" quantisation that is not there.
+# The `-upper-us` fields are bucket edges, not percentiles, so they are labelled that way.
 if ($prodMax.Count -gt 0) {
     Write-Output ("frame tails  : production-max-us exact; p95/p99-upper-us are 1 ms BUCKET EDGES (upper bounds), never point values")
     Write-Output ("field quantisation: {0} of {1} windows have max-us within 5% of a whole 60 Hz field; median fractional distance {2}" -f `
@@ -1073,9 +939,8 @@ if ($result.guestProgress -is [System.Collections.IDictionary]) {
     if ($result.hostClock -is [System.Collections.IDictionary]) {
         Write-Output ("               sampled host clock: median={0} MHz (min {1}, max {2}) over {3} samples, load={4}%" -f `
             $result.hostClock.medianMhz, $result.hostClock.minMhz, $result.hostClock.maxMhz, $result.hostClock.samples, $result.hostClock.medianLoadPct)
-        # OrderedDictionary keys are not exposed through PSObject.Properties, so the
-        # presence test must go through the dictionary interface. Using the PSObject
-        # form silently suppressed this line even when the value had been computed.
+        # OrderedDictionary keys are not exposed through PSObject.Properties, so the presence test goes through the
+        # dictionary interface.
         if ($result.hostClock.Contains('cyclesPerCheckpoint')) {
             Write-Output ("               => {0} CYCLES per completed checkpoint at the SAMPLED clock (was estimated from an assumed 2.2 GHz for the Arc)" -f `
                 $result.hostClock.cyclesPerCheckpoint)
@@ -1103,9 +968,8 @@ Write-Output ("               total-us median all={0}  sampled={1}  parse-us med
     $rt.totalUsMedianAll, $(if ($null -eq $rt.totalUsMedianSampled) { 'none' } else { $rt.totalUsMedianSampled }), $rt.parseUsMedianAll, $rt.flushPsoUsMedianAll)
 Write-Output ("               producer-wait-us (sim thread parked on the render queue): sampled median={0} max={1}" -f `
     $rt.producerWaitUsMedianSampled, $rt.producerWaitUsMaxSampled)
-# The attribution that decides what to optimise next. Always printed: when the
-# denominator is absent from the build, `unavailable` plus the warning below is
-# the answer, not silence.
+# Attribution for the next optimisation target. Always printed: when the denominator is missing from the build,
+# `unavailable` and the warning below are the answer.
 Write-Output ("               flush per call (sampled, includes early-out, valid uninstrumented): median={0} us  sampled-only median={1} us  p95={2} us" -f `
     $rt.flushMeanUsMedianAll, $rt.flushMeanUsMedianSampled, $rt.flushMeanUsP95Sampled)
 Write-Output ("               flush body path per call = flush-us / (flush-calls - pso-route-early): median={0} us" -f `

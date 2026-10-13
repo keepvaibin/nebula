@@ -43,9 +43,8 @@ constexpr bool is_rmge01_kpad_ring_destination(
 static_assert(is_rmge01_kpad_ring_destination(0u, 0x8061D450u));
 static_assert(!is_rmge01_kpad_ring_destination(0u, 0x8061D451u));
 
-// Passive proof bookkeeping only. None of these states are consulted by the
-// Wii Remote producer, IOS delivery cadence, translated WPAD/KPAD code, or
-// game-visible memory.
+// Passive proof bookkeeping. The Wii Remote producer, IOS delivery cadence, translated
+// WPAD/KPAD code and game-visible memory never read this state.
 enum class NativeInputCausalityReason : std::uint32_t {
     None,
     InvalidDeliveryPayload,
@@ -122,14 +121,12 @@ struct NativeInputCausalKpadSample {
     std::uint64_t kpad_copy_completion_wii_ticks{};
 };
 
-// Exact identity transferred from the newest 0x38-byte KPAD sampling-ring
-// entry to output KPADStatus[0] by RMGE01's normal gameplay consumer,
-// WPadHolder::updateReadDataOnly (KPADRead call 0x803AB2B0, max_samples=120).
-// KPADRead drains oldest-to-newest while filling its output in reverse, so the
-// newest protected ring entry ((write_index - 1) modulo 120) is output index
-// zero; write_index itself is valid in the inclusive range [0, 120]. The
-// max_samples=1 call at 0x803AA570 belongs to JUTException::readPad and is
-// classified for diagnostics only; it can never satisfy gameplay IR proof.
+// The exact identity moved from the newest 0x38-byte KPAD ring entry to output KPADStatus[0] by
+// RMGE01's gameplay consumer, WPadHolder::updateReadDataOnly (KPADRead call 0x803AB2B0,
+// max_samples=120). KPADRead drains oldest to newest while filling output in reverse, so the
+// newest protected entry, (write_index - 1) modulo 120, is output index zero. write_index itself
+// is valid in the inclusive range [0, 120]. The max_samples=1 call at 0x803AA570 belongs to
+// JUTException::readPad and is for diagnostics only. It can never satisfy gameplay proof.
 struct NativeInputCausalKpadReadSample {
     bool exact{};
     bool gameplay_read_data_route{};
@@ -168,9 +165,8 @@ struct NativeInputCausalGameplayPointerSample {
     std::uint64_t observation_wii_ticks{};
 };
 
-// The three volatile PPC argument registers as observed immediately before a
-// proven WPADRead memmove call.  The tracker retains them only until the
-// ordinary post-call checkpoint verifies the actual guest-memory copy.
+// The three volatile PPC argument registers as observed just before a proven WPADRead memmove
+// call. They are kept only until the post-call checkpoint verifies the actual guest-memory copy.
 struct NativeInputWpadReadCopyArguments {
     std::uint32_t call_pc{};
     std::uint32_t destination{};
@@ -215,11 +211,10 @@ public:
 
     [[nodiscard]] Token begin_kpad_sample(std::uint32_t channel) noexcept;
 
-    // The pre-call observation retains the architectural arguments before the
-    // translated memmove helper may clobber its volatile registers. Completion
-    // is observed at the existing call-return checkpoint, where
-    // `snapshot_equal` is measured from the actual guest bytes; it is never
-    // inferred. The combined method is retained for unit-level lifecycle tests.
+    // The pre-call observation keeps the architectural arguments before the translated memmove
+    // helper can clobber its volatile registers. Completion is observed at the call-return
+    // checkpoint, where `snapshot_equal` is measured from the actual guest bytes, never inferred.
+    // The combined method is kept for unit-level lifecycle tests.
     void begin_wpad_read_copy(
         std::uint32_t call_pc,
         std::uint32_t destination,
@@ -326,11 +321,10 @@ private:
 
     mutable std::mutex mutex_;
     std::deque<PendingDelivery> pending_deliveries_;
-    // At a report-mode/epoch boundary, a translated decoder can still revisit
-    // bytes delivered in the immediately preceding generation while the first
-    // new-generation packet is already queued.  Retain only that displaced
-    // FIFO so an exact old-byte revisit is explicitly classified as
-    // untracked; it can never establish a new identity.
+    // At a report-mode or epoch boundary, a translated decoder can still revisit bytes delivered in
+    // the previous generation while the first new-generation packet is queued. Only that displaced
+    // FIFO is kept, so an exact old-byte revisit is classified as untracked. It can never establish
+    // a new identity.
     std::deque<PendingDelivery> retired_deliveries_;
     std::vector<DecoderFrame> decoder_frames_;
     std::vector<KpadFrame> kpad_frames_;
@@ -351,10 +345,9 @@ private:
     std::uint64_t transport_mode_invalidations_{};
     std::uint64_t transport_disconnect_resets_{};
     bool transport_armed_{};
-    // This is diagnostic provenance only: it records that native ACL traffic
-    // has crossed the IOS boundary, but a later decoder with no queued report
-    // remains an untracked guest-state revisit rather than a fabricated
-    // delivery. Exact proof still requires a queued delivery and byte match.
+    // Diagnostic provenance only. It records that native ACL traffic has crossed the IOS boundary.
+    // A later decoder with no queued report stays an untracked guest-state revisit, not a fabricated
+    // delivery. Exact proof still requires a queued delivery and a byte match.
     bool have_observed_native_delivery_{};
     Token next_token_{1u};
     std::uint64_t next_decode_sequence_{1u};

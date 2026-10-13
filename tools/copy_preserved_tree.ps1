@@ -1,43 +1,26 @@
-# Copy a tree while preserving NTFS alternate data streams, including the
-# directory streams that PowerShell's stream enumeration cannot see.
+# Copies a tree and keeps NTFS alternate data streams, including the directory streams
+# that Get-Item -Stream cannot enumerate.
 #
-# WHY THIS EXISTS
-# ---------------
-# Nebula's native NAND stores ISFS ownership/permission metadata in a stream
-# named `galaxy.isfs.meta`, on DIRECTORIES as well as files. A copy that drops
-# the directory streams hands the runtime a NAND whose contents are complete but
-# whose ownership metadata is absent, and `probe_native_nand_root` rejects that
-# as unrecoverable:
+# Nebula's native NAND stores ISFS ownership/permission metadata in a stream named
+# `galaxy.isfs.meta`, on directories as well as files. A copy that drops the directory
+# streams gives the runtime a NAND whose contents are complete but whose metadata is
+# missing. probe_native_nand_root rejects that with ISFS result -102.
 #
-#     [boot] Unhandled exception: native NAND root preflight failed with ISFS result -102
-#     exit.json -> { "exit": 9 }
+# Two PowerShell behaviours make this non-obvious:
+# 1. `Get-Item -Stream *` (and the .Stream property) returns no streams for a directory,
+#    even when `cmd /c dir /r` shows one. A loop built on it copies only file streams.
+# 2. [IO.File]::ReadAllBytes / WriteAllBytes throw NotSupportedException for any stream
+#    path on this .NET runtime, so they cannot read or write streams.
 #
-# Measured on `D:\NebulaWork\perf-20261007`: the seed has metadata on 11
-# directories and 5 files; the copy this function previously produced preserved
-# all 5 file streams and lost all 11 directory streams, so every perf session
-# died at boot and nothing could be measured.
-#
-# THE TWO BUGS BEING AVOIDED
-# -------------------------
-# 1. `Get-Item -Stream *` (and the `.Stream` property) enumerates NOTHING for a
-#    directory — it returns 0 streams even when the directory demonstrably has
-#    one via `cmd /c dir /r`. So the old loop copied only file streams.
-# 2. `[IO.File]::ReadAllBytes` / `WriteAllBytes` throw
-#    `NotSupportedException: "The given path's format is not supported."` for ANY
-#    stream path on this .NET runtime, file or directory. So even the file-stream
-#    copy relied on calls that cannot read a stream.
-#
-# What DOES work, verified byte-exact round-trip on both files and directories:
+# This round trip is byte-exact on files and directories:
 #     Get-Content -LiteralPath <path> -Stream <name> -Encoding Byte
 #     Set-Content -LiteralPath <path> -Stream <name> -Value <byte[]> -Encoding Byte
 #
-# So this copy does not enumerate at all. The runtime uses a known, closed set of
-# three stream names (see `native_host.cpp:20379-20383`), so each is probed by
-# name and the ones that exist are copied.
+# The copy does not enumerate. The runtime uses a closed set of three stream names
+# (native_host.cpp:20379-20383), so each name is probed and the ones present are copied.
 #
-# NOTE: `-Encoding Byte` is Windows PowerShell 5.1 syntax; `-AsByteStream` is
-# PowerShell 7+ only. This targets 5.1 deliberately, because that is what the
-# harness runs under (`$PSVersionTable.PSVersion` = 5.1.26100).
+# -Encoding Byte is Windows PowerShell 5.1 syntax; -AsByteStream requires PowerShell 7.
+# This script targets 5.1, the harness runtime.
 
 function Get-PreservedStreamNames {
     # Kept in sync with native_host.cpp:20379-20383.
@@ -109,9 +92,8 @@ function Copy-PreservedTree {
             throw "File mismatch: $relative"
         }
     }
-    # Fail loudly on a shortfall. This is the check whose absence let a copy that
-    # preserved 5 of 16 metadata streams look successful, and it cost this machine
-    # every measurement it might have taken.
+    # Fail on a shortfall: the number of copied streams must match the source. A copy that
+    # drops streams must not report success.
     $expectedStreams = 0
     foreach ($entry in $entries) {
         foreach ($name in $streamNames) {

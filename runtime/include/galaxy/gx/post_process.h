@@ -129,9 +129,8 @@ public:
 
     [[nodiscard]] const PostProcessSettings& settings() const noexcept { return settings_; }
 
-    // Takes new settings between frames on the render thread. A quality
-    // change rebuilds the two SMAA pipelines (the old ones are released
-    // `frames_in_flight` frames later); everything else is read per frame.
+    // Takes new settings between frames on the render thread. A quality change rebuilds the two SMAA
+    // pipelines; the replaced ones are released `frames_in_flight` frames later. Everything else is read per frame.
     void apply_settings(const PostProcessSettings& settings,
                         std::uint64_t frame_index, unsigned frames_in_flight);
 

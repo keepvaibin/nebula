@@ -1554,12 +1554,11 @@ PpcFloatResult ppc_f64_ternary_to_f32(
     multiplicand = flush_f64_input(multiplicand, fpscr);
     multiplier = flush_f64_input(multiplier, fpscr);
     addend = flush_f64_input(addend, fpscr);
-    // NI does not exclude normal/zero binary32 operands widened to f64.
-    // In particular, do NOT route widened f32 subnormals through f32 NI input
-    // flushing: they are normal scalar f64 values. The exact source proof
-    // below excludes them. The native result proof also declines minimum
-    // normal and nonzero subnormal outputs, preserving scalar pre-round NI
-    // behavior at the boundary where it differs from paired arithmetic.
+    // NI does not exclude normal/zero binary32 operands widened to f64. Widened f32 subnormals
+    // must not go through f32 NI input flushing: they are normal scalar f64 values. The exact
+    // source proof below excludes them. The native result proof also declines minimum normal
+    // and nonzero subnormal outputs, preserving scalar pre-round NI behavior at the boundary
+    // where it differs from paired arithmetic.
     PpcFloatResult ni_fast{};
     if ((fpscr & (kNi | 3u)) == kNi &&
         try_narrow_normal_or_zero_widened_f32(multiplicand, a32) &&

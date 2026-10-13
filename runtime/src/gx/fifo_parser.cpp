@@ -1,16 +1,14 @@
-// fifo_parser.cpp — GX FIFO opcode dispatcher.
+// fifo_parser.cpp: GX FIFO opcode dispatcher.
 //
-// Hard-fail contract: an unknown opcode, a truncated payload, or an
-// unresolvable guest pointer throws GxFatalError after writing a .gxdump
-// artifact. Unknown CP/XF/BP state writes are fatal before state mutation.
-// Hardware-observed no-op command bytes 0x01-0x07/0x3f remain explicitly
-// classified and are ignored by the real FIFO.
+// Hard-fail contract: an unknown opcode, a truncated payload, or an unresolvable guest
+// pointer throws GxFatalError after writing a .gxdump artifact. Unknown CP/XF/BP state
+// writes are fatal before state mutation. Hardware no-op command bytes 0x01-0x07 and 0x3f
+// are classified explicitly and ignored, as the real FIFO ignores them.
 //
-// Endianness: all FIFO payload words are big-endian.  Scalar fields (opcodes,
-// register indices, counts) are read with FifoCursor::read_u8/u16/u32 which
-// perform the byte-swap inline.  Bulk vertex arrays are taken as raw byte
-// windows and byte-swapped with the SSSE3 kernels below so the hot path never
-// goes through per-element branches.
+// Endianness: all FIFO payload words are big-endian. Scalar fields (opcodes, register
+// indices, counts) are read with FifoCursor::read_u8/u16/u32, which swap bytes inline.
+// Bulk vertex arrays are taken as raw byte windows and swapped with the SSSE3 kernels
+// below, so the hot path has no per-element branches.
 
 #include "galaxy/gx/fifo_parser.h"
 #include "galaxy/gx/snapshot_region_lookup.h"
@@ -145,19 +143,9 @@ bool should_trace_fifo_offset(std::size_t offset) {
     return range.enabled && offset >= range.begin && offset <= range.end;
 }
 
-// NOTE (agent-18): a `per_command_fifo_timing_enabled()` gate on the per-command
-// steady_clock reads lived here and has been REMOVED. It was justified by an
-// arithmetic error -- "two clocks per command is the dominant cost they report" --
-// which the probe at AgentWork/agent-18/probes/clock_overhead_probe.cpp refutes:
-// a clock pair measures 31.177 ns, i.e. 368.7 us of frame 6799's 20152 us and
-// 1340.8 us of frame 6796's 450743 us (1.83 pct and 0.30 pct). Gating the clocks
-// would have removed the only per-category parser breakdown to save 0.3 pct. The
-// real cause of the anomalous sum is the CALL_DL double count, fixed below.
-//
-// Removing this must leave no residue: the first attempt at the revert deleted the
-// function body but kept its trailing `return enabled;` and `}`, which produced an
-// orphaned brace and an unbalanced namespace that only a brace check would catch.
-// `AgentWork/agent-18/probes/brace_check.py` reports BALANCED for this file now.
+// Per-command timing reads steady_clock twice per command and is not gated. A clock pair
+// costs about 31 ns, a small share of a frame. Gating it would remove the only per-category
+// parser breakdown. Nested CALL_DL time is charged exclusively; see command_us below.
 
 std::uint64_t elapsed_fifo_us(
     std::chrono::steady_clock::time_point start,
@@ -529,7 +517,7 @@ void swap16_block(
     std::uint16_t* dst,
     std::size_t count) {
     // Shuffle mask: swap every pair of bytes within each 16-bit lane.
-    // 8 lanes × 2 bytes = 16 bytes per iteration.
+    // 8 lanes x 2 bytes = 16 bytes per iteration.
     const __m128i mask = _mm_set_epi8(
         14, 15, 12, 13, 10, 11,  8,  9,
          6,  7,  4,  5,  2,  3,  0,  1);
@@ -593,7 +581,7 @@ void FifoParser::set_dump_dir(std::string dump_dir) {
 }
 
 // ---------------------------------------------------------------------------
-// FifoParser::write_dump — best-effort; ignores all I/O errors.
+// FifoParser::write_dump: best-effort; ignores all I/O errors.
 // ---------------------------------------------------------------------------
 void FifoParser::write_dump(
     std::span<const std::byte> fifo,
@@ -662,7 +650,7 @@ struct FifoParser::FrozenRegionScope {
 };
 
 // ---------------------------------------------------------------------------
-// FifoParser::resolve_guest — maps a guest physical range to host memory.
+// FifoParser::resolve_guest: maps a guest physical range to host memory.
 // Throws GxFatalError (with the current cursor position) if unmapped.
 // ---------------------------------------------------------------------------
 std::span<const std::byte> FifoParser::resolve_guest(
@@ -773,7 +761,7 @@ std::size_t FifoParser::run_available(
 }
 
 // ---------------------------------------------------------------------------
-// FifoParser::run_window — main opcode dispatch loop.
+// FifoParser::run_window: main opcode dispatch loop.
 // ---------------------------------------------------------------------------
 FifoParser::CachedDisplayList* FifoParser::find_cached_display_list(
     std::uint32_t guest_addr,
@@ -952,8 +940,8 @@ void FifoParser::index_display_list_cache_entry(std::size_t index) {
 std::uint64_t FifoParser::display_list_cache_entry_bytes(
     const CachedDisplayList& cached) noexcept {
     // capacity(), not size(): the retained heap blocks are what a memory budget
-    // has to bound. shrink_to_fit is deliberately not used — the whole point of
-    // the cache is to keep these buffers for the next replay.
+    // has to bound. shrink_to_fit is not used: the cache exists to keep these
+    // buffers for the next replay.
     const auto vector_bytes = [](const auto& container) -> std::uint64_t {
         return static_cast<std::uint64_t>(container.capacity()) *
             sizeof(typename std::decay_t<decltype(container)>::value_type);
@@ -1132,9 +1120,9 @@ void FifoParser::store_cached_display_list(
         erase_display_list_cache_index_from_maps(static_cast<std::size_t>(
             target - display_list_cache_.data()));
     }
-    // Invalidation removes replay eligibility but deliberately retains and
-    // charges this slot's vectors. Replacing an invalid slot must subtract
-    // those capacities too, before moving fresh data and charging it once.
+    // Invalidation removes replay eligibility but keeps and charges this slot's
+    // vectors. Replacing an invalid slot must subtract those capacities too,
+    // before moving fresh data and charging it once.
     const std::uint64_t released = display_list_cache_entry_bytes(*target);
     cache_bytes_ = cache_bytes_ > released ? cache_bytes_ - released : 0u;
 
@@ -1294,18 +1282,14 @@ void FifoParser::prepare_cached_display_list_draw_runs(
             continue;
         }
 
-        // Only the *prepared* path needs this property. It concatenates the
-        // packets' vertex payloads into one strip and replays them as a single
-        // draw, so it is correct only when concatenation provably preserves the
-        // primitive. A strip/fan/line-strip run never satisfies that, and this
-        // guard used to `continue` for such a run — which also skipped the
-        // prepared-run construction below. The packet run does NOT need the
-        // property: it keeps one packet per draw and builds per-packet indices
-        // through append_cached_packet_indices, whose strip/fan/line-strip cases
-        // match VertexLoader's emitters exactly (including the odd-triangle
-        // winding flip). Returning here therefore leaves a packet run that was
-        // already validated above intact, for exactly the primitives it was
-        // written for, instead of dropping the whole run to per-packet replay.
+        // Only the prepared path needs the primitive-preservation property. It concatenates the
+        // packets' vertex payloads into one strip and replays them as a single draw, so it is
+        // correct only when concatenation preserves the primitive. A strip/fan/line-strip run never
+        // satisfies that, so the prepared path does not take it. The packet run does not need the
+        // property: it keeps one packet per draw and builds per-packet indices through
+        // append_cached_packet_indices, whose strip/fan/line-strip cases match VertexLoader's
+        // emitters (including the odd-triangle winding flip). A packet run is therefore kept intact
+        // for the primitives it was validated for, instead of dropping to per-packet replay.
         if (!cached_draw_run_concatenation_preserves_primitive(
                 first.primitive,
                 run_commands)) {
@@ -1495,14 +1479,12 @@ void FifoParser::replay_cached_display_list(
         }
     };
 
-    // Reused across replays instead of constructed per call. Display-list
-    // replay runs thousands of times per frame on the render thread, and this
-    // is the only allocation in its loop; `clear()` keeps the capacity so the
-    // steady state performs no allocation at all. The sink consumes the span
-    // synchronously (`on_cached_simple_draw_run` copies every packet into its
-    // own scratch before returning) and `replay_cached_display_list` is not
-    // reentrant, so a function-local buffer is equivalent to a fresh vector for
-    // every caller-visible result.
+    // Reused across replays instead of constructed per call. Display-list replay runs thousands
+    // of times per frame on the render thread, and this is the only allocation in its loop.
+    // clear() keeps the capacity, so the steady state allocates nothing. The sink consumes the
+    // span synchronously (on_cached_simple_draw_run copies every packet into its own scratch
+    // before returning), and replay_cached_display_list is not reentrant, so a function-local
+    // buffer would give the same results.
     static thread_local std::vector<CachedDrawPacket> simple_draw_packets;
     std::size_t command_index = 0;
     // `run_end_cache` is the end of the maximal run of consecutive Draw
@@ -1869,7 +1851,7 @@ static bool top_level_command_complete(
             }
             // A GX vertex is at most 129 bytes (direct position, NBT normal,
             // two colors, eight texture coordinates, nine matrix indices), so
-            // most draws are proven complete without the layout lookup.
+            // most draws can be checked for completeness without the layout lookup.
             constexpr std::size_t kVertexBytesBound = 160u;
             const std::uint16_t vertex_count = u16_at(0);
             if (available - 2u >= static_cast<std::size_t>(vertex_count) * kVertexBytesBound) {
@@ -1913,30 +1895,16 @@ void FifoParser::run_window(
                 static_cast<unsigned>(opcode));
         }
         FifoParserProfile* const profile = profile_;
-        // Per-command elapsed time is measured unconditionally. A gated version of
-        // this (taking the clocks only when GALAXY_TRACE_GX_MICROPROFILE was set)
-        // was written and REVERTED: the probe at
-        // AgentWork/agent-18/probes/clock_overhead_probe.cpp measures a
-        // steady_clock::now() pair at 31.177 ns on this host, which is 368.7 us of
-        // frame 6799's 20152 us and 1340.8 us of frame 6796's 450743 us -- 1.83 pct
-        // and 0.30 pct. That is not worth losing the only per-category breakdown of
-        // parser cost, especially now that the CALL_DL double count below is fixed
-        // and these fields are trustworthy. Do not re-add the gate on the strength
-        // of "two clocks per command sounds expensive"; it was measured.
+        // Per-command elapsed time is read unconditionally. A steady_clock pair costs about
+        // 31 ns, a small share of a frame, and the per-category breakdown depends on these reads.
+        // Do not gate them.
         const auto command_start = profile != nullptr
             ? std::chrono::steady_clock::now()
             : std::chrono::steady_clock::time_point{};
-        // `command_us` accumulates EXCLUSIVE time, so a command that recurses --
-        // CALL_DL replaying a cached display list -- does not count its
-        // descendants twice. The accumulator is monotonic, so the time this
-        // command's descendants added is exactly its growth across the command
-        // body; subtracting that growth at `finish_profile` needs no explicit
-        // span stack and is correct at any depth. Without this the replayed
-        // commands are charged once nested and once again inside their parent,
-        // which is why the published recordings show `fifo-command-us` larger
-        // than the frame's own `total-us`. That anomaly was originally attributed
-        // to the clock overhead above; the probe disproved that attribution, so
-        // this accumulator is the whole explanation.
+        // command_us accumulates EXCLUSIVE time, so a recursive command (CALL_DL replaying a cached
+        // display list) does not count its descendants twice. The accumulator only grows, so the
+        // time the descendants added is exactly its growth across the command body. Subtracting that
+        // growth in finish_profile needs no span stack and is correct at any depth.
         const std::uint64_t command_us_before =
             profile != nullptr ? profile->command_us : 0u;
         if (profile != nullptr) {
@@ -2056,8 +2024,8 @@ void FifoParser::run_window(
             // The four INDX variants address the GXSetArray slots for
             // POS_MTX/NRM_MTX/TEX_MTX/LIGHT arrays: bases live in CP
             // 0xAC-0xAF and strides (bytes per element, NOT the XF
-            // transfer size) in CP 0xBC-0xBF.  A=0x20→0xAC/0xBC,
-            // B=0x28→0xAD/0xBD, C=0x30→0xAE/0xBE, D=0x38→0xAF/0xBF.
+            // transfer size) in CP 0xBC-0xBF.  A=0x20->0xAC/0xBC,
+            // B=0x28->0xAD/0xBD, C=0x30->0xAE/0xBE, D=0x38->0xAF/0xBF.
             const std::uint8_t array_slot =
                 static_cast<std::uint8_t>((opcode - op::kLoadIndxA) / 8u);
 
@@ -2080,7 +2048,7 @@ void FifoParser::run_window(
 
             // guest_addr = base + idx * stride (a normal-matrix load reads
             // 9 words out of a 12-word-stride matrix array, so the stride
-            // register is authoritative — idx*length*4 is wrong for it).
+            // register is authoritative; idx*length*4 is wrong for it).
             const std::uint32_t array_base =
                 state.cp(static_cast<std::uint8_t>(0xACu + array_slot));
             const std::uint32_t array_stride =

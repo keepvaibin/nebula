@@ -115,9 +115,9 @@ bool exact_binary32_store_conversions() {
             return false;
         }
     }
-    // Corrupt every low bit excluded by exact widening. Check the public
-    // arithmetic conversion against SoftFloat; actual stores use their bit oracle, including
-    // boundary/subnormal/infinity/NaN inputs and all RN/NI combinations.
+    // Corrupt every low bit excluded by exact widening. The public arithmetic conversion is checked against
+    // SoftFloat. Actual stores use their bit oracle, including boundary, subnormal, infinity and NaN inputs
+    // and all RN/NI combinations.
     {
         struct RestoreGlobals {
             std::uint_fast8_t rounding = softfloat_roundingMode;
@@ -696,8 +696,8 @@ bool result_commit_preserves_status_and_fault_order() {
         const std::uint32_t cr = next();
         const auto lane = [&]() {
             const std::uint64_t bits = 0x3FF0000000000000ull | next();
-            // A previously enabled sticky exception may keep FEX set, but
-            // an operation with no newly raised exception must still commit.
+            // A sticky exception that is already enabled may keep FEX set, but an operation that raises no new exception
+            // must still commit.
             const std::uint32_t exceptions =
                 i < sticky_inputs.size() || (i & 7u) == 0u ? 0u : next() & 0x1FF80700u;
             const std::uint32_t fprf = next() & 0x0001F000u;
@@ -1380,9 +1380,8 @@ bool inline_scalar_single_binary_matches_current_helper() {
             actual_fault = true;
             fast_fault = !fallback;
         }
-        // The native guard classifies its unflushed binary32 result. With NI,
-        // the old fallback can flush a subnormal to signed zero; that zero
-        // must not make a rejected native candidate appear eligible here.
+        // The native guard classifies its unflushed binary32 result. With NI, the fallback can flush a subnormal
+        // to signed zero; that zero must not make a rejected native candidate look eligible here.
         auto eligibility_result = result;
         if ((fpscr & 7u) == 4u && common_widened(left) && common_widened(right)) {
             eligibility_result = galaxy::ppc_f64_binary_to_f32(
@@ -1488,7 +1487,7 @@ bool broadway_estimate_vectors_and_status() {
                 "frsqrte matches pinned literal Dolphin vectors with RN/NI varied");
         }
     }
-    // This counterexample fails the old division-plus-mantissa-clearing policy.
+    // This counterexample breaks a division-plus-mantissa-clearing policy.
     passed &= expect(galaxy::ppc_f64_reciprocal_estimate(0x3FF0000000000000ull, 0u).bits
         == 0x3FEFFF0000000000ull, "fres one is the Broadway estimate, not exact one");
     passed &= expect(galaxy::ppc_f64_reciprocal_estimate(0x7FF0123456789ABCull, 0u).bits
@@ -1648,9 +1647,8 @@ bool scalar_estimates_preserve_operand_and_result_widths() {
 
 }  // namespace
 
-// Division/frsp/conversion use independent SoftFloat oracles. Estimates use
-// pinned Broadway table interpolation instead of the old divide/truncate policy.
-// Keep the real division and conversion tests unchanged.
+// Division, frsp and conversion use independent SoftFloat oracles. Estimates use pinned Broadway table
+// interpolation, not a divide-and-truncate policy.
 bool native_division_estimates_and_conversions_match_software_reference() {
     const auto saved_rounding = softfloat_roundingMode;
     const auto saved_tininess = softfloat_detectTininess;
@@ -2142,10 +2140,9 @@ bool scalar_single_binary_preserves_final_rounding_and_source_format() {
 
 bool scalar_single_division_preserves_normal_double_inputs_with_ni() {
     bool passed = true;
-    // A binary32 subnormal widened into an FPR is a NORMAL binary64 operand.
-    // NI single-result handling must not turn a nonzero/nonzero division into
-    // 0/0 before the operation. Dolphin's fdivsx/NI_div computes from PS0AsDouble
-    // and applies ForceSingle to the quotient, not to either source operand.
+    // A widened binary32 subnormal in an FPR is a normal binary64 operand. NI must not flush it to zero
+    // before a nonzero divide. The quotient is computed from PS0AsDouble, and ForceSingle applies only to
+    // the result, as Dolphin's fdivsx/NI_div does.
     for (std::uint32_t rn = 0; rn < 4; ++rn) {
         for (auto a : {1u, 2u, 0x80000001u, 0x80000002u}) {
             for (auto b : {1u, 2u, 0x80000001u, 0x80000002u}) {

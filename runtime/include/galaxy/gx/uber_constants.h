@@ -76,8 +76,8 @@ static_assert(offsetof(GxPsConstants, ind_misc) == 736);
 static_assert(offsetof(GxPsConstants, uber_ps_header) == 752);
 static_assert(sizeof(GxPsConstants) == 768);
 
-// Vertex-stage constants (root CBV b0).  The XF matrix palette itself rides
-// in a structured buffer (root SRV), not here — it is large and re-snapshot
+// Vertex-stage constants (root CBV b0). The XF matrix palette itself rides in a
+// structured buffer (root SRV), not here. It is large and is re-snapshotted
 // whenever LOAD_INDX mutates it mid-frame.
 struct alignas(256) GxVsConstants {
     float projection[4][4];
@@ -95,9 +95,8 @@ struct alignas(256) GxVsConstants {
     // CP MatrixIndexA/B: default (non-per-vertex) matrix indices.
     //   A: bits 0-5 pos/normal, 6-11 tex0, 12-17 tex1, 18-23 tex2, 24-29 tex3
     //   B: bits 0-5 tex4, 6-11 tex5, 12-17 tex6, 18-23 tex7
-    // (Dolphin: VertexShaderManager resolves these into I_TEXMATRICES; we
-    // resolve in the VS instead so the palette snapshot stays the only
-    // matrix upload.)
+    // Dolphin resolves these in VertexShaderManager into I_TEXMATRICES. Here the
+    // vertex shader resolves them, so the palette snapshot stays the only matrix upload.
     std::uint32_t matrix_index_a;
     std::uint32_t matrix_index_b;
     std::uint32_t pad0;
@@ -119,12 +118,11 @@ struct alignas(256) GxVsConstants {
     std::uint32_t uber_texgen[kMaxTexGens];
     std::uint32_t uber_post_texgen[kMaxTexGens];
     std::uint32_t uber_channel[4];
-    // Motion-vector pipelines only (temporal scenes), in what was tail
-    // padding: the previous projection (GX A..D; E, F, type), the previous
-    // position matrix or camera delta, the draw's jitter (NDC) and half
-    // viewport (pixels), and the mode (0: previous palette rows at
-    // motion_ctrl[1]; 1: motion_prev_pos applied to the current eye position
-    // for palette draws, to the vertex for inline draws).
+    // Motion-vector pipelines only (temporal scenes), in the tail padding: the
+    // previous projection (GX A..D; E, F, type), the previous position matrix or
+    // camera delta, the draw's jitter (NDC) and half viewport (pixels), and the
+    // mode (0: previous palette rows at motion_ctrl[1]; 1: motion_prev_pos applied
+    // to the current eye position for palette draws, to the vertex for inline draws).
     float motion_prev_proj[2][4];
     float motion_prev_pos[3][4];
     float motion_params[4];

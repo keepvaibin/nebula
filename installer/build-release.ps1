@@ -21,26 +21,22 @@ param(
     [string]$Repository = 'keepvaibin/nebula',
     [string]$OutputDirectory = '',
     [string]$SigningKey = '',
-    # Native ISA for the prebuilt runtime and the prebuilt float/DSP libraries
-    # that every per-machine module links against.
+    # Native ISA for the prebuilt runtime and the prebuilt float/DSP libraries that every
+    # per-machine module links against.
     #
-    # This used to be pinned to SSE2, which meant only the generated game module
-    # got VEX/AVX2 code: NebulaRuntime.exe (GX parse, vertex decode, texture
-    # decode, host HLE, audio) and galaxy_ppc_float/softfloat/dsp_alu were all
-    # emitted for the 2004 x64 baseline even on hosts that can run AVX2. The
-    # AUTO runs the same CPUID + XGETBV probe the module build uses and falls
-    # back to SSE2 when the build host cannot execute it. Public releases default
-    # to SSE2 so the publisher's CPU does not set the user's minimum requirement.
+    # Only the generated game module got VEX/AVX2 code while this was pinned to SSE2.
+    # NebulaRuntime.exe and galaxy_ppc_float/softfloat/dsp_alu were built for the 2004 x64
+    # baseline, even on hosts that can run AVX2. AUTO runs the same CPUID + XGETBV probe as the
+    # module build and falls back to SSE2 when the build host cannot execute AVX2. Public releases
+    # default to SSE2, so the publisher's CPU does not set the user's minimum requirement.
     #
-    # AUTO does NOT mean the produced package runs everywhere: the effective
-    # value is recorded as the embedded runtime-isa.txt resource and Setup
-    # refuses to install a package whose runtime needs instruction sets this PC
-    # lacks, instead of installing a build that faults with an illegal
-    # instruction later. Pass -NativeIsa SSE2 for a portable package.
+    # AUTO does not mean the package runs everywhere. The effective value is recorded as the
+    # embedded runtime-isa.txt resource, and Setup refuses to install a package whose runtime needs
+    # instruction sets this PC lacks. Otherwise it would install a build that faults later with an
+    # illegal instruction. Pass -NativeIsa SSE2 for a portable package.
     #
-    # BOTH (the default) embeds an SSE2 and an AVX2 build; Setup installs the
-    # AVX2 one on CPUs that expose AVX2, so those keep full speed while older
-    # CPUs still install.
+    # BOTH (the default) embeds an SSE2 and an AVX2 build. Setup installs the AVX2 one on CPUs that
+    # expose AVX2, so those keep full speed while older CPUs still install.
     [ValidateSet('AUTO', 'SSE2', 'AVX2', 'BOTH')][string]$NativeIsa = 'BOTH'
 )
 $ErrorActionPreference = 'Stop'
@@ -208,8 +204,8 @@ namespace Nebula
     }
 
     $resourceArgs = @($resources.GetEnumerator() | ForEach-Object { "/resource:$($_.Value),$($_.Key)" })
-    # Older preview updaters inspect every prerelease but recognize only the
-    # standard asset name. Keep beta assets separate even for those clients.
+    # Older updaters inspect every prerelease but recognize only the standard asset name. Keep beta
+    # assets separate even for those clients.
     $setupName = if ($Version -match '-beta\.') { 'Nebula-Beta-Setup.exe' } else { 'Nebula-Setup.exe' }
     $setup = Join-Path $OutputDirectory $setupName
     Invoke-Checked $csc (@('/nologo', '/target:winexe', '/platform:x64', '/optimize+', "/win32manifest:$manifestFile", "/win32icon:$iconFile", "/out:$setup") + $references + $resourceArgs + $common +

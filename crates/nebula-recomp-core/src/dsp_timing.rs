@@ -10,20 +10,17 @@ use crate::dsp::{
     DspInstruction, DspInstructionMemoryRegion,
 };
 
-/// Version of the install-time DSP timing contract.
-///
-/// This is intentionally independent of `kNativeAbiVersion`: timing metadata can
-/// be exported by generated DSP code without changing `PpcContext` or
-/// `NativeServicesV1`. Increment this whenever key meaning, cycle accounting, or
-/// generated timing-boundary semantics change.
+/// Version of the install-time DSP timing contract. It is independent of `kNativeAbiVersion`:
+/// generated DSP code can export timing metadata without changing `PpcContext` or
+/// `NativeServicesV1`. Increment it when key meaning, cycle accounting or timing-boundary
+/// semantics change.
 pub const DSP_TIMING_CONTRACT_VERSION: u32 = 2;
 pub const DSP_TIMING_PROFILE_SCHEMA_VERSION: u32 = 2;
 pub const DSP_TIMING_CAPTURE_SCHEMA_VERSION: u32 = 1;
 
-// Production acceptance is an explicit source-controlled review decision. This
-// list intentionally remains empty until retail-Wii captures, their clock
-// measurement, and every covered key have been independently reviewed. Merely
-// labeling a JSON document "retail" must never qualify it for lowering.
+// Production acceptance is a source-controlled review decision. This list stays empty until
+// retail-Wii captures, their clock measurements and every covered key are independently
+// reviewed. A JSON document labelled "retail" never qualifies for lowering.
 const APPROVED_RETAIL_DSP_TIMING_PROFILE_IDENTITIES: &[&str] = &[];
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
@@ -46,11 +43,10 @@ pub enum DspTimingBundleKey {
 
 /// Exact instruction identity used by a timing rule.
 ///
-/// Immediate operands deliberately remain part of the identity. A future
-/// profile format may add evidence-backed masks, but schema v2 never assumes an
-/// operand is timing-irrelevant. Parallel issue is represented both by the raw
-/// opcode and by its decoded primary/extension split so bundles cannot silently
-/// collapse into their primary operation.
+/// Immediate operands remain part of the identity. A future profile format may add
+/// evidence-backed masks, but schema v2 never assumes an operand is timing-irrelevant. A parallel
+/// issue is identified by both the raw opcode and its decoded primary/extension split, so bundles
+/// cannot collapse into their primary operation.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct DspTimingInstructionKey {
@@ -143,11 +139,9 @@ pub enum DspTimingInterruptOutcome {
 
 /// Post-semantics identity for one successfully retired instruction.
 ///
-/// A timing key is never formed at instruction entry. The runtime must first
-/// snapshot the complete immutable pre-state, execute the instruction, resolve
-/// its condition and hardware-loop edge, and then commit exactly once. A hard
-/// trap or cooperative abort before that commit produces no timing key and does
-/// not retire the current instruction.
+/// A timing key is never formed at entry. The runtime snapshots the immutable pre-state, executes
+/// the instruction, resolves its condition and hardware-loop edge, then commits once. A hard trap
+/// or cooperative abort before the commit produces no key and does not retire the instruction.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct DspTimingOutcomeKey {
@@ -158,11 +152,11 @@ pub struct DspTimingOutcomeKey {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
-/// Encoded architectural operand identity, independent of helper-call order or
-/// dynamic access coalescing. Single parallel loads/stores use `Primary`. For
-/// dual operations, `Primary` is the decoded address-register operand (AR0 for
-/// accumulator-mid load/store) and `Secondary` is AR3. Thus LS is primary-read
-/// plus secondary-write, while SL is primary-write plus secondary-read.
+/// Encoded architectural operand identity, independent of helper-call order or dynamic access
+/// coalescing. Single parallel loads and stores use `Primary`. For dual operations, `Primary` is
+/// the decoded address-register operand (AR0 for accumulator-mid load/store) and `Secondary` is
+/// AR3. LS is therefore primary-read plus secondary-write, and SL is primary-write plus
+/// secondary-read.
 pub enum DspTimingMemorySlot {
     Standalone,
     ParallelPrimary,
@@ -195,10 +189,9 @@ pub const DSP_TIMING_ALL_HARDWARE_LOOP_OUTCOME_BITS: u8 = DSP_TIMING_NO_HARDWARE
 
 /// Install-time semantic class exported with a generated timing plan.
 ///
-/// This is derived from the decoded instruction by the Rust resolver. The
-/// native runtime deliberately has no DSP opcode decoder and may only accept
-/// this metadata after the plan identity is found in an authenticated timing
-/// contract produced by that resolver.
+/// The Rust resolver derives it from the decoded instruction. The native runtime has no DSP
+/// opcode decoder, so it accepts this metadata only when the plan identity is found in an
+/// authenticated timing contract produced by that resolver.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u8)]
 pub enum DspTimingInstructionSemantic {
@@ -226,16 +219,14 @@ pub struct DspTimingRuntimeMemoryOperand {
 
 /// Source-complete install-time metadata for one runtime retirement plan.
 ///
-/// `resolver_plan_identity` is a full 20-byte deterministic SHA-1 table
-/// identity for the canonical fields below. SHA-1 is used only as a stable
-/// table key: it is not artifact integrity, a signature, or authentication,
-/// and caller construction is not authorization. An independently
-/// authenticated generated timing contract must authorize the exact version
-/// and identity; the future staged producer/signer and generated-source hash
-/// remain the security authority. Runtime validation can reject internal standalone/parallel,
-/// instruction-length, semantic, and outcome-mask lies without decoding an
-/// opcode; exact opcode and memory-operation authority remains the Rust
-/// resolver plus that authenticated lookup.
+/// `resolver_plan_identity` is a 20-byte deterministic SHA-1 table identity over the canonical
+/// fields below. SHA-1 is only a stable table key: it is not integrity, a signature or
+/// authentication, and caller construction is not authorization. An independently authenticated
+/// generated timing contract must authorize the exact version and identity. The staged
+/// producer/signer and generated-source hash are the security authority. Runtime validation
+/// rejects internal standalone/parallel, instruction-length, semantic and outcome-mask
+/// inconsistencies without decoding an opcode. Exact opcode and memory-operation authority stays
+/// with the Rust resolver and that lookup.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DspTimingRuntimePlan {
     pub contract_version: u32,
@@ -811,19 +802,16 @@ fn timing_data_region(direction: DspTimingMemoryDirection, address: u16) -> DspT
 
 /// Exact pre-instruction context represented by schema v2.
 ///
-/// No wildcard fields exist. Profiles may only combine contexts after a future
-/// contract version defines and validates evidence-backed equivalence rules.
-/// Register, stack, pending-interrupt, and predecessor fields are sampled before
-/// any semantics of the current instruction. Exact effective memory accesses
-/// are appended to that immutable snapshot while semantics execute and the
-/// combined key exists only at commit. The four stack values are logical depths,
-/// not an unreviewed reinterpretation of wrapping stack-pointer storage. Schema
-/// Stack 0 carries both call return addresses and hardware-loop body targets;
-/// a hardware-loop edge therefore requires its logical depth along with stacks
-/// 2 and 3. Schema v2 stores depths as `u8`; the native inert sidecar starts at
-/// a known reset epoch and becomes unavailable on underflow or values above
-/// 255 rather than inferring a 31/32 limit from wrapping hardware cursors. No
-/// product worker installs that sidecar yet.
+/// There are no wildcard fields. Profiles may combine contexts only after a future contract
+/// version defines and validates equivalence rules. Register, stack, pending-interrupt and
+/// predecessor fields are sampled before the current instruction's semantics. Exact effective
+/// memory accesses are appended to that snapshot while semantics run, and the combined key exists
+/// only at commit. The four stack values are logical depths, not a reinterpretation of
+/// wrapping stack-pointer storage. Stack 0 holds both call return addresses and hardware-loop body
+/// targets, so a hardware-loop edge needs its logical depth along with stacks 2 and 3. Schema v2
+/// stores depths as `u8`. The native inert sidecar starts at a known reset epoch and becomes
+/// unavailable on underflow or on values above 255, rather than inferring a 31/32 limit from
+/// wrapping cursors. No product worker installs that sidecar yet.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct DspTimingPredecessorKey {
@@ -1222,9 +1210,8 @@ impl DspTimingProfile {
             captures: &self.captures,
             rules: &self.rules,
         };
-        // Struct field order and canonical vector order are part of schema v2.
-        // Validation rejects unsorted captures/rules/evidence before a profile is
-        // eligible for use.
+        // Struct field order and canonical vector order are part of schema v2. Validation rejects
+        // unsorted captures, rules or evidence before a profile can be used.
         let bytes = serde_json::to_vec(&payload)
             .expect("DSP timing profile identity payload serialization cannot fail");
         format!("sha1:{:x}", Sha1::digest(bytes))
@@ -1731,25 +1718,21 @@ pub fn require_dsp_timing<'a>(
     Ok((profile, cycles))
 }
 
-/// Gate for production DSP lowering until generated code and the native worker
+/// Gate for production DSP lowering. It stays closed until generated code and the native worker
 /// use the complete timing-contract retirement and scheduling boundary.
 ///
-/// Profile approval is necessary but not sufficient. Schema v2 keys contain
-/// dynamic pre-instruction state and post-instruction outcomes that the
-/// current generated entry does not capture coherently. Runtime foundation
-/// primitives are intentionally insufficient: the emitter does not yet supply
-/// exact predecessor, interrupt/outcome state, or a timing-ledger transaction.
-/// Generated lowering now emits decoder-authoritative memory address plans to
-/// a nullable test-only raw observer and schema v2 represents CR, open-bus data,
-/// and masked-IROM accesses, but no product worker installs that observer or
-/// connects its records to an authenticated timing table. Accelerator exception
-/// pending state still has no reviewed latch,
-/// and no product reset/worker installs the logical-depth sidecar. The native foundation exposes only fresh
-/// retirement/timeline reset: neither prior retirement identity nor cycle
-/// checkpoint history has an authenticated restore provider, and no grant is
-/// connected to a reviewed deterministic event scheduler. Returning a binding before all of
-/// those pieces exist would let metadata be mistaken for timing-correct
-/// execution.
+/// Profile approval is necessary but not sufficient. Schema v2 keys contain dynamic pre-instruction
+/// state and post-instruction outcomes that the current generated entry does not capture
+/// coherently. The emitter does not yet supply exact predecessor state, interrupt/outcome state or
+/// a timing-ledger transaction. Generated lowering emits decoder-authoritative memory address
+/// plans to a nullable test-only raw observer, and schema v2 represents CR, open-bus data and
+/// masked-IROM accesses. No product worker installs that observer or connects its records to an
+/// authenticated timing table. Accelerator exception pending state has no reviewed latch, and no
+/// product reset or worker installs the logical-depth sidecar. The native foundation exposes only
+/// fresh retirement/timeline reset. Neither prior retirement identity nor cycle checkpoint history
+/// has an authenticated restore provider, and no grant is connected to a reviewed deterministic
+/// event scheduler. Returning a binding before all of these exist would let metadata pass for
+/// timing-correct execution.
 pub fn require_production_dsp_timing_execution(
     profile: Option<&ValidatedDspTimingProfile>,
 ) -> Result<DspTimingContractBinding, DspTimingExecutionError> {
@@ -1768,12 +1751,11 @@ pub fn require_production_dsp_timing_execution(
 }
 
 fn production_runtime_plan_foundation_ready() -> bool {
-    // Keep every inert install-plan entry point compile-checked while making
-    // the product capability bit unconditionally false. This function must
-    // not become true merely because these constructors and the nullable raw
-    // provenance descriptors compile: authenticated table publication, product
-    // observer/ledger installation, accelerator state, exact timing-outcome
-    // retirement hooks, and deterministic scheduling remain absent.
+    // Keeps every inert install-plan entry point compile-checked while the product capability bit
+    // stays false. The bit must not become true just because these constructors and the nullable raw
+    // provenance descriptors compile. Authenticated table publication, product observer and ledger
+    // installation, accelerator state, exact timing-outcome retirement hooks and deterministic
+    // scheduling are still absent.
     let _ = DspTimingRuntimePlan::from_words;
     let _ = DspTimingRuntimePlan::validate;
     let _ = DspTimingRuntimePlan::authorized_table_entry;
@@ -3198,9 +3180,8 @@ mod tests {
             Err(DspTimingExecutionError::UnqualifiedTimingProfile { .. })
         ));
 
-        // No fixture bypasses retail approval in product code. This private
-        // test mutation exercises only the independent execution-readiness
-        // gate that must remain closed even after a future profile approval.
+        // No fixture bypasses retail approval in product code. This private test mutation checks only the
+        // execution-readiness gate, which must stay closed even after a future profile approval.
         validated.production_qualified = true;
         assert_eq!(
             require_production_dsp_timing_execution(Some(&validated)),

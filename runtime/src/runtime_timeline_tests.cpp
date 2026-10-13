@@ -233,9 +233,8 @@ bool timeline_rejects_recovery_after_device_observation() {
     galaxy::timing::RuntimeTimeline timeline(
         {&read_manual_counter, &counter,
          galaxy::timing::kTimelineTicksPerSecond});
-    // The control capture's production/delivery pair: acquisition stalled
-    // after the sample was produced, and recovery was deferred until after
-    // IOS delivery had committed the later timestamp.
+    // The control capture's production/delivery pair: acquisition stalls after the
+    // sample is produced, and recovery waits until IOS delivery commits the later timestamp.
     constexpr std::uint64_t kProduction = 4'293'302'676u;
     constexpr std::uint64_t kDelivery = 4'294'676'228u;
     counter.value = kProduction;
@@ -284,10 +283,9 @@ bool host_suspension_candidate_interval_boundaries() {
     constexpr std::uint64_t kMaximumCpu =
         galaxy::timing::kHostSuspensionCandidateMaximumCpuTime100ns;
 
-    // kHostSuspensionCandidateMinimumTicks is exactly one VI period (lowered
-    // from 1.5 -- see the comment on its definition in runtime_timeline.h):
-    // a stall just over one period with near-zero CPU time used is already
-    // sufficient evidence of an OS scheduling gap.
+    // kHostSuspensionCandidateMinimumTicks is exactly one VI period: a stall just over
+    // one period with near-zero CPU time used is already sufficient evidence of an OS
+    // scheduling gap.
     static_assert(kMinimum == galaxy::timing::kViPeriodTicks);
     static_assert(kMinimum > 0u);
     static_assert(kMaximumCpu < std::numeric_limits<std::uint64_t>::max());
@@ -342,8 +340,7 @@ bool host_suspension_proof_selection_preserves_boundary_ownership() {
         return select_host_suspension_recovery_proof(
             observation.status, true, true, false, successor_owned, enabled);
     };
-    // This is the production selector. The former status-first branch chose
-    // ViBacklog here, which its validator rejects for every active boundary.
+    // This is the production selector. Its validator rejects ViBacklog for every active boundary.
     bool passed = expect(
         select_active_backlog(true) ==
             HostSuspensionRecoveryProof::BacklogWithOwnedActiveViSuccessor,
@@ -1334,10 +1331,9 @@ bool pending_latch_publication_drain_race_leaves_no_stale_mask() {
     using galaxy::timing::EventKind;
     using galaxy::timing::PendingEventLatch;
 
-    // The consumer deliberately polls the payload rather than the mask so it
-    // can race a producer at the publication boundary. Once publish returns
-    // and the payload has been drained, the corresponding wake bit must be
-    // clear. This exercises the former payload-store/mask-fetch_or window.
+    // The consumer polls the payload rather than the mask so it can race a producer at
+    // the publication boundary. Once publish returns and the payload has been drained,
+    // the corresponding wake bit must be clear. This exercises the payload-store/mask-fetch_or window.
     constexpr std::uint32_t kRounds = 20'000u;
 
     PendingEventLatch counted_latch;
@@ -2416,9 +2412,9 @@ bool broker_rephase_starts_at_next_unconsumed_input_deadline() {
 }
 
 bool broker_configures_worker_priority_before_timeline_reads() {
-    // This checks the explicit Win32 fallback, not the later dynamic MMCSS
-    // priority. Games registration can legitimately change GetThreadPriority
-    // after configure_deadline_worker_scheduling has verified ABOVE_NORMAL.
+    // This checks the explicit Win32 fallback, not the later dynamic MMCSS priority.
+    // Games registration can legitimately change GetThreadPriority after
+    // configure_deadline_worker_scheduling has set and checked ABOVE_NORMAL.
     // Override only this process during this test and restore its prior value.
     struct RestoreMmcssEnvironment {
         std::wstring previous;

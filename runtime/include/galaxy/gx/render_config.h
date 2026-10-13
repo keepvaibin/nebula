@@ -1,15 +1,14 @@
 #pragma once
 
-// RenderConfig: user-visible rendering settings.  Set before
-// galaxy::gx::initialize(); mutate via set_render_config() at runtime
-// (changes are polled on begin_frame through a lock-protected snapshot).
+// RenderConfig: user-visible rendering settings. Set before galaxy::gx::initialize().
+// Mutate via set_render_config() at runtime; changes are polled on begin_frame through a
+// lock-protected snapshot.
 //
-// efb_scale is applied live: the render thread re-creates the EFB targets at
-// the next frame boundary when the configured value differs from the live
-// one. Window dimensions change through the window itself (resize, or the
-// overlay's output presets). The remaining implemented settings are live-hot. Fields reserved for future
-// renderer work are clamped off until the renderer has the required native
-// D3D12 path and capability checks.
+// efb_scale is applied live: the render thread re-creates the EFB targets at the next frame
+// boundary when the configured value differs from the live one. Window dimensions change
+// through the window itself (resize, or the overlay's output presets). Other implemented
+// settings are also applied live. Fields reserved for future renderer work are clamped off
+// until the renderer has the required native D3D12 path and capability checks.
 
 #include <algorithm>
 #include <array>
@@ -33,10 +32,9 @@ struct RenderConfig {
     // resolution, the lightest GPU path with no added supersampling.
     unsigned efb_scale           = 1;
 
-    // DXGI Present sync interval: 0=off, 1=vblank-synced, 2=every other
-    // vblank.  The native Release path defaults to a 60 Hz host cap with
-    // tearing disabled; sync-interval 1 can back-pressure the command stream
-    // through DWM and produced the observed ~24 FPS cadence on some systems.
+    // DXGI Present sync interval: 0=off, 1=vblank-synced, 2=every other vblank. The native
+    // Release path defaults to a 60 Hz host cap with tearing disabled. Sync interval 1 can
+    // back-pressure the command stream through DWM and lower the frame rate on some systems.
     unsigned vsync_interval      = 0;
 
     // Startup-only D3D12 presentation controls. They are persisted so direct
@@ -202,7 +200,7 @@ struct GxTimingConfig {
     // capture, including texture decodes, is complete by then) instead of at
     // the GPU fence. Nothing the GPU produces is read back by the CPU through
     // guest memory (EFB copies stay GPU resources; peeks use asynchronous
-    // fields), so the GPU's execution time no longer serializes the game's
+    // fields), so the GPU's execution time does not serialize the game's
     // GXDrawDone. GALAXY_PE_EVENTS_AT_CONSUMPTION=0 restores fence delivery.
     bool pe_events_at_consumption = true;
 };

@@ -88,13 +88,11 @@ public:
     // the caller then posts the game's AUDIOMSG_DSP.
     bool release_halt(std::uint32_t message, const JAudioGuestMemory& memory);
     void note_ignored_command() noexcept { ++stats_.ignored_commands; }
-    // Volume categories. The runtime passes the category gains once per audio
-    // frame (`master` is applied at the output, not here). A channel's
-    // category is decided once per sound, at the sound's first render --
-    // TChannel +0x008 is set by playStart and cleared after that render --
-    // when the game has linked the channel to its owner; the gain then
-    // applies from the sound's first sample. A changed gain ramps over 80
-    // samples. Until the first call every gain is 1.
+    // Volume categories. The runtime passes the category gains once per audio frame (`master` is applied at
+    // the output, not here). A channel's category is decided once per sound, at the sound's first render, when
+    // the game has linked the channel to its owner (TChannel +0x008 is set by playStart and cleared after that
+    // render). The gain then applies from the sound's first sample. A changed gain ramps over 80 samples.
+    // Until the first call, every gain is 1.
     void set_bus_gains(const galaxy::audio::NativeAudioBusGains& gains) noexcept;
     [[nodiscard]] const JAudioChannelCategory& channel_category(std::uint32_t channel) const noexcept {
         return categories_[channel < categories_.size() ? channel : 0u];
