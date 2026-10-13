@@ -8309,7 +8309,7 @@ galaxy::input::WiimoteInputSnapshot build_replayed_hid_input_snapshot(
     static std::uint64_t s_replay_pointer_vi = 0u;
     static int s_replay_mouse_x = -1;
     static int s_replay_mouse_y = -1;
-    static bool s_replay_recenter_previous = false;
+    static galaxy::input::RecenterHold s_replay_recenter{};
     // Each replay log starts from a fresh pointer.
     static const void* s_replay_log_identity = nullptr;
     if (const void* log = active_native_input_replay_log(); log != s_replay_log_identity) {
@@ -8318,7 +8318,7 @@ galaxy::input::WiimoteInputSnapshot build_replayed_hid_input_snapshot(
         s_replay_owner = {};
         s_replay_pointer_vi = 0u;
         s_replay_mouse_x = s_replay_mouse_y = -1;
-        s_replay_recenter_previous = false;
+        s_replay_recenter = {};
     }
     const float dt = s_replay_pointer_vi == 0u || current_vi <= s_replay_pointer_vi
         ? 0.0f
@@ -8367,15 +8367,15 @@ galaxy::input::WiimoteInputSnapshot build_replayed_hid_input_snapshot(
     const bool controller_recenter =
         pad_allowed && replay_pad_held(replay, XINPUT_GAMEPAD_RIGHT_THUMB);
     const bool recenter_held = (keys_allowed && key(23)) || controller_recenter;
-    if (recenter_held && !s_replay_recenter_previous) {
+    const galaxy::input::RecenterHold::Output recenter = s_replay_recenter.update(recenter_held);
+    if (recenter.pressed) {
         s_replay_owner.owner = controller_recenter ? galaxy::input::PointerSource::Stick
                                                    : galaxy::input::PointerSource::Keys;
-        s_replay_owner.last_active_us = now_us;
-        s_replay_pointer_x = 0.0f;
-        s_replay_pointer_y = 0.0f;
     }
-    s_replay_recenter_previous = recenter_held;
-    switch (s_replay_owner.update(activity, now_us)) {
+    if (recenter.pinned) {
+        s_replay_owner.last_active_us = now_us;
+    }
+    switch (recenter.pinned ? s_replay_owner.owner : s_replay_owner.update(activity, now_us)) {
     case galaxy::input::PointerSource::Mouse:
         if (mouse_visible) {
             s_replay_pointer_x = replay_pointer.x;
@@ -8405,6 +8405,13 @@ galaxy::input::WiimoteInputSnapshot build_replayed_hid_input_snapshot(
             pointer_source = "controller";
         }
         break;
+    }
+    if (recenter.pinned) {
+        // Held recenter: the pointer stays at the centre (pointer_control.h).
+        s_replay_pointer_x = 0.0f;
+        s_replay_pointer_y = 0.0f;
+        pointer_active = true;
+        pointer_source = controller_recenter ? "controller" : "replay";
     }
     if (script.has_pointer) {
         s_replay_pointer_x = script.pointer_x;
@@ -8725,7 +8732,7 @@ galaxy::input::WiimoteInputSnapshot build_native_hid_input_snapshot(
     bool pad_gyro_pointing = false;
     // Rest-hide tuning of the pad that points (gyro first, then the stick).
     float pointer_hide_seconds = 0.0f;
-    float pointer_hide_radius = 0.03f;
+    float pointer_hide_radius = galaxy::input::kDefaultPointerHideRadius;
     static std::array<std::uint32_t, XUSER_MAX_COUNT + kMaxSwitchPads> s_pad_previous_pressed{};
     if (use_pads) {
         for (std::size_t index = 0; index < live_pads.size(); ++index) {
@@ -9115,22 +9122,25 @@ galaxy::input::WiimoteInputSnapshot build_native_hid_input_snapshot(
     activity.stick = stick_velocity.x != 0.0f || stick_velocity.y != 0.0f;
     activity.gyro = pad_gyro_pointing && dt > 0.0f &&
                     gyro_motion > kGyroActiveUnitsPerSecond * dt;
+    // Recenter (pointer_control.h RecenterHold): the press gives the pointer to
+    // the recentering device at the picture centre; while the button is held
+    // the pointer stays there and that device keeps it.
     const bool recenter_held = held(WiiTarget::PointerRecenter);
-    static bool s_recenter_previous = false;
-    const bool recenter_pressed = recenter_held && !s_recenter_previous;
-    s_recenter_previous = recenter_held;
-    if (recenter_pressed) {
-        // The recentering device takes the pointer at the picture centre.
+    static galaxy::input::RecenterHold s_recenter{};
+    const galaxy::input::RecenterHold::Output recenter = s_recenter.update(recenter_held);
+    if (recenter.pressed) {
         const bool pad_recenter = pad_logic_all.held(WiiTarget::PointerRecenter);
         s_pointer_owner.owner = pad_recenter
             ? (pad_gyro_pointing ? galaxy::input::PointerSource::Gyro
                                  : galaxy::input::PointerSource::Stick)
             : galaxy::input::PointerSource::Keys;
-        s_pointer_owner.last_active_us = now_us;
-        s_pointer_x = 0.0f;
-        s_pointer_y = 0.0f;
     }
-    const galaxy::input::PointerSource owner = s_pointer_owner.update(activity, now_us);
+    if (recenter.pinned) {
+        s_pointer_owner.last_active_us = now_us;
+    }
+    const galaxy::input::PointerSource owner = recenter.pinned
+        ? s_pointer_owner.owner
+        : s_pointer_owner.update(activity, now_us);
     switch (owner) {
     case galaxy::input::PointerSource::Mouse:
         if (mouse_visible) {
@@ -9170,6 +9180,13 @@ galaxy::input::WiimoteInputSnapshot build_native_hid_input_snapshot(
     case galaxy::input::PointerSource::None:
         break;
     }
+    if (recenter.pinned) {
+        // Gyro and stick motion while the button is held is discarded.
+        s_pointer_x = 0.0f;
+        s_pointer_y = 0.0f;
+        pointer_active = true;
+        pointer_source = owner == galaxy::input::PointerSource::Keys ? "keyboard_mouse" : "controller";
+    }
     // A connected controller keeps the pointer on screen until the mouse
     // owns it.
     if (!pointer_active && use_pads && owner != galaxy::input::PointerSource::Mouse &&
@@ -9177,15 +9194,16 @@ galaxy::input::WiimoteInputSnapshot build_native_hid_input_snapshot(
         pointer_active = true;
         pointer_source = "controller";
     }
-    // Rest hide (Switch ports): a still controller pointer disappears until
-    // recentered; a stick push also brings a stick pointer back.
+    // Still-pointer hiding (pointer_control.h PointerRestHide): recentering
+    // and a stick push show it again, as does a move out of the radius.
     static galaxy::input::PointerRestHide s_rest_hide{};
     const bool controller_owned = owner == galaxy::input::PointerSource::Stick ||
                                   owner == galaxy::input::PointerSource::Gyro ||
                                   (owner == galaxy::input::PointerSource::None && use_pads);
     const bool rest_hidden = s_rest_hide.update(
         s_pointer_x, s_pointer_y, now_us, controller_owned,
-        recenter_pressed || (owner == galaxy::input::PointerSource::Stick && activity.stick),
+        recenter.pinned || recenter.released ||
+            (owner == galaxy::input::PointerSource::Stick && activity.stick),
         pointer_hide_seconds, pointer_hide_radius);
     if (rest_hidden) {
         pointer_active = false;

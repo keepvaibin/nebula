@@ -175,7 +175,7 @@ void test_evaluation() {
     const float threshold = 96.0f / 255.0f;
     LogicalInput pad = evaluate_pad_bindings(config.table(ControlScheme::Xbox), sample, threshold);
     expect(pad.held(WiiTarget::A) && pad.held(WiiTarget::B), "XInput A and LB map to A and B");
-    expect(pad.held(WiiTarget::Z), "right trigger at the threshold presses Z");
+    expect(pad.held(WiiTarget::Shake) && !pad.held(WiiTarget::Z), "right trigger at the threshold spins");
     expect(approx(pad.stick_x, -0.4f) && !pad.held(WiiTarget::StickLeft), "analog stick passes through");
     expect(approx(pad.pointer_y, 0.8f), "right stick drives the pointer");
     sample.axes[static_cast<std::size_t>(PadAxis::RightTrigger)] = 95.0f / 255.0f;
@@ -328,8 +328,8 @@ void test_switch_pro_decoding() {
     const LogicalInput logic = evaluate_pad_bindings(
         default_binding_table(ControlScheme::SwitchPro), sample, 96.0f / 255.0f);
     expect(logic.held(WiiTarget::A) && logic.held(WiiTarget::B) && logic.held(WiiTarget::Plus) &&
-               logic.held(WiiTarget::Home) && logic.held(WiiTarget::DpadUp) && logic.held(WiiTarget::Z) && !logic.held(WiiTarget::Shake),
-           "Switch defaults: A->A, L->B, ZR->Z, Plus, Home, D-pad");
+               logic.held(WiiTarget::Home) && logic.held(WiiTarget::DpadUp) && !logic.held(WiiTarget::Z) && logic.held(WiiTarget::Shake),
+           "Switch defaults: A->A, L->B, ZR->spin, Plus, Home, D-pad");
 
     // Simple 0x3F report (Bluetooth default mode).
     std::vector<std::uint8_t> simple(12, 0);
@@ -669,35 +669,139 @@ void test_stick_pointer() {
     }
 }
 
+// Seconds until PointerRestHide hides a pointer that follows `at(t)` (pointer
+// units), sampled every `report_s`; -1 if it never hides within `seconds`.
+template <typename Path>
+double hide_time(Path&& at, double seconds, double report_s = 0.015) {
+    PointerRestHide hide{};
+    const float r = kDefaultPointerHideRadius;
+    const float s = kDefaultPointerHideSeconds;
+    for (double t = 0.0; t <= seconds; t += report_s) {
+        const auto p = at(t);
+        if (hide.update(p[0], p[1], static_cast<std::uint64_t>(t * 1e6) + 1'000'000u, true, false, s, r)) {
+            return t;
+        }
+    }
+    return -1.0;
+}
+
 void test_rest_hide() {
+    using P = std::array<float, 2>;
+    // A perfectly still pointer hides after the default 2 s.
+    const double still = hide_time([](double) { return P{0.3f, -0.2f}; }, 5.0);
+    expect(still >= 1.99 && still <= 2.03, "a still pointer hides after 2 s");
+    // Tremor (+-0.025 units at 9 Hz) plus small jerks (0.08 units for 60 ms,
+    // alternating sides, every 0.5 s) never restart the timer.
+    const double shaky = hide_time([](double t) {
+        const double tremor = 0.025 * std::sin(2.0 * 3.14159265 * 9.0 * t);
+        const double phase = std::fmod(t, 0.5);
+        const double jerk = phase < 0.06 ? (std::fmod(t, 1.0) < 0.5 ? 0.08 : -0.08) : 0.0;
+        return P{static_cast<float>(0.3 + tremor + jerk), static_cast<float>(-0.2 + 0.5 * tremor)};
+    }, 5.0);
+    expect(shaky >= 1.99 && shaky <= 2.05, "tremor and small jerks inside the radius hide at 2 s");
+    // A single-report spike far outside the radius is filtered out.
+    const double spike = hide_time([](double t) {
+        return P{t > 1.0 && t < 1.015 ? 0.8f : 0.3f, -0.2f};
+    }, 5.0);
+    expect(spike >= 1.99 && spike <= 2.03, "a one-report spike does not restart the timer");
+    // A slow deliberate pan (0.15 units/s, 3 degrees per second at sensitivity
+    // 1) never hides while it lasts; it hides 2 s after it stops.
+    const double pan = hide_time([](double t) {
+        return P{static_cast<float>(-0.9 + 0.15 * std::min(t, 10.0)), 0.0f};
+    }, 9.9);
+    expect(pan < 0.0, "a slow pan never hides");
+    const double after_pan = hide_time([](double t) {
+        return P{static_cast<float>(-0.9 + 0.15 * std::min(t, 10.0)), 0.0f};
+    }, 14.0);
+    // The timer runs from the last re-anchor, at most radius/speed (0.8 s)
+    // before the pan stopped.
+    expect(after_pan > 11.1 && after_pan < 12.1, "the pointer hides within 2 s after the pan stops");
+
+    // Hidden: tremor keeps it hidden, leaving the radius shows it, recenter
+    // shows it.
     PointerRestHide hide{};
     std::uint64_t t = 1'000'000;
-    // Tremor within the radius for 4 s hides; reveal shows; bigger moves reset.
-    bool hidden = false;
-    for (int i = 0; i < 400; ++i, t += 10'000) {
-        hidden = hide.update(0.2f + ((i & 1) ? 0.01f : -0.01f), 0.1f, t, true, false, 4.0f, 0.03f);
-        if (i == 390) expect(!hidden, "still visible before the hide delay");
+    for (int i = 0; i < 210; ++i, t += 10'000) (void)hide.update(0.2f, 0.1f, t, true, false, 2.0f, 0.12f);
+    expect(hide.hidden, "hidden after 2.1 s");
+    bool shown = false;
+    for (int i = 0; i < 50; ++i, t += 10'000) {
+        shown |= !hide.update(0.2f + ((i & 1) ? 0.04f : -0.04f), 0.1f, t, true, false, 2.0f, 0.12f);
     }
-    hidden = hide.update(0.2f, 0.1f, t + 200'000, true, false, 4.0f, 0.03f);
-    expect(hidden, "a pointer resting within the radius for the delay hides");
-    expect(hide.update(0.9f, 0.5f, t + 300'000, true, false, 4.0f, 0.03f),
-           "a hidden gyro pointer stays hidden when moved (only recenter brings it back)");
-    expect(!hide.update(0.0f, 0.0f, t + 400'000, true, true, 4.0f, 0.03f), "recenter brings it back");
-    PointerRestHide moving{};
-    t = 0;
-    bool ever = false;
-    for (int i = 0; i < 1000; ++i, t += 10'000) {
-        ever |= moving.update(i * 0.001f, 0.0f, t, true, false, 4.0f, 0.03f);  // 0.1 units/s drift
-    }
-    expect(!ever, "a slowly moving pointer never hides");
+    expect(!shown, "tremor inside the radius keeps a hidden pointer hidden");
+    for (int i = 0; i < 30; ++i, t += 10'000) (void)hide.update(0.5f, 0.1f, t, true, false, 2.0f, 0.12f);
+    expect(!hide.hidden, "moving out of the radius shows the pointer");
+    for (int i = 0; i < 210; ++i, t += 10'000) (void)hide.update(0.5f, 0.1f, t, true, false, 2.0f, 0.12f);
+    expect(hide.hidden, "the moved pointer hides again 2 s after it settles");
+    expect(!hide.update(0.0f, 0.0f, t, true, true, 2.0f, 0.12f), "recenter shows it");
+
     PointerRestHide mouse{};
-    ever = false;
-    for (int i = 0; i < 1000; ++i) ever |= mouse.update(0.0f, 0.0f, i * 10'000ull, false, false, 4.0f, 0.03f);
+    bool ever = false;
+    for (int i = 0; i < 1000; ++i) ever |= mouse.update(0.0f, 0.0f, i * 10'000ull, false, false, 2.0f, 0.12f);
     expect(!ever, "a mouse-owned pointer never rest-hides");
     PointerRestHide never{};
     ever = false;
-    for (int i = 0; i < 1000; ++i) ever |= never.update(0.0f, 0.0f, i * 10'000ull, true, false, 0.0f, 0.03f);
+    for (int i = 0; i < 1000; ++i) ever |= never.update(0.0f, 0.0f, i * 10'000ull, true, false, 0.0f, 0.12f);
     expect(!ever, "0 seconds never hides");
+}
+
+// The gyro pointer of a hand-held Pro Controller: SwitchMotion integrates a
+// synthetic hand (tremor, small jerks, a slow pan) and the rest-hide rule
+// runs on the integrated pointer at the report rate.
+double gyro_hide_time(double seconds, double pan_dps, double pan_until_s) {
+    using namespace switch_hid;
+    constexpr double kDeg = 3.14159265358979 / 180.0;
+    SwitchMotion motion{};
+    MotionSettings settings{};
+    PointerRestHide hide{};
+    float x = 0.0f, y = 0.0f;
+    std::uint64_t t_us = 1'000'000;
+    double hidden_at = -1.0;
+    for (int report = 0; report * 0.015 < seconds; ++report) {
+        for (int k = 0; k < 3; ++k, t_us += 5000) {
+            const double t = (t_us - 1'000'000) * 1e-6;
+            // Yaw and pitch rates (deg/s): 9 Hz tremor of +-0.5 degrees, a
+            // 1.5 degree jerk every 0.5 s (60 ms, alternating), the pan.
+            const double tremor = 0.5 * 2.0 * 3.14159265 * 9.0 * std::cos(2.0 * 3.14159265 * 9.0 * t);
+            const double phase = std::fmod(t, 0.5);
+            const double jerk = phase < 0.06 ? (std::fmod(t, 1.0) < 0.5 ? 25.0 : -25.0) : 0.0;
+            const double pan = t < pan_until_s ? pan_dps : 0.0;
+            ImuSample s{};
+            s.accel = {0.0f, 1.0f, 0.0f};  // held flat: gravity reaction along +Y (up)
+            s.gyro = {static_cast<float>((0.6 * tremor) * kDeg), static_cast<float>((tremor + jerk + pan) * kDeg), 0.0f};
+            const auto out = motion.feed(s, 0.005f, t_us, settings);
+            x += out.pointer_x;
+            y -= out.pointer_y;
+        }
+        if (hide.update(x, y, t_us, true, false, kDefaultPointerHideSeconds, kDefaultPointerHideRadius) &&
+            hidden_at < 0.0) {
+            hidden_at = (t_us - 1'000'000) * 1e-6;
+        }
+        if (!hide.hidden) hidden_at = -1.0;
+    }
+    return hidden_at;
+}
+
+void test_rest_hide_gyro() {
+    const double held = gyro_hide_time(6.0, 0.0, 0.0);
+    expect(held >= 1.95 && held <= 2.3, "hand-held gyro (tremor + small jerks) hides at about 2 s");
+    expect(gyro_hide_time(8.0, 3.0, 8.0) < 0.0, "a slow 3 deg/s pan never hides while it lasts");
+}
+
+void test_recenter_hold() {
+    RecenterHold hold{};
+    auto out = hold.update(true);
+    expect(out.pressed && out.pinned && !out.released, "press: recenter and pin");
+    out = hold.update(true);
+    expect(!out.pressed && out.pinned && !out.released, "held: stays pinned at the centre");
+    out = hold.update(false);
+    expect(!out.pressed && !out.pinned && out.released, "release: motion resumes from the centre");
+    out = hold.update(false);
+    expect(!out.pressed && !out.pinned && !out.released, "idle");
+    // A tap (one report down) still recenters.
+    out = hold.update(true);
+    expect(out.pressed && out.pinned, "tap recenters");
+    out = hold.update(false);
+    expect(out.released, "tap releases on the next report");
 }
 
 void test_jump_back() {
@@ -733,20 +837,42 @@ void test_defaults_and_migration() {
     expect(only(sw[WiiTarget::A], {SourceKind::Button, pad::kEastBit}), "Switch: A is Wii A");
     expect(only(sw[WiiTarget::JumpBack], {SourceKind::Button, pad::kSouthBit}), "Switch: B is jump/back");
     expect(only(sw[WiiTarget::B], {SourceKind::Button, pad::kLeftShoulderBit}), "Switch: only L shoots Star Bits (Wii B)");
-    expect(sw[WiiTarget::Z][0] == zl && sw[WiiTarget::Z][1] == zr && sw[WiiTarget::Z][2].empty(),
-           "Switch: ZL and ZR crouch (Wii Z)");
+    expect(only(sw[WiiTarget::Z], zl), "Switch: ZL crouches (Wii Z)");
     expect(only(sw[WiiTarget::C], {SourceKind::Button, pad::kLeftStickBit}), "Switch: left-stick click resets the camera");
     expect(only(sw[WiiTarget::PointerRecenter], {SourceKind::Button, pad::kRightShoulderBit}), "Switch: R recenters");
-    expect(sw[WiiTarget::Shake][2].empty(), "Switch: shake is X, Y (and motion), not R");
+    expect(sw[WiiTarget::Shake][0] == InputSource{SourceKind::Button, pad::kWestBit} &&
+               sw[WiiTarget::Shake][1] == InputSource{SourceKind::Button, pad::kNorthBit} &&
+               sw[WiiTarget::Shake][2] == zr && sw[WiiTarget::Shake][3].empty(),
+           "Switch: Y, X and ZR spin (with motion), not R");
     expect(sw[WiiTarget::DpadLeft][1] == InputSource{SourceKind::AxisNegative, static_cast<std::uint8_t>(PadAxis::RightX)},
            "Switch: right stick left is D-pad left (camera)");
     expect(config.tune(ControlScheme::SwitchPro).gyro_pointer && config.tune(ControlScheme::SwitchPro2).gyro_pointer,
            "gyro pointer on by default for both Switch schemes");
     expect(only(xb[WiiTarget::JumpBack], {SourceKind::Button, pad::kEastBit}), "Xbox: B is jump/back");
     expect(only(xb[WiiTarget::B], {SourceKind::Button, pad::kLeftShoulderBit}), "Xbox: only LB shoots Star Bits");
-    expect(xb[WiiTarget::Z][0] == zl && xb[WiiTarget::Z][1] == zr, "Xbox: LT and RT crouch");
+    expect(only(xb[WiiTarget::Z], zl), "Xbox: LT crouches");
     expect(only(xb[WiiTarget::C], {SourceKind::Button, pad::kLeftStickBit}), "Xbox: LS click resets the camera");
-    expect(xb[WiiTarget::Shake][2] == InputSource{SourceKind::Button, pad::kRightShoulderBit}, "Xbox: RB spins");
+    expect(xb[WiiTarget::Shake][2] == InputSource{SourceKind::Button, pad::kRightShoulderBit} &&
+               xb[WiiTarget::Shake][3] == zr,
+           "Xbox: RB and RT spin");
+    // A trigger bound to a level target presses at the trigger threshold.
+    {
+        PadSample pad_sample{};
+        pad_sample.connected = true;
+        pad_sample.scheme = ControlScheme::Xbox;
+        pad_sample.axes[static_cast<std::size_t>(PadAxis::RightTrigger)] = 0.6f;
+        const LogicalInput rt = evaluate_pad_bindings(xb, pad_sample, 0.12f);
+        expect(rt.held(WiiTarget::Shake) && !rt.held(WiiTarget::Z) && !rt.held(WiiTarget::B),
+               "Xbox: RT spins, does not crouch or shoot");
+        pad_sample.axes[static_cast<std::size_t>(PadAxis::RightTrigger)] = 0.0f;
+        pad_sample.axes[static_cast<std::size_t>(PadAxis::LeftTrigger)] = 0.6f;
+        const LogicalInput lt = evaluate_pad_bindings(xb, pad_sample, 0.12f);
+        expect(lt.held(WiiTarget::Z) && !lt.held(WiiTarget::Shake), "Xbox: LT crouches");
+    }
+    expect(config.tune(ControlScheme::SwitchPro).pointer_hide_seconds == 2.0f &&
+               config.tune(ControlScheme::SwitchPro).pointer_hide_radius == kDefaultPointerHideRadius &&
+               config.tune(ControlScheme::Xbox).pointer_hide_seconds == kDefaultPointerHideSeconds,
+           "still pointer hides after 2 s within 0.12 units by default");
     expect(only(xb[WiiTarget::PointerRecenter], {SourceKind::Button, pad::kRightStickBit}), "Xbox: RS recenters");
     expect(!config.tune(ControlScheme::Xbox).gyro_pointer, "Xbox has no gyro");
 
@@ -797,7 +923,40 @@ void test_defaults_and_migration() {
     expect(migrated.table(ControlScheme::Xbox)[WiiTarget::Z] == default_binding_table(ControlScheme::Xbox)[WiiTarget::Z],
            "other Xbox defaults move");
     ControlsConfig again = migrated;
-    expect(migrate_legacy_controls(again, 3u) == 0u && again == migrated, "migration is idempotent on new defaults");
+    expect(migrate_legacy_controls(again, kControlsVersion) == 0u && again == migrated,
+           "migration is idempotent on new defaults");
+    // A version-3 (Native29b) file: ZL+ZR crouch and the 4 s / 0.03 still
+    // pointer move to the version-4 defaults, values the player changed stay.
+    {
+        ControlsConfig v3{};
+        for (std::size_t i = 0; i < kControlSchemeCount; ++i) {
+            const auto scheme = static_cast<ControlScheme>(i);
+            v3.tables[i] = version3_binding_table(scheme);
+            v3.tuning[i] = default_scheme_tuning(scheme);
+            if (scheme_is_gamepad(scheme)) {
+                v3.tuning[i].pointer_hide_seconds = kVersion3PointerHideSeconds;
+                v3.tuning[i].pointer_hide_radius = kVersion3PointerHideRadius;
+            }
+        }
+        v3.tune(ControlScheme::Xbox).pointer_hide_seconds = 7.0f;
+        v3.table(ControlScheme::SwitchPro)[WiiTarget::Z] = {};
+        add_binding(v3.table(ControlScheme::SwitchPro)[WiiTarget::Z], {SourceKind::Button, pad::kRightShoulderBit});
+        expect(migrate_legacy_controls(v3, 3u) > 0u, "version-3 defaults migrate");
+        expect(v3.table(ControlScheme::Xbox) == default_binding_table(ControlScheme::Xbox) &&
+                   v3.table(ControlScheme::SwitchPro2) == default_binding_table(ControlScheme::SwitchPro2),
+               "untouched version-3 tables become the version-4 defaults");
+        expect(v3.table(ControlScheme::SwitchPro)[WiiTarget::Shake] ==
+                   default_binding_table(ControlScheme::SwitchPro)[WiiTarget::Shake],
+               "version-3 Switch spin gains ZR");
+        expect(v3.table(ControlScheme::SwitchPro)[WiiTarget::Z][0] == InputSource{SourceKind::Button, pad::kRightShoulderBit},
+               "a changed version-3 crouch binding stays");
+        expect(v3.tune(ControlScheme::SwitchPro).pointer_hide_seconds == 2.0f &&
+                   v3.tune(ControlScheme::SwitchPro).pointer_hide_radius == kDefaultPointerHideRadius,
+               "version-3 still-pointer timing moves to 2 s / 0.12");
+        expect(v3.tune(ControlScheme::Xbox).pointer_hide_seconds == 7.0f &&
+                   v3.tune(ControlScheme::Xbox).pointer_hide_radius == kDefaultPointerHideRadius,
+               "a changed hide time stays");
+    }
     // A version-2 (Native29) file: its defaults move, the gyro switch the
     // player turned off stays off.
     ControlsConfig v2{};
@@ -810,7 +969,7 @@ void test_defaults_and_migration() {
     add_binding(v2.table(ControlScheme::SwitchPro)[WiiTarget::Shake], {SourceKind::Button, pad::kNorthBit});
     expect(migrate_legacy_controls(v2, 2u) > 0u, "version-2 defaults migrate");
     expect(v2.table(ControlScheme::Xbox) == default_binding_table(ControlScheme::Xbox),
-           "an untouched version-2 Xbox table becomes the version-3 defaults");
+           "an untouched version-2 Xbox table becomes the current defaults");
     expect(v2.table(ControlScheme::SwitchPro)[WiiTarget::B] == default_binding_table(ControlScheme::SwitchPro)[WiiTarget::B],
            "version-2 ZR Star Bits move to L");
     expect(!v2.tune(ControlScheme::SwitchPro).gyro_pointer, "a version-2 gyro choice stays");
@@ -852,6 +1011,11 @@ int imu_replay(const char* path) {
     switch_hid::MotionSettings settings{};
     double t0 = -1.0;
     float x = 0.0f, y = 0.0f, peak = 0.0f;
+    // The live pointer (every sample, from the first report) through the
+    // default still-pointer rule.
+    float live_x = 0.0f, live_y = 0.0f;
+    PointerRestHide hide{};
+    double hidden_at = -1.0;
     int reports = 0, shakes = 0;
     std::string hex;
     double time = 0.0;
@@ -866,6 +1030,8 @@ int imu_replay(const char* path) {
         const auto us = static_cast<std::uint64_t>((time - t0) * 1e6);
         for (std::size_t i = 0; i < decoded.imu_count; ++i) {
             const auto out = motion.feed(decoded.imu[i], 0.005f, us, settings);
+            live_x += out.pointer_x;
+            live_y -= out.pointer_y;
             // Drift is counted after the first second (one rest window has
             // measured the bias that the stored calibration would remove).
             if (us < 1'000'000u) continue;
@@ -874,14 +1040,22 @@ int imu_replay(const char* path) {
             shakes += out.shake_started ? 1 : 0;
             peak = std::max(peak, std::sqrt(x * x + y * y));
         }
+        if (hide.update(live_x, live_y, us + 1'000'000u, true, false, kDefaultPointerHideSeconds,
+                        kDefaultPointerHideRadius)) {
+            if (hidden_at < 0.0) hidden_at = static_cast<double>(us) * 1e-6;
+        } else {
+            hidden_at = -1.0;
+        }
         ++reports;
     }
     const auto& bias = motion.gyro_bias();
     std::printf("reports=%d span=%.1fs rest-windows=%u bias-dps=(%.3f,%.3f,%.3f) drift-after-1s-units=(%.4f,%.4f) "
-                "peak-units=%.4f shakes=%d gravity=(%.3f,%.3f,%.3f)\n",
+                "peak-units=%.4f shakes=%d gravity=(%.3f,%.3f,%.3f) hide-radius=%.2f hide-seconds=%.1f "
+                "hidden-at-s=%.3f hidden-at-end=%d\n",
                 reports, time - t0, motion.rest_windows(), bias[0] * 57.2958f, bias[1] * 57.2958f,
                 bias[2] * 57.2958f, x, y, peak, shakes, motion.gravity()[0], motion.gravity()[1],
-                motion.gravity()[2]);
+                motion.gravity()[2], kDefaultPointerHideRadius, kDefaultPointerHideSeconds, hidden_at,
+                hide.hidden ? 1 : 0);
     return 0;
 }
 
@@ -908,6 +1082,8 @@ int main(int argc, char** argv) {
     test_stick_pointer();
     test_jump_back();
     test_rest_hide();
+    test_rest_hide_gyro();
+    test_recenter_hold();
     test_defaults_and_migration();
     test_kpad_dots_stable();
     if (g_failures != 0) {

@@ -73,29 +73,49 @@ StickVector stick_pointer_velocity(StickVector stick, float speed) noexcept {
 
 bool PointerRestHide::update(float x, float y, std::uint64_t now_us, bool controller_owned,
                              bool reveal, float hide_seconds, float radius) noexcept {
-    const auto settle = [&] {
-        anchor_x = x;
-        anchor_y = y;
+    if (!std::isfinite(x) || !std::isfinite(y)) {
+        return hidden;
+    }
+    const bool active = controller_owned && hide_seconds > 0.0f;
+    if (!active || !anchored || reveal || now_us < last_us) {
+        filtered_x = anchor_x = x;
+        filtered_y = anchor_y = y;
         since_us = now_us;
-    };
-    if (!controller_owned || reveal || !(hide_seconds > 0.0f)) {
+        last_us = now_us;
+        anchored = active;
         hidden = false;
-        settle();
         return false;
     }
-    if (hidden) {
-        return true;
-    }
-    const float dx = x - anchor_x;
-    const float dy = y - anchor_y;
-    if (dx * dx + dy * dy > radius * radius || now_us < since_us) {
-        settle();
+    const float dt = static_cast<float>(now_us - last_us) * 1e-6f;
+    last_us = now_us;
+    const float blend = 1.0f - std::exp(-std::min(dt, 1.0f) / kPointerHideFilterSeconds);
+    filtered_x += (x - filtered_x) * blend;
+    filtered_y += (y - filtered_y) * blend;
+    const float dx = filtered_x - anchor_x;
+    const float dy = filtered_y - anchor_y;
+    const float r = std::isfinite(radius) ? std::max(radius, 0.0f) : kDefaultPointerHideRadius;
+    if (dx * dx + dy * dy > r * r) {
+        // A deliberate move: the anchor follows it and the pointer shows.
+        anchor_x = filtered_x;
+        anchor_y = filtered_y;
+        since_us = now_us;
+        hidden = false;
         return false;
     }
-    if (static_cast<double>(now_us - since_us) >= static_cast<double>(hide_seconds) * 1e6) {
+    if (!hidden &&
+        static_cast<double>(now_us - since_us) >= static_cast<double>(hide_seconds) * 1e6) {
         hidden = true;
     }
     return hidden;
+}
+
+RecenterHold::Output RecenterHold::update(bool down) noexcept {
+    Output out{};
+    out.pressed = down && !held;
+    out.released = !down && held;
+    out.pinned = down;
+    held = down;
+    return out;
 }
 
 PlayContext play_context_from_star_pointer_mode(std::uint32_t mode) noexcept {

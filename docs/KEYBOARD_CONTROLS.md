@@ -7,17 +7,17 @@ Controllers work at the same time; every Wii input can be rebound.
 ## Default maps
 
 Controllers follow Super Mario Galaxy on Nintendo Switch (3D All-Stars; the
-Switch 2 edition keeps the layout), with Star Bits on the left shoulder only
-(Nintendo uses ZR) and both triggers as crouch.
+Switch 2 edition keeps the layout), with Star Bits on L/LB (Nintendo uses ZR),
+ZR/RT as a spin button and ZL/LT as crouch.
 
 | Action (Wii input) | Keyboard and mouse | Xbox | Switch Pro / Pro Controller 2 |
 |---|---|---|---|
 | Jump, confirm (A) | `Space`, `Enter`, left mouse button | A | A |
 | Jump in play, back in menus | - | B | B |
 | Star Bits, back (B) | `Left Shift`, `Right Shift`, right mouse button | LB | L |
-| Crouch, ground pound (Z) | `Z`, `Left Ctrl`, `Right Ctrl` | LT, RT | ZL, ZR |
+| Crouch, ground pound (Z) | `Z`, `Left Ctrl`, `Right Ctrl` | LT | ZL |
 | Camera reset (C) | `C` | Left stick click | Left stick click |
-| Spin (Wii Remote shake) | `Q`, `E` | X, Y, RB | X, Y, shake the controller |
+| Spin (Wii Remote shake) | `Q`, `E` | X, Y, RB, RT | X, Y, ZR, shake the controller |
 | Move (Nunchuk stick) | `W` `A` `S` `D` | Left stick | Left stick |
 | Camera, first person (D-pad) | Arrow keys | D-pad | D-pad; right stick while the gyro points |
 | Pointer | Mouse, `I` `J` `K` `L` | Right stick | Gyro; right stick when the gyro is off |
@@ -40,13 +40,18 @@ Capture, GL, GR and C (Pro Controller 2) are unbound by default.
 
 Pointer recenter: press R (Switch), the right stick click (Xbox) or `R`
 (keyboard) to put the pointer in the middle of the picture; it also brings a
-hidden pointer back, on any menu.
+hidden pointer back, on any menu. While the button is held the pointer stays
+in the middle and gyro or stick motion is ignored; on release it moves from
+the middle, so the controller's direction at release is the new centre.
 
 Still pointer: a controller pointer that stays within
-`tune.<scheme>.pointer_hide_radius` (default 0.03, about 1.5% of the picture
-width) for `pointer_hide_seconds` (default 4; 0 never hides) disappears, as in
-the Switch ports, and comes back only with the recenter button; a stick
-pointer also comes back with a stick push. The mouse never hides this way.
+`tune.<scheme>.pointer_hide_radius` (default 0.12, 6% of the picture width,
+2.4 degrees of turn) of where it settled for `pointer_hide_seconds` (default
+2; 0 never hides) disappears, as in the Switch ports. Hand tremor and small
+jerks inside the radius do not restart the timer; the position is smoothed
+over 0.1 s, so a single-report spike does not count. Moving out of the radius,
+the recenter button or (stick pointer) a stick push brings it back. The mouse
+never hides this way.
 Sources for the Switch behaviour (player reports; no official timing exists):
 [ResetEra, Galaxy + Galaxy 2 (Switch 2) review thread](https://www.resetera.com/threads/super-mario-galaxy-super-mario-galaxy-2-review-thread.1312336/page-16)
 ("if you're not actively using it for a bit it kind of just disappears on its
@@ -112,7 +117,7 @@ Settings are stored in `runtime_settings.ini` next to `config.ini`:
 
 ```
 input_mode=auto
-controls_version=3
+controls_version=4
 bind.keyboard.a=Space, Enter, MouseLeft
 bind.xbox.jump_back=B
 bind.switch_pro.b=L
@@ -129,10 +134,11 @@ LT RT LS RS Menu View DpadUp...`; Switch `A B X Y L R ZL ZR LS RS Plus Minus
 Home Capture GL GR C DpadUp...`; sticks `LX+ LX- LY+ LY- RX+ RX- RY+ RY-`.
 
 Files with an older `controls_version` are migrated on load: bindings that
-still hold the defaults of Native28 (no version) or Native29 (version 2) take
-the version-3 defaults; a Native28 file's gyro switch and
-`input_mode=keyboard_mouse` take `1` and `auto`; anything else the player
-changed stays.
+still hold the defaults of Native28 (no version), Native29 (version 2) or
+Native29b (version 3) take the version-4 defaults; a Native28 file's gyro
+switch and `input_mode=keyboard_mouse` take `1` and `auto`; a version-3
+still-pointer time of 4 s and radius of 0.03 take 2 s and 0.12; anything else
+the player changed stays.
 
 | Tuning (`tune.<scheme>.`) | Values | Default |
 |---|---|---|
@@ -143,8 +149,8 @@ changed stays.
 | `shake_sensitivity` (Switch) | 1 (hard shake) - 5 (light) | 3 |
 | `gyro_pointer` (Switch) | 0/1 | 1 |
 | `gyro_sensitivity` (Switch) | 0.2-5.0 (1: a picture width per 40 degrees) | 1 |
-| `pointer_hide_seconds` (controllers) | 0-60 seconds still before the pointer hides; 0 never | 4 |
-| `pointer_hide_radius` (controllers) | 0-0.5 pointer units (2 = picture width) | 0.03 |
+| `pointer_hide_seconds` (controllers) | 0-60 seconds within the radius before the pointer hides; 0 never | 2 |
+| `pointer_hide_radius` (controllers) | 0-0.5 pointer units (2 = picture width) | 0.12 |
 
 `GALAXY_XINPUT_LEFT_DEADZONE`, `GALAXY_XINPUT_POINTER_DEADZONE`,
 `GALAXY_XINPUT_POINTER_SPEED`, `GALAXY_KEYBOARD_POINTER_SPEED` and

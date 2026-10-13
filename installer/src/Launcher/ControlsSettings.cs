@@ -26,7 +26,7 @@ namespace Nebula.Launcher
         public float StickDeadzone, PointerDeadzone, PointerSpeed = 1.6f;
         public bool InvertPointerY, GyroPointer;
         public float GyroSensitivity = 1.0f;
-        public float PointerHideSeconds, PointerHideRadius = 0.03f;
+        public float PointerHideSeconds, PointerHideRadius = 0.12f;
         public int Motion; // 0 off, 1 Wii Remote, 2 Nunchuk
         public int ShakeSensitivity = 3;
         public SchemeTuning Clone() { return (SchemeTuning)MemberwiseClone(); }
@@ -42,7 +42,9 @@ namespace Nebula.Launcher
         public const int SchemeCount = 4, TargetCount = 25, Slots = 4;
         public const int JumpBack = 24;
         // runtime_settings.ini controls_version (input_bindings.h kControlsVersion).
-        public const int ControlsVersion = 3;
+        public const int ControlsVersion = 4;
+        // Version 3 still-pointer defaults (pads), replaced in version 4.
+        public const float Version3PointerHideSeconds = 4.0f, Version3PointerHideRadius = 0.03f;
         public const int ModeAuto = 0, ModeKeyboardMouse = 1, ModeController = 2, ModeRealWiimote = 3;
         public const int Keyboard = 0, Xbox = 1, SwitchPro = 2, SwitchPro2 = 3;
         public static readonly string[] SchemeIds = { "keyboard", "xbox", "switch_pro", "switch_pro2" };
@@ -175,20 +177,32 @@ namespace Nebula.Launcher
             return t;
         }
 
-        /// <summary>
-        /// Super Mario Galaxy on Switch with Star Bits on the left shoulder
-        /// only: A or B jump (B backs out of menus), L/LB Star Bits, both
-        /// triggers crouch, left-stick click camera, X/Y (Xbox also RB) or shake
-        /// spin, R / right-stick click recenters, gyro points, right stick turns
-        /// the camera (pointer when the gyro is off; Xbox: pointer).
-        /// </summary>
-        public static InputSource[][] DefaultTable(int scheme)
+        /// <summary>The defaults shipped in controls version 3 (Native29b), for migration.</summary>
+        public static InputSource[][] Version3Table(int scheme)
         {
             var t = Version2Table(scheme);
             if (scheme == Keyboard) return t;
             t[1] = new[] { Button(LeftShoulder) };
             t[16] = new[] { Pos(LeftTrigger), Pos(RightTrigger) };
             t[15] = new[] { Button(LeftStick) };
+            return t;
+        }
+
+        /// <summary>
+        /// Super Mario Galaxy on Switch with the player's choices: A or B jump
+        /// (B backs out of menus), L/LB Star Bits, ZL/LT crouch, X/Y/ZR (Xbox
+        /// X/Y/RB/RT) or shake spin, left-stick click camera, R / right-stick
+        /// click recenters (held: pinned at the centre), gyro points, right
+        /// stick turns the camera (pointer when the gyro is off; Xbox: pointer).
+        /// </summary>
+        public static InputSource[][] DefaultTable(int scheme)
+        {
+            var t = Version3Table(scheme);
+            if (scheme == Keyboard) return t;
+            t[16] = new[] { Pos(LeftTrigger) };
+            t[17] = scheme == Xbox
+                ? new[] { Button(West), Button(North), Button(RightShoulder), Pos(RightTrigger) }
+                : new[] { Button(West), Button(North), Pos(RightTrigger) };
             return t;
         }
 
@@ -217,6 +231,11 @@ namespace Nebula.Launcher
         {
             var t = LegacyTuning(scheme);
             if (HasMotion(scheme)) t.GyroPointer = true;
+            if (scheme != Keyboard)
+            {
+                t.PointerHideSeconds = 2.0f;
+                t.PointerHideRadius = 0.12f;
+            }
             return t;
         }
 
@@ -234,13 +253,20 @@ namespace Nebula.Launcher
             {
                 var legacy = LegacyTable(s);
                 var version2 = Version2Table(s);
+                var version3 = Version3Table(s);
                 var current = DefaultTable(s);
                 for (int t = 0; t < TargetCount; t++)
                 {
-                    bool old = SameBindings(Bindings[s][t], legacy[t]) || SameBindings(Bindings[s][t], version2[t]);
+                    bool old = SameBindings(Bindings[s][t], legacy[t]) || SameBindings(Bindings[s][t], version2[t]) ||
+                               SameBindings(Bindings[s][t], version3[t]);
                     if (old && !SameBindings(Bindings[s][t], current[t])) Bindings[s][t] = current[t];
                 }
                 if (version < 2 && Tuning[s].GyroPointer == LegacyTuning(s).GyroPointer) Tuning[s].GyroPointer = DefaultTuning(s).GyroPointer;
+                if (version < 4 && s != Keyboard)
+                {
+                    if (Tuning[s].PointerHideSeconds == Version3PointerHideSeconds) Tuning[s].PointerHideSeconds = DefaultTuning(s).PointerHideSeconds;
+                    if (Tuning[s].PointerHideRadius == Version3PointerHideRadius) Tuning[s].PointerHideRadius = DefaultTuning(s).PointerHideRadius;
+                }
             }
             if (version < 2 && InputMode == ModeKeyboardMouse) InputMode = ModeAuto;
         }
