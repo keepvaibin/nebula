@@ -1004,7 +1004,11 @@ pub fn translate_module_with_options(
         None
     };
     let callable_entries = translated.len() as u64 + aliases.len() as u64;
-    let mut source_files = emit_sharded_module_with_experiment(
+    // The checkpoint-globals spellings are longer; the packer must see them.
+    let definition_rewrite = options
+        .checkpoint_globals
+        .then_some(rewrite_checkpoint_globals as fn(&str) -> String);
+    let mut source_files = emit_sharded_module_with_definition_rewrite(
         &translated,
         &aliases,
         shard_size,
@@ -1017,6 +1021,7 @@ pub fn translate_module_with_options(
             psvec_normalize: psvec_normalize_experiment.as_ref(),
             typed_region_80165478: typed_region_80165478.as_deref(),
         },
+        definition_rewrite,
     )?;
     apply_module_options(&mut source_files, &options);
     if options.trace_end_frame_spans {
@@ -11274,6 +11279,32 @@ fn emit_sharded_module_with_experiment(
     exact_fpu_functions: &BTreeSet<u32>,
     experiments: LocalPairedExperiments<'_>,
 ) -> Result<Vec<GeneratedSource>, TranslationError> {
+    emit_sharded_module_with_definition_rewrite(
+        functions,
+        aliases,
+        shard_size,
+        shard_source_bytes,
+        guest_entry_point,
+        exact_fpu_functions,
+        experiments,
+        None,
+    )
+}
+
+/// `definition_rewrite` is a module option's textual pass over each rendered
+/// function definition (`--checkpoint-globals`), applied before packing so
+/// the shard budget measures the final text.
+#[allow(clippy::too_many_arguments)]
+fn emit_sharded_module_with_definition_rewrite(
+    functions: &[(FunctionRange, String)],
+    aliases: &[(u32, u32)],
+    shard_size: usize,
+    shard_source_bytes: usize,
+    guest_entry_point: u32,
+    exact_fpu_functions: &BTreeSet<u32>,
+    experiments: LocalPairedExperiments<'_>,
+    definition_rewrite: Option<fn(&str) -> String>,
+) -> Result<Vec<GeneratedSource>, TranslationError> {
     if shard_size == 0 {
         return Err(TranslationError::InvalidShardSize);
     }
@@ -11335,6 +11366,10 @@ fn emit_sharded_module_with_experiment(
             &owners_with_interior_entries,
             exact_fpu_functions,
         )?;
+        let rendered = match definition_rewrite {
+            Some(rewrite) => rewrite(&rendered),
+            None => rendered,
+        };
         let generated_bytes = fixed_shard_bytes.checked_add(rendered.len()).ok_or(
             TranslationError::FunctionExceedsShardSourceBudget {
                 address: function.address,
@@ -21364,6 +21399,89 @@ extern \"C\" std::uint32_t galaxy_module_transfer_flags() {
             assert!(module
                 .contents
                 .contains("galaxy_module_checkpoint_gate() {"));
+        }
+    }
+
+    #[test]
+    fn checkpoint_globals_pack_shards_by_the_rewritten_text() {
+        let site = "    GALAXY_CALL_RETURN_CHECKPOINT(services, 0x80004004u, 0x80004008u, context, memory);\n";
+        let functions = [
+            (
+                FunctionRange {
+                    address: 0x8000_4000,
+                    size: 8,
+                },
+                site.repeat(40),
+            ),
+            (
+                FunctionRange {
+                    address: 0x8000_4100,
+                    size: 8,
+                },
+                site.repeat(40),
+            ),
+        ];
+        let exact = BTreeSet::new();
+        let shard_sizes = |files: &[GeneratedSource]| {
+            files
+                .iter()
+                .filter(|file| file.name.starts_with("functions_") && file.name.ends_with(".cpp"))
+                .map(|file| file.contents.len())
+                .collect::<Vec<_>>()
+        };
+        let roomy = emit_sharded_module_with_exact_fpu_and_source_budget(
+            &functions,
+            &[],
+            64,
+            1 << 20,
+            0x8000_4000,
+            &exact,
+        )
+        .unwrap();
+        let one_shard = shard_sizes(&roomy);
+        assert_eq!(one_shard.len(), 1);
+        // The 80 renamed sites add two bytes each: half of that fits.
+        let budget = one_shard[0] + 80;
+        // Packing the plain text and renaming afterwards overflows the shard.
+        let mut renamed_after = emit_sharded_module_with_exact_fpu_and_source_budget(
+            &functions,
+            &[],
+            64,
+            budget,
+            0x8000_4000,
+            &exact,
+        )
+        .unwrap();
+        assert_eq!(shard_sizes(&renamed_after).len(), 1);
+        apply_checkpoint_globals(&mut renamed_after);
+        assert!(matches!(
+            validate_function_shard_source_budget(&renamed_after, budget),
+            Err(TranslationError::ShardExceedsSourceBudget { .. })
+        ));
+        // Packing the renamed text splits the shard; the module pass then
+        // leaves the shards alone and every one fits.
+        let mut packed = emit_sharded_module_with_definition_rewrite(
+            &functions,
+            &[],
+            64,
+            budget,
+            0x8000_4000,
+            &exact,
+            LocalPairedExperiments::default(),
+            Some(rewrite_checkpoint_globals),
+        )
+        .unwrap();
+        assert_eq!(shard_sizes(&packed).len(), 2);
+        let before = packed.clone();
+        apply_checkpoint_globals(&mut packed);
+        validate_function_shard_source_budget(&packed, budget).unwrap();
+        for (after, before) in packed.iter().zip(&before) {
+            if after.name.starts_with("functions_") && after.name.ends_with(".cpp") {
+                assert_eq!(after, before);
+                assert!(!after
+                    .contents
+                    .contains("GALAXY_CALL_RETURN_CHECKPOINT(services,"));
+            }
         }
     }
 }
