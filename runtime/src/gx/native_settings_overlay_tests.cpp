@@ -1,5 +1,6 @@
 #include "galaxy/gx_d3d12.h"
 #include "galaxy/gx/render_config.h"
+#include "galaxy/gx/temporal_upscaler.h"
 #include "galaxy/input_bindings.h"
 #include "galaxy/runtime_settings.h"
 
@@ -233,14 +234,15 @@ int main() {
     passed &= expect(reopen(), "reopening takes the new live settings");
     passed &= expect(key(VK_TAB), "Tab enters the graphics page");
     snapshot = galaxy::gx::native_settings_overlay_snapshot();
-    passed &= expect(snapshot.tab == 1u && snapshot.row_count == 10u,
-                     "graphics page has AA, AA quality, upscaler, FSR 3 quality, sharpening, "
-                     "textures, mipmaps, lighting, 2D layer and draw distance");
+    const bool fsr3 = galaxy::gx::fsr3_available();
+    passed &= expect(snapshot.tab == 1u && snapshot.row_count == (fsr3 ? 10u : 9u),
+                     "graphics page has AA, AA quality, upscaler, FSR 3 quality (only with FSR 3), "
+                     "sharpening, textures, mipmaps, lighting, 2D layer and draw distance");
     passed &= expect(key(VK_LEFT), "left lowers the anti-aliasing mode");
     passed &= expect(key(VK_DOWN) && key(VK_RIGHT), "AA quality row is adjustable");
     passed &= expect(key(VK_RIGHT), "quality stops at its last value");
     passed &= expect(key(VK_DOWN) && key(VK_LEFT), "upscaler row is adjustable");
-    passed &= expect(key(VK_DOWN) && key(VK_RIGHT), "FSR 3 quality row is adjustable");
+    if (fsr3) passed &= expect(key(VK_DOWN) && key(VK_RIGHT), "FSR 3 quality row is adjustable");
     passed &= expect(key(VK_DOWN) && key(VK_RIGHT), "sharpening row is adjustable");
     passed &= expect(key(VK_DOWN) && key(VK_RIGHT), "texture filtering row is adjustable");
     passed &= expect(key(VK_DOWN) && key(VK_RIGHT), "mipmap row toggles");
@@ -248,14 +250,15 @@ int main() {
     passed &= expect(key(VK_DOWN) && key(VK_RIGHT), "2D layer row toggles");
     passed &= expect(
         galaxy::gx::get_render_config().aa_mode == 2u &&
-            galaxy::gx::native_settings_overlay_snapshot().pending_changes == 9u,
-        "nine graphics changes wait in the draft");
+            galaxy::gx::native_settings_overlay_snapshot().pending_changes == (fsr3 ? 9u : 8u),
+        "every graphics change waits in the draft");
     passed &= expect(key(VK_RETURN), "Enter applies the graphics changes");
     const galaxy::gx::RenderConfig applied = galaxy::gx::get_render_config();
     passed &= expect(applied.aa_mode == 1u, "AUTO steps down to SMAA");
     passed &= expect(applied.smaa_quality == 3u, "HIGH steps up to ULTRA and stops there");
     passed &= expect(applied.upscaler == 0u, "FSR 1 steps down to bilinear");
-    passed &= expect(applied.temporal_quality == 2u, "QUALITY steps up to BALANCED");
+    passed &= expect(applied.temporal_quality == (fsr3 ? 2u : 1u),
+                     "FSR 3 QUALITY steps up to BALANCED, or stays without FSR 3");
     passed &= expect(applied.sharpness == 30u, "sharpening moves in steps of ten");
     passed &= expect(applied.anisotropic_filtering == 16u, "8x anisotropic steps up to 16x");
     passed &= expect(!applied.enhanced_mipmaps, "mipmaps switch to the original ones");

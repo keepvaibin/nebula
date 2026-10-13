@@ -665,10 +665,16 @@ void reset_controls_draft() {
     s_input_mode_draft = get_runtime_settings().input_mode;
 }
 
+// The graphics page has its FSR 3 QUALITY row (row 3) only in runtimes built
+// with FSR 3; maps a shown row to its graphics row.
+unsigned graphics_row(unsigned row) {
+    return !fsr3_available() && row >= 3u ? row + 1u : row;
+}
+
 unsigned native_settings_row_count(unsigned tab) {
     switch (tab % kNativeSettingsTabCount) {
     case 0: return 8u;
-    case 1: return 10u;
+    case 1: return fsr3_available() ? 10u : 9u;
     case 2: return controls_row_count();
     case 3: return 6u;
     case 4: return 6u;
@@ -972,7 +978,7 @@ void adjust_native_setting_unlogged(int delta) {
 
     if (tab == 1u) {
         static constexpr std::array<unsigned, 5> kAnisotropy{1u, 2u, 4u, 8u, 16u};
-        switch (row) {
+        switch (graphics_row(row)) {
         case 0: draft.aa_mode = step(std::min(draft.aa_mode, 3u), 4u); break;
         case 1: draft.smaa_quality = step(std::min(draft.smaa_quality, 3u), 4u); break;
         case 2: {
@@ -9278,12 +9284,13 @@ std::string native_settings_row_text(
     }
     case 1: {
         static constexpr const char* kQuality[] = {"LOW", "MEDIUM", "HIGH", "ULTRA"};
-        switch (row) {
+        switch (graphics_row(row)) {
         case 0: return anti_aliasing_row_text(render.aa_mode, render.smaa_quality, get_post_process_status());
         case 1: return std::string("AA QUALITY: ") + kQuality[std::min(render.smaa_quality, 3u)];
         case 2: {
             static constexpr const char* kUpscalers[] = {"BILINEAR", "FSR 1", "FSR 3"};
-            return std::string("UPSCALER: ") + kUpscalers[std::min(render.upscaler, 2u)];
+            return std::string("UPSCALER: ") +
+                   kUpscalers[std::min(render.upscaler, fsr3_available() ? 2u : 1u)];
         }
         case 3: {
             static constexpr const char* kTemporal[] = {

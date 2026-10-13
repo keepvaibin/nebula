@@ -244,7 +244,7 @@ namespace Nebula.Launcher
         private readonly ComboBox aspect = new ComboBox(), internalScale = new ComboBox(), frameRate = new ComboBox();
         private readonly CheckBox vsync = new CheckBox();
         private readonly ComboBox antiAliasing = new ComboBox(), aaQuality = new ComboBox(), upscaler = new ComboBox(),
-            temporalQuality = new ComboBox(), textureFilter = new ComboBox(), lighting = new ComboBox(), drawDistance = new ComboBox();
+            textureFilter = new ComboBox(), lighting = new ComboBox(), drawDistance = new ComboBox();
         private readonly NumericUpDown sharpness = new NumericUpDown();
         private readonly CheckBox mipmaps = new CheckBox(), hudOutput = new CheckBox();
         private readonly TrackBar[] volumes = new TrackBar[AudioSettings.Names.Length];
@@ -310,7 +310,6 @@ namespace Nebula.Launcher
             Row(image, "Anti-aliasing", antiAliasing, ref y);
             Row(image, "Anti-aliasing quality", aaQuality, ref y);
             Row(image, "Upscaling", upscaler, ref y);
-            Row(image, "FSR 3 quality", temporalQuality, ref y);
             Label(image, "Sharpening (0-100)", 12, y + 3);
             sharpness.Location = new Point(320, y);
             sharpness.Size = new Size(120, 28);
@@ -334,7 +333,6 @@ namespace Nebula.Launcher
             antiAliasing.Items.AddRange(GraphicsSettings.AntiAliasingModes);
             aaQuality.Items.AddRange(GraphicsSettings.AntiAliasingQualities);
             upscaler.Items.AddRange(GraphicsSettings.Upscalers);
-            temporalQuality.Items.AddRange(GraphicsSettings.TemporalQualities);
             textureFilter.Items.AddRange(GraphicsSettings.TextureFilters);
             lighting.Items.AddRange(GraphicsSettings.LightingModes);
             drawDistance.Items.AddRange(GraphicsSettings.DrawDistances);
@@ -716,7 +714,6 @@ namespace Nebula.Launcher
             antiAliasing.SelectedIndex = graphics.AntiAliasing;
             aaQuality.SelectedIndex = graphics.Quality;
             upscaler.SelectedIndex = graphics.Upscaler;
-            temporalQuality.SelectedIndex = graphics.TemporalQuality;
             sharpness.Value = graphics.Sharpness;
             textureFilter.SelectedIndex = graphics.TextureFilter;
             lighting.SelectedIndex = graphics.PerPixelLighting ? 0 : 1;
@@ -856,7 +853,6 @@ namespace Nebula.Launcher
                 graphics.AntiAliasing = antiAliasing.SelectedIndex;
                 graphics.Quality = aaQuality.SelectedIndex;
                 graphics.Upscaler = upscaler.SelectedIndex;
-                graphics.TemporalQuality = temporalQuality.SelectedIndex;
                 graphics.Sharpness = (int)sharpness.Value;
                 graphics.TextureFilter = textureFilter.SelectedIndex;
                 graphics.PerPixelLighting = lighting.SelectedIndex == 0;
