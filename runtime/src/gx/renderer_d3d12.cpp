@@ -22,6 +22,8 @@
 #pragma warning(pop)
 
 #include <algorithm>
+#include <cstdarg>
+#include <cwchar>
 #include <atomic>
 #include <bit>
 #include <cctype>
@@ -1628,6 +1630,22 @@ bool dred_diagnostics_enabled() {
     return enabled;
 }
 
+// With GALAXY_D3D_DRED: a breadcrumb context (PIX unicode marker) that the
+// device-removal dump prints next to the operation where the GPU stopped.
+void dred_marker(ID3D12GraphicsCommandList* list, const wchar_t* format, ...) {
+    if (!dred_diagnostics_enabled() || list == nullptr) {
+        return;
+    }
+    wchar_t text[96]{};
+    va_list args;
+    va_start(args, format);
+    const int length = std::vswprintf(text, sizeof(text) / sizeof(text[0]), format, args);
+    va_end(args);
+    if (length > 0) {
+        list->SetMarker(0u, text, static_cast<UINT>((std::wcslen(text) + 1u) * sizeof(wchar_t)));
+    }
+}
+
 unsigned swap_chain_frame_latency() {
     static const unsigned latency = [] {
         char value[16]{};
@@ -2390,14 +2408,23 @@ static void dump_device_removal(ID3D12Device* dev) {
     if (SUCCEEDED(dev->QueryInterface(IID_PPV_ARGS(&dred)))) {
         D3D12_DRED_AUTO_BREADCRUMBS_OUTPUT bo{};
         if (SUCCEEDED(dred->GetAutoBreadcrumbsOutput(&bo))) {
+            // Every list still in flight; finished ones only up to 4.
             int node_idx = 0;
+            int finished = 0;
             for (const D3D12_AUTO_BREADCRUMB_NODE* n = bo.pHeadAutoBreadcrumbNode;
-                 n != nullptr && node_idx < 8; n = n->pNext, ++node_idx) {
+                 n != nullptr && node_idx < 256; n = n->pNext, ++node_idx) {
                 const UINT32 last = n->pLastBreadcrumbValue
                     ? *n->pLastBreadcrumbValue : 0u;
-                std::cerr << "[DRED] cmdlist "
-                          << (n->pCommandListDebugNameA
-                                  ? n->pCommandListDebugNameA : "(unnamed)")
+                if (last >= n->BreadcrumbCount && ++finished > 4) {
+                    continue;
+                }
+                char name[96] = "(unnamed)";
+                if (n->pCommandListDebugNameW != nullptr) {
+                    std::snprintf(name, sizeof(name), "%ls", n->pCommandListDebugNameW);
+                } else if (n->pCommandListDebugNameA != nullptr) {
+                    std::snprintf(name, sizeof(name), "%s", n->pCommandListDebugNameA);
+                }
+                std::cerr << "[DRED] node " << node_idx << " cmdlist " << name
                           << " executed " << last << "/" << n->BreadcrumbCount
                           << " ops; ops around stop:";
                 const UINT32 from = (last > 6u) ? last - 6u : 0u;
@@ -2408,6 +2435,40 @@ static void dump_device_removal(ID3D12Device* dev) {
                               << (i + 1u == last ? "<" : "");
                 }
                 std::cerr << '\n';
+            }
+        }
+        ComPtr<ID3D12DeviceRemovedExtendedData1> dred1;
+        D3D12_DRED_AUTO_BREADCRUMBS_OUTPUT1 bo1{};
+        if (SUCCEEDED(dred.As(&dred1)) && SUCCEEDED(dred1->GetAutoBreadcrumbsOutput1(&bo1))) {
+            int node_idx = 0;
+            for (const D3D12_AUTO_BREADCRUMB_NODE1* n = bo1.pHeadAutoBreadcrumbNode;
+                 n != nullptr && node_idx < 256; n = n->pNext, ++node_idx) {
+                const UINT32 last = n->pLastBreadcrumbValue ? *n->pLastBreadcrumbValue : 0u;
+                if (last >= n->BreadcrumbCount || n->BreadcrumbContextsCount == 0u) {
+                    continue;
+                }
+                // The markers before the stop (the last three) and the first after it.
+                std::vector<std::wstring> before;
+                std::wstring after;
+                for (UINT c = 0; c < n->BreadcrumbContextsCount; ++c) {
+                    const D3D12_DRED_BREADCRUMB_CONTEXT& context = n->pBreadcrumbContexts[c];
+                    const std::wstring value = context.pContextString != nullptr ? context.pContextString : L"";
+                    if (context.BreadcrumbIndex <= last) {
+                        before.push_back(std::to_wstring(context.BreadcrumbIndex) + L":" + value);
+                        if (before.size() > 3u) before.erase(before.begin());
+                    } else if (after.empty()) {
+                        after = std::to_wstring(context.BreadcrumbIndex) + L":" + value;
+                    }
+                }
+                std::string line;
+                for (const std::wstring& item : before) {
+                    char buffer[160]{};
+                    std::snprintf(buffer, sizeof(buffer), " [%ls]", item.c_str());
+                    line += buffer;
+                }
+                char next[160]{};
+                std::snprintf(next, sizeof(next), " next [%ls]", after.c_str());
+                std::cerr << "[DRED] node " << node_idx << " stopped at op " << last << " after" << line << next << '\n';
             }
         }
         D3D12_DRED_PAGE_FAULT_OUTPUT pf{};
@@ -3762,7 +3823,7 @@ HRESULT create_gx_root_signature(
     params[6].ParameterType            = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
     params[6].Constants.ShaderRegister = 2;
     params[6].Constants.RegisterSpace  = 0;
-    params[6].Constants.Num32BitValues = 3;
+    params[6].Constants.Num32BitValues = 4;
     params[6].ShaderVisibility         = D3D12_SHADER_VISIBILITY_VERTEX;
 
     params[7].ParameterType             = D3D12_ROOT_PARAMETER_TYPE_SRV;
@@ -6078,6 +6139,7 @@ void RendererD3D12::begin_frame(bool present_swap_chain) {
         dump_device_removal(device_.Get());
         d3d_check(command_reset_hr, "CommandList Reset");
     }
+    dred_marker(command_list_.Get(), L"frame slot=%u", frame_slot_);
     if (timestamp_query_heap_) {
         command_list_->EndQuery(
             timestamp_query_heap_.Get(), D3D12_QUERY_TYPE_TIMESTAMP,
@@ -6990,6 +7052,12 @@ ByteAddressBuffer ring : register(t0);
 ByteAddressBuffer resident : register(t1);
 StructuredBuffer<uint4> pairs : register(t2);
 RWStructuredBuffer<uint4> verdicts : register(u0);
+// Last valid Load3 offset of each buffer. Root views have no bounds, and
+// compilers may run both loads of a select: both stay inside their buffers.
+cbuffer Limits : register(b0) {
+    uint ring_last;
+    uint resident_last;
+};
 groupshared uint g_same;
 groupshared uint g_worst;
 groupshared uint g_lo[3];
@@ -7003,7 +7071,9 @@ float unordered(uint u) {
     return asfloat((u & 0x80000000u) != 0u ? (u & 0x7FFFFFFFu) : ~u);
 }
 float3 position(uint in_resident, uint offset) {
-    return asfloat(in_resident != 0u ? resident.Load3(offset) : ring.Load3(offset));
+    const float3 r = asfloat(resident.Load3(min(offset, resident_last)));
+    const float3 g = asfloat(ring.Load3(min(offset, ring_last)));
+    return in_resident != 0u ? r : g;
 }
 [numthreads(64, 1, 1)]
 void main(uint3 group : SV_GroupID, uint lane : SV_GroupIndex) {
@@ -7076,7 +7146,7 @@ bool RendererD3D12::ensure_blend_validation() {
     }
     blend_verdicts_->SetName(L"GX vertex blend verdicts");
     blend_verdicts_state_ = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
-    D3D12_ROOT_PARAMETER params[4]{};
+    D3D12_ROOT_PARAMETER params[5]{};
     for (unsigned i = 0; i < 3u; ++i) {
         params[i].ParameterType = D3D12_ROOT_PARAMETER_TYPE_SRV;
         params[i].Descriptor.ShaderRegister = i;
@@ -7085,8 +7155,12 @@ bool RendererD3D12::ensure_blend_validation() {
     params[3].ParameterType = D3D12_ROOT_PARAMETER_TYPE_UAV;
     params[3].Descriptor.ShaderRegister = 0;
     params[3].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+    params[4].ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
+    params[4].Constants.ShaderRegister = 0;
+    params[4].Constants.Num32BitValues = 2;
+    params[4].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
     D3D12_ROOT_SIGNATURE_DESC rsd{};
-    rsd.NumParameters = 4;
+    rsd.NumParameters = 5;
     rsd.pParameters = params;
     ComPtr<ID3DBlob> blob, err;
     if (FAILED(D3D12SerializeRootSignature(&rsd, D3D_ROOT_SIGNATURE_VERSION_1, &blob, &err)) ||
@@ -7135,11 +7209,18 @@ void RendererD3D12::record_blend_validation() {
     }
     command_list_->SetComputeRootSignature(blend_validate_root_.Get());
     command_list_->SetPipelineState(blend_validate_pso_.Get());
+    const std::uint64_t ring_bytes = vertex_ring_.total_bytes();
+    const bool resident = resident_vertex_base_ != 0u && resident_vertex_bytes_ >= 12u;
+    const std::uint32_t limits[2]{
+        static_cast<std::uint32_t>(std::min<std::uint64_t>(ring_bytes - 12u, 0xFFFFFFF0u)),
+        static_cast<std::uint32_t>(std::min<std::uint64_t>((resident ? resident_vertex_bytes_ : ring_bytes) - 12u,
+                                                           0xFFFFFFF0u))};
     command_list_->SetComputeRootShaderResourceView(0, vertex_ring_.gpu_base());
-    command_list_->SetComputeRootShaderResourceView(
-        1, resident_vertex_base_ != 0u ? resident_vertex_base_ : vertex_ring_.gpu_base());
+    command_list_->SetComputeRootShaderResourceView(1, resident ? resident_vertex_base_ : vertex_ring_.gpu_base());
     command_list_->SetComputeRootShaderResourceView(2, table.gpu);
     command_list_->SetComputeRootUnorderedAccessView(3, blend_verdicts_->GetGPUVirtualAddress());
+    command_list_->SetComputeRoot32BitConstants(4, 2u, limits, 0u);
+    dred_marker(command_list_.Get(), L"blend-validate pairs=%zu", blend_pairs_.size());
     command_list_->Dispatch(static_cast<UINT>(blend_pairs_.size()), 1u, 1u);
     D3D12_RESOURCE_BARRIER barrier{};
     barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
@@ -7823,6 +7904,8 @@ bool RendererD3D12::present_replay_subframe(
     d3d_check(subframe_allocators_[index]->Reset(), "sub-frame allocator Reset");
     d3d_check(command_list_->Reset(subframe_allocators_[index].Get(), nullptr),
               "sub-frame CommandList Reset");
+    dred_marker(command_list_.Get(), L"subframe log=%llu t=%.3f", static_cast<unsigned long long>(run_serial_),
+                static_cast<double>(vertex_t));
     if (subframe_query_heap_) {
         command_list_->EndQuery(subframe_query_heap_.Get(), D3D12_QUERY_TYPE_TIMESTAMP,
                                 index * 2u);
@@ -7966,6 +8049,9 @@ bool RendererD3D12::present_replay_subframe(
             if (!redirect_.empty() && call.texture_table.ptr != 0u) {
                 call.texture_table = patch_replay_table(call.texture_table);
             }
+            dred_marker(command_list_.Get(), L"replay draw %u blend=%u slot=%u rec=%d n=%u",
+                        op.index, call.blend_vertices != 0u ? 1u : 0u, call.blend_slot, call.replay_record,
+                        call.index_count);
             draw(call);
             break;
         }
@@ -8628,7 +8714,80 @@ void RendererD3D12::clear_efb(
 // draw
 // ---------------------------------------------------------------------------
 
+void RendererD3D12::check_draw_addresses(const DrawCall& call) {
+    static std::uint32_t reported = 0u;
+    if (reported >= 40u) {
+        return;
+    }
+    const auto known = [this](D3D12_GPU_VIRTUAL_ADDRESS va, std::uint64_t bytes) {
+        const auto in = [va, bytes](D3D12_GPU_VIRTUAL_ADDRESS base, std::uint64_t size) {
+            return base != 0u && va >= base && va + bytes <= base + size;
+        };
+        return in(vertex_ring_.gpu_base(), vertex_ring_.total_bytes()) ||
+               in(index_ring_.gpu_base(), index_ring_.total_bytes()) ||
+               in(constant_ring_.gpu_base(), constant_ring_.total_bytes()) ||
+               in(matrix_ring_.gpu_base(), matrix_ring_.total_bytes()) ||
+               in(resident_vertex_base_, resident_vertex_bytes_) ||
+               (blend_verdicts_ && in(blend_verdicts_->GetGPUVirtualAddress(), blend_verdicts_->GetDesc().Width));
+    };
+    const auto check = [&](const char* field, D3D12_GPU_VIRTUAL_ADDRESS va, std::uint64_t bytes) {
+        if (va == 0u || known(va, bytes) || reported >= 40u) {
+            return;
+        }
+        ++reported;
+        std::cerr << "[draw-address] field=" << field << " va=0x" << std::hex << va << std::dec
+                  << " bytes=" << bytes << " replaying=" << (replay_playing_ ? 1 : 0)
+                  << " t=" << vertex_blend_t_
+                  << " blend=" << (call.blend_vertices != 0u ? 1 : 0)
+                  << " record=" << call.ps_record << '\n';
+    };
+    check("vs-constants", call.vs_constants, 16u);
+    check("ps-constants", call.ps_constants, 16u);
+    check("matrix-palette", call.matrix_palette, 16u);
+    check("blend-vertices", call.blend_vertices, 144u);
+    check("vertex-view", call.vertex_view.BufferLocation, call.vertex_view.SizeInBytes);
+    check("index-view", call.index_view.BufferLocation, call.index_view.SizeInBytes);
+    // A blended draw reads the earlier vertices at SV_VertexID * stride: every
+    // index must be below the vertex count, and the earlier run must be whole.
+    if (call.blend_vertices != 0u && call.vertex_view.StrideInBytes != 0u && call.index_count != 0u &&
+        reported < 40u) {
+        const std::uint32_t vertices = call.vertex_view.SizeInBytes / call.vertex_view.StrideInBytes;
+        std::uint32_t highest = 0u;
+        if (call.index_view.BufferLocation != 0u) {
+            const auto* indices = reinterpret_cast<const std::uint16_t*>(index_ring_.cpu_at(call.index_view.BufferLocation));
+            highest = 0u;
+            for (std::uint32_t i = 0u; indices != nullptr && i < call.index_count; ++i) {
+                highest = std::max<std::uint32_t>(highest, indices[i]);
+            }
+        } else {
+            highest = call.index_count - 1u;
+        }
+        const std::uint64_t reach = (static_cast<std::uint64_t>(highest) + 1u) * call.vertex_view.StrideInBytes;
+        if (highest >= vertices || !known(call.blend_vertices, reach)) {
+            ++reported;
+            std::cerr << "[draw-address] blend highest-index=" << highest << " vertices=" << vertices
+                      << " earlier=0x" << std::hex << call.blend_vertices << std::dec << " reach=" << reach
+                      << " in-known-buffer=" << (known(call.blend_vertices, reach) ? 1 : 0)
+                      << " resident=0x" << std::hex << resident_vertex_base_ << std::dec << '+' << resident_vertex_bytes_
+                      << " slot=" << call.blend_slot << '\n';
+        }
+    }
+}
+
 void RendererD3D12::draw(const DrawCall& call) {
+    static const bool validate_addresses = [] {
+        char value[8]{};
+        std::size_t length = 0u;
+        return getenv_s(&length, value, sizeof(value), "GALAXY_VALIDATE_DRAW_ADDRESSES") == 0 &&
+               length > 1u && value[0] == '1';
+    }();
+    if (validate_addresses) [[unlikely]] {
+        check_draw_addresses(call);
+    }
+    if (!replay_playing_) {
+        dred_marker(command_list_.Get(), L"draw rec=%d n=%u vb=%u", call.replay_record, call.index_count,
+                    call.vertex_view.SizeInBytes);
+    }
     if (replay_recording_) [[unlikely]] {
         if (call.texture_table.ptr != 0u && !replay_textures_.by_gpu.empty()) {
             take_replay_snapshots(call.texture_table.ptr);
@@ -8672,9 +8831,13 @@ void RendererD3D12::draw(const DrawCall& call) {
         // Unblended draws bind valid addresses the shaders never read.
         command_list_->SetGraphicsRootShaderResourceView(
             5, call.blend_vertices != 0u ? call.blend_vertices : vertex_ring_.gpu_base());
-        const std::uint32_t blend[3]{call.blend_vertices != 0u ? 1u : 0u,
-                                     std::bit_cast<std::uint32_t>(vertex_blend_t_), call.blend_slot};
-        command_list_->SetGraphicsRoot32BitConstants(6, 3u, blend, 0u);
+        const std::uint32_t vertices = call.vertex_view.StrideInBytes != 0u
+            ? call.vertex_view.SizeInBytes / call.vertex_view.StrideInBytes : 0u;
+        const std::uint32_t blend[4]{call.blend_vertices != 0u ? 1u : 0u,
+                                     std::bit_cast<std::uint32_t>(vertex_blend_t_),
+                                     std::min(call.blend_slot, kMaxBlendPairs - 1u),
+                                     call.blend_vertices != 0u && vertices != 0u ? vertices - 1u : 0u};
+        command_list_->SetGraphicsRoot32BitConstants(6, 4u, blend, 0u);
         command_list_->SetGraphicsRootShaderResourceView(
             7, blend_verdicts_ ? blend_verdicts_->GetGPUVirtualAddress() : vertex_ring_.gpu_base());
         bound_blend_vertices_ = call.blend_vertices;

@@ -139,6 +139,7 @@ cbuffer GxVertexBlend : register(b2) {
     uint  vb_mode;  // 0: the draw's own vertices only
     float vb_t;     // 0 the frame before, 1 this frame
     uint  vb_slot;  // the pair's verdict
+    uint  vb_last;  // the last vertex of the earlier draw
 };
 ByteAddressBuffer vb_prev : register(t1, space1);
 StructuredBuffer<uint4> vb_verdict : register(t2, space1);
@@ -160,14 +161,16 @@ void vertex_blend(inout VSIn v, uint id) {
     if (vb_mode == 0u) {
         return;
     }
-    const uint4 verdict = vb_verdict[vb_slot];
+    // Root views have no bounds: every read stays inside its buffer even if
+    // a compiler moves it above the checks.
+    const uint4 verdict = vb_verdict[min(vb_slot, 8191u)];
     const float worst = asfloat(verdict.z);
     const float extent = asfloat(verdict.w);
     if (verdict.y != verdict.x && !(verdict.y == 0u && worst <= 0.25 * extent) &&
         !(worst <= 0.02 * extent)) {
         return;
     }
-    const uint at = id * 144u;
+    const uint at = min(id, vb_last) * 144u;
     v.pos = lerp(asfloat(vb_prev.Load3(at)), v.pos, vb_t);
     const float3 n = lerp(asfloat(vb_prev.Load3(at + 12u)), v.nrm, vb_t);
     const float nn = dot(n, n);

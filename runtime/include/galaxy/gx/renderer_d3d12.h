@@ -264,6 +264,11 @@ public:
         return peak;
     }
     [[nodiscard]] std::size_t bytes_per_frame() const { return bytes_per_frame_; }
+    [[nodiscard]] std::size_t total_bytes() const { return bytes_per_frame_ * frames_in_flight_; }
+    // CPU view of a GPU address inside this ring; null outside it.
+    [[nodiscard]] const std::byte* cpu_at(D3D12_GPU_VIRTUAL_ADDRESS va) const {
+        return va >= gpu_base_ && va < gpu_base_ + total_bytes() ? mapped_ + (va - gpu_base_) : nullptr;
+    }
     [[nodiscard]] std::size_t cursor() const { return cursor_; }
 
     [[nodiscard]] ID3D12Resource* resource() const { return buffer_.Get(); }
@@ -621,6 +626,9 @@ public:
         std::uint8_t pixel_format = 0);
 
     void draw(const DrawCall& call);
+    // GALAXY_VALIDATE_DRAW_ADDRESSES=1: logs draws whose GPU addresses lie
+    // outside every buffer the renderer owns (device-removal triage).
+    void check_draw_addresses(const DrawCall& call);
 
     // EFB copy paths (record into the current command list). Both run the
     // conversion blit (intensity / gamma / 3-tap vertical copy filter /
