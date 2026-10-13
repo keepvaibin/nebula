@@ -26,10 +26,13 @@ struct SwitchPadState {
     // Motion shake held until this steady-clock microsecond (0: none).
     std::uint64_t shake_until_us = 0;
     // Pointer movement from the gyro since the previous consuming read
-    // (input_bindings pointer units, up positive), already scaled by the
-    // scheme's pointer speed.
+    // (pointer units, 2 = picture width; up positive), integrated per IMU
+    // sample in world yaw/pitch (switch_controller.h SwitchMotion).
     float gyro_x = 0.0f;
     float gyro_y = 0.0f;
+    // The last report carried IMU samples (0x30 with the IMU on).
+    bool imu_live = false;
+    unsigned gyro_rest_windows = 0;
 };
 
 // Starts the worker on first use; later calls are free.

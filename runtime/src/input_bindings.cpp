@@ -26,7 +26,7 @@ constexpr std::array<const char*, kWiiTargetCount> kTargetIds{
     "stick_up", "stick_down", "stick_left", "stick_right",
     "c", "z", "shake", "nunchuk_shake",
     "pointer_up", "pointer_down", "pointer_left", "pointer_right",
-    "pointer_recenter",
+    "pointer_recenter", "jump_back",
 };
 
 constexpr std::array<const char*, kWiiTargetCount> kTargetLabels{
@@ -35,7 +35,7 @@ constexpr std::array<const char*, kWiiTargetCount> kTargetLabels{
     "STICK UP", "STICK DOWN", "STICK LEFT", "STICK RIGHT",
     "C", "Z", "SHAKE", "NUNCHUK SHAKE",
     "POINTER UP", "POINTER DOWN", "POINTER LEFT", "POINTER RIGHT",
-    "RECENTER",
+    "RECENTER", "A IN PLAY, B IN MENUS",
 };
 
 constexpr std::array<const char*, kControlSchemeCount> kSchemeIds{
@@ -225,7 +225,7 @@ constexpr const char* kMotionNames[] = {"off", "remote", "nunchuk"};
 
 }  // namespace
 
-BindingTable default_binding_table(ControlScheme scheme) {
+BindingTable legacy_binding_table(ControlScheme scheme) {
     BindingTable table{};
     using T = WiiTarget;
     if (scheme == ControlScheme::Keyboard) {
@@ -274,11 +274,9 @@ BindingTable default_binding_table(ControlScheme scheme) {
     set(table, T::Shake, {button(pad::kWestBit), button(pad::kNorthBit),
                           button(pad::kRightShoulderBit)});
     if (scheme == ControlScheme::Xbox) {
-        // Positional: Xbox A (south) is Wii A.
         set(table, T::A, {button(pad::kSouthBit)});
         set(table, T::B, {button(pad::kEastBit), axis_pos(PadAxis::RightTrigger)});
     } else {
-        // Labelled: Nintendo A (east) is Wii A, as on the console.
         set(table, T::A, {button(pad::kEastBit)});
         set(table, T::B, {button(pad::kSouthBit), axis_pos(PadAxis::RightTrigger)});
         set(table, T::Home, {button(pad::kHomeBit)});
@@ -286,7 +284,53 @@ BindingTable default_binding_table(ControlScheme scheme) {
     return table;
 }
 
-SchemeTuning default_scheme_tuning(ControlScheme scheme) {
+// The defaults shipped in controls version 2 (Native29), for migration.
+BindingTable version2_binding_table(ControlScheme scheme) {
+    BindingTable table = legacy_binding_table(scheme);
+    if (scheme == ControlScheme::Keyboard) {
+        return table;
+    }
+    using T = WiiTarget;
+    const bool xbox = scheme == ControlScheme::Xbox;
+    set(table, T::A, {button(xbox ? pad::kSouthBit : pad::kEastBit)});
+    set(table, T::JumpBack, {button(xbox ? pad::kEastBit : pad::kSouthBit)});
+    set(table, T::B, {axis_pos(PadAxis::RightTrigger)});
+    set(table, T::Z, {axis_pos(PadAxis::LeftTrigger)});
+    set(table, T::C, {button(pad::kLeftShoulderBit), button(pad::kLeftStickBit)});
+    if (xbox) {
+        set(table, T::Shake, {button(pad::kWestBit), button(pad::kNorthBit),
+                              button(pad::kRightShoulderBit)});
+        set(table, T::PointerRecenter, {button(pad::kRightStickBit)});
+    } else {
+        set(table, T::Shake, {button(pad::kWestBit), button(pad::kNorthBit)});
+        set(table, T::PointerRecenter, {button(pad::kRightShoulderBit)});
+        set(table, T::DpadUp, {button(pad::kDpadUpBit), axis_pos(PadAxis::RightY)});
+        set(table, T::DpadDown, {button(pad::kDpadDownBit), axis_neg(PadAxis::RightY)});
+        set(table, T::DpadLeft, {button(pad::kDpadLeftBit), axis_neg(PadAxis::RightX)});
+        set(table, T::DpadRight, {button(pad::kDpadRightBit), axis_pos(PadAxis::RightX)});
+    }
+    return table;
+}
+
+// The Super Mario Galaxy on Switch shape, with Star Bits on the left
+// shoulder only (the player's choice over Nintendo's ZR): A or B jump (B
+// backs out of menus), L/LB Star Bits, both triggers crouch, left-stick click
+// resets the camera, X/Y (Xbox also RB) or a shake spin, R / right-stick
+// click recenters, the gyro points and the right stick turns the camera (the
+// pointer when the gyro is off; Xbox: the pointer).
+BindingTable default_binding_table(ControlScheme scheme) {
+    BindingTable table = version2_binding_table(scheme);
+    if (scheme == ControlScheme::Keyboard) {
+        return table;
+    }
+    using T = WiiTarget;
+    set(table, T::B, {button(pad::kLeftShoulderBit)});
+    set(table, T::Z, {axis_pos(PadAxis::LeftTrigger), axis_pos(PadAxis::RightTrigger)});
+    set(table, T::C, {button(pad::kLeftStickBit)});
+    return table;
+}
+
+SchemeTuning legacy_scheme_tuning(ControlScheme scheme) {
     SchemeTuning tuning{};
     switch (scheme) {
     case ControlScheme::Keyboard:
@@ -297,6 +341,7 @@ SchemeTuning default_scheme_tuning(ControlScheme scheme) {
         tuning.stick_deadzone = 7849.0f / 32767.0f;
         tuning.pointer_deadzone = 8689.0f / 32767.0f;
         tuning.pointer_speed = 2.4f;
+        tuning.pointer_hide_seconds = 4.0f;
         break;
     case ControlScheme::SwitchPro:
     case ControlScheme::SwitchPro2:
@@ -305,9 +350,45 @@ SchemeTuning default_scheme_tuning(ControlScheme scheme) {
         tuning.pointer_speed = 2.4f;
         tuning.motion_shake = MotionShake::Remote;
         tuning.shake_sensitivity = 3;
+        tuning.pointer_hide_seconds = 4.0f;
         break;
     }
     return tuning;
+}
+
+SchemeTuning default_scheme_tuning(ControlScheme scheme) {
+    SchemeTuning tuning = legacy_scheme_tuning(scheme);
+    if (scheme_has_motion(scheme)) {
+        tuning.gyro_pointer = true;
+    }
+    return tuning;
+}
+
+unsigned migrate_legacy_controls(ControlsConfig& config, unsigned version) noexcept {
+    unsigned changed = 0u;
+    for (std::size_t s = 0; s < kControlSchemeCount; ++s) {
+        const auto scheme = static_cast<ControlScheme>(s);
+        const BindingTable legacy = legacy_binding_table(scheme);
+        const BindingTable version2 = version2_binding_table(scheme);
+        const BindingTable current = default_binding_table(scheme);
+        for (std::size_t t = 0; t < kWiiTargetCount; ++t) {
+            TargetBindings& bindings = config.tables[s].targets[t];
+            const bool old_default = bindings == legacy.targets[t] || bindings == version2.targets[t];
+            if (old_default && bindings != current.targets[t]) {
+                bindings = current.targets[t];
+                ++changed;
+            }
+        }
+        const SchemeTuning legacy_tuning = legacy_scheme_tuning(scheme);
+        const SchemeTuning current_tuning = default_scheme_tuning(scheme);
+        SchemeTuning& tuning = config.tuning[s];
+        if (version < 2u && tuning.gyro_pointer == legacy_tuning.gyro_pointer &&
+            legacy_tuning.gyro_pointer != current_tuning.gyro_pointer) {
+            tuning.gyro_pointer = current_tuning.gyro_pointer;
+            ++changed;
+        }
+    }
+    return changed;
 }
 
 ControlsConfig default_controls_config() {
@@ -511,6 +592,12 @@ bool apply_controls_setting(ControlsConfig& config, std::string_view key_text, s
         tuning.invert_pointer_y = flag;
     } else if (name == "gyro_pointer" && parse_bool(value, flag)) {
         tuning.gyro_pointer = flag;
+    } else if (name == "gyro_sensitivity" && parse_float_c(value, number)) {
+        tuning.gyro_sensitivity = number;
+    } else if (name == "pointer_hide_seconds" && parse_float_c(value, number)) {
+        tuning.pointer_hide_seconds = number;
+    } else if (name == "pointer_hide_radius" && parse_float_c(value, number)) {
+        tuning.pointer_hide_radius = number;
     } else if (name == "shake_sensitivity" && parse_float_c(value, number)) {
         tuning.shake_sensitivity = static_cast<std::uint8_t>(
             std::clamp(static_cast<int>(std::lround(number)), 1, int{kShakeSensitivitySteps}));
@@ -534,12 +621,16 @@ ControlsConfig sanitize_controls_config(ControlsConfig config) noexcept {
         tuning.stick_deadzone = clamp_or(tuning.stick_deadzone, 0.0f, 0.9f, defaults.stick_deadzone);
         tuning.pointer_deadzone = clamp_or(tuning.pointer_deadzone, 0.0f, 0.9f, defaults.pointer_deadzone);
         tuning.pointer_speed = clamp_or(tuning.pointer_speed, 0.1f, 10.0f, defaults.pointer_speed);
+        tuning.gyro_sensitivity = clamp_or(tuning.gyro_sensitivity, 0.2f, 5.0f, defaults.gyro_sensitivity);
+        tuning.pointer_hide_seconds = clamp_or(tuning.pointer_hide_seconds, 0.0f, 60.0f, defaults.pointer_hide_seconds);
+        tuning.pointer_hide_radius = clamp_or(tuning.pointer_hide_radius, 0.0f, 0.5f, defaults.pointer_hide_radius);
         tuning.shake_sensitivity = static_cast<std::uint8_t>(
             std::clamp<int>(tuning.shake_sensitivity, 1, kShakeSensitivitySteps));
         if (static_cast<unsigned>(tuning.motion_shake) > 2u) tuning.motion_shake = MotionShake::Off;
         if (!scheme_has_motion(static_cast<ControlScheme>(s))) {
             tuning.motion_shake = MotionShake::Off;
             tuning.gyro_pointer = false;
+            tuning.gyro_sensitivity = defaults.gyro_sensitivity;
         }
     }
     return config;
@@ -558,6 +649,8 @@ std::string format_controls_settings(const ControlsConfig& config) {
         if (scheme_is_gamepad(scheme)) {
             text += "tune." + prefix + "stick_deadzone=" + format_float_c(tuning.stick_deadzone) + "\n";
             text += "tune." + prefix + "pointer_deadzone=" + format_float_c(tuning.pointer_deadzone) + "\n";
+            text += "tune." + prefix + "pointer_hide_seconds=" + format_float_c(tuning.pointer_hide_seconds) + "\n";
+            text += "tune." + prefix + "pointer_hide_radius=" + format_float_c(tuning.pointer_hide_radius) + "\n";
         }
         text += "tune." + prefix + "pointer_speed=" + format_float_c(tuning.pointer_speed) + "\n";
         text += "tune." + prefix + "invert_pointer_y=" + (tuning.invert_pointer_y ? "1" : "0") + "\n";
@@ -567,6 +660,7 @@ std::string format_controls_settings(const ControlsConfig& config) {
             text += "tune." + prefix + "shake_sensitivity=" +
                     std::to_string(tuning.shake_sensitivity) + "\n";
             text += "tune." + prefix + "gyro_pointer=" + (tuning.gyro_pointer ? "1" : "0") + "\n";
+            text += "tune." + prefix + "gyro_sensitivity=" + format_float_c(tuning.gyro_sensitivity) + "\n";
         }
     }
     return text;
@@ -606,8 +700,36 @@ bool is_trigger_source(InputSource source) noexcept {
             source.code == static_cast<std::uint8_t>(PadAxis::RightTrigger));
 }
 
-template <typename ValueOf, typename PressedOf>
-LogicalInput evaluate(const BindingTable& table, ValueOf&& value_of, PressedOf&& pressed_of) noexcept {
+bool is_stick_source(InputSource source) noexcept {
+    return (source.kind == SourceKind::AxisPositive || source.kind == SourceKind::AxisNegative) &&
+           source.code <= static_cast<std::uint8_t>(PadAxis::RightY);
+}
+
+bool is_pointer_target(WiiTarget target) noexcept {
+    return target >= WiiTarget::PointerUp && target <= WiiTarget::PointerRight;
+}
+
+// Bit per stick axis (code) bound to a pointer direction / to anything else.
+struct StickRoles {
+    std::uint8_t pointer = 0;
+    std::uint8_t other = 0;
+};
+
+StickRoles stick_roles(const BindingTable& table) noexcept {
+    StickRoles roles{};
+    for (std::size_t t = 0; t < kWiiTargetCount; ++t) {
+        for (const InputSource& source : table.targets[t]) {
+            if (!is_stick_source(source)) continue;
+            const auto bit = static_cast<std::uint8_t>(1u << source.code);
+            (is_pointer_target(static_cast<WiiTarget>(t)) ? roles.pointer : roles.other) |= bit;
+        }
+    }
+    return roles;
+}
+
+template <typename ValueOf, typename PressedOf, typename Usable>
+LogicalInput evaluate(const BindingTable& table, ValueOf&& value_of, PressedOf&& pressed_of,
+                      Usable&& usable) noexcept {
     LogicalInput out{};
     std::array<float, kWiiTargetCount> analog{};
     for (std::size_t t = 0; t < kWiiTargetCount; ++t) {
@@ -616,10 +738,10 @@ LogicalInput evaluate(const BindingTable& table, ValueOf&& value_of, PressedOf&&
         float magnitude = 0.0f;
         bool pressed = false;
         for (const InputSource& source : table.targets[t]) {
-            if (source.empty()) continue;
+            if (source.empty() || !usable(target, source)) continue;
             if (is_analog) {
                 magnitude = std::max(magnitude, std::min(value_of(source), 1.0f));
-            } else if (pressed_of(source)) {
+            } else if (pressed_of(target, source)) {
                 pressed = true;
             }
         }
@@ -643,19 +765,35 @@ LogicalInput evaluate_keyboard_bindings(const BindingTable& table, const Keyboar
     return evaluate(
         table,
         [&levels](InputSource s) { return source_value_keyboard(s, levels); },
-        [&levels](InputSource s) { return source_value_keyboard(s, levels) >= 0.5f; });
+        [&levels](WiiTarget, InputSource s) { return source_value_keyboard(s, levels) >= 0.5f; },
+        [](WiiTarget, InputSource) { return true; });
 }
 
 LogicalInput evaluate_pad_bindings(const BindingTable& table, const PadSample& sample,
                                    float trigger_threshold) noexcept {
+    return evaluate_pad_bindings(table, sample, trigger_threshold, 0u, false);
+}
+
+LogicalInput evaluate_pad_bindings(const BindingTable& table, const PadSample& sample,
+                                   float trigger_threshold, std::uint32_t previous_pressed,
+                                   bool gyro_pointer) noexcept {
     if (!sample.connected) return {};
+    const StickRoles roles = stick_roles(table);
     return evaluate(
         table,
         [&sample](InputSource s) { return source_value_pad(s, sample); },
-        [&sample, trigger_threshold](InputSource s) {
+        [&sample, trigger_threshold, previous_pressed](WiiTarget target, InputSource s) {
             const float value = source_value_pad(s, sample);
-            return is_trigger_source(s) ? value >= trigger_threshold && value > 0.0f
-                                        : value >= kStickDirectionPress;
+            if (is_trigger_source(s)) return value >= trigger_threshold && value > 0.0f;
+            const bool was_pressed = (previous_pressed & wii_target_bit(target)) != 0u;
+            return value >= kStickDirectionPress ||
+                   (was_pressed && is_stick_source(s) && value >= kStickDirectionRelease);
+        },
+        [&roles, gyro_pointer](WiiTarget target, InputSource s) {
+            if (!is_stick_source(s)) return true;
+            const auto bit = static_cast<std::uint8_t>(1u << s.code);
+            if ((roles.pointer & roles.other & bit) == 0u) return true;
+            return is_pointer_target(target) ? !gyro_pointer : gyro_pointer;
         });
 }
 

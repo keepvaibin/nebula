@@ -400,33 +400,153 @@ bool decode_switch2_report(std::span<const std::uint8_t> r, Switch2ImuState& imu
     return true;
 }
 
-float ShakeDetector::threshold_g(std::uint8_t sensitivity) noexcept {
-    static constexpr float kThresholds[kShakeSensitivitySteps] = {1.40f, 1.10f, 0.85f, 0.65f, 0.50f};
+namespace {
+
+using Vec3 = std::array<float, 3>;
+float dot(const Vec3& a, const Vec3& b) noexcept { return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]; }
+Vec3 cross(const Vec3& a, const Vec3& b) noexcept {
+    return {a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]};
+}
+float length(const Vec3& a) noexcept { return std::sqrt(dot(a, a)); }
+bool finite(const Vec3& a) noexcept {
+    return std::isfinite(a[0]) && std::isfinite(a[1]) && std::isfinite(a[2]);
+}
+
+}  // namespace
+
+float SwitchMotion::shake_accel_threshold_g(std::uint8_t sensitivity) noexcept {
+    static constexpr float kThresholds[kShakeSensitivitySteps] = {1.50f, 1.20f, 0.95f, 0.75f, 0.60f};
     return kThresholds[std::clamp<int>(sensitivity, 1, kShakeSensitivitySteps) - 1];
 }
 
-bool ShakeDetector::feed(const std::array<float, 3>& accel_g, std::uint64_t time_us,
-                         std::uint8_t sensitivity) noexcept {
-    const float magnitude =
-        std::sqrt(accel_g[0] * accel_g[0] + accel_g[1] * accel_g[1] + accel_g[2] * accel_g[2]);
-    window_[next_] = std::fabs(magnitude - 1.0f);
-    next_ = (next_ + 1u) % window_.size();
-    filled_ = std::min(filled_ + 1u, window_.size());
-    if (filled_ < window_.size()) return false;
-    float sum = 0.0f;
-    for (float value : window_) sum += value;
-    const float mean = sum / static_cast<float>(window_.size());
-    if (mean < threshold_g(sensitivity) || time_us < cooldown_until_us_) return false;
-    active_ = true;
-    hold_until_us_ = time_us + kHoldUs;
-    cooldown_until_us_ = time_us + kCooldownUs;
-    return true;
+float SwitchMotion::shake_gyro_threshold(std::uint8_t sensitivity) noexcept {
+    // 1100 .. 450 degrees per second.
+    static constexpr float kThresholds[kShakeSensitivitySteps] = {19.2f, 15.7f, 12.6f, 9.8f, 7.9f};
+    return kThresholds[std::clamp<int>(sensitivity, 1, kShakeSensitivitySteps) - 1];
 }
 
-GyroPointerDelta gyro_pointer_delta(const ImuSample& sample, float dt_seconds, float pointer_speed) noexcept {
-    const float gain = (2.0f / kGyroRadiansPerScreen) * (pointer_speed / 2.4f);
-    // Yaw left (positive about +Y) moves the pointer left; pitch up moves it up.
-    return {-sample.gyro[1] * dt_seconds * gain, sample.gyro[0] * dt_seconds * gain};
+SwitchMotion::Output SwitchMotion::feed(const ImuSample& sample, float dt, std::uint64_t time_us,
+                                        const MotionSettings& settings) noexcept {
+    Output out{};
+    if (!finite(sample.accel) || !finite(sample.gyro) || !std::isfinite(dt)) {
+        return out;
+    }
+    dt = std::clamp(dt, 0.0f, 0.05f);
+    const float accel_length = length(sample.accel);
+    Vec3 rate{sample.gyro[0] - bias_[0], sample.gyro[1] - bias_[1], sample.gyro[2] - bias_[2]};
+
+    // Gravity in the controller frame: a world-fixed vector turns against the
+    // controller's rotation, then leans toward the measured direction.
+    if (!gravity_ready_) {
+        if (accel_length > 0.5f) {
+            for (std::size_t i = 0; i < 3; ++i) gravity_[i] = sample.accel[i] / accel_length;
+            gravity_ready_ = true;
+        }
+    } else {
+        const Vec3 turn = cross(rate, gravity_);
+        for (std::size_t i = 0; i < 3; ++i) gravity_[i] -= turn[i] * dt;
+        if (accel_length > 0.8f && accel_length < 1.2f) {
+            const float blend = dt / (0.5f + dt);
+            for (std::size_t i = 0; i < 3; ++i) {
+                gravity_[i] += (sample.accel[i] / accel_length - gravity_[i]) * blend;
+            }
+        }
+        const float g = length(gravity_);
+        if (g > 1e-3f) {
+            for (float& c : gravity_) c /= g;
+        } else {
+            gravity_ = {0.0f, 1.0f, 0.0f};
+        }
+    }
+
+    // Rest windows refine the bias.
+    for (std::size_t i = 0; i < 3; ++i) {
+        sum_[i] += sample.gyro[i];
+        sum_sq_[i] += static_cast<double>(sample.gyro[i]) * sample.gyro[i];
+    }
+    accel_min_ = std::min(accel_min_, accel_length);
+    accel_max_ = std::max(accel_max_, accel_length);
+    window_time_ += dt;
+    ++window_samples_;
+    if (window_time_ >= kRestWindowSeconds && window_samples_ >= 8u) {
+        bool rest = accel_max_ - accel_min_ < 0.05f;
+        Vec3 mean{};
+        for (std::size_t i = 0; i < 3 && rest; ++i) {
+            const double m = sum_[i] / window_samples_;
+            const double variance = std::max(0.0, sum_sq_[i] / window_samples_ - m * m);
+            mean[i] = static_cast<float>(m);
+            rest = std::sqrt(variance) < kRestGyroSd;
+        }
+        // A steady slow turn is not bias: later windows may move the estimate
+        // by at most 3 degrees per second.
+        for (std::size_t i = 0; i < 3 && rest && rest_windows_ != 0u; ++i) {
+            rest = std::fabs(mean[i] - bias_[i]) < 0.05f;
+        }
+        if (rest) {
+            // The first rest window replaces the stored origin's residual;
+            // later ones move the estimate gradually.
+            const float weight = rest_windows_ == 0u ? 1.0f : 0.3f;
+            for (std::size_t i = 0; i < 3; ++i) bias_[i] += (mean[i] - bias_[i]) * weight;
+            ++rest_windows_;
+        }
+        sum_ = {};
+        sum_sq_ = {};
+        accel_min_ = 1e9f;
+        accel_max_ = -1e9f;
+        window_time_ = 0.0f;
+        window_samples_ = 0u;
+    }
+
+    // Shake: linear acceleration (gravity removed) or a fast flick.
+    if (settings.shake) {
+        Vec3 linear{};
+        for (std::size_t i = 0; i < 3; ++i) linear[i] = sample.accel[i] - gravity_[i];
+        const float linear_g = gravity_ready_ ? length(linear) : 0.0f;
+        const float speed = length(rate);
+        const float linear_mean = 0.5f * (linear_g + previous_linear_);
+        const float rate_min = std::min(speed, previous_rate_);
+        previous_linear_ = linear_g;
+        previous_rate_ = speed;
+        const bool triggered = linear_mean >= shake_accel_threshold_g(settings.shake_sensitivity) ||
+                               rate_min >= shake_gyro_threshold(settings.shake_sensitivity);
+        if (triggered && time_us >= shake_cooldown_until_us_) {
+            shake_active_ = true;
+            shake_hold_until_us_ = time_us + kShakeHoldUs;
+            shake_cooldown_until_us_ = time_us + kShakeCooldownUs;
+            out.shake_started = true;
+        }
+    }
+
+    if (settings.gyro_pointer && gravity_ready_) {
+        // Smooth noise gate: rates under the gate shrink toward zero.
+        const float speed = length(rate);
+        if (speed < kGyroNoiseGate) {
+            const float scale = speed / kGyroNoiseGate;
+            for (float& c : rate) c *= scale;
+        }
+        const Vec3& up = gravity_;
+        const float yaw = dot(rate, up);
+        Vec3 pitch_axis{1.0f, 0.0f, 0.0f};
+        const float along = dot(pitch_axis, up);
+        for (std::size_t i = 0; i < 3; ++i) pitch_axis[i] -= up[i] * along;
+        const float pitch_length = length(pitch_axis);
+        if (pitch_length > 0.3f) {
+            for (float& c : pitch_axis) c /= pitch_length;
+        } else {
+            pitch_axis = {1.0f, 0.0f, 0.0f};
+        }
+        const float pitch = dot(rate, pitch_axis);
+        const float sensitivity = std::clamp(
+            std::isfinite(settings.gyro_sensitivity) ? settings.gyro_sensitivity : 1.0f, 0.1f, 10.0f);
+        const float gain_x = 2.0f / (kDegreesPerPictureWidth * kPi / 180.0f) * sensitivity;
+        const float aspect = std::clamp(
+            std::isfinite(settings.picture_aspect) ? settings.picture_aspect : 16.0f / 9.0f, 1.0f, 4.0f);
+        // Yaw to the left (positive about up) moves the pointer left; pitch up
+        // (positive about the right axis) moves it up.
+        out.pointer_x = -yaw * dt * gain_x;
+        out.pointer_y = pitch * dt * gain_x * aspect;
+    }
+    return out;
 }
 
 }  // namespace galaxy::input::switch_hid

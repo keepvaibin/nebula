@@ -11048,8 +11048,9 @@ bool native_bt_wiimote_protocol_path_works(
 
         galaxy::RuntimeSettings controller_host_pointer_settings =
             keyboard_host_pointer_settings;
+        // Auto: the mouse stays a pointer source next to the controllers.
         controller_host_pointer_settings.input_mode =
-            galaxy::RuntimeInputMode::Controller;
+            galaxy::RuntimeInputMode::Auto;
         galaxy::set_runtime_settings(controller_host_pointer_settings);
         const galaxy::RuntimeInputModeState controller_input_state =
             galaxy::get_runtime_input_mode_state();
@@ -11108,13 +11109,11 @@ bool native_bt_wiimote_protocol_path_works(
 
         const std::string controller_host_pointer_trace_text =
             controller_host_pointer_trace.str();
+        // Without a controller attached auto reads as the keyboard/mouse
+        // source.
         passed &= expect(
-            controller_host_pointer_trace_text.find("source=keyboard_mouse") ==
+            controller_host_pointer_trace_text.find("source=keyboard_mouse") !=
                     std::string::npos &&
-                (controller_host_pointer_trace_text.find("source=controller") !=
-                     std::string::npos ||
-                 controller_host_pointer_trace_text.find(
-                     "source=controller_disconnected") != std::string::npos) &&
                 controller_host_pointer_trace_text.find("ptrsrc=mouse") !=
                     std::string::npos &&
                 controller_host_pointer_trace_text.find(
@@ -11122,7 +11121,7 @@ bool native_bt_wiimote_protocol_path_works(
                     std::string::npos &&
                 controller_host_pointer_trace_text.find("ir=1") !=
                     std::string::npos,
-            "native BT controller mode traces live mouse-backed IR without switching to keyboard/mouse source");
+            "native BT auto mode traces live mouse-backed IR under its own source");
         if (controller_host_pointer_trace_text.find("FAILED:") !=
             std::string::npos) {
             std::cerr << controller_host_pointer_trace_text;
@@ -18667,6 +18666,10 @@ int main(int argc, char** argv) {
         guest_memory, 0xCC005032, 0x0000, nullptr, 0x80004000);
     galaxy::guest_store_u16(
         guest_memory, 0xCC005036, 0x8002, nullptr, 0x80004000);
+    // The game's next buffer (AIInitDMA): without it the elapsed boundary
+    // would be held for the game instead of replaying the started buffer.
+    galaxy::guest_store_u16(
+        guest_memory, 0xCC005036, 0x8002, nullptr, 0x80004000);
     const std::uint64_t elapsed_stop_completion =
         fake_ticks + memory.ai_dma_last_duration_ticks();
     fake_ticks = elapsed_stop_completion;
@@ -18715,6 +18718,8 @@ int main(int argc, char** argv) {
     const auto masked_started = memory.dsp_debug_snapshot();
     const std::uint64_t masked_submit_after_start =
         memory.ai_audio_submit_count();
+    galaxy::guest_store_u16(
+        guest_memory, 0xCC005036, 0x8002, nullptr, 0x80004000);
     fake_ticks = masked_started.ai_dma_next_completion_ticks;
     (void)galaxy::guest_load_u16(
         guest_memory, 0xCC00503A, nullptr, 0x80004000);
@@ -18730,6 +18735,87 @@ int main(int argc, char** argv) {
             ai_deadline_probe.deadlines.back() ==
                 masked_serviced.ai_dma_next_completion_ticks,
         "masked catch-up republishes the completion and following exact deadlines without losing a wake");
+
+    // The game has not written its next buffer: the due boundary is held
+    // instead of replaying the buffer just latched, the AID_LEN write releases
+    // it on the original grid, and a hold without a write ends in a fade.
+    acknowledge_ai_level();
+    const std::uint64_t held_completion = masked_serviced.ai_dma_next_completion_ticks;
+    const std::uint64_t holds_before = memory.ai_dma_holds();
+    fake_ticks = held_completion;
+    (void)galaxy::guest_load_u16(guest_memory, 0xCC00503A, nullptr, 0x80004000);
+    passed &= expect(
+        memory.ai_audio_submit_count() == masked_submit_after_start + 1u &&
+            memory.ai_dma_holds() == holds_before + 1u &&
+            !memory.ai_dma_interrupt_pending() &&
+            memory.ai_dma_next_completion_ticks() ==
+                held_completion + memory.ai_dma_last_duration_ticks() *
+                    galaxy::host::ai_dma_timing::kStaleAiHoldPeriods &&
+            ai_deadline_probe.deadlines.back() ==
+                memory.ai_dma_next_completion_ticks(),
+        "a due boundary with an unwritten shadow is held and publishes its release tick");
+    galaxy::guest_store_u16(
+        guest_memory, 0xCC005036, 0x8002, nullptr, 0x80004000);
+    passed &= expect(
+        memory.ai_dma_next_completion_ticks() == held_completion &&
+            ai_deadline_probe.deadlines.back() == held_completion,
+        "the game's AID_LEN write republishes the held boundary on its original tick");
+    fake_ticks = held_completion + 1'000u;
+    (void)galaxy::guest_load_u16(guest_memory, 0xCC00503A, nullptr, 0x80004000);
+    const auto released = memory.dsp_debug_snapshot();
+    passed &= expect(
+        memory.ai_audio_submit_count() == masked_submit_after_start + 2u &&
+            released.ai_dma_next_completion_ticks ==
+                held_completion + memory.ai_dma_last_duration_ticks() &&
+            memory.ai_dma_interrupt_pending(),
+        "the released boundary latches the new buffer once and keeps the period grid");
+    acknowledge_ai_level();
+    fake_ticks = released.ai_dma_next_completion_ticks;
+    (void)galaxy::guest_load_u16(guest_memory, 0xCC00503A, nullptr, 0x80004000);
+    fake_ticks += memory.ai_dma_last_duration_ticks() *
+        galaxy::host::ai_dma_timing::kStaleAiHoldPeriods;
+    (void)galaxy::guest_load_u16(guest_memory, 0xCC00503A, nullptr, 0x80004000);
+    passed &= expect(
+        memory.ai_audio_submit_count() == masked_submit_after_start + 3u &&
+            memory.ai_dma_hold_timeouts() == 1u &&
+            memory.ai_dma_concealed_blocks() == 1u &&
+            memory.dsp_debug_snapshot().ai_dma_next_completion_ticks ==
+                released.ai_dma_next_completion_ticks +
+                    memory.ai_dma_last_duration_ticks() *
+                        (galaxy::host::ai_dma_timing::kStaleAiHoldPeriods + 1u),
+        "a hold the game never answers ends in a concealed block on the period grid");
+
+    struct SourceProbe {
+        bool ready = false;
+    } source_probe;
+    memory.set_ai_dma_source_ready_probe(
+        +[](void* user) noexcept { return static_cast<SourceProbe*>(user)->ready; },
+        &source_probe);
+    acknowledge_ai_level();
+    galaxy::guest_store_u16(
+        guest_memory, 0xCC005036, 0x8002, nullptr, 0x80004000);
+    const std::uint64_t source_due =
+        memory.dsp_debug_snapshot().ai_dma_next_completion_ticks;
+    const std::uint64_t source_recheck =
+        memory.ai_dma_last_duration_ticks() /
+        galaxy::host::ai_dma_timing::kAiSourceRecheckDivisor;
+    const std::uint64_t submits_before_source = memory.ai_audio_submit_count();
+    fake_ticks = source_due;
+    (void)galaxy::guest_load_u16(guest_memory, 0xCC00503A, nullptr, 0x80004000);
+    passed &= expect(
+        memory.ai_audio_submit_count() == submits_before_source &&
+            memory.ai_dma_next_completion_ticks() == source_due + source_recheck &&
+            ai_deadline_probe.deadlines.back() == source_due + source_recheck,
+        "a written buffer waits for the game's next DSP frame and rechecks the ring");
+    source_probe.ready = true;
+    fake_ticks = source_due + source_recheck;
+    (void)galaxy::guest_load_u16(guest_memory, 0xCC00503A, nullptr, 0x80004000);
+    passed &= expect(
+        memory.ai_audio_submit_count() == submits_before_source + 1u &&
+            memory.dsp_debug_snapshot().ai_dma_next_completion_ticks ==
+                source_due + memory.ai_dma_last_duration_ticks(),
+        "the held boundary latches on its grid once the ring holds a frame");
+    memory.set_ai_dma_source_ready_probe(nullptr, nullptr);
     galaxy::guest_store_u16(
         guest_memory, 0xCC005036, 0x0000, nullptr, 0x80004000);
     acknowledge_ai_level();

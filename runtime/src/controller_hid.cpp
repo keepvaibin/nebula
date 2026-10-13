@@ -1,4 +1,5 @@
 #include "galaxy/controller_hid.h"
+#include "galaxy/content_viewport.h"
 
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
@@ -137,8 +138,9 @@ struct Device {
     sw::StickCal right{};
     sw::ImuCal imu{};
     sw::Switch2ImuState switch2_imu{};
-    sw::ShakeDetector shake{};
+    sw::SwitchMotion motion{};
     std::uint64_t last_report_us = 0;
+    std::uint64_t imu_reports = 0;
     std::unique_ptr<WinUsbPipes> winusb;
     std::size_t slot = 0;
 };
@@ -636,19 +638,23 @@ private:
         device.last_report_us = now;
         float gyro_x = 0.0f, gyro_y = 0.0f;
         bool shake_started = false;
+        sw::MotionSettings motion{};
+        motion.shake = tuning.motion_shake != input::MotionShake::Off;
+        motion.shake_sensitivity = tuning.shake_sensitivity;
+        motion.gyro_pointer = tuning.gyro_pointer;
+        motion.gyro_sensitivity = tuning.gyro_sensitivity;
+        motion.picture_aspect = static_cast<float>(galaxy::kWiiContentAspect);
         for (std::size_t i = 0; i < decoded.imu_count; ++i) {
-            const sw::ImuSample& sample = decoded.imu[i];
             // Switch Pro: three samples 5 ms apart; Pro 2: one per report.
             const float dt = device.scheme == ControlScheme::SwitchPro ? 0.005f : dt_report;
-            if (tuning.motion_shake != input::MotionShake::Off) {
-                const std::uint64_t t = now - static_cast<std::uint64_t>((decoded.imu_count - 1u - i) * 5000u);
-                shake_started |= device.shake.feed(sample.accel, t, tuning.shake_sensitivity);
-            }
-            if (tuning.gyro_pointer) {
-                const auto delta = sw::gyro_pointer_delta(sample, dt, tuning.pointer_speed);
-                gyro_x += delta.x;
-                gyro_y += delta.y;
-            }
+            const std::uint64_t t = now - static_cast<std::uint64_t>((decoded.imu_count - 1u - i) * 5000u);
+            const sw::SwitchMotion::Output out = device.motion.feed(decoded.imu[i], dt, t, motion);
+            shake_started |= out.shake_started;
+            gyro_x += out.pointer_x;
+            gyro_y += out.pointer_y;
+        }
+        if (decoded.imu_count != 0u) {
+            ++device.imu_reports;
         }
         AcquireSRWLockExclusive(&hub().lock);
         Published& published = hub().pads[device.slot];
@@ -659,9 +665,11 @@ private:
         state.decoded = decoded;
         state.left = device.left;
         state.right = device.right;
-        if (shake_started) state.shake_until_us = now + sw::ShakeDetector::kHoldUs;
+        if (shake_started) state.shake_until_us = now + sw::SwitchMotion::kShakeHoldUs;
         state.gyro_x = std::clamp(state.gyro_x + gyro_x, -4.0f, 4.0f);
         state.gyro_y = std::clamp(state.gyro_y + gyro_y, -4.0f, 4.0f);
+        state.imu_live = decoded.imu_count != 0u;
+        state.gyro_rest_windows = device.motion.rest_windows();
         ReleaseSRWLockExclusive(&hub().lock);
     }
 

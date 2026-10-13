@@ -22,8 +22,11 @@ struct RuntimeAudioSettings {
     float cutscene = 1.0f;
 };
 
+// Auto: keyboard, mouse and every controller are live together and the pointer
+// follows whichever moved last. KeyboardMouse and Controller are overrides that
+// keep only that source.
 struct RuntimeSettings {
-    RuntimeInputMode input_mode = RuntimeInputMode::KeyboardMouse;
+    RuntimeInputMode input_mode = RuntimeInputMode::Auto;
     RuntimeAudioSettings audio{};
 };
 
@@ -32,7 +35,7 @@ struct RuntimeSettings {
 // under an older source without treating unrelated audio-setting writes as an
 // input transition.
 struct RuntimeInputModeState {
-    RuntimeInputMode mode = RuntimeInputMode::KeyboardMouse;
+    RuntimeInputMode mode = RuntimeInputMode::Auto;
     std::uint64_t generation = 1u;
 };
 
