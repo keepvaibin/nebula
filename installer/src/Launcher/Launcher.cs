@@ -805,13 +805,14 @@ namespace Nebula.Launcher
             int want = frameRate.SelectedIndex >= 0 && frameRate.SelectedIndex < frameRateChoices.Count
                 ? frameRateChoices[frameRate.SelectedIndex] : graphics.FrameRate;
             frameRateChoices.Clear();
-            frameRateChoices.AddRange(GraphicsSettings.FrameRates);
+            frameRateChoices.AddRange(GraphicsSettings.FrameRates(SelectedMonitor.Refresh));
             frameRate.Items.Clear();
-            int selected = 0;
+            int selected = frameRateChoices.Count - 1;
             for (int i = 0; i < frameRateChoices.Count; i++)
             {
-                frameRate.Items.Add(frameRateChoices[i] + " FPS");
-                if (frameRateChoices[i] <= want) selected = i;
+                int rate = frameRateChoices[i];
+                frameRate.Items.Add(rate == 0 ? "Unlimited" : rate + " FPS");
+                if (want != 0 && rate != 0 && rate <= want) selected = i;
             }
             frameRate.SelectedIndex = selected;
         }
