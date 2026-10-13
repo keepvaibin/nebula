@@ -90,6 +90,23 @@ motion) is ignored. `keyboard_mouse` and `controller` keep only that source.
   pointer disappears, as with a Wii Remote, and returns when turned back.
 - Shake (Switch): a jolt of the controller (acceleration with gravity
   removed) or a fast wrist flick; held 60 ms, at most one per 280 ms.
+- Tilt (Star Ball, ray surfing): the game steers these with the Wii Remote's
+  accelerometer only. Pro Controller and Pro Controller 2: the hold when the
+  section starts is level (R takes the current hold as level again); tilt
+  left, right, forward or back to roll the ball, tilt left or right to steer
+  the ray. Xbox controllers steer with the left stick, the keyboard with `W`
+  `A` `S` `D`. The controller used last decides. Outside these sections the
+  remote's accelerometer stays at rest, and the pointer never rotates with
+  the controller.
+- Vibration: when the game runs the Wii Remote's motor (a Star Bit shot,
+  a hit, an earthquake), the controller in use vibrates for exactly as long:
+  Xbox controllers through XInput, Pro Controllers with HD rumble, Pro
+  Controller 2 (USB) with its rumble report. A key or mouse button bound to a
+  Wii input hands vibration to the keyboard (none). The motor stops at once
+  when the game window loses focus, a pause, HOME or settings menu opens, the
+  game stalls for 100 ms, the controller disconnects, or Nebula exits or
+  crashes. `tune.<controller>.rumble` sets the strength (`0` off, `25`, `50`,
+  `75`, `100`). A real Wii Remote receives the game's own motor commands.
 
 ## Remapping
 
@@ -151,6 +168,7 @@ the player changed stays.
 | `gyro_sensitivity` (Switch) | 0.2-5.0 (1: a picture width per 40 degrees) | 1 |
 | `pointer_hide_seconds` (controllers) | 0-60 seconds within the radius before the pointer hides; 0 never | 2 |
 | `pointer_hide_radius` (controllers) | 0-0.5 pointer units (2 = picture width) | 0.12 |
+| `rumble` (controllers) | 0, 25, 50, 75, 100 percent vibration strength; 0 off | 100 |
 
 `GALAXY_XINPUT_LEFT_DEADZONE`, `GALAXY_XINPUT_POINTER_DEADZONE`,
 `GALAXY_XINPUT_POINTER_SPEED`, `GALAXY_KEYBOARD_POINTER_SPEED` and
@@ -186,6 +204,11 @@ Star Bits and the drawn pointer use the same sample: for every host pointer
 source the runtime answers the game's pointer depth query
 (`StarPointerController::storeDataFromCallback`) from the scene depth it
 captures at `StarPointerPeekZ`'s scene token, not from the end-of-frame EFB.
+Every store of an active pointer is answered at the current position: when
+this scene's field cannot be used, the newest completed field (or the last
+answered depth) gives the depth. The game aims Star Bits at the stored world
+point when it is within 3000 units of Mario, so a store left unanswered would
+send them to an older pointer position.
 
 ## Native Settings Overlay
 
@@ -228,6 +251,10 @@ Automated runtime probes can script input by VI retrace:
 | `GALAXY_INPUT_POINTER2_X`..`GALAXY_INPUT_POINTER6_Y` plus matching `*_VI` | Pointer waypoints that become active at the given VI |
 | `GALAXY_INPUT_POINTER_SWEEP_VI`, `GALAXY_INPUT_POINTER_SWEEP_DURATION` | Horizontal pointer sweep over a VI window |
 | `GALAXY_INPUT_REPLAY_LOG` | Path to a `tools/measure_inputs.ps1` TSV; replayed as virtual host input before HID report formatting |
+| `GALAXY_RUMBLE_TRACE` | `1` logs the game's Wii Remote motor transitions (`[rumble]`) and what the controller in use would receive (`[rumble-out]`); no controller vibrates in such a session or with `GALAXY_HIDE_WINDOW` |
+| `GALAXY_TEST_RUMBLE_TARGET` | `xinput:N` or `switch:N`: the controller `[rumble-out]` reports for, with the window counted as focused (trace sessions only) |
+| `GALAXY_TRACE_TILT` | `1` logs tilt sections and the accelerometer reading sent (`[tilt]`) |
+| `GALAXY_TRACE_NATIVE_MOUSE_POINTER` | `1` logs pointer depth stores (`[mouse-pointer-frame]`) and world points (`[pointer-world]`); `_ROWS`, `_FROM_VI` limit them |
 
 These hooks are for deterministic native-runtime diagnostics and do not affect
 normal interactive input unless the environment variables are set. Treat them as
