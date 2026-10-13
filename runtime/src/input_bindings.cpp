@@ -1,4 +1,5 @@
 #include "galaxy/input_bindings.h"
+#include "galaxy/rumble.h"
 
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
@@ -222,6 +223,7 @@ std::string format_float_c(float value) {
 }
 
 constexpr const char* kMotionNames[] = {"off", "remote", "nunchuk"};
+static_assert(SchemeTuning{}.rumble == rumble::kDefaultStrength);
 
 }  // namespace
 
@@ -641,6 +643,8 @@ bool apply_controls_setting(ControlsConfig& config, std::string_view key_text, s
         for (std::size_t i = 0; i < std::size(kMotionNames); ++i) {
             if (iequals(text, kMotionNames[i])) tuning.motion_shake = static_cast<MotionShake>(i);
         }
+    } else if (name == "rumble" && parse_float_c(value, number)) {
+        tuning.rumble = rumble::snap_strength(number);
     }
     config = sanitize_controls_config(config);
     return true;
@@ -661,6 +665,7 @@ ControlsConfig sanitize_controls_config(ControlsConfig config) noexcept {
         tuning.pointer_hide_radius = clamp_or(tuning.pointer_hide_radius, 0.0f, 0.5f, defaults.pointer_hide_radius);
         tuning.shake_sensitivity = static_cast<std::uint8_t>(
             std::clamp<int>(tuning.shake_sensitivity, 1, kShakeSensitivitySteps));
+        tuning.rumble = rumble::snap_strength(static_cast<float>(tuning.rumble));
         if (static_cast<unsigned>(tuning.motion_shake) > 2u) tuning.motion_shake = MotionShake::Off;
         if (!scheme_has_motion(static_cast<ControlScheme>(s))) {
             tuning.motion_shake = MotionShake::Off;
@@ -686,6 +691,7 @@ std::string format_controls_settings(const ControlsConfig& config) {
             text += "tune." + prefix + "pointer_deadzone=" + format_float_c(tuning.pointer_deadzone) + "\n";
             text += "tune." + prefix + "pointer_hide_seconds=" + format_float_c(tuning.pointer_hide_seconds) + "\n";
             text += "tune." + prefix + "pointer_hide_radius=" + format_float_c(tuning.pointer_hide_radius) + "\n";
+            text += "tune." + prefix + "rumble=" + std::to_string(tuning.rumble) + "\n";
         }
         text += "tune." + prefix + "pointer_speed=" + format_float_c(tuning.pointer_speed) + "\n";
         text += "tune." + prefix + "invert_pointer_y=" + (tuning.invert_pointer_y ? "1" : "0") + "\n";

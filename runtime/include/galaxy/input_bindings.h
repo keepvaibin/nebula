@@ -181,6 +181,9 @@ struct SchemeTuning {
     // 0 seconds never hides (pointer_control.h PointerRestHide).
     float pointer_hide_seconds = 0.0f;
     float pointer_hide_radius = 0.12f;
+    // Controllers: vibration strength in percent, one of 0 (off), 25, 50, 75,
+    // 100 (rumble.h kStrengthSteps).
+    std::uint8_t rumble = 100;
     friend bool operator==(const SchemeTuning&, const SchemeTuning&) = default;
 };
 

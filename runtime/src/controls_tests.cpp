@@ -6,7 +6,10 @@
 #include "galaxy/native_input.h"
 #include "galaxy/native_settings_pad.h"
 #include "galaxy/pointer_control.h"
+#include "galaxy/rumble.h"
 #include "galaxy/switch_controller.h"
+#include "galaxy/synthetic_kpad_motion.h"
+#include "galaxy/tilt.h"
 
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
@@ -116,6 +119,8 @@ void test_ini_round_trip() {
     config.tune(ControlScheme::SwitchPro2).motion_shake = MotionShake::Nunchuk;
     config.tune(ControlScheme::Xbox).pointer_speed = 3.7f;
     config.tune(ControlScheme::Keyboard).invert_pointer_y = true;
+    config.tune(ControlScheme::Xbox).rumble = 0;
+    config.tune(ControlScheme::SwitchPro).rumble = 75;
     const std::string text = format_controls_settings(config);
     ControlsConfig parsed = default_controls_config();
     std::size_t lines = 0;
@@ -136,6 +141,18 @@ void test_ini_round_trip() {
     expect(text.find("bind.xbox.b=LB\n") != std::string::npos, "xbox B line is stable text");
     expect(text.find("bind.xbox.jump_back=B\n") != std::string::npos, "xbox jump/back line is stable text");
     expect(text.find("bind.switch_pro.a=A\n") != std::string::npos, "switch A line is stable text");
+    expect(text.find("tune.xbox.rumble=0\n") != std::string::npos &&
+               text.find("tune.switch_pro.rumble=75\n") != std::string::npos &&
+               text.find("tune.switch_pro2.rumble=100\n") != std::string::npos &&
+               text.find("tune.keyboard.rumble") == std::string::npos,
+           "vibration strength lines (controllers only, default 100)");
+    ControlsConfig snapped = default_controls_config();
+    expect(apply_controls_setting(snapped, "tune.switch_pro2.rumble", "60") &&
+               snapped.tune(ControlScheme::SwitchPro2).rumble == 50u,
+           "vibration strength snaps to the nearest 25%");
+    expect(apply_controls_setting(snapped, "tune.xbox.rumble", "loud") &&
+               snapped.tune(ControlScheme::Xbox).rumble == 100u,
+           "malformed vibration strength keeps the previous value");
     expect(!apply_controls_setting(parsed, "audio_master_gain", "1"), "foreign keys are not owned");
     ControlsConfig malformed = default_controls_config();
     expect(apply_controls_setting(malformed, "tune.xbox.pointer_speed", "fast"), "malformed tune is owned");
@@ -787,6 +804,203 @@ void test_rest_hide_gyro() {
     expect(gyro_hide_time(8.0, 3.0, 8.0) < 0.0, "a slow 3 deg/s pan never hides while it lasts");
 }
 
+void test_rumble_encoding() {
+    namespace rb = galaxy::input::rumble;
+    using B4 = std::array<std::uint8_t, 4>;
+    // Neutral: 320 Hz high band, 160 Hz low band, zero amplitude.
+    expect(rb::encode_switch_hd_rumble(320.0f, 0.0f, 160.0f, 0.0f) == rb::kSwitchNeutralRumble,
+           "zero amplitude encodes the neutral frame 00 01 40 40");
+    // dekuNukem rumble_data_table.md rows: amplitude 1.003 -> HA C8, LA 0072;
+    // 0.501 -> 88, 0062; 0.206 -> 3A, 804E (half step in byte 2 bit 7).
+    expect(rb::encode_switch_hd_rumble(320.0f, 1.0f, 160.0f, 1.0f) == B4{0x00, 0xC9, 0x40, 0x72},
+           "full amplitude: HA C8 + high bit, LA 72");
+    expect(rb::encode_switch_hd_rumble(320.0f, 0.501f, 160.0f, 0.501f) == B4{0x00, 0x89, 0x40, 0x62},
+           "amplitude 0.501: HA 88, LA 62");
+    expect(rb::encode_switch_hd_rumble(320.0f, 0.206f, 160.0f, 0.206f) == B4{0x00, 0x3B, 0xC0, 0x4E},
+           "amplitude 0.206: HA 3A, LA 80 4E");
+    // Frequencies: 160 Hz high band is 0x0080, 320 Hz low band is 0x60.
+    expect(rb::encode_switch_hd_rumble(160.0f, 0.0f, 320.0f, 0.0f) == B4{0x80, 0x00, 0x60, 0x40},
+           "160 Hz high band, 320 Hz low band");
+    const auto off = rb::switch_pro_motor_rumble(false, 100);
+    expect(std::equal(off.begin(), off.begin() + 4, rb::kSwitchNeutralRumble.begin()) &&
+               std::equal(off.begin() + 4, off.end(), rb::kSwitchNeutralRumble.begin()),
+           "motor off: neutral on both actuators");
+    const auto on = rb::switch_pro_motor_rumble(true, 100);
+    const auto expected = rb::encode_switch_hd_rumble(rb::kSwitchMotorHighHz, rb::kSwitchMotorHighAmplitude,
+                                                      rb::kSwitchMotorLowHz, rb::kSwitchMotorLowAmplitude);
+    expect(std::equal(expected.begin(), expected.end(), on.begin()) &&
+               std::equal(expected.begin(), expected.end(), on.begin() + 4) && on[1] != 0x01u,
+           "motor on: 160/320 Hz with amplitude on both actuators");
+    const auto quarter = rb::switch_pro_motor_rumble(true, 25);
+    expect(quarter[1] != 0x01u && quarter[1] < on[1] && quarter[3] < on[3], "25% is weaker and not silent");
+    const auto none = rb::switch_pro_motor_rumble(true, 0);
+    expect(std::equal(none.begin(), none.begin() + 4, rb::kSwitchNeutralRumble.begin()), "0% is silent");
+    std::array<std::uint8_t, 64> report{};
+    report.fill(0xAA);
+    expect(rb::build_switch_pro_rumble_report(0x13, on, report) == 10u && report[0] == 0x10u && report[1] == 0x03u &&
+               std::equal(on.begin(), on.end(), report.begin() + 2) && report[10] == 0u && report[63] == 0u,
+           "report 0x10: id, packet nibble, 8 rumble bytes, zero padding");
+    // Pro Controller 2 (SDL_hidapi_switch2.c layout).
+    std::array<std::uint8_t, 64> pro2{};
+    expect(rb::build_switch2_rumble_report(0x12, false, 100, pro2) == 64u && pro2[0] == 0x02u && pro2[1] == 0x52u &&
+               pro2[2] == 0x87u && pro2[3] == 0x01u && pro2[4] == 0x20u && pro2[5] == 0x11u && pro2[6] == 0x00u &&
+               std::equal(pro2.begin() + 1, pro2.begin() + 7, pro2.begin() + 0x11) && pro2[7] == 0u,
+           "Pro Controller 2 report: 0x02, 0x5n, frequencies with zero amplitude, copy at 0x11");
+    (void)rb::build_switch2_rumble_report(0, true, 100, pro2);
+    const auto motor2 = rb::encode_switch2_hd_rumble(rb::kSwitch2HighFrequency, 17400, rb::kSwitch2LowFrequency, 23200);
+    expect(std::equal(motor2.begin(), motor2.end(), pro2.begin() + 2), "Pro Controller 2 amplitudes 0.6/0.8 of 29000");
+    // Xbox: the light motor full, the heavy one half.
+    const auto x_off = rb::xinput_motor_speeds(false, 100);
+    const auto x_full = rb::xinput_motor_speeds(true, 100);
+    const auto x_half = rb::xinput_motor_speeds(true, 50);
+    expect(x_off.left == 0u && x_off.right == 0u, "xbox off");
+    expect(x_full.left == 32767u && x_full.right == 65535u, "xbox full: right motor full, left half");
+    expect(x_half.left == 16384u && x_half.right == 32768u, "xbox 50%");
+    expect(rb::snap_strength(30.0f) == 25u && rb::snap_strength(63.0f) == 75u && rb::snap_strength(110.0f) == 100u &&
+               rb::snap_strength(-5.0f) == 0u,
+           "strength snaps to 0/25/50/75/100");
+}
+
+void test_rumble_gate() {
+    namespace rb = galaxy::input::rumble;
+    rb::GateInputs in{};
+    in.game_motor_on = true;
+    in.now_us = 10'000'000;
+    in.published_us = in.now_us - 20'000;
+    in.focused = true;
+    in.strength = 100;
+    expect(rb::motor_should_run(in), "motor bit on, fresh, focused: runs");
+    auto stalled = in;
+    stalled.published_us = in.now_us - rb::kStallUs - 1;
+    expect(!rb::motor_should_run(stalled), "no publication for over 100 ms: off");
+    auto unfocused = in;
+    unfocused.focused = false;
+    expect(!rb::motor_should_run(unfocused), "window without focus: off");
+    auto paused = in;
+    paused.paused = true;
+    expect(!rb::motor_should_run(paused), "pause or HOME menu: off");
+    auto silent = in;
+    silent.strength = 0;
+    expect(!rb::motor_should_run(silent), "strength 0: off");
+    auto motor_off = in;
+    motor_off.game_motor_on = false;
+    expect(!rb::motor_should_run(motor_off), "game motor off: off");
+    auto clock_back = in;
+    clock_back.published_us = in.now_us + 1;
+    expect(!rb::motor_should_run(clock_back), "a publication from the future is not trusted");
+}
+
+// RMGE01 SphereAccelSensorController::clacXY for the Wii Remote (0x80330230):
+// X from (a.x, |a.y|), Y the signed angle of (-a.y, a.z) from (cos 10, sin
+// 10); 5-degree dead zone, full at 25 degrees.
+std::array<float, 2> star_ball_clac_xy(const tilt::Vec3& a) {
+    constexpr float kDeg = 3.14159265f / 180.0f;
+    const float dead = 5.0f * kDeg, full = 25.0f * kDeg, lean = 10.0f * kDeg;
+    float x = 0.0f, y = 0.0f;
+    if (a[0] * a[0] + a[1] * a[1] > 3.8147e-6f) x = std::asin(a[0] / std::sqrt(a[0] * a[0] + a[1] * a[1]));
+    const float vx = -a[1], vy = a[2];
+    const float l = std::sqrt(vx * vx + vy * vy);
+    if (l * l > 3.8147e-6f) {
+        const float nx = vx / l, ny = vy / l;
+        y = std::acos(std::clamp(nx * std::cos(lean) + ny * std::sin(lean), -1.0f, 1.0f));
+        if (ny * std::cos(lean) - nx * std::sin(lean) < 0.0f) y = -y;
+    }
+    const auto shape = [&](float v) {
+        if (std::fabs(v) < dead) return 0.0f;
+        return (v > 0.0f ? v - dead : v + dead) / (full - dead);
+    };
+    return {shape(x), shape(y)};
+}
+
+// RMGE01 SurfRay::updateRotate's turn input (0x80332820): turning when
+// a.z > -0.7 or |a.x| > 0.15; amount a.x pushed away from zero by
+// clamp(-a.z, 0, 1), clamped to 1.5.
+float ray_turn(const tilt::Vec3& a) {
+    if (!(a[2] > -0.7f || std::fabs(a[0]) > 0.15f)) return 0.0f;
+    float f = a[0];
+    const float extra = std::clamp(-a[2], 0.0f, 1.0f);
+    if (f > 0.0f) f += extra; else if (f < 0.0f) f -= extra;
+    return std::clamp(f, -1.5f, 1.5f);
+}
+
+void test_tilt() {
+    using namespace tilt;
+    const auto close_to = [](float a, float b, float eps) { return std::fabs(a - b) <= eps; };
+    // Star Ball: the controller's neutral hold is clacXY's zero.
+    const auto neutral = star_ball_clac_xy(remote_gravity(Section::StarBall, {0.0f, 1.0f, 0.0f}));
+    expect(close_to(neutral[0], 0.0f, 1e-4f) && close_to(neutral[1], 0.0f, 1e-4f), "star ball: the neutral hold rolls nowhere");
+    // Tilt right / forward 15 degrees: half of the range, positive.
+    const auto right = star_ball_clac_xy(remote_gravity(Section::StarBall, up_from_angles(15.0f, 0.0f)));
+    const auto forward = star_ball_clac_xy(remote_gravity(Section::StarBall, up_from_angles(0.0f, 15.0f)));
+    const auto left_back = star_ball_clac_xy(remote_gravity(Section::StarBall, up_from_angles(-15.0f, -15.0f)));
+    expect(close_to(right[0], 0.5f, 0.02f) && close_to(right[1], 0.0f, 0.02f), "star ball: 15 degrees right is X +0.5");
+    expect(close_to(forward[1], 0.5f, 0.02f) && close_to(forward[0], 0.0f, 0.02f), "star ball: 15 degrees forward is Y +0.5");
+    expect(left_back[0] < -0.4f && left_back[1] < -0.4f, "star ball: left and back are negative");
+    // The tutorial's raise check: within 30 degrees of (0,-1,0).
+    const Vec3 held = remote_gravity(Section::StarBall, {0.0f, 1.0f, 0.0f});
+    expect(-held[1] > std::cos(30.0f * 3.14159265f / 180.0f), "star ball: the neutral passes the raise check");
+    // A neutral captured in the player's own hold (30 degrees toward the
+    // face) is zero; 15 degrees more forward is +0.5.
+    const Vec3 hold = up_from_angles(0.0f, -30.0f);
+    const auto from_hold = star_ball_clac_xy(remote_gravity(Section::StarBall, relative_up(hold, hold)));
+    const auto more = star_ball_clac_xy(remote_gravity(Section::StarBall, relative_up(up_from_angles(0.0f, -15.0f), hold)));
+    expect(close_to(from_hold[0], 0.0f, 1e-3f) && close_to(from_hold[1], 0.0f, 1e-3f), "star ball: the captured hold is neutral");
+    expect(close_to(more[1], 0.5f, 0.03f), "star ball: tilt is measured from the captured hold");
+    // Stick: full deflection is the full range.
+    const auto stick_right = star_ball_clac_xy(remote_gravity(Section::StarBall, up_from_stick(Section::StarBall, 1.0f, 0.0f)));
+    const auto stick_down = star_ball_clac_xy(remote_gravity(Section::StarBall, up_from_stick(Section::StarBall, 0.0f, -1.0f)));
+    expect(close_to(stick_right[0], 1.0f, 0.02f) && close_to(stick_right[1], 0.0f, 0.02f),
+           "star ball: stick right is full right");
+    expect(close_to(stick_down[1], -1.0f, 0.02f) && close_to(stick_down[0], 0.0f, 0.02f),
+           "star ball: stick down is full back");
+    // Ray: flat neutral does not turn; a twist right turns positive, left
+    // negative, proportionally.
+    expect(ray_turn(remote_gravity(Section::Ray, {0.0f, 1.0f, 0.0f})) == 0.0f, "ray: the neutral hold does not turn");
+    const float twist = ray_turn(remote_gravity(Section::Ray, up_from_angles(20.0f, 0.0f)));
+    expect(close_to(twist, std::sin(20.0f * 3.14159265f / 180.0f), 0.01f), "ray: a 20-degree twist right turns +sin 20");
+    expect(ray_turn(remote_gravity(Section::Ray, up_from_angles(-20.0f, 0.0f))) < -0.3f, "ray: a twist left turns negative");
+    expect(close_to(ray_turn(remote_gravity(Section::Ray, up_from_stick(Section::Ray, 1.0f, 0.0f))),
+                std::sin(kRayStickDegrees * 3.14159265f / 180.0f), 0.01f),
+           "ray: full stick is a 50-degree twist");
+    // Counts: flat is the rest reading; a round trip through the KPAD
+    // conversion gives the game vector back.
+    const Counts rest = accel_counts({0.0f, 0.0f, 1.0f});
+    expect(rest.x == kWiimoteRestAccelX && rest.y == kWiimoteRestAccelY && rest.z == kWiimoteRestAccelZ,
+           "the flat remote is the rest reading");
+    const Vec3 g = remote_gravity(Section::StarBall, up_from_angles(12.0f, 7.0f));
+    const Counts c = accel_counts(g);
+    SyntheticKpadMotionState motion_state{};
+    const auto kpad = sample_synthetic_kpad_motion(Axis10{c.x, c.y, c.z}, motion_state);
+    expect(close_to(-kpad.acceleration[0], g[0], 0.01f) && close_to(kpad.acceleration[2], g[1], 0.01f) &&
+               close_to(-kpad.acceleration[1], g[2], 0.01f),
+           "counts survive the KPAD conversion (game vector = -x, z, -y)");
+    // State: inactive outside sections; the neutral is captured at the start
+    // and again on recenter; a motion controller steers by tilt only, a
+    // controller without motion by the stick.
+    Tilt t{};
+    expect(!t.update(Section::None, nullptr, 0.0f, 0.0f, false).active, "no section: no tilt");
+    const Vec3 start = up_from_angles(5.0f, -20.0f);
+    auto out = t.update(Section::StarBall, &start, 0.0f, 0.0f, false);
+    auto xy = star_ball_clac_xy(out.game);
+    expect(out.active && !out.from_stick && close_to(xy[0], 0.0f, 1e-3f) && close_to(xy[1], 0.0f, 1e-3f),
+           "section start captures the hold as neutral");
+    const Vec3 tilted = up_from_angles(5.0f, -5.0f);
+    xy = star_ball_clac_xy(t.update(Section::StarBall, &tilted, 0.0f, 0.0f, false).game);
+    expect(xy[1] > 0.4f, "tilting forward from the hold rolls forward");
+    xy = star_ball_clac_xy(t.update(Section::StarBall, &tilted, 0.0f, 0.0f, true).game);
+    expect(close_to(xy[1], 0.0f, 1e-3f), "recenter takes the current hold as neutral");
+    out = t.update(Section::StarBall, &tilted, -1.0f, 0.0f, false);
+    xy = star_ball_clac_xy(out.game);
+    expect(!out.from_stick && close_to(xy[0], 0.0f, 1e-3f), "a Pro Controller's stick does not tilt");
+    out = t.update(Section::StarBall, nullptr, -1.0f, 0.0f, false);
+    xy = star_ball_clac_xy(out.game);
+    expect(out.from_stick && xy[0] < -0.9f, "without motion (Xbox, keyboard) the stick steers");
+    out = t.update(Section::StarBall, nullptr, 0.1f, 0.05f, false);
+    xy = star_ball_clac_xy(out.game);
+    expect(close_to(xy[0], 0.0f, 1e-3f) && close_to(xy[1], 0.0f, 1e-3f), "a stick at rest is level");
+    expect(!t.update(Section::None, &tilted, 0.0f, 0.0f, false).active && !t.neutral_valid, "leaving resets the neutral");
+}
+
 void test_recenter_hold() {
     RecenterHold hold{};
     auto out = hold.update(true);
@@ -1084,6 +1298,9 @@ int main(int argc, char** argv) {
     test_rest_hide();
     test_rest_hide_gyro();
     test_recenter_hold();
+    test_rumble_encoding();
+    test_rumble_gate();
+    test_tilt();
     test_defaults_and_migration();
     test_kpad_dots_stable();
     if (g_failures != 0) {

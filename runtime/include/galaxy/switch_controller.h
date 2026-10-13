@@ -205,6 +205,7 @@ public:
         return shake_active_ && now_us < shake_hold_until_us_;
     }
     [[nodiscard]] const std::array<float, 3>& gravity() const noexcept { return gravity_; }
+    [[nodiscard]] bool gravity_ready() const noexcept { return gravity_ready_; }
     [[nodiscard]] const std::array<float, 3>& gyro_bias() const noexcept { return bias_; }
     [[nodiscard]] unsigned rest_windows() const noexcept { return rest_windows_; }
     [[nodiscard]] static float shake_accel_threshold_g(std::uint8_t sensitivity) noexcept;

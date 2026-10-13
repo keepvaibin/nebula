@@ -1,9 +1,11 @@
 #include "galaxy/controller_hid.h"
 #include "galaxy/content_viewport.h"
+#include "galaxy/rumble.h"
 
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
 #include <Windows.h>
+#include <Xinput.h>
 #include <cfgmgr32.h>
 #include <hidsdi.h>
 #include <hidpi.h>
@@ -14,14 +16,18 @@
 #include <algorithm>
 #include <array>
 #include <atomic>
+#include <cctype>
 #include <chrono>
 #include <cmath>
+#include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <cwchar>
 #include <iostream>
 #include <memory>
 #include <mutex>
 #include <string>
+#include <string_view>
 #include <thread>
 #include <vector>
 
@@ -143,6 +149,14 @@ struct Device {
     std::uint64_t imu_reports = 0;
     std::unique_ptr<WinUsbPipes> winusb;
     std::size_t slot = 0;
+    // Output packet number after initialisation (0x10 rumble reports).
+    std::uint8_t packet = 0;
+    // Vibration last sent to this controller.
+    bool rumble_on = false;
+    std::uint8_t rumble_strength = 0;
+    std::uint8_t rumble_sequence = 0;
+    std::uint64_t rumble_sent_us = 0;
+    UniqueHandle write_event;
 };
 
 struct Published {
@@ -162,6 +176,21 @@ struct Hub {
     std::atomic<unsigned> pro_count{0};
     std::atomic<unsigned> pro2_count{0};
     std::atomic<bool> pro2_needs_winusb{false};
+    // Vibration: the game state from the emulation thread, and what runs on
+    // the devices (read without locks by stop_all_rumble).
+    SRWLOCK rumble_lock = SRWLOCK_INIT;
+    RumbleRequest rumble_request{};
+    std::uint64_t rumble_published_us = 0;
+    UniqueHandle rumble_event;
+    // Set by stop_all_rumble (exit, crash): no motor starts again.
+    std::atomic<bool> rumble_shutdown{false};
+    std::atomic<std::uint8_t> xinput_rumbling{0};  // bit per XInput user index
+    // A Switch controller's handle while its motor may run; cleared under
+    // rumble_device_lock (exclusive) before the handle closes.
+    SRWLOCK rumble_device_lock = SRWLOCK_INIT;
+    std::array<std::atomic<HANDLE>, kMaxSwitchPads> switch_rumble_handles{};
+    std::array<std::atomic<std::uint16_t>, kMaxSwitchPads> switch_rumble_lengths{};
+    std::array<std::atomic<bool>, kMaxSwitchPads> switch_rumble_pro2{};
 };
 
 // Never destroyed: the worker may still be blocked when the process exits.
@@ -426,46 +455,190 @@ void init_switch_pro(Device& device) {
     }
     const std::uint8_t full_mode = sw::kReportFullState;
     const std::uint8_t on = 1;
-    const std::uint8_t off = 0;
     const std::uint8_t player_one = 0x01;
+    // Vibration is enabled so the game's motor can be mirrored; the motor
+    // stays silent until the game turns it on (worker service_rumble).
+    const std::uint8_t vibration = rumble_output_disabled() ? 0 : 1;
     const bool mode_ok = subcommand(device, io, packet, sw::kSubcommandSetReportMode, std::span(&full_mode, 1), 0, nullptr);
     const bool imu_ok = subcommand(device, io, packet, sw::kSubcommandEnableImu, std::span(&on, 1), 0, nullptr);
-    (void)subcommand(device, io, packet, sw::kSubcommandEnableVibration, std::span(&off, 1), 0, nullptr);
+    (void)subcommand(device, io, packet, sw::kSubcommandEnableVibration, std::span(&vibration, 1), 0, nullptr);
     (void)subcommand(device, io, packet, sw::kSubcommandPlayerLights, std::span(&player_one, 1), 0, nullptr);
+    device.packet = packet;
     std::cerr << "[controller] switch pro (" << (device.bluetooth ? "bluetooth" : "usb")
               << ") report 0x30 " << (mode_ok ? "on" : "unconfirmed") << ", imu "
               << (imu_ok ? "on" : "unconfirmed") << '\n';
 }
 
+// One output report on an overlapped device handle, waiting at most
+// `timeout_ms`; a stuck write is cancelled.
+bool write_report(HANDLE handle, HANDLE event, const std::uint8_t* data, DWORD size, DWORD timeout_ms) noexcept {
+    if (handle == nullptr || handle == INVALID_HANDLE_VALUE || event == nullptr) return false;
+    OVERLAPPED ov{};
+    ov.hEvent = event;
+    ResetEvent(event);
+    DWORD done = 0;
+    if (!WriteFile(handle, data, size, nullptr, &ov)) {
+        if (GetLastError() != ERROR_IO_PENDING) return false;
+        if (WaitForSingleObject(event, timeout_ms) != WAIT_OBJECT_0) {
+            CancelIoEx(handle, &ov);
+            GetOverlappedResult(handle, &ov, &done, TRUE);
+            return false;
+        }
+    }
+    return GetOverlappedResult(handle, &ov, &done, FALSE) != FALSE;
+}
+
+// The motor-off report for a Switch controller.
+bool write_rumble_off(HANDLE handle, HANDLE event, std::uint16_t output_length, bool pro2) noexcept {
+    std::array<std::uint8_t, 128> report{};
+    const std::size_t length = std::min<std::size_t>(output_length, report.size());
+    const std::size_t built = pro2
+        ? input::rumble::build_switch2_rumble_report(0, false, 0, std::span(report.data(), length))
+        : input::rumble::build_switch_pro_rumble_report(0, input::rumble::switch_pro_motor_rumble(false, 0),
+                                                        std::span(report.data(), length));
+    return built != 0 && write_report(handle, event, report.data(), static_cast<DWORD>(length), 30);
+}
+
+// Set unless the value is empty, 0, false, off or no.
+bool env_flag(const char* name) noexcept {
+    char value[16]{};
+    const DWORD length = GetEnvironmentVariableA(name, value, sizeof(value));
+    if (length == 0) return false;
+    if (length >= sizeof(value)) return true;
+    for (DWORD i = 0; i < length; ++i) {
+        value[i] = static_cast<char>(std::tolower(static_cast<unsigned char>(value[i])));
+    }
+    const std::string_view text(value, length);
+    return !(text == "0" || text == "false" || text == "off" || text == "no");
+}
+
+bool rumble_trace_enabled() noexcept {
+    static const bool enabled = env_flag("GALAXY_RUMBLE_TRACE");
+    return enabled;
+}
+
+// GALAXY_TEST_RUMBLE_TARGET=xinput:N or switch:N, honoured only while
+// output is disabled: the controller a trace session reports as vibrating,
+// with the window counted as focused (a hidden window never is).
+RumbleTarget test_rumble_target() noexcept {
+    static const RumbleTarget target = [] {
+        RumbleTarget parsed{};
+        char value[32]{};
+        const DWORD length = GetEnvironmentVariableA("GALAXY_TEST_RUMBLE_TARGET", value, sizeof(value));
+        if (length == 0 || length >= sizeof(value) || !rumble_output_disabled()) return parsed;
+        const std::string_view text(value, length);
+        const std::size_t colon = text.find(':');
+        if (colon == std::string_view::npos || colon + 2u != text.size()) return parsed;
+        const char digit = text[colon + 1u];
+        if (digit < '0' || digit > '3') return parsed;
+        const std::string_view kind = text.substr(0, colon);
+        if (kind == "xinput") parsed.kind = RumbleTarget::Kind::XInput;
+        else if (kind == "switch") parsed.kind = RumbleTarget::Kind::Switch;
+        parsed.slot = static_cast<std::uint8_t>(digit - '0');
+        return parsed;
+    }();
+    return target;
+}
+
+const char* rumble_target_kind_name(RumbleTarget::Kind kind) noexcept {
+    switch (kind) {
+    case RumbleTarget::Kind::XInput: return "xinput";
+    case RumbleTarget::Kind::Switch: return "switch";
+    default: return "none";
+    }
+}
+
+// GALAXY_RUMBLE_TRACE: what the controller in use would receive, logged at
+// every change of the gated motor state (nothing is sent to any device).
+void trace_rumble_output(const RumbleRequest& request, std::uint64_t now) noexcept {
+    static bool s_logged = false;
+    static bool s_run = false;
+    static RumbleTarget s_target{};
+    static std::uint8_t s_strength = 0;
+    static unsigned s_rows = 0;
+    input::rumble::GateInputs gate{};
+    gate.game_motor_on = request.motor_on;
+    gate.now_us = now;
+    gate.published_us = now;
+    gate.focused = request.focused;
+    gate.paused = request.paused;
+    gate.strength = request.strength;
+    const bool has_target = request.target.kind != RumbleTarget::Kind::None;
+    const bool run = has_target && input::rumble::motor_should_run(gate);
+    if (s_logged && run == s_run && request.target == s_target && request.strength == s_strength) return;
+    if (s_rows >= 4000u) return;
+    ++s_rows;
+    s_logged = true;
+    s_run = run;
+    s_target = request.target;
+    s_strength = request.strength;
+    const char* reason = run ? "" : !request.motor_on ? " game-off" : !has_target ? " no-controller"
+                                  : request.strength == 0u ? " strength-off" : !request.focused ? " unfocused"
+                                  : request.paused ? " paused" : " gate";
+    char line[256]{};
+    int used = std::snprintf(line, sizeof(line), "[rumble-out] us=%llu target=%s:%u motor=%s%s strength=%u",
+                             static_cast<unsigned long long>(now), rumble_target_kind_name(request.target.kind),
+                             static_cast<unsigned>(request.target.slot), run ? "on" : "off", reason,
+                             static_cast<unsigned>(request.strength));
+    if (used > 0 && static_cast<std::size_t>(used) < sizeof(line)) {
+        if (request.target.kind == RumbleTarget::Kind::XInput) {
+            const input::rumble::XInputMotors speeds = input::rumble::xinput_motor_speeds(run, request.strength);
+            used += std::snprintf(line + used, sizeof(line) - static_cast<std::size_t>(used), " xinput=%u/%u",
+                                  static_cast<unsigned>(speeds.left), static_cast<unsigned>(speeds.right));
+        } else if (request.target.kind == RumbleTarget::Kind::Switch) {
+            const std::array<std::uint8_t, 8> pro = input::rumble::switch_pro_motor_rumble(run, request.strength);
+            std::array<std::uint8_t, input::rumble::kSwitch2RumbleReportBytes> pro2{};
+            (void)input::rumble::build_switch2_rumble_report(0, run, request.strength, pro2);
+            used += std::snprintf(line + used, sizeof(line) - static_cast<std::size_t>(used),
+                                  " pro=%02x%02x%02x%02x.%02x%02x%02x%02x pro2=%02x%02x%02x%02x%02x", pro[0],
+                                  pro[1], pro[2], pro[3], pro[4], pro[5], pro[6], pro[7], pro2[2], pro2[3], pro2[4],
+                                  pro2[5], pro2[6]);
+        }
+    }
+    std::cerr << line << '\n';
+}
+
+// Switch output pacing: SDL's hidapi drivers space Pro Controller writes at
+// least ~30 ms apart (faster writes can drop a Bluetooth link) and repeat a
+// held rumble so it does not fade; the Pro Controller 2 takes a fresh motor
+// packet every 12 ms.
+constexpr std::uint64_t kSwitchRumbleGapUs = 30'000;
+constexpr std::uint64_t kSwitchRumbleRefreshUs = 40'000;
+constexpr std::uint64_t kSwitch2RumbleRefreshUs = 12'000;
+
 class Worker {
 public:
-    void run(HANDLE stop, HANDLE rescan) {
+    void run(HANDLE stop, HANDLE rescan, HANDLE rumble) {
         rescan_devices();
         for (;;) {
-            std::array<HANDLE, 2 + kMaxSwitchPads> waits{};
-            std::array<Device*, 2 + kMaxSwitchPads> owners{};
+            std::array<HANDLE, 3 + kMaxSwitchPads> waits{};
+            std::array<Device*, 3 + kMaxSwitchPads> owners{};
             DWORD count = 0;
             waits[count++] = stop;
             waits[count++] = rescan;
+            waits[count++] = rumble;
             for (auto& device : devices_) {
                 if (device->read_pending) {
                     owners[count] = device.get();
                     waits[count++] = device->read_event.get();
                 }
             }
-            const DWORD result = WaitForMultipleObjects(count, waits.data(), FALSE, INFINITE);
+            // A timer only while a motor runs: it refreshes the motor and
+            // stops it when the game's state goes stale.
+            const DWORD result = WaitForMultipleObjects(count, waits.data(), FALSE,
+                                                        rumble_timer_ms_ != 0u ? rumble_timer_ms_ : INFINITE);
             if (result == WAIT_OBJECT_0) break;
             if (result == WAIT_OBJECT_0 + 1) {
                 rescan_devices();
-                continue;
-            }
-            if (result >= WAIT_OBJECT_0 + 2 && result < WAIT_OBJECT_0 + count) {
+            } else if (result >= WAIT_OBJECT_0 + 3 && result < WAIT_OBJECT_0 + count) {
                 Device* device = owners[result - WAIT_OBJECT_0];
                 complete_read(*device);
-                continue;
+            } else if (result != WAIT_OBJECT_0 + 2 && result != WAIT_TIMEOUT) {
+                break;  // WAIT_FAILED: leave rather than spin
             }
-            break;  // WAIT_FAILED: leave rather than spin
+            service_rumble();
         }
+        stop_xinput_rumble();
         for (auto& device : devices_) close_device(*device);
         devices_.clear();
     }
@@ -553,6 +726,7 @@ private:
             published.state.scheme = device->scheme;
             published.state.left = device->left;
             published.state.right = device->right;
+            published.state.slot = static_cast<std::uint8_t>(device->slot);
             ReleaseSRWLockExclusive(&hub().lock);
         }
         std::cerr << "[controller] connected " << input::control_scheme_id(device->scheme)
@@ -563,6 +737,17 @@ private:
     }
 
     void close_device(Device& device) {
+        if (device.slot < kMaxSwitchPads) {
+            AcquireSRWLockExclusive(&hub().rumble_device_lock);
+            hub().switch_rumble_handles[device.slot].store(nullptr);
+            ReleaseSRWLockExclusive(&hub().rumble_device_lock);
+        }
+        if (device.rumble_on) {
+            if (!device.write_event) device.write_event.reset(CreateEventW(nullptr, TRUE, FALSE, nullptr));
+            (void)write_rumble_off(device.handle.get(), device.write_event.get(), device.output_length,
+                                   device.scheme == ControlScheme::SwitchPro2);
+            device.rumble_on = false;
+        }
         if (device.read_pending && !device.resume) {
             CancelIoEx(device.handle.get(), &device.read_ov);
             DWORD done = 0;
@@ -670,7 +855,125 @@ private:
         state.gyro_y = std::clamp(state.gyro_y + gyro_y, -4.0f, 4.0f);
         state.imu_live = decoded.imu_count != 0u;
         state.gyro_rest_windows = device.motion.rest_windows();
+        state.gravity = device.motion.gravity();
+        state.gravity_valid = device.motion.gravity_ready();
+        state.slot = static_cast<std::uint8_t>(device.slot);
         ReleaseSRWLockExclusive(&hub().lock);
+    }
+
+    // ---- Vibration ------------------------------------------------------------
+    // Applies the game's published motor state (rumble::motor_should_run) to
+    // the controller in use and turns every other motor off. Runs after every
+    // wake: a device report, a publication, a rescan or the motor timer.
+    void service_rumble() {
+        Hub& h = hub();
+        AcquireSRWLockShared(&h.rumble_lock);
+        const RumbleRequest request = h.rumble_request;
+        const std::uint64_t published = h.rumble_published_us;
+        ReleaseSRWLockShared(&h.rumble_lock);
+        const std::uint64_t now = steady_us();
+        input::rumble::GateInputs gate{};
+        gate.game_motor_on = request.motor_on;
+        gate.now_us = now;
+        gate.published_us = published;
+        gate.focused = request.focused;
+        gate.paused = request.paused;
+        gate.strength = request.strength;
+        const bool run = !rumble_output_disabled() && !h.rumble_shutdown.load(std::memory_order_acquire) &&
+                         input::rumble::motor_should_run(gate);
+        // XInput motors hold their speed: one call per change. A call that
+        // fails (no controller in that slot) is not repeated until the
+        // wanted state changes, since XInput calls on empty slots are slow.
+        const bool xinput = run && request.target.kind == RumbleTarget::Kind::XInput &&
+                            request.target.slot < XUSER_MAX_COUNT;
+        const std::uint8_t want_mask = xinput ? static_cast<std::uint8_t>(1u << request.target.slot) : 0u;
+        const std::uint8_t want_strength = xinput ? request.strength : 0u;
+        if (want_mask != xinput_want_mask_ || want_strength != xinput_want_strength_) {
+            xinput_want_mask_ = want_mask;
+            xinput_want_strength_ = want_strength;
+            for (DWORD slot = 0; slot < XUSER_MAX_COUNT; ++slot) {
+                const std::uint8_t bit = static_cast<std::uint8_t>(1u << slot);
+                if ((want_mask & bit) != 0u) {
+                    const input::rumble::XInputMotors speeds = input::rumble::xinput_motor_speeds(true, want_strength);
+                    XINPUT_VIBRATION vibration{};
+                    vibration.wLeftMotorSpeed = speeds.left;
+                    vibration.wRightMotorSpeed = speeds.right;
+                    // Marked before the call: stop_all_rumble may run at any time.
+                    h.xinput_rumbling.fetch_or(bit, std::memory_order_acq_rel);
+                    if (XInputSetState(slot, &vibration) == ERROR_SUCCESS) {
+                        xinput_on_ |= bit;
+                    } else {
+                        h.xinput_rumbling.fetch_and(static_cast<std::uint8_t>(~bit), std::memory_order_acq_rel);
+                    }
+                } else if ((xinput_on_ & bit) != 0u) {
+                    XINPUT_VIBRATION off{};
+                    (void)XInputSetState(slot, &off);
+                    xinput_on_ = static_cast<std::uint8_t>(xinput_on_ & ~bit);
+                    h.xinput_rumbling.fetch_and(static_cast<std::uint8_t>(~bit), std::memory_order_acq_rel);
+                }
+            }
+        }
+        DWORD timer_ms = xinput_on_ != 0u ? 25u : 0u;
+        for (auto& device : devices_) {
+            const bool want = run && request.target.kind == RumbleTarget::Kind::Switch &&
+                              request.target.slot == device->slot;
+            if (service_switch_rumble(*device, want, request.strength, now)) {
+                const DWORD period = device->scheme == ControlScheme::SwitchPro2 ? 10u : 25u;
+                timer_ms = timer_ms == 0u ? period : std::min(timer_ms, period);
+            }
+        }
+        rumble_timer_ms_ = timer_ms;
+    }
+
+    // One Switch controller; true while its motor runs or a change waits for
+    // the write gap (the worker keeps its timer).
+    bool service_switch_rumble(Device& device, bool want, std::uint8_t strength, std::uint64_t now) {
+        const bool pro2 = device.scheme == ControlScheme::SwitchPro2;
+        if (device.failed || (pro2 && device.bluetooth)) want = false;
+        if (!want && !device.rumble_on) return false;
+        const bool changed = want != device.rumble_on || (want && strength != device.rumble_strength);
+        const std::uint64_t since = now - device.rumble_sent_us;
+        if (!changed && since < (pro2 ? kSwitch2RumbleRefreshUs : kSwitchRumbleRefreshUs)) return true;
+        if (!pro2 && device.rumble_sent_us != 0u && since < kSwitchRumbleGapUs) return true;
+        if (!device.write_event) device.write_event.reset(CreateEventW(nullptr, TRUE, FALSE, nullptr));
+        std::array<std::uint8_t, 128> report{};
+        const std::size_t length = std::min<std::size_t>(device.output_length, report.size());
+        const std::span<std::uint8_t> out(report.data(), length);
+        const std::size_t built =
+            pro2 ? input::rumble::build_switch2_rumble_report(device.rumble_sequence++, want, strength, out)
+                 : input::rumble::build_switch_pro_rumble_report(
+                       device.packet++, input::rumble::switch_pro_motor_rumble(want, strength), out);
+        if (built == 0u) {
+            device.rumble_on = false;
+            return false;
+        }
+        Hub& h = hub();
+        if (want && device.slot < kMaxSwitchPads) {
+            h.switch_rumble_lengths[device.slot].store(static_cast<std::uint16_t>(length), std::memory_order_release);
+            h.switch_rumble_pro2[device.slot].store(pro2, std::memory_order_release);
+            h.switch_rumble_handles[device.slot].store(device.handle.get(), std::memory_order_release);
+        }
+        (void)write_report(device.handle.get(), device.write_event.get(), report.data(), static_cast<DWORD>(length), 30);
+        device.rumble_sent_us = now;
+        device.rumble_on = want;
+        device.rumble_strength = strength;
+        if (!want && device.slot < kMaxSwitchPads) {
+            h.switch_rumble_handles[device.slot].store(nullptr, std::memory_order_release);
+        }
+        return want;
+    }
+
+    void stop_xinput_rumble() {
+        for (DWORD slot = 0; slot < XUSER_MAX_COUNT; ++slot) {
+            const std::uint8_t bit = static_cast<std::uint8_t>(1u << slot);
+            if ((xinput_on_ & bit) == 0u) continue;
+            XINPUT_VIBRATION off{};
+            (void)XInputSetState(slot, &off);
+            hub().xinput_rumbling.fetch_and(static_cast<std::uint8_t>(~bit), std::memory_order_acq_rel);
+        }
+        xinput_on_ = 0u;
+        xinput_want_mask_ = 0u;
+        xinput_want_strength_ = 0u;
     }
 
 public:
@@ -680,6 +983,10 @@ private:
     std::vector<std::unique_ptr<Device>> devices_;
     input::ControlsConfig config_ = input::default_controls_config();
     std::uint64_t config_generation_ = 0;
+    DWORD rumble_timer_ms_ = 0;
+    std::uint8_t xinput_on_ = 0;        // XInput motors this worker turned on
+    std::uint8_t xinput_want_mask_ = 0;
+    std::uint8_t xinput_want_strength_ = 0;
 };
 
 }  // namespace
@@ -692,7 +999,19 @@ void ensure_controller_hid_started() noexcept {
     try {
         h.stop_event.reset(CreateEventW(nullptr, TRUE, FALSE, nullptr));
         h.rescan_event.reset(CreateEventW(nullptr, FALSE, FALSE, nullptr));
-        if (h.stop_event.get() == nullptr || h.rescan_event.get() == nullptr) return;
+        // Created once and never replaced: publish_rumble_request signals it
+        // from the emulation thread.
+        if (!h.rumble_event) h.rumble_event.reset(CreateEventW(nullptr, FALSE, FALSE, nullptr));
+        if (h.stop_event.get() == nullptr || h.rescan_event.get() == nullptr || h.rumble_event.get() == nullptr) {
+            return;
+        }
+        static const bool exit_hook = [] {
+            // Orderly exits also stop the motors in prepare_for_process_exit
+            // (ExitProcess skips atexit).
+            std::atexit([] { stop_all_rumble(); });
+            return true;
+        }();
+        (void)exit_hook;
         CM_NOTIFY_FILTER filter{};
         filter.cbSize = sizeof(filter);
         filter.FilterType = CM_NOTIFY_FILTER_TYPE_DEVICEINTERFACE;
@@ -703,11 +1022,12 @@ void ensure_controller_hid_started() noexcept {
         }
         HANDLE stop = h.stop_event.get();
         HANDLE rescan = h.rescan_event.get();
-        h.worker = std::thread([stop, rescan] {
+        HANDLE rumble = h.rumble_event.get();
+        h.worker = std::thread([stop, rescan, rumble] {
             SetThreadDescription(GetCurrentThread(), L"nebula-controller-hid");
             Worker worker;
             worker.rescan_handle_ = rescan;
-            worker.run(stop, rescan);
+            worker.run(stop, rescan, rumble);
         });
         h.started.store(true, std::memory_order_release);
     } catch (...) {
@@ -746,6 +1066,59 @@ std::size_t read_switch_pads(std::span<SwitchPadState> out, bool consume_gyro) n
 
 std::uint64_t controller_hid_now_us() noexcept {
     return steady_us();
+}
+
+bool rumble_output_disabled() noexcept {
+    // Test sessions (hidden window) and trace sessions never drive a motor.
+    static const bool disabled = env_flag("GALAXY_HIDE_WINDOW") || env_flag("GALAXY_RUMBLE_TRACE");
+    return disabled;
+}
+
+void publish_rumble_request(const RumbleRequest& published) noexcept {
+    RumbleRequest request = published;
+    const RumbleTarget test_target = test_rumble_target();
+    if (test_target.kind != RumbleTarget::Kind::None) {
+        request.target = test_target;
+        request.focused = true;
+    }
+    Hub& h = hub();
+    const std::uint64_t now = steady_us();
+    AcquireSRWLockExclusive(&h.rumble_lock);
+    const RumbleRequest previous = h.rumble_request;
+    h.rumble_request = request;
+    h.rumble_published_us = now;
+    ReleaseSRWLockExclusive(&h.rumble_lock);
+    if (rumble_trace_enabled()) trace_rumble_output(request, now);
+    const bool changed = previous.motor_on != request.motor_on || previous.strength != request.strength ||
+                         !(previous.target == request.target) || previous.focused != request.focused ||
+                         previous.paused != request.paused;
+    if (changed && h.started.load(std::memory_order_acquire) && h.rumble_event) SetEvent(h.rumble_event.get());
+}
+
+void stop_all_rumble() noexcept {
+    Hub& h = hub();
+    h.rumble_shutdown.store(true, std::memory_order_release);
+    const std::uint8_t xinput = h.xinput_rumbling.exchange(0u, std::memory_order_acq_rel);
+    for (DWORD slot = 0; slot < XUSER_MAX_COUNT; ++slot) {
+        if ((xinput & (1u << slot)) == 0u) continue;
+        XINPUT_VIBRATION off{};
+        (void)XInputSetState(slot, &off);
+    }
+    HANDLE event = nullptr;
+    for (std::size_t slot = 0; slot < kMaxSwitchPads; ++slot) {
+        if (h.switch_rumble_handles[slot].load(std::memory_order_acquire) == nullptr) continue;
+        // Never blocks: the worker holds the lock only to retire a handle,
+        // and a crash may have stopped it there.
+        if (!TryAcquireSRWLockShared(&h.rumble_device_lock)) continue;
+        const HANDLE handle = h.switch_rumble_handles[slot].load(std::memory_order_acquire);
+        if (handle != nullptr) {
+            if (event == nullptr) event = CreateEventW(nullptr, TRUE, FALSE, nullptr);
+            (void)write_rumble_off(handle, event, h.switch_rumble_lengths[slot].load(std::memory_order_acquire),
+                                   h.switch_rumble_pro2[slot].load(std::memory_order_acquire));
+        }
+        ReleaseSRWLockShared(&h.rumble_device_lock);
+    }
+    if (event != nullptr) CloseHandle(event);
 }
 
 ControllerHidStatus controller_hid_status() noexcept {

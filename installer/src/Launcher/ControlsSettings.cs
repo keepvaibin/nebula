@@ -29,6 +29,7 @@ namespace Nebula.Launcher
         public float PointerHideSeconds, PointerHideRadius = 0.12f;
         public int Motion; // 0 off, 1 Wii Remote, 2 Nunchuk
         public int ShakeSensitivity = 3;
+        public int Rumble = 100; // vibration percent: 0, 25, 50, 75, 100
         public SchemeTuning Clone() { return (SchemeTuning)MemberwiseClone(); }
     }
 
@@ -60,6 +61,18 @@ namespace Nebula.Launcher
             "Pointer recenter", "A in play, B in menus" };
         public static readonly string[] MotionNames = { "off", "remote", "nunchuk" };
         public static readonly string[] MotionLabels = { "Off", "Wii Remote shake", "Nunchuk shake" };
+        // tune.<scheme>.rumble steps (rumble.h kStrengthSteps).
+        public static readonly int[] RumbleSteps = { 0, 25, 50, 75, 100 };
+        public static readonly string[] RumbleLabels = { "Off", "25%", "50%", "75%", "100%" };
+
+        /// <summary>The nearest step, ties down (rumble.h snap_strength).</summary>
+        public static int SnapRumble(float percent)
+        {
+            int best = RumbleSteps[0];
+            foreach (int step in RumbleSteps)
+                if (Math.Abs(percent - step) < Math.Abs(percent - best)) best = step;
+            return best;
+        }
 
         // Unified pad bits (input_bindings.h pad::).
         public const int DpadUp = 0, DpadDown = 1, DpadLeft = 2, DpadRight = 3, Start = 4, Back = 5, LeftStick = 6,
@@ -441,6 +454,7 @@ namespace Nebula.Launcher
                 case "pointer_hide_radius": if (parsed) t.PointerHideRadius = Math.Max(0f, Math.Min(0.5f, f)); break;
                 case "shake_sensitivity": if (parsed) t.ShakeSensitivity = Math.Max(1, Math.Min(5, (int)Math.Round(f))); break;
                 case "motion": { int m = Array.IndexOf(MotionNames, value.ToLowerInvariant()); if (m >= 0) t.Motion = m; break; }
+                case "rumble": if (parsed) t.Rumble = SnapRumble(f); break;
             }
         }
 
@@ -465,6 +479,7 @@ namespace Nebula.Launcher
                     lines.Add(new KeyValuePair<string, string>("tune." + p + "pointer_deadzone", F(tuning.PointerDeadzone)));
                     lines.Add(new KeyValuePair<string, string>("tune." + p + "pointer_hide_seconds", F(tuning.PointerHideSeconds)));
                     lines.Add(new KeyValuePair<string, string>("tune." + p + "pointer_hide_radius", F(tuning.PointerHideRadius)));
+                    lines.Add(new KeyValuePair<string, string>("tune." + p + "rumble", SnapRumble(tuning.Rumble).ToString(CultureInfo.InvariantCulture)));
                 }
                 lines.Add(new KeyValuePair<string, string>("tune." + p + "pointer_speed", F(tuning.PointerSpeed)));
                 lines.Add(new KeyValuePair<string, string>("tune." + p + "invert_pointer_y", tuning.InvertPointerY ? "1" : "0"));

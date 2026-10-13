@@ -20,6 +20,7 @@
 #include "galaxy/ppc_float.h"
 #include "galaxy/psmtx_guard_trace.h"
 #include "galaxy/native_host.h"
+#include "galaxy/controller_hid.h"
 #include "galaxy/jaudio_host_mixer.h"
 #include "galaxy/flat_guest_memory.h"
 #include "galaxy/dsp_timing_runtime.h"
@@ -31914,6 +31915,8 @@ static void prepare_crash_dump_directory() {
 // philosophy exists to surface, not hide.
 static LONG WINAPI galaxy_unhandled_exception_filter(
     EXCEPTION_POINTERS* exception_info) {
+    // A crash never leaves a controller vibrating (bounded writes).
+    galaxy::host::stop_all_rumble();
     const std::wstring dir = g_crash_dump_dir[0] != L'\0'
         ? std::wstring(g_crash_dump_dir) : std::wstring(L".");
     wchar_t path[MAX_PATH]{};
