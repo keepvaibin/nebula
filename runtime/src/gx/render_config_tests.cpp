@@ -84,13 +84,8 @@ int main() {
         const auto same = [](const std::vector<unsigned>& got, std::initializer_list<unsigned> want) {
             return std::equal(got.begin(), got.end(), want.begin(), want.end());
         };
-        if (!same(frame_rate_options(220u), {30u, 60u, 120u, 144u, 165u, 220u, 0u}) ||
-            !same(frame_rate_options(50u), {30u, 50u, 0u}) ||
-            !same(frame_rate_options(59u), {30u, 60u, 0u}) ||
-            !same(frame_rate_options(144u), {30u, 60u, 120u, 144u, 0u}) ||
-            !same(frame_rate_options(75u), {30u, 60u, 75u, 0u}) ||
-            !same(frame_rate_options(0u), {30u, 60u, 120u, 144u, 165u, 240u, 360u, 0u})) {
-            std::cerr << "frame-rate choices must be the standard rates up to the display rate, the display rate, then unlimited\n";
+        if (!same(frame_rate_options(), {30u, 60u})) {
+            std::cerr << "frame-rate choices must be 30 and 60\n";
             passed = false;
         }
         using galaxy::gx::present_frame_rate;
@@ -141,7 +136,7 @@ int main() {
             passed &= expect(value.max_fps == 60.0f && value.texture_lod_bias == 8u &&
                 value.anisotropic_filtering == 1u, "direct config applies the same numeric boundary checks");
         }
-        for (float rate : {0.0f, 1.0f, 59.940002f, 1000.0f}) {
+        for (float rate : {1.0f, 30.0f, 59.940002f, 60.0f}) {
             galaxy::gx::RenderConfig original{};
             original.max_fps = rate;
             galaxy::gx::set_render_config(original);
@@ -149,7 +144,7 @@ int main() {
             galaxy::gx::set_render_config(galaxy::gx::RenderConfig{});
             galaxy::gx::load_render_config_from_file();
             passed &= expect(galaxy::gx::get_render_config().max_fps == rate,
-                "finite caps and unlimited survive exact float round trips");
+                "frame-rate caps survive exact float round trips");
         }
         {
             std::ofstream file(path, std::ios::binary | std::ios::trunc);

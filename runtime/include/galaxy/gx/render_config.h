@@ -25,7 +25,7 @@ namespace galaxy::gx {
 // D3D12 16384-texel limit. Higher scales are opt-in; the default remains 1x.
 inline constexpr unsigned kMaxEfbScale = 16u;
 inline constexpr float kMinFrameRate = 1.0f;
-inline constexpr float kMaxFrameRate = 1000.0f;
+inline constexpr float kMaxFrameRate = 60.0f;
 
 struct RenderConfig {
     // EFB resolution multiplier (1-kMaxEfbScale).  efb_scale=2 -> 1280x1056 and acts as
@@ -55,7 +55,7 @@ struct RenderConfig {
     // jitter, and history resources exist.
     bool     taa_enabled         = false;
 
-    // Maximum frame rate (Hz); 0 = unlimited, otherwise finite 1-1000 Hz.
+    // Maximum frame rate (Hz), 1-60; the settings offer 30 and 60.
     // Enforced by the render thread
     // before Present() when vsync_interval is 0 and realtime VI pacing is not
     // active. Normal Release gameplay uses the native VI scheduler as the
@@ -74,17 +74,17 @@ struct RenderConfig {
 
     // D3D12 anisotropic filtering for mipmapped GX samplers. 1 disables it;
     // 2/4/8/16 map directly to D3D12_SAMPLER_DESC::MaxAnisotropy.
-    unsigned anisotropic_filtering = 8;
+    unsigned anisotropic_filtering = 1;
 
     // Generate native mip chains for color textures that the game samples with
     // linear filtering but without authored GX mips. Authored mips are still
     // decoded from guest memory unchanged.
-    bool     enhanced_mipmaps    = true;
+    bool     enhanced_mipmaps    = false;
 
     // Enhancement: lit GX color channels are evaluated per pixel instead of
     // per vertex (same XF light formulas on the interpolated eye-space
     // position and normal). Applies to specialized triangle pipelines.
-    bool     per_pixel_lighting  = true;
+    bool     per_pixel_lighting  = false;
 
     // Presentation image quality (post_process.h), applied to the presented
     // frame on the render thread. aa_mode: 0 off, 1 SMAA, 2 auto (SMAA unless
@@ -100,7 +100,7 @@ struct RenderConfig {
     // during an edge drag), efb_scale becomes the smallest scale that covers
     // the window's game picture, as the launcher's "Match Output" does at
     // start. The renderer re-creates its targets once, at a frame boundary.
-    bool     internal_follow_window = false;
+    bool     internal_follow_window = true;
     // The 2D layer (HUD, menus, text) renders at the window's resolution over
     // the resampled 3D scene when the internal resolution is lower. Off by
     // default: the scene then takes two resamples (to the integer output
@@ -109,11 +109,11 @@ struct RenderConfig {
 
     // false presents with the plain bilinear blit (A/B and fallback).
     bool     post_process        = true;
-    unsigned aa_mode             = 2;
+    unsigned aa_mode             = 0;
     unsigned smaa_quality        = 2;
-    unsigned upscaler            = 1;
+    unsigned upscaler            = 0;
     unsigned temporal_quality    = 1;
-    unsigned sharpness           = 20;
+    unsigned sharpness           = 0;
 
     // Reserved for future DXR work. Clamped off until there is a real DXR
     // capability query, acceleration-structure path, ray PSO, and visible
@@ -130,10 +130,9 @@ struct RenderConfig {
     unsigned window_height       = 480;
 
     // Display, reconciled by the render thread at a frame boundary.
-    // display_mode: 0 windowed, 1 borderless fullscreen, 2 exclusive
-    // fullscreen (the monitor switches to fullscreen_width x height at
-    // fullscreen_refresh_hz; zeros keep its desktop mode).
-    unsigned display_mode        = 0;
+    // display_mode: 0 windowed, 1 borderless fullscreen. Exclusive
+    // fullscreen (2) is not offered; a saved 2 opens borderless.
+    unsigned display_mode        = 1;
     // GDI device name of the monitor (UTF-8, e.g. \\.\DISPLAY2); empty or
     // unknown selects the primary monitor.
     std::array<char, 64> monitor{};
@@ -146,26 +145,12 @@ struct RenderConfig {
     // Draw distance of objects (with their particles and light glows) and
     // shadows: 0 the game's own, 1 twice, 2 four times, 3 eight times.
     // Wider pictures show the game's cut-offs at their sides.
-    unsigned draw_distance       = 2;
+    unsigned draw_distance       = 0;
 };
 
-// Frame-rate choices for a display refreshing at refresh_hz (0 = unknown):
-// the standard rates it can show, its own rate when that is not one of them,
-// then 0 for unlimited. 59 Hz reports count as 60.
-inline constexpr unsigned kStandardFrameRates[] = {30u, 60u, 120u, 144u, 165u, 240u, 360u};
-inline std::vector<unsigned> frame_rate_options(unsigned refresh_hz) {
-    std::vector<unsigned> options;
-    bool listed = false;
-    for (const unsigned rate : kStandardFrameRates) {
-        if (refresh_hz != 0u && rate > refresh_hz + 1u) break;
-        options.push_back(rate);
-        listed = listed || (refresh_hz + 1u >= rate && refresh_hz <= rate + 1u);
-    }
-    if (refresh_hz > 30u && !listed) {
-        options.insert(std::upper_bound(options.begin(), options.end(), refresh_hz), refresh_hz);
-    }
-    options.push_back(0u);
-    return options;
+// Frame-rate choices: 30 and the game's own 60.
+inline std::vector<unsigned> frame_rate_options() {
+    return {30u, 60u};
 }
 
 // Frames per second the game picture is presented at. The game renders 60;

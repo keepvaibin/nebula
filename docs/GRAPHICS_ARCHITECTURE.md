@@ -200,30 +200,18 @@ bottom-level acceleration structures built once per scene, with per-frame
 refits for skinned draws; first targets are RT shadows and AO composited
 before the HUD split point.
 
-### Frame rate above 60: interpolated redraw
+### Frame rate
 
-The game renders 60 frames per second. FRAME RATE sets the present rate:
+The game renders 60 frames per second. FRAME RATE offers 30 (the newest frame
+every other display frame, on a QPC cadence) and 60 (every game frame); with
+VSYNC the sync interval is refresh/rate when that is an integer 2..4.
 
-| FRAME RATE | VSYNC OFF | VSYNC ON |
-|---|---|---|
-| 30, 50 | newest frame on a QPC cadence (every other frame at 30) | same; sync interval refresh/rate when an integer 2..4 |
-| 60 | game frames | game frames, interval 1 (2..4 when refresh is a multiple) |
-| 120 .. 360, display rate | k = round(rate / 60) - 1 interpolated frames per game frame, interval 0 with tearing, QPC cadence | rate capped at refresh; interval refresh/rate when an integer 2..4, else 1 |
-| Unlimited | the display rate (at least 60) | the display rate |
-
-Interpolation (behind `GALAXY_EXPERIMENTAL_INTERPOLATION=1` while it is
-validated; off with the temporal upscaler): rings and the sampler heap keep one
-segment per game frame, the renderer logs the frame's EFB operations up to its
-display copy, and when the frame's present arrives the render thread presents
-k sub-frames at t = i / (k + 1), one present slot apart, then the frame itself
-(one game frame of latency). A sub-frame replays the log into a private EFB
-with every scene record's transform interpolated between the matched previous
-record (or the camera delta) and the frame's (translation and scale lerp,
-rotation slerp; per-vertex palettes rebuilt from CPU shadows; texture matrices
-lerped); projection, lights and the 2D layer are the frame's. The FRAME RATE
-row shows the measured presents per second; `GALAXY_TRACE_PRESENT_STATS=1`
-adds `[interp-stats]` (sub-frames per second, drops, CPU and GPU ms per
-sub-frame).
+Interpolated frames above 60 (`GALAXY_EXPERIMENTAL_INTERPOLATION=1`) are not
+offered in this release: rings and the sampler heap keep one segment per game
+frame, the renderer logs the frame's EFB operations up to its display copy,
+and the render thread presents k sub-frames at t = i / (k + 1) before the
+frame itself, each replaying the log with every scene record's transform
+interpolated between the matched previous record and the frame's.
 
 ## Migration plan (the triangle never breaks)
 

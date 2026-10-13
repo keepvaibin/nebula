@@ -278,17 +278,14 @@ static void apply_env_overrides(RenderConfig& cfg) {
     apply_env(cfg, "GALAXY_RT_REFLECTIONS", "rt_reflections");
     apply_env(cfg, "GALAXY_WINDOW_WIDTH", "window_width");
     apply_env(cfg, "GALAXY_WINDOW_HEIGHT", "window_height");
-    // Launch variables of earlier launchers and the test tools:
-    // GALAXY_FULLSCREEN selects borderless, with GALAXY_EXCLUSIVE_FULLSCREEN
-    // exclusive fullscreen.
+    // Launch variable of earlier launchers and the test tools:
+    // GALAXY_FULLSCREEN selects borderless.
     {
         char value[16]{};
         std::size_t length = 0;
         if (getenv_s(&length, value, sizeof(value), "GALAXY_FULLSCREEN") == 0 && length > 1u) {
-            cfg.display_mode = read_env_bool("GALAXY_FULLSCREEN", false)
-                ? (read_env_bool("GALAXY_EXCLUSIVE_FULLSCREEN", false) ? kDisplayExclusive
-                                                                      : kDisplayBorderless)
-                : kDisplayWindowed;
+            cfg.display_mode = read_env_bool("GALAXY_FULLSCREEN", false) ? kDisplayBorderless
+                                                                        : kDisplayWindowed;
         }
     }
     apply_env(cfg, "GALAXY_DISPLAY_MODE", "display_mode");
@@ -304,8 +301,7 @@ static void clamp_unimplemented_features(RenderConfig& cfg) {
     cfg.vsync_interval = std::clamp(cfg.vsync_interval, 0u, 2u);
     cfg.swap_chain_frame_latency =
         std::clamp(cfg.swap_chain_frame_latency, 1u, 2u);
-    if (!std::isfinite(cfg.max_fps) ||
-        (cfg.max_fps != 0.0f && (cfg.max_fps < kMinFrameRate || cfg.max_fps > kMaxFrameRate))) {
+    if (!std::isfinite(cfg.max_fps) || cfg.max_fps < kMinFrameRate || cfg.max_fps > kMaxFrameRate) {
         cfg.max_fps = RenderConfig{}.max_fps;
     }
     cfg.texture_lod_bias = std::min(cfg.texture_lod_bias, 8u);
@@ -321,7 +317,7 @@ static void clamp_unimplemented_features(RenderConfig& cfg) {
         static_cast<unsigned>(std::numeric_limits<int>::max());
     cfg.window_width = std::clamp(cfg.window_width, 1u, kMaxWindowDimension);
     cfg.window_height = std::clamp(cfg.window_height, 1u, kMaxWindowDimension);
-    cfg.display_mode = std::min(cfg.display_mode, kDisplayExclusive);
+    cfg.display_mode = std::min(cfg.display_mode, kDisplayBorderless);
     cfg.aspect_mode = std::min(cfg.aspect_mode, kAspectModeCount - 1u);
     cfg.draw_distance = std::min(cfg.draw_distance, 3u);
     cfg.monitor.back() = '\0';

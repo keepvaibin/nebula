@@ -13,7 +13,7 @@ namespace Nebula.Launcher
     /// </summary>
     internal sealed class GraphicsSettings
     {
-        public static readonly string[] DisplayModes = { "Windowed", "Borderless fullscreen", "Fullscreen" };
+        public static readonly string[] DisplayModes = { "Windowed", "Borderless fullscreen" };
         public static readonly string[] Aspects = { "Auto (match the window)", "4:3", "16:10", "16:9", "21:9", "32:9" };
         public static readonly string[] AntiAliasingModes = { "Off", "SMAA", "Auto (SMAA unless supersampled)", "FXAA" };
         public static readonly string[] AntiAliasingQualities = { "Low", "Medium", "High", "Ultra" };
@@ -23,30 +23,10 @@ namespace Nebula.Launcher
         public static readonly string[] LightingModes = { "Per pixel (enhanced)", "Per vertex (original)" };
         public static readonly string[] DrawDistances = { "Original", "2x", "4x", "8x" };
         private static readonly int[] Anisotropy = { 1, 2, 4, 8, 16 };
-        private static readonly int[] StandardFrameRates = { 30, 60, 120, 144, 165, 240, 360 };
+        // The runtime's frame_rate_options.
+        public static readonly int[] FrameRates = { 30, 60 };
 
-        // The runtime's frame_rate_options: standard rates the display can
-        // show, its own rate when that is not one of them, then 0 (unlimited).
-        public static List<int> FrameRates(int refreshHz)
-        {
-            var rates = new List<int>();
-            bool listed = false;
-            foreach (int rate in StandardFrameRates)
-            {
-                if (refreshHz != 0 && rate > refreshHz + 1) break;
-                rates.Add(rate);
-                listed = listed || (refreshHz + 1 >= rate && refreshHz <= rate + 1);
-            }
-            if (refreshHz > 30 && !listed)
-            {
-                int at = rates.FindIndex(r => r > refreshHz);
-                rates.Insert(at < 0 ? rates.Count : at, refreshHz);
-            }
-            rates.Add(0);
-            return rates;
-        }
-
-        public int DisplayMode = 0;
+        public int DisplayMode = 1;
         public string Monitor = "";
         public int WindowWidth = 1280, WindowHeight = 720;
         public int FullscreenWidth = 0, FullscreenHeight = 0, FullscreenRefresh = 0;
@@ -55,9 +35,9 @@ namespace Nebula.Launcher
         public bool MatchOutput = true;
         public bool VSync = false;
         public int FrameRate = 60;
-        public int AntiAliasing = 2, Quality = 2, Upscaler = 1, Sharpness = 20, TextureFilter = 3, DrawDistance = 2;
+        public int AntiAliasing = 0, Quality = 2, Upscaler = 0, Sharpness = 0, TextureFilter = 0, DrawDistance = 0;
         public int TemporalQuality = 1;
-        public bool GeneratedMipmaps = true, PerPixelLighting = true, HudOutputResolution = false;
+        public bool GeneratedMipmaps = false, PerPixelLighting = false, HudOutputResolution = false;
 
         public static string ConfigPath { get { return Path.Combine(NebulaPaths.DataRoot, "config.ini"); } }
 
@@ -68,7 +48,8 @@ namespace Nebula.Launcher
             try { values = Read(ConfigPath).Item2; }
             catch (IOException) { return settings; }
             catch (UnauthorizedAccessException) { return settings; }
-            settings.DisplayMode = Choice(values, "display_mode", DisplayModes.Length, settings.DisplayMode);
+            // Exclusive fullscreen (2) is not offered; it opens borderless.
+            settings.DisplayMode = Math.Min(Choice(values, "display_mode", 3, settings.DisplayMode), 1);
             string monitor;
             if (values.TryGetValue("monitor", out monitor)) settings.Monitor = monitor.Trim();
             settings.WindowWidth = Choice(values, "window_width", 65536, settings.WindowWidth);
@@ -85,7 +66,7 @@ namespace Nebula.Launcher
             double rate;
             if (values.TryGetValue("max_fps", out fps) &&
                 double.TryParse(fps.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out rate) &&
-                rate >= 0 && rate <= 1000) settings.FrameRate = (int)Math.Round(rate);
+                rate >= 1 && rate <= 60) settings.FrameRate = (int)Math.Round(rate);
             settings.AntiAliasing = Choice(values, "aa", AntiAliasingModes.Length, settings.AntiAliasing);
             settings.Quality = Choice(values, "smaa_quality", AntiAliasingQualities.Length, settings.Quality);
             settings.Upscaler = Choice(values, "upscaler", Upscalers.Length, settings.Upscaler);

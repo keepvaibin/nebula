@@ -836,7 +836,7 @@ void adjust_native_setting_unlogged(int delta) {
             return;
         }
         case 1:  // display mode
-            draft.display_mode = step(draft.display_mode, 3u);
+            draft.display_mode = step(std::min(draft.display_mode, kDisplayBorderless), 2u);
             sanitize_settings_draft(draft);
             return;
         case 2: {  // resolution
@@ -915,11 +915,11 @@ void adjust_native_setting_unlogged(int delta) {
             return;
         }
         case 6: {  // frame rate
-            const auto rates = frame_rate_options(settings_refresh_hz(draft));
+            const auto rates = frame_rate_options();
             const auto current = static_cast<unsigned>(std::lround(std::max(0.0f, draft.max_fps)));
-            std::size_t index = rates.size() - 1u;  // unlimited
-            for (std::size_t i = 0; i + 1u < rates.size(); ++i) {
-                if (current != 0u && rates[i] <= current) index = i;
+            std::size_t index = 0u;
+            for (std::size_t i = 0; i < rates.size(); ++i) {
+                if (rates[i] <= current) index = i;
             }
             const std::size_t next = step(static_cast<unsigned>(index), static_cast<unsigned>(rates.size()));
             draft.max_fps = static_cast<float>(rates[next]);
@@ -9263,8 +9263,8 @@ std::string native_settings_row_text(
             return text;
         }
         case 1: {
-            static constexpr const char* kModes[] = {"WINDOWED", "BORDERLESS", "FULLSCREEN"};
-            return std::string("MODE: ") + kModes[std::min(render.display_mode, 2u)];
+            static constexpr const char* kModes[] = {"WINDOWED", "BORDERLESS"};
+            return std::string("MODE: ") + kModes[std::min(render.display_mode, kDisplayBorderless)];
         }
         case 2: {
             const auto [w, h] = settings_output_size(render);
@@ -9273,10 +9273,7 @@ std::string native_settings_row_text(
             return text;
         }
         case 3:
-            if (render.display_mode != kDisplayExclusive) return "REFRESH RATE: DESKTOP";
-            std::snprintf(text, sizeof(text), "REFRESH RATE: %u HZ",
-                          render.fullscreen_refresh_hz != 0u ? render.fullscreen_refresh_hz
-                          : (monitor ? monitor->current.refresh_hz : 60u));
+            std::snprintf(text, sizeof(text), "REFRESH RATE: %u HZ", monitor ? monitor->current.refresh_hz : 60u);
             return text;
         case 4: {
             static constexpr const char* kAspects[] = {
@@ -9295,11 +9292,7 @@ std::string native_settings_row_text(
         case 6: {
             const auto rate = static_cast<unsigned>(std::lround(std::max(0.0f, render.max_fps)));
             const double measured = s_measured_present_hz.load(std::memory_order_relaxed);
-            if (rate == 0u) {
-                std::snprintf(text, sizeof(text), "FRAME RATE: UNLIMITED  %.1f", measured);
-            } else {
-                std::snprintf(text, sizeof(text), "FRAME RATE: %u  %.1f", rate, measured);
-            }
+            std::snprintf(text, sizeof(text), "FRAME RATE: %u  %.1f", rate, measured);
             return text;
         }
         case 7:

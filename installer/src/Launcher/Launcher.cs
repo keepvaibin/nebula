@@ -77,8 +77,10 @@ namespace Nebula.Launcher
                 string savedContent = Json.Str(settings, "content");
                 if (savedContent != null && File.Exists(Path.Combine(savedContent, "game.pak"))) Content = savedContent;
                 SetupComplete = Json.Long(settings, "settingsVersion") >= 3;
+                // A recording is for the next launch only (settings version 4).
                 long recording = Json.Long(settings, "recording");
-                if (recording >= 0 && recording <= 2) Recording = (RecordingMode)recording;
+                if (Json.Long(settings, "settingsVersion") >= 4 && recording >= 0 && recording <= 2)
+                    Recording = (RecordingMode)recording;
             }
             catch (Exception) { }
         }
@@ -87,7 +89,7 @@ namespace Nebula.Launcher
         {
             Json.Save(SettingsFile, new Dictionary<string, object>
             {
-                { "settingsVersion", 3 }, { "content", Content }, { "recording", (int)Recording }
+                { "settingsVersion", 4 }, { "content", Content }, { "recording", (int)Recording }
             });
             SetupComplete = true;
         }
@@ -99,7 +101,7 @@ namespace Nebula.Launcher
             {
                 if (!File.Exists(Path.Combine(Content, "game.pak")))
                     return "Nebula could not find the game content (game.pak). Choose it in Nebula settings.";
-                if (RuntimeLeaseHeld())
+                if (RuntimeLeaseHeld() && !EndRunningGame())
                     return "Nebula is already running.";
                 LaunchOptions.ValidatePair(App);
                 if (Portable) LaunchOptions.PreserveUserData(NebulaPaths.DataRoot, "portable-" + BuildInfo.Version);
@@ -110,6 +112,10 @@ namespace Nebula.Launcher
                     using (Process.Start(start)) { }
                     return null;
                 }
+                var mode = Recording;
+                Recording = RecordingMode.None;
+                try { Save(); } catch (Exception) { }
+                Recording = mode;
                 StartRecorded(start);
                 return null;
             }
@@ -130,6 +136,39 @@ namespace Nebula.Launcher
                 catch (AbandonedMutexException) { acquired = true; }
                 if (acquired) lease.ReleaseMutex();
                 return !acquired;
+            }
+        }
+
+        // A game that stopped responding can keep the lease after its window
+        // is gone. Offers to end this install's runtime and waits for the lease.
+        private bool EndRunningGame()
+        {
+            string exe = Path.Combine(App, "NebulaRuntime.exe");
+            var running = new List<Process>();
+            foreach (var process in Process.GetProcessesByName("NebulaRuntime"))
+            {
+                try
+                {
+                    if (string.Equals(process.MainModule.FileName, exe, StringComparison.OrdinalIgnoreCase)) { running.Add(process); continue; }
+                }
+                catch (Exception) { }
+                process.Dispose();
+            }
+            if (running.Count == 0) return false;
+            try
+            {
+                if (MessageBox.Show("Nebula is already running. End it and start again?", "Nebula",
+                                    MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return false;
+                foreach (var process in running)
+                {
+                    try { process.Kill(); process.WaitForExit(5000); } catch (Exception) { }
+                }
+                for (int i = 0; i < 50 && RuntimeLeaseHeld(); i++) Thread.Sleep(100);
+                return !RuntimeLeaseHeld();
+            }
+            finally
+            {
+                foreach (var process in running) process.Dispose();
             }
         }
 
@@ -681,8 +720,8 @@ namespace Nebula.Launcher
             RefreshDisplayChoices();
         }
 
-        // Resolution: window sizes that fit the monitor (windowed), the desktop
-        // (borderless) or the monitor's own modes (fullscreen).
+        // Resolution: window sizes that fit the monitor (windowed) or the
+        // desktop (borderless).
         private void RefreshDisplayChoices()
         {
             loading = true;
@@ -694,18 +733,6 @@ namespace Nebula.Launcher
             {
                 resolutionChoices.Add(new Size(screen.Width, screen.Height));
                 resolution.Items.Add(string.Format("{0} × {1} (desktop)", screen.Width, screen.Height));
-            }
-            else if (mode.SelectedIndex == 2)
-            {
-                foreach (var size in screen.Resolutions()) resolutionChoices.Add(size);
-                int wantW = graphics.FullscreenWidth != 0 ? graphics.FullscreenWidth : screen.Width;
-                int wantH = graphics.FullscreenHeight != 0 ? graphics.FullscreenHeight : screen.Height;
-                for (int i = 0; i < resolutionChoices.Count; i++)
-                {
-                    var s = resolutionChoices[i];
-                    resolution.Items.Add(string.Format("{0} × {1}{2}", s.Width, s.Height, s.Width == screen.Width && s.Height == screen.Height ? " (desktop)" : ""));
-                    if (s.Width == wantW && s.Height == wantH) selected = i;
-                }
             }
             else
             {
@@ -739,49 +766,27 @@ namespace Nebula.Launcher
             var screen = SelectedMonitor;
             refresh.Items.Clear();
             refreshChoices.Clear();
-            if (mode.SelectedIndex == 2 && resolution.SelectedIndex >= 0)
-            {
-                var size = resolutionChoices[resolution.SelectedIndex];
-                int want = graphics.FullscreenRefresh != 0 ? graphics.FullscreenRefresh : screen.Refresh;
-                int selected = 0;
-                foreach (int rate in screen.RefreshRates(size.Width, size.Height))
-                {
-                    if (rate == want) selected = refreshChoices.Count;
-                    refreshChoices.Add(rate);
-                    refresh.Items.Add(rate + " Hz");
-                }
-                refresh.Enabled = true;
-                if (refresh.Items.Count > 0) refresh.SelectedIndex = selected;
-            }
-            else
-            {
-                refresh.Items.Add(string.Format("Desktop ({0} Hz)", screen.Refresh));
-                refresh.SelectedIndex = 0;
-                refresh.Enabled = false;
-            }
+            refresh.Items.Add(string.Format("Desktop ({0} Hz)", screen.Refresh));
+            refresh.SelectedIndex = 0;
+            refresh.Enabled = false;
             resolution.Enabled = mode.SelectedIndex != 1;
             RefreshScaleChoices();
             RefreshFrameRateChoices();
             loading = false;
         }
 
-        // Frame rate: the choices the display's refresh rate allows.
         private void RefreshFrameRateChoices()
         {
-            var screen = SelectedMonitor;
-            int hz = mode.SelectedIndex == 2 && refresh.SelectedIndex >= 0 && refresh.SelectedIndex < refreshChoices.Count
-                ? refreshChoices[refresh.SelectedIndex] : screen.Refresh;
             int want = frameRate.SelectedIndex >= 0 && frameRate.SelectedIndex < frameRateChoices.Count
                 ? frameRateChoices[frameRate.SelectedIndex] : graphics.FrameRate;
             frameRateChoices.Clear();
-            frameRateChoices.AddRange(GraphicsSettings.FrameRates(hz));
+            frameRateChoices.AddRange(GraphicsSettings.FrameRates);
             frameRate.Items.Clear();
-            int selected = frameRateChoices.Count - 1;
+            int selected = 0;
             for (int i = 0; i < frameRateChoices.Count; i++)
             {
-                int rate = frameRateChoices[i];
-                frameRate.Items.Add(rate == 0 ? "Unlimited" : rate + " FPS");
-                if (want != 0 && rate != 0 && rate <= want) selected = i;
+                frameRate.Items.Add(frameRateChoices[i] + " FPS");
+                if (frameRateChoices[i] <= want) selected = i;
             }
             frameRate.SelectedIndex = selected;
         }
@@ -791,13 +796,7 @@ namespace Nebula.Launcher
         private void RefreshScaleChoices()
         {
             var screen = SelectedMonitor;
-            int outW = screen.Width, outH = screen.Height;
-            if (mode.SelectedIndex == 2 && resolution.SelectedIndex >= 0)
-            {
-                outW = resolutionChoices[resolution.SelectedIndex].Width;
-                outH = resolutionChoices[resolution.SelectedIndex].Height;
-            }
-            int cap = DisplayInfo.ScaleCovering(outW, outH);
+            int cap = DisplayInfo.ScaleCovering(screen.Width, screen.Height);
             int previous = internalScale.SelectedIndex;
             bool hadItems = internalScale.Items.Count > 0;
             internalScale.Items.Clear();
@@ -819,13 +818,6 @@ namespace Nebula.Launcher
                 {
                     var size = resolutionChoices[resolution.SelectedIndex];
                     if (graphics.DisplayMode == 0) { graphics.WindowWidth = size.Width; graphics.WindowHeight = size.Height; }
-                    if (graphics.DisplayMode == 2)
-                    {
-                        graphics.FullscreenWidth = size.Width;
-                        graphics.FullscreenHeight = size.Height;
-                        graphics.FullscreenRefresh = refresh.SelectedIndex >= 0 && refresh.SelectedIndex < refreshChoices.Count
-                            ? refreshChoices[refresh.SelectedIndex] : 0;
-                    }
                 }
                 graphics.Aspect = Math.Max(0, aspect.SelectedIndex);
                 graphics.MatchOutput = internalScale.SelectedIndex <= 0;
