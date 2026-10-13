@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Drawing;
 using System.Globalization;
 using System.IO;
 using System.Text;
@@ -25,6 +26,11 @@ namespace Nebula.Launcher
         private static readonly int[] Anisotropy = { 1, 2, 4, 8, 16 };
         // The runtime's frame_rate_options.
         public static readonly int[] FrameRates = { 30, 60 };
+        // Width:height of each aspect choice; Auto has none.
+        private static readonly int[,] AspectRatios = { { 0, 0 }, { 4, 3 }, { 16, 10 }, { 16, 9 }, { 21, 9 }, { 32, 9 } };
+        // Window heights offered for a fixed aspect when the width comes out whole.
+        // The runtime's settings_window_sizes uses the same list.
+        private static readonly int[] WindowHeights = { 360, 480, 540, 600, 720, 768, 800, 900, 960, 1050, 1080, 1200, 1440, 1536, 1600, 1800, 2160, 2400, 2880, 4320 };
 
         public int DisplayMode = 1;
         public string Monitor = "";
@@ -40,6 +46,30 @@ namespace Nebula.Launcher
         public bool GeneratedMipmaps = false, PerPixelLighting = false, HudOutputResolution = false;
 
         public static string ConfigPath { get { return Path.Combine(NebulaPaths.DataRoot, "config.ini"); } }
+
+        // Window sizes of exactly the given aspect that fit maxWidth x maxHeight,
+        // smallest first. Empty for Auto.
+        public static List<Size> AspectWindowSizes(int aspect, int maxWidth, int maxHeight)
+        {
+            var sizes = new List<Size>();
+            if (aspect <= 0 || aspect >= Aspects.Length) return sizes;
+            int ratioWidth = AspectRatios[aspect, 0], ratioHeight = AspectRatios[aspect, 1];
+            foreach (int height in WindowHeights)
+            {
+                if (height * ratioWidth % ratioHeight != 0) continue;
+                int width = height * ratioWidth / ratioHeight;
+                if (width <= maxWidth && height <= maxHeight) sizes.Add(new Size(width, height));
+            }
+            return sizes;
+        }
+
+        // Index of the smallest size at least as tall as want, or of the largest.
+        public static int SnapWindowSize(IList<Size> sizes, Size want)
+        {
+            for (int i = 0; i < sizes.Count; i++)
+                if (sizes[i].Height >= want.Height) return i;
+            return sizes.Count - 1;
+        }
 
         public static GraphicsSettings Load()
         {

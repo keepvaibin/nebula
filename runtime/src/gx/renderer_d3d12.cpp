@@ -412,9 +412,11 @@ unsigned settings_scale_cap(const RenderConfig& render) {
     return efb_scale_covering(width, height, kMaxEfbScale);
 }
 
-// Window client sizes that fit the monitor's work area: its own resolutions
-// and common sizes, smallest first.
-std::vector<std::pair<unsigned, unsigned>> settings_window_sizes(const MonitorInfo* monitor) {
+// Window client sizes that fit the monitor's work area, smallest first: those
+// of a fixed aspect (aspect_window_sizes), or common sizes and the monitor's
+// own resolutions.
+std::vector<std::pair<unsigned, unsigned>> settings_window_sizes(
+    const MonitorInfo* monitor, unsigned aspect_mode) {
     static constexpr std::pair<unsigned, unsigned> kCommon[] = {
         {854u, 480u}, {1024u, 768u}, {1280u, 720u}, {1280u, 800u}, {1366u, 768u},
         {1440u, 900u}, {1600u, 900u}, {1680u, 1050u}, {1920u, 1080u}, {1920u, 1200u},
@@ -428,6 +430,16 @@ std::vector<std::pair<unsigned, unsigned>> settings_window_sizes(const MonitorIn
         (void)AdjustWindowRectExForDpi(&frame, kWindowStyle, FALSE, WS_EX_APPWINDOW, dpi);
         max_w = (monitor->work_area.right - monitor->work_area.left) - (frame.right - frame.left);
         max_h = (monitor->work_area.bottom - monitor->work_area.top) - (frame.bottom - frame.top);
+    }
+    const unsigned aspect = std::min(aspect_mode, kAspectModeCount - 1u);
+    if (aspect != 0u) {
+        auto sizes = aspect_window_sizes(aspect, static_cast<unsigned>(std::max(max_w, 0L)),
+                                         static_cast<unsigned>(std::max(max_h, 0L)));
+        if (sizes.empty()) {
+            // Nothing fits: offer the smallest.
+            sizes = aspect_window_sizes(aspect, std::numeric_limits<unsigned>::max(), 360u);
+        }
+        return sizes;
     }
     std::vector<std::pair<unsigned, unsigned>> sizes;
     const auto add = [&](unsigned w, unsigned h) {
@@ -447,14 +459,34 @@ std::vector<std::pair<unsigned, unsigned>> settings_window_sizes(const MonitorIn
     return sizes;
 }
 
+// Fixed aspect, windowed: the smallest listed size at least as tall as the
+// current window, or the largest one.
+void snap_window_size(RenderConfig& render) {
+    const auto sizes = settings_window_sizes(settings_monitor(render), render.aspect_mode);
+    auto chosen = sizes.back();
+    for (const auto& size : sizes) {
+        if (size.second >= render.window_height) {
+            chosen = size;
+            break;
+        }
+    }
+    render.window_width = chosen.first;
+    render.window_height = chosen.second;
+}
+
 // Keeps the draft inside what its display allows.
 void sanitize_settings_draft(RenderConfig& render) {
     const MonitorInfo* monitor = settings_monitor(render);
     if (render.display_mode == kDisplayWindowed) {
-        const auto sizes = settings_window_sizes(monitor);
+        const auto sizes = settings_window_sizes(monitor, render.aspect_mode);
         const auto& largest = sizes.back();
-        render.window_width = std::min(render.window_width, largest.first);
-        render.window_height = std::min(render.window_height, largest.second);
+        if (render.aspect_mode != 0u &&
+            (render.window_width > largest.first || render.window_height > largest.second)) {
+            snap_window_size(render);
+        } else {
+            render.window_width = std::min(render.window_width, largest.first);
+            render.window_height = std::min(render.window_height, largest.second);
+        }
     }
     render.efb_scale = std::clamp(render.efb_scale, 1u, settings_scale_cap(render));
 }
@@ -836,6 +868,9 @@ void adjust_native_setting_unlogged(int delta) {
         }
         case 1:  // display mode
             draft.display_mode = step(std::min(draft.display_mode, kDisplayBorderless), 2u);
+            if (draft.display_mode == kDisplayWindowed && draft.aspect_mode != 0u) {
+                snap_window_size(draft);
+            }
             sanitize_settings_draft(draft);
             return;
         case 2: {  // resolution
@@ -860,7 +895,7 @@ void adjust_native_setting_unlogged(int delta) {
                     *monitor, draft.fullscreen_width, draft.fullscreen_height);
                 draft.fullscreen_refresh_hz = rates.empty() ? 0u : rates.front();
             } else {
-                const auto sizes = settings_window_sizes(monitor);  // smallest first
+                const auto sizes = settings_window_sizes(monitor, draft.aspect_mode);  // smallest first
                 std::size_t index = 0u;
                 for (std::size_t i = 0; i < sizes.size(); ++i) {
                     if (std::uint64_t{sizes[i].first} * sizes[i].second <=
@@ -899,6 +934,9 @@ void adjust_native_setting_unlogged(int delta) {
         }
         case 4:  // aspect ratio
             draft.aspect_mode = step(draft.aspect_mode, kAspectModeCount);
+            if (draft.display_mode == kDisplayWindowed && draft.aspect_mode != 0u) {
+                snap_window_size(draft);
+            }
             return;
         case 5: {  // internal resolution: 0 matches the output, then 1x..cap
             const unsigned cap = settings_scale_cap(draft);

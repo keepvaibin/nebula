@@ -88,6 +88,30 @@ int main() {
             std::cerr << "frame-rate choices must be 30 and 60\n";
             passed = false;
         }
+        using galaxy::gx::aspect_window_sizes;
+        using galaxy::gx::kAspectRatios;
+        if (!aspect_window_sizes(0u, 4000u, 4000u).empty()) {
+            std::cerr << "the Auto aspect has no fixed window sizes\n";
+            passed = false;
+        }
+        for (unsigned mode = 1u; mode < galaxy::gx::kAspectModeCount; ++mode) {
+            const auto sizes = aspect_window_sizes(mode, 2600u, 1400u);
+            bool ok = sizes.size() >= 3u;
+            for (std::size_t i = 0; i < sizes.size(); ++i) {
+                const auto [w, h] = sizes[i];
+                ok = ok && w * kAspectRatios[mode][1] == h * kAspectRatios[mode][0] &&
+                     w <= 2600u && h <= 1400u && (i == 0u || sizes[i - 1u].second < h);
+            }
+            if (!ok) {
+                std::cerr << "aspect " << mode << ": window sizes must have its shape, fit and grow\n";
+                passed = false;
+            }
+        }
+        const auto wide = aspect_window_sizes(4u, 2600u, 1400u);
+        if (wide.empty() || wide.front() != std::pair{840u, 360u} || wide.back() != std::pair{2520u, 1080u}) {
+            std::cerr << "21:9 window sizes within 2600 x 1400 must run from 840 x 360 to 2520 x 1080\n";
+            passed = false;
+        }
         using galaxy::gx::present_frame_rate;
         if (present_frame_rate(30.0f, 1u, 144.0) != 30.0 || present_frame_rate(144.0f, 1u, 144.0) != 144.0 ||
             present_frame_rate(240.0f, 1u, 144.0) != 144.0 || present_frame_rate(240.0f, 0u, 144.0) != 240.0 ||

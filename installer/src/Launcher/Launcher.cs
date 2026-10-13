@@ -252,6 +252,8 @@ namespace Nebula.Launcher
         private readonly ComboBox recording = new ComboBox();
         private readonly Label contentLabel = new Label();
         private readonly List<Size> resolutionChoices = new List<Size>();
+        // The windowed size being edited; kept while borderless is selected.
+        private Size windowSize;
         private readonly List<int> refreshChoices = new List<int>();
         private readonly List<int> frameRateChoices = new List<int>();
 
@@ -398,7 +400,14 @@ namespace Nebula.Launcher
             LoadValues();
             monitor.SelectedIndexChanged += delegate { if (!loading) { graphics.FullscreenWidth = graphics.FullscreenHeight = graphics.FullscreenRefresh = 0; RefreshDisplayChoices(); } };
             mode.SelectedIndexChanged += delegate { if (!loading) RefreshDisplayChoices(); };
-            resolution.SelectedIndexChanged += delegate { if (!loading) RefreshRefreshChoices(); };
+            aspect.SelectedIndexChanged += delegate { if (!loading) RefreshDisplayChoices(); };
+            resolution.SelectedIndexChanged += delegate
+            {
+                if (loading) return;
+                if (mode.SelectedIndex == 0 && resolution.SelectedIndex >= 0 && resolution.SelectedIndex < resolutionChoices.Count)
+                    windowSize = resolutionChoices[resolution.SelectedIndex];
+                RefreshRefreshChoices();
+            };
             refresh.SelectedIndexChanged += delegate { if (!loading) RefreshFrameRateChoices(); };
             UiScale.Apply(this);
         }
@@ -721,12 +730,15 @@ namespace Nebula.Launcher
             }
             recording.SelectedIndex = (int)session.Recording;
             contentLabel.Text = session.Content;
+            windowSize = new Size(graphics.WindowWidth, graphics.WindowHeight);
             loading = false;
             RefreshDisplayChoices();
         }
 
-        // Resolution: window sizes that fit the monitor (windowed) or the
-        // desktop (borderless).
+        // Resolution: the desktop (borderless), or window sizes that fit the
+        // monitor's work area. With a fixed aspect the window sizes have that
+        // shape, and the selection moves to the smallest one at least as tall as
+        // the current window.
         private void RefreshDisplayChoices()
         {
             loading = true;
@@ -744,21 +756,32 @@ namespace Nebula.Launcher
                 var frame = SystemInformation.FrameBorderSize;
                 int maxW = screen.WorkArea.Width - 2 * frame.Width - 16;
                 int maxH = screen.WorkArea.Height - SystemInformation.CaptionHeight - 2 * frame.Height - 16;
-                var sizes = new List<Size> { new Size(854, 480), new Size(1024, 768), new Size(1280, 720), new Size(1280, 800),
-                    new Size(1366, 768), new Size(1440, 900), new Size(1600, 900), new Size(1680, 1050), new Size(1920, 1080),
-                    new Size(1920, 1200), new Size(2560, 1080), new Size(2560, 1440), new Size(2560, 1600), new Size(3440, 1440),
-                    new Size(3840, 1080), new Size(3840, 2160), new Size(5120, 1440), new Size(5120, 2160) };
-                sizes.AddRange(screen.Resolutions());
-                foreach (var size in sizes.Distinct().Where(s => s.Width <= maxW && s.Height <= maxH).OrderBy(s => (long)s.Width * s.Height))
-                    resolutionChoices.Add(size);
-                if (resolutionChoices.Count == 0) resolutionChoices.Add(new Size(854, 480));
-                long want = (long)graphics.WindowWidth * graphics.WindowHeight;
-                for (int i = 0; i < resolutionChoices.Count; i++)
+                if (aspect.SelectedIndex > 0)
                 {
-                    var s = resolutionChoices[i];
-                    resolution.Items.Add(string.Format("{0} × {1}", s.Width, s.Height));
-                    if ((long)s.Width * s.Height <= want) selected = i;
+                    resolutionChoices.AddRange(GraphicsSettings.AspectWindowSizes(aspect.SelectedIndex, maxW, maxH));
+                    if (resolutionChoices.Count == 0)
+                        resolutionChoices.AddRange(GraphicsSettings.AspectWindowSizes(aspect.SelectedIndex, int.MaxValue, int.MaxValue).Take(1));
+                    selected = GraphicsSettings.SnapWindowSize(resolutionChoices, windowSize);
                 }
+                else
+                {
+                    var sizes = new List<Size> { new Size(854, 480), new Size(1024, 768), new Size(1280, 720), new Size(1280, 800),
+                        new Size(1366, 768), new Size(1440, 900), new Size(1600, 900), new Size(1680, 1050), new Size(1920, 1080),
+                        new Size(1920, 1200), new Size(2560, 1080), new Size(2560, 1440), new Size(2560, 1600), new Size(3440, 1440),
+                        new Size(3840, 1080), new Size(3840, 2160), new Size(5120, 1440), new Size(5120, 2160), windowSize };
+                    sizes.AddRange(screen.Resolutions());
+                    foreach (var size in sizes.Distinct().Where(s => s.Width <= maxW && s.Height <= maxH).OrderBy(s => (long)s.Width * s.Height))
+                        resolutionChoices.Add(size);
+                    if (resolutionChoices.Count == 0) resolutionChoices.Add(new Size(854, 480));
+                    long want = (long)windowSize.Width * windowSize.Height;
+                    for (int i = 0; i < resolutionChoices.Count; i++)
+                        if ((long)resolutionChoices[i].Width * resolutionChoices[i].Height <= want) selected = i;
+                    int exact = resolutionChoices.IndexOf(windowSize);
+                    if (exact >= 0) selected = exact;
+                }
+                foreach (var s in resolutionChoices)
+                    resolution.Items.Add(string.Format("{0} × {1}", s.Width, s.Height));
+                windowSize = resolutionChoices[selected];
             }
             resolution.SelectedIndex = Math.Min(selected, resolution.Items.Count - 1);
             loading = false;

@@ -14,6 +14,7 @@
 #include <array>
 #include <cmath>
 #include <cstdint>
+#include <utility>
 #include <vector>
 
 namespace galaxy::gx {
@@ -177,6 +178,26 @@ inline constexpr unsigned kAspectModeCount = 6u;
 // Width:height of each aspect_mode (0 = follow the window).
 inline constexpr unsigned kAspectRatios[kAspectModeCount][2] = {
     {0u, 0u}, {4u, 3u}, {16u, 10u}, {16u, 9u}, {21u, 9u}, {32u, 9u}};
+
+// Window sizes of exactly an aspect_mode's shape that fit max_width x
+// max_height, smallest first; none for aspect_mode 0. The launcher's
+// GraphicsSettings.AspectWindowSizes lists the same sizes.
+inline std::vector<std::pair<unsigned, unsigned>> aspect_window_sizes(
+    unsigned aspect_mode, unsigned max_width, unsigned max_height) {
+    static constexpr unsigned kHeights[] = {
+        360u, 480u, 540u, 600u, 720u, 768u, 800u, 900u, 960u, 1050u,
+        1080u, 1200u, 1440u, 1536u, 1600u, 1800u, 2160u, 2400u, 2880u, 4320u};
+    std::vector<std::pair<unsigned, unsigned>> sizes;
+    if (aspect_mode == 0u || aspect_mode >= kAspectModeCount) return sizes;
+    const unsigned ratio_w = kAspectRatios[aspect_mode][0];
+    const unsigned ratio_h = kAspectRatios[aspect_mode][1];
+    for (const unsigned height : kHeights) {
+        if (height * ratio_w % ratio_h != 0u) continue;
+        const unsigned width = height * ratio_w / ratio_h;
+        if (width <= max_width && height <= max_height) sizes.emplace_back(width, height);
+    }
+    return sizes;
+}
 
 // Startup-only ordering contract shared by runtime diagnostics and the GX backend.
 // Keep these values in one resolved object: independent environment readers

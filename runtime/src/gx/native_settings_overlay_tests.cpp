@@ -157,11 +157,22 @@ int main() {
         "undo returns the draft to the live settings");
 
     passed &= expect(key(VK_UP), "up moves to the aspect ratio");
-    passed &= expect(key(VK_RIGHT) && key(VK_RETURN), "aspect ratio applies");
+    passed &= expect(key(VK_RIGHT), "right selects 4:3");
+    passed &= expect(
+        galaxy::gx::native_settings_draft_for_tests().window_width == 640u &&
+            galaxy::gx::native_settings_draft_for_tests().window_height == 480u,
+        "4:3 snaps the 854 x 480 window to 640 x 480");
+    passed &= expect(key(VK_RETURN), "aspect ratio applies");
     passed &= expect(
         galaxy::gx::get_render_config().aspect_mode == 1u &&
+            galaxy::gx::native_settings_overlay_snapshot().confirming_display,
+        "the new window size waits for confirmation");
+    passed &= expect(key(VK_RETURN), "Enter keeps the window size");
+    passed &= expect(
+        galaxy::gx::get_render_config().window_width == 640u &&
+            galaxy::gx::get_render_config().window_height == 480u &&
             !galaxy::gx::native_settings_overlay_snapshot().confirming_display,
-        "the aspect ratio changes during play without a display confirmation");
+        "the 4:3 window stays");
 
     for (int i = 0; i < 3; ++i) passed &= expect(key(VK_UP), "up moves to the display mode");
     passed &= expect(key(VK_RIGHT) && key(VK_RETURN), "borderless applies");

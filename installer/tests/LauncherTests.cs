@@ -54,6 +54,26 @@ namespace Nebula.Launcher
             }
         }
 
+        // Windowed sizes for a fixed aspect, and the size chosen when the aspect changes.
+        static void WindowSizeCases()
+        {
+            Check(GraphicsSettings.AspectWindowSizes(0, 4000, 4000).Count == 0, "Auto aspect has no fixed window sizes");
+            int[,] ratios = { { 0, 0 }, { 4, 3 }, { 16, 10 }, { 16, 9 }, { 21, 9 }, { 32, 9 } };
+            for (int aspect = 1; aspect < GraphicsSettings.Aspects.Length; aspect++)
+            {
+                var sizes = GraphicsSettings.AspectWindowSizes(aspect, 2600, 1400);
+                Check(sizes.Count >= 3, GraphicsSettings.Aspects[aspect] + ": at least three window sizes fit 2600 x 1400");
+                Check(sizes.All(s => s.Width * ratios[aspect, 1] == s.Height * ratios[aspect, 0]), GraphicsSettings.Aspects[aspect] + ": every size has the exact aspect");
+                Check(sizes.All(s => s.Width <= 2600 && s.Height <= 1400), GraphicsSettings.Aspects[aspect] + ": every size fits");
+                Check(sizes.Zip(sizes.Skip(1), (a, b) => a.Height < b.Height).All(x => x), GraphicsSettings.Aspects[aspect] + ": smallest first");
+            }
+            var wide = GraphicsSettings.AspectWindowSizes(4, 2600, 1400);
+            Check(wide[GraphicsSettings.SnapWindowSize(wide, new Size(1440, 1080))] == new Size(2520, 1080), "21:9 from 1440 x 1080 snaps to 2520 x 1080");
+            Check(wide[GraphicsSettings.SnapWindowSize(wide, new Size(1280, 720))] == new Size(1680, 720), "21:9 from 1280 x 720 snaps to 1680 x 720");
+            var small = GraphicsSettings.AspectWindowSizes(4, 1900, 1000);
+            Check(small[GraphicsSettings.SnapWindowSize(small, new Size(1920, 1080))] == small[small.Count - 1], "a size taller than the screen allows snaps to the largest");
+        }
+
         [STAThread]
         public static int Main(string[] args)
         {
@@ -62,6 +82,7 @@ namespace Nebula.Launcher
                 string dataRoot = Environment.GetEnvironmentVariable("NEBULA_DATA_ROOT");
                 Check(!string.IsNullOrEmpty(dataRoot) && NebulaPaths.DataRoot == dataRoot, "NEBULA_DATA_ROOT replaces the user data root");
                 string outDir = args[0];
+                WindowSizeCases();
                 Application.EnableVisualStyles();
 
                 var first = new LaunchSession();
