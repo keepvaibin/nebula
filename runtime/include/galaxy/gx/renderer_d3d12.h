@@ -58,9 +58,14 @@ class TextureCache;
     std::string& diagnostics) noexcept;
 
 inline constexpr unsigned kFramesInFlight = 2;
-// Ring segments in temporal and interpolation modes (see RendererD3D12::
-// begin_frame): two more than the frames in flight.
+// Matrix-ring segments in temporal mode (see RendererD3D12::begin_frame):
+// two more than the frames in flight.
 inline constexpr unsigned kRingSegments = kFramesInFlight + 2u;
+// Interpolation mode: one segment of every ring, the descriptor ring and the
+// sampler heaps per game frame, for the frame being recorded, the completed
+// log waiting for its present and the log whose sub-frames play. A segment
+// is reused only after its fence (the oldest log is then invalidated).
+inline constexpr unsigned kInterpSegments = 3u;
 inline constexpr unsigned kSamplerHeapSlots = 2048;
 
 namespace detail {
@@ -251,6 +256,12 @@ public:
     // is fatal, so the floor for any reduction is peak_bytes_per_frame().
     [[nodiscard]] std::size_t peak_bytes_per_frame() const {
         return peak_bytes_per_frame_;
+    }
+    // The peak since the last call (diagnostics windows).
+    [[nodiscard]] std::size_t take_peak_bytes_per_frame() noexcept {
+        const std::size_t peak = peak_bytes_per_frame_;
+        peak_bytes_per_frame_ = 0u;
+        return peak;
     }
     [[nodiscard]] std::size_t bytes_per_frame() const { return bytes_per_frame_; }
     [[nodiscard]] std::size_t cursor() const { return cursor_; }
@@ -465,21 +476,34 @@ public:
     // when none is ready.
     bool start_replay_playback();
     [[nodiscard]] bool replay_playing() const noexcept { return run_valid_; }
-    // Interpolation mode: present rate above 60, temporal upscaler off,
-    // GALAXY_EXPERIMENTAL_INTERPOLATION=1. Rings then keep one segment per
+    // Replay serial (game frame) of the playing log.
+    [[nodiscard]] std::uint64_t playing_serial() const noexcept { return run_serial_; }
+    // Interpolation mode: present rate above 60, temporal upscaler off, not
+    // GALAXY_INTERPOLATION=0. Rings then keep one segment per
     // game frame (advanced at the first frame after a display copy) and the
     // log spans every render chunk of the game frame up to its display copy.
     [[nodiscard]] bool interpolation_mode() const;
+    // The game-frame ring segment in interpolation mode (resources a log
+    // names must outlive it: it comes round again only after its fence),
+    // ~0u otherwise.
+    [[nodiscard]] unsigned replay_hold_segment() const noexcept {
+        return ring_mode_ == RingMode::Interp ? ring_segment_ : ~0u;
+    }
     // Completed logs, counted; the guest XFB the latest one copied to.
     [[nodiscard]] std::uint64_t replay_serial() const noexcept { return replay_serial_; }
     [[nodiscard]] std::uint32_t replay_xfb_addr() const noexcept { return replay_xfb_addr_; }
     // A 3D scene began inside the log being recorded (one is replayable).
     void note_replay_scene() noexcept { ++replay_scene_count_; }
+    // Why the latest closed log is not replayable: 0 it is, 1 no 3D scene,
+    // 2 more than one.
+    [[nodiscard]] unsigned replay_reject() const noexcept { return replay_reject_; }
     // Last reason a sub-frame was not recorded (diagnostics).
     [[nodiscard]] unsigned replay_failure() const noexcept { return replay_failure_; }
     void note_replay_failure(unsigned reason) noexcept { replay_failure_ = reason; }
     // The next sub-frame's backbuffer is read back to the debug capture path.
     void set_subframe_capture(bool capture) noexcept { subframe_capture_ = capture; }
+    // Captures wait for the previous readback instead of skipping (sequences).
+    void set_capture_waits(bool waits) noexcept { capture_waits_ = waits; }
     // False (nothing recorded) when the log is gone or has no display copy.
     // `record_constants[i]` replaces the VS constants of draws of record i.
     bool present_replay_subframe(std::span<const D3D12_GPU_VIRTUAL_ADDRESS> record_constants);
@@ -493,6 +517,18 @@ public:
         samples = subframe_gpu_samples_;
         subframe_gpu_ms_ = 0.0;
         subframe_gpu_samples_ = 0u;
+    }
+    // Render-thread milliseconds recording and submitting sub-frames (no
+    // fence, latency or present waits) since the last call.
+    void take_subframe_record_ms(double& total_ms, std::uint64_t& samples) noexcept {
+        total_ms = subframe_record_ms_;
+        samples = subframe_record_samples_;
+        subframe_record_ms_ = 0.0;
+        subframe_record_samples_ = 0u;
+    }
+    // Copy textures saved and restored around sub-frames since the last call.
+    [[nodiscard]] std::uint64_t take_subframe_guarded() noexcept {
+        return std::exchange(subframe_guarded_total_, 0u);
     }
     // The scene camera's clip planes and vertical field of view (radians).
     void set_scene_camera(float near_plane, float far_plane, float fov_y) noexcept;
@@ -904,9 +940,10 @@ private:
     unsigned run_segment_ = 0;
     bool replay_recording_ = false;
     bool replay_valid_ = false;
-    bool replay_has_swaps_ = false;
+    unsigned replay_reject_ = 0;
     unsigned replay_failure_ = 0;
     bool subframe_capture_ = false;
+    bool capture_waits_ = false;
     unsigned replay_scene_count_ = 0;
     unsigned replay_segment_ = 0;
     std::uint64_t replay_serial_ = 0;
@@ -917,20 +954,53 @@ private:
     enum class RingMode : std::uint8_t { Normal, Temporal, Interp };
     RingMode ring_mode_ = RingMode::Normal;
     unsigned ring_segment_ = 0;
-    std::array<std::uint64_t, kRingSegments> ring_segment_fence_{};
+    std::array<std::uint64_t, kInterpSegments> ring_segment_fence_{};
     bool ring_advance_pending_ = true;
     // Sub-frames render into their own EFB so a later frame's partial EFB
     // (its chunks interleave with the sub-frames) stays intact.
     EfbTargetSet replay_efb_;
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> replay_efb_rtv_heap_;
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> replay_efb_dsv_heap_;
+    // The output-resolution EFB of a sub-frame whose log switches to it.
+    EfbTargetSet replay_output_efb_;
+    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> replay_output_efb_rtv_heap_;
+    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> replay_output_efb_dsv_heap_;
+    // persistent_views: the conversion-source views live in the descriptor
+    // ring's persistent prefix (else the caller writes them per use).
     bool create_efb_set(EfbTargetSet& set, Microsoft::WRL::ComPtr<ID3D12DescriptorHeap>& rtv_heap,
-                        Microsoft::WRL::ComPtr<ID3D12DescriptorHeap>& dsv_heap, unsigned scale);
+                        Microsoft::WRL::ComPtr<ID3D12DescriptorHeap>& dsv_heap, unsigned scale,
+                        bool persistent_views = true);
+    void write_efb_set_views(EfbTargetSet& set, const DescriptorRing::Table& table);
     void swap_efb_with(EfbTargetSet& other);
     bool replay_playing_ = false;
     bool replay_start_output_active_ = false;
     unsigned replay_source_slot_ = 0;
     XfbTexture subframe_xfb_{};
+    // EFB-copy textures are shared with the live frames: a later game frame's
+    // chunks may already have rewritten a texture the sub-frame's log copies
+    // to. Such textures are saved to scratch before the sub-frame and restored
+    // after it. copy_writes_: the latest replay serial each copy texture was
+    // written under (Interp mode, real copies only).
+    struct CopyWrite {
+        ID3D12Resource* dest = nullptr;
+        std::uint64_t serial = 0;
+    };
+    std::vector<CopyWrite> copy_writes_;
+    void note_copy_write(ID3D12Resource* dest);
+    std::uint64_t play_serial_ = 0;       // replay serial of the ready log
+    std::uint64_t run_serial_ = 0;        // replay serial of the playing log
+    struct SubframeScratch {
+        Microsoft::WRL::ComPtr<ID3D12Resource> texture;
+        D3D12_RESOURCE_DESC desc{};
+        std::uint64_t used = 0;           // subframe_counter_ of its last use
+    };
+    std::vector<SubframeScratch> subframe_scratch_;
+    std::vector<std::pair<ID3D12Resource*, ID3D12Resource*>> subframe_guarded_;  // dest, scratch
+    std::vector<D3D12_RESOURCE_BARRIER> subframe_barriers_;
+    std::uint64_t subframe_counter_ = 0;
+    std::uint64_t subframe_guarded_total_ = 0;
+    ID3D12Resource* acquire_subframe_scratch(ID3D12Resource* dest);
+    void record_subframe_guard(bool save);
     static constexpr unsigned kSubframeAllocators = 4;
     std::array<Microsoft::WRL::ComPtr<ID3D12CommandAllocator>, kSubframeAllocators> subframe_allocators_;
     std::array<std::uint64_t, kSubframeAllocators> subframe_fences_{};
@@ -940,6 +1010,8 @@ private:
     Microsoft::WRL::ComPtr<ID3D12Resource> subframe_readback_;
     double subframe_gpu_ms_ = 0.0;
     std::uint64_t subframe_gpu_samples_ = 0;
+    double subframe_record_ms_ = 0.0;
+    std::uint64_t subframe_record_samples_ = 0;
     std::atomic<double> measured_present_hz_{0.0};
     std::int64_t measured_present_window_qpc_ = 0;
     std::uint32_t measured_present_count_ = 0;
@@ -998,18 +1070,18 @@ private:
 
     Microsoft::WRL::ComPtr<ID3D12RootSignature> root_signature_;
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> sampler_heap_;
-    std::array<Microsoft::WRL::ComPtr<ID3D12DescriptorHeap>, kRingSegments>
+    std::array<Microsoft::WRL::ComPtr<ID3D12DescriptorHeap>, kInterpSegments>
         sampler_heaps_;
     // Sampler heap in use: the frame slot, or the game-frame segment in
     // interpolation mode.
     unsigned sampler_slot_ = 0;
     D3D12_GPU_DESCRIPTOR_HANDLE default_sampler_table_{};
-    std::array<std::uint32_t, kRingSegments> default_sampler_config_keys_{};
-    std::array<bool, kRingSegments> default_sampler_valid_{};
+    std::array<std::uint32_t, kInterpSegments> default_sampler_config_keys_{};
+    std::array<bool, kInterpSegments> default_sampler_valid_{};
     // Each cache describes tables actually written in its physical heap.
     // Configuration invalidation happens only after that slot's fence; tables
     // retained in another heap cannot establish a hit for the active heap.
-    std::array<SamplerTableCache, kRingSegments> sampler_tables_;
+    std::array<SamplerTableCache, kInterpSegments> sampler_tables_;
 
     UploadRing vertex_ring_;
     UploadRing index_ring_;
@@ -1175,6 +1247,8 @@ private:
         std::vector<Microsoft::WRL::ComPtr<ID3D12Resource>>;
     std::array<RetiredResourceList, kFramesInFlight>
         retired_efb_copy_textures_;
+    // Interpolation: copy textures retired during a game-frame ring segment.
+    std::array<RetiredResourceList, kInterpSegments> retired_segment_textures_;
 
     // Conversion blit pipeline (root sig lives in a module static next to
     // the present-blit one) + cached CPU-only descriptors for conversion

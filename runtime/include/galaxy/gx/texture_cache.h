@@ -233,6 +233,22 @@ public:
     // Called after the renderer has waited for this frame slot's fence.
     void begin_frame(unsigned frame_slot, unsigned frames_in_flight);
 
+    // Interpolated redraw replays a game frame's draws until the renderer's
+    // game-frame ring segment comes round again. Called before begin_frame
+    // with that segment (kNoHoldSegment outside interpolation): a reclaimed
+    // slot's textures then keep their resources, out of the pool, until the
+    // segment current at reclaim comes round (its fence has been waited on).
+    // Their SRV slots are reclaimed as usual: replayed draws read descriptor
+    // tables already copied into the renderer's shader-visible ring.
+    static constexpr unsigned kNoHoldSegment = ~0u;
+    static constexpr unsigned kMaxHoldSegments = 4u;
+    void set_retirement_hold_segment(unsigned segment);
+    [[nodiscard]] std::uint64_t take_held_texture_count() noexcept {
+        const std::uint64_t count = held_texture_count_;
+        held_texture_count_ = 0u;
+        return count;
+    }
+
     // Asynchronous first-use decode. While allowed, a miss creates the texture,
     // records its staging copy and SRV exactly as before, and hands only the
     // CPU decode into that staging memory to a worker. The caller promises the
@@ -396,6 +412,11 @@ private:
     std::unordered_map<EfbAliasKey, Entry, EfbAliasKeyHasher> efb_aliases_;
     detail::ConservativeGuestRangeEnvelope alias_guest_envelope_;
     std::vector<std::vector<Entry>> retired_entries_;
+    // Interpolation: reclaimed textures held per game-frame segment.
+    std::array<std::vector<Entry>, kMaxHoldSegments> held_entries_;
+    unsigned hold_segment_ = kNoHoldSegment;
+    std::uint64_t held_texture_count_ = 0;
+    void release_held_entries(std::vector<Entry>& held);
     // Recycled decoded-texture resources. Creating a committed resource on first use can stall the texture
     // flush, so a GPU-idle retired texture of the same size and mip count is reused instead. RGBA8 2D, no
     // flags, PSR state.

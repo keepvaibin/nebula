@@ -32852,6 +32852,29 @@ int wmain(int argc, wchar_t** argv) {
                     }
                 }
                 state.pending_draw_done_submissions.audit_drained();
+                // A VI boundary stopped while its frame token was pending
+                // (the render thread was still on that frame): its token is
+                // newer than every draw-done receipt, so consume it last.
+                if (state.pending_vi_boundary.snapshot().phase ==
+                    galaxy::vi::BoundaryPhase::TokenPending) {
+                    const auto token = state.pending_vi_boundary.snapshot().token;
+                    const auto start = std::chrono::steady_clock::now();
+                    while (!galaxy::gx::wait_for_frame_pe_completion_for(token, 0u)) {
+                        if (std::chrono::steady_clock::now() - start >=
+                            std::chrono::milliseconds(
+                                galaxy::gx::kFramePeCooperativeWaitTimeoutMs)) {
+                            throw RuntimeFailure(
+                                "shutdown VI PE token exceeded its absolute budget");
+                        }
+                        if (!wait_realtime_vi_duration_high_res(
+                                std::chrono::milliseconds(1))) {
+                            SwitchToThread();
+                        }
+                    }
+                    if (!state.pending_vi_boundary.mark_token_consumed(token)) {
+                        throw RuntimeFailure("shutdown VI token lost exact ownership");
+                    }
+                }
             } catch (const std::exception& error) {
                 if (cleanup_failure == nullptr) {
                     cleanup_failure = std::current_exception();
