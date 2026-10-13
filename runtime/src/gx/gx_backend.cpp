@@ -7050,6 +7050,13 @@ void GxBackend::advance_interp_sequence(bool flush) {
                 return getenv_s(&length, value, sizeof(value), "GALAXY_INTERP_FORCE_T") == 0 && length > 1u
                     ? std::clamp(std::strtod(value, nullptr), 0.0, 1.0) : -1.0;
             }();
+            // GALAXY_INTERP_COPY_AB=1: sequences alternate redirected and guarded copies; =3 adds
+            // a third with neither (A/B in one run, diagnostics).
+            static const std::uint64_t copy_ab = read_env_u64("GALAXY_INTERP_COPY_AB", 0u);
+            if (copy_ab != 0u) {
+                const std::uint64_t phase = interp_sequence_serial_ % (copy_ab == 3u ? 3u : 2u);
+                renderer_.set_subframe_copy_redirect(phase == 0u ? 1 : phase == 1u ? 0 : 2);
+            }
             const bool presented = render_interp_subframe(static_cast<float>(force_t >= 0.0 ? force_t : t));
             interp_event("sub", interp_last_played_serial_, static_cast<std::uint64_t>(t * 1000.0));
             if (!snapshot.empty()) {
@@ -7123,6 +7130,13 @@ void GxBackend::report_interp_stats() {
     const double presented = static_cast<double>(interp_presented_);
     std::uint64_t real_only = 0u;
     for (const std::uint64_t count : interp_real_only_) real_only += count;
+    const RendererD3D12::CopyRedirectStats redirect = renderer_.take_copy_redirect_stats();
+    std::array<double, 3> path_ms{};
+    std::array<std::uint64_t, 3> path_samples{};
+    renderer_.take_subframe_path_gpu_ms(path_ms, path_samples);
+    const auto per_sample = [](double ms, std::uint64_t samples) {
+        return samples != 0u ? ms / static_cast<double>(samples) : 0.0;
+    };
     std::ostringstream message;
     message << "[interp-stats] subframes-per-frame=" << interp_frames_
             << " sequences=" << interp_sequences_
@@ -7165,6 +7179,15 @@ void GxBackend::report_interp_stats() {
             << (interp_presented_ != 0u
                     ? static_cast<double>(renderer_.take_vertex_blend_draws()) / presented : 0.0)
             << " guarded-copies=" << renderer_.take_subframe_guarded()
+            << " redirected-copies=" << redirect.redirected
+            << " patched-tables=" << redirect.patched_tables
+            << " copy-snapshots=" << redirect.snapshots
+            << " redirect-fallbacks=" << redirect.fallback_logs
+            << " gpu-ms-guard-path=" << per_sample(path_ms[0], path_samples[0])
+            << " gpu-ms-redirect-path=" << per_sample(path_ms[1], path_samples[1])
+            << " gpu-ms-unguarded-path=" << per_sample(path_ms[2], path_samples[2])
+            << " path-samples(guard/redirect/unguarded)=" << path_samples[0] << '/' << path_samples[1]
+            << '/' << path_samples[2]
             << " held-textures=" << texture_cache_.take_held_texture_count()
             << " held-vertex-blocks=" << interp_held_vertex_blocks_
             << " ring-peak-kb(v/i/c/m)="
@@ -11146,6 +11169,23 @@ ID3D12PipelineState* GxBackend::flush_draw_state(
                     dev->CopyDescriptors(1, &tbl.cpu, &destination_size,
                         num_maps, sources, nullptr,
                         D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+                    // Interpolation logs keep tables that name EFB-copy
+                    // textures: sub-frames repoint those slots.
+                    if (renderer_.replay_recording()) [[unlikely]] {
+                        static_assert(kMaxTextureMaps == RendererD3D12::kReplayTableSlots);
+                        ID3D12Resource* copies[kMaxTextureMaps]{};
+                        bool names_copy = false;
+                        for (unsigned m = 0; m < num_maps; ++m) {
+                            if (texture_handles[m].resource != nullptr &&
+                                texture_handles[m].from_efb_copy) {
+                                copies[m] = texture_handles[m].resource;
+                                names_copy = true;
+                            }
+                        }
+                        if (names_copy) {
+                            renderer_.note_replay_texture_table(tbl.gpu, sources, copies);
+                        }
+                    }
                     current_texture_table_ = tbl.gpu;
                     frame_texture_tables_.emplace(table_key, tbl.gpu);
                 }

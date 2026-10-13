@@ -5703,6 +5703,10 @@ void RendererD3D12::begin_frame(bool present_swap_chain) {
             run_valid_ = false;
             prev_run_valid_ = false;
             copy_writes_.clear();
+            replay_textures_.clear();
+            play_textures_.clear();
+            run_textures_.clear();
+            release_copy_snapshots(~0u);
             for (auto& retired : retired_segment_textures_) {
                 retired.clear();
             }
@@ -5852,6 +5856,8 @@ void RendererD3D12::begin_frame(bool present_swap_chain) {
                 wait_for_fence_value(ring_segment_fence_[ring_segment_]);
             }
             retired_segment_textures_[ring_segment_].clear();
+            // The segment's logs are gone (and their sub-frames complete).
+            release_copy_snapshots(ring_segment_);
             vertex_ring_.begin_frame(ring_segment_);
             index_ring_.begin_frame(ring_segment_);
             constant_ring_.begin_frame(ring_segment_);
@@ -6698,6 +6704,7 @@ void RendererD3D12::publish_replay_log() {
     std::swap(replay_viewports_, play_viewports_);
     std::swap(replay_clears_, play_clears_);
     std::swap(replay_copies_, play_copies_);
+    std::swap(replay_textures_, play_textures_);
     play_start_output_active_ = replay_start_output_active_;
 }
 
@@ -6718,6 +6725,7 @@ bool RendererD3D12::start_replay_playback() {
     std::swap(play_viewports_, run_viewports_);
     std::swap(play_clears_, run_clears_);
     std::swap(play_copies_, run_copies_);
+    std::swap(play_textures_, run_textures_);
     run_start_output_active_ = play_start_output_active_;
     run_segment_ = replay_segment_;
     run_serial_ = play_serial_;
@@ -7014,6 +7022,7 @@ void RendererD3D12::begin_replay_record() {
     replay_viewports_.clear();
     replay_clears_.clear();
     replay_copies_.clear();
+    replay_textures_.clear();
     if (log_start_clear_valid_) {
         log_start_clear_valid_ = false;
         replay_ops_.push_back({ReplayKind::Clear, 0u});
@@ -7104,10 +7113,10 @@ bool RendererD3D12::ensure_subframe_resources(unsigned xfb_width, unsigned xfb_h
     return true;
 }
 
-void RendererD3D12::execute_replay_copy(const ReplayCopy& copy) {
+void RendererD3D12::execute_replay_copy(const ReplayCopy& copy, ID3D12Resource* target) {
     if (copy.identity) {
         detail::record_efb_identity_copy(command_list_.Get(), efb_color_.Get(),
-                                         copy.dest, copy.box);
+                                         target != nullptr ? target : copy.dest, copy.box);
         return;
     }
     if (copy.mode == 2u) {
@@ -7117,7 +7126,8 @@ void RendererD3D12::execute_replay_copy(const ReplayCopy& copy) {
             copy.geometry[2], copy.geometry[3], copy.geometry[4]);
         return;
     }
-    ID3D12Resource* const dest = copy.mode == 1u ? subframe_xfb_.texture.Get() : copy.dest;
+    ID3D12Resource* const dest = copy.mode == 1u ? subframe_xfb_.texture.Get()
+        : target != nullptr ? target : copy.dest;
     D3D12_RESOURCE_BARRIER b{};
     b.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
     b.Transition.pResource = dest;
@@ -7135,6 +7145,11 @@ void RendererD3D12::execute_replay_copy(const ReplayCopy& copy) {
 }
 
 void RendererD3D12::note_copy_write(ID3D12Resource* dest) {
+    if (replay_recording_ &&
+        std::find(replay_textures_.written.begin(), replay_textures_.written.end(), dest) ==
+            replay_textures_.written.end()) {
+        replay_textures_.written.push_back(dest);
+    }
     for (CopyWrite& write : copy_writes_) {
         if (write.dest == dest) {
             write.serial = replay_serial_;
@@ -7221,6 +7236,236 @@ void RendererD3D12::record_subframe_guard(bool save) {
     flush();
 }
 
+bool RendererD3D12::copy_redirect_enabled() {
+    static const bool enabled = [] {
+        char value[8]{};
+        std::size_t length = 0u;
+        return !(getenv_s(&length, value, sizeof(value), "GALAXY_INTERP_COPY_REDIRECT") == 0 &&
+                 length > 1u && value[0] == '0');
+    }();
+    return enabled;
+}
+
+bool RendererD3D12::ensure_replay_store(ReplayTextures& log) {
+    if (srv_increment_ == 0u) {
+        srv_increment_ = device_->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+    }
+    if (log.store) {
+        return true;
+    }
+    D3D12_DESCRIPTOR_HEAP_DESC desc{};
+    desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
+    desc.NumDescriptors = kReplayStoreDescriptors;
+    desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
+    if (FAILED(device_->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&log.store)))) {
+        log.store.Reset();
+        return false;
+    }
+    log.store_base = log.store->GetCPUDescriptorHandleForHeapStart();
+    return true;
+}
+
+void RendererD3D12::note_replay_texture_table(D3D12_GPU_DESCRIPTOR_HANDLE table,
+                                              const D3D12_CPU_DESCRIPTOR_HANDLE* sources,
+                                              ID3D12Resource* const* copies) {
+    if (!replay_recording_ || ring_mode_ != RingMode::Interp || !copy_redirect_enabled() ||
+        table.ptr == 0u) {
+        return;
+    }
+    ReplayTextures& log = replay_textures_;
+    if (log.incomplete || log.by_gpu.contains(table.ptr)) {
+        return;
+    }
+    if (log.store_used + kReplayTableSlots > kReplayStoreDescriptors || !ensure_replay_store(log)) {
+        log.incomplete = true;
+        return;
+    }
+    const D3D12_CPU_DESCRIPTOR_HANDLE destination{
+        log.store_base.ptr + static_cast<SIZE_T>(log.store_used) * srv_increment_};
+    const UINT destination_size = kReplayTableSlots;
+    device_->CopyDescriptors(1u, &destination, &destination_size, kReplayTableSlots, sources, nullptr,
+                             D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+    ReplayTextureTable entry{};
+    entry.gpu = table.ptr;
+    entry.store = log.store_used;
+    for (unsigned m = 0; m < kReplayTableSlots; ++m) {
+        entry.copies[m] = copies[m];
+    }
+    log.by_gpu.emplace(table.ptr, static_cast<std::uint32_t>(log.tables.size()));
+    log.tables.push_back(entry);
+    log.store_used += kReplayTableSlots;
+}
+
+D3D12_CPU_DESCRIPTOR_HANDLE RendererD3D12::copy_texture_srv(std::uint32_t index) const {
+    return {copy_srv_base_.ptr + static_cast<SIZE_T>(copy_pool_[index].srv) * srv_increment_};
+}
+
+std::int32_t RendererD3D12::acquire_copy_texture(ID3D12Resource* like, bool snapshot) {
+    const D3D12_RESOURCE_DESC want = like->GetDesc();
+    for (std::size_t i = 0; i < copy_pool_.size(); ++i) {
+        CopyTexture& entry = copy_pool_[i];
+        const D3D12_RESOURCE_DESC& have = entry.desc;
+        if (entry.snapshot != snapshot || have.Width != want.Width || have.Height != want.Height ||
+            have.Format != want.Format || have.MipLevels != want.MipLevels ||
+            have.DepthOrArraySize != want.DepthOrArraySize || have.Flags != want.Flags) {
+            continue;
+        }
+        // Targets serve one destination per sub-frame; snapshots one log
+        // until its ring segment comes round again.
+        if (snapshot ? entry.segment != ~0u : entry.used == subframe_counter_) {
+            continue;
+        }
+        if (snapshot) {
+            entry.segment = ring_segment_;
+        } else {
+            entry.used = subframe_counter_;
+        }
+        return static_cast<std::int32_t>(i);
+    }
+    if (srv_increment_ == 0u) {
+        srv_increment_ = device_->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+    }
+    if (!copy_srv_heap_) {
+        D3D12_DESCRIPTOR_HEAP_DESC heap{};
+        heap.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
+        heap.NumDescriptors = kCopySrvCapacity;
+        heap.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
+        if (FAILED(device_->CreateDescriptorHeap(&heap, IID_PPV_ARGS(&copy_srv_heap_)))) {
+            copy_srv_heap_.Reset();
+            return -1;
+        }
+        copy_srv_base_ = copy_srv_heap_->GetCPUDescriptorHandleForHeapStart();
+    }
+    if (copy_srv_used_ >= kCopySrvCapacity) {
+        return -1;
+    }
+    CopyTexture entry{};
+    D3D12_RESOURCE_DESC desc = want;
+    desc.Alignment = 0u;
+    D3D12_HEAP_PROPERTIES heap{};
+    heap.Type = D3D12_HEAP_TYPE_DEFAULT;
+    if (FAILED(device_->CreateCommittedResource(&heap, D3D12_HEAP_FLAG_NONE, &desc,
+                                                D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, nullptr,
+                                                IID_PPV_ARGS(&entry.texture)))) {
+        return -1;
+    }
+    entry.texture->SetName(snapshot ? L"GX sub-frame copy snapshot" : L"GX sub-frame copy target");
+    entry.desc = want;
+    entry.srv = copy_srv_used_++;
+    entry.snapshot = snapshot;
+    if (snapshot) {
+        entry.segment = ring_segment_;
+    } else {
+        entry.used = subframe_counter_;
+    }
+    D3D12_SHADER_RESOURCE_VIEW_DESC view{};
+    view.Format = want.Format;
+    view.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+    view.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+    view.Texture2D.MipLevels = want.MipLevels;
+    copy_pool_.push_back(std::move(entry));
+    const auto index = static_cast<std::uint32_t>(copy_pool_.size() - 1u);
+    device_->CreateShaderResourceView(copy_pool_[index].texture.Get(), &view, copy_texture_srv(index));
+    return static_cast<std::int32_t>(index);
+}
+
+// Recording: before the first draw with this table, every copy texture it
+// samples that this log has not written yet (an earlier frame's capture) is
+// copied, so the log's sub-frames read it as this frame did.
+void RendererD3D12::take_replay_snapshots(std::uint64_t table) {
+    ReplayTextures& log = replay_textures_;
+    const auto found = log.by_gpu.find(table);
+    if (found == log.by_gpu.end()) {
+        return;
+    }
+    ReplayTextureTable& entry = log.tables[found->second];
+    if (entry.snapshots_checked || log.incomplete) {
+        return;
+    }
+    entry.snapshots_checked = true;
+    for (ID3D12Resource* source : entry.copies) {
+        if (source == nullptr ||
+            std::find(log.written.begin(), log.written.end(), source) != log.written.end()) {
+            continue;
+        }
+        bool taken = false;
+        for (const auto& snapshot : log.snapshots) {
+            taken = taken || snapshot.first == source;
+        }
+        if (taken) {
+            continue;
+        }
+        const std::int32_t index = acquire_copy_texture(source, true);
+        if (index < 0) {
+            log.incomplete = true;
+            return;
+        }
+        ID3D12Resource* const copy = copy_pool_[static_cast<std::size_t>(index)].texture.Get();
+        D3D12_RESOURCE_BARRIER barriers[2]{};
+        for (auto& barrier : barriers) {
+            barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+            barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+            barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+        }
+        barriers[0].Transition.pResource = source;
+        barriers[0].Transition.StateAfter = D3D12_RESOURCE_STATE_COPY_SOURCE;
+        barriers[1].Transition.pResource = copy;
+        barriers[1].Transition.StateAfter = D3D12_RESOURCE_STATE_COPY_DEST;
+        command_list_->ResourceBarrier(2u, barriers);
+        command_list_->CopyResource(copy, source);
+        for (auto& barrier : barriers) {
+            std::swap(barrier.Transition.StateBefore, barrier.Transition.StateAfter);
+        }
+        command_list_->ResourceBarrier(2u, barriers);
+        log.snapshots.emplace_back(source, static_cast<std::uint32_t>(index));
+        ++copy_redirect_stats_.snapshots;
+    }
+}
+
+// Playback: the table with every slot that names a redirected copy texture
+// pointed at its stand-in (a copy in the current descriptor segment).
+D3D12_GPU_DESCRIPTOR_HANDLE RendererD3D12::patch_replay_table(D3D12_GPU_DESCRIPTOR_HANDLE table) {
+    const auto found = run_textures_.by_gpu.find(table.ptr);
+    if (found == run_textures_.by_gpu.end()) {
+        return table;
+    }
+    const ReplayTextureTable& entry = run_textures_.tables[found->second];
+    D3D12_CPU_DESCRIPTOR_HANDLE sources[kReplayTableSlots]{};
+    bool redirected = false;
+    for (unsigned m = 0; m < kReplayTableSlots; ++m) {
+        sources[m].ptr = run_textures_.store_base.ptr +
+            static_cast<SIZE_T>(entry.store + m) * srv_increment_;
+        if (entry.copies[m] != nullptr) {
+            if (const auto stand_in = redirect_.find(entry.copies[m]); stand_in != redirect_.end()) {
+                sources[m] = copy_texture_srv(stand_in->second);
+                redirected = true;
+            }
+        }
+    }
+    if (!redirected) {
+        return table;
+    }
+    auto& cached = patched_tables_[table.ptr];
+    if (cached.first == redirect_epoch_ + 1u) {
+        return {cached.second};
+    }
+    const DescriptorRing::Table patched = srv_ring_.allocate(kReplayTableSlots);
+    const UINT destination_size = kReplayTableSlots;
+    device_->CopyDescriptors(1u, &patched.cpu, &destination_size, kReplayTableSlots, sources, nullptr,
+                             D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+    cached = {redirect_epoch_ + 1u, patched.gpu.ptr};
+    ++copy_redirect_stats_.patched_tables;
+    return patched.gpu;
+}
+
+void RendererD3D12::release_copy_snapshots(unsigned segment) {
+    for (CopyTexture& entry : copy_pool_) {
+        if (entry.snapshot && (segment == ~0u || entry.segment == segment)) {
+            entry.segment = ~0u;
+        }
+    }
+}
+
 bool RendererD3D12::present_replay_subframe(
     std::span<const D3D12_GPU_VIRTUAL_ADDRESS> record_constants, float vertex_t) {
     if (ring_mode_ != RingMode::Interp && replay_valid_ && !run_valid_) {
@@ -7270,9 +7515,12 @@ bool RendererD3D12::present_replay_subframe(
             const auto* ticks = reinterpret_cast<const std::uint64_t*>(
                 static_cast<const std::byte*>(mapped) + offset);
             if (ticks[1] >= ticks[0]) {
-                subframe_gpu_ms_ += static_cast<double>(ticks[1] - ticks[0]) * 1000.0 /
-                                    static_cast<double>(timestamp_frequency_);
+                const double ms = static_cast<double>(ticks[1] - ticks[0]) * 1000.0 /
+                                  static_cast<double>(timestamp_frequency_);
+                subframe_gpu_ms_ += ms;
                 ++subframe_gpu_samples_;
+                subframe_path_gpu_ms_[subframe_timestamp_redirect_[index]] += ms;
+                ++subframe_path_gpu_samples_[subframe_timestamp_redirect_[index]];
             }
             const D3D12_RANGE none{0, 0};
             subframe_readback_->Unmap(0, &none);
@@ -7299,9 +7547,25 @@ bool RendererD3D12::present_replay_subframe(
     invalidate_gx_bindings();
     bound_rt_aux_ = 0u;
 
-    // Copy textures a later frame already rewrote keep that content.
     ++subframe_counter_;
     subframe_guarded_.clear();
+    // Copy redirection: the log's texture copies go to stand-ins, its
+    // read-before-write copy textures read the recording frame's snapshots.
+    const bool want_redirect = subframe_copy_redirect_ >= 0 ? subframe_copy_redirect_ == 1
+                                                            : copy_redirect_enabled();
+    const bool redirect = interp_rings && want_redirect && copy_redirect_enabled() &&
+                          !run_textures_.incomplete;
+    redirect_.clear();
+    patched_tables_.clear();
+    if (redirect) {
+        for (const auto& [source, snapshot] : run_textures_.snapshots) {
+            redirect_[source] = snapshot;
+        }
+    } else if (interp_rings && want_redirect && copy_redirect_enabled()) {
+        ++copy_redirect_stats_.fallback_logs;
+    }
+    // Without redirection: copy textures a later frame already rewrote (or,
+    // by default, every one) keep their content.
     static const bool copy_guard = [] {
         char value[8]{};
         std::size_t length = 0u;
@@ -7309,7 +7573,7 @@ bool RendererD3D12::present_replay_subframe(
                  length > 1u && value[0] == '0');
     }();
     for (const ReplayCopy& copy : run_copies_) {
-        if (!copy_guard) break;
+        if (!copy_guard || redirect || subframe_copy_redirect_ == 2) break;
         if (copy.mode != 0u || copy.dest == nullptr) continue;
         bool listed = false;
         for (const auto& guarded : subframe_guarded_) listed = listed || guarded.first == copy.dest;
@@ -7401,6 +7665,9 @@ bool RendererD3D12::present_replay_subframe(
                 call.blend_slot = run_blend_vertices_[op.index].slot;
                 ++blended;
             }
+            if (!redirect_.empty() && call.texture_table.ptr != 0u) {
+                call.texture_table = patch_replay_table(call.texture_table);
+            }
             draw(call);
             break;
         }
@@ -7414,9 +7681,29 @@ bool RendererD3D12::present_replay_subframe(
             clear_efb(c.ar, c.gb, c.z24, c.color, c.alpha, c.depth, c.x, c.y, c.w, c.h, c.format);
             break;
         }
-        case ReplayKind::Copy:
-            execute_replay_copy(run_copies_[op.index]);
+        case ReplayKind::Copy: {
+            const ReplayCopy& copy = run_copies_[op.index];
+            if (redirect && copy.mode == 0u && copy.dest != nullptr) {
+                // One stand-in per destination per sub-frame (never a snapshot).
+                std::int32_t stand_in = -1;
+                if (const auto current = redirect_.find(copy.dest);
+                    current != redirect_.end() && !copy_pool_[current->second].snapshot) {
+                    stand_in = static_cast<std::int32_t>(current->second);
+                } else {
+                    stand_in = acquire_copy_texture(copy.dest, false);
+                }
+                if (stand_in >= 0) {
+                    execute_replay_copy(copy, copy_pool_[static_cast<std::size_t>(stand_in)].texture.Get());
+                    redirect_[copy.dest] = static_cast<std::uint32_t>(stand_in);
+                    ++redirect_epoch_;
+                    ++copy_redirect_stats_.redirected;
+                    break;
+                }
+                ++copy_redirect_stats_.fallback_logs;
+            }
+            execute_replay_copy(copy);
             break;
+        }
         case ReplayKind::SwapEfbSets:
             swap_efb_sets();
             break;
@@ -7461,6 +7748,7 @@ bool RendererD3D12::present_replay_subframe(
                                         index * 2u, 2u, subframe_readback_.Get(),
                                         static_cast<UINT64>(index) * 2u * sizeof(std::uint64_t));
         subframe_timestamp_pending_[index] = true;
+        subframe_timestamp_redirect_[index] = redirect ? 1u : subframe_copy_redirect_ == 2 ? 2u : 0u;
     }
     d3d_check(command_list_->Close(), "sub-frame CommandList Close");
     ID3D12CommandList* lists[] = {command_list_.Get()};
@@ -8036,6 +8324,9 @@ void RendererD3D12::clear_efb(
 
 void RendererD3D12::draw(const DrawCall& call) {
     if (replay_recording_) [[unlikely]] {
+        if (call.texture_table.ptr != 0u && !replay_textures_.by_gpu.empty()) {
+            take_replay_snapshots(call.texture_table.ptr);
+        }
         replay_ops_.push_back({ReplayKind::Draw, static_cast<std::uint32_t>(replay_draws_.size())});
         replay_draws_.push_back(call);
     } else if (ring_mode_ == RingMode::Interp && ring_advance_pending_ && !replay_playing_) [[unlikely]] {
