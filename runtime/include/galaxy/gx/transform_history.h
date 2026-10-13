@@ -81,6 +81,16 @@ struct TransformRecord {
     // Palette snapshot, in float4 elements from the matrix ring base.
     std::uint32_t palette_offset = kNoPaletteOffset;
     bool palette = false;
+    // Hash of the XF matrix-load destinations since the record's marker
+    // (GxState::matrix_load_signature): an identity match must have the same
+    // sequence of loads, not only the same count.
+    std::uint64_t load_signature = 0;
+    // Draw phase and category (galaxy/motion_signals.h encode_category).
+    std::uint32_t category = 0;
+    // A particle record carries its JPA age: an identity match must continue
+    // it (galaxy::motion::particle_age_continues), else it is a new life.
+    std::uint32_t continuity = 0;
+    bool particle = false;
 };
 
 struct TransformHistoryStats {
@@ -90,6 +100,10 @@ struct TransformHistoryStats {
     std::uint32_t identified = 0;        // records with an identity
     std::uint32_t identity_matched = 0;  // matched by identity
     std::uint32_t identity_rejected = 0; // same identity, other draw form
+    std::uint32_t signature_rejected = 0;   // same identity, other matrix loads
+    std::uint32_t continuity_rejected = 0;  // same particle key, a new life
+    // Particle identity hits by age step: <0, 0, 1, 2, >2.
+    std::array<std::uint32_t, 5> particle_age_steps{};
 };
 
 class TransformHistory {
@@ -137,6 +151,9 @@ private:
     std::uint32_t identified_ = 0;
     std::uint32_t identity_matched_ = 0;
     std::uint32_t identity_rejected_ = 0;
+    std::uint32_t signature_rejected_ = 0;
+    std::uint32_t continuity_rejected_ = 0;
+    std::array<std::uint32_t, 5> particle_age_steps_{};
 
     std::vector<TransformRecord> current_;
     std::vector<TransformRecord> previous_;

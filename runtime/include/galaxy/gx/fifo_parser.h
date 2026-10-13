@@ -209,15 +209,18 @@ struct CachedDrawPacketRun {
 struct FifoSink {
     virtual ~FifoSink() = default;
 
-    // Host draw-identity marker (op::kHostMarker): the game object whose
-    // commands follow. Kinds: 1 J3D shape packet, 2 NameObj draw, 3 JPA
-    // emitter pass, 4 JPA particle.
+    // Host marker (op::kHostMarker). Draw identity, the game object whose
+    // commands follow: 1 J3D shape packet, 2 NameObj draw, 3 JPA emitter
+    // pass, 4 JPA particle. Motion signals (galaxy/motion_signals.h): 5 draw
+    // category or scene phase, 6 scene signals, 7 pass, 8 light load.
+    // `offset` is the marker's byte offset in the span passed to this run.
     virtual void on_host_marker(std::uint8_t kind, std::uint16_t aux, std::uint32_t a,
-                                std::uint32_t b) {
+                                std::uint32_t b, std::size_t offset) {
         (void)kind;
         (void)aux;
         (void)a;
         (void)b;
+        (void)offset;
     }
 
     // Byte count of the in-band vertex payload for a draw. The parser uses

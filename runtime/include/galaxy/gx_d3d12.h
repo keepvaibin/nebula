@@ -48,10 +48,14 @@ struct HostClientExtent {
 [[nodiscard]] HostClientExtent aspect_latch_extent() noexcept;
 
 // Guest scene boundaries the simulation thread marks in the GX stream:
-// GameScene::draw3D's entry and its closing MR::clearZBuffer call.
+// GameScene::draw3D's entry and its closing MR::clearZBuffer call; the 2D
+// layer, GameScene::draw2D's entry and epilogue (layouts, camera cover,
+// pause, 2D models, wipes).
 enum class FifoMarker : std::uint8_t {
     SceneBegin,
     SceneEnd,
+    Scene2DBegin,
+    Scene2DEnd,
 };
 
 enum class EfbPeekKind : std::uint8_t {
@@ -128,6 +132,11 @@ void attach_scene_view(const float view[12]) noexcept;
 // Simulation thread, at each SceneBegin: whether the renderer reads
 // draw-identity markers (frame interpolation or motion vectors are on).
 [[nodiscard]] bool draw_identity_wanted() noexcept;
+// Simulation thread: one particle of a JPA stripe at `stream_offset` of the
+// live GX stream (GuestAddressSpace::gx_stream_position); its two strip
+// vertices follow. The next render_frame submission carries it.
+void attach_stripe_particle(std::size_t stream_offset, std::uint32_t particle, std::uint32_t age_lifetime,
+                            std::uint8_t strip);
 void set_pointer_response(PointerResponseStamp stamp) noexcept;
 // Simulation producer; copied into each owned FIFO chunk and selected XFB.
 void set_prerecorded_movie_content(bool movie) noexcept;

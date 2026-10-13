@@ -38,7 +38,11 @@ use std::{fs, path::Path};
 //     module.
 // 19: draw identity site hooks (J3D shape packets, NameObj draws, JPA emitters
 //     and particles) for frame interpolation and motion vectors.
-pub const GENERATION_VERSION: u32 = 19;
+// 20: motion signal site hooks (camera force-change, object resets and new
+//     lives, emitter inits, draw categories and scene phases, stripe
+//     particles, mirror pass, light loads); needs a runtime that knows
+//     SiteHookKind 21-26.
+pub const GENERATION_VERSION: u32 = 20;
 
 /// Shard size and per-shard source budget of the qualified module build.
 pub const MODULE_SHARD_SIZE: usize = 64;

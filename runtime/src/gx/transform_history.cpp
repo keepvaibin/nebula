@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #include "galaxy/gx/transform_history.h"
 
+#include "galaxy/motion_signals.h"
+
 #include <algorithm>
 #include <cmath>
 #include <cstring>
@@ -389,6 +391,9 @@ void TransformHistory::reset() noexcept {
     identified_ = 0;
     identity_matched_ = 0;
     identity_rejected_ = 0;
+    signature_rejected_ = 0;
+    continuity_rejected_ = 0;
+    particle_age_steps_ = {};
     previous_identified_ = false;
 }
 
@@ -429,6 +434,9 @@ void TransformHistory::begin_scene(std::uint64_t frame, const Affine34* view) {
     identified_ = 0;
     identity_matched_ = 0;
     identity_rejected_ = 0;
+    signature_rejected_ = 0;
+    continuity_rejected_ = 0;
+    particle_age_steps_ = {};
     scene_open_ = true;
 }
 
@@ -483,12 +491,22 @@ const TransformRecord* TransformHistory::add(const TransformRecord& record) {
             const std::int32_t found = find_identity(record.identity);
             if (found >= 0) {
                 const TransformRecord& previous = previous_[static_cast<std::size_t>(found)];
-                if (previous.palette == record.palette && previous.layout == record.layout) {
+                const bool particle = record.particle && previous.particle;
+                if (particle) {
+                    const std::int64_t step = static_cast<std::int64_t>(record.continuity) -
+                                              static_cast<std::int64_t>(previous.continuity);
+                    ++particle_age_steps_[step < 0 ? 0u : step > 2 ? 4u : static_cast<std::size_t>(step) + 1u];
+                }
+                if (previous.palette != record.palette || previous.layout != record.layout) {
+                    ++identity_rejected_;
+                } else if (previous.load_signature != record.load_signature) {
+                    ++signature_rejected_;
+                } else if (particle && !motion::particle_age_continues(previous.continuity, record.continuity)) {
+                    ++continuity_rejected_;
+                } else {
                     best = found;
                     ++matched_;
                     ++identity_matched_;
-                } else {
-                    ++identity_rejected_;
                 }
             }
         }
@@ -554,6 +572,9 @@ TransformHistoryStats TransformHistory::stats() const noexcept {
     s.identified = identified_;
     s.identity_matched = identity_matched_;
     s.identity_rejected = identity_rejected_;
+    s.signature_rejected = signature_rejected_;
+    s.continuity_rejected = continuity_rejected_;
+    s.particle_age_steps = particle_age_steps_;
     return s;
 }
 

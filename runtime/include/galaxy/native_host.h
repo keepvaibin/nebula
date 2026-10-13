@@ -1066,6 +1066,16 @@ public:
     }
     void flush_wgpipe_gather_tail_for_frame();
     bool write_gx_fifo_bytes(std::span<const std::byte> bytes);
+    // Offset in the live GX stream (gx_fifo_data()) that the next guest FIFO
+    // byte will have: appended bytes, staged gather bytes and the markers
+    // waiting to be spliced before them. SIZE_MAX while the gather pipe writes
+    // a display list.
+    [[nodiscard]] std::size_t gx_stream_position() const {
+        if (!wgpipe_feeds_live_fifo()) {
+            return SIZE_MAX;
+        }
+        return gx_fifo_.size() + wgpipe_gather_count_ + 12u * pending_gx_markers_.size();
+    }
     // A host draw-identity marker (FifoParser op::kHostMarker) at the current
     // write position of the live GX stream. Inside a partly filled gather
     // burst it waits for that burst and is spliced in when the burst drains:

@@ -28,6 +28,7 @@
 #include "galaxy/frame_timeline.h"
 #include "galaxy/gx/sorted_dirty_ranges.h"
 #include "galaxy/gx/snapshot_region_lookup.h"
+#include "galaxy/motion_signals.h"
 
 #include <algorithm>
 #include <array>
@@ -5508,6 +5509,7 @@ FramePeCompletionToken GxBackend::render_frame(
         chunk.pointer_response=producer_pointer_response_;
         take_attached_pointer_depth_capture(chunk, fifo_size);
         take_attached_fifo_markers(chunk, fifo_size);
+        take_attached_stripe_particles(chunk, fifo_size);
         chunk.prerecorded_movie=producer_movie_content_;
         chunk.safety_surround=producer_safety_surround_;
         chunk.services = services;
@@ -5607,6 +5609,7 @@ FramePeCompletionToken GxBackend::render_frame(
     chunk.pointer_response=producer_pointer_response_;
     take_attached_pointer_depth_capture(chunk, fifo_size);
     take_attached_fifo_markers(chunk, fifo_size);
+    take_attached_stripe_particles(chunk, fifo_size);
     chunk.prerecorded_movie=producer_movie_content_;
     chunk.safety_surround=producer_safety_surround_;
     chunk.services = services;
@@ -6334,6 +6337,10 @@ void GxBackend::write_scene_vs_constants(const GxVsConstants& cpu, GxVsConstants
             state_.cp(cp::kVcdHi));
     record.identity = record_identity();
     record.layout = current_vs_hash_;
+    record.load_signature = state_.matrix_load_signature();
+    record.category = identity_category_;
+    record.continuity = identity_continuity_;
+    record.particle = identity_continuity_particle_;
     record.palette = (vs_key_.flags & 0x01u) != 0u;
     if (record.palette) {
         // PNMTX0 (XF rows 0-2) stands for the per-vertex palette's object.
@@ -6371,6 +6378,7 @@ void GxBackend::write_scene_vs_constants(const GxVsConstants& cpu, GxVsConstants
         // the palette too: their snapshot is interpolated like a skinned one.
         scene.palette.push_back(record.palette || current_palette_required_ ? current_palette_shadow_ : -1);
         scene.per_vertex.push_back(record.palette ? 1u : 0u);
+        scene.category.push_back(record.category);
     }
     if (!motion_scene_) {
         return;
@@ -6458,6 +6466,13 @@ void GxBackend::begin_identity_scene() {
     identity_matrix_base_ = state_.matrix_write_count();
     identity_last_base_ = 0u;
     identity_sub_index_ = 0u;
+    identity_continuity_ = 0u;
+    identity_continuity_particle_ = false;
+    identity_category_ = motion::kNoCategory;
+    scene_camera_epoch_known_ = false;
+    scene_image_effect_record_ = -1;
+    scene_image_effect_offset_ = -1;
+    state_.reset_matrix_load_signature();
 }
 
 std::uint64_t GxBackend::record_identity() noexcept {
@@ -6473,26 +6488,208 @@ std::uint64_t GxBackend::record_identity() noexcept {
 }
 
 void GxBackend::on_host_marker(std::uint8_t kind, std::uint16_t aux, std::uint32_t a,
-                               std::uint32_t b) {
+                               std::uint32_t b, std::size_t offset) {
     if (kind < identity_markers_by_kind_.size()) {
         ++identity_markers_by_kind_[kind];
+    }
+    if (kind >= motion::kMarkerCategory) {
+        on_motion_marker(kind, aux, a, b, offset);
+        return;
     }
     if (!history_scene_) {
         return;
     }
     ++identity_scene_markers_;
     std::uint64_t tag = b;
-    if (kind == 4u) {
-        // Particles come from a pool: the birth scene (scene index - age) and
-        // the lifetime tell a reused slot from the particle it held before.
-        const std::uint64_t age = b >> 16u;
-        tag = ((identity_scene_index_ - age) & 0xFFFFFFFFull) |
-              (static_cast<std::uint64_t>(b & 0xFFFFu) << 32u);
+    identity_continuity_particle_ = kind == motion::kMarkerParticle;
+    identity_continuity_ = 0u;
+    if (identity_continuity_particle_) {
+        // Particles come from a pool: node, pass and lifetime name the slot's
+        // particle; its age (the record's continuity) must continue on a
+        // match, else the slot holds a new particle (TransformHistory::add).
+        identity_continuity_ = b >> 16u;
+        tag = b & 0xFFFFu;
+    } else if (motion_trace_signals()) [[unlikely]] {
+        // Shape packets, NameObjs and emitters carry their object's epoch
+        // above the pass bit (generation 20): a change is a new identity.
+        const auto epoch = static_cast<std::uint16_t>(aux >> 1u);
+        const auto [it, inserted] = trace_object_epochs_.try_emplace(a, epoch);
+        if (!inserted && it->second != epoch) {
+            std::fprintf(stderr, "[motion-identity] new-life kind=%u object=%08X epoch=%u->%u scene=%llu\n",
+                         static_cast<unsigned>(kind), a, static_cast<unsigned>(it->second),
+                         static_cast<unsigned>(epoch), static_cast<unsigned long long>(identity_scene_index_));
+            it->second = epoch;
+        }
     }
     std::uint64_t key = combine64(combine64(kind | (static_cast<std::uint64_t>(aux) << 8u), a), tag);
     key = combine64(key, note_identity_occurrence(key));
     identity_marker_ = key;
     identity_matrix_base_ = state_.matrix_write_count();
+    state_.reset_matrix_load_signature();
+}
+
+void GxBackend::on_motion_marker(std::uint8_t kind, std::uint16_t aux, std::uint32_t a, std::uint32_t b,
+                                 std::size_t offset) {
+    switch (kind) {
+    case motion::kMarkerCategory: {
+        ++motion_category_markers_;
+        if (scene_2d_open_) {
+            ++scene_2d_categories_;
+        }
+        if (!history_scene_) {
+            return;
+        }
+        std::uint8_t phase = motion::category_phase(identity_category_);
+        if (aux == motion::kCategoryPhase) {
+            phase = static_cast<std::uint8_t>(a);
+            if (phase == static_cast<std::uint8_t>(motion::ScenePhase::ImageEffect)) {
+                ++motion_image_effect_markers_;
+                scene_image_effect_record_ = static_cast<std::int64_t>(transform_history_.current().size());
+                scene_image_effect_offset_ =
+                    static_cast<std::int64_t>(parse_span_base_ + offset) - static_cast<std::int64_t>(parse_span_prefix_);
+                if (motion_trace_signals()) [[unlikely]] {
+                    std::fprintf(stderr, "[gx-phase] image-effect scene=%llu record=%lld chunk-offset=%lld\n",
+                                 static_cast<unsigned long long>(identity_scene_index_),
+                                 static_cast<long long>(scene_image_effect_record_),
+                                 static_cast<long long>(scene_image_effect_offset_));
+                }
+            }
+        }
+        identity_category_ = motion::encode_category(phase, aux, a);
+        return;
+    }
+    case motion::kMarkerScene:
+        ++motion_scene_markers_;
+        if (!history_scene_) {
+            return;
+        }
+        scene_camera_epoch_ = a;
+        scene_camera_epoch_known_ = true;
+        // The game cut the view: the temporal upscaler's history is invalid.
+        if (temporal_scene_ && (aux & motion::kSceneCameraCut) != 0u) {
+            renderer_.reset_temporal_history();
+        }
+        if (interp_recording_) {
+            InterpScene& scene = interp_scenes_[interp_scene_];
+            scene.camera_epoch = a;
+            scene.camera_epoch_known = true;
+        }
+        if (motion_trace_signals() && (aux & motion::kSceneCameraCut) != 0u) [[unlikely]] {
+            std::fprintf(stderr, "[gx-scene] camera-cut scene=%llu epoch=%u object-events=%u\n",
+                         static_cast<unsigned long long>(identity_scene_index_), a, b);
+        }
+        return;
+    case motion::kMarkerPass:
+        ++motion_mirror_markers_;
+        if (motion_trace_signals()) [[unlikely]] {
+            static std::uint64_t lines = 0u;
+            if (lines++ < 200u) {
+                std::fprintf(stderr, "[gx-pass] %s scene=%llu history-scene=%d\n",
+                             aux == static_cast<std::uint16_t>(motion::PassMarker::MirrorBegin) ? "mirror-begin"
+                                                                                                 : "mirror-end",
+                             static_cast<unsigned long long>(identity_scene_index_), history_scene_ ? 1 : 0);
+            }
+        }
+        return;
+    case motion::kMarkerLight:
+        ++motion_light_markers_;
+        return;
+    case motion::kMarkerLayoutPane:
+    case motion::kMarkerLayoutActor:
+    case motion::kMarkerStarPointer: {
+        const std::size_t index = static_cast<std::size_t>(kind - motion::kMarkerLayoutPane);
+        if (scene_2d_open_) {
+            ++scene_2d_layout_markers_[index];
+            ++layout_markers_in_2d_[index];
+        } else {
+            ++layout_markers_outside_2d_[index];
+        }
+        return;
+    }
+    default:
+        return;
+    }
+}
+
+// GameScene::draw2D's entry and epilogue (FifoMarker::Scene2DBegin/End): the
+// 2D layer's FIFO span in the chunk. Recording only.
+void GxBackend::on_scene_2d_marker(bool begin, std::size_t chunk_offset) {
+    if (begin) {
+        scene_2d_open_ = true;
+        ++scene_2d_serial_;
+        ++window_2d_scenes_;
+        scene_2d_begin_offset_ = static_cast<std::int64_t>(chunk_offset);
+        scene_2d_end_offset_ = -1;
+        scene_2d_layout_markers_ = {};
+        scene_2d_categories_ = 0u;
+        return;
+    }
+    scene_2d_open_ = false;
+    scene_2d_end_offset_ = static_cast<std::int64_t>(chunk_offset);
+    if (motion_trace_signals() && (scene_2d_serial_ <= 30u || scene_2d_serial_ % 600u == 0u)) [[unlikely]] {
+        std::fprintf(stderr,
+                     "[gx-2d] scene=%llu begin=%lld end=%lld panes=%u layout-actors=%u star-pointer=%u "
+                     "categories=%u total-in-2d(pane/actor/star)=%llu/%llu/%llu outside-2d=%llu/%llu/%llu\n",
+                     static_cast<unsigned long long>(scene_2d_serial_),
+                     static_cast<long long>(scene_2d_begin_offset_), static_cast<long long>(scene_2d_end_offset_),
+                     scene_2d_layout_markers_[0], scene_2d_layout_markers_[1], scene_2d_layout_markers_[2],
+                     scene_2d_categories_, static_cast<unsigned long long>(layout_markers_in_2d_[0]),
+                     static_cast<unsigned long long>(layout_markers_in_2d_[1]),
+                     static_cast<unsigned long long>(layout_markers_in_2d_[2]),
+                     static_cast<unsigned long long>(layout_markers_outside_2d_[0]),
+                     static_cast<unsigned long long>(layout_markers_outside_2d_[1]),
+                     static_cast<unsigned long long>(layout_markers_outside_2d_[2]));
+    }
+}
+
+bool GxBackend::motion_trace_signals() noexcept {
+    static const bool enabled = read_env_u64("GALAXY_MOTION_TRACE_SIGNALS", 0u) != 0u;
+    return enabled;
+}
+
+void GxBackend::take_attached_stripe_particles(FrameChunk& chunk, std::size_t fifo_size) {
+    if (producer_stripe_particles_.empty()) {
+        return;
+    }
+    // Marks past this submission (staged gather bytes) move to the next one.
+    std::size_t kept = 0u;
+    for (const StripeParticleMark& mark : producer_stripe_particles_) {
+        if (mark.offset < fifo_size) {
+            chunk.stripe_particles.push_back(mark);
+        } else {
+            StripeParticleMark rest = mark;
+            rest.offset -= fifo_size;
+            producer_stripe_particles_[kept++] = rest;
+        }
+    }
+    producer_stripe_particles_.resize(kept);
+}
+
+void GxBackend::note_stripe_particles(const FrameChunk& chunk) {
+    motion_stripe_marks_ += chunk.stripe_particles.size();
+    if (!motion_trace_signals()) {
+        return;
+    }
+    static std::uint64_t lines = 0u;
+    if (lines >= 400u) {
+        return;
+    }
+    // One strip = consecutive marks of one strip id with rising offsets.
+    std::size_t strips = 0u;
+    std::uint32_t min_age = 0xFFFFu, max_age = 0u;
+    for (std::size_t i = 0; i < chunk.stripe_particles.size(); ++i) {
+        const StripeParticleMark& mark = chunk.stripe_particles[i];
+        if (i == 0u || mark.strip != chunk.stripe_particles[i - 1u].strip ||
+            mark.offset <= chunk.stripe_particles[i - 1u].offset) {
+            ++strips;
+        }
+        min_age = std::min(min_age, mark.age_lifetime >> 16u);
+        max_age = std::max(max_age, mark.age_lifetime >> 16u);
+    }
+    ++lines;
+    std::fprintf(stderr, "[gx-stripe] scene=%llu marks=%zu strips=%zu first-offset=%zu age=%u..%u\n",
+                 static_cast<unsigned long long>(identity_scene_index_), chunk.stripe_particles.size(), strips,
+                 chunk.stripe_particles.front().offset, min_age, max_age);
 }
 
 void GxBackend::take_attached_fifo_markers(FrameChunk& chunk, std::size_t fifo_size) noexcept {
@@ -6565,6 +6762,7 @@ void GxBackend::on_fifo_marker(FifoMarker marker, const std::array<float, 12>* v
             transform_history_.begin_scene(renderer_.matrix_segment_serial(),
                                            view != nullptr ? &camera : nullptr);
             begin_identity_scene();
+            state_.set_matrix_load_tracking(true);
             if (interp_recording_) {
                 InterpScene& scene = interp_scenes_[interp_scene_];
                 scene.camera = transform_history_.camera_delta();
@@ -6573,6 +6771,7 @@ void GxBackend::on_fifo_marker(FifoMarker marker, const std::array<float, 12>* v
             }
         } else {
             transform_history_.reset();
+            state_.set_matrix_load_tracking(false);
         }
     } else {
         if (history_scene_) {
@@ -6586,6 +6785,11 @@ void GxBackend::on_fifo_marker(FifoMarker marker, const std::array<float, 12>* v
             identity_matched_ += stats.identity_matched;
             identity_rejected_ += stats.identity_rejected;
             identity_scene_records_ += stats.records;
+            identity_signature_rejected_ += stats.signature_rejected;
+            identity_continuity_rejected_ += stats.continuity_rejected;
+            for (std::size_t i = 0; i < particle_age_steps_.size(); ++i) {
+                particle_age_steps_[i] += stats.particle_age_steps[i];
+            }
             // A cut: most transforms have no previous counterpart.
             if (temporal_scene_ && stats.records >= 16u && stats.matched * 2u < stats.records) {
                 renderer_.reset_temporal_history();
@@ -6608,6 +6812,7 @@ void GxBackend::on_fifo_marker(FifoMarker marker, const std::array<float, 12>* v
         history_scene_ = false;
         current_replay_record_ = -1;
         current_ps_record_ = -1;
+        state_.set_matrix_load_tracking(false);
     }
     // Projections take (or drop) the scene jitter, and scene draws switch
     // palette addressing, from the next draw on.
@@ -7280,6 +7485,18 @@ void GxBackend::report_interp_stats() {
             << " markers(shape/obj/emitter/particle)=" << identity_markers_by_kind_[1] << '/'
             << identity_markers_by_kind_[2] << '/' << identity_markers_by_kind_[3] << '/'
             << identity_markers_by_kind_[4]
+            << " motion(game-cuts/threshold-cuts/signature-rejects/continuity-rejects)=" << interp_game_cuts_
+            << '/' << interp_threshold_cuts_ << '/' << identity_signature_rejected_ << '/'
+            << identity_continuity_rejected_
+            << " particle-age-steps(<0/0/1/2/>2)=" << particle_age_steps_[0] << '/' << particle_age_steps_[1]
+            << '/' << particle_age_steps_[2] << '/' << particle_age_steps_[3] << '/' << particle_age_steps_[4]
+            << " signal-markers(category/image-effect/scene/pass/light/stripe-marks)=" << motion_category_markers_
+            << '/' << motion_image_effect_markers_ << '/' << motion_scene_markers_ << '/' << motion_mirror_markers_
+            << '/' << motion_light_markers_ << '/' << motion_stripe_marks_
+            << " layout-markers(2d-scenes/pane/actor/star-pointer)=" << window_2d_scenes_ << '/'
+            << identity_markers_by_kind_[motion::kMarkerLayoutPane] << '/'
+            << identity_markers_by_kind_[motion::kMarkerLayoutActor] << '/'
+            << identity_markers_by_kind_[motion::kMarkerStarPointer]
             << " build-ms-per-subframe="
             << (interp_presented_ != 0u ? interp_build_ms_ / presented : 0.0)
             << " record-ms-per-subframe="
@@ -7341,6 +7558,18 @@ void GxBackend::report_interp_stats() {
     identity_rejected_ = 0u;
     identity_scene_records_ = 0u;
     identity_markers_by_kind_ = {};
+    interp_game_cuts_ = 0u;
+    interp_threshold_cuts_ = 0u;
+    identity_signature_rejected_ = 0u;
+    identity_continuity_rejected_ = 0u;
+    particle_age_steps_ = {};
+    motion_category_markers_ = 0u;
+    motion_image_effect_markers_ = 0u;
+    motion_scene_markers_ = 0u;
+    motion_mirror_markers_ = 0u;
+    motion_light_markers_ = 0u;
+    window_2d_scenes_ = 0u;
+    motion_stripe_marks_ = 0u;
     interp_stats_qpc_ = now.QuadPart;
 }
 
@@ -7383,9 +7612,19 @@ bool GxBackend::render_interp_subframe(float t) {
         camera_motion(before_valid && before_scene.view_known ? &before_scene.view : nullptr,
                       scene.view_known ? &scene.view : nullptr, interp_camera_move_, cut_limits,
                       interp_camera_);
-        interp_camera_move_ = interp_camera_.known ? interp_camera_.moved : 0.0f;
+        // The game's camera epoch (generation 20) changes when the view was set
+        // without blending: a hard cut whatever the thresholds say. The
+        // thresholds remain for cuts the game does not flag.
+        const bool game_cut = before_valid && scene.camera_epoch_known && before_scene.camera_epoch_known &&
+                              scene.camera_epoch != before_scene.camera_epoch;
+        const bool threshold_cut = interp_camera_.cut;
+        if (game_cut && interp_camera_.known) {
+            interp_camera_.cut = true;
+        }
+        interp_camera_move_ = interp_camera_.known && !game_cut ? interp_camera_.moved : 0.0f;
         if (interp_camera_.cut) {
             ++interp_camera_cuts_;
+            ++(game_cut ? interp_game_cuts_ : interp_threshold_cuts_);
         }
         static const std::uint64_t dump_records = read_env_u64("GALAXY_INTERP_DUMP_RECORDS", 0u);
         if (dump_records != 0u && interp_sequence_serial_ == dump_records) {
@@ -7415,7 +7654,10 @@ bool GxBackend::render_interp_subframe(float t) {
             std::ostringstream line;
             line << "[interp-camera] seq=" << interp_sequence_serial_ << " scene=" << interp_sequence_.scene
                  << " known=" << interp_camera_.known << " rigid=" << interp_camera_.rigid
-                 << " cut=" << interp_camera_.cut << " moved=" << interp_camera_.moved
+                 << " cut=" << interp_camera_.cut << " game-cut=" << game_cut << " threshold-cut=" << threshold_cut
+                 << " epochs=" << (before_scene.camera_epoch_known ? static_cast<std::int64_t>(before_scene.camera_epoch) : -1)
+                 << '/' << (scene.camera_epoch_known ? static_cast<std::int64_t>(scene.camera_epoch) : -1)
+                 << " moved=" << interp_camera_.moved
                  << " turn=" << interp_camera_.turn_degrees << " before-valid=" << before_valid
                  << " records=" << count << " before-records=" << before_scene.constants.size() << " Va=";
             for (float v : before_scene.view) line << v << ',';
@@ -7541,7 +7783,16 @@ bool GxBackend::render_interp_subframe(float t) {
                  << " moving=" << interp_moving_.size() << " palette-pairs=" << interp_palette_motions_.size()
                  << " pairs-without-before=" << pairs_without_before
                  << " palette-snapped-slots=" << palette_snapped_slots
-                 << " palettes=" << scene.palette_count << '/' << before_scene.palette_count << '\n';
+                 << " palettes=" << scene.palette_count << '/' << before_scene.palette_count;
+            // Records per draw phase (galaxy/motion_signals.h; the last is none).
+            std::array<std::uint32_t, 11> phase_records{};
+            for (const std::uint32_t category : scene.category) {
+                const std::uint8_t phase = motion::category_phase(category);
+                ++phase_records[phase < 10u ? phase : 10u];
+            }
+            line << " phase-records=";
+            for (std::size_t i = 0; i < phase_records.size(); ++i) line << (i != 0u ? "," : "") << phase_records[i];
+            line << '\n';
             std::cerr << line.str();
         }
         // Vertex blending pairs draws with the log run before: not for a
@@ -9303,7 +9554,7 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
                     int marker;  // -1: pointer depth field
                     int view;    // marker index (its camera), -1 none
                 };
-                std::array<Split, 5> splits{};
+                std::array<Split, 1u + kFifoMarkersPerChunk> splits{};
                 std::size_t split_count = 0;
                 if (capture_in_frame) {
                     splits[split_count++] = {
@@ -9324,6 +9575,8 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
                         continue;
                     }
                     if (split.offset > consumed) {
+                        parse_span_base_ = consumed;
+                        parse_span_prefix_ = prefix;
                         consumed += parser_.run_available(
                             stream.subspan(consumed, split.offset - consumed),
                             memory, *this, state_,
@@ -9331,6 +9584,10 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
                     }
                     if (split.marker < 0) {
                         record_pointer_depth_capture_in_frame(chunk);
+                    } else if (split.marker == static_cast<int>(FifoMarker::Scene2DBegin) ||
+                               split.marker == static_cast<int>(FifoMarker::Scene2DEnd)) {
+                        on_scene_2d_marker(split.marker == static_cast<int>(FifoMarker::Scene2DBegin),
+                                           split.offset - prefix);
                     } else {
                         const auto index = static_cast<std::size_t>(split.view);
                         on_fifo_marker(static_cast<FifoMarker>(split.marker),
@@ -9341,6 +9598,8 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
                     }
                 }
                 if (consumed < stream.size()) {
+                    parse_span_base_ = consumed;
+                    parse_span_prefix_ = prefix;
                     consumed += parser_.run_available(
                         stream.subspan(consumed), memory, *this, state_,
                         frame_memory_regions_disjoint_sorted_);
@@ -9371,6 +9630,9 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
                         pending_fifo_.begin() +
                             static_cast<std::ptrdiff_t>(consumed));
                 }
+            }
+            if (!chunk.stripe_particles.empty()) [[unlikely]] {
+                note_stripe_particles(chunk);
             }
         } catch (const GxFatalError& e) {
             texture_cache_.set_async_decode_allowed(false);

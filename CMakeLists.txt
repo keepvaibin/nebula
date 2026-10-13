@@ -1020,6 +1020,9 @@ add_executable(galaxy_transform_history_tests runtime/src/gx/transform_history_t
     runtime/src/gx/transform_history.cpp)
 target_include_directories(galaxy_transform_history_tests PRIVATE runtime/include)
 
+add_executable(galaxy_motion_signals_tests runtime/src/motion_signals_tests.cpp)
+target_include_directories(galaxy_motion_signals_tests PRIVATE runtime/include)
+
 add_executable(galaxy_frame_interpolation_tests runtime/src/gx/frame_interpolation_tests.cpp
     runtime/src/gx/frame_interpolation.cpp runtime/src/gx/transform_history.cpp)
 target_include_directories(galaxy_frame_interpolation_tests PRIVATE runtime/include)
@@ -1155,6 +1158,7 @@ if(MSVC)
         galaxy_render_config_tests
         galaxy_transform_history_tests
         galaxy_frame_interpolation_tests
+        galaxy_motion_signals_tests
         galaxy_frame_completion_tests
         galaxy_window_owner_tests
         galaxy_memory_snapshot_tests
@@ -1243,6 +1247,7 @@ galaxy_add_native_test(native_dsp_coprocessor galaxy_native_dsp_tests)
 galaxy_add_native_test(render_config_gates galaxy_render_config_tests)
 galaxy_add_native_test(transform_history_matching galaxy_transform_history_tests)
 galaxy_add_native_test(frame_interpolation_math galaxy_frame_interpolation_tests)
+galaxy_add_native_test(motion_signal_epochs galaxy_motion_signals_tests)
 galaxy_add_native_test(frame_pe_completion galaxy_frame_completion_tests)
 galaxy_add_native_test(native_window_owner galaxy_window_owner_tests)
 set_tests_properties(native_window_owner PROPERTIES TIMEOUT 20)

@@ -226,6 +226,8 @@ public:
     // tail at the scene boundary). The render thread owns the capture until it publishes.
     void attach_pointer_depth_capture(
         const std::shared_ptr<PointerDepthCapture>& capture, std::size_t fifo_offset);
+    // Scene boundaries one render chunk carries (3D and 2D, two frames).
+    static constexpr std::size_t kFifoMarkersPerChunk = 8u;
     // Simulation thread: the next render_frame submission handles `marker`
     // when its parser reaches `fifo_offset` bytes into the submitted FIFO.
     void attach_fifo_marker(FifoMarker marker, std::size_t fifo_offset) noexcept {
@@ -244,10 +246,35 @@ public:
     [[nodiscard]] bool draw_identity_wanted() const noexcept {
         return draw_identity_wanted_.load(std::memory_order_relaxed);
     }
+    // Render thread: where GameScene image effects begin in the open (or
+    // last) 3D scene (SceneFunction::executeDrawImageEffect marker): the
+    // transform-record index and the byte offset in the chunk's FIFO; -1
+    // before the marker. The split point for an upscaler or HUD-less colour.
+    [[nodiscard]] std::int64_t scene_image_effect_record() const noexcept { return scene_image_effect_record_; }
+    [[nodiscard]] std::int64_t scene_image_effect_offset() const noexcept { return scene_image_effect_offset_; }
+    // Render thread: the 2D layer (GameScene::draw2D, FifoMarker::Scene2DBegin
+    // and Scene2DEnd) in the chunk's FIFO: byte offsets of its entry and of its
+    // epilogue (-1 until the marker), and whether the parser is inside it.
+    // Layout identity markers (kinds 9-11, galaxy/motion_signals.h) follow.
+    [[nodiscard]] std::int64_t scene_2d_begin_offset() const noexcept { return scene_2d_begin_offset_; }
+    [[nodiscard]] std::int64_t scene_2d_end_offset() const noexcept { return scene_2d_end_offset_; }
+    [[nodiscard]] bool scene_2d_open() const noexcept { return scene_2d_open_; }
     // Simulation thread: the game camera for the next SceneBegin marker.
     void attach_scene_view(const float view[12]) noexcept {
         for (unsigned i = 0; i < 12u; ++i) producer_scene_view_[i] = view[i];
         producer_scene_view_valid_ = true;
+    }
+    // One particle of a JPA stripe at `stream_offset` of the live GX stream
+    // (its two strip vertices follow); carried by the next submission.
+    struct StripeParticleMark {
+        std::size_t offset = 0;
+        std::uint32_t particle = 0;
+        std::uint32_t age_lifetime = 0;   // mAge << 16 | mLifeTime
+        std::uint8_t strip = 0;           // 0 JPADrawStripe, 1-2 JPADrawStripeX
+    };
+    // Simulation thread.
+    void attach_stripe_particle(const StripeParticleMark& mark) {
+        if (producer_stripe_particles_.size() < 65536u) producer_stripe_particles_.push_back(mark);
     }
     void set_prerecorded_movie_content(bool movie) noexcept { producer_movie_content_=movie; }
     void set_safety_scene_surround(float intensity) noexcept { producer_safety_surround_=intensity; }
@@ -391,7 +418,12 @@ private:
     void on_invalidate_vertex_cache() override;
     void on_tlut_load() override;
     void on_host_marker(std::uint8_t kind, std::uint16_t aux, std::uint32_t a,
-                        std::uint32_t b) override;
+                        std::uint32_t b, std::size_t offset) override;
+    // GALAXY_MOTION_TRACE_SIGNALS: motion-signal and identity-epoch traces.
+    [[nodiscard]] static bool motion_trace_signals() noexcept;
+    // Motion-signal markers (galaxy/motion_signals.h kinds 5-8).
+    void on_motion_marker(std::uint8_t kind, std::uint16_t aux, std::uint32_t a, std::uint32_t b,
+                          std::size_t offset);
 
     // --- Per-draw state flush ------------------------------------------------
 
@@ -541,13 +573,16 @@ private:
         // offset of the chunk's FIFO (the scene boundary).
         std::size_t pointer_depth_capture_fifo_offset = 0;
         bool pointer_depth_in_frame = false;
-        // Scene boundaries in this chunk's FIFO, in stream order.
-        std::array<std::pair<std::size_t, FifoMarker>, 4> fifo_markers{};
+        // Scene boundaries in this chunk's FIFO, in stream order (3D and 2D
+        // scenes of up to two frames).
+        std::array<std::pair<std::size_t, FifoMarker>, kFifoMarkersPerChunk> fifo_markers{};
         std::uint8_t fifo_marker_count = 0;
         // Game camera (world to eye) per SceneBegin marker; bit i of the
         // mask marks marker i's view valid.
-        std::array<std::array<float, 12>, 4> fifo_marker_views{};
+        std::array<std::array<float, 12>, kFifoMarkersPerChunk> fifo_marker_views{};
         std::uint8_t fifo_marker_view_mask = 0;
+        // JPA stripe particles in this chunk's FIFO (attach_stripe_particle).
+        std::vector<StripeParticleMark> stripe_particles;
         std::uint64_t dependency_scan_ns = 0;
         std::uint64_t snapshot_ns = 0;
         std::uint64_t snapshot_bytes = 0;
@@ -613,12 +648,16 @@ private:
     PointerResponseStamp producer_pointer_response_{}, render_pointer_response_{}, last_response_{};
     std::shared_ptr<PointerDepthCapture> producer_pointer_depth_capture_;
     std::size_t producer_pointer_depth_capture_offset_ = 0;
-    std::array<std::pair<std::size_t, FifoMarker>, 4> producer_fifo_markers_{};
+    std::array<std::pair<std::size_t, FifoMarker>, kFifoMarkersPerChunk> producer_fifo_markers_{};
     std::uint8_t producer_fifo_marker_count_ = 0;
-    std::array<std::array<float, 12>, 4> producer_fifo_marker_views_{};
+    std::array<std::array<float, 12>, kFifoMarkersPerChunk> producer_fifo_marker_views_{};
     std::uint8_t producer_fifo_marker_view_mask_ = 0;
     std::array<float, 12> producer_scene_view_{};
     bool producer_scene_view_valid_ = false;
+    std::vector<StripeParticleMark> producer_stripe_particles_;
+    void take_attached_stripe_particles(FrameChunk& chunk, std::size_t fifo_size);
+    // Render thread, after a chunk's parse: trace of the stripe-particle marks.
+    void note_stripe_particles(const FrameChunk& chunk);
     // Render thread: inside GameScene::draw3D (between the scene markers).
     bool scene_phase_ = false;
     // Render thread -> simulation thread: emit draw-identity markers.
@@ -652,11 +691,58 @@ private:
     [[nodiscard]] std::uint32_t note_identity_occurrence(std::uint64_t key);
     [[nodiscard]] std::uint64_t record_identity() noexcept;
     void begin_identity_scene();
-    std::array<std::uint64_t, 5> identity_markers_by_kind_{};
+    std::array<std::uint64_t, 12> identity_markers_by_kind_{};  // motion::kMarkerKinds
     std::uint64_t identity_records_ = 0;
     std::uint64_t identity_matched_ = 0;
     std::uint64_t identity_rejected_ = 0;
     std::uint64_t identity_scene_records_ = 0;
+    // Motion signals (galaxy/motion_signals.h). The marker in force names a
+    // particle: its age is the record's continuity (checked on match, not
+    // part of the key).
+    std::uint32_t identity_continuity_ = 0;
+    bool identity_continuity_particle_ = false;
+    // Category in force (draw phase and the latest CategoryList call).
+    std::uint32_t identity_category_ = 0x00FF0000u;
+    // Scene signals of the open scene (kind-6 marker): the game's camera
+    // epoch, known once a scene marker arrived.
+    std::uint32_t scene_camera_epoch_ = 0;
+    bool scene_camera_epoch_known_ = false;
+    // GameScene image effects (SceneFunction::executeDrawImageEffect) begin
+    // at this record index and FIFO offset of the scene's chunk (the future
+    // upscaler / HUD-less split); -1 none yet.
+    std::int64_t scene_image_effect_record_ = -1;
+    std::int64_t scene_image_effect_offset_ = -1;
+    // FIFO offset of the span the parser is running (run_stream), so marker
+    // offsets map to the chunk's FIFO.
+    std::size_t parse_span_base_ = 0;
+    std::size_t parse_span_prefix_ = 0;
+    std::uint64_t motion_category_markers_ = 0;
+    std::uint64_t motion_image_effect_markers_ = 0;
+    std::uint64_t motion_scene_markers_ = 0;
+    std::uint64_t motion_light_markers_ = 0;
+    std::uint64_t motion_mirror_markers_ = 0;
+    std::uint64_t motion_stripe_marks_ = 0;
+    // The 2D layer (FifoMarker::Scene2DBegin/End) and the layout markers
+    // (kinds 9-11: pane, layout actor, star pointer) parsed inside and
+    // outside it; counts since the start (per scene for the open one).
+    void on_scene_2d_marker(bool begin, std::size_t chunk_offset);
+    bool scene_2d_open_ = false;
+    std::int64_t scene_2d_begin_offset_ = -1;
+    std::int64_t scene_2d_end_offset_ = -1;
+    std::uint64_t scene_2d_serial_ = 0;
+    std::array<std::uint32_t, 3> scene_2d_layout_markers_{};
+    std::uint32_t scene_2d_categories_ = 0;
+    std::array<std::uint64_t, 3> layout_markers_in_2d_{};
+    std::array<std::uint64_t, 3> layout_markers_outside_2d_{};
+    std::uint64_t window_2d_scenes_ = 0;
+    std::uint64_t identity_signature_rejected_ = 0;
+    std::uint64_t identity_continuity_rejected_ = 0;
+    // Matched particle keys by age step: <0, 0, 1, 2, >2.
+    std::array<std::uint64_t, 5> particle_age_steps_{};
+    std::uint64_t interp_game_cuts_ = 0;        // cuts from the game's camera epoch
+    std::uint64_t interp_threshold_cuts_ = 0;   // cuts from the turn/move thresholds only
+    // GALAXY_MOTION_TRACE_SIGNALS: identity epoch changes per object.
+    std::unordered_map<std::uint32_t, std::uint16_t> trace_object_epochs_;
     // Temporal upscaling for the current scene: perspective projections carry
     // this sub-pixel jitter (render pixels).
     bool temporal_scene_ = false;
@@ -704,10 +790,17 @@ private:
         bool view_known = false;
         bool valid = false;
         std::uint64_t serial = 0;               // replay serial of its log (0: none)
+        // Per record: draw phase and category (galaxy/motion_signals.h).
+        std::vector<std::uint32_t> category;
+        // The game's camera epoch (scene marker); a different epoch in the
+        // next scene is a hard cut.
+        std::uint32_t camera_epoch = 0;
+        bool camera_epoch_known = false;
         void clear() noexcept {
             constants.clear(); from.clear(); current.clear(); prev_index.clear();
             palette.clear(); per_vertex.clear(); palette_count = 0; valid = false; serial = 0;
             ps_constants.clear();
+            category.clear(); camera_epoch_known = false;
         }
     };
     // Recording, ready (log completed), playing, and the playing scene's
