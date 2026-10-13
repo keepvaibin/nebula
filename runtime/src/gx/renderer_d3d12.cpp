@@ -7550,6 +7550,8 @@ bool RendererD3D12::present_replay_subframe(
                                   static_cast<double>(timestamp_frequency_);
                 subframe_gpu_ms_ += ms;
                 ++subframe_gpu_samples_;
+                subframe_gpu_ema_ms_ = subframe_gpu_ema_ms_ == 0.0
+                    ? ms : subframe_gpu_ema_ms_ + (ms - subframe_gpu_ema_ms_) * 0.0625;
                 subframe_path_gpu_ms_[subframe_timestamp_redirect_[index]] += ms;
                 ++subframe_path_gpu_samples_[subframe_timestamp_redirect_[index]];
             }

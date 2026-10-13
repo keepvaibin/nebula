@@ -793,6 +793,12 @@ private:
     void supersede_interp_sequence();
     void start_interp_sequence(std::uint32_t xfb_addr);
     void select_interp_before();
+    // B22: sub-frames per game frame within the GPU budget (interp_gpu_governor).
+    unsigned interp_gpu_governor(double& rate);
+    unsigned interp_gpu_cap_ = 7u;
+    std::uint64_t interp_gpu_cap_serial_ = 0;
+    std::uint64_t interp_gpu_checked_ = 0;
+    std::uint64_t interp_gpu_capped_ = 0;   // sequences with fewer sub-frames
     std::vector<D3D12_GPU_VIRTUAL_ADDRESS> interp_record_vas_;
     std::uint64_t interp_presented_ = 0;
     std::uint64_t interp_dropped_ = 0;

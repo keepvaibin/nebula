@@ -6864,7 +6864,7 @@ void GxBackend::start_interp_sequence(std::uint32_t xfb_addr) {
         return;
     }
     const RenderConfig cfg = get_render_config();
-    const double rate = std::max(61.0, present_frame_rate(
+    double rate = std::max(61.0, present_frame_rate(
         cfg.max_fps, cfg.vsync_interval, renderer_.display_refresh_hz()));
     ++interp_sequence_serial_;
     ++interp_started_;
@@ -6886,7 +6886,7 @@ void GxBackend::start_interp_sequence(std::uint32_t xfb_addr) {
     interp_sequence_.scene = interp_log_scene_;
     select_interp_before();
     interp_sequence_.xfb_addr = xfb_addr;
-    interp_sequence_.subframes = interp_stopping_ ? 0u : interp_frames_;
+    interp_sequence_.subframes = interp_gpu_governor(rate);
     interp_sequence_.next = 0u;
     // Present slots run on one clock at the present rate. A slot shows the
     // game at t = (slot - arrival) * 60 + lead between the previous frame (0)
@@ -6979,6 +6979,56 @@ void GxBackend::select_interp_before() {
     interp_sequence_.before = shown;
     interp_sequence_.chained = true;
     ++interp_chained_sequences_;
+}
+
+// B22: as many sub-frames per game frame as the GPU fits. A sub-frame
+// replays the whole frame, so a game frame costs about (k + 1) sub-frame
+// times (measured with GPU timestamps). k drops at once when over budget and
+// rises one step after 10 s under it; with none left, one is tried again
+// every 20 s. A capped sequence runs the slot clock at 60 * (k + 1).
+// GALAXY_INTERP_GPU_BUDGET_MS: GPU time per game frame (default 15 of 16.7);
+// GALAXY_INTERP_GPU_GOVERNOR=0 turns it off.
+unsigned GxBackend::interp_gpu_governor(double& rate) {
+    const unsigned configured = interp_stopping_ ? 0u : interp_frames_;
+    static const bool enabled = read_env_u64("GALAXY_INTERP_GPU_GOVERNOR", 1u) != 0u;
+    static const double budget_ms = [] {
+        char value[32]{};
+        std::size_t length = 0u;
+        const double ms = getenv_s(&length, value, sizeof(value), "GALAXY_INTERP_GPU_BUDGET_MS") == 0 &&
+                                  length > 1u
+            ? std::strtod(value, nullptr) : 0.0;
+        return ms > 0.0 ? ms : 15.0;
+    }();
+    if (!enabled || configured == 0u) {
+        return configured;
+    }
+    const std::uint64_t serial = interp_sequence_serial_;
+    if (serial - interp_gpu_checked_ >= 30u) {
+        interp_gpu_checked_ = serial;
+        const double sub_ms = renderer_.subframe_gpu_ema_ms();
+        if (sub_ms > 0.0) {
+            const double fit = std::floor(budget_ms / sub_ms) - 1.0;
+            const unsigned fits = fit < 1.0 ? 0u : static_cast<unsigned>(std::min(fit, 7.0));
+            if (fits < interp_gpu_cap_) {
+                interp_gpu_cap_ = fits;
+                interp_gpu_cap_serial_ = serial;
+            } else if (fits > interp_gpu_cap_ && serial - interp_gpu_cap_serial_ >= 600u) {
+                ++interp_gpu_cap_;
+                interp_gpu_cap_serial_ = serial;
+            }
+        }
+        if (interp_gpu_cap_ == 0u && serial - interp_gpu_cap_serial_ >= 1200u) {
+            interp_gpu_cap_ = 1u;  // measure one sub-frame again
+            interp_gpu_cap_serial_ = serial;
+            renderer_.reset_subframe_gpu_ema();
+        }
+    }
+    if (interp_gpu_cap_ >= configured) {
+        return configured;
+    }
+    ++interp_gpu_capped_;
+    rate = 60.0 * static_cast<double>(interp_gpu_cap_ + 1u);
+    return interp_gpu_cap_;
 }
 
 // The next frame's sequence replaces this one before its real frame (at
@@ -7244,6 +7294,9 @@ void GxBackend::report_interp_stats() {
             << " patched-tables=" << redirect.patched_tables
             << " copy-snapshots=" << redirect.snapshots
             << " redirect-fallbacks=" << redirect.fallback_logs
+            << " gpu-subframe-cap=" << interp_gpu_cap_
+            << " capped-sequences=" << std::exchange(interp_gpu_capped_, 0u)
+            << " subframe-gpu-ema-ms=" << renderer_.subframe_gpu_ema_ms()
             << " gpu-ms-guard-path=" << per_sample(path_ms[0], path_samples[0])
             << " gpu-ms-redirect-path=" << per_sample(path_ms[1], path_samples[1])
             << " gpu-ms-unguarded-path=" << per_sample(path_ms[2], path_samples[2])

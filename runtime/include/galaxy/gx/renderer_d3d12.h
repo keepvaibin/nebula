@@ -538,6 +538,9 @@ public:
         total_ms = std::exchange(subframe_path_gpu_ms_, {});
         samples = std::exchange(subframe_path_gpu_samples_, {});
     }
+    // Smoothed GPU time of one sub-frame (0 until measured), for the budget.
+    [[nodiscard]] double subframe_gpu_ema_ms() const noexcept { return subframe_gpu_ema_ms_; }
+    void reset_subframe_gpu_ema() noexcept { subframe_gpu_ema_ms_ = 0.0; }
     void take_subframe_gpu_ms(double& total_ms, std::uint64_t& samples) noexcept {
         total_ms = subframe_gpu_ms_;
         samples = subframe_gpu_samples_;
@@ -1173,6 +1176,7 @@ private:
     Microsoft::WRL::ComPtr<ID3D12Resource> subframe_readback_;
     double subframe_gpu_ms_ = 0.0;
     std::uint64_t subframe_gpu_samples_ = 0;
+    double subframe_gpu_ema_ms_ = 0.0;
     // The same by copy path (0: guard, 1: redirected, 2: neither), for A/B runs.
     std::array<std::uint8_t, kSubframeAllocators> subframe_timestamp_redirect_{};
     std::array<double, 3> subframe_path_gpu_ms_{};
