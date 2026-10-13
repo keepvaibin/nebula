@@ -22101,6 +22101,13 @@ bool validate_native_nand_subtree(
 bool validate_required_modern_nand_layout(
     const std::filesystem::path& root);
 
+enum class NandAdoption {
+    not_needed,
+    adopted,
+    failed,
+};
+NandAdoption adopt_foreign_nand_tree(const std::filesystem::path& root);
+
 std::uint32_t isfs_error_from_host_error(DWORD error) noexcept {
     switch (error) {
     case ERROR_FILE_EXISTS:
@@ -25239,6 +25246,9 @@ NativeNandRootProbe probe_native_nand_root() {
     if (!nand_volume_supports_named_streams(root)) {
         return {root, kIsfsErrAccess};
     }
+    if (adopt_foreign_nand_tree(root) == NandAdoption::failed) {
+        return {root, kIsfsErrAccess};
+    }
     const std::optional<bool> tree_reparse = nand_tree_has_reparse_point(root);
     if (!tree_reparse.has_value() || *tree_reparse) {
         return {root, kIsfsErrAccess};
@@ -26401,6 +26411,260 @@ std::uint32_t initialize_native_nand_layout(
         result = commit_fresh_nand_transaction(root);
     }
     return result;
+}
+
+// A NAND root the user assembled (copied from another installation, extracted from a zip, edited in Explorer) can lack
+// the metadata streams written here, carry other metadata, or hold files the game never reads. Such a root is rebuilt
+// like the first start of a new console: the files the game reads (its title data and the Mii database) are carried
+// over with their default metadata, and everything else is dropped or set aside.
+
+struct NandSalvage {
+    std::vector<std::byte> game_data;
+    std::vector<std::byte> banner;
+    std::vector<std::byte> rfl;
+    bool unreadable{false};
+    // Something other than carried files, regenerated system files, /tmp contents and directories.
+    bool unaccounted{false};
+};
+
+constexpr std::string_view kGameDataPath =
+    "/title/00010000/524d4745/data/GameData.bin";
+constexpr std::string_view kBannerPath =
+    "/title/00010000/524d4745/data/banner.bin";
+constexpr std::uintmax_t kMaximumSalvageFileBytes = 1u << 20u;
+
+std::wstring ascii_lower_wide(std::wstring value) {
+    for (wchar_t& ch : value) {
+        if (ch >= L'A' && ch <= L'Z') ch = static_cast<wchar_t>(ch + (L'a' - L'A'));
+    }
+    return value;
+}
+
+std::string nand_log_path(const std::filesystem::path& path) {
+    std::u8string text = path.u8string();
+    if (text.starts_with(u8"\\\\?\\") && !text.starts_with(u8"\\\\?\\UNC\\")) {
+        text.erase(0, 4);
+    }
+    return std::string(text.begin(), text.end());
+}
+
+// Entries of a transaction the runtime itself left unfinished; startup recovery owns them.
+bool nand_tree_awaits_recovery(const std::filesystem::path& root) {
+    const auto entry_awaits_recovery = [](const std::filesystem::path& path) {
+        const NandInternalNameKind kind =
+            classify_nand_internal_name(path.filename().string());
+        if (kind != NandInternalNameKind::none &&
+            kind != NandInternalNameKind::malformed_reserved) {
+            return true;
+        }
+        return inspect_startup_nand_streams(path).has_pending ||
+            load_nand_provisional_marker(path).status ==
+                NandProvisionalLoadStatus::ok;
+    };
+    if (entry_awaits_recovery(root)) return true;
+    std::error_code error;
+    std::filesystem::recursive_directory_iterator iterator(root, error);
+    const std::filesystem::recursive_directory_iterator end;
+    while (!error && iterator != end) {
+        if (entry_awaits_recovery(iterator->path())) return true;
+        iterator.increment(error);
+    }
+    return static_cast<bool>(error);
+}
+
+// The tree the strict startup path already understands: a complete modern tree or a legacy cohort it migrates.
+bool nand_tree_is_accepted(const std::filesystem::path& root) {
+    try {
+        if (validate_required_modern_nand_layout(root) &&
+            validate_native_nand_subtree(root, root, "/")) {
+            return true;
+        }
+    } catch (const std::exception&) {
+    }
+    const std::optional<StartupNandPlan> plan = classify_startup_nand_plan(root);
+    return plan.has_value() && plan->state != StartupNandState::modern_complete;
+}
+
+NandSalvage scan_nand_for_salvage(const std::filesystem::path& root) {
+    NandSalvage salvage;
+    std::vector<std::byte> flat_game_data;
+    std::vector<std::byte> flat_banner;
+    const auto read_valid = [&](const std::filesystem::path& path,
+                                bool (*valid)(std::span<const std::byte>),
+                                std::vector<std::byte>& out) {
+        std::error_code error;
+        const std::uintmax_t size = std::filesystem::file_size(path, error);
+        if (error) {
+            salvage.unreadable = true;
+            return;
+        }
+        std::vector<std::byte> bytes;
+        if (size > kMaximumSalvageFileBytes) {
+            salvage.unaccounted = true;
+        } else if (!try_read_file(path, bytes)) {
+            salvage.unreadable = true;
+        } else if (!valid(bytes) || !out.empty()) {
+            salvage.unaccounted = true;
+        } else {
+            out = std::move(bytes);
+        }
+    };
+    std::error_code error;
+    std::filesystem::recursive_directory_iterator iterator(root, error);
+    const std::filesystem::recursive_directory_iterator end;
+    for (; !error && iterator != end; iterator.increment(error)) {
+        const std::filesystem::path path = iterator->path();
+        const DWORD attributes = GetFileAttributesW(path.c_str());
+        if (attributes == INVALID_FILE_ATTRIBUTES) {
+            salvage.unreadable = true;
+            continue;
+        }
+        const bool directory = (attributes & FILE_ATTRIBUTE_DIRECTORY) != 0u;
+        if ((attributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0u) {
+            salvage.unaccounted = true;
+            if (directory) iterator.disable_recursion_pending();
+            continue;
+        }
+        if (directory) continue;
+        const std::wstring name = ascii_lower_wide(
+            path.lexically_relative(root).generic_wstring());
+        if (name == L"title/00010000/524d4745/data/gamedata.bin") {
+            read_valid(path, is_valid_rmge_game_data, salvage.game_data);
+        } else if (name == L"title/00010000/524d4745/data/banner.bin") {
+            read_valid(path, is_valid_rmge_banner, salvage.banner);
+        } else if (name == L"shared2/menu/facelib/rfl_db.dat") {
+            read_valid(path, is_valid_rfl_database, salvage.rfl);
+        } else if (name == L"gamedata.bin") {
+            read_valid(path, is_valid_rmge_game_data, flat_game_data);
+        } else if (name == L"banner.bin") {
+            read_valid(path, is_valid_rmge_banner, flat_banner);
+        } else if (name != L"shared2/sys/sysconf" &&
+                   name != L"shared2/sys/sysconf.stale.bak" &&
+                   name != L"title/00000001/00000002/data/setting.txt" &&
+                   name != L"title/00000001/00000002/data/play_rec.dat" &&
+                   !name.starts_with(L"tmp/")) {
+            salvage.unaccounted = true;
+        }
+    }
+    if (error) salvage.unreadable = true;
+    // Root-level copies are the layout of earlier builds: the save when no title copy exists, a stale duplicate otherwise.
+    if (salvage.game_data.empty()) {
+        salvage.game_data = std::move(flat_game_data);
+    } else if (!flat_game_data.empty() && flat_game_data != salvage.game_data) {
+        salvage.unaccounted = true;
+    }
+    if (salvage.banner.empty()) {
+        salvage.banner = std::move(flat_banner);
+    } else if (!flat_banner.empty() && flat_banner != salvage.banner) {
+        salvage.unaccounted = true;
+    }
+    return salvage;
+}
+
+bool build_adopted_nand_tree(
+    const std::filesystem::path& staging, const NandSalvage& salvage) {
+    try {
+        std::error_code error;
+        std::filesystem::remove_all(staging, error);
+        if (error ||
+            !std::filesystem::create_directory(staging, error) || error) {
+            return false;
+        }
+        if (begin_fresh_nand_transaction(staging, *fixed_nand_metadata("/")) != 0u ||
+            initialize_native_nand_layout(
+                staging, NativeNandStartupMode::fresh) != 0u) {
+            return false;
+        }
+        const auto publish = [&](std::string_view guest_path,
+                                 const std::vector<std::byte>& bytes,
+                                 const PersistedNandMetadata& metadata) {
+            return bytes.empty() ||
+                publish_new_native_nand_file(
+                    staging, guest_path, bytes, metadata) == 0u;
+        };
+        if (!publish(kGameDataPath, salvage.game_data,
+                     *fixed_nand_metadata(kGameDataPath)) ||
+            !publish(kBannerPath, salvage.banner,
+                     *fixed_nand_metadata(kBannerPath))) {
+            return false;
+        }
+        if (!salvage.rfl.empty()) {
+            const PersistedNandMetadata directory_metadata =
+                *fixed_nand_metadata("/shared2/menu/FaceLib");
+            if (provision_native_nand_directory(
+                    staging, "/shared2/menu/FaceLib", directory_metadata,
+                    true) != 0u ||
+                !publish(kRflDatabasePath, salvage.rfl,
+                         PersistedNandMetadata{
+                             kRmge01IsfsUid, kRmge01IsfsGid, 3u, 3u, 3u, 0u})) {
+                return false;
+            }
+        }
+        return validate_required_modern_nand_layout(staging) &&
+            validate_native_nand_subtree(staging, staging, "/");
+    } catch (const std::exception&) {
+        return false;
+    }
+}
+
+std::wstring nand_local_timestamp() {
+    SYSTEMTIME now{};
+    GetLocalTime(&now);
+    wchar_t text[32]{};
+    swprintf_s(text, L"%04u%02u%02u-%02u%02u%02u",
+             now.wYear, now.wMonth, now.wDay, now.wHour, now.wMinute,
+             now.wSecond);
+    return text;
+}
+
+NandAdoption adopt_foreign_nand_tree(const std::filesystem::path& root) {
+    std::error_code error;
+    const std::filesystem::directory_iterator first(root, error);
+    if (error || first == std::filesystem::directory_iterator{} ||
+        nand_tree_awaits_recovery(root) || nand_tree_is_accepted(root)) {
+        return NandAdoption::not_needed;
+    }
+    const NandSalvage salvage = scan_nand_for_salvage(root);
+    // A file that exists but cannot be read now might be locked; leave the tree for the next start.
+    if (salvage.unreadable) {
+        std::cerr << "[nand] saves folder not adopted: a file could not be read\n";
+        return NandAdoption::failed;
+    }
+    std::filesystem::path staging = root;
+    staging += L".adopt";
+    if (!build_adopted_nand_tree(staging, salvage)) {
+        std::cerr << "[nand] saves folder not adopted: the replacement could not be built\n";
+        std::filesystem::remove_all(staging, error);
+        return NandAdoption::failed;
+    }
+    std::filesystem::path displaced = root;
+    if (salvage.unaccounted) {
+        displaced += L"-rejected-" + nand_local_timestamp();
+        for (int attempt = 2; std::filesystem::exists(displaced, error) && attempt < 100; ++attempt) {
+            displaced = root;
+            displaced += L"-rejected-" + nand_local_timestamp() + L"-" + std::to_wstring(attempt);
+        }
+    } else {
+        displaced += L".replaced";
+        std::filesystem::remove_all(displaced, error);
+    }
+    if (MoveFileExW(root.c_str(), displaced.c_str(), MOVEFILE_WRITE_THROUGH) == FALSE ||
+        MoveFileExW(staging.c_str(), root.c_str(), MOVEFILE_WRITE_THROUGH) == FALSE) {
+        (void)MoveFileExW(displaced.c_str(), root.c_str(), 0u);
+        std::cerr << "[nand] saves folder not adopted: the replacement could not be put in place\n";
+        std::filesystem::remove_all(staging, error);
+        return NandAdoption::failed;
+    }
+    std::cerr << "[nand] saves folder rebuilt: GameData "
+              << (salvage.game_data.empty() ? "absent" : "kept") << ", Mii data "
+              << (salvage.rfl.empty() ? "absent" : "kept");
+    if (salvage.unaccounted) {
+        std::cerr << "; previous contents kept in " << nand_log_path(displaced);
+    } else {
+        std::filesystem::remove_all(displaced, error);
+    }
+    std::cerr << '\n';
+    return NandAdoption::adopted;
 }
 
 }  // namespace

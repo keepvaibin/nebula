@@ -882,6 +882,21 @@ std::array<std::uint64_t, 2> host_file_identity_for_test(
     };
 }
 
+// Folders a rebuilt NAND root leaves beside it for the contents it did not carry over.
+std::vector<std::filesystem::path> rejected_nand_copies_for_test(
+    const std::filesystem::path& root) {
+    std::vector<std::filesystem::path> copies;
+    const std::wstring prefix = root.filename().wstring() + L"-rejected-";
+    std::error_code error;
+    for (const auto& entry :
+         std::filesystem::directory_iterator(root.parent_path(), error)) {
+        if (entry.path().filename().wstring().starts_with(prefix)) {
+            copies.push_back(entry.path());
+        }
+    }
+    return copies;
+}
+
 bool host_file_stream_exists_for_test(const std::filesystem::path& path) {
     HANDLE file = CreateFileW(
         path.c_str(),
@@ -3622,43 +3637,48 @@ bool native_nand_pre_ads_legacy_cohort_startup_works(
             DeleteFileW(stripped_metadata.c_str()) != FALSE &&
                 !host_file_stream_exists_for_test(stripped_metadata),
             "modern strict-loader fixture removes exactly one setting.txt GIS3 stream");
-        passed &= expect_runtime_error(
-            [&] { static_cast<void>(cold_open_path(kSettingPath)); },
-            "modern Open hard-fails a post-initialization object whose GIS3 was stripped");
         passed &= expect(
-            !host_file_stream_exists_for_test(stripped_metadata),
-            "failed modern Open does not recreate stripped GIS3 authority");
-        passed &= expect_runtime_error(
-            [&] {
-                auto cold =
-                    std::make_unique<galaxy::host::GuestAddressSpace>();
-                galaxy::GuestMemoryV1* const guest_memory =
-                    cold->guest_memory();
-                const std::uint32_t fs_handle = ios_open_path(
-                    *cold,
-                    guest_memory,
-                    kRequest,
-                    kFsPath,
-                    "/dev/fs");
-                if (fs_handle == 0u || fs_handle >= 0x80000000u) {
-                    return;
-                }
-                write_isfs_path_buffer(*cold, kPath, kSettingPath);
-                ios_ioctl_request(
-                    *cold,
-                    guest_memory,
-                    kRequest + 0x80u,
-                    fs_handle,
-                    6u,
-                    kPath,
-                    64u,
-                    kAttrOut,
-                    0x4Cu);
-            },
-            "modern GetAttr hard-fails a post-initialization object whose GIS3 was stripped");
+            cold_open_path(kSettingPath),
+            "modern Open rebuilds a tree whose setting.txt GIS3 was stripped");
         passed &= expect(
-            !host_file_stream_exists_for_test(stripped_metadata),
-            "failed modern GetAttr does not recreate stripped GIS3 authority");
+            host_file_stream_exists_for_test(stripped_metadata) &&
+                rejected_nand_copies_for_test(positive_root).size() == 1u,
+            "the rebuilt tree has GIS3 authority for setting.txt and the stale root keeps the legacy artifacts");
+        const auto get_attr_result = [&] {
+            auto cold = std::make_unique<galaxy::host::GuestAddressSpace>();
+            galaxy::GuestMemoryV1* const guest_memory = cold->guest_memory();
+            const std::uint32_t fs_handle = ios_open_path(
+                *cold,
+                guest_memory,
+                kRequest,
+                kFsPath,
+                "/dev/fs");
+            if (fs_handle == 0u || fs_handle >= 0x80000000u) {
+                return 1u;
+            }
+            write_isfs_path_buffer(*cold, kPath, kSettingPath);
+            ios_ioctl_request(
+                *cold,
+                guest_memory,
+                kRequest + 0x80u,
+                fs_handle,
+                6u,
+                kPath,
+                64u,
+                kAttrOut,
+                0x4Cu);
+            return cold->read_u32(kRequest + 0x84u);
+        };
+        const std::uint32_t attr_baseline = get_attr_result();
+        passed &= expect(
+            DeleteFileW(stripped_metadata.c_str()) != FALSE &&
+                !host_file_stream_exists_for_test(stripped_metadata),
+            "modern strict-loader fixture strips the rebuilt setting.txt GIS3");
+        passed &= expect(
+            attr_baseline != 1u && get_attr_result() == attr_baseline &&
+                host_file_stream_exists_for_test(stripped_metadata) &&
+                rejected_nand_copies_for_test(positive_root).size() == 1u,
+            "modern GetAttr rebuilds a tree whose setting.txt GIS3 was stripped without keeping a second copy");
     }
     std::filesystem::remove_all(positive_root, cleanup_error);
 
@@ -3724,25 +3744,23 @@ bool native_nand_pre_ads_legacy_cohort_startup_works(
             gap_files[3].native() + L":galaxy.isfs.meta");
         write_binary_file(sysconf_metadata, system_menu_gis3);
         write_binary_file(play_rec_metadata, system_menu_gis3);
-        const LegacySnapshot before_gap = capture_snapshot(resume_gap_root);
-        passed &= expect_runtime_error(
-            [&] { static_cast<void>(cold_open_sysconf()); },
-            "legacy crash-resume hard-fails a late play-rec GIS3 after an earlier migration gap");
-        bool only_original_streams = true;
-        for (const std::filesystem::path& path : all_paths_for(resume_gap_root)) {
-            const std::size_t expected_count =
-                path == gap_files[1] || path == gap_files[3] ? 1u : 0u;
-            only_original_streams &=
-                host_named_stream_count_for_test(path) == expected_count;
-        }
         passed &= expect(
-            snapshot_matches(resume_gap_root, before_gap) &&
-                only_original_streams &&
-                galaxy::host::read_binary_file(sysconf_metadata) ==
-                    system_menu_gis3 &&
-                galaxy::host::read_binary_file(play_rec_metadata) ==
-                    system_menu_gis3,
-            "legacy resume-gap rejection preserves every object, byte, and original GIS3 without mutation");
+            cold_open_sysconf(),
+            "legacy crash-resume with a late play-rec GIS3 after an earlier migration gap is rebuilt");
+        const std::vector<std::filesystem::path> rejected =
+            rejected_nand_copies_for_test(resume_gap_root);
+        passed &= expect(
+            rejected.size() == 1u &&
+                galaxy::host::read_binary_file(
+                    rejected[0] / L"title" / L"00010000" / L"524d4745" /
+                    L"data" / L"GameData.bin") == fixture.game_data &&
+                galaxy::host::read_binary_file(gap_files[4]) ==
+                    fixture.game_data &&
+                host_file_stream_exists_for_test(
+                    std::filesystem::path(
+                        gap_files[4].native() + L":galaxy.isfs.meta")) &&
+                cold_open_sysconf(),
+            "legacy resume-gap rebuild carries the save, keeps the previous tree, and starts again from the rebuilt root");
     }
     std::filesystem::remove_all(resume_gap_root, cleanup_error);
 
@@ -3909,19 +3927,21 @@ bool native_nand_pre_ads_legacy_cohort_startup_works(
             final,
             std::span<const std::byte>(
                 sys_step.metadata.data(), 7u));
-        const LegacySnapshot before = capture_snapshot(orphan_final_root);
         const std::vector<std::byte> final_before =
             galaxy::host::read_binary_file(final);
-        passed &= expect_runtime_error(
-            [&] { static_cast<void>(cold_open_sysconf()); },
-            "legacy startup hard-fails a truncated final GIS3 without pending authority");
         passed &= expect(
-            snapshot_matches(orphan_final_root, before) &&
-                host_named_stream_count_for_test(sys_step.path) == 1u &&
-                !host_file_stream_exists_for_test(
-                    pending_stream_path(sys_step.path)) &&
-                galaxy::host::read_binary_file(final) == final_before,
-            "orphan torn-final rejection preserves every object, byte, and raw final ADS");
+            cold_open_sysconf(),
+            "legacy startup rebuilds a tree with a truncated final GIS3 and no pending authority");
+        const std::vector<std::filesystem::path> rejected =
+            rejected_nand_copies_for_test(orphan_final_root);
+        passed &= expect(
+            rejected.size() == 1u &&
+                galaxy::host::read_binary_file(std::filesystem::path(
+                    (rejected[0] / L"shared2" / L"sys" / L"SYSCONF").native() +
+                    L":galaxy.isfs.meta")) == final_before &&
+                galaxy::host::read_binary_file(final).size() ==
+                    sys_step.metadata.size(),
+            "the rebuilt SYSCONF has valid authority and the previous tree keeps the truncated stream byte for byte");
     }
     std::filesystem::remove_all(orphan_final_root, cleanup_error);
 
@@ -3939,12 +3959,16 @@ bool native_nand_pre_ads_legacy_cohort_startup_works(
         passed &= expect(
             all_named_streams_absent(missing_root),
             "missing-sentinel legacy fixture starts without metadata authority");
-        passed &= expect_runtime_error(
-            [&] { static_cast<void>(cold_open_sysconf()); },
-            "legacy startup hard-fails when a required root sentinel is missing");
         passed &= expect(
-            all_named_streams_absent(missing_root),
-            "missing-sentinel rejection publishes no GIS3 pending/final stream");
+            cold_open_sysconf(),
+            "legacy startup rebuilds a tree whose required root sentinel is missing");
+        passed &= expect(
+            rejected_nand_copies_for_test(missing_root).empty() &&
+                !std::filesystem::exists(missing_root.native() + L".replaced") &&
+                !std::filesystem::exists(missing_root / L"GameData.bin") &&
+                galaxy::host::read_binary_file(
+                    file_paths_for(missing_root)[4]) == fixture.game_data,
+            "the rebuild carries the save, drops the legacy artifacts and sets nothing aside");
     }
     std::filesystem::remove_all(missing_root, cleanup_error);
 
@@ -3965,23 +3989,22 @@ bool native_nand_pre_ads_legacy_cohort_startup_works(
             all_gis3_streams_absent(unknown_ads_root) &&
                 host_named_stream_count_for_test(unknown_ads_files[4]) == 1u,
             "unknown-ADS legacy fixture contains only its deliberate unrecognized stream");
-        passed &= expect_runtime_error(
-            [&] { static_cast<void>(cold_open_sysconf()); },
-            "legacy startup hard-fails an otherwise exact cohort with an unknown ADS");
-        bool no_extra_streams = true;
-        for (const std::filesystem::path& path : all_paths_for(unknown_ads_root)) {
-            const std::size_t expected_count = path == unknown_ads_files[4]
-                ? 1u
-                : 0u;
-            no_extra_streams &=
-                host_named_stream_count_for_test(path) == expected_count;
-        }
         passed &= expect(
-            all_gis3_streams_absent(unknown_ads_root) && no_extra_streams &&
-                galaxy::host::read_binary_file(unknown_ads) ==
+            cold_open_sysconf(),
+            "legacy startup rebuilds an otherwise exact cohort with an unknown ADS");
+        const std::vector<std::filesystem::path> rejected =
+            rejected_nand_copies_for_test(unknown_ads_root);
+        passed &= expect(
+            rejected.size() == 1u &&
+                galaxy::host::read_binary_file(std::filesystem::path(
+                    (rejected[0] / L"title" / L"00010000" / L"524d4745" /
+                     L"data" / L"GameData.bin").native() +
+                    L":galaxy.unknown")) ==
                     std::vector<std::byte>(
-                        kUnknownAdsBytes.begin(), kUnknownAdsBytes.end()),
-            "unknown-ADS rejection preserves the poison stream and publishes no GIS3 authority");
+                        kUnknownAdsBytes.begin(), kUnknownAdsBytes.end()) &&
+                !host_file_stream_exists_for_test(unknown_ads) &&
+                host_named_stream_count_for_test(unknown_ads_files[4]) == 1u,
+            "the unknown stream stays with the previous tree and the rebuilt save carries only its own GIS3");
     }
     std::filesystem::remove_all(unknown_ads_root, cleanup_error);
 
@@ -4386,23 +4409,22 @@ bool native_nand_fresh_root_intent_recovery_works(
             DeleteFileW(missing.c_str()) != FALSE &&
                 !std::filesystem::exists(missing),
             "fresh strict-core fixture removes exactly one required modern child");
-        const std::vector<std::byte> root_final =
-            galaxy::host::read_binary_file(root_final_path(missing_modern_root));
-        passed &= expect_runtime_error(
-            [&] { static_cast<void>(cold_open_sysconf()); },
-            "modern root-final startup hard-fails a missing required core child");
         passed &= expect(
-            !std::filesystem::exists(missing) &&
-                !host_file_stream_exists_for_test(missing_metadata) &&
-                galaxy::host::read_binary_file(
-                    root_final_path(missing_modern_root)) == root_final,
-            "modern missing-core rejection does not recreate the child or alter root authority");
+            cold_open_sysconf(),
+            "modern root-final startup rebuilds a tree with a missing required core child");
+        passed &= expect(
+            std::filesystem::exists(missing) &&
+                host_file_stream_exists_for_test(missing_metadata) &&
+                host_file_stream_exists_for_test(
+                    root_final_path(missing_modern_root)) &&
+                rejected_nand_copies_for_test(missing_modern_root).empty(),
+            "the rebuild recreates the missing child with default content and its own authority");
     }
     std::filesystem::remove_all(missing_modern_root, cleanup_error);
     return passed;
 }
 
-bool native_nand_invalid_sole_legacy_hard_fails(
+bool native_nand_invalid_sole_legacy_is_set_aside(
     const std::filesystem::path& shared_test_root) {
     constexpr std::string_view kCanonicalGameData =
         "/title/00010000/524d4745/data/GameData.bin";
@@ -4424,29 +4446,215 @@ bool native_nand_invalid_sole_legacy_hard_fails(
     {
         galaxy::host::GuestAddressSpace memory;
         galaxy::GuestMemoryV1* const guest_memory = memory.guest_memory();
-        passed &= expect_runtime_error(
-            [&] {
-                static_cast<void>(ios_open_path(
-                    memory,
-                    guest_memory,
-                    kRequest,
-                    kPath,
-                    kCanonicalGameData,
-                    1u));
-            },
-            "an invalid sole root-level legacy GameData hard-fails migration");
+        static_cast<void>(ios_open_path(
+            memory,
+            guest_memory,
+            kRequest,
+            kPath,
+            kCanonicalGameData,
+            1u));
     }
     const std::filesystem::path canonical =
         isolated_root / L"title" / L"00010000" / L"524d4745" / L"data" /
         L"GameData.bin";
+    const std::vector<std::filesystem::path> rejected =
+        rejected_nand_copies_for_test(isolated_root);
     passed &= expect(
-        galaxy::host::read_binary_file(legacy) ==
+        rejected.size() == 1u &&
+            galaxy::host::read_binary_file(rejected[0] / L"GameData.bin") ==
                 std::vector<std::byte>(
                     kInvalidLegacy.begin(), kInvalidLegacy.end()) &&
+            !std::filesystem::exists(legacy) &&
             !std::filesystem::exists(canonical),
-        "rejected sole legacy migration preserves the source and publishes no canonical save");
+        "an invalid sole root-level legacy GameData is set aside and publishes no canonical save");
 
     std::filesystem::remove_all(isolated_root, cleanup_error);
+    return passed;
+}
+
+bool native_nand_foreign_tree_adoption_works(
+    const std::filesystem::path& shared_test_root) {
+    constexpr std::string_view kSysconfGuestPath = "/shared2/sys/SYSCONF";
+    constexpr std::uint32_t kPath = 0x13530000u;
+    constexpr std::uint32_t kRequest = 0x13530100u;
+
+    const auto cold_open = [&] {
+        galaxy::host::GuestAddressSpace memory;
+        galaxy::GuestMemoryV1* const guest_memory = memory.guest_memory();
+        const std::uint32_t handle = ios_open_path(
+            memory, guest_memory, kRequest, kPath, kSysconfGuestPath, 1u);
+        if (handle == 0u || handle >= 0x80000000u) return false;
+        ios_close_request(memory, guest_memory, kRequest + 0x40u, handle);
+        const bool closed = memory.read_u32(kRequest + 0x44u) == 0u;
+        acknowledge_ios_reply(guest_memory);
+        return closed;
+    };
+    const auto data_directory = [](const std::filesystem::path& root) {
+        return root / L"title" / L"00010000" / L"524d4745" / L"data";
+    };
+    const auto rfl_path = [](const std::filesystem::path& root) {
+        return root / L"shared2" / L"menu" / L"FaceLib" / L"RFL_DB.dat";
+    };
+    const auto gis3_of = [](const std::filesystem::path& path) {
+        return std::filesystem::path(path.native() + L":galaxy.isfs.meta");
+    };
+    const auto leftovers = [](const std::filesystem::path& root) {
+        return std::filesystem::exists(root.native() + L".adopt") ||
+            std::filesystem::exists(root.native() + L".replaced");
+    };
+
+    const std::vector<std::byte> game_data = valid_rmge_game_data_for_test();
+    const std::vector<std::byte> banner = valid_rmge_banner_for_test(2u);
+    const std::vector<std::byte> rfl = valid_empty_rfl_database_for_test();
+
+    bool passed = true;
+    std::error_code cleanup_error;
+    const auto clean = [&](const std::filesystem::path& root) {
+        std::filesystem::remove_all(root, cleanup_error);
+        for (const std::filesystem::path& copy :
+             rejected_nand_copies_for_test(root)) {
+            std::filesystem::remove_all(copy, cleanup_error);
+        }
+    };
+
+    // A save folder copied without its named streams (zip, exFAT, plain file copy), holding only the game's own files.
+    const std::filesystem::path plain_root =
+        shared_test_root / L"foreign_stream_free";
+    clean(plain_root);
+    write_binary_file(data_directory(plain_root) / L"GameData.bin", game_data);
+    write_binary_file(data_directory(plain_root) / L"banner.bin", banner);
+    {
+        ScopedWideEnv set_root(L"GALAXY_NAND_ROOT", plain_root);
+        passed &= expect(
+            cold_open(), "a stream-free copy of the game's files starts");
+        const std::filesystem::path save =
+            data_directory(plain_root) / L"GameData.bin";
+        passed &= expect(
+            galaxy::host::read_binary_file(save) == game_data &&
+                galaxy::host::read_binary_file(
+                    data_directory(plain_root) / L"banner.bin") == banner &&
+                host_file_stream_exists_for_test(gis3_of(save)) &&
+                !std::filesystem::exists(rfl_path(plain_root)),
+            "the save and banner are carried with default metadata");
+        passed &= expect(
+            rejected_nand_copies_for_test(plain_root).empty() &&
+                !leftovers(plain_root),
+            "a tree holding only game files and regenerated system files sets nothing aside");
+
+        const std::array<std::uint64_t, 2> root_identity =
+            host_file_identity_for_test(plain_root);
+        const std::array<std::uint64_t, 2> save_identity =
+            host_file_identity_for_test(save);
+        passed &= expect(
+            cold_open() &&
+                host_file_identity_for_test(plain_root) == root_identity &&
+                host_file_identity_for_test(save) == save_identity,
+            "the rebuilt tree is accepted as it is on the next start");
+
+        // A damaged metadata stream on a valid layout rebuilds again and keeps the save.
+        const std::array<std::byte, 3> torn{
+            std::byte{'G'}, std::byte{'I'}, std::byte{'S'}};
+        write_binary_file(gis3_of(save), torn);
+        passed &= expect(
+            cold_open() &&
+                galaxy::host::read_binary_file(save) == game_data &&
+                galaxy::host::read_binary_file(gis3_of(save)).size() == 18u &&
+                rejected_nand_copies_for_test(plain_root).empty(),
+            "a truncated metadata stream is replaced by default metadata and the save is kept");
+    }
+    clean(plain_root);
+
+    // Mii data, a stray desktop.ini and a folder the game never uses.
+    const std::filesystem::path mixed_root =
+        shared_test_root / L"foreign_mixed";
+    clean(mixed_root);
+    write_binary_file(data_directory(mixed_root) / L"GameData.bin", game_data);
+    write_binary_file(rfl_path(mixed_root), rfl);
+    const std::array<std::byte, 1> note{std::byte{'x'}};
+    write_binary_file(data_directory(mixed_root) / L"desktop.ini", note);
+    write_binary_file(
+        mixed_root / L"shared2" / L"wc24" / L"nwc24msg.cfg", note);
+    write_binary_file(mixed_root / L"tmp" / L"sys" / L"leftover.bin", note);
+    {
+        ScopedWideEnv set_root(L"GALAXY_NAND_ROOT", mixed_root);
+        passed &= expect(cold_open(), "a tree with unrelated files starts");
+        const std::vector<std::filesystem::path> rejected =
+            rejected_nand_copies_for_test(mixed_root);
+        passed &= expect(
+            galaxy::host::read_binary_file(
+                data_directory(mixed_root) / L"GameData.bin") == game_data &&
+                galaxy::host::read_binary_file(rfl_path(mixed_root)) == rfl &&
+                host_file_stream_exists_for_test(
+                    gis3_of(rfl_path(mixed_root))) &&
+                host_file_stream_exists_for_test(
+                    gis3_of(mixed_root / L"shared2" / L"menu" / L"FaceLib")) &&
+                !std::filesystem::exists(
+                    data_directory(mixed_root) / L"desktop.ini") &&
+                !std::filesystem::exists(mixed_root / L"shared2" / L"wc24"),
+            "the save and the Mii data are carried and the unrelated files are not");
+        passed &= expect(
+            rejected.size() == 1u &&
+                std::filesystem::exists(
+                    data_directory(rejected[0]) / L"desktop.ini") &&
+                std::filesystem::exists(
+                    rejected[0] / L"shared2" / L"wc24" / L"nwc24msg.cfg") &&
+                galaxy::host::read_binary_file(
+                    data_directory(rejected[0]) / L"GameData.bin") == game_data &&
+                !leftovers(mixed_root),
+            "the previous tree is kept whole next to the new one");
+    }
+    clean(mixed_root);
+
+    // A save that fails its own checksum is not carried and is never deleted.
+    const std::filesystem::path damaged_root =
+        shared_test_root / L"foreign_damaged_save";
+    clean(damaged_root);
+    std::vector<std::byte> damaged = game_data;
+    damaged[0x200] ^= std::byte{0xFF};
+    write_binary_file(data_directory(damaged_root) / L"GameData.bin", damaged);
+    write_binary_file(data_directory(damaged_root) / L"banner.bin", banner);
+    {
+        ScopedWideEnv set_root(L"GALAXY_NAND_ROOT", damaged_root);
+        passed &= expect(cold_open(), "a tree with a damaged save starts");
+        const std::vector<std::filesystem::path> rejected =
+            rejected_nand_copies_for_test(damaged_root);
+        passed &= expect(
+            !std::filesystem::exists(
+                data_directory(damaged_root) / L"GameData.bin") &&
+                galaxy::host::read_binary_file(
+                    data_directory(damaged_root) / L"banner.bin") == banner &&
+                rejected.size() == 1u &&
+                galaxy::host::read_binary_file(
+                    data_directory(rejected[0]) / L"GameData.bin") == damaged,
+            "the damaged save is kept in the previous tree and the new tree starts without it");
+    }
+    clean(damaged_root);
+
+    // Names in another case (zip tools, hand-made folders).
+    const std::filesystem::path cased_root =
+        shared_test_root / L"foreign_case_variants";
+    clean(cased_root);
+    write_binary_file(
+        cased_root / L"Title" / L"00010000" / L"524D4745" / L"Data" /
+            L"GAMEDATA.BIN",
+        game_data);
+    {
+        ScopedWideEnv set_root(L"GALAXY_NAND_ROOT", cased_root);
+        passed &= expect(
+            cold_open() &&
+                galaxy::host::read_binary_file(
+                    data_directory(cased_root) / L"GameData.bin") == game_data &&
+                rejected_nand_copies_for_test(cased_root).empty(),
+            "a save under differently cased names is carried to the canonical path");
+        bool canonical_case = false;
+        for (const auto& entry :
+             std::filesystem::directory_iterator(data_directory(cased_root))) {
+            canonical_case |= entry.path().filename() == L"GameData.bin";
+        }
+        passed &= expect(
+            canonical_case, "the rebuilt save uses the canonical name");
+    }
+    clean(cased_root);
     return passed;
 }
 
@@ -5146,15 +5354,13 @@ bool native_nand_modern_startup_recovery_edges_work(
                 "failed to replace FaceLib creator metadata fixture");
         }
         write_binary_file(face_lib_metadata, kernel_public_metadata);
-        const ModernTreeSnapshot before_mismatch =
-            capture_tree(rfl_parent_root);
-        passed &= expect_runtime_error(
-            [&] { static_cast<void>(cold_open_sysconf()); },
-            "modern startup hard-fails mismatched optional menu/FaceLib creators without RFL");
         passed &= expect(
-            tree_matches(before_mismatch) &&
-                !std::filesystem::exists(rfl),
-            "optional-parent mismatch rejection preserves the complete object/byte/ADS inventory and keeps RFL absent");
+            cold_open_sysconf(),
+            "modern startup rebuilds mismatched optional menu/FaceLib creators without RFL");
+        passed &= expect(
+            !std::filesystem::exists(rfl) &&
+                rejected_nand_copies_for_test(rfl_parent_root).empty(),
+            "the rebuild keeps RFL absent and sets nothing aside");
     }
     std::filesystem::remove_all(rfl_parent_root, cleanup_error);
     return passed;
@@ -14336,8 +14542,10 @@ int main(int argc, char** argv) {
     passed &= native_nand_pre_ads_legacy_cohort_startup_works(nand_test_root);
     std::cerr << "[native-host-test] native_nand_fresh_root_intent_recovery_works\n";
     passed &= native_nand_fresh_root_intent_recovery_works(nand_test_root);
-    std::cerr << "[native-host-test] native_nand_invalid_sole_legacy_hard_fails\n";
-    passed &= native_nand_invalid_sole_legacy_hard_fails(nand_test_root);
+    std::cerr << "[native-host-test] native_nand_invalid_sole_legacy_is_set_aside\n";
+    passed &= native_nand_invalid_sole_legacy_is_set_aside(nand_test_root);
+    std::cerr << "[native-host-test] native_nand_foreign_tree_adoption_works\n";
+    passed &= native_nand_foreign_tree_adoption_works(nand_test_root);
     std::cerr << "[native-host-test] native_nand_provisional_known_file_contract_works\n";
     passed &= native_nand_provisional_known_file_contract_works(nand_test_root);
     std::cerr << "[native-host-test] native_nand_modern_startup_recovery_edges_work\n";
