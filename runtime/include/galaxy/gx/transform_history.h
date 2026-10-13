@@ -64,6 +64,9 @@ struct TransformRecord {
     std::uint64_t signature = 0;
     // Draw identity (0: none, signature matching).
     std::uint64_t identity = 0;
+    // Vertex shader key hash (texgen and lighting setup): an identity match
+    // must have the same one.
+    std::uint64_t layout = 0;
     // Matching fingerprint: eye-space origin of the draw's object (inline
     // position matrix translation, or PNMTX0's for per-vertex palettes).
     float translation[3]{};

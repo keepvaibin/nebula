@@ -398,7 +398,8 @@ const TransformRecord* TransformHistory::add(const TransformRecord& record) {
         if (previous_valid_ && previous_identified_) {
             const std::int32_t found = find_identity(record.identity);
             if (found >= 0) {
-                if (previous_[static_cast<std::size_t>(found)].palette == record.palette) {
+                const TransformRecord& previous = previous_[static_cast<std::size_t>(found)];
+                if (previous.palette == record.palette && previous.layout == record.layout) {
                     best = found;
                     ++matched_;
                     ++identity_matched_;

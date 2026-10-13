@@ -6297,6 +6297,7 @@ void GxBackend::write_scene_vs_constants(const GxVsConstants& cpu, GxVsConstants
             (static_cast<std::uint64_t>(state_.cp(cp::kVcdLo)) << 16u) ^
             state_.cp(cp::kVcdHi));
     record.identity = record_identity();
+    record.layout = current_vs_hash_;
     record.palette = (vs_key_.flags & 0x01u) != 0u;
     if (record.palette) {
         // PNMTX0 (XF rows 0-2) stands for the per-vertex palette's object.
@@ -6417,14 +6418,19 @@ void GxBackend::begin_identity_scene() {
     identity_occurrences_used_ = 0u;
     identity_marker_ = mix64(0x5343454E45ull);
     identity_matrix_base_ = state_.matrix_write_count();
+    identity_last_base_ = 0u;
+    identity_sub_index_ = 0u;
 }
 
-std::uint64_t GxBackend::record_identity() const noexcept {
+std::uint64_t GxBackend::record_identity() noexcept {
     if (!identity_scene_) {
         return 0u;
     }
-    const std::uint64_t key = combine64(
+    const std::uint64_t base = combine64(
         identity_marker_, static_cast<std::uint32_t>(state_.matrix_write_count() - identity_matrix_base_));
+    identity_sub_index_ = base == identity_last_base_ ? identity_sub_index_ + 1u : 0u;
+    identity_last_base_ = base;
+    const std::uint64_t key = combine64(base, identity_sub_index_);
     return key != 0u ? key : 1u;
 }
 
@@ -6903,7 +6909,9 @@ std::string GxBackend::interp_snapshot_path(const char* suffix) const {
     }();
     static const std::uint64_t first = read_env_u64("GALAXY_INTERP_SNAPSHOT_FIRST", 0u);
     static const std::uint64_t last = read_env_u64("GALAXY_INTERP_SNAPSHOT_LAST", 0u);
-    if (directory.empty() || interp_sequence_serial_ < first || interp_sequence_serial_ > last) {
+    static const std::uint64_t every = std::max<std::uint64_t>(read_env_u64("GALAXY_INTERP_SNAPSHOT_EVERY", 1u), 1u);
+    if (directory.empty() || interp_sequence_serial_ < first || interp_sequence_serial_ > last ||
+        (interp_sequence_serial_ - first) % every != 0u) {
         return {};
     }
     return directory + "\\seq_" + std::to_string(interp_sequence_serial_) + "_" + suffix + ".ppm";
@@ -6996,7 +7004,15 @@ void GxBackend::advance_interp_sequence(bool flush) {
                 renderer_.set_subframe_capture(true);
                 renderer_.set_capture_waits(true);
             }
-            const bool presented = render_interp_subframe(static_cast<float>(t));
+            // GALAXY_INTERP_FORCE_T=<0..1>: every sub-frame at that t (replay checks: 1 must
+            // reproduce the frame, 0 the frame before).
+            static const double force_t = [] {
+                char value[32]{};
+                std::size_t length = 0u;
+                return getenv_s(&length, value, sizeof(value), "GALAXY_INTERP_FORCE_T") == 0 && length > 1u
+                    ? std::clamp(std::strtod(value, nullptr), 0.0, 1.0) : -1.0;
+            }();
+            const bool presented = render_interp_subframe(static_cast<float>(force_t >= 0.0 ? force_t : t));
             interp_event("sub", interp_last_played_serial_, static_cast<std::uint64_t>(t * 1000.0));
             if (!snapshot.empty()) {
                 renderer_.set_subframe_capture(false);
@@ -7180,6 +7196,43 @@ bool GxBackend::render_interp_subframe(float t) {
         if (interp_camera_.cut) {
             ++interp_camera_cuts_;
         }
+        static const std::uint64_t dump_records = read_env_u64("GALAXY_INTERP_DUMP_RECORDS", 0u);
+        if (dump_records != 0u && interp_sequence_serial_ == dump_records) {
+            const auto& current = transform_history_.previous();  // the playing scene's records
+            std::ostringstream out;
+            out << "[interp-records] seq=" << interp_sequence_serial_ << " count=" << count
+                << " history-previous=" << current.size() << '\n';
+            for (std::size_t r = 0; r < count; ++r) {
+                const std::int32_t m = scene.prev_index[r];
+                const GxVsConstants& now = scene.constants[r];
+                out << "  r=" << r << " m=" << m << " pv=" << int(scene.per_vertex[r])
+                    << " pal=" << scene.palette[r]
+                    << " id=" << std::hex << (r < current.size() ? current[r].identity : 0u) << std::dec
+                    << " t=(" << now.inline_pos_matrix[0][3] << ',' << now.inline_pos_matrix[1][3] << ','
+                    << now.inline_pos_matrix[2][3] << ')';
+                if (before_valid && m >= 0 && static_cast<std::size_t>(m) < before_scene.constants.size()) {
+                    const GxVsConstants& b = before_scene.constants[static_cast<std::size_t>(m)];
+                    out << " prev=(" << b.inline_pos_matrix[0][3] << ',' << b.inline_pos_matrix[1][3] << ','
+                        << b.inline_pos_matrix[2][3] << ')';
+                }
+                out << '\n';
+            }
+            std::cerr << out.str();
+        }
+        static const bool trace_camera = read_env_u64("GALAXY_INTERP_TRACE_CAMERA", 0u) != 0u;
+        if (trace_camera) {
+            std::ostringstream line;
+            line << "[interp-camera] seq=" << interp_sequence_serial_ << " scene=" << interp_sequence_.scene
+                 << " known=" << interp_camera_.known << " rigid=" << interp_camera_.rigid
+                 << " cut=" << interp_camera_.cut << " moved=" << interp_camera_.moved
+                 << " turn=" << interp_camera_.turn_degrees << " before-valid=" << before_valid
+                 << " records=" << count << " before-records=" << before_scene.constants.size() << " Va=";
+            for (float v : before_scene.view) line << v << ',';
+            line << " Vb=";
+            for (float v : scene.view) line << v << ',';
+            line << '\n';
+            std::cerr << line.str();
+        }
         const bool camera_moves = interp_camera_.known && !interp_camera_.cut &&
             std::memcmp(interp_camera_.a.data(), interp_camera_.b.data(), sizeof(Affine34)) != 0;
         for (std::size_t r = 0; r < count; ++r) {
@@ -7250,6 +7303,8 @@ bool GxBackend::render_interp_subframe(float t) {
     }
     ++interp_subframe_serial_;
     const Affine34 camera_t = camera_at(interp_camera_, t);
+    // GALAXY_INTERP_PARTS: bit 0 inline position, 1 texture matrices, 2 projection, 3 palette (diagnostics).
+    static const std::uint64_t parts = read_env_u64("GALAXY_INTERP_PARTS", 0xFu);
     interp_moving_records_ += interp_moving_.size();
     alignas(16) std::uint32_t palette_words[kMatrixPaletteWords];
     for (const InterpRecordMotion& moving : interp_moving_) {
@@ -7258,11 +7313,11 @@ bool GxBackend::render_interp_subframe(float t) {
             ? &before_scene.constants[static_cast<std::size_t>(moving.prev)] : nullptr;
         // Built in cached memory, then copied once: the upload is write-combined.
         GxVsConstants built = recorded;
-        if (moving.position_moves) {
+        if (moving.position_moves && (parts & 1u) != 0u) {
             const Affine34 at = eye_at(moving.position, interp_camera_, camera_t, t);
             std::memcpy(built.inline_pos_matrix, at.data(), sizeof(built.inline_pos_matrix));
         }
-        if (moving.tex_moves && before != nullptr) {
+        if (moving.tex_moves && before != nullptr && (parts & 2u) != 0u) {
             const auto lerp_rows = [t](const float* a, const float* b, float* out, std::size_t words) {
                 for (std::size_t i = 0; i < words; ++i) {
                     out[i] = tex_word_at(a[i], b[i], (i & 3u) == 3u, t);
@@ -7273,7 +7328,7 @@ bool GxBackend::render_interp_subframe(float t) {
             lerp_rows(&before->inline_post_matrices[0][0][0], &recorded.inline_post_matrices[0][0][0],
                       &built.inline_post_matrices[0][0][0], kMaxTexGens * 12u);
         }
-        if (moving.projection_moves && before != nullptr) {
+        if (moving.projection_moves && before != nullptr && (parts & 4u) != 0u) {
             const float* a = &before->projection[0][0];
             const float* b = &recorded.projection[0][0];
             float* out = &built.projection[0][0];
@@ -7281,7 +7336,7 @@ bool GxBackend::render_interp_subframe(float t) {
                 out[i] = std::isfinite(a[i]) && std::isfinite(b[i]) ? a[i] + (b[i] - a[i]) * t : b[i];
             }
         }
-        if (moving.palette >= 0) {
+        if (moving.palette >= 0 && (parts & 8u) != 0u) {
             InterpPaletteMotion& entry = interp_palette_motions_[static_cast<std::size_t>(moving.palette)];
             if (entry.uploaded != interp_subframe_serial_) {
                 const std::uint32_t* now_words =

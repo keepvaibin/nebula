@@ -631,6 +631,10 @@ private:
     // them keeps signature matching).
     std::uint64_t identity_marker_ = 0;
     std::uint32_t identity_matrix_base_ = 0;
+    // Records with the same marker and matrix writes (texgen or color changes
+    // between them) are told apart by their order.
+    std::uint64_t identity_last_base_ = 0;
+    std::uint32_t identity_sub_index_ = 0;
     std::uint64_t identity_scene_index_ = 0;
     std::uint64_t identity_scene_markers_ = 0;
     bool identity_scene_ = false;
@@ -642,7 +646,7 @@ private:
     std::vector<IdentityOccurrence> identity_occurrences_;
     std::uint32_t identity_occurrences_used_ = 0;
     [[nodiscard]] std::uint32_t note_identity_occurrence(std::uint64_t key);
-    [[nodiscard]] std::uint64_t record_identity() const noexcept;
+    [[nodiscard]] std::uint64_t record_identity() noexcept;
     void begin_identity_scene();
     std::array<std::uint64_t, 5> identity_markers_by_kind_{};
     std::uint64_t identity_records_ = 0;
