@@ -6823,25 +6823,54 @@ void GxBackend::start_interp_sequence(std::uint32_t xfb_addr) {
     interp_sequence_.subframes = interp_stopping_ ? 0u : interp_frames_;
     interp_sequence_.next = 0u;
     // Present slots run on one clock at the present rate. A slot shows the
-    // game at t = (slot - arrival) * 60 + 60 / rate between the previous
-    // frame (0) and this one (1); the first slot with t >= 1 presents this
-    // frame itself. At rate 60(k+1) that is k sub-frames at i / (k + 1).
-    interp_sequence_.frame_qpc = now.QuadPart;
-    interp_sequence_.lead = 60.0 / rate;
+    // game at t = (slot - arrival) * 60 + lead between the previous frame (0)
+    // and this one (1); the first slot with t >= 1 presents this frame
+    // itself. Integer multiples of 60 lock the clock to each arrival with
+    // lead 60 / rate: k sub-frames at i / (k + 1), then the frame, on time.
+    // Other rates keep a free-running clock with lead 0: content time is
+    // then linear in present time (the next arrival ends the sequence at
+    // t -> 1), where a lead would show the frame up to one slot early and
+    // step the content unevenly around it. A clock left behind by a pause
+    // restarts.
     interp_slot_period_qpc_ = static_cast<std::int64_t>(static_cast<double>(frequency) / rate);
-    // Integer multiples of 60 lock the slot clock to the frame (k sub-frames
-    // then the frame); other rates keep a free-running clock and let the
-    // slots drift across frames. A clock left behind by a pause restarts.
     const bool locked = std::abs(rate / 60.0 - std::round(rate / 60.0)) < 0.02;
+    // The arrival clock: the render thread sees a frame's present when it
+    // reaches the queue (a chunk in progress delays it by milliseconds), so
+    // arrivals are the game's frame cadence, smoothed: the prediction one or
+    // more frame periods on, pulled 1/8 toward the measured arrival, with the
+    // period tracking the game's rate. A miss by a third of a period or more
+    // (pause, hitch) restarts it at the measured time.
+    if (interp_frame_period_qpc_ == 0) {
+        interp_frame_period_qpc_ = frequency / 60;
+    }
+    std::int64_t arrival = now.QuadPart;
+    if (interp_arrival_qpc_ != 0 && now.QuadPart > interp_arrival_qpc_) {
+        const std::int64_t periods = std::max<std::int64_t>(1,
+            (now.QuadPart - interp_arrival_qpc_ + interp_frame_period_qpc_ / 2) /
+                interp_frame_period_qpc_);
+        const std::int64_t predicted = interp_arrival_qpc_ + periods * interp_frame_period_qpc_;
+        const std::int64_t error = now.QuadPart - predicted;
+        if (periods <= 4 && std::abs(error) < interp_frame_period_qpc_ / 3) {
+            arrival = predicted + error / 8;
+            interp_frame_period_qpc_ = std::clamp<std::int64_t>(
+                interp_frame_period_qpc_ + error / (64 * periods), frequency / 62, frequency / 58);
+        }
+    }
+    interp_arrival_qpc_ = arrival;
+    interp_sequence_.frame_qpc = arrival;
+    interp_sequence_.lead = locked ? 60.0 / rate : 0.0;
     if (locked || interp_slot_due_qpc_ == 0 ||
         now.QuadPart - interp_slot_due_qpc_ > interp_slot_period_qpc_ ||
         interp_slot_due_qpc_ - now.QuadPart > interp_slot_period_qpc_) {
-        interp_slot_due_qpc_ = now.QuadPart;
+        // Locked rates start the slots at the (smoothed) arrival.
+        interp_slot_due_qpc_ = locked && arrival <= now.QuadPart + interp_slot_period_qpc_
+            ? arrival : now.QuadPart;
     }
 }
 
-// The next frame's sequence replaces this one before its real frame: that
-// frame is skipped (the next frame's sub-frames continue from it).
+// The next frame's sequence replaces this one before its real frame (at
+// rates that are not multiples of 60 that is the normal end: the next
+// frame's sub-frames continue from t = 0, its predecessor's image).
 void GxBackend::supersede_interp_sequence() {
     if (!interp_sequence_.active) {
         return;
@@ -6867,7 +6896,18 @@ std::string GxBackend::interp_snapshot_path(const char* suffix) const {
     return directory + "\\seq_" + std::to_string(interp_sequence_serial_) + "_" + suffix + ".ppm";
 }
 
-std::int64_t GxBackend::interp_wait_ms() const {
+// t of the next slot in the playing sequence (see advance_interp_sequence).
+double GxBackend::interp_slot_t() const {
+    static const std::int64_t frequency = [] {
+        LARGE_INTEGER value{};
+        QueryPerformanceFrequency(&value);
+        return static_cast<std::int64_t>(value.QuadPart);
+    }();
+    return static_cast<double>(interp_slot_due_qpc_ - interp_sequence_.frame_qpc) * 60.0 /
+               static_cast<double>(frequency) + interp_sequence_.lead;
+}
+
+std::int64_t GxBackend::interp_remaining_us() const {
     LARGE_INTEGER now{};
     QueryPerformanceCounter(&now);
     static const std::int64_t frequency = [] {
@@ -6875,8 +6915,30 @@ std::int64_t GxBackend::interp_wait_ms() const {
         QueryPerformanceFrequency(&value);
         return static_cast<std::int64_t>(value.QuadPart);
     }();
-    const std::int64_t remaining = interp_slot_due_qpc_ - now.QuadPart;
-    return remaining <= 0 ? 0 : std::max<std::int64_t>(1, remaining * 1000 / frequency);
+    return (interp_slot_due_qpc_ - now.QuadPart) * 1'000'000 / frequency;
+}
+
+#ifndef CREATE_WAITABLE_TIMER_HIGH_RESOLUTION
+#define CREATE_WAITABLE_TIMER_HIGH_RESOLUTION 0x00000002
+#endif
+
+// Render thread: a short wait to a present slot, finer than the scheduler tick.
+void GxBackend::interp_sleep_us(std::int64_t us) {
+    struct Timer {
+        HANDLE handle = CreateWaitableTimerExW(
+            nullptr, nullptr, CREATE_WAITABLE_TIMER_HIGH_RESOLUTION, TIMER_ALL_ACCESS);
+        ~Timer() {
+            if (handle != nullptr) CloseHandle(handle);
+        }
+    };
+    static thread_local Timer timer;
+    LARGE_INTEGER due{};
+    due.QuadPart = -us * 10;  // relative, 100 ns units
+    if (timer.handle != nullptr && SetWaitableTimer(timer.handle, &due, 0, nullptr, nullptr, FALSE)) {
+        (void)WaitForSingleObject(timer.handle, 4u);
+        return;
+    }
+    std::this_thread::sleep_for(std::chrono::microseconds(us));
 }
 
 void GxBackend::advance_interp_sequence(bool flush) {
@@ -6896,8 +6958,9 @@ void GxBackend::advance_interp_sequence(bool flush) {
             return;
         }
         const std::int64_t slot = interp_slot_due_qpc_;
-        const double t = static_cast<double>(slot - sequence.frame_qpc) * 60.0 /
-                             static_cast<double>(frequency) + sequence.lead;
+        // A free-running slot due just before the arrival shows t = 0.
+        const double t = std::max(0.0, static_cast<double>(slot - sequence.frame_qpc) * 60.0 /
+                                           static_cast<double>(frequency) + sequence.lead);
         if (!flush) {
             interp_slot_due_qpc_ = slot + interp_slot_period_qpc_;
             // A stall skips the slots it missed instead of bunching them.
@@ -6935,6 +6998,8 @@ void GxBackend::advance_interp_sequence(bool flush) {
                 ++interp_failed_;
             }
             ++sequence.next;
+            // Rates that are not multiples of 60 rarely present real frames.
+            report_interp_stats();
             return;
         }
         sequence.active = false;
@@ -7010,6 +7075,9 @@ void GxBackend::report_interp_stats() {
             << " multi-scene=" << interp_real_only_[2]
             << " log-gone=" << interp_real_only_[4]
             << " unmatched=" << interp_real_only_[5] << ")"
+            << " moving-per-subframe="
+            << (interp_presented_ != 0u ? static_cast<double>(interp_moving_records_) / presented : 0.0)
+            << " palette-decompositions=" << interp_palette_decompositions_
             << " build-ms-per-subframe="
             << (interp_presented_ != 0u ? interp_build_ms_ / presented : 0.0)
             << " record-ms-per-subframe="
@@ -7021,6 +7089,11 @@ void GxBackend::report_interp_stats() {
             << " guarded-copies=" << renderer_.take_subframe_guarded()
             << " held-textures=" << texture_cache_.take_held_texture_count()
             << " held-vertex-blocks=" << interp_held_vertex_blocks_
+            << " ring-peak-kb(v/i/c/m)="
+            << renderer_.vertex_ring().take_peak_bytes_per_frame() / 1024u << '/'
+            << renderer_.index_ring().take_peak_bytes_per_frame() / 1024u << '/'
+            << renderer_.constant_ring().take_peak_bytes_per_frame() / 1024u << '/'
+            << renderer_.matrix_ring().take_peak_bytes_per_frame() / 1024u
             << " measured-presents-hz=" << renderer_.measured_present_hz() << '\n';
     std::cerr << message.str();
     interp_presented_ = 0u;
@@ -7037,6 +7110,8 @@ void GxBackend::report_interp_stats() {
     interp_cpu_ms_ = 0.0;
     interp_build_ms_ = 0.0;
     interp_held_vertex_blocks_ = 0u;
+    interp_moving_records_ = 0u;
+    interp_palette_decompositions_ = 0u;
     interp_stats_qpc_ = now.QuadPart;
 }
 
@@ -7056,18 +7131,24 @@ bool GxBackend::render_interp_subframe(float t) {
     const Affine34& camera = scene.camera;
     const D3D12_GPU_VIRTUAL_ADDRESS ring_base = renderer_.matrix_ring().gpu_base();
     constexpr std::size_t kWords = kMatrixPaletteWords;
-    alignas(16) static thread_local std::uint32_t palette[kMatrixPaletteWords];
     if (!interp_sequence_.classified) {
         // Once per sequence: records that did not move keep the constants
-        // the frame recorded (a zero address leaves the draw's own).
+        // the frame recorded (a zero address leaves the draw's own); moving
+        // inline records keep their decomposed motion for every sub-frame.
         interp_sequence_.classified = true;
         interp_record_vas_.assign(count, 0u);
         interp_moving_.clear();
+        interp_motion_count_ = 0u;
+        for (InterpPaletteMotion& motion : interp_palette_motions_) motion.ready = false;
+        if (interp_palette_motions_.size() < scene.palette_count) {
+            interp_palette_motions_.resize(scene.palette_count);
+        }
         const bool camera_still = camera == affine_identity();
         for (std::size_t r = 0; r < count; ++r) {
             const std::int32_t m = scene.prev_index[r];
             const bool prev_data = before_scene.valid && m >= 0 &&
                 static_cast<std::size_t>(m) < before_scene.constants.size();
+            std::uint32_t motion = 0u;
             if (scene.per_vertex[r] == 0u) {
                 const bool same_tex = !prev_data ||
                     std::memcmp(before_scene.constants[static_cast<std::size_t>(m)].inline_tex_matrices,
@@ -7076,10 +7157,16 @@ bool GxBackend::render_interp_subframe(float t) {
                 if (same_tex && scene.from[r] == scene.current[r]) {
                     continue;
                 }
-                if (!affine_motion_plausible(scene.from[r], scene.current[r])) {
+                if (interp_motions_.size() <= interp_motion_count_) {
+                    interp_motions_.resize(interp_motion_count_ + 64u);
+                }
+                AffineMotion& pair = interp_motions_[interp_motion_count_];
+                affine_motion(scene.from[r], scene.current[r], pair);
+                if (!affine_motion_plausible(pair)) {
                     ++interp_snapped_;
                     continue;
                 }
+                motion = interp_motion_count_++;
             } else if (const std::int32_t shadow = scene.palette[r];
                        shadow >= 0 && static_cast<std::size_t>(shadow) < scene.palette_count) {
                 const std::uint32_t* now_words =
@@ -7097,86 +7184,98 @@ bool GxBackend::render_interp_subframe(float t) {
             } else {
                 continue;
             }
-            interp_moving_.push_back(static_cast<std::uint32_t>(r));
+            interp_moving_.push_back({static_cast<std::uint32_t>(r), motion});
         }
     }
     // Draws of one skinned model share a palette: interpolate it once.
     interp_palette_uploads_.assign(scene.palette_count, InterpPaletteUpload{});
-    for (const std::uint32_t r : interp_moving_) {
+    interp_moving_records_ += interp_moving_.size();
+    for (const InterpMoving& moving : interp_moving_) {
+        const std::uint32_t r = moving.record;
         const std::int32_t m = scene.prev_index[r];
         const bool prev_data = before_scene.valid && m >= 0 &&
             static_cast<std::size_t>(m) < before_scene.constants.size();
-        GxVsConstants constants = scene.constants[r];
+        const GxVsConstants& recorded = scene.constants[r];
+        // The upload is write-combined: written once, never read back.
+        const UploadRing::Allocation upload =
+            renderer_.constant_ring().allocate(sizeof(GxVsConstants), 256u);
+        auto* constants = reinterpret_cast<GxVsConstants*>(upload.cpu);
+        std::memcpy(constants, &recorded, sizeof(GxVsConstants));
+        interp_record_vas_[r] = upload.gpu;
         if (scene.per_vertex[r] == 0u) {
-            const Affine34 at = affine_interpolate(scene.from[r], scene.current[r], t);
-            std::memcpy(constants.inline_pos_matrix, at.data(), sizeof(constants.inline_pos_matrix));
+            const Affine34 at = affine_motion_at(interp_motions_[moving.motion], t);
+            std::memcpy(constants->inline_pos_matrix, at.data(), sizeof(constants->inline_pos_matrix));
             if (prev_data) {
                 const GxVsConstants& before = before_scene.constants[static_cast<std::size_t>(m)];
-                float* tex = &constants.inline_tex_matrices[0][0][0];
+                const float* now = &recorded.inline_tex_matrices[0][0][0];
                 const float* old = &before.inline_tex_matrices[0][0][0];
+                float lerped[kMaxTexGens * 12u];
                 for (std::size_t i = 0; i < kMaxTexGens * 12u; ++i) {
-                    tex[i] = old[i] + (tex[i] - old[i]) * t;
+                    lerped[i] = old[i] + (now[i] - old[i]) * t;
                 }
+                std::memcpy(&constants->inline_tex_matrices[0][0][0], lerped, sizeof(lerped));
             }
-        } else if (const std::int32_t shadow = scene.palette[r];
-                   shadow >= 0 && static_cast<std::size_t>(shadow) < scene.palette_count) {
-            const std::uint32_t* now_words =
-                scene.palettes.data() + static_cast<std::size_t>(shadow) * kWords;
-            const std::uint32_t* before_words = nullptr;
-            std::int32_t before = -1;
-            if (prev_data) {
-                before = before_scene.palette[static_cast<std::size_t>(m)];
-                if (before >= 0 && static_cast<std::size_t>(before) < before_scene.palette_count) {
-                    before_words = before_scene.palettes.data() +
-                                   static_cast<std::size_t>(before) * kWords;
-                } else {
-                    before = -1;
+            continue;
+        }
+        const std::int32_t shadow = scene.palette[r];
+        const std::uint32_t* now_words =
+            scene.palettes.data() + static_cast<std::size_t>(shadow) * kWords;
+        const std::uint32_t* before_words = nullptr;
+        std::int32_t before = -1;
+        if (prev_data) {
+            before = before_scene.palette[static_cast<std::size_t>(m)];
+            if (before >= 0 && static_cast<std::size_t>(before) < before_scene.palette_count) {
+                before_words = before_scene.palettes.data() +
+                               static_cast<std::size_t>(before) * kWords;
+            } else {
+                before = -1;
+            }
+        }
+        InterpPaletteUpload& cached = interp_palette_uploads_[static_cast<std::size_t>(shadow)];
+        if (!cached.valid || cached.before != before) {
+            // PNMTX0-9 (XF rows 0-29) rigid, decomposed once per sequence;
+            // texture matrices (rows 30-63) element-wise.
+            InterpPaletteMotion& motion = interp_palette_motions_[static_cast<std::size_t>(shadow)];
+            if (!motion.ready || motion.before != before) {
+                for (unsigned matrix = 0; matrix < 10u; ++matrix) {
+                    Affine34 now_m{};
+                    std::memcpy(now_m.data(), now_words + matrix * 12u, sizeof(now_m));
+                    Affine34 from{};
+                    if (before_words != nullptr) {
+                        std::memcpy(from.data(), before_words + matrix * 12u, sizeof(from));
+                    } else {
+                        from = affine_multiply(camera, now_m);
+                    }
+                    affine_motion(from, now_m, motion.matrices[matrix]);
+                    if (!affine_motion_plausible(motion.matrices[matrix])) {
+                        affine_motion(now_m, now_m, motion.matrices[matrix]);
+                    }
                 }
+                motion.ready = true;
+                motion.before = before;
+                ++interp_palette_decompositions_;
             }
-            InterpPaletteUpload& cached = interp_palette_uploads_[static_cast<std::size_t>(shadow)];
-            if (cached.valid && cached.before == before) {
-                constants.mtx_palette_base = cached.base;
-                const UploadRing::Allocation upload =
-                    renderer_.constant_ring().allocate(sizeof(GxVsConstants), 256u);
-                std::memcpy(upload.cpu, &constants, sizeof(constants));
-                interp_record_vas_[r] = upload.gpu;
-                continue;
-            }
-            std::memcpy(palette, now_words, sizeof(palette));
-            // PNMTX0-9 (XF rows 0-29): rigid interpolation.
+            static_assert(kMatrixPaletteWords > 256u);
+            const UploadRing::Allocation alloc =
+                renderer_.matrix_ring().allocate(kWords * sizeof(std::uint32_t), 256u);
+            auto* words = reinterpret_cast<std::uint32_t*>(alloc.cpu);  // write-combined, write only
             for (unsigned matrix = 0; matrix < 10u; ++matrix) {
-                Affine34 now_m{};
-                std::memcpy(now_m.data(), now_words + matrix * 12u, sizeof(now_m));
-                Affine34 from{};
-                if (before_words != nullptr) {
-                    std::memcpy(from.data(), before_words + matrix * 12u, sizeof(from));
-                } else {
-                    from = affine_multiply(camera, now_m);
-                }
-                if (!affine_motion_plausible(from, now_m)) {
-                    from = now_m;
-                }
-                const Affine34 at = affine_interpolate(from, now_m, t);
-                std::memcpy(palette + matrix * 12u, at.data(), sizeof(at));
+                const Affine34 at = affine_motion_at(motion.matrices[matrix], t);
+                std::memcpy(words + matrix * 12u, at.data(), sizeof(at));
             }
-            // Texture matrices (rows 30-63): element-wise.
             if (before_words != nullptr) {
                 for (std::size_t w = 120u; w < 256u; ++w) {
                     const float a = std::bit_cast<float>(before_words[w]);
                     const float b = std::bit_cast<float>(now_words[w]);
-                    palette[w] = std::bit_cast<std::uint32_t>(a + (b - a) * t);
+                    words[w] = std::bit_cast<std::uint32_t>(a + (b - a) * t);
                 }
+            } else {
+                std::memcpy(words + 120u, now_words + 120u, (256u - 120u) * sizeof(std::uint32_t));
             }
-            const UploadRing::Allocation alloc =
-                renderer_.matrix_ring().allocate(sizeof(palette), 256u);
-            std::memcpy(alloc.cpu, palette, sizeof(palette));
-            constants.mtx_palette_base = static_cast<std::uint32_t>((alloc.gpu - ring_base) / 16u);
-            cached = {true, before, constants.mtx_palette_base};
+            std::memcpy(words + 256u, now_words + 256u, (kWords - 256u) * sizeof(std::uint32_t));
+            cached = {true, before, static_cast<std::uint32_t>((alloc.gpu - ring_base) / 16u)};
         }
-        const UploadRing::Allocation upload =
-            renderer_.constant_ring().allocate(sizeof(GxVsConstants), 256u);
-        std::memcpy(upload.cpu, &constants, sizeof(constants));
-        interp_record_vas_[r] = upload.gpu;
+        constants->mtx_palette_base = cached.base;
     }
     interp_build_ms_ += std::chrono::duration<double, std::milli>(
         std::chrono::steady_clock::now() - build_start).count();
@@ -7359,11 +7458,18 @@ void GxBackend::render_thread_main() {
             // Draining for a stop: queued frames present without sub-frames.
             interp_stopping_ = stop_render_thread_;
             if (interp_sequence_.active && frame_queue_.empty() && !stop_render_thread_) {
-                const std::int64_t wait_ms = interp_wait_ms();
-                if (wait_ms > 0) {
-                    queue_cv_.wait_for(lock, std::chrono::milliseconds(wait_ms), [this] {
+                // Coarse and interruptible to about 1.5 ms before the slot
+                // (the condition variable wakes on the 1 ms scheduler tick),
+                // then a high-resolution timer for the rest.
+                const std::int64_t remaining_us = interp_remaining_us();
+                if (remaining_us > 2000) {
+                    queue_cv_.wait_for(lock, std::chrono::microseconds(remaining_us - 1500), [this] {
                         return stop_render_thread_ || !frame_queue_.empty();
                     });
+                } else if (remaining_us > 0) {
+                    lock.unlock();
+                    interp_sleep_us(remaining_us);
+                    lock.lock();
                 }
             } else if (idle_present || poll_frame_effects || poll_pointer_depth) {
                 // Completion polling occurs outside queue_mutex_ at the top of
@@ -7379,7 +7485,20 @@ void GxBackend::render_thread_main() {
                     return stop_render_thread_ || !frame_queue_.empty();
                 });
             }
-            if (frame_queue_.empty() && interp_sequence_.active && !stop_render_thread_) {
+            // A due slot goes before queued chunks, so presents keep their
+            // cadence while a game frame's chunks stream in; except a slot
+            // that would show the frame itself (t >= 1) while the next
+            // frame's present is queued: that present starts its sequence.
+            const auto due_slot_first = [this] {
+                if (interp_remaining_us() > 0) return false;
+                if (interp_slot_t() < 1.0 - 1e-3) return true;
+                for (const FrameChunk& queued : frame_queue_) {
+                    if (queued.present_only || queued.present_swap_chain) return false;
+                }
+                return true;
+            };
+            if (interp_sequence_.active && !stop_render_thread_ &&
+                (frame_queue_.empty() || due_slot_first())) {
                 lock.unlock();
                 try {
                     advance_interp_sequence(false);
@@ -7454,7 +7573,10 @@ void GxBackend::render_thread_main() {
                     active_pointer_depth.reset();
                 } else if (chunk.present_only) {
                     // An interpolation sequence presents the latest frame itself.
-                    interp_event("vi-present", chunk.displayed_xfb_addr, interp_log_waiting_ ? 1u : 0u);
+                    if (interp_recording_) [[unlikely]] {
+                        interp_event("vi-present", chunk.displayed_xfb_addr,
+                                     interp_log_waiting_ ? 1u : 0u);
+                    }
                     if (interp_log_waiting_ && renderer_.replay_available()) {
                         supersede_interp_sequence();
                         interp_log_waiting_ = false;
@@ -8474,13 +8596,14 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
         // comes round again (after its fence): resident blocks and texture
         // resources then retire per game frame, over the segment count.
         {
-            static_assert(kRingSegments <= TextureCache::kMaxHoldSegments);
+            static_assert(kInterpSegments <= TextureCache::kMaxHoldSegments &&
+                          kInterpSegments >= kFramesInFlight);
             const unsigned hold = renderer_.replay_hold_segment();
             if (hold != resident_hold_segment_) [[unlikely]] {
                 // Interpolation started or stopped, or a game frame began.
                 resident_hold_segment_ = hold;
                 resident_vertices_.set_frames_in_flight(
-                    hold == ~0u ? kFramesInFlight : kRingSegments);
+                    hold == ~0u ? kFramesInFlight : kInterpSegments);
                 if (hold != ~0u) {
                     resident_vertices_.advance_frame();
                 }

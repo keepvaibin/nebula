@@ -221,27 +221,40 @@ off (`GALAXY_INTERPOLATION=0` turns it off). With FSR 3 the rate stays at 60
 and the FRAME RATE row reads `(60: FSR 3)`: FSR 3's history takes one jittered
 frame per dispatch, so sub-frames cannot go through it.
 
-- Rings and the sampler heap keep one segment per game frame; the renderer logs
-  the frame's EFB operations up to its display copy. A frame with one 3D scene
-  and no output-EFB switch has a replayable log; menus and loading present
-  game frames only.
+- Rings, the descriptor ring and the sampler heaps keep one segment per game
+  frame, three in all (the frame recording, the completed log waiting for its
+  present, the log playing); the renderer logs the frame's EFB operations up
+  to its display copy. A frame with one 3D scene has a replayable log; menus
+  and loading present game frames only.
 - Present slots run every 1/rate s. A slot shows the game at
-  t = (slot - frame arrival) * 60 + 60/rate between the previous frame (0) and
-  the latest (1); the first slot with t >= 1 presents the latest frame itself.
-  At 60(k+1) the clock locks to each frame (k sub-frames at i/(k+1), then the
-  frame); other rates drift across frames, and a frame whose own slot comes
-  after the next frame's arrival is skipped. The sequence starts at the first
-  present after the log closes, so the picture is not later than at 60.
+  t = (slot - arrival) * 60 + lead between the previous frame (0) and the
+  latest (1); the first slot with t >= 1 presents the latest frame itself.
+  Arrivals are the game's frame cadence, smoothed (a present reaches the
+  render thread up to a chunk late). At 60(k+1) the clock locks to each
+  arrival with lead 1/(k+1): k sub-frames at i/(k+1), then the frame. Other
+  rates keep a free-running clock with lead 0, so content time advances
+  evenly; the next arrival ends a sequence, and a frame's own image shows
+  only when the next one is late. A frame's image is reached k/(k+1) of a
+  game frame after it completes at 60(k+1), one game frame after at other
+  rates.
+- The render thread waits for a slot on the scheduler tick until about 1.5 ms
+  before it, then on a high-resolution timer; a due slot goes before queued
+  chunks, except one that would show the frame itself while the next frame's
+  present is queued.
 - A sub-frame replays the log into a private EFB with every scene record's
   transform interpolated between the matched previous record (or the camera
   delta) and the frame's: translation and scale lerp, rotation slerp,
   per-vertex palettes rebuilt from CPU shadows (once per palette), texture
-  matrices lerped. Pairs that cannot be one frame of motion (a jump beyond a
-  third of the eye distance, a 2x scale step, a turn above 90 degrees) show the
-  frame's transform. Projection, lights and the 2D layer are the frame's.
+  matrices lerped. Each pair is decomposed once per sequence. Pairs that
+  cannot be one frame of motion (a jump beyond a third of the eye distance, a
+  2x scale step, a turn above 90 degrees) show the frame's transform.
+  Projection, lights and the 2D layer are the frame's. With HUD at output
+  resolution the 2D layer replays into a private output EFB.
 - EFB-copy textures alternate between two sets per game frame, so a sub-frame's
   copies never overwrite what the next frame's chunks already copied; a
   rewrite by a frame two ahead is saved and restored around the sub-frame.
+  Textures and resident vertex blocks a log names are released only when its
+  ring segment comes round again.
 - The FRAME RATE row shows the measured Present calls per second. Every
   swap-chain present (game frame or sub-frame) is one
   `IDXGISwapChain::Present` call, which is what Xbox Game Bar, the NVIDIA

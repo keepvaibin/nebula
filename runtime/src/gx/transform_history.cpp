@@ -129,7 +129,79 @@ Decomposed decompose(const Affine34& m) noexcept {
 
 }  // namespace
 
-bool affine_motion_plausible(const Affine34& a, const Affine34& b) noexcept {
+void affine_motion(const Affine34& a, const Affine34& b, AffineMotion& out) noexcept {
+    out.a = a;
+    out.b = b;
+    out.rigid = false;
+    out.theta = 0.0f;
+    out.inv_sin_theta = 0.0f;
+    out.cos_turn = 1.0f;
+    const Decomposed da = decompose(a);
+    const Decomposed db = decompose(b);
+    if (!da.valid || !db.valid) {
+        return;
+    }
+    float dot = da.q[0] * db.q[0] + da.q[1] * db.q[1] + da.q[2] * db.q[2] + da.q[3] * db.q[3];
+    out.cos_turn = std::fabs(dot);
+    if ((da.scale[0] < 0.0f) != (db.scale[0] < 0.0f)) {
+        return;
+    }
+    const float sign = dot < 0.0f ? -1.0f : 1.0f;
+    dot *= sign;
+    for (unsigned i = 0; i < 4u; ++i) {
+        out.qa[i] = da.q[i];
+        out.qb[i] = db.q[i] * sign;
+    }
+    for (unsigned c = 0; c < 3u; ++c) {
+        out.scale_a[c] = da.scale[c];
+        out.scale_b[c] = db.scale[c];
+    }
+    if (dot < 0.9995f) {
+        out.theta = std::acos(std::min(dot, 1.0f));
+        out.inv_sin_theta = 1.0f / std::sin(out.theta);
+    }
+    out.rigid = true;
+}
+
+Affine34 affine_motion_at(const AffineMotion& m, float t) noexcept {
+    Affine34 out{};
+    const Affine34& a = m.a;
+    const Affine34& b = m.b;
+    if (!m.rigid) {
+        for (unsigned i = 0; i < 12u; ++i) out[i] = a[i] + (b[i] - a[i]) * t;
+        return out;
+    }
+    float wa = 1.0f - t, wb = t;
+    if (m.theta != 0.0f) {
+        wa = std::sin((1.0f - t) * m.theta) * m.inv_sin_theta;
+        wb = std::sin(t * m.theta) * m.inv_sin_theta;
+    }
+    float q[4];
+    float norm = 0.0f;
+    for (unsigned i = 0; i < 4u; ++i) {
+        q[i] = m.qa[i] * wa + m.qb[i] * wb;
+        norm += q[i] * q[i];
+    }
+    norm = 1.0f / std::sqrt(norm);
+    for (float& v : q) v *= norm;
+    const float x = q[0], y = q[1], z = q[2], w = q[3];
+    const float rot[3][3] = {
+        {1.0f - 2.0f * (y * y + z * z), 2.0f * (x * y - z * w), 2.0f * (x * z + y * w)},
+        {2.0f * (x * y + z * w), 1.0f - 2.0f * (x * x + z * z), 2.0f * (y * z - x * w)},
+        {2.0f * (x * z - y * w), 2.0f * (y * z + x * w), 1.0f - 2.0f * (x * x + y * y)}};
+    for (unsigned c = 0; c < 3u; ++c) {
+        const float s = m.scale_a[c] + (m.scale_b[c] - m.scale_a[c]) * t;
+        for (unsigned r = 0; r < 3u; ++r) out[r * 4u + c] = rot[r][c] * s;
+    }
+    for (unsigned r = 0; r < 3u; ++r) {
+        out[r * 4u + 3u] = a[r * 4u + 3u] + (b[r * 4u + 3u] - a[r * 4u + 3u]) * t;
+    }
+    return out;
+}
+
+bool affine_motion_plausible(const AffineMotion& m) noexcept {
+    const Affine34& a = m.a;
+    const Affine34& b = m.b;
     const float ta[3] = {a[3], a[7], a[11]};
     const float tb[3] = {b[3], b[7], b[11]};
     float moved = 0.0f, da = 0.0f, db = 0.0f;
@@ -150,60 +222,19 @@ bool affine_motion_plausible(const Affine34& a, const Affine34& b) noexcept {
             return false;
         }
     }
-    const Decomposed qa = decompose(a);
-    const Decomposed qb = decompose(b);
-    if (qa.valid && qb.valid) {
-        const float dot = std::fabs(qa.q[0] * qb.q[0] + qa.q[1] * qb.q[1] +
-                                    qa.q[2] * qb.q[2] + qa.q[3] * qb.q[3]);
-        if (dot < 0.70710678f) {  // cos(45 deg): a turn above 90 degrees
-            return false;
-        }
-    }
-    return true;
+    return m.cos_turn >= 0.70710678f;  // cos(45 deg): a turn above 90 degrees
+}
+
+bool affine_motion_plausible(const Affine34& a, const Affine34& b) noexcept {
+    AffineMotion m;
+    affine_motion(a, b, m);
+    return affine_motion_plausible(m);
 }
 
 Affine34 affine_interpolate(const Affine34& a, const Affine34& b, float t) noexcept {
-    Affine34 out{};
-    const Decomposed da = decompose(a);
-    const Decomposed db = decompose(b);
-    if (!da.valid || !db.valid || (da.scale[0] < 0.0f) != (db.scale[0] < 0.0f)) {
-        for (unsigned i = 0; i < 12u; ++i) out[i] = a[i] + (b[i] - a[i]) * t;
-        return out;
-    }
-    float qb[4]{db.q[0], db.q[1], db.q[2], db.q[3]};
-    float dot = da.q[0] * qb[0] + da.q[1] * qb[1] + da.q[2] * qb[2] + da.q[3] * qb[3];
-    if (dot < 0.0f) {
-        for (float& v : qb) v = -v;
-        dot = -dot;
-    }
-    float wa = 1.0f - t, wb = t;
-    if (dot < 0.9995f) {
-        const float theta = std::acos(std::min(dot, 1.0f));
-        const float sin_theta = std::sin(theta);
-        wa = std::sin((1.0f - t) * theta) / sin_theta;
-        wb = std::sin(t * theta) / sin_theta;
-    }
-    float q[4];
-    float norm = 0.0f;
-    for (unsigned i = 0; i < 4u; ++i) {
-        q[i] = da.q[i] * wa + qb[i] * wb;
-        norm += q[i] * q[i];
-    }
-    norm = 1.0f / std::sqrt(norm);
-    for (float& v : q) v *= norm;
-    const float x = q[0], y = q[1], z = q[2], w = q[3];
-    const float rot[3][3] = {
-        {1.0f - 2.0f * (y * y + z * z), 2.0f * (x * y - z * w), 2.0f * (x * z + y * w)},
-        {2.0f * (x * y + z * w), 1.0f - 2.0f * (x * x + z * z), 2.0f * (y * z - x * w)},
-        {2.0f * (x * z - y * w), 2.0f * (y * z + x * w), 1.0f - 2.0f * (x * x + y * y)}};
-    for (unsigned c = 0; c < 3u; ++c) {
-        const float s = da.scale[c] + (db.scale[c] - da.scale[c]) * t;
-        for (unsigned r = 0; r < 3u; ++r) out[r * 4u + c] = rot[r][c] * s;
-    }
-    for (unsigned r = 0; r < 3u; ++r) {
-        out[r * 4u + 3u] = a[r * 4u + 3u] + (b[r * 4u + 3u] - a[r * 4u + 3u]) * t;
-    }
-    return out;
+    AffineMotion m;
+    affine_motion(a, b, m);
+    return affine_motion_at(m, t);
 }
 
 void TransformHistory::reserve(std::size_t records) {

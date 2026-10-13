@@ -4685,7 +4685,7 @@ bool RendererD3D12::initialize(int window_width, int window_height, unsigned efb
         if (!index_ring_   .initialize(device_.Get(), "index",    ib_per_frame_bytes(),  kFramesInFlight)) return false;
         if (!constant_ring_.initialize(device_.Get(), "constant", cb_per_frame_bytes(),  kFramesInFlight)) return false;
         if (!matrix_ring_  .initialize(device_.Get(), "matrix",   mtx_per_frame_bytes(), kFramesInFlight)) return false;
-        if (!srv_ring_.initialize(device_.Get(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, kSrvPerFrame, kRingSegments, kPersistentSrvDescriptors)) return false;
+        if (!srv_ring_.initialize(device_.Get(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, kSrvPerFrame, kInterpSegments, kPersistentSrvDescriptors)) return false;
 
         // Conversion sources occupy the descriptor ring's immutable prefix.
         if (!create_conversion_pipeline()) return false;
@@ -5634,8 +5634,9 @@ void RendererD3D12::begin_frame(bool present_swap_chain) {
             : interpolation_mode() ? RingMode::Interp : RingMode::Normal;
         if (mode != ring_mode_) {
             wait_for_gpu();
-            const unsigned segments = mode == RingMode::Interp ? kRingSegments : kFramesInFlight;
-            const unsigned matrix_segments = mode == RingMode::Normal ? kFramesInFlight : kRingSegments;
+            const unsigned segments = mode == RingMode::Interp ? kInterpSegments : kFramesInFlight;
+            const unsigned matrix_segments = mode == RingMode::Normal ? kFramesInFlight
+                : mode == RingMode::Interp ? kInterpSegments : kRingSegments;
             vertex_ring_.reset();
             index_ring_.reset();
             constant_ring_.reset();
@@ -5797,7 +5798,7 @@ void RendererD3D12::begin_frame(bool present_swap_chain) {
         // comes round again.
         if (ring_advance_pending_) {
             ring_advance_pending_ = false;
-            ring_segment_ = (ring_segment_ + 1u) % kRingSegments;
+            ring_segment_ = (ring_segment_ + 1u) % kInterpSegments;
             if (replay_valid_ && ring_segment_ == replay_segment_) {
                 replay_valid_ = false;
             }
@@ -6687,7 +6688,7 @@ void RendererD3D12::begin_replay_record() {
     replay_recording_ = true;
     replay_start_output_active_ = output_efb_active_;
     std::erase_if(copy_writes_, [this](const CopyWrite& write) {
-        return write.serial + kRingSegments < replay_serial_;
+        return write.serial + kInterpSegments < replay_serial_;
     });
     replay_source_slot_ = frame_slot_;
 }

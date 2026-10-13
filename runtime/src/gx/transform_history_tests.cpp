@@ -109,6 +109,21 @@ void test_interpolate() {
     for (unsigned r = 0; r < 3u; ++r) grown[r * 4u + 1u] *= 3.0f;
     check(!affine_motion_plausible(at_1000, grown), "a 3x scale step is not");
     check(affine_motion_plausible(affine_identity(), shear), "shear within limits is motion");
+    // One decomposition evaluated at several t (a sequence's sub-frames).
+    AffineMotion m;
+    affine_motion(a, b, m);
+    bool steps = m.rigid;
+    for (const float t : {0.25f, 0.5f, 0.75f}) {
+        const Affine34 at = affine_motion_at(m, t);
+        const Affine34 want = rotation_y(1.5707963f * t, 10.0f * t, 0.0f, -10.0f);
+        for (unsigned i = 0; i < 12u; ++i) steps = steps && near(at[i], want[i], 1e-4f);
+    }
+    check(steps, "one decomposition serves every t");
+    AffineMotion turn, step;
+    affine_motion(at_1000, rotation_y(2.0f, 0.0f, 0.0f, -1000.0f), turn);
+    affine_motion(at_1000, rotation_y(0.1f, 20.0f, 0.0f, -1000.0f), step);
+    check(!affine_motion_plausible(turn) && affine_motion_plausible(step),
+          "plausibility from the decomposition");
 }
 
 void test_matching_reordered() {

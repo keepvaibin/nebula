@@ -697,15 +697,32 @@ private:
         unsigned subframes = 0;
         unsigned next = 0;
         std::int64_t frame_qpc = 0;       // the frame's arrival (its present)
-        double lead = 0.0;                // t of a slot at the arrival: 60 / rate
+        double lead = 0.0;                // t of a slot at the arrival (see start)
         // Set inside a render chunk (no frame may be recorded there): the
         // render loop presents the real frame before anything else.
         bool flush_requested = false;
         unsigned scene = 0;               // interp_scenes_ index being interpolated
         bool classified = false;          // interp_moving_ holds this scene's records
     };
-    // Records of the playing scene that moved (the rest keep their constants).
-    std::vector<std::uint32_t> interp_moving_;
+    // Records of the playing scene that moved (the rest keep their constants),
+    // with their decomposed motion (inline records; interp_motions_ index).
+    struct InterpMoving {
+        std::uint32_t record = 0;
+        std::uint32_t motion = 0;
+    };
+    std::vector<InterpMoving> interp_moving_;
+    std::vector<AffineMotion> interp_motions_;
+    std::uint32_t interp_motion_count_ = 0;
+    // Per palette shadow of the playing scene: PNMTX0-9 decomposed once per
+    // sequence (against `before`, the previous scene's shadow, or -1).
+    struct InterpPaletteMotion {
+        bool ready = false;
+        std::int32_t before = -1;
+        std::array<AffineMotion, 10> matrices{};
+    };
+    std::vector<InterpPaletteMotion> interp_palette_motions_;
+    std::uint64_t interp_moving_records_ = 0;        // summed per sub-frame
+    std::uint64_t interp_palette_decompositions_ = 0;
     // Per palette shadow: its interpolated palette in this sub-frame.
     struct InterpPaletteUpload {
         bool valid = false;
@@ -733,6 +750,9 @@ private:
     // Present slot clock (VSync off): next slot and slot length.
     std::int64_t interp_slot_due_qpc_ = 0;
     std::int64_t interp_slot_period_qpc_ = 0;
+    // Smoothed game-frame arrival clock (start_interp_sequence).
+    std::int64_t interp_arrival_qpc_ = 0;
+    std::int64_t interp_frame_period_qpc_ = 0;
     std::uint64_t interp_late_slots_ = 0;   // slots a stall skipped
     std::uint64_t interp_superseded_ = 0;   // frames replaced before their own slot
     void supersede_interp_sequence();
@@ -762,7 +782,9 @@ private:
     // frame now and drops the remaining sub-frames).
     void advance_interp_sequence(bool flush);
     bool render_interp_subframe(float t);
-    [[nodiscard]] std::int64_t interp_wait_ms() const;
+    [[nodiscard]] std::int64_t interp_remaining_us() const;  // to the next slot
+    [[nodiscard]] double interp_slot_t() const;
+    static void interp_sleep_us(std::int64_t us);
     std::uint64_t motion_trace_scenes_ = 0;
     bool scene_camera_captured_ = false;
     float scene_jitter_px_[2]{};

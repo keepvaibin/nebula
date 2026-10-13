@@ -58,9 +58,14 @@ class TextureCache;
     std::string& diagnostics) noexcept;
 
 inline constexpr unsigned kFramesInFlight = 2;
-// Ring segments in temporal and interpolation modes (see RendererD3D12::
-// begin_frame): two more than the frames in flight.
+// Matrix-ring segments in temporal mode (see RendererD3D12::begin_frame):
+// two more than the frames in flight.
 inline constexpr unsigned kRingSegments = kFramesInFlight + 2u;
+// Interpolation mode: one segment of every ring, the descriptor ring and the
+// sampler heaps per game frame, for the frame being recorded, the completed
+// log waiting for its present and the log whose sub-frames play. A segment
+// is reused only after its fence (the oldest log is then invalidated).
+inline constexpr unsigned kInterpSegments = 3u;
 inline constexpr unsigned kSamplerHeapSlots = 2048;
 
 namespace detail {
@@ -261,6 +266,12 @@ public:
     // guess.
     [[nodiscard]] std::size_t peak_bytes_per_frame() const {
         return peak_bytes_per_frame_;
+    }
+    // The peak since the last call (diagnostics windows).
+    [[nodiscard]] std::size_t take_peak_bytes_per_frame() noexcept {
+        const std::size_t peak = peak_bytes_per_frame_;
+        peak_bytes_per_frame_ = 0u;
+        return peak;
     }
     [[nodiscard]] std::size_t bytes_per_frame() const { return bytes_per_frame_; }
     [[nodiscard]] std::size_t cursor() const { return cursor_; }
@@ -961,7 +972,7 @@ private:
     enum class RingMode : std::uint8_t { Normal, Temporal, Interp };
     RingMode ring_mode_ = RingMode::Normal;
     unsigned ring_segment_ = 0;
-    std::array<std::uint64_t, kRingSegments> ring_segment_fence_{};
+    std::array<std::uint64_t, kInterpSegments> ring_segment_fence_{};
     bool ring_advance_pending_ = true;
     // Sub-frames render into their own EFB so a later frame's partial EFB
     // (its chunks interleave with the sub-frames) stays intact.
@@ -1078,18 +1089,18 @@ private:
 
     Microsoft::WRL::ComPtr<ID3D12RootSignature> root_signature_;
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> sampler_heap_;
-    std::array<Microsoft::WRL::ComPtr<ID3D12DescriptorHeap>, kRingSegments>
+    std::array<Microsoft::WRL::ComPtr<ID3D12DescriptorHeap>, kInterpSegments>
         sampler_heaps_;
     // Sampler heap in use: the frame slot, or the game-frame segment in
     // interpolation mode.
     unsigned sampler_slot_ = 0;
     D3D12_GPU_DESCRIPTOR_HANDLE default_sampler_table_{};
-    std::array<std::uint32_t, kRingSegments> default_sampler_config_keys_{};
-    std::array<bool, kRingSegments> default_sampler_valid_{};
+    std::array<std::uint32_t, kInterpSegments> default_sampler_config_keys_{};
+    std::array<bool, kInterpSegments> default_sampler_valid_{};
     // Each cache describes tables actually written in its physical heap.
     // Configuration invalidation happens only after that slot's fence; tables
     // retained in another heap cannot establish a hit for the active heap.
-    std::array<SamplerTableCache, kRingSegments> sampler_tables_;
+    std::array<SamplerTableCache, kInterpSegments> sampler_tables_;
 
     UploadRing vertex_ring_;
     UploadRing index_ring_;
@@ -1262,7 +1273,7 @@ private:
     std::array<RetiredResourceList, kFramesInFlight>
         retired_efb_copy_textures_;
     // Interpolation: copy textures retired during a game-frame ring segment.
-    std::array<RetiredResourceList, kRingSegments> retired_segment_textures_;
+    std::array<RetiredResourceList, kInterpSegments> retired_segment_textures_;
 
     // Conversion blit pipeline (root sig lives in a module static next to
     // the present-blit one) + cached CPU-only descriptors for conversion
