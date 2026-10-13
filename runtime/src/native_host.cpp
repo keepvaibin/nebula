@@ -1,5 +1,4 @@
 #include "galaxy/native_host.h"
-#include "galaxy/host/scene_hint.h"
 
 #include "galaxy/ai_dma_timing.h"
 #include "galaxy/native_audio_anomaly.h"
@@ -10869,7 +10868,6 @@ void GuestAddressSpace::service_async_disc_completions() {
     if (auto failure = async_disc_->failure()) std::rethrow_exception(failure);
     for (const auto& job : async_disc_->take_completed()) {
         notify_guest_write(job.destination, job.size);
-        note_disc_read_for_scene_hint(job.offset, job.size);
         if (trace_di_io()) {
             const DiscReadTicket ticket = make_disc_read_ticket(
                 job.request, job.destination, job.offset, job.size, job.ioctlv);
@@ -12503,141 +12501,6 @@ void GuestAddressSpace::open_game_pak(const std::filesystem::path& path) {
                   << static_cast<const void*>(pak_view_) << '\n';
     }
     load_disc_mod_overrides_from_env();
-}
-
-void GuestAddressSpace::install_fst_scene_table(
-    std::span<const std::byte> fst_bytes) {
-    fst_scene_entries_.clear();
-    set_file_select_scene_hint(0);
-
-    // Best-effort, read-only, host-side parse of the FST image already placed in guest memory at boot.
-    // Never throws or asserts. A malformed FST, or one from another game revision, leaves
-    // fst_scene_entries_ empty and the scene hint "unknown"; this never affects guest-visible behavior.
-    // Mirrors the entry layout in crates/nebula-recomp-core/src/fst.rs: 12-byte entries of a 1-byte
-    // flags field, a 24-bit big-endian name offset and two big-endian u32 words. The string table
-    // follows all entries.
-    try {
-        const auto* data =
-            reinterpret_cast<const std::uint8_t*>(fst_bytes.data());
-        const std::size_t len = fst_bytes.size();
-        if (len < 12 || data[0] != 1) {
-            return;
-        }
-        const auto read_u32be = [&](std::size_t off) -> std::uint32_t {
-            return (static_cast<std::uint32_t>(data[off]) << 24) |
-                   (static_cast<std::uint32_t>(data[off + 1]) << 16) |
-                   (static_cast<std::uint32_t>(data[off + 2]) << 8) |
-                   static_cast<std::uint32_t>(data[off + 3]);
-        };
-        const auto read_u24be = [&](std::size_t off) -> std::uint32_t {
-            return (static_cast<std::uint32_t>(data[off]) << 16) |
-                   (static_cast<std::uint32_t>(data[off + 1]) << 8) |
-                   static_cast<std::uint32_t>(data[off + 2]);
-        };
-        const std::uint32_t root_next = read_u32be(8);
-        const std::size_t available_entries = len / 12;
-        if (root_next < 1u || root_next > available_entries) {
-            return;
-        }
-        const std::size_t total_entries = root_next;
-        const std::size_t string_table_offset = total_entries * 12;
-        if (string_table_offset > len) {
-            return;
-        }
-        const char* strings =
-            reinterpret_cast<const char*>(data + string_table_offset);
-        const std::size_t strings_len = len - string_table_offset;
-
-        struct StackEntry {
-            std::size_t end;
-            std::string prefix;
-        };
-        std::vector<StackEntry> stack;
-        stack.push_back({total_entries, std::string()});
-
-        // FST entries are relative to the partition root, which has no "files/" segment. That segment is
-        // added only when resolving to the host location under DATA/files/ (see
-        // crates/nebula-recomp-core/src/fst.rs). Checked against the RMGE01 sys/fst.bin: the file-select
-        // archive entry is "LayoutData/FileSelect.arc", not "files/LayoutData/FileSelect.arc".
-        static constexpr char kLayoutPrefix[] = "LayoutData/";
-        static constexpr std::size_t kLayoutPrefixLen =
-            sizeof(kLayoutPrefix) - 1u;
-
-        for (std::size_t idx = 1; idx < total_entries; ++idx) {
-            while (!stack.empty() && idx >= stack.back().end) {
-                stack.pop_back();
-            }
-            if (stack.empty()) {
-                return;
-            }
-            const std::string prefix = stack.back().prefix;
-
-            const std::size_t entry_base = idx * 12;
-            if (entry_base + 12 > len) {
-                return;
-            }
-            const std::uint8_t flags = data[entry_base];
-            const std::uint32_t name_off = read_u24be(entry_base + 1);
-            const std::uint32_t word4 = read_u32be(entry_base + 4);
-            const std::uint32_t word8 = read_u32be(entry_base + 8);
-
-            if (name_off >= strings_len) {
-                return;
-            }
-            const char* name_start = strings + name_off;
-            const std::size_t max_name_len = strings_len - name_off;
-            const std::size_t name_len = strnlen_s(name_start, max_name_len);
-            if (name_len == 0 || name_len == max_name_len) {
-                return;  // Empty or unterminated: malformed, so bail out.
-            }
-            const std::string name(name_start, name_len);
-
-            if (flags == 1u) {
-                const std::size_t next_idx = word8;
-                if (next_idx <= idx || next_idx > stack.back().end) {
-                    return;
-                }
-                stack.push_back({next_idx, prefix + name + "/"});
-            } else if (flags == 0u) {
-                const std::string path = prefix + name;
-                if (path.size() > kLayoutPrefixLen &&
-                    path.compare(0, kLayoutPrefixLen, kLayoutPrefix) == 0 &&
-                    path.size() >= 4u &&
-                    path.compare(path.size() - 4u, 4u, ".arc") == 0) {
-                    FstSceneEntry entry{};
-                    entry.disc_offset = static_cast<std::uint64_t>(word4) * 4u;
-                    entry.size = word8;
-                    const std::string base = path.substr(kLayoutPrefixLen);
-                    entry.is_file_select =
-                        _stricmp(base.c_str(), "FileSelect.arc") == 0;
-                    fst_scene_entries_.push_back(entry);
-                }
-            } else {
-                return;
-            }
-        }
-    } catch (...) {
-        fst_scene_entries_.clear();
-    }
-}
-
-void GuestAddressSpace::note_disc_read_for_scene_hint(
-    std::uint64_t byte_offset, std::uint64_t byte_count) noexcept {
-    if (fst_scene_entries_.empty() || byte_count == 0u) {
-        return;
-    }
-    for (const FstSceneEntry& entry : fst_scene_entries_) {
-        if (byte_offset >= entry.disc_offset &&
-            byte_offset < entry.disc_offset + entry.size) {
-            const int new_hint = entry.is_file_select ? 1 : 2;
-            const int old_hint = exchange_file_select_scene_hint(new_hint);
-            if (old_hint != new_hint && trace_di_io()) {
-                std::cout << "[scene-hint] file_select_active="
-                          << (new_hint == 1 ? 1 : 0) << '\n';
-            }
-            return;
-        }
-    }
 }
 
 void GuestAddressSpace::load_disc_mod_overrides_from_env() {
@@ -15717,7 +15580,6 @@ bool GuestAddressSpace::handle_di_ioctl(
         }
         if (byte_count > 0u) {
             copy_disc_bytes(out_buf, byte_offset, byte_count);
-            note_disc_read_for_scene_hint(byte_offset, byte_count);
             // The read ticket exists only to be printed. Its readers (acknowledge_ios_request, post_ios_reply and the
             // two latched-reply paths) all sit inside a `trace_di_io()` branch, yet make_disc_read_ticket runs 64
             // disc_byte_at calls (each a range check plus a disc_override_at scan) and two FNV-1a hashes, and
@@ -15886,7 +15748,6 @@ bool GuestAddressSpace::handle_di_ioctlv(
         }
         if (byte_count > 0u) {
             copy_disc_bytes(out_buf, byte_offset, byte_count);
-            note_disc_read_for_scene_hint(byte_offset, byte_count);
             if (trace_di_io()) {
                 const DiscReadTicket ticket = make_disc_read_ticket(
                     physical_request, out_buf, byte_offset, byte_count,
@@ -32609,9 +32470,6 @@ void initialize_boot_memory(
     address_space.write_u32(0x8000310C, arena_low);
     address_space.write_u32(0x80003110, fst_address);
     address_space.open_game_pak(content_root / L"game.pak");
-    // Cosmetic-only, host-side scene hint for the native settings-overlay file-select UI button (see
-    // file_select_scene_active()). Parses the same FST bytes already placed in guest memory above.
-    address_space.install_fst_scene_table(fst);
     // Does not re-zero the declared BSS range. RMGE01's BSS span (0x805F5A40..0x806ADF90) interleaves with two loaded
     // data sections: .sdata (0x8069CCA0, initialised SDA1 globals, including __mailboxAck at 0x8069E390, the IPC
     // free-slot semaphore whose retail initial value is 1) and .sdata2 (0x806A3280, SDA2 float/double constants).

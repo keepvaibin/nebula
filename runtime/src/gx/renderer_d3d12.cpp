@@ -5,7 +5,6 @@
 #include "galaxy/experimental_ultrawide_aspect.h"
 #include "galaxy/gx_d3d12.h"
 #include "galaxy/gx/game_asset_extract.h"
-#include "galaxy/host/scene_hint.h"
 #include "galaxy/gx/render_config.h"
 #include "galaxy/gx/texture_cache.h"
 #include "galaxy/runtime_settings.h"
@@ -9395,73 +9394,6 @@ std::string native_settings_row_text(
     }
 }
 
-// A small clickable "PC SETTINGS" button, drawn only while galaxy::host::file_select_scene_active()
-// reports the save-file-select screen, so it reads as part of that screen. A left click inside it
-// opens the same native settings panel as F1; F1 remains a fallback. The button uses the file-select
-// screen's extracted window-frame texture rather than hooking the guest's FileSelectButton code,
-// since guessing its addresses risks guest memory corruption. It executes no guest instruction.
-void draw_and_handle_file_select_settings_button(RendererD3D12& renderer) {
-    if (!native_settings_ui_enabled()) {
-        return;
-    }
-    if (!galaxy::host::file_select_scene_active()) {
-        return;
-    }
-    if (s_native_settings_visible.load(std::memory_order_relaxed)) {
-        return;  // the full panel is already open; nothing else to draw.
-    }
-    if (s_bb_width < 320u || s_bb_height < 240u) {
-        return;
-    }
-    const bool compact = s_bb_width < 854u || s_bb_height < 480u;
-    const int scale = compact ? 1 : (s_bb_width >= 1280u ? 2 : 1);
-    const int margin = compact ? 8 : 16;
-    const int button_w = compact ? 118 : 176;
-    const int button_h = compact ? 20 : 32;
-    const int button_x = margin;
-    const int button_y = margin;
-
-    const std::array<float, 4> button_bg{0.02f, 0.025f, 0.035f, 0.82f};
-    const std::array<float, 4> button_rail{0.15f, 0.72f, 0.85f, 0.9f};
-    const std::array<float, 4> button_text{0.88f, 0.94f, 0.96f, 1.0f};
-    renderer.draw_ui_solid_quad(button_x, button_y, button_w, button_h, button_bg);
-    renderer.draw_ui_solid_quad(button_x, button_y, 4, button_h, button_rail);
-
-    renderer.ensure_native_settings_corner_texture_loaded();
-    {
-        constexpr int kCornerPx = 12;
-        const std::array<float, 4> corner_tint{1.0f, 1.0f, 1.0f, 0.85f};
-        renderer.draw_ui_textured_quad(
-            button_x + button_w - kCornerPx, button_y, kCornerPx, kCornerPx,
-            1.0f, 0.0f, 0.0f, 1.0f, corner_tint);
-    }
-    ui_text(
-        renderer,
-        button_x + 12,
-        button_y + (compact ? 6 : 10),
-        scale,
-        "PC SETTINGS",
-        button_text);
-
-    // Edge-detected left click, hit-tested in client-pixel coordinates
-    // (which match backbuffer pixel coordinates 1:1 -- see
-    // poll_host_pointer_state()). A local static is enough here: exactly
-    // one native settings overlay/button exists per process, matching the
-    // convention already used for s_native_settings_visible etc. above.
-    static bool s_button_left_was_down = false;
-    const HostPointerState pointer = poll_host_pointer_state();
-    const bool inside_button =
-        pointer.inside_client &&
-        pointer.client_x >= button_x &&
-        pointer.client_x < button_x + button_w &&
-        pointer.client_y >= button_y &&
-        pointer.client_y < button_y + button_h;
-    if (pointer.left_button && inside_button && !s_button_left_was_down) {
-        set_native_settings_visible(true);
-    }
-    s_button_left_was_down = pointer.left_button;
-}
-
 void draw_native_settings_overlay(RendererD3D12& renderer) {
     if (!s_native_settings_visible.load(std::memory_order_relaxed)) {
         return;
@@ -9922,7 +9854,6 @@ bool RendererD3D12::present(
         const auto stall_watch_overlay_start = stall_watch_overlay
             ? std::chrono::steady_clock::now()
             : std::chrono::steady_clock::time_point{};
-        draw_and_handle_file_select_settings_button(*this);
         draw_native_settings_overlay(*this);
         draw_native_settings_hint(*this);
         if (stall_watch_overlay) {

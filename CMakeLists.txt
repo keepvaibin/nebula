@@ -500,21 +500,6 @@ if(MSVC)
     target_compile_options(galaxy_ai_pcm_identity PRIVATE /GS- /GR- /Oi /favor:INTEL64)
 endif()
 
-# Tiny, dependency-free (only <atomic>) shared flag: the file-select scene
-# hint written by galaxy_native_host (native_host.cpp, observing DVDLowRead)
-# and read by galaxy_gx (renderer_d3d12.cpp's file-select UI button). Kept
-# out of both of those heavier libraries so neither has to link the other
-# just for this one process-wide flag.
-add_library(galaxy_scene_hint STATIC runtime/src/host/scene_hint.cpp)
-target_include_directories(
-    galaxy_scene_hint
-    PUBLIC
-        "${CMAKE_CURRENT_SOURCE_DIR}/runtime/include"
-)
-if(MSVC)
-    target_compile_options(galaxy_scene_hint PRIVATE /GS- /GR- /Oi /favor:INTEL64)
-endif()
-
 # Host JAudio mixer: the game's DSP command interface as host calls.
 add_library(galaxy_jaudio_mixer STATIC runtime/src/jaudio_host_mixer.cpp)
 target_include_directories(
@@ -541,7 +526,6 @@ target_link_libraries(
         galaxy_native_dsp
         galaxy_frame_cadence_diagnostics
         galaxy_ai_pcm_identity
-        galaxy_scene_hint
         bcrypt
         hid
         ole32
@@ -570,7 +554,6 @@ target_link_libraries(
         galaxy_native_dsp
         galaxy_frame_cadence_diagnostics
         galaxy_ai_pcm_identity
-        galaxy_scene_hint
         bcrypt
         hid
         ole32
@@ -725,7 +708,6 @@ target_link_libraries(galaxy_gx
         galaxy_runtime_abi
         galaxy_runtime_settings
         galaxy_host_pointer_events
-        galaxy_scene_hint
         d3d12
         dxgi
         d3dcompiler
@@ -840,7 +822,7 @@ if(MSVC)
             galaxy_gx galaxy_native_host galaxy_native_input galaxy_native_dsp
             galaxy_runtime_timeline galaxy_runtime_instance galaxy_checkpoint_gate
             galaxy_decrementer_deadline galaxy_frame_cadence_diagnostics
-            galaxy_native_input_causality galaxy_host_pointer_events galaxy_scene_hint
+            galaxy_native_input_causality galaxy_host_pointer_events
             galaxy_ppc_float galaxy_dsp_alu galaxy_runtime_settings galaxy_atomic_file
             galaxy_jaudio_mixer)
         if(TARGET ${galaxy_symbol_target})
@@ -873,7 +855,7 @@ if(NEBULA_HOST_IPO)
         set(nebula_host_ipo_targets
             NebulaRuntime galaxy_native_host galaxy_gx galaxy_native_input
             galaxy_native_input_causality galaxy_host_pointer_events
-            galaxy_frame_cadence_diagnostics galaxy_scene_hint
+            galaxy_frame_cadence_diagnostics
             galaxy_runtime_settings galaxy_runtime_timeline galaxy_runtime_instance
             galaxy_checkpoint_gate galaxy_decrementer_deadline galaxy_atomic_file
             galaxy_ai_pcm_identity galaxy_jaudio_mixer)

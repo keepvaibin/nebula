@@ -191,10 +191,10 @@ pointer's axes follow JoyShockMapper's description of player and world space.
 ## Settings overlay
 
 `F1`, View+Menu (Xbox) or Minus+Plus (Switch) opens or closes the settings
-overlay; a one-line hint names them for the first seconds of a session, and
-the file-select screen shows a PC SETTINGS button. Autorepeat never toggles
-it. While it is open the game sees no keyboard or controller input, and
-buttons held when it closes stay hidden from the game until released.
+overlay; a one-line hint names them for the first seconds of a session.
+Autorepeat never toggles it. While it is open the game sees no keyboard or
+controller input, and buttons held when it closes stay hidden from the game
+until released.
 
 | Keyboard | Controller | Settings action |
 |---|---|---|

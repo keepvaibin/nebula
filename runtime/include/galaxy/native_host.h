@@ -1087,13 +1087,6 @@ public:
     // is missing, a warning is printed and disc reads return EIO.
     void open_game_pak(const std::filesystem::path& path);
 
-    // Parses the FST into a table of files/LayoutData/*.arc entries so DVDLowRead
-    // can tell, by disc offset, when the guest loads the file-select layout
-    // archive. Only gates a cosmetic UI hint; a parse failure leaves the hint
-    // unknown and never affects the guest. The hint is process-global
-    // (galaxy/host/scene_hint.h) because the renderer reads it without this header.
-    void install_fst_scene_table(std::span<const std::byte> fst_bytes);
-
     // Pre-wires the CP FIFO ring with the dummy GXFifoObj base/end so direct
     // CP_WRITE_POINTER writes drain before GXInit runs.
     void pre_wire_cp_fifo(std::uint32_t base, std::uint32_t end);
@@ -2194,16 +2187,6 @@ private:
     std::uint64_t pak_size_{};
     std::vector<DiscOverride> disc_overrides_;
     GuestMemoryV1 memory_{};
-
-    // See install_fst_scene_table()/file_select_scene_active().
-    struct FstSceneEntry {
-        std::uint64_t disc_offset{};
-        std::uint64_t size{};
-        bool is_file_select{};
-    };
-    std::vector<FstSceneEntry> fst_scene_entries_;
-    void note_disc_read_for_scene_hint(
-        std::uint64_t byte_offset, std::uint64_t byte_count) noexcept;
 };
 
 void load_boot_image(
