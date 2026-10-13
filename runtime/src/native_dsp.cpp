@@ -2287,8 +2287,8 @@ void NativeDspWorker::thread_main() {
                               << ctx.dram[0x03FDu] << " dram3fe=0x"
                               << ctx.dram[0x03FEu] << " dram3ff=0x"
                               << ctx.dram[0x03FFu]
-                              // Dumps DSP words 0x420-0x430 at the trap instant. Word 0x428 is the value the clamped
-                              // address-register read at PC 0x0DEB/0x0DEC consumed to produce ar[0]=0x7fff.
+                              // DSP data words 0x420-0x430. The address-register load at PC 0x0DEB/0x0DEC
+                              // reads 0x428.
                               << " dram420=0x" << ctx.dram[0x0420u]
                               << " dram421=0x" << ctx.dram[0x0421u]
                               << " dram422=0x" << ctx.dram[0x0422u]

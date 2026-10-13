@@ -1933,19 +1933,8 @@ private:
     std::uint64_t ai_dma_next_interrupt_ticks_{};
     std::uint64_t ai_dma_interrupt_pending_since_ticks_{};
     std::uint64_t ai_dma_last_duration_ticks_{};
-    // Both fields are zero-initialized and nothing writes them: no `++`, `+=` or
-    // assignment to either name appears in runtime/src, runtime/src/gx or the headers,
-    // and no resync logic exists in runtime/. The getters therefore always return 0,
-    // and the benchmark report prints that 0 as `ai-dma-resync-events=` and
-    // `ai-dma-resync-missed-buffers=`. Read those as "not measured", not "no problem".
-    // The report prints `ai-dma-missed-buffer-estimate` beside them, and that field is
-    // live, so the inert pair can look like a second, agreeing signal.
-    //
-    // native_host_tests.cpp asserts both are `== 0`. Those assertions are tautological
-    // and would pass in a build that resynced on every buffer.
-    //
-    // Not wired up: nothing in the tree defines what a resync event is. Either define
-    // the condition and count it, or delete the pair and its assertions.
+    // Host stalls longer than the AI catch-up limit (service_ai_dma): how often the
+    // completion clock skipped the missed buffer periods, and how many it skipped.
     std::uint64_t ai_dma_resync_events_{};
     std::uint64_t ai_dma_resync_missed_buffers_{};
     // The guest wrote AID_LEN (AIInitDMA's last register) since the previous

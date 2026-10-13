@@ -58,6 +58,9 @@ it is the original game code, translated instruction by instruction by the recom
 - 8 GB of RAM; 16 GB of free disk space during installation, about 5.5 GB afterwards
 - An internet connection for the first installation
 
+The least powerful system tested so far, an Intel Core Ultra 9 185H with its integrated
+graphics and 16 GB of RAM, runs the game at a locked 60 FPS at 1440p (16:10).
+
 ## Install
 
 1. Download `Nebula-Setup.exe` from the [latest release](https://github.com/keepvaibin/nebula/releases/latest).

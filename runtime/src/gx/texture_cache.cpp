@@ -1166,14 +1166,6 @@ static void write_staging_levels(
     }
 }
 
-// ---------------------------------------------------------------------------
-// Create a non-shader-visible SRV for a buffer that holds linear (row-major) texture data.
-// The renderer copies it into the frame's shader-visible ring before each draw. The view
-// is a raw buffer SRV; the HLSL sampler reads it with Load().
-//
-// Descriptor heap index is the caller-assigned slot; the descriptor is written there.
-// ---------------------------------------------------------------------------
-
 } // anonymous namespace
 
 std::size_t TextureCache::hash_content_key(const ContentKey& key) {

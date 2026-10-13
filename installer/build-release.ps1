@@ -21,22 +21,11 @@ param(
     [string]$Repository = 'keepvaibin/nebula',
     [string]$OutputDirectory = '',
     [string]$SigningKey = '',
-    # Native ISA for the prebuilt runtime and the prebuilt float/DSP libraries that every
-    # per-machine module links against.
-    #
-    # Only the generated game module got VEX/AVX2 code while this was pinned to SSE2.
-    # NebulaRuntime.exe and galaxy_ppc_float/softfloat/dsp_alu were built for the 2004 x64
-    # baseline, even on hosts that can run AVX2. AUTO runs the same CPUID + XGETBV probe as the
-    # module build and falls back to SSE2 when the build host cannot execute AVX2. Public releases
-    # default to SSE2, so the publisher's CPU does not set the user's minimum requirement.
-    #
-    # AUTO does not mean the package runs everywhere. The effective value is recorded as the
-    # embedded runtime-isa.txt resource, and Setup refuses to install a package whose runtime needs
-    # instruction sets this PC lacks. Otherwise it would install a build that faults later with an
-    # illegal instruction. Pass -NativeIsa SSE2 for a portable package.
-    #
-    # BOTH (the default) embeds an SSE2 and an AVX2 build. Setup installs the AVX2 one on CPUs that
-    # expose AVX2, so those keep full speed while older CPUs still install.
+    # Instruction set of the prebuilt runtime and of the float/DSP libraries that each installed
+    # game module links against. BOTH (the default) embeds an SSE2 and an AVX2 build, and Setup
+    # installs the AVX2 one on CPUs that support it. AUTO picks AVX2 when the build PC supports it
+    # and SSE2 otherwise. The choice is recorded in the embedded runtime-isa.txt, and Setup refuses
+    # a package whose runtime needs instructions the PC lacks.
     [ValidateSet('AUTO', 'SSE2', 'AVX2', 'BOTH')][string]$NativeIsa = 'BOTH'
 )
 $ErrorActionPreference = 'Stop'

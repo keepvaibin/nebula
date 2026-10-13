@@ -18583,10 +18583,9 @@ int main(int argc, char** argv) {
     passed &= expect(
         memory.ai_audio_submit_count() == 3,
         "the already-serviced interruptible AI boundary is not submitted again");
-    // The stale-counter checks are not asserted here. The resync counters are not written by the runtime,
-    // so asserting their zero value would not test anything. The invariant is covered by the
-    // ai_audio_submit_count() == 3 check above, which pins "submits one boundary and waits", and by the
-    // masked catch-up case below.
+    passed &= expect(
+        memory.ai_dma_resync_events() == 1u,
+        "an on-time AI service does not resync again");
     passed &= expect(
         memory.ai_dma_next_completion_ticks() > second_ai_completion,
         "on-time masked AI service arms exactly the next real hardware boundary");

@@ -1,6 +1,6 @@
 $ErrorActionPreference='Stop'
 $repo=Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
-$scratch=Join-Path $PSScriptRoot ('results-'+[guid]::NewGuid().ToString('N'))
+$scratch=Join-Path $env:TEMP ('nebula-updater-tests-'+[guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory $scratch | Out-Null
 $stub=Join-Path $scratch 'BuildInfo.cs'
 $key=(Get-Content -LiteralPath (Join-Path $repo 'installer\release-public-key.xml') -Raw).Trim().Replace('"','\"')
@@ -30,4 +30,5 @@ foreach($Version in @('0.1.0-preview.3','0.1.1-beta.1','0.2.0')) {
  $expected=if($Version -match '-beta\.') {'Nebula-Beta-Setup.exe'} else {'Nebula-Setup.exe'}
  if($setupName -ne $expected) {throw "Wrong asset name for $Version"}
 }
+Remove-Item -LiteralPath $scratch -Recurse -Force
 Write-Output 'PASS: production release-script asset naming (3 versions); signature filename derives from selected setup path. No setup built or installed.'
