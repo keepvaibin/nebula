@@ -41,7 +41,7 @@ settings are preserved by default.
 
 Start **Nebula** from the Start Menu, pick display settings and press **Play**.
 
-- Keyboard and mouse, an Xbox (XInput) controller, a Switch Pro Controller or a Switch 2 Pro Controller (USB); all remappable. See [docs/KEYBOARD_CONTROLS.md](docs/KEYBOARD_CONTROLS.md).
+- Keyboard and mouse, Xbox (XInput) controllers, Switch Pro Controllers and Switch 2 Pro Controllers (USB), all at once and remappable; Switch controllers point with the gyro, R recenters. See [docs/KEYBOARD_CONTROLS.md](docs/KEYBOARD_CONTROLS.md).
 - Aspect ratios from 4:3 to 32:9; internal resolution up to 16x.
 - Anti-aliasing: Auto (default; SMAA unless the internal resolution already
   supersamples the display), SMAA, FXAA (cheapest), Off. Low-end GPUs: 1x-2x

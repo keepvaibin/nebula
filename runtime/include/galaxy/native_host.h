@@ -1,5 +1,6 @@
 #pragma once
 
+#include "galaxy/ai_dma_timing.h"
 #include "galaxy/ai_pcm_identity.h"
 #include "galaxy/flat_guest_memory.h"
 #include "galaxy/frame_cadence_diagnostics.h"
@@ -246,6 +247,14 @@ void clear_native_window_key_presses() noexcept;
 // Window-thread key level (down on WM_KEYDOWN, up on WM_KEYUP); cleared with
 // the press latch.
 void publish_native_window_key_state(std::uint32_t key, bool down) noexcept;
+// Whether the window message for `key` / the latest mouse move or button came
+// from SendInput (a controller mapper such as Steam's desktop layout) instead
+// of a device. In auto input mode with a controller attached such input is
+// ignored so the controller is not read twice.
+void publish_native_window_input_origin(std::uint32_t key, bool injected) noexcept;
+void publish_native_pointer_input_origin(bool button, bool injected) noexcept;
+[[nodiscard]] bool native_window_key_injected(std::uint32_t key) noexcept;
+[[nodiscard]] bool native_pointer_input_injected(bool button) noexcept;
 
 // Binding capture for the overlay's CONTROLS page. While armed, controllers
 // of `scheme` are read in every input mode, never reach the overlay's pad
@@ -871,6 +880,15 @@ public:
         ai_dma_deadline_callback_ = callback;
         ai_dma_deadline_callback_user_ = user;
     }
+    // Whether the game has its next audio frame ready for the AI callback
+    // (ai_dma_timing.h); a held completion waits for it. Unset: always ready.
+    using AiDmaSourceReadyProbe = bool (*)(void* user) noexcept;
+    void set_ai_dma_source_ready_probe(
+        AiDmaSourceReadyProbe probe,
+        void* user) noexcept {
+        ai_dma_source_ready_probe_ = probe;
+        ai_dma_source_ready_user_ = user;
+    }
     void set_ai_dma_mmio_service_decision_provider(
         AiDmaMmioServiceDecisionProvider provider,
         void* user) noexcept {
@@ -884,6 +902,21 @@ public:
     std::uint64_t ai_dma_next_completion_ticks() const {
         if (ai_dma_next_completion_ticks_ == 0) {
             return ai_dma_next_interrupt_ticks_;
+        }
+        if (ai_dma_hold_since_ticks_ != 0u &&
+            (!ai_dma_shadow_fresh_ || ai_dma_hold_recheck_ticks_ != 0u)) {
+            // A held completion is serviced when the guest writes its next
+            // buffer (write_ai_dma_len republishes), at the next DSP ring
+            // check, or when the hold times out.
+            std::uint64_t release =
+                ai_dma_timing::stale_ai_hold_release_ticks(
+                    ai_dma_hold_since_ticks_, ai_dma_last_duration_ticks_);
+            if (ai_dma_shadow_fresh_) {
+                release = std::min(release, ai_dma_hold_recheck_ticks_);
+            }
+            return ai_dma_next_interrupt_ticks_ == 0
+                ? release
+                : std::min(release, ai_dma_next_interrupt_ticks_);
         }
         if (ai_dma_next_interrupt_ticks_ == 0) {
             return ai_dma_next_completion_ticks_;
@@ -942,6 +975,13 @@ public:
     std::uint64_t ai_dma_resync_missed_buffers() const {
         return ai_dma_resync_missed_buffers_;
     }
+    // Completions held for the game's next buffer (ai_dma_timing::
+    // hold_stale_ai_completion), holds that timed out, and blocks that were
+    // played as a fade to silence instead of a replayed buffer.
+    std::uint64_t ai_dma_holds() const { return ai_dma_holds_; }
+    std::uint64_t ai_dma_hold_timeouts() const { return ai_dma_hold_timeouts_; }
+    std::uint64_t ai_dma_concealed_blocks() const { return ai_dma_concealed_blocks_; }
+    std::uint64_t ai_dma_hold_max_ticks() const { return ai_dma_hold_max_ticks_; }
     AudioSinkStats audio_sink_stats() const;
     // Records deferred correlation data after an accepted timeline rebase.
     // Simulation thread only; does not service any device.
@@ -1927,6 +1967,29 @@ private:
     // the condition and count it, or delete the pair and its assertions.
     std::uint64_t ai_dma_resync_events_{};
     std::uint64_t ai_dma_resync_missed_buffers_{};
+    // The guest wrote AID_LEN (AIInitDMA's last register) since the previous
+    // latch: the shadow names a buffer that has not been played yet.
+    bool ai_dma_shadow_fresh_{true};
+    // Timeline tick at which a due completion was first held for a fresh
+    // shadow; 0 when no completion is held.
+    std::uint64_t ai_dma_hold_since_ticks_{};
+    // Next DSP ring check of a hold whose shadow is written; 0 otherwise.
+    std::uint64_t ai_dma_hold_recheck_ticks_{};
+    AiDmaSourceReadyProbe ai_dma_source_ready_probe_{};
+    void* ai_dma_source_ready_user_{};
+    std::uint64_t ai_dma_holds_{};
+    std::uint64_t ai_dma_hold_timeouts_{};
+    std::uint64_t ai_dma_hold_max_ticks_{};
+    // Concealment of a block the guest did not refill: the latched buffer is
+    // replaced by a fade from the last submitted sample to silence, and the
+    // next refilled buffer fades in (ai_dma_timing conceal helpers).
+    std::uint64_t ai_dma_concealed_blocks_{};
+    bool ai_dma_latch_stale_{};
+    bool ai_dma_feed_stalled_{};
+    bool ai_dma_output_concealed_{};
+    std::int16_t ai_dma_last_left_{};
+    std::int16_t ai_dma_last_right_{};
+    std::vector<std::byte> ai_dma_conceal_buffer_;
     std::uint64_t ai_dma_notified_deadline_ticks_{};
     AiDmaDeadlineCallback ai_dma_deadline_callback_{};
     void* ai_dma_deadline_callback_user_{};

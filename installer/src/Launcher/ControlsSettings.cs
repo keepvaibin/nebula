@@ -25,6 +25,8 @@ namespace Nebula.Launcher
     {
         public float StickDeadzone, PointerDeadzone, PointerSpeed = 1.6f;
         public bool InvertPointerY, GyroPointer;
+        public float GyroSensitivity = 1.0f;
+        public float PointerHideSeconds, PointerHideRadius = 0.03f;
         public int Motion; // 0 off, 1 Wii Remote, 2 Nunchuk
         public int ShakeSensitivity = 3;
         public SchemeTuning Clone() { return (SchemeTuning)MemberwiseClone(); }
@@ -37,19 +39,23 @@ namespace Nebula.Launcher
     /// </summary>
     internal sealed class ControlsSettings
     {
-        public const int SchemeCount = 4, TargetCount = 24, Slots = 4;
+        public const int SchemeCount = 4, TargetCount = 25, Slots = 4;
+        public const int JumpBack = 24;
+        // runtime_settings.ini controls_version (input_bindings.h kControlsVersion).
+        public const int ControlsVersion = 3;
+        public const int ModeAuto = 0, ModeKeyboardMouse = 1, ModeController = 2, ModeRealWiimote = 3;
         public const int Keyboard = 0, Xbox = 1, SwitchPro = 2, SwitchPro2 = 3;
         public static readonly string[] SchemeIds = { "keyboard", "xbox", "switch_pro", "switch_pro2" };
         public static readonly string[] SchemeLabels = { "Keyboard and mouse", "Xbox controller (XInput)", "Switch Pro Controller", "Switch 2 Pro Controller" };
         public static readonly string[] TargetIds = {
             "a", "b", "one", "two", "plus", "minus", "home", "dpad_up", "dpad_down", "dpad_left", "dpad_right",
             "stick_up", "stick_down", "stick_left", "stick_right", "c", "z", "shake", "nunchuk_shake",
-            "pointer_up", "pointer_down", "pointer_left", "pointer_right", "pointer_recenter" };
+            "pointer_up", "pointer_down", "pointer_left", "pointer_right", "pointer_recenter", "jump_back" };
         public static readonly string[] TargetLabels = {
             "A", "B", "1", "2", "Plus", "Minus", "Home", "D-pad up", "D-pad down", "D-pad left", "D-pad right",
             "Nunchuk stick up", "Nunchuk stick down", "Nunchuk stick left", "Nunchuk stick right", "C", "Z",
             "Shake (Wii Remote)", "Shake (Nunchuk)", "Pointer up", "Pointer down", "Pointer left", "Pointer right",
-            "Pointer recenter" };
+            "Pointer recenter", "A in play, B in menus" };
         public static readonly string[] MotionNames = { "off", "remote", "nunchuk" };
         public static readonly string[] MotionLabels = { "Off", "Wii Remote shake", "Nunchuk shake" };
 
@@ -76,7 +82,7 @@ namespace Nebula.Launcher
             K(0x6F, "NumDiv"), K(0x6E, "NumDecimal") };
         private static KeyValuePair<int, string> K(int vk, string name) { return new KeyValuePair<int, string>(vk, name); }
 
-        public int InputMode; // 0 keyboard_mouse, 1 controller, 2 real_wiimote (kept, not offered)
+        public int InputMode; // ModeAuto, ModeKeyboardMouse, ModeController, ModeRealWiimote (kept, not offered)
         public readonly InputSource[][][] Bindings = new InputSource[SchemeCount][][];
         public readonly SchemeTuning[] Tuning = new SchemeTuning[SchemeCount];
 
@@ -96,7 +102,8 @@ namespace Nebula.Launcher
         private static InputSource Pos(int a) { return new InputSource(SourceKind.AxisPositive, a); }
         private static InputSource Neg(int a) { return new InputSource(SourceKind.AxisNegative, a); }
 
-        public static InputSource[][] DefaultTable(int scheme)
+        /// <summary>The defaults shipped before controls version 2 (Native28), for migration.</summary>
+        public static InputSource[][] LegacyTable(int scheme)
         {
             var t = new InputSource[TargetCount][];
             for (int i = 0; i < TargetCount; i++) t[i] = new InputSource[0];
@@ -140,7 +147,52 @@ namespace Nebula.Launcher
             return t;
         }
 
-        public static SchemeTuning DefaultTuning(int scheme)
+        /// <summary>The defaults shipped in controls version 2 (Native29), for migration.</summary>
+        public static InputSource[][] Version2Table(int scheme)
+        {
+            var t = LegacyTable(scheme);
+            if (scheme == Keyboard) return t;
+            bool xbox = scheme == Xbox;
+            t[0] = new[] { Button(xbox ? South : East) };
+            t[JumpBack] = new[] { Button(xbox ? East : South) };
+            t[1] = new[] { Pos(RightTrigger) };
+            t[16] = new[] { Pos(LeftTrigger) };
+            t[15] = new[] { Button(LeftShoulder), Button(LeftStick) };
+            if (xbox)
+            {
+                t[17] = new[] { Button(West), Button(North), Button(RightShoulder) };
+                t[23] = new[] { Button(RightStick) };
+            }
+            else
+            {
+                t[17] = new[] { Button(West), Button(North) };
+                t[23] = new[] { Button(RightShoulder) };
+                t[7] = new[] { Button(DpadUp), Pos(RightY) };
+                t[8] = new[] { Button(DpadDown), Neg(RightY) };
+                t[9] = new[] { Button(DpadLeft), Neg(RightX) };
+                t[10] = new[] { Button(DpadRight), Pos(RightX) };
+            }
+            return t;
+        }
+
+        /// <summary>
+        /// Super Mario Galaxy on Switch with Star Bits on the left shoulder
+        /// only: A or B jump (B backs out of menus), L/LB Star Bits, both
+        /// triggers crouch, left-stick click camera, X/Y (Xbox also RB) or shake
+        /// spin, R / right-stick click recenters, gyro points, right stick turns
+        /// the camera (pointer when the gyro is off; Xbox: pointer).
+        /// </summary>
+        public static InputSource[][] DefaultTable(int scheme)
+        {
+            var t = Version2Table(scheme);
+            if (scheme == Keyboard) return t;
+            t[1] = new[] { Button(LeftShoulder) };
+            t[16] = new[] { Pos(LeftTrigger), Pos(RightTrigger) };
+            t[15] = new[] { Button(LeftStick) };
+            return t;
+        }
+
+        public static SchemeTuning LegacyTuning(int scheme)
         {
             var t = new SchemeTuning();
             if (scheme == Xbox)
@@ -148,6 +200,7 @@ namespace Nebula.Launcher
                 t.StickDeadzone = 7849.0f / 32767.0f;
                 t.PointerDeadzone = 8689.0f / 32767.0f;
                 t.PointerSpeed = 2.4f;
+                t.PointerHideSeconds = 4.0f;
             }
             else if (HasMotion(scheme))
             {
@@ -155,8 +208,41 @@ namespace Nebula.Launcher
                 t.PointerDeadzone = 0.12f;
                 t.PointerSpeed = 2.4f;
                 t.Motion = 1;
+                t.PointerHideSeconds = 4.0f;
             }
             return t;
+        }
+
+        public static SchemeTuning DefaultTuning(int scheme)
+        {
+            var t = LegacyTuning(scheme);
+            if (HasMotion(scheme)) t.GyroPointer = true;
+            return t;
+        }
+
+        private static bool SameBindings(InputSource[] a, InputSource[] b)
+        {
+            if (a.Length != b.Length) return false;
+            for (int i = 0; i < a.Length; i++) if (!a[i].Equals(b[i])) return false;
+            return true;
+        }
+
+        /// <summary>Moves bindings and tuning that still equal the legacy defaults to the current defaults (runtime migrate_legacy_controls).</summary>
+        private void MigrateLegacy(int version)
+        {
+            for (int s = 0; s < SchemeCount; s++)
+            {
+                var legacy = LegacyTable(s);
+                var version2 = Version2Table(s);
+                var current = DefaultTable(s);
+                for (int t = 0; t < TargetCount; t++)
+                {
+                    bool old = SameBindings(Bindings[s][t], legacy[t]) || SameBindings(Bindings[s][t], version2[t]);
+                    if (old && !SameBindings(Bindings[s][t], current[t])) Bindings[s][t] = current[t];
+                }
+                if (version < 2 && Tuning[s].GyroPointer == LegacyTuning(s).GyroPointer) Tuning[s].GyroPointer = DefaultTuning(s).GyroPointer;
+            }
+            if (version < 2 && InputMode == ModeKeyboardMouse) InputMode = ModeAuto;
         }
 
         // ---- names ---------------------------------------------------------------
@@ -264,12 +350,16 @@ namespace Nebula.Launcher
             try { lines = File.Exists(SettingsPath) ? File.ReadAllLines(SettingsPath) : new string[0]; }
             catch (IOException) { return settings; }
             catch (UnauthorizedAccessException) { return settings; }
+            int version = 0;
             foreach (string line in lines)
             {
                 int eq = line.IndexOf('=');
                 if (eq <= 0) continue;
-                settings.Apply(line.Substring(0, eq).Trim(), line.Substring(eq + 1).Trim());
+                string key = line.Substring(0, eq).Trim(), value = line.Substring(eq + 1).Trim();
+                if (key == "controls_version") { int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out version); continue; }
+                settings.Apply(key, value);
             }
+            if (lines.Length != 0 && version < ControlsVersion) settings.MigrateLegacy(version);
             return settings;
         }
 
@@ -278,9 +368,10 @@ namespace Nebula.Launcher
             if (key == "input_mode")
             {
                 string v = value.ToLowerInvariant();
-                if (v == "controller" || v == "xinput" || v == "gamepad" || v == "switch" || v == "switch_pro") InputMode = 1;
-                else if (v.Contains("wiimote") || v.Contains("wii_remote") || v.Contains("wii-remote")) InputMode = 2;
-                else if (v.StartsWith("keyboard") || v == "kbm" || v == "mouse") InputMode = 0;
+                if (v == "auto") InputMode = ModeAuto;
+                else if (v == "controller" || v == "xinput" || v == "gamepad" || v == "switch" || v == "switch_pro") InputMode = ModeController;
+                else if (v.Contains("wiimote") || v.Contains("wii_remote") || v.Contains("wii-remote")) InputMode = ModeRealWiimote;
+                else if (v.StartsWith("keyboard") || v == "kbm" || v == "mouse") InputMode = ModeKeyboardMouse;
                 return;
             }
             bool bind = key.StartsWith("bind."), tune = key.StartsWith("tune.");
@@ -319,6 +410,9 @@ namespace Nebula.Launcher
                 case "pointer_speed": if (parsed) t.PointerSpeed = Math.Max(0.1f, Math.Min(10f, f)); break;
                 case "invert_pointer_y": t.InvertPointerY = value == "1" || value.ToLowerInvariant() == "true"; break;
                 case "gyro_pointer": t.GyroPointer = value == "1" || value.ToLowerInvariant() == "true"; break;
+                case "gyro_sensitivity": if (parsed) t.GyroSensitivity = Math.Max(0.2f, Math.Min(5f, f)); break;
+                case "pointer_hide_seconds": if (parsed) t.PointerHideSeconds = Math.Max(0f, Math.Min(60f, f)); break;
+                case "pointer_hide_radius": if (parsed) t.PointerHideRadius = Math.Max(0f, Math.Min(0.5f, f)); break;
                 case "shake_sensitivity": if (parsed) t.ShakeSensitivity = Math.Max(1, Math.Min(5, (int)Math.Round(f))); break;
                 case "motion": { int m = Array.IndexOf(MotionNames, value.ToLowerInvariant()); if (m >= 0) t.Motion = m; break; }
             }
@@ -329,7 +423,10 @@ namespace Nebula.Launcher
         public List<KeyValuePair<string, string>> Lines()
         {
             var lines = new List<KeyValuePair<string, string>>();
-            if (InputMode != 2) lines.Add(new KeyValuePair<string, string>("input_mode", InputMode == 1 ? "controller" : "keyboard_mouse"));
+            if (InputMode != ModeRealWiimote)
+                lines.Add(new KeyValuePair<string, string>("input_mode",
+                    InputMode == ModeController ? "controller" : InputMode == ModeKeyboardMouse ? "keyboard_mouse" : "auto"));
+            lines.Add(new KeyValuePair<string, string>("controls_version", ControlsVersion.ToString(CultureInfo.InvariantCulture)));
             for (int s = 0; s < SchemeCount; s++)
             {
                 string p = SchemeIds[s] + ".";
@@ -340,6 +437,8 @@ namespace Nebula.Launcher
                 {
                     lines.Add(new KeyValuePair<string, string>("tune." + p + "stick_deadzone", F(tuning.StickDeadzone)));
                     lines.Add(new KeyValuePair<string, string>("tune." + p + "pointer_deadzone", F(tuning.PointerDeadzone)));
+                    lines.Add(new KeyValuePair<string, string>("tune." + p + "pointer_hide_seconds", F(tuning.PointerHideSeconds)));
+                    lines.Add(new KeyValuePair<string, string>("tune." + p + "pointer_hide_radius", F(tuning.PointerHideRadius)));
                 }
                 lines.Add(new KeyValuePair<string, string>("tune." + p + "pointer_speed", F(tuning.PointerSpeed)));
                 lines.Add(new KeyValuePair<string, string>("tune." + p + "invert_pointer_y", tuning.InvertPointerY ? "1" : "0"));
@@ -348,6 +447,7 @@ namespace Nebula.Launcher
                     lines.Add(new KeyValuePair<string, string>("tune." + p + "motion", MotionNames[tuning.Motion]));
                     lines.Add(new KeyValuePair<string, string>("tune." + p + "shake_sensitivity", tuning.ShakeSensitivity.ToString(CultureInfo.InvariantCulture)));
                     lines.Add(new KeyValuePair<string, string>("tune." + p + "gyro_pointer", tuning.GyroPointer ? "1" : "0"));
+                    lines.Add(new KeyValuePair<string, string>("tune." + p + "gyro_sensitivity", F(tuning.GyroSensitivity)));
                 }
             }
             return lines;

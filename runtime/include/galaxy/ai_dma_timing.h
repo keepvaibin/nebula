@@ -2,6 +2,7 @@
 
 #include "galaxy/runtime_timeline.h"
 
+#include <cstddef>
 #include <cstdint>
 #include <utility>
 
@@ -153,6 +154,121 @@ inline constexpr std::uint64_t kHostPauseAiCatchUpPeriods = 6u;
     const std::uint64_t cap = duration_ticks * kHostPauseAiCatchUpPeriods;
     const std::uint64_t shift = owed_ticks < cap ? owed_ticks : cap;
     return shift < next_completion_ticks ? shift : next_completion_ticks - 1u;
+}
+
+// JASDriver::updateDac (0x80494390) runs on the game's audio thread once per
+// AI callback: AIInitDMA of the buffer it mixed last (AID_LEN is the last
+// register written), then readDspBuffer of the next frame from the DSP output
+// ring into the following buffer. A completion that falls due before that
+// thread ran for the previous callback finds the shadow still naming the
+// buffer just played, and the hardware would play it again: one 17.5 ms block
+// repeated. A callback that runs before the DSP ring holds a frame makes the
+// game fill the buffer with its last sample (readDspBuffer underrun 0x804945CC:
+// a flat block and two steps). Both happen whenever completions are late (a
+// host stall; every guest thread runs on the simulation thread, so late
+// completions arrive back to back while the ring holds only the frames mixed
+// ahead). Such a completion is held until the game wrote AID_LEN and the ring
+// holds a frame, on the device's original period grid, so the late periods are
+// produced once each at the pace the game mixes them and the output queue
+// regains its depth. Without a write for kStaleAiHoldPeriods (the game stopped
+// feeding the DMA) the boundary is latched as the hardware would, but played as
+// a fade to silence instead of a repeat. The limit outlasts host stalls in
+// which no guest thread can run (a frame boundary waiting for the GPU inside an
+// interrupt handler measured 50-78 ms); a shorter one turned each such stall
+// into inserted silence while the output queue still had audio. It equals the
+// masked catch-up bound of service_ai_dma, beyond which periods are dropped.
+inline constexpr std::uint64_t kStaleAiHoldPeriods = 8u;
+// A hold that waits for the DSP ring re-checks it this often (in periods).
+inline constexpr std::uint64_t kAiSourceRecheckDivisor = 8u;
+
+enum class StaleAiCompletion : std::uint8_t {
+    Latch,           // the shadow names a new buffer
+    Hold,            // wait for the game's AID_LEN write or its next DSP frame
+    LatchConcealed,  // hold timed out: latch, output a fade to silence
+};
+
+[[nodiscard]] constexpr std::uint64_t stale_ai_hold_release_ticks(
+    std::uint64_t hold_since_ticks,
+    std::uint64_t duration_ticks) noexcept {
+    const std::uint64_t span = duration_ticks <= ~std::uint64_t{0} / kStaleAiHoldPeriods
+        ? duration_ticks * kStaleAiHoldPeriods
+        : ~std::uint64_t{0};
+    return hold_since_ticks <= ~std::uint64_t{0} - span
+        ? hold_since_ticks + span
+        : ~std::uint64_t{0};
+}
+
+// `hold_since_ticks` is 0 when no hold is running (a hold then starts now).
+// `source_ready`: the game's DSP ring holds a frame for the next callback.
+// `feed_stalled`: a hold already timed out and the game has not written since;
+// later boundaries keep the period grid and are concealed without a hold.
+[[nodiscard]] constexpr StaleAiCompletion stale_ai_completion_action(
+    bool shadow_fresh,
+    bool source_ready,
+    bool feed_stalled,
+    std::uint64_t hold_since_ticks,
+    std::uint64_t now_ticks,
+    std::uint64_t duration_ticks) noexcept {
+    if (shadow_fresh && source_ready) {
+        return StaleAiCompletion::Latch;
+    }
+    if (feed_stalled && !shadow_fresh) {
+        return StaleAiCompletion::LatchConcealed;
+    }
+    if (duration_ticks == 0u) {
+        return StaleAiCompletion::Latch;
+    }
+    if (hold_since_ticks == 0u ||
+        now_ticks < stale_ai_hold_release_ticks(hold_since_ticks, duration_ticks)) {
+        return StaleAiCompletion::Hold;
+    }
+    // Timed out: a written buffer plays as written; a replay is concealed.
+    return shadow_fresh ? StaleAiCompletion::Latch
+                        : StaleAiCompletion::LatchConcealed;
+}
+
+// Concealment ramps for big-endian 16-bit stereo AI PCM: 4 ms at 32 kHz, short
+// enough to hide a step without an audible fade.
+inline constexpr std::size_t kConcealRampFrames = 128u;
+
+[[nodiscard]] constexpr std::int16_t load_be16(const std::byte* p) noexcept {
+    return static_cast<std::int16_t>(
+        (std::to_integer<std::uint16_t>(p[0]) << 8) | std::to_integer<std::uint16_t>(p[1]));
+}
+
+constexpr void store_be16(std::byte* p, std::int32_t value) noexcept {
+    const auto bits = static_cast<std::uint16_t>(static_cast<std::int16_t>(value));
+    p[0] = static_cast<std::byte>(bits >> 8);
+    p[1] = static_cast<std::byte>(bits & 0xFFu);
+}
+
+// Fills `out` (whole frames) with a ramp from the last output sample pair to
+// silence, then silence.
+constexpr void write_conceal_fade_out(
+    std::byte* out, std::size_t bytes, std::int16_t left, std::int16_t right) noexcept {
+    const std::size_t frames = bytes / 4u;
+    for (std::size_t i = 0; i < frames; ++i) {
+        const std::int32_t remaining = i < kConcealRampFrames
+            ? static_cast<std::int32_t>(kConcealRampFrames - 1u - i)
+            : 0;
+        constexpr auto kSteps = static_cast<std::int32_t>(kConcealRampFrames);
+        store_be16(out + i * 4u, left * remaining / kSteps);
+        store_be16(out + i * 4u + 2u, right * remaining / kSteps);
+    }
+}
+
+// Ramps the first kConcealRampFrames frames of `pcm` up from silence in place.
+constexpr void apply_conceal_fade_in(std::byte* pcm, std::size_t bytes) noexcept {
+    const std::size_t frames = bytes / 4u;
+    const std::size_t ramp = frames < kConcealRampFrames ? frames : kConcealRampFrames;
+    constexpr auto kSteps = static_cast<std::int32_t>(kConcealRampFrames);
+    for (std::size_t i = 0; i < ramp; ++i) {
+        const auto gain = static_cast<std::int32_t>(i);
+        for (std::size_t c = 0; c < 2u; ++c) {
+            std::byte* sample = pcm + i * 4u + c * 2u;
+            store_be16(sample, load_be16(sample) * gain / kSteps);
+        }
+    }
 }
 
 // A host-suspension rebase may restore AI only when the device, RuntimeState,

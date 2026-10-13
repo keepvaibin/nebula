@@ -2569,6 +2569,12 @@ struct RuntimeState {
     bool gx_sync_capture_active{};
     std::uint64_t draw_done_submit_attempts{};
     std::uint64_t draw_done_submit_deferred{};
+    // The GXDrawDone capture is still Captured: the render queue was full when
+    // the main thread went to sleep for it (submit_gx_at_draw_done_wait).
+    bool draw_done_submit_owed{};
+    std::uint64_t draw_done_submit_queue_deferrals{};
+    std::uint64_t draw_done_submit_owed_us{};
+    std::chrono::steady_clock::time_point draw_done_submit_owed_since{};
     std::uint64_t draw_done_submit_count{};
     std::uint64_t draw_done_submit_bytes{};
     bool gx_stream_active{};
@@ -5954,6 +5960,55 @@ void on_native_input_cadence_armed(
         next_unconsumed_deadline_ticks,
         period_ticks,
         next_unconsumed_sequence);
+}
+
+// JASDriver state (RMGE01 .sbss). updateDac (0x80494390) clears lastRspMadep
+// on entry, programs the previous buffer, reads the next DSP frame
+// (readDspBuffer 0x804945CC: slot read+1, a flat underrun fill when that is the
+// slot being written) and stores the new buffer in lastRspMadep on exit. The
+// next AI callback finds a frame when the previous updateDac has finished and
+// the ring holds one. True also before the driver has run once.
+bool jaudio_dsp_frame_ready(void* user) noexcept {
+    constexpr std::uint32_t kDspDacWriteBuffer = 0x806A2B9Cu;
+    constexpr std::uint32_t kDspDacReadBuffer = 0x806A2BA0u;
+    constexpr std::uint32_t kLastRspMadep = 0x806A2BACu;
+    constexpr std::uint32_t kDspDacBufferCount = 0x8069E028u;  // u8
+    const auto& state = *static_cast<const RuntimeState*>(user);
+    if (state.address_space == nullptr) {
+        return true;
+    }
+    const std::byte* count_byte =
+        state.address_space->pointer_or_null(kDspDacBufferCount, 1u);
+    const std::byte* driver =
+        state.address_space->pointer_or_null(kDspDacWriteBuffer, 0x14u);
+    if (count_byte == nullptr || driver == nullptr) {
+        return true;
+    }
+    const std::uint32_t count = std::to_integer<std::uint32_t>(*count_byte);
+    const std::uint32_t write = state.address_space->read_u32(kDspDacWriteBuffer);
+    const std::uint32_t read = state.address_space->read_u32(kDspDacReadBuffer);
+    if (count < 2u || count > 16u || write >= count || read >= count) {
+        return true;
+    }
+    static bool driver_seen = false;
+    const bool dac_prepared = state.address_space->read_u32(kLastRspMadep) != 0u;
+    driver_seen = driver_seen || dac_prepared;
+    const bool ready = !driver_seen ||
+        (dac_prepared && (read + 1u) % count != write);
+    static const bool trace = read_env_flag("GALAXY_TRACE_AI_SOURCE", false);
+    if (trace) {
+        static unsigned lines = 0u;
+        if (lines < 4000u) {
+            ++lines;
+            std::cerr << "[ai-source] read=" << read << " write=" << write
+                      << " count=" << count << " status="
+                      << state.address_space->read_u32(0x806A2BA4u)
+                      << " ready=" << (ready ? 1 : 0) << " now="
+                      << runtime_time_base_ticks(const_cast<RuntimeState&>(state))
+                      << '\n';
+        }
+    }
+    return ready;
 }
 
 galaxy::host::AiDmaMmioServiceDecision ai_dma_mmio_service_decision(
@@ -16969,13 +17024,56 @@ void scan_pending_gx_pe_events(
 // off-VI submission is excluded while either of those owners is active.
 // This only retires backend receipts. PE levels are raised by the renderer's
 // real fence callback and remain acknowledged exclusively by translated code.
+// Submits the GXDrawDone capture that submit_gx_at_draw_done_wait left
+// Captured because the render queue was full. `wait`: block for queue space
+// (an ordering point, a later FIFO must not overtake it); otherwise submit
+// only if a slot is free. Returns true when nothing is owed afterwards.
+bool submit_owed_draw_done_capture(RuntimeState& state, bool wait) {
+    if (!state.draw_done_submit_owed) {
+        return true;
+    }
+    if (!wait && !galaxy::gx::render_queue_has_space()) {
+        return false;
+    }
+    const auto* capture = state.pending_draw_done_submissions.next_to_submit();
+    if (capture == nullptr || state.address_space == nullptr) {
+        throw RuntimeFailure("owed draw-done capture lost its submission owner");
+    }
+    const auto serial = capture->serial;
+    const auto bytes = capture->fifo_size;
+    join_native_thp_video_decode(state);
+    galaxy::timeline::record(galaxy::timeline::Event::SubmitSource, 2u);
+    const auto token = galaxy::gx::render_frame(
+        capture->fifo.data(), bytes, state.address_space->guest_memory(),
+        state.services, false, 0u);
+    std::vector<std::byte> released_fifo;
+    if (!state.pending_draw_done_submissions.mark_submitted(
+            serial, token, &released_fifo)) {
+        throw RuntimeFailure("owed draw-done submission returned invalid ownership");
+    }
+    state.address_space->recycle_gx_fifo(std::move(released_fifo));
+    state.draw_done_submit_owed = false;
+    state.draw_done_submit_owed_us += static_cast<std::uint64_t>(
+        std::chrono::duration_cast<std::chrono::microseconds>(
+            std::chrono::steady_clock::now() - state.draw_done_submit_owed_since).count());
+    ++state.draw_done_submit_count;
+    state.draw_done_submit_bytes += bytes;
+    return true;
+}
+
 bool poll_draw_done_submissions(RuntimeState& state) {
     while (const auto* entry = state.pending_draw_done_submissions.front()) {
         const auto serial = entry->serial;
         const auto token = entry->token;
         const auto source_vi_serial = entry->source_vi_serial;
         if (entry->phase == galaxy::gx::FifoSubmissionPhase::Captured) {
-            throw RuntimeFailure("draw-done capture escaped synchronous submission");
+            if (!state.draw_done_submit_owed) {
+                throw RuntimeFailure("draw-done capture escaped synchronous submission");
+            }
+            if (!submit_owed_draw_done_capture(state, false)) {
+                return false;
+            }
+            continue;
         }
         if (entry->phase == galaxy::gx::FifoSubmissionPhase::Submitted) {
             if (!galaxy::gx::wait_for_frame_pe_completion_for(token, 0u)) {
@@ -17065,6 +17163,8 @@ void submit_gx_at_draw_done_wait(
         ++state.draw_done_submit_deferred;
         return;
     }
+    // A spurious wake re-enters the sleep with the earlier capture still owed.
+    (void)submit_owed_draw_done_capture(state, true);
     if (state.address_space->gx_fifo_data().empty()) {
         return;
     }
@@ -17076,6 +17176,18 @@ void submit_gx_at_draw_done_wait(
     const auto* capture = state.pending_draw_done_submissions.next_to_submit();
     if (capture == nullptr || capture->serial != serial) {
         throw RuntimeFailure("draw-done FIFO capture lost submission order");
+    }
+    if (state.coop != nullptr && !galaxy::gx::render_queue_has_space()) {
+        // The renderer is behind. Blocking here (EE off, before OSSleepThread)
+        // would stop every guest thread, the game's audio thread included,
+        // for as long as the GPU needs. The main thread sleeps for this draw
+        // done anyway, and its PE finish cannot precede the submission, so the
+        // capture is submitted from the idle loop once a slot frees
+        // (coop_idle), or first by whichever submission comes next.
+        state.draw_done_submit_owed = true;
+        state.draw_done_submit_owed_since = std::chrono::steady_clock::now();
+        ++state.draw_done_submit_queue_deferrals;
+        return;
     }
     const auto bytes = capture->fifo_size;
     join_native_thp_video_decode(state);
@@ -17164,6 +17276,7 @@ bool render_pending_gx_fifo_for_sync(
         bool previous;
         ~RestoreSyncCapture() noexcept { active = previous; }
     } restore_sync_capture{state.gx_sync_capture_active, previous_sync_capture_active};
+    (void)submit_owed_draw_done_capture(state, true);
     if (state.address_space == nullptr) {
         galaxy::gx::wait_for_render_fifo_effects_idle();
         return false;
@@ -18635,7 +18748,14 @@ void dump_ai_dma_deadline_audit(
                << state.address_space->ai_dma_next_completion_ticks()
                << " device-pending-since="
                << state.address_space->ai_dma_interrupt_pending_since_ticks()
-               << " duration=" << state.address_space->ai_dma_last_duration_ticks();
+               << " duration=" << state.address_space->ai_dma_last_duration_ticks()
+               << " ai-holds=" << state.address_space->ai_dma_holds()
+               << " ai-hold-timeouts=" << state.address_space->ai_dma_hold_timeouts()
+               << " ai-hold-max-us="
+               << state.address_space->ai_dma_hold_max_ticks() * 1'000'000u /
+                      galaxy::timing::kTimelineTicksPerSecond
+               << " ai-concealed-blocks="
+               << state.address_space->ai_dma_concealed_blocks();
     }
     if (state.deadline_broker != nullptr) {
         const galaxy::timing::DeadlinePublicationStats publication =
@@ -18786,6 +18906,12 @@ void idle_loop_wait_for_next_deadline(RuntimeState& state) {
         read_env_u64("GALAXY_IDLE_LOOP_SLEEP_SLICE_US", 16000u), 100u, 16000u));
     if (wait_duration > max_slice) {
         wait_duration = max_slice;
+    }
+    // An owed draw-done capture is submitted by the next idle pass that finds
+    // a free render queue slot; poll for it at a fine grain.
+    constexpr auto kOwedSubmitPoll = std::chrono::microseconds(500);
+    if (state.draw_done_submit_owed && wait_duration > kOwedSubmitPoll) {
+        wait_duration = kOwedSubmitPoll;
     }
     // Optional final stretch left to polling. VI edges arrive through the
     // broker's publication wake, not this timer, so no guard is needed: the
@@ -19037,6 +19163,20 @@ bool advance_pending_vi_boundary(
     }
     const std::uint32_t exact_resume =
         resume_pc != 0u ? resume_pc : context->pc;
+    // The waits below service AI with EE masked, which only latches the level.
+    // When the waiting context accepts external interrupts the level is
+    // delivered here, as the PE drain below does; the callback readies the
+    // game's audio thread and the preemption test ends the wait so it mixes
+    // its next buffer while the GPU catches up. Returns whether it delivered.
+    const auto deliver_ai_level = [&] {
+        if (state.coop == nullptr ||
+            !state.address_space->ai_dma_interrupt_pending() ||
+            !(exact_idle_ee || guest_external_interrupts_enabled(context))) {
+            return false;
+        }
+        return dispatch_external_interrupt(
+            state, exact_resume, context, memory, exact_idle_ee);
+    };
 
     for (;;) {
         const auto phase = state.pending_vi_boundary.snapshot().phase;
@@ -19062,6 +19202,8 @@ bool advance_pending_vi_boundary(
             if (galaxy::gx::quit_requested()) {
                 throw RuntimeQuitRequested{};
             }
+            const bool ai_delivered = deliver_ai_level();
+            if (state.pending_transfer.active) return true;
             // Cooperative path: a delivery that readied a higher-priority
             // thread ends this wait so that thread runs, as the exception
             // path's transfer did. The blocked thread re-enters the wait
@@ -19069,6 +19211,10 @@ bool advance_pending_vi_boundary(
             if (!blocks_current ||
                 (state.coop_reschedule_pending && coop_preemption_due(state))) {
                 return true;
+            }
+            if (ai_delivered) {
+                // The handler's checkpoints may have advanced this boundary.
+                continue;
             }
             galaxy::timeline::record(galaxy::timeline::Event::PeWaitBegin);
             if (!wait_realtime_vi_duration_high_res(std::chrono::milliseconds(
@@ -19196,9 +19342,14 @@ bool advance_pending_vi_boundary(
                     if (galaxy::gx::quit_requested()) {
                         throw RuntimeQuitRequested{};
                     }
+                    const bool ai_delivered = deliver_ai_level();
+                    if (state.pending_transfer.active) return true;
                     if (!blocks_current ||
                         (state.coop_reschedule_pending && coop_preemption_due(state))) {
                         return true;
+                    }
+                    if (ai_delivered) {
+                        continue;
                     }
                     galaxy::timeline::record(galaxy::timeline::Event::PeWaitBegin);
                     if (!wait_realtime_vi_duration_high_res(
@@ -19600,6 +19751,10 @@ bool dispatch_vi_retrace(
     if (state.vi_retrace_count > 0u) {
         state.address_space->flush_wgpipe_gather_tail_for_frame();
         captured_fifo = state.address_space->take_gx_fifo();
+        if (!captured_fifo.empty()) {
+            // Token order: an owed draw-done capture is older than this one.
+            (void)submit_owed_draw_done_capture(state, true);
+        }
         rendered_retrace_frame = true;
         present_this_vi = should_present_vi_frame(state, use_realtime_vi);
         present_in_render_frame =
@@ -23700,6 +23855,18 @@ bool try_native_thp_wrapper(RuntimeState& state, galaxy::PpcContext* context,
     return true;
 }
 
+// Every host pointer source (mouse, pointer keys, stick, gyro, script,
+// replay) is answered by the owned scene-depth field. The guest's own
+// StarPointerPeekZ GXPeekZ reads the published EFB depth after the frame's
+// later passes, which put Star Bits past the drawn pointer.
+bool native_pointer_depth_origin(galaxy::host::SyntheticKpadPointerOrigin origin) noexcept {
+    return origin != galaxy::host::SyntheticKpadPointerOrigin::None;
+}
+
+bool native_pointer_depth_mode(galaxy::RuntimeInputMode mode) noexcept {
+    return mode != galaxy::RuntimeInputMode::RealWiimote;
+}
+
 // Exact 803FA3E4 object chain and StarPointerOnOffController::mMode.
 // FileSelect uses screen/pane and explicit WithoutCheckZ targets. Its shared
 // draw path also emits tokens, but mouse targeting needs no scene-depth field.
@@ -24290,7 +24457,9 @@ void call_guest_impl_body(
     // Capture at the exact producer boundary after GXGetProjectionv/Viewportv,
     // before GXSetDrawSync and before image effects/copies/clears.
     if (guest_address == 0x804B9EC8u && context->lr==0x80385ADCu && state.native_mouse_pointer_frame &&
-        state.address_space != nullptr && mouse_mode.mode == galaxy::RuntimeInputMode::KeyboardMouse &&
+        state.address_space != nullptr &&
+        native_pointer_depth_mode(mouse_mode.mode) &&
+        native_pointer_depth_origin(state.synthetic_pointer_last_read.sample.origin) &&
         // A mouse may enter and press after this scene boundary. Keep this
         // owned field available even when the preceding sample was outside.
         !native_mouse_file_select_mode(state,*context)) {
@@ -24372,6 +24541,7 @@ void call_guest_impl_body(
                             // CPU reads (or seals the snapshot) before returning.
                             // Keep its exact completion receipt, without waiting
                             // for GPU execution or dispatching guest interrupts.
+                            (void)submit_owed_draw_done_capture(state, true);
                             const auto serial=state.pending_draw_done_submissions.capture(
                                 state.address_space->take_gx_fifo(),std::chrono::steady_clock::now());
                             state.pe_scanned_fifo_bytes=0u;
@@ -24442,7 +24612,7 @@ void call_guest_impl_body(
         state.native_mouse_restore_controller=0u;
     }
     if (guest_address == 0x80385034u && state.address_space != nullptr &&
-        mouse_mode.mode == galaxy::RuntimeInputMode::KeyboardMouse) {
+        native_pointer_depth_mode(mouse_mode.mode)) {
         auto& mem=*state.address_space;
         const auto self=context->gpr[3];
         if (mapped_guest_range(&mem,self,0x74u) && mem.read_u32(self)==0u) {
@@ -24453,7 +24623,7 @@ void call_guest_impl_body(
             bool matches=state.native_mouse_pointer_frame && state.synthetic_kpad_fresh_mouse_pointer &&
                 frame && frame->valid && frame->controller==self && frame->mode_generation==mouse_mode.generation &&
                 selected.active && selected.mode_generation==mouse_mode.generation &&
-                selected.origin==galaxy::host::SyntheticKpadPointerOrigin::PhysicalMouse &&
+                native_pointer_depth_origin(selected.origin) &&
                 frame->store_serial+1u==state.native_mouse_store_serial &&
                 frame->aspect_word==mouse_aspect_word &&
                 mapped_guest_range(&mem,context->gpr[4],28u) && mapped_guest_range(&mem,context->gpr[5],24u);
@@ -24507,7 +24677,7 @@ void call_guest_impl_body(
             const auto store_aspect_word = galaxy::experimental_dynamic_aspect_requested() ?
                 state.services->experimental_aspect_word(state.services->user) : 0u;
             const bool store_owner_matches =
-                store_mode.mode == galaxy::RuntimeInputMode::KeyboardMouse &&
+                store_mode.mode == mouse_mode.mode &&
                 store_mode.generation == mouse_mode.generation &&
                 store_aspect_word == mouse_aspect_word;
             if (matches && frame->capture->error) std::rethrow_exception(frame->capture->error);
@@ -24534,7 +24704,7 @@ void call_guest_impl_body(
                 }
             }
             const bool screen_only=store_owner_matches && state.native_mouse_pointer_frame && state.synthetic_kpad_fresh_mouse_pointer &&
-                selected.active && selected.origin==galaxy::host::SyntheticKpadPointerOrigin::PhysicalMouse &&
+                selected.active && native_pointer_depth_origin(selected.origin) &&
                 selected.mode_generation==mouse_mode.generation && native_mouse_file_select_mode(state,*context);
             unsigned screen_width=frame ? frame->screen_width : 0u;
             unsigned screen_height=frame ? frame->screen_height : 0u;
@@ -25217,6 +25387,7 @@ void call_guest_impl_body(
         const auto input_mode_state = galaxy::get_runtime_input_mode_state();
         const auto input_mode = input_mode_state.mode;
         const bool synthetic_source =
+            input_mode == galaxy::RuntimeInputMode::Auto ||
             input_mode == galaxy::RuntimeInputMode::KeyboardMouse ||
             input_mode == galaxy::RuntimeInputMode::Controller;
         const auto* snapshot = state.address_space->latest_native_hid_snapshot();
@@ -29949,6 +30120,7 @@ void coop_idle_spin(RuntimeState& state) {
 
 void coop_idle(void* user, galaxy::PpcContext* context) {
     auto& state = *static_cast<RuntimeState*>(user);
+    (void)submit_owed_draw_done_capture(state, false);
     galaxy::coop::ThreadRegisters parked{};
     galaxy::coop::save_thread_registers(*context, parked);
     context->msr |= kMsrExternalInterruptEnable;
@@ -32638,6 +32810,7 @@ int wmain(int argc, wchar_t** argv) {
             state.address_space->set_ai_dma_deadline_callback(nullptr, nullptr);
             state.address_space->set_ai_dma_mmio_service_decision_provider(
                 nullptr, nullptr);
+            state.address_space->set_ai_dma_source_ready_probe(nullptr, nullptr);
             state.address_space->set_native_virtual_input_acl_delivery_callback(
                 nullptr, nullptr);
         }
@@ -32981,6 +33154,9 @@ int wmain(int argc, wchar_t** argv) {
                           << (submit_gx_at_draw_done_wait_enabled() ? 1 : 0)
                           << " attempts=" << state.draw_done_submit_attempts
                           << " deferred=" << state.draw_done_submit_deferred
+                          << " queue-full-deferrals="
+                          << state.draw_done_submit_queue_deferrals
+                          << " owed-us=" << state.draw_done_submit_owed_us
                           << " submitted=" << state.draw_done_submit_count
                           << " bytes=" << state.draw_done_submit_bytes
                           << " consumed=" << state.draw_done_consumed_count
@@ -33619,6 +33795,8 @@ int wmain(int argc, wchar_t** argv) {
             &on_ai_dma_deadline_changed, &state);
         address_space.set_ai_dma_mmio_service_decision_provider(
             &ai_dma_mmio_service_decision, &state);
+        address_space.set_ai_dma_source_ready_probe(
+            &jaudio_dsp_frame_ready, &state);
 
         run_guest_entry(state, entry_fn, &context, address_space.guest_memory());
     } catch (const BenchmarkComplete&) {

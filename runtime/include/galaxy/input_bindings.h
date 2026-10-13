@@ -48,8 +48,10 @@ enum class WiiTarget : std::uint8_t {
     PointerLeft,
     PointerRight,
     PointerRecenter,
+    // Wii A while the player controls Mario, Wii B in menus (pointer_control.h).
+    JumpBack,
 };
-inline constexpr std::size_t kWiiTargetCount = 24;
+inline constexpr std::size_t kWiiTargetCount = 25;
 
 [[nodiscard]] constexpr std::uint32_t wii_target_bit(WiiTarget target) noexcept {
     return 1u << static_cast<unsigned>(target);
@@ -172,6 +174,12 @@ struct SchemeTuning {
     MotionShake motion_shake = MotionShake::Off;
     std::uint8_t shake_sensitivity = 3;  // 1 (strong shake) .. 5 (light)
     bool gyro_pointer = false;
+    float gyro_sensitivity = 1.0f;  // 1: a picture width per 40 degrees of turn
+    // A controller pointer that rests within pointer_hide_radius (pointer
+    // units) for pointer_hide_seconds disappears until the recenter button
+    // (or, for the stick, a push); 0 seconds never hides.
+    float pointer_hide_seconds = 0.0f;
+    float pointer_hide_radius = 0.03f;
     friend bool operator==(const SchemeTuning&, const SchemeTuning&) = default;
 };
 
@@ -201,6 +209,18 @@ struct ControlsConfig {
 }
 
 [[nodiscard]] BindingTable default_binding_table(ControlScheme scheme);
+// The defaults shipped before controls version 2 (Native28) and in version 2
+// (Native29), for migration.
+[[nodiscard]] BindingTable legacy_binding_table(ControlScheme scheme);
+[[nodiscard]] BindingTable version2_binding_table(ControlScheme scheme);
+[[nodiscard]] SchemeTuning legacy_scheme_tuning(ControlScheme scheme);
+// runtime_settings.ini `controls_version`; files without it are version 1.
+inline constexpr unsigned kControlsVersion = 3;
+// For a file of `version`: every binding list that still equals an earlier
+// version's default takes the current default, and the gyro switch of a
+// version-1 file its new default; values the player changed stay. Returns the
+// number of entries changed.
+unsigned migrate_legacy_controls(ControlsConfig& config, unsigned version) noexcept;
 [[nodiscard]] SchemeTuning default_scheme_tuning(ControlScheme scheme);
 [[nodiscard]] ControlsConfig default_controls_config();
 
@@ -254,12 +274,23 @@ struct LogicalInput {
 };
 
 inline constexpr float kStickDirectionPress = 0.5f;
+// Digital targets fed by a stick release below this once pressed, so a stick
+// resting near kStickDirectionPress cannot chatter (a held D-pad is one press).
+inline constexpr float kStickDirectionRelease = 0.35f;
 
 [[nodiscard]] LogicalInput evaluate_keyboard_bindings(
     const BindingTable& table, const KeyboardMouseLevels& levels) noexcept;
 // `trigger_threshold` (0..1) is the trigger press level for digital targets.
 [[nodiscard]] LogicalInput evaluate_pad_bindings(
     const BindingTable& table, const PadSample& sample, float trigger_threshold) noexcept;
+// `previous_pressed` (the last report's `pressed`) gives stick-fed digital
+// targets their release hysteresis. A stick axis bound both to a pointer
+// direction and to another target is the pointer when `gyro_pointer` is false
+// and the other target when it is true (Switch: right stick = camera while the
+// gyro points).
+[[nodiscard]] LogicalInput evaluate_pad_bindings(
+    const BindingTable& table, const PadSample& sample, float trigger_threshold,
+    std::uint32_t previous_pressed, bool gyro_pointer) noexcept;
 // Buttons OR; each analog axis keeps the larger magnitude.
 [[nodiscard]] LogicalInput merge_logical_input(const LogicalInput& a, const LogicalInput& b) noexcept;
 // Wii targets driven only by mouse buttons in `levels` (for the gated

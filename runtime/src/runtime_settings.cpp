@@ -37,13 +37,13 @@ SRWLOCK s_settings_lock = SRWLOCK_INIT;
 
 RuntimeSettings sanitize_settings(RuntimeSettings settings) {
     switch (settings.input_mode) {
+    case RuntimeInputMode::Auto:
     case RuntimeInputMode::KeyboardMouse:
     case RuntimeInputMode::Controller:
     case RuntimeInputMode::RealWiimote:
         break;
-    case RuntimeInputMode::Auto:
     default:
-        settings.input_mode = RuntimeInputMode::KeyboardMouse;
+        settings.input_mode = RuntimeInputMode::Auto;
         break;
     }
     const auto sanitize_gain = [](float gain) {
@@ -97,6 +97,9 @@ RuntimeInputMode parse_input_mode(
         [](unsigned char ch) {
             return static_cast<char>(std::tolower(ch));
         });
+    if (text == "auto") {
+        return RuntimeInputMode::Auto;
+    }
     if (text == "controller" || text == "xinput" || text == "gamepad" ||
         text == "switch" || text == "switch_pro") {
         return RuntimeInputMode::Controller;
@@ -173,11 +176,31 @@ std::filesystem::path settings_path() {
            L"runtime_settings.ini";
 }
 
+// Files written by an older controls version carry that version's defaults:
+// those bindings move to the current defaults, and a version-1 file's
+// keyboard_mouse becomes auto (the one-source modes are overrides since
+// version 2). Choices that differ from the old defaults stay.
+void migrate_settings_file(RuntimeSettings& settings, input::ControlsConfig& controls,
+                           unsigned version) {
+    if (version >= input::kControlsVersion) {
+        return;
+    }
+    const unsigned changed = input::migrate_legacy_controls(controls, version);
+    const bool mode = version < 2u && settings.input_mode == RuntimeInputMode::KeyboardMouse;
+    if (mode) {
+        settings.input_mode = RuntimeInputMode::Auto;
+    }
+    std::fprintf(stderr, "[settings] controls version %u -> %u: %u defaults updated%s\n",
+                 version, input::kControlsVersion, changed,
+                 mode ? ", input_mode keyboard_mouse -> auto" : "");
+}
+
 void parse_settings_file(RuntimeSettings& settings, input::ControlsConfig& controls) {
     const std::filesystem::path path = settings_path();
     if (path.empty()) {
         return;
     }
+    unsigned controls_version = 0u;
 
     FILE* file = nullptr;
     const int open_error = _wfopen_s(&file, path.c_str(), L"rb");
@@ -221,10 +244,13 @@ void parse_settings_file(RuntimeSettings& settings, input::ControlsConfig& contr
         }
         const std::string key_text(key);
         const std::string value_text(trim(record.substr(equals + 1u)));
-        if (!input::apply_controls_setting(controls, key_text, value_text)) {
+        if (key_text == "controls_version") {
+            controls_version = static_cast<unsigned>(std::strtoul(value_text.c_str(), nullptr, 10));
+        } else if (!input::apply_controls_setting(controls, key_text, value_text)) {
             apply_kv(settings, key_text.c_str(), value_text.c_str());
         }
     }
+    migrate_settings_file(settings, controls, controls_version);
 }
 
 void apply_env(RuntimeSettings& settings, const char* env, const char* key) {
@@ -345,6 +371,7 @@ bool save_runtime_settings_to_file() {
         contents.imbue(std::locale::classic());
         contents << "input_mode=" << runtime_input_mode_name(settings.input_mode)
                  << '\n'
+                 << "controls_version=" << input::kControlsVersion << '\n'
                  << std::setprecision(std::numeric_limits<float>::max_digits10)
                  << "audio_master_gain=" << settings.audio.master << '\n'
                  << "audio_music_gain=" << settings.audio.music << '\n'
@@ -372,7 +399,7 @@ const char* runtime_input_mode_name(RuntimeInputMode mode) {
         return "real_wiimote";
     case RuntimeInputMode::Auto:
     default:
-        return "keyboard_mouse";
+        return "auto";
     }
 }
 

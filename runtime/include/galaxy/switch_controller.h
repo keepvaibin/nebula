@@ -155,38 +155,79 @@ struct Switch2ImuState {
 
 // ---- Motion ----------------------------------------------------------------
 
-// Shake: the mean of |a| - 1 g over the last four IMU samples (about 20 ms)
-// crossing the sensitivity threshold starts a shake; a shake stays pressed
-// for kHoldUs and another cannot start for kCooldownUs.
-class ShakeDetector {
+// One controller's motion state, fed one IMU sample at a time (Pro: three
+// samples 5 ms apart per report; Pro Controller 2: one per report).
+//
+// Gravity: the accelerometer direction, carried through rotations by the gyro
+// and pulled toward the measured direction while |a| is near 1 g
+// (complementary filter, 0.5 s).
+//
+// Gyro bias: starts at the controller's stored calibration origin (already
+// removed by the decoder) and is refined from every 0.5 s window in which the
+// controller rests (gyro standard deviation under kRestGyroSd and |a| steady).
+//
+// Pointer: rotation about the world vertical (yaw) moves it sideways and
+// rotation about the horizontal right axis (pitch) moves it up and down, so the
+// controller points the same way held flat or upright (JoyShockMapper's
+// "world space"). A picture width is 40 degrees of yaw at sensitivity 1;
+// vertical gain keeps equal pixels per degree. Rates under kGyroNoiseGate are
+// scaled down toward zero so resting noise does not drift the pointer.
+//
+// Shake: the linear acceleration |a - gravity| averaged over two samples
+// crossing the sensitivity threshold, or a wrist flick faster than the gyro
+// threshold, starts a shake; it is held kShakeHoldUs and another cannot start
+// for kShakeCooldownUs.
+struct MotionSettings {
+    bool shake = true;
+    std::uint8_t shake_sensitivity = 3;  // 1 (hard) .. 5 (light)
+    bool gyro_pointer = true;
+    float gyro_sensitivity = 1.0f;       // multiplier on 40 degrees per picture width
+    float picture_aspect = 16.0f / 9.0f;
+};
+
+class SwitchMotion {
 public:
-    static constexpr std::uint64_t kHoldUs = 60'000;
-    static constexpr std::uint64_t kCooldownUs = 280'000;
-    [[nodiscard]] static float threshold_g(std::uint8_t sensitivity) noexcept;
-    // Returns true when a shake starts at this sample.
-    bool feed(const std::array<float, 3>& accel_g, std::uint64_t time_us, std::uint8_t sensitivity) noexcept;
-    [[nodiscard]] bool pressed(std::uint64_t now_us) const noexcept {
-        return active_ && now_us < hold_until_us_;
+    static constexpr std::uint64_t kShakeHoldUs = 60'000;
+    static constexpr std::uint64_t kShakeCooldownUs = 280'000;
+    static constexpr float kDegreesPerPictureWidth = 40.0f;
+    static constexpr float kRestGyroSd = 0.0175f;    // rad/s (1 deg/s)
+    static constexpr float kGyroNoiseGate = 0.026f;  // rad/s (1.5 deg/s)
+    static constexpr float kRestWindowSeconds = 0.5f;
+
+    struct Output {
+        float pointer_x = 0.0f;
+        float pointer_y = 0.0f;  // up positive
+        bool shake_started = false;
+    };
+    Output feed(const ImuSample& sample, float dt_seconds, std::uint64_t time_us,
+                const MotionSettings& settings) noexcept;
+    [[nodiscard]] bool shake_pressed(std::uint64_t now_us) const noexcept {
+        return shake_active_ && now_us < shake_hold_until_us_;
     }
-    void reset() noexcept { *this = ShakeDetector{}; }
+    [[nodiscard]] const std::array<float, 3>& gravity() const noexcept { return gravity_; }
+    [[nodiscard]] const std::array<float, 3>& gyro_bias() const noexcept { return bias_; }
+    [[nodiscard]] unsigned rest_windows() const noexcept { return rest_windows_; }
+    [[nodiscard]] static float shake_accel_threshold_g(std::uint8_t sensitivity) noexcept;
+    [[nodiscard]] static float shake_gyro_threshold(std::uint8_t sensitivity) noexcept;  // rad/s
 
 private:
-    std::array<float, 4> window_{};
-    std::size_t filled_ = 0;
-    std::size_t next_ = 0;
-    std::uint64_t hold_until_us_ = 0;
-    std::uint64_t cooldown_until_us_ = 0;
-    bool active_ = false;
+    std::array<float, 3> gravity_{0.0f, 1.0f, 0.0f};
+    bool gravity_ready_ = false;
+    std::array<float, 3> bias_{};
+    // Rest window accumulators.
+    std::array<double, 3> sum_{};
+    std::array<double, 3> sum_sq_{};
+    float accel_min_ = 1e9f;
+    float accel_max_ = -1e9f;
+    float window_time_ = 0.0f;
+    unsigned window_samples_ = 0;
+    unsigned rest_windows_ = 0;
+    // Shake.
+    float previous_linear_ = 0.0f;
+    float previous_rate_ = 0.0f;
+    std::uint64_t shake_hold_until_us_ = 0;
+    std::uint64_t shake_cooldown_until_us_ = 0;
+    bool shake_active_ = false;
 };
-
-// Pointer deltas from yaw/pitch rate: full pointer width (2 units) per
-// kRadiansPerScreen at speed 2.4, scaled linearly with the pointer speed.
-inline constexpr float kGyroRadiansPerScreen = 0.70f;
-struct GyroPointerDelta {
-    float x = 0.0f;
-    float y = 0.0f;  // up positive
-};
-[[nodiscard]] GyroPointerDelta gyro_pointer_delta(const ImuSample& sample, float dt_seconds,
-                                                  float pointer_speed) noexcept;
 
 }  // namespace galaxy::input::switch_hid
