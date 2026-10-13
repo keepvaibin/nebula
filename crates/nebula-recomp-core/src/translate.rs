@@ -3597,6 +3597,7 @@ fn module_abi_facts(
                 .collect::<Vec<_>>(),
         );
     }
+    let jump_targets = discover_jump_targets(sections, dol_bytes, ranges, &words_by_function);
     let inputs = ranges
         .iter()
         .zip(&words_by_function)
@@ -3604,6 +3605,9 @@ fn module_abi_facts(
             start: function.address,
             words,
             native: abi_native_function(function.address),
+            jump_targets: jump_targets
+                .get(&function.address)
+                .unwrap_or(&crate::ppc_dataflow::NO_JUMP_TARGETS),
         })
         .collect::<Vec<_>>();
     let address_taken = discover_address_taken_functions(sections, dol_bytes, ranges);
@@ -3614,21 +3618,329 @@ fn module_abi_facts(
     ))
 }
 
-/// The register effects of a call the translator lowers in place: `bl
-/// _savegpr_N` reads r11 and rN..r31 (it stores them below r11), `bl
-/// _restgpr_N` reads r11 and writes rN..r31.
+/// The register effects of a call to one of CodeWarrior's register save and
+/// restore helpers, which the analysis treats as part of the caller's own
+/// prologue or epilogue: `bl _savegpr_N` reads r11 and rN..r31 (it stores
+/// them below r11), `bl _restgpr_N` reads r11 and writes rN..r31 (the
+/// translator lowers both in place); `bl _savefpr_N` / `bl _restfpr_N` do the
+/// same for fN..f31 (they stay calls in the generated code, where an
+/// unmarked call keeps full synchronization).
 pub(crate) fn abi_inline_call(target: u32) -> Option<(Regs, Regs)> {
-    let (first, save) = gpr_save_restore_entry(target)?;
+    let frame = Regs::gpr(11);
+    if let Some((first, save)) = gpr_save_restore_entry(target) {
+        let run = Regs {
+            gpr: u32::MAX << first,
+            ..Regs::default()
+        };
+        return Some(if save {
+            (frame.union(run), Regs::default())
+        } else {
+            (frame, run)
+        });
+    }
+    let (first, save) = fpr_save_restore_entry(target)?;
     let run = Regs {
-        gpr: u32::MAX << first,
+        fpr: u32::MAX << first,
         ..Regs::default()
     };
-    let frame = Regs::gpr(11);
     Some(if save {
         (frame.union(run), Regs::default())
     } else {
         (frame, run)
     })
+}
+
+/// `_savefpr_N` (`stfd fN..f31` below r11) and `_restfpr_N` (`lfd`) entry
+/// points of RMGE01's `__save_fpr` / `__restore_fpr`: (first register, save).
+fn fpr_save_restore_entry(target: u32) -> Option<(u32, bool)> {
+    match target {
+        0x8051_7464..=0x8051_74A8 if (target - 0x8051_7464) % 4 == 0 => {
+            Some((14 + (target - 0x8051_7464) / 4, true))
+        }
+        0x8051_74B0..=0x8051_74F4 if (target - 0x8051_74B0) % 4 == 0 => {
+            Some((14 + (target - 0x8051_74B0) / 4, false))
+        }
+        _ => None,
+    }
+}
+
+/// The in-function targets of every function's computed jumps, from the
+/// image's data: each data word that points inside a function past its start
+/// is a possible target (`JumpTargets::any`; over-approximate, an unrelated
+/// word only adds a target). A `bctr` whose table address the function
+/// builds with `lis`/`addi` (or `ori`) and indexes with `lwzx` (CodeWarrior's
+/// switch) gets the case labels of that table alone: the run of consecutive
+/// data words from the table address that point inside the function.
+fn discover_jump_targets(
+    sections: &[DolSection],
+    dol_bytes: &[u8],
+    functions: &[FunctionRange],
+    words_by_function: &[Vec<u32>],
+) -> BTreeMap<u32, crate::ppc_dataflow::JumpTargets> {
+    let mut sorted: Vec<FunctionRange> = functions.to_vec();
+    sorted.sort_unstable_by_key(|function| function.address);
+    // Data address -> (owning function, word) for every interior pointer.
+    let mut pointers: BTreeMap<u32, (u32, u32)> = BTreeMap::new();
+    for section in sections {
+        if section.kind == DolSectionKind::Text {
+            continue;
+        }
+        let Some(bytes) = dol_bytes.get(section.file_range()) else {
+            continue;
+        };
+        for (index, chunk) in bytes.chunks_exact(4).enumerate() {
+            let word = u32::from_be_bytes(chunk.try_into().expect("four-byte word"));
+            if word % 4 != 0 {
+                continue;
+            }
+            let owner = sorted.partition_point(|function| function.address <= word);
+            let Some(function) = owner.checked_sub(1).map(|index| sorted[index]) else {
+                continue;
+            };
+            if word > function.address && word < function.address + function.size {
+                pointers.insert(section.address + index as u32 * 4, (function.address, word));
+            }
+        }
+    }
+    let mut targets: BTreeMap<u32, crate::ppc_dataflow::JumpTargets> = BTreeMap::new();
+    for (owner, word) in pointers.values() {
+        targets.entry(*owner).or_default().any.push(*word);
+    }
+    for jump_targets in targets.values_mut() {
+        jump_targets.any.sort_unstable();
+        jump_targets.any.dedup();
+    }
+    let table_run = |table: u32, owner: u32| -> Vec<u32> {
+        let mut run = Vec::new();
+        let mut address = table;
+        while let Some((function, word)) = pointers.get(&address) {
+            if *function != owner {
+                break;
+            }
+            run.push(*word);
+            address = address.wrapping_add(4);
+        }
+        run
+    };
+    for (function, words) in functions.iter().zip(words_by_function) {
+        let has_computed_jump = words.iter().enumerate().any(|(index, word)| {
+            crate::ppc_dataflow::effect(function.address + index as u32 * 4, *word)
+                .is_some_and(|effect| effect.flow == crate::ppc_dataflow::Flow::IndirectJump)
+        });
+        if !has_computed_jump {
+            continue;
+        }
+        let jump_targets = targets.entry(function.address).or_default();
+        let mut labels: BTreeSet<u32> = words
+            .iter()
+            .enumerate()
+            .filter_map(|(index, word)| {
+                let pc = function.address + index as u32 * 4;
+                match crate::ppc_dataflow::effect(pc, *word)?.flow {
+                    crate::ppc_dataflow::Flow::Branch(target)
+                    | crate::ppc_dataflow::Flow::CondBranch(target) => Some(target),
+                    _ => None,
+                }
+            })
+            .chain(jump_targets.any.iter().copied())
+            .collect();
+        // Addresses the code builds inside the function are computed-jump
+        // targets too, and labels for the tracking: rescan until stable.
+        loop {
+            let scan = scan_computed_jumps(*function, words, &labels, &table_run);
+            if scan.built.iter().all(|address| labels.contains(address)) {
+                jump_targets.by_site = scan.by_site;
+                jump_targets.loaded = scan.loaded;
+                jump_targets.any.extend(scan.built);
+                jump_targets.any.sort_unstable();
+                jump_targets.any.dedup();
+                break;
+            }
+            labels.extend(scan.built);
+        }
+    }
+    targets
+}
+
+/// What one pass of `scan_computed_jumps` found.
+struct ComputedJumpScan {
+    by_site: BTreeMap<u32, Vec<u32>>,
+    loaded: BTreeSet<u32>,
+    built: Vec<u32>,
+}
+
+/// Straight-line tracking over one function, reset at every label and call:
+/// constants (lis/addi/ori), switch index bounds (`cmplwi rX,N` then `bgt`,
+/// kept through `slwi rY,rX,2`), table entries (`lwzx` from a constant base),
+/// pointers loaded from memory, and what reaches CTR before each `bctr`.
+fn scan_computed_jumps(
+    function: FunctionRange,
+    words: &[u32],
+    labels: &BTreeSet<u32>,
+    table_run: &dyn Fn(u32, u32) -> Vec<u32>,
+) -> ComputedJumpScan {
+    let interior = |address: u32| {
+        address % 4 == 0 && address > function.address && address < function.address + function.size
+    };
+    let mut scan = ComputedJumpScan {
+        by_site: BTreeMap::new(),
+        loaded: BTreeSet::new(),
+        built: Vec::new(),
+    };
+    let mut constant: [Option<u32>; 32] = [None; 32];
+    let mut bound: [Option<u32>; 32] = [None; 32];
+    // (table address, entries when bounded)
+    let mut table_entry: [Option<(u32, Option<u32>)>; 32] = [None; 32];
+    let mut loaded = [false; 32];
+    let mut ctr_table: Option<(u32, Option<u32>)> = None;
+    let mut ctr_loaded = false;
+    let mut compare: Option<(u32, usize, u32)> = None;
+    for (index, word) in words.iter().enumerate() {
+        let pc = function.address + index as u32 * 4;
+        if labels.contains(&pc) {
+            constant = [None; 32];
+            bound = [None; 32];
+            table_entry = [None; 32];
+            loaded = [false; 32];
+            ctr_table = None;
+            ctr_loaded = false;
+            compare = None;
+        }
+        let rd = gpr_rt(*word) as usize;
+        let ra = gpr_ra(*word) as usize;
+        let rb = ((*word >> 11) & 31) as usize;
+        let immediate = *word & 0xFFFF;
+        let primary = *word >> 26;
+        let extended = (*word >> 1) & 0x3FF;
+        let pending_compare = compare.take();
+        let mut known = None;
+        let mut entry = None;
+        match primary {
+            // cmplwi crfD, rA, N (the range check of a switch)
+            10 if (*word >> 21) & 1 == 0 => {
+                compare = Some(((*word >> 23) & 7, ra, immediate));
+            }
+            // bgt crfD, default: the index is at most N on the fall-through.
+            16 if (*word >> 21) & 30 == 12 => {
+                if let Some((field, register, limit)) = pending_compare {
+                    if (*word >> 16) & 31 == field * 4 + 1 {
+                        bound[register] = Some(limit);
+                    }
+                }
+            }
+            // lis rD, hi / addis rD, rA, hi
+            15 => {
+                known = if ra == 0 {
+                    Some(immediate << 16)
+                } else {
+                    constant[ra].map(|base| base.wrapping_add(immediate << 16))
+                };
+            }
+            // addi rD, rA, lo
+            14 if ra != 0 => {
+                known = constant[ra]
+                    .map(|base| base.wrapping_add(immediate as u16 as i16 as i32 as u32));
+            }
+            // ori rA, rS, lo: the destination is rA.
+            24 => {
+                let value = constant[rd].map(|base| base | immediate);
+                if let Some(address) = value.filter(|address| interior(*address)) {
+                    scan.built.push(address);
+                }
+                constant[ra] = value;
+                bound[ra] = None;
+                table_entry[ra] = None;
+                loaded[ra] = false;
+                continue;
+            }
+            // slwi rA, rS, 2 (rlwinm rA, rS, 2, 0, 29): a scaled index.
+            21 if *word & 0xFFFE == (2 << 11) | (29 << 1) => {
+                let value = bound[rd];
+                bound[ra] = value;
+                constant[ra] = None;
+                table_entry[ra] = None;
+                loaded[ra] = false;
+                continue;
+            }
+            // lwzx rD, rA, rB: an entry of a table at a known address.
+            31 if extended == 23 => {
+                entry = match (constant[ra], constant[rb]) {
+                    (Some(table), _) => Some((table, bound[rb].map(|limit| limit + 1))),
+                    (None, Some(table)) => Some((table, bound[ra].map(|limit| limit + 1))),
+                    (None, None) => None,
+                };
+            }
+            // mtctr rS
+            31 if extended == 467 && ((*word >> 11) & 0x3FF) == (9 << 5) => {
+                ctr_table = table_entry[rd];
+                ctr_loaded = loaded[rd];
+                continue;
+            }
+            _ => {}
+        }
+        let Some(effect) = crate::ppc_dataflow::effect(pc, *word) else {
+            constant = [None; 32];
+            bound = [None; 32];
+            table_entry = [None; 32];
+            loaded = [false; 32];
+            ctr_table = None;
+            ctr_loaded = false;
+            continue;
+        };
+        if effect.flow == crate::ppc_dataflow::Flow::IndirectJump {
+            if let Some((table, entries)) = ctr_table {
+                let mut run = table_run(table, function.address);
+                if let Some(entries) = entries {
+                    run.truncate(entries as usize);
+                }
+                if !run.is_empty() {
+                    scan.by_site.insert(pc, run);
+                }
+            }
+            if ctr_loaded {
+                scan.loaded.insert(pc);
+            }
+        }
+        if effect.writes.ctr {
+            ctr_table = None;
+            ctr_loaded = false;
+        }
+        for register in 0..32 {
+            if effect.writes.gpr & (1 << register) != 0 {
+                constant[register] = None;
+                bound[register] = None;
+                table_entry[register] = None;
+                loaded[register] = false;
+            }
+        }
+        if matches!(
+            effect.flow,
+            crate::ppc_dataflow::Flow::Call(_) | crate::ppc_dataflow::Flow::IndirectCall
+        ) {
+            constant = [None; 32];
+            bound = [None; 32];
+            table_entry = [None; 32];
+            loaded = [false; 32];
+            ctr_table = None;
+            ctr_loaded = false;
+        }
+        if let Some(value) = known {
+            if interior(value) {
+                scan.built.push(value);
+            }
+            constant[rd] = Some(value);
+        }
+        if let Some(table) = entry {
+            table_entry[rd] = Some(table);
+        }
+        // lwz / lwzu / lwzx / lwzux: a word loaded from memory.
+        if primary == 32 || primary == 33 || (primary == 31 && (extended == 23 || extended == 55)) {
+            loaded[rd] = true;
+        }
+    }
+    scan.built.sort_unstable();
+    scan.built.dedup();
+    scan
 }
 
 /// A function whose generated body is not its guest code: a host
@@ -3658,10 +3970,11 @@ fn function_abi_residency(
 }
 
 /// Possible indirect-call targets: functions whose start address appears as
-/// a word anywhere in the image (vtables, callback and jump tables, data
+/// a word in the image's data (vtables, callback and jump tables, data
 /// pointers) or is built in code by `lis` followed by `addi`/`ori` on the
 /// same register. Over-approximate: a spurious match only keeps a function in
-/// the set.
+/// the set. Instruction words are not data: every `lwz` encodes a value in
+/// 0x80000000..0x83FFFFFF and would match some function start.
 fn discover_address_taken_functions(
     sections: &[DolSection],
     dol_bytes: &[u8],
@@ -3676,10 +3989,10 @@ fn discover_address_taken_functions(
         let mut high: [Option<u32>; 32] = [None; 32];
         for chunk in bytes.chunks_exact(4) {
             let word = u32::from_be_bytes(chunk.try_into().expect("four-byte word"));
-            if starts.contains(&word) {
-                taken.insert(word);
-            }
             if section.kind != DolSectionKind::Text {
+                if starts.contains(&word) {
+                    taken.insert(word);
+                }
                 continue;
             }
             let rd = gpr_rt(word) as usize;
@@ -12937,8 +13250,10 @@ mod tests {
                 size: 8,
             },
         ];
-        // text: lis r12,0x8000; addi r12,r12,0x5000; blr; data: 0x80006000
-        let text: Vec<u8> = [0x3D80_8000u32, 0x398C_5000, 0x4E80_0020, 0]
+        // text: lis r12,0x8000; addi r12,r12,0x5000; blr; lwz r0,0x4000(r0)
+        // (an instruction word equal to 0x80004000, not a pointer);
+        // data: 0x80006000
+        let text: Vec<u8> = [0x3D80_8000u32, 0x398C_5000, 0x4E80_0020, 0x8000_4000]
             .iter()
             .flat_map(|word| word.to_be_bytes())
             .collect();
@@ -12967,6 +13282,108 @@ mod tests {
             discover_address_taken_functions(&sections, &image, &functions),
             BTreeSet::from([0x8000_5000, 0x8000_6000])
         );
+    }
+
+    #[test]
+    fn fpr_save_and_restore_helpers_are_part_of_the_caller() {
+        let frame = Regs::gpr(11);
+        let all = Regs {
+            fpr: u32::MAX << 14,
+            ..Regs::default()
+        };
+        // _savefpr_14 reads r11 and f14..f31; _restfpr_14 writes f14..f31.
+        assert_eq!(
+            abi_inline_call(0x8051_7464),
+            Some((frame.union(all), Regs::default()))
+        );
+        assert_eq!(abi_inline_call(0x8051_74B0), Some((frame, all)));
+        // _savefpr_31 / _restfpr_31: f31 alone.
+        assert_eq!(
+            abi_inline_call(0x8051_74A8),
+            Some((frame.union(Regs::fpr(31)), Regs::default()))
+        );
+        assert_eq!(abi_inline_call(0x8051_74F4), Some((frame, Regs::fpr(31))));
+        // The blr after each run is not an entry.
+        assert_eq!(abi_inline_call(0x8051_74AC), None);
+        assert_eq!(abi_inline_call(0x8051_74F8), None);
+    }
+
+    #[test]
+    fn a_switch_bctr_gets_the_case_labels_of_its_own_bounded_table() {
+        const F: u32 = 0x8000_4000;
+        const G: u32 = 0x8000_4040;
+        let functions = [
+            FunctionRange {
+                address: F,
+                size: 0x40,
+            },
+            FunctionRange {
+                address: G,
+                size: 0x10,
+            },
+        ];
+        let f_words = vec![
+            0x2803_0001, // cmplwi r3,1
+            0x4181_002C, // bgt F+0x30 (default)
+            0x3C80_8040, // lis r4,0x8040
+            0x5460_103A, // slwi r0,r3,2
+            0x3884_0000, // addi r4,r4,0
+            0x7C84_002E, // lwzx r4,r4,r0
+            0x7C89_03A6, // mtctr r4
+            0x4E80_0420, // bctr
+            0x3860_0000, // F+0x20 case 0: li r3,0
+            0x4E80_0020,
+            0x3860_0001, // F+0x28 case 1: li r3,1
+            0x4E80_0020,
+            0x3860_0002, // F+0x30 default (and a case of another table)
+            0x4E80_0020,
+            0x4E80_0020,
+            0x4E80_0020,
+        ];
+        let g_words = vec![
+            0x8183_0000, // lwz r12,0(r3)
+            0x818C_0034, // lwz r12,0x34(r12)
+            0x7D89_03A6, // mtctr r12
+            0x4E80_0420, // bctr: a virtual call in tail position
+        ];
+        let mut image: Vec<u8> = f_words
+            .iter()
+            .chain(&g_words)
+            .flat_map(|word: &u32| word.to_be_bytes())
+            .collect();
+        let text_len = image.len() as u32;
+        // F's table (two cases) followed by a word of another table of F.
+        for word in [F + 0x20, F + 0x28, F + 0x30] {
+            image.extend_from_slice(&word.to_be_bytes());
+        }
+        let sections = [
+            DolSection {
+                name: "text0".to_owned(),
+                kind: DolSectionKind::Text,
+                index: 0,
+                file_offset: 0,
+                address: F,
+                size: text_len,
+            },
+            DolSection {
+                name: "data0".to_owned(),
+                kind: DolSectionKind::Data,
+                index: 1,
+                file_offset: text_len,
+                address: 0x8040_0000,
+                size: 12,
+            },
+        ];
+        let targets = discover_jump_targets(&sections, &image, &functions, &[f_words, g_words]);
+        let f = &targets[&F];
+        assert_eq!(f.any, vec![F + 0x20, F + 0x28, F + 0x30]);
+        assert_eq!(
+            f.by_site,
+            BTreeMap::from([(F + 0x1C, vec![F + 0x20, F + 0x28])])
+        );
+        let g = &targets[&G];
+        assert!(g.by_site.is_empty() && g.any.is_empty());
+        assert_eq!(g.loaded, BTreeSet::from([G + 0xC]));
     }
 
     /// stmw r22,8(r3); stmw r20,-0x30(r1); dcbz r3,r4; blr

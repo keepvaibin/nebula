@@ -15,8 +15,11 @@
 //! * condition-register fields and the carry bit written but never read.
 //!
 //! Every decision is conservative: an instruction the decoder does not know,
-//! an indirect jump inside the function, a trap or a system call makes every
-//! register live there.
+//! a computed jump whose targets are not known, a trap, a system call or an
+//! interrupt return makes every register live there. A switch's `bctr` makes
+//! live what its own case labels read; a `bctr` through a pointer loaded
+//! from memory what a tail call (or an in-function address the image holds)
+//! reads.
 
 use powerpc::{Extensions, Ins, Opcode};
 use std::collections::{BTreeMap, BTreeSet};
@@ -208,9 +211,9 @@ pub struct Effect {
     pub reads: Regs,
     pub writes: Regs,
     pub flow: Flow,
-    /// The instruction observes or replaces the complete architectural state
-    /// (system call, trap, interrupt return, MSR write). Everything is live
-    /// before it.
+    /// The instruction hands the complete architectural state to a handler
+    /// or replaces it (system call, trap, interrupt return). Everything is
+    /// live before it.
     pub boundary: bool,
 }
 
@@ -306,6 +309,9 @@ pub fn effect(pc: u32, word: u32) -> Option<Effect> {
                 writes = writes.union(Regs::cr_field(0));
             }
         }
+        // `ori rX,rX,0` (the `nop` encoding when X = 0) and its siblings leave
+        // the register unchanged: no read, no write.
+        O::Ori | O::Oris | O::Xori | O::Xoris if word & 0xFFFF == 0 && rt(word) == ra(word) => {}
         O::Ori | O::Oris | O::Xori | O::Xoris => {
             reads = g(rt(word));
             writes = g(ra(word));
@@ -520,16 +526,11 @@ pub fn effect(pc: u32, word: u32) -> Option<Effect> {
         | O::PsNabs
         | O::PsRes
         | O::PsRsqrte => {
+            // The scalar moves keep frD's ps1 lane. It is not counted as a
+            // read: scalar code never reads ps1, and EABI code never relies
+            // on a volatile register's ps1 surviving a call.
             reads = f(rb(word));
             writes = f(rt(word));
-            if matches!(
-                ins.op,
-                O::Fmr | O::Fneg | O::Fabs | O::Fnabs | O::PsMr | O::PsNeg | O::PsAbs | O::PsNabs
-            ) {
-                // The scalar moves keep ps1; the paired ones replace both
-                // lanes. Either way the register is read for the kept lane.
-                reads = reads.union(f(rt(word)));
-            }
         }
         O::Fcmpu | O::Fcmpo | O::PsCmpu0 | O::PsCmpo0 | O::PsCmpu1 | O::PsCmpo1 => {
             reads = f(ra(word)).union(f(rb(word)));
@@ -583,6 +584,10 @@ pub fn effect(pc: u32, word: u32) -> Option<Effect> {
                 _ => {}
             }
         }
+        // Writes of machine state (MSR, segment and special registers) read
+        // their operand only. An interrupt that MSR[EE] lets in is delivered
+        // at the translated checkpoint, which synchronizes the whole register
+        // file itself, so it adds nothing to the liveness here.
         O::Mtspr => {
             let spr = ((word >> 16) & 31) | ((word >> 6) & 0x3E0);
             reads = g(rt(word));
@@ -593,7 +598,7 @@ pub fn effect(pc: u32, word: u32) -> Option<Effect> {
                 }
                 8 => writes.lr = true,
                 9 => writes.ctr = true,
-                _ => boundary = true,
+                _ => {}
             }
         }
         O::Mftb | O::Mfmsr | O::Mfsr => {
@@ -601,7 +606,6 @@ pub fn effect(pc: u32, word: u32) -> Option<Effect> {
         }
         O::Mtmsr | O::Mtsr => {
             reads = g(rt(word));
-            boundary = true;
         }
         // Cache and synchronization.
         O::Dcbf | O::Dcbst | O::Dcbi | O::Dcbt | O::Dcbz | O::DcbzL | O::Icbi | O::Dcbtst => {
@@ -842,12 +846,71 @@ pub fn analyze_effects(
     exit_live: Regs,
     call_model: &dyn Fn(Option<u32>) -> CallModel,
 ) -> FunctionLiveness {
+    analyze_effects_with_jump_targets(start, effects, exit_live, call_model, &NO_JUMP_TARGETS)
+}
+
+/// The in-function targets of a function's computed jumps (`bctr` through a
+/// switch table).
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct JumpTargets {
+    /// The case labels of one `bctr`'s own table, by the `bctr`'s pc.
+    pub by_site: BTreeMap<u32, Vec<u32>>,
+    /// Every address inside the function past its start that the image's
+    /// data holds or its code builds: the possible in-function targets of a
+    /// `bctr` whose table is not known.
+    pub any: Vec<u32>,
+    /// `bctr`s through a pointer loaded from memory (a call in tail
+    /// position, or a jump to one of `any`).
+    pub loaded: BTreeSet<u32>,
+}
+
+/// A function without computed jumps (or with no known targets).
+pub static NO_JUMP_TARGETS: JumpTargets = JumpTargets {
+    by_site: BTreeMap::new(),
+    any: Vec::new(),
+    loaded: BTreeSet::new(),
+};
+
+/// `analyze_effects` knowing the in-function targets of the function's
+/// computed jumps. A switch makes live what its case labels read; a jump
+/// through a loaded pointer what a tail call or one of `any` reads; any other
+/// computed jump everything.
+#[must_use]
+pub fn analyze_effects_with_jump_targets(
+    start: u32,
+    effects: Vec<Option<Effect>>,
+    exit_live: Regs,
+    call_model: &dyn Fn(Option<u32>) -> CallModel,
+    jump_targets: &JumpTargets,
+) -> FunctionLiveness {
     let count = effects.len();
     let index_of = |pc: u32| -> Option<usize> {
         let offset = pc.checked_sub(start)?;
         let index = (offset / 4) as usize;
         (offset % 4 == 0 && index < count).then_some(index)
     };
+    let any_indices: Vec<usize> = jump_targets
+        .any
+        .iter()
+        .filter_map(|target| index_of(*target))
+        .collect();
+    let site_indices: BTreeMap<usize, Vec<usize>> = jump_targets
+        .by_site
+        .iter()
+        .filter_map(|(site, targets)| {
+            let indices: Vec<usize> = targets
+                .iter()
+                .filter_map(|target| index_of(*target))
+                .collect();
+            (!indices.is_empty()).then_some((index_of(*site)?, indices))
+        })
+        .collect();
+    // A computed jump that is not a known switch may also be a tail call
+    // through a pointer (a virtual call in tail position).
+    let tail_live = exit_live.union(call_model(None).uses).union(Regs {
+        lr: true,
+        ..Regs::default()
+    });
     let mut live_before = vec![Regs::default(); count];
     let mut live_after = vec![Regs::default(); count];
     loop {
@@ -870,23 +933,42 @@ pub fn analyze_effects(
                     }),
                 }
             };
+            let jump_live = |index: usize| -> Regs {
+                match site_indices.get(&index) {
+                    Some(targets) => targets.iter().fold(Regs::default(), |live, target| {
+                        live.union(live_before[*target])
+                    }),
+                    None if jump_targets.loaded.contains(&(start + index as u32 * 4)) => {
+                        any_indices
+                            .iter()
+                            .fold(tail_live, |live, target| live.union(live_before[*target]))
+                    }
+                    None => Regs::ALL,
+                }
+            };
             let (after, before) = match effects[index] {
                 None => (Regs::ALL, Regs::ALL),
-                // `bl` into the function's own body: a local subroutine whose
-                // `blr` returns inside the function. Not modelled.
+                // `bl` into the function's own body past its start: a local
+                // subroutine whose `blr` returns inside the function. Not
+                // modelled. A `bl` to the start is ordinary recursion.
                 Some(Effect {
                     flow: Flow::Call(target),
                     ..
-                }) if index_of(target).is_some() => (Regs::ALL, Regs::ALL),
+                }) if index_of(target).is_some_and(|target| target != 0) => (Regs::ALL, Regs::ALL),
                 Some(effect) => {
                     let after = match effect.flow {
                         Flow::Next => next(index),
                         Flow::Branch(target) => target_live(target),
                         Flow::CondBranch(target) => next(index).union(target_live(target)),
+                        // A call the function ends with does not return
+                        // (CodeWarrior's calls to noreturn functions): nothing
+                        // after it reads anything.
+                        Flow::Call(_) | Flow::IndirectCall if index + 1 == count => Regs::default(),
                         Flow::Call(_) | Flow::IndirectCall => next(index),
                         Flow::Return => exit_live,
                         Flow::CondReturn => exit_live.union(next(index)),
-                        Flow::IndirectJump | Flow::End => Regs::ALL,
+                        Flow::IndirectJump => jump_live(index),
+                        Flow::End => Regs::ALL,
                     };
                     let before = match effect.flow {
                         Flow::Call(target) => {
@@ -975,7 +1057,24 @@ pub fn abi_facts_with(
     effects: Vec<Option<Effect>>,
     call_model: &dyn Fn(Option<u32>) -> CallModel,
 ) -> AbiFacts {
-    let liveness = analyze_effects(start, effects, abi::return_live(), call_model);
+    abi_facts_with_jump_targets(start, effects, call_model, &NO_JUMP_TARGETS)
+}
+
+/// `abi_facts_with` knowing the in-function targets of computed jumps.
+#[must_use]
+pub fn abi_facts_with_jump_targets(
+    start: u32,
+    effects: Vec<Option<Effect>>,
+    call_model: &dyn Fn(Option<u32>) -> CallModel,
+    jump_targets: &JumpTargets,
+) -> AbiFacts {
+    let liveness = analyze_effects_with_jump_targets(
+        start,
+        effects,
+        abi::return_live(),
+        call_model,
+        jump_targets,
+    );
     let mut facts = AbiFacts {
         entry_live: liveness.entry_live(),
         ..AbiFacts::default()
@@ -1062,6 +1161,9 @@ pub struct AbiFunctionInput<'a> {
     /// The function's body is not its guest code (host substitution, lean
     /// body, audited wrapper): direct callers keep full synchronization.
     pub native: bool,
+    /// What the function's computed jumps may reach, from the image's data
+    /// and code (`NO_JUMP_TARGETS`: anywhere).
+    pub jump_targets: &'a JumpTargets,
 }
 
 /// Why a function keeps full context synchronization at its calls, at its
@@ -1074,6 +1176,13 @@ pub enum AbiOptOut {
     Undecodable,
     /// `bl` into its own body (a local subroutine returning inside it).
     InternalLink,
+    /// Reads a volatile register after a call that its callee's call tree
+    /// may write: an extra result (OS assembly) or an uninitialized local on
+    /// a default path.
+    ReadsAfterCall,
+    /// The direct callee a `ReadsAfterCall` function reads from: its returns
+    /// store everything it wrote.
+    ExtraResult,
 }
 
 impl AbiOptOut {
@@ -1083,7 +1192,16 @@ impl AbiOptOut {
             Self::Native => "native",
             Self::Undecodable => "undecodable",
             Self::InternalLink => "internal-link",
+            Self::ReadsAfterCall => "reads-after-call",
+            Self::ExtraResult => "extra-result",
         }
+    }
+
+    /// The function's guest code was analyzed: its entry registers and
+    /// clobbers are known even though it keeps full synchronization.
+    #[must_use]
+    pub fn modelled(self) -> bool {
+        matches!(self, Self::ReadsAfterCall | Self::ExtraResult)
     }
 }
 
@@ -1110,6 +1228,14 @@ pub struct FunctionAbi {
     /// Non-volatile registers the function saves and restores: it reads
     /// them before it writes them. A callee's clobber of one stays hidden.
     pub saved: Regs,
+    /// The function can return to its caller: it has a `blr`, a tail call
+    /// or a computed jump, or it was not decoded. A function that ends in
+    /// `rfi`, an endless loop or a call that does not return never hands its
+    /// register state back, so its callers do not inherit its clobbers.
+    pub returns: bool,
+    /// Every register an instruction of the function may write (every
+    /// register when unknown: host substitutions, unmodelled code).
+    pub writes: Regs,
 }
 
 /// What a caller synchronizes around one call under the EABI contract.
@@ -1200,6 +1326,7 @@ impl ModuleAbi {
         inline_calls: &InlineCalls<'_>,
     ) -> Self {
         let mut module = Self::default();
+        let facts_model = |_| CallModel::abi();
         let starts: BTreeSet<u32> = functions.iter().map(|function| function.start).collect();
         let decoded: BTreeMap<u32, Vec<Option<Effect>>> = functions
             .iter()
@@ -1210,19 +1337,30 @@ impl ModuleAbi {
                 )
             })
             .collect();
+        let jump_targets: BTreeMap<u32, &JumpTargets> = functions
+            .iter()
+            .map(|function| (function.start, function.jump_targets))
+            .collect();
         for function in functions {
             let effects = &decoded[&function.start];
-            let facts = abi_facts_with(function.start, effects.clone(), &|_| CallModel::abi());
+            let facts = abi_facts_with_jump_targets(
+                function.start,
+                effects.clone(),
+                &facts_model,
+                function.jump_targets,
+            );
             let end = function.start.wrapping_add(function.words.len() as u32 * 4);
             let mut direct_calls = Vec::new();
             let mut tail_calls = Vec::new();
             let mut indirect_calls = false;
             let mut indirect_call_sites = Vec::new();
             let mut internal_link = false;
+            let mut returns = facts.undecodable;
             for (index, effect) in effects.iter().enumerate() {
                 let pc = function.start + index as u32 * 4;
                 match effect.map(|effect| effect.flow) {
-                    Some(Flow::Call(target)) if target >= function.start && target < end => {
+                    // A `bl` to the start is recursion, an ordinary call.
+                    Some(Flow::Call(target)) if target > function.start && target < end => {
                         internal_link = true;
                     }
                     Some(Flow::Call(target)) => direct_calls.push((pc, target)),
@@ -1230,13 +1368,24 @@ impl ModuleAbi {
                         if (target < function.start || target >= end)
                             && starts.contains(&target) =>
                     {
+                        // Returns when the target does (resolved below).
                         tail_calls.push((pc, target));
+                    }
+                    // A branch out of the function to no known start.
+                    Some(Flow::Branch(target) | Flow::CondBranch(target))
+                        if target < function.start || target >= end =>
+                    {
+                        returns = true;
                     }
                     Some(Flow::IndirectCall) => {
                         indirect_calls = true;
                         indirect_call_sites.push(pc);
                     }
-                    Some(Flow::IndirectJump) => indirect_calls = true,
+                    Some(Flow::IndirectJump) => {
+                        indirect_calls = true;
+                        returns = true;
+                    }
+                    Some(Flow::Return | Flow::CondReturn) => returns = true,
                     _ => {}
                 }
             }
@@ -1275,89 +1424,156 @@ impl ModuleAbi {
                         .writes
                         .intersect(facts.entry_live)
                         .intersect(nonvolatile()),
+                    // Writing r1 without reading it first switches to another
+                    // stack: control never comes back to the caller's frame
+                    // (OSLoadContext, TRKLoadContext, __init_registers).
+                    returns: returns && facts.nonvolatile_clobbers.gpr & (1 << 1) == 0,
+                    writes: if opt_out.is_some() || facts.undecodable {
+                        Regs::ALL
+                    } else {
+                        facts.writes
+                    },
                 },
             );
         }
-        // Which argument registers each function really reads at entry, as a
-        // fixed point over the call graph. Calling a function then makes only
-        // those live, so `bl A; bl B` does not count B's unused argument
-        // registers as reads after A. Opted-out functions and targets outside
-        // the module read every argument; an indirect callee reads none (a
-        // compiled caller never passes a value through an argument register
-        // it set before an earlier call).
-        let arguments = Regs {
-            gpr: abi::ARGUMENT_GPRS,
-            fpr: abi::ARGUMENT_FPRS,
-            ..Regs::default()
-        };
-        let mut argument_reads: BTreeMap<u32, Regs> = module
-            .functions
-            .iter()
-            .map(|(start, function)| {
-                let reads = if function.opt_out.is_some() {
-                    arguments
-                } else {
-                    Regs::default()
-                };
-                (*start, reads)
-            })
-            .collect();
-        let mut callers: BTreeMap<u32, BTreeSet<u32>> = BTreeMap::new();
-        for (start, function) in &module.functions {
-            for (_, target) in function.direct_calls.iter().chain(&function.tail_calls) {
-                callers.entry(*target).or_default().insert(*start);
-            }
-        }
-        let precise_model = |reads: &BTreeMap<u32, Regs>, target: Option<u32>| -> CallModel {
-            let base = Regs {
-                gpr: (1 << 1) | (1 << 2) | (1 << 13),
-                ..Regs::default()
-            };
-            let uses = match target {
-                Some(target) => base.union(reads.get(&target).copied().unwrap_or(arguments)),
-                None => base,
-            };
-            CallModel {
-                uses,
-                clobbers: abi::call_clobbers(),
-            }
-        };
-        let mut worklist: BTreeSet<u32> = module
-            .functions
-            .iter()
-            .filter(|(_, function)| function.opt_out.is_none())
-            .map(|(start, _)| *start)
-            .collect();
-        while let Some(start) = worklist.pop_first() {
-            let liveness = analyze_effects(
-                start,
-                decoded[&start].clone(),
-                abi::return_live(),
-                &|target| precise_model(&argument_reads, target),
-            );
-            let reads = liveness.entry_live().intersect(arguments);
-            if reads != argument_reads[&start] {
-                argument_reads.insert(start, reads);
-                if let Some(callers) = callers.get(&start) {
-                    worklist.extend(
-                        callers
-                            .iter()
-                            .filter(|caller| module.functions[*caller].opt_out.is_none()),
-                    );
+        // A tail call returns when its target does.
+        loop {
+            let returning: BTreeSet<u32> = module
+                .functions
+                .iter()
+                .filter(|(_, function)| function.returns)
+                .map(|(start, _)| *start)
+                .collect();
+            let mut changed = false;
+            for function in module.functions.values_mut() {
+                // The clobbers are still the function's own here.
+                let switches_stack = function.clobbers.gpr & (1 << 1) != 0;
+                if function.returns || switches_stack {
+                    continue;
+                }
+                if function
+                    .tail_calls
+                    .iter()
+                    .any(|(_, target)| returning.contains(target))
+                {
+                    function.returns = true;
+                    changed = true;
                 }
             }
+            if !changed {
+                break;
+            }
         }
+        // Volatile registers read after a call before being rewritten, where
+        // a later call's argument registers do not count as reads. Compiled
+        // code sets every argument after the previous call; and an argument
+        // register the caller set before an earlier call reaches the later
+        // callee unchanged either way, because a register the earlier callee
+        // did not touch holds the same value in the caller's local copy. What
+        // remains is code that reads a volatile register itself after a call:
+        // it relies on a callee's undeclared extra result or on a callee
+        // preserving a scratch register, and those registers stay
+        // synchronized at every call.
+        let site_model = CallModel {
+            uses: Regs {
+                gpr: (1 << 1) | (1 << 2) | (1 << 13),
+                ..Regs::default()
+            },
+            clobbers: abi::call_clobbers(),
+        };
         for (start, function) in module.functions.iter_mut() {
             if function.opt_out.is_some() {
                 continue;
             }
-            function.reads_after_calls =
-                abi_facts_with(*start, decoded[start].clone(), &|target| {
-                    precise_model(&argument_reads, target)
-                })
-                .volatile_reads_after_calls;
+            function.reads_after_calls = abi_facts_with_jump_targets(
+                *start,
+                decoded[start].clone(),
+                &|_| site_model,
+                jump_targets[start],
+            )
+            .volatile_reads_after_calls;
         }
-        // Volatile registers read after calls, by any analyzable function.
+        // A register read after a call holds what the callee's call tree left
+        // in it. When nothing in that tree may write the register, the
+        // caller's own copy is still exact and needs no synchronization (the
+        // caller relies on the callee preserving it, as code around runtime
+        // helpers such as `__va_arg` does); only registers the tree may write
+        // keep the fact.
+        let indirect_target =
+            |start: &u32| address_taken.is_empty() || address_taken.contains(start);
+        let mut tree_writes: BTreeMap<u32, Regs> = module
+            .functions
+            .iter()
+            .map(|(start, function)| (*start, function.writes))
+            .collect();
+        let indirect_writes = loop {
+            let indirect = tree_writes
+                .iter()
+                .filter(|(start, _)| indirect_target(start))
+                .fold(Regs::default(), |all, (_, writes)| all.union(*writes));
+            let mut changed = false;
+            for (start, function) in &module.functions {
+                let mut writes = tree_writes[start];
+                for (_, target) in function.direct_calls.iter().chain(&function.tail_calls) {
+                    writes = writes.union(tree_writes.get(target).copied().unwrap_or(Regs::ALL));
+                }
+                if function.indirect_calls {
+                    writes = writes.union(indirect);
+                }
+                if writes != tree_writes[start] {
+                    tree_writes.insert(*start, writes);
+                    changed = true;
+                }
+            }
+            if !changed {
+                break indirect;
+            }
+        };
+        for function in module.functions.values_mut() {
+            let targets: BTreeMap<u32, u32> = function.direct_calls.iter().copied().collect();
+            function.reads_after_calls = function
+                .reads_after_calls
+                .iter()
+                .filter_map(|(pc, registers)| {
+                    let written = match targets.get(pc) {
+                        Some(target) => tree_writes.get(target).copied().unwrap_or(Regs::ALL),
+                        None => indirect_writes,
+                    };
+                    let kept = registers.intersect(written);
+                    (!kept.is_empty()).then_some((*pc, kept))
+                })
+                .collect();
+        }
+        // A function that still reads a register its callee's tree may write
+        // keeps full synchronization at its own calls and returns, and so does
+        // each direct callee it reads from (whose returns then store every
+        // register it wrote). Syncing those registers at every call of the
+        // module instead would bring back the scratch-register traffic (r0 in
+        // every prologue) the contract removes.
+        let mut extra_results = BTreeSet::new();
+        for function in module.functions.values_mut() {
+            if function.opt_out.is_some() || function.reads_after_calls.is_empty() {
+                continue;
+            }
+            function.opt_out = Some(AbiOptOut::ReadsAfterCall);
+            let targets: BTreeMap<u32, u32> = function.direct_calls.iter().copied().collect();
+            extra_results.extend(
+                function
+                    .reads_after_calls
+                    .keys()
+                    .filter_map(|pc| targets.get(pc).copied()),
+            );
+        }
+        for target in extra_results {
+            if let Some(function) = module.functions.get_mut(&target) {
+                if function.opt_out.is_none() {
+                    function.opt_out = Some(AbiOptOut::ExtraResult);
+                }
+            }
+        }
+        // Volatile registers read after calls by a function that keeps the
+        // contract: none once the rule above applied; kept as the general
+        // mechanism for facts a later analysis stage leaves in place.
         for function in module.functions.values() {
             if function.opt_out.is_some() {
                 continue;
@@ -1370,24 +1586,32 @@ impl ModuleAbi {
         // callees clobbered and it did not save itself (an indirect call or a
         // computed jump may reach any function); a tail call also needs its
         // target's entry registers.
-        let indirect_target =
-            |start: &u32| address_taken.is_empty() || address_taken.contains(start);
+        let unmodelled =
+            |function: &FunctionAbi| function.opt_out.is_some_and(|reason| !reason.modelled());
         loop {
+            // A callee that never returns hands back no register state.
+            let returned = |function: &FunctionAbi| {
+                if function.returns {
+                    function.clobbers
+                } else {
+                    Regs::default()
+                }
+            };
             let any_clobbers = module
                 .functions
                 .iter()
                 .filter(|(start, _)| indirect_target(start))
                 .fold(Regs::default(), |all, (_, function)| {
-                    all.union(function.clobbers)
+                    all.union(returned(function))
                 });
             let snapshot: BTreeMap<u32, (Regs, Regs)> = module
                 .functions
                 .iter()
-                .map(|(start, function)| (*start, (function.entry_extra, function.clobbers)))
+                .map(|(start, function)| (*start, (function.entry_extra, returned(function))))
                 .collect();
             let mut changed = false;
             for function in module.functions.values_mut() {
-                if function.opt_out.is_some() {
+                if unmodelled(function) {
                     continue;
                 }
                 let mut inherited = Regs::default();
@@ -1435,7 +1659,9 @@ impl ModuleAbi {
             let mut entry_extra = Regs::default();
             let mut clobbers = Regs::default();
             for (start, function) in &module.functions {
-                if function.opt_out.is_some() || !indirect_target(start) {
+                // As for `indirect_entry` (ModuleAbi::analyze): code that
+                // never returns is not an indirect callee.
+                if unmodelled(function) || !indirect_target(start) || !function.returns {
                     continue;
                 }
                 entry_extra = entry_extra.union(function.entry_extra);
@@ -1852,16 +2078,19 @@ mod tests {
                     start: CALLER,
                     words: &caller,
                     native: false,
+                    jump_targets: &NO_JUMP_TARGETS,
                 },
                 AbiFunctionInput {
                     start: LEAF,
                     words: leaf,
                     native: false,
+                    jump_targets: &NO_JUMP_TARGETS,
                 },
                 AbiFunctionInput {
                     start: OTHER,
                     words: other,
                     native: native_other,
+                    jump_targets: &NO_JUMP_TARGETS,
                 },
             ],
             &BTreeSet::new(),
@@ -1898,11 +2127,10 @@ mod tests {
         assert_eq!(abi.functions[&CALLER].clobbers.gpr & (1 << 31), 0);
     }
 
-    #[test]
-    fn a_volatile_read_after_a_call_is_synchronized_everywhere() {
-        // OTHER reads r5 after calling LEAF.
-        let leaf = [addi(3, 3, 1), BLR];
-        let other = [
+    /// stwu r1,-16(r1); mflr r0; stw r0,20(r1); bl LEAF; add r3,r5,r3;
+    /// lwz r0,20(r1); mtlr r0; addi r1,r1,16; blr: reads r5 after the call.
+    fn reads_r5_after_leaf() -> [u32; 9] {
+        [
             (37 << 26) | (1 << 21) | (1 << 16) | 0xFFF0,
             0x7C08_02A6,
             stw(0, 20, 1),
@@ -1912,13 +2140,178 @@ mod tests {
             0x7C08_03A6,
             addi(1, 1, 16),
             BLR,
+        ]
+    }
+
+    #[test]
+    fn a_volatile_read_after_a_call_needs_nothing_when_the_callee_keeps_it() {
+        // LEAF leaves r5 alone: OTHER's own copy of r5 is still exact.
+        let leaf = [addi(3, 3, 1), BLR];
+        let abi = module(&leaf, &reads_r5_after_leaf(), false);
+        assert!(abi.always_synced.is_empty(), "{abi:?}");
+        assert_eq!(abi.functions[&OTHER].opt_out, None);
+        assert!(abi.functions[&OTHER].reads_after_calls.is_empty());
+        assert_eq!(abi.exit_stores(LEAF), Some(abi_exit_store()));
+    }
+
+    #[test]
+    fn a_volatile_read_after_a_call_keeps_both_sides_fully_synchronized() {
+        // LEAF leaves an extra result in r5: OTHER and LEAF keep full
+        // synchronization, every other call keeps the contract.
+        let leaf = [addi(5, 0, 7), addi(3, 3, 1), BLR];
+        let abi = module(&leaf, &reads_r5_after_leaf(), false);
+        assert!(abi.always_synced.is_empty(), "{abi:?}");
+        assert_eq!(
+            abi.functions[&OTHER].opt_out,
+            Some(AbiOptOut::ReadsAfterCall)
+        );
+        assert_eq!(abi.functions[&LEAF].opt_out, Some(AbiOptOut::ExtraResult));
+        assert_eq!(abi.call_sync(OTHER, OTHER + 12, Some(LEAF)), None);
+        assert_eq!(abi.call_sync(CALLER, CALLER + 20, Some(LEAF)), None);
+        assert_eq!(abi.call_sync(CALLER, CALLER + 28, Some(OTHER)), None);
+        assert_eq!(abi.exit_stores(LEAF), None);
+        assert_eq!(abi.exit_stores(CALLER), Some(abi_exit_store()));
+        // Both stay indirect callees with known facts.
+        assert!(abi.indirect.is_some());
+        let json = abi.manifest_json();
+        assert!(
+            json.contains("\"address\": \"0x80006000\", \"reason\": \"reads-after-call\""),
+            "{json}"
+        );
+        assert!(
+            json.contains("\"address\": \"0x80005000\", \"reason\": \"extra-result\""),
+            "{json}"
+        );
+    }
+
+    #[test]
+    fn a_later_calls_arguments_are_not_reads_after_the_earlier_call() {
+        // CALLER: bl LEAF; add r3,r31,r3; bl OTHER. OTHER is a host
+        // substitution, so it may read any argument register, yet r4..r10
+        // left over from LEAF are not facts about CALLER.
+        let leaf = [addi(3, 3, 1), BLR];
+        let other = [x(3, 3, 9, 266, false), BLR];
+        let abi = module(&leaf, &other, true);
+        assert!(abi.functions[&CALLER].reads_after_calls.is_empty());
+        assert!(abi.always_synced.is_empty());
+    }
+
+    #[test]
+    fn recursion_is_an_ordinary_call() {
+        // stwu r1,-16(r1); mflr r0; stw r0,20(r1); bl LEAF (its own start);
+        // lwz r0,20(r1); mtlr r0; addi r1,r1,16; blr
+        let leaf = [
+            (37 << 26) | (1 << 21) | (1 << 16) | 0xFFF0,
+            0x7C08_02A6,
+            stw(0, 20, 1),
+            bl(LEAF + 12, LEAF),
+            lwz(0, 20, 1),
+            0x7C08_03A6,
+            addi(1, 1, 16),
+            BLR,
         ];
+        let other = [addi(3, 3, 1), BLR];
         let abi = module(&leaf, &other, false);
-        assert_eq!(abi.always_synced.gpr, 1 << 5);
-        let sync = abi.call_sync(CALLER, CALLER + 20, Some(LEAF)).unwrap();
-        assert_eq!(sync.store.gpr & (1 << 5), 1 << 5);
-        assert_eq!(sync.reload.gpr & (1 << 5), 1 << 5);
-        assert_eq!(abi.exit_stores(LEAF).unwrap().gpr & (1 << 5), 1 << 5);
+        assert_eq!(abi.functions[&LEAF].opt_out, None);
+        assert_eq!(abi.functions[&LEAF].direct_calls, vec![(LEAF + 12, LEAF)]);
+        assert!(abi.call_sync(LEAF, LEAF + 12, Some(LEAF)).is_some());
+    }
+
+    #[test]
+    fn a_call_the_function_ends_with_does_not_return() {
+        let start = 0x8000_4000;
+        // add r3,r3,r3; bl 0x80005000 (noreturn): nothing after it is read.
+        let words = [x(3, 3, 3, 266, false), bl(start + 4, 0x8000_5000)];
+        let facts = abi_facts(start, &words);
+        assert!(facts.volatile_reads_after_calls.is_empty(), "{facts:?}");
+        assert!(facts.scratch_entry_reads.is_empty(), "{facts:?}");
+    }
+
+    #[test]
+    fn a_callee_that_never_returns_hands_back_no_clobbers() {
+        // lwz r31,4(r3); rfi: clobbers r31, never returns to its caller.
+        let rfi_leaf = [lwz(31, 4, 3), 0x4C00_0064];
+        // lwz r1,0(r3); lwz r31,4(r3); blr: switches stacks.
+        let stack_switch = [lwz(1, 0, 3), lwz(31, 4, 3), BLR];
+        let other = [addi(3, 3, 1), BLR];
+        for leaf in [&rfi_leaf[..], &stack_switch[..]] {
+            let abi = module(leaf, &other, false);
+            let callee = &abi.functions[&LEAF];
+            assert!(!callee.returns, "{callee:?}");
+            assert_eq!(callee.clobbers.gpr & (1 << 31), 1 << 31);
+            // The call still reloads what the callee wrote; the caller's own
+            // summary does not inherit it.
+            let sync = abi.call_sync(CALLER, CALLER + 20, Some(LEAF)).unwrap();
+            assert_eq!(sync.reload.gpr & (1 << 31), 1 << 31);
+            assert!(abi.functions[&CALLER].clobbers.is_empty(), "{abi:?}");
+        }
+    }
+
+    #[test]
+    fn scalar_moves_nop_and_machine_state_writes_read_only_their_operands() {
+        // fmr f3,f1 keeps f3's ps1 lane but does not count as reading f3.
+        let fmr = effect(0, (63 << 26) | (3 << 21) | (1 << 11) | (72 << 1)).unwrap();
+        assert_eq!(fmr.reads.fpr, 1 << 1);
+        assert_eq!(fmr.writes.fpr, 1 << 3);
+        // nop (ori r0,r0,0) reads and writes nothing.
+        let nop = effect(0, 0x6000_0000).unwrap();
+        assert!(nop.reads.is_empty() && nop.writes.is_empty());
+        // ori r3,r3,1 still does.
+        assert_eq!(effect(0, 0x6063_0001).unwrap().reads.gpr, 1 << 3);
+        // mtmsr r3 and mtspr GQR0 read their operand; sc stays a boundary.
+        let mtmsr = effect(0, (31 << 26) | (3 << 21) | (146 << 1)).unwrap();
+        assert!(!mtmsr.boundary && mtmsr.reads.gpr == 1 << 3);
+        let mtgqr = effect(0, 0x7C70_E3A6).unwrap();
+        assert!(!mtgqr.boundary && mtgqr.reads.gpr == 1 << 3);
+        assert!(effect(0, 0x4400_0002).unwrap().boundary);
+    }
+
+    #[test]
+    fn a_switch_bctr_reads_only_its_own_case_labels() {
+        let start = 0x8000_4000;
+        // bl X; mtctr r3; bctr (switch B: case S+16); blr; S+16: li r3,0;
+        // blr; S+24: add r3,r6,r6 (a case of another switch); blr
+        let words = [
+            bl(start, 0x8000_9000),
+            0x7C69_03A6,
+            0x4E80_0420,
+            BLR,
+            addi(3, 0, 0),
+            BLR,
+            x(3, 6, 6, 266, false),
+            BLR,
+        ];
+        let effects = || decode(start, &words, &|_| None);
+        let model = |_| CallModel::abi();
+        let mut targets = JumpTargets {
+            by_site: BTreeMap::from([(start + 8, vec![start + 16])]),
+            any: vec![start + 16, start + 24],
+            loaded: BTreeSet::new(),
+        };
+        let facts = abi_facts_with_jump_targets(start, effects(), &model, &targets);
+        assert!(facts.volatile_reads_after_calls.is_empty(), "{facts:?}");
+        // A jump through a loaded pointer: a tail call or any interior
+        // target, so r6 is read after the call.
+        targets.by_site.clear();
+        targets.loaded.insert(start + 8);
+        let facts = abi_facts_with_jump_targets(start, effects(), &model, &targets);
+        assert_eq!(
+            facts
+                .volatile_reads_after_calls
+                .get(&start)
+                .map(|regs| regs.gpr & (1 << 6)),
+            Some(1 << 6)
+        );
+        // Any other computed jump: everything is live.
+        targets.loaded.clear();
+        let liveness = analyze_effects_with_jump_targets(
+            start,
+            effects(),
+            abi::return_live(),
+            &model,
+            &targets,
+        );
+        assert_eq!(liveness.live_after[2], Regs::ALL);
     }
 
     #[test]
@@ -1940,11 +2333,13 @@ mod tests {
                     start: CALLER,
                     words: &caller,
                     native: false,
+                    jump_targets: &NO_JUMP_TARGETS,
                 },
                 AbiFunctionInput {
                     start: LEAF,
                     words: &leaf,
                     native: false,
+                    jump_targets: &NO_JUMP_TARGETS,
                 },
             ],
             &BTreeSet::from([LEAF]),
@@ -2001,11 +2396,13 @@ mod tests {
                     start: CALLER,
                     words: &words,
                     native: false,
+                    jump_targets: &NO_JUMP_TARGETS,
                 },
                 AbiFunctionInput {
                     start: LEAF,
                     words: &leaf,
                     native: false,
+                    jump_targets: &NO_JUMP_TARGETS,
                 },
             ],
             &BTreeSet::new(),

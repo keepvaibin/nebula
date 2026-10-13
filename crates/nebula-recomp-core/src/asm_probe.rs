@@ -738,6 +738,7 @@ pub fn translate_probe_module(
                 start: probe.address,
                 words: &probe.words,
                 native: false,
+                jump_targets: &crate::ppc_dataflow::NO_JUMP_TARGETS,
             })
             .collect();
         ModuleAbi::analyze(
