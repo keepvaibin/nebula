@@ -838,21 +838,18 @@ GALAXY_ALWAYS_INLINE void scalar_binary_fast(
             static_cast<float>(as_f64(fpr[left_register])),
             static_cast<float>(as_f64(fpr[right_register])));
         write_single(context, fpr, ps1, target, as_bits(static_cast<double>(result)), true);
-        if (record) {
-            update_cr1_from_fpscr(context);
-        }
-        return;
-    }
-    const double left = as_f64(fpr[left_register]);
-    std::uint64_t right_bits = fpr[right_register];
-    if constexpr (Single && Operation == PpcFloatBinaryOperation::Multiply) {
-        right_bits = round_multiplier_25(right_bits);
-    }
-    const double result = binary_op<Operation>(left, as_f64(right_bits));
-    if constexpr (Single) {
-        write_single(context, fpr, ps1, target, single_result_bits(result), true);
     } else {
-        fpr[target] = as_bits(result);
+        const double left = as_f64(fpr[left_register]);
+        std::uint64_t right_bits = fpr[right_register];
+        if constexpr (Single && Operation == PpcFloatBinaryOperation::Multiply) {
+            right_bits = round_multiplier_25(right_bits);
+        }
+        const double result = binary_op<Operation>(left, as_f64(right_bits));
+        if constexpr (Single) {
+            write_single(context, fpr, ps1, target, single_result_bits(result), true);
+        } else {
+            fpr[target] = as_bits(result);
+        }
     }
     if (record) {
         update_cr1_from_fpscr(context);
@@ -870,22 +867,19 @@ GALAXY_ALWAYS_INLINE void scalar_ternary_fast(
             static_cast<float>(as_f64(fpr[multiplier_register])),
             static_cast<float>(as_f64(fpr[addend_register])));
         write_single(context, fpr, ps1, target, as_bits(static_cast<double>(result)), true);
-        if (record) {
-            update_cr1_from_fpscr(context);
-        }
-        return;
-    }
-    const double a = as_f64(fpr[multiplicand_register]);
-    std::uint64_t c_bits = fpr[multiplier_register];
-    if constexpr (Single) {
-        c_bits = round_multiplier_25(c_bits);
-    }
-    const double b = as_f64(fpr[addend_register]);
-    const double result = ternary_op<Operation>(a, as_f64(c_bits), b);
-    if constexpr (Single) {
-        write_single(context, fpr, ps1, target, single_result_bits(result), true);
     } else {
-        fpr[target] = as_bits(result);
+        const double a = as_f64(fpr[multiplicand_register]);
+        std::uint64_t c_bits = fpr[multiplier_register];
+        if constexpr (Single) {
+            c_bits = round_multiplier_25(c_bits);
+        }
+        const double b = as_f64(fpr[addend_register]);
+        const double result = ternary_op<Operation>(a, as_f64(c_bits), b);
+        if constexpr (Single) {
+            write_single(context, fpr, ps1, target, single_result_bits(result), true);
+        } else {
+            fpr[target] = as_bits(result);
+        }
     }
     if (record) {
         update_cr1_from_fpscr(context);
@@ -1186,14 +1180,14 @@ GALAXY_ALWAYS_INLINE void paired_binary_fast(
             from_single_pair(binary_single_pair<Operation>(
                 to_single_pair(left), to_single_pair(right))),
             record);
-        return;
+    } else {
+        if constexpr (Operation == PpcFloatBinaryOperation::Multiply) {
+            right = round_multiplier_25(right);
+        }
+        write_pair(
+            context, fpr, ps1, target, round_to_single(binary_pair<Operation>(left, right)),
+            record);
     }
-    if constexpr (Operation == PpcFloatBinaryOperation::Multiply) {
-        right = round_multiplier_25(right);
-    }
-    write_pair(
-        context, fpr, ps1, target, round_to_single(binary_pair<Operation>(left, right)),
-        record);
 }
 
 template <PpcFloatTernaryOperation Operation, PairedLane Lane>
@@ -1211,15 +1205,15 @@ GALAXY_ALWAYS_INLINE void paired_ternary_fast(
         write_pair(
             context, fpr, ps1, target,
             from_single_pair(ternary_single_pair<Operation>(a, c, b)), record);
-        return;
+    } else {
+        const Pair a = make_pair(fpr[multiplicand_register], ps1[multiplicand_register]);
+        const Pair c = round_multiplier_25(
+            select_lanes<Lane>(fpr[multiplier_register], ps1[multiplier_register]));
+        const Pair b = make_pair(fpr[addend_register], ps1[addend_register]);
+        write_pair(
+            context, fpr, ps1, target, round_to_single(ternary_pair<Operation>(a, c, b)),
+            record);
     }
-    const Pair a = make_pair(fpr[multiplicand_register], ps1[multiplicand_register]);
-    const Pair c = round_multiplier_25(
-        select_lanes<Lane>(fpr[multiplier_register], ps1[multiplier_register]));
-    const Pair b = make_pair(fpr[addend_register], ps1[addend_register]);
-    write_pair(
-        context, fpr, ps1, target, round_to_single(ternary_pair<Operation>(a, c, b)),
-        record);
 }
 
 template <bool SumInLane1>
