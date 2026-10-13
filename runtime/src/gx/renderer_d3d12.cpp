@@ -6899,6 +6899,11 @@ void RendererD3D12::prepare_vertex_blend(std::span<const std::int32_t> previous_
     run_blend_vertices_.assign(run_draws_.size(), BlendSource{});
     blend_pairs_.clear();
     blend_validate_pending_ = false;
+    std::int32_t ps_records = 0;
+    for (const DrawCall& call : run_draws_) {
+        ps_records = std::max(ps_records, call.ps_record + 1);
+    }
+    run_ps_previous_.assign(static_cast<std::size_t>(ps_records), -1);
     if (!prev_run_valid_ || prev_run_serial_ + 1u != run_serial_ || previous_record.empty()) {
         return;
     }
@@ -6979,6 +6984,10 @@ void RendererD3D12::prepare_vertex_blend(std::span<const std::int32_t> previous_
         fill[m] = at + 1u - first[m];
         ++paired;
         const DrawCall& before = prev_run_draws_[order[at]];
+        if (call.ps_record >= 0 && before.ps_record >= 0) {
+            std::int32_t& pair = run_ps_previous_[static_cast<std::size_t>(call.ps_record)];
+            pair = pair == -1 || pair == before.ps_record ? before.ps_record : -2;
+        }
         same_buffer += before.vertex_view.BufferLocation == call.vertex_view.BufferLocation ? 1u : 0u;
         std::uint32_t current_offset = 0u, previous_offset = 0u;
         const int current_buffer =
@@ -7222,7 +7231,8 @@ void RendererD3D12::record_subframe_guard(bool save) {
 }
 
 bool RendererD3D12::present_replay_subframe(
-    std::span<const D3D12_GPU_VIRTUAL_ADDRESS> record_constants, float vertex_t) {
+    std::span<const D3D12_GPU_VIRTUAL_ADDRESS> record_constants,
+    std::span<const D3D12_GPU_VIRTUAL_ADDRESS> ps_constants, float vertex_t) {
     if (ring_mode_ != RingMode::Interp && replay_valid_ && !run_valid_) {
         (void)start_replay_playback();
     }
@@ -7395,6 +7405,10 @@ bool RendererD3D12::present_replay_subframe(
                 static_cast<std::size_t>(call.replay_record) < record_constants.size() &&
                 record_constants[static_cast<std::size_t>(call.replay_record)] != 0u) {
                 call.vs_constants = record_constants[static_cast<std::size_t>(call.replay_record)];
+            }
+            if (call.ps_record >= 0 && static_cast<std::size_t>(call.ps_record) < ps_constants.size() &&
+                ps_constants[static_cast<std::size_t>(call.ps_record)] != 0u) {
+                call.ps_constants = ps_constants[static_cast<std::size_t>(call.ps_record)];
             }
             if (blend && run_blend_vertices_[op.index].vertices != 0u) {
                 call.blend_vertices = run_blend_vertices_[op.index].vertices;

@@ -386,6 +386,8 @@ struct DrawCall {
     // GPU verdict (same geometry or not) is at `blend_slot`.
     D3D12_GPU_VIRTUAL_ADDRESS blend_vertices = 0;
     std::uint32_t blend_slot = 0;
+    // Interpolated redraw: the scene's pixel-constant record, -1 for none.
+    std::int32_t ps_record = -1;
 };
 
 class RendererD3D12 {
@@ -515,7 +517,10 @@ public:
     // `record_constants[i]` replaces the VS constants of draws of record i.
     // Draws matched by prepare_vertex_blend blend their vertices with the
     // frame before's at `vertex_t` (negative: no blending).
+    // `ps_constants[i]` (when not 0) replaces the PS constants of draws of
+    // pixel-constant record i.
     bool present_replay_subframe(std::span<const D3D12_GPU_VIRTUAL_ADDRESS> record_constants,
+                                 std::span<const D3D12_GPU_VIRTUAL_ADDRESS> ps_constants,
                                  float vertex_t);
     // Once per sequence: pairs each draw of the playing log with the draw of
     // the log before it that has the same position among its record's draws
@@ -523,6 +528,12 @@ public:
     // i, or -1) and as many vertices in a different buffer, so CPU-written
     // geometry (shadow volumes, particle strips, trails) moves per sub-frame.
     void prepare_vertex_blend(std::span<const std::int32_t> previous_record);
+    // After prepare_vertex_blend: per pixel-constant record of the playing
+    // log, the record of the log before that its paired draws used (-1 none,
+    // -2 paired draws disagree).
+    [[nodiscard]] std::span<const std::int32_t> ps_record_pairs() const noexcept {
+        return run_ps_previous_;
+    }
     // The resident decoded-vertex buffer (blend pairs may live in it); 0 for none.
     void set_resident_vertices(D3D12_GPU_VIRTUAL_ADDRESS base, std::uint64_t bytes) noexcept {
         resident_vertex_base_ = base;
@@ -1035,6 +1046,7 @@ private:
         std::uint32_t slot = 0;
     };
     std::vector<BlendSource> run_blend_vertices_;
+    std::vector<std::int32_t> run_ps_previous_;
     // Candidate pairs of the playing log (current offset, previous offset,
     // vertices, flags: bit 0 current / bit 1 previous in the resident buffer),
     // checked on the GPU before the sequence's first sub-frame draws: a

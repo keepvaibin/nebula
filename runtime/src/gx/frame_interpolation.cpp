@@ -127,24 +127,37 @@ void store_normal(const Affine34& m, std::uint32_t* words) noexcept {
 // One frame of an object's motion: its origin moved less than half its
 // distance from the eye plus 200 units, no axis scaled by more than 2x, and
 // it turned less than 150 degrees (a teleport, a respawn or a reused slot
-// otherwise). A scale step up to 8x is motion (pulsing, popping effects).
-bool plausible(const AffineMotion& m, float eye_distance) noexcept {
+// otherwise). A scale step up to 8x is motion (pulsing, popping effects). A
+// larger turn alone is a flip of an object that stays (a sprite spun by a
+// random angle): its rotation shows b, the rest still moves.
+enum class Plausibility : std::uint8_t { motion, flip, teleport };
+
+Plausibility plausibility(const AffineMotion& m, float eye_distance) noexcept {
     float moved = 0.0f;
     for (unsigned r = 0; r < 3u; ++r) {
         const float d = m.b[r * 4u + 3u] - m.a[r * 4u + 3u];
         moved += d * d;
     }
     const float reach = 0.5f * eye_distance + 200.0f;
-    if (!(moved <= reach * reach)) return false;
+    if (!(moved <= reach * reach)) return Plausibility::teleport;
     for (unsigned c = 0; c < 3u; ++c) {
         const float sa = m.a[c] * m.a[c] + m.a[4u + c] * m.a[4u + c] + m.a[8u + c] * m.a[8u + c];
         const float sb = m.b[c] * m.b[c] + m.b[4u + c] * m.b[4u + c] + m.b[8u + c] * m.b[8u + c];
         // Squared norms: more than 8x is another object. Growing from or
         // shrinking to nothing (spawn, pop) is motion.
         const float lo = std::min(sa, sb), hi = std::max(sa, sb);
-        if (lo > 1e-12f && hi > 64.0f * lo) return false;
+        if (lo > 1e-12f && hi > 64.0f * lo) return Plausibility::teleport;
     }
-    return m.cos_turn >= 0.2588190f;  // cos(75 deg): turns up to 150 degrees
+    // cos(75 deg): turns up to 150 degrees.
+    return m.cos_turn >= 0.2588190f ? Plausibility::motion : Plausibility::flip;
+}
+
+// The motion keeps b's rotation: scale and translation still interpolate.
+void take_rotation_of_b(AffineMotion& m) noexcept {
+    for (unsigned i = 0; i < 4u; ++i) m.qa[i] = m.qb[i];
+    m.theta = 0.0f;
+    m.inv_sin_theta = 0.0f;
+    m.cos_turn = 1.0f;
 }
 
 }  // namespace
@@ -235,14 +248,21 @@ void eye_motion(const Affine34* a, const Affine34& b, const CameraMotion& camera
         return;
     }
     out.split = camera.known && !orthographic;
+    const float eye_distance = std::sqrt(b[3] * b[3] + b[7] * b[7] + b[11] * b[11]);
     if (!out.split) {
         const Affine34& from = a != nullptr ? *a : b;
         out.still = equal_words(from, b);
         affine_motion(from, b, out.world);
-        if (!out.still && !plausible(out.world, std::sqrt(b[3] * b[3] + b[7] * b[7] + b[11] * b[11]))) {
-            affine_motion(b, b, out.world);
-            out.still = true;
-            out.snapped = true;
+        if (!out.still) {
+            const Plausibility p = plausibility(out.world, eye_distance);
+            if (p == Plausibility::teleport) {
+                affine_motion(b, b, out.world);
+                out.still = true;
+                out.snapped = true;
+            } else if (p == Plausibility::flip) {
+                take_rotation_of_b(out.world);
+                out.flipped = true;
+            }
         }
         return;
     }
@@ -255,11 +275,16 @@ void eye_motion(const Affine34* a, const Affine34& b, const CameraMotion& camera
     const Affine34 world_a = affine_multiply(camera.a_inverse, *a);
     affine_motion(world_a, world_b, out.world);
     out.still = equal_words(world_a, world_b);
-    if (!out.still &&
-        !plausible(out.world, std::sqrt(b[3] * b[3] + b[7] * b[7] + b[11] * b[11]))) {
-        affine_motion(world_b, world_b, out.world);
-        out.still = true;
-        out.snapped = true;
+    if (!out.still) {
+        const Plausibility p = plausibility(out.world, eye_distance);
+        if (p == Plausibility::teleport) {
+            affine_motion(world_b, world_b, out.world);
+            out.still = true;
+            out.snapped = true;
+        } else if (p == Plausibility::flip) {
+            take_rotation_of_b(out.world);
+            out.flipped = true;
+        }
     }
 }
 
@@ -335,6 +360,79 @@ float tex_word_at(float a, float b, bool translation, float t) noexcept {
         return b;
     }
     return a + (b - a) * t;
+}
+
+bool ps_colours_move(const GxPsConstants& a, const GxPsConstants& b) noexcept {
+    if (std::memcmp(a.stage_config, b.stage_config, sizeof(a.stage_config)) != 0 ||
+        std::memcmp(a.uber_ps_header, b.uber_ps_header, sizeof(a.uber_ps_header)) != 0 ||
+        std::memcmp(a.ind_cmd, b.ind_cmd, sizeof(a.ind_cmd)) != 0 ||
+        std::memcmp(a.ind_misc, b.ind_misc, sizeof(a.ind_misc)) != 0 ||
+        std::memcmp(a.tex_dims, b.tex_dims, sizeof(a.tex_dims)) != 0 ||
+        std::memcmp(&a.alpha_refs[2], &b.alpha_refs[2], sizeof(float)) != 0 ||
+        std::memcmp(&a.fog_params[7], &b.fog_params[7], sizeof(float)) != 0) {
+        return false;
+    }
+    return std::memcmp(a.tev_regs, b.tev_regs, sizeof(a.tev_regs)) != 0 ||
+           std::memcmp(a.konst, b.konst, sizeof(a.konst)) != 0 ||
+           std::memcmp(a.alpha_refs, b.alpha_refs, sizeof(a.alpha_refs)) != 0 ||
+           std::memcmp(a.fog_params, b.fog_params, sizeof(a.fog_params)) != 0 ||
+           std::memcmp(a.ind_mtx, b.ind_mtx, sizeof(a.ind_mtx)) != 0;
+}
+
+void ps_colours_at(const GxPsConstants& a, const GxPsConstants& b, float t, GxPsConstants& out) noexcept {
+    out = b;
+    if (t >= 1.0f) {
+        return;
+    }
+    const auto lerp = [t](float x, float y) {
+        return std::isfinite(x) && std::isfinite(y) ? x + (y - x) * t : y;
+    };
+    for (unsigned r = 0; r < 4u; ++r) {
+        for (unsigned c = 0; c < 4u; ++c) {
+            out.tev_regs[r][c] = lerp(a.tev_regs[r][c], b.tev_regs[r][c]);
+            out.konst[r][c] = lerp(a.konst[r][c], b.konst[r][c]);
+        }
+    }
+    // Alpha-test references and the constant destination alpha; [2] packs the
+    // compare modes.
+    out.alpha_refs[0] = lerp(a.alpha_refs[0], b.alpha_refs[0]);
+    out.alpha_refs[1] = lerp(a.alpha_refs[1], b.alpha_refs[1]);
+    out.alpha_refs[3] = lerp(a.alpha_refs[3], b.alpha_refs[3]);
+    // Fog: a, b magnitude, b shift, c, colour, projection.
+    for (unsigned i = 4u; i < 7u; ++i) out.fog_params[i] = lerp(a.fog_params[i], b.fog_params[i]);
+    if (a.fog_params[2] == b.fog_params[2]) {
+        out.fog_params[0] = lerp(a.fog_params[0], b.fog_params[0]);
+        out.fog_params[1] = lerp(a.fog_params[1], b.fog_params[1]);
+        out.fog_params[3] = lerp(a.fog_params[3], b.fog_params[3]);
+    }
+    // Indirect matrices: integer mantissas per row, w = 17 - scale.
+    for (unsigned r = 0; r < 6u; ++r) {
+        if (a.ind_mtx[r][3] != b.ind_mtx[r][3]) continue;
+        for (unsigned c = 0; c < 3u; ++c) {
+            const float x = static_cast<float>(a.ind_mtx[r][c]);
+            const float y = static_cast<float>(b.ind_mtx[r][c]);
+            out.ind_mtx[r][c] = static_cast<std::int32_t>(std::lround(x + (y - x) * t));
+        }
+    }
+}
+
+bool channel_colours_move(const GxVsConstants& a, const GxVsConstants& b) noexcept {
+    return std::memcmp(a.chan_ambient, b.chan_ambient, sizeof(a.chan_ambient)) != 0 ||
+           std::memcmp(a.chan_material, b.chan_material, sizeof(a.chan_material)) != 0;
+}
+
+void channel_colours_at(const GxVsConstants& a, const GxVsConstants& b, float t, GxVsConstants& out) noexcept {
+    if (t >= 1.0f) {
+        return;
+    }
+    for (unsigned ch = 0; ch < kMaxColorChannels; ++ch) {
+        for (unsigned c = 0; c < 4u; ++c) {
+            const float am = a.chan_ambient[ch][c], bm = b.chan_ambient[ch][c];
+            const float ma = a.chan_material[ch][c], mb = b.chan_material[ch][c];
+            out.chan_ambient[ch][c] = std::isfinite(am) && std::isfinite(bm) ? am + (bm - am) * t : bm;
+            out.chan_material[ch][c] = std::isfinite(ma) && std::isfinite(mb) ? ma + (mb - ma) * t : mb;
+        }
+    }
 }
 
 void light_at(const std::uint32_t* a, const std::uint32_t* b, const CameraMotion& camera,

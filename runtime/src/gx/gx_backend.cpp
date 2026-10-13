@@ -6548,6 +6548,8 @@ void GxBackend::on_fifo_marker(FifoMarker marker, const std::array<float, 12>* v
             matrix_palette_stale_ = true;
             current_palette_shadow_ = -1;
             current_replay_record_ = -1;
+            current_ps_record_ = -1;
+            ps_record_restart_ = true;
         }
         if (history_scene_) {
             if (transform_history_.current().capacity() == 0u) {
@@ -6602,6 +6604,7 @@ void GxBackend::on_fifo_marker(FifoMarker marker, const std::array<float, 12>* v
         motion_scene_ = false;
         history_scene_ = false;
         current_replay_record_ = -1;
+        current_ps_record_ = -1;
     }
     // Projections take (or drop) the scene jitter, and scene draws switch
     // palette addressing, from the next draw on.
@@ -7161,6 +7164,9 @@ void GxBackend::report_interp_stats() {
             << " gpu-ms-per-subframe="
             << (gpu_samples != 0u ? gpu_ms / static_cast<double>(gpu_samples) : 0.0)
             << " chunk-continued-records=" << std::exchange(interp_chunk_continues_, 0u)
+            << " colour-records-per-subframe="
+            << (interp_presented_ != 0u
+                    ? static_cast<double>(std::exchange(interp_ps_moving_total_, 0u)) / presented : 0.0)
             << " vertex-blend-draws-per-subframe="
             << (interp_presented_ != 0u
                     ? static_cast<double>(renderer_.take_vertex_blend_draws()) / presented : 0.0)
@@ -7300,6 +7306,7 @@ bool GxBackend::render_interp_subframe(float t) {
                 interp_snapped_ += motion.position.snapped ? 1u : 0u;
             }
             if (before != nullptr && !(interp_camera_.known && interp_camera_.cut)) {
+                motion.colour_moves = channel_colours_move(*before, now);
                 motion.tex_moves =
                     std::memcmp(before->inline_tex_matrices, now.inline_tex_matrices,
                                 sizeof(now.inline_tex_matrices)) != 0 ||
@@ -7338,7 +7345,7 @@ bool GxBackend::render_interp_subframe(float t) {
                 }
             }
             if (motion.position_moves || motion.tex_moves || motion.projection_moves ||
-                motion.palette >= 0) {
+                motion.colour_moves || motion.palette >= 0) {
                 interp_moving_.push_back(motion);
             }
         }
@@ -7371,12 +7378,27 @@ bool GxBackend::render_interp_subframe(float t) {
         }
         renderer_.prepare_vertex_blend(before_valid ? std::span<const std::int32_t>(scene.prev_index)
                                                     : std::span<const std::int32_t>{});
+        // Pixel-constant records pair through the paired draws.
+        interp_ps_moving_.clear();
+        interp_ps_vas_.assign(scene.ps_constants.size(), 0u);
+        if (before_valid && !(interp_camera_.known && interp_camera_.cut)) {
+            const std::span<const std::int32_t> pairs = renderer_.ps_record_pairs();
+            const std::size_t records = std::min(pairs.size(), scene.ps_constants.size());
+            for (std::size_t p = 0; p < records; ++p) {
+                const std::int32_t q = pairs[p];
+                if (q >= 0 && static_cast<std::size_t>(q) < before_scene.ps_constants.size() &&
+                    ps_colours_move(before_scene.ps_constants[static_cast<std::size_t>(q)],
+                                    scene.ps_constants[p])) {
+                    interp_ps_moving_.push_back({static_cast<std::uint32_t>(p), static_cast<std::uint32_t>(q)});
+                }
+            }
+        }
     }
     ++interp_subframe_serial_;
     const Affine34 camera_t = camera_at(interp_camera_, t);
     // GALAXY_INTERP_PARTS: bit 0 inline position, 1 texture matrices, 2 projection, 3 palette,
-    // 4 vertex blending (diagnostics).
-    static const std::uint64_t parts = read_env_u64("GALAXY_INTERP_PARTS", 0x1Fu);
+    // 4 vertex blending, 5 colours (diagnostics).
+    static const std::uint64_t parts = read_env_u64("GALAXY_INTERP_PARTS", 0x3Fu);
     interp_moving_records_ += interp_moving_.size();
     alignas(16) std::uint32_t palette_words[kMatrixPaletteWords];
     // GALAXY_INTERP_VERIFY=1 with GALAXY_INTERP_FORCE_T=0: every matched record's rebuilt
@@ -7409,6 +7431,9 @@ bool GxBackend::render_interp_subframe(float t) {
                       &built.inline_tex_matrices[0][0][0], kMaxTexGens * 12u);
             lerp_rows(&before->inline_post_matrices[0][0][0], &recorded.inline_post_matrices[0][0][0],
                       &built.inline_post_matrices[0][0][0], kMaxTexGens * 12u);
+        }
+        if (moving.colour_moves && before != nullptr && (parts & 0x20u) != 0u) {
+            channel_colours_at(*before, recorded, t, built);
         }
         if (moving.projection_moves && before != nullptr && (parts & 4u) != 0u) {
             const float* a = &before->projection[0][0];
@@ -7513,9 +7538,21 @@ bool GxBackend::render_interp_subframe(float t) {
                   << verify_light_worst_b << std::dec << " rel=" << verify_light_worst << '\n'
                   << verify_out.str();
     }
+    if ((parts & 0x20u) != 0u) {
+        interp_ps_moving_total_ += interp_ps_moving_.size();
+        for (const auto& [p, q] : interp_ps_moving_) {
+            GxPsConstants built{};
+            ps_colours_at(before_scene.ps_constants[q], scene.ps_constants[p], t, built);
+            const UploadRing::Allocation upload =
+                renderer_.constant_ring().allocate(sizeof(GxPsConstants), 256u);
+            std::memcpy(upload.cpu, &built, sizeof(GxPsConstants));
+            interp_ps_vas_[p] = upload.gpu;
+        }
+    }
     interp_build_ms_ += std::chrono::duration<double, std::milli>(
         std::chrono::steady_clock::now() - build_start).count();
-    return renderer_.present_replay_subframe(interp_record_vas_, (parts & 0x10u) != 0u ? t : -1.0f);
+    return renderer_.present_replay_subframe(interp_record_vas_, interp_ps_vas_,
+                                             (parts & 0x10u) != 0u ? t : -1.0f);
 }
 
 bool GxBackend::skip_for_present_rate() {
@@ -10970,7 +11007,7 @@ ID3D12PipelineState* GxBackend::flush_draw_state(
 
     // Upload PS constants when TEV stage config / fog / alpha / tex dims change.
     if (tev_dirty || tev_c_dirty || tex_dirty || frame_bindings_dirty_ ||
-        dirty == ~0u) {
+        dirty == ~0u || (ps_record_restart_ && history_scene_)) {
         const auto constants_start = time_detail
             ? std::chrono::steady_clock::now()
             : std::chrono::steady_clock::time_point{};
@@ -10983,6 +11020,12 @@ ID3D12PipelineState* GxBackend::flush_draw_state(
             renderer_.constant_ring().allocate(sizeof(GxPsConstants), 256u);
         std::memcpy(ps_alloc.cpu, &ps_c, sizeof(ps_c));
         current_ps_constants_ = ps_alloc.gpu;
+        if (interp_recording_ && history_scene_) [[unlikely]] {
+            ps_record_restart_ = false;
+            InterpScene& scene = interp_scenes_[interp_scene_];
+            current_ps_record_ = static_cast<std::int32_t>(scene.ps_constants.size());
+            scene.ps_constants.push_back(ps_c);
+        }
         if (time_detail) {
             frame_flush_constants_us_ +=
                 elapsed_us(constants_start, std::chrono::steady_clock::now());
@@ -11379,6 +11422,7 @@ bool GxBackend::begin_cached_draw_run(
     cached_draw_run_state_call_.matrix_palette = draw_matrix_palette_;
     cached_draw_run_state_call_.aux_target     = current_pipeline_aux_;
     cached_draw_run_state_call_.replay_record  = current_replay_record_;
+    cached_draw_run_state_call_.ps_record      = current_ps_record_;
     cached_draw_run_state_call_.topology       = topology;
     cached_draw_run_state_call_.scissor        = scissor_rect;
     for (unsigned i = 0; i < 6; ++i) {
@@ -12353,6 +12397,7 @@ void GxBackend::on_draw(
     state_call.matrix_palette = draw_matrix_palette_;
     state_call.aux_target     = current_pipeline_aux_;
     state_call.replay_record  = current_replay_record_;
+    state_call.ps_record      = current_ps_record_;
     state_call.topology       = topology;
     state_call.scissor        = scissor_rect;
     for (unsigned i = 0; i < 6; ++i) {

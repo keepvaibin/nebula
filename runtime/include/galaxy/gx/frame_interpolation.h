@@ -18,6 +18,7 @@
 // No Windows/D3D12 includes (unit-tested offline).
 
 #include "galaxy/gx/transform_history.h"
+#include "galaxy/gx/uber_constants.h"
 
 #include <array>
 #include <cstdint>
@@ -64,6 +65,8 @@ struct EyeMotion {
     bool split = false;       // W = V^-1 M; false: M interpolated directly
     bool still = false;       // W (or M) did not change: V_t W_b
     bool snapped = false;     // implausible as one frame of motion: shows b
+    bool flipped = false;     // turned too far (a sprite flip): b's rotation,
+                              // position and scale still interpolate
 };
 // `a` may be null (no match): the object is taken as still in the world.
 void eye_motion(const Affine34* a, const Affine34& b, const CameraMotion& camera,
@@ -114,6 +117,17 @@ void palette_motion(const std::uint32_t* a, const std::uint32_t* b, const Camera
 void palette_at(const PaletteMotion& m, const std::uint32_t* a, const std::uint32_t* b,
                 const CameraMotion& camera, const Affine34& camera_t, float t,
                 std::uint32_t* out) noexcept;
+
+// Pixel-stage colours of one draw state between two frames: TEV registers,
+// konstant colours, alpha-test references, fog colour (and range when its
+// shift is unchanged) and indirect matrices (rows of equal scale). Only when
+// the TEV program, texture setup and indirect commands are the same; any
+// other difference is a discrete change and shows b.
+[[nodiscard]] bool ps_colours_move(const GxPsConstants& a, const GxPsConstants& b) noexcept;
+void ps_colours_at(const GxPsConstants& a, const GxPsConstants& b, float t, GxPsConstants& out) noexcept;
+// Channel ambient and material colours (vertex stage).
+[[nodiscard]] bool channel_colours_move(const GxVsConstants& a, const GxVsConstants& b) noexcept;
+void channel_colours_at(const GxVsConstants& a, const GxVsConstants& b, float t, GxVsConstants& out) noexcept;
 
 // One GX light (16 XF words) at t: color and attenuation lerped; position and
 // direction interpolated in world space when `split` (else in eye space). A

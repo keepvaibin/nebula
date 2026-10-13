@@ -679,6 +679,10 @@ private:
     unsigned interp_frames_ = 0;          // interpolated frames per game frame
     unsigned interp_scenes_in_chunk_ = 0;
     std::int32_t current_replay_record_ = -1;
+    // The scene's current pixel-constant record (InterpScene::ps_constants), -1 for none.
+    std::int32_t current_ps_record_ = -1;
+    // The first draw of a recorded scene re-uploads its pixel constants so it has a record.
+    bool ps_record_restart_ = false;
     std::int32_t current_palette_shadow_ = -1;
     // One history scene's interpolation inputs, kept for three scenes: the
     // one recording, the one being interpolated (its log completed), and its
@@ -692,6 +696,8 @@ private:
         std::vector<std::uint8_t> per_vertex;   // per-vertex palette draw
         std::vector<std::uint32_t> palettes;    // kMatrixPaletteWords per shadow
         std::size_t palette_count = 0;
+        // Pixel-stage constants per upload in the scene (draws carry the index).
+        std::vector<GxPsConstants> ps_constants;
         Affine34 camera{};
         // The game camera (world to eye) of the scene.
         Affine34 view{};
@@ -700,6 +706,7 @@ private:
         void clear() noexcept {
             constants.clear(); from.clear(); current.clear(); prev_index.clear();
             palette.clear(); per_vertex.clear(); palette_count = 0; valid = false;
+            ps_constants.clear();
         }
     };
     // Recording, ready (log completed), playing, and the playing scene's
@@ -735,6 +742,7 @@ private:
         EyeMotion position{};             // inline position matrix
         bool position_moves = false;
         bool tex_moves = false;           // inline texture or post matrices
+        bool colour_moves = false;        // channel ambient or material colours
         bool projection_moves = false;
     };
     std::vector<InterpRecordMotion> interp_moving_;
@@ -780,6 +788,11 @@ private:
     void supersede_interp_sequence();
     void start_interp_sequence(std::uint32_t xfb_addr);
     std::vector<D3D12_GPU_VIRTUAL_ADDRESS> interp_record_vas_;
+    // Pixel-constant records of the playing scene whose colours change
+    // (record, matched record of the scene before), and their sub-frame uploads.
+    std::vector<std::array<std::uint32_t, 2>> interp_ps_moving_;
+    std::vector<D3D12_GPU_VIRTUAL_ADDRESS> interp_ps_vas_;
+    std::uint64_t interp_ps_moving_total_ = 0;   // summed per sub-frame
     std::uint64_t interp_presented_ = 0;
     std::uint64_t interp_dropped_ = 0;
     std::uint64_t interp_failed_ = 0;     // sub-frames that could not be recorded
