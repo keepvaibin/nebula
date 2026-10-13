@@ -696,9 +696,10 @@ if(GALAXY_FIDELITYFX_SDK)
         "${GALAXY_FIDELITYFX_SDK}/bin/ffx_sdk/ffx_backend_dx12_x64.lib")
     target_compile_definitions(galaxy_gx PRIVATE GALAXY_WITH_FSR3=1)
 endif()
-# NVIDIA Streamline 2.14.1 headers (MIT) for DLSS: the runtime loads the
-# signed binaries from the user's vendor folder at run time.
-set(GALAXY_STREAMLINE_SDK "" CACHE PATH "Streamline SDK 2.14.1 directory (headers in include/)")
+# NVIDIA Streamline 2.14.1 headers (MIT, third_party/streamline) for DLSS: the
+# runtime loads the signed binaries from the user's vendor folder at run time.
+# Empty builds the runtime without DLSS.
+set(GALAXY_STREAMLINE_SDK "${CMAKE_SOURCE_DIR}/third_party/streamline" CACHE PATH "Streamline SDK 2.14.1 directory (headers in include/)")
 if(GALAXY_STREAMLINE_SDK)
     target_include_directories(galaxy_gx SYSTEM PRIVATE "${GALAXY_STREAMLINE_SDK}/include")
     target_compile_definitions(galaxy_gx PRIVATE GALAXY_WITH_STREAMLINE=1)

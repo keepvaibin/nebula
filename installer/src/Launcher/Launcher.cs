@@ -29,6 +29,23 @@ namespace Nebula.Launcher
             Application.SetCompatibleTextRenderingDefault(false);
             try
             {
+                // The in-game menu runs these: the DLSS download, and a restart once the game has exited.
+                if (args.Length > 0 && string.Equals(args[0], "--install-dlss", StringComparison.OrdinalIgnoreCase))
+                {
+                    if (GraphicsSettings.DlssInstalled()) return 0;
+                    using (var dialog = new DlssInstallDialog(false) { TopMost = true })
+                        return dialog.ShowDialog() == DialogResult.OK ? 0 : 1;
+                }
+                int restartAfter;
+                if (args.Length > 1 && string.Equals(args[0], "--restart-after", StringComparison.OrdinalIgnoreCase) &&
+                    int.TryParse(args[1], out restartAfter))
+                {
+                    WaitForExit(restartAfter);
+                    string restartError = new LaunchSession().TryLaunch();
+                    if (restartError == null) return 0;
+                    MessageBox.Show(restartError, "Nebula", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    return 1;
+                }
                 var session = new LaunchSession();
                 if (!OpensSettings(args, session))
                 {
@@ -44,6 +61,17 @@ namespace Nebula.Launcher
                 MessageBox.Show(error.Message, "Nebula", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 return 1;
             }
+        }
+
+        private static void WaitForExit(int processId)
+        {
+            try
+            {
+                using (var process = Process.GetProcessById(processId))
+                    process.WaitForExit(60000);
+            }
+            catch (ArgumentException) { }       // already exited
+            catch (InvalidOperationException) { }
         }
 
         internal static bool OpensSettings(string[] args, LaunchSession session)
@@ -244,7 +272,7 @@ namespace Nebula.Launcher
         private readonly ComboBox aspect = new ComboBox(), internalScale = new ComboBox(), frameRate = new ComboBox();
         private readonly CheckBox vsync = new CheckBox();
         private readonly ComboBox antiAliasing = new ComboBox(), aaQuality = new ComboBox(), upscaler = new ComboBox(),
-            textureFilter = new ComboBox(), lighting = new ComboBox(), drawDistance = new ComboBox();
+            dlssQuality = new ComboBox(), textureFilter = new ComboBox(), lighting = new ComboBox(), drawDistance = new ComboBox();
         private readonly NumericUpDown sharpness = new NumericUpDown();
         private readonly CheckBox mipmaps = new CheckBox(), hudOutput = new CheckBox();
         private readonly TrackBar[] volumes = new TrackBar[AudioSettings.Names.Length];
@@ -311,6 +339,7 @@ namespace Nebula.Launcher
             Row(image, "Anti-aliasing", antiAliasing, ref y);
             Row(image, "Anti-aliasing quality", aaQuality, ref y);
             Row(image, "Upscaling", upscaler, ref y);
+            Row(image, "DLSS quality", dlssQuality, ref y);
             Label(image, "Sharpening (0-100)", 12, y + 3);
             sharpness.Location = new Point(320, y);
             sharpness.Size = new Size(120, 28);
@@ -334,6 +363,7 @@ namespace Nebula.Launcher
             antiAliasing.Items.AddRange(GraphicsSettings.AntiAliasingModes);
             aaQuality.Items.AddRange(GraphicsSettings.AntiAliasingQualities);
             foreach (int value in upscalerChoices) upscaler.Items.Add(GraphicsSettings.UpscalerName(value));
+            dlssQuality.Items.AddRange(GraphicsSettings.DlssQualities);
             textureFilter.Items.AddRange(GraphicsSettings.TextureFilters);
             lighting.Items.AddRange(GraphicsSettings.LightingModes);
             drawDistance.Items.AddRange(GraphicsSettings.DrawDistances);
@@ -408,6 +438,25 @@ namespace Nebula.Launcher
                 RefreshRefreshChoices();
             };
             refresh.SelectedIndexChanged += delegate { if (!loading) RefreshFrameRateChoices(); };
+            // Choosing DLSS before it is downloaded opens the download; closing it without
+            // installing goes back to the previous choice.
+            int upscalerShown = upscaler.SelectedIndex;
+            upscaler.SelectedIndexChanged += delegate
+            {
+                if (loading) return;
+                int index = upscaler.SelectedIndex;
+                if (index >= 0 && upscalerChoices[index] == 3 && !GraphicsSettings.DlssInstalled())
+                {
+                    bool installed;
+                    using (var dialog = new DlssInstallDialog(false)) installed = dialog.ShowDialog(this) == DialogResult.OK;
+                    loading = true;
+                    if (installed) upscaler.Items[index] = GraphicsSettings.UpscalerName(3);
+                    else upscaler.SelectedIndex = upscalerShown;
+                    loading = false;
+                }
+                upscalerShown = upscaler.SelectedIndex;
+                dlssQuality.Enabled = upscalerShown >= 0 && upscalerChoices[upscalerShown] == 3;
+            };
             UiScale.Apply(this);
         }
 
@@ -716,6 +765,8 @@ namespace Nebula.Launcher
             aaQuality.SelectedIndex = graphics.Quality;
             upscaler.SelectedIndex = upscalerChoices.Contains(graphics.Upscaler)
                 ? upscalerChoices.IndexOf(graphics.Upscaler) : upscalerChoices.IndexOf(1);
+            dlssQuality.SelectedIndex = Math.Max(0, Math.Min(graphics.TemporalQuality, GraphicsSettings.DlssQualities.Length - 1));
+            dlssQuality.Enabled = upscalerChoices[upscaler.SelectedIndex] == 3;
             sharpness.Value = graphics.Sharpness;
             textureFilter.SelectedIndex = graphics.TextureFilter;
             lighting.SelectedIndex = graphics.PerPixelLighting ? 0 : 1;
@@ -857,6 +908,7 @@ namespace Nebula.Launcher
                 graphics.Quality = aaQuality.SelectedIndex;
                 if (upscaler.SelectedIndex >= 0 && upscaler.SelectedIndex < upscalerChoices.Count)
                     graphics.Upscaler = upscalerChoices[upscaler.SelectedIndex];
+                graphics.TemporalQuality = Math.Max(0, dlssQuality.SelectedIndex);
                 graphics.Sharpness = (int)sharpness.Value;
                 graphics.TextureFilter = textureFilter.SelectedIndex;
                 graphics.PerPixelLighting = lighting.SelectedIndex == 0;

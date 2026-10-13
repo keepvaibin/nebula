@@ -20,27 +20,24 @@ namespace Nebula.Launcher
         public static readonly string[] AntiAliasingQualities = { "Low", "Medium", "High", "Ultra" };
         // Release runtimes are built without FSR 3 (upscaler 2); a saved 2 reads as FSR 1.
         public static readonly string[] Upscalers = { "Bilinear", "AMD FidelityFX FSR 1" };
-        // NVIDIA DLSS (upscaler 3) runs from the user's own Streamline install;
-        // Nebula ships none of NVIDIA's files.
-        public static string StreamlineDir { get { return Path.Combine(NebulaPaths.DataRoot, "vendor", "streamline-2.14.1"); } }
-        private static readonly string[] StreamlineFiles = { "sl.interposer.dll", "sl.common.dll", "sl.dlss.dll", "nvngx_dlss.dll" };
-        public static bool DlssInstalled()
-        {
-            foreach (string name in StreamlineFiles)
-                if (!File.Exists(Path.Combine(StreamlineDir, name))) return false;
-            return true;
-        }
-        // The upscaler setting values offered, in list order.
+        // NVIDIA DLSS (upscaler 3) runs from files the player downloads from NVIDIA
+        // (DlssPackage); Nebula ships none of them.
+        public static string StreamlineDir { get { return DlssPackage.Folder; } }
+        public static bool DlssInstalled() { return DlssPackage.Installed(); }
+        // The upscaler setting values offered, in list order. On NVIDIA RTX machines DLSS is
+        // listed before it is downloaded; choosing it offers the download.
         public static List<int> UpscalerChoices()
         {
             var choices = new List<int> { 0, 1 };
-            if (DlssInstalled()) choices.Add(3);
+            if (DlssInstalled() || DlssPackage.RtxAdapterPresent()) choices.Add(3);
             return choices;
         }
         public static string UpscalerName(int value)
         {
-            return value == 3 ? "NVIDIA DLSS" : Upscalers[Math.Max(0, Math.Min(value, Upscalers.Length - 1))];
+            if (value == 3) return DlssInstalled() ? "NVIDIA DLSS" : "NVIDIA DLSS (download)";
+            return Upscalers[Math.Max(0, Math.Min(value, Upscalers.Length - 1))];
         }
+        public static readonly string[] DlssQualities = { "DLAA", "Quality", "Balanced", "Performance", "Ultra Performance" };
         private const int TemporalQualityCount = 5;
         public static readonly string[] TextureFilters = { "Trilinear", "2x anisotropic", "4x anisotropic", "8x anisotropic", "16x anisotropic" };
         public static readonly string[] LightingModes = { "Per pixel (enhanced)", "Per vertex (original)" };

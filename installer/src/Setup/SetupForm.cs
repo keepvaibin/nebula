@@ -16,7 +16,7 @@ namespace Nebula.Setup
         private InstalledInfo installed;
         private readonly Panel choose = new Panel(), work = new Panel();
         private readonly TextBox input = new TextBox(), root = new TextBox(), log = new TextBox();
-        private readonly CheckBox desktop = new CheckBox(), license = new CheckBox();
+        private readonly CheckBox desktop = new CheckBox(), license = new CheckBox(), dlss = new CheckBox(), dlssLicense = new CheckBox();
         private readonly RadioButton modeRepair = new RadioButton(), modeRestore = new RadioButton(), modeUninstall = new RadioButton(), modeInstall = new RadioButton();
         private readonly Label summary = new Label(), step = new Label(), elapsed = new Label();
         private readonly ProgressBar overall = new ProgressBar(), stepBar = new ProgressBar();
@@ -99,7 +99,8 @@ namespace Nebula.Setup
                 modeInstall.Checked = true;
             }
 
-            AddLabel(choose, "Your game: ISO, RVZ or extracted folder.", 20, y, 720, 22);
+            AddLabel(choose, installed == null ? "Your game: ISO, RVZ or extracted folder."
+                : "Your game: ISO, RVZ or extracted folder. Leave it empty to keep the copy Setup already has.", 20, y, 720, 22);
             y += 24;
             input.Location = new Point(20, y);
             input.Size = new Size(470, 26);
@@ -143,14 +144,43 @@ namespace Nebula.Setup
             y += 28;
 
             var toolchain = new Toolchain(Json.Parse(Payload.ReadText("toolchain.json")), layout.Toolchains);
-            license.Text = "I accept the Microsoft Visual Studio Build Tools license";
-            license.Location = new Point(20, y);
-            license.Size = new Size(620, 24);
-            choose.Controls.Add(license);
-            var link = new LinkLabel { Text = "Read license", Location = new Point(644, y + 3), Size = new Size(100, 22) };
-            link.LinkClicked += delegate { Process.Start(toolchain.LicenseUrl); };
-            choose.Controls.Add(link);
-            y += 32;
+            // The compiler download is covered by Microsoft's license; once it is installed there is nothing to accept.
+            if (installed == null || !toolchain.IsReady)
+            {
+                license.Text = "I accept the Microsoft Visual Studio Build Tools license (required)";
+                license.Location = new Point(20, y);
+                license.Size = new Size(620, 24);
+                license.CheckedChanged += delegate { license.ForeColor = SystemColors.ControlText; };
+                choose.Controls.Add(license);
+                var link = new LinkLabel { Text = "Read license", Location = new Point(644, y + 3), Size = new Size(100, 22) };
+                link.LinkClicked += delegate { Process.Start(toolchain.LicenseUrl); };
+                choose.Controls.Add(link);
+                y += 32;
+            }
+
+            if (DlssPackage.RtxAdapterPresent() && !DlssPackage.Installed())
+            {
+                dlss.Text = "Install NVIDIA DLSS (" + FileUtil.FormatBytes(DlssPackage.DownloadBytes) + " download from NVIDIA)";
+                dlss.Location = new Point(20, y);
+                dlss.Size = new Size(620, 24);
+                choose.Controls.Add(dlss);
+                y += 26;
+                dlssLicense.Text = "I accept the NVIDIA RTX SDKs license";
+                dlssLicense.Location = new Point(40, y);
+                dlssLicense.Size = new Size(600, 24);
+                dlssLicense.Enabled = false;
+                dlssLicense.CheckedChanged += delegate { dlssLicense.ForeColor = SystemColors.ControlText; };
+                dlss.CheckedChanged += delegate
+                {
+                    dlssLicense.Enabled = dlss.Checked;
+                    if (!dlss.Checked) { dlssLicense.Checked = false; dlssLicense.ForeColor = SystemColors.ControlText; }
+                };
+                choose.Controls.Add(dlssLicense);
+                var dlssLink = new LinkLabel { Text = "Read license", Location = new Point(644, y + 3), Size = new Size(100, 22) };
+                dlssLink.LinkClicked += delegate { using (var dialog = new DlssInstallDialog(true)) dialog.ShowDialog(this); };
+                choose.Controls.Add(dlssLink);
+                y += 32;
+            }
 
             summary.Location = new Point(20, y);
             summary.Size = new Size(720, 170);
@@ -257,14 +287,25 @@ namespace Nebula.Setup
             var toolchain = new Toolchain(Json.Parse(Payload.ReadText("toolchain.json")), layout.Toolchains);
             if (mode != InstallMode.Update && !toolchain.IsReady && !license.Checked)
             {
-                Fail("Accept the Microsoft Visual Studio Build Tools license to continue."); return;
+                license.ForeColor = Color.Firebrick;
+                license.Focus();
+                Fail("Accept the Microsoft Visual Studio Build Tools license to install.\r\n\r\n" +
+                     "Setup downloads Microsoft's C++ compiler to build the game from your copy.");
+                return;
+            }
+            if (dlss.Checked && !dlssLicense.Checked)
+            {
+                dlssLicense.ForeColor = Color.Firebrick;
+                dlssLicense.Focus();
+                Fail("Accept the NVIDIA RTX SDKs license to install DLSS, or clear the DLSS option.");
+                return;
             }
             var problems = InstallEngine.CheckRequirements(layout.Root.Length > 3 ? Path.GetDirectoryName(layout.Root) ?? layout.Root : layout.Root);
             if (problems.Count > 0) { Fail(string.Join("\r\n", problems)); return; }
 
             var request = new InstallRequest
             {
-                Mode = mode, GameInput = game, InstallRoot = layout.Root, DesktopShortcut = desktop.Checked,
+                Mode = mode, GameInput = game, InstallRoot = layout.Root, DesktopShortcut = desktop.Checked, InstallDlss = dlss.Checked,
                 SourceOverride = options.ContainsKey("source") ? options["source"] : null,
                 CompileJobs = options.ContainsKey("jobs") ? int.Parse(options["jobs"]) : 0
             };
@@ -298,6 +339,9 @@ namespace Nebula.Setup
             if (failure == null)
             {
                 step.Text = engine.ModuleUpdateNotice ?? ("Nebula " + BuildInfo.Version + " is installed.");
+                if (engine.DlssFailure != null)
+                    MessageBox.Show(this, "NVIDIA DLSS was not installed: " + engine.DlssFailure + "\r\n\r\nYou can install it later from the game's graphics settings.",
+                        "Nebula Setup", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 overall.Value = overall.Maximum;
                 launch.Visible = true;
                 return;

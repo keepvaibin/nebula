@@ -23,6 +23,13 @@ namespace Nebula.Setup
                     "The installed modules cannot be reused with this runtime.");
         }
 
+        // Installed modules are reused only when they came from the generator
+        // version this release builds. A setup without the field (0) keeps them.
+        internal static bool SameGeneration(long installed, long required)
+        {
+            return required == 0 || installed == required;
+        }
+
         internal static void Validate(string directory, Dictionary<string, object> contract)
         {
             uint game, home, rso, dsp, capabilities;

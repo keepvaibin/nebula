@@ -44,6 +44,8 @@ namespace Nebula.Setup
         public string Commit { get { return Json.Str(install, "commit"); } }
         public string ModuleSourceCommit { get { return Json.Str(install, "moduleSourceCommit") ?? Commit; } }
         public string ModuleIsa { get { return Json.Str(install, "moduleIsa") ?? "SSE2"; } }
+        /// <summary>Generator version of the installed game code; 0 before Setup recorded it (1.0.0 and older).</summary>
+        public long Generation { get { return Json.Long(install, "generation"); } }
 
         public static InstalledInfo Read(InstallLayout layout)
         {
