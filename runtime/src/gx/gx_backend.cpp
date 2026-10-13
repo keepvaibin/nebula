@@ -6529,9 +6529,12 @@ void GxBackend::on_fifo_marker(FifoMarker marker, const std::array<float, 12>* v
             note_interp_log_completion();
             renderer_.note_replay_scene();
             interp_scene_ = (interp_scene_ + 1u) % 4u;
+            if (interp_shown_scene_ == static_cast<std::int32_t>(interp_scene_)) {
+                interp_shown_scene_ = -1;  // its inputs are about to be reused
+            }
             if (interp_sequence_.active &&
                 (interp_scene_ == interp_sequence_.scene ||
-                 interp_scene_ == (interp_sequence_.scene + 3u) % 4u)) {
+                 interp_scene_ == interp_sequence_.before)) {
                 // The playing scene's inputs are about to be reused.
                 interp_dropped_ += interp_sequence_.subframes - interp_sequence_.next;
                 interp_sequence_.subframes = interp_sequence_.next;
@@ -6828,6 +6831,7 @@ void GxBackend::note_interp_log_completion() {
         return;
     }
     interp_log_scene_ = interp_scene_;
+    interp_scenes_[interp_log_scene_].serial = serial;
     interp_log_waiting_ = interp_scenes_[interp_log_scene_].valid &&
         !native_settings_overlay_visible();
     interp_log_xfb_ = renderer_.replay_xfb_addr();
@@ -6876,6 +6880,7 @@ void GxBackend::start_interp_sequence(std::uint32_t xfb_addr) {
     interp_sequence_.flush_requested = false;
     interp_sequence_.classified = false;
     interp_sequence_.scene = interp_log_scene_;
+    select_interp_before();
     interp_sequence_.xfb_addr = xfb_addr;
     interp_sequence_.subframes = interp_stopping_ ? 0u : interp_frames_;
     interp_sequence_.next = 0u;
@@ -6923,6 +6928,48 @@ void GxBackend::start_interp_sequence(std::uint32_t xfb_addr) {
         interp_slot_due_qpc_ = locked && arrival <= now.QuadPart + interp_slot_period_qpc_
             ? arrival : now.QuadPart;
     }
+}
+
+// B18: the scene before the starting one was never on screen (its log was
+// replaced before a present started it, or its sequence ended before showing
+// anything). The sub-frames then start from the scene shown last, records
+// matched through the skipped scenes, instead of from a frame never shown.
+// Vertex blending needs consecutive logs (prepare_vertex_blend) and stays off
+// for such a sequence.
+void GxBackend::select_interp_before() {
+    const unsigned scene = interp_sequence_.scene;
+    interp_sequence_.before = (scene + 3u) % 4u;
+    interp_sequence_.chained = false;
+    if (interp_shown_scene_ < 0 ||
+        static_cast<unsigned>(interp_shown_scene_) == interp_sequence_.before ||
+        static_cast<unsigned>(interp_shown_scene_) == scene) {
+        return;
+    }
+    // GALAXY_INTERP_CHAIN=0: start from the scene before regardless (A/B).
+    static const bool chain = read_env_u64("GALAXY_INTERP_CHAIN", 1u) != 0u;
+    const unsigned shown = static_cast<unsigned>(interp_shown_scene_);
+    const unsigned depth = (scene + 4u - shown) % 4u;  // 2 or 3 scenes back
+    const InterpScene& target = interp_scenes_[scene];
+    bool consecutive = chain && target.valid && target.serial != 0u;
+    for (unsigned step = 1u; consecutive && step <= depth; ++step) {
+        const InterpScene& older = interp_scenes_[(scene + 4u - step) % 4u];
+        consecutive = older.valid && older.serial + step == target.serial;
+    }
+    if (!consecutive) {
+        ++interp_unchained_skips_;
+        return;
+    }
+    interp_chain_prev_ = target.prev_index;
+    for (unsigned step = 1u; step < depth; ++step) {
+        const std::vector<std::int32_t>& through = interp_scenes_[(scene + 4u - step) % 4u].prev_index;
+        for (std::int32_t& m : interp_chain_prev_) {
+            m = m >= 0 && static_cast<std::size_t>(m) < through.size()
+                ? through[static_cast<std::size_t>(m)] : -1;
+        }
+    }
+    interp_sequence_.before = shown;
+    interp_sequence_.chained = true;
+    ++interp_chained_sequences_;
 }
 
 // The next frame's sequence replaces this one before its real frame (at
@@ -7068,6 +7115,7 @@ void GxBackend::advance_interp_sequence(bool flush) {
                 std::chrono::steady_clock::now() - start).count();
             if (presented) {
                 ++interp_presented_;
+                interp_shown_scene_ = static_cast<std::int32_t>(sequence.scene);
             } else {
                 ++interp_failed_;
             }
@@ -7083,6 +7131,7 @@ void GxBackend::advance_interp_sequence(bool flush) {
         interp_presenting_real_ = true;
         present_cached_xfb_on_thread(sequence.xfb_addr, false, true);
         interp_presenting_real_ = false;
+        interp_shown_scene_ = static_cast<std::int32_t>(sequence.scene);
         renderer_.set_capture_waits(false);
         interp_snapshot_path_.clear();
         ++interp_sequences_;
@@ -7093,6 +7142,7 @@ void GxBackend::advance_interp_sequence(bool flush) {
 
 // A game frame presented while interpolating, without sub-frames: why.
 void GxBackend::note_interp_real_present() {
+    interp_shown_scene_ = -1;                  // a frame no sequence knows
     unsigned reason = 5u;                      // log ready, present not matched
     if (native_settings_overlay_visible()) {
         reason = 0u;
@@ -7146,6 +7196,8 @@ void GxBackend::report_interp_stats() {
             << " superseded=" << interp_superseded_
             << " started=" << interp_started_
             << " logs-skipped=" << interp_logs_skipped_
+            << " chained-sequences=" << interp_chained_sequences_
+            << " unchained-skips=" << interp_unchained_skips_
             << " presents-during-sequence=" << interp_present_skipped_
             << " snapped-records=" << interp_snapped_
             << " failed=" << interp_failed_
@@ -7203,6 +7255,8 @@ void GxBackend::report_interp_stats() {
     interp_superseded_ = 0u;
     interp_started_ = 0u;
     interp_logs_skipped_ = 0u;
+    interp_chained_sequences_ = 0u;
+    interp_unchained_skips_ = 0u;
     interp_present_skipped_ = 0u;
     interp_snapped_ = 0u;
     interp_failed_ = 0u;
@@ -7229,7 +7283,10 @@ void GxBackend::report_interp_stats() {
 // lights and projection; then the latest frame's operations replayed.
 bool GxBackend::render_interp_subframe(float t) {
     const InterpScene& scene = interp_scenes_[interp_sequence_.scene];
-    const InterpScene& before_scene = interp_scenes_[(interp_sequence_.scene + 3u) % 4u];
+    const InterpScene& before_scene = interp_scenes_[interp_sequence_.before];
+    // Matched records of the scene before (through skipped scenes: B18).
+    const std::vector<std::int32_t>& prev_index =
+        interp_sequence_.chained ? interp_chain_prev_ : scene.prev_index;
     if (!scene.valid) {
         renderer_.note_replay_failure(9u);
         return false;
@@ -7268,7 +7325,7 @@ bool GxBackend::render_interp_subframe(float t) {
             out << "[interp-records] seq=" << interp_sequence_serial_ << " count=" << count
                 << " history-previous=" << current.size() << '\n';
             for (std::size_t r = 0; r < count; ++r) {
-                const std::int32_t m = scene.prev_index[r];
+                const std::int32_t m = prev_index[r];
                 const GxVsConstants& now = scene.constants[r];
                 out << "  r=" << r << " m=" << m << " pv=" << int(scene.per_vertex[r])
                     << " pal=" << scene.palette[r]
@@ -7301,7 +7358,7 @@ bool GxBackend::render_interp_subframe(float t) {
         const bool camera_moves = interp_camera_.known && !interp_camera_.cut &&
             std::memcmp(interp_camera_.a.data(), interp_camera_.b.data(), sizeof(Affine34)) != 0;
         for (std::size_t r = 0; r < count; ++r) {
-            const std::int32_t m = scene.prev_index[r];
+            const std::int32_t m = prev_index[r];
             const bool prev_data = before_valid && m >= 0 &&
                 static_cast<std::size_t>(m) < before_scene.constants.size();
             const GxVsConstants& now = scene.constants[r];
@@ -7368,10 +7425,10 @@ bool GxBackend::render_interp_subframe(float t) {
         if (trace_camera) {
             std::size_t matched = 0u, inline_records = 0u, inline_unmatched = 0u, snapped = 0u;
             for (std::size_t r = 0; r < count; ++r) {
-                matched += scene.prev_index[r] >= 0 ? 1u : 0u;
+                matched += prev_index[r] >= 0 ? 1u : 0u;
                 if (scene.per_vertex[r] == 0u) {
                     ++inline_records;
-                    inline_unmatched += scene.prev_index[r] < 0 ? 1u : 0u;
+                    inline_unmatched += prev_index[r] < 0 ? 1u : 0u;
                 }
             }
             for (const InterpRecordMotion& moving : interp_moving_) {
@@ -7392,8 +7449,11 @@ bool GxBackend::render_interp_subframe(float t) {
                  << " palettes=" << scene.palette_count << '/' << before_scene.palette_count << '\n';
             std::cerr << line.str();
         }
-        renderer_.prepare_vertex_blend(before_valid ? std::span<const std::int32_t>(scene.prev_index)
-                                                    : std::span<const std::int32_t>{});
+        // Vertex blending pairs draws with the log run before: not for a
+        // sequence chained past a skipped scene (B18).
+        renderer_.prepare_vertex_blend(before_valid && !interp_sequence_.chained
+                                           ? std::span<const std::int32_t>(prev_index)
+                                           : std::span<const std::int32_t>{});
     }
     ++interp_subframe_serial_;
     const Affine34 camera_t = camera_at(interp_camera_, t);
@@ -8829,6 +8889,9 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
             // The renderer keeps the log per game frame (interpolation_mode).
             interp_recording_ = renderer_.interpolation_mode();
             interp_frames_ = interp_recording_ ? interpolated_frames_per_game_frame(rate) : 0u;
+            if (!interp_recording_) {
+                interp_shown_scene_ = -1;
+            }
             // GALAXY_DRAW_IDENTITY=0 never asks the game for draw identities,
             // =1 always does (tests at 60).
             static const std::uint64_t identity_env = read_env_u64("GALAXY_DRAW_IDENTITY", 2u);
