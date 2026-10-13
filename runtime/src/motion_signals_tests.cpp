@@ -1,0 +1,86 @@
+// SPDX-License-Identifier: GPL-3.0-only
+#include "galaxy/motion_signals.h"
+
+#include <cstdio>
+#include <set>
+
+using namespace galaxy::motion;
+
+namespace {
+
+int failures = 0;
+
+void check(bool condition, const char* what) {
+    if (!condition) {
+        std::printf("FAIL: %s\n", what);
+        ++failures;
+    }
+}
+
+void test_epochs() {
+    EpochTable table;
+    check(table.get(0x80001000u) == 0u && table.size() == 0u, "untouched objects have epoch 0");
+    check(table.bump(0x80001000u) == 1u, "first bump");
+    check(table.bump(0x80001000u) == 2u, "second bump");
+    check(table.get(0x80001000u) == 2u, "epoch kept");
+    check(table.get(0x80002000u) == 0u, "other objects unaffected");
+    check(table.bump(0u) == 0u && table.get(0u) == 0u && table.size() == 1u, "null object ignored");
+}
+
+void test_epoch_reset_changes_every_identity() {
+    EpochTable table;
+    const std::uint32_t kept = 0x81000000u;
+    const std::uint16_t before_kept = table.get(kept);
+    std::uint32_t object = 0x80000000u;
+    while (table.resets() == 0u) {
+        table.bump(object);
+        object += 4u;
+    }
+    check(table.size() == 1u, "a full table restarts with the bumped object");
+    check(table.get(kept) != before_kept, "the salt changes untouched objects too");
+    check(table.get(object - 4u) == static_cast<std::uint16_t>((1u + table.get(kept)) & EpochTable::kMask),
+          "the bumped object is one past the salt");
+}
+
+void test_epochs_spread() {
+    EpochTable table;
+    std::set<std::uint16_t> seen;
+    for (std::uint32_t i = 0; i < 1000u; ++i) {
+        table.bump(0x80400000u + i * 0x40u);
+    }
+    for (std::uint32_t i = 0; i < 1000u; ++i) {
+        seen.insert(table.get(0x80400000u + i * 0x40u));
+    }
+    check(seen.size() == 1u && *seen.begin() == 1u, "1000 objects keep their own epochs");
+    check(table.size() == 1000u, "1000 entries");
+}
+
+void test_category() {
+    const std::uint32_t c = encode_category(static_cast<std::uint8_t>(ScenePhase::ImageEffect), kCategoryDrawType, 0x2Du);
+    check(category_phase(c) == static_cast<std::uint8_t>(ScenePhase::ImageEffect), "phase round trip");
+    check((c & 0xFFu) == 0x2Du && ((c >> 8u) & 0xFFu) == kCategoryDrawType, "source and type");
+    check(category_phase(kNoCategory) == 0xFFu, "no phase");
+}
+
+void test_particle_age() {
+    check(particle_age_continues(5u, 6u), "one step");
+    check(particle_age_continues(5u, 5u), "paused");
+    check(!particle_age_continues(5u, 0u), "restart");
+    check(!particle_age_continues(5u, 7u), "jump");
+}
+
+}  // namespace
+
+int main() {
+    test_epochs();
+    test_epoch_reset_changes_every_identity();
+    test_epochs_spread();
+    test_category();
+    test_particle_age();
+    if (failures != 0) {
+        std::printf("%d failure(s)\n", failures);
+        return 1;
+    }
+    std::printf("motion signals: ok\n");
+    return 0;
+}

@@ -511,6 +511,13 @@ enum class SiteHookKind : std::uint32_t {
     DrawNameObj = 18,           // r4 NameObj (const category-list delegator)
     DrawEmitter = 19,           // r3 JPAResource, r4 JPAEmitterWorkData; argument 1 = child pass
     DrawParticle = 20,          // argument: node register | 0x100 for the child pass; r31 work
+    // Motion signals (generation 20); see galaxy/motion_signals.h.
+    MotionCamera = 21,          // argument: MotionCameraSite
+    MotionObject = 22,          // argument: MotionObjectSite; r3 the object
+    DrawCategory = 23,          // argument: source << 8 | scene phase
+    DrawStripeParticle = 24,    // argument: node register | strip << 8; r31 or r28 work
+    MirrorPass = 25,            // argument: 0 begins, 1 its geometry ends
+    LightLoad = 26,             // argument: MotionLightSite; r3 the light info
 };
 
 inline void site_hook(

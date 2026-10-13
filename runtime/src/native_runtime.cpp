@@ -34,6 +34,7 @@
 #include "galaxy/gx_d3d12.h"
 #include "galaxy/gx/render_config.h"
 #include "galaxy/gx/fifo_submission.h"
+#include "galaxy/motion_signals.h"
 #include "galaxy/runtime_timeline.h"
 #include "galaxy/relative_vi_window.h"
 #include "galaxy/opening_route_marker_guard.h"
@@ -2288,6 +2289,20 @@ struct RuntimeState {
     bool draw_identity_scene{};
     std::uint64_t draw_identity_markers{};
     std::uint64_t draw_identity_dropped{};
+    // Motion signals (generation-20 site hooks; galaxy/motion_signals.h).
+    galaxy::motion::EpochTable motion_epochs;
+    std::uint32_t motion_camera_epoch{};
+    std::uint32_t motion_camera_sites{};      // CameraSite bits seen since the last cut
+    bool motion_camera_cut_pending{};         // a cut since the previous scene marker
+    std::uint32_t motion_object_events{};     // epoch bumps since the previous scene marker
+    std::uint64_t motion_scene_serial{};      // SceneBegin markers seen
+    std::array<std::uint64_t, 8> motion_object_counts{};
+    std::uint64_t motion_camera_cuts{};
+    std::uint64_t motion_category_markers{};
+    std::uint64_t motion_light_markers{};
+    std::uint64_t motion_stripe_entries{};
+    std::uint64_t motion_mirror_passes{};
+    std::uint64_t motion_dead_repeats{};      // makeActorDead on a dead actor (no bump)
     DrawDistanceState draw_distance{};
     galaxy::input::NativeInputCausalityTracker native_input_causality;
     galaxy::scheduler::FunctionAsyncFlightTracker function_async_flights;
@@ -9890,6 +9905,25 @@ std::uint32_t read_guest_u32_or_zero(
     return value;
 }
 
+bool append_host_marker(RuntimeState& state, std::uint8_t kind, std::uint16_t aux, std::uint32_t a,
+                        std::uint32_t b) {
+    const std::array<std::byte, 12> marker{
+        std::byte{0xF0}, std::byte{kind},
+        std::byte(aux >> 8u), std::byte(aux & 0xFFu),
+        std::byte(a >> 24u), std::byte((a >> 16u) & 0xFFu),
+        std::byte((a >> 8u) & 0xFFu), std::byte(a & 0xFFu),
+        std::byte(b >> 24u), std::byte((b >> 16u) & 0xFFu),
+        std::byte((b >> 8u) & 0xFFu), std::byte(b & 0xFFu)};
+    if (state.address_space->append_gx_host_marker(marker)) {
+        ++state.draw_identity_markers;
+        return true;
+    }
+    ++state.draw_identity_dropped;
+    return false;
+}
+
+// Shape-packet, NameObj and emitter markers carry their object's epoch above
+// the pass bit (galaxy/motion_signals.h): a reset or new life is a new identity.
 void emit_draw_identity_marker(RuntimeState& state, std::uint32_t kind, std::uint32_t argument,
                                const galaxy::PpcContext& context) {
     if (state.address_space == nullptr) {
@@ -9902,23 +9936,28 @@ void emit_draw_identity_marker(RuntimeState& state, std::uint32_t kind, std::uin
     std::uint32_t b = 0u;
     switch (static_cast<galaxy::SiteHookKind>(kind)) {
     case galaxy::SiteHookKind::DrawShapePacket:
-        marker_kind = 1u;
+        marker_kind = galaxy::motion::kMarkerShapePacket;
         a = context.gpr[3];
         b = read_guest_u32_or_zero(space, a + 0x28u);  // J3DShapePacket::mpShape
+        if (state.motion_epochs.size() != 0u) {
+            const std::uint32_t model = read_guest_u32_or_zero(space, a + galaxy::motion::kShapePacketModel);
+            aux = static_cast<std::uint16_t>(state.motion_epochs.get(model) << 1u);
+        }
         break;
     case galaxy::SiteHookKind::DrawNameObj:
-        marker_kind = 2u;
+        marker_kind = galaxy::motion::kMarkerNameObj;
         a = context.gpr[4];
         b = read_guest_u32_or_zero(space, a);          // vtable
+        aux = static_cast<std::uint16_t>(state.motion_epochs.get(a) << 1u);
         break;
     case galaxy::SiteHookKind::DrawEmitter:
-        marker_kind = 3u;
+        marker_kind = galaxy::motion::kMarkerEmitter;
         a = read_guest_u32_or_zero(space, context.gpr[4]);  // JPAEmitterWorkData::mpEmtr
         b = context.gpr[3];
-        aux = static_cast<std::uint16_t>(argument & 1u);
+        aux = static_cast<std::uint16_t>((state.motion_epochs.get(a) << 1u) | (argument & 1u));
         break;
     case galaxy::SiteHookKind::DrawParticle:
-        marker_kind = 4u;
+        marker_kind = galaxy::motion::kMarkerParticle;
         a = context.gpr[argument & 0x1Fu] + 8u;         // JPANode -> JPABaseParticle
         b = read_guest_u32_or_zero(space, a + 0x80u);  // mAge << 16 | mLifeTime
         aux = static_cast<std::uint16_t>((argument >> 8u) & 1u);
@@ -9926,18 +9965,7 @@ void emit_draw_identity_marker(RuntimeState& state, std::uint32_t kind, std::uin
     default:
         return;
     }
-    const std::array<std::byte, 12> marker{
-        std::byte{0xF0}, std::byte{marker_kind},
-        std::byte(aux >> 8u), std::byte(aux & 0xFFu),
-        std::byte(a >> 24u), std::byte((a >> 16u) & 0xFFu),
-        std::byte((a >> 8u) & 0xFFu), std::byte(a & 0xFFu),
-        std::byte(b >> 24u), std::byte((b >> 16u) & 0xFFu),
-        std::byte((b >> 8u) & 0xFFu), std::byte(b & 0xFFu)};
-    if (state.address_space->append_gx_host_marker(marker)) {
-        ++state.draw_identity_markers;
-    } else {
-        ++state.draw_identity_dropped;
-    }
+    static_cast<void>(append_host_marker(state, marker_kind, aux, a, b));
 }
 
 std::uint8_t read_guest_u8_or_zero(
@@ -9946,6 +9974,197 @@ std::uint8_t read_guest_u8_or_zero(
     return mapped_guest_range(address_space, address, 1u)
                ? read_guest_u8(address_space, address)
                : 0u;
+}
+
+// Generation-20 motion signals (galaxy/motion_signals.h), simulation thread.
+// GALAXY_MOTION_TRACE_SIGNALS=1 logs every camera cut, the first 4000 camera
+// sites and object epoch bumps, and a summary every 600 scenes.
+bool motion_trace_enabled() {
+    static const bool enabled = read_env_u64("GALAXY_MOTION_TRACE_SIGNALS", 0u) != 0u;
+    return enabled;
+}
+
+void note_motion_camera(RuntimeState& state, std::uint32_t site, const galaxy::PpcContext& context) {
+    using galaxy::motion::CameraSite;
+    if (state.address_space == nullptr) {
+        return;
+    }
+    const auto& space = *state.address_space;
+    if (site == static_cast<std::uint32_t>(CameraSite::ReduceOscillation)) {
+        const std::uint32_t self = context.gpr[3];
+        if (read_guest_u8_or_zero(space, self + galaxy::motion::kInterpolatorForceChange) == 0u) {
+            return;
+        }
+        ++state.motion_camera_epoch;
+        ++state.motion_camera_cuts;
+        state.motion_camera_cut_pending = true;
+        if (motion_trace_enabled()) {
+            std::fprintf(stderr,
+                         "[motion-signal] camera-cut vi=%llu scene=%llu epoch=%u sites=0x%X anti-oscillation=%u\n",
+                         static_cast<unsigned long long>(state.vi_retrace_count),
+                         static_cast<unsigned long long>(state.motion_scene_serial), state.motion_camera_epoch,
+                         state.motion_camera_sites,
+                         static_cast<unsigned>(read_guest_u8_or_zero(
+                             space, self + galaxy::motion::kInterpolatorAntiOscillation)));
+        }
+        state.motion_camera_sites = 0u;
+        return;
+    }
+    if (site < 32u) {
+        state.motion_camera_sites |= 1u << site;
+    }
+    if (motion_trace_enabled()) {
+        static std::uint64_t lines = 0u;
+        if (lines++ < 4000u) {
+            const std::uint32_t frames = site == static_cast<std::uint32_t>(CameraSite::StartInterpolation)
+                ? context.gpr[3]
+                : site == static_cast<std::uint32_t>(CameraSite::SetInterpolation) ? context.gpr[4] : 0u;
+            const unsigned off = site == static_cast<std::uint32_t>(CameraSite::SetInterpolation)
+                ? read_guest_u8_or_zero(space, context.gpr[3] + galaxy::motion::kInterpolatorOff)
+                : 0u;
+            std::fprintf(stderr, "[motion-signal] camera-site vi=%llu scene=%llu site=%u frames=%u interpolation-off=%u\n",
+                         static_cast<unsigned long long>(state.vi_retrace_count),
+                         static_cast<unsigned long long>(state.motion_scene_serial), site, frames, off);
+        }
+    }
+}
+
+// A reset position or a new life: the object's epoch, and its model's.
+void note_motion_object(RuntimeState& state, std::uint32_t site, std::uint32_t object) {
+    using galaxy::motion::ObjectSite;
+    if (object == 0u || state.address_space == nullptr || site >= static_cast<std::uint32_t>(ObjectSite::Count)) {
+        return;
+    }
+    const auto& space = *state.address_space;
+    // makeActorDead on an actor that is already dead ends no life (some
+    // objects kill their dead children every frame).
+    if (site == static_cast<std::uint32_t>(ObjectSite::Dead) &&
+        read_guest_u8_or_zero(space, object + galaxy::motion::kActorDeadFlag) != 0u) {
+        ++state.motion_dead_repeats;
+        return;
+    }
+    const std::uint16_t epoch = state.motion_epochs.bump(object);
+    std::uint32_t model = 0u;
+    if (site != static_cast<std::uint32_t>(ObjectSite::EmitterInit)) {
+        const std::uint32_t manager = read_guest_u32_or_zero(space, object + galaxy::motion::kActorModelManager);
+        model = manager != 0u ? read_guest_u32_or_zero(space, manager + galaxy::motion::kModelManagerModel) : 0u;
+        if (model != 0u) {
+            static_cast<void>(state.motion_epochs.bump(model));
+        }
+    }
+    ++state.motion_object_events;
+    ++state.motion_object_counts[site];
+    if (motion_trace_enabled()) {
+        static constexpr const char* kNames[] = {"reset-position", "reset-position-to", "reset-position-named",
+                                                 "appeared", "dead", "player-trans", "player-base-mtx",
+                                                 "emitter-init"};
+        static std::array<std::uint64_t, 8> lines{};
+        if (lines[site]++ < 4000u) {
+            std::fprintf(stderr, "[motion-signal] object vi=%llu scene=%llu site=%s object=%08X model=%08X epoch=%u\n",
+                         static_cast<unsigned long long>(state.vi_retrace_count),
+                         static_cast<unsigned long long>(state.motion_scene_serial), kNames[site], object, model,
+                         static_cast<unsigned>(epoch));
+        }
+    }
+}
+
+// Draw category or scene phase marker (inside the 3D scene only).
+void emit_motion_category(RuntimeState& state, std::uint32_t argument, const galaxy::PpcContext& context) {
+    if (!state.draw_identity_scene || state.address_space == nullptr) {
+        return;
+    }
+    const auto source = static_cast<std::uint16_t>((argument >> 8u) & 0xFFu);
+    const std::uint32_t type = source == galaxy::motion::kCategoryPhase ? (argument & 0xFFu) : context.gpr[3];
+    if (append_host_marker(state, galaxy::motion::kMarkerCategory, source, type, 0u)) {
+        ++state.motion_category_markers;
+    }
+}
+
+// The first marker of a 3D scene: the camera epoch and the object epoch bumps
+// since the previous scene.
+void emit_scene_signal_marker(RuntimeState& state) {
+    const std::uint16_t flags = state.motion_camera_cut_pending ? galaxy::motion::kSceneCameraCut : 0u;
+    static_cast<void>(append_host_marker(state, galaxy::motion::kMarkerScene, flags, state.motion_camera_epoch,
+                                         state.motion_object_events));
+    state.motion_camera_cut_pending = false;
+    state.motion_object_events = 0u;
+    if (motion_trace_enabled() && state.motion_scene_serial % 600u == 0u) {
+        const auto& counts = state.motion_object_counts;
+        std::fprintf(stderr,
+                     "[motion-signal] summary scene=%llu camera-cuts=%llu epoch=%u objects reset=%llu/%llu/%llu "
+                     "appeared=%llu dead=%llu dead-repeats=%llu player=%llu/%llu emitters=%llu table=%zu resets=%u "
+                     "categories=%llu lights=%llu stripes=%llu mirrors=%llu\n",
+                     static_cast<unsigned long long>(state.motion_scene_serial),
+                     static_cast<unsigned long long>(state.motion_camera_cuts), state.motion_camera_epoch,
+                     static_cast<unsigned long long>(counts[0]), static_cast<unsigned long long>(counts[1]),
+                     static_cast<unsigned long long>(counts[2]), static_cast<unsigned long long>(counts[3]),
+                     static_cast<unsigned long long>(counts[4]),
+                     static_cast<unsigned long long>(state.motion_dead_repeats),
+                     static_cast<unsigned long long>(counts[5]),
+                     static_cast<unsigned long long>(counts[6]), static_cast<unsigned long long>(counts[7]),
+                     state.motion_epochs.size(), state.motion_epochs.resets(),
+                     static_cast<unsigned long long>(state.motion_category_markers),
+                     static_cast<unsigned long long>(state.motion_light_markers),
+                     static_cast<unsigned long long>(state.motion_stripe_entries),
+                     static_cast<unsigned long long>(state.motion_mirror_passes));
+    }
+}
+
+// One particle of a JPA stripe: its two strip vertices follow inside the same
+// GXBegin, so it travels as a side mark at its FIFO offset, never as a marker.
+void note_stripe_particle(RuntimeState& state, std::uint32_t argument, const galaxy::PpcContext& context) {
+    if (!state.draw_identity_scene || state.address_space == nullptr) {
+        return;
+    }
+    const std::size_t position = state.address_space->gx_stream_position();
+    if (position == SIZE_MAX) {
+        return;
+    }
+    const std::uint32_t particle = context.gpr[argument & 0x1Fu] + 8u;  // JPANode -> JPABaseParticle
+    const std::uint32_t age_lifetime = read_guest_u32_or_zero(*state.address_space, particle + 0x80u);
+    galaxy::gx::attach_stripe_particle(position, particle, age_lifetime,
+                                       static_cast<std::uint8_t>((argument >> 8u) & 0xFFu));
+    ++state.motion_stripe_entries;
+}
+
+void handle_motion_signal(RuntimeState& state, std::uint32_t kind, std::uint32_t argument,
+                          const galaxy::PpcContext& context) {
+    switch (static_cast<galaxy::SiteHookKind>(kind)) {
+    case galaxy::SiteHookKind::MotionCamera:
+        note_motion_camera(state, argument, context);
+        return;
+    case galaxy::SiteHookKind::MotionObject:
+        note_motion_object(state, argument, context.gpr[3]);
+        return;
+    case galaxy::SiteHookKind::DrawCategory:
+        emit_motion_category(state, argument, context);
+        return;
+    case galaxy::SiteHookKind::DrawStripeParticle:
+        note_stripe_particle(state, argument, context);
+        return;
+    case galaxy::SiteHookKind::MirrorPass:
+        if (state.address_space != nullptr && galaxy::gx::draw_identity_wanted() &&
+            append_host_marker(state, galaxy::motion::kMarkerPass,
+                               static_cast<std::uint16_t>(argument == 0u ? galaxy::motion::PassMarker::MirrorBegin
+                                                                         : galaxy::motion::PassMarker::MirrorEnd),
+                               0u, 0u) &&
+            argument == 0u) {
+            ++state.motion_mirror_passes;
+        }
+        return;
+    case galaxy::SiteHookKind::LightLoad:
+        if (state.draw_identity_scene && state.address_space != nullptr &&
+            append_host_marker(state, galaxy::motion::kMarkerLight, static_cast<std::uint16_t>(argument),
+                               argument <= static_cast<std::uint32_t>(galaxy::motion::LightSite::PointLight)
+                                   ? context.gpr[3]
+                                   : 0u,
+                               0u)) {
+            ++state.motion_light_markers;
+        }
+        return;
+    default:
+        return;
+    }
 }
 
 RuntimeState::FunctionAsyncCausalityObservation
@@ -24226,6 +24445,14 @@ void call_guest_impl_body(
             state.address_space->gx_fifo_data().size());
         state.draw_identity_scene =
             guest_address == 0x8033EE8Cu && galaxy::gx::draw_identity_wanted();
+        if (guest_address == 0x8033EE8Cu) {
+            // The scene's first marker: the game's camera epoch and object
+            // epoch bumps since the previous scene (galaxy/motion_signals.h).
+            ++state.motion_scene_serial;
+            if (state.draw_identity_scene) {
+                emit_scene_signal_marker(state);
+            }
+        }
     }
     const auto mouse_boundary_object=context->gpr[3];
     guest_address = normalize_executable_address(state, guest_address);
@@ -33461,6 +33688,11 @@ int wmain(int argc, wchar_t** argv) {
             if (runtime.draw_identity_scene) {
                 emit_draw_identity_marker(runtime, kind, argument, *context);
             }
+            return;
+        }
+        if (kind >= static_cast<std::uint32_t>(galaxy::SiteHookKind::MotionCamera) &&
+            kind <= static_cast<std::uint32_t>(galaxy::SiteHookKind::LightLoad)) {
+            handle_motion_signal(runtime, kind, argument, *context);
             return;
         }
         galaxy::dispatch_site_hook(runtime.services, guest_pc, kind, argument, context, memory);

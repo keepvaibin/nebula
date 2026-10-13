@@ -128,6 +128,11 @@ void attach_scene_view(const float view[12]) noexcept;
 // Simulation thread, at each SceneBegin: whether the renderer reads
 // draw-identity markers (frame interpolation or motion vectors are on).
 [[nodiscard]] bool draw_identity_wanted() noexcept;
+// Simulation thread: one particle of a JPA stripe at `stream_offset` of the
+// live GX stream (GuestAddressSpace::gx_stream_position); its two strip
+// vertices follow. The next render_frame submission carries it.
+void attach_stripe_particle(std::size_t stream_offset, std::uint32_t particle, std::uint32_t age_lifetime,
+                            std::uint8_t strip);
 void set_pointer_response(PointerResponseStamp stamp) noexcept;
 // Simulation producer; copied into each owned FIFO chunk and selected XFB.
 void set_prerecorded_movie_content(bool movie) noexcept;

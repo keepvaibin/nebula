@@ -238,6 +238,53 @@ void test_many_records() {
     check(matched == 3000u, "3000 records match their own previous record");
 }
 
+
+TransformRecord identified(std::uint64_t identity, std::uint64_t load_signature) {
+    TransformRecord r = make(1u, 0.0f, 0.0f, -10.0f);
+    r.identity = identity;
+    r.load_signature = load_signature;
+    return r;
+}
+
+TransformRecord particle(std::uint64_t identity, std::uint32_t age) {
+    TransformRecord r = identified(identity, 0u);
+    r.particle = true;
+    r.continuity = age;
+    return r;
+}
+
+void test_identity_load_signature() {
+    TransformHistory h;
+    h.begin_scene(1, nullptr);
+    h.add(identified(0x10u, 0xAAu));
+    h.add(identified(0x11u, 0xBBu));
+    h.begin_scene(2, nullptr);
+    check(h.add(identified(0x10u, 0xAAu)) != nullptr, "same identity and loads match");
+    check(h.add(identified(0x11u, 0xCCu)) == nullptr, "same identity, other loads: no match");
+    check(h.stats().signature_rejected == 1u && h.stats().identity_matched == 1u,
+          "a load-signature reject is counted apart");
+}
+
+void test_particle_continuity() {
+    TransformHistory h;
+    h.begin_scene(1, nullptr);
+    h.add(particle(0x20u, 7u));
+    h.add(particle(0x21u, 7u));
+    h.add(particle(0x22u, 7u));
+    h.add(particle(0x23u, 7u));
+    h.begin_scene(2, nullptr);
+    check(h.add(particle(0x20u, 8u)) != nullptr, "age + 1 continues");
+    check(h.add(particle(0x21u, 7u)) != nullptr, "a paused particle continues");
+    check(h.add(particle(0x22u, 0u)) == nullptr, "age back to 0 is a new particle");
+    check(h.add(particle(0x23u, 9u)) == nullptr, "an age jump is not one frame");
+    const TransformHistoryStats stats = h.stats();
+    check(stats.continuity_rejected == 2u && stats.identity_matched == 2u, "continuity rejects counted");
+    check(stats.particle_age_steps[0] == 1u && stats.particle_age_steps[1] == 1u &&
+              stats.particle_age_steps[2] == 1u && stats.particle_age_steps[3] == 1u &&
+              stats.particle_age_steps[4] == 0u,
+          "age steps histogram");
+}
+
 }  // namespace
 
 int main() {
@@ -248,6 +295,8 @@ int main() {
     test_camera_delta();
     test_reset_and_outside_scene();
     test_many_records();
+    test_identity_load_signature();
+    test_particle_continuity();
     if (failures != 0) {
         std::printf("%d failure(s)\n", failures);
         return 1;
