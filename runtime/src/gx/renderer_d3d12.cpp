@@ -3484,6 +3484,9 @@ HRESULT create_gx_root_signature(
     //   [2] Descriptor table   SRV t0..t7,space0  PS - textures
     //   [3] Descriptor table   Sampler s0..s7       PS
     //   [4] Root SRV  t0,space1 VS - matrix palette
+    //   [5] Root SRV  t1,space1 VS - previous vertices (sub-frame blending)
+    //   [6] Root constants b2   VS - vertex blend mode, t, verdict slot
+    //   [7] Root SRV  t2,space1 VS - vertex blend verdicts
 
     D3D12_DESCRIPTOR_RANGE tex_range{};
     tex_range.RangeType          = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
@@ -3499,7 +3502,7 @@ HRESULT create_gx_root_signature(
     samp_range.RegisterSpace      = 0;
     samp_range.OffsetInDescriptorsFromTableStart = 0;
 
-    D3D12_ROOT_PARAMETER params[5]{};
+    D3D12_ROOT_PARAMETER params[8]{};
     params[0].ParameterType             = D3D12_ROOT_PARAMETER_TYPE_CBV;
     params[0].Descriptor.ShaderRegister = 0;
     params[0].Descriptor.RegisterSpace  = 0;
@@ -3527,8 +3530,24 @@ HRESULT create_gx_root_signature(
     // reads in the pixel shader.
     params[4].ShaderVisibility          = D3D12_SHADER_VISIBILITY_ALL;
 
+    params[5].ParameterType             = D3D12_ROOT_PARAMETER_TYPE_SRV;
+    params[5].Descriptor.ShaderRegister = 1;
+    params[5].Descriptor.RegisterSpace  = 1;
+    params[5].ShaderVisibility          = D3D12_SHADER_VISIBILITY_VERTEX;
+
+    params[6].ParameterType            = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
+    params[6].Constants.ShaderRegister = 2;
+    params[6].Constants.RegisterSpace  = 0;
+    params[6].Constants.Num32BitValues = 3;
+    params[6].ShaderVisibility         = D3D12_SHADER_VISIBILITY_VERTEX;
+
+    params[7].ParameterType             = D3D12_ROOT_PARAMETER_TYPE_SRV;
+    params[7].Descriptor.ShaderRegister = 2;
+    params[7].Descriptor.RegisterSpace  = 1;
+    params[7].ShaderVisibility          = D3D12_SHADER_VISIBILITY_VERTEX;
+
     D3D12_ROOT_SIGNATURE_DESC rsd{};
-    rsd.NumParameters = 5;
+    rsd.NumParameters = 8;
     rsd.pParameters   = params;
     rsd.Flags =
         D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT |
@@ -5620,6 +5639,7 @@ void RendererD3D12::invalidate_gx_bindings() {
     bound_texture_table_ = {};
     bound_sampler_table_ = {};
     bound_matrix_palette_ = 0;
+    bound_vertex_blend_valid_ = false;
     bound_topology_ = D3D_PRIMITIVE_TOPOLOGY_UNDEFINED;
     bound_vertex_view_ = {};
     bound_vertex_view_valid_ = false;
@@ -5681,6 +5701,7 @@ void RendererD3D12::begin_frame(bool present_swap_chain) {
             replay_recording_ = false;
             // The logs name memory of the rings just rebuilt.
             run_valid_ = false;
+            prev_run_valid_ = false;
             copy_writes_.clear();
             for (auto& retired : retired_segment_textures_) {
                 retired.clear();
@@ -5823,6 +5844,9 @@ void RendererD3D12::begin_frame(bool present_swap_chain) {
             }
             if (run_valid_ && ring_segment_ == run_segment_) {
                 run_valid_ = false;
+            }
+            if (prev_run_valid_ && ring_segment_ == prev_run_segment_) {
+                prev_run_valid_ = false;
             }
             if (ring_segment_fence_[ring_segment_] != 0u) {
                 wait_for_fence_value(ring_segment_fence_[ring_segment_]);
@@ -6681,6 +6705,14 @@ bool RendererD3D12::start_replay_playback() {
     if (!replay_valid_) {
         return false;
     }
+    // The playing log becomes the one before (vertex blending reads it).
+    prev_run_valid_ = run_valid_;
+    if (run_valid_) {
+        std::swap(prev_run_draws_, run_draws_);
+        prev_run_segment_ = run_segment_;
+        prev_run_serial_ = run_serial_;
+    }
+    run_blend_vertices_.clear();
     std::swap(play_ops_, run_ops_);
     std::swap(play_draws_, run_draws_);
     std::swap(play_viewports_, run_viewports_);
@@ -6692,6 +6724,287 @@ bool RendererD3D12::start_replay_playback() {
     run_valid_ = true;
     replay_valid_ = false;
     return true;
+}
+
+// Blend-pair check: one group per pair compares the positions of the two
+// draws vertex by vertex (GxVertexOut, 144-byte stride; position first).
+static constexpr char kBlendValidateCs[] = R"HLSL(
+ByteAddressBuffer ring : register(t0);
+ByteAddressBuffer resident : register(t1);
+StructuredBuffer<uint4> pairs : register(t2);
+RWStructuredBuffer<uint4> verdicts : register(u0);
+groupshared uint g_same;
+groupshared uint g_worst;
+groupshared uint g_lo[3];
+groupshared uint g_hi[3];
+// Float bits ordered like the floats, for integer min/max.
+uint ordered(float f) {
+    const uint u = asuint(f);
+    return (u & 0x80000000u) != 0u ? ~u : (u | 0x80000000u);
+}
+float unordered(uint u) {
+    return asfloat((u & 0x80000000u) != 0u ? (u & 0x7FFFFFFFu) : ~u);
+}
+float3 position(uint in_resident, uint offset) {
+    return asfloat(in_resident != 0u ? resident.Load3(offset) : ring.Load3(offset));
+}
+[numthreads(64, 1, 1)]
+void main(uint3 group : SV_GroupID, uint lane : SV_GroupIndex) {
+    const uint4 pair = pairs[group.x];
+    if (lane == 0u) {
+        g_same = 0u;
+        g_worst = 0u;
+        [unroll] for (uint k = 0u; k < 3u; ++k) {
+            g_lo[k] = 0xFFFFFFFFu;
+            g_hi[k] = 0u;
+        }
+    }
+    GroupMemoryBarrierWithGroupSync();
+    uint same = 0u, worst = 0u;
+    uint lo[3] = {0xFFFFFFFFu, 0xFFFFFFFFu, 0xFFFFFFFFu};
+    uint hi[3] = {0u, 0u, 0u};
+    for (uint i = lane; i < pair.z; i += 64u) {
+        const float3 c = position(pair.w & 1u, pair.x + i * 144u);
+        const float3 p = position((pair.w >> 1u) & 1u, pair.y + i * 144u);
+        same += all(c == p) ? 1u : 0u;
+        const float3 d = c - p;
+        const float dist = sqrt(dot(d, d));
+        worst = max(worst, isfinite(dist) ? asuint(dist) : 0x7F800000u);
+        [unroll] for (uint k = 0u; k < 3u; ++k) {
+            lo[k] = min(lo[k], min(ordered(c[k]), ordered(p[k])));
+            hi[k] = max(hi[k], max(ordered(c[k]), ordered(p[k])));
+        }
+    }
+    InterlockedAdd(g_same, same);
+    InterlockedMax(g_worst, worst);
+    [unroll] for (uint k = 0u; k < 3u; ++k) {
+        InterlockedMin(g_lo[k], lo[k]);
+        InterlockedMax(g_hi[k], hi[k]);
+    }
+    GroupMemoryBarrierWithGroupSync();
+    if (lane == 0u) {
+        float3 extent;
+        [unroll] for (uint k = 0u; k < 3u; ++k) {
+            extent[k] = unordered(g_hi[k]) - unordered(g_lo[k]);
+        }
+        const float size = sqrt(dot(extent, extent));
+        verdicts[group.x] = uint4(pair.z, g_same, g_worst, asuint(isfinite(size) ? size : 0.0));
+    }
+}
+)HLSL";
+
+bool RendererD3D12::ensure_blend_validation() {
+    if (blend_validate_pso_) {
+        return true;
+    }
+    if (blend_validate_failed_ || !device_) {
+        return false;
+    }
+    blend_validate_failed_ = true;
+    D3D12_HEAP_PROPERTIES heap{};
+    heap.Type = D3D12_HEAP_TYPE_DEFAULT;
+    D3D12_RESOURCE_DESC desc{};
+    desc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+    desc.Width = static_cast<UINT64>(kMaxBlendPairs) * 16u;
+    desc.Height = 1;
+    desc.DepthOrArraySize = 1;
+    desc.MipLevels = 1;
+    desc.SampleDesc.Count = 1;
+    desc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+    desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
+    if (FAILED(device_->CreateCommittedResource(&heap, D3D12_HEAP_FLAG_NONE, &desc,
+                                                D3D12_RESOURCE_STATE_UNORDERED_ACCESS, nullptr,
+                                                IID_PPV_ARGS(&blend_verdicts_)))) {
+        return false;
+    }
+    blend_verdicts_->SetName(L"GX vertex blend verdicts");
+    blend_verdicts_state_ = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+    D3D12_ROOT_PARAMETER params[4]{};
+    for (unsigned i = 0; i < 3u; ++i) {
+        params[i].ParameterType = D3D12_ROOT_PARAMETER_TYPE_SRV;
+        params[i].Descriptor.ShaderRegister = i;
+        params[i].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+    }
+    params[3].ParameterType = D3D12_ROOT_PARAMETER_TYPE_UAV;
+    params[3].Descriptor.ShaderRegister = 0;
+    params[3].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+    D3D12_ROOT_SIGNATURE_DESC rsd{};
+    rsd.NumParameters = 4;
+    rsd.pParameters = params;
+    ComPtr<ID3DBlob> blob, err;
+    if (FAILED(D3D12SerializeRootSignature(&rsd, D3D_ROOT_SIGNATURE_VERSION_1, &blob, &err)) ||
+        FAILED(device_->CreateRootSignature(0, blob->GetBufferPointer(), blob->GetBufferSize(),
+                                            IID_PPV_ARGS(&blend_validate_root_)))) {
+        return false;
+    }
+    try {
+        const ComPtr<ID3DBlob> cs =
+            compile_hlsl(kBlendValidateCs, sizeof(kBlendValidateCs) - 1u, "cs_5_1", "main");
+        D3D12_COMPUTE_PIPELINE_STATE_DESC pso{};
+        pso.pRootSignature = blend_validate_root_.Get();
+        pso.CS = {cs->GetBufferPointer(), cs->GetBufferSize()};
+        if (FAILED(device_->CreateComputePipelineState(&pso, IID_PPV_ARGS(&blend_validate_pso_)))) {
+            return false;
+        }
+    } catch (const std::exception& error) {
+        std::cerr << "[interp-blend] validation shader: " << error.what() << '\n';
+        return false;
+    }
+    blend_validate_failed_ = false;
+    return true;
+}
+
+// At the start of the sequence's first sub-frame (before its draws).
+void RendererD3D12::record_blend_validation() {
+    if (!blend_validate_pending_) {
+        return;
+    }
+    blend_validate_pending_ = false;
+    if (blend_pairs_.empty() || !ensure_blend_validation()) {
+        for (BlendSource& source : run_blend_vertices_) source = {};
+        return;
+    }
+    const std::size_t bytes = blend_pairs_.size() * sizeof(blend_pairs_[0]);
+    const UploadRing::Allocation table = constant_ring_.allocate(bytes, 256u);
+    std::memcpy(table.cpu, blend_pairs_.data(), bytes);
+    if (blend_verdicts_state_ != D3D12_RESOURCE_STATE_UNORDERED_ACCESS) {
+        D3D12_RESOURCE_BARRIER barrier{};
+        barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+        barrier.Transition.pResource = blend_verdicts_.Get();
+        barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+        barrier.Transition.StateBefore = blend_verdicts_state_;
+        barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+        command_list_->ResourceBarrier(1, &barrier);
+    }
+    command_list_->SetComputeRootSignature(blend_validate_root_.Get());
+    command_list_->SetPipelineState(blend_validate_pso_.Get());
+    command_list_->SetComputeRootShaderResourceView(0, vertex_ring_.gpu_base());
+    command_list_->SetComputeRootShaderResourceView(
+        1, resident_vertex_base_ != 0u ? resident_vertex_base_ : vertex_ring_.gpu_base());
+    command_list_->SetComputeRootShaderResourceView(2, table.gpu);
+    command_list_->SetComputeRootUnorderedAccessView(3, blend_verdicts_->GetGPUVirtualAddress());
+    command_list_->Dispatch(static_cast<UINT>(blend_pairs_.size()), 1u, 1u);
+    D3D12_RESOURCE_BARRIER barrier{};
+    barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+    barrier.Transition.pResource = blend_verdicts_.Get();
+    barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+    barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+    barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
+    command_list_->ResourceBarrier(1, &barrier);
+    blend_verdicts_state_ = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
+    bound_pipeline_ = nullptr;
+}
+
+void RendererD3D12::prepare_vertex_blend(std::span<const std::int32_t> previous_record) {
+    run_blend_vertices_.assign(run_draws_.size(), BlendSource{});
+    blend_pairs_.clear();
+    blend_validate_pending_ = false;
+    if (!prev_run_valid_ || prev_run_serial_ + 1u != run_serial_ || previous_record.empty()) {
+        return;
+    }
+    // Where a draw's vertices are: the frame vertex ring (0) or the resident
+    // decoded-vertex buffer (1), and the byte offset there.
+    const D3D12_GPU_VIRTUAL_ADDRESS ring_base = vertex_ring_.gpu_base();
+    const std::uint64_t ring_bytes =
+        vertex_ring_.resource() != nullptr ? vertex_ring_.resource()->GetDesc().Width : 0u;
+    const auto locate = [&](D3D12_GPU_VIRTUAL_ADDRESS va, std::uint32_t bytes, std::uint32_t& offset) {
+        if (va >= ring_base && va + bytes <= ring_base + ring_bytes) {
+            offset = static_cast<std::uint32_t>(va - ring_base);
+            return 0;
+        }
+        if (resident_vertex_base_ != 0u && va >= resident_vertex_base_ &&
+            va + bytes <= resident_vertex_base_ + resident_vertex_bytes_) {
+            offset = static_cast<std::uint32_t>(va - resident_vertex_base_);
+            return 1;
+        }
+        return -1;
+    };
+    // The draws of each previous record, in log order (counting sort).
+    std::int32_t records = 0;
+    for (const DrawCall& call : prev_run_draws_) {
+        records = std::max(records, call.replay_record + 1);
+    }
+    std::vector<std::uint32_t>& scratch = blend_scratch_;
+    const std::size_t count = static_cast<std::size_t>(records);
+    scratch.assign(2u * count + 1u + prev_run_draws_.size(), 0u);
+    std::uint32_t* const first = scratch.data();              // [records + 1]
+    std::uint32_t* const fill = first + count + 1u;           // [records]
+    std::uint32_t* const order = fill + count;                // [draws]
+    for (const DrawCall& call : prev_run_draws_) {
+        if (call.replay_record >= 0) ++first[call.replay_record + 1];
+    }
+    for (std::size_t r = 0; r < count; ++r) first[r + 1u] += first[r];
+    for (std::size_t d = 0; d < prev_run_draws_.size(); ++d) {
+        const std::int32_t r = prev_run_draws_[d].replay_record;
+        if (r >= 0) order[first[r] + fill[r]++] = static_cast<std::uint32_t>(d);
+    }
+    // Reuse `fill` as each previous record's cursor: a record's draws pair in
+    // order, skipping up to three unmatched draws (one drawn in only one of
+    // the frames) to the next one with as many vertices.
+    std::fill(fill, fill + count, 0u);
+    std::vector<std::uint32_t> seen;
+    static const bool trace = [] {
+        char value[8]{};
+        std::size_t length = 0u;
+        return getenv_s(&length, value, sizeof(value), "GALAXY_INTERP_TRACE_BLEND") == 0 &&
+               length > 1u && value[0] != '0';
+    }();
+    std::size_t in_scene = 0u, matched = 0u, paired = 0u, size_differs = 0u, same_buffer = 0u, blended = 0u;
+    std::ostringstream detail;
+    for (std::size_t d = 0; d < run_draws_.size(); ++d) {
+        const DrawCall& call = run_draws_[d];
+        const std::int32_t r = call.replay_record;
+        if (r < 0 || static_cast<std::size_t>(r) >= previous_record.size()) continue;
+        const std::int32_t m = previous_record[static_cast<std::size_t>(r)];
+        ++in_scene;
+        if (m < 0 || m >= records) continue;
+        ++matched;
+        if (seen.size() <= static_cast<std::size_t>(r)) seen.resize(static_cast<std::size_t>(r) + 1u, 0u);
+        const std::uint32_t k = seen[static_cast<std::size_t>(r)]++;
+        std::uint32_t at = first[m] + fill[m];
+        const std::uint32_t end = std::min(first[m + 1], at + 4u);
+        while (at < end && prev_run_draws_[order[at]].vertex_view.SizeInBytes != call.vertex_view.SizeInBytes) {
+            ++at;
+        }
+        if (at >= end) {
+            if (first[m] + fill[m] < first[m + 1] && trace && size_differs < 6u) {
+                const DrawCall& next = prev_run_draws_[order[first[m] + fill[m]]];
+                detail << "  size r=" << r << " m=" << m << " k=" << k << " vertices "
+                       << next.vertex_view.SizeInBytes / 144u << "->" << call.vertex_view.SizeInBytes / 144u
+                       << " indices " << next.index_count << "->" << call.index_count << '\n';
+            }
+            size_differs += first[m] + fill[m] < first[m + 1] ? 1u : 0u;
+            continue;
+        }
+        fill[m] = at + 1u - first[m];
+        ++paired;
+        const DrawCall& before = prev_run_draws_[order[at]];
+        same_buffer += before.vertex_view.BufferLocation == call.vertex_view.BufferLocation ? 1u : 0u;
+        std::uint32_t current_offset = 0u, previous_offset = 0u;
+        const int current_buffer =
+            locate(call.vertex_view.BufferLocation, call.vertex_view.SizeInBytes, current_offset);
+        const int previous_buffer =
+            locate(before.vertex_view.BufferLocation, before.vertex_view.SizeInBytes, previous_offset);
+        if (before.vertex_view.BufferLocation != call.vertex_view.BufferLocation &&
+            before.vertex_view.StrideInBytes == call.vertex_view.StrideInBytes &&
+            call.vertex_view.SizeInBytes != 0u && current_buffer >= 0 && previous_buffer >= 0 &&
+            blend_pairs_.size() < kMaxBlendPairs) {
+            const auto slot = static_cast<std::uint32_t>(blend_pairs_.size());
+            blend_pairs_.push_back({current_offset, previous_offset,
+                                    call.vertex_view.SizeInBytes / call.vertex_view.StrideInBytes,
+                                    static_cast<std::uint32_t>(current_buffer) |
+                                        (static_cast<std::uint32_t>(previous_buffer) << 1u)});
+            run_blend_vertices_[d] = {before.vertex_view.BufferLocation, slot};
+            ++blended;
+        }
+    }
+    blend_validate_pending_ = !blend_pairs_.empty();
+    if (trace) {
+        std::cerr << "[interp-blend] log=" << run_serial_ << " draws=" << run_draws_.size()
+                  << " in-scene=" << in_scene << " matched-record=" << matched << " paired=" << paired
+                  << " same-buffer=" << same_buffer << " size-differs=" << size_differs
+                  << " blended=" << blended << '\n' << detail.str();
+    }
 }
 
 void RendererD3D12::begin_replay_record() {
@@ -6909,7 +7222,7 @@ void RendererD3D12::record_subframe_guard(bool save) {
 }
 
 bool RendererD3D12::present_replay_subframe(
-    std::span<const D3D12_GPU_VIRTUAL_ADDRESS> record_constants) {
+    std::span<const D3D12_GPU_VIRTUAL_ADDRESS> record_constants, float vertex_t) {
     if (ring_mode_ != RingMode::Interp && replay_valid_ && !run_valid_) {
         (void)start_replay_playback();
     }
@@ -6979,6 +7292,9 @@ bool RendererD3D12::present_replay_subframe(
         srv_ring_.heap(),
         interp_rings ? sampler_heaps_[run_segment_].Get() : sampler_heap_.Get()};
     command_list_->SetDescriptorHeaps(2, heaps);
+    if (vertex_t >= 0.0f) {
+        record_blend_validation();
+    }
     command_list_->SetGraphicsRootSignature(root_signature_.Get());
     invalidate_gx_bindings();
     bound_rt_aux_ = 0u;
@@ -7002,7 +7318,16 @@ bool RendererD3D12::present_replay_subframe(
         for (const CopyWrite& write : copy_writes_) {
             rewritten = rewritten || (write.dest == copy.dest && write.serial >= run_serial_);
         }
-        if (!rewritten) continue;
+        // Every destination is restored after the sub-frame: real frames read
+        // copies of earlier frames (feedback blur, camera-cut cover), never a
+        // sub-frame's. GALAXY_INTERP_COPY_GUARD=2 keeps only rewritten ones.
+        static const bool rewritten_only = [] {
+            char value[8]{};
+            std::size_t length = 0u;
+            return getenv_s(&length, value, sizeof(value), "GALAXY_INTERP_COPY_GUARD") == 0 &&
+                   length > 1u && value[0] == '2';
+        }();
+        if (rewritten_only && !rewritten) continue;
         if (ID3D12Resource* scratch = acquire_subframe_scratch(copy.dest)) {
             subframe_guarded_.emplace_back(copy.dest, scratch);
         }
@@ -7058,6 +7383,10 @@ bool RendererD3D12::present_replay_subframe(
     replay_playing_ = true;
     bind_efb(nullptr);
     const auto far_values = make_efb_clear_values(0u, 0u, 0x00FFFFFFu, 0u);
+    const bool blend = vertex_t >= 0.0f && run_blend_vertices_.size() == run_draws_.size() &&
+                       !blend_validate_failed_;
+    vertex_blend_t_ = blend ? vertex_t : 1.0f;
+    std::uint64_t blended = 0u;
     for (const ReplayOp& op : run_ops_) {
         switch (op.kind) {
         case ReplayKind::Draw: {
@@ -7066,6 +7395,11 @@ bool RendererD3D12::present_replay_subframe(
                 static_cast<std::size_t>(call.replay_record) < record_constants.size() &&
                 record_constants[static_cast<std::size_t>(call.replay_record)] != 0u) {
                 call.vs_constants = record_constants[static_cast<std::size_t>(call.replay_record)];
+            }
+            if (blend && run_blend_vertices_[op.index].vertices != 0u) {
+                call.blend_vertices = run_blend_vertices_[op.index].vertices;
+                call.blend_slot = run_blend_vertices_[op.index].slot;
+                ++blended;
             }
             draw(call);
             break;
@@ -7105,6 +7439,8 @@ bool RendererD3D12::present_replay_subframe(
         swap_efb_sets();
     }
     replay_playing_ = false;
+    vertex_blend_t_ = 1.0f;
+    vertex_blend_draws_ += blended;
     record_subframe_guard(false);
     // Scratch textures unused for many sub-frames (a copy size changed) go;
     // the allocator fence wait above retired their last use long ago.
@@ -7147,6 +7483,11 @@ bool RendererD3D12::present_replay_subframe(
     if (interp_rings) {
         ring_segment_fence_[run_segment_] = std::max(ring_segment_fence_[run_segment_], fence);
         ring_segment_fence_[ring_segment_] = std::max(ring_segment_fence_[ring_segment_], fence);
+        if (blended != 0u) {
+            // Blended draws read the log before's vertices.
+            ring_segment_fence_[prev_run_segment_] =
+                std::max(ring_segment_fence_[prev_run_segment_], fence);
+        }
     } else if (matrix_segments_ != kFramesInFlight) {
         matrix_segment_fence_[matrix_segment_] = std::max(matrix_segment_fence_[matrix_segment_], fence);
     }
@@ -7728,6 +8069,20 @@ void RendererD3D12::draw(const DrawCall& call) {
         call.matrix_palette != bound_matrix_palette_) {
         command_list_->SetGraphicsRootShaderResourceView(4, call.matrix_palette);
         bound_matrix_palette_ = call.matrix_palette;
+    }
+    if (!bound_vertex_blend_valid_ || call.blend_vertices != bound_blend_vertices_ ||
+        call.blend_slot != bound_blend_slot_) {
+        // Unblended draws bind valid addresses the shaders never read.
+        command_list_->SetGraphicsRootShaderResourceView(
+            5, call.blend_vertices != 0u ? call.blend_vertices : vertex_ring_.gpu_base());
+        const std::uint32_t blend[3]{call.blend_vertices != 0u ? 1u : 0u,
+                                     std::bit_cast<std::uint32_t>(vertex_blend_t_), call.blend_slot};
+        command_list_->SetGraphicsRoot32BitConstants(6, 3u, blend, 0u);
+        command_list_->SetGraphicsRootShaderResourceView(
+            7, blend_verdicts_ ? blend_verdicts_->GetGPUVirtualAddress() : vertex_ring_.gpu_base());
+        bound_blend_vertices_ = call.blend_vertices;
+        bound_blend_slot_ = call.blend_slot;
+        bound_vertex_blend_valid_ = true;
     }
     if (call.aux_target != bound_rt_aux_) [[unlikely]] {
         if (call.aux_target != 0u) {

@@ -116,9 +116,18 @@ void test_moving_object_and_teleport() {
     eye_motion(&a, far, cam, false, motion);
     check(motion.snapped, "a 3000 unit jump at 500 units from the eye is a teleport");
     check(near_matrix(eye_at(motion, cam, camera_at(cam, 0.3f), 0.3f), far), "a teleport shows b");
+    // A pulsing object doubling its size between frames is motion.
+    Affine34 pulse = a;
+    for (unsigned r = 0; r < 3u; ++r) {
+        for (unsigned c = 0; c < 3u; ++c) pulse[r * 4u + c] *= 2.0f;
+    }
+    eye_motion(&a, pulse, cam, false, motion);
+    check(!motion.snapped && !motion.still, "a 2x scale pulse interpolates");
 }
 
 void test_tex_words() {
+    check(tex_word_at(150.25f, 151.25f, true, 0.0f) == 150.25f, "t=0 is a exactly (integer scroll)");
+    check(tex_word_at(0.0f, 0.4f, true, 1.0f) == 0.4f, "t=1 is b exactly");
     check(near(tex_word_at(0.95f, 0.05f, true, 0.5f), 1.0f) || near(tex_word_at(0.95f, 0.05f, true, 0.5f), 0.0f),
           "a wrapped scroll interpolates forward");
     check(near(tex_word_at(0.0f, 0.1f, true, 0.5f), 0.05f), "a scroll interpolates");
@@ -145,13 +154,26 @@ void test_light_and_palette() {
     b[3] = 0xFF0000FFu;
     const float t = 0.5f;
     const Affine34 vt = camera_at(cam, t);
-    light_at(a, b, cam, vt, t, out);
+    light_at(a, b, cam, vt, t, true, out);
     float p[3]{std::bit_cast<float>(out[10]), std::bit_cast<float>(out[11]), std::bit_cast<float>(out[12])};
     float expect[3];
     affine_transform_point(vt, light_world, expect);
     check(near(p[0], expect[0], 1e-3f) && near(p[1], expect[1], 1e-3f) && near(p[2], expect[2], 1e-3f),
           "a static light stays at its world position");
     check(((out[3] >> 24u) & 0xFFu) == 128u, "light color interpolates per byte");
+    // Without a previous snapshot the light keeps b's world position at every t.
+    for (float tt : {0.0f, 0.4f, 1.0f}) {
+        const Affine34 v_tt = camera_at(cam, tt);
+        light_at(nullptr, b, cam, v_tt, tt, true, out);
+        float q[3]{std::bit_cast<float>(out[10]), std::bit_cast<float>(out[11]), std::bit_cast<float>(out[12])};
+        affine_transform_point(v_tt, light_world, expect);
+        check(near(q[0], expect[0], 1e-3f) && near(q[1], expect[1], 1e-3f) && near(q[2], expect[2], 1e-3f),
+              "a light without history stays at its world position");
+    }
+    // Screen-space (unsplit) lights stay in eye space.
+    light_at(a, b, cam, vt, 1.0f, false, out);
+    check(near(std::bit_cast<float>(out[10]), pb[0], 1e-4f) && near(std::bit_cast<float>(out[11]), pb[1], 1e-4f) &&
+              near(std::bit_cast<float>(out[12]), pb[2], 1e-4f), "an unsplit light at t=1 is b");
 
     std::vector<std::uint32_t> pal_a(kXfPaletteWords, 0u), pal_b(kXfPaletteWords, 0u), pal_out(kXfPaletteWords);
     const Affine34 world = rotation_y(0.2f, 10.0f, 0.0f, -400.0f);

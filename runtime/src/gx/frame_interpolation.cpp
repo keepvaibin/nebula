@@ -127,7 +127,7 @@ void store_normal(const Affine34& m, std::uint32_t* words) noexcept {
 // One frame of an object's motion: its origin moved less than half its
 // distance from the eye plus 200 units, no axis scaled by more than 2x, and
 // it turned less than 150 degrees (a teleport, a respawn or a reused slot
-// otherwise).
+// otherwise). A scale step up to 8x is motion (pulsing, popping effects).
 bool plausible(const AffineMotion& m, float eye_distance) noexcept {
     float moved = 0.0f;
     for (unsigned r = 0; r < 3u; ++r) {
@@ -139,7 +139,10 @@ bool plausible(const AffineMotion& m, float eye_distance) noexcept {
     for (unsigned c = 0; c < 3u; ++c) {
         const float sa = m.a[c] * m.a[c] + m.a[4u + c] * m.a[4u + c] + m.a[8u + c] * m.a[8u + c];
         const float sb = m.b[c] * m.b[c] + m.b[4u + c] * m.b[4u + c] + m.b[8u + c] * m.b[8u + c];
-        if (sa > 4.0f * sb + 1e-12f || sb > 4.0f * sa + 1e-12f) return false;
+        // Squared norms: more than 8x is another object. Growing from or
+        // shrinking to nothing (spawn, pop) is motion.
+        const float lo = std::min(sa, sb), hi = std::max(sa, sb);
+        if (lo > 1e-12f && hi > 64.0f * lo) return false;
     }
     return m.cos_turn >= 0.2588190f;  // cos(75 deg): turns up to 150 degrees
 }
@@ -314,8 +317,11 @@ Affine34 normal_at(const NormalMotion& m, const CameraMotion& camera, const Affi
 }
 
 float tex_word_at(float a, float b, bool translation, float t) noexcept {
-    if (a == b || !std::isfinite(a) || !std::isfinite(b)) {
+    if (a == b || !std::isfinite(a) || !std::isfinite(b) || t >= 1.0f) {
         return b;
+    }
+    if (t <= 0.0f) {
+        return a;
     }
     if (translation) {
         const float d = b - a;
@@ -332,10 +338,19 @@ float tex_word_at(float a, float b, bool translation, float t) noexcept {
 }
 
 void light_at(const std::uint32_t* a, const std::uint32_t* b, const CameraMotion& camera,
-              const Affine34& camera_t, float t, std::uint32_t* out) noexcept {
+              const Affine34& camera_t, float t, bool split, std::uint32_t* out) noexcept {
     for (unsigned i = 0; i < 16u; ++i) out[i] = b[i];
     if (camera.known && camera.cut) {
         return;
+    }
+    split = split && camera.known;
+    // No previous snapshot: b's light, still in the world (eye space of b).
+    const bool held = a == nullptr;
+    if (held) {
+        if (!split) {
+            return;
+        }
+        a = b;
     }
     // Color: RGBA8 per byte.
     std::uint32_t color = 0u;
@@ -362,14 +377,15 @@ void light_at(const std::uint32_t* a, const std::uint32_t* b, const CameraMotion
         }
     }
     float p[3], d[3];
-    if (camera.known) {
+    if (split) {
+        const Affine34& to_world_a = held ? camera.b_inverse : camera.a_inverse;
         float wa[3], wb[3];
-        affine_transform_point(camera.a_inverse, pa, wa);
+        affine_transform_point(to_world_a, pa, wa);
         affine_transform_point(camera.b_inverse, pb, wb);
         float w[3];
         for (unsigned i = 0; i < 3u; ++i) w[i] = wa[i] + (wb[i] - wa[i]) * t;
         affine_transform_point(camera_t, w, p);
-        const Affine34 ra = rotation_only(camera.a_inverse);
+        const Affine34 ra = rotation_only(to_world_a);
         const Affine34 rb = rotation_only(camera.b_inverse);
         const Affine34 rt = rotation_only(camera_t);
         float va[3], vb[3], v[3];
@@ -401,6 +417,7 @@ void light_at(const std::uint32_t* a, const std::uint32_t* b, const CameraMotion
 void palette_motion(const std::uint32_t* a, const std::uint32_t* b, const CameraMotion& camera,
                     bool orthographic, PaletteMotion& out) noexcept {
     out = PaletteMotion{};
+    out.split = camera.known && !camera.cut && !orthographic;
     const bool camera_moves = camera.known && !camera.cut && !equal_words(camera.a, camera.b);
     for (unsigned k = 0; k < 10u; ++k) {
         const std::uint32_t* wb = b + k * 12u;
@@ -436,7 +453,7 @@ void palette_motion(const std::uint32_t* a, const std::uint32_t* b, const Camera
         out.normal_changed[k] = 1u;
         out.any_changed = true;
     }
-    if (a == nullptr && camera_moves) {
+    if (a == nullptr && camera_moves && !orthographic) {
         // Lights without a previous snapshot stay where they are in the world.
         out.light_changed = 0xFFu;
         out.any_changed = true;
@@ -447,7 +464,7 @@ void palette_motion(const std::uint32_t* a, const std::uint32_t* b, const Camera
             std::memcmp(a + kXfPostBase, b + kXfPostBase, (kXfLightBase - kXfPostBase) * 4u) != 0;
         for (unsigned light = 0; light < 8u; ++light) {
             const unsigned base = kXfLightBase + light * 16u;
-            if (camera_moves || std::memcmp(a + base, b + base, 16u * 4u) != 0) {
+            if ((camera_moves && !orthographic) || std::memcmp(a + base, b + base, 16u * 4u) != 0) {
                 out.light_changed |= static_cast<std::uint8_t>(1u << light);
             }
         }
@@ -472,7 +489,7 @@ void palette_at(const PaletteMotion& m, const std::uint32_t* a, const std::uint3
         for (unsigned light = 0; light < 8u; ++light) {
             if ((m.light_changed & (1u << light)) != 0u) {
                 const unsigned base = kXfLightBase + light * 16u;
-                light_at(b + base, b + base, camera, camera_t, t, out + base);
+                light_at(nullptr, b + base, camera, camera_t, t, m.split, out + base);
             }
         }
         return;
@@ -494,7 +511,7 @@ void palette_at(const PaletteMotion& m, const std::uint32_t* a, const std::uint3
     for (unsigned light = 0; light < 8u; ++light) {
         if ((m.light_changed & (1u << light)) != 0u) {
             const unsigned base = kXfLightBase + light * 16u;
-            light_at(a + base, b + base, camera, camera_t, t, out + base);
+            light_at(a + base, b + base, camera, camera_t, t, m.split, out + base);
         }
     }
 }

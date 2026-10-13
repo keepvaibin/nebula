@@ -635,6 +635,10 @@ private:
     // between them) are told apart by their order.
     std::uint64_t identity_last_base_ = 0;
     std::uint32_t identity_sub_index_ = 0;
+    // A render chunk began (FIFO streaming cuts frames mid-scene): its first
+    // VS upload re-states the bindings and may continue the open record.
+    bool scene_chunk_restart_ = false;
+    std::uint64_t interp_chunk_continues_ = 0;   // records continued across a chunk start
     std::uint64_t identity_scene_index_ = 0;
     std::uint64_t identity_scene_markers_ = 0;
     bool identity_scene_ = false;

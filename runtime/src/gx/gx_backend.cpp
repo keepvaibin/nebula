@@ -5258,6 +5258,7 @@ bool GxBackend::ensure_resident_vertex_buffer() {
     resident_vertex_mapped_ = static_cast<std::byte*>(mapped);
     resident_vertex_gpu_ = resident_vertex_buffer_->GetGPUVirtualAddress();
     resident_vertices_.reset(kResidentDecodedVertexCapacity, kFramesInFlight);
+    renderer_.set_resident_vertices(resident_vertex_gpu_, resident_vertex_buffer_->GetDesc().Width);
     return true;
 }
 
@@ -5268,6 +5269,7 @@ void GxBackend::release_resident_vertex_buffer() noexcept {
     resident_vertex_buffer_.Reset();
     resident_vertex_mapped_ = nullptr;
     resident_vertex_gpu_ = 0;
+    renderer_.set_resident_vertices(0u, 0u);
     resident_vertex_device_ = nullptr;
     resident_vertex_buffer_failed_ = false;
     resident_vertices_.reset(0u, kFramesInFlight);
@@ -6290,6 +6292,40 @@ void GxBackend::write_scene_vs_constants(const GxVsConstants& cpu, GxVsConstants
     const auto xf_float = [this](unsigned offset) {
         return std::bit_cast<float>(state_.xf(static_cast<std::uint16_t>(offset)));
     };
+    if (std::exchange(scene_chunk_restart_, false) && interp_recording_ && !motion_scene_ &&
+        current_replay_record_ >= 0) [[unlikely]] {
+        // The chunk start re-uploaded the bindings of the open record: when
+        // nothing changed (no marker, no matrix write, the same constants and
+        // palette), its draws stay in that record instead of an unmatched one.
+        InterpScene& scene = interp_scenes_[interp_scene_];
+        const auto r = static_cast<std::size_t>(current_replay_record_);
+        const std::uint64_t base = combine64(
+            identity_marker_, static_cast<std::uint32_t>(state_.matrix_write_count() - identity_matrix_base_));
+        if (identity_scene_ && base == identity_last_base_ && r < scene.constants.size()) {
+            GxVsConstants probe = cpu;
+            probe.mtx_palette_base = scene.constants[r].mtx_palette_base;
+            apply_uber_vs_key(vs_key_, probe);
+            const std::int32_t shadow = scene.palette[r];
+            const bool palette_continues =
+                shadow < 0
+                    ? !current_palette_required_
+                    : current_palette_shadow_ >= 0 &&
+                          (current_palette_shadow_ == shadow ||
+                           std::memcmp(scene.palettes.data() + static_cast<std::size_t>(shadow) * kMatrixPaletteWords,
+                                       scene.palettes.data() +
+                                           static_cast<std::size_t>(current_palette_shadow_) * kMatrixPaletteWords,
+                                       kMatrixPaletteWords * sizeof(std::uint32_t)) == 0);
+            if (palette_continues && std::memcmp(&probe, &scene.constants[r], sizeof(probe)) == 0) {
+                if (shadow >= 0 && current_palette_shadow_ != shadow &&
+                    static_cast<std::size_t>(current_palette_shadow_) + 1u == scene.palette_count) {
+                    --scene.palette_count;  // the duplicate snapshot
+                }
+                current_palette_shadow_ = shadow;
+                ++interp_chunk_continues_;
+                return;
+            }
+        }
+    }
     TransformRecord record{};
     record.signature = combine64(
         combine64(mix64(current_vs_hash_ & ~0ull), current_ps_hash_),
@@ -6331,7 +6367,9 @@ void GxBackend::write_scene_vs_constants(const GxVsConstants& cpu, GxVsConstants
             : affine_multiply(transform_history_.camera_delta(), record.position));
         scene.current.push_back(record.position);
         scene.prev_index.push_back(m);
-        scene.palette.push_back(record.palette ? current_palette_shadow_ : -1);
+        // Inline draws read normals, lights and indexed texture matrices from
+        // the palette too: their snapshot is interpolated like a skinned one.
+        scene.palette.push_back(record.palette || current_palette_required_ ? current_palette_shadow_ : -1);
         scene.per_vertex.push_back(record.palette ? 1u : 0u);
     }
     if (!motion_scene_) {
@@ -7122,6 +7160,10 @@ void GxBackend::report_interp_stats() {
             << (interp_presented_ != 0u ? interp_cpu_ms_ / presented : 0.0)
             << " gpu-ms-per-subframe="
             << (gpu_samples != 0u ? gpu_ms / static_cast<double>(gpu_samples) : 0.0)
+            << " chunk-continued-records=" << std::exchange(interp_chunk_continues_, 0u)
+            << " vertex-blend-draws-per-subframe="
+            << (interp_presented_ != 0u
+                    ? static_cast<double>(renderer_.take_vertex_blend_draws()) / presented : 0.0)
             << " guarded-copies=" << renderer_.take_subframe_guarded()
             << " held-textures=" << texture_cache_.take_held_texture_count()
             << " held-vertex-blocks=" << interp_held_vertex_blocks_
@@ -7300,13 +7342,53 @@ bool GxBackend::render_interp_subframe(float t) {
                 interp_moving_.push_back(motion);
             }
         }
+        if (trace_camera) {
+            std::size_t matched = 0u, inline_records = 0u, inline_unmatched = 0u, snapped = 0u;
+            for (std::size_t r = 0; r < count; ++r) {
+                matched += scene.prev_index[r] >= 0 ? 1u : 0u;
+                if (scene.per_vertex[r] == 0u) {
+                    ++inline_records;
+                    inline_unmatched += scene.prev_index[r] < 0 ? 1u : 0u;
+                }
+            }
+            for (const InterpRecordMotion& moving : interp_moving_) {
+                snapped += moving.position.snapped ? 1u : 0u;
+            }
+            std::size_t pairs_without_before = 0u, palette_snapped_slots = 0u;
+            for (const InterpPaletteMotion& entry : interp_palette_motions_) {
+                pairs_without_before += entry.before < 0 ? 1u : 0u;
+                palette_snapped_slots += entry.motion.snapped;
+            }
+            std::ostringstream line;
+            line << "[interp-seq] seq=" << interp_sequence_serial_ << " records=" << count
+                 << " matched=" << matched << " inline=" << inline_records
+                 << " inline-unmatched=" << inline_unmatched << " inline-snapped=" << snapped
+                 << " moving=" << interp_moving_.size() << " palette-pairs=" << interp_palette_motions_.size()
+                 << " pairs-without-before=" << pairs_without_before
+                 << " palette-snapped-slots=" << palette_snapped_slots
+                 << " palettes=" << scene.palette_count << '/' << before_scene.palette_count << '\n';
+            std::cerr << line.str();
+        }
+        renderer_.prepare_vertex_blend(before_valid ? std::span<const std::int32_t>(scene.prev_index)
+                                                    : std::span<const std::int32_t>{});
     }
     ++interp_subframe_serial_;
     const Affine34 camera_t = camera_at(interp_camera_, t);
-    // GALAXY_INTERP_PARTS: bit 0 inline position, 1 texture matrices, 2 projection, 3 palette (diagnostics).
-    static const std::uint64_t parts = read_env_u64("GALAXY_INTERP_PARTS", 0xFu);
+    // GALAXY_INTERP_PARTS: bit 0 inline position, 1 texture matrices, 2 projection, 3 palette,
+    // 4 vertex blending (diagnostics).
+    static const std::uint64_t parts = read_env_u64("GALAXY_INTERP_PARTS", 0x1Fu);
     interp_moving_records_ += interp_moving_.size();
     alignas(16) std::uint32_t palette_words[kMatrixPaletteWords];
+    // GALAXY_INTERP_VERIFY=1 with GALAXY_INTERP_FORCE_T=0: every matched record's rebuilt
+    // constants must equal the previous frame's (diagnostics).
+    static const bool verify = read_env_u64("GALAXY_INTERP_VERIFY", 0u) != 0u;
+    const bool verify_now = verify && t == 0.0f && interp_sequence_.next == 0u;
+    std::size_t verify_checked = 0u, verify_bad = 0u, verify_palette_words = 0u;
+    std::array<std::size_t, 5> verify_regions{};  // positions, texture rows, normals, post, lights
+    std::array<std::size_t, 16> verify_light_words{};
+    float verify_light_worst = 0.0f;
+    std::uint32_t verify_light_worst_a = 0u, verify_light_worst_b = 0u, verify_light_worst_w = 0u;
+    std::ostringstream verify_out;
     for (const InterpRecordMotion& moving : interp_moving_) {
         const GxVsConstants& recorded = scene.constants[moving.record];
         const GxVsConstants* before = moving.prev >= 0
@@ -7343,6 +7425,28 @@ bool GxBackend::render_interp_subframe(float t) {
                     scene.palettes.data() + static_cast<std::size_t>(entry.shadow) * kWords;
                 palette_at(entry.motion, before_palette(entry.before), now_words, interp_camera_, camera_t,
                            t, palette_words);
+                if (verify_now && entry.before >= 0) {
+                    const std::uint32_t* was = before_palette(entry.before);
+                    for (std::size_t w = 0; w < kWords; ++w) {
+                        const float x = std::bit_cast<float>(palette_words[w]);
+                        const float y = std::bit_cast<float>(was[w]);
+                        if (palette_words[w] != was[w] &&
+                            !(std::fabs(x - y) <= 1e-3f * (1.0f + std::fabs(y)))) {
+                            ++verify_palette_words;
+                            ++verify_regions[w < 120u ? 0u : w < 256u ? 1u : w < 0x500u ? 2u : w < 0x600u ? 3u : 4u];
+                            if (w >= 0x600u) {
+                                ++verify_light_words[(w - 0x600u) & 15u];
+                                const float rel = std::fabs(x - y) / (1.0f + std::fabs(y));
+                                if (((w - 0x600u) & 15u) >= 3u && rel > verify_light_worst) {
+                                    verify_light_worst = rel;
+                                    verify_light_worst_a = was[w];
+                                    verify_light_worst_b = palette_words[w];
+                                    verify_light_worst_w = static_cast<std::uint32_t>(w);
+                                }
+                            }
+                        }
+                    }
+                }
                 const UploadRing::Allocation alloc =
                     renderer_.matrix_ring().allocate(kWords * sizeof(std::uint32_t), 256u);
                 std::memcpy(alloc.cpu, palette_words, kWords * sizeof(std::uint32_t));
@@ -7351,14 +7455,67 @@ bool GxBackend::render_interp_subframe(float t) {
             }
             built.mtx_palette_base = entry.base;
         }
+        if (verify_now && before != nullptr) {
+            ++verify_checked;
+            float worst = 0.0f;
+            unsigned part = 0u;
+            const auto compare = [&](const float* x, const float* y, std::size_t n, unsigned p) {
+                for (std::size_t i = 0; i < n; ++i) {
+                    const float d = std::fabs(x[i] - y[i]) / (1.0f + std::fabs(y[i]));
+                    if (d > worst) {
+                        worst = d;
+                        part = p;
+                    }
+                }
+            };
+            if (scene.per_vertex[moving.record] == 0u) {
+                compare(&built.inline_pos_matrix[0][0], &before->inline_pos_matrix[0][0], 12u, 1u);
+            }
+            compare(&built.projection[0][0], &before->projection[0][0], 16u, 4u);
+            compare(&built.inline_tex_matrices[0][0][0], &before->inline_tex_matrices[0][0][0],
+                    kMaxTexGens * 12u, 2u);
+            if (worst > 1e-3f) {
+                ++verify_bad;
+                if (verify_bad <= 8u) {
+                    verify_out << "  r=" << moving.record << " m=" << moving.prev << " part=" << part
+                               << " worst=" << worst << " snapped=" << moving.position.snapped
+                               << " still=" << moving.position.still << " split=" << moving.position.split
+                               << " now-t=(" << recorded.inline_pos_matrix[0][3] << ','
+                               << recorded.inline_pos_matrix[1][3] << ',' << recorded.inline_pos_matrix[2][3]
+                               << ") before-t=(" << before->inline_pos_matrix[0][3] << ','
+                               << before->inline_pos_matrix[1][3] << ',' << before->inline_pos_matrix[2][3]
+                               << ") built-t=(" << built.inline_pos_matrix[0][3] << ','
+                               << built.inline_pos_matrix[1][3] << ',' << built.inline_pos_matrix[2][3] << ")\n";
+                if (part == 1u && verify_bad <= 8u) {
+                    verify_out << "    A=";
+                    for (const auto& row : before->inline_pos_matrix) for (float v : row) verify_out << v << ',';
+                    verify_out << " B=";
+                    for (const auto& row : recorded.inline_pos_matrix) for (float v : row) verify_out << v << ',';
+                    verify_out << " proj=";
+                    for (const auto& row : recorded.projection) for (float v : row) verify_out << v << ',';
+                    verify_out << '\n';
+                }
+                }
+            }
+        }
         const UploadRing::Allocation upload =
             renderer_.constant_ring().allocate(sizeof(GxVsConstants), 256u);
         std::memcpy(upload.cpu, &built, sizeof(GxVsConstants));
         interp_record_vas_[moving.record] = upload.gpu;
     }
+    if (verify_now) {
+        std::cerr << "[interp-verify] seq=" << interp_sequence_serial_ << " checked=" << verify_checked
+                  << " bad=" << verify_bad << " palette-words-off=" << verify_palette_words << " (pos/tex/nrm/post/light "
+                  << verify_regions[0] << '/' << verify_regions[1] << '/' << verify_regions[2] << '/'
+                  << verify_regions[3] << '/' << verify_regions[4] << ") light-words";
+        for (std::size_t k = 0; k < 16u; ++k) std::cerr << ' ' << verify_light_words[k];
+        std::cerr << " worst(w,was,built)=" << std::hex << verify_light_worst_w << ',' << verify_light_worst_a << ','
+                  << verify_light_worst_b << std::dec << " rel=" << verify_light_worst << '\n'
+                  << verify_out.str();
+    }
     interp_build_ms_ += std::chrono::duration<double, std::milli>(
         std::chrono::steady_clock::now() - build_start).count();
-    return renderer_.present_replay_subframe(interp_record_vas_);
+    return renderer_.present_replay_subframe(interp_record_vas_, (parts & 0x10u) != 0u ? t : -1.0f);
 }
 
 bool GxBackend::skip_for_present_rate() {
@@ -8808,6 +8965,7 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
     // palette chunk uploaded then is not at a known offset. Re-arm every chunk; the first palette
     // upload of the frame writes the full bank again.
     xf_palette_valid_ = 0u;
+    scene_chunk_restart_ = true;
 
     // Bind EFB with default (null) viewport. The XF viewport registers
     // will provide the actual values once processed from the FIFO.

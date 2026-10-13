@@ -381,6 +381,11 @@ struct DrawCall {
     // Interpolated redraw: the scene transform record whose VS constants a
     // sub-frame replaces, -1 for draws outside the 3D scene.
     std::int32_t replay_record = -1;
+    // Sub-frames only: the matching draw's vertices in the frame before,
+    // blended with this draw's (root SRV t1, space1); 0 for none. The pair's
+    // GPU verdict (same geometry or not) is at `blend_slot`.
+    D3D12_GPU_VIRTUAL_ADDRESS blend_vertices = 0;
+    std::uint32_t blend_slot = 0;
 };
 
 class RendererD3D12 {
@@ -508,7 +513,21 @@ public:
     void set_capture_waits(bool waits) noexcept { capture_waits_ = waits; }
     // False (nothing recorded) when the log is gone or has no display copy.
     // `record_constants[i]` replaces the VS constants of draws of record i.
-    bool present_replay_subframe(std::span<const D3D12_GPU_VIRTUAL_ADDRESS> record_constants);
+    // Draws matched by prepare_vertex_blend blend their vertices with the
+    // frame before's at `vertex_t` (negative: no blending).
+    bool present_replay_subframe(std::span<const D3D12_GPU_VIRTUAL_ADDRESS> record_constants,
+                                 float vertex_t);
+    // Once per sequence: pairs each draw of the playing log with the draw of
+    // the log before it that has the same position among its record's draws
+    // (`previous_record[i]`: the record of the scene before matched to record
+    // i, or -1) and as many vertices in a different buffer, so CPU-written
+    // geometry (shadow volumes, particle strips, trails) moves per sub-frame.
+    void prepare_vertex_blend(std::span<const std::int32_t> previous_record);
+    // The resident decoded-vertex buffer (blend pairs may live in it); 0 for none.
+    void set_resident_vertices(D3D12_GPU_VIRTUAL_ADDRESS base, std::uint64_t bytes) noexcept {
+        resident_vertex_base_ = base;
+        resident_vertex_bytes_ = bytes;
+    }
     // Swap-chain presents per second over the last second (any source).
     [[nodiscard]] double measured_present_hz() const noexcept {
         return measured_present_hz_.load(std::memory_order_relaxed);
@@ -534,6 +553,10 @@ public:
     }
     [[nodiscard]] std::uint64_t take_log_gap_ops() noexcept {
         return std::exchange(log_gap_ops_, 0u);
+    }
+    // Sub-frame draws drawn with blended vertices since the last call.
+    [[nodiscard]] std::uint64_t take_vertex_blend_draws() noexcept {
+        return std::exchange(vertex_blend_draws_, 0u);
     }
     // The scene camera's clip planes and vertical field of view (radians).
     void set_scene_camera(float near_plane, float far_plane, float fov_y) noexcept;
@@ -1000,6 +1023,37 @@ private:
     void note_copy_write(ID3D12Resource* dest);
     std::uint64_t play_serial_ = 0;       // replay serial of the ready log
     std::uint64_t run_serial_ = 0;        // replay serial of the playing log
+    // The log played before run_* (its vertices stay in its ring segment
+    // until the segment comes round again) and, per run_* draw, its matched
+    // draw's vertices (prepare_vertex_blend; 0 for none).
+    std::vector<DrawCall> prev_run_draws_;
+    unsigned prev_run_segment_ = 0;
+    std::uint64_t prev_run_serial_ = 0;
+    bool prev_run_valid_ = false;
+    struct BlendSource {
+        D3D12_GPU_VIRTUAL_ADDRESS vertices = 0;
+        std::uint32_t slot = 0;
+    };
+    std::vector<BlendSource> run_blend_vertices_;
+    // Candidate pairs of the playing log (current offset, previous offset,
+    // vertices, flags: bit 0 current / bit 1 previous in the resident buffer),
+    // checked on the GPU before the sequence's first sub-frame draws: a
+    // verdict per pair (vertices, positions unchanged, largest move, extent).
+    std::vector<std::array<std::uint32_t, 4>> blend_pairs_;
+    bool blend_validate_pending_ = false;
+    bool blend_validate_failed_ = false;
+    Microsoft::WRL::ComPtr<ID3D12Resource> blend_verdicts_;
+    D3D12_RESOURCE_STATES blend_verdicts_state_ = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+    Microsoft::WRL::ComPtr<ID3D12RootSignature> blend_validate_root_;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> blend_validate_pso_;
+    D3D12_GPU_VIRTUAL_ADDRESS resident_vertex_base_ = 0;
+    std::uint64_t resident_vertex_bytes_ = 0;
+    static constexpr std::uint32_t kMaxBlendPairs = 8192u;
+    bool ensure_blend_validation();
+    void record_blend_validation();
+    std::vector<std::uint32_t> blend_scratch_;
+    float vertex_blend_t_ = 1.0f;
+    std::uint64_t vertex_blend_draws_ = 0;
     struct SubframeScratch {
         Microsoft::WRL::ComPtr<ID3D12Resource> texture;
         D3D12_RESOURCE_DESC desc{};
@@ -1119,6 +1173,9 @@ private:
     D3D12_GPU_DESCRIPTOR_HANDLE bound_texture_table_{};
     D3D12_GPU_DESCRIPTOR_HANDLE bound_sampler_table_{};
     D3D12_GPU_VIRTUAL_ADDRESS bound_matrix_palette_ = 0;
+    D3D12_GPU_VIRTUAL_ADDRESS bound_blend_vertices_ = 0;
+    std::uint32_t bound_blend_slot_ = 0;
+    bool bound_vertex_blend_valid_ = false;
     D3D12_PRIMITIVE_TOPOLOGY bound_topology_ =
         D3D_PRIMITIVE_TOPOLOGY_UNDEFINED;
     D3D12_VERTEX_BUFFER_VIEW bound_vertex_view_{};
