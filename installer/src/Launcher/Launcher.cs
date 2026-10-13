@@ -256,6 +256,7 @@ namespace Nebula.Launcher
         private Size windowSize;
         private readonly List<int> refreshChoices = new List<int>();
         private readonly List<int> frameRateChoices = new List<int>();
+        private readonly List<int> upscalerChoices = GraphicsSettings.UpscalerChoices();
 
         public SettingsForm(LaunchSession session)
         {
@@ -332,7 +333,7 @@ namespace Nebula.Launcher
             image.Controls.Add(hudOutput);
             antiAliasing.Items.AddRange(GraphicsSettings.AntiAliasingModes);
             aaQuality.Items.AddRange(GraphicsSettings.AntiAliasingQualities);
-            upscaler.Items.AddRange(GraphicsSettings.Upscalers);
+            foreach (int value in upscalerChoices) upscaler.Items.Add(GraphicsSettings.UpscalerName(value));
             textureFilter.Items.AddRange(GraphicsSettings.TextureFilters);
             lighting.Items.AddRange(GraphicsSettings.LightingModes);
             drawDistance.Items.AddRange(GraphicsSettings.DrawDistances);
@@ -713,7 +714,8 @@ namespace Nebula.Launcher
             vsync.Checked = graphics.VSync;
             antiAliasing.SelectedIndex = graphics.AntiAliasing;
             aaQuality.SelectedIndex = graphics.Quality;
-            upscaler.SelectedIndex = graphics.Upscaler;
+            upscaler.SelectedIndex = upscalerChoices.Contains(graphics.Upscaler)
+                ? upscalerChoices.IndexOf(graphics.Upscaler) : upscalerChoices.IndexOf(1);
             sharpness.Value = graphics.Sharpness;
             textureFilter.SelectedIndex = graphics.TextureFilter;
             lighting.SelectedIndex = graphics.PerPixelLighting ? 0 : 1;
@@ -853,7 +855,8 @@ namespace Nebula.Launcher
                     graphics.FrameRate = frameRateChoices[frameRate.SelectedIndex];
                 graphics.AntiAliasing = antiAliasing.SelectedIndex;
                 graphics.Quality = aaQuality.SelectedIndex;
-                graphics.Upscaler = upscaler.SelectedIndex;
+                if (upscaler.SelectedIndex >= 0 && upscaler.SelectedIndex < upscalerChoices.Count)
+                    graphics.Upscaler = upscalerChoices[upscaler.SelectedIndex];
                 graphics.Sharpness = (int)sharpness.Value;
                 graphics.TextureFilter = textureFilter.SelectedIndex;
                 graphics.PerPixelLighting = lighting.SelectedIndex == 0;

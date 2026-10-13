@@ -20,6 +20,27 @@ namespace Nebula.Launcher
         public static readonly string[] AntiAliasingQualities = { "Low", "Medium", "High", "Ultra" };
         // Release runtimes are built without FSR 3 (upscaler 2); a saved 2 reads as FSR 1.
         public static readonly string[] Upscalers = { "Bilinear", "AMD FidelityFX FSR 1" };
+        // NVIDIA DLSS (upscaler 3) runs from the user's own Streamline install;
+        // Nebula ships none of NVIDIA's files.
+        public static string StreamlineDir { get { return Path.Combine(NebulaPaths.DataRoot, "vendor", "streamline-2.14.1"); } }
+        private static readonly string[] StreamlineFiles = { "sl.interposer.dll", "sl.common.dll", "sl.dlss.dll", "nvngx_dlss.dll" };
+        public static bool DlssInstalled()
+        {
+            foreach (string name in StreamlineFiles)
+                if (!File.Exists(Path.Combine(StreamlineDir, name))) return false;
+            return true;
+        }
+        // The upscaler setting values offered, in list order.
+        public static List<int> UpscalerChoices()
+        {
+            var choices = new List<int> { 0, 1 };
+            if (DlssInstalled()) choices.Add(3);
+            return choices;
+        }
+        public static string UpscalerName(int value)
+        {
+            return value == 3 ? "NVIDIA DLSS" : Upscalers[Math.Max(0, Math.Min(value, Upscalers.Length - 1))];
+        }
         private const int TemporalQualityCount = 5;
         public static readonly string[] TextureFilters = { "Trilinear", "2x anisotropic", "4x anisotropic", "8x anisotropic", "16x anisotropic" };
         public static readonly string[] LightingModes = { "Per pixel (enhanced)", "Per vertex (original)" };
@@ -120,7 +141,8 @@ namespace Nebula.Launcher
                 (rate == 0 || (rate >= 1 && rate <= 1000))) settings.FrameRate = (int)Math.Round(rate);
             settings.AntiAliasing = Choice(values, "aa", AntiAliasingModes.Length, settings.AntiAliasing);
             settings.Quality = Choice(values, "smaa_quality", AntiAliasingQualities.Length, settings.Quality);
-            settings.Upscaler = Math.Min(Choice(values, "upscaler", Upscalers.Length + 1, settings.Upscaler), Upscalers.Length - 1);
+            int upscaler = Choice(values, "upscaler", 4, settings.Upscaler);
+            settings.Upscaler = upscaler == 2 ? 1 : upscaler;
             settings.TemporalQuality = Choice(values, "temporal_quality", TemporalQualityCount, settings.TemporalQuality);
             settings.Sharpness = Math.Min(Choice(values, "sharpness", 101, settings.Sharpness), 100);
             settings.DrawDistance = Choice(values, "draw_distance", DrawDistances.Length, settings.DrawDistance);
