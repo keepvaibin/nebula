@@ -82,6 +82,20 @@ namespace {
     throw GxFatalError(message, 0u, op::kLoadBpReg);
 }
 
+[[noreturn]] void throw_tmem_load(std::uint32_t value, std::uint32_t command) {
+    char message[224]{};
+    std::snprintf(
+        message,
+        sizeof(message),
+        "[GxState] TMEM load not emulated: opcode=0x%02X register=0x%02X "
+        "value=0x%06X command=0x%08X fifo-offset=unavailable",
+        static_cast<unsigned>(op::kLoadBpReg),
+        static_cast<unsigned>(bp::kTexLoadStart),
+        static_cast<unsigned>(value),
+        static_cast<unsigned>(command));
+    throw GxFatalError(message, 0u, op::kLoadBpReg);
+}
+
 [[nodiscard]] constexpr bool in_u16_range(
     std::uint16_t value,
     std::uint16_t begin,
@@ -171,6 +185,7 @@ void validate_xf_write(
         (reg >= bp::kScissorTopLeft && reg <= bp::kSuLpSize) ||
         (reg >= bp::kPerf0TriBase && reg < bp::kPerf0TriBase + 2u) ||
         (reg >= bp::kRas1Ss0 && reg <= 0x59u) ||
+        reg == bp::kTexLoadStart ||
         (reg >= bp::kTlutSrcAddr && reg <= bp::kBusClock1) ||
         (reg >= 0x80u && reg <= 0xFDu) ||
         reg == bp::kBpMask;
@@ -328,6 +343,10 @@ void validate_xf_write(
 
     // Scissor offset  0x59
     case bp::kScissorOffset:
+        break;
+
+    // TMEM load start  0x63: only the empty load reaches here (GXTexModeSync)
+    case bp::kTexLoadStart:
         break;
 
     // TLUT load  0x64-0x65
@@ -595,6 +614,12 @@ void GxState::load_bp(std::uint32_t command) {
     if (reg == bp::kBpMask) {
         bp_mask_ = val;
         return;
+    }
+
+    // A TMEM load of nothing (GXTexModeSync) leaves every register and texture as it was;
+    // textures are read from main memory, so only a load of lines would need TMEM.
+    if (reg == bp::kTexLoadStart && (val & bp_mask_) != 0u) {
+        throw_tmem_load(val, command);
     }
 
     // Applies the current write mask. TEV color registers 0xE0-0xE7: data bit 23 routes the
