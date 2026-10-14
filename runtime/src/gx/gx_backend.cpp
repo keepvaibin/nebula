@@ -10448,7 +10448,8 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
                            : 0.0f;
             }();
             enhanced_split_ = split;
-            enhanced_ps_flags_ = renderer_.rt_reflections_active() ? kEnhancedRtReflections : 0u;
+            enhanced_ps_flags_ = (renderer_.rt_reflections_active() ? kEnhancedRtReflections : 0u) |
+                                 (renderer_.rt_lighting() ? kEnhancedRtLighting : 0u);
         }
         renderer_.begin_frame(chunk.present_swap_chain);
         {

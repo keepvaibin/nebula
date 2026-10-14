@@ -754,8 +754,9 @@ void enh_highlight(inout EnhShade e, float3 ldir, float3 radiance, bool metal) {
     }
 }
 
+// `sky_light`: hemisphere ambient and sky rim (off while the ray tracer lights the scene).
 void enh_channels(inout float4 col0, inout float4 col1, float3 P, float4 vtx_col0, float4 vtx_col1,
-                  inout EnhShade e, bool metal) {
+                  inout EnhShade e, bool metal, bool sky_light) {
     bool highlights = e.valid;
     [unroll] for (uint ch = 0u; ch < 2u; ++ch) {
         if (ch >= ppl_num_chans) {
@@ -770,7 +771,7 @@ void enh_channels(inout float4 col0, inout float4 col1, float3 P, float4 vtx_col
             const float3 amb = (((cc >> 6u) & 1u) != 0u ? vtx : ppl_chan_ambient[ch]).rgb;
             const float3 amb_lin = enh_lin(amb);
             float sky = 1.0;
-            if (e.valid) {
+            if (e.valid && sky_light) {
                 const float g = 1.0 - e.NoV;
                 sky = 1.0 + kEnhHemi * e.N.y + kEnhRim * g * g * g * saturate(0.5 + 0.5 * e.N.y);
             }
@@ -1614,7 +1615,7 @@ std::string ShaderGenerator::generate_ps(const PixelShaderKey& key) const {
         if (enh_lit) {
             emit(s,
                  "    if (enh_on) enh_channels(pin.col0, pin.col1, pin.ppl_pos, pin.ppl_vcol0,"
-                 " pin.ppl_vcol1, enh, %s);\n",
+                 " pin.ppl_vcol1, enh, %s, (uber_ps_header.w & 0x20000u) == 0u);\n",
                  enh_env != 0u ? "true" : "false");
         } else {
             s << "    if (enh_on) enh_key_highlight(enh, pin.ppl_pos);\n";
