@@ -894,8 +894,8 @@ bool test_unchanged_display_list_replays_prepared_packet_runs() {
 }
 
 int main(int argc, char** argv) try {
-    if (bp_write_observation_digest() != 0xb70fc6f9fdf8aea3ull) {
-        std::cerr << "BP write observation regression\n";
+    if (const std::uint64_t digest = bp_write_observation_digest(); digest != 0x38ae405df5b176beull) {
+        std::cerr << "BP write observation regression: digest 0x" << std::hex << digest << std::dec << '\n';
         return 1;
     }
     if (argc == 2 && std::string(argv[1]) == "--benchmark-frozen-lookup") return benchmark_frozen_fifo_lookup();
@@ -1436,6 +1436,46 @@ int main(int argc, char** argv) try {
         if (!expect(
                 bp_state.bp(0x41u) == 0x000019u,
                 "unknown BP write consumed the one-shot write mask")) {
+            return 1;
+        }
+    }
+
+    {
+        // GXTexModeSync's FIFO command (RMGE01 0x804BA0F8: 0x61, then 0x63000000; the
+        // 2026-10-14 crash report's fatal command): a TMEM load of nothing. It parses, changes
+        // no register or dirty state and consumes an armed write mask; a load of lines is
+        // still rejected.
+        FifoParser sync_parser;
+        GxState sync_state;
+        TestSink sync_sink;
+        sync_state.load_bp((0x41u << 24u) | 0x000018u);
+        (void)sync_state.consume_dirty();
+        const std::array<std::byte, 10> sync_bytes{
+            std::byte{0x61}, std::byte{0xFE}, std::byte{0x00}, std::byte{0x00}, std::byte{0x07},
+            std::byte{0x61}, std::byte{0x63}, std::byte{0x00}, std::byte{0x00}, std::byte{0x00}};
+        bool threw = false;
+        std::size_t consumed = 0u;
+        try {
+            consumed = sync_parser.run_available(sync_bytes, nullptr, sync_sink, sync_state);
+        } catch (const GxFatalError&) {
+            threw = true;
+        }
+        if (!expect(!threw && consumed == sync_bytes.size(), "GXTexModeSync command did not parse") ||
+            !expect(sync_state.bp(galaxy::gx::bp::kTexLoadStart) == 0u && sync_state.consume_dirty() == 0u,
+                    "GXTexModeSync changed register or dirty state")) {
+            return 1;
+        }
+        sync_state.load_bp((0x41u << 24u) | 0x000001u);
+        if (!expect(sync_state.bp(0x41u) == 0x000001u, "GXTexModeSync left the write mask armed")) {
+            return 1;
+        }
+        bool rejected = false;
+        try {
+            sync_state.load_bp((static_cast<std::uint32_t>(galaxy::gx::bp::kTexLoadStart) << 24u) | 0x000010u);
+        } catch (const GxFatalError& error) {
+            rejected = std::string(error.what()).find("TMEM load not emulated") != std::string::npos;
+        }
+        if (!expect(rejected && sync_state.bp(galaxy::gx::bp::kTexLoadStart) == 0u, "a TMEM load of lines was accepted")) {
             return 1;
         }
     }
