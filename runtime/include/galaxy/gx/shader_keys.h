@@ -116,13 +116,21 @@ inline constexpr std::uint8_t kPsKeyPplFiniteLightAttn = 0x08u;
 inline constexpr std::uint8_t kVsKeyEnhancedLighting = 0x40u;
 inline constexpr std::uint8_t kPsKeyEnhancedLighting = 0x10u;
 // PixelShaderKey::ind_reserved under kPsKeyEnhancedLighting: bits 0-7 the
-// texcoords generated from normals (environment maps), bit 8 a lit colour
-// channel reaches the TEV, bit 9 the surface class whose highlights the ray
-// tracer's reflections own (environment-mapped metal, indirect water), bits
-// 24-31 the tuning (GALAXY_ENHANCED_LIGHTING_TUNE) hash, zero by default.
+// texcoords generated from normals (environment maps), bit 8 colour channel 0
+// is lit with a diffuse light function, bit 9 the surface class whose
+// highlights the ray tracer's reflections own (environment-mapped metal,
+// indirect water), bits 10-17 colour channel 0's lights, 18-19 its diffuse
+// function, bit 20 spot attenuation, bit 21 ambient and bit 22 material from
+// the vertex colour, bits 24-31 the tuning (GALAXY_ENHANCED_LIGHTING_TUNE)
+// hash, zero by default.
 inline constexpr std::uint32_t kEnhancedEnvCoordMask = 0xFFu;
 inline constexpr std::uint32_t kEnhancedLit = 1u << 8u;
 inline constexpr std::uint32_t kEnhancedReflective = 1u << 9u;
+inline constexpr unsigned kEnhancedLightShift = 10u;
+inline constexpr unsigned kEnhancedDiffuseShift = 18u;
+inline constexpr std::uint32_t kEnhancedSpot = 1u << 20u;
+inline constexpr std::uint32_t kEnhancedAmbientVertex = 1u << 21u;
+inline constexpr std::uint32_t kEnhancedMaterialVertex = 1u << 22u;
 inline constexpr unsigned kEnhancedTuneShift = 24u;
 // GxPsConstants::uber_ps_header[3] for enhanced pipelines: bits 0-15 the
 // split column in render-target pixels (left of it the game's own lighting,

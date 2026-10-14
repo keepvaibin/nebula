@@ -91,11 +91,20 @@ std::uint32_t enhanced_lighting_material(const VertexShaderKey& vs, const PixelS
             env |= 1u << coord;
         }
     }
-    const bool lit = (surface.features & kRtSurfaceUnlit) == 0u;
-    if (!lit && env == 0u) {
+    // Colour channel 0 lit with a diffuse light function; its lights and sources.
+    std::uint32_t material = env;
+    const XfChannelCtrl colour = decode_xf_channel_ctrl(vs.channel[0]);
+    if ((surface.features & kRtSurfaceUnlit) == 0u && vs.num_chans != 0u && colour.lighting_enable &&
+        colour.light_mask != 0u && colour.atten_func != 1u) {
+        material |= kEnhancedLit | (static_cast<std::uint32_t>(colour.light_mask) << kEnhancedLightShift) |
+                    (static_cast<std::uint32_t>(colour.diffuse_func) << kEnhancedDiffuseShift) |
+                    (colour.atten_func == 3u ? kEnhancedSpot : 0u) |
+                    (colour.ambient_from_vertex ? kEnhancedAmbientVertex : 0u) |
+                    (colour.material_from_vertex ? kEnhancedMaterialVertex : 0u);
+    }
+    if (material == 0u) {
         return 0u;
     }
-    std::uint32_t material = env | (lit ? kEnhancedLit : 0u);
     if (surface.surface_class == RtSurfaceClass::Metal || surface.surface_class == RtSurfaceClass::Water) {
         material |= kEnhancedReflective;
     }

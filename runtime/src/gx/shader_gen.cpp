@@ -664,12 +664,12 @@ void ppl_apply(inout float4 col0, inout float4 col1, float3 wpos, float3 nrm_in,
 }
 )HLSL";
 
-// Enhanced lighting (enhanced_lighting.h), after kPplLighting and the kEnh* tuning constants.
-// Lit colour channels interpolate in linear light between their ambient and ambient-plus-light
-// colours (the channel's unlit and fully lit ends) under a soft shoulder; the ambient is a
-// view-up hemisphere with a sky rim. Highlights of the draw's lights: dielectric, or tinted by
-// the surface colour on environment-mapped (metal) draws. The game's specular channels and the
-// alpha channels keep the GX formulas, per pixel.
+// Enhanced lighting (enhanced_lighting.h), after kPplLighting and the kEnh* tuning constants. The
+// lit colour channel 0 (generate_ps, one block per light of the key) interpolates in linear light
+// between its ambient and ambient-plus-light colours (the channel's unlit and fully lit ends) under
+// a soft shoulder; the ambient is a view-up hemisphere with a sky rim. The key light's highlight:
+// dielectric, or tinted by the surface colour on environment-mapped (metal) draws. Other channels
+// keep the vertex stage's GX colours.
 static constexpr const char* kEnhancedLighting = R"HLSL(
 float3 enh_lin(float3 c) { return pow(max(c, 0.0), 2.2); }
 float3 enh_srgb(float3 c) { return pow(max(c, 0.0), 1.0 / 2.2); }
@@ -690,7 +690,7 @@ float enh_vis(float NoL, float NoV, float a) {
 }
 
 // Light n at P: direction towards it, the GX spot attenuation (function 3) or none, colour.
-void enh_light(uint n, uint ctrl, float3 P, out float3 ldir, out float attn, out float3 lcol) {
+void enh_light(uint n, bool spot, float3 P, out float3 ldir, out float attn, out float3 lcol) {
     const uint e = ppl_mtx_palette_base + 0x180u + 4u * n;
     const uint lcw = asuint(mtx_palette[e].w);
     const float4 le1 = mtx_palette[e + 1u];
@@ -701,7 +701,7 @@ void enh_light(uint n, uint ctrl, float3 P, out float3 ldir, out float attn, out
     const float dist = sqrt(dist2);
     ldir = dist > 0.0 ? ldelta / dist : float3(0.0, 0.0, 1.0);
     attn = 1.0;
-    if (((ctrl >> 9u) & 3u) == 3u) {
+    if (spot) {
         const float c = max(0.0, dot(ldir, le3.yzw));
         const float denom = dot(float3(le1.w, le2.x, le2.y), float3(1.0, dist, dist2));
         attn = denom != 0.0 ? max(0.0, le1.x + le1.y * c + le1.z * c * c) / denom : 0.0;
@@ -715,10 +715,9 @@ struct EnhShade {
     float3 V;
     float  NoV;
     float  env_gain;  // environment lookups: Fresnel gain
-    float3 spec;      // dielectric highlights, linear, added after the TEV
-    float3 metal;     // metal lobes, linear, times the surface's Fresnel after the TEV
-    float  metal_fw;  // the lobes' Schlick weight times their luminance
-    float  metal_w;   // the lobes' luminance
+    float3 spec;      // dielectric highlight, linear, added after the TEV
+    float3 metal;     // metal lobe, linear, times the surface's Fresnel after the TEV
+    float  metal_fw;  // its Schlick weight
 };
 
 EnhShade enh_begin(float3 P, float3 n) {
@@ -742,91 +741,23 @@ void enh_highlight(inout EnhShade e, float3 ldir, float3 radiance, bool metal) {
     const float fw = pow(1.0 - saturate(dot(e.V, H)), 5.0);
     if (metal) {
         const float a = kEnhMetalRough * kEnhMetalRough;
-        const float3 lobe = radiance * (NoL * enh_ggx(NoH, a * a) * enh_vis(NoL, e.NoV, a) * kEnhMetal);
-        const float w = dot(lobe, float3(0.2126, 0.7152, 0.0722));
-        e.metal += lobe;
-        e.metal_fw += w * fw;
-        e.metal_w += w;
+        e.metal = radiance * (NoL * enh_ggx(NoH, a * a) * enh_vis(NoL, e.NoV, a) * kEnhMetal);
+        e.metal_fw = fw;
     } else {
         const float a = kEnhSheenRough * kEnhSheenRough;
-        e.spec += radiance * (NoL * enh_ggx(NoH, a * a) * enh_vis(NoL, e.NoV, a) * kEnhSheen *
-                              (0.04 + 0.96 * fw));
+        e.spec = radiance * (NoL * enh_ggx(NoH, a * a) * enh_vis(NoL, e.NoV, a) * kEnhSheen *
+                             (0.04 + 0.96 * fw));
     }
 }
 
-// `sky_light`: hemisphere ambient and sky rim (off while the ray tracer lights the scene).
-void enh_channels(inout float4 col0, inout float4 col1, float3 P, float4 vtx_col0, float4 vtx_col1,
-                  inout EnhShade e, bool metal, bool sky_light) {
-    bool highlights = e.valid;
-    [unroll] for (uint ch = 0u; ch < 2u; ++ch) {
-        if (ch >= ppl_num_chans) {
-            continue;
-        }
-        const float4 vtx = ch == 0u ? vtx_col0 : vtx_col1;
-        const uint cc = ppl_channel[ch];
-        const uint ca = ppl_channel[2u + ch];
-        float4 result = ch == 0u ? col0 : col1;
-        if (((cc >> 1u) & 1u) != 0u && ((cc >> 9u) & 3u) != 1u) {
-            const float3 mat = ((cc & 1u) != 0u ? vtx : ppl_chan_material[ch]).rgb;
-            const float3 amb = (((cc >> 6u) & 1u) != 0u ? vtx : ppl_chan_ambient[ch]).rgb;
-            const float3 amb_lin = enh_lin(amb);
-            float sky = 1.0;
-            if (e.valid && sky_light) {
-                const float g = 1.0 - e.NoV;
-                sky = 1.0 + kEnhHemi * e.N.y + kEnhRim * g * g * g * saturate(0.5 + 0.5 * e.N.y);
-            }
-            float3 acc = amb_lin * sky;
-            const uint mask = ((cc >> 2u) & 0xFu) | (((cc >> 11u) & 0xFu) << 4u);
-            const uint dfn = (cc >> 7u) & 3u;
-            [loop] for (uint n = 0u; n < 8u; ++n) {
-                if (((mask >> n) & 1u) == 0u) {
-                    continue;
-                }
-                float3 ldir;
-                float attn;
-                float3 lcol;
-                enh_light(n, cc, P, ldir, attn, lcol);
-                const float nl = dot(e.N, ldir);
-                const float x = attn * (dfn == 1u ? nl : dfn == 2u ? max(nl, 0.0) : 1.0);
-                acc += (enh_lin(amb + lcol) - amb_lin) * x;
-                if (highlights && dfn != 0u) {
-                    enh_highlight(e, ldir, enh_lin(lcol) * attn, metal);
-                }
-            }
-            highlights = false;
-            result.rgb = mat * enh_srgb(enh_shoulder(max(acc, 0.0)));
-        } else if (((cc >> 1u) & 1u) != 0u) {
-            int3 mat_c_i = int3(round(((cc & 1u) != 0u ? vtx : ppl_chan_material[ch]).rgb * 255.0));
-            int3 lacc_i = int3(round((((cc >> 6u) & 1u) != 0u ? vtx : ppl_chan_ambient[ch]).rgb * 255.0));
-            int unused_a = 0;
-            const uint mask = ((cc >> 2u) & 0xFu) | (((cc >> 11u) & 0xFu) << 4u);
-            [loop] for (uint n = 0u; n < 8u; ++n) {
-                if (((mask >> n) & 1u) != 0u) {
-                    ppl_add_light(n, cc, false, P, e.N, lacc_i, unused_a);
-                }
-            }
-            lacc_i = clamp(lacc_i, int3(0,0,0), int3(255,255,255));
-            result.rgb = float3((mat_c_i * (lacc_i + (lacc_i >> 7))) >> 8) / 255.0;
-        }
-        if (((ca >> 1u) & 1u) != 0u) {
-            int mat_a_i = int(round(((ca & 1u) != 0u ? vtx.a : ppl_chan_material[ch].a) * 255.0));
-            int lacc_a_i = int(round((((ca >> 6u) & 1u) != 0u ? vtx.a : ppl_chan_ambient[ch].a) * 255.0));
-            int3 unused_c = int3(0,0,0);
-            const uint mask = ((ca >> 2u) & 0xFu) | (((ca >> 11u) & 0xFu) << 4u);
-            [loop] for (uint n = 0u; n < 8u; ++n) {
-                if (((mask >> n) & 1u) != 0u) {
-                    ppl_add_light(n, ca, true, P, e.N, unused_c, lacc_a_i);
-                }
-            }
-            lacc_a_i = clamp(lacc_a_i, 0, 255);
-            result.a = float((mat_a_i * (lacc_a_i + (lacc_a_i >> 7))) >> 8) / 255.0;
-        }
-        if (ch == 0u) {
-            col0 = result;
-        } else {
-            col1 = result;
-        }
+// The ambient's sky term: a view-up hemisphere (mean 1) and a rim of sky light on the upper half;
+// 1 while the ray tracer lights the scene (`sky_light` false).
+float enh_sky(EnhShade e, bool sky_light) {
+    if (!e.valid || !sky_light) {
+        return 1.0;
     }
+    const float g = 1.0 - e.NoV;
+    return 1.0 + kEnhHemi * e.N.y + kEnhRim * g * g * g * saturate(0.5 + 0.5 * e.N.y);
 }
 
 // Unlit environment-mapped draws: the highlight of light 0, the last actor key light the game
@@ -838,7 +769,7 @@ void enh_key_highlight(inout EnhShade e, float3 P) {
     float3 ldir;
     float attn;
     float3 lcol;
-    enh_light(0u, 0u, P, ldir, attn, lcol);
+    enh_light(0u, false, P, ldir, attn, lcol);
     if (any(lcol > 0.0)) {
         enh_highlight(e, ldir, enh_lin(lcol), true);
     }
@@ -847,8 +778,7 @@ void enh_key_highlight(inout EnhShade e, float3 P) {
 float3 enh_finish(float3 frag, EnhShade e) {
     float3 c = enh_lin(frag);
     const float3 f0 = saturate(c);
-    const float fw = e.metal_w > 0.0 ? e.metal_fw / e.metal_w : 0.0;
-    return enh_srgb(c + e.spec + e.metal * (f0 + (1.0 - f0) * fw));
+    return enh_srgb(c + e.spec + e.metal * (f0 + (1.0 - f0) * e.metal_fw));
 }
 )HLSL";
 
@@ -1520,10 +1450,14 @@ std::string ShaderGenerator::generate_ps(const PixelShaderKey& key) const {
     } else {
         s << (ppl_inputs ? kPsStructsPpl : kPsStructs);
     }
-    if (ppl_inputs) {
+    if (ppl) {
         const bool finite = (key.reserved & kPsKeyPplFiniteLightAttn) != 0u;
         emit(s, "static const bool ppl_finite_attn = %s;\n", finite ? "true" : "false");
         s << kPplLighting;
+    } else if (enhanced) {
+        // Its constants and the palette, without the per-pixel GX functions.
+        const std::string_view ppl_decl(kPplLighting);
+        s << ppl_decl.substr(0, ppl_decl.find("void ppl_add_light"));
     }
     if (enhanced) {
         const EnhancedLightingTuning& t = enhanced_lighting_tuning();
@@ -1613,10 +1547,42 @@ std::string ShaderGenerator::generate_ps(const PixelShaderKey& key) const {
         s << "    const bool enh_on = pin.pos.x >= float(uber_ps_header.w & 0xFFFFu);\n";
         s << "    EnhShade enh = enh_begin(pin.ppl_pos, pin.ppl_nrm);\n";
         if (enh_lit) {
-            emit(s,
-                 "    if (enh_on) enh_channels(pin.col0, pin.col1, pin.ppl_pos, pin.ppl_vcol0,"
-                 " pin.ppl_vcol1, enh, %s, (uber_ps_header.w & 0x20000u) == 0u);\n",
-                 enh_env != 0u ? "true" : "false");
+            // Colour channel 0 (ind_reserved bits 10-22): its lights in key order, the first one's
+            // highlight.
+            const std::uint32_t m = key.ind_reserved;
+            const unsigned lights = (m >> kEnhancedLightShift) & 0xFFu;
+            const unsigned dfn = (m >> kEnhancedDiffuseShift) & 3u;
+            const bool spot = (m & kEnhancedSpot) != 0u;
+            s << "    if (enh_on) {\n";
+            emit(s, "        const float3 enh_mat = %s.rgb;\n",
+                 (m & kEnhancedMaterialVertex) != 0u ? "pin.ppl_vcol0" : "ppl_chan_material[0]");
+            emit(s, "        const float3 enh_amb = %s.rgb;\n",
+                 (m & kEnhancedAmbientVertex) != 0u ? "pin.ppl_vcol0" : "ppl_chan_ambient[0]");
+            s << "        const float3 enh_amb_lin = enh_lin(enh_amb);\n"
+                 "        float3 enh_acc = enh_amb_lin * enh_sky(enh, (uber_ps_header.w & 0x20000u) == 0u);\n";
+            bool first = true;
+            for (unsigned n = 0; n < 8u; ++n) {
+                if ((lights & (1u << n)) == 0u) continue;
+                emit(s,
+                     "        {\n"
+                     "            float3 ldir;\n"
+                     "            float attn;\n"
+                     "            float3 lcol;\n"
+                     "            enh_light(%uu, %s, pin.ppl_pos, ldir, attn, lcol);\n",
+                     n, spot ? "true" : "false");
+                s << (dfn == 1u   ? "            const float x = attn * dot(enh.N, ldir);\n"
+                      : dfn == 2u ? "            const float x = attn * max(dot(enh.N, ldir), 0.0);\n"
+                                  : "            const float x = attn;\n");
+                s << "            enh_acc += (enh_lin(enh_amb + lcol) - enh_amb_lin) * x;\n";
+                if (first && dfn != 0u) {
+                    emit(s, "            if (enh.valid) enh_highlight(enh, ldir, enh_lin(lcol) * attn, %s);\n",
+                         enh_env != 0u ? "true" : "false");
+                }
+                s << "        }\n";
+                first = false;
+            }
+            s << "        pin.col0.rgb = enh_mat * enh_srgb(enh_shoulder(max(enh_acc, 0.0)));\n"
+                 "    }\n";
         } else {
             s << "    if (enh_on) enh_key_highlight(enh, pin.ppl_pos);\n";
         }
