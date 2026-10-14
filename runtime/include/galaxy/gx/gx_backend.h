@@ -810,10 +810,12 @@ private:
     std::uint32_t rt_palette_lights_ = 0;
     std::uint32_t rt_draw_lights_ = 0;
     // GALAXY_TRACE_LIGHTS: snapshots with moved lights, snapshots added for them, TSC cycles of
-    // the actor-light work, and palette snapshots with the cycles of their allocation and copy.
+    // the actor-light work and its timed regions, and palette snapshots with the cycles of their
+    // allocation and copy.
     std::uint64_t rt_light_uploads_ = 0;
     std::uint64_t rt_light_forced_ = 0;
     std::uint64_t rt_light_cycles_ = 0;
+    std::uint64_t rt_light_regions_ = 0;
     std::uint64_t rt_snapshot_count_ = 0;
     std::uint64_t rt_snapshot_cycles_ = 0;
     void aim_rt_scene_lights(const std::array<float, 12>* view);

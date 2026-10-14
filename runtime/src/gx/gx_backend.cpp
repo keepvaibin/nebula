@@ -318,6 +318,7 @@ bool capture_pixel_frame_requested(std::uint64_t frame) {
 // Test aid for runs without a display: every Nth swap-chain present is read
 // back and written to GALAXY_PRESENT_SNAPSHOT_DIR\present_<n>.ppm, limited to
 // presents GALAXY_PRESENT_SNAPSHOT_FIRST..GALAXY_PRESENT_SNAPSHOT_LAST.
+// GALAXY_PRESENT_SNAPSHOT_PAIR=1 also writes the present after each.
 std::string present_snapshot_path() {
     const auto read_u64 = [](const char* name, std::uint64_t fallback) {
         char value[32]{};
@@ -326,6 +327,7 @@ std::string present_snapshot_path() {
             ? std::strtoull(value, nullptr, 10) : fallback;
     };
     static const std::uint64_t every = read_u64("GALAXY_PRESENT_SNAPSHOT_EVERY", 0u);
+    static const bool pair = read_u64("GALAXY_PRESENT_SNAPSHOT_PAIR", 0u) != 0u;
     static const std::uint64_t first = read_u64("GALAXY_PRESENT_SNAPSHOT_FIRST", 0u);
     static const std::uint64_t last = read_u64(
         "GALAXY_PRESENT_SNAPSHOT_LAST", std::numeric_limits<std::uint64_t>::max());
@@ -337,8 +339,9 @@ std::string present_snapshot_path() {
             ? std::string(value) : std::string{};
     }();
     static std::uint64_t presents = 0u;
-    if (every == 0u || directory.empty() || ++presents % every != 0u ||
-        presents < first || presents > last) {
+    ++presents;
+    if (every == 0u || directory.empty() || presents < first || presents > last ||
+        (presents % every != 0u && !(pair && presents % every == 1u % every))) {
         return {};
     }
     return directory + "\\present_" + std::to_string(presents) + ".ppm";
@@ -7018,13 +7021,15 @@ bool GxBackend::begin_rt_batch(const DrawCall& call, RtDrawInfo& info) {
 
 // Actor lights (actor_lights.h): each scene's follow-camera lights go towards the traced sun,
 // else to the game point light the ray tracer weighs strongest; with neither, or without the
-// scene camera, they stay the game's. GALAXY_RT_ACTOR_LIGHTS=0 always leaves them.
+// scene camera, they stay the game's. GALAXY_RT_ACTOR_LIGHTS=0 always leaves them; =2 moves them in
+// odd scenes only (a frame-to-frame comparison).
 void GxBackend::aim_rt_scene_lights(const std::array<float, 12>* view) {
-    static const bool enabled = read_env_u64("GALAXY_RT_ACTOR_LIGHTS", 1u) != 0u;
+    static const std::uint64_t mode = read_env_u64("GALAXY_RT_ACTOR_LIGHTS", 1u);
     rt_light_aim_ = {};
     rt_follow_lights_ = 0u;
     rt_follow_pending_ = 0u;
     ++rt_light_serial_;
+    const bool enabled = mode == 1u || (mode == 2u && (rt_light_serial_ & 1u) != 0u);
     std::array<float, 3> sun{};
     if (view != nullptr && enabled && renderer_.rt_sun_direction(sun)) {
         rt_light_aim_ = aim_at_sun(*view, sun);
@@ -7047,17 +7052,27 @@ void GxBackend::aim_rt_scene_lights(const std::array<float, 12>* view) {
         actor_light_trace_level() >= 2u || (trace_actor_lights_enabled() && rt_light_serial_ % 600u == 1u);
     if (report) [[unlikely]] {
         // Running totals: snapshots with moved lights, snapshots added for them, TSC cycles of the
-        // actor-light work, palette snapshots and their cycles (allocation and copy), TSC and clock.
+        // actor-light work and the timed regions they span, palette snapshots and their cycles
+        // (allocation and copy), TSC and clock; `pair`: the mean cycles of one empty timing pair.
+        static const std::uint64_t pair = [] {
+            std::uint64_t total = 0u;
+            for (unsigned i = 0; i < 4096u; ++i) {
+                const std::uint64_t a = __rdtsc();
+                total += __rdtsc() - a;
+            }
+            return total / 4096u;
+        }();
         const auto ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
             std::chrono::steady_clock::now().time_since_epoch());
         std::fprintf(stderr,
                      "[rt-actor-light] scene=%u aim=%s key=(%.3f %.3f %.3f) moved=%llu added=%llu cycles=%llu "
-                     "snapshots=%llu snapshot-cycles=%llu tsc=%llu ns=%lld\n",
+                     "regions=%llu pair=%llu snapshots=%llu snapshot-cycles=%llu tsc=%llu ns=%lld\n",
                      rt_light_serial_, !rt_light_aim_.valid ? "none" : rt_light_aim_.point ? "point" : "sun",
                      rt_light_aim_.key[0], rt_light_aim_.key[1], rt_light_aim_.key[2],
                      static_cast<unsigned long long>(rt_light_uploads_),
                      static_cast<unsigned long long>(rt_light_forced_),
                      static_cast<unsigned long long>(rt_light_cycles_),
+                     static_cast<unsigned long long>(rt_light_regions_), static_cast<unsigned long long>(pair),
                      static_cast<unsigned long long>(rt_snapshot_count_),
                      static_cast<unsigned long long>(rt_snapshot_cycles_), static_cast<unsigned long long>(__rdtsc()),
                      static_cast<long long>(ns.count()));
@@ -7101,6 +7116,7 @@ void GxBackend::write_rt_lights(std::uint32_t* palette) noexcept {
                      static_cast<std::uint8_t>(rt_draw_lights_ & 0x02u), rt_light_aim_, origin);
     if (start != 0u) [[unlikely]] {
         rt_light_cycles_ += __rdtsc() - start;
+        ++rt_light_regions_;
     }
 }
 
@@ -12301,6 +12317,7 @@ ID3D12PipelineState* GxBackend::flush_draw_state(
         static unsigned traced = 0u;
         if (start != 0u) [[unlikely]] {
             rt_light_cycles_ += __rdtsc() - start;
+            ++rt_light_regions_;
         }
         if (start != 0u && (lights & 0xFFu) != 0u && traced < 24u) [[unlikely]] {
             ++traced;

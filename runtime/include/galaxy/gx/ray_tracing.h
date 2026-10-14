@@ -285,7 +285,9 @@ private:
     // a hit at distance 0), _CONTACT_RANGE, _SKY (sky hue 0-1), _FALLBACK, _EMISSIVE, the sun's
     // world direction _SUN (x,y,z), _SUN_SIZE (degrees), _SUN_LIGHT, _SUN_COLOR (r,g,b), the sky
     // light's weight _SKY_LIGHT, the point lights' _POINT_LIGHT and _POINT_RANGE, and _VIEW=1
-    // (the lighting alone; 2, 3, 4: the sun's, the sky's, the point lights' light) tune it.
+    // (the lighting alone; 2, 3, 4: the sun's, the sky's, the point lights' light; 5: the glow
+    // terms; 6: the distance to what shadows the sun, 0.05 + 0.45 log10(eye units) / 6 on screen)
+    // tune it.
     struct LightSlot {
         RtView view{};
         std::array<float, 12> camera{};

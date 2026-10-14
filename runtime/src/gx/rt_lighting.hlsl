@@ -31,7 +31,8 @@ cbuffer RtLight : register(b0)
     uint g_factor;              // EFB pixels per sample side
     uint g_flags;               // bit 0: previous samples usable; bit 1: previous picture usable;
                                 // bits 2-4: results hold the sun's, the sky's, the point lights'
-                                // light alone
+                                // light alone; bit 5: glow view; bit 6: the distance to
+                                // what shadows the sun
     uint g_history_frames;      // accumulation limit
     float4 g_reproject[3];      // previous samples' eye position from this frame's (3x4 rows)
     float4 g_picture[3];        // the previous picture's eye position from this frame's
@@ -840,6 +841,17 @@ void TraceCS(uint3 id : SV_DispatchThreadID)
         query.TraceRayInline(g_scene, RAY_FLAG_NONE, 0xFFu, ray);
         query.Proceed();
         sun = query.CommittedStatus() == COMMITTED_TRIANGLE_HIT ? 0.0f : facing_sun;
+        if ((g_flags & 64u) != 0u) {
+            // GALAXY_RT_VIEW=6: the nearest blocker's distance up to 1e6, past the sun's reach,
+            // 0.1 + 0.9 log10(t) / 6 (0: none).
+            RayQuery<RAY_FLAG_FORCE_OPAQUE | RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES> nearest;
+            ray.TMax = 1.0e6f;
+            nearest.TraceRayInline(g_scene, RAY_FLAG_NONE, 0xFFu, ray);
+            nearest.Proceed();
+            sun = nearest.CommittedStatus() == COMMITTED_TRIANGLE_HIT
+                ? 0.1f + 0.9f * saturate(log10(max(nearest.CommittedRayT(), 1.0f)) / 6.0f)
+                : 0.0f;
+        }
     }
 
     // The point lights: one picked in proportion to its unshadowed light, one shadow ray to it;
@@ -1226,8 +1238,8 @@ void SpatialBCS(uint3 id : SV_DispatchThreadID)
             }
         }
     }
-    if ((g_flags & 4u) != 0u) {
-        m = light.sun.xxx;     // GALAXY_RT_VIEW=2: the sun's light alone
+    if ((g_flags & (4u | 64u)) != 0u) {
+        m = light.sun.xxx;     // GALAXY_RT_VIEW=2: the sun's light alone (6: its blocker's distance)
     } else if ((g_flags & 8u) != 0u) {
         m = light.sky;         // GALAXY_RT_VIEW=3: the sky and bounce light alone
     } else if ((g_flags & 16u) != 0u) {
