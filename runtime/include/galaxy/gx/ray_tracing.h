@@ -203,6 +203,13 @@ public:
     // writes over the EFB colour (render target) reading the depth (PIXEL_SHADER_RESOURCE at
     // `depth_table`). A sub-frame's replay passes `replay` (its camera from write_reprojection).
     [[nodiscard]] bool post_active() const noexcept { return lighting_active() && post_; }
+    // The lighting of the last traced scene as a texture (RGBA16F, one texel per sample) for the
+    // translucent draws after it: written after the composite, PIXEL_SHADER_RESOURCE otherwise.
+    void write_light_texture(ID3D12GraphicsCommandList* list, int slot);
+    [[nodiscard]] bool light_texture_ready() const noexcept { return light_tex_ready_; }
+    [[nodiscard]] ID3D12Resource* light_texture() const noexcept { return light_tex_.Get(); }
+    [[nodiscard]] D3D12_CPU_DESCRIPTOR_HANDLE light_texture_srv() const noexcept { return light_tex_srv_; }
+    [[nodiscard]] float light_texture_scale() const noexcept { return light_tex_scale_; }
     void post_prepare(ID3D12GraphicsCommandList* list, D3D12_GPU_DESCRIPTOR_HANDLE color_depth_table,
                       std::uint32_t width, std::uint32_t height, bool replay);
     void post_finish(ID3D12GraphicsCommandList* list, D3D12_CPU_DESCRIPTOR_HANDLE target,
@@ -376,6 +383,18 @@ private:
     Microsoft::WRL::ComPtr<ID3D12PipelineState> glow_base_pso_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> sky_state_pso_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> surface_emit_pso_;
+    // The lighting texture for lit translucents (rt_lighting.hlsl LightTexturePS).
+    Microsoft::WRL::ComPtr<ID3D12RootSignature> light_tex_root_;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> light_tex_pso_;
+    Microsoft::WRL::ComPtr<ID3D12Resource> light_tex_;
+    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> light_tex_rtv_heap_;
+    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> light_tex_srv_heap_;
+    D3D12_CPU_DESCRIPTOR_HANDLE light_tex_srv_{};
+    D3D12_RESOURCE_STATES light_tex_state_ = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+    std::uint32_t light_tex_width_ = 0u;
+    std::uint32_t light_tex_height_ = 0u;
+    float light_tex_scale_ = 0.5f;
+    bool light_tex_ready_ = false;
     // The cinematic finish (rt_post.hlsl): the picture before it (RGBA8), its bright part, blur and
     // light shafts at a quarter of the pixels, the focus and core radius over time.
     Microsoft::WRL::ComPtr<ID3D12RootSignature> post_root_;
@@ -479,8 +498,8 @@ private:
     float glow_model_spill_ = 1.0f;     // GALAXY_RT_GLOW_MODEL_SPILL
     float sky_distance_ = 60000.0f; // GALAXY_RT_SKY_DISTANCE: farther surfaces are the sky (backdrops)
     bool post_ = true;              // GALAXY_RT_POST: the cinematic finish
-    float post_bloom_ = 0.45f;      // GALAXY_RT_POST_BLOOM
-    float post_threshold_ = 0.82f;  // GALAXY_RT_POST_THRESHOLD: luminance where bloom starts
+    float post_bloom_ = 0.4f;       // GALAXY_RT_POST_BLOOM
+    float post_threshold_ = 0.9f;   // GALAXY_RT_POST_THRESHOLD: luminance where bloom starts
     float post_shafts_ = 0.6f;      // GALAXY_RT_POST_SHAFTS
     float post_dof_ = 3.0f;         // GALAXY_RT_POST_DOF: largest far blur (EFB pixels at 1x; 0 none)
     float post_grade_ = 1.0f;       // GALAXY_RT_POST_GRADE

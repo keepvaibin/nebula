@@ -637,6 +637,14 @@ PSOut main(PSIn pin) {
         frag.rgb *= ztex_params.z;
         frag.rgb += max(max(frag.r, max(frag.g, frag.b)) - 1.0, 0.0) * ztex_params.w;
     }
+    // Lit translucents (dust, smoke, splashes: blended scene draws under ray-traced lighting) take
+    // the light of the surface behind them, a little softened (texture 7: the lighting per sample).
+    if ((output_flags & 0x40u) != 0u) {
+        uint lit_w, lit_h;
+        tex[7].GetDimensions(lit_w, lit_h);
+        const int2 lit_at = min(int2(pin.pos.xy * ztex_params.z), int2(lit_w, lit_h) - 1);
+        frag.rgb *= clamp(tex[7].Load(int3(lit_at, 0)).rgb, 0.45, 1.35);
+    }
     float tev_alpha = saturate(frag.a);
     uint4 efb_color = uint4(round(saturate(frag) * 255.0));
     if (rgba6) {

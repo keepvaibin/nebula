@@ -12030,16 +12030,32 @@ ID3D12PipelineState* GxBackend::flush_draw_state(
         (dirty & GxState::kDirtyTex) == 0u &&
         !texture_bindings_dirty_ &&
         texture_map_mask == current_texture_binding_key_mask_;
-    const TextureBindingKey texture_binding_key = texture_binding_key_fresh
+    TextureBindingKey texture_binding_key = texture_binding_key_fresh
         ? current_texture_binding_key_
         : capture_texture_binding_key(texture_map_mask);
+    // Lit translucents: blended (not additive) scene draws of the translucent phases while the ray
+    // tracer's lighting texture is ready, with map 7 free for it.
+    {
+        const BlendMode b = state_.blend_mode();
+        using motion::ScenePhase;
+        lit_translucent_ =
+            scene_phase_ && side_layer_ == kSceneLayer && (texture_map_mask & 0x80u) == 0u && b.blend_enable &&
+            !b.logic_op_enable && !b.subtract && b.color_update && b.dst_factor != BlendFactor::One &&
+            (rt_phase_ == static_cast<std::uint8_t>(ScenePhase::Xlu) ||
+             rt_phase_ == static_cast<std::uint8_t>(ScenePhase::ListXlu)) &&
+            renderer_.rt_light_texture_ready() && renderer_.rt_light_texture() != nullptr;
+        if ((texture_map_mask & 0x80u) == 0u) {
+            texture_binding_key.regs[7u * 5u] = lit_translucent_ ? kLitTranslucentKey : 0u;
+        }
+    }
     // A dirty BP input requires a fresh capture, but writes to unused maps,
     // image1/2 or restored register values can leave the effective key equal.
     // Explicit frame/resource invalidation still forces work through tex_dirty.
     const bool texture_binding_changed =
         !current_texture_binding_key_valid_ ||
         (!texture_binding_key_fresh &&
-         !(texture_binding_key == current_texture_binding_key_));
+         !(texture_binding_key == current_texture_binding_key_)) ||
+        texture_binding_key.regs[7u * 5u] != current_texture_binding_key_.regs[7u * 5u];
     const bool tex_dirty = frame_bindings_dirty_ ||
         texture_bindings_dirty_ || texture_binding_changed;
 
@@ -12068,6 +12084,14 @@ ID3D12PipelineState* GxBackend::flush_draw_state(
                                                           : (ps_key_.output_flags & ~0x20u));
         if (flags != ps_key_.output_flags) {
             ps_key_.output_flags = flags;
+            current_ps_hash_ = ps_key_.hash();
+            glow_changed = true;
+        }
+        // Lit translucents (output_flags bit 6): the lighting texture in map 7.
+        const auto lit_flags = static_cast<std::uint8_t>(lit_translucent_ ? (ps_key_.output_flags | 0x40u)
+                                                                          : (ps_key_.output_flags & ~0x40u));
+        if (lit_flags != ps_key_.output_flags) {
+            ps_key_.output_flags = lit_flags;
             current_ps_hash_ = ps_key_.hash();
             glow_changed = true;
         }
@@ -12474,7 +12498,9 @@ ID3D12PipelineState* GxBackend::flush_draw_state(
         fill_ps_constants(state_, ps_c);
         ps_c.ztex_params[1] = 1.0f / static_cast<float>(renderer_.efb_scale());
         ps_c.ztex_params[2] =
-            (ps_key_.output_flags & 0x20u) != 0u ? renderer_.rt_glow_exposure(glow_kind_ == 2u) : 0.0f;
+            (ps_key_.output_flags & 0x20u) != 0u   ? renderer_.rt_glow_exposure(glow_kind_ == 2u)
+            : (ps_key_.output_flags & 0x40u) != 0u ? renderer_.rt_light_texture_scale()
+                                                   : 0.0f;
         ps_c.ztex_params[3] =
             (ps_key_.output_flags & 0x20u) != 0u ? renderer_.rt_glow_spill(glow_kind_ == 2u) : 0.0f;
         apply_uber_ps_key(ps_key_, ps_c);
@@ -12616,6 +12642,11 @@ ID3D12PipelineState* GxBackend::flush_draw_state(
                     table_key.widths[m] = th.width;
                     table_key.heights[m] = th.height;
                 }
+                const bool lit_table = lit_translucent_ && texture_handles[7].resource == nullptr;
+                if (lit_table) {
+                    table_key.resources[7] = reinterpret_cast<std::uintptr_t>(renderer_.rt_light_texture());
+                    table_key.srv_indices[7] = 0xFFFFFFFFu;
+                }
 
                 const auto table_start = time_detail
                     ? std::chrono::steady_clock::now()
@@ -12646,6 +12677,9 @@ ID3D12PipelineState* GxBackend::flush_draw_state(
                         } else {
                             sources[m] = texture_cache_.null_srv();
                         }
+                    }
+                    if (lit_table) {
+                        sources[7] = renderer_.rt_light_texture_srv();
                     }
                     // CPU-only sources, one contiguous frame-owned table.
                     const UINT destination_size = num_maps;

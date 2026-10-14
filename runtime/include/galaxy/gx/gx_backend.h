@@ -791,6 +791,10 @@ private:
     bool rt_glow_eligible_ = false;
     // The glow exposure the PS constants carry: 0 none, 1 sprite, 2 model.
     std::uint8_t glow_kind_ = 0u;
+    // Blended scene draws of the translucent phases under ray-traced lighting take its texture in
+    // map 7 (output_flags bit 6); the texture binding key marks them in map 7's TEX_MODE0 word.
+    bool lit_translucent_ = false;
+    static constexpr std::uint32_t kLitTranslucentKey = 0x4C495431u;
     bool rt_scene_traced_ = true;
     bool rt_view_set_ = false;
     [[nodiscard]] bool rt_geometry_draw() const noexcept;

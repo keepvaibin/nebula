@@ -7692,6 +7692,7 @@ void RendererD3D12::rt_trace_scene() {
     }
     if (depth && slot >= 0) {
         ray_tracer_.composite(command_list_.Get(), efb_rtv_, conv_efb_depth_srv_, width, desc.Height, slot, false);
+        ray_tracer_.write_light_texture(command_list_.Get(), slot);
         if (replay_recording_) {
             replay_ops_.push_back({ReplayKind::RtComposite, static_cast<std::uint32_t>(slot)});
         }

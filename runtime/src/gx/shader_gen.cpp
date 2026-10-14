@@ -2046,6 +2046,14 @@ std::string ShaderGenerator::generate_ps(const PixelShaderKey& key) const {
         s << "    frag.rgb *= ztex_params.z;\n";
         s << "    frag.rgb += max(max(frag.r, max(frag.g, frag.b)) - 1.0, 0.0) * ztex_params.w;\n";
     }
+    if ((key.output_flags & 0x40u) != 0u) {
+        // Lit translucents (blended scene draws under ray-traced lighting) take the light of the
+        // surface behind them (texture 7: the lighting per sample).
+        s << "    uint lit_w, lit_h;\n";
+        s << "    tex[7].GetDimensions(lit_w, lit_h);\n";
+        s << "    const int2 lit_at = min(int2(pin.pos.xy * ztex_params.z), int2(lit_w, lit_h) - 1);\n";
+        s << "    frag.rgb *= clamp(tex[7].Load(int3(lit_at, 0)).rgb, 0.45, 1.35);\n";
+    }
     if (dual_src) {
         s << "    float tev_alpha = saturate(frag.a);\n";
     }

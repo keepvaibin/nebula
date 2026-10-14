@@ -1415,6 +1415,27 @@ void SpatialBCS(uint3 id : SV_DispatchThreadID)
 }
 
 // ---------------------------------------------------------------------------------------------
+// The lighting as a texture for the translucent draws after the trace (one texel per sample).
+// ---------------------------------------------------------------------------------------------
+
+cbuffer RtLightTexture : register(b0)
+{
+    uint2 t_size;
+    uint2 t_pad;
+};
+StructuredBuffer<uint3> t_final : register(t0);
+
+float4 LightTexturePS(float4 position : SV_Position) : SV_Target0
+{
+    const uint2 s = min(uint2(position.xy), t_size - 1u);
+    const uint3 v = t_final[s.y * t_size.x + s.x];
+    if (asfloat(v.z) == 0.0f) {
+        return float4(1.0f, 1.0f, 1.0f, 1.0f);
+    }
+    return float4(f16tof32(v.x), f16tof32(v.x >> 16u), f16tof32(v.y), 1.0f);
+}
+
+// ---------------------------------------------------------------------------------------------
 // Composite: the EFB colour times the lighting (dual-source blend: dst * src0 + dst * src1, so
 // the multiplier reaches 2 on an 8-bit target)
 // ---------------------------------------------------------------------------------------------

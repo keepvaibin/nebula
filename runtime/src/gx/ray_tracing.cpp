@@ -6,6 +6,7 @@
 #include "rt_bloom_down_cs.h"
 #include "rt_bloom_ps.h"
 #include "rt_capture_cs.h"
+#include "rt_light_texture_ps.h"
 #include "rt_post_blur_cs.h"
 #include "rt_post_bright_cs.h"
 #include "rt_post_copy_cs.h"
@@ -624,8 +625,8 @@ bool SceneRayTracer::initialize(ID3D12Device* device, std::uint64_t timestamp_fr
     glow_model_spill_ = std::clamp(env_float("GALAXY_RT_GLOW_MODEL_SPILL", 1.0f), 0.0f, 2.0f);
     sky_distance_ = std::clamp(env_float("GALAXY_RT_SKY_DISTANCE", 60000.0f), 1000.0f, 1.0e7f);
     post_ = env_float("GALAXY_RT_POST", 1.0f) != 0.0f;
-    post_bloom_ = std::clamp(env_float("GALAXY_RT_POST_BLOOM", 0.45f), 0.0f, 4.0f);
-    post_threshold_ = std::clamp(env_float("GALAXY_RT_POST_THRESHOLD", 0.82f), 0.0f, 0.99f);
+    post_bloom_ = std::clamp(env_float("GALAXY_RT_POST_BLOOM", 0.4f), 0.0f, 4.0f);
+    post_threshold_ = std::clamp(env_float("GALAXY_RT_POST_THRESHOLD", 0.9f), 0.0f, 0.99f);
     post_shafts_ = std::clamp(env_float("GALAXY_RT_POST_SHAFTS", 0.6f), 0.0f, 4.0f);
     post_dof_ = std::clamp(env_float("GALAXY_RT_POST_DOF", 3.0f), 0.0f, 32.0f);
     post_grade_ = std::clamp(env_float("GALAXY_RT_POST_GRADE", 1.0f), 0.0f, 1.0f);
@@ -697,6 +698,14 @@ void SceneRayTracer::shutdown() noexcept {
     capture_pso_.Reset();
     capture_root_.Reset();
     glow_base_pso_.Reset();
+    light_tex_root_.Reset();
+    light_tex_pso_.Reset();
+    light_tex_.Reset();
+    light_tex_rtv_heap_.Reset();
+    light_tex_srv_heap_.Reset();
+    light_tex_srv_ = {};
+    light_tex_width_ = light_tex_height_ = 0u;
+    light_tex_ready_ = false;
     post_root_.Reset();
     post_copy_pso_.Reset();
     post_bright_pso_.Reset();
@@ -1125,6 +1134,7 @@ void SceneRayTracer::report() {
 }
 
 void SceneRayTracer::begin_scene() noexcept {
+    light_tex_ready_ = false;
     draws_.clear();
     glow_draws_.clear();
     glow_triangles_ = 0u;
@@ -1426,6 +1436,49 @@ bool SceneRayTracer::create_lighting_pipelines(DXGI_FORMAT color_format) {
         if (FAILED(device_->CreateGraphicsPipelineState(&finish, IID_PPV_ARGS(&post_finish_pso_)))) {
             return false;
         }
+    }
+
+    {
+        D3D12_ROOT_PARAMETER light_tex_params[2]{};
+        light_tex_params[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
+        light_tex_params[0].Constants.Num32BitValues = 4u;
+        light_tex_params[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_SRV;
+        for (auto& param : light_tex_params) {
+            param.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+        }
+        D3D12_ROOT_SIGNATURE_DESC light_tex_rsd{};
+        light_tex_rsd.NumParameters = 2u;
+        light_tex_rsd.pParameters = light_tex_params;
+        if (!serialize(light_tex_rsd, light_tex_root_)) {
+            return false;
+        }
+        D3D12_GRAPHICS_PIPELINE_STATE_DESC light_tex{};
+        light_tex.pRootSignature = light_tex_root_.Get();
+        light_tex.VS = {g_rt_composite_vs, sizeof(g_rt_composite_vs)};
+        light_tex.PS = {g_rt_light_texture_ps, sizeof(g_rt_light_texture_ps)};
+        light_tex.BlendState.RenderTarget[0].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
+        light_tex.SampleMask = UINT_MAX;
+        light_tex.RasterizerState.FillMode = D3D12_FILL_MODE_SOLID;
+        light_tex.RasterizerState.CullMode = D3D12_CULL_MODE_NONE;
+        light_tex.RasterizerState.DepthClipEnable = TRUE;
+        light_tex.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+        light_tex.NumRenderTargets = 1u;
+        light_tex.RTVFormats[0] = DXGI_FORMAT_R16G16B16A16_FLOAT;
+        light_tex.SampleDesc.Count = 1u;
+        if (FAILED(device_->CreateGraphicsPipelineState(&light_tex, IID_PPV_ARGS(&light_tex_pso_)))) {
+            return false;
+        }
+        D3D12_DESCRIPTOR_HEAP_DESC rtv_heap{};
+        rtv_heap.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
+        rtv_heap.NumDescriptors = 1u;
+        D3D12_DESCRIPTOR_HEAP_DESC srv_heap{};
+        srv_heap.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
+        srv_heap.NumDescriptors = 1u;
+        if (FAILED(device_->CreateDescriptorHeap(&rtv_heap, IID_PPV_ARGS(&light_tex_rtv_heap_))) ||
+            FAILED(device_->CreateDescriptorHeap(&srv_heap, IID_PPV_ARGS(&light_tex_srv_heap_)))) {
+            return false;
+        }
+        light_tex_srv_ = light_tex_srv_heap_->GetCPUDescriptorHandleForHeapStart();
     }
 
     D3D12_DESCRIPTOR_RANGE composite_depth{};
@@ -2290,6 +2343,64 @@ void SceneRayTracer::post_finish(ID3D12GraphicsCommandList* list, D3D12_CPU_DESC
     list->SetGraphicsRootShaderResourceView(5u, post_buffers_[5]->GetGPUVirtualAddress());
     list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
     list->DrawInstanced(3u, 1u, 0u, 0u);
+}
+
+void SceneRayTracer::write_light_texture(ID3D12GraphicsCommandList* list, int slot) {
+    if (list == nullptr || slot < 0 || slot >= static_cast<int>(kLightSlots) || !light_tex_pso_ ||
+        !light_final_[static_cast<unsigned>(slot)]) {
+        return;
+    }
+    const LightSlot& info = light_slots_[static_cast<unsigned>(slot)];
+    if (info.sample_width == 0u || info.sample_height == 0u) {
+        return;
+    }
+    if (info.sample_width != light_tex_width_ || info.sample_height != light_tex_height_ || !light_tex_) {
+        retire(light_tex_);
+        D3D12_HEAP_PROPERTIES heap{};
+        heap.Type = D3D12_HEAP_TYPE_DEFAULT;
+        D3D12_RESOURCE_DESC desc{};
+        desc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+        desc.Width = info.sample_width;
+        desc.Height = info.sample_height;
+        desc.DepthOrArraySize = 1u;
+        desc.MipLevels = 1u;
+        desc.Format = DXGI_FORMAT_R16G16B16A16_FLOAT;
+        desc.SampleDesc.Count = 1u;
+        desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
+        if (FAILED(device_->CreateCommittedResource(&heap, D3D12_HEAP_FLAG_NONE, &desc,
+                                                    D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, nullptr,
+                                                    IID_PPV_ARGS(&light_tex_)))) {
+            light_tex_width_ = light_tex_height_ = 0u;
+            return;
+        }
+        light_tex_->SetName(L"rt light texture");
+        device_->CreateRenderTargetView(light_tex_.Get(), nullptr,
+                                        light_tex_rtv_heap_->GetCPUDescriptorHandleForHeapStart());
+        device_->CreateShaderResourceView(light_tex_.Get(), nullptr, light_tex_srv_);
+        light_tex_state_ = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+        light_tex_width_ = info.sample_width;
+        light_tex_height_ = info.sample_height;
+    }
+    to_state(list, light_final_[static_cast<unsigned>(slot)].Get(), light_final_state_[static_cast<unsigned>(slot)],
+             kLightRead);
+    to_state(list, light_tex_.Get(), light_tex_state_, D3D12_RESOURCE_STATE_RENDER_TARGET);
+    const D3D12_CPU_DESCRIPTOR_HANDLE rtv = light_tex_rtv_heap_->GetCPUDescriptorHandleForHeapStart();
+    list->OMSetRenderTargets(1u, &rtv, FALSE, nullptr);
+    const D3D12_VIEWPORT viewport{0.0f, 0.0f, static_cast<float>(light_tex_width_),
+                                  static_cast<float>(light_tex_height_), 0.0f, 1.0f};
+    const D3D12_RECT scissor{0, 0, static_cast<LONG>(light_tex_width_), static_cast<LONG>(light_tex_height_)};
+    list->RSSetViewports(1u, &viewport);
+    list->RSSetScissorRects(1u, &scissor);
+    list->SetGraphicsRootSignature(light_tex_root_.Get());
+    list->SetPipelineState(light_tex_pso_.Get());
+    const std::uint32_t constants[4] = {light_tex_width_, light_tex_height_, 0u, 0u};
+    list->SetGraphicsRoot32BitConstants(0u, 4u, constants, 0u);
+    list->SetGraphicsRootShaderResourceView(1u, light_final_[static_cast<unsigned>(slot)]->GetGPUVirtualAddress());
+    list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+    list->DrawInstanced(3u, 1u, 0u, 0u);
+    to_state(list, light_tex_.Get(), light_tex_state_, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+    light_tex_scale_ = 1.0f / static_cast<float>(std::max(info.factor, 1u));
+    light_tex_ready_ = true;
 }
 
 void SceneRayTracer::bloom(ID3D12GraphicsCommandList* list, D3D12_CPU_DESCRIPTOR_HANDLE target, std::uint32_t width,
