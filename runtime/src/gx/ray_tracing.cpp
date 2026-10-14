@@ -811,6 +811,16 @@ void SceneRayTracer::shutdown() noexcept {
     triangles_ = 0u;
     positions_state_ = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
     surfaces_state_ = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+    water_draws_.clear();
+    water_open_ = false;
+    water_positions_.Reset();
+    water_surfaces_.Reset();
+    water_blas_.Reset();
+    water_tlas_.Reset();
+    water_scratch_.Reset();
+    water_instance_.Reset();
+    water_positions_state_ = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+    water_surfaces_state_ = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
 }
 
 bool SceneRayTracer::create_buffer(std::uint64_t bytes, D3D12_HEAP_TYPE heap, D3D12_RESOURCE_STATES state,
@@ -1192,6 +1202,12 @@ void SceneRayTracer::begin_scene() noexcept {
     glow_triangles_ = 0u;
     glow_open_ = false;
     glow_base_valid_ = false;
+    water_draws_.clear();
+    water_triangles_ = 0u;
+    water_flushed_draws_ = 0u;
+    water_flushed_triangles_ = 0u;
+    water_open_ = false;
+    water_incomplete_ = false;
     draw_colors_.clear();
     infos_.clear();
     triangles_ = 0u;
@@ -1209,6 +1225,14 @@ void SceneRayTracer::add_draw(const RtDraw& draw, const RtDrawInfo& info) {
             RtDraw& entry = glow_draws_.emplace_back(draw);
             entry.first_triangle = glow_triangles_;
             glow_triangles_ += draw.triangle_count;
+        }
+        return;
+    }
+    if ((info.surface & kRtDrawWater) != 0u) {
+        if (water_open_ && draw.triangle_count != 0u && water_triangles_ + draw.triangle_count <= kWaterMaxTriangles) {
+            RtDraw& entry = water_draws_.emplace_back(draw);
+            entry.first_triangle = water_triangles_;
+            water_triangles_ += draw.triangle_count;
         }
         return;
     }
@@ -2051,6 +2075,15 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
     c.ambient[2] = glow_boost_;
     c.ambient[3] = sky_distance_;
     std::memcpy(upload.cpu, &c, sizeof(c));
+    // The same lights give the reflections their highlights.
+    std::copy(std::begin(c.sun), std::end(c.sun), reflect_lights_.sun.begin());
+    reflect_lights_.sun_light = {c.sun_light[0], c.sun_light[1], c.sun_light[2], c.sun_reach};
+    for (unsigned i = 0; i < 16u; ++i) {
+        std::copy(std::begin(c.points[i]), std::end(c.points[i]), reflect_lights_.points[i].begin());
+    }
+    reflect_lights_.point_count = c.point_count;
+    reflect_lights_.point_light = c.point_light;
+    reflect_lights_.point_size = c.point_size;
 
     const unsigned current = light_parity_;
     const unsigned previous = current ^ 1u;
@@ -2745,6 +2778,35 @@ void SceneRayTracer::composite(ID3D12GraphicsCommandList* list, D3D12_CPU_DESCRI
     }
 }
 
+RtReflectScene SceneRayTracer::reflect_scene(unsigned slot) const {
+    const LightSlot& light = light_slots_[slot];
+    RtReflectScene scene{};
+    scene.projection = light.view.projection;
+    scene.depth = {light.view.z_scale, light.view.z_offset, light.view.min_depth, light.view.max_depth};
+    scene.viewport = light.view.viewport;
+    scene.near_plane = light.near_plane;
+    scene.camera = light.camera;
+    scene.camera_known = light.camera_known;
+    scene.width = light.width;
+    scene.height = light.height;
+    scene.sample_width = light.sample_width;
+    scene.sample_height = light.sample_height;
+    scene.factor = light.factor;
+    scene.tlas = tlas_->GetGPUVirtualAddress();
+    scene.positions = positions_->GetGPUVirtualAddress();
+    scene.surfaces = surfaces_->GetGPUVirtualAddress();
+    scene.primary = light_primary_->GetGPUVirtualAddress();
+    scene.light = light_final_[slot]->GetGPUVirtualAddress();
+    scene.sums = picture_valid_ ? picture_sums_->GetGPUVirtualAddress() : 0u;
+    scene.sky_distance = sky_distance_;
+    // trace_reflections and trace_water left the sky map readable.
+    scene.sky_map = sky_radiance_ ? sky_radiance_->GetGPUVirtualAddress() : 0u;
+    scene.lights = reflect_lights_;
+    // trace_lighting left the glow lights' list readable.
+    scene.lights.emitters = emit_list_ ? emit_list_->GetGPUVirtualAddress() : 0u;
+    return scene;
+}
+
 void SceneRayTracer::trace_reflections(ID3D12GraphicsCommandList* list, Allocate allocate, void* allocate_context,
                                        D3D12_GPU_DESCRIPTOR_HANDLE color_depth_table, std::uint32_t width,
                                        std::uint32_t height) {
@@ -2764,25 +2826,10 @@ void SceneRayTracer::trace_reflections(ID3D12GraphicsCommandList* list, Allocate
     // trace_lighting left the geometry readable and its per-sample primary hits (always UAV) written.
     to_state(list, positions_.Get(), positions_state_, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
     to_state(list, surfaces_.Get(), surfaces_state_, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-    RtReflectScene scene{};
-    scene.projection = light.view.projection;
-    scene.depth = {light.view.z_scale, light.view.z_offset, light.view.min_depth, light.view.max_depth};
-    scene.viewport = light.view.viewport;
-    scene.near_plane = light.near_plane;
-    scene.camera = light.camera;
-    scene.camera_known = light.camera_known;
-    scene.width = width;
-    scene.height = height;
-    scene.sample_width = light.sample_width;
-    scene.sample_height = light.sample_height;
-    scene.factor = light.factor;
-    scene.tlas = tlas_->GetGPUVirtualAddress();
-    scene.positions = positions_->GetGPUVirtualAddress();
-    scene.surfaces = surfaces_->GetGPUVirtualAddress();
-    scene.primary = light_primary_->GetGPUVirtualAddress();
-    scene.light = light_final_[slot]->GetGPUVirtualAddress();
-    scene.sums = picture_valid_ ? picture_sums_->GetGPUVirtualAddress() : 0u;
-    reflections_.trace(list, scene, slot, upload.cpu, upload.gpu, color_depth_table);
+    if (sky_radiance_) {
+        to_state(list, sky_radiance_.Get(), sky_radiance_state_, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+    }
+    reflections_.trace(list, reflect_scene(slot), slot, upload.cpu, upload.gpu, color_depth_table);
 }
 
 void SceneRayTracer::write_reprojection(ID3D12GraphicsCommandList* list, const std::array<float, 12>& camera_t) {
@@ -2840,6 +2887,40 @@ bool SceneRayTracer::fill_constants(const RtSources& sources, Allocate allocate,
     constants.near_plane = near_plane(view_);
     constants.triangle_base = triangle_base;
     std::memcpy(frame.cpu, &constants, sizeof(constants));
+    return true;
+}
+
+bool SceneRayTracer::transform_draws(ID3D12GraphicsCommandList* list, const RtSources& sources, Allocate allocate,
+                                     void* allocate_context, const RtDraw* draws, std::size_t count,
+                                     std::uint32_t triangle_base, std::uint32_t triangles, ID3D12Resource* positions,
+                                     D3D12_RESOURCE_STATES& positions_state, ID3D12Resource* surfaces,
+                                     D3D12_RESOURCE_STATES& surfaces_state) {
+    const std::size_t table_bytes = count * sizeof(RtDraw);
+    const RtUpload table = allocate(allocate_context, table_bytes, 256u);
+    RtUpload frame{};
+    if (table.cpu == nullptr || !fill_constants(sources, allocate, allocate_context, static_cast<std::uint32_t>(count),
+                                                triangle_base, triangles, 0u, 0u, 0u, frame)) {
+        return false;
+    }
+    std::memcpy(table.cpu, draws, table_bytes);
+    to_state(list, positions, positions_state, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+    to_state(list, surfaces, surfaces_state, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+    const D3D12_GPU_VIRTUAL_ADDRESS resident = sources.resident.base != 0u ? sources.resident.base
+                                                                           : sources.vertex_ring.base;
+    list->SetComputeRootSignature(root_.Get());
+    list->SetPipelineState(geometry_pso_.Get());
+    list->SetComputeRootConstantBufferView(kRootFrame, frame.gpu);
+    list->SetComputeRootShaderResourceView(kRootDraws, table.gpu);
+    list->SetComputeRootShaderResourceView(kRootVertexRing, sources.vertex_ring.base);
+    list->SetComputeRootShaderResourceView(kRootResident, resident);
+    list->SetComputeRootShaderResourceView(kRootIndexRing, sources.index_ring.base);
+    list->SetComputeRootShaderResourceView(kRootConstantRing, sources.constant_ring.base);
+    list->SetComputeRootShaderResourceView(kRootMatrixRing, sources.matrix_ring.base);
+    list->SetComputeRootUnorderedAccessView(kRootPositions, positions->GetGPUVirtualAddress());
+    list->SetComputeRootUnorderedAccessView(kRootSurfaces, surfaces->GetGPUVirtualAddress());
+    list->Dispatch((triangles + 63u) / 64u, 1u, 1u);
+    const D3D12_RESOURCE_BARRIER barrier = uav_barrier(nullptr);
+    list->ResourceBarrier(1u, &barrier);
     return true;
 }
 
@@ -3025,6 +3106,7 @@ bool SceneRayTracer::trace_scene(ID3D12GraphicsCommandList* list, const RtSource
         list->EndQuery(timestamps_.Get(), D3D12_QUERY_TYPE_TIMESTAMP, slot * kTimestampsPerSlot + 2u);
     }
     trace_lighting(list, allocate, allocate_context, depth_srv, width, height);
+    water_open_ = reflections_active() && light_slot_ >= 0;
     if (record_results) {
         if (timestamps_) {
             list->EndQuery(timestamps_.Get(), D3D12_QUERY_TYPE_TIMESTAMP, slot * kTimestampsPerSlot + 3u);

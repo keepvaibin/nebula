@@ -4,7 +4,12 @@
 #include "galaxy/gx/gx_bitfields.h"
 
 #include <algorithm>
+#include <cstdio>
+#include <cstdlib>
 #include <iterator>
+#include <mutex>
+#include <string_view>
+#include <unordered_set>
 
 namespace galaxy::gx {
 namespace {
@@ -91,6 +96,68 @@ RtSurface classify_rt_surface(const VertexShaderKey& vs, const PixelShaderKey& p
         surface.surface_class = RtSurfaceClass::Unlit;
     }
     return surface;
+}
+
+RtSurfaceClass rt_named_class(std::string_view name, RtSurfaceClass gx) noexcept {
+    // Name fragments of the game's clear materials (case-insensitive), from the [rt-material]
+    // census (STATUS.md): environment-mapped or lit, they are dielectrics, not metal.
+    static constexpr std::string_view kCrystal[] = {"crystal", "ice", "gem", "glass", "jewel", "diamond", "bubble"};
+    if (gx != RtSurfaceClass::Metal && gx != RtSurfaceClass::Glossy) {
+        return gx;
+    }
+    const auto lower = [](char c) { return c >= 'A' && c <= 'Z' ? static_cast<char>(c - 'A' + 'a') : c; };
+    for (const std::string_view fragment : kCrystal) {
+        if (name.size() < fragment.size()) {
+            continue;
+        }
+        for (std::size_t i = 0; i + fragment.size() <= name.size(); ++i) {
+            std::size_t k = 0;
+            while (k < fragment.size() && lower(name[i + k]) == fragment[k]) {
+                ++k;
+            }
+            if (k == fragment.size()) {
+                return RtSurfaceClass::Crystal;
+            }
+        }
+    }
+    return gx;
+}
+
+bool rt_material_census() noexcept {
+    static const bool enabled = [] {
+        char value[8]{};
+        std::size_t length = 0u;
+        return getenv_s(&length, value, sizeof(value), "GALAXY_RT_MATERIALS") == 0 && length > 1u && value[0] == '1';
+    }();
+    return enabled;
+}
+
+void note_rt_material(const RtMaterialNote& note) {
+    static std::mutex lock;
+    static std::unordered_set<std::uint64_t> seen;
+    std::uint64_t key = 1469598103934665603ull;
+    const auto mix = [&](std::uint64_t v) { key = (key ^ v) * 1099511628211ull; };
+    for (const char c : std::string_view(note.name)) {
+        mix(static_cast<unsigned char>(c));
+    }
+    mix(static_cast<std::uint64_t>(note.surface.surface_class) | (static_cast<std::uint64_t>(note.surface.features) << 8u) |
+        (static_cast<std::uint64_t>(note.blend) << 16u));
+    mix(note.combiner);
+    mix(note.texture);
+    mix(note.buffer);
+    const std::lock_guard guard(lock);
+    if (seen.size() >= 20000u || !seen.insert(key).second) {
+        return;
+    }
+    static const char* const kBlends[4] = {"opaque", "alpha", "add", "other"};
+    std::fprintf(stderr,
+                 "[rt-material] name=%s object=%08X class=%u features=0x%02X stages=%u texgens=%u ind=%u "
+                 "chan=%08X env=%06X blend=%s tex=%08X %ux%u fmt=%u phase=%u buffer=%u%s\n",
+                 note.name[0] != 0 ? note.name : "-", note.object, static_cast<unsigned>(note.surface.surface_class),
+                 static_cast<unsigned>(note.surface.features), note.stages, note.texgens, note.indirect, note.channel,
+                 note.combiner, kBlends[note.blend & 3u], note.texture, note.texture_size & 0xFFFFu,
+                 note.texture_size >> 16u, note.texture_format, note.phase, note.buffer & 0xFFFFu,
+                 (note.buffer & 0x10000u) != 0u ? "x" : "o");
 }
 
 }  // namespace galaxy::gx

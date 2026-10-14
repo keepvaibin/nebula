@@ -11,6 +11,7 @@
 #include "galaxy/gx/shader_keys.h"
 
 #include <cstdint>
+#include <string_view>
 
 namespace galaxy::gx {
 
@@ -20,6 +21,8 @@ enum class RtSurfaceClass : std::uint8_t {
     Metal = 2,      // an environment map
     Unlit = 3,      // baked or self-lit colour (no lit channel reaches the TEV)
     Water = 4,      // opaque surface with indirect texturing
+    // 5, 6: the reflections' translucent water (rt_reflections.hlsl).
+    Crystal = 7,    // clear dielectric named by its object (crystals, ice, gems, glass)
 };
 inline constexpr unsigned kRtSurfaceClasses = 5u;
 
@@ -40,5 +43,30 @@ struct RtSurface {
 };
 
 [[nodiscard]] RtSurface classify_rt_surface(const VertexShaderKey& vs, const PixelShaderKey& ps) noexcept;
+
+// The class of a draw of the object named `name` (NameObj::mName): materials the GX state does not
+// tell apart from metal (crystals, ice, gems, glass) by name; else `gx`.
+[[nodiscard]] RtSurfaceClass rt_named_class(std::string_view name, RtSurfaceClass gx) noexcept;
+
+// GALAXY_RT_MATERIALS=1: a census of the scene's 3D materials, one [rt-material] line per new
+// combination of object name, class, blend and environment texture.
+struct RtMaterialNote {
+    const char* name = "";           // the drawing NameObj's name ("" unknown)
+    std::uint32_t object = 0;        // its guest address
+    RtSurface surface{};
+    std::uint32_t stages = 0;
+    std::uint32_t texgens = 0;
+    std::uint32_t indirect = 0;
+    std::uint32_t channel = 0;       // colour channel 0 control (XF)
+    std::uint32_t combiner = 0;      // the environment map stage's colour combiner (0: none)
+    std::uint32_t blend = 0;         // 0 opaque, 1 alpha, 2 additive, 3 other
+    std::uint32_t texture = 0;       // the environment map (else map 0): guest address
+    std::uint32_t texture_size = 0;  // width | height << 16
+    std::uint32_t texture_format = 0;
+    std::uint32_t phase = 0;
+    std::uint32_t buffer = 0xFFFFu;  // MR::DrawBufferType of the draw (bit 16: its translucent list)
+};
+[[nodiscard]] bool rt_material_census() noexcept;
+void note_rt_material(const RtMaterialNote& note);
 
 }  // namespace galaxy::gx
