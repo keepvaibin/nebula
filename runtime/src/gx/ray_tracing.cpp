@@ -654,6 +654,7 @@ bool SceneRayTracer::initialize(ID3D12Device* device, std::uint64_t timestamp_fr
     point_saturation_ = std::clamp(env_float("GALAXY_RT_POINT_SATURATION", 0.4f), 0.0f, 1.0f);
     split_ = std::clamp(env_float("GALAXY_RT_SPLIT", 0.0f), 0.0f, 1.0f);
     emission_ = std::clamp(env_float("GALAXY_RT_EMISSION", 24.0f), 0.0f, 256.0f);
+    log_emitters_ = env_float("GALAXY_RT_LOG_EMITTERS", 0.0f) != 0.0f;
     night_ = std::clamp(env_float("GALAXY_RT_NIGHT", 1.0f), 0.0f, 1.0f);
     daylight_ = std::clamp(env_float("GALAXY_RT_DAYLIGHT", 0.35f), 0.01f, 1.0f);
     glow_boost_ = std::clamp(env_float("GALAXY_RT_GLOW_BOOST", 0.4f), 0.0f, 1.0f);
@@ -789,6 +790,7 @@ void SceneRayTracer::shutdown() noexcept {
     emit_tiles_.Reset();
     emit_lights_.Reset();
     emit_list_.Reset();
+    emit_readback_.Reset();
     composite_pso_.Reset();
     composite_root_.Reset();
     for (auto& buffer : light_z_) buffer.Reset();
@@ -1033,12 +1035,83 @@ void SceneRayTracer::begin_frame(std::uint64_t frame_index) {
         const D3D12_RANGE no_write{0, 0};
         readback_->Unmap(0, &no_write);
     }
+    if (emit_log_pending_ && emit_log_frame_ + kResultDelay <= frame_index) {
+        emit_log_pending_ = false;
+        log_emitters();
+    }
     if (dump_pending_ && dump_frame_ + kResultDelay <= frame_index) {
         dump_pending_ = false;
         write_dump();
     }
     if (window_.scenes >= 240u) {
         report();
+    }
+}
+
+// [rt-emit]: the glow lights' count and total power, then the strongest (world position, radius,
+// distance from the camera, power luminance and colour).
+void SceneRayTracer::log_emitters() {
+    const D3D12_RANGE range{0, kEmitLogBytes + kEmitLogSums};
+    void* mapped = nullptr;
+    if (!emit_readback_ || FAILED(emit_readback_->Map(0, &range, &mapped))) {
+        return;
+    }
+    const auto* bytes = static_cast<const std::byte*>(mapped);
+    std::uint32_t count = 0u;
+    float total = 0.0f;
+    std::memcpy(&count, bytes, 4u);
+    std::memcpy(&total, bytes + 4u, 4u);
+    struct Entry {
+        float p[4];
+        float power[4];
+    };
+    std::vector<Entry> lights(std::min<std::uint32_t>(count, kEmitLogLights));
+    for (std::size_t i = 0; i < lights.size(); ++i) {
+        std::memcpy(&lights[i], bytes + 16u + i * 32u, sizeof(Entry));
+    }
+    std::uint32_t sums[16]{};
+    std::memcpy(sums, bytes + kEmitLogBytes, sizeof(sums));
+    const D3D12_RANGE no_write{0, 0};
+    emit_readback_->Unmap(0, &no_write);
+    const auto lum = [](const Entry& e) {
+        return 0.2126f * e.power[0] + 0.7152f * e.power[1] + 0.0722f * e.power[2];
+    };
+    std::sort(lights.begin(), lights.end(), [&](const Entry& a, const Entry& b) { return lum(a) > lum(b); });
+    char line[256];
+    std::snprintf(line, sizeof(line), "[rt-emit] frame=%llu lights=%u total=%.0f eye=%.0f,%.0f,%.0f",
+                  static_cast<unsigned long long>(emit_log_frame_), count, total, emit_log_eye_[0], emit_log_eye_[1],
+                  emit_log_eye_[2]);
+    std::cerr << line << '\n';
+    {
+        // Sky and scene means (8-bit units), the sky state, the exposure and the lit / game ratio.
+        const auto mean = [&](unsigned at) {
+            const double n = std::max<double>(sums[at + 3u], 1.0);
+            return std::array<double, 3>{sums[at] / n, sums[at + 1u] / n, sums[at + 2u] / n};
+        };
+        const auto sky = mean(0u);
+        const auto scene = mean(4u);
+        float state = 0.0f;
+        float exposure = 0.0f;
+        std::memcpy(&state, &sums[8], 4u);
+        std::memcpy(&exposure, &sums[12], 4u);
+        std::snprintf(line, sizeof(line),
+                      "[rt-emit] sky=%.0f,%.0f,%.0f (n=%u) scene=%.0f,%.0f,%.0f (n=%u) state=%.3f%s exposure=%.3f%s "
+                      "lit/game=%.3f lit-samples=%u",
+                      sky[0], sky[1], sky[2], sums[3], scene[0], scene[1], scene[2], sums[7], state,
+                      sums[9] != 0u ? "" : "(unset)", exposure, sums[13] != 0u ? "" : "(unset)",
+                      static_cast<double>(sums[14]) / std::max<double>(sums[15], 1.0), sums[11]);
+        std::cerr << line << '\n';
+    }
+    for (std::size_t i = 0; i < std::min<std::size_t>(lights.size(), 12u); ++i) {
+        const Entry& e = lights[i];
+        const float dx = e.p[0] - emit_log_eye_[0];
+        const float dy = e.p[1] - emit_log_eye_[1];
+        const float dz = e.p[2] - emit_log_eye_[2];
+        const float l = std::max(lum(e), 1e-6f);
+        std::snprintf(line, sizeof(line), "[rt-emit]   at=%.0f,%.0f,%.0f r=%.0f dist=%.0f power=%.0f rgb=%.2f,%.2f,%.2f",
+                      e.p[0], e.p[1], e.p[2], e.p[3], std::sqrt(dx * dx + dy * dy + dz * dz), l, e.power[0] / l,
+                      e.power[1] / l, e.power[2] / l);
+        std::cerr << line << '\n';
     }
 }
 
@@ -1774,9 +1847,12 @@ bool SceneRayTracer::create_lighting_pipelines(DXGI_FORMAT color_format) {
         !create_buffer(kEmitLights * 32u, D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
                        D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, emit_lights_, L"rt emitters") ||
         !create_buffer(16u + kEmitLights * 32u, D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
-                       D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, emit_list_, L"rt emitter list")) {
+                       D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, emit_list_, L"rt emitter list") ||
+        (log_emitters_ && !create_buffer(kEmitLogBytes + kEmitLogSums, D3D12_HEAP_TYPE_READBACK, D3D12_RESOURCE_STATE_COPY_DEST,
+                                         D3D12_RESOURCE_FLAG_NONE, emit_readback_, L"rt emitter log"))) {
         return false;
     }
+    emit_log_pending_ = false;
     glow_positions_state_ = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
     emit_tiles_state_ = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
     emit_list_state_ = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
@@ -2498,6 +2574,21 @@ void SceneRayTracer::capture_glow_lights(ID3D12GraphicsCommandList* list, const 
     }
     list->SetPipelineState(emit_merge_pso_.Get());
     list->Dispatch(1u, 1u, 1u);
+    if (emit_readback_ && !emit_log_pending_ && frame_index_ % 120u == 0u) {
+        to_state(list, emit_list_.Get(), emit_list_state_, D3D12_RESOURCE_STATE_COPY_SOURCE);
+        list->CopyBufferRegion(emit_readback_.Get(), 0u, emit_list_.Get(), 0u, kEmitLogBytes);
+        const D3D12_RESOURCE_STATES sums_state = picture_sums_state_;
+        to_state(list, picture_sums_.Get(), picture_sums_state_, D3D12_RESOURCE_STATE_COPY_SOURCE);
+        list->CopyBufferRegion(emit_readback_.Get(), kEmitLogBytes, picture_sums_.Get(), 0u, kEmitLogSums);
+        to_state(list, picture_sums_.Get(), picture_sums_state_, sums_state);
+        emit_log_pending_ = true;
+        emit_log_frame_ = frame_index_;
+        // The camera's world position: -R^T t of the world-to-eye rows.
+        for (unsigned i = 0; i < 3u; ++i) {
+            emit_log_eye_[i] = -(camera_[0 * 4 + i] * camera_[0 * 4 + 3] + camera_[1 * 4 + i] * camera_[1 * 4 + 3] +
+                                 camera_[2 * 4 + i] * camera_[2 * 4 + 3]);
+        }
+    }
     to_state(list, emit_list_.Get(), emit_list_state_, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
     window_.glow_draws += glow_draws;
     window_.glow_triangles += glow ? glow_triangles_ : 0u;

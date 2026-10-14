@@ -270,6 +270,9 @@ public:
 private:
     static constexpr unsigned kResultSlots = 16u;
     static constexpr std::uint64_t kResultDelay = 8u;
+    static constexpr std::uint32_t kEmitLogLights = 64u;
+    static constexpr std::uint64_t kEmitLogBytes = 16u + kEmitLogLights * 32u;
+    static constexpr std::uint64_t kEmitLogSums = 64u;   // the picture sums after them
     static constexpr unsigned kStatsWords = 16u;
     static constexpr std::uint32_t kMaxTriangles = 4u * 1024u * 1024u;
     // Translucent water triangles of one scene.
@@ -295,6 +298,7 @@ private:
                         std::uint32_t triangle_base, std::uint32_t triangles, std::uint32_t width,
                         std::uint32_t height, std::uint32_t flags, RtUpload& frame);
     void write_dump();
+    void log_emitters();
     bool create_lighting_pipelines(DXGI_FORMAT color_format);
     // The geometry pass over `count` draws (triangles from `triangle_base`) into `positions` and
     // `surfaces`.
@@ -431,6 +435,7 @@ private:
     Microsoft::WRL::ComPtr<ID3D12Resource> emit_tiles_;
     Microsoft::WRL::ComPtr<ID3D12Resource> emit_lights_;
     Microsoft::WRL::ComPtr<ID3D12Resource> emit_list_;
+    Microsoft::WRL::ComPtr<ID3D12Resource> emit_readback_;   // GALAXY_RT_LOG_EMITTERS: the list's head
     Microsoft::WRL::ComPtr<ID3D12RootSignature> emit_root_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> glow_base_pso_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> sky_state_pso_;
@@ -498,6 +503,10 @@ private:
     std::chrono::steady_clock::time_point emit_last_time_{};
     std::array<float, 3> emit_last_eye_{};
     bool emit_seen_ = false;
+    bool log_emitters_ = false;      // GALAXY_RT_LOG_EMITTERS=1: [rt-emit] every 120 frames
+    bool emit_log_pending_ = false;
+    std::uint64_t emit_log_frame_ = 0u;
+    std::array<float, 3> emit_log_eye_{};
     std::array<D3D12_RESOURCE_STATES, 2> light_z_state_{};
     std::array<D3D12_RESOURCE_STATES, 2> light_history_state_{};
     std::array<D3D12_RESOURCE_STATES, kLightSlots> light_final_state_{};
