@@ -648,7 +648,7 @@ PSOut main(PSIn pin) {
         const float3 lit_m = clamp(tex[7].Load(int3(lit_at, 0)).rgb, 0.45, 1.35);
         const float3 lit_room = max(1.0 - frag.rgb, 1e-4);
         frag.rgb = lerp(frag.rgb * lit_m,
-                        frag.rgb + lit_room * (1.0 - exp(-(frag.rgb * max(lit_m - 1.0, 0.0)) / lit_room)),
+                        frag.rgb + 0.5 * lit_room * (1.0 - exp(-(frag.rgb * max(lit_m - 1.0, 0.0)) / (0.5 * lit_room))),
                         step(1.0, lit_m));
     }
     float tev_alpha = saturate(frag.a);

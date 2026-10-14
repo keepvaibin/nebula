@@ -56,7 +56,8 @@ cbuffer RtLight : register(b0)
     uint g_draw_count;          // entries of g_draws
     float g_sky_ibl;            // rays reaching the sky take the light of their direction (0: the
                                 // sky's mean colour from every direction)
-    uint g_pad;
+    float g_fill;               // the share of the game's own light every surface keeps (by day;
+                                // half again at night)
 };
 
 RaytracingAccelerationStructure g_scene : register(t6);
@@ -491,17 +492,18 @@ void SkyStateCS()
         const float state = c_sums.Load(36u) != 0u ? lerp(asfloat(c_sums.Load(32u)), l, 0.05f) : l;
         c_sums.Store2(32u, uint2(asuint(state), 1u));
     }
-    // The exposure: the lighting's mean over the picture moves towards its target (darker under a
-    // black sky), a tenth of the way per frame.
+    // The exposure keeps the picture as bright as the game drew it: the ratio of the lit picture's
+    // mean luminance to the game's own moves towards its target, a tenth of the way per frame. Its
+    // shadows and lights move the light around; they neither darken nor wash out the whole.
     const uint lit_count = c_sums.Load(44u);
     if (c_exposure == 0u) {
         c_sums.Store2(48u, uint2(asuint(1.0f), 0u));
     } else if (lit_count * 50u > c_sample_size.x * c_sample_size.y) {
-        const float mean = exp2(float(c_sums.Load(40u)) / (64.0f * float(lit_count)) - 6.0f);
+        const float ratio = float(c_sums.Load(56u)) / max(float(c_sums.Load(60u)), 1.0f);
         const float day = c_sums.Load(36u) != 0u ? saturate(asfloat(c_sums.Load(32u)) / c_daylight) : 1.0f;
         const float target = lerp(c_exposure_night, c_exposure_day, day);
         const float exposure = c_sums.Load(52u) != 0u ? asfloat(c_sums.Load(48u)) : 1.0f;
-        const float next = clamp(exposure * lerp(1.0f, target / max(mean, 0.05f), 0.1f), 0.85f, 1.3f);
+        const float next = clamp(exposure * lerp(1.0f, target / max(ratio, 0.05f), 0.1f), 0.6f, 2.5f);
         c_sums.Store2(48u, uint2(asuint(next), 1u));
     }
 }
@@ -543,9 +545,10 @@ void CaptureCS(uint3 id : SV_DispatchThreadID)
             if (float(q.x) < c_split) {
                 keep *= lit;
             } else {
-                // log2 of the lighting (the exposure follows its geometric mean: the typical
-                // surface, not the few sunlit ones far above it).
-                c_sums.InterlockedAdd(40u, uint((clamp(log2(max(lit, 1.0f / 64.0f)), -6.0f, 2.0f) + 6.0f) * 64.0f));
+                // The picture's luminance as lit, and as the game drew it (before the lighting).
+                const float shown = luminance(saturate(color));
+                c_sums.InterlockedAdd(56u, uint(shown * 256.0f));
+                c_sums.InterlockedAdd(60u, uint(min(shown / max(lit, 0.05f), 2.0f) * 256.0f));
                 c_sums.InterlockedAdd(44u, 1u);
             }
             color *= clamp(keep, 0.25f, 4.0f);
@@ -1548,6 +1551,15 @@ void SpatialBCS(uint3 id : SV_DispatchThreadID)
             open = (ambient + sun) / max(unshadowed, 1e-3f) + added;
         }
     }
+    // A fill keeps shade readable, as a sky light's minimum does: under a dark sky more of it.
+    {
+        const float day = g_picture_sums.Load(36u) != 0u
+                              ? saturate(asfloat(g_picture_sums.Load(32u)) / max(g_ambient.y, 1e-3f))
+                              : 1.0f;
+        const float fill = g_fill * lerp(1.5f, 1.0f, day);
+        lighting = fill + (1.0f - fill) * lighting;
+        open = fill + (1.0f - fill) * open;
+    }
     lighting *= exposure;
     open *= exposure;
     float3 m = lerp(float3(1.0f, 1.0f, 1.0f), lighting, g_strength);
@@ -1646,7 +1658,8 @@ struct CompositeOut
 float3 apply_light(float3 c, float3 m)
 {
     const float3 headroom = max(1.0f - c, 1e-4f);
-    const float3 brighter = c + headroom * (1.0f - exp(-(c * max(m - 1.0f, 0.0f)) / headroom));
+    // At most half the headroom: near-white texels keep their gradient instead of merging at 1.
+    const float3 brighter = c + 0.5f * headroom * (1.0f - exp(-(c * max(m - 1.0f, 0.0f)) / (0.5f * headroom)));
     return lerp(c * m, brighter, step(1.0f, m));
 }
 

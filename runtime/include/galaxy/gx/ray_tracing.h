@@ -606,6 +606,7 @@ private:
     float glow_model_exposure_ = 3.2f;  // GALAXY_RT_GLOW_MODEL_EXPOSURE: glowing models (a star's surface)
     float glow_model_spill_ = 1.0f;     // GALAXY_RT_GLOW_MODEL_SPILL
     float sky_distance_ = 60000.0f; // GALAXY_RT_SKY_DISTANCE: farther surfaces are the sky (backdrops)
+    float fill_ = 0.2f;             // GALAXY_RT_FILL: the light every surface keeps (more at night)
     float sky_ibl_ = 0.8f;          // GALAXY_RT_SKY_IBL: rays reaching the sky take the light of their
                                     // direction (0: the sky's mean colour from every direction)
     bool post_ = true;              // GALAXY_RT_POST: the cinematic finish
@@ -625,8 +626,8 @@ private:
     // GALAXY_RT_EXPOSURE_DAY / _NIGHT: the mean lighting the exposure holds under a bright / black
     // sky (the light moves into lit areas and out of shadows instead of dimming the picture);
     // GALAXY_RT_EXPOSURE=0 turns it off.
-    float exposure_day_ = 0.95f;
-    float exposure_night_ = 0.95f;
+    float exposure_day_ = 1.0f;
+    float exposure_night_ = 1.0f;
     bool exposure_ = true;
     float surface_emission_ = 3.0f; // GALAXY_RT_SURFACE_EMISSION: a glowing surface's light per unit
                                     // of its colour and eye-space area (0: none)
