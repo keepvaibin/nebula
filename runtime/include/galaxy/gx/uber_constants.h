@@ -48,7 +48,8 @@ struct alignas(256) GxPsConstants {
     // by xy.
     float tex_dims[kMaxTextureMaps][4];
     // x = Z-texture bias (BP 0xF4, 24-bit) / 2^24;
-    // y = reciprocal physical EFB scale for RGBA6 dithering; z,w reserved.
+    // y = reciprocal physical EFB scale for RGBA6 dithering;
+    // z, w = a glow's exposure and white-hot spill (PixelShaderKey output_flags bit 5).
     float ztex_params[4];
     // Indirect TEV state: commands are raw BP 0x10-0x1F words grouped as
     // uint4s; matrices are decoded as six int4 rows where .w is 17 - scale;

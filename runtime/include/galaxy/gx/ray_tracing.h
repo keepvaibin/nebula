@@ -199,6 +199,7 @@ public:
     [[nodiscard]] bool emitters_active() const noexcept { return lighting_active() && emission_ > 0.0f; }
     // The colour scale of glows (additive scene draws) while the lighting is on, else 1.
     [[nodiscard]] float glow_exposure() const noexcept { return lighting_active() ? glow_exposure_ : 1.0f; }
+    [[nodiscard]] float glow_spill() const noexcept { return glow_spill_; }
 
 private:
     static constexpr unsigned kResultSlots = 16u;
@@ -422,7 +423,15 @@ private:
     float night_ = 0.4f;            // GALAXY_RT_NIGHT: the sky and bounce light under a black sky (relative)
     float daylight_ = 0.35f;        // GALAXY_RT_DAYLIGHT: the sky's luminance that gives it in full
     float glow_boost_ = 0.4f;       // GALAXY_RT_GLOW_BOOST: extra light of a glowing surface
-    float glow_exposure_ = 1.6f;    // GALAXY_RT_GLOW_EXPOSURE: colour scale of the glows themselves
+    float glow_exposure_ = 2.2f;    // GALAXY_RT_GLOW_EXPOSURE: colour scale of the glows themselves
+    float glow_spill_ = 0.7f;       // GALAXY_RT_GLOW_SPILL: share of a glow's excess that turns it white
+    float sky_distance_ = 60000.0f; // GALAXY_RT_SKY_DISTANCE: farther surfaces are the sky (backdrops)
+    // GALAXY_RT_EXPOSURE_DAY / _NIGHT: the mean lighting the exposure holds under a bright / black
+    // sky (the light moves into lit areas and out of shadows instead of dimming the picture);
+    // GALAXY_RT_EXPOSURE=0 turns it off.
+    float exposure_day_ = 0.97f;
+    float exposure_night_ = 0.8f;
+    bool exposure_ = true;
     float surface_emission_ = 3.0f; // GALAXY_RT_SURFACE_EMISSION: a glowing surface's light per unit
                                     // of its colour and eye-space area (0: none)
     float emission_ = 24.0f;        // GALAXY_RT_EMISSION: a glow's light per unit it adds to the picture

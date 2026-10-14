@@ -631,9 +631,11 @@ PSOut main(PSIn pin) {
         frag.rgb = float3((fog_rgb_i * (256 - fog_i) + fog_color_i * fog_i) >> 8) / 255.0;
     }
 
-    // Glows (additive scene draws under ray-traced lighting) shine at their light's exposure.
+    // Glows (additive scene draws under ray-traced lighting) shine at their light's exposure; what
+    // passes 1 in one channel spills into all of them, as an over-exposed emitter turns white-hot.
     if ((output_flags & 0x20u) != 0u) {
         frag.rgb *= ztex_params.z;
+        frag.rgb += max(max(frag.r, max(frag.g, frag.b)) - 1.0, 0.0) * ztex_params.w;
     }
     float tev_alpha = saturate(frag.a);
     uint4 efb_color = uint4(round(saturate(frag) * 255.0));

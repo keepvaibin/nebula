@@ -50,7 +50,8 @@ cbuffer RtLight : register(b0)
                                 // 1 / its half-light distance squared (w)
     float4 g_to_eye[3];         // world to eye (the glow lights' positions)
     float4 g_ambient;           // the sky and bounce light under a black sky (relative), the sky's
-                                // luminance that gives it in full, a glowing surface's extra light
+                                // luminance that gives it in full, a glowing surface's extra light,
+                                // the distance beyond which surfaces are the sky (backdrops)
     float g_point_saturation;   // the colours above: 0 white .. 1 the game's
     uint g_draw_count;          // entries of g_draws
     uint2 g_pad;
@@ -251,9 +252,14 @@ cbuffer RtCapture : register(b0)
     float c_strength;
     float c_split;           // GALAXY_RT_SPLIT: pixels left of it kept the game's own colour
     float c_surface_gain;    // a glowing surface's light per unit of colour and eye-space area
-    uint2 c_pad;
+    float c_sky_distance;    // farther surfaces are the sky (backdrops)
+    float c_exposure_day;    // the mean lighting the exposure holds under a bright sky
     float4 c_projection;
     float4 c_to_world[3];    // eye to world
+    float c_exposure_night;  // ... under a black sky
+    float c_daylight;        // the sky's luminance that counts as bright
+    uint c_exposure;         // 1: the exposure follows the lighting
+    uint c_pad;
 };
 Texture2D<float4> c_color : register(t0);
 Texture2D<float> c_depth_tex : register(t1);
@@ -356,6 +362,19 @@ void SkyStateCS()
         const float state = c_sums.Load(36u) != 0u ? lerp(asfloat(c_sums.Load(32u)), l, 0.05f) : l;
         c_sums.Store2(32u, uint2(asuint(state), 1u));
     }
+    // The exposure: the lighting's mean over the picture moves towards its target (darker under a
+    // black sky), a tenth of the way per frame.
+    const uint lit_count = c_sums.Load(44u);
+    if (c_exposure == 0u) {
+        c_sums.Store2(48u, uint2(asuint(1.0f), 0u));
+    } else if (lit_count * 50u > c_sample_size.x * c_sample_size.y) {
+        const float mean = float(c_sums.Load(40u)) / (256.0f * float(lit_count));
+        const float day = c_sums.Load(36u) != 0u ? saturate(asfloat(c_sums.Load(32u)) / c_daylight) : 1.0f;
+        const float target = lerp(c_exposure_night, c_exposure_day, day);
+        const float exposure = c_sums.Load(52u) != 0u ? asfloat(c_sums.Load(48u)) : 1.0f;
+        const float next = clamp(exposure * lerp(1.0f, target / max(mean, 0.05f), 0.1f), 0.8f, 1.8f);
+        c_sums.Store2(48u, uint2(asuint(next), 1u));
+    }
 }
 
 // After the composite: the picture before the translucent phases.
@@ -381,7 +400,8 @@ void CaptureCS(uint3 id : SV_DispatchThreadID)
         c_glow[index] = pack_r11g11b10(max(color - unpack_r11g11b10(c_glow_base[index]), 0.0f));
     }
     const float depth = c_depth_tex.Load(int3(q, 0));
-    const bool sky = far_plane(c_depth, depth) || !inside(c_viewport, float2(q) + 0.5f);
+    const bool sky = far_plane(c_depth, depth) || !inside(c_viewport, float2(q) + 0.5f) ||
+                     -depth_to_eye_z(c_depth, depth) > c_sky_distance;
     float z = 0.0f;
     if (!sky) {
         z = depth_to_eye_z(c_depth, depth);
@@ -390,8 +410,12 @@ void CaptureCS(uint3 id : SV_DispatchThreadID)
             // light stays, for the bounce it sends.
             const uint3 f = c_final[index];
             float keep = f16tof32(f.y >> 16u);
+            const float lit = luminance(float3(f16tof32(f.x), f16tof32(f.x >> 16u), f16tof32(f.y)));
             if (float(q.x) < c_split) {
-                keep *= luminance(float3(f16tof32(f.x), f16tof32(f.x >> 16u), f16tof32(f.y)));
+                keep *= lit;
+            } else {
+                c_sums.InterlockedAdd(40u, uint(clamp(lit, 0.0f, 4.0f) * 256.0f));
+                c_sums.InterlockedAdd(44u, 1u);
             }
             color *= clamp(keep, 0.25f, 4.0f);
         }
@@ -769,7 +793,8 @@ void TraceCS(uint3 id : SV_DispatchThreadID)
     const uint index = id.y * g_sample_size.x + id.x;
     const int2 q = sample_pixel(id.xy);
     float3 p;
-    if (!pixel_point(q, p) || !inside(g_viewport, float2(q) + 0.5f)) {
+    // Backdrops (sky domes and distant scenery far beyond the stage) are the sky: no lighting.
+    if (!pixel_point(q, p) || !inside(g_viewport, float2(q) + 0.5f) || -p.z > g_ambient.w) {
         g_z[index] = 0.0f;
         g_normal[index] = 0u;
         g_primary[index] = uint2(0u, 0u);
@@ -1211,6 +1236,7 @@ void SpatialBCS(uint3 id : SV_DispatchThreadID)
     float3 lighting = ambient * light.sky + sun + points;
     // With the sky open: what the picture capture keeps (no feedback through the sky and bounce).
     float3 open = ambient + sun + points;
+    const float exposure = g_picture_sums.Load(52u) != 0u ? asfloat(g_picture_sums.Load(48u)) : 1.0f;
     // A surface the game lights already turns its shading towards its lights: the traced light
     // shadows it (the ratio to the same light unshadowed). The point lights add to it, or, where
     // the game lights it with them too (GX light 4), shadow it likewise.
@@ -1256,6 +1282,8 @@ void SpatialBCS(uint3 id : SV_DispatchThreadID)
             open = (ambient + sun) / max(unshadowed, 1e-3f) + added;
         }
     }
+    lighting *= exposure;
+    open *= exposure;
     float3 m = lerp(float3(1.0f, 1.0f, 1.0f), lighting, g_strength);
     // A glowing surface (unlit, bright, under its own glow in the previous picture: a core, a lamp)
     // sends its light whatever reaches it: it keeps its colour and shines brighter.

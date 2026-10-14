@@ -483,6 +483,7 @@ public:
     [[nodiscard]] float rt_glow_exposure() const noexcept {
         return ray_tracer_.ready() ? ray_tracer_.glow_exposure() : 1.0f;
     }
+    [[nodiscard]] float rt_glow_spill() const noexcept { return ray_tracer_.glow_spill(); }
     void rt_begin_scene() noexcept { ray_tracer_.begin_scene(); }
     void rt_set_view(const RtView& view) noexcept { ray_tracer_.set_view(view); }
     void rt_set_camera(const std::array<float, 12>* view) noexcept { ray_tracer_.set_camera(view); }

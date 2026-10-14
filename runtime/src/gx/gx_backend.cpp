@@ -12466,6 +12466,7 @@ ID3D12PipelineState* GxBackend::flush_draw_state(
         fill_ps_constants(state_, ps_c);
         ps_c.ztex_params[1] = 1.0f / static_cast<float>(renderer_.efb_scale());
         ps_c.ztex_params[2] = (ps_key_.output_flags & 0x20u) != 0u ? renderer_.rt_glow_exposure() : 0.0f;
+        ps_c.ztex_params[3] = (ps_key_.output_flags & 0x20u) != 0u ? renderer_.rt_glow_spill() : 0.0f;
         apply_uber_ps_key(ps_key_, ps_c);
 
         UploadRing::Allocation ps_alloc =

@@ -120,11 +120,16 @@ struct RtCaptureConstants {
     float strength;
     float split;
     float surface_gain;
-    std::uint32_t pad[2];
+    float sky_distance;
+    float exposure_day;
     float projection[4];
     float to_world[3][4];
+    float exposure_night;
+    float daylight;
+    std::uint32_t exposure;
+    std::uint32_t pad;
 };
-static_assert(sizeof(RtCaptureConstants) == 144u);
+static_assert(sizeof(RtCaptureConstants) == 160u);
 
 // Mirrors cbuffer RtComposite in rt_lighting.hlsl (root constants).
 struct RtCompositeConstants {
@@ -192,9 +197,9 @@ enum EmitParameter : UINT {
 // A result slot's state: read by the composite (pixel) and the picture capture (compute).
 constexpr D3D12_RESOURCE_STATES kLightRead =
     D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
-// Sky r g b n, scene r g b n (cleared per capture), then the sky's luminance over time and
-// whether it is known (kept).
-constexpr UINT64 kPictureSumsBytes = 48u;
+// Sky r g b n, scene r g b n (cleared per capture); the sky's luminance over time, known (kept);
+// the lighting's luminance sum (x 256) and count (cleared); the exposure, known (kept).
+constexpr UINT64 kPictureSumsBytes = 64u;
 constexpr UINT64 kPictureSumsCleared = 32u;
 
 constexpr unsigned kReprojectEntries = 256u;
@@ -541,7 +546,12 @@ bool SceneRayTracer::initialize(ID3D12Device* device, std::uint64_t timestamp_fr
     night_ = std::clamp(env_float("GALAXY_RT_NIGHT", 0.4f), 0.0f, 1.0f);
     daylight_ = std::clamp(env_float("GALAXY_RT_DAYLIGHT", 0.35f), 0.01f, 1.0f);
     glow_boost_ = std::clamp(env_float("GALAXY_RT_GLOW_BOOST", 0.4f), 0.0f, 1.0f);
-    glow_exposure_ = std::clamp(env_float("GALAXY_RT_GLOW_EXPOSURE", 1.6f), 1.0f, 4.0f);
+    glow_exposure_ = std::clamp(env_float("GALAXY_RT_GLOW_EXPOSURE", 2.2f), 1.0f, 6.0f);
+    glow_spill_ = std::clamp(env_float("GALAXY_RT_GLOW_SPILL", 0.7f), 0.0f, 2.0f);
+    sky_distance_ = std::clamp(env_float("GALAXY_RT_SKY_DISTANCE", 60000.0f), 1000.0f, 1.0e7f);
+    exposure_ = env_float("GALAXY_RT_EXPOSURE", 1.0f) != 0.0f;
+    exposure_day_ = std::clamp(env_float("GALAXY_RT_EXPOSURE_DAY", 0.97f), 0.3f, 1.5f);
+    exposure_night_ = std::clamp(env_float("GALAXY_RT_EXPOSURE_NIGHT", 0.8f), 0.3f, 1.5f);
     surface_emission_ = std::clamp(env_float("GALAXY_RT_SURFACE_EMISSION", 3.0f), 0.0f, 256.0f);
     {
         char value[96]{};
@@ -1526,6 +1536,7 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
     c.ambient[0] = night_;
     c.ambient[1] = daylight_;
     c.ambient[2] = glow_boost_;
+    c.ambient[3] = sky_distance_;
     std::memcpy(upload.cpu, &c, sizeof(c));
 
     const unsigned current = light_parity_;
@@ -1685,6 +1696,11 @@ void SceneRayTracer::capture_picture(ID3D12GraphicsCommandList* list, const RtSo
     std::array<float, 12> to_world{};
     const bool surfaces = emit && surface_emission_ > 0.0f && affine_inverse(camera_, to_world);
     c.surface_gain = surface_emission_;
+    c.sky_distance = sky_distance_;
+    c.exposure_day = exposure_day_;
+    c.exposure_night = exposure_night_;
+    c.daylight = daylight_;
+    c.exposure = exposure_ ? 1u : 0u;
     std::copy(view_.projection.begin(), view_.projection.end(), c.projection);
     std::memcpy(c.to_world, to_world.data(), sizeof(c.to_world));
     to_state(list, emit_tiles_.Get(), emit_tiles_state_, D3D12_RESOURCE_STATE_COPY_DEST);
@@ -1695,6 +1711,7 @@ void SceneRayTracer::capture_picture(ID3D12GraphicsCommandList* list, const RtSo
     to_state(list, picture_.Get(), picture_state_, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
     to_state(list, picture_sums_.Get(), picture_sums_state_, D3D12_RESOURCE_STATE_COPY_DEST);
     list->CopyBufferRegion(picture_sums_.Get(), 0u, stats_zero_.Get(), 0u, kPictureSumsCleared);
+    list->CopyBufferRegion(picture_sums_.Get(), 40u, stats_zero_.Get(), 0u, 8u);
     to_state(list, picture_sums_.Get(), picture_sums_state_, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
     list->SetComputeRootSignature(capture_root_.Get());
     list->SetPipelineState(capture_pso_.Get());
