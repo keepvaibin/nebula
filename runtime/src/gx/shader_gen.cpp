@@ -689,7 +689,9 @@ float enh_vis(float NoL, float NoV, float a) {
     return 0.5 / max(NoL * (NoV * (1.0 - a) + a) + NoV * (NoL * (1.0 - a) + a), 1e-4);
 }
 
-// Light n at P: direction towards it, the GX spot attenuation (function 3) or none, colour.
+// Light n at P: direction towards it, the GX spot attenuation (function 3) or none, colour. The
+// attenuation operands stay finite (kVsKeyFiniteLightAttn): a light the game left without a
+// direction keeps its light.
 void enh_light(uint n, bool spot, float3 P, out float3 ldir, out float attn, out float3 lcol) {
     const uint e = ppl_mtx_palette_base + 0x180u + 4u * n;
     const uint lcw = asuint(mtx_palette[e].w);
@@ -702,8 +704,8 @@ void enh_light(uint n, bool spot, float3 P, out float3 ldir, out float attn, out
     ldir = dist > 0.0 ? ldelta / dist : float3(0.0, 0.0, 1.0);
     attn = 1.0;
     if (spot) {
-        const float c = max(0.0, dot(ldir, le3.yzw));
-        const float denom = dot(float3(le1.w, le2.x, le2.y), float3(1.0, dist, dist2));
+        const float c = min(max(0.0, dot(ldir, le3.yzw)), 1.0e18);
+        const float denom = dot(float3(le1.w, le2.x, le2.y), float3(1.0, min(dist, 1.0e18), min(dist2, 1.0e36)));
         attn = denom != 0.0 ? max(0.0, le1.x + le1.y * c + le1.z * c * c) / denom : 0.0;
     }
     lcol = float3((lcw >> 24) & 255u, (lcw >> 16) & 255u, (lcw >> 8) & 255u) / 255.0;

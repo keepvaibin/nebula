@@ -306,7 +306,8 @@ int main() {
     passed &= expect(reopen(), "reopen on the graphics page");
     render.efb_scale = 4u;
     galaxy::gx::set_render_config(render);
-    passed &= expect(key(VK_RIGHT) &&
+    // The cursor is on LIGHTING, at its last value (ENHANCED).
+    passed &= expect(key(VK_LEFT) &&
                          galaxy::gx::native_settings_overlay_snapshot().pending_changes == 1u &&
                          key(VK_RETURN),
                      "an unrelated change applies");
