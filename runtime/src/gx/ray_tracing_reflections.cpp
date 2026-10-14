@@ -175,10 +175,10 @@ bool RtReflections::initialize(ID3D12Device5* device, std::uint64_t timestamp_fr
     };
     materials_ = {};
     // The game's own shading of its shiny surfaces already carries a reflection (its environment
-    // maps): reflections mostly add light (low cover) so they never dull the game's gold.
+    // maps): water and glossy reflections mostly add light (low cover); metal replaces half.
     materials_[0] = material("GALAXY_RT_REFLECT_DIFFUSE", {0.6f, 0.04f, 0.0f, 0.0f, 0.0f});
     materials_[1] = material("GALAXY_RT_REFLECT_GLOSSY", {0.3f, 0.06f, 1.0f, 0.0f, 0.15f});
-    materials_[2] = material("GALAXY_RT_REFLECT_METAL", {0.22f, 0.8f, 0.8f, 1.0f, 0.25f});
+    materials_[2] = material("GALAXY_RT_REFLECT_METAL", {0.15f, 0.9f, 1.0f, 1.0f, 0.5f});
     materials_[3] = material("GALAXY_RT_REFLECT_UNLIT", {0.5f, 0.02f, 0.0f, 0.0f, 0.0f});
     materials_[4] = material("GALAXY_RT_REFLECT_WATER", {0.08f, 0.1f, 1.0f, 0.0f, 0.4f});
     view_ = static_cast<std::uint32_t>(std::clamp(env_float("GALAXY_RT_REFLECT_VIEW", 0.0f), 0.0f, 4.0f));
