@@ -26,7 +26,7 @@ struct EnhancedLightingTuning {
     float metal = 0.70f;        // metal highlight strength (F0 the surface colour)
     float metal_rough = 0.35f;
     float metal_f0 = 0.50f;     // least peak of a metal's F0 (its colour raised in its own hue)
-    float env_base = 0.92f;     // environment lookup gain facing the viewer
+    float env_base = 1.0f;      // environment lookup gain facing the viewer
     float env_graze = 0.60f;    // gain added at grazing angles, (1 - N.V)^3
     std::uint32_t hash = 0u;    // nonzero when GALAXY_ENHANCED_LIGHTING_TUNE changes a value
 };
