@@ -537,6 +537,13 @@ bool trace_actor_lights_enabled() {
     return actor_light_trace_level() != 0u;
 }
 
+// GALAXY_LIGHTING_CENSUS=1: each scene material's lighting state once ([light-census]) and the
+// enhanced-lighting flushes every 300 frames ([enh-stats]).
+bool lighting_census_enabled() {
+    static const bool enabled = read_env_u64("GALAXY_LIGHTING_CENSUS", 0u) != 0u;
+    return enabled;
+}
+
 bool trace_xfb_causal_enabled() {
     static const bool enabled = [] {
         char value[16]{};
@@ -10448,6 +10455,13 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
                            : 0.0f;
             }();
             enhanced_split_ = split;
+            if (lighting_census_enabled() && frame_index_ % 300u == 0u) [[unlikely]] {
+                std::fprintf(stderr, "[enh-stats] frame=%llu flushes=%u uber=%u\n",
+                             static_cast<unsigned long long>(frame_index_), enhanced_flushes_,
+                             enhanced_uber_flushes_);
+                enhanced_flushes_ = 0u;
+                enhanced_uber_flushes_ = 0u;
+            }
             enhanced_ps_flags_ = (renderer_.rt_reflections_active() ? kEnhancedRtReflections : 0u) |
                                  (renderer_.rt_lighting() ? kEnhancedRtLighting : 0u);
         }
@@ -12473,9 +12487,7 @@ ID3D12PipelineState* GxBackend::flush_draw_state(
     const bool topology_dirty =
         render_state_key_.primitive_topology != topology_key;
     render_state_key_.primitive_topology = topology_key;
-    // GALAXY_LIGHTING_CENSUS=1: each scene material's lighting state once ([light-census]).
-    static const bool census = read_env_u64("GALAXY_LIGHTING_CENSUS", 0u) != 0u;
-    if (census && scene_phase_ && side_layer_ == kSceneLayer) [[unlikely]] {
+    if (lighting_census_enabled() && scene_phase_ && side_layer_ == kSceneLayer) [[unlikely]] {
         static std::unordered_set<std::uint64_t> seen;
         if (seen.insert(current_vs_hash_ * 31u ^ current_ps_hash_).second) {
             const RtSurface surface = classify_rt_surface(vs_key_, ps_key_);
@@ -12726,6 +12738,10 @@ ID3D12PipelineState* GxBackend::flush_draw_state(
     current_pipeline_aux_ = current_pipeline_is_uber_ ? 0u
         : (render_state_key_.blend_bits & kRenderStateMotionTarget) != 0u ? 1u
         : (render_state_key_.blend_bits & kRenderStateReactiveTarget) != 0u ? 2u : 0u;
+    if (enhanced && lighting_census_enabled()) [[unlikely]] {
+        ++enhanced_flushes_;
+        enhanced_uber_flushes_ += current_pipeline_is_uber_ ? 1u : 0u;
+    }
 
     // Snapshot the XF matrix palette only when the matrices changed (kDirtyXfMatrices). Re-uploading
     // the full palette on every TEV or render-state change exhausts the per-frame matrix ring, which
@@ -12745,9 +12761,10 @@ ID3D12PipelineState* GxBackend::flush_draw_state(
     for (unsigned texgen = 0; texgen < vs_key_.num_texgens; ++texgen) {
         emboss_palette_required |= state_.tex_gen(texgen).type == TexGenType::EmbossMap;
     }
+    // Enhanced lighting reads the lights in the pixel shader, unlit draws included.
     const bool palette_required =
         emboss_palette_required ||
-        (vs_key_.flags & 0x03u) != 0u ||
+        (vs_key_.flags & (0x03u | kVsKeyEnhancedLighting)) != 0u ||
         (vs_key_.texmtx_idx_mask & active_texgen_mask) != 0u;
     current_palette_required_ = palette_required;
     // Actor lights (actor_lights.h): a lit scene draw's follow-camera lights are moved in its

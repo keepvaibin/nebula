@@ -1583,6 +1583,10 @@ private:
     // viewport (GALAXY_ENHANCED_LIGHTING_SPLIT).
     std::uint32_t enhanced_ps_flags_ = 0u;
     float enhanced_split_ = 0.0f;
+    // GALAXY_LIGHTING_CENSUS: enhanced flushes since the last [enh-stats] line, and those drawn by the
+    // uber stand-in while their pipeline compiles.
+    std::uint32_t enhanced_flushes_ = 0u;
+    std::uint32_t enhanced_uber_flushes_ = 0u;
     PsoKey current_pso_key_{};
     bool current_pso_key_valid_ = false;
     ID3D12PipelineState* current_pipeline_ = nullptr;
