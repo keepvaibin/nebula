@@ -7642,7 +7642,9 @@ void RendererD3D12::prepare_vertex_blend(std::span<const std::int32_t> previous_
             locate(call.vertex_view.BufferLocation, call.vertex_view.SizeInBytes, current_offset);
         const int previous_buffer =
             locate(before.vertex_view.BufferLocation, before.vertex_view.SizeInBytes, previous_offset);
-        if (stripe >= 0) {
+        // A strip of the same length slides along itself (index pairing, as
+        // any pair); one that grew or shrank pairs particle by particle.
+        if (stripe >= 0 && before.vertex_view.SizeInBytes != call.vertex_view.SizeInBytes) {
             const std::uint32_t vertices = call.vertex_view.StrideInBytes == 144u
                 ? call.vertex_view.SizeInBytes / call.vertex_view.StrideInBytes : 0u;
             const std::uint32_t previous_vertices = before.vertex_view.StrideInBytes == 144u
@@ -7670,6 +7672,7 @@ void RendererD3D12::prepare_vertex_blend(std::span<const std::int32_t> previous_
             for (std::uint32_t i = 0; i < vertices; ++i) {
                 stripe_gather_.push_back({current_offset + i * 144u, static_cast<std::uint32_t>(current_buffer)});
             }
+            stripe_matched_.assign(vertices, -1);
             const StripeDraw& draw = run_stripes_.draws[static_cast<std::size_t>(stripe)];
             for (std::uint32_t i = 0; i < draw.count; ++i) {
                 const StripeVertex& v = run_stripes_.vertices[draw.first + i];
@@ -7683,6 +7686,27 @@ void RendererD3D12::prepare_vertex_blend(std::span<const std::int32_t> previous_
                 if (steps > 1u) continue;
                 stripe_gather_[base + v.vertex] = {previous_offset + was.vertex * 144u,
                                                    static_cast<std::uint32_t>(previous_buffer)};
+                stripe_matched_[v.vertex] = static_cast<std::int32_t>(was.vertex);
+            }
+            // A new particle grows out of where its nearest surviving
+            // neighbour (same side of the strip) was.
+            for (std::uint32_t i = 0; i < vertices; ++i) {
+                if (stripe_matched_[i] >= 0) continue;
+                for (std::uint32_t step = 2u; step <= 16u; step += 2u) {
+                    const std::int64_t below = static_cast<std::int64_t>(i) - step;
+                    const std::uint32_t above = i + step;
+                    std::int32_t from = -1;
+                    if (above < vertices && stripe_matched_[above] >= 0) {
+                        from = stripe_matched_[above];
+                    } else if (below >= 0 && stripe_matched_[static_cast<std::size_t>(below)] >= 0) {
+                        from = stripe_matched_[static_cast<std::size_t>(below)];
+                    }
+                    if (from >= 0) {
+                        stripe_gather_[base + i] = {previous_offset + static_cast<std::uint32_t>(from) * 144u,
+                                                    static_cast<std::uint32_t>(previous_buffer)};
+                        break;
+                    }
+                }
             }
             stripe_blends.push_back({static_cast<std::uint32_t>(d), base});
             ++blended;

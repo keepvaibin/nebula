@@ -766,18 +766,31 @@ private:
     TransformHistory transform_history_;
     // The scene records transforms (temporal upscaling or interpolation).
     bool history_scene_ = false;
-    // The screen layer of an interpolated frame: everything drawn after its 3D
-    // scene up to the display copy (HUD, layouts, star pointer, wipes). Its
-    // draws are records too, matched against the previous frame's screen layer
-    // by layout identity and interpolated without the scene camera.
+    // An interpolated frame's records come in layers (InterpScene::layers): its
+    // 3D scene (transform_history_), the screen layer after it (everything up
+    // to the display copy: HUD, layouts, star pointer, wipes) and the mirror
+    // pass before it (GameScene::drawMirror, its own camera). The side layers
+    // match against the previous frame's same layer by their own identities
+    // and move without the scene camera's world split.
+    static constexpr unsigned kSceneLayer = 0u;
+    static constexpr unsigned kScreenLayer = 1u;
+    static constexpr unsigned kMirrorLayer = 2u;
     TransformHistory screen_history_;
-    bool screen_layer_ = false;
-    bool scene_3d_recorded_ = false;          // this frame's 3D scene took records
-    std::uint64_t screen_layer_serial_ = 0;
-    std::uint64_t screen_identity_markers_ = 0;
-    bool screen_identity_ = false;            // the previous screen layer carried layout markers
-    void begin_screen_layer();
-    void end_screen_layer();
+    TransformHistory mirror_history_;
+    unsigned side_layer_ = 0u;                 // kScreenLayer or kMirrorLayer while one records
+    bool scene_3d_recorded_ = false;           // this frame's 3D scene took records
+    bool mirror_opened_scene_ = false;         // this frame's InterpScene began at its mirror pass
+    std::array<std::uint64_t, 3> layer_serials_{};
+    std::array<std::uint64_t, 3> layer_identity_markers_{};
+    std::array<bool, 3> layer_identity_{};     // the layer's previous occurrence carried markers
+    // Per layer: records recorded and matches dropped because the scene before
+    // did not hold the previous occurrence of the layer.
+    std::array<std::uint64_t, 3> layer_records_{};
+    std::array<std::uint64_t, 3> layer_unmapped_{};
+    void open_interp_scene();
+    void begin_side_layer(unsigned layer);
+    void end_side_layer();
+    void end_record_layer(unsigned layer);
     void set_identity_marker(std::uint8_t kind, std::uint16_t aux, std::uint32_t a, std::uint32_t tag);
     // Interpolated redraw (present rate above 60, temporal upscaler off):
     // this render chunk records a replay log and per-record VS constants.
@@ -814,21 +827,24 @@ private:
         // next scene is a hard cut.
         std::uint32_t camera_epoch = 0;
         bool camera_epoch_known = false;
-        // Records screen_first .. screen_first + screen_count are the screen
-        // layer (GxBackend::begin_screen_layer); their prev_index is in the
-        // scene before's index space like the others.
-        std::size_t screen_first = 0;
-        std::size_t screen_count = 0;
-        std::uint64_t screen_serial = 0;      // 0: no screen layer
-        [[nodiscard]] bool screen_record(std::size_t r) const noexcept {
-            return r - screen_first < screen_count;
+        // Record ranges of the frame's layers (GxBackend::kSceneLayer,
+        // kScreenLayer, kMirrorLayer). Every prev_index is in the scene
+        // before's index space (GxBackend::end_record_layer).
+        struct LayerRange {
+            std::size_t first = 0;
+            std::size_t count = 0;
+            std::uint64_t serial = 0;   // 0: not recorded
+        };
+        std::array<LayerRange, 3> layers{};
+        [[nodiscard]] bool in_layer(unsigned layer, std::size_t r) const noexcept {
+            return r - layers[layer].first < layers[layer].count;
         }
         void clear() noexcept {
             constants.clear(); prev_index.clear();
             palette.clear(); per_vertex.clear(); palette_count = 0; valid = false; serial = 0;
             ps_constants.clear();
             category.clear(); camera_epoch_known = false;
-            screen_first = 0; screen_count = 0; screen_serial = 0;
+            layers = {};
         }
     };
     // Recording, ready (log completed), playing, and the playing scene's
@@ -894,11 +910,16 @@ private:
         std::uint16_t normal_mask = 0;    // normal matrices its records read
         std::uint8_t light_mask = 0;      // GX lights its records evaluate
         bool orthographic = false;
-        bool screen = false;              // read by the screen layer (no scene camera)
+        std::uint8_t layer = 0;           // of the records that read it
         PaletteMotion motion{};
     };
-    // The camera of screen-layer records: none (no split, no cut).
+    // The camera of screen-layer records: none (no split, no cut). Mirror-pass
+    // records have no split either, and cut with the scene camera.
     static constexpr CameraMotion kScreenCamera{};
+    CameraMotion interp_mirror_camera_{};
+    [[nodiscard]] const CameraMotion& layer_camera(unsigned layer) const noexcept {
+        return layer == kScreenLayer ? kScreenCamera : layer == kMirrorLayer ? interp_mirror_camera_ : interp_camera_;
+    }
     std::vector<InterpPaletteMotion> interp_palette_motions_;
     std::vector<std::int32_t> interp_palette_first_;  // per shadow: first entry
     std::uint64_t interp_moving_records_ = 0;        // summed per sub-frame
