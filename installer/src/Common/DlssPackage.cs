@@ -10,17 +10,17 @@ using Microsoft.Win32;
 namespace Nebula
 {
     /// <summary>
-    /// NVIDIA DLSS, installed on request from NVIDIA's Streamline 2.14.1 release
-    /// on GitHub. Only the files the runtime loads are read out of the release
-    /// zip (ranged requests: 32 MB of its 276 MB), and each must match its
-    /// SHA-256 below. Nebula ships none of NVIDIA's files.
+    /// NVIDIA DLSS and DLSS Frame Generation, installed on request from NVIDIA's
+    /// Streamline 2.14.1 release on GitHub. Only the files the runtime loads are
+    /// read out of the release zip (ranged requests: 36 MB of its 276 MB), and
+    /// each must match its SHA-256 below. Nebula ships none of NVIDIA's files.
     /// </summary>
     internal static class DlssPackage
     {
         public const string ArchiveUrl = "https://github.com/NVIDIA-RTX/Streamline/releases/download/v2.14.1/streamline-sdk-v2.14.1.zip";
         private const string ArchiveSha256 = "92c4d954631a1710da86ca3fa8d5034f2b9503838c95fc4ae977ae149319781b";
         private const long ArchiveSize = 275994000;
-        public const long DownloadBytes = 32003270;
+        public const long DownloadBytes = 36367463;
         private const string LicenseEntry = "bin/x64/nvngx_dlss.license.txt";
 
         static DlssPackage()
@@ -38,7 +38,8 @@ namespace Nebula
             }
         }
 
-        // Streamline's interposer and plug-ins, NVIDIA's DLSS library and the two licenses.
+        // Streamline's interposer and plug-ins, NVIDIA's DLSS and DLSS Frame Generation libraries,
+        // Reflex (Frame Generation needs it) and the three licenses.
         private static readonly Part[] Parts =
         {
             new Part("bin/x64/sl.interposer.dll", "sl.interposer.dll", "8c87c9499461da561edd529aa9bf7831d67d7b94ebb1c1a5ed54ef4934e1ea4c", 652928, 284550),
@@ -47,6 +48,11 @@ namespace Nebula
             new Part("bin/x64/nvngx_dlss.dll", "nvngx_dlss.dll", "3975567b8943c53acce397f2b72380092f84f162d00b0d2c7d08a1025c563983", 58956912, 31123319),
             new Part(LicenseEntry, "nvngx_dlss.license.txt", "3027f23ca5a46dd9cb8183fbd522983a86f64d7daac5982912bf9f214671f294", 26727, 9256),
             new Part("license.txt", "streamline.license.txt", "7b6f23e7d6f3ad6292f9308d2b42cdc3d82ae4e9b2abb55f230279d83bedd43d", 1591, 883),
+            new Part("bin/x64/sl.dlss_g.dll", "sl.dlss_g.dll", "f4a6b2b14dcc0b1485989e430d3b4e3a44ac1800b92ba1ad74f476e64fb2b09c", 636032, 290880),
+            new Part("bin/x64/nvngx_dlssg.dll", "nvngx_dlssg.dll", "ff6e90eb78b827927dff5b4ecc6b1c870c2e9bca29ed9f48c7d348cc9e170b82", 7460976, 3717448),
+            new Part("bin/x64/sl.reflex.dll", "sl.reflex.dll", "0ce9725e3e03ea9e7f81d008b57f33ee365973d2e349131c8b1c3e3378fe2db0", 388736, 180983),
+            new Part("bin/x64/sl.pcl.dll", "sl.pcl.dll", "f13d51cfa05f4cd514df2026049e2db8adf359221713170ad386fd499915b582", 360064, 167265),
+            new Part("bin/x64/reflex.license.txt", "reflex.license.txt", "ebf83c07fb3b2939908c3795d887afde3161c89a28ba391724efc784ce1bdabe", 20504, 7617),
         };
 
         /// <summary>The runtime loads Streamline from here (GALAXY_STREAMLINE_DIR).</summary>

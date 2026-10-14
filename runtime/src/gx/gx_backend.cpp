@@ -7712,7 +7712,7 @@ void GxBackend::start_interp_sequence(std::uint32_t xfb_addr) {
     }
     const RenderConfig cfg = get_render_config();
     double rate = std::max(61.0, present_frame_rate(
-        cfg.max_fps, cfg.vsync_interval, renderer_.display_refresh_hz()));
+        presented_max_fps(cfg), cfg.vsync_interval, renderer_.display_refresh_hz()));
     ++interp_sequence_serial_;
     ++interp_started_;
     // Logs completed but never played (a newer one replaced them first).
@@ -8993,7 +8993,7 @@ void GxBackend::check_interp_eval(const InterpScene& scene, const Affine34& came
 
 bool GxBackend::skip_for_present_rate() {
     const RenderConfig cfg = get_render_config();
-    const double rate = present_frame_rate(cfg.max_fps, cfg.vsync_interval, renderer_.display_refresh_hz());
+    const double rate = present_frame_rate(presented_max_fps(cfg), cfg.vsync_interval, renderer_.display_refresh_hz());
     if (rate >= 59.0) {
         next_rate_present_qpc_ = 0;
         return false;
@@ -9159,7 +9159,7 @@ void GxBackend::render_thread_main() {
             std::unique_lock<std::mutex> lock(queue_mutex_);
             const RenderConfig cfg = get_render_config();
             idle_present = cfg.frame_rate_decouple &&
-                (cfg.vsync_interval != 0u || cfg.max_fps > 0.0f);
+                (cfg.vsync_interval != 0u || presented_max_fps(cfg) > 0.0f);
             const bool poll_frame_effects = !pending_frame_effects_.empty();
             const bool poll_pointer_depth =
                 static_cast<bool>(pending_pointer_depth_capture_.capture) ||
@@ -10312,7 +10312,7 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
             // upscaler off. Decided per render chunk.
             const RenderConfig cfg = get_render_config();
             const double rate = present_frame_rate(
-                cfg.max_fps, cfg.vsync_interval, renderer_.display_refresh_hz());
+                presented_max_fps(cfg), cfg.vsync_interval, renderer_.display_refresh_hz());
             // The renderer keeps the log per game frame (interpolation_mode).
             interp_recording_ = renderer_.interpolation_mode();
             const unsigned frames = interp_recording_ ? interpolated_frames_per_game_frame(rate) : 0u;

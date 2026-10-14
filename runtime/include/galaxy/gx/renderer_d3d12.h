@@ -1055,6 +1055,8 @@ private:
     std::unique_ptr<TemporalUpscaler> temporal_;
     unsigned temporal_kind_ = 0;       // upscaler setting it was made for (2 FSR 3, 3 DLSS)
     unsigned temporal_quality_ = 0;
+    // A presented frame's Streamline markers have begun (begin_frame) and not yet ended (present).
+    bool streamline_frame_open_ = false;
     unsigned temporal_render_w_ = 0;
     unsigned temporal_render_h_ = 0;
     unsigned temporal_output_w_ = 0;

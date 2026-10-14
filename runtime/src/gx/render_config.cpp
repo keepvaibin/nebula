@@ -184,6 +184,8 @@ static void apply_kv(RenderConfig& cfg, const char* key, const char* val) {
     } else if (std::strcmp(key, "upscaler") == 0) {
         static constexpr const char* kNames[] = {"bilinear", "fsr", "fsr3", "dlss"};
         cfg.upscaler = parse_choice(val, kNames, cfg.upscaler);
+    } else if (std::strcmp(key, "frame_generation") == 0) {
+        cfg.frame_generation = std::min(parse_uint(val, cfg.frame_generation), 5u);
     } else if (std::strcmp(key, "temporal_quality") == 0) {
         static constexpr const char* kNames[] = {
             "native", "quality", "balanced", "performance", "ultra_performance"};
@@ -271,6 +273,7 @@ static void apply_env_overrides(RenderConfig& cfg) {
     apply_env(cfg, "GALAXY_AA", "aa");
     apply_env(cfg, "GALAXY_SMAA_QUALITY", "smaa_quality");
     apply_env(cfg, "GALAXY_UPSCALER", "upscaler");
+    apply_env(cfg, "GALAXY_FRAME_GENERATION", "frame_generation");
     apply_env(cfg, "GALAXY_TEMPORAL_QUALITY", "temporal_quality");
     apply_env(cfg, "GALAXY_SPATIAL_QUALITY", "spatial_quality");
     apply_env(cfg, "GALAXY_SHARPNESS", "sharpness");
@@ -311,6 +314,7 @@ static void clamp_unimplemented_features(RenderConfig& cfg) {
     cfg.aa_mode = std::min(cfg.aa_mode, 3u);
     cfg.smaa_quality = std::min(cfg.smaa_quality, 3u);
     cfg.upscaler = std::min(cfg.upscaler, 3u);
+    cfg.frame_generation = std::min(cfg.frame_generation, 5u);
     cfg.temporal_quality = std::min(cfg.temporal_quality, 4u);
     cfg.spatial_quality = std::min(cfg.spatial_quality, 4u);
     cfg.sharpness = std::min(cfg.sharpness, 100u);
@@ -411,6 +415,16 @@ RenderConfig get_render_config() {
     ReleaseSRWLockShared(&s_lock);
     return copy;
 }
+
+namespace {
+std::atomic<bool> s_frame_generation_running{false};
+}  // namespace
+
+void set_frame_generation_running(bool running) noexcept {
+    s_frame_generation_running.store(running, std::memory_order_relaxed);
+}
+
+bool frame_generation_running() noexcept { return s_frame_generation_running.load(std::memory_order_relaxed); }
 
 GxTimingConfig resolve_gx_timing_config_from_environment() {
     GxTimingConfig config{};
@@ -578,6 +592,7 @@ bool save_render_config_to_file() {
              << "aa=" << cfg.aa_mode << '\n'
              << "smaa_quality=" << cfg.smaa_quality << '\n'
              << "upscaler=" << cfg.upscaler << '\n'
+             << "frame_generation=" << cfg.frame_generation << '\n'
              << "temporal_quality=" << cfg.temporal_quality << '\n'
              << "spatial_quality=" << cfg.spatial_quality << '\n'
              << "sharpness=" << cfg.sharpness << '\n'

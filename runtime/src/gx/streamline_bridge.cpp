@@ -16,6 +16,9 @@
 #include <sl.h>
 #include <sl_consts.h>
 #include <sl_dlss.h>
+#include <sl_dlss_g.h>
+#include <sl_pcl.h>
+#include <sl_reflex.h>
 #include <sl_security.h>
 #endif
 
@@ -58,10 +61,26 @@ struct Api {
     PFun_slFreeResources* free_resources{};
     PFun_slDLSSGetOptimalSettings* dlss_get_optimal_settings{};
     PFun_slDLSSSetOptions* dlss_set_options{};
+    PFun_slDLSSGSetOptions* dlssg_set_options{};
+    PFun_slDLSSGGetState* dlssg_get_state{};
+    PFun_slReflexSetOptions* reflex_set_options{};
+    PFun_slReflexSleep* reflex_sleep{};
+    PFun_slPCLSetMarker* pcl_set_marker{};
     bool initialized = false;
     bool dlss = false;
+    bool dlssg_loaded = false;      // requested at startup and its plugins installed
+    bool dlssg = false;             // runs on the adapter
+    bool markers = false;           // PCL latency markers
 };
 Api g_api;
+// The presented frame's index (Streamline frame tokens) and frame generation's
+// applied setting and last reported state.
+std::uint32_t g_frame_index = 0u;
+unsigned g_dlssg_max = 0u;
+unsigned g_dlssg_applied = ~0u;
+unsigned g_dlssg_presented = 1u;
+unsigned g_dlssg_status = 0u;
+bool g_dlssg_tagged = false;
 std::wstring g_directory;
 // Streamline's proxies live until it shuts down: a released device proxy
 // clears Streamline's device, and its command queue proxy points at it.
@@ -98,11 +117,57 @@ const char* result_name(sl::Result result) {
     }
 }
 
+// Frame generation on the attached adapter: its functions, Reflex low latency
+// (DLSS-G requires it), the most frames it generates.
+void attach_frame_generation(const sl::AdapterInfo& info) {
+    sl::Result result = g_api.is_feature_supported(sl::kFeatureDLSS_G, info);
+    if (result != sl::Result::eOk) {
+        std::cerr << "[streamline] DLSS Frame Generation unavailable: " << result_name(result) << '\n';
+        return;
+    }
+    void* set_options = nullptr;
+    void* get_state = nullptr;
+    void* reflex_options = nullptr;
+    void* reflex_sleep = nullptr;
+    void* pcl_marker = nullptr;
+    if (g_api.get_feature_function(sl::kFeatureDLSS_G, "slDLSSGSetOptions", set_options) != sl::Result::eOk ||
+        g_api.get_feature_function(sl::kFeatureDLSS_G, "slDLSSGGetState", get_state) != sl::Result::eOk ||
+        g_api.get_feature_function(sl::kFeatureReflex, "slReflexSetOptions", reflex_options) != sl::Result::eOk ||
+        g_api.get_feature_function(sl::kFeatureReflex, "slReflexSleep", reflex_sleep) != sl::Result::eOk ||
+        g_api.get_feature_function(sl::kFeaturePCL, "slPCLSetMarker", pcl_marker) != sl::Result::eOk ||
+        set_options == nullptr || get_state == nullptr || reflex_options == nullptr || reflex_sleep == nullptr ||
+        pcl_marker == nullptr) {
+        std::cerr << "[streamline] the DLSS Frame Generation plugins' functions are missing\n";
+        return;
+    }
+    g_api.dlssg_set_options = reinterpret_cast<PFun_slDLSSGSetOptions*>(set_options);
+    g_api.dlssg_get_state = reinterpret_cast<PFun_slDLSSGGetState*>(get_state);
+    g_api.reflex_set_options = reinterpret_cast<PFun_slReflexSetOptions*>(reflex_options);
+    g_api.reflex_sleep = reinterpret_cast<PFun_slReflexSleep*>(reflex_sleep);
+    g_api.pcl_set_marker = reinterpret_cast<PFun_slPCLSetMarker*>(pcl_marker);
+    sl::ReflexOptions reflex{};
+    reflex.mode = sl::ReflexMode::eLowLatency;
+    result = g_api.reflex_set_options(reflex);
+    if (result != sl::Result::eOk) {
+        std::cerr << "[streamline] Reflex: " << result_name(result) << '\n';
+        return;
+    }
+    sl::DLSSGState state{};
+    if (g_api.dlssg_get_state(sl::ViewportHandle{0u}, state, nullptr) == sl::Result::eOk) {
+        g_dlssg_max = std::max(state.numFramesToGenerateMax, 1u);
+    } else {
+        g_dlssg_max = 1u;
+    }
+    g_api.markers = true;
+    g_api.dlssg = true;
+    std::cerr << "[streamline] DLSS Frame Generation ready (up to " << g_dlssg_max + 1u << "x)\n";
+}
+
 }  // namespace
 
 namespace streamline {
 
-bool startup(const std::wstring& directory) noexcept {
+bool startup(const std::wstring& directory, bool frame_generation) noexcept {
     if (g_api.initialized) {
         return true;
     }
@@ -154,9 +219,19 @@ bool startup(const std::wstring& directory) noexcept {
         preferences.flags = sl::PreferenceFlags::eDisableCLStateTracking |
                             sl::PreferenceFlags::eUseManualHooking |
                             sl::PreferenceFlags::eUseFrameBasedResourceTagging;
-        static const sl::Feature features[] = {sl::kFeatureDLSS};
+        // Frame generation: DLSS-G needs Reflex (PCL loads with the core).
+        const auto installed = [&](const wchar_t* name) {
+            return GetFileAttributesW((g_directory + L"\\" + name).c_str()) != INVALID_FILE_ATTRIBUTES;
+        };
+        const bool dlssg = frame_generation && installed(L"sl.dlss_g.dll") && installed(L"nvngx_dlssg.dll") &&
+                           installed(L"sl.reflex.dll") && installed(L"sl.pcl.dll");
+        if (frame_generation && !dlssg) {
+            std::cerr << "[streamline] DLSS Frame Generation is not installed\n";
+        }
+        static const sl::Feature features[] = {sl::kFeatureDLSS, sl::kFeatureDLSS_G, sl::kFeatureReflex,
+                                               sl::kFeaturePCL};
         preferences.featuresToLoad = features;
-        preferences.numFeaturesToLoad = 1u;
+        preferences.numFeaturesToLoad = dlssg ? 4u : 1u;
         preferences.engine = sl::EngineType::eCustom;
         preferences.engineVersion = "Nebula";
         preferences.projectId = "7c3e2b1a-5d4f-4e8a-9b6c-1f2e3d4c5b6a";
@@ -167,6 +242,7 @@ bool startup(const std::wstring& directory) noexcept {
             return false;
         }
         api.initialized = true;
+        api.dlssg_loaded = dlssg;
         g_api = api;
         return true;
     } catch (...) {
@@ -206,10 +282,140 @@ bool attach_device(ID3D12Device* device, const LUID& adapter) noexcept {
     g_api.dlss_set_options = reinterpret_cast<PFun_slDLSSSetOptions*>(options);
     g_api.dlss = true;
     std::cerr << "[streamline] DLSS ready\n";
+    if (g_api.dlssg_loaded) {
+        attach_frame_generation(info);
+    }
     return true;
 }
 
 bool dlss_supported() noexcept { return g_api.initialized && g_api.dlss; }
+
+bool frame_generation_supported() noexcept { return g_api.initialized && g_api.dlssg; }
+
+unsigned frame_generation_max() noexcept { return frame_generation_supported() ? g_dlssg_max : 0u; }
+
+unsigned frame_index() noexcept { return g_frame_index; }
+
+void marker(Marker m) noexcept {
+    if (!g_api.initialized || !g_api.markers) {
+        if (m == Marker::kPresentEnd) {
+            ++g_frame_index;
+        }
+        return;
+    }
+    sl::FrameToken* token = nullptr;
+    const std::uint32_t index = g_frame_index;
+    if (g_api.get_new_frame_token(token, &index) == sl::Result::eOk && token != nullptr) {
+        (void)g_api.pcl_set_marker(static_cast<sl::PCLMarker>(static_cast<unsigned>(m)), *token);
+    }
+    if (m == Marker::kPresentEnd) {
+        ++g_frame_index;
+        g_dlssg_tagged = false;
+    }
+}
+
+void reflex_sleep() noexcept {
+    if (!frame_generation_supported() || g_api.reflex_sleep == nullptr) {
+        return;
+    }
+    sl::FrameToken* token = nullptr;
+    const std::uint32_t index = g_frame_index;
+    if (g_api.get_new_frame_token(token, &index) == sl::Result::eOk && token != nullptr) {
+        (void)g_api.reflex_sleep(*token);
+    }
+}
+
+bool tag_frame_generation(const FrameGenerationInputs& in) noexcept {
+    if (!frame_generation_supported() || in.list == nullptr || in.depth == nullptr || in.motion == nullptr) {
+        return false;
+    }
+    sl::FrameToken* token = nullptr;
+    const std::uint32_t index = g_frame_index;
+    if (g_api.get_new_frame_token(token, &index) != sl::Result::eOk || token == nullptr) {
+        return false;
+    }
+    sl::Resource depth(sl::ResourceType::eTex2d, in.depth, D3D12_RESOURCE_STATE_DEPTH_WRITE);
+    sl::Resource motion(sl::ResourceType::eTex2d, in.motion, D3D12_RESOURCE_STATE_RENDER_TARGET);
+    sl::Extent render{};
+    render.width = in.render_width;
+    render.height = in.render_height;
+    // The scene's targets are cleared and reused before the present: Streamline copies them now.
+    const sl::ResourceTag tags[] = {
+        sl::ResourceTag(&depth, sl::kBufferTypeDepth, sl::ResourceLifecycle::eOnlyValidNow, &render),
+        sl::ResourceTag(&motion, sl::kBufferTypeMotionVectors, sl::ResourceLifecycle::eOnlyValidNow, &render)};
+    const sl::ViewportHandle viewport{0u};
+    if (g_api.set_tag_for_frame(*token, viewport, tags, 2u, in.list) != sl::Result::eOk) {
+        static bool reported = false;
+        if (!reported) {
+            reported = true;
+            std::cerr << "[dlss-g] tagging failed\n";
+        }
+        return false;
+    }
+    g_dlssg_tagged = true;
+    return true;
+}
+
+void tag_backbuffer_region(ID3D12GraphicsCommandList* list, unsigned left, unsigned top, unsigned width,
+                           unsigned height) noexcept {
+    if (!frame_generation_supported() || !g_dlssg_tagged) {
+        return;
+    }
+    sl::FrameToken* token = nullptr;
+    const std::uint32_t index = g_frame_index;
+    if (g_api.get_new_frame_token(token, &index) != sl::Result::eOk || token == nullptr) {
+        return;
+    }
+    sl::Extent region{};
+    region.left = left;
+    region.top = top;
+    region.width = width;
+    region.height = height;
+    const sl::ResourceTag tag(nullptr, sl::kBufferTypeBackbuffer, sl::ResourceLifecycle{}, &region);
+    (void)g_api.set_tag_for_frame(*token, sl::ViewportHandle{0u}, &tag, 1u, list);
+}
+
+void set_frame_generation(unsigned generated) noexcept {
+    if (!frame_generation_supported()) {
+        return;
+    }
+    // Only frames whose scene was tagged are generated from.
+    const unsigned wanted = g_dlssg_tagged ? std::min(generated, g_dlssg_max) : 0u;
+    if (wanted != g_dlssg_applied) {
+        sl::DLSSGOptions options{};
+        options.mode = wanted != 0u ? sl::DLSSGMode::eOn : sl::DLSSGMode::eOff;
+        options.numFramesToGenerate = std::max(wanted, 1u);
+        // Off between scenes (menus, loading) keeps its resources: no stutter coming back.
+        options.flags = sl::DLSSGFlags::eRetainResourcesWhenOff;
+        const sl::Result result = g_api.dlssg_set_options(sl::ViewportHandle{0u}, options);
+        if (result != sl::Result::eOk) {
+            std::cerr << "[dlss-g] options failed: " << result_name(result) << '\n';
+        } else if (g_dlssg_applied == ~0u || (g_dlssg_applied == 0u) != (wanted == 0u)) {
+            std::cerr << "[dlss-g] " << (wanted != 0u ? "on, generated frames " : "off")
+                      << (wanted != 0u ? std::to_string(wanted) : std::string()) << '\n';
+        }
+        g_dlssg_applied = wanted;
+    }
+    sl::DLSSGState state{};
+    if (g_dlssg_applied != 0u && g_api.dlssg_get_state(sl::ViewportHandle{0u}, state, nullptr) == sl::Result::eOk) {
+        g_dlssg_presented = std::max(state.numFramesActuallyPresented, 1u);
+        const unsigned status = static_cast<unsigned>(state.status);
+        static std::uint32_t reported_index = 0u;
+        if (status != g_dlssg_status || g_frame_index - reported_index >= 600u) {
+            reported_index = g_frame_index;
+            std::cerr << "[dlss-g] frame " << g_frame_index << " status " << status << " presented "
+                      << state.numFramesActuallyPresented << " max " << state.numFramesToGenerateMax
+                      << " min-size " << state.minWidthOrHeight << '\n';
+            g_dlssg_status = status;
+        }
+    } else if (g_dlssg_applied == 0u) {
+        g_dlssg_presented = 1u;
+    }
+}
+
+unsigned frames_presented() noexcept { return g_dlssg_presented; }
+
+unsigned frame_generation_status() noexcept { return g_dlssg_status; }
 
 Microsoft::WRL::ComPtr<ID3D12Device> queue_device(ID3D12Device* device) noexcept {
     if (!g_api.initialized || device == nullptr) {
@@ -253,6 +459,8 @@ void shutdown() noexcept {
     g_device_proxy.Reset();
     g_api.initialized = false;
     g_api.dlss = false;
+    g_api.dlssg = false;
+    g_api.markers = false;
 }
 
 }  // namespace streamline
@@ -304,7 +512,7 @@ public:
             return false;
         }
         sl::FrameToken* token = nullptr;
-        const std::uint32_t index = frame_++;
+        const std::uint32_t index = streamline::frame_index();
         if (g_api.get_new_frame_token(token, &index) != sl::Result::eOk || token == nullptr) {
             return failed("frame token");
         }
@@ -415,7 +623,6 @@ private:
     sl::ViewportHandle viewport_{0u};
     sl::DLSSMode mode_;
     sl::DLSSOptions options_{};
-    std::uint32_t frame_ = 0u;
     bool reported_ = false;
 };
 
@@ -447,7 +654,17 @@ std::unique_ptr<TemporalUpscaler> create_dlss_upscaler(unsigned render_width, un
 #else  // !GALAXY_WITH_STREAMLINE
 
 namespace streamline {
-bool startup(const std::wstring&) noexcept { return false; }
+bool startup(const std::wstring&, bool) noexcept { return false; }
+bool frame_generation_supported() noexcept { return false; }
+unsigned frame_generation_max() noexcept { return 0u; }
+unsigned frame_index() noexcept { return 0u; }
+void marker(Marker) noexcept {}
+void reflex_sleep() noexcept {}
+bool tag_frame_generation(const FrameGenerationInputs&) noexcept { return false; }
+void tag_backbuffer_region(ID3D12GraphicsCommandList*, unsigned, unsigned, unsigned, unsigned) noexcept {}
+void set_frame_generation(unsigned) noexcept {}
+unsigned frames_presented() noexcept { return 1u; }
+unsigned frame_generation_status() noexcept { return 0u; }
 bool active() noexcept { return false; }
 bool attach_device(ID3D12Device*, const LUID&) noexcept { return false; }
 bool dlss_supported() noexcept { return false; }

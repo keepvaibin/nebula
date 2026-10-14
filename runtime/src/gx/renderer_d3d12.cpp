@@ -173,6 +173,8 @@ bool dlss_offered();
 // DXR 1.1 with shader model 6.5 on an adapter with dedicated memory (the RAY TRACING row).
 std::atomic<bool> s_ray_tracing_offered{false};
 bool dlss_installed_now();
+bool frame_generation_offered();
+unsigned frame_generation_choices();
 bool dlss_hold_back(RenderConfig& applied, const RenderConfig& live);
 bool dlss_prompt_key(WPARAM key, bool was_down);
 void dlss_dismiss_prompt();
@@ -603,6 +605,7 @@ unsigned pending_settings_changes() {
         (!d.internal_follow_window && d.efb_scale != live.efb_scale);
     changes += d.vsync_interval != live.vsync_interval;
     changes += d.max_fps != live.max_fps;
+    changes += d.frame_generation != live.frame_generation;
     changes += d.aa_mode != live.aa_mode;
     changes += d.smaa_quality != live.smaa_quality;
     changes += d.upscaler != live.upscaler;
@@ -766,7 +769,7 @@ unsigned graphics_row(unsigned row) {
 
 unsigned native_settings_row_count(unsigned tab) {
     switch (tab % kNativeSettingsTabCount) {
-    case 0: return 8u;
+    case 0: return frame_generation_offered() ? 9u : 8u;
     case 1:
         return (temporal_quality_row_shown() ? 9u : 8u) +
                (s_ray_tracing_offered.load(std::memory_order_relaxed) ? 1u : 0u);
@@ -864,6 +867,7 @@ void apply_native_settings_draft() {
     applied.efb_scale = next.efb_scale;
     applied.vsync_interval = next.vsync_interval;
     applied.max_fps = next.max_fps;
+    applied.frame_generation = next.frame_generation;
     applied.aa_mode = next.aa_mode;
     applied.smaa_quality = next.smaa_quality;
     applied.upscaler = next.upscaler;
@@ -1072,6 +1076,11 @@ void adjust_native_setting_unlogged(int delta) {
         case 7:
             draft.vsync_interval = draft.vsync_interval == 0u ? 1u : 0u;
             return;
+        case 8: {  // frame generation: off, 2x .. the GPU's most
+            const unsigned choices = frame_generation_choices();
+            draft.frame_generation = step(std::min(draft.frame_generation, choices - 1u), choices);
+            return;
+        }
         default:
             return;
         }
@@ -3500,6 +3509,29 @@ bool dlss_installed_now() {
     return s_dlss_installed_now && !streamline::dlss_supported();
 }
 
+// DLSS Frame Generation (DISPLAY: FRAME GENERATION): offered while it runs, or with DLSS once its
+// plugins are installed (it loads when the game starts with it on).
+bool frame_generation_offered() {
+    if (streamline::frame_generation_supported()) {
+        return true;
+    }
+    static const bool installed = [] {
+        const std::wstring directory = streamline::default_directory();
+        for (const wchar_t* name : {L"sl.dlss_g.dll", L"nvngx_dlssg.dll", L"sl.reflex.dll", L"sl.pcl.dll"}) {
+            if (GetFileAttributesW((directory + L"\\" + name).c_str()) == INVALID_FILE_ATTRIBUTES) {
+                return false;
+            }
+        }
+        return true;
+    }();
+    return installed && streamline::dlss_supported();
+}
+
+// Generated frames offered: up to what the GPU runs once loaded, else up to 3 (4x).
+unsigned frame_generation_choices() {
+    return (streamline::frame_generation_supported() ? streamline::frame_generation_max() : 3u) + 1u;
+}
+
 // DLSS chosen before it is installed is not applied: the menu asks to
 // download it. Once downloaded this session it applies and runs after a
 // restart (FSR 1 until then).
@@ -4729,7 +4761,8 @@ bool RendererD3D12::initialize(int window_width, int window_height, unsigned efb
             const bool skip = getenv_s(&length, value, sizeof(value), "GALAXY_STREAMLINE") == 0 &&
                               length > 1u && value[0] == '0';
             if (!skip) {
-                (void)streamline::startup(streamline::default_directory());
+                (void)streamline::startup(streamline::default_directory(),
+                                          get_render_config().frame_generation != 0u);
             }
         }
         UINT flags = 0;
@@ -6123,6 +6156,17 @@ void RendererD3D12::begin_frame(bool present_swap_chain) {
     reconcile_display_state();
     apply_pending_resize();
     follow_window_internal_resolution();
+    if (!streamline_frame_open_) {
+        // Frame generation runs with DLSS on a GPU that runs it, while it is chosen.
+        const RenderConfig fg_cfg = get_render_config();
+        set_frame_generation_running(streamline::frame_generation_supported() && fg_cfg.frame_generation != 0u &&
+                                     fg_cfg.upscaler == 3u && streamline::dlss_supported());
+        if (frame_generation_running()) {
+            streamline::reflex_sleep();
+        }
+        streamline::marker(streamline::Marker::kSimulationStart);
+        streamline_frame_open_ = true;
+    }
     apply_pending_efb_scale();
     sync_post_process_settings();
     reconcile_ray_tracing();
@@ -6580,14 +6624,17 @@ void RendererD3D12::pace_present_if_needed(
 void RendererD3D12::present_to_swap_chain() {
     const bool stall_watch = trace_stall_watch_enabled();
     const RenderConfig cfg = get_render_config();
-    const UINT vsync = present_sync_interval(std::min(2u, cfg.vsync_interval), cfg.max_fps);
+    const bool generating = frame_generation_running();
+    // With frame generation the sync interval is 0 or 1 (Streamline paces the generated frames).
+    const UINT vsync = generating ? std::min(1u, cfg.vsync_interval)
+                                  : present_sync_interval(std::min(2u, cfg.vsync_interval), cfg.max_fps);
     const UINT present_flags =
         (vsync == 0 && tearing_supported_ && !exclusive_fullscreen_active_) ? DXGI_PRESENT_ALLOW_TEARING
                                            : 0u;
     const auto stall_watch_pace_start = stall_watch
         ? std::chrono::steady_clock::now()
         : std::chrono::steady_clock::time_point{};
-    pace_present_if_needed(cfg.vsync_interval, cfg.max_fps);
+    pace_present_if_needed(cfg.vsync_interval, presented_max_fps(cfg));
     if (stall_watch) {
         const double stall_watch_ms =
             std::chrono::duration<double, std::milli>(
@@ -6617,7 +6664,11 @@ void RendererD3D12::present_to_swap_chain() {
         galaxy::timeline::record(galaxy::timeline::Event::PresentBegin,
                              ++timeline_present_ordinal, vsync);
     }
+    streamline::set_frame_generation(generating ? cfg.frame_generation : 0u);
+    streamline::marker(streamline::Marker::kPresentStart);
     const HRESULT present_hr = swap_chain_->Present(vsync, present_flags);
+    streamline::marker(streamline::Marker::kPresentEnd);
+    streamline_frame_open_ = false;
     if (timeline_present) {
         galaxy::timeline::record(galaxy::timeline::Event::PresentEnd,
                              timeline_present_ordinal);
@@ -6892,7 +6943,14 @@ std::uint64_t RendererD3D12::end_frame(
         d3d_check(close_hr, "CommandList Close");
     }
     ID3D12CommandList* lists[] = {command_list_.Get()};
+    if (present_swap_chain) {
+        streamline::marker(streamline::Marker::kSimulationEnd);
+        streamline::marker(streamline::Marker::kRenderSubmitStart);
+    }
     queue_->ExecuteCommandLists(1, lists);
+    if (present_swap_chain) {
+        streamline::marker(streamline::Marker::kRenderSubmitEnd);
+    }
 
     timestamp_pending_[frame_slot_] =
         timestamp_query_heap_ != nullptr && timestamp_readback_ != nullptr;
@@ -7180,7 +7238,7 @@ bool RendererD3D12::interpolation_mode() const {
         return false;
     }
     const RenderConfig cfg = get_render_config();
-    const double rate = present_frame_rate(cfg.max_fps, cfg.vsync_interval, display_refresh_hz_);
+    const double rate = present_frame_rate(presented_max_fps(cfg), cfg.vsync_interval, display_refresh_hz_);
     if (temporal_mode()) {
         // The upscaler's history follows the presented frames: one per slot of
         // a clock locked to the game's 60 Hz.
@@ -7200,7 +7258,7 @@ RendererD3D12::TemporalInterpKey RendererD3D12::temporal_interp_key() const {
     key.quality = cfg.temporal_quality;
     key.efb_scale = output_efb_active_ ? alt_efb_.scale : efb_scale_;  // the render EFB's
     key.output_scale = output_efb_scale_for_window();
-    key.max_fps = cfg.max_fps;
+    key.max_fps = presented_max_fps(cfg);
     key.vsync = cfg.vsync_interval;
     key.refresh_hz = display_refresh_hz_;
     return key;
@@ -9829,7 +9887,8 @@ void RendererD3D12::record_subframe_upscale(const ReplayList& entry, const Subfr
         in.camera_far = scene_camera_[1];
         in.fov_y = scene_camera_[2];
         const RenderConfig cfg = get_render_config();
-        in.frame_ms = static_cast<float>(1000.0 / present_frame_rate(cfg.max_fps, cfg.vsync_interval, display_refresh_hz_));
+        in.frame_ms = static_cast<float>(1000.0 / present_frame_rate(presented_max_fps(cfg), cfg.vsync_interval,
+                                                                      display_refresh_hz_));
         in.reset = time.reset || !temporal_history_valid_;
         upscaled = temporal_inputs_match(in) && temporal_->evaluate(in);
         ID3D12DescriptorHeap* heaps[] = {srv_ring_.heap(), sampler_heap_.Get()};
@@ -10080,6 +10139,15 @@ bool RendererD3D12::record_temporal_upscale(unsigned output_scale) {
     in.frame_ms = 1000.0f / 60.0f;
     in.reset = !temporal_history_valid_;
     const bool recorded = temporal_inputs_match(in) && temporal_->evaluate(in);
+    if (recorded && frame_generation_running()) {
+        streamline::FrameGenerationInputs fg{};
+        fg.list = command_list_.Get();
+        fg.depth = in.depth;
+        fg.motion = in.motion;
+        fg.render_width = in.render_width;
+        fg.render_height = in.render_height;
+        (void)streamline::tag_frame_generation(fg);
+    }
     // The upscaler binds its own heaps, root signature and pipelines.
     ID3D12DescriptorHeap* heaps[] = {srv_ring_.heap(), sampler_heap_.Get()};
     command_list_->SetDescriptorHeaps(2, heaps);
@@ -12527,6 +12595,12 @@ std::string native_settings_row_text(
             const bool gpu_bound = temporal != 0u && above_60 &&
                                    s_temporal_interp_suspended.load(std::memory_order_relaxed);
             const char* cap = gpu_bound ? " (60: GPU)" : !capped ? "" : temporal == 3u ? " (60: DLSS)" : " (60: FSR 3)";
+            if (frame_generation_running()) {
+                // The game presents 60; DLSS Frame Generation shows the frames between.
+                std::snprintf(text, sizeof(text), "FRAME RATE: 60 X%u DLSS FG  %.1f", render.frame_generation + 1u,
+                              measured * static_cast<double>(streamline::frames_presented()));
+                return text;
+            }
             if (rate == 0u) {
                 std::snprintf(text, sizeof(text), "FRAME RATE: UNLIMITED%s  %.1f", cap, measured);
             } else {
@@ -12536,6 +12610,14 @@ std::string native_settings_row_text(
         }
         case 7:
             return std::string("VSYNC: ") + (render.vsync_interval == 0u ? "OFF" : "ON");
+        case 8: {
+            if (render.frame_generation == 0u) return "FRAME GENERATION: OFF";
+            std::snprintf(text, sizeof(text), "FRAME GENERATION: %uX%s", render.frame_generation + 1u,
+                          !streamline::frame_generation_supported() ? " (AFTER RESTART)"
+                          : render.upscaler != 3u                   ? " (WITH DLSS)"
+                                                                    : "");
+            return text;
+        }
         default:
             return {};
         }
@@ -13087,6 +13169,12 @@ bool RendererD3D12::present(
                 <<" presentation-aspect="<<content_aspect<<" prerecorded-movie="<<source->prerecorded_movie
                 <<" dpi="<<GetDpiForWindow(window_)<<" internal-scale="<<efb_scale_<<'\n';
         }
+    }
+    if (frame_generation_running()) {
+        streamline::tag_backbuffer_region(command_list_.Get(), static_cast<unsigned>(content_viewport.left),
+                                          static_cast<unsigned>(content_viewport.top),
+                                          static_cast<unsigned>(content_viewport.width),
+                                          static_cast<unsigned>(content_viewport.height));
     }
     const bool content_has_borders =
         content_viewport.left != 0 || content_viewport.top != 0 ||

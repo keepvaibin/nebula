@@ -1,7 +1,8 @@
 #pragma once
 
-// NVIDIA Streamline (DLSS super resolution), loaded at run time from a vendor
-// folder the user installs: Nebula ships none of NVIDIA's binaries. The
+// NVIDIA Streamline (DLSS super resolution, DLSS Frame Generation with Reflex),
+// loaded at run time from a vendor folder the user installs: Nebula ships none
+// of NVIDIA's binaries. The
 // interposer must carry Streamline's signature; Streamline runs with manual
 // hooking (only the swap chain's presentation and the command queue pass
 // through its proxies) and without over-the-air updates. Render thread only.
@@ -32,8 +33,10 @@ namespace streamline {
 [[nodiscard]] std::wstring default_directory();
 // Before the swap chain exists: loads and initializes Streamline from
 // `directory`. False when it is not installed, not signed or refused (OS,
-// driver); the reason is logged.
-bool startup(const std::wstring& directory) noexcept;
+// driver); the reason is logged. With `frame_generation` it also loads DLSS
+// Frame Generation and Reflex when their plugins are installed: the swap chain
+// is then Streamline's, and frame generation switches on and off while it runs.
+bool startup(const std::wstring& directory, bool frame_generation = false) noexcept;
 [[nodiscard]] bool active() noexcept;
 // After the device exists: hands it to Streamline. True when DLSS super
 // resolution runs on the adapter.
@@ -46,6 +49,50 @@ bool attach_device(ID3D12Device* device, const LUID& adapter) noexcept;
 [[nodiscard]] Microsoft::WRL::ComPtr<IDXGIFactory4> swap_chain_factory(IDXGIFactory4* factory) noexcept;
 // Before the swap chain and device are released.
 void shutdown() noexcept;
+
+// DLSS Frame Generation (after attach_device): it runs on the adapter, and the
+// most frames it generates after each rendered one.
+[[nodiscard]] bool frame_generation_supported() noexcept;
+[[nodiscard]] unsigned frame_generation_max() noexcept;
+
+// The presented frame (render thread). Every Streamline call for one presented
+// frame (DLSS constants and evaluation, frame generation inputs, latency
+// markers) takes the current frame's token; marker(kPresentEnd) moves on to
+// the next frame.
+enum class Marker : unsigned {
+    kSimulationStart,
+    kSimulationEnd,
+    kRenderSubmitStart,
+    kRenderSubmitEnd,
+    kPresentStart,
+    kPresentEnd,
+};
+[[nodiscard]] unsigned frame_index() noexcept;
+void marker(Marker marker) noexcept;
+// Reflex: waits until the frame's best start (frame generation only).
+void reflex_sleep() noexcept;
+
+// This frame's frame generation inputs: the scene's depth and motion vectors
+// at the render size, in the states they are in on `list` (Streamline copies
+// them there), and the backbuffer rectangle the game picture covers.
+struct FrameGenerationInputs {
+    ID3D12GraphicsCommandList* list = nullptr;
+    ID3D12Resource* depth = nullptr;
+    ID3D12Resource* motion = nullptr;
+    unsigned render_width = 0;
+    unsigned render_height = 0;
+};
+bool tag_frame_generation(const FrameGenerationInputs& in) noexcept;
+void tag_backbuffer_region(ID3D12GraphicsCommandList* list, unsigned left, unsigned top, unsigned width,
+                           unsigned height) noexcept;
+// Before the present: frames to generate after it (0 while the frame carries
+// no tagged scene: menus, loading, a camera cut's first frame). Applied when it
+// changes.
+void set_frame_generation(unsigned generated) noexcept;
+// Frames the display showed per present, as Streamline last reported (1
+// without frame generation); its status bits (sl::DLSSGStatus, 0 ok).
+[[nodiscard]] unsigned frames_presented() noexcept;
+[[nodiscard]] unsigned frame_generation_status() noexcept;
 
 }  // namespace streamline
 
