@@ -3072,6 +3072,11 @@ EfbConversionShaderConstants make_efb_peek_conversion_constants(
 // UploadRing
 // ---------------------------------------------------------------------------
 
+namespace {
+// Identities of ring buffers and of their segmentations (immutable-upload tokens).
+std::atomic<std::uint64_t> g_upload_ring_identity{1};
+}  // namespace
+
 void UploadRing::reset() noexcept {
     if (buffer_ && mapped_ != nullptr) {
         buffer_->Unmap(0, nullptr);
@@ -3081,13 +3086,13 @@ void UploadRing::reset() noexcept {
 
 bool UploadRing::initialize(
     ID3D12Device* device, const char* name, std::size_t bytes_per_frame,
-    unsigned frames_in_flight) {
+    unsigned frames_in_flight, std::size_t capacity) {
     if (device == nullptr || bytes_per_frame == 0u || frames_in_flight == 0u ||
         bytes_per_frame > std::numeric_limits<std::size_t>::max() / frames_in_flight) {
         return false;
     }
     // Prepare all fallible state before replacing the retained mapped buffer.
-    const std::size_t total = bytes_per_frame * frames_in_flight;
+    const std::size_t total = std::max(bytes_per_frame * frames_in_flight, capacity);
     D3D12_HEAP_PROPERTIES hp{};
     hp.Type = D3D12_HEAP_TYPE_UPLOAD;
     D3D12_RESOURCE_DESC rd{};
@@ -3119,9 +3124,29 @@ bool UploadRing::initialize(
     name_ = name != nullptr ? name : "";
     bytes_per_frame_ = bytes_per_frame;
     frames_in_flight_ = frames_in_flight;
-    static std::atomic<std::uint64_t> next_identity{1};
-    resource_identity_ = next_identity.fetch_add(1, std::memory_order_relaxed);
+    capacity_ = total;
+    resource_identity_ = g_upload_ring_identity.fetch_add(1, std::memory_order_relaxed);
     slot_generations_ = std::move(generations);
+    segment_base_ = cursor_ = 0u;
+    active_slot_ = 0u;
+    frame_ready_ = false;
+    segment_allocation_pending_ = true;
+    reused_bytes_ = copied_bytes_ = 0u;
+    immutable_upload_calls_ = 0u;
+    peak_bytes_per_frame_ = 0u;
+    return true;
+}
+
+bool UploadRing::resegment(std::size_t bytes_per_frame, unsigned frames_in_flight) {
+    if (!buffer_ || mapped_ == nullptr || bytes_per_frame == 0u || frames_in_flight == 0u ||
+        bytes_per_frame > capacity_ / frames_in_flight) {
+        return false;
+    }
+    bytes_per_frame_ = bytes_per_frame;
+    frames_in_flight_ = frames_in_flight;
+    // A new identity: no immutable-upload token of the old segmentation matches.
+    resource_identity_ = g_upload_ring_identity.fetch_add(1, std::memory_order_relaxed);
+    slot_generations_.assign(frames_in_flight, 0u);
     segment_base_ = cursor_ = 0u;
     active_slot_ = 0u;
     frame_ready_ = false;
@@ -5165,10 +5190,17 @@ bool RendererD3D12::initialize(int window_width, int window_height, unsigned efb
         if (!create_sampler_heap()) return false;
 
         // Upload + descriptor rings.
-        if (!vertex_ring_  .initialize(device_.Get(), "vertex",   vb_per_frame_bytes(),  kFramesInFlight)) return false;
-        if (!index_ring_   .initialize(device_.Get(), "index",    ib_per_frame_bytes(),  kFramesInFlight)) return false;
-        if (!constant_ring_.initialize(device_.Get(), "constant", cb_per_frame_bytes(),  kFramesInFlight)) return false;
-        if (!matrix_ring_  .initialize(device_.Get(), "matrix",   mtx_per_frame_bytes(), kFramesInFlight)) return false;
+        // Each ring reserves its largest segmentation (interpolation, temporal), so a frame-rate or
+        // upscaler change only re-segments it: no 300-400 MB of upload memory created mid-game.
+        constexpr unsigned kMostSegments = std::max({kFramesInFlight, kInterpSegments, kRingSegments});
+        if (!vertex_ring_  .initialize(device_.Get(), "vertex",   vb_per_frame_bytes(),  kFramesInFlight,
+                                       vb_per_frame_bytes() * std::max(kFramesInFlight, kInterpSegments))) return false;
+        if (!index_ring_   .initialize(device_.Get(), "index",    ib_per_frame_bytes(),  kFramesInFlight,
+                                       ib_per_frame_bytes() * std::max(kFramesInFlight, kInterpSegments))) return false;
+        if (!constant_ring_.initialize(device_.Get(), "constant", cb_per_frame_bytes(),  kFramesInFlight,
+                                       cb_per_frame_bytes() * 4u * kInterpSegments)) return false;
+        if (!matrix_ring_  .initialize(device_.Get(), "matrix",   mtx_per_frame_bytes(), kFramesInFlight,
+                                       mtx_per_frame_bytes() * kMostSegments)) return false;
         if (!srv_ring_.initialize(device_.Get(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, kSrvPerFrame, kInterpSegments, kPersistentSrvDescriptors)) return false;
 
         // Conversion sources occupy the descriptor ring's immutable prefix.
@@ -6120,17 +6152,20 @@ void RendererD3D12::begin_frame(bool present_swap_chain) {
             const unsigned segments = mode == RingMode::Interp ? kInterpSegments : kFramesInFlight;
             const unsigned matrix_segments = mode == RingMode::Normal ? kFramesInFlight
                 : mode == RingMode::Interp ? kInterpSegments : kRingSegments;
-            vertex_ring_.reset();
-            index_ring_.reset();
-            constant_ring_.reset();
-            matrix_ring_.reset();
             // Interpolated sub-frames add one VS constant block per scene
             // record each; the constant segment holds a whole game frame.
-            if (!vertex_ring_.initialize(device_.Get(), "vertex", vb_per_frame_bytes(), segments) ||
-                !index_ring_.initialize(device_.Get(), "index", ib_per_frame_bytes(), segments) ||
-                !constant_ring_.initialize(device_.Get(), "constant",
-                    cb_per_frame_bytes() * (mode == RingMode::Interp ? 4u : 1u), segments) ||
-                !matrix_ring_.initialize(device_.Get(), "matrix", mtx_per_frame_bytes(), matrix_segments)) {
+            const std::size_t constant_bytes = cb_per_frame_bytes() * (mode == RingMode::Interp ? 4u : 1u);
+            const auto place = [&](UploadRing& ring, const char* name, std::size_t bytes, unsigned count) {
+                if (ring.resegment(bytes, count)) {
+                    return true;
+                }
+                ring.reset();
+                return ring.initialize(device_.Get(), name, bytes, count);
+            };
+            if (!place(vertex_ring_, "vertex", vb_per_frame_bytes(), segments) ||
+                !place(index_ring_, "index", ib_per_frame_bytes(), segments) ||
+                !place(constant_ring_, "constant", constant_bytes, segments) ||
+                !place(matrix_ring_, "matrix", mtx_per_frame_bytes(), matrix_segments)) {
                 throw std::runtime_error("ring resize failed");
             }
             matrix_segments_ = matrix_segments;
