@@ -1159,6 +1159,10 @@ add_executable(galaxy_line_point_raster_tests
     runtime/src/gx/line_point_raster_tests.cpp)
 target_link_libraries(galaxy_line_point_raster_tests PRIVATE galaxy_gx)
 
+add_executable(galaxy_xf_lighting_tests
+    runtime/src/gx/xf_lighting_tests.cpp)
+target_link_libraries(galaxy_xf_lighting_tests PRIVATE galaxy_gx)
+
 add_executable(galaxy_sorted_dirty_ranges_tests
     runtime/src/gx/sorted_dirty_ranges_tests.cpp)
 target_link_libraries(galaxy_sorted_dirty_ranges_tests PRIVATE galaxy_gx)
@@ -1273,6 +1277,7 @@ if(MSVC)
         galaxy_xfb_present_selection_tests
         galaxy_efb_conversion_tests
         galaxy_line_point_raster_tests
+        galaxy_xf_lighting_tests
         galaxy_sorted_dirty_ranges_tests
         galaxy_same_context_rfi_tests
         galaxy_pipeline_cache_persistence_tests
@@ -1369,6 +1374,7 @@ galaxy_add_native_test(efb_conversion_pipeline galaxy_efb_conversion_tests)
 galaxy_add_native_test(efb_oversized_content_retirement galaxy_efb_conversion_tests --oversized-content-cache)
 galaxy_add_native_test(efb_decoded_allocation_budget galaxy_efb_conversion_tests --decoded-allocation-budget)
 galaxy_add_native_test(line_point_raster galaxy_line_point_raster_tests)
+galaxy_add_native_test(xf_lighting galaxy_xf_lighting_tests)
 galaxy_add_native_test(cosmetic_game_asset_extract galaxy_game_asset_extract_tests)
 galaxy_add_native_test(sorted_dirty_ranges galaxy_sorted_dirty_ranges_tests)
 galaxy_add_native_test(same_context_rfi galaxy_same_context_rfi_tests)

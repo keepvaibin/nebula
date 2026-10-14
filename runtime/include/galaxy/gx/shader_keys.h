@@ -100,6 +100,14 @@ inline constexpr std::uint32_t kRenderStateMotionTarget = 1u << 29u;
 // alpha (max-blended, capped at 0.9) to an R8 render target 1.
 inline constexpr std::uint8_t kPsKeyReactive = 0x04u;
 inline constexpr std::uint32_t kRenderStateReactiveTarget = 1u << 30u;
+// Lit channels with spotlight or specular attenuation evaluate the XF
+// attenuation polynomials on finite operands (cosine and distance at most
+// 1e18): a zero coefficient nulls an out-of-range cosine, as on the hardware,
+// where a light object whose direction the game never initialized keeps its
+// light. Keys without the bit keep their original source. The pixel bit marks
+// the per-pixel lighting keys of such draws.
+inline constexpr std::uint8_t kVsKeyFiniteLightAttn = 0x20u;
+inline constexpr std::uint8_t kPsKeyPplFiniteLightAttn = 0x08u;
 
 struct PixelShaderKey {
     std::uint8_t num_tev_stages;    // 1-16
@@ -122,7 +130,8 @@ struct PixelShaderKey {
     // Keys 0..15 keep their original shader source. New dither keys use 0xff and read the
     // reciprocal scale from the per-draw PS constants.
     std::uint8_t efb_scale_minus_one;
-    std::uint8_t reserved;          // bit0 per-pixel lighting
+    std::uint8_t reserved;          // bit0 per-pixel lighting, bit1 motion, bit2 reactive,
+                                    // bit3 per-pixel finite light attenuation
     std::uint32_t ind_cmd[4][4];    // BP 0x10-0x1F, grouped as uint4s
     std::uint32_t ind_ref;          // BP 0x27
     std::uint32_t ind_scale[2];     // BP 0x25-0x26
@@ -145,7 +154,8 @@ struct VertexShaderKey {
     std::uint8_t num_chans;
     std::uint8_t flags;             // bit0 per-vertex posmtx, bit1 lighting,
                                     // bit2 dual-tex (post-matrix) enable,
-                                    // bit3 per-pixel lighting outputs
+                                    // bit3 per-pixel lighting outputs, bit4 motion,
+                                    // bit5 finite light attenuation
     std::uint8_t texmtx_idx_mask;   // VCD_LO bits 1-8: per-vertex texture
                                     // matrix index present for texgen n (masked to active texgens; affects VS codegen: per-vertex
                                     // index vs MatrixIndexA/B)

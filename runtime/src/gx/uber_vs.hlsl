@@ -64,8 +64,11 @@ uint key_post_texgen(uint i) {
 }
 
 // One light's contribution (emit_light). attn/diffuse functions come from the
-// channel control: bits 9-10 attenuation, bits 7-8 diffuse.
-void add_light(uint n, uint ctrl, bool alpha_part, float3 wpos, float3 nrm,
+// channel control: bits 9-10 attenuation, bits 7-8 diffuse. With `finite` (key
+// flag 0x20, kVsKeyFiniteLightAttn) the attenuation operands stay at most 1e18
+// (squares 1e36), so a zero coefficient nulls an out-of-range cosine, such as
+// one against a light direction the game never initialized.
+void add_light(uint n, uint ctrl, bool alpha_part, bool finite, float3 wpos, float3 nrm,
                inout int3 lacc_i, inout int lacc_a_i) {
     const uint e = 0x180u + 4u * n;
     uint  lcw  = asuint(mtx_palette[mtx_palette_base + e].w);
@@ -85,6 +88,9 @@ void add_light(uint n, uint ctrl, bool alpha_part, float3 wpos, float3 nrm,
         float ldd = dot(ldelta, ldelta);
         ldir = (ldd > 0.0) ? ldelta * rsqrt(ldd) : nrm;
         attn = (dot(nrm, ldir) >= 0.0) ? max(0.0, dot(nrm, ldvec)) : 0.0;
+        if (finite) {
+            attn = min(attn, 1.0e18);
+        }
         float3 distAttn = distA;
         if (diffuse_func != 0u) {
             float dad = dot(distA, distA);
@@ -100,6 +106,11 @@ void add_light(uint n, uint ctrl, bool alpha_part, float3 wpos, float3 nrm,
         float dist  = sqrt(dist2);
         ldir = (dist > 0.0) ? ldelta / dist : nrm;
         attn = max(0.0, dot(ldir, ldvec));
+        if (finite) {
+            attn = min(attn, 1.0e18);
+            dist = min(dist, 1.0e18);
+            dist2 = min(dist2, 1.0e36);
+        }
         float denom = dot(distA, float3(1.0, dist, dist2));
         attn = (denom != 0.0)
              ? max(0.0, cosA.x + cosA.y*attn + cosA.z*attn*attn) / denom
@@ -194,6 +205,7 @@ VSOut main(VSIn v, uint vertex_id : SV_VertexID) {
     const uint key_chans = uber_vs_header.y;
     const uint key_flags = uber_vs_header.z;
     const uint key_texmtx_mask = uber_vs_header.w;
+    const bool finite_attn = (key_flags & 0x20u) != 0u;
 
     uint pn_row = min(v.mtx_idx.x & 0x3Fu, 61u);
     float3 pos_in = v.pos;
@@ -264,7 +276,7 @@ VSOut main(VSIn v, uint vertex_id : SV_VertexID) {
             const uint mask = ((cc >> 2u) & 0xFu) | (((cc >> 11u) & 0xFu) << 4u);
             [loop] for (uint n = 0u; n < 8u; ++n) {
                 if (((mask >> n) & 1u) != 0u) {
-                    add_light(n, cc, false, wpos.xyz, nrm, lacc_i, unused_a);
+                    add_light(n, cc, false, finite_attn, wpos.xyz, nrm, lacc_i, unused_a);
                 }
             }
             lacc_i = clamp(lacc_i, int3(0,0,0), int3(255,255,255));
@@ -280,7 +292,7 @@ VSOut main(VSIn v, uint vertex_id : SV_VertexID) {
             const uint mask = ((ca >> 2u) & 0xFu) | (((ca >> 11u) & 0xFu) << 4u);
             [loop] for (uint n = 0u; n < 8u; ++n) {
                 if (((mask >> n) & 1u) != 0u) {
-                    add_light(n, ca, true, wpos.xyz, nrm, unused_c, lacc_a_i);
+                    add_light(n, ca, true, finite_attn, wpos.xyz, nrm, unused_c, lacc_a_i);
                 }
             }
             lacc_a_i = clamp(lacc_a_i, 0, 255);

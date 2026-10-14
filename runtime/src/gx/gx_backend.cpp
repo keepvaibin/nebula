@@ -12292,6 +12292,11 @@ ID3D12PipelineState* GxBackend::flush_draw_state(
             ps_key_.reserved ^= kPsKeyPerPixelLighting;
             current_ps_hash_ = ps_key_.hash();
         }
+        const bool ppl_finite = ppl && (vs_key_.flags & kVsKeyFiniteLightAttn) != 0u;
+        if (((ps_key_.reserved & kPsKeyPplFiniteLightAttn) != 0u) != ppl_finite) {
+            ps_key_.reserved ^= kPsKeyPplFiniteLightAttn;
+            current_ps_hash_ = ps_key_.hash();
+        }
     }
     shader_key_hashes_valid_ = true;
     if (rs_dirty) {

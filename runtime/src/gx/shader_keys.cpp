@@ -365,6 +365,12 @@ VertexShaderKey build_vertex_shader_key(const GxState& state) {
         key.channel[2u + ch] = canonical_channel(state.xf(
             static_cast<std::uint16_t>(xf::kChannelCtrlBase + 2u + ch)));
     }
+    // A lit channel (bit 1) with attenuation (bit 9: specular or spotlight) and lights (bits 2-5, 11-14).
+    for (const std::uint32_t control : key.channel) {
+        if ((control & 0x202u) == 0x202u && (control & 0x783Cu) != 0u) {
+            key.flags |= kVsKeyFiniteLightAttn;
+        }
+    }
 
     return key;
 }
