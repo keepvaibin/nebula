@@ -599,7 +599,7 @@ namespace Nebula.Setup
                 replaced = versionDir + ".replaced-" + Guid.NewGuid().ToString("N").Substring(0, 8);
                 Directory.Move(versionDir, replaced);
             }
-            Directory.Move(app, versionDir);
+            FileUtil.MoveDirectory(app, versionDir, Log);
 
             string newContent = Path.Combine(staging, "content");
             if (Directory.Exists(newContent))
