@@ -902,6 +902,19 @@ private:
     std::uint64_t interp_gpu_cap_serial_ = 0;
     std::uint64_t interp_gpu_checked_ = 0;
     std::uint64_t interp_gpu_capped_ = 0;   // sequences with fewer sub-frames
+    // Game-frame cadence governor (note_game_frame_cadence).
+    void note_game_frame_cadence(std::int64_t now_qpc);
+    unsigned interp_cadence_cap_ = 7u;
+    unsigned interp_cadence_interval_s_ = 8u;
+    std::int64_t interp_cadence_window_qpc_ = 0;
+    std::int64_t interp_cadence_last_qpc_ = 0;
+    std::uint32_t interp_cadence_misses_ = 0;
+    std::int64_t interp_cadence_change_qpc_ = 0;
+    std::int64_t interp_cadence_try_qpc_ = 0;
+    std::uint32_t interp_cadence_frames_ = 0;
+    std::uint64_t interp_cadence_drops_ = 0;
+    double interp_cadence_fps_ = 0.0;
+    double interp_cadence_own_misses_ = 0.0;   // per second, without sub-frames
     // The playing sequence's evaluation program and output slots (prepare_interp_sequence).
     interp_gpu::Program interp_program_;
     interp_gpu::Layout interp_layout_{};

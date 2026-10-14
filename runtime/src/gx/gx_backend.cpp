@@ -7080,6 +7080,7 @@ void GxBackend::start_interp_sequence(std::uint32_t xfb_addr) {
         interp_logs_skipped_ += played - interp_last_played_serial_ - 1u;
     }
     interp_last_played_serial_ = played;
+    note_game_frame_cadence(now.QuadPart);
     interp_event("start", played, xfb_addr);
     static const std::uint64_t trace_level = read_env_u64("GALAXY_INTERP_TRACE", 0u);
     if (trace_level >= 2u) {
@@ -7204,8 +7205,16 @@ unsigned GxBackend::interp_gpu_governor(double& rate) {
             ? std::strtod(value, nullptr) : 0.0;
         return ms > 0.0 ? ms : 15.0;
     }();
-    if (!enabled || configured == 0u) {
+    if (configured == 0u) {
         return configured;
+    }
+    const unsigned allowed = std::min(configured, interp_cadence_cap_);
+    if (!enabled) {
+        if (allowed < configured) {
+            ++interp_gpu_capped_;
+            rate = 60.0 * static_cast<double>(allowed + 1u);
+        }
+        return allowed;
     }
     const std::uint64_t serial = interp_sequence_serial_;
     if (serial - interp_gpu_checked_ >= 30u) {
@@ -7228,12 +7237,95 @@ unsigned GxBackend::interp_gpu_governor(double& rate) {
             renderer_.reset_subframe_gpu_ema();
         }
     }
-    if (interp_gpu_cap_ >= configured) {
+    const unsigned subframes = std::min(allowed, interp_gpu_cap_);
+    if (subframes >= configured) {
         return configured;
     }
     ++interp_gpu_capped_;
-    rate = 60.0 * static_cast<double>(interp_gpu_cap_ + 1u);
-    return interp_gpu_cap_;
+    rate = 60.0 * static_cast<double>(subframes + 1u);
+    return subframes;
+}
+
+// Sub-frames must never cost the game its own frames. Each game frame shown is
+// timed against the VI period: an interval above 1.5 periods missed VIs. The
+// game's own misses are measured while no sub-frames run. Two or more misses
+// per second beyond those take a sub-frame away (half of them at eight); a try
+// of one more sub-frame is undone at its first miss when the game misses none
+// on its own. Tries follow a clean interval that doubles after each failed
+// one (8 s to 64 s) and halves after one that held.
+// GALAXY_INTERP_CADENCE_GOVERNOR=0 turns it off.
+void GxBackend::note_game_frame_cadence(std::int64_t now_qpc) {
+    static const bool enabled = read_env_u64("GALAXY_INTERP_CADENCE_GOVERNOR", 1u) != 0u;
+    static const std::int64_t frequency = [] {
+        LARGE_INTEGER value{};
+        QueryPerformanceFrequency(&value);
+        return static_cast<std::int64_t>(value.QuadPart);
+    }();
+    if (!enabled) {
+        return;
+    }
+    const std::int64_t period = frequency * 1001 / 60000;
+    if (interp_cadence_last_qpc_ == 0 || now_qpc - interp_cadence_last_qpc_ > 4 * frequency) {
+        // First frame, or a pause (menu, load): a new window.
+        interp_cadence_last_qpc_ = now_qpc;
+        interp_cadence_window_qpc_ = now_qpc;
+        interp_cadence_frames_ = 0u;
+        interp_cadence_misses_ = 0u;
+        return;
+    }
+    const std::int64_t interval = now_qpc - interp_cadence_last_qpc_;
+    interp_cadence_last_qpc_ = now_qpc;
+    ++interp_cadence_frames_;
+    const std::uint32_t missed =
+        interval > period * 3 / 2 ? static_cast<std::uint32_t>((interval + period / 2) / period) - 1u : 0u;
+    interp_cadence_misses_ += missed;
+    const unsigned running = std::min({interp_frames_, interp_cadence_cap_, interp_gpu_cap_});
+    const bool trying = interp_cadence_try_qpc_ != 0 && now_qpc - interp_cadence_try_qpc_ < 4 * frequency;
+    const auto drop = [&](unsigned cap) {
+        if (trying) {
+            interp_cadence_interval_s_ = std::min(interp_cadence_interval_s_ * 2u, 64u);
+        }
+        interp_cadence_cap_ = cap;
+        interp_cadence_change_qpc_ = now_qpc;
+        interp_cadence_try_qpc_ = 0;
+        ++interp_cadence_drops_;
+    };
+    if (trying && missed != 0u && running > 0u && interp_cadence_own_misses_ < 0.5) {
+        drop(running - 1u);
+        return;
+    }
+    const std::int64_t elapsed = now_qpc - interp_cadence_window_qpc_;
+    if (elapsed < frequency) {
+        return;
+    }
+    const double seconds = static_cast<double>(elapsed) / static_cast<double>(frequency);
+    interp_cadence_fps_ = static_cast<double>(interp_cadence_frames_) / seconds;
+    const double misses = static_cast<double>(interp_cadence_misses_) / seconds;
+    interp_cadence_window_qpc_ = now_qpc;
+    interp_cadence_frames_ = 0u;
+    interp_cadence_misses_ = 0u;
+    if (running == 0u) {
+        interp_cadence_own_misses_ = 0.5 * (interp_cadence_own_misses_ + misses);
+    } else {
+        interp_cadence_own_misses_ = std::min(interp_cadence_own_misses_, misses);
+    }
+    const double excess = misses - interp_cadence_own_misses_;
+    if (running > 0u && excess >= 2.0) {
+        drop(excess >= 8.0 ? running / 2u : running - 1u);
+        return;
+    }
+    if (interp_cadence_cap_ >= interp_frames_) {
+        return;
+    }
+    if (now_qpc - interp_cadence_change_qpc_ >=
+        static_cast<std::int64_t>(interp_cadence_interval_s_) * frequency) {
+        ++interp_cadence_cap_;
+        interp_cadence_change_qpc_ = now_qpc;
+        interp_cadence_try_qpc_ = now_qpc;
+    } else if (interp_cadence_try_qpc_ != 0 && now_qpc - interp_cadence_try_qpc_ >= 4 * frequency) {
+        interp_cadence_interval_s_ = std::max(interp_cadence_interval_s_ / 2u, 8u);
+        interp_cadence_try_qpc_ = 0;
+    }
 }
 
 // The next frame's sequence replaces this one before its real frame (at
@@ -7406,6 +7498,9 @@ void GxBackend::advance_interp_sequence(bool flush) {
 
 // A game frame presented while interpolating, without sub-frames: why.
 void GxBackend::note_interp_real_present() {
+    LARGE_INTEGER now{};
+    QueryPerformanceCounter(&now);
+    note_game_frame_cadence(now.QuadPart);
     interp_shown_scene_ = -1;                  // a frame no sequence knows
     unsigned reason = 5u;                      // log ready, present not matched
     if (native_settings_overlay_visible()) {
@@ -7533,6 +7628,9 @@ void GxBackend::report_interp_stats() {
             << " copy-snapshots=" << redirect.snapshots
             << " redirect-fallbacks=" << redirect.fallback_logs
             << " gpu-subframe-cap=" << interp_gpu_cap_
+            << " cadence-subframe-cap=" << interp_cadence_cap_
+            << " cadence-drops=" << std::exchange(interp_cadence_drops_, 0u)
+            << " game-fps=" << interp_cadence_fps_
             << " capped-sequences=" << std::exchange(interp_gpu_capped_, 0u)
             << " subframe-gpu-ema-ms=" << renderer_.subframe_gpu_ema_ms()
             << " gpu-ms-guard-path=" << per_sample(path_ms[0], path_samples[0])
