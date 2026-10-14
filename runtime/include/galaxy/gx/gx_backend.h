@@ -833,6 +833,10 @@ private:
     // The interp_scenes_ index of the last frame on screen (a sub-frame or the
     // real frame of a sequence), -1 when unknown (a frame presented alone).
     std::int32_t interp_shown_scene_ = -1;
+    // Its sequence and t (1: the real frame): the frame before of the next
+    // replay's motion vectors.
+    std::uint64_t interp_shown_serial_ = 0;
+    float interp_shown_t_ = 0.0f;
     std::vector<std::int32_t> interp_chain_prev_;
     std::uint64_t interp_chained_sequences_ = 0;  // started from the scene shown last
     std::uint64_t interp_unchained_skips_ = 0;    // a never-shown scene before, not chained
@@ -928,10 +932,11 @@ private:
     std::uint64_t interp_eval_expected_seq_ = 0;
     std::vector<interp_gpu::Op> interp_eval_ops_;
     bool prepare_interp_sequence(const InterpScene& scene, const InterpScene& before_scene, bool before_valid);
-    void build_interp_reference(const InterpScene& scene, const Affine34& camera_t, float t,
+    void build_interp_reference(const InterpScene& scene, const interp_gpu::FrameTimes& times,
                                 std::vector<std::uint32_t>& out) const;
     void verify_interp_program(const InterpScene& scene, const InterpScene& before_scene, const Affine34& camera_t);
-    void check_interp_eval(const InterpScene& scene, const Affine34& camera_t, float t);
+    void check_interp_eval(const InterpScene& scene, const Affine34& camera_t, float t, const Affine34& camera_prev,
+                           float t_prev);
     // Pixel-constant records of the playing scene whose colours change
     // (record, matched record of the scene before), and their sub-frame uploads.
     std::vector<std::array<std::uint32_t, 2>> interp_ps_moving_;

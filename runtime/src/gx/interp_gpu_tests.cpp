@@ -258,6 +258,79 @@ void test_layout() {
     check(layout.palette_base() == 3u * sizeof(GxVsConstants), "palettes follow the VS blocks");
     check(layout.ps_base() % 256u == 0u && layout.palette_offset(1u) % 256u == 0u, "blocks stay 256-byte aligned");
     check(layout.bytes() == layout.ps_base() + 4u * sizeof(GxPsConstants), "layout size");
+    Layout motion{3u, 2u, 4u, 2u};
+    check(motion.prev_palette_offset(0u) == motion.palette_offset(2u) &&
+              motion.ps_base() == motion.prev_palette_offset(1u) + kPrevPaletteBytes &&
+              motion.prev_palette_offset(1u) % 256u == 0u,
+          "previous-frame palette rows follow the palettes");
+}
+
+// Ops flagged for the frame presented before take its t and camera; the frame
+// at t = 1 evaluates only those.
+void test_previous_frame() {
+    for (int round = 0; round < 200; ++round) {
+        const Affine34 va = view(uniform(-1.0f, 1.0f), uniform(-50.0f, 50.0f), 100.0f, 500.0f);
+        const Affine34 vb = nudge(va, 0.05f);
+        CameraMotion camera;
+        camera_motion(&va, &vb, 0.0f, CameraCutLimits{}, camera);
+        const Affine34 wa = random_object();
+        const Affine34 wb = nudge(wa, 0.1f);
+        EyeMotion eye;
+        eye_motion(&wa, affine_multiply(vb, wb), camera, false, eye);
+        GxVsConstants pa{}, pb{};
+        const bool orthographic = round % 4 == 0;
+        for (GxVsConstants* c : {&pa, &pb}) {
+            const float k = c == &pa ? 1.0f : uniform(0.9f, 1.1f);
+            c->projection[0][0] = 1.2f * k;
+            c->projection[1][1] = 1.6f * k;
+            c->projection[0][orthographic ? 3 : 2] = 0.01f * k;
+            c->projection[1][orthographic ? 3 : 2] = -0.02f * k;
+            c->projection[3][orthographic ? 3 : 2] = orthographic ? 1.0f : -1.0f;
+        }
+        const std::uint32_t ctrl[2]{0u, 1234u};
+        const std::uint32_t base_row = 416u;
+        Program program;
+        program.eye(0u, eye);
+        program.store(30u, &base_row, 1u);
+        program.at_previous(true);
+        program.eye(12u, eye);
+        program.projection_params(24u - kVsMotionPrevProj, pa, pb);
+        program.store(28u, ctrl, 2u);
+        program.at_previous(false);
+        const float t = uniform(0.3f, 1.0f);
+        const float t_prev = uniform(0.0f, t);
+        FrameTimes times{};
+        times.camera = camera_at(camera, t);
+        times.t = t;
+        times.camera_prev = camera_at(camera, t_prev);
+        times.t_prev = t_prev;
+        std::uint32_t out[31]{};
+        evaluate(program, times, out);
+        const Affine34 now = eye_at(eye, camera, times.camera, t);
+        const Affine34 before = eye_at(eye, camera, times.camera_prev, t_prev);
+        bool same = true;
+        for (unsigned i = 0; i < 12u; ++i) {
+            same = same && near_word(out[i], std::bit_cast<std::uint32_t>(now[i])) &&
+                   near_word(out[12u + i], std::bit_cast<std::uint32_t>(before[i]));
+        }
+        const unsigned column = orthographic ? 3u : 2u;
+        const float want_proj[4]{pa.projection[0][0] + (pb.projection[0][0] - pa.projection[0][0]) * t_prev,
+                                 pa.projection[0][column] + (pb.projection[0][column] - pa.projection[0][column]) * t_prev,
+                                 pa.projection[1][1] + (pb.projection[1][1] - pa.projection[1][1]) * t_prev,
+                                 pa.projection[1][column] + (pb.projection[1][column] - pa.projection[1][column]) * t_prev};
+        for (unsigned i = 0; i < 4u; ++i) {
+            same = same && near_word(out[24u + i], std::bit_cast<std::uint32_t>(want_proj[i]));
+        }
+        same = same && out[28] == 0u && out[29] == 1234u && out[30] == base_row;
+        check(same, "previous-frame ops take its t and camera");
+        std::uint32_t last[31]{};
+        times.previous_only = true;
+        evaluate(program, times, last);
+        bool previous_only = true;
+        for (unsigned i = 0; i < 12u; ++i) previous_only = previous_only && last[i] == 0u;
+        for (unsigned i = 12u; i < 31u; ++i) previous_only = previous_only && last[i] == out[i];
+        check(previous_only, "the frame at t = 1 evaluates the stores and the previous-frame ops only");
+    }
 }
 
 }  // namespace
@@ -268,6 +341,7 @@ int main() {
     test_texture_matrices();
     test_colours();
     test_layout();
+    test_previous_frame();
     if (failures != 0) {
         std::printf("%d failure(s)\n", failures);
         return 1;

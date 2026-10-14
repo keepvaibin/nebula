@@ -136,10 +136,10 @@ void add_light(uint n, uint ctrl, bool alpha_part, float3 wpos, float3 nrm,
 
 // Interpolated redraw vertex blending (shader_gen.cpp kVertexBlendDef).
 cbuffer GxVertexBlend : register(b2) {
-    uint  vb_mode;  // 0: the draw's own vertices only
-    uint  vb_t_slot;  // verdict element whose x is the sub-frame t (0 the frame before, 1 this frame)
-    uint  vb_slot;  // the pair's verdict
-    uint  vb_last;  // the last vertex of the earlier draw
+    uint  vb_mode;   // 0: the draw's own vertices only
+    uint  vb_frame;  // element of the presented frame's values (a zero element in game frames)
+    uint  vb_slot;   // the pair's verdict
+    uint  vb_last;   // the last vertex of the earlier draw
 };
 ByteAddressBuffer vb_prev : register(t1, space1);
 StructuredBuffer<uint4> vb_verdict : register(t2, space1);
@@ -159,12 +159,12 @@ float vb_coord(float a, float b) {
     return abs(b - w) > 0.125 ? b : lerp(w, b, vb_t);
 }
 void vertex_blend(inout VSIn v, uint id) {
-    if (vb_mode == 0u) {
-        return;
-    }
-    vb_t = asfloat(vb_verdict[min(vb_t_slot, 8192u)].x);
     // Root views have no bounds: every read stays inside its buffer even if
     // a compiler moves it above the checks.
+    vb_t = asfloat(vb_verdict[min(vb_frame, 8193u)].x);
+    if (vb_mode == 0u || vb_t >= 1.0) {
+        return;
+    }
     const uint4 verdict = vb_verdict[min(vb_slot, 8191u)];
     const float worst = asfloat(verdict.z);
     const float extent = asfloat(verdict.w);

@@ -41,6 +41,8 @@ inline constexpr std::uint32_t kFlagStill = 1u << 9u;
 inline constexpr std::uint32_t kFlagRigid = 1u << 10u;
 // Light: position and direction interpolate in world space.
 inline constexpr std::uint32_t kFlagLightSplit = 1u << 11u;
+// At the frame presented before, with its t and camera (motion vector fields).
+inline constexpr std::uint32_t kFlagPrev = 1u << 12u;
 
 [[nodiscard]] constexpr std::uint32_t op_kind(std::uint32_t control) noexcept { return control & 0xFFu; }
 [[nodiscard]] constexpr std::uint32_t op_count(std::uint32_t control) noexcept { return control >> 16u; }
@@ -69,7 +71,12 @@ inline constexpr std::uint32_t kPaletteWords = kXfPaletteWords;
 inline constexpr std::uint32_t kPaletteBytes = kPaletteWords * 4u;
 inline constexpr std::uint32_t kVsBytes = sizeof(GxVsConstants);
 inline constexpr std::uint32_t kPsBytes = sizeof(GxPsConstants);
-static_assert(kPaletteBytes % 256u == 0u && kVsBytes % 256u == 0u && kPsBytes % 256u == 0u);
+// The rows a motion vector reads from a palette at the frame presented before
+// (position and texture matrices, rows 0-63).
+inline constexpr std::uint32_t kPrevPaletteWords = 256u;
+inline constexpr std::uint32_t kPrevPaletteBytes = kPrevPaletteWords * 4u;
+static_assert(kPaletteBytes % 256u == 0u && kVsBytes % 256u == 0u && kPsBytes % 256u == 0u &&
+              kPrevPaletteBytes % 256u == 0u);
 
 // Word offsets inside the blocks.
 inline constexpr std::uint32_t kVsProjection = offsetof(GxVsConstants, projection) / 4u;
@@ -79,23 +86,33 @@ inline constexpr std::uint32_t kVsPaletteBase = offsetof(GxVsConstants, mtx_pale
 inline constexpr std::uint32_t kVsPosition = offsetof(GxVsConstants, inline_pos_matrix) / 4u;
 inline constexpr std::uint32_t kVsTex = offsetof(GxVsConstants, inline_tex_matrices) / 4u;
 inline constexpr std::uint32_t kVsPost = offsetof(GxVsConstants, inline_post_matrices) / 4u;
+inline constexpr std::uint32_t kVsMotionPrevProj = offsetof(GxVsConstants, motion_prev_proj) / 4u;
+inline constexpr std::uint32_t kVsMotionPrevPos = offsetof(GxVsConstants, motion_prev_pos) / 4u;
+inline constexpr std::uint32_t kVsMotionCtrl = offsetof(GxVsConstants, motion_ctrl) / 4u;
 inline constexpr std::uint32_t kPsTevRegs = offsetof(GxPsConstants, tev_regs) / 4u;
 inline constexpr std::uint32_t kPsKonst = offsetof(GxPsConstants, konst) / 4u;
 inline constexpr std::uint32_t kPsAlphaRefs = offsetof(GxPsConstants, alpha_refs) / 4u;
 inline constexpr std::uint32_t kPsFog = offsetof(GxPsConstants, fog_params) / 4u;
 inline constexpr std::uint32_t kPsIndMtx = offsetof(GxPsConstants, ind_mtx) / 4u;
 
-// Output buffer: VS blocks, then palettes, then PS blocks (each 256-byte aligned).
+// Output buffer: VS blocks, palettes, the palettes' rows at the frame presented
+// before (motion vectors), then PS blocks (each 256-byte aligned).
 struct Layout {
     std::uint32_t vs_count = 0;
     std::uint32_t palette_count = 0;
     std::uint32_t ps_count = 0;
+    std::uint32_t prev_palette_count = 0;  // 0, or palette_count with motion vectors
     [[nodiscard]] std::uint32_t vs_offset(std::uint32_t slot) const noexcept { return slot * kVsBytes; }
     [[nodiscard]] std::uint32_t palette_base() const noexcept { return vs_count * kVsBytes; }
     [[nodiscard]] std::uint32_t palette_offset(std::uint32_t slot) const noexcept {
         return palette_base() + slot * kPaletteBytes;
     }
-    [[nodiscard]] std::uint32_t ps_base() const noexcept { return palette_base() + palette_count * kPaletteBytes; }
+    [[nodiscard]] std::uint32_t prev_palette_offset(std::uint32_t slot) const noexcept {
+        return palette_base() + palette_count * kPaletteBytes + slot * kPrevPaletteBytes;
+    }
+    [[nodiscard]] std::uint32_t ps_base() const noexcept {
+        return palette_base() + palette_count * kPaletteBytes + prev_palette_count * kPrevPaletteBytes;
+    }
     [[nodiscard]] std::uint32_t ps_offset(std::uint32_t slot) const noexcept { return ps_base() + slot * kPsBytes; }
     [[nodiscard]] std::uint32_t bytes() const noexcept { return ps_base() + ps_count * kPsBytes; }
 };
@@ -105,8 +122,11 @@ public:
     void clear() noexcept {
         ops.clear();
         payload.clear();
+        flags_ = 0u;
     }
     [[nodiscard]] bool empty() const noexcept { return ops.empty(); }
+    // Ops added while set are evaluated at the frame presented before (kFlagPrev).
+    void at_previous(bool previous) noexcept { flags_ = previous ? kFlagPrev : 0u; }
 
     void eye(std::uint32_t dst, const EyeMotion& m);
     void normal(std::uint32_t dst, const NormalMotion& m);
@@ -120,6 +140,8 @@ public:
     // The changed parts of one palette as palette_at (dst: the block's first word).
     void palette(std::uint32_t dst, const PaletteMotion& m, const std::uint32_t* a, const std::uint32_t* b,
                  const CameraMotion& camera);
+    // Only its changed position matrices.
+    void palette_positions(std::uint32_t dst, const PaletteMotion& m);
     // One GX light (16 words at dst) as light_at; a may be null.
     void light(std::uint32_t dst, const std::uint32_t* a, const std::uint32_t* b, const CameraMotion& camera,
                bool split);
@@ -127,6 +149,8 @@ public:
     void channel_colours(std::uint32_t dst, const GxVsConstants& a, const GxVsConstants& b);
     // Projection of a VS block as the sub-frame lerp of render_interp_subframe.
     void projection(std::uint32_t dst, const GxVsConstants& a, const GxVsConstants& b);
+    // Its GX parameters A..D (motion_prev_proj) the same way.
+    void projection_params(std::uint32_t dst, const GxVsConstants& a, const GxVsConstants& b);
     // Pixel-stage colours of a PS block (dst: its first word) as ps_colours_at.
     void ps_colours(std::uint32_t dst, const GxPsConstants& a, const GxPsConstants& b);
 
@@ -135,11 +159,26 @@ public:
 
 private:
     void transform(OpKind kind, std::uint32_t dst, const AffineMotion& m, bool split, bool still);
+    void push(OpKind kind, std::uint32_t flags, std::uint32_t count, std::uint32_t dst, std::uint32_t at);
     std::uint32_t append(const float* values, std::uint32_t count);
+    std::uint32_t flags_ = 0;
 };
 
-// The program at t into `out` (words of the output buffer; base copies done).
-// `camera_t`: camera_at(camera, t), row-major 3x4.
+// One presented frame: t and camera_at(camera, t) (row-major 3x4), and the
+// frame presented before it for ops flagged kFlagPrev. `previous_only`: only
+// those and the stores (the frame at t = 1, whose other values are the base
+// copies; stores redirect blocks to the output and hold at every t).
+struct FrameTimes {
+    Affine34 camera{};
+    float t = 0.0f;
+    Affine34 camera_prev{};
+    float t_prev = 0.0f;
+    bool previous_only = false;
+};
+
+// The program into `out` (words of the output buffer; base copies done).
+void evaluate(const Program& program, const FrameTimes& times, std::uint32_t* out);
+// Every op at t.
 void evaluate(const Program& program, const Affine34& camera_t, float t, std::uint32_t* out);
 
 }  // namespace galaxy::gx::interp_gpu

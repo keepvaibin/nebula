@@ -84,6 +84,10 @@ Affine34 transform_at(const std::uint32_t* p, std::uint32_t flags, float t) noex
 
 }  // namespace
 
+void Program::push(OpKind kind, std::uint32_t flags, std::uint32_t count, std::uint32_t dst, std::uint32_t at) {
+    ops.push_back({control(kind, flags | flags_, count), dst, at, 0u});
+}
+
 std::uint32_t Program::append(const float* values, std::uint32_t count) {
     const auto at = static_cast<std::uint32_t>(payload.size());
     for (std::uint32_t i = 0; i < count; ++i) payload.push_back(float_word(values[i]));
@@ -114,7 +118,7 @@ void Program::transform(OpKind kind, std::uint32_t dst, const AffineMotion& m, b
         at = append(m.a.data(), 12u);
         append(m.b.data(), 12u);
     }
-    ops.push_back({control(kind, flags, kind == OpKind::Normal ? 9u : 12u), dst, at, 0u});
+    push(kind, flags, kind == OpKind::Normal ? 9u : 12u, dst, at);
 }
 
 void Program::eye(std::uint32_t dst, const EyeMotion& m) {
@@ -128,20 +132,20 @@ void Program::normal(std::uint32_t dst, const NormalMotion& m) {
 void Program::lerp(std::uint32_t dst, const float* from, const float* to, std::uint32_t count, bool round) {
     const std::uint32_t at = append(from, count);
     append(to, count);
-    ops.push_back({control(round ? OpKind::LerpRound : OpKind::Lerp, 0u, count), dst, at, 0u});
+    push(round ? OpKind::LerpRound : OpKind::Lerp, 0u, count, dst, at);
 }
 
 void Program::color8(std::uint32_t dst, std::uint32_t a, std::uint32_t b) {
     const auto at = static_cast<std::uint32_t>(payload.size());
     payload.push_back(a);
     payload.push_back(b);
-    ops.push_back({control(OpKind::Color8, 0u, 1u), dst, at, 0u});
+    push(OpKind::Color8, 0u, 1u, dst, at);
 }
 
 void Program::store(std::uint32_t dst, const std::uint32_t* words, std::uint32_t count) {
     const auto at = static_cast<std::uint32_t>(payload.size());
     payload.insert(payload.end(), words, words + count);
-    ops.push_back({control(OpKind::Store, 0u, count), dst, at, 0u});
+    push(OpKind::Store, 0u, count, dst, at);
 }
 
 void Program::tex_matrix(std::uint32_t dst, const float* a, const float* b, bool spatial) {
@@ -216,7 +220,7 @@ void Program::light(std::uint32_t dst, const std::uint32_t* a, const std::uint32
     p[12] = std::sqrt(da[0] * da[0] + da[1] * da[1] + da[2] * da[2]);
     p[13] = std::sqrt(db[0] * db[0] + db[1] * db[1] + db[2] * db[2]);
     const std::uint32_t at = append(p, 14u);
-    ops.push_back({control(OpKind::Light, split ? kFlagLightSplit : 0u, 6u), dst + 10u, at, 0u});
+    push(OpKind::Light, split ? kFlagLightSplit : 0u, 6u, dst + 10u, at);
 }
 
 void Program::palette(std::uint32_t dst, const PaletteMotion& m, const std::uint32_t* a,
@@ -268,6 +272,14 @@ void Program::palette(std::uint32_t dst, const PaletteMotion& m, const std::uint
     }
 }
 
+void Program::palette_positions(std::uint32_t dst, const PaletteMotion& m) {
+    for (unsigned k = 0; k < 10u; ++k) {
+        if (m.position_changed[k] != 0u) {
+            eye(dst + k * 12u, m.position[k]);
+        }
+    }
+}
+
 void Program::channel_colours(std::uint32_t dst, const GxVsConstants& a, const GxVsConstants& b) {
     const auto block = [&](std::uint32_t at, const float (*x)[4], const float (*y)[4]) {
         float from[8], to[8];
@@ -295,6 +307,25 @@ void Program::projection(std::uint32_t dst, const GxVsConstants& a, const GxVsCo
         to[i] = y[i];
     }
     if (std::memcmp(from, to, sizeof(from)) != 0) lerp(dst + kVsProjection, from, to, 16u);
+}
+
+void Program::projection_params(std::uint32_t dst, const GxVsConstants& a, const GxVsConstants& b) {
+    // fill_vs_projection: A and C on the diagonal, B and D in column 2
+    // (perspective) or 3 (orthographic).
+    const auto params = [](const GxVsConstants& c, float out[4]) {
+        const unsigned column = c.projection[3][3] != 0.0f ? 3u : 2u;
+        out[0] = c.projection[0][0];
+        out[1] = c.projection[0][column];
+        out[2] = c.projection[1][1];
+        out[3] = c.projection[1][column];
+    };
+    float from[4], to[4];
+    params(a, from);
+    params(b, to);
+    for (unsigned i = 0; i < 4u; ++i) {
+        if (!std::isfinite(from[i]) || !std::isfinite(to[i])) from[i] = to[i];
+    }
+    if (std::memcmp(from, to, sizeof(from)) != 0) lerp(dst + kVsMotionPrevProj, from, to, 4u);
 }
 
 void Program::ps_colours(std::uint32_t dst, const GxPsConstants& a, const GxPsConstants& b) {
@@ -331,11 +362,19 @@ void Program::ps_colours(std::uint32_t dst, const GxPsConstants& a, const GxPsCo
     }
 }
 
-void evaluate(const Program& program, const Affine34& camera_t, float t, std::uint32_t* out) {
-    const Affine34 rotation_t = rotation_only(camera_t);
+void evaluate(const Program& program, const FrameTimes& times, std::uint32_t* out) {
+    const Affine34 rotation_now = rotation_only(times.camera);
+    const Affine34 rotation_prev = rotation_only(times.camera_prev);
     for (const Op& op : program.ops) {
         const std::uint32_t* p = program.payload.data() + op.payload;
         const std::uint32_t flags = op.control & 0xFF00u;
+        const bool previous = (flags & kFlagPrev) != 0u;
+        if (times.previous_only && !previous && static_cast<OpKind>(op_kind(op.control)) != OpKind::Store) {
+            continue;
+        }
+        const float t = previous ? times.t_prev : times.t;
+        const Affine34& camera_t = previous ? times.camera_prev : times.camera;
+        const Affine34& rotation_t = previous ? rotation_prev : rotation_now;
         const std::uint32_t count = op_count(op.control);
         std::uint32_t* const dst = out + op.dst;
         switch (static_cast<OpKind>(op_kind(op.control))) {
@@ -410,6 +449,15 @@ void evaluate(const Program& program, const Affine34& camera_t, float t, std::ui
             break;
         }
     }
+}
+
+void evaluate(const Program& program, const Affine34& camera_t, float t, std::uint32_t* out) {
+    FrameTimes times{};
+    times.camera = camera_t;
+    times.t = t;
+    times.camera_prev = camera_t;
+    times.t_prev = t;
+    evaluate(program, times, out);
 }
 
 }  // namespace galaxy::gx::interp_gpu

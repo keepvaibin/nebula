@@ -525,8 +525,11 @@ int main() {
             std::snprintf(label, sizeof(label), "vs_motion_variant%u", variant);
             check_contains(src, "TEXCOORD13", label);
             check_contains(src, (variant & 1u) != 0u ? "motion_ctrl.x == 0u"
-                                                     : "dot(motion_prev_pos[0], float4(pos_in",
+                                                     : "dot(motion_prev_pos[0], float4(vb_pos_prev",
                            label);
+            // Replays take the presented frame's jitter and the blended position before it.
+            check_contains(src, "o.pos.xy += jitter_ndc * o.pos.w", label);
+            check_contains(src, "vb_pos_prev = lerp(earlier, v.pos, vb_t_prev)", label);
             Microsoft::WRL::ComPtr<ID3DBlob> code, errors;
             const HRESULT hr = D3DCompile(src.data(), src.size(), label, nullptr, nullptr,
                 "main", "vs_5_1", D3DCOMPILE_ENABLE_STRICTNESS |

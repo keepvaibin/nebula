@@ -533,7 +533,18 @@ public:
         bool vertex_blend = false;
     };
     bool begin_replay_sequence(const ReplaySequence& sequence);
-    bool present_replay_subframe(float t, const Affine34& camera_t);
+    // A presented frame of the sequence: t, the t of the frame presented before
+    // it (motion vectors) and its jitter in render pixels (temporal upscaling).
+    struct SubframeTime {
+        float t = 0.0f;
+        float t_prev = 0.0f;
+        float jitter_x = 0.0f;
+        float jitter_y = 0.0f;
+        bool reset = false;   // the upscaler's history starts again (cut, gap)
+    };
+    bool present_replay_subframe(const SubframeTime& time, const Affine34& camera_t, const Affine34& camera_prev);
+    // The temporal upscaler upscales the replays (every presented frame), not the game frames.
+    [[nodiscard]] bool temporal_interpolation() const noexcept { return temporal_interp_; }
     // GALAXY_INTERP_EVAL_CHECK: the evaluation output of the next sub-frame is
     // read back; take_eval_readback returns it once complete (empty until then).
     void request_eval_readback() noexcept { eval_readback_requested_ = true; }
@@ -574,6 +585,10 @@ public:
     }
     // Smoothed GPU time of one sub-frame (0 until measured), for the budget.
     [[nodiscard]] double subframe_gpu_ema_ms() const noexcept { return subframe_gpu_ema_ms_; }
+    // The GPU cannot afford a replay per presented frame: the game frames take
+    // the temporal upscaler (60 presents) until the display or upscaler
+    // settings change.
+    void suspend_temporal_interpolation(double ms_per_frame);
     void reset_subframe_gpu_ema() noexcept { subframe_gpu_ema_ms_ = 0.0; }
     // GPU milliseconds of completed sub-frames by phase (evaluation, replay,
     // present) since the last call.
@@ -1077,9 +1092,11 @@ private:
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> replay_output_efb_dsv_heap_;
     // persistent_views: the conversion-source views live in the descriptor
     // ring's persistent prefix (else the caller writes them per use).
+    // unordered_access: the colour target takes compute writes (the temporal
+    // upscaler's output, as the live output EFB).
     bool create_efb_set(EfbTargetSet& set, Microsoft::WRL::ComPtr<ID3D12DescriptorHeap>& rtv_heap,
                         Microsoft::WRL::ComPtr<ID3D12DescriptorHeap>& dsv_heap, unsigned scale,
-                        bool persistent_views = true);
+                        bool persistent_views = true, bool unordered_access = false);
     void write_efb_set_views(EfbTargetSet& set, const DescriptorRing::Table& table);
     void swap_efb_with(EfbTargetSet& other);
     bool replay_playing_ = false;
@@ -1126,6 +1143,9 @@ private:
     D3D12_GPU_VIRTUAL_ADDRESS resident_vertex_base_ = 0;
     std::uint64_t resident_vertex_bytes_ = 0;
     static constexpr std::uint32_t kMaxBlendPairs = 8192u;
+    static constexpr std::uint32_t kFrameValuesElement = kMaxBlendPairs;
+    static constexpr std::uint32_t kZeroValuesElement = kMaxBlendPairs + 1u;
+    void ensure_frame_values();
     bool ensure_blend_validation();
     void record_blend_validation();
     std::vector<std::uint32_t> blend_scratch_;
@@ -1135,7 +1155,7 @@ private:
     // sub-frame between a small evaluation list and a small present list.
     bool ensure_interp_eval();
     bool ensure_interp_output(std::uint64_t bytes);
-    void record_interp_eval(float t, const Affine34& camera_t, bool blend);
+    void record_interp_eval(const SubframeTime& time, const Affine34& camera_t, const Affine34& camera_prev);
     void transition_interp_output(D3D12_RESOURCE_STATES state);
     void transition_blend_verdicts(D3D12_RESOURCE_STATES state);
     Microsoft::WRL::ComPtr<ID3D12RootSignature> interp_eval_root_;
@@ -1150,9 +1170,27 @@ private:
         std::uint64_t fence = 0;
     };
     std::vector<RetiredResource> interp_retired_;
+    // Inputs of a split replay's temporal upscale (its output switch).
+    struct ReplayUpscale {
+        ID3D12Resource* color = nullptr;
+        ID3D12Resource* depth = nullptr;
+        ID3D12Resource* motion = nullptr;
+        ID3D12Resource* reactive = nullptr;
+        ID3D12Resource* output = nullptr;
+        unsigned render_width = 0;
+        unsigned render_height = 0;
+        unsigned output_width = 0;
+        unsigned output_height = 0;
+        std::uint32_t copy = 0;   // the output switch's copy (resample fallback)
+    };
     struct ReplayList {
         Microsoft::WRL::ComPtr<ID3D12CommandAllocator> allocator;
         Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> list;
+        // Temporal upscaling: the log after its output switch; the switch
+        // itself is recorded per presented frame.
+        Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> list_after;
+        bool split = false;
+        ReplayUpscale upscale{};
         std::uint64_t fence = 0;        // the last submission that executed it
         std::uint64_t sequence = 0;     // SequenceState::serial it replays, 0 none
         bool blend = false;
@@ -1165,6 +1203,19 @@ private:
     static constexpr unsigned kReplayLists = 4;
     std::array<ReplayList, kReplayLists> replay_lists_{};
     bool record_replay_list(ReplayList& entry);
+    void record_subframe_upscale(const ReplayList& entry, const SubframeTime& time);
+    struct ReplayMotionTargets {
+        Microsoft::WRL::ComPtr<ID3D12Resource> target;
+        Microsoft::WRL::ComPtr<ID3D12Resource> reactive;
+        D3D12_CPU_DESCRIPTOR_HANDLE rtv{};
+        D3D12_CPU_DESCRIPTOR_HANDLE reactive_rtv{};
+        unsigned scale = 0;
+    };
+    ReplayMotionTargets replay_motion_{};
+    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> replay_motion_rtv_heap_;
+    bool ensure_replay_motion_targets();
+    void swap_motion_targets();
+    Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> subframe_upscale_list_;
     // GALAXY_INTERP_GPU_PROFILE: timestamps around the copies and clears of a
     // sampled replay (report_replay_profile).
     static constexpr std::uint32_t kReplayProfileQueries = 2048u;
@@ -1185,6 +1236,23 @@ private:
     bool ensure_replay_profile();
     void report_replay_profile();
     std::array<double, 3> subframe_phase_ms_{};  // evaluation, replay, present
+    // The temporal upscaler upscales the sub-frames (and the frame at t = 1)
+    // instead of the game frames (GALAXY_TEMPORAL_INTERPOLATION).
+    bool temporal_interp_ = false;
+    // suspend_temporal_interpolation, and the settings it was decided at.
+    struct TemporalInterpKey {
+        unsigned upscaler = 0;
+        unsigned quality = 0;
+        unsigned efb_scale = 0;
+        unsigned output_scale = 0;
+        float max_fps = 0.0f;
+        unsigned vsync = 0;
+        double refresh_hz = 0.0;
+        friend bool operator==(const TemporalInterpKey&, const TemporalInterpKey&) = default;
+    };
+    [[nodiscard]] TemporalInterpKey temporal_interp_key() const;
+    bool temporal_interp_suspended_ = false;
+    TemporalInterpKey temporal_interp_key_{};
     std::uint64_t sequence_serial_ = 0;
     std::uint64_t replay_records_ = 0;
     Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> subframe_eval_list_;

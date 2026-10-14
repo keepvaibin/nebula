@@ -6308,6 +6308,10 @@ void GxBackend::write_scene_vs_constants(const GxVsConstants& cpu, GxVsConstants
             GxVsConstants probe = cpu;
             probe.mtx_palette_base = scene.constants[r].mtx_palette_base;
             apply_uber_vs_key(vs_key_, probe);
+            // Derived from the fields compared (write_scene_vs_constants).
+            std::memcpy(probe.motion_prev_proj, scene.constants[r].motion_prev_proj,
+                        offsetof(GxVsConstants, motion_ctrl) + sizeof(probe.motion_ctrl) -
+                            offsetof(GxVsConstants, motion_prev_proj));
             const std::int32_t shadow = scene.palette[r];
             const bool palette_continues =
                 shadow < 0
@@ -6381,12 +6385,22 @@ void GxBackend::write_scene_vs_constants(const GxVsConstants& cpu, GxVsConstants
         return;
     }
 
-    // Previous transform: the matched record, else the camera delta.
+    // Previous transform: the matched record, else the camera delta. With
+    // temporal upscaling of the replays, every presented frame is a replay
+    // whose program moves what moves: a block keeps its own transform.
+    const bool replays_upscaled = renderer_.temporal_interpolation();
     const Affine34& camera = transform_history_.camera_delta();
     std::uint32_t mode = 1u;
     std::uint32_t previous_palette = 0u;
-    Affine34 prev_pos = camera;
-    if (record.palette) {
+    Affine34 prev_pos = replays_upscaled ? affine_identity() : camera;
+    if (replays_upscaled) {
+        if (!record.palette) {
+            prev_pos = record.position;
+        } else if (palette_offset != kNoPaletteOffset) {
+            mode = 0u;
+            previous_palette = palette_offset;
+        }
+    } else if (record.palette) {
         if (previous != nullptr && previous->palette_offset != kNoPaletteOffset &&
             transform_history_.current_frame() - transform_history_.previous_frame() <=
                 renderer_.matrix_history_frames()) {
@@ -6398,7 +6412,7 @@ void GxBackend::write_scene_vs_constants(const GxVsConstants& cpu, GxVsConstants
                                        : affine_multiply(camera, record.position);
     }
     const std::array<float, 7>& proj =
-        previous != nullptr ? previous->projection : record.projection;
+        previous != nullptr && !replays_upscaled ? previous->projection : record.projection;
     upload.motion_prev_proj[0][0] = proj[0];
     upload.motion_prev_proj[0][1] = proj[1];
     upload.motion_prev_proj[0][2] = proj[2];
@@ -6416,6 +6430,27 @@ void GxBackend::write_scene_vs_constants(const GxVsConstants& cpu, GxVsConstants
     upload.motion_ctrl[1] = previous_palette;
     upload.motion_ctrl[2] = 0u;
     upload.motion_ctrl[3] = 0u;
+    if (interp_recording_ && replays_upscaled) [[unlikely]] {
+        // The sequence's base copies carry them: the CPU image too (evaluation check).
+        // Written from the values above: `upload` is write-combined memory.
+        GxVsConstants& image = interp_scenes_[interp_scene_].constants.back();
+        for (unsigned i = 0; i < 4u; ++i) {
+            image.motion_prev_proj[0][i] = proj[i];
+        }
+        image.motion_prev_proj[1][0] = proj[4];
+        image.motion_prev_proj[1][1] = proj[5];
+        image.motion_prev_proj[1][2] = proj[6];
+        image.motion_prev_proj[1][3] = 0.0f;
+        std::memcpy(image.motion_prev_pos, prev_pos.data(), sizeof(image.motion_prev_pos));
+        image.motion_params[0] = jitter_ndc[0];
+        image.motion_params[1] = jitter_ndc[1];
+        image.motion_params[2] = 0.5f * cpu.line_point_raster[0];
+        image.motion_params[3] = -0.5f * cpu.line_point_raster[1];
+        image.motion_ctrl[0] = mode;
+        image.motion_ctrl[1] = previous_palette;
+        image.motion_ctrl[2] = 0u;
+        image.motion_ctrl[3] = 0u;
+    }
 }
 
 std::uint32_t GxBackend::note_identity_occurrence(std::uint64_t key) {
@@ -7221,7 +7256,14 @@ unsigned GxBackend::interp_gpu_governor(double& rate) {
         interp_gpu_checked_ = serial;
         const double sub_ms = renderer_.subframe_gpu_ema_ms();
         if (sub_ms > 0.0) {
-            const double fit = std::floor(budget_ms / sub_ms) - 1.0;
+            // With the temporal upscaler on the replays the frame at t = 1 is
+            // one too; when no sub-frame fits beside it, the game frames take
+            // the upscaler instead (the same frames for less GPU time).
+            const bool upscaled = renderer_.temporal_interpolation();
+            const double fit = std::floor(budget_ms / sub_ms) - (upscaled ? 2.0 : 1.0);
+            if (upscaled && fit < 1.0) {
+                renderer_.suspend_temporal_interpolation(sub_ms);
+            }
             const unsigned fits = fit < 1.0 ? 0u : static_cast<unsigned>(std::min(fit, 7.0));
             if (fits < interp_gpu_cap_) {
                 interp_gpu_cap_ = fits;
@@ -7284,6 +7326,12 @@ void GxBackend::note_game_frame_cadence(std::int64_t now_qpc) {
     const auto drop = [&](unsigned cap) {
         if (trying) {
             interp_cadence_interval_s_ = std::min(interp_cadence_interval_s_ * 2u, 64u);
+        }
+        // The replay at t = 1 alone costs the game its frames (measured to
+        // take a quarter of a frame or more, not a load hitch).
+        const double replay_ms = renderer_.subframe_gpu_ema_ms();
+        if (cap == 0u && renderer_.temporal_interpolation() && replay_ms * 4.0 >= 1000.0 / 60.0) {
+            renderer_.suspend_temporal_interpolation(replay_ms);
         }
         interp_cadence_cap_ = cap;
         interp_cadence_change_qpc_ = now_qpc;
@@ -7963,8 +8011,28 @@ bool GxBackend::render_interp_subframe(float t) {
     if (verify && t == 0.0f && interp_sequence_.next == 0u) {
         verify_interp_program(scene, before_scene, camera_t);
     }
-    check_interp_eval(scene, camera_t, t);
-    return renderer_.present_replay_subframe(t, camera_t);
+    // The frame presented before: earlier in this sequence, or this sequence's
+    // t = 0 when it was the scene before at t = 1. Anything else (a frame
+    // presented alone, a cut, a gap) starts the upscaler's history again.
+    RendererD3D12::SubframeTime time{};
+    time.t = t;
+    time.t_prev = t;
+    if (interp_shown_serial_ == interp_sequence_serial_ && interp_shown_t_ < t) {
+        time.t_prev = interp_shown_t_;
+    } else if (interp_shown_t_ >= 1.0f && interp_shown_scene_ == static_cast<std::int32_t>(interp_sequence_.before) &&
+               !(interp_camera_.known && interp_camera_.cut)) {
+        time.t_prev = 0.0f;
+    } else {
+        time.reset = true;
+    }
+    const Affine34 camera_prev = time.t_prev == t ? camera_t : camera_at(interp_camera_, time.t_prev);
+    check_interp_eval(scene, camera_t, t, camera_prev, time.t_prev);
+    if (!renderer_.present_replay_subframe(time, camera_t, camera_prev)) {
+        return false;
+    }
+    interp_shown_serial_ = interp_sequence_serial_;
+    interp_shown_t_ = t;
+    return true;
 }
 
 // The playing sequence's evaluation program (interp_gpu.h): an output block
@@ -8001,9 +8069,14 @@ bool GxBackend::prepare_interp_sequence(const InterpScene& scene, const InterpSc
         }
     }
     const bool colours = (parts & 0x20u) != 0u;
+    // Temporal upscaling of the replays: the motion vector fields of each
+    // moving block at the frame presented before (blocks the program leaves
+    // alone carry their own transform there: no motion).
+    const bool motion = renderer_.temporal_interpolation();
     interp_layout_ = {static_cast<std::uint32_t>(interp_moving_.size()),
                       static_cast<std::uint32_t>(interp_palette_source_.size()),
-                      colours ? static_cast<std::uint32_t>(interp_ps_moving_.size()) : 0u};
+                      colours ? static_cast<std::uint32_t>(interp_ps_moving_.size()) : 0u,
+                      motion ? static_cast<std::uint32_t>(interp_palette_source_.size()) : 0u};
     const interp_gpu::Layout& layout = interp_layout_;
     for (std::size_t s = 0; s < interp_moving_.size(); ++s) {
         const InterpRecordMotion& moving = interp_moving_[s];
@@ -8033,14 +8106,33 @@ bool GxBackend::prepare_interp_sequence(const InterpScene& scene, const InterpSc
         if (moving.projection_moves && before != nullptr && (parts & 4u) != 0u) {
             interp_program_.projection(base, *before, recorded);
         }
+        std::int32_t palette_slot = -1;
         if (moving.palette >= 0) {
             const std::int32_t q = interp_palette_slot_[static_cast<std::size_t>(moving.palette)];
             if (q >= 0) {
+                palette_slot = q;
                 interp_record_palette_slot_[moving.record] = q;
                 const std::uint32_t word =
                     (layout.palette_offset(static_cast<std::uint32_t>(q)) - layout.palette_base()) / 16u;
                 interp_program_.store(base + interp_gpu::kVsPaletteBase, &word, 1u);
             }
+        }
+        if (motion) {
+            interp_program_.at_previous(true);
+            if (moving.position_moves && (parts & 1u) != 0u) {
+                interp_program_.eye(base + interp_gpu::kVsMotionPrevPos, moving.position);
+            }
+            if (moving.projection_moves && before != nullptr && (parts & 4u) != 0u) {
+                interp_program_.projection_params(base, *before, recorded);
+            }
+            if (palette_slot >= 0) {
+                // Mode 0: the palette's rows at the frame before.
+                const std::uint32_t ctrl[2]{
+                    0u, (layout.prev_palette_offset(static_cast<std::uint32_t>(palette_slot)) - layout.palette_base()) /
+                            16u};
+                interp_program_.store(base + interp_gpu::kVsMotionCtrl, ctrl, 2u);
+            }
+            interp_program_.at_previous(false);
         }
     }
     for (std::size_t q = 0; q < interp_palette_entry_.size(); ++q) {
@@ -8048,6 +8140,12 @@ bool GxBackend::prepare_interp_sequence(const InterpScene& scene, const InterpSc
         const std::uint32_t* now_words = scene.palettes.data() + static_cast<std::size_t>(entry.shadow) * kWords;
         interp_program_.palette(layout.palette_offset(static_cast<std::uint32_t>(q)) / 4u, entry.motion,
                                 before_palette(entry.before), now_words, interp_camera_);
+        if (q < layout.prev_palette_count) {
+            interp_program_.at_previous(true);
+            interp_program_.palette_positions(layout.prev_palette_offset(static_cast<std::uint32_t>(q)) / 4u,
+                                              entry.motion);
+            interp_program_.at_previous(false);
+        }
     }
     if (colours) {
         for (std::size_t k = 0; k < interp_ps_moving_.size(); ++k) {
@@ -8072,7 +8170,7 @@ bool GxBackend::prepare_interp_sequence(const InterpScene& scene, const InterpSc
 
 // The output the replay reads, built on the CPU: each block as recorded, then
 // the program at t (interp_gpu::evaluate).
-void GxBackend::build_interp_reference(const InterpScene& scene, const Affine34& camera_t, float t,
+void GxBackend::build_interp_reference(const InterpScene& scene, const interp_gpu::FrameTimes& times,
                                        std::vector<std::uint32_t>& out) const {
     const interp_gpu::Layout& layout = interp_layout_;
     out.assign(layout.bytes() / 4u, 0u);
@@ -8082,15 +8180,19 @@ void GxBackend::build_interp_reference(const InterpScene& scene, const Affine34&
     }
     for (std::size_t q = 0; q < interp_palette_entry_.size(); ++q) {
         const InterpPaletteMotion& entry = interp_palette_motions_[static_cast<std::size_t>(interp_palette_entry_[q])];
-        std::memcpy(out.data() + layout.palette_offset(static_cast<std::uint32_t>(q)) / 4u,
-                    scene.palettes.data() + static_cast<std::size_t>(entry.shadow) * kMatrixPaletteWords,
+        const std::uint32_t* words = scene.palettes.data() + static_cast<std::size_t>(entry.shadow) * kMatrixPaletteWords;
+        std::memcpy(out.data() + layout.palette_offset(static_cast<std::uint32_t>(q)) / 4u, words,
                     interp_gpu::kPaletteBytes);
+        if (q < layout.prev_palette_count) {
+            std::memcpy(out.data() + layout.prev_palette_offset(static_cast<std::uint32_t>(q)) / 4u, words,
+                        interp_gpu::kPrevPaletteBytes);
+        }
     }
     for (std::size_t k = 0; k < layout.ps_count; ++k) {
         std::memcpy(out.data() + layout.ps_offset(static_cast<std::uint32_t>(k)) / 4u,
                     &scene.ps_constants[interp_ps_moving_[k][0]], sizeof(GxPsConstants));
     }
-    interp_gpu::evaluate(interp_program_, camera_t, t, out.data());
+    interp_gpu::evaluate(interp_program_, times, out.data());
 }
 
 // GALAXY_INTERP_VERIFY: at t = 0 every matched record's moving block must equal
@@ -8099,7 +8201,10 @@ void GxBackend::build_interp_reference(const InterpScene& scene, const Affine34&
 void GxBackend::verify_interp_program(const InterpScene& scene, const InterpScene& before_scene,
                                       const Affine34& camera_t) {
     std::vector<std::uint32_t> out;
-    build_interp_reference(scene, camera_t, 0.0f, out);
+    interp_gpu::FrameTimes times{};
+    times.camera = camera_t;
+    times.camera_prev = camera_t;
+    build_interp_reference(scene, times, out);
     const interp_gpu::Layout& layout = interp_layout_;
     std::size_t checked = 0u, bad = 0u, palette_words = 0u;
     float worst = 0.0f;
@@ -8146,7 +8251,8 @@ void GxBackend::verify_interp_program(const InterpScene& scene, const InterpScen
 // first sub-frame is read back and compared with the CPU reference: copied
 // words exactly, each op's output to float precision of its magnitude
 // (rounded colours and integers within one step).
-void GxBackend::check_interp_eval(const InterpScene& scene, const Affine34& camera_t, float t) {
+void GxBackend::check_interp_eval(const InterpScene& scene, const Affine34& camera_t, float t,
+                                  const Affine34& camera_prev, float t_prev) {
     static const std::uint64_t every = read_env_u64("GALAXY_INTERP_EVAL_CHECK", 0u);
     if (every == 0u) {
         return;
@@ -8209,7 +8315,13 @@ void GxBackend::check_interp_eval(const InterpScene& scene, const Affine34& came
         interp_eval_expected_.clear();
     }
     if (interp_sequence_.next == 0u && interp_eval_expected_.empty() && interp_sequence_serial_ % every == 0u) {
-        build_interp_reference(scene, camera_t, t, interp_eval_expected_);
+        interp_gpu::FrameTimes times{};
+        times.camera = camera_t;
+        times.t = t;
+        times.camera_prev = camera_prev;
+        times.t_prev = t_prev;
+        times.previous_only = t >= 1.0f;
+        build_interp_reference(scene, times, interp_eval_expected_);
         interp_eval_expected_seq_ = interp_sequence_serial_;
         interp_eval_ops_ = interp_program_.ops;
         renderer_.request_eval_readback();
@@ -9308,17 +9420,40 @@ void GxBackend::present_cached_xfb_on_thread(
         !duplicate_stamp) {
         note_interp_real_present();
     }
-    renderer_.begin_frame(true);
-    // Present-only frames do not acquire or resize XFB textures. Keep
-    // EfbCopyManager retirement/recycling tied to render frames that can
-    // actually produce GXCopyDisp resources; otherwise the split
-    // render-then-present cadence advances XFB lifetime twice per VI.
-    const bool capture_recorded = renderer_.present(
-        selected, capture_present || !snapshot_path.empty());
+    bool capture_recorded = false;
+    bool replayed = false;
+    if (interp_presenting_real_ && renderer_.temporal_interpolation()) {
+        // The temporal upscaler takes every presented frame from the replays:
+        // the sequence's frame at t = 1 too (one history).
+        const bool capture = capture_present || !snapshot_path.empty();
+        renderer_.set_subframe_capture(capture);
+        replayed = renderer_.replay_playing() && render_interp_subframe(1.0f);
+        renderer_.set_subframe_capture(false);
+        capture_recorded = replayed && capture;
+        if (!replayed) {
+            // Shown without the upscaler: the next sequence starts its history again.
+            interp_shown_serial_ = 0u;
+            interp_shown_t_ = 0.0f;
+        }
+    } else if (interp_presenting_real_) {
+        interp_shown_serial_ = interp_sequence_serial_;
+        interp_shown_t_ = 1.0f;
+    }
+    if (!replayed) {
+        renderer_.begin_frame(true);
+        // Present-only frames do not acquire or resize XFB textures. Keep
+        // EfbCopyManager retirement/recycling tied to render frames that can
+        // actually produce GXCopyDisp resources; otherwise the split
+        // render-then-present cadence advances XFB lifetime twice per VI.
+        capture_recorded = renderer_.present(
+            selected, capture_present || !snapshot_path.empty());
+    }
     if (!snapshot_path.empty()) {
         renderer_.set_debug_capture_paths({}, {});
     }
-    renderer_.end_frame();
+    if (!replayed) {
+        renderer_.end_frame();
+    }
     if (capture_present) {
         renderer_.set_debug_capture_paths({}, {});
         std::cerr << "[gx-present-capture] request=" << present_requests

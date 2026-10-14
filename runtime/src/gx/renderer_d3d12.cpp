@@ -87,6 +87,8 @@ static ComPtr<ID3D12RootSignature> s_clear_root_sig;
 static UINT s_bb_width  = 1280;
 // Swap-chain presents per second (any source), for the FRAME RATE row.
 static std::atomic<double> s_measured_present_hz{0.0};
+// RendererD3D12::suspend_temporal_interpolation (the FRAME RATE row says so).
+static std::atomic<bool> s_temporal_interp_suspended{false};
 static UINT s_bb_height =  720;
 
 // See set_native_settings_content_root in gx_d3d12.h. The setter itself is
@@ -175,15 +177,27 @@ void dlss_dismiss_prompt();
 void poll_dlss_download();
 std::string dlss_footer(std::uint64_t now_ms, bool& error);
 
-// The upscaler choices this runtime and machine offer, in menu order.
+bool temporal_interpolation_allowed() {
+    // GALAXY_TEMPORAL_INTERPOLATION=1: a temporal upscaler upscales every
+    // presented frame (rates that are multiples of 60).
+    static const bool allowed = [] {
+        char value[8]{};
+        std::size_t length = 0u;
+        return getenv_s(&length, value, sizeof(value), "GALAXY_TEMPORAL_INTERPOLATION") == 0 &&
+               length > 1u && value[0] == '1';
+    }();
+    return allowed;
+}
+
 // The temporal upscaler this configuration runs (2 FSR 3, 3 DLSS), 0 none.
-// Until sub-frames are upscaled too it limits the frame rate to 60.
+// Without temporal interpolation it limits the frame rate to 60.
 unsigned temporal_upscaler(const RenderConfig& render) {
     if (render.upscaler == 2u && fsr3_available()) return 2u;
     if (render.upscaler == 3u && streamline::dlss_supported()) return 3u;
     return 0u;
 }
 
+// The upscaler choices this runtime and machine offer, in menu order.
 std::vector<unsigned> available_upscalers() {
     std::vector<unsigned> choices{0u, 1u};
     if (fsr3_available()) choices.push_back(2u);
@@ -425,11 +439,15 @@ unsigned settings_refresh_hz(const RenderConfig& render) {
     return monitor != nullptr ? monitor->current.refresh_hz : 0u;
 }
 
-// FRAME RATE choices: 30 and 60 only while a temporal upscaler runs.
+// FRAME RATE choices while a temporal upscaler runs: 30 and 60, and with
+// temporal interpolation the multiples of 60.
 std::vector<unsigned> frame_rate_choices(const RenderConfig& render) {
     std::vector<unsigned> rates = frame_rate_options(settings_refresh_hz(render));
     if (temporal_upscaler(render) != 0u) {
-        std::erase_if(rates, [](unsigned rate) { return rate == 0u || rate > 60u; });
+        const bool multiples = temporal_interpolation_allowed();
+        std::erase_if(rates, [multiples](unsigned rate) {
+            return rate == 0u || (rate > 60u && (!multiples || rate % 60u != 0u));
+        });
     }
     return rates;
 }
@@ -1048,8 +1066,15 @@ void adjust_native_setting_unlogged(int delta) {
                 if (choices[i] == draft.upscaler) index = i;
             }
             draft.upscaler = choices[step(static_cast<unsigned>(index), static_cast<unsigned>(choices.size()))];
-            if (temporal_upscaler(draft) != 0u && (draft.max_fps <= 0.0f || draft.max_fps > 60.0f)) {
-                draft.max_fps = 60.0f;
+            if (temporal_upscaler(draft) != 0u) {
+                // The highest rate still offered at or below the chosen one.
+                const auto rates = frame_rate_choices(draft);
+                const auto wanted = static_cast<unsigned>(std::lround(std::max(0.0f, draft.max_fps)));
+                unsigned best = 60u;
+                for (const unsigned rate : rates) {
+                    if (rate != 0u && (wanted == 0u || rate <= wanted)) best = std::max(best, rate);
+                }
+                draft.max_fps = static_cast<float>(best);
             }
             break;
         }
@@ -6013,8 +6038,13 @@ void RendererD3D12::begin_frame(bool present_swap_chain) {
     apply_pending_efb_scale();
     sync_post_process_settings();
     {
-        const RingMode mode = temporal_mode() ? RingMode::Temporal
-            : interpolation_mode() ? RingMode::Interp : RingMode::Normal;
+        if (temporal_interp_suspended_ && temporal_interp_key() != temporal_interp_key_) {
+            // Other settings: measured again.
+            temporal_interp_suspended_ = false;
+            s_temporal_interp_suspended.store(false, std::memory_order_relaxed);
+        }
+        const RingMode mode = interpolation_mode() ? RingMode::Interp
+            : temporal_mode() ? RingMode::Temporal : RingMode::Normal;
         if (mode != ring_mode_) {
             wait_for_gpu();
             const unsigned segments = mode == RingMode::Interp ? kInterpSegments : kFramesInFlight;
@@ -6058,6 +6088,7 @@ void RendererD3D12::begin_frame(bool present_swap_chain) {
         }
     }
     frame_slot_ = static_cast<unsigned>(frame_index_ % kFramesInFlight);
+    temporal_interp_ = ring_mode_ == RingMode::Interp && temporal_mode();
     if (ring_mode_ != RingMode::Interp) {
         if (replay_valid_ && frame_slot_ == replay_source_slot_) {
             // The recorded frame's ring segments are about to be rewound.
@@ -6249,6 +6280,7 @@ void RendererD3D12::begin_frame(bool present_swap_chain) {
     }
     retired_efb_copy_textures_[frame_slot_].clear();
 
+    ensure_frame_values();
     // Bind both heaps for the entire frame.
     ID3D12DescriptorHeap* heaps[] = {srv_ring_.heap(), sampler_heap_.Get()};
     command_list_->SetDescriptorHeaps(2, heaps);
@@ -7035,20 +7067,52 @@ void RendererD3D12::record_motion_debug_view() {
 // ---------------------------------------------------------------------------
 
 bool RendererD3D12::interpolation_mode() const {
-    // GALAXY_INTERPOLATION=0 turns it off (diagnostics). The temporal
-    // upscaler's history cannot take sub-frames: FSR 3 presents at 60.
+    // GALAXY_INTERPOLATION=0 turns it off (diagnostics).
     static const bool allowed = [] {
         char value[8]{};
         std::size_t length = 0u;
         return !(getenv_s(&length, value, sizeof(value), "GALAXY_INTERPOLATION") == 0 &&
                  length > 1u && value[0] == '0');
     }();
-    if (!allowed || temporal_mode()) {
+    if (!allowed) {
         return false;
     }
     const RenderConfig cfg = get_render_config();
-    return interpolated_frames_per_game_frame(
-               present_frame_rate(cfg.max_fps, cfg.vsync_interval, display_refresh_hz_)) != 0u;
+    const double rate = present_frame_rate(cfg.max_fps, cfg.vsync_interval, display_refresh_hz_);
+    if (temporal_mode()) {
+        // The upscaler's history follows the presented frames: one per slot of
+        // a clock locked to the game's 60 Hz.
+        const double multiple = std::round(rate / 60.0);
+        if (!temporal_interpolation_allowed() || temporal_interp_suspended_ ||
+            std::abs(rate - 60.0 * multiple) > 0.5) {
+            return false;
+        }
+    }
+    return interpolated_frames_per_game_frame(rate) != 0u;
+}
+
+RendererD3D12::TemporalInterpKey RendererD3D12::temporal_interp_key() const {
+    const RenderConfig cfg = get_render_config();
+    TemporalInterpKey key{};
+    key.upscaler = cfg.upscaler;
+    key.quality = cfg.temporal_quality;
+    key.efb_scale = output_efb_active_ ? alt_efb_.scale : efb_scale_;  // the render EFB's
+    key.output_scale = output_efb_scale_for_window();
+    key.max_fps = cfg.max_fps;
+    key.vsync = cfg.vsync_interval;
+    key.refresh_hz = display_refresh_hz_;
+    return key;
+}
+
+void RendererD3D12::suspend_temporal_interpolation(double ms_per_frame) {
+    if (temporal_interp_suspended_) {
+        return;
+    }
+    temporal_interp_suspended_ = true;
+    temporal_interp_key_ = temporal_interp_key();
+    s_temporal_interp_suspended.store(true, std::memory_order_relaxed);
+    std::cerr << "[interp] temporal upscaling of the replays off: " << ms_per_frame
+              << " ms GPU per presented frame\n";
 }
 
 void RendererD3D12::publish_replay_log() {
@@ -7162,6 +7226,41 @@ void main(uint3 group : SV_GroupID, uint lane : SV_GroupIndex) {
 }
 )HLSL";
 
+// Blend verdicts, then the presented frame's values (t, t of the frame before,
+// jitter) at kFrameValuesElement and a zero element read by game frames. Made
+// at the first frame, zeroed, so every draw can read it.
+void RendererD3D12::ensure_frame_values() {
+    if (blend_verdicts_ || !device_) {
+        return;
+    }
+    D3D12_HEAP_PROPERTIES heap{};
+    heap.Type = D3D12_HEAP_TYPE_DEFAULT;
+    D3D12_RESOURCE_DESC desc{};
+    desc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+    desc.Width = static_cast<UINT64>(kZeroValuesElement + 1u) * 16u;
+    desc.Height = 1;
+    desc.DepthOrArraySize = 1;
+    desc.MipLevels = 1;
+    desc.SampleDesc.Count = 1;
+    desc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+    desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
+    d3d_check(device_->CreateCommittedResource(&heap, D3D12_HEAP_FLAG_NONE, &desc, D3D12_RESOURCE_STATE_COPY_DEST,
+                                               nullptr, IID_PPV_ARGS(&blend_verdicts_)),
+              "frame values CreateCommittedResource");
+    blend_verdicts_->SetName(L"GX vertex blend verdicts and frame values");
+    const UploadRing::Allocation zeros = constant_ring_.allocate(static_cast<std::size_t>(desc.Width), 256u);
+    std::memset(zeros.cpu, 0, static_cast<std::size_t>(desc.Width));
+    command_list_->CopyBufferRegion(blend_verdicts_.Get(), 0u, constant_ring_.resource(), zeros.offset, desc.Width);
+    D3D12_RESOURCE_BARRIER barrier{};
+    barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+    barrier.Transition.pResource = blend_verdicts_.Get();
+    barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+    barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_DEST;
+    barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
+    command_list_->ResourceBarrier(1, &barrier);
+    blend_verdicts_state_ = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
+}
+
 bool RendererD3D12::ensure_blend_validation() {
     if (blend_validate_pso_) {
         return true;
@@ -7170,25 +7269,9 @@ bool RendererD3D12::ensure_blend_validation() {
         return false;
     }
     blend_validate_failed_ = true;
-    D3D12_HEAP_PROPERTIES heap{};
-    heap.Type = D3D12_HEAP_TYPE_DEFAULT;
-    D3D12_RESOURCE_DESC desc{};
-    desc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
-    // One element past the pairs holds the sub-frame t (written by kInterpEvalCs).
-    desc.Width = static_cast<UINT64>(kMaxBlendPairs + 1u) * 16u;
-    desc.Height = 1;
-    desc.DepthOrArraySize = 1;
-    desc.MipLevels = 1;
-    desc.SampleDesc.Count = 1;
-    desc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
-    desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
-    if (FAILED(device_->CreateCommittedResource(&heap, D3D12_HEAP_FLAG_NONE, &desc,
-                                                D3D12_RESOURCE_STATE_UNORDERED_ACCESS, nullptr,
-                                                IID_PPV_ARGS(&blend_verdicts_)))) {
+    if (!blend_verdicts_) {
         return false;
     }
-    blend_verdicts_->SetName(L"GX vertex blend verdicts");
-    blend_verdicts_state_ = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
     D3D12_ROOT_PARAMETER params[5]{};
     for (unsigned i = 0; i < 3u; ++i) {
         params[i].ParameterType = D3D12_ROOT_PARAMETER_TYPE_SRV;
@@ -7900,12 +7983,19 @@ cbuffer Frame : register(b0) {
     uint output_last;
     uint constants_last;
     uint matrices_last;
-    uint blend_slot;
+    uint frame_slot;
+    float t_prev;
+    float2 jitter;
+    float4 camera_prev0;
+    float4 camera_prev1;
+    float4 camera_prev2;
+    uint mode;  // 1: only the stores and the ops at the frame before (the frame at t = 1)
 };
 static const uint kSplit = 0x100u;
 static const uint kStill = 0x200u;
 static const uint kRigid = 0x400u;
 static const uint kLightSplit = 0x800u;
+static const uint kPrev = 0x1000u;
 uint word(uint index) {
     return program.Load(min(payload + index * 4u, program_last));
 }
@@ -7932,7 +8022,7 @@ Affine multiply(Affine a, Affine b) {
     }
     return o;
 }
-Affine transform_at(uint p, uint flags) {
+Affine transform_at(uint p, uint flags, float at) {
     Affine m;
     if ((flags & kStill) != 0u) {
         [unroll] for (uint i = 0u; i < 3u; ++i) {
@@ -7943,17 +8033,17 @@ Affine transform_at(uint p, uint flags) {
     if ((flags & kRigid) == 0u) {
         [unroll] for (uint i = 0u; i < 3u; ++i) {
             const float4 a = row(p + 4u * i);
-            m.r[i] = a + (row(p + 12u + 4u * i) - a) * t;
+            m.r[i] = a + (row(p + 12u + 4u * i) - a) * at;
         }
         return m;
     }
     const float theta = value(p + 32u);
     const float inv_sin = value(p + 33u);
-    float wa = 1.0 - t;
-    float wb = t;
+    float wa = 1.0 - at;
+    float wb = at;
     if (theta != 0.0) {
-        wa = sin((1.0 - t) * theta) * inv_sin;
-        wb = sin(t * theta) * inv_sin;
+        wa = sin((1.0 - at) * theta) * inv_sin;
+        wb = sin(at * theta) * inv_sin;
     }
     float4 q = row(p) * wa + row(p + 4u) * wb;
     q *= rsqrt(dot(q, q));
@@ -7966,10 +8056,10 @@ Affine transform_at(uint p, uint flags) {
     float3 s[3];
     [unroll] for (uint k = 0u; k < 3u; ++k) {
         const float3 a = vec(p + 8u + 3u * k);
-        s[k] = a + (vec(p + 17u + 3u * k) - a) * t;
+        s[k] = a + (vec(p + 17u + 3u * k) - a) * at;
     }
     const float3 ta = vec(p + 26u);
-    const float3 tr = ta + (vec(p + 29u) - ta) * t;
+    const float3 tr = ta + (vec(p + 29u) - ta) * at;
     m.r[0] = float4(r0.x * s[0] + r0.y * s[1] + r0.z * s[2], tr.x);
     m.r[1] = float4(r1.x * s[0] + r1.y * s[1] + r1.z * s[2], tr.y);
     m.r[2] = float4(r2.x * s[0] + r2.y * s[1] + r2.z * s[2], tr.z);
@@ -7990,8 +8080,8 @@ void copy_main(uint3 group : SV_GroupID, uint lane : SV_GroupIndex) {
 }
 [numthreads(64, 1, 1)]
 void eval_main(uint3 id : SV_DispatchThreadID) {
-    if (id.x == 0u && blend_slot != 0xFFFFFFFFu) {
-        verdicts[min(blend_slot, 8192u)] = uint4(asuint(t), 0u, 0u, 0u);
+    if (id.x == 0u) {
+        verdicts[min(frame_slot, 8192u)] = uint4(asuint(t), asuint(t_prev), asuint(jitter));
     }
     if (id.x >= count) {
         return;
@@ -8002,12 +8092,20 @@ void eval_main(uint3 id : SV_DispatchThreadID) {
     const uint n = min(op.x >> 16u, 16u);
     const uint dst = op.y;
     const uint p = op.z;
+    const bool previous = (flags & kPrev) != 0u;
+    if (!previous && mode != 0u && kind != 6u) {
+        return;
+    }
+    const float at = previous ? t_prev : t;
+    const float4 c0 = previous ? camera_prev0 : camera0;
+    const float4 c1 = previous ? camera_prev1 : camera1;
+    const float4 c2 = previous ? camera_prev2 : camera2;
     if (kind <= 1u) {
-        Affine m = transform_at(p, flags);
+        Affine m = transform_at(p, flags, at);
         Affine c;
-        c.r[0] = camera0;
-        c.r[1] = camera1;
-        c.r[2] = camera2;
+        c.r[0] = c0;
+        c.r[1] = c1;
+        c.r[2] = c2;
         if (kind == 1u) {
             [unroll] for (uint i = 0u; i < 3u; ++i) {
                 m.r[i].w = 0.0;
@@ -8033,7 +8131,7 @@ void eval_main(uint3 id : SV_DispatchThreadID) {
         for (uint i = 0u; i < n; ++i) {
             const float a = value(p + i);
             const float b = value(p + n + i);
-            const float v = a == b ? b : a + (b - a) * t;
+            const float v = a == b ? b : a + (b - a) * at;
             put(dst + i, kind == 2u ? asuint(v) : asuint(int(v >= 0.0 ? floor(v + 0.5) : ceil(v - 0.5))));
         }
     } else if (kind == 4u) {
@@ -8043,24 +8141,23 @@ void eval_main(uint3 id : SV_DispatchThreadID) {
         [unroll] for (uint s = 0u; s < 32u; s += 8u) {
             const float x = float((a >> s) & 0xFFu);
             const float y = float((b >> s) & 0xFFu);
-            c |= uint(floor(clamp(x + (y - x) * t, 0.0, 255.0) + 0.5)) << s;
+            c |= uint(floor(clamp(x + (y - x) * at, 0.0, 255.0) + 0.5)) << s;
         }
         put(dst, c);
     } else if (kind == 5u) {
         const float3 wa = vec(p);
         const float3 va = vec(p + 6u);
-        float3 pos = wa + (vec(p + 3u) - wa) * t;
-        float3 dir = va + (vec(p + 9u) - va) * t;
+        float3 pos = wa + (vec(p + 3u) - wa) * at;
+        float3 dir = va + (vec(p + 9u) - va) * at;
         if ((flags & kLightSplit) != 0u) {
-            pos = float3(dot(camera0.xyz, pos) + camera0.w, dot(camera1.xyz, pos) + camera1.w,
-                         dot(camera2.xyz, pos) + camera2.w);
-            dir = float3(dot(camera0.xyz, dir), dot(camera1.xyz, dir), dot(camera2.xyz, dir));
+            pos = float3(dot(c0.xyz, pos) + c0.w, dot(c1.xyz, pos) + c1.w, dot(c2.xyz, pos) + c2.w);
+            dir = float3(dot(c0.xyz, dir), dot(c1.xyz, dir), dot(c2.xyz, dir));
         }
         const float la = value(p + 12u);
         const float lb = value(p + 13u);
         const float ld = length(dir);
         if (ld > 1e-20) {
-            dir *= (la + (lb - la) * t) / ld;
+            dir *= (la + (lb - la) * at) / ld;
         }
         put(dst, asuint(pos.x));
         put(dst + 1u, asuint(pos.y));
@@ -8089,9 +8186,13 @@ struct InterpEvalFrame {
     std::uint32_t output_last;
     std::uint32_t constants_last;
     std::uint32_t matrices_last;
-    std::uint32_t blend_slot;
+    std::uint32_t frame_slot;
+    float t_prev;
+    float jitter[2];
+    float camera_prev[12];
+    std::uint32_t mode;
 };
-static_assert(sizeof(InterpEvalFrame) == 21u * 4u);
+static_assert(sizeof(InterpEvalFrame) == 37u * 4u);
 
 constexpr D3D12_RESOURCE_STATES kInterpOutputRead =
     D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE |
@@ -8217,34 +8318,35 @@ void RendererD3D12::transition_blend_verdicts(D3D12_RESOURCE_STATES state) {
 }
 
 // The sequence's base copies (first sub-frame) and its ops at t, into the
-// output read by the replay.
-void RendererD3D12::record_interp_eval(float t, const Affine34& camera_t, bool blend) {
-    blend = blend && blend_verdicts_;
-    if (sequence_.ops == 0u && !(sequence_.first && sequence_.copies != 0u) && !blend) {
-        transition_interp_output(kInterpOutputRead);
-        return;
-    }
+// output read by the replay. The frame at t = 1 takes the copies again (its
+// constants as the game frame recorded them), the stores (output addressing)
+// and the ops at the frame before (its motion vectors).
+void RendererD3D12::record_interp_eval(const SubframeTime& time, const Affine34& camera_t,
+                                       const Affine34& camera_prev) {
     transition_interp_output(D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-    if (blend) {
-        transition_blend_verdicts(D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-    }
+    transition_blend_verdicts(D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+    const bool last = time.t >= 1.0f;
     InterpEvalFrame frame{};
     std::memcpy(frame.camera, camera_t.data(), sizeof(frame.camera));
-    frame.t = t;
+    std::memcpy(frame.camera_prev, camera_prev.data(), sizeof(frame.camera_prev));
+    frame.mode = last ? 1u : 0u;
+    frame.t = time.t;
+    frame.t_prev = time.t_prev;
+    frame.jitter[0] = time.jitter_x;
+    frame.jitter[1] = time.jitter_y;
     frame.payload = sequence_.payload_offset;
     frame.program_last = sequence_.program_bytes - 16u;
     frame.output_last = static_cast<std::uint32_t>(interp_output_bytes_ - 4u);
     frame.constants_last = static_cast<std::uint32_t>(std::min<std::uint64_t>(constant_ring_.total_bytes() - 4u, 0xFFFFFFF0u));
     frame.matrices_last = static_cast<std::uint32_t>(std::min<std::uint64_t>(matrix_ring_.total_bytes() - 4u, 0xFFFFFFF0u));
-    frame.blend_slot = blend ? kMaxBlendPairs : 0xFFFFFFFFu;
+    frame.frame_slot = kFrameValuesElement;
     command_list_->SetComputeRootSignature(interp_eval_root_.Get());
     command_list_->SetComputeRootShaderResourceView(1, sequence_.program);
     command_list_->SetComputeRootShaderResourceView(2, constant_ring_.gpu_base());
     command_list_->SetComputeRootShaderResourceView(3, matrix_ring_.gpu_base());
     command_list_->SetComputeRootUnorderedAccessView(4, interp_output_->GetGPUVirtualAddress());
-    command_list_->SetComputeRootUnorderedAccessView(
-        5, blend ? blend_verdicts_->GetGPUVirtualAddress() : interp_output_->GetGPUVirtualAddress());
-    if (sequence_.first && sequence_.copies != 0u) {
+    command_list_->SetComputeRootUnorderedAccessView(5, blend_verdicts_->GetGPUVirtualAddress());
+    if ((sequence_.first || last) && sequence_.copies != 0u) {
         frame.count = sequence_.copies;
         frame.table = sequence_.copies_offset;
         command_list_->SetPipelineState(interp_copy_pso_.Get());
@@ -8261,9 +8363,7 @@ void RendererD3D12::record_interp_eval(float t, const Affine34& camera_t, bool b
     command_list_->SetComputeRoot32BitConstants(0, sizeof(frame) / 4u, &frame, 0u);
     command_list_->Dispatch(std::max(1u, (sequence_.ops + 63u) / 64u), 1u, 1u);
     transition_interp_output(kInterpOutputRead);
-    if (blend) {
-        transition_blend_verdicts(D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-    }
+    transition_blend_verdicts(D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
     bound_pipeline_ = nullptr;
 }
 
@@ -8355,6 +8455,11 @@ bool RendererD3D12::begin_replay_sequence(const ReplaySequence& sequence) {
         interp_copies_.push_back({static_cast<std::uint32_t>(interp_gpu::Source::Matrices),
                                   static_cast<std::uint32_t>(source), layout.palette_offset(q),
                                   interp_gpu::kPaletteWords});
+        if (q < layout.prev_palette_count) {
+            interp_copies_.push_back({static_cast<std::uint32_t>(interp_gpu::Source::Matrices),
+                                      static_cast<std::uint32_t>(source), layout.prev_palette_offset(q),
+                                      interp_gpu::kPrevPaletteWords});
+        }
     }
 
     // The program: copies, ops, payload (16 bytes of tail room for Load4).
@@ -8397,6 +8502,7 @@ bool RendererD3D12::record_replay_list(ReplayList& entry) {
     const ReplaySequence& sequence = sequence_.overrides;
     const interp_gpu::Layout& layout = sequence.layout;
     const unsigned output_scale = sequence_.output_scale;
+    const bool temporal = temporal_interp_ && temporal_ != nullptr;
     if (!entry.list) {
         d3d_check(device_->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&entry.allocator)),
                   "replay CreateCommandAllocator");
@@ -8405,24 +8511,35 @@ bool RendererD3D12::record_replay_list(ReplayList& entry) {
                   "replay CreateCommandList");
         d3d_check(entry.list->Close(), "replay Close");
     }
+    if (temporal && !entry.list_after) {
+        d3d_check(device_->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, entry.allocator.Get(), nullptr,
+                                             IID_PPV_ARGS(&entry.list_after)),
+                  "replay CreateCommandList");
+        d3d_check(entry.list_after->Close(), "replay Close");
+    }
     const auto record_start = std::chrono::steady_clock::now();
     d3d_check(entry.allocator->Reset(), "replay allocator Reset");
     d3d_check(entry.list->Reset(entry.allocator.Get(), nullptr), "replay Reset");
+    entry.split = false;
     // The next game frame may be recording: the replay must not log into it.
     const bool recording = replay_recording_;
     replay_recording_ = false;
+    // The list being recorded: the replay, then (temporal upscaling) the part
+    // after the output switch.
+    // std::addressof: a ComPtr's unary & yields a ComPtrRef that releases it on conversion.
+    Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList>* active = std::addressof(entry.list);
     struct Restore {
         RendererD3D12& renderer;
-        Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList>& list;
+        Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList>*& active;
         bool recording;
         ~Restore() {
             renderer.replay_recording_ = recording;
-            std::swap(renderer.command_list_, list);
+            std::swap(renderer.command_list_, *active);
         }
     };
     std::swap(command_list_, entry.list);
     {
-        const Restore restore{*this, entry.list, recording};
+        const Restore restore{*this, active, recording};
         dred_marker(command_list_.Get(), L"replay log=%llu", static_cast<unsigned long long>(run_serial_));
         const bool interp_rings = ring_mode_ == RingMode::Interp;
         ID3D12DescriptorHeap* heaps[] = {
@@ -8492,7 +8609,7 @@ bool RendererD3D12::record_replay_list(ReplayList& entry) {
             (output_scale != 0u &&
              (!replay_output_efb_.color || replay_output_efb_.scale != output_scale) &&
              !create_efb_set(replay_output_efb_, replay_output_efb_rtv_heap_,
-                             replay_output_efb_dsv_heap_, output_scale, false))) {
+                             replay_output_efb_dsv_heap_, output_scale, false, true))) {
             command_list_->Close();
             entry.sequence = 0u;
             replay_failure_ = 5u;
@@ -8513,6 +8630,15 @@ bool RendererD3D12::record_replay_list(ReplayList& entry) {
         swap_efb_with(replay_efb_);
         if (output_scale != 0u) {
             std::swap(alt_efb_, replay_output_efb_);
+        }
+        // Sub-frames write their motion vectors and reactive mask to their own
+        // targets (the game frame's are live meanwhile).
+        const bool motion_swapped = temporal && ensure_replay_motion_targets();
+        if (motion_swapped) {
+            swap_motion_targets();
+            const float zero[4]{};
+            command_list_->ClearRenderTargetView(motion_rtv_, zero, 0u, nullptr);
+            command_list_->ClearRenderTargetView(reactive_rtv_, zero, 0u, nullptr);
         }
         replay_playing_ = true;
         bind_efb(nullptr);
@@ -8595,6 +8721,29 @@ bool RendererD3D12::record_replay_list(ReplayList& entry) {
             }
             case ReplayKind::Copy: {
                 const ReplayCopy& copy = run_copies_[op.index];
+                if (motion_swapped && copy.mode == 2u && !entry.split) {
+                    // The output switch is the temporal upscale, recorded per
+                    // presented frame (record_subframe_upscale); the rest of
+                    // the log goes to the second list.
+                    entry.split = true;
+                    entry.upscale = {efb_color_.Get(), efb_depth_.Get(), motion_target_.Get(), reactive_target_.Get(),
+                                     alt_efb_.color.Get(), kEfbWidth * efb_scale_, kEfbHeight * efb_scale_,
+                                     copy.width, copy.height, op.index};
+                    d3d_check(command_list_->Close(), "replay Close");
+                    std::swap(command_list_, *active);
+                    active = std::addressof(entry.list_after);
+                    d3d_check(entry.list_after->Reset(entry.allocator.Get(), nullptr), "replay Reset");
+                    std::swap(command_list_, *active);
+                    const bool interp_segment = ring_mode_ == RingMode::Interp;
+                    ID3D12DescriptorHeap* after_heaps[] = {
+                        srv_ring_.heap(),
+                        interp_segment ? sampler_heaps_[run_segment_].Get() : sampler_heap_.Get()};
+                    command_list_->SetDescriptorHeaps(2, after_heaps);
+                    command_list_->SetGraphicsRootSignature(root_signature_.Get());
+                    invalidate_gx_bindings();
+                    bound_rt_aux_ = 0u;
+                    break;
+                }
                 if (redirect && copy.mode == 0u && copy.dest != nullptr) {
                     // One stand-in per destination per sequence (never a snapshot).
                     std::int32_t stand_in = -1;
@@ -8651,6 +8800,9 @@ bool RendererD3D12::record_replay_list(ReplayList& entry) {
         if (output_before) {
             swap_efb_sets();
         }
+        if (motion_swapped) {
+            swap_motion_targets();
+        }
         replay_playing_ = false;
         record_subframe_guard(false);
         // Scratch textures unused for many sequences (a copy size changed) go;
@@ -8675,10 +8827,19 @@ bool RendererD3D12::record_replay_list(ReplayList& entry) {
     return true;
 }
 
-bool RendererD3D12::present_replay_subframe(float t, const Affine34& camera_t) {
+bool RendererD3D12::present_replay_subframe(const SubframeTime& given, const Affine34& camera_t,
+                                            const Affine34& camera_prev) {
     if (!sequence_.ready || !run_valid_ || !device_ || !swap_chain_) {
         replay_failure_ = sequence_.ready ? 2u : 10u;
         return false;
+    }
+    SubframeTime time = given;
+    if (temporal_interp_ && temporal_ && temporal_render_w_ != 0u) {
+        // Each presented frame takes the next jitter phase.
+        const unsigned phases = std::max(temporal_->jitter_phase_count(temporal_render_w_, temporal_output_w_), 1u);
+        temporal_->jitter_offset(static_cast<unsigned>(temporal_frame_ % phases), phases, time.jitter_x,
+                                 time.jitter_y);
+        ++temporal_frame_;
     }
     // A list of this sequence whose last execution completed; else a free one
     // (completed longest ago) recorded now. A list that blends with the log
@@ -8760,7 +8921,7 @@ bool RendererD3D12::present_replay_subframe(float t, const Affine34& camera_t) {
         std::swap(command_list_, subframe_eval_list_);
         const Swap swap{*this};
         dred_marker(command_list_.Get(), L"subframe log=%llu t=%.3f", static_cast<unsigned long long>(run_serial_),
-                    static_cast<double>(t));
+                    static_cast<double>(time.t));
         if (subframe_query_heap_) {
             command_list_->EndQuery(subframe_query_heap_.Get(), D3D12_QUERY_TYPE_TIMESTAMP, index * 4u);
         }
@@ -8768,11 +8929,34 @@ bool RendererD3D12::present_replay_subframe(float t, const Affine34& camera_t) {
             record_blend_validation();
             sequence_.validated = true;
         }
-        record_interp_eval(t, camera_t, replay->blend);
+        record_interp_eval(time, camera_t, camera_prev);
         if (subframe_query_heap_) {
             command_list_->EndQuery(subframe_query_heap_.Get(), D3D12_QUERY_TYPE_TIMESTAMP, index * 4u + 1u);
         }
         d3d_check(command_list_->Close(), "sub-frame evaluation Close");
+    }
+    if (replay->split) {
+        // The temporal upscale of this presented frame, between the replay's two lists.
+        if (!subframe_upscale_list_) {
+            d3d_check(device_->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, subframe_allocators_[index].Get(),
+                                                 nullptr, IID_PPV_ARGS(&subframe_upscale_list_)),
+                      "sub-frame CreateCommandList");
+        } else {
+            d3d_check(subframe_upscale_list_->Reset(subframe_allocators_[index].Get(), nullptr),
+                      "sub-frame upscale Reset");
+        }
+        struct Swap {
+            RendererD3D12& renderer;
+            ~Swap() { std::swap(renderer.command_list_, renderer.subframe_upscale_list_); }
+        };
+        std::swap(command_list_, subframe_upscale_list_);
+        const Swap swap{*this};
+        ID3D12DescriptorHeap* heaps[] = {srv_ring_.heap(), sampler_heap_.Get()};
+        command_list_->SetDescriptorHeaps(2, heaps);
+        command_list_->SetGraphicsRootSignature(root_signature_.Get());
+        invalidate_gx_bindings();
+        record_subframe_upscale(*replay, time);
+        d3d_check(command_list_->Close(), "sub-frame upscale Close");
     }
     d3d_check(command_list_->Reset(subframe_allocators_[index].Get(), nullptr), "sub-frame CommandList Reset");
     if (subframe_query_heap_) {
@@ -8812,7 +8996,7 @@ bool RendererD3D12::present_replay_subframe(float t, const Affine34& camera_t) {
             command_list_->CopyBufferRegion(eval_readback_.Get(), 0u, interp_output_.Get(), 0u,
                                             interp_output_bytes_);
             transition_interp_output(kInterpOutputRead);
-            eval_readback_t_ = t;
+            eval_readback_t_ = time.t;
         }
     }
     if (subframe_query_heap_) {
@@ -8825,8 +9009,14 @@ bool RendererD3D12::present_replay_subframe(float t, const Affine34& camera_t) {
             replay->redirect ? 1u : subframe_copy_redirect_ == 2 ? 2u : 0u;
     }
     d3d_check(command_list_->Close(), "sub-frame CommandList Close");
-    ID3D12CommandList* lists[] = {subframe_eval_list_.Get(), replay->list.Get(), command_list_.Get()};
-    queue_->ExecuteCommandLists(3, lists);
+    if (replay->split) {
+        ID3D12CommandList* lists[] = {subframe_eval_list_.Get(), replay->list.Get(), subframe_upscale_list_.Get(),
+                                      replay->list_after.Get(), command_list_.Get()};
+        queue_->ExecuteCommandLists(5, lists);
+    } else {
+        ID3D12CommandList* lists[] = {subframe_eval_list_.Get(), replay->list.Get(), command_list_.Get()};
+        queue_->ExecuteCommandLists(3, lists);
+    }
     const std::uint64_t fence = ++next_fence_value_;
     d3d_check(queue_->Signal(fence_.Get(), fence), "sub-frame Signal");
     subframe_fences_[index] = fence;
@@ -8874,6 +9064,122 @@ bool RendererD3D12::present_replay_subframe(float t, const Affine34& camera_t) {
     ++subframe_record_samples_;
     present_to_swap_chain();
     return true;
+}
+
+// Motion and reactive targets of the sub-frames, at the replay EFB's scale
+// (the scale current while a replay records).
+bool RendererD3D12::ensure_replay_motion_targets() {
+    if (replay_motion_.target && replay_motion_.scale == efb_scale_) {
+        return true;
+    }
+    if (replay_motion_.target) {
+        // A scale change: lists recorded with the old targets are recorded again.
+        wait_for_gpu();
+        for (ReplayList& list : replay_lists_) {
+            list.sequence = 0u;
+        }
+    }
+    replay_motion_ = ReplayMotionTargets{};
+    if (!replay_motion_rtv_heap_) {
+        D3D12_DESCRIPTOR_HEAP_DESC dhd{};
+        dhd.NumDescriptors = 2;
+        dhd.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
+        if (FAILED(device_->CreateDescriptorHeap(&dhd, IID_PPV_ARGS(&replay_motion_rtv_heap_)))) {
+            return false;
+        }
+    }
+    D3D12_HEAP_PROPERTIES hp{};
+    hp.Type = D3D12_HEAP_TYPE_DEFAULT;
+    D3D12_RESOURCE_DESC rd{};
+    rd.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+    rd.Width = kEfbWidth * efb_scale_;
+    rd.Height = kEfbHeight * efb_scale_;
+    rd.DepthOrArraySize = 1;
+    rd.MipLevels = 1;
+    rd.Format = kMotionVectorFormat;
+    rd.SampleDesc.Count = 1;
+    rd.Flags = D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
+    D3D12_CLEAR_VALUE cv{};
+    cv.Format = kMotionVectorFormat;
+    if (FAILED(device_->CreateCommittedResource(&hp, D3D12_HEAP_FLAG_NONE, &rd, D3D12_RESOURCE_STATE_RENDER_TARGET,
+                                                &cv, IID_PPV_ARGS(&replay_motion_.target)))) {
+        return false;
+    }
+    rd.Format = kReactiveMaskFormat;
+    cv.Format = kReactiveMaskFormat;
+    if (FAILED(device_->CreateCommittedResource(&hp, D3D12_HEAP_FLAG_NONE, &rd, D3D12_RESOURCE_STATE_RENDER_TARGET,
+                                                &cv, IID_PPV_ARGS(&replay_motion_.reactive)))) {
+        replay_motion_ = ReplayMotionTargets{};
+        return false;
+    }
+    replay_motion_.target->SetName(L"GX sub-frame motion vectors");
+    replay_motion_.reactive->SetName(L"GX sub-frame reactive mask");
+    replay_motion_.rtv = replay_motion_rtv_heap_->GetCPUDescriptorHandleForHeapStart();
+    replay_motion_.reactive_rtv = replay_motion_.rtv;
+    replay_motion_.reactive_rtv.ptr += device_->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
+    device_->CreateRenderTargetView(replay_motion_.target.Get(), nullptr, replay_motion_.rtv);
+    device_->CreateRenderTargetView(replay_motion_.reactive.Get(), nullptr, replay_motion_.reactive_rtv);
+    replay_motion_.scale = efb_scale_;
+    return true;
+}
+
+void RendererD3D12::swap_motion_targets() {
+    std::swap(motion_target_, replay_motion_.target);
+    std::swap(reactive_target_, replay_motion_.reactive);
+    std::swap(motion_rtv_, replay_motion_.rtv);
+    std::swap(reactive_rtv_, replay_motion_.reactive_rtv);
+    bound_rt_aux_ = 0xFFu;
+}
+
+// The output switch of one presented frame: the temporal upscale of the
+// replay's EFB into its output EFB, or the plain resample when the upscaler
+// could not record it.
+void RendererD3D12::record_subframe_upscale(const ReplayList& entry, const SubframeTime& time) {
+    const bool recording = replay_recording_;
+    replay_recording_ = false;
+    const bool output_before = output_efb_active_;
+    if (output_before) {
+        swap_efb_sets();
+    }
+    swap_efb_with(replay_efb_);
+    std::swap(alt_efb_, replay_output_efb_);
+    bool upscaled = false;
+    if (temporal_) {
+        TemporalUpscaleInputs in{};
+        in.list = command_list_.Get();
+        in.color = entry.upscale.color;
+        in.depth = entry.upscale.depth;
+        in.motion = entry.upscale.motion;
+        in.reactive = entry.upscale.reactive;
+        in.output = entry.upscale.output;
+        in.render_width = entry.upscale.render_width;
+        in.render_height = entry.upscale.render_height;
+        in.output_width = entry.upscale.output_width;
+        in.output_height = entry.upscale.output_height;
+        in.jitter_x = time.jitter_x;
+        in.jitter_y = time.jitter_y;
+        in.camera_near = scene_camera_[0];
+        in.camera_far = scene_camera_[1];
+        in.fov_y = scene_camera_[2];
+        const RenderConfig cfg = get_render_config();
+        in.frame_ms = static_cast<float>(1000.0 / present_frame_rate(cfg.max_fps, cfg.vsync_interval, display_refresh_hz_));
+        in.reset = time.reset || !temporal_history_valid_;
+        upscaled = temporal_->evaluate(in);
+        ID3D12DescriptorHeap* heaps[] = {srv_ring_.heap(), sampler_heap_.Get()};
+        command_list_->SetDescriptorHeaps(2, heaps);
+        command_list_->SetGraphicsRootSignature(root_signature_.Get());
+        invalidate_gx_bindings();
+    }
+    temporal_history_valid_ = upscaled;
+    if (!upscaled && entry.upscale.copy < run_copies_.size()) {
+        execute_replay_copy(run_copies_[entry.upscale.copy]);
+    }
+    std::swap(alt_efb_, replay_output_efb_);
+    swap_efb_with(replay_efb_);
+    if (output_before) {
+        swap_efb_sets();
+    }
+    replay_recording_ = recording;
 }
 
 bool RendererD3D12::ensure_replay_profile() {
@@ -8991,6 +9297,7 @@ bool RendererD3D12::scene_temporal_begin(float& jitter_x, float& jitter_y) {
         temporal_history_valid_ = false;
         return false;
     }
+    temporal_interp_ = ring_mode_ == RingMode::Interp;
     const unsigned output_scale = output_efb_scale_for_window();
     if (output_scale == 0u || efb_scale_ > output_scale) {
         temporal_history_valid_ = false;
@@ -9027,6 +9334,14 @@ bool RendererD3D12::scene_temporal_begin(float& jitter_x, float& jitter_y) {
         temporal_output_h_ = oh;
         std::cout << "[Renderer] " << temporal_->name() << " " << rw << "x" << rh
                   << " -> " << ow << "x" << oh << "\n";
+    }
+    if (temporal_interp_) {
+        // Game frames feed the sub-frames: no jitter, and no upscale
+        // (begin_output_efb). Each presented frame takes the next phase.
+        scene_jitter_[0] = 0.0f;
+        scene_jitter_[1] = 0.0f;
+        scene_temporal_ = true;
+        return true;
     }
     const unsigned phases = std::max(temporal_->jitter_phase_count(rw, ow), 1u);
     temporal_->jitter_offset(static_cast<unsigned>(temporal_frame_ % phases), phases,
@@ -9206,7 +9521,8 @@ void RendererD3D12::write_efb_set_views(EfbTargetSet& set, const DescriptorRing:
 
 bool RendererD3D12::create_efb_set(
     EfbTargetSet& set, ComPtr<ID3D12DescriptorHeap>& rtv_heap,
-    ComPtr<ID3D12DescriptorHeap>& dsv_heap, unsigned scale, bool persistent_views) {
+    ComPtr<ID3D12DescriptorHeap>& dsv_heap, unsigned scale, bool persistent_views,
+    bool unordered_access) {
     const UINT w = kEfbWidth * scale;
     const UINT h = kEfbHeight * scale;
     if (set.color) {
@@ -9235,7 +9551,8 @@ bool RendererD3D12::create_efb_set(
     rd.MipLevels = 1;
     rd.Format = kEfbColorFormat;
     rd.SampleDesc.Count = 1;
-    rd.Flags = D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
+    rd.Flags = D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET |
+               (unordered_access ? D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS : D3D12_RESOURCE_FLAG_NONE);
     D3D12_CLEAR_VALUE cv{};
     cv.Format = kEfbColorFormat;
     cv.Color[3] = 1.0f;
@@ -9315,7 +9632,7 @@ bool RendererD3D12::begin_output_efb() {
         return false;
     }
     scene_temporal_ = temporal;
-    const bool upscaled = temporal && record_temporal_upscale(scale);
+    const bool upscaled = temporal && !temporal_interp_ && record_temporal_upscale(scale);
     scene_temporal_ = false;
     if (upscaled) {
         swap_efb_sets();
@@ -9636,12 +9953,11 @@ void RendererD3D12::draw(const DrawCall& call) {
         const std::uint32_t vertices = call.vertex_view.StrideInBytes != 0u
             ? call.vertex_view.SizeInBytes / call.vertex_view.StrideInBytes : 0u;
         const std::uint32_t blend[4]{call.blend_vertices != 0u ? 1u : 0u,
-                                     kMaxBlendPairs,
+                                     replay_playing_ ? kFrameValuesElement : kZeroValuesElement,
                                      std::min(call.blend_slot, kMaxBlendPairs - 1u),
                                      call.blend_vertices != 0u && vertices != 0u ? vertices - 1u : 0u};
         command_list_->SetGraphicsRoot32BitConstants(6, 4u, blend, 0u);
-        command_list_->SetGraphicsRootShaderResourceView(
-            7, blend_verdicts_ ? blend_verdicts_->GetGPUVirtualAddress() : vertex_ring_.gpu_base());
+        command_list_->SetGraphicsRootShaderResourceView(7, blend_verdicts_->GetGPUVirtualAddress());
         bound_blend_vertices_ = call.blend_vertices;
         bound_blend_slot_ = call.blend_slot;
         bound_vertex_blend_valid_ = true;
@@ -11426,8 +11742,11 @@ std::string native_settings_row_text(
             const double measured = s_measured_present_hz.load(std::memory_order_relaxed);
             // Above 60 needs interpolation, which the temporal upscalers exclude for now.
             const unsigned temporal = temporal_upscaler(render);
-            const bool capped = temporal != 0u && (rate == 0u ? settings_refresh_hz(render) > 61u : rate > 61u);
-            const char* cap = !capped ? "" : temporal == 3u ? " (60: DLSS)" : " (60: FSR 3)";
+            const bool above_60 = rate == 0u ? settings_refresh_hz(render) > 61u : rate > 61u;
+            const bool capped = temporal != 0u && !temporal_interpolation_allowed() && above_60;
+            const bool gpu_bound = temporal != 0u && above_60 &&
+                                   s_temporal_interp_suspended.load(std::memory_order_relaxed);
+            const char* cap = gpu_bound ? " (60: GPU)" : !capped ? "" : temporal == 3u ? " (60: DLSS)" : " (60: FSR 3)";
             if (rate == 0u) {
                 std::snprintf(text, sizeof(text), "FRAME RATE: UNLIMITED%s  %.1f", cap, measured);
             } else {
