@@ -9886,6 +9886,8 @@ void RendererD3D12::record_subframe_upscale(const ReplayList& entry, const Subfr
         in.camera_near = scene_camera_[0];
         in.camera_far = scene_camera_[1];
         in.fov_y = scene_camera_[2];
+        in.view = scene_view_;
+        in.view_known = scene_view_known_;
         const RenderConfig cfg = get_render_config();
         in.frame_ms = static_cast<float>(1000.0 / present_frame_rate(presented_max_fps(cfg), cfg.vsync_interval,
                                                                       display_refresh_hz_));
@@ -10138,6 +10140,8 @@ bool RendererD3D12::record_temporal_upscale(unsigned output_scale) {
     in.fov_y = scene_camera_[2];
     in.frame_ms = 1000.0f / 60.0f;
     in.reset = !temporal_history_valid_;
+    in.view = scene_view_;
+    in.view_known = scene_view_known_;
     const bool recorded = temporal_inputs_match(in) && temporal_->evaluate(in);
     if (recorded && frame_generation_running()) {
         streamline::FrameGenerationInputs fg{};

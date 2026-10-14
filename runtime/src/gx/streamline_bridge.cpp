@@ -564,6 +564,18 @@ public:
         constants.cameraUp = sl::float3(0.0f, 1.0f, 0.0f);
         constants.cameraRight = sl::float3(1.0f, 0.0f, 0.0f);
         constants.cameraFwd = sl::float3(0.0f, 0.0f, 1.0f);
+        if (in.view_known) {
+            // The view's rows are the camera's right, up and back in world space (orthonormal for
+            // the game's cameras); its position is -R^T t. Frame generation's scene change
+            // detection reads them.
+            const auto& v = in.view;
+            constants.cameraRight = sl::float3(v[0], v[1], v[2]);
+            constants.cameraUp = sl::float3(v[4], v[5], v[6]);
+            constants.cameraFwd = sl::float3(-v[8], -v[9], -v[10]);
+            constants.cameraPos = sl::float3(-(v[0] * v[3] + v[4] * v[7] + v[8] * v[11]),
+                                             -(v[1] * v[3] + v[5] * v[7] + v[9] * v[11]),
+                                             -(v[2] * v[3] + v[6] * v[7] + v[10] * v[11]));
+        }
         constants.cameraNear = in.camera_near;
         constants.cameraFar = in.camera_far;
         constants.cameraFOV = in.fov_y;

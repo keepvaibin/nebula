@@ -711,6 +711,13 @@ public:
     }
     // The scene camera's clip planes and vertical field of view (radians).
     void set_scene_camera(float near_plane, float far_plane, float fov_y) noexcept;
+    // Render thread, at each scene's start: its camera (world to eye), or null when unknown.
+    void set_scene_view(const std::array<float, 12>* view) noexcept {
+        scene_view_known_ = view != nullptr;
+        if (view != nullptr) {
+            scene_view_ = *view;
+        }
+    }
     // GX copy-clear: color from the latched AR/GB regs, depth from z24
     // (converted z24 / 0xFFFFFF into the D24 target).  The clear is scoped to
     // the given rect in unscaled EFB pixels (w==0 -> full target), matching
@@ -1080,6 +1087,8 @@ private:
     bool scene_temporal_ = false;
     float scene_jitter_[2]{};
     float scene_camera_[3]{1.0f, 100000.0f, 1.0f};
+    std::array<float, 12> scene_view_{};
+    bool scene_view_known_ = false;
     Microsoft::WRL::ComPtr<ID3D12Resource> motion_target_;
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> motion_rtv_heap_;
     D3D12_CPU_DESCRIPTOR_HANDLE motion_rtv_{};

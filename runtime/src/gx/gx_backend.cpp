@@ -7347,6 +7347,7 @@ void GxBackend::on_fifo_marker(FifoMarker marker, const std::array<float, 12>* v
     }
     scene_phase_ = marker == FifoMarker::SceneBegin;
     if (marker == FifoMarker::SceneBegin) {
+        renderer_.set_scene_view(view);
         rt_phase_ = 0xFFu;
         rt_view_set_ = false;
         rt_scene_traced_ = !renderer_.rt_active();
