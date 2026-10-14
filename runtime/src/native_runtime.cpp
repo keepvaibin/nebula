@@ -2280,6 +2280,7 @@ struct RuntimeState {
     bool motion_camera_cut_pending{};         // a cut since the previous scene marker
     std::uint32_t motion_object_events{};     // epoch bumps since the previous scene marker
     std::uint64_t motion_scene_serial{};      // SceneBegin markers seen
+    std::uint32_t astro_core{};               // the Comet Observatory's AstroCore while it lives
     std::array<std::uint64_t, 8> motion_object_counts{};
     std::uint64_t motion_camera_cuts{};
     std::uint64_t motion_category_markers{};
@@ -10043,6 +10044,15 @@ void note_motion_object(RuntimeState& state, std::uint32_t site, std::uint32_t o
         return;
     }
     const auto& space = *state.address_space;
+    // The Comet Observatory's star core (AstroCore: its vtable 0x80579720) appears and dies with
+    // its stage; the ray tracer lights the scene from it and gives it its finish.
+    constexpr std::uint32_t kAstroCoreVtable = 0x80579720u;
+    if (site == static_cast<std::uint32_t>(ObjectSite::Appeared) &&
+        read_guest_u32_or_zero(space, object) == kAstroCoreVtable) {
+        state.astro_core = object;
+    } else if (site == static_cast<std::uint32_t>(ObjectSite::Dead) && object == state.astro_core) {
+        state.astro_core = 0u;
+    }
     // makeActorDead on an actor that is already dead ends no life (some
     // objects kill their dead children every frame).
     if (site == static_cast<std::uint32_t>(ObjectSite::Dead) &&
@@ -24763,6 +24773,19 @@ void call_guest_impl_body(
                 }
                 if (valid) {
                     galaxy::gx::attach_scene_view(view);
+                }
+            }
+            // The star core: LiveActor position +0x0C, scale +0x24, while its vtable holds.
+            if (state.astro_core != 0u && read_guest_u32_or_zero(space, state.astro_core) == 0x80579720u) {
+                std::array<float, 3> position{};
+                for (unsigned i = 0; i < 3u; ++i) {
+                    position[i] = std::bit_cast<float>(
+                        read_guest_u32_or_zero(space, state.astro_core + galaxy::motion::kActorPosition + 4u * i));
+                }
+                const float scale = std::bit_cast<float>(read_guest_u32_or_zero(space, state.astro_core + 0x24u));
+                if (std::isfinite(position[0]) && std::isfinite(position[1]) && std::isfinite(position[2]) &&
+                    std::isfinite(scale) && scale > 0.0f) {
+                    galaxy::gx::set_star_core(position, scale);
                 }
             }
         }

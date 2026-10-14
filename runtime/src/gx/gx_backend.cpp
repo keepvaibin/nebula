@@ -12071,6 +12071,14 @@ ID3D12PipelineState* GxBackend::flush_draw_state(
             current_ps_hash_ = ps_key_.hash();
             glow_changed = true;
         }
+        // Indexed positions: a model (a star's fiery surface); direct ones: sprites and sparks.
+        const VcdType position = state_.vertex_desc(0u).position.vcd;
+        const std::uint8_t kind =
+            !glow ? 0u : (position == VcdType::Index8 || position == VcdType::Index16) ? 2u : 1u;
+        if (kind != glow_kind_) {
+            glow_kind_ = kind;
+            glow_changed = true;
+        }
     }
     // Per-pixel lighting needs the extra position/normal interpolants, which
     // the line and point geometry shaders do not carry.
@@ -12465,8 +12473,10 @@ ID3D12PipelineState* GxBackend::flush_draw_state(
         GxPsConstants ps_c{};
         fill_ps_constants(state_, ps_c);
         ps_c.ztex_params[1] = 1.0f / static_cast<float>(renderer_.efb_scale());
-        ps_c.ztex_params[2] = (ps_key_.output_flags & 0x20u) != 0u ? renderer_.rt_glow_exposure() : 0.0f;
-        ps_c.ztex_params[3] = (ps_key_.output_flags & 0x20u) != 0u ? renderer_.rt_glow_spill() : 0.0f;
+        ps_c.ztex_params[2] =
+            (ps_key_.output_flags & 0x20u) != 0u ? renderer_.rt_glow_exposure(glow_kind_ == 2u) : 0.0f;
+        ps_c.ztex_params[3] =
+            (ps_key_.output_flags & 0x20u) != 0u ? renderer_.rt_glow_spill(glow_kind_ == 2u) : 0.0f;
         apply_uber_ps_key(ps_key_, ps_c);
 
         UploadRing::Allocation ps_alloc =

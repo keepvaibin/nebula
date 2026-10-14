@@ -683,7 +683,8 @@ endforeach()
 # (runtime/src/gx/rt_lighting.hlsl).
 set(galaxy_rt_light_hlsl "${CMAKE_CURRENT_SOURCE_DIR}/runtime/src/gx/rt_lighting.hlsl")
 foreach(galaxy_rt_pass capture_cs:CaptureCS:cs_6_5 sky_state_cs:SkyStateCS:cs_6_5 glow_base_cs:GlowBaseCS:cs_6_5
-        surface_emit_cs:SurfaceEmitCS:cs_6_5
+        surface_emit_cs:SurfaceEmitCS:cs_6_5 bloom_down_cs:BloomDownCS:cs_6_5 bloom_blur_cs:BloomBlurCS:cs_6_5
+        bloom_ps:BloomPS:ps_6_0
         glow_emit_cs:GlowEmitCS:cs_6_5 emit_merge_cs:EmitMergeCS:cs_6_5 trace_cs:TraceCS:cs_6_5
         temporal_cs:TemporalCS:cs_6_5
         spatial_a_cs:SpatialACS:cs_6_5 spatial_m_cs:SpatialMCS:cs_6_5 spatial_b_cs:SpatialBCS:cs_6_5
@@ -698,6 +699,23 @@ foreach(galaxy_rt_pass capture_cs:CaptureCS:cs_6_5 sky_state_cs:SkyStateCS:cs_6_
         COMMAND "${GALAXY_DXC}" -nologo -T ${galaxy_rt_profile} -E ${galaxy_rt_entry} -O3 -WX -Qstrip_debug
             -Qstrip_reflect -Vn g_rt_${galaxy_rt_name} -Fh "${galaxy_rt_header}" "${galaxy_rt_light_hlsl}"
         DEPENDS "${galaxy_rt_light_hlsl}"
+        VERBATIM)
+    list(APPEND galaxy_rt_headers "${galaxy_rt_header}")
+endforeach()
+# The cinematic finish of the ray-traced picture (runtime/src/gx/rt_post.hlsl).
+set(galaxy_rt_post_hlsl "${CMAKE_CURRENT_SOURCE_DIR}/runtime/src/gx/rt_post.hlsl")
+foreach(galaxy_rt_pass post_copy_cs:PostCopyCS:cs_6_5 post_bright_cs:PostBrightCS:cs_6_5
+        post_blur_cs:PostBlurCS:cs_6_5 post_shafts_cs:PostShaftsCS:cs_6_5 post_focus_cs:PostFocusCS:cs_6_5
+        post_vs:PostVS:vs_6_0 post_ps:PostPS:ps_6_0)
+    string(REPLACE ":" ";" galaxy_rt_pair "${galaxy_rt_pass}")
+    list(GET galaxy_rt_pair 0 galaxy_rt_name)
+    list(GET galaxy_rt_pair 1 galaxy_rt_entry)
+    list(GET galaxy_rt_pair 2 galaxy_rt_profile)
+    set(galaxy_rt_header "${galaxy_rt_dir}/rt_${galaxy_rt_name}.h")
+    add_custom_command(OUTPUT "${galaxy_rt_header}"
+        COMMAND "${GALAXY_DXC}" -nologo -T ${galaxy_rt_profile} -E ${galaxy_rt_entry} -O3 -WX -Qstrip_debug
+            -Qstrip_reflect -Vn g_rt_${galaxy_rt_name} -Fh "${galaxy_rt_header}" "${galaxy_rt_post_hlsl}"
+        DEPENDS "${galaxy_rt_post_hlsl}"
         VERBATIM)
     list(APPEND galaxy_rt_headers "${galaxy_rt_header}")
 endforeach()

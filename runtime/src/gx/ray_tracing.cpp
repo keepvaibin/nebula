@@ -2,7 +2,17 @@
 #include "galaxy/gx/ray_tracing.h"
 #include "galaxy/gx_d3d12.h"
 
+#include "rt_bloom_blur_cs.h"
+#include "rt_bloom_down_cs.h"
+#include "rt_bloom_ps.h"
 #include "rt_capture_cs.h"
+#include "rt_post_blur_cs.h"
+#include "rt_post_bright_cs.h"
+#include "rt_post_copy_cs.h"
+#include "rt_post_focus_cs.h"
+#include "rt_post_ps.h"
+#include "rt_post_shafts_cs.h"
+#include "rt_post_vs.h"
 #include "rt_emit_merge_cs.h"
 #include "rt_glow_base_cs.h"
 #include "rt_glow_emit_cs.h"
@@ -88,6 +98,46 @@ struct RtLightConstants {
     std::uint32_t pad[2];
 };
 static_assert(sizeof(RtLightConstants) == 592u);
+
+// Mirrors cbuffer RtPost in rt_post.hlsl (root constants).
+struct RtPostConstants {
+    float projection[4];
+    float depth[4];
+    float viewport[4];
+    std::uint32_t size[2];
+    std::uint32_t quarter[2];
+    float core[4];
+    float core_light[4];
+    float sun[4];
+    float time;
+    float bloom;
+    float threshold;
+    float shafts;
+    float dof;
+    float grade;
+    float split;
+    std::uint32_t axis;
+};
+static_assert(sizeof(RtPostConstants) == 144u);
+
+// Mirror cbuffer RtBloom and RtBloomComposite in rt_lighting.hlsl (root constants).
+struct RtBloomConstants {
+    std::uint32_t size[2];
+    std::uint32_t sample_size[2];
+    float threshold;
+    float strength;
+    std::uint32_t axis;
+    std::uint32_t pad;
+};
+static_assert(sizeof(RtBloomConstants) == 32u);
+struct RtBloomCompositeConstants {
+    float scale[2];
+    std::uint32_t size[2];
+    float strength;
+    float split;
+    std::uint32_t pad[2];
+};
+static_assert(sizeof(RtBloomCompositeConstants) == 32u);
 
 // Mirrors cbuffer RtEmit in rt_lighting.hlsl (root constants).
 struct RtEmitConstants {
@@ -319,6 +369,10 @@ D3D12_RESOURCE_BARRIER uav_barrier(ID3D12Resource* resource) {
 }
 
 std::mutex g_game_sun_mutex;
+std::mutex g_star_core_mutex;
+std::array<float, 3> g_star_core{};
+float g_star_core_scale = 0.0f;
+std::chrono::steady_clock::time_point g_star_core_time{};
 std::array<float, 3> g_game_sun{};
 float g_game_sun_distance = 0.0f;
 std::chrono::steady_clock::time_point g_game_sun_time{};
@@ -377,6 +431,24 @@ std::size_t active_lights(const std::array<NotedLight, N>& lights, std::span<Gam
 }
 
 }  // namespace
+
+void set_star_core(const std::array<float, 3>& position, float scale) noexcept {
+    const std::lock_guard<std::mutex> lock(g_star_core_mutex);
+    g_star_core = position;
+    g_star_core_scale = scale;
+    g_star_core_time = std::chrono::steady_clock::now();
+}
+
+bool star_core(std::array<float, 3>& position, float& scale, std::uint64_t max_age_ms) noexcept {
+    const std::lock_guard<std::mutex> lock(g_star_core_mutex);
+    if (g_star_core_scale <= 0.0f ||
+        std::chrono::steady_clock::now() - g_star_core_time > std::chrono::milliseconds(max_age_ms)) {
+        return false;
+    }
+    position = g_star_core;
+    scale = g_star_core_scale;
+    return true;
+}
 
 void set_game_sun(const std::array<float, 3>& direction, float distance) noexcept {
     const std::lock_guard<std::mutex> lock(g_game_sun_mutex);
@@ -532,7 +604,7 @@ bool SceneRayTracer::initialize(ID3D12Device* device, std::uint64_t timestamp_fr
     factor_override_ = static_cast<std::uint32_t>(std::clamp(env_float("GALAXY_RT_FACTOR", 0.0f), 0.0f, 4.0f));
     contact_ = std::clamp(env_float("GALAXY_RT_CONTACT", 0.3f), 0.0f, 1.0f);
     contact_range_ = std::clamp(env_float("GALAXY_RT_CONTACT_RANGE", 250.0f), 1.0f, 100000.0f);
-    sky_saturation_ = std::clamp(env_float("GALAXY_RT_SKY", 0.35f), 0.0f, 1.0f);
+    sky_saturation_ = std::clamp(env_float("GALAXY_RT_SKY", 0.12f), 0.0f, 1.0f);
     fallback_ = std::clamp(env_float("GALAXY_RT_FALLBACK", 0.55f), 0.0f, 2.0f);
     emissive_ = std::clamp(env_float("GALAXY_RT_EMISSIVE", 3.0f), 0.0f, 16.0f);
     show_lighting_ = env_float("GALAXY_RT_VIEW", 0.0f) != 0.0f;
@@ -546,12 +618,24 @@ bool SceneRayTracer::initialize(ID3D12Device* device, std::uint64_t timestamp_fr
     night_ = std::clamp(env_float("GALAXY_RT_NIGHT", 0.4f), 0.0f, 1.0f);
     daylight_ = std::clamp(env_float("GALAXY_RT_DAYLIGHT", 0.35f), 0.01f, 1.0f);
     glow_boost_ = std::clamp(env_float("GALAXY_RT_GLOW_BOOST", 0.4f), 0.0f, 1.0f);
-    glow_exposure_ = std::clamp(env_float("GALAXY_RT_GLOW_EXPOSURE", 2.2f), 1.0f, 6.0f);
+    glow_exposure_ = std::clamp(env_float("GALAXY_RT_GLOW_EXPOSURE", 1.7f), 1.0f, 6.0f);
     glow_spill_ = std::clamp(env_float("GALAXY_RT_GLOW_SPILL", 0.7f), 0.0f, 2.0f);
+    glow_model_exposure_ = std::clamp(env_float("GALAXY_RT_GLOW_MODEL_EXPOSURE", 3.2f), 1.0f, 8.0f);
+    glow_model_spill_ = std::clamp(env_float("GALAXY_RT_GLOW_MODEL_SPILL", 1.0f), 0.0f, 2.0f);
     sky_distance_ = std::clamp(env_float("GALAXY_RT_SKY_DISTANCE", 60000.0f), 1000.0f, 1.0e7f);
+    post_ = env_float("GALAXY_RT_POST", 1.0f) != 0.0f;
+    post_bloom_ = std::clamp(env_float("GALAXY_RT_POST_BLOOM", 0.55f), 0.0f, 4.0f);
+    post_threshold_ = std::clamp(env_float("GALAXY_RT_POST_THRESHOLD", 0.72f), 0.0f, 0.99f);
+    post_shafts_ = std::clamp(env_float("GALAXY_RT_POST_SHAFTS", 0.6f), 0.0f, 4.0f);
+    post_dof_ = std::clamp(env_float("GALAXY_RT_POST_DOF", 6.0f), 0.0f, 32.0f);
+    post_grade_ = std::clamp(env_float("GALAXY_RT_POST_GRADE", 1.0f), 0.0f, 1.0f);
+    core_radius_ = std::clamp(env_float("GALAXY_RT_CORE_RADIUS", 400.0f), 1.0f, 100000.0f);
+    core_light_ = std::clamp(env_float("GALAXY_RT_CORE_LIGHT", 2.5f), 0.0f, 16.0f);
+    bloom_strength_ = std::clamp(env_float("GALAXY_RT_BLOOM", 0.8f), 0.0f, 4.0f);
+    bloom_threshold_ = std::clamp(env_float("GALAXY_RT_BLOOM_THRESHOLD", 0.15f), 0.0f, 4.0f);
     exposure_ = env_float("GALAXY_RT_EXPOSURE", 1.0f) != 0.0f;
-    exposure_day_ = std::clamp(env_float("GALAXY_RT_EXPOSURE_DAY", 0.97f), 0.3f, 1.5f);
-    exposure_night_ = std::clamp(env_float("GALAXY_RT_EXPOSURE_NIGHT", 0.8f), 0.3f, 1.5f);
+    exposure_day_ = std::clamp(env_float("GALAXY_RT_EXPOSURE_DAY", 0.92f), 0.3f, 1.5f);
+    exposure_night_ = std::clamp(env_float("GALAXY_RT_EXPOSURE_NIGHT", 0.88f), 0.3f, 1.5f);
     surface_emission_ = std::clamp(env_float("GALAXY_RT_SURFACE_EMISSION", 3.0f), 0.0f, 256.0f);
     {
         char value[96]{};
@@ -561,8 +645,8 @@ bool SceneRayTracer::initialize(ID3D12Device* device, std::uint64_t timestamp_fr
     sun_direction_ = env_triple("GALAXY_RT_SUN", sun_direction_);
     sun_color_ = env_triple("GALAXY_RT_SUN_COLOR", sun_color_);
     sun_size_ = std::clamp(env_float("GALAXY_RT_SUN_SIZE", 2.5f), 0.0f, 30.0f);
-    sun_light_ = std::clamp(env_float("GALAXY_RT_SUN_LIGHT", 0.55f), 0.0f, 4.0f);
-    sky_light_ = std::clamp(env_float("GALAXY_RT_SKY_LIGHT", 0.65f), 0.0f, 4.0f);
+    sun_light_ = std::clamp(env_float("GALAXY_RT_SUN_LIGHT", 1.0f), 0.0f, 4.0f);
+    sky_light_ = std::clamp(env_float("GALAXY_RT_SKY_LIGHT", 0.5f), 0.0f, 4.0f);
     if (lighting_enabled_ && !create_lighting_pipelines(color_format)) {
         std::cerr << "[rt] lighting unavailable\n";
         lighting_enabled_ = false;
@@ -613,6 +697,25 @@ void SceneRayTracer::shutdown() noexcept {
     capture_pso_.Reset();
     capture_root_.Reset();
     glow_base_pso_.Reset();
+    post_root_.Reset();
+    post_copy_pso_.Reset();
+    post_bright_pso_.Reset();
+    post_blur_pso_.Reset();
+    post_shafts_pso_.Reset();
+    post_focus_pso_.Reset();
+    post_finish_root_.Reset();
+    post_finish_pso_.Reset();
+    for (auto& buffer : post_buffers_) buffer.Reset();
+    post_pixels_ = post_quarter_ = 0u;
+    bloom_root_.Reset();
+    bloom_down_pso_.Reset();
+    bloom_blur_pso_.Reset();
+    bloom_composite_root_.Reset();
+    bloom_composite_pso_.Reset();
+    bloom_temp_.Reset();
+    for (auto& buffer : bloom_) buffer.Reset();
+    bloom_entries_ = 0u;
+    bloom_slot_ = -1;
     sky_state_pso_.Reset();
     surface_emit_pso_.Reset();
     glow_emit_pso_.Reset();
@@ -1197,6 +1300,134 @@ bool SceneRayTracer::create_lighting_pipelines(DXGI_FORMAT color_format) {
         return false;
     }
 
+    {
+        D3D12_ROOT_PARAMETER bloom_params[4]{};
+        bloom_params[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
+        bloom_params[0].Constants.Num32BitValues = sizeof(RtBloomConstants) / 4u;
+        bloom_params[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_SRV;
+        bloom_params[2].ParameterType = D3D12_ROOT_PARAMETER_TYPE_SRV;
+        bloom_params[2].Descriptor.ShaderRegister = 1u;
+        bloom_params[3].ParameterType = D3D12_ROOT_PARAMETER_TYPE_UAV;
+        for (auto& param : bloom_params) {
+            param.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+        }
+        D3D12_ROOT_SIGNATURE_DESC bloom_rsd{};
+        bloom_rsd.NumParameters = 4u;
+        bloom_rsd.pParameters = bloom_params;
+        if (!serialize(bloom_rsd, bloom_root_) ||
+            !compute(bloom_root_.Get(), g_rt_bloom_down_cs, sizeof(g_rt_bloom_down_cs), bloom_down_pso_) ||
+            !compute(bloom_root_.Get(), g_rt_bloom_blur_cs, sizeof(g_rt_bloom_blur_cs), bloom_blur_pso_)) {
+            return false;
+        }
+        D3D12_ROOT_PARAMETER composite_bloom_params[2]{};
+        composite_bloom_params[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
+        composite_bloom_params[0].Constants.Num32BitValues = sizeof(RtBloomCompositeConstants) / 4u;
+        composite_bloom_params[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_SRV;
+        for (auto& param : composite_bloom_params) {
+            param.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+        }
+        D3D12_ROOT_SIGNATURE_DESC composite_bloom_rsd{};
+        composite_bloom_rsd.NumParameters = 2u;
+        composite_bloom_rsd.pParameters = composite_bloom_params;
+        if (!serialize(composite_bloom_rsd, bloom_composite_root_)) {
+            return false;
+        }
+        D3D12_GRAPHICS_PIPELINE_STATE_DESC additive{};
+        additive.pRootSignature = bloom_composite_root_.Get();
+        additive.VS = {g_rt_composite_vs, sizeof(g_rt_composite_vs)};
+        additive.PS = {g_rt_bloom_ps, sizeof(g_rt_bloom_ps)};
+        D3D12_RENDER_TARGET_BLEND_DESC& add = additive.BlendState.RenderTarget[0];
+        add.BlendEnable = TRUE;
+        add.SrcBlend = D3D12_BLEND_ONE;
+        add.DestBlend = D3D12_BLEND_ONE;
+        add.BlendOp = D3D12_BLEND_OP_ADD;
+        add.SrcBlendAlpha = D3D12_BLEND_ZERO;
+        add.DestBlendAlpha = D3D12_BLEND_ONE;
+        add.BlendOpAlpha = D3D12_BLEND_OP_ADD;
+        add.LogicOp = D3D12_LOGIC_OP_NOOP;
+        add.RenderTargetWriteMask =
+            D3D12_COLOR_WRITE_ENABLE_RED | D3D12_COLOR_WRITE_ENABLE_GREEN | D3D12_COLOR_WRITE_ENABLE_BLUE;
+        additive.SampleMask = UINT_MAX;
+        additive.RasterizerState.FillMode = D3D12_FILL_MODE_SOLID;
+        additive.RasterizerState.CullMode = D3D12_CULL_MODE_NONE;
+        additive.RasterizerState.DepthClipEnable = TRUE;
+        additive.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+        additive.NumRenderTargets = 1u;
+        additive.RTVFormats[0] = color_format;
+        additive.SampleDesc.Count = 1u;
+        if (FAILED(device_->CreateGraphicsPipelineState(&additive, IID_PPV_ARGS(&bloom_composite_pso_)))) {
+            return false;
+        }
+    }
+
+    {
+        D3D12_ROOT_PARAMETER post_params[5]{};
+        post_params[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
+        post_params[0].Constants.Num32BitValues = sizeof(RtPostConstants) / 4u;
+        post_params[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+        post_params[1].DescriptorTable.NumDescriptorRanges = 1u;
+        post_params[1].DescriptorTable.pDescriptorRanges = &sources_range;
+        post_params[2].ParameterType = D3D12_ROOT_PARAMETER_TYPE_SRV;
+        post_params[2].Descriptor.ShaderRegister = 2u;
+        post_params[3].ParameterType = D3D12_ROOT_PARAMETER_TYPE_UAV;
+        post_params[4].ParameterType = D3D12_ROOT_PARAMETER_TYPE_UAV;
+        post_params[4].Descriptor.ShaderRegister = 1u;
+        for (auto& param : post_params) {
+            param.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+        }
+        D3D12_ROOT_SIGNATURE_DESC post_rsd{};
+        post_rsd.NumParameters = 5u;
+        post_rsd.pParameters = post_params;
+        if (!serialize(post_rsd, post_root_) ||
+            !compute(post_root_.Get(), g_rt_post_copy_cs, sizeof(g_rt_post_copy_cs), post_copy_pso_) ||
+            !compute(post_root_.Get(), g_rt_post_bright_cs, sizeof(g_rt_post_bright_cs), post_bright_pso_) ||
+            !compute(post_root_.Get(), g_rt_post_blur_cs, sizeof(g_rt_post_blur_cs), post_blur_pso_) ||
+            !compute(post_root_.Get(), g_rt_post_shafts_cs, sizeof(g_rt_post_shafts_cs), post_shafts_pso_) ||
+            !compute(post_root_.Get(), g_rt_post_focus_cs, sizeof(g_rt_post_focus_cs), post_focus_pso_)) {
+            return false;
+        }
+        D3D12_DESCRIPTOR_RANGE finish_depth{};
+        finish_depth.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
+        finish_depth.NumDescriptors = 1u;
+        finish_depth.BaseShaderRegister = 1u;
+        D3D12_ROOT_PARAMETER finish_params[6]{};
+        finish_params[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
+        finish_params[0].Constants.Num32BitValues = sizeof(RtPostConstants) / 4u;
+        finish_params[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+        finish_params[1].DescriptorTable.NumDescriptorRanges = 1u;
+        finish_params[1].DescriptorTable.pDescriptorRanges = &finish_depth;
+        for (UINT i = 0; i < 4u; ++i) {
+            finish_params[2 + i].ParameterType = D3D12_ROOT_PARAMETER_TYPE_SRV;
+            finish_params[2 + i].Descriptor.ShaderRegister = 2u + i;
+        }
+        for (auto& param : finish_params) {
+            param.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+        }
+        D3D12_ROOT_SIGNATURE_DESC finish_rsd{};
+        finish_rsd.NumParameters = 6u;
+        finish_rsd.pParameters = finish_params;
+        if (!serialize(finish_rsd, post_finish_root_)) {
+            return false;
+        }
+        D3D12_GRAPHICS_PIPELINE_STATE_DESC finish{};
+        finish.pRootSignature = post_finish_root_.Get();
+        finish.VS = {g_rt_post_vs, sizeof(g_rt_post_vs)};
+        finish.PS = {g_rt_post_ps, sizeof(g_rt_post_ps)};
+        finish.BlendState.RenderTarget[0].RenderTargetWriteMask =
+            D3D12_COLOR_WRITE_ENABLE_RED | D3D12_COLOR_WRITE_ENABLE_GREEN | D3D12_COLOR_WRITE_ENABLE_BLUE;
+        finish.SampleMask = UINT_MAX;
+        finish.RasterizerState.FillMode = D3D12_FILL_MODE_SOLID;
+        finish.RasterizerState.CullMode = D3D12_CULL_MODE_NONE;
+        finish.RasterizerState.DepthClipEnable = TRUE;
+        finish.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+        finish.NumRenderTargets = 1u;
+        finish.RTVFormats[0] = color_format;
+        finish.SampleDesc.Count = 1u;
+        if (FAILED(device_->CreateGraphicsPipelineState(&finish, IID_PPV_ARGS(&post_finish_pso_)))) {
+            return false;
+        }
+    }
+
     D3D12_DESCRIPTOR_RANGE composite_depth{};
     composite_depth.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
     composite_depth.NumDescriptors = 1u;
@@ -1482,6 +1713,21 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
             const float importance = l0 / (1.0f + distance2 / (144.0f * half * half));
             candidates[used++] = {importance, e, rgb, half};
         }
+        // The star core: the brightest light of the Comet Observatory, growing with it.
+        {
+            std::array<float, 3> core{};
+            float scale = 0.0f;
+            if (camera_known_ && core_light_ > 0.0f && used < candidates.size() && star_core(core, scale, 500u)) {
+                std::array<float, 3> e{};
+                for (unsigned r = 0; r < 3u; ++r) {
+                    e[r] = camera_[r * 4u] * core[0] + camera_[r * 4u + 1u] * core[1] + camera_[r * 4u + 2u] * core[2] +
+                           camera_[r * 4u + 3u];
+                }
+                const float grow = std::clamp(0.4f + 0.35f * scale, 0.5f, 2.5f);
+                const float l = core_light_ * grow;
+                candidates[used++] = {1.0e6f, e, {1.0f * l, 0.72f * l, 0.38f * l}, core_radius_ * scale * 2.5f};
+            }
+        }
         std::sort(candidates.begin(), candidates.begin() + static_cast<std::ptrdiff_t>(used),
                   [](const Candidate& a, const Candidate& b) { return a.importance > b.importance; });
         c.point_count = static_cast<std::uint32_t>(std::min<std::size_t>(used, 8u));
@@ -1745,6 +1991,68 @@ void SceneRayTracer::capture_picture(ID3D12GraphicsCommandList* list, const RtSo
         capture_glow_lights(list, sources, allocate, allocate_context, color_depth_table, width, height, factor,
                             glow);
     }
+    bloom_slot_ = -1;
+    if (glow && bloom_strength_ > 0.0f && bloom_blur_pso_ && light_slot_ >= 0) {
+        // What the glows added, at a quarter of the samples above the threshold, blurred twice
+        // across and down: the slot's bloom for this frame and its sub-frames.
+        const auto slot = static_cast<unsigned>(light_slot_);
+        const std::uint32_t bw = (sample_width + 1u) / 2u;
+        const std::uint32_t bh = (sample_height + 1u) / 2u;
+        const std::uint64_t entries = static_cast<std::uint64_t>(bw) * bh;
+        bool ready = entries <= bloom_entries_;
+        if (!ready) {
+            retire(bloom_temp_);
+            for (auto& buffer : bloom_) retire(buffer);
+            bloom_size_ = {};
+            ready = create_buffer(entries * 4u, D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
+                                  D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, bloom_temp_, L"rt bloom temp");
+            for (unsigned i = 0; ready && i < bloom_.size(); ++i) {
+                ready = create_buffer(entries * 4u, D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
+                                      D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, bloom_[i], L"rt bloom");
+                bloom_state_[i] = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+            }
+            bloom_temp_state_ = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+            bloom_entries_ = ready ? entries : 0u;
+        }
+        if (ready && slot < bloom_.size()) {
+            RtBloomConstants b{};
+            b.size[0] = bw;
+            b.size[1] = bh;
+            b.sample_size[0] = sample_width;
+            b.sample_size[1] = sample_height;
+            b.threshold = bloom_threshold_;
+            b.strength = bloom_strength_;
+            to_state(list, glow_added_.Get(), glow_added_state_, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+            to_state(list, bloom_[slot].Get(), bloom_state_[slot], D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+            to_state(list, bloom_temp_.Get(), bloom_temp_state_, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+            const D3D12_RESOURCE_BARRIER all_uav = uav_barrier(nullptr);
+            list->SetComputeRootSignature(bloom_root_.Get());
+            list->SetComputeRoot32BitConstants(0u, sizeof(b) / 4u, &b, 0u);
+            list->SetComputeRootShaderResourceView(1u, glow_added_->GetGPUVirtualAddress());
+            list->SetComputeRootShaderResourceView(2u, glow_added_->GetGPUVirtualAddress());
+            list->SetComputeRootUnorderedAccessView(3u, bloom_[slot]->GetGPUVirtualAddress());
+            list->SetPipelineState(bloom_down_pso_.Get());
+            list->Dispatch((bw + 7u) / 8u, (bh + 7u) / 8u, 1u);
+            for (unsigned pass = 0; pass < 2u; ++pass) {
+                ID3D12Resource* from = pass == 0u ? bloom_[slot].Get() : bloom_temp_.Get();
+                ID3D12Resource* to = pass == 0u ? bloom_temp_.Get() : bloom_[slot].Get();
+                list->ResourceBarrier(1u, &all_uav);
+                to_state(list, from, pass == 0u ? bloom_state_[slot] : bloom_temp_state_,
+                         D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+                to_state(list, to, pass == 0u ? bloom_temp_state_ : bloom_state_[slot],
+                         D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+                b.axis = pass;
+                list->SetComputeRoot32BitConstants(0u, sizeof(b) / 4u, &b, 0u);
+                list->SetComputeRootShaderResourceView(2u, from->GetGPUVirtualAddress());
+                list->SetComputeRootUnorderedAccessView(3u, to->GetGPUVirtualAddress());
+                list->SetPipelineState(bloom_blur_pso_.Get());
+                list->Dispatch((bw + 7u) / 8u, (bh + 7u) / 8u, 1u);
+            }
+            to_state(list, bloom_[slot].Get(), bloom_state_[slot], kLightRead);
+            bloom_size_[slot] = {bw, bh, width, height};
+            bloom_slot_ = light_slot_;
+        }
+    }
     static_cast<void>(emit);
     to_state(list, picture_.Get(), picture_state_, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
     to_state(list, picture_sums_.Get(), picture_sums_state_, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
@@ -1850,6 +2158,171 @@ void SceneRayTracer::capture_glow_lights(ID3D12GraphicsCommandList* list, const 
     window_.glow_triangles += glow ? glow_triangles_ : 0u;
 }
 
+void SceneRayTracer::post_prepare(ID3D12GraphicsCommandList* list, D3D12_GPU_DESCRIPTOR_HANDLE color_depth_table,
+                                  std::uint32_t width, std::uint32_t height, bool replay) {
+    if (!post_active() || !post_finish_pso_ || list == nullptr || color_depth_table.ptr == 0u || !view_known_ ||
+        width == 0u || height == 0u) {
+        return;
+    }
+    const std::uint32_t qw = (width + 3u) / 4u;
+    const std::uint32_t qh = (height + 3u) / 4u;
+    const std::uint64_t pixels = static_cast<std::uint64_t>(width) * height;
+    const std::uint64_t quarter = static_cast<std::uint64_t>(qw) * qh;
+    if (pixels > post_pixels_ || quarter > post_quarter_) {
+        for (auto& buffer : post_buffers_) retire(buffer);
+        post_pixels_ = post_quarter_ = 0u;
+        bool ok = true;
+        for (unsigned i = 0; ok && i < post_buffers_.size(); ++i) {
+            const std::uint64_t bytes = i == 0u ? pixels * 4u : i == 5u ? 16u : quarter * 4u;
+            ok = create_buffer(bytes, D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
+                               D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, post_buffers_[i], L"rt post");
+            post_states_[i] = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+        }
+        if (!ok) {
+            for (auto& buffer : post_buffers_) buffer.Reset();
+            return;
+        }
+        post_pixels_ = pixels;
+        post_quarter_ = quarter;
+    }
+    const std::array<float, 12>& camera = replay && post_camera_known_ ? post_camera_ : camera_;
+    const bool camera_known = camera_known_ || (replay && post_camera_known_);
+    RtPostConstants c{};
+    std::copy(view_.projection.begin(), view_.projection.end(), c.projection);
+    c.depth[0] = view_.z_scale;
+    c.depth[1] = view_.z_offset;
+    c.depth[2] = view_.min_depth;
+    c.depth[3] = view_.max_depth;
+    std::copy(view_.viewport.begin(), view_.viewport.end(), c.viewport);
+    c.size[0] = width;
+    c.size[1] = height;
+    c.quarter[0] = qw;
+    c.quarter[1] = qh;
+    {
+        std::array<float, 3> core{};
+        float scale = 0.0f;
+        if (camera_known && star_core(core, scale, 500u)) {
+            for (unsigned r = 0; r < 3u; ++r) {
+                c.core[r] = camera[r * 4u] * core[0] + camera[r * 4u + 1u] * core[1] + camera[r * 4u + 2u] * core[2] +
+                            camera[r * 4u + 3u];
+            }
+            c.core[3] = core_radius_ * scale;
+            c.core_light[0] = 1.0f;
+            c.core_light[1] = 0.72f;
+            c.core_light[2] = 0.38f;
+            c.core_light[3] = std::clamp(0.4f + 0.35f * scale, 0.5f, 2.5f);
+        }
+        std::array<float, 3> sun{};
+        if (camera_known && game_sun(sun, 2000u)) {
+            for (unsigned r = 0; r < 3u; ++r) {
+                c.sun[r] = camera[r * 4u] * sun[0] + camera[r * 4u + 1u] * sun[1] + camera[r * 4u + 2u] * sun[2];
+            }
+            c.sun[3] = 0.6f;
+        }
+    }
+    c.time = std::chrono::duration<float>(std::chrono::steady_clock::now() - post_epoch_).count();
+    c.bloom = post_bloom_;
+    c.threshold = post_threshold_;
+    c.shafts = post_shafts_;
+    c.dof = post_dof_ * static_cast<float>(width) / 640.0f;
+    c.grade = post_grade_;
+    c.split = split_ > 0.0f ? view_.viewport[0] + split_ * view_.viewport[2] : -1.0f;
+
+    ID3D12Resource* const scene = post_buffers_[0].Get();
+    ID3D12Resource* const bright = post_buffers_[1].Get();
+    ID3D12Resource* const tmp = post_buffers_[2].Get();
+    ID3D12Resource* const bloom = post_buffers_[3].Get();
+    ID3D12Resource* const shafts = post_buffers_[4].Get();
+    ID3D12Resource* const state = post_buffers_[5].Get();
+    for (unsigned i = 0; i < post_buffers_.size(); ++i) {
+        to_state(list, post_buffers_[i].Get(), post_states_[i], D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+    }
+    const D3D12_RESOURCE_BARRIER all_uav = uav_barrier(nullptr);
+    const auto run = [&](ID3D12PipelineState* pso, ID3D12Resource* in, ID3D12Resource* out, std::uint32_t axis,
+                         UINT gx, UINT gy) {
+        c.axis = axis;
+        list->SetComputeRoot32BitConstants(0u, sizeof(c) / 4u, &c, 0u);
+        list->SetComputeRootShaderResourceView(2u, in->GetGPUVirtualAddress());
+        list->SetComputeRootUnorderedAccessView(3u, out->GetGPUVirtualAddress());
+        list->SetPipelineState(pso);
+        list->Dispatch(gx, gy, 1u);
+    };
+    list->SetComputeRootSignature(post_root_.Get());
+    list->SetComputeRootDescriptorTable(1u, color_depth_table);
+    list->SetComputeRootUnorderedAccessView(4u, state->GetGPUVirtualAddress());
+    // The picture before the finish, its bright part, the focus and core radius.
+    run(post_copy_pso_.Get(), state, scene, 0u, (width + 7u) / 8u, (height + 7u) / 8u);
+    run(post_bright_pso_.Get(), state, bright, 0u, (qw + 7u) / 8u, (qh + 7u) / 8u);
+    run(post_focus_pso_.Get(), state, tmp, 0u, 1u, 1u);
+    list->ResourceBarrier(1u, &all_uav);
+    // Shafts from the bright part; its blur across, then down.
+    to_state(list, bright, post_states_[1], D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+    run(post_shafts_pso_.Get(), bright, shafts, 0u, (qw + 7u) / 8u, (qh + 7u) / 8u);
+    run(post_blur_pso_.Get(), bright, tmp, 0u, (qw + 7u) / 8u, (qh + 7u) / 8u);
+    list->ResourceBarrier(1u, &all_uav);
+    to_state(list, tmp, post_states_[2], D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+    run(post_blur_pso_.Get(), tmp, bloom, 1u, (qw + 7u) / 8u, (qh + 7u) / 8u);
+    list->ResourceBarrier(1u, &all_uav);
+    for (unsigned i = 0; i < post_buffers_.size(); ++i) {
+        to_state(list, post_buffers_[i].Get(), post_states_[i], kLightRead);
+    }
+    std::memcpy(post_constants_.data(), &c, sizeof(c));
+}
+
+void SceneRayTracer::post_finish(ID3D12GraphicsCommandList* list, D3D12_CPU_DESCRIPTOR_HANDLE target,
+                                 D3D12_GPU_DESCRIPTOR_HANDLE depth_table, std::uint32_t width, std::uint32_t height) {
+    if (!post_active() || !post_finish_pso_ || list == nullptr || depth_table.ptr == 0u || post_pixels_ == 0u ||
+        static_cast<std::uint64_t>(width) * height > post_pixels_) {
+        return;
+    }
+    list->OMSetRenderTargets(1u, &target, FALSE, nullptr);
+    const D3D12_VIEWPORT viewport{0.0f, 0.0f, static_cast<float>(width), static_cast<float>(height), 0.0f, 1.0f};
+    const D3D12_RECT scissor{0, 0, static_cast<LONG>(width), static_cast<LONG>(height)};
+    list->RSSetViewports(1u, &viewport);
+    list->RSSetScissorRects(1u, &scissor);
+    list->SetGraphicsRootSignature(post_finish_root_.Get());
+    list->SetPipelineState(post_finish_pso_.Get());
+    list->SetGraphicsRoot32BitConstants(0u, static_cast<UINT>(post_constants_.size()), post_constants_.data(), 0u);
+    list->SetGraphicsRootDescriptorTable(1u, depth_table);
+    list->SetGraphicsRootShaderResourceView(2u, post_buffers_[0]->GetGPUVirtualAddress());
+    list->SetGraphicsRootShaderResourceView(3u, post_buffers_[3]->GetGPUVirtualAddress());
+    list->SetGraphicsRootShaderResourceView(4u, post_buffers_[4]->GetGPUVirtualAddress());
+    list->SetGraphicsRootShaderResourceView(5u, post_buffers_[5]->GetGPUVirtualAddress());
+    list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+    list->DrawInstanced(3u, 1u, 0u, 0u);
+}
+
+void SceneRayTracer::bloom(ID3D12GraphicsCommandList* list, D3D12_CPU_DESCRIPTOR_HANDLE target, std::uint32_t width,
+                           std::uint32_t height, int slot) {
+    if (list == nullptr || slot < 0 || slot >= static_cast<int>(bloom_.size()) || !bloom_composite_pso_) {
+        return;
+    }
+    const auto index = static_cast<unsigned>(slot);
+    const auto& size = bloom_size_[index];
+    if (!bloom_[index] || size[0] == 0u || size[2] != width || size[3] != height) {
+        return;
+    }
+    to_state(list, bloom_[index].Get(), bloom_state_[index], kLightRead);
+    RtBloomCompositeConstants c{};
+    c.scale[0] = static_cast<float>(size[0]) / static_cast<float>(width);
+    c.scale[1] = static_cast<float>(size[1]) / static_cast<float>(height);
+    c.size[0] = size[0];
+    c.size[1] = size[1];
+    c.strength = bloom_strength_;
+    c.split = split_ > 0.0f ? split_ * static_cast<float>(width) : -1.0f;
+    list->OMSetRenderTargets(1u, &target, FALSE, nullptr);
+    const D3D12_VIEWPORT viewport{0.0f, 0.0f, static_cast<float>(width), static_cast<float>(height), 0.0f, 1.0f};
+    const D3D12_RECT scissor{0, 0, static_cast<LONG>(width), static_cast<LONG>(height)};
+    list->RSSetViewports(1u, &viewport);
+    list->RSSetScissorRects(1u, &scissor);
+    list->SetGraphicsRootSignature(bloom_composite_root_.Get());
+    list->SetPipelineState(bloom_composite_pso_.Get());
+    list->SetGraphicsRoot32BitConstants(0u, sizeof(c) / 4u, &c, 0u);
+    list->SetGraphicsRootShaderResourceView(1u, bloom_[index]->GetGPUVirtualAddress());
+    list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+    list->DrawInstanced(3u, 1u, 0u, 0u);
+}
+
 void SceneRayTracer::composite(ID3D12GraphicsCommandList* list, D3D12_CPU_DESCRIPTOR_HANDLE target,
                                D3D12_GPU_DESCRIPTOR_HANDLE depth_srv, std::uint32_t width, std::uint32_t height,
                                int slot, bool reproject) {
@@ -1941,6 +2414,8 @@ void SceneRayTracer::trace_reflections(ID3D12GraphicsCommandList* list, Allocate
 }
 
 void SceneRayTracer::write_reprojection(ID3D12GraphicsCommandList* list, const std::array<float, 12>& camera_t) {
+    post_camera_ = camera_t;
+    post_camera_known_ = true;
     if (list == nullptr || !lighting_active() || !reproject_ || reproject_mapped_ == nullptr) {
         return;
     }

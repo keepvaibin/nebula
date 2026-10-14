@@ -480,10 +480,10 @@ public:
     void reconcile_ray_tracing();
     [[nodiscard]] bool rt_scene_open() const noexcept { return ray_tracer_.scene_open(); }
     [[nodiscard]] bool rt_glow_open() const noexcept { return ray_tracer_.glow_open(); }
-    [[nodiscard]] float rt_glow_exposure() const noexcept {
-        return ray_tracer_.ready() ? ray_tracer_.glow_exposure() : 1.0f;
+    [[nodiscard]] float rt_glow_exposure(bool model = false) const noexcept {
+        return ray_tracer_.ready() ? ray_tracer_.glow_exposure(model) : 1.0f;
     }
-    [[nodiscard]] float rt_glow_spill() const noexcept { return ray_tracer_.glow_spill(); }
+    [[nodiscard]] float rt_glow_spill(bool model) const noexcept { return ray_tracer_.glow_spill(model); }
     void rt_begin_scene() noexcept { ray_tracer_.begin_scene(); }
     void rt_set_view(const RtView& view) noexcept { ray_tracer_.set_view(view); }
     void rt_set_camera(const std::array<float, 12>* view) noexcept { ray_tracer_.set_camera(view); }
@@ -496,6 +496,10 @@ public:
     void rt_trace_scene();
     // The scene's end: its finished picture becomes the light the next frame's rays read.
     void rt_capture_picture();
+    // The ray tracer's glow bloom of `slot` added to the EFB (a scene's end and its sub-frames).
+    void record_rt_bloom(int slot);
+    // The cinematic finish over the EFB (a scene's end; sub-frames replay it on their picture).
+    void record_rt_post(bool replay);
     // Matrix-ring segment advances back whose palettes are still alive while
     // this frame executes (0 outside temporal mode). In temporal mode the
     // segment advances only after frames that wrote palettes, so present and
@@ -1070,7 +1074,9 @@ private:
         bool valid = false;
     };
     // RtComposite: the ambient occlusion of ray-tracer result slot `index`.
-    enum class ReplayKind : std::uint8_t { Draw, BindEfb, Clear, Copy, SwapEfbSets, ClearDepth, RtComposite };
+    enum class ReplayKind : std::uint8_t {
+        Draw, BindEfb, Clear, Copy, SwapEfbSets, ClearDepth, RtComposite, RtBloom, RtPost
+    };
     struct ReplayOp {
         ReplayKind kind = ReplayKind::Draw;
         std::uint32_t index = 0;

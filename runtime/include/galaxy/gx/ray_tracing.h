@@ -193,13 +193,31 @@ public:
     void capture_picture(ID3D12GraphicsCommandList* list, const RtSources& sources, Allocate allocate,
                          void* allocate_context, D3D12_GPU_DESCRIPTOR_HANDLE color_depth_table, std::uint32_t width,
                          std::uint32_t height);
+    // The glows' bloom of the scene just captured (-1: none) and its composite (additive) onto the
+    // EFB; sub-frames replay the composite of their frame's slot.
+    [[nodiscard]] int bloom_slot() const noexcept { return bloom_slot_; }
+    void bloom(ID3D12GraphicsCommandList* list, D3D12_CPU_DESCRIPTOR_HANDLE target, std::uint32_t width,
+               std::uint32_t height, int slot);
+    // The cinematic finish at the scene's end (rt_post.hlsl): post_prepare reads the EFB colour and
+    // depth (NON_PIXEL_SHADER_RESOURCE, two consecutive SRVs at `color_depth_table`); post_finish
+    // writes over the EFB colour (render target) reading the depth (PIXEL_SHADER_RESOURCE at
+    // `depth_table`). A sub-frame's replay passes `replay` (its camera from write_reprojection).
+    [[nodiscard]] bool post_active() const noexcept { return lighting_active() && post_; }
+    void post_prepare(ID3D12GraphicsCommandList* list, D3D12_GPU_DESCRIPTOR_HANDLE color_depth_table,
+                      std::uint32_t width, std::uint32_t height, bool replay);
+    void post_finish(ID3D12GraphicsCommandList* list, D3D12_CPU_DESCRIPTOR_HANDLE target,
+                     D3D12_GPU_DESCRIPTOR_HANDLE depth_table, std::uint32_t width, std::uint32_t height);
     // After the composite (same views): the picture before the translucent phases.
     void snapshot_glow_base(ID3D12GraphicsCommandList* list, D3D12_GPU_DESCRIPTOR_HANDLE color_depth_table,
                             std::uint32_t width, std::uint32_t height);
     [[nodiscard]] bool emitters_active() const noexcept { return lighting_active() && emission_ > 0.0f; }
     // The colour scale of glows (additive scene draws) while the lighting is on, else 1.
-    [[nodiscard]] float glow_exposure() const noexcept { return lighting_active() ? glow_exposure_ : 1.0f; }
-    [[nodiscard]] float glow_spill() const noexcept { return glow_spill_; }
+    // Glow models (indexed meshes: the Observatory core's fire) and glow sprites (direct vertices:
+    // halos, sparks) have their own exposure and spill.
+    [[nodiscard]] float glow_exposure(bool model) const noexcept {
+        return lighting_active() ? (model ? glow_model_exposure_ : glow_exposure_) : 1.0f;
+    }
+    [[nodiscard]] float glow_spill(bool model) const noexcept { return model ? glow_model_spill_ : glow_spill_; }
 
 private:
     static constexpr unsigned kResultSlots = 16u;
@@ -358,6 +376,38 @@ private:
     Microsoft::WRL::ComPtr<ID3D12PipelineState> glow_base_pso_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> sky_state_pso_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> surface_emit_pso_;
+    // The cinematic finish (rt_post.hlsl): the picture before it (RGBA8), its bright part, blur and
+    // light shafts at a quarter of the pixels, the focus and core radius over time.
+    Microsoft::WRL::ComPtr<ID3D12RootSignature> post_root_;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> post_copy_pso_;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> post_bright_pso_;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> post_blur_pso_;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> post_shafts_pso_;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> post_focus_pso_;
+    Microsoft::WRL::ComPtr<ID3D12RootSignature> post_finish_root_;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> post_finish_pso_;
+    std::array<Microsoft::WRL::ComPtr<ID3D12Resource>, 6> post_buffers_{};   // scene, bright, tmp, bloom, shafts, state
+    std::array<D3D12_RESOURCE_STATES, 6> post_states_{};
+    std::uint64_t post_pixels_ = 0u;
+    std::uint64_t post_quarter_ = 0u;
+    std::array<std::uint32_t, 36> post_constants_{};
+    std::array<float, 12> post_camera_{};
+    bool post_camera_known_ = false;
+    std::chrono::steady_clock::time_point post_epoch_ = std::chrono::steady_clock::now();
+    // Glow bloom (rt_lighting.hlsl BloomDownCS, BloomBlurCS, BloomPS): per light slot, what the
+    // glows added at a quarter of the samples, blurred.
+    Microsoft::WRL::ComPtr<ID3D12RootSignature> bloom_root_;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> bloom_down_pso_;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> bloom_blur_pso_;
+    Microsoft::WRL::ComPtr<ID3D12RootSignature> bloom_composite_root_;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> bloom_composite_pso_;
+    Microsoft::WRL::ComPtr<ID3D12Resource> bloom_temp_;
+    std::array<Microsoft::WRL::ComPtr<ID3D12Resource>, 4> bloom_{};
+    std::array<D3D12_RESOURCE_STATES, 4> bloom_state_{};
+    D3D12_RESOURCE_STATES bloom_temp_state_ = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+    std::array<std::array<std::uint32_t, 4>, 4> bloom_size_{};   // width, height, EFB width, EFB height
+    std::uint64_t bloom_entries_ = 0u;
+    int bloom_slot_ = -1;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> glow_emit_pso_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> emit_merge_pso_;
     D3D12_RESOURCE_STATES glow_base_state_ = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
@@ -409,7 +459,7 @@ private:
     float strength_ = 0.9f;
     float contact_ = 0.3f;
     float contact_range_ = 250.0f;
-    float sky_saturation_ = 0.35f;
+    float sky_saturation_ = 0.12f;
     float fallback_ = 0.55f;
     float emissive_ = 3.0f;
     std::array<float, 3> sun_direction_{0.35f, 1.0f, 0.3f};   // world space, towards the sun
@@ -423,22 +473,35 @@ private:
     float night_ = 0.4f;            // GALAXY_RT_NIGHT: the sky and bounce light under a black sky (relative)
     float daylight_ = 0.35f;        // GALAXY_RT_DAYLIGHT: the sky's luminance that gives it in full
     float glow_boost_ = 0.4f;       // GALAXY_RT_GLOW_BOOST: extra light of a glowing surface
-    float glow_exposure_ = 2.2f;    // GALAXY_RT_GLOW_EXPOSURE: colour scale of the glows themselves
+    float glow_exposure_ = 1.7f;    // GALAXY_RT_GLOW_EXPOSURE: colour scale of the glows themselves
     float glow_spill_ = 0.7f;       // GALAXY_RT_GLOW_SPILL: share of a glow's excess that turns it white
+    float glow_model_exposure_ = 3.2f;  // GALAXY_RT_GLOW_MODEL_EXPOSURE: glowing models (a star's surface)
+    float glow_model_spill_ = 1.0f;     // GALAXY_RT_GLOW_MODEL_SPILL
     float sky_distance_ = 60000.0f; // GALAXY_RT_SKY_DISTANCE: farther surfaces are the sky (backdrops)
+    bool post_ = true;              // GALAXY_RT_POST: the cinematic finish
+    float post_bloom_ = 0.55f;      // GALAXY_RT_POST_BLOOM
+    float post_threshold_ = 0.72f;  // GALAXY_RT_POST_THRESHOLD: luminance where bloom starts
+    float post_shafts_ = 0.6f;      // GALAXY_RT_POST_SHAFTS
+    float post_dof_ = 6.0f;         // GALAXY_RT_POST_DOF: largest far blur (EFB pixels at 1x; 0 none)
+    float post_grade_ = 1.0f;       // GALAXY_RT_POST_GRADE
+    float core_radius_ = 400.0f;    // GALAXY_RT_CORE_RADIUS: the star core's radius at scale 1 (first guess;
+                                    // the finish measures it from depth)
+    float core_light_ = 2.5f;       // GALAXY_RT_CORE_LIGHT: its light (a point light; grows with it)
+    float bloom_strength_ = 0.8f;   // GALAXY_RT_BLOOM: the glows' bloom (0: none)
+    float bloom_threshold_ = 0.15f; // GALAXY_RT_BLOOM_THRESHOLD: glow luminance that starts to bloom
     // GALAXY_RT_EXPOSURE_DAY / _NIGHT: the mean lighting the exposure holds under a bright / black
     // sky (the light moves into lit areas and out of shadows instead of dimming the picture);
     // GALAXY_RT_EXPOSURE=0 turns it off.
-    float exposure_day_ = 0.97f;
-    float exposure_night_ = 0.8f;
+    float exposure_day_ = 0.92f;
+    float exposure_night_ = 0.88f;
     bool exposure_ = true;
     float surface_emission_ = 3.0f; // GALAXY_RT_SURFACE_EMISSION: a glowing surface's light per unit
                                     // of its colour and eye-space area (0: none)
     float emission_ = 24.0f;        // GALAXY_RT_EMISSION: a glow's light per unit it adds to the picture
                                     // and unit of eye-space area (0: no glow lights)
     float point_size_ = 600.0f;     // GALAXY_RT_POINT_SIZE: radius of the geometry around one
-    float sun_light_ = 0.55f;
-    float sky_light_ = 0.65f;
+    float sun_light_ = 1.0f;
+    float sky_light_ = 0.5f;
     bool lighting_enabled_ = true;
     bool show_lighting_ = false;
     std::uint32_t show_term_ = 0;   // GALAXY_RT_VIEW=2 sun, 3 sky light

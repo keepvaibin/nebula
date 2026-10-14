@@ -789,6 +789,8 @@ private:
     bool rt_state_eligible_ = false;
     // Additive blended triangles (glows) under a perspective projection.
     bool rt_glow_eligible_ = false;
+    // The glow exposure the PS constants carry: 0 none, 1 sprite, 2 model.
+    std::uint8_t glow_kind_ = 0u;
     bool rt_scene_traced_ = true;
     bool rt_view_set_ = false;
     [[nodiscard]] bool rt_geometry_draw() const noexcept;

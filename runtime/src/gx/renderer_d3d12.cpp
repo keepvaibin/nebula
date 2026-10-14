@@ -7750,6 +7750,63 @@ void RendererD3D12::rt_capture_picture() {
     }
     command_list_->ResourceBarrier(2, barriers);
     bound_pipeline_ = nullptr;
+    // The cinematic finish (its bloom includes the glows') or the glows' bloom alone joins the
+    // picture before the 2D layer; sub-frames replay it.
+    if (ray_tracer_.post_active()) {
+        record_rt_post(false);
+        if (replay_recording_) {
+            replay_ops_.push_back({ReplayKind::RtPost, 0u});
+        }
+    } else if (const int bloom = ray_tracer_.bloom_slot(); bloom >= 0) {
+        record_rt_bloom(bloom);
+        if (replay_recording_) {
+            replay_ops_.push_back({ReplayKind::RtBloom, static_cast<std::uint32_t>(bloom)});
+        }
+    }
+}
+
+void RendererD3D12::record_rt_post(bool replay) {
+    if (!ray_tracer_.post_active() || !efb_color_ || !efb_depth_ || conv_efb_color_srv_.ptr == 0u ||
+        conv_efb_depth_srv_.ptr == 0u) {
+        return;
+    }
+    D3D12_RESOURCE_BARRIER barriers[2]{};
+    for (D3D12_RESOURCE_BARRIER& barrier : barriers) {
+        barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+        barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+    }
+    barriers[0].Transition.pResource = efb_color_.Get();
+    barriers[0].Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
+    barriers[0].Transition.StateAfter = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
+    barriers[1].Transition.pResource = efb_depth_.Get();
+    barriers[1].Transition.StateBefore = D3D12_RESOURCE_STATE_DEPTH_WRITE;
+    barriers[1].Transition.StateAfter =
+        D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+    command_list_->ResourceBarrier(2, barriers);
+    const D3D12_RESOURCE_DESC desc = efb_color_->GetDesc();
+    const auto width = static_cast<std::uint32_t>(desc.Width);
+    dred_marker(command_list_.Get(), L"rt post");
+    ray_tracer_.post_prepare(command_list_.Get(), conv_efb_color_srv_, width, desc.Height, replay);
+    std::swap(barriers[0].Transition.StateBefore, barriers[0].Transition.StateAfter);
+    command_list_->ResourceBarrier(1, &barriers[0]);
+    ray_tracer_.post_finish(command_list_.Get(), efb_rtv_, conv_efb_depth_srv_, width, desc.Height);
+    std::swap(barriers[1].Transition.StateBefore, barriers[1].Transition.StateAfter);
+    command_list_->ResourceBarrier(1, &barriers[1]);
+    command_list_->SetGraphicsRootSignature(root_signature_.Get());
+    invalidate_gx_bindings();
+    bound_rt_aux_ = 0xFFu;
+    bound_pipeline_ = nullptr;
+}
+
+void RendererD3D12::record_rt_bloom(int slot) {
+    if (!efb_color_) {
+        return;
+    }
+    const D3D12_RESOURCE_DESC desc = efb_color_->GetDesc();
+    ray_tracer_.bloom(command_list_.Get(), efb_rtv_, static_cast<std::uint32_t>(desc.Width), desc.Height, slot);
+    command_list_->SetGraphicsRootSignature(root_signature_.Get());
+    invalidate_gx_bindings();
+    bound_rt_aux_ = 0xFFu;
 }
 
 void RendererD3D12::record_rt_composite(int slot, bool reproject) {
@@ -9375,6 +9432,12 @@ bool RendererD3D12::record_replay_list(ReplayList& entry) {
                 break;
             case ReplayKind::RtComposite:
                 record_rt_composite(static_cast<int>(op.index), true);
+                break;
+            case ReplayKind::RtBloom:
+                record_rt_bloom(static_cast<int>(op.index));
+                break;
+            case ReplayKind::RtPost:
+                record_rt_post(true);
                 break;
             }
             if (op.kind == ReplayKind::Copy) {

@@ -140,6 +140,11 @@ void set_game_sun(const std::array<float, 3>& direction, float distance) noexcep
 // The direction (and distance) when one arrived within `max_age_ms`.
 [[nodiscard]] bool game_sun(std::array<float, 3>& direction, std::uint64_t max_age_ms,
                             float* distance = nullptr) noexcept;
+// Simulation thread, each scene while the Comet Observatory's star core (AstroCore) exists: its
+// world centre and scale (it grows with the Grand Stars). The ray tracer lights the scene from it
+// and gives it its finish.
+void set_star_core(const std::array<float, 3>& position, float scale) noexcept;
+[[nodiscard]] bool star_core(std::array<float, 3>& position, float& scale, std::uint64_t max_age_ms) noexcept;
 // Simulation thread: the game's lights as it loads them for drawing. A point light
 // (LightFunction::loadPointLightInfo: world position, colour 0-1, the distance at which its GX
 // distance attenuation halves it, 0 without attenuation) and a world-fixed light of an

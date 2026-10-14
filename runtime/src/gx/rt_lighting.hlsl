@@ -372,7 +372,7 @@ void SkyStateCS()
         const float day = c_sums.Load(36u) != 0u ? saturate(asfloat(c_sums.Load(32u)) / c_daylight) : 1.0f;
         const float target = lerp(c_exposure_night, c_exposure_day, day);
         const float exposure = c_sums.Load(52u) != 0u ? asfloat(c_sums.Load(48u)) : 1.0f;
-        const float next = clamp(exposure * lerp(1.0f, target / max(mean, 0.05f), 0.1f), 0.8f, 1.8f);
+        const float next = clamp(exposure * lerp(1.0f, target / max(mean, 0.05f), 0.1f), 0.8f, 1.5f);
         c_sums.Store2(48u, uint2(asuint(next), 1u));
     }
 }
@@ -653,6 +653,88 @@ void EmitMergeCS(uint gi : SV_GroupIndex)
     if (gi == kEmitLights - 1u) {
         e_list.Store2(0u, uint2(uint(s_emit_scan[gi].y), asuint(s_emit_scan[gi].x)));
     }
+}
+
+// ---------------------------------------------------------------------------------------------
+// Glow bloom: what the glows added (the light of cores, lamps, Lumas) above a threshold, at a
+// quarter of the samples, blurred across and down (sigma 10 texels), added to the picture at the
+// scene's end: the corona an over-exposed emitter shows.
+// ---------------------------------------------------------------------------------------------
+
+cbuffer RtBloom : register(b0)
+{
+    uint2 b_size;               // bloom texels (2x2 samples each)
+    uint2 b_sample_size;
+    float b_threshold;          // glow luminance that starts to bloom
+    float b_strength;
+    uint b_axis;                // blur: 0 across, 1 down
+    uint b_pad;
+};
+StructuredBuffer<uint> b_added : register(t0);
+StructuredBuffer<uint> b_in : register(t1);
+RWStructuredBuffer<uint> b_out : register(u0);
+
+[numthreads(8, 8, 1)]
+void BloomDownCS(uint3 id : SV_DispatchThreadID)
+{
+    if (any(id.xy >= b_size)) {
+        return;
+    }
+    float3 sum = float3(0.0f, 0.0f, 0.0f);
+    [unroll] for (uint k = 0u; k < 4u; ++k) {
+        const uint2 s = min(id.xy * 2u + uint2(k & 1u, k >> 1u), b_sample_size - 1u);
+        sum += unpack_r11g11b10(b_added[s.y * b_sample_size.x + s.x]);
+    }
+    float3 c = sum * 0.25f;
+    const float l = luminance(c);
+    c *= max(l - b_threshold, 0.0f) / max(l, 1e-4f);
+    b_out[id.y * b_size.x + id.x] = pack_r11g11b10(c);
+}
+
+[numthreads(8, 8, 1)]
+void BloomBlurCS(uint3 id : SV_DispatchThreadID)
+{
+    if (any(id.xy >= b_size)) {
+        return;
+    }
+    const int2 step = b_axis == 0u ? int2(1, 0) : int2(0, 1);
+    float3 sum = float3(0.0f, 0.0f, 0.0f);
+    float weight = 0.0f;
+    [loop] for (int i = -24; i <= 24; ++i) {
+        const int2 s = clamp(int2(id.xy) + step * i, int2(0, 0), int2(b_size) - 1);
+        const float w = exp(-float(i * i) / 200.0f);
+        sum += unpack_r11g11b10(b_in[uint(s.y) * b_size.x + uint(s.x)]) * w;
+        weight += w;
+    }
+    b_out[id.y * b_size.x + id.x] = pack_r11g11b10(sum / weight);
+}
+
+cbuffer RtBloomComposite : register(b0)
+{
+    float2 o_scale;             // bloom texels per EFB pixel
+    uint2 o_size;
+    float o_strength;
+    float o_split;              // GALAXY_RT_SPLIT: left of it the game's own picture
+    uint2 o_pad;
+};
+StructuredBuffer<uint> o_bloom : register(t0);
+
+float4 BloomPS(float4 position : SV_Position) : SV_Target0
+{
+    if (position.x < o_split) {
+        discard;
+    }
+    const float2 t = position.xy * o_scale - 0.5f;
+    const int2 b = int2(floor(t));
+    const float2 f = t - float2(b);
+    float3 c = float3(0.0f, 0.0f, 0.0f);
+    [unroll] for (uint k = 0u; k < 4u; ++k) {
+        const int2 o = int2(k & 1u, k >> 1u);
+        const int2 s = clamp(b + o, int2(0, 0), int2(o_size) - 1);
+        const float w = (o.x != 0 ? f.x : 1.0f - f.x) * (o.y != 0 ? f.y : 1.0f - f.y);
+        c += unpack_r11g11b10(o_bloom[uint(s.y) * o_size.x + uint(s.x)]) * w;
+    }
+    return float4(c * o_strength, 0.0f);
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -1291,6 +1373,11 @@ void SpatialBCS(uint3 id : SV_DispatchThreadID)
     lighting *= exposure;
     open *= exposure;
     float3 m = lerp(float3(1.0f, 1.0f, 1.0f), lighting, g_strength);
+    // Lit surfaces brighten towards 1.5 on a soft shoulder (no flat, washed-out highlights).
+    {
+        const float3 over = max(m - 1.0f, 0.0f);
+        m = min(m, 1.0f) + over / (1.0f + 2.0f * over);
+    }
     // A glowing surface (unlit, bright, under its own glow in the previous picture: a core, a lamp)
     // sends its light whatever reaches it: it keeps its colour and shines brighter.
     if ((draw_flags & kDrawLit) == 0u && (g_flags & 2u) != 0u) {
