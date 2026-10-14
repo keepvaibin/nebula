@@ -750,7 +750,7 @@ unsigned native_settings_row_count(unsigned tab) {
     case 0: return 8u;
     case 1: return temporal_quality_row_shown() ? 10u : 9u;
     case 2: return controls_row_count();
-    case 3: return 6u;
+    case 3: return 7u;
     case 4: return 6u;
     default: return 0u;
     }
@@ -1185,7 +1185,8 @@ void adjust_native_setting_unlogged(int delta) {
         // The mix changes live (no apply).
         float* const gains[] = {&settings.audio.master, &settings.audio.music,
                                 &settings.audio.sfx, &settings.audio.voice,
-                                &settings.audio.ambience, &settings.audio.cutscene};
+                                &settings.audio.ambience, &settings.audio.cutscene,
+                                &settings.audio.wiimote_speaker};
         if (row >= std::size(gains)) return;
         const float next = step_gain(*gains[row], delta);
         if (next != *gains[row]) {
@@ -12179,6 +12180,7 @@ std::string native_settings_row_text(
         case 3: return std::string("VOICE: ") + percent_text(runtime.audio.voice);
         case 4: return std::string("AMBIENCE: ") + percent_text(runtime.audio.ambience);
         case 5: return std::string("CUTSCENE: ") + percent_text(runtime.audio.cutscene);
+        case 6: return std::string("WIIMOTE SOUNDS: ") + percent_text(runtime.audio.wiimote_speaker);
         default: return {};
         }
     case 4:

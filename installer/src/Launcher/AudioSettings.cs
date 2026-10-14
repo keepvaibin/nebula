@@ -13,10 +13,11 @@ namespace Nebula.Launcher
     /// </summary>
     internal sealed class AudioSettings
     {
-        public static readonly string[] Names = { "Master", "Music", "Sound effects", "Voices", "Ambience", "Cutscenes" };
-        private static readonly string[] Keys = { "audio_master_gain", "audio_music_gain", "audio_sfx_gain", "audio_voice_gain", "audio_ambience_gain", "audio_cutscene_gain" };
+        public static readonly string[] Names = { "Master", "Music", "Sound effects", "Voices", "Ambience", "Cutscenes", "Wiimote sounds" };
+        private static readonly string[] Keys = { "audio_master_gain", "audio_music_gain", "audio_sfx_gain", "audio_voice_gain", "audio_ambience_gain", "audio_cutscene_gain", "audio_wiimote_speaker_gain" };
 
-        public readonly int[] Percent = { 100, 100, 100, 100, 100, 100 };
+        // Wiimote sounds are off unless chosen, also in files written before the key existed.
+        public readonly int[] Percent = { 100, 100, 100, 100, 100, 100, 0 };
 
         public static string SettingsPath { get { return Path.Combine(NebulaPaths.DataRoot, "runtime_settings.ini"); } }
 

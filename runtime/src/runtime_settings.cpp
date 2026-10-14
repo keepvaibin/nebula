@@ -55,6 +55,9 @@ RuntimeSettings sanitize_settings(RuntimeSettings settings) {
     settings.audio.voice = sanitize_gain(settings.audio.voice);
     settings.audio.ambience = sanitize_gain(settings.audio.ambience);
     settings.audio.cutscene = sanitize_gain(settings.audio.cutscene);
+    settings.audio.wiimote_speaker = std::isfinite(settings.audio.wiimote_speaker)
+        ? std::clamp(settings.audio.wiimote_speaker, 0.0f, 4.0f)
+        : 0.0f;
     return settings;
 }
 
@@ -139,6 +142,8 @@ void apply_kv(RuntimeSettings& settings, const char* key, const char* value) {
         settings.audio.ambience = parse_gain(value, settings.audio.ambience);
     } else if (std::strcmp(key, "audio_cutscene_gain") == 0) {
         settings.audio.cutscene = parse_gain(value, settings.audio.cutscene);
+    } else if (std::strcmp(key, "audio_wiimote_speaker_gain") == 0) {
+        settings.audio.wiimote_speaker = parse_gain(value, settings.audio.wiimote_speaker);
     }
 }
 
@@ -272,6 +277,8 @@ void apply_env_overrides(RuntimeSettings& settings) {
         settings, "GALAXY_AUDIO_AMBIENCE_GAIN", "audio_ambience_gain");
     apply_env(
         settings, "GALAXY_AUDIO_CUTSCENE_GAIN", "audio_cutscene_gain");
+    apply_env(
+        settings, "GALAXY_AUDIO_WIIMOTE_SPEAKER_GAIN", "audio_wiimote_speaker_gain");
 }
 
 }  // namespace
@@ -379,6 +386,7 @@ bool save_runtime_settings_to_file() {
                  << "audio_voice_gain=" << settings.audio.voice << '\n'
                  << "audio_ambience_gain=" << settings.audio.ambience << '\n'
                  << "audio_cutscene_gain=" << settings.audio.cutscene << '\n'
+                 << "audio_wiimote_speaker_gain=" << settings.audio.wiimote_speaker << '\n'
                  << input::format_controls_settings(input::get_controls_config());
         if (!contents) {
             return false;

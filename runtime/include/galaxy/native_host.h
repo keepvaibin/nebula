@@ -11,6 +11,7 @@
 #include "galaxy/input_bindings.h"
 #include "galaxy/native_input.h"
 #include "galaxy/synthetic_kpad_buttons.h"
+#include "galaxy/wiimote_speaker.h"
 
 #include <algorithm>
 #include <array>
@@ -1761,6 +1762,7 @@ private:
     bool bt_wiimote_rumble_ = false;
     bool bt_wiimote_speaker_enabled_ = false;
     bool bt_wiimote_speaker_muted_ = true;
+    galaxy::input::speaker::Speaker wiimote_speaker_;
     bool bt_wiimote_ir_enabled_ = false;
     bool bt_wiimote_ir_report13_enabled_ = false;
     bool bt_wiimote_ir_report1a_enabled_ = false;

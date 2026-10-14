@@ -20,6 +20,9 @@ struct RuntimeAudioSettings {
     // In-engine cutscene sounds (the game's DEMO sound category) and the
     // pre-rendered movies' audio.
     float cutscene = 1.0f;
+    // What the game plays on the Wii Remote speaker, mixed into the output.
+    // Off unless chosen, also for files written before the key existed.
+    float wiimote_speaker = 0.0f;
 };
 
 // Auto: keyboard, mouse and every controller are live together and the pointer
