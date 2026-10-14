@@ -242,7 +242,10 @@ Affine34 camera_at(const CameraMotion& m, float t) noexcept {
 void eye_motion(const Affine34* a, const Affine34& b, const CameraMotion& camera,
                 bool orthographic, EyeMotion& out) noexcept {
     out = EyeMotion{};
-    if (camera.known && camera.cut && !orthographic) {
+    // A cut shows b; so does an eye-space matrix that did not change (drawn
+    // with its own camera or attached to the game camera: the world split
+    // would bend it along the camera's chord).
+    if ((camera.known && camera.cut) || (a != nullptr && equal_words(*a, b))) {
         affine_motion(b, b, out.world);
         out.still = true;
         return;
@@ -301,7 +304,7 @@ Affine34 eye_at(const EyeMotion& m, const CameraMotion& camera, const Affine34& 
 void normal_motion(const Affine34* a, const Affine34& b, const CameraMotion& camera,
                    NormalMotion& out) noexcept {
     out = NormalMotion{};
-    if (camera.known && camera.cut) {
+    if ((camera.known && camera.cut) || (a != nullptr && equal_words(*a, b))) {
         affine_motion(b, b, out.world);
         out.still = true;
         return;
@@ -594,12 +597,16 @@ void palette_motion(const std::uint32_t* a, const std::uint32_t* b, const Camera
         out.snapped += out.position[k].snapped ? 1u : 0u;
         out.any_changed = true;
     }
+    // Orthographic palettes do not use the scene camera: their normals move
+    // only with their own matrices.
+    const CameraMotion screen{};
+    const CameraMotion& normal_camera = orthographic ? screen : camera;
     for (unsigned k = 0; k < 10u; ++k) {
         if ((normal_mask & (1u << k)) == 0u) continue;
         const std::uint32_t* wb = b + kXfNormalBase + k * 9u;
         const bool differs =
             a != nullptr && std::memcmp(a + kXfNormalBase + k * 9u, wb, 9u * 4u) != 0;
-        if (!differs && !camera_moves) continue;
+        if (!differs && !(camera_moves && !orthographic)) continue;
         const Affine34 nb = load_normal(wb);
         if (!finite(nb)) continue;
         Affine34 na{};
@@ -608,7 +615,7 @@ void palette_motion(const std::uint32_t* a, const std::uint32_t* b, const Camera
             na = load_normal(a + kXfNormalBase + k * 9u);
             if (finite(na)) pa = &na;
         }
-        normal_motion(pa, nb, camera, out.normal[k]);
+        normal_motion(pa, nb, normal_camera, out.normal[k]);
         out.normal_changed[k] = 1u;
         out.any_changed = true;
     }

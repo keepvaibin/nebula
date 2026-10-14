@@ -656,6 +656,12 @@ private:
     std::array<float, 12> producer_scene_view_{};
     bool producer_scene_view_valid_ = false;
     std::vector<StripeParticleMark> producer_stripe_particles_;
+    // Render thread: the chunk's stripe marks while its FIFO is parsed (log
+    // recording), and the stripe vertices of the pending draw batch.
+    std::span<const StripeParticleMark> parse_stripes_{};
+    std::size_t parse_stripe_next_ = 0;
+    std::vector<RendererD3D12::StripeVertex> pending_stripe_vertices_;
+    std::vector<RendererD3D12::StripeVertex> draw_stripe_vertices_;
     void take_attached_stripe_particles(FrameChunk& chunk, std::size_t fifo_size);
     // Render thread, after a chunk's parse: trace of the stripe-particle marks.
     void note_stripe_particles(const FrameChunk& chunk);
@@ -888,8 +894,11 @@ private:
         std::uint16_t normal_mask = 0;    // normal matrices its records read
         std::uint8_t light_mask = 0;      // GX lights its records evaluate
         bool orthographic = false;
+        bool screen = false;              // read by the screen layer (no scene camera)
         PaletteMotion motion{};
     };
+    // The camera of screen-layer records: none (no split, no cut).
+    static constexpr CameraMotion kScreenCamera{};
     std::vector<InterpPaletteMotion> interp_palette_motions_;
     std::vector<std::int32_t> interp_palette_first_;  // per shadow: first entry
     std::uint64_t interp_moving_records_ = 0;        // summed per sub-frame

@@ -33447,6 +33447,8 @@ int wmain(int argc, wchar_t** argv) {
                           << " bytes=" << state.gx_stream_bytes
                           << " deferred=" << state.gx_stream_deferred
                           << " queue-full=" << state.gx_stream_queue_full << '\n';
+                std::cerr << "[draw-identity-audit] markers=" << state.draw_identity_markers
+                          << " dropped=" << state.draw_identity_dropped << '\n';
                 std::cerr << "[draw-done-submit-audit] enabled="
                           << (submit_gx_at_draw_done_wait_enabled() ? 1 : 0)
                           << " attempts=" << state.draw_done_submit_attempts

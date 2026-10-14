@@ -533,6 +533,16 @@ public:
         bool vertex_blend = false;
     };
     bool begin_replay_sequence(const ReplaySequence& sequence);
+    // A stripe particle's vertex in the draw logged next (JPA stripes, two
+    // vertices per particle): interpolated per particle between game frames.
+    struct StripeVertex {
+        std::uint32_t vertex = 0;        // in the draw's vertex buffer
+        std::uint32_t particle = 0;      // JPABaseParticle
+        std::uint32_t age_lifetime = 0;  // age << 16 | lifetime
+        std::uint8_t strip = 0;          // JPADrawStripe 0, JPADrawStripeX passes 1-2
+        std::uint8_t side = 0;           // the particle's first or second vertex
+    };
+    void note_stripe_vertices(std::span<const StripeVertex> vertices);
     // A presented frame of the sequence: t, the t of the frame presented before
     // it (motion vectors) and its jitter in render pixels (temporal upscaling).
     struct SubframeTime {
@@ -1143,6 +1153,41 @@ private:
     D3D12_GPU_VIRTUAL_ADDRESS resident_vertex_base_ = 0;
     std::uint64_t resident_vertex_bytes_ = 0;
     static constexpr std::uint32_t kMaxBlendPairs = 8192u;
+    // Never a pair's verdict (stays zero, which passes): stripe draws, paired
+    // per particle, blend without the geometry check.
+    static constexpr std::uint32_t kStripeVerdict = kMaxBlendPairs - 1u;
+    struct StripeDraw {
+        std::uint32_t draw = 0;   // index in its log's draws
+        std::uint32_t first = 0;  // in its log's stripe vertices
+        std::uint32_t count = 0;
+    };
+    struct StripeLog {
+        std::vector<StripeDraw> draws;
+        std::vector<StripeVertex> vertices;
+        void clear() noexcept {
+            draws.clear();
+            vertices.clear();
+        }
+    };
+    StripeLog replay_stripes_;
+    StripeLog play_stripes_;
+    StripeLog run_stripes_;
+    StripeLog prev_run_stripes_;
+    // The playing sequence's stripe draws: per output vertex the source of its
+    // earlier position (byte offset, buffer: 0 ring, 1 resident), gathered
+    // into stripe_earlier_ before the first sub-frame (kStripeGatherCs).
+    std::vector<std::array<std::uint32_t, 2>> stripe_gather_;
+    std::vector<std::int32_t> stripe_of_draw_;
+    std::vector<std::int32_t> stripe_of_prev_draw_;
+    std::vector<std::pair<std::uint64_t, std::uint32_t>> stripe_keys_;
+    Microsoft::WRL::ComPtr<ID3D12Resource> stripe_earlier_;
+    std::uint64_t stripe_earlier_bytes_ = 0;
+    D3D12_RESOURCE_STATES stripe_earlier_state_ = D3D12_RESOURCE_STATE_COMMON;
+    Microsoft::WRL::ComPtr<ID3D12RootSignature> stripe_gather_root_;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> stripe_gather_pso_;
+    bool stripe_gather_failed_ = false;
+    bool ensure_stripe_gather(std::uint64_t bytes);
+    void record_stripe_gather();
     static constexpr std::uint32_t kFrameValuesElement = kMaxBlendPairs;
     static constexpr std::uint32_t kZeroValuesElement = kMaxBlendPairs + 1u;
     void ensure_frame_values();

@@ -6657,6 +6657,11 @@ void GxBackend::on_motion_marker(std::uint8_t kind, std::uint16_t aux, std::uint
 // GameScene::draw2D's entry and epilogue (FifoMarker::Scene2DBegin/End): the
 // 2D layer's FIFO span in the chunk. Recording only.
 void GxBackend::on_scene_2d_marker(bool begin, std::size_t chunk_offset) {
+    if (begin && scene_phase_) {
+        // GameScene::draw3D returned before its clearZBuffer (movie, nerve):
+        // the scene ends here.
+        on_fifo_marker(FifoMarker::SceneEnd, nullptr);
+    }
     if (begin) {
         scene_2d_open_ = true;
         ++scene_2d_serial_;
@@ -7926,8 +7931,11 @@ bool GxBackend::render_interp_subframe(float t) {
                 static_cast<std::size_t>(m) < before_scene.constants.size();
             const GxVsConstants& now = scene.constants[r];
             const GxVsConstants* before = prev_data ? &before_scene.constants[static_cast<std::size_t>(m)] : nullptr;
-            // The screen layer moves in screen space, whatever its projection.
-            const bool orthographic = scene.screen_record(r) || now.projection[3][3] != 0.0f;
+            // The screen layer moves in screen space, whatever its projection,
+            // and the scene camera's cuts do not apply to it.
+            const bool screen = scene.screen_record(r);
+            const bool orthographic = screen || now.projection[3][3] != 0.0f;
+            const CameraMotion& camera = screen ? kScreenCamera : interp_camera_;
             InterpRecordMotion motion{};
             motion.record = static_cast<std::uint32_t>(r);
             motion.prev = prev_data ? m : -1;
@@ -7938,12 +7946,12 @@ bool GxBackend::render_interp_subframe(float t) {
                 if (before != nullptr) {
                     std::memcpy(a.data(), before->inline_pos_matrix, sizeof(Affine34));
                 }
-                eye_motion(before != nullptr ? &a : nullptr, b, interp_camera_, orthographic, motion.position);
+                eye_motion(before != nullptr ? &a : nullptr, b, camera, orthographic, motion.position);
                 motion.position_moves =
                     !motion.position.still || (motion.position.split && camera_moves);
                 interp_snapped_ += motion.position.snapped ? 1u : 0u;
             }
-            if (before != nullptr && !(interp_camera_.known && interp_camera_.cut)) {
+            if (before != nullptr && !(camera.known && camera.cut)) {
                 motion.colour_moves = channel_colours_move(*before, now);
                 motion.tex_moves =
                     std::memcmp(before->inline_tex_matrices, now.inline_tex_matrices,
@@ -7972,6 +7980,7 @@ bool GxBackend::render_interp_subframe(float t) {
                     entry.before = pair_before;
                     entry.next = interp_palette_first_[static_cast<std::size_t>(shadow)];
                     entry.orthographic = orthographic;
+                    entry.screen = screen;
                     interp_palette_first_[static_cast<std::size_t>(shadow)] = index;
                 }
                 // The slots this record reads: every one for per-vertex
@@ -7999,7 +8008,8 @@ bool GxBackend::render_interp_subframe(float t) {
         for (InterpPaletteMotion& entry : interp_palette_motions_) {
             const std::uint32_t* now_words =
                 scene.palettes.data() + static_cast<std::size_t>(entry.shadow) * kWords;
-            palette_motion(before_palette(entry.before), now_words, interp_camera_, entry.orthographic,
+            palette_motion(before_palette(entry.before), now_words, entry.screen ? kScreenCamera : interp_camera_,
+                           entry.orthographic,
                            entry.motion, entry.position_mask, entry.normal_mask, entry.light_mask);
             interp_snapped_ += entry.motion.snapped;
             ++interp_palette_decompositions_;
@@ -8224,7 +8234,8 @@ bool GxBackend::prepare_interp_sequence(const InterpScene& scene, const InterpSc
         const InterpPaletteMotion& entry = interp_palette_motions_[static_cast<std::size_t>(interp_palette_entry_[q])];
         const std::uint32_t* now_words = scene.palettes.data() + static_cast<std::size_t>(entry.shadow) * kWords;
         interp_program_.palette(layout.palette_offset(static_cast<std::uint32_t>(q)) / 4u, entry.motion,
-                                before_palette(entry.before), now_words, interp_camera_);
+                                before_palette(entry.before), now_words,
+                                entry.screen ? kScreenCamera : interp_camera_);
         if (q < layout.prev_palette_count) {
             interp_program_.at_previous(true);
             interp_program_.palette_positions(layout.prev_palette_offset(static_cast<std::uint32_t>(q)) / 4u,
@@ -10065,6 +10076,9 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
                 }
                 return consumed;
             };
+            parse_stripes_ = interp_recording_ ? std::span<const StripeParticleMark>(chunk.stripe_particles)
+                                               : std::span<const StripeParticleMark>{};
+            parse_stripe_next_ = 0u;
             if (pending_fifo_.empty()) {
                 const std::span<const std::byte> fifo(fifo_data, fifo_size);
                 const std::size_t consumed = run_stream(fifo, 0u);
@@ -10090,6 +10104,7 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
                             static_cast<std::ptrdiff_t>(consumed));
                 }
             }
+            parse_stripes_ = {};
             if (!chunk.stripe_particles.empty()) [[unlikely]] {
                 note_stripe_particles(chunk);
             }
@@ -12212,6 +12227,10 @@ void GxBackend::flush_pending_draw_batch() {
     const auto draw_record_start = time_detail
         ? std::chrono::steady_clock::now()
         : std::chrono::steady_clock::time_point{};
+    if (!pending_stripe_vertices_.empty()) [[unlikely]] {
+        renderer_.note_stripe_vertices(pending_stripe_vertices_);
+        pending_stripe_vertices_.clear();
+    }
     renderer_.draw(pending_draw_batch_.call);
     if (time_detail) {
         frame_draw_record_us_ +=
@@ -13261,6 +13280,10 @@ void GxBackend::on_draw(
         static_cast<std::uint16_t>(
             (static_cast<std::uint16_t>(cursor.data[cursor.offset]) << 8) |
             static_cast<std::uint16_t>(cursor.data[cursor.offset + 1]));
+    // The FIFO position of the vertex data (top-level stream draws only:
+    // display-list cursors address list memory).
+    const bool stream_draw = cursor.recover_truncation && cursor.base_offset == 0u;
+    const std::size_t vertex_stream_offset = parse_span_base_ + cursor.offset + 2u;
 
     ID3D12PipelineState* pso = nullptr;
     {
@@ -13372,6 +13395,27 @@ void GxBackend::on_draw(
     }
     ++stat_draws_issued_;
     ++frame_draws_issued_;
+    // Stripe particles drawn by this primitive: each mark is the FIFO position
+    // of a particle's two vertices.
+    draw_stripe_vertices_.clear();
+    if (stream_draw && parse_stripe_next_ < parse_stripes_.size() && vertex_stream_offset >= parse_span_prefix_)
+        [[unlikely]] {
+        const std::size_t start = vertex_stream_offset - parse_span_prefix_;
+        const std::size_t end = start + layout.source_size * static_cast<std::size_t>(source_vertex_count);
+        const std::uint32_t base = append_to_pending ? pending_draw_batch_.vertex_count : 0u;
+        while (parse_stripe_next_ < parse_stripes_.size() && parse_stripes_[parse_stripe_next_].offset < start) {
+            ++parse_stripe_next_;
+        }
+        while (parse_stripe_next_ < parse_stripes_.size() && parse_stripes_[parse_stripe_next_].offset < end &&
+               layout.source_size != 0u) {
+            const StripeParticleMark& mark = parse_stripes_[parse_stripe_next_++];
+            const auto local = static_cast<std::uint32_t>((mark.offset - start) / layout.source_size);
+            for (std::uint8_t side = 0; side < 2u && local + side < prim.vertex_count; ++side) {
+                draw_stripe_vertices_.push_back({base + local + side, mark.particle, mark.age_lifetime, mark.strip,
+                                                 side});
+            }
+        }
+    }
 
     const std::uint64_t current_trace_frame = frame_index_ + 1u;
     if (trace_thp_draw_frame_enabled(current_trace_frame)) {
@@ -13965,6 +14009,10 @@ void GxBackend::on_draw(
         pending_draw_batch_.first_index = prim.first_index;
         pending_draw_batch_.index_count = prim.index_count;
         pending_draw_batch_.draw_count = 1;
+    }
+    if (!draw_stripe_vertices_.empty()) [[unlikely]] {
+        pending_stripe_vertices_.insert(pending_stripe_vertices_.end(), draw_stripe_vertices_.begin(),
+                                        draw_stripe_vertices_.end());
     }
     if (capture_draws_ && draw_index == capture_readback_draw_) {
         flush_pending_draw_batch();

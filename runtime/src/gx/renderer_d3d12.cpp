@@ -7115,7 +7115,18 @@ void RendererD3D12::suspend_temporal_interpolation(double ms_per_frame) {
               << " ms GPU per presented frame\n";
 }
 
+void RendererD3D12::note_stripe_vertices(std::span<const StripeVertex> vertices) {
+    if (!replay_recording_ || vertices.empty()) {
+        return;
+    }
+    replay_stripes_.draws.push_back({static_cast<std::uint32_t>(replay_draws_.size()),
+                                     static_cast<std::uint32_t>(replay_stripes_.vertices.size()),
+                                     static_cast<std::uint32_t>(vertices.size())});
+    replay_stripes_.vertices.insert(replay_stripes_.vertices.end(), vertices.begin(), vertices.end());
+}
+
 void RendererD3D12::publish_replay_log() {
+    std::swap(replay_stripes_, play_stripes_);
     std::swap(replay_ops_, play_ops_);
     std::swap(replay_draws_, play_draws_);
     std::swap(replay_viewports_, play_viewports_);
@@ -7133,9 +7144,11 @@ bool RendererD3D12::start_replay_playback() {
     prev_run_valid_ = run_valid_;
     if (run_valid_) {
         std::swap(prev_run_draws_, run_draws_);
+        std::swap(prev_run_stripes_, run_stripes_);
         prev_run_segment_ = run_segment_;
         prev_run_serial_ = run_serial_;
     }
+    std::swap(play_stripes_, run_stripes_);
     run_blend_vertices_.clear();
     std::swap(play_ops_, run_ops_);
     std::swap(play_draws_, run_draws_);
@@ -7312,13 +7325,150 @@ bool RendererD3D12::ensure_blend_validation() {
 }
 
 // At the start of the sequence's first sub-frame (before its draws).
+// Earlier stripe vertices, one 144-byte GxVertexOut per output vertex, from
+// the ring or the resident buffer at the source's byte offset.
+static constexpr char kStripeGatherCs[] = R"HLSL(
+ByteAddressBuffer ring : register(t0);
+ByteAddressBuffer resident : register(t1);
+StructuredBuffer<uint2> sources : register(t2);
+RWByteAddressBuffer earlier : register(u0);
+cbuffer Limits : register(b0) {
+    uint ring_last;
+    uint resident_last;
+    uint vertices;
+};
+[numthreads(64, 1, 1)]
+void main(uint3 id : SV_DispatchThreadID) {
+    const uint k = id.x / 36u;
+    if (k >= vertices) {
+        return;
+    }
+    const uint word = id.x - k * 36u;
+    const uint2 source = sources[k];
+    const uint at = source.x + word * 4u;
+    // Both loads stay inside their buffers (compilers may run both).
+    const uint a = ring.Load(min(at, ring_last));
+    const uint b = resident.Load(min(at, resident_last));
+    earlier.Store(k * 144u + word * 4u, source.y != 0u ? b : a);
+}
+)HLSL";
+
+bool RendererD3D12::ensure_stripe_gather(std::uint64_t bytes) {
+    if (!stripe_gather_pso_) {
+        if (stripe_gather_failed_ || !device_) {
+            return false;
+        }
+        stripe_gather_failed_ = true;
+        D3D12_ROOT_PARAMETER params[5]{};
+        for (unsigned i = 0; i < 3u; ++i) {
+            params[i].ParameterType = D3D12_ROOT_PARAMETER_TYPE_SRV;
+            params[i].Descriptor.ShaderRegister = i;
+            params[i].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+        }
+        params[3].ParameterType = D3D12_ROOT_PARAMETER_TYPE_UAV;
+        params[3].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+        params[4].ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
+        params[4].Constants.Num32BitValues = 3u;
+        params[4].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+        D3D12_ROOT_SIGNATURE_DESC rsd{};
+        rsd.NumParameters = 5;
+        rsd.pParameters = params;
+        ComPtr<ID3DBlob> blob, err;
+        if (FAILED(D3D12SerializeRootSignature(&rsd, D3D_ROOT_SIGNATURE_VERSION_1, &blob, &err)) ||
+            FAILED(device_->CreateRootSignature(0, blob->GetBufferPointer(), blob->GetBufferSize(),
+                                                IID_PPV_ARGS(&stripe_gather_root_)))) {
+            return false;
+        }
+        try {
+            const ComPtr<ID3DBlob> cs = compile_hlsl(kStripeGatherCs, sizeof(kStripeGatherCs) - 1u, "cs_5_1", "main");
+            D3D12_COMPUTE_PIPELINE_STATE_DESC desc{};
+            desc.pRootSignature = stripe_gather_root_.Get();
+            desc.CS = {cs->GetBufferPointer(), cs->GetBufferSize()};
+            if (FAILED(device_->CreateComputePipelineState(&desc, IID_PPV_ARGS(&stripe_gather_pso_)))) {
+                return false;
+            }
+        } catch (const std::exception& error) {
+            std::cerr << "[stripe-gather] shader: " << error.what() << '\n';
+            return false;
+        }
+        stripe_gather_failed_ = false;
+    }
+    if (stripe_earlier_ && stripe_earlier_bytes_ >= bytes) {
+        return true;
+    }
+    std::uint64_t size = std::max<std::uint64_t>(stripe_earlier_bytes_ * 2u, 1ull << 20u);
+    while (size < bytes) {
+        size *= 2u;
+    }
+    if (stripe_earlier_) {
+        // Sub-frames in flight still read the old one.
+        interp_retired_.push_back({std::move(stripe_earlier_), next_fence_value_});
+        stripe_earlier_bytes_ = 0u;
+    }
+    D3D12_HEAP_PROPERTIES heap{};
+    heap.Type = D3D12_HEAP_TYPE_DEFAULT;
+    D3D12_RESOURCE_DESC desc{};
+    desc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+    desc.Width = size;
+    desc.Height = 1;
+    desc.DepthOrArraySize = 1;
+    desc.MipLevels = 1;
+    desc.SampleDesc.Count = 1;
+    desc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+    desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
+    if (FAILED(device_->CreateCommittedResource(&heap, D3D12_HEAP_FLAG_NONE, &desc,
+                                                D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, nullptr,
+                                                IID_PPV_ARGS(&stripe_earlier_)))) {
+        return false;
+    }
+    stripe_earlier_->SetName(L"GX stripe particle earlier vertices");
+    stripe_earlier_bytes_ = size;
+    stripe_earlier_state_ = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
+    return true;
+}
+
+void RendererD3D12::record_stripe_gather() {
+    const std::size_t bytes = stripe_gather_.size() * sizeof(stripe_gather_[0]);
+    const UploadRing::Allocation table = constant_ring_.allocate(bytes, 256u);
+    std::memcpy(table.cpu, stripe_gather_.data(), bytes);
+    D3D12_RESOURCE_BARRIER barrier{};
+    barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+    barrier.Transition.pResource = stripe_earlier_.Get();
+    barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+    barrier.Transition.StateBefore = stripe_earlier_state_;
+    barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+    command_list_->ResourceBarrier(1, &barrier);
+    command_list_->SetComputeRootSignature(stripe_gather_root_.Get());
+    command_list_->SetPipelineState(stripe_gather_pso_.Get());
+    const std::uint64_t ring_bytes = vertex_ring_.total_bytes();
+    const bool resident = resident_vertex_base_ != 0u && resident_vertex_bytes_ >= 4u;
+    const std::uint32_t limits[3]{
+        static_cast<std::uint32_t>(std::min<std::uint64_t>(ring_bytes - 4u, 0xFFFFFFF0u)),
+        static_cast<std::uint32_t>(std::min<std::uint64_t>((resident ? resident_vertex_bytes_ : ring_bytes) - 4u,
+                                                           0xFFFFFFF0u)),
+        static_cast<std::uint32_t>(stripe_gather_.size())};
+    command_list_->SetComputeRootShaderResourceView(0, vertex_ring_.gpu_base());
+    command_list_->SetComputeRootShaderResourceView(1, resident ? resident_vertex_base_ : vertex_ring_.gpu_base());
+    command_list_->SetComputeRootShaderResourceView(2, table.gpu);
+    command_list_->SetComputeRootUnorderedAccessView(3, stripe_earlier_->GetGPUVirtualAddress());
+    command_list_->SetComputeRoot32BitConstants(4, 3u, limits, 0u);
+    const auto threads = static_cast<std::uint64_t>(stripe_gather_.size()) * 36u;
+    command_list_->Dispatch(static_cast<UINT>((threads + 63u) / 64u), 1u, 1u);
+    std::swap(barrier.Transition.StateBefore, barrier.Transition.StateAfter);
+    command_list_->ResourceBarrier(1, &barrier);
+    stripe_earlier_state_ = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
+    bound_pipeline_ = nullptr;
+}
+
 void RendererD3D12::record_blend_validation() {
     if (!blend_validate_pending_) {
         return;
     }
     blend_validate_pending_ = false;
-    if (blend_pairs_.empty() || !ensure_blend_validation()) {
-        for (BlendSource& source : run_blend_vertices_) source = {};
+    if (!stripe_gather_.empty()) {
+        record_stripe_gather();
+    }
+    if (blend_pairs_.empty()) {
         return;
     }
     const std::size_t bytes = blend_pairs_.size() * sizeof(blend_pairs_[0]);
@@ -7362,6 +7512,7 @@ void RendererD3D12::record_blend_validation() {
 void RendererD3D12::prepare_vertex_blend(std::span<const std::int32_t> previous_record) {
     run_blend_vertices_.assign(run_draws_.size(), BlendSource{});
     blend_pairs_.clear();
+    stripe_gather_.clear();
     blend_validate_pending_ = false;
     std::int32_t ps_records = 0;
     for (const DrawCall& call : run_draws_) {
@@ -7411,6 +7562,30 @@ void RendererD3D12::prepare_vertex_blend(std::span<const std::int32_t> previous_
     // order, skipping up to three unmatched draws (one drawn in only one of
     // the frames) to the next one with as many vertices.
     std::fill(fill, fill + count, 0u);
+    // Stripe draws of both logs, by draw index (GALAXY_INTERP_STRIPES=0: paired
+    // as other draws, diagnostics).
+    static const bool stripes = [] {
+        char value[8]{};
+        std::size_t length = 0u;
+        return !(getenv_s(&length, value, sizeof(value), "GALAXY_INTERP_STRIPES") == 0 && length > 1u &&
+                 value[0] == '0');
+    }();
+    stripe_of_draw_.assign(run_draws_.size(), -1);
+    for (std::size_t i = 0; stripes && i < run_stripes_.draws.size(); ++i) {
+        const StripeDraw& stripe = run_stripes_.draws[i];
+        if (stripe.draw < stripe_of_draw_.size()) stripe_of_draw_[stripe.draw] = static_cast<std::int32_t>(i);
+    }
+    stripe_of_prev_draw_.assign(prev_run_draws_.size(), -1);
+    for (std::size_t i = 0; i < prev_run_stripes_.draws.size(); ++i) {
+        const StripeDraw& stripe = prev_run_stripes_.draws[i];
+        if (stripe.draw < stripe_of_prev_draw_.size()) {
+            stripe_of_prev_draw_[stripe.draw] = static_cast<std::int32_t>(i);
+        }
+    }
+    const bool pairs_checked = ensure_blend_validation();
+    // Per stripe draw: its draw and first gathered vertex (addresses once the
+    // gather buffer is sized).
+    std::vector<std::array<std::uint32_t, 2>> stripe_blends;
     std::vector<std::uint32_t> seen;
     static const bool trace = [] {
         char value[8]{};
@@ -7432,8 +7607,17 @@ void RendererD3D12::prepare_vertex_blend(std::span<const std::int32_t> previous_
         const std::uint32_t k = seen[static_cast<std::size_t>(r)]++;
         std::uint32_t at = first[m] + fill[m];
         const std::uint32_t end = std::min(first[m + 1], at + 4u);
-        while (at < end && prev_run_draws_[order[at]].vertex_view.SizeInBytes != call.vertex_view.SizeInBytes) {
-            ++at;
+        const std::int32_t stripe = stripe_of_draw_[d];
+        if (stripe >= 0) {
+            // A stripe pairs with its record's next stripe draw whatever the
+            // particle count, and then particle by particle.
+            while (at < end && stripe_of_prev_draw_[order[at]] < 0) {
+                ++at;
+            }
+        } else {
+            while (at < end && prev_run_draws_[order[at]].vertex_view.SizeInBytes != call.vertex_view.SizeInBytes) {
+                ++at;
+            }
         }
         if (at >= end) {
             if (first[m] + fill[m] < first[m + 1] && trace && size_differs < 6u) {
@@ -7458,10 +7642,56 @@ void RendererD3D12::prepare_vertex_blend(std::span<const std::int32_t> previous_
             locate(call.vertex_view.BufferLocation, call.vertex_view.SizeInBytes, current_offset);
         const int previous_buffer =
             locate(before.vertex_view.BufferLocation, before.vertex_view.SizeInBytes, previous_offset);
-        if (before.vertex_view.BufferLocation != call.vertex_view.BufferLocation &&
+        if (stripe >= 0) {
+            const std::uint32_t vertices = call.vertex_view.StrideInBytes == 144u
+                ? call.vertex_view.SizeInBytes / call.vertex_view.StrideInBytes : 0u;
+            const std::uint32_t previous_vertices = before.vertex_view.StrideInBytes == 144u
+                ? before.vertex_view.SizeInBytes / before.vertex_view.StrideInBytes : 0u;
+            if (vertices == 0u || current_buffer < 0 || previous_buffer < 0 ||
+                stripe_gather_.size() + vertices > (1u << 20u)) {
+                continue;
+            }
+            // Previous particles by (particle, pass, side, lifetime); a match
+            // continues only if its age moved on by at most one frame.
+            const StripeDraw& prev_draw =
+                prev_run_stripes_.draws[static_cast<std::size_t>(stripe_of_prev_draw_[order[at]])];
+            const auto key_of = [](const StripeVertex& v) {
+                return (static_cast<std::uint64_t>(v.particle) << 32u) |
+                       (static_cast<std::uint64_t>(v.strip) << 24u) | (static_cast<std::uint64_t>(v.side) << 16u) |
+                       (v.age_lifetime & 0xFFFFu);
+            };
+            stripe_keys_.clear();
+            for (std::uint32_t i = 0; i < prev_draw.count; ++i) {
+                const StripeVertex& v = prev_run_stripes_.vertices[prev_draw.first + i];
+                if (v.vertex < previous_vertices) stripe_keys_.emplace_back(key_of(v), prev_draw.first + i);
+            }
+            std::sort(stripe_keys_.begin(), stripe_keys_.end());
+            const auto base = static_cast<std::uint32_t>(stripe_gather_.size());
+            for (std::uint32_t i = 0; i < vertices; ++i) {
+                stripe_gather_.push_back({current_offset + i * 144u, static_cast<std::uint32_t>(current_buffer)});
+            }
+            const StripeDraw& draw = run_stripes_.draws[static_cast<std::size_t>(stripe)];
+            for (std::uint32_t i = 0; i < draw.count; ++i) {
+                const StripeVertex& v = run_stripes_.vertices[draw.first + i];
+                if (v.vertex >= vertices) continue;
+                const std::uint64_t key = key_of(v);
+                const auto found = std::lower_bound(stripe_keys_.begin(), stripe_keys_.end(),
+                                                    std::pair<std::uint64_t, std::uint32_t>{key, 0u});
+                if (found == stripe_keys_.end() || found->first != key) continue;
+                const StripeVertex& was = prev_run_stripes_.vertices[found->second];
+                const auto steps = static_cast<std::uint16_t>((v.age_lifetime >> 16u) - (was.age_lifetime >> 16u));
+                if (steps > 1u) continue;
+                stripe_gather_[base + v.vertex] = {previous_offset + was.vertex * 144u,
+                                                   static_cast<std::uint32_t>(previous_buffer)};
+            }
+            stripe_blends.push_back({static_cast<std::uint32_t>(d), base});
+            ++blended;
+            continue;
+        }
+        if (pairs_checked && before.vertex_view.BufferLocation != call.vertex_view.BufferLocation &&
             before.vertex_view.StrideInBytes == call.vertex_view.StrideInBytes &&
             call.vertex_view.SizeInBytes != 0u && current_buffer >= 0 && previous_buffer >= 0 &&
-            blend_pairs_.size() < kMaxBlendPairs) {
+            blend_pairs_.size() < kStripeVerdict) {
             const auto slot = static_cast<std::uint32_t>(blend_pairs_.size());
             blend_pairs_.push_back({current_offset, previous_offset,
                                     call.vertex_view.SizeInBytes / call.vertex_view.StrideInBytes,
@@ -7471,17 +7701,29 @@ void RendererD3D12::prepare_vertex_blend(std::span<const std::int32_t> previous_
             ++blended;
         }
     }
-    blend_validate_pending_ = !blend_pairs_.empty();
+    if (!stripe_gather_.empty()) {
+        if (ensure_stripe_gather(static_cast<std::uint64_t>(stripe_gather_.size()) * 144u)) {
+            const D3D12_GPU_VIRTUAL_ADDRESS earlier = stripe_earlier_->GetGPUVirtualAddress();
+            for (const auto& [draw, base] : stripe_blends) {
+                run_blend_vertices_[draw] = {earlier + static_cast<std::uint64_t>(base) * 144u, kStripeVerdict};
+            }
+        } else {
+            stripe_gather_.clear();
+        }
+    }
+    blend_validate_pending_ = !blend_pairs_.empty() || !stripe_gather_.empty();
     if (trace) {
         std::cerr << "[interp-blend] log=" << run_serial_ << " draws=" << run_draws_.size()
                   << " in-scene=" << in_scene << " matched-record=" << matched << " paired=" << paired
                   << " same-buffer=" << same_buffer << " size-differs=" << size_differs
-                  << " blended=" << blended << '\n' << detail.str();
+                  << " blended=" << blended << " stripe-draws=" << stripe_blends.size()
+                  << " stripe-vertices=" << stripe_gather_.size() << '\n' << detail.str();
     }
 }
 
 void RendererD3D12::begin_replay_record() {
     replay_scene_count_ = 0u;
+    replay_stripes_.clear();
     replay_ops_.clear();
     replay_draws_.clear();
     replay_viewports_.clear();
@@ -8645,8 +8887,9 @@ bool RendererD3D12::record_replay_list(ReplayList& entry) {
         const auto far_values = make_efb_clear_values(0u, 0u, 0x00FFFFFFu, 0u);
         // The log before's vertices are gone once its segment came round (a
         // later game frame records there while this sequence still plays).
-        const bool blend = sequence.vertex_blend && prev_run_valid_ && !blend_pairs_.empty() &&
-                           run_blend_vertices_.size() == run_draws_.size() && ensure_blend_validation();
+        const bool blend = sequence.vertex_blend && prev_run_valid_ &&
+                           (!blend_pairs_.empty() || !stripe_gather_.empty()) &&
+                           run_blend_vertices_.size() == run_draws_.size();
         entry.blend_segment = prev_run_segment_;
         const D3D12_GPU_VIRTUAL_ADDRESS output = interp_output_->GetGPUVirtualAddress();
         std::uint64_t blended = 0u;
