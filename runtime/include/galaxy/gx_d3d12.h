@@ -133,11 +133,13 @@ void attach_scene_view(const float view[12]) noexcept;
 // Simulation thread, at each SceneBegin: whether the renderer reads
 // draw-identity markers (frame interpolation or motion vectors are on).
 [[nodiscard]] bool draw_identity_wanted() noexcept;
-// Simulation thread (BrightSun::control): the world direction towards the game's visible sun.
-// The ray tracer lights the scene from it while it keeps arriving.
-void set_game_sun(const std::array<float, 3>& direction) noexcept;
-// The direction when one arrived within `max_age_ms`.
-[[nodiscard]] bool game_sun(std::array<float, 3>& direction, std::uint64_t max_age_ms) noexcept;
+// Simulation thread (BrightSun::control): the world direction towards the game's visible sun and
+// the distance of its model from the camera. The ray tracer lights the scene from it while it
+// keeps arriving.
+void set_game_sun(const std::array<float, 3>& direction, float distance) noexcept;
+// The direction (and distance) when one arrived within `max_age_ms`.
+[[nodiscard]] bool game_sun(std::array<float, 3>& direction, std::uint64_t max_age_ms,
+                            float* distance = nullptr) noexcept;
 // Simulation thread: the game's lights as it loads them for drawing. A point light
 // (LightFunction::loadPointLightInfo: world position, colour 0-1, the distance at which its GX
 // distance attenuation halves it, 0 without attenuation) and a world-fixed light of an

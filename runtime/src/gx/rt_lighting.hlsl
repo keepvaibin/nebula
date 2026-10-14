@@ -44,7 +44,7 @@ cbuffer RtLight : register(b0)
     uint g_point_count;         // point lights in g_points (0-8)
     float g_point_light;        // their weight
     float g_point_size;         // radius of the geometry around a light (its emitter)
-    float g_point_pad;
+    float g_sun_reach;          // length of a sun ray (eye units)
     float4 g_points[16];        // per light: eye position (xyz), reach (w); colour (rgb),
                                 // 1 / its half-light distance squared (w)
     float4 g_to_eye[3];         // world to eye (the glow lights' positions)
@@ -834,7 +834,7 @@ void TraceCS(uint3 id : SV_DispatchThreadID)
         ray.Origin = origin;
         ray.Direction = normalize(l + l1 * (r * cos(phi)) + l2 * (r * sin(phi)));
         ray.TMin = 0.0f;
-        ray.TMax = 1.0e6f;
+        ray.TMax = g_sun_reach;
         RayQuery<RAY_FLAG_FORCE_OPAQUE | RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH |
                  RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES> query;
         query.TraceRayInline(g_scene, RAY_FLAG_NONE, 0xFFu, ray);

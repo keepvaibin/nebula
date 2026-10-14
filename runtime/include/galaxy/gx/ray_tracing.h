@@ -150,10 +150,10 @@ public:
     // scene has none. The lighting history follows it from frame to frame.
     void set_camera(const std::array<float, 12>* view) noexcept;
     [[nodiscard]] bool lighting_active() const noexcept { return ready_ && lighting_enabled_; }
-    // The traced sun's world direction (towards it: GALAXY_RT_SUN, else the game's visible sun);
-    // false without one. The half-light distance of a game point light without its own
-    // (GALAXY_RT_POINT_RADIUS).
-    [[nodiscard]] bool sun_direction(std::array<float, 3>& world) const noexcept;
+    // The traced sun's world direction (towards it: GALAXY_RT_SUN, else the game's visible sun)
+    // and the distance of the game's sun model (0: none); false without a sun. The half-light
+    // distance of a game point light without its own (GALAXY_RT_POINT_RADIUS).
+    [[nodiscard]] bool sun_direction(std::array<float, 3>& world, float* distance = nullptr) const noexcept;
     [[nodiscard]] float point_radius() const noexcept { return point_radius_; }
     // Ray-traced lighting of the last traced scene (rt_lighting.hlsl): its result slot for
     // composite(), -1 for none. The interpolated sub-frames of that game frame composite the

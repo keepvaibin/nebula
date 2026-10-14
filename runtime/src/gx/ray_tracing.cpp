@@ -79,7 +79,7 @@ struct RtLightConstants {
     std::uint32_t point_count;
     float point_light;
     float point_size;
-    float point_pad;
+    float sun_reach;
     float points[16][4];
     float to_eye[3][4];
     float ambient[4];
@@ -311,6 +311,7 @@ D3D12_RESOURCE_BARRIER uav_barrier(ID3D12Resource* resource) {
 
 std::mutex g_game_sun_mutex;
 std::array<float, 3> g_game_sun{};
+float g_game_sun_distance = 0.0f;
 std::chrono::steady_clock::time_point g_game_sun_time{};
 bool g_game_sun_known = false;
 
@@ -368,9 +369,10 @@ std::size_t active_lights(const std::array<NotedLight, N>& lights, std::span<Gam
 
 }  // namespace
 
-void set_game_sun(const std::array<float, 3>& direction) noexcept {
+void set_game_sun(const std::array<float, 3>& direction, float distance) noexcept {
     const std::lock_guard<std::mutex> lock(g_game_sun_mutex);
     g_game_sun = direction;
+    g_game_sun_distance = distance;
     g_game_sun_time = std::chrono::steady_clock::now();
     g_game_sun_known = true;
 }
@@ -392,13 +394,16 @@ std::size_t game_world_lights(std::span<GameLight> out, std::uint64_t max_age_ms
     return active_lights(g_world_lights, out, max_age_ms);
 }
 
-bool game_sun(std::array<float, 3>& direction, std::uint64_t max_age_ms) noexcept {
+bool game_sun(std::array<float, 3>& direction, std::uint64_t max_age_ms, float* distance) noexcept {
     const std::lock_guard<std::mutex> lock(g_game_sun_mutex);
     if (!g_game_sun_known ||
         std::chrono::steady_clock::now() - g_game_sun_time > std::chrono::milliseconds(max_age_ms)) {
         return false;
     }
     direction = g_game_sun;
+    if (distance != nullptr) {
+        *distance = g_game_sun_distance;
+    }
     return true;
 }
 
@@ -1024,12 +1029,15 @@ void SceneRayTracer::set_camera(const std::array<float, 12>* view) noexcept {
     camera_ = view != nullptr ? *view : kIdentity34;
 }
 
-bool SceneRayTracer::sun_direction(std::array<float, 3>& world) const noexcept {
+bool SceneRayTracer::sun_direction(std::array<float, 3>& world, float* distance) const noexcept {
     if (sun_override_) {
         world = sun_direction_;
+        if (distance != nullptr) {
+            *distance = 0.0f;
+        }
         return true;
     }
-    return game_sun(world, 2000u);
+    return game_sun(world, 2000u, distance);
 }
 
 std::uint32_t SceneRayTracer::sample_factor(std::uint32_t width, std::uint32_t height) const noexcept {
@@ -1348,7 +1356,11 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
         // The game's visible sun (GALAXY_RT_SUN overrides it); without one, no sun light. Its
         // colour: the game's world-fixed light from the same direction, else GALAXY_RT_SUN_COLOR.
         std::array<float, 3> l = sun_direction_;
-        const bool sun_present = sun_direction(l);
+        float sun_distance = 0.0f;
+        const bool sun_present = sun_direction(l, &sun_distance);
+        // Sun rays end halfway to the game's sun model (BrightSun, drawn that far out along the
+        // sun's direction): it would shadow everything near the camera.
+        c.sun_reach = sun_distance > 0.0f ? 0.5f * sun_distance : 1.0e6f;
         std::array<float, 3> sun_color = sun_color_;
         if (sun_present) {
             std::array<GameLight, 16> world{};

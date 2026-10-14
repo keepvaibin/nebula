@@ -10498,7 +10498,7 @@ void note_game_sun(RuntimeState& state, const galaxy::PpcContext& context) {
     }
     length = std::sqrt(length);
     for (float& v : direction) v /= length;
-    galaxy::gx::set_game_sun(direction);
+    galaxy::gx::set_game_sun(direction, length);
     static std::uint32_t traced = 0u;
     static const bool trace = [] {
         char value[8]{};
