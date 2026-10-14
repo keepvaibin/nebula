@@ -24622,33 +24622,73 @@ bool coop_call_intercept(
     }
 }
 
-// Test hook: GALAXY_TEST_TELEPORT=x,y,z,frame places Mario with the game's
-// own MR::setPlayerPos once, at that GameScene draw, so a scripted run can
-// start anywhere in a stage.
+// GameScene draws seen by the test hooks, and the one at which the galaxy
+// tour last requested a stage.
+std::uint64_t test_scene_frames = 0u;
+std::uint64_t test_tour_stop_frame = 0u;
+
+// Test hook: GALAXY_TEST_TELEPORT=x,y,z,frame[/x,y,z,frame...] places Mario
+// with the game's own MR::setPlayerPos at each listed GameScene draw, so a
+// scripted run can start anywhere in a stage or visit several places. With
+// GALAXY_TEST_GALAXY_TOUR the frames count from the latest tour stop.
 void apply_test_teleport(RuntimeState& state, galaxy::PpcContext* context, galaxy::GuestMemoryV1* memory) {
     struct Teleport {
         float x = 0.0f, y = 0.0f, z = 0.0f;
         std::uint64_t frame = 0u;
-        bool armed = false;
     };
-    static Teleport teleport = [] {
-        Teleport result{};
-        char value[96]{};
+    static const std::vector<Teleport> teleports = [] {
+        std::vector<Teleport> result;
+        char value[1024]{};
         std::size_t length = 0;
         if (getenv_s(&length, value, sizeof(value), "GALAXY_TEST_TELEPORT") == 0 && length > 1) {
-            unsigned long long frame = 0u;
-            result.armed = sscanf_s(value, "%f,%f,%f,%llu", &result.x, &result.y, &result.z, &frame) == 4;
-            result.frame = frame;
+            std::istringstream list(value);
+            std::string entry;
+            while (std::getline(list, entry, '/')) {
+                Teleport t{};
+                unsigned long long frame = 0u;
+                if (sscanf_s(entry.c_str(), "%f,%f,%f,%llu", &t.x, &t.y, &t.z, &frame) == 4) {
+                    t.frame = frame;
+                    result.push_back(t);
+                }
+            }
         }
         return result;
     }();
-    static std::uint64_t scene_frames = 0u;
-    ++scene_frames;
-    // Held for 30 frames: Mario's own update re-derives his position until
-    // the game settles him there.
-    if (!teleport.armed || scene_frames < teleport.frame || scene_frames >= teleport.frame + 30u) {
+    static const bool touring = [] {
+        char value[MAX_PATH]{};
+        std::size_t length = 0;
+        return getenv_s(&length, value, sizeof(value), "GALAXY_TEST_GALAXY_TOUR") == 0 && length > 1;
+    }();
+    // GALAXY_GX_CAPTURE_REQUEST_FILE: one GX capture request 60 frames after
+    // each teleport, when Mario and the camera have settled.
+    static const std::string capture_request = [] {
+        char value[MAX_PATH]{};
+        std::size_t length = 0;
+        return getenv_s(&length, value, sizeof(value), "GALAXY_GX_CAPTURE_REQUEST_FILE") == 0 && length > 1
+            ? std::string(value) : std::string{};
+    }();
+    ++test_scene_frames;
+    if (teleports.empty() || (touring && test_tour_stop_frame == 0u)) {
         return;
     }
+    const std::uint64_t frame = test_scene_frames - test_tour_stop_frame;
+    if (!capture_request.empty()) {
+        for (std::size_t i = 0; i < teleports.size(); ++i) {
+            if (frame == teleports[i].frame + 60u) {
+                std::ofstream(capture_request, std::ios::trunc) << (i + 1u) << '\n';
+                std::cerr << "[test-teleport] capture request " << (i + 1u) << '\n';
+            }
+        }
+    }
+    // Held for 30 frames: Mario's own update re-derives his position until
+    // the game settles him there.
+    const auto it = std::find_if(teleports.begin(), teleports.end(), [frame](const Teleport& t) {
+        return frame >= t.frame && frame < t.frame + 30u;
+    });
+    if (it == teleports.end()) {
+        return;
+    }
+    const Teleport& teleport = *it;
     galaxy::coop::ThreadRegisters saved{};
     galaxy::coop::save_thread_registers(*context, saved);
     const std::uint32_t vector = (context->gpr[1] - 0x40u) & ~0xFu;
@@ -24660,7 +24700,7 @@ void apply_test_teleport(RuntimeState& state, galaxy::PpcContext* context, galax
     context->pc = 0x803F1F80u;
     call_guest_impl(&state, 0x803F1F80u, nullptr, context, memory);
     galaxy::coop::load_thread_registers(saved, *context);
-    if (scene_frames == teleport.frame) {
+    if (frame == teleport.frame) {
         std::cerr << "[test-teleport] " << teleport.x << ',' << teleport.y << ',' << teleport.z
                   << " at scene frame " << teleport.frame << '\n';
     }
@@ -24700,6 +24740,7 @@ void apply_test_galaxy_tour(RuntimeState& state, galaxy::PpcContext* context, ga
         return;
     }
     tour.scene_frames = 0u;
+    test_tour_stop_frame = test_scene_frames;
     const auto& [stage, scenario] = tour.stops[tour.next++];
     constexpr std::uint32_t kStageName = 0x80002800u;
     std::array<std::byte, 64> name{};
