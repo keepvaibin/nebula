@@ -470,7 +470,7 @@ private:
     float point_radius_ = 800.0f;   // GALAXY_RT_POINT_RADIUS: half-light distance without GX attenuation
     float point_saturation_ = 0.4f; // GALAXY_RT_POINT_SATURATION: 0 white .. 1 the light's own colour
     float split_ = 0.0f;            // GALAXY_RT_SPLIT: left of this fraction the game's own picture
-    float night_ = 0.4f;            // GALAXY_RT_NIGHT: the sky and bounce light under a black sky (relative)
+    float night_ = 1.0f;            // GALAXY_RT_NIGHT: the sky and bounce light under a black sky (relative)
     float daylight_ = 0.35f;        // GALAXY_RT_DAYLIGHT: the sky's luminance that gives it in full
     float glow_boost_ = 0.4f;       // GALAXY_RT_GLOW_BOOST: extra light of a glowing surface
     float glow_exposure_ = 1.7f;    // GALAXY_RT_GLOW_EXPOSURE: colour scale of the glows themselves
@@ -479,10 +479,10 @@ private:
     float glow_model_spill_ = 1.0f;     // GALAXY_RT_GLOW_MODEL_SPILL
     float sky_distance_ = 60000.0f; // GALAXY_RT_SKY_DISTANCE: farther surfaces are the sky (backdrops)
     bool post_ = true;              // GALAXY_RT_POST: the cinematic finish
-    float post_bloom_ = 0.55f;      // GALAXY_RT_POST_BLOOM
-    float post_threshold_ = 0.72f;  // GALAXY_RT_POST_THRESHOLD: luminance where bloom starts
+    float post_bloom_ = 0.45f;      // GALAXY_RT_POST_BLOOM
+    float post_threshold_ = 0.82f;  // GALAXY_RT_POST_THRESHOLD: luminance where bloom starts
     float post_shafts_ = 0.6f;      // GALAXY_RT_POST_SHAFTS
-    float post_dof_ = 6.0f;         // GALAXY_RT_POST_DOF: largest far blur (EFB pixels at 1x; 0 none)
+    float post_dof_ = 3.0f;         // GALAXY_RT_POST_DOF: largest far blur (EFB pixels at 1x; 0 none)
     float post_grade_ = 1.0f;       // GALAXY_RT_POST_GRADE
     float core_radius_ = 400.0f;    // GALAXY_RT_CORE_RADIUS: the star core's radius at scale 1 (first guess;
                                     // the finish measures it from depth)
@@ -492,8 +492,8 @@ private:
     // GALAXY_RT_EXPOSURE_DAY / _NIGHT: the mean lighting the exposure holds under a bright / black
     // sky (the light moves into lit areas and out of shadows instead of dimming the picture);
     // GALAXY_RT_EXPOSURE=0 turns it off.
-    float exposure_day_ = 0.92f;
-    float exposure_night_ = 0.88f;
+    float exposure_day_ = 0.97f;
+    float exposure_night_ = 0.97f;
     bool exposure_ = true;
     float surface_emission_ = 3.0f; // GALAXY_RT_SURFACE_EMISSION: a glowing surface's light per unit
                                     // of its colour and eye-space area (0: none)

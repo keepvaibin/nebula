@@ -370,12 +370,12 @@ float3 grade(float3 c, float2 pixel)
     c = shoulder(max(c, 0.0f));
     const float l = luminance(c);
     const float3 curved = saturate(c + 0.5f * (c - 0.5f) * c * (1.0f - c));
-    float3 g = lerp(l.xxx, curved, 1.12f);
-    const float3 shadows = float3(0.94f, 0.98f, 1.06f);
-    const float3 highlights = float3(1.05f, 1.01f, 0.94f);
+    float3 g = lerp(l.xxx, curved, 1.06f);
+    const float3 shadows = float3(0.985f, 0.995f, 1.02f);
+    const float3 highlights = float3(1.015f, 1.0f, 0.985f);
     g *= lerp(shadows, highlights, smoothstep(0.15f, 0.85f, l));
     const float2 v = (pixel - (p_viewport.xy + p_viewport.zw * 0.5f)) / (p_viewport.zw * 0.5f);
-    g *= 1.0f - 0.14f * pow(saturate(dot(v, v) * 0.5f), 1.5f);
+    g *= 1.0f - 0.08f * pow(saturate(dot(v, v) * 0.5f), 1.5f);
     return lerp(c, saturate(g), p_grade);
 }
 
@@ -391,7 +391,8 @@ float4 PostPS(float4 position : SV_Position) : SV_Target0
     // as far, so nothing near bleeds out).
     if (p_dof > 0.0f && f_state[1] != 0.0f) {
         const float focus = max(f_state[0], 200.0f);
-        const float coc = saturate((distance - focus * 2.0f) / (focus * 6.0f)) * p_dof;
+        // Far scenery only, never the sky or backdrops (their stars and nebulae stay sharp).
+        const float coc = distance < 6.0e4f ? saturate((distance - focus * 4.0f) / (focus * 12.0f)) * p_dof : 0.0f;
         if (coc > 0.75f) {
             float3 sum = c;
             float weight = 1.0f;

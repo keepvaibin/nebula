@@ -615,7 +615,7 @@ bool SceneRayTracer::initialize(ID3D12Device* device, std::uint64_t timestamp_fr
     point_saturation_ = std::clamp(env_float("GALAXY_RT_POINT_SATURATION", 0.4f), 0.0f, 1.0f);
     split_ = std::clamp(env_float("GALAXY_RT_SPLIT", 0.0f), 0.0f, 1.0f);
     emission_ = std::clamp(env_float("GALAXY_RT_EMISSION", 24.0f), 0.0f, 256.0f);
-    night_ = std::clamp(env_float("GALAXY_RT_NIGHT", 0.4f), 0.0f, 1.0f);
+    night_ = std::clamp(env_float("GALAXY_RT_NIGHT", 1.0f), 0.0f, 1.0f);
     daylight_ = std::clamp(env_float("GALAXY_RT_DAYLIGHT", 0.35f), 0.01f, 1.0f);
     glow_boost_ = std::clamp(env_float("GALAXY_RT_GLOW_BOOST", 0.4f), 0.0f, 1.0f);
     glow_exposure_ = std::clamp(env_float("GALAXY_RT_GLOW_EXPOSURE", 1.7f), 1.0f, 6.0f);
@@ -624,18 +624,18 @@ bool SceneRayTracer::initialize(ID3D12Device* device, std::uint64_t timestamp_fr
     glow_model_spill_ = std::clamp(env_float("GALAXY_RT_GLOW_MODEL_SPILL", 1.0f), 0.0f, 2.0f);
     sky_distance_ = std::clamp(env_float("GALAXY_RT_SKY_DISTANCE", 60000.0f), 1000.0f, 1.0e7f);
     post_ = env_float("GALAXY_RT_POST", 1.0f) != 0.0f;
-    post_bloom_ = std::clamp(env_float("GALAXY_RT_POST_BLOOM", 0.55f), 0.0f, 4.0f);
-    post_threshold_ = std::clamp(env_float("GALAXY_RT_POST_THRESHOLD", 0.72f), 0.0f, 0.99f);
+    post_bloom_ = std::clamp(env_float("GALAXY_RT_POST_BLOOM", 0.45f), 0.0f, 4.0f);
+    post_threshold_ = std::clamp(env_float("GALAXY_RT_POST_THRESHOLD", 0.82f), 0.0f, 0.99f);
     post_shafts_ = std::clamp(env_float("GALAXY_RT_POST_SHAFTS", 0.6f), 0.0f, 4.0f);
-    post_dof_ = std::clamp(env_float("GALAXY_RT_POST_DOF", 6.0f), 0.0f, 32.0f);
+    post_dof_ = std::clamp(env_float("GALAXY_RT_POST_DOF", 3.0f), 0.0f, 32.0f);
     post_grade_ = std::clamp(env_float("GALAXY_RT_POST_GRADE", 1.0f), 0.0f, 1.0f);
     core_radius_ = std::clamp(env_float("GALAXY_RT_CORE_RADIUS", 400.0f), 1.0f, 100000.0f);
     core_light_ = std::clamp(env_float("GALAXY_RT_CORE_LIGHT", 2.5f), 0.0f, 16.0f);
     bloom_strength_ = std::clamp(env_float("GALAXY_RT_BLOOM", 0.8f), 0.0f, 4.0f);
     bloom_threshold_ = std::clamp(env_float("GALAXY_RT_BLOOM_THRESHOLD", 0.15f), 0.0f, 4.0f);
     exposure_ = env_float("GALAXY_RT_EXPOSURE", 1.0f) != 0.0f;
-    exposure_day_ = std::clamp(env_float("GALAXY_RT_EXPOSURE_DAY", 0.92f), 0.3f, 1.5f);
-    exposure_night_ = std::clamp(env_float("GALAXY_RT_EXPOSURE_NIGHT", 0.88f), 0.3f, 1.5f);
+    exposure_day_ = std::clamp(env_float("GALAXY_RT_EXPOSURE_DAY", 0.97f), 0.3f, 1.5f);
+    exposure_night_ = std::clamp(env_float("GALAXY_RT_EXPOSURE_NIGHT", 0.97f), 0.3f, 1.5f);
     surface_emission_ = std::clamp(env_float("GALAXY_RT_SURFACE_EMISSION", 3.0f), 0.0f, 256.0f);
     {
         char value[96]{};
