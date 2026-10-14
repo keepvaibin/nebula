@@ -46,6 +46,7 @@
 #include <limits>
 #include <mutex>
 #include <optional>
+#include <set>
 #include <span>
 #include <stdexcept>
 #include <string>
@@ -10640,7 +10641,7 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
     } else {
         renderer_.set_debug_capture_paths({}, {});
     }
-    capture_draws_ = capture_this_frame && capture_draw_log_enabled() &&
+    capture_draws_ = capture_frame_requested(frame_index_ + 1u) && capture_draw_log_enabled() &&
         !capture_composites_only_enabled();
     capture_all_textures_ = capture_this_frame && capture_all_textures_enabled();
     capture_draw_idx_ = 0;
@@ -12418,6 +12419,11 @@ ID3D12PipelineState* GxBackend::flush_draw_state(
         }
         if (((ps_key_.reserved & kPsKeyPerPixelLighting) != 0u) != ppl) {
             ps_key_.reserved ^= kPsKeyPerPixelLighting;
+            current_ps_hash_ = ps_key_.hash();
+        }
+        const bool ppl_finite = ppl && (vs_key_.flags & kVsKeyFiniteLightAttn) != 0u;
+        if (((ps_key_.reserved & kPsKeyPplFiniteLightAttn) != 0u) != ppl_finite) {
+            ps_key_.reserved ^= kPsKeyPplFiniteLightAttn;
             current_ps_hash_ = ps_key_.hash();
         }
     }
@@ -14378,6 +14384,36 @@ void GxBackend::on_draw(
     call.index_view     = ibv;
     call.index_count    = prim.index_count;
 
+    // GALAXY_GX_TRACE_STALE_LIGHTS=1: lit draws whose spotlight or specular lights carry an
+    // out-of-range direction (an XF light object the game never gave one), once per texture and
+    // light.
+    static const bool trace_stale_lights = read_env_u64("GALAXY_GX_TRACE_STALE_LIGHTS", 0u) != 0u;
+    if (trace_stale_lights && (vs_key_.flags & 0x02u) != 0u) {
+        static std::set<std::pair<std::uint32_t, unsigned>> seen;
+        const std::uint32_t texture = state_.tex_image(state_.tev_order(0).texmap).guest_addr;
+        for (const std::uint32_t control : vs_key_.channel) {
+            if ((control & 0x202u) != 0x202u) continue;
+            const unsigned lights = ((control >> 2u) & 0xFu) | (((control >> 11u) & 0xFu) << 4u);
+            for (unsigned n = 0; n < 8u; ++n) {
+                if ((lights & (1u << n)) == 0u) continue;
+                const std::uint16_t base = static_cast<std::uint16_t>(xf::kLightsBase + 16u * n);
+                float dir[3]{};
+                bool stale = false;
+                for (unsigned i = 0; i < 3u; ++i) {
+                    dir[i] = std::bit_cast<float>(state_.xf(static_cast<std::uint16_t>(base + 13u + i)));
+                    stale = stale || !(std::abs(dir[i]) <= 1.0e18f);
+                }
+                if (stale && seen.emplace(texture, n).second) {
+                    std::fprintf(stderr,
+                        "[xf-stale-light] frame=%llu tex0=%08X light=%u dir=(%g,%g,%g) colour=%08X\n",
+                        static_cast<unsigned long long>(frame_index_), texture, n,
+                        static_cast<double>(dir[0]), static_cast<double>(dir[1]),
+                        static_cast<double>(dir[2]), state_.xf(static_cast<std::uint16_t>(base + 3u)));
+                }
+            }
+        }
+    }
+
     TexImage tex0{};
     TevOrder ord0{};
     bool capture_texaddr_detail = false;
@@ -14490,6 +14526,89 @@ void GxBackend::on_draw(
             tex0.guest_addr, tex0.width, tex0.height,
             static_cast<unsigned>(tex0.format),
             ord0.tex_enable ? 1 : 0);
+        if (capture_draws_) {
+            // EFB-pixel bounds of the draw and its full shading state, so
+            // pixels in the captured image map back to draws. Vertices are
+            // read from the upload ring: resident decoded-vertex-cache draws
+            // need GALAXY_GX_DECODED_VERTEX_CACHE=0.
+            float box[4]{1e30f, 1e30f, -1e30f, -1e30f};
+            void* ring_cpu = nullptr;
+            const D3D12_RANGE no_read{0, 0};
+            if (SUCCEEDED(renderer_.vertex_ring().resource()->Map(
+                    0, &no_read, &ring_cpu)) && ring_cpu != nullptr) {
+                const auto* verts = reinterpret_cast<const GxVertexOut*>(
+                    static_cast<const std::byte*>(ring_cpu) +
+                    prim.vertex_byte_offset);
+                float projection[4][4]{};
+                fill_vs_projection(state_, projection);
+                const auto vp = [this](unsigned i) {
+                    return std::bit_cast<float>(state_.xf(
+                        static_cast<std::uint16_t>(xf::kViewportBase + i)));
+                };
+                for (std::uint32_t v = 0; v < prim.vertex_count; ++v) {
+                    const unsigned row =
+                        std::min<unsigned>(verts[v].mtx_indices[0] & 0x3Fu, 61u);
+                    const float in[4]{verts[v].position[0], verts[v].position[1],
+                                      verts[v].position[2], 1.0f};
+                    float eye[4]{0.0f, 0.0f, 0.0f, 1.0f};
+                    for (unsigned r = 0; r < 3; ++r) {
+                        for (unsigned c = 0; c < 4; ++c) {
+                            eye[r] += std::bit_cast<float>(state_.xf(
+                                static_cast<std::uint16_t>((row + r) * 4u + c))) * in[c];
+                        }
+                    }
+                    float clip[4]{};
+                    for (unsigned r = 0; r < 4; ++r) {
+                        for (unsigned c = 0; c < 4; ++c) {
+                            clip[r] += projection[r][c] * eye[c];
+                        }
+                    }
+                    if (!(clip[3] > 1e-6f)) continue;
+                    const float x = vp(3u) - 342.0f + vp(0u) * clip[0] / clip[3];
+                    const float y = vp(4u) - 342.0f + vp(1u) * clip[1] / clip[3];
+                    box[0] = std::min(box[0], x);
+                    box[1] = std::min(box[1], y);
+                    box[2] = std::max(box[2], x);
+                    box[3] = std::max(box[3], y);
+                }
+                renderer_.vertex_ring().resource()->Unmap(0, &no_read);
+            }
+            std::fprintf(stderr,
+                "[capbox] %u box=%.0f,%.0f,%.0f,%.0f vcd=%08X/%08X chans=%u "
+                "cc=%08X,%08X,%08X,%08X mat=%08X,%08X amb=%08X,%08X "
+                "texgens=%u dual=%u vsflags=%02X\n",
+                log_draw_index, box[0], box[1], box[2], box[3],
+                state_.cp(cp::kVcdLo), state_.cp(cp::kVcdHi),
+                static_cast<unsigned>(state_.gen_mode().num_color_chans),
+                state_.xf(xf::kChannelCtrlBase + 0u),
+                state_.xf(xf::kChannelCtrlBase + 1u),
+                state_.xf(xf::kChannelCtrlBase + 2u),
+                state_.xf(xf::kChannelCtrlBase + 3u),
+                state_.xf(xf::kMaterialColorBase + 0u),
+                state_.xf(xf::kMaterialColorBase + 1u),
+                state_.xf(xf::kAmbientColorBase + 0u),
+                state_.xf(xf::kAmbientColorBase + 1u),
+                static_cast<unsigned>(state_.gen_mode().num_texgens),
+                state_.xf(xf::kDualTexTrans),
+                static_cast<unsigned>(vs_key_.flags));
+            for (unsigned tg = 0; tg < state_.gen_mode().num_texgens &&
+                                  tg < kMaxTexGens; ++tg) {
+                std::fprintf(stderr, "[capbox]   texgen%u=%08X post=%08X\n", tg,
+                    state_.xf(static_cast<std::uint16_t>(xf::kTexGenBase + tg)),
+                    state_.xf(static_cast<std::uint16_t>(xf::kPostTexGenBase + tg)));
+            }
+            for (unsigned st = 0; st < state_.gen_mode().num_tev_stages; ++st) {
+                std::fprintf(stderr,
+                    "[capbox]   stage%u cenv=%06X aenv=%06X ord=%03X ksel=%08X ind=%08X\n",
+                    st, ps_key_.stages[st].color_env, ps_key_.stages[st].alpha_env,
+                    ps_key_.stages[st].order, ps_key_.stages[st].ksel,
+                    ps_key_.ind_cmd[st / 4u][st & 3u]);
+            }
+            const auto konst = state_.tev_konst_colors();
+            std::fprintf(stderr, "[capbox]   k=%08X,%08X,%08X,%08X nind=%u\n",
+                konst[0], konst[1], konst[2], konst[3],
+                static_cast<unsigned>(ps_key_.num_ind_stages));
+        }
         {
             const auto xf_float = [this](std::uint16_t address) {
                 return std::bit_cast<float>(state_.xf(address));
@@ -14664,6 +14783,59 @@ void GxBackend::on_draw(
                     prim.vertex_byte_offset);
                 const std::uint32_t vertex_limit =
                     std::min<std::uint32_t>(prim.vertex_count, 16u);
+                // Matrix memory rows the vertices address (position/normal
+                // and per-vertex texture matrix indices), and the raw normals.
+                std::uint64_t rows_seen = 0u;
+                std::uint32_t normal_rows_seen = 0u;
+                for (std::uint32_t v = 0; v < prim.vertex_count; ++v) {
+                    const std::uint32_t pn = verts[v].mtx_indices[0] & 0x3Fu;
+                    rows_seen |= std::uint64_t{1} << std::min(pn, 61u);
+                    normal_rows_seen |= 1u << (pn & 31u);
+                    for (unsigned tg = 0; tg < 8u; ++tg) {
+                        const std::uint32_t word = tg < 3u ? verts[v].mtx_indices[0]
+                            : tg < 7u ? verts[v].mtx_indices[1] : verts[v].mtx_indices[2];
+                        const unsigned shift = tg < 3u ? 8u + 8u * tg : tg < 7u ? 8u * (tg - 3u) : 0u;
+                        const std::uint32_t row = (word >> shift) & 0xFFu;
+                        if (row != 0u) rows_seen |= std::uint64_t{1} << std::min(row, 61u);
+                    }
+                }
+                for (unsigned row = 0; row < 62u; ++row) {
+                    if ((rows_seen & (std::uint64_t{1} << row)) == 0u) continue;
+                    for (unsigned r = 0; r < 3u; ++r) {
+                        const auto w = [this, row, r](unsigned c) {
+                            return std::bit_cast<float>(state_.xf(
+                                static_cast<std::uint16_t>((row + r) * 4u + c)));
+                        };
+                        std::fprintf(stderr, "[caprow] draw=%u row%u+%u=(%g,%g,%g,%g)\n",
+                            draw_index, row, r, w(0), w(1), w(2), w(3));
+                    }
+                }
+                for (unsigned row = 0; row < 32u; ++row) {
+                    if ((normal_rows_seen & (1u << row)) == 0u) continue;
+                    const auto w = [this, row](unsigned c) {
+                        return std::bit_cast<float>(state_.xf(
+                            static_cast<std::uint16_t>(0x400u + 3u * row + c)));
+                    };
+                    std::fprintf(stderr, "[capnrm] draw=%u row%u=(%g,%g,%g / %g,%g,%g / %g,%g,%g)\n",
+                        draw_index, row, w(0), w(1), w(2), w(3), w(4), w(5), w(6), w(7), w(8));
+                }
+                for (std::uint32_t v = 0; v < vertex_limit; ++v) {
+                    std::fprintf(stderr, "[capvtx] draw=%u v%u nrm=(%g,%g,%g) col0=%08X mi=%08X/%08X\n",
+                        draw_index, v, verts[v].normal[0], verts[v].normal[1], verts[v].normal[2],
+                        verts[v].color0, verts[v].mtx_indices[0], verts[v].mtx_indices[1]);
+                }
+                for (unsigned light = 0; light < 8u; ++light) {
+                    const std::uint16_t base = static_cast<std::uint16_t>(xf::kLightsBase + light * 16u);
+                    const auto f = [this, base](unsigned k) {
+                        return std::bit_cast<float>(state_.xf(static_cast<std::uint16_t>(base + k)));
+                    };
+                    std::fprintf(stderr,
+                        "[caplight8] draw=%u light%u col=%08X cos=(%g,%g,%g) dist=(%g,%g,%g) "
+                        "pos=(%g,%g,%g) dir=(%g,%g,%g)\n",
+                        draw_index, light, state_.xf(static_cast<std::uint16_t>(base + 3u)),
+                        f(4u), f(5u), f(6u), f(7u), f(8u), f(9u), f(10u), f(11u), f(12u),
+                        f(13u), f(14u), f(15u));
+                }
                 const XfTexGen tg0 = state_.tex_gen(0);
                 const XfPostTexGen post0 = state_.post_tex_gen(0);
                 float capture_projection[4][4]{};

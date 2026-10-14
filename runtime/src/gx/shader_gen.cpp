@@ -529,6 +529,7 @@ struct PSIn {
 // eye-space position and renormalized normal. The channel control words,
 // material/ambient registers and XF lights come from the vertex constants
 // (root CBV b0, visible to every stage) and the matrix palette (t0, space1).
+// ppl_finite_attn (kPsKeyPplFiniteLightAttn) precedes it: see emit_light.
 static constexpr const char* kPplLighting = R"HLSL(
 cbuffer GxPplConstants : register(b0) {
     float4 ppl_chan_ambient[2]  : packoffset(c8);
@@ -559,6 +560,9 @@ void ppl_add_light(uint n, uint ctrl, bool alpha_part, float3 wpos, float3 nrm,
         float ldd = dot(ldelta, ldelta);
         ldir = (ldd > 0.0) ? ldelta * rsqrt(ldd) : nrm;
         attn = (dot(nrm, ldir) >= 0.0) ? max(0.0, dot(nrm, ldvec)) : 0.0;
+        if (ppl_finite_attn) {
+            attn = min(attn, 1.0e18);
+        }
         float3 distAttn = distA;
         if (diffuse_func != 0u) {
             float dad = dot(distA, distA);
@@ -574,6 +578,11 @@ void ppl_add_light(uint n, uint ctrl, bool alpha_part, float3 wpos, float3 nrm,
         float dist  = sqrt(dist2);
         ldir = (dist > 0.0) ? ldelta / dist : nrm;
         attn = max(0.0, dot(ldir, ldvec));
+        if (ppl_finite_attn) {
+            attn = min(attn, 1.0e18);
+            dist = min(dist, 1.0e18);
+            dist2 = min(dist2, 1.0e36);
+        }
         float denom = dot(distA, float3(1.0, dist, dist2));
         attn = (denom != 0.0)
              ? max(0.0, cosA.x + cosA.y*attn + cosA.z*attn*attn) / denom
@@ -766,12 +775,17 @@ void main(point VSOut input_vertices[1], inout TriangleStream<VSOut> output) {
 //              elem+2 = {k1,k2,pos.x,pos.y}, elem+3 = {pos.z,dir.x,dir.y,dir.z} (XFMemory.h Light).
 //   - `ctrl`   the channel control (attenuation and diffuse functions).
 //   - `alpha`  accumulate the light's alpha into `lacc_a` instead of its rgb into `lacc`.
+//   - `finite` kVsKeyFiniteLightAttn: the attenuation operands (cosine, distance) stay at most
+//              1e18 (squares 1e36), so a zero coefficient nulls an out-of-range cosine as on the
+//              hardware. SMG's loadLightDiffuse never sets the light direction, and a stale
+//              direction such as 6e36 otherwise turns 0 * cos^2 into NaN and drops the light.
 // Attenuation and diffuse forms follow Dolphin LightingShaderGen.cpp.
 static void emit_light(
     std::ostringstream& s,
     unsigned n,
     const XfChannelCtrl& ctrl,
-    bool alpha) {
+    bool alpha,
+    bool finite) {
     emit(s, "        {  // light %u\n", n);
     const unsigned e = 0x180u + 4u * n;
     emit(s,
@@ -807,6 +821,9 @@ static void emit_light(
              " ? ldelta * rsqrt(ldd) : nrm;\n";
         s << "            float attn = (dot(nrm, ldir) >= 0.0)"
              " ? max(0.0, dot(nrm, ldvec)) : 0.0;\n";
+        if (finite) {
+            s << "            attn = min(attn, 1.0e18);\n";
+        }
         // Dolphin: distAttn is normalized unless diffusefunc == None.
         if (ctrl.diffuse_func == 0u) {
             s << "            float3 distAttn = distA;\n";
@@ -829,6 +846,11 @@ static void emit_light(
         s << "            float3 ldir = (dist > 0.0)"
              " ? ldelta / dist : nrm;\n";
         s << "            float attn = max(0.0, dot(ldir, ldvec));\n";
+        if (finite) {
+            s << "            attn = min(attn, 1.0e18);\n";
+            s << "            dist = min(dist, 1.0e18);\n";
+            s << "            dist2 = min(dist2, 1.0e36);\n";
+        }
         s << "            float denom = dot(distA, float3(1.0, dist,"
              " dist2));\n";
         s << "            attn = (denom != 0.0)\n"
@@ -933,6 +955,7 @@ float xfw(uint w) {
 }
 )HLSL";
     }
+    const bool finite_attn = (key.flags & kVsKeyFiniteLightAttn) != 0u;
 
     // ---- main() ----
     s << "VSOut main(VSIn v, uint vertex_id : SV_VertexID) {\n";
@@ -1055,7 +1078,7 @@ float xfw(uint w) {
                                                    : "chan_ambient[1]"));
             for (unsigned n = 0; n < 8; ++n) {
                 if ((cc.light_mask >> n) & 1u) {
-                    emit_light(s, n, cc, /*alpha=*/false);
+                    emit_light(s, n, cc, /*alpha=*/false, finite_attn);
                 }
             }
             s << "        lacc_i = clamp(lacc_i, int3(0,0,0),"
@@ -1080,7 +1103,7 @@ float xfw(uint w) {
                                 : "chan_ambient[1].a"));
             for (unsigned n = 0; n < 8; ++n) {
                 if ((ca.light_mask >> n) & 1u) {
-                    emit_light(s, n, ca, /*alpha=*/true);
+                    emit_light(s, n, ca, /*alpha=*/true, finite_attn);
                 }
             }
             s << "        lacc_a_i = clamp(lacc_a_i, 0, 255);\n";
@@ -1285,6 +1308,8 @@ std::string ShaderGenerator::generate_ps(const PixelShaderKey& key) const {
         s << (ppl ? kPsStructsPpl : kPsStructs);
     }
     if (ppl) {
+        const bool finite = (key.reserved & kPsKeyPplFiniteLightAttn) != 0u;
+        emit(s, "static const bool ppl_finite_attn = %s;\n", finite ? "true" : "false");
         s << kPplLighting;
     }
 

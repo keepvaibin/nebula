@@ -447,7 +447,68 @@ int main() {
             std::snprintf(label, sizeof(label),
                           "vs_light_attn%u_diff%u", attn, diff);
             run_vs(k, label);
+            k.flags |= kVsKeyFiniteLightAttn;
+            std::snprintf(label, sizeof(label),
+                          "vs_light_attn%u_diff%u_finite", attn, diff);
+            run_vs(k, label);
         }
+    }
+
+    {   // Finite light attenuation: the key bit marks lit channels with specular or spotlight
+        // attenuation and at least one light; only those keys change source.
+        GxState state;
+        state.load_bp(1u << 4u);  // one colour channel
+        const struct {
+            std::uint32_t control;
+            bool finite;
+            const char* label;
+        } cases[] = {
+            {chan_ctrl(true, true, 0x03, false, 2, 3), true, "finite_attn_key_spotlight"},
+            {chan_ctrl(true, true, 0x01, false, 0, 1), true, "finite_attn_key_specular"},
+            {chan_ctrl(true, true, 0x10, false, 2, 3), true, "finite_attn_key_light4"},
+            {chan_ctrl(true, true, 0x03, false, 2, 0), false, "finite_attn_key_no_attenuation"},
+            {chan_ctrl(true, true, 0x03, false, 2, 2), false, "finite_attn_key_select_without_enable"},
+            {chan_ctrl(true, true, 0x00, false, 2, 3), false, "finite_attn_key_no_lights"},
+            {chan_ctrl(true, false, 0x03, false, 2, 3), false, "finite_attn_key_unlit"},
+        };
+        for (const auto& c : cases) {
+            state.load_xf(xf::kChannelCtrlBase, &c.control, 1u);
+            const bool finite = (build_vertex_shader_key(state).flags & kVsKeyFiniteLightAttn) != 0u;
+            if (finite != c.finite) {
+                ++g_failures;
+                std::printf("FAILED: %s\n", c.label);
+            } else {
+                std::printf("ok: %s\n", c.label);
+            }
+        }
+
+        const ShaderGenerator gen;
+        VertexShaderKey k{};
+        std::memset(&k, 0, sizeof(k));
+        k.num_chans = 1;
+        k.flags = 0x02;
+        k.channel[0] = chan_ctrl(true, true, 0x03, false, 2, 3);
+        k.channel[2] = chan_ctrl(false, true, 0x04, false, 1, 1);
+        check_not_contains(gen.generate_vs(k), "1.0e18", "vs_light_attn_legacy_source");
+        k.flags |= kVsKeyFiniteLightAttn;
+        const std::string finite = gen.generate_vs(k);
+        check_contains(finite, "attn = min(attn, 1.0e18);", "vs_light_attn_finite_cosine");
+        check_contains(finite, "dist2 = min(dist2, 1.0e36);", "vs_light_attn_finite_distance");
+
+        PixelShaderKey p{};
+        std::memset(&p, 0, sizeof(p));
+        p.num_tev_stages = 1;
+        p.num_texgens = 1;
+        p.num_chans = 1;
+        p.alpha_comp0 = 7;
+        p.alpha_comp1 = 7;
+        p.stages[0] = basic_stage();
+        p.reserved = kPsKeyPerPixelLighting;
+        check_contains(gen.generate_ps(p), "ppl_finite_attn = false", "ps_ppl_light_attn_legacy");
+        p.reserved |= kPsKeyPplFiniteLightAttn;
+        const std::string ppl = gen.generate_ps(p);
+        check_contains(ppl, "ppl_finite_attn = true", "ps_ppl_light_attn_finite");
+        check_compiles(ppl, "ps_5_1", "ps_ppl_light_attn_finite_compiles");
     }
 
     {   // Texgens: regular ST (tex0 source), regular STQ (geom source,
