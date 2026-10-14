@@ -54,6 +54,8 @@ void shutdown() noexcept;
 // most frames it generates after each rendered one.
 [[nodiscard]] bool frame_generation_supported() noexcept;
 [[nodiscard]] unsigned frame_generation_max() noexcept;
+// It varies the frames it generates to reach a target rate (dynamic multi frame generation).
+[[nodiscard]] bool frame_generation_dynamic() noexcept;
 
 // The presented frame (render thread). Every Streamline call for one presented
 // frame (DLSS constants and evaluation, frame generation inputs, latency
@@ -89,10 +91,10 @@ void tag_backbuffer_region(ID3D12GraphicsCommandList* list, unsigned left, unsig
 // present (null: none this frame).
 void tag_hudless(ID3D12GraphicsCommandList* list, ID3D12Resource* hudless, unsigned width,
                  unsigned height) noexcept;
-// Before the present: frames to generate after it (0 while the frame carries
-// no tagged scene: menus, loading, a camera cut's first frame). Applied when it
-// changes.
-void set_frame_generation(unsigned generated) noexcept;
+// Before the present: frames to generate after it (0: none; also while the
+// frame carries no tagged scene: menus, loading), or with `dynamic` as many as
+// reach `target_fps` (0: the display's refresh rate). Applied when it changes.
+void set_frame_generation(unsigned generated, bool dynamic = false, float target_fps = 0.0f) noexcept;
 // Frames the display showed per present, as Streamline last reported (1
 // without frame generation); its status bits (sl::DLSSGStatus, 0 ok).
 [[nodiscard]] unsigned frames_presented() noexcept;

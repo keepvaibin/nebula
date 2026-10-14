@@ -256,12 +256,11 @@ namespace Nebula.Launcher
         private readonly ControlsSettings controls = ControlsSettings.Load();
         private bool loading;
 
-        // The quality row's list and choice for the selected upscaler; frame generation runs with DLSS.
+        // The quality row's list and choice for the selected upscaler.
         private void ShowUpscalerQuality()
         {
             bool dlss = upscaler.SelectedIndex >= 0 && upscaler.SelectedIndex < upscalerChoices.Count &&
                         upscalerChoices[upscaler.SelectedIndex] == 3;
-            frameGeneration.Enabled = dlss;
             string[] names = dlss ? GraphicsSettings.DlssQualities : GraphicsSettings.SpatialQualities;
             int value = dlss ? graphics.TemporalQuality : graphics.SpatialQuality;
             dlssQuality.Items.Clear();
@@ -288,7 +287,10 @@ namespace Nebula.Launcher
         private readonly CheckBox vsync = new CheckBox();
         private readonly ComboBox antiAliasing = new ComboBox(), aaQuality = new ComboBox(), upscaler = new ComboBox(),
             dlssQuality = new ComboBox(), textureFilter = new ComboBox(), lighting = new ComboBox(),
-            frameGeneration = new ComboBox();
+            interpolation = new ComboBox();
+        // The frame rate row's label: TARGET with interpolation, LIMIT without.
+        private readonly Label frameRateLabel = new Label();
+        private readonly List<int> interpolationChoices = new List<int>();
         private readonly NumericUpDown sharpness = new NumericUpDown();
         private readonly CheckBox mipmaps = new CheckBox(), hudOutput = new CheckBox(), rayTracing = new CheckBox();
         // Offered once the game has run on a GPU with DXR 1.1 and dedicated memory.
@@ -316,7 +318,7 @@ namespace Nebula.Launcher
             try { Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath); } catch (Exception) { }
             Font = new Font("Segoe UI", 10f);
             AutoScaleMode = AutoScaleMode.None;
-            ClientSize = new Size(760, 560);
+            ClientSize = new Size(760, 640);
             FormBorderStyle = FormBorderStyle.FixedDialog;
             MaximizeBox = false;
             StartPosition = FormStartPosition.CenterScreen;
@@ -328,12 +330,12 @@ namespace Nebula.Launcher
             };
             Controls.Add(intro);
 
-            var tabs = new TabControl { Location = new Point(12, 54), Size = new Size(736, 440) };
+            var tabs = new TabControl { Location = new Point(12, 54), Size = new Size(736, 520) };
             var display = new TabPage("Display");
             var image = new TabPage("Graphics");
             var sound = new TabPage("Audio");
             var input = new TabPage("Controls");
-            var generalPage = new TabPage("General");
+            var generalPage = new TabPage("Game");
             var advanced = new TabPage("Advanced");
             tabs.TabPages.AddRange(new[] { display, image, input, sound, generalPage, advanced });
             Controls.Add(tabs);
@@ -344,22 +346,23 @@ namespace Nebula.Launcher
             Row(display, "Resolution", resolution, ref y);
             Row(display, "Refresh rate", refresh, ref y);
             Row(display, "Aspect ratio", aspect, ref y);
-            Row(display, "Internal resolution", internalScale, ref y);
-            Row(display, "Frame rate", frameRate, ref y);
             vsync.Text = "Vertical sync";
             vsync.Location = new Point(12, y);
             vsync.Size = new Size(600, 28);
             display.Controls.Add(vsync);
+            y += 32;
+            hudOutput.Text = "HUD at display resolution";
+            hudOutput.Location = new Point(12, y);
+            hudOutput.Size = new Size(600, 28);
+            display.Controls.Add(hudOutput);
             for (int i = 0; i < monitors.Count; i++) monitor.Items.Add(monitors[i].Label(i));
             mode.Items.AddRange(GraphicsSettings.DisplayModes);
             aspect.Items.AddRange(GraphicsSettings.Aspects);
 
             y = 16;
-            Row(image, "Anti-aliasing", antiAliasing, ref y);
-            Row(image, "Anti-aliasing quality", aaQuality, ref y);
             Row(image, "Upscaling", upscaler, ref y);
             Row(image, "Upscaler quality", dlssQuality, ref y);
-            Row(image, "DLSS Frame Generation", frameGeneration, ref y);
+            Row(image, "Render resolution", internalScale, ref y);
             Label(image, "Sharpening (0-100)", 12, y + 3);
             sharpness.Location = new Point(320, y);
             sharpness.Size = new Size(120, 28);
@@ -368,6 +371,14 @@ namespace Nebula.Launcher
             sharpness.Increment = 10;
             image.Controls.Add(sharpness);
             y += 40;
+            Row(image, "Anti-aliasing", antiAliasing, ref y);
+            Row(image, "Anti-aliasing quality", aaQuality, ref y);
+            Row(image, "Interpolation", interpolation, ref y);
+            frameRateLabel.Location = new Point(12, y + 3);
+            frameRateLabel.Size = new Size(300, 26);
+            image.Controls.Add(frameRateLabel);
+            Combo(image, frameRate, 320, y);
+            y += 40;
             Row(image, "Texture filtering", textureFilter, ref y);
             Row(image, "Lighting", lighting, ref y);
             mipmaps.Text = "Generated mipmaps";
@@ -375,12 +386,7 @@ namespace Nebula.Launcher
             mipmaps.Size = new Size(600, 28);
             image.Controls.Add(mipmaps);
             y += 32;
-            hudOutput.Text = "HUD at display resolution";
-            hudOutput.Location = new Point(12, y);
-            hudOutput.Size = new Size(600, 28);
-            image.Controls.Add(hudOutput);
-            y += 32;
-            rayTracing.Text = "Ray tracing (ambient occlusion)";
+            rayTracing.Text = "Ray tracing";
             rayTracing.Location = new Point(12, y);
             rayTracing.Size = new Size(600, 28);
             rayTracing.Visible = rayTracingOffered;
@@ -390,7 +396,10 @@ namespace Nebula.Launcher
             foreach (int value in upscalerChoices) upscaler.Items.Add(GraphicsSettings.UpscalerName(value));
             textureFilter.Items.AddRange(GraphicsSettings.TextureFilters);
             lighting.Items.AddRange(GraphicsSettings.LightingModes);
-            frameGeneration.Items.AddRange(GraphicsSettings.FrameGenerationModes);
+            interpolationChoices.Add(0);
+            interpolationChoices.Add(1);
+            if (upscalerChoices.Contains(3)) interpolationChoices.Add(2);
+            foreach (int value in interpolationChoices) interpolation.Items.Add(GraphicsSettings.InterpolationModes[value]);
 
             for (int i = 0; i < volumes.Length; i++)
             {
@@ -448,11 +457,11 @@ namespace Nebula.Launcher
                 if (File.Exists(setup)) Process.Start(new ProcessStartInfo(setup, "--update") { WorkingDirectory = session.Root });
             };
 
-            var play = new Button { Text = "Save and play", Location = new Point(608, 508), Size = new Size(140, 38) };
+            var play = new Button { Text = "Save and play", Location = new Point(608, 588), Size = new Size(140, 38) };
             play.Click += delegate { if (Commit()) Play(); };
             Controls.Add(play);
             AcceptButton = play;
-            var save = new Button { Text = "Save", Location = new Point(496, 508), Size = new Size(104, 38) };
+            var save = new Button { Text = "Save", Location = new Point(496, 588), Size = new Size(104, 38) };
             save.Click += delegate { if (Commit()) Close(); };
             Controls.Add(save);
 #if !NEBULA_SETTINGS_APP
@@ -493,8 +502,26 @@ namespace Nebula.Launcher
                 else graphics.SpatialQuality = Math.Max(0, dlssQuality.SelectedIndex);
                 upscalerShown = upscaler.SelectedIndex;
                 ShowUpscalerQuality();
+                // DLSS Frame Generation runs with DLSS only.
+                if (SelectedInterpolation == 2 && upscalerChoices[upscaler.SelectedIndex] != 3)
+                {
+                    loading = true;
+                    interpolation.SelectedIndex = interpolationChoices.IndexOf(1);
+                    loading = false;
+                }
+                RefreshFrameRateChoices();
+                RefreshRenderResolution();
+            };
+            dlssQuality.SelectedIndexChanged += delegate { if (!loading) RefreshRenderResolution(); };
+            interpolation.SelectedIndexChanged += delegate
+            {
+                if (loading) return;
+                // Frame generation selects DLSS (its download when it is not installed yet).
+                if (SelectedInterpolation == 2 && upscalerChoices[Math.Max(0, upscaler.SelectedIndex)] != 3)
+                    upscaler.SelectedIndex = upscalerChoices.IndexOf(3);
                 RefreshFrameRateChoices();
             };
+            RefreshRenderResolution();
             UiScale.Apply(this);
         }
 
@@ -804,7 +831,9 @@ namespace Nebula.Launcher
             upscaler.SelectedIndex = upscalerChoices.Contains(graphics.Upscaler)
                 ? upscalerChoices.IndexOf(graphics.Upscaler) : upscalerChoices.IndexOf(1);
             ShowUpscalerQuality();
-            frameGeneration.SelectedIndex = Math.Max(0, Math.Min(graphics.FrameGeneration, GraphicsSettings.FrameGenerationModes.Length - 1));
+            int interpolationMode = graphics.FrameGeneration != 0 && interpolationChoices.Contains(2) ? 2
+                : graphics.FrameRate != 0 && graphics.FrameRate <= 61 ? 0 : 1;
+            interpolation.SelectedIndex = Math.Max(0, interpolationChoices.IndexOf(interpolationMode));
             sharpness.Value = graphics.Sharpness;
             textureFilter.SelectedIndex = graphics.TextureFilter;
             lighting.SelectedIndex = graphics.PerPixelLighting ? 0 : 1;
@@ -892,25 +921,48 @@ namespace Nebula.Launcher
             loading = false;
         }
 
+        private int SelectedInterpolation
+        {
+            get
+            {
+                int index = interpolation.SelectedIndex;
+                return index >= 0 && index < interpolationChoices.Count ? interpolationChoices[index] : 0;
+            }
+        }
+
+        // The frame rate row for the interpolation chosen: its limit (30 or 60) without one, else its
+        // target (the rates below the display's and the display's own).
         private void RefreshFrameRateChoices()
         {
             int want = frameRate.SelectedIndex >= 0 && frameRate.SelectedIndex < frameRateChoices.Count
                 ? frameRateChoices[frameRate.SelectedIndex] : graphics.FrameRate;
-            frameRateChoices.Clear();
-            frameRateChoices.AddRange(GraphicsSettings.FrameRates(SelectedMonitor.Refresh));
-            // DLSS upscales interpolated frames at multiples of 60.
+            int interpolationMode = SelectedInterpolation;
+            int refreshHz = SelectedMonitor != null ? SelectedMonitor.Refresh : 0;
             bool dlss = upscaler.SelectedIndex >= 0 && upscaler.SelectedIndex < upscalerChoices.Count &&
                 upscalerChoices[upscaler.SelectedIndex] == 3;
-            if (dlss) frameRateChoices.RemoveAll(rate => rate == 0 || (rate > 60 && rate % 60 != 0));
+            frameRateChoices.Clear();
+            frameRateChoices.AddRange(GraphicsSettings.InterpolationTargets(interpolationMode, refreshHz, dlss));
+            frameRateLabel.Text = interpolationMode == 0 ? "Frame rate limit" : "Target frame rate";
             frameRate.Items.Clear();
-            int selected = frameRateChoices.Count - 1;
+            int wanted = want == 0 ? (refreshHz != 0 ? refreshHz : 1000) : want;
+            int selected = interpolationMode == 0 ? frameRateChoices.Count - 1 : 0;
             for (int i = 0; i < frameRateChoices.Count; i++)
             {
                 int rate = frameRateChoices[i];
-                frameRate.Items.Add(rate == 0 ? "Unlimited" : rate + " FPS");
-                if (want != 0 && rate != 0 && rate <= want) selected = i;
+                frameRate.Items.Add(rate != 0 ? rate + " FPS"
+                    : refreshHz != 0 ? string.Format("Match refresh rate ({0} Hz)", refreshHz) : "Match refresh rate");
+                int value = rate == 0 ? (refreshHz != 0 ? refreshHz : 1000) : rate;
+                if (value <= wanted) selected = i;
             }
-            frameRate.SelectedIndex = selected;
+            frameRate.SelectedIndex = Math.Min(selected, frameRate.Items.Count - 1);
+        }
+
+        // The render resolution applies without DLSS and with the MANUAL quality.
+        private void RefreshRenderResolution()
+        {
+            bool dlss = upscaler.SelectedIndex >= 0 && upscaler.SelectedIndex < upscalerChoices.Count &&
+                upscalerChoices[upscaler.SelectedIndex] == 3;
+            internalScale.Enabled = !dlss && dlssQuality.SelectedIndex <= 0;
         }
 
         // Internal resolution: matches the output, or 1x up to the scale that fills the selected display
@@ -951,8 +1003,7 @@ namespace Nebula.Launcher
                 graphics.Quality = aaQuality.SelectedIndex;
                 if (upscaler.SelectedIndex >= 0 && upscaler.SelectedIndex < upscalerChoices.Count)
                     graphics.Upscaler = upscalerChoices[upscaler.SelectedIndex];
-                if (upscaler.SelectedIndex >= 0 && upscalerChoices[upscaler.SelectedIndex] == 3)
-                    graphics.FrameGeneration = Math.Max(0, frameGeneration.SelectedIndex);
+                graphics.FrameGeneration = SelectedInterpolation == 2 ? 1 : 0;
                 if (upscaler.SelectedIndex >= 0 && upscalerChoices[upscaler.SelectedIndex] == 3)
                     graphics.TemporalQuality = Math.Max(0, dlssQuality.SelectedIndex);
                 else

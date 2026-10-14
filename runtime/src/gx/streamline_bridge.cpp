@@ -77,6 +77,8 @@ Api g_api;
 // applied setting and last reported state.
 std::uint32_t g_frame_index = 0u;
 unsigned g_dlssg_max = 0u;
+bool g_dlssg_dynamic = false;
+float g_dlssg_applied_target = -1.0f;
 unsigned g_dlssg_applied = ~0u;
 unsigned g_dlssg_presented = 1u;
 unsigned g_dlssg_status = 0u;
@@ -155,12 +157,14 @@ void attach_frame_generation(const sl::AdapterInfo& info) {
     sl::DLSSGState state{};
     if (g_api.dlssg_get_state(sl::ViewportHandle{0u}, state, nullptr) == sl::Result::eOk) {
         g_dlssg_max = std::max(state.numFramesToGenerateMax, 1u);
+        g_dlssg_dynamic = state.bIsDynamicMFGSupported == sl::Boolean::eTrue;
     } else {
         g_dlssg_max = 1u;
     }
     g_api.markers = true;
     g_api.dlssg = true;
-    std::cerr << "[streamline] DLSS Frame Generation ready (up to " << g_dlssg_max + 1u << "x)\n";
+    std::cerr << "[streamline] DLSS Frame Generation ready (up to " << g_dlssg_max + 1u << "x"
+              << (g_dlssg_dynamic ? ", dynamic" : "") << ")\n";
 }
 
 }  // namespace
@@ -294,6 +298,8 @@ bool frame_generation_supported() noexcept { return g_api.initialized && g_api.d
 
 unsigned frame_generation_max() noexcept { return frame_generation_supported() ? g_dlssg_max : 0u; }
 
+bool frame_generation_dynamic() noexcept { return frame_generation_supported() && g_dlssg_dynamic; }
+
 unsigned frame_index() noexcept { return g_frame_index; }
 
 void marker(Marker m) noexcept {
@@ -394,16 +400,20 @@ void tag_hudless(ID3D12GraphicsCommandList* list, ID3D12Resource* hudless, unsig
     (void)g_api.set_tag_for_frame(*token, sl::ViewportHandle{0u}, &tag, 1u, list);
 }
 
-void set_frame_generation(unsigned generated) noexcept {
+void set_frame_generation(unsigned generated, bool dynamic, float target_fps) noexcept {
     if (!frame_generation_supported()) {
         return;
     }
     // Only frames whose scene was tagged are generated from.
+    dynamic = dynamic && g_dlssg_dynamic && generated != 0u;
     const unsigned wanted = g_dlssg_tagged ? std::min(generated, g_dlssg_max) : 0u;
-    if (wanted != g_dlssg_applied) {
+    const float target = dynamic && wanted != 0u ? target_fps : -1.0f;
+    if (wanted != g_dlssg_applied || target != g_dlssg_applied_target) {
+        g_dlssg_applied_target = target;
         sl::DLSSGOptions options{};
-        options.mode = wanted != 0u ? sl::DLSSGMode::eOn : sl::DLSSGMode::eOff;
+        options.mode = wanted == 0u ? sl::DLSSGMode::eOff : dynamic ? sl::DLSSGMode::eDynamic : sl::DLSSGMode::eOn;
         options.numFramesToGenerate = std::max(wanted, 1u);
+        options.dynamicTargetFrameRate = dynamic ? target_fps : 0.0f;
         // Off between scenes (menus, loading) keeps its resources: no stutter coming back.
         options.flags = sl::DLSSGFlags::eRetainResourcesWhenOff;
         const sl::Result result = g_api.dlssg_set_options(sl::ViewportHandle{0u}, options);
@@ -694,7 +704,8 @@ void reflex_sleep() noexcept {}
 bool tag_frame_generation(const FrameGenerationInputs&) noexcept { return false; }
 void tag_hudless(ID3D12GraphicsCommandList*, ID3D12Resource*, unsigned, unsigned) noexcept {}
 void tag_backbuffer_region(ID3D12GraphicsCommandList*, unsigned, unsigned, unsigned, unsigned) noexcept {}
-void set_frame_generation(unsigned) noexcept {}
+void set_frame_generation(unsigned, bool, float) noexcept {}
+bool frame_generation_dynamic() noexcept { return false; }
 unsigned frames_presented() noexcept { return 1u; }
 unsigned frame_generation_status() noexcept { return 0u; }
 bool active() noexcept { return false; }

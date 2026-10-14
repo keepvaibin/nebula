@@ -198,8 +198,8 @@ public:
     // interpolated sub-frame's, whose camera write_reprojection gave. Leaves its own root
     // signature and pipeline bound.
     void composite(ID3D12GraphicsCommandList* list, D3D12_CPU_DESCRIPTOR_HANDLE target,
-                   D3D12_GPU_DESCRIPTOR_HANDLE depth_srv, std::uint32_t width, std::uint32_t height, int slot,
-                   bool reproject);
+                   D3D12_GPU_DESCRIPTOR_HANDLE depth_srv, D3D12_GPU_DESCRIPTOR_HANDLE color_srv, std::uint32_t width,
+                   std::uint32_t height, int slot, bool reproject);
     // Before a sub-frame's replay: its camera (world to eye at t), for the composites it runs.
     void write_reprojection(ID3D12GraphicsCommandList* list, const std::array<float, 12>& camera_t);
     // The end of the scene: its finished picture (EFB colour and depth, NON_PIXEL_SHADER_RESOURCE,

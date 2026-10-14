@@ -18,8 +18,9 @@ namespace Nebula.Launcher
         public static readonly string[] Aspects = { "Auto (match the window)", "4:3", "16:10", "16:9", "21:9", "32:9" };
         public static readonly string[] AntiAliasingModes = { "Off", "SMAA", "Auto (SMAA unless supersampled)", "FXAA" };
         public static readonly string[] AntiAliasingQualities = { "Low", "Medium", "High", "Ultra" };
-        // DLSS Frame Generation: frames shown per rendered frame (the GPU may run fewer).
-        public static readonly string[] FrameGenerationModes = { "Off", "2x", "3x", "4x" };
+        // Frame rate: the game's own 60 (Off), Nebula's interpolated frames (Native) or NVIDIA's
+        // generated ones (DLSS Frame Generation, with DLSS on an RTX GPU).
+        public static readonly string[] InterpolationModes = { "Off", "Native", "DLSS Frame Generation" };
         // Release runtimes are built without FSR 3 (upscaler 2); a saved 2 reads as FSR 1.
         public static readonly string[] Upscalers = { "Bilinear", "AMD FidelityFX FSR 1" };
         // NVIDIA DLSS (upscaler 3) runs from files the player downloads from NVIDIA
@@ -123,6 +124,28 @@ namespace Nebula.Launcher
 
         // The runtime's frame_rate_options: standard rates the display can
         // show, its own rate when that is not one of them, then 0 (unlimited).
+        /// <summary>
+        /// The frame rates an interpolation mode offers, lowest first: 30 and 60 without one; else
+        /// the standard rates below the display's, then the display's own (0, "match refresh rate").
+        /// With DLSS upscaling native interpolation runs at multiples of 60. The runtime keeps the
+        /// same list (renderer_d3d12.cpp interpolation_targets).
+        /// </summary>
+        public static List<int> InterpolationTargets(int mode, int refreshHz, bool dlss)
+        {
+            var targets = new List<int>();
+            if (mode == 0) { targets.Add(30); targets.Add(60); return targets; }
+            bool sixties = mode == 1 && dlss;
+            foreach (int rate in new[] { 120, 144, 165, 180, 240, 360 })
+            {
+                if (refreshHz != 0 && rate + 1 >= refreshHz) break;
+                if ((rate == 180 && mode == 1 && !sixties) || (sixties && rate % 60 != 0)) continue;
+                targets.Add(rate);
+            }
+            bool own = refreshHz == 0 || (refreshHz > 61 && (!sixties || refreshHz % 60 <= 1 || refreshHz % 60 >= 59));
+            if (own) targets.Add(0);
+            return targets;
+        }
+
         public static List<int> FrameRates(int refreshHz)
         {
             var rates = new List<int>();

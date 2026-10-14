@@ -112,10 +112,12 @@ struct RenderConfig {
     unsigned smaa_quality        = 2;
     // 3: NVIDIA DLSS (temporal like 2; needs the user's Streamline install).
     unsigned upscaler            = 0;
-    // NVIDIA DLSS Frame Generation: frames generated after each rendered one
-    // (0 off, 1-5: 2x-6x, up to what the GPU runs). It runs with DLSS
-    // (upscaler 3) and the Frame Generation plugins, loaded when the game
-    // starts with it on. While it runs the game presents its own 60 frames.
+    // NVIDIA DLSS Frame Generation (GRAPHICS > INTERPOLATION): nonzero has its
+    // generated frames reach max_fps (0: the display's refresh rate) instead of
+    // Nebula's interpolated ones. It runs with DLSS (upscaler 3) and the Frame
+    // Generation plugins, loaded when the game starts with it on; while it runs
+    // the game presents its own 60 frames. Without it the target falls back to
+    // native interpolation.
     unsigned frame_generation    = 0;
     unsigned temporal_quality    = 1;
     // Bilinear and FSR 1: 0 renders at the INTERNAL RES row; 1-4 render at the output scale

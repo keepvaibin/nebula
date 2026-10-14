@@ -32,6 +32,7 @@
 #include "galaxy/native_input_anomaly.h"
 #include "galaxy/native_input_causality.h"
 #include "galaxy/gx_d3d12.h"
+#include "galaxy/gx/galaxy_select.h"
 #include "galaxy/gx/render_config.h"
 #include "galaxy/gx/fifo_submission.h"
 #include "galaxy/motion_signals.h"
@@ -24716,6 +24717,76 @@ void apply_test_galaxy_tour(RuntimeState& state, galaxy::PpcContext* context, ga
     galaxy::coop::load_thread_registers(saved, *context);
 }
 
+// GAME > GALAXY SELECT (galaxy/gx/galaxy_select.h): the game's names for the stages and their
+// stars once the page asks for them, and a travel request, both through the game's own functions
+// at a scene's start, as the galaxy tour. Names are looked up from 0x80002880 (the travel's stage
+// name stays at 0x80002800, where the stage change keeps a pointer to it).
+void apply_galaxy_select(RuntimeState& state, galaxy::PpcContext* context, galaxy::GuestMemoryV1* memory) {
+    if (!galaxy::gx::galaxy_select_enabled() || state.address_space == nullptr) {
+        return;
+    }
+    const auto write_name = [&](std::uint32_t address, const char* id) {
+        std::array<std::byte, 64> name{};
+        for (std::size_t i = 0; id[i] != '\0' && i < 63u; ++i) {
+            name[i] = static_cast<std::byte>(id[i]);
+        }
+        state.address_space->copy(address, name);
+    };
+    const auto call = [&](std::uint32_t function, std::uint32_t r3, std::uint32_t r4) {
+        galaxy::coop::ThreadRegisters saved{};
+        galaxy::coop::save_thread_registers(*context, saved);
+        context->gpr[1] = (context->gpr[1] - 0x100u) & ~0xFu;
+        context->gpr[3] = r3;
+        context->gpr[4] = r4;
+        context->pc = function;
+        call_guest_impl(&state, function, nullptr, context, memory);
+        const std::uint32_t result = context->gpr[3];
+        galaxy::coop::load_thread_registers(saved, *context);
+        return result;
+    };
+    const auto read_message = [&](std::uint32_t address) {
+        std::vector<std::uint16_t> units;
+        for (std::uint32_t i = 0; i < 64u && address != 0u; ++i) {
+            const std::uint32_t at = address + i * 2u;
+            std::uint32_t word = 0u;
+            if (!try_read_guest_u32(*state.address_space, at & ~3u, word)) {
+                break;
+            }
+            const auto unit = static_cast<std::uint16_t>((at & 2u) != 0u ? (word & 0xFFFFu) : (word >> 16u));
+            if (unit == 0u || unit == 0x1Au) {
+                break;  // the end, or a control sequence (names carry none)
+            }
+            units.push_back(unit);
+        }
+        return galaxy::gx::galaxy_select_text(units);
+    };
+    if (galaxy::gx::galaxy_select_names_wanted()) {
+        constexpr std::uint32_t kLookupName = 0x80002880u;
+        std::vector<std::string> galaxies;
+        std::vector<std::vector<std::string>> stars;
+        for (const galaxy::gx::GalaxyStage& stage : galaxy::gx::kGalaxyStages) {
+            write_name(kLookupName, stage.id);
+            galaxies.push_back(read_message(call(0x803E7D78u, kLookupName, 0u)));  // getGalaxyNameOnCurrentLanguage
+            std::vector<std::string> names;
+            for (std::uint32_t star = 1u; star <= stage.stars; ++star) {
+                write_name(kLookupName, stage.id);
+                names.push_back(read_message(call(0x803E7E18u, kLookupName, star)));  // getScenarioNameOnCurrentLanguage
+            }
+            stars.push_back(std::move(names));
+        }
+        galaxy::gx::set_galaxy_select_names(std::move(galaxies), std::move(stars));
+        std::cerr << "[galaxy-select] names read\n";
+    }
+    std::size_t stage = 0u;
+    std::uint32_t star = 0u;
+    if (galaxy::gx::take_galaxy_travel(stage, star)) {
+        constexpr std::uint32_t kStageName = 0x80002800u;
+        write_name(kStageName, galaxy::gx::kGalaxyStages[stage].id);
+        std::cerr << "[galaxy-select] " << galaxy::gx::kGalaxyStages[stage].id << ' ' << star << '\n';
+        (void)call(0x803F8328u, kStageName, star);  // MR::requestChangeStageInGameMoving
+    }
+}
+
 void call_guest_impl_body(
     void* user,
     std::uint32_t guest_address,
@@ -24752,6 +24823,7 @@ void call_guest_impl_body(
         if (guest_address == 0x8033EE8Cu) {
             apply_test_teleport(state, context, memory);
             apply_test_galaxy_tour(state, context, memory);
+            apply_galaxy_select(state, context, memory);
             // MR::getCameraViewMtx (0x803C73CC): *(r13 - 0x3A78) -> +0x24 ->
             // +0xAC -> +0x10 -> scene object 0x17 (CameraContext) -> view
             // matrix at +0x0C. Motion vectors and interpolation use it for

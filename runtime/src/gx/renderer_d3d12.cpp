@@ -5,6 +5,7 @@
 #include "galaxy/experimental_ultrawide_aspect.h"
 #include "galaxy/gx_d3d12.h"
 #include "galaxy/gx/game_asset_extract.h"
+#include "galaxy/gx/galaxy_select.h"
 #include "galaxy/gx/render_config.h"
 #include "galaxy/gx/streamline_bridge.h"
 #include "galaxy/gx/texture_cache.h"
@@ -35,6 +36,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <exception>
+#include <functional>
 #include <iostream>
 #include <iterator>
 #include <limits>
@@ -174,12 +176,25 @@ bool dlss_offered();
 std::atomic<bool> s_ray_tracing_offered{false};
 bool dlss_installed_now();
 bool frame_generation_offered();
-unsigned frame_generation_choices();
 bool dlss_hold_back(RenderConfig& applied, const RenderConfig& live);
 bool dlss_prompt_key(WPARAM key, bool was_down);
 void dlss_dismiss_prompt();
 void poll_dlss_download();
 std::string dlss_footer(std::uint64_t now_ms, bool& error);
+
+// Settings pages built from rows (DISPLAY, GRAPHICS, GAME, SYSTEM: settings_page): a label, the
+// value for the draft, how left/right change the draft (none: the row is fixed) and a help line; a
+// heading starts a section and is never selected. CONTROLS and AUDIO keep their own rows.
+struct SettingsRow {
+    std::string label;
+    std::string value;
+    std::function<void(RenderConfig&, int)> change;
+    std::string help;
+    bool heading = false;
+};
+std::vector<SettingsRow> settings_page(unsigned tab, const RenderConfig& draft, const RuntimeSettings& runtime,
+                                       const RenderFeatureCaps& caps);
+bool settings_page_tab(unsigned tab) { return tab != 2u && tab != 3u; }
 
 bool temporal_interpolation_allowed() {
     // A temporal upscaler upscales every presented frame at rates that are
@@ -459,17 +474,96 @@ unsigned settings_refresh_hz(const RenderConfig& render) {
     return monitor != nullptr ? monitor->current.refresh_hz : 0u;
 }
 
-// FRAME RATE choices while a temporal upscaler runs: 30 and 60, and with
-// temporal interpolation the multiples of 60.
-std::vector<unsigned> frame_rate_choices(const RenderConfig& render) {
-    std::vector<unsigned> rates = frame_rate_options(settings_refresh_hz(render));
-    if (temporal_upscaler(render) != 0u) {
-        const bool multiples = temporal_interpolation_allowed();
-        std::erase_if(rates, [multiples](unsigned rate) {
-            return rate == 0u || (rate > 60u && (!multiples || rate % 60u != 0u));
-        });
+// GRAPHICS > FRAME RATE. INTERPOLATION OFF presents the game's own frames (FRAME RATE LIMIT 30
+// or 60); NATIVE adds Nebula's interpolated frames up to the TARGET FRAME RATE; DLSS FRAME
+// GENERATION has NVIDIA's generated frames reach it. The target is max_fps (0: the display's
+// refresh rate); frame_generation selects DLSS.
+enum class Interpolation : unsigned { kOff, kNative, kFrameGeneration };
+
+Interpolation interpolation_of(const RenderConfig& render) {
+    if (render.frame_generation != 0u) {
+        return Interpolation::kFrameGeneration;
     }
-    return rates;
+    const auto rate = static_cast<unsigned>(std::lround(std::max(0.0f, render.max_fps)));
+    return rate != 0u && rate <= 61u ? Interpolation::kOff : Interpolation::kNative;
+}
+
+// The targets a mode offers, lowest first (0: the display's refresh rate): the standard rates
+// below the display's, then its own. With a temporal upscaler native interpolation runs at
+// multiples of 60, as does frame generation without dynamic multi frame generation (and at most
+// the multiplier the GPU runs).
+std::vector<unsigned> interpolation_targets(const RenderConfig& render, Interpolation mode) {
+    std::vector<unsigned> targets;
+    if (mode == Interpolation::kOff) {
+        return targets;
+    }
+    const unsigned refresh = settings_refresh_hz(render);
+    const bool generated = mode == Interpolation::kFrameGeneration;
+    const bool sixties = generated ? streamline::frame_generation_supported() && !streamline::frame_generation_dynamic()
+                                   : temporal_upscaler(render) != 0u;
+    if (!generated && sixties && !temporal_interpolation_allowed()) {
+        return targets;
+    }
+    const unsigned most = generated && streamline::frame_generation_supported()
+        ? 60u * (streamline::frame_generation_max() + 1u) : 1000u;
+    for (const unsigned rate : {120u, 144u, 165u, 180u, 240u, 360u}) {
+        if (refresh != 0u && rate + 1u >= refresh) {
+            break;
+        }
+        if ((rate == 180u && !sixties) || (sixties && rate % 60u != 0u) || rate > most) {
+            continue;
+        }
+        targets.push_back(rate);
+    }
+    // Its own rate: above 60, and with the multiples of 60 only where it is one (frame generation
+    // takes the largest multiple at or below it).
+    const bool own = refresh == 0u || (refresh > 61u && (!sixties || generated || refresh % 60u <= 1u ||
+                                                          refresh % 60u >= 59u));
+    if (own) {
+        targets.push_back(0u);
+    }
+    return targets;
+}
+
+std::vector<Interpolation> interpolation_modes(const RenderConfig& render) {
+    std::vector<Interpolation> modes{Interpolation::kOff};
+    if (!interpolation_targets(render, Interpolation::kNative).empty()) {
+        modes.push_back(Interpolation::kNative);
+    }
+    if (frame_generation_offered() && !interpolation_targets(render, Interpolation::kFrameGeneration).empty()) {
+        modes.push_back(Interpolation::kFrameGeneration);
+    }
+    return modes;
+}
+
+// Keeps the draft's target one its mode offers: the same, else the highest at or below it (the
+// display's rate counting as its refresh), else the lowest offered; a mode with none turns off.
+void normalize_interpolation(RenderConfig& render) {
+    const Interpolation mode = interpolation_of(render);
+    const auto rate = static_cast<unsigned>(std::lround(std::max(0.0f, render.max_fps)));
+    if (mode == Interpolation::kOff) {
+        render.max_fps = rate != 0u && rate <= 30u ? 30.0f : 60.0f;
+        return;
+    }
+    const auto targets = interpolation_targets(render, mode);
+    if (targets.empty()) {
+        render.frame_generation = 0u;
+        render.max_fps = 60.0f;
+        return;
+    }
+    if (std::find(targets.begin(), targets.end(), rate) != targets.end()) {
+        return;
+    }
+    const unsigned refresh = settings_refresh_hz(render);
+    const unsigned wanted = rate == 0u ? (refresh != 0u ? refresh : 1000u) : rate;
+    unsigned chosen = targets.front();
+    for (const unsigned target : targets) {
+        const unsigned value = target == 0u ? (refresh != 0u ? refresh : 1000u) : target;
+        if (value <= wanted) {
+            chosen = target;
+        }
+    }
+    render.max_fps = static_cast<float>(chosen);
 }
 
 const MonitorInfo* settings_monitor(const RenderConfig& render) {
@@ -761,24 +855,23 @@ void reset_controls_draft() {
     s_input_mode_draft = get_runtime_settings().input_mode;
 }
 
-// The graphics page has its FSR 3 QUALITY row (row 3) only in runtimes built
-// with FSR 3; maps a shown row to its graphics row.
-unsigned graphics_row(unsigned row) {
-    return !temporal_quality_row_shown() && row >= 3u ? row + 1u : row;
+unsigned native_settings_row_count(unsigned tab) {
+    tab %= kNativeSettingsTabCount;
+    if (settings_page_tab(tab)) {
+        return static_cast<unsigned>(
+            settings_page(tab, s_settings_draft, get_runtime_settings(), get_render_feature_caps()).size());
+    }
+    return tab == 2u ? controls_row_count() : 7u;
 }
 
-unsigned native_settings_row_count(unsigned tab) {
-    switch (tab % kNativeSettingsTabCount) {
-    case 0: return frame_generation_offered() ? 9u : 8u;
-    case 1:
-        return (temporal_quality_row_shown() ? 9u : 8u) +
-               (s_ray_tracing_offered.load(std::memory_order_relaxed) ? 1u : 0u);
-    case 2: return controls_row_count();
-    case 3: return 7u;
-    case 4: return 1u;
-    case 5: return 6u;
-    default: return 0u;
+// A heading row (never selected).
+bool native_settings_heading(unsigned tab, unsigned row) {
+    tab %= kNativeSettingsTabCount;
+    if (!settings_page_tab(tab)) {
+        return false;
     }
+    const auto page = settings_page(tab, s_settings_draft, get_runtime_settings(), get_render_feature_caps());
+    return row < page.size() && page[row].heading;
 }
 
 bool settings_display_confirming() {
@@ -953,188 +1046,10 @@ void adjust_native_setting_unlogged(int delta) {
             static_cast<int>(value) + delta, 0, static_cast<int>(count) - 1));
     };
 
-    if (tab == 0u) {
-        const MonitorInfo* monitor = settings_monitor(draft);
-        switch (row) {
-        case 0: {  // monitor
-            if (s_settings_monitors.size() < 2u) return;
-            std::size_t index = 0u;
-            for (std::size_t i = 0; i < s_settings_monitors.size(); ++i) {
-                if (&s_settings_monitors[i] == monitor) index = i;
-            }
-            const std::size_t next = step(static_cast<unsigned>(index),
-                                          static_cast<unsigned>(s_settings_monitors.size()));
-            if (next == index) return;
-            const std::string device = narrow_utf8(s_settings_monitors[next].device);
-            draft.monitor.fill('\0');
-            std::memcpy(draft.monitor.data(), device.data(),
-                        std::min(device.size(), draft.monitor.size() - 1u));
-            // A fullscreen mode belongs to its monitor; start from the new
-            // one's desktop mode.
-            draft.fullscreen_width = 0u;
-            draft.fullscreen_height = 0u;
-            draft.fullscreen_refresh_hz = 0u;
-            sanitize_settings_draft(draft);
-            return;
-        }
-        case 1:  // display mode
-            draft.display_mode = step(std::min(draft.display_mode, kDisplayBorderless), 2u);
-            if (draft.display_mode == kDisplayWindowed && draft.aspect_mode != 0u) {
-                snap_window_size(draft);
-            }
-            sanitize_settings_draft(draft);
-            return;
-        case 2: {  // resolution
-            if (draft.display_mode == kDisplayBorderless) return;
-            if (draft.display_mode == kDisplayExclusive) {
-                if (monitor == nullptr) return;
-                const auto sizes = monitor_resolutions(*monitor);  // largest first
-                const unsigned w = draft.fullscreen_width != 0u ? draft.fullscreen_width
-                                                                : monitor->current.width;
-                const unsigned h = draft.fullscreen_height != 0u ? draft.fullscreen_height
-                                                                 : monitor->current.height;
-                std::size_t index = 0u;
-                for (std::size_t i = 0; i < sizes.size(); ++i) {
-                    if (sizes[i].first == w && sizes[i].second == h) index = i;
-                }
-                // Right moves to a larger mode.
-                const int moved = static_cast<int>(index) - delta;
-                if (moved < 0 || moved >= static_cast<int>(sizes.size())) return;
-                draft.fullscreen_width = sizes[static_cast<std::size_t>(moved)].first;
-                draft.fullscreen_height = sizes[static_cast<std::size_t>(moved)].second;
-                const auto rates = monitor_refresh_rates(
-                    *monitor, draft.fullscreen_width, draft.fullscreen_height);
-                draft.fullscreen_refresh_hz = rates.empty() ? 0u : rates.front();
-            } else {
-                const auto sizes = settings_window_sizes(monitor, draft.aspect_mode);  // smallest first
-                std::size_t index = 0u;
-                for (std::size_t i = 0; i < sizes.size(); ++i) {
-                    if (std::uint64_t{sizes[i].first} * sizes[i].second <=
-                        std::uint64_t{draft.window_width} * draft.window_height) {
-                        index = i;
-                    }
-                }
-                const int moved = static_cast<int>(index) + delta;
-                if (moved < 0 || moved >= static_cast<int>(sizes.size())) return;
-                draft.window_width = sizes[static_cast<std::size_t>(moved)].first;
-                draft.window_height = sizes[static_cast<std::size_t>(moved)].second;
-            }
-            sanitize_settings_draft(draft);
-            return;
-        }
-        case 3: {  // refresh rate (exclusive fullscreen)
-            if (draft.display_mode != kDisplayExclusive || monitor == nullptr) return;
-            const unsigned w = draft.fullscreen_width != 0u ? draft.fullscreen_width
-                                                            : monitor->current.width;
-            const unsigned h = draft.fullscreen_height != 0u ? draft.fullscreen_height
-                                                             : monitor->current.height;
-            const auto rates = monitor_refresh_rates(*monitor, w, h);  // highest first
-            if (rates.empty()) return;
-            const unsigned current = draft.fullscreen_refresh_hz != 0u
-                ? draft.fullscreen_refresh_hz : monitor->current.refresh_hz;
-            std::size_t index = 0u;
-            for (std::size_t i = 0; i < rates.size(); ++i) {
-                if (rates[i] == current) index = i;
-            }
-            const int moved = static_cast<int>(index) - delta;
-            if (moved < 0 || moved >= static_cast<int>(rates.size())) return;
-            draft.fullscreen_width = w;
-            draft.fullscreen_height = h;
-            draft.fullscreen_refresh_hz = rates[static_cast<std::size_t>(moved)];
-            return;
-        }
-        case 4:  // aspect ratio
-            draft.aspect_mode = step(draft.aspect_mode, kAspectModeCount);
-            if (draft.display_mode == kDisplayWindowed && draft.aspect_mode != 0u) {
-                snap_window_size(draft);
-            }
-            return;
-        case 5: {  // internal resolution: 0 matches the output, then 1x..cap
-            const unsigned cap = settings_scale_cap(draft);
-            const unsigned current = draft.internal_follow_window ? 0u
-                : std::clamp(draft.efb_scale, 1u, cap);
-            const unsigned next = step(current, cap + 1u);
-            if (next == 0u) {
-                draft.internal_follow_window = true;
-            } else {
-                draft.internal_follow_window = false;
-                draft.efb_scale = next;
-            }
-            return;
-        }
-        case 6: {  // frame rate
-            const auto rates = frame_rate_choices(draft);
-            const auto current = static_cast<unsigned>(std::lround(std::max(0.0f, draft.max_fps)));
-            std::size_t index = rates.size() - 1u;  // unlimited, or the highest offered
-            for (std::size_t i = 0; i < rates.size(); ++i) {
-                if (rates[i] != 0u && current != 0u && rates[i] <= current) index = i;
-            }
-            const std::size_t next = step(static_cast<unsigned>(index), static_cast<unsigned>(rates.size()));
-            draft.max_fps = static_cast<float>(rates[next]);
-            return;
-        }
-        case 7:
-            draft.vsync_interval = draft.vsync_interval == 0u ? 1u : 0u;
-            return;
-        case 8: {  // frame generation: off, 2x .. the GPU's most
-            const unsigned choices = frame_generation_choices();
-            draft.frame_generation = step(std::min(draft.frame_generation, choices - 1u), choices);
-            return;
-        }
-        default:
-            return;
-        }
-    }
-
-    if (tab == 1u) {
-        static constexpr std::array<unsigned, 5> kAnisotropy{1u, 2u, 4u, 8u, 16u};
-        switch (graphics_row(row)) {
-        case 0: draft.aa_mode = step(std::min(draft.aa_mode, 3u), 4u); break;
-        case 1: draft.smaa_quality = step(std::min(draft.smaa_quality, 3u), 4u); break;
-        case 2: {
-            const std::vector<unsigned> choices = available_upscalers();
-            std::size_t index = 0u;
-            for (std::size_t i = 0; i < choices.size(); ++i) {
-                if (choices[i] == draft.upscaler) index = i;
-            }
-            draft.upscaler = choices[step(static_cast<unsigned>(index), static_cast<unsigned>(choices.size()))];
-            if (temporal_upscaler(draft) != 0u) {
-                // The highest rate still offered at or below the chosen one.
-                const auto rates = frame_rate_choices(draft);
-                const auto wanted = static_cast<unsigned>(std::lround(std::max(0.0f, draft.max_fps)));
-                unsigned best = 60u;
-                for (const unsigned rate : rates) {
-                    if (rate != 0u && (wanted == 0u || rate <= wanted)) best = std::max(best, rate);
-                }
-                draft.max_fps = static_cast<float>(best);
-            }
-            break;
-        }
-        case 3:
-            if (draft.upscaler >= 2u) {
-                draft.temporal_quality = step(std::min(draft.temporal_quality, 4u), 5u);
-            } else {
-                draft.spatial_quality = step(std::min(draft.spatial_quality, 4u), 5u);
-            }
-            break;
-        case 4:
-            draft.sharpness = static_cast<unsigned>(std::clamp(
-                static_cast<int>(std::min(draft.sharpness, 100u)) + delta * 10, 0, 100));
-            break;
-        case 5: {
-            std::size_t index = 0u;
-            for (std::size_t i = 0; i < kAnisotropy.size(); ++i) {
-                if (kAnisotropy[i] <= draft.anisotropic_filtering) index = i;
-            }
-            draft.anisotropic_filtering = kAnisotropy[step(
-                static_cast<unsigned>(index), static_cast<unsigned>(kAnisotropy.size()))];
-            break;
-        }
-        case 6: draft.enhanced_mipmaps = !draft.enhanced_mipmaps; break;
-        case 7: draft.per_pixel_lighting = !draft.per_pixel_lighting; break;
-        case 8: draft.hud_output_resolution = !draft.hud_output_resolution; break;
-        case 9: draft.ray_tracing_enabled = !draft.ray_tracing_enabled; break;
-        default: return;
+    if (settings_page_tab(tab)) {
+        const auto page = settings_page(tab, draft, get_runtime_settings(), get_render_feature_caps());
+        if (row < page.size() && page[row].change) {
+            page[row].change(draft, delta);
         }
         return;
     }
@@ -1233,15 +1148,6 @@ void adjust_native_setting_unlogged(int delta) {
             s_native_settings_dirty.store(true, std::memory_order_release);
         }
     }
-    if (tab == 4u && row == 0u) {
-        // Text speed changes live (no apply).
-        const unsigned next = step(std::clamp(settings.text_speed, 1u, 3u) - 1u, 3u) + 1u;
-        if (next != settings.text_speed) {
-            settings.text_speed = next;
-            set_runtime_settings(settings);
-            s_native_settings_dirty.store(true, std::memory_order_release);
-        }
-    }
 }
 
 void move_native_setting_row(int delta) {
@@ -1255,11 +1161,27 @@ void move_native_setting_row(int delta) {
         return;
     }
     int row = static_cast<int>(s_native_settings_row.load(std::memory_order_relaxed));
-    row = (row + delta) % static_cast<int>(count);
-    if (row < 0) {
-        row += static_cast<int>(count);
+    for (unsigned tries = 0u; tries < count; ++tries) {
+        row = (row + delta) % static_cast<int>(count);
+        if (row < 0) {
+            row += static_cast<int>(count);
+        }
+        if (!native_settings_heading(tab, static_cast<unsigned>(row))) {
+            break;
+        }
     }
     s_native_settings_row.store(static_cast<unsigned>(row), std::memory_order_relaxed);
+}
+
+// The selection never rests on a heading or past the page's end.
+void settle_native_settings_row() {
+    const unsigned tab = s_native_settings_tab.load(std::memory_order_relaxed) % kNativeSettingsTabCount;
+    const unsigned count = native_settings_row_count(tab);
+    unsigned row = std::min(s_native_settings_row.load(std::memory_order_relaxed), count == 0u ? 0u : count - 1u);
+    while (row + 1u < count && native_settings_heading(tab, row)) {
+        ++row;
+    }
+    s_native_settings_row.store(row, std::memory_order_relaxed);
 }
 
 void cycle_native_settings_tab(int delta) {
@@ -1274,7 +1196,12 @@ void cycle_native_settings_tab(int delta) {
     }
     s_native_settings_tab.store(
         static_cast<unsigned>(tab), std::memory_order_relaxed);
-    s_native_settings_row.store(0u, std::memory_order_relaxed);
+    unsigned first = 0u;
+    const unsigned count = native_settings_row_count(static_cast<unsigned>(tab));
+    while (first + 1u < count && native_settings_heading(static_cast<unsigned>(tab), first)) {
+        ++first;
+    }
+    s_native_settings_row.store(first, std::memory_order_relaxed);
 }
 
 void set_native_settings_visible(bool visible) {
@@ -1284,6 +1211,7 @@ void set_native_settings_visible(bool visible) {
         s_settings_monitors = enumerate_monitors();
         s_settings_draft = get_render_config();
         reset_controls_draft();
+        settle_native_settings_row();
     }
     if (!visible) {
         // Closing discards an unapplied draft, an unconfirmed display and an
@@ -3527,10 +3455,6 @@ bool frame_generation_offered() {
     return installed && streamline::dlss_supported();
 }
 
-// Generated frames offered: up to what the GPU runs once loaded, else up to 3 (4x).
-unsigned frame_generation_choices() {
-    return (streamline::frame_generation_supported() ? streamline::frame_generation_max() : 3u) + 1u;
-}
 
 // DLSS chosen before it is installed is not applied: the menu asks to
 // download it. Once downloaded this session it applies and runs after a
@@ -6664,7 +6588,18 @@ void RendererD3D12::present_to_swap_chain() {
         galaxy::timeline::record(galaxy::timeline::Event::PresentBegin,
                              ++timeline_present_ordinal, vsync);
     }
-    streamline::set_frame_generation(generating ? cfg.frame_generation : 0u);
+    {
+        // The target rate: dynamic multi frame generation reaches it, a fixed multiplier is the
+        // largest multiple of 60 at or below it.
+        unsigned generated = 0u;
+        if (generating) {
+            const double rate = present_frame_rate(cfg.max_fps, cfg.vsync_interval, display_refresh_hz_);
+            generated = static_cast<unsigned>(std::clamp<long>(
+                static_cast<long>(rate / 60.0 + 1e-3) - 1, 1, static_cast<long>(streamline::frame_generation_max())));
+        }
+        streamline::set_frame_generation(generated, streamline::frame_generation_dynamic(),
+                                         cfg.max_fps > 0.0f ? cfg.max_fps : 0.0f);
+    }
     streamline::marker(streamline::Marker::kPresentStart);
     const HRESULT present_hr = swap_chain_->Present(vsync, present_flags);
     streamline::marker(streamline::Marker::kPresentEnd);
@@ -7749,7 +7684,8 @@ void RendererD3D12::rt_trace_scene() {
         command_list_->ResourceBarrier(1, &color);
     }
     if (depth && slot >= 0) {
-        ray_tracer_.composite(command_list_.Get(), efb_rtv_, conv_efb_depth_srv_, width, desc.Height, slot, false);
+        ray_tracer_.composite(command_list_.Get(), efb_rtv_, conv_efb_depth_srv_, rt_composite_color(), width,
+                              desc.Height, slot, false);
         ray_tracer_.write_light_texture(command_list_.Get(), slot);
         if (replay_recording_) {
             replay_ops_.push_back({ReplayKind::RtComposite, static_cast<std::uint32_t>(slot)});
@@ -7868,6 +7804,55 @@ void RendererD3D12::record_rt_bloom(int slot) {
     bound_rt_aux_ = 0xFFu;
 }
 
+D3D12_GPU_DESCRIPTOR_HANDLE RendererD3D12::rt_composite_color() {
+    if (!efb_color_) {
+        return {};
+    }
+    const D3D12_RESOURCE_DESC desc = efb_color_->GetDesc();
+    if (!rt_color_copy_ || rt_color_copy_->GetDesc().Width != desc.Width ||
+        rt_color_copy_->GetDesc().Height != desc.Height || rt_color_copy_->GetDesc().Format != desc.Format) {
+        if (rt_color_copy_) {
+            wait_for_gpu();
+        }
+        rt_color_copy_.Reset();
+        D3D12_HEAP_PROPERTIES hp{};
+        hp.Type = D3D12_HEAP_TYPE_DEFAULT;
+        D3D12_RESOURCE_DESC copy = desc;
+        copy.Flags = D3D12_RESOURCE_FLAG_NONE;
+        if (FAILED(device_->CreateCommittedResource(&hp, D3D12_HEAP_FLAG_NONE, &copy,
+                                                    D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, nullptr,
+                                                    IID_PPV_ARGS(&rt_color_copy_)))) {
+            return {};
+        }
+        rt_color_copy_->SetName(L"rt composite colour");
+    }
+    D3D12_RESOURCE_BARRIER barriers[2]{};
+    for (D3D12_RESOURCE_BARRIER& barrier : barriers) {
+        barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+        barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+    }
+    barriers[0].Transition.pResource = efb_color_.Get();
+    barriers[0].Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
+    barriers[0].Transition.StateAfter = D3D12_RESOURCE_STATE_COPY_SOURCE;
+    barriers[1].Transition.pResource = rt_color_copy_.Get();
+    barriers[1].Transition.StateBefore = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+    barriers[1].Transition.StateAfter = D3D12_RESOURCE_STATE_COPY_DEST;
+    command_list_->ResourceBarrier(2u, barriers);
+    command_list_->CopyResource(rt_color_copy_.Get(), efb_color_.Get());
+    for (D3D12_RESOURCE_BARRIER& barrier : barriers) {
+        std::swap(barrier.Transition.StateBefore, barrier.Transition.StateAfter);
+    }
+    command_list_->ResourceBarrier(2u, barriers);
+    const DescriptorRing::Table table = srv_ring_.allocate(1);
+    D3D12_SHADER_RESOURCE_VIEW_DESC view{};
+    view.Format = desc.Format == DXGI_FORMAT_R8G8B8A8_TYPELESS ? DXGI_FORMAT_R8G8B8A8_UNORM : desc.Format;
+    view.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+    view.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+    view.Texture2D.MipLevels = 1u;
+    device_->CreateShaderResourceView(rt_color_copy_.Get(), &view, table.cpu);
+    return table.gpu;
+}
+
 void RendererD3D12::record_rt_composite(int slot, bool reproject) {
     if (!efb_depth_ || conv_efb_depth_srv_.ptr == 0u) {
         return;
@@ -7880,8 +7865,8 @@ void RendererD3D12::record_rt_composite(int slot, bool reproject) {
     barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
     command_list_->ResourceBarrier(1, &barrier);
     const D3D12_RESOURCE_DESC desc = efb_depth_->GetDesc();
-    ray_tracer_.composite(command_list_.Get(), efb_rtv_, conv_efb_depth_srv_, static_cast<std::uint32_t>(desc.Width),
-                          desc.Height, slot, reproject);
+    ray_tracer_.composite(command_list_.Get(), efb_rtv_, conv_efb_depth_srv_, rt_composite_color(),
+                          static_cast<std::uint32_t>(desc.Width), desc.Height, slot, reproject);
     std::swap(barrier.Transition.StateBefore, barrier.Transition.StateAfter);
     command_list_->ResourceBarrier(1, &barrier);
     command_list_->SetGraphicsRootSignature(root_signature_.Get());
@@ -12702,155 +12687,409 @@ std::string upper_ascii(std::string text) {
     return text;
 }
 
-std::string native_settings_row_text(
-    unsigned tab, unsigned row,
-    const RenderConfig& render, const RuntimeSettings& runtime,
-    const RenderFeatureCaps& caps) {
-    char text[128]{};
-    switch (tab % kNativeSettingsTabCount) {
-    case 0: {
-        const MonitorInfo* monitor = settings_monitor(render);
-        switch (row) {
-        case 0: {
-            if (monitor == nullptr) return "MONITOR: PRIMARY";
+namespace {
+
+// One step of a row's choice, clamped to its ends.
+unsigned settings_step(unsigned value, unsigned count, int delta) {
+    return static_cast<unsigned>(std::clamp(static_cast<int>(value) + delta, 0, static_cast<int>(count) - 1));
+}
+
+std::vector<SettingsRow> display_page(const RenderConfig& render) {
+    std::vector<SettingsRow> rows;
+    char text[96]{};
+    const MonitorInfo* monitor = settings_monitor(render);
+    rows.push_back({"SCREEN", {}, nullptr, {}, true});
+    {
+        std::string value = "PRIMARY";
+        if (monitor != nullptr) {
             std::size_t index = 0u;
             for (std::size_t i = 0; i < s_settings_monitors.size(); ++i) {
                 if (&s_settings_monitors[i] == monitor) index = i;
             }
             std::string name = monitor->name.empty() ? std::string("DISPLAY") : monitor->name;
             if (name.size() > 22u) name.resize(22u);
-            std::snprintf(text, sizeof(text), "MONITOR: %u %s %uX%u",
-                          static_cast<unsigned>(index + 1u), upper_ascii(name).c_str(),
-                          monitor->current.width, monitor->current.height);
-            return text;
+            std::snprintf(text, sizeof(text), "%u %s", static_cast<unsigned>(index + 1u), upper_ascii(name).c_str());
+            value = text;
         }
-        case 1: {
-            static constexpr const char* kModes[] = {"WINDOWED", "BORDERLESS"};
-            return std::string("MODE: ") + kModes[std::min(render.display_mode, kDisplayBorderless)];
+        SettingsRow row{"MONITOR", value, nullptr, "THE DISPLAY THE GAME RUNS ON"};
+        if (s_settings_monitors.size() >= 2u) {
+            row.change = [](RenderConfig& draft, int delta) {
+                const MonitorInfo* current = settings_monitor(draft);
+                std::size_t index = 0u;
+                for (std::size_t i = 0; i < s_settings_monitors.size(); ++i) {
+                    if (&s_settings_monitors[i] == current) index = i;
+                }
+                const std::size_t next = settings_step(static_cast<unsigned>(index),
+                                                       static_cast<unsigned>(s_settings_monitors.size()), delta);
+                if (next == index) return;
+                const std::string device = narrow_utf8(s_settings_monitors[next].device);
+                draft.monitor.fill('\0');
+                std::memcpy(draft.monitor.data(), device.data(), std::min(device.size(), draft.monitor.size() - 1u));
+                // A fullscreen mode belongs to its monitor; start from the new one's desktop mode.
+                draft.fullscreen_width = 0u;
+                draft.fullscreen_height = 0u;
+                draft.fullscreen_refresh_hz = 0u;
+                sanitize_settings_draft(draft);
+                normalize_interpolation(draft);
+            };
         }
-        case 2: {
-            const auto [w, h] = settings_output_size(render);
-            std::snprintf(text, sizeof(text), "RESOLUTION: %uX%u%s", w, h,
-                          render.display_mode == kDisplayBorderless ? " DESKTOP" : "");
-            return text;
+        rows.push_back(std::move(row));
+    }
+    {
+        static constexpr const char* kModes[] = {"WINDOWED", "BORDERLESS FULLSCREEN"};
+        rows.push_back({"DISPLAY MODE", kModes[std::min(render.display_mode, kDisplayBorderless)],
+                        [](RenderConfig& draft, int delta) {
+                            draft.display_mode = settings_step(std::min(draft.display_mode, kDisplayBorderless), 2u, delta);
+                            if (draft.display_mode == kDisplayWindowed && draft.aspect_mode != 0u) {
+                                snap_window_size(draft);
+                            }
+                            sanitize_settings_draft(draft);
+                        },
+                        "BORDERLESS FILLS THE SCREEN AND SWITCHES INSTANTLY"});
+    }
+    {
+        const auto [w, h] = settings_output_size(render);
+        std::snprintf(text, sizeof(text), "%uX%u", w, h);
+        SettingsRow row{"RESOLUTION", text, nullptr, "BORDERLESS USES THE DESKTOP RESOLUTION"};
+        if (render.display_mode == kDisplayWindowed) {
+            row.help = "THE WINDOW SIZE";
+            row.change = [](RenderConfig& draft, int delta) {
+                const auto sizes = settings_window_sizes(settings_monitor(draft), draft.aspect_mode);  // smallest first
+                std::size_t index = 0u;
+                for (std::size_t i = 0; i < sizes.size(); ++i) {
+                    if (std::uint64_t{sizes[i].first} * sizes[i].second <=
+                        std::uint64_t{draft.window_width} * draft.window_height) {
+                        index = i;
+                    }
+                }
+                const int moved = static_cast<int>(index) + delta;
+                if (moved < 0 || moved >= static_cast<int>(sizes.size())) return;
+                draft.window_width = sizes[static_cast<std::size_t>(moved)].first;
+                draft.window_height = sizes[static_cast<std::size_t>(moved)].second;
+                sanitize_settings_draft(draft);
+            };
         }
-        case 3:
-            std::snprintf(text, sizeof(text), "REFRESH RATE: %u HZ", monitor ? monitor->current.refresh_hz : 60u);
-            return text;
-        case 4: {
-            static constexpr const char* kAspects[] = {
-                "AUTO", "4:3", "16:10", "16:9", "21:9", "32:9"};
-            return std::string("ASPECT RATIO: ") +
-                   kAspects[std::min(render.aspect_mode, kAspectModeCount - 1u)];
+        rows.push_back(std::move(row));
+    }
+    {
+        const unsigned hz = settings_refresh_hz(render);
+        std::snprintf(text, sizeof(text), "%u HZ", hz != 0u ? hz : 60u);
+        rows.push_back({"REFRESH RATE", text, nullptr, "SET IN THE WINDOWS DISPLAY SETTINGS"});
+    }
+    {
+        static constexpr const char* kAspects[] = {"AUTO", "4:3", "16:10", "16:9", "21:9", "32:9"};
+        rows.push_back({"ASPECT RATIO", kAspects[std::min(render.aspect_mode, kAspectModeCount - 1u)],
+                        [](RenderConfig& draft, int delta) {
+                            draft.aspect_mode = settings_step(draft.aspect_mode, kAspectModeCount, delta);
+                            if (draft.display_mode == kDisplayWindowed && draft.aspect_mode != 0u) {
+                                snap_window_size(draft);
+                            }
+                        },
+                        "AUTO MATCHES THE WINDOW. WIDER SHOWS MORE OF THE WORLD"});
+    }
+    rows.push_back({"VSYNC", render.vsync_interval == 0u ? "OFF" : "ON",
+                    [](RenderConfig& draft, int) {
+                        draft.vsync_interval = draft.vsync_interval == 0u ? 1u : 0u;
+                        normalize_interpolation(draft);
+                    },
+                    "WAITS FOR THE DISPLAY: NO TEARING, A LITTLE MORE LATENCY"});
+    rows.push_back({"INTERFACE", {}, nullptr, {}, true});
+    rows.push_back({"HUD RESOLUTION", render.hud_output_resolution ? "DISPLAY" : "INTERNAL",
+                    [](RenderConfig& draft, int) { draft.hud_output_resolution = !draft.hud_output_resolution; },
+                    "DISPLAY DRAWS MENUS AND TEXT SHARP AT THE SCREEN RESOLUTION"});
+    return rows;
+}
+
+std::vector<SettingsRow> graphics_page(const RenderConfig& render) {
+    std::vector<SettingsRow> rows;
+    char text[96]{};
+    rows.push_back({"RESOLUTION", {}, nullptr, {}, true});
+    {
+        static constexpr const char* kUpscalers[] = {"OFF", "FSR 1", "FSR 3", "DLSS"};
+        const std::vector<unsigned> choices = available_upscalers();
+        const bool offered = std::find(choices.begin(), choices.end(), render.upscaler) != choices.end();
+        std::string value = kUpscalers[offered ? std::min(render.upscaler, 3u) : 1u];
+        if (offered && render.upscaler == 3u && !streamline::dlss_supported()) {
+            value += dlss_installed_now() ? " (AFTER RESTART)" : " (DOWNLOAD)";
         }
-        case 5: {
-            // FSR 3, DLSS and the bilinear/FSR 1 quality modes set the render resolution.
-            if (temporal_upscaler(render) != 0u || spatial_quality_mode(render)) {
-                static constexpr const char* kDriver[] = {"QUALITY", "FSR 1", "FSR 3", "DLSS"};
-                std::snprintf(text, sizeof(text), "INTERNAL RES: BY %s",
-                              kDriver[std::min(render.upscaler, 3u)]);
-                return text;
-            }
-            if (render.internal_follow_window) return "INTERNAL RES: MATCH OUTPUT";
+        rows.push_back({"UPSCALING", value,
+                        [](RenderConfig& draft, int delta) {
+                            const std::vector<unsigned> options = available_upscalers();
+                            std::size_t index = 0u;
+                            for (std::size_t i = 0; i < options.size(); ++i) {
+                                if (options[i] == draft.upscaler) index = i;
+                            }
+                            draft.upscaler = options[settings_step(static_cast<unsigned>(index),
+                                                                   static_cast<unsigned>(options.size()), delta)];
+                            normalize_interpolation(draft);
+                        },
+                        "DLSS AND FSR 3 RENDER FEWER PIXELS AND REBUILD A SHARP IMAGE"});
+    }
+    {
+        static constexpr const char* kTemporal[] = {"NATIVE AA", "QUALITY", "BALANCED", "PERFORMANCE", "ULTRA PERFORMANCE"};
+        static constexpr const char* kDlss[] = {"DLAA", "QUALITY", "BALANCED", "PERFORMANCE", "ULTRA PERFORMANCE"};
+        static constexpr const char* kSpatial[] = {"MANUAL", "QUALITY", "BALANCED", "PERFORMANCE", "ULTRA PERFORMANCE"};
+        const bool temporal = render.upscaler >= 2u;
+        const unsigned quality = temporal ? std::min(render.temporal_quality, 4u) : std::min(render.spatial_quality, 4u);
+        const unsigned upscaler = std::min(render.upscaler, 3u);
+        rows.push_back({upscaler == 3u ? "DLSS MODE" : upscaler == 2u ? "FSR 3 MODE" : "QUALITY MODE",
+                        upscaler == 3u ? kDlss[quality] : upscaler == 2u ? kTemporal[quality] : kSpatial[quality],
+                        [](RenderConfig& draft, int delta) {
+                            if (draft.upscaler >= 2u) {
+                                draft.temporal_quality = settings_step(std::min(draft.temporal_quality, 4u), 5u, delta);
+                            } else {
+                                draft.spatial_quality = settings_step(std::min(draft.spatial_quality, 4u), 5u, delta);
+                            }
+                        },
+                        temporal ? "QUALITY RENDERS MOST PIXELS, PERFORMANCE THE FEWEST"
+                                 : "MANUAL SETS THE RENDER RESOLUTION BELOW"});
+    }
+    if (temporal_upscaler(render) == 0u && !spatial_quality_mode(render)) {
+        std::string value = "MATCH OUTPUT";
+        if (!render.internal_follow_window) {
             const unsigned scale = std::clamp(render.efb_scale, 1u, kMaxEfbScale);
-            std::snprintf(text, sizeof(text), "INTERNAL RES: %uX %uX%u%s", scale,
-                          kEfbWidth * scale, kEfbHeight * scale,
+            std::snprintf(text, sizeof(text), "%uX %uX%u%s", scale, kEfbWidth * scale, kEfbHeight * scale,
                           scale >= settings_scale_cap(render) ? " MAX" : "");
-            return text;
+            value = text;
         }
-        case 6: {
-            const auto rate = static_cast<unsigned>(std::lround(std::max(0.0f, render.max_fps)));
-            const double measured = s_measured_present_hz.load(std::memory_order_relaxed);
-            // A temporal upscaler interpolates only at multiples of 60.
-            const unsigned temporal = temporal_upscaler(render);
-            const bool above_60 = rate == 0u ? settings_refresh_hz(render) > 61u : rate > 61u;
-            const double present = present_frame_rate(render.max_fps, render.vsync_interval,
-                                                      static_cast<double>(settings_refresh_hz(render)));
-            const bool multiple = std::abs(present - 60.0 * std::round(present / 60.0)) <= 0.5;
-            const bool capped = temporal != 0u && above_60 && (!temporal_interpolation_allowed() || !multiple);
-            const bool gpu_bound = temporal != 0u && above_60 &&
-                                   s_temporal_interp_suspended.load(std::memory_order_relaxed);
-            const char* cap = gpu_bound ? " (60: GPU)" : !capped ? "" : temporal == 3u ? " (60: DLSS)" : " (60: FSR 3)";
-            if (frame_generation_running()) {
-                // The game presents 60; DLSS Frame Generation shows the frames between.
-                std::snprintf(text, sizeof(text), "FRAME RATE: 60 X%u DLSS FG  %.1f", render.frame_generation + 1u,
-                              measured * static_cast<double>(streamline::frames_presented()));
-                return text;
-            }
-            if (rate == 0u) {
-                std::snprintf(text, sizeof(text), "FRAME RATE: UNLIMITED%s  %.1f", cap, measured);
-            } else {
-                std::snprintf(text, sizeof(text), "FRAME RATE: %u%s  %.1f", rate, cap, measured);
-            }
-            return text;
-        }
-        case 7:
-            return std::string("VSYNC: ") + (render.vsync_interval == 0u ? "OFF" : "ON");
-        case 8: {
-            if (render.frame_generation == 0u) return "FRAME GENERATION: OFF";
-            std::snprintf(text, sizeof(text), "FRAME GENERATION: %uX%s", render.frame_generation + 1u,
-                          !streamline::frame_generation_supported() ? " (AFTER RESTART)"
-                          : render.upscaler != 3u                   ? " (WITH DLSS)"
-                                                                    : "");
-            return text;
-        }
-        default:
-            return {};
-        }
+        rows.push_back({"RENDER RESOLUTION", value,
+                        [](RenderConfig& draft, int delta) {
+                            const unsigned cap = settings_scale_cap(draft);
+                            const unsigned current = draft.internal_follow_window ? 0u
+                                                                                  : std::clamp(draft.efb_scale, 1u, cap);
+                            const unsigned next = settings_step(current, cap + 1u, delta);
+                            if (next == 0u) {
+                                draft.internal_follow_window = true;
+                            } else {
+                                draft.internal_follow_window = false;
+                                draft.efb_scale = next;
+                            }
+                        },
+                        "MATCH OUTPUT RENDERS AT THE SCREEN RESOLUTION"});
     }
-    case 1: {
+    std::snprintf(text, sizeof(text), "%u%%", std::min(render.sharpness, 100u));
+    rows.push_back({"SHARPENING", text,
+                    [](RenderConfig& draft, int delta) {
+                        draft.sharpness = static_cast<unsigned>(
+                            std::clamp(static_cast<int>(std::min(draft.sharpness, 100u)) + delta * 10, 0, 100));
+                    },
+                    "CONTRAST-ADAPTIVE SHARPENING OF THE FINAL IMAGE"});
+    {
+        std::string value = anti_aliasing_row_text(render.aa_mode, render.smaa_quality, get_post_process_status());
+        if (const std::size_t colon = value.find(": "); colon != std::string::npos) value.erase(0, colon + 2u);
+        rows.push_back({"ANTI-ALIASING", value,
+                        [](RenderConfig& draft, int delta) { draft.aa_mode = settings_step(std::min(draft.aa_mode, 3u), 4u, delta); },
+                        "SMOOTHS EDGES. AUTO SKIPS IT WHEN THE IMAGE IS ALREADY SUPERSAMPLED"});
+    }
+    if (render.aa_mode == 1u || render.aa_mode == 2u) {
         static constexpr const char* kQuality[] = {"LOW", "MEDIUM", "HIGH", "ULTRA"};
-        switch (graphics_row(row)) {
-        case 0: return anti_aliasing_row_text(render.aa_mode, render.smaa_quality, get_post_process_status());
-        case 1: return std::string("AA QUALITY: ") + kQuality[std::min(render.smaa_quality, 3u)];
-        case 2: {
-            static constexpr const char* kUpscalers[] = {"BILINEAR", "FSR 1", "FSR 3", "DLSS"};
-            const std::vector<unsigned> choices = available_upscalers();
-            const bool offered = std::find(choices.begin(), choices.end(), render.upscaler) != choices.end();
-            std::string upscaler = std::string("UPSCALER: ") + kUpscalers[offered ? std::min(render.upscaler, 3u) : 1u];
-            if (offered && render.upscaler == 3u && !streamline::dlss_supported()) {
-                upscaler += dlss_installed_now() ? " (AFTER RESTART)" : " (DOWNLOAD)";
-            }
-            return upscaler;
+        rows.push_back({"SMAA QUALITY", kQuality[std::min(render.smaa_quality, 3u)],
+                        [](RenderConfig& draft, int delta) {
+                            draft.smaa_quality = settings_step(std::min(draft.smaa_quality, 3u), 4u, delta);
+                        },
+                        "HIGHER FINDS MORE EDGES"});
+    }
+
+    rows.push_back({"FRAME RATE", {}, nullptr, {}, true});
+    const Interpolation mode = interpolation_of(render);
+    {
+        std::string value = mode == Interpolation::kOff      ? "OFF"
+                            : mode == Interpolation::kNative ? "NATIVE"
+                                                             : "DLSS FRAME GENERATION";
+        if (mode == Interpolation::kFrameGeneration) {
+            if (!streamline::frame_generation_supported()) value += " (AFTER RESTART)";
+            else if (render.upscaler != 3u) value += " (NEEDS DLSS)";
         }
-        case 3: {
-            static constexpr const char* kTemporal[] = {
-                "NATIVE AA", "QUALITY", "BALANCED", "PERFORMANCE", "ULTRA PERFORMANCE"};
-            static constexpr const char* kDlss[] = {
-                "DLAA", "QUALITY", "BALANCED", "PERFORMANCE", "ULTRA PERFORMANCE"};
-            static constexpr const char* kSpatial[] = {
-                "MANUAL", "QUALITY", "BALANCED", "PERFORMANCE", "ULTRA PERFORMANCE"};
-            const unsigned quality = render.upscaler >= 2u ? std::min(render.temporal_quality, 4u)
-                                                           : std::min(render.spatial_quality, 4u);
-            switch (std::min(render.upscaler, 3u)) {
-            case 3u: return std::string("DLSS: ") + kDlss[quality];
-            case 2u: return std::string("FSR 3 QUALITY: ") + kTemporal[quality];
-            case 1u: return std::string("FSR 1 QUALITY: ") + kSpatial[quality];
-            default: return std::string("QUALITY: ") + kSpatial[quality];
-            }
+        rows.push_back({"INTERPOLATION", value,
+                        [](RenderConfig& draft, int delta) {
+                            const auto modes = interpolation_modes(draft);
+                            const Interpolation current = interpolation_of(draft);
+                            std::size_t index = 0u;
+                            for (std::size_t i = 0; i < modes.size(); ++i) {
+                                if (modes[i] == current) index = i;
+                            }
+                            const Interpolation next = modes[settings_step(static_cast<unsigned>(index),
+                                                                           static_cast<unsigned>(modes.size()), delta)];
+                            if (next == current) return;
+                            draft.frame_generation = next == Interpolation::kFrameGeneration ? 1u : 0u;
+                            // Interpolation starts at the display's own rate.
+                            draft.max_fps = next == Interpolation::kOff ? 60.0f : 0.0f;
+                            if (next == Interpolation::kFrameGeneration && draft.upscaler != 3u) {
+                                draft.upscaler = 3u;  // frame generation runs with DLSS
+                            }
+                            normalize_interpolation(draft);
+                        },
+                        mode == Interpolation::kOff ? "THE GAME RUNS AT 60. NATIVE OR DLSS ADD FRAMES BETWEEN"
+                        : mode == Interpolation::kNative
+                            ? "NEBULA DRAWS EXTRA FRAMES FROM THE GAME MOTION"
+                            : "NVIDIA GENERATES THE FRAMES BETWEEN THE GAME'S 60"});
+    }
+    const double measured = s_measured_present_hz.load(std::memory_order_relaxed) *
+                            (frame_generation_running() ? static_cast<double>(streamline::frames_presented()) : 1.0);
+    char now[48]{};
+    std::snprintf(now, sizeof(now), "SHOWING %.1f FPS", measured);
+    if (mode == Interpolation::kOff) {
+        const auto rate = static_cast<unsigned>(std::lround(std::max(0.0f, render.max_fps)));
+        rows.push_back({"FRAME RATE LIMIT", rate <= 30u ? "30 FPS" : "60 FPS",
+                        [](RenderConfig& draft, int delta) { draft.max_fps = delta < 0 ? 30.0f : 60.0f; },
+                        now});
+    } else {
+        const auto rate = static_cast<unsigned>(std::lround(std::max(0.0f, render.max_fps)));
+        if (rate == 0u) {
+            const unsigned refresh = settings_refresh_hz(render);
+            std::snprintf(text, sizeof(text), refresh != 0u ? "MATCH REFRESH (%u HZ)" : "MATCH REFRESH", refresh);
+        } else {
+            std::snprintf(text, sizeof(text), "%u FPS", rate);
         }
-        case 4:
-            std::snprintf(text, sizeof(text), "SHARPENING: %u%%", std::min(render.sharpness, 100u));
-            return text;
-        case 5:
-            if (render.anisotropic_filtering <= 1u) return "TEXTURES: TRILINEAR";
-            std::snprintf(text, sizeof(text), "TEXTURES: %uX ANISOTROPIC",
-                          std::min(render.anisotropic_filtering, 16u));
-            return text;
-        case 6:
-            return std::string("MIPMAPS: ") + (render.enhanced_mipmaps ? "GENERATED" : "ORIGINAL");
-        case 7:
-            return std::string("LIGHTING: ") +
-                   (render.per_pixel_lighting ? "PER PIXEL" : "PER VERTEX");
-        case 8:
-            return std::string("2D LAYER: ") +
-                   (render.hud_output_resolution ? "DISPLAY RES" : "INTERNAL RES");
-        case 9:
-            return std::string("RAY TRACING: ") + (render.ray_tracing_enabled ? "ON" : "OFF");
-        default:
+        rows.push_back({"TARGET FRAME RATE", text,
+                        [](RenderConfig& draft, int delta) {
+                            const auto targets = interpolation_targets(draft, interpolation_of(draft));
+                            if (targets.empty()) return;
+                            const auto current = static_cast<unsigned>(std::lround(std::max(0.0f, draft.max_fps)));
+                            std::size_t index = targets.size() - 1u;
+                            for (std::size_t i = 0; i < targets.size(); ++i) {
+                                if (targets[i] == current) index = i;
+                            }
+                            draft.max_fps = static_cast<float>(targets[settings_step(
+                                static_cast<unsigned>(index), static_cast<unsigned>(targets.size()), delta)]);
+                        },
+                        now});
+    }
+
+    rows.push_back({"DETAIL", {}, nullptr, {}, true});
+    {
+        static constexpr std::array<unsigned, 5> kAnisotropy{1u, 2u, 4u, 8u, 16u};
+        if (render.anisotropic_filtering <= 1u) {
+            std::snprintf(text, sizeof(text), "TRILINEAR");
+        } else {
+            std::snprintf(text, sizeof(text), "%uX ANISOTROPIC", std::min(render.anisotropic_filtering, 16u));
+        }
+        rows.push_back({"TEXTURE FILTERING", text,
+                        [](RenderConfig& draft, int delta) {
+                            std::size_t index = 0u;
+                            for (std::size_t i = 0; i < kAnisotropy.size(); ++i) {
+                                if (kAnisotropy[i] <= draft.anisotropic_filtering) index = i;
+                            }
+                            draft.anisotropic_filtering = kAnisotropy[settings_step(
+                                static_cast<unsigned>(index), static_cast<unsigned>(kAnisotropy.size()), delta)];
+                        },
+                        "SHARPER TEXTURES ON FLOORS AND WALLS AT AN ANGLE"});
+    }
+    rows.push_back({"MIPMAPS", render.enhanced_mipmaps ? "GENERATED" : "ORIGINAL",
+                    [](RenderConfig& draft, int) { draft.enhanced_mipmaps = !draft.enhanced_mipmaps; },
+                    "GENERATED ADDS SMOOTH DISTANT DETAIL WHERE THE GAME HAS NONE"});
+    rows.push_back({"LIGHTING", render.per_pixel_lighting ? "PER PIXEL" : "PER VERTEX",
+                    [](RenderConfig& draft, int) { draft.per_pixel_lighting = !draft.per_pixel_lighting; },
+                    "PER PIXEL LIGHTS EVERY PIXEL INSTEAD OF EVERY CORNER"});
+    if (s_ray_tracing_offered.load(std::memory_order_relaxed)) {
+        rows.push_back({"RAY TRACING", render.ray_tracing_enabled ? "ON" : "OFF",
+                        [](RenderConfig& draft, int) { draft.ray_tracing_enabled = !draft.ray_tracing_enabled; },
+                        "TRACED SHADOWS, SKY AND BOUNCE LIGHT, GLOWS THAT LIGHT THE WORLD"});
+    }
+    return rows;
+}
+
+// GAME > GALAXY SELECT: the galaxy and star the TRAVEL row goes to.
+std::size_t s_galaxy_select_stage = 0u;
+std::uint32_t s_galaxy_select_star = 1u;
+
+std::vector<SettingsRow> game_page(const RuntimeSettings& runtime) {
+    std::vector<SettingsRow> rows;
+    char text[32]{};
+    std::snprintf(text, sizeof(text), "%uX", std::clamp(runtime.text_speed, 1u, 3u));
+    rows.push_back({"TEXT SPEED", text,
+                    [](RenderConfig&, int delta) {
+                        // Changes live (no apply).
+                        RuntimeSettings settings = get_runtime_settings();
+                        const unsigned next = settings_step(std::clamp(settings.text_speed, 1u, 3u) - 1u, 3u, delta) + 1u;
+                        if (next != settings.text_speed) {
+                            settings.text_speed = next;
+                            set_runtime_settings(settings);
+                            s_native_settings_dirty.store(true, std::memory_order_release);
+                        }
+                    },
+                    "HOW FAST DIALOGUE TEXT APPEARS"});
+    if (galaxy_select_enabled()) {
+        want_galaxy_select_names();
+        const std::size_t stage = std::min(s_galaxy_select_stage, kGalaxyStageCount - 1u);
+        const std::uint32_t star = std::clamp(s_galaxy_select_star, 1u, kGalaxyStages[stage].stars);
+        std::string name = galaxy_select_name(stage);
+        if (name.empty()) name = upper_ascii(kGalaxyStages[stage].id);
+        rows.push_back({"GALAXY SELECT", {}, nullptr, {}, true});
+        rows.push_back({"GALAXY", name,
+                        [](RenderConfig&, int delta) {
+                            s_galaxy_select_stage = settings_step(
+                                static_cast<unsigned>(std::min(s_galaxy_select_stage, kGalaxyStageCount - 1u)),
+                                static_cast<unsigned>(kGalaxyStageCount), delta);
+                            s_galaxy_select_star = 1u;
+                        },
+                        "ANY GALAXY, FOR TESTING. STARS COLLECTED THERE ARE SAVED"});
+        std::string star_name = galaxy_select_star_name(stage, star);
+        char star_text[96]{};
+        std::snprintf(star_text, sizeof(star_text), star_name.empty() ? "%u" : "%u  %s", star, star_name.c_str());
+        rows.push_back({"STAR", star_text,
+                        [](RenderConfig&, int delta) {
+                            const std::size_t at = std::min(s_galaxy_select_stage, kGalaxyStageCount - 1u);
+                            s_galaxy_select_star = settings_step(s_galaxy_select_star - 1u, kGalaxyStages[at].stars,
+                                                                 delta) + 1u;
+                        },
+                        "THE MISSION TO PLAY"});
+        rows.push_back({"TRAVEL", "PRESS RIGHT",
+                        [](RenderConfig&, int delta) {
+                            if (delta <= 0) return;
+                            const std::size_t at = std::min(s_galaxy_select_stage, kGalaxyStageCount - 1u);
+                            request_galaxy_travel(at, std::clamp(s_galaxy_select_star, 1u, kGalaxyStages[at].stars));
+                            std::cerr << "[settings] travel to " << kGalaxyStages[at].id << ' '
+                                      << s_galaxy_select_star << '\n';
+                            set_native_settings_visible(false);
+                        },
+                        "LOADS IT WITH THE GAME OWN STAGE CHANGE, FROM ANY GALAXY"});
+    }
+    return rows;
+}
+
+std::vector<SettingsRow> system_page(const RenderFeatureCaps& caps) {
+    std::vector<SettingsRow> rows;
+    char text[64]{};
+    std::snprintf(text, sizeof(text), "TIER %u %s", caps.dxr_raytracing_tier, exposed_text(caps.dxr));
+    rows.push_back({"RAY TRACING HARDWARE", text, nullptr, "DIRECTX RAYTRACING ON THIS GPU"});
+    rows.push_back({"NVIDIA STREAMLINE", exposed_text(caps.streamline), nullptr, "LOADS DLSS FROM THE NVIDIA DOWNLOAD"});
+    rows.push_back({"NVIDIA REFLEX", exposed_text(caps.reflex), nullptr, "LOW LATENCY WITH FRAME GENERATION"});
+    rows.push_back({"DLSS", exposed_text(caps.dlss_super_resolution), nullptr, "UPSCALING ON NVIDIA RTX GPUS"});
+    rows.push_back({"DLSS FRAME GENERATION", exposed_text(caps.dlss_frame_generation), nullptr,
+                    "GENERATED FRAMES ON NVIDIA RTX 40 AND 50 GPUS"});
+    std::string post = post_process_caps_text(get_post_process_status());
+    if (const std::size_t colon = post.find(": "); colon != std::string::npos) post.erase(0, colon + 2u);
+    rows.push_back({"POST-PROCESS", post, nullptr, "ANTI-ALIASING, FSR 1 AND SHARPENING"});
+    return rows;
+}
+
+std::vector<SettingsRow> settings_page(unsigned tab, const RenderConfig& draft, const RuntimeSettings& runtime,
+                                       const RenderFeatureCaps& caps) {
+    switch (tab % kNativeSettingsTabCount) {
+    case 0: return display_page(draft);
+    case 1: return graphics_page(draft);
+    case 4: return game_page(runtime);
+    case 5: return system_page(caps);
+    default: return {};
+    }
+}
+
+}  // namespace
+
+std::string native_settings_row_text(
+    unsigned tab, unsigned row,
+    const RenderConfig& render, const RuntimeSettings& runtime,
+    const RenderFeatureCaps& caps) {
+    char text[128]{};
+    if (settings_page_tab(tab % kNativeSettingsTabCount)) {
+        const auto page = settings_page(tab % kNativeSettingsTabCount, render, runtime, caps);
+        if (row >= page.size()) {
             return {};
         }
+        return page[row].heading ? page[row].label : page[row].label + ": " + page[row].value;
     }
+    switch (tab % kNativeSettingsTabCount) {
     case 2: {
         (void)runtime;
         using galaxy::input::ControlScheme;
@@ -12939,38 +13178,6 @@ std::string native_settings_row_text(
         case 6: return std::string("WIIMOTE SOUNDS: ") + percent_text(runtime.audio.wiimote_speaker);
         default: return {};
         }
-    case 4:
-        if (row == 0u) {
-            std::snprintf(text, sizeof(text), "TEXT SPEED: %uX", std::clamp(runtime.text_speed, 1u, 3u));
-            return text;
-        }
-        return {};
-    case 5:
-        switch (row) {
-        case 0:
-            std::snprintf(
-                text,
-                sizeof(text),
-                "DXR: TIER %u %s",
-                caps.dxr_raytracing_tier,
-                exposed_text(caps.dxr));
-            return text;
-        case 1:
-            return std::string("STREAMLINE: ") +
-                   exposed_text(caps.streamline);
-        case 2:
-            return std::string("REFLEX: ") + exposed_text(caps.reflex);
-        case 3:
-            return std::string("DLSS: ") +
-                   exposed_text(caps.dlss_super_resolution);
-        case 4:
-            return std::string("DLFG: ") +
-                   exposed_text(caps.dlss_frame_generation);
-        case 5:
-            return post_process_caps_text(get_post_process_status());
-        default:
-            return {};
-        }
     default:
         return {};
     }
@@ -12978,6 +13185,33 @@ std::string native_settings_row_text(
 
 void draw_native_settings_overlay(RendererD3D12& renderer) {
     poll_dlss_download();
+    {
+        // GALAXY_TEST_SETTINGS_OPEN=<page>[:<present>]: hidden test runs open the menu on that page
+        // once, at that present.
+        static int test_page = -1;
+        static unsigned long test_present = 0u;
+        static const bool test_read = [] {
+            char value[32]{};
+            std::size_t length = 0u;
+            if (getenv_s(&length, value, sizeof(value), "GALAXY_TEST_SETTINGS_OPEN") == 0 && length > 1u) {
+                char* end = nullptr;
+                test_page = static_cast<int>(std::strtol(value, &end, 10));
+                if (end != nullptr && *end == ':') test_present = std::strtoul(end + 1, nullptr, 10);
+            }
+            return true;
+        }();
+        (void)test_read;
+        static unsigned long presents = 0u;
+        static bool test_opened = false;
+        if (test_page >= 0 && !test_opened && ++presents >= test_present) {
+            test_opened = true;
+            const std::lock_guard<std::recursive_mutex> lock(s_native_settings_mutex);
+            s_native_settings_tab.store(static_cast<unsigned>(test_page) % kNativeSettingsTabCount,
+                                        std::memory_order_relaxed);
+            s_native_settings_row.store(0u, std::memory_order_relaxed);
+            set_native_settings_visible(true);
+        }
+    }
     if (!s_native_settings_visible.load(std::memory_order_relaxed)) {
         return;
     }
@@ -13045,7 +13279,7 @@ void draw_native_settings_overlay(RendererD3D12& renderer) {
         "SETTINGS",
         text);
 
-    const char* tabs[] = {"DISPLAY", "GRAPHICS", "CONTROLS", "AUDIO", "GENERAL", "CAPS"};
+    const char* tabs[] = {"DISPLAY", "GRAPHICS", "CONTROLS", "AUDIO", "GAME", "SYSTEM"};
     static_assert(std::size(tabs) == kNativeSettingsTabCount);
     int tab_x = panel_x + 28;
     // The labels share the panel width; the longest is eight 6-unit glyphs
@@ -13086,9 +13320,43 @@ void draw_native_settings_overlay(RendererD3D12& renderer) {
                                           static_cast<int>(row_count - visible_rows);
         ui_rect(renderer, track_x, thumb_y, 4, thumb_h, accent);
     }
+    // Rows: the label on the left, the value on the right between arrows where it can change;
+    // section headings in the accent colour.
+    const auto text_width = [](const std::string& line, int glyph_scale) {
+        int width = 0;
+        for (const char ch : line) width += (ch == ' ' ? 4 : 6) * glyph_scale;
+        return width;
+    };
+    const bool page_tab = settings_page_tab(tab);
+    const std::vector<SettingsRow> page =
+        page_tab ? settings_page(tab, row_render, row_runtime, row_caps) : std::vector<SettingsRow>{};
+    std::string help;
     for (unsigned row = s_settings_first_row; row < s_settings_first_row + visible_rows; ++row) {
         const int y =
             layout.rows_y + static_cast<int>(row - s_settings_first_row) * layout.row_step;
+        std::string label;
+        std::string value;
+        bool heading = false;
+        bool changes = true;
+        if (page_tab && row < page.size()) {
+            label = page[row].label;
+            value = page[row].value;
+            heading = page[row].heading;
+            changes = static_cast<bool>(page[row].change);
+            if (row == selected_row) help = page[row].help;
+        } else {
+            label = native_settings_row_text(tab, row, row_render, row_runtime, row_caps);
+            if (const std::size_t colon = label.find(": "); colon != std::string::npos) {
+                value = label.substr(colon + 2u);
+                label.resize(colon);
+            }
+        }
+        if (heading) {
+            ui_text(renderer, panel_x + 36, y, scale, label, accent);
+            ui_rect(renderer, panel_x + 44 + text_width(label, scale), y + scale * 3, panel_w - 92 - text_width(label, scale),
+                    std::max(1, scale / 2), muted);
+            continue;
+        }
         if (row == selected_row) {
             const int selection_height = std::max(14, scale * 7 + 4);
             ui_rect(
@@ -13100,13 +13368,12 @@ void draw_native_settings_overlay(RendererD3D12& renderer) {
                 selected);
             ui_text(renderer, panel_x + 36, y, scale, ">", accent);
         }
-        ui_text(
-            renderer,
-            panel_x + 70,
-            y,
-            scale,
-            native_settings_row_text(tab, row, row_render, row_runtime, row_caps),
-            text);
+        ui_text(renderer, panel_x + 70, y, scale, label, changes ? text : muted);
+        if (!value.empty()) {
+            const std::string shown = changes && row == selected_row ? "< " + value + " >" : value;
+            ui_text(renderer, panel_x + panel_w - 48 - text_width(shown, scale), y, scale, shown,
+                    row == selected_row ? accent : (changes ? text : muted));
+        }
     }
 
     const int footer_y = layout.footer_y;
@@ -13149,6 +13416,8 @@ void draw_native_settings_overlay(RendererD3D12& renderer) {
     } else if (s_settings_applied_ms != 0u && now_ms - s_settings_applied_ms < 2500u) {
         status = "APPLIED";
         status_color = accent;
+    } else if (!help.empty()) {
+        status = help;
     }
     if (!status.empty()) {
         ui_text(renderer, panel_x + 28, footer_y, footer_scale, status, status_color);
@@ -14256,6 +14525,7 @@ void native_settings_reset_overlay_state_for_tests() noexcept {
     s_native_settings_save_error.store(false, std::memory_order_relaxed);
     s_native_settings_tab.store(0u, std::memory_order_relaxed);
     s_native_settings_row.store(0u, std::memory_order_relaxed);
+    settle_native_settings_row();
 }
 
 }  // namespace galaxy::gx

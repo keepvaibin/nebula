@@ -1247,6 +1247,10 @@ private:
     [[nodiscard]] RtSources rt_sources() const;
     // The occlusion of result `slot` onto the EFB colour; `reproject` on a sub-frame's replay.
     void record_rt_composite(int slot, bool reproject);
+    // The EFB colour as the ray-traced composite reads it (it draws into the EFB): a copy, and its
+    // view in this frame's descriptor ring.
+    D3D12_GPU_DESCRIPTOR_HANDLE rt_composite_color();
+    Microsoft::WRL::ComPtr<ID3D12Resource> rt_color_copy_;
     [[nodiscard]] bool temporal_inputs_match(const TemporalUpscaleInputs& in) const;
     D3D12_GPU_VIRTUAL_ADDRESS resident_vertex_base_ = 0;
     std::uint64_t resident_vertex_bytes_ = 0;

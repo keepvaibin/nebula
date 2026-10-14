@@ -643,7 +643,13 @@ PSOut main(PSIn pin) {
         uint lit_w, lit_h;
         tex[7].GetDimensions(lit_w, lit_h);
         const int2 lit_at = min(int2(pin.pos.xy * ztex_params.z), int2(lit_w, lit_h) - 1);
-        frag.rgb *= clamp(tex[7].Load(int3(lit_at, 0)).rgb, 0.45, 1.35);
+        // Darker in proportion, brighter towards white by the headroom left (rt_lighting.hlsl
+        // apply_light): bright texels keep their detail.
+        const float3 lit_m = clamp(tex[7].Load(int3(lit_at, 0)).rgb, 0.45, 1.35);
+        const float3 lit_room = max(1.0 - frag.rgb, 1e-4);
+        frag.rgb = lerp(frag.rgb * lit_m,
+                        frag.rgb + lit_room * (1.0 - exp(-(frag.rgb * max(lit_m - 1.0, 0.0)) / lit_room)),
+                        step(1.0, lit_m));
     }
     float tev_alpha = saturate(frag.a);
     uint4 efb_color = uint4(round(saturate(frag) * 255.0));

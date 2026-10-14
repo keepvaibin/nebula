@@ -662,8 +662,8 @@ bool SceneRayTracer::initialize(ID3D12Device* device, std::uint64_t timestamp_fr
     sky_distance_ = std::clamp(env_float("GALAXY_RT_SKY_DISTANCE", 60000.0f), 1000.0f, 1.0e7f);
     sky_ibl_ = std::clamp(env_float("GALAXY_RT_SKY_IBL", 0.8f), 0.0f, 1.0f);
     post_ = env_float("GALAXY_RT_POST", 1.0f) != 0.0f;
-    post_bloom_ = std::clamp(env_float("GALAXY_RT_POST_BLOOM", 0.4f), 0.0f, 4.0f);
-    post_threshold_ = std::clamp(env_float("GALAXY_RT_POST_THRESHOLD", 0.9f), 0.0f, 0.99f);
+    post_bloom_ = std::clamp(env_float("GALAXY_RT_POST_BLOOM", 0.3f), 0.0f, 4.0f);
+    post_threshold_ = std::clamp(env_float("GALAXY_RT_POST_THRESHOLD", 0.97f), 0.0f, 0.99f);
     post_shafts_ = std::clamp(env_float("GALAXY_RT_POST_SHAFTS", 0.6f), 0.0f, 4.0f);
     post_dof_ = std::clamp(env_float("GALAXY_RT_POST_DOF", 3.0f), 0.0f, 32.0f);
     post_grade_ = std::clamp(env_float("GALAXY_RT_POST_GRADE", 1.0f), 0.0f, 1.0f);
@@ -1679,7 +1679,11 @@ bool SceneRayTracer::create_lighting_pipelines(DXGI_FORMAT color_format) {
     composite_depth.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
     composite_depth.NumDescriptors = 1u;
     composite_depth.BaseShaderRegister = 1u;
-    D3D12_ROOT_PARAMETER composite_params[4]{};
+    D3D12_DESCRIPTOR_RANGE composite_color{};
+    composite_color.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
+    composite_color.NumDescriptors = 1u;
+    composite_color.BaseShaderRegister = 3u;
+    D3D12_ROOT_PARAMETER composite_params[5]{};
     composite_params[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
     composite_params[0].Constants.Num32BitValues = sizeof(RtCompositeConstants) / 4u;
     composite_params[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_SRV;
@@ -1688,11 +1692,14 @@ bool SceneRayTracer::create_lighting_pipelines(DXGI_FORMAT color_format) {
     composite_params[2].DescriptorTable.pDescriptorRanges = &composite_depth;
     composite_params[3].ParameterType = D3D12_ROOT_PARAMETER_TYPE_SRV;
     composite_params[3].Descriptor.ShaderRegister = 2u;
+    composite_params[4].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+    composite_params[4].DescriptorTable.NumDescriptorRanges = 1u;
+    composite_params[4].DescriptorTable.pDescriptorRanges = &composite_color;
     for (auto& param : composite_params) {
         param.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
     }
     D3D12_ROOT_SIGNATURE_DESC composite_rsd{};
-    composite_rsd.NumParameters = 4u;
+    composite_rsd.NumParameters = 5u;
     composite_rsd.pParameters = composite_params;
     if (!serialize(composite_rsd, composite_root_)) {
         return false;
@@ -1701,16 +1708,10 @@ bool SceneRayTracer::create_lighting_pipelines(DXGI_FORMAT color_format) {
     graphics.pRootSignature = composite_root_.Get();
     graphics.VS = {g_rt_composite_vs, sizeof(g_rt_composite_vs)};
     graphics.PS = {g_rt_composite_ps, sizeof(g_rt_composite_ps)};
-    // Colour times the lighting: dst * src0 + dst * src1 (GALAXY_RT_VIEW: the lighting alone).
-    // The destination alpha the game may read stays.
+    // The lit colour over the EFB's (read from a copy); the destination alpha the game may read
+    // stays.
     D3D12_RENDER_TARGET_BLEND_DESC& blend = graphics.BlendState.RenderTarget[0];
-    blend.BlendEnable = show_lighting_ ? FALSE : TRUE;
-    blend.SrcBlend = D3D12_BLEND_DEST_COLOR;
-    blend.DestBlend = D3D12_BLEND_SRC1_COLOR;
-    blend.BlendOp = D3D12_BLEND_OP_ADD;
-    blend.SrcBlendAlpha = D3D12_BLEND_ZERO;
-    blend.DestBlendAlpha = D3D12_BLEND_ONE;
-    blend.BlendOpAlpha = D3D12_BLEND_OP_ADD;
+    blend.BlendEnable = FALSE;
     blend.LogicOp = D3D12_LOGIC_OP_NOOP;
     blend.RenderTargetWriteMask =
         D3D12_COLOR_WRITE_ENABLE_RED | D3D12_COLOR_WRITE_ENABLE_GREEN | D3D12_COLOR_WRITE_ENABLE_BLUE;
@@ -2687,10 +2688,10 @@ void SceneRayTracer::bloom(ID3D12GraphicsCommandList* list, D3D12_CPU_DESCRIPTOR
 }
 
 void SceneRayTracer::composite(ID3D12GraphicsCommandList* list, D3D12_CPU_DESCRIPTOR_HANDLE target,
-                               D3D12_GPU_DESCRIPTOR_HANDLE depth_srv, std::uint32_t width, std::uint32_t height,
-                               int slot, bool reproject) {
+                               D3D12_GPU_DESCRIPTOR_HANDLE depth_srv, D3D12_GPU_DESCRIPTOR_HANDLE color_srv,
+                               std::uint32_t width, std::uint32_t height, int slot, bool reproject) {
     if (list == nullptr || slot < 0 || slot >= static_cast<int>(kLightSlots) || !composite_pso_ ||
-        depth_srv.ptr == 0u) {
+        depth_srv.ptr == 0u || color_srv.ptr == 0u) {
         return;
     }
     const auto index = static_cast<unsigned>(slot);
@@ -2727,6 +2728,7 @@ void SceneRayTracer::composite(ID3D12GraphicsCommandList* list, D3D12_CPU_DESCRI
     list->SetGraphicsRootDescriptorTable(2u, depth_srv);
     list->SetGraphicsRootShaderResourceView(3u, reproject ? reproject_->GetGPUVirtualAddress()
                                                           : light_final_[index]->GetGPUVirtualAddress());
+    list->SetGraphicsRootDescriptorTable(4u, color_srv);
     list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
     list->DrawInstanced(3u, 1u, 0u, 0u);
     ++window_.composites;

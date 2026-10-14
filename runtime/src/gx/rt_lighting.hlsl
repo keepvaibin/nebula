@@ -1611,8 +1611,9 @@ float4 LightTexturePS(float4 position : SV_Position) : SV_Target0
 }
 
 // ---------------------------------------------------------------------------------------------
-// Composite: the EFB colour times the lighting (dual-source blend: dst * src0 + dst * src1, so
-// the multiplier reaches 2 on an 8-bit target)
+// Composite: the EFB colour (a copy of it) under the lighting. Less light darkens it in
+// proportion; more light brightens it towards white without passing it, by the headroom the
+// colour has left, so bright texels keep their detail instead of clipping flat.
 // ---------------------------------------------------------------------------------------------
 
 cbuffer RtComposite : register(b0)
@@ -1632,12 +1633,19 @@ cbuffer RtComposite : register(b0)
 StructuredBuffer<uint3> m_light : register(t0);
 Texture2D<float> m_efb_depth : register(t1);
 StructuredBuffer<float4> m_reproject : register(t2);
+Texture2D<float4> m_color : register(t3);
 
 struct CompositeOut
 {
-    float4 add : SV_Target0;
-    float4 keep : SV_Target1;
+    float4 color : SV_Target0;
 };
+
+float3 apply_light(float3 c, float3 m)
+{
+    const float3 headroom = max(1.0f - c, 1e-4f);
+    const float3 brighter = c + headroom * (1.0f - exp(-(c * max(m - 1.0f, 0.0f)) / headroom));
+    return lerp(c * m, brighter, step(1.0f, m));
+}
 
 float4 CompositeVS(uint id : SV_VertexID) : SV_Position
 {
@@ -1651,11 +1659,11 @@ CompositeOut CompositePS(float4 position : SV_Position)
     const float z = depth_to_eye_z(m_depth, depth);
     const float slope = min(abs(ddx(z)) + abs(ddy(z)), abs(z) * 0.05f);
     CompositeOut result;
-    result.add = float4(0.0f, 0.0f, 0.0f, 0.0f);
-    result.keep = float4(1.0f, 1.0f, 1.0f, 1.0f);
+    const float3 color = m_color.Load(int3(int2(position.xy), 0)).rgb;
+    result.color = float4(color, 1.0f);
     if (far_plane(m_depth, depth) || !inside(m_viewport, position.xy)) {
         if ((m_flags & 2u) != 0u) {
-            result.add = float4(0.5f, 0.5f, 0.5f, 1.0f);
+            result.color = float4(0.5f, 0.5f, 0.5f, 1.0f);
             return result;
         }
         discard;
@@ -1664,7 +1672,7 @@ CompositeOut CompositePS(float4 position : SV_Position)
         if (position.x < m_split - 1.0f) {
             discard;
         }
-        result.keep = float4(0.3f, 0.3f, 0.3f, 1.0f);
+        result.color = float4(color * 0.3f, 1.0f);
         return result;
     }
     float3 p = eye_position(m_projection, m_viewport, position.xy, z);
@@ -1705,10 +1713,9 @@ CompositeOut CompositePS(float4 position : SV_Position)
     }
     const float3 m = clamp(weight > 1e-3f ? sum / weight : nearest, 0.0f, 2.0f);
     if ((m_flags & 2u) != 0u) {
-        result.add = float4(m * 0.5f, 1.0f);
+        result.color = float4(m * 0.5f, 1.0f);
         return result;
     }
-    result.add = float4(max(m - 1.0f, 0.0f), 0.0f);
-    result.keep = float4(min(m, 1.0f), 1.0f);
+    result.color = float4(apply_light(color, m), 1.0f);
     return result;
 }
