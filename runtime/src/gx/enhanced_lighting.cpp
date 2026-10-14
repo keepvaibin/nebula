@@ -24,6 +24,7 @@ constexpr TuningField kTuningFields[] = {
     {"sheen_rough", &EnhancedLightingTuning::sheen_rough},
     {"metal", &EnhancedLightingTuning::metal},
     {"metal_rough", &EnhancedLightingTuning::metal_rough},
+    {"metal_f0", &EnhancedLightingTuning::metal_f0},
     {"env_base", &EnhancedLightingTuning::env_base},
     {"env_graze", &EnhancedLightingTuning::env_graze},
 };

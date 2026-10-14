@@ -135,10 +135,12 @@ inline constexpr unsigned kEnhancedTuneShift = 24u;
 // GxPsConstants::uber_ps_header[3] for enhanced pipelines: bits 0-15 the
 // split column in render-target pixels (left of it the game's own lighting,
 // 0 none), bit 16 the ray tracer's reflections are live, bit 17 its lighting
-// is (it supplies the sky light: no hemisphere ambient or sky rim).
+// is (it supplies the sky light: no hemisphere ambient or sky rim), bit 18
+// the highlights alone (GALAXY_ENHANCED_LIGHTING_VIEW=1).
 inline constexpr std::uint32_t kEnhancedSplitMask = 0xFFFFu;
 inline constexpr std::uint32_t kEnhancedRtReflections = 1u << 16u;
 inline constexpr std::uint32_t kEnhancedRtLighting = 1u << 17u;
+inline constexpr std::uint32_t kEnhancedView = 1u << 18u;
 
 struct PixelShaderKey {
     std::uint8_t num_tev_stages;    // 1-16

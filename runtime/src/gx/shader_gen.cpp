@@ -775,10 +775,15 @@ void enh_key_highlight(inout EnhShade e, float3 P) {
     }
 }
 
-float3 enh_finish(float3 frag, EnhShade e) {
-    float3 c = enh_lin(frag);
-    const float3 f0 = saturate(c);
-    return enh_srgb(c + e.spec + e.metal * (f0 + (1.0 - f0) * e.metal_fw));
+// The highlights added to the TEV result in linear light. A metal's F0 is its own colour raised to
+// a peak of at least kEnhMetalF0, so metals baked dull still reflect their light in their own hue.
+// `view`: the highlights alone (diagnostics).
+float3 enh_finish(float3 frag, EnhShade e, bool view) {
+    const float3 c = enh_lin(frag);
+    const float peak = max(max(c.r, c.g), max(c.b, 1e-4));
+    const float3 f0 = saturate(c * (max(peak, kEnhMetalF0) / peak));
+    const float3 h = e.spec + e.metal * (f0 + (1.0 - f0) * e.metal_fw);
+    return enh_srgb(view ? h : c + h);
 }
 )HLSL";
 
@@ -1469,9 +1474,10 @@ std::string ShaderGenerator::generate_ps(const PixelShaderKey& key) const {
              "static const float kEnhSheenRough = %.9g;\n"
              "static const float kEnhMetal = %.9g;\n"
              "static const float kEnhMetalRough = %.9g;\n"
+             "static const float kEnhMetalF0 = %.9g;\n"
              "static const float kEnhEnvBase = %.9g;\n"
              "static const float kEnhEnvGraze = %.9g;\n",
-             t.hemi, t.rim, t.knee, t.sheen, t.sheen_rough, t.metal, t.metal_rough, t.env_base,
+             t.hemi, t.rim, t.knee, t.sheen, t.sheen_rough, t.metal, t.metal_rough, t.metal_f0, t.env_base,
              t.env_graze);
         s << kEnhancedLighting;
     }
@@ -2136,9 +2142,10 @@ std::string ShaderGenerator::generate_ps(const PixelShaderKey& key) const {
     if (enhanced) {
         if ((key.ind_reserved & kEnhancedReflective) != 0u) {
             // The ray tracer's reflections own this class's highlights while they run.
-            s << "    if (enh_on && (uber_ps_header.w & 0x10000u) == 0u) frag.rgb = enh_finish(frag.rgb, enh);\n\n";
+            s << "    if (enh_on && (uber_ps_header.w & 0x10000u) == 0u)\n"
+                 "        frag.rgb = enh_finish(frag.rgb, enh, (uber_ps_header.w & 0x40000u) != 0u);\n\n";
         } else {
-            s << "    if (enh_on) frag.rgb = enh_finish(frag.rgb, enh);\n\n";
+            s << "    if (enh_on) frag.rgb = enh_finish(frag.rgb, enh, (uber_ps_header.w & 0x40000u) != 0u);\n\n";
         }
     }
 

@@ -10462,8 +10462,10 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
                 enhanced_flushes_ = 0u;
                 enhanced_uber_flushes_ = 0u;
             }
+            static const bool view = read_env_u64("GALAXY_ENHANCED_LIGHTING_VIEW", 0u) != 0u;
             enhanced_ps_flags_ = (renderer_.rt_reflections_active() ? kEnhancedRtReflections : 0u) |
-                                 (renderer_.rt_lighting() ? kEnhancedRtLighting : 0u);
+                                 (renderer_.rt_lighting() ? kEnhancedRtLighting : 0u) |
+                                 (view ? kEnhancedView : 0u);
         }
         renderer_.begin_frame(chunk.present_swap_chain);
         {
