@@ -575,6 +575,11 @@ public:
     // Smoothed GPU time of one sub-frame (0 until measured), for the budget.
     [[nodiscard]] double subframe_gpu_ema_ms() const noexcept { return subframe_gpu_ema_ms_; }
     void reset_subframe_gpu_ema() noexcept { subframe_gpu_ema_ms_ = 0.0; }
+    // GPU milliseconds of completed sub-frames by phase (evaluation, replay,
+    // present) since the last call.
+    [[nodiscard]] std::array<double, 3> take_subframe_phase_ms() noexcept {
+        return std::exchange(subframe_phase_ms_, {});
+    }
     void take_subframe_gpu_ms(double& total_ms, std::uint64_t& samples) noexcept {
         total_ms = subframe_gpu_ms_;
         samples = subframe_gpu_samples_;
@@ -1160,6 +1165,26 @@ private:
     static constexpr unsigned kReplayLists = 4;
     std::array<ReplayList, kReplayLists> replay_lists_{};
     bool record_replay_list(ReplayList& entry);
+    // GALAXY_INTERP_GPU_PROFILE: timestamps around the copies and clears of a
+    // sampled replay (report_replay_profile).
+    static constexpr std::uint32_t kReplayProfileQueries = 2048u;
+    struct ReplayProfileSegment {
+        std::uint32_t kind = 0;    // 0 draws, 1-3 copy (mode 0 texture, 1 display, 2 output EFB), 4 clear
+        std::uint32_t detail = 0;  // the op's copy or clear index
+    };
+    struct ReplayProfile {
+        Microsoft::WRL::ComPtr<ID3D12QueryHeap> heap;
+        Microsoft::WRL::ComPtr<ID3D12Resource> readback;
+        std::vector<ReplayProfileSegment> segments;
+        const ReplayList* list = nullptr;
+        std::uint64_t fence = 0;
+        bool armed = false;
+    };
+    ReplayProfile replay_profile_{};
+    std::uint64_t replay_profile_recordings_ = 0;
+    bool ensure_replay_profile();
+    void report_replay_profile();
+    std::array<double, 3> subframe_phase_ms_{};  // evaluation, replay, present
     std::uint64_t sequence_serial_ = 0;
     std::uint64_t replay_records_ = 0;
     Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> subframe_eval_list_;

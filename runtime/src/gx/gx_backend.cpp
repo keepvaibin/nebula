@@ -7531,6 +7531,8 @@ void GxBackend::report_interp_stats() {
     double gpu_ms = 0.0;
     std::uint64_t gpu_samples = 0u;
     renderer_.take_subframe_gpu_ms(gpu_ms, gpu_samples);
+    const std::array<double, 3> gpu_phase = renderer_.take_subframe_phase_ms();
+    const double gpu_divisor = gpu_samples != 0u ? static_cast<double>(gpu_samples) : 1.0;
     double record_ms = 0.0;
     std::uint64_t record_samples = 0u;
     renderer_.take_subframe_record_ms(record_ms, record_samples);
@@ -7615,6 +7617,8 @@ void GxBackend::report_interp_stats() {
             << (interp_presented_ != 0u ? interp_cpu_ms_ / presented : 0.0)
             << " gpu-ms-per-subframe="
             << (gpu_samples != 0u ? gpu_ms / static_cast<double>(gpu_samples) : 0.0)
+            << " gpu-phase-ms(eval/replay/present)=" << gpu_phase[0] / gpu_divisor << '/'
+            << gpu_phase[1] / gpu_divisor << '/' << gpu_phase[2] / gpu_divisor
             << " chunk-continued-records=" << std::exchange(interp_chunk_continues_, 0u)
             << " colour-records-per-subframe="
             << (interp_presented_ != 0u

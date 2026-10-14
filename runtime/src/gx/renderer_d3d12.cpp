@@ -7423,7 +7423,7 @@ bool RendererD3D12::ensure_subframe_resources(unsigned xfb_width, unsigned xfb_h
         }
         D3D12_QUERY_HEAP_DESC qd{};
         qd.Type = D3D12_QUERY_HEAP_TYPE_TIMESTAMP;
-        qd.Count = kSubframeAllocators * 2u;
+        qd.Count = kSubframeAllocators * 4u;
         if (timestamp_frequency_ != 0u) {
             (void)device_->CreateQueryHeap(&qd, IID_PPV_ARGS(&subframe_query_heap_));
         }
@@ -7432,7 +7432,7 @@ bool RendererD3D12::ensure_subframe_resources(unsigned xfb_width, unsigned xfb_h
             hp.Type = D3D12_HEAP_TYPE_READBACK;
             D3D12_RESOURCE_DESC rd{};
             rd.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
-            rd.Width = kSubframeAllocators * 2u * sizeof(std::uint64_t);
+            rd.Width = kSubframeAllocators * 4u * sizeof(std::uint64_t);
             rd.Height = 1;
             rd.DepthOrArraySize = 1;
             rd.MipLevels = 1;
@@ -8504,7 +8504,32 @@ bool RendererD3D12::record_replay_list(ReplayList& entry) {
         entry.blend_segment = prev_run_segment_;
         const D3D12_GPU_VIRTUAL_ADDRESS output = interp_output_->GetGPUVirtualAddress();
         std::uint64_t blended = 0u;
+        // GALAXY_INTERP_GPU_PROFILE=<n>: every n-th recording takes a timestamp
+        // around each copy and clear (diagnostics).
+        static const std::uint64_t profile_every = [] {
+            char value[16]{};
+            std::size_t length = 0u;
+            return getenv_s(&length, value, sizeof(value), "GALAXY_INTERP_GPU_PROFILE") == 0 && length > 1u
+                ? std::strtoull(value, nullptr, 10) : 0ull;
+        }();
+        const bool profile = profile_every != 0u && timestamp_frequency_ != 0u && !replay_profile_.armed &&
+                             ++replay_profile_recordings_ % profile_every == 0u && ensure_replay_profile();
+        if (profile) {
+            replay_profile_.segments.clear();
+            replay_profile_.list = &entry;
+            command_list_->EndQuery(replay_profile_.heap.Get(), D3D12_QUERY_TYPE_TIMESTAMP, 0u);
+        }
+        const auto mark = [&](std::uint32_t kind, std::uint32_t detail) {
+            if (profile && replay_profile_.segments.size() + 1u < kReplayProfileQueries) {
+                replay_profile_.segments.push_back({kind, detail});
+                command_list_->EndQuery(replay_profile_.heap.Get(), D3D12_QUERY_TYPE_TIMESTAMP,
+                                        static_cast<UINT>(replay_profile_.segments.size()));
+            }
+        };
         for (const ReplayOp& op : run_ops_) {
+            if (op.kind == ReplayKind::Copy || op.kind == ReplayKind::Clear) {
+                mark(0u, op.index);
+            }
             switch (op.kind) {
             case ReplayKind::Draw: {
                 DrawCall call = run_draws_[op.index];
@@ -8580,6 +8605,20 @@ bool RendererD3D12::record_replay_list(ReplayList& entry) {
                     far_values.reversed_depth, 0u, 0u, nullptr);
                 break;
             }
+            if (op.kind == ReplayKind::Copy) {
+                const ReplayCopy& copy = run_copies_[op.index];
+                mark(1u + copy.mode, op.index);
+            } else if (op.kind == ReplayKind::Clear) {
+                mark(4u, op.index);
+            }
+        }
+        if (profile) {
+            mark(0u, ~0u);
+            command_list_->ResolveQueryData(replay_profile_.heap.Get(), D3D12_QUERY_TYPE_TIMESTAMP, 0u,
+                                            static_cast<UINT>(replay_profile_.segments.size() + 1u),
+                                            replay_profile_.readback.Get(), 0u);
+            replay_profile_.armed = true;
+            replay_profile_.fence = 0u;
         }
         // The log ends after its display copy, on the output EFB when it switched.
         if (output_efb_active_) {
@@ -8655,15 +8694,20 @@ bool RendererD3D12::present_replay_subframe(float t, const Affine34& camera_t) {
         wait_for_fence_value(subframe_fences_[index]);
     }
     if (subframe_timestamp_pending_[index] && subframe_readback_ && timestamp_frequency_ != 0u) {
-        const SIZE_T offset = static_cast<SIZE_T>(index) * 2u * sizeof(std::uint64_t);
-        const D3D12_RANGE range{offset, offset + 2u * sizeof(std::uint64_t)};
+        const SIZE_T offset = static_cast<SIZE_T>(index) * 4u * sizeof(std::uint64_t);
+        const D3D12_RANGE range{offset, offset + 4u * sizeof(std::uint64_t)};
         void* mapped = nullptr;
         if (SUCCEEDED(subframe_readback_->Map(0, &range, &mapped))) {
             const auto* ticks = reinterpret_cast<const std::uint64_t*>(
                 static_cast<const std::byte*>(mapped) + offset);
-            if (ticks[1] >= ticks[0]) {
-                const double ms = static_cast<double>(ticks[1] - ticks[0]) * 1000.0 /
-                                  static_cast<double>(timestamp_frequency_);
+            const double to_ms = 1000.0 / static_cast<double>(timestamp_frequency_);
+            if (ticks[3] >= ticks[2] && ticks[2] >= ticks[1] && ticks[1] >= ticks[0]) {
+                subframe_phase_ms_[0] += static_cast<double>(ticks[1] - ticks[0]) * to_ms;
+                subframe_phase_ms_[1] += static_cast<double>(ticks[2] - ticks[1]) * to_ms;
+                subframe_phase_ms_[2] += static_cast<double>(ticks[3] - ticks[2]) * to_ms;
+            }
+            if (ticks[3] >= ticks[0]) {
+                const double ms = static_cast<double>(ticks[3] - ticks[0]) * to_ms;
                 subframe_gpu_ms_ += ms;
                 ++subframe_gpu_samples_;
                 subframe_gpu_ema_ms_ = subframe_gpu_ema_ms_ == 0.0
@@ -8698,16 +8742,22 @@ bool RendererD3D12::present_replay_subframe(float t, const Affine34& camera_t) {
         dred_marker(command_list_.Get(), L"subframe log=%llu t=%.3f", static_cast<unsigned long long>(run_serial_),
                     static_cast<double>(t));
         if (subframe_query_heap_) {
-            command_list_->EndQuery(subframe_query_heap_.Get(), D3D12_QUERY_TYPE_TIMESTAMP, index * 2u);
+            command_list_->EndQuery(subframe_query_heap_.Get(), D3D12_QUERY_TYPE_TIMESTAMP, index * 4u);
         }
         if (replay->blend && !sequence_.validated) {
             record_blend_validation();
             sequence_.validated = true;
         }
         record_interp_eval(t, camera_t, replay->blend);
+        if (subframe_query_heap_) {
+            command_list_->EndQuery(subframe_query_heap_.Get(), D3D12_QUERY_TYPE_TIMESTAMP, index * 4u + 1u);
+        }
         d3d_check(command_list_->Close(), "sub-frame evaluation Close");
     }
     d3d_check(command_list_->Reset(subframe_allocators_[index].Get(), nullptr), "sub-frame CommandList Reset");
+    if (subframe_query_heap_) {
+        command_list_->EndQuery(subframe_query_heap_.Get(), D3D12_QUERY_TYPE_TIMESTAMP, index * 4u + 2u);
+    }
     {
         ID3D12DescriptorHeap* live[] = {srv_ring_.heap(), sampler_heap_.Get()};
         command_list_->SetDescriptorHeaps(2, live);
@@ -8746,10 +8796,10 @@ bool RendererD3D12::present_replay_subframe(float t, const Affine34& camera_t) {
         }
     }
     if (subframe_query_heap_) {
-        command_list_->EndQuery(subframe_query_heap_.Get(), D3D12_QUERY_TYPE_TIMESTAMP, index * 2u + 1u);
+        command_list_->EndQuery(subframe_query_heap_.Get(), D3D12_QUERY_TYPE_TIMESTAMP, index * 4u + 3u);
         command_list_->ResolveQueryData(subframe_query_heap_.Get(), D3D12_QUERY_TYPE_TIMESTAMP,
-                                        index * 2u, 2u, subframe_readback_.Get(),
-                                        static_cast<UINT64>(index) * 2u * sizeof(std::uint64_t));
+                                        index * 4u, 4u, subframe_readback_.Get(),
+                                        static_cast<UINT64>(index) * 4u * sizeof(std::uint64_t));
         subframe_timestamp_pending_[index] = true;
         subframe_timestamp_redirect_[index] =
             replay->redirect ? 1u : subframe_copy_redirect_ == 2 ? 2u : 0u;
@@ -8792,6 +8842,10 @@ bool RendererD3D12::present_replay_subframe(float t, const Affine34& camera_t) {
             matrix_segment_fence_[matrix_segment_] = std::max(matrix_segment_fence_[matrix_segment_], fence);
         }
     }
+    if (replay_profile_.armed && replay_profile_.list == replay && replay_profile_.fence == 0u) {
+        replay_profile_.fence = fence;
+    }
+    report_replay_profile();
     sequence_.first = false;
     vertex_blend_draws_ += replay->blended_draws;
     subframe_guarded_total_ += replay->guarded;
@@ -8800,6 +8854,84 @@ bool RendererD3D12::present_replay_subframe(float t, const Affine34& camera_t) {
     ++subframe_record_samples_;
     present_to_swap_chain();
     return true;
+}
+
+bool RendererD3D12::ensure_replay_profile() {
+    if (replay_profile_.heap) {
+        return true;
+    }
+    D3D12_QUERY_HEAP_DESC qd{};
+    qd.Type = D3D12_QUERY_HEAP_TYPE_TIMESTAMP;
+    qd.Count = kReplayProfileQueries;
+    if (FAILED(device_->CreateQueryHeap(&qd, IID_PPV_ARGS(&replay_profile_.heap)))) {
+        return false;
+    }
+    D3D12_HEAP_PROPERTIES hp{};
+    hp.Type = D3D12_HEAP_TYPE_READBACK;
+    D3D12_RESOURCE_DESC rd{};
+    rd.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+    rd.Width = kReplayProfileQueries * sizeof(std::uint64_t);
+    rd.Height = 1;
+    rd.DepthOrArraySize = 1;
+    rd.MipLevels = 1;
+    rd.SampleDesc.Count = 1;
+    rd.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+    if (FAILED(device_->CreateCommittedResource(&hp, D3D12_HEAP_FLAG_NONE, &rd, D3D12_RESOURCE_STATE_COPY_DEST,
+                                                nullptr, IID_PPV_ARGS(&replay_profile_.readback)))) {
+        replay_profile_.heap.Reset();
+        return false;
+    }
+    return true;
+}
+
+// One sampled replay's GPU time: the draws before each copy or clear, each copy
+// (by kind and size) and each clear.
+void RendererD3D12::report_replay_profile() {
+    if (!replay_profile_.armed || replay_profile_.fence == 0u || completed_fence_value() < replay_profile_.fence) {
+        return;
+    }
+    replay_profile_.armed = false;
+    const std::size_t count = replay_profile_.segments.size() + 1u;
+    void* mapped = nullptr;
+    const D3D12_RANGE range{0, count * sizeof(std::uint64_t)};
+    if (FAILED(replay_profile_.readback->Map(0, &range, &mapped))) {
+        return;
+    }
+    std::vector<std::uint64_t> ticks(count);
+    std::memcpy(ticks.data(), mapped, count * sizeof(std::uint64_t));
+    const D3D12_RANGE none{0, 0};
+    replay_profile_.readback->Unmap(0, &none);
+    const double to_ms = 1000.0 / static_cast<double>(timestamp_frequency_);
+    double draws = 0.0, copies = 0.0, display = 0.0, output = 0.0, clears = 0.0;
+    std::vector<std::pair<double, std::size_t>> slowest;
+    for (std::size_t i = 0; i < replay_profile_.segments.size(); ++i) {
+        const double ms = ticks[i + 1u] >= ticks[i] ? static_cast<double>(ticks[i + 1u] - ticks[i]) * to_ms : 0.0;
+        switch (replay_profile_.segments[i].kind) {
+        case 0u: draws += ms; break;
+        case 1u: copies += ms; break;
+        case 2u: display += ms; break;
+        case 3u: output += ms; break;
+        default: clears += ms; break;
+        }
+        slowest.emplace_back(ms, i);
+    }
+    std::sort(slowest.begin(), slowest.end(), std::greater<>());
+    std::ostringstream line;
+    line << "[interp-gpu-profile] log=" << run_serial_ << " total-ms="
+         << static_cast<double>(ticks.back() - ticks.front()) * to_ms << " draws-ms=" << draws
+         << " copies-ms=" << copies << " display-copy-ms=" << display << " output-switch-ms=" << output
+         << " clears-ms=" << clears << " copies=" << run_copies_.size() << " slowest:";
+    for (std::size_t k = 0; k < slowest.size() && k < 8u; ++k) {
+        const ReplayProfileSegment& segment = replay_profile_.segments[slowest[k].second];
+        line << ' ' << (segment.kind == 0u ? "draws" : segment.kind == 4u ? "clear" : "copy") << '=' << slowest[k].first;
+        if (segment.kind >= 1u && segment.kind <= 3u && segment.detail < run_copies_.size()) {
+            const ReplayCopy& copy = run_copies_[segment.detail];
+            line << '(' << copy.width << 'x' << copy.height << " fmt" << static_cast<unsigned>(copy.format)
+                 << (copy.depth ? " depth" : "") << ')';
+        }
+    }
+    line << '\n';
+    std::cerr << line.str();
 }
 
 bool RendererD3D12::take_eval_readback(std::vector<std::uint32_t>& words, float& t) {
