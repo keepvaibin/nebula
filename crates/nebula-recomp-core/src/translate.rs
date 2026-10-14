@@ -7674,9 +7674,10 @@ fn emit_direct_guest_call_with_exact_fpu(
         if target == 0x802A_367C && (pc == 0x8029_D1A8 || pc == 0x8028_2B38) {
             output.push_str(&site_hook_call(pc, "TextStep", u32::from(pc == 0x8028_2B38)));
         }
-        // BrightSun::control has just set the visible sun's centre (r31 + 0xC, the camera
-        // position at r1 + 8 plus the sun's fixed offset): the ray tracer's sun follows it.
-        if target == 0x8001_6F80 && pc == 0x801B_B598 {
+        // BrightSun::control after controlSunModel: the visible sun's centre is set (r31 + 0xC,
+        // the camera position at r1 + 8 plus the sun's fixed offset); the ray tracer's sun
+        // follows it.
+        if target == 0x801B_B6E0 && pc == 0x801B_B5A0 {
             output.push_str(&site_hook_call(pc, "SunCenter", 0));
         }
         Ok(())
