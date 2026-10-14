@@ -38,12 +38,17 @@ struct RtDraw {
 static_assert(sizeof(RtDraw) == 32u);
 // Decoded vertex stride (GxVertexOut: position at 0, matrix indices at 120).
 inline constexpr std::uint32_t kRtVertexStride = 144u;
+// RtDraw.flags: these bits; surface classes in bits 8-15; the draw's index in its scene in bits
+// 16-31 (SceneRayTracer::add_draw).
 inline constexpr std::uint32_t kRtDrawResident = 1u;
 inline constexpr std::uint32_t kRtDrawIndexed = 2u;
 inline constexpr std::uint32_t kRtDrawWideIndices = 4u;
 // The draw's colour is lit by GX lights (characters, lit objects): its shading already turns
 // towards its lights.
 inline constexpr std::uint32_t kRtDrawLit = 8u;
+// A lit draw whose GX light 0 the actor lights moved towards the traced sun (actor_lights.h):
+// its shading's key light is the sun.
+inline constexpr std::uint32_t kRtDrawSunKey = 16u;
 // It takes GX light 4, the slot LightFunction::loadPointLightInfo loads the game's point light into.
 inline constexpr std::uint32_t kRtDrawPointLit = 32u;
 // An additive translucent draw (a glow: lamps, cores, Lumas, sparks): an emitter, not in the BVH.
@@ -64,7 +69,8 @@ struct RtDrawInfo {
     std::array<std::uint32_t, 2> light_index{0xFFu, 0xFFu};
     std::array<std::array<float, 6>, 2> light{};
     std::array<std::uint32_t, 2> light_color{};
-    // Added to RtDraw.flags: kRtDrawLit; surface classes in bits 8-15.
+    // Added to RtDraw.flags: kRtDrawLit, kRtDrawSunKey, kRtDrawPointLit or kRtDrawGlow; surface classes
+    // in bits 8-15.
     std::uint32_t surface = 0;
 };
 
@@ -146,6 +152,11 @@ public:
     // scene has none. The lighting history follows it from frame to frame.
     void set_camera(const std::array<float, 12>* view) noexcept;
     [[nodiscard]] bool lighting_active() const noexcept { return ready_ && lighting_enabled_; }
+    // The traced sun's world direction (towards it: GALAXY_RT_SUN, else the game's visible sun)
+    // and the distance of the game's sun model (0: none); false without a sun. The half-light
+    // distance of a game point light without its own (GALAXY_RT_POINT_RADIUS).
+    [[nodiscard]] bool sun_direction(std::array<float, 3>& world, float* distance = nullptr) const noexcept;
+    [[nodiscard]] float point_radius() const noexcept { return point_radius_; }
     // Ray-traced lighting of the last traced scene (rt_lighting.hlsl): its result slot for
     // composite(), -1 for none. The interpolated sub-frames of that game frame composite the
     // same slot.
@@ -250,6 +261,9 @@ private:
     std::vector<RtDrawInfo> infos_;
     std::vector<RtDrawInfo> dump_infos_;
     std::vector<RtDraw> draws_;
+    // Per draw of the open scene (RtDraw.flags bits 16-31): ambient and GX light 0 colours (RGBA8)
+    // and 2 spare words, for the lighting of lit draws (rt_lighting.hlsl g_draws).
+    std::vector<std::array<std::uint32_t, 4>> draw_colors_;
     std::array<ResultSlot, kResultSlots> slots_{};
     RtView view_{};
     D3D12_RESOURCE_STATES positions_state_ = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
@@ -278,7 +292,9 @@ private:
     // a hit at distance 0), _CONTACT_RANGE, _SKY (sky hue 0-1), _FALLBACK, _EMISSIVE, the sun's
     // world direction _SUN (x,y,z), _SUN_SIZE (degrees), _SUN_LIGHT, _SUN_COLOR (r,g,b), the sky
     // light's weight _SKY_LIGHT, the point lights' _POINT_LIGHT and _POINT_RANGE, and _VIEW=1
-    // (the lighting alone; 2, 3, 4: the sun's, the sky's, the point lights' light) tune it.
+    // (the lighting alone; 2, 3, 4: the sun's, the sky's, the point lights' light; 5: the glow
+    // terms; 6: the distance to what shadows the sun, 0.05 + 0.45 log10(eye units) / 6 on screen)
+    // tune it.
     struct LightSlot {
         RtView view{};
         std::array<float, 12> camera{};

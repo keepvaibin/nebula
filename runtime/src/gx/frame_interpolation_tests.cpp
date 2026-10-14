@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #include "galaxy/gx/frame_interpolation.h"
+#include "galaxy/gx/actor_lights.h"
 
 #include <bit>
 #include <cmath>
@@ -225,6 +226,92 @@ void test_light_and_palette() {
     check(near_matrix(slot, mb, 2e-3f), "palette at t=1 is the frame's palette");
 }
 
+std::array<float, 3> light_position(const std::vector<std::uint32_t>& palette, unsigned light) {
+    const std::uint32_t* p = palette.data() + kXfLightBase + kXfLightWords * light + kXfLightPosition;
+    return {std::bit_cast<float>(p[0]), std::bit_cast<float>(p[1]), std::bit_cast<float>(p[2])};
+}
+
+bool same_direction(const std::array<float, 3>& v, const std::array<float, 3>& w, float eps) {
+    const float lv = std::sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);
+    const float lw = std::sqrt(w[0] * w[0] + w[1] * w[1] + w[2] * w[2]);
+    return lv > 0.0f && lw > 0.0f && (v[0] * w[0] + v[1] * w[1] + v[2] * w[2]) / (lv * lw) > 1.0f - eps;
+}
+
+// Eye-space direction of a world direction under a camera.
+std::array<float, 3> eye_direction(const Affine34& view, const std::array<float, 3>& d) {
+    std::array<float, 3> e{};
+    for (unsigned r = 0; r < 3u; ++r) e[r] = view[r * 4u] * d[0] + view[r * 4u + 1u] * d[1] + view[r * 4u + 2u] * d[2];
+    return e;
+}
+
+void test_actor_lights() {
+    check(actor_light_load(0u, 3u).written == 0x07u && actor_light_load(0u, 3u).follow == 0x03u,
+          "an ActorLightInfo load writes lights 0-2; A and B can follow the camera");
+    check(actor_light_load(1u, 3u).written == 0x09u && actor_light_load(1u, 3u).follow == 0x01u,
+          "a coin load writes lights 0 and 3; only A can follow the camera");
+    check(actor_light_load(2u, 3u).follow == 0u && actor_light_load(4u, 3u).written == 0u,
+          "point light and player loads move no follow-camera light");
+
+    // The game's follow-camera key and fill (eye space) under a turning, moving camera.
+    std::vector<std::uint32_t> pal_a(kXfPaletteWords, 0u), pal_b(kXfPaletteWords, 0u), out(kXfPaletteWords);
+    const float key[3]{75000.0f, 100000.0f, 76400.0f}, fill[3]{-100000.0f, -93017.6f, -24902.3f};
+    for (std::vector<std::uint32_t>* p : {&pal_a, &pal_b}) {
+        (*p)[kXfLightBase + 3u] = 0xA49F8900u;
+        (*p)[kXfLightBase + kXfLightWords + 3u] = 0x565F9100u;
+        for (unsigned i = 0; i < 3u; ++i) {
+            (*p)[kXfLightBase + kXfLightPosition + i] = std::bit_cast<std::uint32_t>(key[i]);
+            (*p)[kXfLightBase + kXfLightWords + kXfLightPosition + i] = std::bit_cast<std::uint32_t>(fill[i]);
+        }
+    }
+    const std::array<float, 3> sun{0.0f, 0.6f, -0.8f};
+    const Affine34 va = camera(0.0f, 0.0f, 100.0f, 500.0f);
+    const Affine34 vb = camera(0.3f, 80.0f, 100.0f, 420.0f);
+    const ActorLightAim aim_a = aim_at_sun(va, sun), aim_b = aim_at_sun(vb, sun);
+    check(aim_a.valid && !aim_a.point && aim_b.valid, "the sun gives an aim");
+    const float origin[3]{};
+    aim_actor_lights(pal_a.data(), 0x01u, 0x02u, aim_a, origin);
+    aim_actor_lights(pal_b.data(), 0x01u, 0x02u, aim_b, origin);
+    check(pal_a[kXfLightBase + 3u] == 0xA49F8900u && pal_a[kXfLightBase + kXfLightWords + 3u] == 0x565F9100u,
+          "moved lights keep the game's colours");
+    const std::array<float, 3> to_sun = eye_direction(va, sun);
+    const std::array<float, 3> away{-to_sun[0], -to_sun[1], -to_sun[2]};
+    check(same_direction(light_position(pal_a, 0u), to_sun, 1e-6f), "light 0 lies towards the sun");
+    check(same_direction(light_position(pal_a, 1u), away, 1e-6f), "light 1 lies opposite the sun");
+
+    // Sub-frames: the lights stay towards and away from the sun at every camera between.
+    CameraMotion cam;
+    camera_motion(&va, &vb, 0.0f, CameraCutLimits{}, cam);
+    PaletteMotion motion;
+    palette_motion(pal_a.data(), pal_b.data(), cam, false, motion, kAllPaletteSlots, kAllPaletteSlots, 0x03u);
+    check(motion.light_changed == 0x03u && motion.split, "both lights interpolate in world space");
+    for (float t : {0.25f, 0.5f, 0.75f}) {
+        const Affine34 vt = camera_at(cam, t);
+        palette_at(motion, pal_a.data(), pal_b.data(), cam, vt, t, out.data());
+        const std::array<float, 3> sun_t = eye_direction(vt, sun);
+        check(same_direction(light_position(out, 0u), sun_t, 1e-5f), "a sub-frame's light 0 lies towards the sun");
+        check(same_direction(light_position(out, 1u), {-sun_t[0], -sun_t[1], -sun_t[2]}, 1e-5f),
+              "a sub-frame's light 1 lies opposite the sun");
+    }
+
+    // Without a sun: light 0 at the point light, light 1 opposite it at the draw's object.
+    const std::array<float, 3> lamp{300.0f, 150.0f, -200.0f}, far_lamp{30000.0f, 150.0f, -200.0f};
+    const std::array<float, 3> white{1.0f, 1.0f, 1.0f};
+    check(point_light_weight(va, lamp, white, 6000.0f) > point_light_weight(va, far_lamp, white, 6000.0f),
+          "a nearer point light weighs more");
+    const ActorLightAim point = aim_at_point(va, lamp);
+    const float object_world[3]{-100.0f, 0.0f, -300.0f};
+    float object[3]{}, lamp_eye[3]{};
+    affine_transform_point(va, object_world, object);
+    affine_transform_point(va, lamp.data(), lamp_eye);
+    aim_actor_lights(pal_a.data(), 0x01u, 0x02u, point, object);
+    const std::array<float, 3> p0 = light_position(pal_a, 0u), p1 = light_position(pal_a, 1u);
+    check(near(p0[0], lamp_eye[0]) && near(p0[1], lamp_eye[1]) && near(p0[2], lamp_eye[2]),
+          "light 0 sits at the point light");
+    check(same_direction({p1[0] - object[0], p1[1] - object[1], p1[2] - object[2]},
+                         {object[0] - lamp_eye[0], object[1] - lamp_eye[1], object[2] - lamp_eye[2]}, 1e-5f),
+          "light 1 lies opposite the point light at the object");
+}
+
 void test_colours() {
     GxPsConstants a{}, b{}, out{};
     a.tev_regs[0][0] = 0.0f;
@@ -265,6 +352,7 @@ int main() {
     test_moving_object_and_teleport();
     test_tex_words();
     test_light_and_palette();
+    test_actor_lights();
     if (failures != 0) {
         std::printf("%d failure(s)\n", failures);
         return 1;

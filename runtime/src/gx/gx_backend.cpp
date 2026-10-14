@@ -318,6 +318,7 @@ bool capture_pixel_frame_requested(std::uint64_t frame) {
 // Test aid for runs without a display: every Nth swap-chain present is read
 // back and written to GALAXY_PRESENT_SNAPSHOT_DIR\present_<n>.ppm, limited to
 // presents GALAXY_PRESENT_SNAPSHOT_FIRST..GALAXY_PRESENT_SNAPSHOT_LAST.
+// GALAXY_PRESENT_SNAPSHOT_PAIR=1 also writes the present after each.
 std::string present_snapshot_path() {
     const auto read_u64 = [](const char* name, std::uint64_t fallback) {
         char value[32]{};
@@ -326,6 +327,7 @@ std::string present_snapshot_path() {
             ? std::strtoull(value, nullptr, 10) : fallback;
     };
     static const std::uint64_t every = read_u64("GALAXY_PRESENT_SNAPSHOT_EVERY", 0u);
+    static const bool pair = read_u64("GALAXY_PRESENT_SNAPSHOT_PAIR", 0u) != 0u;
     static const std::uint64_t first = read_u64("GALAXY_PRESENT_SNAPSHOT_FIRST", 0u);
     static const std::uint64_t last = read_u64(
         "GALAXY_PRESENT_SNAPSHOT_LAST", std::numeric_limits<std::uint64_t>::max());
@@ -337,8 +339,9 @@ std::string present_snapshot_path() {
             ? std::string(value) : std::string{};
     }();
     static std::uint64_t presents = 0u;
-    if (every == 0u || directory.empty() || ++presents % every != 0u ||
-        presents < first || presents > last) {
+    ++presents;
+    if (every == 0u || directory.empty() || presents < first || presents > last ||
+        (presents % every != 0u && !(pair && presents % every == 1u % every))) {
         return {};
     }
     return directory + "\\present_" + std::to_string(presents) + ".ppm";
@@ -518,6 +521,17 @@ std::uint64_t read_env_u64(const char* name, std::uint64_t fallback) {
     char* end = nullptr;
     const auto parsed = std::strtoull(value, &end, 10);
     return end == value ? fallback : parsed;
+}
+
+// GALAXY_TRACE_LIGHTS=1: the actor-light aim every 600 scenes, the first moved draws and the CPU
+// cycles ([rt-actor-light]); =2: the aim of every scene.
+std::uint64_t actor_light_trace_level() {
+    static const std::uint64_t level = read_env_u64("GALAXY_TRACE_LIGHTS", 0u);
+    return level;
+}
+
+bool trace_actor_lights_enabled() {
+    return actor_light_trace_level() != 0u;
 }
 
 bool trace_xfb_causal_enabled() {
@@ -6659,9 +6673,15 @@ void GxBackend::on_motion_marker(std::uint8_t kind, std::uint16_t aux, std::uint
             }
         }
         return;
-    case motion::kMarkerLight:
+    case motion::kMarkerLight: {
         ++motion_light_markers_;
+        const ActorLightLoad load = actor_light_load(aux, b);
+        rt_follow_lights_ = static_cast<std::uint8_t>((rt_follow_lights_ & ~load.written) | load.follow);
+        if (rt_light_aim_.valid) {
+            rt_follow_pending_ = static_cast<std::uint8_t>((rt_follow_pending_ & ~load.written) | load.follow);
+        }
         return;
+    }
     case motion::kMarkerLayoutPane:
     case motion::kMarkerLayoutActor:
     case motion::kMarkerStarPointer: {
@@ -6957,6 +6977,11 @@ bool GxBackend::begin_rt_batch(const DrawCall& call, RtDrawInfo& info) {
         const XfChannelCtrl color = state_.channel_ctrl(0u);
         info.surface = color.lighting_enable && color.light_mask != 0u ? kRtDrawLit : 0u;
         info.surface |= color.lighting_enable && (color.light_mask & 0x10u) != 0u ? kRtDrawPointLit : 0u;
+        // The lighting reads its ambient register and light 0 colour (RtDrawInfo).
+        if (info.surface != 0u && (color.light_mask & 1u) != 0u && !color.ambient_from_vertex &&
+            (rt_draw_lights_ & 1u) != 0u && !rt_light_aim_.point) {
+            info.surface |= kRtDrawSunKey;
+        }
         if (glow) {
             info.surface = kRtDrawGlow;
         }
@@ -6993,6 +7018,107 @@ bool GxBackend::begin_rt_batch(const DrawCall& call, RtDrawInfo& info) {
         rt_view_set_ = true;
     }
     return true;
+}
+
+// Actor lights (actor_lights.h): each scene's follow-camera lights go towards the traced sun,
+// else to the game point light the ray tracer weighs strongest; with neither, or without the
+// scene camera, they stay the game's. GALAXY_RT_ACTOR_LIGHTS=0 always leaves them; =2 moves them in
+// odd scenes only (a frame-to-frame comparison).
+void GxBackend::aim_rt_scene_lights(const std::array<float, 12>* view) {
+    static const std::uint64_t mode = read_env_u64("GALAXY_RT_ACTOR_LIGHTS", 1u);
+    rt_light_aim_ = {};
+    rt_follow_lights_ = 0u;
+    rt_follow_pending_ = 0u;
+    ++rt_light_serial_;
+    const bool enabled = mode == 1u || (mode == 2u && (rt_light_serial_ & 1u) != 0u);
+    std::array<float, 3> sun{};
+    if (view != nullptr && enabled && renderer_.rt_sun_direction(sun)) {
+        rt_light_aim_ = aim_at_sun(*view, sun);
+    } else if (view != nullptr && enabled) {
+        std::array<GameLight, 32> lights{};
+        const std::size_t count = game_point_lights(lights, 500u);
+        const float radius = renderer_.rt_point_radius();
+        float best = 0.0f;
+        for (std::size_t i = 0; i < count; ++i) {
+            // The ray tracer's reach: twelve half-light distances.
+            const float half = lights[i].half_distance > 1.0f ? lights[i].half_distance : radius;
+            const float weight = point_light_weight(*view, lights[i].position, lights[i].color, 12.0f * half);
+            if (weight > best) {
+                best = weight;
+                rt_light_aim_ = aim_at_point(*view, lights[i].position);
+            }
+        }
+    }
+    const bool report =
+        actor_light_trace_level() >= 2u || (trace_actor_lights_enabled() && rt_light_serial_ % 600u == 1u);
+    if (report) [[unlikely]] {
+        // Running totals: snapshots with moved lights, snapshots added for them, TSC cycles of the
+        // actor-light work and the timed regions they span, palette snapshots and their cycles
+        // (allocation and copy), TSC and clock; `pair`: the mean cycles of one empty timing pair.
+        static const std::uint64_t pair = [] {
+            std::uint64_t total = 0u;
+            for (unsigned i = 0; i < 4096u; ++i) {
+                const std::uint64_t a = __rdtsc();
+                total += __rdtsc() - a;
+            }
+            return total / 4096u;
+        }();
+        const auto ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
+            std::chrono::steady_clock::now().time_since_epoch());
+        std::fprintf(stderr,
+                     "[rt-actor-light] scene=%u aim=%s key=(%.3f %.3f %.3f) moved=%llu added=%llu cycles=%llu "
+                     "regions=%llu pair=%llu snapshots=%llu snapshot-cycles=%llu tsc=%llu ns=%lld\n",
+                     rt_light_serial_, !rt_light_aim_.valid ? "none" : rt_light_aim_.point ? "point" : "sun",
+                     rt_light_aim_.key[0], rt_light_aim_.key[1], rt_light_aim_.key[2],
+                     static_cast<unsigned long long>(rt_light_uploads_),
+                     static_cast<unsigned long long>(rt_light_forced_),
+                     static_cast<unsigned long long>(rt_light_cycles_),
+                     static_cast<unsigned long long>(rt_light_regions_), static_cast<unsigned long long>(pair),
+                     static_cast<unsigned long long>(rt_snapshot_count_),
+                     static_cast<unsigned long long>(rt_snapshot_cycles_), static_cast<unsigned long long>(__rdtsc()),
+                     static_cast<long long>(ns.count()));
+    }
+}
+
+// The lights a lit scene draw has moved: its follow-camera lights 0 and 1 that still hold the
+// positions their load gave them.
+std::uint32_t GxBackend::rt_aimed_lights() const noexcept {
+    if (!rt_light_aim_.valid || !scene_phase_ || side_layer_ != kSceneLayer) {
+        return 0u;
+    }
+    std::uint32_t lights = 0u;
+    for (unsigned n = 0; n < 2u; ++n) {
+        const std::uint32_t* words = state_.xf_raw() + xf::kLightsBase + kXfLightWords * n + kXfLightPosition;
+        if ((rt_follow_lights_ & (1u << n)) != 0u &&
+            std::memcmp(words, rt_follow_words_[n].data(), sizeof(rt_follow_words_[n])) == 0) {
+            lights |= 1u << n;
+        }
+    }
+    return lights != 0u ? (rt_light_serial_ << 8u) | lights : 0u;
+}
+
+// Moves the flushed draw's lights in a palette snapshot (write-only: the upload is write-combined
+// memory). A point light's fill is opposite it at the draw's object: PNMTX0 for a per-vertex
+// palette, else the default position matrix.
+void GxBackend::write_rt_lights(std::uint32_t* palette) noexcept {
+    if (!rt_light_aim_.valid) {
+        return;
+    }
+    const std::uint64_t start = trace_actor_lights_enabled() ? __rdtsc() : 0u;
+    float origin[3]{};
+    if (rt_light_aim_.point) {
+        const std::uint32_t row = (state_.cp(cp::kVcdLo) & 1u) != 0u
+            ? 0u : std::min(state_.cp(cp::kMatrixIndexA) & 0x3Fu, 61u);
+        for (std::uint32_t r = 0; r < 3u; ++r) {
+            origin[r] = std::bit_cast<float>(state_.xf_raw()[(row + r) * 4u + 3u]);
+        }
+    }
+    aim_actor_lights(palette, static_cast<std::uint8_t>(rt_draw_lights_ & 0x01u),
+                     static_cast<std::uint8_t>(rt_draw_lights_ & 0x02u), rt_light_aim_, origin);
+    if (start != 0u) [[unlikely]] {
+        rt_light_cycles_ += __rdtsc() - start;
+        ++rt_light_regions_;
+    }
 }
 
 // SceneFunction phases run opaque first (0, 1, the shadows 6 and 7, then 2 and 4), then the
@@ -7044,6 +7170,7 @@ void GxBackend::on_fifo_marker(FifoMarker marker, const std::array<float, 12>* v
             renderer_.rt_begin_scene();
             renderer_.rt_set_camera(view);
         }
+        aim_rt_scene_lights(renderer_.rt_lighting() ? view : nullptr);
     } else {
         trace_rt_scene();
         if (renderer_.rt_active() && side_layer_ == kSceneLayer) {
@@ -11842,6 +11969,7 @@ ID3D12PipelineState* GxBackend::flush_draw_state(
         !frame_bindings_dirty_ &&
         (!matrix_palette_stale_ || !current_palette_required_) &&
         !inline_matrices_stale_ &&
+        rt_follow_pending_ == 0u &&
         current_pipeline_ != nullptr &&
         !current_pipeline_is_uber_ &&
         current_vs_constants_ != 0 &&
@@ -12181,6 +12309,50 @@ ID3D12PipelineState* GxBackend::flush_draw_state(
         (vs_key_.flags & 0x03u) != 0u ||
         (vs_key_.texmtx_idx_mask & active_texgen_mask) != 0u;
     current_palette_required_ = palette_required;
+    // Actor lights (actor_lights.h): a lit scene draw's follow-camera lights are moved in its
+    // snapshot; one moved otherwise (other lights, another scene's aim) is not reused for it. A
+    // light load's positions are taken at the first draw after it (rt_follow_pending_ needs an aim).
+    if (rt_light_aim_.valid || rt_palette_lights_ != 0u) [[unlikely]] {
+        const std::uint64_t start = trace_actor_lights_enabled() ? __rdtsc() : 0u;
+        for (unsigned n = 0; n < 2u; ++n) {
+            if ((rt_follow_pending_ & (1u << n)) != 0u) {
+                std::memcpy(rt_follow_words_[n].data(),
+                            state_.xf_raw() + xf::kLightsBase + kXfLightWords * n + kXfLightPosition,
+                            sizeof(rt_follow_words_[n]));
+            }
+        }
+        rt_follow_pending_ = 0u;
+        const std::uint32_t lights = (vs_key_.flags & 0x02u) != 0u ? rt_aimed_lights() : rt_palette_lights_;
+        if (lights != rt_palette_lights_) {
+            // Counts the snapshots this adds: the palette had not moved since the last one.
+            rt_light_forced_ += !matrix_palette_stale_ && current_matrix_palette_ != 0u ? 1u : 0u;
+            matrix_palette_stale_ = true;
+            xf_palette_valid_ = 0u;
+        }
+        rt_draw_lights_ = lights;
+        static unsigned traced = 0u;
+        if (start != 0u) [[unlikely]] {
+            rt_light_cycles_ += __rdtsc() - start;
+            ++rt_light_regions_;
+        }
+        if (start != 0u && (lights & 0xFFu) != 0u && traced < 24u) [[unlikely]] {
+            ++traced;
+            const std::uint32_t* l = state_.xf_raw() + xf::kLightsBase;
+            std::fprintf(stderr,
+                         "[rt-actor-light] draw scene=%u lights=%u channels=%08x %08x %08x %08x "
+                         "light0=%08x attn=(%g %g %g / %g %g %g) pos=(%g %g %g) light1=%08x pos=(%g %g %g)\n",
+                         rt_light_serial_, lights & 0xFFu, state_.xf(xf::kChannelCtrlBase),
+                         state_.xf(static_cast<std::uint16_t>(xf::kChannelCtrlBase + 1u)),
+                         state_.xf(static_cast<std::uint16_t>(xf::kChannelCtrlBase + 2u)),
+                         state_.xf(static_cast<std::uint16_t>(xf::kChannelCtrlBase + 3u)), l[3],
+                         std::bit_cast<float>(l[4]), std::bit_cast<float>(l[5]), std::bit_cast<float>(l[6]),
+                         std::bit_cast<float>(l[7]), std::bit_cast<float>(l[8]), std::bit_cast<float>(l[9]),
+                         std::bit_cast<float>(l[10]), std::bit_cast<float>(l[11]), std::bit_cast<float>(l[12]), l[19],
+                         std::bit_cast<float>(l[26]), std::bit_cast<float>(l[27]), std::bit_cast<float>(l[28]));
+        }
+    } else {
+        rt_draw_lights_ = 0u;
+    }
     if (palette_required &&
         (matrix_palette_stale_ || current_matrix_palette_ == 0)) {
         // This block can run per draw. Keep clock sampling opt-in; routine
@@ -12199,10 +12371,20 @@ ID3D12PipelineState* GxBackend::flush_draw_state(
             (state_.xf_palette_dirty() | ~xf_palette_valid_) &
             xf_palette_chunk_mask;
         if (palette_todo != 0u) {
+            const std::uint64_t snapshot_start = trace_actor_lights_enabled() ? __rdtsc() : 0u;
             mtx_alloc =
                 renderer_.matrix_ring().allocate(palette_bytes, /*alignment=*/256u);
             std::memcpy(mtx_alloc.cpu, state_.xf_raw(), palette_bytes);
+            if (snapshot_start != 0u) [[unlikely]] {
+                rt_snapshot_cycles_ += __rdtsc() - snapshot_start;
+                ++rt_snapshot_count_;
+            }
             current_matrix_palette_ = mtx_alloc.gpu;
+            if (rt_draw_lights_ != 0u) [[unlikely]] {
+                write_rt_lights(reinterpret_cast<std::uint32_t*>(mtx_alloc.cpu));
+                ++rt_light_uploads_;
+            }
+            rt_palette_lights_ = rt_draw_lights_;
             if (interp_recording_ && history_scene_) [[unlikely]] {
                 InterpScene& scene = interp_scenes_[interp_scene_];
                 const std::size_t words = kMatrixPaletteWords;
@@ -12211,6 +12393,9 @@ ID3D12PipelineState* GxBackend::flush_draw_state(
                 }
                 std::memcpy(scene.palettes.data() + scene.palette_count * words,
                             state_.xf_raw(), palette_bytes);
+                if (rt_draw_lights_ != 0u) {
+                    write_rt_lights(scene.palettes.data() + scene.palette_count * words);
+                }
                 current_palette_shadow_ = static_cast<std::int32_t>(scene.palette_count++);
             }
             // Every palette chunk was copied to this allocation, so mark the

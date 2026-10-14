@@ -79,12 +79,15 @@ struct RtLightConstants {
     std::uint32_t point_count;
     float point_light;
     float point_size;
-    float point_pad;
+    float sun_reach;
     float points[16][4];
     float to_eye[3][4];
     float ambient[4];
+    float point_saturation;
+    std::uint32_t draw_count;
+    std::uint32_t pad[2];
 };
-static_assert(sizeof(RtLightConstants) == 576u);
+static_assert(sizeof(RtLightConstants) == 592u);
 
 // Mirrors cbuffer RtEmit in rt_lighting.hlsl (root constants).
 struct RtEmitConstants {
@@ -152,6 +155,7 @@ enum LightParameter : UINT {
     kLightEmitters,
     kLightGlowBase,
     kLightGlowAdded,
+    kLightDraws,
     kLightZ,
     kLightNormal,
     kLightRaw,
@@ -311,6 +315,7 @@ D3D12_RESOURCE_BARRIER uav_barrier(ID3D12Resource* resource) {
 
 std::mutex g_game_sun_mutex;
 std::array<float, 3> g_game_sun{};
+float g_game_sun_distance = 0.0f;
 std::chrono::steady_clock::time_point g_game_sun_time{};
 bool g_game_sun_known = false;
 
@@ -368,9 +373,10 @@ std::size_t active_lights(const std::array<NotedLight, N>& lights, std::span<Gam
 
 }  // namespace
 
-void set_game_sun(const std::array<float, 3>& direction) noexcept {
+void set_game_sun(const std::array<float, 3>& direction, float distance) noexcept {
     const std::lock_guard<std::mutex> lock(g_game_sun_mutex);
     g_game_sun = direction;
+    g_game_sun_distance = distance;
     g_game_sun_time = std::chrono::steady_clock::now();
     g_game_sun_known = true;
 }
@@ -392,13 +398,16 @@ std::size_t game_world_lights(std::span<GameLight> out, std::uint64_t max_age_ms
     return active_lights(g_world_lights, out, max_age_ms);
 }
 
-bool game_sun(std::array<float, 3>& direction, std::uint64_t max_age_ms) noexcept {
+bool game_sun(std::array<float, 3>& direction, std::uint64_t max_age_ms, float* distance) noexcept {
     const std::lock_guard<std::mutex> lock(g_game_sun_mutex);
     if (!g_game_sun_known ||
         std::chrono::steady_clock::now() - g_game_sun_time > std::chrono::milliseconds(max_age_ms)) {
         return false;
     }
     direction = g_game_sun;
+    if (distance != nullptr) {
+        *distance = g_game_sun_distance;
+    }
     return true;
 }
 
@@ -522,7 +531,7 @@ bool SceneRayTracer::initialize(ID3D12Device* device, std::uint64_t timestamp_fr
     fallback_ = std::clamp(env_float("GALAXY_RT_FALLBACK", 0.55f), 0.0f, 2.0f);
     emissive_ = std::clamp(env_float("GALAXY_RT_EMISSIVE", 3.0f), 0.0f, 16.0f);
     show_lighting_ = env_float("GALAXY_RT_VIEW", 0.0f) != 0.0f;
-    show_term_ = static_cast<std::uint32_t>(std::clamp(env_float("GALAXY_RT_VIEW", 0.0f), 0.0f, 5.0f));
+    show_term_ = static_cast<std::uint32_t>(std::clamp(env_float("GALAXY_RT_VIEW", 0.0f), 0.0f, 6.0f));
     point_radius_ = std::clamp(env_float("GALAXY_RT_POINT_RADIUS", 800.0f), 10.0f, 1.0e6f);
     point_size_ = std::clamp(env_float("GALAXY_RT_POINT_SIZE", 600.0f), 0.0f, 1.0e5f);
     point_light_ = std::clamp(env_float("GALAXY_RT_POINT_LIGHT", 2.0f), 0.0f, 8.0f);
@@ -985,6 +994,7 @@ void SceneRayTracer::begin_scene() noexcept {
     glow_triangles_ = 0u;
     glow_open_ = false;
     glow_base_valid_ = false;
+    draw_colors_.clear();
     infos_.clear();
     triangles_ = 0u;
     flushed_draws_ = 0u;
@@ -1009,7 +1019,10 @@ void SceneRayTracer::add_draw(const RtDraw& draw, const RtDrawInfo& info) {
     }
     RtDraw& entry = draws_.emplace_back(draw);
     entry.first_triangle = triangles_;
+    entry.flags = (entry.flags & 0xFFFFu) |
+                  (static_cast<std::uint32_t>(std::min<std::size_t>(draws_.size() - 1u, 0xFFFFu)) << 16u);
     triangles_ += draw.triangle_count;
+    draw_colors_.push_back({info.ambient, info.light_index[0] == 0u ? info.light_color[0] : 0u, 0u, 0u});
     if (dump_scene_ != 0u && scene_serial_ == dump_scene_) {
         infos_.push_back(info);
     }
@@ -1023,6 +1036,17 @@ void SceneRayTracer::set_view(const RtView& view) noexcept {
 void SceneRayTracer::set_camera(const std::array<float, 12>* view) noexcept {
     camera_known_ = view != nullptr;
     camera_ = view != nullptr ? *view : kIdentity34;
+}
+
+bool SceneRayTracer::sun_direction(std::array<float, 3>& world, float* distance) const noexcept {
+    if (sun_override_) {
+        world = sun_direction_;
+        if (distance != nullptr) {
+            *distance = 0.0f;
+        }
+        return true;
+    }
+    return game_sun(world, 2000u, distance);
 }
 
 std::uint32_t SceneRayTracer::sample_factor(std::uint32_t width, std::uint32_t height) const noexcept {
@@ -1059,7 +1083,7 @@ bool SceneRayTracer::create_lighting_pipelines(DXGI_FORMAT color_format) {
     params[kLightDepth].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
     params[kLightDepth].DescriptorTable.NumDescriptorRanges = 1u;
     params[kLightDepth].DescriptorTable.pDescriptorRanges = &depth_range;
-    for (UINT i = 0; i <= kLightGlowAdded - kLightPrevZ; ++i) {
+    for (UINT i = 0; i <= kLightDraws - kLightPrevZ; ++i) {
         params[kLightPrevZ + i].ParameterType = D3D12_ROOT_PARAMETER_TYPE_SRV;
         params[kLightPrevZ + i].Descriptor.ShaderRegister = 8u + i;
     }
@@ -1312,10 +1336,20 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
         history_factor_ = factor;
     }
     const RtUpload upload = allocate(allocate_context, sizeof(RtLightConstants), 256u);
-    if (upload.cpu == nullptr) {
+    // Per draw (RtDraw.flags bits 16-31): its ambient and GX light 0 colours (RGBA8), 2 spare words.
+    const std::size_t draw_count = std::max<std::size_t>(draw_colors_.size(), 1u);
+    const RtUpload draw_table = allocate(allocate_context, draw_count * sizeof(draw_colors_[0]), 256u);
+    if (upload.cpu == nullptr || draw_table.cpu == nullptr) {
         return;
     }
+    if (draw_colors_.empty()) {
+        std::memset(draw_table.cpu, 0, sizeof(draw_colors_[0]));
+    } else {
+        std::memcpy(draw_table.cpu, draw_colors_.data(), draw_colors_.size() * sizeof(draw_colors_[0]));
+    }
     RtLightConstants c{};
+    c.draw_count = static_cast<std::uint32_t>(draw_count);
+    c.point_saturation = point_saturation_;
     std::copy(view_.projection.begin(), view_.projection.end(), c.projection);
     c.depth[0] = view_.z_scale;
     c.depth[1] = view_.z_offset;
@@ -1341,10 +1375,11 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
         // The game's visible sun (GALAXY_RT_SUN overrides it); without one, no sun light. Its
         // colour: the game's world-fixed light from the same direction, else GALAXY_RT_SUN_COLOR.
         std::array<float, 3> l = sun_direction_;
-        bool sun_present = sun_override_;
-        if (!sun_override_) {
-            sun_present = game_sun(l, 2000u);
-        }
+        float sun_distance = 0.0f;
+        const bool sun_present = sun_direction(l, &sun_distance);
+        // Sun rays end halfway to the game's sun model (BrightSun, drawn that far out along the
+        // sun's direction): it would shadow everything near the camera.
+        c.sun_reach = sun_distance > 0.0f ? 0.5f * sun_distance : 1.0e6f;
         std::array<float, 3> sun_color = sun_color_;
         if (sun_present) {
             std::array<GameLight, 16> world{};
@@ -1460,7 +1495,8 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
     const std::array<float, 12> reproject = history ? affine_multiply(history_camera_, inverse) : kIdentity34;
     const std::array<float, 12> to_picture = picture ? affine_multiply(picture_camera_, inverse) : kIdentity34;
     c.flags = (history ? 1u : 0u) | (picture ? 2u : 0u) | (show_term_ == 2u ? 4u : 0u) | (show_term_ == 3u ? 8u : 0u) |
-              (show_term_ == 4u ? 16u : 0u) | (show_term_ == 5u ? 32u : 0u);
+              (show_term_ == 4u ? 16u : 0u) | (show_term_ == 5u ? 32u : 0u) |
+              (show_term_ == 6u ? 64u : 0u);
     std::memcpy(c.reproject, reproject.data(), sizeof(c.reproject));
     std::memcpy(c.picture, to_picture.data(), sizeof(c.picture));
     std::memcpy(c.to_eye, camera_.data(), sizeof(c.to_eye));
@@ -1504,6 +1540,7 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
     list->SetComputeRootShaderResourceView(kLightEmitters, emit_list_->GetGPUVirtualAddress());
     list->SetComputeRootShaderResourceView(kLightGlowBase, glow_base_->GetGPUVirtualAddress());
     list->SetComputeRootShaderResourceView(kLightGlowAdded, glow_added_->GetGPUVirtualAddress());
+    list->SetComputeRootShaderResourceView(kLightDraws, draw_table.gpu);
     list->SetComputeRootUnorderedAccessView(kLightZ, light_z_[current]->GetGPUVirtualAddress());
     list->SetComputeRootUnorderedAccessView(kLightNormal, light_normal_->GetGPUVirtualAddress());
     list->SetComputeRootUnorderedAccessView(kLightRaw, light_raw_->GetGPUVirtualAddress());

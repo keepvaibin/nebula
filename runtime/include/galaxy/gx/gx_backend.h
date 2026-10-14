@@ -33,6 +33,7 @@
 // The legacy entry points in gx_d3d12.h are a thin shim over one GxBackend instance, so
 // native_runtime.cpp is unchanged.
 
+#include "galaxy/gx/actor_lights.h"
 #include "galaxy/gx/efb_copy.h"
 #include "galaxy/gx/fifo_parser.h"
 #include "galaxy/gx/gx_state.h"
@@ -797,6 +798,29 @@ private:
     // Whether a batch starting with `call` is traced geometry; the scene's first one also gives
     // the camera (projection and viewport) for rays through EFB pixels.
     [[nodiscard]] bool begin_rt_batch(const DrawCall& call, RtDrawInfo& info);
+    // Actor lights (actor_lights.h): the open scene's aim and its serial; the GX lights the light
+    // loads left following the camera, those whose loaded position words (rt_follow_words_) the
+    // next draw takes; the moved lights of the palette snapshot in use and of the flushed draw
+    // (serial << 8 | light bits, 0 none).
+    ActorLightAim rt_light_aim_{};
+    std::uint32_t rt_light_serial_ = 0;
+    std::uint8_t rt_follow_lights_ = 0;
+    std::uint8_t rt_follow_pending_ = 0;
+    std::array<std::array<std::uint32_t, 3>, 2> rt_follow_words_{};
+    std::uint32_t rt_palette_lights_ = 0;
+    std::uint32_t rt_draw_lights_ = 0;
+    // GALAXY_TRACE_LIGHTS: snapshots with moved lights, snapshots added for them, TSC cycles of
+    // the actor-light work and its timed regions, and palette snapshots with the cycles of their
+    // allocation and copy.
+    std::uint64_t rt_light_uploads_ = 0;
+    std::uint64_t rt_light_forced_ = 0;
+    std::uint64_t rt_light_cycles_ = 0;
+    std::uint64_t rt_light_regions_ = 0;
+    std::uint64_t rt_snapshot_count_ = 0;
+    std::uint64_t rt_snapshot_cycles_ = 0;
+    void aim_rt_scene_lights(const std::array<float, 12>* view);
+    [[nodiscard]] std::uint32_t rt_aimed_lights() const noexcept;
+    void write_rt_lights(std::uint32_t* palette) noexcept;
     bool scene_3d_recorded_ = false;           // this frame's 3D scene took records
     bool mirror_opened_scene_ = false;         // this frame's InterpScene began at its mirror pass
     std::array<std::uint64_t, 3> layer_serials_{};

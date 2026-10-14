@@ -10460,6 +10460,23 @@ void note_game_light(RuntimeState& state, std::uint32_t site, std::uint32_t info
     }
 }
 
+// A light-load marker's follow-camera bits: bit 0 LightInfo A (GX light 0), bit 1 an
+// ActorLightInfo's B (+0x14, GX light 1). The renderer moves those lights under ray tracing
+// (galaxy/gx/actor_lights.h).
+std::uint32_t light_follow_bits(RuntimeState& state, std::uint32_t site, std::uint32_t info) {
+    auto* mem = state.address_space;
+    const auto follows = [&](std::uint32_t light) {
+        return mapped_guest_range(mem, light + 0x10u, 4u) && (mem->read_u32(light + 0x10u) >> 24u) != 0u;
+    };
+    if (site == static_cast<std::uint32_t>(galaxy::motion::LightSite::ActorLightInfo)) {
+        return (follows(info) ? 1u : 0u) | (follows(info + 0x14u) ? 2u : 0u);
+    }
+    if (site == static_cast<std::uint32_t>(galaxy::motion::LightSite::Coin)) {
+        return follows(info) ? 1u : 0u;
+    }
+    return 0u;
+}
+
 // BrightSun::control (SiteHookKind::SunCenter): the visible sun's centre less the camera
 // position it was placed from is the world direction towards it.
 void note_game_sun(RuntimeState& state, const galaxy::PpcContext& context) {
@@ -10481,7 +10498,7 @@ void note_game_sun(RuntimeState& state, const galaxy::PpcContext& context) {
     }
     length = std::sqrt(length);
     for (float& v : direction) v /= length;
-    galaxy::gx::set_game_sun(direction);
+    galaxy::gx::set_game_sun(direction, length);
     static std::uint32_t traced = 0u;
     static const bool trace = [] {
         char value[8]{};
@@ -10536,7 +10553,7 @@ void handle_motion_signal(RuntimeState& state, std::uint32_t kind, std::uint32_t
                                argument <= static_cast<std::uint32_t>(galaxy::motion::LightSite::PointLight)
                                    ? context.gpr[3]
                                    : 0u,
-                               0u)) {
+                               light_follow_bits(state, argument, context.gpr[3]))) {
             ++state.motion_light_markers;
         }
         return;
