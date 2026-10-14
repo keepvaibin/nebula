@@ -120,12 +120,16 @@ struct PaletteMotion {
     bool split = false;              // lights interpolate in world space
     std::uint32_t snapped = 0;
 };
-// Only the PNMTX slots in `position_mask` and the normal matrices in
-// `normal_mask` (bit k: slot k) are decomposed: the slots its draws can read.
+// Only the PNMTX slots in `position_mask`, the normal matrices in
+// `normal_mask` (bit k: slot k) and the lights in `light_mask` (bit n: GX
+// light n) are interpolated: the parts its draws can read.
 inline constexpr std::uint16_t kAllPaletteSlots = 0x3FFu;
 void palette_motion(const std::uint32_t* a, const std::uint32_t* b, const CameraMotion& camera,
                     bool orthographic, PaletteMotion& out, std::uint16_t position_mask = kAllPaletteSlots,
-                    std::uint16_t normal_mask = kAllPaletteSlots) noexcept;
+                    std::uint16_t normal_mask = kAllPaletteSlots, std::uint8_t light_mask = 0xFFu) noexcept;
+// The GX lights a draw with these VS constants evaluates: the light masks of
+// its lit colour and alpha channels and the lights of its emboss texgens.
+[[nodiscard]] std::uint8_t used_lights(const GxVsConstants& constants) noexcept;
 // Writes the palette at t: b's words with every changed part interpolated.
 void palette_at(const PaletteMotion& m, const std::uint32_t* a, const std::uint32_t* b,
                 const CameraMotion& camera, const Affine34& camera_t, float t,

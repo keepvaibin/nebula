@@ -372,7 +372,7 @@ static constexpr const char* kMotionInterpolants =
 static constexpr const char* kVertexBlendDef = R"HLSL(
 cbuffer GxVertexBlend : register(b2) {
     uint  vb_mode;  // 0: the draw's own vertices only
-    float vb_t;     // 0 the frame before, 1 this frame
+    uint  vb_t_slot;  // verdict element whose x is the sub-frame t (0 the frame before, 1 this frame)
     uint  vb_slot;  // the pair's verdict
     uint  vb_last;  // the last vertex of the earlier draw
 };
@@ -380,6 +380,7 @@ ByteAddressBuffer vb_prev : register(t1, space1);
 // Per pair: vertices, positions unchanged, largest move, extent (the GPU
 // check of the pairing, renderer_d3d12.cpp kBlendValidateCs).
 StructuredBuffer<uint4> vb_verdict : register(t2, space1);
+static float vb_t;
 uint vb_color(uint a, uint b) {
     uint c = 0u;
     [unroll] for (uint s = 0u; s < 32u; s += 8u) {
@@ -400,6 +401,7 @@ void vertex_blend(inout VSIn v, uint id) {
     if (vb_mode == 0u) {
         return;
     }
+    vb_t = asfloat(vb_verdict[min(vb_t_slot, 8192u)].x);
     // The same geometry one frame earlier: positions unchanged, all moved by
     // at most a quarter of its extent, or any by at most 2% (a reordered or
     // different vertex set shows this frame's vertices).

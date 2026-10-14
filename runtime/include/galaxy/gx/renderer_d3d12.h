@@ -29,6 +29,7 @@
 #include "galaxy/gx/efb_copy.h"
 #include "galaxy/gx/temporal_upscaler.h"
 #include "galaxy/gx/immutable_upload.h"
+#include "galaxy/gx/interp_gpu.h"
 #include "galaxy/gx/post_process.h"
 #include "galaxy/gx/placed_texture_allocator.h"
 #include "galaxy/gx/gx_bitfields.h"
@@ -477,11 +478,8 @@ public:
 
     // Interpolated redraw (present rates above 60). While recording, a render
     // chunk's EFB operations (draws, EFB bindings, clears, copies, EFB set
-    // swaps) are logged. A sub-frame re-records the log into a continuation
-    // frame: its own command allocator, no ring rewind (it appends to the
-    // recorded frame's segments, which stay alive until the slot is reused),
-    // draws with a record index take that record's interpolated VS constants,
-    // and the display copy lands in a renderer-owned XFB that is presented.
+    // swaps) are logged. The completed log is replayed by the sub-frames of
+    // its sequence (begin_replay_sequence, present_replay_subframe).
     void begin_replay_record();
     void end_replay_record(bool keep);
     [[nodiscard]] bool replay_recording() const noexcept { return replay_recording_; }
@@ -518,15 +516,35 @@ public:
     void set_subframe_capture(bool capture) noexcept { subframe_capture_ = capture; }
     // Captures wait for the previous readback instead of skipping (sequences).
     void set_capture_waits(bool waits) noexcept { capture_waits_ = waits; }
-    // False (nothing recorded) when the log is gone or has no display copy.
-    // `record_constants[i]` replaces the VS constants of draws of record i.
-    // Draws matched by prepare_vertex_blend blend their vertices with the
-    // frame before's at `vertex_t` (negative: no blending).
-    // `ps_constants[i]` (when not 0) replaces the PS constants of draws of
-    // pixel-constant record i.
-    bool present_replay_subframe(std::span<const D3D12_GPU_VIRTUAL_ADDRESS> record_constants,
-                                 std::span<const D3D12_GPU_VIRTUAL_ADDRESS> ps_constants,
-                                 float vertex_t);
+    // The playing log's sub-frames. begin_replay_sequence records the replay
+    // once per sequence: draws of moving records read their constants from the
+    // evaluation output (interp_gpu.h), draws matched by prepare_vertex_blend
+    // blend their vertices with the frame before's, and the display copy lands
+    // in a renderer-owned XFB. present_replay_subframe evaluates the sequence's
+    // program at t and executes that replay. False when the log is gone or has
+    // no display copy (the sequence then shows its real frame only).
+    struct ReplaySequence {
+        interp_gpu::Layout layout{};
+        std::span<const std::int32_t> record_vs_slot;       // per scene record, -1 none
+        std::span<const std::int32_t> record_palette_slot;  // per scene record, -1 none
+        std::span<const std::int32_t> ps_slot;              // per pixel-constant record, -1 none
+        std::span<const std::uint32_t> palette_source;      // per palette slot: float4 offset in the matrix ring
+        const interp_gpu::Program* program = nullptr;
+        bool vertex_blend = false;
+    };
+    bool begin_replay_sequence(const ReplaySequence& sequence);
+    bool present_replay_subframe(float t, const Affine34& camera_t);
+    // GALAXY_INTERP_EVAL_CHECK: the evaluation output of the next sub-frame is
+    // read back; take_eval_readback returns it once complete (empty until then).
+    void request_eval_readback() noexcept { eval_readback_requested_ = true; }
+    [[nodiscard]] bool take_eval_readback(std::vector<std::uint32_t>& words, float& t);
+    // CPU time of begin_replay_sequence and replay recordings since the last
+    // call; sequences begun and replays recorded.
+    void take_sequence_record_ms(double& total_ms, std::uint64_t& samples, std::uint64_t& replays) noexcept {
+        total_ms = std::exchange(sequence_record_ms_, 0.0);
+        samples = std::exchange(sequence_record_samples_, 0u);
+        replays = std::exchange(replay_records_, 0u);
+    }
     // Once per sequence: pairs each draw of the playing log with the draw of
     // the log before it that has the same position among its record's draws
     // (`previous_record[i]`: the record of the scene before matched to record
@@ -1106,8 +1124,71 @@ private:
     bool ensure_blend_validation();
     void record_blend_validation();
     std::vector<std::uint32_t> blend_scratch_;
-    float vertex_blend_t_ = 1.0f;
     std::uint64_t vertex_blend_draws_ = 0;
+    // Sequence replay (begin_replay_sequence) and its evaluation pass. The
+    // replay list is recorded once per sequence and executed by every
+    // sub-frame between a small evaluation list and a small present list.
+    bool ensure_interp_eval();
+    bool ensure_interp_output(std::uint64_t bytes);
+    void record_interp_eval(float t, const Affine34& camera_t, bool blend);
+    void transition_interp_output(D3D12_RESOURCE_STATES state);
+    void transition_blend_verdicts(D3D12_RESOURCE_STATES state);
+    Microsoft::WRL::ComPtr<ID3D12RootSignature> interp_eval_root_;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> interp_copy_pso_;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> interp_eval_pso_;
+    bool interp_eval_failed_ = false;
+    Microsoft::WRL::ComPtr<ID3D12Resource> interp_output_;
+    std::uint64_t interp_output_bytes_ = 0;
+    D3D12_RESOURCE_STATES interp_output_state_ = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+    struct RetiredResource {
+        Microsoft::WRL::ComPtr<ID3D12Resource> resource;
+        std::uint64_t fence = 0;
+    };
+    std::vector<RetiredResource> interp_retired_;
+    struct ReplayList {
+        Microsoft::WRL::ComPtr<ID3D12CommandAllocator> allocator;
+        Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> list;
+        std::uint64_t fence = 0;        // the last submission that executed it
+        std::uint64_t sequence = 0;     // SequenceState::serial it replays, 0 none
+        bool blend = false;
+        bool redirect = false;
+        std::uint64_t blended_draws = 0;
+        std::uint64_t guarded = 0;
+        unsigned alloc_segment = 0;     // ring segment of its descriptor tables
+        unsigned blend_segment = 0;     // ring segment of the log before's vertices
+    };
+    static constexpr unsigned kReplayLists = 4;
+    std::array<ReplayList, kReplayLists> replay_lists_{};
+    bool record_replay_list(ReplayList& entry);
+    std::uint64_t sequence_serial_ = 0;
+    std::uint64_t replay_records_ = 0;
+    Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> subframe_eval_list_;
+    struct SequenceState {
+        bool ready = false;
+        bool first = false;             // the next sub-frame copies the base blocks
+        bool validated = false;         // the blend pairs were checked on the GPU
+        std::uint64_t serial = 0;
+        unsigned output_scale = 0;
+        ReplaySequence overrides{};
+        unsigned alloc_segment = 0;     // ring segment of the sequence's program
+        D3D12_GPU_VIRTUAL_ADDRESS program = 0;
+        std::uint32_t program_bytes = 0;
+        std::uint32_t ops = 0;
+        std::uint32_t copies = 0;
+        std::uint32_t ops_offset = 0;
+        std::uint32_t copies_offset = 0;
+        std::uint32_t payload_offset = 0;
+    };
+    SequenceState sequence_{};
+    std::vector<interp_gpu::Copy> interp_copies_;
+    std::vector<std::uint8_t> interp_copied_;
+    double sequence_record_ms_ = 0.0;
+    std::uint64_t sequence_record_samples_ = 0;
+    bool eval_readback_requested_ = false;
+    Microsoft::WRL::ComPtr<ID3D12Resource> eval_readback_;
+    std::uint64_t eval_readback_fence_ = 0;
+    std::uint64_t eval_readback_bytes_ = 0;
+    float eval_readback_t_ = 0.0f;
     struct SubframeScratch {
         Microsoft::WRL::ComPtr<ID3D12Resource> texture;
         D3D12_RESOURCE_DESC desc{};

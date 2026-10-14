@@ -679,6 +679,7 @@ add_library(galaxy_gx STATIC
     runtime/src/gx/streamline_bridge.cpp
     runtime/src/gx/transform_history.cpp
     runtime/src/gx/frame_interpolation.cpp
+    runtime/src/gx/interp_gpu.cpp
     runtime/src/gx/display_modes.cpp
     runtime/src/gx/fifo_parser.cpp
     runtime/src/gx/gx_backend.cpp
@@ -1028,6 +1029,10 @@ add_executable(galaxy_frame_interpolation_tests runtime/src/gx/frame_interpolati
     runtime/src/gx/frame_interpolation.cpp runtime/src/gx/transform_history.cpp)
 target_include_directories(galaxy_frame_interpolation_tests PRIVATE runtime/include)
 
+add_executable(galaxy_interp_gpu_tests runtime/src/gx/interp_gpu_tests.cpp runtime/src/gx/interp_gpu.cpp
+    runtime/src/gx/frame_interpolation.cpp runtime/src/gx/transform_history.cpp)
+target_include_directories(galaxy_interp_gpu_tests PRIVATE runtime/include)
+
 add_executable(galaxy_frame_completion_tests
     runtime/src/gx/frame_completion_tests.cpp)
 target_link_libraries(galaxy_frame_completion_tests PRIVATE galaxy_gx)
@@ -1159,6 +1164,7 @@ if(MSVC)
         galaxy_render_config_tests
         galaxy_transform_history_tests
         galaxy_frame_interpolation_tests
+        galaxy_interp_gpu_tests
         galaxy_motion_signals_tests
         galaxy_frame_completion_tests
         galaxy_window_owner_tests
@@ -1248,6 +1254,7 @@ galaxy_add_native_test(native_dsp_coprocessor galaxy_native_dsp_tests)
 galaxy_add_native_test(render_config_gates galaxy_render_config_tests)
 galaxy_add_native_test(transform_history_matching galaxy_transform_history_tests)
 galaxy_add_native_test(frame_interpolation_math galaxy_frame_interpolation_tests)
+galaxy_add_native_test(interp_gpu_program galaxy_interp_gpu_tests)
 galaxy_add_native_test(motion_signal_epochs galaxy_motion_signals_tests)
 galaxy_add_native_test(frame_pe_completion galaxy_frame_completion_tests)
 galaxy_add_native_test(native_window_owner galaxy_window_owner_tests)

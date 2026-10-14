@@ -6364,15 +6364,12 @@ void GxBackend::write_scene_vs_constants(const GxVsConstants& cpu, GxVsConstants
             static_cast<std::int32_t>(transform_history_.current().size()) - 1;
         InterpScene& scene = interp_scenes_[interp_scene_];
         scene.constants.push_back(cpu);
-        scene.constants.back().mtx_palette_base = upload.mtx_palette_base;
+        // Not read back from `upload`: the ring is write-combined memory.
+        scene.constants.back().mtx_palette_base = palette_offset != kNoPaletteOffset ? palette_offset : 0u;
         // Uber pipelines read the key from the constants: a sub-frame's copy
         // needs it as the frame's upload has it.
         apply_uber_vs_key(vs_key_, scene.constants.back());
         const std::int32_t m = transform_history_.current_matches().back();
-        scene.from.push_back(previous != nullptr
-            ? previous->position
-            : affine_multiply(transform_history_.camera_delta(), record.position));
-        scene.current.push_back(record.position);
         scene.prev_index.push_back(m);
         // Inline draws read normals, lights and indexed texture matrices from
         // the palette too: their snapshot is interpolated like a skinned one.
@@ -7442,6 +7439,15 @@ void GxBackend::report_interp_stats() {
     double record_ms = 0.0;
     std::uint64_t record_samples = 0u;
     renderer_.take_subframe_record_ms(record_ms, record_samples);
+    double replay_ms = 0.0;
+    std::uint64_t replay_samples = 0u;
+    std::uint64_t replays = 0u;
+    renderer_.take_sequence_record_ms(replay_ms, replay_samples, replays);
+    const double prepared = static_cast<double>(interp_prepared_);
+    std::ostringstream phases;
+    for (std::size_t i = 0; i < interp_prepare_phase_ms_.size(); ++i) {
+        phases << (i != 0u ? "/" : "") << (interp_prepared_ != 0u ? interp_prepare_phase_ms_[i] / prepared : 0.0);
+    }
     const double seconds = static_cast<double>(now.QuadPart - interp_stats_qpc_) /
                            static_cast<double>(frequency);
     const double presented = static_cast<double>(interp_presented_);
@@ -7497,9 +7503,18 @@ void GxBackend::report_interp_stats() {
             << identity_markers_by_kind_[motion::kMarkerLayoutPane] << '/'
             << identity_markers_by_kind_[motion::kMarkerLayoutActor] << '/'
             << identity_markers_by_kind_[motion::kMarkerStarPointer]
-            << " build-ms-per-subframe="
-            << (interp_presented_ != 0u ? interp_build_ms_ / presented : 0.0)
-            << " record-ms-per-subframe="
+            << " prepare-ms-per-sequence="
+            << (interp_prepared_ != 0u ? interp_prepare_ms_ / prepared : 0.0)
+            << " prepare-phase-ms(camera/records/palettes/blend/colours/program+replay)=" << phases.str()
+            << " replay-record-ms-per-sequence="
+            << (replay_samples != 0u ? replay_ms / static_cast<double>(replay_samples) : 0.0)
+            << " replays-per-sequence="
+            << (replay_samples != 0u ? static_cast<double>(replays) / static_cast<double>(replay_samples) : 0.0)
+            << " eval-ops-per-sequence="
+            << (interp_prepared_ != 0u ? static_cast<double>(interp_program_ops_) / prepared : 0.0)
+            << " eval-kb-per-sequence="
+            << (interp_prepared_ != 0u ? static_cast<double>(interp_program_words_) * 4.0 / 1024.0 / prepared : 0.0)
+            << " submit-ms-per-subframe="
             << (record_samples != 0u ? record_ms / static_cast<double>(record_samples) : 0.0)
             << " wall-ms-per-subframe="
             << (interp_presented_ != 0u ? interp_cpu_ms_ / presented : 0.0)
@@ -7548,7 +7563,11 @@ void GxBackend::report_interp_stats() {
     interp_sequences_ = 0u;
     interp_real_only_ = {};
     interp_cpu_ms_ = 0.0;
-    interp_build_ms_ = 0.0;
+    interp_prepare_ms_ = 0.0;
+    interp_prepare_phase_ms_ = {};
+    interp_prepared_ = 0u;
+    interp_program_ops_ = 0u;
+    interp_program_words_ = 0u;
     interp_held_vertex_blocks_ = 0u;
     interp_moving_records_ = 0u;
     interp_palette_decompositions_ = 0u;
@@ -7590,7 +7609,6 @@ bool GxBackend::render_interp_subframe(float t) {
     }
     const auto build_start = std::chrono::steady_clock::now();
     const std::size_t count = scene.constants.size();
-    const D3D12_GPU_VIRTUAL_ADDRESS ring_base = renderer_.matrix_ring().gpu_base();
     constexpr std::size_t kWords = kMatrixPaletteWords;
     static_assert(kMatrixPaletteWords == kXfPaletteWords);
     const bool before_valid = before_scene.valid;
@@ -7603,7 +7621,6 @@ bool GxBackend::render_interp_subframe(float t) {
         // Once per sequence: the camera between the two scenes, then every
         // record whose constants differ at some t, with its decomposed motion.
         interp_sequence_.classified = true;
-        interp_record_vas_.assign(count, 0u);
         interp_moving_.clear();
         interp_pending_.clear();
         interp_palette_motions_.clear();
@@ -7668,6 +7685,7 @@ bool GxBackend::render_interp_subframe(float t) {
         }
         const bool camera_moves = interp_camera_.known && !interp_camera_.cut &&
             std::memcmp(interp_camera_.a.data(), interp_camera_.b.data(), sizeof(Affine34)) != 0;
+        const auto records_start = std::chrono::steady_clock::now();
         for (std::size_t r = 0; r < count; ++r) {
             const std::int32_t m = prev_index[r];
             const bool prev_data = before_valid && m >= 0 &&
@@ -7723,9 +7741,10 @@ bool GxBackend::render_interp_subframe(float t) {
                 }
                 // The slots this record reads: every one for per-vertex
                 // matrices; for an inline draw, the normal matrix of its
-                // matrix index when it is lit (lights and texture rows are
-                // taken whole).
+                // matrix index when it is lit; the lights its channels and
+                // emboss texgens evaluate (texture rows are taken whole).
                 InterpPaletteMotion& entry = interp_palette_motions_[static_cast<std::size_t>(index)];
+                entry.light_mask |= used_lights(now);
                 if (scene.per_vertex[r] != 0u) {
                     entry.position_mask = kAllPaletteSlots;
                     entry.normal_mask = kAllPaletteSlots;
@@ -7740,12 +7759,13 @@ bool GxBackend::render_interp_subframe(float t) {
                 interp_pending_.push_back(motion);
             }
         }
+        const auto palettes_start = std::chrono::steady_clock::now();
         // Each palette pair once, with the slots its records read.
         for (InterpPaletteMotion& entry : interp_palette_motions_) {
             const std::uint32_t* now_words =
                 scene.palettes.data() + static_cast<std::size_t>(entry.shadow) * kWords;
             palette_motion(before_palette(entry.before), now_words, interp_camera_, entry.orthographic,
-                           entry.motion, entry.position_mask, entry.normal_mask);
+                           entry.motion, entry.position_mask, entry.normal_mask, entry.light_mask);
             interp_snapped_ += entry.motion.snapped;
             ++interp_palette_decompositions_;
         }
@@ -7795,14 +7815,15 @@ bool GxBackend::render_interp_subframe(float t) {
             line << '\n';
             std::cerr << line.str();
         }
+        const auto blend_start = std::chrono::steady_clock::now();
         // Vertex blending pairs draws with the log run before: not for a
         // sequence chained past a skipped scene (B18).
         renderer_.prepare_vertex_blend(before_valid && !interp_sequence_.chained
                                            ? std::span<const std::int32_t>(prev_index)
                                            : std::span<const std::int32_t>{});
+        const auto colours_start = std::chrono::steady_clock::now();
         // Pixel-constant records pair through the paired draws.
         interp_ps_moving_.clear();
-        interp_ps_vas_.assign(scene.ps_constants.size(), 0u);
         if (before_valid && !(interp_camera_.known && interp_camera_.cut)) {
             const std::span<const std::int32_t> pairs = renderer_.ps_record_pairs();
             const std::size_t records = std::min(pairs.size(), scene.ps_constants.size());
@@ -7815,166 +7836,282 @@ bool GxBackend::render_interp_subframe(float t) {
                 }
             }
         }
+        const auto program_start = std::chrono::steady_clock::now();
+        interp_sequence_.ready = prepare_interp_sequence(scene, before_scene, before_valid);
+        const auto prepare_end = std::chrono::steady_clock::now();
+        const auto ms = [](auto from, auto to) { return std::chrono::duration<double, std::milli>(to - from).count(); };
+        interp_prepare_phase_ms_[0] += ms(build_start, records_start);
+        interp_prepare_phase_ms_[1] += ms(records_start, palettes_start);
+        interp_prepare_phase_ms_[2] += ms(palettes_start, blend_start);
+        interp_prepare_phase_ms_[3] += ms(blend_start, colours_start);
+        interp_prepare_phase_ms_[4] += ms(colours_start, program_start);
+        interp_prepare_phase_ms_[5] += ms(program_start, prepare_end);
+        interp_prepare_ms_ += ms(build_start, prepare_end);
+        ++interp_prepared_;
     }
-    ++interp_subframe_serial_;
+    if (!interp_sequence_.ready) {
+        return false;
+    }
     const Affine34 camera_t = camera_at(interp_camera_, t);
+    interp_moving_records_ += interp_moving_.size();
+    interp_ps_moving_total_ += interp_ps_moving_.size();
+    // GALAXY_INTERP_VERIFY=1 with GALAXY_INTERP_FORCE_T=0: every matched block at
+    // t = 0 must equal the previous frame's (diagnostics).
+    static const bool verify = read_env_u64("GALAXY_INTERP_VERIFY", 0u) != 0u;
+    if (verify && t == 0.0f && interp_sequence_.next == 0u) {
+        verify_interp_program(scene, before_scene, camera_t);
+    }
+    check_interp_eval(scene, camera_t, t);
+    return renderer_.present_replay_subframe(t, camera_t);
+}
+
+// The playing sequence's evaluation program (interp_gpu.h): an output block
+// per moving record, palette pair and pixel record, the ops that move them,
+// and the replay recorded once over them.
+bool GxBackend::prepare_interp_sequence(const InterpScene& scene, const InterpScene& before_scene,
+                                        bool before_valid) {
     // GALAXY_INTERP_PARTS: bit 0 inline position, 1 texture matrices, 2 projection, 3 palette,
     // 4 vertex blending, 5 colours (diagnostics).
     static const std::uint64_t parts = read_env_u64("GALAXY_INTERP_PARTS", 0x3Fu);
-    interp_moving_records_ += interp_moving_.size();
-    alignas(16) std::uint32_t palette_words[kMatrixPaletteWords];
-    // GALAXY_INTERP_VERIFY=1 with GALAXY_INTERP_FORCE_T=0: every matched record's rebuilt
-    // constants must equal the previous frame's (diagnostics).
-    static const bool verify = read_env_u64("GALAXY_INTERP_VERIFY", 0u) != 0u;
-    const bool verify_now = verify && t == 0.0f && interp_sequence_.next == 0u;
-    std::size_t verify_checked = 0u, verify_bad = 0u, verify_palette_words = 0u;
-    std::array<std::size_t, 5> verify_regions{};  // positions, texture rows, normals, post, lights
-    std::array<std::size_t, 16> verify_light_words{};
-    float verify_light_worst = 0.0f;
-    std::uint32_t verify_light_worst_a = 0u, verify_light_worst_b = 0u, verify_light_worst_w = 0u;
-    std::ostringstream verify_out;
-    for (const InterpRecordMotion& moving : interp_moving_) {
+    constexpr std::size_t kWords = kMatrixPaletteWords;
+    const std::size_t count = scene.constants.size();
+    const auto before_palette = [&](std::int32_t shadow) -> const std::uint32_t* {
+        return before_valid && shadow >= 0 && static_cast<std::size_t>(shadow) < before_scene.palette_count
+            ? before_scene.palettes.data() + static_cast<std::size_t>(shadow) * kWords
+            : nullptr;
+    };
+    interp_program_.clear();
+    interp_vs_slot_.assign(count, -1);
+    interp_record_palette_slot_.assign(count, -1);
+    interp_ps_slot_.assign(scene.ps_constants.size(), -1);
+    interp_palette_slot_.assign(interp_palette_motions_.size(), -1);
+    interp_palette_source_.clear();
+    interp_palette_entry_.clear();
+    if ((parts & 8u) != 0u) {
+        for (const InterpRecordMotion& moving : interp_moving_) {
+            if (moving.palette < 0) continue;
+            std::int32_t& slot = interp_palette_slot_[static_cast<std::size_t>(moving.palette)];
+            if (slot < 0) {
+                slot = static_cast<std::int32_t>(interp_palette_source_.size());
+                interp_palette_source_.push_back(scene.constants[moving.record].mtx_palette_base);
+                interp_palette_entry_.push_back(moving.palette);
+            }
+        }
+    }
+    const bool colours = (parts & 0x20u) != 0u;
+    interp_layout_ = {static_cast<std::uint32_t>(interp_moving_.size()),
+                      static_cast<std::uint32_t>(interp_palette_source_.size()),
+                      colours ? static_cast<std::uint32_t>(interp_ps_moving_.size()) : 0u};
+    const interp_gpu::Layout& layout = interp_layout_;
+    for (std::size_t s = 0; s < interp_moving_.size(); ++s) {
+        const InterpRecordMotion& moving = interp_moving_[s];
+        interp_vs_slot_[moving.record] = static_cast<std::int32_t>(s);
+        const std::uint32_t base = layout.vs_offset(static_cast<std::uint32_t>(s)) / 4u;
         const GxVsConstants& recorded = scene.constants[moving.record];
         const GxVsConstants* before = moving.prev >= 0
             ? &before_scene.constants[static_cast<std::size_t>(moving.prev)] : nullptr;
-        // Built in cached memory, then copied once: the upload is write-combined.
-        GxVsConstants built = recorded;
         if (moving.position_moves && (parts & 1u) != 0u) {
-            const Affine34 at = eye_at(moving.position, interp_camera_, camera_t, t);
-            std::memcpy(built.inline_pos_matrix, at.data(), sizeof(built.inline_pos_matrix));
+            interp_program_.eye(base + interp_gpu::kVsPosition, moving.position);
         }
         if (moving.tex_moves && before != nullptr && (parts & 2u) != 0u) {
             // Per texgen: projection and environment maps lerp whole; texture
             // coordinate matrices scroll (wrap-aware) or step.
             for (unsigned i = 0; i < kMaxTexGens; ++i) {
                 const bool spatial = texgen_spatial(recorded.texgen_config[i][0]);
-                tex_matrix_at(&before->inline_tex_matrices[i][0][0], &recorded.inline_tex_matrices[i][0][0],
-                              spatial, t, &built.inline_tex_matrices[i][0][0]);
-                tex_matrix_at(&before->inline_post_matrices[i][0][0], &recorded.inline_post_matrices[i][0][0],
-                              spatial, t, &built.inline_post_matrices[i][0][0]);
+                interp_program_.tex_matrix(base + interp_gpu::kVsTex + 12u * i, &before->inline_tex_matrices[i][0][0],
+                                           &recorded.inline_tex_matrices[i][0][0], spatial);
+                interp_program_.tex_matrix(base + interp_gpu::kVsPost + 12u * i,
+                                           &before->inline_post_matrices[i][0][0],
+                                           &recorded.inline_post_matrices[i][0][0], spatial);
             }
         }
-        if (moving.colour_moves && before != nullptr && (parts & 0x20u) != 0u) {
-            channel_colours_at(*before, recorded, t, built);
+        if (moving.colour_moves && before != nullptr && colours) {
+            interp_program_.channel_colours(base, *before, recorded);
         }
         if (moving.projection_moves && before != nullptr && (parts & 4u) != 0u) {
-            const float* a = &before->projection[0][0];
-            const float* b = &recorded.projection[0][0];
-            float* out = &built.projection[0][0];
-            for (unsigned i = 0; i < 16u; ++i) {
-                out[i] = std::isfinite(a[i]) && std::isfinite(b[i]) ? a[i] + (b[i] - a[i]) * t : b[i];
+            interp_program_.projection(base, *before, recorded);
+        }
+        if (moving.palette >= 0) {
+            const std::int32_t q = interp_palette_slot_[static_cast<std::size_t>(moving.palette)];
+            if (q >= 0) {
+                interp_record_palette_slot_[moving.record] = q;
+                const std::uint32_t word =
+                    (layout.palette_offset(static_cast<std::uint32_t>(q)) - layout.palette_base()) / 16u;
+                interp_program_.store(base + interp_gpu::kVsPaletteBase, &word, 1u);
             }
         }
-        if (moving.palette >= 0 && (parts & 8u) != 0u) {
-            InterpPaletteMotion& entry = interp_palette_motions_[static_cast<std::size_t>(moving.palette)];
-            if (entry.uploaded != interp_subframe_serial_) {
-                const std::uint32_t* now_words =
-                    scene.palettes.data() + static_cast<std::size_t>(entry.shadow) * kWords;
-                palette_at(entry.motion, before_palette(entry.before), now_words, interp_camera_, camera_t,
-                           t, palette_words);
-                if (verify_now && entry.before >= 0) {
-                    const std::uint32_t* was = before_palette(entry.before);
-                    for (std::size_t w = 0; w < kWords; ++w) {
-                        const float x = std::bit_cast<float>(palette_words[w]);
-                        const float y = std::bit_cast<float>(was[w]);
-                        if (palette_words[w] != was[w] &&
-                            !(std::fabs(x - y) <= 1e-3f * (1.0f + std::fabs(y)))) {
-                            ++verify_palette_words;
-                            ++verify_regions[w < 120u ? 0u : w < 256u ? 1u : w < 0x500u ? 2u : w < 0x600u ? 3u : 4u];
-                            if (w >= 0x600u) {
-                                ++verify_light_words[(w - 0x600u) & 15u];
-                                const float rel = std::fabs(x - y) / (1.0f + std::fabs(y));
-                                if (((w - 0x600u) & 15u) >= 3u && rel > verify_light_worst) {
-                                    verify_light_worst = rel;
-                                    verify_light_worst_a = was[w];
-                                    verify_light_worst_b = palette_words[w];
-                                    verify_light_worst_w = static_cast<std::uint32_t>(w);
-                                }
-                            }
-                        }
+    }
+    for (std::size_t q = 0; q < interp_palette_entry_.size(); ++q) {
+        const InterpPaletteMotion& entry = interp_palette_motions_[static_cast<std::size_t>(interp_palette_entry_[q])];
+        const std::uint32_t* now_words = scene.palettes.data() + static_cast<std::size_t>(entry.shadow) * kWords;
+        interp_program_.palette(layout.palette_offset(static_cast<std::uint32_t>(q)) / 4u, entry.motion,
+                                before_palette(entry.before), now_words, interp_camera_);
+    }
+    if (colours) {
+        for (std::size_t k = 0; k < interp_ps_moving_.size(); ++k) {
+            const auto [p, q] = interp_ps_moving_[k];
+            interp_ps_slot_[p] = static_cast<std::int32_t>(k);
+            interp_program_.ps_colours(layout.ps_offset(static_cast<std::uint32_t>(k)) / 4u,
+                                       before_scene.ps_constants[q], scene.ps_constants[p]);
+        }
+    }
+    interp_program_ops_ += interp_program_.ops.size();
+    interp_program_words_ += interp_program_.payload.size();
+    RendererD3D12::ReplaySequence sequence{};
+    sequence.layout = layout;
+    sequence.record_vs_slot = interp_vs_slot_;
+    sequence.record_palette_slot = interp_record_palette_slot_;
+    sequence.ps_slot = interp_ps_slot_;
+    sequence.palette_source = interp_palette_source_;
+    sequence.program = &interp_program_;
+    sequence.vertex_blend = (parts & 0x10u) != 0u;
+    return renderer_.begin_replay_sequence(sequence);
+}
+
+// The output the replay reads, built on the CPU: each block as recorded, then
+// the program at t (interp_gpu::evaluate).
+void GxBackend::build_interp_reference(const InterpScene& scene, const Affine34& camera_t, float t,
+                                       std::vector<std::uint32_t>& out) const {
+    const interp_gpu::Layout& layout = interp_layout_;
+    out.assign(layout.bytes() / 4u, 0u);
+    for (std::size_t s = 0; s < interp_moving_.size(); ++s) {
+        std::memcpy(out.data() + layout.vs_offset(static_cast<std::uint32_t>(s)) / 4u,
+                    &scene.constants[interp_moving_[s].record], sizeof(GxVsConstants));
+    }
+    for (std::size_t q = 0; q < interp_palette_entry_.size(); ++q) {
+        const InterpPaletteMotion& entry = interp_palette_motions_[static_cast<std::size_t>(interp_palette_entry_[q])];
+        std::memcpy(out.data() + layout.palette_offset(static_cast<std::uint32_t>(q)) / 4u,
+                    scene.palettes.data() + static_cast<std::size_t>(entry.shadow) * kMatrixPaletteWords,
+                    interp_gpu::kPaletteBytes);
+    }
+    for (std::size_t k = 0; k < layout.ps_count; ++k) {
+        std::memcpy(out.data() + layout.ps_offset(static_cast<std::uint32_t>(k)) / 4u,
+                    &scene.ps_constants[interp_ps_moving_[k][0]], sizeof(GxPsConstants));
+    }
+    interp_gpu::evaluate(interp_program_, camera_t, t, out.data());
+}
+
+// GALAXY_INTERP_VERIFY: at t = 0 every matched record's moving block must equal
+// the previous frame's (positions, projection, texture matrices) and every
+// palette with a previous snapshot its words.
+void GxBackend::verify_interp_program(const InterpScene& scene, const InterpScene& before_scene,
+                                      const Affine34& camera_t) {
+    std::vector<std::uint32_t> out;
+    build_interp_reference(scene, camera_t, 0.0f, out);
+    const interp_gpu::Layout& layout = interp_layout_;
+    std::size_t checked = 0u, bad = 0u, palette_words = 0u;
+    float worst = 0.0f;
+    const auto compare = [&worst](const float* x, const float* y, std::size_t n) {
+        float local = 0.0f;
+        for (std::size_t i = 0; i < n; ++i) {
+            local = std::max(local, std::fabs(x[i] - y[i]) / (1.0f + std::fabs(y[i])));
+        }
+        worst = std::max(worst, local);
+        return local;
+    };
+    for (std::size_t s = 0; s < interp_moving_.size(); ++s) {
+        const InterpRecordMotion& moving = interp_moving_[s];
+        if (moving.prev < 0) continue;
+        const GxVsConstants& was = before_scene.constants[static_cast<std::size_t>(moving.prev)];
+        GxVsConstants built{};
+        std::memcpy(&built, out.data() + layout.vs_offset(static_cast<std::uint32_t>(s)) / 4u, sizeof(built));
+        ++checked;
+        float local = compare(&built.projection[0][0], &was.projection[0][0], 16u);
+        local = std::max(local, compare(&built.inline_tex_matrices[0][0][0], &was.inline_tex_matrices[0][0][0],
+                                        kMaxTexGens * 12u));
+        if (scene.per_vertex[moving.record] == 0u) {
+            local = std::max(local, compare(&built.inline_pos_matrix[0][0], &was.inline_pos_matrix[0][0], 12u));
+        }
+        bad += local > 1e-3f ? 1u : 0u;
+    }
+    for (std::size_t q = 0; q < interp_palette_entry_.size(); ++q) {
+        const InterpPaletteMotion& entry = interp_palette_motions_[static_cast<std::size_t>(interp_palette_entry_[q])];
+        if (entry.before < 0) continue;
+        const std::uint32_t* was =
+            before_scene.palettes.data() + static_cast<std::size_t>(entry.before) * kMatrixPaletteWords;
+        const std::uint32_t* got = out.data() + layout.palette_offset(static_cast<std::uint32_t>(q)) / 4u;
+        for (std::size_t w = 0; w < kMatrixPaletteWords; ++w) {
+            const float x = std::bit_cast<float>(got[w]);
+            const float y = std::bit_cast<float>(was[w]);
+            palette_words += got[w] != was[w] && !(std::fabs(x - y) <= 1e-3f * (1.0f + std::fabs(y))) ? 1u : 0u;
+        }
+    }
+    std::cerr << "[interp-verify] seq=" << interp_sequence_serial_ << " checked=" << checked << " bad=" << bad
+              << " palette-words-off=" << palette_words << " worst=" << worst << '\n';
+}
+
+// GALAXY_INTERP_EVAL_CHECK=<n>: every n-th sequence the GPU evaluation of its
+// first sub-frame is read back and compared with the CPU reference: copied
+// words exactly, each op's output to float precision of its magnitude
+// (rounded colours and integers within one step).
+void GxBackend::check_interp_eval(const InterpScene& scene, const Affine34& camera_t, float t) {
+    static const std::uint64_t every = read_env_u64("GALAXY_INTERP_EVAL_CHECK", 0u);
+    if (every == 0u) {
+        return;
+    }
+    std::vector<std::uint32_t> got;
+    float got_t = 0.0f;
+    if (renderer_.take_eval_readback(got, got_t) && !interp_eval_expected_.empty()) {
+        const std::vector<std::uint32_t>& want = interp_eval_expected_;
+        const std::size_t words = std::min(got.size(), want.size());
+        std::vector<std::uint8_t> covered(words, 0u);
+        std::size_t ops_off = 0u, copies_off = 0u;
+        float worst = 0.0f;
+        std::ostringstream detail;
+        unsigned listed = 0u;
+        for (const interp_gpu::Op& op : interp_eval_ops_) {
+            const std::uint32_t kind = interp_gpu::op_kind(op.control);
+            const std::uint32_t n = kind == 0u ? 12u : kind == 1u ? 9u : kind == 5u ? 6u : kind == 4u ? 1u
+                                                                                    : interp_gpu::op_count(op.control);
+            if (op.dst + n > words) continue;
+            float magnitude = 0.0f, error = 0.0f;
+            bool step = false;
+            for (std::uint32_t i = 0; i < n; ++i) {
+                const std::uint32_t x = got[op.dst + i], y = want[op.dst + i];
+                covered[op.dst + i] = 1u;
+                if (kind == 4u) {
+                    for (unsigned shift = 0; shift < 32u; shift += 8u) {
+                        const int dx = static_cast<int>((x >> shift) & 0xFFu) - static_cast<int>((y >> shift) & 0xFFu);
+                        step = step || dx > 1 || dx < -1;
                     }
+                } else if (kind == 3u) {
+                    const std::int64_t d = static_cast<std::int64_t>(static_cast<std::int32_t>(x)) -
+                                           static_cast<std::int32_t>(y);
+                    step = step || d > 1 || d < -1;
+                } else if (kind != 6u) {
+                    magnitude = std::max(magnitude, std::fabs(std::bit_cast<float>(y)));
+                    error = std::max(error, std::fabs(std::bit_cast<float>(x) - std::bit_cast<float>(y)));
+                } else {
+                    step = step || x != y;
                 }
-                const UploadRing::Allocation alloc =
-                    renderer_.matrix_ring().allocate(kWords * sizeof(std::uint32_t), 256u);
-                std::memcpy(alloc.cpu, palette_words, kWords * sizeof(std::uint32_t));
-                entry.base = static_cast<std::uint32_t>((alloc.gpu - ring_base) / 16u);
-                entry.uploaded = interp_subframe_serial_;
             }
-            built.mtx_palette_base = entry.base;
-        }
-        if (verify_now && before != nullptr) {
-            ++verify_checked;
-            float worst = 0.0f;
-            unsigned part = 0u;
-            const auto compare = [&](const float* x, const float* y, std::size_t n, unsigned p) {
-                for (std::size_t i = 0; i < n; ++i) {
-                    const float d = std::fabs(x[i] - y[i]) / (1.0f + std::fabs(y[i]));
-                    if (d > worst) {
-                        worst = d;
-                        part = p;
-                    }
-                }
-            };
-            if (scene.per_vertex[moving.record] == 0u) {
-                compare(&built.inline_pos_matrix[0][0], &before->inline_pos_matrix[0][0], 12u, 1u);
-            }
-            compare(&built.projection[0][0], &before->projection[0][0], 16u, 4u);
-            compare(&built.inline_tex_matrices[0][0][0], &before->inline_tex_matrices[0][0][0],
-                    kMaxTexGens * 12u, 2u);
-            if (worst > 1e-3f) {
-                ++verify_bad;
-                if (verify_bad <= 8u) {
-                    verify_out << "  r=" << moving.record << " m=" << moving.prev << " part=" << part
-                               << " worst=" << worst << " snapped=" << moving.position.snapped
-                               << " still=" << moving.position.still << " split=" << moving.position.split
-                               << " now-t=(" << recorded.inline_pos_matrix[0][3] << ','
-                               << recorded.inline_pos_matrix[1][3] << ',' << recorded.inline_pos_matrix[2][3]
-                               << ") before-t=(" << before->inline_pos_matrix[0][3] << ','
-                               << before->inline_pos_matrix[1][3] << ',' << before->inline_pos_matrix[2][3]
-                               << ") built-t=(" << built.inline_pos_matrix[0][3] << ','
-                               << built.inline_pos_matrix[1][3] << ',' << built.inline_pos_matrix[2][3] << ")\n";
-                if (part == 1u && verify_bad <= 8u) {
-                    verify_out << "    A=";
-                    for (const auto& row : before->inline_pos_matrix) for (float v : row) verify_out << v << ',';
-                    verify_out << " B=";
-                    for (const auto& row : recorded.inline_pos_matrix) for (float v : row) verify_out << v << ',';
-                    verify_out << " proj=";
-                    for (const auto& row : recorded.projection) for (float v : row) verify_out << v << ',';
-                    verify_out << '\n';
-                }
+            const float relative = error / (1.0f + magnitude);
+            if (step || !(relative <= 2e-5f)) {
+                ++ops_off;
+                worst = std::max(worst, step ? 1.0f : relative);
+                if (listed++ < 6u) {
+                    detail << " op(kind=" << kind << " dst=" << op.dst << " rel=" << relative << ')';
                 }
             }
         }
-        const UploadRing::Allocation upload =
-            renderer_.constant_ring().allocate(sizeof(GxVsConstants), 256u);
-        std::memcpy(upload.cpu, &built, sizeof(GxVsConstants));
-        interp_record_vas_[moving.record] = upload.gpu;
-    }
-    if (verify_now) {
-        std::cerr << "[interp-verify] seq=" << interp_sequence_serial_ << " checked=" << verify_checked
-                  << " bad=" << verify_bad << " palette-words-off=" << verify_palette_words << " (pos/tex/nrm/post/light "
-                  << verify_regions[0] << '/' << verify_regions[1] << '/' << verify_regions[2] << '/'
-                  << verify_regions[3] << '/' << verify_regions[4] << ") light-words";
-        for (std::size_t k = 0; k < 16u; ++k) std::cerr << ' ' << verify_light_words[k];
-        std::cerr << " worst(w,was,built)=" << std::hex << verify_light_worst_w << ',' << verify_light_worst_a << ','
-                  << verify_light_worst_b << std::dec << " rel=" << verify_light_worst << '\n'
-                  << verify_out.str();
-    }
-    if ((parts & 0x20u) != 0u) {
-        interp_ps_moving_total_ += interp_ps_moving_.size();
-        for (const auto& [p, q] : interp_ps_moving_) {
-            GxPsConstants built{};
-            ps_colours_at(before_scene.ps_constants[q], scene.ps_constants[p], t, built);
-            const UploadRing::Allocation upload =
-                renderer_.constant_ring().allocate(sizeof(GxPsConstants), 256u);
-            std::memcpy(upload.cpu, &built, sizeof(GxPsConstants));
-            interp_ps_vas_[p] = upload.gpu;
+        for (std::size_t w = 0; w < words; ++w) {
+            if (covered[w] == 0u && got[w] != want[w]) {
+                if (copies_off++ < 4u) {
+                    detail << " copy(word=" << w << ' ' << got[w] << "!=" << want[w] << ')';
+                }
+            }
         }
+        std::cerr << "[interp-eval-check] seq=" << interp_eval_expected_seq_ << " t=" << got_t << " words=" << words
+                  << " ops=" << interp_eval_ops_.size() << " ops-off=" << ops_off << " copies-off=" << copies_off
+                  << " worst=" << worst << detail.str() << '\n';
+        interp_eval_expected_.clear();
     }
-    interp_build_ms_ += std::chrono::duration<double, std::milli>(
-        std::chrono::steady_clock::now() - build_start).count();
-    return renderer_.present_replay_subframe(interp_record_vas_, interp_ps_vas_,
-                                             (parts & 0x10u) != 0u ? t : -1.0f);
+    if (interp_sequence_.next == 0u && interp_eval_expected_.empty() && interp_sequence_serial_ % every == 0u) {
+        build_interp_reference(scene, camera_t, t, interp_eval_expected_);
+        interp_eval_expected_seq_ = interp_sequence_serial_;
+        interp_eval_ops_ = interp_program_.ops;
+        renderer_.request_eval_readback();
+    }
 }
 
 bool GxBackend::skip_for_present_rate() {

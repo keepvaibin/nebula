@@ -42,6 +42,7 @@
 #include "galaxy/gx/shader_keys.h"
 #include "galaxy/gx/texture_cache.h"
 #include "galaxy/gx/frame_interpolation.h"
+#include "galaxy/gx/interp_gpu.h"
 #include "galaxy/gx/transform_history.h"
 #include "galaxy/gx/uber_constants.h"
 #include "galaxy/gx/vs_constants.h"
@@ -775,8 +776,6 @@ private:
     // predecessor (previous palettes and texture matrices).
     struct InterpScene {
         std::vector<GxVsConstants> constants;   // per record, as uploaded
-        std::vector<Affine34> from;             // previous transform (inline)
-        std::vector<Affine34> current;          // current inline transform
         std::vector<std::int32_t> prev_index;   // matched record of the previous scene
         std::vector<std::int32_t> palette;      // per record: shadow index or -1
         std::vector<std::uint8_t> per_vertex;   // per-vertex palette draw
@@ -797,7 +796,7 @@ private:
         std::uint32_t camera_epoch = 0;
         bool camera_epoch_known = false;
         void clear() noexcept {
-            constants.clear(); from.clear(); current.clear(); prev_index.clear();
+            constants.clear(); prev_index.clear();
             palette.clear(); per_vertex.clear(); palette_count = 0; valid = false; serial = 0;
             ps_constants.clear();
             category.clear(); camera_epoch_known = false;
@@ -823,6 +822,7 @@ private:
         bool flush_requested = false;
         unsigned scene = 0;               // interp_scenes_ index being interpolated
         bool classified = false;          // interp_moving_ holds this scene's records
+        bool ready = false;               // the replay and its program are recorded
         // The scene interpolated from: the one before, or the one shown last
         // when the one before was never shown (its log replaced unplayed);
         // `chained`: records then match through the skipped scene
@@ -859,14 +859,12 @@ private:
         std::int32_t next = -1;           // next entry of the same shadow
         std::uint16_t position_mask = 0;  // PNMTX slots its records read
         std::uint16_t normal_mask = 0;    // normal matrices its records read
+        std::uint8_t light_mask = 0;      // GX lights its records evaluate
         bool orthographic = false;
         PaletteMotion motion{};
-        std::uint32_t base = 0;           // this sub-frame's upload (mtx_palette_base)
-        std::uint64_t uploaded = 0;       // interp_subframe_serial_ of `base`
     };
     std::vector<InterpPaletteMotion> interp_palette_motions_;
     std::vector<std::int32_t> interp_palette_first_;  // per shadow: first entry
-    std::uint64_t interp_subframe_serial_ = 0;
     std::uint64_t interp_moving_records_ = 0;        // summed per sub-frame
     std::uint64_t interp_palette_decompositions_ = 0;
     std::uint64_t interp_camera_cuts_ = 0;
@@ -904,17 +902,36 @@ private:
     std::uint64_t interp_gpu_cap_serial_ = 0;
     std::uint64_t interp_gpu_checked_ = 0;
     std::uint64_t interp_gpu_capped_ = 0;   // sequences with fewer sub-frames
-    std::vector<D3D12_GPU_VIRTUAL_ADDRESS> interp_record_vas_;
+    // The playing sequence's evaluation program and output slots (prepare_interp_sequence).
+    interp_gpu::Program interp_program_;
+    interp_gpu::Layout interp_layout_{};
+    std::vector<std::int32_t> interp_vs_slot_;             // per record
+    std::vector<std::int32_t> interp_record_palette_slot_;  // per record
+    std::vector<std::int32_t> interp_ps_slot_;             // per pixel-constant record
+    std::vector<std::int32_t> interp_palette_slot_;        // per interp_palette_motions_ entry
+    std::vector<std::int32_t> interp_palette_entry_;       // per palette slot: its entry
+    std::vector<std::uint32_t> interp_palette_source_;     // per palette slot: mtx_palette_base
+    std::vector<std::uint32_t> interp_eval_expected_;      // GALAXY_INTERP_EVAL_CHECK reference
+    std::uint64_t interp_eval_expected_seq_ = 0;
+    std::vector<interp_gpu::Op> interp_eval_ops_;
+    bool prepare_interp_sequence(const InterpScene& scene, const InterpScene& before_scene, bool before_valid);
+    void build_interp_reference(const InterpScene& scene, const Affine34& camera_t, float t,
+                                std::vector<std::uint32_t>& out) const;
+    void verify_interp_program(const InterpScene& scene, const InterpScene& before_scene, const Affine34& camera_t);
+    void check_interp_eval(const InterpScene& scene, const Affine34& camera_t, float t);
     // Pixel-constant records of the playing scene whose colours change
     // (record, matched record of the scene before), and their sub-frame uploads.
     std::vector<std::array<std::uint32_t, 2>> interp_ps_moving_;
-    std::vector<D3D12_GPU_VIRTUAL_ADDRESS> interp_ps_vas_;
     std::uint64_t interp_ps_moving_total_ = 0;   // summed per sub-frame
     std::uint64_t interp_presented_ = 0;
     std::uint64_t interp_dropped_ = 0;
     std::uint64_t interp_failed_ = 0;     // sub-frames that could not be recorded
     double interp_cpu_ms_ = 0.0;          // wall time per sub-frame, waits included
-    double interp_build_ms_ = 0.0;        // record constants rebuilt per sub-frame
+    double interp_prepare_ms_ = 0.0;      // classification, program and replay per sequence
+    std::array<double, 6> interp_prepare_phase_ms_{};
+    std::uint64_t interp_prepared_ = 0;   // sequences prepared
+    std::uint64_t interp_program_ops_ = 0;
+    std::uint64_t interp_program_words_ = 0;
     std::uint64_t interp_sequences_ = 0;
     std::uint64_t interp_snapped_ = 0;    // records shown at their own transform
     std::uint64_t interp_started_ = 0;

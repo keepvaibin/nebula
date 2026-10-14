@@ -550,9 +550,29 @@ void light_at(const std::uint32_t* a, const std::uint32_t* b, const CameraMotion
     }
 }
 
+std::uint8_t used_lights(const GxVsConstants& constants) noexcept {
+    std::uint32_t mask = 0u;
+    const std::uint32_t channels = std::min<std::uint32_t>(constants.uber_vs_header[1], 2u);
+    for (std::uint32_t ch = 0; ch < channels; ++ch) {
+        for (const std::uint32_t control : {constants.uber_channel[ch], constants.uber_channel[2u + ch]}) {
+            if ((control & 2u) != 0u) {
+                mask |= ((control >> 2u) & 0xFu) | (((control >> 11u) & 0xFu) << 4u);
+            }
+        }
+    }
+    const std::uint32_t texgens = std::min<std::uint32_t>(constants.uber_vs_header[0], kMaxTexGens);
+    for (std::uint32_t i = 0; i < texgens; ++i) {
+        const std::uint32_t texgen = constants.uber_texgen[i];
+        if (((texgen >> 4u) & 7u) == 1u) {
+            mask |= 1u << ((texgen >> 15u) & 7u);
+        }
+    }
+    return static_cast<std::uint8_t>(mask);
+}
+
 void palette_motion(const std::uint32_t* a, const std::uint32_t* b, const CameraMotion& camera,
                     bool orthographic, PaletteMotion& out, std::uint16_t position_mask,
-                    std::uint16_t normal_mask) noexcept {
+                    std::uint16_t normal_mask, std::uint8_t light_mask) noexcept {
     out = PaletteMotion{};
     out.split = camera.known && !camera.cut && !orthographic;
     const bool camera_moves = camera.known && !camera.cut && !equal_words(camera.a, camera.b);
@@ -592,9 +612,9 @@ void palette_motion(const std::uint32_t* a, const std::uint32_t* b, const Camera
         out.normal_changed[k] = 1u;
         out.any_changed = true;
     }
-    if (a == nullptr && camera_moves && !orthographic) {
+    if (a == nullptr && camera_moves && !orthographic && light_mask != 0u) {
         // Lights without a previous snapshot stay where they are in the world.
-        out.light_changed = 0xFFu;
+        out.light_changed = light_mask;
         out.any_changed = true;
     }
     if (a != nullptr) {
@@ -603,7 +623,8 @@ void palette_motion(const std::uint32_t* a, const std::uint32_t* b, const Camera
             std::memcmp(a + kXfPostBase, b + kXfPostBase, (kXfLightBase - kXfPostBase) * 4u) != 0;
         for (unsigned light = 0; light < 8u; ++light) {
             const unsigned base = kXfLightBase + light * 16u;
-            if ((camera_moves && !orthographic) || std::memcmp(a + base, b + base, 16u * 4u) != 0) {
+            if ((light_mask & (1u << light)) != 0u &&
+                ((camera_moves && !orthographic) || std::memcmp(a + base, b + base, 16u * 4u) != 0)) {
                 out.light_changed |= static_cast<std::uint8_t>(1u << light);
             }
         }
