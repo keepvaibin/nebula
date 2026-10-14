@@ -289,6 +289,8 @@ bool SceneRayTracer::initialize(ID3D12Device* device, std::uint64_t timestamp_fr
         std::size_t length = 0u;
         dump_scene_ = getenv_s(&length, value, sizeof(value), "GALAXY_RT_DUMP") == 0 && length > 1u
             ? std::strtoull(value, nullptr, 10) : 0u;
+        dump_every_ = static_cast<std::uint64_t>(std::max(0.0f, env_float("GALAXY_RT_DUMP_EVERY", 0.0f)));
+        dump_remaining_ = static_cast<std::uint64_t>(std::max(1.0f, env_float("GALAXY_RT_DUMP_COUNT", 1.0f)));
     }
     ao_enabled_ = env_float("GALAXY_RT_AO", 1.0f) != 0.0f;
     ao_rays_ = static_cast<std::uint32_t>(std::clamp(env_float("GALAXY_RT_AO_RAYS", 2.0f), 1.0f, 16.0f));
@@ -385,7 +387,8 @@ void SceneRayTracer::retire(ComPtr<ID3D12Resource>& resource) {
     }
 }
 
-bool SceneRayTracer::ensure_capacity(ID3D12GraphicsCommandList* list, std::uint32_t triangles) {
+bool SceneRayTracer::ensure_capacity(ID3D12GraphicsCommandList* list, std::uint32_t triangles,
+                                     std::uint32_t preserved) {
     if (triangles <= capacity_ && blas_ && tlas_) {
         return true;
     }
@@ -454,14 +457,14 @@ bool SceneRayTracer::ensure_capacity(ID3D12GraphicsCommandList* list, std::uint3
         return false;
     }
     positions_state_ = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
-    if (previous_positions && flushed_triangles_ != 0u && list != nullptr) {
+    if (previous_positions && preserved != 0u && list != nullptr) {
         // Triangles flushed by earlier chunks of this scene move to the larger buffer.
         D3D12_RESOURCE_BARRIER barriers[2] = {
             transition(previous_positions.Get(), previous_state, D3D12_RESOURCE_STATE_COPY_SOURCE),
             transition(positions_.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_COPY_DEST)};
         list->ResourceBarrier(2u, barriers);
         list->CopyBufferRegion(positions_.Get(), 0u, previous_positions.Get(), 0u,
-                               static_cast<std::uint64_t>(flushed_triangles_) * 36u);
+                               static_cast<std::uint64_t>(preserved) * 36u);
         barriers[0] = transition(previous_positions.Get(), D3D12_RESOURCE_STATE_COPY_SOURCE, previous_state);
         barriers[1] = transition(positions_.Get(), D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
         list->ResourceBarrier(2u, barriers);
@@ -615,8 +618,15 @@ void SceneRayTracer::write_dump() {
         }
     }
     std::ofstream report(directory + "\\rt_draws_" + std::to_string(dump_scene_) + ".txt");
-    report << "draw first triangles flags vertices proj(A B C D E F) depth(min max) cull phase | "
-              "bg bg-hit match0.1 match1 nearer farther miss outside\n";
+    report << "camera";
+    if (dump_camera_known_) {
+        for (float v : dump_camera_) report << ' ' << v;
+    } else {
+        report << " unknown";
+    }
+    report << "\ndraw first triangles flags vertices proj(A B C D E F) depth(min max) cull phase | "
+              "bg bg-hit match0.1 match1 nearer farther miss outside | channel ambient material "
+              "light(index px py pz dx dy dz color) x2\n";
     for (std::size_t d = 0; d < dump_draws_.size(); ++d) {
         const RtDraw& draw = dump_draws_[d];
         report << d << ' ' << draw.first_triangle << ' ' << draw.triangle_count << ' ' << draw.flags << ' '
@@ -628,12 +638,28 @@ void SceneRayTracer::write_dump() {
         }
         report << " |";
         for (std::uint32_t n : per_draw[d]) report << ' ' << n;
+        if (d < dump_infos_.size()) {
+            const RtDrawInfo& info = dump_infos_[d];
+            char words[64];
+            std::snprintf(words, sizeof(words), " | %08x %08x %08x", info.channel, info.ambient, info.material);
+            report << words;
+            for (unsigned l = 0; l < 2u; ++l) {
+                report << ' ' << info.light_index[l];
+                for (float v : info.light[l]) report << ' ' << v;
+                std::snprintf(words, sizeof(words), " %08x", info.light_color[l]);
+                report << words;
+            }
+        }
         report << '\n';
     }
     const D3D12_RANGE no_write{0, 0};
     dump_readback_->Unmap(0, &no_write);
     std::cerr << "[rt] dump scene=" << dump_scene_ << " " << dump_width_ << 'x' << dump_height_ << " dir=" << directory
               << '\n';
+    if (dump_remaining_ > 1u && dump_every_ != 0u) {
+        --dump_remaining_;
+        dump_scene_ += dump_every_;
+    }
 }
 
 void SceneRayTracer::report() {
@@ -669,6 +695,7 @@ void SceneRayTracer::begin_scene() noexcept {
     flushed_triangles_ = 0u;
     view_known_ = false;
     scene_open_ = ready_;
+    scene_incomplete_ = false;
 }
 
 void SceneRayTracer::add_draw(const RtDraw& draw, const RtDrawInfo& info) {
@@ -1075,9 +1102,10 @@ void SceneRayTracer::flush_geometry(ID3D12GraphicsCommandList* list, const RtSou
     const std::uint32_t count = triangles_ - base;
     flushed_draws_ = draws_.size();
     flushed_triangles_ = triangles_;
-    if (count == 0u || !ensure_capacity(list, triangles_)) {
+    if (count == 0u || !ensure_capacity(list, triangles_, base)) {
         if (count != 0u) {
             ++window_.skipped;
+            scene_incomplete_ = true;
         }
         return;
     }
@@ -1088,6 +1116,7 @@ void SceneRayTracer::flush_geometry(ID3D12GraphicsCommandList* list, const RtSou
         !fill_constants(sources, allocate, allocate_context, static_cast<std::uint32_t>(draws_.size() - first), base,
                         count, 0u, 0u, 0u, frame)) {
         ++window_.skipped;
+        scene_incomplete_ = true;
         return;
     }
     std::memcpy(table.cpu, draws_.data() + first, table_bytes);
@@ -1123,7 +1152,7 @@ bool SceneRayTracer::trace_scene(ID3D12GraphicsCommandList* list, const RtSource
     flush_geometry(list, sources, allocate, allocate_context);
     scene_open_ = false;
     if (draws_.empty() || triangles_ == 0u || list == nullptr || allocate == nullptr || !positions_ ||
-        capacity_ < triangles_) {
+        capacity_ < triangles_ || scene_incomplete_) {
         return false;
     }
     ++window_.scenes;
@@ -1227,6 +1256,8 @@ bool SceneRayTracer::trace_scene(ID3D12GraphicsCommandList* list, const RtSource
             dump_frame_ = frame_index_;
             dump_draws_ = draws_;
             dump_infos_ = infos_;
+            dump_camera_ = camera_;
+            dump_camera_known_ = camera_known_;
             dump_width_ = width;
             dump_height_ = height;
         }

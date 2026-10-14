@@ -42,13 +42,20 @@ inline constexpr std::uint32_t kRtDrawIndexed = 2u;
 inline constexpr std::uint32_t kRtDrawWideIndices = 4u;
 
 // Diagnostics for GALAXY_RT_DUMP: the draw's GX projection (A-F), viewport depth range, cull
-// mode and SceneFunction phase.
+// mode and SceneFunction phase; colour channel 0 (XF control word, ambient and material RGBA8)
+// and the first two lights of its mask (index, eye-space position and direction, RGBA8).
 struct RtDrawInfo {
     std::array<float, 6> projection{};
     float min_depth = 0.0f;
     float max_depth = 1.0f;
     std::uint32_t cull = 0;
     std::uint32_t phase = 0;
+    std::uint32_t channel = 0;
+    std::uint32_t ambient = 0;
+    std::uint32_t material = 0;
+    std::array<std::uint32_t, 2> light_index{0xFFu, 0xFFu};
+    std::array<std::array<float, 6>, 2> light{};
+    std::array<std::uint32_t, 2> light_color{};
 };
 
 struct RtBuffer {
@@ -157,7 +164,8 @@ private:
         std::uint32_t triangles = 0;
     };
 
-    bool ensure_capacity(ID3D12GraphicsCommandList* list, std::uint32_t triangles);
+    // `preserved`: triangles earlier chunks of the open scene wrote, kept when the buffers grow.
+    bool ensure_capacity(ID3D12GraphicsCommandList* list, std::uint32_t triangles, std::uint32_t preserved);
     bool fill_constants(const RtSources& sources, Allocate allocate, void* allocate_context, std::uint32_t draws,
                         std::uint32_t triangle_base, std::uint32_t triangles, std::uint32_t width,
                         std::uint32_t height, std::uint32_t flags, RtUpload& frame);
@@ -192,6 +200,11 @@ private:
     Microsoft::WRL::ComPtr<ID3D12Resource> dump_;
     Microsoft::WRL::ComPtr<ID3D12Resource> dump_readback_;
     std::uint64_t dump_scene_ = 0;
+    // GALAXY_RT_DUMP_EVERY / _COUNT: further dumps every n scenes.
+    std::uint64_t dump_every_ = 0;
+    std::uint64_t dump_remaining_ = 0;
+    std::array<float, 12> dump_camera_{};
+    bool dump_camera_known_ = false;
     std::uint64_t dump_frame_ = 0;
     std::uint32_t dump_width_ = 0;
     std::uint32_t dump_height_ = 0;
@@ -218,6 +231,8 @@ private:
     bool validate_ = false;
     bool view_known_ = false;
     bool scene_open_ = false;
+    // A chunk of the open scene could not be transformed: it is not traced.
+    bool scene_incomplete_ = false;
 
     // Ambient occlusion (rt_ao.hlsl). GALAXY_RT_AO=0 turns it off; GALAXY_RT_AO_RAYS (per sample),
     // _RADIUS (eye units), _STRENGTH (0-1), _HISTORY (frames), _FACTOR (EFB pixels per sample

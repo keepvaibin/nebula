@@ -6935,6 +6935,27 @@ bool GxBackend::begin_rt_batch(const DrawCall& call, RtDrawInfo& info) {
     info.max_depth = viewport.max_depth;
     info.cull = render_state_key_.cull;
     info.phase = rt_phase_;
+    info.channel = state_.xf(xf::kChannelCtrlBase);
+    info.ambient = state_.xf(xf::kAmbientColorBase);
+    info.material = state_.xf(xf::kMaterialColorBase);
+    {
+        const std::uint8_t mask = state_.channel_ctrl(0u).light_mask;
+        unsigned found = 0u;
+        for (unsigned n = 0; n < 8u && found < 2u; ++n) {
+            if ((mask & (1u << n)) == 0u) {
+                continue;
+            }
+            const auto word = [&](unsigned k) {
+                return state_.xf(static_cast<std::uint16_t>(xf::kLightsBase + 16u * n + k));
+            };
+            info.light_index[found] = n;
+            for (unsigned k = 0; k < 6u; ++k) {
+                info.light[found][k] = std::bit_cast<float>(word(10u + k));
+            }
+            info.light_color[found] = word(3u);
+            ++found;
+        }
+    }
     if (!rt_view_set_) {
         // fill_vs_projection: D3D clip z = -(z E + F) (1 - 1e-7).
         constexpr float kFarEps = 1.0f - 1e-7f;
