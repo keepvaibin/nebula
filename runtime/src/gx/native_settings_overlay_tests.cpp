@@ -367,8 +367,8 @@ int main() {
         "audio page increases music gain");
     snapshot = galaxy::gx::native_settings_overlay_snapshot();
     passed &= expect(
-        snapshot.row_count == 6u,
-        "audio page exposes master, music, SFX, voice, ambience, and cutscene rows");
+        snapshot.row_count == 7u,
+        "audio page exposes master, music, SFX, voice, ambience, cutscene and Wiimote rows");
     passed &= expect(
         key(VK_DOWN) && key(VK_DOWN) && key(VK_DOWN) && key(VK_LEFT),
         "ambience row is independently adjustable");
@@ -385,6 +385,15 @@ int main() {
         galaxy::get_runtime_settings().audio.cutscene,
         0.95f,
         "audio page decreases cutscene gain");
+    passed &= expect_near(
+        galaxy::get_runtime_settings().audio.wiimote_speaker,
+        0.0f,
+        "Wiimote sounds start off");
+    passed &= expect(key(VK_DOWN) && key(VK_RIGHT), "Wiimote sounds row is adjustable");
+    passed &= expect_near(
+        galaxy::get_runtime_settings().audio.wiimote_speaker,
+        0.05f,
+        "audio page raises Wiimote sounds");
 
     passed &= expect(key(VK_TAB), "Tab enters the capability page");
     snapshot = galaxy::gx::native_settings_overlay_snapshot();

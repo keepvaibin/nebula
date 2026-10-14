@@ -78,6 +78,21 @@ namespace Nebula.Launcher
             Check(small[GraphicsSettings.SnapWindowSize(small, new Size(1920, 1080))] == small[small.Count - 1], "a size taller than the screen allows snaps to the largest");
         }
 
+        static void AudioCases()
+        {
+            string path = AudioSettings.SettingsPath;
+            if (File.Exists(path)) File.Delete(path);
+            Check(AudioSettings.Names[6] == "Wiimote sounds" && AudioSettings.Load().Percent[6] == 0, "Wiimote sounds start at 0%");
+            File.WriteAllText(path, "audio_master_gain=0.5\naudio_cutscene_gain=1\n");
+            var older = AudioSettings.Load();
+            Check(older.Percent[0] == 50 && older.Percent[6] == 0, "a settings file without the key keeps Wiimote sounds at 0%");
+            older.Percent[6] = 75;
+            older.Save();
+            Check(File.ReadAllText(path).Contains("audio_wiimote_speaker_gain=0.75") && AudioSettings.Load().Percent[6] == 75,
+                  "Wiimote sounds are saved with the other volumes");
+            File.Delete(path);
+        }
+
         // ---- Save export and import ----------------------------------------------------------------------------
 
         static byte[] Noise(int length, int seed)
@@ -313,6 +328,7 @@ namespace Nebula.Launcher
                 Check(!string.IsNullOrEmpty(dataRoot) && NebulaPaths.DataRoot == dataRoot, "NEBULA_DATA_ROOT replaces the user data root");
                 string outDir = args[0];
                 WindowSizeCases();
+                AudioCases();
                 SaveArchiveCases(outDir);
                 Application.EnableVisualStyles();
 

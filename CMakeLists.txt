@@ -464,7 +464,8 @@ add_library(galaxy_native_input STATIC
     runtime/src/pointer_control.cpp
     runtime/src/rumble.cpp
     runtime/src/switch_controller.cpp
-    runtime/src/tilt.cpp)
+    runtime/src/tilt.cpp
+    runtime/src/wiimote_speaker.cpp)
 target_link_libraries(galaxy_native_input PUBLIC galaxy_runtime_abi)
 if(MSVC)
     target_compile_options(galaxy_native_input PRIVATE /GS- /GR- /Oi /favor:INTEL64)
@@ -965,6 +966,9 @@ target_link_libraries(galaxy_simulation_cache_affinity_tests PRIVATE galaxy_runt
 add_executable(galaxy_native_input_tests runtime/src/native_input_tests.cpp)
 target_link_libraries(galaxy_native_input_tests PRIVATE galaxy_native_input)
 
+add_executable(galaxy_wiimote_speaker_tests runtime/src/wiimote_speaker_tests.cpp)
+target_link_libraries(galaxy_wiimote_speaker_tests PRIVATE galaxy_native_input)
+
 add_executable(galaxy_layout_aspect_tests runtime/src/layout_aspect_tests.cpp)
 target_link_libraries(galaxy_layout_aspect_tests PRIVATE galaxy_runtime_abi)
 
@@ -1116,6 +1120,7 @@ if(MSVC)
         galaxy_ai_pcm_identity
         galaxy_ai_pcm_identity_tests
         galaxy_native_input_tests
+        galaxy_wiimote_speaker_tests
         galaxy_diagnostic_stick_lease_tests
         galaxy_simulation_cache_affinity_tests
         galaxy_native_host
@@ -1225,6 +1230,7 @@ galaxy_add_native_test(
     host_pointer_events
     galaxy_host_pointer_events_tests)
 galaxy_add_native_test(native_input_reports galaxy_native_input_tests)
+galaxy_add_native_test(wiimote_speaker galaxy_wiimote_speaker_tests)
 galaxy_add_native_test(layout_aspect_geometry galaxy_layout_aspect_tests)
 galaxy_add_native_test(diagnostic_stick_lease galaxy_diagnostic_stick_lease_tests)
 galaxy_add_native_test(simulation_cache_affinity galaxy_simulation_cache_affinity_tests)
