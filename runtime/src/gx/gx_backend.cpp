@@ -20,6 +20,7 @@
 
 #include "galaxy/frame_cadence_diagnostics.h"
 #include "galaxy/gx/line_point_raster.h"
+#include "galaxy/gx/rt_surfaces.h"
 #include "galaxy/gx/texture_sampling.h"
 #include "galaxy/gx/uber_constants.h"
 #include "galaxy/gx/uber_shaders.h"
@@ -6970,6 +6971,14 @@ bool GxBackend::begin_rt_batch(const DrawCall& call, RtDrawInfo& info) {
     info.max_depth = viewport.max_depth;
     info.cull = render_state_key_.cull;
     info.phase = rt_phase_;
+    // The surface class (rt_surfaces.h) for reflections; diagnostics for GALAXY_RT_DUMP.
+    const RtSurface surface = classify_rt_surface(vs_key_, ps_key_);
+    info.shading = {ps_key_.num_tev_stages | (static_cast<std::uint32_t>(vs_key_.num_texgens) << 8u) |
+                        (static_cast<std::uint32_t>(ps_key_.num_ind_stages) << 16u) |
+                        (static_cast<std::uint32_t>(surface.features) << 24u),
+                    (surface.env_stage < 16u ? ps_key_.stages[surface.env_stage].color_env & 0xFFFFFFu : 0u) |
+                        (static_cast<std::uint32_t>(surface.env_stage) << 24u),
+                    vs_key_.channel[0], vs_key_.channel[1]};
     info.channel = state_.xf(xf::kChannelCtrlBase);
     info.ambient = state_.xf(xf::kAmbientColorBase);
     info.material = state_.xf(xf::kMaterialColorBase);
@@ -6984,6 +6993,8 @@ bool GxBackend::begin_rt_batch(const DrawCall& call, RtDrawInfo& info) {
         }
         if (glow) {
             info.surface = kRtDrawGlow;
+        } else {
+            info.surface |= static_cast<std::uint32_t>(surface.surface_class) << kRtDrawClassShift;
         }
     }
     {

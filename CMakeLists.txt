@@ -701,6 +701,23 @@ foreach(galaxy_rt_pass capture_cs:CaptureCS:cs_6_5 sky_state_cs:SkyStateCS:cs_6_
         VERBATIM)
     list(APPEND galaxy_rt_headers "${galaxy_rt_header}")
 endforeach()
+# Ray-traced reflections and their EFB composite (runtime/src/gx/rt_reflections.hlsl).
+set(galaxy_rt_reflect_hlsl "${CMAKE_CURRENT_SOURCE_DIR}/runtime/src/gx/rt_reflections.hlsl")
+foreach(galaxy_rt_pass reflect_memory_cs:ReflectMemoryCS:cs_6_5 reflect_trace_cs:ReflectTraceCS:cs_6_5
+        reflect_temporal_cs:ReflectTemporalCS:cs_6_5 reflect_filter_cs:ReflectFilterCS:cs_6_5
+        reflect_composite_vs:ReflectCompositeVS:vs_6_0 reflect_composite_ps:ReflectCompositePS:ps_6_0)
+    string(REPLACE ":" ";" galaxy_rt_pair "${galaxy_rt_pass}")
+    list(GET galaxy_rt_pair 0 galaxy_rt_name)
+    list(GET galaxy_rt_pair 1 galaxy_rt_entry)
+    list(GET galaxy_rt_pair 2 galaxy_rt_profile)
+    set(galaxy_rt_header "${galaxy_rt_dir}/rt_${galaxy_rt_name}.h")
+    add_custom_command(OUTPUT "${galaxy_rt_header}"
+        COMMAND "${GALAXY_DXC}" -nologo -T ${galaxy_rt_profile} -E ${galaxy_rt_entry} -O3 -WX -Qstrip_debug
+            -Qstrip_reflect -Vn g_rt_${galaxy_rt_name} -Fh "${galaxy_rt_header}" "${galaxy_rt_reflect_hlsl}"
+        DEPENDS "${galaxy_rt_reflect_hlsl}"
+        VERBATIM)
+    list(APPEND galaxy_rt_headers "${galaxy_rt_header}")
+endforeach()
 
 # galaxy_gx: static lib used by NebulaRuntime and the renderer tests.
 # The public API (gx_d3d12.h) is implemented by gx_shim.cpp over GxBackend.
@@ -726,6 +743,8 @@ add_library(galaxy_gx STATIC
     ${galaxy_post_headers}
     runtime/src/gx/temporal_upscaler.cpp
     runtime/src/gx/ray_tracing.cpp
+    runtime/src/gx/ray_tracing_reflections.cpp
+    runtime/src/gx/rt_surfaces.cpp
     ${galaxy_rt_headers}
     runtime/src/gx/streamline_bridge.cpp
     runtime/src/gx/transform_history.cpp
@@ -1104,6 +1123,9 @@ target_link_libraries(galaxy_memory_snapshot_tests PRIVATE galaxy_gx)
 add_executable(galaxy_sampler_key_tests runtime/src/gx/sampler_key_tests.cpp)
 target_link_libraries(galaxy_sampler_key_tests PRIVATE galaxy_gx)
 
+add_executable(galaxy_rt_surfaces_tests runtime/src/gx/rt_surfaces_tests.cpp)
+target_link_libraries(galaxy_rt_surfaces_tests PRIVATE galaxy_gx)
+
 add_executable(galaxy_xfb_present_selection_tests
     runtime/src/gx/xfb_present_selection_tests.cpp)
 target_link_libraries(galaxy_xfb_present_selection_tests PRIVATE galaxy_gx)
@@ -1226,6 +1248,7 @@ if(MSVC)
         galaxy_window_owner_tests
         galaxy_memory_snapshot_tests
         galaxy_sampler_key_tests
+        galaxy_rt_surfaces_tests
         galaxy_xfb_present_selection_tests
         galaxy_efb_conversion_tests
         galaxy_line_point_raster_tests
@@ -1318,6 +1341,7 @@ galaxy_add_native_test(native_window_owner galaxy_window_owner_tests)
 set_tests_properties(native_window_owner PROPERTIES TIMEOUT 20)
 galaxy_add_native_test(compact_memory_snapshot galaxy_memory_snapshot_tests)
 galaxy_add_native_test(sampler_key_packing galaxy_sampler_key_tests)
+galaxy_add_native_test(rt_surface_classes galaxy_rt_surfaces_tests)
 galaxy_add_native_test(xfb_present_selection galaxy_xfb_present_selection_tests)
 galaxy_add_native_test(efb_content_key_identity galaxy_efb_conversion_tests --content-key-hash)
 galaxy_add_native_test(efb_conversion_pipeline galaxy_efb_conversion_tests)

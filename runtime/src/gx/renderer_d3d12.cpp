@@ -7678,6 +7678,18 @@ void RendererD3D12::rt_trace_scene() {
     // The occlusion multiplies the opaque scene before the translucent phases draw; a recorded
     // log applies it again on each sub-frame's replay.
     const int slot = ray_tracer_.light_slot();
+    if (depth && slot >= 0 && ray_tracer_.reflections_active() && efb_color_ && conv_efb_color_srv_.ptr != 0u) {
+        // Reflected light is the opaque scene's colour (the conversion views: colour, then depth).
+        D3D12_RESOURCE_BARRIER color = barrier;
+        color.Transition.pResource = efb_color_.Get();
+        color.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
+        color.Transition.StateAfter = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
+        command_list_->ResourceBarrier(1, &color);
+        ray_tracer_.trace_reflections(command_list_.Get(), &RendererD3D12::rt_allocate, this, conv_efb_color_srv_,
+                                      width, desc.Height);
+        std::swap(color.Transition.StateBefore, color.Transition.StateAfter);
+        command_list_->ResourceBarrier(1, &color);
+    }
     if (depth && slot >= 0) {
         ray_tracer_.composite(command_list_.Get(), efb_rtv_, conv_efb_depth_srv_, width, desc.Height, slot, false);
         if (replay_recording_) {

@@ -25,8 +25,8 @@ cbuffer RtFrame : register(b0)
 };
 
 // RtDraw, 32 bytes: vertex byte offset; flags (bit 0 resident source, bit 1 indexed, bit 2
-// 32-bit indices); vertex count; index byte offset; first triangle; triangle count; VS
-// constants byte offset; palette byte offset.
+// 32-bit indices, bit 3 lit, bits 8-11 surface class); vertex count; index byte offset; first
+// triangle; triangle count; VS constants byte offset; palette byte offset.
 ByteAddressBuffer g_draws : register(t0);
 ByteAddressBuffer g_vertex_ring : register(t1);
 ByteAddressBuffer g_resident : register(t2);
