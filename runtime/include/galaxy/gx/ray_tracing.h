@@ -38,6 +38,8 @@ struct RtDraw {
 static_assert(sizeof(RtDraw) == 32u);
 // Decoded vertex stride (GxVertexOut: position at 0, matrix indices at 120).
 inline constexpr std::uint32_t kRtVertexStride = 144u;
+// RtDraw.flags: these bits; surface classes in bits 8-15; the draw's index in its scene in bits
+// 16-31 (SceneRayTracer::add_draw).
 inline constexpr std::uint32_t kRtDrawResident = 1u;
 inline constexpr std::uint32_t kRtDrawIndexed = 2u;
 inline constexpr std::uint32_t kRtDrawWideIndices = 4u;
@@ -257,6 +259,9 @@ private:
     std::vector<RtDrawInfo> infos_;
     std::vector<RtDrawInfo> dump_infos_;
     std::vector<RtDraw> draws_;
+    // Per draw of the open scene (RtDraw.flags bits 16-31): ambient and GX light 0 colours (RGBA8)
+    // and 2 spare words, for the lighting of lit draws (rt_lighting.hlsl g_draws).
+    std::vector<std::array<std::uint32_t, 4>> draw_colors_;
     std::array<ResultSlot, kResultSlots> slots_{};
     RtView view_{};
     D3D12_RESOURCE_STATES positions_state_ = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;

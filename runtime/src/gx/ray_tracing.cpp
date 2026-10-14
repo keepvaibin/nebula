@@ -83,8 +83,11 @@ struct RtLightConstants {
     float points[16][4];
     float to_eye[3][4];
     float ambient[4];
+    float point_saturation;
+    std::uint32_t draw_count;
+    std::uint32_t pad[2];
 };
-static_assert(sizeof(RtLightConstants) == 576u);
+static_assert(sizeof(RtLightConstants) == 592u);
 
 // Mirrors cbuffer RtEmit in rt_lighting.hlsl (root constants).
 struct RtEmitConstants {
@@ -152,6 +155,7 @@ enum LightParameter : UINT {
     kLightEmitters,
     kLightGlowBase,
     kLightGlowAdded,
+    kLightDraws,
     kLightZ,
     kLightNormal,
     kLightRaw,
@@ -989,6 +993,7 @@ void SceneRayTracer::begin_scene() noexcept {
     glow_triangles_ = 0u;
     glow_open_ = false;
     glow_base_valid_ = false;
+    draw_colors_.clear();
     infos_.clear();
     triangles_ = 0u;
     flushed_draws_ = 0u;
@@ -1013,7 +1018,10 @@ void SceneRayTracer::add_draw(const RtDraw& draw, const RtDrawInfo& info) {
     }
     RtDraw& entry = draws_.emplace_back(draw);
     entry.first_triangle = triangles_;
+    entry.flags = (entry.flags & 0xFFFFu) |
+                  (static_cast<std::uint32_t>(std::min<std::size_t>(draws_.size() - 1u, 0xFFFFu)) << 16u);
     triangles_ += draw.triangle_count;
+    draw_colors_.push_back({info.ambient, info.light_index[0] == 0u ? info.light_color[0] : 0u, 0u, 0u});
     if (dump_scene_ != 0u && scene_serial_ == dump_scene_) {
         infos_.push_back(info);
     }
@@ -1074,7 +1082,7 @@ bool SceneRayTracer::create_lighting_pipelines(DXGI_FORMAT color_format) {
     params[kLightDepth].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
     params[kLightDepth].DescriptorTable.NumDescriptorRanges = 1u;
     params[kLightDepth].DescriptorTable.pDescriptorRanges = &depth_range;
-    for (UINT i = 0; i <= kLightGlowAdded - kLightPrevZ; ++i) {
+    for (UINT i = 0; i <= kLightDraws - kLightPrevZ; ++i) {
         params[kLightPrevZ + i].ParameterType = D3D12_ROOT_PARAMETER_TYPE_SRV;
         params[kLightPrevZ + i].Descriptor.ShaderRegister = 8u + i;
     }
@@ -1327,10 +1335,20 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
         history_factor_ = factor;
     }
     const RtUpload upload = allocate(allocate_context, sizeof(RtLightConstants), 256u);
-    if (upload.cpu == nullptr) {
+    // Per draw (RtDraw.flags bits 16-31): its ambient and GX light 0 colours (RGBA8), 2 spare words.
+    const std::size_t draw_count = std::max<std::size_t>(draw_colors_.size(), 1u);
+    const RtUpload draw_table = allocate(allocate_context, draw_count * sizeof(draw_colors_[0]), 256u);
+    if (upload.cpu == nullptr || draw_table.cpu == nullptr) {
         return;
     }
+    if (draw_colors_.empty()) {
+        std::memset(draw_table.cpu, 0, sizeof(draw_colors_[0]));
+    } else {
+        std::memcpy(draw_table.cpu, draw_colors_.data(), draw_colors_.size() * sizeof(draw_colors_[0]));
+    }
     RtLightConstants c{};
+    c.draw_count = static_cast<std::uint32_t>(draw_count);
+    c.point_saturation = point_saturation_;
     std::copy(view_.projection.begin(), view_.projection.end(), c.projection);
     c.depth[0] = view_.z_scale;
     c.depth[1] = view_.z_offset;
@@ -1521,6 +1539,7 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
     list->SetComputeRootShaderResourceView(kLightEmitters, emit_list_->GetGPUVirtualAddress());
     list->SetComputeRootShaderResourceView(kLightGlowBase, glow_base_->GetGPUVirtualAddress());
     list->SetComputeRootShaderResourceView(kLightGlowAdded, glow_added_->GetGPUVirtualAddress());
+    list->SetComputeRootShaderResourceView(kLightDraws, draw_table.gpu);
     list->SetComputeRootUnorderedAccessView(kLightZ, light_z_[current]->GetGPUVirtualAddress());
     list->SetComputeRootUnorderedAccessView(kLightNormal, light_normal_->GetGPUVirtualAddress());
     list->SetComputeRootUnorderedAccessView(kLightRaw, light_raw_->GetGPUVirtualAddress());

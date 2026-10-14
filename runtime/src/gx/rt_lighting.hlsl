@@ -51,6 +51,9 @@ cbuffer RtLight : register(b0)
     float4 g_to_eye[3];         // world to eye (the glow lights' positions)
     float4 g_ambient;           // the sky and bounce light under a black sky (relative), the sky's
                                 // luminance that gives it in full, a glowing surface's extra light
+    float g_point_saturation;   // the colours above: 0 white .. 1 the game's
+    uint g_draw_count;          // entries of g_draws
+    uint2 g_pad;
 };
 
 RaytracingAccelerationStructure g_scene : register(t6);
@@ -67,6 +70,7 @@ ByteAddressBuffer g_emitters : register(t15);            // glow lights: count, 
                                                          // world position, radius; power, cumulative
 StructuredBuffer<uint> g_glow_base : register(t16);      // the previous picture before its glows
 StructuredBuffer<uint> g_glow_added : register(t17);     // what its glows added
+ByteAddressBuffer g_draws : register(t18);               // per draw: ambient, GX light 0 colour (RGBA8)
 RWStructuredBuffer<float> g_z : register(u0);
 RWStructuredBuffer<uint> g_normal : register(u1);
 RWStructuredBuffer<uint4> g_raw : register(u2);
@@ -76,6 +80,7 @@ RWStructuredBuffer<uint2> g_primary : register(u5);      // triangle + 1 (0: non
 
 static const float kPi = 3.14159265f;
 static const uint kDrawLit = 8u;    // RtDraw.flags: GX-lit colour
+static const uint kDrawSunKey = 16u;    // RtDraw.flags: its GX light 0 lies along the traced sun
 static const uint kDrawPointLit = 32u;  // RtDraw.flags: lit by GX light 4 (the game's point light)
 
 // ---------------------------------------------------------------------------------------------
@@ -706,8 +711,9 @@ float point_falloff(float d2, uint i)
     return window * window / (1.0f + d2 * g_points[2u * i + 1u].w);
 }
 
-// The point lights' light on a surface, unshadowed.
-float3 points_unshadowed(float3 p, float3 n)
+// The point lights' light on a surface, unshadowed; `game`: in the game's own colours (the
+// stored ones are desaturated by g_point_saturation, which keeps their luminance).
+float3 points_unshadowed(float3 p, float3 n, bool game)
 {
     float3 sum = float3(0.0f, 0.0f, 0.0f);
     [loop] for (uint i = 0u; i < g_point_count; ++i) {
@@ -715,10 +721,21 @@ float3 points_unshadowed(float3 p, float3 n)
         const float d2 = dot(to, to);
         const float nl = dot(n, to) * rsqrt(max(d2, 1e-6f));
         if (nl > 0.0f) {
-            sum += g_points[2u * i + 1u].rgb * (nl * point_falloff(d2, i));
+            float3 color = g_points[2u * i + 1u].rgb;
+            if (game && g_point_saturation > 1e-3f) {
+                const float l = luminance(color);
+                color = max(l + (color - l) / g_point_saturation, 0.0f);
+            }
+            sum += color * (nl * point_falloff(d2, i));
         }
     }
     return sum;
+}
+
+// An RGBA8 colour word's RGB (red in the top byte).
+float3 rgb8(uint c)
+{
+    return float3(float(c >> 24u), float((c >> 16u) & 0xFFu), float((c >> 8u) & 0xFFu)) / 255.0f;
 }
 
 // The light a hit point sends back: the previous picture where it showed that point.
@@ -1199,13 +1216,38 @@ void SpatialBCS(uint3 id : SV_DispatchThreadID)
     // the game lights it with them too (GX light 4), shadow it likewise.
     const uint tri = g_primary[index].x;
     const uint draw_flags = tri != 0u ? g_surfaces.Load((tri - 1u) * 16u + 12u) : 0u;
-    if ((draw_flags & kDrawLit) != 0u) {
+    const bool point_lit = (draw_flags & kDrawPointLit) != 0u && g_point_count != 0u;
+    if ((draw_flags & (kDrawLit | kDrawSunKey)) == (kDrawLit | kDrawSunKey)) {
+        // Its key light lies along the traced sun: the game's shading is its ambient A plus its GX
+        // light 0 colour K times n.l (and its point light), clamped to 1 like GX's accumulator; the
+        // traced light takes A times the sky's light (as the sky state scales it) and K times the
+        // traced sun.
+        const float3 n = unpack_normal(g_normal[index]);
+        const float facing = saturate(dot(n, g_sun.xyz));
+        const uint4 colors = g_draws.Load4(min(draw_flags >> 16u, max(g_draw_count, 1u) - 1u) * 16u);
+        const float3 a = rgb8(colors.x);
+        const float3 k = rgb8(colors.y);
+        const float3 sky_a = a * (ambient / max(g_sun_light.w, 1e-3f));
+        float3 game = a + k * facing;
+        float3 traced = sky_a * light.sky + k * light.sun;
+        float3 opened = sky_a + k * light.sun;
+        float3 added = points;
+        if (point_lit) {
+            game += points_unshadowed(sample_position(id.xy, z), n, true);
+            traced += points;
+            opened += points;
+            added = float3(0.0f, 0.0f, 0.0f);
+        }
+        const float3 shading = max(min(game, 1.0f), 1e-3f);
+        lighting = min(traced, 1.0f) / shading + added;
+        open = min(opened, 1.0f) / shading + added;
+    } else if ((draw_flags & kDrawLit) != 0u) {
         const float3 n = unpack_normal(g_normal[index]);
         const float facing = saturate(dot(n, g_sun.xyz));
         float3 unshadowed = g_sun_light.www + facing * g_sun_light.rgb;
         float3 added = points;
-        if ((draw_flags & kDrawPointLit) != 0u && g_point_count != 0u) {
-            unshadowed += points_unshadowed(sample_position(id.xy, z), n) * g_point_light;
+        if (point_lit) {
+            unshadowed += points_unshadowed(sample_position(id.xy, z), n, false) * g_point_light;
             added = float3(0.0f, 0.0f, 0.0f);
             lighting = (ambient * light.sky + sun + points) / max(unshadowed, 1e-3f);
             open = (ambient + sun + points) / max(unshadowed, 1e-3f);
