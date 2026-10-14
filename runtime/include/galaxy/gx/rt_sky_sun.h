@@ -81,7 +81,9 @@ public:
     // away from it, and its least luminance (0-1). Measured (smoke\sky2, sky3): a sky's sun (Good
     // Egg, within 5 degrees of its BrightSun) 0.86-0.99 with the brightest bin away 0.50-0.51;
     // skies without one, their brightest bins clouds or horizon haze (Gusty Garden, Honeyhive, the
-    // Observatory's horizon) 0.75-0.97 with bins away within 0.08-0.22 of them.
+    // Observatory's horizon) 0.75-0.97 with bins away within 0.08-0.22 of them. A sun stands no
+    // lower than kMinHeight (world y of its direction; measured suns -0.04 to 0.02, a white place
+    // seen while a stage loaded -0.42).
     static constexpr unsigned kMinBins = 24u;
     static constexpr unsigned kMinDistantBins = 8u;
     static constexpr float kDistantCos = 0.866f;
@@ -89,6 +91,7 @@ public:
     static constexpr float kOverRestScale = 1.2f;
     static constexpr float kOverDistant = 0.3f;
     static constexpr float kMinPeak = 0.85f;
+    static constexpr float kMinHeight = -0.15f;
 
     void reset() noexcept {
         bins_ = {};
@@ -131,15 +134,18 @@ public:
         if (seen_ < kMinBins) {
             return sun;
         }
+        const auto& directions = sky_bin_directions();
         unsigned peak = 0u;
         float best = -1.0f;
         for (unsigned b = 0; b < kSkyBins; ++b) {
-            if (bins_[b].seen && luminance(b) > best) {
+            if (bins_[b].seen && directions[b][1] >= kMinHeight && luminance(b) > best) {
                 best = luminance(b);
                 peak = b;
             }
         }
-        const auto& directions = sky_bin_directions();
+        if (best < 0.0f) {
+            return sun;
+        }
         const std::array<float, 3> p = directions[peak];
         std::vector<float> distant;
         distant.reserve(seen_);

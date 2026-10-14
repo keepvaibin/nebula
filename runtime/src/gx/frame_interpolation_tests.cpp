@@ -359,6 +359,10 @@ void test_sky_sun() {
     grey.add(sky_capture(blue, to_sun, 0.995f, blue, 0u).data());
     check(!grey.find().valid, "an even sky shows no sun");
 
+    SkyMap low;
+    low.add(sky_capture(blue, {0.6f, -0.6f, -0.53f}, 0.995f, {1.0f, 1.0f, 1.0f}, 0u).data());
+    check(!low.find().valid, "a bright place well below the horizon is no sun");
+
     // A sun once found stays while the map no longer shows it; a brighter place elsewhere wins.
     SkySun held{};
     map.update(held);
