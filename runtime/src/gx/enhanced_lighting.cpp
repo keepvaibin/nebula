@@ -17,6 +17,7 @@ struct TuningField {
     float EnhancedLightingTuning::*value;
 };
 constexpr TuningField kTuningFields[] = {
+    {"ramp", &EnhancedLightingTuning::ramp},
     {"hemi", &EnhancedLightingTuning::hemi},
     {"rim", &EnhancedLightingTuning::rim},
     {"knee", &EnhancedLightingTuning::knee},

@@ -665,11 +665,11 @@ void ppl_apply(inout float4 col0, inout float4 col1, float3 wpos, float3 nrm_in,
 )HLSL";
 
 // Enhanced lighting (enhanced_lighting.h), after kPplLighting and the kEnh* tuning constants. The
-// lit colour channel 0 (generate_ps, one block per light of the key) interpolates in linear light
-// between its ambient and ambient-plus-light colours (the channel's unlit and fully lit ends) under
-// a soft shoulder; the ambient is a view-up hemisphere with a sky rim. The key light's highlight:
-// dielectric, or tinted by the surface colour on environment-mapped (metal) draws. Other channels
-// keep the vertex stage's GX colours.
+// lit colour channel 0 (generate_ps, one block per light of the key) adds its lights in linear
+// light, each along a blend of its authored falloff and the linear ramp between the channel's
+// ambient and ambient-plus-light colours, under a soft shoulder; the ambient is a view-up hemisphere
+// with a sky rim. The key light's highlight: dielectric, or tinted by the surface colour on
+// environment-mapped (metal) draws. Other channels keep the vertex stage's GX colours.
 static constexpr const char* kEnhancedLighting = R"HLSL(
 float3 enh_lin(float3 c) { return pow(max(c, 0.0), 2.2); }
 float3 enh_srgb(float3 c) { return pow(max(c, 0.0), 1.0 / 2.2); }
@@ -1468,6 +1468,7 @@ std::string ShaderGenerator::generate_ps(const PixelShaderKey& key) const {
     if (enhanced) {
         const EnhancedLightingTuning& t = enhanced_lighting_tuning();
         emit(s,
+             "static const float kEnhRamp = %.9g;\n"
              "static const float kEnhHemi = %.9g;\n"
              "static const float kEnhRim = %.9g;\n"
              "static const float kEnhKnee = %.9g;\n"
@@ -1478,7 +1479,7 @@ std::string ShaderGenerator::generate_ps(const PixelShaderKey& key) const {
              "static const float kEnhMetalF0 = %.9g;\n"
              "static const float kEnhEnvBase = %.9g;\n"
              "static const float kEnhEnvGraze = %.9g;\n",
-             t.hemi, t.rim, t.knee, t.sheen, t.sheen_rough, t.metal, t.metal_rough, t.metal_f0, t.env_base,
+             t.ramp, t.hemi, t.rim, t.knee, t.sheen, t.sheen_rough, t.metal, t.metal_rough, t.metal_f0, t.env_base,
              t.env_graze);
         s << kEnhancedLighting;
     }
@@ -1580,7 +1581,8 @@ std::string ShaderGenerator::generate_ps(const PixelShaderKey& key) const {
                 s << (dfn == 1u   ? "            const float x = attn * dot(enh.N, ldir);\n"
                       : dfn == 2u ? "            const float x = attn * max(dot(enh.N, ldir), 0.0);\n"
                                   : "            const float x = attn;\n");
-                s << "            enh_acc += (enh_lin(enh_amb + lcol) - enh_amb_lin) * x;\n";
+                s << "            enh_acc += lerp(enh_lin(enh_amb + lcol * x) - enh_amb_lin,\n"
+                     "                            (enh_lin(enh_amb + lcol) - enh_amb_lin) * x, kEnhRamp);\n";
                 if (first && dfn != 0u) {
                     emit(s, "            if (enh.valid) enh_highlight(enh, ldir, enh_lin(lcol) * attn, %s);\n",
                          enh_env != 0u ? "true" : "false");

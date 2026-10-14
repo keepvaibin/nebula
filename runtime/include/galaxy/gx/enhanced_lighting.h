@@ -2,12 +2,13 @@
 #pragma once
 
 // Enhanced lighting (RenderConfig::enhanced_lighting): the game's own lights and materials shaded
-// per pixel in linear light. Lit channels keep their ambient (shadow side) and ambient-plus-light
-// (fully lit) colours and interpolate between them in linear light, under a soft shoulder instead
-// of the channel clamp; the ambient becomes a sky/ground hemisphere with a sky rim; lit draws get a
-// dielectric highlight of their lights; environment-mapped materials (the game's metals, crystals
-// and ice) get a Fresnel gain on their environment lookups and a metal highlight tinted by their
-// own colour. Unlit, non-environment-mapped draws (baked map geometry) are unchanged.
+// per pixel. A lit colour channel keeps its ambient (shadow side) and ambient-plus-light (fully lit)
+// colours; each light adds in linear light, along a blend of its authored falloff and the linear
+// Lambert ramp between those ends, under a soft shoulder instead of the channel clamp; the ambient
+// becomes a sky/ground hemisphere with a sky rim; lit draws get a dielectric highlight of their key
+// light; environment-mapped materials (the game's metals, crystals and ice) get a Fresnel gain on
+// their environment lookups and a metal highlight tinted by their own colour. Unlit,
+// non-environment-mapped draws (baked map geometry) are unchanged.
 
 #include "galaxy/gx/shader_keys.h"
 
@@ -16,11 +17,12 @@
 namespace galaxy::gx {
 
 struct EnhancedLightingTuning {
+    float ramp = 0.35f;         // a light's falloff: 0 as authored (gamma space), 1 linear Lambert
     float hemi = 0.30f;         // ambient: 1 + hemi * N.up (view up), mean 1 over the sphere
     float rim = 1.0f;           // sky rim: ambient * rim * (1 - N.V)^3 on the upper half
     float knee = 0.80f;         // linear level where the shoulder starts
-    float sheen = 1.0f;         // dielectric highlight strength (F0 0.04)
-    float sheen_rough = 0.50f;  // its perceptual roughness
+    float sheen = 1.5f;         // dielectric highlight strength (F0 0.04)
+    float sheen_rough = 0.45f;  // its perceptual roughness
     float metal = 0.70f;        // metal highlight strength (F0 the surface colour)
     float metal_rough = 0.35f;
     float metal_f0 = 0.50f;     // least peak of a metal's F0 (its colour raised in its own hue)
