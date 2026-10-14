@@ -958,6 +958,11 @@ private:
     unsigned interp_gpu_cap_ = 7u;
     std::uint64_t interp_gpu_cap_serial_ = 0;
     std::uint64_t interp_gpu_checked_ = 0;
+    // Sequences after a rate or upscaler change whose GPU times are not used (pipeline,
+    // upscaler and target creation).
+    std::uint64_t interp_gpu_warm_until_ = 0;
+    // A new sub-frame configuration (interp_frames_ changed): both governors start over.
+    void restart_interp_governors();
     std::uint64_t interp_gpu_capped_ = 0;   // sequences with fewer sub-frames
     // Game-frame cadence governor (note_game_frame_cadence).
     void note_game_frame_cadence(std::int64_t now_qpc);
@@ -969,6 +974,8 @@ private:
     std::int64_t interp_cadence_change_qpc_ = 0;
     std::int64_t interp_cadence_try_qpc_ = 0;
     std::uint32_t interp_cadence_frames_ = 0;
+    std::uint32_t interp_cadence_stalls_ = 0;           // in the window: four periods or more
+    std::int64_t interp_cadence_grace_until_qpc_ = 0;   // misses after a change are not counted
     std::uint64_t interp_cadence_drops_ = 0;
     double interp_cadence_fps_ = 0.0;
     double interp_cadence_own_misses_ = 0.0;   // per second, without sub-frames

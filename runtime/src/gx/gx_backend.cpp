@@ -7379,7 +7379,7 @@ unsigned GxBackend::interp_gpu_governor(double& rate) {
         return allowed;
     }
     const std::uint64_t serial = interp_sequence_serial_;
-    if (serial - interp_gpu_checked_ >= 30u) {
+    if (serial - interp_gpu_checked_ >= 30u && serial >= interp_gpu_warm_until_) {
         interp_gpu_checked_ = serial;
         const double sub_ms = renderer_.subframe_gpu_ema_ms();
         if (sub_ms > 0.0) {
@@ -7423,6 +7423,24 @@ unsigned GxBackend::interp_gpu_governor(double& rate) {
 // on its own. Tries follow a clean interval that doubles after each failed
 // one (8 s to 64 s) and halves after one that held.
 // GALAXY_INTERP_CADENCE_GOVERNOR=0 turns it off.
+void GxBackend::restart_interp_governors() {
+    LARGE_INTEGER now{};
+    QueryPerformanceCounter(&now);
+    LARGE_INTEGER frequency{};
+    QueryPerformanceFrequency(&frequency);
+    interp_gpu_cap_ = 7u;
+    interp_gpu_cap_serial_ = interp_sequence_serial_;
+    interp_gpu_checked_ = interp_sequence_serial_;
+    interp_gpu_warm_until_ = interp_sequence_serial_ + 60u;
+    renderer_.reset_subframe_gpu_ema();
+    interp_cadence_cap_ = 7u;
+    interp_cadence_interval_s_ = 8u;
+    interp_cadence_try_qpc_ = 0;
+    interp_cadence_change_qpc_ = now.QuadPart;
+    interp_cadence_last_qpc_ = 0;
+    interp_cadence_grace_until_qpc_ = now.QuadPart + frequency.QuadPart * 3 / 2;
+}
+
 void GxBackend::note_game_frame_cadence(std::int64_t now_qpc) {
     static const bool enabled = read_env_u64("GALAXY_INTERP_CADENCE_GOVERNOR", 1u) != 0u;
     static const std::int64_t frequency = [] {
@@ -7444,7 +7462,20 @@ void GxBackend::note_game_frame_cadence(std::int64_t now_qpc) {
     }
     const std::int64_t interval = now_qpc - interp_cadence_last_qpc_;
     interp_cadence_last_qpc_ = now_qpc;
+    if (now_qpc < interp_cadence_grace_until_qpc_) {
+        // Just after a rate or upscaler change: its one-time work is no measure.
+        interp_cadence_window_qpc_ = now_qpc;
+        interp_cadence_frames_ = 0u;
+        interp_cadence_misses_ = 0u;
+        interp_cadence_stalls_ = 0u;
+        return;
+    }
     ++interp_cadence_frames_;
+    // One stall of four periods or more in a window (a load, a shader or upscaler being
+    // created) is not the sub-frames' doing: they cost VIs every frame, not one long wait.
+    if (interval > period * 4 && interp_cadence_stalls_++ == 0u) {
+        return;
+    }
     const std::uint32_t missed =
         interval > period * 3 / 2 ? static_cast<std::uint32_t>((interval + period / 2) / period) - 1u : 0u;
     interp_cadence_misses_ += missed;
@@ -7479,6 +7510,7 @@ void GxBackend::note_game_frame_cadence(std::int64_t now_qpc) {
     interp_cadence_window_qpc_ = now_qpc;
     interp_cadence_frames_ = 0u;
     interp_cadence_misses_ = 0u;
+    interp_cadence_stalls_ = 0u;
     if (running == 0u) {
         interp_cadence_own_misses_ = 0.5 * (interp_cadence_own_misses_ + misses);
     } else {
@@ -7492,9 +7524,14 @@ void GxBackend::note_game_frame_cadence(std::int64_t now_qpc) {
     if (interp_cadence_cap_ >= interp_frames_) {
         return;
     }
-    if (now_qpc - interp_cadence_change_qpc_ >=
-        static_cast<std::int64_t>(interp_cadence_interval_s_) * frequency) {
-        ++interp_cadence_cap_;
+    // Misses with the GPU this far from its budget came from elsewhere (CPU stalls): the
+    // sub-frames come back after 2 s, all at once.
+    const double sub_ms = renderer_.subframe_gpu_ema_ms();
+    const bool headroom = sub_ms > 0.0 && sub_ms * static_cast<double>(interp_frames_ + 2u) < 1000.0 / 60.0 * 0.5;
+    const std::int64_t wait = headroom ? 2 * frequency
+                                       : static_cast<std::int64_t>(interp_cadence_interval_s_) * frequency;
+    if (now_qpc - interp_cadence_change_qpc_ >= wait) {
+        interp_cadence_cap_ = headroom ? interp_frames_ : interp_cadence_cap_ + 1u;
         interp_cadence_change_qpc_ = now_qpc;
         interp_cadence_try_qpc_ = now_qpc;
     } else if (interp_cadence_try_qpc_ != 0 && now_qpc - interp_cadence_try_qpc_ >= 4 * frequency) {
@@ -9784,7 +9821,11 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
                 cfg.max_fps, cfg.vsync_interval, renderer_.display_refresh_hz());
             // The renderer keeps the log per game frame (interpolation_mode).
             interp_recording_ = renderer_.interpolation_mode();
-            interp_frames_ = interp_recording_ ? interpolated_frames_per_game_frame(rate) : 0u;
+            const unsigned frames = interp_recording_ ? interpolated_frames_per_game_frame(rate) : 0u;
+            if (frames != interp_frames_) {
+                interp_frames_ = frames;
+                restart_interp_governors();
+            }
             if (!interp_recording_) {
                 interp_shown_scene_ = -1;
             }
