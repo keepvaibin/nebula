@@ -178,13 +178,14 @@ void poll_dlss_download();
 std::string dlss_footer(std::uint64_t now_ms, bool& error);
 
 bool temporal_interpolation_allowed() {
-    // GALAXY_TEMPORAL_INTERPOLATION=1: a temporal upscaler upscales every
-    // presented frame (rates that are multiples of 60).
+    // A temporal upscaler upscales every presented frame at rates that are
+    // multiples of 60. GALAXY_TEMPORAL_INTERPOLATION=0 keeps it at 60
+    // (diagnostics).
     static const bool allowed = [] {
         char value[8]{};
         std::size_t length = 0u;
-        return getenv_s(&length, value, sizeof(value), "GALAXY_TEMPORAL_INTERPOLATION") == 0 &&
-               length > 1u && value[0] == '1';
+        return !(getenv_s(&length, value, sizeof(value), "GALAXY_TEMPORAL_INTERPOLATION") == 0 &&
+                 length > 1u && value[0] == '0');
     }();
     return allowed;
 }
@@ -12024,10 +12025,13 @@ std::string native_settings_row_text(
         case 6: {
             const auto rate = static_cast<unsigned>(std::lround(std::max(0.0f, render.max_fps)));
             const double measured = s_measured_present_hz.load(std::memory_order_relaxed);
-            // Above 60 needs interpolation, which the temporal upscalers exclude for now.
+            // A temporal upscaler interpolates only at multiples of 60.
             const unsigned temporal = temporal_upscaler(render);
             const bool above_60 = rate == 0u ? settings_refresh_hz(render) > 61u : rate > 61u;
-            const bool capped = temporal != 0u && !temporal_interpolation_allowed() && above_60;
+            const double present = present_frame_rate(render.max_fps, render.vsync_interval,
+                                                      static_cast<double>(settings_refresh_hz(render)));
+            const bool multiple = std::abs(present - 60.0 * std::round(present / 60.0)) <= 0.5;
+            const bool capped = temporal != 0u && above_60 && (!temporal_interpolation_allowed() || !multiple);
             const bool gpu_bound = temporal != 0u && above_60 &&
                                    s_temporal_interp_suspended.load(std::memory_order_relaxed);
             const char* cap = gpu_bound ? " (60: GPU)" : !capped ? "" : temporal == 3u ? " (60: DLSS)" : " (60: FSR 3)";

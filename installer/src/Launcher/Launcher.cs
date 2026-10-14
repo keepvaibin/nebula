@@ -862,16 +862,16 @@ namespace Nebula.Launcher
                 ? frameRateChoices[frameRate.SelectedIndex] : graphics.FrameRate;
             frameRateChoices.Clear();
             frameRateChoices.AddRange(GraphicsSettings.FrameRates(SelectedMonitor.Refresh));
-            // DLSS does not upscale interpolated frames yet: up to 60 with it.
+            // DLSS upscales interpolated frames at multiples of 60.
             bool dlss = upscaler.SelectedIndex >= 0 && upscaler.SelectedIndex < upscalerChoices.Count &&
                 upscalerChoices[upscaler.SelectedIndex] == 3;
-            if (dlss) frameRateChoices.RemoveAll(rate => rate == 0 || rate > 60);
+            if (dlss) frameRateChoices.RemoveAll(rate => rate == 0 || (rate > 60 && rate % 60 != 0));
             frameRate.Items.Clear();
             int selected = frameRateChoices.Count - 1;
             for (int i = 0; i < frameRateChoices.Count; i++)
             {
                 int rate = frameRateChoices[i];
-                frameRate.Items.Add(rate == 0 ? "Unlimited" : dlss && rate == 60 ? "60 FPS (max with DLSS)" : rate + " FPS");
+                frameRate.Items.Add(rate == 0 ? "Unlimited" : rate + " FPS");
                 if (want != 0 && rate != 0 && rate <= want) selected = i;
             }
             frameRate.SelectedIndex = selected;

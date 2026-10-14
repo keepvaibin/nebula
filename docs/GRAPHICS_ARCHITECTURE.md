@@ -161,7 +161,7 @@ replay reads, and matched draws blend their vertices with the older frame's. The
 command list is recorded once per pair. Two governors keep the game at 60: GPU time per
 presented frame (as many frames as fit in 15 ms) and VIs the game misses.
 
-With a temporal upscaler (`GALAXY_TEMPORAL_INTERPOLATION=1`, rates that are multiples of 60),
+With a temporal upscaler (DLSS, FSR 3) at rates that are multiples of 60,
 every presented frame, the one at t = 1 included, is a replay with its own jitter phase and
 motion vectors relative to the frame presented before it, upscaled once. When no sub-frame fits
 beside that replay, the game frames take the upscaler at 60.
