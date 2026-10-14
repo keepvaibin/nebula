@@ -836,7 +836,7 @@ namespace Nebula.Launcher
             interpolation.SelectedIndex = Math.Max(0, interpolationChoices.IndexOf(interpolationMode));
             sharpness.Value = graphics.Sharpness;
             textureFilter.SelectedIndex = graphics.TextureFilter;
-            lighting.SelectedIndex = graphics.PerPixelLighting ? 0 : 1;
+            lighting.SelectedIndex = graphics.EnhancedLighting ? 0 : graphics.PerPixelLighting ? 1 : 2;
             mipmaps.Checked = graphics.GeneratedMipmaps;
             hudOutput.Checked = graphics.HudOutputResolution;
             rayTracing.Checked = graphics.RayTracing;
@@ -1010,7 +1010,8 @@ namespace Nebula.Launcher
                     graphics.SpatialQuality = Math.Max(0, dlssQuality.SelectedIndex);
                 graphics.Sharpness = (int)sharpness.Value;
                 graphics.TextureFilter = textureFilter.SelectedIndex;
-                graphics.PerPixelLighting = lighting.SelectedIndex == 0;
+                graphics.EnhancedLighting = lighting.SelectedIndex == 0;
+                graphics.PerPixelLighting = lighting.SelectedIndex <= 1;
                 graphics.GeneratedMipmaps = mipmaps.Checked;
                 graphics.HudOutputResolution = hudOutput.Checked;
                 if (rayTracingOffered) graphics.RayTracing = rayTracing.Checked;

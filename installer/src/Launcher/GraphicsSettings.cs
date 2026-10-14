@@ -118,7 +118,7 @@ namespace Nebula.Launcher
         public static readonly string[] SpatialQualities = { "Manual (internal resolution)", "Quality", "Balanced", "Performance", "Ultra Performance" };
         private const int TemporalQualityCount = 5;
         public static readonly string[] TextureFilters = { "Trilinear", "2x anisotropic", "4x anisotropic", "8x anisotropic", "16x anisotropic" };
-        public static readonly string[] LightingModes = { "Per pixel (enhanced)", "Per vertex (original)" };
+        public static readonly string[] LightingModes = { "Enhanced", "Per pixel", "Per vertex (original)" };
         private static readonly int[] Anisotropy = { 1, 2, 4, 8, 16 };
         private static readonly int[] StandardFrameRates = { 30, 60, 120, 144, 165, 240, 360 };
 
@@ -183,7 +183,8 @@ namespace Nebula.Launcher
         public int TemporalQuality = 1;
         public int FrameGeneration = 0;
         public int SpatialQuality = 0;
-        public bool GeneratedMipmaps = false, PerPixelLighting = false, HudOutputResolution = false, RayTracing = false;
+        public bool GeneratedMipmaps = false, PerPixelLighting = false, EnhancedLighting = false;
+        public bool HudOutputResolution = false, RayTracing = false;
 
         public static string ConfigPath { get { return Path.Combine(NebulaPaths.DataRoot, "config.ini"); } }
 
@@ -251,9 +252,10 @@ namespace Nebula.Launcher
                 settings.TextureFilter = 0;
                 for (int i = 0; i < Anisotropy.Length; i++) if (Anisotropy[i] <= anisotropy) settings.TextureFilter = i;
             }
-            string mipmaps, lighting, hud, rt;
+            string mipmaps, lighting, enhanced, hud, rt;
             if (values.TryGetValue("enhanced_mipmaps", out mipmaps)) settings.GeneratedMipmaps = mipmaps.Trim() != "0";
             if (values.TryGetValue("per_pixel_lighting", out lighting)) settings.PerPixelLighting = lighting.Trim() != "0";
+            if (values.TryGetValue("enhanced_lighting", out enhanced)) settings.EnhancedLighting = enhanced.Trim() != "0";
             if (values.TryGetValue("hud_output_resolution", out hud)) settings.HudOutputResolution = hud.Trim() != "0";
             if (values.TryGetValue("ray_tracing_enabled", out rt)) settings.RayTracing = rt.Trim() != "0";
             return settings;
@@ -285,6 +287,7 @@ namespace Nebula.Launcher
             Set(lines, "anisotropic_filtering", Anisotropy[Math.Max(0, Math.Min(TextureFilter, Anisotropy.Length - 1))]);
             Set(lines, "enhanced_mipmaps", GeneratedMipmaps ? 1 : 0);
             Set(lines, "per_pixel_lighting", PerPixelLighting ? 1 : 0);
+            Set(lines, "enhanced_lighting", EnhancedLighting ? 1 : 0);
             Set(lines, "hud_output_resolution", HudOutputResolution ? 1 : 0);
             Set(lines, "ray_tracing_enabled", RayTracing ? 1 : 0);
             Directory.CreateDirectory(Path.GetDirectoryName(ConfigPath));

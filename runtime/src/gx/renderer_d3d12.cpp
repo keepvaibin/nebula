@@ -681,6 +681,11 @@ void sanitize_settings_draft(RenderConfig& render) {
 
 unsigned controls_changes();
 
+// The LIGHTING row: 0 per vertex, 1 per pixel, 2 enhanced.
+unsigned lighting_mode(const RenderConfig& render) {
+    return render.enhanced_lighting ? 2u : render.per_pixel_lighting ? 1u : 0u;
+}
+
 unsigned pending_settings_changes() {
     const RenderConfig live = get_render_config();
     const RenderConfig& d = s_settings_draft;
@@ -708,7 +713,7 @@ unsigned pending_settings_changes() {
     changes += d.sharpness != live.sharpness;
     changes += d.anisotropic_filtering != live.anisotropic_filtering;
     changes += d.enhanced_mipmaps != live.enhanced_mipmaps;
-    changes += d.per_pixel_lighting != live.per_pixel_lighting;
+    changes += lighting_mode(d) != lighting_mode(live);
     changes += d.hud_output_resolution != live.hud_output_resolution;
     changes += d.ray_tracing_enabled != live.ray_tracing_enabled;
     changes += controls_changes();
@@ -971,6 +976,7 @@ void apply_native_settings_draft() {
     applied.anisotropic_filtering = next.anisotropic_filtering;
     applied.enhanced_mipmaps = next.enhanced_mipmaps;
     applied.per_pixel_lighting = next.per_pixel_lighting;
+    applied.enhanced_lighting = next.enhanced_lighting;
     applied.hud_output_resolution = next.hud_output_resolution;
     applied.ray_tracing_enabled = next.ray_tracing_enabled;
     const bool display_changed = display_settings_differ(live, applied);
@@ -13052,9 +13058,18 @@ std::vector<SettingsRow> graphics_page(const RenderConfig& render) {
     rows.push_back({"MIPMAPS", render.enhanced_mipmaps ? "GENERATED" : "ORIGINAL",
                     [](RenderConfig& draft, int) { draft.enhanced_mipmaps = !draft.enhanced_mipmaps; },
                     "GENERATED ADDS SMOOTH DISTANT DETAIL WHERE THE GAME HAS NONE"});
-    rows.push_back({"LIGHTING", render.per_pixel_lighting ? "PER PIXEL" : "PER VERTEX",
-                    [](RenderConfig& draft, int) { draft.per_pixel_lighting = !draft.per_pixel_lighting; },
-                    "PER PIXEL LIGHTS EVERY PIXEL INSTEAD OF EVERY CORNER"});
+    {
+        static constexpr const char* kLighting[] = {"PER VERTEX", "PER PIXEL", "ENHANCED"};
+        rows.push_back({"LIGHTING", kLighting[lighting_mode(render)],
+                        [](RenderConfig& draft, int delta) {
+                            const unsigned mode = settings_step(lighting_mode(draft), 3u, delta);
+                            draft.per_pixel_lighting = mode != 0u;
+                            draft.enhanced_lighting = mode == 2u;
+                        },
+                        lighting_mode(render) == 2u
+                            ? "HIGHLIGHTS, SOFT SKY LIGHT AND SHINIER METALS FROM THE GAME'S OWN LIGHTS"
+                            : "PER PIXEL LIGHTS EVERY PIXEL INSTEAD OF EVERY CORNER"});
+    }
     if (s_ray_tracing_offered.load(std::memory_order_relaxed)) {
         rows.push_back({"RAY TRACING", render.ray_tracing_enabled ? "ON" : "OFF",
                         [](RenderConfig& draft, int) { draft.ray_tracing_enabled = !draft.ray_tracing_enabled; },

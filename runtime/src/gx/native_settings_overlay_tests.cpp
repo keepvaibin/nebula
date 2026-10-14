@@ -292,7 +292,8 @@ int main() {
     passed &= expect(applied.sharpness == 30u, "sharpening moves in steps of ten");
     passed &= expect(applied.anisotropic_filtering == 16u, "8x anisotropic steps up to 16x");
     passed &= expect(!applied.enhanced_mipmaps, "mipmaps switch to the original ones");
-    passed &= expect(!applied.per_pixel_lighting, "lighting switches to per vertex");
+    passed &= expect(applied.per_pixel_lighting && applied.enhanced_lighting,
+                     "lighting steps from per pixel to enhanced");
     passed &= expect(galaxy::gx::native_settings_overlay_snapshot().pending_changes == 0u,
                      "nothing is pending after apply");
 
@@ -305,7 +306,8 @@ int main() {
     passed &= expect(reopen(), "reopen on the graphics page");
     render.efb_scale = 4u;
     galaxy::gx::set_render_config(render);
-    passed &= expect(key(VK_RIGHT) &&
+    // The cursor is on LIGHTING, at its last value (ENHANCED).
+    passed &= expect(key(VK_LEFT) &&
                          galaxy::gx::native_settings_overlay_snapshot().pending_changes == 1u &&
                          key(VK_RETURN),
                      "an unrelated change applies");
