@@ -44,6 +44,9 @@ inline constexpr std::uint32_t kRtDrawWideIndices = 4u;
 // The draw's colour is lit by GX lights (characters, lit objects): its shading already turns
 // towards its lights.
 inline constexpr std::uint32_t kRtDrawLit = 8u;
+// A lit draw whose GX light 0 the actor lights moved towards the traced sun (actor_lights.h):
+// its shading's key light is the sun.
+inline constexpr std::uint32_t kRtDrawSunKey = 16u;
 // It takes GX light 4, the slot LightFunction::loadPointLightInfo loads the game's point light into.
 inline constexpr std::uint32_t kRtDrawPointLit = 32u;
 // An additive translucent draw (a glow: lamps, cores, Lumas, sparks): an emitter, not in the BVH.
@@ -64,7 +67,8 @@ struct RtDrawInfo {
     std::array<std::uint32_t, 2> light_index{0xFFu, 0xFFu};
     std::array<std::array<float, 6>, 2> light{};
     std::array<std::uint32_t, 2> light_color{};
-    // Added to RtDraw.flags: kRtDrawLit; surface classes in bits 8-15.
+    // Added to RtDraw.flags: kRtDrawLit, kRtDrawSunKey, kRtDrawPointLit or kRtDrawGlow; surface classes
+    // in bits 8-15.
     std::uint32_t surface = 0;
 };
 

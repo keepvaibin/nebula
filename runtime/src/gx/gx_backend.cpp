@@ -6974,6 +6974,10 @@ bool GxBackend::begin_rt_batch(const DrawCall& call, RtDrawInfo& info) {
         const XfChannelCtrl color = state_.channel_ctrl(0u);
         info.surface = color.lighting_enable && color.light_mask != 0u ? kRtDrawLit : 0u;
         info.surface |= color.lighting_enable && (color.light_mask & 0x10u) != 0u ? kRtDrawPointLit : 0u;
+        if (info.surface != 0u && (color.light_mask & 1u) != 0u && (rt_draw_lights_ & 1u) != 0u &&
+            !rt_light_aim_.point) {
+            info.surface |= kRtDrawSunKey;
+        }
         if (glow) {
             info.surface = kRtDrawGlow;
         }
