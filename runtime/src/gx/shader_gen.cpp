@@ -15,6 +15,7 @@
 
 #include "galaxy/gx/shader_gen.h"
 
+#include "galaxy/gx/enhanced_lighting.h"
 #include "galaxy/gx/gx_bitfields.h"
 #include "galaxy/gx/render_config.h"
 #include "galaxy/gx/uber_constants.h"
@@ -663,6 +664,193 @@ void ppl_apply(inout float4 col0, inout float4 col1, float3 wpos, float3 nrm_in,
 }
 )HLSL";
 
+// Enhanced lighting (enhanced_lighting.h), after kPplLighting and the kEnh* tuning constants.
+// Lit colour channels interpolate in linear light between their ambient and ambient-plus-light
+// colours (the channel's unlit and fully lit ends) under a soft shoulder; the ambient is a
+// view-up hemisphere with a sky rim. Highlights of the draw's lights: dielectric, or tinted by
+// the surface colour on environment-mapped (metal) draws. The game's specular channels and the
+// alpha channels keep the GX formulas, per pixel.
+static constexpr const char* kEnhancedLighting = R"HLSL(
+float3 enh_lin(float3 c) { return pow(max(c, 0.0), 2.2); }
+float3 enh_srgb(float3 c) { return pow(max(c, 0.0), 1.0 / 2.2); }
+
+// Identity up to the knee, then an exponential shoulder towards 1.
+float3 enh_shoulder(float3 x) {
+    const float3 over = kEnhKnee + (1.0 - kEnhKnee) * (1.0 - exp((kEnhKnee - x) / (1.0 - kEnhKnee)));
+    return x > kEnhKnee ? over : x;
+}
+
+float enh_ggx(float NoH, float a2) {
+    const float d = NoH * NoH * (a2 - 1.0) + 1.0;
+    return a2 / (3.14159265 * d * d);
+}
+
+float enh_vis(float NoL, float NoV, float a) {
+    return 0.5 / max(NoL * (NoV * (1.0 - a) + a) + NoV * (NoL * (1.0 - a) + a), 1e-4);
+}
+
+// Light n at P: direction towards it, the GX spot attenuation (function 3) or none, colour.
+void enh_light(uint n, uint ctrl, float3 P, out float3 ldir, out float attn, out float3 lcol) {
+    const uint e = ppl_mtx_palette_base + 0x180u + 4u * n;
+    const uint lcw = asuint(mtx_palette[e].w);
+    const float4 le1 = mtx_palette[e + 1u];
+    const float4 le2 = mtx_palette[e + 2u];
+    const float4 le3 = mtx_palette[e + 3u];
+    const float3 ldelta = float3(le2.z, le2.w, le3.x) - P;
+    const float dist2 = dot(ldelta, ldelta);
+    const float dist = sqrt(dist2);
+    ldir = dist > 0.0 ? ldelta / dist : float3(0.0, 0.0, 1.0);
+    attn = 1.0;
+    if (((ctrl >> 9u) & 3u) == 3u) {
+        const float c = max(0.0, dot(ldir, le3.yzw));
+        const float denom = dot(float3(le1.w, le2.x, le2.y), float3(1.0, dist, dist2));
+        attn = denom != 0.0 ? max(0.0, le1.x + le1.y * c + le1.z * c * c) / denom : 0.0;
+    }
+    lcol = float3((lcw >> 24) & 255u, (lcw >> 16) & 255u, (lcw >> 8) & 255u) / 255.0;
+}
+
+struct EnhShade {
+    bool   valid;     // the draw has a normal
+    float3 N;
+    float3 V;
+    float  NoV;
+    float  env_gain;  // environment lookups: Fresnel gain
+    float3 spec;      // dielectric highlights, linear, added after the TEV
+    float3 metal;     // metal lobes, linear, times the surface's Fresnel after the TEV
+    float  metal_fw;  // the lobes' Schlick weight times their luminance
+    float  metal_w;   // the lobes' luminance
+};
+
+EnhShade enh_begin(float3 P, float3 n) {
+    EnhShade e = (EnhShade)0;
+    e.valid = dot(n, n) > 0.0;
+    e.N = e.valid ? normalize(n) : float3(0.0, 0.0, 0.0);
+    e.V = dot(P, P) > 0.0 ? normalize(-P) : float3(0.0, 0.0, 1.0);
+    e.NoV = e.valid ? saturate(dot(e.N, e.V)) : 1.0;
+    const float g = 1.0 - e.NoV;
+    e.env_gain = e.valid ? kEnhEnvBase + kEnhEnvGraze * g * g * g : 1.0;
+    return e;
+}
+
+void enh_highlight(inout EnhShade e, float3 ldir, float3 radiance, bool metal) {
+    const float NoL = saturate(dot(e.N, ldir));
+    if (NoL <= 0.0) {
+        return;
+    }
+    const float3 H = normalize(ldir + e.V);
+    const float NoH = saturate(dot(e.N, H));
+    const float fw = pow(1.0 - saturate(dot(e.V, H)), 5.0);
+    if (metal) {
+        const float a = kEnhMetalRough * kEnhMetalRough;
+        const float3 lobe = radiance * (NoL * enh_ggx(NoH, a * a) * enh_vis(NoL, e.NoV, a) * kEnhMetal);
+        const float w = dot(lobe, float3(0.2126, 0.7152, 0.0722));
+        e.metal += lobe;
+        e.metal_fw += w * fw;
+        e.metal_w += w;
+    } else {
+        const float a = kEnhSheenRough * kEnhSheenRough;
+        e.spec += radiance * (NoL * enh_ggx(NoH, a * a) * enh_vis(NoL, e.NoV, a) * kEnhSheen *
+                              (0.04 + 0.96 * fw));
+    }
+}
+
+void enh_channels(inout float4 col0, inout float4 col1, float3 P, float4 vtx_col0, float4 vtx_col1,
+                  inout EnhShade e, bool metal) {
+    bool highlights = e.valid;
+    [unroll] for (uint ch = 0u; ch < 2u; ++ch) {
+        if (ch >= ppl_num_chans) {
+            continue;
+        }
+        const float4 vtx = ch == 0u ? vtx_col0 : vtx_col1;
+        const uint cc = ppl_channel[ch];
+        const uint ca = ppl_channel[2u + ch];
+        float4 result = ch == 0u ? col0 : col1;
+        if (((cc >> 1u) & 1u) != 0u && ((cc >> 9u) & 3u) != 1u) {
+            const float3 mat = ((cc & 1u) != 0u ? vtx : ppl_chan_material[ch]).rgb;
+            const float3 amb = (((cc >> 6u) & 1u) != 0u ? vtx : ppl_chan_ambient[ch]).rgb;
+            const float3 amb_lin = enh_lin(amb);
+            float sky = 1.0;
+            if (e.valid) {
+                const float g = 1.0 - e.NoV;
+                sky = 1.0 + kEnhHemi * e.N.y + kEnhRim * g * g * g * saturate(0.5 + 0.5 * e.N.y);
+            }
+            float3 acc = amb_lin * sky;
+            const uint mask = ((cc >> 2u) & 0xFu) | (((cc >> 11u) & 0xFu) << 4u);
+            const uint dfn = (cc >> 7u) & 3u;
+            [loop] for (uint n = 0u; n < 8u; ++n) {
+                if (((mask >> n) & 1u) == 0u) {
+                    continue;
+                }
+                float3 ldir;
+                float attn;
+                float3 lcol;
+                enh_light(n, cc, P, ldir, attn, lcol);
+                const float nl = dot(e.N, ldir);
+                const float x = attn * (dfn == 1u ? nl : dfn == 2u ? max(nl, 0.0) : 1.0);
+                acc += (enh_lin(amb + lcol) - amb_lin) * x;
+                if (highlights && dfn != 0u) {
+                    enh_highlight(e, ldir, enh_lin(lcol) * attn, metal);
+                }
+            }
+            highlights = false;
+            result.rgb = mat * enh_srgb(enh_shoulder(max(acc, 0.0)));
+        } else if (((cc >> 1u) & 1u) != 0u) {
+            int3 mat_c_i = int3(round(((cc & 1u) != 0u ? vtx : ppl_chan_material[ch]).rgb * 255.0));
+            int3 lacc_i = int3(round((((cc >> 6u) & 1u) != 0u ? vtx : ppl_chan_ambient[ch]).rgb * 255.0));
+            int unused_a = 0;
+            const uint mask = ((cc >> 2u) & 0xFu) | (((cc >> 11u) & 0xFu) << 4u);
+            [loop] for (uint n = 0u; n < 8u; ++n) {
+                if (((mask >> n) & 1u) != 0u) {
+                    ppl_add_light(n, cc, false, P, e.N, lacc_i, unused_a);
+                }
+            }
+            lacc_i = clamp(lacc_i, int3(0,0,0), int3(255,255,255));
+            result.rgb = float3((mat_c_i * (lacc_i + (lacc_i >> 7))) >> 8) / 255.0;
+        }
+        if (((ca >> 1u) & 1u) != 0u) {
+            int mat_a_i = int(round(((ca & 1u) != 0u ? vtx.a : ppl_chan_material[ch].a) * 255.0));
+            int lacc_a_i = int(round((((ca >> 6u) & 1u) != 0u ? vtx.a : ppl_chan_ambient[ch].a) * 255.0));
+            int3 unused_c = int3(0,0,0);
+            const uint mask = ((ca >> 2u) & 0xFu) | (((ca >> 11u) & 0xFu) << 4u);
+            [loop] for (uint n = 0u; n < 8u; ++n) {
+                if (((mask >> n) & 1u) != 0u) {
+                    ppl_add_light(n, ca, true, P, e.N, unused_c, lacc_a_i);
+                }
+            }
+            lacc_a_i = clamp(lacc_a_i, 0, 255);
+            result.a = float((mat_a_i * (lacc_a_i + (lacc_a_i >> 7))) >> 8) / 255.0;
+        }
+        if (ch == 0u) {
+            col0 = result;
+        } else {
+            col1 = result;
+        }
+    }
+}
+
+// Unlit environment-mapped draws: the highlight of light 0, the last actor key light the game
+// loaded (loadActorLightInfo), when it has a colour.
+void enh_key_highlight(inout EnhShade e, float3 P) {
+    if (!e.valid) {
+        return;
+    }
+    float3 ldir;
+    float attn;
+    float3 lcol;
+    enh_light(0u, 0u, P, ldir, attn, lcol);
+    if (any(lcol > 0.0)) {
+        enh_highlight(e, ldir, enh_lin(lcol), true);
+    }
+}
+
+float3 enh_finish(float3 frag, EnhShade e) {
+    float3 c = enh_lin(frag);
+    const float3 f0 = saturate(c);
+    const float fw = e.metal_w > 0.0 ? e.metal_fw / e.metal_w : 0.0;
+    return enh_srgb(c + e.spec + e.metal * (f0 + (1.0 - f0) * fw));
+}
+)HLSL";
+
 // D3D12 exposes only fixed one-pixel line/point rasterization. These geometry
 // shaders implement GX BP 0x22 exactly by expanding to solid quads. Constants
 // are in physical pixels, so widths scale with the EFB while the clip-space
@@ -916,13 +1104,15 @@ std::string ShaderGenerator::generate_vs(const VertexShaderKey& key) const {
     s << "// Generated by Nebula ShaderGenerator\n\n";
 
     const bool ppl = (key.flags & kVsKeyPerPixelLighting) != 0u;
+    const bool enhanced = (key.flags & kVsKeyEnhancedLighting) != 0u;
+    const bool ppl_outputs = ppl || enhanced;
     const bool motion = (key.flags & kVsKeyMotion) != 0u;
     if (motion) {
         s << insert_before_close(kVsConstantsDef, kVsMotionConstantMembers, false);
-        s << insert_before_close(ppl ? kVsStructsPpl : kVsStructs, kMotionInterpolants, true);
+        s << insert_before_close(ppl_outputs ? kVsStructsPpl : kVsStructs, kMotionInterpolants, true);
     } else {
         s << kVsConstantsDef;
-        s << (ppl ? kVsStructsPpl : kVsStructs);
+        s << (ppl_outputs ? kVsStructsPpl : kVsStructs);
     }
     s << kVertexBlendDef;
 
@@ -1044,6 +1234,19 @@ float xfw(uint w) {
              " xfw(nrm_base+8u)), v.nrm));\n";
         s << "    float3 nrm = (dot(nrm_t, nrm_t) > 0.0)"
              " ? normalize(nrm_t) : nrm_t;\n\n";
+    } else if (enhanced) {
+        // Unlit draws may leave the normal matrices unloaded: the position
+        // matrix turns the normal (exact for rotation and uniform scale).
+        const bool palette = (key.flags & 0x01u) != 0u;
+        for (unsigned r = 0; r < 3u; ++r) {
+            emit(s, "    const float3 nrm_row%u = %s%u%s.xyz;\n", r,
+                 palette ? "mtx_palette[pnmtx_row+" : "inline_pos_matrix[", r,
+                 palette ? "u]" : "]");
+        }
+        s << "    float3 nrm_t = float3(dot(nrm_row0, v.nrm), dot(nrm_row1, v.nrm),"
+             " dot(nrm_row2, v.nrm));\n";
+        s << "    float3 nrm = (dot(nrm_t, nrm_t) > 0.0)"
+             " ? normalize(nrm_t) : nrm_t;\n\n";
     }
 
     // GX colour channels: the rasterized colour comes from the channel controls. matsource selects the
@@ -1117,7 +1320,7 @@ float xfw(uint w) {
     }
     s << "\n";
 
-    if (ppl) {
+    if (ppl_outputs) {
         s << "    o.ppl_pos = wpos.xyz;\n";
         s << "    o.ppl_nrm = nrm;\n";
         s << "    o.ppl_vcol0 = vtx_col0;\n";
@@ -1299,18 +1502,43 @@ std::string ShaderGenerator::generate_ps(const PixelShaderKey& key) const {
     s << "// Generated by Nebula ShaderGenerator\n\n";
 
     const bool ppl = (key.reserved & kPsKeyPerPixelLighting) != 0u;
+    const bool enhanced = (key.reserved & kPsKeyEnhancedLighting) != 0u;
+    const bool ppl_inputs = ppl || enhanced;
     const bool motion = (key.reserved & kPsKeyMotion) != 0u;
     const bool reactive = !motion && (key.reserved & kPsKeyReactive) != 0u;
-    s << kPsConstantsDef;
-    if (motion) {
-        s << insert_before_close(ppl ? kPsStructsPpl : kPsStructs, kMotionInterpolants, true);
+    const std::uint32_t enh_env = enhanced ? key.ind_reserved & kEnhancedEnvCoordMask : 0u;
+    const bool enh_lit = enhanced && (key.ind_reserved & kEnhancedLit) != 0u;
+    if (enhanced) {
+        // The split column and the ray tracer's state ride in the uber header's last word.
+        s << insert_before_close(kPsConstantsDef, "    uint4    uber_ps_header;\n", false);
     } else {
-        s << (ppl ? kPsStructsPpl : kPsStructs);
+        s << kPsConstantsDef;
     }
-    if (ppl) {
+    if (motion) {
+        s << insert_before_close(ppl_inputs ? kPsStructsPpl : kPsStructs, kMotionInterpolants, true);
+    } else {
+        s << (ppl_inputs ? kPsStructsPpl : kPsStructs);
+    }
+    if (ppl_inputs) {
         const bool finite = (key.reserved & kPsKeyPplFiniteLightAttn) != 0u;
         emit(s, "static const bool ppl_finite_attn = %s;\n", finite ? "true" : "false");
         s << kPplLighting;
+    }
+    if (enhanced) {
+        const EnhancedLightingTuning& t = enhanced_lighting_tuning();
+        emit(s,
+             "static const float kEnhHemi = %.9g;\n"
+             "static const float kEnhRim = %.9g;\n"
+             "static const float kEnhKnee = %.9g;\n"
+             "static const float kEnhSheen = %.9g;\n"
+             "static const float kEnhSheenRough = %.9g;\n"
+             "static const float kEnhMetal = %.9g;\n"
+             "static const float kEnhMetalRough = %.9g;\n"
+             "static const float kEnhEnvBase = %.9g;\n"
+             "static const float kEnhEnvGraze = %.9g;\n",
+             t.hemi, t.rim, t.knee, t.sheen, t.sheen_rough, t.metal, t.metal_rough, t.env_base,
+             t.env_graze);
+        s << kEnhancedLighting;
     }
 
     // ---- main() ----
@@ -1378,6 +1606,19 @@ std::string ShaderGenerator::generate_ps(const PixelShaderKey& key) const {
     if (ppl) {
         s << "    ppl_apply(pin.col0, pin.col1, pin.ppl_pos, pin.ppl_nrm,"
              " pin.ppl_vcol0, pin.ppl_vcol1);\n";
+    }
+    if (enhanced) {
+        // Left of the split column the game's own (per-vertex) lighting.
+        s << "    const bool enh_on = pin.pos.x >= float(uber_ps_header.w & 0xFFFFu);\n";
+        s << "    EnhShade enh = enh_begin(pin.ppl_pos, pin.ppl_nrm);\n";
+        if (enh_lit) {
+            emit(s,
+                 "    if (enh_on) enh_channels(pin.col0, pin.col1, pin.ppl_pos, pin.ppl_vcol0,"
+                 " pin.ppl_vcol1, enh, %s);\n",
+                 enh_env != 0u ? "true" : "false");
+        } else {
+            s << "    if (enh_on) enh_key_highlight(enh, pin.ppl_pos);\n";
+        }
     }
     s << "    int4 tex_color_i = int4(0,0,0,0);\n";
     s << "    int4 last_raw_tex_i = int4(0,0,0,0);\n";
@@ -1633,6 +1874,10 @@ std::string ShaderGenerator::generate_ps(const PixelShaderKey& key) const {
                     texmap,
                     texmap,
                     tex_swz.c_str());
+            }
+            if (!has_indirect_cmd && ((enh_env >> texcoord) & 1u) != 0u) {
+                s << "    if (enh_on) tex_color_i.rgb = min(int3(round(float3(tex_color_i.rgb) *"
+                     " enh.env_gain)), int3(255,255,255));\n";
             }
         } else if (key.num_texgens != 0u) {
             // GX supplies white when this TEV stage disables its texture
@@ -1921,6 +2166,14 @@ std::string ShaderGenerator::generate_ps(const PixelShaderKey& key) const {
     // intermediates, but alpha compare, fog/colour output and the alpha==1 blend quirk see only the low 8 bits.
     s << "\n    int4 frag_i = tev_prev_i & int4(255,255,255,255);\n";
     s << "    float4 frag = float4(frag_i) / 255.0;\n\n";
+    if (enhanced) {
+        if ((key.ind_reserved & kEnhancedReflective) != 0u) {
+            // The ray tracer's reflections own this class's highlights while they run.
+            s << "    if (enh_on && (uber_ps_header.w & 0x10000u) == 0u) frag.rgb = enh_finish(frag.rgb, enh);\n\n";
+        } else {
+            s << "    if (enh_on) frag.rgb = enh_finish(frag.rgb, enh);\n\n";
+        }
+    }
 
     // Alpha test.
     const auto comp0 = static_cast<CompareFunc>(key.alpha_comp0);

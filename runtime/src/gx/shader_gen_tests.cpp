@@ -656,6 +656,82 @@ int main() {
         }
     }
 
+    // ---- Enhanced lighting ----------------------------------------------------
+    {
+        const ShaderGenerator gen;
+        // Vertex stage: lit (normal matrix) and unlit environment-mapped (position matrix),
+        // palette and inline positions, with and without motion vectors.
+        for (unsigned variant = 0; variant < 8u; ++variant) {
+            VertexShaderKey k{};
+            std::memset(&k, 0, sizeof(k));
+            k.num_chans = 1;
+            k.num_texgens = 2;
+            k.texgen[0] = texgen_word(false, false, 0, 5);
+            k.texgen[1] = texgen_word(false, true, 0, 1);
+            k.flags = kVsKeyEnhancedLighting;
+            const bool lit = (variant & 1u) != 0u;
+            if (lit) {
+                k.flags |= 0x02u;
+                k.channel[0] = chan_ctrl(false, true, 0x03, false, 2, 3);
+            } else {
+                k.channel[0] = chan_ctrl(true, false, 0, false, 0, 0);
+            }
+            if ((variant & 2u) != 0u) k.flags |= 0x01u;
+            if ((variant & 4u) != 0u) k.flags |= kVsKeyMotion;
+            const std::string src = gen.generate_vs(k);
+            char label[64];
+            std::snprintf(label, sizeof(label), "vs_enhanced_variant%u", variant);
+            check_contains(src, "o.ppl_nrm = nrm;", label);
+            check_contains(src, lit ? "uint nrm_base" : "nrm_row0", label);
+            check_compiles(src, "vs_5_1", label);
+        }
+        // Pixel stage: lit dielectric, lit environment-mapped, unlit environment-mapped (the ray
+        // tracer's class), each also with motion vectors.
+        for (unsigned variant = 0; variant < 6u; ++variant) {
+            PixelShaderKey k{};
+            std::memset(&k, 0, sizeof(k));
+            k.num_tev_stages = 2;
+            k.num_texgens = 2;
+            k.num_chans = 1;
+            k.alpha_comp0 = 7;
+            k.alpha_comp1 = 7;
+            k.stages[0] = basic_stage();
+            k.stages[1] = basic_stage();
+            k.stages[1].order = (1u << 3) | 1u | (1u << 6);
+            k.reserved = kPsKeyEnhancedLighting;
+            const unsigned material = variant % 3u;
+            k.ind_reserved = material == 0u ? kEnhancedLit
+                           : material == 1u ? kEnhancedLit | 0x02u | kEnhancedReflective
+                                            : 0x02u | kEnhancedReflective;
+            if (variant >= 3u) k.reserved |= kPsKeyMotion;
+            const std::string src = gen.generate_ps(k);
+            char label[64];
+            std::snprintf(label, sizeof(label), "ps_enhanced_variant%u", variant);
+            check_contains(src, "uint4    uber_ps_header;", label);
+            check_contains(src, material == 2u ? "enh_key_highlight(enh" : "enh_channels(pin.col0", label);
+            if (material == 0u) {
+                check_not_contains(src, "enh.env_gain))", label);
+            } else {
+                check_contains(src, "enh.env_gain))", label);
+                check_contains(src, "(uber_ps_header.w & 0x10000u) == 0u", label);
+            }
+            check_compiles(src, "ps_5_1", label);
+        }
+        // Keys without the enhanced bits generate no enhanced code (their cached shaders stay valid).
+        PixelShaderKey k{};
+        std::memset(&k, 0, sizeof(k));
+        k.num_tev_stages = 1;
+        k.num_texgens = 1;
+        k.num_chans = 1;
+        k.alpha_comp0 = 7;
+        k.alpha_comp1 = 7;
+        k.stages[0] = basic_stage();
+        k.reserved = kPsKeyPerPixelLighting;
+        const std::string ppl = gen.generate_ps(k);
+        check_not_contains(ppl, "enh_", "ps_ppl_has_no_enhanced_lighting");
+        check_not_contains(ppl, "uber_ps_header", "ps_ppl_keeps_its_constants");
+    }
+
     // ---- Pixel shaders ------------------------------------------------------
 
     {   // Baseline lerp stage, no fog, trivial alpha test.

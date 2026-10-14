@@ -769,6 +769,7 @@ add_library(galaxy_gx STATIC
     runtime/src/gx/ray_tracing_reflections.cpp
     runtime/src/gx/ray_tracing_water.cpp
     runtime/src/gx/rt_surfaces.cpp
+    runtime/src/gx/enhanced_lighting.cpp
     ${galaxy_rt_headers}
     runtime/src/gx/streamline_bridge.cpp
     runtime/src/gx/transform_history.cpp

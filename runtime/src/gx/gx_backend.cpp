@@ -19,6 +19,7 @@
 #include "galaxy/gx/owned_fifo_event_replay.h"
 
 #include "galaxy/frame_cadence_diagnostics.h"
+#include "galaxy/gx/enhanced_lighting.h"
 #include "galaxy/gx/line_point_raster.h"
 #include "galaxy/gx/rt_surfaces.h"
 #include "galaxy/gx/texture_sampling.h"
@@ -10431,11 +10432,23 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
         {
             const RenderConfig render = get_render_config();
             // A lighting-mode change re-keys every lit draw's pipeline.
-            if (render.per_pixel_lighting != per_pixel_lighting_) {
+            if (render.per_pixel_lighting != per_pixel_lighting_ ||
+                render.enhanced_lighting != enhanced_lighting_) {
                 per_pixel_lighting_ = render.per_pixel_lighting;
+                enhanced_lighting_ = render.enhanced_lighting;
                 shader_key_hashes_valid_ = false;
                 current_pipeline_ = nullptr;
             }
+            // GALAXY_ENHANCED_LIGHTING_SPLIT=f: left of f x the viewport width the game's own lighting.
+            static const float split = [] {
+                char value[32]{};
+                std::size_t length = 0;
+                return getenv_s(&length, value, sizeof(value), "GALAXY_ENHANCED_LIGHTING_SPLIT") == 0 && length > 1u
+                           ? std::clamp(static_cast<float>(std::atof(value)), 0.0f, 1.0f)
+                           : 0.0f;
+            }();
+            enhanced_split_ = split;
+            enhanced_ps_flags_ = renderer_.rt_reflections_active() ? kEnhancedRtReflections : 0u;
         }
         renderer_.begin_frame(chunk.present_swap_chain);
         {
@@ -12408,11 +12421,36 @@ ID3D12PipelineState* GxBackend::flush_draw_state(
             glow_changed = true;
         }
     }
-    // Per-pixel lighting needs the extra position/normal interpolants, which
-    // the line and point geometry shaders do not carry.
+    // Per-pixel and enhanced lighting need the extra position/normal
+    // interpolants, which the line and point geometry shaders do not carry.
+    const bool triangles = topology_key == static_cast<std::uint8_t>(D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE);
+    bool enhanced = false;
+    bool enhanced_changed = false;
     {
-        const bool ppl = per_pixel_lighting_ && (vs_key_.flags & 0x02u) != 0u &&
-            topology_key == static_cast<std::uint8_t>(D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE);
+        // Perspective scene draws only: the view vector is the eye-space position. The material
+        // follows the keys, which change only with their dirty bits.
+        const bool gate = enhanced_lighting_ && triangles && scene_phase_ && side_layer_ == kSceneLayer &&
+                          state_.xf(static_cast<std::uint16_t>(xf::kProjectionBase + 6u)) == 0u;
+        if (gate != enhanced_gate_ || tev_dirty || xf_dirty || vcd_dirty || !shader_key_hashes_valid_) {
+            enhanced_gate_ = gate;
+            enhanced_material_ = gate ? enhanced_lighting_material(vs_key_, ps_key_) : 0u;
+        }
+        const std::uint32_t material = enhanced_material_;
+        enhanced = material != 0u;
+        if (((vs_key_.flags & kVsKeyEnhancedLighting) != 0u) != enhanced) {
+            vs_key_.flags ^= kVsKeyEnhancedLighting;
+            current_vs_hash_ = vs_key_.hash();
+        }
+        enhanced_changed = ((ps_key_.reserved & kPsKeyEnhancedLighting) != 0u) != enhanced;
+        if (enhanced_changed || ps_key_.ind_reserved != material) {
+            ps_key_.reserved = static_cast<std::uint8_t>(enhanced ? ps_key_.reserved | kPsKeyEnhancedLighting
+                                                                  : ps_key_.reserved & ~kPsKeyEnhancedLighting);
+            ps_key_.ind_reserved = material;
+            current_ps_hash_ = ps_key_.hash();
+        }
+    }
+    {
+        const bool ppl = per_pixel_lighting_ && !enhanced && (vs_key_.flags & 0x02u) != 0u && triangles;
         if (((vs_key_.flags & kVsKeyPerPixelLighting) != 0u) != ppl) {
             vs_key_.flags ^= kVsKeyPerPixelLighting;
             current_vs_hash_ = vs_key_.hash();
@@ -12434,6 +12472,49 @@ ID3D12PipelineState* GxBackend::flush_draw_state(
     const bool topology_dirty =
         render_state_key_.primitive_topology != topology_key;
     render_state_key_.primitive_topology = topology_key;
+    // GALAXY_LIGHTING_CENSUS=1: each scene material's lighting state once ([light-census]).
+    static const bool census = read_env_u64("GALAXY_LIGHTING_CENSUS", 0u) != 0u;
+    if (census && scene_phase_ && side_layer_ == kSceneLayer) [[unlikely]] {
+        static std::unordered_set<std::uint64_t> seen;
+        if (seen.insert(current_vs_hash_ * 31u ^ current_ps_hash_).second) {
+            const RtSurface surface = classify_rt_surface(vs_key_, ps_key_);
+            char line[2048];
+            int n = std::snprintf(line, sizeof(line),
+                "[light-census] frame=%llu class=%u feat=0x%02X env=%u enh=0x%08X blend=0x%08X topo=%u chans=%u "
+                "ctrl=%08X,%08X,%08X,%08X mat=%08X,%08X amb=%08X,%08X tg=",
+                static_cast<unsigned long long>(frame_index_), static_cast<unsigned>(surface.surface_class),
+                static_cast<unsigned>(surface.features), static_cast<unsigned>(surface.env_stage),
+                enhanced_lighting_material(vs_key_, ps_key_), render_state_key_.blend_bits, static_cast<unsigned>(topology_key),
+                static_cast<unsigned>(vs_key_.num_chans),
+                vs_key_.channel[0], vs_key_.channel[1], vs_key_.channel[2], vs_key_.channel[3],
+                state_.xf(xf::kMaterialColorBase), state_.xf(static_cast<std::uint16_t>(xf::kMaterialColorBase + 1u)),
+                state_.xf(xf::kAmbientColorBase), state_.xf(static_cast<std::uint16_t>(xf::kAmbientColorBase + 1u)));
+            for (unsigned i = 0; i < vs_key_.num_texgens && i < 8u && n < 1700; ++i) {
+                n += std::snprintf(line + n, sizeof(line) - n, "%08X,", vs_key_.texgen[i]);
+            }
+            n += std::snprintf(line + n, sizeof(line) - n, " st=");
+            for (unsigned s = 0; s < ps_key_.num_tev_stages && s < 16u && n < 1700; ++s) {
+                n += std::snprintf(line + n, sizeof(line) - n, "%06X/%06X/%03X,", ps_key_.stages[s].color_env,
+                                   ps_key_.stages[s].alpha_env, ps_key_.stages[s].order);
+            }
+            std::uint32_t mask = 0u;
+            for (unsigned c = 0; c < 4u; ++c) {
+                const XfChannelCtrl ctrl = decode_xf_channel_ctrl(vs_key_.channel[c]);
+                if (ctrl.lighting_enable) mask |= ctrl.light_mask;
+            }
+            for (unsigned l = 0; l < 8u && n < 1800; ++l) {
+                if ((mask & (1u << l)) == 0u && l != 0u) continue;
+                const auto w = [&](unsigned k) {
+                    return std::bit_cast<float>(state_.xf(static_cast<std::uint16_t>(0x600u + 16u * l + k)));
+                };
+                n += std::snprintf(line + n, sizeof(line) - n,
+                                   " L%u=%08X p(%.0f,%.0f,%.0f) d(%.2f,%.2f,%.2f) a(%.2f,%.2f,%.2f) k(%.2f,%.2f,%.2f)",
+                                   l, state_.xf(static_cast<std::uint16_t>(0x600u + 16u * l + 3u)), w(10), w(11),
+                                   w(12), w(13), w(14), w(15), w(4), w(5), w(6), w(7), w(8), w(9));
+            }
+            std::fprintf(stderr, "%s\n", line);
+        }
+    }
     {
         const BlendMode marks = state_.blend_mode();
         alpha_marks_drawn_ |= !marks.color_update && marks.alpha_update;
@@ -12809,7 +12890,7 @@ ID3D12PipelineState* GxBackend::flush_draw_state(
     }
 
     // Upload PS constants when TEV stage config / fog / alpha / tex dims change.
-    if (tev_dirty || tev_c_dirty || tex_dirty || frame_bindings_dirty_ || glow_changed ||
+    if (tev_dirty || tev_c_dirty || tex_dirty || frame_bindings_dirty_ || glow_changed || enhanced_changed ||
         dirty == ~0u || (ps_record_restart_ && history_scene_)) {
         const auto constants_start = time_detail
             ? std::chrono::steady_clock::now()
@@ -12824,6 +12905,18 @@ ID3D12PipelineState* GxBackend::flush_draw_state(
         ps_c.ztex_params[3] =
             (ps_key_.output_flags & 0x20u) != 0u ? renderer_.rt_glow_spill(glow_kind_ == 2u) : 0.0f;
         apply_uber_ps_key(ps_key_, ps_c);
+        if ((ps_key_.reserved & kPsKeyEnhancedLighting) != 0u) {
+            std::uint32_t column = 0u;
+            if (enhanced_split_ > 0.0f) {
+                // The viewport's left edge plus the fraction of its width, in render-target pixels.
+                const float wd = std::bit_cast<float>(state_.xf(xf::kViewportBase));
+                const float left = std::bit_cast<float>(state_.xf(static_cast<std::uint16_t>(xf::kViewportBase + 3u))) -
+                                   static_cast<float>(state_.efb_scissor().offset.x) - 342.0f - wd;
+                const float x = (left + enhanced_split_ * 2.0f * wd) * static_cast<float>(renderer_.efb_scale());
+                column = static_cast<std::uint32_t>(std::clamp(x, 1.0f, 65535.0f));
+            }
+            ps_c.uber_ps_header[3] = enhanced_ps_flags_ | column;
+        }
 
         UploadRing::Allocation ps_alloc =
             renderer_.constant_ring().allocate(sizeof(GxPsConstants), 256u);

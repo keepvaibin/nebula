@@ -1573,6 +1573,16 @@ private:
     bool shader_key_hashes_valid_ = false;
     // RenderConfig::per_pixel_lighting, sampled at each frame start.
     bool per_pixel_lighting_ = true;
+    // RenderConfig::enhanced_lighting, sampled at each frame start; the last draw's eligibility and
+    // material word (enhanced_lighting.h), kept until its keys or eligibility change.
+    bool enhanced_lighting_ = false;
+    bool enhanced_gate_ = false;
+    std::uint32_t enhanced_material_ = 0u;
+    // uber_ps_header[3] of enhanced pipelines (shader_keys.h kEnhancedSplitMask,
+    // kEnhancedRtReflections) without the split column, per frame; the split as a fraction of the
+    // viewport (GALAXY_ENHANCED_LIGHTING_SPLIT).
+    std::uint32_t enhanced_ps_flags_ = 0u;
+    float enhanced_split_ = 0.0f;
     PsoKey current_pso_key_{};
     bool current_pso_key_valid_ = false;
     ID3D12PipelineState* current_pipeline_ = nullptr;

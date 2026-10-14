@@ -85,6 +85,12 @@ struct RenderConfig {
     // position and normal). Applies to specialized triangle pipelines.
     bool     per_pixel_lighting  = false;
 
+    // Enhancement (enhanced_lighting.h): lit and environment-mapped draws are
+    // shaded per pixel in linear light with highlights, a sky/ground ambient
+    // and Fresnel on environment maps. Takes precedence over
+    // per_pixel_lighting for the draws it shades.
+    bool     enhanced_lighting   = false;
+
     // Presentation image quality (post_process.h), applied to the presented
     // frame on the render thread. aa_mode: 0 off, 1 SMAA, 2 auto (SMAA unless
     // the game image already has 1.5x the window's pixels on both axes),
