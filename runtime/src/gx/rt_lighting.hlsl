@@ -497,11 +497,11 @@ void SkyStateCS()
     if (c_exposure == 0u) {
         c_sums.Store2(48u, uint2(asuint(1.0f), 0u));
     } else if (lit_count * 50u > c_sample_size.x * c_sample_size.y) {
-        const float mean = float(c_sums.Load(40u)) / (256.0f * float(lit_count));
+        const float mean = exp2(float(c_sums.Load(40u)) / (64.0f * float(lit_count)) - 6.0f);
         const float day = c_sums.Load(36u) != 0u ? saturate(asfloat(c_sums.Load(32u)) / c_daylight) : 1.0f;
         const float target = lerp(c_exposure_night, c_exposure_day, day);
         const float exposure = c_sums.Load(52u) != 0u ? asfloat(c_sums.Load(48u)) : 1.0f;
-        const float next = clamp(exposure * lerp(1.0f, target / max(mean, 0.05f), 0.1f), 0.8f, 1.5f);
+        const float next = clamp(exposure * lerp(1.0f, target / max(mean, 0.05f), 0.1f), 0.8f, 1.8f);
         c_sums.Store2(48u, uint2(asuint(next), 1u));
     }
 }
@@ -543,7 +543,9 @@ void CaptureCS(uint3 id : SV_DispatchThreadID)
             if (float(q.x) < c_split) {
                 keep *= lit;
             } else {
-                c_sums.InterlockedAdd(40u, uint(clamp(lit, 0.0f, 4.0f) * 256.0f));
+                // log2 of the lighting (the exposure follows its geometric mean: the typical
+                // surface, not the few sunlit ones far above it).
+                c_sums.InterlockedAdd(40u, uint((clamp(log2(max(lit, 1.0f / 64.0f)), -6.0f, 2.0f) + 6.0f) * 64.0f));
                 c_sums.InterlockedAdd(44u, 1u);
             }
             color *= clamp(keep, 0.25f, 4.0f);

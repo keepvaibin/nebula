@@ -315,12 +315,13 @@ float3 star_core(float2 pixel, float distance, float3 color)
             const float l = luminance(color);
             const float around = 0.25f * (luminance(scene_at(q + int2(3, 0))) + luminance(scene_at(q - int2(3, 0))) +
                                           luminance(scene_at(q + int2(0, 3))) + luminance(scene_at(q - int2(0, 3))));
-            const float relief = clamp(1.0f + 2.2f * (l - around), 0.4f, 2.2f);
-            const float limb = 0.45f + 0.55f * pow(mu, 0.6f);
-            float3 hot = color * (1.05f + 0.3f * glow) * limb * relief;
-            hot = lerp(hot * float3(1.0f, 0.72f, 0.5f), hot, smoothstep(0.0f, 0.6f, mu));
-            hot += max(max(hot.r, max(hot.g, hot.b)) - 1.0f, 0.0f) * 0.35f;
-            return hot;
+            const float relief = clamp(1.0f + 1.4f * (l - around), 0.65f, 1.6f);
+            const float limb = 0.7f + 0.3f * pow(mu, 0.6f);
+            float3 hot = color * (1.0f + 0.12f * glow) * limb * relief;
+            hot = lerp(hot * float3(1.0f, 0.82f, 0.66f), hot, smoothstep(0.0f, 0.6f, mu));
+            hot += max(max(hot.r, max(hot.g, hot.b)) - 1.0f, 0.0f) * 0.2f;
+            // Halfway between the game's own fire and the finished star: its texture stays.
+            return lerp(color, hot, 0.55f);
         }
     }
     // Outside the limb: flares and embers in front of what lies behind the core.
@@ -333,7 +334,7 @@ float3 star_core(float2 pixel, float distance, float3 color)
         const float tongues = fbm3(float3(angle * 3.0f, above * 4.0f - p_time * 0.6f, p_time * 0.15f));
         const float reach = 0.12f + 0.45f * pow(saturate(tongues * 1.6f - 0.35f), 2.0f) * (0.6f + 0.4f * glow);
         const float flare = saturate(1.0f - above / reach) * saturate(tongues * 1.8f - 0.4f);
-        const float corona = exp(-above * 6.0f) * 0.35f;
+        const float corona = exp(-above * 6.0f) * 0.22f;
         float embers = 0.0f;
         [loop] for (uint i = 0u; i < 14u; ++i) {
             const float seed = float(i) * 1.618f;
@@ -348,18 +349,19 @@ float3 star_core(float2 pixel, float distance, float3 color)
             embers += exp(-d * d) * (1.0f - life) * 1.4f;
         }
         const float3 heat = star_ramp(0.55f) * (flare * 1.3f + corona) + star_ramp(0.8f) * embers;
-        return color + heat * (0.6f + 0.6f * glow);
+        return color + heat * (0.35f + 0.35f * glow);
     }
     return color;
 }
 
-// Light above 1 (bloom, glows, the star core) rolls off softly to 1 instead of clipping flat;
-// what one channel loses spills into the others, as over-exposed light turns white.
+// Light near and above 1 (bloom, glows, the star core) rolls off softly to 1 instead of clipping
+// flat, from 0.95 up only: the game's own highlights keep their value. What one channel loses
+// spills into the others, as over-exposed light turns white.
 float3 shoulder(float3 c)
 {
-    const float3 over = max(c - 0.8f, 0.0f);
-    const float3 rolled = min(c, 0.8f) + 0.2f * (1.0f - exp(-over / 0.2f));
-    const float spill = max(max(over.r, max(over.g, over.b)) - 0.2f, 0.0f);
+    const float3 over = max(c - 0.95f, 0.0f);
+    const float3 rolled = min(c, 0.95f) + 0.05f * (1.0f - exp(-over / 0.05f));
+    const float spill = max(max(over.r, max(over.g, over.b)) - 0.05f, 0.0f);
     return saturate(rolled + spill * 0.15f);
 }
 

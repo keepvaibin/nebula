@@ -568,8 +568,8 @@ private:
     // GALAXY_RT_EXPOSURE_DAY / _NIGHT: the mean lighting the exposure holds under a bright / black
     // sky (the light moves into lit areas and out of shadows instead of dimming the picture);
     // GALAXY_RT_EXPOSURE=0 turns it off.
-    float exposure_day_ = 0.97f;
-    float exposure_night_ = 0.97f;
+    float exposure_day_ = 1.0f;
+    float exposure_night_ = 1.0f;
     bool exposure_ = true;
     float surface_emission_ = 3.0f; // GALAXY_RT_SURFACE_EMISSION: a glowing surface's light per unit
                                     // of its colour and eye-space area (0: none)
