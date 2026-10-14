@@ -7614,6 +7614,7 @@ void RendererD3D12::rt_note_draw(const DrawCall& call, const RtDrawInfo& info) {
         return true;
     };
     RtDraw draw{};
+    draw.flags = info.surface;
     const D3D12_GPU_VIRTUAL_ADDRESS vertices = call.vertex_view.BufferLocation;
     if (!offset_in(vertices, call.vertex_view.SizeInBytes, vertex_ring_.gpu_base(), vertex_ring_.total_bytes(),
                    draw.vertex_offset)) {

@@ -40,6 +40,9 @@ inline constexpr std::uint32_t kRtVertexStride = 144u;
 inline constexpr std::uint32_t kRtDrawResident = 1u;
 inline constexpr std::uint32_t kRtDrawIndexed = 2u;
 inline constexpr std::uint32_t kRtDrawWideIndices = 4u;
+// The draw's colour is lit by GX lights (characters, lit objects): its shading already turns
+// towards its lights.
+inline constexpr std::uint32_t kRtDrawLit = 8u;
 
 // Diagnostics for GALAXY_RT_DUMP: the draw's GX projection (A-F), viewport depth range, cull
 // mode and SceneFunction phase; colour channel 0 (XF control word, ambient and material RGBA8)
@@ -56,6 +59,8 @@ struct RtDrawInfo {
     std::array<std::uint32_t, 2> light_index{0xFFu, 0xFFu};
     std::array<std::array<float, 6>, 2> light{};
     std::array<std::uint32_t, 2> light_color{};
+    // Added to RtDraw.flags: kRtDrawLit; surface classes in bits 8-15.
+    std::uint32_t surface = 0;
 };
 
 struct RtBuffer {
@@ -194,6 +199,8 @@ private:
     Microsoft::WRL::ComPtr<ID3D12PipelineState> geometry_pso_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> validate_pso_;
     Microsoft::WRL::ComPtr<ID3D12Resource> positions_;
+    // Per triangle, 16 bytes (ray_tracing.hlsl g_surfaces): vertex normals, draw flags.
+    Microsoft::WRL::ComPtr<ID3D12Resource> surfaces_;
     Microsoft::WRL::ComPtr<ID3D12Resource> blas_;
     Microsoft::WRL::ComPtr<ID3D12Resource> tlas_;
     Microsoft::WRL::ComPtr<ID3D12Resource> scratch_;
@@ -224,6 +231,7 @@ private:
     std::array<ResultSlot, kResultSlots> slots_{};
     RtView view_{};
     D3D12_RESOURCE_STATES positions_state_ = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+    D3D12_RESOURCE_STATES surfaces_state_ = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
     std::uint64_t timestamp_frequency_ = 0;
     std::uint64_t frame_index_ = 0;
     std::uint64_t scene_serial_ = 0;
@@ -275,6 +283,8 @@ private:
     std::array<Microsoft::WRL::ComPtr<ID3D12Resource>, 2> light_z_;
     Microsoft::WRL::ComPtr<ID3D12Resource> light_normal_;
     Microsoft::WRL::ComPtr<ID3D12Resource> light_raw_;
+    // Per sample: the camera ray's triangle + 1 (0: none) and its barycentrics (halves).
+    Microsoft::WRL::ComPtr<ID3D12Resource> light_primary_;
     std::array<Microsoft::WRL::ComPtr<ID3D12Resource>, 2> light_history_;
     std::array<Microsoft::WRL::ComPtr<ID3D12Resource>, kLightSlots> light_final_;
     Microsoft::WRL::ComPtr<ID3D12Resource> picture_;

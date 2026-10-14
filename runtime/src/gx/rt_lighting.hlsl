@@ -55,13 +55,17 @@ StructuredBuffer<uint4> g_prev_history : register(t9);
 StructuredBuffer<uint4> g_history_in : register(t10);
 StructuredBuffer<uint2> g_picture_in : register(t11);    // packed light, eye z
 ByteAddressBuffer g_picture_sums : register(t12);        // sky r g b n, scene r g b n (x 1/255)
+ByteAddressBuffer g_positions : register(t13);           // per triangle: its eye-space vertices
+ByteAddressBuffer g_surfaces : register(t14);            // per triangle: vertex normals, draw flags
 RWStructuredBuffer<float> g_z : register(u0);
 RWStructuredBuffer<uint> g_normal : register(u1);
 RWStructuredBuffer<uint4> g_raw : register(u2);
 RWStructuredBuffer<uint4> g_history : register(u3);
 RWStructuredBuffer<uint3> g_final : register(u4);
+RWStructuredBuffer<uint2> g_primary : register(u5);      // triangle + 1 (0: none), barycentrics
 
 static const float kPi = 3.14159265f;
+static const uint kDrawLit = 8u;    // RtDraw.flags: GX-lit colour
 
 // ---------------------------------------------------------------------------------------------
 // Shared helpers
@@ -128,6 +132,17 @@ uint pack_normal(float3 n)
 float3 unpack_normal(uint v)
 {
     const float2 e = float2(float(v & 0xFFFFu), float(v >> 16u)) / 65535.0f * 2.0f - 1.0f;
+    float3 n = float3(e, 1.0f - abs(e.x) - abs(e.y));
+    const float t = saturate(-n.z);
+    n.x += n.x >= 0.0f ? -t : t;
+    n.y += n.y >= 0.0f ? -t : t;
+    return normalize(n);
+}
+
+// ray_tracing.hlsl pack_vertex_normal: octahedral, 1-65535 per axis.
+float3 unpack_vertex_normal(uint v)
+{
+    const float2 e = (float2(float(v & 0xFFFFu), float(v >> 16u)) - 1.0f) / 65534.0f * 2.0f - 1.0f;
     float3 n = float3(e, 1.0f - abs(e.x) - abs(e.y));
     const float t = saturate(-n.z);
     n.x += n.x >= 0.0f ? -t : t;
@@ -380,11 +395,68 @@ void TraceCS(uint3 id : SV_DispatchThreadID)
     if (!pixel_point(q, p) || !inside(g_viewport, float2(q) + 0.5f)) {
         g_z[index] = 0.0f;
         g_normal[index] = 0u;
+        g_primary[index] = uint2(0u, 0u);
         g_raw[index] = pack_light(kOpenSky, 0.0f);
         return;
     }
-    const float3 n = surface_normal(q, p);
-    const float3 origin = p + n * (0.2f + abs(p.z) * 4e-4f);
+    // The surface: the triangle the camera ray meets at the raster depth gives the face normal,
+    // the shading normal from its vertex normals, and a ray origin lifted off the flat face
+    // where those normals bend away from it (the shadow terminator, Hanika 2021). Geometry the
+    // scene leaves out (blended and indirect draws) takes the normal from the depth.
+    float3 n = surface_normal(q, p);
+    float3 ng = n;
+    float3 lifted = p;
+    uint2 primary = uint2(0u, 0u);
+    {
+        const float span = length(p);
+        RayDesc ray;
+        ray.Origin = float3(0.0f, 0.0f, 0.0f);
+        ray.Direction = p / span;
+        ray.TMin = 0.0f;
+        ray.TMax = span * 1.02f + 2.0f;
+        RayQuery<RAY_FLAG_FORCE_OPAQUE | RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES> query;
+        query.TraceRayInline(g_scene, RAY_FLAG_NONE, 0xFFu, ray);
+        query.Proceed();
+        if (query.CommittedStatus() == COMMITTED_TRIANGLE_HIT &&
+            abs(query.CommittedRayT() - span) < span * 0.01f + 2.0f) {
+            const uint tri = query.CommittedPrimitiveIndex();
+            const float2 b = query.CommittedTriangleBarycentrics();
+            const float3 w = float3(1.0f - b.x - b.y, b.x, b.y);
+            const float3 v0 = asfloat(g_positions.Load3(tri * 36u));
+            const float3 v1 = asfloat(g_positions.Load3(tri * 36u + 12u));
+            const float3 v2 = asfloat(g_positions.Load3(tri * 36u + 24u));
+            const float3 face = cross(v1 - v0, v2 - v0);
+            const float face_length = length(face);
+            if (face_length > 1e-12f) {
+                ng = face / face_length;
+                ng = dot(ng, p) > 0.0f ? -ng : ng;
+                n = ng;
+                lifted = v0 * w.x + v1 * w.y + v2 * w.z;
+                primary = uint2(tri + 1u, f32tof16(b.x) | (f32tof16(b.y) << 16u));
+                const uint4 surface = g_surfaces.Load4(tri * 16u);
+                if (surface.x != 0u && surface.y != 0u && surface.z != 0u) {
+                    float3 n0 = unpack_vertex_normal(surface.x);
+                    float3 n1 = unpack_vertex_normal(surface.y);
+                    float3 n2 = unpack_vertex_normal(surface.z);
+                    float3 smooth = n0 * w.x + n1 * w.y + n2 * w.z;
+                    // The vertex normals of the side the camera sees.
+                    const float side = dot(smooth, ng) < 0.0f ? -1.0f : 1.0f;
+                    smooth *= side;
+                    const float smooth_length = length(smooth);
+                    if (smooth_length > 1e-3f && dot(smooth, ng) > 0.05f * smooth_length) {
+                        n = smooth / smooth_length;
+                        n0 *= side;
+                        n1 *= side;
+                        n2 *= side;
+                        const float3 h = lifted;
+                        lifted = h - w.x * min(0.0f, dot(h - v0, n0)) * n0 - w.y * min(0.0f, dot(h - v1, n1)) * n1 -
+                                 w.z * min(0.0f, dot(h - v2, n2)) * n2;
+                    }
+                }
+            }
+        }
+    }
+    const float3 origin = lifted + ng * (0.2f + abs(p.z) * 4e-4f);
 
     // The sun: one shadow ray inside its disc.
     float sun = 0.0f;
@@ -481,9 +553,13 @@ void TraceCS(uint3 id : SV_DispatchThreadID)
         const float2 u = sample_point(id.xy, i);
         const float r = sqrt(u.x);
         const float phi = 2.0f * kPi * u.y;
+        float3 direction = t1 * (r * cos(phi)) + t2 * (r * sin(phi)) + n * sqrt(max(0.0f, 1.0f - u.x));
+        // Never into the face itself: below its plane the direction mirrors back out.
+        const float below = dot(direction, ng);
+        direction = below < 0.0f ? direction - 2.0f * below * ng : direction;
         RayDesc ray;
         ray.Origin = origin;
-        ray.Direction = t1 * (r * cos(phi)) + t2 * (r * sin(phi)) + n * sqrt(max(0.0f, 1.0f - u.x));
+        ray.Direction = direction;
         ray.TMin = 0.0f;
         ray.TMax = g_range;
         RayQuery<RAY_FLAG_FORCE_OPAQUE | RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES> query;
@@ -502,6 +578,7 @@ void TraceCS(uint3 id : SV_DispatchThreadID)
     }
     g_z[index] = p.z;
     g_normal[index] = pack_normal(n);
+    g_primary[index] = primary;
     g_raw[index] = pack_light(make_light(light / float(rays), sun, points), 0.0f);
 }
 
@@ -631,8 +708,21 @@ void SpatialBCS(uint3 id : SV_DispatchThreadID)
         return;
     }
     const Light light = filtered(id.xy, 2, false);
-    const float3 direct = light.sun * g_sun_light.rgb + light.points * g_point_light;
-    float3 m = lerp(float3(1.0f, 1.0f, 1.0f), g_sun_light.w * light.sky + direct, g_strength);
+    const float3 sun = light.sun * g_sun_light.rgb;
+    const float3 points = light.points * g_point_light;
+    float3 lighting = g_sun_light.w * light.sky + sun + points;
+    // With the sky open: what the picture capture keeps (no feedback through the sky and bounce).
+    float3 open = g_sun_light.www + sun + points;
+    // A surface the game lights already turns its shading towards its lights: the traced light
+    // shadows it (the ratio to the same light unshadowed) and adds the point lights.
+    const uint tri = g_primary[index].x;
+    if (tri != 0u && (g_surfaces.Load((tri - 1u) * 16u + 12u) & kDrawLit) != 0u) {
+        const float facing = saturate(dot(unpack_normal(g_normal[index]), g_sun.xyz));
+        const float3 unshadowed = max(g_sun_light.www + facing * g_sun_light.rgb, 1e-3f);
+        lighting = (g_sun_light.w * light.sky + sun) / unshadowed + points;
+        open = (g_sun_light.www + sun) / unshadowed + points;
+    }
+    float3 m = lerp(float3(1.0f, 1.0f, 1.0f), lighting, g_strength);
     if ((g_flags & 4u) != 0u) {
         m = light.sun.xxx;     // GALAXY_RT_VIEW=2: the sun's light alone
     } else if ((g_flags & 8u) != 0u) {
@@ -641,7 +731,7 @@ void SpatialBCS(uint3 id : SV_DispatchThreadID)
         m = light.points;      // GALAXY_RT_VIEW=4: the point lights alone
     }
     // The picture capture divides out the sky and bounce part (no feedback through it).
-    const float3 without = lerp(float3(1.0f, 1.0f, 1.0f), g_sun_light.www + direct, g_strength);
+    const float3 without = lerp(float3(1.0f, 1.0f, 1.0f), open, g_strength);
     const float keep = luminance(without) / max(luminance(m), 1e-3f);
     g_final[index] = uint3(f32tof16(m.r) | (f32tof16(m.g) << 16u), f32tof16(m.b) | (f32tof16(keep) << 16u), asuint(z));
 }

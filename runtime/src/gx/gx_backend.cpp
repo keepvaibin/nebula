@@ -6939,6 +6939,10 @@ bool GxBackend::begin_rt_batch(const DrawCall& call, RtDrawInfo& info) {
     info.ambient = state_.xf(xf::kAmbientColorBase);
     info.material = state_.xf(xf::kMaterialColorBase);
     {
+        const XfChannelCtrl color = state_.channel_ctrl(0u);
+        info.surface = color.lighting_enable && color.light_mask != 0u ? kRtDrawLit : 0u;
+    }
+    {
         const std::uint8_t mask = state_.channel_ctrl(0u).light_mask;
         unsigned found = 0u;
         for (unsigned n = 0; n < 8u && found < 2u; ++n) {

@@ -114,11 +114,14 @@ enum LightParameter : UINT {
     kLightHistoryIn,
     kLightPicture,
     kLightPictureSums,
+    kLightPositions,
+    kLightSurfaces,
     kLightZ,
     kLightNormal,
     kLightRaw,
     kLightHistory,
     kLightFinal,
+    kLightPrimary,
     kLightCount,
 };
 
@@ -220,6 +223,7 @@ enum RootParameter : UINT {
     kRootDepth,
     kRootStats,
     kRootDump,
+    kRootSurfaces,
     kRootCount,
 };
 
@@ -379,6 +383,8 @@ bool SceneRayTracer::initialize(ID3D12Device* device, std::uint64_t timestamp_fr
     params[kRootStats].Descriptor.ShaderRegister = 1u;
     params[kRootDump].ParameterType = D3D12_ROOT_PARAMETER_TYPE_UAV;
     params[kRootDump].Descriptor.ShaderRegister = 2u;
+    params[kRootSurfaces].ParameterType = D3D12_ROOT_PARAMETER_TYPE_UAV;
+    params[kRootSurfaces].Descriptor.ShaderRegister = 3u;
     for (auto& param : params) {
         param.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
     }
@@ -491,6 +497,7 @@ void SceneRayTracer::shutdown() noexcept {
     slots_ = {};
     window_ = {};
     positions_.Reset();
+    surfaces_.Reset();
     blas_.Reset();
     tlas_.Reset();
     scratch_.Reset();
@@ -517,6 +524,7 @@ void SceneRayTracer::shutdown() noexcept {
     for (auto& buffer : light_z_) buffer.Reset();
     light_normal_.Reset();
     light_raw_.Reset();
+    light_primary_.Reset();
     for (auto& buffer : light_history_) buffer.Reset();
     for (auto& buffer : light_final_) buffer.Reset();
     picture_.Reset();
@@ -533,6 +541,7 @@ void SceneRayTracer::shutdown() noexcept {
     capacity_ = 0u;
     triangles_ = 0u;
     positions_state_ = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+    surfaces_state_ = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
 }
 
 bool SceneRayTracer::create_buffer(std::uint64_t bytes, D3D12_HEAP_TYPE heap, D3D12_RESOURCE_STATES state,
@@ -571,6 +580,8 @@ bool SceneRayTracer::ensure_capacity(ID3D12GraphicsCommandList* list, std::uint3
     }
     ComPtr<ID3D12Resource> previous_positions = positions_;
     const D3D12_RESOURCE_STATES previous_state = positions_state_;
+    ComPtr<ID3D12Resource> previous_surfaces = surfaces_;
+    const D3D12_RESOURCE_STATES previous_surfaces_state = surfaces_state_;
     if (triangles > kMaxTriangles) {
         return false;
     }
@@ -612,11 +623,15 @@ bool SceneRayTracer::ensure_capacity(ID3D12GraphicsCommandList* list, std::uint3
     const std::uint64_t scratch_bytes = scratch_tlas_offset + align(tlas_info.ScratchDataSizeInBytes);
 
     retire(positions_);
+    retire(surfaces_);
     retire(blas_);
     retire(tlas_);
     retire(scratch_);
     capacity_ = 0u;
-    if (!create_buffer(static_cast<std::uint64_t>(capacity) * 36u, D3D12_HEAP_TYPE_DEFAULT,
+    if (!create_buffer(static_cast<std::uint64_t>(capacity) * 16u, D3D12_HEAP_TYPE_DEFAULT,
+                       D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, surfaces_,
+                       L"rt surfaces") ||
+        !create_buffer(static_cast<std::uint64_t>(capacity) * 36u, D3D12_HEAP_TYPE_DEFAULT,
                        D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, positions_,
                        L"rt positions") ||
         !create_buffer(blas_info.ResultDataMaxSizeInBytes, D3D12_HEAP_TYPE_DEFAULT,
@@ -628,12 +643,25 @@ bool SceneRayTracer::ensure_capacity(ID3D12GraphicsCommandList* list, std::uint3
         !create_buffer(scratch_bytes, D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
                        D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, scratch_, L"rt scratch")) {
         positions_.Reset();
+        surfaces_.Reset();
         blas_.Reset();
         tlas_.Reset();
         scratch_.Reset();
         return false;
     }
     positions_state_ = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+    surfaces_state_ = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+    if (previous_surfaces && preserved != 0u && list != nullptr) {
+        D3D12_RESOURCE_BARRIER barriers[2] = {
+            transition(previous_surfaces.Get(), previous_surfaces_state, D3D12_RESOURCE_STATE_COPY_SOURCE),
+            transition(surfaces_.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_COPY_DEST)};
+        list->ResourceBarrier(2u, barriers);
+        list->CopyBufferRegion(surfaces_.Get(), 0u, previous_surfaces.Get(), 0u,
+                               static_cast<std::uint64_t>(preserved) * 16u);
+        barriers[0] = transition(previous_surfaces.Get(), D3D12_RESOURCE_STATE_COPY_SOURCE, previous_surfaces_state);
+        barriers[1] = transition(surfaces_.Get(), D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+        list->ResourceBarrier(2u, barriers);
+    }
     if (previous_positions && preserved != 0u && list != nullptr) {
         // Triangles flushed by earlier chunks of this scene move to the larger buffer.
         D3D12_RESOURCE_BARRIER barriers[2] = {
@@ -675,7 +703,7 @@ bool SceneRayTracer::ensure_capacity(ID3D12GraphicsCommandList* list, std::uint3
     capacity_ = capacity;
     std::cerr << "[rt] capacity triangles=" << capacity << " blas-mb=" << (blas_bytes_ >> 20u)
               << " scratch-mb=" << (scratch_bytes >> 20u) << " positions-mb="
-              << ((static_cast<std::uint64_t>(capacity) * 36u) >> 20u) << '\n';
+              << ((static_cast<std::uint64_t>(capacity) * (36u + 16u)) >> 20u) << '\n';
     return true;
 }
 
@@ -934,9 +962,11 @@ bool SceneRayTracer::create_lighting_pipelines(DXGI_FORMAT color_format) {
     params[kLightDepth].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
     params[kLightDepth].DescriptorTable.NumDescriptorRanges = 1u;
     params[kLightDepth].DescriptorTable.pDescriptorRanges = &depth_range;
-    for (UINT i = 0; i < 5u; ++i) {
+    for (UINT i = 0; i <= kLightSurfaces - kLightPrevZ; ++i) {
         params[kLightPrevZ + i].ParameterType = D3D12_ROOT_PARAMETER_TYPE_SRV;
         params[kLightPrevZ + i].Descriptor.ShaderRegister = 8u + i;
+    }
+    for (UINT i = 0; i <= kLightPrimary - kLightZ; ++i) {
         params[kLightZ + i].ParameterType = D3D12_ROOT_PARAMETER_TYPE_UAV;
         params[kLightZ + i].Descriptor.ShaderRegister = i;
     }
@@ -1056,6 +1086,7 @@ bool SceneRayTracer::ensure_lighting_buffers(std::uint32_t samples) {
     for (auto& buffer : light_z_) retire(buffer);
     retire(light_normal_);
     retire(light_raw_);
+    retire(light_primary_);
     for (auto& buffer : light_history_) retire(buffer);
     for (auto& buffer : light_final_) retire(buffer);
     retire(picture_);
@@ -1070,7 +1101,7 @@ bool SceneRayTracer::ensure_lighting_buffers(std::uint32_t samples) {
         return create_buffer(bytes, D3D12_HEAP_TYPE_DEFAULT, state, uav, out, name);
     };
     bool ok = n != 0u && make(n * 4u, light_normal_, L"rt light normal") && make(n * 16u, light_raw_, L"rt light raw") &&
-              make(n * 8u, picture_, L"rt picture");
+              make(n * 8u, light_primary_, L"rt light primary") && make(n * 8u, picture_, L"rt picture");
     for (unsigned i = 0; ok && i < 2u; ++i) {
         ok = make(n * 4u, light_z_[i], L"rt light eye z") && make(n * 16u, light_history_[i], L"rt light history");
         light_z_state_[i] = state;
@@ -1085,13 +1116,14 @@ bool SceneRayTracer::ensure_lighting_buffers(std::uint32_t samples) {
         for (auto& buffer : light_z_) buffer.Reset();
         light_normal_.Reset();
         light_raw_.Reset();
+        light_primary_.Reset();
         for (auto& buffer : light_history_) buffer.Reset();
         for (auto& buffer : light_final_) buffer.Reset();
         picture_.Reset();
         return false;
     }
     light_samples_ = samples;
-    std::cerr << "[rt] light samples=" << samples << " mb=" << ((n * (4u + 16u + 8u + 2u * 4u + 2u * 16u + 12u * kLightSlots)) >> 20u)
+    std::cerr << "[rt] light samples=" << samples << " mb=" << ((n * (4u + 16u + 8u + 8u + 2u * 4u + 2u * 16u + 12u * kLightSlots)) >> 20u)
               << '\n';
     return true;
 }
@@ -1273,6 +1305,8 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
     to_state(list, light_final_[slot].Get(), light_final_state_[slot], kUav);
     to_state(list, picture_.Get(), picture_state_, kRead);
     to_state(list, picture_sums_.Get(), picture_sums_state_, kRead);
+    to_state(list, positions_.Get(), positions_state_, kRead);
+    to_state(list, surfaces_.Get(), surfaces_state_, kRead);
 
     const UINT groups_x = (sample_width + 7u) / 8u;
     const UINT groups_y = (sample_height + 7u) / 8u;
@@ -1285,11 +1319,14 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
     list->SetComputeRootShaderResourceView(kLightHistoryIn, light_history_[previous]->GetGPUVirtualAddress());
     list->SetComputeRootShaderResourceView(kLightPicture, picture_->GetGPUVirtualAddress());
     list->SetComputeRootShaderResourceView(kLightPictureSums, picture_sums_->GetGPUVirtualAddress());
+    list->SetComputeRootShaderResourceView(kLightPositions, positions_->GetGPUVirtualAddress());
+    list->SetComputeRootShaderResourceView(kLightSurfaces, surfaces_->GetGPUVirtualAddress());
     list->SetComputeRootUnorderedAccessView(kLightZ, light_z_[current]->GetGPUVirtualAddress());
     list->SetComputeRootUnorderedAccessView(kLightNormal, light_normal_->GetGPUVirtualAddress());
     list->SetComputeRootUnorderedAccessView(kLightRaw, light_raw_->GetGPUVirtualAddress());
     list->SetComputeRootUnorderedAccessView(kLightHistory, light_history_[current]->GetGPUVirtualAddress());
     list->SetComputeRootUnorderedAccessView(kLightFinal, light_final_[slot]->GetGPUVirtualAddress());
+    list->SetComputeRootUnorderedAccessView(kLightPrimary, light_primary_->GetGPUVirtualAddress());
     list->SetPipelineState(trace_pso_.Get());
     list->Dispatch(groups_x, groups_y, 1u);
     const D3D12_RESOURCE_BARRIER all_uav = uav_barrier(nullptr);
@@ -1516,6 +1553,7 @@ void SceneRayTracer::flush_geometry(ID3D12GraphicsCommandList* list, const RtSou
         list->ResourceBarrier(1u, &barrier);
         positions_state_ = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
     }
+    to_state(list, surfaces_.Get(), surfaces_state_, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
     const D3D12_GPU_VIRTUAL_ADDRESS resident = sources.resident.base != 0u ? sources.resident.base
                                                                            : sources.vertex_ring.base;
     list->SetComputeRootSignature(root_.Get());
@@ -1528,8 +1566,9 @@ void SceneRayTracer::flush_geometry(ID3D12GraphicsCommandList* list, const RtSou
     list->SetComputeRootShaderResourceView(kRootConstantRing, sources.constant_ring.base);
     list->SetComputeRootShaderResourceView(kRootMatrixRing, sources.matrix_ring.base);
     list->SetComputeRootUnorderedAccessView(kRootPositions, positions_->GetGPUVirtualAddress());
+    list->SetComputeRootUnorderedAccessView(kRootSurfaces, surfaces_->GetGPUVirtualAddress());
     list->Dispatch((count + 63u) / 64u, 1u, 1u);
-    const D3D12_RESOURCE_BARRIER barrier = uav_barrier(positions_.Get());
+    const D3D12_RESOURCE_BARRIER barrier = uav_barrier(nullptr);
     list->ResourceBarrier(1u, &barrier);
 }
 
