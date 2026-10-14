@@ -798,17 +798,49 @@ private:
     // Whether a batch starting with `call` is traced geometry; the scene's first one also gives
     // the camera (projection and viewport) for rays through EFB pixels.
     [[nodiscard]] bool begin_rt_batch(const DrawCall& call, RtDrawInfo& info);
-    // Actor lights (actor_lights.h): the open scene's aim and its serial; the GX lights the light
-    // loads left following the camera, those whose loaded position words (rt_follow_words_) the
-    // next draw takes; the moved lights of the palette snapshot in use and of the flushed draw
-    // (serial << 8 | light bits, 0 none).
+    // Actor lights (actor_lights.h): the open scene's aim and its serial; the scene's key light in
+    // world space (direction towards it), how far the lights are moved to it, its source (1 the
+    // game's visible sun, 2 the sun its sky shows, 3 a world-fixed light) and, for 2 and 3, its
+    // colour (RGBA8); whether the scene is followed (the ray tracer lights it and its camera is
+    // known) and that camera; GX lights 0 and 1: those the hooked light loads left (known) and of
+    // them those following the camera, those whose loaded position words (rt_light_words_) the next
+    // draw takes; the moved lights of the palette snapshot in use and of the flushed draw (serial
+    // << 8 | light bits).
     ActorLightAim rt_light_aim_{};
     std::uint32_t rt_light_serial_ = 0;
+    std::array<float, 3> rt_light_world_{};
+    float rt_light_blend_ = 0.0f;
+    std::uint8_t rt_key_source_ = 0;
+    std::uint32_t rt_light_key_color_ = 0;
+    bool rt_light_tracking_ = false;
+    std::array<float, 12> rt_scene_view_{};
+    std::uint8_t rt_known_lights_ = 0;
     std::uint8_t rt_follow_lights_ = 0;
-    std::uint8_t rt_follow_pending_ = 0;
-    std::array<std::array<std::uint32_t, 3>, 2> rt_follow_words_{};
+    std::uint8_t rt_light_pending_ = 0;
+    std::array<std::array<std::uint32_t, 3>, 2> rt_light_words_{};
     std::uint32_t rt_palette_lights_ = 0;
     std::uint32_t rt_draw_lights_ = 0;
+    // The open scene's candidate key lights: the world-fixed GX light 0 of its lit draws, by world
+    // direction and colour, with the draws using each and the sum of their ambient registers (0-1)
+    // over those taking it from the register (traced).
+    struct RtWorldKey {
+        std::array<float, 3> direction{};
+        std::uint32_t color = 0;
+        std::uint32_t draws = 0;
+        std::array<float, 3> ambient{};
+        std::uint32_t ambient_draws = 0;
+    };
+    std::array<RtWorldKey, 8> rt_world_keys_{};
+    std::uint32_t rt_world_key_count_ = 0;
+    // The stage's last world key (none: no draws), until a stage load.
+    RtWorldKey rt_world_held_{};
+    void note_rt_world_key() noexcept;
+    // A camera cut since the last scene's aim (and the most objects one reported); the game's sun
+    // count at the last cut, and whether one arrived since (the ray tracer holds it).
+    bool rt_scene_cut_ = false;
+    std::uint32_t rt_cut_objects_ = 0;
+    std::uint64_t rt_sun_cut_updates_ = 0;
+    bool rt_sun_held_ = false;
     // GALAXY_TRACE_LIGHTS: snapshots with moved lights, snapshots added for them, TSC cycles of
     // the actor-light work and its timed regions, and palette snapshots with the cycles of their
     // allocation and copy.

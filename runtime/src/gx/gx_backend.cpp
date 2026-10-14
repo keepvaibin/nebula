@@ -6637,6 +6637,17 @@ void GxBackend::on_motion_marker(std::uint8_t kind, std::uint16_t aux, std::uint
     }
     case motion::kMarkerScene:
         ++motion_scene_markers_;
+        if ((aux & motion::kSceneCameraCut) != 0u) {
+            // A cut with this many objects appearing or reset: a stage was loaded (another sky and
+            // other lights). Measured: 3043-4507 at stage loads, 0 at cuts within one.
+            constexpr std::uint32_t kStageObjectEvents = 256u;
+            rt_scene_cut_ = true;
+            rt_cut_objects_ = std::max(rt_cut_objects_, b);
+            if (b >= kStageObjectEvents) {
+                renderer_.rt_reset_sky();
+                rt_world_held_ = {};
+            }
+        }
         if (!history_scene_) {
             return;
         }
@@ -6677,9 +6688,13 @@ void GxBackend::on_motion_marker(std::uint8_t kind, std::uint16_t aux, std::uint
     case motion::kMarkerLight: {
         ++motion_light_markers_;
         const ActorLightLoad load = actor_light_load(aux, b);
+        // GX lights 0 and 1 of an ActorLightInfo or coin load (LightFunction::loadLightInfo).
+        const auto hooked = static_cast<std::uint8_t>(
+            aux <= static_cast<std::uint16_t>(motion::LightSite::Coin) ? load.written & 0x03u : 0u);
+        rt_known_lights_ = static_cast<std::uint8_t>((rt_known_lights_ & ~load.written) | hooked);
         rt_follow_lights_ = static_cast<std::uint8_t>((rt_follow_lights_ & ~load.written) | load.follow);
-        if (rt_light_aim_.valid) {
-            rt_follow_pending_ = static_cast<std::uint8_t>((rt_follow_pending_ & ~load.written) | load.follow);
+        if (rt_light_tracking_) {
+            rt_light_pending_ = static_cast<std::uint8_t>((rt_light_pending_ & ~load.written) | hooked);
         }
         return;
     }
@@ -6988,7 +7003,7 @@ bool GxBackend::begin_rt_batch(const DrawCall& call, RtDrawInfo& info) {
         info.surface |= color.lighting_enable && (color.light_mask & 0x10u) != 0u ? kRtDrawPointLit : 0u;
         // The lighting reads its ambient register and light 0 colour (RtDrawInfo).
         if (info.surface != 0u && (color.light_mask & 1u) != 0u && !color.ambient_from_vertex &&
-            (rt_draw_lights_ & 1u) != 0u && !rt_light_aim_.point) {
+            (rt_draw_lights_ & 1u) != 0u && rt_light_aim_.blend >= 1.0f) {
             info.surface |= kRtDrawSunKey;
         }
         if (glow) {
@@ -7031,34 +7046,142 @@ bool GxBackend::begin_rt_batch(const DrawCall& call, RtDrawInfo& info) {
     return true;
 }
 
-// Actor lights (actor_lights.h): each scene's follow-camera lights go towards the traced sun,
-// else to the game point light the ray tracer weighs strongest; with neither, or without the
-// scene camera, they stay the game's. GALAXY_RT_ACTOR_LIGHTS=0 always leaves them; =2 moves them in
-// odd scenes only (a frame-to-frame comparison).
+// The scene's key light (actor_lights.h): the game's visible sun (the ray tracer's: GALAXY_RT_SUN
+// overrides it), else the sun its sky shows (rt_sky_sun.h), else the world-fixed GX light 0 most of
+// the previous scene's lit draws took (the light the game lights its planets and actors from in
+// that place; the stage's last one while they take none), else none. The ray tracer lights a scene
+// without the game's sun from that key, and each scene's follow-camera lights go towards it;
+// without a key, or without the scene camera, they stay the game's. A key that comes or goes moves
+// them over kActorLightRampScenes scenes from or back to the game's positions, and a key that
+// changes turns over a few scenes. GALAXY_RT_ACTOR_LIGHTS=0 always leaves them; =2 moves them and
+// keys the ray tracer in odd scenes only, at once (a frame-to-frame comparison).
 void GxBackend::aim_rt_scene_lights(const std::array<float, 12>* view) {
     static const std::uint64_t mode = read_env_u64("GALAXY_RT_ACTOR_LIGHTS", 1u);
+    const std::array<RtWorldKey, 8> candidates = rt_world_keys_;
+    const std::uint32_t candidate_count = rt_world_key_count_;
+    const RtWorldKey* world = nullptr;
+    for (std::uint32_t i = 0; i < candidate_count; ++i) {
+        if (world == nullptr || candidates[i].draws > world->draws) {
+            world = &candidates[i];
+        }
+    }
+    // The stage's last world key lights its scenes whose lit draws take none (the game's
+    // follow-camera lights only).
+    if (world != nullptr) {
+        rt_world_held_ = *world;
+    }
+    const RtWorldKey* world_key = world != nullptr ? world : rt_world_held_.draws != 0u ? &rt_world_held_ : nullptr;
+    rt_world_key_count_ = 0u;
     rt_light_aim_ = {};
+    rt_known_lights_ = 0u;
     rt_follow_lights_ = 0u;
-    rt_follow_pending_ = 0u;
+    rt_light_pending_ = 0u;
     ++rt_light_serial_;
-    const bool enabled = mode == 1u || (mode == 2u && (rt_light_serial_ & 1u) != 0u);
-    std::array<float, 3> sun{};
-    if (view != nullptr && enabled && renderer_.rt_sun_direction(sun)) {
-        rt_light_aim_ = aim_at_sun(*view, sun);
-    } else if (view != nullptr && enabled) {
-        std::array<GameLight, 32> lights{};
-        const std::size_t count = game_point_lights(lights, 500u);
-        const float radius = renderer_.rt_point_radius();
-        float best = 0.0f;
-        for (std::size_t i = 0; i < count; ++i) {
-            // The ray tracer's reach: twelve half-light distances.
-            const float half = lights[i].half_distance > 1.0f ? lights[i].half_distance : radius;
-            const float weight = point_light_weight(*view, lights[i].position, lights[i].color, 12.0f * half);
-            if (weight > best) {
-                best = weight;
-                rt_light_aim_ = aim_at_point(*view, lights[i].position);
+    rt_light_tracking_ = view != nullptr && mode != 0u;
+    if (view != nullptr) {
+        rt_scene_view_ = *view;
+    }
+    // The game's sun holds from its first arrival after a camera cut to the next cut (a stage
+    // load cuts): it stops arriving while the game pauses BrightSun, its direction stays.
+    const std::uint64_t sun_updates = game_sun_updates();
+    if (rt_scene_cut_) {
+        if (trace_actor_lights_enabled()) [[unlikely]] {
+            std::fprintf(stderr, "[rt-key] cut scene=%u held=%d objects=%u\n", rt_light_serial_,
+                         rt_sun_held_ ? 1 : 0, rt_cut_objects_);
+        }
+        rt_scene_cut_ = false;
+        rt_cut_objects_ = 0u;
+        rt_sun_held_ = false;
+        rt_sun_cut_updates_ = sun_updates;
+    } else if (sun_updates != rt_sun_cut_updates_) {
+        rt_sun_held_ = true;
+    }
+    renderer_.rt_hold_sun(rt_sun_held_);
+    // Sources: 1 the game's visible sun, 2 the sun its sky shows, 3 a world-fixed light.
+    std::uint8_t source = 0u;
+    std::array<float, 3> target{};
+    std::array<float, 3> sky_color{};
+    if (rt_light_tracking_ && renderer_.rt_sun_direction(target)) {
+        source = 1u;
+    } else if (rt_light_tracking_ && renderer_.rt_sky_sun(target, sky_color)) {
+        source = 2u;
+        const auto byte = [](float v) { return static_cast<std::uint32_t>(std::clamp(v, 0.0f, 1.0f) * 255.0f + 0.5f); };
+        rt_light_key_color_ = byte(sky_color[0]) << 24u | byte(sky_color[1]) << 16u | byte(sky_color[2]) << 8u;
+    } else if (rt_light_tracking_ && world_key != nullptr) {
+        source = 3u;
+        target = world_key->direction;
+        rt_light_key_color_ = world_key->color;
+    }
+    const bool found = source != 0u;
+    const float step = mode == 2u ? 1.0f : 1.0f / kActorLightRampScenes;
+    if (found) {
+        const float length = std::sqrt(target[0] * target[0] + target[1] * target[1] + target[2] * target[2]);
+        for (float& v : target) v /= length > 1e-6f ? length : 1.0f;
+        const float turn = rt_light_world_[0] * target[0] + rt_light_world_[1] * target[1] +
+                           rt_light_world_[2] * target[2];
+        if (rt_light_blend_ <= 0.0f || mode == 2u || turn > 0.99996f) {
+            rt_light_world_ = target;
+        } else {
+            // A changed key: an eighth of the way per scene.
+            float moved[3]{};
+            float moved_length = 0.0f;
+            for (unsigned i = 0; i < 3u; ++i) {
+                moved[i] = rt_light_world_[i] + (target[i] - rt_light_world_[i]) * 0.125f;
+                moved_length += moved[i] * moved[i];
+            }
+            moved_length = std::sqrt(moved_length);
+            for (unsigned i = 0; i < 3u && moved_length > 1e-6f; ++i) {
+                rt_light_world_[i] = moved[i] / moved_length;
             }
         }
+        rt_key_source_ = source;
+        rt_light_blend_ = std::min(rt_light_blend_ + step, 1.0f);
+    } else {
+        rt_light_blend_ = std::max(rt_light_blend_ - step, 0.0f);
+    }
+    if (!rt_light_tracking_) {
+        rt_light_blend_ = 0.0f;
+    }
+    const bool enabled = mode == 1u || (mode == 2u && (rt_light_serial_ & 1u) != 0u);
+    if (enabled && rt_light_blend_ > 0.0f) {
+        rt_light_aim_ = aim_at_key(*view, rt_light_world_);
+        rt_light_aim_.blend = rt_light_blend_;
+    }
+    // The ray tracer's sun when the game shows none: the same key.
+    const std::uint32_t c = rt_light_key_color_;
+    const std::array<float, 3> key_color{static_cast<float>(c >> 24u) / 255.0f,
+                                         static_cast<float>((c >> 16u) & 0xFFu) / 255.0f,
+                                         static_cast<float>((c >> 8u) & 0xFFu) / 255.0f};
+    renderer_.rt_set_key_light(enabled && rt_key_source_ >= 2u && rt_light_blend_ > 0.0f, rt_light_world_, key_color,
+                               rt_light_blend_, rt_key_source_ == 2u);
+    static constexpr const char* kSources[4] = {"none", "sun", "sky", "world"};
+    if (trace_actor_lights_enabled()) [[unlikely]] {
+        // Key changes: its source, or a target more than a degree away.
+        static int traced_source = -1;
+        static std::array<float, 3> traced_target{};
+        const float same = traced_target[0] * target[0] + traced_target[1] * target[1] + traced_target[2] * target[2];
+        if (source != traced_source || (found && same < 0.99985f)) {
+            std::fprintf(stderr, "[rt-key] change scene=%u source=%s target=(%.3f %.3f %.3f) color=%08x held=%d\n",
+                         rt_light_serial_, kSources[source], target[0], target[1], target[2],
+                         source >= 2u ? rt_light_key_color_ : 0u, rt_sun_held_ ? 1 : 0);
+            traced_source = source;
+            traced_target = target;
+        }
+    }
+    if (trace_actor_lights_enabled() && rt_light_serial_ % 240u == 1u) [[unlikely]] {
+        for (std::uint32_t i = 0; i < candidate_count; ++i) {
+            const RtWorldKey& k = candidates[i];
+            const float n = static_cast<float>(std::max(k.ambient_draws, 1u));
+            std::fprintf(stderr,
+                         "[rt-key] scene=%u candidate %u world=(%.3f %.3f %.3f) color=%08x draws=%u "
+                         "ambient=(%.3f %.3f %.3f)/%u%s\n",
+                         rt_light_serial_, i, k.direction[0], k.direction[1], k.direction[2], k.color, k.draws,
+                         k.ambient[0] / n, k.ambient[1] / n, k.ambient[2] / n, k.ambient_draws,
+                         &k == world ? " key" : "");
+        }
+        std::fprintf(stderr, "[rt-key] scene=%u key=%s world=(%.3f %.3f %.3f) color=%08x blend=%.3f\n",
+                     rt_light_serial_, kSources[rt_light_blend_ > 0.0f ? rt_key_source_ : 0u], rt_light_world_[0],
+                     rt_light_world_[1], rt_light_world_[2], rt_light_key_color_, rt_light_blend_);
     }
     const bool report =
         actor_light_trace_level() >= 2u || (trace_actor_lights_enabled() && rt_light_serial_ % 600u == 1u);
@@ -7078,8 +7201,8 @@ void GxBackend::aim_rt_scene_lights(const std::array<float, 12>* view) {
             std::chrono::steady_clock::now().time_since_epoch());
         std::fprintf(stderr,
                      "[rt-actor-light] scene=%u aim=%s key=(%.3f %.3f %.3f) moved=%llu added=%llu cycles=%llu "
-                     "regions=%llu pair=%llu snapshots=%llu snapshot-cycles=%llu tsc=%llu ns=%lld\n",
-                     rt_light_serial_, !rt_light_aim_.valid ? "none" : rt_light_aim_.point ? "point" : "sun",
+                     "regions=%llu pair=%llu snapshots=%llu snapshot-cycles=%llu tsc=%llu ns=%lld blend=%.3f\n",
+                     rt_light_serial_, kSources[rt_light_aim_.valid ? rt_key_source_ : 0u],
                      rt_light_aim_.key[0], rt_light_aim_.key[1], rt_light_aim_.key[2],
                      static_cast<unsigned long long>(rt_light_uploads_),
                      static_cast<unsigned long long>(rt_light_forced_),
@@ -7087,7 +7210,7 @@ void GxBackend::aim_rt_scene_lights(const std::array<float, 12>* view) {
                      static_cast<unsigned long long>(rt_light_regions_), static_cast<unsigned long long>(pair),
                      static_cast<unsigned long long>(rt_snapshot_count_),
                      static_cast<unsigned long long>(rt_snapshot_cycles_), static_cast<unsigned long long>(__rdtsc()),
-                     static_cast<long long>(ns.count()));
+                     static_cast<long long>(ns.count()), rt_light_blend_);
     }
 }
 
@@ -7101,7 +7224,7 @@ std::uint32_t GxBackend::rt_aimed_lights() const noexcept {
     for (unsigned n = 0; n < 2u; ++n) {
         const std::uint32_t* words = state_.xf_raw() + xf::kLightsBase + kXfLightWords * n + kXfLightPosition;
         if ((rt_follow_lights_ & (1u << n)) != 0u &&
-            std::memcmp(words, rt_follow_words_[n].data(), sizeof(rt_follow_words_[n])) == 0) {
+            std::memcmp(words, rt_light_words_[n].data(), sizeof(rt_light_words_[n])) == 0) {
             lights |= 1u << n;
         }
     }
@@ -7109,26 +7232,70 @@ std::uint32_t GxBackend::rt_aimed_lights() const noexcept {
 }
 
 // Moves the flushed draw's lights in a palette snapshot (write-only: the upload is write-combined
-// memory). A point light's fill is opposite it at the draw's object: PNMTX0 for a per-vertex
-// palette, else the default position matrix.
+// memory).
 void GxBackend::write_rt_lights(std::uint32_t* palette) noexcept {
     if (!rt_light_aim_.valid) {
         return;
     }
     const std::uint64_t start = trace_actor_lights_enabled() ? __rdtsc() : 0u;
-    float origin[3]{};
-    if (rt_light_aim_.point) {
-        const std::uint32_t row = (state_.cp(cp::kVcdLo) & 1u) != 0u
-            ? 0u : std::min(state_.cp(cp::kMatrixIndexA) & 0x3Fu, 61u);
-        for (std::uint32_t r = 0; r < 3u; ++r) {
-            origin[r] = std::bit_cast<float>(state_.xf_raw()[(row + r) * 4u + 3u]);
-        }
-    }
-    aim_actor_lights(palette, static_cast<std::uint8_t>(rt_draw_lights_ & 0x01u),
-                     static_cast<std::uint8_t>(rt_draw_lights_ & 0x02u), rt_light_aim_, origin);
+    aim_actor_lights(palette, state_.xf_raw(), static_cast<std::uint8_t>(rt_draw_lights_ & 0x01u),
+                     static_cast<std::uint8_t>(rt_draw_lights_ & 0x02u), rt_light_aim_);
     if (start != 0u) [[unlikely]] {
         rt_light_cycles_ += __rdtsc() - start;
         ++rt_light_regions_;
+    }
+}
+
+// A lit scene draw's world-fixed GX light 0 (loaded by an ActorLightInfo or coin without the
+// follow-camera flag, still holding that load's position, far enough to be a direction): a key
+// light candidate, by its world direction from the camera and its colour.
+void GxBackend::note_rt_world_key() noexcept {
+    if ((rt_known_lights_ & ~rt_follow_lights_ & 1u) == 0u || !scene_phase_ || side_layer_ != kSceneLayer) {
+        return;
+    }
+    const XfChannelCtrl channel = state_.channel_ctrl(0u);
+    if (!channel.lighting_enable || (channel.light_mask & 1u) == 0u) {
+        return;
+    }
+    const std::uint32_t* light = state_.xf_raw() + xf::kLightsBase;
+    if (std::memcmp(light + kXfLightPosition, rt_light_words_[0].data(), sizeof(rt_light_words_[0])) != 0) {
+        return;
+    }
+    const float p[3]{std::bit_cast<float>(light[kXfLightPosition]), std::bit_cast<float>(light[kXfLightPosition + 1u]),
+                     std::bit_cast<float>(light[kXfLightPosition + 2u])};
+    const float distance2 = p[0] * p[0] + p[1] * p[1] + p[2] * p[2];
+    if (!(distance2 > kActorLightFar * kActorLightFar) || !std::isfinite(distance2)) {
+        return;
+    }
+    // Eye to world: the transposed rotation of the scene camera.
+    const std::array<float, 12>& v = rt_scene_view_;
+    const float inverse = 1.0f / std::sqrt(distance2);
+    const std::array<float, 3> direction{(v[0] * p[0] + v[4] * p[1] + v[8] * p[2]) * inverse,
+                                         (v[1] * p[0] + v[5] * p[1] + v[9] * p[2]) * inverse,
+                                         (v[2] * p[0] + v[6] * p[1] + v[10] * p[2]) * inverse};
+    const std::uint32_t color = light[3];
+    RtWorldKey* found = nullptr;
+    for (std::uint32_t i = 0; i < rt_world_key_count_ && found == nullptr; ++i) {
+        RtWorldKey& key = rt_world_keys_[i];
+        if (key.color == color && key.direction[0] * direction[0] + key.direction[1] * direction[1] +
+                                          key.direction[2] * direction[2] > 0.9995f) {
+            found = &key;
+        }
+    }
+    if (found == nullptr) {
+        if (rt_world_key_count_ == rt_world_keys_.size()) {
+            return;
+        }
+        found = &rt_world_keys_[rt_world_key_count_++];
+        *found = {direction, color};
+    }
+    ++found->draws;
+    if (!channel.ambient_from_vertex) {
+        const std::uint32_t a = state_.xf(xf::kAmbientColorBase);
+        found->ambient[0] += static_cast<float>(a >> 24u) / 255.0f;
+        found->ambient[1] += static_cast<float>((a >> 16u) & 0xFFu) / 255.0f;
+        found->ambient[2] += static_cast<float>((a >> 8u) & 0xFFu) / 255.0f;
+        ++found->ambient_draws;
     }
 }
 
@@ -11980,7 +12147,7 @@ ID3D12PipelineState* GxBackend::flush_draw_state(
         !frame_bindings_dirty_ &&
         (!matrix_palette_stale_ || !current_palette_required_) &&
         !inline_matrices_stale_ &&
-        rt_follow_pending_ == 0u &&
+        rt_light_pending_ == 0u &&
         current_pipeline_ != nullptr &&
         !current_pipeline_is_uber_ &&
         current_vs_constants_ != 0 &&
@@ -12322,17 +12489,21 @@ ID3D12PipelineState* GxBackend::flush_draw_state(
     current_palette_required_ = palette_required;
     // Actor lights (actor_lights.h): a lit scene draw's follow-camera lights are moved in its
     // snapshot; one moved otherwise (other lights, another scene's aim) is not reused for it. A
-    // light load's positions are taken at the first draw after it (rt_follow_pending_ needs an aim).
-    if (rt_light_aim_.valid || rt_palette_lights_ != 0u) [[unlikely]] {
+    // light load's positions are taken at the first draw after it; a lit draw's world-fixed key
+    // light is counted.
+    if (rt_light_tracking_ || rt_palette_lights_ != 0u) [[unlikely]] {
         const std::uint64_t start = trace_actor_lights_enabled() ? __rdtsc() : 0u;
         for (unsigned n = 0; n < 2u; ++n) {
-            if ((rt_follow_pending_ & (1u << n)) != 0u) {
-                std::memcpy(rt_follow_words_[n].data(),
+            if ((rt_light_pending_ & (1u << n)) != 0u) {
+                std::memcpy(rt_light_words_[n].data(),
                             state_.xf_raw() + xf::kLightsBase + kXfLightWords * n + kXfLightPosition,
-                            sizeof(rt_follow_words_[n]));
+                            sizeof(rt_light_words_[n]));
             }
         }
-        rt_follow_pending_ = 0u;
+        rt_light_pending_ = 0u;
+        if (rt_light_tracking_ && (vs_key_.flags & 0x02u) != 0u) {
+            note_rt_world_key();
+        }
         const std::uint32_t lights = (vs_key_.flags & 0x02u) != 0u ? rt_aimed_lights() : rt_palette_lights_;
         if (lights != rt_palette_lights_) {
             // Counts the snapshots this adds: the palette had not moved since the last one.

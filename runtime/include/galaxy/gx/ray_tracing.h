@@ -17,6 +17,7 @@
 #include <wrl/client.h>
 
 #include "galaxy/gx/rt_reflections.h"
+#include "galaxy/gx/rt_sky_sun.h"
 
 #include <array>
 #include <chrono>
@@ -161,10 +162,22 @@ public:
     void set_camera(const std::array<float, 12>* view) noexcept;
     [[nodiscard]] bool lighting_active() const noexcept { return ready_ && lighting_enabled_; }
     // The traced sun's world direction (towards it: GALAXY_RT_SUN, else the game's visible sun)
-    // and the distance of the game's sun model (0: none); false without a sun. The half-light
-    // distance of a game point light without its own (GALAXY_RT_POINT_RADIUS).
+    // and the distance of the game's sun model (0: none); false without a sun.
     [[nodiscard]] bool sun_direction(std::array<float, 3>& world, float* distance = nullptr) const noexcept;
-    [[nodiscard]] float point_radius() const noexcept { return point_radius_; }
+    // Held: the game's sun stays where it last arrived however long ago (GxBackend: it arrived
+    // since the last camera cut); else it lasts 2 s.
+    void hold_sun(bool held) noexcept { sun_held_ = held; }
+    // The open scene's key light while the game shows no sun (GxBackend: the world-fixed light its
+    // lit draws take): world direction towards it, colour (0-1), how far it has come in (0-1) and
+    // whether the sky shows it. It lights the scene as the sun does; one the sky does not show has
+    // soft shadows (no disc: GALAXY_RT_KEY_SIZE degrees).
+    void set_key_light(bool valid, const std::array<float, 3>& world, const std::array<float, 3>& color,
+                       float strength, bool shown) noexcept;
+    // The sun the sky shows (rt_sky_sun.h) since the last reset_sky: world direction towards it and
+    // colour (peak 1); false while none stands out.
+    [[nodiscard]] bool sky_sun(std::array<float, 3>& world, std::array<float, 3>& color) const noexcept;
+    // Another sky (GxBackend: a stage was loaded): the map starts over.
+    void reset_sky() noexcept;
     // Ray-traced lighting of the last traced scene (rt_lighting.hlsl): its result slot for
     // composite(), -1 for none. The interpolated sub-frames of that game frame composite the
     // same slot.
@@ -416,6 +429,33 @@ private:
     std::array<float, 3> sun_color_{1.0f, 0.93f, 0.82f};
     float sun_size_ = 2.5f;     // degrees
     bool sun_override_ = false;
+    bool sun_held_ = false;
+    bool key_valid_ = false;    // set_key_light
+    bool key_shown_ = false;
+    std::array<float, 3> key_direction_{};
+    std::array<float, 3> key_color_{};
+    float key_strength_ = 0.0f;
+    // The sky's sun: the bins a capture fills (cleared from sky_zero_), their readbacks (capture
+    // frame and reset generation), the map they build and the sun it shows.
+    static constexpr unsigned kSkyRing = 4u;
+    Microsoft::WRL::ComPtr<ID3D12Resource> sky_bins_;
+    D3D12_RESOURCE_STATES sky_bins_state_ = D3D12_RESOURCE_STATE_COPY_DEST;
+    Microsoft::WRL::ComPtr<ID3D12Resource> sky_zero_;
+    Microsoft::WRL::ComPtr<ID3D12Resource> sky_readback_;
+    struct SkyRead {
+        std::uint64_t frame = 0;
+        std::uint32_t generation = 0;
+        bool pending = false;
+    };
+    std::array<SkyRead, kSkyRing> sky_reads_{};
+    unsigned sky_next_ = 0;
+    std::uint32_t sky_generation_ = 0;
+    SkyMap sky_map_{};
+    SkySun sky_sun_{};
+    std::uint64_t sky_reads_done_ = 0;
+    std::uint64_t sky_cycles_ = 0;
+    void read_sky();
+    float key_size_ = 6.0f;     // GALAXY_RT_KEY_SIZE: degrees
     float point_light_ = 2.0f;      // GALAXY_RT_POINT_LIGHT: weight of the game's point lights
     float point_radius_ = 800.0f;   // GALAXY_RT_POINT_RADIUS: half-light distance without GX attenuation
     float point_saturation_ = 0.4f; // GALAXY_RT_POINT_SATURATION: 0 white .. 1 the light's own colour

@@ -491,7 +491,15 @@ public:
     [[nodiscard]] bool rt_sun_direction(std::array<float, 3>& world) const noexcept {
         return ray_tracer_.sun_direction(world);
     }
-    [[nodiscard]] float rt_point_radius() const noexcept { return ray_tracer_.point_radius(); }
+    void rt_hold_sun(bool held) noexcept { ray_tracer_.hold_sun(held); }
+    void rt_set_key_light(bool valid, const std::array<float, 3>& world, const std::array<float, 3>& color,
+                          float strength, bool shown) noexcept {
+        ray_tracer_.set_key_light(valid, world, color, strength, shown);
+    }
+    [[nodiscard]] bool rt_sky_sun(std::array<float, 3>& world, std::array<float, 3>& color) const noexcept {
+        return ray_tracer_.sky_sun(world, color);
+    }
+    void rt_reset_sky() noexcept { ray_tracer_.reset_sky(); }
     void rt_note_draw(const DrawCall& call, const RtDrawInfo& info);
     void rt_trace_scene();
     // The scene's end: its finished picture becomes the light the next frame's rays read.

@@ -140,6 +140,8 @@ void set_game_sun(const std::array<float, 3>& direction, float distance) noexcep
 // The direction (and distance) when one arrived within `max_age_ms`.
 [[nodiscard]] bool game_sun(std::array<float, 3>& direction, std::uint64_t max_age_ms,
                             float* distance = nullptr) noexcept;
+// How many have arrived.
+[[nodiscard]] std::uint64_t game_sun_updates() noexcept;
 // Simulation thread: the game's lights as it loads them for drawing. A point light
 // (LightFunction::loadPointLightInfo: world position, colour 0-1, the distance at which its GX
 // distance attenuation halves it, 0 without attenuation) and a world-fixed light of an
