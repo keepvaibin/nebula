@@ -375,6 +375,25 @@ void tag_backbuffer_region(ID3D12GraphicsCommandList* list, unsigned left, unsig
     (void)g_api.set_tag_for_frame(*token, sl::ViewportHandle{0u}, &tag, 1u, list);
 }
 
+void tag_hudless(ID3D12GraphicsCommandList* list, ID3D12Resource* hudless, unsigned width,
+                 unsigned height) noexcept {
+    if (!frame_generation_supported() || !g_dlssg_tagged) {
+        return;
+    }
+    sl::FrameToken* token = nullptr;
+    const std::uint32_t index = g_frame_index;
+    if (g_api.get_new_frame_token(token, &index) != sl::Result::eOk || token == nullptr) {
+        return;
+    }
+    sl::Resource resource(sl::ResourceType::eTex2d, hudless, D3D12_RESOURCE_STATE_RENDER_TARGET);
+    sl::Extent extent{};
+    extent.width = width;
+    extent.height = height;
+    const sl::ResourceTag tag(hudless != nullptr ? &resource : nullptr, sl::kBufferTypeHUDLessColor,
+                              sl::ResourceLifecycle::eValidUntilPresent, hudless != nullptr ? &extent : nullptr);
+    (void)g_api.set_tag_for_frame(*token, sl::ViewportHandle{0u}, &tag, 1u, list);
+}
+
 void set_frame_generation(unsigned generated) noexcept {
     if (!frame_generation_supported()) {
         return;
@@ -661,6 +680,7 @@ unsigned frame_index() noexcept { return 0u; }
 void marker(Marker) noexcept {}
 void reflex_sleep() noexcept {}
 bool tag_frame_generation(const FrameGenerationInputs&) noexcept { return false; }
+void tag_hudless(ID3D12GraphicsCommandList*, ID3D12Resource*, unsigned, unsigned) noexcept {}
 void tag_backbuffer_region(ID3D12GraphicsCommandList*, unsigned, unsigned, unsigned, unsigned) noexcept {}
 void set_frame_generation(unsigned) noexcept {}
 unsigned frames_presented() noexcept { return 1u; }

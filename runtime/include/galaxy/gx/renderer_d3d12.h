@@ -1057,6 +1057,20 @@ private:
     unsigned temporal_quality_ = 0;
     // A presented frame's Streamline markers have begun (begin_frame) and not yet ended (present).
     bool streamline_frame_open_ = false;
+    // DLSS Frame Generation's HUD-less picture: the upscaled scene before the 2D layer (taken at
+    // the output EFB switch), copied as the display copy copies the frame and presented as the
+    // frame is, into a backbuffer-sized target.
+    EfbTargetSet fg_hudless_efb_;
+    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> fg_hudless_rtv_heap_;
+    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> fg_hudless_dsv_heap_;
+    XfbTexture fg_hudless_xfb_{};
+    Microsoft::WRL::ComPtr<ID3D12Resource> fg_hudless_target_;
+    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> fg_hudless_target_rtv_heap_;
+    bool fg_hudless_scene_ = false;              // this frame's scene was taken
+    std::uint32_t fg_hudless_xfb_addr_ = 0u;     // the display copy it went with (0: none)
+    void take_fg_hudless_scene();
+    void copy_fg_hudless_xfb(const EfbCopyParams& params, const XfbTexture& dest);
+    void present_fg_hudless(const XfbTexture& source, const D3D12_VIEWPORT& viewport, const D3D12_RECT& scissor);
     unsigned temporal_render_w_ = 0;
     unsigned temporal_render_h_ = 0;
     unsigned temporal_output_w_ = 0;

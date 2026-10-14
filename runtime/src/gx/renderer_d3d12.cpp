@@ -10385,6 +10385,176 @@ void RendererD3D12::swap_efb_sets() {
     bind_efb(nullptr);
 }
 
+// DLSS Frame Generation's HUD-less picture (fg_hudless_*): the output EFB right after the
+// upscale, before the 2D layer draws into it.
+void RendererD3D12::take_fg_hudless_scene() {
+    fg_hudless_scene_ = false;
+    if (!frame_generation_running()) {
+        return;
+    }
+    if (!fg_hudless_efb_.color || fg_hudless_efb_.scale != efb_scale_) {
+        if (fg_hudless_efb_.color) {
+            wait_for_gpu();
+        }
+        fg_hudless_efb_.color.Reset();
+        fg_hudless_efb_.depth.Reset();
+        if (!create_efb_set(fg_hudless_efb_, fg_hudless_rtv_heap_, fg_hudless_dsv_heap_, efb_scale_)) {
+            return;
+        }
+    }
+    D3D12_RESOURCE_BARRIER barriers[2]{};
+    for (D3D12_RESOURCE_BARRIER& barrier : barriers) {
+        barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+        barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+        barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
+    }
+    barriers[0].Transition.pResource = efb_color_.Get();
+    barriers[0].Transition.StateAfter = D3D12_RESOURCE_STATE_COPY_SOURCE;
+    barriers[1].Transition.pResource = fg_hudless_efb_.color.Get();
+    barriers[1].Transition.StateAfter = D3D12_RESOURCE_STATE_COPY_DEST;
+    command_list_->ResourceBarrier(2u, barriers);
+    command_list_->CopyResource(fg_hudless_efb_.color.Get(), efb_color_.Get());
+    for (D3D12_RESOURCE_BARRIER& barrier : barriers) {
+        std::swap(barrier.Transition.StateBefore, barrier.Transition.StateAfter);
+    }
+    command_list_->ResourceBarrier(2u, barriers);
+    fg_hudless_scene_ = true;
+}
+
+// The display copy of the taken scene: the same copy into the HUD-less XFB.
+void RendererD3D12::copy_fg_hudless_xfb(const EfbCopyParams& params, const XfbTexture& dest) {
+    const bool taken = fg_hudless_scene_;
+    fg_hudless_scene_ = false;
+    if (!taken || replay_recording_ || fg_hudless_efb_.scale != efb_scale_ || !dest.texture) {
+        return;
+    }
+    const D3D12_RESOURCE_DESC desc = dest.texture->GetDesc();
+    if (!fg_hudless_xfb_.texture || fg_hudless_xfb_.texture->GetDesc().Width != desc.Width ||
+        fg_hudless_xfb_.texture->GetDesc().Height != desc.Height) {
+        if (fg_hudless_xfb_.texture) {
+            wait_for_gpu();
+        }
+        fg_hudless_xfb_.texture.Reset();
+        D3D12_HEAP_PROPERTIES hp{};
+        hp.Type = D3D12_HEAP_TYPE_DEFAULT;
+        if (FAILED(device_->CreateCommittedResource(&hp, D3D12_HEAP_FLAG_NONE, &desc,
+                                                    D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, nullptr,
+                                                    IID_PPV_ARGS(&fg_hudless_xfb_.texture)))) {
+            return;
+        }
+        fg_hudless_xfb_.texture->SetName(L"DLSS-G HUD-less XFB");
+    }
+    fg_hudless_xfb_.width = dest.width;
+    fg_hudless_xfb_.height = dest.height;
+    fg_hudless_xfb_.rtv = allocate_conversion_rtv(fg_hudless_xfb_.texture.Get());
+    D3D12_RESOURCE_BARRIER b{};
+    b.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+    b.Transition.pResource = fg_hudless_xfb_.texture.Get();
+    b.Transition.StateBefore = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+    b.Transition.StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET;
+    b.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+    command_list_->ResourceBarrier(1, &b);
+    const EfbCopySamplingGeometry sampling =
+        compute_xfb_sampling_geometry(params, dest.width, dest.height, efb_scale_);
+    swap_efb_with(fg_hudless_efb_);
+    record_conversion_blit(fg_hudless_xfb_.texture.Get(), dest.width, dest.height, fg_hudless_xfb_.rtv, params,
+                           /*is_depth_copy=*/false, /*intensity=*/false, /*keep_alpha=*/true,
+                           /*copy_format=*/15u, sampling.src_x, sampling.src_y, sampling.step_x, sampling.step_y,
+                           sampling.filter_row_offset);
+    swap_efb_with(fg_hudless_efb_);
+    std::swap(b.Transition.StateBefore, b.Transition.StateAfter);
+    command_list_->ResourceBarrier(1, &b);
+    fg_hudless_xfb_addr_ = dest.guest_addr;
+}
+
+// The HUD-less XFB of the presented copy, presented as the frame is into a backbuffer-sized
+// target that frame generation reads at the present; without one this frame, no HUD-less tag.
+void RendererD3D12::present_fg_hudless(const XfbTexture& source, const D3D12_VIEWPORT& viewport,
+                                       const D3D12_RECT& scissor) {
+    if (!frame_generation_running()) {
+        return;
+    }
+    const bool ready = fg_hudless_xfb_.texture && fg_hudless_xfb_addr_ != 0u &&
+                       fg_hudless_xfb_addr_ == source.guest_addr && fg_hudless_xfb_.width == source.width &&
+                       fg_hudless_xfb_.height == source.height;
+    fg_hudless_xfb_addr_ = 0u;
+    if (!ready) {
+        streamline::tag_hudless(command_list_.Get(), nullptr, 0u, 0u);
+        return;
+    }
+    if (!fg_hudless_target_ || fg_hudless_target_->GetDesc().Width != s_bb_width ||
+        fg_hudless_target_->GetDesc().Height != s_bb_height) {
+        if (fg_hudless_target_) {
+            wait_for_gpu();
+        }
+        fg_hudless_target_.Reset();
+        if (!fg_hudless_target_rtv_heap_) {
+            D3D12_DESCRIPTOR_HEAP_DESC dhd{};
+            dhd.NumDescriptors = 1;
+            dhd.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
+            d3d_check(device_->CreateDescriptorHeap(&dhd, IID_PPV_ARGS(&fg_hudless_target_rtv_heap_)),
+                      "HUD-less RTV heap");
+        }
+        D3D12_HEAP_PROPERTIES hp{};
+        hp.Type = D3D12_HEAP_TYPE_DEFAULT;
+        D3D12_RESOURCE_DESC rd{};
+        rd.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+        rd.Width = s_bb_width;
+        rd.Height = s_bb_height;
+        rd.DepthOrArraySize = 1;
+        rd.MipLevels = 1;
+        rd.Format = kBackbufferFormat;
+        rd.SampleDesc.Count = 1;
+        rd.Flags = D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
+        D3D12_CLEAR_VALUE cv{};
+        cv.Format = kBackbufferFormat;
+        cv.Color[3] = 1.0f;
+        if (FAILED(device_->CreateCommittedResource(&hp, D3D12_HEAP_FLAG_NONE, &rd,
+                                                    D3D12_RESOURCE_STATE_RENDER_TARGET, &cv,
+                                                    IID_PPV_ARGS(&fg_hudless_target_)))) {
+            streamline::tag_hudless(command_list_.Get(), nullptr, 0u, 0u);
+            return;
+        }
+        fg_hudless_target_->SetName(L"DLSS-G HUD-less");
+        device_->CreateRenderTargetView(fg_hudless_target_.Get(), nullptr,
+                                        fg_hudless_target_rtv_heap_->GetCPUDescriptorHandleForHeapStart());
+    }
+    const D3D12_CPU_DESCRIPTOR_HANDLE rtv = fg_hudless_target_rtv_heap_->GetCPUDescriptorHandleForHeapStart();
+    constexpr float kBlack[4] = {0.0f, 0.0f, 0.0f, 1.0f};
+    command_list_->ClearRenderTargetView(rtv, kBlack, 0, nullptr);
+    command_list_->OMSetRenderTargets(1, &rtv, FALSE, nullptr);
+    ID3D12DescriptorHeap* heaps[] = {srv_ring_.heap(), sampler_heap_.Get()};
+    command_list_->SetDescriptorHeaps(2, heaps);
+    if (post_process_.ready()) {
+        const D3D12_RESOURCE_DESC desc = fg_hudless_xfb_.texture->GetDesc();
+        post_process_.record(command_list_.Get(), srv_ring_, fg_hudless_xfb_.texture.Get(),
+                             static_cast<unsigned>(desc.Width), desc.Height, rtv, viewport, frame_index_,
+                             kFramesInFlight);
+    } else {
+        const DescriptorRing::Table tbl = srv_ring_.allocate(1);
+        D3D12_SHADER_RESOURCE_VIEW_DESC sd{};
+        sd.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+        sd.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+        sd.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+        sd.Texture2D.MipLevels = 1;
+        device_->CreateShaderResourceView(fg_hudless_xfb_.texture.Get(), &sd, tbl.cpu);
+        command_list_->SetGraphicsRootSignature(s_blit_root_sig.Get());
+        command_list_->SetPipelineState(blit_pipeline_.Get());
+        command_list_->SetGraphicsRootDescriptorTable(0, tbl.gpu);
+        command_list_->RSSetViewports(1, &viewport);
+        command_list_->RSSetScissorRects(1, &scissor);
+        command_list_->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+        command_list_->DrawInstanced(3, 1, 0, 0);
+    }
+    invalidate_gx_bindings();
+    streamline::tag_hudless(command_list_.Get(), fg_hudless_target_.Get(), s_bb_width, s_bb_height);
+    // Back to the backbuffer for the overlays.
+    const UINT buf_idx = swap_chain_->GetCurrentBackBufferIndex();
+    D3D12_CPU_DESCRIPTOR_HANDLE back_rtv = rtv_heap_->GetCPUDescriptorHandleForHeapStart();
+    back_rtv.ptr += static_cast<SIZE_T>(buf_idx) * device_->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
+    command_list_->OMSetRenderTargets(1, &back_rtv, FALSE, nullptr);
+}
+
 bool RendererD3D12::begin_output_efb() {
     const bool temporal = scene_temporal_;
     scene_temporal_ = false;
@@ -10406,6 +10576,7 @@ bool RendererD3D12::begin_output_efb() {
         command_list_->ClearDepthStencilView(
             efb_dsv_, D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL,
             far_values.reversed_depth, 0u, 0u, nullptr);
+        take_fg_hudless_scene();
         return true;
     }
     // The whole scene EFB, resampled into the output target with the display
@@ -11073,6 +11244,7 @@ void RendererD3D12::copy_efb_to_xfb(const EfbCopyParams& params, XfbTexture& des
 
     std::swap(b.Transition.StateBefore, b.Transition.StateAfter);
     command_list_->ResourceBarrier(1, &b);
+    copy_fg_hudless_xfb(params, dest);
 
     if (ring_mode_ == RingMode::Interp) {
         // The display copy closes the game frame: its log is complete and the
@@ -13256,6 +13428,7 @@ bool RendererD3D12::present(
         command_list_->DrawInstanced(3, 1, 0, 0);
     }
     invalidate_gx_bindings();
+    present_fg_hudless(*source, vp, sci);
 
     // Native overlays are authored in full client/backbuffer pixels, not Wii
     // content coordinates. Restore the full-surface raster state after the XFB

@@ -85,6 +85,10 @@ struct FrameGenerationInputs {
 bool tag_frame_generation(const FrameGenerationInputs& in) noexcept;
 void tag_backbuffer_region(ID3D12GraphicsCommandList* list, unsigned left, unsigned top, unsigned width,
                            unsigned height) noexcept;
+// The frame without its 2D layer at the backbuffer's size, in the render-target state until the
+// present (null: none this frame).
+void tag_hudless(ID3D12GraphicsCommandList* list, ID3D12Resource* hudless, unsigned width,
+                 unsigned height) noexcept;
 // Before the present: frames to generate after it (0 while the frame carries
 // no tagged scene: menus, loading, a camera cut's first frame). Applied when it
 // changes.
