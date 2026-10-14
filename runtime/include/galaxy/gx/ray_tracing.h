@@ -90,8 +90,10 @@ public:
     ~SceneRayTracer() { shutdown(); }
 
     // False without DXR 1.1 and shader model 6.5, or when a pipeline cannot be created.
-    // `validate` adds the primary-ray check against the raster depth ([rt-stats]).
-    bool initialize(ID3D12Device* device, std::uint64_t timestamp_frequency, bool validate);
+    // `validate` adds the primary-ray check against the raster depth ([rt-stats]);
+    // `color_format` is the EFB colour format the occlusion composite draws into.
+    bool initialize(ID3D12Device* device, std::uint64_t timestamp_frequency, bool validate,
+                    DXGI_FORMAT color_format);
     void shutdown() noexcept;
     [[nodiscard]] bool ready() const noexcept { return ready_; }
 
@@ -118,11 +120,30 @@ public:
     // TLAS of the last traced scene (valid on the GPU timeline after trace_scene).
     [[nodiscard]] D3D12_GPU_VIRTUAL_ADDRESS scene_tlas() const noexcept;
 
+    // The game camera's view matrix (3x4 rows, world to eye) of the open scene; null when the
+    // scene has none. The occlusion history follows it from frame to frame.
+    void set_camera(const std::array<float, 12>* view) noexcept;
+    [[nodiscard]] bool ao_active() const noexcept { return ready_ && ao_enabled_; }
+    // Ambient occlusion of the last traced scene: its result slot for composite(), -1 for none.
+    // The interpolated sub-frames of that game frame composite the same slot.
+    [[nodiscard]] int ao_slot() const noexcept { return ao_slot_; }
+    // Multiplies the EFB colour `target` (width x height, the size the slot was traced at) by
+    // occlusion result `slot` at the depth `depth_srv` holds (PIXEL_SHADER_RESOURCE, in the bound
+    // descriptor heap). `reproject`: the depth is an interpolated sub-frame's, whose camera
+    // write_reprojection gave. Leaves its own root signature and pipeline bound.
+    void composite(ID3D12GraphicsCommandList* list, D3D12_CPU_DESCRIPTOR_HANDLE target,
+                   D3D12_GPU_DESCRIPTOR_HANDLE depth_srv, std::uint32_t width, std::uint32_t height, int slot,
+                   bool reproject);
+    // Before a sub-frame's replay: its camera (world to eye at t), for the composites it runs.
+    void write_reprojection(ID3D12GraphicsCommandList* list, const std::array<float, 12>& camera_t);
+
 private:
     static constexpr unsigned kResultSlots = 16u;
     static constexpr std::uint64_t kResultDelay = 8u;
     static constexpr unsigned kStatsWords = 16u;
     static constexpr std::uint32_t kMaxTriangles = 4u * 1024u * 1024u;
+    // Occlusion results kept for the sub-frames of the game frames being interpolated.
+    static constexpr unsigned kAoSlots = 4u;
 
     struct Retired {
         Microsoft::WRL::ComPtr<ID3D12Resource> resource;
@@ -141,6 +162,12 @@ private:
                         std::uint32_t triangle_base, std::uint32_t triangles, std::uint32_t width,
                         std::uint32_t height, std::uint32_t flags, RtUpload& frame);
     void write_dump();
+    bool create_ao_pipelines(DXGI_FORMAT color_format);
+    bool ensure_ao_buffers(std::uint32_t samples);
+    void trace_ao(ID3D12GraphicsCommandList* list, Allocate allocate, void* allocate_context,
+                  D3D12_GPU_DESCRIPTOR_HANDLE depth_srv, std::uint32_t width, std::uint32_t height);
+    static void to_state(ID3D12GraphicsCommandList* list, ID3D12Resource* resource, D3D12_RESOURCE_STATES& state,
+                         D3D12_RESOURCE_STATES wanted);
     bool create_buffer(std::uint64_t bytes, D3D12_HEAP_TYPE heap, D3D12_RESOURCE_STATES state,
                        D3D12_RESOURCE_FLAGS flags, Microsoft::WRL::ComPtr<ID3D12Resource>& out, const wchar_t* name);
     void retire(Microsoft::WRL::ComPtr<ID3D12Resource>& resource);
@@ -192,6 +219,63 @@ private:
     bool view_known_ = false;
     bool scene_open_ = false;
 
+    // Ambient occlusion (rt_ao.hlsl). GALAXY_RT_AO=0 turns it off; GALAXY_RT_AO_RAYS (per sample),
+    // _RADIUS (eye units), _STRENGTH (0-1), _HISTORY (frames), _FACTOR (EFB pixels per sample
+    // side, 1-4) and _VIEW=1 (the occlusion alone) tune it.
+    struct AoSlot {
+        RtView view{};
+        std::array<float, 12> camera{};
+        std::uint32_t width = 0;
+        std::uint32_t height = 0;
+        std::uint32_t ao_width = 0;
+        std::uint32_t ao_height = 0;
+        float near_plane = 0.0f;
+        bool camera_known = false;
+    };
+    Microsoft::WRL::ComPtr<ID3D12RootSignature> ao_root_;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> ao_trace_pso_;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> ao_temporal_pso_;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> ao_spatial_pso_;
+    Microsoft::WRL::ComPtr<ID3D12RootSignature> composite_root_;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> composite_pso_;
+    // Per sample: eye z (this frame and the previous), packed normal, raw occlusion,
+    // accumulated (occlusion, frames) for both frames; per result slot (occlusion, eye z).
+    std::array<Microsoft::WRL::ComPtr<ID3D12Resource>, 2> ao_z_;
+    Microsoft::WRL::ComPtr<ID3D12Resource> ao_normal_;
+    Microsoft::WRL::ComPtr<ID3D12Resource> ao_raw_;
+    std::array<Microsoft::WRL::ComPtr<ID3D12Resource>, 2> ao_history_;
+    std::array<Microsoft::WRL::ComPtr<ID3D12Resource>, kAoSlots> ao_final_;
+    std::array<D3D12_RESOURCE_STATES, 2> ao_z_state_{};
+    std::array<D3D12_RESOURCE_STATES, 2> ao_history_state_{};
+    std::array<D3D12_RESOURCE_STATES, kAoSlots> ao_final_state_{};
+    std::array<AoSlot, kAoSlots> ao_slots_{};
+    // Per slot the traced frame's eye position from a sub-frame's (3 rows), copied in from a
+    // ring of upload entries before each sub-frame's replay.
+    Microsoft::WRL::ComPtr<ID3D12Resource> reproject_;
+    Microsoft::WRL::ComPtr<ID3D12Resource> reproject_upload_;
+    std::byte* reproject_mapped_ = nullptr;
+    unsigned reproject_entry_ = 0;
+    D3D12_RESOURCE_STATES reproject_state_ = D3D12_RESOURCE_STATE_COPY_DEST;
+    std::array<float, 12> camera_{};
+    std::array<float, 12> history_camera_{};
+    std::uint32_t ao_samples_ = 0;
+    std::uint32_t ao_history_width_ = 0;
+    std::uint32_t ao_history_height_ = 0;
+    std::uint32_t ao_rays_ = 2;
+    std::uint32_t ao_factor_ = 2;
+    std::uint32_t ao_history_frames_ = 12;
+    std::uint32_t ao_frame_ = 0;
+    unsigned ao_parity_ = 0;
+    unsigned ao_next_slot_ = 0;
+    int ao_slot_ = -1;
+    float ao_radius_ = 300.0f;
+    float ao_strength_ = 0.85f;
+    bool ao_enabled_ = true;
+    bool ao_view_ = false;
+    bool camera_known_ = false;
+    bool history_camera_known_ = false;
+    bool ao_history_valid_ = false;
+
     // [rt-stats] accumulation over the report window.
     struct Window {
         std::uint64_t scenes = 0;
@@ -200,6 +284,7 @@ private:
         std::uint64_t max_triangles = 0;
         double build_ms = 0.0;
         double validate_ms = 0.0;
+        double ao_ms = 0.0;
         std::uint64_t timed = 0;
         std::array<std::uint64_t, kStatsWords> stats{};
         std::uint64_t validated = 0;

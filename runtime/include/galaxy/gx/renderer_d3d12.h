@@ -472,6 +472,7 @@ public:
     [[nodiscard]] bool rt_scene_open() const noexcept { return ray_tracer_.scene_open(); }
     void rt_begin_scene() noexcept { ray_tracer_.begin_scene(); }
     void rt_set_view(const RtView& view) noexcept { ray_tracer_.set_view(view); }
+    void rt_set_camera(const std::array<float, 12>* view) noexcept { ray_tracer_.set_camera(view); }
     void rt_note_draw(const DrawCall& call, const RtDrawInfo& info);
     void rt_trace_scene();
     // Matrix-ring segment advances back whose palettes are still alive while
@@ -1043,7 +1044,8 @@ private:
         float values[6]{};
         bool valid = false;
     };
-    enum class ReplayKind : std::uint8_t { Draw, BindEfb, Clear, Copy, SwapEfbSets, ClearDepth };
+    // RtComposite: the ambient occlusion of ray-tracer result slot `index`.
+    enum class ReplayKind : std::uint8_t { Draw, BindEfb, Clear, Copy, SwapEfbSets, ClearDepth, RtComposite };
     struct ReplayOp {
         ReplayKind kind = ReplayKind::Draw;
         std::uint32_t index = 0;
@@ -1165,6 +1167,8 @@ private:
     SceneRayTracer ray_tracer_;
     static RtUpload rt_allocate(void* renderer, std::size_t bytes, std::size_t alignment);
     [[nodiscard]] RtSources rt_sources() const;
+    // The occlusion of result `slot` onto the EFB colour; `reproject` on a sub-frame's replay.
+    void record_rt_composite(int slot, bool reproject);
     [[nodiscard]] bool temporal_inputs_match(const TemporalUpscaleInputs& in) const;
     D3D12_GPU_VIRTUAL_ADDRESS resident_vertex_base_ = 0;
     std::uint64_t resident_vertex_bytes_ = 0;

@@ -5180,7 +5180,7 @@ bool RendererD3D12::initialize(int window_width, int window_height, unsigned efb
                     std::cerr << "[rt] off: integrated GPU\n";
                 } else {
                     static_cast<void>(ray_tracer_.initialize(device_.Get(), timestamp_frequency_,
-                                                             env_on("GALAXY_RT_VALIDATE")));
+                                                             env_on("GALAXY_RT_VALIDATE"), kEfbColorFormat));
                 }
             }
         }
@@ -7596,21 +7596,55 @@ void RendererD3D12::rt_trace_scene() {
     barrier.Transition.pResource = efb_depth_.Get();
     barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
     barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_DEPTH_WRITE;
-    barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
+    barrier.Transition.StateAfter =
+        D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
     if (depth) {
         command_list_->ResourceBarrier(1, &barrier);
     }
     const D3D12_RESOURCE_DESC desc = depth ? efb_depth_->GetDesc() : D3D12_RESOURCE_DESC{};
+    const auto width = static_cast<std::uint32_t>(desc.Width);
     dred_marker(command_list_.Get(), L"rt scene");
     static_cast<void>(ray_tracer_.trace_scene(command_list_.Get(), rt_sources(), &RendererD3D12::rt_allocate, this,
-                                              depth ? conv_efb_depth_srv_ : D3D12_GPU_DESCRIPTOR_HANDLE{},
-                                              static_cast<std::uint32_t>(desc.Width), desc.Height));
+                                              depth ? conv_efb_depth_srv_ : D3D12_GPU_DESCRIPTOR_HANDLE{}, width,
+                                              desc.Height));
+    // The occlusion multiplies the opaque scene before the translucent phases draw; a recorded
+    // log applies it again on each sub-frame's replay.
+    const int slot = ray_tracer_.ao_slot();
+    if (depth && slot >= 0) {
+        ray_tracer_.composite(command_list_.Get(), efb_rtv_, conv_efb_depth_srv_, width, desc.Height, slot, false);
+        if (replay_recording_) {
+            replay_ops_.push_back({ReplayKind::RtComposite, static_cast<std::uint32_t>(slot)});
+        }
+    }
     if (depth) {
         std::swap(barrier.Transition.StateBefore, barrier.Transition.StateAfter);
         command_list_->ResourceBarrier(1, &barrier);
     }
-    // The compute pipeline replaced the bound graphics pipeline.
-    bound_pipeline_ = nullptr;
+    // The compute and composite pipelines replaced the GX bindings.
+    command_list_->SetGraphicsRootSignature(root_signature_.Get());
+    invalidate_gx_bindings();
+    bound_rt_aux_ = 0xFFu;
+}
+
+void RendererD3D12::record_rt_composite(int slot, bool reproject) {
+    if (!efb_depth_ || conv_efb_depth_srv_.ptr == 0u) {
+        return;
+    }
+    D3D12_RESOURCE_BARRIER barrier{};
+    barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+    barrier.Transition.pResource = efb_depth_.Get();
+    barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+    barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_DEPTH_WRITE;
+    barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+    command_list_->ResourceBarrier(1, &barrier);
+    const D3D12_RESOURCE_DESC desc = efb_depth_->GetDesc();
+    ray_tracer_.composite(command_list_.Get(), efb_rtv_, conv_efb_depth_srv_, static_cast<std::uint32_t>(desc.Width),
+                          desc.Height, slot, reproject);
+    std::swap(barrier.Transition.StateBefore, barrier.Transition.StateAfter);
+    command_list_->ResourceBarrier(1, &barrier);
+    command_list_->SetGraphicsRootSignature(root_signature_.Get());
+    invalidate_gx_bindings();
+    bound_rt_aux_ = 0xFFu;
 }
 
 void RendererD3D12::record_blend_validation() {
@@ -8762,6 +8796,8 @@ void RendererD3D12::record_interp_eval(const SubframeTime& time, const Affine34&
                                        const Affine34& camera_prev) {
     transition_interp_output(D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
     transition_blend_verdicts(D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+    // The ray-traced occlusion of the replayed frame follows this sub-frame's camera.
+    ray_tracer_.write_reprojection(command_list_.Get(), camera_t);
     const bool last = time.t >= 1.0f;
     InterpEvalFrame frame{};
     std::memcpy(frame.camera, camera_t.data(), sizeof(frame.camera));
@@ -9210,6 +9246,9 @@ bool RendererD3D12::record_replay_list(ReplayList& entry) {
                 command_list_->ClearDepthStencilView(
                     efb_dsv_, D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL,
                     far_values.reversed_depth, 0u, 0u, nullptr);
+                break;
+            case ReplayKind::RtComposite:
+                record_rt_composite(static_cast<int>(op.index), true);
                 break;
             }
             if (op.kind == ReplayKind::Copy) {

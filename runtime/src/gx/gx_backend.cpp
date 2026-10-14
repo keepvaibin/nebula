@@ -88,6 +88,27 @@ namespace {
 
 static_assert(kEfbWidth == 640u && kEfbHeight == 528u);
 
+// The alpha test keeps every fragment (both compares against the references, combined).
+bool alpha_test_keeps_all(const PixelShaderKey& key) noexcept {
+    const auto always = static_cast<std::uint8_t>(CompareFunc::Always);
+    const auto never = static_cast<std::uint8_t>(CompareFunc::Never);
+    const bool a0 = key.alpha_comp0 == always;
+    const bool a1 = key.alpha_comp1 == always;
+    const bool n0 = key.alpha_comp0 == never;
+    const bool n1 = key.alpha_comp1 == never;
+    switch (static_cast<AlphaTestLogic>(key.alpha_logic)) {
+    case AlphaTestLogic::And:
+        return a0 && a1;
+    case AlphaTestLogic::Or:
+        return a0 || a1;
+    case AlphaTestLogic::Xor:
+        return (a0 && n1) || (n0 && a1);
+    case AlphaTestLogic::Xnor:
+        return (a0 && a1) || (n0 && n1);
+    }
+    return false;
+}
+
 std::vector<std::uint64_t> read_capture_frame_list() {
     std::vector<std::uint64_t> frames;
     char list[1024]{};
@@ -6968,6 +6989,7 @@ void GxBackend::on_fifo_marker(FifoMarker marker, const std::array<float, 12>* v
         rt_scene_traced_ = !renderer_.rt_active();
         if (!rt_scene_traced_) {
             renderer_.rt_begin_scene();
+            renderer_.rt_set_camera(view);
         }
     } else {
         trace_rt_scene();
@@ -11811,14 +11833,17 @@ ID3D12PipelineState* GxBackend::flush_draw_state(
     render_state_key_.primitive_topology = topology_key;
     if (renderer_.rt_active()) {
         // Traced geometry: unblended triangles (no logic op) that write colour and depth under a
-        // perspective projection. Shadow volumes, z-only passes and screen quads stay out.
+        // perspective projection. Shadow volumes, z-only passes and screen quads stay out, and so
+        // do alpha-tested cut-outs (foliage, fences) and z-textured surfaces, whose depth is not
+        // their triangles'.
         const std::uint32_t bb = render_state_key_.blend_bits;
         rt_state_eligible_ =
             topology_key == static_cast<std::uint8_t>(D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE) &&
             (bb & ((1u << 0u) | (1u << 8u))) == 0u && (bb & (1u << 25u)) != 0u &&
             (render_state_key_.zmode_bits & (1u << 4u)) != 0u &&
             render_state_key_.cull != static_cast<std::uint8_t>(CullMode::All) &&
-            state_.xf(static_cast<std::uint16_t>(xf::kProjectionBase + 6u)) == 0u;
+            state_.xf(static_cast<std::uint16_t>(xf::kProjectionBase + 6u)) == 0u &&
+            (ps_key_.flags & 0x02u) == 0u && alpha_test_keeps_all(ps_key_);
     }
     // Motion writers: opaque triangles with color writes in a temporal scene
     // (blending, logic ops and dual-source alpha cannot share a second
