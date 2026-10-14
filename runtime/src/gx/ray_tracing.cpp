@@ -1024,6 +1024,14 @@ void SceneRayTracer::set_camera(const std::array<float, 12>* view) noexcept {
     camera_ = view != nullptr ? *view : kIdentity34;
 }
 
+bool SceneRayTracer::sun_direction(std::array<float, 3>& world) const noexcept {
+    if (sun_override_) {
+        world = sun_direction_;
+        return true;
+    }
+    return game_sun(world, 2000u);
+}
+
 std::uint32_t SceneRayTracer::sample_factor(std::uint32_t width, std::uint32_t height) const noexcept {
     if (factor_override_ != 0u) {
         return factor_override_;
@@ -1340,10 +1348,7 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
         // The game's visible sun (GALAXY_RT_SUN overrides it); without one, no sun light. Its
         // colour: the game's world-fixed light from the same direction, else GALAXY_RT_SUN_COLOR.
         std::array<float, 3> l = sun_direction_;
-        bool sun_present = sun_override_;
-        if (!sun_override_) {
-            sun_present = game_sun(l, 2000u);
-        }
+        const bool sun_present = sun_direction(l);
         std::array<float, 3> sun_color = sun_color_;
         if (sun_present) {
             std::array<GameLight, 16> world{};

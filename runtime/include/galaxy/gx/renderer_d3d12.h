@@ -483,6 +483,11 @@ public:
     void rt_begin_scene() noexcept { ray_tracer_.begin_scene(); }
     void rt_set_view(const RtView& view) noexcept { ray_tracer_.set_view(view); }
     void rt_set_camera(const std::array<float, 12>* view) noexcept { ray_tracer_.set_camera(view); }
+    [[nodiscard]] bool rt_lighting() const noexcept { return ray_tracer_.lighting_active(); }
+    [[nodiscard]] bool rt_sun_direction(std::array<float, 3>& world) const noexcept {
+        return ray_tracer_.sun_direction(world);
+    }
+    [[nodiscard]] float rt_point_radius() const noexcept { return ray_tracer_.point_radius(); }
     void rt_note_draw(const DrawCall& call, const RtDrawInfo& info);
     void rt_trace_scene();
     // The scene's end: its finished picture becomes the light the next frame's rays read.
