@@ -73,6 +73,11 @@ inline constexpr std::uint8_t kCopyClearBoundingBox2 = 0x56;
 inline constexpr std::uint8_t kCopyClearPixelPerf = 0x57;
 inline constexpr std::uint8_t kRevBits = 0x58;
 inline constexpr std::uint8_t kScissorOffset = 0x59;
+// The last register of the TMEM load block before the TLUT loads (0x64-0x65): its write
+// starts a load of the lines it counts. GXTexModeSync (RMGE01 0x804BA0F8) writes it as
+// 0x63000000, a load of nothing that orders texture-mode changes behind the texture work
+// before them. The game links no GXPreLoadEntireTexture: a nonzero count is not its stream.
+inline constexpr std::uint8_t kTexLoadStart = 0x63;
 inline constexpr std::uint8_t kTlutSrcAddr = 0x64;      // main memory >> 5
 inline constexpr std::uint8_t kTlutDest = 0x65;         // TMEM offset + count
 inline constexpr std::uint8_t kTexInvalidate = 0x66;
