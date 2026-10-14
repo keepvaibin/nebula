@@ -1538,9 +1538,6 @@ struct YieldRfiReturnProof {
 // The game's draw-distance cut-offs as the runtime last left them (sim
 // thread). See apply_draw_distance.
 struct DrawDistanceState {
-    std::uint32_t judge = 0u;
-    std::array<std::uint32_t, 7> judge_original{};
-    std::array<std::uint32_t, 7> judge_written{};
     std::uint32_t scene_objects = 0u;
     std::uint32_t shadows = 0u;
     // Scene-object slot of `shadows`. A freed holder keeps its vtable word,
@@ -23934,18 +23931,18 @@ bool coop_call_intercept(
     }
 }
 
-// Draw distance. The game stops drawing an object -- with its particles and
-// light glows -- beyond the distance of the object's clipping level, and a
-// shadow beyond the shadow holder's distance. Wider pictures show those
-// cut-offs at their sides, so the runtime scales both once per frame:
-//  - MR::getClippingDirector (0x8015F4B8) is scene object 2; its
-//    ClippingJudge (+0x0C, vtable 0x805733C0) keeps the distances (cm) of
-//    clipping levels 1..7 at +0x370..+0x388 (ClippingJudge::__ct 0x8015FC2C
-//    fills them; movement 0x8015FCFC builds a viewing volume per level).
+// Draw distance scales, once per frame, what the game decides for drawing
+// alone:
+//  - LodCtrl::update compares the camera distance with the middle and low
+//    model distances (site hook LodDistance): full-detail models reach further;
 //  - ShadowControllerHolder (vtable 0x80573C04) hands +0x28 to every
 //    shadow's updateFarClipping (updateController 0x8016BC44).
-// The game's own values are kept; a value the game rewrites becomes the new
-// original.
+// The clipping levels of ClippingJudge (scene object 2 +0x0C, distances at
+// +0x370..+0x388) stay as the game sets them: clipping also stops actors from
+// running, and a longer reach runs objects the game never runs at that
+// distance (Space Junk Galaxy's web coins then bind to a web that only another
+// scenario builds and dereference null). The game's own shadow distance is
+// kept; a value the game rewrites becomes the new original.
 void apply_draw_distance(RuntimeState& state) {
     if (state.address_space == nullptr) {
         return;
@@ -23973,37 +23970,7 @@ void apply_draw_distance(RuntimeState& state) {
             ? std::bit_cast<std::uint32_t>(value * scale) : original;
     };
 
-    std::uint32_t director = 0u;
-    std::uint32_t judge = 0u;
     std::uint32_t vtable = 0u;
-    if (try_read_guest_u32(space, objects + 2u * 4u, director) &&
-        try_read_guest_u32(space, director + 0x0Cu, judge) &&
-        try_read_guest_u32(space, judge, vtable) && vtable == 0x805733C0u) {
-        std::array<std::uint32_t, 7> now{};
-        bool readable = true;
-        for (std::uint32_t i = 0; i < now.size(); ++i) {
-            readable &= try_read_guest_u32(space, judge + 0x370u + i * 4u, now[i]);
-        }
-        if (readable) {
-            if (judge != dd.judge || now != dd.judge_written) {
-                dd.judge = judge;
-                dd.judge_original = now;
-                std::cerr << "[draw-distance] clipping levels (m):";
-                for (const std::uint32_t bits : now) {
-                    std::cerr << ' ' << std::bit_cast<float>(bits) / 100.0f;
-                }
-                std::cerr << " scale=" << scale << '\n';
-            }
-            for (std::uint32_t i = 0; i < now.size(); ++i) {
-                const std::uint32_t wanted = scaled(dd.judge_original[i]);
-                if (now[i] != wanted) {
-                    write(judge + 0x370u + i * 4u, wanted);
-                }
-                dd.judge_written[i] = wanted;
-            }
-        }
-    }
-
     if (objects != dd.scene_objects) {
         dd.scene_objects = objects;
         dd.shadows = 0u;
