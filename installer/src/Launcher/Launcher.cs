@@ -256,11 +256,12 @@ namespace Nebula.Launcher
         private readonly ControlsSettings controls = ControlsSettings.Load();
         private bool loading;
 
-        // The quality row's list and choice for the selected upscaler.
+        // The quality row's list and choice for the selected upscaler; frame generation runs with DLSS.
         private void ShowUpscalerQuality()
         {
             bool dlss = upscaler.SelectedIndex >= 0 && upscaler.SelectedIndex < upscalerChoices.Count &&
                         upscalerChoices[upscaler.SelectedIndex] == 3;
+            frameGeneration.Enabled = dlss;
             string[] names = dlss ? GraphicsSettings.DlssQualities : GraphicsSettings.SpatialQualities;
             int value = dlss ? graphics.TemporalQuality : graphics.SpatialQuality;
             dlssQuality.Items.Clear();
@@ -286,7 +287,8 @@ namespace Nebula.Launcher
         private readonly ComboBox aspect = new ComboBox(), internalScale = new ComboBox(), frameRate = new ComboBox();
         private readonly CheckBox vsync = new CheckBox();
         private readonly ComboBox antiAliasing = new ComboBox(), aaQuality = new ComboBox(), upscaler = new ComboBox(),
-            dlssQuality = new ComboBox(), textureFilter = new ComboBox(), lighting = new ComboBox();
+            dlssQuality = new ComboBox(), textureFilter = new ComboBox(), lighting = new ComboBox(),
+            frameGeneration = new ComboBox();
         private readonly NumericUpDown sharpness = new NumericUpDown();
         private readonly CheckBox mipmaps = new CheckBox(), hudOutput = new CheckBox(), rayTracing = new CheckBox();
         // Offered once the game has run on a GPU with DXR 1.1 and dedicated memory.
@@ -357,6 +359,7 @@ namespace Nebula.Launcher
             Row(image, "Anti-aliasing quality", aaQuality, ref y);
             Row(image, "Upscaling", upscaler, ref y);
             Row(image, "Upscaler quality", dlssQuality, ref y);
+            Row(image, "DLSS Frame Generation", frameGeneration, ref y);
             Label(image, "Sharpening (0-100)", 12, y + 3);
             sharpness.Location = new Point(320, y);
             sharpness.Size = new Size(120, 28);
@@ -387,6 +390,7 @@ namespace Nebula.Launcher
             foreach (int value in upscalerChoices) upscaler.Items.Add(GraphicsSettings.UpscalerName(value));
             textureFilter.Items.AddRange(GraphicsSettings.TextureFilters);
             lighting.Items.AddRange(GraphicsSettings.LightingModes);
+            frameGeneration.Items.AddRange(GraphicsSettings.FrameGenerationModes);
 
             for (int i = 0; i < volumes.Length; i++)
             {
@@ -800,6 +804,7 @@ namespace Nebula.Launcher
             upscaler.SelectedIndex = upscalerChoices.Contains(graphics.Upscaler)
                 ? upscalerChoices.IndexOf(graphics.Upscaler) : upscalerChoices.IndexOf(1);
             ShowUpscalerQuality();
+            frameGeneration.SelectedIndex = Math.Max(0, Math.Min(graphics.FrameGeneration, GraphicsSettings.FrameGenerationModes.Length - 1));
             sharpness.Value = graphics.Sharpness;
             textureFilter.SelectedIndex = graphics.TextureFilter;
             lighting.SelectedIndex = graphics.PerPixelLighting ? 0 : 1;
@@ -946,6 +951,8 @@ namespace Nebula.Launcher
                 graphics.Quality = aaQuality.SelectedIndex;
                 if (upscaler.SelectedIndex >= 0 && upscaler.SelectedIndex < upscalerChoices.Count)
                     graphics.Upscaler = upscalerChoices[upscaler.SelectedIndex];
+                if (upscaler.SelectedIndex >= 0 && upscalerChoices[upscaler.SelectedIndex] == 3)
+                    graphics.FrameGeneration = Math.Max(0, frameGeneration.SelectedIndex);
                 if (upscaler.SelectedIndex >= 0 && upscalerChoices[upscaler.SelectedIndex] == 3)
                     graphics.TemporalQuality = Math.Max(0, dlssQuality.SelectedIndex);
                 else

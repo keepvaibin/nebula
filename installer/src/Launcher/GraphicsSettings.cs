@@ -18,6 +18,8 @@ namespace Nebula.Launcher
         public static readonly string[] Aspects = { "Auto (match the window)", "4:3", "16:10", "16:9", "21:9", "32:9" };
         public static readonly string[] AntiAliasingModes = { "Off", "SMAA", "Auto (SMAA unless supersampled)", "FXAA" };
         public static readonly string[] AntiAliasingQualities = { "Low", "Medium", "High", "Ultra" };
+        // DLSS Frame Generation: frames shown per rendered frame (the GPU may run fewer).
+        public static readonly string[] FrameGenerationModes = { "Off", "2x", "3x", "4x" };
         // Release runtimes are built without FSR 3 (upscaler 2); a saved 2 reads as FSR 1.
         public static readonly string[] Upscalers = { "Bilinear", "AMD FidelityFX FSR 1" };
         // NVIDIA DLSS (upscaler 3) runs from files the player downloads from NVIDIA
@@ -156,6 +158,7 @@ namespace Nebula.Launcher
         public int FrameRate = 60;
         public int AntiAliasing = 0, Quality = 2, Upscaler = 0, Sharpness = 0, TextureFilter = 0;
         public int TemporalQuality = 1;
+        public int FrameGeneration = 0;
         public int SpatialQuality = 0;
         public bool GeneratedMipmaps = false, PerPixelLighting = false, HudOutputResolution = false, RayTracing = false;
 
@@ -216,6 +219,7 @@ namespace Nebula.Launcher
             int upscaler = Choice(values, "upscaler", 4, settings.Upscaler);
             settings.Upscaler = upscaler == 2 ? 1 : upscaler;
             settings.TemporalQuality = Choice(values, "temporal_quality", TemporalQualityCount, settings.TemporalQuality);
+            settings.FrameGeneration = Choice(values, "frame_generation", 6, settings.FrameGeneration);
             settings.SpatialQuality = Choice(values, "spatial_quality", TemporalQualityCount, settings.SpatialQuality);
             settings.Sharpness = Math.Min(Choice(values, "sharpness", 101, settings.Sharpness), 100);
             int anisotropy = Choice(values, "anisotropic_filtering", 17, -1);
@@ -252,6 +256,7 @@ namespace Nebula.Launcher
             Set(lines, "smaa_quality", Quality);
             Set(lines, "upscaler", Upscaler);
             Set(lines, "temporal_quality", TemporalQuality);
+            Set(lines, "frame_generation", FrameGeneration);
             Set(lines, "spatial_quality", SpatialQuality);
             Set(lines, "sharpness", Sharpness);
             Set(lines, "anisotropic_filtering", Anisotropy[Math.Max(0, Math.Min(TextureFilter, Anisotropy.Length - 1))]);
