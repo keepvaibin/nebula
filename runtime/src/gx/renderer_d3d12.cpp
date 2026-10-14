@@ -176,6 +176,14 @@ void poll_dlss_download();
 std::string dlss_footer(std::uint64_t now_ms, bool& error);
 
 // The upscaler choices this runtime and machine offer, in menu order.
+// The temporal upscaler this configuration runs (2 FSR 3, 3 DLSS), 0 none.
+// Until sub-frames are upscaled too it limits the frame rate to 60.
+unsigned temporal_upscaler(const RenderConfig& render) {
+    if (render.upscaler == 2u && fsr3_available()) return 2u;
+    if (render.upscaler == 3u && streamline::dlss_supported()) return 3u;
+    return 0u;
+}
+
 std::vector<unsigned> available_upscalers() {
     std::vector<unsigned> choices{0u, 1u};
     if (fsr3_available()) choices.push_back(2u);
@@ -415,6 +423,15 @@ unsigned settings_refresh_hz(const RenderConfig& render) {
         return render.fullscreen_refresh_hz;
     }
     return monitor != nullptr ? monitor->current.refresh_hz : 0u;
+}
+
+// FRAME RATE choices: 30 and 60 only while a temporal upscaler runs.
+std::vector<unsigned> frame_rate_choices(const RenderConfig& render) {
+    std::vector<unsigned> rates = frame_rate_options(settings_refresh_hz(render));
+    if (temporal_upscaler(render) != 0u) {
+        std::erase_if(rates, [](unsigned rate) { return rate == 0u || rate > 60u; });
+    }
+    return rates;
 }
 
 const MonitorInfo* settings_monitor(const RenderConfig& render) {
@@ -1001,11 +1018,11 @@ void adjust_native_setting_unlogged(int delta) {
             return;
         }
         case 6: {  // frame rate
-            const auto rates = frame_rate_options(settings_refresh_hz(draft));
+            const auto rates = frame_rate_choices(draft);
             const auto current = static_cast<unsigned>(std::lround(std::max(0.0f, draft.max_fps)));
-            std::size_t index = rates.size() - 1u;  // unlimited
-            for (std::size_t i = 0; i + 1u < rates.size(); ++i) {
-                if (current != 0u && rates[i] <= current) index = i;
+            std::size_t index = rates.size() - 1u;  // unlimited, or the highest offered
+            for (std::size_t i = 0; i < rates.size(); ++i) {
+                if (rates[i] != 0u && current != 0u && rates[i] <= current) index = i;
             }
             const std::size_t next = step(static_cast<unsigned>(index), static_cast<unsigned>(rates.size()));
             draft.max_fps = static_cast<float>(rates[next]);
@@ -1031,6 +1048,9 @@ void adjust_native_setting_unlogged(int delta) {
                 if (choices[i] == draft.upscaler) index = i;
             }
             draft.upscaler = choices[step(static_cast<unsigned>(index), static_cast<unsigned>(choices.size()))];
+            if (temporal_upscaler(draft) != 0u && (draft.max_fps <= 0.0f || draft.max_fps > 60.0f)) {
+                draft.max_fps = 60.0f;
+            }
             break;
         }
         case 3: draft.temporal_quality = step(std::min(draft.temporal_quality, 4u), 5u); break;
@@ -11404,10 +11424,10 @@ std::string native_settings_row_text(
         case 6: {
             const auto rate = static_cast<unsigned>(std::lround(std::max(0.0f, render.max_fps)));
             const double measured = s_measured_present_hz.load(std::memory_order_relaxed);
-            // Above 60 needs interpolation, which the temporal upscaler excludes.
-            const bool fsr3_caps = render.upscaler == 2u && fsr3_available() &&
-                (rate == 0u ? settings_refresh_hz(render) > 61u : rate > 61u);
-            const char* cap = fsr3_caps ? " (60: FSR 3)" : "";
+            // Above 60 needs interpolation, which the temporal upscalers exclude for now.
+            const unsigned temporal = temporal_upscaler(render);
+            const bool capped = temporal != 0u && (rate == 0u ? settings_refresh_hz(render) > 61u : rate > 61u);
+            const char* cap = !capped ? "" : temporal == 3u ? " (60: DLSS)" : " (60: FSR 3)";
             if (rate == 0u) {
                 std::snprintf(text, sizeof(text), "FRAME RATE: UNLIMITED%s  %.1f", cap, measured);
             } else {
