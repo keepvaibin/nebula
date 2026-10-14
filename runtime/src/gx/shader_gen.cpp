@@ -725,7 +725,8 @@ EnhShade enh_begin(float3 P, float3 n) {
     e.valid = dot(n, n) > 0.0;
     e.N = e.valid ? normalize(n) : float3(0.0, 0.0, 0.0);
     e.V = dot(P, P) > 0.0 ? normalize(-P) : float3(0.0, 0.0, 1.0);
-    e.NoV = e.valid ? saturate(dot(e.N, e.V)) : 1.0;
+    // Two-sided surfaces seen from behind face the viewer too (no rim across their back).
+    e.NoV = e.valid ? min(abs(dot(e.N, e.V)), 1.0) : 1.0;
     const float g = 1.0 - e.NoV;
     e.env_gain = e.valid ? kEnhEnvBase + kEnhEnvGraze * g * g * g : 1.0;
     return e;
@@ -2146,6 +2147,10 @@ std::string ShaderGenerator::generate_ps(const PixelShaderKey& key) const {
                  "        frag.rgb = enh_finish(frag.rgb, enh, (uber_ps_header.w & 0x40000u) != 0u);\n\n";
         } else {
             s << "    if (enh_on) frag.rgb = enh_finish(frag.rgb, enh, (uber_ps_header.w & 0x40000u) != 0u);\n\n";
+        }
+        if (enh_lit) {
+            // Diagnostics: colour channel 0 itself, the game's left of the split.
+            s << "    if ((uber_ps_header.w & 0x80000u) != 0u) frag.rgb = saturate(pin.col0.rgb);\n\n";
         }
     }
 
