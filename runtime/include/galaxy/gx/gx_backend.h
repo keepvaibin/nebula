@@ -760,6 +760,19 @@ private:
     TransformHistory transform_history_;
     // The scene records transforms (temporal upscaling or interpolation).
     bool history_scene_ = false;
+    // The screen layer of an interpolated frame: everything drawn after its 3D
+    // scene up to the display copy (HUD, layouts, star pointer, wipes). Its
+    // draws are records too, matched against the previous frame's screen layer
+    // by layout identity and interpolated without the scene camera.
+    TransformHistory screen_history_;
+    bool screen_layer_ = false;
+    bool scene_3d_recorded_ = false;          // this frame's 3D scene took records
+    std::uint64_t screen_layer_serial_ = 0;
+    std::uint64_t screen_identity_markers_ = 0;
+    bool screen_identity_ = false;            // the previous screen layer carried layout markers
+    void begin_screen_layer();
+    void end_screen_layer();
+    void set_identity_marker(std::uint8_t kind, std::uint16_t aux, std::uint32_t a, std::uint32_t tag);
     // Interpolated redraw (present rate above 60, temporal upscaler off):
     // this render chunk records a replay log and per-record VS constants.
     bool interp_recording_ = false;
@@ -795,11 +808,21 @@ private:
         // next scene is a hard cut.
         std::uint32_t camera_epoch = 0;
         bool camera_epoch_known = false;
+        // Records screen_first .. screen_first + screen_count are the screen
+        // layer (GxBackend::begin_screen_layer); their prev_index is in the
+        // scene before's index space like the others.
+        std::size_t screen_first = 0;
+        std::size_t screen_count = 0;
+        std::uint64_t screen_serial = 0;      // 0: no screen layer
+        [[nodiscard]] bool screen_record(std::size_t r) const noexcept {
+            return r - screen_first < screen_count;
+        }
         void clear() noexcept {
             constants.clear(); prev_index.clear();
             palette.clear(); per_vertex.clear(); palette_count = 0; valid = false; serial = 0;
             ps_constants.clear();
             category.clear(); camera_epoch_known = false;
+            screen_first = 0; screen_count = 0; screen_serial = 0;
         }
     };
     // Recording, ready (log completed), playing, and the playing scene's

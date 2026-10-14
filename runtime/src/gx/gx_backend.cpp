@@ -6361,19 +6361,19 @@ void GxBackend::write_scene_vs_constants(const GxVsConstants& cpu, GxVsConstants
     }
     record.projection[6] =
         state_.xf(static_cast<std::uint16_t>(xf::kProjectionBase + 6u)) != 0u ? 1.0f : 0.0f;
-    const TransformRecord* previous = transform_history_.add(record);
+    TransformHistory& history = screen_layer_ ? screen_history_ : transform_history_;
+    const TransformRecord* previous = history.add(record);
     if (interp_recording_) [[unlikely]] {
         // The replay rebuilds this record's constants per sub-frame.
-        current_replay_record_ =
-            static_cast<std::int32_t>(transform_history_.current().size()) - 1;
         InterpScene& scene = interp_scenes_[interp_scene_];
+        current_replay_record_ = static_cast<std::int32_t>(scene.constants.size());
         scene.constants.push_back(cpu);
         // Not read back from `upload`: the ring is write-combined memory.
         scene.constants.back().mtx_palette_base = palette_offset != kNoPaletteOffset ? palette_offset : 0u;
         // Uber pipelines read the key from the constants: a sub-frame's copy
         // needs it as the frame's upload has it.
         apply_uber_vs_key(vs_key_, scene.constants.back());
-        const std::int32_t m = transform_history_.current_matches().back();
+        const std::int32_t m = history.current_matches().back();
         scene.prev_index.push_back(m);
         // Inline draws read normals, lights and indexed texture matrices from
         // the palette too: their snapshot is interpolated like a skinned one.
@@ -6531,7 +6531,7 @@ void GxBackend::on_host_marker(std::uint8_t kind, std::uint16_t aux, std::uint32
     if (!history_scene_) {
         return;
     }
-    ++identity_scene_markers_;
+    ++(screen_layer_ ? screen_identity_markers_ : identity_scene_markers_);
     std::uint64_t tag = b;
     identity_continuity_particle_ = kind == motion::kMarkerParticle;
     identity_continuity_ = 0u;
@@ -6553,6 +6553,10 @@ void GxBackend::on_host_marker(std::uint8_t kind, std::uint16_t aux, std::uint32
             it->second = epoch;
         }
     }
+    set_identity_marker(kind, aux, a, static_cast<std::uint32_t>(tag));
+}
+
+void GxBackend::set_identity_marker(std::uint8_t kind, std::uint16_t aux, std::uint32_t a, std::uint32_t tag) {
     std::uint64_t key = combine64(combine64(kind | (static_cast<std::uint64_t>(aux) << 8u), a), tag);
     key = combine64(key, note_identity_occurrence(key));
     identity_marker_ = key;
@@ -6635,6 +6639,13 @@ void GxBackend::on_motion_marker(std::uint8_t kind, std::uint16_t aux, std::uint
             ++layout_markers_in_2d_[index];
         } else {
             ++layout_markers_outside_2d_[index];
+        }
+        if (screen_layer_) {
+            // The pane, layout actor or pointer layout names the draws after it.
+            ++screen_identity_markers_;
+            identity_continuity_particle_ = false;
+            identity_continuity_ = 0u;
+            set_identity_marker(kind, aux, a, b);
         }
         return;
     }
@@ -6742,9 +6753,78 @@ void GxBackend::take_attached_fifo_markers(FrameChunk& chunk, std::size_t fifo_s
     producer_fifo_marker_view_mask_ = 0;
 }
 
+// After an interpolated frame's 3D scene: the rest of the frame up to its
+// display copy is screen space. Its records follow the scene's in the same
+// InterpScene and match the previous frame's screen layer.
+void GxBackend::begin_screen_layer() {
+    InterpScene& scene = interp_scenes_[interp_scene_];
+    if (!interp_recording_ || !scene_3d_recorded_ || history_scene_ || !scene.valid) {
+        return;
+    }
+    flush_pending_draw_batch();
+    scene_3d_recorded_ = false;
+    screen_layer_ = true;
+    history_scene_ = true;
+    frame_bindings_dirty_ = true;
+    scene.screen_first = scene.constants.size();
+    if (screen_history_.current().capacity() == 0u) {
+        screen_history_.reserve(2048u);
+    }
+    screen_history_.begin_scene(renderer_.matrix_segment_serial(), nullptr);
+    ++identity_scene_index_;
+    identity_scene_ = screen_identity_;
+    screen_identity_markers_ = 0u;
+    identity_occurrences_used_ = 0u;
+    identity_marker_ = mix64(0x5343524545ull);
+    identity_matrix_base_ = state_.matrix_write_count();
+    identity_last_base_ = 0u;
+    identity_sub_index_ = 0u;
+    identity_continuity_ = 0u;
+    identity_continuity_particle_ = false;
+    identity_category_ = motion::kNoCategory;
+    state_.reset_matrix_load_signature();
+    state_.set_matrix_load_tracking(true);
+    matrix_palette_stale_ = true;
+    current_palette_shadow_ = -1;
+    current_replay_record_ = -1;
+    current_ps_record_ = -1;
+    ps_record_restart_ = true;
+}
+
+void GxBackend::end_screen_layer() {
+    if (!screen_layer_) {
+        return;
+    }
+    flush_pending_draw_batch();
+    screen_history_.end_scene();
+    InterpScene& scene = interp_scenes_[interp_scene_];
+    scene.screen_count = scene.constants.size() - scene.screen_first;
+    scene.screen_serial = ++screen_layer_serial_;
+    // Matches index the previous screen layer: they become indices of the
+    // scene before, whose screen layer it is when the two are consecutive.
+    const InterpScene& before = interp_scenes_[(interp_scene_ + 3u) % 4u];
+    const bool consecutive = before.valid && before.screen_serial != 0u &&
+                             before.screen_serial + 1u == scene.screen_serial;
+    for (std::size_t r = scene.screen_first; r < scene.constants.size(); ++r) {
+        std::int32_t& m = scene.prev_index[r];
+        m = consecutive && m >= 0 && static_cast<std::size_t>(m) < before.screen_count
+            ? static_cast<std::int32_t>(before.screen_first + static_cast<std::size_t>(m)) : -1;
+    }
+    screen_identity_ = screen_identity_markers_ != 0u;
+    screen_layer_ = false;
+    history_scene_ = false;
+    frame_bindings_dirty_ = true;
+    current_replay_record_ = -1;
+    current_ps_record_ = -1;
+    state_.set_matrix_load_tracking(false);
+}
+
 void GxBackend::on_fifo_marker(FifoMarker marker, const std::array<float, 12>* view) {
     flush_pending_draw_batch();
     ++scene_markers_seen_;
+    if (marker == FifoMarker::SceneBegin) {
+        end_screen_layer();
+    }
     scene_phase_ = marker == FifoMarker::SceneBegin;
     const bool was_temporal = temporal_scene_;
     const bool was_motion = motion_scene_;
@@ -6775,6 +6855,7 @@ void GxBackend::on_fifo_marker(FifoMarker marker, const std::array<float, 12>* v
             }
             interp_scenes_[interp_scene_].clear();
             interp_scenes_[interp_scene_].valid = true;
+            scene_3d_recorded_ = true;
             ++interp_scenes_in_chunk_;
             // A fresh palette shadow for the scene's first palette draw.
             matrix_palette_stale_ = true;
@@ -6867,6 +6948,9 @@ void GxBackend::on_fifo_marker(FifoMarker marker, const std::array<float, 12>* v
     if (switched) {
         efb_copies_.set_efb_scale(renderer_.efb_scale());
         frame_bindings_dirty_ = true;
+    }
+    if (marker == FifoMarker::SceneEnd) {
+        begin_screen_layer();
     }
 }
 
@@ -7842,7 +7926,8 @@ bool GxBackend::render_interp_subframe(float t) {
                 static_cast<std::size_t>(m) < before_scene.constants.size();
             const GxVsConstants& now = scene.constants[r];
             const GxVsConstants* before = prev_data ? &before_scene.constants[static_cast<std::size_t>(m)] : nullptr;
-            const bool orthographic = now.projection[3][3] != 0.0f;
+            // The screen layer moves in screen space, whatever its projection.
+            const bool orthographic = scene.screen_record(r) || now.projection[3][3] != 0.0f;
             InterpRecordMotion motion{};
             motion.record = static_cast<std::uint32_t>(r);
             motion.prev = prev_data ? m : -1;
@@ -13976,6 +14061,7 @@ void GxBackend::on_efb_copy(std::uint32_t exec_command) {
                     capture_output_path("GALAXY_GX_CAPTURE_BACKBUFFER_PPM", frame_index_ + 1u));
                 owned_efb_recorded = renderer_.debug_copy_efb_to_readback();
             }
+            end_screen_layer();
             renderer_.copy_efb_to_xfb(params, *xfb);
             // The display copy ends the 2D layer: later work and the next
             // frame use the render-resolution EFB again.
