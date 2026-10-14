@@ -23964,6 +23964,57 @@ void apply_test_teleport(RuntimeState& state, galaxy::PpcContext* context, galax
     }
 }
 
+// Test hook: GALAXY_TEST_GALAXY_TOUR=<file of "Stage scenario" lines> visits
+// those stages in turn with the game's own MR::requestChangeStageInGameMoving
+// (0x803F8328), GALAXY_TEST_GALAXY_TOUR_FRAMES 3D scene frames apart (default
+// 1200), so a hidden run can load every galaxy and scenario. The stage name is
+// kept at 0x80002800: low memory between the exception vectors and the OS
+// globals that no game code uses, and the request keeps a pointer to it.
+void apply_test_galaxy_tour(RuntimeState& state, galaxy::PpcContext* context, galaxy::GuestMemoryV1* memory) {
+    struct Tour {
+        std::vector<std::pair<std::string, std::uint32_t>> stops;
+        std::uint64_t frames = 1200u;
+        std::size_t next = 0u;
+        std::uint64_t scene_frames = 0u;
+    };
+    static Tour tour = [] {
+        Tour result{};
+        char value[MAX_PATH]{};
+        std::size_t length = 0;
+        if (getenv_s(&length, value, sizeof(value), "GALAXY_TEST_GALAXY_TOUR") != 0 || length <= 1) {
+            return result;
+        }
+        std::ifstream list(value);
+        std::string stage;
+        std::uint32_t scenario = 0u;
+        while (list >> stage >> scenario) {
+            if (stage.size() < 63u) result.stops.emplace_back(stage, scenario);
+        }
+        result.frames = std::max<std::uint64_t>(read_env_u64("GALAXY_TEST_GALAXY_TOUR_FRAMES", 1200u), 60u);
+        std::cerr << "[galaxy-tour] stops=" << result.stops.size() << " frames=" << result.frames << '\n';
+        return result;
+    }();
+    if (tour.next >= tour.stops.size() || ++tour.scene_frames < tour.frames) {
+        return;
+    }
+    tour.scene_frames = 0u;
+    const auto& [stage, scenario] = tour.stops[tour.next++];
+    constexpr std::uint32_t kStageName = 0x80002800u;
+    std::array<std::byte, 64> name{};
+    std::transform(stage.begin(), stage.end(), name.begin(), [](char c) { return static_cast<std::byte>(c); });
+    state.address_space->copy(kStageName, name);
+    std::cerr << "[galaxy-tour] " << tour.next << '/' << tour.stops.size() << ' ' << stage << ' '
+              << scenario << '\n';
+    galaxy::coop::ThreadRegisters saved{};
+    galaxy::coop::save_thread_registers(*context, saved);
+    context->gpr[1] = (context->gpr[1] - 0x100u) & ~0xFu;
+    context->gpr[3] = kStageName;
+    context->gpr[4] = scenario;
+    context->pc = 0x803F8328u;
+    call_guest_impl(&state, 0x803F8328u, nullptr, context, memory);
+    galaxy::coop::load_thread_registers(saved, *context);
+}
+
 void call_guest_impl_body(
     void* user,
     std::uint32_t guest_address,
@@ -23999,6 +24050,7 @@ void call_guest_impl_body(
         state.address_space->flush_wgpipe_gather_tail_for_frame();
         if (guest_address == 0x8033EE8Cu) {
             apply_test_teleport(state, context, memory);
+            apply_test_galaxy_tour(state, context, memory);
             // MR::getCameraViewMtx (0x803C73CC): *(r13 - 0x3A78) -> +0x24 ->
             // +0xAC -> +0x10 -> scene object 0x17 (CameraContext) -> view
             // matrix at +0x0C. Motion vectors and interpolation use it for
