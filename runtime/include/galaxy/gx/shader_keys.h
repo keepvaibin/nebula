@@ -114,7 +114,9 @@ struct PixelShaderKey {
                                     // bits5-6 ztex format, bit7 dual-source: TEV source alpha is exported on SV_Target1
                                     // for SRC1 blend factors
     std::uint8_t output_flags;      // bits0-2 EFB format, bit3 RGBA6 dither, bit4 RGBA6 with
-                                    // 8-bit colour (no 6-bit colour, no dither; alpha stays 6-bit)
+                                    // 8-bit colour (no 6-bit colour, no dither; alpha stays 6-bit),
+                                    // bit5 glow: colour times ztex_params.z (additive scene draws
+                                    // while ray-traced lighting is on)
     std::uint8_t num_ind_stages;    // 0-4
     // Keys 0..15 keep their original shader source. New dither keys use 0xff and read the
     // reciprocal scale from the per-draw PS constants.

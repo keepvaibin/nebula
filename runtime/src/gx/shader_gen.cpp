@@ -2040,6 +2040,10 @@ std::string ShaderGenerator::generate_ps(const PixelShaderKey& key) const {
     // 6-bit; RGBA6 also quantizes RGB to 6-bit unless it keeps 8-bit colour.
     // Dual-source blending consumes the original 8-bit TEV alpha through
     // SV_Target1.
+    if ((key.output_flags & 0x20u) != 0u) {
+        // Glows (additive scene draws under ray-traced lighting) shine at their light's exposure.
+        s << "    frag.rgb *= ztex_params.z;\n";
+    }
     if (dual_src) {
         s << "    float tev_alpha = saturate(frag.a);\n";
     }

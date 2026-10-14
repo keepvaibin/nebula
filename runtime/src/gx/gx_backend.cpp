@@ -7024,7 +7024,7 @@ void GxBackend::on_fifo_marker(FifoMarker marker, const std::array<float, 12>* v
     flush_pending_draw_batch();
     {
         static const std::uint64_t trace_from = read_env_u64("GALAXY_TRACE_DRAW_ORDER", 0u);
-        if (trace_from != 0u && frame_index_ >= trace_from && (frame_index_ - trace_from) % 500u == 0u &&
+        if (trace_from != 0u && frame_index_ >= trace_from && (frame_index_ - trace_from) < 8u &&
             frame_index_ < trace_from + 6000u) [[unlikely]] {
             std::fprintf(stderr, "[draw-order] frame=%llu marker=%s phase=%u\n",
                          static_cast<unsigned long long>(frame_index_),
@@ -11918,6 +11918,21 @@ ID3D12PipelineState* GxBackend::flush_draw_state(
             current_vs_hash_ = vs_key_.hash();
         }
     }
+    // Glows: additive scene draws shine at the ray tracer's glow exposure (output_flags bit 5).
+    bool glow_changed = false;
+    {
+        const BlendMode b = state_.blend_mode();
+        const bool glow = scene_phase_ && side_layer_ == kSceneLayer && b.blend_enable && !b.logic_op_enable &&
+                          !b.subtract && b.color_update && b.dst_factor == BlendFactor::One &&
+                          renderer_.rt_glow_exposure() > 1.0f;
+        const auto flags = static_cast<std::uint8_t>(glow ? (ps_key_.output_flags | 0x20u)
+                                                          : (ps_key_.output_flags & ~0x20u));
+        if (flags != ps_key_.output_flags) {
+            ps_key_.output_flags = flags;
+            current_ps_hash_ = ps_key_.hash();
+            glow_changed = true;
+        }
+    }
     // Per-pixel lighting needs the extra position/normal interpolants, which
     // the line and point geometry shaders do not carry.
     {
@@ -11942,10 +11957,10 @@ ID3D12PipelineState* GxBackend::flush_draw_state(
     {
         const BlendMode marks = state_.blend_mode();
         alpha_marks_drawn_ |= !marks.color_update && marks.alpha_update;
-        // GALAXY_TRACE_DRAW_ORDER=N: every draw of chunk frames N, N+500, ... (12 frames) with its
+        // GALAXY_TRACE_DRAW_ORDER=N: every draw of chunk frames N to N+7 with its
         // scene phase, layer, blend, depth and projection (diagnostics).
         static const std::uint64_t trace_from = read_env_u64("GALAXY_TRACE_DRAW_ORDER", 0u);
-        if (trace_from != 0u && frame_index_ >= trace_from && (frame_index_ - trace_from) % 500u == 0u &&
+        if (trace_from != 0u && frame_index_ >= trace_from && (frame_index_ - trace_from) < 8u &&
             frame_index_ < trace_from + 6000u) [[unlikely]] {
             const ZMode z = state_.z_mode();
             const auto xf_float = [this](std::uint16_t address) {
@@ -12246,7 +12261,7 @@ ID3D12PipelineState* GxBackend::flush_draw_state(
     }
 
     // Upload PS constants when TEV stage config / fog / alpha / tex dims change.
-    if (tev_dirty || tev_c_dirty || tex_dirty || frame_bindings_dirty_ ||
+    if (tev_dirty || tev_c_dirty || tex_dirty || frame_bindings_dirty_ || glow_changed ||
         dirty == ~0u || (ps_record_restart_ && history_scene_)) {
         const auto constants_start = time_detail
             ? std::chrono::steady_clock::now()
@@ -12254,6 +12269,7 @@ ID3D12PipelineState* GxBackend::flush_draw_state(
         GxPsConstants ps_c{};
         fill_ps_constants(state_, ps_c);
         ps_c.ztex_params[1] = 1.0f / static_cast<float>(renderer_.efb_scale());
+        ps_c.ztex_params[2] = (ps_key_.output_flags & 0x20u) != 0u ? renderer_.rt_glow_exposure() : 0.0f;
         apply_uber_ps_key(ps_key_, ps_c);
 
         UploadRing::Allocation ps_alloc =

@@ -936,8 +936,8 @@ void TraceCS(uint3 id : SV_DispatchThreadID)
             ray.Origin = origin;
             ray.Direction = to / max(span, 1e-4f);
             ray.TMin = 0.0f;
-            // The light sits inside its glow (and whatever glows there): the ray ends at its radius.
-            ray.TMax = max(span - max(0.5f * kept.w, 2.0f + 0.01f * span), 0.0f);
+            // The light fills its glow (a core, a lamp head): the ray ends at its radius.
+            ray.TMax = max(span - max(0.9f * kept.w, 2.0f + 0.01f * span), 0.0f);
             RayQuery<RAY_FLAG_FORCE_OPAQUE | RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH |
                      RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES> query;
             query.TraceRayInline(g_scene, RAY_FLAG_NONE, 0xFFu, ray);
