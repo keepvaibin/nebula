@@ -272,7 +272,7 @@ std::uint32_t s_handled_key_normalized = 0u;
 // Publish/consume both dimensions together; exchange cannot clear a newer size.
 std::atomic<std::uint64_t> s_pending_resize_extent{0};
 
-constexpr unsigned kNativeSettingsTabCount = 5;
+constexpr unsigned kNativeSettingsTabCount = 6;
 // Rows the panel shows at once; longer pages scroll.
 constexpr unsigned kNativeSettingsVisibleRows = 9u;
 
@@ -751,7 +751,8 @@ unsigned native_settings_row_count(unsigned tab) {
     case 1: return temporal_quality_row_shown() ? 9u : 8u;
     case 2: return controls_row_count();
     case 3: return 7u;
-    case 4: return 6u;
+    case 4: return 1u;
+    case 5: return 6u;
     default: return 0u;
     }
 }
@@ -1189,6 +1190,15 @@ void adjust_native_setting_unlogged(int delta) {
         const float next = step_gain(*gains[row], delta);
         if (next != *gains[row]) {
             *gains[row] = next;
+            set_runtime_settings(settings);
+            s_native_settings_dirty.store(true, std::memory_order_release);
+        }
+    }
+    if (tab == 4u && row == 0u) {
+        // Text speed changes live (no apply).
+        const unsigned next = step(std::clamp(settings.text_speed, 1u, 3u) - 1u, 3u) + 1u;
+        if (next != settings.text_speed) {
+            settings.text_speed = next;
             set_runtime_settings(settings);
             s_native_settings_dirty.store(true, std::memory_order_release);
         }
@@ -12181,6 +12191,12 @@ std::string native_settings_row_text(
         default: return {};
         }
     case 4:
+        if (row == 0u) {
+            std::snprintf(text, sizeof(text), "TEXT SPEED: %uX", std::clamp(runtime.text_speed, 1u, 3u));
+            return text;
+        }
+        return {};
+    case 5:
         switch (row) {
         case 0:
             std::snprintf(
@@ -12280,12 +12296,12 @@ void draw_native_settings_overlay(RendererD3D12& renderer) {
         "SETTINGS",
         text);
 
-    const char* tabs[] = {"DISPLAY", "GRAPHICS", "CONTROLS", "AUDIO", "CAPS"};
+    const char* tabs[] = {"DISPLAY", "GRAPHICS", "CONTROLS", "AUDIO", "GENERAL", "CAPS"};
     static_assert(std::size(tabs) == kNativeSettingsTabCount);
     int tab_x = panel_x + 28;
-    // Five labels share the panel width; the longest is eight 6-unit glyphs
+    // The labels share the panel width; the longest is eight 6-unit glyphs
     // plus a gap, so the label scale shrinks on narrow panels.
-    const int tab_step = (panel_w - 56) / 5;
+    const int tab_step = (panel_w - 56) / static_cast<int>(kNativeSettingsTabCount);
     const int tab_scale = std::clamp(tab_step / 54, 1, scale);
     for (unsigned i = 0; i < kNativeSettingsTabCount; ++i) {
         ui_text(

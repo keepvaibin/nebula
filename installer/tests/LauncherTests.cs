@@ -78,6 +78,22 @@ namespace Nebula.Launcher
             Check(small[GraphicsSettings.SnapWindowSize(small, new Size(1920, 1080))] == small[small.Count - 1], "a size taller than the screen allows snaps to the largest");
         }
 
+        static void GeneralCases()
+        {
+            string path = AudioSettings.SettingsPath;
+            if (File.Exists(path)) File.Delete(path);
+            Check(GeneralSettings.Load().TextSpeed == 1, "text speed starts at the game's pace");
+            File.WriteAllText(path, "audio_master_gain=0.5\ntext_speed=7\n");
+            Check(GeneralSettings.Load().TextSpeed == 1, "an unknown text speed reads as 1x");
+            var general = GeneralSettings.Load();
+            general.TextSpeed = 3;
+            general.Save();
+            string saved = File.ReadAllText(path);
+            Check(saved.Contains("text_speed=3") && saved.Contains("audio_master_gain=0.5") && GeneralSettings.Load().TextSpeed == 3,
+                  "text speed is saved beside the other runtime settings");
+            File.Delete(path);
+        }
+
         static void AudioCases()
         {
             string path = AudioSettings.SettingsPath;
@@ -329,6 +345,7 @@ namespace Nebula.Launcher
                 string outDir = args[0];
                 WindowSizeCases();
                 AudioCases();
+                GeneralCases();
                 SaveArchiveCases(outDir);
                 Application.EnableVisualStyles();
 

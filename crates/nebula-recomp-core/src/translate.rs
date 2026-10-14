@@ -7666,6 +7666,14 @@ fn emit_direct_guest_call_with_exact_fpu(
         if target == 0x8016_6C6C && pc == 0x8016_6B1C {
             output.push_str(&site_hook_call(pc, "LodDistance", 0));
         }
+        // TalkTextFormer::updateTalking reveals one step of a talk balloon's
+        // (TalkBalloon, former at r31 + 0x24) or Rosalina's storybook text
+        // (RosettaMonologue, former at r30 + 0x24) per frame; the runtime
+        // repeats it for the text speed setting. Movie subtitles keep the
+        // movie's pace.
+        if target == 0x802A_367C && (pc == 0x8029_D1A8 || pc == 0x8028_2B38) {
+            output.push_str(&site_hook_call(pc, "TextStep", u32::from(pc == 0x8028_2B38)));
+        }
         Ok(())
     }
 

@@ -520,6 +520,8 @@ enum class SiteHookKind : std::uint32_t {
     LightLoad = 26,             // argument: MotionLightSite; r3 the light info
     // 2D layer (generation 20): GameScene::draw2D bounds and layout identity.
     Layout2D = 27,              // argument: galaxy::motion::Layout2DSite
+    // Generation 21: one step of dialogue text was revealed (TalkTextFormer::updateTalking).
+    TextStep = 28,              // argument 0: TalkBalloon in r31; 1: RosettaMonologue in r30
 };
 
 inline void site_hook(

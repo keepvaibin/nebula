@@ -42,7 +42,9 @@ use std::{fs, path::Path};
 //     lives, emitter inits, draw categories and scene phases, stripe
 //     particles, mirror pass, light loads); needs a runtime that knows
 //     SiteHookKind 21-26.
-pub const GENERATION_VERSION: u32 = 20;
+// 21: dialogue text steps for the text speed setting; needs a runtime that
+//     knows SiteHookKind 28.
+pub const GENERATION_VERSION: u32 = 21;
 
 /// Shard size and per-shard source budget of the qualified module build.
 pub const MODULE_SHARD_SIZE: usize = 64;
