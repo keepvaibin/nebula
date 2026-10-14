@@ -10383,10 +10383,22 @@ void trace_game_light(RuntimeState& state, std::uint32_t site, std::uint32_t inf
     static std::vector<std::array<std::uint32_t, 12>> seen;
     std::array<std::uint32_t, 12> words{};
     for (unsigned i = 0; i < 12u; ++i) words[i] = mem->read_u32(info + 4u * i);
-    if (seen.size() >= 400u || std::find(seen.begin(), seen.end(), words) != seen.end()) {
+    // Once per light: positions to 1000 units, colours and brightness to 1/16 (blends and fades
+    // repeat a light many times).
+    std::array<std::uint32_t, 12> key{};
+    for (unsigned i = 0; i < 12u; ++i) {
+        const bool position = site == 2u ? i < 3u : (i >= 1u && i <= 3u) || (i >= 6u && i <= 8u);
+        const bool color = site == 2u ? i == 3u || i == 5u : i == 0u || i == 5u || i == 10u;
+        key[i] = position  ? static_cast<std::uint32_t>(static_cast<std::int32_t>(
+                                std::lround(std::bit_cast<float>(words[i]) / 1000.0f)))
+                 : color ? words[i] & 0xF0F0F0F0u
+                         : words[i];
+    }
+    key[11] = info;
+    if (seen.size() >= 1200u || std::find(seen.begin(), seen.end(), key) != seen.end()) {
         return;
     }
-    seen.push_back(words);
+    seen.push_back(key);
     const auto f = [&](unsigned word) { return std::bit_cast<float>(words[word]); };
     char line[320];
     if (site == 2u) {
@@ -10421,7 +10433,22 @@ void note_game_light(RuntimeState& state, std::uint32_t site, std::uint32_t info
                                     static_cast<float>((color >> 8u) & 0xFFu) / 255.0f};
     };
     if (site == 2u) {
-        galaxy::gx::note_game_point_light({f(info), f(info + 4u), f(info + 8u)}, rgb(mem->read_u32(info + 0xCu)));
+        // GX distance attenuation (GXInitLightDistAttn: reference distance +0x10, brightness
+        // there +0x14, function +0x18): 1 / (1 + k1 d + k2 d^2); the distance where it halves.
+        const float reference = f(info + 0x10u);
+        const float brightness = f(info + 0x14u);
+        const std::uint32_t function = mem->read_u32(info + 0x18u);
+        float half_distance = 0.0f;
+        if (reference > 0.0f && brightness > 0.0f && brightness < 1.0f && function >= 1u && function <= 3u) {
+            const float q = (1.0f - brightness) / brightness;
+            const float k1 = function == 1u ? q / reference : function == 2u ? 0.5f * q / reference : 0.0f;
+            const float k2 = function == 3u ? q / (reference * reference)
+                             : function == 2u ? 0.5f * q / (reference * reference)
+                                              : 0.0f;
+            half_distance = k2 > 0.0f ? (-k1 + std::sqrt(k1 * k1 + 4.0f * k2)) / (2.0f * k2) : 1.0f / k1;
+        }
+        galaxy::gx::note_game_point_light({f(info), f(info + 4u), f(info + 8u)}, rgb(mem->read_u32(info + 0xCu)),
+                                          half_distance);
         return;
     }
     for (const std::uint32_t light : {info, info + 0x14u}) {

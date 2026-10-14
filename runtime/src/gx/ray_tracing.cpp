@@ -88,8 +88,10 @@ struct RtCaptureConstants {
     float emissive;
     std::uint32_t divide;
     float strength;
+    float split;
+    std::uint32_t pad[3];
 };
-static_assert(sizeof(RtCaptureConstants) == 64u);
+static_assert(sizeof(RtCaptureConstants) == 80u);
 
 // Mirrors cbuffer RtComposite in rt_lighting.hlsl (root constants).
 struct RtCompositeConstants {
@@ -101,7 +103,8 @@ struct RtCompositeConstants {
     std::uint32_t flags;
     std::uint32_t slot;
     float near_plane;
-    std::uint32_t pad[2];
+    float split;
+    std::uint32_t pad;
 };
 static_assert(sizeof(RtCompositeConstants) == 80u);
 
@@ -272,7 +275,7 @@ std::array<NotedLight, 16> g_world_lights{};
 
 template <std::size_t N>
 void note_light(std::array<NotedLight, N>& lights, const std::array<float, 3>& position,
-                const std::array<float, 3>& color) {
+                const std::array<float, 3>& color, float half_distance = 0.0f) {
     const auto now = std::chrono::steady_clock::now();
     const std::lock_guard<std::mutex> lock(g_game_lights_mutex);
     NotedLight* slot = &lights[0];
@@ -286,7 +289,7 @@ void note_light(std::array<NotedLight, N>& lights, const std::array<float, 3>& p
             slot = &entry;
         }
     }
-    slot->light = {position, color};
+    slot->light = {position, color, half_distance};
     slot->seen = now;
     slot->used = true;
 }
@@ -315,8 +318,9 @@ void set_game_sun(const std::array<float, 3>& direction) noexcept {
     g_game_sun_known = true;
 }
 
-void note_game_point_light(const std::array<float, 3>& position, const std::array<float, 3>& color) noexcept {
-    note_light(g_point_lights, position, color);
+void note_game_point_light(const std::array<float, 3>& position, const std::array<float, 3>& color,
+                           float half_distance) noexcept {
+    note_light(g_point_lights, position, color, half_distance);
 }
 
 void note_game_world_light(const std::array<float, 3>& position, const std::array<float, 3>& color) noexcept {
@@ -462,9 +466,11 @@ bool SceneRayTracer::initialize(ID3D12Device* device, std::uint64_t timestamp_fr
     emissive_ = std::clamp(env_float("GALAXY_RT_EMISSIVE", 3.0f), 0.0f, 16.0f);
     show_lighting_ = env_float("GALAXY_RT_VIEW", 0.0f) != 0.0f;
     show_term_ = static_cast<std::uint32_t>(std::clamp(env_float("GALAXY_RT_VIEW", 0.0f), 0.0f, 4.0f));
-    point_range_ = std::clamp(env_float("GALAXY_RT_POINT_RANGE", 6000.0f), 10.0f, 1.0e6f);
+    point_radius_ = std::clamp(env_float("GALAXY_RT_POINT_RADIUS", 800.0f), 10.0f, 1.0e6f);
     point_size_ = std::clamp(env_float("GALAXY_RT_POINT_SIZE", 600.0f), 0.0f, 1.0e5f);
     point_light_ = std::clamp(env_float("GALAXY_RT_POINT_LIGHT", 2.0f), 0.0f, 8.0f);
+    point_saturation_ = std::clamp(env_float("GALAXY_RT_POINT_SATURATION", 0.6f), 0.0f, 1.0f);
+    split_ = std::clamp(env_float("GALAXY_RT_SPLIT", 0.0f), 0.0f, 1.0f);
     {
         char value[96]{};
         std::size_t length = 0u;
@@ -1232,6 +1238,7 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
             float importance;
             std::array<float, 3> eye;
             std::array<float, 3> color;
+            float half;
         };
         std::array<Candidate, 32> candidates{};
         std::size_t used = 0u;
@@ -1246,11 +1253,18 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
             } else {
                 continue;
             }
-            const auto& rgb = lights[i].color;
+            // Its colour less saturated (light mixes towards white on what it reaches); its
+            // falloff the game's own (halved at half_distance), else GALAXY_RT_POINT_RADIUS.
+            const auto& c0 = lights[i].color;
+            const float l0 = 0.2126f * c0[0] + 0.7152f * c0[1] + 0.0722f * c0[2];
+            std::array<float, 3> rgb{};
+            for (unsigned k = 0; k < 3u; ++k) {
+                rgb[k] = l0 + (c0[k] - l0) * point_saturation_;
+            }
+            const float half = lights[i].half_distance > 1.0f ? lights[i].half_distance : point_radius_;
             const float distance2 = e[0] * e[0] + e[1] * e[1] + e[2] * e[2];
-            const float importance = (0.2126f * rgb[0] + 0.7152f * rgb[1] + 0.0722f * rgb[2]) /
-                                     (1.0f + distance2 / (point_range_ * point_range_));
-            candidates[used++] = {importance, e, rgb};
+            const float importance = l0 / (1.0f + distance2 / (144.0f * half * half));
+            candidates[used++] = {importance, e, rgb, half};
         }
         std::sort(candidates.begin(), candidates.begin() + static_cast<std::ptrdiff_t>(used),
                   [](const Candidate& a, const Candidate& b) { return a.importance > b.importance; });
@@ -1262,16 +1276,27 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
                 c.points[2u * i][k] = candidates[i].eye[k];
                 c.points[2u * i + 1u][k] = candidates[i].color[k];
             }
-            c.points[2u * i][3] = point_range_;
+            // Reach: twelve half distances (1/145 of the light, windowed to 0).
+            c.points[2u * i][3] = 12.0f * candidates[i].half;
+            c.points[2u * i + 1u][3] = 1.0f / (candidates[i].half * candidates[i].half);
         }
         window_.point_lights += c.point_count;
         // GALAXY_TRACE_LIGHTS=1: the lights of every 240th traced scene (diagnostics).
         static const bool trace_lights = env_float("GALAXY_TRACE_LIGHTS", 0.0f) != 0.0f;
         if (trace_lights && light_frame_ % 240u == 1u) {
             for (std::uint32_t i = 0; i < c.point_count; ++i) {
-                std::fprintf(stderr, "[rt-light] point %u eye=(%.0f %.0f %.0f) color=(%.2f %.2f %.2f) importance=%.4f\n", i,
-                             candidates[i].eye[0], candidates[i].eye[1], candidates[i].eye[2], candidates[i].color[0],
-                             candidates[i].color[1], candidates[i].color[2], candidates[i].importance);
+                std::fprintf(stderr,
+                             "[rt-light] point %u eye=(%.0f %.0f %.0f) color=(%.2f %.2f %.2f) half=%.0f importance=%.4f\n",
+                             i, candidates[i].eye[0], candidates[i].eye[1], candidates[i].eye[2], candidates[i].color[0],
+                             candidates[i].color[1], candidates[i].color[2], candidates[i].half,
+                             candidates[i].importance);
+            }
+            std::array<GameLight, 16> world{};
+            const std::size_t world_count = game_world_lights(world, 2000u);
+            for (std::size_t i = 0; i < world_count; ++i) {
+                std::fprintf(stderr, "[rt-light] world %zu position=(%.0f %.0f %.0f) color=(%.2f %.2f %.2f)\n", i,
+                             world[i].position[0], world[i].position[1], world[i].position[2], world[i].color[0],
+                             world[i].color[1], world[i].color[2]);
             }
             std::fprintf(stderr, "[rt-light] sun present=%d eye=(%.3f %.3f %.3f) light=(%.2f %.2f %.2f)\n",
                          c.sun_light[0] + c.sun_light[1] + c.sun_light[2] > 0.0f ? 1 : 0, c.sun[0], c.sun[1], c.sun[2],
@@ -1392,6 +1417,7 @@ void SceneRayTracer::capture_picture(ID3D12GraphicsCommandList* list, D3D12_GPU_
     c.emissive = emissive_;
     c.divide = divide ? 1u : 0u;
     c.strength = strength_;
+    c.split = view_.viewport[0] + split_ * view_.viewport[2];
 
     to_state(list, picture_.Get(), picture_state_, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
     to_state(list, picture_sums_.Get(), picture_sums_state_, D3D12_RESOURCE_STATE_COPY_DEST);
@@ -1446,6 +1472,7 @@ void SceneRayTracer::composite(ID3D12GraphicsCommandList* list, D3D12_CPU_DESCRI
     c.flags = (reproject ? 1u : 0u) | (show_lighting_ ? 2u : 0u);
     c.slot = index;
     c.near_plane = info.near_plane;
+    c.split = split_ > 0.0f ? info.view.viewport[0] + split_ * info.view.viewport[2] : -1.0f;
     list->OMSetRenderTargets(1u, &target, FALSE, nullptr);
     const D3D12_VIEWPORT viewport{0.0f, 0.0f, static_cast<float>(width), static_cast<float>(height), 0.0f, 1.0f};
     const D3D12_RECT scissor{0, 0, static_cast<LONG>(width), static_cast<LONG>(height)};

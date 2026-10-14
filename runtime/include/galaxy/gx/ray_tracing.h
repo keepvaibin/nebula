@@ -43,6 +43,8 @@ inline constexpr std::uint32_t kRtDrawWideIndices = 4u;
 // The draw's colour is lit by GX lights (characters, lit objects): its shading already turns
 // towards its lights.
 inline constexpr std::uint32_t kRtDrawLit = 8u;
+// It takes GX light 4, the slot LightFunction::loadPointLightInfo loads the game's point light into.
+inline constexpr std::uint32_t kRtDrawPointLit = 32u;
 
 // Diagnostics for GALAXY_RT_DUMP: the draw's GX projection (A-F), viewport depth range, cull
 // mode and SceneFunction phase; colour channel 0 (XF control word, ambient and material RGBA8)
@@ -331,7 +333,9 @@ private:
     float sun_size_ = 2.5f;     // degrees
     bool sun_override_ = false;
     float point_light_ = 2.0f;      // GALAXY_RT_POINT_LIGHT: weight of the game's point lights
-    float point_range_ = 6000.0f;   // GALAXY_RT_POINT_RANGE: their reach (eye units)
+    float point_radius_ = 800.0f;   // GALAXY_RT_POINT_RADIUS: half-light distance without GX attenuation
+    float point_saturation_ = 0.6f; // GALAXY_RT_POINT_SATURATION: 0 white .. 1 the light's own colour
+    float split_ = 0.0f;            // GALAXY_RT_SPLIT: left of this fraction the game's own picture
     float point_size_ = 600.0f;     // GALAXY_RT_POINT_SIZE: radius of the geometry around one
     float sun_light_ = 0.55f;
     float sky_light_ = 0.65f;

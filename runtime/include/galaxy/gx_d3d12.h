@@ -139,13 +139,16 @@ void set_game_sun(const std::array<float, 3>& direction) noexcept;
 // The direction when one arrived within `max_age_ms`.
 [[nodiscard]] bool game_sun(std::array<float, 3>& direction, std::uint64_t max_age_ms) noexcept;
 // Simulation thread: the game's lights as it loads them for drawing. A point light
-// (LightFunction::loadPointLightInfo: world position, colour 0-1) and a world-fixed light of an
+// (LightFunction::loadPointLightInfo: world position, colour 0-1, the distance at which its GX
+// distance attenuation halves it, 0 without attenuation) and a world-fixed light of an
 // ActorLightInfo (follow-camera off: its far position names its direction).
-void note_game_point_light(const std::array<float, 3>& position, const std::array<float, 3>& color) noexcept;
+void note_game_point_light(const std::array<float, 3>& position, const std::array<float, 3>& color,
+                           float half_distance) noexcept;
 void note_game_world_light(const std::array<float, 3>& position, const std::array<float, 3>& color) noexcept;
 struct GameLight {
     std::array<float, 3> position{};
     std::array<float, 3> color{};
+    float half_distance = 0.0f;
 };
 // The lights noted within `max_age_ms` (not black), at most `out.size()`; returns the count.
 std::size_t game_point_lights(std::span<GameLight> out, std::uint64_t max_age_ms) noexcept;

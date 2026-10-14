@@ -6941,6 +6941,7 @@ bool GxBackend::begin_rt_batch(const DrawCall& call, RtDrawInfo& info) {
     {
         const XfChannelCtrl color = state_.channel_ctrl(0u);
         info.surface = color.lighting_enable && color.light_mask != 0u ? kRtDrawLit : 0u;
+        info.surface |= color.lighting_enable && (color.light_mask & 0x10u) != 0u ? kRtDrawPointLit : 0u;
     }
     {
         const std::uint8_t mask = state_.channel_ctrl(0u).light_mask;
@@ -14350,6 +14351,7 @@ void GxBackend::on_efb_copy(std::uint32_t exec_command) {
                   << " alpha-mask=" << state_.blend_mode().alpha_update
                   << " depth-mask=" << state_.z_mode().update_enable
                   << " pixel-format=" << static_cast<unsigned>(state_.pe_control().pixel_format)
+                  << " phase=" << static_cast<unsigned>(rt_phase_) << " scene=" << (scene_phase_ ? 1 : 0)
                   << '\n';
     }
 

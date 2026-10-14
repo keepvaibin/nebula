@@ -45,7 +45,8 @@ cbuffer RtLight : register(b0)
     float g_point_light;        // their weight
     float g_point_size;         // radius of the geometry around a light (its emitter)
     float g_point_pad;
-    float4 g_points[16];        // per light: eye position (xyz), range (w); colour (rgb)
+    float4 g_points[16];        // per light: eye position (xyz), reach (w); colour (rgb),
+                                // 1 / its half-light distance squared (w)
 };
 
 RaytracingAccelerationStructure g_scene : register(t6);
@@ -66,6 +67,7 @@ RWStructuredBuffer<uint2> g_primary : register(u5);      // triangle + 1 (0: non
 
 static const float kPi = 3.14159265f;
 static const uint kDrawLit = 8u;    // RtDraw.flags: GX-lit colour
+static const uint kDrawPointLit = 32u;  // RtDraw.flags: lit by GX light 4 (the game's point light)
 
 // ---------------------------------------------------------------------------------------------
 // Shared helpers
@@ -232,6 +234,8 @@ cbuffer RtCapture : register(b0)
     float c_emissive;        // extra light of the brightest pixels
     uint c_divide;           // 1: this frame's lighting (c_final) is divided out
     float c_strength;
+    float c_split;           // GALAXY_RT_SPLIT: pixels left of it kept the game's own colour
+    uint3 c_pad;
 };
 Texture2D<float4> c_color : register(t0);
 Texture2D<float> c_depth_tex : register(t1);
@@ -260,7 +264,12 @@ void CaptureCS(uint3 id : SV_DispatchThreadID)
         if (c_divide != 0u) {
             // Without this frame's sky and bounce light (no feedback through it); the sun's
             // light stays, for the bounce it sends.
-            color *= clamp(f16tof32(c_final[index].y >> 16u), 0.25f, 4.0f);
+            const uint3 f = c_final[index];
+            float keep = f16tof32(f.y >> 16u);
+            if (float(q.x) < c_split) {
+                keep *= luminance(float3(f16tof32(f.x), f16tof32(f.x >> 16u), f16tof32(f.y)));
+            }
+            color *= clamp(keep, 0.25f, 4.0f);
         }
         // Bright, saturated pixels (lamps, lava, glowing objects) send more light than their
         // stored colour.
@@ -354,11 +363,27 @@ float3 sky_tint()
     return l > 1e-3f ? lerp(float3(1.0f, 1.0f, 1.0f), sky / l, g_sky_saturation) : float3(1.0f, 1.0f, 1.0f);
 }
 
-float point_falloff(float d2, float range)
+// The game's distance attenuation (1 / (1 + d^2 / half^2)), windowed to 0 at the light's reach.
+float point_falloff(float d2, uint i)
 {
-    const float x = d2 / (range * range);
+    const float x = d2 / (g_points[2u * i].w * g_points[2u * i].w);
     const float window = saturate(1.0f - x * x);
-    return window * window / (1.0f + 16.0f * x);
+    return window * window / (1.0f + d2 * g_points[2u * i + 1u].w);
+}
+
+// The point lights' light on a surface, unshadowed.
+float3 points_unshadowed(float3 p, float3 n)
+{
+    float3 sum = float3(0.0f, 0.0f, 0.0f);
+    [loop] for (uint i = 0u; i < g_point_count; ++i) {
+        const float3 to = g_points[2u * i].xyz - p;
+        const float d2 = dot(to, to);
+        const float nl = dot(n, to) * rsqrt(max(d2, 1e-6f));
+        if (nl > 0.0f) {
+            sum += g_points[2u * i + 1u].rgb * (nl * point_falloff(d2, i));
+        }
+    }
+    return sum;
 }
 
 // The light a hit point sends back: the previous picture where it showed that point.
@@ -496,7 +521,7 @@ void TraceCS(uint3 id : SV_DispatchThreadID)
                 const float d2 = dot(to, to);
                 const float nl = dot(n, to) * rsqrt(max(d2, 1e-6f));
                 if (nl > 0.0f) {
-                    weights[i] = luminance(g_points[2u * i + 1u].rgb) * nl * point_falloff(d2, g_points[2u * i].w);
+                    weights[i] = luminance(g_points[2u * i + 1u].rgb) * nl * point_falloff(d2, i);
                 }
             }
             total += weights[i];
@@ -714,13 +739,24 @@ void SpatialBCS(uint3 id : SV_DispatchThreadID)
     // With the sky open: what the picture capture keeps (no feedback through the sky and bounce).
     float3 open = g_sun_light.www + sun + points;
     // A surface the game lights already turns its shading towards its lights: the traced light
-    // shadows it (the ratio to the same light unshadowed) and adds the point lights.
+    // shadows it (the ratio to the same light unshadowed). The point lights add to it, or, where
+    // the game lights it with them too (GX light 4), shadow it likewise.
     const uint tri = g_primary[index].x;
-    if (tri != 0u && (g_surfaces.Load((tri - 1u) * 16u + 12u) & kDrawLit) != 0u) {
-        const float facing = saturate(dot(unpack_normal(g_normal[index]), g_sun.xyz));
-        const float3 unshadowed = max(g_sun_light.www + facing * g_sun_light.rgb, 1e-3f);
-        lighting = (g_sun_light.w * light.sky + sun) / unshadowed + points;
-        open = (g_sun_light.www + sun) / unshadowed + points;
+    const uint draw_flags = tri != 0u ? g_surfaces.Load((tri - 1u) * 16u + 12u) : 0u;
+    if ((draw_flags & kDrawLit) != 0u) {
+        const float3 n = unpack_normal(g_normal[index]);
+        const float facing = saturate(dot(n, g_sun.xyz));
+        float3 unshadowed = g_sun_light.www + facing * g_sun_light.rgb;
+        float3 added = points;
+        if ((draw_flags & kDrawPointLit) != 0u && g_point_count != 0u) {
+            unshadowed += points_unshadowed(sample_position(id.xy, z), n) * g_point_light;
+            added = float3(0.0f, 0.0f, 0.0f);
+            lighting = (g_sun_light.w * light.sky + sun + points) / max(unshadowed, 1e-3f);
+            open = (g_sun_light.www + sun + points) / max(unshadowed, 1e-3f);
+        } else {
+            lighting = (g_sun_light.w * light.sky + sun) / max(unshadowed, 1e-3f) + added;
+            open = (g_sun_light.www + sun) / max(unshadowed, 1e-3f) + added;
+        }
     }
     float3 m = lerp(float3(1.0f, 1.0f, 1.0f), lighting, g_strength);
     if ((g_flags & 4u) != 0u) {
@@ -752,7 +788,8 @@ cbuffer RtComposite : register(b0)
                     // bit 1: show the lighting alone
     uint m_slot;
     float m_near;
-    uint2 m_pad;
+    float m_split;  // GALAXY_RT_SPLIT: left of it the game's own picture (a dark line between)
+    uint m_pad;
 };
 StructuredBuffer<uint3> m_light : register(t0);
 Texture2D<float> m_efb_depth : register(t1);
@@ -784,6 +821,13 @@ CompositeOut CompositePS(float4 position : SV_Position)
             return result;
         }
         discard;
+    }
+    if (position.x < m_split + 1.0f) {
+        if (position.x < m_split - 1.0f) {
+            discard;
+        }
+        result.keep = float4(0.3f, 0.3f, 0.3f, 1.0f);
+        return result;
     }
     float3 p = eye_position(m_projection, m_viewport, position.xy, z);
     if ((m_flags & 1u) != 0u) {
