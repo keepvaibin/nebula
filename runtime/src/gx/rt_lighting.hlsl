@@ -501,7 +501,7 @@ void SkyStateCS()
         const float day = c_sums.Load(36u) != 0u ? saturate(asfloat(c_sums.Load(32u)) / c_daylight) : 1.0f;
         const float target = lerp(c_exposure_night, c_exposure_day, day);
         const float exposure = c_sums.Load(52u) != 0u ? asfloat(c_sums.Load(48u)) : 1.0f;
-        const float next = clamp(exposure * lerp(1.0f, target / max(mean, 0.05f), 0.1f), 0.8f, 1.8f);
+        const float next = clamp(exposure * lerp(1.0f, target / max(mean, 0.05f), 0.1f), 0.85f, 1.3f);
         c_sums.Store2(48u, uint2(asuint(next), 1u));
     }
 }
@@ -1488,7 +1488,10 @@ void SpatialBCS(uint3 id : SV_DispatchThreadID)
         g_final[index] = uint3(f32tof16(1.0f) | (f32tof16(1.0f) << 16u), f32tof16(1.0f) | (f32tof16(1.0f) << 16u), 0u);
         return;
     }
-    const Light light = filtered(id.xy, 4, true);
+    Light light = filtered(id.xy, 4, true);
+    if ((g_flags & 128u) != 0u) {
+        light.sky = float3(1.0f, 1.0f, 1.0f);  // GALAXY_RT_GI=0: the sky open, no bounce
+    }
     const float3 sun = light.sun * g_sun_light.rgb;
     const float3 points = light.points * g_point_light;
     // The sky and bounce light follow the sky: under a dark sky the lights carry the picture.

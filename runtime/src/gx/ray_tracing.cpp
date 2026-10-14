@@ -122,8 +122,10 @@ struct RtPostConstants {
     float grade;
     float split;
     std::uint32_t axis;
+    float rim;
+    std::uint32_t pad[3];
 };
-static_assert(sizeof(RtPostConstants) == 144u);
+static_assert(sizeof(RtPostConstants) == 160u);
 
 // Mirror cbuffer RtBloom and RtBloomComposite in rt_lighting.hlsl (root constants).
 struct RtBloomConstants {
@@ -667,13 +669,16 @@ bool SceneRayTracer::initialize(ID3D12Device* device, std::uint64_t timestamp_fr
     post_shafts_ = std::clamp(env_float("GALAXY_RT_POST_SHAFTS", 0.6f), 0.0f, 4.0f);
     post_dof_ = std::clamp(env_float("GALAXY_RT_POST_DOF", 3.0f), 0.0f, 32.0f);
     post_grade_ = std::clamp(env_float("GALAXY_RT_POST_GRADE", 1.0f), 0.0f, 1.0f);
+    post_rim_ = std::clamp(env_float("GALAXY_RT_POST_RIM", 0.35f), 0.0f, 2.0f);
+    post_view_ = env_float("GALAXY_RT_POST_VIEW", 0.0f) != 0.0f;
+    gi_ = env_float("GALAXY_RT_GI", 1.0f) != 0.0f;
     core_radius_ = std::clamp(env_float("GALAXY_RT_CORE_RADIUS", 400.0f), 1.0f, 100000.0f);
     core_light_ = std::clamp(env_float("GALAXY_RT_CORE_LIGHT", 2.5f), 0.0f, 16.0f);
     bloom_strength_ = std::clamp(env_float("GALAXY_RT_BLOOM", 0.8f), 0.0f, 4.0f);
     bloom_threshold_ = std::clamp(env_float("GALAXY_RT_BLOOM_THRESHOLD", 0.15f), 0.0f, 4.0f);
     exposure_ = env_float("GALAXY_RT_EXPOSURE", 1.0f) != 0.0f;
-    exposure_day_ = std::clamp(env_float("GALAXY_RT_EXPOSURE_DAY", 1.0f), 0.3f, 1.5f);
-    exposure_night_ = std::clamp(env_float("GALAXY_RT_EXPOSURE_NIGHT", 1.0f), 0.3f, 1.5f);
+    exposure_day_ = std::clamp(env_float("GALAXY_RT_EXPOSURE_DAY", 0.95f), 0.3f, 1.5f);
+    exposure_night_ = std::clamp(env_float("GALAXY_RT_EXPOSURE_NIGHT", 0.95f), 0.3f, 1.5f);
     surface_emission_ = std::clamp(env_float("GALAXY_RT_SURFACE_EMISSION", 3.0f), 0.0f, 256.0f);
     {
         char value[96]{};
@@ -2037,7 +2042,7 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
     const std::array<float, 12> to_picture = picture ? affine_multiply(picture_camera_, inverse) : kIdentity34;
     c.flags = (history ? 1u : 0u) | (picture ? 2u : 0u) | (show_term_ == 2u ? 4u : 0u) | (show_term_ == 3u ? 8u : 0u) |
               (show_term_ == 4u ? 16u : 0u) | (show_term_ == 5u ? 32u : 0u) |
-              (show_term_ == 6u ? 64u : 0u);
+              (show_term_ == 6u ? 64u : 0u) | (gi_ ? 0u : 128u);
     std::memcpy(c.reproject, reproject.data(), sizeof(c.reproject));
     std::memcpy(c.picture, to_picture.data(), sizeof(c.picture));
     std::memcpy(c.to_eye, camera_.data(), sizeof(c.to_eye));
@@ -2532,6 +2537,7 @@ void SceneRayTracer::post_prepare(ID3D12GraphicsCommandList* list, D3D12_GPU_DES
     c.shafts = post_shafts_;
     c.dof = post_dof_ * static_cast<float>(width) / 640.0f;
     c.grade = post_grade_;
+    c.rim = post_rim_;
     c.split = split_ > 0.0f ? view_.viewport[0] + split_ * view_.viewport[2] : -1.0f;
 
     ID3D12Resource* const scene = post_buffers_[0].Get();
@@ -2572,6 +2578,7 @@ void SceneRayTracer::post_prepare(ID3D12GraphicsCommandList* list, D3D12_GPU_DES
     for (unsigned i = 0; i < post_buffers_.size(); ++i) {
         to_state(list, post_buffers_[i].Get(), post_states_[i], kLightRead);
     }
+    c.axis = post_view_ ? 2u : 0u;
     std::memcpy(post_constants_.data(), &c, sizeof(c));
 }
 

@@ -22,7 +22,9 @@ cbuffer RtPost : register(b0)
     float p_dof;                // largest blur radius (EFB pixels; 0: none)
     float p_grade;              // colour grade strength (0: none)
     float p_split;              // GALAXY_RT_SPLIT: left of it the game's own picture
-    uint p_axis;                // blur pass: 0 across, 1 down
+    uint p_axis;                // blur pass: 0 across, 1 down; finish: 2 false colour
+    float p_rim;                // rim light at silhouettes (0: none)
+    uint3 p_pad;
 };
 
 Texture2D<float4> p_color : register(t0);
@@ -367,15 +369,19 @@ float3 shoulder(float3 c)
 
 float3 grade(float3 c, float2 pixel)
 {
-    // Filmic contrast around mid grey, richer colour, warm highlights against cool shadows, and a
-    // soft vignette.
+    // Filmic contrast on luminance (an S around mid grey that keeps black, white and the hue),
+    // vibrance (dull colours gain more saturation than vivid ones), warm highlights against cool
+    // shadows, and a soft vignette.
     c = shoulder(max(c, 0.0f));
     const float l = luminance(c);
-    const float3 curved = saturate(c + 0.5f * (c - 0.5f) * c * (1.0f - c));
-    float3 g = lerp(l.xxx, curved, 1.06f);
+    const float lc = saturate(l + 0.7f * (l - 0.5f) * l * (1.0f - l));
+    float3 g = c * (lc / max(l, 1e-4f));
+    const float chroma = max(g.r, max(g.g, g.b)) - min(g.r, min(g.g, g.b));
+    const float vibrance = 1.04f + 0.3f * (1.0f - smoothstep(0.0f, 0.5f, chroma));
+    g = lc + (g - lc) * vibrance;
     const float3 shadows = float3(0.985f, 0.995f, 1.02f);
     const float3 highlights = float3(1.015f, 1.0f, 0.985f);
-    g *= lerp(shadows, highlights, smoothstep(0.15f, 0.85f, l));
+    g *= lerp(shadows, highlights, smoothstep(0.15f, 0.85f, lc));
     const float2 v = (pixel - (p_viewport.xy + p_viewport.zw * 0.5f)) / (p_viewport.zw * 0.5f);
     g *= 1.0f - 0.08f * pow(saturate(dot(v, v) * 0.5f), 1.5f);
     return lerp(c, saturate(g), p_grade);
@@ -413,8 +419,33 @@ float4 PostPS(float4 position : SV_Position) : SV_Target0
     if (p_core.w > 0.0f) {
         c = star_core(position.xy, distance, c);
     }
+    // Rim light: a near surface's edge against something far behind it (an object against the sky
+    // or distant scenery) catches light wrapping around it, in its own colour.
+    if (p_rim > 0.0f && distance < 6.0e4f) {
+        const float r = max(2.0f, p_viewport.w / 360.0f);
+        float behind = 0.0f;
+        const float2 around[4] = {float2(-1.0f, 0.0f), float2(1.0f, 0.0f), float2(0.0f, -1.0f), float2(0.0f, 1.0f)};
+        [unroll] for (uint k = 0u; k < 4u; ++k) {
+            const float far = scene_distance(q + int2(round(around[k] * r)));
+            behind = max(behind, saturate((far - distance) / (distance * 0.6f + 50.0f)));
+        }
+        c *= 1.0f + behind * p_rim;
+    }
     c += quarter_at(f_bloom, position.xy) * p_bloom;
     c += quarter_at(f_shafts, position.xy);
     c = grade(c, position.xy);
+    if (p_axis == 2u) {
+        // GALAXY_RT_POST_VIEW: the finished picture's luminance in false colour: deep blue near
+        // black, blue, green at mid grey, yellow, orange, red near white, magenta clipped.
+        const float l = luminance(c);
+        const float3 bands[6] = {float3(0.05f, 0.05f, 0.35f), float3(0.1f, 0.35f, 1.0f), float3(0.1f, 0.8f, 0.2f),
+                                 float3(0.95f, 0.9f, 0.1f), float3(1.0f, 0.5f, 0.05f), float3(0.95f, 0.1f, 0.1f)};
+        const float t = saturate(l) * 5.0f;
+        const uint i = min(uint(t), 4u);
+        c = lerp(bands[i], bands[i + 1u], t - float(i));
+        if (l >= 0.985f) {
+            c = float3(1.0f, 0.0f, 1.0f);
+        }
+    }
     return float4(c, 1.0f);
 }

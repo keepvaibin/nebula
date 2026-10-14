@@ -431,7 +431,7 @@ private:
     std::array<D3D12_RESOURCE_STATES, 6> post_states_{};
     std::uint64_t post_pixels_ = 0u;
     std::uint64_t post_quarter_ = 0u;
-    std::array<std::uint32_t, 36> post_constants_{};
+    std::array<std::uint32_t, 40> post_constants_{};
     std::array<float, 12> post_camera_{};
     bool post_camera_known_ = false;
     std::chrono::steady_clock::time_point post_epoch_ = std::chrono::steady_clock::now();
@@ -560,6 +560,9 @@ private:
     float post_shafts_ = 0.6f;      // GALAXY_RT_POST_SHAFTS
     float post_dof_ = 3.0f;         // GALAXY_RT_POST_DOF: largest far blur (EFB pixels at 1x; 0 none)
     float post_grade_ = 1.0f;       // GALAXY_RT_POST_GRADE
+    float post_rim_ = 0.35f;        // GALAXY_RT_POST_RIM: rim light at silhouettes
+    bool post_view_ = false;        // GALAXY_RT_POST_VIEW: the finished luminance in false colour
+    bool gi_ = true;                // GALAXY_RT_GI=0: no sky occlusion or bounce (shadows and lights stay)
     float core_radius_ = 400.0f;    // GALAXY_RT_CORE_RADIUS: the star core's radius at scale 1 (first guess;
                                     // the finish measures it from depth)
     float core_light_ = 2.5f;       // GALAXY_RT_CORE_LIGHT: its light (a point light; grows with it)
@@ -568,8 +571,8 @@ private:
     // GALAXY_RT_EXPOSURE_DAY / _NIGHT: the mean lighting the exposure holds under a bright / black
     // sky (the light moves into lit areas and out of shadows instead of dimming the picture);
     // GALAXY_RT_EXPOSURE=0 turns it off.
-    float exposure_day_ = 1.0f;
-    float exposure_night_ = 1.0f;
+    float exposure_day_ = 0.95f;
+    float exposure_night_ = 0.95f;
     bool exposure_ = true;
     float surface_emission_ = 3.0f; // GALAXY_RT_SURFACE_EMISSION: a glowing surface's light per unit
                                     // of its colour and eye-space area (0: none)
