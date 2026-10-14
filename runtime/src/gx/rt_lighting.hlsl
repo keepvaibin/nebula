@@ -426,7 +426,11 @@ void CaptureCS(uint3 id : SV_DispatchThreadID)
         color *= 1.0f + c_emissive * glow * glow;
     }
     c_picture[index] = uint2(pack_r11g11b10(color), asuint(z));
-    // Averages of the sky and of the scene (8-bit units, glow clipped).
+    // Averages of the sky and of the scene (8-bit units, glow clipped); the EFB outside the
+    // viewport (rows below the picture) is neither.
+    if (!inside(c_viewport, float2(q) + 0.5f)) {
+        return;
+    }
     const uint3 units = uint3(round(saturate(color) * 255.0f));
     const uint base = sky ? 0u : 16u;
     c_sums.InterlockedAdd(base + 0u, units.r);
@@ -584,7 +588,7 @@ void EmitMergeCS(uint gi : SV_GroupIndex)
         }
         if (centre.w > 0.0f) {
             // Seen: brighter at once, dimmer slowly (a partly hidden glow shows less of itself).
-            lb.rgb = lerp(lb.rgb, power, luminance(power) > luminance(lb.rgb) ? 0.5f : 0.1f);
+            lb.rgb = lerp(lb.rgb, power, luminance(power) > luminance(lb.rgb) ? 0.25f : 0.08f);
             la = float4(lerp(la.xyz, centre.xyz / centre.w, 0.5f), lerp(la.w, radius, 0.5f));
             lb.w = 0.0f;
         } else {
@@ -998,7 +1002,9 @@ void TraceCS(uint3 id : SV_DispatchThreadID)
             query.Proceed();
             if (query.CommittedStatus() != COMMITTED_TRIANGLE_HIT) {
                 // power nl / (pi (d2 + r2)) over the kept light's weight, times the mean weight.
-                points += kept_power / (kPi * lum) * (sum * 0.125f) / max(g_point_light, 1e-3f);
+                // Bright bursts (lava eruptions, sparks) saturate softly instead of blowing out.
+                const float3 glow = kept_power / (kPi * lum) * (sum * 0.125f);
+                points += glow / (1.0f + luminance(glow) / 1.5f) / max(g_point_light, 1e-3f);
             }
         }
     }
