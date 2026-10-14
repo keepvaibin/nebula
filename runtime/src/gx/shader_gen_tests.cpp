@@ -852,6 +852,28 @@ int main() {
                        "ps_konst_alpha_fixed_eighth");
     }
 
+    {   // RGBA6 with 8-bit colour: no colour quantization, no dither, 6-bit alpha.
+        PixelShaderKey k{};
+        std::memset(&k, 0, sizeof(k));
+        k.num_tev_stages = 1;
+        k.num_texgens = 1;
+        k.alpha_comp0 = 7;
+        k.alpha_comp1 = 7;
+        k.output_flags = 1u | 0x10u;
+        k.stages[0] = basic_stage();
+        const ShaderGenerator gen;
+        const std::string src = gen.generate_ps(k);
+        check_contains(src, "frag.rgb = float3(efb_color.rgb) / 255.0;", "ps_rgba6_true_color_rgb");
+        check_contains(src, "float(efb_color.a >> 2) / 63.0", "ps_rgba6_true_color_alpha");
+        if (src.find("dither_rgb") != std::string::npos ||
+            src.find("efb_color.rgb >> 2") != std::string::npos) {
+            ++g_failures;
+            std::printf("FAILED: ps_rgba6_true_color quantizes or dithers colour\n");
+        } else {
+            std::printf("ok: ps_rgba6_true_color keeps 8-bit colour\n");
+        }
+    }
+
     {   // RGBA6 output quantizes RGB/alpha and applies hardware dither.
         PixelShaderKey k{};
         std::memset(&k, 0, sizeof(k));
@@ -950,10 +972,14 @@ int main() {
         GxState state;
         state.load_bp((static_cast<std::uint32_t>(bp::kPeControl) << 24u) | 1u);
         state.load_bp((static_cast<std::uint32_t>(bp::kBlendMode) << 24u) | (1u << 2u));
-        const auto canonical = build_pixel_shader_key(state, 1u);
+        const auto canonical = build_pixel_shader_key(state, 1u, false);
         bool keys_match = canonical.efb_scale_minus_one == 0xffu;
+        const auto true_color = build_pixel_shader_key(state, 1u, true);
+        keys_match &= true_color.output_flags == (1u | 0x10u) && true_color.efb_scale_minus_one == 0u;
         for (unsigned scale = 1u; scale <= galaxy::gx::kMaxEfbScale; ++scale) {
-            keys_match &= canonical == build_pixel_shader_key(state, scale);
+            keys_match &= canonical == build_pixel_shader_key(state, scale, false);
+            keys_match &= true_color == build_pixel_shader_key(state, scale, true);
+            keys_match &= !(true_color == canonical);
             auto legacy = canonical;
             legacy.efb_scale_minus_one = static_cast<std::uint8_t>(scale - 1u);
             keys_match &= !(canonical == legacy) && canonical.hash() != legacy.hash();

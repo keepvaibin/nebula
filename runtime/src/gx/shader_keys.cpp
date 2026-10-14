@@ -46,9 +46,20 @@ namespace {
 // PixelShaderKey
 // ---------------------------------------------------------------------------
 
+// RGBA6 keeps 8-bit colour by default: the Flipper's 6-bit colour and its 2x2 dither only band
+// and stipple the picture, and at raised internal resolution the dither shows as a dot grid.
+bool efb_true_color() noexcept {
+    static const bool true_color = [] {
+        char value[8]{};
+        std::size_t length = 0u;
+        return !(getenv_s(&length, value, sizeof(value), "GALAXY_EFB_TRUE_COLOR") == 0 && length > 1u &&
+                 value[0] == '0');
+    }();
+    return true_color;
+}
+
 PixelShaderKey build_pixel_shader_key(
-    const GxState& state,
-    unsigned efb_scale) {
+    const GxState& state, unsigned efb_scale, bool true_color) {
     PixelShaderKey key{};
     // Zero-initialise the whole struct first. This covers the padding between num_tev_stages..flags
     // and the trailing stages[] entries, so the hash is deterministic for any stage count.
@@ -102,7 +113,8 @@ PixelShaderKey build_pixel_shader_key(
         (needs_dual_src_alpha(pe, bm) ? 0x80u : 0u));
     key.output_flags = static_cast<std::uint8_t>(
         (pe.pixel_format & 0x7u) |
-        ((pe.pixel_format == 1u && bm.dither) ? 0x08u : 0u));
+        (pe.pixel_format == 1u && true_color ? 0x10u
+         : (pe.pixel_format == 1u && bm.dither) ? 0x08u : 0u));
     // Scale is a per-draw constant, so one prepared material covers every internal resolution. The
     // distinct mode keeps the identity and source of static-scale DXBC in the persistent shader cache.
     static_cast<void>(efb_scale);  // Kept for the public call signature.
