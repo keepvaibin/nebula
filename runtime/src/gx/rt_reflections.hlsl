@@ -201,7 +201,7 @@ cbuffer RtReflect : register(b0)
     float g_sky_fade;           // environment memory of the sky kept per frame where the camera does not look
     float g_sky_average;        // confidence of the sky's average colour where no sky is known
     float g_metal_sky;          // metal: share of the sky's reflection over its own environment map
-    float g_pad3;
+    float g_local_gain;         // the local lights' highlights (point and glow lights)
 };
 
 RaytracingAccelerationStructure g_scene : register(t0);
@@ -493,9 +493,12 @@ bool lit_from(float3 origin, float3 direction, float length)
     return query.CommittedStatus() != COMMITTED_TRIANGLE_HIT;
 }
 
-// The highlights the scene's lights put on a surface at `p` (ray origin `origin`): the sun with
-// one shadow ray, and one local light (the point lights and four glows drawn by power) kept in
-// proportion to its unshadowed highlight (resampled importance), with one shadow ray.
+// The highlights the scene's lights put on a surface at `p` (ray origin `origin`): the sun with one
+// shadow ray; the local lights (the game's point lights and the glow lights: Lumas, lamps, stars,
+// fire) each by its irradiance at `p` (power / distance^2, so the nearest count most) times its GGX
+// lobe, all of them while there are few (else eight drawn by power, weighted by what they give),
+// times g_local_gain; the strongest one's shadow ray decides whether it counts (one ray, no noise
+// from choosing).
 float3 highlights(uint2 s, float3 p, float3 origin, float3 n, float3 v, float alpha, float f0)
 {
     float3 sum = float3(0.0f, 0.0f, 0.0f);
@@ -505,66 +508,72 @@ float3 highlights(uint2 s, float3 p, float3 origin, float3 n, float3 v, float al
             sum += g_sun_light.rgb * k;
         }
     }
-    float total = 0.0f;
-    float3 kept = float3(0.0f, 0.0f, 0.0f);
-    float3 kept_to = float3(0.0f, 0.0f, 1.0f);
-    float kept_end = 0.0f;
-    const float u0 = sample_point(s, 1u).x;
+    float3 local = float3(0.0f, 0.0f, 0.0f);
+    float3 strongest = float3(0.0f, 0.0f, 0.0f);
+    float strongest_weight = 0.0f;
+    float3 strongest_to = float3(0.0f, 0.0f, 1.0f);
+    float strongest_end = 0.0f;
     [loop] for (uint i = 0u; i < g_point_count; ++i) {
         const float3 to = g_points[2u * i].xyz - p;
         const float d = length(to);
         const float3 c = g_points[2u * i + 1u].rgb * (point_falloff(d * d, i) * g_point_light) *
                          ggx_highlight(n, v, to / max(d, 1e-4f), alpha, g_point_size / max(d, 1e-4f), f0);
-        const float w = luminance(c);
-        total += w;
-        if (w > 0.0f && u0 * total < w) {
-            kept = c / w;
-            kept_to = to;
-            kept_end = d - g_point_size;
+        local += c;
+        if (luminance(c) > strongest_weight) {
+            strongest_weight = luminance(c);
+            strongest = c;
+            strongest_to = to;
+            strongest_end = d - g_point_size;
         }
     }
     const uint emitters = (g_flags & 16u) != 0u ? g_emitters.Load(0u) : 0u;
     if (emitters != 0u) {
         const float power_total = asfloat(g_emitters.Load(4u));
-        [unroll] for (uint j = 0u; j < 4u; ++j) {
-            const float2 u = sample_point(s, 2u + j);
-            const float x = u.x * power_total;
-            uint lo = 0u;
-            uint hi = emitters - 1u;
-            [loop] while (lo < hi) {
-                const uint mid = (lo + hi) >> 1u;
-                if (asfloat(g_emitters.Load(16u + mid * 32u + 28u)) < x) {
-                    lo = mid + 1u;
-                } else {
-                    hi = mid;
+        // Few lights: every one; many: eight drawn by power, each weighted by 1 / (8 chance).
+        const bool all = emitters <= 48u;
+        const uint picks = all ? emitters : 8u;
+        [loop] for (uint j = 0u; j < picks; ++j) {
+            uint lo = j;
+            float scale = 1.0f;
+            if (!all) {
+                const float x = sample_point(s, 2u + j).x * power_total;
+                lo = 0u;
+                uint hi = emitters - 1u;
+                [loop] while (lo < hi) {
+                    const uint mid = (lo + hi) >> 1u;
+                    if (asfloat(g_emitters.Load(16u + mid * 32u + 28u)) < x) {
+                        lo = mid + 1u;
+                    } else {
+                        hi = mid;
+                    }
                 }
+                const float below = lo > 0u ? asfloat(g_emitters.Load(16u + (lo - 1u) * 32u + 28u)) : 0.0f;
+                const float chance = (asfloat(g_emitters.Load(16u + lo * 32u + 28u)) - below) / max(power_total, 1e-6f);
+                scale = chance > 0.0f ? 1.0f / (8.0f * chance) : 0.0f;
             }
             const float4 la = asfloat(g_emitters.Load4(16u + lo * 32u));
             const float3 power = asfloat(g_emitters.Load3(16u + lo * 32u + 16u));
-            const float below = lo > 0u ? asfloat(g_emitters.Load(16u + (lo - 1u) * 32u + 28u)) : 0.0f;
-            const float chance = (asfloat(g_emitters.Load(16u + lo * 32u + 28u)) - below) / max(power_total, 1e-6f);
             const float3 to = transform(g_world_to_eye, la.xyz) - p;
             const float d = length(to);
             // Its irradiance power / (pi (d^2 + r^2)), as the lighting's glow lights.
             const float3 c = power / (kPi * (d * d + la.w * la.w)) *
-                             ggx_highlight(n, v, to / max(d, 1e-4f), alpha, la.w / max(d, 1e-4f), f0);
-            const float lum = luminance(c);
-            const float w = chance > 0.0f ? lum / (4.0f * chance) : 0.0f;
-            total += w;
-            if (w > 0.0f && u.y * total < w) {
-                kept = c / lum;
-                kept_to = to;
-                kept_end = d - max(0.9f * la.w, 2.0f + 0.01f * d);
+                             ggx_highlight(n, v, to / max(d, 1e-4f), alpha, la.w / max(d, 1e-4f), f0) * scale;
+            local += c;
+            if (luminance(c) > strongest_weight) {
+                strongest_weight = luminance(c);
+                strongest = c;
+                strongest_to = to;
+                strongest_end = d - max(0.9f * la.w, 2.0f + 0.01f * d);
             }
         }
     }
-    if (total > 0.0f) {
-        const float span = length(kept_to);
-        if (lit_from(origin, kept_to / max(span, 1e-4f), kept_end)) {
-            sum += kept * total;
+    if (strongest_weight > 0.0f) {
+        const float span = length(strongest_to);
+        if (!lit_from(origin, strongest_to / max(span, 1e-4f), strongest_end)) {
+            local -= strongest;
         }
     }
-    return sum;
+    return sum + max(local, 0.0f) * g_local_gain;
 }
 
 // Reflection sources (Reflected.source).
@@ -766,16 +775,20 @@ void ReflectTraceCS(uint3 id : SV_DispatchThreadID)
             }
             const float4 params = g_class[surface_class];
             const float3 base = g_color.Load(int3(q, 0)).rgb;
-            // Lamps, lava, glowing cores and what glows light: bright under this frame's lighting,
-            // they keep their own colour.
+            // Lamps, lava, glowing cores and what glows light keep their own colour: bright unlit
+            // surfaces, bright saturated indirect ones (lava; white ice reflects), and anything lit far
+            // past white.
             const float3 lit = base * lighting_at(q);
-            const float emitter = smoothstep(0.75f, 1.0f, max(lit.r, max(lit.g, lit.b)));
+            const float peak = max(lit.r, max(lit.g, lit.b));
+            const float saturation = (peak - min(lit.r, min(lit.g, lit.b))) / max(peak, 1e-3f);
+            const float emitter = surface_class == 3u ? smoothstep(0.75f, 1.0f, peak)
+                                : surface_class == 4u ? smoothstep(0.75f, 1.0f, peak) * smoothstep(0.35f, 0.6f, saturation)
+                                                      : smoothstep(0.95f, 1.2f, peak);
             info.x = pack_normal(n);
             info.z = surface_class | (uint(round((1.0f - emitter) * 255.0f)) << 8u);
             if (params.y > 0.0f && emitter < 1.0f) {
                 reflected = true;
-                // Glossy draws keep their highlights in the game's own shading (its specular channel).
-                const Reflected r = reflect_light(id.xy, dir, n, ng, hit, params, base, surface_class != 1u);
+                const Reflected r = reflect_light(id.xy, dir, n, ng, hit, params, base, true);
                 light = r.light;
                 highlight = r.highlight;
                 confidence = r.confidence;
@@ -960,7 +973,9 @@ void WaterTraceCS(uint3 id : SV_DispatchThreadID)
                 below = dot(smooth, dir) > 0.0f;
                 smooth *= dot(smooth, ng) < 0.0f ? -1.0f : 1.0f;
                 const float smooth_length = length(smooth);
-                if (smooth_length > 1e-3f && dot(smooth, ng) > 0.05f * smooth_length) {
+                // Only where they lie close to the face: at a rounded lip they bend towards the side wall
+                // and draw a line of sun glints along the edge.
+                if (smooth_length > 1e-3f && dot(smooth, ng) > 0.95f * smooth_length) {
                     n = smooth / smooth_length;
                 }
             }
@@ -980,11 +995,13 @@ void WaterTraceCS(uint3 id : SV_DispatchThreadID)
             info.x = pack_normal(n);
             info.y = asuint(hit.z);
             info.z = surface | (uint(round((1.0f - emitter) * 255.0f)) << 8u);
-            if (params.y > 0.0f && emitter < 1.0f) {
+            // Under the water its surfaces (and a volume's walls) reflect nothing: the reflection of
+            // the bright world above only washed the view out (measured: Beach Bowl underwater).
+            if (params.y > 0.0f && emitter < 1.0f && !below) {
                 reflected = true;
                 const Reflected r = reflect_light(id.xy, dir, n, ng, hit, params, base, true);
                 light = r.light;
-                highlight = r.highlight;
+                highlight = min(r.highlight, 3.0f);
                 confidence = r.confidence;
                 source = r.source;
                 mapped = r.mapped;
@@ -1335,7 +1352,8 @@ Blend blend_samples(float2 pixel, float3 p, bool water)
     const float2 a = (pixel - 0.5f) / float(m_factor);
     const int2 base = int2(floor(a));
     const float2 w = a - float2(base);
-    const float tolerance = abs(p.z) * 0.004f + 0.5f;
+    // Water: wider, so the samples of a lip and its wall blend instead of switching per sample.
+    const float tolerance = (abs(p.z) * 0.004f + 0.5f) * (water ? 3.0f : 1.0f);
     Blend b;
     b.sum = float3(0.0f, 0.0f, 0.0f);
     b.covered = float3(0.0f, 0.0f, 0.0f);
@@ -1399,10 +1417,10 @@ CompositeOut class_view(uint nearest_class)
     return result;
 }
 
-// The blend over the picture: dst (1 - covered) (1 - glint) + reflected (1 - glint) + glint, the
-// lights' highlights screened over the reflection. `under` (water): the clear water's share of the
-// picture (rgb) and what it shows instead, dst (1 - clear) + seen clear.
-CompositeOut finish(Blend b, uint view, float3 clear, float3 seen)
+// The blend over the picture: under (1 - covered) (1 - glint) + reflected (1 - glint) + glint, the
+// lights' highlights screened over the reflection, under = under_add + dst under_keep (water: the
+// water's body over the picture; else dst).
+CompositeOut finish(Blend b, uint view, float3 under_add, float3 under_keep)
 {
     CompositeOut result;
     const float k = saturate(b.k_sum / b.weight);
@@ -1416,9 +1434,9 @@ CompositeOut finish(Blend b, uint view, float3 clear, float3 seen)
         result.add = float4(k, k, k, 0.0f);
         result.keep = float4(0.0f, 0.0f, 0.0f, 1.0f);
     } else {
-        result.add = float4(saturate((saturate(b.sum / b.weight) + seen * clear * kept) * (1.0f - highlight) + highlight),
+        result.add = float4(saturate((saturate(b.sum / b.weight) + under_add * kept) * (1.0f - highlight) + highlight),
                             0.0f);
-        result.keep = float4(kept * (1.0f - clear) * (1.0f - highlight), 1.0f);
+        result.keep = float4(saturate(kept * under_keep * (1.0f - highlight)), 1.0f);
     }
     return result;
 }
@@ -1468,7 +1486,7 @@ CompositeOut ReflectCompositePS(float4 position : SV_Position)
         }
         discard;
     }
-    return finish(b, view, float3(0.0f, 0.0f, 0.0f), float3(0.0f, 0.0f, 0.0f));
+    return finish(b, view, float3(0.0f, 0.0f, 0.0f), float3(1.0f, 1.0f, 1.0f));
 }
 
 // The water's eye z at traced-frame pixel `pixel`: bilinear over the samples on it (0: none near).
@@ -1522,19 +1540,20 @@ float3 under_at(float2 pixel, float limit, out float z)
     return weight > 0.0f ? sum / weight : float3(0.0f, 0.0f, 0.0f);
 }
 
-// The water's normal at traced-frame pixel `pixel` (nearest sample on it; 0 for none).
-float3 water_normal(float2 pixel)
+// The floor under the water at `pixel`, softened over a sample each way: water scatters, and the
+// game's thin projected caustic lines on the sand fade instead of showing as outlines.
+float3 under_soft(float2 pixel, float limit, out float z)
 {
-    const int2 s = clamp(int2(floor(pixel / float(m_factor))), int2(0, 0), int2(m_sample_size) - 1);
-    const uint4 sample = m_final[uint(s.y) * m_sample_size.x + uint(s.x)];
+    const float r = 1.5f * float(m_factor);
     float unused;
-    return sample.z != 0u ? unpack_normal_weight(sample.y, unused) : float3(0.0f, 0.0f, 0.0f);
+    const float3 c = under_at(pixel, limit, z);
+    return 0.4f * c + 0.15f * (under_at(pixel + float2(r, r), limit, unused) + under_at(pixel + float2(-r, r), limit, unused) +
+                               under_at(pixel + float2(r, -r), limit, unused) + under_at(pixel + float2(-r, -r), limit, unused));
 }
 
-// Sunlight focused by the water onto the floor at `floor` (eye space) under the water plane through
-// `surface` with normal `plane`: the sun's rays enter the rippled surface above the floor at three
-// points one sample apart, refract and spread over the floor; the ratio of the areas they cross (1:
-// even light, above 1 focused).
+// Sunlight the surface's waves focus onto the floor at `floor` (eye space) under the water plane
+// through `surface` with normal `plane`: the waves where the sun's ray enters (world space, wave_focus),
+// light only added where they gather (the floor never darker), fading with the depth.
 float caustic(float3 floor, float3 surface, float3 plane)
 {
     const float3 s = m_sun.xyz;
@@ -1542,48 +1561,31 @@ float caustic(float3 floor, float3 surface, float3 plane)
     if (m_sun.w <= 0.0f || rise < 0.1f) {
         return 1.0f;
     }
-    const float t = dot(plane, surface - floor) / rise;
-    if (t <= 1.0f) {
+    const float depth = dot(plane, surface - floor);
+    if (depth <= 1.0f) {
         return 1.0f;
     }
-    const float3 enter = floor + s * t;
-    if (enter.z >= -m_near) {
-        return 1.0f;
+    const uint n = m_sample_size.x * m_sample_size.y;
+    float4 to_world[3];
+    [unroll] for (uint r = 0u; r < 3u; ++r) {
+        const uint2 a = m_under[n + 2u + 2u * r];
+        const uint2 b = m_under[n + 3u + 2u * r];
+        to_world[r] = float4(asfloat(a.x), asfloat(a.y), asfloat(b.x), asfloat(b.y));
     }
-    const float2 e = eye_to_pixel(m_projection, m_viewport, enter);
-    const float step = float(m_factor);
-    const float3 n0 = water_normal(e);
-    const float3 nx = water_normal(e + float2(step, 0.0f));
-    const float3 ny = water_normal(e + float2(0.0f, step));
-    if (!any(n0 != 0.0f) || !any(nx != 0.0f) || !any(ny != 0.0f)) {
-        return 1.0f;
-    }
-    // Where the camera rays of the neighbouring samples meet the plane.
-    const float3 dx = pixel_direction(m_projection, m_viewport, e + float2(step, 0.0f));
-    const float3 dy = pixel_direction(m_projection, m_viewport, e + float2(0.0f, step));
-    const float lift = dot(plane, enter);
-    const float3 ex = dx * (lift / min(dot(plane, dx), -1e-4f));
-    const float3 ey = dy * (lift / min(dot(plane, dy), -1e-4f));
-    const float depth = t * rise;
-    const float3 r0 = refract(-s, n0, 0.75f);
-    const float3 rx = refract(-s, nx, 0.75f);
-    const float3 ry = refract(-s, ny, 0.75f);
-    const float3 f0 = enter + r0 * (depth / max(-dot(plane, r0), 0.1f));
-    const float3 fx = ex + rx * (depth / max(-dot(plane, rx), 0.1f));
-    const float3 fy = ey + ry * (depth / max(-dot(plane, ry), 0.1f));
-    const float before = abs(dot(cross(ex - enter, ey - enter), plane));
-    const float after = abs(dot(cross(fx - f0, fy - f0), plane));
-    // Over a sample's footprint the focus spreads: its square root, within a fourfold range.
-    const float focus = clamp(sqrt(before / max(after, before * 0.05f)), 0.5f, 2.0f);
-    return lerp(1.0f, focus, saturate(m_sun.w));
+    const float3 world_up = normalize(rotate(to_world, plane));
+    const float3 t1 = normalize(abs(world_up.y) < 0.9f ? cross(world_up, float3(0.0f, 1.0f, 0.0f))
+                                                       : cross(world_up, float3(1.0f, 0.0f, 0.0f)));
+    const float3 t2 = cross(world_up, t1);
+    const float3 enter = transform(to_world, floor + s * (depth / rise));
+    const float focus = wave_focus(float2(dot(enter, t1), dot(enter, t2)), float(m_under[n + 1u].y), depth);
+    return 1.0f + max(focus - 1.0f, 0.0f) * 0.35f * saturate(m_sun.w) * exp(-depth / 1500.0f);
 }
 
 // The translucent water's reflections (WaterTraceCS), after the water is drawn: Fresnel-weighted
-// reflection over the water, and under it the clear water: the floor seen through the rippled surface
-// (refracted), lit by the sun the ripples focus (caustics), fading into the water's own colour with
-// the depth of water the light crosses (absorption per colour). Sub-frames move the pixel to the traced
-// frame's camera along the water the samples hold there. What the EFB holds in front of the water keeps
-// its colour.
+// reflection and highlights over the water's body, which shows the floor through the rippled surface
+// (refracted, lit by the sun the ripples focus) and deepens the game's water colour towards blue with
+// the depth of water the light crosses. Sub-frames move the pixel to the traced frame's camera along the
+// water the samples hold there. What the EFB holds in front of the water keeps its colour.
 CompositeOut WaterCompositePS(float4 position : SV_Position)
 {
     if (!inside(m_viewport, position.xy) || position.x < m_split + 1.0f) {
@@ -1625,13 +1627,20 @@ CompositeOut WaterCompositePS(float4 position : SV_Position)
     if (b.weight < 1e-3f || b.surface < 1e-3f) {
         discard;
     }
-    // The clear water: the floor along the refracted ray, as deep below the surface as straight on.
-    float3 clear = float3(0.0f, 0.0f, 0.0f);
-    float3 seen = float3(0.0f, 0.0f, 0.0f);
+    // The water's body over what lies under it: the floor along the refracted ray (as deep below the
+    // surface as straight on), lit by the sun the ripples focus, seen through the water's
+    // transmittance T along that path; the game's water colour (its tint) for the light the water
+    // scatters, deepening towards blue with the path. Shallows show the seabed, depth its colour.
+    float3 under_add = float3(0.0f, 0.0f, 0.0f);
+    float3 under_keep = float3(1.0f, 1.0f, 1.0f);
     const float3 n = normalize(b.normal);
     if (m_water.w > 0.0f && b.nearest_class == kWaterSurface) {
+        // Seen edge-on (a side wall, the lip) the body would only band: it fades out there.
+        const float share = m_water.w * b.surface / b.weight * smoothstep(0.15f, 0.4f, dot(n, -normalize(p)));
         float floor_z;
         under_at(pixel, p.z - 1.0f, floor_z);
+        float path = 4000.0f;
+        float3 seen = float3(0.0f, 0.0f, 0.0f);
         if (floor_z != 0.0f) {
             const float3 v = normalize(p);
             const float3 straight = v * (floor_z / v.z);
@@ -1639,25 +1648,26 @@ CompositeOut WaterCompositePS(float4 position : SV_Position)
             const float3 bent = refract(v, n, 0.75f);
             float3 floor_at = any(bent != 0.0f) ? p + bent * span : straight;
             float bent_z;
-            float3 floor_colour = under_at(eye_to_pixel(m_projection, m_viewport, floor_at), p.z - 1.0f, bent_z);
+            float3 floor_colour = under_soft(eye_to_pixel(m_projection, m_viewport, floor_at), p.z - 1.0f, bent_z);
             if (bent_z == 0.0f) {
-                floor_colour = under_at(pixel, p.z - 1.0f, bent_z);
+                floor_colour = under_soft(pixel, p.z - 1.0f, bent_z);
                 floor_at = straight;
             } else {
                 floor_at = eye_position(m_projection, m_viewport, eye_to_pixel(m_projection, m_viewport, floor_at),
                                         bent_z);
             }
-            const float path = max(length(floor_at - p), 0.0f);
-            // The plane of the water: the vertex normals without the ripples are not kept; the
-            // samples' normal stands in.
+            path = max(length(floor_at - p), 0.0f);
             seen = floor_colour * caustic(floor_at, p, n);
-            clear = exp(-m_water.rgb * path) * (m_water.w * b.surface / b.weight);
         }
+        const float3 through = exp(-m_water.rgb * path);
+        const float3 deep = max(exp(-0.35f * m_water.rgb * path), float3(0.25f, 0.25f, 0.25f));
+        under_add = seen * through * share;
+        under_keep = lerp(float3(1.0f, 1.0f, 1.0f), deep * (1.0f - through), share);
     }
-    if (b.k_sum < 1e-4f && !any(b.glint > 0.0f) && !any(clear > 0.0f)) {
+    if (b.k_sum < 1e-4f && !any(b.glint > 0.0f) && !any(under_add > 0.0f) && !any(under_keep < 1.0f)) {
         discard;
     }
-    return finish(b, view, clear, seen);
+    return finish(b, view, under_add, under_keep);
 }
 
 // The water pass's state (WaterTraceCS write_underwater_state), after the samples in m_under.

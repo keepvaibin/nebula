@@ -183,6 +183,22 @@ int SceneRayTracer::trace_water(ID3D12GraphicsCommandList* list, const RtSources
         to_state(list, sky_radiance_.Get(), sky_radiance_state_, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
     }
     RtReflectScene scene = reflect_scene(slot);
+    // GALAXY_RT_LOG_CAMERA=1: the camera's world position and view direction (positions for test
+    // teleports into the water).
+    static const bool log_camera = [] {
+        char value[8]{};
+        std::size_t length = 0u;
+        return getenv_s(&length, value, sizeof(value), "GALAXY_RT_LOG_CAMERA") == 0 && length > 1u && value[0] == '1';
+    }();
+    static std::uint64_t logged = 0u;
+    if (log_camera && light.camera_known && ++logged % 30u == 0u) {
+        const std::array<float, 12>& m = light.camera;
+        // Rows of world to eye: the eye is -R^T t, it looks along -z (the third row).
+        const float eye[3] = {-(m[0] * m[3] + m[4] * m[7] + m[8] * m[11]), -(m[1] * m[3] + m[5] * m[7] + m[9] * m[11]),
+                              -(m[2] * m[3] + m[6] * m[7] + m[10] * m[11])};
+        std::cerr << "[rt-camera] water=" << logged << " eye=" << eye[0] << ',' << eye[1] << ',' << eye[2]
+                  << " forward=" << -m[8] << ',' << -m[9] << ',' << -m[10] << '\n';
+    }
     scene.water_tlas = water_tlas_->GetGPUVirtualAddress();
     scene.water_positions = water_positions_->GetGPUVirtualAddress();
     scene.water_surfaces = water_surfaces_->GetGPUVirtualAddress();

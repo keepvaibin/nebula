@@ -59,7 +59,7 @@ struct RtReflectConstants {
     float sky_fade;
     float sky_average;
     float metal_sky;
-    float pad3;
+    float local_gain;
 };
 static_assert(sizeof(RtReflectConstants) == RtReflections::kConstantsBytes);
 
@@ -218,20 +218,23 @@ bool RtReflections::initialize(ID3D12Device5* device, std::uint64_t timestamp_fr
     };
     materials_ = {};
     // The game's own shading of its shiny surfaces already carries a reflection (its environment
-    // maps): glossy and opaque water reflections mostly add light (low cover); metal is a near mirror
-    // whose reflection replaces most of it.
-    // Translucent water is a surface of water (F0 0.02): the reflection replaces the picture by the
-    // Fresnel weight, little looking down and most of it at grazing angles.
+    // maps): the traced reflections screen over it (cover 0), so a surface is never darker than the
+    // game shows it (measured: covering Battlerock's chrome with the blurrier traced sky dulled it).
+    // Translucent water is a surface of water (F0 0.02): little reflection looking down, most of it
+    // at grazing angles.
     materials_[0] = material("GALAXY_RT_REFLECT_DIFFUSE", {0.6f, 0.04f, 0.0f, 0.0f, 0.0f});
-    materials_[1] = material("GALAXY_RT_REFLECT_GLOSSY", {0.3f, 0.06f, 1.0f, 0.0f, 0.15f});
-    materials_[2] = material("GALAXY_RT_REFLECT_METAL", {0.12f, 0.9f, 1.0f, 1.0f, 0.8f});
+    materials_[1] = material("GALAXY_RT_REFLECT_GLOSSY", {0.3f, 0.06f, 1.0f, 0.0f, 0.0f});
+    materials_[2] = material("GALAXY_RT_REFLECT_METAL", {0.12f, 0.9f, 1.0f, 1.0f, 0.0f});
     materials_[3] = material("GALAXY_RT_REFLECT_UNLIT", {0.5f, 0.02f, 0.0f, 0.0f, 0.0f});
-    materials_[4] = material("GALAXY_RT_REFLECT_WATER", {0.08f, 0.1f, 1.0f, 0.0f, 0.4f});
-    materials_[kWaterClass] = material("GALAXY_RT_WATER", {0.06f, 0.02f, 1.0f, 0.0f, 1.0f});
+    // Opaque indirect-textured surfaces: ice (Freezeflame's rink and walls), pools, swamps: polished
+    // and glossy (F0 above water's, so the aurora and Mario read in the ice); a white surface shows its
+    // reflection only where the reflection takes its place.
+    materials_[4] = material("GALAXY_RT_REFLECT_WATER", {0.04f, 0.25f, 1.0f, 0.0f, 0.8f});
+    materials_[kWaterClass] = material("GALAXY_RT_WATER", {0.06f, 0.02f, 1.0f, 0.0f, 0.0f});
     materials_[kWaterClass + 1u] = materials_[kWaterClass];
     // Crystals, ice, gems and glass (named in rt_surfaces.cpp): clear dielectric, its reflection
     // white and Fresnel-weighted.
-    materials_[7] = material("GALAXY_RT_REFLECT_CRYSTAL", {0.05f, 0.05f, 1.0f, 0.0f, 1.0f});
+    materials_[7] = material("GALAXY_RT_REFLECT_CRYSTAL", {0.05f, 0.05f, 1.0f, 0.0f, 0.0f});
     view_ = static_cast<std::uint32_t>(std::clamp(env_float("GALAXY_RT_REFLECT_VIEW", 0.0f), 0.0f, 5.0f));
     history_frames_ =
         static_cast<std::uint32_t>(std::clamp(env_float("GALAXY_RT_REFLECT_HISTORY", 24.0f), 1.0f, 64.0f));
@@ -247,9 +250,10 @@ bool RtReflections::initialize(ID3D12Device5* device, std::uint64_t timestamp_fr
     sky_fade_ = std::clamp(env_float("GALAXY_RT_REFLECT_SKY_FADE", 0.9995f), 0.0f, 1.0f);
     sky_average_ = std::clamp(env_float("GALAXY_RT_REFLECT_SKY_AVERAGE", 0.15f), 0.0f, 1.0f);
     metal_sky_ = std::clamp(env_float("GALAXY_RT_REFLECT_METAL_SKY", 0.3f), 0.0f, 1.0f);
+    local_gain_ = std::clamp(env_float("GALAXY_RT_REFLECT_LOCAL_GAIN", 2.0f), 0.0f, 16.0f);
     {
         // Per 1000 eye units (about 10 m of the game's world): red goes first, then green.
-        absorb_ = {9.0f, 2.6f, 1.8f};
+        absorb_ = {25.0f, 4.5f, 2.6f};
         char value[64]{};
         std::size_t length = 0u;
         if (getenv_s(&length, value, sizeof(value), "GALAXY_RT_WATER_ABSORB") == 0 && length > 1u) {
@@ -657,6 +661,7 @@ void RtReflections::fill_constants(const RtReflectScene& scene, const Pass& pass
     c.sky_fade = sky_fade_;
     c.sky_average = sky_average_;
     c.metal_sky = metal_sky_;
+    c.local_gain = local_gain_;
     std::memcpy(constants_cpu, &c, sizeof(c));
 }
 
