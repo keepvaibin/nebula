@@ -272,7 +272,7 @@ namespace Nebula.Launcher
         private readonly ComboBox aspect = new ComboBox(), internalScale = new ComboBox(), frameRate = new ComboBox();
         private readonly CheckBox vsync = new CheckBox();
         private readonly ComboBox antiAliasing = new ComboBox(), aaQuality = new ComboBox(), upscaler = new ComboBox(),
-            dlssQuality = new ComboBox(), textureFilter = new ComboBox(), lighting = new ComboBox(), drawDistance = new ComboBox();
+            dlssQuality = new ComboBox(), textureFilter = new ComboBox(), lighting = new ComboBox();
         private readonly NumericUpDown sharpness = new NumericUpDown();
         private readonly CheckBox mipmaps = new CheckBox(), hudOutput = new CheckBox();
         private readonly TrackBar[] volumes = new TrackBar[AudioSettings.Names.Length];
@@ -350,7 +350,6 @@ namespace Nebula.Launcher
             y += 40;
             Row(image, "Texture filtering", textureFilter, ref y);
             Row(image, "Lighting", lighting, ref y);
-            Row(image, "Draw distance", drawDistance, ref y);
             mipmaps.Text = "Generated mipmaps";
             mipmaps.Location = new Point(12, y);
             mipmaps.Size = new Size(600, 28);
@@ -366,7 +365,6 @@ namespace Nebula.Launcher
             dlssQuality.Items.AddRange(GraphicsSettings.DlssQualities);
             textureFilter.Items.AddRange(GraphicsSettings.TextureFilters);
             lighting.Items.AddRange(GraphicsSettings.LightingModes);
-            drawDistance.Items.AddRange(GraphicsSettings.DrawDistances);
 
             for (int i = 0; i < volumes.Length; i++)
             {
@@ -776,7 +774,6 @@ namespace Nebula.Launcher
             sharpness.Value = graphics.Sharpness;
             textureFilter.SelectedIndex = graphics.TextureFilter;
             lighting.SelectedIndex = graphics.PerPixelLighting ? 0 : 1;
-            drawDistance.SelectedIndex = graphics.DrawDistance;
             mipmaps.Checked = graphics.GeneratedMipmaps;
             hudOutput.Checked = graphics.HudOutputResolution;
             for (int i = 0; i < volumes.Length; i++)
@@ -922,7 +919,6 @@ namespace Nebula.Launcher
                 graphics.Sharpness = (int)sharpness.Value;
                 graphics.TextureFilter = textureFilter.SelectedIndex;
                 graphics.PerPixelLighting = lighting.SelectedIndex == 0;
-                graphics.DrawDistance = drawDistance.SelectedIndex;
                 graphics.GeneratedMipmaps = mipmaps.Checked;
                 graphics.HudOutputResolution = hudOutput.Checked;
                 graphics.Save();

@@ -6,15 +6,12 @@
 #include "galaxy/layout_aspect_fits.h"
 #include "galaxy/layout_aspect_home.h"
 
-#include <atomic>
 #include <bit>
 #include <stdexcept>
 #include <string>
 
 namespace galaxy {
 namespace {
-
-std::atomic<float> g_lod_inverse_scale{1.0f};
 
 // The star-select sky (MultiSceneActor named by the DOL literal at 0x805C4411)
 // is one quad at z = -1000 in model space, sized for a 16:9 view. Wider views
@@ -87,10 +84,6 @@ void fit_rmge01_scenario_camera(GuestMemoryV1* memory, const NativeServicesV1* s
 
 }  // namespace
 
-void set_site_hook_lod_distance_scale(float scale) noexcept {
-    g_lod_inverse_scale.store(scale > 0.0f ? 1.0f / scale : 1.0f, std::memory_order_relaxed);
-}
-
 void dispatch_site_hook(
     const NativeServicesV1* services,
     std::uint32_t guest_pc,
@@ -149,17 +142,10 @@ void dispatch_site_hook(
         fit_rmge01_scenario_sky(context, memory, services, guest_pc);
         fit_rmge01_scenario_camera(memory, services, guest_pc);
         return;
-    case SiteHookKind::LodDistance: {
-        const float inverse = g_lod_inverse_scale.load(std::memory_order_relaxed);
-        if (inverse != 1.0f) {
-            // LodCtrl::update compares this single-precision distance with
-            // the LodCtrl's middle and low distances.
-            const double distance = std::bit_cast<double>(context->fpr_bits[1]);
-            context->fpr_bits[1] = std::bit_cast<std::uint64_t>(
-                static_cast<double>(static_cast<float>(distance * inverse)));
-        }
+    case SiteHookKind::LodDistance:
+        // LodCtrl::update keeps the game's distances: which model shows is
+        // also game state (MR::isHiddenModel).
         return;
-    }
     }
     throw std::runtime_error("unknown site hook kind " + std::to_string(kind));
 }
