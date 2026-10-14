@@ -101,8 +101,9 @@ struct RtLightConstants {
     std::uint32_t draw_count;
     float sky_ibl;
     float fill;
+    float emit[4];
 };
-static_assert(sizeof(RtLightConstants) == 592u);
+static_assert(sizeof(RtLightConstants) == 608u);
 
 // Mirrors cbuffer RtPost in rt_post.hlsl (root constants).
 struct RtPostConstants {
@@ -655,6 +656,10 @@ bool SceneRayTracer::initialize(ID3D12Device* device, std::uint64_t timestamp_fr
     split_ = std::clamp(env_float("GALAXY_RT_SPLIT", 0.0f), 0.0f, 1.0f);
     emission_ = std::clamp(env_float("GALAXY_RT_EMISSION", 24.0f), 0.0f, 256.0f);
     log_emitters_ = env_float("GALAXY_RT_LOG_EMITTERS", 0.0f) != 0.0f;
+    glow_cutoff_ = std::clamp(env_float("GALAXY_RT_GLOW_CUTOFF", 0.004f), 1e-5f, 1.0f);
+    glow_reach_ = std::clamp(env_float("GALAXY_RT_GLOW_REACH", 6000.0f), 10.0f, 1.0e6f);
+    glow_light_ = std::clamp(env_float("GALAXY_RT_GLOW_LIGHT", 1.0f), 0.0f, 64.0f);
+    surface_light_ = std::clamp(env_float("GALAXY_RT_SURFACE_LIGHT", 1.0f), 0.0f, 16.0f);
     night_ = std::clamp(env_float("GALAXY_RT_NIGHT", 1.0f), 0.0f, 1.0f);
     daylight_ = std::clamp(env_float("GALAXY_RT_DAYLIGHT", 0.35f), 0.01f, 1.0f);
     glow_boost_ = std::clamp(env_float("GALAXY_RT_GLOW_BOOST", 0.4f), 0.0f, 1.0f);
@@ -1969,6 +1974,10 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
     c.draw_count = static_cast<std::uint32_t>(draw_count);
     c.sky_ibl = sky_ibl_;
     c.fill = fill_;
+    c.emit[0] = glow_cutoff_;
+    c.emit[1] = glow_reach_;
+    c.emit[2] = glow_light_;
+    c.emit[3] = surface_light_;
     c.point_saturation = point_saturation_;
     std::copy(view_.projection.begin(), view_.projection.end(), c.projection);
     c.depth[0] = view_.z_scale;

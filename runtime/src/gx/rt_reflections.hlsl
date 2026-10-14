@@ -23,6 +23,8 @@
 // first move the pixel to the traced frame's camera.
 
 static const float kPi = 3.14159265f;
+static const float kGlowCutoff = 0.004f;   // rt_lighting.hlsl g_emit.x (GALAXY_RT_GLOW_CUTOFF default)
+static const float kGlowReach = 6000.0f;   // ... g_emit.y (GALAXY_RT_GLOW_REACH default)
 static const uint kNoSurface = 15u;
 static const uint kProbeSize = 64u;
 static const float kSkyDistance = 1.0e9f;
@@ -494,8 +496,8 @@ bool lit_from(float3 origin, float3 direction, float length)
 }
 
 // The highlights the scene's lights put on a surface at `p` (ray origin `origin`): the sun with
-// one shadow ray, and one local light (the point lights and four glows drawn by power) kept in
-// proportion to its unshadowed highlight (resampled importance), with one shadow ray.
+// one shadow ray, and one local light (the point lights and every glow within reach) kept in
+// proportion to its unshadowed highlight (streaming resampled importance), with one shadow ray.
 float3 highlights(uint2 s, float3 p, float3 origin, float3 n, float3 v, float alpha, float f0)
 {
     float3 sum = float3(0.0f, 0.0f, 0.0f);
@@ -525,36 +527,37 @@ float3 highlights(uint2 s, float3 p, float3 origin, float3 n, float3 v, float al
     }
     const uint emitters = (g_flags & 16u) != 0u ? g_emitters.Load(0u) : 0u;
     if (emitters != 0u) {
-        const float power_total = asfloat(g_emitters.Load(4u));
-        [unroll] for (uint j = 0u; j < 4u; ++j) {
-            const float2 u = sample_point(s, 2u + j);
-            const float x = u.x * power_total;
-            uint lo = 0u;
-            uint hi = emitters - 1u;
-            [loop] while (lo < hi) {
-                const uint mid = (lo + hi) >> 1u;
-                if (asfloat(g_emitters.Load(16u + mid * 32u + 28u)) < x) {
-                    lo = mid + 1u;
-                } else {
-                    hi = mid;
-                }
-            }
-            const float4 la = asfloat(g_emitters.Load4(16u + lo * 32u));
-            const float3 power = asfloat(g_emitters.Load3(16u + lo * 32u + 16u));
-            const float below = lo > 0u ? asfloat(g_emitters.Load(16u + (lo - 1u) * 32u + 28u)) : 0.0f;
-            const float chance = (asfloat(g_emitters.Load(16u + lo * 32u + 28u)) - below) / max(power_total, 1e-6f);
+        float pick = min(sample_point(s, 2u).y, 0.99999f);
+        [loop] for (uint j = 0u; j < emitters; ++j) {
+            const float4 la = asfloat(g_emitters.Load4(16u + j * 32u));
+            const float3 power = asfloat(g_emitters.Load3(16u + j * 32u + 16u));
+            const float light = luminance(power);
             const float3 to = transform(g_world_to_eye, la.xyz) - p;
-            const float d = length(to);
-            // Its irradiance power / (pi (d^2 + r^2)), as the lighting's glow lights.
-            const float3 c = power / (kPi * (d * d + la.w * la.w)) *
+            const float d2 = dot(to, to);
+            // Its reach as the lighting's (rt_lighting.hlsl emit_reach2): light / (pi d^2) above
+            // kGlowCutoff, at most kGlowReach.
+            const float reach2 = min(light / (kPi * kGlowCutoff), kGlowReach * kGlowReach);
+            if (d2 >= reach2) {
+                continue;
+            }
+            const float d = sqrt(d2);
+            const float x = d2 / reach2;
+            // Its irradiance power / (pi (d^2 + r^2)), windowed to its reach, as the lighting's.
+            const float3 c = power * ((1.0f - x * x) * (1.0f - x * x) / (kPi * (d2 + la.w * la.w))) *
                              ggx_highlight(n, v, to / max(d, 1e-4f), alpha, la.w / max(d, 1e-4f), f0);
-            const float lum = luminance(c);
-            const float w = chance > 0.0f ? lum / (4.0f * chance) : 0.0f;
+            const float w = luminance(c);
+            if (w <= 0.0f) {
+                continue;
+            }
             total += w;
-            if (w > 0.0f && u.y * total < w) {
-                kept = c / lum;
+            const float chance = w / total;
+            if (pick < chance) {
+                kept = c / w;
                 kept_to = to;
                 kept_end = d - max(0.9f * la.w, 2.0f + 0.01f * d);
+                pick = pick / chance;
+            } else {
+                pick = (pick - chance) / max(1.0f - chance, 1e-6f);
             }
         }
     }

@@ -58,6 +58,9 @@ cbuffer RtLight : register(b0)
                                 // sky's mean colour from every direction)
     float g_fill;               // the share of the game's own light every surface keeps (by day;
                                 // half again at night)
+    float4 g_emit;              // glow lights: the light at which one stops counting (its reach),
+                                // the longest reach (eye units), their gain; the gain of glowing
+                                // surfaces' light (lava, magma, fire) on what sees them
 };
 
 RaytracingAccelerationStructure g_scene : register(t6);
@@ -616,6 +619,9 @@ RWByteAddressBuffer e_list : register(u2);            // count, total; per light
                                                       // power, cumulative power
 
 static const uint kEmitLights = 256u;
+static const float kEmitLargest = 700.0f;      // eye units: a glow wider than this is no light
+static const float kEmitForget = 0.004f;       // a light no longer seen that cannot reach the camera's
+                                               // surroundings (its light there below this) fades fast
 static const uint kEmitFound = 1024u;
 
 groupshared float4 s_glow_a[64];
@@ -670,7 +676,8 @@ void GlowEmitCS(uint3 group : SV_GroupID, uint gi : SV_GroupIndex)
         const float radius = max(spread, 0.5f * sqrt(s_glow_area[0]));
         // A glow's texture covers about a quarter of its quad.
         const float3 power = s_glow_a[0].rgb * (0.25f * e_gain);
-        if (luminance(power) >= 4.0f) {
+        // The largest glows are atmospheres and halos around planets and the sky, not lights.
+        if (luminance(power) >= 4.0f && radius <= kEmitLargest) {
             uint index;
             e_found.InterlockedAdd(0u, 1u, index);
             if (index < kEmitFound) {
@@ -748,7 +755,11 @@ void EmitMergeCS(uint gi : SV_GroupIndex)
                 }
             }
             lb.w += 1.0f;
-            lb.rgb *= gone ? 0.5f : lb.w > 1800.0f ? 0.97f : 1.0f;
+            // Out of view and too far to light anything near the camera: forgotten within seconds
+            // (the list keeps room for the lights that matter here).
+            const float reach = sqrt(luminance(lb.rgb) / (kPi * kEmitForget));
+            const bool far = length(e) > reach + 3000.0f;
+            lb.rgb *= gone ? 0.5f : far ? 0.9f : lb.w > 1800.0f ? 0.97f : 1.0f;
         }
         if (luminance(lb.rgb) < 1.0f) {
             la = float4(0.0f, 0.0f, 0.0f, 0.0f);
@@ -1018,6 +1029,13 @@ float3 points_unshadowed(float3 p, float3 n, bool game)
     return sum;
 }
 
+// A glow light's reach squared: where its light power / (pi d^2) falls to g_emit.x, at most
+// g_emit.y. Beyond it the light counts for nothing.
+float emit_reach2(float light)
+{
+    return min(light / (kPi * g_emit.x), g_emit.y * g_emit.y);
+}
+
 // An RGBA8 colour word's RGB (red in the top byte).
 float3 rgb8(uint c)
 {
@@ -1208,40 +1226,43 @@ void TraceCS(uint3 id : SV_DispatchThreadID)
         }
     }
 
-    // The glows (lamps, cores, Lumas): four lights picked in proportion to their power, one kept
-    // in proportion to its light here (resampled importance), one shadow ray to it. Its light
-    // joins the point lights' (their weight divided out).
+    // The glows (lamps, cores, Lumas, lava bursts): every light within reach of this point, one
+    // kept in proportion to its unshadowed light here (streaming resampled importance over the
+    // whole list: a Luma beside the surface wins over a brighter glow across the level), one
+    // shadow ray to it. Its light joins the point lights' (their weight divided out).
     const uint emitters = g_emitters.Load(0u);
     if (emitters != 0u) {
-        const float total = asfloat(g_emitters.Load(4u));
         float sum = 0.0f;
+        float pick = min(sample_point(id.xy, max(g_rays, 1u) + 7u).x, 0.99999f);
         float4 kept = float4(0.0f, 0.0f, 0.0f, 0.0f);
         float3 kept_power = float3(0.0f, 0.0f, 0.0f);
-        [unroll] for (uint c = 0u; c < 8u; ++c) {
-            const float2 u = sample_point(id.xy, max(g_rays, 1u) + 7u + c);
-            const float x = u.x * total;
-            uint lo = 0u;
-            uint hi = emitters - 1u;
-            [loop] while (lo < hi) {
-                const uint mid = (lo + hi) >> 1u;
-                if (asfloat(g_emitters.Load(16u + mid * 32u + 28u)) < x) {
-                    lo = mid + 1u;
-                } else {
-                    hi = mid;
-                }
-            }
-            const float4 la = asfloat(g_emitters.Load4(16u + lo * 32u));
-            const float3 power = asfloat(g_emitters.Load3(16u + lo * 32u + 16u));
+        [loop] for (uint c = 0u; c < emitters; ++c) {
+            const float4 la = asfloat(g_emitters.Load4(16u + c * 32u));
+            const float3 power = asfloat(g_emitters.Load3(16u + c * 32u + 16u));
+            const float light = luminance(power);
             const float3 e = transform(g_to_eye, la.xyz);
             const float3 to = e - p;
             const float d2 = dot(to, to);
+            const float reach2 = emit_reach2(light);
+            if (d2 >= reach2) {
+                continue;
+            }
             const float nl = dot(n, to) * rsqrt(max(d2, 1e-6f));
-            // Weight: its light here over its chance of being picked (power / total).
-            const float weight = nl > 0.0f ? total * nl / (d2 + la.w * la.w) : 0.0f;
+            if (nl <= 0.0f) {
+                continue;
+            }
+            const float x = d2 / reach2;
+            const float weight = light * nl * (1.0f - x * x) * (1.0f - x * x) / (d2 + la.w * la.w);
             sum += weight;
-            if (weight > 0.0f && u.y * sum < weight) {
+            // One uniform number serves the stream: kept with chance weight / sum, then rescaled
+            // to stay uniform.
+            const float chance = weight / sum;
+            if (pick < chance) {
                 kept = float4(e, la.w);
                 kept_power = power;
+                pick = pick / chance;
+            } else {
+                pick = (pick - chance) / max(1.0f - chance, 1e-6f);
             }
         }
         const float lum = luminance(kept_power);
@@ -1259,9 +1280,9 @@ void TraceCS(uint3 id : SV_DispatchThreadID)
             query.TraceRayInline(g_scene, RAY_FLAG_NONE, 0xFFu, ray);
             query.Proceed();
             if (query.CommittedStatus() != COMMITTED_TRIANGLE_HIT) {
-                // power nl / (pi (d2 + r2)) over the kept light's weight, times the mean weight.
+                // power nl / (pi (d2 + r2)) (windowed to its reach) over its share of the weights.
                 // Bright bursts (lava eruptions, sparks) saturate softly instead of blowing out.
-                const float3 glow = kept_power / (kPi * lum) * (sum * 0.125f);
+                const float3 glow = kept_power / (kPi * lum) * sum * g_emit.z;
                 points += glow / (1.0f + luminance(glow) / 1.5f) / max(g_point_light, 1e-3f);
             }
         }
@@ -1284,6 +1305,7 @@ void TraceCS(uint3 id : SV_DispatchThreadID)
         }
     }
     float3 light = float3(0.0f, 0.0f, 0.0f);
+    float3 emitted = float3(0.0f, 0.0f, 0.0f);
     const uint rays = max(g_rays, 1u);
     for (uint i = 0u; i < rays; ++i) {
         const float2 u = sample_point(id.xy, i);
@@ -1303,10 +1325,21 @@ void TraceCS(uint3 id : SV_DispatchThreadID)
         query.Proceed();
         if (query.CommittedStatus() == COMMITTED_TRIANGLE_HIT) {
             const float t = query.CommittedRayT();
-            const float3 sent = hit_light(origin + ray.Direction * t, fallback);
+            float3 sent = hit_light(origin + ray.Direction * t, fallback);
             const float near = lerp(g_contact, 1.0f, saturate(t / g_contact_range));
             // Distant hits fade into the open sky (the game's lighting already holds them).
             const float distant = saturate((t - 0.6f * g_range) / (0.4f * g_range));
+            // A glowing surface (unlit, bright beyond its colour under the capture's emitter gain,
+            // saturated: lava, magma, fire) sends its own light, whatever the sky: it joins the
+            // point lights' (not scaled by the sky's state), without contact darkening.
+            const uint hit_flags = g_surfaces.Load(query.CommittedPrimitiveIndex() * 16u + 12u);
+            if ((hit_flags & kDrawLit) == 0u && g_emit.w > 0.0f) {
+                const float peak = max(sent.r, max(sent.g, sent.b));
+                const float low = min(sent.r, min(sent.g, sent.b));
+                const float glowing = smoothstep(0.9f, 1.6f, peak) * smoothstep(0.35f, 0.7f, (peak - low) / max(peak, 1e-3f));
+                emitted += sent * (glowing * (1.0f - distant));
+                sent *= 1.0f - glowing;
+            }
             light += lerp(sent * near, sky_light(direction, tint, sky_sh, sky_known), distant);
         } else {
             light += sky_light(direction, tint, sky_sh, sky_known);
@@ -1315,6 +1348,12 @@ void TraceCS(uint3 id : SV_DispatchThreadID)
     g_z[index] = p.z;
     g_normal[index] = pack_normal(n);
     g_primary[index] = primary;
+    // The glowing surfaces' light (cosine-weighted rays: their mean is the irradiance over pi),
+    // saturating softly like the glow lights'.
+    if (any(emitted > 0.0f)) {
+        const float3 surface = emitted / float(rays) * g_emit.w;
+        points += surface / (1.0f + luminance(surface) / 2.0f) / max(g_point_light, 1e-3f);
+    }
     g_raw[index] = pack_light(make_light(light / float(rays), sun, points), 0.0f);
 }
 

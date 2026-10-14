@@ -504,6 +504,10 @@ private:
     std::array<float, 3> emit_last_eye_{};
     bool emit_seen_ = false;
     bool log_emitters_ = false;      // GALAXY_RT_LOG_EMITTERS=1: [rt-emit] every 120 frames
+    float glow_cutoff_ = 0.004f;     // GALAXY_RT_GLOW_CUTOFF: a glow light's reach ends where its light is this
+    float glow_reach_ = 6000.0f;     // GALAXY_RT_GLOW_REACH: the longest reach (eye units)
+    float glow_light_ = 1.0f;        // GALAXY_RT_GLOW_LIGHT: the glow lights' gain on surfaces
+    float surface_light_ = 1.0f;     // GALAXY_RT_SURFACE_LIGHT: glowing surfaces' (lava) light on what sees them
     bool emit_log_pending_ = false;
     std::uint64_t emit_log_frame_ = 0u;
     std::array<float, 3> emit_log_eye_{};
