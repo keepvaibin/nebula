@@ -248,7 +248,8 @@ cbuffer RtCapture : register(b0)
     uint c_factor;
     float c_emissive;        // extra light of the brightest pixels
     uint c_divide;           // bit 0: this frame's lighting (c_final) is divided out; bit 1: what
-                             // the translucent phases added since c_glow_base goes to c_glow
+                             // the translucent phases added since c_glow_base goes to c_glow;
+                             // bit 2: the sky's colour goes to c_sky by world direction
     float c_strength;
     float c_split;           // GALAXY_RT_SPLIT: pixels left of it kept the game's own colour
     float c_surface_gain;    // a glowing surface's light per unit of colour and eye-space area
@@ -269,6 +270,18 @@ RWStructuredBuffer<uint2> c_picture : register(u0);
 RWByteAddressBuffer c_sums : register(u1);
 RWStructuredBuffer<uint> c_glow : register(u2);
 RWByteAddressBuffer c_found : register(u3);              // this frame's lights (see e_found)
+RWByteAddressBuffer c_sky : register(u4);                // per bin: samples, r, g, b (rt_sky_sun.h)
+
+// The sky map's bin of a world direction: octahedral, +y the pole, 32 x 32 (rt_sky_sun.h sky_bin).
+uint sky_bin(float3 w)
+{
+    float2 p = w.xz / (abs(w.x) + abs(w.y) + abs(w.z));
+    if (w.y < 0.0f) {
+        p = (1.0f - abs(p.yx)) * float2(p.x >= 0.0f ? 1.0f : -1.0f, p.y >= 0.0f ? 1.0f : -1.0f);
+    }
+    const uint2 cell = min(uint2(max((p * 0.5f + 0.5f) * 32.0f, 0.0f)), 31u);
+    return cell.y * 32u + cell.x;
+}
 
 // A sample's colour: its block's corners (a smoother light than one pixel).
 float3 block_color(uint2 id)
@@ -432,6 +445,15 @@ void CaptureCS(uint3 id : SV_DispatchThreadID)
         return;
     }
     const uint3 units = uint3(round(saturate(color) * 255.0f));
+    if (sky && (c_divide & 4u) != 0u && ((id.x | id.y) & 3u) == 0u) {
+        const float3 d = pixel_direction(c_projection, c_viewport, float2(q) + 0.5f);
+        const float3 w = float3(dot(c_to_world[0].xyz, d), dot(c_to_world[1].xyz, d), dot(c_to_world[2].xyz, d));
+        const uint bin = sky_bin(w) * 16u;
+        c_sky.InterlockedAdd(bin, 1u);
+        c_sky.InterlockedAdd(bin + 4u, units.r);
+        c_sky.InterlockedAdd(bin + 8u, units.g);
+        c_sky.InterlockedAdd(bin + 12u, units.b);
+    }
     const uint base = sky ? 0u : 16u;
     c_sums.InterlockedAdd(base + 0u, units.r);
     c_sums.InterlockedAdd(base + 4u, units.g);

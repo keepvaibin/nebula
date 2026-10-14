@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #include "galaxy/gx/frame_interpolation.h"
 #include "galaxy/gx/actor_lights.h"
+#include "galaxy/gx/rt_sky_sun.h"
 
 #include <bit>
 #include <cmath>
@@ -266,11 +267,11 @@ void test_actor_lights() {
     const std::array<float, 3> sun{0.0f, 0.6f, -0.8f};
     const Affine34 va = camera(0.0f, 0.0f, 100.0f, 500.0f);
     const Affine34 vb = camera(0.3f, 80.0f, 100.0f, 420.0f);
-    const ActorLightAim aim_a = aim_at_sun(va, sun), aim_b = aim_at_sun(vb, sun);
-    check(aim_a.valid && !aim_a.point && aim_b.valid, "the sun gives an aim");
-    const float origin[3]{};
-    aim_actor_lights(pal_a.data(), 0x01u, 0x02u, aim_a, origin);
-    aim_actor_lights(pal_b.data(), 0x01u, 0x02u, aim_b, origin);
+    const ActorLightAim aim_a = aim_at_key(va, sun), aim_b = aim_at_key(vb, sun);
+    check(aim_a.valid && aim_b.valid, "the sun gives an aim");
+    const std::vector<std::uint32_t> game = pal_a;
+    aim_actor_lights(pal_a.data(), game.data(), 0x01u, 0x02u, aim_a);
+    aim_actor_lights(pal_b.data(), game.data(), 0x01u, 0x02u, aim_b);
     check(pal_a[kXfLightBase + 3u] == 0xA49F8900u && pal_a[kXfLightBase + kXfLightWords + 3u] == 0x565F9100u,
           "moved lights keep the game's colours");
     const std::array<float, 3> to_sun = eye_direction(va, sun);
@@ -293,23 +294,91 @@ void test_actor_lights() {
               "a sub-frame's light 1 lies opposite the sun");
     }
 
-    // Without a sun: light 0 at the point light, light 1 opposite it at the draw's object.
-    const std::array<float, 3> lamp{300.0f, 150.0f, -200.0f}, far_lamp{30000.0f, 150.0f, -200.0f};
-    const std::array<float, 3> white{1.0f, 1.0f, 1.0f};
-    check(point_light_weight(va, lamp, white, 6000.0f) > point_light_weight(va, far_lamp, white, 6000.0f),
-          "a nearer point light weighs more");
-    const ActorLightAim point = aim_at_point(va, lamp);
-    const float object_world[3]{-100.0f, 0.0f, -300.0f};
-    float object[3]{}, lamp_eye[3]{};
-    affine_transform_point(va, object_world, object);
-    affine_transform_point(va, lamp.data(), lamp_eye);
-    aim_actor_lights(pal_a.data(), 0x01u, 0x02u, point, object);
-    const std::array<float, 3> p0 = light_position(pal_a, 0u), p1 = light_position(pal_a, 1u);
-    check(near(p0[0], lamp_eye[0]) && near(p0[1], lamp_eye[1]) && near(p0[2], lamp_eye[2]),
-          "light 0 sits at the point light");
-    check(same_direction({p1[0] - object[0], p1[1] - object[1], p1[2] - object[2]},
-                         {object[0] - lamp_eye[0], object[1] - lamp_eye[1], object[2] - lamp_eye[2]}, 1e-5f),
-          "light 1 lies opposite the point light at the object");
+    // A key that comes or goes: turned part of the way from the game's direction.
+    ActorLightAim ramping = aim_a;
+    const float key_length = std::sqrt(key[0] * key[0] + key[1] * key[1] + key[2] * key[2]);
+    ramping.blend = 0.0f;
+    aim_actor_lights(pal_a.data(), game.data(), 0x01u, 0x00u, ramping);
+    const std::array<float, 3> g0 = light_position(pal_a, 0u);
+    check(near(g0[0], key[0]) && near(g0[1], key[1]) && near(g0[2], key[2]), "blend 0 is the game's position");
+    ramping.blend = 0.25f;
+    aim_actor_lights(pal_a.data(), game.data(), 0x01u, 0x00u, ramping);
+    std::array<float, 3> quarter{};
+    for (unsigned i = 0; i < 3u; ++i) {
+        quarter[i] = key[i] / key_length * 0.75f + to_sun[i] * 0.25f;
+    }
+    check(same_direction(light_position(pal_a, 0u), quarter, 1e-5f),
+          "a ramping aim turns light 0 its blend of the way from the game's direction");
+}
+
+// A sky map capture: every bin given `sky`, those within `radius` (cosine) of `sun` its colour,
+// those `cloud` picks white.
+std::vector<std::uint32_t> sky_capture(const std::array<float, 3>& sky, const std::array<float, 3>& sun,
+                                       float radius, const std::array<float, 3>& sun_color, unsigned cloud_every) {
+    std::vector<std::uint32_t> words(kSkyBins * kSkyBinWords, 0u);
+    for (unsigned b = 0; b < kSkyBins; ++b) {
+        const std::array<float, 3> d = sky_bin_direction(b);
+        std::array<float, 3> c = sky;
+        if (d[0] * sun[0] + d[1] * sun[1] + d[2] * sun[2] > radius) {
+            c = sun_color;
+        } else if (cloud_every != 0u && b % cloud_every == 0u) {
+            c = {1.0f, 1.0f, 1.0f};
+        }
+        words[b * kSkyBinWords] = 2u;
+        for (unsigned i = 0; i < 3u; ++i) {
+            words[b * kSkyBinWords + 1u + i] = static_cast<std::uint32_t>(c[i] * 255.0f * 2.0f + 0.5f);
+        }
+    }
+    return words;
+}
+
+void test_sky_sun() {
+    // Bins and their centres agree.
+    bool round_trip = true;
+    for (unsigned b = 0; b < kSkyBins; ++b) {
+        round_trip = round_trip && sky_bin(sky_bin_direction(b)) == b;
+    }
+    check(round_trip, "a bin's centre lies in that bin");
+    const std::array<float, 3> to_sun{0.36f, 0.64f, -0.68f};
+    const std::array<float, 3> blue{0.4f, 0.6f, 0.9f};
+
+    SkyMap map;
+    check(!map.find().valid, "an empty map shows no sun");
+    const std::vector<std::uint32_t> clear = sky_capture(blue, to_sun, 0.995f, {1.0f, 0.97f, 0.9f}, 0u);
+    map.add(clear.data());
+    const SkySun found = map.find();
+    check(found.valid, "a bright place in a blue sky is its sun");
+    check(same_direction(found.direction, to_sun, 1e-3f), "the sun's direction is that place's");
+    check(found.color[0] == 1.0f && found.color[2] < 0.95f, "the sun's colour is that place's");
+
+    SkyMap clouds;
+    clouds.add(sky_capture(blue, to_sun, 0.995f, {0.98f, 0.98f, 0.98f}, 7u).data());
+    check(!clouds.find().valid, "white clouds as bright as it all over the sky make no sun");
+
+    SkyMap grey;
+    grey.add(sky_capture(blue, to_sun, 0.995f, blue, 0u).data());
+    check(!grey.find().valid, "an even sky shows no sun");
+
+    SkyMap low;
+    low.add(sky_capture(blue, {0.6f, -0.6f, -0.53f}, 0.995f, {1.0f, 1.0f, 1.0f}, 0u).data());
+    check(!low.find().valid, "a bright place well below the horizon is no sun");
+
+    // A sun once found stays while the map no longer shows it; a brighter place elsewhere wins.
+    SkySun held{};
+    map.update(held);
+    check(held.valid, "update keeps a found sun");
+    map.add(sky_capture(blue, to_sun, 0.995f, blue, 0u).data());
+    for (unsigned i = 0; i < 40u; ++i) {
+        map.add(sky_capture(blue, to_sun, 0.995f, blue, 0u).data());
+    }
+    map.update(held);
+    check(held.valid && same_direction(held.direction, to_sun, 1e-3f), "a held sun stays without a new one");
+    const std::array<float, 3> other{-to_sun[0], to_sun[1], -to_sun[2]};
+    for (unsigned i = 0; i < 40u; ++i) {
+        map.add(sky_capture(blue, other, 0.995f, {1.0f, 1.0f, 1.0f}, 0u).data());
+    }
+    map.update(held);
+    check(held.valid && same_direction(held.direction, other, 1e-3f), "a brighter sun elsewhere replaces it");
 }
 
 void test_colours() {
@@ -353,6 +422,7 @@ int main() {
     test_tex_words();
     test_light_and_palette();
     test_actor_lights();
+    test_sky_sun();
     if (failures != 0) {
         std::printf("%d failure(s)\n", failures);
         return 1;

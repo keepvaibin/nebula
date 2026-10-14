@@ -37,6 +37,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <fstream>
+#include <intrin.h>
 #include <iostream>
 #include <string>
 
@@ -230,6 +231,7 @@ enum CaptureParameter : UINT {
     kCaptureSums,
     kCaptureGlow,
     kCaptureFound,
+    kCaptureSky,
     kCaptureCount,
 };
 
@@ -378,6 +380,7 @@ std::array<float, 3> g_game_sun{};
 float g_game_sun_distance = 0.0f;
 std::chrono::steady_clock::time_point g_game_sun_time{};
 bool g_game_sun_known = false;
+std::uint64_t g_game_sun_updates = 0u;
 
 // The game's lights by position (a light that moves takes a new entry; old ones age out).
 struct NotedLight {
@@ -457,6 +460,12 @@ void set_game_sun(const std::array<float, 3>& direction, float distance) noexcep
     g_game_sun_distance = distance;
     g_game_sun_time = std::chrono::steady_clock::now();
     g_game_sun_known = true;
+    ++g_game_sun_updates;
+}
+
+std::uint64_t game_sun_updates() noexcept {
+    const std::lock_guard<std::mutex> lock(g_game_sun_mutex);
+    return g_game_sun_updates;
 }
 
 void note_game_point_light(std::uint32_t info, const std::array<float, 3>& position,
@@ -581,6 +590,20 @@ bool SceneRayTracer::initialize(ID3D12Device* device, std::uint64_t timestamp_fr
     }
     std::memset(zero, 0, kStatsWords * 4u);
     stats_zero_->Unmap(0, nullptr);
+    constexpr UINT64 kSkyBytes = kSkyBins * kSkyBinWords * 4u;
+    if (!create_buffer(kSkyBytes, D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_COPY_DEST,
+                       D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, sky_bins_, L"rt sky bins") ||
+        !create_buffer(kSkyBytes, D3D12_HEAP_TYPE_UPLOAD, D3D12_RESOURCE_STATE_GENERIC_READ, D3D12_RESOURCE_FLAG_NONE,
+                       sky_zero_, L"rt sky zero") ||
+        !create_buffer(kSkyRing * kSkyBytes, D3D12_HEAP_TYPE_READBACK, D3D12_RESOURCE_STATE_COPY_DEST,
+                       D3D12_RESOURCE_FLAG_NONE, sky_readback_, L"rt sky readback") ||
+        FAILED(sky_zero_->Map(0, &no_read, &zero))) {
+        shutdown();
+        return false;
+    }
+    std::memset(zero, 0, kSkyBytes);
+    sky_zero_->Unmap(0, nullptr);
+    sky_bins_state_ = D3D12_RESOURCE_STATE_COPY_DEST;
     D3D12_QUERY_HEAP_DESC query{};
     query.Type = D3D12_QUERY_HEAP_TYPE_TIMESTAMP;
     query.Count = kResultSlots * kTimestampsPerSlot;
@@ -646,6 +669,7 @@ bool SceneRayTracer::initialize(ID3D12Device* device, std::uint64_t timestamp_fr
     sun_direction_ = env_triple("GALAXY_RT_SUN", sun_direction_);
     sun_color_ = env_triple("GALAXY_RT_SUN_COLOR", sun_color_);
     sun_size_ = std::clamp(env_float("GALAXY_RT_SUN_SIZE", 2.5f), 0.0f, 30.0f);
+    key_size_ = std::clamp(env_float("GALAXY_RT_KEY_SIZE", 6.0f), 0.0f, 30.0f);
     sun_light_ = std::clamp(env_float("GALAXY_RT_SUN_LIGHT", 1.0f), 0.0f, 4.0f);
     sky_light_ = std::clamp(env_float("GALAXY_RT_SKY_LIGHT", 0.5f), 0.0f, 4.0f);
     if (lighting_enabled_ && !create_lighting_pipelines(color_format)) {
@@ -682,6 +706,10 @@ void SceneRayTracer::shutdown() noexcept {
     stats_.Reset();
     stats_zero_.Reset();
     readback_.Reset();
+    sky_bins_.Reset();
+    sky_zero_.Reset();
+    sky_readback_.Reset();
+    sky_reads_ = {};
     timestamps_.Reset();
     dump_.Reset();
     dump_readback_.Reset();
@@ -931,6 +959,7 @@ void SceneRayTracer::begin_frame(std::uint64_t frame_index) {
         return;
     }
     reflections_.begin_frame(frame_index);
+    read_sky();
     std::erase_if(retired_, [&](const Retired& entry) { return entry.frame + kResultDelay <= frame_index; });
     for (unsigned slot = 0; slot < kResultSlots; ++slot) {
         ResultSlot& result = slots_[slot];
@@ -1192,7 +1221,134 @@ bool SceneRayTracer::sun_direction(std::array<float, 3>& world, float* distance)
         }
         return true;
     }
-    return game_sun(world, 2000u, distance);
+    return game_sun(world, sun_held_ ? 86'400'000u : 2000u, distance);
+}
+
+void SceneRayTracer::set_key_light(bool valid, const std::array<float, 3>& world, const std::array<float, 3>& color,
+                                   float strength, bool shown) noexcept {
+    key_valid_ = valid;
+    key_shown_ = shown;
+    key_direction_ = world;
+    // Colour at its peak 1, as the sun's.
+    const float peak = std::max({color[0], color[1], color[2]});
+    key_color_ = peak > 1e-3f ? std::array<float, 3>{color[0] / peak, color[1] / peak, color[2] / peak}
+                              : std::array<float, 3>{1.0f, 1.0f, 1.0f};
+    key_strength_ = std::clamp(strength, 0.0f, 1.0f);
+}
+
+bool SceneRayTracer::sky_sun(std::array<float, 3>& world, std::array<float, 3>& color) const noexcept {
+    if (!sky_sun_.valid) {
+        return false;
+    }
+    world = sky_sun_.direction;
+    color = sky_sun_.color;
+    return true;
+}
+
+void SceneRayTracer::reset_sky() noexcept {
+    sky_map_.reset();
+    sky_sun_ = {};
+    ++sky_generation_;
+}
+
+// The captures' sky bins once the GPU has written them: into the map, then the sun it shows
+// (every fourth read). GALAXY_TRACE_LIGHTS: the search every 120th read and each change of the
+// sun, with the TSC cycles of all reads so far; GALAXY_RT_SKY_DUMP=<dir>: the map every 600th read
+// as an equirectangular image (+y up, unseen bins dark red, the sun a cross).
+void SceneRayTracer::read_sky() {
+    constexpr UINT64 kSkyBytes = kSkyBins * kSkyBinWords * 4u;
+    static const bool trace = env_float("GALAXY_TRACE_LIGHTS", 0.0f) != 0.0f;
+    const std::uint64_t start = trace ? __rdtsc() : 0u;
+    bool added = false;
+    for (unsigned i = 0; i < kSkyRing; ++i) {
+        SkyRead& read = sky_reads_[i];
+        if (!read.pending || read.frame + kResultDelay > frame_index_) {
+            continue;
+        }
+        read.pending = false;
+        const D3D12_RANGE range{i * kSkyBytes, (i + 1u) * kSkyBytes};
+        void* mapped = nullptr;
+        if (read.generation != sky_generation_ || FAILED(sky_readback_->Map(0, &range, &mapped))) {
+            continue;
+        }
+        sky_map_.add(reinterpret_cast<const std::uint32_t*>(static_cast<const std::byte*>(mapped) + range.Begin));
+        const D3D12_RANGE no_write{0, 0};
+        sky_readback_->Unmap(0, &no_write);
+        added = true;
+    }
+    if (!added) {
+        return;
+    }
+    if (++sky_reads_done_ % 4u != 0u) {
+        sky_cycles_ += start != 0u ? __rdtsc() - start : 0u;
+        return;
+    }
+    const SkySun before = sky_sun_;
+    sky_map_.update(sky_sun_);
+    sky_cycles_ += start != 0u ? __rdtsc() - start : 0u;
+    const bool changed = sky_sun_.valid != before.valid ||
+                         (sky_sun_.valid && sky_sun_.direction[0] * before.direction[0] +
+                                                    sky_sun_.direction[1] * before.direction[1] +
+                                                    sky_sun_.direction[2] * before.direction[2] < 0.9994f);
+    if (trace && (changed || sky_reads_done_ % 120u == 0u)) [[unlikely]] {
+        const SkySun now = sky_map_.find();
+        std::fprintf(stderr,
+                     "[rt-sky] reads=%llu cycles=%llu bins=%u peak=%.3f distant=%.3f rest=%.3f found=%d "
+                     "sun=%d dir=(%.3f %.3f %.3f) color=(%.2f %.2f %.2f)%s\n",
+                     static_cast<unsigned long long>(sky_reads_done_), static_cast<unsigned long long>(sky_cycles_),
+                     now.bins, now.peak, now.distant, now.rest, now.valid ? 1 : 0, sky_sun_.valid ? 1 : 0,
+                     sky_sun_.direction[0], sky_sun_.direction[1],
+                     sky_sun_.direction[2], sky_sun_.color[0], sky_sun_.color[1], sky_sun_.color[2],
+                     changed ? " changed" : "");
+    }
+    static const std::string dump = [] {
+        char value[MAX_PATH]{};
+        std::size_t length = 0u;
+        return getenv_s(&length, value, sizeof(value), "GALAXY_RT_SKY_DUMP") == 0 && length > 1u ? std::string(value)
+                                                                                                : std::string();
+    }();
+    if (!dump.empty() && sky_reads_done_ % 600u == 0u) [[unlikely]] {
+        constexpr unsigned kWidth = 256u;
+        constexpr unsigned kHeight = 128u;
+        constexpr float kPi = 3.14159265f;
+        std::vector<std::uint8_t> image(kWidth * kHeight * 3u, 0u);
+        for (unsigned y = 0; y < kHeight; ++y) {
+            const float lat = kPi * 0.5f - (static_cast<float>(y) + 0.5f) / kHeight * kPi;
+            for (unsigned x = 0; x < kWidth; ++x) {
+                const float lon = (static_cast<float>(x) + 0.5f) / kWidth * 2.0f * kPi - kPi;
+                const std::array<float, 3> w{std::cos(lat) * std::sin(lon), std::sin(lat), -std::cos(lat) * std::cos(lon)};
+                const unsigned bin = sky_bin(w);
+                std::uint8_t* px = image.data() + (y * kWidth + x) * 3u;
+                if (!sky_map_.seen(bin)) {
+                    px[0] = 60u;
+                    continue;
+                }
+                for (unsigned i = 0; i < 3u; ++i) {
+                    px[i] = static_cast<std::uint8_t>(std::clamp(sky_map_.color(bin)[i], 0.0f, 1.0f) * 255.0f + 0.5f);
+                }
+            }
+        }
+        if (sky_sun_.valid) {
+            const auto& d = sky_sun_.direction;
+            const float lat = std::asin(std::clamp(d[1], -1.0f, 1.0f));
+            const float lon = std::atan2(d[0], -d[2]);
+            const int cx = static_cast<int>((lon + kPi) / (2.0f * kPi) * kWidth);
+            const int cy = static_cast<int>((kPi * 0.5f - lat) / kPi * kHeight);
+            for (int k = -6; k <= 6; ++k) {
+                for (const auto& [x, y] : {std::pair<int, int>{cx + k, cy}, std::pair<int, int>{cx, cy + k}}) {
+                    if (x >= 0 && y >= 0 && x < static_cast<int>(kWidth) && y < static_cast<int>(kHeight)) {
+                        std::uint8_t* px = image.data() + (static_cast<unsigned>(y) * kWidth + static_cast<unsigned>(x)) * 3u;
+                        px[0] = 255u;
+                        px[1] = 0u;
+                        px[2] = 0u;
+                    }
+                }
+            }
+        }
+        std::ofstream file(dump + "\\sky_" + std::to_string(frame_index_) + ".ppm", std::ios::binary);
+        file << "P6\n" << kWidth << ' ' << kHeight << "\n255\n";
+        file.write(reinterpret_cast<const char*>(image.data()), static_cast<std::streamsize>(image.size()));
+    }
 }
 
 std::uint32_t SceneRayTracer::sample_factor(std::uint32_t width, std::uint32_t height) const noexcept {
@@ -1272,6 +1428,8 @@ bool SceneRayTracer::create_lighting_pipelines(DXGI_FORMAT color_format) {
     capture_params[kCaptureGlow].Descriptor.ShaderRegister = 2u;
     capture_params[kCaptureFound].ParameterType = D3D12_ROOT_PARAMETER_TYPE_UAV;
     capture_params[kCaptureFound].Descriptor.ShaderRegister = 3u;
+    capture_params[kCaptureSky].ParameterType = D3D12_ROOT_PARAMETER_TYPE_UAV;
+    capture_params[kCaptureSky].Descriptor.ShaderRegister = 4u;
     for (auto& param : capture_params) {
         param.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
     }
@@ -1689,16 +1847,28 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
     c.sky_saturation = sky_saturation_;
     c.fallback = fallback_;
     {
-        // The game's visible sun (GALAXY_RT_SUN overrides it); without one, no sun light. Its
-        // colour: the game's world-fixed light from the same direction, else GALAXY_RT_SUN_COLOR.
+        // The game's visible sun (GALAXY_RT_SUN overrides it), else the scene's key light (the sun
+        // its sky shows or the world-fixed light its lit draws take, set_key_light); without
+        // either, no sun light. The
+        // sun's colour: the game's world-fixed light from the same direction, else
+        // GALAXY_RT_SUN_COLOR; the key's: its own.
         std::array<float, 3> l = sun_direction_;
         float sun_distance = 0.0f;
-        const bool sun_present = sun_direction(l, &sun_distance);
+        bool sun_present = sun_direction(l, &sun_distance);
+        const bool keyed = !sun_present && key_valid_;
+        const float strength = keyed ? key_strength_ : 1.0f;
+        if (keyed) {
+            l = key_direction_;
+            sun_present = true;
+            // Halfway to where a BrightSun model would stand (100000 units out): the scene's
+            // background sits farther than that.
+            sun_distance = 100000.0f;
+        }
         // Sun rays end halfway to the game's sun model (BrightSun, drawn that far out along the
         // sun's direction): it would shadow everything near the camera.
         c.sun_reach = sun_distance > 0.0f ? 0.5f * sun_distance : 1.0e6f;
-        std::array<float, 3> sun_color = sun_color_;
-        if (sun_present) {
+        std::array<float, 3> sun_color = keyed ? key_color_ : sun_color_;
+        if (sun_present && !keyed) {
             std::array<GameLight, 16> world{};
             const std::size_t count = game_world_lights(world, 2000u);
             const float sun_length = std::sqrt(l[0] * l[0] + l[1] * l[1] + l[2] * l[2]);
@@ -1724,11 +1894,12 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
         const std::array<float, 3> fallback_sun{0.3f, 0.8f, 0.5f};
         for (unsigned i = 0; i < 3u; ++i) {
             c.sun[i] = length > 1e-6f ? l[i] / length : fallback_sun[i] / std::sqrt(0.98f);
-            c.sun_light[i] = sun_present ? sun_color[i] * sun_light_ : 0.0f;
+            c.sun_light[i] = sun_present ? sun_color[i] * sun_light_ * strength : 0.0f;
         }
-        c.sun[3] = std::tan(sun_size_ * 3.14159265f / 180.0f);
+        // A key light the sky does not show has no disc: its shadows are soft.
+        c.sun[3] = std::tan((keyed && !key_shown_ ? key_size_ : sun_size_) * 3.14159265f / 180.0f);
         // Without a sun the sky and bounce light carry the whole picture.
-        c.sun_light[3] = sun_present ? sky_light_ : 1.0f;
+        c.sun_light[3] = sun_present ? 1.0f + (sky_light_ - 1.0f) * strength : 1.0f;
     }
     {
         // The game's point lights nearest in light to the camera, in eye space.
@@ -1993,7 +2164,17 @@ void SceneRayTracer::capture_picture(ID3D12GraphicsCommandList* list, const RtSo
     c.strength = strength_;
     const bool emit = glow && emitters_active() && emit_merge_pso_ && camera_known_;
     std::array<float, 12> to_world{};
-    const bool surfaces = emit && surface_emission_ > 0.0f && affine_inverse(camera_, to_world);
+    const bool inverted = camera_known_ && affine_inverse(camera_, to_world);
+    const bool surfaces = emit && surface_emission_ > 0.0f && inverted;
+    // The sky's colour by world direction, into a free readback.
+    SkyRead& sky_read = sky_reads_[sky_next_];
+    const bool sky = inverted && !sky_read.pending;
+    if (sky) {
+        c.divide |= 4u;
+        to_state(list, sky_bins_.Get(), sky_bins_state_, D3D12_RESOURCE_STATE_COPY_DEST);
+        list->CopyBufferRegion(sky_bins_.Get(), 0u, sky_zero_.Get(), 0u, kSkyBins * kSkyBinWords * 4u);
+    }
+    to_state(list, sky_bins_.Get(), sky_bins_state_, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
     c.surface_gain = surface_emission_;
     c.sky_distance = sky_distance_;
     c.exposure_day = exposure_day_;
@@ -2026,7 +2207,15 @@ void SceneRayTracer::capture_picture(ID3D12GraphicsCommandList* list, const RtSo
     list->SetComputeRootUnorderedAccessView(kCaptureSums, picture_sums_->GetGPUVirtualAddress());
     list->SetComputeRootUnorderedAccessView(kCaptureGlow, glow_added_->GetGPUVirtualAddress());
     list->SetComputeRootUnorderedAccessView(kCaptureFound, emit_tiles_->GetGPUVirtualAddress());
+    list->SetComputeRootUnorderedAccessView(kCaptureSky, sky_bins_->GetGPUVirtualAddress());
     list->Dispatch((sample_width + 7u) / 8u, (sample_height + 7u) / 8u, 1u);
+    if (sky) {
+        constexpr UINT64 kSkyBytes = kSkyBins * kSkyBinWords * 4u;
+        to_state(list, sky_bins_.Get(), sky_bins_state_, D3D12_RESOURCE_STATE_COPY_SOURCE);
+        list->CopyBufferRegion(sky_readback_.Get(), sky_next_ * kSkyBytes, sky_bins_.Get(), 0u, kSkyBytes);
+        sky_read = {frame_index_, sky_generation_, true};
+        sky_next_ = (sky_next_ + 1u) % kSkyRing;
+    }
     if (surfaces) {
         // Glowing surfaces (bright, under their own glow): lights at their own depth.
         const D3D12_RESOURCE_BARRIER barrier = uav_barrier(nullptr);
