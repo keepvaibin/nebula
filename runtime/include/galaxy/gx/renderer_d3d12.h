@@ -1164,6 +1164,7 @@ private:
     Microsoft::WRL::ComPtr<ID3D12PipelineState> blend_validate_pso_;
     SceneRayTracer ray_tracer_;
     static RtUpload rt_allocate(void* renderer, std::size_t bytes, std::size_t alignment);
+    [[nodiscard]] RtSources rt_sources() const;
     [[nodiscard]] bool temporal_inputs_match(const TemporalUpscaleInputs& in) const;
     D3D12_GPU_VIRTUAL_ADDRESS resident_vertex_base_ = 0;
     std::uint64_t resident_vertex_bytes_ = 0;

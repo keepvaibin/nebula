@@ -6834,6 +6834,11 @@ std::uint64_t RendererD3D12::end_frame(
     bool present_swap_chain,
     SubmissionCallback on_submitted,
     void* submission_context) {
+    // Ray tracing: this chunk's traced draws read upload rings the next frame begin rewinds.
+    if (ray_tracer_.scene_open()) {
+        ray_tracer_.flush_geometry(command_list_.Get(), rt_sources(), &RendererD3D12::rt_allocate, this);
+        bound_pipeline_ = nullptr;
+    }
     if (timestamp_query_heap_ && timestamp_readback_) {
         command_list_->EndQuery(
             timestamp_query_heap_.Get(), D3D12_QUERY_TYPE_TIMESTAMP,
@@ -7514,6 +7519,16 @@ void RendererD3D12::record_stripe_gather() {
     bound_pipeline_ = nullptr;
 }
 
+RtSources RendererD3D12::rt_sources() const {
+    RtSources sources{};
+    sources.vertex_ring = {vertex_ring_.gpu_base(), vertex_ring_.total_bytes()};
+    sources.resident = {resident_vertex_base_, resident_vertex_bytes_};
+    sources.index_ring = {index_ring_.gpu_base(), index_ring_.total_bytes()};
+    sources.constant_ring = {constant_ring_.gpu_base(), constant_ring_.total_bytes()};
+    sources.matrix_ring = {matrix_ring_.gpu_base(), matrix_ring_.total_bytes()};
+    return sources;
+}
+
 RtUpload RendererD3D12::rt_allocate(void* renderer, std::size_t bytes, std::size_t alignment) {
     const UploadRing::Allocation allocation =
         static_cast<RendererD3D12*>(renderer)->constant_ring_.allocate(bytes, alignment);
@@ -7585,15 +7600,9 @@ void RendererD3D12::rt_trace_scene() {
     if (depth) {
         command_list_->ResourceBarrier(1, &barrier);
     }
-    RtSources sources{};
-    sources.vertex_ring = {vertex_ring_.gpu_base(), vertex_ring_.total_bytes()};
-    sources.resident = {resident_vertex_base_, resident_vertex_bytes_};
-    sources.index_ring = {index_ring_.gpu_base(), index_ring_.total_bytes()};
-    sources.constant_ring = {constant_ring_.gpu_base(), constant_ring_.total_bytes()};
-    sources.matrix_ring = {matrix_ring_.gpu_base(), matrix_ring_.total_bytes()};
     const D3D12_RESOURCE_DESC desc = depth ? efb_depth_->GetDesc() : D3D12_RESOURCE_DESC{};
     dred_marker(command_list_.Get(), L"rt scene");
-    static_cast<void>(ray_tracer_.trace_scene(command_list_.Get(), sources, &RendererD3D12::rt_allocate, this,
+    static_cast<void>(ray_tracer_.trace_scene(command_list_.Get(), rt_sources(), &RendererD3D12::rt_allocate, this,
                                               depth ? conv_efb_depth_srv_ : D3D12_GPU_DESCRIPTOR_HANDLE{},
                                               static_cast<std::uint32_t>(desc.Width), desc.Height));
     if (depth) {

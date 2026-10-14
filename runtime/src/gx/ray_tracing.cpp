@@ -33,7 +33,7 @@ struct RtFrameConstants {
     float viewport[4];
     std::uint32_t target_size[2];
     float near_plane;
-    float pad0;
+    std::uint32_t triangle_base;
 };
 static_assert(sizeof(RtFrameConstants) == 96u);
 
@@ -248,10 +248,12 @@ void SceneRayTracer::retire(ComPtr<ID3D12Resource>& resource) {
     }
 }
 
-bool SceneRayTracer::ensure_capacity(std::uint32_t triangles) {
+bool SceneRayTracer::ensure_capacity(ID3D12GraphicsCommandList* list, std::uint32_t triangles) {
     if (triangles <= capacity_ && blas_ && tlas_) {
         return true;
     }
+    ComPtr<ID3D12Resource> previous_positions = positions_;
+    const D3D12_RESOURCE_STATES previous_state = positions_state_;
     if (triangles > kMaxTriangles) {
         return false;
     }
@@ -315,6 +317,18 @@ bool SceneRayTracer::ensure_capacity(std::uint32_t triangles) {
         return false;
     }
     positions_state_ = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+    if (previous_positions && flushed_triangles_ != 0u && list != nullptr) {
+        // Triangles flushed by earlier chunks of this scene move to the larger buffer.
+        D3D12_RESOURCE_BARRIER barriers[2] = {
+            transition(previous_positions.Get(), previous_state, D3D12_RESOURCE_STATE_COPY_SOURCE),
+            transition(positions_.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_COPY_DEST)};
+        list->ResourceBarrier(2u, barriers);
+        list->CopyBufferRegion(positions_.Get(), 0u, previous_positions.Get(), 0u,
+                               static_cast<std::uint64_t>(flushed_triangles_) * 36u);
+        barriers[0] = transition(previous_positions.Get(), D3D12_RESOURCE_STATE_COPY_SOURCE, previous_state);
+        barriers[1] = transition(positions_.Get(), D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+        list->ResourceBarrier(2u, barriers);
+    }
     blas_bytes_ = blas_info.ResultDataMaxSizeInBytes;
     tlas_bytes_ = tlas_info.ResultDataMaxSizeInBytes;
     scratch_bytes_ = scratch_tlas_offset;
@@ -510,6 +524,8 @@ void SceneRayTracer::begin_scene() noexcept {
     draws_.clear();
     infos_.clear();
     triangles_ = 0u;
+    flushed_draws_ = 0u;
+    flushed_triangles_ = 0u;
     view_known_ = false;
     scene_open_ = ready_;
 }
@@ -535,74 +551,64 @@ D3D12_GPU_VIRTUAL_ADDRESS SceneRayTracer::scene_tlas() const noexcept {
     return tlas_ ? tlas_->GetGPUVirtualAddress() : 0u;
 }
 
-bool SceneRayTracer::trace_scene(ID3D12GraphicsCommandList* list, const RtSources& sources, Allocate allocate,
-                                 void* allocate_context, D3D12_GPU_DESCRIPTOR_HANDLE depth_srv,
-                                 std::uint32_t width, std::uint32_t height) {
-    if (!ready_ || !scene_open_) {
+bool SceneRayTracer::fill_constants(const RtSources& sources, Allocate allocate, void* allocate_context,
+                                    std::uint32_t draws, std::uint32_t triangle_base, std::uint32_t triangles,
+                                    std::uint32_t width, std::uint32_t height, std::uint32_t flags, RtUpload& frame) {
+    frame = allocate(allocate_context, sizeof(RtFrameConstants), 256u);
+    if (frame.cpu == nullptr) {
         return false;
     }
-    scene_open_ = false;
-    if (draws_.empty() || triangles_ == 0u || list == nullptr || allocate == nullptr) {
-        return false;
-    }
-    ++window_.scenes;
-    window_.draws += draws_.size();
-    window_.triangles += triangles_;
-    window_.max_triangles = std::max<std::uint64_t>(window_.max_triangles, triangles_);
-    ComPtr<ID3D12GraphicsCommandList4> list4;
-    if (FAILED(list->QueryInterface(IID_PPV_ARGS(&list4))) || !ensure_capacity(triangles_)) {
-        ++window_.skipped;
-        return false;
-    }
-    const std::size_t table_bytes = draws_.size() * sizeof(RtDraw);
-    const RtUpload table = allocate(allocate_context, table_bytes, 256u);
-    const RtUpload frame = allocate(allocate_context, sizeof(RtFrameConstants), 256u);
-    if (table.cpu == nullptr || frame.cpu == nullptr) {
-        ++window_.skipped;
-        return false;
-    }
-    std::memcpy(table.cpu, draws_.data(), table_bytes);
     RtFrameConstants constants{};
-    constants.draw_count = static_cast<std::uint32_t>(draws_.size());
-    constants.triangle_count = triangles_;
+    constants.draw_count = draws;
+    constants.triangle_count = triangles;
     constants.vertex_ring_limit = read_limit(sources.vertex_ring.bytes, kRtVertexStride);
     constants.resident_limit = read_limit(sources.resident.bytes, kRtVertexStride);
     constants.index_ring_limit = read_limit(sources.index_ring.bytes, 4u);
     constants.constant_ring_limit = read_limit(sources.constant_ring.bytes, kVsConstantsBytes);
     constants.matrix_ring_limit = read_limit(sources.matrix_ring.bytes, kPaletteMatrixBytes);
+    constants.frame_flags = flags;
     std::copy(view_.projection.begin(), view_.projection.end(), constants.projection);
     constants.depth[0] = view_.z_scale;
     constants.depth[1] = view_.z_offset;
     constants.depth[2] = view_.min_depth;
     constants.depth[3] = view_.max_depth;
     std::copy(view_.viewport.begin(), view_.viewport.end(), constants.viewport);
-    const std::uint64_t serial = scene_serial_++;
-    const unsigned slot = static_cast<unsigned>(serial % kResultSlots);
-    const bool record_results = !slots_[slot].pending;
-    const bool validated = validate_ && view_known_ && depth_srv.ptr != 0u && width != 0u && height != 0u &&
-                           record_results;
-    bool dumping = validated && serial == dump_scene_ && dump_scene_ != 0u && !dump_pending_;
-    if (dumping) {
-        const std::uint64_t bytes = static_cast<std::uint64_t>(width) * height * 16u;
-        dump_.Reset();
-        dump_readback_.Reset();
-        dumping = create_buffer(bytes, D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
-                                D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, dump_, L"rt dump") &&
-                  create_buffer(bytes, D3D12_HEAP_TYPE_READBACK, D3D12_RESOURCE_STATE_COPY_DEST,
-                                D3D12_RESOURCE_FLAG_NONE, dump_readback_, L"rt dump readback");
-    }
-    constants.frame_flags = dumping ? 1u : 0u;
     constants.target_size[0] = width;
     constants.target_size[1] = height;
     // Near plane: depth 1 (reversed Z) is ndc 1, z = -[2][3] / (1 + [2][2]).
     const float near_denominator = 1.0f + view_.z_scale;
     constants.near_plane = near_denominator != 0.0f ? std::max(0.0f, view_.z_offset / near_denominator) : 0.0f;
+    constants.triangle_base = triangle_base;
     std::memcpy(frame.cpu, &constants, sizeof(constants));
+    return true;
+}
 
-    if (record_results && timestamps_) {
-        list->EndQuery(timestamps_.Get(), D3D12_QUERY_TYPE_TIMESTAMP, slot * kTimestampsPerSlot);
+void SceneRayTracer::flush_geometry(ID3D12GraphicsCommandList* list, const RtSources& sources, Allocate allocate,
+                                    void* allocate_context) {
+    if (!ready_ || !scene_open_ || list == nullptr || allocate == nullptr || flushed_draws_ >= draws_.size()) {
+        return;
     }
-
+    const std::size_t first = flushed_draws_;
+    const std::uint32_t base = flushed_triangles_;
+    const std::uint32_t count = triangles_ - base;
+    flushed_draws_ = draws_.size();
+    flushed_triangles_ = triangles_;
+    if (count == 0u || !ensure_capacity(list, triangles_)) {
+        if (count != 0u) {
+            ++window_.skipped;
+        }
+        return;
+    }
+    const std::size_t table_bytes = (draws_.size() - first) * sizeof(RtDraw);
+    const RtUpload table = allocate(allocate_context, table_bytes, 256u);
+    RtUpload frame{};
+    if (table.cpu == nullptr ||
+        !fill_constants(sources, allocate, allocate_context, static_cast<std::uint32_t>(draws_.size() - first), base,
+                        count, 0u, 0u, 0u, frame)) {
+        ++window_.skipped;
+        return;
+    }
+    std::memcpy(table.cpu, draws_.data() + first, table_bytes);
     if (positions_state_ != D3D12_RESOURCE_STATE_UNORDERED_ACCESS) {
         const D3D12_RESOURCE_BARRIER barrier =
             transition(positions_.Get(), positions_state_, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
@@ -621,13 +627,64 @@ bool SceneRayTracer::trace_scene(ID3D12GraphicsCommandList* list, const RtSource
     list->SetComputeRootShaderResourceView(kRootConstantRing, sources.constant_ring.base);
     list->SetComputeRootShaderResourceView(kRootMatrixRing, sources.matrix_ring.base);
     list->SetComputeRootUnorderedAccessView(kRootPositions, positions_->GetGPUVirtualAddress());
-    list->Dispatch((triangles_ + 63u) / 64u, 1u, 1u);
+    list->Dispatch((count + 63u) / 64u, 1u, 1u);
+    const D3D12_RESOURCE_BARRIER barrier = uav_barrier(positions_.Get());
+    list->ResourceBarrier(1u, &barrier);
+}
+
+bool SceneRayTracer::trace_scene(ID3D12GraphicsCommandList* list, const RtSources& sources, Allocate allocate,
+                                 void* allocate_context, D3D12_GPU_DESCRIPTOR_HANDLE depth_srv,
+                                 std::uint32_t width, std::uint32_t height) {
+    if (!ready_ || !scene_open_) {
+        return false;
+    }
+    flush_geometry(list, sources, allocate, allocate_context);
+    scene_open_ = false;
+    if (draws_.empty() || triangles_ == 0u || list == nullptr || allocate == nullptr || !positions_ ||
+        capacity_ < triangles_) {
+        return false;
+    }
+    ++window_.scenes;
+    window_.draws += draws_.size();
+    window_.triangles += triangles_;
+    window_.max_triangles = std::max<std::uint64_t>(window_.max_triangles, triangles_);
+    ComPtr<ID3D12GraphicsCommandList4> list4;
+    if (FAILED(list->QueryInterface(IID_PPV_ARGS(&list4)))) {
+        ++window_.skipped;
+        return false;
+    }
+    const std::uint64_t serial = scene_serial_++;
+    const unsigned slot = static_cast<unsigned>(serial % kResultSlots);
+    const bool record_results = !slots_[slot].pending;
+    const bool validated = validate_ && view_known_ && depth_srv.ptr != 0u && width != 0u && height != 0u &&
+                           record_results;
+    bool dumping = validated && serial == dump_scene_ && dump_scene_ != 0u && !dump_pending_;
+    if (dumping) {
+        const std::uint64_t bytes = static_cast<std::uint64_t>(width) * height * 16u;
+        dump_.Reset();
+        dump_readback_.Reset();
+        dumping = create_buffer(bytes, D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
+                                D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, dump_, L"rt dump") &&
+                  create_buffer(bytes, D3D12_HEAP_TYPE_READBACK, D3D12_RESOURCE_STATE_COPY_DEST,
+                                D3D12_RESOURCE_FLAG_NONE, dump_readback_, L"rt dump readback");
+    }
+    RtUpload frame{};
+    if (!fill_constants(sources, allocate, allocate_context, 0u, 0u, triangles_, width, height, dumping ? 1u : 0u,
+                        frame)) {
+        ++window_.skipped;
+        return false;
+    }
+    if (record_results && timestamps_) {
+        list->EndQuery(timestamps_.Get(), D3D12_QUERY_TYPE_TIMESTAMP, slot * kTimestampsPerSlot);
+    }
     {
         const D3D12_RESOURCE_BARRIER barrier = transition(
             positions_.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
         list->ResourceBarrier(1u, &barrier);
         positions_state_ = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
     }
+    list->SetComputeRootSignature(root_.Get());
+    list->SetComputeRootConstantBufferView(kRootFrame, frame.gpu);
 
     D3D12_RAYTRACING_GEOMETRY_DESC geometry{};
     geometry.Type = D3D12_RAYTRACING_GEOMETRY_TYPE_TRIANGLES;

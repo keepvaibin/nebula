@@ -21,7 +21,7 @@ cbuffer RtFrame : register(b0)
     float4 g_viewport;          // left, top, width, height (EFB pixels)
     uint2 g_target_size;        // EFB pixels
     float g_near;               // near-plane distance (eye units)
-    float g_pad0;
+    uint g_triangle_base;       // first triangle of this geometry dispatch
 };
 
 // RtDraw, 32 bytes: vertex byte offset; flags (bit 0 resident source, bit 1 indexed, bit 2
@@ -89,14 +89,15 @@ float3 transform_vertex(uint4 draw, uint4 draw2, uint vertex, uint vs_flags, uin
     return float3(dot(r0, p), dot(r1, p), dot(r2, p));
 }
 
-// One thread per output triangle: three eye-space vertices (36 bytes) in draw order.
+// One thread per output triangle: three eye-space vertices (36 bytes) in draw order. A dispatch
+// covers the draws noted since the last one (g_triangle_count triangles from g_triangle_base).
 [numthreads(64, 1, 1)]
 void GeometryCS(uint3 id : SV_DispatchThreadID)
 {
-    const uint tri = id.x;
-    if (tri >= g_triangle_count || g_draw_count == 0u) {
+    if (id.x >= g_triangle_count || g_draw_count == 0u) {
         return;
     }
+    const uint tri = g_triangle_base + id.x;
     // The last draw whose first triangle is not after this one.
     uint lo = 0u;
     uint hi = g_draw_count - 1u;

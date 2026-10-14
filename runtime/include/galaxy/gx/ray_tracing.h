@@ -102,8 +102,14 @@ public:
     void set_view(const RtView& view) noexcept;
     [[nodiscard]] bool scene_open() const noexcept { return scene_open_; }
 
-    // Records the geometry pass, the acceleration structures and, with validation, the
-    // primary-ray check against `depth_srv` (EFB depth in NON_PIXEL_SHADER_RESOURCE).
+    // Transforms the draws noted since the last flush into the scene's eye-space vertex buffer.
+    // Called before a render chunk's command list closes: the next chunk's frame begin rewinds
+    // the upload rings the draws read from.
+    void flush_geometry(ID3D12GraphicsCommandList* list, const RtSources& sources, Allocate allocate,
+                        void* allocate_context);
+
+    // Flushes the remaining draws, builds the acceleration structures and, with validation, runs
+    // the primary-ray check against `depth_srv` (EFB depth in NON_PIXEL_SHADER_RESOURCE).
     // Closes the scene. Returns false when nothing was traced.
     bool trace_scene(ID3D12GraphicsCommandList* list, const RtSources& sources, Allocate allocate,
                      void* allocate_context, D3D12_GPU_DESCRIPTOR_HANDLE depth_srv, std::uint32_t width,
@@ -130,7 +136,10 @@ private:
         std::uint32_t triangles = 0;
     };
 
-    bool ensure_capacity(std::uint32_t triangles);
+    bool ensure_capacity(ID3D12GraphicsCommandList* list, std::uint32_t triangles);
+    bool fill_constants(const RtSources& sources, Allocate allocate, void* allocate_context, std::uint32_t draws,
+                        std::uint32_t triangle_base, std::uint32_t triangles, std::uint32_t width,
+                        std::uint32_t height, std::uint32_t flags, RtUpload& frame);
     void write_dump();
     bool create_buffer(std::uint64_t bytes, D3D12_HEAP_TYPE heap, D3D12_RESOURCE_STATES state,
                        D3D12_RESOURCE_FLAGS flags, Microsoft::WRL::ComPtr<ID3D12Resource>& out, const wchar_t* name);
@@ -175,6 +184,9 @@ private:
     std::uint64_t scratch_bytes_ = 0;
     std::uint32_t capacity_ = 0;
     std::uint32_t triangles_ = 0;
+    // Draws and triangles already transformed this scene.
+    std::size_t flushed_draws_ = 0;
+    std::uint32_t flushed_triangles_ = 0;
     bool ready_ = false;
     bool validate_ = false;
     bool view_known_ = false;
