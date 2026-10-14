@@ -3,6 +3,7 @@
 
 #include "rt_reflect_composite_ps.h"
 #include "rt_reflect_composite_vs.h"
+#include "rt_reflect_filter_a_cs.h"
 #include "rt_reflect_filter_cs.h"
 #include "rt_reflect_memory_cs.h"
 #include "rt_reflect_temporal_cs.h"
@@ -237,6 +238,7 @@ void RtReflections::shutdown() noexcept {
     root_.Reset();
     trace_pso_.Reset();
     temporal_pso_.Reset();
+    filter_a_pso_.Reset();
     filter_pso_.Reset();
     memory_pso_.Reset();
     composite_root_.Reset();
@@ -354,6 +356,7 @@ bool RtReflections::create_pipelines(DXGI_FORMAT color_format) {
     rsd.pStaticSamplers = &linear;
     if (!serialize(rsd, root_) || !compute(g_rt_reflect_trace_cs, sizeof(g_rt_reflect_trace_cs), trace_pso_) ||
         !compute(g_rt_reflect_temporal_cs, sizeof(g_rt_reflect_temporal_cs), temporal_pso_) ||
+        !compute(g_rt_reflect_filter_a_cs, sizeof(g_rt_reflect_filter_a_cs), filter_a_pso_) ||
         !compute(g_rt_reflect_filter_cs, sizeof(g_rt_reflect_filter_cs), filter_pso_) ||
         !compute(g_rt_reflect_memory_cs, sizeof(g_rt_reflect_memory_cs), memory_pso_)) {
         return false;
@@ -575,11 +578,14 @@ void RtReflections::trace(ID3D12GraphicsCommandList* list, const RtReflectScene&
     list->SetPipelineState(temporal_pso_.Get());
     list->Dispatch(groups_x, groups_y, 1u);
     list->ResourceBarrier(1u, &all_uav);
-    // The accumulated light is read-only from here; its UAV parameter names a buffer the filter
-    // does not touch.
+    // The accumulated light is read-only from here; its UAV parameter names a buffer the filters
+    // do not touch through it. The first filter writes the raw light's buffer, the second reads it.
     to_state(list, history_[current], kRead);
     list->SetComputeRootShaderResourceView(kHistoryIn, history_[current].resource->GetGPUVirtualAddress());
     list->SetComputeRootUnorderedAccessView(kHistory, raw_.resource->GetGPUVirtualAddress());
+    list->SetPipelineState(filter_a_pso_.Get());
+    list->Dispatch(groups_x, groups_y, 1u);
+    list->ResourceBarrier(1u, &all_uav);
     list->SetPipelineState(filter_pso_.Get());
     list->Dispatch(groups_x, groups_y, 1u);
     to_state(list, final_[slot], kFinalRead);

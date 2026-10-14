@@ -16,7 +16,7 @@
 // nothing.
 // Results accumulate along the reflected image's motion (through the virtual image point for sharp
 // lobes, the surface for wide ones), clamped to the spread of the known light around them, then pass
-// an edge-aware filter as wide as the lobe. The composite adds k * reflection and takes away
+// two edge-aware a-trous filters as wide as the lobe. The composite adds k * reflection and takes away
 // k * (cover + (1 - cover) * reflection) of the surface's own colour (cover 1: a blend towards the
 // reflection; cover 0: a screen, never darker than the game's own shading), k the class strength
 // times Schlick's Fresnel term at the pixel's own view angle times the sample's weight; sub-frames
@@ -618,7 +618,7 @@ void ReflectTemporalCS(uint3 id : SV_DispatchThreadID)
                 const float4 history = sum / weight;
                 const float3 clamped =
                     from_ycocg(clamp(to_ycocg(history.rgb), mean - gamma * spread, mean + gamma * spread));
-                const float limit = lerp(4.0f, float(g_history_frames), saturate(alpha * 4.0f));
+                const float limit = lerp(8.0f, float(g_history_frames), saturate(alpha * 4.0f));
                 frames = min(count_sum / weight + 1.0f, limit);
                 // Light blends by confidence (unknown light only fades the reflection); the
                 // confidence itself by the history's share.
@@ -635,23 +635,24 @@ void ReflectTemporalCS(uint3 id : SV_DispatchThreadID)
     g_history[index] = uint3(pack_rgb_w(max(result.rgb, 0.0f), saturate(result.w)), asuint(frames));
 }
 
-// Edge-aware 5x5 filter at a step as wide as the lobe (none for the sharpest): the sample's
-// result for the composite.
-uint4 filter_sample(uint2 id, uint index)
+// The filters' input: the accumulated light (first pass) or the first pass's result (second).
+float4 filter_input(uint index, bool first)
 {
-    const uint4 info = g_info[index];
+    return first ? unpack_rgb_w(g_history_in[index].xy) : unpack_rgb_w(g_raw[index]);
+}
+
+// Edge-aware 5x5 filter (a-trous): steps as wide as the lobe, doubled in the second pass; none for
+// the sharpest lobes.
+float4 filtered_light(uint2 id, uint index, uint4 info, bool first)
+{
     const uint surface_class = info.z & 15u;
-    const uint z_class = (info.y & ~15u) | surface_class;
-    if (!reflective(info)) {
-        return uint4(0u, info.x, info.y != 0u ? z_class : 0u, 0u);
-    }
     const float alpha = g_class[surface_class].x;
-    const float4 centre = unpack_rgb_w(g_history_in[index].xy);
+    const float4 centre = filter_input(index, first);
     float4 value = centre;
-    const int step = alpha < 0.02f ? 0 : alpha < 0.12f ? 1 : 2;
+    const int step = (alpha < 0.02f ? 0 : alpha < 0.12f ? 1 : 2) * (first ? 1 : 2);
     if (step != 0) {
         const float z = asfloat(info.y);
-        const float3 p = sample_position(id.xy, z);
+        const float3 p = sample_position(id, z);
         const float3 n = unpack_normal(info.x);
         const float inv_tolerance = 1.0f / (0.25f + abs(z) * 0.004f * float(step));
         const float centre_l = luminance(centre.rgb);
@@ -660,7 +661,7 @@ uint4 filter_sample(uint2 id, uint index)
         float weight = 0.0f;
         [unroll] for (int dy = -2; dy <= 2; ++dy) {
             [unroll] for (int dx = -2; dx <= 2; ++dx) {
-                const int2 s = int2(id.xy) + int2(dx, dy) * step;
+                const int2 s = int2(id) + int2(dx, dy) * step;
                 if (any(s < 0) || any(s >= int2(g_sample_size))) {
                     continue;
                 }
@@ -672,7 +673,7 @@ uint4 filter_sample(uint2 id, uint index)
                 const float plane = abs(dot(n, sample_position(uint2(s), asfloat(other.y)) - p)) * inv_tolerance;
                 const float facing = saturate(dot(n, unpack_normal(other.x)));
                 const float facing2 = facing * facing;
-                const float4 c = unpack_rgb_w(g_history_in[si].xy);
+                const float4 c = filter_input(si, first);
                 // Edges between known lights stop the filter; light counts by its confidence.
                 const float edge = abs(luminance(c.rgb) - centre_l) / (0.1f + centre_l + alpha) * min(c.w, centre.w);
                 const float w = exp(-0.3f * float(dx * dx + dy * dy) - plane * plane - edge * edge) *
@@ -686,6 +687,31 @@ uint4 filter_sample(uint2 id, uint index)
             value = float4(known > 1e-4f ? sum / known : centre.rgb, known / weight);
         }
     }
+    return value;
+}
+
+[numthreads(8, 8, 1)]
+void ReflectFilterACS(uint3 id : SV_DispatchThreadID)
+{
+    if (any(id.xy >= g_sample_size)) {
+        return;
+    }
+    const uint index = id.y * g_sample_size.x + id.x;
+    const uint4 info = g_info[index];
+    const float4 value = reflective(info) ? filtered_light(id.xy, index, info, true) : float4(0.0f, 0.0f, 0.0f, 0.0f);
+    g_raw[index] = pack_rgb_w(value.rgb, value.w);
+}
+
+// The second pass: the sample's result for the composite.
+uint4 filter_sample(uint2 id, uint index)
+{
+    const uint4 info = g_info[index];
+    const uint surface_class = info.z & 15u;
+    const uint z_class = (info.y & ~15u) | surface_class;
+    if (!reflective(info)) {
+        return uint4(0u, info.x, info.y != 0u ? z_class : 0u, 0u);
+    }
+    const float4 value = filtered_light(id, index, info, false);
     // The sample's weight: its confidence, without its emitter share.
     const float weight = saturate(value.w) * float(info.z >> 8u) / 255.0f;
     return uint4(pack_r11g11b10(value.rgb), info.x, z_class, asuint(weight));

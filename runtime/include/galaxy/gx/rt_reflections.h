@@ -139,6 +139,7 @@ private:
     Microsoft::WRL::ComPtr<ID3D12RootSignature> root_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> trace_pso_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> temporal_pso_;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> filter_a_pso_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> filter_pso_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> memory_pso_;
     Microsoft::WRL::ComPtr<ID3D12RootSignature> composite_root_;
