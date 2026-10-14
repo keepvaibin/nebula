@@ -728,7 +728,7 @@ EnhShade enh_begin(float3 P, float3 n) {
     // Two-sided surfaces seen from behind face the viewer too (no rim across their back).
     e.NoV = e.valid ? min(abs(dot(e.N, e.V)), 1.0) : 1.0;
     const float g = 1.0 - e.NoV;
-    e.env_gain = e.valid ? kEnhEnvBase + kEnhEnvGraze * g * g * g : 1.0;
+    e.env_gain = e.valid ? kEnhEnvBase + kEnhEnvGraze * (g * g) * (g * g) * g : 1.0;
     return e;
 }
 
