@@ -8,13 +8,18 @@
 #include "rt_reflect_memory_cs.h"
 #include "rt_reflect_temporal_cs.h"
 #include "rt_reflect_trace_cs.h"
+#include "rt_underwater_ps.h"
+#include "rt_water_composite_ps.h"
+#include "rt_water_trace_cs.h"
 
 #include <algorithm>
+#include <bit>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <iostream>
+#include <utility>
 
 namespace galaxy::gx {
 namespace {
@@ -41,7 +46,20 @@ struct RtReflectConstants {
     std::uint32_t history_frames;
     float fallback;
     float memory_fade;
-    std::uint32_t pad[3];
+    float ripple;
+    float probe;
+    float sky_distance;
+    float sun[4];
+    float sun_light[4];
+    float points[16][4];
+    std::uint32_t point_count;
+    float point_light;
+    float point_size;
+    float shafts;
+    float sky_fade;
+    float sky_average;
+    float metal_sky;
+    float pad3;
 };
 static_assert(sizeof(RtReflectConstants) == RtReflections::kConstantsBytes);
 
@@ -57,9 +75,25 @@ struct RtReflectCompositeConstants {
     float near_plane;
     std::uint32_t tile_width;
     float split;
-    float classes[5][4];
+    std::uint32_t classes[8][2];   // strength, F0, GGX alpha, cover (halves)
+    float water[4];
+    float sun[4];
 };
-static_assert(sizeof(RtReflectCompositeConstants) == 160u);
+static_assert(sizeof(RtReflectCompositeConstants) == 176u);
+
+std::uint32_t half_pair(float a, float b) {
+    const auto half = [](float v) {
+        // Non-negative values below 65504: the rounded bits of a float16.
+        const std::uint32_t f = std::bit_cast<std::uint32_t>(std::clamp(v, 0.0f, 65504.0f));
+        const int exponent = static_cast<int>((f >> 23u) & 0xFFu) - 127 + 15;
+        if (exponent <= 0) {
+            return 0u;
+        }
+        const std::uint32_t mantissa = (f & 0x7FFFFFu) + 0x1000u;
+        return static_cast<std::uint32_t>(exponent << 10u) + (mantissa >> 13u);
+    };
+    return half(a) | (half(b) << 16u);
+}
 
 enum Parameter : UINT {
     kFrame = 0,
@@ -72,6 +106,7 @@ enum Parameter : UINT {
     kPrevHistory,
     kSums,
     kHistoryIn,
+    kEmitters,
     kInfo,
     kRaw,
     kHistory,
@@ -80,6 +115,11 @@ enum Parameter : UINT {
     kMemory,
     kPrimary,
     kTiles,
+    kWater,
+    kWaterPositions,
+    kWaterSurfaces,
+    kUnder,
+    kSkyMap,
     kParameterCount,
 };
 
@@ -89,13 +129,14 @@ enum CompositeParameter : UINT {
     kCompositeDepth,
     kCompositeReproject,
     kCompositeTiles,
+    kCompositeUnder,
     kCompositeCount,
 };
 
-// Per result slot: the trace's stats words, then its timestamps (trace begin, end; composite
-// begin, end).
-constexpr std::uint64_t kReadbackSlotBytes = 128u;
-constexpr std::uint64_t kReadbackTicks = 64u;
+// Per result slot: the stats words (the trace's, the water's), then the timestamps (trace,
+// composite, water trace, water composite: begin and end each).
+constexpr std::uint64_t kReadbackSlotBytes = 256u;
+constexpr std::uint64_t kReadbackTicks = 128u;
 constexpr D3D12_RESOURCE_STATES kFinalRead =
     D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
 
@@ -153,7 +194,8 @@ bool RtReflections::initialize(ID3D12Device5* device, std::uint64_t timestamp_fr
         return false;
     }
     device_ = device;
-    // GALAXY_RT_REFLECT_<CLASS>=roughness,F0,strength[,metal[,cover]] per surface class (rt_surfaces.h).
+    // GALAXY_RT_REFLECT_<CLASS>=roughness,F0,strength[,metal[,cover]] per surface class (rt_surfaces.h);
+    // GALAXY_RT_WATER the same for translucent water.
     const auto material = [](const char* name, Material fallback) {
         char value[96]{};
         std::size_t length = 0u;
@@ -176,19 +218,53 @@ bool RtReflections::initialize(ID3D12Device5* device, std::uint64_t timestamp_fr
     };
     materials_ = {};
     // The game's own shading of its shiny surfaces already carries a reflection (its environment
-    // maps): water and glossy reflections mostly add light (low cover); metal replaces half.
+    // maps): glossy and opaque water reflections mostly add light (low cover); metal is a near mirror
+    // whose reflection replaces most of it.
+    // Translucent water is a surface of water (F0 0.02): the reflection replaces the picture by the
+    // Fresnel weight, little looking down and most of it at grazing angles.
     materials_[0] = material("GALAXY_RT_REFLECT_DIFFUSE", {0.6f, 0.04f, 0.0f, 0.0f, 0.0f});
     materials_[1] = material("GALAXY_RT_REFLECT_GLOSSY", {0.3f, 0.06f, 1.0f, 0.0f, 0.15f});
-    materials_[2] = material("GALAXY_RT_REFLECT_METAL", {0.15f, 0.9f, 1.0f, 1.0f, 0.5f});
+    materials_[2] = material("GALAXY_RT_REFLECT_METAL", {0.12f, 0.9f, 1.0f, 1.0f, 0.8f});
     materials_[3] = material("GALAXY_RT_REFLECT_UNLIT", {0.5f, 0.02f, 0.0f, 0.0f, 0.0f});
     materials_[4] = material("GALAXY_RT_REFLECT_WATER", {0.08f, 0.1f, 1.0f, 0.0f, 0.4f});
-    view_ = static_cast<std::uint32_t>(std::clamp(env_float("GALAXY_RT_REFLECT_VIEW", 0.0f), 0.0f, 4.0f));
+    materials_[kWaterClass] = material("GALAXY_RT_WATER", {0.06f, 0.02f, 1.0f, 0.0f, 1.0f});
+    materials_[kWaterClass + 1u] = materials_[kWaterClass];
+    // Crystals, ice, gems and glass (named in rt_surfaces.cpp): clear dielectric, its reflection
+    // white and Fresnel-weighted.
+    materials_[7] = material("GALAXY_RT_REFLECT_CRYSTAL", {0.05f, 0.05f, 1.0f, 0.0f, 1.0f});
+    view_ = static_cast<std::uint32_t>(std::clamp(env_float("GALAXY_RT_REFLECT_VIEW", 0.0f), 0.0f, 5.0f));
     history_frames_ =
         static_cast<std::uint32_t>(std::clamp(env_float("GALAXY_RT_REFLECT_HISTORY", 24.0f), 1.0f, 64.0f));
     range_ = std::clamp(env_float("GALAXY_RT_REFLECT_RANGE", 50000.0f), 100.0f, 1.0e6f);
     lobe_ = std::clamp(env_float("GALAXY_RT_REFLECT_LOBE", 0.85f), 0.05f, 1.0f);
     fallback_ = std::clamp(env_float("GALAXY_RT_REFLECT_FALLBACK", 0.0f), 0.0f, 1.0f);
     memory_fade_ = std::clamp(env_float("GALAXY_RT_REFLECT_MEMORY_FADE", 0.99f), 0.0f, 1.0f);
+    ripple_ = std::clamp(env_float("GALAXY_RT_WATER_RIPPLE", 0.15f), 0.0f, 4.0f);
+    probe_ = std::clamp(env_float("GALAXY_RT_REFLECT_PROBE", 0.6f), 0.0f, 1.0f);
+    clear_ = std::clamp(env_float("GALAXY_RT_WATER_CLEAR", 1.0f), 0.0f, 1.0f);
+    caustics_ = std::clamp(env_float("GALAXY_RT_WATER_CAUSTICS", 1.0f), 0.0f, 4.0f);
+    shafts_ = std::clamp(env_float("GALAXY_RT_WATER_SHAFTS", 1.0f), 0.0f, 8.0f);
+    sky_fade_ = std::clamp(env_float("GALAXY_RT_REFLECT_SKY_FADE", 0.9995f), 0.0f, 1.0f);
+    sky_average_ = std::clamp(env_float("GALAXY_RT_REFLECT_SKY_AVERAGE", 0.15f), 0.0f, 1.0f);
+    metal_sky_ = std::clamp(env_float("GALAXY_RT_REFLECT_METAL_SKY", 0.3f), 0.0f, 1.0f);
+    {
+        // Per 1000 eye units (about 10 m of the game's world): red goes first, then green.
+        absorb_ = {9.0f, 2.6f, 1.8f};
+        char value[64]{};
+        std::size_t length = 0u;
+        if (getenv_s(&length, value, sizeof(value), "GALAXY_RT_WATER_ABSORB") == 0 && length > 1u) {
+            char* cursor = value;
+            for (float& f : absorb_) {
+                char* end = nullptr;
+                const float parsed = std::strtof(cursor, &end);
+                if (end == cursor) {
+                    break;
+                }
+                f = std::max(parsed, 0.0f);
+                cursor = *end == ',' ? end + 1 : end;
+            }
+        }
+    }
     // Committed resources start zeroed: an empty environment memory.
     if (!create_pipelines(color_format) ||
         !create_buffer(kMemoryTexels * 16u, D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
@@ -221,14 +297,18 @@ bool RtReflections::initialize(ID3D12Device5* device, std::uint64_t timestamp_fr
     }
     timestamp_frequency_ = timestamp_frequency;
     ready_ = true;
-    char line[320];
+    char line[512];
     std::snprintf(line, sizeof(line),
                   "[rt] reflections view=%u history=%u range=%.0f lobe=%.2f fade=%.3f | glossy %.2f %.2f %.2f | "
-                  "metal %.2f %.2f %.2f | unlit %.2f %.2f %.2f | water %.2f %.2f %.2f\n",
+                  "metal %.2f %.2f %.2f %.2f | unlit %.2f %.2f %.2f | water %.2f %.2f %.2f | sea %.2f %.2f %.2f %.2f "
+                  "ripple %.2f absorb %.2f %.2f %.2f clear %.2f caustics %.2f | probe %.2f\n",
                   view_, history_frames_, range_, lobe_, memory_fade_, materials_[1].roughness, materials_[1].f0,
                   materials_[1].strength, materials_[2].roughness, materials_[2].f0, materials_[2].strength,
-                  materials_[3].roughness, materials_[3].f0, materials_[3].strength, materials_[4].roughness,
-                  materials_[4].f0, materials_[4].strength);
+                  materials_[2].cover, materials_[3].roughness, materials_[3].f0, materials_[3].strength,
+                  materials_[4].roughness, materials_[4].f0, materials_[4].strength,
+                  materials_[kWaterClass].roughness, materials_[kWaterClass].f0, materials_[kWaterClass].strength,
+                  materials_[kWaterClass].cover, ripple_, absorb_[0], absorb_[1], absorb_[2], clear_, caustics_,
+                  probe_);
     std::cerr << line;
     return true;
 }
@@ -237,17 +317,19 @@ void RtReflections::shutdown() noexcept {
     ready_ = false;
     root_.Reset();
     trace_pso_.Reset();
+    water_trace_pso_.Reset();
     temporal_pso_.Reset();
     filter_a_pso_.Reset();
     filter_pso_.Reset();
     memory_pso_.Reset();
     composite_root_.Reset();
     composite_pso_.Reset();
-    for (Buffer& buffer : info_) buffer = {};
+    water_composite_pso_.Reset();
+    underwater_pso_.Reset();
+    main_ = {};
+    water_ = {};
     raw_ = {};
-    for (Buffer& buffer : history_) buffer = {};
-    for (Buffer& buffer : final_) buffer = {};
-    for (Buffer& buffer : tiles_) buffer = {};
+    for (Buffer& buffer : under_) buffer = {};
     memory_ = {};
     stats_ = {};
     stats_zero_.Reset();
@@ -255,11 +337,14 @@ void RtReflections::shutdown() noexcept {
     timestamps_.Reset();
     retired_.clear();
     slots_ = {};
+    water_slots_ = {};
     pending_ = {};
     window_ = {};
     composite_timing_ = -1;
+    water_result_ = -1;
+    water_composite_timing_ = -1;
     samples_ = 0u;
-    history_valid_ = history_camera_known_ = false;
+    water_samples_ = 0u;
     device_.Reset();
 }
 
@@ -333,7 +418,7 @@ bool RtReflections::create_pipelines(DXGI_FORMAT color_format) {
     params[kSources].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
     params[kSources].DescriptorTable.NumDescriptorRanges = 1u;
     params[kSources].DescriptorTable.pDescriptorRanges = &sources;
-    for (UINT i = kPrevInfo; i <= kHistoryIn; ++i) {
+    for (UINT i = kPrevInfo; i <= kEmitters; ++i) {
         params[i].ParameterType = D3D12_ROOT_PARAMETER_TYPE_SRV;
         params[i].Descriptor.ShaderRegister = 6u + (i - kPrevInfo);
     }
@@ -341,6 +426,14 @@ bool RtReflections::create_pipelines(DXGI_FORMAT color_format) {
         params[i].ParameterType = D3D12_ROOT_PARAMETER_TYPE_UAV;
         params[i].Descriptor.ShaderRegister = i - kInfo;
     }
+    for (UINT i = kWater; i <= kWaterSurfaces; ++i) {
+        params[i].ParameterType = D3D12_ROOT_PARAMETER_TYPE_SRV;
+        params[i].Descriptor.ShaderRegister = 11u + (i - kWater);
+    }
+    params[kUnder].ParameterType = D3D12_ROOT_PARAMETER_TYPE_UAV;
+    params[kUnder].Descriptor.ShaderRegister = 8u;
+    params[kSkyMap].ParameterType = D3D12_ROOT_PARAMETER_TYPE_SRV;
+    params[kSkyMap].Descriptor.ShaderRegister = 14u;
     for (auto& param : params) {
         param.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
     }
@@ -355,6 +448,7 @@ bool RtReflections::create_pipelines(DXGI_FORMAT color_format) {
     rsd.NumStaticSamplers = 1u;
     rsd.pStaticSamplers = &linear;
     if (!serialize(rsd, root_) || !compute(g_rt_reflect_trace_cs, sizeof(g_rt_reflect_trace_cs), trace_pso_) ||
+        !compute(g_rt_water_trace_cs, sizeof(g_rt_water_trace_cs), water_trace_pso_) ||
         !compute(g_rt_reflect_temporal_cs, sizeof(g_rt_reflect_temporal_cs), temporal_pso_) ||
         !compute(g_rt_reflect_filter_a_cs, sizeof(g_rt_reflect_filter_a_cs), filter_a_pso_) ||
         !compute(g_rt_reflect_filter_cs, sizeof(g_rt_reflect_filter_cs), filter_pso_) ||
@@ -377,6 +471,8 @@ bool RtReflections::create_pipelines(DXGI_FORMAT color_format) {
     composite_params[kCompositeReproject].Descriptor.ShaderRegister = 2u;
     composite_params[kCompositeTiles].ParameterType = D3D12_ROOT_PARAMETER_TYPE_SRV;
     composite_params[kCompositeTiles].Descriptor.ShaderRegister = 3u;
+    composite_params[kCompositeUnder].ParameterType = D3D12_ROOT_PARAMETER_TYPE_SRV;
+    composite_params[kCompositeUnder].Descriptor.ShaderRegister = 4u;
     for (auto& param : composite_params) {
         param.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
     }
@@ -410,102 +506,126 @@ bool RtReflections::create_pipelines(DXGI_FORMAT color_format) {
     graphics.NumRenderTargets = 1u;
     graphics.RTVFormats[0] = color_format;
     graphics.SampleDesc.Count = 1u;
-    return SUCCEEDED(device_->CreateGraphicsPipelineState(&graphics, IID_PPV_ARGS(&composite_pso_)));
+    if (FAILED(device_->CreateGraphicsPipelineState(&graphics, IID_PPV_ARGS(&composite_pso_)))) {
+        return false;
+    }
+    graphics.PS = {g_rt_water_composite_ps, sizeof(g_rt_water_composite_ps)};
+    if (FAILED(device_->CreateGraphicsPipelineState(&graphics, IID_PPV_ARGS(&water_composite_pso_)))) {
+        return false;
+    }
+    graphics.PS = {g_rt_underwater_ps, sizeof(g_rt_underwater_ps)};
+    return SUCCEEDED(device_->CreateGraphicsPipelineState(&graphics, IID_PPV_ARGS(&underwater_pso_)));
+}
+
+bool RtReflections::allocate_pass(Pass& pass, std::uint64_t samples, std::uint32_t tiles, const wchar_t* name) {
+    const auto make = [&](std::uint64_t bytes, Buffer& out) {
+        out.state = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+        return create_buffer(bytes, D3D12_HEAP_TYPE_DEFAULT, out.state, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS,
+                             out.resource, name);
+    };
+    bool ok = samples != 0u;
+    for (unsigned i = 0; ok && i < 2u; ++i) {
+        ok = make(samples * 16u, pass.info[i]) && make(samples * 16u, pass.history[i]);
+    }
+    for (unsigned i = 0; ok && i < kSlots; ++i) {
+        ok = make(samples * 16u, pass.final[i]) && make(static_cast<std::uint64_t>(tiles) * 4u, pass.tiles[i]);
+    }
+    return ok;
+}
+
+void RtReflections::release_pass(Pass& pass) {
+    for (Buffer& buffer : pass.info) retire(buffer.resource);
+    for (Buffer& buffer : pass.history) retire(buffer.resource);
+    for (Buffer& buffer : pass.final) retire(buffer.resource);
+    for (Buffer& buffer : pass.tiles) retire(buffer.resource);
+    pass = {};
 }
 
 bool RtReflections::ensure_buffers(std::uint32_t samples, std::uint32_t tiles) {
     if (samples <= samples_ && tiles <= tiles_capacity_ && raw_.resource) {
         return true;
     }
-    for (Buffer& buffer : info_) retire(buffer.resource);
+    release_pass(main_);
+    release_pass(water_);
     retire(raw_.resource);
-    for (Buffer& buffer : history_) retire(buffer.resource);
-    for (Buffer& buffer : final_) retire(buffer.resource);
-    for (Buffer& buffer : tiles_) retire(buffer.resource);
+    for (Buffer& buffer : under_) retire(buffer.resource);
     // Results of the old buffers are gone with them.
     slots_ = {};
+    water_slots_ = {};
     samples_ = 0u;
+    water_samples_ = 0u;
     tiles_capacity_ = 0u;
-    history_valid_ = false;
     const std::uint64_t n = samples;
-    const auto make = [&](std::uint64_t bytes, Buffer& out, const wchar_t* name) {
-        out.state = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
-        return create_buffer(bytes, D3D12_HEAP_TYPE_DEFAULT, out.state, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS,
-                             out.resource, name);
-    };
-    bool ok = n != 0u && make(n * 8u, raw_, L"rt reflect raw");
-    for (unsigned i = 0; ok && i < 2u; ++i) {
-        ok = make(n * 16u, info_[i], L"rt reflect surface") && make(n * 12u, history_[i], L"rt reflect history");
-    }
+    raw_.state = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+    bool ok = n != 0u &&
+              create_buffer(n * 16u, D3D12_HEAP_TYPE_DEFAULT, raw_.state, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS,
+                            raw_.resource, L"rt reflect raw") &&
+              allocate_pass(main_, n, tiles, L"rt reflect");
     for (unsigned i = 0; ok && i < kSlots; ++i) {
-        ok = make(n * 16u, final_[i], L"rt reflect result") &&
-             make(static_cast<std::uint64_t>(tiles) * 4u, tiles_[i], L"rt reflect tiles");
+        under_[i].state = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+        ok = create_buffer((n + kUnderState) * 8u, D3D12_HEAP_TYPE_DEFAULT, under_[i].state,
+                           D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS,
+                           under_[i].resource, L"rt reflect under");
     }
     if (!ok) {
-        for (Buffer& buffer : info_) buffer = {};
+        main_ = {};
         raw_ = {};
-        for (Buffer& buffer : history_) buffer = {};
-        for (Buffer& buffer : final_) buffer = {};
-        for (Buffer& buffer : tiles_) buffer = {};
+        for (Buffer& buffer : under_) buffer = {};
         return false;
     }
     samples_ = samples;
     tiles_capacity_ = tiles;
-    std::cerr << "[rt] reflect samples=" << samples
-              << " mb=" << ((n * (8u + 2u * 16u + 2u * 12u + 16u * kSlots)) >> 20u) << '\n';
+    std::cerr << "[rt] reflect samples=" << samples << " mb=" << ((n * (16u * (5u + kSlots) + 8u * kSlots)) >> 20u)
+              << '\n';
+    return true;
+}
+
+bool RtReflections::ensure_water_buffers() {
+    if (water_samples_ == samples_ && water_.final[0].resource) {
+        return true;
+    }
+    release_pass(water_);
+    water_slots_ = {};
+    water_samples_ = 0u;
+    if (samples_ == 0u || !allocate_pass(water_, samples_, tiles_capacity_, L"rt water")) {
+        water_ = {};
+        return false;
+    }
+    water_samples_ = samples_;
+    std::cerr << "[rt] water samples=" << samples_
+              << " mb=" << ((static_cast<std::uint64_t>(samples_) * 16u * (4u + kSlots)) >> 20u) << '\n';
     return true;
 }
 
 void RtReflections::invalidate(unsigned slot) noexcept {
     if (slot < kSlots) {
         slots_[slot].valid = false;
+        water_slots_[slot].valid = false;
     }
 }
 
-void RtReflections::trace(ID3D12GraphicsCommandList* list, const RtReflectScene& scene, unsigned slot,
-                          void* constants_cpu, D3D12_GPU_VIRTUAL_ADDRESS constants_gpu,
-                          D3D12_GPU_DESCRIPTOR_HANDLE color_depth) {
-    if (!ready_ || slot >= kSlots) {
-        return;
-    }
-    slots_[slot].valid = false;
-    if (list == nullptr || constants_cpu == nullptr || scene.tlas == 0u || scene.positions == 0u ||
-        scene.surfaces == 0u || scene.primary == 0u || scene.light == 0u || color_depth.ptr == 0u ||
-        scene.width == 0u || scene.height == 0u || scene.sample_width == 0u || scene.sample_height == 0u ||
-        scene.factor == 0u) {
-        return;
-    }
-    const std::uint32_t factor = scene.factor;
-    const std::uint32_t sample_width = scene.sample_width;
-    const std::uint32_t sample_height = scene.sample_height;
-    const UINT groups_x = (sample_width + 7u) / 8u;
-    const UINT groups_y = (sample_height + 7u) / 8u;
-    if (!ensure_buffers(sample_width * sample_height, groups_x * groups_y)) {
-        return;
-    }
-    if (sample_width != history_width_ || sample_height != history_height_ || factor != history_factor_) {
-        history_valid_ = false;
-        history_width_ = sample_width;
-        history_height_ = sample_height;
-        history_factor_ = factor;
-    }
+void RtReflections::fill_constants(const RtReflectScene& scene, const Pass& pass, std::uint32_t flags,
+                                   void* constants_cpu) {
     std::array<float, 12> inverse{};
     const bool invertible = scene.camera_known && affine_inverse(scene.camera, inverse);
-    const bool history = history_valid_ && invertible && history_camera_known_;
-    const std::array<float, 12> reproject = history ? affine_multiply(history_camera_, inverse) : kIdentity34;
-
+    const bool history = pass.history_valid && invertible && pass.history_camera_known &&
+                         pass.history_width == scene.sample_width && pass.history_height == scene.sample_height &&
+                         pass.history_factor == scene.factor;
+    const std::array<float, 12> reproject = history ? affine_multiply(pass.history_camera, inverse) : kIdentity34;
     RtReflectConstants c{};
     std::copy(scene.projection.begin(), scene.projection.end(), c.projection);
     std::copy(scene.depth.begin(), scene.depth.end(), c.depth);
     std::copy(scene.viewport.begin(), scene.viewport.end(), c.viewport);
     c.target_size[0] = scene.width;
     c.target_size[1] = scene.height;
-    c.sample_size[0] = sample_width;
-    c.sample_size[1] = sample_height;
+    c.sample_size[0] = scene.sample_width;
+    c.sample_size[1] = scene.sample_height;
     c.near_plane = scene.near_plane;
     c.frame = frame_++;
-    c.factor = factor;
-    c.flags = (history ? 1u : 0u) | (scene.sums != 0u ? 4u : 0u) | (invertible ? 8u : 0u);
+    c.factor = scene.factor;
+    const RtReflectLights& lights = scene.lights;
+    c.flags = flags | (history ? 1u : 0u) | (scene.sums != 0u ? 4u : 0u) | (invertible ? 8u : 0u) |
+              (lights.emitters != 0u ? 16u : 0u) | (scene.sky_map != 0u && invertible ? 64u : 0u);
     std::memcpy(c.reproject, reproject.data(), sizeof(c.reproject));
     // The camera's rotation and its inverse (translations unused: directions only).
     std::memcpy(c.world_to_eye, scene.camera.data(), sizeof(c.world_to_eye));
@@ -522,10 +642,146 @@ void RtReflections::trace(ID3D12GraphicsCommandList* list, const RtReflectScene&
     c.history_frames = history_frames_;
     c.fallback = fallback_;
     c.memory_fade = memory_fade_;
+    c.ripple = ripple_;
+    c.probe = probe_;
+    c.sky_distance = scene.sky_distance > 0.0f ? scene.sky_distance : 1.0e9f;
+    std::copy(lights.sun.begin(), lights.sun.end(), c.sun);
+    std::copy(lights.sun_light.begin(), lights.sun_light.end(), c.sun_light);
+    for (unsigned i = 0; i < 16u; ++i) {
+        std::copy(lights.points[i].begin(), lights.points[i].end(), c.points[i]);
+    }
+    c.point_count = std::min(lights.point_count, 8u);
+    c.point_light = lights.point_light;
+    c.point_size = lights.point_size;
+    c.shafts = shafts_;
+    c.sky_fade = sky_fade_;
+    c.sky_average = sky_average_;
+    c.metal_sky = metal_sky_;
     std::memcpy(constants_cpu, &c, sizeof(c));
+}
 
-    const unsigned current = parity_;
+void RtReflections::bind_trace(ID3D12GraphicsCommandList* list, const RtReflectScene& scene, Pass& pass,
+                               unsigned slot, D3D12_GPU_VIRTUAL_ADDRESS constants_gpu,
+                               D3D12_GPU_DESCRIPTOR_HANDLE color_depth) {
+    const unsigned current = pass.parity;
     const unsigned previous = current ^ 1u;
+    constexpr D3D12_RESOURCE_STATES kUav = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+    constexpr D3D12_RESOURCE_STATES kRead = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
+    to_state(list, stats_, kUav);
+    to_state(list, memory_, kUav);
+    to_state(list, pass.info[current], kUav);
+    to_state(list, raw_, kUav);
+    to_state(list, pass.history[current], kUav);
+    to_state(list, pass.final[slot], kUav);
+    to_state(list, pass.tiles[slot], kUav);
+    to_state(list, pass.info[previous], kRead);
+    to_state(list, pass.history[previous], kRead);
+    to_state(list, under_[slot], kUav);
+    const D3D12_GPU_VIRTUAL_ADDRESS previous_info = pass.info[previous].resource->GetGPUVirtualAddress();
+    const bool water = scene.water_tlas != 0u;
+    list->SetComputeRootSignature(root_.Get());
+    list->SetComputeRootConstantBufferView(kFrame, constants_gpu);
+    list->SetComputeRootShaderResourceView(kScene, scene.tlas);
+    list->SetComputeRootShaderResourceView(kPositions, scene.positions);
+    list->SetComputeRootShaderResourceView(kSurfaces, scene.surfaces);
+    list->SetComputeRootShaderResourceView(kLight, scene.light);
+    list->SetComputeRootDescriptorTable(kSources, color_depth);
+    list->SetComputeRootShaderResourceView(kPrevInfo, previous_info);
+    list->SetComputeRootShaderResourceView(kPrevHistory, pass.history[previous].resource->GetGPUVirtualAddress());
+    list->SetComputeRootShaderResourceView(kSums, scene.sums != 0u ? scene.sums : previous_info);
+    list->SetComputeRootShaderResourceView(kHistoryIn, pass.history[previous].resource->GetGPUVirtualAddress());
+    list->SetComputeRootShaderResourceView(kEmitters, scene.lights.emitters != 0u ? scene.lights.emitters
+                                                                                   : previous_info);
+    list->SetComputeRootUnorderedAccessView(kInfo, pass.info[current].resource->GetGPUVirtualAddress());
+    list->SetComputeRootUnorderedAccessView(kRaw, raw_.resource->GetGPUVirtualAddress());
+    list->SetComputeRootUnorderedAccessView(kHistory, pass.history[current].resource->GetGPUVirtualAddress());
+    list->SetComputeRootUnorderedAccessView(kFinal, pass.final[slot].resource->GetGPUVirtualAddress());
+    list->SetComputeRootUnorderedAccessView(kStats, stats_.resource->GetGPUVirtualAddress());
+    list->SetComputeRootUnorderedAccessView(kMemory, memory_.resource->GetGPUVirtualAddress());
+    list->SetComputeRootUnorderedAccessView(kPrimary, scene.primary);
+    list->SetComputeRootUnorderedAccessView(kTiles, pass.tiles[slot].resource->GetGPUVirtualAddress());
+    list->SetComputeRootShaderResourceView(kWater, water ? scene.water_tlas : scene.tlas);
+    list->SetComputeRootShaderResourceView(kWaterPositions, water ? scene.water_positions : scene.positions);
+    list->SetComputeRootShaderResourceView(kWaterSurfaces, water ? scene.water_surfaces : scene.surfaces);
+    list->SetComputeRootUnorderedAccessView(kUnder, under_[slot].resource->GetGPUVirtualAddress());
+    list->SetComputeRootShaderResourceView(kSkyMap, scene.sky_map != 0u ? scene.sky_map : previous_info);
+}
+
+void RtReflections::accumulate(ID3D12GraphicsCommandList* list, Pass& pass, unsigned slot, UINT groups_x,
+                               UINT groups_y) {
+    const unsigned current = pass.parity;
+    const D3D12_RESOURCE_BARRIER all_uav = uav_barrier();
+    list->ResourceBarrier(1u, &all_uav);
+    list->SetPipelineState(temporal_pso_.Get());
+    list->Dispatch(groups_x, groups_y, 1u);
+    list->ResourceBarrier(1u, &all_uav);
+    // The accumulated light is read-only from here; its UAV parameter names a buffer the filters
+    // do not touch through it. The first filter writes the raw light's buffer, the second reads it.
+    constexpr D3D12_RESOURCE_STATES kRead = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
+    to_state(list, pass.history[current], kRead);
+    list->SetComputeRootShaderResourceView(kHistoryIn, pass.history[current].resource->GetGPUVirtualAddress());
+    list->SetComputeRootUnorderedAccessView(kHistory, raw_.resource->GetGPUVirtualAddress());
+    list->SetPipelineState(filter_a_pso_.Get());
+    list->Dispatch(groups_x, groups_y, 1u);
+    list->ResourceBarrier(1u, &all_uav);
+    list->SetPipelineState(filter_pso_.Get());
+    list->Dispatch(groups_x, groups_y, 1u);
+    to_state(list, pass.final[slot], kFinalRead);
+    to_state(list, pass.tiles[slot], kFinalRead);
+}
+
+void RtReflections::finish_trace(Pass& pass, std::array<Slot, kSlots>& slots, const RtReflectScene& scene,
+                                 unsigned slot, UINT groups_x) {
+    Slot& info = slots[slot];
+    info.valid = true;
+    info.serial = serial_;
+    info.projection = scene.projection;
+    info.depth = scene.depth;
+    info.viewport = scene.viewport;
+    info.near_plane = scene.near_plane;
+    info.width = scene.width;
+    info.height = scene.height;
+    info.sample_width = scene.sample_width;
+    info.sample_height = scene.sample_height;
+    info.factor = scene.factor;
+    info.tile_width = groups_x;
+    info.sun = {0.0f, 0.0f, 0.0f, 0.0f};
+    if (scene.lights.sun_light[0] + scene.lights.sun_light[1] + scene.lights.sun_light[2] > 0.0f) {
+        info.sun = {scene.lights.sun[0], scene.lights.sun[1], scene.lights.sun[2], 1.0f};
+    }
+    pass.history_camera = scene.camera;
+    pass.history_camera_known = scene.camera_known;
+    pass.history_width = scene.sample_width;
+    pass.history_height = scene.sample_height;
+    pass.history_factor = scene.factor;
+    pass.history_valid = true;
+    pass.parity ^= 1u;
+}
+
+void RtReflections::trace(ID3D12GraphicsCommandList* list, const RtReflectScene& scene, unsigned slot,
+                          void* constants_cpu, D3D12_GPU_VIRTUAL_ADDRESS constants_gpu,
+                          D3D12_GPU_DESCRIPTOR_HANDLE color_depth) {
+    water_result_ = -1;
+    if (!ready_ || slot >= kSlots) {
+        return;
+    }
+    slots_[slot].valid = false;
+    water_slots_[slot].valid = false;
+    if (list == nullptr || constants_cpu == nullptr || scene.tlas == 0u || scene.positions == 0u ||
+        scene.surfaces == 0u || scene.primary == 0u || scene.light == 0u || color_depth.ptr == 0u ||
+        scene.width == 0u || scene.height == 0u || scene.sample_width == 0u || scene.sample_height == 0u ||
+        scene.factor == 0u) {
+        return;
+    }
+    const UINT groups_x = (scene.sample_width + 7u) / 8u;
+    const UINT groups_y = (scene.sample_height + 7u) / 8u;
+    if (!ensure_buffers(scene.sample_width * scene.sample_height, groups_x * groups_y)) {
+        return;
+    }
+    RtReflectScene opaque = scene;
+    opaque.water_tlas = 0u;
+    fill_constants(opaque, main_, 0u, constants_cpu);
+
     const unsigned result = static_cast<unsigned>(serial_++ % kResultSlots);
     const bool record = !pending_[result].pending;
     if (record && timestamps_) {
@@ -535,38 +791,7 @@ void RtReflections::trace(ID3D12GraphicsCommandList* list, const RtReflectScene&
         to_state(list, stats_, D3D12_RESOURCE_STATE_COPY_DEST);
         list->CopyBufferRegion(stats_.resource.Get(), 0u, stats_zero_.Get(), 0u, kStatsWords * 4u);
     }
-    constexpr D3D12_RESOURCE_STATES kUav = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
-    constexpr D3D12_RESOURCE_STATES kRead = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
-    to_state(list, stats_, kUav);
-    to_state(list, memory_, kUav);
-    to_state(list, info_[current], kUav);
-    to_state(list, raw_, kUav);
-    to_state(list, history_[current], kUav);
-    to_state(list, final_[slot], kUav);
-    to_state(list, tiles_[slot], kUav);
-    to_state(list, info_[previous], kRead);
-    to_state(list, history_[previous], kRead);
-
-    const D3D12_GPU_VIRTUAL_ADDRESS previous_info = info_[previous].resource->GetGPUVirtualAddress();
-    list->SetComputeRootSignature(root_.Get());
-    list->SetComputeRootConstantBufferView(kFrame, constants_gpu);
-    list->SetComputeRootShaderResourceView(kScene, scene.tlas);
-    list->SetComputeRootShaderResourceView(kPositions, scene.positions);
-    list->SetComputeRootShaderResourceView(kSurfaces, scene.surfaces);
-    list->SetComputeRootShaderResourceView(kLight, scene.light);
-    list->SetComputeRootDescriptorTable(kSources, color_depth);
-    list->SetComputeRootShaderResourceView(kPrevInfo, previous_info);
-    list->SetComputeRootShaderResourceView(kPrevHistory, history_[previous].resource->GetGPUVirtualAddress());
-    list->SetComputeRootShaderResourceView(kSums, scene.sums != 0u ? scene.sums : previous_info);
-    list->SetComputeRootShaderResourceView(kHistoryIn, history_[previous].resource->GetGPUVirtualAddress());
-    list->SetComputeRootUnorderedAccessView(kInfo, info_[current].resource->GetGPUVirtualAddress());
-    list->SetComputeRootUnorderedAccessView(kRaw, raw_.resource->GetGPUVirtualAddress());
-    list->SetComputeRootUnorderedAccessView(kHistory, history_[current].resource->GetGPUVirtualAddress());
-    list->SetComputeRootUnorderedAccessView(kFinal, final_[slot].resource->GetGPUVirtualAddress());
-    list->SetComputeRootUnorderedAccessView(kStats, stats_.resource->GetGPUVirtualAddress());
-    list->SetComputeRootUnorderedAccessView(kMemory, memory_.resource->GetGPUVirtualAddress());
-    list->SetComputeRootUnorderedAccessView(kPrimary, scene.primary);
-    list->SetComputeRootUnorderedAccessView(kTiles, tiles_[slot].resource->GetGPUVirtualAddress());
+    bind_trace(list, opaque, main_, slot, constants_gpu, color_depth);
     // Also orders the lighting's writes of the primary hits before the trace reads them.
     const D3D12_RESOURCE_BARRIER all_uav = uav_barrier();
     list->SetPipelineState(memory_pso_.Get());
@@ -574,22 +799,7 @@ void RtReflections::trace(ID3D12GraphicsCommandList* list, const RtReflectScene&
     list->ResourceBarrier(1u, &all_uav);
     list->SetPipelineState(trace_pso_.Get());
     list->Dispatch(groups_x, groups_y, 1u);
-    list->ResourceBarrier(1u, &all_uav);
-    list->SetPipelineState(temporal_pso_.Get());
-    list->Dispatch(groups_x, groups_y, 1u);
-    list->ResourceBarrier(1u, &all_uav);
-    // The accumulated light is read-only from here; its UAV parameter names a buffer the filters
-    // do not touch through it. The first filter writes the raw light's buffer, the second reads it.
-    to_state(list, history_[current], kRead);
-    list->SetComputeRootShaderResourceView(kHistoryIn, history_[current].resource->GetGPUVirtualAddress());
-    list->SetComputeRootUnorderedAccessView(kHistory, raw_.resource->GetGPUVirtualAddress());
-    list->SetPipelineState(filter_a_pso_.Get());
-    list->Dispatch(groups_x, groups_y, 1u);
-    list->ResourceBarrier(1u, &all_uav);
-    list->SetPipelineState(filter_pso_.Get());
-    list->Dispatch(groups_x, groups_y, 1u);
-    to_state(list, final_[slot], kFinalRead);
-    to_state(list, tiles_[slot], kFinalRead);
+    accumulate(list, main_, slot, groups_x, groups_y);
     if (record) {
         if (timestamps_) {
             list->EndQuery(timestamps_.Get(), D3D12_QUERY_TYPE_TIMESTAMP, result * kTimestampsPerSlot + 1u);
@@ -598,29 +808,111 @@ void RtReflections::trace(ID3D12GraphicsCommandList* list, const RtReflectScene&
         }
         to_state(list, stats_, D3D12_RESOURCE_STATE_COPY_SOURCE);
         list->CopyBufferRegion(readback_.Get(), result * kReadbackSlotBytes, stats_.resource.Get(), 0u,
-                               kStatsWords * 4u);
-        pending_[result] = Pending{frame_index_, true, false};
+                               kStatsWords * 4u / 2u);
+        pending_[result] = Pending{frame_index_, true, false, false, false};
+        water_result_ = static_cast<int>(result);
     }
     composite_timing_ = record && timestamps_ ? static_cast<int>(result) : -1;
+    water_composite_timing_ = -1;
     ++window_.traces;
+    finish_trace(main_, slots_, opaque, slot, groups_x);
+}
 
-    Slot& info = slots_[slot];
-    info.valid = true;
-    info.serial = serial_;
-    info.projection = scene.projection;
-    info.depth = scene.depth;
-    info.viewport = scene.viewport;
-    info.near_plane = scene.near_plane;
-    info.width = scene.width;
-    info.height = scene.height;
-    info.sample_width = sample_width;
-    info.sample_height = sample_height;
-    info.factor = factor;
-    info.tile_width = groups_x;
-    history_camera_ = scene.camera;
-    history_camera_known_ = scene.camera_known;
-    history_valid_ = true;
-    parity_ = previous;
+void RtReflections::trace_water(ID3D12GraphicsCommandList* list, const RtReflectScene& scene, unsigned slot,
+                                void* constants_cpu, D3D12_GPU_VIRTUAL_ADDRESS constants_gpu,
+                                D3D12_GPU_DESCRIPTOR_HANDLE color_depth) {
+    const int result = std::exchange(water_result_, -1);
+    if (!ready_ || slot >= kSlots) {
+        return;
+    }
+    water_slots_[slot].valid = false;
+    if (list == nullptr || constants_cpu == nullptr || scene.tlas == 0u || scene.water_tlas == 0u ||
+        scene.water_positions == 0u || scene.water_surfaces == 0u || scene.primary == 0u || scene.light == 0u ||
+        color_depth.ptr == 0u || scene.width == 0u || scene.sample_width == 0u || scene.factor == 0u ||
+        scene.sample_width * scene.sample_height > samples_ || !raw_.resource) {
+        return;
+    }
+    const UINT groups_x = (scene.sample_width + 7u) / 8u;
+    const UINT groups_y = (scene.sample_height + 7u) / 8u;
+    if (groups_x * groups_y > tiles_capacity_ || !ensure_water_buffers()) {
+        return;
+    }
+    // The water pass: the EFB colour is the lit picture.
+    fill_constants(scene, water_, 32u, constants_cpu);
+    const bool timed = result >= 0 && timestamps_;
+    const auto r = static_cast<unsigned>(result);
+    if (timed) {
+        list->EndQuery(timestamps_.Get(), D3D12_QUERY_TYPE_TIMESTAMP, r * kTimestampsPerSlot + 4u);
+    }
+    bind_trace(list, scene, water_, slot, constants_gpu, color_depth);
+    list->SetPipelineState(water_trace_pso_.Get());
+    list->Dispatch(groups_x, groups_y, 1u);
+    accumulate(list, water_, slot, groups_x, groups_y);
+    if (result >= 0) {
+        if (timed) {
+            list->EndQuery(timestamps_.Get(), D3D12_QUERY_TYPE_TIMESTAMP, r * kTimestampsPerSlot + 5u);
+            list->ResolveQueryData(timestamps_.Get(), D3D12_QUERY_TYPE_TIMESTAMP, r * kTimestampsPerSlot + 4u, 2u,
+                                   readback_.Get(), r * kReadbackSlotBytes + kReadbackTicks + 32u);
+            pending_[r].water_timed = true;
+        }
+        // The water's words (16-31) after the trace's.
+        to_state(list, stats_, D3D12_RESOURCE_STATE_COPY_SOURCE);
+        list->CopyBufferRegion(readback_.Get(), r * kReadbackSlotBytes + kStatsWords * 2u, stats_.resource.Get(),
+                               kStatsWords * 2u, kStatsWords * 2u);
+    }
+    water_composite_timing_ = timed ? result : -1;
+    ++window_.waters;
+    finish_trace(water_, water_slots_, scene, slot, groups_x);
+}
+
+void RtReflections::draw_composite(ID3D12GraphicsCommandList* list, Pass& pass, ID3D12PipelineState* pso,
+                                   D3D12_CPU_DESCRIPTOR_HANDLE target, D3D12_GPU_DESCRIPTOR_HANDLE depth_srv,
+                                   std::uint32_t width, std::uint32_t height, unsigned slot, const Slot& info,
+                                   D3D12_GPU_VIRTUAL_ADDRESS reproject, float split) {
+    to_state(list, pass.final[slot], kFinalRead);
+    to_state(list, pass.tiles[slot], kFinalRead);
+    to_state(list, under_[slot], kFinalRead);
+    RtReflectCompositeConstants c{};
+    std::copy(info.projection.begin(), info.projection.end(), c.projection);
+    std::copy(info.depth.begin(), info.depth.end(), c.depth);
+    std::copy(info.viewport.begin(), info.viewport.end(), c.viewport);
+    c.sample_size[0] = info.sample_width;
+    c.sample_size[1] = info.sample_height;
+    c.factor = info.factor;
+    // GALAXY_RT_REFLECT_VIEW=5: the surface classes on every other traced frame.
+    const std::uint32_t view = view_ == 5u ? ((info.serial & 1u) != 0u ? 2u : 0u) : view_ & 3u;
+    c.flags = (reproject != 0u ? 1u : 0u) | (view << 1u);
+    c.slot = slot;
+    c.tile_width = info.tile_width;
+    c.split = split;
+    c.near_plane = info.near_plane;
+    for (unsigned i = 0; i < kClasses; ++i) {
+        const Material& m = materials_[i];
+        c.classes[i][0] = half_pair(m.strength, m.f0);
+        c.classes[i][1] = half_pair(std::max(m.roughness * m.roughness, 1e-3f), m.cover);
+    }
+    for (unsigned i = 0; i < 3u; ++i) {
+        c.water[i] = absorb_[i] * 1e-3f;
+        c.sun[i] = info.sun[i];
+    }
+    c.water[3] = clear_;
+    c.sun[3] = info.sun[3] * caustics_;
+    const D3D12_GPU_VIRTUAL_ADDRESS final_address = pass.final[slot].resource->GetGPUVirtualAddress();
+    list->OMSetRenderTargets(1u, &target, FALSE, nullptr);
+    const D3D12_VIEWPORT viewport{0.0f, 0.0f, static_cast<float>(width), static_cast<float>(height), 0.0f, 1.0f};
+    const D3D12_RECT scissor{0, 0, static_cast<LONG>(width), static_cast<LONG>(height)};
+    list->RSSetViewports(1u, &viewport);
+    list->RSSetScissorRects(1u, &scissor);
+    list->SetGraphicsRootSignature(composite_root_.Get());
+    list->SetPipelineState(pso);
+    list->SetGraphicsRoot32BitConstants(kCompositeConstants, sizeof(c) / 4u, &c, 0u);
+    list->SetGraphicsRootShaderResourceView(kCompositeFinal, final_address);
+    list->SetGraphicsRootDescriptorTable(kCompositeDepth, depth_srv);
+    list->SetGraphicsRootShaderResourceView(kCompositeReproject, reproject != 0u ? reproject : final_address);
+    list->SetGraphicsRootShaderResourceView(kCompositeTiles, pass.tiles[slot].resource->GetGPUVirtualAddress());
+    list->SetGraphicsRootShaderResourceView(kCompositeUnder, under_[slot].resource->GetGPUVirtualAddress());
+    list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+    list->DrawInstanced(3u, 1u, 0u, 0u);
 }
 
 void RtReflections::composite(ID3D12GraphicsCommandList* list, D3D12_CPU_DESCRIPTOR_HANDLE target,
@@ -630,7 +922,7 @@ void RtReflections::composite(ID3D12GraphicsCommandList* list, D3D12_CPU_DESCRIP
         return;
     }
     const Slot& info = slots_[slot];
-    if (!info.valid || info.width != width || info.height != height || !final_[slot].resource) {
+    if (!info.valid || info.width != width || info.height != height || !main_.final[slot].resource) {
         return;
     }
     // GALAXY_RT_REFLECT_VIEW=4: every other traced frame without reflections (consecutive
@@ -638,48 +930,21 @@ void RtReflections::composite(ID3D12GraphicsCommandList* list, D3D12_CPU_DESCRIP
     if (view_ == 4u && (info.serial & 1u) != 0u) {
         return;
     }
-    to_state(list, final_[slot], kFinalRead);
-    to_state(list, tiles_[slot], kFinalRead);
+    if (view_ == 4u) {
+        // The frames with reflections carry a white mark at the middle of the right edge.
+        const float white[4] = {1.0f, 1.0f, 1.0f, 1.0f};
+        const D3D12_RECT mark{static_cast<LONG>(width) - 12, static_cast<LONG>(height / 2u) - 6,
+                              static_cast<LONG>(width), static_cast<LONG>(height / 2u) + 6};
+        list->ClearRenderTargetView(target, white, 1u, &mark);
+    }
     // The traced frame's composite is timed; its sub-frames' cost the same.
     const bool timed = composite_timing_ >= 0 && reproject == 0u;
     const unsigned result = timed ? static_cast<unsigned>(composite_timing_) : 0u;
     if (timed) {
         list->EndQuery(timestamps_.Get(), D3D12_QUERY_TYPE_TIMESTAMP, result * kTimestampsPerSlot + 2u);
     }
-    RtReflectCompositeConstants c{};
-    std::copy(info.projection.begin(), info.projection.end(), c.projection);
-    std::copy(info.depth.begin(), info.depth.end(), c.depth);
-    std::copy(info.viewport.begin(), info.viewport.end(), c.viewport);
-    c.sample_size[0] = info.sample_width;
-    c.sample_size[1] = info.sample_height;
-    c.factor = info.factor;
-    c.flags = (reproject != 0u ? 1u : 0u) | ((view_ & 3u) << 1u);
-    c.slot = slot;
-    c.tile_width = info.tile_width;
-    c.split = split;
-    c.near_plane = info.near_plane;
-    for (unsigned i = 0; i < 5u; ++i) {
-        const Material& m = materials_[i];
-        c.classes[i][0] = m.strength;
-        c.classes[i][1] = m.f0;
-        c.classes[i][2] = std::max(m.roughness * m.roughness, 1e-3f);
-        c.classes[i][3] = m.cover;
-    }
-    const D3D12_GPU_VIRTUAL_ADDRESS final_address = final_[slot].resource->GetGPUVirtualAddress();
-    list->OMSetRenderTargets(1u, &target, FALSE, nullptr);
-    const D3D12_VIEWPORT viewport{0.0f, 0.0f, static_cast<float>(width), static_cast<float>(height), 0.0f, 1.0f};
-    const D3D12_RECT scissor{0, 0, static_cast<LONG>(width), static_cast<LONG>(height)};
-    list->RSSetViewports(1u, &viewport);
-    list->RSSetScissorRects(1u, &scissor);
-    list->SetGraphicsRootSignature(composite_root_.Get());
-    list->SetPipelineState(composite_pso_.Get());
-    list->SetGraphicsRoot32BitConstants(kCompositeConstants, sizeof(c) / 4u, &c, 0u);
-    list->SetGraphicsRootShaderResourceView(kCompositeFinal, final_address);
-    list->SetGraphicsRootDescriptorTable(kCompositeDepth, depth_srv);
-    list->SetGraphicsRootShaderResourceView(kCompositeReproject, reproject != 0u ? reproject : final_address);
-    list->SetGraphicsRootShaderResourceView(kCompositeTiles, tiles_[slot].resource->GetGPUVirtualAddress());
-    list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-    list->DrawInstanced(3u, 1u, 0u, 0u);
+    draw_composite(list, main_, composite_pso_.Get(), target, depth_srv, width, height, slot, info, reproject, split);
+    ++window_.composites;
     if (timed) {
         list->EndQuery(timestamps_.Get(), D3D12_QUERY_TYPE_TIMESTAMP, result * kTimestampsPerSlot + 3u);
         list->ResolveQueryData(timestamps_.Get(), D3D12_QUERY_TYPE_TIMESTAMP, result * kTimestampsPerSlot + 2u, 2u,
@@ -687,7 +952,40 @@ void RtReflections::composite(ID3D12GraphicsCommandList* list, D3D12_CPU_DESCRIP
         pending_[result].composite_timed = true;
         composite_timing_ = -1;
     }
-    ++window_.composites;
+}
+
+void RtReflections::composite_water(ID3D12GraphicsCommandList* list, D3D12_CPU_DESCRIPTOR_HANDLE target,
+                                    D3D12_GPU_DESCRIPTOR_HANDLE depth_srv, std::uint32_t width, std::uint32_t height,
+                                    unsigned slot, D3D12_GPU_VIRTUAL_ADDRESS reproject, float split) {
+    if (!ready_ || list == nullptr || slot >= kSlots || depth_srv.ptr == 0u) {
+        return;
+    }
+    const Slot& info = water_slots_[slot];
+    if (!info.valid || info.width != width || info.height != height || !water_.final[slot].resource) {
+        return;
+    }
+    if (view_ == 4u && (slots_[slot].serial & 1u) != 0u) {
+        return;
+    }
+    const bool timed = water_composite_timing_ >= 0 && reproject == 0u;
+    const unsigned result = timed ? static_cast<unsigned>(water_composite_timing_) : 0u;
+    if (timed) {
+        list->EndQuery(timestamps_.Get(), D3D12_QUERY_TYPE_TIMESTAMP, result * kTimestampsPerSlot + 6u);
+    }
+    draw_composite(list, water_, water_composite_pso_.Get(), target, depth_srv, width, height, slot, info, reproject,
+                   split);
+    // Under the water (its state from the water pass): caustics and shafts over the whole picture.
+    if (caustics_ > 0.0f || shafts_ > 0.0f) {
+        list->SetPipelineState(underwater_pso_.Get());
+        list->DrawInstanced(3u, 1u, 0u, 0u);
+    }
+    if (timed) {
+        list->EndQuery(timestamps_.Get(), D3D12_QUERY_TYPE_TIMESTAMP, result * kTimestampsPerSlot + 7u);
+        list->ResolveQueryData(timestamps_.Get(), D3D12_QUERY_TYPE_TIMESTAMP, result * kTimestampsPerSlot + 6u, 2u,
+                               readback_.Get(), result * kReadbackSlotBytes + kReadbackTicks + 48u);
+        pending_[result].water_composite_timed = true;
+        water_composite_timing_ = -1;
+    }
 }
 
 void RtReflections::begin_frame(std::uint64_t frame_index) {
@@ -718,13 +1016,21 @@ void RtReflections::begin_frame(std::uint64_t frame_index) {
             std::uint64_t ticks[kTimestampsPerSlot]{};
             std::memcpy(ticks, base + kReadbackTicks, sizeof(ticks));
             const double to_ms = 1000.0 / static_cast<double>(timestamp_frequency_);
-            if (ticks[1] >= ticks[0] && ticks[1] - ticks[0] < timestamp_frequency_) {
-                window_.trace_ms += static_cast<double>(ticks[1] - ticks[0]) * to_ms;
-                ++window_.timed;
+            const auto span = [&](unsigned begin, double& sum, std::uint64_t& count) {
+                if (ticks[begin + 1u] >= ticks[begin] && ticks[begin + 1u] - ticks[begin] < timestamp_frequency_) {
+                    sum += static_cast<double>(ticks[begin + 1u] - ticks[begin]) * to_ms;
+                    ++count;
+                }
+            };
+            span(0u, window_.trace_ms, window_.timed);
+            if (entry.composite_timed) {
+                span(2u, window_.composite_ms, window_.composites_timed);
             }
-            if (entry.composite_timed && ticks[3] >= ticks[2] && ticks[3] - ticks[2] < timestamp_frequency_) {
-                window_.composite_ms += static_cast<double>(ticks[3] - ticks[2]) * to_ms;
-                ++window_.composites_timed;
+            if (entry.water_timed) {
+                span(4u, window_.water_ms, window_.water_timed);
+            }
+            if (entry.water_composite_timed) {
+                span(6u, window_.water_composite_ms, window_.water_composites_timed);
             }
         }
         const D3D12_RANGE no_write{0, 0};
@@ -742,18 +1048,28 @@ void RtReflections::report() {
             ? 100.0 * static_cast<double>(window_.stats[word]) / static_cast<double>(window_.stats[of])
             : 0.0;
     };
-    char line[768];
+    char line[1200];
     std::snprintf(line, sizeof(line),
                   "[rt-reflect] traces=%llu trace-ms=%.3f composite-ms=%.3f composites-per-trace=%.2f samples=%u "
                   "geometry-samples=%.0f found=%.2f%% diffuse=%.2f%% glossy=%.2f%% metal=%.2f%% unlit=%.2f%% "
                   "water=%.2f%% rays=%.0f hit-shown=%.2f%% hit-remembered=%.2f%% hit-unknown=%.2f%% "
-                  "sky-shown=%.2f%% sky-remembered=%.2f%% sky-average=%.2f%%\n",
+                  "hit-probe=%.2f%% sky-shown=%.2f%% sky-remembered=%.2f%% (map %.2f%%) sky-average=%.2f%% "
+                  "highlights=%.2f%% | "
+                  "waters=%llu water-ms=%.3f water-composite-ms=%.3f on-water=%.2f%% water-rays=%.0f "
+                  "hit-shown=%.2f%% hit-remembered=%.2f%% hit-unknown=%.2f%% hit-probe=%.2f%% sky-shown=%.2f%% "
+                  "sky-remembered=%.2f%% (map %.2f%%) sky-average=%.2f%% highlights=%.2f%% under=%llu\n",
                   static_cast<unsigned long long>(window_.traces), per(window_.trace_ms, window_.timed),
                   per(window_.composite_ms, window_.composites_timed),
                   per(static_cast<double>(window_.composites), window_.traces), samples_,
                   per(static_cast<double>(window_.stats[0]), window_.counted), pct(1u, 0u), pct(2u, 1u), pct(3u, 1u),
                   pct(4u, 1u), pct(5u, 1u), pct(6u, 1u), per(static_cast<double>(window_.stats[7]), window_.counted),
-                  pct(8u, 7u), pct(9u, 7u), pct(10u, 7u), pct(11u, 7u), pct(12u, 7u), pct(13u, 7u));
+                  pct(8u, 7u), pct(9u, 7u), pct(10u, 7u), pct(11u, 7u), pct(12u, 7u), pct(13u, 7u), pct(28u, 7u),
+                  pct(14u, 7u), pct(15u, 7u), static_cast<unsigned long long>(window_.waters),
+                  per(window_.water_ms, window_.water_timed),
+                  per(window_.water_composite_ms, window_.water_composites_timed), pct(17u, 16u),
+                  per(static_cast<double>(window_.stats[18]), window_.counted), pct(19u, 18u), pct(20u, 18u),
+                  pct(21u, 18u), pct(22u, 18u), pct(23u, 18u), pct(24u, 18u), pct(29u, 18u), pct(25u, 18u), pct(26u, 18u),
+                  static_cast<unsigned long long>(window_.stats[27]));
     std::cerr << line;
     window_ = {};
 }

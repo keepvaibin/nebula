@@ -6928,6 +6928,10 @@ std::uint64_t RendererD3D12::end_frame(
         ray_tracer_.flush_geometry(command_list_.Get(), rt_sources(), &RendererD3D12::rt_allocate, this);
         bound_pipeline_ = nullptr;
     }
+    if (ray_tracer_.water_open()) {
+        ray_tracer_.flush_water(command_list_.Get(), rt_sources(), &RendererD3D12::rt_allocate, this);
+        bound_pipeline_ = nullptr;
+    }
     if (timestamp_query_heap_ && timestamp_readback_) {
         command_list_->EndQuery(
             timestamp_query_heap_.Get(), D3D12_QUERY_TYPE_TIMESTAMP,
@@ -7863,6 +7867,73 @@ void RendererD3D12::record_rt_bloom(int slot) {
     }
     const D3D12_RESOURCE_DESC desc = efb_color_->GetDesc();
     ray_tracer_.bloom(command_list_.Get(), efb_rtv_, static_cast<std::uint32_t>(desc.Width), desc.Height, slot);
+    command_list_->SetGraphicsRootSignature(root_signature_.Get());
+    invalidate_gx_bindings();
+    bound_rt_aux_ = 0xFFu;
+}
+
+void RendererD3D12::rt_trace_water() {
+    if (!ray_tracer_.water_open()) {
+        return;
+    }
+    if (!efb_color_ || !efb_depth_ || conv_efb_color_srv_.ptr == 0u || conv_efb_depth_srv_.ptr == 0u) {
+        static_cast<void>(ray_tracer_.trace_water(nullptr, rt_sources(), &RendererD3D12::rt_allocate, this,
+                                                  D3D12_GPU_DESCRIPTOR_HANDLE{}, 0u, 0u));
+        return;
+    }
+    // The trace reads the EFB colour and depth (the conversion views: colour, then depth); the
+    // composite draws into the colour at that depth.
+    D3D12_RESOURCE_BARRIER barriers[2]{};
+    for (D3D12_RESOURCE_BARRIER& barrier : barriers) {
+        barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+        barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+    }
+    barriers[0].Transition.pResource = efb_color_.Get();
+    barriers[0].Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
+    barriers[0].Transition.StateAfter = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
+    barriers[1].Transition.pResource = efb_depth_.Get();
+    barriers[1].Transition.StateBefore = D3D12_RESOURCE_STATE_DEPTH_WRITE;
+    barriers[1].Transition.StateAfter =
+        D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+    command_list_->ResourceBarrier(2, barriers);
+    const D3D12_RESOURCE_DESC desc = efb_color_->GetDesc();
+    const auto width = static_cast<std::uint32_t>(desc.Width);
+    dred_marker(command_list_.Get(), L"rt water");
+    const int slot = ray_tracer_.trace_water(command_list_.Get(), rt_sources(), &RendererD3D12::rt_allocate, this,
+                                             conv_efb_color_srv_, width, desc.Height);
+    std::swap(barriers[0].Transition.StateBefore, barriers[0].Transition.StateAfter);
+    command_list_->ResourceBarrier(1, &barriers[0]);
+    if (slot >= 0) {
+        ray_tracer_.composite_water(command_list_.Get(), efb_rtv_, conv_efb_depth_srv_, width, desc.Height, slot,
+                                    false);
+        if (replay_recording_) {
+            replay_ops_.push_back({ReplayKind::RtWater, static_cast<std::uint32_t>(slot)});
+        }
+    }
+    std::swap(barriers[1].Transition.StateBefore, barriers[1].Transition.StateAfter);
+    command_list_->ResourceBarrier(1, &barriers[1]);
+    command_list_->SetGraphicsRootSignature(root_signature_.Get());
+    invalidate_gx_bindings();
+    bound_rt_aux_ = 0xFFu;
+    bound_pipeline_ = nullptr;
+}
+
+void RendererD3D12::record_rt_water(int slot, bool reproject) {
+    if (!efb_depth_ || conv_efb_depth_srv_.ptr == 0u) {
+        return;
+    }
+    D3D12_RESOURCE_BARRIER barrier{};
+    barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+    barrier.Transition.pResource = efb_depth_.Get();
+    barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+    barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_DEPTH_WRITE;
+    barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+    command_list_->ResourceBarrier(1, &barrier);
+    const D3D12_RESOURCE_DESC desc = efb_depth_->GetDesc();
+    ray_tracer_.composite_water(command_list_.Get(), efb_rtv_, conv_efb_depth_srv_,
+                                static_cast<std::uint32_t>(desc.Width), desc.Height, slot, reproject);
+    std::swap(barrier.Transition.StateBefore, barrier.Transition.StateAfter);
+    command_list_->ResourceBarrier(1, &barrier);
     command_list_->SetGraphicsRootSignature(root_signature_.Get());
     invalidate_gx_bindings();
     bound_rt_aux_ = 0xFFu;
@@ -9497,6 +9568,9 @@ bool RendererD3D12::record_replay_list(ReplayList& entry) {
                 break;
             case ReplayKind::RtPost:
                 record_rt_post(true);
+                break;
+            case ReplayKind::RtWater:
+                record_rt_water(static_cast<int>(op.index), true);
                 break;
             }
             if (op.kind == ReplayKind::Copy) {

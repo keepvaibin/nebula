@@ -795,12 +795,22 @@ private:
     // map 7 (output_flags bit 6); the texture binding key marks them in map 7's TEX_MODE0 word.
     bool lit_translucent_ = false;
     static constexpr std::uint32_t kLitTranslucentKey = 0x4C495431u;
+    bool rt_water_eligible_ = false;
     bool rt_scene_traced_ = true;
     bool rt_view_set_ = false;
     [[nodiscard]] bool rt_geometry_draw() const noexcept;
     [[nodiscard]] bool rt_glow_draw() const noexcept;
+    [[nodiscard]] bool rt_water_draw() const noexcept;
     void note_rt_phase(std::uint8_t phase);
     void trace_rt_scene();
+    void trace_rt_water();
+    // GALAXY_RT_MATERIALS: the census line of a scene draw (rt_surfaces.h).
+    void note_rt_material();
+    // The current object's name (NameObj::mName) into `out`; its guest address, 0 for none.
+    std::uint32_t rt_object_name(char* out, std::size_t size);
+    std::uint32_t rt_object_ = 0u;   // the last NameObj marker's object
+    // Per object name (its guest address) the class its name gives (rt_named_class), + 1.
+    std::unordered_map<std::uint32_t, std::uint8_t> rt_named_;
     // Whether a batch starting with `call` is traced geometry; the scene's first one also gives
     // the camera (projection and viewport) for rays through EFB pixels.
     [[nodiscard]] bool begin_rt_batch(const DrawCall& call, RtDrawInfo& info);

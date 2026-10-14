@@ -175,7 +175,9 @@ cbuffer RtReflect : register(b0)
     uint g_frame;               // sample sequence index
     uint g_factor;              // EFB pixels per sample side
     uint g_flags;               // bit 0: previous samples usable; bit 2: picture sums usable;
-                                // bit 3: camera known (environment memory)
+                                // bit 3: camera known (environment memory); bit 4: glow lights;
+                                // bit 5: the water pass (the EFB colour is the lit picture);
+                                // bit 6: the lighting's sky map usable
     float4 g_reproject[3];      // previous samples' eye position from this frame's (3x4 rows)
     float4 g_world_to_eye[3];   // the camera's rotation (rows)
     float4 g_eye_to_world[3];   // its inverse
@@ -185,7 +187,21 @@ cbuffer RtReflect : register(b0)
     uint g_history_frames;      // accumulation limit of the widest lobes
     float g_fallback;           // confidence of the scene's average light for hits nothing showed
     float g_memory_fade;        // environment memory kept per frame where the camera does not look
-    uint3 g_pad;
+    float g_ripple;             // water: normal slope per unit of the picture's relative luminance slope
+    float g_probe;              // confidence of the environment memory along a ray whose hit nothing showed
+    float g_sky_distance;       // farther surfaces are the sky (the lighting's backdrops)
+    // The lighting's lights (rt_lighting.hlsl RtLight) for the highlights.
+    float4 g_sun;               // towards the sun (xyz), tangent of its radius (w)
+    float4 g_sun_light;         // sun light (rgb), how far its shadow rays reach (w)
+    float4 g_points[16];        // per point light: position, reach; colour, 1 / half-light distance^2
+    uint g_point_count;
+    float g_point_light;        // the point lights' weight
+    float g_point_size;         // radius of the emitter around a point light
+    float g_shafts;             // under the water: the sunlight its waves scatter towards the camera
+    float g_sky_fade;           // environment memory of the sky kept per frame where the camera does not look
+    float g_sky_average;        // confidence of the sky's average colour where no sky is known
+    float g_metal_sky;          // metal: share of the sky's reflection over its own environment map
+    float g_pad3;
 };
 
 RaytracingAccelerationStructure g_scene : register(t0);
@@ -196,19 +212,29 @@ StructuredBuffer<uint3> g_light : register(t3);     // this frame's lighting (rt
 Texture2D<float4> g_color : register(t4);           // EFB colour of the opaque scene
 Texture2D<float> g_efb_depth : register(t5);
 StructuredBuffer<uint4> g_prev_info : register(t6);
-StructuredBuffer<uint3> g_prev_history : register(t7);
+StructuredBuffer<uint4> g_prev_history : register(t7);
 ByteAddressBuffer g_sums : register(t8);            // previous picture: sky r g b n, scene r g b n (x 1/255)
-StructuredBuffer<uint3> g_history_in : register(t9);
+StructuredBuffer<uint4> g_history_in : register(t9);
+// Glow lights (rt_lighting.hlsl g_emitters): count, total power; per light world position, radius;
+// power (rgb), cumulative power. Read when g_flags bit 4 is set.
+ByteAddressBuffer g_emitters : register(t10);
+// The translucent water draws (WaterTraceCS): their triangles alone, eye-space vertices, surface records.
+RaytracingAccelerationStructure g_water : register(t11);
+ByteAddressBuffer g_water_positions : register(t12);
+ByteAddressBuffer g_water_surfaces : register(t13);
+// The lighting's sky map (rt_lighting.hlsl SkyLightMapCS): per world direction (octahedral, +y the
+// pole, 32 x 32 bins) the sky's colour over the stage and whether it was seen.
+StructuredBuffer<float4> g_sky_map : register(t14);
 SamplerState g_linear : register(s0);
 // Per sample: packed normal, eye z (0: no surface), class (bits 0-3) and emitter-free share
 // (bits 8-15, unorm), reflection distance.
 RWStructuredBuffer<uint4> g_info : register(u0);
-// Per sample: reflected light (rgb) and its confidence.
-RWStructuredBuffer<uint2> g_raw : register(u1);
-// Per sample: accumulated light and confidence (halves), frames.
-RWStructuredBuffer<uint3> g_history : register(u2);
-// Per sample for the composite: light (11-11-10), packed normal, eye z with the class in its low
-// 4 bits, weight.
+// Per sample: reflected light (rgb) and its confidence, the lights' highlight (rgb) (halves).
+RWStructuredBuffer<uint4> g_raw : register(u1);
+// Per sample: accumulated light and confidence, highlight and frames (halves).
+RWStructuredBuffer<uint4> g_history : register(u2);
+// Per sample for the composite: light (11-11-10), normal (12:12) and weight (8 bits), eye z with the
+// class in its low 4 bits, highlight (11-11-10).
 RWStructuredBuffer<uint4> g_final : register(u3);
 RWByteAddressBuffer g_stats : register(u4);
 // Per world direction from the camera (octahedral, kProbeSize^2): light and its freshness (halves),
@@ -219,6 +245,9 @@ RWStructuredBuffer<uint4> g_memory : register(u5);
 RWStructuredBuffer<uint2> g_primary : register(u6);
 // Per tile of 8x8 samples: 1 where a sample reflects.
 RWStructuredBuffer<uint> g_tiles : register(u7);
+// Per sample, the picture under the translucent phases for the water's refraction: lit colour
+// (11-11-10) and eye z (0: the sky).
+RWStructuredBuffer<uint2> g_under : register(u8);
 
 int2 sample_pixel(uint2 s)
 {
@@ -237,9 +266,17 @@ float2 sample_point(uint2 s)
     return frac(float2(ign, frac(ign * 1.61803399f)) + n * float2(0.7548776662f, 0.5698402910f));
 }
 
+// Further decorrelated points of the same sequence.
+float2 sample_point(uint2 s, uint k)
+{
+    return frac(sample_point(s) + float(k) * float2(0.6180339887f, 0.4142135624f));
+}
+
 // Stats words: 0 samples on geometry, 1 with a traced triangle, 2-6 per class (diffuse, glossy,
-// metal, unlit, water), 7 reflection rays, 8 hits this frame shows, 9 hits the memory knows,
-// 10 other hits, 11 sky this frame shows, 12 sky the memory knows, 13 sky average.
+// metal, unlit, water), 7 reflection rays, 8-14 their sources (Reflected.source: hits this frame
+// shows, the memory knows, nothing knows, the memory along the ray knows; sky this frame shows, the
+// memory knows, the average), 15 samples with a highlight. The water pass: 16 samples, 17 on
+// water, 18 reflection rays, 19-25 their sources, 26 samples with a highlight, 27 under the water.
 void count(uint slot, bool condition)
 {
     const uint n = WaveActiveCountBits(condition);
@@ -308,7 +345,11 @@ bool shown_at(float2 pixel, out float3 light, out float distance)
     light = g_color.SampleLevel(g_linear, pixel / float2(g_target_size), 0.0f).rgb;
     if (!far_plane(g_depth, depth)) {
         distance = length(eye_position(g_projection, g_viewport, pixel, depth_to_eye_z(g_depth, depth)));
-        light *= lighting_at(c);
+        if (distance >= g_sky_distance) {
+            distance = kSkyDistance;
+        } else if ((g_flags & 32u) == 0u) {
+            light *= lighting_at(c);
+        }
     }
     return true;
 }
@@ -348,13 +389,15 @@ void ReflectMemoryCS(uint3 id : SV_DispatchThreadID)
         memory.w = 1.0f;
         distance = nearest;
     } else {
-        memory.w *= g_memory_fade;
+        // The sky does not move with the camera: it is remembered far longer.
+        memory.w *= distance >= kSkyDistance ? g_sky_fade : g_memory_fade;
     }
     g_memory[index] = uint4(pack_rgb_w(memory.rgb, memory.w), asuint(distance), 0u);
 }
 
 // The environment memory towards eye-space point or direction `x` from the camera: its light and
-// how far it agrees (the freshness, and for a point at `distance` the share of a matching distance).
+// how far it agrees (the freshness, and for a point at `distance` the share of a matching distance;
+// distance 0: whatever it saw there).
 float memory_light(float3 x, float distance, out float3 light)
 {
     light = float3(0.0f, 0.0f, 0.0f);
@@ -367,10 +410,295 @@ float memory_light(float3 x, float distance, out float3 light)
     const float4 memory = unpack_rgb_w(stored.xy);
     const float seen = asfloat(stored.z);
     light = memory.rgb;
+    if (distance <= 0.0f) {
+        return memory.w;
+    }
     if (distance >= kSkyDistance) {
         return seen >= kSkyDistance ? memory.w : 0.0f;
     }
     return seen < kSkyDistance ? memory.w * saturate(1.5f - abs(seen - distance) / (0.4f * distance)) : 0.0f;
+}
+
+// The sky the lighting's map holds towards eye-space direction `d` (bilinear over its bins): its
+// light and the share of it seen.
+float sky_map_light(float3 d, out float3 light)
+{
+    light = float3(0.0f, 0.0f, 0.0f);
+    if ((g_flags & 64u) == 0u) {
+        return 0.0f;
+    }
+    const float3 w = normalize(rotate(g_eye_to_world, d));
+    float2 p = w.xz / (abs(w.x) + abs(w.y) + abs(w.z));
+    if (w.y < 0.0f) {
+        p = (1.0f - abs(p.yx)) * float2(p.x >= 0.0f ? 1.0f : -1.0f, p.y >= 0.0f ? 1.0f : -1.0f);
+    }
+    const float2 a = clamp((p * 0.5f + 0.5f) * 32.0f - 0.5f, 0.0f, 31.0f);
+    const uint2 base = min(uint2(a), 30u);
+    const float2 f = a - float2(base);
+    float4 sum = float4(0.0f, 0.0f, 0.0f, 0.0f);
+    float weight = 0.0f;
+    [unroll] for (uint k = 0u; k < 4u; ++k) {
+        const uint2 b = base + uint2(k & 1u, k >> 1u);
+        const float bw = ((k & 1u) != 0u ? f.x : 1.0f - f.x) * ((k >> 1u) != 0u ? f.y : 1.0f - f.y);
+        const float4 bin = g_sky_map[b.y * 32u + b.x];
+        sum += bin.w > 0.0f ? float4(bin.rgb, 1.0f) * bw : float4(0.0f, 0.0f, 0.0f, 0.0f);
+        weight += bw;
+    }
+    light = sum.w > 1e-4f ? sum.rgb / sum.w : float3(0.0f, 0.0f, 0.0f);
+    return sum.w / max(weight, 1e-4f);
+}
+
+// The game's distance attenuation of point light i (rt_lighting.hlsl point_falloff).
+float point_falloff(float d2, uint i)
+{
+    const float x = d2 / (g_points[2u * i].w * g_points[2u * i].w);
+    const float window = saturate(1.0f - x * x);
+    return window * window / (1.0f + d2 * g_points[2u * i + 1u].w);
+}
+
+// GGX highlight of a light in direction `l` whose radius subtends `spread` (tangent): Fresnel times
+// the lobe times n.l times pi, so the light's irradiance E (a white diffuse surface shows E n.l)
+// gives its reflected light. The lobe widens by the light's size, its peak lowered to keep its
+// energy (Karis 2013, sphere lights).
+float ggx_highlight(float3 n, float3 v, float3 l, float alpha, float spread, float f0)
+{
+    const float nl = dot(n, l);
+    if (nl <= 0.0f) {
+        return 0.0f;
+    }
+    const float wide = saturate(alpha + 0.5f * spread);
+    const float a2 = wide * wide;
+    const float3 h = normalize(v + l);
+    const float nh = saturate(dot(n, h));
+    const float nv = max(dot(n, v), 1e-4f);
+    const float q = nh * nh * (a2 - 1.0f) + 1.0f;
+    const float d = alpha * alpha / (kPi * q * q);
+    const float visibility = 0.5f / (nl * sqrt(nv * nv * (1.0f - a2) + a2) + nv * sqrt(nl * nl * (1.0f - a2) + a2));
+    const float m = 1.0f - saturate(dot(v, h));
+    const float m2 = m * m;
+    return kPi * d * visibility * nl * (f0 + (1.0f - f0) * (m2 * m2 * m));
+}
+
+bool lit_from(float3 origin, float3 direction, float length)
+{
+    RayDesc ray;
+    ray.Origin = origin;
+    ray.Direction = direction;
+    ray.TMin = 0.0f;
+    ray.TMax = max(length, 0.0f);
+    RayQuery<RAY_FLAG_FORCE_OPAQUE | RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH | RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES>
+        query;
+    query.TraceRayInline(g_scene, RAY_FLAG_NONE, 0xFFu, ray);
+    query.Proceed();
+    return query.CommittedStatus() != COMMITTED_TRIANGLE_HIT;
+}
+
+// The highlights the scene's lights put on a surface at `p` (ray origin `origin`): the sun with
+// one shadow ray, and one local light (the point lights and four glows drawn by power) kept in
+// proportion to its unshadowed highlight (resampled importance), with one shadow ray.
+float3 highlights(uint2 s, float3 p, float3 origin, float3 n, float3 v, float alpha, float f0)
+{
+    float3 sum = float3(0.0f, 0.0f, 0.0f);
+    if (any(g_sun_light.rgb > 0.0f)) {
+        const float k = ggx_highlight(n, v, g_sun.xyz, alpha, g_sun.w, f0);
+        if (k > 1e-4f && lit_from(origin, g_sun.xyz, g_sun_light.w)) {
+            sum += g_sun_light.rgb * k;
+        }
+    }
+    float total = 0.0f;
+    float3 kept = float3(0.0f, 0.0f, 0.0f);
+    float3 kept_to = float3(0.0f, 0.0f, 1.0f);
+    float kept_end = 0.0f;
+    const float u0 = sample_point(s, 1u).x;
+    [loop] for (uint i = 0u; i < g_point_count; ++i) {
+        const float3 to = g_points[2u * i].xyz - p;
+        const float d = length(to);
+        const float3 c = g_points[2u * i + 1u].rgb * (point_falloff(d * d, i) * g_point_light) *
+                         ggx_highlight(n, v, to / max(d, 1e-4f), alpha, g_point_size / max(d, 1e-4f), f0);
+        const float w = luminance(c);
+        total += w;
+        if (w > 0.0f && u0 * total < w) {
+            kept = c / w;
+            kept_to = to;
+            kept_end = d - g_point_size;
+        }
+    }
+    const uint emitters = (g_flags & 16u) != 0u ? g_emitters.Load(0u) : 0u;
+    if (emitters != 0u) {
+        const float power_total = asfloat(g_emitters.Load(4u));
+        [unroll] for (uint j = 0u; j < 4u; ++j) {
+            const float2 u = sample_point(s, 2u + j);
+            const float x = u.x * power_total;
+            uint lo = 0u;
+            uint hi = emitters - 1u;
+            [loop] while (lo < hi) {
+                const uint mid = (lo + hi) >> 1u;
+                if (asfloat(g_emitters.Load(16u + mid * 32u + 28u)) < x) {
+                    lo = mid + 1u;
+                } else {
+                    hi = mid;
+                }
+            }
+            const float4 la = asfloat(g_emitters.Load4(16u + lo * 32u));
+            const float3 power = asfloat(g_emitters.Load3(16u + lo * 32u + 16u));
+            const float below = lo > 0u ? asfloat(g_emitters.Load(16u + (lo - 1u) * 32u + 28u)) : 0.0f;
+            const float chance = (asfloat(g_emitters.Load(16u + lo * 32u + 28u)) - below) / max(power_total, 1e-6f);
+            const float3 to = transform(g_world_to_eye, la.xyz) - p;
+            const float d = length(to);
+            // Its irradiance power / (pi (d^2 + r^2)), as the lighting's glow lights.
+            const float3 c = power / (kPi * (d * d + la.w * la.w)) *
+                             ggx_highlight(n, v, to / max(d, 1e-4f), alpha, la.w / max(d, 1e-4f), f0);
+            const float lum = luminance(c);
+            const float w = chance > 0.0f ? lum / (4.0f * chance) : 0.0f;
+            total += w;
+            if (w > 0.0f && u.y * total < w) {
+                kept = c / lum;
+                kept_to = to;
+                kept_end = d - max(0.9f * la.w, 2.0f + 0.01f * d);
+            }
+        }
+    }
+    if (total > 0.0f) {
+        const float span = length(kept_to);
+        if (lit_from(origin, kept_to / max(span, 1e-4f), kept_end)) {
+            sum += kept * total;
+        }
+    }
+    return sum;
+}
+
+// Reflection sources (Reflected.source).
+static const uint kShown = 0u;
+static const uint kFromMemory = 1u;
+static const uint kUnknown = 2u;
+static const uint kProbe = 3u;
+static const uint kSkyShown = 4u;
+static const uint kSkyFromMemory = 5u;
+static const uint kSkyAverage = 6u;
+static const uint kSources = 7u;
+
+// What one reflection ray brings to a surface at `hit` (normal `n`, face `ng`, seen along `dir`):
+// light and its confidence, the lights' highlights (`lights`), the ray's length and where its light
+// came from.
+struct Reflected
+{
+    float3 light;
+    float3 highlight;
+    float confidence;
+    float distance;
+    uint source;
+    bool mapped;    // the sky from the lighting's map
+};
+
+Reflected reflect_light(uint2 s, float3 dir, float3 n, float3 ng, float3 hit, float4 params, float3 base,
+                        bool lights)
+{
+    Reflected r;
+    r.light = float3(0.0f, 0.0f, 0.0f);
+    r.highlight = float3(0.0f, 0.0f, 0.0f);
+    r.confidence = 0.0f;
+    r.distance = g_range;
+    r.source = kShown;
+    r.mapped = false;
+    const float3 v = -dir;
+    const float sign_z = n.z >= 0.0f ? 1.0f : -1.0f;
+    const float ta = -1.0f / (sign_z + n.z);
+    const float tb = n.x * n.y * ta;
+    const float3 t1 = float3(1.0f + sign_z * n.x * n.x * ta, sign_z * tb, -sign_z * n.x);
+    const float3 t2 = float3(tb, sign_z + n.y * n.y * ta, -n.y);
+    const float2 u = sample_point(s);
+    const float3 h = sample_vndf(float3(dot(v, t1), dot(v, t2), max(dot(v, n), 1e-4f)), params.x,
+                                 float2(u.x * g_lobe, u.y));
+    float3 l = reflect(-v, t1 * h.x + t2 * h.y + n * h.z);
+    if (dot(l, n) <= 1e-3f) {
+        l = reflect(-v, n);
+    }
+    // Never into the face itself: below its plane the direction mirrors back out.
+    const float below = dot(l, ng);
+    l = below < 1e-3f ? normalize(l - (2.0f * below - 2e-3f) * ng) : l;
+    RayDesc reflection;
+    reflection.Origin = hit + ng * (0.2f + abs(hit.z) * 4e-4f);
+    reflection.Direction = l;
+    reflection.TMin = 0.0f;
+    reflection.TMax = g_range;
+    RayQuery<RAY_FLAG_FORCE_OPAQUE | RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES> query;
+    query.TraceRayInline(g_scene, RAY_FLAG_NONE, 0xFFu, reflection);
+    query.Proceed();
+    r.distance = g_range;
+    if (query.CommittedStatus() == COMMITTED_TRIANGLE_HIT) {
+        r.distance = query.CommittedRayT();
+        const float3 x = reflection.Origin + l * r.distance;
+        const float x_distance = length(x);
+        float seen;
+        const bool shown = x.z < -g_near && shown_at(eye_to_pixel(g_projection, g_viewport, x), r.light, seen) &&
+                                 abs(seen - x_distance) < 0.03f * x_distance + 2.0f;
+        if (shown) {
+            r.confidence = 1.0f;
+        } else {
+            float3 known;
+            r.confidence = memory_light(x, x_distance, known);
+            r.source = r.confidence > 0.05f ? kFromMemory : kUnknown;
+            if (r.source == kFromMemory) {
+                r.light = known;
+            } else {
+                // What the camera saw along the ray's own direction (a probe at the camera: the
+                // scene's light without the parallax of the hit), else the surface keeps its own
+                // colour unless the scene's average is allowed in (GALAXY_RT_REFLECT_FALLBACK).
+                const float along = memory_light(l, 0.0f, known) * g_probe;
+                if (along > 0.05f) {
+                    r.source = kProbe;
+                    r.light = known;
+                    r.confidence = along;
+                } else {
+                    r.confidence = average(16u, r.light) ? g_fallback : 0.0f;
+                }
+            }
+        }
+    } else {
+        float seen;
+        const bool sky_shown = l.z < -1e-3f && shown_at(eye_to_pixel(g_projection, g_viewport, l), r.light, seen) &&
+                               seen >= kSkyDistance;
+        r.source = kSkyShown;
+        if (sky_shown) {
+            r.confidence = 1.0f;
+        } else {
+            float3 known;
+            r.confidence = memory_light(l, kSkyDistance, known);
+            r.source = r.confidence > 0.05f ? kSkyFromMemory : kSkyAverage;
+            if (r.source == kSkyFromMemory) {
+                r.light = known;
+            } else {
+                // The sky the stage has shown in that direction (the lighting's map), else its
+                // average.
+                const float seen_share = sky_map_light(l, known);
+                if (seen_share > 0.05f) {
+                    r.source = kSkyFromMemory;
+                    r.light = known;
+                    r.confidence = 0.8f * seen_share;
+                    r.mapped = true;
+                } else {
+                    r.confidence = average(0u, r.light) ? g_sky_average : 0.0f;
+                }
+            }
+        }
+    }
+    // Metal keeps most of the game's environment map where its reflection is only the sky: the map
+    // is the game's own sky in it (sharper than any known); what the scene puts there replaces it.
+    if (params.w > 0.0f && r.source >= kSkyShown) {
+        r.confidence *= g_metal_sky;
+    }
+    // The lights' highlights, weighted like the reflection (its class strength) so the
+    // composite's Fresnel weight is divided out here.
+    if (lights) {
+        r.highlight = highlights(s, hit, reflection.Origin, n, v, params.x, params.z) * params.y;
+    }
+    if (params.w > 0.0f) {
+        // Metal: the reflection takes the hue (luminance 1) of the surface's own colour.
+        const float3 tint = min(base / max(luminance(base), 0.1f), 3.0f);
+        r.light *= lerp(float3(1.0f, 1.0f, 1.0f), tint, params.w);
+        r.highlight *= lerp(float3(1.0f, 1.0f, 1.0f), tint, params.w);
+    }
+    return r;
 }
 
 [numthreads(8, 8, 1)]
@@ -383,10 +711,17 @@ void ReflectTraceCS(uint3 id : SV_DispatchThreadID)
     const bool geometry = active && !far_plane(g_depth, depth) && inside(g_viewport, float2(q) + 0.5f);
     uint4 info = uint4(0u, 0u, kNoSurface, 0u);
     float3 light = float3(0.0f, 0.0f, 0.0f);
+    float3 highlight = float3(0.0f, 0.0f, 0.0f);
     float confidence = 0.0f;
     uint surface_class = kNoSurface;
-    bool reflected = false, shown = false, remembered = false, other = false;
-    bool sky_shown = false, sky_remembered = false, sky_average = false;
+    bool reflected = false;
+    uint source = 0u;
+    bool mapped = false;
+    if (active) {
+        // The opaque picture as the lighting's composite leaves it (the sky as drawn).
+        const float3 picture = g_color.Load(int3(q, 0)).rgb * (geometry ? lighting_at(q) : float3(1.0f, 1.0f, 1.0f));
+        g_under[index] = uint2(pack_r11g11b10(picture), geometry ? asuint(depth_to_eye_z(g_depth, depth)) : 0u);
+    }
     if (geometry) {
         const float z = depth_to_eye_z(g_depth, depth);
         const float3 dir = normalize(eye_position(g_projection, g_viewport, float2(q) + 0.5f, z));
@@ -439,77 +774,14 @@ void ReflectTraceCS(uint3 id : SV_DispatchThreadID)
             info.z = surface_class | (uint(round((1.0f - emitter) * 255.0f)) << 8u);
             if (params.y > 0.0f && emitter < 1.0f) {
                 reflected = true;
-                const float3 v = -dir;
-                const float sign_z = n.z >= 0.0f ? 1.0f : -1.0f;
-                const float ta = -1.0f / (sign_z + n.z);
-                const float tb = n.x * n.y * ta;
-                const float3 t1 = float3(1.0f + sign_z * n.x * n.x * ta, sign_z * tb, -sign_z * n.x);
-                const float3 t2 = float3(tb, sign_z + n.y * n.y * ta, -n.y);
-                const float2 u = sample_point(id.xy);
-                const float3 h = sample_vndf(float3(dot(v, t1), dot(v, t2), max(dot(v, n), 1e-4f)), params.x,
-                                             float2(u.x * g_lobe, u.y));
-                float3 l = reflect(-v, t1 * h.x + t2 * h.y + n * h.z);
-                if (dot(l, n) <= 1e-3f) {
-                    l = reflect(-v, n);
-                }
-                // Never into the face itself: below its plane the direction mirrors back out.
-                const float below = dot(l, ng);
-                l = below < 1e-3f ? normalize(l - (2.0f * below - 2e-3f) * ng) : l;
-                RayDesc reflection;
-                reflection.Origin = hit + ng * (0.2f + abs(hit.z) * 4e-4f);
-                reflection.Direction = l;
-                reflection.TMin = 0.0f;
-                reflection.TMax = g_range;
-                RayQuery<RAY_FLAG_FORCE_OPAQUE | RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES> query;
-                query.TraceRayInline(g_scene, RAY_FLAG_NONE, 0xFFu, reflection);
-                query.Proceed();
-                float distance = g_range;
-                if (query.CommittedStatus() == COMMITTED_TRIANGLE_HIT) {
-                    distance = query.CommittedRayT();
-                    const float3 x = reflection.Origin + l * distance;
-                    const float x_distance = length(x);
-                    float seen;
-                    shown = x.z < -g_near && shown_at(eye_to_pixel(g_projection, g_viewport, x), light, seen) &&
-                            abs(seen - x_distance) < 0.03f * x_distance + 2.0f;
-                    if (shown) {
-                        confidence = 1.0f;
-                    } else {
-                        float3 known;
-                        confidence = memory_light(x, x_distance, known);
-                        remembered = confidence > 0.05f;
-                        other = !remembered;
-                        if (remembered) {
-                            light = known;
-                        } else {
-                            // Unknown: the surface keeps its own colour unless the scene's average
-                            // is allowed in (GALAXY_RT_REFLECT_FALLBACK).
-                            confidence = average(16u, light) ? g_fallback : 0.0f;
-                        }
-                    }
-                } else {
-                    float seen;
-                    sky_shown = l.z < -1e-3f && shown_at(eye_to_pixel(g_projection, g_viewport, l), light, seen) &&
-                                seen >= kSkyDistance;
-                    if (sky_shown) {
-                        confidence = 1.0f;
-                    } else {
-                        float3 known;
-                        confidence = memory_light(l, kSkyDistance, known);
-                        sky_remembered = confidence > 0.05f;
-                        sky_average = !sky_remembered;
-                        if (sky_remembered) {
-                            light = known;
-                        } else {
-                            confidence = average(0u, light) ? 0.5f : 0.0f;
-                        }
-                    }
-                }
-                if (params.w > 0.0f) {
-                    // Metal: the reflection takes the hue (luminance 1) of the surface's own colour.
-                    const float3 tint = min(base / max(luminance(base), 0.1f), 3.0f);
-                    light *= lerp(float3(1.0f, 1.0f, 1.0f), tint, params.w);
-                }
-                info.w = asuint(distance);
+                // Glossy draws keep their highlights in the game's own shading (its specular channel).
+                const Reflected r = reflect_light(id.xy, dir, n, ng, hit, params, base, surface_class != 1u);
+                light = r.light;
+                highlight = r.highlight;
+                confidence = r.confidence;
+                source = r.source;
+                mapped = r.mapped;
+                info.w = asuint(r.distance);
             }
         }
     }
@@ -519,15 +791,218 @@ void ReflectTraceCS(uint3 id : SV_DispatchThreadID)
         count(2u + c, surface_class == c);
     }
     count(7u, reflected);
-    count(8u, shown);
-    count(9u, remembered);
-    count(10u, other);
-    count(11u, sky_shown);
-    count(12u, sky_remembered);
-    count(13u, sky_average);
+    [unroll] for (uint k = 0u; k < kSources; ++k) {
+        count(8u + k, reflected && source == k);
+    }
+    count(15u, any(highlight > 0.0f));
+    count(28u, mapped);
     if (active) {
         g_info[index] = info;
-        g_raw[index] = pack_rgb_w(light, confidence);
+        g_raw[index] = uint4(pack_rgb_w(light, confidence), pack_rgb_w(min(highlight, 60000.0f), 0.0f));
+    }
+}
+
+// ---------------------------------------------------------------------------------------------
+// Under the water: sunlight focused by the surface's waves onto what lies below (caustics) and
+// scattered towards the camera along its view (shafts)
+// ---------------------------------------------------------------------------------------------
+
+// The water pass's state after its samples in g_under (WaterTraceCS thread 0): [0] the distance to
+// the surface towards the sun, camera under water (1); [1] the surface's normal out of the water,
+// frame; [2-7] eye to world (3 rows); [8] the sun's light (11-11-10), shafts gain.
+static const uint kUnderState = 9u;
+
+// The surface's waves as travelling sines (world units, frames): their height's curvature at `uv`
+// focuses the sunlight crossing it, the light below as 1 / (1 + depth x curvature).
+float wave_focus(float2 uv, float frame, float depth)
+{
+    const float4 kx = float4(0.025f, -0.014f, 0.010f, -0.031f);
+    const float4 ky = float4(0.010f, 0.024f, -0.028f, -0.007f);
+    const float4 speed = float4(0.031f, 0.027f, 0.036f, 0.022f);
+    const float4 height = float4(4.0f, 5.0f, 3.0f, 2.5f);
+    const float4 phase = kx * uv.x + ky * uv.y + speed * frame;
+    const float curvature = dot(height * (kx * kx + ky * ky), sin(phase));
+    return clamp(1.0f / max(1.0f + depth * curvature * 0.9f, 0.2f), 0.2f, 4.0f);
+}
+
+// Thread 0 of the water pass: is the camera under the water the sun shines through?
+void write_underwater_state()
+{
+    const uint n = g_sample_size.x * g_sample_size.y;
+    uint under = 0u;
+    float distance = 0.0f;
+    float3 up = float3(0.0f, 1.0f, 0.0f);
+    if (any(g_sun_light.rgb > 0.0f)) {
+        RayDesc ray;
+        ray.Origin = float3(0.0f, 0.0f, 0.0f);
+        ray.Direction = g_sun.xyz;
+        ray.TMin = g_near;
+        ray.TMax = 4.0f * g_range;
+        RayQuery<RAY_FLAG_FORCE_OPAQUE | RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES> query;
+        query.TraceRayInline(g_water, RAY_FLAG_NONE, 0xFFu, ray);
+        query.Proceed();
+        if (query.CommittedStatus() == COMMITTED_TRIANGLE_HIT) {
+            const uint tri = query.CommittedPrimitiveIndex();
+            const float2 b = query.CommittedTriangleBarycentrics();
+            const uint4 record = g_water_surfaces.Load4(tri * 16u);
+            if (record.x != 0u && record.y != 0u && record.z != 0u) {
+                const float3 n = unpack_vertex_normal(record.x) * (1.0f - b.x - b.y) +
+                                 unpack_vertex_normal(record.y) * b.x + unpack_vertex_normal(record.z) * b.y;
+                // The water's normals point out of it: met from behind towards the sun, it is above.
+                if (dot(n, g_sun.xyz) > 0.0f && length(n) > 1e-3f) {
+                    under = 1u;
+                    distance = query.CommittedRayT();
+                    up = normalize(n);
+                }
+            }
+        }
+    }
+    g_under[n] = uint2(asuint(distance), under);
+    g_stats.InterlockedAdd(27u * 4u, under);
+    g_under[n + 1u] = uint2(pack_normal(up), g_frame);
+    [unroll] for (uint r = 0u; r < 3u; ++r) {
+        g_under[n + 2u + 2u * r] = uint2(asuint(g_eye_to_world[r].x), asuint(g_eye_to_world[r].y));
+        g_under[n + 3u + 2u * r] = uint2(asuint(g_eye_to_world[r].z), asuint(g_eye_to_world[r].w));
+    }
+    g_under[n + 8u] = uint2(pack_r11g11b10(g_sun_light.rgb), asuint(g_shafts));
+}
+
+// The water surface's own class (its material, GALAXY_RT_WATER), and the same surface seen from
+// under the water (no refraction).
+static const uint kWaterSurface = 5u;
+static const uint kWaterBelow = 6u;
+// Clear dielectrics (rt_surfaces.h RtSurfaceClass::Crystal): crystals, ice, gems, glass, bubbles.
+static const uint kCrystal = 7u;
+
+// The water's normal bent by the ripples its picture shows: the slope of its luminance relative to
+// its level across two samples each way, each tap the mean of four pixels (the waves, not the
+// texture's fine grain).
+float3 rippled(int2 q, float3 n)
+{
+    if (g_ripple <= 0.0f) {
+        return n;
+    }
+    const float2 size = float2(g_target_size);
+    const float2 c = float2(q) + 1.0f;
+    const float r = 2.0f * float(g_factor);
+    const float x0 = luminance(g_color.SampleLevel(g_linear, (c - float2(r, 0.0f)) / size, 0.0f).rgb);
+    const float x1 = luminance(g_color.SampleLevel(g_linear, (c + float2(r, 0.0f)) / size, 0.0f).rgb);
+    const float y0 = luminance(g_color.SampleLevel(g_linear, (c - float2(0.0f, r)) / size, 0.0f).rgb);
+    const float y1 = luminance(g_color.SampleLevel(g_linear, (c + float2(0.0f, r)) / size, 0.0f).rgb);
+    const float level = 0.25f * (x0 + x1 + y0 + y1) + 0.05f;
+    const float2 slope = clamp(float2(x1 - x0, y0 - y1) / (2.0f * level), -0.6f, 0.6f) * g_ripple;
+    // Screen x and y along the water.
+    const float3 ex = normalize(float3(1.0f, 0.0f, 0.0f) - n * n.x);
+    const float3 ey = normalize(float3(0.0f, 1.0f, 0.0f) - n * n.y);
+    return normalize(n - slope.x * ex - slope.y * ey);
+}
+
+// Translucent water (seas, lakes, pools drawn blended after the trace) and clear crystals and glass
+// drawn the same way: the camera ray meets the
+// water draws' own triangles in front of the surface the EFB holds behind them; the vertex normals
+// bent by the ripples give the normal; one reflection ray as on the opaque surfaces, its light from
+// the lit picture as the translucent phases left it. Glows over the water (white) keep their colour.
+[numthreads(8, 8, 1)]
+void WaterTraceCS(uint3 id : SV_DispatchThreadID)
+{
+    const bool active = all(id.xy < g_sample_size);
+    const uint index = id.y * g_sample_size.x + id.x;
+    const int2 q = sample_pixel(min(id.xy, g_sample_size - 1u));
+    if (all(id.xy == 0u)) {
+        write_underwater_state();
+    }
+    uint4 info = uint4(0u, 0u, kNoSurface, 0u);
+    float3 light = float3(0.0f, 0.0f, 0.0f);
+    float3 highlight = float3(0.0f, 0.0f, 0.0f);
+    float confidence = 0.0f;
+    bool water = false, reflected = false;
+    uint source = 0u;
+    bool mapped = false;
+    if (active && inside(g_viewport, float2(q) + 0.5f)) {
+        const float depth = g_efb_depth.Load(int3(q, 0));
+        const float3 through = pixel_direction(g_projection, g_viewport, float2(q) + 0.5f);
+        const float3 dir = normalize(through);
+        RayDesc ray;
+        ray.Origin = float3(0.0f, 0.0f, 0.0f);
+        ray.Direction = dir;
+        ray.TMin = g_near / max(-dir.z, 1e-6f);
+        // In front of what the EFB holds (the water itself where it writes depth).
+        ray.TMax = far_plane(g_depth, depth) ? 4.0f * g_range
+                                              : length(through) * -depth_to_eye_z(g_depth, depth) * 1.003f + 1.0f;
+        RayQuery<RAY_FLAG_FORCE_OPAQUE | RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES> query;
+        query.TraceRayInline(g_water, RAY_FLAG_NONE, 0xFFu, ray);
+        query.Proceed();
+        // A water surface has depth below it: triangles lying on the opaque scene the trace saw
+        // (a water volume's floor, seen from inside it) are no surface.
+        const uint2 under = g_under[index];
+        const float floor_distance = under.y != 0u ? length(through) * -asfloat(under.y) : 1e30f;
+        if (query.CommittedStatus() == COMMITTED_TRIANGLE_HIT &&
+            floor_distance - query.CommittedRayT() > max(0.01f * query.CommittedRayT(), 8.0f)) {
+            water = true;
+            const uint tri = query.CommittedPrimitiveIndex();
+            const float2 b = query.CommittedTriangleBarycentrics();
+            const float3 w = float3(1.0f - b.x - b.y, b.x, b.y);
+            const uint a = tri * 36u;
+            const float3 v0 = asfloat(g_water_positions.Load3(a));
+            const float3 v1 = asfloat(g_water_positions.Load3(a + 12u));
+            const float3 v2 = asfloat(g_water_positions.Load3(a + 24u));
+            const uint4 record = g_water_surfaces.Load4(tri * 16u);
+            float3 ng = cross(v1 - v0, v2 - v0);
+            const float ng_length = length(ng);
+            ng = ng_length > 0.0f ? ng / ng_length : -dir;
+            ng = dot(ng, dir) > 0.0f ? -ng : ng;
+            float3 n = ng;
+            bool below = false;
+            if (record.x != 0u && record.y != 0u && record.z != 0u) {
+                float3 smooth = unpack_vertex_normal(record.x) * w.x + unpack_vertex_normal(record.y) * w.y +
+                                unpack_vertex_normal(record.z) * w.z;
+                // The water's normals point out of it: seen from their back, the camera is under it.
+                below = dot(smooth, dir) > 0.0f;
+                smooth *= dot(smooth, ng) < 0.0f ? -1.0f : 1.0f;
+                const float smooth_length = length(smooth);
+                if (smooth_length > 1e-3f && dot(smooth, ng) > 0.05f * smooth_length) {
+                    n = smooth / smooth_length;
+                }
+            }
+            // Translucent crystal and glass draws share the pass: no ripples, no water below them.
+            const bool crystal = ((record.w >> 8u) & 15u) == kCrystal;
+            if (!crystal) {
+                n = rippled(q, n);
+            }
+            if (dot(n, -dir) < 0.02f) {
+                n = ng;
+            }
+            const float3 hit = dir * query.CommittedRayT();
+            const uint surface = crystal ? kCrystal : below ? kWaterBelow : kWaterSurface;
+            const float4 params = g_class[crystal ? kCrystal : kWaterSurface];
+            const float3 base = g_color.Load(int3(q, 0)).rgb;
+            const float emitter = smoothstep(0.8f, 1.0f, min(base.r, min(base.g, base.b)));
+            info.x = pack_normal(n);
+            info.y = asuint(hit.z);
+            info.z = surface | (uint(round((1.0f - emitter) * 255.0f)) << 8u);
+            if (params.y > 0.0f && emitter < 1.0f) {
+                reflected = true;
+                const Reflected r = reflect_light(id.xy, dir, n, ng, hit, params, base, true);
+                light = r.light;
+                highlight = r.highlight;
+                confidence = r.confidence;
+                source = r.source;
+                mapped = r.mapped;
+                info.w = asuint(r.distance);
+            }
+        }
+    }
+    count(16u, active);
+    count(17u, water);
+    count(18u, reflected);
+    [unroll] for (uint k = 0u; k < kSources; ++k) {
+        count(19u + k, reflected && source == k);
+    }
+    count(26u, any(highlight > 0.0f));
+    count(29u, mapped);
+    if (active) {
+        g_info[index] = info;
+        g_raw[index] = uint4(pack_rgb_w(light, confidence), pack_rgb_w(min(highlight, 60000.0f), 0.0f));
     }
 }
 
@@ -538,7 +1013,8 @@ bool reflective(uint4 info)
 
 // Accumulation: the reflection's position in the previous frame (the virtual image point behind the
 // surface for sharp lobes, the surface for wide ones), bilinear over the previous samples on the
-// same plane and class, clamped to the spread of the neighbourhood's new light.
+// same plane and class, clamped to the spread of the neighbourhood's new light; the highlight to
+// the range of the neighbourhood's new highlights, renewed faster.
 [numthreads(8, 8, 1)]
 void ReflectTemporalCS(uint3 id : SV_DispatchThreadID)
 {
@@ -548,15 +1024,19 @@ void ReflectTemporalCS(uint3 id : SV_DispatchThreadID)
     const uint index = id.y * g_sample_size.x + id.x;
     const uint4 info = g_info[index];
     if (!reflective(info)) {
-        g_history[index] = uint3(0u, 0u, 0u);
+        g_history[index] = uint4(0u, 0u, 0u, 0u);
         return;
     }
     const uint surface_class = info.z & 15u;
     const float alpha = g_class[surface_class].x;
-    const float4 raw = unpack_rgb_w(g_raw[index]);
+    const uint4 raw_words = g_raw[index];
+    const float4 raw = unpack_rgb_w(raw_words.xy);
+    const float3 raw_highlight = unpack_rgb_w(raw_words.zw).rgb;
     float3 m1 = float3(0.0f, 0.0f, 0.0f);
     float3 m2 = float3(0.0f, 0.0f, 0.0f);
     float n = 0.0f;
+    float3 highlight_low = raw_highlight;
+    float3 highlight_high = raw_highlight;
     [unroll] for (int dy = -1; dy <= 1; ++dy) {
         [unroll] for (int dx = -1; dx <= 1; ++dx) {
             const int2 s = clamp(int2(id.xy) + int2(dx, dy), int2(0, 0), int2(g_sample_size) - 1);
@@ -566,7 +1046,11 @@ void ReflectTemporalCS(uint3 id : SV_DispatchThreadID)
                 continue;
             }
             // The spread of what is known: each sample counts by its confidence.
-            const float4 r = unpack_rgb_w(g_raw[si]);
+            const uint4 words = g_raw[si];
+            const float4 r = unpack_rgb_w(words.xy);
+            const float3 other_highlight = unpack_rgb_w(words.zw).rgb;
+            highlight_low = min(highlight_low, other_highlight);
+            highlight_high = max(highlight_high, other_highlight);
             const float3 c = to_ycocg(r.rgb);
             m1 += c * r.w;
             m2 += c * c * r.w;
@@ -576,6 +1060,7 @@ void ReflectTemporalCS(uint3 id : SV_DispatchThreadID)
     const float3 mean = m1 / max(n, 1e-3f);
     const float3 spread = n > 0.5f ? sqrt(max(m2 / n - mean * mean, 0.0f)) : float3(1e4f, 1e4f, 1e4f);
     float4 result = raw;
+    float3 highlight = raw_highlight;
     float frames = 1.0f;
     if ((g_flags & 1u) != 0u) {
         const float z = asfloat(info.y);
@@ -592,6 +1077,7 @@ void ReflectTemporalCS(uint3 id : SV_DispatchThreadID)
             const float2 w = a - float2(base);
             const float tolerance = 0.5f + abs(previous_p.z) * 0.01f;
             float4 sum = float4(0.0f, 0.0f, 0.0f, 0.0f);
+            float3 highlight_sum = float3(0.0f, 0.0f, 0.0f);
             float count_sum = 0.0f;
             float weight = 0.0f;
             [unroll] for (uint k = 0u; k < 4u; ++k) {
@@ -608,9 +1094,11 @@ void ReflectTemporalCS(uint3 id : SV_DispatchThreadID)
                     continue;
                 }
                 const float bw = (o.x != 0 ? w.x : 1.0f - w.x) * (o.y != 0 ? w.y : 1.0f - w.y);
-                const uint3 history = g_prev_history[si];
+                const uint4 history = g_prev_history[si];
+                const float4 before_highlight = unpack_rgb_w(history.zw);
                 sum += unpack_rgb_w(history.xy) * bw;
-                count_sum += asfloat(history.z) * bw;
+                highlight_sum += before_highlight.rgb * bw;
+                count_sum += before_highlight.w * bw;
                 weight += bw;
             }
             if (weight > 1e-3f) {
@@ -629,25 +1117,30 @@ void ReflectTemporalCS(uint3 id : SV_DispatchThreadID)
                 const float3 light = confidence > 1e-4f ? (clamped * kept + raw.rgb * added) / confidence
                                                         : (history.w >= raw.w ? clamped : raw.rgb);
                 result = float4(light, confidence);
+                highlight = lerp(clamp(highlight_sum / weight, highlight_low, highlight_high), raw_highlight,
+                                 max(a, 0.25f));
             }
         }
     }
-    g_history[index] = uint3(pack_rgb_w(max(result.rgb, 0.0f), saturate(result.w)), asuint(frames));
+    g_history[index] = uint4(pack_rgb_w(max(result.rgb, 0.0f), saturate(result.w)), pack_rgb_w(highlight, frames));
 }
 
-// The filters' input: the accumulated light (first pass) or the first pass's result (second).
-float4 filter_input(uint index, bool first)
+// The filters' input: the accumulated light and highlight (first pass) or the first pass's result
+// (second).
+float4 filter_input(uint index, bool first, out float3 highlight)
 {
-    return first ? unpack_rgb_w(g_history_in[index].xy) : unpack_rgb_w(g_raw[index]);
+    const uint4 words = first ? g_history_in[index] : g_raw[index];
+    highlight = unpack_rgb_w(words.zw).rgb;
+    return unpack_rgb_w(words.xy);
 }
 
 // Edge-aware 5x5 filter (a-trous): steps as wide as the lobe, doubled in the second pass; none for
 // the sharpest lobes.
-float4 filtered_light(uint2 id, uint index, uint4 info, bool first)
+float4 filtered_light(uint2 id, uint index, uint4 info, bool first, out float3 highlight)
 {
     const uint surface_class = info.z & 15u;
     const float alpha = g_class[surface_class].x;
-    const float4 centre = filter_input(index, first);
+    const float4 centre = filter_input(index, first, highlight);
     float4 value = centre;
     const int step = (alpha < 0.02f ? 0 : alpha < 0.12f ? 1 : 2) * (first ? 1 : 2);
     if (step != 0) {
@@ -657,6 +1150,8 @@ float4 filtered_light(uint2 id, uint index, uint4 info, bool first)
         const float inv_tolerance = 1.0f / (0.25f + abs(z) * 0.004f * float(step));
         const float centre_l = luminance(centre.rgb);
         float3 sum = float3(0.0f, 0.0f, 0.0f);
+        float3 highlight_sum = float3(0.0f, 0.0f, 0.0f);
+        float shape_sum = 0.0f;
         float known = 0.0f;
         float weight = 0.0f;
         [unroll] for (int dy = -2; dy <= 2; ++dy) {
@@ -673,18 +1168,26 @@ float4 filtered_light(uint2 id, uint index, uint4 info, bool first)
                 const float plane = abs(dot(n, sample_position(uint2(s), asfloat(other.y)) - p)) * inv_tolerance;
                 const float facing = saturate(dot(n, unpack_normal(other.x)));
                 const float facing2 = facing * facing;
-                const float4 c = filter_input(si, first);
+                float3 other_highlight;
+                const float4 c = filter_input(si, first, other_highlight);
+                const float shape = exp(-0.3f * float(dx * dx + dy * dy) - plane * plane) * (facing2 * facing2) *
+                                    (facing2 * facing2);
                 // Edges between known lights stop the filter; light counts by its confidence.
                 const float edge = abs(luminance(c.rgb) - centre_l) / (0.1f + centre_l + alpha) * min(c.w, centre.w);
-                const float w = exp(-0.3f * float(dx * dx + dy * dy) - plane * plane - edge * edge) *
-                                (facing2 * facing2) * (facing2 * facing2);
+                const float w = shape * exp(-edge * edge);
                 sum += c.rgb * (w * c.w);
                 known += w * c.w;
                 weight += w;
+                // Highlights by the shape alone.
+                highlight_sum += other_highlight * shape;
+                shape_sum += shape;
             }
         }
         if (weight > 1e-4f) {
             value = float4(known > 1e-4f ? sum / known : centre.rgb, known / weight);
+        }
+        if (shape_sum > 1e-4f) {
+            highlight = highlight_sum / shape_sum;
         }
     }
     return value;
@@ -698,8 +1201,25 @@ void ReflectFilterACS(uint3 id : SV_DispatchThreadID)
     }
     const uint index = id.y * g_sample_size.x + id.x;
     const uint4 info = g_info[index];
-    const float4 value = reflective(info) ? filtered_light(id.xy, index, info, true) : float4(0.0f, 0.0f, 0.0f, 0.0f);
-    g_raw[index] = pack_rgb_w(value.rgb, value.w);
+    float3 highlight = float3(0.0f, 0.0f, 0.0f);
+    float4 value = float4(0.0f, 0.0f, 0.0f, 0.0f);
+    if (reflective(info)) {
+        value = filtered_light(id.xy, index, info, true, highlight);
+    }
+    g_raw[index] = uint4(pack_rgb_w(value.rgb, value.w), pack_rgb_w(highlight, 0.0f));
+}
+
+// Normal in 12:12 bits (octahedral) and a weight in the top 8.
+uint pack_normal_weight(float3 n, float weight)
+{
+    const uint2 u = uint2(round(saturate(octahedral(n)) * 4095.0f));
+    return u.x | (u.y << 12u) | (uint(round(saturate(weight) * 255.0f)) << 24u);
+}
+
+float3 unpack_normal_weight(uint v, out float weight)
+{
+    weight = float(v >> 24u) / 255.0f;
+    return octahedral_direction(float2(float(v & 0xFFFu), float((v >> 12u) & 0xFFFu)) / 4095.0f);
 }
 
 // The second pass: the sample's result for the composite.
@@ -709,12 +1229,15 @@ uint4 filter_sample(uint2 id, uint index)
     const uint surface_class = info.z & 15u;
     const uint z_class = (info.y & ~15u) | surface_class;
     if (!reflective(info)) {
-        return uint4(0u, info.x, info.y != 0u ? z_class : 0u, 0u);
+        return uint4(0u, info.y != 0u ? pack_normal_weight(unpack_normal(info.x), 0.0f) : 0u,
+                     info.y != 0u ? z_class : 0u, 0u);
     }
-    const float4 value = filtered_light(id, index, info, false);
+    float3 highlight;
+    const float4 value = filtered_light(id, index, info, false, highlight);
     // The sample's weight: its confidence, without its emitter share.
     const float weight = saturate(value.w) * float(info.z >> 8u) / 255.0f;
-    return uint4(pack_r11g11b10(value.rgb), info.x, z_class, asuint(weight));
+    return uint4(pack_r11g11b10(value.rgb), pack_normal_weight(unpack_normal(info.x), weight), z_class,
+                 pack_r11g11b10(highlight * float(info.z >> 8u) / 255.0f));
 }
 
 groupshared uint gs_reflects;
@@ -732,7 +1255,8 @@ void ReflectFilterCS(uint3 id : SV_DispatchThreadID, uint3 group : SV_GroupID, u
         const uint index = id.y * g_sample_size.x + id.x;
         const uint4 result = filter_sample(id.xy, index);
         g_final[index] = result;
-        if (asfloat(result.w) > 0.0f) {
+        // A weight (top 8 bits of the normal word) or a highlight.
+        if ((result.y >> 24u) != 0u || result.w != 0u) {
             InterlockedOr(gs_reflects, 1u);
         }
     }
@@ -759,12 +1283,16 @@ cbuffer RtReflectComposite : register(b0)
     float m_near;
     uint m_tile_width;  // tiles of 8x8 samples per row
     float m_split;      // GALAXY_RT_SPLIT: left of it (and its line) the game's own picture
-    float4 m_class[5];  // per surface class: strength, F0, GGX alpha, cover
+    uint4 m_class[4];   // per surface class (two per row): strength, F0, GGX alpha, cover (halves)
+    float4 m_water;     // water: absorption per eye unit (rgb), share of the clear water shown (clarity)
+    float4 m_sun;       // towards the sun (eye space, traced frame), caustics gain (0: none)
 };
 StructuredBuffer<uint4> m_final : register(t0);
 Texture2D<float> m_efb_depth : register(t1);
 StructuredBuffer<float4> m_reproject : register(t2);
 StructuredBuffer<uint> m_tiles : register(t3);
+// The picture under the translucent phases (ReflectTraceCS g_under) for the water's refraction.
+StructuredBuffer<uint2> m_under : register(t4);
 
 struct CompositeOut
 {
@@ -772,10 +1300,137 @@ struct CompositeOut
     float4 keep : SV_Target1;
 };
 
+float4 class_params(uint c)
+{
+    const uint4 row = m_class[min(c, 7u) >> 1u];
+    const uint2 h = (c & 1u) != 0u ? row.zw : row.xy;
+    return float4(f16tof32(h.x), f16tof32(h.x >> 16u), f16tof32(h.y), f16tof32(h.y >> 16u));
+}
+
 float4 ReflectCompositeVS(uint id : SV_VertexID) : SV_Position
 {
     const float2 uv = float2((id << 1u) & 2u, id & 2u);
     return float4(uv * float2(2.0f, -2.0f) + float2(-1.0f, 1.0f), 0.0f, 1.0f);
+}
+
+// The samples around a traced-frame pixel blended: Fresnel-weighted reflected light, the share of
+// the surface's own colour it takes away, the highlights, their weight; the normal of the samples
+// on the surface and their share of the weight; the class of the nearest sample.
+struct Blend
+{
+    float3 sum;
+    float3 covered;
+    float3 glint;
+    float k_sum;
+    float weight;
+    float3 normal;
+    float surface;
+    uint nearest_class;
+};
+
+// On water (`water`) the samples off it count in the weight: the reflection fades towards the shore.
+Blend blend_samples(float2 pixel, float3 p, bool water)
+{
+    const float3 v = -normalize(p);
+    const float2 a = (pixel - 0.5f) / float(m_factor);
+    const int2 base = int2(floor(a));
+    const float2 w = a - float2(base);
+    const float tolerance = abs(p.z) * 0.004f + 0.5f;
+    Blend b;
+    b.sum = float3(0.0f, 0.0f, 0.0f);
+    b.covered = float3(0.0f, 0.0f, 0.0f);
+    b.glint = float3(0.0f, 0.0f, 0.0f);
+    b.k_sum = 0.0f;
+    b.weight = 0.0f;
+    b.normal = float3(0.0f, 0.0f, 0.0f);
+    b.surface = 0.0f;
+    b.nearest_class = 15u;
+    float nearest = 1e30f;
+    [unroll] for (uint i = 0u; i < 4u; ++i) {
+        const int2 o = int2(i & 1u, i >> 1u);
+        const int2 s = clamp(base + o, int2(0, 0), int2(m_sample_size) - 1);
+        const uint4 sample = m_final[uint(s.y) * m_sample_size.x + uint(s.x)];
+        const float corner = (o.x != 0 ? w.x : 1.0f - w.x) * (o.y != 0 ? w.y : 1.0f - w.y);
+        if (sample.z == 0u) {
+            b.weight += water ? corner : 0.0f;
+            continue;
+        }
+        const uint surface_class = sample.z & 15u;
+        const float sz = asfloat(sample.z & ~15u);
+        const float3 sp = eye_position(m_projection, m_viewport, float2(s * m_factor) + 0.5f, sz);
+        float sample_weight;
+        const float3 n = unpack_normal_weight(sample.y, sample_weight);
+        // Same surface: on the sample's plane (its depth where no plane is known).
+        const float d = (surface_class == 15u ? abs(sz - p.z) : abs(dot(n, p - sp))) / tolerance;
+        const float bw = corner * exp(-d * d);
+        if (d < nearest) {
+            nearest = d;
+            b.nearest_class = surface_class;
+        }
+        if (surface_class < 8u) {
+            // Water seen from below has the water's material.
+            const float4 c = class_params(surface_class == kWaterBelow ? kWaterSurface : surface_class);
+            const float k = c.x * fresnel(c.y, c.z, dot(n, v)) * sample_weight;
+            const float3 light = min(unpack_r11g11b10(sample.x), 1.0f);
+            b.sum += light * (k * bw);
+            // How much of the surface's own colour the reflection takes away: all of it at cover 1
+            // (dst * (1 - k) + k * light), only its own share at cover 0 (a screen: never darker).
+            b.covered += (c.w + (1.0f - c.w) * light) * (k * bw);
+            b.k_sum += k * bw;
+            b.glint += unpack_r11g11b10(sample.w) * bw;
+        }
+        b.normal += n * bw;
+        b.surface += bw;
+        b.weight += bw;
+    }
+    return b;
+}
+
+// Surface classes over the picture: diffuse grey, glossy cyan, metal orange, unlit magenta, water
+// blue, translucent water light blue (from below green), crystal white, untraced black.
+CompositeOut class_view(uint nearest_class)
+{
+    const float3 colours[9] = {float3(0.3f, 0.3f, 0.3f), float3(0.0f, 0.86f, 1.0f), float3(1.0f, 0.67f, 0.0f),
+                               float3(1.0f, 0.0f, 1.0f), float3(0.0f, 0.3f, 1.0f), float3(0.45f, 0.8f, 1.0f),
+                               float3(0.2f, 1.0f, 0.6f), float3(1.0f, 1.0f, 1.0f), float3(0.0f, 0.0f, 0.0f)};
+    CompositeOut result;
+    result.add = float4(colours[min(nearest_class, 8u)] * 0.55f, 0.0f);
+    result.keep = float4(0.45f, 0.45f, 0.45f, 1.0f);
+    return result;
+}
+
+// The blend over the picture: dst (1 - covered) (1 - glint) + reflected (1 - glint) + glint, the
+// lights' highlights screened over the reflection. `under` (water): the clear water's share of the
+// picture (rgb) and what it shows instead, dst (1 - clear) + seen clear.
+CompositeOut finish(Blend b, uint view, float3 clear, float3 seen)
+{
+    CompositeOut result;
+    const float k = saturate(b.k_sum / b.weight);
+    const float3 highlight = saturate(b.glint / b.weight);
+    const float3 kept = saturate(1.0f - b.covered / b.weight);
+    if (view == 1u) {
+        const float3 reflection = b.k_sum > 1e-4f ? b.sum / b.k_sum : float3(0.0f, 0.0f, 0.0f);
+        result.add = float4(saturate(reflection + highlight), 0.0f);
+        result.keep = float4(0.0f, 0.0f, 0.0f, 1.0f);
+    } else if (view == 3u) {
+        result.add = float4(k, k, k, 0.0f);
+        result.keep = float4(0.0f, 0.0f, 0.0f, 1.0f);
+    } else {
+        result.add = float4(saturate((saturate(b.sum / b.weight) + seen * clear * kept) * (1.0f - highlight) + highlight),
+                            0.0f);
+        result.keep = float4(kept * (1.0f - clear) * (1.0f - highlight), 1.0f);
+    }
+    return result;
+}
+
+// Whether a sample of the footprint of traced-frame pixel `pixel` reflects (tiles of 8x8 samples).
+bool tiles_reflect(float2 pixel)
+{
+    const int2 base = int2(floor((pixel - 0.5f) / float(m_factor)));
+    const uint2 lo = uint2(clamp(base, int2(0, 0), int2(m_sample_size) - 1)) >> 3u;
+    const uint2 hi = uint2(clamp(base + 1, int2(0, 0), int2(m_sample_size) - 1)) >> 3u;
+    return (m_tiles[lo.y * m_tile_width + lo.x] | m_tiles[lo.y * m_tile_width + hi.x] |
+            m_tiles[hi.y * m_tile_width + lo.x] | m_tiles[hi.y * m_tile_width + hi.x]) != 0u;
 }
 
 CompositeOut ReflectCompositePS(float4 position : SV_Position)
@@ -795,86 +1450,299 @@ CompositeOut ReflectCompositePS(float4 position : SV_Position)
         }
     }
     const uint view = (m_flags >> 1u) & 3u;
-    const float2 a = (eye_to_pixel(m_projection, m_viewport, p) - 0.5f) / float(m_factor);
-    const int2 base = int2(floor(a));
-    if (view == 0u) {
-        // Nothing to blend where no sample of the footprint's tiles reflects.
-        const uint2 lo = uint2(clamp(base, int2(0, 0), int2(m_sample_size) - 1)) >> 3u;
-        const uint2 hi = uint2(clamp(base + 1, int2(0, 0), int2(m_sample_size) - 1)) >> 3u;
-        if ((m_tiles[lo.y * m_tile_width + lo.x] | m_tiles[lo.y * m_tile_width + hi.x] |
-             m_tiles[hi.y * m_tile_width + lo.x] | m_tiles[hi.y * m_tile_width + hi.x]) == 0u) {
-            discard;
-        }
+    const float2 pixel = eye_to_pixel(m_projection, m_viewport, p);
+    // Nothing to blend where no sample of the footprint's tiles reflects.
+    if (view == 0u && !tiles_reflect(pixel)) {
+        discard;
     }
-    const float3 v = -normalize(p);
-    const float2 w = a - float2(base);
-    const float tolerance = abs(p.z) * 0.004f + 0.5f;
-    float3 sum = float3(0.0f, 0.0f, 0.0f);
-    float3 covered = float3(0.0f, 0.0f, 0.0f);
-    float k_sum = 0.0f;
-    float weight = 0.0f;
-    uint nearest_class = 15u;
-    float nearest = 1e30f;
-    [unroll] for (uint i = 0u; i < 4u; ++i) {
-        const int2 o = int2(i & 1u, i >> 1u);
-        const int2 s = clamp(base + o, int2(0, 0), int2(m_sample_size) - 1);
-        const uint4 sample = m_final[uint(s.y) * m_sample_size.x + uint(s.x)];
-        if (sample.z == 0u) {
-            continue;
-        }
-        const uint surface_class = sample.z & 15u;
-        const float sz = asfloat(sample.z & ~15u);
-        const float3 sp = eye_position(m_projection, m_viewport, float2(s * m_factor) + 0.5f, sz);
-        const float3 n = unpack_normal(sample.y);
-        // Same surface: on the sample's plane (its depth where no plane is known).
-        const float d = (surface_class == 15u ? abs(sz - p.z) : abs(dot(n, p - sp))) / tolerance;
-        const float bw = (o.x != 0 ? w.x : 1.0f - w.x) * (o.y != 0 ? w.y : 1.0f - w.y) * exp(-d * d);
-        if (d < nearest) {
-            nearest = d;
-            nearest_class = surface_class;
-        }
-        if (surface_class < 5u) {
-            const float4 c = m_class[surface_class];
-            const float k = c.x * fresnel(c.y, c.z, dot(n, v)) * asfloat(sample.w);
-            const float3 light = min(unpack_r11g11b10(sample.x), 1.0f);
-            sum += light * (k * bw);
-            // How much of the surface's own colour the reflection takes away: all of it at cover 1
-            // (dst * (1 - k) + k * light), only its own share at cover 0 (a screen: never darker).
-            covered += (c.w + (1.0f - c.w) * light) * (k * bw);
-            k_sum += k * bw;
-        }
-        weight += bw;
-    }
-    CompositeOut result;
-    result.add = float4(0.0f, 0.0f, 0.0f, 0.0f);
-    result.keep = float4(1.0f, 1.0f, 1.0f, 1.0f);
+    const Blend b = blend_samples(pixel, p, false);
     if (view == 2u) {
-        // Surface classes over the picture: diffuse grey, glossy cyan, metal orange, unlit magenta,
-        // water blue, untraced black.
-        const float3 colours[6] = {float3(0.3f, 0.3f, 0.3f), float3(0.0f, 0.86f, 1.0f), float3(1.0f, 0.67f, 0.0f),
-                                   float3(1.0f, 0.0f, 1.0f), float3(0.0f, 0.3f, 1.0f), float3(0.0f, 0.0f, 0.0f)};
-        result.add = float4(colours[min(nearest_class, 5u)] * 0.55f, 0.0f);
-        result.keep = float4(0.45f, 0.45f, 0.45f, 1.0f);
-        return result;
+        return class_view(b.nearest_class);
     }
-    if (weight < 1e-3f || k_sum < 1e-4f) {
+    if (b.weight < 1e-3f || (b.k_sum < 1e-4f && !any(b.glint > 0.0f))) {
         if (view != 0u) {
+            CompositeOut result;
+            result.add = float4(0.0f, 0.0f, 0.0f, 0.0f);
             result.keep = float4(0.0f, 0.0f, 0.0f, 1.0f);
             return result;
         }
         discard;
     }
-    const float k = saturate(k_sum / weight);
-    const float3 reflection = sum / k_sum;
-    if (view == 1u) {
-        result.add = float4(reflection, 0.0f);
-        result.keep = float4(0.0f, 0.0f, 0.0f, 1.0f);
-    } else if (view == 3u) {
-        result.add = float4(k, k, k, 0.0f);
-        result.keep = float4(0.0f, 0.0f, 0.0f, 1.0f);
-    } else {
-        result.add = float4(saturate(sum / weight), 0.0f);
-        result.keep = float4(saturate(1.0f - covered / weight), 1.0f);
+    return finish(b, view, float3(0.0f, 0.0f, 0.0f), float3(0.0f, 0.0f, 0.0f));
+}
+
+// The water's eye z at traced-frame pixel `pixel`: bilinear over the samples on it (0: none near).
+float water_z(float2 pixel)
+{
+    const float2 a = (pixel - 0.5f) / float(m_factor);
+    const int2 base = int2(floor(a));
+    const float2 w = a - float2(base);
+    float sum = 0.0f;
+    float weight = 0.0f;
+    [unroll] for (uint i = 0u; i < 4u; ++i) {
+        const int2 o = int2(i & 1u, i >> 1u);
+        const int2 s = clamp(base + o, int2(0, 0), int2(m_sample_size) - 1);
+        const uint z_class = m_final[uint(s.y) * m_sample_size.x + uint(s.x)].z;
+        const float bw = (o.x != 0 ? w.x : 1.0f - w.x) * (o.y != 0 ? w.y : 1.0f - w.y);
+        if (z_class != 0u) {
+            sum += asfloat(z_class & ~15u) * bw;
+            weight += bw;
+        }
     }
+    return weight > 1e-3f ? sum / weight : 0.0f;
+}
+
+// The picture under the water at traced-frame pixel `pixel`: colour bilinear over the samples behind
+// the water (eye z below `limit`), and the nearest such sample's eye z (0: none, the sky).
+float3 under_at(float2 pixel, float limit, out float z)
+{
+    const float2 a = clamp((pixel - 0.5f) / float(m_factor), 0.0f, float2(m_sample_size) - 1.0f);
+    const int2 base = int2(floor(a));
+    const float2 w = a - float2(base);
+    float3 sum = float3(0.0f, 0.0f, 0.0f);
+    float weight = 0.0f;
+    float best = 0.0f;
+    z = 0.0f;
+    [unroll] for (uint i = 0u; i < 4u; ++i) {
+        const int2 o = int2(i & 1u, i >> 1u);
+        const int2 s = min(base + o, int2(m_sample_size) - 1);
+        const uint2 u = m_under[uint(s.y) * m_sample_size.x + uint(s.x)];
+        const float uz = asfloat(u.y);
+        const float bw = (o.x != 0 ? w.x : 1.0f - w.x) * (o.y != 0 ? w.y : 1.0f - w.y) + 1e-4f;
+        if (u.y != 0u && uz >= limit) {
+            continue;
+        }
+        sum += unpack_r11g11b10(u.x) * bw;
+        weight += bw;
+        if (bw > best) {
+            best = bw;
+            z = u.y != 0u ? uz : 0.0f;
+        }
+    }
+    return weight > 0.0f ? sum / weight : float3(0.0f, 0.0f, 0.0f);
+}
+
+// The water's normal at traced-frame pixel `pixel` (nearest sample on it; 0 for none).
+float3 water_normal(float2 pixel)
+{
+    const int2 s = clamp(int2(floor(pixel / float(m_factor))), int2(0, 0), int2(m_sample_size) - 1);
+    const uint4 sample = m_final[uint(s.y) * m_sample_size.x + uint(s.x)];
+    float unused;
+    return sample.z != 0u ? unpack_normal_weight(sample.y, unused) : float3(0.0f, 0.0f, 0.0f);
+}
+
+// Sunlight focused by the water onto the floor at `floor` (eye space) under the water plane through
+// `surface` with normal `plane`: the sun's rays enter the rippled surface above the floor at three
+// points one sample apart, refract and spread over the floor; the ratio of the areas they cross (1:
+// even light, above 1 focused).
+float caustic(float3 floor, float3 surface, float3 plane)
+{
+    const float3 s = m_sun.xyz;
+    const float rise = dot(plane, s);
+    if (m_sun.w <= 0.0f || rise < 0.1f) {
+        return 1.0f;
+    }
+    const float t = dot(plane, surface - floor) / rise;
+    if (t <= 1.0f) {
+        return 1.0f;
+    }
+    const float3 enter = floor + s * t;
+    if (enter.z >= -m_near) {
+        return 1.0f;
+    }
+    const float2 e = eye_to_pixel(m_projection, m_viewport, enter);
+    const float step = float(m_factor);
+    const float3 n0 = water_normal(e);
+    const float3 nx = water_normal(e + float2(step, 0.0f));
+    const float3 ny = water_normal(e + float2(0.0f, step));
+    if (!any(n0 != 0.0f) || !any(nx != 0.0f) || !any(ny != 0.0f)) {
+        return 1.0f;
+    }
+    // Where the camera rays of the neighbouring samples meet the plane.
+    const float3 dx = pixel_direction(m_projection, m_viewport, e + float2(step, 0.0f));
+    const float3 dy = pixel_direction(m_projection, m_viewport, e + float2(0.0f, step));
+    const float lift = dot(plane, enter);
+    const float3 ex = dx * (lift / min(dot(plane, dx), -1e-4f));
+    const float3 ey = dy * (lift / min(dot(plane, dy), -1e-4f));
+    const float depth = t * rise;
+    const float3 r0 = refract(-s, n0, 0.75f);
+    const float3 rx = refract(-s, nx, 0.75f);
+    const float3 ry = refract(-s, ny, 0.75f);
+    const float3 f0 = enter + r0 * (depth / max(-dot(plane, r0), 0.1f));
+    const float3 fx = ex + rx * (depth / max(-dot(plane, rx), 0.1f));
+    const float3 fy = ey + ry * (depth / max(-dot(plane, ry), 0.1f));
+    const float before = abs(dot(cross(ex - enter, ey - enter), plane));
+    const float after = abs(dot(cross(fx - f0, fy - f0), plane));
+    // Over a sample's footprint the focus spreads: its square root, within a fourfold range.
+    const float focus = clamp(sqrt(before / max(after, before * 0.05f)), 0.5f, 2.0f);
+    return lerp(1.0f, focus, saturate(m_sun.w));
+}
+
+// The translucent water's reflections (WaterTraceCS), after the water is drawn: Fresnel-weighted
+// reflection over the water, and under it the clear water: the floor seen through the rippled surface
+// (refracted), lit by the sun the ripples focus (caustics), fading into the water's own colour with
+// the depth of water the light crosses (absorption per colour). Sub-frames move the pixel to the traced
+// frame's camera along the water the samples hold there. What the EFB holds in front of the water keeps
+// its colour.
+CompositeOut WaterCompositePS(float4 position : SV_Position)
+{
+    if (!inside(m_viewport, position.xy) || position.x < m_split + 1.0f) {
+        discard;
+    }
+    float2 pixel = position.xy;
+    float z = water_z(pixel);
+    if (z == 0.0f) {
+        discard;
+    }
+    const float3 here = eye_position(m_projection, m_viewport, position.xy, z);
+    float3 p = here;
+    if ((m_flags & 1u) != 0u) {
+        const uint row = m_slot * 3u;
+        const float4 rows[3] = {m_reproject[row], m_reproject[row + 1u], m_reproject[row + 2u]};
+        p = transform(rows, here);
+        if (p.z >= -m_near) {
+            discard;
+        }
+        pixel = eye_to_pixel(m_projection, m_viewport, p);
+        z = water_z(pixel);
+        if (z == 0.0f) {
+            discard;
+        }
+        p = eye_position(m_projection, m_viewport, pixel, z);
+    }
+    const float depth = m_efb_depth.Load(int3(int2(position.xy), 0));
+    if (!far_plane(m_depth, depth) && depth_to_eye_z(m_depth, depth) > here.z + abs(here.z) * 0.003f + 1.0f) {
+        discard;
+    }
+    const uint view = (m_flags >> 1u) & 3u;
+    const Blend b = blend_samples(pixel, p, true);
+    if (view == 2u) {
+        if (b.nearest_class == 15u) {
+            discard;
+        }
+        return class_view(b.nearest_class);
+    }
+    if (b.weight < 1e-3f || b.surface < 1e-3f) {
+        discard;
+    }
+    // The clear water: the floor along the refracted ray, as deep below the surface as straight on.
+    float3 clear = float3(0.0f, 0.0f, 0.0f);
+    float3 seen = float3(0.0f, 0.0f, 0.0f);
+    const float3 n = normalize(b.normal);
+    if (m_water.w > 0.0f && b.nearest_class == kWaterSurface) {
+        float floor_z;
+        under_at(pixel, p.z - 1.0f, floor_z);
+        if (floor_z != 0.0f) {
+            const float3 v = normalize(p);
+            const float3 straight = v * (floor_z / v.z);
+            const float span = max(length(straight) - length(p), 0.0f);
+            const float3 bent = refract(v, n, 0.75f);
+            float3 floor_at = any(bent != 0.0f) ? p + bent * span : straight;
+            float bent_z;
+            float3 floor_colour = under_at(eye_to_pixel(m_projection, m_viewport, floor_at), p.z - 1.0f, bent_z);
+            if (bent_z == 0.0f) {
+                floor_colour = under_at(pixel, p.z - 1.0f, bent_z);
+                floor_at = straight;
+            } else {
+                floor_at = eye_position(m_projection, m_viewport, eye_to_pixel(m_projection, m_viewport, floor_at),
+                                        bent_z);
+            }
+            const float path = max(length(floor_at - p), 0.0f);
+            // The plane of the water: the vertex normals without the ripples are not kept; the
+            // samples' normal stands in.
+            seen = floor_colour * caustic(floor_at, p, n);
+            clear = exp(-m_water.rgb * path) * (m_water.w * b.surface / b.weight);
+        }
+    }
+    if (b.k_sum < 1e-4f && !any(b.glint > 0.0f) && !any(clear > 0.0f)) {
+        discard;
+    }
+    return finish(b, view, clear, seen);
+}
+
+// The water pass's state (WaterTraceCS write_underwater_state), after the samples in m_under.
+uint2 under_state(uint k)
+{
+    return m_under[m_sample_size.x * m_sample_size.y + k];
+}
+
+// Under the water: what the EFB shows below the surface takes the sunlight the waves focus onto it
+// (caustics: light added where they gather, taken where they spread), and the water between it and
+// the camera scatters sunlight towards it (shafts), both fading with the light's path through the
+// water (absorption). Only while the camera is under the water the sun shines through.
+CompositeOut UnderwaterPS(float4 position : SV_Position)
+{
+    const uint2 state = under_state(0u);
+    if (state.y == 0u || !inside(m_viewport, position.xy) || position.x < m_split + 1.0f) {
+        discard;
+    }
+    const float3 s = m_sun.xyz;
+    const float3 up = unpack_normal(under_state(1u).x);
+    const float frame = float(under_state(1u).y);
+    float4 to_world[3];
+    [unroll] for (uint r = 0u; r < 3u; ++r) {
+        const uint2 a = under_state(2u + 2u * r);
+        const uint2 b = under_state(3u + 2u * r);
+        to_world[r] = float4(asfloat(a.x), asfloat(a.y), asfloat(b.x), asfloat(b.y));
+    }
+    const uint2 light_gain = under_state(8u);
+    const float3 sun = unpack_r11g11b10(light_gain.x);
+    const float shafts = asfloat(light_gain.y);
+    const float rise = max(dot(up, s), 0.05f);
+    const float3 surface = s * asfloat(state.x);
+    // A plane basis in world space, so the waves stay with the world.
+    const float3 world_up = normalize(rotate(to_world, up));
+    const float3 t1 = normalize(abs(world_up.y) < 0.9f ? cross(world_up, float3(0.0f, 1.0f, 0.0f))
+                                                       : cross(world_up, float3(1.0f, 0.0f, 0.0f)));
+    const float3 t2 = cross(world_up, t1);
+
+    const float depth = m_efb_depth.Load(int3(int2(position.xy), 0));
+    const bool sky = far_plane(m_depth, depth);
+    float3 p = eye_position(m_projection, m_viewport, position.xy, sky ? -4000.0f : depth_to_eye_z(m_depth, depth));
+    if ((m_flags & 1u) != 0u) {
+        const uint row = m_slot * 3u;
+        const float4 rows[3] = {m_reproject[row], m_reproject[row + 1u], m_reproject[row + 2u]};
+        p = transform(rows, p);
+    }
+    float3 add = float3(0.0f, 0.0f, 0.0f);
+    float3 keep = float3(1.0f, 1.0f, 1.0f);
+    // Caustics on the surface the pixel shows, if it lies under the water.
+    const float below = dot(up, surface - p);
+    if (!sky && below > 1.0f) {
+        const float along = below / rise;
+        const float3 enter = transform(to_world, p + s * along);
+        const float focus = wave_focus(float2(dot(enter, t1), dot(enter, t2)), frame, below);
+        const float3 through = exp(-m_water.rgb * along);
+        const float k = saturate(m_sun.w) * 0.5f;
+        add += sun * through * (max(focus - 1.0f, 0.0f) * 0.12f * k);
+        keep *= 1.0f - saturate(1.0f - focus) * k * through;
+    }
+    // Shafts: eight steps along the view through the water, each lit by the light its waves focus.
+    if (shafts > 0.0f) {
+        const float span = min(length(p), 4000.0f);
+        const float3 v = normalize(p);
+        const float jitter = frac(52.9829189f * frac(0.06711056f * position.x + 0.00583715f * position.y) +
+                                  0.618034f * frame);
+        float3 sum = float3(0.0f, 0.0f, 0.0f);
+        [unroll] for (uint i = 0u; i < 8u; ++i) {
+            const float t = span * (float(i) + jitter) / 8.0f;
+            const float3 x = v * t;
+            const float depth_x = dot(up, surface - x);
+            if (depth_x <= 0.0f) {
+                continue;
+            }
+            const float along = depth_x / rise;
+            const float3 enter = transform(to_world, x + s * along);
+            const float focus = wave_focus(float2(dot(enter, t1), dot(enter, t2)), frame, depth_x);
+            sum += exp(-m_water.rgb * (along + t)) * (focus * focus);
+        }
+        // Forward scattering towards the sun (Henyey-Greenstein, g 0.6).
+        const float c = dot(v, s);
+        const float phase = (1.0f - 0.36f) / pow(max(1.0f + 0.36f - 1.2f * c, 1e-3f), 1.5f) / (4.0f * kPi);
+        add += sun * sum * (span / 8.0f) * (shafts * 2e-4f * phase);
+    }
+    CompositeOut result;
+    result.add = float4(saturate(add), 0.0f);
+    result.keep = float4(saturate(keep), 1.0f);
     return result;
 }

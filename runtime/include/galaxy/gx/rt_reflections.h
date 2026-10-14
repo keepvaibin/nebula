@@ -4,7 +4,8 @@
 // RtReflections: ray-traced reflections of the traced scene's metal, glossy and water surfaces
 // (rt_reflections.hlsl), part of SceneRayTracer. Traced after the lighting at the scene's first
 // translucent phase from the EFB as the opaque scene left it; composited after the lighting
-// composite, on interpolated sub-frames too. Render thread only.
+// composite, on interpolated sub-frames too. Translucent water (seas, lakes) is traced and
+// composited once the translucent phases have drawn it. Render thread only.
 
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
@@ -22,6 +23,18 @@
 #include <vector>
 
 namespace galaxy::gx {
+
+// The lights the lighting traced (rt_lighting.hlsl RtLight, eye space), for specular highlights.
+struct RtReflectLights {
+    std::array<float, 4> sun{};               // towards the sun (xyz), tangent of its radius (w)
+    std::array<float, 4> sun_light{};         // sun light (rgb), how far its shadow rays reach (w)
+    // Per point light: position, reach; colour, 1 / its half-light distance squared.
+    std::array<std::array<float, 4>, 16> points{};
+    std::uint32_t point_count = 0;
+    float point_light = 0.0f;                 // the point lights' weight
+    float point_size = 0.0f;                  // radius of the emitter around a point light
+    D3D12_GPU_VIRTUAL_ADDRESS emitters = 0;   // glow lights (rt_lighting.hlsl g_emitters), 0 for none
+};
 
 // A traced scene, as the reflections read it. They take the lighting's samples: one per factor x
 // factor EFB pixels, each with the triangle the lighting's camera ray met.
@@ -44,12 +57,20 @@ struct RtReflectScene {
     D3D12_GPU_VIRTUAL_ADDRESS light = 0;        // per sample the lighting result (uint3)
     // The previous picture's sky and scene sums (rt_lighting.hlsl CaptureCS); 0 for none.
     D3D12_GPU_VIRTUAL_ADDRESS sums = 0;
+    float sky_distance = 0.0f;              // farther surfaces are the sky (backdrops); 0 none
+    // The lighting's sky map (rt_lighting.hlsl SkyLightMapCS: 32x32 float4 by world direction); 0 none.
+    D3D12_GPU_VIRTUAL_ADDRESS sky_map = 0;
+    RtReflectLights lights{};
+    // The translucent water draws (trace_water): their TLAS, eye-space vertices and surface records.
+    D3D12_GPU_VIRTUAL_ADDRESS water_tlas = 0;
+    D3D12_GPU_VIRTUAL_ADDRESS water_positions = 0;
+    D3D12_GPU_VIRTUAL_ADDRESS water_surfaces = 0;
 };
 
 class RtReflections {
 public:
     // Constants of one trace, in an upload allocation the caller makes (256-byte aligned).
-    static constexpr std::size_t kConstantsBytes = 384u;
+    static constexpr std::size_t kConstantsBytes = 704u;
     // Results kept for the sub-frames of the game frames being interpolated (the lighting's slots).
     static constexpr unsigned kSlots = 4u;
 
@@ -79,13 +100,26 @@ public:
     void composite(ID3D12GraphicsCommandList* list, D3D12_CPU_DESCRIPTOR_HANDLE target,
                    D3D12_GPU_DESCRIPTOR_HANDLE depth_srv, std::uint32_t width, std::uint32_t height, unsigned slot,
                    D3D12_GPU_VIRTUAL_ADDRESS reproject, float split);
+    // The translucent water of the scene traced into `slot` (scene.water_*), from the EFB colour and
+    // depth as the translucent phases left them (NON_PIXEL_SHADER_RESOURCE at `color_depth`).
+    void trace_water(ID3D12GraphicsCommandList* list, const RtReflectScene& scene, unsigned slot,
+                     void* constants_cpu, D3D12_GPU_VIRTUAL_ADDRESS constants_gpu,
+                     D3D12_GPU_DESCRIPTOR_HANDLE color_depth);
+    // As composite(), the water's reflections over it.
+    void composite_water(ID3D12GraphicsCommandList* list, D3D12_CPU_DESCRIPTOR_HANDLE target,
+                         D3D12_GPU_DESCRIPTOR_HANDLE depth_srv, std::uint32_t width, std::uint32_t height,
+                         unsigned slot, D3D12_GPU_VIRTUAL_ADDRESS reproject, float split);
 
 private:
     static constexpr unsigned kResultSlots = 16u;
     static constexpr std::uint64_t kResultDelay = 8u;
-    static constexpr unsigned kStatsWords = 16u;
-    static constexpr unsigned kTimestampsPerSlot = 4u;
+    // Words 0-15 the trace's, 16-31 the water's.
+    static constexpr unsigned kStatsWords = 32u;
+    // Trace, composite, water trace, water composite: begin and end each.
+    static constexpr unsigned kTimestampsPerSlot = 8u;
     static constexpr unsigned kClasses = 8u;
+    // Class of the translucent water's surface (rt_reflections.hlsl kWaterSurface).
+    static constexpr unsigned kWaterClass = 5u;
     // Environment memory: kMemorySize^2 world directions (octahedral; rt_reflections.hlsl kProbeSize).
     static constexpr unsigned kMemorySize = 64u;
     static constexpr unsigned kMemoryTexels = kMemorySize * kMemorySize;
@@ -111,11 +145,29 @@ private:
         std::uint32_t sample_height = 0;
         std::uint32_t factor = 0;
         std::uint32_t tile_width = 0;
+        std::array<float, 4> sun{};   // the water's caustics: towards the sun (eye space), 0 without one
     };
     struct Pending {
         std::uint64_t frame = 0;
         bool pending = false;
         bool composite_timed = false;
+        bool water_timed = false;
+        bool water_composite_timed = false;
+    };
+    // Per sample buffers of one pass (reflections or water): surface (both frames), accumulated light
+    // (both frames); per result slot the composite's input and its tiles of 8x8 samples.
+    struct Pass {
+        std::array<Buffer, 2> info{};
+        std::array<Buffer, 2> history{};
+        std::array<Buffer, kSlots> final{};
+        std::array<Buffer, kSlots> tiles{};
+        std::array<float, 12> history_camera{};
+        std::uint32_t history_width = 0;
+        std::uint32_t history_height = 0;
+        std::uint32_t history_factor = 0;
+        unsigned parity = 0;
+        bool history_valid = false;
+        bool history_camera_known = false;
     };
     // Per surface class (rt_surfaces.h): perceptual roughness, F0, strength, metal (hue of the
     // surface) and cover (share of the surface's colour the reflection replaces; 0 adds light only).
@@ -129,28 +181,50 @@ private:
 
     bool create_pipelines(DXGI_FORMAT color_format);
     bool ensure_buffers(std::uint32_t samples, std::uint32_t tiles);
+    bool ensure_water_buffers();
+    bool allocate_pass(Pass& pass, std::uint64_t samples, std::uint32_t tiles, const wchar_t* name);
+    void release_pass(Pass& pass);
     bool create_buffer(std::uint64_t bytes, D3D12_HEAP_TYPE heap, D3D12_RESOURCE_STATES state,
                        D3D12_RESOURCE_FLAGS flags, Microsoft::WRL::ComPtr<ID3D12Resource>& out, const wchar_t* name);
     void retire(Microsoft::WRL::ComPtr<ID3D12Resource>& resource);
     static void to_state(ID3D12GraphicsCommandList* list, Buffer& buffer, D3D12_RESOURCE_STATES wanted);
+    // The trace constants of `scene` for `pass` (its camera history), with `flags` added.
+    void fill_constants(const RtReflectScene& scene, const Pass& pass, std::uint32_t flags, void* constants_cpu);
+    // Binds the trace's root parameters for `pass` writing result slot `slot`.
+    void bind_trace(ID3D12GraphicsCommandList* list, const RtReflectScene& scene, Pass& pass, unsigned slot,
+                    D3D12_GPU_VIRTUAL_ADDRESS constants_gpu, D3D12_GPU_DESCRIPTOR_HANDLE color_depth);
+    // After the trace: temporal accumulation and the two filters into result slot `slot`.
+    void accumulate(ID3D12GraphicsCommandList* list, Pass& pass, unsigned slot, UINT groups_x, UINT groups_y);
+    // The pass's history moves to this trace and its result slot `slot` describes it.
+    void finish_trace(Pass& pass, std::array<Slot, kSlots>& slots, const RtReflectScene& scene, unsigned slot,
+                      UINT groups_x);
+    void draw_composite(ID3D12GraphicsCommandList* list, Pass& pass, ID3D12PipelineState* pso,
+                        D3D12_CPU_DESCRIPTOR_HANDLE target, D3D12_GPU_DESCRIPTOR_HANDLE depth_srv,
+                        std::uint32_t width, std::uint32_t height, unsigned slot, const Slot& info,
+                        D3D12_GPU_VIRTUAL_ADDRESS reproject, float split);
     void report();
 
     Microsoft::WRL::ComPtr<ID3D12Device5> device_;
     Microsoft::WRL::ComPtr<ID3D12RootSignature> root_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> trace_pso_;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> water_trace_pso_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> temporal_pso_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> filter_a_pso_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> filter_pso_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> memory_pso_;
     Microsoft::WRL::ComPtr<ID3D12RootSignature> composite_root_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> composite_pso_;
-    // Per sample: surface (both frames), reflected light, accumulated light (both frames), and per
-    // result slot the composite's input and its tiles of 8x8 samples; the environment memory.
-    std::array<Buffer, 2> info_{};
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> water_composite_pso_;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> underwater_pso_;
+    // The reflections' and the water's per sample buffers; reflected light per sample (both passes,
+    // one after the other); the environment memory.
+    Pass main_{};
+    Pass water_{};
     Buffer raw_{};
-    std::array<Buffer, 2> history_{};
-    std::array<Buffer, kSlots> final_{};
-    std::array<Buffer, kSlots> tiles_{};
+    // Per result slot, per sample the picture under the translucent phases (the water's refraction),
+    // then the water pass's state (rt_reflections.hlsl kUnderState entries).
+    std::array<Buffer, kSlots> under_{};
+    static constexpr std::uint32_t kUnderState = 9u;
     Buffer memory_{};
     Buffer stats_{};
     Microsoft::WRL::ComPtr<ID3D12Resource> stats_zero_;
@@ -158,31 +232,39 @@ private:
     Microsoft::WRL::ComPtr<ID3D12QueryHeap> timestamps_;
     std::vector<Retired> retired_;
     std::array<Slot, kSlots> slots_{};
+    std::array<Slot, kSlots> water_slots_{};
     std::array<Pending, kResultSlots> pending_{};
     std::array<Material, kClasses> materials_{};
-    std::array<float, 12> history_camera_{};
     std::uint64_t timestamp_frequency_ = 0;
     std::uint64_t frame_index_ = 0;
     std::uint64_t serial_ = 0;
-    int composite_timing_ = -1;   // result slot whose composite is timed next
+    int composite_timing_ = -1;         // result slot whose composite is timed next
+    int water_result_ = -1;             // result slot of the last trace, for the water's stats
+    int water_composite_timing_ = -1;   // result slot whose water composite is timed next
     std::uint32_t samples_ = 0;
     std::uint32_t tiles_capacity_ = 0;
-    std::uint32_t history_width_ = 0;
-    std::uint32_t history_height_ = 0;
-    std::uint32_t history_factor_ = 0;
+    std::uint32_t water_samples_ = 0;   // the water's buffers, allocated at its first trace
     std::uint32_t frame_ = 0;
-    unsigned parity_ = 0;
-    bool history_valid_ = false;
-    bool history_camera_known_ = false;
     bool ready_ = false;
     // GALAXY_RT_REFLECT_VIEW: 1 the reflections alone, 2 the surface classes, 3 their weight, 4
-    // reflections on every other traced frame (A/B pairs).
+    // reflections on every other traced frame (A/B pairs), 5 the classes on every other frame.
     std::uint32_t view_ = 0;
     std::uint32_t history_frames_ = 24;
     float range_ = 50000.0f;
     float lobe_ = 0.85f;
     float fallback_ = 0.0f;   // GALAXY_RT_REFLECT_FALLBACK: confidence of the scene's average light
     float memory_fade_ = 0.99f;
+    float ripple_ = 0.0f;     // GALAXY_RT_WATER_RIPPLE: the water normal's slope per luminance slope
+    float probe_ = 0.6f;      // GALAXY_RT_REFLECT_PROBE: confidence of the memory along unknown rays
+    // GALAXY_RT_WATER_ABSORB (r,g,b per 1000 eye units), _CLEAR (share of the clear water shown),
+    // _CAUSTICS (gain, 0 none).
+    std::array<float, 3> absorb_{};
+    float clear_ = 1.0f;
+    float caustics_ = 1.0f;
+    float shafts_ = 1.0f;     // GALAXY_RT_WATER_SHAFTS: sunlight scattered under the water (0 none)
+    float sky_fade_ = 0.9995f;  // GALAXY_RT_REFLECT_SKY_FADE: the memory of the sky kept per frame
+    float sky_average_ = 0.15f; // GALAXY_RT_REFLECT_SKY_AVERAGE: confidence of the sky's average colour
+    float metal_sky_ = 0.3f;    // GALAXY_RT_REFLECT_METAL_SKY: metal's share of reflected sky over its env map
 
     // [rt-reflect] accumulation over the report window.
     struct Window {
@@ -192,6 +274,11 @@ private:
         std::uint64_t composites_timed = 0;
         double trace_ms = 0.0;
         double composite_ms = 0.0;
+        std::uint64_t waters = 0;
+        std::uint64_t water_timed = 0;
+        std::uint64_t water_composites_timed = 0;
+        double water_ms = 0.0;
+        double water_composite_ms = 0.0;
         std::array<std::uint64_t, kStatsWords> stats{};
         std::uint64_t counted = 0;
     } window_{};

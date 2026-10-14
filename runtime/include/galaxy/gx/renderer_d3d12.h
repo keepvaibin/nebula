@@ -480,6 +480,7 @@ public:
     void reconcile_ray_tracing();
     [[nodiscard]] bool rt_scene_open() const noexcept { return ray_tracer_.scene_open(); }
     [[nodiscard]] bool rt_glow_open() const noexcept { return ray_tracer_.glow_open(); }
+    [[nodiscard]] bool rt_water_open() const noexcept { return ray_tracer_.water_open(); }
     [[nodiscard]] float rt_glow_exposure(bool model = false) const noexcept {
         return ray_tracer_.ready() ? ray_tracer_.glow_exposure(model) : 1.0f;
     }
@@ -520,6 +521,9 @@ public:
     void record_rt_bloom(int slot);
     // The cinematic finish over the EFB (a scene's end; sub-frames replay it on their picture).
     void record_rt_post(bool replay);
+    // After the translucent phases: the water drawn since the trace reflects (its composite is
+    // recorded for the sub-frames' replays).
+    void rt_trace_water();
     // Matrix-ring segment advances back whose palettes are still alive while
     // this frame executes (0 outside temporal mode). In temporal mode the
     // segment advances only after frames that wrote palettes, so present and
@@ -1111,7 +1115,7 @@ private:
     };
     // RtComposite: the ambient occlusion of ray-tracer result slot `index`.
     enum class ReplayKind : std::uint8_t {
-        Draw, BindEfb, Clear, Copy, SwapEfbSets, ClearDepth, RtComposite, RtBloom, RtPost
+        Draw, BindEfb, Clear, Copy, SwapEfbSets, ClearDepth, RtComposite, RtBloom, RtPost, RtWater
     };
     struct ReplayOp {
         ReplayKind kind = ReplayKind::Draw;
@@ -1238,6 +1242,7 @@ private:
     [[nodiscard]] RtSources rt_sources() const;
     // The occlusion of result `slot` onto the EFB colour; `reproject` on a sub-frame's replay.
     void record_rt_composite(int slot, bool reproject);
+    void record_rt_water(int slot, bool reproject);
     [[nodiscard]] bool temporal_inputs_match(const TemporalUpscaleInputs& in) const;
     D3D12_GPU_VIRTUAL_ADDRESS resident_vertex_base_ = 0;
     std::uint64_t resident_vertex_bytes_ = 0;

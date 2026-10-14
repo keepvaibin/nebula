@@ -6566,6 +6566,13 @@ void GxBackend::on_host_marker(std::uint8_t kind, std::uint16_t aux, std::uint32
         on_motion_marker(kind, aux, a, b, offset);
         return;
     }
+    // The drawing object for the material census and the named classes: a NameObj's draws follow
+    // its marker; emitters and particles are none.
+    if (kind == motion::kMarkerNameObj) {
+        rt_object_ = a;
+    } else if (kind == motion::kMarkerEmitter || kind == motion::kMarkerParticle) {
+        rt_object_ = 0u;
+    }
     if (!history_scene_) {
         return;
     }
@@ -6956,8 +6963,84 @@ bool GxBackend::rt_glow_draw() const noexcept {
            rt_phase_ == static_cast<std::uint8_t>(ScenePhase::AfterIndirect);
 }
 
+// Water: alpha-blended draws of the translucent phases (seas, pools, lakes) before the image
+// effects; begin_rt_batch keeps those of the water class (indirect-textured) and the clear ones
+// (crystals, glass: environment-mapped or named).
+bool GxBackend::rt_water_draw() const noexcept {
+    if (!rt_water_eligible_ || !scene_phase_ || side_layer_ != kSceneLayer || !renderer_.rt_water_open()) {
+        return false;
+    }
+    using motion::ScenePhase;
+    return rt_phase_ == static_cast<std::uint8_t>(ScenePhase::Xlu) ||
+           rt_phase_ == static_cast<std::uint8_t>(ScenePhase::ListXlu) ||
+           rt_phase_ == static_cast<std::uint8_t>(ScenePhase::AfterIndirect);
+}
+
+// The current object's name: NameObj::mName (+4), its bytes (Shift-JIS), blanks as '_'.
+std::uint32_t GxBackend::rt_object_name(char* out, std::size_t size) {
+    out[0] = 0;
+    if (rt_object_ == 0u || frame_memory_ == nullptr) {
+        return 0u;
+    }
+    const std::byte* field = resolve_guest_const_bytes(frame_memory_, rt_object_ + 4u, 4u);
+    if (field == nullptr) {
+        return 0u;
+    }
+    std::uint32_t pointer = 0u;
+    std::memcpy(&pointer, field, 4u);
+    pointer = byte_swap_u32(pointer);
+    std::size_t n = 0u;
+    for (std::uint32_t i = 0; pointer != 0u && i < 32u && n + 4u < size; ++i) {
+        const std::byte* c = resolve_guest_const_bytes(frame_memory_, pointer + i, 1u);
+        if (c == nullptr || *c == std::byte{0}) {
+            break;
+        }
+        const auto v = std::to_integer<unsigned char>(*c);
+        // Shift-JIS bytes as they are (the census decodes them); blanks and controls as '_'.
+        out[n++] = v > 0x20u && v != 0x7Fu ? static_cast<char>(v) : '_';
+    }
+    out[n] = 0;
+    return pointer;
+}
+
+// The census line of the current scene draw: its object's name, class, blend and the texture its
+// environment stage (else stage 0) reads.
+void GxBackend::note_rt_material() {
+    RtSurface surface = classify_rt_surface(vs_key_, ps_key_);
+    RtMaterialNote note{};
+    char name[48]{};
+    rt_object_name(name, sizeof(name));
+    surface.surface_class = rt_named_class(name, surface.surface_class);
+    note.name = name;
+    note.object = rt_object_;
+    note.surface = surface;
+    note.stages = ps_key_.num_tev_stages;
+    note.texgens = vs_key_.num_texgens;
+    note.indirect = ps_key_.num_ind_stages;
+    note.channel = state_.xf(xf::kChannelCtrlBase);
+    const unsigned stage = surface.env_stage < 16u ? surface.env_stage : 0u;
+    note.combiner = surface.env_stage < 16u ? ps_key_.stages[stage].color_env & 0xFFFFFFu : 0u;
+    const BlendMode blend = state_.blend_mode();
+    note.blend = !blend.blend_enable ? 0u
+                 : blend.src_factor == BlendFactor::SrcAlpha && blend.dst_factor == BlendFactor::InvSrcAlpha ? 1u
+                 : blend.dst_factor == BlendFactor::One ? 2u
+                                                         : 3u;
+    const unsigned map = ps_key_.stages[stage].order & 7u;
+    const std::uint8_t bank = map >= 4u ? bp::kTexHighBankOffset : 0u;
+    const std::uint32_t image0 = state_.bp(static_cast<std::uint8_t>(bp::kTexImage0Base + bank + (map & 3u)));
+    note.texture = (state_.bp(static_cast<std::uint8_t>(bp::kTexImage3Base + bank + (map & 3u))) & 0xFFFFFFu) << 5u;
+    note.texture_size = ((image0 & 0x3FFu) + 1u) | ((((image0 >> 10u) & 0x3FFu) + 1u) << 16u);
+    note.texture_format = (image0 >> 20u) & 0xFu;
+    note.phase = rt_phase_;
+    galaxy::gx::note_rt_material(note);
+}
+
 bool GxBackend::begin_rt_batch(const DrawCall& call, RtDrawInfo& info) {
-    if (!scene_phase_ || !(renderer_.rt_scene_open() || renderer_.rt_glow_open())) {
+    if (rt_material_census() && scene_phase_ && side_layer_ == kSceneLayer &&
+        state_.xf(static_cast<std::uint16_t>(xf::kProjectionBase + 6u)) == 0u) [[unlikely]] {
+        note_rt_material();
+    }
+    if (!scene_phase_ || !(renderer_.rt_scene_open() || renderer_.rt_glow_open() || renderer_.rt_water_open())) {
         return false;
     }
     const ScaledGxViewport viewport = compute_scaled_gx_viewport(call.xf_viewport, renderer_.efb_scale());
@@ -6972,8 +7055,10 @@ bool GxBackend::begin_rt_batch(const DrawCall& call, RtDrawInfo& info) {
     if (flat) {
         return false;
     }
-    const bool glow = !rt_geometry_draw();
-    if (glow && !rt_glow_draw()) {
+    const bool translucent = !rt_geometry_draw();
+    const bool glow = translucent && rt_glow_draw();
+    const bool water = translucent && !glow && rt_water_draw();
+    if (translucent && !glow && !water) {
         return false;
     }
     const auto projection = [this](unsigned i) {
@@ -6987,7 +7072,31 @@ bool GxBackend::begin_rt_batch(const DrawCall& call, RtDrawInfo& info) {
     info.cull = render_state_key_.cull;
     info.phase = rt_phase_;
     // The surface class (rt_surfaces.h) for reflections; diagnostics for GALAXY_RT_DUMP.
-    const RtSurface surface = classify_rt_surface(vs_key_, ps_key_);
+    RtSurface surface = classify_rt_surface(vs_key_, ps_key_);
+    if (surface.surface_class == RtSurfaceClass::Metal || surface.surface_class == RtSurfaceClass::Glossy) {
+        // Clear materials the GX state shows as metal or gloss go by their object's name.
+        char name[48];
+        const std::uint32_t pointer = rt_object_name(name, sizeof(name));
+        if (pointer != 0u) {
+            if (rt_named_.size() > 4096u) {
+                rt_named_.clear();
+            }
+            auto [it, inserted] = rt_named_.try_emplace(pointer, std::uint8_t{0});
+            if (inserted) {
+                it->second = static_cast<std::uint8_t>(rt_named_class(name, surface.surface_class)) + 1u;
+            }
+            if (it->second == static_cast<std::uint8_t>(RtSurfaceClass::Crystal) + 1u) {
+                surface.surface_class = RtSurfaceClass::Crystal;
+            }
+        }
+    }
+    if (water && surface.surface_class == RtSurfaceClass::Metal) {
+        // A blended environment map is glass, not metal.
+        surface.surface_class = RtSurfaceClass::Crystal;
+    }
+    if (water && surface.surface_class != RtSurfaceClass::Water && surface.surface_class != RtSurfaceClass::Crystal) {
+        return false;
+    }
     info.shading = {ps_key_.num_tev_stages | (static_cast<std::uint32_t>(vs_key_.num_texgens) << 8u) |
                         (static_cast<std::uint32_t>(ps_key_.num_ind_stages) << 16u) |
                         (static_cast<std::uint32_t>(surface.features) << 24u),
@@ -7008,6 +7117,8 @@ bool GxBackend::begin_rt_batch(const DrawCall& call, RtDrawInfo& info) {
         }
         if (glow) {
             info.surface = kRtDrawGlow;
+        } else if (water) {
+            info.surface = kRtDrawWater | (static_cast<std::uint32_t>(surface.surface_class) << kRtDrawClassShift);
         } else {
             info.surface |= static_cast<std::uint32_t>(surface.surface_class) << kRtDrawClassShift;
         }
@@ -7319,6 +7430,18 @@ void GxBackend::note_rt_phase(std::uint8_t phase) {
         phase == static_cast<std::uint8_t>(ScenePhase::ImageEffect)) {
         trace_rt_scene();
     }
+    if (phase == static_cast<std::uint8_t>(ScenePhase::ImageEffect)) {
+        trace_rt_water();
+    }
+}
+
+// The water drawn since the trace reflects, before the image effects (or at the scene's end).
+void GxBackend::trace_rt_water() {
+    if (!renderer_.rt_water_open()) {
+        return;
+    }
+    flush_pending_draw_batch();
+    renderer_.rt_trace_water();
 }
 
 void GxBackend::trace_rt_scene() {
@@ -7358,6 +7481,7 @@ void GxBackend::on_fifo_marker(FifoMarker marker, const std::array<float, 12>* v
     } else {
         trace_rt_scene();
         if (renderer_.rt_active() && side_layer_ == kSceneLayer) {
+            trace_rt_water();
             renderer_.rt_capture_picture();
         }
     }
@@ -12312,7 +12436,7 @@ ID3D12PipelineState* GxBackend::flush_draw_state(
             };
             std::fprintf(stderr,
                          "[draw-order] frame=%llu scene=%d phase=%u layer=%u blend=%d src=%u dst=%u cu=%d au=%d "
-                         "z=%d/%d proj=%c vp=%.0f,%.0f,%.0f,%.0f stages=%u chan=%08x\n",
+                         "z=%d/%d proj=%c vp=%.0f,%.0f,%.0f,%.0f stages=%u ind=%u chan=%08x\n",
                          static_cast<unsigned long long>(frame_index_), scene_phase_ ? 1 : 0,
                          static_cast<unsigned>(rt_phase_), static_cast<unsigned>(side_layer_),
                          marks.blend_enable ? 1 : 0, static_cast<unsigned>(marks.src_factor),
@@ -12323,7 +12447,8 @@ ID3D12PipelineState* GxBackend::flush_draw_state(
                          static_cast<double>(xf_float(static_cast<std::uint16_t>(xf::kViewportBase + 1u))),
                          static_cast<double>(xf_float(static_cast<std::uint16_t>(xf::kViewportBase + 3u))),
                          static_cast<double>(xf_float(static_cast<std::uint16_t>(xf::kViewportBase + 4u))),
-                         static_cast<unsigned>(state_.gen_mode().num_tev_stages), state_.xf(xf::kChannelCtrlBase));
+                         static_cast<unsigned>(state_.gen_mode().num_tev_stages),
+                         static_cast<unsigned>(state_.gen_mode().num_ind_stages), state_.xf(xf::kChannelCtrlBase));
         }
     }
     if (renderer_.rt_active()) {
@@ -12343,6 +12468,12 @@ ID3D12PipelineState* GxBackend::flush_draw_state(
         rt_glow_eligible_ =
             topology_key == static_cast<std::uint8_t>(D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE) && blend.blend_enable &&
             !blend.logic_op_enable && !blend.subtract && blend.color_update && blend.dst_factor == BlendFactor::One &&
+            render_state_key_.cull != static_cast<std::uint8_t>(CullMode::All) &&
+            state_.xf(static_cast<std::uint16_t>(xf::kProjectionBase + 6u)) == 0u;
+        rt_water_eligible_ =
+            topology_key == static_cast<std::uint8_t>(D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE) && blend.blend_enable &&
+            !blend.logic_op_enable && !blend.subtract && blend.color_update &&
+            blend.src_factor == BlendFactor::SrcAlpha && blend.dst_factor == BlendFactor::InvSrcAlpha &&
             render_state_key_.cull != static_cast<std::uint8_t>(CullMode::All) &&
             state_.xf(static_cast<std::uint16_t>(xf::kProjectionBase + 6u)) == 0u;
     }

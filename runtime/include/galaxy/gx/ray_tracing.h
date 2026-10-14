@@ -56,6 +56,9 @@ inline constexpr std::uint32_t kRtDrawSunKey = 16u;
 inline constexpr std::uint32_t kRtDrawPointLit = 32u;
 // An additive translucent draw (a glow: lamps, cores, Lumas, sparks): an emitter, not in the BVH.
 inline constexpr std::uint32_t kRtDrawGlow = 64u;
+// A blended translucent draw of the water class (seas, lakes): its reflections are traced once the
+// translucent phases drew it (SceneRayTracer::trace_water); not in the BVH.
+inline constexpr std::uint32_t kRtDrawWater = 128u;
 // Bits 8-11: the draw's surface class (rt_surfaces.h).
 inline constexpr std::uint32_t kRtDrawClassShift = 8u;
 inline constexpr std::uint32_t kRtDrawClassMask = 0xFu << kRtDrawClassShift;
@@ -137,8 +140,12 @@ public:
     [[nodiscard]] bool scene_open() const noexcept { return scene_open_; }
     // From the trace to the scene's end: glow draws (kRtDrawGlow) are noted.
     [[nodiscard]] bool glow_open() const noexcept { return glow_open_; }
+    // From the trace to the water's trace: translucent water draws (kRtDrawWater) are noted.
+    [[nodiscard]] bool water_open() const noexcept { return water_open_; }
     [[nodiscard]] bool accepts(const RtDrawInfo& info) const noexcept {
-        return (info.surface & kRtDrawGlow) != 0u ? glow_open_ : scene_open_;
+        return (info.surface & kRtDrawGlow) != 0u ? glow_open_
+               : (info.surface & kRtDrawWater) != 0u ? water_open_
+                                                      : scene_open_;
     }
 
     // Transforms the draws noted since the last flush into the scene's eye-space vertex buffer.
@@ -231,6 +238,23 @@ public:
                       std::uint32_t width, std::uint32_t height, bool replay);
     void post_finish(ID3D12GraphicsCommandList* list, D3D12_CPU_DESCRIPTOR_HANDLE target,
                      D3D12_GPU_DESCRIPTOR_HANDLE depth_table, std::uint32_t width, std::uint32_t height);
+    // Transforms the water draws noted since the last flush (before a render chunk's list closes,
+    // as flush_geometry).
+    void flush_water(ID3D12GraphicsCommandList* list, const RtSources& sources, Allocate allocate,
+                     void* allocate_context);
+    // After the translucent phases: the water draws noted since the trace become their own
+    // acceleration structure and the reflections trace the water's surface from the picture (EFB
+    // colour then depth, NON_PIXEL_SHADER_RESOURCE, two consecutive SRVs at `color_depth_table`).
+    // Ends the water window. Returns the result slot for composite_water(), -1 for none.
+    int trace_water(ID3D12GraphicsCommandList* list, const RtSources& sources, Allocate allocate,
+                    void* allocate_context, D3D12_GPU_DESCRIPTOR_HANDLE color_depth_table, std::uint32_t width,
+                    std::uint32_t height);
+    // Blends the water reflections of `slot` into the EFB colour `target` at the depth `depth_srv`
+    // holds (PIXEL_SHADER_RESOURCE); `reproject` as composite(). Leaves its own root signature and
+    // pipeline bound.
+    void composite_water(ID3D12GraphicsCommandList* list, D3D12_CPU_DESCRIPTOR_HANDLE target,
+                         D3D12_GPU_DESCRIPTOR_HANDLE depth_srv, std::uint32_t width, std::uint32_t height, int slot,
+                         bool reproject);
     // After the composite (same views): the picture before the translucent phases.
     void snapshot_glow_base(ID3D12GraphicsCommandList* list, D3D12_GPU_DESCRIPTOR_HANDLE color_depth_table,
                             std::uint32_t width, std::uint32_t height);
@@ -248,6 +272,8 @@ private:
     static constexpr std::uint64_t kResultDelay = 8u;
     static constexpr unsigned kStatsWords = 16u;
     static constexpr std::uint32_t kMaxTriangles = 4u * 1024u * 1024u;
+    // Translucent water triangles of one scene.
+    static constexpr std::uint32_t kWaterMaxTriangles = 128u * 1024u;
     // Lighting results kept for the sub-frames of the game frames being interpolated.
     static constexpr unsigned kLightSlots = 4u;
 
@@ -270,6 +296,15 @@ private:
                         std::uint32_t height, std::uint32_t flags, RtUpload& frame);
     void write_dump();
     bool create_lighting_pipelines(DXGI_FORMAT color_format);
+    // The geometry pass over `count` draws (triangles from `triangle_base`) into `positions` and
+    // `surfaces`.
+    bool transform_draws(ID3D12GraphicsCommandList* list, const RtSources& sources, Allocate allocate,
+                         void* allocate_context, const RtDraw* draws, std::size_t count, std::uint32_t triangle_base,
+                         std::uint32_t triangles, ID3D12Resource* positions, D3D12_RESOURCE_STATES& positions_state,
+                         ID3D12Resource* surfaces, D3D12_RESOURCE_STATES& surfaces_state);
+    // The reflections' view of the scene traced into lighting slot `slot`.
+    [[nodiscard]] RtReflectScene reflect_scene(unsigned slot) const;
+    bool ensure_water_buffers();
     void capture_glow_lights(ID3D12GraphicsCommandList* list, const RtSources& sources, Allocate allocate,
                              void* allocate_context, D3D12_GPU_DESCRIPTOR_HANDLE color_depth_table,
                              std::uint32_t width, std::uint32_t height, std::uint32_t factor, bool glow);
@@ -470,8 +505,27 @@ private:
     D3D12_RESOURCE_STATES picture_sums_state_ = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
     std::array<LightSlot, kLightSlots> light_slots_{};
     static_assert(RtReflections::kSlots == kLightSlots);
-    // Reflections, in the lighting's result slots (GALAXY_RT_REFLECT=0 turns them off).
+    // Reflections, in the lighting's result slots (GALAXY_RT_REFLECT=0 turns them off), and the
+    // lights of the last traced lighting for their highlights.
     RtReflections reflections_;
+    RtReflectLights reflect_lights_{};
+    // Translucent water draws (kRtDrawWater) from the trace to trace_water: the draws, their
+    // eye-space triangles and surface records, and their own acceleration structure.
+    std::vector<RtDraw> water_draws_;
+    std::uint32_t water_triangles_ = 0u;
+    std::size_t water_flushed_draws_ = 0u;
+    std::uint32_t water_flushed_triangles_ = 0u;
+    bool water_open_ = false;
+    bool water_incomplete_ = false;
+    Microsoft::WRL::ComPtr<ID3D12Resource> water_positions_;
+    Microsoft::WRL::ComPtr<ID3D12Resource> water_surfaces_;
+    Microsoft::WRL::ComPtr<ID3D12Resource> water_blas_;
+    Microsoft::WRL::ComPtr<ID3D12Resource> water_tlas_;
+    Microsoft::WRL::ComPtr<ID3D12Resource> water_scratch_;
+    Microsoft::WRL::ComPtr<ID3D12Resource> water_instance_;
+    std::uint64_t water_scratch_tlas_ = 0u;   // the TLAS build's offset in the scratch buffer
+    D3D12_RESOURCE_STATES water_positions_state_ = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+    D3D12_RESOURCE_STATES water_surfaces_state_ = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
     // Per slot the traced frame's eye position from a sub-frame's (3 rows), copied in from a
     // ring of upload entries before each sub-frame's replay.
     Microsoft::WRL::ComPtr<ID3D12Resource> reproject_;
