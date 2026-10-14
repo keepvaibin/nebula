@@ -17,6 +17,7 @@
 #include <wrl/client.h>
 
 #include <array>
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <vector>
@@ -45,6 +46,8 @@ inline constexpr std::uint32_t kRtDrawWideIndices = 4u;
 inline constexpr std::uint32_t kRtDrawLit = 8u;
 // It takes GX light 4, the slot LightFunction::loadPointLightInfo loads the game's point light into.
 inline constexpr std::uint32_t kRtDrawPointLit = 32u;
+// An additive translucent draw (a glow: lamps, cores, Lumas, sparks): an emitter, not in the BVH.
+inline constexpr std::uint32_t kRtDrawGlow = 64u;
 
 // Diagnostics for GALAXY_RT_DUMP: the draw's GX projection (A-F), viewport depth range, cull
 // mode and SceneFunction phase; colour channel 0 (XF control word, ambient and material RGBA8)
@@ -117,6 +120,11 @@ public:
     void add_draw(const RtDraw& draw, const RtDrawInfo& info);
     void set_view(const RtView& view) noexcept;
     [[nodiscard]] bool scene_open() const noexcept { return scene_open_; }
+    // From the trace to the scene's end: glow draws (kRtDrawGlow) are noted.
+    [[nodiscard]] bool glow_open() const noexcept { return glow_open_; }
+    [[nodiscard]] bool accepts(const RtDrawInfo& info) const noexcept {
+        return (info.surface & kRtDrawGlow) != 0u ? glow_open_ : scene_open_;
+    }
 
     // Transforms the draws noted since the last flush into the scene's eye-space vertex buffer.
     // Called before a render chunk's command list closes: the next chunk's frame begin rewinds
@@ -154,8 +162,15 @@ public:
     // The end of the scene: its finished picture (EFB colour and depth, NON_PIXEL_SHADER_RESOURCE,
     // as two consecutive SRVs at `color_depth_table` in the bound heap) becomes the light the
     // next frame's rays read where they hit.
-    void capture_picture(ID3D12GraphicsCommandList* list, D3D12_GPU_DESCRIPTOR_HANDLE color_depth_table,
-                         std::uint32_t width, std::uint32_t height);
+    // The glows drawn since the trace become lights: their eye-space triangles (geometry pass on the
+    // same sources) and what they added to the picture since snapshot_glow_base().
+    void capture_picture(ID3D12GraphicsCommandList* list, const RtSources& sources, Allocate allocate,
+                         void* allocate_context, D3D12_GPU_DESCRIPTOR_HANDLE color_depth_table, std::uint32_t width,
+                         std::uint32_t height);
+    // After the composite (same views): the picture before the translucent phases.
+    void snapshot_glow_base(ID3D12GraphicsCommandList* list, D3D12_GPU_DESCRIPTOR_HANDLE color_depth_table,
+                            std::uint32_t width, std::uint32_t height);
+    [[nodiscard]] bool emitters_active() const noexcept { return lighting_active() && emission_ > 0.0f; }
 
 private:
     static constexpr unsigned kResultSlots = 16u;
@@ -184,6 +199,9 @@ private:
                         std::uint32_t height, std::uint32_t flags, RtUpload& frame);
     void write_dump();
     bool create_lighting_pipelines(DXGI_FORMAT color_format);
+    void capture_glow_lights(ID3D12GraphicsCommandList* list, const RtSources& sources, Allocate allocate,
+                             void* allocate_context, D3D12_GPU_DESCRIPTOR_HANDLE color_depth_table,
+                             std::uint32_t width, std::uint32_t height, std::uint32_t factor, bool glow);
     bool ensure_lighting_buffers(std::uint32_t samples);
     // EFB pixels per sample side for a width x height target.
     [[nodiscard]] std::uint32_t sample_factor(std::uint32_t width, std::uint32_t height) const noexcept;
@@ -274,6 +292,7 @@ private:
     Microsoft::WRL::ComPtr<ID3D12PipelineState> trace_pso_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> temporal_pso_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> spatial_a_pso_;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> spatial_m_pso_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> spatial_b_pso_;
     Microsoft::WRL::ComPtr<ID3D12RootSignature> capture_root_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> capture_pso_;
@@ -291,6 +310,34 @@ private:
     std::array<Microsoft::WRL::ComPtr<ID3D12Resource>, kLightSlots> light_final_;
     Microsoft::WRL::ComPtr<ID3D12Resource> picture_;
     Microsoft::WRL::ComPtr<ID3D12Resource> picture_sums_;
+    // Glows (rt_lighting.hlsl GlowBaseCS, CaptureCS, GlowEmitCS, EmitMergeCS): per sample the
+    // picture before the translucent phases and what they added; the glow draws' eye-space
+    // triangles; this frame's glow lights; the remembered lights and their list for sampling.
+    Microsoft::WRL::ComPtr<ID3D12Resource> glow_base_;
+    Microsoft::WRL::ComPtr<ID3D12Resource> glow_added_;
+    Microsoft::WRL::ComPtr<ID3D12Resource> glow_positions_;
+    Microsoft::WRL::ComPtr<ID3D12Resource> glow_surfaces_;
+    Microsoft::WRL::ComPtr<ID3D12Resource> emit_tiles_;
+    Microsoft::WRL::ComPtr<ID3D12Resource> emit_lights_;
+    Microsoft::WRL::ComPtr<ID3D12Resource> emit_list_;
+    Microsoft::WRL::ComPtr<ID3D12RootSignature> emit_root_;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> glow_base_pso_;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> sky_state_pso_;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> surface_emit_pso_;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> glow_emit_pso_;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> emit_merge_pso_;
+    D3D12_RESOURCE_STATES glow_base_state_ = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+    D3D12_RESOURCE_STATES glow_added_state_ = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+    D3D12_RESOURCE_STATES glow_positions_state_ = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+    D3D12_RESOURCE_STATES emit_tiles_state_ = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+    D3D12_RESOURCE_STATES emit_list_state_ = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+    std::vector<RtDraw> glow_draws_;
+    std::uint32_t glow_triangles_ = 0u;
+    bool glow_open_ = false;
+    bool glow_base_valid_ = false;
+    std::chrono::steady_clock::time_point emit_last_time_{};
+    std::array<float, 3> emit_last_eye_{};
+    bool emit_seen_ = false;
     std::array<D3D12_RESOURCE_STATES, 2> light_z_state_{};
     std::array<D3D12_RESOURCE_STATES, 2> light_history_state_{};
     std::array<D3D12_RESOURCE_STATES, kLightSlots> light_final_state_{};
@@ -322,7 +369,7 @@ private:
     unsigned next_light_slot_ = 0;
     int light_slot_ = -1;
     float range_ = 1600.0f;
-    float strength_ = 0.75f;
+    float strength_ = 0.9f;
     float contact_ = 0.3f;
     float contact_range_ = 250.0f;
     float sky_saturation_ = 0.35f;
@@ -334,8 +381,15 @@ private:
     bool sun_override_ = false;
     float point_light_ = 2.0f;      // GALAXY_RT_POINT_LIGHT: weight of the game's point lights
     float point_radius_ = 800.0f;   // GALAXY_RT_POINT_RADIUS: half-light distance without GX attenuation
-    float point_saturation_ = 0.6f; // GALAXY_RT_POINT_SATURATION: 0 white .. 1 the light's own colour
+    float point_saturation_ = 0.4f; // GALAXY_RT_POINT_SATURATION: 0 white .. 1 the light's own colour
     float split_ = 0.0f;            // GALAXY_RT_SPLIT: left of this fraction the game's own picture
+    float night_ = 0.4f;            // GALAXY_RT_NIGHT: the sky and bounce light under a black sky (relative)
+    float daylight_ = 0.35f;        // GALAXY_RT_DAYLIGHT: the sky's luminance that gives it in full
+    float glow_boost_ = 0.4f;       // GALAXY_RT_GLOW_BOOST: extra light of a glowing surface
+    float surface_emission_ = 3.0f; // GALAXY_RT_SURFACE_EMISSION: a glowing surface's light per unit
+                                    // of its colour and eye-space area (0: none)
+    float emission_ = 24.0f;        // GALAXY_RT_EMISSION: a glow's light per unit it adds to the picture
+                                    // and unit of eye-space area (0: no glow lights)
     float point_size_ = 600.0f;     // GALAXY_RT_POINT_SIZE: radius of the geometry around one
     float sun_light_ = 0.55f;
     float sky_light_ = 0.65f;
@@ -364,6 +418,8 @@ private:
         std::array<std::uint64_t, kStatsWords> stats{};
         std::uint64_t validated = 0;
         std::uint64_t skipped = 0;
+        std::uint64_t glow_draws = 0;
+        std::uint64_t glow_triangles = 0;
     } window_{};
 };
 

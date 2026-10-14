@@ -142,8 +142,8 @@ void set_game_sun(const std::array<float, 3>& direction) noexcept;
 // (LightFunction::loadPointLightInfo: world position, colour 0-1, the distance at which its GX
 // distance attenuation halves it, 0 without attenuation) and a world-fixed light of an
 // ActorLightInfo (follow-camera off: its far position names its direction).
-void note_game_point_light(const std::array<float, 3>& position, const std::array<float, 3>& color,
-                           float half_distance) noexcept;
+void note_game_point_light(std::uint32_t info, const std::array<float, 3>& position,
+                           const std::array<float, 3>& color, float half_distance) noexcept;
 void note_game_world_light(const std::array<float, 3>& position, const std::array<float, 3>& color) noexcept;
 struct GameLight {
     std::array<float, 3> position{};

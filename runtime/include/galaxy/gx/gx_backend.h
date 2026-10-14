@@ -786,9 +786,12 @@ private:
     // depth-writing perspective triangles; flush_draw_state) and whether the scene was traced.
     std::uint8_t rt_phase_ = 0xFFu;
     bool rt_state_eligible_ = false;
+    // Additive blended triangles (glows) under a perspective projection.
+    bool rt_glow_eligible_ = false;
     bool rt_scene_traced_ = true;
     bool rt_view_set_ = false;
     [[nodiscard]] bool rt_geometry_draw() const noexcept;
+    [[nodiscard]] bool rt_glow_draw() const noexcept;
     void note_rt_phase(std::uint8_t phase);
     void trace_rt_scene();
     // Whether a batch starting with `call` is traced geometry; the scene's first one also gives
@@ -1236,6 +1239,11 @@ private:
     // Asynchronous EFB depth field for simulation-thread GXPeekZ. Three slots: the render owner fills the
     // slot after the published one, then publishes it. Readers only load the published slot. One set per
     // peek kind: [0] depth, [1] color (async_peek_kind_index).
+    // The game drew alpha-only marks (colour updates off, alpha on: BrightObjBase::drawSphere)
+    // since the last PE token; the colour field for its GXPeekARGB is captured at the next one.
+    bool alpha_marks_drawn_ = false;
+    // Colour fields come from those tokens from the first one on (not from chunk ends).
+    bool color_field_at_tokens_ = false;
     struct AsyncPeekFieldState {
         // Mapped readback bytes of each slot (RGBA8, 640x528), written by the
         // render thread before the slot is published.

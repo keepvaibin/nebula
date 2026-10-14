@@ -6909,8 +6909,19 @@ bool GxBackend::rt_geometry_draw() const noexcept {
            rt_phase_ == static_cast<std::uint8_t>(ScenePhase::ListOpa);
 }
 
+// Glows: additive draws of the translucent phases, after the trace and before the scene's end.
+bool GxBackend::rt_glow_draw() const noexcept {
+    if (!rt_glow_eligible_ || !scene_phase_ || side_layer_ != kSceneLayer || !renderer_.rt_glow_open()) {
+        return false;
+    }
+    using motion::ScenePhase;
+    return rt_phase_ == static_cast<std::uint8_t>(ScenePhase::Xlu) ||
+           rt_phase_ == static_cast<std::uint8_t>(ScenePhase::ListXlu) ||
+           rt_phase_ == static_cast<std::uint8_t>(ScenePhase::AfterIndirect);
+}
+
 bool GxBackend::begin_rt_batch(const DrawCall& call, RtDrawInfo& info) {
-    if (!scene_phase_ || !renderer_.rt_scene_open()) {
+    if (!scene_phase_ || !(renderer_.rt_scene_open() || renderer_.rt_glow_open())) {
         return false;
     }
     const ScaledGxViewport viewport = compute_scaled_gx_viewport(call.xf_viewport, renderer_.efb_scale());
@@ -6922,7 +6933,11 @@ bool GxBackend::begin_rt_batch(const DrawCall& call, RtDrawInfo& info) {
         rt_view_set_ = false;
         return false;
     }
-    if (flat || !rt_geometry_draw()) {
+    if (flat) {
+        return false;
+    }
+    const bool glow = !rt_geometry_draw();
+    if (glow && !rt_glow_draw()) {
         return false;
     }
     const auto projection = [this](unsigned i) {
@@ -6942,6 +6957,9 @@ bool GxBackend::begin_rt_batch(const DrawCall& call, RtDrawInfo& info) {
         const XfChannelCtrl color = state_.channel_ctrl(0u);
         info.surface = color.lighting_enable && color.light_mask != 0u ? kRtDrawLit : 0u;
         info.surface |= color.lighting_enable && (color.light_mask & 0x10u) != 0u ? kRtDrawPointLit : 0u;
+        if (glow) {
+            info.surface = kRtDrawGlow;
+        }
     }
     {
         const std::uint8_t mask = state_.channel_ctrl(0u).light_mask;
@@ -7004,6 +7022,15 @@ void GxBackend::trace_rt_scene() {
 
 void GxBackend::on_fifo_marker(FifoMarker marker, const std::array<float, 12>* view) {
     flush_pending_draw_batch();
+    {
+        static const std::uint64_t trace_from = read_env_u64("GALAXY_TRACE_DRAW_ORDER", 0u);
+        if (trace_from != 0u && frame_index_ >= trace_from && (frame_index_ - trace_from) % 500u == 0u &&
+            frame_index_ < trace_from + 6000u) [[unlikely]] {
+            std::fprintf(stderr, "[draw-order] frame=%llu marker=%s phase=%u\n",
+                         static_cast<unsigned long long>(frame_index_),
+                         marker == FifoMarker::SceneBegin ? "scene-begin" : "scene-end", static_cast<unsigned>(rt_phase_));
+        }
+    }
     ++scene_markers_seen_;
     if (marker == FifoMarker::SceneBegin) {
         end_side_layer();
@@ -9122,6 +9149,9 @@ void GxBackend::poll_async_peek_fields() {
 void GxBackend::submit_async_peek_fields_if_requested() {
     for (std::size_t index = 0; index < async_peek_.size(); ++index) {
         const EfbPeekKind kind = async_peek_kind_at(index);
+        if (kind == EfbPeekKind::Color && color_field_at_tokens_) {
+            continue;
+        }
         AsyncPeekFieldState& state = async_peek_[index];
         if (!state.requested.load(std::memory_order_acquire)) {
             continue;
@@ -11909,6 +11939,34 @@ ID3D12PipelineState* GxBackend::flush_draw_state(
     const bool topology_dirty =
         render_state_key_.primitive_topology != topology_key;
     render_state_key_.primitive_topology = topology_key;
+    {
+        const BlendMode marks = state_.blend_mode();
+        alpha_marks_drawn_ |= !marks.color_update && marks.alpha_update;
+        // GALAXY_TRACE_DRAW_ORDER=N: every draw of chunk frames N, N+500, ... (12 frames) with its
+        // scene phase, layer, blend, depth and projection (diagnostics).
+        static const std::uint64_t trace_from = read_env_u64("GALAXY_TRACE_DRAW_ORDER", 0u);
+        if (trace_from != 0u && frame_index_ >= trace_from && (frame_index_ - trace_from) % 500u == 0u &&
+            frame_index_ < trace_from + 6000u) [[unlikely]] {
+            const ZMode z = state_.z_mode();
+            const auto xf_float = [this](std::uint16_t address) {
+                return std::bit_cast<float>(state_.xf(address));
+            };
+            std::fprintf(stderr,
+                         "[draw-order] frame=%llu scene=%d phase=%u layer=%u blend=%d src=%u dst=%u cu=%d au=%d "
+                         "z=%d/%d proj=%c vp=%.0f,%.0f,%.0f,%.0f stages=%u chan=%08x\n",
+                         static_cast<unsigned long long>(frame_index_), scene_phase_ ? 1 : 0,
+                         static_cast<unsigned>(rt_phase_), static_cast<unsigned>(side_layer_),
+                         marks.blend_enable ? 1 : 0, static_cast<unsigned>(marks.src_factor),
+                         static_cast<unsigned>(marks.dst_factor), marks.color_update ? 1 : 0,
+                         marks.alpha_update ? 1 : 0, z.test_enable ? 1 : 0, z.update_enable ? 1 : 0,
+                         state_.xf(static_cast<std::uint16_t>(xf::kProjectionBase + 6u)) == 0u ? 'P' : 'O',
+                         static_cast<double>(xf_float(xf::kViewportBase)),
+                         static_cast<double>(xf_float(static_cast<std::uint16_t>(xf::kViewportBase + 1u))),
+                         static_cast<double>(xf_float(static_cast<std::uint16_t>(xf::kViewportBase + 3u))),
+                         static_cast<double>(xf_float(static_cast<std::uint16_t>(xf::kViewportBase + 4u))),
+                         static_cast<unsigned>(state_.gen_mode().num_tev_stages), state_.xf(xf::kChannelCtrlBase));
+        }
+    }
     if (renderer_.rt_active()) {
         // Traced geometry: unblended triangles (no logic op) that write colour and depth under a
         // perspective projection. Shadow volumes, z-only passes and screen quads stay out, and so
@@ -11922,6 +11980,12 @@ ID3D12PipelineState* GxBackend::flush_draw_state(
             render_state_key_.cull != static_cast<std::uint8_t>(CullMode::All) &&
             state_.xf(static_cast<std::uint16_t>(xf::kProjectionBase + 6u)) == 0u &&
             (ps_key_.flags & 0x02u) == 0u && alpha_test_keeps_all(ps_key_);
+        const BlendMode blend = state_.blend_mode();
+        rt_glow_eligible_ =
+            topology_key == static_cast<std::uint8_t>(D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE) && blend.blend_enable &&
+            !blend.logic_op_enable && !blend.subtract && blend.color_update && blend.dst_factor == BlendFactor::One &&
+            render_state_key_.cull != static_cast<std::uint8_t>(CullMode::All) &&
+            state_.xf(static_cast<std::uint16_t>(xf::kProjectionBase + 6u)) == 0u;
     }
     // Motion writers: opaque triangles with color writes in a temporal scene
     // (blending, logic ops and dual-source alpha cannot share a second
@@ -14552,6 +14616,27 @@ void GxBackend::on_pe_finish() {
 
 void GxBackend::on_pe_token(std::uint16_t token, bool interrupt) {
     flush_pending_draw_batch();
+    // LensFlareDirector's draw sync follows the sun's alpha marks; its callback reads them with
+    // GXPeekARGB. The colour field it reads is the EFB at this token, not at a chunk's end
+    // (after the frame's copy-clear, or with an overlay's timing).
+    if (std::exchange(alpha_marks_drawn_, false) && initialized_ && async_render_thread_enabled()) {
+        AsyncPeekFieldState& state = async_peek_[async_peek_kind_index(EfbPeekKind::Color)];
+        if (state.requested.load(std::memory_order_acquire) &&
+            !renderer_.async_peek_field_pending(EfbPeekKind::Color)) {
+            const int published = state.published.load(std::memory_order_relaxed);
+            const int slot = published < 0 ? 0 : (published + 1) % 3;
+            if (renderer_.record_async_peek_field_in_frame(EfbPeekKind::Color, static_cast<std::size_t>(slot))) {
+                if (state.rgba[0] == nullptr) {
+                    for (std::size_t i = 0; i < state.rgba.size(); ++i) {
+                        state.rgba[i] = renderer_.async_peek_field_rgba(EfbPeekKind::Color, i);
+                    }
+                }
+                state.requested.store(false, std::memory_order_relaxed);
+                state.pending_slot = slot;
+                color_field_at_tokens_ = true;
+            }
+        }
+    }
     if (frame_dependency_event_sink_ != nullptr) {
         frame_dependency_event_sink_->pe_token(token, interrupt);
     }

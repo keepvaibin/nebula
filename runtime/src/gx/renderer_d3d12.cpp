@@ -6910,6 +6910,12 @@ std::uint64_t RendererD3D12::end_frame(
         pointer_depth_capture_fence_ = submitted_fence;
         pointer_depth_in_frame_pending_ = false;
     }
+    for (AsyncPeekField& field : async_peek_fields_) {
+        if (field.in_frame) {
+            field.fence = submitted_fence;
+            field.in_frame = false;
+        }
+    }
     const HRESULT signal_hr = queue_->Signal(fence_.Get(), submitted_fence);
     if (FAILED(signal_hr)) {
         dump_device_removal(device_.Get());
@@ -7600,7 +7606,7 @@ RtUpload RendererD3D12::rt_allocate(void* renderer, std::size_t bytes, std::size
 // R16/R32 indices in the index ring, VS constants in the constant ring and its palette in the
 // matrix ring. Draws whose data lives elsewhere are not traced.
 void RendererD3D12::rt_note_draw(const DrawCall& call, const RtDrawInfo& info) {
-    if (!ray_tracer_.scene_open() || call.index_count < 3u ||
+    if (!ray_tracer_.accepts(info) || call.index_count < 3u ||
         call.topology != D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST ||
         call.vertex_view.StrideInBytes != kRtVertexStride || call.vertex_view.SizeInBytes == 0u) {
         return;
@@ -7682,6 +7688,25 @@ void RendererD3D12::rt_trace_scene() {
         std::swap(barrier.Transition.StateBefore, barrier.Transition.StateAfter);
         command_list_->ResourceBarrier(1, &barrier);
     }
+    // The picture before the translucent phases: what the glows add to it measures their light.
+    if (depth && ray_tracer_.glow_open() && efb_color_ && conv_efb_color_srv_.ptr != 0u) {
+        D3D12_RESOURCE_BARRIER views[2]{};
+        for (D3D12_RESOURCE_BARRIER& view : views) {
+            view.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+            view.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+            view.Transition.StateAfter = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
+        }
+        views[0].Transition.pResource = efb_color_.Get();
+        views[0].Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
+        views[1].Transition.pResource = efb_depth_.Get();
+        views[1].Transition.StateBefore = D3D12_RESOURCE_STATE_DEPTH_WRITE;
+        command_list_->ResourceBarrier(2, views);
+        ray_tracer_.snapshot_glow_base(command_list_.Get(), conv_efb_color_srv_, width, desc.Height);
+        for (D3D12_RESOURCE_BARRIER& view : views) {
+            std::swap(view.Transition.StateBefore, view.Transition.StateAfter);
+        }
+        command_list_->ResourceBarrier(2, views);
+    }
     // The compute and composite pipelines replaced the GX bindings.
     command_list_->SetGraphicsRootSignature(root_signature_.Get());
     invalidate_gx_bindings();
@@ -7706,8 +7731,8 @@ void RendererD3D12::rt_capture_picture() {
     const D3D12_RESOURCE_DESC desc = efb_color_->GetDesc();
     dred_marker(command_list_.Get(), L"rt picture");
     // The conversion views hold the EFB colour, then its depth.
-    ray_tracer_.capture_picture(command_list_.Get(), conv_efb_color_srv_, static_cast<std::uint32_t>(desc.Width),
-                                desc.Height);
+    ray_tracer_.capture_picture(command_list_.Get(), rt_sources(), &RendererD3D12::rt_allocate, this,
+                                conv_efb_color_srv_, static_cast<std::uint32_t>(desc.Width), desc.Height);
     for (D3D12_RESOURCE_BARRIER& barrier : barriers) {
         std::swap(barrier.Transition.StateBefore, barrier.Transition.StateAfter);
     }
@@ -11706,6 +11731,78 @@ std::uint64_t RendererD3D12::submit_async_peek_field(EfbPeekKind kind, std::size
     }
     field.fence = fence_value;
     return fence_value;
+}
+
+bool RendererD3D12::record_async_peek_field_in_frame(EfbPeekKind kind, std::size_t slot) {
+    AsyncPeekField& field = async_peek_fields_[async_peek_field_index(kind)];
+    if (field.fence != 0u || field.in_frame || slot >= kAsyncPeekFieldSlots || !command_list_) {
+        return false;
+    }
+    if (!ensure_async_peek_field_resources(field, kind)) {
+        return false;
+    }
+    const bool is_depth = kind == EfbPeekKind::Depth;
+    constexpr UINT width = kEfbWidth;
+    constexpr UINT height = kEfbHeight;
+    constexpr UINT row_pitch = kEfbWidth * 4u;
+    ID3D12Resource* const target = field.target.Get();
+    ID3D12Resource* const readback = field.readbacks[slot].Get();
+    ID3D12Resource* const src = is_depth ? efb_depth_.Get() : efb_color_.Get();
+
+    D3D12_RESOURCE_BARRIER barriers[2]{};
+    barriers[0].Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+    barriers[0].Transition.pResource = src;
+    barriers[0].Transition.StateBefore =
+        is_depth ? D3D12_RESOURCE_STATE_DEPTH_WRITE : D3D12_RESOURCE_STATE_RENDER_TARGET;
+    barriers[0].Transition.StateAfter = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+    barriers[0].Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+    barriers[1].Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+    barriers[1].Transition.pResource = target;
+    barriers[1].Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_SOURCE;
+    barriers[1].Transition.StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET;
+    barriers[1].Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+    command_list_->ResourceBarrier(2, barriers);
+
+    command_list_->OMSetRenderTargets(1, &field.rtv, FALSE, nullptr);
+    bound_rt_aux_ = 0u;
+    const D3D12_VIEWPORT viewport{
+        0.0f, 0.0f, static_cast<float>(width), static_cast<float>(height), 0.0f, 1.0f};
+    const D3D12_RECT scissor{0, 0, static_cast<LONG>(width), static_cast<LONG>(height)};
+    command_list_->RSSetViewports(1, &viewport);
+    command_list_->RSSetScissorRects(1, &scissor);
+    command_list_->SetGraphicsRootSignature(s_conv_root_sig.Get());
+    command_list_->SetPipelineState(conv_pipeline_.Get());
+    const EfbPeekSamplingGeometry sampling = compute_efb_peek_sampling_geometry(0u, 0u, efb_scale_);
+    EfbConversionShaderConstants constants = make_efb_peek_conversion_constants(sampling, kind);
+    constants.values[15] = -1.0f;
+    command_list_->SetGraphicsRoot32BitConstants(0, 16, constants.values.data(), 0);
+    command_list_->SetGraphicsRootDescriptorTable(1, is_depth ? conv_efb_depth_srv_ : conv_efb_color_srv_);
+    command_list_->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+    command_list_->DrawInstanced(3, 1, 0, 0);
+
+    std::swap(barriers[0].Transition.StateBefore, barriers[0].Transition.StateAfter);
+    std::swap(barriers[1].Transition.StateBefore, barriers[1].Transition.StateAfter);
+    command_list_->ResourceBarrier(2, barriers);
+
+    D3D12_TEXTURE_COPY_LOCATION src_copy{};
+    src_copy.pResource = target;
+    src_copy.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
+    D3D12_TEXTURE_COPY_LOCATION dst_copy{};
+    dst_copy.pResource = readback;
+    dst_copy.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
+    dst_copy.PlacedFootprint.Footprint.Format = kEfbColorFormat;
+    dst_copy.PlacedFootprint.Footprint.Width = width;
+    dst_copy.PlacedFootprint.Footprint.Height = height;
+    dst_copy.PlacedFootprint.Footprint.Depth = 1;
+    dst_copy.PlacedFootprint.Footprint.RowPitch = row_pitch;
+    command_list_->CopyTextureRegion(&dst_copy, 0, 0, 0, &src_copy, nullptr);
+
+    // Restore the GX drawing state exactly as record_conversion_blit does.
+    command_list_->SetGraphicsRootSignature(root_signature_.Get());
+    invalidate_gx_bindings();
+    bind_efb(nullptr);
+    field.in_frame = true;
+    return true;
 }
 
 bool RendererD3D12::try_complete_async_peek_field(EfbPeekKind kind) {

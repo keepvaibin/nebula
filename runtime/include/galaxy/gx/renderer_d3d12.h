@@ -479,6 +479,7 @@ public:
     // Starts or stops the ray tracer at a frame boundary to follow the RAY TRACING setting.
     void reconcile_ray_tracing();
     [[nodiscard]] bool rt_scene_open() const noexcept { return ray_tracer_.scene_open(); }
+    [[nodiscard]] bool rt_glow_open() const noexcept { return ray_tracer_.glow_open(); }
     void rt_begin_scene() noexcept { ray_tracer_.begin_scene(); }
     void rt_set_view(const RtView& view) noexcept { ray_tracer_.set_view(view); }
     void rt_set_camera(const std::array<float, 12>* view) noexcept { ray_tracer_.set_camera(view); }
@@ -751,14 +752,18 @@ public:
     // Captures the field into readback `slot` (0..2). Completion leaves it
     // there; async_peek_field_rgba names the mapped bytes (RGBA8, 640x528).
     [[nodiscard]] std::uint64_t submit_async_peek_field(EfbPeekKind kind, std::size_t slot);
+    // The same field recorded at this point of the open frame (the PE token that follows the
+    // game's alpha marks); end_frame fences it.
+    [[nodiscard]] bool record_async_peek_field_in_frame(EfbPeekKind kind, std::size_t slot);
     [[nodiscard]] bool try_complete_async_peek_field(EfbPeekKind kind);
     [[nodiscard]] const std::uint8_t* async_peek_field_rgba(
         EfbPeekKind kind, std::size_t slot) const noexcept;
     [[nodiscard]] bool async_peek_field_pending(EfbPeekKind kind) const noexcept {
-        return async_peek_fields_[async_peek_field_index(kind)].fence != 0u;
+        const AsyncPeekField& field = async_peek_fields_[async_peek_field_index(kind)];
+        return field.fence != 0u || field.in_frame;
     }
     [[nodiscard]] bool any_async_peek_field_pending() const noexcept {
-        return async_peek_fields_[0].fence != 0u || async_peek_fields_[1].fence != 0u;
+        return async_peek_field_pending(EfbPeekKind::Depth) || async_peek_field_pending(EfbPeekKind::Color);
     }
     static constexpr std::size_t async_peek_field_index(EfbPeekKind kind) noexcept {
         return kind == EfbPeekKind::Depth ? 0u : 1u;
@@ -1750,6 +1755,8 @@ private:
         Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> rtv_heap;
         D3D12_CPU_DESCRIPTOR_HANDLE rtv{};
         std::uint64_t fence = 0;
+        // Recorded on the open frame's command list; end_frame assigns its fence.
+        bool in_frame = false;
     };
     // [0] depth, [1] color (async_peek_field_index).
     std::array<AsyncPeekField, 2> async_peek_fields_{};

@@ -47,6 +47,9 @@ cbuffer RtLight : register(b0)
     float g_point_pad;
     float4 g_points[16];        // per light: eye position (xyz), reach (w); colour (rgb),
                                 // 1 / its half-light distance squared (w)
+    float4 g_to_eye[3];         // world to eye (the glow lights' positions)
+    float4 g_ambient;           // the sky and bounce light under a black sky (relative), the sky's
+                                // luminance that gives it in full, a glowing surface's extra light
 };
 
 RaytracingAccelerationStructure g_scene : register(t6);
@@ -55,9 +58,14 @@ StructuredBuffer<float> g_prev_z : register(t8);
 StructuredBuffer<uint4> g_prev_history : register(t9);
 StructuredBuffer<uint4> g_history_in : register(t10);
 StructuredBuffer<uint2> g_picture_in : register(t11);    // packed light, eye z
-ByteAddressBuffer g_picture_sums : register(t12);        // sky r g b n, scene r g b n (x 1/255)
+ByteAddressBuffer g_picture_sums : register(t12);        // sky r g b n, scene r g b n (x 1/255),
+                                                         // the sky's luminance over time, known
 ByteAddressBuffer g_positions : register(t13);           // per triangle: its eye-space vertices
 ByteAddressBuffer g_surfaces : register(t14);            // per triangle: vertex normals, draw flags
+ByteAddressBuffer g_emitters : register(t15);            // glow lights: count, total power; per light
+                                                         // world position, radius; power, cumulative
+StructuredBuffer<uint> g_glow_base : register(t16);      // the previous picture before its glows
+StructuredBuffer<uint> g_glow_added : register(t17);     // what its glows added
 RWStructuredBuffer<float> g_z : register(u0);
 RWStructuredBuffer<uint> g_normal : register(u1);
 RWStructuredBuffer<uint4> g_raw : register(u2);
@@ -232,16 +240,127 @@ cbuffer RtCapture : register(b0)
     uint2 c_sample_size;
     uint c_factor;
     float c_emissive;        // extra light of the brightest pixels
-    uint c_divide;           // 1: this frame's lighting (c_final) is divided out
+    uint c_divide;           // bit 0: this frame's lighting (c_final) is divided out; bit 1: what
+                             // the translucent phases added since c_glow_base goes to c_glow
     float c_strength;
     float c_split;           // GALAXY_RT_SPLIT: pixels left of it kept the game's own colour
-    uint3 c_pad;
+    float c_surface_gain;    // a glowing surface's light per unit of colour and eye-space area
+    uint2 c_pad;
+    float4 c_projection;
+    float4 c_to_world[3];    // eye to world
 };
 Texture2D<float4> c_color : register(t0);
 Texture2D<float> c_depth_tex : register(t1);
 StructuredBuffer<uint3> c_final : register(t2);
+StructuredBuffer<uint> c_glow_base : register(t3);
 RWStructuredBuffer<uint2> c_picture : register(u0);
 RWByteAddressBuffer c_sums : register(u1);
+RWStructuredBuffer<uint> c_glow : register(u2);
+RWByteAddressBuffer c_found : register(u3);              // this frame's lights (see e_found)
+
+// A sample's colour: its block's corners (a smoother light than one pixel).
+float3 block_color(uint2 id)
+{
+    const int2 q = int2(min(id * c_factor, c_target_size - 1u));
+    const int2 far_corner = min(q + int2(c_factor, c_factor) - 1, int2(c_target_size) - 1);
+    return (c_color.Load(int3(q, 0)).rgb + c_color.Load(int3(int2(far_corner.x, q.y), 0)).rgb +
+            c_color.Load(int3(int2(q.x, far_corner.y), 0)).rgb + c_color.Load(int3(far_corner, 0)).rgb) * 0.25f;
+}
+
+groupshared float4 s_surface_a[64];
+groupshared float4 s_surface_b[64];
+
+// After the capture: glowing surfaces (bright before the translucent phases and under their own
+// glow after them: cores, lamp heads, Lumas) become lights at their own depth, one per 8x8
+// samples near the depth of the brightest.
+[numthreads(8, 8, 1)]
+void SurfaceEmitCS(uint3 id : SV_DispatchThreadID, uint gi : SV_GroupIndex)
+{
+    float3 emitted = float3(0.0f, 0.0f, 0.0f);
+    float z = 0.0f;
+    float3 p = float3(0.0f, 0.0f, 0.0f);
+    float area = 0.0f;
+    if (all(id.xy < c_sample_size)) {
+        const uint index = id.y * c_sample_size.x + id.x;
+        z = asfloat(c_picture[index].y);
+        if (z != 0.0f) {
+            const float3 base = unpack_r11g11b10(c_glow_base[index]);
+            const float added = luminance(unpack_r11g11b10(c_glow[index]));
+            const float glowing = smoothstep(0.1f, 0.4f, added) *
+                                  smoothstep(0.55f, 0.85f, max(base.r, max(base.g, base.b)));
+            const float2 pixel = float2(id.xy * c_factor) + 0.5f;
+            p = eye_position(c_projection, c_viewport, pixel, z);
+            const float2 size = 2.0f * abs(z) * float(c_factor) /
+                                (abs(float2(c_projection.x, c_projection.z)) * c_viewport.zw);
+            area = size.x * size.y;
+            emitted = base * glowing;
+        }
+    }
+    const float l = luminance(emitted);
+    s_surface_a[gi] = float4(l, z, 0.0f, 0.0f);
+    GroupMemoryBarrierWithGroupSync();
+    [unroll] for (uint s = 32u; s > 0u; s >>= 1u) {
+        if (gi < s && s_surface_a[gi + s].x > s_surface_a[gi].x) {
+            s_surface_a[gi] = s_surface_a[gi + s];
+        }
+        GroupMemoryBarrierWithGroupSync();
+    }
+    const float2 ref = s_surface_a[0].xy;
+    GroupMemoryBarrierWithGroupSync();
+    float4 a = float4(0.0f, 0.0f, 0.0f, 0.0f);
+    float4 b = float4(0.0f, 0.0f, 0.0f, 0.0f);
+    if (l > 0.0f && abs(z - ref.y) < 0.15f * abs(ref.y) + 20.0f) {
+        const float w = l * area;
+        a = float4(emitted * area, w);
+        b = float4(p * w, dot(p, p) * w);
+    }
+    s_surface_a[gi] = a;
+    s_surface_b[gi] = b;
+    GroupMemoryBarrierWithGroupSync();
+    [unroll] for (uint t = 32u; t > 0u; t >>= 1u) {
+        if (gi < t) {
+            s_surface_a[gi] += s_surface_a[gi + t];
+            s_surface_b[gi] += s_surface_b[gi + t];
+        }
+        GroupMemoryBarrierWithGroupSync();
+    }
+    if (gi == 0u && s_surface_a[0].w > 0.0f) {
+        const float w = s_surface_a[0].w;
+        const float3 centre = s_surface_b[0].xyz / w;
+        const float spread = sqrt(max(s_surface_b[0].w / w - dot(centre, centre), 0.0f));
+        const float3 power = s_surface_a[0].rgb * c_surface_gain;
+        if (luminance(power) >= 4.0f) {
+            uint at;
+            c_found.InterlockedAdd(0u, 1u, at);
+            if (at < 1024u) {
+                c_found.Store4(16u + at * 32u, asuint(float4(transform(c_to_world, centre), max(spread, 1.0f))));
+                c_found.Store4(16u + at * 32u + 16u, asuint(float4(power, 0.0f)));
+            }
+        }
+    }
+}
+
+// After the capture: the sky's luminance over time (where the frame shows enough sky).
+[numthreads(1, 1, 1)]
+void SkyStateCS()
+{
+    const uint4 sky = c_sums.Load4(0u);
+    if (sky.w * 100u > c_sample_size.x * c_sample_size.y) {
+        const float l = luminance(float3(sky.xyz) / (255.0f * float(sky.w)));
+        const float state = c_sums.Load(36u) != 0u ? lerp(asfloat(c_sums.Load(32u)), l, 0.05f) : l;
+        c_sums.Store2(32u, uint2(asuint(state), 1u));
+    }
+}
+
+// After the composite: the picture before the translucent phases.
+[numthreads(8, 8, 1)]
+void GlowBaseCS(uint3 id : SV_DispatchThreadID)
+{
+    if (any(id.xy >= c_sample_size)) {
+        return;
+    }
+    c_glow[id.y * c_sample_size.x + id.x] = pack_r11g11b10(block_color(id.xy));
+}
 
 [numthreads(8, 8, 1)]
 void CaptureCS(uint3 id : SV_DispatchThreadID)
@@ -251,17 +370,16 @@ void CaptureCS(uint3 id : SV_DispatchThreadID)
     }
     const uint index = id.y * c_sample_size.x + id.x;
     const int2 q = int2(min(id.xy * c_factor, c_target_size - 1u));
-    const int2 last = int2(c_target_size) - 1;
-    const int2 far_corner = min(q + int2(c_factor, c_factor) - 1, last);
-    // The block's corners: a smoother light than one pixel.
-    float3 color = (c_color.Load(int3(q, 0)).rgb + c_color.Load(int3(int2(far_corner.x, q.y), 0)).rgb +
-                    c_color.Load(int3(int2(q.x, far_corner.y), 0)).rgb + c_color.Load(int3(far_corner, 0)).rgb) * 0.25f;
+    float3 color = block_color(id.xy);
+    if ((c_divide & 2u) != 0u) {
+        c_glow[index] = pack_r11g11b10(max(color - unpack_r11g11b10(c_glow_base[index]), 0.0f));
+    }
     const float depth = c_depth_tex.Load(int3(q, 0));
     const bool sky = far_plane(c_depth, depth) || !inside(c_viewport, float2(q) + 0.5f);
     float z = 0.0f;
     if (!sky) {
         z = depth_to_eye_z(c_depth, depth);
-        if (c_divide != 0u) {
+        if ((c_divide & 1u) != 0u) {
             // Without this frame's sky and bounce light (no feedback through it); the sun's
             // light stays, for the bounce it sends.
             const uint3 f = c_final[index];
@@ -285,6 +403,222 @@ void CaptureCS(uint3 id : SV_DispatchThreadID)
     c_sums.InterlockedAdd(base + 4u, units.g);
     c_sums.InterlockedAdd(base + 8u, units.b);
     c_sums.InterlockedAdd(base + 12u, 1u);
+}
+
+// ---------------------------------------------------------------------------------------------
+// Glow lights: the game's additive translucent draws (lamp and core halos, Lumas, sparks) are its
+// light sources. Each glow draw's eye-space triangles (the geometry pass) and what the
+// translucent phases added to the picture where they lie give a light: the draw's centre
+// weighted by that light, its spread, its power (light added x area x gain). The lights are
+// remembered in world space while out of view or hidden, and fade where their place is in view
+// and no longer glows.
+// ---------------------------------------------------------------------------------------------
+
+cbuffer RtEmit : register(b0)
+{
+    float4 e_projection;
+    float4 e_depth;
+    float4 e_viewport;
+    uint2 e_target_size;
+    uint2 e_sample_size;
+    float4 e_to_world[3];       // eye to world
+    float4 e_to_eye[3];         // world to eye
+    float e_gain;
+    float e_near;
+    uint e_reset;               // 1: forget the remembered lights
+    uint e_factor;              // EFB pixels per sample side
+};
+Texture2D<float4> e_color : register(t0);
+Texture2D<float> e_depth_tex : register(t1);
+ByteAddressBuffer e_draws : register(t2);             // the glow draws (RtDraw)
+ByteAddressBuffer e_triangles : register(t3);         // their eye-space triangles (36 bytes)
+StructuredBuffer<uint> e_added : register(t4);        // per sample: light the glows added
+RWByteAddressBuffer e_found : register(u0);           // count; per glow light position, radius; power
+RWStructuredBuffer<float4> e_lights : register(u1);   // per light: position, radius; power, frames unseen
+RWByteAddressBuffer e_list : register(u2);            // count, total; per light position, radius;
+                                                      // power, cumulative power
+
+static const uint kEmitLights = 256u;
+static const uint kEmitFound = 1024u;
+
+groupshared float4 s_glow_a[64];
+groupshared float4 s_glow_b[64];
+groupshared float s_glow_area[64];
+
+// One group per glow draw.
+[numthreads(64, 1, 1)]
+void GlowEmitCS(uint3 group : SV_GroupID, uint gi : SV_GroupIndex)
+{
+    const uint2 range = e_draws.Load2(group.x * 32u + 16u);   // first triangle, count
+    float4 a = float4(0.0f, 0.0f, 0.0f, 0.0f);   // power rgb, weight (luminance x area)
+    float4 b = float4(0.0f, 0.0f, 0.0f, 0.0f);   // weighted centre, weighted |centre|^2
+    float area_sum = 0.0f;
+    for (uint t = gi; t < range.y; t += 64u) {
+        const uint at = (range.x + t) * 36u;
+        const float3 v0 = asfloat(e_triangles.Load3(at));
+        const float3 v1 = asfloat(e_triangles.Load3(at + 12u));
+        const float3 v2 = asfloat(e_triangles.Load3(at + 24u));
+        const float3 c = (v0 + v1 + v2) / 3.0f;
+        const float area = 0.5f * length(cross(v1 - v0, v2 - v0));
+        if (c.z < -e_near && area > 0.0f && all(abs(c) < 1.0e6f)) {
+            const float2 q = eye_to_pixel(e_projection, e_viewport, c);
+            const int2 s = int2(floor(q / float(e_factor)));
+            if (all(s >= 0) && all(s < int2(e_sample_size))) {
+                const float3 added = unpack_r11g11b10(e_added[uint(s.y) * e_sample_size.x + uint(s.x)]);
+                const float w = luminance(added) * area;
+                if (luminance(added) > 0.02f) {
+                    a += float4(added * area, w);
+                    b += float4(c * w, dot(c, c) * w);
+                    area_sum += area;
+                }
+            }
+        }
+    }
+    s_glow_a[gi] = a;
+    s_glow_b[gi] = b;
+    s_glow_area[gi] = area_sum;
+    GroupMemoryBarrierWithGroupSync();
+    [unroll] for (uint s = 32u; s > 0u; s >>= 1u) {
+        if (gi < s) {
+            s_glow_a[gi] += s_glow_a[gi + s];
+            s_glow_b[gi] += s_glow_b[gi + s];
+            s_glow_area[gi] += s_glow_area[gi + s];
+        }
+        GroupMemoryBarrierWithGroupSync();
+    }
+    if (gi == 0u && s_glow_a[0].w > 0.0f) {
+        const float w = s_glow_a[0].w;
+        const float3 centre = s_glow_b[0].xyz / w;
+        const float spread = sqrt(max(s_glow_b[0].w / w - dot(centre, centre), 0.0f));
+        const float radius = max(spread, 0.5f * sqrt(s_glow_area[0]));
+        // A glow's texture covers about a quarter of its quad.
+        const float3 power = s_glow_a[0].rgb * (0.25f * e_gain);
+        if (luminance(power) >= 4.0f) {
+            uint index;
+            e_found.InterlockedAdd(0u, 1u, index);
+            if (index < kEmitFound) {
+                const uint at = 16u + index * 32u;
+                e_found.Store4(at, asuint(float4(transform(e_to_world, centre), radius)));
+                e_found.Store4(at + 16u, asuint(float4(power, 0.0f)));
+            }
+        }
+    }
+}
+
+groupshared uint s_emit_best[kEmitFound];
+groupshared uint s_emit_free[kEmitLights];
+groupshared uint s_emit_free_count;
+groupshared uint s_emit_taken;
+groupshared float2 s_emit_scan[kEmitLights];
+
+// One group: the remembered lights take this frame's glow lights (each the nearest light within
+// reach of both), the others take free slots, unseen lights fade, then the list for sampling.
+[numthreads(256, 1, 1)]
+void EmitMergeCS(uint gi : SV_GroupIndex)
+{
+    const uint found = min(e_found.Load(0u), kEmitFound);
+    float4 la = e_reset != 0u ? float4(0.0f, 0.0f, 0.0f, 0.0f) : e_lights[gi * 2u];
+    float4 lb = e_reset != 0u ? float4(0.0f, 0.0f, 0.0f, 0.0f) : e_lights[gi * 2u + 1u];
+    const bool active = luminance(lb.rgb) > 0.0f;
+    for (uint i = gi; i < found; i += kEmitLights) {
+        s_emit_best[i] = 0xFFFFFFFFu;
+    }
+    if (gi == 0u) {
+        s_emit_free_count = 0u;
+        s_emit_taken = 0u;
+    }
+    GroupMemoryBarrierWithGroupSync();
+    if (active) {
+        [loop] for (uint t = 0u; t < found; ++t) {
+            const float4 f = asfloat(e_found.Load4(16u + t * 32u));
+            const float d = distance(f.xyz, la.xyz);
+            if (d < 2.0f * (la.w + f.w)) {
+                InterlockedMin(s_emit_best[t], (asuint(d) & 0xFFFFFF00u) | gi);
+            }
+        }
+    }
+    GroupMemoryBarrierWithGroupSync();
+    if (active) {
+        float3 power = float3(0.0f, 0.0f, 0.0f);
+        float4 centre = float4(0.0f, 0.0f, 0.0f, 0.0f);
+        float radius = 0.0f;
+        [loop] for (uint t = 0u; t < found; ++t) {
+            if (s_emit_best[t] != 0xFFFFFFFFu && (s_emit_best[t] & 0xFFu) == gi) {
+                const float4 fa = asfloat(e_found.Load4(16u + t * 32u));
+                const float3 fp = asfloat(e_found.Load3(16u + t * 32u + 16u));
+                const float w = luminance(fp) + 1e-6f;
+                power += fp;
+                centre += float4(fa.xyz * w, w);
+                radius = max(radius, fa.w);
+            }
+        }
+        if (centre.w > 0.0f) {
+            // Seen: brighter at once, dimmer slowly (a partly hidden glow shows less of itself).
+            lb.rgb = lerp(lb.rgb, power, luminance(power) > luminance(lb.rgb) ? 0.5f : 0.1f);
+            la = float4(lerp(la.xyz, centre.xyz / centre.w, 0.5f), lerp(la.w, radius, 0.5f));
+            lb.w = 0.0f;
+        } else {
+            // Its place in view with nothing in front: the glow is gone. Out of view or hidden:
+            // kept, fading after 30 s.
+            const float3 e = transform(e_to_eye, la.xyz);
+            bool gone = false;
+            if (e.z < -e_near) {
+                const float2 q = eye_to_pixel(e_projection, e_viewport, e);
+                if (inside(e_viewport, q) && all(q < float2(e_target_size))) {
+                    const float depth = e_depth_tex.Load(int3(int2(q), 0));
+                    const float scene_z = far_plane(e_depth, depth) ? -1.0e30f : depth_to_eye_z(e_depth, depth);
+                    gone = scene_z < e.z + la.w + 0.02f * abs(e.z);
+                }
+            }
+            lb.w += 1.0f;
+            lb.rgb *= gone ? 0.5f : lb.w > 1800.0f ? 0.97f : 1.0f;
+        }
+        if (luminance(lb.rgb) < 1.0f) {
+            la = float4(0.0f, 0.0f, 0.0f, 0.0f);
+            lb = float4(0.0f, 0.0f, 0.0f, 0.0f);
+        }
+    }
+    e_lights[gi * 2u] = la;
+    e_lights[gi * 2u + 1u] = lb;
+    if (luminance(lb.rgb) <= 0.0f) {
+        uint slot;
+        InterlockedAdd(s_emit_free_count, 1u, slot);
+        s_emit_free[slot] = gi;
+    }
+    AllMemoryBarrierWithGroupSync();
+    // Glow lights no remembered light took: new lights in free slots.
+    for (uint n = gi; n < found; n += kEmitLights) {
+        if (s_emit_best[n] == 0xFFFFFFFFu) {
+            uint k;
+            InterlockedAdd(s_emit_taken, 1u, k);
+            if (k < s_emit_free_count) {
+                const uint slot = s_emit_free[k];
+                e_lights[slot * 2u] = asfloat(e_found.Load4(16u + n * 32u));
+                e_lights[slot * 2u + 1u] = float4(asfloat(e_found.Load3(16u + n * 32u + 16u)), 0.0f);
+            }
+        }
+    }
+    AllMemoryBarrierWithGroupSync();
+    // The list: the lights in slot order with their cumulative power.
+    const float4 fa = e_lights[gi * 2u];
+    const float4 fb = e_lights[gi * 2u + 1u];
+    const float lum = luminance(fb.rgb);
+    s_emit_scan[gi] = float2(lum, lum > 0.0f ? 1.0f : 0.0f);
+    GroupMemoryBarrierWithGroupSync();
+    [unroll] for (uint step = 1u; step < kEmitLights; step <<= 1u) {
+        const float2 add = gi >= step ? s_emit_scan[gi - step] : float2(0.0f, 0.0f);
+        GroupMemoryBarrierWithGroupSync();
+        s_emit_scan[gi] += add;
+        GroupMemoryBarrierWithGroupSync();
+    }
+    if (lum > 0.0f) {
+        const uint at = 16u + (uint(s_emit_scan[gi].y) - 1u) * 32u;
+        e_list.Store4(at, asuint(fa));
+        e_list.Store4(at + 16u, asuint(float4(fb.rgb, s_emit_scan[gi].x)));
+    }
+    if (gi == kEmitLights - 1u) {
+        e_list.Store2(0u, uint2(uint(s_emit_scan[gi].y), asuint(s_emit_scan[gi].x)));
+    }
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -558,6 +892,63 @@ void TraceCS(uint3 id : SV_DispatchThreadID)
         }
     }
 
+    // The glows (lamps, cores, Lumas): four lights picked in proportion to their power, one kept
+    // in proportion to its light here (resampled importance), one shadow ray to it. Its light
+    // joins the point lights' (their weight divided out).
+    const uint emitters = g_emitters.Load(0u);
+    if (emitters != 0u) {
+        const float total = asfloat(g_emitters.Load(4u));
+        float sum = 0.0f;
+        float4 kept = float4(0.0f, 0.0f, 0.0f, 0.0f);
+        float3 kept_power = float3(0.0f, 0.0f, 0.0f);
+        [unroll] for (uint c = 0u; c < 8u; ++c) {
+            const float2 u = sample_point(id.xy, max(g_rays, 1u) + 7u + c);
+            const float x = u.x * total;
+            uint lo = 0u;
+            uint hi = emitters - 1u;
+            [loop] while (lo < hi) {
+                const uint mid = (lo + hi) >> 1u;
+                if (asfloat(g_emitters.Load(16u + mid * 32u + 28u)) < x) {
+                    lo = mid + 1u;
+                } else {
+                    hi = mid;
+                }
+            }
+            const float4 la = asfloat(g_emitters.Load4(16u + lo * 32u));
+            const float3 power = asfloat(g_emitters.Load3(16u + lo * 32u + 16u));
+            const float3 e = transform(g_to_eye, la.xyz);
+            const float3 to = e - p;
+            const float d2 = dot(to, to);
+            const float nl = dot(n, to) * rsqrt(max(d2, 1e-6f));
+            // Weight: its light here over its chance of being picked (power / total).
+            const float weight = nl > 0.0f ? total * nl / (d2 + la.w * la.w) : 0.0f;
+            sum += weight;
+            if (weight > 0.0f && u.y * sum < weight) {
+                kept = float4(e, la.w);
+                kept_power = power;
+            }
+        }
+        const float lum = luminance(kept_power);
+        if (sum > 0.0f && lum > 0.0f) {
+            const float3 to = kept.xyz - origin;
+            const float span = length(to);
+            RayDesc ray;
+            ray.Origin = origin;
+            ray.Direction = to / max(span, 1e-4f);
+            ray.TMin = 0.0f;
+            // The light sits inside its glow (and whatever glows there): the ray ends at its radius.
+            ray.TMax = max(span - max(0.5f * kept.w, 2.0f + 0.01f * span), 0.0f);
+            RayQuery<RAY_FLAG_FORCE_OPAQUE | RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH |
+                     RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES> query;
+            query.TraceRayInline(g_scene, RAY_FLAG_NONE, 0xFFu, ray);
+            query.Proceed();
+            if (query.CommittedStatus() != COMMITTED_TRIANGLE_HIT) {
+                // power nl / (pi (d2 + r2)) over the kept light's weight, times the mean weight.
+                points += kept_power / (kPi * lum) * (sum * 0.125f) / max(g_point_light, 1e-3f);
+            }
+        }
+    }
+
     const float sign_z = n.z >= 0.0f ? 1.0f : -1.0f;
     const float a = -1.0f / (sign_z + n.z);
     const float b = n.x * n.y * a;
@@ -657,9 +1048,42 @@ void TemporalCS(uint3 id : SV_DispatchThreadID)
                 weight += bw;
             }
             if (weight > 1e-3f) {
-                const Light history = scale_light(sum, 1.0f / weight);
+                Light history = scale_light(sum, 1.0f / weight);
                 frames = min(count_sum / weight + 1.0f, float(g_history_frames));
-                const float direct = max(1.0f / frames, 0.2f);
+                // The history stays within this frame's neighbourhood (mean +- 2.5 deviations of
+                // the raw samples around): long accumulation where the light holds, quick change
+                // where it moved (shadows of moving casters, lights switching).
+                Light mean = make_light(float3(0.0f, 0.0f, 0.0f), 0.0f, float3(0.0f, 0.0f, 0.0f));
+                Light square = mean;
+                float around = 0.0f;
+                [unroll] for (int dy = -1; dy <= 1; ++dy) {
+                    [unroll] for (int dx = -1; dx <= 1; ++dx) {
+                        const int2 s = int2(id.xy) + int2(dx, dy);
+                        if (any(s < 0) || any(s >= int2(g_sample_size))) {
+                            continue;
+                        }
+                        const uint si = uint(s.y) * g_sample_size.x + uint(s.x);
+                        if (g_z[si] == 0.0f) {
+                            continue;
+                        }
+                        float unused_count;
+                        const Light v = unpack_light(g_raw[si], unused_count);
+                        mean = add_light(mean, v);
+                        square = add_light(square, make_light(v.sky * v.sky, v.sun * v.sun, v.points * v.points));
+                        around += 1.0f;
+                    }
+                }
+                if (around > 0.0f) {
+                    mean = scale_light(mean, 1.0f / around);
+                    square = scale_light(square, 1.0f / around);
+                    const float3 sky_dev = sqrt(max(square.sky - mean.sky * mean.sky, 0.0f)) * 2.5f + 0.02f;
+                    const float sun_dev = sqrt(max(square.sun - mean.sun * mean.sun, 0.0f)) * 2.5f + 0.02f;
+                    const float3 points_dev = sqrt(max(square.points - mean.points * mean.points, 0.0f)) * 2.5f + 0.02f;
+                    history = make_light(clamp(history.sky, mean.sky - sky_dev, mean.sky + sky_dev),
+                                         clamp(history.sun, mean.sun - sun_dev, mean.sun + sun_dev),
+                                         clamp(history.points, mean.points - points_dev, mean.points + points_dev));
+                }
+                const float direct = max(1.0f / frames, 0.08f);
                 result = make_light(lerp(history.sky, raw.sky, 1.0f / frames), lerp(history.sun, raw.sun, direct),
                                     lerp(history.points, raw.points, direct));
             }
@@ -668,7 +1092,8 @@ void TemporalCS(uint3 id : SV_DispatchThreadID)
     g_history[index] = pack_light(result, frames);
 }
 
-// Edge-aware 5x5 filter at `step` samples (plane distance and normal).
+// Edge-aware 5x5 filter at `step` samples (plane distance and normal); three passes (steps 1, 2,
+// 4) reach 26 samples around.
 Light filtered(uint2 id, int step, bool from_history)
 {
     const uint index = id.y * g_sample_size.x + id.x;
@@ -721,6 +1146,20 @@ void SpatialACS(uint3 id : SV_DispatchThreadID)
 }
 
 [numthreads(8, 8, 1)]
+void SpatialMCS(uint3 id : SV_DispatchThreadID)
+{
+    if (any(id.xy >= g_sample_size)) {
+        return;
+    }
+    const uint index = id.y * g_sample_size.x + id.x;
+    if (g_z[index] == 0.0f) {
+        g_history[index] = pack_light(kOpenSky, 0.0f);
+        return;
+    }
+    g_history[index] = pack_light(filtered(id.xy, 2, false), 0.0f);
+}
+
+[numthreads(8, 8, 1)]
 void SpatialBCS(uint3 id : SV_DispatchThreadID)
 {
     if (any(id.xy >= g_sample_size)) {
@@ -732,12 +1171,17 @@ void SpatialBCS(uint3 id : SV_DispatchThreadID)
         g_final[index] = uint3(f32tof16(1.0f) | (f32tof16(1.0f) << 16u), f32tof16(1.0f) | (f32tof16(1.0f) << 16u), 0u);
         return;
     }
-    const Light light = filtered(id.xy, 2, false);
+    const Light light = filtered(id.xy, 4, true);
     const float3 sun = light.sun * g_sun_light.rgb;
     const float3 points = light.points * g_point_light;
-    float3 lighting = g_sun_light.w * light.sky + sun + points;
+    // The sky and bounce light follow the sky: under a dark sky the lights carry the picture.
+    float ambient = g_sun_light.w;
+    if (g_picture_sums.Load(36u) != 0u) {
+        ambient *= lerp(g_ambient.x, 1.0f, saturate(asfloat(g_picture_sums.Load(32u)) / g_ambient.y));
+    }
+    float3 lighting = ambient * light.sky + sun + points;
     // With the sky open: what the picture capture keeps (no feedback through the sky and bounce).
-    float3 open = g_sun_light.www + sun + points;
+    float3 open = ambient + sun + points;
     // A surface the game lights already turns its shading towards its lights: the traced light
     // shadows it (the ratio to the same light unshadowed). The point lights add to it, or, where
     // the game lights it with them too (GX light 4), shadow it likewise.
@@ -751,14 +1195,37 @@ void SpatialBCS(uint3 id : SV_DispatchThreadID)
         if ((draw_flags & kDrawPointLit) != 0u && g_point_count != 0u) {
             unshadowed += points_unshadowed(sample_position(id.xy, z), n) * g_point_light;
             added = float3(0.0f, 0.0f, 0.0f);
-            lighting = (g_sun_light.w * light.sky + sun + points) / max(unshadowed, 1e-3f);
-            open = (g_sun_light.www + sun + points) / max(unshadowed, 1e-3f);
+            lighting = (ambient * light.sky + sun + points) / max(unshadowed, 1e-3f);
+            open = (ambient + sun + points) / max(unshadowed, 1e-3f);
         } else {
-            lighting = (g_sun_light.w * light.sky + sun) / max(unshadowed, 1e-3f) + added;
-            open = (g_sun_light.www + sun) / max(unshadowed, 1e-3f) + added;
+            lighting = (ambient * light.sky + sun) / max(unshadowed, 1e-3f) + added;
+            open = (ambient + sun) / max(unshadowed, 1e-3f) + added;
         }
     }
     float3 m = lerp(float3(1.0f, 1.0f, 1.0f), lighting, g_strength);
+    // A glowing surface (unlit, bright, under its own glow in the previous picture: a core, a lamp)
+    // sends its light whatever reaches it: it keeps its colour and shines brighter.
+    if ((draw_flags & kDrawLit) == 0u && (g_flags & 2u) != 0u) {
+        const float3 previous = transform(g_picture, sample_position(id.xy, z));
+        if (previous.z < -g_near) {
+            const float2 s = (eye_to_pixel(g_projection, g_viewport, previous) - 0.5f) / float(g_factor) + 0.5f;
+            if (all(s >= 0.0f) && all(s < float2(g_sample_size))) {
+                const uint si = uint(s.y) * g_sample_size.x + uint(s.x);
+                const float pz = asfloat(g_picture_in[si].y);
+                if (pz != 0.0f && abs(pz - previous.z) <= 0.03f * abs(previous.z) + 2.0f) {
+                    const float3 base = unpack_r11g11b10(g_glow_base[si]);
+                    const float added = luminance(unpack_r11g11b10(g_glow_added[si]));
+                    const float glowing = smoothstep(0.1f, 0.4f, added) *
+                                          smoothstep(0.55f, 0.85f, max(base.r, max(base.g, base.b)));
+                    m = lerp(m, max(m, (1.0f + g_ambient.z * saturate(added)).xxx), glowing);
+                    if ((g_flags & 32u) != 0u) {
+                        m = float3(2.0f * glowing, 2.0f * saturate(added),
+                                   2.0f * max(base.r, max(base.g, base.b)));
+                    }
+                }
+            }
+        }
+    }
     if ((g_flags & 4u) != 0u) {
         m = light.sun.xxx;     // GALAXY_RT_VIEW=2: the sun's light alone
     } else if ((g_flags & 8u) != 0u) {

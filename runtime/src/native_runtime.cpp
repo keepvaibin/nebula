@@ -10447,8 +10447,8 @@ void note_game_light(RuntimeState& state, std::uint32_t site, std::uint32_t info
                                               : 0.0f;
             half_distance = k2 > 0.0f ? (-k1 + std::sqrt(k1 * k1 + 4.0f * k2)) / (2.0f * k2) : 1.0f / k1;
         }
-        galaxy::gx::note_game_point_light({f(info), f(info + 4u), f(info + 8u)}, rgb(mem->read_u32(info + 0xCu)),
-                                          half_distance);
+        galaxy::gx::note_game_point_light(info, {f(info), f(info + 4u), f(info + 8u)},
+                                          rgb(mem->read_u32(info + 0xCu)), half_distance);
         return;
     }
     for (const std::uint32_t light : {info, info + 0x14u}) {
