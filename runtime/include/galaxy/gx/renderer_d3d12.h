@@ -1130,6 +1130,8 @@ private:
     // until the segment comes round again) and, per run_* draw, its matched
     // draw's vertices (prepare_vertex_blend; 0 for none).
     std::vector<DrawCall> prev_run_draws_;
+    std::vector<ReplayCopy> prev_run_copies_;
+    std::uint64_t moving_copies_ = 0;     // paired texture copies whose source moved (prepare_vertex_blend)
     unsigned prev_run_segment_ = 0;
     std::uint64_t prev_run_serial_ = 0;
     bool prev_run_valid_ = false;

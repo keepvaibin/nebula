@@ -7144,6 +7144,7 @@ bool RendererD3D12::start_replay_playback() {
     prev_run_valid_ = run_valid_;
     if (run_valid_) {
         std::swap(prev_run_draws_, run_draws_);
+        std::swap(prev_run_copies_, run_copies_);
         std::swap(prev_run_stripes_, run_stripes_);
         prev_run_segment_ = run_segment_;
         prev_run_serial_ = run_serial_;
@@ -7725,6 +7726,23 @@ void RendererD3D12::prepare_vertex_blend(std::span<const std::int32_t> previous_
             ++blended;
         }
     }
+    // Texture copies of both logs paired by destination and order: those whose
+    // source rectangle moved (screen boxes that follow an object).
+    moving_copies_ = 0u;
+    for (std::size_t c = 0; c < run_copies_.size(); ++c) {
+        const ReplayCopy& copy = run_copies_[c];
+        if (copy.mode != 0u || copy.dest == nullptr) continue;
+        std::size_t ordinal = 0u;
+        for (std::size_t k = 0; k < c; ++k) ordinal += run_copies_[k].dest == copy.dest ? 1u : 0u;
+        for (const ReplayCopy& was : prev_run_copies_) {
+            if (was.mode != 0u || was.dest != copy.dest) continue;
+            if (ordinal-- != 0u) continue;
+            moving_copies_ += was.width == copy.width && was.height == copy.height &&
+                                      (was.geometry[0] != copy.geometry[0] || was.geometry[1] != copy.geometry[1])
+                                  ? 1u : 0u;
+            break;
+        }
+    }
     if (!stripe_gather_.empty()) {
         if (ensure_stripe_gather(static_cast<std::uint64_t>(stripe_gather_.size()) * 144u)) {
             const D3D12_GPU_VIRTUAL_ADDRESS earlier = stripe_earlier_->GetGPUVirtualAddress();
@@ -7741,7 +7759,8 @@ void RendererD3D12::prepare_vertex_blend(std::span<const std::int32_t> previous_
                   << " in-scene=" << in_scene << " matched-record=" << matched << " paired=" << paired
                   << " same-buffer=" << same_buffer << " size-differs=" << size_differs
                   << " blended=" << blended << " stripe-draws=" << stripe_blends.size()
-                  << " stripe-vertices=" << stripe_gather_.size() << '\n' << detail.str();
+                  << " stripe-vertices=" << stripe_gather_.size() << " moving-copies=" << moving_copies_ << '\n'
+                  << detail.str();
     }
 }
 
