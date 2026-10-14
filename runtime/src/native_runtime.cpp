@@ -31541,6 +31541,71 @@ static void prepare_crash_dump_directory() {
                  g_crash_dump_full ? 1 : 0);
 }
 
+// The simulation thread's guest CPU, for crash reports. Registers are as of
+// their last write-back to the context.
+static const galaxy::PpcContext* g_crash_guest_context = nullptr;
+
+struct CrashGuestContextScope {
+    explicit CrashGuestContextScope(const galaxy::PpcContext* context) noexcept {
+        g_crash_guest_context = context;
+    }
+    ~CrashGuestContextScope() { g_crash_guest_context = nullptr; }
+    CrashGuestContextScope(const CrashGuestContextScope&) = delete;
+    CrashGuestContextScope& operator=(const CrashGuestContextScope&) = delete;
+};
+
+static std::uint32_t crash_guest_u32(std::uint32_t address) noexcept {
+    const std::byte* const bytes = galaxy::host::flat_guest_memory::host_pointer(address, 4u);
+    if (bytes == nullptr) return 0u;
+    return (std::to_integer<std::uint32_t>(bytes[0]) << 24u) |
+           (std::to_integer<std::uint32_t>(bytes[1]) << 16u) |
+           (std::to_integer<std::uint32_t>(bytes[2]) << 8u) | std::to_integer<std::uint32_t>(bytes[3]);
+}
+
+// The translated guest function that holds a crashing host instruction, and
+// the guest call chain from the simulation thread's stack pointer (each
+// frame's back chain at +0, the caller's saved LR at +4 of the next frame).
+static void print_guest_crash_report(const void* host_address, HMODULE crash_module) noexcept {
+    if (g_module_function_record_count != 0u && crash_module != nullptr) {
+        HMODULE records_module = nullptr;
+        if (GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                               reinterpret_cast<LPCWSTR>(g_module_function_records[0].function),
+                               &records_module) &&
+            records_module == crash_module) {
+            const auto rip = reinterpret_cast<std::uintptr_t>(host_address);
+            std::uint32_t owner = 0u;
+            std::uintptr_t owner_entry = 0u;
+            for (std::size_t r = 0; r < g_module_function_record_count; ++r) {
+                const auto entry = reinterpret_cast<std::uintptr_t>(g_module_function_records[r].function);
+                if (entry <= rip && entry > owner_entry) {
+                    owner_entry = entry;
+                    owner = g_module_function_records[r].address;
+                }
+            }
+            if (owner_entry != 0u) {
+                std::fprintf(stderr, "[crash] guest-function=0x%08X host-offset=0x%llx\n", owner,
+                             static_cast<unsigned long long>(rip - owner_entry));
+            }
+        }
+    }
+    const galaxy::PpcContext* const context = g_crash_guest_context;
+    if (context == nullptr) return;
+    std::fprintf(stderr,
+        "[crash] guest pc=0x%08X lr=0x%08X ctr=0x%08X r1=0x%08X r3=0x%08X r4=0x%08X r5=0x%08X r6=0x%08X "
+        "r29=0x%08X r30=0x%08X r31=0x%08X\n",
+        context->pc, context->lr, context->ctr, context->gpr[1], context->gpr[3], context->gpr[4],
+        context->gpr[5], context->gpr[6], context->gpr[29], context->gpr[30], context->gpr[31]);
+    std::fprintf(stderr, "[crash] guest-stack");
+    std::uint32_t frame = context->gpr[1];
+    for (int depth = 0; depth < 32 && frame != 0u && (frame & 3u) == 0u; ++depth) {
+        const std::uint32_t next = crash_guest_u32(frame);
+        if (next <= frame || next - frame > 0x10000u) break;
+        std::fprintf(stderr, " 0x%08X", crash_guest_u32(next + 4u));
+        frame = next;
+    }
+    std::fprintf(stderr, "\n");
+}
+
 // Silent-crash harness, run before any other CRT init via wmain. It disables all modal dialogs: assertion,
 // abort, error and WerFault. SEM_NOGPFAULTERRORBOX (see below) keeps an unhandled exception during an
 // automated launch from blocking on a dialog, but in many configurations it also suppresses WER crash-dump
@@ -31640,6 +31705,7 @@ static LONG WINAPI galaxy_unhandled_exception_filter(
                 ? reinterpret_cast<void*>(exception_info->ExceptionRecord->ExceptionInformation[1])
                 : nullptr,
             static_cast<unsigned long>(GetCurrentThreadId()));
+        print_guest_crash_report(exception_info->ExceptionRecord->ExceptionAddress, crash_module);
     }
     std::fflush(stderr);
     return EXCEPTION_EXECUTE_HANDLER;
@@ -33381,6 +33447,7 @@ int wmain(int argc, wchar_t** argv) {
               << (state.module_checkpoint_gate != nullptr ? 1 : 0) << '\n';
 
     galaxy::PpcContext context{};
+    const CrashGuestContextScope crash_guest_context(&context);
     try {
         // D3D12 window
         try {
