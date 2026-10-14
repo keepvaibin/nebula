@@ -128,14 +128,15 @@ public:
     [[nodiscard]] D3D12_GPU_VIRTUAL_ADDRESS scene_tlas() const noexcept;
 
     // The game camera's view matrix (3x4 rows, world to eye) of the open scene; null when the
-    // scene has none. The occlusion history follows it from frame to frame.
+    // scene has none. The lighting history follows it from frame to frame.
     void set_camera(const std::array<float, 12>* view) noexcept;
-    [[nodiscard]] bool ao_active() const noexcept { return ready_ && ao_enabled_; }
-    // Ambient occlusion of the last traced scene: its result slot for composite(), -1 for none.
-    // The interpolated sub-frames of that game frame composite the same slot.
-    [[nodiscard]] int ao_slot() const noexcept { return ao_slot_; }
+    [[nodiscard]] bool lighting_active() const noexcept { return ready_ && lighting_enabled_; }
+    // Ray-traced lighting of the last traced scene (rt_lighting.hlsl): its result slot for
+    // composite(), -1 for none. The interpolated sub-frames of that game frame composite the
+    // same slot.
+    [[nodiscard]] int light_slot() const noexcept { return light_slot_; }
     // Multiplies the EFB colour `target` (width x height, the size the slot was traced at) by
-    // occlusion result `slot` at the depth `depth_srv` holds (PIXEL_SHADER_RESOURCE, in the bound
+    // lighting result `slot` at the depth `depth_srv` holds (PIXEL_SHADER_RESOURCE, in the bound
     // descriptor heap). `reproject`: the depth is an interpolated sub-frame's, whose camera
     // write_reprojection gave. Leaves its own root signature and pipeline bound.
     void composite(ID3D12GraphicsCommandList* list, D3D12_CPU_DESCRIPTOR_HANDLE target,
@@ -143,14 +144,19 @@ public:
                    bool reproject);
     // Before a sub-frame's replay: its camera (world to eye at t), for the composites it runs.
     void write_reprojection(ID3D12GraphicsCommandList* list, const std::array<float, 12>& camera_t);
+    // The end of the scene: its finished picture (EFB colour and depth, NON_PIXEL_SHADER_RESOURCE,
+    // as two consecutive SRVs at `color_depth_table` in the bound heap) becomes the light the
+    // next frame's rays read where they hit.
+    void capture_picture(ID3D12GraphicsCommandList* list, D3D12_GPU_DESCRIPTOR_HANDLE color_depth_table,
+                         std::uint32_t width, std::uint32_t height);
 
 private:
     static constexpr unsigned kResultSlots = 16u;
     static constexpr std::uint64_t kResultDelay = 8u;
     static constexpr unsigned kStatsWords = 16u;
     static constexpr std::uint32_t kMaxTriangles = 4u * 1024u * 1024u;
-    // Occlusion results kept for the sub-frames of the game frames being interpolated.
-    static constexpr unsigned kAoSlots = 4u;
+    // Lighting results kept for the sub-frames of the game frames being interpolated.
+    static constexpr unsigned kLightSlots = 4u;
 
     struct Retired {
         Microsoft::WRL::ComPtr<ID3D12Resource> resource;
@@ -170,10 +176,12 @@ private:
                         std::uint32_t triangle_base, std::uint32_t triangles, std::uint32_t width,
                         std::uint32_t height, std::uint32_t flags, RtUpload& frame);
     void write_dump();
-    bool create_ao_pipelines(DXGI_FORMAT color_format);
-    bool ensure_ao_buffers(std::uint32_t samples);
-    void trace_ao(ID3D12GraphicsCommandList* list, Allocate allocate, void* allocate_context,
-                  D3D12_GPU_DESCRIPTOR_HANDLE depth_srv, std::uint32_t width, std::uint32_t height);
+    bool create_lighting_pipelines(DXGI_FORMAT color_format);
+    bool ensure_lighting_buffers(std::uint32_t samples);
+    // EFB pixels per sample side for a width x height target.
+    [[nodiscard]] std::uint32_t sample_factor(std::uint32_t width, std::uint32_t height) const noexcept;
+    void trace_lighting(ID3D12GraphicsCommandList* list, Allocate allocate, void* allocate_context,
+                        D3D12_GPU_DESCRIPTOR_HANDLE depth_srv, std::uint32_t width, std::uint32_t height);
     static void to_state(ID3D12GraphicsCommandList* list, ID3D12Resource* resource, D3D12_RESOURCE_STATES& state,
                          D3D12_RESOURCE_STATES wanted);
     bool create_buffer(std::uint64_t bytes, D3D12_HEAP_TYPE heap, D3D12_RESOURCE_STATES state,
@@ -234,36 +242,48 @@ private:
     // A chunk of the open scene could not be transformed: it is not traced.
     bool scene_incomplete_ = false;
 
-    // Ambient occlusion (rt_ao.hlsl). GALAXY_RT_AO=0 turns it off; GALAXY_RT_AO_RAYS (per sample),
-    // _RADIUS (eye units), _STRENGTH (0-1), _HISTORY (frames), _FACTOR (EFB pixels per sample
-    // side, 1-4) and _VIEW=1 (the occlusion alone) tune it.
-    struct AoSlot {
+    // Ray-traced lighting (rt_lighting.hlsl). GALAXY_RT_LIGHT=0 turns it off; GALAXY_RT_RAYS (per
+    // sample), _RANGE (eye units), _STRENGTH (0-1), _HISTORY (frames), _FACTOR (EFB pixels per
+    // sample side, 1-4; by default 2, 3 above 6.2 and 4 above 16 megapixels), _CONTACT (light of
+    // a hit at distance 0), _CONTACT_RANGE, _SKY (sky hue 0-1), _FALLBACK, _EMISSIVE, the sun's
+    // world direction _SUN (x,y,z), _SUN_SIZE (degrees), _SUN_LIGHT, _SUN_COLOR (r,g,b), the sky
+    // light's weight _SKY_LIGHT and _VIEW=1 (the lighting alone) tune it.
+    struct LightSlot {
         RtView view{};
         std::array<float, 12> camera{};
         std::uint32_t width = 0;
         std::uint32_t height = 0;
-        std::uint32_t ao_width = 0;
-        std::uint32_t ao_height = 0;
+        std::uint32_t sample_width = 0;
+        std::uint32_t sample_height = 0;
+        std::uint32_t factor = 0;
         float near_plane = 0.0f;
         bool camera_known = false;
     };
-    Microsoft::WRL::ComPtr<ID3D12RootSignature> ao_root_;
-    Microsoft::WRL::ComPtr<ID3D12PipelineState> ao_trace_pso_;
-    Microsoft::WRL::ComPtr<ID3D12PipelineState> ao_temporal_pso_;
-    Microsoft::WRL::ComPtr<ID3D12PipelineState> ao_spatial_pso_;
+    Microsoft::WRL::ComPtr<ID3D12RootSignature> light_root_;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> trace_pso_;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> temporal_pso_;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> spatial_a_pso_;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> spatial_b_pso_;
+    Microsoft::WRL::ComPtr<ID3D12RootSignature> capture_root_;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> capture_pso_;
     Microsoft::WRL::ComPtr<ID3D12RootSignature> composite_root_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> composite_pso_;
-    // Per sample: eye z (this frame and the previous), packed normal, raw occlusion,
-    // accumulated (occlusion, frames) for both frames; per result slot (occlusion, eye z).
-    std::array<Microsoft::WRL::ComPtr<ID3D12Resource>, 2> ao_z_;
-    Microsoft::WRL::ComPtr<ID3D12Resource> ao_normal_;
-    Microsoft::WRL::ComPtr<ID3D12Resource> ao_raw_;
-    std::array<Microsoft::WRL::ComPtr<ID3D12Resource>, 2> ao_history_;
-    std::array<Microsoft::WRL::ComPtr<ID3D12Resource>, kAoSlots> ao_final_;
-    std::array<D3D12_RESOURCE_STATES, 2> ao_z_state_{};
-    std::array<D3D12_RESOURCE_STATES, 2> ao_history_state_{};
-    std::array<D3D12_RESOURCE_STATES, kAoSlots> ao_final_state_{};
-    std::array<AoSlot, kAoSlots> ao_slots_{};
+    // Per sample: eye z (this frame and the previous), packed normal, raw light (then the first
+    // filter's), accumulated light and frames (both frames); per result slot the light and eye
+    // z; the previous picture's light and eye z, and its sky and scene sums.
+    std::array<Microsoft::WRL::ComPtr<ID3D12Resource>, 2> light_z_;
+    Microsoft::WRL::ComPtr<ID3D12Resource> light_normal_;
+    Microsoft::WRL::ComPtr<ID3D12Resource> light_raw_;
+    std::array<Microsoft::WRL::ComPtr<ID3D12Resource>, 2> light_history_;
+    std::array<Microsoft::WRL::ComPtr<ID3D12Resource>, kLightSlots> light_final_;
+    Microsoft::WRL::ComPtr<ID3D12Resource> picture_;
+    Microsoft::WRL::ComPtr<ID3D12Resource> picture_sums_;
+    std::array<D3D12_RESOURCE_STATES, 2> light_z_state_{};
+    std::array<D3D12_RESOURCE_STATES, 2> light_history_state_{};
+    std::array<D3D12_RESOURCE_STATES, kLightSlots> light_final_state_{};
+    D3D12_RESOURCE_STATES picture_state_ = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+    D3D12_RESOURCE_STATES picture_sums_state_ = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+    std::array<LightSlot, kLightSlots> light_slots_{};
     // Per slot the traced frame's eye position from a sub-frame's (3 rows), copied in from a
     // ring of upload entries before each sub-frame's replay.
     Microsoft::WRL::ComPtr<ID3D12Resource> reproject_;
@@ -273,23 +293,42 @@ private:
     D3D12_RESOURCE_STATES reproject_state_ = D3D12_RESOURCE_STATE_COPY_DEST;
     std::array<float, 12> camera_{};
     std::array<float, 12> history_camera_{};
-    std::uint32_t ao_samples_ = 0;
-    std::uint32_t ao_history_width_ = 0;
-    std::uint32_t ao_history_height_ = 0;
-    std::uint32_t ao_rays_ = 2;
-    std::uint32_t ao_factor_ = 2;
-    std::uint32_t ao_history_frames_ = 12;
-    std::uint32_t ao_frame_ = 0;
-    unsigned ao_parity_ = 0;
-    unsigned ao_next_slot_ = 0;
-    int ao_slot_ = -1;
-    float ao_radius_ = 300.0f;
-    float ao_strength_ = 0.85f;
-    bool ao_enabled_ = true;
-    bool ao_view_ = false;
+    std::array<float, 12> picture_camera_{};
+    std::uint32_t light_samples_ = 0;
+    std::uint32_t history_width_ = 0;
+    std::uint32_t history_height_ = 0;
+    std::uint32_t history_factor_ = 0;
+    std::uint32_t picture_width_ = 0;
+    std::uint32_t picture_height_ = 0;
+    std::uint32_t picture_factor_ = 0;
+    std::uint32_t rays_ = 2;
+    std::uint32_t factor_override_ = 0;
+    std::uint32_t history_frames_ = 16;
+    std::uint32_t light_frame_ = 0;
+    unsigned light_parity_ = 0;
+    unsigned next_light_slot_ = 0;
+    int light_slot_ = -1;
+    float range_ = 1600.0f;
+    float strength_ = 0.75f;
+    float contact_ = 0.3f;
+    float contact_range_ = 250.0f;
+    float sky_saturation_ = 0.35f;
+    float fallback_ = 0.55f;
+    float emissive_ = 3.0f;
+    std::array<float, 3> sun_direction_{0.35f, 1.0f, 0.3f};   // world space, towards the sun
+    std::array<float, 3> sun_color_{1.0f, 0.93f, 0.82f};
+    float sun_size_ = 2.5f;     // degrees
+    bool sun_override_ = false;
+    float sun_light_ = 0.55f;
+    float sky_light_ = 0.65f;
+    bool lighting_enabled_ = true;
+    bool show_lighting_ = false;
+    std::uint32_t show_term_ = 0;   // GALAXY_RT_VIEW=2 sun, 3 sky light
     bool camera_known_ = false;
     bool history_camera_known_ = false;
-    bool ao_history_valid_ = false;
+    bool history_valid_ = false;
+    bool picture_valid_ = false;
+    bool picture_camera_known_ = false;
 
     // [rt-stats] accumulation over the report window.
     struct Window {
@@ -299,7 +338,9 @@ private:
         std::uint64_t max_triangles = 0;
         double build_ms = 0.0;
         double validate_ms = 0.0;
-        double ao_ms = 0.0;
+        double light_ms = 0.0;
+        std::uint64_t composites = 0;
+        std::uint64_t captures = 0;
         std::uint64_t timed = 0;
         std::array<std::uint64_t, kStatsWords> stats{};
         std::uint64_t validated = 0;

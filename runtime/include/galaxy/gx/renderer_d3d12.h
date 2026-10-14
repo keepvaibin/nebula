@@ -484,6 +484,8 @@ public:
     void rt_set_camera(const std::array<float, 12>* view) noexcept { ray_tracer_.set_camera(view); }
     void rt_note_draw(const DrawCall& call, const RtDrawInfo& info);
     void rt_trace_scene();
+    // The scene's end: its finished picture becomes the light the next frame's rays read.
+    void rt_capture_picture();
     // Matrix-ring segment advances back whose palettes are still alive while
     // this frame executes (0 outside temporal mode). In temporal mode the
     // segment advances only after frames that wrote palettes, so present and

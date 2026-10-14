@@ -679,10 +679,12 @@ foreach(galaxy_rt_pass geometry:GeometryCS validate:ValidateCS)
         VERBATIM)
     list(APPEND galaxy_rt_headers "${galaxy_rt_header}")
 endforeach()
-# Ambient occlusion passes and the EFB composite (runtime/src/gx/rt_ao.hlsl).
-set(galaxy_rt_ao_hlsl "${CMAKE_CURRENT_SOURCE_DIR}/runtime/src/gx/rt_ao.hlsl")
-foreach(galaxy_rt_pass ao_trace_cs:AoTraceCS:cs_6_5 ao_temporal_cs:AoTemporalCS:cs_6_5
-        ao_spatial_cs:AoSpatialCS:cs_6_5 composite_vs:CompositeVS:vs_6_0 composite_ps:CompositePS:ps_6_0)
+# Ray-traced lighting passes, the picture capture and the EFB composite
+# (runtime/src/gx/rt_lighting.hlsl).
+set(galaxy_rt_light_hlsl "${CMAKE_CURRENT_SOURCE_DIR}/runtime/src/gx/rt_lighting.hlsl")
+foreach(galaxy_rt_pass capture_cs:CaptureCS:cs_6_5 trace_cs:TraceCS:cs_6_5 temporal_cs:TemporalCS:cs_6_5
+        spatial_a_cs:SpatialACS:cs_6_5 spatial_b_cs:SpatialBCS:cs_6_5 composite_vs:CompositeVS:vs_6_0
+        composite_ps:CompositePS:ps_6_0)
     string(REPLACE ":" ";" galaxy_rt_pair "${galaxy_rt_pass}")
     list(GET galaxy_rt_pair 0 galaxy_rt_name)
     list(GET galaxy_rt_pair 1 galaxy_rt_entry)
@@ -690,8 +692,8 @@ foreach(galaxy_rt_pass ao_trace_cs:AoTraceCS:cs_6_5 ao_temporal_cs:AoTemporalCS:
     set(galaxy_rt_header "${galaxy_rt_dir}/rt_${galaxy_rt_name}.h")
     add_custom_command(OUTPUT "${galaxy_rt_header}"
         COMMAND "${GALAXY_DXC}" -nologo -T ${galaxy_rt_profile} -E ${galaxy_rt_entry} -O3 -WX -Qstrip_debug
-            -Qstrip_reflect -Vn g_rt_${galaxy_rt_name} -Fh "${galaxy_rt_header}" "${galaxy_rt_ao_hlsl}"
-        DEPENDS "${galaxy_rt_ao_hlsl}"
+            -Qstrip_reflect -Vn g_rt_${galaxy_rt_name} -Fh "${galaxy_rt_header}" "${galaxy_rt_light_hlsl}"
+        DEPENDS "${galaxy_rt_light_hlsl}"
         VERBATIM)
     list(APPEND galaxy_rt_headers "${galaxy_rt_header}")
 endforeach()

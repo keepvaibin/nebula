@@ -10366,6 +10366,30 @@ void handle_layout_signal(RuntimeState& state, std::uint32_t argument, const gal
     }
 }
 
+// BrightSun::control (SiteHookKind::SunCenter): the visible sun's centre less the camera
+// position it was placed from is the world direction towards it.
+void note_game_sun(RuntimeState& state, const galaxy::PpcContext& context) {
+    auto* mem = state.address_space;
+    const std::uint32_t sun = context.gpr[31];
+    const std::uint32_t camera = context.gpr[1] + 8u;
+    if (mem == nullptr || !mapped_guest_range(mem, sun + 0xCu, 12u) || !mapped_guest_range(mem, camera, 12u)) {
+        return;
+    }
+    std::array<float, 3> direction{};
+    float length = 0.0f;
+    for (unsigned i = 0; i < 3u; ++i) {
+        direction[i] = std::bit_cast<float>(mem->read_u32(sun + 0xCu + 4u * i)) -
+                       std::bit_cast<float>(mem->read_u32(camera + 4u * i));
+        length += direction[i] * direction[i];
+    }
+    if (!(length > 1e-6f) || !std::isfinite(length)) {
+        return;
+    }
+    length = std::sqrt(length);
+    for (float& v : direction) v /= length;
+    galaxy::gx::set_game_sun(direction);
+}
+
 void handle_motion_signal(RuntimeState& state, std::uint32_t kind, std::uint32_t argument,
                           const galaxy::PpcContext& context) {
     switch (static_cast<galaxy::SiteHookKind>(kind)) {
@@ -33942,6 +33966,10 @@ int wmain(int argc, wchar_t** argv) {
         if (kind >= static_cast<std::uint32_t>(galaxy::SiteHookKind::MotionCamera) &&
             kind <= static_cast<std::uint32_t>(galaxy::SiteHookKind::Layout2D)) {
             handle_motion_signal(runtime, kind, argument, *context);
+            return;
+        }
+        if (kind == static_cast<std::uint32_t>(galaxy::SiteHookKind::SunCenter)) {
+            note_game_sun(runtime, *context);
             return;
         }
         galaxy::dispatch_site_hook(runtime.services, guest_pc, kind, argument, context, memory);

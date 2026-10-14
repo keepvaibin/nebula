@@ -7670,7 +7670,7 @@ void RendererD3D12::rt_trace_scene() {
                                               desc.Height));
     // The occlusion multiplies the opaque scene before the translucent phases draw; a recorded
     // log applies it again on each sub-frame's replay.
-    const int slot = ray_tracer_.ao_slot();
+    const int slot = ray_tracer_.light_slot();
     if (depth && slot >= 0) {
         ray_tracer_.composite(command_list_.Get(), efb_rtv_, conv_efb_depth_srv_, width, desc.Height, slot, false);
         if (replay_recording_) {
@@ -7685,6 +7685,33 @@ void RendererD3D12::rt_trace_scene() {
     command_list_->SetGraphicsRootSignature(root_signature_.Get());
     invalidate_gx_bindings();
     bound_rt_aux_ = 0xFFu;
+}
+
+void RendererD3D12::rt_capture_picture() {
+    if (!ray_tracer_.lighting_active() || !efb_color_ || !efb_depth_ || conv_efb_color_srv_.ptr == 0u) {
+        return;
+    }
+    D3D12_RESOURCE_BARRIER barriers[2]{};
+    for (D3D12_RESOURCE_BARRIER& barrier : barriers) {
+        barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+        barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+        barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
+    }
+    barriers[0].Transition.pResource = efb_color_.Get();
+    barriers[0].Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
+    barriers[1].Transition.pResource = efb_depth_.Get();
+    barriers[1].Transition.StateBefore = D3D12_RESOURCE_STATE_DEPTH_WRITE;
+    command_list_->ResourceBarrier(2, barriers);
+    const D3D12_RESOURCE_DESC desc = efb_color_->GetDesc();
+    dred_marker(command_list_.Get(), L"rt picture");
+    // The conversion views hold the EFB colour, then its depth.
+    ray_tracer_.capture_picture(command_list_.Get(), conv_efb_color_srv_, static_cast<std::uint32_t>(desc.Width),
+                                desc.Height);
+    for (D3D12_RESOURCE_BARRIER& barrier : barriers) {
+        std::swap(barrier.Transition.StateBefore, barrier.Transition.StateAfter);
+    }
+    command_list_->ResourceBarrier(2, barriers);
+    bound_pipeline_ = nullptr;
 }
 
 void RendererD3D12::record_rt_composite(int slot, bool reproject) {

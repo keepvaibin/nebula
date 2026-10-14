@@ -522,6 +522,9 @@ enum class SiteHookKind : std::uint32_t {
     Layout2D = 27,              // argument: galaxy::motion::Layout2DSite
     // Generation 21: one step of dialogue text was revealed (TalkTextFormer::updateTalking).
     TextStep = 28,              // argument 0: TalkBalloon in r31; 1: RosettaMonologue in r30
+    // Generation 22: BrightSun::control set the visible sun's centre (r31 + 0xC; the camera
+    // position it was placed from at r1 + 8).
+    SunCenter = 29,
 };
 
 inline void site_hook(

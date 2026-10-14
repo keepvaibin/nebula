@@ -1,16 +1,21 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #include "galaxy/gx/ray_tracing.h"
+#include "galaxy/gx_d3d12.h"
 
-#include "rt_ao_spatial_cs.h"
-#include "rt_ao_temporal_cs.h"
-#include "rt_ao_trace_cs.h"
+#include "rt_capture_cs.h"
 #include "rt_composite_ps.h"
 #include "rt_composite_vs.h"
+#include "rt_spatial_a_cs.h"
+#include "rt_spatial_b_cs.h"
+#include "rt_temporal_cs.h"
+#include "rt_trace_cs.h"
 #include "rt_geometry_cs.h"
 #include "rt_validate_cs.h"
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
+#include <mutex>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -42,31 +47,51 @@ struct RtFrameConstants {
 };
 static_assert(sizeof(RtFrameConstants) == 96u);
 
-// Mirrors cbuffer RtAo in rt_ao.hlsl.
-struct RtAoConstants {
+// Mirrors cbuffer RtLight in rt_lighting.hlsl.
+struct RtLightConstants {
     float projection[4];
     float depth[4];
     float viewport[4];
     std::uint32_t target_size[2];
-    std::uint32_t ao_size[2];
+    std::uint32_t sample_size[2];
     float near_plane;
     std::uint32_t frame;
-    float radius;
+    float range;
     float strength;
     std::uint32_t rays;
     std::uint32_t factor;
     std::uint32_t flags;
     std::uint32_t history_frames;
     float reproject[3][4];
+    float picture[3][4];
+    float contact;
+    float contact_range;
+    float sky_saturation;
+    float fallback;
+    float sun[4];
+    float sun_light[4];
 };
-static_assert(sizeof(RtAoConstants) == 144u);
+static_assert(sizeof(RtLightConstants) == 240u);
 
-// Mirrors cbuffer RtComposite in rt_ao.hlsl (root constants).
+// Mirrors cbuffer RtCapture in rt_lighting.hlsl (root constants).
+struct RtCaptureConstants {
+    float depth[4];
+    float viewport[4];
+    std::uint32_t target_size[2];
+    std::uint32_t sample_size[2];
+    std::uint32_t factor;
+    float emissive;
+    std::uint32_t divide;
+    float strength;
+};
+static_assert(sizeof(RtCaptureConstants) == 64u);
+
+// Mirrors cbuffer RtComposite in rt_lighting.hlsl (root constants).
 struct RtCompositeConstants {
     float projection[4];
     float depth[4];
     float viewport[4];
-    std::uint32_t ao_size[2];
+    std::uint32_t sample_size[2];
     std::uint32_t factor;
     std::uint32_t flags;
     std::uint32_t slot;
@@ -75,20 +100,36 @@ struct RtCompositeConstants {
 };
 static_assert(sizeof(RtCompositeConstants) == 80u);
 
-enum AoParameter : UINT {
-    kAoFrame = 0,
-    kAoScene,
-    kAoDepth,
-    kAoPrevZ,
-    kAoPrevHistory,
-    kAoHistoryIn,
-    kAoZ,
-    kAoNormal,
-    kAoRaw,
-    kAoHistory,
-    kAoFinal,
-    kAoCount,
+enum LightParameter : UINT {
+    kLightFrame = 0,
+    kLightScene,
+    kLightDepth,
+    kLightPrevZ,
+    kLightPrevHistory,
+    kLightHistoryIn,
+    kLightPicture,
+    kLightPictureSums,
+    kLightZ,
+    kLightNormal,
+    kLightRaw,
+    kLightHistory,
+    kLightFinal,
+    kLightCount,
 };
+
+enum CaptureParameter : UINT {
+    kCaptureConstants = 0,
+    kCaptureSources,
+    kCaptureFinal,
+    kCapturePicture,
+    kCaptureSums,
+    kCaptureCount,
+};
+
+// A result slot's state: read by the composite (pixel) and the picture capture (compute).
+constexpr D3D12_RESOURCE_STATES kLightRead =
+    D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+constexpr UINT64 kPictureSumsBytes = 32u;
 
 constexpr unsigned kReprojectEntries = 256u;
 constexpr UINT64 kReprojectEntryBytes = 256u;
@@ -126,6 +167,27 @@ bool affine_inverse(const std::array<float, 12>& m, std::array<float, 12>& out) 
 }
 
 constexpr std::array<float, 12> kIdentity34{1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f};
+
+// GALAXY_RT_* "a,b,c" triples.
+std::array<float, 3> env_triple(const char* name, std::array<float, 3> fallback) {
+    char value[96]{};
+    std::size_t length = 0u;
+    if (getenv_s(&length, value, sizeof(value), name) != 0 || length <= 1u) {
+        return fallback;
+    }
+    std::array<float, 3> out = fallback;
+    char* cursor = value;
+    for (float& v : out) {
+        char* end = nullptr;
+        const float parsed = std::strtof(cursor, &end);
+        if (end == cursor) {
+            return fallback;
+        }
+        v = parsed;
+        cursor = *end == ',' ? end + 1 : end;
+    }
+    return out;
+}
 
 float env_float(const char* name, float fallback) {
     char value[32]{};
@@ -184,7 +246,29 @@ D3D12_RESOURCE_BARRIER uav_barrier(ID3D12Resource* resource) {
     return barrier;
 }
 
+std::mutex g_game_sun_mutex;
+std::array<float, 3> g_game_sun{};
+std::chrono::steady_clock::time_point g_game_sun_time{};
+bool g_game_sun_known = false;
+
 }  // namespace
+
+void set_game_sun(const std::array<float, 3>& direction) noexcept {
+    const std::lock_guard<std::mutex> lock(g_game_sun_mutex);
+    g_game_sun = direction;
+    g_game_sun_time = std::chrono::steady_clock::now();
+    g_game_sun_known = true;
+}
+
+bool game_sun(std::array<float, 3>& direction, std::uint64_t max_age_ms) noexcept {
+    const std::lock_guard<std::mutex> lock(g_game_sun_mutex);
+    if (!g_game_sun_known ||
+        std::chrono::steady_clock::now() - g_game_sun_time > std::chrono::milliseconds(max_age_ms)) {
+        return false;
+    }
+    direction = g_game_sun;
+    return true;
+}
 
 bool SceneRayTracer::initialize(ID3D12Device* device, std::uint64_t timestamp_frequency, bool validate,
                                 DXGI_FORMAT color_format) {
@@ -292,22 +376,40 @@ bool SceneRayTracer::initialize(ID3D12Device* device, std::uint64_t timestamp_fr
         dump_every_ = static_cast<std::uint64_t>(std::max(0.0f, env_float("GALAXY_RT_DUMP_EVERY", 0.0f)));
         dump_remaining_ = static_cast<std::uint64_t>(std::max(1.0f, env_float("GALAXY_RT_DUMP_COUNT", 1.0f)));
     }
-    ao_enabled_ = env_float("GALAXY_RT_AO", 1.0f) != 0.0f;
-    ao_rays_ = static_cast<std::uint32_t>(std::clamp(env_float("GALAXY_RT_AO_RAYS", 2.0f), 1.0f, 16.0f));
-    ao_radius_ = std::clamp(env_float("GALAXY_RT_AO_RADIUS", 300.0f), 1.0f, 100000.0f);
-    ao_strength_ = std::clamp(env_float("GALAXY_RT_AO_STRENGTH", 0.85f), 0.0f, 1.0f);
-    ao_history_frames_ =
-        static_cast<std::uint32_t>(std::clamp(env_float("GALAXY_RT_AO_HISTORY", 12.0f), 1.0f, 64.0f));
-    ao_factor_ = static_cast<std::uint32_t>(std::clamp(env_float("GALAXY_RT_AO_FACTOR", 2.0f), 1.0f, 4.0f));
-    ao_view_ = env_float("GALAXY_RT_AO_VIEW", 0.0f) != 0.0f;
-    if (ao_enabled_ && !create_ao_pipelines(color_format)) {
-        std::cerr << "[rt] ambient occlusion unavailable\n";
-        ao_enabled_ = false;
+    lighting_enabled_ = env_float("GALAXY_RT_LIGHT", 1.0f) != 0.0f;
+    rays_ = static_cast<std::uint32_t>(std::clamp(env_float("GALAXY_RT_RAYS", 2.0f), 1.0f, 16.0f));
+    range_ = std::clamp(env_float("GALAXY_RT_RANGE", 1600.0f), 10.0f, 100000.0f);
+    strength_ = std::clamp(env_float("GALAXY_RT_STRENGTH", 0.75f), 0.0f, 1.0f);
+    history_frames_ = static_cast<std::uint32_t>(std::clamp(env_float("GALAXY_RT_HISTORY", 16.0f), 1.0f, 64.0f));
+    factor_override_ = static_cast<std::uint32_t>(std::clamp(env_float("GALAXY_RT_FACTOR", 0.0f), 0.0f, 4.0f));
+    contact_ = std::clamp(env_float("GALAXY_RT_CONTACT", 0.3f), 0.0f, 1.0f);
+    contact_range_ = std::clamp(env_float("GALAXY_RT_CONTACT_RANGE", 250.0f), 1.0f, 100000.0f);
+    sky_saturation_ = std::clamp(env_float("GALAXY_RT_SKY", 0.35f), 0.0f, 1.0f);
+    fallback_ = std::clamp(env_float("GALAXY_RT_FALLBACK", 0.55f), 0.0f, 2.0f);
+    emissive_ = std::clamp(env_float("GALAXY_RT_EMISSIVE", 3.0f), 0.0f, 16.0f);
+    show_lighting_ = env_float("GALAXY_RT_VIEW", 0.0f) != 0.0f;
+    show_term_ = static_cast<std::uint32_t>(std::clamp(env_float("GALAXY_RT_VIEW", 0.0f), 0.0f, 3.0f));
+    {
+        char value[96]{};
+        std::size_t length = 0u;
+        sun_override_ = getenv_s(&length, value, sizeof(value), "GALAXY_RT_SUN") == 0 && length > 1u;
+    }
+    sun_direction_ = env_triple("GALAXY_RT_SUN", sun_direction_);
+    sun_color_ = env_triple("GALAXY_RT_SUN_COLOR", sun_color_);
+    sun_size_ = std::clamp(env_float("GALAXY_RT_SUN_SIZE", 2.5f), 0.0f, 30.0f);
+    sun_light_ = std::clamp(env_float("GALAXY_RT_SUN_LIGHT", 0.55f), 0.0f, 4.0f);
+    sky_light_ = std::clamp(env_float("GALAXY_RT_SKY_LIGHT", 0.65f), 0.0f, 4.0f);
+    if (lighting_enabled_ && !create_lighting_pipelines(color_format)) {
+        std::cerr << "[rt] lighting unavailable\n";
+        lighting_enabled_ = false;
     }
     ready_ = true;
-    std::cerr << "[rt] ready tier=1.1 validate=" << (validate ? 1 : 0) << " ao=" << (ao_enabled_ ? 1 : 0)
-              << " rays=" << ao_rays_ << " radius=" << ao_radius_ << " strength=" << ao_strength_
-              << " history=" << ao_history_frames_ << " factor=" << ao_factor_ << '\n';
+    std::cerr << "[rt] ready tier=1.1 validate=" << (validate ? 1 : 0) << " lighting=" << (lighting_enabled_ ? 1 : 0)
+              << " rays=" << rays_ << " range=" << range_ << " strength=" << strength_
+              << " history=" << history_frames_ << " factor=" << factor_override_ << " contact=" << contact_
+              << " sky=" << sky_saturation_ << " emissive=" << emissive_ << " sun=" << sun_direction_[0] << ','
+              << sun_direction_[1] << ',' << sun_direction_[2] << " sun-light=" << sun_light_
+              << " sky-light=" << sky_light_ << '\n';
     return true;
 }
 
@@ -333,25 +435,30 @@ void SceneRayTracer::shutdown() noexcept {
     geometry_pso_.Reset();
     validate_pso_.Reset();
     root_.Reset();
-    ao_trace_pso_.Reset();
-    ao_temporal_pso_.Reset();
-    ao_spatial_pso_.Reset();
-    ao_root_.Reset();
+    trace_pso_.Reset();
+    temporal_pso_.Reset();
+    spatial_a_pso_.Reset();
+    spatial_b_pso_.Reset();
+    light_root_.Reset();
+    capture_pso_.Reset();
+    capture_root_.Reset();
     composite_pso_.Reset();
     composite_root_.Reset();
-    for (auto& buffer : ao_z_) buffer.Reset();
-    ao_normal_.Reset();
-    ao_raw_.Reset();
-    for (auto& buffer : ao_history_) buffer.Reset();
-    for (auto& buffer : ao_final_) buffer.Reset();
+    for (auto& buffer : light_z_) buffer.Reset();
+    light_normal_.Reset();
+    light_raw_.Reset();
+    for (auto& buffer : light_history_) buffer.Reset();
+    for (auto& buffer : light_final_) buffer.Reset();
+    picture_.Reset();
+    picture_sums_.Reset();
     reproject_.Reset();
     reproject_upload_.Reset();
     reproject_mapped_ = nullptr;
-    ao_slots_ = {};
-    ao_samples_ = 0u;
-    ao_slot_ = -1;
-    ao_history_valid_ = false;
-    camera_known_ = history_camera_known_ = false;
+    light_slots_ = {};
+    light_samples_ = 0u;
+    light_slot_ = -1;
+    history_valid_ = picture_valid_ = false;
+    camera_known_ = history_camera_known_ = picture_camera_known_ = false;
     device_.Reset();
     capacity_ = 0u;
     triangles_ = 0u;
@@ -539,7 +646,7 @@ void SceneRayTracer::begin_frame(std::uint64_t frame_index) {
                     window_.validate_ms += static_cast<double>(ticks[2] - ticks[1]) * to_ms;
                 }
                 if (ticks[3] >= ticks[2] && ticks[3] - ticks[2] < timestamp_frequency_) {
-                    window_.ao_ms += static_cast<double>(ticks[3] - ticks[2]) * to_ms;
+                    window_.light_ms += static_cast<double>(ticks[3] - ticks[2]) * to_ms;
                 }
             }
         }
@@ -672,7 +779,7 @@ void SceneRayTracer::report() {
     char line[768];
     std::snprintf(line, sizeof(line),
                   "[rt-stats] scenes=%llu skipped=%llu draws-per-scene=%.1f triangles-per-scene=%.0f "
-                  "max-triangles=%llu capacity=%u build-ms=%.3f validate-ms=%.3f ao-ms=%.3f validated=%llu "
+                  "max-triangles=%llu capacity=%u build-ms=%.3f validate-ms=%.3f light-ms=%.3f composites=%llu captures=%llu validated=%llu "
                   "geometry-pixels=%.2f%% match-0.1%%=%.3f%% match-1%%=%.3f%% hit-nearer=%.3f%% hit-farther=%.3f%% "
                   "miss=%.3f%% background-hit=%.3f%%\n",
                   static_cast<unsigned long long>(window_.scenes), static_cast<unsigned long long>(window_.skipped),
@@ -680,7 +787,8 @@ void SceneRayTracer::report() {
                   per(static_cast<double>(window_.triangles), window_.scenes),
                   static_cast<unsigned long long>(window_.max_triangles), capacity_,
                   per(window_.build_ms, window_.timed), per(window_.validate_ms, window_.validated),
-                  per(window_.ao_ms, window_.timed),
+                  per(window_.light_ms, window_.timed), static_cast<unsigned long long>(window_.composites),
+                  static_cast<unsigned long long>(window_.captures),
                   static_cast<unsigned long long>(window_.validated), pct(2u, 0u), pct(3u, 2u), pct(4u, 2u),
                   pct(5u, 2u), pct(6u, 2u), pct(7u, 2u), pct(8u, 1u));
     std::cerr << line;
@@ -696,6 +804,7 @@ void SceneRayTracer::begin_scene() noexcept {
     view_known_ = false;
     scene_open_ = ready_;
     scene_incomplete_ = false;
+    light_slot_ = -1;
 }
 
 void SceneRayTracer::add_draw(const RtDraw& draw, const RtDrawInfo& info) {
@@ -720,50 +829,82 @@ void SceneRayTracer::set_camera(const std::array<float, 12>* view) noexcept {
     camera_ = view != nullptr ? *view : kIdentity34;
 }
 
-bool SceneRayTracer::create_ao_pipelines(DXGI_FORMAT color_format) {
+std::uint32_t SceneRayTracer::sample_factor(std::uint32_t width, std::uint32_t height) const noexcept {
+    if (factor_override_ != 0u) {
+        return factor_override_;
+    }
+    const std::uint64_t pixels = static_cast<std::uint64_t>(width) * height;
+    return pixels > 16'000'000u ? 4u : pixels > 6'200'000u ? 3u : 2u;
+}
+
+bool SceneRayTracer::create_lighting_pipelines(DXGI_FORMAT color_format) {
+    const auto serialize = [&](const D3D12_ROOT_SIGNATURE_DESC& desc, ComPtr<ID3D12RootSignature>& out) {
+        ComPtr<ID3DBlob> blob, error;
+        return SUCCEEDED(D3D12SerializeRootSignature(&desc, D3D_ROOT_SIGNATURE_VERSION_1, &blob, &error)) &&
+               SUCCEEDED(device_->CreateRootSignature(0, blob->GetBufferPointer(), blob->GetBufferSize(),
+                                                      IID_PPV_ARGS(&out)));
+    };
+    const auto compute = [&](ID3D12RootSignature* root, const void* code, std::size_t bytes,
+                             ComPtr<ID3D12PipelineState>& out) {
+        D3D12_COMPUTE_PIPELINE_STATE_DESC desc{};
+        desc.pRootSignature = root;
+        desc.CS = {code, bytes};
+        return SUCCEEDED(device_->CreateComputePipelineState(&desc, IID_PPV_ARGS(&out)));
+    };
+
     D3D12_DESCRIPTOR_RANGE depth_range{};
     depth_range.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
     depth_range.NumDescriptors = 1u;
     depth_range.BaseShaderRegister = 7u;
-    D3D12_ROOT_PARAMETER params[kAoCount]{};
-    params[kAoFrame].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
-    params[kAoScene].ParameterType = D3D12_ROOT_PARAMETER_TYPE_SRV;
-    params[kAoScene].Descriptor.ShaderRegister = 6u;
-    params[kAoDepth].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
-    params[kAoDepth].DescriptorTable.NumDescriptorRanges = 1u;
-    params[kAoDepth].DescriptorTable.pDescriptorRanges = &depth_range;
-    for (UINT i = 0; i < 3u; ++i) {
-        params[kAoPrevZ + i].ParameterType = D3D12_ROOT_PARAMETER_TYPE_SRV;
-        params[kAoPrevZ + i].Descriptor.ShaderRegister = 8u + i;
-    }
+    D3D12_ROOT_PARAMETER params[kLightCount]{};
+    params[kLightFrame].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
+    params[kLightScene].ParameterType = D3D12_ROOT_PARAMETER_TYPE_SRV;
+    params[kLightScene].Descriptor.ShaderRegister = 6u;
+    params[kLightDepth].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+    params[kLightDepth].DescriptorTable.NumDescriptorRanges = 1u;
+    params[kLightDepth].DescriptorTable.pDescriptorRanges = &depth_range;
     for (UINT i = 0; i < 5u; ++i) {
-        params[kAoZ + i].ParameterType = D3D12_ROOT_PARAMETER_TYPE_UAV;
-        params[kAoZ + i].Descriptor.ShaderRegister = i;
+        params[kLightPrevZ + i].ParameterType = D3D12_ROOT_PARAMETER_TYPE_SRV;
+        params[kLightPrevZ + i].Descriptor.ShaderRegister = 8u + i;
+        params[kLightZ + i].ParameterType = D3D12_ROOT_PARAMETER_TYPE_UAV;
+        params[kLightZ + i].Descriptor.ShaderRegister = i;
     }
     for (auto& param : params) {
         param.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
     }
     D3D12_ROOT_SIGNATURE_DESC rsd{};
-    rsd.NumParameters = kAoCount;
+    rsd.NumParameters = kLightCount;
     rsd.pParameters = params;
-    ComPtr<ID3DBlob> blob, error;
-    if (FAILED(D3D12SerializeRootSignature(&rsd, D3D_ROOT_SIGNATURE_VERSION_1, &blob, &error)) ||
-        FAILED(device_->CreateRootSignature(0, blob->GetBufferPointer(), blob->GetBufferSize(),
-                                            IID_PPV_ARGS(&ao_root_)))) {
+    if (!serialize(rsd, light_root_) ||
+        !compute(light_root_.Get(), g_rt_trace_cs, sizeof(g_rt_trace_cs), trace_pso_) ||
+        !compute(light_root_.Get(), g_rt_temporal_cs, sizeof(g_rt_temporal_cs), temporal_pso_) ||
+        !compute(light_root_.Get(), g_rt_spatial_a_cs, sizeof(g_rt_spatial_a_cs), spatial_a_pso_) ||
+        !compute(light_root_.Get(), g_rt_spatial_b_cs, sizeof(g_rt_spatial_b_cs), spatial_b_pso_)) {
         return false;
     }
-    D3D12_COMPUTE_PIPELINE_STATE_DESC compute{};
-    compute.pRootSignature = ao_root_.Get();
-    compute.CS = {g_rt_ao_trace_cs, sizeof(g_rt_ao_trace_cs)};
-    if (FAILED(device_->CreateComputePipelineState(&compute, IID_PPV_ARGS(&ao_trace_pso_)))) {
-        return false;
+
+    D3D12_DESCRIPTOR_RANGE sources_range{};
+    sources_range.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
+    sources_range.NumDescriptors = 2u;
+    D3D12_ROOT_PARAMETER capture_params[kCaptureCount]{};
+    capture_params[kCaptureConstants].ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
+    capture_params[kCaptureConstants].Constants.Num32BitValues = sizeof(RtCaptureConstants) / 4u;
+    capture_params[kCaptureSources].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+    capture_params[kCaptureSources].DescriptorTable.NumDescriptorRanges = 1u;
+    capture_params[kCaptureSources].DescriptorTable.pDescriptorRanges = &sources_range;
+    capture_params[kCaptureFinal].ParameterType = D3D12_ROOT_PARAMETER_TYPE_SRV;
+    capture_params[kCaptureFinal].Descriptor.ShaderRegister = 2u;
+    capture_params[kCapturePicture].ParameterType = D3D12_ROOT_PARAMETER_TYPE_UAV;
+    capture_params[kCaptureSums].ParameterType = D3D12_ROOT_PARAMETER_TYPE_UAV;
+    capture_params[kCaptureSums].Descriptor.ShaderRegister = 1u;
+    for (auto& param : capture_params) {
+        param.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
     }
-    compute.CS = {g_rt_ao_temporal_cs, sizeof(g_rt_ao_temporal_cs)};
-    if (FAILED(device_->CreateComputePipelineState(&compute, IID_PPV_ARGS(&ao_temporal_pso_)))) {
-        return false;
-    }
-    compute.CS = {g_rt_ao_spatial_cs, sizeof(g_rt_ao_spatial_cs)};
-    if (FAILED(device_->CreateComputePipelineState(&compute, IID_PPV_ARGS(&ao_spatial_pso_)))) {
+    D3D12_ROOT_SIGNATURE_DESC capture_rsd{};
+    capture_rsd.NumParameters = kCaptureCount;
+    capture_rsd.pParameters = capture_params;
+    if (!serialize(capture_rsd, capture_root_) ||
+        !compute(capture_root_.Get(), g_rt_capture_cs, sizeof(g_rt_capture_cs), capture_pso_)) {
         return false;
     }
 
@@ -786,23 +927,19 @@ bool SceneRayTracer::create_ao_pipelines(DXGI_FORMAT color_format) {
     D3D12_ROOT_SIGNATURE_DESC composite_rsd{};
     composite_rsd.NumParameters = 4u;
     composite_rsd.pParameters = composite_params;
-    blob.Reset();
-    error.Reset();
-    if (FAILED(D3D12SerializeRootSignature(&composite_rsd, D3D_ROOT_SIGNATURE_VERSION_1, &blob, &error)) ||
-        FAILED(device_->CreateRootSignature(0, blob->GetBufferPointer(), blob->GetBufferSize(),
-                                            IID_PPV_ARGS(&composite_root_)))) {
+    if (!serialize(composite_rsd, composite_root_)) {
         return false;
     }
     D3D12_GRAPHICS_PIPELINE_STATE_DESC graphics{};
     graphics.pRootSignature = composite_root_.Get();
     graphics.VS = {g_rt_composite_vs, sizeof(g_rt_composite_vs)};
     graphics.PS = {g_rt_composite_ps, sizeof(g_rt_composite_ps)};
-    // Colour times occlusion (GALAXY_RT_AO_VIEW: the occlusion alone); the destination alpha the
-    // game may read stays.
+    // Colour times the lighting: dst * src0 + dst * src1 (GALAXY_RT_VIEW: the lighting alone).
+    // The destination alpha the game may read stays.
     D3D12_RENDER_TARGET_BLEND_DESC& blend = graphics.BlendState.RenderTarget[0];
-    blend.BlendEnable = ao_view_ ? FALSE : TRUE;
-    blend.SrcBlend = D3D12_BLEND_ZERO;
-    blend.DestBlend = D3D12_BLEND_SRC_COLOR;
+    blend.BlendEnable = show_lighting_ ? FALSE : TRUE;
+    blend.SrcBlend = D3D12_BLEND_DEST_COLOR;
+    blend.DestBlend = D3D12_BLEND_SRC1_COLOR;
     blend.BlendOp = D3D12_BLEND_OP_ADD;
     blend.SrcBlendAlpha = D3D12_BLEND_ZERO;
     blend.DestBlendAlpha = D3D12_BLEND_ONE;
@@ -822,13 +959,16 @@ bool SceneRayTracer::create_ao_pipelines(DXGI_FORMAT color_format) {
         return false;
     }
     if (!create_buffer(kReprojectEntryBytes, D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_COPY_DEST,
-                       D3D12_RESOURCE_FLAG_NONE, reproject_, L"rt ao reprojection") ||
+                       D3D12_RESOURCE_FLAG_NONE, reproject_, L"rt light reprojection") ||
         !create_buffer(kReprojectEntries * kReprojectEntryBytes, D3D12_HEAP_TYPE_UPLOAD,
                        D3D12_RESOURCE_STATE_GENERIC_READ, D3D12_RESOURCE_FLAG_NONE, reproject_upload_,
-                       L"rt ao reprojection upload")) {
+                       L"rt light reprojection upload") ||
+        !create_buffer(kPictureSumsBytes, D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
+                       D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, picture_sums_, L"rt picture sums")) {
         return false;
     }
     reproject_state_ = D3D12_RESOURCE_STATE_COPY_DEST;
+    picture_sums_state_ = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
     void* mapped = nullptr;
     const D3D12_RANGE no_read{0, 0};
     if (FAILED(reproject_upload_->Map(0, &no_read, &mapped))) {
@@ -838,44 +978,50 @@ bool SceneRayTracer::create_ao_pipelines(DXGI_FORMAT color_format) {
     return true;
 }
 
-bool SceneRayTracer::ensure_ao_buffers(std::uint32_t samples) {
-    if (samples <= ao_samples_ && ao_raw_) {
+bool SceneRayTracer::ensure_lighting_buffers(std::uint32_t samples) {
+    if (samples <= light_samples_ && light_raw_) {
         return true;
     }
-    for (auto& buffer : ao_z_) retire(buffer);
-    retire(ao_normal_);
-    retire(ao_raw_);
-    for (auto& buffer : ao_history_) retire(buffer);
-    for (auto& buffer : ao_final_) retire(buffer);
+    for (auto& buffer : light_z_) retire(buffer);
+    retire(light_normal_);
+    retire(light_raw_);
+    for (auto& buffer : light_history_) retire(buffer);
+    for (auto& buffer : light_final_) retire(buffer);
+    retire(picture_);
     // Results of the old buffers are gone with them.
-    ao_slots_ = {};
-    ao_samples_ = 0u;
-    ao_history_valid_ = false;
+    light_slots_ = {};
+    light_samples_ = 0u;
+    history_valid_ = picture_valid_ = false;
     const std::uint64_t n = samples;
     const D3D12_RESOURCE_FLAGS uav = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
     const D3D12_RESOURCE_STATES state = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
-    bool ok = n != 0u && create_buffer(n * 4u, D3D12_HEAP_TYPE_DEFAULT, state, uav, ao_normal_, L"rt ao normal") &&
-              create_buffer(n * 4u, D3D12_HEAP_TYPE_DEFAULT, state, uav, ao_raw_, L"rt ao raw");
+    const auto make = [&](std::uint64_t bytes, ComPtr<ID3D12Resource>& out, const wchar_t* name) {
+        return create_buffer(bytes, D3D12_HEAP_TYPE_DEFAULT, state, uav, out, name);
+    };
+    bool ok = n != 0u && make(n * 4u, light_normal_, L"rt light normal") && make(n * 8u, light_raw_, L"rt light raw") &&
+              make(n * 8u, picture_, L"rt picture");
     for (unsigned i = 0; ok && i < 2u; ++i) {
-        ok = create_buffer(n * 4u, D3D12_HEAP_TYPE_DEFAULT, state, uav, ao_z_[i], L"rt ao eye z") &&
-             create_buffer(n * 8u, D3D12_HEAP_TYPE_DEFAULT, state, uav, ao_history_[i], L"rt ao history");
-        ao_z_state_[i] = state;
-        ao_history_state_[i] = state;
+        ok = make(n * 4u, light_z_[i], L"rt light eye z") && make(n * 12u, light_history_[i], L"rt light history");
+        light_z_state_[i] = state;
+        light_history_state_[i] = state;
     }
-    for (unsigned i = 0; ok && i < kAoSlots; ++i) {
-        ok = create_buffer(n * 8u, D3D12_HEAP_TYPE_DEFAULT, state, uav, ao_final_[i], L"rt ao result");
-        ao_final_state_[i] = state;
+    for (unsigned i = 0; ok && i < kLightSlots; ++i) {
+        ok = make(n * 12u, light_final_[i], L"rt light result");
+        light_final_state_[i] = state;
     }
+    picture_state_ = state;
     if (!ok) {
-        for (auto& buffer : ao_z_) buffer.Reset();
-        ao_normal_.Reset();
-        ao_raw_.Reset();
-        for (auto& buffer : ao_history_) buffer.Reset();
-        for (auto& buffer : ao_final_) buffer.Reset();
+        for (auto& buffer : light_z_) buffer.Reset();
+        light_normal_.Reset();
+        light_raw_.Reset();
+        for (auto& buffer : light_history_) buffer.Reset();
+        for (auto& buffer : light_final_) buffer.Reset();
+        picture_.Reset();
         return false;
     }
-    ao_samples_ = samples;
-    std::cerr << "[rt] ao samples=" << samples << " mb=" << ((n * (16u + 16u + 8u * kAoSlots)) >> 20u) << '\n';
+    light_samples_ = samples;
+    std::cerr << "[rt] light samples=" << samples << " mb=" << ((n * (4u + 8u + 8u + 2u * 4u + 2u * 12u + 12u * kLightSlots)) >> 20u)
+              << '\n';
     return true;
 }
 
@@ -889,27 +1035,30 @@ void SceneRayTracer::to_state(ID3D12GraphicsCommandList* list, ID3D12Resource* r
     state = wanted;
 }
 
-void SceneRayTracer::trace_ao(ID3D12GraphicsCommandList* list, Allocate allocate, void* allocate_context,
-                              D3D12_GPU_DESCRIPTOR_HANDLE depth_srv, std::uint32_t width, std::uint32_t height) {
-    ao_slot_ = -1;
-    if (!ao_enabled_ || !ao_trace_pso_ || !view_known_ || depth_srv.ptr == 0u || width == 0u || height == 0u) {
+void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate allocate, void* allocate_context,
+                                    D3D12_GPU_DESCRIPTOR_HANDLE depth_srv, std::uint32_t width,
+                                    std::uint32_t height) {
+    light_slot_ = -1;
+    if (!lighting_enabled_ || !trace_pso_ || !view_known_ || depth_srv.ptr == 0u || width == 0u || height == 0u) {
         return;
     }
-    const std::uint32_t ao_width = (width + ao_factor_ - 1u) / ao_factor_;
-    const std::uint32_t ao_height = (height + ao_factor_ - 1u) / ao_factor_;
-    if (!ensure_ao_buffers(ao_width * ao_height)) {
+    const std::uint32_t factor = sample_factor(width, height);
+    const std::uint32_t sample_width = (width + factor - 1u) / factor;
+    const std::uint32_t sample_height = (height + factor - 1u) / factor;
+    if (!ensure_lighting_buffers(sample_width * sample_height)) {
         return;
     }
-    if (ao_width != ao_history_width_ || ao_height != ao_history_height_) {
-        ao_history_valid_ = false;
-        ao_history_width_ = ao_width;
-        ao_history_height_ = ao_height;
+    if (sample_width != history_width_ || sample_height != history_height_ || factor != history_factor_) {
+        history_valid_ = false;
+        history_width_ = sample_width;
+        history_height_ = sample_height;
+        history_factor_ = factor;
     }
-    const RtUpload upload = allocate(allocate_context, sizeof(RtAoConstants), 256u);
+    const RtUpload upload = allocate(allocate_context, sizeof(RtLightConstants), 256u);
     if (upload.cpu == nullptr) {
         return;
     }
-    RtAoConstants c{};
+    RtLightConstants c{};
     std::copy(view_.projection.begin(), view_.projection.end(), c.projection);
     c.depth[0] = view_.z_scale;
     c.depth[1] = view_.z_offset;
@@ -918,93 +1067,188 @@ void SceneRayTracer::trace_ao(ID3D12GraphicsCommandList* list, Allocate allocate
     std::copy(view_.viewport.begin(), view_.viewport.end(), c.viewport);
     c.target_size[0] = width;
     c.target_size[1] = height;
-    c.ao_size[0] = ao_width;
-    c.ao_size[1] = ao_height;
+    c.sample_size[0] = sample_width;
+    c.sample_size[1] = sample_height;
     c.near_plane = near_plane(view_);
-    c.frame = ao_frame_++;
-    c.radius = ao_radius_;
-    c.strength = ao_strength_;
-    c.rays = ao_rays_;
-    c.factor = ao_factor_;
-    c.history_frames = ao_history_frames_;
-    // The previous samples' eye position of a point: their camera times the inverse of this one.
+    c.frame = light_frame_++;
+    c.range = range_;
+    c.strength = strength_;
+    c.rays = rays_;
+    c.factor = factor;
+    c.history_frames = history_frames_;
+    c.contact = contact_;
+    c.contact_range = contact_range_;
+    c.sky_saturation = sky_saturation_;
+    c.fallback = fallback_;
+    {
+        // The game's visible sun (GALAXY_RT_SUN overrides it); without one, no sun light.
+        std::array<float, 3> l = sun_direction_;
+        bool sun_present = sun_override_;
+        if (!sun_override_) {
+            sun_present = game_sun(l, 2000u);
+        }
+        if (camera_known_) {
+            l = {camera_[0] * l[0] + camera_[1] * l[1] + camera_[2] * l[2],
+                 camera_[4] * l[0] + camera_[5] * l[1] + camera_[6] * l[2],
+                 camera_[8] * l[0] + camera_[9] * l[1] + camera_[10] * l[2]};
+        }
+        const float length = std::sqrt(l[0] * l[0] + l[1] * l[1] + l[2] * l[2]);
+        const std::array<float, 3> fallback_sun{0.3f, 0.8f, 0.5f};
+        for (unsigned i = 0; i < 3u; ++i) {
+            c.sun[i] = length > 1e-6f ? l[i] / length : fallback_sun[i] / std::sqrt(0.98f);
+            c.sun_light[i] = sun_present ? sun_color_[i] * sun_light_ : 0.0f;
+        }
+        c.sun[3] = std::tan(sun_size_ * 3.14159265f / 180.0f);
+        // Without a sun the sky and bounce light carry the whole picture.
+        c.sun_light[3] = sun_present ? sky_light_ : 1.0f;
+    }
+    // Earlier frames' eye positions of a point: their camera times the inverse of this one.
     std::array<float, 12> inverse{};
-    const bool history = ao_history_valid_ && camera_known_ && history_camera_known_ &&
-                         affine_inverse(camera_, inverse);
+    const bool invertible = camera_known_ && affine_inverse(camera_, inverse);
+    const bool history = history_valid_ && invertible && history_camera_known_;
+    const bool picture = picture_valid_ && invertible && picture_camera_known_ && picture_width_ == sample_width &&
+                         picture_height_ == sample_height && picture_factor_ == factor;
     const std::array<float, 12> reproject = history ? affine_multiply(history_camera_, inverse) : kIdentity34;
-    c.flags = history ? 1u : 0u;
+    const std::array<float, 12> to_picture = picture ? affine_multiply(picture_camera_, inverse) : kIdentity34;
+    c.flags = (history ? 1u : 0u) | (picture ? 2u : 0u) | (show_term_ == 2u ? 4u : 0u) | (show_term_ == 3u ? 8u : 0u);
     std::memcpy(c.reproject, reproject.data(), sizeof(c.reproject));
+    std::memcpy(c.picture, to_picture.data(), sizeof(c.picture));
     std::memcpy(upload.cpu, &c, sizeof(c));
 
-    const unsigned current = ao_parity_;
+    const unsigned current = light_parity_;
     const unsigned previous = current ^ 1u;
-    const unsigned slot = ao_next_slot_;
-    ao_next_slot_ = (ao_next_slot_ + 1u) % kAoSlots;
+    const unsigned slot = next_light_slot_;
+    next_light_slot_ = (next_light_slot_ + 1u) % kLightSlots;
     constexpr D3D12_RESOURCE_STATES kUav = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
     constexpr D3D12_RESOURCE_STATES kRead = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
-    to_state(list, ao_z_[current].Get(), ao_z_state_[current], kUav);
-    to_state(list, ao_history_[current].Get(), ao_history_state_[current], kUav);
-    to_state(list, ao_z_[previous].Get(), ao_z_state_[previous], kRead);
-    to_state(list, ao_history_[previous].Get(), ao_history_state_[previous], kRead);
-    to_state(list, ao_final_[slot].Get(), ao_final_state_[slot], kUav);
+    to_state(list, light_z_[current].Get(), light_z_state_[current], kUav);
+    to_state(list, light_history_[current].Get(), light_history_state_[current], kUav);
+    to_state(list, light_z_[previous].Get(), light_z_state_[previous], kRead);
+    to_state(list, light_history_[previous].Get(), light_history_state_[previous], kRead);
+    to_state(list, light_final_[slot].Get(), light_final_state_[slot], kUav);
+    to_state(list, picture_.Get(), picture_state_, kRead);
+    to_state(list, picture_sums_.Get(), picture_sums_state_, kRead);
 
-    const UINT groups_x = (ao_width + 7u) / 8u;
-    const UINT groups_y = (ao_height + 7u) / 8u;
-    list->SetComputeRootSignature(ao_root_.Get());
-    list->SetComputeRootConstantBufferView(kAoFrame, upload.gpu);
-    list->SetComputeRootShaderResourceView(kAoScene, tlas_->GetGPUVirtualAddress());
-    list->SetComputeRootDescriptorTable(kAoDepth, depth_srv);
-    list->SetComputeRootShaderResourceView(kAoPrevZ, ao_z_[previous]->GetGPUVirtualAddress());
-    list->SetComputeRootShaderResourceView(kAoPrevHistory, ao_history_[previous]->GetGPUVirtualAddress());
-    list->SetComputeRootShaderResourceView(kAoHistoryIn, ao_history_[previous]->GetGPUVirtualAddress());
-    list->SetComputeRootUnorderedAccessView(kAoZ, ao_z_[current]->GetGPUVirtualAddress());
-    list->SetComputeRootUnorderedAccessView(kAoNormal, ao_normal_->GetGPUVirtualAddress());
-    list->SetComputeRootUnorderedAccessView(kAoRaw, ao_raw_->GetGPUVirtualAddress());
-    list->SetComputeRootUnorderedAccessView(kAoHistory, ao_history_[current]->GetGPUVirtualAddress());
-    list->SetComputeRootUnorderedAccessView(kAoFinal, ao_final_[slot]->GetGPUVirtualAddress());
-    list->SetPipelineState(ao_trace_pso_.Get());
+    const UINT groups_x = (sample_width + 7u) / 8u;
+    const UINT groups_y = (sample_height + 7u) / 8u;
+    list->SetComputeRootSignature(light_root_.Get());
+    list->SetComputeRootConstantBufferView(kLightFrame, upload.gpu);
+    list->SetComputeRootShaderResourceView(kLightScene, tlas_->GetGPUVirtualAddress());
+    list->SetComputeRootDescriptorTable(kLightDepth, depth_srv);
+    list->SetComputeRootShaderResourceView(kLightPrevZ, light_z_[previous]->GetGPUVirtualAddress());
+    list->SetComputeRootShaderResourceView(kLightPrevHistory, light_history_[previous]->GetGPUVirtualAddress());
+    list->SetComputeRootShaderResourceView(kLightHistoryIn, light_history_[previous]->GetGPUVirtualAddress());
+    list->SetComputeRootShaderResourceView(kLightPicture, picture_->GetGPUVirtualAddress());
+    list->SetComputeRootShaderResourceView(kLightPictureSums, picture_sums_->GetGPUVirtualAddress());
+    list->SetComputeRootUnorderedAccessView(kLightZ, light_z_[current]->GetGPUVirtualAddress());
+    list->SetComputeRootUnorderedAccessView(kLightNormal, light_normal_->GetGPUVirtualAddress());
+    list->SetComputeRootUnorderedAccessView(kLightRaw, light_raw_->GetGPUVirtualAddress());
+    list->SetComputeRootUnorderedAccessView(kLightHistory, light_history_[current]->GetGPUVirtualAddress());
+    list->SetComputeRootUnorderedAccessView(kLightFinal, light_final_[slot]->GetGPUVirtualAddress());
+    list->SetPipelineState(trace_pso_.Get());
     list->Dispatch(groups_x, groups_y, 1u);
     const D3D12_RESOURCE_BARRIER all_uav = uav_barrier(nullptr);
     list->ResourceBarrier(1u, &all_uav);
-    list->SetPipelineState(ao_temporal_pso_.Get());
+    list->SetPipelineState(temporal_pso_.Get());
     list->Dispatch(groups_x, groups_y, 1u);
     list->ResourceBarrier(1u, &all_uav);
-    to_state(list, ao_history_[current].Get(), ao_history_state_[current], kRead);
-    list->SetComputeRootShaderResourceView(kAoHistoryIn, ao_history_[current]->GetGPUVirtualAddress());
-    list->SetComputeRootUnorderedAccessView(kAoHistory, ao_raw_->GetGPUVirtualAddress());
-    list->SetPipelineState(ao_spatial_pso_.Get());
+    to_state(list, light_history_[current].Get(), light_history_state_[current], kRead);
+    list->SetComputeRootShaderResourceView(kLightHistoryIn, light_history_[current]->GetGPUVirtualAddress());
+    // The history slot is read-only from here; its UAV parameter names a buffer the filters do
+    // not touch.
+    list->SetComputeRootUnorderedAccessView(kLightHistory, light_normal_->GetGPUVirtualAddress());
+    list->SetPipelineState(spatial_a_pso_.Get());
     list->Dispatch(groups_x, groups_y, 1u);
-    to_state(list, ao_final_[slot].Get(), ao_final_state_[slot], D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+    list->ResourceBarrier(1u, &all_uav);
+    list->SetPipelineState(spatial_b_pso_.Get());
+    list->Dispatch(groups_x, groups_y, 1u);
+    to_state(list, light_final_[slot].Get(), light_final_state_[slot], kLightRead);
 
-    AoSlot& info = ao_slots_[slot];
+    LightSlot& info = light_slots_[slot];
     info.view = view_;
     info.camera = camera_;
     info.camera_known = camera_known_;
     info.width = width;
     info.height = height;
-    info.ao_width = ao_width;
-    info.ao_height = ao_height;
+    info.sample_width = sample_width;
+    info.sample_height = sample_height;
+    info.factor = factor;
     info.near_plane = c.near_plane;
     history_camera_ = camera_;
     history_camera_known_ = camera_known_;
-    ao_parity_ = previous;
-    ao_history_valid_ = true;
-    ao_slot_ = static_cast<int>(slot);
+    light_parity_ = previous;
+    history_valid_ = true;
+    light_slot_ = static_cast<int>(slot);
+}
+
+void SceneRayTracer::capture_picture(ID3D12GraphicsCommandList* list, D3D12_GPU_DESCRIPTOR_HANDLE color_depth_table,
+                                     std::uint32_t width, std::uint32_t height) {
+    if (!lighting_active() || !capture_pso_ || list == nullptr || color_depth_table.ptr == 0u || !view_known_ ||
+        width == 0u || height == 0u) {
+        return;
+    }
+    const std::uint32_t factor = sample_factor(width, height);
+    const std::uint32_t sample_width = (width + factor - 1u) / factor;
+    const std::uint32_t sample_height = (height + factor - 1u) / factor;
+    if (!ensure_lighting_buffers(sample_width * sample_height)) {
+        return;
+    }
+    // This scene's own lighting is divided out where its result matches the picture.
+    const bool divide = light_slot_ >= 0 && light_slots_[static_cast<unsigned>(light_slot_)].width == width &&
+                        light_slots_[static_cast<unsigned>(light_slot_)].height == height;
+    RtCaptureConstants c{};
+    c.depth[0] = view_.z_scale;
+    c.depth[1] = view_.z_offset;
+    c.depth[2] = view_.min_depth;
+    c.depth[3] = view_.max_depth;
+    std::copy(view_.viewport.begin(), view_.viewport.end(), c.viewport);
+    c.target_size[0] = width;
+    c.target_size[1] = height;
+    c.sample_size[0] = sample_width;
+    c.sample_size[1] = sample_height;
+    c.factor = factor;
+    c.emissive = emissive_;
+    c.divide = divide ? 1u : 0u;
+    c.strength = strength_;
+
+    to_state(list, picture_.Get(), picture_state_, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+    to_state(list, picture_sums_.Get(), picture_sums_state_, D3D12_RESOURCE_STATE_COPY_DEST);
+    list->CopyBufferRegion(picture_sums_.Get(), 0u, stats_zero_.Get(), 0u, kPictureSumsBytes);
+    to_state(list, picture_sums_.Get(), picture_sums_state_, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+    list->SetComputeRootSignature(capture_root_.Get());
+    list->SetPipelineState(capture_pso_.Get());
+    list->SetComputeRoot32BitConstants(kCaptureConstants, sizeof(c) / 4u, &c, 0u);
+    list->SetComputeRootDescriptorTable(kCaptureSources, color_depth_table);
+    list->SetComputeRootShaderResourceView(
+        kCaptureFinal, divide ? light_final_[static_cast<unsigned>(light_slot_)]->GetGPUVirtualAddress()
+                              : light_normal_->GetGPUVirtualAddress());
+    list->SetComputeRootUnorderedAccessView(kCapturePicture, picture_->GetGPUVirtualAddress());
+    list->SetComputeRootUnorderedAccessView(kCaptureSums, picture_sums_->GetGPUVirtualAddress());
+    list->Dispatch((sample_width + 7u) / 8u, (sample_height + 7u) / 8u, 1u);
+    to_state(list, picture_.Get(), picture_state_, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+    to_state(list, picture_sums_.Get(), picture_sums_state_, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+    ++window_.captures;
+    picture_valid_ = true;
+    picture_camera_ = camera_;
+    picture_camera_known_ = camera_known_;
+    picture_width_ = sample_width;
+    picture_height_ = sample_height;
+    picture_factor_ = factor;
 }
 
 void SceneRayTracer::composite(ID3D12GraphicsCommandList* list, D3D12_CPU_DESCRIPTOR_HANDLE target,
                                D3D12_GPU_DESCRIPTOR_HANDLE depth_srv, std::uint32_t width, std::uint32_t height,
                                int slot, bool reproject) {
-    if (list == nullptr || slot < 0 || slot >= static_cast<int>(kAoSlots) || !composite_pso_ ||
+    if (list == nullptr || slot < 0 || slot >= static_cast<int>(kLightSlots) || !composite_pso_ ||
         depth_srv.ptr == 0u) {
         return;
     }
     const auto index = static_cast<unsigned>(slot);
-    const AoSlot& info = ao_slots_[index];
-    if (!ao_final_[index] || info.ao_width == 0u || info.width != width || info.height != height) {
+    const LightSlot& info = light_slots_[index];
+    if (!light_final_[index] || info.sample_width == 0u || info.width != width || info.height != height) {
         return;
     }
-    to_state(list, ao_final_[index].Get(), ao_final_state_[index], D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+    to_state(list, light_final_[index].Get(), light_final_state_[index], kLightRead);
     // Each sub-frame's evaluation list wrote the reprojection before its replay runs.
     reproject = reproject && reproject_;
     RtCompositeConstants c{};
@@ -1014,10 +1258,10 @@ void SceneRayTracer::composite(ID3D12GraphicsCommandList* list, D3D12_CPU_DESCRI
     c.depth[2] = info.view.min_depth;
     c.depth[3] = info.view.max_depth;
     std::copy(info.view.viewport.begin(), info.view.viewport.end(), c.viewport);
-    c.ao_size[0] = info.ao_width;
-    c.ao_size[1] = info.ao_height;
-    c.factor = ao_factor_;
-    c.flags = (reproject ? 1u : 0u) | (ao_view_ ? 2u : 0u);
+    c.sample_size[0] = info.sample_width;
+    c.sample_size[1] = info.sample_height;
+    c.factor = info.factor;
+    c.flags = (reproject ? 1u : 0u) | (show_lighting_ ? 2u : 0u);
     c.slot = index;
     c.near_plane = info.near_plane;
     list->OMSetRenderTargets(1u, &target, FALSE, nullptr);
@@ -1028,23 +1272,24 @@ void SceneRayTracer::composite(ID3D12GraphicsCommandList* list, D3D12_CPU_DESCRI
     list->SetGraphicsRootSignature(composite_root_.Get());
     list->SetPipelineState(composite_pso_.Get());
     list->SetGraphicsRoot32BitConstants(0u, sizeof(c) / 4u, &c, 0u);
-    list->SetGraphicsRootShaderResourceView(1u, ao_final_[index]->GetGPUVirtualAddress());
+    list->SetGraphicsRootShaderResourceView(1u, light_final_[index]->GetGPUVirtualAddress());
     list->SetGraphicsRootDescriptorTable(2u, depth_srv);
     list->SetGraphicsRootShaderResourceView(3u, reproject ? reproject_->GetGPUVirtualAddress()
-                                                          : ao_final_[index]->GetGPUVirtualAddress());
+                                                          : light_final_[index]->GetGPUVirtualAddress());
     list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
     list->DrawInstanced(3u, 1u, 0u, 0u);
+    ++window_.composites;
 }
 
 void SceneRayTracer::write_reprojection(ID3D12GraphicsCommandList* list, const std::array<float, 12>& camera_t) {
-    if (list == nullptr || !ao_active() || !reproject_ || reproject_mapped_ == nullptr) {
+    if (list == nullptr || !lighting_active() || !reproject_ || reproject_mapped_ == nullptr) {
         return;
     }
     std::array<float, 12> inverse{};
     const bool invertible = affine_inverse(camera_t, inverse);
-    float rows[kAoSlots][12]{};
-    for (unsigned slot = 0; slot < kAoSlots; ++slot) {
-        const AoSlot& info = ao_slots_[slot];
+    float rows[kLightSlots][12]{};
+    for (unsigned slot = 0; slot < kLightSlots; ++slot) {
+        const LightSlot& info = light_slots_[slot];
         const std::array<float, 12> m =
             invertible && info.camera_known ? affine_multiply(info.camera, inverse) : kIdentity34;
         std::memcpy(rows[slot], m.data(), sizeof(rows[slot]));
@@ -1270,7 +1515,7 @@ bool SceneRayTracer::trace_scene(ID3D12GraphicsCommandList* list, const RtSource
     if (record_results && timestamps_) {
         list->EndQuery(timestamps_.Get(), D3D12_QUERY_TYPE_TIMESTAMP, slot * kTimestampsPerSlot + 2u);
     }
-    trace_ao(list, allocate, allocate_context, depth_srv, width, height);
+    trace_lighting(list, allocate, allocate_context, depth_srv, width, height);
     if (record_results) {
         if (timestamps_) {
             list->EndQuery(timestamps_.Get(), D3D12_QUERY_TYPE_TIMESTAMP, slot * kTimestampsPerSlot + 3u);

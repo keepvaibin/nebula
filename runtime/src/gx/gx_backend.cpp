@@ -7014,6 +7014,9 @@ void GxBackend::on_fifo_marker(FifoMarker marker, const std::array<float, 12>* v
         }
     } else {
         trace_rt_scene();
+        if (renderer_.rt_active() && side_layer_ == kSceneLayer) {
+            renderer_.rt_capture_picture();
+        }
     }
     const bool was_temporal = temporal_scene_;
     const bool was_motion = motion_scene_;
@@ -9222,6 +9225,14 @@ void GxBackend::execute_efb_peek_on_thread(FrameChunk& chunk) {
             request->depth_pixels.empty()
                 ? renderer_.peek_efb(request->x, request->y, request->kind, value)
                 : renderer_.capture_pointer_depth(request->depth_pixels);
+        // GALAXY_TRACE_PEEKS=1: every EFB peek with the scene state it read (diagnostics).
+        static const bool trace_peeks = read_env_u64("GALAXY_TRACE_PEEKS", 0u) != 0u;
+        if (trace_peeks && request->depth_pixels.empty()) [[unlikely]] {
+            std::fprintf(stderr, "[peek] frame=%llu scene=%d phase=%u layer=%u kind=%u x=%u y=%u value=%08x ok=%d\n",
+                         static_cast<unsigned long long>(renderer_.frame_index()), scene_phase_ ? 1 : 0,
+                         static_cast<unsigned>(rt_phase_), side_layer_, static_cast<unsigned>(request->kind),
+                         request->x, request->y, value, success ? 1 : 0);
+        }
         {
             std::lock_guard<std::mutex> lock(request->mutex);
             request->value = value;
