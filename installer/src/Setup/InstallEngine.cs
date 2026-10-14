@@ -666,7 +666,8 @@ namespace Nebula.Setup
             string self = Assembly.GetExecutingAssembly().Location;
             if (!string.Equals(Path.GetFullPath(self), layout.SetupCopy, StringComparison.OrdinalIgnoreCase))
                 File.Copy(self, layout.SetupCopy, true);
-            Integration.Register(layout, BuildInfo.Version, request.DesktopShortcut);
+            foreach (var failure in Integration.Register(layout, BuildInfo.Version, request.DesktopShortcut))
+                Log("Could not create the shortcut " + failure + "; Nebula.exe is in " + versionDir + ".");
             InstalledVersionDir = versionDir;
             Log("Installed " + BuildInfo.Version + " to " + versionDir + (previous != null ? "; kept " + previous + " for rollback." : "."));
         }

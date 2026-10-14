@@ -120,17 +120,28 @@ namespace Nebula.Setup
             get { return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Programs), "Nebula"); }
         }
 
-        public static void Register(InstallLayout layout, string version, bool desktop)
+        /// <summary>
+        /// Shortcuts, the install-root key and the Add/Remove Programs entry. A shortcut that cannot be written (Wine's
+        /// Mono has no late-bound COM for WScript.Shell) is returned as a failure, not thrown: Nebula runs without it,
+        /// and the registry entries still follow.
+        /// </summary>
+        public static IList<string> Register(InstallLayout layout, string version, bool desktop)
         {
             string app = layout.VersionDir(version);
+            var failures = new List<string>();
+            Action<string, string, string, string, string> link = (path, target, arguments, directory, description) =>
+            {
+                try { Shortcut(path, target, arguments, directory, description); }
+                catch (Exception error) { failures.Add(Path.GetFileName(path) + ": " + error.Message); }
+            };
             Directory.CreateDirectory(StartMenuFolder);
-            Shortcut(Path.Combine(StartMenuFolder, "Nebula.lnk"), Path.Combine(app, "Nebula.exe"), "", app, "Play Nebula");
-            Shortcut(Path.Combine(StartMenuFolder, "Nebula Settings.lnk"), Path.Combine(app, "NebulaSettings.exe"), "", app, "Display, graphics, audio and game files");
-            Shortcut(Path.Combine(StartMenuFolder, "Update Nebula.lnk"), layout.SetupCopy, "--update", layout.Root, "Check for and install Nebula updates");
-            Shortcut(Path.Combine(StartMenuFolder, "Nebula Setup.lnk"), layout.SetupCopy, "", layout.Root, "Repair, restore or uninstall Nebula");
+            link(Path.Combine(StartMenuFolder, "Nebula.lnk"), Path.Combine(app, "Nebula.exe"), "", app, "Play Nebula");
+            link(Path.Combine(StartMenuFolder, "Nebula Settings.lnk"), Path.Combine(app, "NebulaSettings.exe"), "", app, "Display, graphics, audio and game files");
+            link(Path.Combine(StartMenuFolder, "Update Nebula.lnk"), layout.SetupCopy, "--update", layout.Root, "Check for and install Nebula updates");
+            link(Path.Combine(StartMenuFolder, "Nebula Setup.lnk"), layout.SetupCopy, "", layout.Root, "Repair, restore or uninstall Nebula");
             string desktopLink = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory), "Nebula.lnk");
             if (desktop || File.Exists(desktopLink))
-                Shortcut(desktopLink, Path.Combine(app, "Nebula.exe"), "", app, "Play Nebula");
+                link(desktopLink, Path.Combine(app, "Nebula.exe"), "", app, "Play Nebula");
 
             using (var key = Registry.CurrentUser.CreateSubKey(@"Software\Nebula")) key.SetValue("InstallRoot", layout.Root);
             using (var key = Registry.CurrentUser.CreateSubKey(UninstallKey))
@@ -145,6 +156,7 @@ namespace Nebula.Setup
                 key.SetValue("URLInfoAbout", "https://github.com/" + BuildInfo.Repository);
                 key.SetValue("NoRepair", 0, RegistryValueKind.DWord);
             }
+            return failures;
         }
 
         private static void Shortcut(string path, string target, string arguments, string workingDirectory, string description)
