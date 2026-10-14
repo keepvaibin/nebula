@@ -809,6 +809,7 @@ private:
     // The current object's name (NameObj::mName) into `out`; its guest address, 0 for none.
     std::uint32_t rt_object_name(char* out, std::size_t size);
     std::uint32_t rt_object_ = 0u;   // the last NameObj marker's object
+    std::uint32_t rt_draw_buffer_ = 0xFFFFu;   // the last draw buffer marker's type (bit 16: translucent)
     // Per object name (its guest address) the class its name gives (rt_named_class), + 1.
     std::unordered_map<std::uint32_t, std::uint8_t> rt_named_;
     // Whether a batch starting with `call` is traced geometry; the scene's first one also gives

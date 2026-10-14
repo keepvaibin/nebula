@@ -144,6 +144,7 @@ void note_rt_material(const RtMaterialNote& note) {
         (static_cast<std::uint64_t>(note.blend) << 16u));
     mix(note.combiner);
     mix(note.texture);
+    mix(note.buffer);
     const std::lock_guard guard(lock);
     if (seen.size() >= 20000u || !seen.insert(key).second) {
         return;
@@ -151,11 +152,12 @@ void note_rt_material(const RtMaterialNote& note) {
     static const char* const kBlends[4] = {"opaque", "alpha", "add", "other"};
     std::fprintf(stderr,
                  "[rt-material] name=%s object=%08X class=%u features=0x%02X stages=%u texgens=%u ind=%u "
-                 "chan=%08X env=%06X blend=%s tex=%08X %ux%u fmt=%u phase=%u\n",
+                 "chan=%08X env=%06X blend=%s tex=%08X %ux%u fmt=%u phase=%u buffer=%u%s\n",
                  note.name[0] != 0 ? note.name : "-", note.object, static_cast<unsigned>(note.surface.surface_class),
                  static_cast<unsigned>(note.surface.features), note.stages, note.texgens, note.indirect, note.channel,
                  note.combiner, kBlends[note.blend & 3u], note.texture, note.texture_size & 0xFFFFu,
-                 note.texture_size >> 16u, note.texture_format, note.phase);
+                 note.texture_size >> 16u, note.texture_format, note.phase, note.buffer & 0xFFFFu,
+                 (note.buffer & 0x10000u) != 0u ? "x" : "o");
 }
 
 }  // namespace galaxy::gx

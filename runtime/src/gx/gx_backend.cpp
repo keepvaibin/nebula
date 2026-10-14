@@ -6617,6 +6617,10 @@ void GxBackend::on_motion_marker(std::uint8_t kind, std::uint16_t aux, std::uint
         if (aux == motion::kCategoryPhase) {
             note_rt_phase(static_cast<std::uint8_t>(a));
         }
+        if (aux == motion::kCategoryBufferOpa || aux == motion::kCategoryBufferXlu) {
+            // The draw buffer (MR::DrawBufferType) the next draws come from, for the census.
+            rt_draw_buffer_ = (a & 0xFFFFu) | (aux == motion::kCategoryBufferXlu ? 0x10000u : 0u);
+        }
         if (scene_2d_open_) {
             ++scene_2d_categories_;
         }
@@ -7032,6 +7036,7 @@ void GxBackend::note_rt_material() {
     note.texture_size = ((image0 & 0x3FFu) + 1u) | ((((image0 >> 10u) & 0x3FFu) + 1u) << 16u);
     note.texture_format = (image0 >> 20u) & 0xFu;
     note.phase = rt_phase_;
+    note.buffer = rt_draw_buffer_;
     galaxy::gx::note_rt_material(note);
 }
 
