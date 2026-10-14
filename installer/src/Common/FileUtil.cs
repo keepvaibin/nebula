@@ -250,6 +250,66 @@ namespace Nebula
             return result;
         }
 
+        /// <summary>
+        /// The named streams of a file or directory, by bare name ("galaxy.isfs.meta"). Volumes without named
+        /// streams (FAT32, exFAT) report none.
+        /// </summary>
+        public static List<KeyValuePair<string, byte[]>> ReadNamedStreams(string path, int maximumBytes)
+        {
+            var streams = new List<KeyValuePair<string, byte[]>>();
+            NativeMethods.WIN32_FIND_STREAM_DATA data;
+            IntPtr find = NativeMethods.FindFirstStreamW(NativePath(path), 0, out data, 0);
+            if (find == new IntPtr(-1))
+            {
+                int error = Marshal.GetLastWin32Error();
+                // ERROR_HANDLE_EOF: none; ERROR_INVALID_FUNCTION, ERROR_NOT_SUPPORTED, ERROR_INVALID_PARAMETER: no stream support.
+                if (error == 38 || error == 1 || error == 50 || error == 87) return streams;
+                throw new Win32Exception(error, path);
+            }
+            try
+            {
+                do
+                {
+                    string name = data.cStreamName;
+                    if (name == "::$DATA") continue;
+                    if (!name.StartsWith(":", StringComparison.Ordinal) || !name.EndsWith(":$DATA", StringComparison.Ordinal))
+                        throw new IOException("Unexpected stream " + name + " on " + path + ".");
+                    if (data.StreamSize > maximumBytes) throw new IOException("The stream " + name + " of " + path + " is too large.");
+                    using (var handle = NativeMethods.CreateFileW(NativePath(path) + name, 0x80000000, 1, IntPtr.Zero, 3, 0x02000000, IntPtr.Zero))
+                    {
+                        if (handle.IsInvalid) throw new Win32Exception(Marshal.GetLastWin32Error(), path + name);
+                        using (var stream = new FileStream(handle, FileAccess.Read))
+                        {
+                            var bytes = new byte[data.StreamSize];
+                            int read = 0, count;
+                            while (read < bytes.Length && (count = stream.Read(bytes, read, bytes.Length - read)) > 0) read += count;
+                            if (read != bytes.Length || stream.ReadByte() != -1) throw new IOException("The stream " + name + " of " + path + " changed while it was read.");
+                            streams.Add(new KeyValuePair<string, byte[]>(name.Substring(1, name.Length - 7), bytes));
+                        }
+                    }
+                } while (NativeMethods.FindNextStreamW(find, out data));
+                int last = Marshal.GetLastWin32Error();
+                if (last != 38) throw new Win32Exception(last, path);
+            }
+            finally { NativeMethods.FindClose(find); }
+            return streams;
+        }
+
+        /// <summary>Create a named stream ("galaxy.isfs.meta") of an existing file or directory.</summary>
+        public static void WriteNamedStream(string path, string name, byte[] bytes)
+        {
+            // CREATE_NEW, FILE_FLAG_BACKUP_SEMANTICS (directories hold streams as well).
+            using (var handle = NativeMethods.CreateFileW(NativePath(path) + ":" + name, 0x40000000, 0, IntPtr.Zero, 1, 0x02000000, IntPtr.Zero))
+            {
+                if (handle.IsInvalid) throw new Win32Exception(Marshal.GetLastWin32Error(), path + ":" + name);
+                using (var stream = new FileStream(handle, FileAccess.Write))
+                {
+                    stream.Write(bytes, 0, bytes.Length);
+                    stream.Flush(true);
+                }
+            }
+        }
+
         public static long FreeBytes(string path)
         {
             ulong available, total, free;

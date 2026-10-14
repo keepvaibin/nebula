@@ -130,7 +130,7 @@ namespace Nebula.Launcher
 
         // The runtime holds a named mutex while it runs (runtime_instance.cpp). Automated sessions use private
         // lease names (GALAXY_INSTANCE_LEASE), so only the player's lease counts, not every NebulaRuntime.exe process.
-        private static bool RuntimeLeaseHeld()
+        internal static bool RuntimeLeaseHeld()
         {
             Mutex lease;
             if (!Mutex.TryOpenExisting(@"Local\Nebula.RMGE01.NativeRuntime", out lease)) return false;
@@ -363,13 +363,18 @@ namespace Nebula.Launcher
             recording.Items.AddRange(new[] { "No recording", "Lightweight recording", "Detailed recording" });
             Combo(advanced, recording, 320, y);
             y += 44;
-            Button(advanced, "Import saves…", 12, y, 250).Click += delegate { ImportSave(); };
-            Button(advanced, "Open save folder", 270, y, 170).Click += delegate
+            Button(advanced, "Export saves…", 12, y, 170).Click += delegate { ExportSaves(); };
+            var importSaves = Button(advanced, "Import saves…", 190, y, 170);
+            var importMenu = new ContextMenuStrip();
+            importMenu.Items.Add("From a zip file…", null, delegate { ImportSaves(true); });
+            importMenu.Items.Add("From a folder…", null, delegate { ImportSaves(false); });
+            importSaves.Click += delegate { importMenu.Show(importSaves, new Point(0, importSaves.Height)); };
+            Button(advanced, "Open save folder", 368, y, 170).Click += delegate
             {
                 Directory.CreateDirectory(NebulaPaths.Saves);
                 Process.Start("explorer.exe", "\"" + NebulaPaths.Saves + "\"");
             };
-            Button(advanced, "Open diagnostics", 448, y, 170).Click += delegate
+            Button(advanced, "Open diagnostics", 546, y, 170).Click += delegate
             {
                 Directory.CreateDirectory(NebulaPaths.Sessions);
                 Process.Start("explorer.exe", "\"" + NebulaPaths.Sessions + "\"");
@@ -896,18 +901,45 @@ namespace Nebula.Launcher
             }
         }
 
-        private void ImportSave()
+        private void ExportSaves()
         {
-            using (var dialog = new FolderBrowserDialog { Description = "Choose a saves folder from an earlier installation" })
+            using (var dialog = new FolderBrowserDialog { Description = "Choose a folder for the saves archive." })
             {
                 if (dialog.ShowDialog(this) != DialogResult.OK) return;
                 try
                 {
-                    string message = SaveImport.Import(dialog.SelectedPath);
-                    MessageBox.Show(this, message, "Nebula", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    string archive = SaveArchive.Export(dialog.SelectedPath);
+                    MessageBox.Show(this, "Saves exported to " + archive + ".", "Nebula", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 }
                 catch (Exception error) { MessageBox.Show(this, error.Message, "Nebula", MessageBoxButtons.OK, MessageBoxIcon.Error); }
             }
+        }
+
+        // A zip from Export saves (or another zip of a saves folder), or a saves folder.
+        private void ImportSaves(bool zip)
+        {
+            string source = null;
+            if (zip)
+            {
+                using (var dialog = new OpenFileDialog { Title = "Import saves", Filter = "Zip archives (*.zip)|*.zip", CheckFileExists = true })
+                    if (dialog.ShowDialog(this) == DialogResult.OK) source = dialog.FileName;
+            }
+            else
+            {
+                using (var dialog = new FolderBrowserDialog { Description = "Choose a saves folder.", ShowNewFolderButton = false })
+                    if (dialog.ShowDialog(this) == DialogResult.OK) source = dialog.SelectedPath;
+            }
+            if (source == null) return;
+            try
+            {
+                string message = SaveArchive.Import(source, delegate
+                {
+                    return MessageBox.Show(this, "Replace the current saves? They are moved to a backup folder.", "Nebula",
+                                           MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.Yes;
+                });
+                if (message != null) MessageBox.Show(this, message, "Nebula", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+            catch (Exception error) { MessageBox.Show(this, error.Message, "Nebula", MessageBoxButtons.OK, MessageBoxIcon.Error); }
         }
     }
 
@@ -1046,55 +1078,6 @@ namespace Nebula.Launcher
             });
             thread.IsBackground = false;
             thread.Start();
-        }
-    }
-
-    /// <summary>Import a GalaxyRecomp save-data folder, alternate data streams included.</summary>
-    internal static class SaveImport
-    {
-        private const string GameSave = @"title\00010000\524d4745\data\GameData.bin";
-
-        public static string Import(string selected)
-        {
-            string sourceRoot = FileUtil.FinalPath(Path.GetFullPath(selected));
-            if (!File.Exists(Path.Combine(sourceRoot, GameSave)))
-            {
-                string nested = Path.Combine(sourceRoot, "save-data");
-                if (File.Exists(Path.Combine(nested, GameSave))) sourceRoot = FileUtil.FinalPath(nested);
-                else throw new InvalidOperationException("This folder does not contain Super Mario Galaxy saves (" + GameSave + " was not found).");
-            }
-            if (Process.GetProcessesByName("NebulaRuntime").Length > 0)
-                throw new InvalidOperationException("Close the game before importing a save.");
-            string target = NebulaPaths.Saves;
-            string staging = target + ".import-" + Guid.NewGuid().ToString("N").Substring(0, 8);
-            int count = 0;
-            FileUtil.CopyTreeWithStreams(sourceRoot, staging, delegate(string f) { count++; });
-            // Every file, directory and stream must match its source before switching.
-            var entries = new List<string> { sourceRoot };
-            entries.AddRange(Directory.GetDirectories(sourceRoot, "*", SearchOption.AllDirectories));
-            entries.AddRange(Directory.GetFiles(sourceRoot, "*", SearchOption.AllDirectories));
-            int rootLength = sourceRoot.TrimEnd('\\').Length;
-            foreach (var file in entries)
-            {
-                string relative = file.Length > rootLength ? file.Substring(rootLength + 1) : "";
-                var a = FileUtil.StreamDigests(file);
-                var b = FileUtil.StreamDigests(Path.Combine(staging, relative));
-                if (a.Count != b.Count || a.Any(p => !b.ContainsKey(p.Key) || b[p.Key] != p.Value))
-                {
-                    FileUtil.DeleteTree(staging);
-                    throw new IOException("The imported copy of " + relative + " does not match the original; nothing was changed.");
-                }
-            }
-            string backup = null;
-            if (Directory.Exists(target) && Directory.EnumerateFileSystemEntries(target).Any())
-            {
-                backup = target + "-backup-" + DateTime.UtcNow.ToString("yyyyMMdd-HHmmss");
-                Directory.Move(target, backup);
-            }
-            else if (Directory.Exists(target)) Directory.Delete(target);
-            Directory.Move(staging, target);
-            return "Imported " + count + " save files from " + sourceRoot + "." +
-                (backup != null ? "\r\nYour previous Nebula saves were kept in " + backup + "." : "");
         }
     }
 }

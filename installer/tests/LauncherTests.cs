@@ -1,8 +1,12 @@
 using System;
+using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Imaging;
 using System.IO;
+using System.IO.Compression;
 using System.Linq;
+using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Windows.Forms;
 
@@ -74,6 +78,232 @@ namespace Nebula.Launcher
             Check(small[GraphicsSettings.SnapWindowSize(small, new Size(1920, 1080))] == small[small.Count - 1], "a size taller than the screen allows snaps to the largest");
         }
 
+        // ---- Save export and import ----------------------------------------------------------------------------
+
+        static byte[] Noise(int length, int seed)
+        {
+            var bytes = new byte[length];
+            new Random(seed).NextBytes(bytes);
+            return bytes;
+        }
+
+        static void PutBe32(byte[] bytes, int offset, uint value)
+        {
+            bytes[offset] = (byte)(value >> 24);
+            bytes[offset + 1] = (byte)(value >> 16);
+            bytes[offset + 2] = (byte)(value >> 8);
+            bytes[offset + 3] = (byte)value;
+        }
+
+        static byte[] GameData(int seed)
+        {
+            byte[] bytes = Noise(SaveFormat.GameDataSize, seed);
+            PutBe32(bytes, 4, 2);
+            PutBe32(bytes, 8, 19);
+            PutBe32(bytes, 12, SaveFormat.GameDataSize);
+            for (int i = 0; i < SaveFormat.GameDataNames.Length; i++)
+            {
+                int info = 0x10 + i * 0x10;
+                Array.Clear(bytes, info, 12);
+                Encoding.ASCII.GetBytes(SaveFormat.GameDataNames[i]).CopyTo(bytes, info);
+                PutBe32(bytes, info + 12, SaveFormat.GameDataOffsets[i]);
+            }
+            PutBe32(bytes, 0, SaveFormat.GameDataChecksum(bytes));
+            return bytes;
+        }
+
+        static byte[] Banner(int seed)
+        {
+            byte[] bytes = Noise(SaveFormat.BannerSize, seed);
+            Encoding.ASCII.GetBytes("WIBN").CopyTo(bytes, 0);
+            Array.Clear(bytes, 4, 28);
+            bytes[9] = 2;
+            return bytes;
+        }
+
+        static byte[] MiiDatabase(int seed)
+        {
+            byte[] bytes = Noise(SaveFormat.MiiDatabaseSize, seed);
+            PutBe32(bytes, 0, 0x524E4F44);
+            PutBe32(bytes, SaveFormat.MiiHiddenOffset, 0x524E4844);
+            bytes[bytes.Length - 2] = bytes[bytes.Length - 1] = 0;
+            int crc = SaveFormat.MiiCrc(bytes);
+            bytes[bytes.Length - 2] = (byte)(crc >> 8);
+            bytes[bytes.Length - 1] = (byte)crc;
+            return bytes;
+        }
+
+        // A saves tree as the runtime keeps it, each folder and file with a metadata stream, plus files the game
+        // never reads.
+        static void BuildSaves(string root, int seed)
+        {
+            int stream = 0;
+            foreach (string folder in SaveArchive.Folders)
+            {
+                string host = SaveArchive.HostPath(root, folder);
+                Directory.CreateDirectory(host);
+                FileUtil.WriteNamedStream(host, "galaxy.isfs.meta", Noise(18, seed * 100 + stream++));
+            }
+            var files = new Dictionary<string, byte[]>
+            {
+                { SaveArchive.GameDataPath, GameData(seed) }, { SaveArchive.BannerPath, Banner(seed) },
+                { SaveArchive.MiiDatabasePath, MiiDatabase(seed) }, { "shared2/sys/SYSCONF", Noise(0x4000, seed + 1) },
+                { "title/00000001/00000002/data/setting.txt", Noise(0x100, seed + 2) },
+                { "title/00000001/00000002/data/play_rec.dat", Noise(0x80, seed + 3) },
+            };
+            foreach (var file in files)
+            {
+                string host = SaveArchive.HostPath(root, file.Key);
+                File.WriteAllBytes(host, file.Value);
+                FileUtil.WriteNamedStream(host, "galaxy.isfs.meta", Noise(18, seed * 100 + stream++));
+            }
+            Directory.CreateDirectory(Path.Combine(root, "tmp", "sys"));
+            File.WriteAllBytes(Path.Combine(root, "tmp", "sys", "leftover.bin"), Noise(64, seed + 4));
+            File.WriteAllBytes(SaveArchive.HostPath(root, "title/00010000/524d4745/data/desktop.ini"), Noise(16, seed + 5));
+        }
+
+        static Exception Failure(Action action)
+        {
+            try { action(); return null; }
+            catch (Exception error) { return error; }
+        }
+
+        // A copy of an archive with one byte of an entry's stored data inverted.
+        static void DamageEntry(string zip, string damaged, string entryName)
+        {
+            byte[] bytes = File.ReadAllBytes(zip);
+            byte[] name = Encoding.ASCII.GetBytes(entryName);
+            int at = -1;
+            for (int i = 30; i + name.Length <= bytes.Length && at < 0; i++)
+                if (bytes[i] == name[0] && bytes.Skip(i).Take(name.Length).SequenceEqual(name)) at = i;
+            int header = at - 30, extra = bytes[header + 28] | bytes[header + 29] << 8;
+            bytes[at + name.Length + extra + 64] ^= 0xFF;
+            File.WriteAllBytes(damaged, bytes);
+        }
+
+        static string ZipWith(string path, string manifest)
+        {
+            using (ZipArchive archive = ZipFile.Open(path, ZipArchiveMode.Create))
+            using (var writer = new StreamWriter(archive.CreateEntry("nebula-saves.json").Open()))
+                writer.Write(manifest);
+            return path;
+        }
+
+        static void SaveArchiveCases(string scratch)
+        {
+            string saves = NebulaPaths.Saves, parent = Path.GetDirectoryName(saves);
+            string work = Path.Combine(scratch, "save-archive");
+            Directory.CreateDirectory(work);
+            Func<int> backupCount = delegate { return Directory.GetDirectories(parent, "saves-backup-*").Length; };
+            Func<bool> noStaging = delegate { return Directory.GetDirectories(parent, "saves.import-*").Length == 0; };
+            SaveArchive.GameIsRunning = delegate { return false; };
+
+            BuildSaves(saves, 1);
+            List<SaveItem> first = SaveArchive.ReadTree(saves);
+            Check(first.Count == 18 && first.All(i => i.Streams.Count == 1), "save fixture: 12 folders and 6 files, each with a metadata stream");
+            string zip = SaveArchive.Export(work);
+            Check(Regex.IsMatch(Path.GetFileName(zip), @"^Nebula-Saves-\d{8}-\d{6}\.zip$"), "export writes Nebula-Saves-<yyyyMMdd-HHmmss>.zip: " + Path.GetFileName(zip));
+            using (ZipArchive archive = ZipFile.OpenRead(zip))
+                Check(archive.Entries.All(e => !e.FullName.Contains("tmp/") && !e.FullName.EndsWith("desktop.ini", StringComparison.Ordinal)) &&
+                      archive.Entries.Count(e => e.FullName.StartsWith("streams/", StringComparison.Ordinal)) == 18,
+                      "export holds one stream entry per folder and file, and leaves out /tmp and files the game does not read");
+            Check(SaveArchive.Same(first, SaveArchive.ReadArchive(zip)), "the archive reads back as the exported tree");
+
+            FileUtil.DeleteTree(saves);
+            string message = SaveArchive.Import(zip, delegate { throw new Exception("asked without saves"); });
+            Check(SaveArchive.Same(first, SaveArchive.ReadWholeTree(saves)), "zip round trip: every folder, file and stream, and nothing else");
+            Check(backupCount() == 0 && noStaging() && !message.Contains("previous saves"), "an import without saves makes no backup: " + message);
+
+            FileUtil.DeleteTree(saves);
+            BuildSaves(saves, 2);
+            List<SaveItem> second = SaveArchive.ReadWholeTree(saves);
+            Check(SaveArchive.Import(zip, delegate { return false; }) == null && SaveArchive.Same(second, SaveArchive.ReadWholeTree(saves)) &&
+                  backupCount() == 0 && noStaging(), "declining the replacement changes nothing");
+            int asked = 0;
+            message = SaveArchive.Import(zip, delegate { asked++; return true; });
+            string[] backups = Directory.GetDirectories(parent, "saves-backup-*");
+            Check(asked == 1 && SaveArchive.Same(first, SaveArchive.ReadWholeTree(saves)), "import over saves restores the exported tree");
+            Check(backups.Length == 1 && SaveArchive.Same(second, SaveArchive.ReadWholeTree(backups[0])) && message.Contains(Path.GetFileName(backups[0])),
+                  "the replaced saves are kept whole in " + Path.GetFileName(backups.FirstOrDefault() ?? ""));
+
+            List<SaveItem> current = SaveArchive.ReadWholeTree(saves);
+            Func<bool> unchanged = delegate
+            {
+                return SaveArchive.Same(current, SaveArchive.ReadWholeTree(saves)) && backupCount() == 1 && noStaging();
+            };
+            byte[] zipBytes = File.ReadAllBytes(zip);
+            string truncated = Path.Combine(work, "truncated.zip");
+            File.WriteAllBytes(truncated, zipBytes.Take(zipBytes.Length / 2).ToArray());
+            string damaged = Path.Combine(work, "damaged.zip");
+            DamageEntry(zip, damaged, "saves/" + SaveArchive.GameDataPath);
+            string mismatched = Path.Combine(work, "mismatched.zip");
+            File.Copy(zip, mismatched);
+            using (ZipArchive archive = ZipFile.Open(mismatched, ZipArchiveMode.Update))
+            {
+                string name = "streams/" + SaveArchive.GameDataPath + "/galaxy.isfs.meta";
+                archive.GetEntry(name).Delete();
+                using (Stream stream = archive.CreateEntry(name).Open()) stream.Write(new byte[18], 0, 18);
+            }
+            string notZip = Path.Combine(work, "not-a-zip.zip");
+            File.WriteAllText(notZip, "saves");
+            string otherFormat = ZipWith(Path.Combine(work, "other-format.zip"), "{\"format\":\"other\",\"version\":1,\"items\":[]}");
+            string newer = ZipWith(Path.Combine(work, "newer.zip"), "{\"format\":\"nebula-saves\",\"version\":2,\"items\":[]}");
+            foreach (string bad in new[] { truncated, damaged, mismatched, notZip, otherFormat, newer })
+            {
+                Exception error = Failure(delegate { SaveArchive.Import(bad, null); });
+                Check(error is InvalidDataException && unchanged(), Path.GetFileName(bad) + " is refused and the saves are unchanged: " +
+                      (error == null ? "imported" : error.Message));
+            }
+
+            SaveArchive.Staged = delegate(string path) { if (path == SaveArchive.GameDataPath) throw new IOException("staging failed"); };
+            Exception partial = Failure(delegate { SaveArchive.Import(zip, null); });
+            SaveArchive.Staged = delegate { };
+            Check(partial != null && partial.Message == "staging failed" && unchanged(), "an import that fails part-way leaves the saves and removes its staging");
+            using (File.Open(SaveArchive.HostPath(saves, SaveArchive.GameDataPath), FileMode.Open, FileAccess.Read, FileShare.Read))
+            {
+                Exception held = Failure(delegate { SaveArchive.Import(zip, null); });
+                Check(held != null && unchanged(), "saves that cannot be moved aside are left as they were: " + (held == null ? "imported" : held.Message));
+            }
+
+            SaveArchive.GameIsRunning = delegate { return true; };
+            Exception running = Failure(delegate { SaveArchive.Import(zip, null); });
+            int archives = Directory.GetFiles(work, "Nebula-Saves-*").Length;
+            Exception exportRunning = Failure(delegate { SaveArchive.Export(work); });
+            SaveArchive.GameIsRunning = delegate { return false; };
+            Check(running is InvalidOperationException && exportRunning is InvalidOperationException && unchanged() &&
+                  Directory.GetFiles(work, "Nebula-Saves-*").Length == archives, "import and export are refused while the game runs");
+
+            // A saves folder copied with its streams imports losslessly; files the game does not read stay behind.
+            string folder = Path.Combine(work, "folder-source");
+            FileUtil.CopyTreeWithStreams(backups[0], folder, null);
+            SaveArchive.Import(folder, null);
+            Check(SaveArchive.Same(SaveArchive.ReadTree(backups[0]), SaveArchive.ReadWholeTree(saves)), "folder import keeps every stream and leaves out /tmp and desktop.ini");
+
+            // A zip made by another tool has no streams; the runtime rebuilds the metadata at the next start.
+            string plain = Path.Combine(work, "plain.zip");
+            ZipFile.CreateFromDirectory(folder, plain, CompressionLevel.Optimal, true);
+            SaveArchive.Import(plain, null);
+            List<SaveItem> imported = SaveArchive.ReadWholeTree(saves);
+            Check(imported.Count(i => !i.IsFolder) == 6 && imported.All(i => i.Streams.Count == 0) &&
+                  imported.First(i => i.Path == SaveArchive.GameDataPath).Data.SequenceEqual(GameData(2)), "a plain zip of a saves folder imports the six files without streams");
+
+            string invalidBanner = Path.Combine(work, "invalid-banner");
+            Directory.CreateDirectory(invalidBanner);
+            File.WriteAllBytes(Path.Combine(invalidBanner, "GameData.bin"), GameData(3));
+            File.WriteAllBytes(Path.Combine(invalidBanner, "banner.bin"), Noise(SaveFormat.BannerSize, 3));
+            message = SaveArchive.Import(invalidBanner, null);
+            Check(message.Contains("banner.bin") && File.Exists(SaveArchive.HostPath(saves, SaveArchive.GameDataPath)) &&
+                  !File.Exists(SaveArchive.HostPath(saves, SaveArchive.BannerPath)), "a data folder imports GameData.bin and leaves out an invalid banner");
+            File.WriteAllBytes(Path.Combine(invalidBanner, "GameData.bin"), Noise(SaveFormat.GameDataSize, 4));
+            Check(Failure(delegate { SaveArchive.Import(invalidBanner, null); }) is InvalidDataException, "an invalid GameData.bin is refused");
+
+            FileUtil.WriteNamedStream(SaveArchive.HostPath(saves, SaveArchive.GameDataPath), "galaxy.isfs.meta.pending", Noise(18, 5));
+            Check(Failure(delegate { SaveArchive.Export(work); }) is InvalidOperationException, "export is refused while a save is unfinished");
+
+            FileUtil.DeleteTree(saves);
+            foreach (string backup in Directory.GetDirectories(parent, "saves-backup-*")) FileUtil.DeleteTree(backup);
+        }
+
         [STAThread]
         public static int Main(string[] args)
         {
@@ -83,6 +313,7 @@ namespace Nebula.Launcher
                 Check(!string.IsNullOrEmpty(dataRoot) && NebulaPaths.DataRoot == dataRoot, "NEBULA_DATA_ROOT replaces the user data root");
                 string outDir = args[0];
                 WindowSizeCases();
+                SaveArchiveCases(outDir);
                 Application.EnableVisualStyles();
 
                 var first = new LaunchSession();
