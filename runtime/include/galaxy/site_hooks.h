@@ -13,8 +13,4 @@ void dispatch_site_hook(
     PpcContext* context,
     GuestMemoryV1* memory);
 
-// Level-of-detail distances are multiplied by `scale` (the draw distance
-// setting): LodCtrl::update sees camera distances divided by it.
-void set_site_hook_lod_distance_scale(float scale) noexcept;
-
 }  // namespace galaxy

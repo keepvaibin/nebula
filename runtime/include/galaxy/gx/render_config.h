@@ -141,10 +141,6 @@ struct RenderConfig {
     // Game picture aspect: 0 follows the window's shape, then 4:3, 16:10,
     // 16:9, 21:9 and 32:9. Applied at the next video frame.
     unsigned aspect_mode         = 0;
-    // Draw distance of objects (with their particles and light glows) and
-    // shadows: 0 the game's own, 1 twice, 2 four times, 3 eight times.
-    // Wider pictures show the game's cut-offs at their sides.
-    unsigned draw_distance       = 0;
 };
 
 // Frame-rate choices: 30 and the game's own 60.

@@ -23,7 +23,6 @@ namespace Nebula.Launcher
         private const int TemporalQualityCount = 5;
         public static readonly string[] TextureFilters = { "Trilinear", "2x anisotropic", "4x anisotropic", "8x anisotropic", "16x anisotropic" };
         public static readonly string[] LightingModes = { "Per pixel (enhanced)", "Per vertex (original)" };
-        public static readonly string[] DrawDistances = { "Original", "2x", "4x", "8x" };
         private static readonly int[] Anisotropy = { 1, 2, 4, 8, 16 };
         // The runtime's frame_rate_options.
         public static readonly int[] FrameRates = { 30, 60 };
@@ -42,7 +41,7 @@ namespace Nebula.Launcher
         public bool MatchOutput = true;
         public bool VSync = false;
         public int FrameRate = 60;
-        public int AntiAliasing = 0, Quality = 2, Upscaler = 0, Sharpness = 0, TextureFilter = 0, DrawDistance = 0;
+        public int AntiAliasing = 0, Quality = 2, Upscaler = 0, Sharpness = 0, TextureFilter = 0;
         public int TemporalQuality = 1;
         public bool GeneratedMipmaps = false, PerPixelLighting = false, HudOutputResolution = false;
 
@@ -103,7 +102,6 @@ namespace Nebula.Launcher
             settings.Upscaler = Math.Min(Choice(values, "upscaler", Upscalers.Length + 1, settings.Upscaler), Upscalers.Length - 1);
             settings.TemporalQuality = Choice(values, "temporal_quality", TemporalQualityCount, settings.TemporalQuality);
             settings.Sharpness = Math.Min(Choice(values, "sharpness", 101, settings.Sharpness), 100);
-            settings.DrawDistance = Choice(values, "draw_distance", DrawDistances.Length, settings.DrawDistance);
             int anisotropy = Choice(values, "anisotropic_filtering", 17, -1);
             if (anisotropy >= 1)
             {
@@ -142,7 +140,6 @@ namespace Nebula.Launcher
             Set(lines, "enhanced_mipmaps", GeneratedMipmaps ? 1 : 0);
             Set(lines, "per_pixel_lighting", PerPixelLighting ? 1 : 0);
             Set(lines, "hud_output_resolution", HudOutputResolution ? 1 : 0);
-            Set(lines, "draw_distance", DrawDistance);
             Directory.CreateDirectory(Path.GetDirectoryName(ConfigPath));
             string temp = ConfigPath + ".tmp";
             File.WriteAllText(temp, string.Join("\n", lines) + "\n", new UTF8Encoding(false));

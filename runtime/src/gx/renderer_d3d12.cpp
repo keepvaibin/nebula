@@ -520,7 +520,6 @@ unsigned pending_settings_changes() {
     changes += d.enhanced_mipmaps != live.enhanced_mipmaps;
     changes += d.per_pixel_lighting != live.per_pixel_lighting;
     changes += d.hud_output_resolution != live.hud_output_resolution;
-    changes += d.draw_distance != live.draw_distance;
     changes += controls_changes();
     return changes;
 }
@@ -674,7 +673,7 @@ unsigned graphics_row(unsigned row) {
 unsigned native_settings_row_count(unsigned tab) {
     switch (tab % kNativeSettingsTabCount) {
     case 0: return 8u;
-    case 1: return fsr3_available() ? 10u : 9u;
+    case 1: return fsr3_available() ? 9u : 8u;
     case 2: return controls_row_count();
     case 3: return 6u;
     case 4: return 6u;
@@ -777,7 +776,6 @@ void apply_native_settings_draft() {
     applied.enhanced_mipmaps = next.enhanced_mipmaps;
     applied.per_pixel_lighting = next.per_pixel_lighting;
     applied.hud_output_resolution = next.hud_output_resolution;
-    applied.draw_distance = next.draw_distance;
     const bool display_changed = display_settings_differ(live, applied);
     const unsigned changes = pending_settings_changes();
     if (applied.internal_follow_window) {
@@ -1003,7 +1001,6 @@ void adjust_native_setting_unlogged(int delta) {
         case 6: draft.enhanced_mipmaps = !draft.enhanced_mipmaps; break;
         case 7: draft.per_pixel_lighting = !draft.per_pixel_lighting; break;
         case 8: draft.hud_output_resolution = !draft.hud_output_resolution; break;
-        case 9: draft.draw_distance = step(std::min(draft.draw_distance, 3u), 4u); break;
         default: return;
         }
         return;
@@ -9313,10 +9310,6 @@ std::string native_settings_row_text(
         case 8:
             return std::string("2D LAYER: ") +
                    (render.hud_output_resolution ? "DISPLAY RES" : "INTERNAL RES");
-        case 9: {
-            static constexpr const char* kDistances[] = {"ORIGINAL", "2X", "4X", "8X"};
-            return std::string("DRAW DISTANCE: ") + kDistances[std::min(render.draw_distance, 3u)];
-        }
         default:
             return {};
         }

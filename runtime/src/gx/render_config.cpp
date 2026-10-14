@@ -211,9 +211,6 @@ static void apply_kv(RenderConfig& cfg, const char* key, const char* val) {
     else if (std::strcmp(key, "aspect") == 0) {
         static constexpr const char* kNames[] = {"auto", "4:3", "16:10", "16:9", "21:9", "32:9"};
         cfg.aspect_mode = parse_choice(val, kNames, cfg.aspect_mode);
-    } else if (std::strcmp(key, "draw_distance") == 0) {
-        static constexpr const char* kNames[] = {"original", "2x", "4x", "8x"};
-        cfg.draw_distance = parse_choice(val, kNames, cfg.draw_distance);
     }
 }
 
@@ -291,7 +288,6 @@ static void apply_env_overrides(RenderConfig& cfg) {
     apply_env(cfg, "GALAXY_DISPLAY_MODE", "display_mode");
     apply_env(cfg, "GALAXY_MONITOR", "monitor");
     apply_env(cfg, "GALAXY_ASPECT", "aspect");
-    apply_env(cfg, "GALAXY_DRAW_DISTANCE", "draw_distance");
 }
 
 static void clamp_unimplemented_features(RenderConfig& cfg) {
@@ -319,7 +315,6 @@ static void clamp_unimplemented_features(RenderConfig& cfg) {
     cfg.window_height = std::clamp(cfg.window_height, 1u, kMaxWindowDimension);
     cfg.display_mode = std::min(cfg.display_mode, kDisplayBorderless);
     cfg.aspect_mode = std::min(cfg.aspect_mode, kAspectModeCount - 1u);
-    cfg.draw_distance = std::min(cfg.draw_distance, 3u);
     cfg.monitor.back() = '\0';
     cfg.msaa_samples = 1;
     cfg.taa_enabled = false;
@@ -590,8 +585,7 @@ bool save_render_config_to_file() {
              << "fullscreen_width=" << cfg.fullscreen_width << '\n'
              << "fullscreen_height=" << cfg.fullscreen_height << '\n'
              << "fullscreen_refresh_hz=" << cfg.fullscreen_refresh_hz << '\n'
-             << "aspect=" << cfg.aspect_mode << '\n'
-             << "draw_distance=" << cfg.draw_distance << '\n';
+             << "aspect=" << cfg.aspect_mode << '\n';
     if (!contents) {
         return false;
     }

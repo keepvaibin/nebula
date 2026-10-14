@@ -235,9 +235,9 @@ int main() {
     passed &= expect(key(VK_TAB), "Tab enters the graphics page");
     snapshot = galaxy::gx::native_settings_overlay_snapshot();
     const bool fsr3 = galaxy::gx::fsr3_available();
-    passed &= expect(snapshot.tab == 1u && snapshot.row_count == (fsr3 ? 10u : 9u),
+    passed &= expect(snapshot.tab == 1u && snapshot.row_count == (fsr3 ? 9u : 8u),
                      "graphics page has AA, AA quality, upscaler, FSR 3 quality (only with FSR 3), "
-                     "sharpening, textures, mipmaps, lighting, 2D layer and draw distance");
+                     "sharpening, textures, mipmaps, lighting and 2D layer");
     passed &= expect(key(VK_LEFT), "left lowers the anti-aliasing mode");
     passed &= expect(key(VK_DOWN) && key(VK_RIGHT), "AA quality row is adjustable");
     passed &= expect(key(VK_RIGHT), "quality stops at its last value");
