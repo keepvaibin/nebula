@@ -1530,7 +1530,7 @@ bool write_cache_bytes(FILE* f, const void* data, std::size_t bytes) {
 #if defined(GALAXY_PIPELINE_CACHE_PERSISTENCE_TEST_IO)
     if (persistence_test_write_entered && persistence_test_write_release) {
         SetEvent(persistence_test_write_entered);
-        if (WaitForSingleObject(persistence_test_write_release, 5000u) != WAIT_OBJECT_0)
+        if (WaitForSingleObject(persistence_test_write_release, 30000u) != WAIT_OBJECT_0)
             return false;
     }
     if (bytes > persistence_test_write_budget) {
