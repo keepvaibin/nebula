@@ -897,6 +897,15 @@ std::vector<std::filesystem::path> rejected_nand_copies_for_test(
     return copies;
 }
 
+// Later fixtures use the shared root itself as a NAND root; a copy left in it would be a foreign tree there.
+void remove_nand_root_for_test(const std::filesystem::path& root) {
+    std::error_code error;
+    std::filesystem::remove_all(root, error);
+    for (const std::filesystem::path& copy : rejected_nand_copies_for_test(root)) {
+        std::filesystem::remove_all(copy, error);
+    }
+}
+
 bool host_file_stream_exists_for_test(const std::filesystem::path& path) {
     HANDLE file = CreateFileW(
         path.c_str(),
@@ -3680,7 +3689,7 @@ bool native_nand_pre_ads_legacy_cohort_startup_works(
                 rejected_nand_copies_for_test(positive_root).size() == 1u,
             "modern GetAttr rebuilds a tree whose setting.txt GIS3 was stripped without keeping a second copy");
     }
-    std::filesystem::remove_all(positive_root, cleanup_error);
+    remove_nand_root_for_test(positive_root);
 
     const std::filesystem::path resume_root =
         shared_test_root / L"legacy_cohort_sysconf_final_resume";
@@ -3762,7 +3771,7 @@ bool native_nand_pre_ads_legacy_cohort_startup_works(
                 cold_open_sysconf(),
             "legacy resume-gap rebuild carries the save, keeps the previous tree, and starts again from the rebuilt root");
     }
-    std::filesystem::remove_all(resume_gap_root, cleanup_error);
+    remove_nand_root_for_test(resume_gap_root);
 
     const std::filesystem::path torn_sys_root =
         shared_test_root / L"legacy_cohort_torn_sys_pending";
@@ -3943,7 +3952,7 @@ bool native_nand_pre_ads_legacy_cohort_startup_works(
                     sys_step.metadata.size(),
             "the rebuilt SYSCONF has valid authority and the previous tree keeps the truncated stream byte for byte");
     }
-    std::filesystem::remove_all(orphan_final_root, cleanup_error);
+    remove_nand_root_for_test(orphan_final_root);
 
     const std::filesystem::path missing_root =
         shared_test_root / L"legacy_cohort_missing_sentinel";
@@ -4006,7 +4015,7 @@ bool native_nand_pre_ads_legacy_cohort_startup_works(
                 host_named_stream_count_for_test(unknown_ads_files[4]) == 1u,
             "the unknown stream stays with the previous tree and the rebuilt save carries only its own GIS3");
     }
-    std::filesystem::remove_all(unknown_ads_root, cleanup_error);
+    remove_nand_root_for_test(unknown_ads_root);
 
     const std::filesystem::path candidate_root =
         shared_test_root / L"legacy_cohort_internal_candidate";
@@ -4468,7 +4477,7 @@ bool native_nand_invalid_sole_legacy_is_set_aside(
             !std::filesystem::exists(canonical),
         "an invalid sole root-level legacy GameData is set aside and publishes no canonical save");
 
-    std::filesystem::remove_all(isolated_root, cleanup_error);
+    remove_nand_root_for_test(isolated_root);
     return passed;
 }
 
@@ -4508,19 +4517,11 @@ bool native_nand_foreign_tree_adoption_works(
     const std::vector<std::byte> rfl = valid_empty_rfl_database_for_test();
 
     bool passed = true;
-    std::error_code cleanup_error;
-    const auto clean = [&](const std::filesystem::path& root) {
-        std::filesystem::remove_all(root, cleanup_error);
-        for (const std::filesystem::path& copy :
-             rejected_nand_copies_for_test(root)) {
-            std::filesystem::remove_all(copy, cleanup_error);
-        }
-    };
 
     // A save folder copied without its named streams (zip, exFAT, plain file copy), holding only the game's own files.
     const std::filesystem::path plain_root =
         shared_test_root / L"foreign_stream_free";
-    clean(plain_root);
+    remove_nand_root_for_test(plain_root);
     write_binary_file(data_directory(plain_root) / L"GameData.bin", game_data);
     write_binary_file(data_directory(plain_root) / L"banner.bin", banner);
     {
@@ -4562,12 +4563,12 @@ bool native_nand_foreign_tree_adoption_works(
                 rejected_nand_copies_for_test(plain_root).empty(),
             "a truncated metadata stream is replaced by default metadata and the save is kept");
     }
-    clean(plain_root);
+    remove_nand_root_for_test(plain_root);
 
     // Mii data, a stray desktop.ini and a folder the game never uses.
     const std::filesystem::path mixed_root =
         shared_test_root / L"foreign_mixed";
-    clean(mixed_root);
+    remove_nand_root_for_test(mixed_root);
     write_binary_file(data_directory(mixed_root) / L"GameData.bin", game_data);
     write_binary_file(rfl_path(mixed_root), rfl);
     const std::array<std::byte, 1> note{std::byte{'x'}};
@@ -4603,12 +4604,12 @@ bool native_nand_foreign_tree_adoption_works(
                 !leftovers(mixed_root),
             "the previous tree is kept whole next to the new one");
     }
-    clean(mixed_root);
+    remove_nand_root_for_test(mixed_root);
 
     // A save that fails its own checksum is not carried and is never deleted.
     const std::filesystem::path damaged_root =
         shared_test_root / L"foreign_damaged_save";
-    clean(damaged_root);
+    remove_nand_root_for_test(damaged_root);
     std::vector<std::byte> damaged = game_data;
     damaged[0x200] ^= std::byte{0xFF};
     write_binary_file(data_directory(damaged_root) / L"GameData.bin", damaged);
@@ -4628,12 +4629,12 @@ bool native_nand_foreign_tree_adoption_works(
                     data_directory(rejected[0]) / L"GameData.bin") == damaged,
             "the damaged save is kept in the previous tree and the new tree starts without it");
     }
-    clean(damaged_root);
+    remove_nand_root_for_test(damaged_root);
 
     // Names in another case (zip tools, hand-made folders).
     const std::filesystem::path cased_root =
         shared_test_root / L"foreign_case_variants";
-    clean(cased_root);
+    remove_nand_root_for_test(cased_root);
     write_binary_file(
         cased_root / L"Title" / L"00010000" / L"524D4745" / L"Data" /
             L"GAMEDATA.BIN",
@@ -4654,7 +4655,35 @@ bool native_nand_foreign_tree_adoption_works(
         passed &= expect(
             canonical_case, "the rebuilt save uses the canonical name");
     }
-    clean(cased_root);
+    remove_nand_root_for_test(cased_root);
+
+    // A saves folder emptied by hand keeps the metadata stream of the folder itself.
+    const std::filesystem::path emptied_root =
+        shared_test_root / L"foreign_emptied";
+    remove_nand_root_for_test(emptied_root);
+    {
+        ScopedWideEnv set_root(L"GALAXY_NAND_ROOT", emptied_root);
+        passed &= expect(cold_open(), "an empty saves folder starts");
+        std::vector<std::filesystem::path> children;
+        for (const auto& entry :
+             std::filesystem::directory_iterator(emptied_root)) {
+            children.push_back(entry.path());
+        }
+        for (const std::filesystem::path& child : children) {
+            std::filesystem::remove_all(child);
+        }
+        passed &= expect(
+            !children.empty() && std::filesystem::is_empty(emptied_root) &&
+                host_file_stream_exists_for_test(gis3_of(emptied_root)),
+            "emptied-folder fixture keeps only the folder's own GIS3");
+        passed &= expect(
+            cold_open() &&
+                std::filesystem::is_directory(data_directory(emptied_root)) &&
+                rejected_nand_copies_for_test(emptied_root).empty() &&
+                !leftovers(emptied_root),
+            "an emptied saves folder starts as a new console");
+    }
+    remove_nand_root_for_test(emptied_root);
     return passed;
 }
 
@@ -14520,9 +14549,11 @@ int main(int argc, char** argv) {
     // native_async_nand_ownership_works scopes the flag to 1 and restores it.
     _putenv_s("GALAXY_ASYNC_NAND_WRITES", "0");
     _putenv_s("GALAXY_DSP_DETAILED_STATS", "1");
+    // One root per process: the same tests from other build trees may run at the same time.
     const std::filesystem::path nand_test_root =
         std::filesystem::temp_directory_path() /
-        L"galaxy_native_host_tests_nand";
+        (L"galaxy_native_host_tests_nand-" +
+         std::to_wstring(GetCurrentProcessId()));
     std::error_code nand_test_ec;
     std::filesystem::remove_all(nand_test_root, nand_test_ec);
     ScopedWideEnv set_nand_root(L"GALAXY_NAND_ROOT", nand_test_root);
@@ -20253,6 +20284,7 @@ int main(int argc, char** argv) {
         [&] { submit_ios_request(guest_memory, kBadIosCommandReq); },
         "unknown IOS command must hard-fail");
 
+    std::filesystem::remove_all(nand_test_root, nand_test_ec);
     if (!passed) {
         return 1;
     }

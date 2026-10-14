@@ -26617,13 +26617,25 @@ std::wstring nand_local_timestamp() {
     return text;
 }
 
+// Scanners and indexers briefly open files that were just written; a folder rename fails while they hold one.
+bool rename_nand_tree(const std::filesystem::path& from, const std::filesystem::path& to) {
+    for (int attempt = 0;; ++attempt) {
+        if (MoveFileExW(from.c_str(), to.c_str(), MOVEFILE_WRITE_THROUGH) != FALSE) return true;
+        const DWORD error = GetLastError();
+        if ((error != ERROR_ACCESS_DENIED && error != ERROR_SHARING_VIOLATION) || attempt == 40) {
+            return false;
+        }
+        Sleep(25);
+    }
+}
+
 NandAdoption adopt_foreign_nand_tree(const std::filesystem::path& root) {
-    std::error_code error;
-    const std::filesystem::directory_iterator first(root, error);
-    if (error || first == std::filesystem::directory_iterator{} ||
+    // An empty root without streams is a first start; a root emptied by hand keeps its own stream and is rebuilt.
+    if (native_nand_root_is_empty_and_stream_free(root) ||
         nand_tree_awaits_recovery(root) || nand_tree_is_accepted(root)) {
         return NandAdoption::not_needed;
     }
+    std::error_code error;
     const NandSalvage salvage = scan_nand_for_salvage(root);
     // A file that exists but cannot be read now might be locked; leave the tree for the next start.
     if (salvage.unreadable) {
@@ -26648,9 +26660,9 @@ NandAdoption adopt_foreign_nand_tree(const std::filesystem::path& root) {
         displaced += L".replaced";
         std::filesystem::remove_all(displaced, error);
     }
-    if (MoveFileExW(root.c_str(), displaced.c_str(), MOVEFILE_WRITE_THROUGH) == FALSE ||
-        MoveFileExW(staging.c_str(), root.c_str(), MOVEFILE_WRITE_THROUGH) == FALSE) {
-        (void)MoveFileExW(displaced.c_str(), root.c_str(), 0u);
+    const bool displaced_root = rename_nand_tree(root, displaced);
+    if (!displaced_root || !rename_nand_tree(staging, root)) {
+        if (displaced_root) (void)rename_nand_tree(displaced, root);
         std::cerr << "[nand] saves folder not adopted: the replacement could not be put in place\n";
         std::filesystem::remove_all(staging, error);
         return NandAdoption::failed;
