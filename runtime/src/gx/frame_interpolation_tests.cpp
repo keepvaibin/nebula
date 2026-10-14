@@ -363,6 +363,24 @@ void test_sky_sun() {
     low.add(sky_capture(blue, {0.6f, -0.6f, -0.53f}, 0.995f, {1.0f, 1.0f, 1.0f}, 0u).data());
     check(!low.find().valid, "a bright place well below the horizon is no sun");
 
+    // A daylight sky without a sun: its key comes from its bright side, 50 degrees up; an even
+    // sky's from its default side; a night sky has none.
+    SkyMap bright_side;
+    const std::array<float, 3> horizon{0.8f, 0.0f, -0.6f};
+    bright_side.add(sky_capture(blue, horizon, 0.5f, {1.0f, 1.0f, 1.0f}, 0u).data());
+    const SkyKey side = bright_side.key();
+    check(side.valid && side.strength > 0.9f, "a daylight sky has a key");
+    const float across = std::sqrt(1.0f - SkyMap::kKeyHeight * SkyMap::kKeyHeight);
+    check(same_direction(side.direction, {0.8f * across, SkyMap::kKeyHeight, -0.6f * across}, 1e-3f),
+          "its key stands over its bright side, 50 degrees up");
+    const SkyKey even = grey.key();
+    check(even.valid && same_direction(even.direction, {SkyMap::kKeyDefaultSide[0] * across, SkyMap::kKeyHeight,
+                                                        SkyMap::kKeyDefaultSide[1] * across}, 1e-4f),
+          "an even daylight sky lights from its default side");
+    SkyMap night;
+    night.add(sky_capture({0.02f, 0.03f, 0.08f}, to_sun, 0.995f, {0.02f, 0.03f, 0.08f}, 0u).data());
+    check(!night.key().valid, "a night sky has no key");
+
     // A sun once found stays while the map no longer shows it; a brighter place elsewhere wins.
     SkySun held{};
     map.update(held);

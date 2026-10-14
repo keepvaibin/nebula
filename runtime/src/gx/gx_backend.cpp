@@ -7097,10 +7097,12 @@ void GxBackend::aim_rt_scene_lights(const std::array<float, 12>* view) {
         rt_sun_held_ = true;
     }
     renderer_.rt_hold_sun(rt_sun_held_);
-    // Sources: 1 the game's visible sun, 2 the sun its sky shows, 3 a world-fixed light.
+    // Sources: 1 the game's visible sun, 2 the sun its sky shows, 3 a world-fixed light, 4 the
+    // bright side of a daylight sky.
     std::uint8_t source = 0u;
     std::array<float, 3> target{};
     std::array<float, 3> sky_color{};
+    float sky_strength = 1.0f;
     if (rt_light_tracking_ && renderer_.rt_sun_direction(target)) {
         source = 1u;
     } else if (rt_light_tracking_ && renderer_.rt_sky_sun(target, sky_color)) {
@@ -7111,6 +7113,9 @@ void GxBackend::aim_rt_scene_lights(const std::array<float, 12>* view) {
         source = 3u;
         target = world_key->direction;
         rt_light_key_color_ = world_key->color;
+    } else if (rt_light_tracking_ && renderer_.rt_sky_key(target, sky_strength)) {
+        source = 4u;
+        rt_light_key_color_ = 0xFFF6E600u;   // daylight: warm white
     }
     const bool found = source != 0u;
     const float step = mode == 2u ? 1.0f : 1.0f / kActorLightRampScenes;
@@ -7153,8 +7158,9 @@ void GxBackend::aim_rt_scene_lights(const std::array<float, 12>* view) {
                                          static_cast<float>((c >> 16u) & 0xFFu) / 255.0f,
                                          static_cast<float>((c >> 8u) & 0xFFu) / 255.0f};
     renderer_.rt_set_key_light(enabled && rt_key_source_ >= 2u && rt_light_blend_ > 0.0f, rt_light_world_, key_color,
-                               rt_light_blend_, rt_key_source_ == 2u);
-    static constexpr const char* kSources[4] = {"none", "sun", "sky", "world"};
+                               rt_light_blend_ * (rt_key_source_ == 4u ? sky_strength : 1.0f),
+                               rt_key_source_ == 2u || rt_key_source_ == 4u);
+    static constexpr const char* kSources[5] = {"none", "sun", "sky", "world", "daylight"};
     if (trace_actor_lights_enabled()) [[unlikely]] {
         // Key changes: its source, or a target more than a degree away.
         static int traced_source = -1;

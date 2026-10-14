@@ -64,6 +64,14 @@ inline constexpr unsigned kSkyBinWords = 4u;
     return table;
 }
 
+// A daylight sky without a sun still lights from its bright side.
+struct SkyKey {
+    bool valid = false;
+    std::array<float, 3> direction{};  // world, towards the light
+    float strength = 0.0f;             // 0-1 with the sky's daylight
+    float mean = 0.0f;                 // the sky's mean luminance (0-1)
+};
+
 struct SkySun {
     bool valid = false;
     std::array<float, 3> direction{};  // world, towards it
@@ -195,6 +203,64 @@ public:
         sun.direction = {d[0] / length, d[1] / length, d[2] / length};
         sun.color = {c[0] / top, c[1] / top, c[2] / top};
         return sun;
+    }
+
+    // The key light of a daylight sky that shows no sun: from the side its light comes from (the
+    // luminance-weighted mean direction over the sphere, directions not seen at the mean of those
+    // seen; kKeyDefaultSide when the sky is even), kKeyHeight above the horizon: an afternoon sun,
+    // whose shadows read. Daylight: the mean luminance of the bins seen; none below kKeyDayStart,
+    // full at kKeyDayFull. Measured (smoke\daykey1 [rt-sky] rest): Honeyhive 0.40-0.45, Gold Leaf
+    // 0.45-0.59, the Observatory's night 0.13-0.24.
+    static constexpr float kKeyHeight = 0.766f;   // 50 degrees
+    static constexpr float kKeyDayStart = 0.25f;
+    static constexpr float kKeyDayFull = 0.4f;
+    static constexpr std::array<float, 2> kKeyDefaultSide{0.6f, -0.8f};
+
+    [[nodiscard]] SkyKey key() const noexcept {
+        SkyKey key{};
+        if (seen_ < kMinBins) {
+            return key;
+        }
+        const auto& directions = sky_bin_directions();
+        // A bin's solid angle: |x| + |y| + |z| of its direction, cubed (octahedral bins).
+        const auto solid = [](const std::array<float, 3>& d) {
+            const float l1 = std::fabs(d[0]) + std::fabs(d[1]) + std::fabs(d[2]);
+            return l1 * l1 * l1;
+        };
+        float seen_sum = 0.0f;
+        float seen_weight = 0.0f;
+        for (unsigned b = 0; b < kSkyBins; ++b) {
+            if (bins_[b].seen) {
+                const float w = solid(directions[b]);
+                seen_sum += luminance(b) * w;
+                seen_weight += w;
+            }
+        }
+        key.mean = seen_weight > 0.0f ? seen_sum / seen_weight : 0.0f;
+        if (key.mean < kKeyDayStart) {
+            return key;
+        }
+        std::array<float, 3> v{};
+        float total = 0.0f;
+        for (unsigned b = 0; b < kSkyBins; ++b) {
+            const float w = solid(directions[b]) * (bins_[b].seen ? luminance(b) : key.mean);
+            for (unsigned i = 0; i < 3u; ++i) {
+                v[i] += directions[b][i] * w;
+            }
+            total += w;
+        }
+        std::array<float, 2> side = kKeyDefaultSide;
+        const float flat = std::sqrt(v[0] * v[0] + v[2] * v[2]);
+        if (total > 0.0f && flat > 0.01f * total) {
+            side = {v[0] / flat, v[2] / flat};
+        }
+        const float across = std::sqrt(1.0f - kKeyHeight * kKeyHeight);
+        const std::array<float, 3> d{side[0] * across, kKeyHeight, side[1] * across};
+        const float t = std::clamp((key.mean - kKeyDayStart) / (kKeyDayFull - kKeyDayStart), 0.0f, 1.0f);
+        key.valid = true;
+        key.direction = d;
+        key.strength = t * t * (3.0f - 2.0f * t);
+        return key;
     }
 
     // The sun to keep: a new one near the held one replaces it; one elsewhere only where it is

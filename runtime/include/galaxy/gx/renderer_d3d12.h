@@ -508,6 +508,9 @@ public:
     [[nodiscard]] bool rt_sky_sun(std::array<float, 3>& world, std::array<float, 3>& color) const noexcept {
         return ray_tracer_.sky_sun(world, color);
     }
+    [[nodiscard]] bool rt_sky_key(std::array<float, 3>& world, float& strength) const noexcept {
+        return ray_tracer_.sky_key(world, strength);
+    }
     void rt_reset_sky() noexcept { ray_tracer_.reset_sky(); }
     void rt_note_draw(const DrawCall& call, const RtDrawInfo& info);
     void rt_trace_scene();

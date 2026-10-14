@@ -683,6 +683,7 @@ endforeach()
 # (runtime/src/gx/rt_lighting.hlsl).
 set(galaxy_rt_light_hlsl "${CMAKE_CURRENT_SOURCE_DIR}/runtime/src/gx/rt_lighting.hlsl")
 foreach(galaxy_rt_pass capture_cs:CaptureCS:cs_6_5 sky_state_cs:SkyStateCS:cs_6_5 glow_base_cs:GlowBaseCS:cs_6_5
+        sky_light_map_cs:SkyLightMapCS:cs_6_5 sky_light_sh_cs:SkyLightShCS:cs_6_5
         surface_emit_cs:SurfaceEmitCS:cs_6_5 bloom_down_cs:BloomDownCS:cs_6_5 bloom_blur_cs:BloomBlurCS:cs_6_5
         bloom_ps:BloomPS:ps_6_0
         glow_emit_cs:GlowEmitCS:cs_6_5 emit_merge_cs:EmitMergeCS:cs_6_5 trace_cs:TraceCS:cs_6_5

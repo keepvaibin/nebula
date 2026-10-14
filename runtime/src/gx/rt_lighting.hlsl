@@ -54,7 +54,9 @@ cbuffer RtLight : register(b0)
                                 // the distance beyond which surfaces are the sky (backdrops)
     float g_point_saturation;   // the colours above: 0 white .. 1 the game's
     uint g_draw_count;          // entries of g_draws
-    uint2 g_pad;
+    float g_sky_ibl;            // rays reaching the sky take the light of their direction (0: the
+                                // sky's mean colour from every direction)
+    uint g_pad;
 };
 
 RaytracingAccelerationStructure g_scene : register(t6);
@@ -71,7 +73,9 @@ ByteAddressBuffer g_emitters : register(t15);            // glow lights: count, 
                                                          // world position, radius; power, cumulative
 StructuredBuffer<uint> g_glow_base : register(t16);      // the previous picture before its glows
 StructuredBuffer<uint> g_glow_added : register(t17);     // what its glows added
-ByteAddressBuffer g_draws : register(t18);               // per draw: ambient, GX light 0 colour (RGBA8)
+ByteAddressBuffer g_draws : register(t18);
+ByteAddressBuffer g_sky_light : register(t19);           // the sky light: 9 SH coefficients (rgb),
+                                                         // its mean luminance, known (SkyLightShCS)               // per draw: ambient, GX light 0 colour (RGBA8)
 RWStructuredBuffer<float> g_z : register(u0);
 RWStructuredBuffer<uint> g_normal : register(u1);
 RWStructuredBuffer<uint4> g_raw : register(u2);
@@ -271,6 +275,8 @@ RWByteAddressBuffer c_sums : register(u1);
 RWStructuredBuffer<uint> c_glow : register(u2);
 RWByteAddressBuffer c_found : register(u3);              // this frame's lights (see e_found)
 RWByteAddressBuffer c_sky : register(u4);                // per bin: samples, r, g, b (rt_sky_sun.h)
+RWStructuredBuffer<float4> c_sky_radiance : register(u5); // per bin: colour over time, seen
+RWByteAddressBuffer c_sky_sh : register(u6);             // see g_sky_light
 
 // The sky map's bin of a world direction: octahedral, +y the pole, 32 x 32 (rt_sky_sun.h sky_bin).
 uint sky_bin(float3 w)
@@ -362,6 +368,116 @@ void SurfaceEmitCS(uint3 id : SV_DispatchThreadID, uint gi : SV_GroupIndex)
                 c_found.Store4(16u + at * 32u + 16u, asuint(float4(power, 0.0f)));
             }
         }
+    }
+}
+
+// A sky bin's direction (the inverse of sky_bin at the bin's centre) and its solid angle in
+// units of the octahedron's (x, z) area: 1 / |v|^3 for the point v on the octahedron.
+float3 sky_bin_direction(uint bin, out float solid)
+{
+    const float2 e = (float2(bin & 31u, bin >> 5u) + 0.5f) / 32.0f * 2.0f - 1.0f;
+    float3 v = float3(e.x, 1.0f - abs(e.x) - abs(e.y), e.y);
+    if (v.y < 0.0f) {
+        v.xz = (1.0f - abs(e.yx)) * float2(e.x >= 0.0f ? 1.0f : -1.0f, e.y >= 0.0f ? 1.0f : -1.0f);
+    }
+    const float length_v = length(v);
+    solid = 1.0f / (length_v * length_v * length_v);
+    return v / length_v;
+}
+
+// Real spherical harmonics, bands 0-2.
+void sh9(float3 d, out float basis[9])
+{
+    basis[0] = 0.282095f;
+    basis[1] = 0.488603f * d.y;
+    basis[2] = 0.488603f * d.z;
+    basis[3] = 0.488603f * d.x;
+    basis[4] = 1.092548f * d.x * d.y;
+    basis[5] = 1.092548f * d.y * d.z;
+    basis[6] = 0.315392f * (3.0f * d.z * d.z - 1.0f);
+    basis[7] = 1.092548f * d.x * d.z;
+    basis[8] = 0.546274f * (d.x * d.x - d.y * d.y);
+}
+
+// The sky light over time: each bin this capture saw moves a tenth of the way to it.
+[numthreads(64, 1, 1)]
+void SkyLightMapCS(uint3 id : SV_DispatchThreadID)
+{
+    const uint4 bin = c_sky.Load4(id.x * 16u);   // samples, r, g, b
+    if (bin.x == 0u) {
+        return;
+    }
+    const float3 color = float3(bin.yzw) / (255.0f * float(bin.x));
+    const float4 state = c_sky_radiance[id.x];
+    c_sky_radiance[id.x] = float4(state.w > 0.0f ? lerp(state.rgb, color, 0.1f) : color, 1.0f);
+}
+
+groupshared float4 s_sky_mean[64];
+groupshared float s_sky_sh[64][27];
+
+// The sky light's spherical harmonics; directions never seen take the mean of those seen.
+[numthreads(64, 1, 1)]
+void SkyLightShCS(uint gi : SV_GroupIndex)
+{
+    float4 mean = float4(0.0f, 0.0f, 0.0f, 0.0f);
+    for (uint t = gi; t < 1024u; t += 64u) {
+        const float4 v = c_sky_radiance[t];
+        float solid;
+        sky_bin_direction(t, solid);
+        mean += v.w > 0.0f ? float4(v.rgb, 1.0f) * solid : float4(0.0f, 0.0f, 0.0f, 0.0f);
+    }
+    s_sky_mean[gi] = mean;
+    GroupMemoryBarrierWithGroupSync();
+    [unroll] for (uint s = 32u; s > 0u; s >>= 1u) {
+        if (gi < s) {
+            s_sky_mean[gi] += s_sky_mean[gi + s];
+        }
+        GroupMemoryBarrierWithGroupSync();
+    }
+    // At least a sixteenth of the sphere seen (in octahedron area: 8 for the whole sphere).
+    const float4 total = s_sky_mean[0];
+    GroupMemoryBarrierWithGroupSync();
+    if (total.w < 0.5f) {
+        if (gi == 0u) {
+            c_sky_sh.Store(112u, 0u);
+        }
+        return;
+    }
+    const float3 average = total.rgb / total.w;
+    float sums[28];
+    [unroll] for (uint k = 0u; k < 28u; ++k) {
+        sums[k] = 0.0f;
+    }
+    for (uint u = gi; u < 1024u; u += 64u) {
+        const float4 v = c_sky_radiance[u];
+        const float3 radiance = v.w > 0.0f ? v.rgb : average;
+        float solid;
+        const float3 d = sky_bin_direction(u, solid);
+        float basis[9];
+        sh9(d, basis);
+        [unroll] for (uint b = 0u; b < 9u; ++b) {
+            sums[b * 3u + 0u] += radiance.r * basis[b] * solid;
+            sums[b * 3u + 1u] += radiance.g * basis[b] * solid;
+            sums[b * 3u + 2u] += radiance.b * basis[b] * solid;
+        }
+        sums[27] += solid;
+    }
+    [unroll] for (uint j = 0u; j < 27u; ++j) {
+        s_sky_sh[gi][j] = sums[j];
+    }
+    s_sky_mean[gi] = float4(sums[27], 0.0f, 0.0f, 0.0f);
+    GroupMemoryBarrierWithGroupSync();
+    if (gi < 27u) {
+        float coefficient = 0.0f;
+        float area = 0.0f;
+        for (uint w = 0u; w < 64u; ++w) {
+            coefficient += s_sky_sh[w][gi];
+            area += s_sky_mean[w].x;
+        }
+        c_sky_sh.Store(gi * 4u, asuint(coefficient * (4.0f * kPi / area)));
+    }
+    if (gi == 0u) {
+        c_sky_sh.Store2(108u, uint2(asuint(max(luminance(average), 1e-3f)), 1u));
     }
 }
 
@@ -835,6 +951,39 @@ float3 sky_tint()
     return l > 1e-3f ? lerp(float3(1.0f, 1.0f, 1.0f), sky / l, g_sky_saturation) : float3(1.0f, 1.0f, 1.0f);
 }
 
+// The light a ray that reaches the sky brings, in units of the sky's mean (as sky_tint): the sky
+// light of its eye-space direction, its colour saturated as the tint's, blended with the tint by
+// g_sky_ibl. `sh`: g_sky_light's coefficients over its mean luminance (sky_light_load).
+float3 sky_light(float3 direction, float3 tint, float3 sh[9], bool known)
+{
+    if (!known) {
+        return tint;
+    }
+    const float3 d = normalize(direction.x * g_to_eye[0].xyz + direction.y * g_to_eye[1].xyz +
+                               direction.z * g_to_eye[2].xyz);
+    float basis[9];
+    sh9(d, basis);
+    float3 radiance = float3(0.0f, 0.0f, 0.0f);
+    [unroll] for (uint b = 0u; b < 9u; ++b) {
+        radiance += sh[b] * basis[b];
+    }
+    radiance = max(radiance, 0.0f);
+    const float l = luminance(radiance);
+    const float3 color = l > 1e-3f ? lerp(float3(1.0f, 1.0f, 1.0f), radiance / l, g_sky_saturation)
+                                   : float3(1.0f, 1.0f, 1.0f);
+    return lerp(tint, color * clamp(l, 0.1f, 3.0f), g_sky_ibl);
+}
+
+bool sky_light_load(out float3 sh[9])
+{
+    const bool known = g_sky_ibl > 0.0f && g_sky_light.Load(112u) != 0u;
+    const float mean = known ? asfloat(g_sky_light.Load(108u)) : 1.0f;
+    [unroll] for (uint b = 0u; b < 9u; ++b) {
+        sh[b] = known ? asfloat(g_sky_light.Load3(b * 12u)) / mean : float3(0.0f, 0.0f, 0.0f);
+    }
+    return known;
+}
+
 // The game's distance attenuation (1 / (1 + d^2 / half^2)), windowed to 0 at the light's reach.
 float point_falloff(float d2, uint i)
 {
@@ -1120,6 +1269,8 @@ void TraceCS(uint3 id : SV_DispatchThreadID)
     const float3 t2 = float3(b, sign_z + n.y * n.y * a, -n.y);
 
     const float3 tint = sky_tint();
+    float3 sky_sh[9];
+    const bool sky_known = sky_light_load(sky_sh);
     float3 fallback = float3(g_fallback, g_fallback, g_fallback);
     {
         const uint4 scene = g_picture_sums.Load4(16u);
@@ -1151,9 +1302,9 @@ void TraceCS(uint3 id : SV_DispatchThreadID)
             const float near = lerp(g_contact, 1.0f, saturate(t / g_contact_range));
             // Distant hits fade into the open sky (the game's lighting already holds them).
             const float distant = saturate((t - 0.6f * g_range) / (0.4f * g_range));
-            light += lerp(sent * near, tint, distant);
+            light += lerp(sent * near, sky_light(direction, tint, sky_sh, sky_known), distant);
         } else {
-            light += tint;
+            light += sky_light(direction, tint, sky_sh, sky_known);
         }
     }
     g_z[index] = p.z;

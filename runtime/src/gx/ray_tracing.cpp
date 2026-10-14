@@ -6,6 +6,8 @@
 #include "rt_bloom_down_cs.h"
 #include "rt_bloom_ps.h"
 #include "rt_capture_cs.h"
+#include "rt_sky_light_map_cs.h"
+#include "rt_sky_light_sh_cs.h"
 #include "rt_light_texture_ps.h"
 #include "rt_post_blur_cs.h"
 #include "rt_post_bright_cs.h"
@@ -97,7 +99,8 @@ struct RtLightConstants {
     float ambient[4];
     float point_saturation;
     std::uint32_t draw_count;
-    std::uint32_t pad[2];
+    float sky_ibl;
+    std::uint32_t pad;
 };
 static_assert(sizeof(RtLightConstants) == 592u);
 
@@ -213,6 +216,7 @@ enum LightParameter : UINT {
     kLightGlowBase,
     kLightGlowAdded,
     kLightDraws,
+    kLightSky,
     kLightZ,
     kLightNormal,
     kLightRaw,
@@ -232,6 +236,8 @@ enum CaptureParameter : UINT {
     kCaptureGlow,
     kCaptureFound,
     kCaptureSky,
+    kCaptureSkyRadiance,
+    kCaptureSkySh,
     kCaptureCount,
 };
 
@@ -597,6 +603,10 @@ bool SceneRayTracer::initialize(ID3D12Device* device, std::uint64_t timestamp_fr
                        sky_zero_, L"rt sky zero") ||
         !create_buffer(kSkyRing * kSkyBytes, D3D12_HEAP_TYPE_READBACK, D3D12_RESOURCE_STATE_COPY_DEST,
                        D3D12_RESOURCE_FLAG_NONE, sky_readback_, L"rt sky readback") ||
+        !create_buffer(kSkyBins * 16u, D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
+                       D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, sky_radiance_, L"rt sky radiance") ||
+        !create_buffer(128u, D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
+                       D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, sky_sh_, L"rt sky light") ||
         FAILED(sky_zero_->Map(0, &no_read, &zero))) {
         shutdown();
         return false;
@@ -604,6 +614,9 @@ bool SceneRayTracer::initialize(ID3D12Device* device, std::uint64_t timestamp_fr
     std::memset(zero, 0, kSkyBytes);
     sky_zero_->Unmap(0, nullptr);
     sky_bins_state_ = D3D12_RESOURCE_STATE_COPY_DEST;
+    sky_radiance_state_ = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+    sky_sh_state_ = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+    sky_radiance_generation_ = ~0u;
     D3D12_QUERY_HEAP_DESC query{};
     query.Type = D3D12_QUERY_HEAP_TYPE_TIMESTAMP;
     query.Count = kResultSlots * kTimestampsPerSlot;
@@ -647,6 +660,7 @@ bool SceneRayTracer::initialize(ID3D12Device* device, std::uint64_t timestamp_fr
     glow_model_exposure_ = std::clamp(env_float("GALAXY_RT_GLOW_MODEL_EXPOSURE", 3.2f), 1.0f, 8.0f);
     glow_model_spill_ = std::clamp(env_float("GALAXY_RT_GLOW_MODEL_SPILL", 1.0f), 0.0f, 2.0f);
     sky_distance_ = std::clamp(env_float("GALAXY_RT_SKY_DISTANCE", 60000.0f), 1000.0f, 1.0e7f);
+    sky_ibl_ = std::clamp(env_float("GALAXY_RT_SKY_IBL", 0.8f), 0.0f, 1.0f);
     post_ = env_float("GALAXY_RT_POST", 1.0f) != 0.0f;
     post_bloom_ = std::clamp(env_float("GALAXY_RT_POST_BLOOM", 0.4f), 0.0f, 4.0f);
     post_threshold_ = std::clamp(env_float("GALAXY_RT_POST_THRESHOLD", 0.9f), 0.0f, 0.99f);
@@ -709,6 +723,8 @@ void SceneRayTracer::shutdown() noexcept {
     sky_bins_.Reset();
     sky_zero_.Reset();
     sky_readback_.Reset();
+    sky_radiance_.Reset();
+    sky_sh_.Reset();
     sky_reads_ = {};
     timestamps_.Reset();
     dump_.Reset();
@@ -755,6 +771,8 @@ void SceneRayTracer::shutdown() noexcept {
     bloom_slot_ = -1;
     sky_state_pso_.Reset();
     surface_emit_pso_.Reset();
+    sky_light_map_pso_.Reset();
+    sky_light_sh_pso_.Reset();
     glow_emit_pso_.Reset();
     emit_merge_pso_.Reset();
     emit_root_.Reset();
@@ -1245,9 +1263,20 @@ bool SceneRayTracer::sky_sun(std::array<float, 3>& world, std::array<float, 3>& 
     return true;
 }
 
+bool SceneRayTracer::sky_key(std::array<float, 3>& world, float& strength) const noexcept {
+    static const bool enabled = env_float("GALAXY_RT_SKY_KEY", 1.0f) != 0.0f;
+    if (!enabled || !sky_key_.valid) {
+        return false;
+    }
+    world = sky_key_.direction;
+    strength = sky_key_.strength;
+    return true;
+}
+
 void SceneRayTracer::reset_sky() noexcept {
     sky_map_.reset();
     sky_sun_ = {};
+    sky_key_ = {};
     ++sky_generation_;
 }
 
@@ -1285,6 +1314,7 @@ void SceneRayTracer::read_sky() {
     }
     const SkySun before = sky_sun_;
     sky_map_.update(sky_sun_);
+    sky_key_ = sky_map_.key();
     sky_cycles_ += start != 0u ? __rdtsc() - start : 0u;
     const bool changed = sky_sun_.valid != before.valid ||
                          (sky_sun_.valid && sky_sun_.direction[0] * before.direction[0] +
@@ -1385,7 +1415,7 @@ bool SceneRayTracer::create_lighting_pipelines(DXGI_FORMAT color_format) {
     params[kLightDepth].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
     params[kLightDepth].DescriptorTable.NumDescriptorRanges = 1u;
     params[kLightDepth].DescriptorTable.pDescriptorRanges = &depth_range;
-    for (UINT i = 0; i <= kLightDraws - kLightPrevZ; ++i) {
+    for (UINT i = 0; i <= kLightSky - kLightPrevZ; ++i) {
         params[kLightPrevZ + i].ParameterType = D3D12_ROOT_PARAMETER_TYPE_SRV;
         params[kLightPrevZ + i].Descriptor.ShaderRegister = 8u + i;
     }
@@ -1430,6 +1460,10 @@ bool SceneRayTracer::create_lighting_pipelines(DXGI_FORMAT color_format) {
     capture_params[kCaptureFound].Descriptor.ShaderRegister = 3u;
     capture_params[kCaptureSky].ParameterType = D3D12_ROOT_PARAMETER_TYPE_UAV;
     capture_params[kCaptureSky].Descriptor.ShaderRegister = 4u;
+    capture_params[kCaptureSkyRadiance].ParameterType = D3D12_ROOT_PARAMETER_TYPE_UAV;
+    capture_params[kCaptureSkyRadiance].Descriptor.ShaderRegister = 5u;
+    capture_params[kCaptureSkySh].ParameterType = D3D12_ROOT_PARAMETER_TYPE_UAV;
+    capture_params[kCaptureSkySh].Descriptor.ShaderRegister = 6u;
     for (auto& param : capture_params) {
         param.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
     }
@@ -1440,7 +1474,9 @@ bool SceneRayTracer::create_lighting_pipelines(DXGI_FORMAT color_format) {
         !compute(capture_root_.Get(), g_rt_capture_cs, sizeof(g_rt_capture_cs), capture_pso_) ||
         !compute(capture_root_.Get(), g_rt_glow_base_cs, sizeof(g_rt_glow_base_cs), glow_base_pso_) ||
         !compute(capture_root_.Get(), g_rt_sky_state_cs, sizeof(g_rt_sky_state_cs), sky_state_pso_) ||
-        !compute(capture_root_.Get(), g_rt_surface_emit_cs, sizeof(g_rt_surface_emit_cs), surface_emit_pso_)) {
+        !compute(capture_root_.Get(), g_rt_surface_emit_cs, sizeof(g_rt_surface_emit_cs), surface_emit_pso_) ||
+        !compute(capture_root_.Get(), g_rt_sky_light_map_cs, sizeof(g_rt_sky_light_map_cs), sky_light_map_pso_) ||
+        !compute(capture_root_.Get(), g_rt_sky_light_sh_cs, sizeof(g_rt_sky_light_sh_cs), sky_light_sh_pso_)) {
         return false;
     }
 
@@ -1824,6 +1860,7 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
     }
     RtLightConstants c{};
     c.draw_count = static_cast<std::uint32_t>(draw_count);
+    c.sky_ibl = sky_ibl_;
     c.point_saturation = point_saturation_;
     std::copy(view_.projection.begin(), view_.projection.end(), c.projection);
     c.depth[0] = view_.z_scale;
@@ -2028,6 +2065,7 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
     to_state(list, emit_list_.Get(), emit_list_state_, kRead);
     to_state(list, glow_base_.Get(), glow_base_state_, kRead);
     to_state(list, glow_added_.Get(), glow_added_state_, kRead);
+    to_state(list, sky_sh_.Get(), sky_sh_state_, kRead);
 
     const UINT groups_x = (sample_width + 7u) / 8u;
     const UINT groups_y = (sample_height + 7u) / 8u;
@@ -2046,6 +2084,7 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
     list->SetComputeRootShaderResourceView(kLightGlowBase, glow_base_->GetGPUVirtualAddress());
     list->SetComputeRootShaderResourceView(kLightGlowAdded, glow_added_->GetGPUVirtualAddress());
     list->SetComputeRootShaderResourceView(kLightDraws, draw_table.gpu);
+    list->SetComputeRootShaderResourceView(kLightSky, sky_sh_->GetGPUVirtualAddress());
     list->SetComputeRootUnorderedAccessView(kLightZ, light_z_[current]->GetGPUVirtualAddress());
     list->SetComputeRootUnorderedAccessView(kLightNormal, light_normal_->GetGPUVirtualAddress());
     list->SetComputeRootUnorderedAccessView(kLightRaw, light_raw_->GetGPUVirtualAddress());
@@ -2175,6 +2214,16 @@ void SceneRayTracer::capture_picture(ID3D12GraphicsCommandList* list, const RtSo
         list->CopyBufferRegion(sky_bins_.Get(), 0u, sky_zero_.Get(), 0u, kSkyBins * kSkyBinWords * 4u);
     }
     to_state(list, sky_bins_.Get(), sky_bins_state_, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+    if (sky_radiance_generation_ != sky_generation_) {
+        // A new stage: its sky is unknown until it is seen.
+        sky_radiance_generation_ = sky_generation_;
+        to_state(list, sky_radiance_.Get(), sky_radiance_state_, D3D12_RESOURCE_STATE_COPY_DEST);
+        to_state(list, sky_sh_.Get(), sky_sh_state_, D3D12_RESOURCE_STATE_COPY_DEST);
+        list->CopyBufferRegion(sky_radiance_.Get(), 0u, sky_zero_.Get(), 0u, kSkyBins * 16u);
+        list->CopyBufferRegion(sky_sh_.Get(), 0u, sky_zero_.Get(), 0u, 128u);
+    }
+    to_state(list, sky_radiance_.Get(), sky_radiance_state_, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+    to_state(list, sky_sh_.Get(), sky_sh_state_, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
     c.surface_gain = surface_emission_;
     c.sky_distance = sky_distance_;
     c.exposure_day = exposure_day_;
@@ -2208,8 +2257,20 @@ void SceneRayTracer::capture_picture(ID3D12GraphicsCommandList* list, const RtSo
     list->SetComputeRootUnorderedAccessView(kCaptureGlow, glow_added_->GetGPUVirtualAddress());
     list->SetComputeRootUnorderedAccessView(kCaptureFound, emit_tiles_->GetGPUVirtualAddress());
     list->SetComputeRootUnorderedAccessView(kCaptureSky, sky_bins_->GetGPUVirtualAddress());
+    list->SetComputeRootUnorderedAccessView(kCaptureSkyRadiance, sky_radiance_->GetGPUVirtualAddress());
+    list->SetComputeRootUnorderedAccessView(kCaptureSkySh, sky_sh_->GetGPUVirtualAddress());
     list->Dispatch((sample_width + 7u) / 8u, (sample_height + 7u) / 8u, 1u);
     if (sky) {
+        // The sky light: the bins into the map over time, then its spherical harmonics.
+        const D3D12_RESOURCE_BARRIER barrier = uav_barrier(nullptr);
+        list->ResourceBarrier(1u, &barrier);
+        list->SetPipelineState(sky_light_map_pso_.Get());
+        list->Dispatch(kSkyBins / 64u, 1u, 1u);
+        list->ResourceBarrier(1u, &barrier);
+        list->SetPipelineState(sky_light_sh_pso_.Get());
+        list->Dispatch(1u, 1u, 1u);
+        list->ResourceBarrier(1u, &barrier);
+        list->SetPipelineState(capture_pso_.Get());
         constexpr UINT64 kSkyBytes = kSkyBins * kSkyBinWords * 4u;
         to_state(list, sky_bins_.Get(), sky_bins_state_, D3D12_RESOURCE_STATE_COPY_SOURCE);
         list->CopyBufferRegion(sky_readback_.Get(), sky_next_ * kSkyBytes, sky_bins_.Get(), 0u, kSkyBytes);
@@ -2454,8 +2515,10 @@ void SceneRayTracer::post_prepare(ID3D12GraphicsCommandList* list, D3D12_GPU_DES
             c.core_light[2] = 0.38f;
             c.core_light[3] = std::clamp(0.4f + 0.35f * scale, 0.5f, 2.5f);
         }
+        // Shafts from a sun the sky shows: the game's, else the one the sky map found.
         std::array<float, 3> sun{};
-        if (camera_known && game_sun(sun, 2000u)) {
+        std::array<float, 3> sky_color{};
+        if (camera_known && (game_sun(sun, 2000u) || sky_sun(sun, sky_color))) {
             for (unsigned r = 0; r < 3u; ++r) {
                 c.sun[r] = camera[r * 4u] * sun[0] + camera[r * 4u + 1u] * sun[1] + camera[r * 4u + 2u] * sun[2];
             }

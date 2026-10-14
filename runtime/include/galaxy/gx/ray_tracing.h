@@ -176,6 +176,10 @@ public:
     // The sun the sky shows (rt_sky_sun.h) since the last reset_sky: world direction towards it and
     // colour (peak 1); false while none stands out.
     [[nodiscard]] bool sky_sun(std::array<float, 3>& world, std::array<float, 3>& color) const noexcept;
+    // A daylight sky's own key light while it shows no sun (rt_sky_sun.h SkyMap::key): world
+    // direction towards it and its strength (0-1); false at night, in space, or with
+    // GALAXY_RT_SKY_KEY=0.
+    [[nodiscard]] bool sky_key(std::array<float, 3>& world, float& strength) const noexcept;
     // Another sky (GxBackend: a stage was loaded): the map starts over.
     void reset_sky() noexcept;
     // Ray-traced lighting of the last traced scene (rt_lighting.hlsl): its result slot for
@@ -396,6 +400,11 @@ private:
     Microsoft::WRL::ComPtr<ID3D12PipelineState> glow_base_pso_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> sky_state_pso_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> surface_emit_pso_;
+    // The sky light (rt_lighting.hlsl SkyLightMapCS, SkyLightShCS): the captures' sky bins over time
+    // (float4 per bin: colour, seen) and their spherical harmonics, which the rays that reach the
+    // sky take their light from.
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> sky_light_map_pso_;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> sky_light_sh_pso_;
     // The lighting texture for lit translucents (rt_lighting.hlsl LightTexturePS).
     Microsoft::WRL::ComPtr<ID3D12RootSignature> light_tex_root_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> light_tex_pso_;
@@ -521,7 +530,13 @@ private:
     std::uint32_t sky_generation_ = 0;
     SkyMap sky_map_{};
     SkySun sky_sun_{};
+    SkyKey sky_key_{};
     std::uint64_t sky_reads_done_ = 0;
+    Microsoft::WRL::ComPtr<ID3D12Resource> sky_radiance_;
+    Microsoft::WRL::ComPtr<ID3D12Resource> sky_sh_;
+    D3D12_RESOURCE_STATES sky_radiance_state_ = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+    D3D12_RESOURCE_STATES sky_sh_state_ = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+    std::uint32_t sky_radiance_generation_ = ~0u;   // sky_generation_ when the map was last cleared
     std::uint64_t sky_cycles_ = 0;
     void read_sky();
     float key_size_ = 6.0f;     // GALAXY_RT_KEY_SIZE: degrees
@@ -537,6 +552,8 @@ private:
     float glow_model_exposure_ = 3.2f;  // GALAXY_RT_GLOW_MODEL_EXPOSURE: glowing models (a star's surface)
     float glow_model_spill_ = 1.0f;     // GALAXY_RT_GLOW_MODEL_SPILL
     float sky_distance_ = 60000.0f; // GALAXY_RT_SKY_DISTANCE: farther surfaces are the sky (backdrops)
+    float sky_ibl_ = 0.8f;          // GALAXY_RT_SKY_IBL: rays reaching the sky take the light of their
+                                    // direction (0: the sky's mean colour from every direction)
     bool post_ = true;              // GALAXY_RT_POST: the cinematic finish
     float post_bloom_ = 0.4f;       // GALAXY_RT_POST_BLOOM
     float post_threshold_ = 0.9f;   // GALAXY_RT_POST_THRESHOLD: luminance where bloom starts
