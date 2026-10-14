@@ -339,11 +339,11 @@ int main() {
         !sanitized.taa_enabled,
         "set_render_config clamps unimplemented TAA off");
     passed &= expect(
-        !sanitized.ray_tracing_enabled &&
+        sanitized.ray_tracing_enabled &&
             sanitized.rt_shadow_quality == 0 &&
             !sanitized.rt_ao_enabled &&
             !sanitized.rt_reflections,
-        "set_render_config clamps unimplemented DXR effects off");
+        "set_render_config keeps ray tracing and clamps the reserved DXR keys off");
     passed &= expect(
         sanitized.swap_chain_frame_latency == 2,
         "set_render_config clamps swap-chain latency to the frame ring");
@@ -512,11 +512,11 @@ int main() {
     passed &= expect(
         loaded.msaa_samples == 1 &&
             !loaded.taa_enabled &&
-            !loaded.ray_tracing_enabled &&
+            loaded.ray_tracing_enabled &&
             loaded.rt_shadow_quality == 0 &&
             !loaded.rt_ao_enabled &&
             !loaded.rt_reflections,
-        "file/env render config cannot enable unimplemented graphics features");
+        "file/env render config enables ray tracing but no unimplemented graphics feature");
 
     {
         ScopedEnv lod_bias("GALAXY_TEXTURE_LOD_BIAS", "99");

@@ -42,29 +42,46 @@ namespace Nebula.Launcher
         public static bool DlssAdapter()
         {
             bool lowPower = PackagePrefersIntegratedGpu();
+            var values = AdapterRecord(lowPower);
+            string vendor, description;
+            if (values != null && values.TryGetValue("vendor_id", out vendor) && values.TryGetValue("description", out description))
+            {
+                return vendor == "4318" && description.IndexOf("RTX", StringComparison.OrdinalIgnoreCase) >= 0;
+            }
+            return !lowPower && DlssPackage.RtxAdapterPresent();
+        }
+
+        /// <summary>
+        /// The game's GPU runs Nebula's ray tracing (DXR 1.1, shader model 6.5, dedicated memory), as
+        /// recorded by the runtime in adapter.ini; unknown until the game has run once.
+        /// </summary>
+        public static bool RayTracingAdapter()
+        {
+            var values = AdapterRecord(PackagePrefersIntegratedGpu());
+            string rt;
+            return values != null && values.TryGetValue("ray_tracing", out rt) && rt == "1";
+        }
+
+        // adapter.ini when it was written with this package's GPU preference; otherwise null.
+        private static Dictionary<string, string> AdapterRecord(bool lowPower)
+        {
             string path = Path.Combine(NebulaPaths.DataRoot, "adapter.ini");
             try
             {
-                if (File.Exists(path))
+                if (!File.Exists(path)) return null;
+                var values = new Dictionary<string, string>();
+                foreach (string line in File.ReadAllLines(path))
                 {
-                    var values = new Dictionary<string, string>();
-                    foreach (string line in File.ReadAllLines(path))
-                    {
-                        int equals = line.IndexOf('=');
-                        if (equals > 0) values[line.Substring(0, equals).Trim()] = line.Substring(equals + 1).Trim();
-                    }
-                    string preference, vendor, description;
-                    if (values.TryGetValue("gpu_preference", out preference) &&
-                        (preference == "low") == lowPower &&
-                        values.TryGetValue("vendor_id", out vendor) && values.TryGetValue("description", out description))
-                    {
-                        return vendor == "4318" && description.IndexOf("RTX", StringComparison.OrdinalIgnoreCase) >= 0;
-                    }
+                    int equals = line.IndexOf('=');
+                    if (equals > 0) values[line.Substring(0, equals).Trim()] = line.Substring(equals + 1).Trim();
                 }
+                string preference;
+                return values.TryGetValue("gpu_preference", out preference) && (preference == "low") == lowPower
+                    ? values : null;
             }
             catch (IOException) { }
             catch (UnauthorizedAccessException) { }
-            return !lowPower && DlssPackage.RtxAdapterPresent();
+            return null;
         }
 
         /// <summary>runtime-env.json beside the launcher selects the integrated GPU (GALAXY_GPU_PREFERENCE=low).</summary>
@@ -140,7 +157,7 @@ namespace Nebula.Launcher
         public int AntiAliasing = 0, Quality = 2, Upscaler = 0, Sharpness = 0, TextureFilter = 0;
         public int TemporalQuality = 1;
         public int SpatialQuality = 0;
-        public bool GeneratedMipmaps = false, PerPixelLighting = false, HudOutputResolution = false;
+        public bool GeneratedMipmaps = false, PerPixelLighting = false, HudOutputResolution = false, RayTracing = false;
 
         public static string ConfigPath { get { return Path.Combine(NebulaPaths.DataRoot, "config.ini"); } }
 
@@ -207,10 +224,11 @@ namespace Nebula.Launcher
                 settings.TextureFilter = 0;
                 for (int i = 0; i < Anisotropy.Length; i++) if (Anisotropy[i] <= anisotropy) settings.TextureFilter = i;
             }
-            string mipmaps, lighting, hud;
+            string mipmaps, lighting, hud, rt;
             if (values.TryGetValue("enhanced_mipmaps", out mipmaps)) settings.GeneratedMipmaps = mipmaps.Trim() != "0";
             if (values.TryGetValue("per_pixel_lighting", out lighting)) settings.PerPixelLighting = lighting.Trim() != "0";
             if (values.TryGetValue("hud_output_resolution", out hud)) settings.HudOutputResolution = hud.Trim() != "0";
+            if (values.TryGetValue("ray_tracing_enabled", out rt)) settings.RayTracing = rt.Trim() != "0";
             return settings;
         }
 
@@ -240,6 +258,7 @@ namespace Nebula.Launcher
             Set(lines, "enhanced_mipmaps", GeneratedMipmaps ? 1 : 0);
             Set(lines, "per_pixel_lighting", PerPixelLighting ? 1 : 0);
             Set(lines, "hud_output_resolution", HudOutputResolution ? 1 : 0);
+            Set(lines, "ray_tracing_enabled", RayTracing ? 1 : 0);
             Directory.CreateDirectory(Path.GetDirectoryName(ConfigPath));
             string temp = ConfigPath + ".tmp";
             File.WriteAllText(temp, string.Join("\n", lines) + "\n", new UTF8Encoding(false));

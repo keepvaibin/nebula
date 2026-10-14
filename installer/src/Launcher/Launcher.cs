@@ -288,7 +288,9 @@ namespace Nebula.Launcher
         private readonly ComboBox antiAliasing = new ComboBox(), aaQuality = new ComboBox(), upscaler = new ComboBox(),
             dlssQuality = new ComboBox(), textureFilter = new ComboBox(), lighting = new ComboBox();
         private readonly NumericUpDown sharpness = new NumericUpDown();
-        private readonly CheckBox mipmaps = new CheckBox(), hudOutput = new CheckBox();
+        private readonly CheckBox mipmaps = new CheckBox(), hudOutput = new CheckBox(), rayTracing = new CheckBox();
+        // Offered once the game has run on a GPU with DXR 1.1 and dedicated memory.
+        private readonly bool rayTracingOffered = GraphicsSettings.RayTracingAdapter();
         private readonly TrackBar[] volumes = new TrackBar[AudioSettings.Names.Length];
         private readonly Label[] volumeValues = new Label[AudioSettings.Names.Length];
         private readonly ComboBox recording = new ComboBox();
@@ -374,6 +376,12 @@ namespace Nebula.Launcher
             hudOutput.Location = new Point(12, y);
             hudOutput.Size = new Size(600, 28);
             image.Controls.Add(hudOutput);
+            y += 32;
+            rayTracing.Text = "Ray tracing (ambient occlusion)";
+            rayTracing.Location = new Point(12, y);
+            rayTracing.Size = new Size(600, 28);
+            rayTracing.Visible = rayTracingOffered;
+            image.Controls.Add(rayTracing);
             antiAliasing.Items.AddRange(GraphicsSettings.AntiAliasingModes);
             aaQuality.Items.AddRange(GraphicsSettings.AntiAliasingQualities);
             foreach (int value in upscalerChoices) upscaler.Items.Add(GraphicsSettings.UpscalerName(value));
@@ -797,6 +805,7 @@ namespace Nebula.Launcher
             lighting.SelectedIndex = graphics.PerPixelLighting ? 0 : 1;
             mipmaps.Checked = graphics.GeneratedMipmaps;
             hudOutput.Checked = graphics.HudOutputResolution;
+            rayTracing.Checked = graphics.RayTracing;
             for (int i = 0; i < volumes.Length; i++)
             {
                 volumes[i].Value = Math.Max(0, Math.Min(200, audio.Percent[i]));
@@ -946,6 +955,7 @@ namespace Nebula.Launcher
                 graphics.PerPixelLighting = lighting.SelectedIndex == 0;
                 graphics.GeneratedMipmaps = mipmaps.Checked;
                 graphics.HudOutputResolution = hudOutput.Checked;
+                if (rayTracingOffered) graphics.RayTracing = rayTracing.Checked;
                 graphics.Save();
                 for (int i = 0; i < volumes.Length; i++) audio.Percent[i] = volumes[i].Value;
                 audio.Save();

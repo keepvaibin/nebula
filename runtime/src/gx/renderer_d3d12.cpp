@@ -170,6 +170,8 @@ constexpr bool kStreamlineBuilt = false;
 
 // DLSS before it is installed (defined after the adapter selection below).
 bool dlss_offered();
+// DXR 1.1 with shader model 6.5 on an adapter with dedicated memory (the RAY TRACING row).
+std::atomic<bool> s_ray_tracing_offered{false};
 bool dlss_installed_now();
 bool dlss_hold_back(RenderConfig& applied, const RenderConfig& live);
 bool dlss_prompt_key(WPARAM key, bool was_down);
@@ -611,6 +613,7 @@ unsigned pending_settings_changes() {
     changes += d.enhanced_mipmaps != live.enhanced_mipmaps;
     changes += d.per_pixel_lighting != live.per_pixel_lighting;
     changes += d.hud_output_resolution != live.hud_output_resolution;
+    changes += d.ray_tracing_enabled != live.ray_tracing_enabled;
     changes += controls_changes();
     return changes;
 }
@@ -764,7 +767,9 @@ unsigned graphics_row(unsigned row) {
 unsigned native_settings_row_count(unsigned tab) {
     switch (tab % kNativeSettingsTabCount) {
     case 0: return 8u;
-    case 1: return temporal_quality_row_shown() ? 9u : 8u;
+    case 1:
+        return (temporal_quality_row_shown() ? 9u : 8u) +
+               (s_ray_tracing_offered.load(std::memory_order_relaxed) ? 1u : 0u);
     case 2: return controls_row_count();
     case 3: return 7u;
     case 4: return 1u;
@@ -870,6 +875,7 @@ void apply_native_settings_draft() {
     applied.enhanced_mipmaps = next.enhanced_mipmaps;
     applied.per_pixel_lighting = next.per_pixel_lighting;
     applied.hud_output_resolution = next.hud_output_resolution;
+    applied.ray_tracing_enabled = next.ray_tracing_enabled;
     const bool display_changed = display_settings_differ(live, applied);
     const unsigned changes = pending_settings_changes();
     if (applied.internal_follow_window) {
@@ -1118,6 +1124,7 @@ void adjust_native_setting_unlogged(int delta) {
         case 6: draft.enhanced_mipmaps = !draft.enhanced_mipmaps; break;
         case 7: draft.per_pixel_lighting = !draft.per_pixel_lighting; break;
         case 8: draft.hud_output_resolution = !draft.hud_output_resolution; break;
+        case 9: draft.ray_tracing_enabled = !draft.ray_tracing_enabled; break;
         default: return;
         }
         return;
@@ -4775,8 +4782,6 @@ bool RendererD3D12::initialize(int window_width, int window_height, unsigned efb
         // validity flag as well.
         g_selected_adapter_desc = adapter_desc;
         g_selected_adapter_valid = true;
-        record_render_adapter(adapter_desc.Description, adapter_desc.VendorId, adapter_desc.DeviceId,
-                              adapter_preference() == DXGI_GPU_PREFERENCE_MINIMUM_POWER);
         (void)adapter.As(&adapter3_);
         {
             char narrow[128]{};
@@ -4859,6 +4864,17 @@ bool RendererD3D12::initialize(int window_width, int window_height, unsigned efb
                 &options5,
                 sizeof(options5))) &&
             options5.RaytracingTier != D3D12_RAYTRACING_TIER_NOT_SUPPORTED;
+        {
+            D3D12_FEATURE_DATA_SHADER_MODEL shader_model{D3D_SHADER_MODEL_6_5};
+            const bool offered =
+                dxr_runtime_supported && options5.RaytracingTier >= D3D12_RAYTRACING_TIER_1_1 &&
+                SUCCEEDED(device_->CheckFeatureSupport(D3D12_FEATURE_SHADER_MODEL, &shader_model,
+                                                       sizeof(shader_model))) &&
+                shader_model.HighestShaderModel >= D3D_SHADER_MODEL_6_5 && !adapter_is_unified_memory();
+            s_ray_tracing_offered.store(offered, std::memory_order_relaxed);
+            record_render_adapter(adapter_desc.Description, adapter_desc.VendorId, adapter_desc.DeviceId,
+                                  adapter_preference() == DXGI_GPU_PREFERENCE_MINIMUM_POWER, offered);
+        }
         RenderFeatureCaps caps{};
         caps.d3d12_device_created = true;
         caps.d3d_feature_level =
@@ -4891,13 +4907,14 @@ bool RendererD3D12::initialize(int window_width, int window_height, unsigned efb
             false,
             "motion vectors, jitter, and history resources are not built");
         caps.dxr = make_render_feature_status(
-            false,
+            true,
             dxr_runtime_supported,
-            false,
-            false,
-            dxr_runtime_supported
-                ? "DXR runtime is available; native RT effects are not built"
-                : "D3D12 raytracing tier is unsupported");
+            s_ray_tracing_offered.load(std::memory_order_relaxed),
+            s_ray_tracing_offered.load(std::memory_order_relaxed),
+            s_ray_tracing_offered.load(std::memory_order_relaxed)
+                ? "ray-traced ambient occlusion (GRAPHICS: RAY TRACING)"
+            : dxr_runtime_supported ? "needs DXR 1.1, shader model 6.5 and dedicated video memory"
+                                    : "D3D12 raytracing tier is unsupported");
         caps.streamline = make_render_feature_status(
             caps.streamline_bridge_built,
             streamline::active(),
@@ -5167,23 +5184,8 @@ bool RendererD3D12::initialize(int window_width, int window_height, unsigned efb
                       << '\n';
         }
 
-        // Ray tracing: GALAXY_RAY_TRACING=1 on adapters with dedicated memory (DXR 1.1);
-        // GALAXY_RT_VALIDATE=1 adds the primary-ray check against the raster depth.
-        {
-            const auto env_on = [](const char* name) {
-                char value[8]{};
-                std::size_t length = 0u;
-                return getenv_s(&length, value, sizeof(value), name) == 0 && length > 1u && value[0] == '1';
-            };
-            if (env_on("GALAXY_RAY_TRACING")) {
-                if (adapter_is_unified_memory()) {
-                    std::cerr << "[rt] off: integrated GPU\n";
-                } else {
-                    static_cast<void>(ray_tracer_.initialize(device_.Get(), timestamp_frequency_,
-                                                             env_on("GALAXY_RT_VALIDATE"), kEfbColorFormat));
-                }
-            }
-        }
+        // Ray tracing (config ray_tracing_enabled, GALAXY_RAY_TRACING=1) where offered.
+        reconcile_ray_tracing();
 
         if (trace_renderer_startup_enabled()) {
             std::cout << "[Renderer] OK  EFB=" << kEfbWidth * efb_scale_
@@ -6091,6 +6093,7 @@ void RendererD3D12::begin_frame(bool present_swap_chain) {
     follow_window_internal_resolution();
     apply_pending_efb_scale();
     sync_post_process_settings();
+    reconcile_ray_tracing();
     {
         if (temporal_interp_suspended_ && temporal_interp_key() != temporal_interp_key_) {
             // Other settings: measured again.
@@ -7517,6 +7520,29 @@ void RendererD3D12::record_stripe_gather() {
     command_list_->ResourceBarrier(1, &barrier);
     stripe_earlier_state_ = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
     bound_pipeline_ = nullptr;
+}
+
+void RendererD3D12::reconcile_ray_tracing() {
+    const bool wanted =
+        get_render_config().ray_tracing_enabled && s_ray_tracing_offered.load(std::memory_order_relaxed);
+    if (wanted == ray_tracer_.ready() || (wanted && rt_start_failed_) || !device_) {
+        return;
+    }
+    if (!wanted) {
+        // Recorded sub-frame replays composite the tracer's results: none may run again.
+        wait_for_gpu();
+        for (ReplayList& entry : replay_lists_) {
+            entry.sequence = 0u;
+        }
+        ray_tracer_.shutdown();
+        std::cerr << "[rt] off\n";
+        return;
+    }
+    char value[8]{};
+    std::size_t length = 0u;
+    const bool validate =
+        getenv_s(&length, value, sizeof(value), "GALAXY_RT_VALIDATE") == 0 && length > 1u && value[0] == '1';
+    rt_start_failed_ = !ray_tracer_.initialize(device_.Get(), timestamp_frequency_, validate, kEfbColorFormat);
 }
 
 RtSources RendererD3D12::rt_sources() const {
@@ -12325,6 +12351,8 @@ std::string native_settings_row_text(
         case 8:
             return std::string("2D LAYER: ") +
                    (render.hud_output_resolution ? "DISPLAY RES" : "INTERNAL RES");
+        case 9:
+            return std::string("RAY TRACING: ") + (render.ray_tracing_enabled ? "ON" : "OFF");
         default:
             return {};
         }

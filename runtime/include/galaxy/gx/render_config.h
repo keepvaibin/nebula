@@ -118,9 +118,9 @@ struct RenderConfig {
     unsigned spatial_quality     = 0;
     unsigned sharpness           = 0;
 
-    // Reserved for future DXR work. Clamped off until there is a real DXR
-    // capability query, acceleration-structure path, ray PSO, and visible
-    // native effect.
+    // Ray-traced effects (ambient occlusion) on adapters with DXR 1.1, shader
+    // model 6.5 and dedicated video memory; ignored elsewhere. The other rt_*
+    // keys are reserved and clamped off.
     bool     ray_tracing_enabled = false;
     unsigned rt_shadow_quality   = 0;   // 0=off, 1=low, 2=medium, 3=high
     bool     rt_ao_enabled       = false;
@@ -309,6 +309,6 @@ bool save_render_config_to_file();
 // which offers DLSS only on an NVIDIA RTX adapter: description, PCI vendor and device id and
 // the GPU preference the runtime started with (low: integrated first).
 void record_render_adapter(const wchar_t* description, unsigned vendor_id, unsigned device_id,
-                           bool low_power_preference) noexcept;
+                           bool low_power_preference, bool ray_tracing) noexcept;
 
 } // namespace galaxy::gx

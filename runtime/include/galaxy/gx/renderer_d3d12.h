@@ -469,6 +469,8 @@ public:
     // Ray tracing (galaxy/gx/ray_tracing.h): the 3D scene's opaque draws, noted as they are
     // drawn, become the traced scene when the game's translucent phases begin.
     [[nodiscard]] bool rt_active() const noexcept { return ray_tracer_.ready(); }
+    // Starts or stops the ray tracer at a frame boundary to follow the RAY TRACING setting.
+    void reconcile_ray_tracing();
     [[nodiscard]] bool rt_scene_open() const noexcept { return ray_tracer_.scene_open(); }
     void rt_begin_scene() noexcept { ray_tracer_.begin_scene(); }
     void rt_set_view(const RtView& view) noexcept { ray_tracer_.set_view(view); }
@@ -1165,6 +1167,8 @@ private:
     Microsoft::WRL::ComPtr<ID3D12RootSignature> blend_validate_root_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> blend_validate_pso_;
     SceneRayTracer ray_tracer_;
+    // The ray tracer could not start on this device: not retried every frame.
+    bool rt_start_failed_ = false;
     static RtUpload rt_allocate(void* renderer, std::size_t bytes, std::size_t alignment);
     [[nodiscard]] RtSources rt_sources() const;
     // The occlusion of result `slot` onto the EFB colour; `reproject` on a sub-frame's replay.

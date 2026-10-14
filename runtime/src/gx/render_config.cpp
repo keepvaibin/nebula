@@ -274,6 +274,7 @@ static void apply_env_overrides(RenderConfig& cfg) {
     apply_env(cfg, "GALAXY_TEMPORAL_QUALITY", "temporal_quality");
     apply_env(cfg, "GALAXY_SPATIAL_QUALITY", "spatial_quality");
     apply_env(cfg, "GALAXY_SHARPNESS", "sharpness");
+    apply_env(cfg, "GALAXY_RAY_TRACING", "ray_tracing_enabled");
     apply_env(cfg, "GALAXY_RAY_TRACING_ENABLED", "ray_tracing_enabled");
     apply_env(cfg, "GALAXY_RT_SHADOW_QUALITY", "rt_shadow_quality");
     apply_env(cfg, "GALAXY_RT_AO_ENABLED", "rt_ao_enabled");
@@ -324,7 +325,6 @@ static void clamp_unimplemented_features(RenderConfig& cfg) {
     cfg.monitor.back() = '\0';
     cfg.msaa_samples = 1;
     cfg.taa_enabled = false;
-    cfg.ray_tracing_enabled = false;
     cfg.rt_shadow_quality = 0;
     cfg.rt_ao_enabled = false;
     cfg.rt_reflections = false;
@@ -585,6 +585,8 @@ bool save_render_config_to_file() {
              << (cfg.internal_follow_window ? 1u : 0u) << '\n'
              << "hud_output_resolution="
              << (cfg.hud_output_resolution ? 1u : 0u) << '\n'
+             << "ray_tracing_enabled="
+             << (cfg.ray_tracing_enabled ? 1u : 0u) << '\n'
              << "window_width=" << cfg.window_width << '\n'
              << "window_height=" << cfg.window_height << '\n'
              << "display_mode=" << cfg.display_mode << '\n'
@@ -600,7 +602,7 @@ bool save_render_config_to_file() {
 }
 
 void record_render_adapter(const wchar_t* description, unsigned vendor_id, unsigned device_id,
-                           bool low_power_preference) noexcept {
+                           bool low_power_preference, bool ray_tracing) noexcept {
     try {
         const std::filesystem::path config = config_path();
         if (config.empty() || description == nullptr) {
@@ -617,7 +619,8 @@ void record_render_adapter(const wchar_t* description, unsigned vendor_id, unsig
         contents << "description=" << name << '\n'
                  << "vendor_id=" << vendor_id << '\n'
                  << "device_id=" << device_id << '\n'
-                 << "gpu_preference=" << (low_power_preference ? "low" : "high") << '\n';
+                 << "gpu_preference=" << (low_power_preference ? "low" : "high") << '\n'
+                 << "ray_tracing=" << (ray_tracing ? 1 : 0) << '\n';
         static_cast<void>(io::write_text_file_atomically(config.parent_path() / L"adapter.ini", contents.str()));
     } catch (...) {
     }
