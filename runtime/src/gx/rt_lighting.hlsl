@@ -2,14 +2,15 @@
 // Ray-traced lighting of the game frame's opaque scene (DXR 1.1 inline ray queries, cs_6_5) and
 // its composite into the EFB (vs/ps_6_0). Compiled by DXC at build time.
 //
-// Two lights relight every opaque surface. The sun: a world-fixed direction with a disc, whose
-// shadow ray decides each sample's direct light (n.l when it reaches the sky). The sky and
-// what surrounds the surface: a ray that leaves the scene brings 1, tinted towards the sky's
-// colour; a ray that hits geometry brings the light that surface sends back, read from the
-// previous frame's finished picture where the surface was visible (its brightest pixels count
-// as emitters), darker the closer the hit. The surface's colour is multiplied by the sky
-// light's weight times the average over cosine-weighted rays plus the sun's light: lit faces
-// brighten and warm, shadows fall away from the sun and take the colours around them.
+// The game's own lights relight every opaque surface. Its visible sun: a direction with a
+// disc, whose shadow ray decides each sample's direct light (n.l where it reaches the sky).
+// Its point lights: one picked per sample in proportion to its unshadowed light, with a shadow
+// ray to it. The sky and what surrounds the surface: a ray that leaves the scene brings 1,
+// tinted towards the sky's colour; a ray that hits geometry brings the light that surface sends
+// back, read from the previous frame's finished picture where the surface was visible (its
+// brightest pixels count as emitters), darker the closer the hit. The surface's colour is
+// multiplied by the weighted sum: lit faces brighten in the lights' colours, shadows fall away
+// from them and take the colours around them.
 //
 // Samples are taken once per g_factor x g_factor EFB pixels, accumulate over frames along the
 // game camera's motion and pass two edge-aware filters. The composite reads them at each
@@ -29,7 +30,8 @@ cbuffer RtLight : register(b0)
     uint g_rays;                // rays per sample
     uint g_factor;              // EFB pixels per sample side
     uint g_flags;               // bit 0: previous samples usable; bit 1: previous picture usable;
-                                // bits 2, 3: results hold the sun's light, the sky light alone
+                                // bits 2-4: results hold the sun's, the sky's, the point lights'
+                                // light alone
     uint g_history_frames;      // accumulation limit
     float4 g_reproject[3];      // previous samples' eye position from this frame's (3x4 rows)
     float4 g_picture[3];        // the previous picture's eye position from this frame's
@@ -39,19 +41,24 @@ cbuffer RtLight : register(b0)
     float g_fallback;           // light of a hit the previous picture did not show
     float4 g_sun;               // towards the sun in eye space (xyz), tangent of its radius (w)
     float4 g_sun_light;         // sun light (rgb), weight of the sky and bounce light (w)
+    uint g_point_count;         // point lights in g_points (0-8)
+    float g_point_light;        // their weight
+    float g_point_size;         // radius of the geometry around a light (its emitter)
+    float g_point_pad;
+    float4 g_points[16];        // per light: eye position (xyz), range (w); colour (rgb)
 };
 
 RaytracingAccelerationStructure g_scene : register(t6);
 Texture2D<float> g_efb_depth : register(t7);
 StructuredBuffer<float> g_prev_z : register(t8);
-StructuredBuffer<uint3> g_prev_history : register(t9);
-StructuredBuffer<uint3> g_history_in : register(t10);
+StructuredBuffer<uint4> g_prev_history : register(t9);
+StructuredBuffer<uint4> g_history_in : register(t10);
 StructuredBuffer<uint2> g_picture_in : register(t11);    // packed light, eye z
 ByteAddressBuffer g_picture_sums : register(t12);        // sky r g b n, scene r g b n (x 1/255)
 RWStructuredBuffer<float> g_z : register(u0);
 RWStructuredBuffer<uint> g_normal : register(u1);
-RWStructuredBuffer<uint2> g_raw : register(u2);
-RWStructuredBuffer<uint3> g_history : register(u3);
+RWStructuredBuffer<uint4> g_raw : register(u2);
+RWStructuredBuffer<uint4> g_history : register(u3);
 RWStructuredBuffer<uint3> g_final : register(u4);
 
 static const float kPi = 3.14159265f;
@@ -139,17 +146,48 @@ float4 unpack_rgb_w(uint2 p)
     return float4(f16tof32(p.x), f16tof32(p.x >> 16u), f16tof32(p.y), f16tof32(p.y >> 16u));
 }
 
-// Sky and bounce light (rgb), sun light (w) and accumulated frames.
-uint3 pack_light(float4 light, float count)
+// A sample's light: sky and bounce (rgb), the sun's, the point lights' (rgb).
+struct Light
 {
-    return uint3(pack_rgb_w(light.rgb, light.w), f32tof16(count));
+    float3 sky;
+    float sun;
+    float3 points;
+};
+
+Light make_light(float3 sky, float sun, float3 points)
+{
+    Light l;
+    l.sky = sky;
+    l.sun = sun;
+    l.points = points;
+    return l;
 }
 
-float4 unpack_light(uint3 p, out float count)
+Light scale_light(Light l, float w)
 {
-    count = f16tof32(p.z);
-    return unpack_rgb_w(p.xy);
+    return make_light(l.sky * w, l.sun * w, l.points * w);
 }
+
+Light add_light(Light a, Light b)
+{
+    return make_light(a.sky + b.sky, a.sun + b.sun, a.points + b.points);
+}
+
+// With the accumulated frames in the last half.
+uint4 pack_light(Light l, float count)
+{
+    return uint4(pack_rgb_w(l.sky, l.sun), pack_rgb_w(l.points, count));
+}
+
+Light unpack_light(uint4 p, out float count)
+{
+    const float4 a = unpack_rgb_w(p.xy);
+    const float4 b = unpack_rgb_w(p.zw);
+    count = b.w;
+    return make_light(a.rgb, a.w, b.rgb);
+}
+
+static const Light kOpenSky = {float3(1.0f, 1.0f, 1.0f), 0.0f, float3(0.0f, 0.0f, 0.0f)};
 
 // Non-negative RGB in 11-11-10 bits (the half's exponent and leading mantissa bits).
 uint pack_r11g11b10(float3 c)
@@ -301,6 +339,13 @@ float3 sky_tint()
     return l > 1e-3f ? lerp(float3(1.0f, 1.0f, 1.0f), sky / l, g_sky_saturation) : float3(1.0f, 1.0f, 1.0f);
 }
 
+float point_falloff(float d2, float range)
+{
+    const float x = d2 / (range * range);
+    const float window = saturate(1.0f - x * x);
+    return window * window / (1.0f + 16.0f * x);
+}
+
 // The light a hit point sends back: the previous picture where it showed that point.
 float3 hit_light(float3 hit, float3 fallback)
 {
@@ -335,7 +380,7 @@ void TraceCS(uint3 id : SV_DispatchThreadID)
     if (!pixel_point(q, p) || !inside(g_viewport, float2(q) + 0.5f)) {
         g_z[index] = 0.0f;
         g_normal[index] = 0u;
-        g_raw[index] = pack_rgb_w(float3(1.0f, 1.0f, 1.0f), 0.0f);
+        g_raw[index] = pack_light(kOpenSky, 0.0f);
         return;
     }
     const float3 n = surface_normal(q, p);
@@ -364,6 +409,56 @@ void TraceCS(uint3 id : SV_DispatchThreadID)
         query.TraceRayInline(g_scene, RAY_FLAG_NONE, 0xFFu, ray);
         query.Proceed();
         sun = query.CommittedStatus() == COMMITTED_TRIANGLE_HIT ? 0.0f : facing_sun;
+    }
+
+    // The point lights: one picked in proportion to its unshadowed light, one shadow ray to it;
+    // the estimate is that light's colour over its share.
+    float3 points = float3(0.0f, 0.0f, 0.0f);
+    if (g_point_count != 0u) {
+        float weights[8];
+        float total = 0.0f;
+        [unroll] for (uint i = 0u; i < 8u; ++i) {
+            weights[i] = 0.0f;
+            if (i < g_point_count) {
+                const float3 to = g_points[2u * i].xyz - p;
+                const float d2 = dot(to, to);
+                const float nl = dot(n, to) * rsqrt(max(d2, 1e-6f));
+                if (nl > 0.0f) {
+                    weights[i] = luminance(g_points[2u * i + 1u].rgb) * nl * point_falloff(d2, g_points[2u * i].w);
+                }
+            }
+            total += weights[i];
+        }
+        if (total > 1e-6f) {
+            float pick = sample_point(id.xy, max(g_rays, 1u) + 5u).x * total;
+            uint chosen = 0u;
+            [unroll] for (uint j = 0u; j < 8u; ++j) {
+                if (weights[j] > 0.0f) {
+                    chosen = j;
+                    if (pick < weights[j]) {
+                        break;
+                    }
+                    pick -= weights[j];
+                }
+            }
+            const float3 to = g_points[2u * chosen].xyz - origin;
+            const float span = length(to);
+            RayDesc ray;
+            ray.Origin = origin;
+            ray.Direction = to / max(span, 1e-4f);
+            ray.TMin = 0.0f;
+            // The light sits inside its own emitter (a lamp, a glowing core): the shadow ray
+            // ends at that surface.
+            ray.TMax = max(span - g_point_size, 0.0f);
+            RayQuery<RAY_FLAG_FORCE_OPAQUE | RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH |
+                     RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES> query;
+            query.TraceRayInline(g_scene, RAY_FLAG_NONE, 0xFFu, ray);
+            query.Proceed();
+            if (query.CommittedStatus() != COMMITTED_TRIANGLE_HIT) {
+                const float3 color = g_points[2u * chosen + 1u].rgb;
+                points = color / max(luminance(color), 1e-4f) * total;
+            }
+        }
     }
 
     const float sign_z = n.z >= 0.0f ? 1.0f : -1.0f;
@@ -407,11 +502,12 @@ void TraceCS(uint3 id : SV_DispatchThreadID)
     }
     g_z[index] = p.z;
     g_normal[index] = pack_normal(n);
-    g_raw[index] = pack_rgb_w(light / float(rays), sun);
+    g_raw[index] = pack_light(make_light(light / float(rays), sun, points), 0.0f);
 }
 
 // Accumulation: the sample's point in the previous frame, bilinear over the previous samples on
-// its plane, weighted towards the history up to g_history_frames.
+// its plane, weighted towards the history up to g_history_frames (the direct lights' shadows
+// keep at most five frames: their casters move).
 [numthreads(8, 8, 1)]
 void TemporalCS(uint3 id : SV_DispatchThreadID)
 {
@@ -420,12 +516,13 @@ void TemporalCS(uint3 id : SV_DispatchThreadID)
     }
     const uint index = id.y * g_sample_size.x + id.x;
     const float z = g_z[index];
-    const float4 raw = unpack_rgb_w(g_raw[index]);
+    float unused;
+    const Light raw = unpack_light(g_raw[index], unused);
     if (z == 0.0f) {
-        g_history[index] = pack_light(float4(1.0f, 1.0f, 1.0f, 0.0f), 0.0f);
+        g_history[index] = pack_light(kOpenSky, 0.0f);
         return;
     }
-    float4 result = raw;
+    Light result = raw;
     float frames = 1.0f;
     if ((g_flags & 1u) != 0u) {
         const float3 previous = transform(g_reproject, sample_position(id.xy, z));
@@ -437,7 +534,7 @@ void TemporalCS(uint3 id : SV_DispatchThreadID)
             const int2 base = int2(floor(a));
             const float2 w = a - float2(base);
             const float tolerance = 0.5f + abs(previous.z) * 0.01f;
-            float4 sum = float4(0.0f, 0.0f, 0.0f, 0.0f);
+            Light sum = make_light(float3(0.0f, 0.0f, 0.0f), 0.0f, float3(0.0f, 0.0f, 0.0f));
             float count_sum = 0.0f;
             float weight = 0.0f;
             [unroll] for (uint k = 0u; k < 4u; ++k) {
@@ -453,15 +550,16 @@ void TemporalCS(uint3 id : SV_DispatchThreadID)
                 }
                 const float bw = (o.x != 0 ? w.x : 1.0f - w.x) * (o.y != 0 ? w.y : 1.0f - w.y);
                 float count;
-                sum += unpack_light(g_prev_history[si], count) * bw;
+                sum = add_light(sum, scale_light(unpack_light(g_prev_history[si], count), bw));
                 count_sum += count * bw;
                 weight += bw;
             }
             if (weight > 1e-3f) {
-                const float4 history = sum / weight;
+                const Light history = scale_light(sum, 1.0f / weight);
                 frames = min(count_sum / weight + 1.0f, float(g_history_frames));
-                result = float4(lerp(history.rgb, raw.rgb, 1.0f / frames),
-                                lerp(history.w, raw.w, max(1.0f / frames, 0.2f)));
+                const float direct = max(1.0f / frames, 0.2f);
+                result = make_light(lerp(history.sky, raw.sky, 1.0f / frames), lerp(history.sun, raw.sun, direct),
+                                    lerp(history.points, raw.points, direct));
             }
         }
     }
@@ -469,16 +567,16 @@ void TemporalCS(uint3 id : SV_DispatchThreadID)
 }
 
 // Edge-aware 5x5 filter at `step` samples (plane distance and normal).
-float4 filtered(uint2 id, int step, bool from_history)
+Light filtered(uint2 id, int step, bool from_history)
 {
     const uint index = id.y * g_sample_size.x + id.x;
     const float z = g_z[index];
     const float3 p = sample_position(id, z);
     const float3 n = unpack_normal(g_normal[index]);
     const float inv_tolerance = 1.0f / (0.25f + abs(z) * 0.004f * float(step));
-    float4 sum = float4(0.0f, 0.0f, 0.0f, 0.0f);
+    Light sum = make_light(float3(0.0f, 0.0f, 0.0f), 0.0f, float3(0.0f, 0.0f, 0.0f));
     float weight = 0.0f;
-    float count = 0.0f;
+    float count;
     [unroll] for (int dy = -2; dy <= 2; ++dy) {
         [unroll] for (int dx = -2; dx <= 2; ++dx) {
             const int2 s = int2(id) + int2(dx, dy) * step;
@@ -495,15 +593,15 @@ float4 filtered(uint2 id, int step, bool from_history)
             const float facing2 = facing * facing;
             const float w = exp(-0.18f * float(dx * dx + dy * dy) - plane * plane) * (facing2 * facing2) *
                             (facing2 * facing2);
-            const float4 value = from_history ? unpack_light(g_history_in[si], count) : unpack_rgb_w(g_raw[si]);
-            sum += value * w;
+            const Light value = unpack_light(from_history ? g_history_in[si] : g_raw[si], count);
+            sum = add_light(sum, scale_light(value, w));
             weight += w;
         }
     }
     if (weight > 1e-4f) {
-        return sum / weight;
+        return scale_light(sum, 1.0f / weight);
     }
-    return from_history ? unpack_light(g_history_in[index], count) : unpack_rgb_w(g_raw[index]);
+    return unpack_light(from_history ? g_history_in[index] : g_raw[index], count);
 }
 
 [numthreads(8, 8, 1)]
@@ -513,8 +611,11 @@ void SpatialACS(uint3 id : SV_DispatchThreadID)
         return;
     }
     const uint index = id.y * g_sample_size.x + id.x;
-    const float4 light = filtered(id.xy, 1, true);
-    g_raw[index] = g_z[index] == 0.0f ? pack_rgb_w(float3(1.0f, 1.0f, 1.0f), 0.0f) : pack_rgb_w(light.rgb, light.w);
+    if (g_z[index] == 0.0f) {
+        g_raw[index] = pack_light(kOpenSky, 0.0f);
+        return;
+    }
+    g_raw[index] = pack_light(filtered(id.xy, 1, true), 0.0f);
 }
 
 [numthreads(8, 8, 1)]
@@ -529,16 +630,18 @@ void SpatialBCS(uint3 id : SV_DispatchThreadID)
         g_final[index] = uint3(f32tof16(1.0f) | (f32tof16(1.0f) << 16u), f32tof16(1.0f) | (f32tof16(1.0f) << 16u), 0u);
         return;
     }
-    const float4 light = filtered(id.xy, 2, false);
-    const float3 sun = light.w * g_sun_light.rgb;
-    float3 m = lerp(float3(1.0f, 1.0f, 1.0f), g_sun_light.w * light.rgb + sun, g_strength);
+    const Light light = filtered(id.xy, 2, false);
+    const float3 direct = light.sun * g_sun_light.rgb + light.points * g_point_light;
+    float3 m = lerp(float3(1.0f, 1.0f, 1.0f), g_sun_light.w * light.sky + direct, g_strength);
     if ((g_flags & 4u) != 0u) {
-        m = light.www;   // GALAXY_RT_VIEW=2: the sun's light alone
+        m = light.sun.xxx;     // GALAXY_RT_VIEW=2: the sun's light alone
     } else if ((g_flags & 8u) != 0u) {
-        m = light.rgb;   // GALAXY_RT_VIEW=3: the sky and bounce light alone
+        m = light.sky;         // GALAXY_RT_VIEW=3: the sky and bounce light alone
+    } else if ((g_flags & 16u) != 0u) {
+        m = light.points;      // GALAXY_RT_VIEW=4: the point lights alone
     }
     // The picture capture divides out the sky and bounce part (no feedback through it).
-    const float3 without = lerp(float3(1.0f, 1.0f, 1.0f), g_sun_light.www + sun, g_strength);
+    const float3 without = lerp(float3(1.0f, 1.0f, 1.0f), g_sun_light.www + direct, g_strength);
     const float keep = luminance(without) / max(luminance(m), 1e-3f);
     g_final[index] = uint3(f32tof16(m.r) | (f32tof16(m.g) << 16u), f32tof16(m.b) | (f32tof16(keep) << 16u), asuint(z));
 }

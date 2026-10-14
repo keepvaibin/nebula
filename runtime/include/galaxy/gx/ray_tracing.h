@@ -247,7 +247,8 @@ private:
     // sample side, 1-4; by default 2, 3 above 6.2 and 4 above 16 megapixels), _CONTACT (light of
     // a hit at distance 0), _CONTACT_RANGE, _SKY (sky hue 0-1), _FALLBACK, _EMISSIVE, the sun's
     // world direction _SUN (x,y,z), _SUN_SIZE (degrees), _SUN_LIGHT, _SUN_COLOR (r,g,b), the sky
-    // light's weight _SKY_LIGHT and _VIEW=1 (the lighting alone) tune it.
+    // light's weight _SKY_LIGHT, the point lights' _POINT_LIGHT and _POINT_RANGE, and _VIEW=1
+    // (the lighting alone; 2, 3, 4: the sun's, the sky's, the point lights' light) tune it.
     struct LightSlot {
         RtView view{};
         std::array<float, 12> camera{};
@@ -319,6 +320,9 @@ private:
     std::array<float, 3> sun_color_{1.0f, 0.93f, 0.82f};
     float sun_size_ = 2.5f;     // degrees
     bool sun_override_ = false;
+    float point_light_ = 2.0f;      // GALAXY_RT_POINT_LIGHT: weight of the game's point lights
+    float point_range_ = 6000.0f;   // GALAXY_RT_POINT_RANGE: their reach (eye units)
+    float point_size_ = 600.0f;     // GALAXY_RT_POINT_SIZE: radius of the geometry around one
     float sun_light_ = 0.55f;
     float sky_light_ = 0.65f;
     bool lighting_enabled_ = true;
@@ -340,6 +344,7 @@ private:
         double validate_ms = 0.0;
         double light_ms = 0.0;
         std::uint64_t composites = 0;
+        std::uint64_t point_lights = 0;
         std::uint64_t captures = 0;
         std::uint64_t timed = 0;
         std::array<std::uint64_t, kStatsWords> stats{};

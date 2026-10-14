@@ -70,8 +70,13 @@ struct RtLightConstants {
     float fallback;
     float sun[4];
     float sun_light[4];
+    std::uint32_t point_count;
+    float point_light;
+    float point_size;
+    float point_pad;
+    float points[16][4];
 };
-static_assert(sizeof(RtLightConstants) == 240u);
+static_assert(sizeof(RtLightConstants) == 512u);
 
 // Mirrors cbuffer RtCapture in rt_lighting.hlsl (root constants).
 struct RtCaptureConstants {
@@ -251,6 +256,52 @@ std::array<float, 3> g_game_sun{};
 std::chrono::steady_clock::time_point g_game_sun_time{};
 bool g_game_sun_known = false;
 
+// The game's lights by position (a light that moves takes a new entry; old ones age out).
+struct NotedLight {
+    GameLight light{};
+    std::chrono::steady_clock::time_point seen{};
+    bool used = false;
+};
+std::mutex g_game_lights_mutex;
+std::array<NotedLight, 32> g_point_lights{};
+std::array<NotedLight, 16> g_world_lights{};
+
+template <std::size_t N>
+void note_light(std::array<NotedLight, N>& lights, const std::array<float, 3>& position,
+                const std::array<float, 3>& color) {
+    const auto now = std::chrono::steady_clock::now();
+    const std::lock_guard<std::mutex> lock(g_game_lights_mutex);
+    NotedLight* slot = &lights[0];
+    for (NotedLight& entry : lights) {
+        if (entry.used && std::abs(entry.light.position[0] - position[0]) + std::abs(entry.light.position[1] - position[1]) +
+                                  std::abs(entry.light.position[2] - position[2]) < 100.0f) {
+            slot = &entry;
+            break;
+        }
+        if (!entry.used || (slot->used && entry.seen < slot->seen)) {
+            slot = &entry;
+        }
+    }
+    slot->light = {position, color};
+    slot->seen = now;
+    slot->used = true;
+}
+
+template <std::size_t N>
+std::size_t active_lights(const std::array<NotedLight, N>& lights, std::span<GameLight> out, std::uint64_t max_age_ms) {
+    const auto now = std::chrono::steady_clock::now();
+    const std::lock_guard<std::mutex> lock(g_game_lights_mutex);
+    std::size_t count = 0u;
+    for (const NotedLight& entry : lights) {
+        const auto& c = entry.light.color;
+        if (count < out.size() && entry.used && now - entry.seen <= std::chrono::milliseconds(max_age_ms) &&
+            c[0] + c[1] + c[2] > 0.01f) {
+            out[count++] = entry.light;
+        }
+    }
+    return count;
+}
+
 }  // namespace
 
 void set_game_sun(const std::array<float, 3>& direction) noexcept {
@@ -258,6 +309,22 @@ void set_game_sun(const std::array<float, 3>& direction) noexcept {
     g_game_sun = direction;
     g_game_sun_time = std::chrono::steady_clock::now();
     g_game_sun_known = true;
+}
+
+void note_game_point_light(const std::array<float, 3>& position, const std::array<float, 3>& color) noexcept {
+    note_light(g_point_lights, position, color);
+}
+
+void note_game_world_light(const std::array<float, 3>& position, const std::array<float, 3>& color) noexcept {
+    note_light(g_world_lights, position, color);
+}
+
+std::size_t game_point_lights(std::span<GameLight> out, std::uint64_t max_age_ms) noexcept {
+    return active_lights(g_point_lights, out, max_age_ms);
+}
+
+std::size_t game_world_lights(std::span<GameLight> out, std::uint64_t max_age_ms) noexcept {
+    return active_lights(g_world_lights, out, max_age_ms);
 }
 
 bool game_sun(std::array<float, 3>& direction, std::uint64_t max_age_ms) noexcept {
@@ -388,7 +455,10 @@ bool SceneRayTracer::initialize(ID3D12Device* device, std::uint64_t timestamp_fr
     fallback_ = std::clamp(env_float("GALAXY_RT_FALLBACK", 0.55f), 0.0f, 2.0f);
     emissive_ = std::clamp(env_float("GALAXY_RT_EMISSIVE", 3.0f), 0.0f, 16.0f);
     show_lighting_ = env_float("GALAXY_RT_VIEW", 0.0f) != 0.0f;
-    show_term_ = static_cast<std::uint32_t>(std::clamp(env_float("GALAXY_RT_VIEW", 0.0f), 0.0f, 3.0f));
+    show_term_ = static_cast<std::uint32_t>(std::clamp(env_float("GALAXY_RT_VIEW", 0.0f), 0.0f, 4.0f));
+    point_range_ = std::clamp(env_float("GALAXY_RT_POINT_RANGE", 6000.0f), 10.0f, 1.0e6f);
+    point_size_ = std::clamp(env_float("GALAXY_RT_POINT_SIZE", 600.0f), 0.0f, 1.0e5f);
+    point_light_ = std::clamp(env_float("GALAXY_RT_POINT_LIGHT", 2.0f), 0.0f, 8.0f);
     {
         char value[96]{};
         std::size_t length = 0u;
@@ -779,7 +849,7 @@ void SceneRayTracer::report() {
     char line[768];
     std::snprintf(line, sizeof(line),
                   "[rt-stats] scenes=%llu skipped=%llu draws-per-scene=%.1f triangles-per-scene=%.0f "
-                  "max-triangles=%llu capacity=%u build-ms=%.3f validate-ms=%.3f light-ms=%.3f composites=%llu captures=%llu validated=%llu "
+                  "max-triangles=%llu capacity=%u build-ms=%.3f validate-ms=%.3f light-ms=%.3f point-lights=%.2f composites=%llu captures=%llu validated=%llu "
                   "geometry-pixels=%.2f%% match-0.1%%=%.3f%% match-1%%=%.3f%% hit-nearer=%.3f%% hit-farther=%.3f%% "
                   "miss=%.3f%% background-hit=%.3f%%\n",
                   static_cast<unsigned long long>(window_.scenes), static_cast<unsigned long long>(window_.skipped),
@@ -787,7 +857,8 @@ void SceneRayTracer::report() {
                   per(static_cast<double>(window_.triangles), window_.scenes),
                   static_cast<unsigned long long>(window_.max_triangles), capacity_,
                   per(window_.build_ms, window_.timed), per(window_.validate_ms, window_.validated),
-                  per(window_.light_ms, window_.timed), static_cast<unsigned long long>(window_.composites),
+                  per(window_.light_ms, window_.timed), per(static_cast<double>(window_.point_lights), window_.scenes),
+                  static_cast<unsigned long long>(window_.composites),
                   static_cast<unsigned long long>(window_.captures),
                   static_cast<unsigned long long>(window_.validated), pct(2u, 0u), pct(3u, 2u), pct(4u, 2u),
                   pct(5u, 2u), pct(6u, 2u), pct(7u, 2u), pct(8u, 1u));
@@ -998,10 +1069,10 @@ bool SceneRayTracer::ensure_lighting_buffers(std::uint32_t samples) {
     const auto make = [&](std::uint64_t bytes, ComPtr<ID3D12Resource>& out, const wchar_t* name) {
         return create_buffer(bytes, D3D12_HEAP_TYPE_DEFAULT, state, uav, out, name);
     };
-    bool ok = n != 0u && make(n * 4u, light_normal_, L"rt light normal") && make(n * 8u, light_raw_, L"rt light raw") &&
+    bool ok = n != 0u && make(n * 4u, light_normal_, L"rt light normal") && make(n * 16u, light_raw_, L"rt light raw") &&
               make(n * 8u, picture_, L"rt picture");
     for (unsigned i = 0; ok && i < 2u; ++i) {
-        ok = make(n * 4u, light_z_[i], L"rt light eye z") && make(n * 12u, light_history_[i], L"rt light history");
+        ok = make(n * 4u, light_z_[i], L"rt light eye z") && make(n * 16u, light_history_[i], L"rt light history");
         light_z_state_[i] = state;
         light_history_state_[i] = state;
     }
@@ -1020,7 +1091,7 @@ bool SceneRayTracer::ensure_lighting_buffers(std::uint32_t samples) {
         return false;
     }
     light_samples_ = samples;
-    std::cerr << "[rt] light samples=" << samples << " mb=" << ((n * (4u + 8u + 8u + 2u * 4u + 2u * 12u + 12u * kLightSlots)) >> 20u)
+    std::cerr << "[rt] light samples=" << samples << " mb=" << ((n * (4u + 16u + 8u + 2u * 4u + 2u * 16u + 12u * kLightSlots)) >> 20u)
               << '\n';
     return true;
 }
@@ -1081,11 +1152,30 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
     c.sky_saturation = sky_saturation_;
     c.fallback = fallback_;
     {
-        // The game's visible sun (GALAXY_RT_SUN overrides it); without one, no sun light.
+        // The game's visible sun (GALAXY_RT_SUN overrides it); without one, no sun light. Its
+        // colour: the game's world-fixed light from the same direction, else GALAXY_RT_SUN_COLOR.
         std::array<float, 3> l = sun_direction_;
         bool sun_present = sun_override_;
         if (!sun_override_) {
             sun_present = game_sun(l, 2000u);
+        }
+        std::array<float, 3> sun_color = sun_color_;
+        if (sun_present) {
+            std::array<GameLight, 16> world{};
+            const std::size_t count = game_world_lights(world, 2000u);
+            const float sun_length = std::sqrt(l[0] * l[0] + l[1] * l[1] + l[2] * l[2]);
+            float best = 0.9f;
+            for (std::size_t i = 0; i < count && sun_length > 1e-6f; ++i) {
+                const auto& p = world[i].position;
+                const float length = std::sqrt(p[0] * p[0] + p[1] * p[1] + p[2] * p[2]);
+                const float alignment = length > 1e-3f ? (p[0] * l[0] + p[1] * l[1] + p[2] * l[2]) / (length * sun_length) : 0.0f;
+                const auto& rgb = world[i].color;
+                const float peak = std::max({rgb[0], rgb[1], rgb[2]});
+                if (alignment > best && peak > 0.05f) {
+                    best = alignment;
+                    sun_color = {rgb[0] / peak, rgb[1] / peak, rgb[2] / peak};
+                }
+            }
         }
         if (camera_known_) {
             l = {camera_[0] * l[0] + camera_[1] * l[1] + camera_[2] * l[2],
@@ -1096,11 +1186,65 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
         const std::array<float, 3> fallback_sun{0.3f, 0.8f, 0.5f};
         for (unsigned i = 0; i < 3u; ++i) {
             c.sun[i] = length > 1e-6f ? l[i] / length : fallback_sun[i] / std::sqrt(0.98f);
-            c.sun_light[i] = sun_present ? sun_color_[i] * sun_light_ : 0.0f;
+            c.sun_light[i] = sun_present ? sun_color[i] * sun_light_ : 0.0f;
         }
         c.sun[3] = std::tan(sun_size_ * 3.14159265f / 180.0f);
         // Without a sun the sky and bounce light carry the whole picture.
         c.sun_light[3] = sun_present ? sky_light_ : 1.0f;
+    }
+    {
+        // The game's point lights nearest in light to the camera, in eye space.
+        std::array<GameLight, 32> lights{};
+        const std::size_t count = game_point_lights(lights, 500u);
+        struct Candidate {
+            float importance;
+            std::array<float, 3> eye;
+            std::array<float, 3> color;
+        };
+        std::array<Candidate, 32> candidates{};
+        std::size_t used = 0u;
+        for (std::size_t i = 0; i < count; ++i) {
+            const auto& w = lights[i].position;
+            std::array<float, 3> e = w;
+            if (camera_known_) {
+                for (unsigned r = 0; r < 3u; ++r) {
+                    e[r] = camera_[r * 4u] * w[0] + camera_[r * 4u + 1u] * w[1] + camera_[r * 4u + 2u] * w[2] +
+                           camera_[r * 4u + 3u];
+                }
+            } else {
+                continue;
+            }
+            const auto& rgb = lights[i].color;
+            const float distance2 = e[0] * e[0] + e[1] * e[1] + e[2] * e[2];
+            const float importance = (0.2126f * rgb[0] + 0.7152f * rgb[1] + 0.0722f * rgb[2]) /
+                                     (1.0f + distance2 / (point_range_ * point_range_));
+            candidates[used++] = {importance, e, rgb};
+        }
+        std::sort(candidates.begin(), candidates.begin() + static_cast<std::ptrdiff_t>(used),
+                  [](const Candidate& a, const Candidate& b) { return a.importance > b.importance; });
+        c.point_count = static_cast<std::uint32_t>(std::min<std::size_t>(used, 8u));
+        c.point_light = point_light_;
+        c.point_size = point_size_;
+        for (std::uint32_t i = 0; i < c.point_count; ++i) {
+            for (unsigned k = 0; k < 3u; ++k) {
+                c.points[2u * i][k] = candidates[i].eye[k];
+                c.points[2u * i + 1u][k] = candidates[i].color[k];
+            }
+            c.points[2u * i][3] = point_range_;
+        }
+        window_.point_lights += c.point_count;
+        // GALAXY_TRACE_LIGHTS=1: the lights of every 240th traced scene (diagnostics).
+        static const bool trace_lights = env_float("GALAXY_TRACE_LIGHTS", 0.0f) != 0.0f;
+        if (trace_lights && light_frame_ % 240u == 1u) {
+            for (std::uint32_t i = 0; i < c.point_count; ++i) {
+                std::fprintf(stderr, "[rt-light] point %u eye=(%.0f %.0f %.0f) color=(%.2f %.2f %.2f) importance=%.4f\n", i,
+                             candidates[i].eye[0], candidates[i].eye[1], candidates[i].eye[2], candidates[i].color[0],
+                             candidates[i].color[1], candidates[i].color[2], candidates[i].importance);
+            }
+            std::fprintf(stderr, "[rt-light] sun present=%d eye=(%.3f %.3f %.3f) light=(%.2f %.2f %.2f)\n",
+                         c.sun_light[0] + c.sun_light[1] + c.sun_light[2] > 0.0f ? 1 : 0, c.sun[0], c.sun[1], c.sun[2],
+                         c.sun_light[0], c.sun_light[1], c.sun_light[2]);
+        }
     }
     // Earlier frames' eye positions of a point: their camera times the inverse of this one.
     std::array<float, 12> inverse{};
@@ -1110,7 +1254,8 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
                          picture_height_ == sample_height && picture_factor_ == factor;
     const std::array<float, 12> reproject = history ? affine_multiply(history_camera_, inverse) : kIdentity34;
     const std::array<float, 12> to_picture = picture ? affine_multiply(picture_camera_, inverse) : kIdentity34;
-    c.flags = (history ? 1u : 0u) | (picture ? 2u : 0u) | (show_term_ == 2u ? 4u : 0u) | (show_term_ == 3u ? 8u : 0u);
+    c.flags = (history ? 1u : 0u) | (picture ? 2u : 0u) | (show_term_ == 2u ? 4u : 0u) | (show_term_ == 3u ? 8u : 0u) |
+              (show_term_ == 4u ? 16u : 0u);
     std::memcpy(c.reproject, reproject.data(), sizeof(c.reproject));
     std::memcpy(c.picture, to_picture.data(), sizeof(c.picture));
     std::memcpy(upload.cpu, &c, sizeof(c));

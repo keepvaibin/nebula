@@ -10366,6 +10366,73 @@ void handle_layout_signal(RuntimeState& state, std::uint32_t argument, const gal
     }
 }
 
+// GALAXY_TRACE_LIGHTS=1: each distinct light the game loads (diagnostics). ActorLightInfo:
+// light A and B (colour, position, follow-camera flag), ambient; PointLightInfo: position,
+// colour, reference distance and brightness, distance function.
+void trace_game_light(RuntimeState& state, std::uint32_t site, std::uint32_t info) {
+    static const bool enabled = [] {
+        char value[8]{};
+        std::size_t length = 0u;
+        return getenv_s(&length, value, sizeof(value), "GALAXY_TRACE_LIGHTS") == 0 && length > 1u &&
+               value[0] == '1';
+    }();
+    auto* mem = state.address_space;
+    if (!enabled || mem == nullptr || (site != 0u && site != 2u) || !mapped_guest_range(mem, info, 0x30u)) {
+        return;
+    }
+    static std::vector<std::array<std::uint32_t, 12>> seen;
+    std::array<std::uint32_t, 12> words{};
+    for (unsigned i = 0; i < 12u; ++i) words[i] = mem->read_u32(info + 4u * i);
+    if (seen.size() >= 400u || std::find(seen.begin(), seen.end(), words) != seen.end()) {
+        return;
+    }
+    seen.push_back(words);
+    const auto f = [&](unsigned word) { return std::bit_cast<float>(words[word]); };
+    char line[320];
+    if (site == 2u) {
+        std::snprintf(line, sizeof(line),
+                      "[game-light] vi=%u point info=%08x pos=(%.1f %.1f %.1f) color=%08x ref-distance=%.2f "
+                      "ref-brightness=%.3f distance-fn=%u\n",
+                      static_cast<unsigned>(state.vi_retrace_count), info, f(0), f(1), f(2), words[3], f(4), f(5),
+                      words[6]);
+    } else {
+        std::snprintf(line, sizeof(line),
+                      "[game-light] vi=%u actor info=%08x A color=%08x pos=(%.1f %.1f %.1f) follow=%u | B color=%08x "
+                      "pos=(%.1f %.1f %.1f) follow=%u | ambient=%08x\n",
+                      static_cast<unsigned>(state.vi_retrace_count), info, words[0], f(1), f(2), f(3), words[4] >> 24u,
+                      words[5], f(6),
+                      f(7), f(8), words[9] >> 24u, (words[10] << 8u) | (words[11] >> 24u));
+    }
+    std::cerr << line;
+}
+
+// The ray tracer lights the scene with the game's lights: each point light it loads
+// (PointLightInfo: position +0, colour +0xC) and each world-fixed light of an ActorLightInfo
+// (LightInfo A +0 and B +0x14: colour +0, position +4, follow-camera flag +0x10).
+void note_game_light(RuntimeState& state, std::uint32_t site, std::uint32_t info) {
+    auto* mem = state.address_space;
+    if (mem == nullptr || (site != 0u && site != 2u) || !mapped_guest_range(mem, info, 0x28u)) {
+        return;
+    }
+    const auto f = [&](std::uint32_t address) { return std::bit_cast<float>(mem->read_u32(address)); };
+    const auto rgb = [](std::uint32_t color) {
+        return std::array<float, 3>{static_cast<float>(color >> 24u) / 255.0f,
+                                    static_cast<float>((color >> 16u) & 0xFFu) / 255.0f,
+                                    static_cast<float>((color >> 8u) & 0xFFu) / 255.0f};
+    };
+    if (site == 2u) {
+        galaxy::gx::note_game_point_light({f(info), f(info + 4u), f(info + 8u)}, rgb(mem->read_u32(info + 0xCu)));
+        return;
+    }
+    for (const std::uint32_t light : {info, info + 0x14u}) {
+        const std::array<float, 3> position{f(light + 4u), f(light + 8u), f(light + 0xCu)};
+        const bool follow = (mem->read_u32(light + 0x10u) >> 24u) != 0u;
+        if (!follow && position[0] * position[0] + position[1] * position[1] + position[2] * position[2] > 4.0e8f) {
+            galaxy::gx::note_game_world_light(position, rgb(mem->read_u32(light)));
+        }
+    }
+}
+
 // BrightSun::control (SiteHookKind::SunCenter): the visible sun's centre less the camera
 // position it was placed from is the world direction towards it.
 void note_game_sun(RuntimeState& state, const galaxy::PpcContext& context) {
@@ -10388,6 +10455,22 @@ void note_game_sun(RuntimeState& state, const galaxy::PpcContext& context) {
     length = std::sqrt(length);
     for (float& v : direction) v /= length;
     galaxy::gx::set_game_sun(direction);
+    static std::uint32_t traced = 0u;
+    static const bool trace = [] {
+        char value[8]{};
+        std::size_t length = 0u;
+        return getenv_s(&length, value, sizeof(value), "GALAXY_TRACE_LIGHTS") == 0 && length > 1u &&
+               value[0] == '1';
+    }();
+    if (trace && (traced++ % 600u) == 0u) {
+        char line[224];
+        std::snprintf(line, sizeof(line),
+                      "[game-light] vi=%u sun direction=(%.3f %.3f %.3f) distance=%.1f centre=(%.1f %.1f %.1f)\n",
+                      static_cast<unsigned>(state.vi_retrace_count), direction[0], direction[1], direction[2], length,
+                      std::bit_cast<float>(mem->read_u32(sun + 0xCu)), std::bit_cast<float>(mem->read_u32(sun + 0x10u)),
+                      std::bit_cast<float>(mem->read_u32(sun + 0x14u)));
+        std::cerr << line;
+    }
 }
 
 void handle_motion_signal(RuntimeState& state, std::uint32_t kind, std::uint32_t argument,
@@ -10419,6 +10502,8 @@ void handle_motion_signal(RuntimeState& state, std::uint32_t kind, std::uint32_t
         }
         return;
     case galaxy::SiteHookKind::LightLoad:
+        trace_game_light(state, argument, context.gpr[3]);
+        note_game_light(state, argument, context.gpr[3]);
         if (state.draw_identity_scene && state.address_space != nullptr &&
             append_host_marker(state, galaxy::motion::kMarkerLight, static_cast<std::uint16_t>(argument),
                                argument <= static_cast<std::uint32_t>(galaxy::motion::LightSite::PointLight)
