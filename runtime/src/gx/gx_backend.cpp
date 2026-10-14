@@ -6571,6 +6571,9 @@ void GxBackend::on_motion_marker(std::uint8_t kind, std::uint16_t aux, std::uint
     switch (kind) {
     case motion::kMarkerCategory: {
         ++motion_category_markers_;
+        if (aux == motion::kCategoryPhase) {
+            note_rt_phase(static_cast<std::uint8_t>(a));
+        }
         if (scene_2d_open_) {
             ++scene_2d_categories_;
         }
@@ -6874,6 +6877,84 @@ void GxBackend::end_side_layer() {
     state_.set_matrix_load_tracking(false);
 }
 
+bool GxBackend::rt_geometry_draw() const noexcept {
+    if (!rt_state_eligible_ || !scene_phase_ || side_layer_ != kSceneLayer || !renderer_.rt_scene_open()) {
+        return false;
+    }
+    using motion::ScenePhase;
+    return rt_phase_ == static_cast<std::uint8_t>(ScenePhase::OpaBeforeVolumeShadow) ||
+           rt_phase_ == static_cast<std::uint8_t>(ScenePhase::OpaBeforeSilhouette) ||
+           rt_phase_ == static_cast<std::uint8_t>(ScenePhase::Opa) ||
+           rt_phase_ == static_cast<std::uint8_t>(ScenePhase::ListOpa);
+}
+
+bool GxBackend::begin_rt_batch(const DrawCall& call, RtDrawInfo& info) {
+    if (!scene_phase_ || !renderer_.rt_scene_open()) {
+        return false;
+    }
+    const ScaledGxViewport viewport = compute_scaled_gx_viewport(call.xf_viewport, renderer_.efb_scale());
+    const bool flat = !call.has_viewport || !viewport.valid() || viewport.max_depth - viewport.min_depth < 0.5f;
+    // MR::clearZBuffer: a depth write through a flattened viewport puts the far plane under
+    // everything drawn before (the sky and air layers); that geometry occludes nothing.
+    if (flat && (render_state_key_.zmode_bits & (1u << 4u)) != 0u) {
+        renderer_.rt_begin_scene();
+        rt_view_set_ = false;
+        return false;
+    }
+    if (flat || !rt_geometry_draw()) {
+        return false;
+    }
+    const auto projection = [this](unsigned i) {
+        return std::bit_cast<float>(state_.xf(static_cast<std::uint16_t>(xf::kProjectionBase + i)));
+    };
+    for (unsigned i = 0; i < 6u; ++i) {
+        info.projection[i] = projection(i);
+    }
+    info.min_depth = viewport.min_depth;
+    info.max_depth = viewport.max_depth;
+    info.cull = render_state_key_.cull;
+    info.phase = rt_phase_;
+    if (!rt_view_set_) {
+        // fill_vs_projection: D3D clip z = -(z E + F) (1 - 1e-7).
+        constexpr float kFarEps = 1.0f - 1e-7f;
+        RtView view{};
+        view.projection = {projection(0u), projection(1u), projection(2u), projection(3u)};
+        view.z_scale = -projection(4u) * kFarEps;
+        view.z_offset = -projection(5u) * kFarEps;
+        view.viewport = {viewport.x, viewport.y, viewport.width, viewport.height};
+        view.min_depth = viewport.min_depth;
+        view.max_depth = viewport.max_depth;
+        renderer_.rt_set_view(view);
+        rt_view_set_ = true;
+    }
+    return true;
+}
+
+// SceneFunction phases run opaque first (0, 1, the shadows 6 and 7, then 2 and 4), then the
+// translucent lists (3, 5), indirect (8) and image effects (9).
+void GxBackend::note_rt_phase(std::uint8_t phase) {
+    if (!scene_phase_) {
+        return;
+    }
+    rt_phase_ = phase;
+    using motion::ScenePhase;
+    if (phase == static_cast<std::uint8_t>(ScenePhase::Xlu) ||
+        phase == static_cast<std::uint8_t>(ScenePhase::ListXlu) ||
+        phase == static_cast<std::uint8_t>(ScenePhase::AfterIndirect) ||
+        phase == static_cast<std::uint8_t>(ScenePhase::ImageEffect)) {
+        trace_rt_scene();
+    }
+}
+
+void GxBackend::trace_rt_scene() {
+    if (rt_scene_traced_) {
+        return;
+    }
+    rt_scene_traced_ = true;
+    flush_pending_draw_batch();
+    renderer_.rt_trace_scene();
+}
+
 void GxBackend::on_fifo_marker(FifoMarker marker, const std::array<float, 12>* view) {
     flush_pending_draw_batch();
     ++scene_markers_seen_;
@@ -6881,6 +6962,16 @@ void GxBackend::on_fifo_marker(FifoMarker marker, const std::array<float, 12>* v
         end_side_layer();
     }
     scene_phase_ = marker == FifoMarker::SceneBegin;
+    if (marker == FifoMarker::SceneBegin) {
+        rt_phase_ = 0xFFu;
+        rt_view_set_ = false;
+        rt_scene_traced_ = !renderer_.rt_active();
+        if (!rt_scene_traced_) {
+            renderer_.rt_begin_scene();
+        }
+    } else {
+        trace_rt_scene();
+    }
     const bool was_temporal = temporal_scene_;
     const bool was_motion = motion_scene_;
     if (marker == FifoMarker::SceneBegin) {
@@ -8723,6 +8814,9 @@ void GxBackend::render_thread_main() {
                     frame_queue_.pop_front();
                     chunk.present_swap_chain = present.present_swap_chain;
                     chunk.displayed_xfb_addr = present.displayed_xfb_addr;
+                    if (interp_recording_) [[unlikely]] {
+                        interp_event("merged-present", present.displayed_xfb_addr, chunk.fifo.size());
+                    }
                 }
                 if (chunk.efb_peek_only) {
                     active_peek = chunk.efb_peek_request;
@@ -9792,7 +9886,7 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
             // =1 always does (tests at 60).
             static const std::uint64_t identity_env = read_env_u64("GALAXY_DRAW_IDENTITY", 2u);
             const bool wanted = identity_env == 2u
-                ? (interp_recording_ || renderer_.temporal_mode())
+                ? (interp_recording_ || renderer_.temporal_mode() || renderer_.rt_active())
                 : identity_env != 0u;
             if (draw_identity_wanted_.load(std::memory_order_relaxed) != wanted) {
                 draw_identity_wanted_.store(wanted, std::memory_order_relaxed);
@@ -10474,6 +10568,12 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
          !skip_duplicate_present && !skip_rate_present);
     if (interp_recording_) {
         note_interp_log_completion();
+        if (chunk.present_swap_chain) {
+            interp_event("chunk-decision", selected_xfb != nullptr ? selected_xfb->copy_serial : 0u,
+                         1u | (duplicate_xfb_present ? 2u : 0u) | (skip_duplicate_present ? 4u : 0u) |
+                             (skip_rate_present ? 8u : 0u) | (present_swap_chain ? 16u : 0u) |
+                             (interp_log_waiting_ ? 32u : 0u) | (capture_backbuffer ? 64u : 0u));
+        }
         static const bool trace_interp = read_env_u64("GALAXY_INTERP_TRACE", 0u) != 0u;
         static std::uint64_t traced = 0u;
         if (trace_interp && (traced++ % 240u) == 0u) {
@@ -10493,9 +10593,11 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
         }
         // As on the VI-present path, a present while a completed log waits
         // starts that log's sequence: the VI may still name the previous
-        // XFB (the guest flips at the next retrace).
-        if (interp_log_waiting_ && present_swap_chain && !capture_backbuffer &&
-            renderer_.replay_available()) {
+        // XFB (the guest flips at the next retrace), so a present the
+        // duplicate or rate checks would drop still starts it. Dropping it
+        // skipped the waiting frame when the next one closed first.
+        if (interp_log_waiting_ && chunk.present_swap_chain && selected_xfb != nullptr &&
+            !capture_backbuffer && renderer_.replay_available()) {
             interp_start_pending_ = true;
             present_swap_chain = false;
         } else if (interp_sequence_.active && present_swap_chain) {
@@ -11707,6 +11809,17 @@ ID3D12PipelineState* GxBackend::flush_draw_state(
     const bool topology_dirty =
         render_state_key_.primitive_topology != topology_key;
     render_state_key_.primitive_topology = topology_key;
+    if (renderer_.rt_active()) {
+        // Traced geometry: unblended triangles (no logic op) that write colour and depth under a
+        // perspective projection. Shadow volumes, z-only passes and screen quads stay out.
+        const std::uint32_t bb = render_state_key_.blend_bits;
+        rt_state_eligible_ =
+            topology_key == static_cast<std::uint8_t>(D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE) &&
+            (bb & ((1u << 0u) | (1u << 8u))) == 0u && (bb & (1u << 25u)) != 0u &&
+            (render_state_key_.zmode_bits & (1u << 4u)) != 0u &&
+            render_state_key_.cull != static_cast<std::uint8_t>(CullMode::All) &&
+            state_.xf(static_cast<std::uint16_t>(xf::kProjectionBase + 6u)) == 0u;
+    }
     // Motion writers: opaque triangles with color writes in a temporal scene
     // (blending, logic ops and dual-source alpha cannot share a second
     // target). Keys only change while a motion scene is (or was) active.
@@ -12280,6 +12393,9 @@ void GxBackend::flush_pending_draw_batch() {
     if (!pending_stripe_vertices_.empty()) [[unlikely]] {
         renderer_.note_stripe_vertices(pending_stripe_vertices_);
         pending_stripe_vertices_.clear();
+    }
+    if (pending_draw_batch_.rt) {
+        renderer_.rt_note_draw(pending_draw_batch_.call, pending_draw_batch_.rt_info);
     }
     renderer_.draw(pending_draw_batch_.call);
     if (time_detail) {
@@ -13085,6 +13201,7 @@ bool GxBackend::on_cached_packet_draw_run(
     flush_pending_draw_batch();
     pending_draw_batch_.active = true;
     pending_draw_batch_.call = call;
+    pending_draw_batch_.rt = begin_rt_batch(call, pending_draw_batch_.rt_info);
     pending_draw_batch_.indexed = prim.indexed;
     pending_draw_batch_.base_vertex = prim.base_vertex;
     pending_draw_batch_.vertex_count = prim.vertex_count;
@@ -13269,6 +13386,7 @@ void GxBackend::on_cached_draw_run_draw(
     flush_pending_draw_batch();
     pending_draw_batch_.active = true;
     pending_draw_batch_.call = call;
+    pending_draw_batch_.rt = begin_rt_batch(call, pending_draw_batch_.rt_info);
     pending_draw_batch_.indexed = prim.indexed;
     pending_draw_batch_.base_vertex = prim.base_vertex;
     pending_draw_batch_.vertex_count = prim.vertex_count;
@@ -14052,6 +14170,7 @@ void GxBackend::on_draw(
         flush_pending_draw_batch();
         pending_draw_batch_.active = true;
         pending_draw_batch_.call = call;
+        pending_draw_batch_.rt = begin_rt_batch(call, pending_draw_batch_.rt_info);
         pending_draw_batch_.indexed = prim.indexed;
         pending_draw_batch_.base_vertex = prim.base_vertex;
         pending_draw_batch_.vertex_count = prim.vertex_count;

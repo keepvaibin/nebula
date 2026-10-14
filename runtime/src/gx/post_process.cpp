@@ -33,6 +33,7 @@
 #include "post_smaa_blend_ps.h"
 #include "post_fsr_easu_ps.h"
 #include "post_fsr_rcas_ps.h"
+#include "post_fsr_rcas_scaled_ps.h"
 #include "post_resample_ps.h"
 #include "post_fxaa_ps.h"
 
@@ -289,6 +290,8 @@ bool PostProcessor::initialize(ID3D12Device* device, ID3D12CommandQueue* queue,
     const bool scaling =
         create_pipeline(code(bytes(g_post_fullscreen_vs)), code(bytes(g_post_fsr_easu_ps)), kColorFormat, 0, easu_) &&
         create_pipeline(code(bytes(g_post_fullscreen_vs)), code(bytes(g_post_fsr_rcas_ps)), kColorFormat, 0, rcas_) &&
+        create_pipeline(code(bytes(g_post_fullscreen_vs)), code(bytes(g_post_fsr_rcas_scaled_ps)), kColorFormat, 0,
+                        rcas_scaled_) &&
         create_pipeline(code(bytes(g_post_fullscreen_vs)), code(bytes(g_post_resample_ps)), kColorFormat, 0, resample_);
     if (!scaling) {
         std::cerr << "[post-process] pipeline creation failed\n";
@@ -363,6 +366,7 @@ void PostProcessor::shutdown() noexcept {
     fxaa_.Reset();
     easu_.Reset();
     rcas_.Reset();
+    rcas_scaled_.Reset();
     resample_.Reset();
     root_signature_.Reset();
     area_texture_.Reset();
@@ -847,6 +851,23 @@ void PostProcessor::record(ID3D12GraphicsCommandList* list,
     c.rt_metrics[1] = 1.0f / static_cast<float>(source_height);
     c.rt_metrics[2] = static_cast<float>(source_width);
     c.rt_metrics[3] = static_cast<float>(source_height);
+
+    // Enlarging on both axes with sharpening: one pass straight into the target. The two-pass
+    // form wrote and read a window-sized intermediate for every presented frame.
+    if (plan.resample && plan.rcas && rcas_scaled_ && target_width >= source_width &&
+        target_height >= source_height) {
+        Constants s = c;
+        rcas_constants(s.con0, settings_.sharpness);
+        s.params[0] = static_cast<float>(source_width);
+        s.params[1] = static_cast<float>(source_height);
+        s.params[2] = static_cast<float>(target_width);
+        s.params[3] = static_cast<float>(target_height);
+        list->OMSetRenderTargets(1, &target_rtv, FALSE, nullptr);
+        s.origin[0] = static_cast<std::int32_t>(viewport.TopLeftX);
+        s.origin[1] = static_cast<std::int32_t>(viewport.TopLeftY);
+        draw(list, srv_ring, rcas_scaled_.Get(), {image}, {kColorFormat}, viewport, s);
+        return;
+    }
 
     // Window-sized intermediate for a scaling step that RCAS then reads.
     const bool needs_scaled = (plan.easu || plan.resample) && plan.rcas;

@@ -113,7 +113,8 @@ struct PixelShaderKey {
                                     // bit2 dst_alpha (GXSetDstAlpha on RGBA6 EFB with alpha_update), bits3-4 ztex op,
                                     // bits5-6 ztex format, bit7 dual-source: TEV source alpha is exported on SV_Target1
                                     // for SRC1 blend factors
-    std::uint8_t output_flags;      // bits0-2 EFB format, bit3 RGBA6 dither
+    std::uint8_t output_flags;      // bits0-2 EFB format, bit3 RGBA6 dither, bit4 RGBA6 with
+                                    // 8-bit colour (no 6-bit colour, no dither; alpha stays 6-bit)
     std::uint8_t num_ind_stages;    // 0-4
     // Keys 0..15 keep their original shader source. New dither keys use 0xff and read the
     // reciprocal scale from the per-draw PS constants.
@@ -276,9 +277,14 @@ struct MemoizedPsoKeyHasher {
 
 // Key builders: the only construction path outside tests. Each applies the canonicalization rule against
 // the current register state.
+// RGBA6 colour precision: 8-bit (the default) or the hardware 6-bit colour with its 2x2 dither
+// (GALAXY_EFB_TRUE_COLOR=0).
+[[nodiscard]] bool efb_true_color() noexcept;
 [[nodiscard]] PixelShaderKey build_pixel_shader_key(
-    const GxState& state,
-    unsigned efb_scale);
+    const GxState& state, unsigned efb_scale, bool true_color);
+[[nodiscard]] inline PixelShaderKey build_pixel_shader_key(const GxState& state, unsigned efb_scale) {
+    return build_pixel_shader_key(state, efb_scale, efb_true_color());
+}
 [[nodiscard]] VertexShaderKey build_vertex_shader_key(const GxState& state);
 [[nodiscard]] RenderStateKey build_render_state_key(const GxState& state);
 

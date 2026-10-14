@@ -62,7 +62,7 @@ int2 ViewportPixel(float4 pos) {
 #define SMAAGather(tex, coord) tex.Gather(LinearSampler, coord, 0)
 #endif
 
-#if defined(PASS_FSR_EASU) || defined(PASS_FSR_RCAS)
+#if defined(PASS_FSR_EASU) || defined(PASS_FSR_RCAS) || defined(PASS_FSR_RCAS_SCALED)
 #define A_GPU 1
 #define A_HLSL 1
 #endif
@@ -83,6 +83,18 @@ AF4 FsrEasuBF(AF2 p) { return inputTex.GatherBlue(LinearSampler, p, int2(0, 0));
 AF4 FsrRcasLoadF(ASU2 p) {
     const int2 last = int2(g_params.xy) - 1;
     return inputTex.Load(int3(clamp(int2(p), int2(0, 0), last), 0));
+}
+void FsrRcasInputF(inout AF1 r, inout AF1 g, inout AF1 b) {}
+#define FSR_RCAS_F 1
+#endif
+
+#if defined(PASS_FSR_RCAS_SCALED)
+// Enlarging and sharpening in one pass: each RCAS tap is the bilinear source sample at that
+// target pixel's centre, the value the resample pass would have stored there.
+AF4 FsrRcasLoadF(ASU2 p) {
+    const int2 last = int2(g_params.zw) - 1;
+    const float2 uv = (float2(clamp(int2(p), int2(0, 0), last)) + 0.5) / g_params.zw;
+    return inputTex.SampleLevel(LinearSampler, uv, 0);
 }
 void FsrRcasInputF(inout AF1 r, inout AF1 g, inout AF1 b) {}
 #define FSR_RCAS_F 1
@@ -164,7 +176,7 @@ float4 PSMain(FullscreenOut i) : SV_Target {
 }
 #endif
 
-#if defined(PASS_FSR_RCAS)
+#if defined(PASS_FSR_RCAS) || defined(PASS_FSR_RCAS_SCALED)
 FullscreenOut VSMain(uint id : SV_VertexID) { return FullscreenTriangle(id); }
 float4 PSMain(FullscreenOut i) : SV_Target {
     AF3 color;

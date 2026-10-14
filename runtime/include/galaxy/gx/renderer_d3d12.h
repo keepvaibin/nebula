@@ -31,6 +31,7 @@
 #include "galaxy/gx/immutable_upload.h"
 #include "galaxy/gx/interp_gpu.h"
 #include "galaxy/gx/post_process.h"
+#include "galaxy/gx/ray_tracing.h"
 #include "galaxy/gx/placed_texture_allocator.h"
 #include "galaxy/gx/gx_bitfields.h"
 #include "galaxy/gx/render_config.h"
@@ -464,6 +465,15 @@ public:
     void record_motion_debug_view();
     // The temporal history does not match the picture (scene cut).
     void reset_temporal_history() noexcept { temporal_history_valid_ = false; }
+
+    // Ray tracing (galaxy/gx/ray_tracing.h): the 3D scene's opaque draws, noted as they are
+    // drawn, become the traced scene when the game's translucent phases begin.
+    [[nodiscard]] bool rt_active() const noexcept { return ray_tracer_.ready(); }
+    [[nodiscard]] bool rt_scene_open() const noexcept { return ray_tracer_.scene_open(); }
+    void rt_begin_scene() noexcept { ray_tracer_.begin_scene(); }
+    void rt_set_view(const RtView& view) noexcept { ray_tracer_.set_view(view); }
+    void rt_note_draw(const DrawCall& call, const RtDrawInfo& info);
+    void rt_trace_scene();
     // Matrix-ring segment advances back whose palettes are still alive while
     // this frame executes (0 outside temporal mode). In temporal mode the
     // segment advances only after frames that wrote palettes, so present and
@@ -1152,6 +1162,9 @@ private:
     D3D12_RESOURCE_STATES blend_verdicts_state_ = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
     Microsoft::WRL::ComPtr<ID3D12RootSignature> blend_validate_root_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> blend_validate_pso_;
+    SceneRayTracer ray_tracer_;
+    static RtUpload rt_allocate(void* renderer, std::size_t bytes, std::size_t alignment);
+    [[nodiscard]] bool temporal_inputs_match(const TemporalUpscaleInputs& in) const;
     D3D12_GPU_VIRTUAL_ADDRESS resident_vertex_base_ = 0;
     std::uint64_t resident_vertex_bytes_ = 0;
     static constexpr std::uint32_t kMaxBlendPairs = 8192u;

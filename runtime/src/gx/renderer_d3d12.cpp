@@ -206,9 +206,24 @@ std::vector<unsigned> available_upscalers() {
     return choices;
 }
 
-// The quality row serves FSR 3 and DLSS.
+// The quality row serves every upscaler: it sets the render resolution relative to the output
+// (QUALITY 1.5x, BALANCED 1.7x, PERFORMANCE 2x, ULTRA PERFORMANCE 3x fewer pixels per axis).
+// Its first mode is the INTERNAL RES row for bilinear and FSR 1, native resolution for FSR 3
+// and DLSS.
 bool temporal_quality_row_shown() {
-    return fsr3_available() || galaxy::gx::streamline::dlss_supported() || dlss_offered();
+    return true;
+}
+
+// Output scale divided by the quality ratio (native, 1.5, 1.7, 2, 3), at least 1x.
+unsigned quality_render_scale(unsigned output_scale, unsigned quality) {
+    static constexpr float kRatio[] = {1.0f, 1.5f, 1.7f, 2.0f, 3.0f};
+    const long scale = std::lround(static_cast<float>(output_scale) / kRatio[std::min(quality, 4u)]);
+    return std::clamp(static_cast<unsigned>(std::max(scale, 1l)), 1u, std::max(output_scale, 1u));
+}
+
+// Bilinear or FSR 1 with a quality mode: the render scale follows the output like FSR 3/DLSS.
+bool spatial_quality_mode(const RenderConfig& render) {
+    return temporal_upscaler(render) == 0u && std::min(render.spatial_quality, 4u) >= 1u;
 }
 
 std::atomic<bool> s_pointer_focused{false};
@@ -590,6 +605,7 @@ unsigned pending_settings_changes() {
     changes += d.smaa_quality != live.smaa_quality;
     changes += d.upscaler != live.upscaler;
     changes += d.temporal_quality != live.temporal_quality;
+    changes += d.spatial_quality != live.spatial_quality;
     changes += d.sharpness != live.sharpness;
     changes += d.anisotropic_filtering != live.anisotropic_filtering;
     changes += d.enhanced_mipmaps != live.enhanced_mipmaps;
@@ -848,6 +864,7 @@ void apply_native_settings_draft() {
     applied.upscaler = next.upscaler;
     const bool dlss_asked = dlss_hold_back(applied, live);
     applied.temporal_quality = next.temporal_quality;
+    applied.spatial_quality = next.spatial_quality;
     applied.sharpness = next.sharpness;
     applied.anisotropic_filtering = next.anisotropic_filtering;
     applied.enhanced_mipmaps = next.enhanced_mipmaps;
@@ -1078,7 +1095,13 @@ void adjust_native_setting_unlogged(int delta) {
             }
             break;
         }
-        case 3: draft.temporal_quality = step(std::min(draft.temporal_quality, 4u), 5u); break;
+        case 3:
+            if (draft.upscaler >= 2u) {
+                draft.temporal_quality = step(std::min(draft.temporal_quality, 4u), 5u);
+            } else {
+                draft.spatial_quality = step(std::min(draft.spatial_quality, 4u), 5u);
+            }
+            break;
         case 4:
             draft.sharpness = static_cast<unsigned>(std::clamp(
                 static_cast<int>(std::min(draft.sharpness, 100u)) + delta * 10, 0, 100));
@@ -4345,10 +4368,11 @@ void RendererD3D12::sync_post_process_settings() {
 
 void RendererD3D12::apply_pending_efb_scale() {
     unsigned wanted = std::clamp(get_render_config().efb_scale, 1u, kMaxEfbScale);
-    if (temporal_mode()) {
+    if (temporal_mode() || spatial_quality_mode(get_render_config())) {
         const unsigned output_scale = output_efb_scale_for_window();
         if (output_scale != 0u) {
-            wanted = temporal_render_scale(output_scale);
+            wanted = temporal_mode() ? temporal_render_scale(output_scale)
+                                     : quality_render_scale(output_scale, get_render_config().spatial_quality);
         }
     }
     wanted = std::min(wanted, display_efb_scale_cap());
@@ -4751,6 +4775,8 @@ bool RendererD3D12::initialize(int window_width, int window_height, unsigned efb
         // validity flag as well.
         g_selected_adapter_desc = adapter_desc;
         g_selected_adapter_valid = true;
+        record_render_adapter(adapter_desc.Description, adapter_desc.VendorId, adapter_desc.DeviceId,
+                              adapter_preference() == DXGI_GPU_PREFERENCE_MINIMUM_POWER);
         (void)adapter.As(&adapter3_);
         {
             char narrow[128]{};
@@ -5141,6 +5167,24 @@ bool RendererD3D12::initialize(int window_width, int window_height, unsigned efb
                       << '\n';
         }
 
+        // Ray tracing: GALAXY_RAY_TRACING=1 on adapters with dedicated memory (DXR 1.1);
+        // GALAXY_RT_VALIDATE=1 adds the primary-ray check against the raster depth.
+        {
+            const auto env_on = [](const char* name) {
+                char value[8]{};
+                std::size_t length = 0u;
+                return getenv_s(&length, value, sizeof(value), name) == 0 && length > 1u && value[0] == '1';
+            };
+            if (env_on("GALAXY_RAY_TRACING")) {
+                if (adapter_is_unified_memory()) {
+                    std::cerr << "[rt] off: integrated GPU\n";
+                } else {
+                    static_cast<void>(ray_tracer_.initialize(device_.Get(), timestamp_frequency_,
+                                                             env_on("GALAXY_RT_VALIDATE")));
+                }
+            }
+        }
+
         if (trace_renderer_startup_enabled()) {
             std::cout << "[Renderer] OK  EFB=" << kEfbWidth * efb_scale_
                       << "x" << kEfbHeight * efb_scale_ << "\n";
@@ -5223,6 +5267,7 @@ void RendererD3D12::shutdown() {
     }
     s_blit_root_sig.Reset();
     post_process_.shutdown();
+    ray_tracer_.shutdown();
     {
         const PlacedTextureAllocator::Stats heap = efb_copy_heap_.stats();
         std::cerr << "[efb-copy-heap] heaps=" << heap.heaps << " heap-bytes=" << heap.heap_bytes
@@ -6200,6 +6245,8 @@ void RendererD3D12::begin_frame(bool present_swap_chain) {
         }
     }
 
+    ray_tracer_.begin_frame(frame_index_);
+
     const auto reset_start = collect_begin_timing
         ? std::chrono::steady_clock::now()
         : std::chrono::steady_clock::time_point{};
@@ -6927,10 +6974,7 @@ bool RendererD3D12::temporal_mode() const {
 }
 
 unsigned RendererD3D12::temporal_render_scale(unsigned output_scale) const {
-    static constexpr float kRatio[] = {1.0f, 1.5f, 1.7f, 2.0f, 3.0f};
-    const unsigned quality = std::min(get_render_config().temporal_quality, 4u);
-    const long scale = std::lround(static_cast<float>(output_scale) / kRatio[quality]);
-    return std::clamp(static_cast<unsigned>(std::max(scale, 1l)), 1u, std::max(output_scale, 1u));
+    return quality_render_scale(output_scale, get_render_config().temporal_quality);
 }
 
 bool RendererD3D12::ensure_motion_target() {
@@ -7467,6 +7511,96 @@ void RendererD3D12::record_stripe_gather() {
     std::swap(barrier.Transition.StateBefore, barrier.Transition.StateAfter);
     command_list_->ResourceBarrier(1, &barrier);
     stripe_earlier_state_ = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
+    bound_pipeline_ = nullptr;
+}
+
+RtUpload RendererD3D12::rt_allocate(void* renderer, std::size_t bytes, std::size_t alignment) {
+    const UploadRing::Allocation allocation =
+        static_cast<RendererD3D12*>(renderer)->constant_ring_.allocate(bytes, alignment);
+    return {allocation.cpu, allocation.gpu};
+}
+
+// A traced draw's buffers: vertices in the frame ring or the resident decoded-vertex buffer,
+// R16/R32 indices in the index ring, VS constants in the constant ring and its palette in the
+// matrix ring. Draws whose data lives elsewhere are not traced.
+void RendererD3D12::rt_note_draw(const DrawCall& call, const RtDrawInfo& info) {
+    if (!ray_tracer_.scene_open() || call.index_count < 3u ||
+        call.topology != D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST ||
+        call.vertex_view.StrideInBytes != kRtVertexStride || call.vertex_view.SizeInBytes == 0u) {
+        return;
+    }
+    const auto offset_in = [](D3D12_GPU_VIRTUAL_ADDRESS va, std::uint64_t bytes, D3D12_GPU_VIRTUAL_ADDRESS base,
+                              std::uint64_t size, std::uint32_t& offset) {
+        if (base == 0u || va < base || va + bytes > base + size || va - base > 0xFFFFFFFFu) {
+            return false;
+        }
+        offset = static_cast<std::uint32_t>(va - base);
+        return true;
+    };
+    RtDraw draw{};
+    const D3D12_GPU_VIRTUAL_ADDRESS vertices = call.vertex_view.BufferLocation;
+    if (!offset_in(vertices, call.vertex_view.SizeInBytes, vertex_ring_.gpu_base(), vertex_ring_.total_bytes(),
+                   draw.vertex_offset)) {
+        if (!offset_in(vertices, call.vertex_view.SizeInBytes, resident_vertex_base_, resident_vertex_bytes_,
+                       draw.vertex_offset)) {
+            return;
+        }
+        draw.flags |= kRtDrawResident;
+    }
+    draw.vertex_count = call.vertex_view.SizeInBytes / call.vertex_view.StrideInBytes;
+    if (call.index_view.BufferLocation != 0u) {
+        if (!offset_in(call.index_view.BufferLocation, call.index_view.SizeInBytes, index_ring_.gpu_base(),
+                       index_ring_.total_bytes(), draw.index_offset)) {
+            return;
+        }
+        draw.flags |= kRtDrawIndexed;
+        if (call.index_view.Format == DXGI_FORMAT_R32_UINT) {
+            draw.flags |= kRtDrawWideIndices;
+        }
+    }
+    if (!offset_in(call.vs_constants, sizeof(GxVsConstants), constant_ring_.gpu_base(), constant_ring_.total_bytes(),
+                   draw.constants_offset)) {
+        return;
+    }
+    if (call.matrix_palette != 0u &&
+        !offset_in(call.matrix_palette, 16u, matrix_ring_.gpu_base(), matrix_ring_.total_bytes(),
+                   draw.palette_offset)) {
+        return;
+    }
+    draw.triangle_count = call.index_count / 3u;
+    ray_tracer_.add_draw(draw, info);
+}
+
+void RendererD3D12::rt_trace_scene() {
+    if (!ray_tracer_.scene_open()) {
+        return;
+    }
+    const bool depth = efb_depth_ && conv_efb_depth_srv_.ptr != 0u;
+    D3D12_RESOURCE_BARRIER barrier{};
+    barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+    barrier.Transition.pResource = efb_depth_.Get();
+    barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+    barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_DEPTH_WRITE;
+    barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
+    if (depth) {
+        command_list_->ResourceBarrier(1, &barrier);
+    }
+    RtSources sources{};
+    sources.vertex_ring = {vertex_ring_.gpu_base(), vertex_ring_.total_bytes()};
+    sources.resident = {resident_vertex_base_, resident_vertex_bytes_};
+    sources.index_ring = {index_ring_.gpu_base(), index_ring_.total_bytes()};
+    sources.constant_ring = {constant_ring_.gpu_base(), constant_ring_.total_bytes()};
+    sources.matrix_ring = {matrix_ring_.gpu_base(), matrix_ring_.total_bytes()};
+    const D3D12_RESOURCE_DESC desc = depth ? efb_depth_->GetDesc() : D3D12_RESOURCE_DESC{};
+    dred_marker(command_list_.Get(), L"rt scene");
+    static_cast<void>(ray_tracer_.trace_scene(command_list_.Get(), sources, &RendererD3D12::rt_allocate, this,
+                                              depth ? conv_efb_depth_srv_ : D3D12_GPU_DESCRIPTOR_HANDLE{},
+                                              static_cast<std::uint32_t>(desc.Width), desc.Height));
+    if (depth) {
+        std::swap(barrier.Transition.StateBefore, barrier.Transition.StateAfter);
+        command_list_->ResourceBarrier(1, &barrier);
+    }
+    // The compute pipeline replaced the bound graphics pipeline.
     bound_pipeline_ = nullptr;
 }
 
@@ -9459,7 +9593,7 @@ void RendererD3D12::record_subframe_upscale(const ReplayList& entry, const Subfr
         const RenderConfig cfg = get_render_config();
         in.frame_ms = static_cast<float>(1000.0 / present_frame_rate(cfg.max_fps, cfg.vsync_interval, display_refresh_hz_));
         in.reset = time.reset || !temporal_history_valid_;
-        upscaled = temporal_->evaluate(in);
+        upscaled = temporal_inputs_match(in) && temporal_->evaluate(in);
         ID3D12DescriptorHeap* heaps[] = {srv_ring_.heap(), sampler_heap_.Get()};
         command_list_->SetDescriptorHeaps(2, heaps);
         command_list_->SetGraphicsRootSignature(root_signature_.Get());
@@ -9654,6 +9788,37 @@ void RendererD3D12::set_scene_camera(float near_plane, float far_plane, float fo
     scene_camera_[2] = fov_y;
 }
 
+// The upscaler's context was created for exactly these sizes and the resources cover them. An
+// internal-resolution change applied between a scene's start and its upscale (a render chunk
+// boundary) would otherwise dispatch past the context's maximum (FidelityFX OUT_OF_RANGE) or
+// outside the resources.
+bool RendererD3D12::temporal_inputs_match(const TemporalUpscaleInputs& in) const {
+    const auto covers = [](ID3D12Resource* resource, unsigned width, unsigned height) {
+        if (resource == nullptr) {
+            return true;
+        }
+        const D3D12_RESOURCE_DESC desc = resource->GetDesc();
+        return desc.Width >= width && desc.Height >= height;
+    };
+    const bool match =
+        in.render_width == temporal_render_w_ && in.render_height == temporal_render_h_ &&
+        in.output_width == temporal_output_w_ && in.output_height == temporal_output_h_ &&
+        covers(in.color, in.render_width, in.render_height) &&
+        covers(in.depth, in.render_width, in.render_height) &&
+        covers(in.motion, in.render_width, in.render_height) &&
+        covers(in.reactive, in.render_width, in.render_height) &&
+        covers(in.output, in.output_width, in.output_height);
+    if (!match) {
+        static std::uint64_t reported = 0u;
+        if (reported++ < 8u) {
+            std::cerr << "[temporal] skipped: " << in.render_width << 'x' << in.render_height << " -> "
+                      << in.output_width << 'x' << in.output_height << " context " << temporal_render_w_ << 'x'
+                      << temporal_render_h_ << " -> " << temporal_output_w_ << 'x' << temporal_output_h_ << '\n';
+        }
+    }
+    return match;
+}
+
 bool RendererD3D12::record_temporal_upscale(unsigned output_scale) {
     if (!scene_temporal_ || !temporal_ || !ensure_motion_target()) {
         return false;
@@ -9676,7 +9841,7 @@ bool RendererD3D12::record_temporal_upscale(unsigned output_scale) {
     in.fov_y = scene_camera_[2];
     in.frame_ms = 1000.0f / 60.0f;
     in.reset = !temporal_history_valid_;
-    const bool recorded = temporal_->evaluate(in);
+    const bool recorded = temporal_inputs_match(in) && temporal_->evaluate(in);
     // The upscaler binds its own heaps, root signature and pipelines.
     ID3D12DescriptorHeap* heaps[] = {srv_ring_.heap(), sampler_heap_.Get()};
     command_list_->SetDescriptorHeaps(2, heaps);
@@ -12025,6 +12190,13 @@ std::string native_settings_row_text(
                    kAspects[std::min(render.aspect_mode, kAspectModeCount - 1u)];
         }
         case 5: {
+            // FSR 3, DLSS and the bilinear/FSR 1 quality modes set the render resolution.
+            if (temporal_upscaler(render) != 0u || spatial_quality_mode(render)) {
+                static constexpr const char* kDriver[] = {"QUALITY", "FSR 1", "FSR 3", "DLSS"};
+                std::snprintf(text, sizeof(text), "INTERNAL RES: BY %s",
+                              kDriver[std::min(render.upscaler, 3u)]);
+                return text;
+            }
             if (render.internal_follow_window) return "INTERNAL RES: MATCH OUTPUT";
             const unsigned scale = std::clamp(render.efb_scale, 1u, kMaxEfbScale);
             std::snprintf(text, sizeof(text), "INTERNAL RES: %uX %uX%u%s", scale,
@@ -12078,9 +12250,16 @@ std::string native_settings_row_text(
                 "NATIVE AA", "QUALITY", "BALANCED", "PERFORMANCE", "ULTRA PERFORMANCE"};
             static constexpr const char* kDlss[] = {
                 "DLAA", "QUALITY", "BALANCED", "PERFORMANCE", "ULTRA PERFORMANCE"};
-            return render.upscaler == 3u || !fsr3_available()
-                       ? std::string("DLSS: ") + kDlss[std::min(render.temporal_quality, 4u)]
-                       : std::string("FSR 3 QUALITY: ") + kTemporal[std::min(render.temporal_quality, 4u)];
+            static constexpr const char* kSpatial[] = {
+                "MANUAL", "QUALITY", "BALANCED", "PERFORMANCE", "ULTRA PERFORMANCE"};
+            const unsigned quality = render.upscaler >= 2u ? std::min(render.temporal_quality, 4u)
+                                                           : std::min(render.spatial_quality, 4u);
+            switch (std::min(render.upscaler, 3u)) {
+            case 3u: return std::string("DLSS: ") + kDlss[quality];
+            case 2u: return std::string("FSR 3 QUALITY: ") + kTemporal[quality];
+            case 1u: return std::string("FSR 1 QUALITY: ") + kSpatial[quality];
+            default: return std::string("QUALITY: ") + kSpatial[quality];
+            }
         }
         case 4:
             std::snprintf(text, sizeof(text), "SHARPENING: %u%%", std::min(render.sharpness, 100u));

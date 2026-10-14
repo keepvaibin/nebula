@@ -449,6 +449,9 @@ private:
         // ring; vertex_byte_end/base_vertex are offsets in that buffer. Only
         // another resident run can extend such a batch.
         bool resident = false;
+        // Ray-traced scene geometry (begin_rt_batch when the batch began).
+        bool rt = false;
+        RtDrawInfo rt_info{};
     };
 
     [[nodiscard]] static bool draw_calls_batch_compatible(
@@ -778,6 +781,19 @@ private:
     TransformHistory screen_history_;
     TransformHistory mirror_history_;
     unsigned side_layer_ = 0u;                 // kScreenLayer or kMirrorLayer while one records
+    // Ray tracing: the 3D scene's SceneFunction phase (motion::ScenePhase, from the phase
+    // markers), whether the draw state is traceable geometry (unblended, colour- and
+    // depth-writing perspective triangles; flush_draw_state) and whether the scene was traced.
+    std::uint8_t rt_phase_ = 0xFFu;
+    bool rt_state_eligible_ = false;
+    bool rt_scene_traced_ = true;
+    bool rt_view_set_ = false;
+    [[nodiscard]] bool rt_geometry_draw() const noexcept;
+    void note_rt_phase(std::uint8_t phase);
+    void trace_rt_scene();
+    // Whether a batch starting with `call` is traced geometry; the scene's first one also gives
+    // the camera (projection and viewport) for rays through EFB pixels.
+    [[nodiscard]] bool begin_rt_batch(const DrawCall& call, RtDrawInfo& info);
     bool scene_3d_recorded_ = false;           // this frame's 3D scene took records
     bool mirror_opened_scene_ = false;         // this frame's InterpScene began at its mirror pass
     std::array<std::uint64_t, 3> layer_serials_{};

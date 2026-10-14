@@ -641,6 +641,7 @@ galaxy_post_shader(post_resample_ps PASS_RESAMPLE - none ps_5_0 PSMain)
 galaxy_post_shader(post_fxaa_ps PASS_FXAA - none ps_5_0 PSMain)
 galaxy_post_shader(post_fsr_easu_ps PASS_FSR_EASU - fsr ps_5_0 PSMain)
 galaxy_post_shader(post_fsr_rcas_ps PASS_FSR_RCAS - fsr ps_5_0 PSMain)
+galaxy_post_shader(post_fsr_rcas_scaled_ps PASS_FSR_RCAS_SCALED - fsr ps_5_0 PSMain)
 galaxy_post_shader(post_smaa_edges_vs PASS_SMAA_EDGES SMAA_PRESET_HIGH smaa vs_5_0 VSMain)
 galaxy_post_shader(post_smaa_blend_vs PASS_SMAA_BLEND SMAA_PRESET_HIGH smaa vs_5_0 VSMain)
 galaxy_post_shader(post_smaa_blend_ps PASS_SMAA_BLEND SMAA_PRESET_HIGH smaa ps_5_0 PSMain)
@@ -652,6 +653,31 @@ foreach(galaxy_smaa_preset LOW MEDIUM HIGH ULTRA)
         PASS_SMAA_WEIGHTS SMAA_PRESET_${galaxy_smaa_preset} smaa vs_5_0 VSMain)
     galaxy_post_shader(post_smaa_weights_ps_${galaxy_smaa_suffix}
         PASS_SMAA_WEIGHTS SMAA_PRESET_${galaxy_smaa_preset} smaa ps_5_0 PSMain)
+endforeach()
+
+# Ray-tracing compute shaders (runtime/src/gx/ray_tracing.hlsl: DXR 1.1 inline ray queries,
+# shader model 6.5) are compiled by the Windows SDK's DXC at build time into signed DXIL headers.
+find_program(GALAXY_DXC dxc
+    HINTS "$ENV{WindowsSdkVerBinPath}x64" "$ENV{WindowsSdkBinPath}x64"
+    NO_DEFAULT_PATH)
+if(NOT GALAXY_DXC)
+    find_program(GALAXY_DXC dxc REQUIRED)
+endif()
+set(galaxy_rt_dir "${CMAKE_CURRENT_BINARY_DIR}/generated/rt_shaders")
+file(MAKE_DIRECTORY "${galaxy_rt_dir}")
+set(galaxy_rt_hlsl "${CMAKE_CURRENT_SOURCE_DIR}/runtime/src/gx/ray_tracing.hlsl")
+set(galaxy_rt_headers "")
+foreach(galaxy_rt_pass geometry:GeometryCS validate:ValidateCS)
+    string(REPLACE ":" ";" galaxy_rt_pair "${galaxy_rt_pass}")
+    list(GET galaxy_rt_pair 0 galaxy_rt_name)
+    list(GET galaxy_rt_pair 1 galaxy_rt_entry)
+    set(galaxy_rt_header "${galaxy_rt_dir}/rt_${galaxy_rt_name}_cs.h")
+    add_custom_command(OUTPUT "${galaxy_rt_header}"
+        COMMAND "${GALAXY_DXC}" -nologo -T cs_6_5 -E ${galaxy_rt_entry} -O3 -WX -Qstrip_debug -Qstrip_reflect
+            -Vn g_rt_${galaxy_rt_name}_cs -Fh "${galaxy_rt_header}" "${galaxy_rt_hlsl}"
+        DEPENDS "${galaxy_rt_hlsl}"
+        VERBATIM)
+    list(APPEND galaxy_rt_headers "${galaxy_rt_header}")
 endforeach()
 
 # galaxy_gx: static lib used by NebulaRuntime and the renderer tests.
@@ -677,6 +703,8 @@ add_library(galaxy_gx STATIC
     runtime/src/gx/post_process.cpp
     ${galaxy_post_headers}
     runtime/src/gx/temporal_upscaler.cpp
+    runtime/src/gx/ray_tracing.cpp
+    ${galaxy_rt_headers}
     runtime/src/gx/streamline_bridge.cpp
     runtime/src/gx/transform_history.cpp
     runtime/src/gx/frame_interpolation.cpp
@@ -726,6 +754,7 @@ target_compile_definitions(
 target_include_directories(galaxy_gx
     PRIVATE
         "${galaxy_post_dir}"
+        "${galaxy_rt_dir}"
         "${CMAKE_CURRENT_SOURCE_DIR}/third_party/smaa"
 )
 if(MSVC)

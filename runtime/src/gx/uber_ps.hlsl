@@ -567,7 +567,8 @@ PSOut main(PSIn pin) {
     uint tev_alpha_i = uint(frag_i.a);
     if (tev_alpha_i == 1u) frag.a = 0.0;
 
-    const bool rgba6 = (output_flags & 0x7u) == 1u;
+    // RGBA6 colour precision; bit 4 keeps 8-bit colour (no dither).
+    const bool rgba6 = (output_flags & 0x7u) == 1u && (output_flags & 0x10u) == 0u;
     if (rgba6 && (output_flags & 0x08u) != 0u) {
         int3 dither_rgb = int3(round(saturate(frag.rgb) * 255.0));
         int2 dither_xy;

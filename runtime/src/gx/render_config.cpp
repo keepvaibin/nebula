@@ -188,6 +188,10 @@ static void apply_kv(RenderConfig& cfg, const char* key, const char* val) {
         static constexpr const char* kNames[] = {
             "native", "quality", "balanced", "performance", "ultra_performance"};
         cfg.temporal_quality = parse_choice(val, kNames, cfg.temporal_quality);
+    } else if (std::strcmp(key, "spatial_quality") == 0) {
+        static constexpr const char* kNames[] = {
+            "manual", "quality", "balanced", "performance", "ultra_performance"};
+        cfg.spatial_quality = parse_choice(val, kNames, cfg.spatial_quality);
     } else if (std::strcmp(key, "sharpness") == 0) {
         cfg.sharpness = std::min(parse_uint(val, cfg.sharpness), 100u);
     }
@@ -268,6 +272,7 @@ static void apply_env_overrides(RenderConfig& cfg) {
     apply_env(cfg, "GALAXY_SMAA_QUALITY", "smaa_quality");
     apply_env(cfg, "GALAXY_UPSCALER", "upscaler");
     apply_env(cfg, "GALAXY_TEMPORAL_QUALITY", "temporal_quality");
+    apply_env(cfg, "GALAXY_SPATIAL_QUALITY", "spatial_quality");
     apply_env(cfg, "GALAXY_SHARPNESS", "sharpness");
     apply_env(cfg, "GALAXY_RAY_TRACING_ENABLED", "ray_tracing_enabled");
     apply_env(cfg, "GALAXY_RT_SHADOW_QUALITY", "rt_shadow_quality");
@@ -306,6 +311,7 @@ static void clamp_unimplemented_features(RenderConfig& cfg) {
     cfg.smaa_quality = std::min(cfg.smaa_quality, 3u);
     cfg.upscaler = std::min(cfg.upscaler, 3u);
     cfg.temporal_quality = std::min(cfg.temporal_quality, 4u);
+    cfg.spatial_quality = std::min(cfg.spatial_quality, 4u);
     cfg.sharpness = std::min(cfg.sharpness, 100u);
     // Win32 client geometry is signed-int based even though DXGI dimensions
     // are UINT. Keep direct API callers inside the common representable range.
@@ -573,6 +579,7 @@ bool save_render_config_to_file() {
              << "smaa_quality=" << cfg.smaa_quality << '\n'
              << "upscaler=" << cfg.upscaler << '\n'
              << "temporal_quality=" << cfg.temporal_quality << '\n'
+             << "spatial_quality=" << cfg.spatial_quality << '\n'
              << "sharpness=" << cfg.sharpness << '\n'
              << "internal_follow_window="
              << (cfg.internal_follow_window ? 1u : 0u) << '\n'
@@ -590,6 +597,30 @@ bool save_render_config_to_file() {
         return false;
     }
     return io::write_text_file_atomically(path, contents.str());
+}
+
+void record_render_adapter(const wchar_t* description, unsigned vendor_id, unsigned device_id,
+                           bool low_power_preference) noexcept {
+    try {
+        const std::filesystem::path config = config_path();
+        if (config.empty() || description == nullptr) {
+            return;
+        }
+        char name[256]{};
+        WideCharToMultiByte(CP_UTF8, 0, description, -1, name, static_cast<int>(sizeof(name) - 1), nullptr,
+                            nullptr);
+        for (char& c : name) {
+            if (c == '\r' || c == '\n') c = ' ';
+        }
+        std::ostringstream contents;
+        contents.imbue(std::locale::classic());
+        contents << "description=" << name << '\n'
+                 << "vendor_id=" << vendor_id << '\n'
+                 << "device_id=" << device_id << '\n'
+                 << "gpu_preference=" << (low_power_preference ? "low" : "high") << '\n';
+        static_cast<void>(io::write_text_file_atomically(config.parent_path() / L"adapter.ini", contents.str()));
+    } catch (...) {
+    }
 }
 
 }  // namespace galaxy::gx

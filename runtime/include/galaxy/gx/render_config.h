@@ -113,6 +113,9 @@ struct RenderConfig {
     // 3: NVIDIA DLSS (temporal like 2; needs the user's Streamline install).
     unsigned upscaler            = 0;
     unsigned temporal_quality    = 1;
+    // Bilinear and FSR 1: 0 renders at the INTERNAL RES row; 1-4 render at the output scale
+    // divided by 1.5, 1.7, 2 or 3 (the temporal_quality ratios).
+    unsigned spatial_quality     = 0;
     unsigned sharpness           = 0;
 
     // Reserved for future DXR work. Clamped off until there is a real DXR
@@ -301,5 +304,11 @@ void load_render_config_from_file();
 // feature placeholders are intentionally omitted until their renderer paths
 // are real and exposed.
 bool save_render_config_to_file();
+
+// Records the adapter the renderer runs on (adapter.ini beside config.ini) for the launcher,
+// which offers DLSS only on an NVIDIA RTX adapter: description, PCI vendor and device id and
+// the GPU preference the runtime started with (low: integrated first).
+void record_render_adapter(const wchar_t* description, unsigned vendor_id, unsigned device_id,
+                           bool low_power_preference) noexcept;
 
 } // namespace galaxy::gx

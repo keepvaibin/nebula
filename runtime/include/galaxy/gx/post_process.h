@@ -206,6 +206,8 @@ private:
     // RCAS and the resample run into intermediates and into the back buffer;
     // both use RGBA8, so one pipeline each serves every target.
     Microsoft::WRL::ComPtr<ID3D12PipelineState> rcas_;
+    // Bilinear enlargement and RCAS in one pass (no window-sized intermediate).
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> rcas_scaled_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> resample_;
     Microsoft::WRL::ComPtr<ID3D12Resource> area_texture_;
     Microsoft::WRL::ComPtr<ID3D12Resource> search_texture_;

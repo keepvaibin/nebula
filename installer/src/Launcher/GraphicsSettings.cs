@@ -24,13 +24,68 @@ namespace Nebula.Launcher
         // (DlssPackage); Nebula ships none of them.
         public static string StreamlineDir { get { return DlssPackage.Folder; } }
         public static bool DlssInstalled() { return DlssPackage.Installed(); }
-        // The upscaler setting values offered, in list order. On NVIDIA RTX machines DLSS is
-        // listed before it is downloaded; choosing it offers the download.
+        // The upscaler setting values offered, in list order. DLSS is listed (before it is
+        // downloaded too) when the game runs on an NVIDIA RTX GPU.
         public static List<int> UpscalerChoices()
         {
             var choices = new List<int> { 0, 1 };
-            if (DlssInstalled() || DlssPackage.RtxAdapterPresent()) choices.Add(3);
+            if (DlssAdapter()) choices.Add(3);
             return choices;
+        }
+
+        /// <summary>
+        /// The GPU the game runs on is an NVIDIA RTX GPU. The runtime records its adapter in
+        /// adapter.ini beside config.ini with the GPU preference it started with; a record from
+        /// another preference (another package) or no record yet falls back to this package's
+        /// preference: the integrated GPU never, otherwise any RTX adapter in the machine.
+        /// </summary>
+        public static bool DlssAdapter()
+        {
+            bool lowPower = PackagePrefersIntegratedGpu();
+            string path = Path.Combine(NebulaPaths.DataRoot, "adapter.ini");
+            try
+            {
+                if (File.Exists(path))
+                {
+                    var values = new Dictionary<string, string>();
+                    foreach (string line in File.ReadAllLines(path))
+                    {
+                        int equals = line.IndexOf('=');
+                        if (equals > 0) values[line.Substring(0, equals).Trim()] = line.Substring(equals + 1).Trim();
+                    }
+                    string preference, vendor, description;
+                    if (values.TryGetValue("gpu_preference", out preference) &&
+                        (preference == "low") == lowPower &&
+                        values.TryGetValue("vendor_id", out vendor) && values.TryGetValue("description", out description))
+                    {
+                        return vendor == "4318" && description.IndexOf("RTX", StringComparison.OrdinalIgnoreCase) >= 0;
+                    }
+                }
+            }
+            catch (IOException) { }
+            catch (UnauthorizedAccessException) { }
+            return !lowPower && DlssPackage.RtxAdapterPresent();
+        }
+
+        /// <summary>runtime-env.json beside the launcher selects the integrated GPU (GALAXY_GPU_PREFERENCE=low).</summary>
+        public static bool PackagePrefersIntegratedGpu()
+        {
+            try
+            {
+                string path = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "runtime-env.json");
+                if (!File.Exists(path)) return false;
+                foreach (var entry in (System.Collections.IList)Json.ParseAny(File.ReadAllText(path)))
+                {
+                    var pair = entry as Dictionary<string, object>;
+                    if (pair != null && Json.Str(pair, "name") == "GALAXY_GPU_PREFERENCE")
+                        return string.Equals(Json.Str(pair, "value"), "low", StringComparison.OrdinalIgnoreCase);
+                }
+            }
+            catch (IOException) { }
+            catch (UnauthorizedAccessException) { }
+            catch (ArgumentException) { }
+            catch (InvalidCastException) { }
+            return false;
         }
         public static string UpscalerName(int value)
         {
@@ -38,6 +93,9 @@ namespace Nebula.Launcher
             return Upscalers[Math.Max(0, Math.Min(value, Upscalers.Length - 1))];
         }
         public static readonly string[] DlssQualities = { "DLAA", "Quality", "Balanced", "Performance", "Ultra Performance" };
+        // Bilinear and FSR 1: Manual renders at the internal resolution; the others at the
+        // output resolution divided by 1.5, 1.7, 2 or 3.
+        public static readonly string[] SpatialQualities = { "Manual (internal resolution)", "Quality", "Balanced", "Performance", "Ultra Performance" };
         private const int TemporalQualityCount = 5;
         public static readonly string[] TextureFilters = { "Trilinear", "2x anisotropic", "4x anisotropic", "8x anisotropic", "16x anisotropic" };
         public static readonly string[] LightingModes = { "Per pixel (enhanced)", "Per vertex (original)" };
@@ -81,6 +139,7 @@ namespace Nebula.Launcher
         public int FrameRate = 60;
         public int AntiAliasing = 0, Quality = 2, Upscaler = 0, Sharpness = 0, TextureFilter = 0;
         public int TemporalQuality = 1;
+        public int SpatialQuality = 0;
         public bool GeneratedMipmaps = false, PerPixelLighting = false, HudOutputResolution = false;
 
         public static string ConfigPath { get { return Path.Combine(NebulaPaths.DataRoot, "config.ini"); } }
@@ -140,6 +199,7 @@ namespace Nebula.Launcher
             int upscaler = Choice(values, "upscaler", 4, settings.Upscaler);
             settings.Upscaler = upscaler == 2 ? 1 : upscaler;
             settings.TemporalQuality = Choice(values, "temporal_quality", TemporalQualityCount, settings.TemporalQuality);
+            settings.SpatialQuality = Choice(values, "spatial_quality", TemporalQualityCount, settings.SpatialQuality);
             settings.Sharpness = Math.Min(Choice(values, "sharpness", 101, settings.Sharpness), 100);
             int anisotropy = Choice(values, "anisotropic_filtering", 17, -1);
             if (anisotropy >= 1)
@@ -174,6 +234,7 @@ namespace Nebula.Launcher
             Set(lines, "smaa_quality", Quality);
             Set(lines, "upscaler", Upscaler);
             Set(lines, "temporal_quality", TemporalQuality);
+            Set(lines, "spatial_quality", SpatialQuality);
             Set(lines, "sharpness", Sharpness);
             Set(lines, "anisotropic_filtering", Anisotropy[Math.Max(0, Math.Min(TextureFilter, Anisotropy.Length - 1))]);
             Set(lines, "enhanced_mipmaps", GeneratedMipmaps ? 1 : 0);

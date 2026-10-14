@@ -255,6 +255,18 @@ namespace Nebula.Launcher
         private readonly ComboBox textSpeed = new ComboBox();
         private readonly ControlsSettings controls = ControlsSettings.Load();
         private bool loading;
+
+        // The quality row's list and choice for the selected upscaler.
+        private void ShowUpscalerQuality()
+        {
+            bool dlss = upscaler.SelectedIndex >= 0 && upscaler.SelectedIndex < upscalerChoices.Count &&
+                        upscalerChoices[upscaler.SelectedIndex] == 3;
+            string[] names = dlss ? GraphicsSettings.DlssQualities : GraphicsSettings.SpatialQualities;
+            int value = dlss ? graphics.TemporalQuality : graphics.SpatialQuality;
+            dlssQuality.Items.Clear();
+            dlssQuality.Items.AddRange(names);
+            dlssQuality.SelectedIndex = Math.Max(0, Math.Min(value, names.Length - 1));
+        }
         private readonly ComboBox inputSource = new ComboBox(), editScheme = new ComboBox(), motion = new ComboBox(),
             vibration = new ComboBox();
         private readonly ListView bindingList = new ListView();
@@ -342,7 +354,7 @@ namespace Nebula.Launcher
             Row(image, "Anti-aliasing", antiAliasing, ref y);
             Row(image, "Anti-aliasing quality", aaQuality, ref y);
             Row(image, "Upscaling", upscaler, ref y);
-            Row(image, "DLSS quality", dlssQuality, ref y);
+            Row(image, "Upscaler quality", dlssQuality, ref y);
             Label(image, "Sharpening (0-100)", 12, y + 3);
             sharpness.Location = new Point(320, y);
             sharpness.Size = new Size(120, 28);
@@ -365,7 +377,6 @@ namespace Nebula.Launcher
             antiAliasing.Items.AddRange(GraphicsSettings.AntiAliasingModes);
             aaQuality.Items.AddRange(GraphicsSettings.AntiAliasingQualities);
             foreach (int value in upscalerChoices) upscaler.Items.Add(GraphicsSettings.UpscalerName(value));
-            dlssQuality.Items.AddRange(GraphicsSettings.DlssQualities);
             textureFilter.Items.AddRange(GraphicsSettings.TextureFilters);
             lighting.Items.AddRange(GraphicsSettings.LightingModes);
 
@@ -464,8 +475,12 @@ namespace Nebula.Launcher
                     else upscaler.SelectedIndex = upscalerShown;
                     loading = false;
                 }
+                // The quality list follows the upscaler: DLSS modes or the bilinear/FSR 1 ones.
+                bool wasDlss = upscalerShown >= 0 && upscalerChoices[upscalerShown] == 3;
+                if (wasDlss) graphics.TemporalQuality = Math.Max(0, dlssQuality.SelectedIndex);
+                else graphics.SpatialQuality = Math.Max(0, dlssQuality.SelectedIndex);
                 upscalerShown = upscaler.SelectedIndex;
-                dlssQuality.Enabled = upscalerShown >= 0 && upscalerChoices[upscalerShown] == 3;
+                ShowUpscalerQuality();
                 RefreshFrameRateChoices();
             };
             UiScale.Apply(this);
@@ -776,8 +791,7 @@ namespace Nebula.Launcher
             aaQuality.SelectedIndex = graphics.Quality;
             upscaler.SelectedIndex = upscalerChoices.Contains(graphics.Upscaler)
                 ? upscalerChoices.IndexOf(graphics.Upscaler) : upscalerChoices.IndexOf(1);
-            dlssQuality.SelectedIndex = Math.Max(0, Math.Min(graphics.TemporalQuality, GraphicsSettings.DlssQualities.Length - 1));
-            dlssQuality.Enabled = upscalerChoices[upscaler.SelectedIndex] == 3;
+            ShowUpscalerQuality();
             sharpness.Value = graphics.Sharpness;
             textureFilter.SelectedIndex = graphics.TextureFilter;
             lighting.SelectedIndex = graphics.PerPixelLighting ? 0 : 1;
@@ -923,7 +937,10 @@ namespace Nebula.Launcher
                 graphics.Quality = aaQuality.SelectedIndex;
                 if (upscaler.SelectedIndex >= 0 && upscaler.SelectedIndex < upscalerChoices.Count)
                     graphics.Upscaler = upscalerChoices[upscaler.SelectedIndex];
-                graphics.TemporalQuality = Math.Max(0, dlssQuality.SelectedIndex);
+                if (upscaler.SelectedIndex >= 0 && upscalerChoices[upscaler.SelectedIndex] == 3)
+                    graphics.TemporalQuality = Math.Max(0, dlssQuality.SelectedIndex);
+                else
+                    graphics.SpatialQuality = Math.Max(0, dlssQuality.SelectedIndex);
                 graphics.Sharpness = (int)sharpness.Value;
                 graphics.TextureFilter = textureFilter.SelectedIndex;
                 graphics.PerPixelLighting = lighting.SelectedIndex == 0;
