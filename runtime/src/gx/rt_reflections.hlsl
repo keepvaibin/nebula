@@ -1350,6 +1350,39 @@ float4 filtered_light(uint2 id, uint index, uint4 info, bool first, out float3 h
         if (shape_sum > 1e-4f) {
             highlight = highlight_sum / shape_sum;
         }
+    } else {
+        // The sharpest lobes (water, ice, glass) keep their reflection unfiltered, but their
+        // highlights are glints off per-sample ripple normals: alone they speckle the surface. They
+        // average over the 3 x 3 samples on the same plane (one pass each, the second twice as wide).
+        const int reach = first ? 1 : 2;
+        const float z = asfloat(info.y);
+        const float3 p = sample_position(id, z);
+        const float3 n = unpack_normal(info.x);
+        const float inv_tolerance = 1.0f / (0.25f + abs(z) * 0.004f * float(reach));
+        float3 highlight_sum = float3(0.0f, 0.0f, 0.0f);
+        float shape_sum = 0.0f;
+        [unroll] for (int dy = -1; dy <= 1; ++dy) {
+            [unroll] for (int dx = -1; dx <= 1; ++dx) {
+                const int2 s = int2(id) + int2(dx, dy) * reach;
+                if (any(s < 0) || any(s >= int2(g_sample_size))) {
+                    continue;
+                }
+                const uint si = uint(s.y) * g_sample_size.x + uint(s.x);
+                const uint4 other = g_info[si];
+                if (!reflective(other) || (other.z & 15u) != surface_class) {
+                    continue;
+                }
+                const float plane = abs(dot(n, sample_position(uint2(s), asfloat(other.y)) - p)) * inv_tolerance;
+                const float shape = exp(-0.5f * float(dx * dx + dy * dy) - plane * plane);
+                float3 other_highlight;
+                filter_input(si, first, other_highlight);
+                highlight_sum += other_highlight * shape;
+                shape_sum += shape;
+            }
+        }
+        if (shape_sum > 1e-4f) {
+            highlight = highlight_sum / shape_sum;
+        }
     }
     return value;
 }

@@ -246,6 +246,17 @@ Light unpack_light(uint4 p, out float count)
 
 static const Light kOpenSky = {float3(1.0f, 1.0f, 1.0f), 0.0f, float3(0.0f, 0.0f, 0.0f)};
 
+// A colour's luminance after the finish's tone (rt_post.hlsl shoulder, then grade's filmic S at
+// strength `grade`).
+float finished_luminance(float3 c, float grade)
+{
+    const float3 over = max(c - 0.95f, 0.0f);
+    const float3 rolled = min(c, 0.95f) + 0.05f * (1.0f - exp(-over / 0.05f));
+    const float spill = max(max(over.r, max(over.g, over.b)) - 0.05f, 0.0f);
+    const float l = luminance(saturate(rolled + spill * 0.15f));
+    return lerp(l, saturate(l + 0.7f * (l - 0.5f) * l * (1.0f - l)), grade);
+}
+
 float3 rotate3(float4 rows[3], float3 d)
 {
     return float3(dot(rows[0].xyz, d), dot(rows[1].xyz, d), dot(rows[2].xyz, d));
@@ -301,8 +312,9 @@ cbuffer RtCapture : register(b0)
     float4 c_to_world[3];    // eye to world
     float c_exposure_night;  // ... under a black sky
     float c_daylight;        // the sky's luminance that counts as bright
-    uint c_exposure;         // 1: the exposure follows the lighting; 2: it starts over at 1 (a new stage)
-    uint c_pad;
+    uint c_exposure;         // SkyStateCS: 1 the exposure follows the lighting, 2 it starts over at 1
+                             // (a new stage); GlowBaseCS: bit 0 measure it, bit 2 through the finish's tone
+    float c_grade;           // the finish's grade strength (rt_post.hlsl grade)
 };
 Texture2D<float4> c_color : register(t0);
 Texture2D<float> c_depth_tex : register(t1);
@@ -316,8 +328,10 @@ RWByteAddressBuffer c_sky : register(u4);                // per bin: samples, r,
 RWStructuredBuffer<float4> c_sky_radiance : register(u5); // per bin: colour over time, seen
 RWByteAddressBuffer c_sky_sh : register(u6);             // see g_sky_light
 // The composite's exposure measurement (CompositePS m_exposure): kExposureBuckets of lit and game
-// luminance (x 256) and pixels; SkyStateCS reads and clears them.
+// luminance (x 256) and pixels from GlowBaseCS; SkyStateCS reads and clears them.
 RWByteAddressBuffer c_exposure_sums : register(u7);
+// The game's own opaque picture (the lighting composite's source), for the exposure's measurement.
+Texture2D<float4> c_game : register(t4);
 
 // The sky map's bin of a world direction: octahedral, +y the pole, 32 x 32 (rt_sky_sun.h sky_bin).
 uint sky_bin(float3 w)
@@ -534,9 +548,9 @@ void SkyStateCS()
         c_sums.Store2(32u, uint2(asuint(state), 1u));
     }
     // The exposure keeps the picture as bright as the game drew it: the ratio of the lit picture's
-    // mean luminance, as the finish will tone it, to the game's own on the same pixels (measured by
-    // the composite) moves towards its target, a tenth of the way per frame. Its shadows and lights
-    // move the light around; they neither darken nor wash out the whole.
+    // mean luminance (with its reflections, as the finish will tone it) to the game's own on the same
+    // pixels (GlowBaseCS) moves towards its target, a tenth of the way per frame. Its shadows and
+    // lights move the light around; they neither darken nor wash out the whole.
     uint3 measured = uint3(0u, 0u, 0u);
     [unroll] for (uint b = 0u; b < kExposureBuckets; ++b) {
         measured += c_exposure_sums.Load3(b * 16u);
@@ -549,7 +563,7 @@ void SkyStateCS()
     // For [rt-emit]: lit and game sums, pixels.
     c_sums.Store(44u, measured.z);
     c_sums.Store2(56u, measured.xy);
-    const uint grid = max((c_target_size.x / 16u) * (c_target_size.y / 16u), 1u);
+    const uint grid = max(((c_sample_size.x + 7u) / 8u) * ((c_sample_size.y + 7u) / 8u), 1u);
     if (c_exposure == 0u) {
         c_sums.Store2(48u, uint2(asuint(1.0f), 0u));
     } else if (measured.z * 50u > grid && measured.y != 0u) {
@@ -562,7 +576,9 @@ void SkyStateCS()
     }
 }
 
-// After the composite: the picture before the translucent phases.
+// After the composite (lighting and reflections): the picture before the translucent phases. One
+// sample in 8 x 8 on a surface (not the sky or backdrops) measures the exposure: the lit picture as
+// the finish will tone it against the game's own, spread over the buckets so that few atomics meet.
 [numthreads(8, 8, 1)]
 void GlowBaseCS(uint3 id : SV_DispatchThreadID)
 {
@@ -570,6 +586,19 @@ void GlowBaseCS(uint3 id : SV_DispatchThreadID)
         return;
     }
     c_glow[id.y * c_sample_size.x + id.x] = pack_r11g11b10(block_color(id.xy));
+    if ((c_exposure & 1u) != 0u && ((id.x | id.y) & 7u) == 0u) {
+        const int2 q = int2(min(id.xy * c_factor, c_target_size - 1u));
+        const float depth = c_depth_tex.Load(int3(q, 0));
+        if (!far_plane(c_depth, depth) && inside(c_viewport, float2(q) + 0.5f) && float(q.x) >= c_split &&
+            -depth_to_eye_z(c_depth, depth) <= c_sky_distance) {
+            const float3 lit = c_color.Load(int3(q, 0)).rgb;
+            const float l = (c_exposure & 4u) != 0u ? finished_luminance(lit, c_grade) : luminance(saturate(lit));
+            const uint at = (((id.x >> 3u) + (id.y >> 3u)) % kExposureBuckets) * 16u;
+            c_exposure_sums.InterlockedAdd(at, uint(saturate(l) * 256.0f));
+            c_exposure_sums.InterlockedAdd(at + 4u, uint(luminance(saturate(c_game.Load(int3(q, 0)).rgb)) * 256.0f));
+            c_exposure_sums.InterlockedAdd(at + 8u, 1u);
+        }
+    }
 }
 
 [numthreads(8, 8, 1)]
@@ -1952,31 +1981,16 @@ cbuffer RtComposite : register(b0)
     uint2 m_sample_size;
     uint m_factor;
     uint m_flags;   // bit 0: move the point to the traced frame's camera (m_reproject[m_slot]);
-                    // bit 1: show the lighting alone; bit 2: measure the exposure (m_exposure);
-                    // bit 3: the finish tones the picture (rt_post.hlsl grade)
+                    // bit 1: show the lighting alone
     uint m_slot;
     float m_near;
     float m_split;  // GALAXY_RT_SPLIT: left of it the game's own picture (a dark line between)
-    float m_grade;  // the finish's grade strength (m_flags bit 3)
+    uint m_pad;
 };
 StructuredBuffer<uint3> m_light : register(t0);
 Texture2D<float> m_efb_depth : register(t1);
 StructuredBuffer<float4> m_reproject : register(t2);
 Texture2D<float4> m_color : register(t3);
-// Per bucket (kExposureBuckets): lit and game luminance (x 256), pixels. One pixel in 16 x 16 adds,
-// spread over the buckets so that few atomics meet.
-RWByteAddressBuffer m_exposure : register(u0);
-
-// A colour's luminance after the finish's tone (rt_post.hlsl shoulder, then grade's filmic S at
-// strength `grade`).
-float finished_luminance(float3 c, float grade)
-{
-    const float3 over = max(c - 0.95f, 0.0f);
-    const float3 rolled = min(c, 0.95f) + 0.05f * (1.0f - exp(-over / 0.05f));
-    const float spill = max(max(over.r, max(over.g, over.b)) - 0.05f, 0.0f);
-    const float l = luminance(saturate(rolled + spill * 0.15f));
-    return lerp(l, saturate(l + 0.7f * (l - 0.5f) * l * (1.0f - l)), grade);
-}
 
 struct CompositeOut
 {
@@ -2061,13 +2075,5 @@ CompositeOut CompositePS(float4 position : SV_Position)
         return result;
     }
     result.color = float4(apply_light(color, m), 1.0f);
-    if ((m_flags & 4u) != 0u && ((uint(position.x) | uint(position.y)) & 15u) == 0u) {
-        const float lit = (m_flags & 8u) != 0u ? finished_luminance(result.color.rgb, m_grade)
-                                               : luminance(saturate(result.color.rgb));
-        const uint at = (((uint(position.x) >> 4u) + (uint(position.y) >> 4u)) % kExposureBuckets) * 16u;
-        m_exposure.InterlockedAdd(at, uint(saturate(lit) * 256.0f));
-        m_exposure.InterlockedAdd(at + 4u, uint(luminance(saturate(color)) * 256.0f));
-        m_exposure.InterlockedAdd(at + 8u, 1u);
-    }
     return result;
 }

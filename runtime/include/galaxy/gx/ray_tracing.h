@@ -267,9 +267,10 @@ public:
     void composite_water(ID3D12GraphicsCommandList* list, D3D12_CPU_DESCRIPTOR_HANDLE target,
                          D3D12_GPU_DESCRIPTOR_HANDLE depth_srv, std::uint32_t width, std::uint32_t height, int slot,
                          bool reproject);
-    // After the composite (same views): the picture before the translucent phases.
+    // After the composite (same views): the picture before the translucent phases; with `game_srv`
+    // (the composite's source: the game's own opaque picture) the exposure's measurement.
     void snapshot_glow_base(ID3D12GraphicsCommandList* list, D3D12_GPU_DESCRIPTOR_HANDLE color_depth_table,
-                            std::uint32_t width, std::uint32_t height);
+                            D3D12_GPU_DESCRIPTOR_HANDLE game_srv, std::uint32_t width, std::uint32_t height);
     [[nodiscard]] bool emitters_active() const noexcept { return lighting_active() && emission_ > 0.0f; }
     // The colour scale of glows (additive scene draws) while the lighting is on, else 1.
     // Glow models (indexed meshes: the Observatory core's fire) and glow sprites (direct vertices:
@@ -475,7 +476,7 @@ private:
     std::array<Microsoft::WRL::ComPtr<ID3D12Resource>, kLightSlots> light_final_;
     Microsoft::WRL::ComPtr<ID3D12Resource> picture_;
     Microsoft::WRL::ComPtr<ID3D12Resource> picture_sums_;
-    // The composite's exposure measurement (lit and game luminance per bucket); always a UAV.
+    // The exposure's measurement (lit and game luminance per bucket, snapshot_glow_base); always a UAV.
     Microsoft::WRL::ComPtr<ID3D12Resource> exposure_sums_;
     bool exposure_reset_ = true;
     // Glows (rt_lighting.hlsl GlowBaseCS, CaptureCS, GlowEmitCS, EmitMergeCS): per sample the
@@ -698,7 +699,10 @@ private:
     float sky_ibl_ = 0.8f;          // GALAXY_RT_SKY_IBL: rays reaching the sky take the light of their
                                     // direction (0: the sky's mean colour from every direction)
     bool post_ = true;              // GALAXY_RT_POST: the cinematic finish
-    float post_bloom_ = 0.4f;       // GALAXY_RT_POST_BLOOM
+    // GALAXY_RT_POST_BLOOM: bloom of the picture's bright part. 0: the 8-bit picture holds no light
+    // beyond white, so a threshold blooms white sand, snow and clouds; the glows' own bloom (what
+    // the emitters added) runs under the finish instead.
+    float post_bloom_ = 0.0f;
     float post_threshold_ = 0.9f;   // GALAXY_RT_POST_THRESHOLD: luminance where bloom starts
     float post_shafts_ = 0.6f;      // GALAXY_RT_POST_SHAFTS
     float post_dof_ = 3.0f;         // GALAXY_RT_POST_DOF: largest far blur (EFB pixels at 1x; 0 none)

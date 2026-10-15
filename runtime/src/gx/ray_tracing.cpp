@@ -206,7 +206,7 @@ struct RtCaptureConstants {
     float exposure_night;
     float daylight;
     std::uint32_t exposure;
-    std::uint32_t pad;
+    float grade;
 };
 static_assert(sizeof(RtCaptureConstants) == 160u);
 
@@ -221,7 +221,7 @@ struct RtCompositeConstants {
     std::uint32_t slot;
     float near_plane;
     float split;
-    float grade;
+    std::uint32_t pad;
 };
 static_assert(sizeof(RtCompositeConstants) == 80u);
 
@@ -263,6 +263,7 @@ enum CaptureParameter : UINT {
     kCaptureSkyRadiance,
     kCaptureSkySh,
     kCaptureExposure,
+    kCaptureGame,
     kCaptureCount,
 };
 
@@ -710,7 +711,7 @@ bool SceneRayTracer::initialize(ID3D12Device* device, std::uint64_t timestamp_fr
     sky_ibl_ = std::clamp(env_float("GALAXY_RT_SKY_IBL", 0.8f), 0.0f, 1.0f);
     fill_ = std::clamp(env_float("GALAXY_RT_FILL", 0.2f), 0.0f, 0.8f);
     post_ = env_float("GALAXY_RT_POST", 1.0f) != 0.0f;
-    post_bloom_ = std::clamp(env_float("GALAXY_RT_POST_BLOOM", 0.3f), 0.0f, 4.0f);
+    post_bloom_ = std::clamp(env_float("GALAXY_RT_POST_BLOOM", 0.0f), 0.0f, 4.0f);
     post_threshold_ = std::clamp(env_float("GALAXY_RT_POST_THRESHOLD", 0.97f), 0.0f, 0.99f);
     post_shafts_ = std::clamp(env_float("GALAXY_RT_POST_SHAFTS", 0.6f), 0.0f, 4.0f);
     post_dof_ = std::clamp(env_float("GALAXY_RT_POST_DOF", 3.0f), 0.0f, 32.0f);
@@ -1745,6 +1746,13 @@ bool SceneRayTracer::create_lighting_pipelines(DXGI_FORMAT color_format) {
     capture_params[kCaptureSkySh].Descriptor.ShaderRegister = 6u;
     capture_params[kCaptureExposure].ParameterType = D3D12_ROOT_PARAMETER_TYPE_UAV;
     capture_params[kCaptureExposure].Descriptor.ShaderRegister = 7u;
+    D3D12_DESCRIPTOR_RANGE game_range{};
+    game_range.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
+    game_range.NumDescriptors = 1u;
+    game_range.BaseShaderRegister = 4u;
+    capture_params[kCaptureGame].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+    capture_params[kCaptureGame].DescriptorTable.NumDescriptorRanges = 1u;
+    capture_params[kCaptureGame].DescriptorTable.pDescriptorRanges = &game_range;
     for (auto& param : capture_params) {
         param.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
     }
@@ -1965,7 +1973,7 @@ bool SceneRayTracer::create_lighting_pipelines(DXGI_FORMAT color_format) {
     composite_color.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
     composite_color.NumDescriptors = 1u;
     composite_color.BaseShaderRegister = 3u;
-    D3D12_ROOT_PARAMETER composite_params[6]{};
+    D3D12_ROOT_PARAMETER composite_params[5]{};
     composite_params[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
     composite_params[0].Constants.Num32BitValues = sizeof(RtCompositeConstants) / 4u;
     composite_params[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_SRV;
@@ -1977,12 +1985,11 @@ bool SceneRayTracer::create_lighting_pipelines(DXGI_FORMAT color_format) {
     composite_params[4].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
     composite_params[4].DescriptorTable.NumDescriptorRanges = 1u;
     composite_params[4].DescriptorTable.pDescriptorRanges = &composite_color;
-    composite_params[5].ParameterType = D3D12_ROOT_PARAMETER_TYPE_UAV;
     for (auto& param : composite_params) {
         param.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
     }
     D3D12_ROOT_SIGNATURE_DESC composite_rsd{};
-    composite_rsd.NumParameters = 6u;
+    composite_rsd.NumParameters = 5u;
     composite_rsd.pParameters = composite_params;
     if (!serialize(composite_rsd, composite_root_)) {
         return false;
@@ -2454,7 +2461,8 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
 }
 
 void SceneRayTracer::snapshot_glow_base(ID3D12GraphicsCommandList* list, D3D12_GPU_DESCRIPTOR_HANDLE color_depth_table,
-                                        std::uint32_t width, std::uint32_t height) {
+                                        D3D12_GPU_DESCRIPTOR_HANDLE game_srv, std::uint32_t width,
+                                        std::uint32_t height) {
     if (!glow_open_ || !glow_base_pso_ || list == nullptr || color_depth_table.ptr == 0u || !view_known_ ||
         width == 0u || height == 0u) {
         return;
@@ -2476,12 +2484,26 @@ void SceneRayTracer::snapshot_glow_base(ID3D12GraphicsCommandList* list, D3D12_G
     c.sample_size[0] = sample_width;
     c.sample_size[1] = sample_height;
     c.factor = factor;
+    c.split = view_.viewport[0] + split_ * view_.viewport[2];
+    c.sky_distance = sky_distance_;
+    const bool measure = exposure_ && exposure_sums_ && game_srv.ptr != 0u;
+    c.exposure = (measure ? 1u : 0u) | (post_active() && post_grade_ > 0.0f ? 4u : 0u);
+    c.grade = std::clamp(post_grade_, 0.0f, 1.0f);
     const int timed = begin_pass(list);
     to_state(list, glow_base_.Get(), glow_base_state_, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+    if (measure) {
+        // After the last capture's reads and clears.
+        const D3D12_RESOURCE_BARRIER barrier = uav_barrier(exposure_sums_.Get());
+        list->ResourceBarrier(1u, &barrier);
+    }
     list->SetComputeRootSignature(capture_root_.Get());
     list->SetPipelineState(glow_base_pso_.Get());
     list->SetComputeRoot32BitConstants(kCaptureConstants, sizeof(c) / 4u, &c, 0u);
     list->SetComputeRootDescriptorTable(kCaptureSources, color_depth_table);
+    list->SetComputeRootDescriptorTable(kCaptureGame, measure ? game_srv : color_depth_table);
+    list->SetComputeRootUnorderedAccessView(kCaptureExposure,
+                                            exposure_sums_ ? exposure_sums_->GetGPUVirtualAddress()
+                                                           : glow_base_->GetGPUVirtualAddress());
     list->SetComputeRootUnorderedAccessView(kCaptureGlow, glow_base_->GetGPUVirtualAddress());
     list->Dispatch((sample_width + 7u) / 8u, (sample_height + 7u) / 8u, 1u);
     to_state(list, glow_base_.Get(), glow_base_state_, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
@@ -2583,6 +2605,7 @@ void SceneRayTracer::capture_picture(ID3D12GraphicsCommandList* list, const RtSo
     list->SetComputeRootUnorderedAccessView(kCaptureSkyRadiance, sky_radiance_->GetGPUVirtualAddress());
     list->SetComputeRootUnorderedAccessView(kCaptureSkySh, sky_sh_->GetGPUVirtualAddress());
     list->SetComputeRootUnorderedAccessView(kCaptureExposure, exposure_sums_->GetGPUVirtualAddress());
+    list->SetComputeRootDescriptorTable(kCaptureGame, color_depth_table);
     list->Dispatch((sample_width + 7u) / 8u, (sample_height + 7u) / 8u, 1u);
     if (sky) {
         // The sky light: the bins into the map over time, then its spherical harmonics.
@@ -3078,11 +3101,7 @@ void SceneRayTracer::composite(ID3D12GraphicsCommandList* list, D3D12_CPU_DESCRI
     c.sample_size[0] = info.sample_width;
     c.sample_size[1] = info.sample_height;
     c.factor = info.factor;
-    // The traced frame's composite measures the exposure (sub-frames replay the same light).
-    const bool measure = exposure_ && !reproject && !show_lighting_ && exposure_sums_;
-    c.flags = (reproject ? 1u : 0u) | (show_lighting_ ? 2u : 0u) | (measure ? 4u : 0u) |
-              (post_active() && post_grade_ > 0.0f ? 8u : 0u);
-    c.grade = std::clamp(post_grade_, 0.0f, 1.0f);
+    c.flags = (reproject ? 1u : 0u) | (show_lighting_ ? 2u : 0u);
     c.slot = index;
     c.near_plane = info.near_plane;
     c.split = split_ > 0.0f ? info.view.viewport[0] + split_ * info.view.viewport[2] : -1.0f;
@@ -3100,13 +3119,6 @@ void SceneRayTracer::composite(ID3D12GraphicsCommandList* list, D3D12_CPU_DESCRI
     list->SetGraphicsRootShaderResourceView(3u, reproject ? reproject_->GetGPUVirtualAddress()
                                                           : light_final_[index]->GetGPUVirtualAddress());
     list->SetGraphicsRootDescriptorTable(4u, color_srv);
-    list->SetGraphicsRootUnorderedAccessView(5u, exposure_sums_ ? exposure_sums_->GetGPUVirtualAddress()
-                                                                : light_normal_->GetGPUVirtualAddress());
-    if (measure) {
-        // After the last capture's reads and clears.
-        const D3D12_RESOURCE_BARRIER barrier = uav_barrier(exposure_sums_.Get());
-        list->ResourceBarrier(1u, &barrier);
-    }
     list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
     list->DrawInstanced(3u, 1u, 0u, 0u);
     end_pass(list, timed, kPassComposite);

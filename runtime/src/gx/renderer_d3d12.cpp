@@ -7693,8 +7693,10 @@ void RendererD3D12::rt_trace_scene() {
         std::swap(color.Transition.StateBefore, color.Transition.StateAfter);
         command_list_->ResourceBarrier(1, &color);
     }
+    D3D12_GPU_DESCRIPTOR_HANDLE game_srv{};
     if (depth && slot >= 0) {
-        ray_tracer_.composite(command_list_.Get(), efb_rtv_, conv_efb_depth_srv_, rt_composite_color(), width,
+        game_srv = rt_composite_color();
+        ray_tracer_.composite(command_list_.Get(), efb_rtv_, conv_efb_depth_srv_, game_srv, width,
                               desc.Height, slot, false);
         ray_tracer_.write_light_texture(command_list_.Get(), slot);
         if (replay_recording_) {
@@ -7718,7 +7720,7 @@ void RendererD3D12::rt_trace_scene() {
         views[1].Transition.pResource = efb_depth_.Get();
         views[1].Transition.StateBefore = D3D12_RESOURCE_STATE_DEPTH_WRITE;
         command_list_->ResourceBarrier(2, views);
-        ray_tracer_.snapshot_glow_base(command_list_.Get(), conv_efb_color_srv_, width, desc.Height);
+        ray_tracer_.snapshot_glow_base(command_list_.Get(), conv_efb_color_srv_, game_srv, width, desc.Height);
         for (D3D12_RESOURCE_BARRIER& view : views) {
             std::swap(view.Transition.StateBefore, view.Transition.StateAfter);
         }
@@ -7755,17 +7757,18 @@ void RendererD3D12::rt_capture_picture() {
     }
     command_list_->ResourceBarrier(2, barriers);
     bound_pipeline_ = nullptr;
-    // The cinematic finish (its bloom includes the glows') or the glows' bloom alone joins the
-    // picture before the 2D layer; sub-frames replay it.
+    // The glows' bloom (what the emitters added), then the cinematic finish over it, join the
+    // picture before the 2D layer; sub-frames replay both.
+    if (const int bloom = ray_tracer_.bloom_slot(); bloom >= 0) {
+        record_rt_bloom(bloom);
+        if (replay_recording_) {
+            replay_ops_.push_back({ReplayKind::RtBloom, static_cast<std::uint32_t>(bloom)});
+        }
+    }
     if (ray_tracer_.post_active()) {
         record_rt_post(false);
         if (replay_recording_) {
             replay_ops_.push_back({ReplayKind::RtPost, 0u});
-        }
-    } else if (const int bloom = ray_tracer_.bloom_slot(); bloom >= 0) {
-        record_rt_bloom(bloom);
-        if (replay_recording_) {
-            replay_ops_.push_back({ReplayKind::RtBloom, static_cast<std::uint32_t>(bloom)});
         }
     }
 }
