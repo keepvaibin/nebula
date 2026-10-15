@@ -122,6 +122,8 @@ void SceneRayTracer::flush_water(ID3D12GraphicsCommandList* list, const RtSource
 int SceneRayTracer::trace_water(ID3D12GraphicsCommandList* list, const RtSources& sources, Allocate allocate,
                                 void* allocate_context, D3D12_GPU_DESCRIPTOR_HANDLE color_depth_table,
                                 std::uint32_t width, std::uint32_t height) {
+    // The late draws (Rosalina) come before the water: its reflections show them.
+    finish_late(list, sources, allocate, allocate_context);
     if (!water_open_) {
         return -1;
     }
@@ -139,6 +141,9 @@ int SceneRayTracer::trace_water(ID3D12GraphicsCommandList* list, const RtSources
     }
     ComPtr<ID3D12GraphicsCommandList4> list4;
     if (FAILED(list->QueryInterface(IID_PPV_ARGS(&list4)))) {
+        return -1;
+    }
+    if (late_built_ != 0u && !build_tlas(list4.Get(), allocate, allocate_context)) {
         return -1;
     }
     const RtUpload upload = allocate(allocate_context, RtReflections::kConstantsBytes, 256u);

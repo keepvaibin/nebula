@@ -209,7 +209,7 @@ void ValidateCS(uint3 id : SV_DispatchThreadID)
     ray.TMin = g_near / max(-direction.z, 1e-6f);
     ray.TMax = 1e30f;
     RayQuery<RAY_FLAG_FORCE_OPAQUE> query;
-    query.TraceRayInline(g_scene, RAY_FLAG_NONE, 0xFFu, ray);
+    query.TraceRayInline(g_scene, RAY_FLAG_NONE, 1u, ray);
     query.Proceed();
     const bool hit = query.CommittedStatus() == COMMITTED_TRIANGLE_HIT;
     const float hit_z = direction.z * (hit ? query.CommittedRayT() : 0.0f);

@@ -803,11 +803,15 @@ private:
     bool lit_translucent_ = false;
     static constexpr std::uint32_t kLitTranslucentKey = 0x4C495431u;
     bool rt_water_eligible_ = false;
+    bool rt_sprite_eligible_ = false;   // alpha-blended translucent triangles (light sprites, rt_sprite_light_draw)
+    bool lit_late_ = false;             // a lit late opaque draw (output_flags bit 7: its light at most 1.15)
     bool rt_scene_traced_ = true;
     bool rt_view_set_ = false;
     [[nodiscard]] bool rt_geometry_draw() const noexcept;
     [[nodiscard]] bool rt_glow_draw() const noexcept;
+    [[nodiscard]] bool rt_late_draw() const noexcept;
     [[nodiscard]] bool rt_water_draw() const noexcept;
+    [[nodiscard]] bool rt_sprite_light_draw() const noexcept;
     void note_rt_phase(std::uint8_t phase);
     void trace_rt_scene();
     void trace_rt_water();

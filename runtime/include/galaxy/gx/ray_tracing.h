@@ -74,6 +74,9 @@ inline constexpr std::uint32_t kRtDrawNoShadow = 1u << 15u;
 // Bits 8-11: the draw's surface class (rt_surfaces.h).
 inline constexpr std::uint32_t kRtDrawClassShift = 8u;
 inline constexpr std::uint32_t kRtDrawClassMask = 0xFu << kRtDrawClassShift;
+// RtDrawInfo.phase of the draws after the screen capture (motion::ScenePhase::AfterIndirect): the indirect-
+// textured models (Rosalina, glassy NPCs) come after the trace. Their opaque draws are the late geometry.
+inline constexpr std::uint32_t kRtLatePhase = 8u;
 
 // Diagnostics for GALAXY_RT_DUMP: the draw's GX projection (A-F), viewport depth range, cull
 // mode and SceneFunction phase; colour channel 0 (XF control word, ambient and material RGBA8)
@@ -156,10 +159,13 @@ public:
     [[nodiscard]] bool glow_open() const noexcept { return glow_open_; }
     // From the trace to the water's trace: translucent water draws (kRtDrawWater) are noted.
     [[nodiscard]] bool water_open() const noexcept { return water_open_; }
+    // From the trace to the scene's end: opaque draws after the screen capture (kRtLatePhase) are noted.
+    [[nodiscard]] bool late_open() const noexcept { return late_open_; }
     [[nodiscard]] bool accepts(const RtDrawInfo& info) const noexcept {
         return (info.surface & kRtDrawGlow) != 0u ? glow_open_
                : (info.surface & kRtDrawWater) != 0u ? water_open_
-                                                      : scene_open_;
+               : info.phase == kRtLatePhase && !scene_open_ ? late_open_
+                                                            : scene_open_;
     }
 
     // Transforms the draws noted since the last flush into the scene's eye-space vertex buffer.
@@ -267,6 +273,9 @@ public:
     // as flush_geometry).
     void flush_water(ID3D12GraphicsCommandList* list, const RtSources& sources, Allocate allocate,
                      void* allocate_context);
+    // Transforms the late draws noted since the last flush (as flush_water).
+    void flush_late(ID3D12GraphicsCommandList* list, const RtSources& sources, Allocate allocate,
+                    void* allocate_context);
     // After the translucent phases: the water draws noted since the trace become their own
     // acceleration structure and the reflections trace the water's surface from the picture (EFB
     // colour then depth, NON_PIXEL_SHADER_RESOURCE, two consecutive SRVs at `color_depth_table`).
@@ -309,6 +318,8 @@ private:
     static constexpr std::uint32_t kMaxTriangles = 4u * 1024u * 1024u;
     // Translucent water triangles of one scene.
     static constexpr std::uint32_t kWaterMaxTriangles = 128u * 1024u;
+    // Late opaque triangles of one scene (kRtLatePhase).
+    static constexpr std::uint32_t kLateMaxTriangles = 128u * 1024u;
     // Lighting results kept for the sub-frames of the game frames being interpolated.
     static constexpr unsigned kLightSlots = 4u;
 
@@ -365,6 +376,13 @@ private:
     // The reflections' view of the scene traced into lighting slot `slot`.
     [[nodiscard]] RtReflectScene reflect_scene(unsigned slot) const;
     bool ensure_water_buffers();
+    bool ensure_late_buffers();
+    // Ends the late window: the late draws noted this scene become late_blas_ (none: no late instance).
+    void finish_late(ID3D12GraphicsCommandList* list, const RtSources& sources, Allocate allocate,
+                     void* allocate_context);
+    // The scene TLAS: the frame's geometry and, when built, the late geometry moved from its camera to this
+    // one (instance 1, mask kLateMask: shadow, sky and reflection rays only).
+    bool build_tlas(ID3D12GraphicsCommandList4* list, Allocate allocate, void* allocate_context);
     void capture_glow_lights(ID3D12GraphicsCommandList* list, const RtSources& sources, Allocate allocate,
                              void* allocate_context, D3D12_GPU_DESCRIPTOR_HANDLE color_depth_table,
                              std::uint32_t width, std::uint32_t height, std::uint32_t factor, bool glow);
@@ -394,7 +412,6 @@ private:
     Microsoft::WRL::ComPtr<ID3D12Resource> blas_;
     Microsoft::WRL::ComPtr<ID3D12Resource> tlas_;
     Microsoft::WRL::ComPtr<ID3D12Resource> scratch_;
-    Microsoft::WRL::ComPtr<ID3D12Resource> instance_;
     Microsoft::WRL::ComPtr<ID3D12Resource> stats_;
     Microsoft::WRL::ComPtr<ID3D12Resource> stats_zero_;
     Microsoft::WRL::ComPtr<ID3D12Resource> readback_;
@@ -473,6 +490,8 @@ private:
         bool camera_known = false;
         std::array<float, 3> sun{};        // towards the traced sun (eye space)
         std::array<float, 3> sun_light{};  // its light
+        std::array<float, 3> core{};       // the star core's centre (eye space; core_known)
+        bool core_known = false;
     };
     Microsoft::WRL::ComPtr<ID3D12RootSignature> light_root_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> trace_pso_;
@@ -612,7 +631,7 @@ private:
     bool emit_seen_ = false;
     bool log_emitters_ = false;      // GALAXY_RT_LOG_EMITTERS=1: [rt-emit] every 120 frames
     float glow_cutoff_ = 0.004f;     // GALAXY_RT_GLOW_CUTOFF: a glow light's reach ends where its light is this
-    float glow_reach_ = 6000.0f;     // GALAXY_RT_GLOW_REACH: the longest reach (eye units)
+    float glow_reach_ = 30000.0f;    // GALAXY_RT_GLOW_REACH: the longest reach (eye units; a star's light)
     float glow_light_ = 1.0f;        // GALAXY_RT_GLOW_LIGHT: the glow lights' gain on surfaces
     float surface_light_ = 1.0f;     // GALAXY_RT_SURFACE_LIGHT: glowing surfaces' (lava) light on what sees them
     bool emit_log_pending_ = false;
@@ -649,6 +668,28 @@ private:
     std::uint64_t water_scratch_tlas_ = 0u;   // the TLAS build's offset in the scratch buffer
     D3D12_RESOURCE_STATES water_positions_state_ = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
     D3D12_RESOURCE_STATES water_surfaces_state_ = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+    // Late opaque draws (kRtLatePhase) from the trace to the scene's end: drawn after the trace, they join
+    // the scene as a second instance: in this frame's water reflections, then (moved to the next frame's
+    // camera) in its shadows, sky occlusion and reflections. Rosalina was in none of them.
+    std::vector<RtDraw> late_draws_;
+    std::uint32_t late_triangles_ = 0u;
+    std::size_t late_flushed_draws_ = 0u;
+    std::uint32_t late_flushed_triangles_ = 0u;
+    bool late_open_ = false;
+    bool late_incomplete_ = false;
+    bool late_pending_ = false;            // flushed late triangles not yet in late_blas_
+    std::uint32_t late_built_ = 0u;        // triangles in late_blas_ (0: none)
+    std::uint64_t late_scene_ = 0u;        // scene_serial_ of the trace they followed
+    std::array<float, 12> late_camera_{};          // the eye space of late_blas_
+    bool late_camera_known_ = false;
+    std::array<float, 12> late_next_camera_{};     // the eye space of the late draws being noted
+    bool late_next_camera_known_ = false;
+    Microsoft::WRL::ComPtr<ID3D12Resource> late_positions_;
+    Microsoft::WRL::ComPtr<ID3D12Resource> late_surfaces_;
+    Microsoft::WRL::ComPtr<ID3D12Resource> late_blas_;
+    Microsoft::WRL::ComPtr<ID3D12Resource> late_scratch_;
+    D3D12_RESOURCE_STATES late_positions_state_ = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+    D3D12_RESOURCE_STATES late_surfaces_state_ = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
     // Per slot the traced frame's eye position from a sub-frame's (3 rows), copied in from a
     // ring of upload entries before each sub-frame's replay.
     Microsoft::WRL::ComPtr<ID3D12Resource> reproject_;
@@ -749,11 +790,16 @@ private:
     // Night model (stages without daylight: rt-suns day 0, or a dark sky): the open art's level
     // (GALAXY_RT_NIGHT_LEVEL), the traced sky occlusion's depth (_AO), the cast shadows' depth (_SHADOW),
     // the traced lights' gain (_LIGHTS) and the light they add at most, softly (_LIGHTS_CAP).
-    float night_level_ = 0.8f;
+    float night_level_ = 0.7f;
     float night_occlusion_ = 0.75f;
     float night_shadow_ = 0.6f;
-    float night_lights_ = 1.0f;
-    float night_lights_cap_ = 1.5f;
+    float night_lights_ = 2.0f;
+    float night_lights_cap_ = 1.0f;
+    // The night key (moon, a stage's red star) adds its light on the faces it reaches (GALAXY_RT_NIGHT_KEY,
+    // its strength per stage in rt-suns.tsv); by day the environment's art level (GALAXY_RT_DAY_ENVIRONMENT,
+    // map geometry; characters and objects stay at kDayLevel).
+    float night_key_ = 0.5f;
+    float day_environment_ = 0.92f;
     float sky_ibl_ = 0.8f;          // GALAXY_RT_SKY_IBL: rays reaching the sky take the light of their
                                     // direction (0: the sky's mean colour from every direction)
     bool post_ = false;             // GALAXY_RT_POST: the cinematic finish (off: see ray_tracing.cpp)
@@ -774,9 +820,9 @@ private:
     float post_vignette_ = 0.1f;    // GALAXY_RT_POST_VIGNETTE: darkening towards the corners
     bool post_view_ = false;        // GALAXY_RT_POST_VIEW: the finished luminance in false colour
     bool gi_ = true;                // GALAXY_RT_GI=0: no sky occlusion or bounce (shadows and lights stay)
-    float core_radius_ = 400.0f;    // GALAXY_RT_CORE_RADIUS: the star core's radius at scale 1 (first guess;
-                                    // the finish measures it from depth)
-    float core_light_ = 0.8f;       // GALAXY_RT_CORE_LIGHT: its light (a point light; grows with it)
+    // GALAXY_RT_CORE_RADIUS: the star core light's half distance at scale 1, over 1.2 (it reaches the plaza)
+    float core_radius_ = 1667.0f;
+    float core_light_ = 1.5f;       // GALAXY_RT_CORE_LIGHT: its light (a point light; grows with it)
     float bloom_strength_ = 1.4f;   // GALAXY_RT_BLOOM: the glows' bloom (0: none)
     float bloom_threshold_ = 0.15f; // GALAXY_RT_BLOOM_THRESHOLD: glow luminance that starts to bloom
     // GALAXY_RT_EXPOSURE_DAY / _NIGHT: the mean lighting the exposure holds under a bright / black
@@ -821,6 +867,7 @@ private:
         std::uint64_t skipped = 0;
         std::uint64_t glow_draws = 0;
         std::uint64_t glow_triangles = 0;
+        std::uint64_t late_triangles = 0;
         std::array<double, kPassCount> pass_ms{};
         std::array<std::uint64_t, kPassCount> passes{};
         std::uint64_t passes_dropped = 0;

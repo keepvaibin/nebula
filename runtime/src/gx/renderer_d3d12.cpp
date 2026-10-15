@@ -1,4 +1,5 @@
 #include "galaxy/gx/renderer_d3d12.h"
+#include "galaxy/gx/rt_materials.h"
 #include "galaxy/gx/display_modes.h"
 
 #include "galaxy/content_viewport.h"
@@ -6907,6 +6908,10 @@ std::uint64_t RendererD3D12::end_frame(
         ray_tracer_.flush_water(command_list_.Get(), rt_sources(), &RendererD3D12::rt_allocate, this);
         bound_pipeline_ = nullptr;
     }
+    if (ray_tracer_.late_open()) {
+        ray_tracer_.flush_late(command_list_.Get(), rt_sources(), &RendererD3D12::rt_allocate, this);
+        bound_pipeline_ = nullptr;
+    }
     if (timestamp_query_heap_ && timestamp_readback_) {
         command_list_->EndQuery(
             timestamp_query_heap_.Get(), D3D12_QUERY_TYPE_TIMESTAMP,
@@ -7641,6 +7646,19 @@ RtUpload RendererD3D12::rt_allocate(void* renderer, std::size_t bytes, std::size
 // R16/R32 indices in the index ring, VS constants in the constant ring and its palette in the
 // matrix ring. Draws whose data lives elsewhere are not traced.
 void RendererD3D12::rt_note_draw(const DrawCall& call, const RtDrawInfo& info) {
+    if ((info.surface & kRtDrawWater) != 0u && rt_log_glows()) [[unlikely]] {
+        static std::uint32_t logged = 0u;
+        const std::uint32_t reason = !ray_tracer_.accepts(info) ? 1u : call.index_count < 3u ? 2u
+                                     : call.topology != D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST ? 4u
+                                     : call.vertex_view.StrideInBytes != kRtVertexStride ? 8u
+                                     : call.vertex_view.SizeInBytes == 0u ? 16u : 32u;
+        if ((logged & reason) == 0u) {
+            logged |= reason;
+            std::fprintf(stderr, "[rt-water-note] material=%u reason=%u topology=%d stride=%u indices=%u\n",
+                         static_cast<unsigned>(info.rt_material), reason, static_cast<int>(call.topology),
+                         call.vertex_view.StrideInBytes, call.index_count);
+        }
+    }
     if (!ray_tracer_.accepts(info) || call.index_count < 3u ||
         call.topology != D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST ||
         call.vertex_view.StrideInBytes != kRtVertexStride || call.vertex_view.SizeInBytes == 0u) {

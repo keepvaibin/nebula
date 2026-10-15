@@ -486,6 +486,7 @@ public:
     [[nodiscard]] bool rt_scene_open() const noexcept { return ray_tracer_.scene_open(); }
     [[nodiscard]] bool rt_glow_open() const noexcept { return ray_tracer_.glow_open(); }
     [[nodiscard]] bool rt_water_open() const noexcept { return ray_tracer_.water_open(); }
+    [[nodiscard]] bool rt_late_open() const noexcept { return ray_tracer_.late_open(); }
     [[nodiscard]] float rt_glow_exposure(bool model = false) const noexcept {
         return ray_tracer_.ready() ? ray_tracer_.glow_exposure(model) : 1.0f;
     }

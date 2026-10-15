@@ -2272,8 +2272,10 @@ TextureHandle TextureCache::get(
     // The ray tracer's material table names textures by the texture-pack key of their base level.
     std::uint16_t rt_material = 0u;
     if (rt_materials_loaded()) {
-        rt_material = rt_material_index(texture_pack_hash(
-            src, texture_guest_byte_size(image.format, image.width, image.height, 1u)));
+        const std::uint64_t pack = texture_pack_hash(
+            src, texture_guest_byte_size(image.format, image.width, image.height, 1u));
+        rt_material = rt_material_index(pack);
+        note_rt_texture(image.guest_addr, pack, image.width, image.height, static_cast<std::uint32_t>(image.format));
     }
     std::optional<ContentKey> content_key;
     if (decoded_content_cache_enabled() &&

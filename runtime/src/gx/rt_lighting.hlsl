@@ -69,6 +69,7 @@ cbuffer RtLight : register(b0)
                                 // night (0: off); the night model's most light the lights add (soft)
     float4 g_night;             // night model: the open art's level, the sky occlusion's depth, the cast
                                 // shadows' depth, the traced lights' gain
+    float4 g_night2;            // the night key's gain on what it reaches; by day the environment's level
 };
 
 RaytracingAccelerationStructure g_scene : register(t6);
@@ -117,18 +118,24 @@ static const uint kDrawStride = 48u;
 // glow / kDrawGlowScale in the high half.
 static const uint kDrawTableGlow = 2u;
 static const uint kDrawTableFoliage = 4u;   // g_draws word 6: alpha-cut foliage cards
+static const uint kDrawTableStar = 8u;      // g_draws word 6: a star's burning surface (the star core)
+// Scene instance masks (ray_tracing.cpp kSceneMask): the frame's geometry. The late geometry (instance 1:
+// drawn after the trace, Rosalina) has no records in g_positions or g_surfaces: shadow, sky and reflection
+// rays meet it as an occluder.
+static const uint kSceneMask = 1u;
 static const float kDrawGlowScale = 16.0f;
 // RtDraw.flags bits 8-11 (rt_surfaces.h RtSurfaceClass::Crystal): clear crystal, glass and gems.
 static const uint kClearClass = 7u;
 // The lighting multiplies the game's colour by at most this; the composite rolls it off on a film
 // shoulder from kLitKnee (apply_light).
 static const float kMaxLight = 8.0f;
-// Daytime (SpatialBCS): a cast shadow's depth, the faint sun's darkening of faces turned from it, the sky
-// occlusion's depth and the sky colour's share in shade.
+// Daytime (SpatialBCS): a cast shadow's depth, the sun's darkening of faces turned from it, the sky
+// occlusion's depth and the sky colour's share in shade. Faces turned from the sun at 0.7 of the sunlit ones
+// and shade 40 % towards the sky's cool hue: the ground reads lit by a sun, not dimmed (user, v53a).
 static const float kDayShadow = 0.35f;
-static const float kDayForm = 0.15f;
+static const float kDayForm = 0.3f;
 static const float kDayOcclusion = 0.5f;
-static const float kDayTint = 0.25f;
+static const float kDayTint = 0.4f;
 // Daylight's level: open sunlit art at 0.95 of the game's (never above it); cast shadows and occlusion
 // carry the depth. 0.8-0.85 were set while the finish lifted every picture x(1 + x) (build 46); without
 // that lift they left Beach Bowl's sand, water and grass a flat 0.82 of the game (fc46).
@@ -807,6 +814,16 @@ groupshared float s_glow_area[64];
 static const uint kGlowTableIntensity = 4u;
 static const uint kGlowTableColor = 8u;
 static const uint kGlowLens = 16u;      // a black hole's lens draw: no light (rt_post.hlsl PostLensCS)
+static const uint kGlowEffect = 32u;    // the table names it a particle: an effect, its halo in the bloom only
+
+// A light's power by its size: a flame, a glow or a star of radius r lights its surroundings in proportion to
+// its area (a 60-unit glow as the table gives it, a 500-unit fire at the limit). Characters and items (Lumas,
+// coins) keep the table's power whatever their size (a big Luma at 6x washed the Observatory fountain, v53a).
+float light_size(float radius, float limit)
+{
+    const float s = radius / 60.0f;
+    return clamp(s * s, 1.0f, limit);
+}
 
 // One group per glow draw.
 [numthreads(64, 1, 1)]
@@ -881,12 +898,15 @@ void GlowEmitCS(uint3 group : SV_GroupID, uint gi : SV_GroupIndex)
             if (pulse > 0.0f) {
                 intensity *= 0.75f + 0.25f * sin(6.2831853f * pulse * e_time);
             }
-            power = tint / max(luminance(tint), 1e-6f) * (intensity * e_authored_power);
-        } else {
-            // A glow the table does not name is an effect, not a light: its halo shows in the bloom only. As
-            // lights, effect sprites around a Luma summed to 0.4-0.9e6 per light (10-22 Lumas) even when each
-            // was capped at two Lumas (rp13 Observatory [rt-emit], six lights at the Tico at -900,88,4385).
+            power = tint / max(luminance(tint), 1e-6f) * (intensity * e_authored_power) * light_size(radius, 64.0f);
+        } else if ((flags & kGlowEffect) != 0u) {
+            // The table's particles are effects: their halo shows in the bloom only (sparkles around a Luma
+            // summed to 0.4-0.9e6 per light, 10-22 Lumas: rp13 Observatory [rt-emit]).
             power = float3(0.0f, 0.0f, 0.0f);
+        } else {
+            // Any other glow (a lamp's, a model's) lights what is near it as the picture shows it, at most half
+            // a Luma: everything that glows lights its surroundings.
+            power *= min(1.0f, 0.5f * e_authored_power / max(luminance(power), 1e-6f));
         }
         // The largest glows are atmospheres and halos around planets and the sky, not lights.
         if (luminance(power) >= 4.0f && radius <= kEmitLargest) {
@@ -913,6 +933,7 @@ void GlowEmitCS(uint3 group : SV_GroupID, uint gi : SV_GroupIndex)
 // cosine of the cone).
 static const uint kAuthoredTint = 1u;
 static const uint kAuthoredSpot = 2u;
+static const uint kAuthoredStar = 4u;   // a star: its power by its size (light_size)
 
 groupshared float4 s_authored_n[64];   // face normal sum (twice the area), facing evidence (area)
 groupshared float4 s_authored_c[64];   // colour seen (times area), area seen
@@ -988,7 +1009,8 @@ void AuthoredEmitCS(uint3 group : SV_GroupID, uint gi : SV_GroupIndex)
         if (shape.y > 0.0f) {
             intensity *= 0.75f + 0.25f * sin(6.2831853f * shape.y * e_time);
         }
-        const float3 power = color * (intensity * e_authored_power);
+        const float3 power =
+            color * (intensity * e_authored_power) * ((flags & kAuthoredStar) != 0u ? light_size(spread, 400.0f) : 1.0f);
         float4 spot = float4(0.0f, 0.0f, 0.0f, 0.0f);
         float3 at_point = centre;
         if ((flags & kAuthoredSpot) != 0u) {
@@ -1530,7 +1552,7 @@ void TraceCS(uint3 id : SV_DispatchThreadID, uint gi : SV_GroupIndex)
         ray.TMin = 0.0f;
         ray.TMax = span * 1.02f + 2.0f;
         RayQuery<RAY_FLAG_FORCE_OPAQUE | RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES> query;
-        query.TraceRayInline(g_scene, RAY_FLAG_NONE, 0xFFu, ray);
+        query.TraceRayInline(g_scene, RAY_FLAG_NONE, kSceneMask, ray);
         query.Proceed();
         if (query.CommittedStatus() == COMMITTED_TRIANGLE_HIT &&
             abs(query.CommittedRayT() - span) < span * 0.01f + 2.0f) {
@@ -1602,6 +1624,10 @@ void TraceCS(uint3 id : SV_DispatchThreadID, uint gi : SV_GroupIndex)
         RayQuery<RAY_FLAG_FORCE_NON_OPAQUE | RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES> query;
         query.TraceRayInline(g_scene, RAY_FLAG_NONE, 0xFFu, ray);
         while (query.Proceed()) {
+            if (query.CandidateInstanceID() != 0u) {
+                query.CommitNonOpaqueTriangleHit();
+                continue;
+            }
             const uint hit = g_surfaces.Load(query.CandidatePrimitiveIndex() * 16u + 12u);
             if ((hit & kDrawNoShadow) != 0u) {
                 continue;
@@ -1671,7 +1697,8 @@ void TraceCS(uint3 id : SV_DispatchThreadID, uint gi : SV_GroupIndex)
                      RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES> query;
             query.TraceRayInline(g_scene, RAY_FLAG_NONE, 0xFFu, ray);
             while (query.Proceed()) {
-                if ((g_surfaces.Load(query.CandidatePrimitiveIndex() * 16u + 12u) & kDrawNoShadow) == 0u) {
+                if (query.CandidateInstanceID() != 0u ||
+                    (g_surfaces.Load(query.CandidatePrimitiveIndex() * 16u + 12u) & kDrawNoShadow) == 0u) {
                     query.CommitNonOpaqueTriangleHit();
                 }
             }
@@ -1789,7 +1816,8 @@ void TraceCS(uint3 id : SV_DispatchThreadID, uint gi : SV_GroupIndex)
         RayQuery<RAY_FLAG_FORCE_NON_OPAQUE | RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES> query;
         query.TraceRayInline(g_scene, RAY_FLAG_NONE, 0xFFu, ray);
         while (query.Proceed()) {
-            if ((g_surfaces.Load(query.CandidatePrimitiveIndex() * 16u + 12u) & kDrawNoShadow) == 0u) {
+            if (query.CandidateInstanceID() != 0u ||
+                (g_surfaces.Load(query.CandidatePrimitiveIndex() * 16u + 12u) & kDrawNoShadow) == 0u) {
                 query.CommitNonOpaqueTriangleHit();
             }
         }
@@ -1802,10 +1830,11 @@ void TraceCS(uint3 id : SV_DispatchThreadID, uint gi : SV_GroupIndex)
             // A glowing surface (unlit, bright beyond its colour under the capture's emitter gain,
             // saturated: lava, magma, fire) sends its own light, whatever the sky: it joins the
             // point lights' (not scaled by the sky's state), without contact darkening.
-            const uint hit_flags = g_surfaces.Load(query.CommittedPrimitiveIndex() * 16u + 12u);
+            const bool late_hit = query.CommittedInstanceID() != 0u;
+            const uint hit_flags = late_hit ? 0u : g_surfaces.Load(query.CommittedPrimitiveIndex() * 16u + 12u);
             const uint2 hit_emission =
                 g_draws.Load2(min(hit_flags >> 16u, max(g_draw_count, 1u) - 1u) * kDrawStride + 8u);
-            if ((hit_emission.x & kEmitNamed) != 0u) {
+            if (!late_hit && (hit_emission.x & kEmitNamed) != 0u) {
                 // Named by the material table: an area light (lava, magma, a glowing panel) sends all of
                 // its light as it shows, times its intensity; anything else none of its own.
                 if ((hit_emission.x & 3u) == kEmitArea && g_emit.w > 0.0f) {
@@ -2267,14 +2296,18 @@ void SpatialBCS(uint3 id : SV_DispatchThreadID)
             const float sky_l = luminance(light.sky);
             const bool foliage = (g_draws.Load(min(draw_flags >> 16u, max(g_draw_count, 1u) - 1u) * kDrawStride + 24u) &
                                   kDrawTableFoliage) != 0u;
-            const float ao = 1.0f - kDayOcclusion * (foliage ? 0.5f : 1.0f) * (1.0f - saturate(sky_l));
+            // The characters and objects the game lights carry their form in their own shading: their sky and
+            // contact occlusion at 0.4 (by day Mario fell to about 0.58 of the game under it, user: too dark).
+            const bool lit_draw = (draw_flags & (kDrawLit | kDrawDelit)) != 0u;
+            const float occlusion_share = lit_draw ? 0.4f : foliage ? 0.5f : 1.0f;
+            const float ao = 1.0f - kDayOcclusion * occlusion_share * (1.0f - saturate(sky_l));
             const float3 tint = lerp(float3(1.0f, 1.0f, 1.0f), light.sky / max(sky_l, 0.05f), kDayTint * (1.0f - vis));
             // A de-lit draw (its GX light averaged at a mean facing of 0.55, shader_gen) back at the game's own
             // shading of this face: its ambient plus its light 0 at the face's facing to it, clamped as GX's
             // accumulator. (Its full-facing level on every face raised the faces the game shades x1.18-1.20,
             // measured fc43.) Its facing is then the game's: no faint-sun form on it.
             float3 level = float3(1.0f, 1.0f, 1.0f);
-            float day_form = form;
+            float day_form = lit_draw ? 1.0f : form;
             if (delit) {
                 const uint record = min(draw_flags >> 16u, max(g_draw_count, 1u) - 1u) * kDrawStride;
                 const uint2 colors = g_draws.Load2(record);
@@ -2293,14 +2326,20 @@ void SpatialBCS(uint3 id : SV_DispatchThreadID)
             // found 56-192 lights in Honeyhive and lifted it to 1.23 of the game, measured fc33), and nothing
             // passes 1.1 of its art's level: no overexposed grass, sand or dirt. The light sources' own glow
             // (below) is not affected.
-            const float3 day_points = points * lerp(1.0f, 0.35f, day_share);
+            // By day half their light, outside the art's cap and rolling off towards 0.35: a glowing thing lights
+            // what is near it (user: it must make a difference) without bleaching sunlit ground.
+            const float3 day_lights = points * 0.5f;
+            const float3 day_points = day_lights / (1.0f + luminance(day_lights) / 0.35f);
             // Contact occlusion on the art: in full where the sun does not reach, half where it does
             // (sunlit contacts keep their direct light).
             const float sunlit = vis * saturate(shaped / 0.5f);
-            const float day_contact = 1.0f - g_ao.y * (foliage ? 0.5f : 1.0f) * (1.0f - contact) * (1.0f - 0.5f * sunlit);
-            float3 day_m = min(shadow * day_form * ao * day_contact * tint * level + day_points, 1.1f * level) * kDayLevel;
+            const float day_contact = 1.0f - g_ao.y * occlusion_share * (1.0f - contact) * (1.0f - 0.5f * sunlit);
+            // Map geometry (no GX light: ground, grass, sand, wood, trees) at the environment's level, under
+            // the characters and objects the game lights: the sunlit grass no longer outshines Mario.
+            const float art_level = (draw_flags & (kDrawLit | kDrawDelit)) != 0u ? kDayLevel : g_night2.y;
+            float3 day_m = min(shadow * day_form * ao * day_contact * tint * level, 1.1f * level) * art_level + day_points;
             day_terms = float3(vis, shaped, saturate(sky_l));
-            float3 day_open = min((shadow * day_form) * level + day_points, 1.1f * level) * kDayLevel;
+            float3 day_open = min((shadow * day_form) * level, 1.1f * level) * art_level + day_points;
             // Night (no daylight): the art darker in the open (g_night.x), the traced sky occlusion and the
             // contact occlusion carry the depth (corners, creases, under and around objects), the key's
             // (moon's) cast shadows go deeper, and the traced lights add their light uncapped by the art
@@ -2308,10 +2347,12 @@ void SpatialBCS(uint3 id : SV_DispatchThreadID)
             // softly towards g_ao.w. (The art model's 1.1 cap held every light at +10 %: the Observatory's
             // core, lamps and Lumas lit nothing; Rosalina and the Lumas cast no shadow.)
             if (day_share < 1.0f) {
-                const float occlusion = 1.0f - g_night.y * (foliage ? 0.5f : 1.0f) * (1.0f - saturate(sky_l));
-                const float night_contact = 1.0f - g_ao.z * (foliage ? 0.5f : 1.0f) * (1.0f - contact);
+                const float occlusion = 1.0f - g_night.y * occlusion_share * (1.0f - saturate(sky_l));
+                const float night_contact = 1.0f - g_ao.z * occlusion_share * (1.0f - contact);
                 const float night_shadow = 1.0f - g_night.z * (1.0f - vis);
-                const float3 lights = points * g_night.w;
+                // The key (moon, a red star) lights the faces it reaches: its light by the shaped facing and
+                // its traced visibility, with the lamps under the soft cap.
+                const float3 lights = points * g_night.w + g_sun_light.rgb * (shaped * vis * g_night2.x);
                 const float3 added = lights / (1.0f + luminance(lights) / max(g_ao.w, 1e-3f));
                 const float3 art = night_shadow * day_form * tint * level * g_night.x;
                 day_m = lerp(art * occlusion * night_contact + added, day_m, day_share);
@@ -2359,9 +2400,10 @@ void SpatialBCS(uint3 id : SV_DispatchThreadID)
                                         : asfloat(emission.y);
             if (kind != kEmitArea) {
                 halo = g_self.y * min(intensity, 3.0f);
-                // A light source is lit by itself: no occlusion or night darkening on its own surface (a
-                // Luma glows, a star bit sparkles), a little over its colour as it grows brighter.
-                m = max(m, (1.0f + 0.15f * saturate(intensity)).xxx);
+                // A light source is lit by itself: no occlusion or night darkening on its own surface, and it
+                // glows over its colour with its glow (Luma 1 -> 1.3, sling star 2.5 -> 1.75, at most 1.9); the
+                // film shoulder takes it towards white-hot.
+                m = max(m, (1.0f + 0.3f * min(intensity, 3.0f)).xxx);
             }
             const float glow = kind == kEmitArea ? g_self.x * intensity : 0.0f;
             if (glow > 0.0f) {
@@ -2371,6 +2413,17 @@ void SpatialBCS(uint3 id : SV_DispatchThreadID)
                 m = min(max(m, 1.0f) + glow * hue, kMaxLight);
             }
         }
+    }
+    // A star's burning surface: the composite shades it from its own fire (CompositePS star_surface); its
+    // relief share carries the mark (-1), its light (above) how hot it burns.
+    if (tri != 0u &&
+        (g_draws.Load(min(draw_flags >> 16u, max(g_draw_count, 1u) - 1u) * kDrawStride + 24u) & kDrawTableStar) != 0u) {
+        relief = -1.0f;
+    }
+    // Metal shows the world in its painted reflection: under the diffuse light it darkens half as much (measured
+    // mb0: the giant ? coin 209,188,39 -> 179,140,30, Bubble Blast's gold frame darker).
+    if (((draw_flags >> 8u) & 15u) == 2u) {
+        m = max(m, 0.5f + 0.5f * m);
     }
     // Clear crystal and glass show what lies behind them (the game's refraction of the picture): the light
     // at their surface does not darken that; the lights in and around them add to it (a crystal's star
@@ -2468,6 +2521,7 @@ cbuffer RtComposite : register(b0)
     uint m_pad;
     float4 m_sun;        // towards the traced sun (eye space, traced frame); relief height (eye units)
     float4 m_sun_light;  // its light (rgb)
+    float4 m_core;       // the star core's centre (eye space, traced frame), known (w)
 };
 StructuredBuffer<uint4> m_light : register(t0);
 Texture2D<float> m_efb_depth : register(t1);
@@ -2482,6 +2536,59 @@ struct CompositeOut
 float3 apply_light(float3 c, float3 m)
 {
     return film_light(c, m);
+}
+
+// A star's colour at temperature t (0 deep red .. 1 white-hot).
+float3 star_ramp(float t)
+{
+    const float3 red = float3(0.85f, 0.18f, 0.03f);
+    const float3 orange = float3(1.0f, 0.52f, 0.12f);
+    const float3 yellow = float3(1.0f, 0.86f, 0.45f);
+    const float3 white = float3(1.0f, 0.98f, 0.92f);
+    return t < 0.4f ? lerp(red, orange, t / 0.4f) : t < 0.75f ? lerp(orange, yellow, (t - 0.4f) / 0.35f)
+                                                             : lerp(yellow, white, saturate((t - 0.75f) / 0.25f));
+}
+
+// A star's burning surface (the star core): the game's own fire with its heat. Its cells (the texture against
+// its neighbourhood) stand out, the ball burns white-hot at its centre and deepens through yellow and orange to
+// red at its limb (mu: the face's turn to the eye on the ball, star_mu).
+// The turn to the eye of the core's face along `pixel`'s view ray (traced frame): the ray's distance from the
+// core's centre against its radius, the centre's distance less its front surface's along the ray to it (the
+// depth at the centre; the finish measured it so). Its normals are flat (measured: a flat profile from them).
+float star_mu(float2 pixel)
+{
+    if (m_core.w == 0.0f || m_core.z >= -m_near) {
+        return 0.6f;
+    }
+    const float3 to_centre = normalize(m_core.xyz);
+    const int2 at = int2(eye_to_pixel(m_projection, m_viewport, m_core.xyz));
+    const float centre_z = depth_to_eye_z(m_depth, m_efb_depth.Load(int3(at, 0)));
+    const float front = centre_z / min(to_centre.z, -1e-4f);
+    const float radius = length(m_core.xyz) - front;
+    if (radius <= 1.0f) {
+        return 0.6f;
+    }
+    const float3 ray = normalize(pixel_direction(m_projection, m_viewport, pixel));
+    const float off = length(cross(ray, m_core.xyz));
+    const float x = off / radius;
+    return sqrt(saturate(1.0f - x * x));
+}
+
+float3 star_surface(int2 c, float mu, float3 color)
+{
+    const float l = luminance(color);
+    const float around = 0.25f * (luminance(m_color.Load(int3(c + int2(3, 0), 0)).rgb) +
+                                  luminance(m_color.Load(int3(c - int2(3, 0), 0)).rgb) +
+                                  luminance(m_color.Load(int3(c + int2(0, 3), 0)).rgb) +
+                                  luminance(m_color.Load(int3(c - int2(0, 3), 0)).rgb));
+    const float cells = clamp(l / max(around, 0.03f), 0.6f, 1.5f);
+    // Centre (mu 1) t 0.85: white-yellow; mu 0.8 t 0.58: yellow-orange; mu 0.6 t 0.37: orange; limb (mu 0.2)
+    // t 0.13: deep red-orange. Over the disc it averages the game's own orange (about 212, 120, 43 against
+    // 220, 107, 45): hotter at the centre, deeper at the limb. The hot cells burn whiter, the lanes deeper.
+    const float t = saturate((0.1f + 0.75f * mu * mu) * (0.85f + 0.15f * cells));
+    const float3 fire = star_ramp(t) * (0.6f + 0.5f * mu) * pow(cells, 0.8f);
+    const float3 hot = fire + max(max(fire.r, max(fire.g, fire.b)) - 1.0f, 0.0f) * 0.25f;
+    return lerp(color, saturate(hot), 0.8f);
 }
 
 float4 CompositeVS(uint id : SV_VertexID) : SV_Position
@@ -2557,6 +2664,11 @@ CompositeOut CompositePS(float4 position : SV_Position)
     // sun's light follows the bent normal where the sample sees the sun. Across a depth edge that
     // side's difference is left out; with distance a pixel spans more than the detail and it fades.
     const float relief = weight > 1e-3f ? relief_sum / weight : 0.0f;
+    if (relief < -0.5f && (m_flags & 2u) == 0u) {
+        result.color = float4(star_surface(int2(position.xy), star_mu(eye_to_pixel(m_projection, m_viewport, p)),
+                                           color), 1.0f);
+        return result;
+    }
     if (relief > 1e-3f && m_sun.w > 0.0f) {
         const int2 c = int2(position.xy);
         float zs[4];

@@ -165,7 +165,9 @@ struct PixelShaderKey {
                                     // 8-bit colour (no 6-bit colour, no dither; alpha stays 6-bit),
                                     // bit5 glow: colour times ztex_params.z (additive scene draws
                                     // while ray-traced lighting is on), bit6 lit translucent: colour
-                                    // times texture 7 (the ray-traced lighting) at pixel x ztex_params.z
+                                    // times texture 7 (the ray-traced lighting) at pixel x ztex_params.z,
+                                    // bit7 with bit6: an opaque draw after the trace (its light at most
+                                    // 1.15: the surface behind it may be an emitter)
     std::uint8_t num_ind_stages;    // 0-4
     // Keys 0..15 keep their original shader source. New dither keys use 0xff and read the
     // reciprocal scale from the per-draw PS constants.

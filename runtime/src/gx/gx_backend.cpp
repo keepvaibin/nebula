@@ -6975,6 +6975,13 @@ bool GxBackend::rt_geometry_draw() const noexcept {
            rt_phase_ == static_cast<std::uint8_t>(ScenePhase::ListOpa);
 }
 
+// Late geometry: opaque draws after the screen capture (indirect-textured models: Rosalina), after the trace.
+bool GxBackend::rt_late_draw() const noexcept {
+    static_assert(static_cast<std::uint8_t>(motion::ScenePhase::AfterIndirect) == kRtLatePhase);
+    return rt_state_eligible_ && scene_phase_ && side_layer_ == kSceneLayer && renderer_.rt_late_open() &&
+           rt_phase_ == static_cast<std::uint8_t>(motion::ScenePhase::AfterIndirect);
+}
+
 // Glows: additive draws of the translucent phases, after the trace and before the scene's end.
 bool GxBackend::rt_glow_draw() const noexcept {
     if (!rt_glow_eligible_ || !scene_phase_ || side_layer_ != kSceneLayer || !renderer_.rt_glow_open()) {
@@ -6984,6 +6991,23 @@ bool GxBackend::rt_glow_draw() const noexcept {
     return rt_phase_ == static_cast<std::uint8_t>(ScenePhase::Xlu) ||
            rt_phase_ == static_cast<std::uint8_t>(ScenePhase::ListXlu) ||
            rt_phase_ == static_cast<std::uint8_t>(ScenePhase::AfterIndirect);
+}
+
+// Light sprites: alpha-blended draws of the translucent phases whose texture the material table names as a
+// light (the Observatory's walkway lamps are an alpha-blended glow effect): captured with the glows, their
+// light found from what they add to the picture.
+bool GxBackend::rt_sprite_light_draw() const noexcept {
+    if (!rt_sprite_eligible_ || !scene_phase_ || side_layer_ != kSceneLayer || !renderer_.rt_glow_open()) {
+        return false;
+    }
+    using motion::ScenePhase;
+    if (rt_phase_ != static_cast<std::uint8_t>(ScenePhase::Xlu) &&
+        rt_phase_ != static_cast<std::uint8_t>(ScenePhase::ListXlu) &&
+        rt_phase_ != static_cast<std::uint8_t>(ScenePhase::AfterIndirect)) {
+        return false;
+    }
+    const RtMaterial* const material = rt_material(current_rt_material_);
+    return material != nullptr && material->emission != RtEmission::None && !material->no_light;
 }
 
 // Water: alpha-blended draws of the translucent phases (seas, pools, lakes) before the image
@@ -7045,6 +7069,7 @@ void GxBackend::note_rt_stage() {
             name[i] = static_cast<char>(v);
         }
     }
+    rt_materials_set_stage(name);
     const RtStageSun* const sun = name[0] != 0 ? rt_stage_sun(name) : nullptr;
     renderer_.rt_set_stage_sun(sun);
     if (trace_actor_lights_enabled()) [[unlikely]] {
@@ -7166,7 +7191,8 @@ bool GxBackend::begin_rt_batch(const DrawCall& call, RtDrawInfo& info) {
         state_.xf(static_cast<std::uint16_t>(xf::kProjectionBase + 6u)) == 0u) [[unlikely]] {
         note_rt_material();
     }
-    if (!scene_phase_ || !(renderer_.rt_scene_open() || renderer_.rt_glow_open() || renderer_.rt_water_open())) {
+    if (!scene_phase_ || !(renderer_.rt_scene_open() || renderer_.rt_glow_open() || renderer_.rt_water_open() ||
+                           renderer_.rt_late_open())) {
         return false;
     }
     // What the traced lighting hides from the picture (the game's drop-shadow volumes, the table's faked
@@ -7200,9 +7226,37 @@ bool GxBackend::begin_rt_batch(const DrawCall& call, RtDrawInfo& info) {
                        clear->surface_class == static_cast<std::uint8_t>(RtSurfaceClass::Water)) &&
                       (position == VcdType::Index8 || position == VcdType::Index16);
     }
-    const bool glow = translucent && !lens && !clear_added && rt_glow_draw();
+    const bool glow = translucent && !lens && !clear_added && (rt_glow_draw() || rt_sprite_light_draw());
+    if (glow && current_rt_material_ == 0u) {
+        const unsigned map = ps_key_.stages[0].order & 7u;
+        const std::uint8_t bank = map >= 4u ? bp::kTexHighBankOffset : 0u;
+        note_rt_unnamed_glow((state_.bp(static_cast<std::uint8_t>(bp::kTexImage3Base + bank + (map & 3u))) & 0xFFFFFFu)
+                             << 5u);
+    }
     const bool water = translucent && !lens && !glow && (clear_added || rt_water_draw());
-    if (translucent && !glow && !water && !lens) {
+    const bool late = translucent && !glow && !water && !lens && rt_late_draw();
+    if (const RtMaterial* clear = rt_material(current_rt_material_);
+        clear != nullptr && rt_log_glows() &&
+        (clear->surface_class == static_cast<std::uint8_t>(RtSurfaceClass::Water) ||
+         clear->surface_class == static_cast<std::uint8_t>(RtSurfaceClass::Crystal))) [[unlikely]] {
+        static std::unordered_set<std::uint32_t> logged;
+        if (logged.insert(current_rt_material_ | (static_cast<std::uint32_t>(rt_phase_) << 16u) |
+                          (water ? 1u << 24u : 0u) | (renderer_.rt_water_open() ? 1u << 25u : 0u) |
+                          (side_layer_ == kSceneLayer ? 1u << 26u : 0u)).second) {
+            const BlendMode blend = state_.blend_mode();
+            const VcdType position = state_.vertex_desc(0u).position.vcd;
+            std::fprintf(stderr,
+                         "[rt-clear] material=%u class=%u phase=%u blend=%d src=%u dst=%u indexed=%d geometry=%d "
+                         "water-eligible=%d glow=%d water=%d late=%d water-open=%d scene-layer=%d\n",
+                         static_cast<unsigned>(current_rt_material_), static_cast<unsigned>(clear->surface_class),
+                         static_cast<unsigned>(rt_phase_), blend.blend_enable ? 1 : 0,
+                         static_cast<unsigned>(blend.src_factor), static_cast<unsigned>(blend.dst_factor),
+                         position == VcdType::Index8 || position == VcdType::Index16 ? 1 : 0, translucent ? 0 : 1,
+                         rt_water_eligible_ ? 1 : 0, glow ? 1 : 0, water ? 1 : 0, late ? 1 : 0,
+                         renderer_.rt_water_open() ? 1 : 0, side_layer_ == kSceneLayer ? 1 : 0);
+        }
+    }
+    if (translucent && !glow && !water && !lens && !late) {
         return false;
     }
     const auto projection = [this](unsigned i) {
@@ -12596,18 +12650,24 @@ ID3D12PipelineState* GxBackend::flush_draw_state(
         ? current_texture_binding_key_
         : capture_texture_binding_key(texture_map_mask);
     // Lit translucents: blended (not additive) scene draws of the translucent phases while the ray
-    // tracer's lighting texture is ready, with map 7 free for it.
+    // tracer's lighting texture is ready, with map 7 free for it. The opaque draws after the screen
+    // capture (Rosalina) take it too: drawn after the composite, they kept the game's full light in a
+    // darker, traced scene.
     {
         const BlendMode b = state_.blend_mode();
         using motion::ScenePhase;
-        lit_translucent_ =
-            scene_phase_ && side_layer_ == kSceneLayer && (texture_map_mask & 0x80u) == 0u && b.blend_enable &&
-            !b.logic_op_enable && !b.subtract && b.color_update && b.dst_factor != BlendFactor::One &&
+        const bool blended =
+            b.blend_enable && !b.logic_op_enable && !b.subtract && b.color_update && b.dst_factor != BlendFactor::One &&
             b.src_factor != BlendFactor::SrcColor && b.src_factor != BlendFactor::InvSrcColor &&
             b.dst_factor != BlendFactor::SrcColor && b.dst_factor != BlendFactor::InvSrcColor &&
             (rt_phase_ == static_cast<std::uint8_t>(ScenePhase::Xlu) ||
-             rt_phase_ == static_cast<std::uint8_t>(ScenePhase::ListXlu)) &&
-            renderer_.rt_light_texture_ready() && renderer_.rt_light_texture() != nullptr;
+             rt_phase_ == static_cast<std::uint8_t>(ScenePhase::ListXlu));
+        const bool late = !b.blend_enable && !b.logic_op_enable && b.color_update &&
+                          rt_phase_ == static_cast<std::uint8_t>(ScenePhase::AfterIndirect);
+        lit_translucent_ = scene_phase_ && side_layer_ == kSceneLayer && (texture_map_mask & 0x80u) == 0u &&
+                           (blended || late) && renderer_.rt_light_texture_ready() &&
+                           renderer_.rt_light_texture() != nullptr;
+        lit_late_ = lit_translucent_ && !blended;
         if ((texture_map_mask & 0x80u) == 0u) {
             texture_binding_key.regs[7u * 5u] = lit_translucent_ ? kLitTranslucentKey : 0u;
         }
@@ -12652,8 +12712,8 @@ ID3D12PipelineState* GxBackend::flush_draw_state(
             glow_changed = true;
         }
         // Lit translucents (output_flags bit 6): the lighting texture in map 7.
-        const auto lit_flags = static_cast<std::uint8_t>(lit_translucent_ ? (ps_key_.output_flags | 0x40u)
-                                                                          : (ps_key_.output_flags & ~0x40u));
+        const auto lit_flags = static_cast<std::uint8_t>(
+            (ps_key_.output_flags & ~0xC0u) | (lit_translucent_ ? 0x40u : 0u) | (lit_late_ ? 0x80u : 0u));
         if (lit_flags != ps_key_.output_flags) {
             ps_key_.output_flags = lit_flags;
             current_ps_hash_ = ps_key_.hash();
@@ -12826,6 +12886,12 @@ ID3D12PipelineState* GxBackend::flush_draw_state(
         // Water and clear materials are models (indexed positions): particles (steam, smoke, haze with
         // indirect warps) are direct-vertex sprites, and as water they turned into dark quads.
         const VcdType position = state_.vertex_desc(0u).position.vcd;
+        rt_sprite_eligible_ =
+            topology_key == static_cast<std::uint8_t>(D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE) && blend.blend_enable &&
+            !blend.logic_op_enable && !blend.subtract && blend.color_update &&
+            blend.src_factor == BlendFactor::SrcAlpha && blend.dst_factor == BlendFactor::InvSrcAlpha &&
+            render_state_key_.cull != static_cast<std::uint8_t>(CullMode::All) &&
+            state_.xf(static_cast<std::uint16_t>(xf::kProjectionBase + 6u)) == 0u;
         rt_water_eligible_ =
             topology_key == static_cast<std::uint8_t>(D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE) && blend.blend_enable &&
             !blend.logic_op_enable && !blend.subtract && blend.color_update &&

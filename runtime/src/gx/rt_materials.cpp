@@ -135,6 +135,7 @@ void apply_class(const std::string& text, RtMaterial& m) {
         else if (token == "unlit-only") m.unlit_only = true;
         else if (token == "particle") m.particle = true;
         else if (token == "lens") m.lens = true;
+        else if (token == "star") m.star = true;
         else if (token == "waterfall") {
             m.waterfall = true;
             set(RtSurfaceClass::Water);
@@ -229,7 +230,8 @@ std::size_t RtMaterialTable::read(std::istream& in) {
     std::string line;
     bool header_read = false;
     int hash_col = -1, class_col = -1, rough_col = -1, metal_col = -1, r_col = -1, g_col = -1, b_col = -1,
-        intensity_col = -1, range_col = -1, pulse_col = -1, cone_col = -1, shadow_col = -1, glow_col = -1;
+        intensity_col = -1, range_col = -1, pulse_col = -1, cone_col = -1, shadow_col = -1, glow_col = -1,
+        stage_col = -1;
     std::size_t rows = 0u;
     while (std::getline(in, line)) {
         if (line.empty() || line[0] == '#') {
@@ -245,7 +247,8 @@ std::size_t RtMaterialTable::read(std::istream& in) {
                                 : name == "r" ? &r_col : name == "g" ? &g_col : name == "b" ? &b_col
                                 : name == "intensity" ? &intensity_col : name == "range" ? &range_col
                                 : name == "pulse" ? &pulse_col : name == "cone" ? &cone_col
-                                : name == "shadow" ? &shadow_col : name == "glow" ? &glow_col : nullptr;
+                                : name == "shadow" ? &shadow_col : name == "glow" ? &glow_col
+                                : name == "stage" ? &stage_col : nullptr;
                 if (slot != nullptr) *slot = static_cast<int>(i);
             }
             continue;
@@ -264,7 +267,15 @@ std::size_t RtMaterialTable::read(std::istream& in) {
             materials_.emplace_back();
             it = by_hash_.emplace(hash, static_cast<std::uint16_t>(materials_.size())).first;
         }
-        RtMaterial& m = materials_[it->second - 1u];
+        std::string stage = stage_col >= 0 && static_cast<std::size_t>(stage_col) < row.size()
+                                ? row[static_cast<std::size_t>(stage_col)]
+                                : std::string();
+        while (!stage.empty() && (stage.back() == '\r' || stage.back() == ' ')) stage.pop_back();
+        if (!stage.empty()) {
+            // The texture's material so far, with this row on top, for that stage.
+            stage_rows_.push_back({stage, it->second, materials_[it->second - 1u]});
+        }
+        RtMaterial& m = stage.empty() ? materials_[it->second - 1u] : stage_rows_.back().material;
         const RtEmission before = m.emission;
         if (class_col >= 0 && static_cast<std::size_t>(class_col) < row.size()) {
             apply_class(row[static_cast<std::size_t>(class_col)], m);
@@ -299,11 +310,22 @@ const RtMaterial* RtMaterialTable::material(std::uint16_t index) const noexcept 
     return index != 0u && index <= materials_.size() ? &materials_[index - 1u] : nullptr;
 }
 
+std::vector<std::pair<std::uint16_t, const RtMaterial*>> RtMaterialTable::stage_materials(
+    std::string_view stage) const {
+    std::vector<std::pair<std::uint16_t, const RtMaterial*>> out;
+    for (const StageRow& row : stage_rows_) {
+        if (row.stage == stage) {
+            out.emplace_back(row.index, &row.material);
+        }
+    }
+    return out;
+}
+
 std::size_t RtStageSunTable::read(std::istream& in) {
     std::string line;
     bool header_read = false;
     int stage_col = -1, source_col = -1, x_col = -1, y_col = -1, z_col = -1, r_col = -1, g_col = -1, b_col = -1,
-        strength_col = -1, size_col = -1, shafts_col = -1, day_col = -1;
+        strength_col = -1, size_col = -1, shafts_col = -1, day_col = -1, ambient_col = -1;
     std::size_t rows = 0u;
     while (std::getline(in, line)) {
         if (line.empty() || line[0] == '#') {
@@ -318,7 +340,8 @@ std::size_t RtStageSunTable::read(std::istream& in) {
                                 : name == "x" ? &x_col : name == "y" ? &y_col : name == "z" ? &z_col
                                 : name == "r" ? &r_col : name == "g" ? &g_col : name == "b" ? &b_col
                                 : name == "strength" ? &strength_col : name == "size" ? &size_col
-                                : name == "shafts" ? &shafts_col : name == "day" ? &day_col : nullptr;
+                                : name == "shafts" ? &shafts_col : name == "day" ? &day_col
+                                : name == "ambient" ? &ambient_col : nullptr;
                 if (slot != nullptr) *slot = static_cast<int>(i);
             }
             continue;
@@ -354,6 +377,7 @@ std::size_t RtStageSunTable::read(std::istream& in) {
         if (number(row, size_col, v)) sun.size = std::clamp(v, 0.0f, 30.0f);
         if (number(row, shafts_col, v)) sun.shafts = std::clamp(v, 0.0f, 4.0f);
         if (number(row, day_col, v)) sun.day = std::clamp(v, 0.0f, 1.0f);
+        if (number(row, ambient_col, v)) sun.ambient = std::clamp(v, 0.0f, 2.0f);
         suns_[stage] = sun;
         ++rows;
     }
@@ -377,7 +401,69 @@ std::uint16_t rt_material_index(std::uint64_t hash) noexcept {
     return table().index(hash);
 }
 
+namespace {
+// The loaded stage's own materials (rt_materials_set_stage), by material index.
+std::vector<std::pair<std::uint16_t, const RtMaterial*>> g_stage_materials;
+}  // namespace
+
+namespace {
+bool log_glows() {
+    static const bool enabled = [] {
+        char value[8]{};
+        std::size_t length = 0u;
+        return getenv_s(&length, value, sizeof(value), "GALAXY_RT_LOG_GLOWS") == 0 && length > 1u && value[0] == '1';
+    }();
+    return enabled;
+}
+struct TextureName {
+    std::uint64_t pack;
+    std::uint32_t width, height, format;
+};
+std::unordered_map<std::uint32_t, TextureName> g_texture_names;
+std::unordered_map<std::uint32_t, bool> g_glows_logged;
+}  // namespace
+
+void note_rt_texture(std::uint32_t guest_addr, std::uint64_t pack, std::uint32_t width, std::uint32_t height,
+                     std::uint32_t format) {
+    if (log_glows() && g_texture_names.size() < 65536u) {
+        g_texture_names[guest_addr] = {pack, width, height, format};
+    }
+}
+
+bool rt_log_glows() noexcept {
+    return log_glows();
+}
+
+void note_rt_unnamed_glow(std::uint32_t guest_addr) {
+    if (!log_glows() || !g_glows_logged.emplace(guest_addr, true).second) {
+        return;
+    }
+    const auto it = g_texture_names.find(guest_addr);
+    if (it == g_texture_names.end()) {
+        std::fprintf(stderr, "[rt-glow] unnamed addr=%08X (not hashed)\n", guest_addr);
+        return;
+    }
+    std::fprintf(stderr, "[rt-glow] unnamed addr=%08X tex1_%ux%u_%016llx_%u\n", guest_addr, it->second.width,
+                 it->second.height, static_cast<unsigned long long>(it->second.pack), it->second.format);
+}
+
+void rt_materials_set_stage(std::string_view stage) {
+    g_stage_materials = table().stage_materials(stage);
+    if (!g_stage_materials.empty()) {
+        std::cerr << "[rt-materials] stage=" << stage << " rows=" << g_stage_materials.size();
+        for (const auto& [index, material] : g_stage_materials) {
+            std::cerr << " material=" << index;
+        }
+        std::cerr << '\n';
+    }
+}
+
 const RtMaterial* rt_material(std::uint16_t index) noexcept {
+    for (const auto& [own, material] : g_stage_materials) {
+        if (own == index) {
+            return material;
+        }
+    }
     return table().material(index);
 }
 

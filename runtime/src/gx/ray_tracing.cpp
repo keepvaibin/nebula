@@ -112,8 +112,9 @@ struct RtLightConstants {
     float self[4];
     float ao[4];
     float night[4];
+    float night2[4];
 };
-static_assert(sizeof(RtLightConstants) == 656u);
+static_assert(sizeof(RtLightConstants) == 672u);
 
 // Mirrors cbuffer RtPost in rt_post.hlsl (root constants).
 struct RtPostConstants {
@@ -192,10 +193,20 @@ constexpr std::uint32_t kDrawTableTint = 1u;
 constexpr std::uint32_t kDrawTableGlow = 2u;
 // g_draws word 6 (rt_lighting.hlsl kDrawTableFoliage): alpha-cut leaves, grass and flower cards.
 constexpr std::uint32_t kDrawTableFoliage = 4u;
+// g_draws word 6 (rt_lighting.hlsl kDrawTableStar): a star's burning surface.
+constexpr std::uint32_t kDrawTableStar = 8u;
+// Scene TLAS instance masks (rt_lighting.hlsl kSceneMask): the frame's geometry; the late geometry, which
+// camera rays to the frame's own surfaces skip.
+constexpr UINT kSceneMask = 1u;
+constexpr UINT kLateMask = 2u;
 constexpr float kDrawGlowScale = 16.0f;
 // AuthoredLight.flags (rt_lighting.hlsl kAuthored*): the colour the draw shows; a spot light.
 constexpr std::uint32_t kAuthoredTint = 1u;
 constexpr std::uint32_t kAuthoredSpot = 2u;
+// AuthoredLight.flags (rt_lighting.hlsl kAuthoredStar): a star: its power by its size.
+constexpr std::uint32_t kAuthoredStar = 4u;
+// Glow light flags (rt_lighting.hlsl kGlowEffect): the table names the glow a particle (no light).
+constexpr std::uint32_t kGlowEffect = 32u;
 // glow_lights_ flags (rt_lighting.hlsl kGlowTable*): the light scales by the table's intensity; it takes
 // the table's colour.
 constexpr std::uint32_t kGlowTableIntensity = 4u;
@@ -249,8 +260,9 @@ struct RtCompositeConstants {
     std::uint32_t pad;
     float sun[4];        // towards the traced sun (eye space, traced frame); relief height (eye units)
     float sun_light[4];  // its light (rgb)
+    float core[4];       // the star core's centre (eye space, traced frame), known (w)
 };
-static_assert(sizeof(RtCompositeConstants) == 112u);
+static_assert(sizeof(RtCompositeConstants) == 128u);
 
 enum LightParameter : UINT {
     kLightFrame = 0,
@@ -638,9 +650,7 @@ bool SceneRayTracer::initialize(ID3D12Device* device, std::uint64_t timestamp_fr
         !create_buffer(kStatsWords * 4u, D3D12_HEAP_TYPE_UPLOAD, D3D12_RESOURCE_STATE_GENERIC_READ,
                        D3D12_RESOURCE_FLAG_NONE, stats_zero_, L"rt stats zero") ||
         !create_buffer(kResultSlots * kReadbackSlotBytes, D3D12_HEAP_TYPE_READBACK, D3D12_RESOURCE_STATE_COPY_DEST,
-                       D3D12_RESOURCE_FLAG_NONE, readback_, L"rt readback") ||
-        !create_buffer(sizeof(D3D12_RAYTRACING_INSTANCE_DESC), D3D12_HEAP_TYPE_UPLOAD,
-                       D3D12_RESOURCE_STATE_GENERIC_READ, D3D12_RESOURCE_FLAG_NONE, instance_, L"rt instance")) {
+                       D3D12_RESOURCE_FLAG_NONE, readback_, L"rt readback")) {
         shutdown();
         return false;
     }
@@ -724,7 +734,7 @@ bool SceneRayTracer::initialize(ID3D12Device* device, std::uint64_t timestamp_fr
     log_emitters_ = env_float("GALAXY_RT_LOG_EMITTERS", 0.0f) != 0.0f;
     ab_ = env_float("GALAXY_RT_AB", 0.0f) != 0.0f;
     glow_cutoff_ = std::clamp(env_float("GALAXY_RT_GLOW_CUTOFF", 0.004f), 1e-5f, 1.0f);
-    glow_reach_ = std::clamp(env_float("GALAXY_RT_GLOW_REACH", 6000.0f), 10.0f, 1.0e6f);
+    glow_reach_ = std::clamp(env_float("GALAXY_RT_GLOW_REACH", 30000.0f), 10.0f, 1.0e6f);
     glow_light_ = std::clamp(env_float("GALAXY_RT_GLOW_LIGHT", 1.0f), 0.0f, 64.0f);
     surface_light_ = std::clamp(env_float("GALAXY_RT_SURFACE_LIGHT", 1.0f), 0.0f, 16.0f);
     night_ = std::clamp(env_float("GALAXY_RT_NIGHT", 1.0f), 0.0f, 1.0f);
@@ -743,11 +753,13 @@ bool SceneRayTracer::initialize(ID3D12Device* device, std::uint64_t timestamp_fr
     ao_reach_ = std::clamp(env_float("GALAXY_RT_AO_REACH", 150.0f), 0.0f, 2000.0f);
     ao_day_ = std::clamp(env_float("GALAXY_RT_AO", 0.8f), 0.0f, 1.0f);
     ao_night_ = std::clamp(env_float("GALAXY_RT_AO_NIGHT", 1.0f), 0.0f, 1.0f);
-    night_level_ = std::clamp(env_float("GALAXY_RT_NIGHT_LEVEL", 0.8f), 0.2f, 1.5f);
+    night_level_ = std::clamp(env_float("GALAXY_RT_NIGHT_LEVEL", 0.7f), 0.2f, 1.5f);
     night_occlusion_ = std::clamp(env_float("GALAXY_RT_NIGHT_AO", 0.75f), 0.0f, 1.0f);
     night_shadow_ = std::clamp(env_float("GALAXY_RT_NIGHT_SHADOW", 0.6f), 0.0f, 1.0f);
-    night_lights_ = std::clamp(env_float("GALAXY_RT_NIGHT_LIGHTS", 1.0f), 0.0f, 8.0f);
-    night_lights_cap_ = std::clamp(env_float("GALAXY_RT_NIGHT_LIGHTS_CAP", 1.5f), 0.05f, 8.0f);
+    night_lights_ = std::clamp(env_float("GALAXY_RT_NIGHT_LIGHTS", 2.0f), 0.0f, 8.0f);
+    night_lights_cap_ = std::clamp(env_float("GALAXY_RT_NIGHT_LIGHTS_CAP", 1.0f), 0.05f, 8.0f);
+    night_key_ = std::clamp(env_float("GALAXY_RT_NIGHT_KEY", 0.5f), 0.0f, 4.0f);
+    day_environment_ = std::clamp(env_float("GALAXY_RT_DAY_ENVIRONMENT", 0.92f), 0.3f, 1.2f);
     // The finish (grade, depth of field, shafts, haze, star core, lenses) off by default: with it and the
     // reflections both on, pictures came out x(1 + x) of the game (Honeyhive 1.31-1.51 per pair with the
     // lighting off; off: 0.87-1.03, measured h5n / h5p / hhd, 2026-10-15). Cause not yet found.
@@ -768,8 +780,8 @@ bool SceneRayTracer::initialize(ID3D12Device* device, std::uint64_t timestamp_fr
     post_vignette_ = std::clamp(env_float("GALAXY_RT_POST_VIGNETTE", 0.1f), 0.0f, 1.0f);
     post_view_ = env_float("GALAXY_RT_POST_VIEW", 0.0f) != 0.0f;
     gi_ = env_float("GALAXY_RT_GI", 1.0f) != 0.0f;
-    core_radius_ = std::clamp(env_float("GALAXY_RT_CORE_RADIUS", 400.0f), 1.0f, 100000.0f);
-    core_light_ = std::clamp(env_float("GALAXY_RT_CORE_LIGHT", 0.8f), 0.0f, 16.0f);
+    core_radius_ = std::clamp(env_float("GALAXY_RT_CORE_RADIUS", 1667.0f), 1.0f, 100000.0f);
+    core_light_ = std::clamp(env_float("GALAXY_RT_CORE_LIGHT", 1.5f), 0.0f, 16.0f);
     bloom_strength_ = std::clamp(env_float("GALAXY_RT_BLOOM", 1.4f), 0.0f, 4.0f);
     bloom_threshold_ = std::clamp(env_float("GALAXY_RT_BLOOM_THRESHOLD", 0.15f), 0.0f, 4.0f);
     exposure_ = env_float("GALAXY_RT_EXPOSURE", 1.0f) != 0.0f;
@@ -818,7 +830,13 @@ void SceneRayTracer::shutdown() noexcept {
     blas_.Reset();
     tlas_.Reset();
     scratch_.Reset();
-    instance_.Reset();
+    late_draws_.clear();
+    late_open_ = false;
+    late_built_ = 0u;
+    late_positions_.Reset();
+    late_surfaces_.Reset();
+    late_blas_.Reset();
+    late_scratch_.Reset();
     stats_.Reset();
     stats_zero_.Reset();
     readback_.Reset();
@@ -992,7 +1010,7 @@ bool SceneRayTracer::ensure_capacity(ID3D12GraphicsCommandList* list, std::uint3
     D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS tlas_inputs{};
     tlas_inputs.Type = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL;
     tlas_inputs.Flags = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_TRACE;
-    tlas_inputs.NumDescs = 1u;
+    tlas_inputs.NumDescs = 2u;   // the frame's geometry and the late geometry (build_tlas)
     tlas_inputs.DescsLayout = D3D12_ELEMENTS_LAYOUT_ARRAY;
     D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO tlas_info{};
     device_->GetRaytracingAccelerationStructurePrebuildInfo(&tlas_inputs, &tlas_info);
@@ -1062,28 +1080,6 @@ bool SceneRayTracer::ensure_capacity(ID3D12GraphicsCommandList* list, std::uint3
     tlas_bytes_ = tlas_info.ResultDataMaxSizeInBytes;
     scratch_bytes_ = scratch_tlas_offset;
 
-    // One instance: the frame's eye-space geometry, untransformed. Written while no frame
-    // references the new BLAS; the previous instance buffer retires with the old BLAS.
-    retire(instance_);
-    if (!create_buffer(sizeof(D3D12_RAYTRACING_INSTANCE_DESC), D3D12_HEAP_TYPE_UPLOAD,
-                       D3D12_RESOURCE_STATE_GENERIC_READ, D3D12_RESOURCE_FLAG_NONE, instance_, L"rt instance")) {
-        return false;
-    }
-    D3D12_RAYTRACING_INSTANCE_DESC instance{};
-    instance.Transform[0][0] = 1.0f;
-    instance.Transform[1][1] = 1.0f;
-    instance.Transform[2][2] = 1.0f;
-    instance.InstanceMask = 0xFFu;
-    instance.Flags = D3D12_RAYTRACING_INSTANCE_FLAG_TRIANGLE_CULL_DISABLE |
-                     D3D12_RAYTRACING_INSTANCE_FLAG_FORCE_OPAQUE;
-    instance.AccelerationStructure = blas_->GetGPUVirtualAddress();
-    void* mapped = nullptr;
-    const D3D12_RANGE no_read{0, 0};
-    if (FAILED(instance_->Map(0, &no_read, &mapped))) {
-        return false;
-    }
-    std::memcpy(mapped, &instance, sizeof(instance));
-    instance_->Unmap(0, nullptr);
     capacity_ = capacity;
     std::cerr << "[rt] capacity triangles=" << capacity << " blas-mb=" << (blas_bytes_ >> 20u)
               << " scratch-mb=" << (scratch_bytes >> 20u) << " positions-mb="
@@ -1364,7 +1360,7 @@ void SceneRayTracer::report() {
                   "[rt-stats] scenes=%llu skipped=%llu draws-per-scene=%.1f triangles-per-scene=%.0f "
                   "max-triangles=%llu capacity=%u build-ms=%.3f validate-ms=%.3f light-ms=%.3f point-lights=%.2f composites=%llu captures=%llu validated=%llu "
                   "geometry-pixels=%.2f%% match-0.1%%=%.3f%% match-1%%=%.3f%% hit-nearer=%.3f%% hit-farther=%.3f%% "
-                  "miss=%.3f%% background-hit=%.3f%% glow-draws=%.1f glow-triangles=%.0f\n",
+                  "miss=%.3f%% background-hit=%.3f%% glow-draws=%.1f glow-triangles=%.0f late-triangles=%.0f\n",
                   static_cast<unsigned long long>(window_.scenes), static_cast<unsigned long long>(window_.skipped),
                   per(static_cast<double>(window_.draws), window_.scenes),
                   per(static_cast<double>(window_.triangles), window_.scenes),
@@ -1376,7 +1372,8 @@ void SceneRayTracer::report() {
                   static_cast<unsigned long long>(window_.validated), pct(2u, 0u), pct(3u, 2u), pct(4u, 2u),
                   pct(5u, 2u), pct(6u, 2u), pct(7u, 2u), pct(8u, 1u),
                   per(static_cast<double>(window_.glow_draws), window_.captures),
-                  per(static_cast<double>(window_.glow_triangles), window_.captures));
+                  per(static_cast<double>(window_.glow_triangles), window_.captures),
+                  per(static_cast<double>(window_.late_triangles), window_.scenes));
     std::cerr << line;
     if (pass_timestamps_) {
         // Per scene: geometry and every pass after the trace (sub-frames' replays included); per pass:
@@ -1494,6 +1491,12 @@ void SceneRayTracer::begin_scene() noexcept {
     scene_open_ = ready_;
     scene_incomplete_ = false;
     light_slot_ = -1;
+    late_draws_.clear();
+    late_triangles_ = 0u;
+    late_flushed_draws_ = 0u;
+    late_flushed_triangles_ = 0u;
+    late_open_ = false;
+    late_incomplete_ = false;
 }
 
 void SceneRayTracer::add_draw(const RtDraw& draw, const RtDrawInfo& info) {
@@ -1531,6 +1534,8 @@ void SceneRayTracer::add_draw(const RtDraw& draw, const RtDrawInfo& info) {
                 light.intensity = material->intensity;
                 light.pulse = material->pulse;
                 light.flags = kGlowTableIntensity | (material->tint ? 0u : kGlowTableColor);
+            } else if (material != nullptr && material->particle) {
+                light.flags = kGlowEffect;
             }
             glow_lights_.push_back(light);
             glow_triangles_ += draw.triangle_count;
@@ -1542,6 +1547,16 @@ void SceneRayTracer::add_draw(const RtDraw& draw, const RtDrawInfo& info) {
             RtDraw& entry = water_draws_.emplace_back(draw);
             entry.first_triangle = water_triangles_;
             water_triangles_ += draw.triangle_count;
+        }
+        return;
+    }
+    if (!scene_open_ && info.phase == kRtLatePhase) {
+        // Shadow, sky and reflection rays meet it; nothing reads its draw record (no lights, no emission).
+        if (late_open_ && draw.triangle_count != 0u && late_triangles_ + draw.triangle_count <= kLateMaxTriangles) {
+            RtDraw& entry = late_draws_.emplace_back(draw);
+            entry.first_triangle = late_triangles_;
+            entry.flags &= 0xFFFFu;
+            late_triangles_ += draw.triangle_count;
         }
         return;
     }
@@ -1567,7 +1582,8 @@ void SceneRayTracer::add_draw(const RtDraw& draw, const RtDrawInfo& info) {
                    (material->no_light ? 8u : 0u);
         intensity = material->intensity;
         surface = unit_pair(material->matte ? 1.0f : material->roughness, material->metallic);
-        flags = (material->tint ? kDrawTableTint : 0u) | (material->foliage ? kDrawTableFoliage : 0u);
+        flags = (material->tint ? kDrawTableTint : 0u) | (material->foliage ? kDrawTableFoliage : 0u) |
+                (material->star ? kDrawTableStar : 0u);
         if (material->glow >= 0.0f) {
             flags |= kDrawTableGlow |
                      (static_cast<std::uint32_t>(std::lround(std::min(material->glow / kDrawGlowScale, 1.0f) * 65535.0f))
@@ -1583,7 +1599,8 @@ void SceneRayTracer::add_draw(const RtDraw& draw, const RtDrawInfo& info) {
             const bool spot = material->cone > 0.0f;
             authored_.push_back({entry.first_triangle, entry.triangle_count, emission, intensity, material->range,
                                  material->pulse,
-                                 (material->tint ? kAuthoredTint : 0u) | (spot ? kAuthoredSpot : 0u),
+                                 (material->tint ? kAuthoredTint : 0u) | (spot ? kAuthoredSpot : 0u) |
+                                     (material->star ? kAuthoredStar : 0u),
                                  spot ? std::cos(material->cone * 3.14159265f / 180.0f) : -1.0f});
         }
     }
@@ -1664,6 +1681,7 @@ void SceneRayTracer::reset_sky() noexcept {
     // nothing of the last stage.
     exposure_reset_ = true;
     reflections_.reset_memory();
+    late_built_ = 0u;
     sky_map_.reset();
     sky_sun_ = {};
     sky_key_ = {};
@@ -2288,10 +2306,12 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
     c.ao[1] = ao_day_;
     c.ao[2] = ao_night_;
     c.ao[3] = night_lights_cap_;
-    c.night[0] = night_level_;
+    c.night[0] = night_level_ * (stage_sun_ != nullptr ? stage_sun_->ambient : 1.0f);
     c.night[1] = night_occlusion_;
     c.night[2] = night_shadow_;
     c.night[3] = night_lights_;
+    c.night2[0] = night_key_;
+    c.night2[1] = day_environment_;
     // The stage's day model share (rt-suns.tsv day); < 0: by its sky's brightness.
     c.self[3] = stage_sun_ != nullptr && stage_sun_->day >= 0.0f ? stage_sun_->day : -1.0f;
     c.point_saturation = point_saturation_;
@@ -2627,6 +2647,15 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
         info.sun[i] = c.sun[i];
         info.sun_light[i] = c.sun_light[i];
     }
+    {
+        std::array<float, 3> core{};
+        float scale = 0.0f;
+        info.core_known = camera_known_ && star_core(core, scale, 500u);
+        for (unsigned r = 0; info.core_known && r < 3u; ++r) {
+            info.core[r] = camera_[r * 4u] * core[0] + camera_[r * 4u + 1u] * core[1] + camera_[r * 4u + 2u] * core[2] +
+                           camera_[r * 4u + 3u];
+        }
+    }
     history_camera_ = camera_;
     history_camera_known_ = camera_known_;
     light_parity_ = previous;
@@ -2688,6 +2717,7 @@ void SceneRayTracer::snapshot_glow_base(ID3D12GraphicsCommandList* list, D3D12_G
 void SceneRayTracer::capture_picture(ID3D12GraphicsCommandList* list, const RtSources& sources, Allocate allocate,
                                      void* allocate_context, D3D12_GPU_DESCRIPTOR_HANDLE color_depth_table,
                                      std::uint32_t width, std::uint32_t height, D3D12_GPU_DESCRIPTOR_HANDLE game_srv) {
+    finish_late(list, sources, allocate, allocate_context);
     const bool glow = glow_open_ && glow_base_valid_;
     glow_open_ = false;
     if (!lighting_active() || !capture_pso_ || list == nullptr || color_depth_table.ptr == 0u || !view_known_ ||
@@ -3347,6 +3377,10 @@ void SceneRayTracer::composite(ID3D12GraphicsCommandList* list, D3D12_CPU_DESCRI
         c.sun_light[i] = info.sun_light[i];
     }
     c.sun[3] = relief_;
+    for (unsigned i = 0; i < 3u; ++i) {
+        c.core[i] = info.core[i];
+    }
+    c.core[3] = info.core_known ? 1.0f : 0.0f;
     const int timed = begin_pass(list);
     list->OMSetRenderTargets(1u, &target, FALSE, nullptr);
     const D3D12_VIEWPORT viewport{0.0f, 0.0f, static_cast<float>(width), static_cast<float>(height), 0.0f, 1.0f};
@@ -3581,6 +3615,156 @@ void SceneRayTracer::flush_geometry(ID3D12GraphicsCommandList* list, const RtSou
     end_pass(list, timed, kPassGeometry);
 }
 
+bool SceneRayTracer::ensure_late_buffers() {
+    if (late_blas_) {
+        return true;
+    }
+    D3D12_RAYTRACING_GEOMETRY_DESC geometry{};
+    geometry.Type = D3D12_RAYTRACING_GEOMETRY_TYPE_TRIANGLES;
+    geometry.Flags = D3D12_RAYTRACING_GEOMETRY_FLAG_OPAQUE;
+    geometry.Triangles.VertexFormat = DXGI_FORMAT_R32G32B32_FLOAT;
+    geometry.Triangles.VertexCount = kLateMaxTriangles * 3u;
+    geometry.Triangles.VertexBuffer.StrideInBytes = 12u;
+    D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS bottom{};
+    bottom.Type = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL;
+    bottom.Flags = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_BUILD;
+    bottom.NumDescs = 1u;
+    bottom.DescsLayout = D3D12_ELEMENTS_LAYOUT_ARRAY;
+    bottom.pGeometryDescs = &geometry;
+    D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO info{};
+    device_->GetRaytracingAccelerationStructurePrebuildInfo(&bottom, &info);
+    if (info.ResultDataMaxSizeInBytes == 0u) {
+        return false;
+    }
+    constexpr D3D12_RESOURCE_STATES kUav = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+    constexpr D3D12_RESOURCE_FLAGS kUavFlag = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
+    if (!create_buffer(static_cast<std::uint64_t>(kLateMaxTriangles) * 36u, D3D12_HEAP_TYPE_DEFAULT, kUav, kUavFlag,
+                       late_positions_, L"rt late triangles") ||
+        !create_buffer(static_cast<std::uint64_t>(kLateMaxTriangles) * 16u, D3D12_HEAP_TYPE_DEFAULT, kUav, kUavFlag,
+                       late_surfaces_, L"rt late surfaces") ||
+        !create_buffer(info.ResultDataMaxSizeInBytes, D3D12_HEAP_TYPE_DEFAULT,
+                       D3D12_RESOURCE_STATE_RAYTRACING_ACCELERATION_STRUCTURE, kUavFlag, late_blas_, L"rt late blas") ||
+        !create_buffer(std::max<std::uint64_t>(info.ScratchDataSizeInBytes, 256u), D3D12_HEAP_TYPE_DEFAULT, kUav,
+                       kUavFlag, late_scratch_, L"rt late scratch")) {
+        late_positions_.Reset();
+        late_surfaces_.Reset();
+        late_blas_.Reset();
+        late_scratch_.Reset();
+        return false;
+    }
+    late_positions_state_ = kUav;
+    late_surfaces_state_ = kUav;
+    std::cerr << "[rt] late triangles=" << kLateMaxTriangles << " blas-kb=" << (info.ResultDataMaxSizeInBytes >> 10u)
+              << '\n';
+    return true;
+}
+
+void SceneRayTracer::flush_late(ID3D12GraphicsCommandList* list, const RtSources& sources, Allocate allocate,
+                                void* allocate_context) {
+    if (!late_open_ || list == nullptr || allocate == nullptr || late_flushed_draws_ >= late_draws_.size()) {
+        return;
+    }
+    const std::size_t first = late_flushed_draws_;
+    const std::uint32_t base = late_flushed_triangles_;
+    late_flushed_draws_ = late_draws_.size();
+    late_flushed_triangles_ = late_triangles_;
+    if (!ensure_late_buffers() ||
+        !transform_draws(list, sources, allocate, allocate_context, late_draws_.data() + first,
+                         late_draws_.size() - first, base, late_triangles_ - base, late_positions_.Get(),
+                         late_positions_state_, late_surfaces_.Get(), late_surfaces_state_)) {
+        late_incomplete_ = true;
+    }
+}
+
+void SceneRayTracer::finish_late(ID3D12GraphicsCommandList* list, const RtSources& sources, Allocate allocate,
+                                 void* allocate_context) {
+    if (!late_open_) {
+        return;
+    }
+    flush_late(list, sources, allocate, allocate_context);
+    late_open_ = false;
+    late_built_ = 0u;
+    ComPtr<ID3D12GraphicsCommandList4> list4;
+    if (list == nullptr || late_incomplete_ || late_triangles_ == 0u || !late_blas_ || !late_next_camera_known_ ||
+        FAILED(list->QueryInterface(IID_PPV_ARGS(&list4)))) {
+        return;
+    }
+    to_state(list, late_positions_.Get(), late_positions_state_, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+    // This frame's traces may still read the previous late structure.
+    D3D12_RESOURCE_BARRIER barrier = uav_barrier(nullptr);
+    list->ResourceBarrier(1u, &barrier);
+    D3D12_RAYTRACING_GEOMETRY_DESC geometry{};
+    geometry.Type = D3D12_RAYTRACING_GEOMETRY_TYPE_TRIANGLES;
+    geometry.Flags = D3D12_RAYTRACING_GEOMETRY_FLAG_OPAQUE;
+    geometry.Triangles.VertexFormat = DXGI_FORMAT_R32G32B32_FLOAT;
+    geometry.Triangles.VertexCount = late_triangles_ * 3u;
+    geometry.Triangles.VertexBuffer.StartAddress = late_positions_->GetGPUVirtualAddress();
+    geometry.Triangles.VertexBuffer.StrideInBytes = 12u;
+    D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC build{};
+    build.Inputs.Type = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL;
+    build.Inputs.Flags = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_BUILD;
+    build.Inputs.NumDescs = 1u;
+    build.Inputs.DescsLayout = D3D12_ELEMENTS_LAYOUT_ARRAY;
+    build.Inputs.pGeometryDescs = &geometry;
+    build.DestAccelerationStructureData = late_blas_->GetGPUVirtualAddress();
+    build.ScratchAccelerationStructureData = late_scratch_->GetGPUVirtualAddress();
+    list4->BuildRaytracingAccelerationStructure(&build, 0u, nullptr);
+    barrier = uav_barrier(late_blas_.Get());
+    list->ResourceBarrier(1u, &barrier);
+    late_built_ = late_triangles_;
+    late_scene_ = scene_serial_ - 1u;
+    late_camera_ = late_next_camera_;
+    late_camera_known_ = true;
+    window_.late_triangles += late_triangles_;
+}
+
+bool SceneRayTracer::build_tlas(ID3D12GraphicsCommandList4* list, Allocate allocate, void* allocate_context) {
+    // The late geometry of this scene (the water's trace) or the last one (moved to this camera: a frame late).
+    std::array<float, 12> inverse{};
+    const bool late = late_built_ != 0u && late_blas_ && late_camera_known_ && camera_known_ &&
+                      scene_serial_ - 1u - late_scene_ <= 1u && affine_inverse(late_camera_, inverse);
+    const UINT count = late ? 2u : 1u;
+    const RtUpload upload = allocate(allocate_context, 2u * sizeof(D3D12_RAYTRACING_INSTANCE_DESC), 256u);
+    if (upload.cpu == nullptr) {
+        return false;
+    }
+    D3D12_RAYTRACING_INSTANCE_DESC instances[2]{};
+    for (D3D12_RAYTRACING_INSTANCE_DESC& instance : instances) {
+        instance.Flags = D3D12_RAYTRACING_INSTANCE_FLAG_TRIANGLE_CULL_DISABLE | D3D12_RAYTRACING_INSTANCE_FLAG_FORCE_OPAQUE;
+    }
+    instances[0].Transform[0][0] = 1.0f;
+    instances[0].Transform[1][1] = 1.0f;
+    instances[0].Transform[2][2] = 1.0f;
+    instances[0].InstanceMask = kSceneMask;
+    instances[0].AccelerationStructure = blas_->GetGPUVirtualAddress();
+    if (late) {
+        const std::array<float, 12> to_now = affine_multiply(camera_, inverse);
+        for (unsigned r = 0; r < 3u; ++r) {
+            for (unsigned c = 0; c < 4u; ++c) {
+                instances[1].Transform[r][c] = to_now[r * 4u + c];
+            }
+        }
+        instances[1].InstanceID = 1u;
+        instances[1].InstanceMask = kLateMask;
+        instances[1].AccelerationStructure = late_blas_->GetGPUVirtualAddress();
+    }
+    std::memcpy(upload.cpu, instances, count * sizeof(D3D12_RAYTRACING_INSTANCE_DESC));
+    D3D12_RESOURCE_BARRIER barrier = uav_barrier(nullptr);
+    list->ResourceBarrier(1u, &barrier);
+    D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC top{};
+    top.Inputs.Type = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL;
+    top.Inputs.Flags = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_TRACE;
+    top.Inputs.NumDescs = count;
+    top.Inputs.DescsLayout = D3D12_ELEMENTS_LAYOUT_ARRAY;
+    top.Inputs.InstanceDescs = upload.gpu;
+    top.DestAccelerationStructureData = tlas_->GetGPUVirtualAddress();
+    top.ScratchAccelerationStructureData = scratch_->GetGPUVirtualAddress() + scratch_bytes_;
+    list->BuildRaytracingAccelerationStructure(&top, 0u, nullptr);
+    barrier = uav_barrier(tlas_.Get());
+    list->ResourceBarrier(1u, &barrier);
+    return true;
+}
+
 bool SceneRayTracer::trace_scene(ID3D12GraphicsCommandList* list, const RtSources& sources, Allocate allocate,
                                  void* allocate_context, D3D12_GPU_DESCRIPTOR_HANDLE depth_srv,
                                  std::uint32_t width, std::uint32_t height) {
@@ -3656,18 +3840,9 @@ bool SceneRayTracer::trace_scene(ID3D12GraphicsCommandList* list, const RtSource
         const D3D12_RESOURCE_BARRIER barrier = uav_barrier(blas_.Get());
         list->ResourceBarrier(1u, &barrier);
     }
-    D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC top{};
-    top.Inputs.Type = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL;
-    top.Inputs.Flags = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_TRACE;
-    top.Inputs.NumDescs = 1u;
-    top.Inputs.DescsLayout = D3D12_ELEMENTS_LAYOUT_ARRAY;
-    top.Inputs.InstanceDescs = instance_->GetGPUVirtualAddress();
-    top.DestAccelerationStructureData = tlas_->GetGPUVirtualAddress();
-    top.ScratchAccelerationStructureData = scratch_->GetGPUVirtualAddress() + scratch_bytes_;
-    list4->BuildRaytracingAccelerationStructure(&top, 0u, nullptr);
-    {
-        const D3D12_RESOURCE_BARRIER barrier = uav_barrier(tlas_.Get());
-        list->ResourceBarrier(1u, &barrier);
+    if (!build_tlas(list4.Get(), allocate, allocate_context)) {
+        ++window_.skipped;
+        return false;
     }
     if (record_results && timestamps_) {
         list->EndQuery(timestamps_.Get(), D3D12_QUERY_TYPE_TIMESTAMP, slot * kTimestampsPerSlot + 1u);
@@ -3711,6 +3886,9 @@ bool SceneRayTracer::trace_scene(ID3D12GraphicsCommandList* list, const RtSource
     }
     trace_lighting(list, allocate, allocate_context, depth_srv, width, height);
     water_open_ = reflections_active() && light_slot_ >= 0;
+    late_open_ = true;
+    late_next_camera_ = camera_;
+    late_next_camera_known_ = camera_known_;
     if (record_results) {
         if (timestamps_) {
             list->EndQuery(timestamps_.Get(), D3D12_QUERY_TYPE_TIMESTAMP, slot * kTimestampsPerSlot + 3u);

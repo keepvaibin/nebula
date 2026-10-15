@@ -238,11 +238,15 @@ bool RtReflections::initialize(ID3D12Device5* device, std::uint64_t timestamp_fr
     // and glossy (F0 above water's, so the aurora and Mario read in the ice); a white surface shows its
     // reflection only where the reflection takes its place.
     materials_[4] = material("GALAXY_RT_REFLECT_WATER", {0.04f, 0.25f, 1.0f, 0.0f, 0.8f});
-    materials_[kWaterClass] = material("GALAXY_RT_WATER", {0.06f, 0.02f, 1.0f, 0.0f, 0.0f});
+    // A calm, glassy surface (roughness 0.03) with F0 0.2: what stands over the water mirrors in it (20 % looking
+    // 45 degrees down, 23 % at 60, 38 % at 75, the far sea at the 0.5 cap); cover 0.3 keeps the water's own colour;
+    // the sky never (WaterTraceCS). (F0 0.08 cover 0.5 left Buoy Base's tower faint, v52b; cover 0.8 turned
+    // Beach Bowl's lagoon milky, v53a; user: not reflective or modern enough.)
+    materials_[kWaterClass] = material("GALAXY_RT_WATER", {0.03f, 0.2f, 1.0f, 0.0f, 0.3f});
     materials_[kWaterClass + 1u] = materials_[kWaterClass];
     // Crystals, ice, gems and glass (named in rt_surfaces.cpp): clear dielectric, its reflection
     // white and Fresnel-weighted.
-    materials_[7] = material("GALAXY_RT_REFLECT_CRYSTAL", {0.05f, 0.15f, 1.0f, 0.0f, 0.0f});
+    materials_[7] = material("GALAXY_RT_REFLECT_CRYSTAL", {0.05f, 0.25f, 1.0f, 0.0f, 0.0f});
     view_ = static_cast<std::uint32_t>(std::clamp(env_float("GALAXY_RT_REFLECT_VIEW", 0.0f), 0.0f, 6.0f));
     history_frames_ =
         static_cast<std::uint32_t>(std::clamp(env_float("GALAXY_RT_REFLECT_HISTORY", 24.0f), 1.0f, 64.0f));

@@ -1287,9 +1287,9 @@ void WaterTraceCS(uint3 id : SV_DispatchThreadID)
                 const Reflected r = reflect_light(id.xy, dir, n, ng, hit, params, base, true, false);
                 light = r.light;
                 highlight = min(r.highlight, 1.5f) * (surface == kWaterSurface ? 0.5f : 1.0f);
-                // Water mirrors what stands over it in full; the sky at 0.25 of it (the bright sky
-                // bleached the far lagoon, measured wb36).
-                confidence = surface == kWaterSurface && r.source >= kSkyShown ? r.confidence * 0.25f : r.confidence;
+                // Water mirrors what stands over it in full, never the sky (the scene, not the skybox;
+                // the bright sky bleached the far lagoon, measured wb36).
+                confidence = surface == kWaterSurface && r.source >= kSkyShown ? 0.0f : r.confidence;
                 source = r.source;
                 mapped = r.mapped;
                 info.w = asuint(r.distance);

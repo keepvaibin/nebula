@@ -54,6 +54,8 @@ struct RtMaterial {
     bool lens = false;                    // a black hole's lens draw: the finish bends light around it
     bool matte = false;                   // foliage, cloth: absorbs light, no highlight or reflection
     bool sky = false;                     // a sky or backdrop mesh: drawn, never in the traced scene
+    bool star = false;                    // a star's burning surface (the star core): white-hot at its
+                                          // centre, red at its limb (rt_lighting.hlsl CompositePS)
     bool shadow = true;
     float roughness = -1.0f;              // < 0: the class's
     float metallic = -1.0f;               // < 0: the class's
@@ -78,10 +80,21 @@ public:
     // 0: not in the table; else its index + 1.
     [[nodiscard]] std::uint16_t index(std::uint64_t hash) const noexcept;
     [[nodiscard]] const RtMaterial* material(std::uint16_t index) const noexcept;
+    // A row with a `stage` (the game's stage name) holds for that stage alone: its texture's material there
+    // is the texture's own with that row on top (the Observatory's fountain is glass, the same water texture
+    // elsewhere stays water). Per material index, its stage material.
+    [[nodiscard]] std::vector<std::pair<std::uint16_t, const RtMaterial*>> stage_materials(
+        std::string_view stage) const;
 
 private:
+    struct StageRow {
+        std::string stage;
+        std::uint16_t index;
+        RtMaterial material;
+    };
     std::vector<RtMaterial> materials_;
     std::unordered_map<std::uint64_t, std::uint16_t> by_hash_;
+    std::vector<StageRow> stage_rows_;
     std::size_t skipped_ = 0;
 };
 
@@ -104,6 +117,7 @@ struct RtStageSun {
     float size = -1.0f;                   // < 0: the default
     float shafts = -1.0f;                 // < 0: the default
     float day = -1.0f;                    // < 0: by the sky's brightness
+    float ambient = 1.0f;                 // the night model's open-art level for this stage (x GALAXY_RT_NIGHT_LEVEL)
 };
 
 class RtStageSunTable {
@@ -127,5 +141,13 @@ private:
 // 0: not in the table; else its index + 1.
 [[nodiscard]] std::uint16_t rt_material_index(std::uint64_t hash) noexcept;
 [[nodiscard]] const RtMaterial* rt_material(std::uint16_t index) noexcept;
+// GALAXY_RT_LOG_GLOWS=1: the texture-pack name of each texture as uploaded, kept by guest address, and
+// printed ([rt-glow]) for glow draws the table does not name.
+void note_rt_texture(std::uint32_t guest_addr, std::uint64_t pack, std::uint32_t width, std::uint32_t height,
+                     std::uint32_t format);
+void note_rt_unnamed_glow(std::uint32_t guest_addr);
+[[nodiscard]] bool rt_log_glows() noexcept;
+// The loaded stage: its rows of the table (RtMaterialTable::stage_materials) take effect.
+void rt_materials_set_stage(std::string_view stage);
 
 }  // namespace galaxy::gx

@@ -2363,7 +2363,11 @@ std::string ShaderGenerator::generate_ps(const PixelShaderKey& key) const {
         s << "    tex[7].GetDimensions(lit_w, lit_h);\n";
         s << "    const int2 lit_at = min(int2(pin.pos.xy * ztex_params.z), int2(lit_w, lit_h) - 1);\n";
         // The film shoulder on the brightest channel, the hue kept (rt_lighting.hlsl film_light).
-        s << "    const float3 lit_c = frag.rgb * clamp(tex[7].Load(int3(lit_at, 0)).rgb, 0.45, 4.0);\n";
+        // An opaque draw after the trace (bit 7: Rosalina, Freezeflame's ice) takes the light of what lay behind it,
+        // never an emitter's (the lava under the ice took it to x4: a white blot, measured v52b Freezeflame).
+        s << ((key.output_flags & 0x80u) != 0u
+                  ? "    const float3 lit_c = frag.rgb * clamp(tex[7].Load(int3(lit_at, 0)).rgb, 0.45, 1.15);\n"
+                  : "    const float3 lit_c = frag.rgb * clamp(tex[7].Load(int3(lit_at, 0)).rgb, 0.45, 4.0);\n");
         s << "    const float lit_peak = max(lit_c.r, max(lit_c.g, lit_c.b));\n";
         s << "    const float lit_knee = max(max(frag.r, max(frag.g, frag.b)), 0.8);\n";
         s << "    const float lit_room = max(1.0 - lit_knee, 1e-4);\n";
