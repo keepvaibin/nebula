@@ -2197,7 +2197,11 @@ std::string ShaderGenerator::generate_ps(const PixelShaderKey& key) const {
 
     // The PE consumes the final TEV result on the 8-bit lattice. Unclamped TEV stages can hold wider signed
     // intermediates, but alpha compare, fog/colour output and the alpha==1 blend quirk see only the low 8 bits.
-    s << "\n    int4 frag_i = tev_prev_i & int4(255,255,255,255);\n";
+    // Under ray-traced lighting (enhanced keys, header bit 17) the final result clamps like the inputs
+    // (measured rtpartner dy28: Good Egg's wood rim 255,255,102 -> 11,219,101, green streaks).
+    s << (enhanced ? "\n    int4 frag_i = (uber_ps_header.w & 0x20000u) != 0u ? clamp(tev_prev_i, 0, 255)"
+                     " : (tev_prev_i & int4(255,255,255,255));\n"
+                   : "\n    int4 frag_i = tev_prev_i & int4(255,255,255,255);\n");
     s << "    float4 frag = float4(frag_i) / 255.0;\n\n";
     if (enhanced) {
         if ((key.ind_reserved & kEnhancedReflective) != 0u) {
