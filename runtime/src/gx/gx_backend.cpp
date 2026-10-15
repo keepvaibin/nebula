@@ -6699,6 +6699,11 @@ void GxBackend::on_motion_marker(std::uint8_t kind, std::uint16_t aux, std::uint
         return;
     case motion::kMarkerPass:
         ++motion_mirror_markers_;
+        rt_mirror_pass_ = aux == static_cast<std::uint16_t>(motion::PassMarker::MirrorBegin);
+        if (rt_mirror_pass_) {
+            // The frame's A/B state before its scene begins (rt_hidden_draw reads it for the mirror's draws).
+            renderer_.rt_set_ab_original(((g_snapshot_presents + 1u) & 1u) != 0u);
+        }
         if (aux == static_cast<std::uint16_t>(motion::PassMarker::MirrorBegin)) {
             end_side_layer();
             begin_side_layer(kMirrorLayer);
@@ -7141,6 +7146,13 @@ bool GxBackend::rt_fake_shadow_object(std::uint32_t object) {
 }
 
 bool GxBackend::rt_hidden_draw() const noexcept {
+    // GALAXY_RT_HIDE_MIRROR=1: the game's mirror pass (the world drawn from the mirrored camera into the
+    // texture mirrors project) is not drawn under traced reflections. Off by default: in Freezeflame the
+    // second Mario stayed with it on (mf1: the inverted Mario is drawn after the reflection composite).
+    static const bool hide_mirror = read_env_u64("GALAXY_RT_HIDE_MIRROR", 0u) != 0u;
+    if (rt_mirror_pass_ && hide_mirror && renderer_.rt_reflections_active()) {
+        return true;
+    }
     if (!scene_phase_ || side_layer_ != kSceneLayer || !renderer_.rt_lighting()) {
         return false;
     }
@@ -7744,6 +7756,7 @@ void GxBackend::on_fifo_marker(FifoMarker marker, const std::array<float, 12>* v
     }
     scene_phase_ = marker == FifoMarker::SceneBegin;
     if (marker == FifoMarker::SceneBegin) {
+        rt_mirror_pass_ = false;
         renderer_.set_scene_view(view);
         // GALAXY_RT_AB: the game's own picture on odd presents (the snapshots' numbering).
         renderer_.rt_set_ab_original(((g_snapshot_presents + 1u) & 1u) != 0u);
