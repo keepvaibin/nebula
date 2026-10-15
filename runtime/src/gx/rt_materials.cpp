@@ -303,7 +303,7 @@ std::size_t RtStageSunTable::read(std::istream& in) {
     std::string line;
     bool header_read = false;
     int stage_col = -1, source_col = -1, x_col = -1, y_col = -1, z_col = -1, r_col = -1, g_col = -1, b_col = -1,
-        strength_col = -1, size_col = -1, shafts_col = -1;
+        strength_col = -1, size_col = -1, shafts_col = -1, day_col = -1;
     std::size_t rows = 0u;
     while (std::getline(in, line)) {
         if (line.empty() || line[0] == '#') {
@@ -318,7 +318,7 @@ std::size_t RtStageSunTable::read(std::istream& in) {
                                 : name == "x" ? &x_col : name == "y" ? &y_col : name == "z" ? &z_col
                                 : name == "r" ? &r_col : name == "g" ? &g_col : name == "b" ? &b_col
                                 : name == "strength" ? &strength_col : name == "size" ? &size_col
-                                : name == "shafts" ? &shafts_col : nullptr;
+                                : name == "shafts" ? &shafts_col : name == "day" ? &day_col : nullptr;
                 if (slot != nullptr) *slot = static_cast<int>(i);
             }
             continue;
@@ -353,6 +353,7 @@ std::size_t RtStageSunTable::read(std::istream& in) {
         if (number(row, strength_col, v)) sun.strength = std::clamp(v, 0.0f, 4.0f);
         if (number(row, size_col, v)) sun.size = std::clamp(v, 0.0f, 30.0f);
         if (number(row, shafts_col, v)) sun.shafts = std::clamp(v, 0.0f, 4.0f);
+        if (number(row, day_col, v)) sun.day = std::clamp(v, 0.0f, 1.0f);
         suns_[stage] = sun;
         ++rows;
     }

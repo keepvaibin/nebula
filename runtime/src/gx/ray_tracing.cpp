@@ -156,9 +156,11 @@ struct RtBloomCompositeConstants {
     std::uint32_t size[2];
     float strength;
     float split;
-    std::uint32_t pad[2];
+    std::uint32_t light_size[2];
+    std::uint32_t factor;
+    std::uint32_t pad[3];
 };
-static_assert(sizeof(RtBloomCompositeConstants) == 32u);
+static_assert(sizeof(RtBloomCompositeConstants) == 48u);
 
 // Mirrors cbuffer RtEmit in rt_lighting.hlsl (root constants).
 struct RtEmitConstants {
@@ -1905,15 +1907,18 @@ bool SceneRayTracer::create_lighting_pipelines(DXGI_FORMAT color_format) {
             !compute(bloom_root_.Get(), g_rt_bloom_blur_cs, sizeof(g_rt_bloom_blur_cs), bloom_blur_pso_)) {
             return false;
         }
-        D3D12_ROOT_PARAMETER composite_bloom_params[2]{};
+        // Constants; the bloom (t0); the lighting's result for the halo mask (t1).
+        D3D12_ROOT_PARAMETER composite_bloom_params[3]{};
         composite_bloom_params[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
         composite_bloom_params[0].Constants.Num32BitValues = sizeof(RtBloomCompositeConstants) / 4u;
         composite_bloom_params[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_SRV;
+        composite_bloom_params[2].ParameterType = D3D12_ROOT_PARAMETER_TYPE_SRV;
+        composite_bloom_params[2].Descriptor.ShaderRegister = 1u;
         for (auto& param : composite_bloom_params) {
             param.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
         }
         D3D12_ROOT_SIGNATURE_DESC composite_bloom_rsd{};
-        composite_bloom_rsd.NumParameters = 2u;
+        composite_bloom_rsd.NumParameters = 3u;
         composite_bloom_rsd.pParameters = composite_bloom_params;
         if (!serialize(composite_bloom_rsd, bloom_composite_root_)) {
             return false;
@@ -2266,6 +2271,8 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
     c.ao[0] = ao_reach_;
     c.ao[1] = ao_day_;
     c.ao[2] = ao_night_;
+    // The stage's day model share (rt-suns.tsv day); < 0: by its sky's brightness.
+    c.self[3] = stage_sun_ != nullptr && stage_sun_->day >= 0.0f ? stage_sun_->day : -1.0f;
     c.point_saturation = point_saturation_;
     std::copy(view_.projection.begin(), view_.projection.end(), c.projection);
     c.depth[0] = view_.z_scale;
@@ -3259,6 +3266,15 @@ void SceneRayTracer::bloom(ID3D12GraphicsCommandList* list, D3D12_CPU_DESCRIPTOR
     c.size[1] = size[1];
     c.strength = bloom_strength_;
     c.split = split_ > 0.0f ? split_ * static_cast<float>(width) : -1.0f;
+    // The halo mask reads the same slot's lighting result (bloom slots are the light slots).
+    const bool mask = index < kLightSlots && light_final_[index] && light_slots_[index].factor != 0u &&
+                      light_slots_[index].width == width && light_slots_[index].height == height;
+    if (mask) {
+        to_state(list, light_final_[index].Get(), light_final_state_[index], kLightRead);
+        c.light_size[0] = light_slots_[index].sample_width;
+        c.light_size[1] = light_slots_[index].sample_height;
+        c.factor = light_slots_[index].factor;
+    }
     list->OMSetRenderTargets(1u, &target, FALSE, nullptr);
     const D3D12_VIEWPORT viewport{0.0f, 0.0f, static_cast<float>(width), static_cast<float>(height), 0.0f, 1.0f};
     const D3D12_RECT scissor{0, 0, static_cast<LONG>(width), static_cast<LONG>(height)};
@@ -3268,6 +3284,8 @@ void SceneRayTracer::bloom(ID3D12GraphicsCommandList* list, D3D12_CPU_DESCRIPTOR
     list->SetPipelineState(bloom_composite_pso_.Get());
     list->SetGraphicsRoot32BitConstants(0u, sizeof(c) / 4u, &c, 0u);
     list->SetGraphicsRootShaderResourceView(1u, bloom_[index]->GetGPUVirtualAddress());
+    list->SetGraphicsRootShaderResourceView(2u, mask ? light_final_[index]->GetGPUVirtualAddress()
+                                                     : bloom_[index]->GetGPUVirtualAddress());
     list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
     const int timed = begin_pass(list);
     list->DrawInstanced(3u, 1u, 0u, 0u);

@@ -63,7 +63,8 @@ cbuffer RtLight : register(b0)
                                 // surfaces' light (lava, magma, fire) on what sees them
     float4 g_self;              // the material table's emitters glowing from their own surfaces: area
                                 // lights (lava) and point lights (Lumas, star bits) per unit of
-                                // intensity; an area light's radiance on what sees it per unit
+                                // intensity; an area light's radiance on what sees it per unit; the
+                                // stage's day model share (rt-suns.tsv day; < 0: by its sky)
     float4 g_ao;                // contact occlusion: reach (eye units), strength by day, strength at
                                 // night (0: off), unused
 };
@@ -114,6 +115,8 @@ static const uint kDrawStride = 32u;
 static const uint kDrawTableGlow = 2u;
 static const uint kDrawTableFoliage = 4u;   // g_draws word 6: alpha-cut foliage cards
 static const float kDrawGlowScale = 16.0f;
+// RtDraw.flags bits 8-11 (rt_surfaces.h RtSurfaceClass::Crystal): clear crystal, glass and gems.
+static const uint kClearClass = 7u;
 // The lighting multiplies the game's colour by at most this; the composite rolls it off on a film
 // shoulder from kLitKnee (apply_light).
 static const float kMaxLight = 8.0f;
@@ -744,12 +747,12 @@ void CaptureCS(uint3 id : SV_DispatchThreadID)
 }
 
 // ---------------------------------------------------------------------------------------------
-// Glow lights: the game's additive translucent draws (lamp and core halos, Lumas, sparks) are its
-// light sources. Each glow draw's eye-space triangles (the geometry pass) and what the
-// translucent phases added to the picture where they lie give a light: the draw's centre
-// weighted by that light, its spread, its power (light added x area x gain). The lights are
-// remembered in world space while out of view or hidden, and fade where their place is in view
-// and no longer glows.
+// Glow lights: the game's additive translucent draws whose texture the material table names as a
+// light (lamp halos, fire, lava sparks, electricity) are light sources; other glows are effects whose
+// halo shows in the bloom only. Each glow draw's eye-space triangles (the geometry pass) and what the
+// translucent phases added to the picture where they lie give the light's centre (weighted by that
+// light) and spread; its power and colour are the table's. The lights are remembered in world space
+// while out of view or hidden, and fade where their place is in view and no longer glows.
 // ---------------------------------------------------------------------------------------------
 
 cbuffer RtEmit : register(b0)
@@ -858,15 +861,25 @@ void GlowEmitCS(uint3 group : SV_GroupID, uint gi : SV_GroupIndex)
         // A glow's texture covers about a quarter of its quad.
         float3 power = s_glow_a[0].rgb * (0.25f * e_gain);
         const uint flags = e_draws.Load(group.x * 32u + 24u);
-        if ((flags & kGlowTableColor) != 0u) {
-            // The table's colour at the luminance the picture shows (fire is orange, not the white its
-            // sprites clip to).
-            const float3 tint = float3(float(entry.z >> 24u), float((entry.z >> 16u) & 0xFFu),
-                                       float((entry.z >> 8u) & 0xFFu)) / 255.0f;
-            power = tint / max(luminance(tint), 1e-3f) * luminance(power);
-        }
         if ((flags & kGlowTableIntensity) != 0u) {
-            power *= asfloat(entry.w);
+            // A light the table names sends the table's light (its intensity in Lumas), whatever the size of
+            // the sprite that shows it: in the table's colour (fire is orange, not the white its sprites clip
+            // to), or the colour the picture shows for a tinted row.
+            const float3 tint = (flags & kGlowTableColor) != 0u
+                                    ? float3(float(entry.z >> 24u), float((entry.z >> 16u) & 0xFFu),
+                                             float((entry.z >> 8u) & 0xFFu)) / 255.0f
+                                    : power;
+            float intensity = asfloat(entry.w);
+            const float pulse = asfloat(e_draws.Load(group.x * 32u + 20u));
+            if (pulse > 0.0f) {
+                intensity *= 0.75f + 0.25f * sin(6.2831853f * pulse * e_time);
+            }
+            power = tint / max(luminance(tint), 1e-6f) * (intensity * e_authored_power);
+        } else {
+            // A glow the table does not name is an effect, not a light: its halo shows in the bloom only. As
+            // lights, effect sprites around a Luma summed to 0.4-0.9e6 per light (10-22 Lumas) even when each
+            // was capped at two Lumas (rp13 Observatory [rt-emit], six lights at the Tico at -900,88,4385).
+            power = float3(0.0f, 0.0f, 0.0f);
         }
         // The largest glows are atmospheres and halos around planets and the sky, not lights.
         if (luminance(power) >= 4.0f && radius <= kEmitLargest) {
@@ -1200,9 +1213,12 @@ cbuffer RtBloomComposite : register(b0)
     uint2 o_size;
     float o_strength;
     float o_split;              // GALAXY_RT_SPLIT: left of it the game's own picture
-    uint2 o_pad;
+    uint2 o_light_size;         // the lighting's samples (0: no halo mask)
+    uint o_factor;              // EFB pixels per sample side
+    uint3 o_pad;
 };
 StructuredBuffer<uint> o_bloom : register(t0);
+StructuredBuffer<uint4> o_light : register(t1);   // the lighting's result (SpatialBCS g_final)
 
 float4 BloomPS(float4 position : SV_Position) : SV_Target0
 {
@@ -1218,6 +1234,13 @@ float4 BloomPS(float4 position : SV_Position) : SV_Target0
         const int2 s = clamp(b + o, int2(0, 0), int2(o_size) - 1);
         const float w = (o.x != 0 ? f.x : 1.0f - f.x) * (o.y != 0 ? f.y : 1.0f - f.y);
         c += unpack_r11g11b10(o_bloom[uint(s.y) * o_size.x + uint(s.x)]) * w;
+    }
+    // A small light source (Luma, star bit, star, fire enemy) glows around itself, not over itself: its own
+    // pixels (a halo share in the lighting's result) keep their detail.
+    if (o_factor != 0u) {
+        const uint2 s = min(uint2(position.xy) / o_factor, o_light_size - 1u);
+        const float halo = f16tof32(o_light[s.y * o_light_size.x + s.x].w >> 16u);
+        c *= 1.0f - saturate(halo * 2.5f);
     }
     return float4(c * o_strength, 0.0f);
 }
@@ -1489,6 +1512,9 @@ void TraceCS(uint3 id : SV_DispatchThreadID, uint gi : SV_GroupIndex)
     float3 ng = n;
     float3 lifted = p;
     uint2 primary = uint2(0u, 0u);
+    // A clear crystal or glass surface (surface class 7) lets the lights behind it through: the star bits
+    // inside a crystal light it from within.
+    bool clear = false;
     {
         const float span = length(p);
         RayDesc ray;
@@ -1516,6 +1542,7 @@ void TraceCS(uint3 id : SV_DispatchThreadID, uint gi : SV_GroupIndex)
                 lifted = v0 * w.x + v1 * w.y + v2 * w.z;
                 primary = uint2(tri + 1u, f32tof16(b.x) | (f32tof16(b.y) << 16u));
                 const uint4 surface = g_surfaces.Load4(tri * 16u);
+                clear = ((surface.w >> 8u) & 15u) == kClearClass;
                 if (surface.x != 0u && surface.y != 0u && surface.z != 0u) {
                     float3 n0 = unpack_vertex_normal(surface.x);
                     float3 n1 = unpack_vertex_normal(surface.y);
@@ -1671,7 +1698,7 @@ void TraceCS(uint3 id : SV_DispatchThreadID, uint gi : SV_GroupIndex)
                 continue;
             }
             const float inv_d = rsqrt(max(d2, 1e-6f));
-            const float nl = dot(n, to) * inv_d;
+            const float nl = clear ? abs(dot(n, to)) * inv_d : dot(n, to) * inv_d;
             if (nl <= 0.0f) {
                 continue;
             }
@@ -1696,10 +1723,13 @@ void TraceCS(uint3 id : SV_DispatchThreadID, uint gi : SV_GroupIndex)
         }
         const float lum = luminance(kept_power);
         if (sum > 0.0f && lum > 0.0f) {
-            const float3 to = kept.xyz - origin;
+            // A light behind a clear surface is reached from its inner side.
+            const bool behind = clear && dot(kept.xyz - p, ng) < 0.0f;
+            const float3 start = behind ? lifted - ng * (0.2f + abs(p.z) * 4e-4f) : origin;
+            const float3 to = kept.xyz - start;
             const float span = length(to);
             RayDesc ray;
-            ray.Origin = origin;
+            ray.Origin = start;
             ray.Direction = to / max(span, 1e-4f);
             ray.TMin = 0.0f;
             // The light fills its glow (a core, a lamp head): the ray ends at its radius.
@@ -2211,7 +2241,7 @@ void SpatialBCS(uint3 id : SV_DispatchThreadID)
     // luminance (black: no traced triangle under the sample, the day model left out).
     float3 day_terms = float3(0.0f, 0.0f, 0.0f);
     {
-        const float day_mix = smoothstep(0.35f, 0.8f, day_sky);
+        const float day_mix = g_self.w >= 0.0f ? g_self.w : smoothstep(0.35f, 0.8f, day_sky);
         if (day_mix > 0.0f && tri != 0u) {
             const float3 n = unpack_normal(g_normal[index]);
             const float nl = dot(n, g_sun.xyz);
@@ -2299,6 +2329,14 @@ void SpatialBCS(uint3 id : SV_DispatchThreadID)
                 m = min(max(m, 1.0f) + glow * hue, kMaxLight);
             }
         }
+    }
+    // Clear crystal and glass show what lies behind them (the game's refraction of the picture): the light
+    // at their surface does not darken that; the lights in and around them add to it (a crystal's star
+    // bits light it from within: TraceCS takes their light through it).
+    if (((draw_flags >> 8u) & 15u) == kClearClass) {
+        m = max(m, 1.0f + points);
+        // Lit from within, the crystal itself glows (its halo joins the bloom around it).
+        halo = max(halo, 0.5f * saturate(luminance(points)));
     }
     // A glowing surface (unlit, bright, under its own glow in the previous picture: a core, a lamp)
     // sends its light whatever reaches it: it keeps its colour and shines brighter.
