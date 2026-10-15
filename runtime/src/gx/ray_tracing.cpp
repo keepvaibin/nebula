@@ -111,8 +111,9 @@ struct RtLightConstants {
     float emit[4];
     float self[4];
     float ao[4];
+    float night[4];
 };
-static_assert(sizeof(RtLightConstants) == 640u);
+static_assert(sizeof(RtLightConstants) == 656u);
 
 // Mirrors cbuffer RtPost in rt_post.hlsl (root constants).
 struct RtPostConstants {
@@ -742,6 +743,11 @@ bool SceneRayTracer::initialize(ID3D12Device* device, std::uint64_t timestamp_fr
     ao_reach_ = std::clamp(env_float("GALAXY_RT_AO_REACH", 150.0f), 0.0f, 2000.0f);
     ao_day_ = std::clamp(env_float("GALAXY_RT_AO", 0.8f), 0.0f, 1.0f);
     ao_night_ = std::clamp(env_float("GALAXY_RT_AO_NIGHT", 1.0f), 0.0f, 1.0f);
+    night_level_ = std::clamp(env_float("GALAXY_RT_NIGHT_LEVEL", 0.8f), 0.2f, 1.5f);
+    night_occlusion_ = std::clamp(env_float("GALAXY_RT_NIGHT_AO", 0.75f), 0.0f, 1.0f);
+    night_shadow_ = std::clamp(env_float("GALAXY_RT_NIGHT_SHADOW", 0.6f), 0.0f, 1.0f);
+    night_lights_ = std::clamp(env_float("GALAXY_RT_NIGHT_LIGHTS", 1.0f), 0.0f, 8.0f);
+    night_lights_cap_ = std::clamp(env_float("GALAXY_RT_NIGHT_LIGHTS_CAP", 1.5f), 0.05f, 8.0f);
     // The finish (grade, depth of field, shafts, haze, star core, lenses) off by default: with it and the
     // reflections both on, pictures came out x(1 + x) of the game (Honeyhive 1.31-1.51 per pair with the
     // lighting off; off: 0.87-1.03, measured h5n / h5p / hhd, 2026-10-15). Cause not yet found.
@@ -2281,6 +2287,11 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
     c.ao[0] = ao_reach_;
     c.ao[1] = ao_day_;
     c.ao[2] = ao_night_;
+    c.ao[3] = night_lights_cap_;
+    c.night[0] = night_level_;
+    c.night[1] = night_occlusion_;
+    c.night[2] = night_shadow_;
+    c.night[3] = night_lights_;
     // The stage's day model share (rt-suns.tsv day); < 0: by its sky's brightness.
     c.self[3] = stage_sun_ != nullptr && stage_sun_->day >= 0.0f ? stage_sun_->day : -1.0f;
     c.point_saturation = point_saturation_;

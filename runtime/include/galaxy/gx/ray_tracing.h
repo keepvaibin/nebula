@@ -746,6 +746,14 @@ private:
     float ao_reach_ = 150.0f;
     float ao_day_ = 0.8f;
     float ao_night_ = 1.0f;
+    // Night model (stages without daylight: rt-suns day 0, or a dark sky): the open art's level
+    // (GALAXY_RT_NIGHT_LEVEL), the traced sky occlusion's depth (_AO), the cast shadows' depth (_SHADOW),
+    // the traced lights' gain (_LIGHTS) and the light they add at most, softly (_LIGHTS_CAP).
+    float night_level_ = 0.8f;
+    float night_occlusion_ = 0.75f;
+    float night_shadow_ = 0.6f;
+    float night_lights_ = 1.0f;
+    float night_lights_cap_ = 1.5f;
     float sky_ibl_ = 0.8f;          // GALAXY_RT_SKY_IBL: rays reaching the sky take the light of their
                                     // direction (0: the sky's mean colour from every direction)
     bool post_ = false;             // GALAXY_RT_POST: the cinematic finish (off: see ray_tracing.cpp)

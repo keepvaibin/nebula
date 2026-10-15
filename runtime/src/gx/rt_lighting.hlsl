@@ -66,7 +66,9 @@ cbuffer RtLight : register(b0)
                                 // intensity; an area light's radiance on what sees it per unit; the
                                 // stage's day model share (rt-suns.tsv day; < 0: by its sky)
     float4 g_ao;                // contact occlusion: reach (eye units), strength by day, strength at
-                                // night (0: off), unused
+                                // night (0: off); the night model's most light the lights add (soft)
+    float4 g_night;             // night model: the open art's level, the sky occlusion's depth, the cast
+                                // shadows' depth, the traced lights' gain
 };
 
 RaytracingAccelerationStructure g_scene : register(t6);
@@ -2296,9 +2298,25 @@ void SpatialBCS(uint3 id : SV_DispatchThreadID)
             // (sunlit contacts keep their direct light).
             const float sunlit = vis * saturate(shaped / 0.5f);
             const float day_contact = 1.0f - g_ao.y * (foliage ? 0.5f : 1.0f) * (1.0f - contact) * (1.0f - 0.5f * sunlit);
-            const float3 day_m = min(shadow * day_form * ao * day_contact * tint * level + day_points, 1.1f * level) * kDayLevel;
+            float3 day_m = min(shadow * day_form * ao * day_contact * tint * level + day_points, 1.1f * level) * kDayLevel;
             day_terms = float3(vis, shaped, saturate(sky_l));
-            const float3 day_open = min((shadow * day_form) * level + day_points, 1.1f * level) * kDayLevel;
+            float3 day_open = min((shadow * day_form) * level + day_points, 1.1f * level) * kDayLevel;
+            // Night (no daylight): the art darker in the open (g_night.x), the traced sky occlusion and the
+            // contact occlusion carry the depth (corners, creases, under and around objects), the key's
+            // (moon's) cast shadows go deeper, and the traced lights add their light uncapped by the art
+            // (lamps, Lumas, star bits and the star core light what they reach and cast shadows), rolling off
+            // softly towards g_ao.w. (The art model's 1.1 cap held every light at +10 %: the Observatory's
+            // core, lamps and Lumas lit nothing; Rosalina and the Lumas cast no shadow.)
+            if (day_share < 1.0f) {
+                const float occlusion = 1.0f - g_night.y * (foliage ? 0.5f : 1.0f) * (1.0f - saturate(sky_l));
+                const float night_contact = 1.0f - g_ao.z * (foliage ? 0.5f : 1.0f) * (1.0f - contact);
+                const float night_shadow = 1.0f - g_night.z * (1.0f - vis);
+                const float3 lights = points * g_night.w;
+                const float3 added = lights / (1.0f + luminance(lights) / max(g_ao.w, 1e-3f));
+                const float3 art = night_shadow * day_form * tint * level * g_night.x;
+                day_m = lerp(art * occlusion * night_contact + added, day_m, day_share);
+                day_open = lerp(night_shadow * day_form * level * g_night.x + added, day_open, day_share);
+            }
             lighting = lerp(lighting, day_m, day_mix);
             open = lerp(open, day_open, day_mix);
         }
@@ -2341,6 +2359,9 @@ void SpatialBCS(uint3 id : SV_DispatchThreadID)
                                         : asfloat(emission.y);
             if (kind != kEmitArea) {
                 halo = g_self.y * min(intensity, 3.0f);
+                // A light source is lit by itself: no occlusion or night darkening on its own surface (a
+                // Luma glows, a star bit sparkles), a little over its colour as it grows brighter.
+                m = max(m, (1.0f + 0.15f * saturate(intensity)).xxx);
             }
             const float glow = kind == kEmitArea ? g_self.x * intensity : 0.0f;
             if (glow > 0.0f) {
