@@ -2251,6 +2251,28 @@ float contact_occlusion(uint2 id, float3 p, float3 n)
     return saturate(visible / 4.0f);
 }
 
+// The depth at a sample is its traced surface: its primary triangle lies at the sample's eye z (within
+// 0.1 %, the validation's match). Surfaces the trace leaves out or holds only nearby carry depth the art
+// paints flat (Snow Cap's snow floor, a drawer's bumpy grid a few units over its traced ground: contact
+// occlusion speckled it with pits).
+bool traced_depth(uint2 id, float z)
+{
+    const uint primary = g_primary[id.y * g_sample_size.x + id.x].x;
+    if (primary == 0u) {
+        return false;
+    }
+    // The triangle's plane along the sample's camera ray.
+    const uint at = (primary - 1u) * 36u;
+    const float3 v0 = asfloat(g_positions.Load3(at));
+    const float3 face = cross(asfloat(g_positions.Load3(at + 12u)) - v0, asfloat(g_positions.Load3(at + 24u)) - v0);
+    const float3 d = pixel_direction(g_projection, g_viewport, sample_centre(id));
+    const float facing = dot(face, d);
+    if (!(abs(facing) > 1e-6f * length(face) * length(d))) {
+        return true;
+    }
+    return abs(-dot(face, v0) / facing - z) <= 1e-3f * abs(z) + 0.25f;
+}
+
 [numthreads(8, 8, 1)]
 void SpatialBCS(uint3 id : SV_DispatchThreadID)
 {
@@ -2274,7 +2296,7 @@ void SpatialBCS(uint3 id : SV_DispatchThreadID)
     // Contact occlusion: corners, contacts and creases the sky and bounce light reach less of. Never on
     // the sun or the lamps and glows (their shadows are traced).
     float contact = 1.0f;
-    if (g_ao.x > 0.0f && (g_ao.y > 0.0f || g_ao.z > 0.0f)) {
+    if (g_ao.x > 0.0f && (g_ao.y > 0.0f || g_ao.z > 0.0f) && traced_depth(id.xy, z)) {
         contact = contact_occlusion(id.xy, sample_position(id.xy, z), unpack_normal(g_normal[index]));
     }
     const float3 sky_seen = light.sky * (1.0f - g_ao.z * (1.0f - contact));
@@ -2369,8 +2391,11 @@ void SpatialBCS(uint3 id : SV_DispatchThreadID)
     // occlusion darkens creases and contacts, shade takes a little of the sky's colour, and faces
     // turned from the sun keep kDayForm of their light (a faint sun). The lamps and glows still add
     // their light; no exposure. Under a dark sky the lit model above (the nights as they are).
+    // Surfaces the traced scene leaves out (alpha-tested cut-outs other than foliage cards, the snow
+    // floor's drawer) take it too, by their depth's normal: on the lit model they turned dark by day
+    // (Snow Cap's snowmen grey, its snow speckled where samples met the ground's triangle or none).
     // GALAXY_RT_VIEW=8: the day model's sun visibility, the sun's facing (shaped n.l) and the sky's
-    // luminance (black: no traced triangle under the sample, the day model left out).
+    // luminance.
     float3 day_terms = float3(0.0f, 0.0f, 0.0f);
     {
         // Every stage on the art model (build 49): the night lit model re-shaded art past the game's (fc46:
@@ -2378,7 +2403,7 @@ void SpatialBCS(uint3 id : SV_DispatchThreadID)
         // By night the lamps and glows add their light in full, by day a third.
         const float day_share = g_self.w >= 0.0f ? g_self.w : smoothstep(0.35f, 0.8f, day_sky);
         const float day_mix = 1.0f;
-        if (day_mix > 0.0f && tri != 0u) {
+        if (day_mix > 0.0f) {
             const float3 n = unpack_normal(g_normal[index]);
             const float nl = dot(n, g_sun.xyz);
             const float shaped = nl > 0.0f ? nl * (1.5f - 0.5f * nl) : 0.0f;
@@ -2390,8 +2415,8 @@ void SpatialBCS(uint3 id : SV_DispatchThreadID)
             // darkened faces away from it: Melty 0.78 of the game, measured rtpartner rp10).
             const float form = any(g_sun_light.rgb > 0.0f) ? 1.0f - kDayForm * (1.0f - saturate(shaped / 0.8f)) : 1.0f;
             const float sky_l = luminance(light.sky);
-            const bool foliage = (g_draws.Load(min(draw_flags >> 16u, max(g_draw_count, 1u) - 1u) * kDrawStride + 24u) &
-                                  kDrawTableFoliage) != 0u;
+            const bool foliage = tri != 0u && (g_draws.Load(min(draw_flags >> 16u, max(g_draw_count, 1u) - 1u) *
+                                               kDrawStride + 24u) & kDrawTableFoliage) != 0u;
             // The characters and objects the game lights carry their form in their own shading: their sky and
             // contact occlusion at 0.4 (by day Mario fell to about 0.58 of the game under it, user: too dark).
             const bool lit_draw = (draw_flags & (kDrawLit | kDrawDelit)) != 0u;
