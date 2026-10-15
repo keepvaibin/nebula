@@ -1425,7 +1425,7 @@ void ReflectTemporalCS(uint3 id : SV_DispatchThreadID)
                 const float4 history = sum / weight;
                 const float3 clamped =
                     from_ycocg(clamp(to_ycocg(history.rgb), mean - gamma * spread, mean + gamma * spread));
-                const float limit = lerp(8.0f, float(g_history_frames), saturate(alpha * 4.0f));
+                const float limit = lerp(4.0f, float(g_history_frames), saturate(alpha * 4.0f));
                 frames = min(count_sum / weight + 1.0f, limit);
                 // Light blends by confidence (unknown light only fades the reflection); the
                 // confidence itself by the history's share.
@@ -2095,7 +2095,11 @@ CompositeOut WaterCompositePS(float4 position : SV_Position)
         const float2 lo = m_viewport.xy;
         const float2 hi = m_viewport.xy + m_viewport.zw - 1.0f;
         float3 water;
+        float edge = 1.0f;
         if (m_water2.y > 0.0f) {
+            const int2 own = int2(clamp(position.xy, lo, hi));
+            const float3 drawn = abs(m_scene.Load(int3(own, 0)).rgb - m_opaque.Load(int3(own, 0)).rgb);
+            edge = smoothstep(0.004f, 0.03f, drawn.r + drawn.g + drawn.b);
             // The water layer the game drew (the frame with it less the frame before it) low-passed by a
             // bilateral filter (its tiled texture goes, its colour and gradient stay), over the seabed as it
             // lies (sharp), moved by the waves' refraction where the moved point is water too.
@@ -2145,7 +2149,7 @@ CompositeOut WaterCompositePS(float4 position : SV_Position)
             const float foam = shore * smoothstep(0.45f, 0.7f, lace) * m_water2.z;
             water = lerp(water, max(luminance(water), 0.75f).xxx * float3(1.0f, 1.0f, 1.02f), saturate(foam));
         }
-        const float cover = abs(m_water2.y) * share;
+        const float cover = abs(m_water2.y) * share * edge;
         under_add = water * cover;
         under_keep = (1.0f - cover).xxx;
     }

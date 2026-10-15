@@ -115,6 +115,12 @@ static const float kDrawGlowScale = 16.0f;
 // The lighting multiplies the game's colour by at most this; the composite rolls it off on a film
 // shoulder from kLitKnee (apply_light).
 static const float kMaxLight = 8.0f;
+// Daytime (SpatialBCS): a cast shadow's depth, the faint sun's darkening of faces turned from it, the sky
+// occlusion's depth and the sky colour's share in shade.
+static const float kDayShadow = 0.45f;
+static const float kDayForm = 0.15f;
+static const float kDayOcclusion = 0.5f;
+static const float kDayTint = 0.25f;
 static const float kLitKnee = 0.8f;
 // The share of the light the film shoulder rolls off (lava, fire, lamps, glints) that joins the
 // bloom (CaptureCS).
@@ -655,7 +661,7 @@ void CaptureCS(uint3 id : SV_DispatchThreadID)
     if ((c_divide & 2u) != 0u) {
         const float day_glow = c_sums.Load(36u) != 0u ? saturate(asfloat(c_sums.Load(32u)) / c_daylight) : 1.0f;
         c_glow[index] = pack_r11g11b10(max(color - unpack_r11g11b10(c_glow_base[index]), 0.0f) *
-                                       (1.0f - 0.6f * day_glow));
+                                       (1.0f - 0.25f * day_glow));
     }
     const float depth = c_depth_tex.Load(int3(q, 0));
     const bool sky = far_plane(c_depth, depth) || !inside(c_viewport, float2(q) + 0.5f) ||
@@ -2043,6 +2049,33 @@ void SpatialBCS(uint3 id : SV_DispatchThreadID)
     }
     lighting *= exposure;
     open *= exposure;
+    // Daytime: the game's art as it draws it, with modern shadows on it. The art is painted for even
+    // light; a physical sun either bleached it or darkened it (user: keep the art style and direction,
+    // the sun very faint, just more shadows; research R03 ratio relighting, R14 Nintendo). Open, sunlit
+    // surfaces stay exactly as drawn; the sun's cast shadows take them to kDayShadow, the sky's
+    // occlusion darkens creases and contacts, shade takes a little of the sky's colour, and faces
+    // turned from the sun keep kDayForm of their light (a faint sun). The lamps and glows still add
+    // their light; no exposure. Under a dark sky the lit model above (the nights as they are).
+    {
+        const float day_mix = smoothstep(0.35f, 0.8f, day_sky);
+        if (day_mix > 0.0f && tri != 0u) {
+            const float3 n = unpack_normal(g_normal[index]);
+            const float nl = dot(n, g_sun.xyz);
+            const float shaped = nl > 0.0f ? nl * (1.5f - 0.5f * nl) : 0.0f;
+            // The sun's cast shadow: its traced term over its facing (faces it does not reach count as
+            // lit; the art lit them).
+            const float vis = any(g_sun_light.rgb > 0.0f) && shaped > 0.08f ? saturate(light.sun / shaped) : 1.0f;
+            const float shadow = 1.0f - kDayShadow * (1.0f - vis);
+            const float form = 1.0f - kDayForm * (1.0f - saturate(shaped / 0.8f));
+            const float sky_l = luminance(light.sky);
+            const float ao = 1.0f - kDayOcclusion * (1.0f - saturate(sky_l));
+            const float3 tint = lerp(float3(1.0f, 1.0f, 1.0f), light.sky / max(sky_l, 0.05f), kDayTint * (1.0f - vis));
+            const float3 day_m = shadow * form * ao * tint + points;
+            const float3 day_open = (shadow * form).xxx + points;
+            lighting = lerp(lighting, day_m, day_mix);
+            open = lerp(open, day_open, day_mix);
+        }
+    }
     // A small light source's halo: its share of the picture that joins the bloom (CaptureCS).
     float halo = 0.0f;
     // The sun's share of the light for the composite's per-pixel relief: its visibility (the filtered
