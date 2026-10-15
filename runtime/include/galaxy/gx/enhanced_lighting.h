@@ -38,6 +38,10 @@ struct EnhancedLightingTuning {
 // The ind_reserved material word of an enhanced draw (shader_keys.h kEnhanced*), zero when the
 // draw is neither lit nor environment-mapped (enhanced lighting leaves it as the game draws it).
 // The keys are the draw's own, before the enhanced bits are set.
+struct RtMaterial;
+// The material table's roughness and metalness for an enhanced draw's uber header (kEnhancedTable*;
+// 0 without an entry or without either value).
+[[nodiscard]] std::uint32_t enhanced_table_material(const RtMaterial* material) noexcept;
 [[nodiscard]] std::uint32_t enhanced_lighting_material(const VertexShaderKey& vs,
                                                        const PixelShaderKey& ps) noexcept;
 

@@ -1259,6 +1259,7 @@ private:
     // The EFB colour as the ray-traced composite reads it (it draws into the EFB): a copy, and its
     // view in this frame's descriptor ring.
     D3D12_GPU_DESCRIPTOR_HANDLE rt_composite_color();
+    D3D12_GPU_DESCRIPTOR_HANDLE rt_game_picture();
     Microsoft::WRL::ComPtr<ID3D12Resource> rt_color_copy_;
     void record_rt_water(int slot, bool reproject);
     [[nodiscard]] bool temporal_inputs_match(const TemporalUpscaleInputs& in) const;

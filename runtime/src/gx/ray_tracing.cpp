@@ -106,8 +106,9 @@ struct RtLightConstants {
     float sky_ibl;
     float fill;
     float emit[4];
+    float self[4];
 };
-static_assert(sizeof(RtLightConstants) == 608u);
+static_assert(sizeof(RtLightConstants) == 624u);
 
 // Mirrors cbuffer RtPost in rt_post.hlsl (root constants).
 struct RtPostConstants {
@@ -128,7 +129,9 @@ struct RtPostConstants {
     float split;
     std::uint32_t axis;
     float rim;
-    std::uint32_t pad[3];
+    float haze;
+    float haze_distance;
+    float vignette;
 };
 static_assert(sizeof(RtPostConstants) == 160u);
 
@@ -222,8 +225,10 @@ struct RtCompositeConstants {
     float near_plane;
     float split;
     std::uint32_t pad;
+    float sun[4];        // towards the traced sun (eye space, traced frame); relief height (eye units)
+    float sun_light[4];  // its light (rgb)
 };
-static_assert(sizeof(RtCompositeConstants) == 80u);
+static_assert(sizeof(RtCompositeConstants) == 112u);
 
 enum LightParameter : UINT {
     kLightFrame = 0,
@@ -677,7 +682,7 @@ bool SceneRayTracer::initialize(ID3D12Device* device, std::uint64_t timestamp_fr
     lighting_enabled_ = env_float("GALAXY_RT_LIGHT", 1.0f) != 0.0f;
     rays_ = static_cast<std::uint32_t>(std::clamp(env_float("GALAXY_RT_RAYS", 2.0f), 1.0f, 16.0f));
     range_ = std::clamp(env_float("GALAXY_RT_RANGE", 1600.0f), 10.0f, 100000.0f);
-    strength_ = std::clamp(env_float("GALAXY_RT_STRENGTH", 0.9f), 0.0f, 1.0f);
+    strength_ = std::clamp(env_float("GALAXY_RT_STRENGTH", 1.0f), 0.0f, 1.0f);
     history_frames_ = static_cast<std::uint32_t>(std::clamp(env_float("GALAXY_RT_HISTORY", 32.0f), 1.0f, 64.0f));
     factor_override_ = static_cast<std::uint32_t>(std::clamp(env_float("GALAXY_RT_FACTOR", 0.0f), 0.0f, 4.0f));
     contact_ = std::clamp(env_float("GALAXY_RT_CONTACT", 0.3f), 0.0f, 1.0f);
@@ -709,19 +714,26 @@ bool SceneRayTracer::initialize(ID3D12Device* device, std::uint64_t timestamp_fr
     glow_model_spill_ = std::clamp(env_float("GALAXY_RT_GLOW_MODEL_SPILL", 1.0f), 0.0f, 2.0f);
     sky_distance_ = std::clamp(env_float("GALAXY_RT_SKY_DISTANCE", 60000.0f), 1000.0f, 1.0e7f);
     sky_ibl_ = std::clamp(env_float("GALAXY_RT_SKY_IBL", 0.8f), 0.0f, 1.0f);
-    fill_ = std::clamp(env_float("GALAXY_RT_FILL", 0.2f), 0.0f, 0.8f);
+    fill_ = std::clamp(env_float("GALAXY_RT_FILL", 0.08f), 0.0f, 0.8f);
+    self_area_ = std::clamp(env_float("GALAXY_RT_SELF_AREA", 1.2f), 0.0f, 8.0f);
+    self_point_ = std::clamp(env_float("GALAXY_RT_SELF_POINT", 1.0f), 0.0f, 8.0f);
+    area_radiance_ = std::clamp(env_float("GALAXY_RT_AREA_RADIANCE", 3.0f), 0.0f, 16.0f);
     post_ = env_float("GALAXY_RT_POST", 1.0f) != 0.0f;
     post_bloom_ = std::clamp(env_float("GALAXY_RT_POST_BLOOM", 0.0f), 0.0f, 4.0f);
     post_threshold_ = std::clamp(env_float("GALAXY_RT_POST_THRESHOLD", 0.97f), 0.0f, 0.99f);
-    post_shafts_ = std::clamp(env_float("GALAXY_RT_POST_SHAFTS", 0.6f), 0.0f, 4.0f);
+    post_shafts_ = std::clamp(env_float("GALAXY_RT_POST_SHAFTS", 1.0f), 0.0f, 4.0f);
     post_dof_ = std::clamp(env_float("GALAXY_RT_POST_DOF", 3.0f), 0.0f, 32.0f);
     post_grade_ = std::clamp(env_float("GALAXY_RT_POST_GRADE", 1.0f), 0.0f, 1.0f);
-    post_rim_ = std::clamp(env_float("GALAXY_RT_POST_RIM", 0.35f), 0.0f, 2.0f);
+    post_rim_ = std::clamp(env_float("GALAXY_RT_POST_RIM", 0.6f), 0.0f, 2.0f);
+    post_haze_ = std::clamp(env_float("GALAXY_RT_POST_HAZE", 0.35f), 0.0f, 1.0f);
+    relief_ = std::clamp(env_float("GALAXY_RT_RELIEF", 3.0f), 0.0f, 64.0f);
+    post_haze_distance_ = std::clamp(env_float("GALAXY_RT_POST_HAZE_DISTANCE", 20000.0f), 100.0f, 1.0e6f);
+    post_vignette_ = std::clamp(env_float("GALAXY_RT_POST_VIGNETTE", 0.18f), 0.0f, 1.0f);
     post_view_ = env_float("GALAXY_RT_POST_VIEW", 0.0f) != 0.0f;
     gi_ = env_float("GALAXY_RT_GI", 1.0f) != 0.0f;
     core_radius_ = std::clamp(env_float("GALAXY_RT_CORE_RADIUS", 400.0f), 1.0f, 100000.0f);
     core_light_ = std::clamp(env_float("GALAXY_RT_CORE_LIGHT", 2.5f), 0.0f, 16.0f);
-    bloom_strength_ = std::clamp(env_float("GALAXY_RT_BLOOM", 0.8f), 0.0f, 4.0f);
+    bloom_strength_ = std::clamp(env_float("GALAXY_RT_BLOOM", 1.4f), 0.0f, 4.0f);
     bloom_threshold_ = std::clamp(env_float("GALAXY_RT_BLOOM_THRESHOLD", 0.15f), 0.0f, 4.0f);
     exposure_ = env_float("GALAXY_RT_EXPOSURE", 1.0f) != 0.0f;
     exposure_day_ = std::clamp(env_float("GALAXY_RT_EXPOSURE_DAY", 1.0f), 0.3f, 1.5f);
@@ -736,8 +748,9 @@ bool SceneRayTracer::initialize(ID3D12Device* device, std::uint64_t timestamp_fr
     sun_color_ = env_triple("GALAXY_RT_SUN_COLOR", sun_color_);
     sun_size_ = std::clamp(env_float("GALAXY_RT_SUN_SIZE", 2.5f), 0.0f, 30.0f);
     key_size_ = std::clamp(env_float("GALAXY_RT_KEY_SIZE", 6.0f), 0.0f, 30.0f);
-    sun_light_ = std::clamp(env_float("GALAXY_RT_SUN_LIGHT", 1.0f), 0.0f, 4.0f);
-    sky_light_ = std::clamp(env_float("GALAXY_RT_SKY_LIGHT", 0.65f), 0.0f, 4.0f);
+    sun_min_elevation_ = std::clamp(env_float("GALAXY_RT_SUN_MIN_ELEVATION", 30.0f), 0.0f, 89.0f);
+    sun_light_ = std::clamp(env_float("GALAXY_RT_SUN_LIGHT", 1.4f), 0.0f, 4.0f);
+    sky_light_ = std::clamp(env_float("GALAXY_RT_SKY_LIGHT", 1.0f), 0.0f, 4.0f);
     if (lighting_enabled_ && !create_lighting_pipelines(color_format)) {
         std::cerr << "[rt] lighting unavailable\n";
         lighting_enabled_ = false;
@@ -1473,7 +1486,7 @@ void SceneRayTracer::add_draw(const RtDraw& draw, const RtDrawInfo& info) {
                    (unit(material->color[2]) << 8u) | static_cast<std::uint32_t>(material->emission) | 4u |
                    (material->no_light ? 8u : 0u);
         intensity = material->intensity;
-        surface = unit_pair(material->roughness, material->metallic);
+        surface = unit_pair(material->matte ? 1.0f : material->roughness, material->metallic);
         flags = material->tint ? kDrawTableTint : 0u;
         // A lamp's lit housing in its glass's texture: only the glass emits.
         const bool emits = !material->unlit_only || (info.surface & kRtDrawLit) == 0u;
@@ -1489,8 +1502,10 @@ void SceneRayTracer::add_draw(const RtDraw& draw, const RtDrawInfo& info) {
                                  spot ? std::cos(material->cone * 3.14159265f / 180.0f) : -1.0f});
         }
     }
+    const float relief = material != nullptr && !material->particle ? material->relief : 0.0f;
     draw_colors_.push_back({info.ambient, info.light_index[0] == 0u ? info.light_color[0] : 0u, emission,
-                            std::bit_cast<std::uint32_t>(intensity), surface, info.material, flags, 0u});
+                            std::bit_cast<std::uint32_t>(intensity), surface, info.material, flags,
+                            std::bit_cast<std::uint32_t>(relief)});
     if (dump_scene_ != 0u && scene_serial_ == dump_scene_) {
         infos_.push_back(info);
     }
@@ -1529,7 +1544,9 @@ void SceneRayTracer::set_key_light(bool valid, const std::array<float, 3>& world
     const float peak = std::max({color[0], color[1], color[2]});
     key_color_ = peak > 1e-3f ? std::array<float, 3>{color[0] / peak, color[1] / peak, color[2] / peak}
                               : std::array<float, 3>{1.0f, 1.0f, 1.0f};
-    key_strength_ = std::clamp(strength, 0.0f, 1.0f);
+    // As bright as the game's own light (a stage without a sun keeps its level: a night stage's dim
+    // world light stays dim; full from a peak of 0.75 up).
+    key_strength_ = std::clamp(strength, 0.0f, 1.0f) * std::clamp(peak / 0.75f, 0.15f, 1.0f);
 }
 
 bool SceneRayTracer::sky_sun(std::array<float, 3>& world, std::array<float, 3>& color) const noexcept {
@@ -2093,7 +2110,7 @@ bool SceneRayTracer::ensure_lighting_buffers(std::uint32_t samples) {
         light_history_state_[i] = state;
     }
     for (unsigned i = 0; ok && i < kLightSlots; ++i) {
-        ok = make(n * 12u, light_final_[i], L"rt light result");
+        ok = make(n * 16u, light_final_[i], L"rt light result");
         light_final_state_[i] = state;
     }
     picture_state_ = state;
@@ -2166,6 +2183,9 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
     c.emit[1] = glow_reach_;
     c.emit[2] = glow_light_;
     c.emit[3] = surface_light_;
+    c.self[0] = self_area_;
+    c.self[1] = self_point_;
+    c.self[2] = area_radiance_;
     c.point_saturation = point_saturation_;
     std::copy(view_.projection.begin(), view_.projection.end(), c.projection);
     c.depth[0] = view_.z_scale;
@@ -2209,6 +2229,18 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
         // Sun rays end halfway to the game's sun model (BrightSun, drawn that far out along the
         // sun's direction): it would shadow everything near the camera.
         c.sun_reach = sun_distance > 0.0f ? 0.5f * sun_distance : 1.0e6f;
+        // A sun the game placed low (a BrightSun on the horizon) keeps its compass direction but rises to
+        // at least GALAXY_RT_SUN_MIN_ELEVATION degrees: a level sun leaves half of every planet dark. The
+        // shafts still come from the sun the sky shows (post_prepare).
+        if (sun_present && !keyed && !sun_override_ && sun_min_elevation_ > 0.0f) {
+            const float length = std::sqrt(l[0] * l[0] + l[1] * l[1] + l[2] * l[2]);
+            const float horizontal = std::sqrt(l[0] * l[0] + l[2] * l[2]);
+            const float min_y = std::sin(sun_min_elevation_ * 3.14159265f / 180.0f);
+            if (length > 1e-6f && horizontal > 1e-6f && l[1] / length < min_y) {
+                const float across = std::sqrt(1.0f - min_y * min_y);
+                l = {l[0] / horizontal * across, min_y, l[2] / horizontal * across};
+            }
+        }
         std::array<float, 3> sun_color = keyed ? key_color_ : sun_color_;
         const RtStageSun* const stage = stage_sun_;
         if (sun_present && !keyed) {
@@ -2453,6 +2485,10 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
     info.sample_height = sample_height;
     info.factor = factor;
     info.near_plane = c.near_plane;
+    for (unsigned i = 0; i < 3u; ++i) {
+        info.sun[i] = c.sun[i];
+        info.sun_light[i] = c.sun_light[i];
+    }
     history_camera_ = camera_;
     history_camera_known_ = camera_known_;
     light_parity_ = previous;
@@ -2513,7 +2549,7 @@ void SceneRayTracer::snapshot_glow_base(ID3D12GraphicsCommandList* list, D3D12_G
 
 void SceneRayTracer::capture_picture(ID3D12GraphicsCommandList* list, const RtSources& sources, Allocate allocate,
                                      void* allocate_context, D3D12_GPU_DESCRIPTOR_HANDLE color_depth_table,
-                                     std::uint32_t width, std::uint32_t height) {
+                                     std::uint32_t width, std::uint32_t height, D3D12_GPU_DESCRIPTOR_HANDLE game_srv) {
     const bool glow = glow_open_ && glow_base_valid_;
     glow_open_ = false;
     if (!lighting_active() || !capture_pso_ || list == nullptr || color_depth_table.ptr == 0u || !view_known_ ||
@@ -2605,7 +2641,7 @@ void SceneRayTracer::capture_picture(ID3D12GraphicsCommandList* list, const RtSo
     list->SetComputeRootUnorderedAccessView(kCaptureSkyRadiance, sky_radiance_->GetGPUVirtualAddress());
     list->SetComputeRootUnorderedAccessView(kCaptureSkySh, sky_sh_->GetGPUVirtualAddress());
     list->SetComputeRootUnorderedAccessView(kCaptureExposure, exposure_sums_->GetGPUVirtualAddress());
-    list->SetComputeRootDescriptorTable(kCaptureGame, color_depth_table);
+    list->SetComputeRootDescriptorTable(kCaptureGame, game_srv.ptr != 0u ? game_srv : color_depth_table);
     list->Dispatch((sample_width + 7u) / 8u, (sample_height + 7u) / 8u, 1u);
     if (sky) {
         // The sky light: the bins into the map over time, then its spherical harmonics.
@@ -2855,7 +2891,7 @@ void SceneRayTracer::post_prepare(ID3D12GraphicsCommandList* list, D3D12_GPU_DES
         post_pixels_ = post_quarter_ = 0u;
         bool ok = true;
         for (unsigned i = 0; ok && i < post_buffers_.size(); ++i) {
-            const std::uint64_t bytes = i == 0u ? pixels * 4u : i == 5u ? 16u : quarter * 4u;
+            const std::uint64_t bytes = i == 0u ? pixels * 4u : i == 5u ? 32u : quarter * 4u;
             ok = create_buffer(bytes, D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
                                D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, post_buffers_[i], L"rt post");
             post_states_[i] = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
@@ -2911,6 +2947,9 @@ void SceneRayTracer::post_prepare(ID3D12GraphicsCommandList* list, D3D12_GPU_DES
     c.dof = post_dof_ * static_cast<float>(width) / 640.0f;
     c.grade = post_grade_;
     c.rim = post_rim_;
+    c.haze = post_haze_;
+    c.haze_distance = post_haze_distance_;
+    c.vignette = post_vignette_;
     c.split = split_ > 0.0f ? view_.viewport[0] + split_ * view_.viewport[2] : -1.0f;
 
     ID3D12Resource* const scene = post_buffers_[0].Get();
@@ -3105,6 +3144,11 @@ void SceneRayTracer::composite(ID3D12GraphicsCommandList* list, D3D12_CPU_DESCRI
     c.slot = index;
     c.near_plane = info.near_plane;
     c.split = split_ > 0.0f ? info.view.viewport[0] + split_ * info.view.viewport[2] : -1.0f;
+    for (unsigned i = 0; i < 3u; ++i) {
+        c.sun[i] = info.sun[i];
+        c.sun_light[i] = info.sun_light[i];
+    }
+    c.sun[3] = relief_;
     const int timed = begin_pass(list);
     list->OMSetRenderTargets(1u, &target, FALSE, nullptr);
     const D3D12_VIEWPORT viewport{0.0f, 0.0f, static_cast<float>(width), static_cast<float>(height), 0.0f, 1.0f};

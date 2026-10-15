@@ -1591,6 +1591,8 @@ private:
     // kEnhancedRtReflections) without the split column, per frame; the split as a fraction of the
     // viewport (GALAXY_ENHANCED_LIGHTING_SPLIT).
     std::uint32_t enhanced_ps_flags_ = 0u;
+    // The material table bits (enhanced_table_material) the last uploaded PS constants carry.
+    std::uint32_t enhanced_material_bits_ = 0u;
     float enhanced_split_ = 0.0f;
     // GALAXY_LIGHTING_CENSUS: enhanced flushes since the last [enh-stats] line, and those drawn by the
     // uber stand-in while their pipeline compiles.

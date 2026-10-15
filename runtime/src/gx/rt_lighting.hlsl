@@ -61,6 +61,9 @@ cbuffer RtLight : register(b0)
     float4 g_emit;              // glow lights: the light at which one stops counting (its reach),
                                 // the longest reach (eye units), their gain; the gain of glowing
                                 // surfaces' light (lava, magma, fire) on what sees them
+    float4 g_self;              // the material table's emitters glowing from their own surfaces: area
+                                // lights (lava) and point lights (Lumas, star bits) per unit of
+                                // intensity; an area light's radiance on what sees it per unit
 };
 
 RaytracingAccelerationStructure g_scene : register(t6);
@@ -85,13 +88,16 @@ RWStructuredBuffer<float> g_z : register(u0);
 RWStructuredBuffer<uint> g_normal : register(u1);
 RWStructuredBuffer<uint4> g_raw : register(u2);
 RWStructuredBuffer<uint4> g_history : register(u3);
-RWStructuredBuffer<uint3> g_final : register(u4);
+RWStructuredBuffer<uint4> g_final : register(u4);
 RWStructuredBuffer<uint2> g_primary : register(u5);      // triangle + 1 (0: none), barycentrics
 
 static const float kPi = 3.14159265f;
 static const uint kDrawLit = 8u;    // RtDraw.flags: GX-lit colour
 static const uint kDrawSunKey = 16u;    // RtDraw.flags: its GX light 0 lies along the traced sun
 static const uint kDrawPointLit = 32u;  // RtDraw.flags: lit by GX light 4 (the game's point light)
+// RtDraw.flags: its colour is its material alone (the game's lights removed): the traced light is
+// its whole light, as on unlit surfaces.
+static const uint kDrawDelit = 4096u;
 // g_draws word 2 (SceneRayTracer::add_draw): the material table's emission, colour RGBA8 with these
 // in the low byte; word 3: its intensity.
 static const uint kEmitArea = 2u;       // low 2 bits: 1 point light, 2 area light
@@ -104,6 +110,21 @@ static const uint kDrawStride = 32u;
 // shoulder from kLitKnee (apply_light).
 static const float kMaxLight = 8.0f;
 static const float kLitKnee = 0.8f;
+// The share of the light the film shoulder rolls off (lava, fire, lamps, glints) that joins the
+// bloom (CaptureCS).
+static const float kExcessBloom = 0.5f;
+
+// As lit (c m) up to the knee (0.8, or the colour itself where it is brighter: the game's own
+// highlights stay as drawn), then a film shoulder towards white that never passes it, channel by
+// channel (light past white turns pale: red-hot runs through orange to yellow-white). Its slope is
+// 1 at the knee: no seam where it starts.
+float3 film_light(float3 c, float3 m)
+{
+    const float3 lit = c * m;
+    const float3 knee = max(c, kLitKnee);
+    const float3 room = max(1.0f - knee, 1e-4f);
+    return lerp(lit, knee + room * (1.0f - exp(-(lit - knee) / room)), step(knee, lit));
+}
 // Buckets of the exposure measurement (16 bytes each: lit, game, pixels, spare).
 static const uint kExposureBuckets = 16u;
 // A light of the glow lights' lists: position, radius; power, frames unseen or cumulative power; spot
@@ -258,7 +279,7 @@ float finished_luminance(float3 c, float grade)
     const float3 rolled = min(c, 0.95f) + 0.05f * (1.0f - exp(-over / 0.05f));
     const float spill = max(max(over.r, max(over.g, over.b)) - 0.05f, 0.0f);
     const float l = luminance(saturate(rolled + spill * 0.15f));
-    return lerp(l, saturate(l + 0.7f * (l - 0.5f) * l * (1.0f - l)), grade);
+    return lerp(l, saturate(l + 1.0f * (l - 0.5f) * l * (1.0f - l)), grade);
 }
 
 float3 rotate3(float4 rows[3], float3 d)
@@ -322,7 +343,7 @@ cbuffer RtCapture : register(b0)
 };
 Texture2D<float4> c_color : register(t0);
 Texture2D<float> c_depth_tex : register(t1);
-StructuredBuffer<uint3> c_final : register(t2);
+StructuredBuffer<uint4> c_final : register(t2);
 StructuredBuffer<uint> c_glow_base : register(t3);
 RWStructuredBuffer<uint2> c_picture : register(u0);
 RWByteAddressBuffer c_sums : register(u1);
@@ -551,10 +572,11 @@ void SkyStateCS()
         const float state = c_sums.Load(36u) != 0u ? lerp(asfloat(c_sums.Load(32u)), l, 0.05f) : l;
         c_sums.Store2(32u, uint2(asuint(state), 1u));
     }
-    // The exposure keeps the picture as bright as the game drew it: the ratio of the lit picture's
-    // mean luminance (with its reflections, as the finish will tone it) to the game's own on the same
-    // pixels (GlowBaseCS) moves towards its target, a tenth of the way per frame. Its shadows and
-    // lights move the light around; they neither darken nor wash out the whole.
+    // The exposure guards the picture's brightness: the ratio of the lit picture's mean luminance
+    // (with its reflections, as the finish will tone it) to the game's own on the same pixels
+    // (GlowBaseCS) is left alone inside a band around its target (0.97-1.12 of it) and moves back
+    // into the band a tenth of the way per frame outside it: never darker or washed out, but the
+    // traced light's own contrast and brightness stay.
     uint3 measured = uint3(0u, 0u, 0u);
     [unroll] for (uint b = 0u; b < kExposureBuckets; ++b) {
         measured += c_exposure_sums.Load3(b * 16u);
@@ -575,7 +597,8 @@ void SkyStateCS()
         const float day = c_sums.Load(36u) != 0u ? saturate(asfloat(c_sums.Load(32u)) / c_daylight) : 1.0f;
         const float target = lerp(c_exposure_night, c_exposure_day, day);
         const float exposure = c_sums.Load(52u) != 0u ? asfloat(c_sums.Load(48u)) : 1.0f;
-        const float next = clamp(exposure * lerp(1.0f, target / max(ratio, 0.05f), 0.1f), 0.6f, 2.5f);
+        const float goal = clamp(ratio, 0.97f * target, 1.12f * target);
+        const float next = clamp(exposure * lerp(1.0f, goal / max(ratio, 0.05f), 0.1f), 0.35f, 2.5f);
         c_sums.Store2(48u, uint2(asuint(next), 1u));
     }
 }
@@ -626,9 +649,26 @@ void CaptureCS(uint3 id : SV_DispatchThreadID)
         if ((c_divide & 1u) != 0u) {
             // Without this frame's sky and bounce light (no feedback through it); the sun's
             // light stays, for the bounce it sends.
-            const uint3 f = c_final[index];
-            float keep = f16tof32(f.y >> 16u);
-            const float lit = luminance(float3(f16tof32(f.x), f16tof32(f.x >> 16u), f16tof32(f.y)));
+            const uint4 f = c_final[index];
+            float keep = abs(f16tof32(f.y >> 16u));
+            const float3 m = float3(f16tof32(f.x), f16tof32(f.x >> 16u), f16tof32(f.y));
+            const float lit = luminance(m);
+            // The light the composite's film shoulder rolled off (lava, fire, lamps, bright sunlit
+            // surfaces) blooms as the glows do.
+            // A small light source's halo (SpatialBCS): its colour joins the bloom.
+            const float halo = f16tof32(f.w >> 16u);
+            if (halo > 0.0f && (c_divide & 2u) != 0u && float(q.x) >= c_split) {
+                c_glow[index] = pack_r11g11b10(unpack_r11g11b10(c_glow[index]) + color * halo);
+            }
+            // Only where the light passes the knee at all (most samples do not).
+            if ((c_divide & 2u) != 0u && float(q.x) >= c_split && max(m.r, max(m.g, m.b)) > 1.0f) {
+                const float3 game = c_game.Load(int3(q, 0)).rgb;
+                const float3 excess = max(game * m - film_light(game, m), 0.0f);
+                if (luminance(excess) > 0.004f) {
+                    const float3 added = unpack_r11g11b10(c_glow[index]);
+                    c_glow[index] = pack_r11g11b10(added + excess * kExcessBloom);
+                }
+            }
             if (float(q.x) < c_split) {
                 keep *= lit;
             }
@@ -1637,15 +1677,12 @@ void TraceCS(uint3 id : SV_DispatchThreadID, uint gi : SV_GroupIndex)
                 // Named by the material table: an area light (lava, magma, a glowing panel) sends all of
                 // its light as it shows, times its intensity; anything else none of its own.
                 if ((hit_emission.x & 3u) == kEmitArea && g_emit.w > 0.0f) {
-                    emitted += sent * (asfloat(hit_emission.y) * (1.0f - distant));
+                    // Its radiance from the table (its colour times its intensity): the picture
+                    // holds lava at 8 bits, far below the light it sends.
+                    const float3 radiance = max(sent, rgb8(hit_emission.x) * g_self.z);
+                    emitted += radiance * (asfloat(hit_emission.y) * (1.0f - distant));
                     sent = float3(0.0f, 0.0f, 0.0f);
                 }
-            } else if ((hit_flags & kDrawLit) == 0u && g_emit.w > 0.0f) {
-                const float peak = max(sent.r, max(sent.g, sent.b));
-                const float low = min(sent.r, min(sent.g, sent.b));
-                const float glowing = smoothstep(0.9f, 1.6f, peak) * smoothstep(0.35f, 0.7f, (peak - low) / max(peak, 1e-3f));
-                emitted += sent * (glowing * (1.0f - distant));
-                sent *= 1.0f - glowing;
             }
             light += lerp(sent * near, sky_light(direction, tint, sky_sh, sky_known), distant);
         } else {
@@ -1659,7 +1696,7 @@ void TraceCS(uint3 id : SV_DispatchThreadID, uint gi : SV_GroupIndex)
     // saturating softly like the glow lights'.
     if (any(emitted > 0.0f)) {
         const float3 surface = emitted / float(rays) * g_emit.w;
-        points += surface / (1.0f + luminance(surface) / 2.0f) / max(g_point_light, 1e-3f);
+        points += surface / (1.0f + luminance(surface) / 8.0f) / max(g_point_light, 1e-3f);
     }
     g_raw[index] = pack_light(make_light(light / float(rays), sun, points), 0.0f);
 }
@@ -1834,7 +1871,7 @@ void SpatialBCS(uint3 id : SV_DispatchThreadID)
     const uint index = id.y * g_sample_size.x + id.x;
     const float z = g_z[index];
     if (z == 0.0f) {
-        g_final[index] = uint3(f32tof16(1.0f) | (f32tof16(1.0f) << 16u), f32tof16(1.0f) | (f32tof16(1.0f) << 16u), 0u);
+        g_final[index] = uint4(f32tof16(1.0f) | (f32tof16(1.0f) << 16u), f32tof16(1.0f) | (f32tof16(1.0f) << 16u), 0u, 0u);
         return;
     }
     Light light = filtered(id.xy, 4, true);
@@ -1848,17 +1885,24 @@ void SpatialBCS(uint3 id : SV_DispatchThreadID)
     if (g_picture_sums.Load(36u) != 0u) {
         ambient *= lerp(g_ambient.x, 1.0f, saturate(asfloat(g_picture_sums.Load(32u)) / g_ambient.y));
     }
-    float3 lighting = ambient * light.sky + sun + points;
+    // Unlit and de-lit surfaces hold the game's light at its average over direction: the traced sky
+    // and sun are taken relative to theirs over a lit surface (the sky whole, the sun at a mean facing
+    // of 0.55): sunlit faces above 1, shade below, the whole near the game's level.
+    const float norm = max(g_sun_light.w + 0.55f * luminance(g_sun_light.rgb), 0.25f);
+    float3 lighting = (ambient * light.sky + sun) / norm + points;
     // With the sky open: what the picture capture keeps (no feedback through the sky and bounce).
-    float3 open = ambient + sun + points;
+    float3 open = (ambient + sun) / norm + points;
     const float exposure = g_picture_sums.Load(52u) != 0u ? asfloat(g_picture_sums.Load(48u)) : 1.0f;
     // A surface the game lights already turns its shading towards its lights: the traced light
     // shadows it (the ratio to the same light unshadowed). The point lights add to it, or, where
     // the game lights it with them too (GX light 4), shadow it likewise.
     const uint tri = g_primary[index].x;
     const uint draw_flags = tri != 0u ? g_surfaces.Load((tri - 1u) * 16u + 12u) : 0u;
+    const bool delit = (draw_flags & kDrawDelit) != 0u;
     const bool point_lit = (draw_flags & kDrawPointLit) != 0u && g_point_count != 0u;
-    if ((draw_flags & (kDrawLit | kDrawSunKey)) == (kDrawLit | kDrawSunKey)) {
+    if (delit) {
+        // Its colour is its material: the traced light is its light (the unlit form above).
+    } else if ((draw_flags & (kDrawLit | kDrawSunKey)) == (kDrawLit | kDrawSunKey)) {
         // Its key light lies along the traced sun: the game's shading is its ambient A plus its GX
         // light 0 colour K times n.l (and its point light), clamped to 1 like GX's accumulator; the
         // traced light takes A times the sky's light (as the sky state scales it) and K times the
@@ -1908,9 +1952,46 @@ void SpatialBCS(uint3 id : SV_DispatchThreadID)
     }
     lighting *= exposure;
     open *= exposure;
+    // A small light source's halo: its share of the picture that joins the bloom (CaptureCS).
+    float halo = 0.0f;
+    // The sun's share of the light for the composite's per-pixel relief: its visibility (the filtered
+    // sun over the sample's n.l) times the draw's relief, at the scale the light took here.
+    float relief = 0.0f;
+    if (tri != 0u && (delit || (draw_flags & kDrawLit) == 0u)) {
+        const float strength = asfloat(g_draws.Load(min(draw_flags >> 16u, max(g_draw_count, 1u) - 1u) * kDrawStride + 28u));
+        const float nl = dot(unpack_normal(g_normal[index]), g_sun.xyz);
+        if (strength > 0.0f && nl > 0.05f) {
+            const float day = g_picture_sums.Load(36u) != 0u
+                                  ? saturate(asfloat(g_picture_sums.Load(32u)) / max(g_ambient.y, 1e-3f))
+                                  : 1.0f;
+            const float fill = g_fill * lerp(1.5f, 1.0f, day);
+            relief = strength * saturate(light.sun / nl) * (1.0f - fill) * exposure * g_strength;
+        }
+    }
     float3 m = lerp(float3(1.0f, 1.0f, 1.0f), lighting, g_strength);
     // The composite's film shoulder (apply_light) rolls bright light off; here only a bound.
     m = min(m, kMaxLight);
+    // The material table's light sources glow from their own surfaces, whatever reaches them: lava
+    // and magma red-hot (area lights), Lumas, star bits, stars and fire enemies in their own colours
+    // (point lights). The composite's shoulder takes them towards white-hot; the capture passes
+    // what it rolls off to the bloom.
+    if (tri != 0u) {
+        const uint2 emission = g_draws.Load2(min(draw_flags >> 16u, max(g_draw_count, 1u) - 1u) * kDrawStride + 8u);
+        const uint kind = emission.x & 3u;
+        if ((emission.x & kEmitNamed) != 0u && kind != 0u && (emission.x & kEmitNoLight) == 0u) {
+            const float intensity = asfloat(emission.y);
+            if (kind != kEmitArea) {
+                halo = g_self.y * min(intensity, 3.0f);
+            }
+            const float glow = kind == kEmitArea ? g_self.x * intensity : 0.0f;
+            if (glow > 0.0f) {
+                // In its own colour (lava stays red-orange; white for the draw-tinted ones).
+                const float3 tint = rgb8(emission.x);
+                const float3 hue = tint / max(max(tint.r, tint.g), max(tint.b, 1e-3f));
+                m = min(max(m, 1.0f) + glow * hue, kMaxLight);
+            }
+        }
+    }
     // A glowing surface (unlit, bright, under its own glow in the previous picture: a core, a lamp)
     // sends its light whatever reaches it: it keeps its colour and shines brighter.
     if ((draw_flags & kDrawLit) == 0u && (g_flags & 2u) != 0u) {
@@ -1943,8 +2024,9 @@ void SpatialBCS(uint3 id : SV_DispatchThreadID)
     }
     // The picture capture divides out the sky and bounce part (no feedback through it).
     const float3 without = lerp(float3(1.0f, 1.0f, 1.0f), open, g_strength);
-    const float keep = luminance(without) / max(luminance(m), 1e-3f);
-    g_final[index] = uint3(f32tof16(m.r) | (f32tof16(m.g) << 16u), f32tof16(m.b) | (f32tof16(keep) << 16u), asuint(z));
+    const float keep = max(luminance(without) / max(luminance(m), 1e-3f), 1e-3f);
+    g_final[index] = uint4(f32tof16(m.r) | (f32tof16(m.g) << 16u), f32tof16(m.b) | (f32tof16(keep) << 16u), asuint(z),
+                           f32tof16(relief) | (f32tof16(halo) << 16u));
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -1956,12 +2038,12 @@ cbuffer RtLightTexture : register(b0)
     uint2 t_size;
     uint2 t_pad;
 };
-StructuredBuffer<uint3> t_final : register(t0);
+StructuredBuffer<uint4> t_final : register(t0);
 
 float4 LightTexturePS(float4 position : SV_Position) : SV_Target0
 {
     const uint2 s = min(uint2(position.xy), t_size - 1u);
-    const uint3 v = t_final[s.y * t_size.x + s.x];
+    const uint4 v = t_final[s.y * t_size.x + s.x];
     if (asfloat(v.z) == 0.0f) {
         return float4(1.0f, 1.0f, 1.0f, 1.0f);
     }
@@ -1987,8 +2069,10 @@ cbuffer RtComposite : register(b0)
     float m_near;
     float m_split;  // GALAXY_RT_SPLIT: left of it the game's own picture (a dark line between)
     uint m_pad;
+    float4 m_sun;        // towards the traced sun (eye space, traced frame); relief height (eye units)
+    float4 m_sun_light;  // its light (rgb)
 };
-StructuredBuffer<uint3> m_light : register(t0);
+StructuredBuffer<uint4> m_light : register(t0);
 Texture2D<float> m_efb_depth : register(t1);
 StructuredBuffer<float4> m_reproject : register(t2);
 Texture2D<float4> m_color : register(t3);
@@ -2000,13 +2084,7 @@ struct CompositeOut
 
 float3 apply_light(float3 c, float3 m)
 {
-    // As lit (c m) up to the knee (0.8, or the colour itself where it is brighter: the game's own
-    // highlights stay as drawn), then a film shoulder towards white that never passes it, channel by
-    // channel (light past white turns pale). Its slope is 1 at the knee: no seam where it starts.
-    const float3 lit = c * m;
-    const float3 knee = max(c, kLitKnee);
-    const float3 room = max(1.0f - knee, 1e-4f);
-    return lerp(lit, knee + room * (1.0f - exp(-(lit - knee) / room)), step(knee, lit));
+    return film_light(c, m);
 }
 
 float4 CompositeVS(uint id : SV_VertexID) : SV_Position
@@ -2038,6 +2116,7 @@ CompositeOut CompositePS(float4 position : SV_Position)
         return result;
     }
     float3 p = eye_position(m_projection, m_viewport, position.xy, z);
+    const float3 here = p;
     if ((m_flags & 1u) != 0u) {
         const uint row = m_slot * 3u;
         const float4 rows[3] = {m_reproject[row], m_reproject[row + 1u], m_reproject[row + 2u]};
@@ -2051,13 +2130,14 @@ CompositeOut CompositePS(float4 position : SV_Position)
     const float2 w = a - float2(base);
     const float tolerance = slope * float(m_factor) * 1.5f + abs(p.z) * 0.01f + 0.25f;
     float3 sum = float3(0.0f, 0.0f, 0.0f);
+    float relief_sum = 0.0f;
     float weight = 0.0f;
     float3 nearest = float3(1.0f, 1.0f, 1.0f);
     float nearest_dz = abs(p.z) * 0.1f;
     [unroll] for (uint k = 0u; k < 4u; ++k) {
         const int2 o = int2(k & 1u, k >> 1u);
         const int2 s = clamp(base + o, int2(0, 0), int2(m_sample_size) - 1);
-        const uint3 sample = m_light[uint(s.y) * m_sample_size.x + uint(s.x)];
+        const uint4 sample = m_light[uint(s.y) * m_sample_size.x + uint(s.x)];
         const float sz = asfloat(sample.z);
         if (sz == 0.0f) {
             continue;
@@ -2071,9 +2151,62 @@ CompositeOut CompositePS(float4 position : SV_Position)
         const float d = dz / tolerance;
         const float bw = (o.x != 0 ? w.x : 1.0f - w.x) * (o.y != 0 ? w.y : 1.0f - w.y) * exp(-d * d);
         sum += m * bw;
+        relief_sum += f16tof32(sample.w & 0xFFFFu) * bw;
         weight += bw;
     }
-    const float3 m = clamp(weight > 1e-3f ? sum / weight : nearest, 0.0f, kMaxLight);
+    float3 m = clamp(weight > 1e-3f ? sum / weight : nearest, 0.0f, kMaxLight);
+    // Relief: the texture's detail as height (its brightness, m_sun.w eye units at white) bends the
+    // pixel's normal (the surface gradient of the faceted normal from depth, Mikkelsen 2010); the
+    // sun's light follows the bent normal where the sample sees the sun. Across a depth edge that
+    // side's difference is left out; with distance a pixel spans more than the detail and it fades.
+    const float relief = weight > 1e-3f ? relief_sum / weight : 0.0f;
+    if (relief > 1e-3f && m_sun.w > 0.0f) {
+        const int2 c = int2(position.xy);
+        float zs[4];
+        float hs[4];
+        const int2 steps[4] = {int2(1, 0), int2(-1, 0), int2(0, 1), int2(0, -1)};
+        [unroll] for (uint k = 0u; k < 4u; ++k) {
+            const int2 q = c + steps[k];
+            zs[k] = depth_to_eye_z(m_depth, m_efb_depth.Load(int3(q, 0)));
+            hs[k] = luminance(m_color.Load(int3(q, 0)).rgb);
+        }
+        const float limit = abs(z) * 0.01f + 0.5f;
+        const bool okx = abs(zs[0] - z) < limit && abs(zs[1] - z) < limit;
+        const bool oky = abs(zs[2] - z) < limit && abs(zs[3] - z) < limit;
+        if (okx && oky) {
+            const float3 px = eye_position(m_projection, m_viewport, position.xy + float2(1.0f, 0.0f), zs[0]);
+            const float3 py = eye_position(m_projection, m_viewport, position.xy + float2(0.0f, 1.0f), zs[2]);
+            const float3 dpdx = px - here;
+            const float3 dpdy = py - here;
+            float3 nf = cross(dpdx, dpdy);
+            const float nf_length = length(nf);
+            if (nf_length > 1e-8f) {
+                nf /= nf_length;
+                nf = dot(nf, here) > 0.0f ? -nf : nf;
+                const float dhdx = 0.5f * (hs[0] - hs[1]) * m_sun.w;
+                const float dhdy = 0.5f * (hs[2] - hs[3]) * m_sun.w;
+                const float3 r1 = cross(dpdy, nf);
+                const float3 r2 = cross(nf, dpdx);
+                const float det = dot(dpdx, r1);
+                const float3 grad = (det >= 0.0f ? 1.0f : -1.0f) * (dhdx * r1 + dhdy * r2);
+                const float3 nb = normalize(abs(det) * nf - grad);
+                // Fades where a pixel spans more than a few relief heights (minified detail shimmers).
+                const float span = length(dpdx);
+                const float fade = saturate(2.0f - span / (2.0f * m_sun.w));
+                // Sub-frames: this frame's normals turned to the traced frame's camera (its sun).
+                float3 nfa = nf;
+                float3 nba = nb;
+                if ((m_flags & 1u) != 0u) {
+                    const uint row = m_slot * 3u;
+                    const float4 rows[3] = {m_reproject[row], m_reproject[row + 1u], m_reproject[row + 2u]};
+                    nfa = float3(dot(rows[0].xyz, nf), dot(rows[1].xyz, nf), dot(rows[2].xyz, nf));
+                    nba = float3(dot(rows[0].xyz, nb), dot(rows[1].xyz, nb), dot(rows[2].xyz, nb));
+                }
+                const float delta = clamp(dot(nba, m_sun.xyz) - dot(nfa, m_sun.xyz), -0.6f, 0.6f);
+                m = max(m + relief * fade * delta * m_sun_light.rgb, 0.0f);
+            }
+        }
+    }
     if ((m_flags & 2u) != 0u) {
         result.color = float4(m * 0.5f, 1.0f);
         return result;

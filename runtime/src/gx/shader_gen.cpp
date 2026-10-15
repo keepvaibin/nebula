@@ -734,20 +734,34 @@ EnhShade enh_begin(float3 P, float3 n) {
     return e;
 }
 
-void enh_highlight(inout EnhShade e, float3 ldir, float3 radiance, bool metal) {
+// The material table's lobe for this draw (uber header bits 20-30), else the tuning's.
+void enh_table(bool metal, out float rough, out bool is_metal) {
+    const uint w = uber_ps_header.w;
+    rough = metal ? kEnhMetalRough : kEnhSheenRough;
+    is_metal = metal;
+    if ((w & 0x40000000u) != 0u) {
+        rough = max(float((w >> 20) & 63u) / 63.0, 0.05);
+        is_metal = metal || float((w >> 26) & 15u) / 15.0 >= 0.5;
+    }
+}
+
+void enh_highlight(inout EnhShade e, float3 ldir, float3 radiance, bool env_metal) {
     const float NoL = saturate(dot(e.N, ldir));
     if (NoL <= 0.0) {
         return;
     }
+    float rough;
+    bool metal;
+    enh_table(env_metal, rough, metal);
     const float3 H = normalize(ldir + e.V);
     const float NoH = saturate(dot(e.N, H));
     const float fw = pow(1.0 - saturate(dot(e.V, H)), 5.0);
     if (metal) {
-        const float a = kEnhMetalRough * kEnhMetalRough;
+        const float a = rough * rough;
         e.metal = radiance * (NoL * enh_ggx(NoH, a * a) * enh_vis(NoL, e.NoV, a) * kEnhMetal);
         e.metal_fw = fw;
     } else {
-        const float a = kEnhSheenRough * kEnhSheenRough;
+        const float a = rough * rough;
         e.spec = radiance * (NoL * enh_ggx(NoH, a * a) * enh_vis(NoL, e.NoV, a) * kEnhSheen *
                              (0.04 + 0.96 * fw));
     }
@@ -1563,11 +1577,30 @@ std::string ShaderGenerator::generate_ps(const PixelShaderKey& key) const {
             const unsigned lights = (m >> kEnhancedLightShift) & 0xFFu;
             const unsigned dfn = (m >> kEnhancedDiffuseShift) & 3u;
             const bool spot = (m & kEnhancedSpot) != 0u;
-            s << "    if (enh_on) {\n";
-            emit(s, "        const float3 enh_mat = %s.rgb;\n",
+            emit(s, "    if (enh_on) {\n        const float3 enh_mat = %s.rgb;\n",
                  (m & kEnhancedMaterialVertex) != 0u ? "pin.ppl_vcol0" : "ppl_chan_material[0]");
             emit(s, "        const float3 enh_amb = %s.rgb;\n",
                  (m & kEnhancedAmbientVertex) != 0u ? "pin.ppl_vcol0" : "ppl_chan_ambient[0]");
+            // Under ray-traced lighting (header bit 17) the channel is the game's own light averaged over
+            // direction: its ambient plus each light at the mean facing of a lit surface (0.55; lights
+            // without a facing term whole), clamped as GX's channel. The art's level and tint stay; the
+            // direction of its camera-following lights leaves, and the tracer's sun gives the direction.
+            s << "        if ((uber_ps_header.w & 0x20000u) != 0u) {\n"
+                 "            float3 enh_avg = enh_amb;\n";
+            for (unsigned n = 0; n < 8u; ++n) {
+                if ((lights & (1u << n)) == 0u) continue;
+                emit(s,
+                     "            {\n"
+                     "                float3 ldir;\n"
+                     "                float attn;\n"
+                     "                float3 lcol;\n"
+                     "                enh_light(%uu, %s, pin.ppl_pos, ldir, attn, lcol);\n"
+                     "                enh_avg += lcol * (attn * %s);\n"
+                     "            }\n",
+                     n, spot ? "true" : "false", dfn != 0u ? "0.55" : "1.0");
+            }
+            s << "            pin.col0.rgb = enh_mat * saturate(enh_avg);\n"
+                 "        } else {\n";
             s << "        const float3 enh_amb_lin = enh_lin(enh_amb);\n"
                  "        float3 enh_acc = enh_amb_lin * enh_sky(enh, (uber_ps_header.w & 0x20000u) == 0u);\n";
             bool first = true;
@@ -1593,9 +1626,10 @@ std::string ShaderGenerator::generate_ps(const PixelShaderKey& key) const {
                 first = false;
             }
             s << "        pin.col0.rgb = enh_mat * enh_srgb(enh_shoulder(max(enh_acc, 0.0)));\n"
+                 "        }\n"
                  "    }\n";
         } else {
-            s << "    if (enh_on) enh_key_highlight(enh, pin.ppl_pos);\n";
+            s << "    if (enh_on && (uber_ps_header.w & 0x20000u) == 0u) enh_key_highlight(enh, pin.ppl_pos);\n";
         }
     }
     s << "    int4 tex_color_i = int4(0,0,0,0);\n";
@@ -1854,8 +1888,23 @@ std::string ShaderGenerator::generate_ps(const PixelShaderKey& key) const {
                     tex_swz.c_str());
             }
             if (!has_indirect_cmd && ((enh_env >> texcoord) & 1u) != 0u) {
-                s << "    if (enh_on) tex_color_i.rgb = min(int3(round(float3(tex_color_i.rgb) *"
-                     " enh.env_gain)), int3(255,255,255));\n";
+                // Under ray-traced lighting and reflections (header bits 16-17), on a metal the material
+                // table names (bits 26-30), the painted reflection gives way to the traced one: the map's
+                // mean colour (its centre and a ring inside the sphere map's disc) stays as the tint.
+                // Elsewhere (crystals, sheen on cloth and skin) the game's map stays as drawn.
+                emit(s,
+                     "    if (enh_on && (uber_ps_header.w & 0x30000u) == 0x30000u &&\n"
+                     "        (uber_ps_header.w & 0x40000000u) != 0u && ((uber_ps_header.w >> 26) & 15u) >= 8u) {\n"
+                     "        float4 env_mean = tex[%u].SampleLevel(samp[%u], float2(0.5, 0.5), 0.0);\n"
+                     "        [unroll] for (uint env_k = 0u; env_k < 8u; ++env_k) {\n"
+                     "            const float env_a = float(env_k) * 0.785398;\n"
+                     "            env_mean += tex[%u].SampleLevel(samp[%u], 0.5 + 0.3 * float2(cos(env_a), sin(env_a)), 0.0);\n"
+                     "        }\n"
+                     "        tex_color_i = int4(round(saturate(env_mean / 9.0) * 255.0))%s;\n"
+                     "    } else if (enh_on && (uber_ps_header.w & 0x20000u) == 0u) {\n"
+                     "        tex_color_i.rgb = min(int3(round(float3(tex_color_i.rgb) * enh.env_gain)), int3(255,255,255));\n"
+                     "    }\n",
+                     texmap, texmap, texmap, texmap, tex_swz.c_str());
             }
         } else if (key.num_texgens != 0u) {
             // GX supplies white when this TEV stage disables its texture
@@ -2147,10 +2196,11 @@ std::string ShaderGenerator::generate_ps(const PixelShaderKey& key) const {
     if (enhanced) {
         if ((key.ind_reserved & kEnhancedReflective) != 0u) {
             // The ray tracer's reflections own this class's highlights while they run.
-            s << "    if (enh_on && (uber_ps_header.w & 0x10000u) == 0u)\n"
+            s << "    if (enh_on && (uber_ps_header.w & 0x30000u) == 0u)\n"
                  "        frag.rgb = enh_finish(frag.rgb, enh, (uber_ps_header.w & 0x40000u) != 0u);\n\n";
         } else {
-            s << "    if (enh_on) frag.rgb = enh_finish(frag.rgb, enh, (uber_ps_header.w & 0x40000u) != 0u);\n\n";
+            s << "    if (enh_on && (uber_ps_header.w & 0x20000u) == 0u)\n"
+                 "        frag.rgb = enh_finish(frag.rgb, enh, (uber_ps_header.w & 0x40000u) != 0u);\n\n";
         }
         if (enh_lit) {
             // Diagnostics: colour channel 0 itself, the game's left of the split.

@@ -134,14 +134,26 @@ void apply_class(const std::string& text, RtMaterial& m) {
         else if (token == "hide") m.hide = true;
         else if (token == "unlit-only") m.unlit_only = true;
         else if (token == "particle") m.particle = true;
-        else if (token == "metal") set(RtSurfaceClass::Metal);
-        else if (token == "glossy") set(RtSurfaceClass::Glossy);
-        else if (token == "glass" || token == "crystal" || token == "glass/crystal") set(RtSurfaceClass::Crystal);
-        else if (token == "ice" || token == "water") set(RtSurfaceClass::Water);
-        else if (token == "diffuse" || token == "foliage" || token == "fabric" || token == "skin") {
+        else if (token == "waterfall") {
+            m.waterfall = true;
+            set(RtSurfaceClass::Water);
+            m.relief = 0.0f;
+        }
+        else if (token == "metal") { set(RtSurfaceClass::Metal); m.relief = 0.0f; }
+        else if (token == "glossy") { set(RtSurfaceClass::Glossy); m.relief = 0.0f; }
+        else if (token == "glass" || token == "crystal" || token == "glass/crystal") {
+            set(RtSurfaceClass::Crystal);
+            m.relief = 0.0f;
+        } else if (token == "ice" || token == "water") {
+            set(RtSurfaceClass::Water);
+            m.relief = 0.0f;
+        } else if (token == "diffuse" || token == "foliage" || token == "fabric" || token == "skin") {
             set(RtSurfaceClass::Diffuse);
+            m.relief = token == "diffuse" ? 1.0f : token == "foliage" ? 0.7f : token == "fabric" ? 0.6f : 0.0f;
+            m.matte = token == "foliage" || token == "fabric";
         } else if (token == "unlit" || token == "sky") {
             set(RtSurfaceClass::Unlit);
+            m.relief = 0.0f;
         }
     }
 }

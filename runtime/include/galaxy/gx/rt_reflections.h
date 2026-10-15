@@ -270,6 +270,7 @@ private:
     float sky_average_ = 0.15f; // GALAXY_RT_REFLECT_SKY_AVERAGE: confidence of the sky's average colour
     float metal_sky_ = 0.3f;    // GALAXY_RT_REFLECT_METAL_SKY: metal's share of reflected sky over its env map
     float local_gain_ = 2.0f;   // GALAXY_RT_REFLECT_LOCAL_GAIN: the point and glow lights' highlights
+    float waves_ = 1.0f;          // GALAXY_RT_WAVES: slope of the water's procedural waves (0: none)
     float rough_cutoff_ = 0.65f; // GALAXY_RT_REFLECT_ROUGH_CUTOFF: the material table's roughness above
                                  // which a surface traces no reflection
 

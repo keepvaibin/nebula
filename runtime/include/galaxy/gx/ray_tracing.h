@@ -60,6 +60,11 @@ inline constexpr std::uint32_t kRtDrawGlow = 64u;
 // A blended translucent draw of the water class (seas, lakes): its reflections are traced once the
 // translucent phases drew it (SceneRayTracer::trace_water); not in the BVH.
 inline constexpr std::uint32_t kRtDrawWater = 128u;
+// A lit draw whose colour is its material alone (the enhanced path under traced lighting: the game's
+// lights and ambient removed, shader_gen.cpp): the traced light is its whole light.
+inline constexpr std::uint32_t kRtDrawDelit = 1u << 12u;
+// A water draw the material table marks as falling water (rt_reflections.hlsl kWaterfallFlag).
+inline constexpr std::uint32_t kRtDrawWaterfall = 1u << 13u;
 // Bits 8-11: the draw's surface class (rt_surfaces.h).
 inline constexpr std::uint32_t kRtDrawClassShift = 8u;
 inline constexpr std::uint32_t kRtDrawClassMask = 0xFu << kRtDrawClassShift;
@@ -226,9 +231,11 @@ public:
     // next frame's rays read where they hit.
     // The glows drawn since the trace become lights: their eye-space triangles (geometry pass on the
     // same sources) and what they added to the picture since snapshot_glow_base().
+    // `game_srv`: the game's own opaque picture (the lighting composite's source; 0: none), whose light
+    // past the film shoulder joins the bloom.
     void capture_picture(ID3D12GraphicsCommandList* list, const RtSources& sources, Allocate allocate,
                          void* allocate_context, D3D12_GPU_DESCRIPTOR_HANDLE color_depth_table, std::uint32_t width,
-                         std::uint32_t height);
+                         std::uint32_t height, D3D12_GPU_DESCRIPTOR_HANDLE game_srv = {});
     // The glows' bloom of the scene just captured (-1: none) and its composite (additive) onto the
     // EFB; sub-frames replay the composite of their frame's slot.
     [[nodiscard]] int bloom_slot() const noexcept { return bloom_slot_; }
@@ -453,6 +460,8 @@ private:
         std::uint32_t factor = 0;
         float near_plane = 0.0f;
         bool camera_known = false;
+        std::array<float, 3> sun{};        // towards the traced sun (eye space)
+        std::array<float, 3> sun_light{};  // its light
     };
     Microsoft::WRL::ComPtr<ID3D12RootSignature> light_root_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> trace_pso_;
@@ -636,7 +645,7 @@ private:
     unsigned next_light_slot_ = 0;
     int light_slot_ = -1;
     float range_ = 1600.0f;
-    float strength_ = 0.9f;
+    float strength_ = 1.0f;
     float contact_ = 0.3f;
     float contact_range_ = 250.0f;
     float sky_saturation_ = 0.12f;
@@ -646,6 +655,7 @@ private:
     std::array<float, 3> sun_color_{1.0f, 0.93f, 0.82f};
     float sun_size_ = 2.5f;     // degrees
     bool sun_override_ = false;
+    float sun_min_elevation_ = 30.0f;  // GALAXY_RT_SUN_MIN_ELEVATION: degrees a game sun rises to at least
     const RtStageSun* stage_sun_ = nullptr;
     bool sun_held_ = false;
     bool key_valid_ = false;    // set_key_light
@@ -695,7 +705,13 @@ private:
     float glow_model_exposure_ = 1.0f;  // GALAXY_RT_GLOW_MODEL_EXPOSURE: glowing models (a star's surface)
     float glow_model_spill_ = 1.0f;     // GALAXY_RT_GLOW_MODEL_SPILL
     float sky_distance_ = 60000.0f; // GALAXY_RT_SKY_DISTANCE: farther surfaces are the sky (backdrops)
-    float fill_ = 0.2f;             // GALAXY_RT_FILL: the light every surface keeps (more at night)
+    float fill_ = 0.08f;            // GALAXY_RT_FILL: the light every surface keeps (more at night)
+    // The material table's emitters glowing from their own surfaces (GALAXY_RT_SELF_AREA lava and
+    // magma, GALAXY_RT_SELF_POINT Lumas, star bits, stars, per unit of intensity) and an area
+    // light's radiance on what sees it (GALAXY_RT_AREA_RADIANCE, times its colour and intensity).
+    float self_area_ = 1.2f;
+    float self_point_ = 1.0f;
+    float area_radiance_ = 3.0f;
     float sky_ibl_ = 0.8f;          // GALAXY_RT_SKY_IBL: rays reaching the sky take the light of their
                                     // direction (0: the sky's mean colour from every direction)
     bool post_ = true;              // GALAXY_RT_POST: the cinematic finish
@@ -704,16 +720,20 @@ private:
     // the emitters added) runs under the finish instead.
     float post_bloom_ = 0.0f;
     float post_threshold_ = 0.9f;   // GALAXY_RT_POST_THRESHOLD: luminance where bloom starts
-    float post_shafts_ = 0.6f;      // GALAXY_RT_POST_SHAFTS
+    float post_shafts_ = 1.0f;      // GALAXY_RT_POST_SHAFTS
     float post_dof_ = 3.0f;         // GALAXY_RT_POST_DOF: largest far blur (EFB pixels at 1x; 0 none)
     float post_grade_ = 1.0f;       // GALAXY_RT_POST_GRADE
-    float post_rim_ = 0.35f;        // GALAXY_RT_POST_RIM: rim light at silhouettes
+    float post_rim_ = 0.6f;         // GALAXY_RT_POST_RIM: rim light at silhouettes
+    float relief_ = 3.0f;           // GALAXY_RT_RELIEF: height (eye units) of full texture brightness
+    float post_haze_ = 0.35f;       // GALAXY_RT_POST_HAZE: distance haze's largest share (bright skies)
+    float post_haze_distance_ = 20000.0f;  // GALAXY_RT_POST_HAZE_DISTANCE: where it reaches 63 % of it
+    float post_vignette_ = 0.18f;   // GALAXY_RT_POST_VIGNETTE: darkening towards the corners
     bool post_view_ = false;        // GALAXY_RT_POST_VIEW: the finished luminance in false colour
     bool gi_ = true;                // GALAXY_RT_GI=0: no sky occlusion or bounce (shadows and lights stay)
     float core_radius_ = 400.0f;    // GALAXY_RT_CORE_RADIUS: the star core's radius at scale 1 (first guess;
                                     // the finish measures it from depth)
     float core_light_ = 2.5f;       // GALAXY_RT_CORE_LIGHT: its light (a point light; grows with it)
-    float bloom_strength_ = 0.8f;   // GALAXY_RT_BLOOM: the glows' bloom (0: none)
+    float bloom_strength_ = 1.4f;   // GALAXY_RT_BLOOM: the glows' bloom (0: none)
     float bloom_threshold_ = 0.15f; // GALAXY_RT_BLOOM_THRESHOLD: glow luminance that starts to bloom
     // GALAXY_RT_EXPOSURE_DAY / _NIGHT: the mean lighting the exposure holds under a bright / black
     // sky (the light moves into lit areas and out of shadows instead of dimming the picture);
@@ -726,8 +746,8 @@ private:
     float emission_ = 40.0f;        // GALAXY_RT_EMISSION: a glow's light per unit it adds to the picture
                                     // and unit of eye-space area (0: no glow lights)
     float point_size_ = 600.0f;     // GALAXY_RT_POINT_SIZE: radius of the geometry around one
-    float sun_light_ = 1.0f;
-    float sky_light_ = 0.5f;
+    float sun_light_ = 1.4f;        // GALAXY_RT_SUN_LIGHT: the key light's strength
+    float sky_light_ = 1.0f;
     bool lighting_enabled_ = true;
     bool ab_ = false;               // GALAXY_RT_AB
     bool ab_original_ = false;

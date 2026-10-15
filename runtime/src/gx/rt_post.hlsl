@@ -24,14 +24,17 @@ cbuffer RtPost : register(b0)
     float p_split;              // GALAXY_RT_SPLIT: left of it the game's own picture
     uint p_axis;                // blur pass: 0 across, 1 down; finish: 2 false colour
     float p_rim;                // rim light at silhouettes (0: none)
-    uint3 p_pad;
+    float p_haze;               // distance haze in the sky's colour: its largest share (0: none)
+    float p_haze_distance;      // eye distance at which the haze reaches 63 % of that share
+    float p_vignette;           // darkening towards the corners (0: none)
 };
 
 Texture2D<float4> p_color : register(t0);
 Texture2D<float> p_depth_tex : register(t1);
 StructuredBuffer<uint> p_in : register(t2);
 RWStructuredBuffer<uint> p_out : register(u0);
-RWStructuredBuffer<float> p_state : register(u1);   // focus distance, known; core radius, known
+RWStructuredBuffer<float> p_state : register(u1);   // focus distance, known; core radius, known;
+                                                    // the sky's colour (rgb), known
 
 static const float kPi = 3.14159265f;
 
@@ -238,6 +241,29 @@ void PostFocusCS()
         p_state[0] = p_state[1] != 0.0f ? lerp(p_state[0], focus, 0.08f) : focus;
         p_state[1] = 1.0f;
     }
+    // The sky's colour: the mean of a grid of points where the frame shows sky (far plane or
+    // backdrops), over time.
+    {
+        float3 sky = float3(0.0f, 0.0f, 0.0f);
+        float count = 0.0f;
+        [loop] for (int y = 0; y < 8; ++y) {
+            [loop] for (int x = 0; x < 12; ++x) {
+                const int2 q = int2(p_viewport.xy + p_viewport.zw * float2((x + 0.5f) / 12.0f, (y + 0.5f) / 8.0f));
+                if (scene_distance(q) >= 6.0e4f) {
+                    sky += p_color.Load(int3(q, 0)).rgb;
+                    count += 1.0f;
+                }
+            }
+        }
+        if (count >= 6.0f) {
+            sky /= count;
+            const bool known = p_state[7] != 0.0f;
+            [unroll] for (uint k = 0u; k < 3u; ++k) {
+                p_state[4u + k] = known ? lerp(p_state[4u + k], sky[k], 0.05f) : sky[k];
+            }
+            p_state[7] = 1.0f;
+        }
+    }
     // The core's radius: its centre's distance less its front surface's along the ray to it.
     if (p_core.w > 0.0f && p_core.z < 0.0f) {
         const float2 at = eye_to_pixel(p_core.xyz);
@@ -375,10 +401,10 @@ float3 grade(float3 c, float2 pixel)
     // (rt_lighting.hlsl finished_luminance).
     c = shoulder(max(c, 0.0f));
     const float l = luminance(c);
-    const float lc = saturate(l + 0.7f * (l - 0.5f) * l * (1.0f - l));
+    const float lc = saturate(l + 1.0f * (l - 0.5f) * l * (1.0f - l));
     float3 g = c * (lc / max(l, 1e-4f));
     const float chroma = max(g.r, max(g.g, g.b)) - min(g.r, min(g.g, g.b));
-    const float vibrance = 1.04f + 0.3f * (1.0f - smoothstep(0.0f, 0.5f, chroma));
+    const float vibrance = 1.1f + 0.3f * (1.0f - smoothstep(0.0f, 0.5f, chroma));
     g = lc + (g - lc) * vibrance;
     const float3 shadows = float3(0.985f, 0.995f, 1.02f);
     const float3 highlights = float3(1.015f, 1.0f, 0.985f);
@@ -430,12 +456,24 @@ float4 PostPS(float4 position : SV_Position) : SV_Target0
         }
         c *= 1.0f + behind * p_rim;
     }
+    // Distance haze (aerial perspective): far surfaces fade towards the sky's colour under a bright
+    // sky; under a dark one (space) none.
+    if (p_haze > 0.0f && distance < 6.0e4f && f_state[7] != 0.0f) {
+        const float3 sky = float3(f_state[4], f_state[5], f_state[6]);
+        const float amount = p_haze * smoothstep(0.12f, 0.45f, luminance(sky)) *
+                             (1.0f - exp(-distance / max(p_haze_distance, 1.0f)));
+        c = lerp(c, sky, amount);
+    }
     c += quarter_at(f_bloom, position.xy) * p_bloom;
     c += quarter_at(f_shafts, position.xy);
     // The sky and backdrops keep the game's own colours: the lighting never touched them, and a grade
     // there only shifted them (measured: Sea Slide's clouds turned warm).
     if (distance < 6.0e4f) {
         c = grade(c, position.xy);
+    }
+    if (p_vignette > 0.0f) {
+        const float2 at = (position.xy - p_viewport.xy) / p_viewport.zw * 2.0f - 1.0f;
+        c *= 1.0f - p_vignette * smoothstep(0.4f, 1.6f, dot(at, at));
     }
     if (p_axis == 2u) {
         // GALAXY_RT_POST_VIEW: the finished picture's luminance in false colour: deep blue near

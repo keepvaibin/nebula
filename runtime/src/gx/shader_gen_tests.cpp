@@ -718,12 +718,16 @@ int main() {
             } else {
                 check_contains(src, "enh_light(1u, true, pin.ppl_pos", label);
                 check_contains(src, "pin.col0.rgb = enh_mat *", label);
+                // Under traced lighting the channel is the game's light averaged over direction.
+                check_contains(src, "pin.col0.rgb = enh_mat * saturate(enh_avg);", label);
             }
             if (material == 0u) {
                 check_not_contains(src, "enh.env_gain))", label);
             } else {
                 check_contains(src, "enh.env_gain))", label);
-                check_contains(src, "(uber_ps_header.w & 0x10000u) == 0u", label);
+                // Under traced lighting and reflections the painted map gives way to its mean colour.
+                check_contains(src, "(uber_ps_header.w & 0x30000u) == 0x30000u", label);
+                check_contains(src, "env_mean", label);
             }
             check_compiles(src, "ps_5_1", label);
         }

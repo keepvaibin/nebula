@@ -208,14 +208,14 @@ cbuffer RtReflect : register(b0)
     uint g_draw_count;          // entries of g_draws (g_flags bit 7)
     float g_rough_cutoff;       // the material table's roughness above which a surface reflects nothing
     float g_metal_f0;           // Fresnel reflectance of a bare metal (metalness 1)
-    uint g_pad_r;
+    float g_waves;              // water: slope of its procedural waves (0: none)
 };
 
 RaytracingAccelerationStructure g_scene : register(t0);
 ByteAddressBuffer g_positions : register(t1);       // per triangle three eye-space vertices
 // Per triangle, 16 bytes: vertex normals (octahedral 16:16, 1-65535 per axis, 0 none), draw flags.
 ByteAddressBuffer g_surfaces : register(t2);
-StructuredBuffer<uint3> g_light : register(t3);     // this frame's lighting (rt_lighting.hlsl SpatialBCS)
+StructuredBuffer<uint4> g_light : register(t3);     // this frame's lighting (rt_lighting.hlsl SpatialBCS)
 Texture2D<float4> g_color : register(t4);           // EFB colour of the opaque scene
 Texture2D<float> g_efb_depth : register(t5);
 StructuredBuffer<uint4> g_prev_info : register(t6);
@@ -316,7 +316,7 @@ float3 sample_vndf(float3 v, float alpha, float2 u)
 float3 lighting_at(int2 pixel)
 {
     const uint2 s = min(uint2(pixel) / g_factor, g_sample_size - 1u);
-    const uint3 m = g_light[s.y * g_sample_size.x + s.x];
+    const uint4 m = g_light[s.y * g_sample_size.x + s.x];
     if (asfloat(m.z) == 0.0f) {
         return float3(1.0f, 1.0f, 1.0f);
     }
@@ -939,6 +939,19 @@ void ReflectTraceCS(uint3 id : SV_DispatchThreadID, uint gi : SV_GroupIndex)
                 source = r.source;
                 mapped = r.mapped;
                 info.w = asuint(r.distance);
+            } else if (emitter < 1.0f && (g_flags & 128u) != 0u) {
+                // Too rough to reflect anything worth a ray: the lights' highlights alone (a broad
+                // sheen under the sun, a soft glint near a lamp), at the least strength that keeps the
+                // sample in the accumulation and filters; no reflected light (confidence 0).
+                info.z = pack_material(surface_class, 1.0f / 15.0f, 1.0f - emitter, roughness, params.w);
+                const float3 origin = hit + ng * (0.2f + abs(hit.z) * 4e-4f);
+                highlight = highlights(id.xy, hit, origin, n, -dir, params.x, params.z, true) *
+                            (1.0f - smoothstep(0.8f, 0.98f, roughness));
+                if (params.w > 0.0f) {
+                    const float3 tint = min(base / max(luminance(base), 0.1f), 3.0f);
+                    highlight *= lerp(float3(1.0f, 1.0f, 1.0f), tint, params.w);
+                }
+                info.w = asuint(g_range);
             }
         }
     }
@@ -964,8 +977,8 @@ void ReflectTraceCS(uint3 id : SV_DispatchThreadID, uint gi : SV_GroupIndex)
 // scattered towards the camera along its view (shafts)
 // ---------------------------------------------------------------------------------------------
 
-// The water pass's state after its samples in g_under (WaterTraceCS thread 0): [0] the distance to
-// the surface towards the sun, camera under water (1); [1] the surface's normal out of the water,
+// The water pass's state after its samples in g_under (WaterTraceCS thread 0): [0] the surface's plane
+// (its offset along its normal, eye space), camera under water (1); [1] the surface's normal out of the water,
 // frame; [2-7] eye to world (3 rows); [8] the sun's light (11-11-10), shafts gain.
 static const uint kUnderState = 9u;
 
@@ -987,12 +1000,19 @@ void write_underwater_state()
 {
     const uint n = g_sample_size.x * g_sample_size.y;
     uint under = 0u;
-    float distance = 0.0f;
+    float plane = 0.0f;
     float3 up = float3(0.0f, 1.0f, 0.0f);
-    if (any(g_sun_light.rgb > 0.0f)) {
+    // Two probes: towards the sun, and straight up against the world's gravity (a low sun's ray can
+    // leave the water through its side or run out before the surface).
+    const float3 probes[2] = {g_sun.xyz, g_eye_to_world[1].xyz};
+    [unroll] for (uint k = 0u; k < 2u; ++k) {
+        if (under != 0u || (k == 0u && !any(g_sun_light.rgb > 0.0f))) {
+            continue;
+        }
+        const float3 d = normalize(probes[k]);
         RayDesc ray;
         ray.Origin = float3(0.0f, 0.0f, 0.0f);
-        ray.Direction = g_sun.xyz;
+        ray.Direction = d;
         ray.TMin = g_near;
         ray.TMax = 4.0f * g_range;
         RayQuery<RAY_FLAG_FORCE_OPAQUE | RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES> query;
@@ -1002,19 +1022,20 @@ void write_underwater_state()
             const uint tri = query.CommittedPrimitiveIndex();
             const float2 b = query.CommittedTriangleBarycentrics();
             const uint4 record = g_water_surfaces.Load4(tri * 16u);
-            if (record.x != 0u && record.y != 0u && record.z != 0u) {
+            // Water only (class 7, crystal and glass, is no water to be under).
+            if (record.x != 0u && record.y != 0u && record.z != 0u && ((record.w >> 8u) & 15u) != 7u) {
                 const float3 n = unpack_vertex_normal(record.x) * (1.0f - b.x - b.y) +
                                  unpack_vertex_normal(record.y) * b.x + unpack_vertex_normal(record.z) * b.y;
-                // The water's normals point out of it: met from behind towards the sun, it is above.
-                if (dot(n, g_sun.xyz) > 0.0f && length(n) > 1e-3f) {
+                // The water's normals point out of it: met from behind, the camera is below it.
+                if (dot(n, d) > 0.0f && length(n) > 1e-3f) {
                     under = 1u;
-                    distance = query.CommittedRayT();
                     up = normalize(n);
+                    plane = dot(up, d * query.CommittedRayT());
                 }
             }
         }
     }
-    g_under[n] = uint2(asuint(distance), under);
+    g_under[n] = uint2(asuint(plane), under);
     g_stats.InterlockedAdd(27u * 4u, under);
     g_under[n + 1u] = uint2(pack_normal(up), g_frame);
     [unroll] for (uint r = 0u; r < 3u; ++r) {
@@ -1052,6 +1073,60 @@ float3 rippled(int2 q, float3 n)
     const float3 ex = normalize(float3(1.0f, 0.0f, 0.0f) - n * n.x);
     const float3 ey = normalize(float3(0.0f, 1.0f, 0.0f) - n * n.y);
     return normalize(n - slope.x * ex - slope.y * ey);
+}
+
+// RtDraw.flags bit 13 (kRtDrawWaterfall): falling water (its streaks run down it).
+static const uint kWaterfallFlag = 8192u;
+
+// The water's procedural waves (world units, frames): four travelling waves' height slopes along its
+// plane basis (uv). `flow`: a waterfall, uv.x across and uv.y down its fall: fine streaks across,
+// travelling fast down.
+float2 wave_slope(float2 uv, float frame, bool flow)
+{
+    float4 kx, ky, speed, amp;
+    if (flow) {
+        kx = float4(0.21f, -0.13f, 0.34f, -0.08f);
+        ky = float4(0.020f, 0.031f, 0.015f, 0.026f);
+        speed = float4(-0.9f, -1.3f, -1.1f, -0.7f);
+        amp = float4(0.35f, 0.3f, 0.2f, 0.45f);
+    } else {
+        kx = float4(0.045f, -0.031f, 0.018f, -0.067f);
+        ky = float4(0.012f, 0.039f, -0.052f, -0.021f);
+        speed = float4(0.05f, 0.043f, 0.058f, 0.07f);
+        amp = float4(1.2f, 1.0f, 1.4f, 0.5f);
+    }
+    const float4 c = cos(kx * uv.x + ky * uv.y + speed * frame) * amp;
+    return float2(dot(c, kx), dot(c, ky));
+}
+
+// The water's normal `n` at eye-space `hit` bent by its waves (world space, so they stay with the
+// world); far water, where a sample spans more than the waves, keeps its own.
+float3 water_detail(float3 n, float3 hit, bool flow)
+{
+    if (g_waves <= 0.0f) {
+        return n;
+    }
+    const float3 wn = normalize(rotate(g_eye_to_world, n));
+    float3 t1;
+    float3 t2;
+    if (flow) {
+        const float3 down = float3(0.0f, -1.0f, 0.0f) + wn * wn.y;
+        if (dot(down, down) < 1e-4f) {
+            return n;
+        }
+        t2 = normalize(down);
+        t1 = cross(t2, wn);
+    } else {
+        t1 = normalize(abs(wn.y) < 0.9f ? cross(wn, float3(0.0f, 1.0f, 0.0f)) : cross(wn, float3(1.0f, 0.0f, 0.0f)));
+        t2 = cross(wn, t1);
+    }
+    const float3 wp = transform(g_eye_to_world, hit);
+    const float fade = saturate(1.5f - length(hit) / 6000.0f);
+    const float2 s = wave_slope(float2(dot(wp, t1), dot(wp, t2)), float(g_frame), flow) * (g_waves * fade);
+    const float3 wd = normalize(wn - s.x * t1 - s.y * t2);
+    return normalize(float3(dot(float3(g_eye_to_world[0].x, g_eye_to_world[1].x, g_eye_to_world[2].x), wd),
+                            dot(float3(g_eye_to_world[0].y, g_eye_to_world[1].y, g_eye_to_world[2].y), wd),
+                            dot(float3(g_eye_to_world[0].z, g_eye_to_world[1].z, g_eye_to_world[2].z), wd)));
 }
 
 // Translucent water (seas, lakes, pools drawn blended after the trace) and clear crystals and glass
@@ -1127,12 +1202,15 @@ void WaterTraceCS(uint3 id : SV_DispatchThreadID)
             const bool crystal = ((record.w >> 8u) & 15u) == kCrystal;
             if (!crystal) {
                 n = rippled(q, n);
+                n = water_detail(n, dir * query.CommittedRayT(), (record.w & kWaterfallFlag) != 0u);
             }
             if (dot(n, -dir) < 0.02f) {
                 n = ng;
             }
             const float3 hit = dir * query.CommittedRayT();
-            const uint surface = crystal ? kCrystal : below ? kWaterBelow : kWaterSurface;
+            // A waterfall is a clear sheet (no lake body under it), its streaks in its normal.
+            const bool fall = (record.w & kWaterfallFlag) != 0u;
+            const uint surface = crystal || fall ? kCrystal : below ? kWaterBelow : kWaterSurface;
             const float4 params = g_class[crystal ? kCrystal : kWaterSurface];
             const float3 base = g_color.Load(int3(q, 0)).rgb;
             const float emitter = smoothstep(0.8f, 1.0f, min(base.r, min(base.g, base.b)));
@@ -1573,7 +1651,9 @@ Blend blend_samples(float2 pixel, float3 p, bool water)
             const float rough = float((sample.z >> 4u) & 15u) / 15.0f;
             const float metal = float((sample.z >> 8u) & 15u) / 15.0f;
             const float f0 = lerp(surface_class == kMetalClass ? kDielectricF0 : c.y, class_params(kMetalClass).y, metal);
-            const float k = fresnel(f0, max(rough * rough, 1e-3f), dot(n, v)) * sample_weight;
+            // Samples too rough to reflect (ReflectTraceCS: highlights only) take no reflected light,
+            // only their glint.
+            const float k = rough >= 0.62f ? 0.0f : fresnel(f0, max(rough * rough, 1e-3f), dot(n, v)) * sample_weight;
             const float3 light = min(unpack_r11g11b10(sample.x), 1.0f);
             b.sum += light * (k * bw);
             // How much of the surface's own colour the reflection takes away: all of it at cover 1
@@ -1697,7 +1777,7 @@ float water_z(float2 pixel)
 
 // The picture under the water at traced-frame pixel `pixel`: colour bilinear over the samples behind
 // the water (eye z below `limit`), and the nearest such sample's eye z (0: none, the sky).
-float3 under_at(float2 pixel, float limit, out float z)
+float3 under_at(float2 pixel, float limit, out float z, out float found)
 {
     const float2 a = clamp((pixel - 0.5f) / float(m_factor), 0.0f, float2(m_sample_size) - 1.0f);
     const int2 base = int2(floor(a));
@@ -1722,18 +1802,33 @@ float3 under_at(float2 pixel, float limit, out float z)
             z = u.y != 0u ? uz : 0.0f;
         }
     }
+    found = saturate(weight);
     return weight > 0.0f ? sum / weight : float3(0.0f, 0.0f, 0.0f);
 }
 
 // The floor under the water at `pixel`, softened over a sample each way: water scatters, and the
-// game's thin projected caustic lines on the sand fade instead of showing as outlines.
-float3 under_soft(float2 pixel, float limit, out float z)
+// game's thin projected caustic lines on the sand fade instead of showing as outlines. Taps with
+// nothing behind the water leave the mean; `found` is the share that had something.
+float3 under_soft(float2 pixel, float limit, out float z, out float found)
 {
     const float r = 1.5f * float(m_factor);
-    float unused;
-    const float3 c = under_at(pixel, limit, z);
-    return 0.4f * c + 0.15f * (under_at(pixel + float2(r, r), limit, unused) + under_at(pixel + float2(-r, r), limit, unused) +
-                               under_at(pixel + float2(r, -r), limit, unused) + under_at(pixel + float2(-r, -r), limit, unused));
+    const float2 offsets[5] = {float2(0.0f, 0.0f), float2(r, r), float2(-r, r), float2(r, -r), float2(-r, -r)};
+    const float weights[5] = {0.4f, 0.15f, 0.15f, 0.15f, 0.15f};
+    float3 sum = float3(0.0f, 0.0f, 0.0f);
+    float total = 0.0f;
+    z = 0.0f;
+    [unroll] for (uint k = 0u; k < 5u; ++k) {
+        float tz;
+        float f;
+        const float3 c = under_at(pixel + offsets[k], limit, tz, f);
+        sum += c * (weights[k] * f);
+        total += weights[k] * f;
+        if (k == 0u) {
+            z = tz;
+        }
+    }
+    found = total;
+    return total > 1e-4f ? sum / total : float3(0.0f, 0.0f, 0.0f);
 }
 
 // Sunlight the surface's waves focus onto the floor at `floor` (eye space) under the water plane
@@ -1834,7 +1929,8 @@ CompositeOut WaterCompositePS(float4 position : SV_Position)
         // Seen edge-on (a side wall, the lip) the body would only band: it fades out there.
         const float share = m_water.w * b.surface / b.weight * smoothstep(0.15f, 0.4f, dot(n, -normalize(p)));
         float floor_z;
-        under_at(pixel, p.z - 1.0f, floor_z);
+        float floor_found;
+        under_at(pixel, p.z - 1.0f, floor_z, floor_found);
         float path = 4000.0f;
         float3 seen = float3(0.0f, 0.0f, 0.0f);
         if (floor_z != 0.0f) {
@@ -1843,15 +1939,19 @@ CompositeOut WaterCompositePS(float4 position : SV_Position)
             const float span = max(length(straight) - length(p), 0.0f);
             const float3 bent = refract(v, n, 0.75f);
             float3 floor_at = any(bent != 0.0f) ? p + bent * span : straight;
+            // The refracted lookup where what it meets lies behind the water, the straight one where not,
+            // blended by that share (a switch per pixel showed as speckles on the shallows).
             float bent_z;
-            float3 floor_colour = under_soft(eye_to_pixel(m_projection, m_viewport, floor_at), p.z - 1.0f, bent_z);
-            if (bent_z == 0.0f) {
-                floor_colour = under_soft(pixel, p.z - 1.0f, bent_z);
-                floor_at = straight;
-            } else {
-                floor_at = eye_position(m_projection, m_viewport, eye_to_pixel(m_projection, m_viewport, floor_at),
-                                        bent_z);
-            }
+            float bent_found;
+            const float2 bent_pixel = eye_to_pixel(m_projection, m_viewport, floor_at);
+            const float3 bent_colour = under_soft(bent_pixel, p.z - 1.0f, bent_z, bent_found);
+            float straight_z;
+            float straight_found;
+            const float3 straight_colour = under_soft(pixel, p.z - 1.0f, straight_z, straight_found);
+            const float use_bent = bent_z != 0.0f ? smoothstep(0.55f, 0.95f, bent_found) : 0.0f;
+            float3 floor_colour = lerp(straight_colour, bent_colour, use_bent);
+            floor_at = lerp(straight, bent_z != 0.0f ? eye_position(m_projection, m_viewport, bent_pixel, bent_z) : straight,
+                            use_bent);
             path = max(length(floor_at - p), 0.0f);
             seen = floor_colour * caustic(floor_at, p, n);
         }
@@ -1895,7 +1995,7 @@ CompositeOut UnderwaterPS(float4 position : SV_Position)
     const float3 sun = unpack_r11g11b10(light_gain.x);
     const float shafts = asfloat(light_gain.y);
     const float rise = max(dot(up, s), 0.05f);
-    const float3 surface = s * asfloat(state.x);
+    const float plane = asfloat(state.x);
     // A plane basis in world space, so the waves stay with the world.
     const float3 world_up = normalize(rotate(to_world, up));
     const float3 t1 = normalize(abs(world_up.y) < 0.9f ? cross(world_up, float3(0.0f, 1.0f, 0.0f))
@@ -1913,7 +2013,7 @@ CompositeOut UnderwaterPS(float4 position : SV_Position)
     float3 add = float3(0.0f, 0.0f, 0.0f);
     float3 keep = float3(1.0f, 1.0f, 1.0f);
     // Caustics on the surface the pixel shows, if it lies under the water.
-    const float below = dot(up, surface - p);
+    const float below = plane - dot(up, p);
     if (!sky && below > 1.0f) {
         const float along = below / rise;
         const float3 enter = transform(to_world, p + s * along);
@@ -1933,7 +2033,7 @@ CompositeOut UnderwaterPS(float4 position : SV_Position)
         [unroll] for (uint i = 0u; i < 8u; ++i) {
             const float t = span * (float(i) + jitter) / 8.0f;
             const float3 x = v * t;
-            const float depth_x = dot(up, surface - x);
+            const float depth_x = plane - dot(up, x);
             if (depth_x <= 0.0f) {
                 continue;
             }
@@ -1946,6 +2046,15 @@ CompositeOut UnderwaterPS(float4 position : SV_Position)
         const float c = dot(v, s);
         const float phase = (1.0f - 0.36f) / pow(max(1.0f + 0.36f - 1.2f * c, 1e-3f), 1.5f) / (4.0f * kPi);
         add += sun * sum * (span / 8.0f) * (shafts * 2e-4f * phase);
+    }
+    // The water between the camera and what the pixel shows: its light fades with the depth of water
+    // it crosses (absorption) and the light the water scatters (its teal) takes its place.
+    {
+        const float span = sky ? 4000.0f : length(p);
+        const float3 t = exp(-m_water.rgb * span * 0.35f);
+        const float3 scatter = (sun * 0.35f + 0.08f) * float3(0.06f, 0.42f, 0.52f);
+        add = add * t + scatter * (1.0f - t);
+        keep *= t;
     }
     CompositeOut result;
     result.add = float4(saturate(add), 0.0f);

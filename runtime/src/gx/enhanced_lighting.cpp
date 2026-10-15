@@ -2,10 +2,12 @@
 #include "galaxy/gx/enhanced_lighting.h"
 
 #include "galaxy/gx/gx_bitfields.h"
+#include "galaxy/gx/rt_materials.h"
 #include "galaxy/gx/rt_surfaces.h"
 
 #include <algorithm>
 #include <bit>
+#include <cmath>
 #include <cstdlib>
 #include <string>
 
@@ -71,6 +73,16 @@ EnhancedLightingTuning parse_tuning() {
 const EnhancedLightingTuning& enhanced_lighting_tuning() {
     static const EnhancedLightingTuning tuning = parse_tuning();
     return tuning;
+}
+
+std::uint32_t enhanced_table_material(const RtMaterial* material) noexcept {
+    if (material == nullptr || (material->roughness < 0.0f && material->metallic < 0.0f)) {
+        return 0u;
+    }
+    const float rough = material->roughness >= 0.0f ? std::clamp(material->roughness, 0.0f, 1.0f) : 0.6f;
+    const float metal = material->metallic >= 0.0f ? std::clamp(material->metallic, 0.0f, 1.0f) : 0.0f;
+    return kEnhancedTableKnown | (static_cast<std::uint32_t>(std::lround(rough * 63.0f)) << kEnhancedTableRoughShift) |
+           (static_cast<std::uint32_t>(std::lround(metal * 15.0f)) << kEnhancedTableMetalShift);
 }
 
 std::uint32_t enhanced_lighting_material(const VertexShaderKey& vs, const PixelShaderKey& ps) noexcept {

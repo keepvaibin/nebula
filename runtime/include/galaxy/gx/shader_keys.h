@@ -141,6 +141,11 @@ inline constexpr unsigned kEnhancedTuneShift = 24u;
 inline constexpr std::uint32_t kEnhancedSplitMask = 0xFFFFu;
 inline constexpr std::uint32_t kEnhancedRtReflections = 1u << 16u;
 inline constexpr std::uint32_t kEnhancedRtLighting = 1u << 17u;
+// Bits 20-25 the material table's roughness (/63), 26-29 its metalness (/15), bit 30 the table names
+// the draw's texture (enhanced_table_material): the enhanced highlights take its lobe.
+inline constexpr unsigned kEnhancedTableRoughShift = 20u;
+inline constexpr unsigned kEnhancedTableMetalShift = 26u;
+inline constexpr std::uint32_t kEnhancedTableKnown = 1u << 30u;
 inline constexpr std::uint32_t kEnhancedView = 1u << 18u;
 inline constexpr std::uint32_t kEnhancedViewChannel = 1u << 19u;
 

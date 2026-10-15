@@ -47,6 +47,8 @@ struct RtMaterial {
     bool hide = false;                    // a faked light effect: not drawn under the traced lighting
     bool unlit_only = false;              // only unlit draws of the texture emit
     bool particle = false;                // smoke, steam, sparks: never traced geometry or water
+    bool waterfall = false;               // falling water: water whose streaks run down it
+    bool matte = false;                   // foliage, cloth: absorbs light, no highlight or reflection
     bool shadow = true;
     float roughness = -1.0f;              // < 0: the class's
     float metallic = -1.0f;               // < 0: the class's
@@ -55,6 +57,9 @@ struct RtMaterial {
     float range = 0.0f;
     float pulse = 0.0f;
     float cone = 0.0f;                    // degrees; 0: a point light
+    // Surface relief from the texture's detail under the sun (ground, rock, bark, cloth; none on
+    // skin, paint, metal, glass): the strength of the per-pixel normal its brightness gives.
+    float relief = 0.0f;
 };
 
 class RtMaterialTable {

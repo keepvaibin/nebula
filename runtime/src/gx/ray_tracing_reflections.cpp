@@ -63,7 +63,7 @@ struct RtReflectConstants {
     std::uint32_t draw_count;
     float rough_cutoff;
     float metal_f0;
-    std::uint32_t pad;
+    float waves;
 };
 static_assert(sizeof(RtReflectConstants) == RtReflections::kConstantsBytes);
 
@@ -257,6 +257,7 @@ bool RtReflections::initialize(ID3D12Device5* device, std::uint64_t timestamp_fr
     metal_sky_ = std::clamp(env_float("GALAXY_RT_REFLECT_METAL_SKY", 0.3f), 0.0f, 1.0f);
     local_gain_ = std::clamp(env_float("GALAXY_RT_REFLECT_LOCAL_GAIN", 2.0f), 0.0f, 16.0f);
     rough_cutoff_ = std::clamp(env_float("GALAXY_RT_REFLECT_ROUGH_CUTOFF", 0.65f), 0.05f, 1.2f);
+    waves_ = std::clamp(env_float("GALAXY_RT_WAVES", 1.0f), 0.0f, 4.0f);
     {
         // Per 1000 eye units (about 10 m of the game's world): red goes first, then green.
         absorb_ = {25.0f, 4.5f, 2.6f};
@@ -673,6 +674,7 @@ void RtReflections::fill_constants(const RtReflectScene& scene, const Pass& pass
     c.local_gain = local_gain_;
     c.draw_count = scene.draws != 0u ? scene.draw_count : 0u;
     c.rough_cutoff = rough_cutoff_;
+    c.waves = waves_;
     c.metal_f0 = materials_[2].f0;
     std::memcpy(constants_cpu, &c, sizeof(c));
 }

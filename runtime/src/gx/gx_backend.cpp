@@ -7208,10 +7208,16 @@ bool GxBackend::begin_rt_batch(const DrawCall& call, RtDrawInfo& info) {
             (rt_draw_lights_ & 1u) != 0u && rt_light_aim_.blend >= 1.0f) {
             info.surface |= kRtDrawSunKey;
         }
+        if (info.surface != 0u && (ps_key_.reserved & kPsKeyEnhancedLighting) != 0u &&
+            (ps_key_.ind_reserved & kEnhancedLit) != 0u && (enhanced_ps_flags_ & kEnhancedRtLighting) != 0u) {
+            info.surface |= kRtDrawDelit;
+        }
         if (glow) {
             info.surface = kRtDrawGlow;
         } else if (water) {
-            info.surface = kRtDrawWater | (static_cast<std::uint32_t>(surface.surface_class) << kRtDrawClassShift);
+            const RtMaterial* const fall = rt_material(current_rt_material_);
+            info.surface = kRtDrawWater | (static_cast<std::uint32_t>(surface.surface_class) << kRtDrawClassShift) |
+                           (fall != nullptr && fall->waterfall ? kRtDrawWaterfall : 0u);
         } else {
             info.surface |= static_cast<std::uint32_t>(surface.surface_class) << kRtDrawClassShift;
         }
@@ -7586,6 +7592,11 @@ void GxBackend::on_fifo_marker(FifoMarker marker, const std::array<float, 12>* v
         if (renderer_.rt_ab_original()) {
             rt_light_aim_ = {};
         }
+        // This scene's ray-tracing state for the enhanced pipelines (and the de-lit draws: under
+        // traced lighting every lit and environment-mapped scene draw takes the enhanced path).
+        enhanced_ps_flags_ = (enhanced_ps_flags_ & ~(kEnhancedRtReflections | kEnhancedRtLighting)) |
+                             (renderer_.rt_reflections_active() ? kEnhancedRtReflections : 0u) |
+                             (renderer_.rt_lighting() ? kEnhancedRtLighting : 0u);
     } else {
         trace_rt_scene();
         if (renderer_.rt_active() && side_layer_ == kSceneLayer) {
@@ -12539,7 +12550,8 @@ ID3D12PipelineState* GxBackend::flush_draw_state(
     {
         // Perspective scene draws only: the view vector is the eye-space position. The material
         // follows the keys, which change only with their dirty bits.
-        const bool gate = enhanced_lighting_ && triangles && scene_phase_ && side_layer_ == kSceneLayer &&
+        const bool gate = (enhanced_lighting_ || (enhanced_ps_flags_ & kEnhancedRtLighting) != 0u) && triangles &&
+                          scene_phase_ && side_layer_ == kSceneLayer &&
                           state_.xf(static_cast<std::uint16_t>(xf::kProjectionBase + 6u)) == 0u;
         if (gate != enhanced_gate_ || tev_dirty || xf_dirty || vcd_dirty || !shader_key_hashes_valid_) {
             enhanced_gate_ = gate;
@@ -13006,51 +13018,6 @@ ID3D12PipelineState* GxBackend::flush_draw_state(
         }
     }
 
-    // Upload PS constants when TEV stage config / fog / alpha / tex dims change.
-    if (tev_dirty || tev_c_dirty || tex_dirty || frame_bindings_dirty_ || glow_changed || enhanced_changed ||
-        dirty == ~0u || (ps_record_restart_ && history_scene_)) {
-        const auto constants_start = time_detail
-            ? std::chrono::steady_clock::now()
-            : std::chrono::steady_clock::time_point{};
-        GxPsConstants ps_c{};
-        fill_ps_constants(state_, ps_c);
-        ps_c.ztex_params[1] = 1.0f / static_cast<float>(renderer_.efb_scale());
-        ps_c.ztex_params[2] =
-            (ps_key_.output_flags & 0x20u) != 0u   ? renderer_.rt_glow_exposure(glow_kind_ == 2u)
-            : (ps_key_.output_flags & 0x40u) != 0u ? renderer_.rt_light_texture_scale()
-                                                   : 0.0f;
-        ps_c.ztex_params[3] =
-            (ps_key_.output_flags & 0x20u) != 0u ? renderer_.rt_glow_spill(glow_kind_ == 2u) : 0.0f;
-        apply_uber_ps_key(ps_key_, ps_c);
-        if ((ps_key_.reserved & kPsKeyEnhancedLighting) != 0u) {
-            std::uint32_t column = 0u;
-            if (enhanced_split_ > 0.0f) {
-                // The viewport's left edge plus the fraction of its width, in render-target pixels.
-                const float wd = std::bit_cast<float>(state_.xf(xf::kViewportBase));
-                const float left = std::bit_cast<float>(state_.xf(static_cast<std::uint16_t>(xf::kViewportBase + 3u))) -
-                                   static_cast<float>(state_.efb_scissor().offset.x) - 342.0f - wd;
-                const float x = (left + enhanced_split_ * 2.0f * wd) * static_cast<float>(renderer_.efb_scale());
-                column = static_cast<std::uint32_t>(std::clamp(x, 1.0f, 65535.0f));
-            }
-            ps_c.uber_ps_header[3] = enhanced_ps_flags_ | column;
-        }
-
-        UploadRing::Allocation ps_alloc =
-            renderer_.constant_ring().allocate(sizeof(GxPsConstants), 256u);
-        std::memcpy(ps_alloc.cpu, &ps_c, sizeof(ps_c));
-        current_ps_constants_ = ps_alloc.gpu;
-        if (interp_recording_ && history_scene_) [[unlikely]] {
-            ps_record_restart_ = false;
-            InterpScene& scene = interp_scenes_[interp_scene_];
-            current_ps_record_ = static_cast<std::int32_t>(scene.ps_constants.size());
-            scene.ps_constants.push_back(ps_c);
-        }
-        if (time_detail) {
-            frame_flush_constants_us_ +=
-                elapsed_us(constants_start, std::chrono::steady_clock::now());
-        }
-    }
-
     // Refresh the texture descriptor table when any texture register changed.
     //
     // `tex_dirty` is the complete set of inputs this block consumes:
@@ -13293,6 +13260,56 @@ ID3D12PipelineState* GxBackend::flush_draw_state(
             }
         }
     }
+
+    // Upload PS constants when TEV stage config / fog / alpha / tex dims change, or an enhanced
+    // draw's material table entry does (after the texture binding, which finds it).
+    const std::uint32_t enhanced_material_bits =
+        (ps_key_.reserved & kPsKeyEnhancedLighting) != 0u ? enhanced_table_material(rt_material(current_rt_material_)) : 0u;
+    if (tev_dirty || tev_c_dirty || tex_dirty || frame_bindings_dirty_ || glow_changed || enhanced_changed ||
+        dirty == ~0u || (ps_record_restart_ && history_scene_) || enhanced_material_bits != enhanced_material_bits_) {
+        enhanced_material_bits_ = enhanced_material_bits;
+        const auto constants_start = time_detail
+            ? std::chrono::steady_clock::now()
+            : std::chrono::steady_clock::time_point{};
+        GxPsConstants ps_c{};
+        fill_ps_constants(state_, ps_c);
+        ps_c.ztex_params[1] = 1.0f / static_cast<float>(renderer_.efb_scale());
+        ps_c.ztex_params[2] =
+            (ps_key_.output_flags & 0x20u) != 0u   ? renderer_.rt_glow_exposure(glow_kind_ == 2u)
+            : (ps_key_.output_flags & 0x40u) != 0u ? renderer_.rt_light_texture_scale()
+                                                   : 0.0f;
+        ps_c.ztex_params[3] =
+            (ps_key_.output_flags & 0x20u) != 0u ? renderer_.rt_glow_spill(glow_kind_ == 2u) : 0.0f;
+        apply_uber_ps_key(ps_key_, ps_c);
+        if ((ps_key_.reserved & kPsKeyEnhancedLighting) != 0u) {
+            std::uint32_t column = 0u;
+            if (enhanced_split_ > 0.0f) {
+                // The viewport's left edge plus the fraction of its width, in render-target pixels.
+                const float wd = std::bit_cast<float>(state_.xf(xf::kViewportBase));
+                const float left = std::bit_cast<float>(state_.xf(static_cast<std::uint16_t>(xf::kViewportBase + 3u))) -
+                                   static_cast<float>(state_.efb_scissor().offset.x) - 342.0f - wd;
+                const float x = (left + enhanced_split_ * 2.0f * wd) * static_cast<float>(renderer_.efb_scale());
+                column = static_cast<std::uint32_t>(std::clamp(x, 1.0f, 65535.0f));
+            }
+            ps_c.uber_ps_header[3] = enhanced_ps_flags_ | column | enhanced_material_bits;
+        }
+
+        UploadRing::Allocation ps_alloc =
+            renderer_.constant_ring().allocate(sizeof(GxPsConstants), 256u);
+        std::memcpy(ps_alloc.cpu, &ps_c, sizeof(ps_c));
+        current_ps_constants_ = ps_alloc.gpu;
+        if (interp_recording_ && history_scene_) [[unlikely]] {
+            ps_record_restart_ = false;
+            InterpScene& scene = interp_scenes_[interp_scene_];
+            current_ps_record_ = static_cast<std::int32_t>(scene.ps_constants.size());
+            scene.ps_constants.push_back(ps_c);
+        }
+        if (time_detail) {
+            frame_flush_constants_us_ +=
+                elapsed_us(constants_start, std::chrono::steady_clock::now());
+        }
+    }
+
 
     frame_bindings_dirty_ = false;
     texture_bindings_dirty_ = false;

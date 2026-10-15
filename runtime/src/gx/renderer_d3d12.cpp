@@ -7751,7 +7751,8 @@ void RendererD3D12::rt_capture_picture() {
     dred_marker(command_list_.Get(), L"rt picture");
     // The conversion views hold the EFB colour, then its depth.
     ray_tracer_.capture_picture(command_list_.Get(), rt_sources(), &RendererD3D12::rt_allocate, this,
-                                conv_efb_color_srv_, static_cast<std::uint32_t>(desc.Width), desc.Height);
+                                conv_efb_color_srv_, static_cast<std::uint32_t>(desc.Width), desc.Height,
+                                rt_game_picture());
     for (D3D12_RESOURCE_BARRIER& barrier : barriers) {
         std::swap(barrier.Transition.StateBefore, barrier.Transition.StateAfter);
     }
@@ -7833,7 +7834,7 @@ D3D12_GPU_DESCRIPTOR_HANDLE RendererD3D12::rt_composite_color() {
         D3D12_RESOURCE_DESC copy = desc;
         copy.Flags = D3D12_RESOURCE_FLAG_NONE;
         if (FAILED(device_->CreateCommittedResource(&hp, D3D12_HEAP_FLAG_NONE, &copy,
-                                                    D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, nullptr,
+                                                    D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE, nullptr,
                                                     IID_PPV_ARGS(&rt_color_copy_)))) {
             return {};
         }
@@ -7847,8 +7848,9 @@ D3D12_GPU_DESCRIPTOR_HANDLE RendererD3D12::rt_composite_color() {
     barriers[0].Transition.pResource = efb_color_.Get();
     barriers[0].Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
     barriers[0].Transition.StateAfter = D3D12_RESOURCE_STATE_COPY_SOURCE;
+    // Read by the composite (pixel) and the exposure and capture passes (compute).
     barriers[1].Transition.pResource = rt_color_copy_.Get();
-    barriers[1].Transition.StateBefore = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+    barriers[1].Transition.StateBefore = D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE;
     barriers[1].Transition.StateAfter = D3D12_RESOURCE_STATE_COPY_DEST;
     command_list_->ResourceBarrier(2u, barriers);
     command_list_->CopyResource(rt_color_copy_.Get(), efb_color_.Get());
@@ -7856,6 +7858,27 @@ D3D12_GPU_DESCRIPTOR_HANDLE RendererD3D12::rt_composite_color() {
         std::swap(barrier.Transition.StateBefore, barrier.Transition.StateAfter);
     }
     command_list_->ResourceBarrier(2u, barriers);
+    const DescriptorRing::Table table = srv_ring_.allocate(1);
+    D3D12_SHADER_RESOURCE_VIEW_DESC view{};
+    view.Format = desc.Format == DXGI_FORMAT_R8G8B8A8_TYPELESS ? DXGI_FORMAT_R8G8B8A8_UNORM : desc.Format;
+    view.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+    view.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+    view.Texture2D.MipLevels = 1u;
+    device_->CreateShaderResourceView(rt_color_copy_.Get(), &view, table.cpu);
+    return table.gpu;
+}
+
+// The copy rt_composite_color made of this scene's opaque picture (before the lighting), without a new
+// copy; 0 without one of the EFB's size.
+D3D12_GPU_DESCRIPTOR_HANDLE RendererD3D12::rt_game_picture() {
+    if (!efb_color_ || !rt_color_copy_) {
+        return {};
+    }
+    const D3D12_RESOURCE_DESC desc = efb_color_->GetDesc();
+    const D3D12_RESOURCE_DESC copy = rt_color_copy_->GetDesc();
+    if (copy.Width != desc.Width || copy.Height != desc.Height || copy.Format != desc.Format) {
+        return {};
+    }
     const DescriptorRing::Table table = srv_ring_.allocate(1);
     D3D12_SHADER_RESOURCE_VIEW_DESC view{};
     view.Format = desc.Format == DXGI_FORMAT_R8G8B8A8_TYPELESS ? DXGI_FORMAT_R8G8B8A8_UNORM : desc.Format;
