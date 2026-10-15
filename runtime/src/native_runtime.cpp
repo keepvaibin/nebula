@@ -2477,6 +2477,8 @@ struct RuntimeState {
     bool vi_edge_delivery_active{};
     // VI services that found a due batch still unpublished a period late.
     std::uint64_t vi_unpublished_backlog_retries{};
+    // The VI sequence whose late publication last woke the broker worker.
+    std::uint64_t vi_late_wake_sequence{};
     std::atomic_bool vi_readiness_probe_requested{false};
     bool guest_write_watch_enabled =
         read_env_flag("GALAXY_TRACE_GUEST_WRITE_WATCH", false);
@@ -19591,6 +19593,14 @@ void wake_idle_simulation_thread(void* user) noexcept {
     }
 }
 
+// Some due VI deadline is not published yet: the broker is late (by up to a period while
+// AwaitingPublication, by more in a Backlog it has not caught up with).
+bool vi_publication_late(const galaxy::timing::PeriodicDeadlineObservation& observation) noexcept {
+    using Status = galaxy::timing::PeriodicConsumeStatus;
+    return (observation.status == Status::AwaitingPublication || observation.status == Status::Backlog) &&
+           observation.pending_edges < observation.scheduled_due_edges;
+}
+
 void wait_for_exact_vi_deadline(
     RuntimeState& state,
     galaxy::PpcContext* context,
@@ -19629,9 +19639,14 @@ void wait_for_exact_vi_deadline(
                 now_ticks);
         if (observation.status !=
                 galaxy::timing::PeriodicConsumeStatus::NotDue &&
-            observation.status !=
-                galaxy::timing::PeriodicConsumeStatus::AwaitingPublication) {
+            !vi_publication_late(observation)) {
             return;
+        }
+        if (observation.scheduled_due_edges > 1u &&
+            state.vi_late_wake_sequence != observation.expected_sequence) {
+            // A period late: the worker was descheduled or its timer fired late.
+            state.vi_late_wake_sequence = observation.expected_sequence;
+            state.deadline_broker->wake_worker();
         }
 
         pump_due_os_events_except_vi(
@@ -20261,10 +20276,7 @@ bool dispatch_vi_retrace(
         // competing consumers and invalid identities still throw inside it.
         if (state.deadline_events.pending(
                 galaxy::timing::EventKind::VideoInterface) == 0u) {
-            // No edge is published a full period after its deadline: the
-            // broker worker was descheduled or its timer fired late.
             ++state.vi_unpublished_backlog_retries;
-            state.deadline_broker->wake_worker();
         }
         return false;
     }
@@ -23371,9 +23383,7 @@ bool arbitrate_external_before_decrementer(
             state.deadline_events,
             galaxy::timing::EventKind::VideoInterface,
             runtime_time_base_ticks(state));
-        force_due_vi_publication =
-            observation.status ==
-            galaxy::timing::PeriodicConsumeStatus::AwaitingPublication;
+        force_due_vi_publication = vi_publication_late(observation);
         // wait_for_exact_vi_deadline owns publication waiting. Re-entering its
         // force path would recurse; its latest exact sample instead decides
         // whether DEC was eligible before the VI edge.
