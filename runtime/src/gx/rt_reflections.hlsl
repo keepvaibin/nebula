@@ -2062,19 +2062,22 @@ CompositeOut WaterCompositePS(float4 position : SV_Position)
                                         dot(float3(to_world[0].z, to_world[1].z, to_world[2].z), shift_world));
         const float2 wobble = clamp(eye_to_pixel(m_projection, m_viewport, p + shift_eye) - pixel, -24.0f, 24.0f);
         const float px_per_unit = 0.5f * m_viewport.w * abs(m_projection.z) / max(-p.z, 1.0f);
-        const float radius = clamp(40.0f * px_per_unit, 1.5f, 28.0f);
+        const float radius = clamp(40.0f * px_per_unit, 5.0f, 28.0f);
         const float2 lo = m_viewport.xy;
         const float2 hi = m_viewport.xy + m_viewport.zw - 1.0f;
-        float3 water = m_scene.Load(int3(int2(clamp(position.xy + wobble, lo, hi)), 0)).rgb;
+        const float3 centre = m_scene.Load(int3(int2(clamp(position.xy + wobble, lo, hi)), 0)).rgb;
+        // Bilateral: taps of a like colour (the water's own texture) count, islands, sand and objects
+        // (far from it) do not.
+        float3 water = centre;
         float taps = 1.0f;
-        [unroll] for (uint k = 0u; k < 12u; ++k) {
+        [unroll] for (uint k = 0u; k < 16u; ++k) {
             const float a = float(k) * 2.39996f;
-            const float2 o = float2(cos(a), sin(a)) * (radius * sqrt((float(k) + 0.5f) / 12.0f)) + wobble;
-            const float tz = water_z(pixel + o);
-            if (tz != 0.0f && abs(tz - p.z) <= abs(p.z) * 0.08f + 20.0f) {
-                water += m_scene.Load(int3(int2(clamp(position.xy + o, lo, hi)), 0)).rgb;
-                taps += 1.0f;
-            }
+            const float2 o = float2(cos(a), sin(a)) * (radius * sqrt((float(k) + 0.5f) / 16.0f)) + wobble;
+            const float3 c = m_scene.Load(int3(int2(clamp(position.xy + o, lo, hi)), 0)).rgb;
+            const float3 d = c - centre;
+            const float w = exp(-dot(d, d) / 0.02f);
+            water += c * w;
+            taps += w;
         }
         water /= taps;
         // Shallows: the sunlight the waves focus on the seabed (its own caustics, moving).
@@ -2185,8 +2188,8 @@ CompositeOut UnderwaterPS(float4 position : SV_Position)
     // it crosses and the light the water scatters (its teal) takes its place: murky with distance, the
     // near seabed readable (0.22 of the lake body's absorption; 0.35 was a little too dark).
     {
-        const float span = sky ? 4000.0f : length(p);
-        const float3 t = exp(-m_water.rgb * span * 0.18f);
+        const float span = max((sky ? 4000.0f : length(p)) - 100.0f, 0.0f);
+        const float3 t = exp(-float3(0.0016f, 0.0009f, 0.0007f) * span);
         const float3 scatter = (sun * 0.4f + 0.15f) * float3(0.09f, 0.5f, 0.56f);
         add = add * t + scatter * (1.0f - t);
         keep *= t;
