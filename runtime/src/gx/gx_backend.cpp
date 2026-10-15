@@ -7159,6 +7159,23 @@ bool GxBackend::rt_hidden_draw() const noexcept {
     if (rt_object_fake_shadow_) {
         return true;
     }
+    // The game's own mirror copies drawn after the trace (Mario's reflection under Freezeflame's ice:
+    // MarioActor::drawReflectModel in the indirect phase) carry a mirrored position matrix. Under traced
+    // reflections they doubled what the trace reflects (two Marios, user); GALAXY_RT_KEEP_GAME_MIRRORS=1 keeps them.
+    static const bool keep_mirrors = read_env_u64("GALAXY_RT_KEEP_GAME_MIRRORS", 0u) != 0u;
+    if (!keep_mirrors && rt_phase_ == static_cast<std::uint8_t>(motion::ScenePhase::AfterIndirect) &&
+        renderer_.rt_reflections_active()) {
+        const std::uint32_t base = (state_.cp(cp::kMatrixIndexA) & 0x3Fu) * 4u;
+        const auto m = [this, base](unsigned row, unsigned column) {
+            return std::bit_cast<float>(state_.xf(static_cast<std::uint16_t>(base + row * 4u + column)));
+        };
+        const float det = m(0, 0) * (m(1, 1) * m(2, 2) - m(1, 2) * m(2, 1)) -
+                          m(0, 1) * (m(1, 0) * m(2, 2) - m(1, 2) * m(2, 0)) +
+                          m(0, 2) * (m(1, 0) * m(2, 1) - m(1, 1) * m(2, 0));
+        if (std::isfinite(det) && det < 0.0f) {
+            return true;
+        }
+    }
     if (current_rt_material_ == 0u) {
         return false;
     }
