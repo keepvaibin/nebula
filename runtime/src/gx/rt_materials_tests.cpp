@@ -162,6 +162,20 @@ bool stage_suns() {
     const auto* lava = table.find("HellProminenceGalaxy");
     ok &= expect(lava != nullptr && lava->source == Source::None, "no sun");
     ok &= expect(table.find("Missing") == nullptr, "no row");
+    ok &= expect(egg->day < 0.0f, "no day column: by the sky");
+    std::istringstream with_day(
+        "stage\tsource\tday\tnotes\n"
+        "BattleShipGalaxy\tgame\t0\tspace\n"
+        "EggStarGalaxy\tgame\t1.5\tday\n"
+        "PhantomGalaxy\tgame\t\tby sky\n");
+    galaxy::gx::RtStageSunTable days;
+    days.read(with_day);
+    const auto* space = days.find("BattleShipGalaxy");
+    const auto* day = days.find("EggStarGalaxy");
+    const auto* by_sky = days.find("PhantomGalaxy");
+    ok &= expect(space != nullptr && space->day == 0.0f, "day 0: the night model");
+    ok &= expect(day != nullptr && near(day->day, 1.0f), "day clamps to 1");
+    ok &= expect(by_sky != nullptr && by_sky->day < 0.0f, "empty day: by the sky");
     return ok;
 }
 

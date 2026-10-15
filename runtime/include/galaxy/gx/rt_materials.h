@@ -87,12 +87,13 @@ private:
 
 // A stage's sun: GALAXY_RT_SUNS_FILE, else rt-suns.tsv beside the executable; tab-separated with a
 // header naming its columns:
-//   stage  source  x  y  z  r  g  b  strength  size  shafts  (others ignored)
+//   stage  source  x  y  z  r  g  b  strength  size  shafts  day  (others ignored)
 // stage: the game's stage name (EggStarGalaxy). source: game (the game's visible sun, else the one its
 // sky shows: as without a row), table (x y z: the world direction towards the sun, where the sky
 // shows it), none (no sun or sky key: the stage's own lights carry it). r g b: its colour (0-1); strength: its light relative to the default; size: the disc's
-// radius in degrees; shafts: the light shafts' strength (GALAXY_RT_POST_SHAFTS). Empty fields keep
-// the defaults.
+// radius in degrees; shafts: the light shafts' strength (GALAXY_RT_POST_SHAFTS); day: 1 the day model (the
+// art as drawn with modern shadows), 0 the night model (lit by its lights), between a blend; empty: by the
+// brightness of its sky. Empty fields keep the defaults.
 struct RtStageSun {
     enum class Source : std::uint8_t { Game = 0, Table = 1, None = 2 };
     Source source = Source::Game;
@@ -102,6 +103,7 @@ struct RtStageSun {
     float strength = 1.0f;
     float size = -1.0f;                   // < 0: the default
     float shafts = -1.0f;                 // < 0: the default
+    float day = -1.0f;                    // < 0: by the sky's brightness
 };
 
 class RtStageSunTable {

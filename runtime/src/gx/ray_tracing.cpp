@@ -2264,6 +2264,8 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
     c.self[0] = self_area_;
     c.self[1] = self_point_;
     c.self[2] = area_radiance_;
+    // The stage's day model share (rt-suns.tsv day); < 0: by its sky's brightness.
+    c.self[3] = stage_sun_ != nullptr && stage_sun_->day >= 0.0f ? stage_sun_->day : -1.0f;
     c.point_saturation = point_saturation_;
     std::copy(view_.projection.begin(), view_.projection.end(), c.projection);
     c.depth[0] = view_.z_scale;

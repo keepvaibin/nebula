@@ -63,7 +63,8 @@ cbuffer RtLight : register(b0)
                                 // surfaces' light (lava, magma, fire) on what sees them
     float4 g_self;              // the material table's emitters glowing from their own surfaces: area
                                 // lights (lava) and point lights (Lumas, star bits) per unit of
-                                // intensity; an area light's radiance on what sees it per unit
+                                // intensity; an area light's radiance on what sees it per unit; the
+                                // stage's day model share (rt-suns.tsv day; < 0: by its sky)
 };
 
 RaytracingAccelerationStructure g_scene : register(t6);
@@ -2094,7 +2095,7 @@ void SpatialBCS(uint3 id : SV_DispatchThreadID)
     // turned from the sun keep kDayForm of their light (a faint sun). The lamps and glows still add
     // their light; no exposure. Under a dark sky the lit model above (the nights as they are).
     {
-        const float day_mix = smoothstep(0.35f, 0.8f, day_sky);
+        const float day_mix = g_self.w >= 0.0f ? g_self.w : smoothstep(0.35f, 0.8f, day_sky);
         if (day_mix > 0.0f && tri != 0u) {
             const float3 n = unpack_normal(g_normal[index]);
             const float nl = dot(n, g_sun.xyz);
