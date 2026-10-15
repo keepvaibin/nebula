@@ -1540,8 +1540,10 @@ void TraceCS(uint3 id : SV_DispatchThreadID, uint gi : SV_GroupIndex)
     }
     const float3 origin = lifted + ng * (0.2f + abs(p.z) * 4e-4f);
 
-    // The sun: one shadow ray inside its disc.
+    // The sun: one shadow ray inside its disc, to its nearest blocker (its distance sizes the
+    // penumbra the first filter gives the shadow, SpatialACS).
     float sun = 0.0f;
+    float blocker = 0.0f;
     const float facing_sun = dot(n, g_sun.xyz);
     if (facing_sun > 0.0f) {
         const float3 l = g_sun.xyz;
@@ -1563,8 +1565,7 @@ void TraceCS(uint3 id : SV_DispatchThreadID, uint gi : SV_GroupIndex)
             const uint own = g_surfaces.Load((primary.x - 1u) * 16u + 12u);
             card = (g_draws.Load(min(own >> 16u, max(g_draw_count, 1u) - 1u) * kDrawStride + 24u) & kDrawTableFoliage) != 0u;
         }
-        RayQuery<RAY_FLAG_FORCE_NON_OPAQUE | RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH |
-                 RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES> query;
+        RayQuery<RAY_FLAG_FORCE_NON_OPAQUE | RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES> query;
         query.TraceRayInline(g_scene, RAY_FLAG_NONE, 0xFFu, ray);
         while (query.Proceed()) {
             const uint hit = g_surfaces.Load(query.CandidatePrimitiveIndex() * 16u + 12u);
@@ -1577,7 +1578,9 @@ void TraceCS(uint3 id : SV_DispatchThreadID, uint gi : SV_GroupIndex)
             }
             query.CommitNonOpaqueTriangleHit();
         }
-        sun = query.CommittedStatus() == COMMITTED_TRIANGLE_HIT ? 0.0f : facing_sun * (1.5f - 0.5f * facing_sun);
+        const bool blocked = query.CommittedStatus() == COMMITTED_TRIANGLE_HIT;
+        sun = blocked ? 0.0f : facing_sun * (1.5f - 0.5f * facing_sun);
+        blocker = blocked ? clamp(query.CommittedRayT(), 1e-2f, 6.0e4f) : 0.0f;
         if ((g_flags & 64u) != 0u) {
             // GALAXY_RT_VIEW=6: the nearest blocker's distance up to 1e6, past the sun's reach,
             // 0.1 + 0.9 log10(t) / 6 (0: none).
@@ -1790,7 +1793,8 @@ void TraceCS(uint3 id : SV_DispatchThreadID, uint gi : SV_GroupIndex)
         const float3 surface = emitted / float(rays) * g_emit.w;
         points += surface / (1.0f + luminance(surface) / 8.0f) / max(g_point_light, 1e-3f);
     }
-    g_raw[index] = pack_light(make_light(light / float(rays), sun, points), 0.0f);
+    // The count half carries the sun's blocker distance (0: none) through the first filter.
+    g_raw[index] = pack_light(make_light(light / float(rays), sun, points), blocker);
 }
 
 // Accumulation: the sample's point in the previous frame, bilinear over the previous samples on
@@ -1926,6 +1930,58 @@ Light filtered(uint2 id, int step, bool from_history)
     return unpack_light(from_history ? g_history_in[index] : g_raw[index], count);
 }
 
+// The sun's shadow at the width of its penumbra (R07, after NVIDIA SIGMA and PCSS): 2 d tan(sun
+// radius) for the nearest blocker distance d in the 3 x 3 around (a lit sample beside an edge takes its
+// neighbour's), in samples. Under half a sample the accumulated shadow stays as traced (contact
+// shadows crisp); wider penumbrae are averaged over a Gaussian of that radius, up to 2 samples.
+// Blocker distances ride in the count half of g_raw, which this pass rewrites with the same value.
+float sun_at_penumbra(uint2 id, float3 p, float3 n, float own)
+{
+    float blocker = 0.0f;
+    [unroll] for (int by = -1; by <= 1; ++by) {
+        [unroll] for (int bx = -1; bx <= 1; ++bx) {
+            const int2 s = int2(id) + int2(bx, by);
+            if (any(s < 0) || any(s >= int2(g_sample_size))) {
+                continue;
+            }
+            const float b = f16tof32(g_raw[uint(s.y) * g_sample_size.x + uint(s.x)].w >> 16u);
+            blocker = b > 0.0f && (blocker == 0.0f || b < blocker) ? b : blocker;
+        }
+    }
+    const float spacing = abs(p.z) * 2.0f * float(g_factor) / max(abs(g_projection.x) * g_viewport.z, 1e-4f);
+    const float radius = blocker > 0.0f ? 2.0f * blocker * g_sun.w / max(spacing, 1e-4f) : 0.0f;
+    if (radius < 0.5f) {
+        return own;
+    }
+    const float sigma = min(radius, 2.0f);
+    const float spread = 0.5f / (sigma * sigma);
+    const float inv_tolerance = 1.0f / (0.25f + abs(p.z) * 0.004f);
+    float sum = 0.0f;
+    float weight = 0.0f;
+    [unroll] for (int dy = -2; dy <= 2; ++dy) {
+        [unroll] for (int dx = -2; dx <= 2; ++dx) {
+            const int2 s = int2(id) + int2(dx, dy);
+            if (any(s < 0) || any(s >= int2(g_sample_size))) {
+                continue;
+            }
+            const uint si = uint(s.y) * g_sample_size.x + uint(s.x);
+            const float sz = g_z[si];
+            if (sz == 0.0f) {
+                continue;
+            }
+            const float plane = abs(dot(n, sample_position(uint2(s), sz) - p)) * inv_tolerance;
+            const float facing = saturate(dot(n, unpack_normal(g_normal[si])));
+            const float facing2 = facing * facing;
+            const float w = exp(-spread * float(dx * dx + dy * dy) - plane * plane) * (facing2 * facing2) *
+                            (facing2 * facing2);
+            float count;
+            sum += unpack_light(g_history_in[si], count).sun * w;
+            weight += w;
+        }
+    }
+    return weight > 1e-4f ? sum / weight : own;
+}
+
 [numthreads(8, 8, 1)]
 void SpatialACS(uint3 id : SV_DispatchThreadID)
 {
@@ -1933,11 +1989,17 @@ void SpatialACS(uint3 id : SV_DispatchThreadID)
         return;
     }
     const uint index = id.y * g_sample_size.x + id.x;
-    if (g_z[index] == 0.0f) {
-        g_raw[index] = pack_light(kOpenSky, 0.0f);
+    const float blocker = f16tof32(g_raw[index].w >> 16u);
+    const float z = g_z[index];
+    if (z == 0.0f) {
+        g_raw[index] = pack_light(kOpenSky, blocker);
         return;
     }
-    g_raw[index] = pack_light(filtered(id.xy, 1, true), 0.0f);
+    Light l = filtered(id.xy, 1, true);
+    float own_count;
+    const float own = unpack_light(g_history_in[index], own_count).sun;
+    l.sun = sun_at_penumbra(id.xy, sample_position(id.xy, z), unpack_normal(g_normal[index]), own);
+    g_raw[index] = pack_light(l, blocker);
 }
 
 [numthreads(8, 8, 1)]
