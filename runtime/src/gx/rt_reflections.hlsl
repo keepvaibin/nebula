@@ -862,6 +862,10 @@ float glow_reach2(float light)
 
 float3 highlights(uint2 s, float3 p, float3 origin, float3 n, float3 v, float alpha, float f0, bool tiled)
 {
+    // Specular anti-aliasing (Kaplanyan 2016): a rippled surface's normals vary across the pixel by about half
+    // g_spread; the lobe widens by that variance, its peak lowered to keep the energy. One-pixel sun glints
+    // became a smooth glitter path (user: the water's noise; Buoy Base towards its low sun, v70w).
+    alpha = min(sqrt(alpha * alpha + 0.5f * g_spread * g_spread), 1.0f);
     float3 sum = float3(0.0f, 0.0f, 0.0f);
     if (any(g_sun_light.rgb > 0.0f)) {
         const float k = ggx_highlight(n, v, g_sun.xyz, alpha, g_sun.w, f0);
