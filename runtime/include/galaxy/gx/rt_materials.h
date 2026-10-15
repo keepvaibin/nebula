@@ -49,6 +49,7 @@ struct RtMaterial {
     bool particle = false;                // smoke, steam, sparks: never traced geometry or water
     bool waterfall = false;               // falling water: water whose streaks run down it
     bool matte = false;                   // foliage, cloth: absorbs light, no highlight or reflection
+    bool sky = false;                     // a sky or backdrop mesh: drawn, never in the traced scene
     bool shadow = true;
     float roughness = -1.0f;              // < 0: the class's
     float metallic = -1.0f;               // < 0: the class's

@@ -754,8 +754,8 @@ private:
     float emission_ = 40.0f;        // GALAXY_RT_EMISSION: a glow's light per unit it adds to the picture
                                     // and unit of eye-space area (0: no glow lights)
     float point_size_ = 600.0f;     // GALAXY_RT_POINT_SIZE: radius of the geometry around one
-    float sun_light_ = 1.25f;       // GALAXY_RT_SUN_LIGHT: the key light's strength
-    float sky_light_ = 1.0f;
+    float sun_light_ = 1.5f;        // GALAXY_RT_SUN_LIGHT: the key light's strength
+    float sky_light_ = 0.7f;
     bool lighting_enabled_ = true;
     bool ab_ = false;               // GALAXY_RT_AB
     bool ab_original_ = false;

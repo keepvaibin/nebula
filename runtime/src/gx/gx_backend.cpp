@@ -7210,6 +7210,11 @@ bool GxBackend::begin_rt_batch(const DrawCall& call, RtDrawInfo& info) {
         if (material->particle && material->emission == RtEmission::None && !glow) {
             return false;
         }
+        // Sky domes and backdrops drawn among the scene (after its depth clear): never traced, or every
+        // ray towards the sun meets them (measured: Dusty Dune's DesertSky left the desert unlit).
+        if (material->sky && !glow) {
+            return false;
+        }
         if (material->surface_class != 0xFFu) {
             surface.surface_class = static_cast<RtSurfaceClass>(material->surface_class);
         }
