@@ -725,9 +725,8 @@ int main() {
                 check_not_contains(src, "enh.env_gain))", label);
             } else {
                 check_contains(src, "enh.env_gain))", label);
-                // Under traced lighting and reflections the painted map gives way to its mean colour.
-                check_contains(src, "(uber_ps_header.w & 0x30000u) == 0x30000u", label);
-                check_contains(src, "env_mean", label);
+                // Under traced lighting the painted map stays as drawn (the traced reflection screens over it).
+                check_not_contains(src, "env_mean", label);
             }
             check_compiles(src, "ps_5_1", label);
         }
