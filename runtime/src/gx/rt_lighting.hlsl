@@ -127,9 +127,10 @@ static const float kDayShadow = 0.45f;
 static const float kDayForm = 0.15f;
 static const float kDayOcclusion = 0.5f;
 static const float kDayTint = 0.25f;
-// Daylight's level: the art at 0.8 of the game's brightness (user: sand, grass and trees darker and
-// richer, never overexposed; the sky keeps the game's, so the land reads deep against it).
-static const float kDayLevel = 0.85f;
+// Daylight's level: open sunlit art at 0.95 of the game's (never above it); cast shadows and occlusion
+// carry the depth. 0.8-0.85 were set while the finish lifted every picture x(1 + x) (build 46); without
+// that lift they left Beach Bowl's sand, water and grass a flat 0.82 of the game (fc46).
+static const float kDayLevel = 0.95f;
 static const float kLitKnee = 0.8f;
 // The share of the light the film shoulder rolls off (lava, fire, lamps, glints) that joins the
 // bloom (CaptureCS).
