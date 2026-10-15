@@ -760,11 +760,12 @@ public:
 
     // Stretch-blit `source` to the backbuffer. A null/invalid source is a
     // runtime bug: callers must keep the last valid swap-chain image instead
-    // of submitting a black frame.
+    // of submitting a black frame. `black` presents black with the overlays
+    // (the VI's own black output); `source` then only sets the layout.
     // `capture_backbuffer` records the final post-blit swap-chain image.
     // Returns whether an optional backbuffer capture was recorded. Busy
     // diagnostic buffers never suppress the required blit/presentation.
-    bool present(const XfbTexture* source, bool capture_backbuffer = false);
+    bool present(const XfbTexture* source, bool capture_backbuffer = false, bool black = false);
 
     // Bring-up diagnostics: record an EFB-to-readback copy into the current
     // command list (call while recording). Readback and PPM encoding are

@@ -9446,7 +9446,11 @@ void GxBackend::render_thread_main() {
                         interp_event("vi-present", chunk.displayed_xfb_addr,
                                      interp_log_waiting_ ? 1u : 0u);
                     }
-                    if (interp_log_waiting_ && renderer_.replay_available()) {
+                    if (chunk.displayed_xfb_addr == kNoDisplayedXfbAddr) {
+                        supersede_interp_sequence();
+                        interp_log_waiting_ = false;
+                        present_cached_xfb_on_thread(chunk.displayed_xfb_addr, false);
+                    } else if (interp_log_waiting_ && renderer_.replay_available()) {
                         supersede_interp_sequence();
                         interp_log_waiting_ = false;
                         start_interp_sequence(interp_log_xfb_);
@@ -10048,6 +10052,30 @@ void GxBackend::deliver_pe_event(
     }
 }
 
+void GxBackend::present_vi_black(bool in_frame) {
+    const XfbTexture* layout = efb_copies_.latest();
+    if (layout == nullptr || (vi_black_shown_ && !native_settings_overlay_visible())) {
+        return;
+    }
+    const std::string snapshot_path = present_snapshot_path();
+    if (!snapshot_path.empty()) {
+        renderer_.set_debug_capture_paths({}, snapshot_path);
+    }
+    if (!in_frame) {
+        renderer_.begin_frame(true);
+    }
+    renderer_.present(layout, !snapshot_path.empty(), true);
+    if (!snapshot_path.empty()) {
+        renderer_.set_debug_capture_paths({}, {});
+    }
+    if (!in_frame) {
+        renderer_.end_frame();
+    }
+    vi_black_shown_ = true;
+    // The frame the VI shows next is new to the display, even when it repeats the last XFB.
+    last_presented_xfb_serial_.store(~std::uint64_t{0}, std::memory_order_relaxed);
+}
+
 void GxBackend::present_latest_frame_on_thread() {
     present_cached_xfb_on_thread(
         kUnknownDisplayedXfbAddr,
@@ -10070,6 +10098,14 @@ void GxBackend::present_cached_xfb_on_thread(
         displayed_xfb_addr == kUnknownDisplayedXfbAddr;
     const bool display_xfb_none =
         displayed_xfb_addr == kNoDisplayedXfbAddr;
+    if (display_xfb_none) {
+        if (count_game_xfb_present) {
+            present_epoch_ = current_present_epoch;
+            present_vi_black(false);
+        }
+        return;
+    }
+    vi_black_shown_ = false;
     const bool requested_specific_xfb =
         displayed_xfb_addr != 0u && !display_xfb_unknown &&
         !display_xfb_none;
@@ -11186,6 +11222,13 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
         capture_backbuffer ||
         (chunk.present_swap_chain && selected_xfb != nullptr &&
          !skip_duplicate_present && !skip_rate_present);
+    const bool present_black = chunk.present_swap_chain && display_xfb_none;
+    if (present_black) {
+        supersede_interp_sequence();
+        interp_log_waiting_ = false;
+    } else if (chunk.present_swap_chain) {
+        vi_black_shown_ = false;
+    }
     if (interp_recording_) {
         note_interp_log_completion();
         if (chunk.present_swap_chain) {
@@ -11271,6 +11314,8 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
             present_record_us =
                 elapsed_us(present_record_start, std::chrono::steady_clock::now());
         }
+    } else if (present_black) {
+        present_vi_black(true);
     }
     if (skip_duplicate_present) {
         record_skipped_duplicate_xfb_present(*selected_xfb);
@@ -11337,6 +11382,8 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
         record_presented_xfb_copy(*selected_xfb);
         last_presented_xfb_addr_.store(
             selected_xfb->guest_addr, std::memory_order_relaxed);
+    } else if (present_black) {
+        present_epoch_ = current_present_epoch;
     }
     const auto end_frame_end = frame_timing_enabled
         ? std::chrono::steady_clock::now()

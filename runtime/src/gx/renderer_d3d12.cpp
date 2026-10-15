@@ -13631,7 +13631,7 @@ void draw_native_settings_hint(RendererD3D12& renderer) {
 }
 
 bool RendererD3D12::present(
-    const XfbTexture* source, bool capture_backbuffer) {
+    const XfbTexture* source, bool capture_backbuffer, bool black) {
     // Diagnostic stall watch, gated on its own opt-in flag. GALAXY_TRACE_STALL_WATCH is unset in the
     // shipped runtime-env.json, and trace_stall_watch_enabled() holds a function-local
     // `static const bool`, so with the flag off this folds to a constant false and clang deletes every
@@ -13784,14 +13784,14 @@ bool RendererD3D12::present(
 
     const BackbufferPreBlitClearMode clear_mode =
         backbuffer_pre_blit_clear_mode();
-    if (content_has_borders ||
+    if (black || content_has_borders ||
         clear_mode != BackbufferPreBlitClearMode::Disabled) {
         constexpr float kBlack[4] = {0.0f, 0.0f, 0.0f, 1.0f};
         constexpr float kDiagnostic[4] = {1.0f, 0.0f, 1.0f, 1.0f};
         const float kSafety[4] = {source->safety_surround, source->safety_surround,
                                  source->safety_surround, 1.0f};
-        const float* clear_color =
-            clear_mode == BackbufferPreBlitClearMode::Diagnostic
+        const float* clear_color = black ? kBlack
+            : clear_mode == BackbufferPreBlitClearMode::Diagnostic
                 ? kDiagnostic
                 : source->safety_surround > 0.0f ? kSafety : kBlack;
         command_list_->ClearRenderTargetView(
@@ -13823,7 +13823,9 @@ bool RendererD3D12::present(
     // present effects and matches normal GX draw recording.
     ID3D12DescriptorHeap* heaps[] = {srv_ring_.heap(), sampler_heap_.Get()};
     command_list_->SetDescriptorHeaps(2, heaps);
-    if (post_process_.ready()) {
+    if (black) {
+        // The VI shows black (VISetBlack): the XFB is not scanned out.
+    } else if (post_process_.ready()) {
         const D3D12_RESOURCE_DESC source_desc = source->texture->GetDesc();
         post_process_.record(
             command_list_.Get(), srv_ring_, source->texture.Get(),
@@ -13857,7 +13859,9 @@ bool RendererD3D12::present(
         command_list_->DrawInstanced(3, 1, 0, 0);
     }
     invalidate_gx_bindings();
-    present_fg_hudless(*source, vp, sci);
+    if (!black) {
+        present_fg_hudless(*source, vp, sci);
+    }
 
     // Native overlays are authored in full client/backbuffer pixels, not Wii
     // content coordinates. Restore the full-surface raster state after the XFB

@@ -650,6 +650,11 @@ private:
         bool sleep_if_missing,
         bool count_game_xfb_present = true);
     void present_latest_frame_on_thread();
+    // The VI shows black (displayed_xfb_addr kNoDisplayedXfbAddr): one black present per black
+    // run, repeated while the settings overlay is open. `in_frame`: inside a render chunk's
+    // begin_frame/end_frame.
+    void present_vi_black(bool in_frame);
+    bool vi_black_shown_ = false;
     PointerResponseStamp producer_pointer_response_{}, render_pointer_response_{}, last_response_{};
     std::shared_ptr<PointerDepthCapture> producer_pointer_depth_capture_;
     std::size_t producer_pointer_depth_capture_offset_ = 0;

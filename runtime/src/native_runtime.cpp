@@ -2637,6 +2637,8 @@ struct RuntimeState {
     std::uint32_t last_valid_displaying_xfb_manager{};
     std::uint64_t last_valid_displaying_xfb_vi{};
     std::uint64_t stale_displaying_xfb_preserves{};
+    // The VI's output is black (VISetBlack) since this retrace (0: not black).
+    std::uint64_t vi_black_since{};
     // Two samples are captured per VI. 1,536 records hold a complete 600-VI certification window, with
     // room for setup and teardown, and stay below the process stack reserve.
     static constexpr std::size_t kXfbStateRecordCapacity = 1'536u;
@@ -16186,12 +16188,35 @@ std::uint64_t indeterminate_slot_xfb_preserve_vis() {
     return value;
 }
 
+// VISetBlack clears the active video lines (ACV) of the VI's vertical timing register, so the
+// display shows black whatever the XFB holds. JUTVideo::preRetraceProc does so while a black
+// frame count runs and while no drawn XFB exists, around scene changes. A register never
+// written (before VIConfigure) is not black. GALAXY_VI_BLACK=0 ignores it (A/B).
+bool vi_output_black(const galaxy::host::GuestAddressSpace& address_space) {
+    static const bool honoured = read_env_flag("GALAXY_VI_BLACK", true);
+    constexpr std::uint32_t kViVerticalTiming = 0xCC002000u;
+    const std::uint32_t vtr = address_space.read_u32(kViVerticalTiming) >> 16u;
+    return honoured && vtr != 0u && ((vtr >> 4u) & 0x3FFu) == 0u;
+}
+
 std::uint32_t current_displayed_xfb_addr(RuntimeState& state) {
     if (state.address_space == nullptr) {
         return 0;
     }
 
     const auto& address_space = *state.address_space;
+    if (vi_output_black(address_space)) {
+        if (state.vi_black_since == 0u) {
+            state.vi_black_since = std::max<std::uint64_t>(state.vi_retrace_count, 1u);
+            std::cerr << "[vi] black from vi=" << state.vi_retrace_count << '\n';
+        }
+        return galaxy::gx::kNoDisplayedXfbAddr;
+    }
+    if (state.vi_black_since != 0u) {
+        std::cerr << "[vi] black ends vi=" << state.vi_retrace_count
+                  << " retraces=" << state.vi_retrace_count - state.vi_black_since << '\n';
+        state.vi_black_since = 0u;
+    }
     const bool has_any_xfb_copy = galaxy::gx::xfb_copy_count() != 0u;
     constexpr std::uint32_t kJutXfbManagerPtr = 0x806A2868u;
     const std::uint32_t xfb = address_space.read_u32(kJutXfbManagerPtr);
