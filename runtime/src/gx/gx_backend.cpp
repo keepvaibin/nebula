@@ -12667,7 +12667,16 @@ ID3D12PipelineState* GxBackend::flush_draw_state(
         // follows the keys, which change only with their dirty bits.
         // GALAXY_RT_DELIGHT=0 (diagnostics): the game's lit colour stays under traced lighting.
         static const bool delight = read_env_u64("GALAXY_RT_DELIGHT", 1u) != 0u;
-        const bool gate = (enhanced_lighting_ || (delight && (enhanced_ps_flags_ & kEnhancedRtLighting) != 0u)) && triangles &&
+        // The traced lighting de-lights the opaque phases only (it relights what it traces); translucent
+        // draws (water, glass, seaweed) keep the game's lit colour: de-lit, Beach Bowl's lagoon came out
+        // 40,168,182 -> 82,230,234 with reflections off (measured wd41a), the seaweed nearly black.
+        using motion::ScenePhase;
+        const bool opaque_phase = rt_phase_ == static_cast<std::uint8_t>(ScenePhase::OpaBeforeVolumeShadow) ||
+                                  rt_phase_ == static_cast<std::uint8_t>(ScenePhase::OpaBeforeSilhouette) ||
+                                  rt_phase_ == static_cast<std::uint8_t>(ScenePhase::Opa) ||
+                                  rt_phase_ == static_cast<std::uint8_t>(ScenePhase::ListOpa);
+        const bool gate = (enhanced_lighting_ || (delight && opaque_phase && (enhanced_ps_flags_ & kEnhancedRtLighting) != 0u)) &&
+                          triangles &&
                           scene_phase_ && side_layer_ == kSceneLayer &&
                           state_.xf(static_cast<std::uint16_t>(xf::kProjectionBase + 6u)) == 0u;
         if (gate != enhanced_gate_ || tev_dirty || xf_dirty || vcd_dirty || !shader_key_hashes_valid_) {
