@@ -10,6 +10,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace galaxy::gx {
@@ -20,18 +21,21 @@ struct GalaxyStage {
 };
 
 // By dome (Terrace, Fountain, Kitchen, Bedroom, Engine Room, Garden), then the rest.
+// stars leaves out the hidden scenarios (ScenarioData IsHidden, numbered after the others): the game sizes
+// its per-scenario data by the count without them (ScenarioData::getScenarioNum), so entering one directly
+// indexes past those arrays (IceVolcanoGalaxy 6 crashed in SpinDriverPathStorageScenario::setup).
 inline constexpr GalaxyStage kGalaxyStages[] = {
-    {"EggStarGalaxy", 6u}, {"HoneyBeeKingdomGalaxy", 6u}, {"SurfingLv1Galaxy", 1u},
+    {"EggStarGalaxy", 5u}, {"HoneyBeeKingdomGalaxy", 5u}, {"SurfingLv1Galaxy", 1u},
     {"FlipPanelExGalaxy", 1u}, {"TriLegLv1Galaxy", 1u},
     {"StarDustGalaxy", 5u}, {"BattleShipGalaxy", 5u}, {"TamakoroExLv1Galaxy", 1u},
     {"BreakDownPlanetGalaxy", 1u}, {"KoopaBattleVs1Galaxy", 1u},
-    {"HeavenlyBeachGalaxy", 5u}, {"PhantomGalaxy", 6u}, {"CubeBubbleExLv1Galaxy", 1u},
-    {"OceanFloaterLandGalaxy", 2u}, {"KoopaJrShipLv1Galaxy", 1u},
-    {"CosmosGardenGalaxy", 5u}, {"IceVolcanoGalaxy", 6u}, {"SandClockGalaxy", 5u},
+    {"HeavenlyBeachGalaxy", 5u}, {"PhantomGalaxy", 5u}, {"CubeBubbleExLv1Galaxy", 1u},
+    {"OceanFloaterLandGalaxy", 1u}, {"KoopaJrShipLv1Galaxy", 1u},
+    {"CosmosGardenGalaxy", 5u}, {"IceVolcanoGalaxy", 5u}, {"SandClockGalaxy", 5u},
     {"HoneyBeeExGalaxy", 1u}, {"KoopaBattleVs2Galaxy", 1u},
     {"ReverseKingdomGalaxy", 5u}, {"OceanRingGalaxy", 5u}, {"FactoryGalaxy", 5u},
     {"SkullSharkGalaxy", 1u}, {"FloaterOtaKingGalaxy", 1u},
-    {"OceanPhantomCaveGalaxy", 5u}, {"CannonFleetGalaxy", 5u}, {"HellProminenceGalaxy", 6u},
+    {"OceanPhantomCaveGalaxy", 5u}, {"CannonFleetGalaxy", 5u}, {"HellProminenceGalaxy", 5u},
     {"DarkRoomGalaxy", 1u}, {"KoopaBattleVs3Galaxy", 1u},
     {"HeavensDoorGalaxy", 2u}, {"BeltConveyerExGalaxy", 1u}, {"CocoonExGalaxy", 1u},
     {"TearDropGalaxy", 1u}, {"FishTunnelGalaxy", 1u}, {"TransformationExGalaxy", 1u},
@@ -39,6 +43,9 @@ inline constexpr GalaxyStage kGalaxyStages[] = {
     {"TamakoroExLv2Galaxy", 1u}, {"SurfingLv2Galaxy", 1u},
 };
 inline constexpr std::size_t kGalaxyStageCount = sizeof(kGalaxyStages) / sizeof(kGalaxyStages[0]);
+
+// The stars of a stage in kGalaxyStages; 0 for other stages.
+[[nodiscard]] std::uint32_t galaxy_stage_stars(std::string_view id) noexcept;
 
 [[nodiscard]] bool galaxy_select_enabled() noexcept;
 

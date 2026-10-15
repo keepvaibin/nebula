@@ -24755,9 +24755,10 @@ void apply_test_teleport(RuntimeState& state, galaxy::PpcContext* context, galax
 // Test hook: GALAXY_TEST_GALAXY_TOUR=<file of "Stage scenario" lines> visits
 // those stages in turn with the game's own MR::requestChangeStageInGameMoving
 // (0x803F8328), GALAXY_TEST_GALAXY_TOUR_FRAMES 3D scene frames apart (default
-// 1200), so a hidden run can load every galaxy and scenario. The stage name is
-// kept at 0x80002800: low memory between the exception vectors and the OS
-// globals that no game code uses, and the request keeps a pointer to it.
+// 1200), so a hidden run can load every galaxy and scenario the game enters
+// (hidden scenarios are skipped). The stage name is kept at 0x80002800: low
+// memory between the exception vectors and the OS globals that no game code
+// uses, and the request keeps a pointer to it.
 void apply_test_galaxy_tour(RuntimeState& state, galaxy::PpcContext* context, galaxy::GuestMemoryV1* memory) {
     struct Tour {
         std::vector<std::pair<std::string, std::uint32_t>> stops;
@@ -24776,7 +24777,14 @@ void apply_test_galaxy_tour(RuntimeState& state, galaxy::PpcContext* context, ga
         std::string stage;
         std::uint32_t scenario = 0u;
         while (list >> stage >> scenario) {
-            if (stage.size() < 63u) result.stops.emplace_back(stage, scenario);
+            const std::uint32_t stars = galaxy::gx::galaxy_stage_stars(stage);
+            if (stars != 0u && (scenario == 0u || scenario > stars)) {
+                // A hidden scenario: see kGalaxyStages.
+                std::cerr << "[galaxy-tour] skipped " << stage << ' ' << scenario << ": the game enters 1-" << stars
+                          << '\n';
+            } else if (stage.size() < 63u) {
+                result.stops.emplace_back(stage, scenario);
+            }
         }
         result.frames = std::max<std::uint64_t>(read_env_u64("GALAXY_TEST_GALAXY_TOUR_FRAMES", 1200u), 60u);
         std::cerr << "[galaxy-tour] stops=" << result.stops.size() << " frames=" << result.frames << '\n';
