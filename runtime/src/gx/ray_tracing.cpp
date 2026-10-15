@@ -109,8 +109,9 @@ struct RtLightConstants {
     float fill;
     float emit[4];
     float self[4];
+    float ao[4];
 };
-static_assert(sizeof(RtLightConstants) == 624u);
+static_assert(sizeof(RtLightConstants) == 640u);
 
 // Mirrors cbuffer RtPost in rt_post.hlsl (root constants).
 struct RtPostConstants {
@@ -708,7 +709,7 @@ bool SceneRayTracer::initialize(ID3D12Device* device, std::uint64_t timestamp_fr
     fallback_ = std::clamp(env_float("GALAXY_RT_FALLBACK", 0.55f), 0.0f, 2.0f);
     emissive_ = std::clamp(env_float("GALAXY_RT_EMISSIVE", 3.0f), 0.0f, 16.0f);
     show_lighting_ = env_float("GALAXY_RT_VIEW", 0.0f) != 0.0f;
-    show_term_ = static_cast<std::uint32_t>(std::clamp(env_float("GALAXY_RT_VIEW", 0.0f), 0.0f, 6.0f));
+    show_term_ = static_cast<std::uint32_t>(std::clamp(env_float("GALAXY_RT_VIEW", 0.0f), 0.0f, 8.0f));
     point_radius_ = std::clamp(env_float("GALAXY_RT_POINT_RADIUS", 800.0f), 10.0f, 1.0e6f);
     point_size_ = std::clamp(env_float("GALAXY_RT_POINT_SIZE", 600.0f), 0.0f, 1.0e5f);
     point_light_ = std::clamp(env_float("GALAXY_RT_POINT_LIGHT", 2.0f), 0.0f, 8.0f);
@@ -735,6 +736,9 @@ bool SceneRayTracer::initialize(ID3D12Device* device, std::uint64_t timestamp_fr
     self_area_ = std::clamp(env_float("GALAXY_RT_SELF_AREA", 1.2f), 0.0f, 8.0f);
     self_point_ = std::clamp(env_float("GALAXY_RT_SELF_POINT", 1.0f), 0.0f, 8.0f);
     area_radiance_ = std::clamp(env_float("GALAXY_RT_AREA_RADIANCE", 3.0f), 0.0f, 16.0f);
+    ao_reach_ = std::clamp(env_float("GALAXY_RT_AO_REACH", 150.0f), 0.0f, 2000.0f);
+    ao_day_ = std::clamp(env_float("GALAXY_RT_AO", 0.8f), 0.0f, 1.0f);
+    ao_night_ = std::clamp(env_float("GALAXY_RT_AO_NIGHT", 1.0f), 0.0f, 1.0f);
     post_ = env_float("GALAXY_RT_POST", 1.0f) != 0.0f;
     post_bloom_ = std::clamp(env_float("GALAXY_RT_POST_BLOOM", 0.0f), 0.0f, 4.0f);
     post_threshold_ = std::clamp(env_float("GALAXY_RT_POST_THRESHOLD", 0.97f), 0.0f, 0.99f);
@@ -2259,6 +2263,9 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
     c.self[0] = self_area_;
     c.self[1] = self_point_;
     c.self[2] = area_radiance_;
+    c.ao[0] = ao_reach_;
+    c.ao[1] = ao_day_;
+    c.ao[2] = ao_night_;
     c.point_saturation = point_saturation_;
     std::copy(view_.projection.begin(), view_.projection.end(), c.projection);
     c.depth[0] = view_.z_scale;
@@ -2486,7 +2493,8 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
     const std::array<float, 12> to_picture = picture ? affine_multiply(picture_camera_, inverse) : kIdentity34;
     c.flags = (history ? 1u : 0u) | (picture ? 2u : 0u) | (show_term_ == 2u ? 4u : 0u) | (show_term_ == 3u ? 8u : 0u) |
               (show_term_ == 4u ? 16u : 0u) | (show_term_ == 5u ? 32u : 0u) |
-              (show_term_ == 6u ? 64u : 0u) | (gi_ ? 0u : 128u);
+              (show_term_ == 6u ? 64u : 0u) | (gi_ ? 0u : 128u) | (show_term_ == 7u ? 256u : 0u) |
+              (show_term_ == 8u ? 512u : 0u);
     std::memcpy(c.reproject, reproject.data(), sizeof(c.reproject));
     std::memcpy(c.picture, to_picture.data(), sizeof(c.picture));
     std::memcpy(c.to_eye, camera_.data(), sizeof(c.to_eye));

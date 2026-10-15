@@ -64,6 +64,8 @@ cbuffer RtLight : register(b0)
     float4 g_self;              // the material table's emitters glowing from their own surfaces: area
                                 // lights (lava) and point lights (Lumas, star bits) per unit of
                                 // intensity; an area light's radiance on what sees it per unit
+    float4 g_ao;                // contact occlusion: reach (eye units), strength by day, strength at
+                                // night (0: off), unused
 };
 
 RaytracingAccelerationStructure g_scene : register(t6);
@@ -1538,8 +1540,10 @@ void TraceCS(uint3 id : SV_DispatchThreadID, uint gi : SV_GroupIndex)
     }
     const float3 origin = lifted + ng * (0.2f + abs(p.z) * 4e-4f);
 
-    // The sun: one shadow ray inside its disc.
+    // The sun: one shadow ray inside its disc, to its nearest blocker (its distance sizes the
+    // penumbra the first filter gives the shadow, SpatialACS).
     float sun = 0.0f;
+    float blocker = 0.0f;
     const float facing_sun = dot(n, g_sun.xyz);
     if (facing_sun > 0.0f) {
         const float3 l = g_sun.xyz;
@@ -1561,8 +1565,7 @@ void TraceCS(uint3 id : SV_DispatchThreadID, uint gi : SV_GroupIndex)
             const uint own = g_surfaces.Load((primary.x - 1u) * 16u + 12u);
             card = (g_draws.Load(min(own >> 16u, max(g_draw_count, 1u) - 1u) * kDrawStride + 24u) & kDrawTableFoliage) != 0u;
         }
-        RayQuery<RAY_FLAG_FORCE_NON_OPAQUE | RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH |
-                 RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES> query;
+        RayQuery<RAY_FLAG_FORCE_NON_OPAQUE | RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES> query;
         query.TraceRayInline(g_scene, RAY_FLAG_NONE, 0xFFu, ray);
         while (query.Proceed()) {
             const uint hit = g_surfaces.Load(query.CandidatePrimitiveIndex() * 16u + 12u);
@@ -1575,7 +1578,9 @@ void TraceCS(uint3 id : SV_DispatchThreadID, uint gi : SV_GroupIndex)
             }
             query.CommitNonOpaqueTriangleHit();
         }
-        sun = query.CommittedStatus() == COMMITTED_TRIANGLE_HIT ? 0.0f : facing_sun * (1.5f - 0.5f * facing_sun);
+        const bool blocked = query.CommittedStatus() == COMMITTED_TRIANGLE_HIT;
+        sun = blocked ? 0.0f : facing_sun * (1.5f - 0.5f * facing_sun);
+        blocker = blocked ? clamp(query.CommittedRayT(), 1e-2f, 6.0e4f) : 0.0f;
         if ((g_flags & 64u) != 0u) {
             // GALAXY_RT_VIEW=6: the nearest blocker's distance up to 1e6, past the sun's reach,
             // 0.1 + 0.9 log10(t) / 6 (0: none).
@@ -1788,7 +1793,8 @@ void TraceCS(uint3 id : SV_DispatchThreadID, uint gi : SV_GroupIndex)
         const float3 surface = emitted / float(rays) * g_emit.w;
         points += surface / (1.0f + luminance(surface) / 8.0f) / max(g_point_light, 1e-3f);
     }
-    g_raw[index] = pack_light(make_light(light / float(rays), sun, points), 0.0f);
+    // The count half carries the sun's blocker distance (0: none) through the first filter.
+    g_raw[index] = pack_light(make_light(light / float(rays), sun, points), blocker);
 }
 
 // Accumulation: the sample's point in the previous frame, bilinear over the previous samples on
@@ -1924,6 +1930,58 @@ Light filtered(uint2 id, int step, bool from_history)
     return unpack_light(from_history ? g_history_in[index] : g_raw[index], count);
 }
 
+// The sun's shadow at the width of its penumbra (R07, after NVIDIA SIGMA and PCSS): 2 d tan(sun
+// radius) for the nearest blocker distance d in the 3 x 3 around (a lit sample beside an edge takes its
+// neighbour's), in samples. Under half a sample the accumulated shadow stays as traced (contact
+// shadows crisp); wider penumbrae are averaged over a Gaussian of that radius, up to 2 samples.
+// Blocker distances ride in the count half of g_raw, which this pass rewrites with the same value.
+float sun_at_penumbra(uint2 id, float3 p, float3 n, float own)
+{
+    float blocker = 0.0f;
+    [unroll] for (int by = -1; by <= 1; ++by) {
+        [unroll] for (int bx = -1; bx <= 1; ++bx) {
+            const int2 s = int2(id) + int2(bx, by);
+            if (any(s < 0) || any(s >= int2(g_sample_size))) {
+                continue;
+            }
+            const float b = f16tof32(g_raw[uint(s.y) * g_sample_size.x + uint(s.x)].w >> 16u);
+            blocker = b > 0.0f && (blocker == 0.0f || b < blocker) ? b : blocker;
+        }
+    }
+    const float spacing = abs(p.z) * 2.0f * float(g_factor) / max(abs(g_projection.x) * g_viewport.z, 1e-4f);
+    const float radius = blocker > 0.0f ? 2.0f * blocker * g_sun.w / max(spacing, 1e-4f) : 0.0f;
+    if (radius < 0.5f) {
+        return own;
+    }
+    const float sigma = min(radius, 2.0f);
+    const float spread = 0.5f / (sigma * sigma);
+    const float inv_tolerance = 1.0f / (0.25f + abs(p.z) * 0.004f);
+    float sum = 0.0f;
+    float weight = 0.0f;
+    [unroll] for (int dy = -2; dy <= 2; ++dy) {
+        [unroll] for (int dx = -2; dx <= 2; ++dx) {
+            const int2 s = int2(id) + int2(dx, dy);
+            if (any(s < 0) || any(s >= int2(g_sample_size))) {
+                continue;
+            }
+            const uint si = uint(s.y) * g_sample_size.x + uint(s.x);
+            const float sz = g_z[si];
+            if (sz == 0.0f) {
+                continue;
+            }
+            const float plane = abs(dot(n, sample_position(uint2(s), sz) - p)) * inv_tolerance;
+            const float facing = saturate(dot(n, unpack_normal(g_normal[si])));
+            const float facing2 = facing * facing;
+            const float w = exp(-spread * float(dx * dx + dy * dy) - plane * plane) * (facing2 * facing2) *
+                            (facing2 * facing2);
+            float count;
+            sum += unpack_light(g_history_in[si], count).sun * w;
+            weight += w;
+        }
+    }
+    return weight > 1e-4f ? sum / weight : own;
+}
+
 [numthreads(8, 8, 1)]
 void SpatialACS(uint3 id : SV_DispatchThreadID)
 {
@@ -1931,11 +1989,17 @@ void SpatialACS(uint3 id : SV_DispatchThreadID)
         return;
     }
     const uint index = id.y * g_sample_size.x + id.x;
-    if (g_z[index] == 0.0f) {
-        g_raw[index] = pack_light(kOpenSky, 0.0f);
+    const float blocker = f16tof32(g_raw[index].w >> 16u);
+    const float z = g_z[index];
+    if (z == 0.0f) {
+        g_raw[index] = pack_light(kOpenSky, blocker);
         return;
     }
-    g_raw[index] = pack_light(filtered(id.xy, 1, true), 0.0f);
+    Light l = filtered(id.xy, 1, true);
+    float own_count;
+    const float own = unpack_light(g_history_in[index], own_count).sun;
+    l.sun = sun_at_penumbra(id.xy, sample_position(id.xy, z), unpack_normal(g_normal[index]), own);
+    g_raw[index] = pack_light(l, blocker);
 }
 
 [numthreads(8, 8, 1)]
@@ -1953,6 +2017,76 @@ void SpatialMCS(uint3 id : SV_DispatchThreadID)
     float own_count;
     l.sun = unpack_light(g_raw[index], own_count).sun;   // the sun stays as the first pass left it
     g_history[index] = pack_light(l, 0.0f);
+}
+
+// Contact occlusion: ground truth based ambient occlusion (GTAO, Jimenez et al. 2016, as XeGTAO
+// evaluates it) on the light samples. Four fixed slices of the view (8 screen directions); per side 3
+// steps at g_ao.x x (k/3)^2 eye units projected onto the sample grid (at most 96 samples): the highest
+// horizon toward the camera, faded with the occluder's distance ((1 - (d / reach)^2)^2 towards the
+// tangent); the cosine-weighted visible arc between the two horizons, clamped to the normal's
+// hemisphere, weighted by the normal's length in the slice. 1 open, 0 closed. Fixed slices and steps:
+// the same geometry gives the same value every frame (no noise to filter, no shimmer).
+float fast_acos(float x)
+{
+    const float a = abs(x);
+    const float r = (-0.156583f * a + kPi * 0.5f) * sqrt(1.0f - a);
+    return x >= 0.0f ? r : kPi - r;
+}
+
+float contact_occlusion(uint2 id, float3 p, float3 n)
+{
+    const float reach = g_ao.x;
+    // Eye units between samples at this depth.
+    const float spacing = abs(p.z) * 2.0f * float(g_factor) / max(abs(g_projection.x) * g_viewport.z, 1e-4f);
+    const float steps = clamp(reach / max(spacing, 1e-4f), 1.5f, 96.0f);
+    const float inv_reach2 = 1.0f / (reach * reach);
+    const float3 view = -normalize(p);
+    float visible = 0.0f;
+    [unroll] for (uint slice = 0u; slice < 4u; ++slice) {
+        const float angle = (float(slice) + 0.5f) * (kPi / 4.0f);
+        const float2 screen = float2(cos(angle), sin(angle));
+        const float3 direction = float3(screen.x, -screen.y, 0.0f);   // screen y runs down, eye y up
+        const float3 axis = normalize(cross(direction, view));
+        const float3 ortho = direction - view * dot(direction, view);
+        const float3 projected = n - axis * dot(n, axis);
+        const float length_n = length(projected);
+        const float cos_n = saturate(dot(projected, view) / max(length_n, 1e-4f));
+        const float gamma = (dot(ortho, projected) >= 0.0f ? 1.0f : -1.0f) * fast_acos(cos_n);
+        float horizon[2];
+        [unroll] for (uint side = 0u; side < 2u; ++side) {
+            const float sign = side == 0u ? 1.0f : -1.0f;
+            const float low = cos(gamma + sign * kPi * 0.5f);
+            float best = low;
+            [unroll] for (uint k = 1u; k <= 3u; ++k) {
+                const float fraction = float(k * k) / 9.0f;
+                const int2 s = int2(id) + int2(round(screen * (sign * steps * fraction)));
+                if (any(s < 0) || any(s >= int2(g_sample_size))) {
+                    continue;
+                }
+                const float sz = g_z[uint(s.y) * g_sample_size.x + uint(s.x)];
+                if (sz == 0.0f) {
+                    continue;
+                }
+                const float3 v = sample_position(uint2(s), sz) - p;
+                const float d2 = dot(v, v);
+                if (d2 < 1e-4f) {
+                    continue;
+                }
+                const float x = saturate(d2 * inv_reach2);
+                const float c = dot(v, view) * rsqrt(d2);
+                best = max(best, lerp(low, c, (1.0f - x) * (1.0f - x)));
+            }
+            horizon[side] = best;
+        }
+        // h1 towards +direction, h0 towards -direction (angles from the view vector).
+        const float h1 = gamma + clamp(fast_acos(horizon[0]) - gamma, -kPi * 0.5f, kPi * 0.5f);
+        const float h0 = gamma + clamp(-fast_acos(horizon[1]) - gamma, -kPi * 0.5f, kPi * 0.5f);
+        const float sin_g = sin(gamma);
+        const float arc0 = (cos_n + 2.0f * h0 * sin_g - cos(2.0f * h0 - gamma)) * 0.25f;
+        const float arc1 = (cos_n + 2.0f * h1 * sin_g - cos(2.0f * h1 - gamma)) * 0.25f;
+        visible += length_n * (arc0 + arc1);
+    }
+    return saturate(visible / 4.0f);
 }
 
 [numthreads(8, 8, 1)]
@@ -1975,6 +2109,13 @@ void SpatialBCS(uint3 id : SV_DispatchThreadID)
     if ((g_flags & 128u) != 0u) {
         light.sky = float3(1.0f, 1.0f, 1.0f);  // GALAXY_RT_GI=0: the sky open, no bounce
     }
+    // Contact occlusion: corners, contacts and creases the sky and bounce light reach less of. Never on
+    // the sun or the lamps and glows (their shadows are traced).
+    float contact = 1.0f;
+    if (g_ao.x > 0.0f && (g_ao.y > 0.0f || g_ao.z > 0.0f)) {
+        contact = contact_occlusion(id.xy, sample_position(id.xy, z), unpack_normal(g_normal[index]));
+    }
+    const float3 sky_seen = light.sky * (1.0f - g_ao.z * (1.0f - contact));
     const float3 sun = light.sun * g_sun_light.rgb;
     const float3 points = light.points * g_point_light;
     // The sky and bounce light follow the sky: under a dark sky the lights carry the picture.
@@ -1990,7 +2131,7 @@ void SpatialBCS(uint3 id : SV_DispatchThreadID)
                               ? saturate(asfloat(g_picture_sums.Load(32u)) / max(g_ambient.y, 1e-3f))
                               : 1.0f;
     const float norm = max(g_sun_light.w + lerp(0.55f, 1.0f, day_sky) * luminance(g_sun_light.rgb), 0.25f);
-    float3 lighting = (ambient * light.sky + sun) / norm + points;
+    float3 lighting = (ambient * sky_seen + sun) / norm + points;
     // With the sky open: what the picture capture keeps (no feedback through the sky and bounce).
     float3 open = (ambient + sun) / norm + points;
     const float exposure = g_picture_sums.Load(52u) != 0u ? asfloat(g_picture_sums.Load(48u)) : 1.0f;
@@ -2021,7 +2162,7 @@ void SpatialBCS(uint3 id : SV_DispatchThreadID)
         const float3 k = rgb8(colors.y);
         const float3 sky_a = a * (ambient / max(g_sun_light.w, 1e-3f));
         float3 game = a + k * facing;
-        float3 traced = sky_a * light.sky + k * light.sun;
+        float3 traced = sky_a * sky_seen + k * light.sun;
         float3 opened = sky_a + k * light.sun;
         float3 added = points;
         if (point_lit) {
@@ -2041,10 +2182,10 @@ void SpatialBCS(uint3 id : SV_DispatchThreadID)
         if (point_lit) {
             unshadowed += points_unshadowed(sample_position(id.xy, z), n, false) * g_point_light;
             added = float3(0.0f, 0.0f, 0.0f);
-            lighting = (ambient * light.sky + sun + points) / max(unshadowed, 1e-3f);
+            lighting = (ambient * sky_seen + sun + points) / max(unshadowed, 1e-3f);
             open = (ambient + sun + points) / max(unshadowed, 1e-3f);
         } else {
-            lighting = (ambient * light.sky + sun) / max(unshadowed, 1e-3f) + added;
+            lighting = (ambient * sky_seen + sun) / max(unshadowed, 1e-3f) + added;
             open = (ambient + sun) / max(unshadowed, 1e-3f) + added;
         }
     }
@@ -2066,6 +2207,9 @@ void SpatialBCS(uint3 id : SV_DispatchThreadID)
     // occlusion darkens creases and contacts, shade takes a little of the sky's colour, and faces
     // turned from the sun keep kDayForm of their light (a faint sun). The lamps and glows still add
     // their light; no exposure. Under a dark sky the lit model above (the nights as they are).
+    // GALAXY_RT_VIEW=8: the day model's sun visibility, the sun's facing (shaped n.l) and the sky's
+    // luminance (black: no traced triangle under the sample, the day model left out).
+    float3 day_terms = float3(0.0f, 0.0f, 0.0f);
     {
         const float day_mix = smoothstep(0.35f, 0.8f, day_sky);
         if (day_mix > 0.0f && tri != 0u) {
@@ -2097,7 +2241,12 @@ void SpatialBCS(uint3 id : SV_DispatchThreadID)
             // passes 1.1 of its art's level: no overexposed grass, sand or dirt. The light sources' own glow
             // (below) is not affected.
             const float3 day_points = points * 0.35f;
-            const float3 day_m = min(shadow * form * ao * tint * level + day_points, 1.1f * level) * kDayLevel;
+            // Contact occlusion on the art: in full where the sun does not reach, half where it does
+            // (sunlit contacts keep their direct light).
+            const float sunlit = vis * saturate(shaped / 0.5f);
+            const float day_contact = 1.0f - g_ao.y * (1.0f - contact) * (1.0f - 0.5f * sunlit);
+            const float3 day_m = min(shadow * form * ao * day_contact * tint * level + day_points, 1.1f * level) * kDayLevel;
+            day_terms = float3(vis, shaped, saturate(sky_l));
             const float3 day_open = min((shadow * form) * level + day_points, 1.1f * level) * kDayLevel;
             lighting = lerp(lighting, day_m, day_mix);
             open = lerp(open, day_open, day_mix);
@@ -2181,6 +2330,10 @@ void SpatialBCS(uint3 id : SV_DispatchThreadID)
         m = light.sky;         // GALAXY_RT_VIEW=3: the sky and bounce light alone
     } else if ((g_flags & 16u) != 0u) {
         m = light.points;      // GALAXY_RT_VIEW=4: the point lights alone
+    } else if ((g_flags & 256u) != 0u) {
+        m = contact.xxx;       // GALAXY_RT_VIEW=7: the contact occlusion
+    } else if ((g_flags & 512u) != 0u) {
+        m = day_terms;         // GALAXY_RT_VIEW=8: the day model's sun visibility, facing, sky
     }
     // The picture capture divides out the sky and bounce part (no feedback through it).
     const float3 without = lerp(float3(1.0f, 1.0f, 1.0f), open, g_strength);
