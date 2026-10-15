@@ -243,7 +243,7 @@ bool RtReflections::initialize(ID3D12Device5* device, std::uint64_t timestamp_fr
     // Crystals, ice, gems and glass (named in rt_surfaces.cpp): clear dielectric, its reflection
     // white and Fresnel-weighted.
     materials_[7] = material("GALAXY_RT_REFLECT_CRYSTAL", {0.05f, 0.15f, 1.0f, 0.0f, 0.0f});
-    view_ = static_cast<std::uint32_t>(std::clamp(env_float("GALAXY_RT_REFLECT_VIEW", 0.0f), 0.0f, 5.0f));
+    view_ = static_cast<std::uint32_t>(std::clamp(env_float("GALAXY_RT_REFLECT_VIEW", 0.0f), 0.0f, 6.0f));
     history_frames_ =
         static_cast<std::uint32_t>(std::clamp(env_float("GALAXY_RT_REFLECT_HISTORY", 24.0f), 1.0f, 64.0f));
     range_ = std::clamp(env_float("GALAXY_RT_REFLECT_RANGE", 50000.0f), 100.0f, 1.0e6f);
@@ -924,8 +924,12 @@ void RtReflections::draw_composite(ID3D12GraphicsCommandList* list, Pass& pass, 
     c.sample_size[0] = info.sample_width;
     c.sample_size[1] = info.sample_height;
     c.factor = info.factor;
-    // GALAXY_RT_REFLECT_VIEW=5: the surface classes on every other traced frame.
-    const std::uint32_t view = view_ == 5u ? ((info.serial & 1u) != 0u ? 2u : 0u) : view_ & 3u;
+    // GALAXY_RT_REFLECT_VIEW=5: the surface classes on every other traced frame; 6: the composite, the
+    // reflected light alone (composite view 4) and its weight with the highlights (5) in turn.
+    static constexpr std::uint32_t kCycle[4] = {0u, 0u, 4u, 5u};
+    const std::uint32_t view = view_ == 5u   ? ((info.serial & 1u) != 0u ? 2u : 0u)
+                               : view_ == 6u ? kCycle[info.serial & 3u]
+                                             : view_ & 3u;
     c.flags = (reproject != 0u ? 1u : 0u) | (view << 1u);
     c.slot = slot;
     c.tile_width = info.tile_width;
@@ -979,16 +983,18 @@ void RtReflections::composite(ID3D12GraphicsCommandList* list, D3D12_CPU_DESCRIP
         return;
     }
     // GALAXY_RT_REFLECT_VIEW=4: every other traced frame without reflections (consecutive
-    // snapshots are A/B pairs).
-    if (view_ == 4u && (info.serial & 1u) != 0u) {
+    // snapshots are A/B pairs); 6: one traced frame in four.
+    if ((view_ == 4u && (info.serial & 1u) != 0u) || (view_ == 6u && (info.serial & 3u) == 1u)) {
         return;
     }
-    if (view_ == 4u) {
-        // The frames with reflections carry a white mark at the middle of the right edge.
-        const float white[4] = {1.0f, 1.0f, 1.0f, 1.0f};
+    if (view_ == 4u || view_ == 6u) {
+        // The frames with reflections carry a mark at the middle of the right edge: white the composite,
+        // red the reflected light, green its weight (VIEW=6).
+        const std::uint32_t phase = view_ == 6u ? info.serial & 3u : 0u;
+        const float colour[4] = {phase != 3u ? 1.0f : 0.0f, phase != 2u ? 1.0f : 0.0f, phase == 0u ? 1.0f : 0.0f, 1.0f};
         const D3D12_RECT mark{static_cast<LONG>(width) - 12, static_cast<LONG>(height / 2u) - 6,
                               static_cast<LONG>(width), static_cast<LONG>(height / 2u) + 6};
-        list->ClearRenderTargetView(target, white, 1u, &mark);
+        list->ClearRenderTargetView(target, colour, 1u, &mark);
     }
     // The traced frame's composite is timed; its sub-frames' cost the same.
     const bool timed = composite_timing_ >= 0 && reproject == 0u;
@@ -1018,7 +1024,7 @@ void RtReflections::composite_water(ID3D12GraphicsCommandList* list, D3D12_CPU_D
     if (!info.valid || info.width != width || info.height != height || !water_.final[slot].resource) {
         return;
     }
-    if (view_ == 4u && (slots_[slot].serial & 1u) != 0u) {
+    if ((view_ == 4u && (slots_[slot].serial & 1u) != 0u) || (view_ == 6u && (slots_[slot].serial & 3u) == 1u)) {
         return;
     }
     const bool timed = water_composite_timing_ >= 0 && reproject == 0u;

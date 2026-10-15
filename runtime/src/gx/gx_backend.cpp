@@ -322,7 +322,7 @@ bool capture_pixel_frame_requested(std::uint64_t frame) {
 // Test aid for runs without a display: every Nth swap-chain present is read
 // back and written to GALAXY_PRESENT_SNAPSHOT_DIR\present_<n>.ppm, limited to
 // presents GALAXY_PRESENT_SNAPSHOT_FIRST..GALAXY_PRESENT_SNAPSHOT_LAST.
-// GALAXY_PRESENT_SNAPSHOT_PAIR=1 also writes the present after each.
+// GALAXY_PRESENT_SNAPSHOT_PAIR=n also writes the n presents after each (1: a pair).
 std::uint64_t g_snapshot_presents = 0u;
 
 std::string present_snapshot_path() {
@@ -333,7 +333,7 @@ std::string present_snapshot_path() {
             ? std::strtoull(value, nullptr, 10) : fallback;
     };
     static const std::uint64_t every = read_u64("GALAXY_PRESENT_SNAPSHOT_EVERY", 0u);
-    static const bool pair = read_u64("GALAXY_PRESENT_SNAPSHOT_PAIR", 0u) != 0u;
+    static const std::uint64_t after = read_u64("GALAXY_PRESENT_SNAPSHOT_PAIR", 0u);
     static const std::uint64_t first = read_u64("GALAXY_PRESENT_SNAPSHOT_FIRST", 0u);
     static const std::uint64_t last = read_u64(
         "GALAXY_PRESENT_SNAPSHOT_LAST", std::numeric_limits<std::uint64_t>::max());
@@ -346,7 +346,7 @@ std::string present_snapshot_path() {
     }();
     const std::uint64_t presents = ++g_snapshot_presents;
     if (every == 0u || directory.empty() || presents < first || presents > last ||
-        (presents % every != 0u && !(pair && presents % every == 1u % every))) {
+        presents % every > std::min(after, every - 1u)) {
         return {};
     }
     return directory + "\\present_" + std::to_string(presents) + ".ppm";
