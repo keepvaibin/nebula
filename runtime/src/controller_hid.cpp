@@ -467,6 +467,26 @@ ControllerLink link_of(const HidCandidate& candidate) {
     return bluetooth_path(candidate.path) ? ControllerLink::Bluetooth : ControllerLink::Usb;
 }
 
+// A HID collection's compatible ids name its top-level usage
+// ("HID_DEVICE_SYSTEM_GAME", "HID_DEVICE_UP:0001_U:0005"): a joystick or game
+// pad is found without opening the device.
+bool game_collection(HDEVINFO set, SP_DEVINFO_DATA& info) {
+    std::array<wchar_t, 1024> ids{};
+    if (!SetupDiGetDeviceRegistryPropertyW(set, &info, SPDRP_COMPATIBLEIDS, nullptr,
+                                           reinterpret_cast<PBYTE>(ids.data()),
+                                           static_cast<DWORD>((ids.size() - 2u) * sizeof(wchar_t)), nullptr)) {
+        return false;
+    }
+    for (const wchar_t* id = ids.data(); *id != L'\0'; id += std::wcslen(id) + 1u) {
+        const std::wstring text = id;
+        if (contains_ci(text, L"HID_DEVICE_SYSTEM_GAME") || contains_ci(text, L"HID_DEVICE_UP:0001_U:0004") ||
+            contains_ci(text, L"HID_DEVICE_UP:0001_U:0005")) {
+            return true;
+        }
+    }
+    return false;
+}
+
 std::vector<HidCandidate> enumerate_hid_pads() {
     std::vector<HidCandidate> found;
     GUID hid_guid{};
@@ -482,8 +502,14 @@ std::vector<HidCandidate> enumerate_hid_pads() {
         std::vector<std::uint8_t> storage(needed);
         auto* detail = reinterpret_cast<SP_DEVICE_INTERFACE_DETAIL_DATA_W*>(storage.data());
         detail->cbSize = sizeof(SP_DEVICE_INTERFACE_DETAIL_DATA_W);
-        if (!SetupDiGetDeviceInterfaceDetailW(set, &iface, detail, needed, nullptr, nullptr)) continue;
+        SP_DEVINFO_DATA info{};
+        info.cbSize = sizeof(info);
+        if (!SetupDiGetDeviceInterfaceDetailW(set, &iface, detail, needed, nullptr, &info)) continue;
         const std::wstring path = detail->DevicePath;
+        // Only the vendors with their own drivers and game collections are opened.
+        const bool known_vendor = contains_ci(path, L"057e") || contains_ci(path, L"054c") ||
+                                  contains_ci(path, L"28de");
+        if (!known_vendor && !game_collection(set, info)) continue;
         // Opened without access: attributes and the top-level collection only.
         UniqueHandle probe(CreateFileW(path.c_str(), 0, FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr,
                                        OPEN_EXISTING, 0, nullptr));
