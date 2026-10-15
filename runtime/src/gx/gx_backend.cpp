@@ -7172,10 +7172,15 @@ bool GxBackend::begin_rt_batch(const DrawCall& call, RtDrawInfo& info) {
             }
         }
     }
-    // The material table (rt_materials.h) gives this texture's class where it names one.
-    if (const RtMaterial* material = rt_material(current_rt_material_);
-        material != nullptr && material->surface_class != 0xFFu) {
-        surface.surface_class = static_cast<RtSurfaceClass>(material->surface_class);
+    // The material table (rt_materials.h) gives this texture's class where it names one; particles
+    // are never traced geometry or water (glows still light, and so do the table's emitting ones).
+    if (const RtMaterial* material = rt_material(current_rt_material_); material != nullptr) {
+        if (material->particle && material->emission == RtEmission::None && !glow) {
+            return false;
+        }
+        if (material->surface_class != 0xFFu) {
+            surface.surface_class = static_cast<RtSurfaceClass>(material->surface_class);
+        }
     }
     info.rt_material = current_rt_material_;
     if (water && surface.surface_class == RtSurfaceClass::Metal) {
@@ -12666,12 +12671,16 @@ ID3D12PipelineState* GxBackend::flush_draw_state(
             !blend.logic_op_enable && !blend.subtract && blend.color_update && blend.dst_factor == BlendFactor::One &&
             render_state_key_.cull != static_cast<std::uint8_t>(CullMode::All) &&
             state_.xf(static_cast<std::uint16_t>(xf::kProjectionBase + 6u)) == 0u;
+        // Water and clear materials are models (indexed positions): particles (steam, smoke, haze with
+        // indirect warps) are direct-vertex sprites, and as water they turned into dark quads.
+        const VcdType position = state_.vertex_desc(0u).position.vcd;
         rt_water_eligible_ =
             topology_key == static_cast<std::uint8_t>(D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE) && blend.blend_enable &&
             !blend.logic_op_enable && !blend.subtract && blend.color_update &&
             blend.src_factor == BlendFactor::SrcAlpha && blend.dst_factor == BlendFactor::InvSrcAlpha &&
             render_state_key_.cull != static_cast<std::uint8_t>(CullMode::All) &&
-            state_.xf(static_cast<std::uint16_t>(xf::kProjectionBase + 6u)) == 0u;
+            state_.xf(static_cast<std::uint16_t>(xf::kProjectionBase + 6u)) == 0u &&
+            (position == VcdType::Index8 || position == VcdType::Index16);
     }
     // Motion writers: opaque triangles with color writes in a temporal scene
     // (blending, logic ops and dual-source alpha cannot share a second

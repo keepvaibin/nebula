@@ -88,7 +88,8 @@ bool lights_fill_their_fields() {
                      near(luma->intensity, 1.0f) && near(luma->pulse, 0.5f) && luma->cone == 0.0f,
                  "a lights row keeps the surface it leaves empty; emitters default to a Luma's intensity");
     const RtMaterial* beam = find(table, 0xB2u);
-    ok &= expect(beam != nullptr && beam->helper && beam->no_light && beam->hide && beam->unlit_only && !beam->shadow,
+    ok &= expect(beam != nullptr && beam->helper && beam->particle && beam->no_light && beam->hide && beam->unlit_only &&
+                     !beam->shadow,
                  "tokens add up across files");
     const RtMaterial* lamp = find(table, 0xB3u);
     ok &= expect(lamp != nullptr && lamp->emission == RtEmission::Point && near(lamp->color[1], 0.95f) &&

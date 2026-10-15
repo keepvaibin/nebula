@@ -15,7 +15,7 @@
 // so a lights file can carry emissions alone over the surfaces file.
 // hash: a texture-pack name (tex1_<w>x<h>[_m]_<16 hex>_<format>) or the 16 hex digits alone.
 // class: '+'-joined tokens. Surfaces: diffuse, glossy, metal, glass, crystal, ice, water, foliage,
-// fabric, skin, unlit, sky, particle. Lights: emitter (point light; a spot light with a cone),
+// fabric, skin, unlit, sky, particle (never traced geometry or water). Lights: emitter (point light; a spot light with a cone),
 // emissive-area (area light), tint (the emission takes the colour the draw shows: Luma and star-bit
 // colours live in the game's colour registers, not in the shared texture). helper: a lookup texture
 // (environment, indirect or mask map) that never decides a draw's material. skip: never a light.
@@ -46,6 +46,7 @@ struct RtMaterial {
     bool tint = false;                    // the emission's colour is the draw's own
     bool hide = false;                    // a faked light effect: not drawn under the traced lighting
     bool unlit_only = false;              // only unlit draws of the texture emit
+    bool particle = false;                // smoke, steam, sparks: never traced geometry or water
     bool shadow = true;
     float roughness = -1.0f;              // < 0: the class's
     float metallic = -1.0f;               // < 0: the class's

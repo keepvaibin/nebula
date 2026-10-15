@@ -133,6 +133,7 @@ void apply_class(const std::string& text, RtMaterial& m) {
         else if (token == "tint") m.tint = true;
         else if (token == "hide") m.hide = true;
         else if (token == "unlit-only") m.unlit_only = true;
+        else if (token == "particle") m.particle = true;
         else if (token == "metal") set(RtSurfaceClass::Metal);
         else if (token == "glossy") set(RtSurfaceClass::Glossy);
         else if (token == "glass" || token == "crystal" || token == "glass/crystal") set(RtSurfaceClass::Crystal);
