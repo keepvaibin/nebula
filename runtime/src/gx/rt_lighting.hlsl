@@ -146,7 +146,9 @@ float3 film_light(float3 c, float3 m)
     const float3 hue = lit * ((knee + room * (1.0f - exp(-(peak - knee) / room))) / peak);
     const float3 knees = max(c, kLitKnee);
     const float3 rooms = max(1.0f - knees, 1e-4f);
-    const float3 channels = lerp(lit, knees + rooms * (1.0f - exp(-(lit - knees) / rooms)), step(knees, lit));
+    // Below its knee a channel keeps its light; the shoulder's exponent only for the part above it (a white
+    // texel's room is 1e-4: exp of the part below overflowed to inf, and lerp(lit, -inf, 0) is NaN, black).
+    const float3 channels = lerp(lit, knees + rooms * (1.0f - exp(-max(lit - knees, 0.0f) / rooms)), step(knees, lit));
     return lerp(hue, channels, smoothstep(1.6f, 3.5f, peak));
 }
 // Buckets of the exposure measurement (16 bytes each: lit, game, pixels, spare).
