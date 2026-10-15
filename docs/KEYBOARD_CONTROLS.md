@@ -2,8 +2,9 @@
 
 The game sees one Wii Remote with a Nunchuk on channel 0. Keyboard, mouse,
 Xbox (XInput) controllers, Switch Pro Controllers, Switch 2 Pro Controllers,
-PlayStation controllers (DualShock 4, DualSense, DualSense Edge) and the Steam
-Controller (2026) work at the same time; every Wii input can be rebound.
+PlayStation controllers (DualShock 4, DualSense, DualSense Edge), the Steam
+Controller (2026) and generic HID game controllers work at the same time; every
+Wii input can be rebound.
 
 ## Default maps
 
@@ -145,8 +146,8 @@ bind.switch_pro.b=L
 tune.switch_pro.gyro_sensitivity=1
 ```
 
-Schemes: `keyboard`, `xbox`, `switch_pro`, `switch_pro2`, `playstation`, `steam`
-(files from before the last two load unchanged). Targets: `a b one
+Schemes: `keyboard`, `xbox`, `switch_pro`, `switch_pro2`, `playstation`, `steam`,
+`generic` (files from before the last three load unchanged). Targets: `a b one
 two plus minus home dpad_up dpad_down dpad_left dpad_right stick_up
 stick_down stick_left stick_right c z shake nunchuk_shake pointer_up
 pointer_down pointer_left pointer_right pointer_recenter jump_back`. Input
@@ -156,7 +157,8 @@ LT RT LS RS Menu View DpadUp...`; Switch `A B X Y L R ZL ZR LS RS Plus Minus
 Home Capture GL GR C DpadUp...`; PlayStation `Cross Circle Square Triangle L1 R1
 L2 R2 L3 R3 Options Share Create PS Touchpad LeftPaddle RightPaddle Mute
 DpadUp...`; Steam `A B X Y LB RB LT RT LS RS Menu View Steam QAM L4 R4 L5 R5
-LPad RPad DpadUp...`; sticks `LX+ LX- LY+ LY- RX+ RX- RY+ RY-`.
+LPad RPad DpadUp...`; generic `Button1`..`Button19 LT RT DpadUp...`; sticks
+`LX+ LX- LY+ LY- RX+ RX- RY+ RY-`.
 
 Files with an older `controls_version` are migrated on load: bindings and tuning values that
 still hold an earlier version's defaults take the current defaults, a `rumble=0` from version 4
@@ -207,6 +209,15 @@ turns vibration off, and values the player changed stay.
   settings feature report repeated every 3 s (the emulation returns on its own
   when the reports stop), and drives the haptic motors for vibration. Trackpad
   surfaces are not read, only their clicks.
+- Generic controllers: any HID device with a Joystick or Game Pad collection that
+  none of the above reads (not Microsoft, Nintendo, Sony or Valve hardware, no
+  XInput interface), listed by its product name. Buttons are read by number through
+  the Windows HID parser: 1-4 face buttons (1 jumps, 2 backs out of menus), 5/6
+  shoulders, 7/8 the triggers when a pad reports them as buttons, 9 Back, 10 Start,
+  11/12 stick clicks, 13 Home. X/Y are the left stick, Z/Rz (or Rx/Ry) the right
+  one, the remaining pair (or Brake/Accelerator) the triggers, the hat the d-pad.
+  Layouts differ between pads: rebind on the CONTROLS page. No vibration (HID has no
+  standard motor report).
 - Steam client: with Steam's controller support on, Steam keeps its desktop layout
   on Nebula's window (Nebula is not a Steam game). Auto mode ignores the
   keys and mouse motion that layout generates while a controller is
