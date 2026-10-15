@@ -365,7 +365,37 @@ bool average(uint offset, out float3 light)
 
 // What the frame shows at `pixel`: the lit colour and the distance of its surface (kSkyDistance
 // for the sky); false outside the viewport.
-bool shown_at(float2 pixel, out float3 light, out float distance)
+// The angle a reflection ray of this sample may stray by from its neighbours' (radians): the water's ripples
+// and waves bend each pixel's normal its own way (WaterTraceCS); 0 elsewhere.
+static float g_spread = 0.0f;
+
+// The frame's colour at `pixel`, averaged over a footprint `blur` pixels wide (8 taps): what a rippled
+// surface's rays scatter across, not the one texel a single ray lands on.
+float3 frame_color(float2 pixel, float blur)
+{
+    const float2 size = float2(g_target_size);
+    if (blur < 0.75f) {
+        return g_color.SampleLevel(g_linear, pixel / size, 0.0f).rgb;
+    }
+    const float o = 0.5f * blur;
+    const float i = 0.25f * blur;
+    return 0.125f * (g_color.SampleLevel(g_linear, (pixel + float2(-o, -o)) / size, 0.0f).rgb +
+                     g_color.SampleLevel(g_linear, (pixel + float2(o, -o)) / size, 0.0f).rgb +
+                     g_color.SampleLevel(g_linear, (pixel + float2(-o, o)) / size, 0.0f).rgb +
+                     g_color.SampleLevel(g_linear, (pixel + float2(o, o)) / size, 0.0f).rgb +
+                     g_color.SampleLevel(g_linear, (pixel + float2(-i, 0.0f)) / size, 0.0f).rgb +
+                     g_color.SampleLevel(g_linear, (pixel + float2(i, 0.0f)) / size, 0.0f).rgb +
+                     g_color.SampleLevel(g_linear, (pixel + float2(0.0f, -i)) / size, 0.0f).rgb +
+                     g_color.SampleLevel(g_linear, (pixel + float2(0.0f, i)) / size, 0.0f).rgb);
+}
+
+// An eye-space distance `z`'s pixel: its width in world units.
+float pixel_size(float z)
+{
+    return abs(z) * 2.0f / max(abs(g_projection.x) * g_viewport.z, 1e-4f);
+}
+
+bool shown_at(float2 pixel, out float3 light, out float distance, float blur = 0.0f)
 {
     light = float3(0.0f, 0.0f, 0.0f);
     distance = kSkyDistance;
@@ -374,7 +404,7 @@ bool shown_at(float2 pixel, out float3 light, out float distance)
     }
     const int2 c = int2(pixel);
     const float depth = g_efb_depth.Load(int3(c, 0));
-    light = g_color.SampleLevel(g_linear, pixel / float2(g_target_size), 0.0f).rgb;
+    light = frame_color(pixel, blur);
     if (!far_plane(g_depth, depth)) {
         distance = length(eye_position(g_projection, g_viewport, pixel, depth_to_eye_z(g_depth, depth)));
         if (distance >= g_sky_distance) {
@@ -917,7 +947,9 @@ bool hit_shade(uint instance, uint tri, float2 b, float3 x, float3 l, float dist
     }
     if (d.x != 0xFFFFFFFFu && all(abs(uv) < 1.0e4f)) {
         const Texture2D<float4> map = ResourceDescriptorHeap[NonUniformResourceIndex(d.x)];
-        const float lod = clamp(log2(max(distance * g_hit.w, 1.0f)), 0.0f, 8.0f);
+        // Coarser where a rippled surface's rays spread (g_spread over the pixel's own angle).
+        const float pixel_angle = 2.0f / max(abs(g_projection.x) * g_viewport.z, 1e-4f);
+        const float lod = clamp(log2(max(distance * g_hit.w * (1.0f + g_spread / pixel_angle), 1.0f)), 0.0f, 8.0f);
         albedo *= map.SampleLevel(g_wrap, uv, lod).rgb;
     }
     float day_level = g_hit.z;
@@ -1009,7 +1041,9 @@ Reflected reflect_light(uint2 s, float3 dir, float3 n, float3 ng, float3 hit, fl
         const float3 x = reflection.Origin + l * r.distance;
         const float x_distance = length(x);
         float seen;
-        const bool shown = x.z < -g_near && shown_at(eye_to_pixel(g_projection, g_viewport, x), r.light, seen) &&
+        // A rippled surface's rays spread over r.distance * g_spread around the hit: its pixels there.
+        const float blur = g_spread > 0.0f ? min(r.distance * g_spread / pixel_size(x.z), 12.0f) : 0.0f;
+        const bool shown = x.z < -g_near && shown_at(eye_to_pixel(g_projection, g_viewport, x), r.light, seen, blur) &&
                                  abs(seen - x_distance) < 0.03f * x_distance + 2.0f;
         float3 drawn;
         if (shown) {
@@ -1049,7 +1083,11 @@ Reflected reflect_light(uint2 s, float3 dir, float3 n, float3 ng, float3 hit, fl
         }
     } else {
         float seen;
-        const bool sky_shown = l.z < -1e-3f && shown_at(eye_to_pixel(g_projection, g_viewport, l), r.light, seen) &&
+        // The sky lies at infinity: a rippled surface's rays spread over g_spread of it, its pixels that angle.
+        const float sky_blur = g_spread > 0.0f
+            ? min(g_spread * max(abs(g_projection.x) * g_viewport.z, 1e-4f) * 0.5f, 12.0f) : 0.0f;
+        const bool sky_shown = l.z < -1e-3f &&
+                               shown_at(eye_to_pixel(g_projection, g_viewport, l), r.light, seen, sky_blur) &&
                                seen >= kSkyDistance;
         r.source = kSkyShown;
         float3 captured;
@@ -1541,7 +1579,10 @@ float3 water_detail(float3 n, float3 hit, bool flow)
         t2 = cross(wn, t1);
     }
     const float3 wp = transform(g_eye_to_world, hit);
-    const float fade = saturate(1.5f - length(hit) / 6000.0f);
+    // Off where a pixel spans the finest waves (23 units): far water and water seen edge-on, whose waves
+    // would alias into a different slope per pixel.
+    const float footprint = pixel_size(hit.z) / max(abs(dot(n, normalize(hit))), 0.1f);
+    const float fade = saturate(1.5f - length(hit) / 6000.0f) * saturate(2.0f - footprint / 12.0f);
     const float2 s = wave_slope(float2(dot(wp, t1), dot(wp, t2)), float(g_frame), flow) * (g_waves * fade);
     const float3 wd = normalize(wn - s.x * t1 - s.y * t2);
     return normalize(float3(dot(float3(g_eye_to_world[0].x, g_eye_to_world[1].x, g_eye_to_world[2].x), wd),
@@ -1624,10 +1665,13 @@ void WaterTraceCS(uint3 id : SV_DispatchThreadID)
             }
             // Translucent crystal and glass draws share the pass: no ripples, no water below them.
             const bool crystal = ((record.w >> 8u) & 15u) == kCrystal;
+            const float3 calm = n;
             if (!crystal) {
                 n = rippled(q, n);
                 n = water_detail(n, dir * query.CommittedRayT(), (record.w & kWaterfallFlag) != 0u);
             }
+            // The reflection strays by up to twice the normal's bend: the footprint its rays average over.
+            g_spread = crystal ? 0.0f : 2.0f * length(cross(n, calm));
             if (dot(n, -dir) < 0.02f) {
                 n = ng;
             }

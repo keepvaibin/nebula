@@ -185,10 +185,10 @@ namespace Nebula.Launcher
         public int SpatialQuality = 0;
         public bool GeneratedMipmaps = false, PerPixelLighting = false, EnhancedLighting = false;
         public bool HudOutputResolution = false, RayTracing = false;
-        // Ray tracing quality (config rt_quality): 0 medium, 1 high (every pixel traced, more rays, reflections
-        // shaded where they land).
+        // Ray tracing quality (config rt_quality): 0 medium (one sample per 2 x 2 pixels of the internal
+        // resolution), 1 high (every internal pixel, more rays, reflections shaded where they land).
         public int RtQuality = 1;
-        public static readonly string[] RtQualities = { "Medium quality", "High quality" };
+        public static readonly string[] RtQualities = { "Medium (quarter-res)", "High (full-res)" };
 
         public static string ConfigPath { get { return Path.Combine(NebulaPaths.DataRoot, "config.ini"); } }
 

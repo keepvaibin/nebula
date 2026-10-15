@@ -1932,6 +1932,21 @@ void TraceCS(uint3 id : SV_DispatchThreadID, uint gi : SV_GroupIndex)
             const float t = query.CommittedRayT();
             float3 sent = hit_light(origin + ray.Direction * t, fallback);
             const float near = lerp(g_contact, 1.0f, saturate(t / g_contact_range));
+            // The picture shows only faces turned to the camera. The side a ray meets turned away from it (a
+            // character's underside, a ledge's soffit, a wall's back) is not the lit side the picture holds a
+            // few units off, which hit_light's depth match accepts on a small body: it sends a shaded face's
+            // light, a quarter of the scene's average. (User: penguins and animals without shadows: under a
+            // high sun their contact shade read their sunlit fronts.)
+            if (query.CommittedInstanceID() == 0u) {
+                const uint tri = query.CommittedPrimitiveIndex();
+                const float3 v0 = asfloat(g_positions.Load3(tri * 36u));
+                float3 face = cross(asfloat(g_positions.Load3(tri * 36u + 12u)) - v0,
+                                    asfloat(g_positions.Load3(tri * 36u + 24u)) - v0);
+                face = dot(face, direction) > 0.0f ? -face : face;
+                if (dot(face, -(origin + direction * t)) < 0.0f) {
+                    sent = fallback * 0.25f;
+                }
+            }
             // Distant hits fade into the open sky (the game's lighting already holds them).
             const float distant = saturate((t - 0.6f * g_range) / (0.4f * g_range));
             // A glowing surface (unlit, bright beyond its colour under the capture's emitter gain,

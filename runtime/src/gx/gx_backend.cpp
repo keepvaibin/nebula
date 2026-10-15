@@ -7255,14 +7255,47 @@ bool GxBackend::begin_rt_batch(const DrawCall& call, RtDrawInfo& info) {
         state_.xf(static_cast<std::uint16_t>(xf::kProjectionBase + 6u)) == 0u) [[unlikely]] {
         note_rt_material();
     }
+    // GALAXY_RT_UNTRACED=1: once per table material, phase, outcome and reason, what became of a perspective
+    // scene draw (why a character casts no traced shadow): traced as geometry or a card, a glow, water, a
+    // lens, late geometry, or left out (no window open, hidden, flat, or untraced with its reasons: blend
+    // bits, colour and depth writes, cull-all, z texture, the alpha test, eligible, scene open).
+    static const bool untraced_log = read_env_u64("GALAXY_RT_UNTRACED", 0u) != 0u;
+    const bool log_outcome = untraced_log && scene_phase_ && side_layer_ == kSceneLayer && current_rt_material_ != 0u &&
+                             state_.xf(static_cast<std::uint16_t>(xf::kProjectionBase + 6u)) == 0u;
+    const auto outcome = [&](const char* what) {
+        if (!log_outcome) [[likely]] {
+            return;
+        }
+        const std::uint32_t bb = render_state_key_.blend_bits;
+        const std::uint32_t reasons =
+            ((bb & ((1u << 0u) | (1u << 8u))) != 0u ? 1u : 0u) | ((bb & (1u << 25u)) == 0u ? 2u : 0u) |
+            ((render_state_key_.zmode_bits & (1u << 4u)) == 0u ? 4u : 0u) |
+            (render_state_key_.cull == static_cast<std::uint8_t>(CullMode::All) ? 8u : 0u) |
+            ((ps_key_.flags & 0x02u) != 0u ? 16u : 0u) | (!alpha_test_keeps_all(ps_key_) ? 32u : 0u) |
+            (rt_state_eligible_ ? 64u : 0u) | (renderer_.rt_scene_open() ? 128u : 0u);
+        static std::unordered_set<std::uint64_t> logged;
+        const std::uint64_t key = static_cast<std::uint64_t>(current_rt_material_) |
+                                  (static_cast<std::uint64_t>(rt_phase_) << 16u) |
+                                  (static_cast<std::uint64_t>(reasons) << 24u) |
+                                  (static_cast<std::uint64_t>(static_cast<unsigned char>(what[0])) << 32u) |
+                                  (static_cast<std::uint64_t>(static_cast<unsigned char>(what[1])) << 40u);
+        if (logged.size() < 8192u && logged.insert(key).second) {
+            std::fprintf(stderr, "[rt-untraced] material=%u phase=%u buffer=%u%s reasons=0x%02X outcome=%s\n",
+                         static_cast<unsigned>(current_rt_material_), static_cast<unsigned>(rt_phase_),
+                         static_cast<unsigned>(rt_draw_buffer_ & 0xFFFFu), (rt_draw_buffer_ & 0x10000u) != 0u ? "x" : "o",
+                         reasons, what);
+        }
+    };
     if (!scene_phase_ || !(renderer_.rt_scene_open() || renderer_.rt_glow_open() || renderer_.rt_water_open() ||
                            renderer_.rt_late_open())) {
+        outcome("closed");
         return false;
     }
     // What the traced lighting hides from the picture (the game's drop-shadow volumes, the table's faked
     // light cones) stays out of the traced scene too: Mario's invisible shadow box, extruded down along
     // gravity, cast a rectangular shadow on the stone under him and a second one down Good Egg's rim.
     if (rt_hidden_draw()) {
+        outcome("hidden");
         return false;
     }
     const ScaledGxViewport viewport = compute_scaled_gx_viewport(call.xf_viewport, renderer_.efb_scale());
@@ -7275,6 +7308,7 @@ bool GxBackend::begin_rt_batch(const DrawCall& call, RtDrawInfo& info) {
         return false;
     }
     if (flat) {
+        outcome("flat");
         return false;
     }
     const bool translucent = !rt_geometry_draw();
@@ -7320,34 +7354,9 @@ bool GxBackend::begin_rt_batch(const DrawCall& call, RtDrawInfo& info) {
                          renderer_.rt_water_open() ? 1 : 0, side_layer_ == kSceneLayer ? 1 : 0);
         }
     }
+    outcome(translucent ? (glow ? "glow" : water ? "water" : lens ? "lens" : late ? "late" : "untraced")
+                        : rt_state_eligible_ ? "geometry" : "card");
     if (translucent && !glow && !water && !lens && !late) {
-        // GALAXY_RT_UNTRACED=1: once per table material, phase and reason, a scene draw left out of the
-        // traced scene (why a character casts no traced shadow): blend bits, depth and colour writes, the
-        // alpha test, the z texture, the phase and draw buffer, whether the scene was open.
-        static const bool untraced_log = read_env_u64("GALAXY_RT_UNTRACED", 0u) != 0u;
-        if (untraced_log && side_layer_ == kSceneLayer && current_rt_material_ != 0u) [[unlikely]] {
-            const std::uint32_t bb = render_state_key_.blend_bits;
-            const std::uint32_t reasons =
-                ((bb & ((1u << 0u) | (1u << 8u))) != 0u ? 1u : 0u) | ((bb & (1u << 25u)) == 0u ? 2u : 0u) |
-                ((render_state_key_.zmode_bits & (1u << 4u)) == 0u ? 4u : 0u) |
-                (render_state_key_.cull == static_cast<std::uint8_t>(CullMode::All) ? 8u : 0u) |
-                ((ps_key_.flags & 0x02u) != 0u ? 16u : 0u) | (!alpha_test_keeps_all(ps_key_) ? 32u : 0u) |
-                (rt_state_eligible_ ? 64u : 0u) | (renderer_.rt_scene_open() ? 128u : 0u);
-            static std::unordered_set<std::uint64_t> logged;
-            const std::uint64_t key = static_cast<std::uint64_t>(current_rt_material_) |
-                                      (static_cast<std::uint64_t>(rt_phase_) << 16u) |
-                                      (static_cast<std::uint64_t>(reasons) << 24u);
-            if (logged.size() < 4096u && logged.insert(key).second) {
-                std::fprintf(stderr,
-                             "[rt-untraced] material=%u phase=%u buffer=%u%s reasons=0x%02X blend=%u colour=%u "
-                             "zwrite=%u cullall=%u ztex=%u atest=%u eligible=%u open=%u\n",
-                             static_cast<unsigned>(current_rt_material_), static_cast<unsigned>(rt_phase_),
-                             static_cast<unsigned>(rt_draw_buffer_ & 0xFFFFu),
-                             (rt_draw_buffer_ & 0x10000u) != 0u ? "x" : "o", reasons, reasons & 1u,
-                             (reasons >> 1u) & 1u, (reasons >> 2u) & 1u, (reasons >> 3u) & 1u, (reasons >> 4u) & 1u,
-                             (reasons >> 5u) & 1u, (reasons >> 6u) & 1u, (reasons >> 7u) & 1u);
-            }
-        }
         return false;
     }
     const auto projection = [this](unsigned i) {
