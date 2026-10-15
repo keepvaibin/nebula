@@ -533,10 +533,11 @@ float3 grade(float3 c, float2 pixel)
     // (rt_lighting.hlsl finished_luminance).
     c = shoulder(max(c, 0.0f));
     const float l = luminance(c);
-    const float lc = saturate(l + 0.85f * (l - 0.5f) * l * (1.0f - l));
+    const float lc = saturate(l + 0.45f * (l - 0.5f) * l * (1.0f - l));
     float3 g = c * (lc / max(l, 1e-4f));
     const float chroma = max(g.r, max(g.g, g.b)) - min(g.r, min(g.g, g.b));
-    const float vibrance = 1.0f + 0.15f * (1.0f - smoothstep(0.0f, 0.5f, chroma));
+    // Pale colours only a little more saturated (1.15 turned cream sand yellow, wb36).
+    const float vibrance = 1.0f + 0.06f * (1.0f - smoothstep(0.0f, 0.5f, chroma));
     g = lc + (g - lc) * vibrance;
     const float3 shadows = float3(0.985f, 0.995f, 1.02f);
     const float3 highlights = float3(1.015f, 1.0f, 0.985f);

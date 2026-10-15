@@ -121,6 +121,9 @@ static const float kDayShadow = 0.45f;
 static const float kDayForm = 0.15f;
 static const float kDayOcclusion = 0.5f;
 static const float kDayTint = 0.25f;
+// Daylight's level: the art at 0.8 of the game's brightness (user: sand, grass and trees darker and
+// richer, never overexposed; the sky keeps the game's, so the land reads deep against it).
+static const float kDayLevel = 0.8f;
 static const float kLitKnee = 0.8f;
 // The share of the light the film shoulder rolls off (lava, fire, lamps, glints) that joins the
 // bloom (CaptureCS).
@@ -2087,8 +2090,8 @@ void SpatialBCS(uint3 id : SV_DispatchThreadID)
             // passes 1.1 of its art's level: no overexposed grass, sand or dirt. The light sources' own glow
             // (below) is not affected.
             const float3 day_points = points * 0.35f;
-            const float3 day_m = min(shadow * form * ao * tint * level + day_points, 1.1f * level);
-            const float3 day_open = min((shadow * form) * level + day_points, 1.1f * level);
+            const float3 day_m = min(shadow * form * ao * tint * level + day_points, 1.1f * level) * kDayLevel;
+            const float3 day_open = min((shadow * form) * level + day_points, 1.1f * level) * kDayLevel;
             lighting = lerp(lighting, day_m, day_mix);
             open = lerp(open, day_open, day_mix);
         }
@@ -2196,7 +2199,11 @@ float4 LightTexturePS(float4 position : SV_Position) : SV_Target0
     if (asfloat(v.z) == 0.0f) {
         return float4(1.0f, 1.0f, 1.0f, 1.0f);
     }
-    return float4(f16tof32(v.x), f16tof32(v.x >> 16u), f16tof32(v.y), 1.0f);
+    // A blended translucent (seaweed, glass, leaf cards) takes the light of the surface behind it, and
+    // that surface lies in the translucent's own shadow: it keeps at most half of the darkening (more
+    // light it takes whole). Measured wb33/wb36: Beach Bowl's seaweed 115,111,36 -> 27,52,25.
+    const float3 m = float3(f16tof32(v.x), f16tof32(v.x >> 16u), f16tof32(v.y));
+    return float4(max(m, 0.5f + 0.5f * m), 1.0f);
 }
 
 // ---------------------------------------------------------------------------------------------
