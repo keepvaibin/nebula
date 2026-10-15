@@ -2104,7 +2104,9 @@ void SpatialBCS(uint3 id : SV_DispatchThreadID)
             // lit; the art lit them).
             const float vis = any(g_sun_light.rgb > 0.0f) && shaped > 0.08f ? saturate(light.sun / shaped) : 1.0f;
             const float shadow = 1.0f - kDayShadow * (1.0f - vis);
-            const float form = 1.0f - kDayForm * (1.0f - saturate(shaped / 0.8f));
+            // Without a sun (rt-suns none: Melty Molten) no faint-sun facing either (the fallback direction
+            // darkened faces away from it: Melty 0.78 of the game, measured rtpartner rp10).
+            const float form = any(g_sun_light.rgb > 0.0f) ? 1.0f - kDayForm * (1.0f - saturate(shaped / 0.8f)) : 1.0f;
             const float sky_l = luminance(light.sky);
             const float ao = 1.0f - kDayOcclusion * (1.0f - saturate(sky_l));
             const float3 tint = lerp(float3(1.0f, 1.0f, 1.0f), light.sky / max(sky_l, 0.05f), kDayTint * (1.0f - vis));
