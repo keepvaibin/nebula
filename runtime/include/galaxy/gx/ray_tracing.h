@@ -65,6 +65,12 @@ inline constexpr std::uint32_t kRtDrawWater = 128u;
 inline constexpr std::uint32_t kRtDrawDelit = 1u << 12u;
 // A water draw the material table marks as falling water (rt_reflections.hlsl kWaterfallFlag).
 inline constexpr std::uint32_t kRtDrawWaterfall = 1u << 13u;
+// With kRtDrawGlow: a black hole's lens draw (the material table's `lens`): its triangles give the
+// finish the hole's centre and size on screen (rt_post.hlsl PostLensCS), it lights nothing.
+inline constexpr std::uint32_t kRtDrawLens = 1u << 14u;
+// The material table's shadow 0 (wings, glow shells around planets, overlays): in the traced scene but
+// never in the way of the sun, the sky or a light (rt_lighting.hlsl kDrawNoShadow).
+inline constexpr std::uint32_t kRtDrawNoShadow = 1u << 15u;
 // Bits 8-11: the draw's surface class (rt_surfaces.h).
 inline constexpr std::uint32_t kRtDrawClassShift = 8u;
 inline constexpr std::uint32_t kRtDrawClassMask = 0xFu << kRtDrawClassShift;
@@ -533,6 +539,7 @@ private:
     Microsoft::WRL::ComPtr<ID3D12PipelineState> post_shafts_pso_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> post_focus_pso_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> post_lum_pso_;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> post_lens_pso_;
     Microsoft::WRL::ComPtr<ID3D12RootSignature> post_finish_root_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> post_finish_pso_;
     // scene, bright, tmp, bloom, shafts, state, region luminance, its blur's temporary
@@ -584,6 +591,15 @@ private:
     // Per glow draw (glow_draws_) for GlowEmitCS, in AuthoredLight's layout: its triangles, the material
     // table's colour and intensity for its texture where the table names it (flags kGlowTable).
     std::vector<AuthoredLight> glow_lights_;
+    // Black holes' lens draws among the glow draws (kRtDrawLens): first triangle and count in the glow
+    // triangles; lens_ready_ once this frame's glow geometry holds them.
+    static constexpr std::uint32_t kLensSlots = 4u;
+    std::array<std::uint32_t, kLensSlots> lens_first_{};
+    std::array<std::uint32_t, kLensSlots> lens_count_{};
+    std::uint32_t lens_draws_ = 0u;
+    bool lens_ready_ = false;
+    float lens_strength_ = 1.0f;      // GALAXY_RT_LENS: the bending (0: none)
+    bool lens_view_ = false;          // GALAXY_RT_LENS_VIEW: rings at the found sizes
     Microsoft::WRL::ComPtr<ID3D12PipelineState> authored_emit_pso_;
     float authored_power_ = 40000.0f;   // GALAXY_RT_AUTHORED_POWER: a Luma's light (intensity 1)
     std::uint64_t authored_frames_ = 0u;
@@ -665,9 +681,9 @@ private:
     float emissive_ = 3.0f;
     std::array<float, 3> sun_direction_{0.35f, 1.0f, 0.3f};   // world space, towards the sun
     std::array<float, 3> sun_color_{1.0f, 0.93f, 0.82f};
-    float sun_size_ = 2.5f;     // degrees
+    float sun_size_ = 1.0f;     // degrees
     bool sun_override_ = false;
-    float sun_min_elevation_ = 30.0f;  // GALAXY_RT_SUN_MIN_ELEVATION: degrees a game sun rises to at least
+    float sun_min_elevation_ = 50.0f;  // GALAXY_RT_SUN_MIN_ELEVATION: degrees a game sun rises to at least
     const RtStageSun* stage_sun_ = nullptr;
     bool sun_held_ = false;
     bool key_valid_ = false;    // set_key_light
@@ -701,7 +717,7 @@ private:
     std::uint32_t sky_radiance_generation_ = ~0u;   // sky_generation_ when the map was last cleared
     std::uint64_t sky_cycles_ = 0;
     void read_sky();
-    float key_size_ = 6.0f;     // GALAXY_RT_KEY_SIZE: degrees
+    float key_size_ = 1.5f;     // GALAXY_RT_KEY_SIZE: degrees
     float point_light_ = 2.0f;      // GALAXY_RT_POINT_LIGHT: weight of the game's point lights
     float point_radius_ = 800.0f;   // GALAXY_RT_POINT_RADIUS: half-light distance without GX attenuation
     float point_saturation_ = 0.4f; // GALAXY_RT_POINT_SATURATION: 0 white .. 1 the light's own colour
@@ -737,9 +753,9 @@ private:
     float post_grade_ = 1.0f;       // GALAXY_RT_POST_GRADE
     float post_rim_ = 0.0f;         // GALAXY_RT_POST_RIM: rim light at silhouettes (outlined everything)
     float relief_ = 3.0f;           // GALAXY_RT_RELIEF: height (eye units) of full texture brightness
-    float post_local_bright_ = 0.75f;  // GALAXY_RT_LOCAL_BRIGHT: contrast scale of regions above mid grey
-    float post_local_dark_ = 0.92f;    // GALAXY_RT_LOCAL_DARK: of regions below it (1: no local exposure)
-    float post_haze_ = 0.12f;       // GALAXY_RT_POST_HAZE: distance haze's largest share (bright skies)
+    float post_local_bright_ = 1.0f;   // GALAXY_RT_LOCAL_BRIGHT: contrast scale of regions above mid grey
+    float post_local_dark_ = 1.0f;     // GALAXY_RT_LOCAL_DARK: of regions below it (1: no local exposure)
+    float post_haze_ = 0.04f;       // GALAXY_RT_POST_HAZE: distance haze's largest share (bright skies)
     float post_haze_distance_ = 20000.0f;  // GALAXY_RT_POST_HAZE_DISTANCE: where it reaches 63 % of it
     float post_vignette_ = 0.1f;    // GALAXY_RT_POST_VIGNETTE: darkening towards the corners
     bool post_view_ = false;        // GALAXY_RT_POST_VIEW: the finished luminance in false colour
@@ -760,8 +776,8 @@ private:
     float emission_ = 40.0f;        // GALAXY_RT_EMISSION: a glow's light per unit it adds to the picture
                                     // and unit of eye-space area (0: no glow lights)
     float point_size_ = 600.0f;     // GALAXY_RT_POINT_SIZE: radius of the geometry around one
-    float sun_light_ = 1.5f;        // GALAXY_RT_SUN_LIGHT: the key light's strength
-    float sky_light_ = 0.7f;
+    float sun_light_ = 1.2f;        // GALAXY_RT_SUN_LIGHT: the key light's strength
+    float sky_light_ = 0.6f;
     bool lighting_enabled_ = true;
     bool ab_ = false;               // GALAXY_RT_AB
     bool ab_original_ = false;

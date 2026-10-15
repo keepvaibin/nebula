@@ -1000,7 +1000,9 @@ float wave_focus(float2 uv, float frame, float depth)
     const float4 height = float4(4.0f, 5.0f, 3.0f, 2.5f);
     const float4 phase = kx * uv.x + ky * uv.y + speed * frame;
     const float curvature = dot(height * (kx * kx + ky * ky), sin(phase));
-    return clamp(1.0f / max(1.0f + depth * curvature * 0.9f, 0.2f), 0.2f, 4.0f);
+    float x = depth * curvature * 0.9f;
+    x = x >= 0.0f ? x : -0.75f * (1.0f - exp(x / 0.75f));
+    return clamp(1.0f / (1.0f + x), 0.2f, 4.0f);
 }
 
 // Thread 0 of the water pass: is the camera under the water the sun shines through?
@@ -1870,8 +1872,8 @@ float3 under_at(float2 pixel, float limit, out float z, out float found)
     const float2 w = a - float2(base);
     float3 sum = float3(0.0f, 0.0f, 0.0f);
     float weight = 0.0f;
-    float best = 0.0f;
-    z = 0.0f;
+    float z_sum = 0.0f;
+    float z_weight = 0.0f;
     [unroll] for (uint i = 0u; i < 4u; ++i) {
         const int2 o = int2(i & 1u, i >> 1u);
         const int2 s = min(base + o, int2(m_sample_size) - 1);
@@ -1883,11 +1885,12 @@ float3 under_at(float2 pixel, float limit, out float z, out float found)
         }
         sum += unpack_r11g11b10(u.x) * bw;
         weight += bw;
-        if (bw > best) {
-            best = bw;
-            z = u.y != 0u ? uz : 0.0f;
+        if (u.y != 0u) {
+            z_sum += uz * bw;
+            z_weight += bw;
         }
     }
+    z = z_weight > 0.0f ? z_sum / z_weight : 0.0f;
     found = saturate(weight);
     return weight > 0.0f ? sum / weight : float3(0.0f, 0.0f, 0.0f);
 }
@@ -2069,9 +2072,19 @@ CompositeOut WaterCompositePS(float4 position : SV_Position)
         const float3 shift_eye = float3(dot(float3(to_world[0].x, to_world[1].x, to_world[2].x), shift_world),
                                         dot(float3(to_world[0].y, to_world[1].y, to_world[2].y), shift_world),
                                         dot(float3(to_world[0].z, to_world[1].z, to_world[2].z), shift_world));
-        const float2 wobble = clamp(eye_to_pixel(m_projection, m_viewport, p + shift_eye) - pixel, -24.0f, 24.0f);
+        const float2 wobble = clamp(eye_to_pixel(m_projection, m_viewport, p + shift_eye) - pixel, -8.0f, 8.0f);
         const float px_per_unit = 0.5f * m_viewport.w * abs(m_projection.z) / max(-p.z, 1.0f);
-        const float radius = clamp(40.0f * px_per_unit, 5.0f, 28.0f);
+        const float radius = clamp(40.0f * px_per_unit, 1.0f, 12.0f);
+        // The seabed's light through the water: depth absorption (down and back up, red first) and the
+        // shallows' caustics act on the seabed only; the game's water colour holds its own (tinting it
+        // again turned the shallows neon). Where no floor was found the deep value, blended by the share
+        // found (no switch per sample).
+        const float path_c = floor_z != 0.0f ? lerp(500.0f, min(path, 500.0f), floor_found) : 500.0f;
+        float3 seabed_gain = lerp(float3(1.0f, 1.0f, 1.0f), exp(-float3(0.0035f, 0.0012f, 0.0009f) * path_c), 0.75f);
+        const float shallow = floor_z != 0.0f ? exp(-path_c / 120.0f) : 0.0f;
+        if (shallow > 0.0f && m_water2.w > 0.0f) {
+            seabed_gain *= lerp(1.0f, caustic(floor_point, p, n), saturate(shallow * m_water2.w));
+        }
         const float2 lo = m_viewport.xy;
         const float2 hi = m_viewport.xy + m_viewport.zw - 1.0f;
         float3 water;
@@ -2079,30 +2092,35 @@ CompositeOut WaterCompositePS(float4 position : SV_Position)
             // The water layer the game drew (the frame with it less the frame before it) low-passed by a
             // bilateral filter (its tiled texture goes, its colour and gradient stay), over the seabed as it
             // lies (sharp), moved by the waves' refraction where the moved point is water too.
-            const int2 at = int2(clamp(position.xy, lo, hi));
-            const float3 layer_c = m_scene.Load(int3(at, 0)).rgb - m_opaque.Load(int3(at, 0)).rgb;
-            float3 layer = layer_c;
+            const bool moved = water_z(pixel + wobble) != 0.0f;
+            const float2 centre_at = clamp(position.xy + (moved ? wobble : 0.0f), lo, hi);
+            const int2 at = int2(centre_at);
+            const float3 seabed = m_opaque.Load(int3(at, 0)).rgb;
+            float3 layer = m_scene.Load(int3(at, 0)).rgb - seabed;
             float taps = 1.0f;
             [unroll] for (uint k = 0u; k < 16u; ++k) {
                 const float a = float(k) * 2.39996f;
-                const int2 q = int2(clamp(position.xy + float2(cos(a), sin(a)) * (radius * sqrt((float(k) + 0.5f) / 16.0f)), lo, hi));
-                const float3 c = m_scene.Load(int3(q, 0)).rgb - m_opaque.Load(int3(q, 0)).rgb;
-                const float3 d = c - layer_c;
-                const float w = exp(-dot(d, d) / 0.02f);
-                layer += c * w;
+                const int2 q = int2(clamp(centre_at + float2(cos(a), sin(a)) * (radius * sqrt((float(k) + 0.5f) / 16.0f)), lo, hi));
+                const float3 o = m_opaque.Load(int3(q, 0)).rgb;
+                const float3 d = o - seabed;
+                const float w = exp(-dot(d, d) / 0.008f);
+                layer += (m_scene.Load(int3(q, 0)).rgb - o) * w;
                 taps += w;
             }
             layer /= taps;
-            const bool moved = water_z(pixel + wobble) != 0.0f;
-            const float3 seabed = m_opaque.Load(int3(int2(clamp(position.xy + (moved ? wobble : 0.0f), lo, hi)), 0)).rgb;
-            water = max(seabed + layer, 0.0f);
+            {
+                // 30 % less saturated, fading towards the shore (the seabed shows through the shallows).
+                const float through = exp(-0.0012f * path_c);
+                layer = lerp(layer, luminance(layer).xxx, 0.3f) * lerp(1.0f, 0.45f, through);
+            }
+            water = max(seabed * seabed_gain + layer, 0.0f);
         } else {
             const float3 centre = m_scene.Load(int3(int2(clamp(position.xy + wobble, lo, hi)), 0)).rgb;
             water = centre;
             float taps = 1.0f;
             [unroll] for (uint k = 0u; k < 16u; ++k) {
                 const float a = float(k) * 2.39996f;
-                const float2 o = float2(cos(a), sin(a)) * (radius * sqrt((float(k) + 0.5f) / 16.0f)) + wobble;
+                const float2 o = float2(cos(a), sin(a)) * (min(radius, 6.0f) * sqrt((float(k) + 0.5f) / 16.0f)) + wobble;
                 const float3 c = m_scene.Load(int3(int2(clamp(position.xy + o, lo, hi)), 0)).rgb;
                 const float3 d = c - centre;
                 const float w = exp(-dot(d, d) / 0.02f);
@@ -2110,11 +2128,7 @@ CompositeOut WaterCompositePS(float4 position : SV_Position)
                 taps += w;
             }
             water /= taps;
-        }
-        // Shallows: the sunlight the waves focus on the seabed (its own caustics, moving).
-        const float shallow = floor_z != 0.0f ? exp(-path / 120.0f) : 0.0f;
-        if (shallow > 0.0f && m_water2.w > 0.0f) {
-            water *= lerp(1.0f, caustic(floor_point, p, n), saturate(shallow * m_water2.w));
+            water *= seabed_gain;
         }
         // The shore: foam where the water is a few units deep, broken by drifting noise.
         if (floor_z != 0.0f && m_water2.z > 0.0f) {
@@ -2187,16 +2201,16 @@ CompositeOut UnderwaterPS(float4 position : SV_Position)
         const float3 enter = transform(to_world, p + s * along);
         const float focus = wave_focus(float2(dot(enter, t1), dot(enter, t2)), frame, below);
         const float3 through = exp(-m_water.rgb * along);
+        const float tl = luminance(through);
         const float k = saturate(m_sun.w) * 0.5f;
-        add += sun * through * (max(focus - 1.0f, 0.0f) * 0.12f * k);
-        keep *= 1.0f - saturate(1.0f - focus) * k * through;
+        add += sun * lerp(tl.xxx, through, 0.35f) * (max(focus - 1.0f, 0.0f) * 0.12f * k);
+        keep *= 1.0f - saturate(1.0f - focus) * k * 0.5f * tl;
     }
     // Shafts: eight steps along the view through the water, each lit by the light its waves focus.
     if (shafts > 0.0f) {
         const float span = min(length(p), 4000.0f);
         const float3 v = normalize(p);
-        const float jitter = frac(52.9829189f * frac(0.06711056f * position.x + 0.00583715f * position.y) +
-                                  0.618034f * frame);
+        const float jitter = frac(52.9829189f * frac(0.06711056f * position.x + 0.00583715f * position.y));
         float3 sum = float3(0.0f, 0.0f, 0.0f);
         [unroll] for (uint i = 0u; i < 8u; ++i) {
             const float t = span * (float(i) + jitter) / 8.0f;
@@ -2208,21 +2222,21 @@ CompositeOut UnderwaterPS(float4 position : SV_Position)
             const float along = depth_x / rise;
             const float3 enter = transform(to_world, x + s * along);
             const float focus = wave_focus(float2(dot(enter, t1), dot(enter, t2)), frame, depth_x);
-            sum += exp(-m_water.rgb * (along + t)) * (focus * focus);
+            sum += exp(-m_water.rgb * 0.3f * (along + t)) * focus;
         }
         // Forward scattering towards the sun (Henyey-Greenstein, g 0.6).
         const float c = dot(v, s);
         const float phase = (1.0f - 0.36f) / pow(max(1.0f + 0.36f - 1.2f * c, 1e-3f), 1.5f) / (4.0f * kPi);
-        add += sun * sum * (span / 8.0f) * (shafts * 2e-4f * phase);
+        add += sun * sum * (span / 8.0f) * (shafts * 5e-5f * phase);
     }
     // The water between the camera and what the pixel shows: its light fades with the depth of water
     // it crosses and the light the water scatters takes its place: clear for the first 600 units
     // (the player sees what they do), a light blue-teal veil over the far distance (measured: 250
     // units and 0.0008 per unit left Beach Bowl's lagoon murky).
     {
-        const float span = max((sky ? 4000.0f : length(p)) - 600.0f, 0.0f);
+        const float span = max((sky ? 1500.0f : min(length(p), 4000.0f)) - 600.0f, 0.0f);
         const float3 t = exp(-float3(0.00032f, 0.00016f, 0.00012f) * span);
-        const float3 scatter = (sun * 0.4f + 0.25f) * float3(0.16f, 0.58f, 0.72f);
+        const float3 scatter = (sun * 0.4f + 0.25f) * float3(0.07f, 0.4f, 0.78f);
         add = add * t + scatter * (1.0f - t);
         keep *= t;
     }

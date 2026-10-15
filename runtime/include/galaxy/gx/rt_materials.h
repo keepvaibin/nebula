@@ -50,6 +50,7 @@ struct RtMaterial {
     bool unlit_only = false;              // only unlit draws of the texture emit
     bool particle = false;                // smoke, steam, sparks: never traced geometry or water
     bool waterfall = false;               // falling water: water whose streaks run down it
+    bool lens = false;                    // a black hole's lens draw: the finish bends light around it
     bool matte = false;                   // foliage, cloth: absorbs light, no highlight or reflection
     bool sky = false;                     // a sky or backdrop mesh: drawn, never in the traced scene
     bool shadow = true;

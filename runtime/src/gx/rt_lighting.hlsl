@@ -98,6 +98,7 @@ static const uint kDrawPointLit = 32u;  // RtDraw.flags: lit by GX light 4 (the 
 // RtDraw.flags: its colour is its material alone (the game's lights removed): the traced light is
 // its whole light, as on unlit surfaces.
 static const uint kDrawDelit = 4096u;
+static const uint kDrawNoShadow = 32768u;   // RtDraw.flags: the table's shadow 0 (lets light through)
 // g_draws word 2 (SceneRayTracer::add_draw): the material table's emission, colour RGBA8 with these
 // in the low byte; word 3: its intensity.
 static const uint kEmitArea = 2u;       // low 2 bits: 1 point light, 2 area light
@@ -610,8 +611,8 @@ void SkyStateCS()
         const float day = c_sums.Load(36u) != 0u ? saturate(asfloat(c_sums.Load(32u)) / c_daylight) : 1.0f;
         const float target = lerp(c_exposure_night, c_exposure_day, day);
         const float exposure = c_sums.Load(52u) != 0u ? asfloat(c_sums.Load(48u)) : 1.0f;
-        const float goal = clamp(ratio, lerp(0.97f, 0.9f, day) * target, 1.12f * target);
-        const float next = clamp(exposure * lerp(1.0f, goal / max(ratio, 0.05f), 0.1f), 0.35f, 2.5f);
+        const float goal = clamp(ratio, lerp(0.97f, 0.7f, day) * target, 1.12f * target);
+        const float next = clamp(exposure * lerp(1.0f, goal / max(ratio, 0.05f), 0.1f), 0.35f, lerp(2.5f, 1.1f, day));
         c_sums.Store2(48u, uint2(asuint(next), 1u));
     }
 }
@@ -651,7 +652,9 @@ void CaptureCS(uint3 id : SV_DispatchThreadID)
     const int2 q = int2(min(id.xy * c_factor, c_target_size - 1u));
     float3 color = block_color(id.xy);
     if ((c_divide & 2u) != 0u) {
-        c_glow[index] = pack_r11g11b10(max(color - unpack_r11g11b10(c_glow_base[index]), 0.0f));
+        const float day_glow = c_sums.Load(36u) != 0u ? saturate(asfloat(c_sums.Load(32u)) / c_daylight) : 1.0f;
+        c_glow[index] = pack_r11g11b10(max(color - unpack_r11g11b10(c_glow_base[index]), 0.0f) *
+                                       (1.0f - 0.6f * day_glow));
     }
     const float depth = c_depth_tex.Load(int3(q, 0));
     const bool sky = far_plane(c_depth, depth) || !inside(c_viewport, float2(q) + 0.5f) ||
@@ -678,8 +681,9 @@ void CaptureCS(uint3 id : SV_DispatchThreadID)
                 const float3 game = c_game.Load(int3(q, 0)).rgb;
                 // Hot light only (lava, fire, lamps): sunlit ground does not glow.
                 const float3 lit = game * m;
+                const float day_excess = c_sums.Load(36u) != 0u ? saturate(asfloat(c_sums.Load(32u)) / c_daylight) : 1.0f;
                 const float3 excess = max(lit - film_light(game, m), 0.0f) *
-                                      smoothstep(1.4f, 2.5f, max(lit.r, max(lit.g, lit.b)));
+                                      smoothstep(1.4f, 2.5f, max(lit.r, max(lit.g, lit.b))) * (1.0f - 0.85f * day_excess);
                 if (luminance(excess) > 0.004f) {
                     const float3 added = unpack_r11g11b10(c_glow[index]);
                     c_glow[index] = pack_r11g11b10(added + excess * kExcessBloom);
@@ -773,12 +777,16 @@ groupshared float s_glow_area[64];
 // intensity; it takes the table's colour.
 static const uint kGlowTableIntensity = 4u;
 static const uint kGlowTableColor = 8u;
+static const uint kGlowLens = 16u;      // a black hole's lens draw: no light (rt_post.hlsl PostLensCS)
 
 // One group per glow draw.
 [numthreads(64, 1, 1)]
 void GlowEmitCS(uint3 group : SV_GroupID, uint gi : SV_GroupIndex)
 {
     const uint4 entry = e_draws.Load4(group.x * 32u);
+    if ((e_draws.Load(group.x * 32u + 24u) & kGlowLens) != 0u) {
+        return;
+    }
     const uint2 range = entry.xy;   // first triangle, count
     float4 a = float4(0.0f, 0.0f, 0.0f, 0.0f);   // power rgb, weight (luminance x area)
     float4 b = float4(0.0f, 0.0f, 0.0f, 0.0f);   // weighted centre, weighted |centre|^2
@@ -1531,11 +1539,15 @@ void TraceCS(uint3 id : SV_DispatchThreadID, uint gi : SV_GroupIndex)
         ray.Direction = normalize(l + l1 * (r * cos(phi)) + l2 * (r * sin(phi)));
         ray.TMin = 0.0f;
         ray.TMax = g_sun_reach;
-        RayQuery<RAY_FLAG_FORCE_OPAQUE | RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH |
+        RayQuery<RAY_FLAG_FORCE_NON_OPAQUE | RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH |
                  RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES> query;
         query.TraceRayInline(g_scene, RAY_FLAG_NONE, 0xFFu, ray);
-        query.Proceed();
-        sun = query.CommittedStatus() == COMMITTED_TRIANGLE_HIT ? 0.0f : facing_sun;
+        while (query.Proceed()) {
+            if ((g_surfaces.Load(query.CandidatePrimitiveIndex() * 16u + 12u) & kDrawNoShadow) == 0u) {
+                query.CommitNonOpaqueTriangleHit();
+            }
+        }
+        sun = query.CommittedStatus() == COMMITTED_TRIANGLE_HIT ? 0.0f : facing_sun * (1.5f - 0.5f * facing_sun);
         if ((g_flags & 64u) != 0u) {
             // GALAXY_RT_VIEW=6: the nearest blocker's distance up to 1e6, past the sun's reach,
             // 0.1 + 0.9 log10(t) / 6 (0: none).
@@ -1588,10 +1600,14 @@ void TraceCS(uint3 id : SV_DispatchThreadID, uint gi : SV_GroupIndex)
             // The light sits inside its own emitter (a lamp, a glowing core): the shadow ray
             // ends at that surface.
             ray.TMax = max(span - g_point_size, 0.0f);
-            RayQuery<RAY_FLAG_FORCE_OPAQUE | RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH |
+            RayQuery<RAY_FLAG_FORCE_NON_OPAQUE | RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH |
                      RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES> query;
             query.TraceRayInline(g_scene, RAY_FLAG_NONE, 0xFFu, ray);
-            query.Proceed();
+            while (query.Proceed()) {
+                if ((g_surfaces.Load(query.CandidatePrimitiveIndex() * 16u + 12u) & kDrawNoShadow) == 0u) {
+                    query.CommitNonOpaqueTriangleHit();
+                }
+            }
             if (query.CommittedStatus() != COMMITTED_TRIANGLE_HIT) {
                 const float3 color = g_points[2u * chosen + 1u].rgb;
                 points = color / max(luminance(color), 1e-4f) * total;
@@ -1700,9 +1716,13 @@ void TraceCS(uint3 id : SV_DispatchThreadID, uint gi : SV_GroupIndex)
         ray.Direction = direction;
         ray.TMin = 0.0f;
         ray.TMax = g_range;
-        RayQuery<RAY_FLAG_FORCE_OPAQUE | RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES> query;
+        RayQuery<RAY_FLAG_FORCE_NON_OPAQUE | RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES> query;
         query.TraceRayInline(g_scene, RAY_FLAG_NONE, 0xFFu, ray);
-        query.Proceed();
+        while (query.Proceed()) {
+            if ((g_surfaces.Load(query.CandidatePrimitiveIndex() * 16u + 12u) & kDrawNoShadow) == 0u) {
+                query.CommitNonOpaqueTriangleHit();
+            }
+        }
         if (query.CommittedStatus() == COMMITTED_TRIANGLE_HIT) {
             const float t = query.CommittedRayT();
             float3 sent = hit_light(origin + ray.Direction * t, fallback);
@@ -1901,7 +1921,10 @@ void SpatialMCS(uint3 id : SV_DispatchThreadID)
         g_history[index] = pack_light(kOpenSky, 0.0f);
         return;
     }
-    g_history[index] = pack_light(filtered(id.xy, 2, false), 0.0f);
+    Light l = filtered(id.xy, 2, false);
+    float own_count;
+    l.sun = unpack_light(g_raw[index], own_count).sun;   // the sun stays as the first pass left it
+    g_history[index] = pack_light(l, 0.0f);
 }
 
 [numthreads(8, 8, 1)]
@@ -1917,6 +1940,10 @@ void SpatialBCS(uint3 id : SV_DispatchThreadID)
         return;
     }
     Light light = filtered(id.xy, 4, true);
+    {
+        float own_count;
+        light.sun = unpack_light(g_history_in[index], own_count).sun;   // sharp sun shadows (SpatialMCS)
+    }
     if ((g_flags & 128u) != 0u) {
         light.sky = float3(1.0f, 1.0f, 1.0f);  // GALAXY_RT_GI=0: the sky open, no bounce
     }

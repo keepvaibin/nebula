@@ -29,6 +29,8 @@ cbuffer RtPost : register(b0)
     float p_vignette;           // darkening towards the corners (0: none)
     float4 p_local;             // local exposure: contrast scale of regions brighter than mid grey, of
                                 // darker ones, mid grey (0: none)
+    uint4 p_lens_first;         // black holes' lens draws: first triangle in the glow triangles
+    uint4 p_lens_count;         // their count | bending x 32 << 24 | view rings << 31 (0: none)
 };
 
 Texture2D<float4> p_color : register(t0);
@@ -206,9 +208,112 @@ void PostLumCS(uint3 id : SV_DispatchThreadID)
     p_out[id.y * p_quarter.x + id.x] = pack_r11g11b10(l.xxx);
 }
 
+// Black holes: one group per lens draw (the game's IndBend lens around each hole) over its eye-space
+// triangles (p_in, 36 bytes each): the area-weighted centre and the farthest corner give its centre
+// and size on screen; sixteen rays out from the centre over the picture find where the hole's dark
+// horizon ends. p_state from 8, 8 floats per hole: centre (EFB pixels), lens radius, horizon
+// radius (pixels), eye distance of the lens's front, of its centre, 0, 0.
+groupshared float4 s_lens[64];
+
+float3 lens_corner(uint t, uint k)
+{
+    const uint at = t * 9u + k * 3u;
+    return asfloat(uint3(p_in[at], p_in[at + 1u], p_in[at + 2u]));
+}
+
+[numthreads(64, 1, 1)]
+void PostLensCS(uint3 group : SV_GroupID, uint gi : SV_GroupIndex)
+{
+    const uint slot = group.x;
+    const uint count = p_lens_count[slot] & 0xFFFFFFu;
+    const uint first = p_lens_first[slot];
+    float4 a = float4(0.0f, 0.0f, 0.0f, 0.0f);
+    for (uint t = gi; t < count; t += 64u) {
+        const float3 v0 = lens_corner(first + t, 0u);
+        const float3 v1 = lens_corner(first + t, 1u);
+        const float3 v2 = lens_corner(first + t, 2u);
+        const float area = 0.5f * length(cross(v1 - v0, v2 - v0));
+        a += float4((v0 + v1 + v2) * (area / 3.0f), area);
+    }
+    s_lens[gi] = a;
+    GroupMemoryBarrierWithGroupSync();
+    [unroll] for (uint step = 32u; step > 0u; step >>= 1u) {
+        if (gi < step) {
+            s_lens[gi] += s_lens[gi + step];
+        }
+        GroupMemoryBarrierWithGroupSync();
+    }
+    const float4 sum = s_lens[0];
+    const float3 centre = sum.w > 0.0f ? sum.xyz / sum.w : float3(0.0f, 0.0f, 0.0f);
+    GroupMemoryBarrierWithGroupSync();
+    float far2 = 0.0f;
+    for (uint u = gi; u < count; u += 64u) {
+        [unroll] for (uint k = 0u; k < 3u; ++k) {
+            const float3 d = lens_corner(first + u, k) - centre;
+            far2 = max(far2, dot(d, d));
+        }
+    }
+    s_lens[gi] = float4(far2, 0.0f, 0.0f, 0.0f);
+    GroupMemoryBarrierWithGroupSync();
+    [unroll] for (uint step2 = 32u; step2 > 0u; step2 >>= 1u) {
+        if (gi < step2) {
+            s_lens[gi].x = max(s_lens[gi].x, s_lens[gi + step2].x);
+        }
+        GroupMemoryBarrierWithGroupSync();
+    }
+    const float radius = sqrt(s_lens[0].x);
+    const bool seen = count != 0u && sum.w > 0.0f && centre.z < -1.0f - radius;
+    const float2 c = seen ? eye_to_pixel(centre) : float2(0.0f, 0.0f);
+    float px = seen ? radius * 0.5f * p_viewport.w * abs(p_projection.z) / max(-centre.z, 1.0f) : 0.0f;
+    if (any(c < p_viewport.xy - px) || any(c > p_viewport.xy + p_viewport.zw + px)) {
+        px = 0.0f;
+    }
+    // The horizon: along 16 rays from the centre, where the picture first turns brighter than near
+    // black (the hole's disc); their mean, at least a fifth of the lens.
+    GroupMemoryBarrierWithGroupSync();
+    float edge = 0.0f;
+    if (gi < 16u && px > 2.0f) {
+        const float angle = float(gi) * (2.0f * kPi / 16.0f);
+        const float2 dir = float2(cos(angle), sin(angle));
+        edge = px;
+        for (uint s = 1u; s <= 48u; ++s) {
+            const float r = px * float(s) / 48.0f;
+            const int2 q = int2(c + dir * r);
+            if (any(q < 0) || any(q >= int2(p_size))) {
+                edge = r;
+                break;
+            }
+            if (luminance(p_color.Load(int3(q, 0)).rgb) > 0.06f) {
+                edge = r;
+                break;
+            }
+        }
+    }
+    s_lens[gi] = float4(edge, gi < 16u ? 1.0f : 0.0f, 0.0f, 0.0f);
+    GroupMemoryBarrierWithGroupSync();
+    [unroll] for (uint step3 = 32u; step3 > 0u; step3 >>= 1u) {
+        if (gi < step3) {
+            s_lens[gi].xy += s_lens[gi + step3].xy;
+        }
+        GroupMemoryBarrierWithGroupSync();
+    }
+    if (gi == 0u) {
+        const float horizon = seen && px > 2.0f ? clamp(s_lens[0].x / max(s_lens[0].y, 1.0f), 0.2f * px, px) : 0.0f;
+        const uint at = 8u + slot * 8u;
+        p_state[at] = c.x;
+        p_state[at + 1u] = c.y;
+        p_state[at + 2u] = px > 2.0f ? px : 0.0f;
+        p_state[at + 3u] = horizon;
+        p_state[at + 4u] = seen ? -centre.z - radius : 0.0f;
+        p_state[at + 5u] = seen ? -centre.z : 0.0f;
+        p_state[at + 6u] = 0.0f;
+        p_state[at + 7u] = 0.0f;
+    }
+}
+
 // Light shafts: towards the core and the sun on screen, the bright picture between (in front of
 // the light's distance) scatters along the way.
-float3 shaft(float2 texel, float2 light, float strength)
+float3 shaft(float2 texel, float2 light, float strength, float near)
 {
     float3 sum = float3(0.0f, 0.0f, 0.0f);
     const float2 delta = (light - texel) / 28.0f;
@@ -220,7 +325,10 @@ float3 shaft(float2 texel, float2 light, float strength)
         if (any(s < 0) || any(s >= int2(p_quarter))) {
             break;
         }
-        sum += unpack_r11g11b10(p_in[uint(s.y) * p_quarter.x + uint(s.x)]) * decay;
+        // `near` > 0: only what lies within about that many texels of the light counts.
+        const float2 off = at - light;
+        const float close = near > 0.0f ? exp(-dot(off, off) / (near * near)) : 1.0f;
+        sum += unpack_r11g11b10(p_in[uint(s.y) * p_quarter.x + uint(s.x)]) * (decay * close);
         decay *= 0.94f;
     }
     return sum * (strength / 28.0f);
@@ -235,10 +343,10 @@ void PostShaftsCS(uint3 id : SV_DispatchThreadID)
     const float2 texel = float2(id.xy) + 0.5f;
     float3 c = float3(0.0f, 0.0f, 0.0f);
     if (p_core.w > 0.0f && p_core.z < 0.0f) {
-        c += shaft(texel, eye_to_pixel(p_core.xyz) / 4.0f, p_shafts * p_core_light.w);
+        c += shaft(texel, eye_to_pixel(p_core.xyz) / 4.0f, p_shafts * p_core_light.w, 0.0f);
     }
     if (p_sun.w > 0.0f && p_sun.z < -0.05f) {
-        c += shaft(texel, eye_to_pixel(p_sun.xyz * 1.0e5f) / 4.0f, p_shafts * p_sun.w);
+        c += shaft(texel, eye_to_pixel(p_sun.xyz * 1.0e5f) / 4.0f, p_shafts * p_sun.w, 0.18f * float(p_quarter.y));
     }
     p_out[id.y * p_quarter.x + id.x] = pack_r11g11b10(c);
 }
@@ -428,12 +536,88 @@ float3 grade(float3 c, float2 pixel)
     const float lc = saturate(l + 0.85f * (l - 0.5f) * l * (1.0f - l));
     float3 g = c * (lc / max(l, 1e-4f));
     const float chroma = max(g.r, max(g.g, g.b)) - min(g.r, min(g.g, g.b));
-    const float vibrance = 1.04f + 0.2f * (1.0f - smoothstep(0.0f, 0.5f, chroma));
+    const float vibrance = 1.0f + 0.15f * (1.0f - smoothstep(0.0f, 0.5f, chroma));
     g = lc + (g - lc) * vibrance;
     const float3 shadows = float3(0.985f, 0.995f, 1.02f);
     const float3 highlights = float3(1.015f, 1.0f, 0.985f);
     g *= lerp(shadows, highlights, smoothstep(0.15f, 0.85f, lc));
-    return lerp(c, saturate(g), p_grade);
+    g = max(g, 0.0f);
+    const float peak = max(g.r, max(g.g, g.b));
+    if (peak > 1.0f) {
+        g /= peak;
+    }
+    return lerp(c, g, p_grade);
+}
+
+// Black holes (PostLensCS): light passing near one bends towards it. Around the horizon the sky
+// behind is seen from farther out, squeezed into a ring and stretched along it (a point mass's
+// lens, its Einstein ring at 1.6 horizon radii), fading out by 3.2; a thin photon ring at the
+// horizon's edge, and the horizon a dark gloss: a rim of the light around it on the side the sun
+// stands. Surfaces in front of the hole are untouched.
+float3 scene_bilinear(float2 at)
+{
+    const float2 a = at - 0.5f;
+    const int2 b = int2(floor(a));
+    const float2 f = a - float2(b);
+    return lerp(lerp(scene_at(b), scene_at(b + int2(1, 0)), f.x),
+                lerp(scene_at(b + int2(0, 1)), scene_at(b + int2(1, 1)), f.x), f.y);
+}
+
+float3 black_holes(int2 q, float distance, float3 c)
+{
+    float2 at = float2(q) + 0.5f;
+    float3 add = float3(0.0f, 0.0f, 0.0f);
+    bool bent = false;
+    [unroll] for (uint i = 0u; i < 4u; ++i) {
+        const uint word = p_lens_count[i];
+        const uint base = 8u + i * 8u;
+        if ((word & 0xFFFFFFu) == 0u || f_state[base + 2u] <= 2.0f) {
+            continue;
+        }
+        const float2 centre = float2(f_state[base], f_state[base + 1u]);
+        const float lens = f_state[base + 2u];
+        const float horizon = max(f_state[base + 3u], 1.0f);
+        const float front = f_state[base + 4u];
+        const float strength = float((word >> 24u) & 0x7Fu) / 32.0f;
+        const float2 d = float2(q) + 0.5f - centre;
+        const float r = length(d);
+        if ((word >> 31u) != 0u) {
+            // GALAXY_RT_LENS_VIEW: the lens's size magenta, the horizon found cyan.
+            if (abs(r - lens) < 1.5f) add += float3(1.0f, 0.0f, 1.0f);
+            if (abs(r - horizon) < 1.5f) add += float3(0.0f, 1.0f, 1.0f);
+        }
+        const float reach = 3.2f * horizon;
+        if (r >= reach || r < 0.5f || distance < front) {
+            continue;
+        }
+        const float2 dir = d / r;
+        const float einstein = 1.6f * horizon;
+        const float fade = smoothstep(reach, 0.55f * reach, r) * smoothstep(1.08f * horizon, 1.35f * horizon, r);
+        if (fade > 0.0f) {
+            const float2 from = clamp(centre + dir * (r + strength * fade * einstein * einstein / r),
+                                      p_viewport.xy + 1.0f, p_viewport.xy + p_viewport.zw - 2.0f);
+            // Never a nearer surface pulled in (Mario, a planet before the hole).
+            if (scene_distance(int2(from)) >= front) {
+                at = from;
+                bent = true;
+            }
+        }
+        // The photon ring: light that circled the hole, a thin bright line just outside its horizon,
+        // in the colour of the sky it gathers.
+        const int2 around_at = int2(centre + dir * min(2.2f * horizon, reach));
+        const float3 around = scene_distance(around_at) >= front ? scene_at(around_at) : float3(0.6f, 0.55f, 0.5f);
+        const float ring = exp(-pow((r - 1.04f * horizon) / max(0.035f * horizon, 0.75f), 2.0f));
+        add += ring * strength * 0.55f * lerp(around, float3(1.0f, 0.95f, 0.88f), 0.6f);
+        // The horizon's gloss: a Fresnel rim inside its edge, brightest towards the sun on screen.
+        if (r < horizon) {
+            const float2 sun = p_sun.w > 0.0f && dot(p_sun.xy, p_sun.xy) > 1e-4f ? normalize(float2(p_sun.x, -p_sun.y))
+                                                                                 : float2(-0.6f, -0.8f);
+            const float rim = smoothstep(0.78f * horizon, horizon, r);
+            const float facing = 0.25f + 0.75f * pow(saturate(0.5f + 0.5f * dot(dir, sun)), 3.0f);
+            add += rim * rim * facing * strength * 0.35f * lerp(around, float3(1.0f, 1.0f, 1.0f), 0.3f);
+        }
+    }
+    return (bent ? scene_bilinear(at) : c) + add;
 }
 
 float4 PostPS(float4 position : SV_Position) : SV_Target0
@@ -444,6 +628,9 @@ float4 PostPS(float4 position : SV_Position) : SV_Target0
     }
     float3 c = scene_at(q);
     const float distance = scene_distance(q);
+    if (p_lens_count.x != 0u) {
+        c = black_holes(q, distance, c);
+    }
     // Depth of field: beyond twice the focus the picture softens (gathered from surfaces at least
     // as far, so nothing near bleeds out).
     if (p_dof > 0.0f && f_state[1] != 0.0f) {

@@ -17,6 +17,7 @@
 #include "rt_post_copy_cs.h"
 #include "rt_post_focus_cs.h"
 #include "rt_post_lum_cs.h"
+#include "rt_post_lens_cs.h"
 #include "rt_post_ps.h"
 #include "rt_post_shafts_cs.h"
 #include "rt_post_vs.h"
@@ -134,8 +135,10 @@ struct RtPostConstants {
     float haze_distance;
     float vignette;
     float local[4];      // local exposure: bright and dark regions' contrast scale, mid grey, 0
+    std::uint32_t lens_first[4];  // black holes' lens triangles: first, count | strength x 32 << 24 |
+    std::uint32_t lens_count[4];  // view ring << 31 (0: none)
 };
-static_assert(sizeof(RtPostConstants) == 176u);
+static_assert(sizeof(RtPostConstants) == 208u);
 
 // Mirror cbuffer RtBloom and RtBloomComposite in rt_lighting.hlsl (root constants).
 struct RtBloomConstants {
@@ -190,6 +193,8 @@ constexpr std::uint32_t kAuthoredSpot = 2u;
 // the table's colour.
 constexpr std::uint32_t kGlowTableIntensity = 4u;
 constexpr std::uint32_t kGlowTableColor = 8u;
+// A black hole's lens draw among the glow draws: GlowEmitCS skips it (rt_lighting.hlsl kGlowLens).
+constexpr std::uint32_t kGlowLens = 16u;
 
 // Two values 0-1 as unorm16 (0-65534) in one word, the first in the low half; 0xFFFF where a value
 // is negative (unset).
@@ -735,9 +740,11 @@ bool SceneRayTracer::initialize(ID3D12Device* device, std::uint64_t timestamp_fr
     post_dof_ = std::clamp(env_float("GALAXY_RT_POST_DOF", 0.0f), 0.0f, 32.0f);
     post_grade_ = std::clamp(env_float("GALAXY_RT_POST_GRADE", 1.0f), 0.0f, 1.0f);
     post_rim_ = std::clamp(env_float("GALAXY_RT_POST_RIM", 0.0f), 0.0f, 2.0f);
-    post_haze_ = std::clamp(env_float("GALAXY_RT_POST_HAZE", 0.12f), 0.0f, 1.0f);
-    post_local_bright_ = std::clamp(env_float("GALAXY_RT_LOCAL_BRIGHT", 0.75f), 0.3f, 1.0f);
-    post_local_dark_ = std::clamp(env_float("GALAXY_RT_LOCAL_DARK", 0.92f), 0.3f, 1.0f);
+    post_haze_ = std::clamp(env_float("GALAXY_RT_POST_HAZE", 0.04f), 0.0f, 1.0f);
+    lens_strength_ = std::clamp(env_float("GALAXY_RT_LENS", 1.0f), 0.0f, 3.9f);
+    lens_view_ = env_float("GALAXY_RT_LENS_VIEW", 0.0f) != 0.0f;
+    post_local_bright_ = std::clamp(env_float("GALAXY_RT_LOCAL_BRIGHT", 1.0f), 0.3f, 1.0f);
+    post_local_dark_ = std::clamp(env_float("GALAXY_RT_LOCAL_DARK", 1.0f), 0.3f, 1.0f);
     relief_ = std::clamp(env_float("GALAXY_RT_RELIEF", 3.0f), 0.0f, 64.0f);
     post_haze_distance_ = std::clamp(env_float("GALAXY_RT_POST_HAZE_DISTANCE", 20000.0f), 100.0f, 1.0e6f);
     post_vignette_ = std::clamp(env_float("GALAXY_RT_POST_VIGNETTE", 0.1f), 0.0f, 1.0f);
@@ -758,11 +765,11 @@ bool SceneRayTracer::initialize(ID3D12Device* device, std::uint64_t timestamp_fr
     }
     sun_direction_ = env_triple("GALAXY_RT_SUN", sun_direction_);
     sun_color_ = env_triple("GALAXY_RT_SUN_COLOR", sun_color_);
-    sun_size_ = std::clamp(env_float("GALAXY_RT_SUN_SIZE", 2.5f), 0.0f, 30.0f);
-    key_size_ = std::clamp(env_float("GALAXY_RT_KEY_SIZE", 6.0f), 0.0f, 30.0f);
-    sun_min_elevation_ = std::clamp(env_float("GALAXY_RT_SUN_MIN_ELEVATION", 30.0f), 0.0f, 89.0f);
-    sun_light_ = std::clamp(env_float("GALAXY_RT_SUN_LIGHT", 1.5f), 0.0f, 4.0f);
-    sky_light_ = std::clamp(env_float("GALAXY_RT_SKY_LIGHT", 0.7f), 0.0f, 4.0f);
+    sun_size_ = std::clamp(env_float("GALAXY_RT_SUN_SIZE", 1.0f), 0.0f, 30.0f);
+    key_size_ = std::clamp(env_float("GALAXY_RT_KEY_SIZE", 1.5f), 0.0f, 30.0f);
+    sun_min_elevation_ = std::clamp(env_float("GALAXY_RT_SUN_MIN_ELEVATION", 50.0f), 0.0f, 89.0f);
+    sun_light_ = std::clamp(env_float("GALAXY_RT_SUN_LIGHT", 1.2f), 0.0f, 4.0f);
+    sky_light_ = std::clamp(env_float("GALAXY_RT_SKY_LIGHT", 0.6f), 0.0f, 4.0f);
     if (lighting_enabled_ && !create_lighting_pipelines(color_format)) {
         std::cerr << "[rt] lighting unavailable\n";
         lighting_enabled_ = false;
@@ -837,6 +844,7 @@ void SceneRayTracer::shutdown() noexcept {
     post_shafts_pso_.Reset();
     post_focus_pso_.Reset();
     post_lum_pso_.Reset();
+    post_lens_pso_.Reset();
     post_finish_root_.Reset();
     post_finish_pso_.Reset();
     for (auto& buffer : post_buffers_) buffer.Reset();
@@ -1446,6 +1454,8 @@ void SceneRayTracer::begin_scene() noexcept {
     light_tex_ready_ = false;
     draws_.clear();
     glow_draws_.clear();
+    lens_draws_ = 0u;
+    lens_ready_ = false;
     glow_lights_.clear();
     authored_.clear();
     glow_triangles_ = 0u;
@@ -1470,6 +1480,19 @@ void SceneRayTracer::begin_scene() noexcept {
 
 void SceneRayTracer::add_draw(const RtDraw& draw, const RtDrawInfo& info) {
     const RtMaterial* const material = rt_material(info.rt_material);
+    if ((info.surface & kRtDrawLens) != 0u) {
+        if (glow_open_ && draw.triangle_count != 0u && lens_draws_ < kLensSlots &&
+            glow_triangles_ + draw.triangle_count <= kGlowMaxTriangles) {
+            RtDraw& entry = glow_draws_.emplace_back(draw);
+            entry.first_triangle = glow_triangles_;
+            glow_lights_.push_back({glow_triangles_, draw.triangle_count, 0u, 0.0f, 0.0f, 0.0f, kGlowLens, -1.0f});
+            lens_first_[lens_draws_] = glow_triangles_;
+            lens_count_[lens_draws_] = draw.triangle_count;
+            ++lens_draws_;
+            glow_triangles_ += draw.triangle_count;
+        }
+        return;
+    }
     if ((info.surface & kRtDrawGlow) != 0u) {
         // A glow the material table marks as no light (an atmosphere, a halo) lights nothing.
         if (material != nullptr && material->no_light) {
@@ -1941,7 +1964,8 @@ bool SceneRayTracer::create_lighting_pipelines(DXGI_FORMAT color_format) {
             !compute(post_root_.Get(), g_rt_post_blur_cs, sizeof(g_rt_post_blur_cs), post_blur_pso_) ||
             !compute(post_root_.Get(), g_rt_post_shafts_cs, sizeof(g_rt_post_shafts_cs), post_shafts_pso_) ||
             !compute(post_root_.Get(), g_rt_post_focus_cs, sizeof(g_rt_post_focus_cs), post_focus_pso_) ||
-            !compute(post_root_.Get(), g_rt_post_lum_cs, sizeof(g_rt_post_lum_cs), post_lum_pso_)) {
+            !compute(post_root_.Get(), g_rt_post_lum_cs, sizeof(g_rt_post_lum_cs), post_lum_pso_) ||
+            !compute(post_root_.Get(), g_rt_post_lens_cs, sizeof(g_rt_post_lens_cs), post_lens_pso_)) {
             return false;
         }
         D3D12_DESCRIPTOR_RANGE finish_depth{};
@@ -2276,16 +2300,35 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
         // Sun rays end halfway to the game's sun model (BrightSun, drawn that far out along the
         // sun's direction): it would shadow everything near the camera.
         c.sun_reach = sun_distance > 0.0f ? 0.5f * sun_distance : 1.0e6f;
-        // A sun the game placed low (a BrightSun on the horizon) keeps its compass direction but rises to
-        // at least GALAXY_RT_SUN_MIN_ELEVATION degrees: a level sun leaves half of every planet dark. The
-        // shafts still come from the sun the sky shows (post_prepare).
-        if (sun_present && !keyed && !sun_override_ && sun_min_elevation_ > 0.0f) {
+        // A sun (or key) low over the ground the camera looks at keeps its compass direction but rises to
+        // at least GALAXY_RT_SUN_MIN_ELEVATION degrees above the camera's horizon (its up: the game's
+        // camera rolls with Mario's gravity): a fixed world sun leaves the far side of every small planet
+        // and every rotated one dark (measured sv28: Dusty Dune's sand and all of Good Egg unlit; world Y
+        // is not up there). The shafts still come from the sun the sky shows (post_prepare).
+        if (sun_present && !sun_override_ && sun_min_elevation_ > 0.0f && camera_known_) {
+            const std::array<float, 3> up{camera_[4], camera_[5], camera_[6]};
+            const float up_length = std::sqrt(up[0] * up[0] + up[1] * up[1] + up[2] * up[2]);
             const float length = std::sqrt(l[0] * l[0] + l[1] * l[1] + l[2] * l[2]);
-            const float horizontal = std::sqrt(l[0] * l[0] + l[2] * l[2]);
-            const float min_y = std::sin(sun_min_elevation_ * 3.14159265f / 180.0f);
-            if (length > 1e-6f && horizontal > 1e-6f && l[1] / length < min_y) {
-                const float across = std::sqrt(1.0f - min_y * min_y);
-                l = {l[0] / horizontal * across, min_y, l[2] / horizontal * across};
+            const float min_e = std::sin(sun_min_elevation_ * 3.14159265f / 180.0f);
+            if (length > 1e-6f && up_length > 1e-6f) {
+                std::array<float, 3> u{up[0] / up_length, up[1] / up_length, up[2] / up_length};
+                std::array<float, 3> d{l[0] / length, l[1] / length, l[2] / length};
+                const float e = d[0] * u[0] + d[1] * u[1] + d[2] * u[2];
+                if (e < min_e) {
+                    std::array<float, 3> h{d[0] - e * u[0], d[1] - e * u[1], d[2] - e * u[2]};
+                    float h_length = std::sqrt(h[0] * h[0] + h[1] * h[1] + h[2] * h[2]);
+                    if (h_length < 1e-3f) {
+                        // Straight below: from behind the camera.
+                        h = {camera_[8], camera_[9], camera_[10]};
+                        h_length = std::sqrt(h[0] * h[0] + h[1] * h[1] + h[2] * h[2]);
+                    }
+                    if (h_length > 1e-6f) {
+                        const float across = std::sqrt(1.0f - min_e * min_e);
+                        for (unsigned i = 0; i < 3u; ++i) {
+                            l[i] = h[i] / h_length * across + u[i] * min_e;
+                        }
+                    }
+                }
             }
         }
         std::array<float, 3> sun_color = keyed ? key_color_ : sun_color_;
@@ -2858,6 +2901,7 @@ void SceneRayTracer::capture_glow_lights(ID3D12GraphicsCommandList* list, const 
         list->SetComputeRootUnorderedAccessView(kRootSurfaces, glow_surfaces_->GetGPUVirtualAddress());
         list->Dispatch((glow_triangles_ + 63u) / 64u, 1u, 1u);
         to_state(list, glow_positions_.Get(), glow_positions_state_, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+        lens_ready_ = lens_draws_ != 0u;
     }
     RtEmitConstants c{};
     std::copy(view_.projection.begin(), view_.projection.end(), c.projection);
@@ -2960,7 +3004,8 @@ void SceneRayTracer::post_prepare(ID3D12GraphicsCommandList* list, D3D12_GPU_DES
         post_pixels_ = post_quarter_ = 0u;
         bool ok = true;
         for (unsigned i = 0; ok && i < post_buffers_.size(); ++i) {
-            const std::uint64_t bytes = i == 0u ? pixels * 4u : i == 5u ? 32u : quarter * 4u;  // 6, 7: luminance
+            // 5: the state (focus, core, sky colour; 8 floats per black hole from 8)
+            const std::uint64_t bytes = i == 0u ? pixels * 4u : i == 5u ? 160u : quarter * 4u;  // 6, 7: luminance
             ok = create_buffer(bytes, D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
                                D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, post_buffers_[i], L"rt post");
             post_states_[i] = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
@@ -3006,7 +3051,7 @@ void SceneRayTracer::post_prepare(ID3D12GraphicsCommandList* list, D3D12_GPU_DES
             for (unsigned r = 0; r < 3u; ++r) {
                 c.sun[r] = camera[r * 4u] * sun[0] + camera[r * 4u + 1u] * sun[1] + camera[r * 4u + 2u] * sun[2];
             }
-            c.sun[3] = 0.6f;
+            c.sun[3] = 0.35f;
         }
     }
     c.time = std::chrono::duration<float>(std::chrono::steady_clock::now() - post_epoch_).count();
@@ -3023,6 +3068,13 @@ void SceneRayTracer::post_prepare(ID3D12GraphicsCommandList* list, D3D12_GPU_DES
     c.local[1] = post_local_dark_;
     c.local[2] = post_local_bright_ < 1.0f || post_local_dark_ < 1.0f ? 0.4f : 0.0f;
     c.split = split_ > 0.0f ? view_.viewport[0] + split_ * view_.viewport[2] : -1.0f;
+    if (lens_ready_ && lens_strength_ > 0.0f && post_lens_pso_ && glow_positions_) {
+        const auto strength = static_cast<std::uint32_t>(std::clamp(lens_strength_ * 32.0f, 1.0f, 127.0f));
+        for (std::uint32_t i = 0; i < lens_draws_ && i < kLensSlots; ++i) {
+            c.lens_first[i] = lens_first_[i];
+            c.lens_count[i] = std::min(lens_count_[i], 0xFFFFFFu) | (strength << 24u) | (lens_view_ ? 1u << 31u : 0u);
+        }
+    }
 
     ID3D12Resource* const scene = post_buffers_[0].Get();
     ID3D12Resource* const bright = post_buffers_[1].Get();
@@ -3055,6 +3107,10 @@ void SceneRayTracer::post_prepare(ID3D12GraphicsCommandList* list, D3D12_GPU_DES
     run(post_copy_pso_.Get(), state, scene, 0u, (width + 7u) / 8u, (height + 7u) / 8u, kPassPostCopy);
     run(post_bright_pso_.Get(), state, bright, 0u, (qw + 7u) / 8u, (qh + 7u) / 8u, kPassPostBright);
     run(post_focus_pso_.Get(), state, tmp, 0u, 1u, 1u, kPassPostFocus);
+    if (c.lens_count[0] != 0u) {
+        // Black holes: each lens draw's centre and size on screen, its dark horizon's radius.
+        run(post_lens_pso_.Get(), glow_positions_.Get(), tmp, 0u, kLensSlots, 1u, kPassPostFocus);
+    }
     list->ResourceBarrier(1u, &all_uav);
     // Shafts from the bright part; its blur across, then down.
     to_state(list, bright, post_states_[1], D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);

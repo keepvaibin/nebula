@@ -7174,9 +7174,12 @@ bool GxBackend::begin_rt_batch(const DrawCall& call, RtDrawInfo& info) {
         return false;
     }
     const bool translucent = !rt_geometry_draw();
-    const bool glow = translucent && rt_glow_draw();
-    const bool water = translucent && !glow && rt_water_draw();
-    if (translucent && !glow && !water) {
+    // A black hole's lens (the table's `lens`): captured with the glows for the finish's bending.
+    const RtMaterial* const lens_material = translucent ? rt_material(current_rt_material_) : nullptr;
+    const bool lens = lens_material != nullptr && lens_material->lens && renderer_.rt_glow_open();
+    const bool glow = translucent && !lens && rt_glow_draw();
+    const bool water = translucent && !lens && !glow && rt_water_draw();
+    if (translucent && !glow && !water && !lens) {
         return false;
     }
     const auto projection = [this](unsigned i) {
@@ -7253,7 +7256,9 @@ bool GxBackend::begin_rt_batch(const DrawCall& call, RtDrawInfo& info) {
             (ps_key_.ind_reserved & kEnhancedLit) != 0u && (enhanced_ps_flags_ & kEnhancedRtLighting) != 0u) {
             info.surface |= kRtDrawDelit;
         }
-        if (glow) {
+        if (lens) {
+            info.surface = kRtDrawGlow | kRtDrawLens;
+        } else if (glow) {
             info.surface = kRtDrawGlow;
         } else if (water) {
             const RtMaterial* const fall = rt_material(current_rt_material_);
@@ -7261,6 +7266,13 @@ bool GxBackend::begin_rt_batch(const DrawCall& call, RtDrawInfo& info) {
                            (fall != nullptr && fall->waterfall ? kRtDrawWaterfall : 0u);
         } else {
             info.surface |= static_cast<std::uint32_t>(surface.surface_class) << kRtDrawClassShift;
+            // The table's shadow 0 was read but never applied: Good Egg's planet shells blocked its
+            // sun everywhere (measured sb29: every surface blocked 100-200 units out).
+            // A helper row (an environment map, a mask) speaks for its texture, not for the draw.
+            if (const RtMaterial* shade = rt_material(current_rt_material_);
+                shade != nullptr && !shade->shadow && !shade->helper) {
+                info.surface |= kRtDrawNoShadow;
+            }
         }
     }
     {
