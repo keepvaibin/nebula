@@ -708,6 +708,7 @@ endforeach()
 set(galaxy_rt_post_hlsl "${CMAKE_CURRENT_SOURCE_DIR}/runtime/src/gx/rt_post.hlsl")
 foreach(galaxy_rt_pass post_copy_cs:PostCopyCS:cs_6_5 post_bright_cs:PostBrightCS:cs_6_5
         post_blur_cs:PostBlurCS:cs_6_5 post_shafts_cs:PostShaftsCS:cs_6_5 post_focus_cs:PostFocusCS:cs_6_5
+        post_lum_cs:PostLumCS:cs_6_5
         post_vs:PostVS:vs_6_0 post_ps:PostPS:ps_6_0)
     string(REPLACE ":" ";" galaxy_rt_pair "${galaxy_rt_pass}")
     list(GET galaxy_rt_pair 0 galaxy_rt_name)
