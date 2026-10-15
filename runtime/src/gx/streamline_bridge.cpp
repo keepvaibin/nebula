@@ -428,20 +428,31 @@ std::unique_ptr<TemporalUpscaler> create_dlss_upscaler(unsigned render_width, un
         output_width == 0u || output_height == 0u) {
         return nullptr;
     }
+    // A mode evaluates only render widths inside its range (ultra performance accepts one size), and
+    // the render scales are whole EFB scales: the requested mode, else the next higher-quality one
+    // whose range holds the render width (NGX fails every evaluate outside it).
+    unsigned mode = std::min(quality, 4u);
     if (g_api.dlss_get_optimal_settings != nullptr) {
-        sl::DLSSOptions options{};
-        options.mode = dlss_mode(quality);
-        options.outputWidth = output_width;
-        options.outputHeight = output_height;
-        sl::DLSSOptimalSettings settings{};
-        if (g_api.dlss_get_optimal_settings(options, settings) == sl::Result::eOk) {
+        for (unsigned candidate = mode + 1u; candidate-- > 0u;) {
+            sl::DLSSOptions options{};
+            options.mode = dlss_mode(candidate);
+            options.outputWidth = output_width;
+            options.outputHeight = output_height;
+            sl::DLSSOptimalSettings settings{};
+            if (g_api.dlss_get_optimal_settings(options, settings) != sl::Result::eOk ||
+                render_width < settings.renderWidthMin || render_width > settings.renderWidthMax) {
+                continue;
+            }
             std::cerr << "[dlss] " << render_width << 'x' << render_height << " -> " << output_width << 'x'
-                      << output_height << " (mode range " << settings.renderWidthMin << 'x'
-                      << settings.renderHeightMin << " .. " << settings.renderWidthMax << 'x'
-                      << settings.renderHeightMax << ")\n";
+                      << output_height << " mode " << candidate << " of requested " << quality << " (range "
+                      << settings.renderWidthMin << 'x' << settings.renderHeightMin << " .. "
+                      << settings.renderWidthMax << 'x' << settings.renderHeightMax << ")\n";
+            return std::make_unique<DlssUpscaler>(candidate);
         }
+        std::cerr << "[dlss] " << render_width << 'x' << render_height << " -> " << output_width << 'x'
+                  << output_height << ": outside every mode's range\n";
     }
-    return std::make_unique<DlssUpscaler>(quality);
+    return std::make_unique<DlssUpscaler>(mode);
 }
 
 #else  // !GALAXY_WITH_STREAMLINE
