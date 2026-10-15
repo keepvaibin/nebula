@@ -639,6 +639,20 @@ int main() {
             check_contains(src, "TEXCOORD13", label);
             check_compiles(src, "ps_5_1", label);
         }
+        {
+            // Per-pixel lighting without an environment map: the TEV saturates instead of wrapping.
+            PixelShaderKey k{};
+            std::memset(&k, 0, sizeof(k));
+            k.num_tev_stages = 1;
+            k.num_texgens = 1;
+            k.num_chans = 1;
+            k.alpha_comp0 = 7;
+            k.alpha_comp1 = 7;
+            k.reserved = kPsKeyPerPixelLighting | kPsKeyPplSaturate;
+            const std::string src = gen.generate_ps(k);
+            check_contains(src, "int4 frag_i = clamp(tev_prev_i, 0, 255);", "ps_ppl_saturate");
+            check_compiles(src, "ps_5_1", "ps_ppl_saturate");
+        }
         for (unsigned variant = 0; variant < 2u; ++variant) {
             PixelShaderKey k{};
             std::memset(&k, 0, sizeof(k));

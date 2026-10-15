@@ -900,9 +900,11 @@ void GlowEmitCS(uint3 group : SV_GroupID, uint gi : SV_GroupIndex)
             }
             power = tint / max(luminance(tint), 1e-6f) * (intensity * e_authored_power) * light_size(radius, 64.0f);
         } else if ((flags & kGlowEffect) != 0u) {
-            // The table's particles are effects: their halo shows in the bloom only (sparkles around a Luma
-            // summed to 0.4-0.9e6 per light, 10-22 Lumas: rp13 Observatory [rt-emit]).
-            power = float3(0.0f, 0.0f, 0.0f);
+            // The table's particles are effects: they light what is near them as the picture shows them, at most
+            // a fifth of a Luma (an Octoomba's head light, sparks, a flame; user: anything that glows lights its
+            // surroundings). Uncapped, the sparkles around a Luma summed to 0.4-0.9e6 per light, 10-22 Lumas
+            // (rp13 Observatory [rt-emit]); a fifth of a Luma is 8000.
+            power *= min(1.0f, 0.2f * e_authored_power / max(luminance(power), 1e-6f));
         } else {
             // Any other glow (a lamp's, a model's) lights what is near it as the picture shows it, at most half
             // a Luma: everything that glows lights its surroundings.
