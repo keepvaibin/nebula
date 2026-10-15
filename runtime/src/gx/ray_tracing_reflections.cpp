@@ -261,7 +261,7 @@ bool RtReflections::initialize(ID3D12Device5* device, std::uint64_t timestamp_fr
     local_gain_ = std::clamp(env_float("GALAXY_RT_REFLECT_LOCAL_GAIN", 2.0f), 0.0f, 16.0f);
     rough_cutoff_ = std::clamp(env_float("GALAXY_RT_REFLECT_ROUGH_CUTOFF", 0.65f), 0.05f, 1.2f);
     waves_ = std::clamp(env_float("GALAXY_RT_WAVES", 1.0f), 0.0f, 4.0f);
-    water_cover_ = std::clamp(env_float("GALAXY_RT_WATER_COVER", 0.75f), 0.0f, 1.0f);
+    water_cover_ = std::clamp(env_float("GALAXY_RT_WATER_COVER", 1.0f), 0.0f, 1.0f);
     foam_ = std::clamp(env_float("GALAXY_RT_WATER_FOAM", 0.6f), 0.0f, 2.0f);
     shallow_caustics_ = std::clamp(env_float("GALAXY_RT_WATER_SHALLOW_CAUSTICS", 0.6f), 0.0f, 4.0f);
     {
