@@ -376,6 +376,11 @@ void ReflectMemoryCS(uint3 id : SV_DispatchThreadID)
     const uint4 stored = g_memory[index];
     float4 memory = unpack_rgb_w(stored.xy);
     float distance = asfloat(stored.z);
+    // A new stage (g_flags bit 8): nothing remembered (the last stage's colours showed in reflections).
+    if ((g_flags & 256u) != 0u) {
+        memory = float4(0.0f, 0.0f, 0.0f, 0.0f);
+        distance = kSkyDistance;
+    }
     float3 sum = float3(0.0f, 0.0f, 0.0f);
     float nearest = kSkyDistance;
     float looks = 0.0f;
@@ -980,7 +985,10 @@ void ReflectTraceCS(uint3 id : SV_DispatchThreadID, uint gi : SV_GroupIndex)
 // The water pass's state after its samples in g_under (WaterTraceCS thread 0): [0] the surface's plane
 // (its offset along its normal, eye space), camera under water (1); [1] the surface's normal out of the water,
 // frame; [2-7] eye to world (3 rows); [8] the sun's light (11-11-10), shafts gain.
-static const uint kUnderState = 9u;
+static const uint kUnderState = 13u;
+// [9-12] the water pass's sums of the game's water colour (8-bit units) on its surface samples: deep
+// water (r g, b n), all of it (r g, b n); zeroed before the pass (RtReflections::trace_water).
+static const uint kUnderTint = 9u;
 
 // The surface's waves as travelling sines (world units, frames): their height's curvature at `uv`
 // focuses the sunlight crossing it, the light below as 1 / (1 + depth x curvature).
@@ -1052,6 +1060,8 @@ void write_underwater_state()
 // under the water (no refraction).
 static const uint kWaterSurface = 5u;
 static const uint kWaterBelow = 6u;
+// The share of the game's drawn water (its tiled texture) the traced water replaces.
+static const float kWaterCover = 0.85f;
 // Clear dielectrics (rt_surfaces.h RtSurfaceClass::Crystal): crystals, ice, gems, glass, bubbles.
 static const uint kCrystal = 7u;
 
@@ -1081,22 +1091,56 @@ float3 rippled(int2 q, float3 n)
 // RtDraw.flags bit 13 (kRtDrawWaterfall): falling water (its streaks run down it).
 static const uint kWaterfallFlag = 8192u;
 
-// The water's procedural waves (world units, frames): four travelling waves' height slopes along its
-// plane basis (uv). `flow`: a waterfall, uv.x across and uv.y down its fall: fine streaks across,
-// travelling fast down.
+// Value noise in 3D (hashed lattice corners, smooth interpolation) and its fractal sum.
+float wave_hash(float3 p)
+{
+    p = frac(p * 0.3183099f + 0.1f);
+    p *= 17.0f;
+    return frac(p.x * p.y * p.z * (p.x + p.y + p.z));
+}
+
+float wave_noise(float3 x)
+{
+    const float3 i = floor(x);
+    const float3 f = x - i;
+    const float3 u = f * f * (3.0f - 2.0f * f);
+    return lerp(lerp(lerp(wave_hash(i), wave_hash(i + float3(1, 0, 0)), u.x),
+                     lerp(wave_hash(i + float3(0, 1, 0)), wave_hash(i + float3(1, 1, 0)), u.x), u.y),
+                lerp(lerp(wave_hash(i + float3(0, 0, 1)), wave_hash(i + float3(1, 0, 1)), u.x),
+                     lerp(wave_hash(i + float3(0, 1, 1)), wave_hash(i + float3(1, 1, 1)), u.x), u.y), u.z);
+}
+
+// The water's height (world units) at plane point uv and time t: two fractal layers drifting over
+// time, no repeating pattern.
+float wave_height(float2 uv, float t)
+{
+    float3 x = float3(uv * 0.010f, t);
+    float h = 0.0f;
+    float a = 6.0f;
+    [unroll] for (uint k = 0u; k < 3u; ++k) {
+        h += wave_noise(x) * a;
+        x = x * float3(2.07f, 2.07f, 1.5f) + float3(13.7f, 4.1f, 0.0f);
+        a *= 0.5f;
+    }
+    return h;
+}
+
+// The water's procedural waves (world units, frames): its height's slopes along its plane basis (uv).
+// `flow`: a waterfall, uv.x across and uv.y down its fall: fine streaks across, travelling fast down.
 float2 wave_slope(float2 uv, float frame, bool flow)
 {
+    if (!flow) {
+        const float t = frame * 0.02f;
+        const float e = 6.0f;
+        return float2(wave_height(uv + float2(e, 0.0f), t) - wave_height(uv - float2(e, 0.0f), t),
+                      wave_height(uv + float2(0.0f, e), t) - wave_height(uv - float2(0.0f, e), t)) / (2.0f * e);
+    }
     float4 kx, ky, speed, amp;
-    if (flow) {
+    {
         kx = float4(0.21f, -0.13f, 0.34f, -0.08f);
         ky = float4(0.020f, 0.031f, 0.015f, 0.026f);
         speed = float4(-0.9f, -1.3f, -1.1f, -0.7f);
         amp = float4(0.35f, 0.3f, 0.2f, 0.45f);
-    } else {
-        kx = float4(0.045f, -0.031f, 0.018f, -0.067f);
-        ky = float4(0.012f, 0.039f, -0.052f, -0.021f);
-        speed = float4(0.05f, 0.043f, 0.058f, 0.07f);
-        amp = float4(1.2f, 1.0f, 1.4f, 0.5f);
     }
     const float4 c = cos(kx * uv.x + ky * uv.y + speed * frame) * amp;
     return float2(dot(c, kx), dot(c, ky));
@@ -1153,6 +1197,10 @@ void WaterTraceCS(uint3 id : SV_DispatchThreadID)
     bool water = false, reflected = false;
     uint source = 0u;
     bool mapped = false;
+    // The game's water colour on this surface sample (8-bit units), deep water or not, for the tint.
+    uint3 tint_rgb = uint3(0u, 0u, 0u);
+    uint tint_deep = 0u;
+    uint tint_all = 0u;
     if (active && inside(g_viewport, float2(q) + 0.5f)) {
         const float depth = g_efb_depth.Load(int3(q, 0));
         const float3 through = pixel_direction(g_projection, g_viewport, float2(q) + 0.5f);
@@ -1220,6 +1268,11 @@ void WaterTraceCS(uint3 id : SV_DispatchThreadID)
             info.x = pack_normal(n);
             info.y = asuint(hit.z);
             info.z = pack_material(surface, params.y, 1.0f - emitter, sqrt(params.x), params.w);
+            if (surface == kWaterSurface && emitter < 1.0f) {
+                tint_rgb = uint3(round(saturate(base) * 255.0f));
+                tint_all = 1u;
+                tint_deep = floor_distance - query.CommittedRayT() > 300.0f ? 1u : 0u;
+            }
             // Under the water its surfaces (and a volume's walls) reflect nothing: the reflection of
             // the bright world above only washed the view out (measured: Beach Bowl underwater).
             if (params.y > 0.0f && emitter < 1.0f && !below) {
@@ -1232,6 +1285,23 @@ void WaterTraceCS(uint3 id : SV_DispatchThreadID)
                 mapped = r.mapped;
                 info.w = asuint(r.distance);
             }
+        }
+    }
+    {
+        const uint3 deep_sum = WaveActiveSum(tint_rgb * tint_deep);
+        const uint deep_n = WaveActiveSum(tint_deep);
+        const uint3 all_sum = WaveActiveSum(tint_rgb);
+        const uint all_n = WaveActiveSum(tint_all);
+        if (WaveIsFirstLane() && all_n != 0u) {
+            const uint t = g_sample_size.x * g_sample_size.y + kUnderTint;
+            InterlockedAdd(g_under[t].x, deep_sum.r);
+            InterlockedAdd(g_under[t].y, deep_sum.g);
+            InterlockedAdd(g_under[t + 1u].x, deep_sum.b);
+            InterlockedAdd(g_under[t + 1u].y, deep_n);
+            InterlockedAdd(g_under[t + 2u].x, all_sum.r);
+            InterlockedAdd(g_under[t + 2u].y, all_sum.g);
+            InterlockedAdd(g_under[t + 3u].x, all_sum.b);
+            InterlockedAdd(g_under[t + 3u].y, all_n);
         }
     }
     count(16u, active);
@@ -1921,16 +1991,26 @@ CompositeOut WaterCompositePS(float4 position : SV_Position)
     if (b.weight < 1e-3f || b.surface < 1e-3f) {
         discard;
     }
-    // The water's body over what lies under it: the floor along the refracted ray (as deep below the
-    // surface as straight on), lit by the sun the ripples focus, seen through the water's
-    // transmittance T along that path; the game's water colour (its tint) for the light the water
-    // scatters, deepening towards blue with the path. Shallows show the seabed, depth its colour.
+    // The water's body: the seabed along the refracted ray (as deep below the surface as straight on), lit
+    // by the sun the waves focus, seen through the water's transmittance T along that path, and the
+    // water's own colour for the light it scatters (1 - T): the game's water averaged over the frame (its
+    // deep water where it has some), so the tiled texture it draws gives way (kWaterCover of it) to the
+    // traced water: shallows show the seabed, depth the water's colour, reflections and glints over it.
     float3 under_add = float3(0.0f, 0.0f, 0.0f);
     float3 under_keep = float3(1.0f, 1.0f, 1.0f);
     const float3 n = normalize(b.normal);
     if (m_water.w > 0.0f && b.nearest_class == kWaterSurface) {
         // Seen edge-on (a side wall, the lip) the body would only band: it fades out there.
         const float share = m_water.w * b.surface / b.weight * smoothstep(0.15f, 0.4f, dot(n, -normalize(p)));
+        const uint tint_at = m_sample_size.x * m_sample_size.y + kUnderTint;
+        const uint2 d0 = m_under[tint_at];
+        const uint2 d1 = m_under[tint_at + 1u];
+        const uint2 a0 = m_under[tint_at + 2u];
+        const uint2 a1 = m_under[tint_at + 3u];
+        const bool deep_known = d1.y >= 64u;
+        const bool tint_known = deep_known || a1.y >= 64u;
+        const float3 tint = deep_known ? float3(d0.x, d0.y, d1.x) / (255.0f * float(d1.y))
+                                       : float3(a0.x, a0.y, a1.x) / (255.0f * float(max(a1.y, 1u)));
         float floor_z;
         float floor_found;
         under_at(pixel, p.z - 1.0f, floor_z, floor_found);
@@ -1958,10 +2038,13 @@ CompositeOut WaterCompositePS(float4 position : SV_Position)
             path = max(length(floor_at - p), 0.0f);
             seen = floor_colour * caustic(floor_at, p, n);
         }
-        // Only where the seabed is seen (the shallows show it, deepening with the water above it);
-        // open water keeps the game's own colour (a body over nothing only darkened it), never below
-        // 0.6 of it.
-        if (floor_z != 0.0f) {
+        if (tint_known) {
+            const float3 through = floor_z != 0.0f ? exp(-m_water.rgb * path) : float3(0.0f, 0.0f, 0.0f);
+            const float cover = kWaterCover * share;
+            under_add = (seen * through + tint * (1.0f - through)) * cover;
+            under_keep = (1.0f - cover).xxx;
+        } else if (floor_z != 0.0f) {
+            // No tint yet (the first frame): the seabed where seen over the game's own colour.
             const float3 through = exp(-m_water.rgb * path);
             const float3 deep = max(exp(-0.35f * m_water.rgb * path), float3(0.6f, 0.6f, 0.6f));
             under_add = seen * through * share;
@@ -2056,12 +2139,12 @@ CompositeOut UnderwaterPS(float4 position : SV_Position)
         add += sun * sum * (span / 8.0f) * (shafts * 2e-4f * phase);
     }
     // The water between the camera and what the pixel shows: its light fades with the depth of water
-    // it crosses and the light the water scatters (its teal) takes its place. Clear shallow water: about
-    // a sixth of the lake body's absorption (the game's own view under water stays readable).
+    // it crosses and the light the water scatters (its teal) takes its place: murky with distance, the
+    // near seabed readable (0.22 of the lake body's absorption; 0.35 was a little too dark).
     {
         const float span = sky ? 4000.0f : length(p);
-        const float3 t = exp(-m_water.rgb * span * 0.06f);
-        const float3 scatter = (sun * 0.25f + 0.12f) * float3(0.10f, 0.50f, 0.55f);
+        const float3 t = exp(-m_water.rgb * span * 0.22f);
+        const float3 scatter = (sun * 0.3f + 0.1f) * float3(0.08f, 0.46f, 0.54f);
         add = add * t + scatter * (1.0f - t);
         keep *= t;
     }

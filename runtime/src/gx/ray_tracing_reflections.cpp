@@ -247,7 +247,7 @@ bool RtReflections::initialize(ID3D12Device5* device, std::uint64_t timestamp_fr
     lobe_ = std::clamp(env_float("GALAXY_RT_REFLECT_LOBE", 0.85f), 0.05f, 1.0f);
     fallback_ = std::clamp(env_float("GALAXY_RT_REFLECT_FALLBACK", 0.0f), 0.0f, 1.0f);
     memory_fade_ = std::clamp(env_float("GALAXY_RT_REFLECT_MEMORY_FADE", 0.99f), 0.0f, 1.0f);
-    ripple_ = std::clamp(env_float("GALAXY_RT_WATER_RIPPLE", 0.15f), 0.0f, 4.0f);
+    ripple_ = std::clamp(env_float("GALAXY_RT_WATER_RIPPLE", 0.0f), 0.0f, 4.0f);
     probe_ = std::clamp(env_float("GALAXY_RT_REFLECT_PROBE", 0.6f), 0.0f, 1.0f);
     clear_ = std::clamp(env_float("GALAXY_RT_WATER_CLEAR", 1.0f), 0.0f, 1.0f);
     caustics_ = std::clamp(env_float("GALAXY_RT_WATER_CAUSTICS", 1.0f), 0.0f, 4.0f);
@@ -257,7 +257,7 @@ bool RtReflections::initialize(ID3D12Device5* device, std::uint64_t timestamp_fr
     metal_sky_ = std::clamp(env_float("GALAXY_RT_REFLECT_METAL_SKY", 0.3f), 0.0f, 1.0f);
     local_gain_ = std::clamp(env_float("GALAXY_RT_REFLECT_LOCAL_GAIN", 2.0f), 0.0f, 16.0f);
     rough_cutoff_ = std::clamp(env_float("GALAXY_RT_REFLECT_ROUGH_CUTOFF", 0.65f), 0.05f, 1.2f);
-    waves_ = std::clamp(env_float("GALAXY_RT_WAVES", 0.0f), 0.0f, 4.0f);
+    waves_ = std::clamp(env_float("GALAXY_RT_WAVES", 1.0f), 0.0f, 4.0f);
     {
         // Per 1000 eye units (about 10 m of the game's world): red goes first, then green.
         absorb_ = {25.0f, 4.5f, 2.6f};
@@ -800,7 +800,8 @@ void RtReflections::trace(ID3D12GraphicsCommandList* list, const RtReflectScene&
     }
     RtReflectScene opaque = scene;
     opaque.water_tlas = 0u;
-    fill_constants(opaque, main_, 0u, constants_cpu);
+    // A new stage: the environment memory starts over (rt_reflections.hlsl ReflectMemoryCS).
+    fill_constants(opaque, main_, std::exchange(memory_reset_, false) ? 256u : 0u, constants_cpu);
 
     const unsigned result = static_cast<unsigned>(serial_++ % kResultSlots);
     const bool record = !pending_[result].pending;
@@ -859,6 +860,12 @@ void RtReflections::trace_water(ID3D12GraphicsCommandList* list, const RtReflect
     }
     // The water pass: the EFB colour is the lit picture.
     fill_constants(scene, water_, 32u, constants_cpu);
+    {
+        // The tint sums (rt_reflections.hlsl kUnderTint) start at zero.
+        const std::uint64_t n = static_cast<std::uint64_t>(scene.sample_width) * scene.sample_height;
+        to_state(list, under_[slot], D3D12_RESOURCE_STATE_COPY_DEST);
+        list->CopyBufferRegion(under_[slot].resource.Get(), (n + kUnderTint) * 8u, stats_zero_.Get(), 0u, 32u);
+    }
     const bool timed = result >= 0 && timestamps_;
     const auto r = static_cast<unsigned>(result);
     if (timed) {

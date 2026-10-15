@@ -96,6 +96,8 @@ public:
                D3D12_GPU_VIRTUAL_ADDRESS constants_gpu, D3D12_GPU_DESCRIPTOR_HANDLE color_depth);
     // The lighting of `slot` was not traced: neither are its reflections.
     void invalidate(unsigned slot) noexcept;
+    // A new stage: the environment memory starts over at the next trace.
+    void reset_memory() noexcept { memory_reset_ = true; }
     // Blends slot `slot`'s reflections into the EFB colour `target` at the depth `depth_srv` holds
     // (PIXEL_SHADER_RESOURCE, in the bound heap). `reproject`: per slot the traced frame's eye
     // position from the sub-frame's (3 float4 rows), 0 in the traced frame. Pixels left of `split`
@@ -228,7 +230,8 @@ private:
     // Per result slot, per sample the picture under the translucent phases (the water's refraction),
     // then the water pass's state (rt_reflections.hlsl kUnderState entries).
     std::array<Buffer, kSlots> under_{};
-    static constexpr std::uint32_t kUnderState = 9u;
+    static constexpr std::uint32_t kUnderState = 13u;
+    static constexpr std::uint32_t kUnderTint = 9u;   // rt_reflections.hlsl kUnderTint (4 entries)
     Buffer memory_{};
     Buffer stats_{};
     Microsoft::WRL::ComPtr<ID3D12Resource> stats_zero_;
@@ -270,7 +273,8 @@ private:
     float sky_average_ = 0.15f; // GALAXY_RT_REFLECT_SKY_AVERAGE: confidence of the sky's average colour
     float metal_sky_ = 0.3f;    // GALAXY_RT_REFLECT_METAL_SKY: metal's share of reflected sky over its env map
     float local_gain_ = 2.0f;   // GALAXY_RT_REFLECT_LOCAL_GAIN: the point and glow lights' highlights
-    float waves_ = 0.0f;          // GALAXY_RT_WAVES: slope of the water's procedural waves (0: none)
+    bool memory_reset_ = false;
+    float waves_ = 1.0f;          // GALAXY_RT_WAVES: slope of the water's procedural waves (0: none)
     float rough_cutoff_ = 0.65f; // GALAXY_RT_REFLECT_ROUGH_CUTOFF: the material table's roughness above
                                  // which a surface traces no reflection
 

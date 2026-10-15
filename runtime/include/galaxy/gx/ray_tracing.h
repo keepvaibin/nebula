@@ -329,6 +329,8 @@ private:
         kPassPostBlur,
         kPassPostFinish,
         kPassBloom,
+        kPassLights,        // inside the capture: the glow and table lights found and merged
+        kPassBloomBlur,     // inside the capture: the bloom's downsample and blurs
         kPassCount
     };
     struct PassEntry {

@@ -1339,7 +1339,10 @@ void SceneRayTracer::report() {
         const auto& ms = window_.pass_ms;
         const auto& n = window_.passes;
         double passes_ms = 0.0;
-        for (const double value : ms) passes_ms += value;
+        // The capture's inner passes (lights, bloom blur) are inside its own time.
+        for (unsigned p = 0; p < kPassCount; ++p) {
+            if (p != kPassLights && p != kPassBloomBlur) passes_ms += ms[p];
+        }
         const double scene_ms = per(window_.build_ms, window_.timed) + per(window_.light_ms, window_.timed) +
                                 per(passes_ms, window_.scenes);
         const auto calls = [&](Pass pass) { return per(static_cast<double>(n[pass]), window_.scenes); };
@@ -1348,12 +1351,14 @@ void SceneRayTracer::report() {
                       "[rt-pass] scenes=%llu geometry-ms=%.3f geometry-flushes=%.2f composite-ms=%.3f "
                       "composites=%.2f glow-base-ms=%.3f capture-ms=%.3f captures=%.2f post-copy-ms=%.3f "
                       "post-bright-ms=%.3f post-focus-ms=%.3f post-shafts-ms=%.3f post-blur-ms=%.3f "
-                      "post-finish-ms=%.3f posts=%.2f bloom-ms=%.3f blooms=%.2f dropped=%llu gpu-ms-per-scene=%.3f\n",
+                      "post-finish-ms=%.3f posts=%.2f bloom-ms=%.3f blooms=%.2f lights-ms=%.3f bloom-blur-ms=%.3f "
+                      "dropped=%llu gpu-ms-per-scene=%.3f\n",
                       static_cast<unsigned long long>(window_.scenes), per(ms[kPassGeometry], window_.scenes),
                       calls(kPassGeometry), call_ms(kPassComposite), calls(kPassComposite), call_ms(kPassGlowBase),
                       call_ms(kPassCapture), calls(kPassCapture), call_ms(kPassPostCopy), call_ms(kPassPostBright),
                       call_ms(kPassPostFocus), call_ms(kPassPostShafts), call_ms(kPassPostBlur),
                       call_ms(kPassPostFinish), calls(kPassPostFinish), call_ms(kPassBloom), calls(kPassBloom),
+                      call_ms(kPassLights), call_ms(kPassBloomBlur),
                       static_cast<unsigned long long>(window_.passes_dropped), scene_ms);
         std::cerr << line;
     }
@@ -1569,8 +1574,10 @@ bool SceneRayTracer::sky_key(std::array<float, 3>& world, float& strength) const
 }
 
 void SceneRayTracer::reset_sky() noexcept {
-    // Another stage: its exposure starts from 1, not from the last stage's.
+    // Another stage: its exposure starts from 1, not from the last stage's; its reflections remember
+    // nothing of the last stage.
     exposure_reset_ = true;
+    reflections_.reset_memory();
     sky_map_.reset();
     sky_sun_ = {};
     sky_key_ = {};
@@ -2675,8 +2682,10 @@ void SceneRayTracer::capture_picture(ID3D12GraphicsCommandList* list, const RtSo
     list->SetPipelineState(sky_state_pso_.Get());
     list->Dispatch(1u, 1u, 1u);
     if (emitters_active() && emit_merge_pso_ && camera_known_) {
+        const int lights_timed = begin_pass(list);
         capture_glow_lights(list, sources, allocate, allocate_context, color_depth_table, width, height, factor,
                             glow);
+        end_pass(list, lights_timed, kPassLights);
     }
     bloom_slot_ = -1;
     if (glow && bloom_strength_ > 0.0f && bloom_blur_pso_ && light_slot_ >= 0) {
@@ -2702,6 +2711,7 @@ void SceneRayTracer::capture_picture(ID3D12GraphicsCommandList* list, const RtSo
             bloom_entries_ = ready ? entries : 0u;
         }
         if (ready && slot < bloom_.size()) {
+            const int blur_timed = begin_pass(list);
             RtBloomConstants b{};
             b.size[0] = bw;
             b.size[1] = bh;
@@ -2736,6 +2746,7 @@ void SceneRayTracer::capture_picture(ID3D12GraphicsCommandList* list, const RtSo
                 list->Dispatch((bw + 7u) / 8u, (bh + 7u) / 8u, 1u);
             }
             to_state(list, bloom_[slot].Get(), bloom_state_[slot], kLightRead);
+            end_pass(list, blur_timed, kPassBloomBlur);
             bloom_size_[slot] = {bw, bh, width, height};
             bloom_slot_ = light_slot_;
         }
