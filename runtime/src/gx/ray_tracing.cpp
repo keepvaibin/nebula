@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #include "galaxy/gx/ray_tracing.h"
 #include "galaxy/gx/rt_materials.h"
+#include "galaxy/gx/gx_bitfields.h"
 
 #include <bit>
 #include "galaxy/gx_d3d12.h"
@@ -1578,9 +1579,15 @@ void SceneRayTracer::add_draw(const RtDraw& draw, const RtDrawInfo& info) {
         }
     }
     const float relief = material != nullptr && !material->particle ? material->relief : 0.0f;
+    // GX light 0 as the game lights the draw (not attenuated: a direction from its position).
+    const XfChannelCtrl channel = decode_xf_channel_ctrl(info.channel);
+    const bool light0 = info.light_index[0] == 0u && (channel.atten_func == 0u || channel.atten_func == 2u);
+    const std::uint32_t light_kind = !light0 ? 0u : channel.diffuse_func == 0u ? 1u : 2u;
     draw_colors_.push_back({info.ambient, info.light_index[0] == 0u ? info.light_color[0] : 0u, emission,
                             std::bit_cast<std::uint32_t>(intensity), surface, info.material, flags,
-                            std::bit_cast<std::uint32_t>(relief)});
+                            std::bit_cast<std::uint32_t>(relief), std::bit_cast<std::uint32_t>(info.light[0][0]),
+                            std::bit_cast<std::uint32_t>(info.light[0][1]),
+                            std::bit_cast<std::uint32_t>(info.light[0][2]), light_kind});
     if (dump_scene_ != 0u && scene_serial_ == dump_scene_) {
         infos_.push_back(info);
     }

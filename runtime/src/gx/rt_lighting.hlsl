@@ -108,8 +108,9 @@ static const uint kEmitArea = 2u;       // low 2 bits: 1 point light, 2 area lig
 static const uint kEmitNamed = 4u;      // the table names this draw's texture
 static const uint kEmitNoLight = 8u;    // never a light
 // g_draws records (SceneRayTracer::draw_colors_): ambient, GX light 0 colour, emission, intensity,
-// roughness and metalness, material colour, flags, spare.
-static const uint kDrawStride = 32u;
+// roughness and metalness, material colour, flags, relief; GX light 0's eye position (3 floats), its kind
+// (0 none, 1 no facing term, 2 n.l).
+static const uint kDrawStride = 48u;
 // g_draws word 6: the table gives the light source's own glow (in place of its intensity), unorm16 of
 // glow / kDrawGlowScale in the high half.
 static const uint kDrawTableGlow = 2u;
@@ -128,7 +129,7 @@ static const float kDayOcclusion = 0.5f;
 static const float kDayTint = 0.25f;
 // Daylight's level: the art at 0.8 of the game's brightness (user: sand, grass and trees darker and
 // richer, never overexposed; the sky keeps the game's, so the land reads deep against it).
-static const float kDayLevel = 0.75f;
+static const float kDayLevel = 0.85f;
 static const float kLitKnee = 0.8f;
 // The share of the light the film shoulder rolls off (lava, fire, lamps, glints) that joins the
 // bloom (CaptureCS).
@@ -2259,15 +2260,25 @@ void SpatialBCS(uint3 id : SV_DispatchThreadID)
             const float sky_l = luminance(light.sky);
             const float ao = 1.0f - kDayOcclusion * (1.0f - saturate(sky_l));
             const float3 tint = lerp(float3(1.0f, 1.0f, 1.0f), light.sky / max(sky_l, 0.05f), kDayTint * (1.0f - vis));
-            // A de-lit draw (characters, items: their GX light averaged at a mean facing of 0.55, shader_gen)
-            // back at the level the game lights it from the front: its ambient plus its light 0 (measured
-            // wb33: Beach Bowl's seaweed 115,111,36 -> 27,52,25 against the art).
+            // A de-lit draw (its GX light averaged at a mean facing of 0.55, shader_gen) back at the game's own
+            // shading of this face: its ambient plus its light 0 at the face's facing to it, clamped as GX's
+            // accumulator. (Its full-facing level on every face raised the faces the game shades x1.18-1.20,
+            // measured fc43.) Its facing is then the game's: no faint-sun form on it.
             float3 level = float3(1.0f, 1.0f, 1.0f);
+            float day_form = form;
             if (delit) {
-                const uint2 colors = g_draws.Load2(min(draw_flags >> 16u, max(g_draw_count, 1u) - 1u) * kDrawStride);
+                const uint record = min(draw_flags >> 16u, max(g_draw_count, 1u) - 1u) * kDrawStride;
+                const uint2 colors = g_draws.Load2(record);
                 const float3 a = rgb8(colors.x);
                 const float3 k = rgb8(colors.y);
-                level = clamp(min(a + k, 1.0f) / max(min(a + 0.55f * k, 1.0f), 0.05f), 1.0f, 2.0f);
+                const uint kind = g_draws.Load(record + 44u);
+                if (kind != 0u) {
+                    const float3 to_light = asfloat(g_draws.Load3(record + 32u)) - sample_position(id.xy, z);
+                    const float facing = kind == 1u ? 1.0f : saturate(dot(n, to_light * rsqrt(max(dot(to_light, to_light), 1e-6f))));
+                    const float3 averaged = max(min(a + (kind == 1u ? 1.0f : 0.55f) * k, 1.0f), 0.05f);
+                    level = clamp(min(a + k * facing, 1.0f) / averaged, 0.0f, 2.0f);
+                    day_form = 1.0f;
+                }
             }
             // By day the lights add a third of their light (daylight swamps it; the game's glow sprites
             // found 56-192 lights in Honeyhive and lifted it to 1.23 of the game, measured fc33), and nothing
@@ -2278,9 +2289,9 @@ void SpatialBCS(uint3 id : SV_DispatchThreadID)
             // (sunlit contacts keep their direct light).
             const float sunlit = vis * saturate(shaped / 0.5f);
             const float day_contact = 1.0f - g_ao.y * (1.0f - contact) * (1.0f - 0.5f * sunlit);
-            const float3 day_m = min(shadow * form * ao * day_contact * tint * level + day_points, 1.1f * level) * kDayLevel;
+            const float3 day_m = min(shadow * day_form * ao * day_contact * tint * level + day_points, 1.1f * level) * kDayLevel;
             day_terms = float3(vis, shaped, saturate(sky_l));
-            const float3 day_open = min((shadow * form) * level + day_points, 1.1f * level) * kDayLevel;
+            const float3 day_open = min((shadow * day_form) * level + day_points, 1.1f * level) * kDayLevel;
             lighting = lerp(lighting, day_m, day_mix);
             open = lerp(open, day_open, day_mix);
         }

@@ -425,8 +425,9 @@ private:
     // Per draw of the open scene (RtDraw.flags bits 16-31; rt_lighting.hlsl g_draws, kDrawStride):
     // ambient and GX light 0 colours (RGBA8), the material table's emission (RGBA8 with its kind)
     // and intensity; roughness and metalness (unorm16 pair, 0xFFFF: the class's), the material colour
-    // register (RGBA8), flags (kDrawTableTint), a spare word.
-    std::vector<std::array<std::uint32_t, 8>> draw_colors_;
+    // register (RGBA8), flags (kDrawTableTint), the relief; GX light 0's eye-space position (3 floats) and
+    // its kind (0: none or attenuated, 1: no facing term, 2: n.l) for the day model's game shading.
+    std::vector<std::array<std::uint32_t, 12>> draw_colors_;
     // This scene's draw table in the frame's upload ring (trace_lighting), for its reflections; 0: none.
     D3D12_GPU_VIRTUAL_ADDRESS draw_table_ = 0;
     std::array<ResultSlot, kResultSlots> slots_{};

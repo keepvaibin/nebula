@@ -836,7 +836,7 @@ float4 draw_material(uint surface_class, uint draw, out float roughness)
     if ((g_flags & 128u) == 0u || draw >= g_draw_count) {
         return params;
     }
-    const uint words = g_draws.Load(draw * 32u + 16u);
+    const uint words = g_draws.Load(draw * 48u + 16u);
     const uint r16 = words & 0xFFFFu;
     const uint m16 = words >> 16u;
     if (m16 != 0xFFFFu) {
