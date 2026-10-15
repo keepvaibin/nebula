@@ -186,9 +186,11 @@ namespace Nebula.Launcher
         public bool GeneratedMipmaps = false, PerPixelLighting = false, EnhancedLighting = false;
         public bool HudOutputResolution = false, RayTracing = false;
         // Ray tracing quality (config rt_quality): 0 medium (one sample per 2 x 2 pixels of the internal
-        // resolution), 1 high (every internal pixel, more rays, reflections shaded where they land).
+        // resolution), 1 high (every internal pixel, more rays, reflections shaded where they land), 2 low (one
+        // per 3 x 3, single rays: RTX 3050-class cards). Shown Low, Medium, High (RtQualityOrder).
         public int RtQuality = 1;
-        public static readonly string[] RtQualities = { "Medium (quarter-res)", "High (full-res)" };
+        public static readonly string[] RtQualities = { "Low (1/3 res)", "Medium (1/2 res)", "High (full res)" };
+        public static readonly int[] RtQualityOrder = { 2, 0, 1 };
 
         public static string ConfigPath { get { return Path.Combine(NebulaPaths.DataRoot, "config.ini"); } }
 
@@ -265,7 +267,9 @@ namespace Nebula.Launcher
             string quality;
             if (values.TryGetValue("rt_quality", out quality))
                 settings.RtQuality = quality.Trim() == "0" ||
-                                     quality.Trim().Equals("medium", StringComparison.OrdinalIgnoreCase) ? 0 : 1;
+                                     quality.Trim().Equals("medium", StringComparison.OrdinalIgnoreCase) ? 0
+                                   : quality.Trim() == "2" ||
+                                     quality.Trim().Equals("low", StringComparison.OrdinalIgnoreCase) ? 2 : 1;
             return settings;
         }
 
@@ -298,7 +302,7 @@ namespace Nebula.Launcher
             Set(lines, "enhanced_lighting", EnhancedLighting ? 1 : 0);
             Set(lines, "hud_output_resolution", HudOutputResolution ? 1 : 0);
             Set(lines, "ray_tracing_enabled", RayTracing ? 1 : 0);
-            SetText(lines, "rt_quality", RtQuality == 0 ? "medium" : "high");
+            SetText(lines, "rt_quality", RtQuality == 0 ? "medium" : RtQuality == 2 ? "low" : "high");
             Directory.CreateDirectory(Path.GetDirectoryName(ConfigPath));
             string temp = ConfigPath + ".tmp";
             File.WriteAllText(temp, string.Join("\n", lines) + "\n", new UTF8Encoding(false));

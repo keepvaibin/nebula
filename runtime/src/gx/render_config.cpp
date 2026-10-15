@@ -200,7 +200,7 @@ static void apply_kv(RenderConfig& cfg, const char* key, const char* val) {
     }
     else if (std::strcmp(key, "ray_tracing_enabled") == 0) cfg.ray_tracing_enabled = parse_bool(val, false);
     else if (std::strcmp(key, "rt_quality") == 0) {
-        static constexpr const char* kNames[] = {"medium", "high"};
+        static constexpr const char* kNames[] = {"medium", "high", "low"};
         cfg.rt_quality = parse_choice(val, kNames, cfg.rt_quality);
     }
     else if (std::strcmp(key, "rt_shadow_quality") == 0) cfg.rt_shadow_quality = std::clamp(parse_uint(val, 0), 0u, 3u);
@@ -337,7 +337,7 @@ static void clamp_unimplemented_features(RenderConfig& cfg) {
     cfg.msaa_samples = 1;
     cfg.taa_enabled = false;
     cfg.rt_shadow_quality = 0;
-    cfg.rt_quality = std::min(cfg.rt_quality, 1u);
+    cfg.rt_quality = std::min(cfg.rt_quality, 2u);
     cfg.rt_ao_enabled = false;
     cfg.rt_reflections = false;
 }
@@ -612,7 +612,7 @@ bool save_render_config_to_file() {
              << (cfg.hud_output_resolution ? 1u : 0u) << '\n'
              << "ray_tracing_enabled="
              << (cfg.ray_tracing_enabled ? 1u : 0u) << '\n'
-             << "rt_quality=" << (cfg.rt_quality != 0u ? "high" : "medium") << '\n'
+             << "rt_quality=" << (cfg.rt_quality == 1u ? "high" : cfg.rt_quality == 2u ? "low" : "medium") << '\n'
              << "window_width=" << cfg.window_width << '\n'
              << "window_height=" << cfg.window_height << '\n'
              << "display_mode=" << cfg.display_mode << '\n'

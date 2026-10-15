@@ -525,7 +525,7 @@ bool RtReflections::create_pipelines(DXGI_FORMAT color_format) {
     {
         D3D12_FEATURE_DATA_SHADER_MODEL model{D3D_SHADER_MODEL_6_6};
         D3D12_FEATURE_DATA_D3D12_OPTIONS options{};
-        textured_ = get_render_config().rt_quality != 0u &&
+        textured_ = get_render_config().rt_quality == 1u &&
                     SUCCEEDED(device_->CheckFeatureSupport(D3D12_FEATURE_SHADER_MODEL, &model, sizeof(model))) &&
                     model.HighestShaderModel >= D3D_SHADER_MODEL_6_6 &&
                     SUCCEEDED(device_->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS, &options, sizeof(options))) &&

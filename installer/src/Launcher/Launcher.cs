@@ -842,7 +842,7 @@ namespace Nebula.Launcher
             mipmaps.Checked = graphics.GeneratedMipmaps;
             hudOutput.Checked = graphics.HudOutputResolution;
             rayTracing.Checked = graphics.RayTracing;
-            rtQuality.SelectedIndex = Math.Max(0, Math.Min(1, graphics.RtQuality));
+            rtQuality.SelectedIndex = Math.Max(0, Array.IndexOf(GraphicsSettings.RtQualityOrder, graphics.RtQuality));
             rtQuality.Enabled = graphics.RayTracing;
             for (int i = 0; i < volumes.Length; i++)
             {
@@ -1013,7 +1013,7 @@ namespace Nebula.Launcher
                 if (rayTracingOffered)
                 {
                     graphics.RayTracing = rayTracing.Checked;
-                    graphics.RtQuality = rtQuality.SelectedIndex < 0 ? 1 : rtQuality.SelectedIndex;
+                    graphics.RtQuality = rtQuality.SelectedIndex < 0 ? 1 : GraphicsSettings.RtQualityOrder[rtQuality.SelectedIndex];
                 }
                 graphics.Save();
                 for (int i = 0; i < volumes.Length; i++) audio.Percent[i] = volumes[i].Value;

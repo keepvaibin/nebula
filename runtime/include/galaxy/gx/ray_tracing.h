@@ -733,6 +733,7 @@ private:
     std::uint32_t picture_factor_ = 0;
     std::uint32_t rays_ = 2;
     bool light_textured_ = false;  // the lighting's trace reads alpha maps from the descriptor heap (SM 6.6)
+    bool low_quality_ = false;   // config rt_quality low: a third of the internal resolution, single rays
     bool high_quality_ = true;  // config rt_quality: high (every pixel, more rays) or medium
     std::uint32_t factor_override_ = 0;
     std::uint32_t history_frames_ = 16;
