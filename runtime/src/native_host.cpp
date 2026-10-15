@@ -8908,6 +8908,7 @@ galaxy::input::WiimoteInputSnapshot build_native_hid_input_snapshot(
     // and whether it moved (a new physical sample inside the client).
     bool mouse_visible = false;
     bool mouse_moved = false;
+    bool mouse_button_held = false;
     const char* mouse_source = "mouse";
     const bool drop_injected_mouse = drop_injected && native_pointer_input_injected(false);
     input_poll_diagnostic_stage(NativeInputPollStage::Pointer);
@@ -9063,10 +9064,11 @@ galaxy::input::WiimoteInputSnapshot build_native_hid_input_snapshot(
                 : host_pointer_absolute_sequence_changed;
             // Fresh physical movement inside the client takes precedence over a non-forced script, even when
             // the game window is unfocused. Button ownership stays guarded separately by window focus.
+            mouse_button_held = host_pointer.window_focused &&
+                                (host_pointer.left_button || host_pointer.right_button);
             if ((host_pointer_inside_client &&
                  host_pointer_has_fresh_coordinates) ||
-                (host_pointer.window_focused &&
-                 (host_pointer.left_button || host_pointer.right_button))) {
+                mouse_button_held) {
                 s_last_live_mouse_tick = now;
             }
             if (button_sample.has_transition_coordinates &&
@@ -9268,6 +9270,14 @@ galaxy::input::WiimoteInputSnapshot build_native_hid_input_snapshot(
     if (rest_hidden) {
         pointer_active = false;
         pointer_source = "controller-rest-hidden";
+    }
+    // In menus a key press acts on the pointer's position, so a resting mouse pointer stays.
+    static galaxy::input::MouseRestHide s_mouse_rest_hide{};
+    if (s_mouse_rest_hide.update(owner == galaxy::input::PointerSource::Mouse && pointer_active && window_focused &&
+                                     play_context == galaxy::input::PlayContext::Play,
+                                 mouse_moved || mouse_button_held, now_us)) {
+        pointer_active = false;
+        pointer_source = "mouse-rest-hidden";
     }
     if (script.has_pointer &&
         (script_pointer_force_enabled() || !live_mouse_recent ||
