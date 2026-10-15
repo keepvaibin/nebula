@@ -2246,7 +2246,11 @@ void SpatialBCS(uint3 id : SV_DispatchThreadID)
     // luminance (black: no traced triangle under the sample, the day model left out).
     float3 day_terms = float3(0.0f, 0.0f, 0.0f);
     {
-        const float day_mix = g_self.w >= 0.0f ? g_self.w : smoothstep(0.35f, 0.8f, day_sky);
+        // Every stage on the art model (build 49): the night lit model re-shaded art past the game's (fc46:
+        // Freezeflame's ice x1.25, Battlerock's discs, the Observatory; rtpartner rp13: 7 of 9 night stops).
+        // By night the lamps and glows add their light in full, by day a third.
+        const float day_share = g_self.w >= 0.0f ? g_self.w : smoothstep(0.35f, 0.8f, day_sky);
+        const float day_mix = 1.0f;
         if (day_mix > 0.0f && tri != 0u) {
             const float3 n = unpack_normal(g_normal[index]);
             const float nl = dot(n, g_sun.xyz);
@@ -2285,7 +2289,7 @@ void SpatialBCS(uint3 id : SV_DispatchThreadID)
             // found 56-192 lights in Honeyhive and lifted it to 1.23 of the game, measured fc33), and nothing
             // passes 1.1 of its art's level: no overexposed grass, sand or dirt. The light sources' own glow
             // (below) is not affected.
-            const float3 day_points = points * 0.35f;
+            const float3 day_points = points * lerp(1.0f, 0.35f, day_share);
             // Contact occlusion on the art: in full where the sun does not reach, half where it does
             // (sunlit contacts keep their direct light).
             const float sunlit = vis * saturate(shaped / 0.5f);
