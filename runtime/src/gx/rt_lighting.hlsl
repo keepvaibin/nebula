@@ -112,6 +112,8 @@ static const uint kDrawStride = 32u;
 static const uint kDrawTableGlow = 2u;
 static const uint kDrawTableFoliage = 4u;   // g_draws word 6: alpha-cut foliage cards
 static const float kDrawGlowScale = 16.0f;
+// RtDraw.flags bits 8-11 (rt_surfaces.h RtSurfaceClass::Crystal): clear crystal, glass and gems.
+static const uint kClearClass = 7u;
 // The lighting multiplies the game's colour by at most this; the composite rolls it off on a film
 // shoulder from kLitKnee (apply_light).
 static const float kMaxLight = 8.0f;
@@ -1489,6 +1491,9 @@ void TraceCS(uint3 id : SV_DispatchThreadID, uint gi : SV_GroupIndex)
     float3 ng = n;
     float3 lifted = p;
     uint2 primary = uint2(0u, 0u);
+    // A clear crystal or glass surface (surface class 7) lets the lights behind it through: the star bits
+    // inside a crystal light it from within.
+    bool clear = false;
     {
         const float span = length(p);
         RayDesc ray;
@@ -1516,6 +1521,7 @@ void TraceCS(uint3 id : SV_DispatchThreadID, uint gi : SV_GroupIndex)
                 lifted = v0 * w.x + v1 * w.y + v2 * w.z;
                 primary = uint2(tri + 1u, f32tof16(b.x) | (f32tof16(b.y) << 16u));
                 const uint4 surface = g_surfaces.Load4(tri * 16u);
+                clear = ((surface.w >> 8u) & 15u) == kClearClass;
                 if (surface.x != 0u && surface.y != 0u && surface.z != 0u) {
                     float3 n0 = unpack_vertex_normal(surface.x);
                     float3 n1 = unpack_vertex_normal(surface.y);
@@ -1668,7 +1674,7 @@ void TraceCS(uint3 id : SV_DispatchThreadID, uint gi : SV_GroupIndex)
                 continue;
             }
             const float inv_d = rsqrt(max(d2, 1e-6f));
-            const float nl = dot(n, to) * inv_d;
+            const float nl = clear ? abs(dot(n, to)) * inv_d : dot(n, to) * inv_d;
             if (nl <= 0.0f) {
                 continue;
             }
@@ -1693,10 +1699,13 @@ void TraceCS(uint3 id : SV_DispatchThreadID, uint gi : SV_GroupIndex)
         }
         const float lum = luminance(kept_power);
         if (sum > 0.0f && lum > 0.0f) {
-            const float3 to = kept.xyz - origin;
+            // A light behind a clear surface is reached from its inner side.
+            const bool behind = clear && dot(kept.xyz - p, ng) < 0.0f;
+            const float3 start = behind ? lifted - ng * (0.2f + abs(p.z) * 4e-4f) : origin;
+            const float3 to = kept.xyz - start;
             const float span = length(to);
             RayDesc ray;
-            ray.Origin = origin;
+            ray.Origin = start;
             ray.Direction = to / max(span, 1e-4f);
             ray.TMin = 0.0f;
             // The light fills its glow (a core, a lamp head): the ray ends at its radius.
@@ -2145,6 +2154,12 @@ void SpatialBCS(uint3 id : SV_DispatchThreadID)
                 m = min(max(m, 1.0f) + glow * hue, kMaxLight);
             }
         }
+    }
+    // Clear crystal and glass show what lies behind them (the game's refraction of the picture): the light
+    // at their surface does not darken that; the lights in and around them add to it (a crystal's star
+    // bits light it from within: TraceCS takes their light through it).
+    if (((draw_flags >> 8u) & 15u) == kClearClass) {
+        m = max(m, 1.0f + points);
     }
     // A glowing surface (unlit, bright, under its own glow in the previous picture: a core, a lamp)
     // sends its light whatever reaches it: it keeps its colour and shines brighter.
