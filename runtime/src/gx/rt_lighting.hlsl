@@ -2581,6 +2581,38 @@ float star_mu(float3 p)
     return saturate(dot(outward / radius, -normalize(p)));
 }
 
+// The turn to the eye of the surface at pixel c (eye position here) from the depth: the face the depth slopes
+// show (each axis the neighbour nearer in depth). Exact at the ball's limb whatever its centre (the actor's
+// position is not the ball's centre: the centre-based turn read 0.8 at the visible limb, build 60); -1 where a
+// neighbour lies off the surface.
+float star_mu_depth(int2 c, float3 here)
+{
+    const float z = here.z;
+    const float zr = depth_to_eye_z(m_depth, m_efb_depth.Load(int3(c + int2(1, 0), 0)));
+    const float zl = depth_to_eye_z(m_depth, m_efb_depth.Load(int3(c - int2(1, 0), 0)));
+    const float zd = depth_to_eye_z(m_depth, m_efb_depth.Load(int3(c + int2(0, 1), 0)));
+    const float zu = depth_to_eye_z(m_depth, m_efb_depth.Load(int3(c - int2(0, 1), 0)));
+    const bool right = abs(zr - z) < abs(z - zl);
+    const bool down = abs(zd - z) < abs(z - zu);
+    const float limit = abs(z) * 0.05f + 2.0f;
+    if (min(abs(zr - z), abs(z - zl)) > limit || min(abs(zd - z), abs(z - zu)) > limit) {
+        return -1.0f;
+    }
+    const float2 px = float2(c) + 0.5f;
+    const float3 ex = right ? eye_position(m_projection, m_viewport, px + float2(1.0f, 0.0f), zr) - here
+                            : here - eye_position(m_projection, m_viewport, px - float2(1.0f, 0.0f), zl);
+    const float3 ey = down ? eye_position(m_projection, m_viewport, px + float2(0.0f, 1.0f), zd) - here
+                           : here - eye_position(m_projection, m_viewport, px - float2(0.0f, 1.0f), zu);
+    float3 n = cross(ex, ey);
+    const float len = length(n);
+    if (len < 1e-8f) {
+        return -1.0f;
+    }
+    n /= len;
+    const float3 v = -normalize(here);
+    return abs(dot(n, v));
+}
+
 float3 star_surface(int2 c, float mu, float3 color)
 {
     const float l = luminance(color);
@@ -2692,7 +2724,10 @@ CompositeOut CompositePS(float4 position : SV_Position)
     // side's difference is left out; with distance a pixel spans more than the detail and it fades.
     const float relief = weight > 1e-3f ? relief_sum / weight : 0.0f;
     if (relief < -0.5f && (m_flags & 2u) == 0u) {
-        result.color = float4(star_surface(int2(position.xy), star_mu(p), color), 1.0f);
+        // The depth's turn where the surface is continuous (true limb darkening), the centre's elsewhere.
+        const float mu_depth = star_mu_depth(int2(position.xy), here);
+        const float mu = mu_depth >= 0.0f ? mu_depth : star_mu(p);
+        result.color = float4(star_surface(int2(position.xy), mu, color), 1.0f);
         return result;
     }
     if (relief > 1e-3f && m_sun.w > 0.0f) {

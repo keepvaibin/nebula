@@ -1843,10 +1843,11 @@ Blend blend_samples(float2 pixel, float3 p, bool water)
             const float alpha_k = max(rough * rough, 1e-3f);
             float k = rough >= 0.62f ? 0.0f
                     : (f0 + (fresnel(f0, alpha_k, dot(n, v)) - f0) * graze) * sample_weight;
-            // Water from above reflects at most 0.5 (its sky reflection at 0.25 of that, WaterTraceCS):
-            // islands, palms and Mario mirrored clearly, the sky never bleaching it.
+            // Water from above reflects at most 0.8, like a calm lake: islands, palms, towers and Mario mirrored
+            // clearly (user: water reflects everything around it; 0.5 left Buoy Base's and Beach Bowl's water
+            // looking unreflective). The sky in it never outshines the water (WaterTraceCS): no bleaching.
             if (surface_class == kWaterSurface) {
-                k = min(k, 0.5f * sample_weight);
+                k = min(k, 0.8f * sample_weight);
             }
             const float3 light = min(unpack_r11g11b10(sample.x), 1.0f);
             b.sum += light * (k * bw);

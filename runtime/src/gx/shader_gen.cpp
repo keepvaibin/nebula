@@ -629,7 +629,11 @@ void ppl_apply(inout float4 col0, inout float4 col1, float3 wpos, float3 nrm_in,
         const uint cc = ppl_channel[ch];
         const uint ca = ppl_channel[2u + ch];
         float4 result = ch == 0u ? col0 : col1;
-        if (((cc >> 1u) & 1u) != 0u) {
+        // A specular channel (attenuation function 1) keeps the vertex stage's colour: per pixel its highlight
+        // peaks above the per-vertex values the game's TEV stages were sized for, and a stage that overflows
+        // wraps (Mario's skin and gloves turned cyan and magenta). Channels that overflow by design (a Luma's
+        // blue wraps to its yellow) keep their wrap.
+        if (((cc >> 1u) & 1u) != 0u && ((cc >> 9u) & 3u) != 1u) {
             int3 mat_c_i = int3(round(((cc & 1u) != 0u ? vtx : ppl_chan_material[ch]).rgb * 255.0));
             int3 lacc_i = int3(round((((cc >> 6u) & 1u) != 0u ? vtx : ppl_chan_ambient[ch]).rgb * 255.0));
             int unused_a = 0;
@@ -642,7 +646,7 @@ void ppl_apply(inout float4 col0, inout float4 col1, float3 wpos, float3 nrm_in,
             lacc_i = clamp(lacc_i, int3(0,0,0), int3(255,255,255));
             result.rgb = float3((mat_c_i * (lacc_i + (lacc_i >> 7))) >> 8) / 255.0;
         }
-        if (((ca >> 1u) & 1u) != 0u) {
+        if (((ca >> 1u) & 1u) != 0u && ((ca >> 9u) & 3u) != 1u) {
             int mat_a_i = int(round(((ca & 1u) != 0u ? vtx.a : ppl_chan_material[ch].a) * 255.0));
             int lacc_a_i = int(round((((ca >> 6u) & 1u) != 0u ? vtx.a : ppl_chan_ambient[ch].a) * 255.0));
             int3 unused_c = int3(0,0,0);
@@ -1463,7 +1467,6 @@ std::string ShaderGenerator::generate_ps(const PixelShaderKey& key) const {
     const bool ppl = (key.reserved & kPsKeyPerPixelLighting) != 0u;
     const bool enhanced = (key.reserved & kPsKeyEnhancedLighting) != 0u;
     const bool ppl_inputs = ppl || enhanced;
-    const bool saturate = !enhanced && (key.reserved & kPsKeyPplSaturate) != 0u;
     const bool motion = (key.reserved & kPsKeyMotion) != 0u;
     const bool reactive = !motion && (key.reserved & kPsKeyReactive) != 0u;
     const std::uint32_t enh_env = enhanced ? key.ind_reserved & kEnhancedEnvCoordMask : 0u;
@@ -1991,8 +1994,8 @@ std::string ShaderGenerator::generate_ps(const PixelShaderKey& key) const {
         // Color and alpha combiners observe the same stage-entry registers.
         // The alpha R8/GR16/BGR24 comparisons reuse COLOR A/B selectors.
         if (alpha_bias == TevBias::Compare && alpha_scale != TevScale::Half) {
-            emit(s, enhanced ? "    int3 alpha_compare_a_%u = tev_in3(int3(%s));\n" : saturate ? "    int3 alpha_compare_a_%u = clamp(int3(%s), 0, 255);\n" : "    int3 alpha_compare_a_%u = int3(%s) & int3(255,255,255);\n", st, ca);
-            emit(s, enhanced ? "    int3 alpha_compare_b_%u = tev_in3(int3(%s));\n" : saturate ? "    int3 alpha_compare_b_%u = clamp(int3(%s), 0, 255);\n" : "    int3 alpha_compare_b_%u = int3(%s) & int3(255,255,255);\n", st, cb);
+            emit(s, enhanced ? "    int3 alpha_compare_a_%u = tev_in3(int3(%s));\n" : "    int3 alpha_compare_a_%u = int3(%s) & int3(255,255,255);\n", st, ca);
+            emit(s, enhanced ? "    int3 alpha_compare_b_%u = tev_in3(int3(%s));\n" : "    int3 alpha_compare_b_%u = int3(%s) & int3(255,255,255);\n", st, cb);
         }
 
         if (color_bias == TevBias::Compare) {
@@ -2005,9 +2008,9 @@ std::string ShaderGenerator::generate_ps(const PixelShaderKey& key) const {
                 static_cast<TevCompareKind>(static_cast<unsigned>(color_scale));
             const bool is_eq = color_sub;  // SUB bit: 0 = GT, 1 = EQ
             s << "    {\n";
-            emit(s, enhanced ? "        int3 ca_i = tev_in3(int3(%s));\n" : saturate ? "        int3 ca_i = clamp(int3(%s), 0, 255);\n" : "        int3 ca_i = int3(%s) & int3(255,255,255);\n", ca);
-            emit(s, enhanced ? "        int3 cb_i = tev_in3(int3(%s));\n" : saturate ? "        int3 cb_i = clamp(int3(%s), 0, 255);\n" : "        int3 cb_i = int3(%s) & int3(255,255,255);\n", cb);
-            emit(s, enhanced ? "        int3 cc_i = tev_in3(int3(%s));\n" : saturate ? "        int3 cc_i = clamp(int3(%s), 0, 255);\n" : "        int3 cc_i = int3(%s) & int3(255,255,255);\n", cc);
+            emit(s, enhanced ? "        int3 ca_i = tev_in3(int3(%s));\n" : "        int3 ca_i = int3(%s) & int3(255,255,255);\n", ca);
+            emit(s, enhanced ? "        int3 cb_i = tev_in3(int3(%s));\n" : "        int3 cb_i = int3(%s) & int3(255,255,255);\n", cb);
+            emit(s, enhanced ? "        int3 cc_i = tev_in3(int3(%s));\n" : "        int3 cc_i = int3(%s) & int3(255,255,255);\n", cc);
             emit(s, "        int3 cd_i = int3(%s);\n", cd);
             switch (kind) {
             case TevCompareKind::R8:
@@ -2058,9 +2061,9 @@ std::string ShaderGenerator::generate_ps(const PixelShaderKey& key) const {
             // final >>8.  Keeping the stage in int space preserves dark eye
             // and UI-detail materials that float lerp over-brightens.
             s << "    {\n";
-            emit(s, enhanced ? "        int3 ai = tev_in3(int3(%s));\n" : saturate ? "        int3 ai = clamp(int3(%s), 0, 255);\n" : "        int3 ai = int3(%s) & int3(255,255,255);\n", ca);
-            emit(s, enhanced ? "        int3 bi = tev_in3(int3(%s));\n" : saturate ? "        int3 bi = clamp(int3(%s), 0, 255);\n" : "        int3 bi = int3(%s) & int3(255,255,255);\n", cb);
-            emit(s, enhanced ? "        int3 ci = tev_in3(int3(%s));\n" : saturate ? "        int3 ci = clamp(int3(%s), 0, 255);\n" : "        int3 ci = int3(%s) & int3(255,255,255);\n", cc);
+            emit(s, enhanced ? "        int3 ai = tev_in3(int3(%s));\n" : "        int3 ai = int3(%s) & int3(255,255,255);\n", ca);
+            emit(s, enhanced ? "        int3 bi = tev_in3(int3(%s));\n" : "        int3 bi = int3(%s) & int3(255,255,255);\n", cb);
+            emit(s, enhanced ? "        int3 ci = tev_in3(int3(%s));\n" : "        int3 ci = int3(%s) & int3(255,255,255);\n", cc);
             emit(s, "        int3 di = int3(%s);\n", cd);
             emit(s, "        int3 lhs = (di + int3(%s,%s,%s))%s;\n",
                  tev_bias_i(color_bias), tev_bias_i(color_bias),
@@ -2104,8 +2107,8 @@ std::string ShaderGenerator::generate_ps(const PixelShaderKey& key) const {
             const bool is_eq = alpha_sub;
             s << "    {\n";
             if (kind == TevCompareKind::RGB8) {  // value 3 = A8 for alpha
-                emit(s, enhanced ? "        int aa_i = tev_in1(%s);\n" : saturate ? "        int aa_i = clamp(%s, 0, 255);\n" : "        int aa_i = (%s) & 255;\n", aa);
-                emit(s, enhanced ? "        int ab_i = tev_in1(%s);\n" : saturate ? "        int ab_i = clamp(%s, 0, 255);\n" : "        int ab_i = (%s) & 255;\n", ab);
+                emit(s, enhanced ? "        int aa_i = tev_in1(%s);\n" : "        int aa_i = (%s) & 255;\n", aa);
+                emit(s, enhanced ? "        int ab_i = tev_in1(%s);\n" : "        int ab_i = (%s) & 255;\n", ab);
                 emit(s, "        bool acmp = (aa_i %s ab_i);\n",
                      is_eq ? "==" : ">");
             } else {
@@ -2128,7 +2131,7 @@ std::string ShaderGenerator::generate_ps(const PixelShaderKey& key) const {
                          is_eq ? "==" : ">");
                 }
             }
-            emit(s, enhanced ? "        int ac_i = tev_in1(%s);\n" : saturate ? "        int ac_i = clamp(%s, 0, 255);\n" : "        int ac_i = (%s) & 255;\n", ac);
+            emit(s, enhanced ? "        int ac_i = tev_in1(%s);\n" : "        int ac_i = (%s) & 255;\n", ac);
             emit(s, "        int ad_i = %s;\n", ad);
             s << "        int outv = ad_i + (acmp ? ac_i : 0);\n";
             if (alpha_clamp) {
@@ -2140,9 +2143,9 @@ std::string ShaderGenerator::generate_ps(const PixelShaderKey& key) const {
             s << "    }\n";
         } else {
             s << "    {\n";
-            emit(s, enhanced ? "        int ai = tev_in1(%s);\n" : saturate ? "        int ai = clamp(%s, 0, 255);\n" : "        int ai = (%s) & 255;\n", aa);
-            emit(s, enhanced ? "        int bi = tev_in1(%s);\n" : saturate ? "        int bi = clamp(%s, 0, 255);\n" : "        int bi = (%s) & 255;\n", ab);
-            emit(s, enhanced ? "        int ci = tev_in1(%s);\n" : saturate ? "        int ci = clamp(%s, 0, 255);\n" : "        int ci = (%s) & 255;\n", ac);
+            emit(s, enhanced ? "        int ai = tev_in1(%s);\n" : "        int ai = (%s) & 255;\n", aa);
+            emit(s, enhanced ? "        int bi = tev_in1(%s);\n" : "        int bi = (%s) & 255;\n", ab);
+            emit(s, enhanced ? "        int ci = tev_in1(%s);\n" : "        int ci = (%s) & 255;\n", ac);
             emit(s, "        int di = %s;\n", ad);
             emit(s, "        int lhs = (di + %s)%s;\n",
                  tev_bias_i(alpha_bias), tev_scale_left(alpha_scale));
@@ -2191,7 +2194,6 @@ std::string ShaderGenerator::generate_ps(const PixelShaderKey& key) const {
     // (measured rtpartner dy28: Good Egg's wood rim 255,255,102 -> 11,219,101, green streaks).
     s << (enhanced ? "\n    int4 frag_i = (uber_ps_header.w & 0x20000u) != 0u ? clamp(tev_prev_i, 0, 255)"
                      " : (tev_prev_i & int4(255,255,255,255));\n"
-                   : saturate ? "\n    int4 frag_i = clamp(tev_prev_i, 0, 255);\n"
                    : "\n    int4 frag_i = tev_prev_i & int4(255,255,255,255);\n");
     s << "    float4 frag = float4(frag_i) / 255.0;\n\n";
     if (enhanced) {

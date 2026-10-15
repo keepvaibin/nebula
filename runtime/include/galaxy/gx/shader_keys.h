@@ -115,11 +115,6 @@ inline constexpr std::uint8_t kPsKeyPplFiniteLightAttn = 0x08u;
 // pixel key's ind_reserved word carries the material (kEnhanced* below).
 inline constexpr std::uint8_t kVsKeyEnhancedLighting = 0x40u;
 inline constexpr std::uint8_t kPsKeyEnhancedLighting = 0x10u;
-// Per-pixel lighting on a draw without an environment map: its TEV inputs and result saturate at 255
-// instead of wrapping. Per-pixel highlights peak above the per-vertex ones the game's stages were sized
-// for, and a wrapped stage turns them cyan or magenta (Mario's face and gloves, user 2026-10-15); the
-// environment-mapped metals that wrap by design (Battlerock's chrome bands) keep the wrap.
-inline constexpr std::uint8_t kPsKeyPplSaturate = 0x20u;
 // PixelShaderKey::ind_reserved under kPsKeyEnhancedLighting: bits 0-7 the
 // texcoords generated from normals (environment maps), bit 8 colour channel 0
 // is lit with a diffuse light function, bit 9 the surface class whose
@@ -179,7 +174,7 @@ struct PixelShaderKey {
     std::uint8_t efb_scale_minus_one;
     std::uint8_t reserved;          // bit0 per-pixel lighting, bit1 motion, bit2 reactive,
                                     // bit3 per-pixel finite light attenuation,
-                                    // bit4 enhanced lighting, bit5 per-pixel saturation
+                                    // bit4 enhanced lighting
     std::uint32_t ind_cmd[4][4];    // BP 0x10-0x1F, grouped as uint4s
     std::uint32_t ind_ref;          // BP 0x27
     std::uint32_t ind_scale[2];     // BP 0x25-0x26

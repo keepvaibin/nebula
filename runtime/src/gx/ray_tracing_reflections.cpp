@@ -246,12 +246,12 @@ bool RtReflections::initialize(ID3D12Device5* device, std::uint64_t timestamp_fr
     // and glossy (F0 above water's, so the aurora and Mario read in the ice); a white surface shows its
     // reflection only where the reflection takes its place.
     materials_[4] = material("GALAXY_RT_REFLECT_WATER", {0.04f, 0.25f, 1.0f, 0.0f, 0.8f});
-    // A calm, glassy surface (roughness 0.03) with F0 0.3: what stands over the water mirrors in it (30 % looking
-    // 45 degrees down, 32 % at 60, 46 % at 75, the far sea at the 0.5 cap); cover 0.3 keeps the water's own colour;
-    // the sky never (WaterTraceCS). (F0 0.08 cover 0.5 left Buoy Base's tower faint, v52b; cover 0.8 turned
-    // Beach Bowl's lagoon milky, v53a; F0 0.2, build 55: user, still not reflective enough in Buoy Base and
-    // Beach Bowl.)
-    materials_[kWaterClass] = material("GALAXY_RT_WATER", {0.03f, 0.3f, 1.0f, 0.0f, 0.3f});
+    // A calm, glassy surface (roughness 0.03) with F0 0.5: what stands over the water mirrors in it like a lake (50 %
+    // looking 45 degrees down, 52 % at 60, 61 % at 75, the far water at the 0.8 cap); cover 0.6: the reflection
+    // replaces the water's colour where it shows, as a mirror's does; the sky's part never brighter than the water
+    // (WaterTraceCS), so nothing bleaches. (Cover 0.8 turned Beach Bowl's lagoon milky with the sky uncapped, v53a;
+    // F0 0.2 and 0.3, builds 55-60: user, the water must reflect what is around it much more.)
+    materials_[kWaterClass] = material("GALAXY_RT_WATER", {0.03f, 0.5f, 1.0f, 0.0f, 0.6f});
     materials_[kWaterClass + 1u] = materials_[kWaterClass];
     // Crystals, ice, gems and glass (named in rt_surfaces.cpp): clear dielectric, its reflection
     // white and Fresnel-weighted.
