@@ -256,7 +256,10 @@ private:
     std::uint32_t frame_ = 0;
     bool ready_ = false;
     // GALAXY_RT_REFLECT_VIEW: 1 the reflections alone, 2 the surface classes, 3 their weight, 4
-    // reflections on every other traced frame (A/B pairs), 5 the classes on every other frame.
+    // reflections on every other traced frame (A/B pairs), 5 the classes on every other frame, 6 per
+    // traced frame in turn: the composite, none, the reflected light alone, its weight k (red) and
+    // the highlights' luminance (green), marked at the middle of the right edge white, -, red, green
+    // (GALAXY_PRESENT_SNAPSHOT_PAIR=3 keeps each set of four).
     std::uint32_t view_ = 0;
     std::uint32_t history_frames_ = 24;
     float range_ = 50000.0f;
