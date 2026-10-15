@@ -686,9 +686,12 @@ private:
     float night_ = 1.0f;            // GALAXY_RT_NIGHT: the sky and bounce light under a black sky (relative)
     float daylight_ = 0.35f;        // GALAXY_RT_DAYLIGHT: the sky's luminance that gives it in full
     float glow_boost_ = 0.4f;       // GALAXY_RT_GLOW_BOOST: extra light of a glowing surface
-    float glow_exposure_ = 1.7f;    // GALAXY_RT_GLOW_EXPOSURE: colour scale of the glows themselves
+    // GALAXY_RT_GLOW_EXPOSURE: colour scale of the glows themselves. 1 (as the game draws them): the
+    // exposure matches the lit picture to the game's, and a scale on every additive draw blew planets'
+    // atmospheres and halos out to white (measured: Gateway, the Observatory).
+    float glow_exposure_ = 1.0f;
     float glow_spill_ = 0.7f;       // GALAXY_RT_GLOW_SPILL: share of a glow's excess that turns it white
-    float glow_model_exposure_ = 3.2f;  // GALAXY_RT_GLOW_MODEL_EXPOSURE: glowing models (a star's surface)
+    float glow_model_exposure_ = 1.0f;  // GALAXY_RT_GLOW_MODEL_EXPOSURE: glowing models (a star's surface)
     float glow_model_spill_ = 1.0f;     // GALAXY_RT_GLOW_MODEL_SPILL
     float sky_distance_ = 60000.0f; // GALAXY_RT_SKY_DISTANCE: farther surfaces are the sky (backdrops)
     float fill_ = 0.2f;             // GALAXY_RT_FILL: the light every surface keeps (more at night)
@@ -716,7 +719,7 @@ private:
     bool exposure_ = true;
     float surface_emission_ = 3.0f; // GALAXY_RT_SURFACE_EMISSION: a glowing surface's light per unit
                                     // of its colour and eye-space area (0: none)
-    float emission_ = 24.0f;        // GALAXY_RT_EMISSION: a glow's light per unit it adds to the picture
+    float emission_ = 40.0f;        // GALAXY_RT_EMISSION: a glow's light per unit it adds to the picture
                                     // and unit of eye-space area (0: no glow lights)
     float point_size_ = 600.0f;     // GALAXY_RT_POINT_SIZE: radius of the geometry around one
     float sun_light_ = 1.0f;

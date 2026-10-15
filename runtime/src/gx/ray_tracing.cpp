@@ -691,7 +691,7 @@ bool SceneRayTracer::initialize(ID3D12Device* device, std::uint64_t timestamp_fr
     point_light_ = std::clamp(env_float("GALAXY_RT_POINT_LIGHT", 2.0f), 0.0f, 8.0f);
     point_saturation_ = std::clamp(env_float("GALAXY_RT_POINT_SATURATION", 0.4f), 0.0f, 1.0f);
     split_ = std::clamp(env_float("GALAXY_RT_SPLIT", 0.0f), 0.0f, 1.0f);
-    emission_ = std::clamp(env_float("GALAXY_RT_EMISSION", 24.0f), 0.0f, 256.0f);
+    emission_ = std::clamp(env_float("GALAXY_RT_EMISSION", 40.0f), 0.0f, 256.0f);
     authored_power_ = std::clamp(env_float("GALAXY_RT_AUTHORED_POWER", 40000.0f), 0.0f, 1.0e7f);
     log_emitters_ = env_float("GALAXY_RT_LOG_EMITTERS", 0.0f) != 0.0f;
     ab_ = env_float("GALAXY_RT_AB", 0.0f) != 0.0f;
@@ -702,9 +702,9 @@ bool SceneRayTracer::initialize(ID3D12Device* device, std::uint64_t timestamp_fr
     night_ = std::clamp(env_float("GALAXY_RT_NIGHT", 1.0f), 0.0f, 1.0f);
     daylight_ = std::clamp(env_float("GALAXY_RT_DAYLIGHT", 0.35f), 0.01f, 1.0f);
     glow_boost_ = std::clamp(env_float("GALAXY_RT_GLOW_BOOST", 0.4f), 0.0f, 1.0f);
-    glow_exposure_ = std::clamp(env_float("GALAXY_RT_GLOW_EXPOSURE", 1.7f), 1.0f, 6.0f);
+    glow_exposure_ = std::clamp(env_float("GALAXY_RT_GLOW_EXPOSURE", 1.0f), 1.0f, 6.0f);
     glow_spill_ = std::clamp(env_float("GALAXY_RT_GLOW_SPILL", 0.7f), 0.0f, 2.0f);
-    glow_model_exposure_ = std::clamp(env_float("GALAXY_RT_GLOW_MODEL_EXPOSURE", 3.2f), 1.0f, 8.0f);
+    glow_model_exposure_ = std::clamp(env_float("GALAXY_RT_GLOW_MODEL_EXPOSURE", 1.0f), 1.0f, 8.0f);
     glow_model_spill_ = std::clamp(env_float("GALAXY_RT_GLOW_MODEL_SPILL", 1.0f), 0.0f, 2.0f);
     sky_distance_ = std::clamp(env_float("GALAXY_RT_SKY_DISTANCE", 60000.0f), 1000.0f, 1.0e7f);
     sky_ibl_ = std::clamp(env_float("GALAXY_RT_SKY_IBL", 0.8f), 0.0f, 1.0f);
