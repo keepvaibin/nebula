@@ -1282,7 +1282,9 @@ void WaterTraceCS(uint3 id : SV_DispatchThreadID)
                 const Reflected r = reflect_light(id.xy, dir, n, ng, hit, params, base, true, false);
                 light = r.light;
                 highlight = min(r.highlight, 1.5f);
-                confidence = r.confidence;
+                // Water mirrors what stands over it in full; the sky at 0.45 of it (the bright sky
+                // bleached the far lagoon, measured wb36).
+                confidence = surface == kWaterSurface && r.source >= kSkyShown ? r.confidence * 0.45f : r.confidence;
                 source = r.source;
                 mapped = r.mapped;
                 info.w = asuint(r.distance);
@@ -1742,8 +1744,10 @@ Blend blend_samples(float2 pixel, float3 p, bool water)
             const float alpha_k = max(rough * rough, 1e-3f);
             float k = rough >= 0.62f ? 0.0f
                     : (f0 + (fresnel(f0, alpha_k, dot(n, v)) - f0) * graze) * sample_weight;
+            // Water from above reflects at most 0.5 (its sky reflection is already at 0.45, WaterTraceCS):
+            // islands, palms and Mario mirrored clearly, the sky never bleaching it.
             if (surface_class == kWaterSurface) {
-                k = min(k, 0.4f * sample_weight);
+                k = min(k, 0.5f * sample_weight);
             }
             const float3 light = min(unpack_r11g11b10(sample.x), 1.0f);
             b.sum += light * (k * bw);
