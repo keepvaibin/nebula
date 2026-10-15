@@ -452,6 +452,9 @@ public:
     // covers the window.
     [[nodiscard]] bool begin_output_efb();
     void end_output_efb();
+    // The scene's anti-aliasing (post_process.h) in the render EFB at the end of the 3D scene,
+    // before the 2D layer and begin_output_efb. A temporal upscaler antialiases the scene itself.
+    void record_scene_aa();
     [[nodiscard]] bool output_efb_active() const noexcept { return output_efb_active_; }
     // Whether the targets for `scale` fit the adapter's video-memory budget
     // next to everything already resident.
@@ -1134,7 +1137,7 @@ private:
     };
     // RtComposite: the ambient occlusion of ray-tracer result slot `index`.
     enum class ReplayKind : std::uint8_t {
-        Draw, BindEfb, Clear, Copy, SwapEfbSets, ClearDepth, RtComposite, RtBloom, RtPost, RtWater
+        Draw, BindEfb, Clear, Copy, SwapEfbSets, ClearDepth, RtComposite, RtBloom, RtPost, RtWater, SceneAa
     };
     struct ReplayOp {
         ReplayKind kind = ReplayKind::Draw;

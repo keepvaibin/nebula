@@ -9594,6 +9594,9 @@ bool RendererD3D12::record_replay_list(ReplayList& entry) {
             case ReplayKind::RtWater:
                 record_rt_water(static_cast<int>(op.index), true);
                 break;
+            case ReplayKind::SceneAa:
+                record_scene_aa();
+                break;
             }
             if (op.kind == ReplayKind::Copy) {
                 const ReplayCopy& copy = run_copies_[op.index];
@@ -10687,13 +10690,46 @@ void RendererD3D12::present_fg_hudless(const XfbTexture& source, const D3D12_VIE
     command_list_->OMSetRenderTargets(1, &back_rtv, FALSE, nullptr);
 }
 
+void RendererD3D12::record_scene_aa() {
+    if (!post_process_.ready() || output_efb_active_ || scene_temporal_ || !efb_color_ ||
+        post_process_.settings().aa == PostProcessSettings::Aa::kOff) {
+        return;
+    }
+    // The 640x456 picture the display copy takes decides AUTO. GALAXY_AA_SPLIT=<0..1>: the part
+    // of the picture left of it stays unfiltered (A/B captures).
+    static const float split = [] {
+        char value[16]{};
+        std::size_t length = 0u;
+        return getenv_s(&length, value, sizeof(value), "GALAXY_AA_SPLIT") == 0 && length > 1u
+            ? std::clamp(static_cast<float>(std::strtod(value, nullptr)), 0.0f, 1.0f) : 0.0f;
+    }();
+    if (replay_recording_) [[unlikely]] {
+        replay_ops_.push_back({ReplayKind::SceneAa, 0u});
+    }
+    const auto aspect = galaxy::experimental_effective_host_aspect();
+    const galaxy::ContentViewport content = galaxy::fit_content_viewport(
+        static_cast<int>(s_bb_width), static_cast<int>(s_bb_height),
+        aspect ? aspect->content_aspect : galaxy::kWiiContentAspect);
+    const D3D12_RESOURCE_DESC desc = efb_color_->GetDesc();
+    (void)post_process_.record_scene_aa(
+        command_list_.Get(), srv_ring_, efb_color_.Get(), efb_rtv_, static_cast<unsigned>(desc.Width),
+        desc.Height, kEfbWidth * efb_scale_, 456u * efb_scale_,
+        static_cast<unsigned>(std::max(content.width, 1)), static_cast<unsigned>(std::max(content.height, 1)),
+        split, frame_index_, kFramesInFlight);
+    command_list_->SetGraphicsRootSignature(root_signature_.Get());
+    invalidate_gx_bindings();
+    bound_rt_aux_ = 0xFFu;
+}
+
 bool RendererD3D12::begin_output_efb() {
     const bool temporal = scene_temporal_;
     scene_temporal_ = false;
     if (output_efb_active_ || (!temporal && !get_render_config().hud_output_resolution)) {
         return false;
     }
-    const unsigned scale = output_efb_scale_for_window();
+    // A temporal upscaler outputs the internal resolution; the 2D layer alone
+    // goes to the window's.
+    const unsigned scale = temporal ? temporal_output_w_ / kEfbWidth : output_efb_scale_for_window();
     if (scale == 0u || scale < efb_scale_ || (scale == efb_scale_ && !temporal) ||
         !ensure_output_efb(scale)) {
         temporal_history_valid_ = false;

@@ -131,12 +131,12 @@ PostProcessPlan plan_post_process(
 
 bool PostProcessor::create_pipeline(D3D12_SHADER_BYTECODE vs, D3D12_SHADER_BYTECODE ps,
                                     DXGI_FORMAT format, int stencil,
-                                    ComPtr<ID3D12PipelineState>& out) {
+                                    ComPtr<ID3D12PipelineState>& out, UINT8 write_mask) {
     D3D12_GRAPHICS_PIPELINE_STATE_DESC pd{};
     pd.pRootSignature = root_signature_.Get();
     pd.VS = vs;
     pd.PS = ps;
-    pd.BlendState.RenderTarget[0].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
+    pd.BlendState.RenderTarget[0].RenderTargetWriteMask = write_mask;
     pd.SampleMask = UINT_MAX;
     pd.RasterizerState.FillMode = D3D12_FILL_MODE_SOLID;
     pd.RasterizerState.CullMode = D3D12_CULL_MODE_NONE;
@@ -300,11 +300,17 @@ bool PostProcessor::initialize(ID3D12Device* device, ID3D12CommandQueue* queue,
     }
     fault_selftest_ = test_fault("selftest");
     fault_targets_ = test_fault("targets");
+    constexpr UINT8 kRgb = D3D12_COLOR_WRITE_ENABLE_RED | D3D12_COLOR_WRITE_ENABLE_GREEN |
+                           D3D12_COLOR_WRITE_ENABLE_BLUE;
     const bool smaa_pipelines = !test_fault("smaa") &&
         create_smaa_pipelines(settings_.smaa_quality, smaa_edges_, smaa_weights_) &&
-        create_pipeline(code(bytes(g_post_smaa_blend_vs)), code(bytes(g_post_smaa_blend_ps)), kColorFormat, 0, smaa_blend_);
+        create_pipeline(code(bytes(g_post_smaa_blend_vs)), code(bytes(g_post_smaa_blend_ps)), kColorFormat, 0, smaa_blend_) &&
+        create_pipeline(code(bytes(g_post_smaa_blend_vs)), code(bytes(g_post_smaa_blend_ps)), kColorFormat, 0,
+                        smaa_blend_rgb_, kRgb);
     const bool fxaa_pipeline = !test_fault("fxaa") &&
-        create_pipeline(code(bytes(g_post_fullscreen_vs)), code(bytes(g_post_fxaa_ps)), kColorFormat, 0, fxaa_);
+        create_pipeline(code(bytes(g_post_fullscreen_vs)), code(bytes(g_post_fxaa_ps)), kColorFormat, 0, fxaa_) &&
+        create_pipeline(code(bytes(g_post_fullscreen_vs)), code(bytes(g_post_fxaa_ps)), kColorFormat, 0, fxaa_rgb_,
+                        kRgb);
 
     D3D12_DESCRIPTOR_HEAP_DESC hd{};
     hd.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
@@ -364,6 +370,8 @@ void PostProcessor::shutdown() noexcept {
     smaa_weights_.Reset();
     smaa_blend_.Reset();
     fxaa_.Reset();
+    smaa_blend_rgb_.Reset();
+    fxaa_rgb_.Reset();
     easu_.Reset();
     rcas_.Reset();
     rcas_scaled_.Reset();
@@ -522,7 +530,8 @@ void PostProcessor::draw(ID3D12GraphicsCommandList* list, DescriptorRing& srv_ri
                          std::initializer_list<ID3D12Resource*> inputs,
                          std::initializer_list<DXGI_FORMAT> formats,
                          const D3D12_VIEWPORT& viewport,
-                         const Constants& constants) {
+                         const Constants& constants,
+                         const D3D12_RECT* scissor) {
     const DescriptorRing::Table table = srv_ring.allocate(3);
     const UINT increment = device_->GetDescriptorHandleIncrementSize(
         D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
@@ -551,12 +560,12 @@ void PostProcessor::draw(ID3D12GraphicsCommandList* list, DescriptorRing& srv_ri
     list->SetPipelineState(pipeline);
     list->SetGraphicsRoot32BitConstants(0, sizeof(Constants) / 4u, &constants, 0);
     list->SetGraphicsRootDescriptorTable(1, table.gpu);
-    const D3D12_RECT scissor{
+    const D3D12_RECT full{
         static_cast<LONG>(viewport.TopLeftX), static_cast<LONG>(viewport.TopLeftY),
         static_cast<LONG>(viewport.TopLeftX + viewport.Width),
         static_cast<LONG>(viewport.TopLeftY + viewport.Height)};
     list->RSSetViewports(1, &viewport);
-    list->RSSetScissorRects(1, &scissor);
+    list->RSSetScissorRects(1, scissor != nullptr ? scissor : &full);
     list->DrawInstanced(3, 1, 0, 0);
 }
 
@@ -613,6 +622,105 @@ bool PostProcessor::record_aa(ID3D12GraphicsCommandList* list, DescriptorRing& s
          {kColorFormat, kColorFormat}, viewport, c);
     transition(list, antialiased_, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
     return true;
+}
+
+void PostProcessor::note_aa_run(const PostProcessPlan& plan, AaRun ran) {
+    ++status_.frames;
+    status_.last_run = ran;
+    status_.last_wanted = plan.aa_wanted;
+    status_.last_supersampled = plan.supersampled;
+    status_.smaa_frames += ran == AaRun::kSmaa;
+    status_.fxaa_frames += ran == AaRun::kFxaa;
+    if (plan.aa_wanted) {
+        ++status_.aa_wanted_frames;
+        if (ran == AaRun::kNone) {
+            ++status_.aa_skipped_frames;
+            set_reason(status_.skip_reason, plan.smaa || plan.fxaa ? "NO MEMORY" : "FAILED");
+        }
+    }
+}
+
+AaRun PostProcessor::record_scene_aa(ID3D12GraphicsCommandList* list, DescriptorRing& srv_ring,
+                                     ID3D12Resource* color, D3D12_CPU_DESCRIPTOR_HANDLE color_rtv,
+                                     unsigned width, unsigned height, unsigned picture_width,
+                                     unsigned picture_height, unsigned display_width,
+                                     unsigned display_height, float split, std::uint64_t frame_index,
+                                     unsigned frames_in_flight) {
+    if (!ready_ || color == nullptr || width == 0u || height == 0u) {
+        return AaRun::kNone;
+    }
+    release_retired(frame_index);
+    const PostProcessPlan plan = plan_post_process(picture_width, picture_height, display_width,
+                                                   display_height, settings_, status_.smaa_ok, status_.fxaa_ok);
+    AaRun pass = plan.smaa ? AaRun::kSmaa : plan.fxaa ? AaRun::kFxaa : AaRun::kNone;
+    if (pass == AaRun::kSmaa &&
+        !(ensure_target(edges_, width, height, kEdgesFormat, 0u, frame_index, frames_in_flight) &&
+          ensure_target(weights_, width, height, kColorFormat, 1u, frame_index, frames_in_flight) &&
+          ensure_target(stencil_, width, height, kStencilFormat, 0u, frame_index, frames_in_flight))) {
+        pass = status_.fxaa_ok ? AaRun::kFxaa : AaRun::kNone;
+    }
+    // The passes read a copy of the scene and write the EFB.
+    if (pass != AaRun::kNone &&
+        ((fault_targets_ && frame_index != 0u) ||
+         !ensure_target(antialiased_, width, height, kColorFormat, 2u, frame_index, frames_in_flight))) {
+        pass = AaRun::kNone;
+    }
+    note_aa_run(plan, pass);
+    if (pass == AaRun::kNone) {
+        return pass;
+    }
+    D3D12_RESOURCE_BARRIER to_copy{};
+    to_copy.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+    to_copy.Transition.pResource = color;
+    to_copy.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+    to_copy.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
+    to_copy.Transition.StateAfter = D3D12_RESOURCE_STATE_COPY_SOURCE;
+    list->ResourceBarrier(1, &to_copy);
+    transition(list, antialiased_, D3D12_RESOURCE_STATE_COPY_DEST);
+    list->CopyResource(antialiased_.resource.Get(), color);
+    transition(list, antialiased_, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+    std::swap(to_copy.Transition.StateBefore, to_copy.Transition.StateAfter);
+    list->ResourceBarrier(1, &to_copy);
+
+    ID3D12Resource* source = antialiased_.resource.Get();
+    list->SetGraphicsRootSignature(root_signature_.Get());
+    list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+    const D3D12_VIEWPORT viewport{
+        0.0f, 0.0f, static_cast<float>(width), static_cast<float>(height), 0.0f, 1.0f};
+    const LONG left = std::clamp(static_cast<LONG>(std::lround(std::clamp(split, 0.0f, 1.0f) * width)), 0l,
+                                 static_cast<LONG>(width));
+    const D3D12_RECT output{left, 0, static_cast<LONG>(width), static_cast<LONG>(height)};
+    Constants c{};
+    c.rt_metrics[0] = 1.0f / static_cast<float>(width);
+    c.rt_metrics[1] = 1.0f / static_cast<float>(height);
+    c.rt_metrics[2] = static_cast<float>(width);
+    c.rt_metrics[3] = static_cast<float>(height);
+    if (pass == AaRun::kFxaa) {
+        list->OMSetRenderTargets(1, &color_rtv, FALSE, nullptr);
+        draw(list, srv_ring, fxaa_rgb_.Get(), {source}, {kColorFormat}, viewport, c, &output);
+        return pass;
+    }
+    constexpr float kZero[4] = {0.0f, 0.0f, 0.0f, 0.0f};
+    const D3D12_CPU_DESCRIPTOR_HANDLE dsv = stencil_.rtv;
+    transition(list, edges_, D3D12_RESOURCE_STATE_RENDER_TARGET);
+    list->ClearRenderTargetView(edges_.rtv, kZero, 0, nullptr);
+    list->ClearDepthStencilView(dsv, D3D12_CLEAR_FLAG_STENCIL, 1.0f, 0, 0, nullptr);
+    list->OMSetRenderTargets(1, &edges_.rtv, FALSE, &dsv);
+    list->OMSetStencilRef(1);
+    draw(list, srv_ring, smaa_edges_.Get(), {source}, {kColorFormat}, viewport, c);
+    transition(list, edges_, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+    transition(list, weights_, D3D12_RESOURCE_STATE_RENDER_TARGET);
+    list->ClearRenderTargetView(weights_.rtv, kZero, 0, nullptr);
+    list->OMSetRenderTargets(1, &weights_.rtv, FALSE, &dsv);
+    draw(list, srv_ring, smaa_weights_.Get(),
+         {edges_.resource.Get(), area_texture_.Get(), search_texture_.Get()},
+         {kEdgesFormat, DXGI_FORMAT_R8G8_UNORM, DXGI_FORMAT_R8_UNORM},
+         viewport, c);
+    transition(list, weights_, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+    list->OMSetRenderTargets(1, &color_rtv, FALSE, nullptr);
+    draw(list, srv_ring, smaa_blend_rgb_.Get(), {source, weights_.resource.Get()},
+         {kColorFormat, kColorFormat}, viewport, c, &output);
+    return pass;
 }
 
 void PostProcessor::self_test(ID3D12CommandQueue* queue) {
@@ -810,37 +918,14 @@ void PostProcessor::record(ID3D12GraphicsCommandList* list,
     release_retired(frame_index);
     const unsigned target_width = static_cast<unsigned>(viewport.Width);
     const unsigned target_height = static_cast<unsigned>(viewport.Height);
+    // The scene was antialiased before the 2D layer (record_scene_aa).
+    PostProcessSettings scaling = settings_;
+    scaling.aa = PostProcessSettings::Aa::kOff;
     PostProcessPlan plan = plan_post_process(
-        source_width, source_height, target_width, target_height, settings_,
+        source_width, source_height, target_width, target_height, scaling,
         status_.smaa_ok, status_.fxaa_ok);
 
     ID3D12Resource* image = source;
-    AaRun ran = AaRun::kNone;
-    if (plan.smaa || plan.fxaa) {
-        const AaRun pass = plan.smaa ? AaRun::kSmaa : AaRun::kFxaa;
-        if (record_aa(list, srv_ring, pass, source, source_width, source_height,
-                      frame_index, frames_in_flight)) {
-            ran = pass;
-        } else if (pass == AaRun::kSmaa && status_.fxaa_ok &&
-                   record_aa(list, srv_ring, AaRun::kFxaa, source, source_width, source_height,
-                             frame_index, frames_in_flight)) {
-            ran = AaRun::kFxaa;
-        }
-        if (ran != AaRun::kNone) image = antialiased_.resource.Get();
-    }
-    ++status_.frames;
-    status_.last_run = ran;
-    status_.last_wanted = plan.aa_wanted;
-    status_.last_supersampled = plan.supersampled;
-    status_.smaa_frames += ran == AaRun::kSmaa;
-    status_.fxaa_frames += ran == AaRun::kFxaa;
-    if (plan.aa_wanted) {
-        ++status_.aa_wanted_frames;
-        if (ran == AaRun::kNone) {
-            ++status_.aa_skipped_frames;
-            set_reason(status_.skip_reason, plan.smaa || plan.fxaa ? "NO MEMORY" : "FAILED");
-        }
-    }
 
     list->SetGraphicsRootSignature(root_signature_.Get());
     list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
