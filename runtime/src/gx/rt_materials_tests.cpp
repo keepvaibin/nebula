@@ -120,6 +120,24 @@ bool values_are_clamped() {
     return ok;
 }
 
+bool glow_apart_from_light() {
+    std::istringstream file(
+        "hash\tclass\tr\tg\tb\tintensity\tglow\n"
+        "00000000000000d1\temissive-area\t1\t0.6\t0.2\t1\t0.3\n"
+        "00000000000000d2\temitter\t1\t1\t1\t2\t\n"
+        "00000000000000d3\temitter\t1\t1\t1\t2\t40\n");
+    RtMaterialTable table;
+    table.read(file);
+    const RtMaterial* core = find(table, 0xD1u);
+    bool ok = expect(core != nullptr && near(core->intensity, 1.0f) && near(core->glow, 0.3f),
+                     "glow apart from the intensity");
+    const RtMaterial* star = find(table, 0xD2u);
+    ok &= expect(star != nullptr && star->glow < 0.0f, "no glow: the intensity's");
+    const RtMaterial* big = find(table, 0xD3u);
+    ok &= expect(big != nullptr && near(big->glow, 16.0f), "glow clamps");
+    return ok;
+}
+
 bool stage_suns() {
     std::istringstream file(
         "stage\tsource\tx\ty\tz\tr\tg\tb\tstrength\tsize\tshafts\tnotes\n"
@@ -155,6 +173,7 @@ int main() {
     ok &= columns_by_header();
     ok &= lights_fill_their_fields();
     ok &= values_are_clamped();
+    ok &= glow_apart_from_light();
     ok &= stage_suns();
     if (!ok) {
         return 1;

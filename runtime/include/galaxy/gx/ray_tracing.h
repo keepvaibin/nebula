@@ -578,6 +578,9 @@ private:
     };
     static_assert(sizeof(AuthoredLight) == 32u);
     std::vector<AuthoredLight> authored_;
+    // Per glow draw (glow_draws_) for GlowEmitCS, in AuthoredLight's layout: its triangles, the material
+    // table's colour and intensity for its texture where the table names it (flags kGlowTable).
+    std::vector<AuthoredLight> glow_lights_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> authored_emit_pso_;
     float authored_power_ = 40000.0f;   // GALAXY_RT_AUTHORED_POWER: a Luma's light (intensity 1)
     std::uint64_t authored_frames_ = 0u;
