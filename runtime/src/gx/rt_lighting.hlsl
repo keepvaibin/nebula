@@ -123,6 +123,8 @@ static const uint kDrawTableStar = 8u;      // g_draws word 6: a star's burning 
 // drawn after the trace, Rosalina) has no records in g_positions or g_surfaces: shadow, sky and reflection
 // rays meet it as an occluder.
 static const uint kSceneMask = 1u;
+// g_draws word 6: an alpha-tested card (grass, flowers), traced whole (card_blocks decides its hits).
+static const uint kDrawTableCard = 16u;
 static const float kDrawGlowScale = 16.0f;
 // RtDraw.flags bits 8-11 (rt_surfaces.h RtSurfaceClass::Crystal): clear crystal, glass and gems.
 static const uint kClearClass = 7u;
@@ -1449,6 +1451,62 @@ float3 hit_light(float3 hit, float3 fallback)
     return unpack_r11g11b10(picture.x);
 }
 
+// Foliage cards: the scene holds the alpha-tested ones whole, their cut-outs filled. A hit on a card
+// counts where the raster drew it (the depth at the hit's pixel lies on the card's plane), not where it
+// saw through it (a farther depth, the sky); hidden or out of view, at the cards' mean coverage (Gusty
+// Garden's flower and leaf cards: 0.46-0.57 of their texels), a number from the primitive and `salt` (the
+// sample, the frame, the ray) deciding.
+static const float kCardCoverage = 0.5f;
+
+bool traced_card(uint flags)
+{
+    return (g_draws.Load(min(flags >> 16u, max(g_draw_count, 1u) - 1u) * kDrawStride + 24u) & kDrawTableCard) != 0u;
+}
+
+float card_hash(uint primitive, uint salt)
+{
+    uint h = primitive * 0x9E3779B1u + salt;
+    h ^= h >> 16u;
+    h *= 0x7FEB352Du;
+    h ^= h >> 15u;
+    h *= 0x846CA68Bu;
+    h ^= h >> 16u;
+    return float(h >> 8u) * (1.0f / 16777216.0f);
+}
+
+// Whether a candidate hit at eye-space `h` on `primitive` (its g_surfaces flags word `flags`) stops a ray.
+bool card_blocks(uint primitive, uint flags, float3 h, uint salt)
+{
+    if (!traced_card(flags)) {
+        return true;
+    }
+    const float2 q = eye_to_pixel(g_projection, g_viewport, h);
+    if (h.z < -g_near && inside(g_viewport, q) && all(q < float2(g_target_size))) {
+        const float depth = g_efb_depth.Load(int3(int2(q), 0));
+        if (far_plane(g_depth, depth)) {
+            return false;
+        }
+        // The card's plane along the pixel's own ray (edge-on: undecided).
+        const float3 v0 = asfloat(g_positions.Load3(primitive * 36u));
+        const float3 face = cross(asfloat(g_positions.Load3(primitive * 36u + 12u)) - v0,
+                                  asfloat(g_positions.Load3(primitive * 36u + 24u)) - v0);
+        const float3 d = pixel_direction(g_projection, g_viewport, floor(q) + 0.5f);
+        const float facing = dot(face, d);
+        if (abs(facing) > 0.05f * length(face) * length(d)) {
+            const float plane = -dot(face, v0) / facing;
+            const float z = depth_to_eye_z(g_depth, depth);
+            const float tolerance = 0.004f * abs(plane) + 1.0f;
+            if (z < plane - tolerance) {
+                return false;
+            }
+            if (z <= plane + tolerance) {
+                return true;
+            }
+        }
+    }
+    return card_hash(primitive, salt) < kCardCoverage;
+}
+
 // ---------------------------------------------------------------------------------------------
 // Tile light lists: each group of 8 x 8 samples keeps the glow lights whose reach meets the box
 // around its samples' surface points; its samples weigh only those. Lights beyond a tile's reach
@@ -1553,9 +1611,15 @@ void TraceCS(uint3 id : SV_DispatchThreadID, uint gi : SV_GroupIndex)
         ray.Direction = p / span;
         ray.TMin = 0.0f;
         ray.TMax = span * 1.02f + 2.0f;
-        RayQuery<RAY_FLAG_FORCE_OPAQUE | RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES> query;
+        RayQuery<RAY_FLAG_FORCE_NON_OPAQUE | RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES> query;
         query.TraceRayInline(g_scene, RAY_FLAG_NONE, kSceneMask, ray);
-        query.Proceed();
+        while (query.Proceed()) {
+            // A foliage card is the surface only where the raster drew it (at this pixel's depth).
+            if (abs(query.CandidateTriangleRayT() - span) <= span * 0.002f + 0.5f ||
+                !traced_card(g_surfaces.Load(query.CandidatePrimitiveIndex() * 16u + 12u))) {
+                query.CommitNonOpaqueTriangleHit();
+            }
+        }
         if (query.CommittedStatus() == COMMITTED_TRIANGLE_HIT &&
             abs(query.CommittedRayT() - span) < span * 0.01f + 2.0f) {
             const uint tri = query.CommittedPrimitiveIndex();
@@ -1597,6 +1661,8 @@ void TraceCS(uint3 id : SV_DispatchThreadID, uint gi : SV_GroupIndex)
         }
     }
     const float3 origin = lifted + ng * (0.2f + abs(p.z) * 4e-4f);
+    // Decides card hits out of view (card_blocks), per sample, frame and ray.
+    const uint salt = index * 32u + g_frame * 0x632BE5ABu;
 
     // The sun: one shadow ray inside its disc, to its nearest blocker (its distance sizes the
     // penumbra the first filter gives the shadow, SpatialACS).
@@ -1636,6 +1702,10 @@ void TraceCS(uint3 id : SV_DispatchThreadID, uint gi : SV_GroupIndex)
             }
             if (card && query.CandidateTriangleRayT() < 60.0f &&
                 (g_draws.Load(min(hit >> 16u, max(g_draw_count, 1u) - 1u) * kDrawStride + 24u) & kDrawTableFoliage) != 0u) {
+                continue;
+            }
+            if (!card_blocks(query.CandidatePrimitiveIndex(), hit,
+                             origin + ray.Direction * query.CandidateTriangleRayT(), salt + 1u)) {
                 continue;
             }
             query.CommitNonOpaqueTriangleHit();
@@ -1699,8 +1769,12 @@ void TraceCS(uint3 id : SV_DispatchThreadID, uint gi : SV_GroupIndex)
                      RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES> query;
             query.TraceRayInline(g_scene, RAY_FLAG_NONE, 0xFFu, ray);
             while (query.Proceed()) {
-                if (query.CandidateInstanceID() != 0u ||
-                    (g_surfaces.Load(query.CandidatePrimitiveIndex() * 16u + 12u) & kDrawNoShadow) == 0u) {
+                // Late geometry (instance 1) has no records: it blocks. A card blocks where the raster drew it.
+                const bool late_hit = query.CandidateInstanceID() != 0u;
+                const uint hit = late_hit ? 0u : g_surfaces.Load(query.CandidatePrimitiveIndex() * 16u + 12u);
+                if (late_hit || ((hit & kDrawNoShadow) == 0u &&
+                                 card_blocks(query.CandidatePrimitiveIndex(), hit,
+                                             origin + ray.Direction * query.CandidateTriangleRayT(), salt + 2u))) {
                     query.CommitNonOpaqueTriangleHit();
                 }
             }
@@ -1776,10 +1850,17 @@ void TraceCS(uint3 id : SV_DispatchThreadID, uint gi : SV_GroupIndex)
                 ray.TMin = 0.0f;
                 // The light fills its glow (a core, a lamp head): the ray ends at its radius.
                 ray.TMax = max(span - max(0.9f * kept[s].w, 2.0f + 0.01f * span), 0.0f);
-                RayQuery<RAY_FLAG_FORCE_OPAQUE | RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH |
+                RayQuery<RAY_FLAG_FORCE_NON_OPAQUE | RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH |
                          RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES> query;
                 query.TraceRayInline(g_scene, RAY_FLAG_NONE, 0xFFu, ray);
-                query.Proceed();
+                while (query.Proceed()) {
+                    if (query.CandidateInstanceID() != 0u ||
+                        card_blocks(query.CandidatePrimitiveIndex(),
+                                    g_surfaces.Load(query.CandidatePrimitiveIndex() * 16u + 12u),
+                                    start + ray.Direction * query.CandidateTriangleRayT(), salt + 3u + s)) {
+                        query.CommitNonOpaqueTriangleHit();
+                    }
+                }
                 if (query.CommittedStatus() != COMMITTED_TRIANGLE_HIT) {
                     // power nl / (pi (d2 + r2)) (windowed to its reach) over its share of the weights,
                     // shared among the picks.
@@ -1826,8 +1907,11 @@ void TraceCS(uint3 id : SV_DispatchThreadID, uint gi : SV_GroupIndex)
         RayQuery<RAY_FLAG_FORCE_NON_OPAQUE | RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES> query;
         query.TraceRayInline(g_scene, RAY_FLAG_NONE, 0xFFu, ray);
         while (query.Proceed()) {
-            if (query.CandidateInstanceID() != 0u ||
-                (g_surfaces.Load(query.CandidatePrimitiveIndex() * 16u + 12u) & kDrawNoShadow) == 0u) {
+            const bool late_hit = query.CandidateInstanceID() != 0u;
+            const uint hit = late_hit ? 0u : g_surfaces.Load(query.CandidatePrimitiveIndex() * 16u + 12u);
+            if (late_hit || ((hit & kDrawNoShadow) == 0u &&
+                             card_blocks(query.CandidatePrimitiveIndex(), hit,
+                                         origin + ray.Direction * query.CandidateTriangleRayT(), salt + 5u + i))) {
                 query.CommitNonOpaqueTriangleHit();
             }
         }

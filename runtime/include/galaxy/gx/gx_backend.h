@@ -794,6 +794,8 @@ private:
     // depth-writing perspective triangles; flush_draw_state) and whether the scene was traced.
     std::uint8_t rt_phase_ = 0xFFu;
     bool rt_state_eligible_ = false;
+    // The same, alpha-tested: traced as foliage cards where the material table names foliage.
+    bool rt_card_eligible_ = false;
     // Additive blended triangles (glows) under a perspective projection.
     bool rt_glow_eligible_ = false;
     // The glow exposure the PS constants carry: 0 none, 1 sprite, 2 model.
@@ -808,6 +810,7 @@ private:
     bool rt_scene_traced_ = true;
     bool rt_view_set_ = false;
     [[nodiscard]] bool rt_geometry_draw() const noexcept;
+    [[nodiscard]] bool rt_card_draw() const noexcept;
     [[nodiscard]] bool rt_glow_draw() const noexcept;
     [[nodiscard]] bool rt_late_draw() const noexcept;
     [[nodiscard]] bool rt_water_draw() const noexcept;

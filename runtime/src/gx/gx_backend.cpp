@@ -6965,7 +6965,8 @@ void GxBackend::end_side_layer() {
 }
 
 bool GxBackend::rt_geometry_draw() const noexcept {
-    if (!rt_state_eligible_ || !scene_phase_ || side_layer_ != kSceneLayer || !renderer_.rt_scene_open()) {
+    if (!(rt_state_eligible_ || rt_card_draw()) || !scene_phase_ || side_layer_ != kSceneLayer ||
+        !renderer_.rt_scene_open()) {
         return false;
     }
     using motion::ScenePhase;
@@ -6980,6 +6981,18 @@ bool GxBackend::rt_late_draw() const noexcept {
     static_assert(static_cast<std::uint8_t>(motion::ScenePhase::AfterIndirect) == kRtLatePhase);
     return rt_state_eligible_ && scene_phase_ && side_layer_ == kSceneLayer && renderer_.rt_late_open() &&
            rt_phase_ == static_cast<std::uint8_t>(motion::ScenePhase::AfterIndirect);
+}
+
+// An alpha-tested draw of the material table's foliage (grass tufts, flower carpets): traced as a card,
+// whole (kRtDrawCard: the lighting counts its hits where the raster drew it). GALAXY_RT_CARDS=0 leaves
+// cards out of the traced scene.
+bool GxBackend::rt_card_draw() const noexcept {
+    static const bool enabled = read_env_u64("GALAXY_RT_CARDS", 1u) != 0u;
+    if (!enabled || !rt_card_eligible_ || current_rt_material_ == 0u) {
+        return false;
+    }
+    const RtMaterial* const material = rt_material(current_rt_material_);
+    return material != nullptr && material->foliage;
 }
 
 // Glows: additive draws of the translucent phases, after the trace and before the scene's end.
@@ -7363,6 +7376,7 @@ bool GxBackend::begin_rt_batch(const DrawCall& call, RtDrawInfo& info) {
                            (fall != nullptr && fall->waterfall ? kRtDrawWaterfall : 0u);
         } else {
             info.surface |= static_cast<std::uint32_t>(surface.surface_class) << kRtDrawClassShift;
+            info.surface |= rt_state_eligible_ ? 0u : kRtDrawCard;
             // The table's shadow 0 was read but never applied: Good Egg's planet shells blocked its
             // sun everywhere (measured sb29: every surface blocked 100-200 units out).
             // A helper row (an environment map, a mask) speaks for its texture, not for the draw.
@@ -12891,15 +12905,17 @@ ID3D12PipelineState* GxBackend::flush_draw_state(
         // Traced geometry: unblended triangles (no logic op) that write colour and depth under a
         // perspective projection. Shadow volumes, z-only passes and screen quads stay out, and so
         // do alpha-tested cut-outs (foliage, fences) and z-textured surfaces, whose depth is not
-        // their triangles'.
+        // their triangles'. The material table's foliage cards are the exception (rt_card_draw).
         const std::uint32_t bb = render_state_key_.blend_bits;
-        rt_state_eligible_ =
+        const bool traceable =
             topology_key == static_cast<std::uint8_t>(D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE) &&
             (bb & ((1u << 0u) | (1u << 8u))) == 0u && (bb & (1u << 25u)) != 0u &&
             (render_state_key_.zmode_bits & (1u << 4u)) != 0u &&
             render_state_key_.cull != static_cast<std::uint8_t>(CullMode::All) &&
             state_.xf(static_cast<std::uint16_t>(xf::kProjectionBase + 6u)) == 0u &&
-            (ps_key_.flags & 0x02u) == 0u && alpha_test_keeps_all(ps_key_);
+            (ps_key_.flags & 0x02u) == 0u;
+        rt_state_eligible_ = traceable && alpha_test_keeps_all(ps_key_);
+        rt_card_eligible_ = traceable && !rt_state_eligible_;
         const BlendMode blend = state_.blend_mode();
         rt_glow_eligible_ =
             topology_key == static_cast<std::uint8_t>(D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE) && blend.blend_enable &&

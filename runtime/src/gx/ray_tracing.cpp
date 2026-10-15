@@ -200,6 +200,8 @@ constexpr std::uint32_t kDrawTableStar = 8u;
 // camera rays to the frame's own surfaces skip.
 constexpr UINT kSceneMask = 1u;
 constexpr UINT kLateMask = 2u;
+// g_draws word 6 (rt_lighting.hlsl kDrawTableCard): an alpha-tested card, traced whole (kRtDrawCard).
+constexpr std::uint32_t kDrawTableCard = 16u;
 constexpr float kDrawGlowScale = 16.0f;
 // AuthoredLight.flags (rt_lighting.hlsl kAuthored*): the colour the draw shows; a spot light.
 constexpr std::uint32_t kAuthoredTint = 1u;
@@ -1626,7 +1628,8 @@ void SceneRayTracer::add_draw(const RtDraw& draw, const RtDrawInfo& info) {
         intensity = material->intensity;
         surface = unit_pair(material->matte ? 1.0f : material->roughness, material->metallic);
         flags = (material->tint ? kDrawTableTint : 0u) | (material->foliage ? kDrawTableFoliage : 0u) |
-                (material->star ? kDrawTableStar : 0u);
+                (material->star ? kDrawTableStar : 0u) |
+                ((info.surface & kRtDrawCard) != 0u ? kDrawTableCard : 0u);
         if (material->glow >= 0.0f) {
             flags |= kDrawTableGlow |
                      (static_cast<std::uint32_t>(std::lround(std::min(material->glow / kDrawGlowScale, 1.0f) * 65535.0f))

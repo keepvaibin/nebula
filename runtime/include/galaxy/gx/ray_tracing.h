@@ -71,6 +71,9 @@ inline constexpr std::uint32_t kRtDrawLens = 1u << 14u;
 // The material table's shadow 0 (wings, glow shells around planets, overlays): in the traced scene but
 // never in the way of the sun, the sky or a light (rt_lighting.hlsl kDrawNoShadow).
 inline constexpr std::uint32_t kRtDrawNoShadow = 1u << 15u;
+// RtDrawInfo.surface only (above the RtDraw.flags bits): an alpha-tested foliage card, in the traced
+// scene whole; add_draw marks its draw record (rt_lighting.hlsl kDrawTableCard).
+inline constexpr std::uint32_t kRtDrawCard = 1u << 16u;
 // Bits 8-11: the draw's surface class (rt_surfaces.h).
 inline constexpr std::uint32_t kRtDrawClassShift = 8u;
 inline constexpr std::uint32_t kRtDrawClassMask = 0xFu << kRtDrawClassShift;
