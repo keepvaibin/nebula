@@ -2082,8 +2082,13 @@ void SpatialBCS(uint3 id : SV_DispatchThreadID)
                 const float3 k = rgb8(colors.y);
                 level = clamp(min(a + k, 1.0f) / max(min(a + 0.55f * k, 1.0f), 0.05f), 1.0f, 2.0f);
             }
-            const float3 day_m = shadow * form * ao * tint * level + points;
-            const float3 day_open = (shadow * form) * level + points;
+            // By day the lights add a third of their light (daylight swamps it; the game's glow sprites
+            // found 56-192 lights in Honeyhive and lifted it to 1.23 of the game, measured fc33), and nothing
+            // passes 1.1 of its art's level: no overexposed grass, sand or dirt. The light sources' own glow
+            // (below) is not affected.
+            const float3 day_points = points * 0.35f;
+            const float3 day_m = min(shadow * form * ao * tint * level + day_points, 1.1f * level);
+            const float3 day_open = min((shadow * form) * level + day_points, 1.1f * level);
             lighting = lerp(lighting, day_m, day_mix);
             open = lerp(open, day_open, day_mix);
         }

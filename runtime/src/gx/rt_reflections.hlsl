@@ -1740,8 +1740,11 @@ Blend blend_samples(float2 pixel, float3 p, bool water)
             const bool clear = surface_class >= 4u || metal > 0.5f;
             const float graze = clear ? 1.0f : 0.5f;
             const float alpha_k = max(rough * rough, 1e-3f);
-            const float k = rough >= 0.62f ? 0.0f
-                          : (f0 + (fresnel(f0, alpha_k, dot(n, v)) - f0) * graze) * sample_weight;
+            float k = rough >= 0.62f ? 0.0f
+                    : (f0 + (fresnel(f0, alpha_k, dot(n, v)) - f0) * graze) * sample_weight;
+            if (surface_class == kWaterSurface) {
+                k = min(k, 0.4f * sample_weight);
+            }
             const float3 light = min(unpack_r11g11b10(sample.x), 1.0f);
             b.sum += light * (k * bw);
             // How much of the surface's own colour the reflection takes away: all of it at cover 1
@@ -2075,49 +2078,57 @@ CompositeOut WaterCompositePS(float4 position : SV_Position)
         const float2 wobble = clamp(eye_to_pixel(m_projection, m_viewport, p + shift_eye) - pixel, -8.0f, 8.0f);
         const float px_per_unit = 0.5f * m_viewport.w * abs(m_projection.z) / max(-p.z, 1.0f);
         const float radius = clamp(40.0f * px_per_unit, 3.0f, 18.0f);
-        // The seabed's light through the water: depth absorption (down and back up, red first) and the
-        // shallows' caustics act on the seabed only; the game's water colour holds its own (tinting it
-        // again turned the shallows neon). Where no floor was found the deep value, blended by the share
-        // found (no switch per sample).
+        // The water's depth over the floor the trace found (where none, the deep value, blended by the
+        // share found: no switch per sample), and the caustics the waves focus on the shallows' floor
+        // (energy-neutral).
         const float path_c = floor_z != 0.0f ? lerp(500.0f, min(path, 500.0f), floor_found) : 500.0f;
-        float3 seabed_gain = lerp(float3(1.0f, 1.0f, 1.0f), exp(-float3(0.0035f, 0.0012f, 0.0009f) * path_c), 0.75f);
         const float shallow = floor_z != 0.0f ? exp(-path_c / 120.0f) : 0.0f;
+        float caustic_gain = 1.0f;
         if (shallow > 0.0f && m_water2.w > 0.0f) {
-            seabed_gain *= lerp(1.0f, caustic(floor_point, p, n), saturate(shallow * m_water2.w));
+            caustic_gain = lerp(1.0f, caustic(floor_point, p, n), saturate(shallow * m_water2.w));
         }
         const float2 lo = m_viewport.xy;
         const float2 hi = m_viewport.xy + m_viewport.zw - 1.0f;
         float3 water;
         float edge = 1.0f;
         if (m_water2.y > 0.0f) {
+            // Where the game drew water at this pixel (its own full-resolution outline: no stair-steps from
+            // the half-resolution samples at the shore).
             const int2 own = int2(clamp(position.xy, lo, hi));
             const float3 drawn = abs(m_scene.Load(int3(own, 0)).rgb - m_opaque.Load(int3(own, 0)).rgb);
-            edge = smoothstep(0.004f, 0.03f, drawn.r + drawn.g + drawn.b);
-            // The water layer the game drew (the frame with it less the frame before it) low-passed by a
-            // bilateral filter (its tiled texture goes, its colour and gradient stay), over the seabed as it
-            // lies (sharp), moved by the waves' refraction where the moved point is water too.
+            edge = smoothstep(0.002f, 0.012f, drawn.r + drawn.g + drawn.b);
+            // The traced water body. Its tone: the game's water colour (each galaxy's own hue and its
+            // gradient from shore to deep) averaged over a wide disc of water pixels, so that no texel of
+            // its tiled texture reaches the picture (it showed as specks and tiling; measured wv0-wv4: not
+            // the waves). Its detail: the seabed under it (lit by the traced light, with its shadows) over
+            // its own average on the same disc, energy-neutral, with the shallows' caustics, fading with
+            // depth; read where the waves' refraction moves it. The traced reflections go over it.
             const bool moved = water_z(pixel + wobble) != 0.0f;
             const float2 centre_at = clamp(position.xy + (moved ? wobble : 0.0f), lo, hi);
-            const int2 at = int2(centre_at);
-            const float3 seabed = m_opaque.Load(int3(at, 0)).rgb;
-            float3 layer = m_scene.Load(int3(at, 0)).rgb - seabed;
-            float taps = 1.0f;
+            const float wide = clamp(60.0f * px_per_unit, 8.0f, 48.0f);
+            float3 tone = float3(0.0f, 0.0f, 0.0f);
+            float3 floor_mean = float3(0.0f, 0.0f, 0.0f);
+            float taps = 0.0f;
             [unroll] for (uint k = 0u; k < 16u; ++k) {
                 const float a = float(k) * 2.39996f;
-                const int2 q = int2(clamp(centre_at + float2(cos(a), sin(a)) * (radius * sqrt((float(k) + 0.5f) / 16.0f)), lo, hi));
-                const float3 o = m_opaque.Load(int3(q, 0)).rgb;
-                const float3 d = o - seabed;
-                const float w = exp(-dot(d, d) / 0.03f);
-                layer += (m_scene.Load(int3(q, 0)).rgb - o) * w;
-                taps += w;
+                const int2 q = int2(clamp(centre_at + float2(cos(a), sin(a)) * (wide * sqrt((float(k) + 0.5f) / 16.0f)), lo, hi));
+                if (water_z(pixel + (float2(q) + 0.5f - position.xy)) != 0.0f) {
+                    tone += m_scene.Load(int3(q, 0)).rgb;
+                    floor_mean += m_opaque.Load(int3(q, 0)).rgb;
+                    taps += 1.0f;
+                }
             }
-            layer /= taps;
-            {
-                // 30 % less saturated, fading towards the shore (the seabed shows through the shallows).
-                const float through = exp(-0.0012f * path_c);
-                layer = lerp(layer, luminance(layer).xxx, 0.1f) * lerp(1.0f, 0.8f, through);
+            if (taps < 1.0f) {
+                tone = m_scene.Load(int3(int2(centre_at), 0)).rgb;
+                floor_mean = m_opaque.Load(int3(int2(centre_at), 0)).rgb;
+                taps = 1.0f;
             }
-            water = max(seabed * seabed_gain + layer, 0.0f);
+            tone /= taps;
+            floor_mean /= taps;
+            const float3 seabed = m_opaque.Load(int3(int2(centre_at), 0)).rgb;
+            const float3 detail = clamp(seabed / max(floor_mean, 0.02f), 0.4f, 1.8f) * caustic_gain;
+            const float clear = exp(-path_c / 90.0f);
+            water = tone * lerp(float3(1.0f, 1.0f, 1.0f), detail, clear);
         } else {
             const float3 centre = m_scene.Load(int3(int2(clamp(position.xy + wobble, lo, hi)), 0)).rgb;
             water = centre;
@@ -2132,7 +2143,7 @@ CompositeOut WaterCompositePS(float4 position : SV_Position)
                 taps += w;
             }
             water /= taps;
-            water *= seabed_gain;
+            water *= caustic_gain;
         }
         // The shore: foam where the water is a few units deep, broken by drifting noise.
         if (floor_z != 0.0f && m_water2.z > 0.0f) {
