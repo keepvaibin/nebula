@@ -601,6 +601,8 @@ private:
     bool emit_log_pending_ = false;
     std::uint64_t emit_log_frame_ = 0u;
     std::array<float, 3> emit_log_eye_{};
+    // The logged scene's material-table point lights, glow draws and the glow draws the table names.
+    std::array<std::uint32_t, 3> emit_log_draws_{};
     std::array<D3D12_RESOURCE_STATES, 2> light_z_state_{};
     std::array<D3D12_RESOURCE_STATES, 2> light_history_state_{};
     std::array<D3D12_RESOURCE_STATES, kLightSlots> light_final_state_{};

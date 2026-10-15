@@ -1157,9 +1157,11 @@ void SceneRayTracer::log_emitters() {
     };
     std::sort(lights.begin(), lights.end(), [&](const Entry& a, const Entry& b) { return lum(a) > lum(b); });
     char line[256];
-    std::snprintf(line, sizeof(line), "[rt-emit] frame=%llu lights=%u total=%.0f eye=%.0f,%.0f,%.0f",
+    std::snprintf(line, sizeof(line),
+                  "[rt-emit] frame=%llu lights=%u total=%.0f eye=%.0f,%.0f,%.0f table-lights=%u glow-draws=%u "
+                  "table-glows=%u",
                   static_cast<unsigned long long>(emit_log_frame_), count, total, emit_log_eye_[0], emit_log_eye_[1],
-                  emit_log_eye_[2]);
+                  emit_log_eye_[2], emit_log_draws_[0], emit_log_draws_[1], emit_log_draws_[2]);
     std::cerr << line << '\n';
     {
         // Sky and scene means (8-bit units), the sky state, the exposure and the lit / game ratio.
@@ -2922,6 +2924,10 @@ void SceneRayTracer::capture_glow_lights(ID3D12GraphicsCommandList* list, const 
         to_state(list, picture_sums_.Get(), picture_sums_state_, sums_state);
         emit_log_pending_ = true;
         emit_log_frame_ = frame_index_;
+        emit_log_draws_ = {static_cast<std::uint32_t>(authored_.size()), glow_draws,
+                           static_cast<std::uint32_t>(std::count_if(
+                               glow_lights_.begin(), glow_lights_.end(),
+                               [](const AuthoredLight& l) { return (l.flags & kGlowTableIntensity) != 0u; }))};
         // The camera's world position: -R^T t of the world-to-eye rows.
         for (unsigned i = 0; i < 3u; ++i) {
             emit_log_eye_[i] = -(camera_[0 * 4 + i] * camera_[0 * 4 + 3] + camera_[1 * 4 + i] * camera_[1 * 4 + 3] +
