@@ -1181,9 +1181,12 @@ cbuffer RtBloomComposite : register(b0)
     uint2 o_size;
     float o_strength;
     float o_split;              // GALAXY_RT_SPLIT: left of it the game's own picture
-    uint2 o_pad;
+    uint2 o_light_size;         // the lighting's samples (0: no halo mask)
+    uint o_factor;              // EFB pixels per sample side
+    uint3 o_pad;
 };
 StructuredBuffer<uint> o_bloom : register(t0);
+StructuredBuffer<uint4> o_light : register(t1);   // the lighting's result (SpatialBCS g_final)
 
 float4 BloomPS(float4 position : SV_Position) : SV_Target0
 {
@@ -1199,6 +1202,13 @@ float4 BloomPS(float4 position : SV_Position) : SV_Target0
         const int2 s = clamp(b + o, int2(0, 0), int2(o_size) - 1);
         const float w = (o.x != 0 ? f.x : 1.0f - f.x) * (o.y != 0 ? f.y : 1.0f - f.y);
         c += unpack_r11g11b10(o_bloom[uint(s.y) * o_size.x + uint(s.x)]) * w;
+    }
+    // A small light source (Luma, star bit, star, fire enemy) glows around itself, not over itself: its own
+    // pixels (a halo share in the lighting's result) keep their detail.
+    if (o_factor != 0u) {
+        const uint2 s = min(uint2(position.xy) / o_factor, o_light_size - 1u);
+        const float halo = f16tof32(o_light[s.y * o_light_size.x + s.x].w >> 16u);
+        c *= 1.0f - saturate(halo * 2.5f);
     }
     return float4(c * o_strength, 0.0f);
 }
