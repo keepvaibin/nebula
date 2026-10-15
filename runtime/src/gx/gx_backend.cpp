@@ -7191,8 +7191,17 @@ bool GxBackend::begin_rt_batch(const DrawCall& call, RtDrawInfo& info) {
     // A black hole's lens (the table's `lens`): captured with the glows for the finish's bending.
     const RtMaterial* const lens_material = translucent ? rt_material(current_rt_material_) : nullptr;
     const bool lens = lens_material != nullptr && lens_material->lens && renderer_.rt_glow_open();
-    const bool glow = translucent && !lens && rt_glow_draw();
-    const bool water = translucent && !lens && !glow && rt_water_draw();
+    bool clear_added = false;
+    if (translucent && !lens && renderer_.rt_water_open() && rt_glow_draw()) {
+        const RtMaterial* const clear = rt_material(current_rt_material_);
+        const VcdType position = state_.vertex_desc(0u).position.vcd;
+        clear_added = clear != nullptr && !clear->particle && !clear->waterfall && clear->emission == RtEmission::None &&
+                      (clear->surface_class == static_cast<std::uint8_t>(RtSurfaceClass::Crystal) ||
+                       clear->surface_class == static_cast<std::uint8_t>(RtSurfaceClass::Water)) &&
+                      (position == VcdType::Index8 || position == VcdType::Index16);
+    }
+    const bool glow = translucent && !lens && !clear_added && rt_glow_draw();
+    const bool water = translucent && !lens && !glow && (clear_added || rt_water_draw());
     if (translucent && !glow && !water && !lens) {
         return false;
     }
@@ -7241,8 +7250,8 @@ bool GxBackend::begin_rt_batch(const DrawCall& call, RtDrawInfo& info) {
         }
     }
     info.rt_material = current_rt_material_;
-    if (water && surface.surface_class == RtSurfaceClass::Metal) {
-        // A blended environment map is glass, not metal.
+    if ((water && surface.surface_class == RtSurfaceClass::Metal) || clear_added) {
+        // A blended environment map is glass, not metal; an added one over ice is the ice's gloss.
         surface.surface_class = RtSurfaceClass::Crystal;
     }
     if (water && surface.surface_class != RtSurfaceClass::Water && surface.surface_class != RtSurfaceClass::Crystal) {
@@ -12594,6 +12603,8 @@ ID3D12PipelineState* GxBackend::flush_draw_state(
         lit_translucent_ =
             scene_phase_ && side_layer_ == kSceneLayer && (texture_map_mask & 0x80u) == 0u && b.blend_enable &&
             !b.logic_op_enable && !b.subtract && b.color_update && b.dst_factor != BlendFactor::One &&
+            b.src_factor != BlendFactor::SrcColor && b.src_factor != BlendFactor::InvSrcColor &&
+            b.dst_factor != BlendFactor::SrcColor && b.dst_factor != BlendFactor::InvSrcColor &&
             (rt_phase_ == static_cast<std::uint8_t>(ScenePhase::Xlu) ||
              rt_phase_ == static_cast<std::uint8_t>(ScenePhase::ListXlu)) &&
             renderer_.rt_light_texture_ready() && renderer_.rt_light_texture() != nullptr;
