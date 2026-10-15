@@ -788,6 +788,8 @@ groupshared float s_glow_area[64];
 // intensity; it takes the table's colour.
 static const uint kGlowTableIntensity = 4u;
 static const uint kGlowTableColor = 8u;
+// The light of a glow the table does not name, at most (in Lumas: e_authored_power each).
+static const float kGlowMaxLumas = 2.0f;
 static const uint kGlowLens = 16u;      // a black hole's lens draw: no light (rt_post.hlsl PostLensCS)
 
 // One group per glow draw.
@@ -850,15 +852,24 @@ void GlowEmitCS(uint3 group : SV_GroupID, uint gi : SV_GroupIndex)
         // A glow's texture covers about a quarter of its quad.
         float3 power = s_glow_a[0].rgb * (0.25f * e_gain);
         const uint flags = e_draws.Load(group.x * 32u + 24u);
-        if ((flags & kGlowTableColor) != 0u) {
-            // The table's colour at the luminance the picture shows (fire is orange, not the white its
-            // sprites clip to).
-            const float3 tint = float3(float(entry.z >> 24u), float((entry.z >> 16u) & 0xFFu),
-                                       float((entry.z >> 8u) & 0xFFu)) / 255.0f;
-            power = tint / max(luminance(tint), 1e-3f) * luminance(power);
-        }
         if ((flags & kGlowTableIntensity) != 0u) {
-            power *= asfloat(entry.w);
+            // A light the table names sends the table's light (its intensity in Lumas), whatever the size of
+            // the sprite that shows it: in the table's colour (fire is orange, not the white its sprites clip
+            // to), or the colour the picture shows for a tinted row.
+            const float3 tint = (flags & kGlowTableColor) != 0u
+                                    ? float3(float(entry.z >> 24u), float((entry.z >> 16u) & 0xFFu),
+                                             float((entry.z >> 8u) & 0xFFu)) / 255.0f
+                                    : power;
+            float intensity = asfloat(entry.w);
+            const float pulse = asfloat(e_draws.Load(group.x * 32u + 20u));
+            if (pulse > 0.0f) {
+                intensity *= 0.75f + 0.25f * sin(6.2831853f * pulse * e_time);
+            }
+            power = tint / max(luminance(tint), 1e-6f) * (intensity * e_authored_power);
+        } else {
+            // A glow the table does not name lights as at most kGlowMaxLumas Lumas: a halo sprite's light
+            // grows with its size on screen (a Luma's halo measured 2.7e6, 68 Lumas, rp10 [rt-emit]).
+            power *= min(1.0f, kGlowMaxLumas * e_authored_power / max(luminance(power), 1e-6f));
         }
         // The largest glows are atmospheres and halos around planets and the sky, not lights.
         if (luminance(power) >= 4.0f && radius <= kEmitLargest) {
@@ -2160,6 +2171,8 @@ void SpatialBCS(uint3 id : SV_DispatchThreadID)
     // bits light it from within: TraceCS takes their light through it).
     if (((draw_flags >> 8u) & 15u) == kClearClass) {
         m = max(m, 1.0f + points);
+        // Lit from within, the crystal itself glows (its halo joins the bloom around it).
+        halo = max(halo, 0.5f * saturate(luminance(points)));
     }
     // A glowing surface (unlit, bright, under its own glow in the previous picture: a core, a lamp)
     // sends its light whatever reaches it: it keeps its colour and shines brighter.
