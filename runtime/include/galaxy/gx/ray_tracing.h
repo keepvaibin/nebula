@@ -743,8 +743,8 @@ private:
     // Contact occlusion (rt_lighting.hlsl contact_occlusion): reach in eye units, strength on the art by
     // day, strength on the sky and bounce light at night.
     float ao_reach_ = 150.0f;
-    float ao_day_ = 0.6f;
-    float ao_night_ = 0.8f;
+    float ao_day_ = 0.8f;
+    float ao_night_ = 1.0f;
     float sky_ibl_ = 0.8f;          // GALAXY_RT_SKY_IBL: rays reaching the sky take the light of their
                                     // direction (0: the sky's mean colour from every direction)
     bool post_ = true;              // GALAXY_RT_POST: the cinematic finish

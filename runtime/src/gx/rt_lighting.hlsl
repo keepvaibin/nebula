@@ -1957,45 +1957,74 @@ void SpatialMCS(uint3 id : SV_DispatchThreadID)
     g_history[index] = pack_light(l, 0.0f);
 }
 
-// Contact occlusion (horizon based, after GTAO, Jimenez et al. 2016): in 8 fixed screen directions,
-// 3 steps out to g_ao.x eye units (projected onto the sample grid), the highest horizon above the
-// surface's tangent plane, faded with the occluder's distance ((1 - (d / reach)^2)^2); the hidden share
-// of the cosine-weighted hemisphere is its sine squared. 1 open, 0 closed. Fixed directions and steps:
+// Contact occlusion: ground truth based ambient occlusion (GTAO, Jimenez et al. 2016, as XeGTAO
+// evaluates it) on the light samples. Four fixed slices of the view (8 screen directions); per side 3
+// steps at g_ao.x x (k/3)^2 eye units projected onto the sample grid (at most 96 samples): the highest
+// horizon toward the camera, faded with the occluder's distance ((1 - (d / reach)^2)^2 towards the
+// tangent); the cosine-weighted visible arc between the two horizons, clamped to the normal's
+// hemisphere, weighted by the normal's length in the slice. 1 open, 0 closed. Fixed slices and steps:
 // the same geometry gives the same value every frame (no noise to filter, no shimmer).
+float fast_acos(float x)
+{
+    const float a = abs(x);
+    const float r = (-0.156583f * a + kPi * 0.5f) * sqrt(1.0f - a);
+    return x >= 0.0f ? r : kPi - r;
+}
+
 float contact_occlusion(uint2 id, float3 p, float3 n)
 {
     const float reach = g_ao.x;
     // Eye units between samples at this depth.
     const float spacing = abs(p.z) * 2.0f * float(g_factor) / max(abs(g_projection.x) * g_viewport.z, 1e-4f);
-    const float steps = clamp(reach / max(spacing, 1e-4f), 1.5f, 12.0f);
+    const float steps = clamp(reach / max(spacing, 1e-4f), 1.5f, 96.0f);
     const float inv_reach2 = 1.0f / (reach * reach);
-    float hidden = 0.0f;
-    [unroll] for (uint d = 0u; d < 8u; ++d) {
-        const float angle = (float(d) + 0.5f) * (kPi / 4.0f);
-        const float2 direction = float2(cos(angle), sin(angle));
-        float horizon = 0.0f;
-        [unroll] for (uint k = 1u; k <= 3u; ++k) {
-            const int2 s = int2(id) + int2(round(direction * (steps * float(k) / 3.0f)));
-            if (any(s < 0) || any(s >= int2(g_sample_size))) {
-                continue;
+    const float3 view = -normalize(p);
+    float visible = 0.0f;
+    [unroll] for (uint slice = 0u; slice < 4u; ++slice) {
+        const float angle = (float(slice) + 0.5f) * (kPi / 4.0f);
+        const float2 screen = float2(cos(angle), sin(angle));
+        const float3 direction = float3(screen.x, -screen.y, 0.0f);   // screen y runs down, eye y up
+        const float3 axis = normalize(cross(direction, view));
+        const float3 ortho = direction - view * dot(direction, view);
+        const float3 projected = n - axis * dot(n, axis);
+        const float length_n = length(projected);
+        const float cos_n = saturate(dot(projected, view) / max(length_n, 1e-4f));
+        const float gamma = (dot(ortho, projected) >= 0.0f ? 1.0f : -1.0f) * fast_acos(cos_n);
+        float horizon[2];
+        [unroll] for (uint side = 0u; side < 2u; ++side) {
+            const float sign = side == 0u ? 1.0f : -1.0f;
+            const float low = cos(gamma + sign * kPi * 0.5f);
+            float best = low;
+            [unroll] for (uint k = 1u; k <= 3u; ++k) {
+                const float fraction = float(k * k) / 9.0f;
+                const int2 s = int2(id) + int2(round(screen * (sign * steps * fraction)));
+                if (any(s < 0) || any(s >= int2(g_sample_size))) {
+                    continue;
+                }
+                const float sz = g_z[uint(s.y) * g_sample_size.x + uint(s.x)];
+                if (sz == 0.0f) {
+                    continue;
+                }
+                const float3 v = sample_position(uint2(s), sz) - p;
+                const float d2 = dot(v, v);
+                if (d2 < 1e-4f) {
+                    continue;
+                }
+                const float x = saturate(d2 * inv_reach2);
+                const float c = dot(v, view) * rsqrt(d2);
+                best = max(best, lerp(low, c, (1.0f - x) * (1.0f - x)));
             }
-            const float sz = g_z[uint(s.y) * g_sample_size.x + uint(s.x)];
-            if (sz == 0.0f) {
-                continue;
-            }
-            const float3 v = sample_position(uint2(s), sz) - p;
-            const float d2 = dot(v, v);
-            if (d2 < 1e-4f) {
-                continue;
-            }
-            // Elevation over the tangent plane, less a small bias (smooth normals on flat faces).
-            const float elevation = saturate((dot(v, n) * rsqrt(d2) - 0.1f) / 0.9f);
-            const float x = saturate(d2 * inv_reach2);
-            horizon = max(horizon, elevation * (1.0f - x) * (1.0f - x));
+            horizon[side] = best;
         }
-        hidden += horizon * horizon;
+        // h1 towards +direction, h0 towards -direction (angles from the view vector).
+        const float h1 = gamma + clamp(fast_acos(horizon[0]) - gamma, -kPi * 0.5f, kPi * 0.5f);
+        const float h0 = gamma + clamp(-fast_acos(horizon[1]) - gamma, -kPi * 0.5f, kPi * 0.5f);
+        const float sin_g = sin(gamma);
+        const float arc0 = (cos_n + 2.0f * h0 * sin_g - cos(2.0f * h0 - gamma)) * 0.25f;
+        const float arc1 = (cos_n + 2.0f * h1 * sin_g - cos(2.0f * h1 - gamma)) * 0.25f;
+        visible += length_n * (arc0 + arc1);
     }
-    return 1.0f - hidden / 8.0f;
+    return saturate(visible / 4.0f);
 }
 
 [numthreads(8, 8, 1)]

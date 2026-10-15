@@ -737,8 +737,8 @@ bool SceneRayTracer::initialize(ID3D12Device* device, std::uint64_t timestamp_fr
     self_point_ = std::clamp(env_float("GALAXY_RT_SELF_POINT", 1.0f), 0.0f, 8.0f);
     area_radiance_ = std::clamp(env_float("GALAXY_RT_AREA_RADIANCE", 3.0f), 0.0f, 16.0f);
     ao_reach_ = std::clamp(env_float("GALAXY_RT_AO_REACH", 150.0f), 0.0f, 2000.0f);
-    ao_day_ = std::clamp(env_float("GALAXY_RT_AO", 0.6f), 0.0f, 1.0f);
-    ao_night_ = std::clamp(env_float("GALAXY_RT_AO_NIGHT", 0.8f), 0.0f, 1.0f);
+    ao_day_ = std::clamp(env_float("GALAXY_RT_AO", 0.8f), 0.0f, 1.0f);
+    ao_night_ = std::clamp(env_float("GALAXY_RT_AO_NIGHT", 1.0f), 0.0f, 1.0f);
     post_ = env_float("GALAXY_RT_POST", 1.0f) != 0.0f;
     post_bloom_ = std::clamp(env_float("GALAXY_RT_POST_BLOOM", 0.0f), 0.0f, 4.0f);
     post_threshold_ = std::clamp(env_float("GALAXY_RT_POST_THRESHOLD", 0.97f), 0.0f, 0.99f);
