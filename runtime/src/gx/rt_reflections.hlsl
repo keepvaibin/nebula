@@ -940,8 +940,12 @@ void ReflectTraceCS(uint3 id : SV_DispatchThreadID, uint gi : SV_GroupIndex)
                 const Reflected r = reflect_light(id.xy, dir, n, ng, hit, params, base, true, true);
                 light = r.light;
                 highlight = r.highlight;
+                // Painted dielectrics and clear ones (ice, crystal, opaque water) take the sky's reflection
+                // at half its confidence: what stands around them reads in their reflection, the bright sky
+                // or aurora only half (rf2: Freezeflame's crystals took the dark sky at cover 0.8).
                 const bool painted = (surface_class == 0u || surface_class == 1u || surface_class == 3u) && params.w < 0.5f;
-                confidence = painted && r.source >= kSkyShown ? r.confidence * 0.5f : r.confidence;
+                const bool clear = surface_class == 4u || surface_class == 7u;
+                confidence = (painted || clear) && r.source >= kSkyShown ? r.confidence * 0.5f : r.confidence;
                 source = r.source;
                 mapped = r.mapped;
                 info.w = asuint(r.distance);
@@ -1633,7 +1637,8 @@ cbuffer RtReflectComposite : register(b0)
     uint m_factor;
     uint m_flags;       // bit 0: move the point to the traced frame's camera (m_reproject[m_slot]);
                         // bits 1-3: view 1 the reflections alone, 2 the surface classes, 3 the weight k,
-                        // 4 the reflected light alone, 5 k (red) and the highlights' luminance (green)
+                        // 4 the reflected light alone, 5 k (red), the highlights' luminance (green) and
+                        // the nearest sample's class + 1 in eighths (blue)
     uint m_slot;
     float m_near;
     uint m_tile_width;  // tiles of 8x8 samples per row
@@ -1793,7 +1798,8 @@ CompositeOut finish(Blend b, uint view, float3 under_add, float3 under_keep)
         result.add = float4(saturate(reflection + (view == 1u ? highlight : float3(0.0f, 0.0f, 0.0f))), 0.0f);
         result.keep = float4(0.0f, 0.0f, 0.0f, 1.0f);
     } else if (view == 3u || view == 5u) {
-        result.add = view == 3u ? float4(k, k, k, 0.0f) : float4(k, luminance(highlight), 0.0f, 0.0f);
+        result.add = view == 3u ? float4(k, k, k, 0.0f)
+                                : float4(k, luminance(highlight), float(min(b.nearest_class, 7u) + 1u) / 8.0f, 0.0f);
         result.keep = float4(0.0f, 0.0f, 0.0f, 1.0f);
     } else {
         result.add = float4(saturate((saturate(b.sum / b.weight) + under_add * kept) * (1.0f - highlight) + highlight),
