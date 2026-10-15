@@ -1425,21 +1425,34 @@ static const float kWaterCover = 0.85f;
 // Clear dielectrics (rt_surfaces.h RtSurfaceClass::Crystal): crystals, ice, gems, glass, bubbles.
 static const uint kCrystal = 7u;
 
+// The water's luminance around `c` (EFB pixels): four bilinear taps `o` either way (a box about one of the
+// game's own pixels).
+float ripple_tap(float2 c, float o, float2 size)
+{
+    return 0.25f * (luminance(g_color.SampleLevel(g_linear, (c + float2(-o, -o)) / size, 0.0f).rgb) +
+                    luminance(g_color.SampleLevel(g_linear, (c + float2(o, -o)) / size, 0.0f).rgb) +
+                    luminance(g_color.SampleLevel(g_linear, (c + float2(-o, o)) / size, 0.0f).rgb) +
+                    luminance(g_color.SampleLevel(g_linear, (c + float2(o, o)) / size, 0.0f).rgb));
+}
+
 // The water's normal bent by the ripples its picture shows: the slope of its luminance relative to
-// its level across two samples each way, each tap the mean of four pixels (the waves, not the
-// texture's fine grain).
+// its level across two of the game's 640 x 456 pixels each way, each tap the mean over one of them (the
+// waves, not the texture's fine grain or the render's aliasing). The scale is the game's, not the samples':
+// tied to the sample spacing, High's every-pixel samples bent each ray its own way and speckled the water.
 float3 rippled(int2 q, float3 n)
 {
     if (g_ripple <= 0.0f) {
         return n;
     }
     const float2 size = float2(g_target_size);
-    const float2 c = float2(q) + 1.0f;
-    const float r = 2.0f * float(g_factor);
-    const float x0 = luminance(g_color.SampleLevel(g_linear, (c - float2(r, 0.0f)) / size, 0.0f).rgb);
-    const float x1 = luminance(g_color.SampleLevel(g_linear, (c + float2(r, 0.0f)) / size, 0.0f).rgb);
-    const float y0 = luminance(g_color.SampleLevel(g_linear, (c - float2(0.0f, r)) / size, 0.0f).rgb);
-    const float y1 = luminance(g_color.SampleLevel(g_linear, (c + float2(0.0f, r)) / size, 0.0f).rgb);
+    const float native = max(size.y / 456.0f, 1.0f);
+    const float2 c = float2(q) + 0.5f;
+    const float r = 2.0f * native;
+    const float o = max(0.5f * native - 0.5f, 0.5f);
+    const float x0 = ripple_tap(c - float2(r, 0.0f), o, size);
+    const float x1 = ripple_tap(c + float2(r, 0.0f), o, size);
+    const float y0 = ripple_tap(c - float2(0.0f, r), o, size);
+    const float y1 = ripple_tap(c + float2(0.0f, r), o, size);
     const float level = 0.25f * (x0 + x1 + y0 + y1) + 0.05f;
     const float2 slope = clamp(float2(x1 - x0, y0 - y1) / (2.0f * level), -0.6f, 0.6f) * g_ripple;
     // Screen x and y along the water.
@@ -1874,13 +1887,23 @@ float4 filtered_light(uint2 id, uint index, uint4 info, bool first, out float3 h
         // The sharpest lobes (water, ice, glass) keep their reflection unfiltered, but their
         // highlights are glints off per-sample ripple normals: alone they speckle the surface. They
         // average over the 3 x 3 samples on the same plane (one pass each, the second twice as wide).
+        // Water's light too, in the first pass: a sample outside the range of its neighbours on the plane
+        // (a ray its ripple sent to another object, the sky or the shore) is clamped into that range, then
+        // blended with them by distance (user: the water's fuzz and noise, the reflections kept).
         const int reach = first ? 1 : 2;
+        const bool water_light = first && surface_class == kWaterSurface;
         const float z = asfloat(info.y);
         const float3 p = sample_position(id, z);
         const float3 n = unpack_normal(info.x);
         const float inv_tolerance = 1.0f / (0.25f + abs(z) * 0.004f * float(reach));
         float3 highlight_sum = float3(0.0f, 0.0f, 0.0f);
         float shape_sum = 0.0f;
+        float3 light_low = float3(1.0e9f, 1.0e9f, 1.0e9f);
+        float3 light_high = float3(-1.0e9f, -1.0e9f, -1.0e9f);
+        float3 light_sum = float3(0.0f, 0.0f, 0.0f);
+        float light_known = 0.0f;
+        float light_weight = 0.0f;
+        uint neighbours = 0u;
         [unroll] for (int dy = -1; dy <= 1; ++dy) {
             [unroll] for (int dx = -1; dx <= 1; ++dx) {
                 const int2 s = int2(id) + int2(dx, dy) * reach;
@@ -1895,13 +1918,27 @@ float4 filtered_light(uint2 id, uint index, uint4 info, bool first, out float3 h
                 const float plane = abs(dot(n, sample_position(uint2(s), asfloat(other.y)) - p)) * inv_tolerance;
                 const float shape = exp(-0.5f * float(dx * dx + dy * dy) - plane * plane);
                 float3 other_highlight;
-                filter_input(si, first, other_highlight);
+                const float4 c = filter_input(si, first, other_highlight);
                 highlight_sum += other_highlight * shape;
                 shape_sum += shape;
+                if (water_light && plane < 1.0f && c.w > 0.05f) {
+                    if (dx != 0 || dy != 0) {
+                        light_low = min(light_low, c.rgb);
+                        light_high = max(light_high, c.rgb);
+                        ++neighbours;
+                    }
+                    light_sum += c.rgb * (shape * c.w);
+                    light_known += shape * c.w;
+                    light_weight += shape;
+                }
             }
         }
         if (shape_sum > 1e-4f) {
             highlight = highlight_sum / shape_sum;
+        }
+        if (water_light && neighbours >= 3u && light_known > 1e-4f) {
+            const float3 kept = clamp(value.rgb, light_low, light_high);
+            value.rgb = lerp(kept, light_sum / light_known, 0.5f);
         }
     }
     return value;

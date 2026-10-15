@@ -718,9 +718,9 @@ bool SceneRayTracer::initialize(ID3D12Device* device, std::uint64_t timestamp_fr
         dump_remaining_ = static_cast<std::uint64_t>(std::max(1.0f, env_float("GALAXY_RT_DUMP_COUNT", 1.0f)));
     }
     lighting_enabled_ = env_float("GALAXY_RT_LIGHT", 1.0f) != 0.0f;
-    // Quality (config rt_quality, GALAXY_RT_QUALITY): high traces every pixel up to 4K-class pictures with 4 sky
-    // and occlusion rays and two glow lights per sample; medium a share of the pixels with 2 and one (user: use
-    // the ray tracing hardware, more rays; two modes, high with everything).
+    // Quality (config rt_quality, GALAXY_RT_QUALITY): high traces every pixel of the internal resolution with 4
+    // sky and occlusion rays, 4 sun shadow rays and two glow lights per sample; medium one pixel per 2 x 2 with
+    // 2, 1 and one (user: use the ray tracing hardware, more rays; two modes, high with everything).
     high_quality_ = get_render_config().rt_quality != 0u;
     rays_ = static_cast<std::uint32_t>(
         std::clamp(env_float("GALAXY_RT_RAYS", high_quality_ ? 4.0f : 2.0f), 1.0f, 16.0f));
@@ -1856,13 +1856,11 @@ std::uint32_t SceneRayTracer::sample_factor(std::uint32_t width, std::uint32_t h
     if (factor_override_ != 0u) {
         return factor_override_;
     }
-    const std::uint64_t pixels = static_cast<std::uint64_t>(width) * height;
-    if (!high_quality_) {
-        return pixels > 16'000'000u ? 4u : pixels > 6'200'000u ? 3u : 2u;
-    }
-    // High: every pixel traced up to 4K-class pictures (no upsampled light: shadow and crease edges follow the
-    // geometry); past that at least 3.7 million samples (2560 x 1440).
-    return pixels > 33'200'000u ? 3u : pixels > 9'000'000u ? 2u : 1u;
+    // The internal resolution decides the samples, at a fixed ratio (user: set the internal resolution, ray
+    // tracing and DLSS work off it): high traces every pixel, medium one per 2 x 2.
+    (void)width;
+    (void)height;
+    return high_quality_ ? 1u : 2u;
 }
 
 bool SceneRayTracer::create_lighting_pipelines(DXGI_FORMAT color_format) {

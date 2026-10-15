@@ -1678,43 +1678,54 @@ void TraceCS(uint3 id : SV_DispatchThreadID, uint gi : SV_GroupIndex)
         const float lb = l.x * l.y * la;
         const float3 l1 = float3(1.0f + lz * l.x * l.x * la, lz * lb, -lz * l.x);
         const float3 l2 = float3(lb, lz + l.y * l.y * la, -l.y);
-        const float2 u = sample_point(id.xy, max(g_rays, 1u) + 3u);
-        const float r = sqrt(u.x) * g_sun.w;
-        const float phi = 2.0f * kPi * u.y;
-        RayDesc ray;
-        ray.Origin = origin;
-        ray.Direction = normalize(l + l1 * (r * cos(phi)) + l2 * (r * sin(phi)));
-        ray.TMin = 0.0f;
-        ray.TMax = g_sun_reach;
         bool card = false;
         if (primary.x != 0u) {
             const uint own = g_surfaces.Load((primary.x - 1u) * 16u + 12u);
             card = (g_draws.Load(min(own >> 16u, max(g_draw_count, 1u) - 1u) * kDrawStride + 24u) & kDrawTableFoliage) != 0u;
         }
-        RayQuery<RAY_FLAG_FORCE_NON_OPAQUE | RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES> query;
-        query.TraceRayInline(g_scene, RAY_FLAG_NONE, 0xFFu, ray);
-        while (query.Proceed()) {
-            if (query.CandidateInstanceID() != 0u) {
+        // High (g_flags bit 10): four shadow rays spread over the sun's disc, the sun's light their open
+        // share (the penumbra measured per sample, not only filtered); medium one.
+        const uint sun_rays = (g_flags & 1024u) != 0u ? 4u : 1u;
+        RayDesc ray;
+        ray.Origin = origin;
+        ray.Direction = l;
+        ray.TMin = 0.0f;
+        ray.TMax = g_sun_reach;
+        uint open = 0u;
+        for (uint k = 0u; k < sun_rays; ++k) {
+            const float2 u = sample_point(id.xy, max(g_rays, 1u) + 3u + 8u * k);
+            const float r = sqrt(u.x) * g_sun.w;
+            const float phi = 2.0f * kPi * u.y;
+            ray.Direction = normalize(l + l1 * (r * cos(phi)) + l2 * (r * sin(phi)));
+            RayQuery<RAY_FLAG_FORCE_NON_OPAQUE | RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES> query;
+            query.TraceRayInline(g_scene, RAY_FLAG_NONE, 0xFFu, ray);
+            while (query.Proceed()) {
+                if (query.CandidateInstanceID() != 0u) {
+                    query.CommitNonOpaqueTriangleHit();
+                    continue;
+                }
+                const uint hit = g_surfaces.Load(query.CandidatePrimitiveIndex() * 16u + 12u);
+                if ((hit & kDrawNoShadow) != 0u) {
+                    continue;
+                }
+                if (card && query.CandidateTriangleRayT() < 60.0f &&
+                    (g_draws.Load(min(hit >> 16u, max(g_draw_count, 1u) - 1u) * kDrawStride + 24u) & kDrawTableFoliage) != 0u) {
+                    continue;
+                }
+                if (!card_blocks(query.CandidatePrimitiveIndex(), hit,
+                                 origin + ray.Direction * query.CandidateTriangleRayT(), salt + 1u + 2u * k)) {
+                    continue;
+                }
                 query.CommitNonOpaqueTriangleHit();
-                continue;
             }
-            const uint hit = g_surfaces.Load(query.CandidatePrimitiveIndex() * 16u + 12u);
-            if ((hit & kDrawNoShadow) != 0u) {
-                continue;
+            if (query.CommittedStatus() == COMMITTED_TRIANGLE_HIT) {
+                const float t = clamp(query.CommittedRayT(), 1e-2f, 6.0e4f);
+                blocker = blocker == 0.0f ? t : min(blocker, t);
+            } else {
+                ++open;
             }
-            if (card && query.CandidateTriangleRayT() < 60.0f &&
-                (g_draws.Load(min(hit >> 16u, max(g_draw_count, 1u) - 1u) * kDrawStride + 24u) & kDrawTableFoliage) != 0u) {
-                continue;
-            }
-            if (!card_blocks(query.CandidatePrimitiveIndex(), hit,
-                             origin + ray.Direction * query.CandidateTriangleRayT(), salt + 1u)) {
-                continue;
-            }
-            query.CommitNonOpaqueTriangleHit();
         }
-        const bool blocked = query.CommittedStatus() == COMMITTED_TRIANGLE_HIT;
-        sun = blocked ? 0.0f : facing_sun * (1.5f - 0.5f * facing_sun);
-        blocker = blocked ? clamp(query.CommittedRayT(), 1e-2f, 6.0e4f) : 0.0f;
+        sun = facing_sun * (1.5f - 0.5f * facing_sun) * (float(open) / float(sun_rays));
         if ((g_flags & 64u) != 0u) {
             // GALAXY_RT_VIEW=6: the nearest blocker's distance up to 1e6, past the sun's reach,
             // 0.1 + 0.9 log10(t) / 6 (0: none).
