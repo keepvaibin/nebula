@@ -16,6 +16,7 @@
 #include "rt_post_bright_cs.h"
 #include "rt_post_copy_cs.h"
 #include "rt_post_focus_cs.h"
+#include "rt_post_lum_cs.h"
 #include "rt_post_ps.h"
 #include "rt_post_shafts_cs.h"
 #include "rt_post_vs.h"
@@ -132,8 +133,9 @@ struct RtPostConstants {
     float haze;
     float haze_distance;
     float vignette;
+    float local[4];      // local exposure: bright and dark regions' contrast scale, mid grey, 0
 };
-static_assert(sizeof(RtPostConstants) == 160u);
+static_assert(sizeof(RtPostConstants) == 176u);
 
 // Mirror cbuffer RtBloom and RtBloomComposite in rt_lighting.hlsl (root constants).
 struct RtBloomConstants {
@@ -734,6 +736,8 @@ bool SceneRayTracer::initialize(ID3D12Device* device, std::uint64_t timestamp_fr
     post_grade_ = std::clamp(env_float("GALAXY_RT_POST_GRADE", 1.0f), 0.0f, 1.0f);
     post_rim_ = std::clamp(env_float("GALAXY_RT_POST_RIM", 0.0f), 0.0f, 2.0f);
     post_haze_ = std::clamp(env_float("GALAXY_RT_POST_HAZE", 0.12f), 0.0f, 1.0f);
+    post_local_bright_ = std::clamp(env_float("GALAXY_RT_LOCAL_BRIGHT", 0.75f), 0.3f, 1.0f);
+    post_local_dark_ = std::clamp(env_float("GALAXY_RT_LOCAL_DARK", 0.92f), 0.3f, 1.0f);
     relief_ = std::clamp(env_float("GALAXY_RT_RELIEF", 3.0f), 0.0f, 64.0f);
     post_haze_distance_ = std::clamp(env_float("GALAXY_RT_POST_HAZE_DISTANCE", 20000.0f), 100.0f, 1.0e6f);
     post_vignette_ = std::clamp(env_float("GALAXY_RT_POST_VIGNETTE", 0.18f), 0.0f, 1.0f);
@@ -832,6 +836,7 @@ void SceneRayTracer::shutdown() noexcept {
     post_blur_pso_.Reset();
     post_shafts_pso_.Reset();
     post_focus_pso_.Reset();
+    post_lum_pso_.Reset();
     post_finish_root_.Reset();
     post_finish_pso_.Reset();
     for (auto& buffer : post_buffers_) buffer.Reset();
@@ -1929,20 +1934,21 @@ bool SceneRayTracer::create_lighting_pipelines(DXGI_FORMAT color_format) {
             !compute(post_root_.Get(), g_rt_post_bright_cs, sizeof(g_rt_post_bright_cs), post_bright_pso_) ||
             !compute(post_root_.Get(), g_rt_post_blur_cs, sizeof(g_rt_post_blur_cs), post_blur_pso_) ||
             !compute(post_root_.Get(), g_rt_post_shafts_cs, sizeof(g_rt_post_shafts_cs), post_shafts_pso_) ||
-            !compute(post_root_.Get(), g_rt_post_focus_cs, sizeof(g_rt_post_focus_cs), post_focus_pso_)) {
+            !compute(post_root_.Get(), g_rt_post_focus_cs, sizeof(g_rt_post_focus_cs), post_focus_pso_) ||
+            !compute(post_root_.Get(), g_rt_post_lum_cs, sizeof(g_rt_post_lum_cs), post_lum_pso_)) {
             return false;
         }
         D3D12_DESCRIPTOR_RANGE finish_depth{};
         finish_depth.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
         finish_depth.NumDescriptors = 1u;
         finish_depth.BaseShaderRegister = 1u;
-        D3D12_ROOT_PARAMETER finish_params[6]{};
+        D3D12_ROOT_PARAMETER finish_params[7]{};
         finish_params[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
         finish_params[0].Constants.Num32BitValues = sizeof(RtPostConstants) / 4u;
         finish_params[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
         finish_params[1].DescriptorTable.NumDescriptorRanges = 1u;
         finish_params[1].DescriptorTable.pDescriptorRanges = &finish_depth;
-        for (UINT i = 0; i < 4u; ++i) {
+        for (UINT i = 0; i < 5u; ++i) {
             finish_params[2 + i].ParameterType = D3D12_ROOT_PARAMETER_TYPE_SRV;
             finish_params[2 + i].Descriptor.ShaderRegister = 2u + i;
         }
@@ -1950,7 +1956,7 @@ bool SceneRayTracer::create_lighting_pipelines(DXGI_FORMAT color_format) {
             param.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
         }
         D3D12_ROOT_SIGNATURE_DESC finish_rsd{};
-        finish_rsd.NumParameters = 6u;
+        finish_rsd.NumParameters = 7u;
         finish_rsd.pParameters = finish_params;
         if (!serialize(finish_rsd, post_finish_root_)) {
             return false;
@@ -2935,7 +2941,7 @@ void SceneRayTracer::post_prepare(ID3D12GraphicsCommandList* list, D3D12_GPU_DES
         post_pixels_ = post_quarter_ = 0u;
         bool ok = true;
         for (unsigned i = 0; ok && i < post_buffers_.size(); ++i) {
-            const std::uint64_t bytes = i == 0u ? pixels * 4u : i == 5u ? 32u : quarter * 4u;
+            const std::uint64_t bytes = i == 0u ? pixels * 4u : i == 5u ? 32u : quarter * 4u;  // 6, 7: luminance
             ok = create_buffer(bytes, D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
                                D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, post_buffers_[i], L"rt post");
             post_states_[i] = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
@@ -2994,6 +3000,9 @@ void SceneRayTracer::post_prepare(ID3D12GraphicsCommandList* list, D3D12_GPU_DES
     c.haze = post_haze_;
     c.haze_distance = post_haze_distance_;
     c.vignette = post_vignette_;
+    c.local[0] = post_local_bright_;
+    c.local[1] = post_local_dark_;
+    c.local[2] = post_local_bright_ < 1.0f || post_local_dark_ < 1.0f ? 0.4f : 0.0f;
     c.split = split_ > 0.0f ? view_.viewport[0] + split_ * view_.viewport[2] : -1.0f;
 
     ID3D12Resource* const scene = post_buffers_[0].Get();
@@ -3036,6 +3045,23 @@ void SceneRayTracer::post_prepare(ID3D12GraphicsCommandList* list, D3D12_GPU_DES
     to_state(list, tmp, post_states_[2], D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
     run(post_blur_pso_.Get(), tmp, bloom, 1u, (qw + 7u) / 8u, (qh + 7u) / 8u, kPassPostBlur);
     list->ResourceBarrier(1u, &all_uav);
+    if (c.local[2] > 0.0f) {
+        // Local exposure: the surfaces' luminance per quarter texel, blurred twice over the region.
+        ID3D12Resource* const lum = post_buffers_[6].Get();
+        ID3D12Resource* const lum_tmp = post_buffers_[7].Get();
+        run(post_lum_pso_.Get(), state, lum, 0u, (qw + 7u) / 8u, (qh + 7u) / 8u, kPassPostBright);
+        for (unsigned pass = 0; pass < 2u; ++pass) {
+            list->ResourceBarrier(1u, &all_uav);
+            to_state(list, lum, post_states_[6], D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+            to_state(list, lum_tmp, post_states_[7], D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+            run(post_blur_pso_.Get(), lum, lum_tmp, 0u, (qw + 7u) / 8u, (qh + 7u) / 8u, kPassPostBlur);
+            list->ResourceBarrier(1u, &all_uav);
+            to_state(list, lum_tmp, post_states_[7], D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+            to_state(list, lum, post_states_[6], D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+            run(post_blur_pso_.Get(), lum_tmp, lum, 1u, (qw + 7u) / 8u, (qh + 7u) / 8u, kPassPostBlur);
+        }
+        list->ResourceBarrier(1u, &all_uav);
+    }
     for (unsigned i = 0; i < post_buffers_.size(); ++i) {
         to_state(list, post_buffers_[i].Get(), post_states_[i], kLightRead);
     }
@@ -3062,6 +3088,7 @@ void SceneRayTracer::post_finish(ID3D12GraphicsCommandList* list, D3D12_CPU_DESC
     list->SetGraphicsRootShaderResourceView(3u, post_buffers_[3]->GetGPUVirtualAddress());
     list->SetGraphicsRootShaderResourceView(4u, post_buffers_[4]->GetGPUVirtualAddress());
     list->SetGraphicsRootShaderResourceView(5u, post_buffers_[5]->GetGPUVirtualAddress());
+    list->SetGraphicsRootShaderResourceView(6u, post_buffers_[6]->GetGPUVirtualAddress());
     list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
     const int timed = begin_pass(list);
     list->DrawInstanced(3u, 1u, 0u, 0u);

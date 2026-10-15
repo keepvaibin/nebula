@@ -531,10 +531,12 @@ private:
     Microsoft::WRL::ComPtr<ID3D12PipelineState> post_blur_pso_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> post_shafts_pso_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> post_focus_pso_;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> post_lum_pso_;
     Microsoft::WRL::ComPtr<ID3D12RootSignature> post_finish_root_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> post_finish_pso_;
-    std::array<Microsoft::WRL::ComPtr<ID3D12Resource>, 6> post_buffers_{};   // scene, bright, tmp, bloom, shafts, state
-    std::array<D3D12_RESOURCE_STATES, 6> post_states_{};
+    // scene, bright, tmp, bloom, shafts, state, region luminance, its blur's temporary
+    std::array<Microsoft::WRL::ComPtr<ID3D12Resource>, 8> post_buffers_{};
+    std::array<D3D12_RESOURCE_STATES, 8> post_states_{};
     std::uint64_t post_pixels_ = 0u;
     std::uint64_t post_quarter_ = 0u;
     std::array<std::uint32_t, 40> post_constants_{};
@@ -731,6 +733,8 @@ private:
     float post_grade_ = 1.0f;       // GALAXY_RT_POST_GRADE
     float post_rim_ = 0.0f;         // GALAXY_RT_POST_RIM: rim light at silhouettes (outlined everything)
     float relief_ = 3.0f;           // GALAXY_RT_RELIEF: height (eye units) of full texture brightness
+    float post_local_bright_ = 0.75f;  // GALAXY_RT_LOCAL_BRIGHT: contrast scale of regions above mid grey
+    float post_local_dark_ = 0.92f;    // GALAXY_RT_LOCAL_DARK: of regions below it (1: no local exposure)
     float post_haze_ = 0.12f;       // GALAXY_RT_POST_HAZE: distance haze's largest share (bright skies)
     float post_haze_distance_ = 20000.0f;  // GALAXY_RT_POST_HAZE_DISTANCE: where it reaches 63 % of it
     float post_vignette_ = 0.18f;   // GALAXY_RT_POST_VIGNETTE: darkening towards the corners

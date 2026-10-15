@@ -27,6 +27,8 @@ cbuffer RtPost : register(b0)
     float p_haze;               // distance haze in the sky's colour: its largest share (0: none)
     float p_haze_distance;      // eye distance at which the haze reaches 63 % of that share
     float p_vignette;           // darkening towards the corners (0: none)
+    float4 p_local;             // local exposure: contrast scale of regions brighter than mid grey, of
+                                // darker ones, mid grey (0: none)
 };
 
 Texture2D<float4> p_color : register(t0);
@@ -183,6 +185,27 @@ void PostBlurCS(uint3 id : SV_DispatchThreadID)
     p_out[id.y * p_quarter.x + id.x] = pack_r11g11b10(sum / weight);
 }
 
+// Local exposure: the luminance of the surfaces (not the sky or backdrops) over each quarter texel's
+// block; the blur passes then spread it over the region.
+[numthreads(8, 8, 1)]
+void PostLumCS(uint3 id : SV_DispatchThreadID)
+{
+    if (any(id.xy >= p_quarter)) {
+        return;
+    }
+    float sum = 0.0f;
+    float n = 0.0f;
+    [unroll] for (uint k = 0u; k < 4u; ++k) {
+        const int2 q = min(int2(id.xy * 4u + uint2(1u + (k & 1u) * 2u, 1u + (k >> 1u) * 2u)), int2(p_size) - 1);
+        if (scene_distance(q) < 6.0e4f) {
+            sum += luminance(p_color.Load(int3(q, 0)).rgb);
+            n += 1.0f;
+        }
+    }
+    const float l = n > 0.0f ? sum / n : p_local.z;
+    p_out[id.y * p_quarter.x + id.x] = pack_r11g11b10(l.xxx);
+}
+
 // Light shafts: towards the core and the sun on screen, the bright picture between (in front of
 // the light's distance) scatters along the way.
 float3 shaft(float2 texel, float2 light, float strength)
@@ -293,6 +316,7 @@ StructuredBuffer<uint> f_scene : register(t2);    // the picture before the fini
 StructuredBuffer<uint> f_bloom : register(t3);
 StructuredBuffer<uint> f_shafts : register(t4);
 StructuredBuffer<float> f_state : register(t5);
+StructuredBuffer<uint> f_lum : register(t6);       // the regions' surface luminance (PostLumCS, blurred)
 
 float3 scene_at(int2 q)
 {
@@ -463,6 +487,14 @@ float4 PostPS(float4 position : SV_Position) : SV_Target0
         const float amount = p_haze * smoothstep(0.12f, 0.45f, luminance(sky)) *
                              (1.0f - exp(-distance / max(p_haze_distance, 1.0f)));
         c = lerp(c, sky, amount);
+    }
+    // Local exposure: each region's brightness compressed around mid grey (bright sunlit ground down,
+    // deep shade a little up), its detail kept: strong sunlight without washing out (Unreal's local
+    // exposure works the same way).
+    if (p_local.z > 0.0f && distance < 6.0e4f) {
+        const float region = max(quarter_at(f_lum, position.xy).r, 1e-3f);
+        const float scale = region > p_local.z ? p_local.x : p_local.y;
+        c *= clamp(pow(region / p_local.z, scale - 1.0f), 0.55f, 1.5f);
     }
     c += quarter_at(f_bloom, position.xy) * p_bloom;
     c += quarter_at(f_shafts, position.xy);
