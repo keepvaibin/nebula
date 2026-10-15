@@ -7169,6 +7169,12 @@ bool GxBackend::begin_rt_batch(const DrawCall& call, RtDrawInfo& info) {
     if (!scene_phase_ || !(renderer_.rt_scene_open() || renderer_.rt_glow_open() || renderer_.rt_water_open())) {
         return false;
     }
+    // What the traced lighting hides from the picture (the game's drop-shadow volumes, the table's faked
+    // light cones) stays out of the traced scene too: Mario's invisible shadow box, extruded down along
+    // gravity, cast a rectangular shadow on the stone under him and a second one down Good Egg's rim.
+    if (rt_hidden_draw()) {
+        return false;
+    }
     const ScaledGxViewport viewport = compute_scaled_gx_viewport(call.xf_viewport, renderer_.efb_scale());
     const bool flat = !call.has_viewport || !viewport.valid() || viewport.max_depth - viewport.min_depth < 0.5f;
     // MR::clearZBuffer: a depth write through a flattened viewport puts the far plane under
