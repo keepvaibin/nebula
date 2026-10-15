@@ -426,8 +426,11 @@ void SurfaceEmitCS(uint3 id : SV_DispatchThreadID, uint gi : SV_GroupIndex)
         if (z != 0.0f) {
             const float3 base = unpack_r11g11b10(c_glow_base[index]);
             const float added = luminance(unpack_r11g11b10(c_glow[index]));
+            // Night only: by day the sun glare sprites over bright sand made it a light.
+            const float day = c_sums.Load(36u) != 0u ? saturate(asfloat(c_sums.Load(32u)) / c_daylight) : 1.0f;
             const float glowing = smoothstep(0.1f, 0.4f, added) *
-                                  smoothstep(0.55f, 0.85f, max(base.r, max(base.g, base.b)));
+                                  smoothstep(0.55f, 0.85f, max(base.r, max(base.g, base.b))) *
+                                  (1.0f - smoothstep(0.35f, 0.8f, day));
             const float2 pixel = float2(id.xy * c_factor) + 0.5f;
             p = eye_position(c_projection, c_viewport, pixel, z);
             const float2 size = 2.0f * abs(z) * float(c_factor) /
@@ -2200,7 +2203,8 @@ void SpatialBCS(uint3 id : SV_DispatchThreadID)
                     const float3 base = unpack_r11g11b10(g_glow_base[si]);
                     const float added = luminance(unpack_r11g11b10(g_glow_added[si]));
                     const float glowing = smoothstep(0.1f, 0.4f, added) *
-                                          smoothstep(0.55f, 0.85f, max(base.r, max(base.g, base.b)));
+                                          smoothstep(0.55f, 0.85f, max(base.r, max(base.g, base.b))) *
+                                          (1.0f - smoothstep(0.35f, 0.8f, day_sky));
                     m = lerp(m, max(m, (1.0f + g_ambient.z * saturate(added)).xxx), glowing);
                     if ((g_flags & 32u) != 0u) {
                         m = float3(2.0f * glowing, 2.0f * saturate(added),

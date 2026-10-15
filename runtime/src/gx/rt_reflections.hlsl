@@ -940,7 +940,8 @@ void ReflectTraceCS(uint3 id : SV_DispatchThreadID, uint gi : SV_GroupIndex)
                 const Reflected r = reflect_light(id.xy, dir, n, ng, hit, params, base, true, true);
                 light = r.light;
                 highlight = r.highlight;
-                confidence = r.confidence;
+                const bool painted = (surface_class == 0u || surface_class == 1u || surface_class == 3u) && params.w < 0.5f;
+                confidence = painted && r.source >= kSkyShown ? r.confidence * 0.5f : r.confidence;
                 source = r.source;
                 mapped = r.mapped;
                 info.w = asuint(r.distance);
