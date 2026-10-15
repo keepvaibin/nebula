@@ -761,8 +761,8 @@ bool SceneRayTracer::initialize(ID3D12Device* device, std::uint64_t timestamp_fr
     sun_size_ = std::clamp(env_float("GALAXY_RT_SUN_SIZE", 2.5f), 0.0f, 30.0f);
     key_size_ = std::clamp(env_float("GALAXY_RT_KEY_SIZE", 6.0f), 0.0f, 30.0f);
     sun_min_elevation_ = std::clamp(env_float("GALAXY_RT_SUN_MIN_ELEVATION", 30.0f), 0.0f, 89.0f);
-    sun_light_ = std::clamp(env_float("GALAXY_RT_SUN_LIGHT", 1.25f), 0.0f, 4.0f);
-    sky_light_ = std::clamp(env_float("GALAXY_RT_SKY_LIGHT", 1.0f), 0.0f, 4.0f);
+    sun_light_ = std::clamp(env_float("GALAXY_RT_SUN_LIGHT", 1.5f), 0.0f, 4.0f);
+    sky_light_ = std::clamp(env_float("GALAXY_RT_SKY_LIGHT", 0.7f), 0.0f, 4.0f);
     if (lighting_enabled_ && !create_lighting_pipelines(color_format)) {
         std::cerr << "[rt] lighting unavailable\n";
         lighting_enabled_ = false;
@@ -2317,6 +2317,13 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
         }
         const float length = std::sqrt(l[0] * l[0] + l[1] * l[1] + l[2] * l[2]);
         const std::array<float, 3> fallback_sun{0.3f, 0.8f, 0.5f};
+        {
+            // Half its colour: a strongly tinted world light turned grass yellow and white objects cyan.
+            const float grey = 0.2126f * sun_color[0] + 0.7152f * sun_color[1] + 0.0722f * sun_color[2];
+            for (float& v : sun_color) v = 0.5f * (v + grey);
+            const float peak = std::max({sun_color[0], sun_color[1], sun_color[2], 1e-3f});
+            for (float& v : sun_color) v /= peak;
+        }
         for (unsigned i = 0; i < 3u; ++i) {
             c.sun[i] = length > 1e-6f ? l[i] / length : fallback_sun[i] / std::sqrt(0.98f);
             c.sun_light[i] = sun_present ? sun_color[i] * sun_light_ * strength * stage_strength : 0.0f;

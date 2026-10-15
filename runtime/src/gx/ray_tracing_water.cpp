@@ -209,7 +209,7 @@ int SceneRayTracer::trace_water(ID3D12GraphicsCommandList* list, const RtSources
 void SceneRayTracer::composite_water(ID3D12GraphicsCommandList* list, D3D12_CPU_DESCRIPTOR_HANDLE target,
                                      D3D12_GPU_DESCRIPTOR_HANDLE depth_srv, std::uint32_t width,
                                      std::uint32_t height, int slot, bool reproject,
-                                     D3D12_GPU_DESCRIPTOR_HANDLE scene_srv) {
+                                     D3D12_GPU_DESCRIPTOR_HANDLE scene_srv, D3D12_GPU_DESCRIPTOR_HANDLE opaque_srv) {
     if (list == nullptr || slot < 0 || slot >= static_cast<int>(kLightSlots) || depth_srv.ptr == 0u ||
         show_lighting_) {
         return;
@@ -218,7 +218,7 @@ void SceneRayTracer::composite_water(ID3D12GraphicsCommandList* list, D3D12_CPU_
     reproject = reproject && reproject_;
     const float split = split_ > 0.0f ? info.view.viewport[0] + split_ * info.view.viewport[2] : -1.0f;
     reflections_.composite_water(list, target, depth_srv, width, height, static_cast<unsigned>(slot),
-                                 reproject ? reproject_->GetGPUVirtualAddress() : 0u, split, scene_srv);
+                                 reproject ? reproject_->GetGPUVirtualAddress() : 0u, split, scene_srv, opaque_srv);
 }
 
 }  // namespace galaxy::gx

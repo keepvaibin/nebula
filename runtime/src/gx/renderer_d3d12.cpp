@@ -7707,6 +7707,9 @@ void RendererD3D12::rt_trace_scene() {
         std::swap(barrier.Transition.StateBefore, barrier.Transition.StateAfter);
         command_list_->ResourceBarrier(1, &barrier);
     }
+    // The frame before the translucent phases, for the water composite (the seabed under the water).
+    rt_opaque_srv_ = depth && slot >= 0 ? rt_copy_color(rt_opaque_copy_, L"rt opaque scene")
+                                        : D3D12_GPU_DESCRIPTOR_HANDLE{};
     // The picture before the translucent phases: what the glows add to it measures their light.
     if (depth && ray_tracer_.glow_open() && efb_color_ && conv_efb_color_srv_.ptr != 0u) {
         D3D12_RESOURCE_BARRIER views[2]{};
@@ -7930,7 +7933,7 @@ void RendererD3D12::rt_trace_water() {
     if (slot >= 0) {
         const D3D12_GPU_DESCRIPTOR_HANDLE scene = rt_copy_color(rt_water_copy_, L"rt water scene");
         ray_tracer_.composite_water(command_list_.Get(), efb_rtv_, conv_efb_depth_srv_, width, desc.Height, slot,
-                                    false, scene);
+                                    false, scene, rt_opaque_srv_);
         if (replay_recording_) {
             replay_ops_.push_back({ReplayKind::RtWater, static_cast<std::uint32_t>(slot)});
         }
@@ -7957,7 +7960,8 @@ void RendererD3D12::record_rt_water(int slot, bool reproject) {
     const D3D12_RESOURCE_DESC desc = efb_depth_->GetDesc();
     const D3D12_GPU_DESCRIPTOR_HANDLE scene = rt_copy_color(rt_water_copy_, L"rt water scene");
     ray_tracer_.composite_water(command_list_.Get(), efb_rtv_, conv_efb_depth_srv_,
-                                static_cast<std::uint32_t>(desc.Width), desc.Height, slot, reproject, scene);
+                                static_cast<std::uint32_t>(desc.Width), desc.Height, slot, reproject, scene,
+                                rt_opaque_srv_);
     std::swap(barrier.Transition.StateBefore, barrier.Transition.StateAfter);
     command_list_->ResourceBarrier(1, &barrier);
     command_list_->SetGraphicsRootSignature(root_signature_.Get());
@@ -7981,6 +7985,8 @@ void RendererD3D12::record_rt_composite(int slot, bool reproject) {
                           static_cast<std::uint32_t>(desc.Width), desc.Height, slot, reproject);
     std::swap(barrier.Transition.StateBefore, barrier.Transition.StateAfter);
     command_list_->ResourceBarrier(1, &barrier);
+    // The sub-frame's frame before its translucent phases (its water composite's seabed).
+    rt_opaque_srv_ = rt_copy_color(rt_opaque_copy_, L"rt opaque scene");
     command_list_->SetGraphicsRootSignature(root_signature_.Get());
     invalidate_gx_bindings();
     bound_rt_aux_ = 0xFFu;

@@ -137,6 +137,7 @@ enum CompositeParameter : UINT {
     kCompositeTiles,
     kCompositeUnder,
     kCompositeScene,
+    kCompositeOpaque,
     kCompositeCount,
 };
 
@@ -498,6 +499,11 @@ bool RtReflections::create_pipelines(DXGI_FORMAT color_format) {
     composite_params[kCompositeScene].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
     composite_params[kCompositeScene].DescriptorTable.NumDescriptorRanges = 1u;
     composite_params[kCompositeScene].DescriptorTable.pDescriptorRanges = &scene_range;
+    D3D12_DESCRIPTOR_RANGE opaque_range = scene_range;
+    opaque_range.BaseShaderRegister = 6u;
+    composite_params[kCompositeOpaque].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+    composite_params[kCompositeOpaque].DescriptorTable.NumDescriptorRanges = 1u;
+    composite_params[kCompositeOpaque].DescriptorTable.pDescriptorRanges = &opaque_range;
     for (auto& param : composite_params) {
         param.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
     }
@@ -937,7 +943,8 @@ void RtReflections::draw_composite(ID3D12GraphicsCommandList* list, Pass& pass, 
     c.water[3] = clear_;
     c.sun[3] = info.sun[3] * caustics_;
     c.water2[0] = waves_;
-    c.water2[1] = water_cover_;
+    // Its sign: the frame before the water is bound (the water layer over a sharp seabed).
+    c.water2[1] = water_opaque_.ptr != 0u ? water_cover_ : -water_cover_;
     c.water2[2] = foam_;
     c.water2[3] = shallow_caustics_;
     const D3D12_GPU_VIRTUAL_ADDRESS final_address = pass.final[slot].resource->GetGPUVirtualAddress();
@@ -956,6 +963,7 @@ void RtReflections::draw_composite(ID3D12GraphicsCommandList* list, Pass& pass, 
     list->SetGraphicsRootShaderResourceView(kCompositeUnder, under_[slot].resource->GetGPUVirtualAddress());
     // The water composite reads the frame with the game's water (water_scene_); the others never do.
     list->SetGraphicsRootDescriptorTable(kCompositeScene, water_scene_.ptr != 0u ? water_scene_ : depth_srv);
+    list->SetGraphicsRootDescriptorTable(kCompositeOpaque, water_opaque_.ptr != 0u ? water_opaque_ : depth_srv);
     list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
     list->DrawInstanced(3u, 1u, 0u, 0u);
 }
@@ -1002,7 +1010,7 @@ void RtReflections::composite(ID3D12GraphicsCommandList* list, D3D12_CPU_DESCRIP
 void RtReflections::composite_water(ID3D12GraphicsCommandList* list, D3D12_CPU_DESCRIPTOR_HANDLE target,
                                     D3D12_GPU_DESCRIPTOR_HANDLE depth_srv, std::uint32_t width, std::uint32_t height,
                                     unsigned slot, D3D12_GPU_VIRTUAL_ADDRESS reproject, float split,
-                                    D3D12_GPU_DESCRIPTOR_HANDLE scene_srv) {
+                                    D3D12_GPU_DESCRIPTOR_HANDLE scene_srv, D3D12_GPU_DESCRIPTOR_HANDLE opaque_srv) {
     if (!ready_ || list == nullptr || slot >= kSlots || depth_srv.ptr == 0u) {
         return;
     }
@@ -1019,9 +1027,11 @@ void RtReflections::composite_water(ID3D12GraphicsCommandList* list, D3D12_CPU_D
         list->EndQuery(timestamps_.Get(), D3D12_QUERY_TYPE_TIMESTAMP, result * kTimestampsPerSlot + 6u);
     }
     water_scene_ = scene_srv;
+    water_opaque_ = scene_srv.ptr != 0u ? opaque_srv : D3D12_GPU_DESCRIPTOR_HANDLE{};
     draw_composite(list, water_, water_composite_pso_.Get(), target, depth_srv, width, height, slot, info, reproject,
                    split);
     water_scene_ = {};
+    water_opaque_ = {};
     // Under the water (its state from the water pass): caustics and shafts over the whole picture.
     if (caustics_ > 0.0f || shafts_ > 0.0f) {
         list->SetPipelineState(underwater_pso_.Get());

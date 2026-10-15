@@ -116,7 +116,7 @@ public:
     void composite_water(ID3D12GraphicsCommandList* list, D3D12_CPU_DESCRIPTOR_HANDLE target,
                          D3D12_GPU_DESCRIPTOR_HANDLE depth_srv, std::uint32_t width, std::uint32_t height,
                          unsigned slot, D3D12_GPU_VIRTUAL_ADDRESS reproject, float split,
-                         D3D12_GPU_DESCRIPTOR_HANDLE scene_srv = {});
+                         D3D12_GPU_DESCRIPTOR_HANDLE scene_srv = {}, D3D12_GPU_DESCRIPTOR_HANDLE opaque_srv = {});
 
 private:
     static constexpr unsigned kResultSlots = 16u;
@@ -277,6 +277,7 @@ private:
     float local_gain_ = 2.0f;   // GALAXY_RT_REFLECT_LOCAL_GAIN: the point and glow lights' highlights
     bool memory_reset_ = false;
     D3D12_GPU_DESCRIPTOR_HANDLE water_scene_{};  // composite_water's scene copy while it draws
+    D3D12_GPU_DESCRIPTOR_HANDLE water_opaque_{}; // ... and its copy of the frame before the water
     float water_cover_ = 0.75f;        // GALAXY_RT_WATER_COVER: share of the game's drawn water low-passed
     float foam_ = 0.6f;               // GALAXY_RT_WATER_FOAM: shore foam
     float shallow_caustics_ = 0.6f;   // GALAXY_RT_WATER_SHALLOW_CAUSTICS

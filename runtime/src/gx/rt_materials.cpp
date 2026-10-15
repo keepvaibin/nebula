@@ -154,6 +154,7 @@ void apply_class(const std::string& text, RtMaterial& m) {
         } else if (token == "unlit" || token == "sky") {
             set(RtSurfaceClass::Unlit);
             m.relief = 0.0f;
+            m.sky = token == "sky";
         }
     }
 }
