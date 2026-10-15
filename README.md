@@ -40,9 +40,11 @@ it is the original game code, translated instruction by instruction by the recom
 
 ## Features
 
-- Keyboard and mouse, Xbox controllers, the Switch Pro Controller and the Switch 2 Pro
-  Controller (USB), remappable. Switch controllers point with the gyro (R recenters) and tilt
-  for the Star Ball and ray surfing.
+- Keyboard and mouse, Xbox controllers, the Switch Pro Controller, the Switch 2 Pro
+  Controller (USB), PlayStation controllers (DualShock 4, DualSense, DualSense Edge), the
+  Steam Controller and generic HID game controllers, remappable. Switch, PlayStation and
+  Steam controllers point with the gyro (R/R1/RB recenters) and tilt for the Star Ball and
+  ray surfing.
   Vibration follows the game's Wii Remote motor.
 - Aspect ratios from 4:3 to 32:9 and internal resolution up to 16x.
 - Anti-aliasing (SMAA, FXAA), AMD FidelityFX FSR 1 upscaling, anisotropic filtering and
