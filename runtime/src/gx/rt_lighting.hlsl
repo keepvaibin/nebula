@@ -126,6 +126,8 @@ static const uint kSceneMask = 1u;
 // g_draws word 6: an alpha-tested card (grass, flowers), traced whole (card_blocks decides its hits).
 static const uint kDrawTableCard = 16u;
 static const float kDrawGlowScale = 16.0f;
+// A glowing plant's (an area light of the table's foliage) halo share per unit of its glow.
+static const float kPlantHalo = 2.0f;
 // RtDraw.flags bits 8-11 (rt_surfaces.h RtSurfaceClass::Crystal): clear crystal, glass and gems.
 static const uint kClearClass = 7u;
 // The lighting multiplies the game's colour by at most this; the composite rolls it off on a film
@@ -2506,7 +2508,14 @@ void SpatialBCS(uint3 id : SV_DispatchThreadID)
                 // In its own colour (lava stays red-orange; white for the draw-tinted ones).
                 const float3 tint = rgb8(emission.x);
                 const float3 hue = tint / max(max(tint.r, tint.g), max(tint.b, 1e-3f));
-                m = min(max(m, 1.0f) + glow * hue, kMaxLight);
+                if ((table_flags & kDrawTableFoliage) != 0u) {
+                    // A glowing plant (Gusty Garden's flowers) keeps its occlusion and shadows, its glow
+                    // added to them, with a small halo.
+                    m = min(m + glow * hue, kMaxLight);
+                    halo = kPlantHalo * intensity;
+                } else {
+                    m = min(max(m, 1.0f) + glow * hue, kMaxLight);
+                }
             }
         }
     }
