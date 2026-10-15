@@ -12677,7 +12677,10 @@ ID3D12PipelineState* GxBackend::flush_draw_state(
         // Perspective scene draws only: the view vector is the eye-space position. The material
         // follows the keys, which change only with their dirty bits.
         // GALAXY_RT_DELIGHT=0 (diagnostics): the game's lit colour stays under traced lighting.
-        static const bool delight = read_env_u64("GALAXY_RT_DELIGHT", 1u) != 0u;
+        // Off by default: de-lighting measured no change to the light (Honeyhive, DELIGHT 0 vs 1 identical,
+        // hha / hhb) while its enhanced path clamped the TEV where the game wraps: Battlerock's chrome lost
+        // its dark bands (front x1.9, fc46) and Toy Time's screw heads turned white.
+        static const bool delight = read_env_u64("GALAXY_RT_DELIGHT", 0u) != 0u;
         // The traced lighting de-lights the opaque phases only (it relights what it traces); translucent
         // draws (water, glass, seaweed) keep the game's lit colour: de-lit, Beach Bowl's lagoon came out
         // 40,168,182 -> 82,230,234 with reflections off (measured wd41a), the seaweed nearly black.
