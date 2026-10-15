@@ -769,7 +769,7 @@ bool SceneRayTracer::initialize(ID3D12Device* device, std::uint64_t timestamp_fr
     sun_color_ = env_triple("GALAXY_RT_SUN_COLOR", sun_color_);
     sun_size_ = std::clamp(env_float("GALAXY_RT_SUN_SIZE", 1.0f), 0.0f, 30.0f);
     key_size_ = std::clamp(env_float("GALAXY_RT_KEY_SIZE", 1.5f), 0.0f, 30.0f);
-    sun_min_elevation_ = std::clamp(env_float("GALAXY_RT_SUN_MIN_ELEVATION", 50.0f), 0.0f, 89.0f);
+    sun_min_elevation_ = std::clamp(env_float("GALAXY_RT_SUN_MIN_ELEVATION", 30.0f), 0.0f, 89.0f);
     sun_light_ = std::clamp(env_float("GALAXY_RT_SUN_LIGHT", 1.2f), 0.0f, 4.0f);
     sky_light_ = std::clamp(env_float("GALAXY_RT_SKY_LIGHT", 0.6f), 0.0f, 4.0f);
     if (lighting_enabled_ && !create_lighting_pipelines(color_format)) {
@@ -2302,13 +2302,13 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
         // Sun rays end halfway to the game's sun model (BrightSun, drawn that far out along the
         // sun's direction): it would shadow everything near the camera.
         c.sun_reach = sun_distance > 0.0f ? 0.5f * sun_distance : 1.0e6f;
-        // A sun (or key) low over the ground the camera looks at keeps its compass direction but rises to
-        // at least GALAXY_RT_SUN_MIN_ELEVATION degrees above the camera's horizon (its up: the game's
-        // camera rolls with Mario's gravity): a fixed world sun leaves the far side of every small planet
-        // and every rotated one dark (measured sv28: Dusty Dune's sand and all of Good Egg unlit; world Y
-        // is not up there). The shafts still come from the sun the sky shows (post_prepare).
-        if (sun_present && !sun_override_ && sun_min_elevation_ > 0.0f && camera_known_) {
-            const std::array<float, 3> up{camera_[4], camera_[5], camera_[6]};
+        // A sun the game placed low (a BrightSun on the horizon) keeps its compass direction but rises to
+        // at least GALAXY_RT_SUN_MIN_ELEVATION degrees over world Y. The camera's up is not the ground's:
+        // looking down at Mario under water it lies level, and a sun lifted against it came in flat and
+        // shadowed the whole seabed (measured wb31: seabed 178 -> 49). Keys (the game's world-fixed planet
+        // light) stay as the game has them. The shafts still come from the sun the sky shows.
+        if (sun_present && !keyed && !sun_override_ && sun_min_elevation_ > 0.0f) {
+            const std::array<float, 3> up{0.0f, 1.0f, 0.0f};
             const float up_length = std::sqrt(up[0] * up[0] + up[1] * up[1] + up[2] * up[2]);
             const float length = std::sqrt(l[0] * l[0] + l[1] * l[1] + l[2] * l[2]);
             const float min_e = std::sin(sun_min_elevation_ * 3.14159265f / 180.0f);
