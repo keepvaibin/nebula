@@ -1954,7 +1954,7 @@ float caustic(float3 floor, float3 surface, float3 plane)
     const float3 t2 = cross(world_up, t1);
     const float3 enter = transform(to_world, floor + s * (depth / rise));
     const float focus = wave_focus(float2(dot(enter, t1), dot(enter, t2)), float(m_under[n + 1u].y), depth);
-    return 1.0f + max(focus - 1.0f, 0.0f) * 0.35f * saturate(m_sun.w) * exp(-depth / 1500.0f);
+    return 1.0f + clamp(focus - 1.0f, -0.6f, 1.5f) * 0.3f * saturate(m_sun.w) * exp(-depth / 1500.0f);
 }
 
 // The translucent water's reflections (WaterTraceCS), after the water is drawn: Fresnel-weighted

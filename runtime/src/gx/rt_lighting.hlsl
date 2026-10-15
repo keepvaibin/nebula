@@ -659,6 +659,8 @@ void CaptureCS(uint3 id : SV_DispatchThreadID)
     const int2 q = int2(min(id.xy * c_factor, c_target_size - 1u));
     float3 color = block_color(id.xy);
     if ((c_divide & 2u) != 0u) {
+        // Under a bright sky the glows' bloom at 75 % (the game's sun glare sprites veiled daylight; star
+        // bits, Lumas and lamps keep most of their halo).
         const float day_glow = c_sums.Load(36u) != 0u ? saturate(asfloat(c_sums.Load(32u)) / c_daylight) : 1.0f;
         c_glow[index] = pack_r11g11b10(max(color - unpack_r11g11b10(c_glow_base[index]), 0.0f) *
                                        (1.0f - 0.25f * day_glow));
@@ -2070,8 +2072,18 @@ void SpatialBCS(uint3 id : SV_DispatchThreadID)
             const float sky_l = luminance(light.sky);
             const float ao = 1.0f - kDayOcclusion * (1.0f - saturate(sky_l));
             const float3 tint = lerp(float3(1.0f, 1.0f, 1.0f), light.sky / max(sky_l, 0.05f), kDayTint * (1.0f - vis));
-            const float3 day_m = shadow * form * ao * tint + points;
-            const float3 day_open = (shadow * form).xxx + points;
+            // A de-lit draw (characters, items: their GX light averaged at a mean facing of 0.55, shader_gen)
+            // back at the level the game lights it from the front: its ambient plus its light 0 (measured
+            // wb33: Beach Bowl's seaweed 115,111,36 -> 27,52,25 against the art).
+            float3 level = float3(1.0f, 1.0f, 1.0f);
+            if (delit) {
+                const uint2 colors = g_draws.Load2(min(draw_flags >> 16u, max(g_draw_count, 1u) - 1u) * kDrawStride);
+                const float3 a = rgb8(colors.x);
+                const float3 k = rgb8(colors.y);
+                level = clamp(min(a + k, 1.0f) / max(min(a + 0.55f * k, 1.0f), 0.05f), 1.0f, 2.0f);
+            }
+            const float3 day_m = shadow * form * ao * tint * level + points;
+            const float3 day_open = (shadow * form) * level + points;
             lighting = lerp(lighting, day_m, day_mix);
             open = lerp(open, day_open, day_mix);
         }
