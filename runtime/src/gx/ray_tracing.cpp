@@ -2378,7 +2378,8 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
             const float importance = l0 / (1.0f + distance2 / (144.0f * half * half));
             candidates[used++] = {importance, e, rgb, half};
         }
-        // The star core: the brightest light of the Comet Observatory, growing with it.
+        // The star core: the brightest light of the Comet Observatory, growing with it. Its light halves
+        // at 1.2 core radii from its centre: warm at its foot, an accent across the night plaza.
         {
             std::array<float, 3> core{};
             float scale = 0.0f;
@@ -2390,7 +2391,7 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
                 }
                 const float grow = std::clamp(0.4f + 0.35f * scale, 0.5f, 2.5f);
                 const float l = core_light_ * grow;
-                candidates[used++] = {1.0e6f, e, {1.0f * l, 0.72f * l, 0.38f * l}, core_radius_ * scale * 2.5f};
+                candidates[used++] = {1.0e6f, e, {1.0f * l, 0.72f * l, 0.38f * l}, core_radius_ * scale * 1.2f};
             }
         }
         std::sort(candidates.begin(), candidates.begin() + static_cast<std::ptrdiff_t>(used),
