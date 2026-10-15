@@ -745,12 +745,12 @@ void CaptureCS(uint3 id : SV_DispatchThreadID)
 }
 
 // ---------------------------------------------------------------------------------------------
-// Glow lights: the game's additive translucent draws (lamp and core halos, Lumas, sparks) are its
-// light sources. Each glow draw's eye-space triangles (the geometry pass) and what the
-// translucent phases added to the picture where they lie give a light: the draw's centre
-// weighted by that light, its spread, its power (light added x area x gain). The lights are
-// remembered in world space while out of view or hidden, and fade where their place is in view
-// and no longer glows.
+// Glow lights: the game's additive translucent draws whose texture the material table names as a
+// light (lamp halos, fire, lava sparks, electricity) are light sources; other glows are effects whose
+// halo shows in the bloom only. Each glow draw's eye-space triangles (the geometry pass) and what the
+// translucent phases added to the picture where they lie give the light's centre (weighted by that
+// light) and spread; its power and colour are the table's. The lights are remembered in world space
+// while out of view or hidden, and fade where their place is in view and no longer glows.
 // ---------------------------------------------------------------------------------------------
 
 cbuffer RtEmit : register(b0)
@@ -797,8 +797,6 @@ groupshared float s_glow_area[64];
 // intensity; it takes the table's colour.
 static const uint kGlowTableIntensity = 4u;
 static const uint kGlowTableColor = 8u;
-// The light of a glow the table does not name, at most (in Lumas: e_authored_power each).
-static const float kGlowMaxLumas = 2.0f;
 static const uint kGlowLens = 16u;      // a black hole's lens draw: no light (rt_post.hlsl PostLensCS)
 
 // One group per glow draw.
@@ -876,9 +874,10 @@ void GlowEmitCS(uint3 group : SV_GroupID, uint gi : SV_GroupIndex)
             }
             power = tint / max(luminance(tint), 1e-6f) * (intensity * e_authored_power);
         } else {
-            // A glow the table does not name lights as at most kGlowMaxLumas Lumas: a halo sprite's light
-            // grows with its size on screen (a Luma's halo measured 2.7e6, 68 Lumas, rp10 [rt-emit]).
-            power *= min(1.0f, kGlowMaxLumas * e_authored_power / max(luminance(power), 1e-6f));
+            // A glow the table does not name is an effect, not a light: its halo shows in the bloom only. As
+            // lights, effect sprites around a Luma summed to 0.4-0.9e6 per light (10-22 Lumas) even when each
+            // was capped at two Lumas (rp13 Observatory [rt-emit], six lights at the Tico at -900,88,4385).
+            power = float3(0.0f, 0.0f, 0.0f);
         }
         // The largest glows are atmospheres and halos around planets and the sky, not lights.
         if (luminance(power) >= 4.0f && radius <= kEmitLargest) {
