@@ -742,7 +742,7 @@ private:
     bool gi_ = true;                // GALAXY_RT_GI=0: no sky occlusion or bounce (shadows and lights stay)
     float core_radius_ = 400.0f;    // GALAXY_RT_CORE_RADIUS: the star core's radius at scale 1 (first guess;
                                     // the finish measures it from depth)
-    float core_light_ = 2.5f;       // GALAXY_RT_CORE_LIGHT: its light (a point light; grows with it)
+    float core_light_ = 0.8f;       // GALAXY_RT_CORE_LIGHT: its light (a point light; grows with it)
     float bloom_strength_ = 1.4f;   // GALAXY_RT_BLOOM: the glows' bloom (0: none)
     float bloom_threshold_ = 0.15f; // GALAXY_RT_BLOOM_THRESHOLD: glow luminance that starts to bloom
     // GALAXY_RT_EXPOSURE_DAY / _NIGHT: the mean lighting the exposure holds under a bright / black
