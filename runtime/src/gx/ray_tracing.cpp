@@ -36,6 +36,7 @@
 #include "rt_spatial_m_cs.h"
 #include "rt_temporal_cs.h"
 #include "rt_trace_cs.h"
+#include "rt_trace_tex_cs.h"
 #include "rt_geometry_cs.h"
 #include "rt_validate_cs.h"
 
@@ -202,6 +203,8 @@ constexpr UINT kSceneMask = 1u;
 constexpr UINT kLateMask = 2u;
 // g_draws word 6 (rt_lighting.hlsl kDrawTableCard): an alpha-tested card, traced whole (kRtDrawCard).
 constexpr std::uint32_t kDrawTableCard = 16u;
+// g_draws word 6 (rt_lighting.hlsl kDrawTableAlpha): an alpha-tested draw traced whole (kRtDrawAlphaTest).
+constexpr std::uint32_t kDrawTableAlpha = 32u;
 constexpr float kDrawGlowScale = 16.0f;
 // AuthoredLight.flags (rt_lighting.hlsl kAuthored*): the colour the draw shows; a spot light.
 constexpr std::uint32_t kAuthoredTint = 1u;
@@ -289,6 +292,8 @@ enum LightParameter : UINT {
     kLightHistory,
     kLightFinal,
     kLightPrimary,
+    kLightSurfaceUv,
+    kLightDrawTextures,
     kLightCount,
 };
 
@@ -810,6 +815,7 @@ bool SceneRayTracer::initialize(ID3D12Device* device, std::uint64_t timestamp_fr
     sun_size_ = std::clamp(env_float("GALAXY_RT_SUN_SIZE", 1.0f), 0.0f, 30.0f);
     key_size_ = std::clamp(env_float("GALAXY_RT_KEY_SIZE", 1.5f), 0.0f, 30.0f);
     sun_min_elevation_ = std::clamp(env_float("GALAXY_RT_SUN_MIN_ELEVATION", 50.0f), 0.0f, 89.0f);
+    sun_max_elevation_ = std::clamp(env_float("GALAXY_RT_SUN_MAX_ELEVATION", 65.0f), sun_min_elevation_, 90.0f);
     sun_light_ = std::clamp(env_float("GALAXY_RT_SUN_LIGHT", 1.2f), 0.0f, 4.0f);
     sky_light_ = std::clamp(env_float("GALAXY_RT_SKY_LIGHT", 0.6f), 0.0f, 4.0f);
     if (lighting_enabled_ && !create_lighting_pipelines(color_format)) {
@@ -1068,9 +1074,9 @@ bool SceneRayTracer::ensure_capacity(ID3D12GraphicsCommandList* list, std::uint3
     }
     positions_state_ = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
     surfaces_state_ = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
-    // High quality: texture coordinates and colours per triangle (36 B) for textured reflection hits.
-    if (high_quality_ &&
-        create_buffer(static_cast<std::uint64_t>(capacity) * 36u, D3D12_HEAP_TYPE_DEFAULT,
+    // Texture coordinates and colours per triangle (36 B): the alpha tests (both qualities) and high quality's
+    // textured reflection hits.
+    if (create_buffer(static_cast<std::uint64_t>(capacity) * 36u, D3D12_HEAP_TYPE_DEFAULT,
                       D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, surface_uv_,
                       L"rt surface uv")) {
         surface_uv_state_ = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
@@ -1670,10 +1676,11 @@ void SceneRayTracer::add_draw(const RtDraw& draw, const RtDrawInfo& info) {
                 colour |= static_cast<std::uint32_t>(std::lround(std::clamp(lit, 0.0f, 1.0f) * 255.0f)) << shift;
             }
         }
-        draw_textures_.push_back({info.texture, channel.material_from_vertex ? 1u : 0u, colour, 0u});
+        draw_textures_.push_back({info.texture, channel.material_from_vertex ? 1u : 0u, colour, info.alpha});
     }
     draw_colors_.push_back({info.ambient, info.light_index[0] == 0u ? info.light_color[0] : 0u, emission,
-                            std::bit_cast<std::uint32_t>(intensity), surface, info.material, flags,
+                            std::bit_cast<std::uint32_t>(intensity), surface, info.material,
+                            flags | ((info.surface & kRtDrawAlphaTest) != 0u ? kDrawTableAlpha : 0u),
                             std::bit_cast<std::uint32_t>(relief), std::bit_cast<std::uint32_t>(info.light[0][0]),
                             std::bit_cast<std::uint32_t>(info.light[0][1]),
                             std::bit_cast<std::uint32_t>(info.light[0][2]), light_kind});
@@ -1897,14 +1904,50 @@ bool SceneRayTracer::create_lighting_pipelines(DXGI_FORMAT color_format) {
         params[kLightZ + i].ParameterType = D3D12_ROOT_PARAMETER_TYPE_UAV;
         params[kLightZ + i].Descriptor.ShaderRegister = i;
     }
+    // Alpha-tested geometry: per triangle its texture coordinates (t20), per draw its alpha map (t21).
+    params[kLightSurfaceUv].ParameterType = D3D12_ROOT_PARAMETER_TYPE_SRV;
+    params[kLightSurfaceUv].Descriptor.ShaderRegister = 20u;
+    params[kLightDrawTextures].ParameterType = D3D12_ROOT_PARAMETER_TYPE_SRV;
+    params[kLightDrawTextures].Descriptor.ShaderRegister = 21u;
     for (auto& param : params) {
         param.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
     }
+    D3D12_STATIC_SAMPLER_DESC wrap{};
+    wrap.Filter = D3D12_FILTER_MIN_MAG_MIP_POINT;
+    wrap.AddressU = wrap.AddressV = wrap.AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+    wrap.MaxLOD = D3D12_FLOAT32_MAX;
+    wrap.ShaderRegister = 0u;
+    wrap.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
     D3D12_ROOT_SIGNATURE_DESC rsd{};
     rsd.NumParameters = kLightCount;
     rsd.pParameters = params;
-    if (!serialize(rsd, light_root_) ||
-        !compute(light_root_.Get(), g_rt_trace_cs, sizeof(g_rt_trace_cs), trace_pso_) ||
+    rsd.NumStaticSamplers = 1u;
+    rsd.pStaticSamplers = &wrap;
+    // The trace tests alpha maps straight from the descriptor heap: shader model 6.6 and resource binding tier 3
+    // (else alpha-tested draws are traced solid). GALAXY_RT_ALPHA_TEST=0: solid.
+    {
+        D3D12_FEATURE_DATA_SHADER_MODEL model{D3D_SHADER_MODEL_6_6};
+        D3D12_FEATURE_DATA_D3D12_OPTIONS options{};
+        light_textured_ = SUCCEEDED(device_->CheckFeatureSupport(D3D12_FEATURE_SHADER_MODEL, &model, sizeof(model))) &&
+                          model.HighestShaderModel >= D3D_SHADER_MODEL_6_6 &&
+                          SUCCEEDED(device_->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS, &options,
+                                                                 sizeof(options))) &&
+                          options.ResourceBindingTier >= D3D12_RESOURCE_BINDING_TIER_3 &&
+                          env_float("GALAXY_RT_ALPHA_TEST", 1.0f) != 0.0f;
+    }
+    if (light_textured_) {
+        rsd.Flags = D3D12_ROOT_SIGNATURE_FLAG_CBV_SRV_UAV_HEAP_DIRECTLY_INDEXED;
+        if (!serialize(rsd, light_root_) ||
+            !compute(light_root_.Get(), g_rt_trace_tex_cs, sizeof(g_rt_trace_tex_cs), trace_pso_)) {
+            light_textured_ = false;
+            light_root_.Reset();
+            trace_pso_.Reset();
+            rsd.Flags = D3D12_ROOT_SIGNATURE_FLAG_NONE;
+        }
+    }
+    std::cerr << "[rt] alpha-tested geometry " << (light_textured_ ? "tested by its alpha maps" : "solid") << '\n';
+    if ((!light_textured_ && (!serialize(rsd, light_root_) ||
+                              !compute(light_root_.Get(), g_rt_trace_cs, sizeof(g_rt_trace_cs), trace_pso_))) ||
         !compute(light_root_.Get(), g_rt_temporal_cs, sizeof(g_rt_temporal_cs), temporal_pso_) ||
         !compute(light_root_.Get(), g_rt_spatial_a_cs, sizeof(g_rt_spatial_a_cs), spatial_a_pso_) ||
         !compute(light_root_.Get(), g_rt_spatial_m_cs, sizeof(g_rt_spatial_m_cs), spatial_m_pso_) ||
@@ -2462,6 +2505,28 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
                 }
             }
         }
+        // Nor higher than GALAXY_RT_SUN_MAX_ELEVATION degrees, keys included: a sun overhead hides every
+        // character's shadow under it (user: tilt it slightly so the shadows show). Its compass direction stays;
+        // straight overhead it leans away from the camera's view (the shadows fall towards the camera).
+        if (sun_present && !sun_override_ && sun_max_elevation_ < 90.0f) {
+            const float length = std::sqrt(l[0] * l[0] + l[1] * l[1] + l[2] * l[2]);
+            const float max_e = std::sin(sun_max_elevation_ * 3.14159265f / 180.0f);
+            if (length > 1e-6f) {
+                const std::array<float, 3> d{l[0] / length, l[1] / length, l[2] / length};
+                if (d[1] > max_e) {
+                    std::array<float, 3> h{d[0], 0.0f, d[2]};
+                    float h_length = std::sqrt(h[0] * h[0] + h[2] * h[2]);
+                    if (h_length < 1e-3f) {
+                        h = {-camera_[8], 0.0f, -camera_[10]};
+                        h_length = std::sqrt(h[0] * h[0] + h[2] * h[2]);
+                    }
+                    if (h_length > 1e-6f) {
+                        const float across = std::sqrt(1.0f - max_e * max_e);
+                        l = {h[0] / h_length * across, max_e, h[2] / h_length * across};
+                    }
+                }
+            }
+        }
         std::array<float, 3> sun_color = keyed ? key_color_ : sun_color_;
         const RtStageSun* const stage = stage_sun_;
         if (sun_present && !keyed) {
@@ -2616,7 +2681,8 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
     c.flags = (history ? 1u : 0u) | (picture ? 2u : 0u) | (show_term_ == 2u ? 4u : 0u) | (show_term_ == 3u ? 8u : 0u) |
               (show_term_ == 4u ? 16u : 0u) | (show_term_ == 5u ? 32u : 0u) |
               (show_term_ == 6u ? 64u : 0u) | (gi_ ? 0u : 128u) | (show_term_ == 7u ? 256u : 0u) |
-              (show_term_ == 8u ? 512u : 0u) | (high_quality_ ? 1024u : 0u);
+              (show_term_ == 8u ? 512u : 0u) | (high_quality_ ? 1024u : 0u) |
+              (light_textured_ && surface_uv_ && draw_texture_table_ != 0u ? 4096u : 0u);
     std::memcpy(c.reproject, reproject.data(), sizeof(c.reproject));
     std::memcpy(c.picture, to_picture.data(), sizeof(c.picture));
     std::memcpy(c.to_eye, camera_.data(), sizeof(c.to_eye));
@@ -2651,6 +2717,9 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
     to_state(list, picture_sums_.Get(), picture_sums_state_, kRead);
     to_state(list, positions_.Get(), positions_state_, kRead);
     to_state(list, surfaces_.Get(), surfaces_state_, kRead);
+    if (surface_uv_) {
+        to_state(list, surface_uv_.Get(), surface_uv_state_, kRead);
+    }
     to_state(list, emit_list_.Get(), emit_list_state_, kRead);
     to_state(list, glow_base_.Get(), glow_base_state_, kRead);
     to_state(list, glow_added_.Get(), glow_added_state_, kRead);
@@ -2680,6 +2749,12 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
     list->SetComputeRootUnorderedAccessView(kLightHistory, light_history_[current]->GetGPUVirtualAddress());
     list->SetComputeRootUnorderedAccessView(kLightFinal, light_final_[slot]->GetGPUVirtualAddress());
     list->SetComputeRootUnorderedAccessView(kLightPrimary, light_primary_->GetGPUVirtualAddress());
+    // The alpha tests' texture coordinates and alpha maps (stand-ins the trace never reads without them: g_flags
+    // bit 12 off).
+    list->SetComputeRootShaderResourceView(kLightSurfaceUv, surface_uv_ ? surface_uv_->GetGPUVirtualAddress()
+                                                                        : positions_->GetGPUVirtualAddress());
+    list->SetComputeRootShaderResourceView(kLightDrawTextures,
+                                           draw_texture_table_ != 0u ? draw_texture_table_ : draw_table.gpu);
     list->SetPipelineState(trace_pso_.Get());
     list->Dispatch(groups_x, groups_y, 1u);
     const D3D12_RESOURCE_BARRIER all_uav = uav_barrier(nullptr);

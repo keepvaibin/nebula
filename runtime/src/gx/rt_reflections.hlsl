@@ -731,6 +731,40 @@ bool traced_card(uint instance, uint primitive)
     return (g_flags & 128u) != 0u && draw < g_draw_count && (g_draws.Load(draw * 48u + 24u) & 16u) != 0u;
 }
 
+// A candidate hit a reflection ray goes on through: a foliage card, or with the textured hits a texel an
+// alpha-tested draw's test cuts (g_draw_tex word 3: the alpha map's view, the alpha its test passes from).
+bool passes_through(uint instance, uint primitive, float2 b)
+{
+    if (traced_card(instance, primitive)) {
+        return true;
+    }
+#if RT_TEXTURED
+    if (instance != 0u || (g_flags & 2048u) == 0u) {
+        return false;
+    }
+    const uint draw = g_surfaces.Load(primitive * 16u + 12u) >> 16u;
+    if (draw >= g_texture_count) {
+        return false;
+    }
+    const uint alpha = g_draw_tex[draw].w;
+    if (alpha == 0u) {
+        return false;
+    }
+    const float3 w = float3(1.0f - b.x - b.y, b.x, b.y);
+    const uint a = primitive * 36u;
+    const float4 uv01 = asfloat(g_tri_uv.Load4(a));
+    const float2 uv2 = asfloat(g_tri_uv.Load2(a + 16u));
+    const float2 uv = uv01.xy * w.x + uv01.zw * w.y + uv2 * w.z;
+    if (any(abs(uv) > 1.0e4f) || any(isnan(uv))) {
+        return false;
+    }
+    const Texture2D<float4> map = ResourceDescriptorHeap[NonUniformResourceIndex(alpha & 0xFFFFFFu)];
+    return map.SampleLevel(g_wrap, uv, 0.0f).a * 255.0f < float(alpha >> 24u) - 0.5f;
+#else
+    return false;
+#endif
+}
+
 bool lit_from(float3 origin, float3 direction, float length)
 {
     RayDesc ray;
@@ -742,7 +776,8 @@ bool lit_from(float3 origin, float3 direction, float length)
         query;
     query.TraceRayInline(g_scene, RAY_FLAG_NONE, 0xFFu, ray);
     while (query.Proceed()) {
-        if (!traced_card(query.CandidateInstanceID(), query.CandidatePrimitiveIndex())) {
+        if (!passes_through(query.CandidateInstanceID(), query.CandidatePrimitiveIndex(),
+                            query.CandidateTriangleBarycentrics())) {
             query.CommitNonOpaqueTriangleHit();
         }
     }
@@ -1031,7 +1066,8 @@ Reflected reflect_light(uint2 s, float3 dir, float3 n, float3 ng, float3 hit, fl
     RayQuery<RAY_FLAG_FORCE_NON_OPAQUE | RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES> query;
     query.TraceRayInline(g_scene, RAY_FLAG_NONE, 0xFFu, reflection);
     while (query.Proceed()) {
-        if (!traced_card(query.CandidateInstanceID(), query.CandidatePrimitiveIndex())) {
+        if (!passes_through(query.CandidateInstanceID(), query.CandidatePrimitiveIndex(),
+                            query.CandidateTriangleBarycentrics())) {
             query.CommitNonOpaqueTriangleHit();
         }
     }

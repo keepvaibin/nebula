@@ -74,6 +74,10 @@ inline constexpr std::uint32_t kRtDrawNoShadow = 1u << 15u;
 // RtDrawInfo.surface only (above the RtDraw.flags bits): an alpha-tested foliage card, in the traced
 // scene whole; add_draw marks its draw record (rt_lighting.hlsl kDrawTableCard).
 inline constexpr std::uint32_t kRtDrawCard = 1u << 16u;
+// RtDrawInfo.surface only: an alpha-tested opaque draw outside the foliage table (wood panels, rocks, bells,
+// Gearmos: tests that cut little or nothing), traced whole; each ray's hit counts where its texture's alpha
+// passes the draw's test (RtDrawInfo.alpha; rt_lighting.hlsl alpha_test). Cards carry the same test.
+inline constexpr std::uint32_t kRtDrawAlphaTest = 1u << 17u;
 // Bits 8-11: the draw's surface class (rt_surfaces.h).
 inline constexpr std::uint32_t kRtDrawClassShift = 8u;
 inline constexpr std::uint32_t kRtDrawClassMask = 0xFu << kRtDrawClassShift;
@@ -107,6 +111,9 @@ struct RtDrawInfo {
     // Its material texture's view in the frame's shader-visible descriptor heap (~0: none): high quality's
     // reflections sample it where they hit the draw off screen.
     std::uint32_t texture = 0xFFFFFFFFu;
+    // An alpha-tested draw (kRtDrawAlphaTest, kRtDrawCard): its alpha map's view (low 24 bits) and the alpha
+    // its test passes from (high 8 bits, 1-255); 0: none (solid).
+    std::uint32_t alpha = 0u;
 };
 
 struct RtBuffer {
@@ -721,6 +728,7 @@ private:
     std::uint32_t picture_height_ = 0;
     std::uint32_t picture_factor_ = 0;
     std::uint32_t rays_ = 2;
+    bool light_textured_ = false;  // the lighting's trace reads alpha maps from the descriptor heap (SM 6.6)
     bool high_quality_ = true;  // config rt_quality: high (every pixel, more rays) or medium
     std::uint32_t factor_override_ = 0;
     std::uint32_t history_frames_ = 16;
@@ -739,6 +747,7 @@ private:
     std::array<float, 3> sun_color_{1.0f, 0.93f, 0.82f};
     float sun_size_ = 1.0f;     // degrees
     bool sun_override_ = false;
+    float sun_max_elevation_ = 65.0f;  // GALAXY_RT_SUN_MAX_ELEVATION: degrees no sun or key rises above
     float sun_min_elevation_ = 50.0f;  // GALAXY_RT_SUN_MIN_ELEVATION: degrees a game sun rises to at least
     const RtStageSun* stage_sun_ = nullptr;
     bool sun_held_ = false;

@@ -73,6 +73,14 @@ cbuffer RtLight : register(b0)
 };
 
 RaytracingAccelerationStructure g_scene : register(t6);
+#if RT_TEXTURED
+// Alpha-tested geometry (g_flags bit 12): per triangle its texture coordinates and colours (36 bytes,
+// ray_tracing.hlsl g_tri_uv), per draw its alpha map and the alpha its test passes from (word 3: the map's view
+// in the low 24 bits, the alpha in the high 8; 0: solid), sampled from the descriptor heap.
+ByteAddressBuffer g_tri_uv : register(t20);
+StructuredBuffer<uint4> g_draw_tex : register(t21);
+SamplerState g_wrap_point : register(s0);
+#endif
 Texture2D<float> g_efb_depth : register(t7);
 StructuredBuffer<float> g_prev_z : register(t8);
 StructuredBuffer<uint4> g_prev_history : register(t9);
@@ -1476,9 +1484,71 @@ float card_hash(uint primitive, uint salt)
     return float(h >> 8u) * (1.0f / 16777216.0f);
 }
 
-// Whether a candidate hit at eye-space `h` on `primitive` (its g_surfaces flags word `flags`) stops a ray.
+// An alpha-tested draw traced whole (kRtDrawAlphaTest: wood panels, rocks, bells, Gearmos whose test cuts
+// little or nothing): the camera's ray takes it where the raster drew it, as a card.
+static const uint kDrawTableAlpha = 32u;
+
+bool alpha_draw(uint flags)
+{
+    return (g_draws.Load(min(flags >> 16u, max(g_draw_count, 1u) - 1u) * kDrawStride + 24u) & kDrawTableAlpha) != 0u;
+}
+
+// The alpha test of a hit at eye-space `h` on `primitive` (its g_surfaces flags word `flags`): 1 where its
+// texture's alpha passes the draw's test (it stops the ray), 0 where the test cuts the texel (the ray goes on
+// through a lattice's hole, between a fern's fronds), -1 untested (no alpha map or no tables: solid, or the
+// card's own rule). The texture coordinates from the hit's barycentrics on its eye-space triangle.
+int alpha_test(uint primitive, uint flags, float3 h)
+{
+#if RT_TEXTURED
+    if ((g_flags & 4096u) == 0u) {
+        return -1;
+    }
+    const uint draw = flags >> 16u;
+    uint count;
+    uint stride;
+    g_draw_tex.GetDimensions(count, stride);
+    const uint alpha = draw < count ? g_draw_tex[draw].w : 0u;
+    if (alpha == 0u) {
+        return -1;
+    }
+    const float3 v0 = asfloat(g_positions.Load3(primitive * 36u));
+    const float3 e1 = asfloat(g_positions.Load3(primitive * 36u + 12u)) - v0;
+    const float3 e2 = asfloat(g_positions.Load3(primitive * 36u + 24u)) - v0;
+    const float3 d = h - v0;
+    const float d11 = dot(e1, e1);
+    const float d12 = dot(e1, e2);
+    const float d22 = dot(e2, e2);
+    const float denominator = d11 * d22 - d12 * d12;
+    if (abs(denominator) < 1e-20f) {
+        return -1;
+    }
+    const float d1 = dot(d, e1);
+    const float d2 = dot(d, e2);
+    const float b1 = (d22 * d1 - d12 * d2) / denominator;
+    const float b2 = (d11 * d2 - d12 * d1) / denominator;
+    const uint a = primitive * 36u;
+    const float4 uv01 = asfloat(g_tri_uv.Load4(a));
+    const float2 uv2 = asfloat(g_tri_uv.Load2(a + 16u));
+    const float2 uv = uv01.xy * (1.0f - b1 - b2) + uv01.zw * b1 + uv2 * b2;
+    if (any(abs(uv) > 1.0e4f) || any(isnan(uv))) {
+        return -1;
+    }
+    const Texture2D<float4> map = ResourceDescriptorHeap[NonUniformResourceIndex(alpha & 0xFFFFFFu)];
+    return map.SampleLevel(g_wrap_point, uv, 0.0f).a * 255.0f >= float(alpha >> 24u) - 0.5f ? 1 : 0;
+#else
+    return -1;
+#endif
+}
+
+// Whether a candidate hit at eye-space `h` on `primitive` (its g_surfaces flags word `flags`) stops a ray. An
+// alpha-tested draw or card stops it where its texture's alpha passes its test (exact leaf, fence and lattice
+// shadows; Beach Bowl's grass dithered the seabed under the water with the cards' mean coverage).
 bool card_blocks(uint primitive, uint flags, float3 h, uint salt)
 {
+    const int tested = alpha_test(primitive, flags, h);
+    if (tested >= 0) {
+        return tested != 0;
+    }
     if (!traced_card(flags)) {
         return true;
     }
@@ -1617,8 +1687,9 @@ void TraceCS(uint3 id : SV_DispatchThreadID, uint gi : SV_GroupIndex)
         query.TraceRayInline(g_scene, RAY_FLAG_NONE, kSceneMask, ray);
         while (query.Proceed()) {
             // A foliage card is the surface only where the raster drew it (at this pixel's depth).
+            const uint candidate = g_surfaces.Load(query.CandidatePrimitiveIndex() * 16u + 12u);
             if (abs(query.CandidateTriangleRayT() - span) <= span * 0.002f + 0.5f ||
-                !traced_card(g_surfaces.Load(query.CandidatePrimitiveIndex() * 16u + 12u))) {
+                !(traced_card(candidate) || alpha_draw(candidate))) {
                 query.CommitNonOpaqueTriangleHit();
             }
         }

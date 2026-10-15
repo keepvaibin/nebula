@@ -811,6 +811,7 @@ private:
     bool rt_view_set_ = false;
     [[nodiscard]] bool rt_geometry_draw() const noexcept;
     [[nodiscard]] bool rt_card_draw() const noexcept;
+    [[nodiscard]] bool rt_alpha_draw() const noexcept;
     [[nodiscard]] bool rt_glow_draw() const noexcept;
     [[nodiscard]] bool rt_late_draw() const noexcept;
     [[nodiscard]] bool rt_water_draw() const noexcept;

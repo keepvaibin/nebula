@@ -6970,7 +6970,7 @@ void GxBackend::end_side_layer() {
 }
 
 bool GxBackend::rt_geometry_draw() const noexcept {
-    if (!(rt_state_eligible_ || rt_card_draw()) || !scene_phase_ || side_layer_ != kSceneLayer ||
+    if (!(rt_state_eligible_ || rt_card_draw() || rt_alpha_draw()) || !scene_phase_ || side_layer_ != kSceneLayer ||
         !renderer_.rt_scene_open()) {
         return false;
     }
@@ -6998,6 +6998,19 @@ bool GxBackend::rt_card_draw() const noexcept {
     }
     const RtMaterial* const material = rt_material(current_rt_material_);
     return material != nullptr && material->foliage;
+}
+
+// An alpha-tested opaque draw outside the foliage table: most such tests cut little or nothing (the Observatory's
+// wood panels, rocks, bells, Gearmos, Buoy Base's far models; v68w outcome log: 41 objects in five galaxies left out
+// of the traced scene), so it is traced whole and the rays test its texture's alpha (kRtDrawAlphaTest).
+// GALAXY_RT_ALPHA_GEOMETRY=0 leaves them out as before.
+bool GxBackend::rt_alpha_draw() const noexcept {
+    static const bool enabled = read_env_u64("GALAXY_RT_ALPHA_GEOMETRY", 1u) != 0u;
+    if (!enabled || !rt_card_eligible_ || rt_card_draw()) {
+        return false;
+    }
+    const RtMaterial* const material = current_rt_material_ != 0u ? rt_material(current_rt_material_) : nullptr;
+    return material == nullptr || (!material->particle && !material->sky && !material->hide);
 }
 
 // Glows: additive draws of the translucent phases, after the trace and before the scene's end.
@@ -7448,7 +7461,25 @@ bool GxBackend::begin_rt_batch(const DrawCall& call, RtDrawInfo& info) {
                            (fall != nullptr && fall->waterfall ? kRtDrawWaterfall : 0u);
         } else {
             info.surface |= static_cast<std::uint32_t>(surface.surface_class) << kRtDrawClassShift;
-            info.surface |= rt_state_eligible_ ? 0u : kRtDrawCard;
+            if (!rt_state_eligible_) {
+                info.surface |= rt_card_draw() ? kRtDrawCard : kRtDrawAlphaTest;
+                // The alpha its test passes from (GREATER ref: ref + 1, GEQUAL ref: ref, the first such compare;
+                // other tests keep it solid) and the alpha map: TEV stage 0's texture.
+                const AlphaCompare test = state_.alpha_compare();
+                std::uint32_t from = 0u;
+                if (test.comp0 == CompareFunc::Greater || test.comp0 == CompareFunc::GEqual) {
+                    from = test.ref0 + (test.comp0 == CompareFunc::Greater ? 1u : 0u);
+                } else if (test.comp1 == CompareFunc::Greater || test.comp1 == CompareFunc::GEqual) {
+                    from = test.ref1 + (test.comp1 == CompareFunc::Greater ? 1u : 0u);
+                }
+                const unsigned map = ps_key_.stages[0].order & 7u;
+                if (from != 0u && from <= 255u && current_texture_table_.ptr != 0u && map < kMaxTextureMaps) {
+                    const std::uint32_t table = renderer_.srv_ring().index_of(current_texture_table_);
+                    if (table != 0xFFFFFFFFu && table + map < 0xFFFFFFu) {
+                        info.alpha = (from << 24u) | (table + map);
+                    }
+                }
+            }
             // The table's shadow 0 was read but never applied: Good Egg's planet shells blocked its
             // sun everywhere (measured sb29: every surface blocked 100-200 units out).
             // A helper row (an environment map, a mask) speaks for its texture, not for the draw.
@@ -7527,6 +7558,13 @@ void GxBackend::aim_rt_scene_lights(const std::array<float, 12>* view) {
     rt_light_pending_ = 0u;
     ++rt_light_serial_;
     rt_light_tracking_ = view != nullptr && mode != 0u;
+    // The ray tracer's key (a stage without the game's sun: its table sun, the sun its sky shows, the bright
+    // side of a daylight sky) holds whatever the actor lights do; GALAXY_RT_KEY=0: none. Turning the actor
+    // lights off (build 59) took it along: the table's suns (Honeyhive, Gusty Garden, Gold Leaf, Battlerock,
+    // Bigmouth, Drip Drop) went out and their characters cast no shadow (user: penguins and animals without
+    // shadows sometimes; key69 Drip Drop "sun present=0").
+    static const bool key_on = read_env_u64("GALAXY_RT_KEY", 1u) != 0u;
+    const bool keying = view != nullptr && (mode != 0u || key_on);
     if (view != nullptr) {
         rt_scene_view_ = *view;
     }
@@ -7555,22 +7593,22 @@ void GxBackend::aim_rt_scene_lights(const std::array<float, 12>* view) {
     const RtStageSun* const stage_sun = renderer_.rt_stage_sun();
     if (stage_sun != nullptr && stage_sun->source == RtStageSun::Source::None) {
         // The stage has no sun or sky key (rt-suns.tsv): its own lights carry it.
-    } else if (rt_light_tracking_ && stage_sun != nullptr && stage_sun->source == RtStageSun::Source::Table) {
+    } else if (keying && stage_sun != nullptr && stage_sun->source == RtStageSun::Source::Table) {
         // The stage's sun where its sky shows it (rt-suns.tsv): lit as the sky's own sun.
         source = 2u;
         target = {stage_sun->direction[0], stage_sun->direction[1], stage_sun->direction[2]};
         rt_light_key_color_ = 0xFFF6E600u;
-    } else if (rt_light_tracking_ && renderer_.rt_sun_direction(target)) {
+    } else if (keying && renderer_.rt_sun_direction(target)) {
         source = 1u;
-    } else if (rt_light_tracking_ && renderer_.rt_sky_sun(target, sky_color)) {
+    } else if (keying && renderer_.rt_sky_sun(target, sky_color)) {
         source = 2u;
         const auto byte = [](float v) { return static_cast<std::uint32_t>(std::clamp(v, 0.0f, 1.0f) * 255.0f + 0.5f); };
         rt_light_key_color_ = byte(sky_color[0]) << 24u | byte(sky_color[1]) << 16u | byte(sky_color[2]) << 8u;
-    } else if (rt_light_tracking_ && world_key != nullptr) {
+    } else if (keying && world_key != nullptr) {
         source = 3u;
         target = world_key->direction;
         rt_light_key_color_ = world_key->color;
-    } else if (rt_light_tracking_ && renderer_.rt_sky_key(target, sky_strength)) {
+    } else if (keying && renderer_.rt_sky_key(target, sky_strength)) {
         source = 4u;
         rt_light_key_color_ = 0xFFF6E600u;   // daylight: warm white
     }
@@ -7601,7 +7639,7 @@ void GxBackend::aim_rt_scene_lights(const std::array<float, 12>* view) {
     } else {
         rt_light_blend_ = std::max(rt_light_blend_ - step, 0.0f);
     }
-    if (!rt_light_tracking_) {
+    if (!keying) {
         rt_light_blend_ = 0.0f;
     }
     const bool enabled = mode == 1u || (mode == 2u && (rt_light_serial_ & 1u) != 0u);
@@ -7614,7 +7652,8 @@ void GxBackend::aim_rt_scene_lights(const std::array<float, 12>* view) {
     const std::array<float, 3> key_color{static_cast<float>(c >> 24u) / 255.0f,
                                          static_cast<float>((c >> 16u) & 0xFFu) / 255.0f,
                                          static_cast<float>((c >> 8u) & 0xFFu) / 255.0f};
-    renderer_.rt_set_key_light(enabled && rt_key_source_ >= 2u && rt_light_blend_ > 0.0f, rt_light_world_, key_color,
+    renderer_.rt_set_key_light((enabled || (mode == 0u && key_on)) && rt_key_source_ >= 2u && rt_light_blend_ > 0.0f,
+                               rt_light_world_, key_color,
                                rt_light_blend_ * (rt_key_source_ == 4u ? sky_strength : 1.0f),
                                rt_key_source_ == 2u || rt_key_source_ == 4u);
     static constexpr const char* kSources[5] = {"none", "sun", "sky", "world", "daylight"};
