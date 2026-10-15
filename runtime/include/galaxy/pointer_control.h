@@ -62,7 +62,7 @@ inline constexpr float kPointerVisibleLimit = 1.02f;
 // restart the timer; leaving the radius re-anchors and restarts it. A hidden gyro
 // pointer (`latch`) stays hidden until `reveal` (recenter). A hidden stick pointer also
 // shows again when it leaves the radius or the stick is pushed. A mouse-owned pointer
-// never hides.
+// hides by MouseRestHide instead.
 //
 // The default radius of 0.12 units (6 % of the picture width, 2.4 degrees of turn at
 // gyro sensitivity 1) is larger than hand tremor (about 0.025 units).
@@ -82,6 +82,16 @@ struct PointerRestHide {
     // Returns whether the pointer is hidden after this report.
     bool update(float x, float y, std::uint64_t now_us, bool controller_owned, bool reveal, bool latch,
                 float hide_seconds, float radius) noexcept;
+};
+
+// Keyboard and mouse, in play: the mouse-owned pointer hides after kMouseHideSeconds without a
+// mouse move or a held mouse button, and shows again with either. Any other owner resets it.
+inline constexpr float kMouseHideSeconds = 4.5f;
+
+struct MouseRestHide {
+    std::uint64_t since_us = 0;
+    // Returns whether the pointer is hidden after this report.
+    bool update(bool mouse_owned, bool mouse_active, std::uint64_t now_us) noexcept;
 };
 
 // The recenter button (Switch R, Xbox right-stick click, keyboard R): the

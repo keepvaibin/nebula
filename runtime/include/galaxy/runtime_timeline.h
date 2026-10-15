@@ -564,9 +564,10 @@ public:
     // variant keeps the strict schedule and checks a backlog's complete sequence and deadline identity. When
     // several due levels have accumulated, it acknowledges the latest identity with one guest-visible
     // interrupt. A singleton uses the strict method's transaction. It never coalesces an early, anonymous,
-    // incomplete, noncontiguous or arithmetically invalid batch. An incomplete due batch returns no event
-    // and consumes nothing. Even a prior Ready inspection can be deferred if another period elapses. The
-    // strict method remains for edge-triggered consumers and acceptance tests that need one delivery per edge.
+    // incomplete, noncontiguous or arithmetically invalid batch. An incomplete or not yet published due batch
+    // returns no event and consumes nothing. Even a prior Ready inspection can be deferred if another period
+    // elapses. The strict method remains for edge-triggered consumers and acceptance tests that need one
+    // delivery per edge.
     std::optional<DeadlineEvent> consume_one_or_coalesce_level_or_throw(
         PendingEventLatch& latch,
         EventKind kind,
@@ -634,6 +635,9 @@ public:
     }
     [[nodiscard]] DeadlinePublicationStats publication_stats(
         EventKind kind) const;
+    // Makes the worker recompute its due set now. For a consumer that finds a deadline unpublished a period
+    // after it fell due: a late timer wake must not hold the publication back further.
+    void wake_worker() noexcept { notify_worker(); }
     // Serializes a host-suspension clock rebase against the worker's timeline reads. Callers re-arm any device
     // schedule whose published edges the rebase invalidated before guest execution resumes.
     [[nodiscard]] bool rebase_timeline_after_host_suspension(

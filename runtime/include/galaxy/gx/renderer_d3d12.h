@@ -452,6 +452,11 @@ public:
     // covers the window.
     [[nodiscard]] bool begin_output_efb();
     void end_output_efb();
+    // The scene's anti-aliasing (post_process.h) in the render EFB at the end of the 3D scene,
+    // before the 2D layer and begin_output_efb. A temporal upscaler antialiases the scene itself.
+    void record_scene_aa();
+    // GALAXY_TRACE_SCENE_AA=1: the pass's GPU time per game frame, logged every 300 frames.
+    void read_scene_aa_timing();
     [[nodiscard]] bool output_efb_active() const noexcept { return output_efb_active_; }
     // Whether the targets for `scale` fit the adapter's video-memory budget
     // next to everything already resident.
@@ -764,11 +769,12 @@ public:
 
     // Stretch-blit `source` to the backbuffer. A null/invalid source is a
     // runtime bug: callers must keep the last valid swap-chain image instead
-    // of submitting a black frame.
+    // of submitting a black frame. `black` presents black with the overlays
+    // (the VI's own black output); `source` then only sets the layout.
     // `capture_backbuffer` records the final post-blit swap-chain image.
     // Returns whether an optional backbuffer capture was recorded. Busy
     // diagnostic buffers never suppress the required blit/presentation.
-    bool present(const XfbTexture* source, bool capture_backbuffer = false);
+    bool present(const XfbTexture* source, bool capture_backbuffer = false, bool black = false);
 
     // Bring-up diagnostics: record an EFB-to-readback copy into the current
     // command list (call while recording). Readback and PPM encoding are
@@ -959,7 +965,6 @@ private:
     bool create_efb_targets(unsigned efb_scale);
     void carry_over_efb_contents();
     [[nodiscard]] unsigned output_efb_scale_for_window() const;
-    [[nodiscard]] unsigned temporal_render_scale(unsigned output_scale) const;
     [[nodiscard]] bool ensure_motion_target();
     [[nodiscard]] bool record_temporal_upscale(unsigned output_scale);
     [[nodiscard]] bool ensure_output_efb(unsigned scale);
@@ -967,6 +972,12 @@ private:
     // Live internal-resolution change, applied between frames by begin_frame
     // when get_render_config().efb_scale differs from the live targets.
     void apply_pending_efb_scale();
+    // Creates, replaces or releases the temporal upscaler for the live render
+    // and output scales, from begin_frame before its command list records.
+    void prepare_temporal_upscaler();
+    // The INTERNAL RESOLUTION row's scale, taken by apply_pending_efb_scale: the
+    // temporal upscaler's output (its quality mode renders below it).
+    unsigned upscale_output_scale_ = 0;
     // With internal_follow_window, re-derive efb_scale from the settled
     // window size (see RenderConfig::internal_follow_window).
     void follow_window_internal_resolution();
@@ -1068,7 +1079,16 @@ private:
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> alt_efb_rtv_heap_;
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> alt_efb_dsv_heap_;
     bool output_efb_active_ = false;
+    Microsoft::WRL::ComPtr<ID3D12QueryHeap> scene_aa_queries_;
+    Microsoft::WRL::ComPtr<ID3D12Resource> scene_aa_readback_;
+    std::array<std::uint8_t, kFramesInFlight> scene_aa_pending_{};  // AaRun, 0 none
+    double scene_aa_ms_sum_ = 0.0;
+    double scene_aa_ms_max_ = 0.0;
+    unsigned scene_aa_samples_ = 0;
     std::unique_ptr<TemporalUpscaler> temporal_;
+    // An FSR 3 context being created off the render thread (its pipelines take seconds on an
+    // integrated GPU), for the sizes and mode recorded below.
+    std::future<std::unique_ptr<TemporalUpscaler>> temporal_pending_;
     unsigned temporal_kind_ = 0;       // upscaler setting it was made for (2 FSR 3, 3 DLSS)
     unsigned temporal_quality_ = 0;
     // A presented frame's Streamline markers have begun (begin_frame) and not yet ended (present).
@@ -1129,7 +1149,7 @@ private:
     };
     // RtComposite: the ambient occlusion of ray-tracer result slot `index`.
     enum class ReplayKind : std::uint8_t {
-        Draw, BindEfb, Clear, Copy, SwapEfbSets, ClearDepth, RtComposite, RtBloom, RtPost, RtWater
+        Draw, BindEfb, Clear, Copy, SwapEfbSets, ClearDepth, RtComposite, RtBloom, RtPost, RtWater, SceneAa
     };
     struct ReplayOp {
         ReplayKind kind = ReplayKind::Draw;

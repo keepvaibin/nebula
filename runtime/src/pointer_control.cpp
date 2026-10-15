@@ -113,6 +113,14 @@ bool PointerRestHide::update(float x, float y, std::uint64_t now_us, bool contro
     return hidden;
 }
 
+bool MouseRestHide::update(bool mouse_owned, bool mouse_active, std::uint64_t now_us) noexcept {
+    if (!mouse_owned || mouse_active || since_us == 0u || now_us < since_us) {
+        since_us = now_us;
+        return false;
+    }
+    return static_cast<double>(now_us - since_us) >= static_cast<double>(kMouseHideSeconds) * 1e6;
+}
+
 RecenterHold::Output RecenterHold::update(bool down) noexcept {
     Output out{};
     out.pressed = down && !held;

@@ -1,9 +1,11 @@
-// plan_post_process, the AA status texts, and the start-up self-test on the
-// WARP software device (no GPU or window needed).
+// plan_post_process, the AA status texts, the start-up self-test and the scene
+// anti-aliasing on the WARP software device (no GPU or window needed).
 #include "galaxy/gx/post_process.h"
+#include "galaxy/gx/renderer_d3d12.h"
 
 #include <dxgi1_4.h>
 
+#include <array>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -173,12 +175,174 @@ void self_test_on_warp() {
     expect(!nothing.status().initialized && !nothing.status().smaa_ok, "no device: nothing available");
 }
 
+// The scene passes on a 64x64 EFB-like target with a stair-stepped edge and an alpha ramp:
+// they change colour near the edge, right of the split only, and never the alpha.
+void scene_aa_on_warp() {
+    using Microsoft::WRL::ComPtr;
+    ComPtr<IDXGIFactory4> factory;
+    ComPtr<IDXGIAdapter> adapter;
+    ComPtr<ID3D12Device> device;
+    ComPtr<ID3D12CommandQueue> queue;
+    D3D12_COMMAND_QUEUE_DESC qd{};
+    if (FAILED(CreateDXGIFactory1(IID_PPV_ARGS(&factory))) ||
+        FAILED(factory->EnumWarpAdapter(IID_PPV_ARGS(&adapter))) ||
+        FAILED(D3D12CreateDevice(adapter.Get(), D3D_FEATURE_LEVEL_11_0, IID_PPV_ARGS(&device))) ||
+        FAILED(device->CreateCommandQueue(&qd, IID_PPV_ARGS(&queue)))) {
+        std::cerr << "FAILED: WARP device\n";
+        ++failures;
+        return;
+    }
+    constexpr unsigned kSize = 64u;
+    constexpr unsigned kPitch = kSize * 4u;
+    std::array<unsigned char, kPitch * kSize> pattern{};
+    for (unsigned y = 0; y < kSize; ++y) {
+        for (unsigned x = 0; x < kSize; ++x) {
+            unsigned char* px = &pattern[y * kPitch + x * 4u];
+            const unsigned char v = y < 20u + x / 4u ? 255u : 0u;
+            px[0] = px[1] = px[2] = v;
+            px[3] = static_cast<unsigned char>(x * 4u);
+        }
+    }
+    const auto run = [&](Aa aa, unsigned display, AaRun& ran) {
+        std::array<unsigned char, kPitch * kSize> out{};
+        PostProcessSettings settings{};
+        settings.aa = aa;
+        galaxy::gx::PostProcessor post;
+        ComPtr<ID3D12CommandAllocator> allocator;
+        ComPtr<ID3D12GraphicsCommandList> list;
+        ComPtr<ID3D12Fence> fence;
+        ComPtr<ID3D12DescriptorHeap> rtv_heap;
+        ComPtr<ID3D12Resource> target, upload, readback;
+        galaxy::gx::DescriptorRing ring;
+        D3D12_DESCRIPTOR_HEAP_DESC hd{};
+        hd.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
+        hd.NumDescriptors = 1;
+        D3D12_HEAP_PROPERTIES def{}, up{}, rb{};
+        def.Type = D3D12_HEAP_TYPE_DEFAULT;
+        up.Type = D3D12_HEAP_TYPE_UPLOAD;
+        rb.Type = D3D12_HEAP_TYPE_READBACK;
+        D3D12_RESOURCE_DESC td{};
+        td.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+        td.Width = kSize;
+        td.Height = kSize;
+        td.DepthOrArraySize = 1;
+        td.MipLevels = 1;
+        td.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+        td.SampleDesc.Count = 1;
+        td.Flags = D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
+        D3D12_RESOURCE_DESC bd{};
+        bd.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+        bd.Width = pattern.size();
+        bd.Height = 1;
+        bd.DepthOrArraySize = 1;
+        bd.MipLevels = 1;
+        bd.SampleDesc.Count = 1;
+        bd.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+        unsigned char* mapped = nullptr;
+        if (!post.initialize(device.Get(), queue.Get(), settings) ||
+            FAILED(device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&allocator))) ||
+            FAILED(device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, allocator.Get(), nullptr,
+                                             IID_PPV_ARGS(&list))) ||
+            FAILED(device->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&fence))) ||
+            FAILED(device->CreateDescriptorHeap(&hd, IID_PPV_ARGS(&rtv_heap))) ||
+            !ring.initialize(device.Get(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 64u, 1u) ||
+            FAILED(device->CreateCommittedResource(&def, D3D12_HEAP_FLAG_NONE, &td, D3D12_RESOURCE_STATE_COPY_DEST,
+                                                   nullptr, IID_PPV_ARGS(&target))) ||
+            FAILED(device->CreateCommittedResource(&up, D3D12_HEAP_FLAG_NONE, &bd,
+                                                   D3D12_RESOURCE_STATE_GENERIC_READ, nullptr,
+                                                   IID_PPV_ARGS(&upload))) ||
+            FAILED(device->CreateCommittedResource(&rb, D3D12_HEAP_FLAG_NONE, &bd, D3D12_RESOURCE_STATE_COPY_DEST,
+                                                   nullptr, IID_PPV_ARGS(&readback))) ||
+            FAILED(upload->Map(0, nullptr, reinterpret_cast<void**>(&mapped)))) {
+            std::cerr << "FAILED: scene AA test setup\n";
+            ++failures;
+            return out;
+        }
+        std::memcpy(mapped, pattern.data(), pattern.size());
+        upload->Unmap(0, nullptr);
+        const D3D12_CPU_DESCRIPTOR_HANDLE rtv = rtv_heap->GetCPUDescriptorHandleForHeapStart();
+        device->CreateRenderTargetView(target.Get(), nullptr, rtv);
+        ring.begin_frame(0);
+        D3D12_TEXTURE_COPY_LOCATION buffer{};
+        buffer.pResource = upload.Get();
+        buffer.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
+        buffer.PlacedFootprint.Footprint = {DXGI_FORMAT_R8G8B8A8_UNORM, kSize, kSize, 1, kPitch};
+        D3D12_TEXTURE_COPY_LOCATION texture{};
+        texture.pResource = target.Get();
+        texture.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
+        list->CopyTextureRegion(&texture, 0, 0, 0, &buffer, nullptr);
+        D3D12_RESOURCE_BARRIER b{};
+        b.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+        b.Transition.pResource = target.Get();
+        b.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+        b.Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_DEST;
+        b.Transition.StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET;
+        list->ResourceBarrier(1, &b);
+        ID3D12DescriptorHeap* heaps[] = {ring.heap()};
+        list->SetDescriptorHeaps(1, heaps);
+        ran = post.record_scene_aa(list.Get(), ring, target.Get(), rtv, kSize, kSize, kSize, kSize, display,
+                                   display, 0.5f, 1u, 1u);
+        b.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
+        b.Transition.StateAfter = D3D12_RESOURCE_STATE_COPY_SOURCE;
+        list->ResourceBarrier(1, &b);
+        buffer.pResource = readback.Get();
+        list->CopyTextureRegion(&buffer, 0, 0, 0, &texture, nullptr);
+        list->Close();
+        ID3D12CommandList* lists[] = {list.Get()};
+        queue->ExecuteCommandLists(1, lists);
+        queue->Signal(fence.Get(), 1);
+        HANDLE done = CreateEventW(nullptr, FALSE, FALSE, nullptr);
+        fence->SetEventOnCompletion(1, done);
+        WaitForSingleObject(done, INFINITE);
+        CloseHandle(done);
+        readback->Map(0, nullptr, reinterpret_cast<void**>(&mapped));
+        std::memcpy(out.data(), mapped, out.size());
+        readback->Unmap(0, nullptr);
+        return out;
+    };
+    const auto check = [&](Aa aa, AaRun want, const char* name) {
+        AaRun ran = AaRun::kNone;
+        const auto out = run(aa, kSize, ran);
+        bool alpha_kept = true;
+        bool left_kept = true;
+        unsigned right_changed = 0u;
+        for (unsigned y = 0; y < kSize; ++y) {
+            for (unsigned x = 0; x < kSize; ++x) {
+                const unsigned i = y * kPitch + x * 4u;
+                alpha_kept = alpha_kept && out[i + 3u] == pattern[i + 3u];
+                const bool same = out[i] == pattern[i] && out[i + 1u] == pattern[i + 1u] &&
+                                  out[i + 2u] == pattern[i + 2u];
+                if (x < kSize / 2u) {
+                    left_kept = left_kept && same;
+                } else if (!same) {
+                    ++right_changed;
+                }
+            }
+        }
+        std::string what = std::string(name) + " runs on the scene";
+        expect(ran == want, what.c_str());
+        what = std::string(name) + " keeps the alpha the game left";
+        expect(alpha_kept, what.c_str());
+        what = std::string(name) + " leaves the picture left of the split";
+        expect(left_kept, what.c_str());
+        what = std::string(name) + " smooths the edge right of it";
+        expect(right_changed >= 8u, what.c_str());
+    };
+    check(Aa::kSmaa, AaRun::kSmaa, "SMAA");
+    check(Aa::kFxaa, AaRun::kFxaa, "FXAA");
+    AaRun ran = AaRun::kSmaa;
+    const auto out = run(Aa::kAuto, kSize / 2u, ran);
+    expect(ran == AaRun::kNone && out == pattern, "AUTO leaves a supersampled scene alone");
+    expect(device->GetDeviceRemovedReason() == S_OK, "device alive after the scene passes");
+}
+
 }  // namespace
 
 int main() {
     plans();
     texts();
     self_test_on_warp();
+    scene_aa_on_warp();
     if (failures != 0) {
         std::cerr << failures << " post-process checks failed\n";
         return 1;

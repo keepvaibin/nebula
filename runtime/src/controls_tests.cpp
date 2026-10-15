@@ -781,6 +781,29 @@ void test_rest_hide() {
     expect(!ever, "0 seconds never hides");
 }
 
+void test_mouse_rest_hide() {
+    MouseRestHide hide{};
+    std::uint64_t t = 1'000'000;
+    bool hidden = false;
+    for (int i = 0; i < 440; ++i, t += 10'000) hidden |= hide.update(true, i == 0, t);
+    expect(!hidden, "a still mouse pointer shows for 4.4 s");
+    for (int i = 0; i < 20; ++i, t += 10'000) hidden |= hide.update(true, false, t);
+    expect(hidden, "a still mouse pointer hides by 4.6 s");
+    expect(!hide.update(true, true, t), "a mouse move shows it");
+    t += 10'000;
+    expect(!hide.update(true, false, t), "the timer starts again after the move");
+    MouseRestHide click{};
+    t = 1'000'000;
+    for (int i = 0; i < 600; ++i, t += 10'000) (void)click.update(true, false, t);
+    expect(!click.update(true, true, t), "a held mouse button shows it");
+    MouseRestHide other{};
+    hidden = false;
+    t = 1'000'000;
+    for (int i = 0; i < 1000; ++i, t += 10'000) hidden |= other.update(false, false, t);
+    expect(!hidden, "a pointer the mouse does not own never mouse-hides");
+    expect(!other.update(true, false, t), "the mouse taking the pointer starts the timer");
+}
+
 // The gyro pointer of a hand-held Pro Controller: SwitchMotion integrates a
 // synthetic hand (tremor, small jerks, a slow pan) and the rest-hide rule
 // runs on the integrated pointer at the report rate.
@@ -1375,6 +1398,7 @@ int main(int argc, char** argv) {
     test_stick_pointer();
     test_jump_back();
     test_rest_hide();
+    test_mouse_rest_hide();
     test_rest_hide_gyro();
     test_recenter_hold();
     test_rumble_encoding();

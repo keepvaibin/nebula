@@ -17,6 +17,15 @@ std::vector<std::vector<std::string>> g_star_names;
 
 }  // namespace
 
+std::uint32_t galaxy_stage_stars(std::string_view id) noexcept {
+    for (const GalaxyStage& stage : kGalaxyStages) {
+        if (id == stage.id) {
+            return stage.stars;
+        }
+    }
+    return 0u;
+}
+
 bool galaxy_select_enabled() noexcept {
     static const bool enabled = [] {
         char value[8]{};

@@ -1739,6 +1739,59 @@ bool level_periodic_consumer_coalesces_only_complete_due_identity() {
     return passed;
 }
 
+// Diagnostics session 20261015-002725: the broker's timer woke over a period
+// late, so the simulation thread saw two due VI deadlines with none published.
+bool level_periodic_consumer_waits_for_late_broker_publication() {
+    using galaxy::timing::DeadlineEvent;
+    using galaxy::timing::EventKind;
+    using galaxy::timing::ExactPeriodicDeadlineConsumer;
+    using galaxy::timing::PendingEventLatch;
+
+    constexpr EventKind kKind = EventKind::VideoInterface;
+    PendingEventLatch latch;
+    ExactPeriodicDeadlineConsumer consumer(1'000u, 100u, 7u);
+    bool passed = true;
+
+    passed &= expect(
+        consumer.inspect(latch, kKind, 1'150u).status ==
+            galaxy::timing::PeriodicConsumeStatus::Backlog,
+        "two due VI deadlines with no publication inspect as a backlog");
+    const auto unpublished = consumer.consume_one_or_coalesce_level_or_throw(
+        latch, kKind, 1'150u);
+    passed &= expect(
+        !unpublished.has_value() && latch.pending(kKind) == 0u &&
+            consumer.stats().locked_rate_valid &&
+            consumer.stats().delivered_edges == 0u,
+        "an unpublished due batch waits for the broker instead of failing");
+
+    passed &= expect(
+        latch.publish_periodic(DeadlineEvent{kKind, 7u, 1'000u}) &&
+            latch.publish_periodic(DeadlineEvent{kKind, 8u, 1'100u}),
+        "the late broker publishes both due identities");
+    const auto coalesced = consumer.consume_one_or_coalesce_level_or_throw(
+        latch, kKind, 1'160u);
+    passed &= expect(
+        coalesced.has_value() && coalesced->sequence == 8u &&
+            coalesced->deadline_ticks == 1'100u &&
+            latch.pending(kKind) == 0u &&
+            consumer.stats().locked_rate_valid &&
+            consumer.stats().delivered_edges == 2u &&
+            consumer.stats().coalesced_level_edges == 1u,
+        "the late batch coalesces into one level at its latest identity");
+
+    passed &= expect(
+        latch.publish_periodic(DeadlineEvent{kKind, 9u, 1'200u}),
+        "the successor publishes on time");
+    const auto successor = consumer.consume_one_or_coalesce_level_or_throw(
+        latch, kKind, 1'200u);
+    passed &= expect(
+        successor.has_value() && successor->sequence == 9u &&
+            consumer.stats().locked_rate_valid &&
+            consumer.stats().delivered_interrupts == 2u,
+        "the schedule continues at its exact successor");
+    return passed;
+}
+
 bool periodic_prefix_take_preserves_concurrent_successor() {
     using galaxy::timing::DeadlineEvent;
     using galaxy::timing::EventKind;
@@ -2720,6 +2773,7 @@ int main() {
     passed &= run_test("exact_periodic_consumer_accepts_one_late_edge_within_period", exact_periodic_consumer_accepts_one_late_edge_within_period);
     passed &= run_test("exact_periodic_consumer_rejects_267ms_backlog", exact_periodic_consumer_rejects_267ms_backlog);
     passed &= run_test("level_periodic_consumer_coalesces_only_complete_due_identity", level_periodic_consumer_coalesces_only_complete_due_identity);
+    passed &= run_test("level_periodic_consumer_waits_for_late_broker_publication", level_periodic_consumer_waits_for_late_broker_publication);
     passed &= run_test("periodic_prefix_take_preserves_concurrent_successor", periodic_prefix_take_preserves_concurrent_successor);
     passed &= run_test("level_periodic_consumer_rejects_anonymous_singleton", level_periodic_consumer_rejects_anonymous_singleton);
     passed &= run_test("periodic_prefix_concurrent_orders_converge", periodic_prefix_concurrent_orders_converge);

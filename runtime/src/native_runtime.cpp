@@ -2475,6 +2475,10 @@ struct RuntimeState {
     std::uint64_t vi_first_deadline_ticks{};
     bool vi_deadline_wait_active{};
     bool vi_edge_delivery_active{};
+    // VI services that found a due batch still unpublished a period late.
+    std::uint64_t vi_unpublished_backlog_retries{};
+    // The VI sequence whose late publication last woke the broker worker.
+    std::uint64_t vi_late_wake_sequence{};
     std::atomic_bool vi_readiness_probe_requested{false};
     bool guest_write_watch_enabled =
         read_env_flag("GALAXY_TRACE_GUEST_WRITE_WATCH", false);
@@ -2635,6 +2639,8 @@ struct RuntimeState {
     std::uint32_t last_valid_displaying_xfb_manager{};
     std::uint64_t last_valid_displaying_xfb_vi{};
     std::uint64_t stale_displaying_xfb_preserves{};
+    // The VI's output is black (VISetBlack) since this retrace (0: not black).
+    std::uint64_t vi_black_since{};
     // Two samples are captured per VI. 1,536 records hold a complete 600-VI certification window, with
     // room for setup and teardown, and stay below the process stack reserve.
     static constexpr std::size_t kXfbStateRecordCapacity = 1'536u;
@@ -16184,12 +16190,35 @@ std::uint64_t indeterminate_slot_xfb_preserve_vis() {
     return value;
 }
 
+// VISetBlack clears the active video lines (ACV) of the VI's vertical timing register, so the
+// display shows black whatever the XFB holds. JUTVideo::preRetraceProc does so while a black
+// frame count runs and while no drawn XFB exists, around scene changes. A register never
+// written (before VIConfigure) is not black. GALAXY_VI_BLACK=0 ignores it (A/B).
+bool vi_output_black(const galaxy::host::GuestAddressSpace& address_space) {
+    static const bool honoured = read_env_flag("GALAXY_VI_BLACK", true);
+    constexpr std::uint32_t kViVerticalTiming = 0xCC002000u;
+    const std::uint32_t vtr = address_space.read_u32(kViVerticalTiming) >> 16u;
+    return honoured && vtr != 0u && ((vtr >> 4u) & 0x3FFu) == 0u;
+}
+
 std::uint32_t current_displayed_xfb_addr(RuntimeState& state) {
     if (state.address_space == nullptr) {
         return 0;
     }
 
     const auto& address_space = *state.address_space;
+    if (vi_output_black(address_space)) {
+        if (state.vi_black_since == 0u) {
+            state.vi_black_since = std::max<std::uint64_t>(state.vi_retrace_count, 1u);
+            std::cerr << "[vi] black from vi=" << state.vi_retrace_count << '\n';
+        }
+        return galaxy::gx::kNoDisplayedXfbAddr;
+    }
+    if (state.vi_black_since != 0u) {
+        std::cerr << "[vi] black ends vi=" << state.vi_retrace_count
+                  << " retraces=" << state.vi_retrace_count - state.vi_black_since << '\n';
+        state.vi_black_since = 0u;
+    }
     const bool has_any_xfb_copy = galaxy::gx::xfb_copy_count() != 0u;
     constexpr std::uint32_t kJutXfbManagerPtr = 0x806A2868u;
     const std::uint32_t xfb = address_space.read_u32(kJutXfbManagerPtr);
@@ -19214,7 +19243,9 @@ void dump_exact_vi_deadline_audit(
                << " early-publications=" << stats.early_publication_edges
                << " arithmetic-failures=" << stats.arithmetic_failures
                << " locked-rate-valid="
-               << (stats.locked_rate_valid ? 1 : 0);
+               << (stats.locked_rate_valid ? 1 : 0)
+               << " unpublished-backlog-retries="
+               << state.vi_unpublished_backlog_retries;
     }
     if (state.deadline_broker != nullptr) {
         const galaxy::timing::DeadlinePublicationStats publication =
@@ -19562,6 +19593,14 @@ void wake_idle_simulation_thread(void* user) noexcept {
     }
 }
 
+// Some due VI deadline is not published yet: the broker is late (by up to a period while
+// AwaitingPublication, by more in a Backlog it has not caught up with).
+bool vi_publication_late(const galaxy::timing::PeriodicDeadlineObservation& observation) noexcept {
+    using Status = galaxy::timing::PeriodicConsumeStatus;
+    return (observation.status == Status::AwaitingPublication || observation.status == Status::Backlog) &&
+           observation.pending_edges < observation.scheduled_due_edges;
+}
+
 void wait_for_exact_vi_deadline(
     RuntimeState& state,
     galaxy::PpcContext* context,
@@ -19600,9 +19639,14 @@ void wait_for_exact_vi_deadline(
                 now_ticks);
         if (observation.status !=
                 galaxy::timing::PeriodicConsumeStatus::NotDue &&
-            observation.status !=
-                galaxy::timing::PeriodicConsumeStatus::AwaitingPublication) {
+            !vi_publication_late(observation)) {
             return;
+        }
+        if (observation.scheduled_due_edges > 1u &&
+            state.vi_late_wake_sequence != observation.expected_sequence) {
+            // A period late: the worker was descheduled or its timer fired late.
+            state.vi_late_wake_sequence = observation.expected_sequence;
+            state.deadline_broker->wake_worker();
         }
 
         pump_due_os_events_except_vi(
@@ -20230,6 +20274,10 @@ bool dispatch_vi_retrace(
         // broker publishes its edge. The level consumer leaves this partial
         // batch intact and returns no event. Retry at the next safepoint;
         // competing consumers and invalid identities still throw inside it.
+        if (state.deadline_events.pending(
+                galaxy::timing::EventKind::VideoInterface) == 0u) {
+            ++state.vi_unpublished_backlog_retries;
+        }
         return false;
     }
     state.last_vi_delivery_ticks = observation_ticks;
@@ -23335,9 +23383,7 @@ bool arbitrate_external_before_decrementer(
             state.deadline_events,
             galaxy::timing::EventKind::VideoInterface,
             runtime_time_base_ticks(state));
-        force_due_vi_publication =
-            observation.status ==
-            galaxy::timing::PeriodicConsumeStatus::AwaitingPublication;
+        force_due_vi_publication = vi_publication_late(observation);
         // wait_for_exact_vi_deadline owns publication waiting. Re-entering its
         // force path would recurse; its latest exact sample instead decides
         // whether DEC was eligible before the VI edge.
@@ -24709,9 +24755,10 @@ void apply_test_teleport(RuntimeState& state, galaxy::PpcContext* context, galax
 // Test hook: GALAXY_TEST_GALAXY_TOUR=<file of "Stage scenario" lines> visits
 // those stages in turn with the game's own MR::requestChangeStageInGameMoving
 // (0x803F8328), GALAXY_TEST_GALAXY_TOUR_FRAMES 3D scene frames apart (default
-// 1200), so a hidden run can load every galaxy and scenario. The stage name is
-// kept at 0x80002800: low memory between the exception vectors and the OS
-// globals that no game code uses, and the request keeps a pointer to it.
+// 1200), so a hidden run can load every galaxy and scenario the game enters
+// (hidden scenarios are skipped). The stage name is kept at 0x80002800: low
+// memory between the exception vectors and the OS globals that no game code
+// uses, and the request keeps a pointer to it.
 void apply_test_galaxy_tour(RuntimeState& state, galaxy::PpcContext* context, galaxy::GuestMemoryV1* memory) {
     struct Tour {
         std::vector<std::pair<std::string, std::uint32_t>> stops;
@@ -24730,7 +24777,14 @@ void apply_test_galaxy_tour(RuntimeState& state, galaxy::PpcContext* context, ga
         std::string stage;
         std::uint32_t scenario = 0u;
         while (list >> stage >> scenario) {
-            if (stage.size() < 63u) result.stops.emplace_back(stage, scenario);
+            const std::uint32_t stars = galaxy::gx::galaxy_stage_stars(stage);
+            if (stars != 0u && (scenario == 0u || scenario > stars)) {
+                // A hidden scenario: see kGalaxyStages.
+                std::cerr << "[galaxy-tour] skipped " << stage << ' ' << scenario << ": the game enters 1-" << stars
+                          << '\n';
+            } else if (stage.size() < 63u) {
+                result.stops.emplace_back(stage, scenario);
+            }
         }
         result.frames = std::max<std::uint64_t>(read_env_u64("GALAXY_TEST_GALAXY_TOUR_FRAMES", 1200u), 60u);
         std::cerr << "[galaxy-tour] stops=" << result.stops.size() << " frames=" << result.frames << '\n';
