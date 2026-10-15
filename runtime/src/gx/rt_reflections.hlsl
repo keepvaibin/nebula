@@ -499,6 +499,10 @@ float ggx_highlight(float3 n, float3 v, float3 l, float alpha, float spread, flo
 static const uint kEmitStride = 48u;
 static const uint kMetalClass = 2u;
 static const float kDielectricF0 = 0.04f;
+// The material table's metals at or above this metalness lose the game's painted sphere-map reflection
+// under traced lighting (shader_gen.cpp: header bits 26-30 >= 8 of 15): the traced reflection is their
+// whole reflection, sky included, and takes the surface's place (cover 1).
+static const float kTracedMetal = 8.0f / 15.0f;
 
 // A spot light's share along `from_light` (normalised, from the light): full inside the inner part of
 // its cone, none outside it (`spot` w: the cosine of its half angle; xyz 0: a point light).
@@ -786,9 +790,10 @@ Reflected reflect_light(uint2 s, float3 dir, float3 n, float3 ng, float3 hit, fl
             }
         }
     }
-    // Metal keeps most of the game's environment map where its reflection is only the sky: the map
-    // is the game's own sky in it (sharper than any known); what the scene puts there replaces it.
-    if (params.w > 0.0f && r.source >= kSkyShown) {
+    // Metal that keeps the game's environment map keeps most of it where its reflection is only the sky:
+    // the map is the game's own sky in it (sharper than any known); what the scene puts there replaces
+    // it. A metal whose map gave way to its mean (kTracedMetal) takes the sky the traced ray finds.
+    if (params.w > 0.0f && params.w < kTracedMetal && r.source >= kSkyShown) {
         r.confidence *= g_metal_sky;
     }
     // The lights' highlights, weighted like the reflection (its class strength) so the
@@ -1745,8 +1750,10 @@ Blend blend_samples(float2 pixel, float3 p, bool water)
             const float3 light = min(unpack_r11g11b10(sample.x), 1.0f);
             b.sum += light * (k * bw);
             // How much of the surface's own colour the reflection takes away: all of it at cover 1
-            // (dst * (1 - k) + k * light), only its own share at cover 0 (a screen: never darker).
-            b.covered += (c.w + (1.0f - c.w) * light) * (k * bw);
+            // (dst * (1 - k) + k * light), only its own share at cover 0 (a screen: never darker). A
+            // metal that lost its painted reflection (kTracedMetal) is its reflection: cover 1.
+            const float cover = metal >= kTracedMetal - 0.5f / 15.0f ? 1.0f : c.w;
+            b.covered += (cover + (1.0f - cover) * light) * (k * bw);
             b.k_sum += k * bw;
             b.glint += unpack_r11g11b10(sample.w) * bw;
         }
