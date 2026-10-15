@@ -274,7 +274,8 @@ public:
     // `scene_srv`: the frame with the game's water drawn (a copy), which the water composite low-passes.
     void composite_water(ID3D12GraphicsCommandList* list, D3D12_CPU_DESCRIPTOR_HANDLE target,
                          D3D12_GPU_DESCRIPTOR_HANDLE depth_srv, std::uint32_t width, std::uint32_t height, int slot,
-                         bool reproject, D3D12_GPU_DESCRIPTOR_HANDLE scene_srv = {});
+                         bool reproject, D3D12_GPU_DESCRIPTOR_HANDLE scene_srv = {},
+                         D3D12_GPU_DESCRIPTOR_HANDLE opaque_srv = {});
     // After the composite (same views): the picture before the translucent phases; with `game_srv`
     // (the composite's source: the game's own opaque picture) the exposure's measurement.
     void snapshot_glow_base(ID3D12GraphicsCommandList* list, D3D12_GPU_DESCRIPTOR_HANDLE color_depth_table,

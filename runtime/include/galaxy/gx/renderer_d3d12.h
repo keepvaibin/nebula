@@ -1263,6 +1263,8 @@ private:
     D3D12_GPU_DESCRIPTOR_HANDLE rt_game_picture();
     Microsoft::WRL::ComPtr<ID3D12Resource> rt_color_copy_;
     Microsoft::WRL::ComPtr<ID3D12Resource> rt_water_copy_;   // the frame with the game's water (water composite)
+    Microsoft::WRL::ComPtr<ID3D12Resource> rt_opaque_copy_;  // the frame before the translucent phases
+    D3D12_GPU_DESCRIPTOR_HANDLE rt_opaque_srv_{};             // its view this frame (0: none)
     void record_rt_water(int slot, bool reproject);
     [[nodiscard]] bool temporal_inputs_match(const TemporalUpscaleInputs& in) const;
     D3D12_GPU_VIRTUAL_ADDRESS resident_vertex_base_ = 0;
