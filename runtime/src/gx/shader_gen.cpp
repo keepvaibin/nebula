@@ -2313,10 +2313,11 @@ std::string ShaderGenerator::generate_ps(const PixelShaderKey& key) const {
         s << "    uint lit_w, lit_h;\n";
         s << "    tex[7].GetDimensions(lit_w, lit_h);\n";
         s << "    const int2 lit_at = min(int2(pin.pos.xy * ztex_params.z), int2(lit_w, lit_h) - 1);\n";
-        s << "    const float3 lit_m = clamp(tex[7].Load(int3(lit_at, 0)).rgb, 0.45, 1.35);\n";
-        s << "    const float3 lit_room = max(1.0 - frag.rgb, 1e-4);\n";
-        s << "    frag.rgb = lerp(frag.rgb * lit_m, frag.rgb + 0.5 * lit_room * (1.0 - exp(-(frag.rgb * "
-             "max(lit_m - 1.0, 0.0)) / (0.5 * lit_room))), step(1.0, lit_m));\n";
+        s << "    const float3 lit_c = frag.rgb * clamp(tex[7].Load(int3(lit_at, 0)).rgb, 0.45, 4.0);\n";
+        s << "    const float3 lit_knee = max(frag.rgb, 0.8);\n";
+        s << "    const float3 lit_room = max(1.0 - lit_knee, 1e-4);\n";
+        s << "    frag.rgb = lerp(lit_c, lit_knee + lit_room * (1.0 - exp(-(lit_c - lit_knee) / lit_room)), "
+             "step(lit_knee, lit_c));\n";
     }
     if (dual_src) {
         s << "    float tev_alpha = saturate(frag.a);\n";

@@ -100,6 +100,10 @@ static const uint kEmitNoLight = 8u;    // never a light
 // g_draws records (SceneRayTracer::draw_colors_): ambient, GX light 0 colour, emission, intensity,
 // roughness and metalness, material colour, flags, spare.
 static const uint kDrawStride = 32u;
+// The lighting multiplies the game's colour by at most this; the composite rolls it off on a film
+// shoulder from kLitKnee (apply_light).
+static const float kMaxLight = 8.0f;
+static const float kLitKnee = 0.8f;
 // Buckets of the exposure measurement (16 bytes each: lit, game, pixels, spare).
 static const uint kExposureBuckets = 16u;
 // A light of the glow lights' lists: position, radius; power, frames unseen or cumulative power; spot
@@ -1905,11 +1909,8 @@ void SpatialBCS(uint3 id : SV_DispatchThreadID)
     lighting *= exposure;
     open *= exposure;
     float3 m = lerp(float3(1.0f, 1.0f, 1.0f), lighting, g_strength);
-    // Lit surfaces brighten towards 1.5 on a soft shoulder (no flat, washed-out highlights).
-    {
-        const float3 over = max(m - 1.0f, 0.0f);
-        m = min(m, 1.0f) + over / (1.0f + 2.0f * over);
-    }
+    // The composite's film shoulder (apply_light) rolls bright light off; here only a bound.
+    m = min(m, kMaxLight);
     // A glowing surface (unlit, bright, under its own glow in the previous picture: a core, a lamp)
     // sends its light whatever reaches it: it keeps its colour and shines brighter.
     if ((draw_flags & kDrawLit) == 0u && (g_flags & 2u) != 0u) {
@@ -1969,8 +1970,8 @@ float4 LightTexturePS(float4 position : SV_Position) : SV_Target0
 
 // ---------------------------------------------------------------------------------------------
 // Composite: the EFB colour (a copy of it) under the lighting. Less light darkens it in
-// proportion; more light brightens it towards white without passing it, by the headroom the
-// colour has left, so bright texels keep their detail instead of clipping flat.
+// proportion; more light brightens it in proportion up to a knee, then rolls off towards white
+// without passing it (apply_light).
 // ---------------------------------------------------------------------------------------------
 
 cbuffer RtComposite : register(b0)
@@ -1999,10 +2000,13 @@ struct CompositeOut
 
 float3 apply_light(float3 c, float3 m)
 {
-    const float3 headroom = max(1.0f - c, 1e-4f);
-    // At most half the headroom: near-white texels keep their gradient instead of merging at 1.
-    const float3 brighter = c + 0.5f * headroom * (1.0f - exp(-(c * max(m - 1.0f, 0.0f)) / (0.5f * headroom)));
-    return lerp(c * m, brighter, step(1.0f, m));
+    // As lit (c m) up to the knee (0.8, or the colour itself where it is brighter: the game's own
+    // highlights stay as drawn), then a film shoulder towards white that never passes it, channel by
+    // channel (light past white turns pale). Its slope is 1 at the knee: no seam where it starts.
+    const float3 lit = c * m;
+    const float3 knee = max(c, kLitKnee);
+    const float3 room = max(1.0f - knee, 1e-4f);
+    return lerp(lit, knee + room * (1.0f - exp(-(lit - knee) / room)), step(knee, lit));
 }
 
 float4 CompositeVS(uint id : SV_VertexID) : SV_Position
@@ -2069,7 +2073,7 @@ CompositeOut CompositePS(float4 position : SV_Position)
         sum += m * bw;
         weight += bw;
     }
-    const float3 m = clamp(weight > 1e-3f ? sum / weight : nearest, 0.0f, 2.0f);
+    const float3 m = clamp(weight > 1e-3f ? sum / weight : nearest, 0.0f, kMaxLight);
     if ((m_flags & 2u) != 0u) {
         result.color = float4(m * 0.5f, 1.0f);
         return result;
