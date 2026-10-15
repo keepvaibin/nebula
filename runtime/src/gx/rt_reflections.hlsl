@@ -1022,12 +1022,15 @@ void write_underwater_state()
             const uint tri = query.CommittedPrimitiveIndex();
             const float2 b = query.CommittedTriangleBarycentrics();
             const uint4 record = g_water_surfaces.Load4(tri * 16u);
-            // Water only (class 7, crystal and glass, is no water to be under).
-            if (record.x != 0u && record.y != 0u && record.z != 0u && ((record.w >> 8u) & 15u) != 7u) {
+            // Water only (class 7, crystal and glass, is no water to be under; a waterfall neither).
+            if (record.x != 0u && record.y != 0u && record.z != 0u && ((record.w >> 8u) & 15u) != 7u &&
+                (record.w & 8192u) == 0u) {
                 const float3 n = unpack_vertex_normal(record.x) * (1.0f - b.x - b.y) +
                                  unpack_vertex_normal(record.y) * b.x + unpack_vertex_normal(record.z) * b.y;
-                // The water's normals point out of it: met from behind, the camera is below it.
-                if (dot(n, d) > 0.0f && length(n) > 1e-3f) {
+                // The water's normals point out of it: met from behind, the camera is below it. Only a
+                // level surface (within 45 degrees of the world's up) is a surface to be under.
+                const float3 world_up = g_eye_to_world[1].xyz;
+                if (dot(n, d) > 0.0f && length(n) > 1e-3f && dot(normalize(n), normalize(world_up)) > 0.7f) {
                     under = 1u;
                     up = normalize(n);
                     plane = dot(up, d * query.CommittedRayT());
@@ -1223,7 +1226,7 @@ void WaterTraceCS(uint3 id : SV_DispatchThreadID)
                 reflected = true;
                 const Reflected r = reflect_light(id.xy, dir, n, ng, hit, params, base, true, false);
                 light = r.light;
-                highlight = min(r.highlight, 3.0f);
+                highlight = min(r.highlight, 1.5f);
                 confidence = r.confidence;
                 source = r.source;
                 mapped = r.mapped;
@@ -1955,10 +1958,15 @@ CompositeOut WaterCompositePS(float4 position : SV_Position)
             path = max(length(floor_at - p), 0.0f);
             seen = floor_colour * caustic(floor_at, p, n);
         }
-        const float3 through = exp(-m_water.rgb * path);
-        const float3 deep = max(exp(-0.35f * m_water.rgb * path), float3(0.25f, 0.25f, 0.25f));
-        under_add = seen * through * share;
-        under_keep = lerp(float3(1.0f, 1.0f, 1.0f), deep * (1.0f - through), share);
+        // Only where the seabed is seen (the shallows show it, deepening with the water above it);
+        // open water keeps the game's own colour (a body over nothing only darkened it), never below
+        // 0.6 of it.
+        if (floor_z != 0.0f) {
+            const float3 through = exp(-m_water.rgb * path);
+            const float3 deep = max(exp(-0.35f * m_water.rgb * path), float3(0.6f, 0.6f, 0.6f));
+            under_add = seen * through * share;
+            under_keep = lerp(float3(1.0f, 1.0f, 1.0f), deep * (1.0f - through), share);
+        }
     }
     if (b.k_sum < 1e-4f && !any(b.glint > 0.0f) && !any(under_add > 0.0f) && !any(under_keep < 1.0f)) {
         discard;
@@ -2048,11 +2056,12 @@ CompositeOut UnderwaterPS(float4 position : SV_Position)
         add += sun * sum * (span / 8.0f) * (shafts * 2e-4f * phase);
     }
     // The water between the camera and what the pixel shows: its light fades with the depth of water
-    // it crosses (absorption) and the light the water scatters (its teal) takes its place.
+    // it crosses and the light the water scatters (its teal) takes its place. Clear shallow water: about
+    // a sixth of the lake body's absorption (the game's own view under water stays readable).
     {
         const float span = sky ? 4000.0f : length(p);
-        const float3 t = exp(-m_water.rgb * span * 0.35f);
-        const float3 scatter = (sun * 0.35f + 0.08f) * float3(0.06f, 0.42f, 0.52f);
+        const float3 t = exp(-m_water.rgb * span * 0.06f);
+        const float3 scatter = (sun * 0.25f + 0.12f) * float3(0.10f, 0.50f, 0.55f);
         add = add * t + scatter * (1.0f - t);
         keep *= t;
     }

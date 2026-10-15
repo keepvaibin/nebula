@@ -149,7 +149,7 @@ void apply_class(const std::string& text, RtMaterial& m) {
             m.relief = 0.0f;
         } else if (token == "diffuse" || token == "foliage" || token == "fabric" || token == "skin") {
             set(RtSurfaceClass::Diffuse);
-            m.relief = token == "diffuse" ? 1.0f : token == "foliage" ? 0.7f : token == "fabric" ? 0.6f : 0.0f;
+            m.relief = token == "diffuse" ? 1.0f : token == "foliage" ? 0.7f : 0.0f;
             m.matte = token == "foliage" || token == "fabric";
         } else if (token == "unlit" || token == "sky") {
             set(RtSurfaceClass::Unlit);

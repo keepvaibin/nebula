@@ -749,7 +749,7 @@ bool SceneRayTracer::initialize(ID3D12Device* device, std::uint64_t timestamp_fr
     sun_size_ = std::clamp(env_float("GALAXY_RT_SUN_SIZE", 2.5f), 0.0f, 30.0f);
     key_size_ = std::clamp(env_float("GALAXY_RT_KEY_SIZE", 6.0f), 0.0f, 30.0f);
     sun_min_elevation_ = std::clamp(env_float("GALAXY_RT_SUN_MIN_ELEVATION", 30.0f), 0.0f, 89.0f);
-    sun_light_ = std::clamp(env_float("GALAXY_RT_SUN_LIGHT", 1.4f), 0.0f, 4.0f);
+    sun_light_ = std::clamp(env_float("GALAXY_RT_SUN_LIGHT", 1.25f), 0.0f, 4.0f);
     sky_light_ = std::clamp(env_float("GALAXY_RT_SKY_LIGHT", 1.0f), 0.0f, 4.0f);
     if (lighting_enabled_ && !create_lighting_pipelines(color_format)) {
         std::cerr << "[rt] lighting unavailable\n";

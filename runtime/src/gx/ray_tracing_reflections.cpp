@@ -257,7 +257,7 @@ bool RtReflections::initialize(ID3D12Device5* device, std::uint64_t timestamp_fr
     metal_sky_ = std::clamp(env_float("GALAXY_RT_REFLECT_METAL_SKY", 0.3f), 0.0f, 1.0f);
     local_gain_ = std::clamp(env_float("GALAXY_RT_REFLECT_LOCAL_GAIN", 2.0f), 0.0f, 16.0f);
     rough_cutoff_ = std::clamp(env_float("GALAXY_RT_REFLECT_ROUGH_CUTOFF", 0.65f), 0.05f, 1.2f);
-    waves_ = std::clamp(env_float("GALAXY_RT_WAVES", 1.0f), 0.0f, 4.0f);
+    waves_ = std::clamp(env_float("GALAXY_RT_WAVES", 0.0f), 0.0f, 4.0f);
     {
         // Per 1000 eye units (about 10 m of the game's world): red goes first, then green.
         absorb_ = {25.0f, 4.5f, 2.6f};

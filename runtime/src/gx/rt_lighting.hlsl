@@ -279,7 +279,7 @@ float finished_luminance(float3 c, float grade)
     const float3 rolled = min(c, 0.95f) + 0.05f * (1.0f - exp(-over / 0.05f));
     const float spill = max(max(over.r, max(over.g, over.b)) - 0.05f, 0.0f);
     const float l = luminance(saturate(rolled + spill * 0.15f));
-    return lerp(l, saturate(l + 1.0f * (l - 0.5f) * l * (1.0f - l)), grade);
+    return lerp(l, saturate(l + 0.85f * (l - 0.5f) * l * (1.0f - l)), grade);
 }
 
 float3 rotate3(float4 rows[3], float3 d)
@@ -1957,7 +1957,9 @@ void SpatialBCS(uint3 id : SV_DispatchThreadID)
     // The sun's share of the light for the composite's per-pixel relief: its visibility (the filtered
     // sun over the sample's n.l) times the draw's relief, at the scale the light took here.
     float relief = 0.0f;
-    if (tri != 0u && (delit || (draw_flags & kDrawLit) == 0u)) {
+    // Map geometry only (unlit draws: ground, rock, walls); characters and objects the game lights keep
+    // their painted detail flat (their emblems and seams would emboss).
+    if (tri != 0u && (draw_flags & (kDrawLit | kDrawDelit)) == 0u) {
         const float strength = asfloat(g_draws.Load(min(draw_flags >> 16u, max(g_draw_count, 1u) - 1u) * kDrawStride + 28u));
         const float nl = dot(unpack_normal(g_normal[index]), g_sun.xyz);
         if (strength > 0.0f && nl > 0.05f) {
@@ -1965,7 +1967,8 @@ void SpatialBCS(uint3 id : SV_DispatchThreadID)
                                   ? saturate(asfloat(g_picture_sums.Load(32u)) / max(g_ambient.y, 1e-3f))
                                   : 1.0f;
             const float fill = g_fill * lerp(1.5f, 1.0f, day);
-            relief = strength * saturate(light.sun / nl) * (1.0f - fill) * exposure * g_strength;
+            // At the scale the sun took in the light (its normalisation, norm).
+            relief = strength * saturate(light.sun / nl) * (1.0f - fill) * exposure * g_strength / norm;
         }
     }
     float3 m = lerp(float3(1.0f, 1.0f, 1.0f), lighting, g_strength);
@@ -2202,7 +2205,7 @@ CompositeOut CompositePS(float4 position : SV_Position)
                     nfa = float3(dot(rows[0].xyz, nf), dot(rows[1].xyz, nf), dot(rows[2].xyz, nf));
                     nba = float3(dot(rows[0].xyz, nb), dot(rows[1].xyz, nb), dot(rows[2].xyz, nb));
                 }
-                const float delta = clamp(dot(nba, m_sun.xyz) - dot(nfa, m_sun.xyz), -0.6f, 0.6f);
+                const float delta = clamp(dot(nba, m_sun.xyz) - dot(nfa, m_sun.xyz), -0.25f, 0.25f);
                 m = max(m + relief * fade * delta * m_sun_light.rgb, 0.0f);
             }
         }
